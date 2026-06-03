@@ -12,12 +12,49 @@ explain back to him.
 
 ---
 
-## 0. Current state (most recent: Direct Domain-type unification + send-hook fix + param-slice PQD)
+## 0. Current state (most recent: param-slice PQD α-routing fix)
 
 **Full suite passing, 0 failed; `npm run lint` clean** (run `npm test` for the
-live count). Cache version `v48-direct-domaintype-sendfix-pqd-paramslice`.
+live count). Cache version `v49-paramslice-pqd-alpha-routing-fix`.
 
-**Direct Domain-type unification + cross-tab send fix + param-slice PQD (most recent).**
+**Param-slice PQD α-routing fix (most recent).** The Parameter-slice tab rendered
+PQDs as **classical** QDs — the grid classification AND the **Hovered-QD** preview
+both showed a plain `boundedQD` domain for what should be a power-weighted one
+(the user's report: "Hovered QD renders don't look right for one-point bounded
+non-singular PQDs"). Root cause, in `param-slice/param-slice-common.js`
+`_solveScenarioBody`: it rebuilt the solver `opts` from `s.norm` (w0/c/q/lqd/
+unbounded/singular) but **never copied `s.norm.alpha`**. The cold-solve
+`solveInverseQD(hData, opts)` then saw no `alpha`, so `selectFamily` couldn't match
+`Family.powerQD`/`powerQD_singular` and silently fell back to classical `boundedQD`.
+The first (cold) pixel produced a classical φ whose `family` ≠ the PQD tag, which
+**poisoned the warm-start chain** (no subsequent pixel could warm-start), so EVERY
+pixel went cold→classical. LQD was unaffected (its `lqd`/`q`/`c` flags *were*
+copied) — which is exactly why only PQDs looked wrong. Fixes:
+- **`opts.alpha = s.norm.alpha`** (the one-line root fix) + a defensive
+  `init.alpha = s.norm.alpha` sync in the warm-start branch (mirrors the existing
+  w0/c/q sync; α is never a sweepable axis so it's already constant, but kept in
+  lock-step for robustness).
+- **Hover live-solve** (`param-slice-ui.js` `runLiveSolve`) now passes
+  `PS.MODE_FAMILY_TAG[scenario.mode]` instead of `undefined` as `expectedFamilyTag`,
+  so a PQD/LQD hover can actually warm-start (the grid path already did this via
+  `_attachFamilyTag`; with `undefined`, only classical hints — also `family===undefined`
+  — ever matched).
+- **Regression test** (`node-test.js`, after the cardioid-sweep block): a bounded
+  non-singular PQD (α=2, `h=3/(w−3)`) solved via `PS.solveOnePoint` must land in
+  `family==='powerQD'` with `alpha===2` (cold), and a same-family warm hint must
+  engage (`warmUsed`) and stay `powerQD`. These assertions FAIL on the pre-fix code.
+- **Verify:** full suite green incl. the 4 new assertions; lint clean; browser-confirmed
+  in the live bundle — the param-slice cold path `solveInverseQD(hData,{alpha:2,w0,
+  bootstrapW0:false})` routes to `powerQD` (vs classical with α omitted), and a fresh
+  `ParamSlice.solveOnePoint` cold+warm both land `powerQD` with a proper α=2 boundary
+  (bbox ~1.18×1.16 around the pole, vs the classical fallback's ~3.46×3.46). NB: the
+  page `<script>` for `param-slice-common.js` has no `?v=` query, so the browser HTTP
+  disk-cache can serve the old file until the SW update cycle refreshes it (known
+  dev verify friction — bust via SW unregister + `cache:'no-store'` fetch).
+
+## (prior) Direct Domain-type unification + send-hook fix + param-slice PQD
+
+**Direct Domain-type unification + cross-tab send fix + param-slice PQD.**
 Three fixes in one slice:
 - **Direct tab Domain-type control** (`direct/direct-ui.js`) now mirrors the inverse
   tab's compact segmented control: a `#dir-dm-weight` (QD/PQD/LQD) × `#dir-dm-domain`

@@ -4547,6 +4547,48 @@ ok('ParamSlice: namespace exports core symbols',
      r.cls === PS.CLASS_VALID || r.cls === PS.CLASS_NO_ROOT);
 }
 
+// ---- PQD param-slice routing regression ----
+// A bounded non-singular PQD scenario MUST route through _solveScenarioBody
+// to Family.powerQD — NOT the classical boundedQD fallback. Regression for the
+// dropped `norm.alpha` that made the Parameter-slice grid AND the Hovered-QD
+// live preview render a classical QD for one-point bounded non-singular PQDs.
+{
+  // One-point bounded non-singular PQD, α=2, h = 3/(w−3) (the §20 example).
+  // Bootstrap a valid interior w₀ (param-slice runs with bootstrapW0:false, so
+  // the scenario must supply w₀ exactly as the QD tab's buildNorm does).
+  const mkH = () => ({ poles: [{ a: { re: 3, im: 0 }, principal: [{ re: 3, im: 0 }] }], polyPart: [] });
+  const boot = QD_NS.solveInverseQD(mkH(), { alpha: 2 });
+  ok('ParamSlice PQD: bootstrap solve for w₀ succeeded', boot.success, boot.error);
+  if (boot.success) {
+    const w0 = boot.primary.phi.w0;
+    const scen = {
+      hData: mkH(),
+      norm:  { w0: { re: w0.re, im: w0.im }, alpha: 2 },
+      opts:  { univalenceSamples: 64, identityTol: 1e-5, findAlternates: false,
+               newton: { maxIter: 40, tolerance: 1e-9 },
+               usePhases: { direct: true, continuation: false, multistart: true,
+                            diverse: false, deflation: false } },
+    };
+    const pt = [{ ref: { kind: 'poleRe', poleIdx: 0 }, value: 3 }];   // no-op assign
+    // Cold solve — only routes to powerQD if opts.alpha is forwarded (the fix).
+    const cold = PS.solveOnePoint(scen, pt, null, 'powerQD');
+    ok('ParamSlice PQD: cold solve routes to Family.powerQD (not classical)',
+       cold.cls === PS.CLASS_VALID && cold.phiSerialized && cold.phiSerialized.family === 'powerQD',
+       'cls=' + cold.cls + ' family=' + (cold.phiSerialized && cold.phiSerialized.family));
+    ok('ParamSlice PQD: cold solve preserves α=2',
+       !!cold.phiSerialized && cold.phiSerialized.alpha === 2,
+       'alpha=' + (cold.phiSerialized && cold.phiSerialized.alpha));
+    // Warm solve from the powerQD hint — chain must engage AND stay powerQD
+    // (guards the chain-poisoning: a classical first pixel would block warm-start).
+    const warm = PS.solveOnePoint(scen, pt, cold.phiSerialized, 'powerQD');
+    ok('ParamSlice PQD: same-family warm-start engages + stays powerQD',
+       warm.cls === PS.CLASS_VALID && warm.warmUsed &&
+       warm.phiSerialized && warm.phiSerialized.family === 'powerQD',
+       'cls=' + warm.cls + ' warmUsed=' + warm.warmUsed +
+       ' family=' + (warm.phiSerialized && warm.phiSerialized.family));
+  }
+}
+
 // ---- Identity-rigor wiring (HANDOFF #32): opts.univalenceSamples flows
 // from a param-slice scenario through to the family identity verifier
 // for both the warm-start and cold-start paths in _solveScenarioBody.

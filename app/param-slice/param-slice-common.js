@@ -351,12 +351,20 @@
   // solver call + classification.
   function _solveScenarioBody(QD, s, warmHint, expectedFamilyTag) {
     const opts = Object.assign({}, s.opts || {});
-    if (s.norm.w0)        opts.w0 = s.norm.w0;
-    if (s.norm.c != null) opts.c  = s.norm.c;
-    if (s.norm.q)         opts.q  = s.norm.q;
-    if (s.norm.lqd)       opts.lqd = true;
-    if (s.norm.unbounded) opts.unbounded = true;
-    if (s.norm.singular)  opts.singular = true;
+    if (s.norm.w0)            opts.w0 = s.norm.w0;
+    if (s.norm.c != null)     opts.c  = s.norm.c;
+    if (s.norm.q)             opts.q  = s.norm.q;
+    if (s.norm.lqd)           opts.lqd = true;
+    if (s.norm.unbounded)     opts.unbounded = true;
+    if (s.norm.singular)      opts.singular = true;
+    // PQD power weight |w|^{2(α−1)}. WITHOUT this, the cold-solve
+    // `solveInverseQD` below sees no `alpha`, so `selectFamily` can't match
+    // Family.powerQD / powerQD_singular and silently falls back to the
+    // classical boundedQD — every PQD pixel (grid AND the Hovered-QD live
+    // preview) then renders a classical domain. The first cold pixel also
+    // poisons the warm-start chain (its phi.family ≠ the PQD tag, so no
+    // subsequent pixel can warm-start). Mirrors `applyNorm` in ui.js's MODES.
+    if (s.norm.alpha != null) opts.alpha = s.norm.alpha;
 
     const canWarm = warmHint &&
       warmHint.family === expectedFamilyTag &&
@@ -371,6 +379,10 @@
         if (init.w0 && s.norm.w0) { init.w0.re = s.norm.w0.re; init.w0.im = s.norm.w0.im; }
         if (s.norm.c != null)     init.c = s.norm.c;
         if (init.q && s.norm.q)   { init.q.re = s.norm.q.re; init.q.im = s.norm.q.im; }
+        // α is fixed across a sweep (never a sweepable axis), so the warm
+        // hint already carries the right value — but keep it in lock-step
+        // with the scenario for robustness (mirrors the w0/c/q sync above).
+        if (s.norm.alpha != null) init.alpha = s.norm.alpha;
         // Speculative tighter maxIter when the warm hint carries a
         // coarse-pass iteration count (`_coarseIter`, set by the
         // adaptive renderer's nearestPhi). A refined sub-pixel whose

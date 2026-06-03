@@ -403,9 +403,15 @@
     // snapshotScenario doesn't include opts). Reuse the same opts the
     // last render used so quality / Newton settings match.
     const sceneWithOpts = Object.assign({}, scenario, { opts: sliceState.lastOpts || {} });
+    // Pass the scenario's family tag so a PQD/LQD warm hint can actually
+    // warm-start (the grid path does the same via _attachFamilyTag). With
+    // `undefined` here, only classical hints (also family===undefined) ever
+    // matched, so weighted-family hovers fell back to a cold solve.
+    const expectedFamilyTag = (PS.MODE_FAMILY_TAG && scenario.mode)
+      ? PS.MODE_FAMILY_TAG[scenario.mode] : undefined;
     let r;
     try {
-      r = PS.solveOnePoint(sceneWithOpts, point, warmHint, undefined);
+      r = PS.solveOnePoint(sceneWithOpts, point, warmHint, expectedFamilyTag);
     } catch (e) {
       r = { cls: 'unclassified', errSample: String(e && e.message || e) };
     }
