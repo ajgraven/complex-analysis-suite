@@ -12,12 +12,44 @@ explain back to him.
 
 ---
 
-## 0. Current state (most recent: Direct Domain-type unification + send-hook fix + param-slice PQD)
+## 0. Current state (most recent: double-click to add a pole)
 
 **Full suite passing, 0 failed; `npm run lint` clean** (run `npm test` for the
-live count). Cache version `v48-direct-domaintype-sendfix-pqd-paramslice`.
+live count). Cache version `v51-dblclick-add-pole`.
 
-**Direct Domain-type unification + cross-tab send fix + param-slice PQD (most recent).**
+> Branch note: this feature branch (`feat/dblclick-add-pole`) is cut from
+> `main`, so it does NOT include the in-flight param-slice PQD work (the
+> α-routing fix + univalence speed-up live on `fix/param-slice-pqd` / its PR).
+> The two are independent; when both land, the `CACHE_VERSION` line and the §0
+> HANDOFF heading will conflict trivially — keep the later one.
+
+**Double-click to add a pole (most recent).** In the QD tab's **Inverse Problem**
+view, double-clicking an empty point on the domain plot now drops a new simple
+pole there (order 1, coefficient 1) and re-solves — the inverse of the existing
+click-drag-to-move gesture. Implementation reuses the established hooks:
+- `ui-domain-plot.js`: `DomainPlot` gains an `onAddPole` callback (beside
+  `onPoleDrag`/`onPoleDragEnd`) and a `dblclick` listener in `attachEvents()`.
+  It gates on `_qdTabActive()`, ignores double-clicks that land on an existing
+  pole dot (`_hitTestPole >= 0`) so it never stacks a duplicate, and otherwise
+  fires `onAddPole(this.toWorld(x, y))` (w-plane coordinate).
+- `ui.js`: new `addPoleAt(w)` mirrors `addPole()` but stamps the clicked position
+  (`QD.Complex.toString(w, 4)`) + `markAsCustom()`. Wired as
+  `plot.onAddPole = (w) => { if (state.viewMode !== 'inverse') return; addPoleAt(w); }`
+  — inverse view only (the direct view hides `#qd-inverse-content`). Family-
+  agnostic: a simple pole is valid input for classical QD / PQD / LQD / unbounded.
+- `node-test.js`: a **jsdom** test loads the real `ui-domain-plot.js` (via the
+  `QD_UI.installDomainPlot` factory), dispatches `dblclick` events, and asserts
+  (a) empty-space fires `onAddPole` with `w === toWorld(click)`, (b) a click on an
+  existing pole dot is ignored. (jsdom is a devDep; the test skips gracefully if
+  absent — this also activates the long-deferred P1.3 jsdom UI harness slot.)
+- **Verify:** full suite green incl. the 4 new jsdom assertions; lint clean.
+  Browser-cache caveat: the page's query-less `<script>`s (ui.js / ui-domain-plot.js)
+  can stay HTTP-cached stale in dev until the SW version-bump (v51) drops old
+  caches; a hard refresh forces it. The handler itself is jsdom-verified.
+
+## (prior) Direct Domain-type unification + cross-tab send fix + param-slice PQD
+
+**Direct Domain-type unification + cross-tab send fix + param-slice PQD.**
 Three fixes in one slice:
 - **Direct tab Domain-type control** (`direct/direct-ui.js`) now mirrors the inverse
   tab's compact segmented control: a `#dir-dm-weight` (QD/PQD/LQD) × `#dir-dm-domain`
