@@ -6088,5 +6088,60 @@ ok('CriticalSet: namespace exports',
 // for this P1 milestone.
 // =============================================================================
 
+// =============================================================================
+// DomainPlot double-click → add-pole (jsdom). Verifies the dblclick handler in
+// ui-domain-plot.js fires onAddPole(toWorld(click)) on empty plot space and
+// ignores double-clicks that land on an existing pole dot (no duplicate). Runs
+// the REAL source in a jsdom window; skipped gracefully if jsdom is absent.
+// =============================================================================
+(function () {
+  let JSDOM;
+  try { ({ JSDOM } = require('jsdom')); }
+  catch (e) { ok('DomainPlot dblclick: jsdom present (else skipped)', true, 'jsdom unavailable — skipped'); return; }
+  try {
+    const fs2 = require('fs'), path2 = require('path');
+    const html = '<!DOCTYPE html><body>' +
+      '<button class="tab-btn active" data-tab="qd"></button><canvas id="c"></canvas></body>';
+    const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true });
+    const W = dom.window;
+    // ui-domain-plot.js is a factory IIFE: it installs QD_UI.installDomainPlot(deps)
+    // which returns the DomainPlot class with ui.js closures injected. Run the
+    // source in W's realm, then call the factory with dummy deps (the dblclick
+    // path uses none of them; render — the only heavy consumer — is stubbed).
+    const srcText = fs2.readFileSync(path2.join(__dirname, 'ui-domain-plot.js'), 'utf8');
+    W.eval(srcText);
+    const DP = W.QD_UI.installDomainPlot({
+      state: { poles: [], viewMode: 'inverse' },
+      modeDescriptor: () => ({}),
+      formatTick: (v) => String(v),
+      sub: (n) => String(n),
+    });
+    ok('DomainPlot dblclick: class loads in jsdom', typeof DP === 'function');
+    if (typeof DP !== 'function') return;
+    DP.prototype.render = function () {};                 // jsdom has no 2D ctx — stub drawing
+    const canvas = W.document.getElementById('c');
+    const plot = new DP(canvas, { textContent: '' });
+    plot.setData({ poles: [{ re: 0.5, im: -0.5 }], boundaryPts: [] });
+
+    // (1) double-click empty space → onAddPole fires with w === toWorld(click).
+    let added = null;
+    plot.onAddPole = (w) => { added = w; };
+    canvas.dispatchEvent(new W.MouseEvent('dblclick', { clientX: 5, clientY: 5, bubbles: true, cancelable: true }));
+    const want = plot.toWorld(5, 5);
+    ok('DomainPlot dblclick: empty space fires onAddPole', added !== null);
+    ok('DomainPlot dblclick: onAddPole receives the clicked w (toWorld)',
+       !!added && Math.abs(added.re - want.re) < 1e-9 && Math.abs(added.im - want.im) < 1e-9,
+       added ? ('got ' + added.re + ',' + added.im) : 'no call');
+
+    // (2) double-click ON the existing pole dot → ignored (no stacked duplicate).
+    added = null;
+    const sp = plot.toScreen(0.5, -0.5);
+    canvas.dispatchEvent(new W.MouseEvent('dblclick', { clientX: sp.x, clientY: sp.y, bubbles: true, cancelable: true }));
+    ok('DomainPlot dblclick: on an existing pole is ignored', added === null);
+  } catch (e) {
+    ok('DomainPlot dblclick: jsdom test ran without error', false, String((e && e.stack) || e));
+  }
+})();
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail === 0 ? 0 : 1);
