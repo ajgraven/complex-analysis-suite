@@ -4589,6 +4589,73 @@ ok('ParamSlice: namespace exports core symbols',
   }
 }
 
+// ---- Boundary self-intersection: O(N log N) grid == O(N²) brute force ----
+// (param-slice PQD perf work, Fix B). The spatial-grid fast path MUST return
+// the identical verdict to the reference all-pairs test on every curve — it's
+// only an optimisation. The brute-force fn is also the test oracle.
+{
+  const bsi   = QD_NS.boundarySelfIntersects;
+  const brute = QD_NS.boundarySelfIntersectsBruteForce;
+  function circle(N, cx = 0, cy = 0, R = 1) {
+    const p = [];
+    for (let i = 0; i < N; i++) { const t = 2 * Math.PI * i / N; p.push({ re: cx + R * Math.cos(t), im: cy + R * Math.sin(t) }); }
+    return p;
+  }
+  // limaçon r = 0.5 + cos θ — r goes negative ⇒ an inner loop ⇒ self-intersects.
+  function limacon(N) {
+    const p = [];
+    for (let i = 0; i < N; i++) { const t = 2 * Math.PI * i / N; const r = 0.5 + Math.cos(t); p.push({ re: r * Math.cos(t), im: r * Math.sin(t) }); }
+    return p;
+  }
+  const bowtie = [{ re: -1, im: -1 }, { re: 1, im: 1 }, { re: 1, im: -1 }, { re: -1, im: 1 }];
+  function pentagram() {
+    const p = [];
+    for (let k = 0; k < 5; k++) { const t = 2 * Math.PI * (2 * k) / 5 - Math.PI / 2; p.push({ re: Math.cos(t), im: Math.sin(t) }); }
+    return p;   // vertex skip ⇒ self-intersecting star
+  }
+  const battery = [
+    { name: 'unit square N=4',     pts: [{ re: 0, im: 0 }, { re: 1, im: 0 }, { re: 1, im: 1 }, { re: 0, im: 1 }] },
+    { name: 'bowtie N=4',          pts: bowtie },
+    { name: 'pentagram N=5',       pts: pentagram() },
+    { name: 'circle N=33',         pts: circle(33) },             // grid path (N>32), convex
+    { name: 'circle N=300',        pts: circle(300) },            // grid path, convex
+    { name: 'ellipse N=257',       pts: circle(257, 0, 0, 1).map(p => ({ re: 2 * p.re, im: 0.3 * p.im })) },
+    { name: 'limaçon N=200',       pts: limacon(200) },           // grid path, self-intersecting
+    { name: 'limaçon N=400',       pts: limacon(400) },
+  ];
+  let allAgree = true, detail = '';
+  for (const c of battery) {
+    const g = bsi(c.pts), b = brute(c.pts);
+    if (g !== b) { allAgree = false; detail += ` ${c.name}:grid=${g}≠brute=${b}`; }
+  }
+  ok('BSI: grid self-intersection == brute-force across battery', allAgree, detail);
+  ok('BSI: bowtie + pentagram + limaçon flagged self-intersecting',
+     brute(bowtie) && bsi(bowtie) && brute(pentagram()) && bsi(pentagram()) &&
+     brute(limacon(200)) && bsi(limacon(200)));
+  ok('BSI: convex circles (N=300) NOT self-intersecting (grid path)',
+     !brute(circle(300)) && !bsi(circle(300)));
+}
+
+// ---- PQD isBoundaryUnivalent: family-sweep sampler (Fix A) gives the same
+// verdict as the old per-point evalPhi sampler, across a pole-angle battery. ----
+{
+  let agree = true, allUniv = true, n = 0, detail = '';
+  for (const deg of [0, 30, 60, 90, 135, 170]) {
+    const th = deg * Math.PI / 180;
+    const h = { poles: [{ a: { re: 2 * Math.cos(th), im: 2 * Math.sin(th) }, principal: [{ re: 1, im: 0 }] }], polyPart: [] };
+    const r = QD_NS.solveInverseQD(h, { alpha: 2 });
+    if (!r.success) { detail += ` deg${deg}:solveFail`; continue; }
+    n++;
+    const phi  = r.primary.phi;
+    const fast = QD_NS.isBoundaryUnivalent(phi, 128);                                  // new: family sweep
+    const slow = !QD_NS.boundarySelfIntersectsBruteForce(QD_NS.sampleBoundary(phi, 128)); // old: per-point evalPhi
+    if (fast !== slow) { agree = false; detail += ` deg${deg}:fast=${fast}≠slow=${slow}`; }
+    if (!fast) allUniv = false;
+  }
+  ok('PQD isBoundaryUnivalent: family-sweep sampler agrees with per-point sampler', agree && n >= 5, 'n=' + n + detail);
+  ok('PQD isBoundaryUnivalent: valid α=2 PQDs report univalent', allUniv && n >= 5, detail);
+}
+
 // ---- Identity-rigor wiring (HANDOFF #32): opts.univalenceSamples flows
 // from a param-slice scenario through to the family identity verifier
 // for both the warm-start and cold-start paths in _solveScenarioBody.

@@ -12,12 +12,58 @@ explain back to him.
 
 ---
 
-## 0. Current state (most recent: param-slice PQD α-routing fix)
+## 0. Current state (most recent: param-slice PQD univalence speed-up)
 
 **Full suite passing, 0 failed; `npm run lint` clean** (run `npm test` for the
-live count). Cache version `v49-paramslice-pqd-alpha-routing-fix`.
+live count). Cache version `v50-paramslice-pqd-univalence-speedup`.
 
-**Param-slice PQD α-routing fix (most recent).** The Parameter-slice tab rendered
+**Param-slice PQD speed-up (most recent).** PQD slices were extremely slow even
+for one-point bounded. Profiled per valid PQD pixel at default Standard quality
+(N=128): the dominant cost was **`isBoundaryUnivalent` (~4.2 ms)**, NOT the Newton
+solve (warm refine 0.03 ms; cold 5.6 ms) or the identity verify (0.58 ms);
+invalid/non-realizable pixels reject in ~0.01 ms (so the empty plane is cheap).
+Two reducible parts: (a) **boundary sampling** — `isBoundaryUnivalent` used the
+naive per-point `sampleBoundary`, and for PQD each `evalPhi_PQD` re-runs a K=24
+arg-continuation walk *per point* (`phiAnchored`→`argContAt`), ~3200 `evalRHash`
+for one N=128 check; (b) **O(N²) `boundarySelfIntersects`** (~1.6 ms @128, ~25 ms
+@512). Four fixes (user picked Full scope):
+- **A — `solver.js isBoundaryUnivalent`**: when `_resolveFamily(phi)` has a
+  `sampleBoundary` override (the PQD families), sample via the family's
+  incremental-arg sweep (`sampleBoundaryAdaptive(phi, N, 0)`, WeakMap-cached) and
+  map `[{theta,w}]`→points; classical keeps the per-point path. ~20× less sampling.
+- **B — `solver.js boundarySelfIntersects`**: replaced the all-pairs loop with
+  **uniform spatial-grid bucketing** (only same-cell edge pairs tested via the
+  exact `segmentsCross`; identical verdict). Kept the O(N²) as
+  `boundarySelfIntersectsBruteForce` (small-N fast path, degenerate fallback, test
+  oracle). Both now exported.
+- **C — `param-slice-common.js _solveScenarioBody`**: cap the per-pixel
+  self-intersection N at `UNIVALENCE_SAMPLES_CAP = 64`, decoupled from the
+  identity verifier's N (which keeps the full quality-preset count for
+  `identityTol` accuracy). Cold path (rare) unchanged.
+- **D — `param-slice-ui.js runAdaptive2D`**: precompute ONE valid seed φ
+  (`PS.solveOnePoint(baseScenario, [], null, familyTag)`) and use it as the
+  warm-hint fallback in `dispatchPoints` when `nearestPhi` is null — so the
+  ~200+ coarse-pass points (and each worker chunk's first point) warm-refine
+  (0.03 ms) instead of cold-solving (5.6 ms). Wrong-basin seed is safe (cold
+  fallback in `_solveScenarioBody`).
+- **Measured (node, same source as workers):** univalence N=128 4.2 ms→0.41 ms
+  (~10×), N=512 33.7 ms→1.6 ms (~21×); warm PQD pixel ~5 ms→~0.86 ms (~6×).
+- **Tests** (`node-test.js`): `boundarySelfIntersects` == brute-force oracle on a
+  battery (square, bowtie, pentagram, circle N=33/300, ellipse, limaçon); PQD
+  `isBoundaryUnivalent` verdict unchanged old-vs-new sampler across the pole-angle
+  battery. `bench.js` gains a `powerQD: 1-pt α=2` scenario (and its module loader
+  was fixed to the canonical worker-bundle order — it was missing seeds-*.js, so
+  `npm run bench` had been throwing at `solver-uqd.js`).
+- **Verify:** full suite green (+5 assertions); lint clean; `node app/bench.js`
+  runs all 8 scenarios. Browser: the worker bundler fetches each source as
+  `?v=<CACHE_VERSION>` (`param-slice-pool.js:118`), so the grid render's workers
+  load the v50 fast code (confirmed the `solver.js?v=v50` URL serves it). NB the
+  query-less main-thread `<script>` copy can stay HTTP-cached stale until the SW
+  update cycle — affects only the hover live-solve / seed, not the grid render.
+
+## (prior) Param-slice PQD α-routing fix
+
+**Param-slice PQD α-routing fix.** The Parameter-slice tab rendered
 PQDs as **classical** QDs — the grid classification AND the **Hovered-QD** preview
 both showed a plain `boundedQD` domain for what should be a power-weighted one
 (the user's report: "Hovered QD renders don't look right for one-point bounded

@@ -28,11 +28,22 @@ const vm = require('vm');
 const ctx = { module: { exports: {} }, exports: {}, global, require, console, process, __dirname, __filename };
 ctx.global = ctx;
 vm.createContext(ctx);
+// Canonical worker-bundle order (each solver-*.js needs its seeds-*.js loaded
+// first — the solvers throw at load time otherwise). Kept in lock-step with
+// asset-manifest.js WORKER_BUNDLE_FILES so every family (incl. the PQDs) loads.
 for (const f of [
   'complex.js', 'taylor.js', 'solver.js', 'solver-faber.js',
-  'solvers/seeds/seeds-qd.js', 'solver-qd.js', 'solver-uqd.js',
-  'solver-lqd-common.js', 'solver-lqd.js', 'solver-lqd-singular.js',
-  'solver-uqd-lqd.js', 'solver-uqd-lqd-singular.js',
+  'solvers/seeds/seeds-qd.js', 'solver-qd.js',
+  'solvers/seeds/seeds-uqd.js', 'solver-uqd.js',
+  'solver-lqd-common.js', 'solvers/seeds/seeds-lqd.js', 'solver-lqd.js',
+  'solvers/seeds/seeds-lqd-singular.js', 'solver-lqd-singular.js',
+  'solvers/seeds/seeds-uqd-lqd.js', 'solver-uqd-lqd.js',
+  'solvers/seeds/seeds-uqd-lqd-singular.js', 'solver-uqd-lqd-singular.js',
+  'solver-pqd-common.js', 'solvers/seeds/seeds-pqd.js', 'solver-pqd.js',
+  'solvers/seeds/seeds-pqd-singular.js', 'solver-pqd-singular.js',
+  'solvers/seeds/seeds-uqd-pqd.js', 'solver-uqd-pqd.js',
+  'solvers/seeds/seeds-uqd-pqd-singular.js', 'solver-uqd-pqd-singular.js',
+  'poly-helpers.js', 'parse-h.js',
 ]) {
   const src = fs.readFileSync(path.join(__dirname, f), 'utf8')
     .replace(/typeof window !== 'undefined'/g, 'false');
@@ -87,6 +98,13 @@ const SCENARIOS = [
     name: 'boundedLQD: 1-pt α=2',
     hData: { poles: [{ a: { re: 1, im: 0 }, principal: [{ re: 2, im: 0 }] }] },
     opts: { lqd: true, w0: { re: 1, im: 0 } },
+  },
+  {
+    // Bounded power QD (Family.powerQD). Tracks per-solve cost of the αth-root /
+    // continuous-arg branch machinery that dominates the param-slice PQD path.
+    name: 'powerQD: 1-pt α=2',
+    hData: { poles: [{ a: { re: 3, im: 0 }, principal: [{ re: 3, im: 0 }] }] },
+    opts: { alpha: 2 },
   },
   {
     name: 'boundedLQD_singular: Thm 5.6.2',

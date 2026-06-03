@@ -1183,8 +1183,14 @@
       // (it gets cloned again inside `_solveScenarioBody` via QD.clonePhi).
       const hints = points.map(({ c, r }) => {
         const hit = nearestPhi(c, r);
-        if (!hit) return null;
-        return Object.assign({}, hit.phi, { _coarseIter: hit.iterCount });
+        if (hit) return Object.assign({}, hit.phi, { _coarseIter: hit.iterCount });
+        // No cached neighbour yet (the whole COARSE pass, and the first point of
+        // each worker chunk): fall back to the precomputed seed φ so the pixel
+        // warm-starts (~0.03 ms) instead of cold-solving (~5.6 ms for PQD). A
+        // wrong-basin seed is safe — `_solveScenarioBody` retries cold if the
+        // warm Newton fails. Seeding is what keeps PQD slices from paying ~200+
+        // cold solves on the coarse pass alone.
+        return seedPhi ? Object.assign({}, seedPhi) : null;
       });
       return pool.solveBatch(baseScenario, mode, params, hints);
     }
@@ -1209,6 +1215,24 @@
     includeEdge(n0 - 1, n1 - 1);
 
     if (cancelToken.cancelled) return;
+
+    // Warm-start seed (PQD perf): solve the base scenario once on the main
+    // thread to get ONE valid φ of the right family + pole structure, then use
+    // it as the warm hint for every point that has no cached neighbour yet —
+    // i.e. the entire coarse pass and each worker chunk's first point. Without
+    // it, those ~200+ coarse points each cold-solve (~5.6 ms for PQD); with it
+    // they warm-refine (~0.03 ms). The empty-point solve uses the scenario's
+    // current (already-valid, user-visible) config; if it fails to solve we
+    // simply skip seeding (seedPhi stays null → prior cold-start behaviour).
+    let seedPhi = null;
+    try {
+      const familyTag = PS.MODE_FAMILY_TAG ? PS.MODE_FAMILY_TAG[mode] : undefined;
+      const seedR = PS.solveOnePoint(baseScenario, [], null, familyTag);
+      if (seedR && seedR.cls === PS.CLASS_VALID && seedR.phiSerialized) {
+        seedPhi = seedR.phiSerialized;
+      }
+    } catch (e) { seedPhi = null; }
+
     const t0 = performance.now();
     const coarseResults = await dispatchPoints(coarsePoints);
     if (cancelToken.cancelled || !coarseResults) return;

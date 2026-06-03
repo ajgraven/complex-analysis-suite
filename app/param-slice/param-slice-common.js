@@ -27,6 +27,11 @@
     // Loaded before solver — tolerate this; consumers re-resolve QD lazily.
   }
 
+  // Per-pixel cap on the boundary SELF-INTERSECTION sample count (decoupled
+  // from the identity-check N). A coarse parameter-slice map detects boundary
+  // crossings reliably at this resolution; higher counts only slow the sweep.
+  const UNIVALENCE_SAMPLES_CAP = 64;
+
   // ---------------------------------------------------------------------------
   // Parameter descriptors
   // ---------------------------------------------------------------------------
@@ -407,7 +412,16 @@
         if (ns.success) {
           const family = QD.selectFamily(s.norm);
           const phi = family.canonicalizePhi(ns.phi);
-          const univalent = QD.isBoundaryUnivalent(phi, opts.univalenceSamples || 64);
+          // Decouple the per-pixel univalence sample count from the identity
+          // count. The identity check needs the full quality-preset N for its
+          // `identityTol` accuracy, but the boundary SELF-INTERSECTION check is
+          // a topological test that a coarse cartography map resolves fine at
+          // ≤ UNIVALENCE_SAMPLES_CAP — capping it avoids paying 128–512 boundary
+          // samples per pixel just to detect a crossing (see the param-slice
+          // PQD perf work). The cold path (rare, see the coarse-pass seed) keeps
+          // both at full N inside solveInverseQD.
+          const uniN = Math.min(opts.univalenceSamples || 64, UNIVALENCE_SAMPLES_CAP);
+          const univalent = QD.isBoundaryUnivalent(phi, uniN);
           const id = family.verifyQuadratureIdentity(phi, s.hData,
             { numSamples: opts.univalenceSamples || 64 });
           resultBag = {
