@@ -576,7 +576,25 @@ function scaleHDataResidues(hData, s) {
 
 // --------- Boundary sampling + univalence ---------------------------------
 function isBoundaryUnivalent(phi, samples = 500) {
-  return !boundarySelfIntersects(sampleBoundary(phi, samples));
+  // Families with a continuous-arg sweep sampler (currently the powerQD
+  // families, whose φ = (R#)^{1/α} needs αth-root branch tracking) get the
+  // SAME boundary far more cheaply via the sweep than via N independent
+  // `evalPhi` calls: `evalPhi_PQD` re-runs a per-point arg-continuation walk
+  // (argContAt, ~24 R# evals each) at every sample, whereas the sweep unwraps
+  // arg INCREMENTALLY between adjacent θ (~1 R# eval each) — a ~20× cut that
+  // dominates per-pixel cost in the param-slice tab. maxExtra=0 ⇒ a uniform
+  // N-point ring (no curvature refinement), which is what the self-intersection
+  // test wants; sampleBoundaryAdaptive is WeakMap-cached by phi, so this also
+  // reuses the boundary the plot already computed. Classical families have no
+  // override and keep the cheap per-point `sampleBoundary` (unchanged).
+  const fam = _resolveFamily(phi);
+  let pts;
+  if (fam && fam.sampleBoundary) {
+    pts = sampleBoundaryAdaptive(phi, samples, 0).map(s => s.w);
+  } else {
+    pts = sampleBoundary(phi, samples);
+  }
+  return !boundarySelfIntersects(pts);
 }
 
 function sampleBoundary(phi, N) {
@@ -607,7 +625,10 @@ function segmentsCross(p1, p2, p3, p4) {
       && u > SEG_ENDPOINT_EPS && u < 1 - SEG_ENDPOINT_EPS;
 }
 
-function boundarySelfIntersects(pts) {
+// Reference O(N²) self-intersection: tests every non-adjacent edge pair of the
+// closed polyline pts[0]→…→pts[N-1]→pts[0]. Kept as the small-N fast path, the
+// fallback for degenerate geometry, and the correctness oracle in node-test.
+function boundarySelfIntersectsBruteForce(pts) {
   const N = pts.length;
   for (let i = 0; i < N; i++) {
     const i2 = (i + 1) % N;
@@ -615,6 +636,81 @@ function boundarySelfIntersects(pts) {
       const j2 = (j + 1) % N;
       if (j2 === i) continue;
       if (segmentsCross(pts[i], pts[i2], pts[j], pts[j2])) return true;
+    }
+  }
+  return false;
+}
+
+// O(N log N)-typical self-intersection via uniform spatial-grid bucketing.
+// Each edge is hashed into the grid cells its bounding box overlaps; only edges
+// that share a cell are tested with the exact `segmentsCross` predicate, so the
+// verdict is IDENTICAL to the brute-force version — just far fewer pair tests
+// (~O(N) for a boundary whose edges are of comparable length, which the uniform
+// θ-sweep produces). The all-pairs version is O(N²) and was the dominant cost
+// of `isBoundaryUnivalent` at high sample counts (e.g. the param-slice tab).
+function boundarySelfIntersects(pts) {
+  const N = pts.length;
+  if (N < 4) return false;
+  // Small N: the grid's setup overhead isn't worth it; brute force is instant.
+  if (N <= 32) return boundarySelfIntersectsBruteForce(pts);
+
+  // Bounding box + mean edge length (for the cell size).
+  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+  let perim = 0;
+  for (let i = 0; i < N; i++) {
+    const p = pts[i];
+    if (!Number.isFinite(p.re) || !Number.isFinite(p.im)) {
+      return boundarySelfIntersectsBruteForce(pts);   // NaN/∞ ⇒ exact path
+    }
+    if (p.re < minx) minx = p.re; if (p.re > maxx) maxx = p.re;
+    if (p.im < miny) miny = p.im; if (p.im > maxy) maxy = p.im;
+    const q = pts[(i + 1) % N];
+    perim += Math.hypot(q.re - p.re, q.im - p.im);
+  }
+  const w = maxx - minx, h = maxy - miny;
+  const meanEdge = perim / N;
+  // Degenerate (all points coincident / collinear-zero-area or zero edges):
+  // fall back to the exact path rather than divide by zero.
+  if (!(meanEdge > 0) || (!(w > 0) && !(h > 0))) return boundarySelfIntersectsBruteForce(pts);
+
+  // Cell ≈ 2× mean edge ⇒ a handful of edges per cell. Clamp grid dimensions so
+  // a pathological aspect ratio (one huge edge) can't allocate a giant grid.
+  const cell = meanEdge * 2;
+  const cols = Math.max(1, Math.min(2048, Math.floor(w / cell) + 1));
+  const rows = Math.max(1, Math.min(2048, Math.floor(h / cell) + 1));
+  const cw = w > 0 ? w / cols : 1;
+  const ch = h > 0 ? h / rows : 1;
+
+  // Bucket each edge by every cell its bbox overlaps; test against edges already
+  // in that cell. `adjacent` skips the two edges sharing a vertex with edge i
+  // (i±1, and the 0↔N-1 wrap) — matching the brute-force loop exactly. A pair
+  // sharing >1 cell may be tested more than once; that's harmless (we return on
+  // the first true crossing) and bounded by edges-per-cell.
+  const buckets = new Map();
+  for (let i = 0; i < N; i++) {
+    const a = pts[i], b = pts[(i + 1) % N];
+    const cx0 = Math.min(a.re, b.re), cx1 = Math.max(a.re, b.re);
+    const cy0 = Math.min(a.im, b.im), cy1 = Math.max(a.im, b.im);
+    const gx0 = Math.max(0, Math.floor((cx0 - minx) / cw));
+    const gx1 = Math.min(cols - 1, Math.floor((cx1 - minx) / cw));
+    const gy0 = Math.max(0, Math.floor((cy0 - miny) / ch));
+    const gy1 = Math.min(rows - 1, Math.floor((cy1 - miny) / ch));
+    for (let gy = gy0; gy <= gy1; gy++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        const key = gy * cols + gx;
+        let list = buckets.get(key);
+        if (list) {
+          for (let t = 0; t < list.length; t++) {
+            const j = list[t];
+            const adjacent = (i === j + 1) || (j === i + 1) || (i === 0 && j === N - 1) || (j === 0 && i === N - 1);
+            if (adjacent) continue;
+            if (segmentsCross(pts[i], pts[(i + 1) % N], pts[j], pts[(j + 1) % N])) return true;
+          }
+          list.push(i);
+        } else {
+          buckets.set(key, [i]);
+        }
+      }
     }
   }
   return false;
@@ -1312,6 +1408,7 @@ const _exports = {
   newtonSolve, scaleHDataPoles, scaleHDataResidues,
   solveLinearSystem, solveLeastSquares, houseQR, numericalJacobian,
   isBoundaryUnivalent, sampleBoundary, sampleBoundaryAdaptive, refineBoundaryByDeviation,
+  boundarySelfIntersects, boundarySelfIntersectsBruteForce, segmentsCross,
   binomialCoeff, diverseInitialGuess,
   solveInverseQD, searchAlternates, mulberry32,
   // §23 — auto-switch helpers (origin-in-Ω detection for the singular ↔
