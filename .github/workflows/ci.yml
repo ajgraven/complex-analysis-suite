@@ -1,0 +1,40 @@
+# Continuous integration: run the headless test suite + ESLint on every push
+# to main and every PR. Matches the local commands documented in
+# CONTRIBUTING.md.
+#
+# Adding more checks:
+#   * `npm run typecheck` once D7 (wider @ts-check coverage) lands.
+#   * `npm run bench` once D5 ships — can be gated to a nightly cron rather
+#     than every push.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests
+        run: npm test
+      - name: Run linter
+        run: npm run lint
+      # Benchmark check: non-blocking. Reports >25% slowdowns as a warning
+      # but doesn't fail the build — CI runners have variable load and the
+      # threshold can produce false positives. Flip `continue-on-error: false`
+      # once we have enough history to calibrate a tighter threshold.
+      - name: Run benchmark check
+        continue-on-error: true
+        run: npm run bench:check

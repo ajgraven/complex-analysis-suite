@@ -1,0 +1,626 @@
+/* ===== Layout ===== */
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #2a2a2a;
+  background: #f3f4f6;
+  overflow: hidden;
+}
+
+#app {
+  display: grid;
+  grid-template-columns: 410px 1fr;
+  height: 100vh;
+}
+
+#controls {
+  background: #fff;
+  border-right: 1px solid #d8dbe0;
+  padding: 16px;
+  overflow-y: auto;
+}
+#controls h1 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  color: #1a2a44;
+}
+
+/* ===== Tab bar ===== */
+#tab-bar {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #d8dbe0;
+}
+#tab-bar .tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #5677a8;
+  border-radius: 4px 4px 0 0;
+  margin-bottom: -1px;
+}
+#tab-bar .tab-btn:hover { background: #eef2f7; }
+#tab-bar .tab-btn.active {
+  background: #fff;
+  border-color: #d8dbe0;
+  color: #1a2a44;
+  font-weight: 600;
+}
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+#plot-area {
+  position: relative;
+  overflow: hidden;
+  background: #fafafa;
+}
+#canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+#plot-overlay {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 6px;
+  background: rgba(255,255,255,0.85);
+  border: 1px solid #d8dbe0;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 12px;
+  user-select: none;
+}
+#plot-overlay button {
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 4px 8px;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 4px;
+  color: #1a3e7a;
+}
+#plot-overlay button:hover { background: #eef2f7; }
+
+#plot-readout {
+  position: absolute;
+  bottom: 8px;
+  left: 12px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+  color: #555;
+  background: rgba(255,255,255,0.75);
+  padding: 2px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* ===== Transparent solution-summary panel (overlaid bottom-right of plot) ===== */
+#status-panel {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  max-width: min(44%, 420px);
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  background: rgba(255, 255, 255, 0.58);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  border: 1px solid #d8dbe0;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #1a2a44;
+  pointer-events: auto;
+  z-index: 3;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+#status-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#sp-badge { flex: 1; font-weight: 600; }
+#sp-badge .ok   { color: #2a8f2a; }
+#sp-badge .warn { color: #b8860b; }
+#sp-badge .err  { color: #b53030; }
+#sp-collapse {
+  padding: 0 6px;
+  line-height: 1.4;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 14px;
+  color: #5677a8;
+}
+/* Collapsed: hide the body, leaving only the badge bar (the verdict stays
+   visible). The chevron flips via the .collapsed class. */
+#status-panel.collapsed #status-panel-body { display: none; }
+#status-panel.collapsed #sp-collapse { transform: rotate(-90deg); }
+#status-panel-body { margin-top: 6px; }
+#status-panel details { margin: 4px 0; }
+#status-panel summary {
+  cursor: pointer;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #777;
+  font-weight: 600;
+}
+#status-panel summary + div { margin-top: 4px; }
+/* Status spans reused from the old cards. */
+#status-panel .ok   { color: #2a8f2a; font-weight: 600; }
+#status-panel .warn { color: #b8860b; font-weight: 600; }
+#status-panel .err  { color: #b53030; font-weight: 600; }
+#status-panel .key  { color: #777; }
+/* Geometric-property rows carry their margin/angle in a hover tooltip. */
+#status-panel .geom-row { cursor: help; }
+
+/* ===== Cards ===== */
+.card {
+  background: #fff;
+  border: 1px solid #e3e5ea;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.card h2 {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #5677a8;
+  margin: 0 0 8px 0;
+}
+.card .hint {
+  font-size: 11px;
+  color: #777;
+  margin-bottom: 6px;
+}
+
+/* ===== QoL: help button, hover tooltip, copy button (HANDOFF #33) ===== */
+.help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  width: 16px; height: 16px;
+  padding: 0;
+  font-size: 11px; font-weight: 600;
+  line-height: 1;
+  color: #777;
+  background: #eef1f6;
+  border: 1px solid #c5c9d2;
+  border-radius: 50%;
+  cursor: help;
+  vertical-align: middle;
+}
+.help-btn:hover { color: #1a2a44; background: #dde3ee; border-color: #99a3b5; }
+.help-btn:focus { outline: 2px solid rgba(86, 119, 168, 0.4); outline-offset: 1px; }
+
+.help-popover {
+  position: absolute;
+  z-index: 1000;
+  max-width: 320px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #1a2a44;
+  background: #fffef7;
+  border: 1px solid #c5c9d2;
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+}
+.help-popover h3 { margin: 0 0 4px 0; font-size: 12px; color: #5677a8; }
+.help-popover code, .help-popover kbd {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+  background: #f3f5f9;
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid #dde3ee;
+}
+.help-popover .hint { margin-top: 4px; }
+
+.hover-tooltip {
+  position: absolute;
+  z-index: 1100;
+  pointer-events: none;
+  max-width: 280px;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  color: #1a2a44;
+  background: #fffef7;
+  border: 1px solid #c5c9d2;
+  border-radius: 5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  white-space: nowrap;
+}
+.hover-tooltip .tt-class { display: block; font-family: inherit; color: #5677a8; font-weight: 600; margin-top: 2px; }
+.hover-tooltip .tt-row   { display: block; }
+
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  width: 18px; height: 18px;
+  padding: 0;
+  font-size: 12px;
+  color: #777;
+  background: #eef1f6;
+  border: 1px solid #c5c9d2;
+  border-radius: 3px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.copy-btn:hover { color: #1a2a44; background: #dde3ee; border-color: #99a3b5; }
+
+.copy-toast {
+  position: absolute;
+  z-index: 1200;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(40, 100, 60, 0.92);
+  border-radius: 4px;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.copy-toast.fade { opacity: 0; }
+
+.shortcuts-overlay {
+  position: fixed;
+  z-index: 1300;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+}
+.shortcuts-table { font-size: 12px; border-spacing: 6px 4px; }
+.shortcuts-table td:first-child { text-align: right; }
+
+/* ===== Inputs ===== */
+input[type="text"], input[type="number"], select {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 6px;
+  border: 1px solid #c5c9d2;
+  border-radius: 4px;
+  background: #fff;
+  color: #1a2a44;
+}
+input[type="text"]:focus, input[type="number"]:focus, select:focus {
+  outline: none;
+  border-color: #5677a8;
+  box-shadow: 0 0 0 2px rgba(86, 119, 168, 0.18);
+}
+input.invalid { border-color: #b53030; background: #fcf2f2; }
+input[type="text"].cnum { width: 100px; font-family: ui-monospace, "SF Mono", Consolas, monospace; }
+
+/* 1-D sliders (magnitude / argument) attached to residue inputs */
+.residue-block {
+  margin: 4px 0;
+  padding: 4px 0;
+  border-top: 1px dashed #e8eaef;
+}
+.residue-block:first-child { border-top: none; padding-top: 0; }
+
+.slider1d-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 2px 12px;
+}
+.slider1d-row > label {
+  width: 28px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+  color: #5677a8;
+}
+.slider1d {
+  flex: 1 1 auto;
+  min-width: 80px;
+  height: 16px;
+  margin: 0;
+  accent-color: #5677a8;
+}
+.slider1d-val {
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  width: 56px;
+  text-align: right;
+  color: #555;
+}
+
+label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  margin: 3px 0;
+}
+.row { display: flex; align-items: center; gap: 8px; margin: 4px 0; flex-wrap: wrap; }
+
+button {
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 10px;
+  border: 1px solid #c5c9d2;
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #1a2a44;
+}
+button:hover { background: #eef2f7; border-color: #5677a8; }
+button.primary { background: #5677a8; color: #fff; border-color: #5677a8; }
+button.primary:hover { background: #4a6792; }
+/* Visible keyboard-focus ring on all buttons (a11y). :focus-visible only
+   shows it for keyboard/programmatic focus, not mouse clicks. */
+button:focus-visible {
+  outline: 2px solid #5677a8;
+  outline-offset: 2px;
+}
+button.small { padding: 2px 7px; font-size: 12px; }
+button.danger { color: #b53030; border-color: #e2c4c4; }
+button.danger:hover { background: #fceeee; }
+
+/* ===== Pole entries ===== */
+.pole {
+  border: 1px solid #e3e5ea;
+  border-radius: 5px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: #fbfcfd;
+}
+/* Separator between the mode selector and the solved Riemann-map display. */
+.dm-sep {
+  border: 0;
+  border-top: 1px solid #e3e5ea;
+  margin: 10px 0 0;
+}
+/* Riemann-map block at the bottom of the Domain-type tile. */
+#dm-riemann { margin-top: 10px; }
+.dm-riemann-label { display: flex; align-items: center; gap: 4px; }
+/* #c-card is relocated INTO the Domain-type tile (below the φ(z) formula);
+   strip its card chrome so it reads as a sub-section, not a nested box. */
+#domain-mode-card > #c-card {
+  border: 0;
+  padding: 0;
+  margin: 8px 0 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Pole header is the <summary> of the collapsible <details.pole>. */
+.pole-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;            /* hide the default disclosure triangle… */
+}
+.pole-header::-webkit-details-marker { display: none; }
+.pole-header::before {         /* …replace with our own chevron */
+  content: '▸';
+  color: #5677a8;
+  font-size: 10px;
+  transition: transform 0.12s ease;
+}
+details.pole[open] > .pole-header::before { transform: rotate(90deg); }
+details.pole[open] > .pole-header { margin-bottom: 6px; }
+.pole-num {
+  font-weight: 600;
+  font-size: 12px;
+  color: #5677a8;
+}
+/* Location preview shown in the collapsed summary. flex:1 pushes the × right. */
+.pole-loc {
+  flex: 1;
+  font-size: 11px;
+  color: #777;
+  font-family: ui-monospace, Consolas, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.residues { margin-top: 5px; }
+.residue-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+  font-size: 13px;
+}
+.residue-row .label-fixed {
+  width: 38px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  color: #5677a8;
+}
+
+/* ===== Status ===== */
+/* (Geometric-properties / cusps moved to the #status-panel overlay, which has
+   its own .ok/.warn/.err/.key rules; this is just the operational #status card.) */
+#status {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+}
+#status .ok   { color: #2a8f2a; font-weight: 600; }
+#status .warn { color: #b8860b; font-weight: 600; }
+#status .err  { color: #b53030; font-weight: 600; }
+#status .key  { color: #777; }
+
+#alternates-card .alt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 13px;
+  border-bottom: 1px dashed #eee;
+}
+#alternates-card .alt:last-child { border-bottom: none; }
+
+/* ===== Riemann-map LaTeX (KaTeX) — shown in the Domain-type tile =====
+   .rm-sym  = boxed SYMBOLIC identity (#dm-riemann-sym, revealed by "?"; also
+              reused by the Direct tab's h(w) display).
+   .rm-numer = the explicit NUMERICAL closed form (#dm-riemann-numer), with
+              horizontal scroll for long expressions. */
+.rm-sym {
+  background: #f4f6fb;
+  border-left: 3px solid #5677a8;
+  padding: 6px 10px;
+  margin: 4px 0 10px 0;
+  overflow-x: auto;
+}
+.rm-sym .katex { font-size: 0.95em; }
+/* Left-align display-mode math (KaTeX centres it by default), so formulas
+   read from the left margin instead of floating mid-card with ragged gaps. */
+.rm-sym .katex-display { text-align: left; margin: 4px 0; }
+
+.rm-numer {
+  padding: 4px 0 4px 4px;
+  overflow-x: auto;
+}
+.rm-numer .katex { font-size: 0.95em; }
+.rm-numer .katex-display { margin: 4px 0; text-align: left; }
+
+/* ===== Schwarz σ-form panel (KaTeX-typeset; #2 typesetting pass) ===== */
+#schwarz-sigma-form-out .ssf-fam {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  color: #777;
+  margin-bottom: 4px;
+}
+#schwarz-sigma-form-out .ssf-row { overflow-x: auto; }
+#schwarz-sigma-form-out .katex { font-size: 0.95em; }
+#schwarz-sigma-form-out .katex-display { text-align: left; margin: 4px 0; }
+
+/* ===== Riemann-sphere GL canvas ===== */
+/* Mirrors the #schwarz-gl-canvas pattern: absolute-positioned behind the
+   main 2D canvas (z-index 0). Hidden by default; sphere-ui.js shows it
+   when the sphere tab is active and hides it on tab-out. */
+#sphere-gl-canvas {
+  position: absolute;
+  left: 0; top: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Hover readout in the sphere camera card: allow newlines. */
+#sp-hover { white-space: pre; }
+
+/* Floating tooltip that follows the cursor over the Riemann-sphere GL canvas.
+   Sits at z-index 3 — above the GL canvas (2) and above any 2D overlay (1). */
+#sphere-hover-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid #d8dbe0;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+  color: #333;
+  white-space: pre;
+  z-index: 3;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  user-select: none;
+}
+
+.hidden { display: none !important; }
+
+.search-spinner {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border: 2px solid #c5c9d2;
+  border-top-color: #5677a8;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+/* Respect the user's reduced-motion preference: drop the continuous spin
+   (it still renders as a static partial ring, which reads as "busy"). */
+@media (prefers-reduced-motion: reduce) {
+  .search-spinner { animation: none; }
+}
+
+/* ===== Search options (advanced) panel ===== */
+.search-opt-group {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed #d8dbe0;
+}
+.search-opt-group-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #555;
+  margin-bottom: 6px;
+}
+input.so-num {
+  width: 100px;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+/* Domain-type sub-grouping (Classical QD vs Log-weighted QD) */
+.domain-mode-group {
+  margin-bottom: 8px;
+}
+.domain-mode-group:last-of-type {
+  margin-bottom: 0;
+}
+.domain-mode-group-label {
+  font-size: 10px;
+  color: #777;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 3px;
+  font-weight: 500;
+}
+
+/* ---- View-mode segmented control (HANDOFF #29) ---------------------------
+   Used in the Schwarz tab sidebar to switch between plane and sphere views.
+   Pattern: two (or more) <button.seg-btn> children inside a .segmented
+   container; the JS toggles .active on the chosen one. */
+.segmented {
+  display: flex;
+  gap: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #c2cad6;
+}
+.segmented .seg-btn {
+  flex: 1;
+  padding: 6px 10px;
+  border: 0;
+  background: #f4f6fa;
+  color: #234;
+  cursor: pointer;
+  font: inherit;
+}
+.segmented .seg-btn:hover { background: #e8edf5; }
+.segmented .seg-btn.active {
+  background: #2d70c8;
+  color: #fff;
+}
+.segmented .seg-btn:not(:last-child) {
+  border-right: 1px solid #c2cad6;
+}
+/* .view-plane-only / .view-sphere-only — visibility toggled by JS. */

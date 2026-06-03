@@ -1,0 +1,191 @@
+# Theory → Code Map
+
+This file is the bridge between the math in
+[Andrew Graven's PhD thesis](Andrew_Graven_Thesis.pdf), *Weighted
+Quadrature Domains and the Faber Transform* (Caltech, 2026), and the
+specific code that implements each result. Equation labels match the
+thesis.
+
+Line numbers are accurate as of the P3 docs pass. If a file is edited,
+the symbol name is the source of truth — search for it.
+
+---
+
+## Core inverse-problem identity (Theorem 3.2.2)
+
+**Statement.** For a bounded simply connected QD with quadrature
+function `h(w) = Σ Σ C_{j,s} / (w − a_j)^s`, the Riemann map φ : 𝔻 → Ω
+satisfies
+
+  φ(z) = w₀ + Φ_φ⁻¹(h)^#(z),
+
+where Φ_φ⁻¹ is the inverse Faber transform and `f^#(z) = conj(f(1/conj(z)))`.
+
+**Code.** The forward + inverse Faber primitives live in
+[`app/solver-faber.js`](app/solver-faber.js):
+
+| Symbol | Where | Maps to |
+| --- | --- | --- |
+| `QD.Faber.inverseFaberAtPole(residues, phiTilde)` | `solver-faber.js:60` | Per-pole inverse Faber transform yielding A_{j,k} |
+| `QD.Faber.inverseFaberAtInfinity(polyPart, f, c)` | `solver-faber.js:109` | Inverse Faber at ∞ for h's polynomial part (unbounded families) |
+
+---
+
+## The (★) and (●) system (Theorems 3.2.1, 3.2.2)
+
+**Statement.** Writing ψ̃_j(t) = φ⁻¹(a_j + t) − z_j (the local
+Taylor series of φ⁻¹), the inverse problem is
+
+  **(★)** A_{j,k} = Σ_{s=k}^{m_j} (s/k) · C_{j,s} · [t^s] ψ̃_j(t)^k,
+  **(●)** φ(z_j) = a_j,
+
+for n+d complex unknowns (z_j, A_{j,k}), with d = Σ m_j.
+
+**Code (bounded classical, Family.boundedQD).**
+
+| Block | Symbol | Where |
+| --- | --- | --- |
+| Compute (★) RHS (the target A) | `computeTargetA_QD` | `solver-qd.js:93` |
+| Build φ evaluation | `evalPhi_QD` | `solver-qd.js:36` |
+| ψ̃ Taylor series | `phiTaylorAt_QD` | `solver-qd.js:57` |
+| Full residual (block (★) ⊕ block (●)) | `residual_QD` | `solver-qd.js:114` |
+| Pack/unpack to flat real vector | `packPhi_QD`, `unpackPhi_QD` | `solver-qd.js:142`, `:149` |
+| Initial guess (disk seed) | `diskInitialGuess_QD` | `solver-qd.js:189` |
+| Continuation along a_j(t) | `continuationSolve_QD` | `solver-qd.js:244` |
+| Identity verifier (∂Ω test) | `verifyQuadratureIdentity_QD` | `solver-qd.js:322` |
+| Register on registry | `QD.registerFamily('boundedQD')` | `solver-qd.js:427` |
+
+The same shape repeats for every other family (`solver-uqd.js`,
+`solver-lqd*.js`, `solver-uqd-lqd*.js`) — see
+[CONTRIBUTING.md](CONTRIBUTING.md#adding-a-new-family) for how to add one.
+
+---
+
+## LQD families (Thesis Chapter V)
+
+The Blaschke factor `b_{z_0}(z)` and its companion `r#(z)` form the
+shared LQD machinery used by all four LQD families.
+
+| Symbol | Where | Role |
+| --- | --- | --- |
+| `blaschkeEval(z, z0)` | `solver-lqd-common.js:52` | Standard Blaschke factor `(z − z_0) / (1 − conj(z_0) z)` |
+| `blaschkeTaylor(zc, z0, L)` | `solver-lqd-common.js:65` | Taylor expansion of `b_{z_0}` at `zc` (length L+1) |
+| `rHashLaurentAtInfinity(phi, L)` | `solver-lqd-common.js:132` | Laurent of `r#(z)` at z = ∞ |
+| `blaschkeLaurentAtInfinity(z0, L)` | `solver-lqd-common.js:170` | Laurent of `ln(b_{z_0}(z))` at ∞ |
+| `phiLaurentAtInfinity_UQDL(phi, L)` | `solver-lqd-common.js:204` | φ-Laurent at ∞ for unbounded non-singular LQD (HANDOFF #21) |
+| `phiLaurentAtInfinity_UQDLS(phi, L)` | `solver-lqd-common.js:237` | φ-Laurent at ∞ for unbounded singular LQD (HANDOFF #22) |
+
+---
+
+## Theorem 5.3.2 (bounded LQD existence)
+
+**Statement.** Ω ∈ QD₀(α/(w−w₀)) iff `0 < α ≤ π²`, with explicit form
+`Ω = {|ln(w/w₀)|² < α}`; double-point at α = π².
+
+**Code.** [`app/solver-lqd.js`](app/solver-lqd.js); presets that exercise
+the bound at `LQD_PRESETS_BOUNDED` in
+[`app/ui-presets.js`](app/ui-presets.js:88).
+
+Tests covering the closed-form solutions live in
+[`app/node-test.js`](app/node-test.js) (search for `Thm 5.3.2`).
+
+---
+
+## Theorem 5.6.2 (bounded singular LQD family)
+
+**Statement.** Bounded LQD with `0 ∈ Ω`; q (the residue of h at 0) is
+the family parameter. q = 0 is the degenerate edge case.
+
+**Code (Family.boundedLQD_singular).**
+
+| Block | Symbol | Where |
+| --- | --- | --- |
+| (★) target | `computeTargetA_LQDS` | `solver-lqd-singular.js:137` |
+| φ evaluation | `evalPhi_LQDS` | `solver-lqd-singular.js:99` |
+| ψ̃ Taylor | `phiTaylorAt_LQDS` | `solver-lqd-singular.js:109` |
+| Residual (★ ⊕ ● ⊕ q-equation at 0) | `residual_LQDS` | `solver-lqd-singular.js:151` |
+| Schema (pack/unpack via `packPhiBySchema`) | `SCHEMA_LQDS` | `solver-lqd-singular.js:273` |
+| Initial guess | `initialGuess_LQDS` | `solver-lqd-singular.js:299` |
+| Diverse seeds (Blaschke z₀ multistart) | `diverseInitialGuess_LQDS` | `solver-lqd-singular.js:463` |
+| Identity verifier | `verifyQuadratureIdentity_LQDS` | `solver-lqd-singular.js:549` |
+| Register on registry | `QD.registerFamily('boundedLQD_singular')` | `solver-lqd-singular.js:629` |
+
+---
+
+## Polynomial-h support for unbounded LQDs (HANDOFF #21, #22, #24)
+
+These three handoffs derived and shipped the β / γ corrections that
+extend polynomial-h support to unbounded non-singular / singular LQDs
+and the higher-order-pole-at-origin case.
+
+| Concept | Symbol | Where |
+| --- | --- | --- |
+| β-correction (polynomial-at-∞ part) | `phi.lqdBeta` | populated in `solver-uqd-lqd.js`, `solver-uqd-lqd-singular.js`; carried through `clonePhi` everywhere |
+| γ synthetic-branch at z₀ | `phi.lqdGamma` | `solver-uqd-lqd-singular.js`; merged into branches via `_phiWithSyntheticBranch` |
+| (★)_F equations match β to h's poly-at-∞ | via `inverseFaberAtInfinity` + `phiLaurentAtInfinity_UQDL` | `solver-lqd-common.js:204` |
+| (★)_Γ block (γ matches principal at w=0) | uses `inverseFaberAtPole` directly | `solver-uqd-lqd-singular.js` |
+| Schwarz GPU support | `u_lqdBeta` uniforms, γ-merged branches | `schwarz/schwarz-webgl.js` |
+
+---
+
+## Direct problem (Thesis §3.4)
+
+**Statement.** Given φ : 𝔻 → Ω, the Schwarz function σ satisfies σ(w)
+= conj(w) on ∂Ω and extends meromorphically into Ω. h is the sum of
+σ's principal parts at its finite poles in Ω.
+
+**Code.** [`app/direct/direct-common.js`](app/direct/direct-common.js) —
+see [`app/direct/README.md`](app/direct/README.md) for the four
+φ-shape kernels (polynomial, rational, Laurent, numerical) and the
+Durand–Kerner root finder.
+
+---
+
+## Schwarz dynamics
+
+**Statement.** Iterating σ : Ω → Ω partitions the plane into the
+"tiling set" (orbits stay bounded forever) and its complement (orbits
+escape after `n` steps). The boundary of the tiling set is the
+classical Schwarz limit set, a fractal.
+
+**Code.** [`app/schwarz/schwarz-common.js`](app/schwarz/schwarz-common.js) —
+see [`app/schwarz/README.md`](app/schwarz/README.md) for the CPU + GPU
+adapters and per-family translations.
+
+---
+
+## Critical-set image (φ' zeros mapped to w-plane)
+
+**Statement.** A zero of φ' inside the relevant disk causes φ to fail
+univalence. Zeros near `|z| = 1` predict imminent failure as
+parameters vary.
+
+**Code.** [`app/critical-set.js`](app/critical-set.js); UI overlay in
+the inverse-tab plot. Severity classifier maps `|z|` to colours
+(critical / near / safe).
+
+---
+
+## Numerical primitives
+
+| Primitive | Where | Notes |
+| --- | --- | --- |
+| Householder QR (real, m ≥ n) | `houseQR` — `solver.js:195` | P1.2. Backward-stable; replaces Gauss-Jordan on the normal equations. Surfaces `condEst`. |
+| Square linear solve | `solveLinearSystem` — `solver.js` (post-QR) | Now routes through `houseQR.applyQt` + `backSolve`. |
+| Least-squares solve | `solveLeastSquares` — `solver.js` (post-QR) | Direct QR; no `A^T A` formation. |
+| Newton with Armijo + deflation | `newtonSolve` — `solver.js:341` | Damped Newton, finite-diff Jacobian, optional pluggable analytic Jacobian. |
+| Top-level inverse solver | `solveInverseQD` — `solver.js:790` | Stages A1-A5 (direct / continuation / multistart / diverse seeds / deflation). |
+| Boundary sampler (adaptive) | `sampleBoundaryAdaptive` — `solver.js` | Used everywhere φ(∂𝔻) is needed. |
+| Univalence check | `isBoundaryUnivalent` — `solver.js` | Polygon self-intersection on sampled boundary. |
+
+---
+
+## Conventions (matching the thesis)
+
+- Contour integrals suppress the `1/(2πi)` factor: `∮_∂Ω F dw` in
+  this codebase means `(1/(2πi)) · (literal integral)`. Unit-disk QD
+  identity reads `∫_D f dA = ∮_∂D f · (1/w) dw`, so h = 1/w (not
+  `2/w` as the textbook convention).
+- `dA = dx dy / π` — normalised area measure; area of unit disk = 1.
+- Complex values are `{re, im}` everywhere; never math.js objects in
+  the solver hot path (math.js used only for parsing user input).

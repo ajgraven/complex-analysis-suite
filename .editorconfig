@@ -1,0 +1,20 @@
+# Editor / formatter consistency. See https://editorconfig.org.
+# Matches the existing codebase: 2-space indent, LF endings, UTF-8,
+# trim trailing whitespace, final newline.
+
+root = true
+
+[*]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.md]
+# Markdown soft-line-breaks can be load-bearing; don't trim them.
+trim_trailing_whitespace = false
+
+[Makefile]
+indent_style = tab

@@ -1,0 +1,326 @@
+===== PAGE 72 =====
+62
+Proof of Theorem 4.4.2.
+TheequivalencefollowsdirectlyfromProposition4.6.2. ToobtainEquation4.19,applyProposition
+4.6.2 so that𝜑(𝑧)=𝑐𝑧
+
+𝑧−𝑧1
+𝑧−𝑧0 −1
+ 1
+𝑎
+, with𝜑(𝑧 0)=𝑤 0, which implies𝑧 1 =𝑧 0 − |𝑧 0|2−1
+𝑧0
+
+𝑤0
+𝑐𝑧0
+ 𝑎
+.
+Substitution and simplification yields Equation 4.19. The final relation follows straightforwardly
+from Equation 4.16.□
+Theorem 4.4.3.Fix1≠𝑎 >0, and let0∈Ωbe an unbounded simply connected domain with
+conformal radius𝑐 >0. Then there exist𝛼, 𝑤0 ∈C\ {0}for whichΩ∈QD 𝑎
+
+𝛼
+𝑤−𝑤 0
+
+if and only if
+there are𝑧0, 𝑧1 ∈D ∗ such thatΩ =𝜑(D ∗), where𝜑:D ∗ → bCis a conformal map of the form
+𝜑(𝑧)=𝑐𝑧|𝑧 1|𝑏 𝑧1 (𝑧)
+
+1+ |𝑧 0|2 −1
+𝑧𝑧0 −1 (𝛽𝑎 −1 )
+ 1
+𝑎
+,(4.20)
+for which𝛽= 𝑤0
+𝑐𝑧0
+𝑧0−𝑧1 −1
+𝑧0−𝑧1
+, and satisfies the relation
+𝛼= 𝑐2𝑎
+𝑎2
+|𝑧 1|2(𝑎−1)
+|𝑧 0|2 −1
+
+𝑎𝑧0(𝑧 0(𝑧1𝑧0 −2) +𝑧 1) − |𝑧 0 −𝑧 1|2
+1− |𝑧 0|−2
+
+.
+Also note that𝜑(𝑧0)=𝑤 0, and𝜑(𝑧 1)=0.
+Proof of Theorem 4.4.3.
+The equivalence follows directly from Proposition 4.6.2. To obtain Equation 4.20 note that, by
+Proposition 4.6.2,
+𝜑(𝑧)=𝑐𝑧|𝑧 1|𝑏 𝑧1 (𝑧)
+ 
+𝑧− 𝑧1−1
+𝑧− 𝑧0−1
+! 1
+𝑎
+,
+with𝜑(𝑧 0)=𝑤 0,whichimplies 𝑧0−1 =𝑧 0 − 𝑧0𝑧1−1
+𝑧1
+
+𝑐𝑧0𝑧1
+𝑤0
+𝑧0−𝑧1
+𝑧0𝑧1−1
+ 𝑎
+=𝑧 0 − 𝑧0𝑧1−1
+𝑧1
+𝛽𝑎. Substitutionand
+simplification yields Equation 4.20. The final relation follows from Equation 4.16.□
+Before continuing on to our discussion of Monomial PQDs, we state the following univalence
+criterion particularly applicable to PQDs.
+Proposition 4.4.3.Take𝑎 >0,𝑘∈Z +,{𝑧 𝑗 }𝑘
+𝑗=1 nonzero constants, and assume𝜑:D ∗ → bCis
+given by𝜑(𝑧)=𝑧
+
+1− 𝑧1
+𝑧
+
+. . .
+
+1− 𝑧𝑘
+𝑧
+ 1
+𝑎
+. Then,
+1. If𝑘≤2𝑎then𝜑is univalent if and only if each|𝑧 𝑗 | ≤1. In this case,𝜑(D ∗)is starlike with
+respect to infinity.
+2. If𝑘 >2𝑎, then𝜑is univalent and𝜑(D ∗)is starlike with respect to infinity if and only if
+|𝑧 𝑗 | ≤1and
+𝑎+Re ©­
+«
+𝑘∑︁
+𝑗=1
+𝑧 𝑗
+𝑧−𝑧 𝑗
+ª®
+¬
+>0,∀𝑧∈D ∗.
+===== PAGE 73 =====
+63
+The proof of Proposition 4.4.3 is in Appendix A.3
+4.5 Classification of Monomial PQDs
+In this section, we attempt to classify the set of simply connectedmonomial PQDs: domains
+Ω∈QD 𝑎 (𝛼𝑘𝑤 𝑘−1 )for some𝛼∈Cand𝑘∈Z +. We begin with the𝑘=1case:Ω∈QD 𝑎 (𝛼),
+referred to asbasic monomial PQDs. In this case, we obtain a complete classification, with
+Theorem 4.5.1 covering the non-singular case, and Theorem 4.5.2 covering the singular case.
+Using symmetry arguments and an appropriate change of variables, we then obtain a classification
+of rotationally symmetric monomial PQDs for𝑘 >1(Theorem 4.5.3). Finally, in Example 4.5.1,
+we provide an explicit example of non-uniqueness for PQDs: We exhibit a domainΩsuch that
+−Ω,Ω∈QD 2(2𝛼𝑤)and−Ω∩Ω ≠∅. Hence, demonstrating that the uniqueness conjecture for
+classical quadrature domains2 does not generalize to PQDs.
+Classification of Basic Monomial PQDs
+In Example 4.3.1, we showed that the imageΩofD∗ under the map
+𝜑(𝑧)=𝑐𝑧
+
+1− 𝛾
+𝑧
+ 1
+𝑎
+(4.21)
+is a PQD with quadrature function𝛼=−𝑐2𝑎−1
+𝑎 𝛾whenever|𝛾|<1,𝑎, 𝑐 >0, and𝜑is univalent in
+D∗.
+Usingthisresultasastarting point, ouraiminthis sectionistofullyclassifythesimplyconnected
+domainsΩ∈QD 𝑎 (𝛼). We refer to such domains asbasic monomial PQDs. It turns out that all
+suchdomainsnotcontainingzeroadmitaRiemannmapintheformofEquation4.21. Thesituation
+is slightly more complicated when0∈Ω, so we deal with this case last.
+Non-Singular Basic Monomial PQDs
+Theorem 4.5.1 below provides a characterization of basic monomial PQDs not containing zero.
+Theorem 4.5.1.Take𝑎 >0and𝛼∈C\ {0}. There exists a simply connected domainΩ, not
+containing zero, of conformal radius𝑐for whichΩ∈QD𝑎 (𝛼)if and only if either
+1.0< 𝑎 < 1
+2 and|𝛾| ≤ 𝑎
+1−𝑎,
+2.𝑎 > 1
+2 and|𝛾| ≤1,
+3.𝑎= 1
+2 and|𝛼| ≤2.
+2The conjecture states that simply connected quadrature domains are uniquely associated to their quadrature
+function (modulo conformal radius in the unbounded case).
+===== PAGE 74 =====
+64
+where𝛾=− 𝑎𝛼
+𝑐2𝑎−1. In this case,Ωis unique modulo conformal radius, andΩ =𝜑(D ∗)with𝜑
+univalent inD∗ and given by Equation 4.21.
+Proof of Theorem 4.5.1.We proved in Example 4.3.1 that if𝜑(Equation 4.21) is a Riemann map
+forΩ, thenΩ∈QD 𝑎 (𝛼), where𝛼=− 𝑐2𝑎−1
+𝑎 𝛾.
+Conversely,supposeΩ ∌0isasimplyconnecteddomaininQD 𝑎 (𝛼)forsome𝑎 >0and𝛼∈C\ {0}
+(necessarily unbounded because∞is a quadrature node). Then by Theorem 4.3.6 there exists a
+rational function𝑟for which𝜑(𝑧)=𝑧𝑟 #(𝑧)
+1
+𝑎 is a Riemann map forΩand
+𝑟=𝑎Φ −1
+𝜑
+
+CΩ∗
+
+𝛼𝑤
+ 𝜓(𝑤)
+𝑤
+ 𝑎
++ 𝑎
+𝑐𝑎 𝑡.
+Also note that the argument of the Faber transform grows linearly about∞, so there exists𝑐0 ∈C
+s.t.𝑤
+
+𝜓(𝑤)
+𝑤
+ 𝑎
+− 𝑤+𝑐 0
+𝑐𝑎 ∈ A 0(Ω), which implies
+CΩ∗
+
+𝛼𝑤
+ 𝜓(𝑤)
+𝑤
+ 𝑎
+= 𝛼
+𝑐𝑎 CΩ∗ [𝑤+𝑐 0] +𝛼C Ω∗
+
+𝑤
+ 𝜓(𝑤)
+𝑐−1𝑤
+ 𝑎
+− 𝑤+𝑐 0
+𝑐𝑎
+
+= 𝛼
+𝑐𝑎 (𝑤+𝑐 0).
+Substituting this into the above expression and computing the Faber transform, we obtain
+𝑟#(𝑧)= 𝑎𝛼
+𝑐𝑎 Φ−1
+𝜑 (𝑤+𝑐 0)# (𝑧) + 𝑎
+𝑐𝑎 𝑡=𝑎 𝛼 𝑐𝑧 −1 + 𝑓0
+𝑐𝑎 + 𝑎
+𝑐𝑎 𝑡= 𝑎𝛼
+𝑐𝑎−1 𝑧−1 +𝑐 1.
+Considering the asymptotics,𝜑(𝑧)=𝑐𝑧+𝑂(1), we find that𝑐 1 =𝑐 𝑎, so
+𝜑(𝑧)=𝑐𝑧
+
+1− 𝛾
+𝑧
+ 1
+𝑎
+.
+Now all there is to do is demonstrate that𝜑is univalent if and only if one of conditions 1-3 in the
+theorem is satisfied. By Proposition 4.4.3, when𝑎≥1
+2,𝜑is univalent inD ∗ if and only if|𝛾| ≤1.
+Furthermore, when𝑎= 1
+2,𝛾is independent of𝑐with−2𝛾= 𝛼, so𝜑is univalent if and only if
+|𝛼| ≤2.
+On the other hand, if𝑎 <1
+2 then Proposition 4.4.3 tells us that𝜑is univalent inD∗ if and only if
+|𝛾| ≤1and𝑎+Re
+
+𝛾
+𝑧−𝛾
+
+>0forall𝑧∈D ∗. RotatingD∗bytaking𝑧↦→ − 𝛾
+|𝛾| 𝑧yields𝑎− |𝛾|Re
+
+1
+𝑧+|𝛾|
+
+whichisminimizedas𝑧→1. Thusweobtainthecondition|𝛾| ≤ 𝑎
+1−𝑎. Or,equivalently0< 𝑐≤𝑐 ∗,
+where𝑐 ∗ = 2𝑎−1
+√︁
+|𝛼|(1−𝑎). Thus when0< 𝑎 < 1
+2,𝜑is univalent if and only if|𝛾| ≤ 𝑎
+1−𝑎.□
+Singular Basic Monomial PQDs
+The additional complexity in this case is owed to the fact that when0∈Ω, the formula for the
+associated Riemann map picks up a Blaschke factor with parameter𝑧0, the unique root of𝜑inD∗.
+𝜑nevertheless admits a relatively simple representation.
+===== PAGE 75 =====
+65
+Figure 4.4: Example families ofΩ∈QD𝑎 (𝛼)(complements of the shaded regions). Finite family:
+𝛼= 25
+12 and𝑎=.4< 1
+2 with𝑐∈ {.03, .1, .2, .25, .3, .32768}(left); traveling wave:𝛼= 4
+3
+and𝑎= 1
+2, with𝑐∈ {.05, .1, .2, .3, .4, .5}(center); two phase:𝛼= 1
+2 and𝑎=2> 1
+2, with
+𝑐∈ {.1, .4, .8, .98,1,1.02,1.08}(right).
+Theorem 4.5.2.Take𝑎 >0and𝛼∈C\ {0}. There exists a simply connected domainΩof
+conformal radius𝑐 >0containing0for whichΩ∈QD 𝑎 (𝛼)if and only if|𝛾| ≥1, with𝛾=− 𝑎𝛼
+𝑐2𝑎−1
+as in Theorem 4.5.1. In this case,Ωis unique modulo conformal radius, andΩ =𝜑(D∗)with𝜑
+given by
+𝜑(𝑧)=𝑐𝑧 𝑧− 𝛾
+1
+2𝑎−1
+𝑧−𝛾 − 1
+2𝑎−1
+ 
+1− 𝛾
+1
+2𝑎−1
+𝑧
+! 1
+𝑎
+, 𝛾
+1
+2𝑎−1 =−
+ 𝑎𝛼
+𝑐2𝑎−1
+ 1
+2𝑎−1
+.(4.22)
+Proof of Theorem 4.5.2.Let0∈Ω∈QD 𝑎 (ℎ)be a simply connected PQD of conformal radius
+𝑐 >0with quadrature function𝛼∈C\ {0}for some𝑎 >0. Then by Proposition 4.6.3,
+𝜑(𝑧)=𝑧𝑏 𝑧0 (𝑧)
+ 
+|𝑐𝑧 0|𝑎
+ 
+1− 𝑧0−1
+𝑧
+!! 1
+𝑎
+is a Riemann map forΩfor some𝑧0 ∈D ∗. Supposing that𝜑is univalent inD ∗, Equation 4.16
+implies
+𝛼=ℎ(𝑤)= 1
+𝑎𝑤 Φ𝜑
+ 
+CD
+"
+|𝑐𝑧 0|𝑎
+ 
+1− 𝑧0−1
+𝑧
+!
+|𝑐𝑧 0|𝑎
+
+1−𝑧𝑧 −1
+0
+#!
+(𝑤) − 𝑡
+𝑤
+= |𝑐𝑧 0|2𝑎
+𝑎𝑤 Φ𝜑
+ 
+CD
+"
+1+ |𝑧 0|−2 −𝑧𝑧 −1
+0 − 𝑧0−1
+𝑧
+#!
+(𝑤) − 𝑡
+𝑤
+=−
+𝑧−1
+0 |𝑐𝑧 0|2𝑎
+𝑎𝑤 𝑐−1𝑤− e𝑡
+𝑤 .
+hence𝑧 −1
+0 |𝑧 0|2𝑎 =− 𝑎𝛼
+𝑐2𝑎−1 =− 𝛾. Thisimpliesthat𝑧 0𝛼 <0,sowemayconcludethat𝑧 0 = 𝛾
+1
+2𝑎−1,and
+𝜑takestheformofEquation4.22. Inparticular,wheneverΩ∋0isasimplyconnectedunbounded

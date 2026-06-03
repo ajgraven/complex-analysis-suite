@@ -1,0 +1,237 @@
+# Architecture
+
+High-level map of how the Quadrature Domain Solver app fits together.
+For mathematical content, see [THEORY_MAP.md](THEORY_MAP.md). For how
+to extend the app, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## At a glance
+
+- **Vanilla HTML + JS** — no build step. Open `app/index.html` in any
+  modern browser.
+- **Single namespace** — `window.QD` holds every public function, type,
+  and subsystem. ES-module consumers can use the [`app/qd.mjs`](app/qd.mjs)
+  façade instead.
+- **Lazy-mount tabs** — Schwarz, Sphere, and Param-slice UIs mount
+  their controls only when their tab is first activated, keeping
+  startup cheap.
+- **Web Workers for heavy compute** — the Inverse-tab primary solve
+  runs on a single warm worker (P0.2); the Parameter-slice tab spawns
+  a pool of workers (one per `navigator.hardwareConcurrency` core).
+  Both bundles are built at runtime by `fetch`-ing the solver source
+  files and stitching them with a `Blob` URL — no build step needed.
+- **GPU rendering for Schwarz / Sphere** — WebGL 2 fragment shaders;
+  Float32 throughout. CPU fallback ships in every adapter.
+
+## Script load order
+
+```mermaid
+flowchart LR
+  subgraph CDN
+    A1[math.js 12.4.1]
+    A2[KaTeX 0.16.11]
+  end
+  subgraph Math["Math primitives"]
+    B1[complex.js]
+    B2[taylor.js]
+  end
+  subgraph Solver["Solver core (registers families on QD)"]
+    C1[solver.js]
+    C2[solver-faber.js]
+    C3[solver-qd.js]
+    C4[solver-uqd.js]
+    C5[solver-lqd-common.js]
+    C6[solver-lqd.js]
+    C7[solver-lqd-singular.js]
+    C8[solver-uqd-lqd.js]
+    C9[solver-uqd-lqd-singular.js]
+  end
+  subgraph Utility
+    D1[parse-h.js]
+    D2[critical-set.js]
+    D3[primary-solution.js]
+    D4[primary-solver-worker.js]
+  end
+  subgraph Tabs["Tab subsystems"]
+    E1[direct/direct-common.js]
+    E2[schwarz/schwarz-common.js]
+    E3[schwarz/schwarz-webgl.js]
+    E4[param-slice/param-slice-common.js]
+    E5[param-slice/param-slice-pool.js]
+  end
+  subgraph UI["UI layer"]
+    F1[qol.js]
+    F2[ui-presets.js]
+    F3[ui-domain-plot.js]
+    F4[ui.js]
+    F5[direct/direct-ui.js]
+    F6[schwarz/schwarz-ui.js]
+    F7[param-slice/param-slice-ui.js]
+  end
+  subgraph Sphere["Sphere (lazy adapter)"]
+    G1[sphere/sphere-common.js]
+    G2[sphere/sphere-webgl.js]
+    G3[sphere/sphere-ui.js]
+  end
+
+  CDN --> Math --> Solver --> Utility --> Tabs --> UI --> Sphere
+```
+
+Within each layer, files are loaded in the order shown above. The
+load order matters: every solver-family file calls
+`QD.registerFamily('X')` at top level, so `solver.js` must run first.
+
+## Public `QD.*` surface
+
+| Group | Exports |
+| --- | --- |
+| Math primitives | `Complex`, `Taylor` |
+| Solver core | `evalPhi`, `phiTaylorAt`, `residual`, `residualNorm`, `packPhi`, `unpackPhi`, `newtonSolve`, `solveInverseQD`, `searchAlternates`, `isBoundaryUnivalent`, `sampleBoundary`, `sampleBoundaryAdaptive`, `binomialCoeff`, `selectFamily`, `registerFamily`, `packPhiBySchema`, `unpackPhiBySchema`, `applySchemaClamps` |
+| Linear algebra (P1.2) | `solveLinearSystem`, `solveLeastSquares`, `houseQR`, `numericalJacobian` |
+| Inverse Faber | `QD.Faber.inverseFaberAtPole`, `QD.Faber.inverseFaberAtInfinity` |
+| Direct problem | `QD.Direct.*` (see [`app/direct/README.md`](app/direct/README.md)) |
+| Schwarz dynamics | `QD.Schwarz.*` (see [`app/schwarz/README.md`](app/schwarz/README.md)) |
+| Riemann sphere | `QD.Sphere.*` (see [`app/sphere/README.md`](app/sphere/README.md)) |
+| Critical set | `QD.findCriticalPoints`, `QD.CriticalSet.*` |
+| Geometric properties | `QD.classifyUnivalence`, `QD.Univalence.classifyUnivalence` |
+| Boundary cusps | `QD.classifyCusps`, `QD.Cusps.classifyCusps` |
+| Custom h(w) text | `QD.parseH`, `QD.formatH` |
+| Cross-tab envelope (P0.1a) | `QD.PrimarySolution.{get, hasSolution, subscribe, publish, update, clear}` |
+| Warm worker (P0.2) | `QD.PrimarySolverWorker.{ensureReady, solve, cancel, isBusy, searchAlternates, cancelAux, isAuxBusy}` |
+| Family registry | `QD.Family.boundedQD`, `QD.Family.unboundedQD`, `QD.Family.boundedLQD`, `QD.Family.boundedLQD_singular`, `QD.Family.unboundedLQD`, `QD.Family.unboundedLQD_singular` |
+
+## Tab → DOM ownership
+
+| Tab | Container | UI script | Public adapter |
+| --- | --- | --- | --- |
+| QD (Inverse + Direct) | `#controls-qd` + shared `#canvas` | `ui.js`, `direct/direct-ui.js` | publishes `QD.PrimarySolution` |
+| Schwarz dynamics | `#controls-schwarz` + own GL canvas overlay | `schwarz/schwarz-ui.js` | subscribes `QD.PrimarySolution`; toggles to Sphere |
+| Sphere view | mounted inside Schwarz panel | `sphere/sphere-ui.js` (`QD.SphereView.mount`) | shares Schwarz's `phiSnapshot` |
+| Parameter slice | `#controls-param-slice` | `param-slice/param-slice-ui.js` | reads `window.QD_UI.snapshotScenario`; pushes back via `loadScenarioIntoQdTab` |
+
+## Key cross-cutting contracts (P0/P1 work)
+
+### `QD.PrimarySolution` envelope (P0.1a)
+
+Cross-tab pub/sub for the current inverse-solver result. Schwarz /
+Sphere / Param-slice subscribe to this envelope rather than reaching
+into `ui.js`'s internal `state.current`.
+
+```js
+QD.PrimarySolution.subscribe(handler);   // tabs subscribe
+QD.PrimarySolution.publish(envelope);    // ui.js writes after each solve
+const env = QD.PrimarySolution.get();    // snapshot read
+```
+
+Source: [`app/primary-solution.js`](app/primary-solution.js). Envelope
+shape is the same `{ success, primary, alternates, hData, w0Used,
+cUsed, unbounded, attempts, criticalSet }` previously held on
+`state.current`. The JSDoc `@typedef PrimaryEnvelope` at the top of
+that file is the source of truth.
+
+### `QD.PrimarySolverWorker` (P0.2)
+
+Single warm Web Worker for the Inverse-tab solve. Keeps the multistart
+pipeline (50–500 ms for hard h's) off the main thread. Source:
+[`app/primary-solver-worker.js`](app/primary-solver-worker.js).
+
+```js
+const result = await QD.PrimarySolverWorker.solve(hData, opts);
+```
+
+Preemption: if a new `solve()` arrives while one is in flight, the
+worker is **terminated and recreated**. This is the cheapest way to
+interrupt deeply-nested Newton iteration; the resulting solve rejects
+with `{ aborted: true, superseded: true }`. Token-gating in `ui.js`
+(`_solveAndRenderToken`) discards stale results that arrive after a
+newer call. `ui.js` also surfaces a **Cancel** button during a solve
+that calls `cancel()` and bumps the token.
+
+The same module hosts a **dedicated aux worker** for the background
+alternate-solution search (`searchAlternates` / `cancelAux`): a second
+Worker instance from the same bundle, so a long alt-search never queues
+behind or preempts an interactive primary solve. `ui.js`'s
+`startBackgroundAltSearch` drives it as an async loop instead of the old
+synchronous `setTimeout` chunks (which janked the 2D plot).
+
+### URL/hash state (B1)
+
+`ui.js` serializes the user-meaningful config — `{mode, h(w) text,
+w0(mode), c, α, q, aggressiveness, tab}` — into `location.hash` via
+`writeUrlState` (`history.replaceState`, rAF-coalesced) on each solve and
+tab switch, and restores it on load via `applyUrlState`. The h-text
+round-trips both the poles and the polynomial part (`formatH` ⇄
+`parseH`), so it alone reproduces the quadrature data. This makes a
+configuration bookmarkable, shareable, and reload-restorable.
+
+Fallback: if Worker / Blob / fetch is unavailable (e.g. `file://`
+origin), `solve()` runs `QD.solveInverseQD` on the main thread inside
+a microtask. Logged once at `console.warn`.
+
+### `window.QD_UI.installDomainPlot(deps)` (P0.1b)
+
+`DomainPlot` lives in [`app/ui-domain-plot.js`](app/ui-domain-plot.js)
+as a factory function, so the class can be in a separate `<script>`
+tag while still receiving the four `ui.js` closures it needs:
+
+```js
+const DomainPlot = window.QD_UI.installDomainPlot({
+  state, modeDescriptor, formatTick, sub,
+});
+const plot = new DomainPlot(canvasEl, readoutEl);
+```
+
+Same pattern works for any future class extraction.
+
+### `qd.mjs` ESM façade (P1.1)
+
+[`app/qd.mjs`](app/qd.mjs) re-exports the entire public `QD` surface as
+named ES-module exports:
+
+```js
+import { Complex, solveInverseQD, PrimarySolution } from './qd.mjs';
+```
+
+Load order requirement: classic scripts must run first to populate
+`window.QD`. A 5-stage migration plan (leaf modules → solver families
+→ Worker pool → UI) is documented at the top of `qd.mjs`. This file is
+**stage 1**: a no-risk façade. Stages 2-5 are open follow-ups.
+
+## Worker bundles
+
+Both Worker subsystems (`primary-solver-worker.js`,
+`param-slice/param-slice-pool.js`) build their bundles at runtime:
+
+1. `fetch` each solver source file (`complex.js`, `solver.js`, …) as text.
+2. Prepend `var window = self;` so the existing `(typeof window !==
+   'undefined' && window.QD)` namespace idiom resolves inside the
+   worker scope.
+3. Append a worker-side message handler.
+4. Wrap as a `Blob({ type: 'application/javascript' })` and pass the
+   `URL.createObjectURL(blob)` to `new Worker(url)`.
+
+The asset list lives in two places today (`primary-solver-worker.js`'s
+`SOLVER_SRC_FILES` and `param-slice-pool.js`'s `SOLVER_SRC_FILES`). The
+P3.3 service worker reuses the same set; a follow-up should hoist the
+list into a single `app/asset-manifest.js` constant shared by all three.
+
+## Test harness
+
+- `node app/node-test.js` runs the full suite headless via Node `vm`
+  (the runner prints the live pass/fail tally on exit — the count is not
+  duplicated here to avoid drift). Loads the same source files as the
+  browser, masking `typeof window !== 'undefined'` to `false` so each
+  file falls through to the Node export branch.
+- `app/test.html` is the in-browser equivalent with small visualisations.
+- Parse-checks (P1.3) cover every browser-loaded JS file in `app/`,
+  catching syntax errors and identifier typos that would otherwise
+  only surface at runtime.
+
+## File index
+
+For the canonical file layout see `README.md` § "File layout". The
+module READMEs cover the per-subsystem internals:
+
+- [`app/direct/README.md`](app/direct/README.md)
+- [`app/schwarz/README.md`](app/schwarz/README.md)
+- [`app/sphere/README.md`](app/sphere/README.md)
+- [`app/param-slice/README.md`](app/param-slice/README.md)
