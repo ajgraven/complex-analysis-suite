@@ -143,7 +143,11 @@ visualizations, complementary to the headless runner.
     │   └── aqd/                       Algebraic QD scaffolding (deferred)
     │
     ├── test.html                      in-browser test harness
-    └── node-test.js                   headless test harness
+    ├── node-test.js                   headless test entry (async runner)
+    └── test/                          split test suite + shared harness/bootstrap
+        ├── harness.js                 ok/approxEq/report (shared counters)
+        ├── bootstrap.js               builds the vm ctx once; installs globals
+        └── *.test.js                  one file per subsystem (solvers, schwarz, …)
 ```
 
 ## Supported families

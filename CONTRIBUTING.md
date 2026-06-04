@@ -74,9 +74,14 @@ To add a seeds file for a new family, follow the same pattern:
    guard that throws if `QD.Seeds.<familyTag>` is missing).
 5. Add the seeds file to `WORKER_BUNDLE_FILES` in
    `app/asset-manifest.js` (the worker bundlers read it), BEFORE its
-   `solver-<familyTag>.js`.
-6. Add the seeds file to `node-test.js`'s loaders (the top vm loader
-   AND the parse-check list).
+   `solver-<familyTag>.js`. **This is the only list to edit** — the test
+   bootstrap (`app/test/bootstrap.js`) and the parse-check
+   (`app/test/parse-check.test.js`) both derive their file lists from the
+   manifest, so a manifest entry gives you both test execution and parse
+   coverage automatically (no more hand-synced loader copies).
+6. Run `npm run version:sync` and commit the updated `app/asset-manifest.js`
+   — any change to an `app/` asset bumps the content-hash cache version, and
+   CI's `npm run version:check` fails if it's stale.
 
 If a seed function needs a kernel-internal helper (e.g.
 `computeTargetF_*`, `_finitePolesView`), export it onto `QD` from the
@@ -97,10 +102,12 @@ the residual.
 ### Tests for the new family
 
 Add a `runFamilyBattery` block in
-[`app/node-test.js`](app/node-test.js) — search for the existing
-calls to copy the pattern. Each preset gets: solve success, family
-tag, boundary univalence, identity tol, optional inside-test point.
-The new family should pass `runFamilyBattery` before being shipped.
+[`app/test/solvers.test.js`](app/test/solvers.test.js) — search for the
+existing calls to copy the pattern. (`runFamilyBattery`, `ok`, `solveInverseQD`,
+etc. are installed on `global` by `app/test/bootstrap.js`; see "Test harness"
+below.) Each preset gets: solve success, family tag, boundary univalence,
+identity tol, optional inside-test point. The new family should pass
+`runFamilyBattery` before being shipped.
 
 ## Adding a Schwarz adapter
 
@@ -134,14 +141,22 @@ P0-P3 work in this codebase follows the same cadence — see entries
 
 ## Test harness
 
-Two paths:
-
-- **Headless:** `cd app && node node-test.js`. Loads source files via
-  Node's `vm`, masking `typeof window !== 'undefined'` to `false` so
-  the Node export branch fires. Fast (well under 30 s for the full
-  battery + parse-checks).
-- **Browser:** open `app/test.html`. Same tests, with small inline
-  visualisations. Mostly useful for debugging numerical surprises.
+`npm test` (= `node app/node-test.js`) is the entry. As of the Phase-2
+refactor it is a thin **async runner**: it requires `app/test/bootstrap.js`
+(which builds the Node `vm` context ONCE — masking `typeof window` /
+`typeof self` to `false` so the Node export branch fires — and installs the
+shared kernels + assertion helpers on `global`: `ok`, `approxEq`, `C`, `T`,
+`QD`, `solveInverseQD`, `Schwarz`, `PS`, `SC`, `runFamilyBattery`, …), then
+`await`s each subsystem's `run()`. The suite lives in per-subsystem files
+under [`app/test/`](app/test/) (`solvers.test.js`, `direct.test.js`,
+`schwarz.test.js`, `param-slice.test.js`, `sphere.test.js`, `cusps.test.js`,
+`riemann.test.js`, `parse-check.test.js`, `worker.test.js`,
+`ui-domain-plot.test.js`, `schwarz-ui.test.js`, `manifest.test.js`), each
+exporting `module.exports = async function run() { … }`. To add a subsystem,
+drop a file there and add its name to the `TESTS` array in `node-test.js`.
+The runner is async, so jsdom/timer-based tests can `await` real behaviour
+(e.g. the deferred single-click pin in `schwarz-ui.test.js`). Fast (well
+under 30 s for the full battery + parse-checks).
 
 When in doubt, add a test before the fix — the parser, families, and
 critical-set kernels all have extensive precedent.
@@ -149,8 +164,10 @@ critical-set kernels all have extensive precedent.
 ### Parse-check layer (P1.3)
 
 Every browser-loaded JS file (and the `qd.mjs` ESM façade) gets a
-parse-check in `node-test.js`. New files should be added to
-`sourceFiles` in the parse-check block. This catches:
+parse-check in [`app/test/parse-check.test.js`](app/test/parse-check.test.js).
+The file list is **derived from the manifest** (`PAGE_SCRIPTS` +
+`asset-manifest.js` + `sw.js`) — no manual list to maintain; adding a file to
+`app/asset-manifest.js` gives it parse coverage automatically. This catches:
 
 - Syntax errors before browser load.
 - Identifier typos in files that aren't otherwise exercised by Node.
@@ -181,9 +198,11 @@ Two Worker subsystems today:
   — pool of N workers for parameter sweeps.
 
 Both build their bundles at runtime by `fetch`-ing solver source files
-and concatenating with a worker-side handler string. To add a new
-solver file, update **both** `SOLVER_SRC_FILES` arrays. A future
-refactor will hoist this into a shared `asset-manifest.js`.
+(cache-busted with `?v=<CACHE_VERSION>`) and concatenating with a
+worker-side handler string. Both read the file list from
+`QD_ASSET_MANIFEST.WORKER_BUNDLE_FILES` (`app/asset-manifest.js`) — the
+single source of truth — so adding a new solver file only means editing
+the manifest (`bench.js` and the test bootstrap read the same list).
 
 ## Style
 

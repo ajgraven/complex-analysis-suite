@@ -209,22 +209,29 @@ Both Worker subsystems (`primary-solver-worker.js`,
 4. Wrap as a `Blob({ type: 'application/javascript' })` and pass the
    `URL.createObjectURL(blob)` to `new Worker(url)`.
 
-The asset list lives in two places today (`primary-solver-worker.js`'s
-`SOLVER_SRC_FILES` and `param-slice-pool.js`'s `SOLVER_SRC_FILES`). The
-P3.3 service worker reuses the same set; a follow-up should hoist the
-list into a single `app/asset-manifest.js` constant shared by all three.
+The worker-bundle file list lives in ONE place — `WORKER_BUNDLE_FILES` in
+[`app/asset-manifest.js`](app/asset-manifest.js). Both worker bundlers
+(`primary-solver-worker.js`, `param-slice-pool.js`), the service worker
+(via `ALL_ASSETS`), `bench.js`, and the test bootstrap all read it; the
+index.html page-script loader and the cache-version generator likewise
+derive from the manifest. It is the single source of truth for which files
+load where.
 
 ## Test harness
 
-- `node app/node-test.js` runs the full suite headless via Node `vm`
-  (the runner prints the live pass/fail tally on exit — the count is not
-  duplicated here to avoid drift). Loads the same source files as the
-  browser, masking `typeof window !== 'undefined'` to `false` so each
-  file falls through to the Node export branch.
-- `app/test.html` is the in-browser equivalent with small visualisations.
-- Parse-checks (P1.3) cover every browser-loaded JS file in `app/`,
-  catching syntax errors and identifier typos that would otherwise
-  only surface at runtime.
+- `npm test` (= `node app/node-test.js`) runs the full suite headless. Since
+  the Phase-2 refactor the entry is a thin **async runner**: it boots the
+  shared Node `vm` context + assertion harness once via
+  [`app/test/bootstrap.js`](app/test/bootstrap.js) (masking `typeof window` /
+  `typeof self` to `false` so each file takes its Node export branch, and
+  installing the kernels + `ok`/`approxEq`/… on `global`), then `await`s each
+  per-subsystem file under [`app/test/`](app/test/) in turn. The runner prints
+  the live pass/fail tally on exit — the count is not duplicated here to avoid
+  drift.
+- Parse-checks (P1.3, `app/test/parse-check.test.js`) cover every
+  browser-loaded JS file in `app/` (list derived from the manifest), catching
+  syntax errors and identifier typos that would otherwise only surface at
+  runtime.
 
 ## File index
 
