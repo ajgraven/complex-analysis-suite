@@ -16,7 +16,9 @@ non-singular / singular (0 ∈ Ω, Blaschke factor).
 | File | Role |
 | --- | --- |
 | `direct-common.js` | Math kernel: classical (polynomial / rational / Laurent / numerical) **and** weighted (bounded + unbounded, power + log, non-singular + singular) φ → h. Durand–Kerner polynomial root finder. Fourier boundary verifier. Sample-the-boundary primitives. |
-| `direct-ui.js` | Direct-mode UI inside the QD tab (HANDOFF #30 merged the standalone Direct tab into a `inverse \| direct` view-toggle). A compact segmented **Domain-type** control (`#dir-dm-weight` QD/PQD/LQD × `#dir-dm-domain` Bounded/Unbounded/Numerical × `#dir-dm-singular`, inverse-tab style) selects the family; the weight PARAMETER inputs (α/w₀/z₀/c/kernel) live in the φ-input cards. `applyDirectMode()` is the single canonical mode-refresh. |
+| `direct-ui.js` | Direct-mode UI hub inside the QD tab (HANDOFF #30 merged the standalone Direct tab into a `inverse \| direct` view-toggle). A compact segmented **Domain-type** control (`#dir-dm-weight` QD/PQD/LQD × `#dir-dm-domain` Bounded/Unbounded/Numerical × `#dir-dm-singular`, inverse-tab style) selects the family; the weight PARAMETER inputs (α/w₀/z₀/c/kernel) live in the φ-input cards. `applyDirectMode()` is the single canonical mode-refresh. Owns `directState`, the card builders, and the `dCtx` injection + the two module installs below. |
+| `direct-recompute.js` | `QD_UI.installDirectRecompute(dCtx)` — the recompute→render pipeline: `recomputeAndRender` dispatches on `directState.mode` to `recomputeBounded`/`recomputeUnbounded`/`recomputeNumerical` (each builds h via the `QD.Direct.*` kernels), renders it (`displayH`), and pushes the weight-honoring boundary to the shared plot (`sampleBoundedPhi`/`pushBoundaryToPlot`). Phase-3 (item E) split. |
+| `direct-verify.js` | `QD_UI.installDirectVerify(dCtx)` — the **Verify** button: `runVerify` dispatches per family (unbounded/bounded weighted → family identity verifier or inverse round-trip; classical → Fourier boundary-identity diagnostic on `sampleAnalyticPhi` samples). Phase-3 (item E) split. |
 
 ## Public surface (`QD.Direct.*`)
 

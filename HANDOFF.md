@@ -26,7 +26,39 @@ priors.
 > version:sync` refreshes it after any `app/` asset change; CI's
 > `npm run version:check` fails if it's stale.
 
-## (most recent) Phase 3 — UI modularization (schwarz-ui.js split, item E / PR-E2)
+## (most recent) Phase 3 — UI modularization (direct-ui.js split, item E / PR-E3)
+
+The 1662-line `direct/direct-ui.js` Direct-tab monolith was carved down to
+**1063 lines (−36%)** by extracting its two heaviest clusters into sibling
+factory modules — the same IIFE-host `QD_UI.installX` pattern as the schwarz
+split.
+- **New modules** (each `QD_UI.installDirectX(dCtx)`; `direct-ui.js` captures the
+  returns into forward-`let` bindings so the card handlers + `_activate` call
+  them unchanged):
+  `direct-recompute.js` (the recompute→render pipeline — `recomputeAndRender` +
+  `recomputeBounded`/`recomputeUnbounded`/`recomputeNumerical` + `displayH` +
+  `sampleBoundedPhi` + `pushBoundaryToPlot`) and
+  `direct-verify.js` (the **Verify** button — `runVerify` + `sampleAnalyticPhi`).
+- **Wiring (`dCtx`):** one shared `{ directState, parseComplex, isMounted }`;
+  both modules install at the tail. They're independent (neither calls the
+  other), so install order is free. What STAYS: `directState`, the mount/activate
+  API, the Domain-type + φ-input + output card builders, the coeff-field +
+  paste/expression-parse wiring, and the shared `parseComplex`/`coeffToString`/
+  `section` helpers.
+- **Gotcha it encodes:** the host's `mounted` flag (a primitive) can't be shared
+  by value, so the moved `recomputeAndRender`'s guard reads `dCtx.isMounted()` —
+  the only non-verbatim line in the move. `complexToString`/`complexToKatex`
+  moved with their sole user `displayH`; `coeffToString` stayed (host card
+  builders use it).
+- **Verify:** `node app/node-test.js` → 1119 passed / 0 failed (baseline 1117 + 2
+  new parse-checks); lint clean; `version:check` clean. The Direct UI functions
+  aren't exercised by node-test (DOM-driven), so **browser smoke is the primary
+  guard**: bounded polynomial (h = 1/(w−0)), Verify (Fourier neg-mass 2e-17),
+  unbounded, numerical (Taylor poles), weighted PQD (graceful R# guard error) —
+  zero console errors.
+- **Follow-up:** PR-E4 (param-slice-ui.js) per the same pattern remains open.
+
+## (prior) Phase 3 — UI modularization (schwarz-ui.js split, item E / PR-E2)
 
 The 2477-line `schwarz/schwarz-ui.js` Schwarz-tab monolith was carved down to
 **1215 lines (−51%)** by extracting four cohesive clusters into sibling factory

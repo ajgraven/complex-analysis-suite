@@ -113,8 +113,14 @@ visualizations, complementary to the headless runner.
     │   ├── direct-common.js           Direct-problem kernels (polynomial / rational /
     │   │                              numerical / unbounded), polynomial root finder,
     │   │                              parser, Fourier verifier, boundary samplers
-    │   └── direct-ui.js               Direct-tab UI: mode toggle, paste / structured
-    │                                  inputs, h display, Verify button
+    │   ├── direct-ui.js               Direct-tab UI hub: Domain-type + φ-input +
+    │   │                              output cards, mode toggle, dCtx injection +
+    │   │                              the two module installs below
+    │   ├── direct-recompute.js        recompute → render pipeline (bounded /
+    │   │                              unbounded / numerical + h display + ∂Ω plot)
+    │   └── direct-verify.js           Verify button (family verifier / round-trip /
+    │                                  Fourier diagnostic) — both QD_UI.installDirectX
+    │                                  (dCtx) factories, Phase-3 item E split of direct-ui.js
     │
     ├── schwarz/
     │   ├── schwarz-common.js          Schwarz-reflection dynamics math kernel +

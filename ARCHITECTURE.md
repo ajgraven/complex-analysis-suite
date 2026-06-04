@@ -65,6 +65,7 @@ flowchart LR
     F3[ui-domain-plot.js]
     F2c["ui-modes / ui-pole-grid / ui-h-text / ui-solve / ui-url-state"]
     F4[ui.js]
+    F5a["direct/direct-recompute / direct-verify"]
     F5[direct/direct-ui.js]
     F6a["schwarz/schwarz-paint / schwarz-render / schwarz-features / schwarz-interaction"]
     F6[schwarz/schwarz-ui.js]
@@ -251,6 +252,29 @@ recompute hooks `_recomputeLevelCurves` / `_recomputeDomainColoring` /
 `schwarz-ui.js`: `sState` + constants, the lazy sidebar mount + the card
 builders, `setMode` / view-toggle, the φ-capture + GPU-init plumbing, and the
 coordinate transforms / `renderImmediate` that several modules share via `sCtx`.
+
+#### `QD_UI.installDirectX(dCtx)` — the Direct-tab module split (Phase 3, item E)
+
+The 1662-line `direct/direct-ui.js` (also an IIFE) was carved to ~1063 by moving
+the two heaviest clusters into sibling factory modules:
+
+| Module | Responsibility |
+| --- | --- |
+| [`app/direct/direct-recompute.js`](app/direct/direct-recompute.js) | the recompute→render pipeline: `recomputeAndRender` + `recomputeBounded`/`recomputeUnbounded`/`recomputeNumerical` + `displayH` + `sampleBoundedPhi` + `pushBoundaryToPlot` |
+| [`app/direct/direct-verify.js`](app/direct/direct-verify.js) | the **Verify** button: `runVerify` + `sampleAnalyticPhi` |
+
+`direct-ui.js` builds ONE shared `dCtx` (`{ directState, parseComplex, isMounted }`)
+and installs both at the tail (`({ recomputeAndRender } = QD_UI.installDirectRecompute(dCtx))`,
+`({ runVerify } = QD_UI.installDirectVerify(dCtx))`), capturing the returns into
+forward-`let` bindings so the card-builder handlers + `_activate` call them
+unchanged. The two modules are independent (neither calls the other), so install
+order between them is free. What **stays** in `direct-ui.js`: `directState`, the
+mount/activate API, the Domain-type + φ-input + output card builders, the
+coeff-field builders, the paste/expression-parse wiring, and the shared
+`parseComplex` / `coeffToString` / `section` helpers (retained handlers use
+them). The host's mount flag is read inside the moved `recomputeAndRender` via
+the `dCtx.isMounted()` accessor — the one non-verbatim line, since a primitive
+can't be shared by value.
 
 ### `qd.mjs` ESM façade (P1.1)
 
