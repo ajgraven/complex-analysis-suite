@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Complex Dynamics Visualization Tool</title>
+    <script type="text/javascript" src="/vendor/cindyjs/Cindy.js"></script>
+    <script type="text/javascript" src="/vendor/cindyjs/CindyGL.js"></script>
+    <link rel="stylesheet" href="/vendor/cindyjs/CindyJS.css" />
+    <link rel="icon" href="/images/favicon.ico" />
+  </head>
+
+  <body>
+    <!-- Application entry: imports the stylesheet, instantiates both plots,
+         and wires the controls. -->
+    <script type="module" src="/src/main.ts"></script>
+
+    <div class="page">
+      <h1>Complex Dynamics Visualization Tool</h1>
+
+      <main class="plots">
+        <!-- ============================ Parameter space ============== -->
+        <section class="plot" aria-labelledby="param-heading">
+          <h2 id="param-heading">Parameter Space</h2>
+          <canvas id="MCSCanvas"></canvas>
+
+          <div class="controls">
+            <div class="field">
+              <label for="inpc">c</label>
+              <input type="text" id="inpc" placeholder="a+b*i" value="-.7-.4*i" size="14" />
+            </div>
+            <div class="field">
+              <label for="inpme">escape(z,c)</label>
+              <textarea id="inpme" rows="1" cols="14">abs(z)>2</textarea>
+            </div>
+            <div class="field">
+              <label for="inpparamcenter">center</label>
+              <input
+                type="text"
+                id="inpparamcenter"
+                placeholder="-.75,0"
+                value="-.75,0"
+                size="14"
+              />
+            </div>
+            <div class="field">
+              <label for="inpparamzoom">zoom</label>
+              <input type="text" id="inpparamzoom" placeholder=".75" value=".75" size="10" />
+            </div>
+            <div class="field">
+              <label for="inpmn">max # iterations</label>
+              <input type="text" id="inpmn" value="100" size="10" />
+            </div>
+            <div class="field">
+              <label for="inpParamRes">resolution</label>
+              <input type="text" id="inpParamRes" value="500" size="10" />
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================ Dynamical plane ============== -->
+        <section class="plot" aria-labelledby="dyn-heading">
+          <h2 id="dyn-heading">Dynamical Plane</h2>
+          <canvas id="JCSCanvas"></canvas>
+
+          <div class="controls">
+            <div class="field">
+              <label for="inpje">escape(z,c)</label>
+              <textarea id="inpje" rows="1" cols="14">abs(z)>2</textarea>
+            </div>
+            <div class="field">
+              <label for="inpdyncenter">center</label>
+              <input type="text" id="inpdyncenter" placeholder="0,0" value="0,0" size="14" />
+            </div>
+            <div class="field">
+              <label for="inpdynzoom">zoom</label>
+              <input type="text" id="inpdynzoom" placeholder=".65" value=".65" size="10" />
+            </div>
+            <div class="field">
+              <label for="inpjn">max # iterations</label>
+              <input type="text" id="inpjn" value="100" size="10" />
+            </div>
+            <div class="field">
+              <label for="inpDynRes">resolution</label>
+              <input type="text" id="inpDynRes" value="500" size="10" />
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- ============================ Shared controls ================ -->
+      <section class="panel" aria-label="Function and presets">
+        <div class="panel-group">
+          <div class="field">
+            <label for="inpf">f(z,c)</label>
+            <textarea id="inpf" rows="2" cols="22">z^2+c</textarea>
+          </div>
+          <div class="field">
+            <label for="fractal_presets">Presets</label>
+            <div class="inline-actions">
+              <select id="fractal_presets">
+                <option value="mandelbrot">Mandelbrot set</option>
+                <option value="tricorn">tricorn</option>
+                <option value="burning ship">burning ship</option>
+                <option value="butterfly">butterfly</option>
+                <option value="exponential map">exponential map</option>
+                <option value="teardrop Schwarz">teardrop Schwarz</option>
+                <option value="exp Schwarz">exp Schwarz</option>
+              </select>
+              <button id="apply_preset" type="button">apply</button>
+            </div>
+          </div>
+        </div>
+        <div class="inline-actions">
+          <button id="apply_all" type="button">apply changes</button>
+        </div>
+      </section>
+
+      <!-- ============================ Downloads ====================== -->
+      <section class="panel" aria-label="Download plots">
+        <div class="panel-group">
+          <div class="field">
+            <label for="mImageName">Parameter space image</label>
+            <div class="inline-actions">
+              <input type="text" id="mImageName" value="ParamSpace.png" size="14" />
+              <button id="print_param_space" type="button">Save</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="jImageName">Dynamical plane image</label>
+            <div class="inline-actions">
+              <input type="text" id="jImageName" value="DynPlane.png" size="14" />
+              <button id="print_dyn_plane" type="button">Save</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================ Documentation ================== -->
+      <section class="docs">
+        <div>
+          <h3>General information</h3>
+          <ul>
+            <li>
+              This applet plots the parameter space associated with the complex function
+              f(z,&nbsp;c), and renders the dynamical plane for the chosen value of the parameter
+              "c".
+            </li>
+            <li>
+              Points are coloured by escape time: the number of iterations of f(z,&nbsp;c) required
+              for escape(z,&nbsp;c) to return true.
+            </li>
+            <li>
+              The white point in the parameter space is the value of "c" for the dynamical plane. It
+              is draggable, and the dynamical plane updates in real time.
+            </li>
+            <li>
+              The white point in the dynamical plane is the starting point for a plot of the first
+              several iterates. It can also be dragged.
+            </li>
+            <li>GPU acceleration limits accuracy beyond a certain level of zoom.</li>
+          </ul>
+        </div>
+
+        <div>
+          <h3>Controls</h3>
+          <ul>
+            <li>Move the plot window with the arrow keys or by clicking and dragging.</li>
+            <li>Adjust the zoom level with the +/- keys.</li>
+            <li>Drag the white point in each plot to change its value.</li>
+            <li>Press "enter" to apply changes.</li>
+          </ul>
+
+          <h3>Predefined objects</h3>
+          <ul>
+            <li><b>Constants:</b> e, pi, i.</li>
+            <li>
+              <b>Operations:</b> z*w, z^w, z+w, z-w, z/w, |z|, sqrt, exp, log, sin, cos, tan,
+              arcsin, arccos, arctan, arctan2(x,y), lambertw, re, im, conjugate, arg, mod(x,y),
+              round, floor, ceil.
+            </li>
+            <li>
+              <b>Misc. functions:</b> random(x) (random float in (0,x)), randomint(n) (random
+              integer in [0,n]), randombool() (random true/false).
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h3>Known limitations</h3>
+          <ul>
+            <li>
+              Saved images use the canvas resolution (500&times;500), not the user-specified
+              resolution field. The resolution field controls render quality, not export size.
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <footer>
+        <p>
+          Questions, suggestions, or feature requests:
+          <a href="mailto:andrew@graven.com">andrew@graven.com</a>.
+        </p>
+        <p>Created by Andrew Graven.</p>
+      </footer>
+    </div>
+  </body>
+</html>

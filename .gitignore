@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.local
+.DS_Store
+
+# Editor / OS noise
+.vscode/*
+!.vscode/extensions.json
+Thumbs.db
+
+# Stray empty nested repo folder (removed during restructure)
+/ComplexDynamicsJS/
