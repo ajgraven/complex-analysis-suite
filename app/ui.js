@@ -804,6 +804,16 @@ function addPole() {
   renderPolesList();
   scheduleSolve();
 }
+// Add a simple pole (order 1, coefficient 1) at a specific w-plane point.
+// Used by the plot's double-click gesture (plot.onAddPole). Mirrors addPole()
+// but stamps the clicked position and marks the config as custom (a placed
+// pole is a user edit, like a drag).
+function addPoleAt(w) {
+  state.poles.push({ a: QD.Complex.toString(w, 4), order: 1, residues: ['1'] });
+  markAsCustom();
+  renderPolesList();
+  scheduleSolve();
+}
 function removePoleAt(idx) {
   state.poles.splice(idx, 1);
   // No defensive "insert a default if empty" — an empty pole list is a valid
@@ -1740,6 +1750,14 @@ plot.onPoleDrag = (idx, w) => {
   scheduleQuickSolve();
 };
 plot.onPoleDragEnd = () => { scheduleSolve(); };
+
+// Double-click on the plot drops a new simple pole (coefficient 1) at the
+// clicked w. Inverse view only — the direct view hides this canvas, and the
+// gesture only makes sense for the inverse problem (it edits h's poles).
+plot.onAddPole = (w) => {
+  if ((state.viewMode || 'inverse') !== 'inverse') return;
+  addPoleAt(w);
+};
 
 renderPolesList();
 renderPolyCoefList();

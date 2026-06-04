@@ -42,6 +42,9 @@ class DomainPlot {
     // Callbacks for click-drag on quadrature-node dots. Set by ui.js.
     this.onPoleDrag    = null;   // (idx, worldPoint) -> void
     this.onPoleDragEnd = null;   // (idx)            -> void
+    // Double-click on empty plot space -> add a new simple pole there. Set by
+    // ui.js (which owns state.poles + the solve pipeline). (worldPoint) -> void
+    this.onAddPole     = null;
 
     this.attachEvents();
     this.resize();
@@ -191,6 +194,20 @@ class DomainPlot {
       this.view.cy += wBefore.im - wAfter.im;
       this.render();
     }, { passive: false });
+
+    // Double-click on empty plot space drops a new simple pole at that w
+    // (coefficient 1) — the inverse of the click-drag-to-move gesture. A
+    // double-click that lands on an existing pole dot is ignored so we never
+    // stack a duplicate node on one the user was aiming to grab. ui.js owns
+    // state.poles + the solve, so we just hand it the world coordinate.
+    this.canvas.addEventListener('dblclick', e => {
+      if (!_qdTabActive()) return;
+      const rect = this.canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left, y = e.clientY - rect.top;
+      if (this._hitTestPole(x, y) >= 0) return;   // on an existing pole — ignore
+      e.preventDefault();
+      if (this.onAddPole) this.onAddPole(this.toWorld(x, y));
+    });
   }
 
   setData(d) {

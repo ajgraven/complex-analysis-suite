@@ -4599,6 +4599,115 @@ ok('ParamSlice: namespace exports core symbols',
      r.cls === PS.CLASS_VALID || r.cls === PS.CLASS_NO_ROOT);
 }
 
+// ---- PQD param-slice routing regression ----
+// A bounded non-singular PQD scenario MUST route through _solveScenarioBody
+// to Family.powerQD — NOT the classical boundedQD fallback. Regression for the
+// dropped `norm.alpha` that made the Parameter-slice grid AND the Hovered-QD
+// live preview render a classical QD for one-point bounded non-singular PQDs.
+{
+  // One-point bounded non-singular PQD, α=2, h = 3/(w−3) (the §20 example).
+  // Bootstrap a valid interior w₀ (param-slice runs with bootstrapW0:false, so
+  // the scenario must supply w₀ exactly as the QD tab's buildNorm does).
+  const mkH = () => ({ poles: [{ a: { re: 3, im: 0 }, principal: [{ re: 3, im: 0 }] }], polyPart: [] });
+  const boot = QD_NS.solveInverseQD(mkH(), { alpha: 2 });
+  ok('ParamSlice PQD: bootstrap solve for w₀ succeeded', boot.success, boot.error);
+  if (boot.success) {
+    const w0 = boot.primary.phi.w0;
+    const scen = {
+      hData: mkH(),
+      norm:  { w0: { re: w0.re, im: w0.im }, alpha: 2 },
+      opts:  { univalenceSamples: 64, identityTol: 1e-5, findAlternates: false,
+               newton: { maxIter: 40, tolerance: 1e-9 },
+               usePhases: { direct: true, continuation: false, multistart: true,
+                            diverse: false, deflation: false } },
+    };
+    const pt = [{ ref: { kind: 'poleRe', poleIdx: 0 }, value: 3 }];   // no-op assign
+    // Cold solve — only routes to powerQD if opts.alpha is forwarded (the fix).
+    const cold = PS.solveOnePoint(scen, pt, null, 'powerQD');
+    ok('ParamSlice PQD: cold solve routes to Family.powerQD (not classical)',
+       cold.cls === PS.CLASS_VALID && cold.phiSerialized && cold.phiSerialized.family === 'powerQD',
+       'cls=' + cold.cls + ' family=' + (cold.phiSerialized && cold.phiSerialized.family));
+    ok('ParamSlice PQD: cold solve preserves α=2',
+       !!cold.phiSerialized && cold.phiSerialized.alpha === 2,
+       'alpha=' + (cold.phiSerialized && cold.phiSerialized.alpha));
+    // Warm solve from the powerQD hint — chain must engage AND stay powerQD
+    // (guards the chain-poisoning: a classical first pixel would block warm-start).
+    const warm = PS.solveOnePoint(scen, pt, cold.phiSerialized, 'powerQD');
+    ok('ParamSlice PQD: same-family warm-start engages + stays powerQD',
+       warm.cls === PS.CLASS_VALID && warm.warmUsed &&
+       warm.phiSerialized && warm.phiSerialized.family === 'powerQD',
+       'cls=' + warm.cls + ' warmUsed=' + warm.warmUsed +
+       ' family=' + (warm.phiSerialized && warm.phiSerialized.family));
+  }
+}
+
+// ---- Boundary self-intersection: O(N log N) grid == O(N²) brute force ----
+// (param-slice PQD perf work, Fix B). The spatial-grid fast path MUST return
+// the identical verdict to the reference all-pairs test on every curve — it's
+// only an optimisation. The brute-force fn is also the test oracle.
+{
+  const bsi   = QD_NS.boundarySelfIntersects;
+  const brute = QD_NS.boundarySelfIntersectsBruteForce;
+  function circle(N, cx = 0, cy = 0, R = 1) {
+    const p = [];
+    for (let i = 0; i < N; i++) { const t = 2 * Math.PI * i / N; p.push({ re: cx + R * Math.cos(t), im: cy + R * Math.sin(t) }); }
+    return p;
+  }
+  // limaçon r = 0.5 + cos θ — r goes negative ⇒ an inner loop ⇒ self-intersects.
+  function limacon(N) {
+    const p = [];
+    for (let i = 0; i < N; i++) { const t = 2 * Math.PI * i / N; const r = 0.5 + Math.cos(t); p.push({ re: r * Math.cos(t), im: r * Math.sin(t) }); }
+    return p;
+  }
+  const bowtie = [{ re: -1, im: -1 }, { re: 1, im: 1 }, { re: 1, im: -1 }, { re: -1, im: 1 }];
+  function pentagram() {
+    const p = [];
+    for (let k = 0; k < 5; k++) { const t = 2 * Math.PI * (2 * k) / 5 - Math.PI / 2; p.push({ re: Math.cos(t), im: Math.sin(t) }); }
+    return p;   // vertex skip ⇒ self-intersecting star
+  }
+  const battery = [
+    { name: 'unit square N=4',     pts: [{ re: 0, im: 0 }, { re: 1, im: 0 }, { re: 1, im: 1 }, { re: 0, im: 1 }] },
+    { name: 'bowtie N=4',          pts: bowtie },
+    { name: 'pentagram N=5',       pts: pentagram() },
+    { name: 'circle N=33',         pts: circle(33) },             // grid path (N>32), convex
+    { name: 'circle N=300',        pts: circle(300) },            // grid path, convex
+    { name: 'ellipse N=257',       pts: circle(257, 0, 0, 1).map(p => ({ re: 2 * p.re, im: 0.3 * p.im })) },
+    { name: 'limaçon N=200',       pts: limacon(200) },           // grid path, self-intersecting
+    { name: 'limaçon N=400',       pts: limacon(400) },
+  ];
+  let allAgree = true, detail = '';
+  for (const c of battery) {
+    const g = bsi(c.pts), b = brute(c.pts);
+    if (g !== b) { allAgree = false; detail += ` ${c.name}:grid=${g}≠brute=${b}`; }
+  }
+  ok('BSI: grid self-intersection == brute-force across battery', allAgree, detail);
+  ok('BSI: bowtie + pentagram + limaçon flagged self-intersecting',
+     brute(bowtie) && bsi(bowtie) && brute(pentagram()) && bsi(pentagram()) &&
+     brute(limacon(200)) && bsi(limacon(200)));
+  ok('BSI: convex circles (N=300) NOT self-intersecting (grid path)',
+     !brute(circle(300)) && !bsi(circle(300)));
+}
+
+// ---- PQD isBoundaryUnivalent: family-sweep sampler (Fix A) gives the same
+// verdict as the old per-point evalPhi sampler, across a pole-angle battery. ----
+{
+  let agree = true, allUniv = true, n = 0, detail = '';
+  for (const deg of [0, 30, 60, 90, 135, 170]) {
+    const th = deg * Math.PI / 180;
+    const h = { poles: [{ a: { re: 2 * Math.cos(th), im: 2 * Math.sin(th) }, principal: [{ re: 1, im: 0 }] }], polyPart: [] };
+    const r = QD_NS.solveInverseQD(h, { alpha: 2 });
+    if (!r.success) { detail += ` deg${deg}:solveFail`; continue; }
+    n++;
+    const phi  = r.primary.phi;
+    const fast = QD_NS.isBoundaryUnivalent(phi, 128);                                  // new: family sweep
+    const slow = !QD_NS.boundarySelfIntersectsBruteForce(QD_NS.sampleBoundary(phi, 128)); // old: per-point evalPhi
+    if (fast !== slow) { agree = false; detail += ` deg${deg}:fast=${fast}≠slow=${slow}`; }
+    if (!fast) allUniv = false;
+  }
+  ok('PQD isBoundaryUnivalent: family-sweep sampler agrees with per-point sampler', agree && n >= 5, 'n=' + n + detail);
+  ok('PQD isBoundaryUnivalent: valid α=2 PQDs report univalent', allUniv && n >= 5, detail);
+}
+
 // ---- Identity-rigor wiring (HANDOFF #32): opts.univalenceSamples flows
 // from a param-slice scenario through to the family identity verifier
 // for both the warm-start and cold-start paths in _solveScenarioBody.
@@ -6030,6 +6139,61 @@ ok('CriticalSet: namespace exports',
 // scenario, falling back to skip if jsdom is unavailable. Not blocking
 // for this P1 milestone.
 // =============================================================================
+
+// =============================================================================
+// DomainPlot double-click → add-pole (jsdom). Verifies the dblclick handler in
+// ui-domain-plot.js fires onAddPole(toWorld(click)) on empty plot space and
+// ignores double-clicks that land on an existing pole dot (no duplicate). Runs
+// the REAL source in a jsdom window; skipped gracefully if jsdom is absent.
+// =============================================================================
+(function () {
+  let JSDOM;
+  try { ({ JSDOM } = require('jsdom')); }
+  catch (e) { ok('DomainPlot dblclick: jsdom present (else skipped)', true, 'jsdom unavailable — skipped'); return; }
+  try {
+    const fs2 = require('fs'), path2 = require('path');
+    const html = '<!DOCTYPE html><body>' +
+      '<button class="tab-btn active" data-tab="qd"></button><canvas id="c"></canvas></body>';
+    const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true });
+    const W = dom.window;
+    // ui-domain-plot.js is a factory IIFE: it installs QD_UI.installDomainPlot(deps)
+    // which returns the DomainPlot class with ui.js closures injected. Run the
+    // source in W's realm, then call the factory with dummy deps (the dblclick
+    // path uses none of them; render — the only heavy consumer — is stubbed).
+    const srcText = fs2.readFileSync(path2.join(__dirname, 'ui-domain-plot.js'), 'utf8');
+    W.eval(srcText);
+    const DP = W.QD_UI.installDomainPlot({
+      state: { poles: [], viewMode: 'inverse' },
+      modeDescriptor: () => ({}),
+      formatTick: (v) => String(v),
+      sub: (n) => String(n),
+    });
+    ok('DomainPlot dblclick: class loads in jsdom', typeof DP === 'function');
+    if (typeof DP !== 'function') return;
+    DP.prototype.render = function () {};                 // jsdom has no 2D ctx — stub drawing
+    const canvas = W.document.getElementById('c');
+    const plot = new DP(canvas, { textContent: '' });
+    plot.setData({ poles: [{ re: 0.5, im: -0.5 }], boundaryPts: [] });
+
+    // (1) double-click empty space → onAddPole fires with w === toWorld(click).
+    let added = null;
+    plot.onAddPole = (w) => { added = w; };
+    canvas.dispatchEvent(new W.MouseEvent('dblclick', { clientX: 5, clientY: 5, bubbles: true, cancelable: true }));
+    const want = plot.toWorld(5, 5);
+    ok('DomainPlot dblclick: empty space fires onAddPole', added !== null);
+    ok('DomainPlot dblclick: onAddPole receives the clicked w (toWorld)',
+       !!added && Math.abs(added.re - want.re) < 1e-9 && Math.abs(added.im - want.im) < 1e-9,
+       added ? ('got ' + added.re + ',' + added.im) : 'no call');
+
+    // (2) double-click ON the existing pole dot → ignored (no stacked duplicate).
+    added = null;
+    const sp = plot.toScreen(0.5, -0.5);
+    canvas.dispatchEvent(new W.MouseEvent('dblclick', { clientX: sp.x, clientY: sp.y, bubbles: true, cancelable: true }));
+    ok('DomainPlot dblclick: on an existing pole is ignored', added === null);
+  } catch (e) {
+    ok('DomainPlot dblclick: jsdom test ran without error', false, String((e && e.stack) || e));
+  }
+})();
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail === 0 ? 0 : 1);
