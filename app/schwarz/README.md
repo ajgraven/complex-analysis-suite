@@ -13,7 +13,15 @@ escape-time fractal.
 | `schwarz-common.js` | Pure math kernel + per-family CPU adapters (`adaptBounded`, `adaptUnbounded`, `adaptBoundedLQD`, …). |
 | `schwarz-webgl.js` | WebGL 2 fragment-shader renderer; same σ-iteration on the GPU. |
 | `schwarz-cpu-worker.js` | `QD.SchwarzCpuWorker` — dedicated Web Worker that computes the CPU escape-time field off the main thread (rebuilds the Schwarz handle from the serializable φ + boundary samples, streams a transferable field snapshot per pyramid pass). Falls back to the in-page renderer on file:// / no-Worker. |
-| `schwarz-ui.js` | Schwarz-tab UI: source-φ capture, resolution / colormap / scale controls, pan / zoom / orbit-on-double-click, view-toggle to Sphere mode. |
+| `schwarz-ui.js` | Schwarz-tab UI hub: source-φ capture, card builders, `setMode` / view-toggle to Sphere mode, coordinate transforms, and the `sCtx` injection + the four module installs below. |
+| `schwarz-paint.js` | 2D-canvas output layer: field / boundary / orbit / preimage-tree / limit-set painters + colormaps. `QD_UI.installSchwarzPaint(sCtx)`. |
+| `schwarz-render.js` | Progressive escape-time renderer: debounced `requestRecompute` + GPU one-frame path + CPU 4×4→2×2→1×1 pyramid. `QD_UI.installSchwarzRender(sCtx)`. |
+| `schwarz-features.js` | Per-feature compute routines for the analysis / limit-set / forward-dynamics cards: domain-coloring, preimage-tree rebuild, limit-set chaos game, σ level curves, critical orbits, cycle finder, orbit sweep, z-panel pullback, PNG export. `QD_UI.installSchwarzFeatures(sCtx)`. |
+| `schwarz-interaction.js` | Canvas hover / wheel / click / dblclick / pin handlers + `attachCanvasHandlers`. `QD_UI.installSchwarzInteraction(sCtx)`. |
+
+The last four are the Phase-3 (item E) factory-module split of the former
+2477-line `schwarz-ui.js`; see [ARCHITECTURE.md](../../ARCHITECTURE.md) for the
+`installSchwarzX(sCtx)` pattern and install order.
 
 ## Public surface (`QD.Schwarz.*`)
 

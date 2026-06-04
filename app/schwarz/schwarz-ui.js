@@ -151,7 +151,6 @@
   // Interaction tuning. CLICK_DELAY defers the single-click orbit-pin long
   // enough for a double-click (which seeds the preimage tree) to cancel it;
   // the dblclick handler clears the pending timer. Exposed via the test hook.
-  let CLICK_DELAY = 250;                  // ms; single-click → pin debounce
   // The preimage-tree seed gate runs escapeTime with a generous iteration cap
   // so genuinely-fundamental (tiling-set) points that escape slowly aren't
   // mis-classified as non-escaping `interior`. Display/hover use the smaller
@@ -162,6 +161,15 @@
   // the end of this file; called by name throughout — see schwarz-paint.js).
   let clearCanvas, paintAll, repaintField, paintBoundaryOnTop, paintOrbit;
   let paintPreimageTree, paintLimitSet, setProgress;
+  let requestRecompute;
+  let attachCanvasHandlers, onCanvasClick, onCanvasDblClick, onMouseMove;
+  let runHoverOrbit, pinOrbitAt, _schwarzInter;
+  // Forward bindings for the Phase-3 feature-compute module (assigned by the
+  // install near the end of this file; the card-builder event handlers + the
+  // interaction install call them by name — see schwarz-features.js).
+  let _recomputeDomainColoring, _rebuildPreimageTreeIfActive, _refreshPreimageTreeStats;
+  let _computeLimitSet, _clearLimitSet, _recomputeCriticalOrbits, _findCycles;
+  let _exportPng, _recomputeZPanelOrbit, _computeSweep, _recomputeLevelCurves;
 
   // ---------------------------------------------------------------------------
   // Lazy mount
@@ -377,45 +385,9 @@
     }
   }
 
-  function _recomputeDomainColoring() {
-    if (!sState.schwarz) { sState.domainColor = null; return; }
-    const v = sState.view;
-    const viewport = {
-      reMin: v.cx - (v.cssW / 2) / v.scale,
-      reMax: v.cx + (v.cssW / 2) / v.scale,
-      imMin: v.cy - (v.cssH / 2) / v.scale,
-      imMax: v.cy + (v.cssH / 2) / v.scale,
-    };
-    const W = 256, H = 256;
-    try {
-      const buf = QD.Schwarz.domainColoringField(sState.schwarz, viewport, { W, H });
-      sState.domainColor = { buf, W, H, viewport };
-    } catch (_) { sState.domainColor = null; }
-  }
-
-  // Re-build the tree from the existing seed (root of the previous tree)
-  // when depth or budget changes. Cheap: σ⁻¹ runs are millisecond-scale.
-  function _rebuildPreimageTreeIfActive() {
-    if (sState.mode !== 'fractal') return;
-    if (!sState.schwarz || !sState.preimageTree) return;
-    const seed = sState.preimageTree.generations[0][0];
-    sState.preimageTree = QD.Schwarz.buildPreimageTree(seed, sState.schwarz, {
-      depth:        sState.preimageDepth,
-      visualBudget: sState.preimageBudget,
-    });
-    paintBoundaryOnTop();
-    paintPreimageTree();
-    _refreshPreimageTreeStats();
-  }
-
-  function _refreshPreimageTreeStats() {
-    const el = document.getElementById('schwarz-preimage-count');
-    if (!el || !sState.preimageTree) { if (el) el.textContent = ''; return; }
-    let total = 0;
-    for (const g of sState.preimageTree.generations) total += g.length;
-    const trunc = sState.preimageTree.truncatedByBudget ? ' (capped)' : '';
-    el.textContent = total + ' pts' + trunc;
-  }
+  // Feature-compute (σ domain-coloring, preimage-tree rebuild + stats) ->
+  // schwarz-features.js (Phase-3 item E). Installed near the end of this file;
+  // the card builders + interaction install call the captured names.
 
   // ---------------------------------------------------------------------------
   // Limit-set card (S3): chaos-game point cloud + dim_H readout.
@@ -456,53 +428,8 @@
     return card;
   }
 
-  function _computeLimitSet() {
-    if (!sState.schwarz) {
-      const el = document.getElementById('schwarz-ls-status');
-      if (el) el.textContent = 'No φ captured.';
-      return;
-    }
-    const statusEl = document.getElementById('schwarz-ls-status');
-    const dimEl    = document.getElementById('schwarz-ls-dim');
-    if (statusEl) statusEl.textContent = 'Computing…';
-    if (dimEl)    dimEl.textContent    = '';
-    // Defer one frame so the "Computing…" text actually paints.
-    setTimeout(() => {
-      const t0 = performance.now();
-      try {
-        sState.limitSet = QD.Schwarz.sampleLimitSet(sState.schwarz, {
-          n: sState.limitSetN,
-          burnIn: 200,
-        });
-      } catch (err) {
-        if (statusEl) statusEl.textContent = 'Error: ' + (err.message || err);
-        return;
-      }
-      const t1 = performance.now();
-      const n = sState.limitSet.length / 2;
-      if (statusEl) statusEl.textContent = n + ' pts in ' + (t1 - t0).toFixed(0) + ' ms';
-      // Dimension estimate.
-      if (n >= 200) {
-        try {
-          const r = QD.Schwarz.boxCountingDimension(sState.limitSet);
-          sState.limitSetDim = r.dim;
-          if (dimEl) dimEl.textContent = 'dim ≈ ' + (isFinite(r.dim) ? r.dim.toFixed(3) : 'NaN');
-        } catch (_) { /* ignore */ }
-      }
-      paintBoundaryOnTop();
-      paintLimitSet();
-    }, 30);
-  }
-
-  function _clearLimitSet() {
-    sState.limitSet = null;
-    sState.limitSetDim = null;
-    const el = document.getElementById('schwarz-ls-status');
-    const dimEl = document.getElementById('schwarz-ls-dim');
-    if (el) el.textContent = '';
-    if (dimEl) dimEl.textContent = '';
-    paintBoundaryOnTop();
-  }
+  // Limit-set compute/clear (_computeLimitSet / _clearLimitSet) ->
+  // schwarz-features.js (Phase-3 item E).
 
   // ---------------------------------------------------------------------------
   // S4: Analysis card — explicit σ form (E13), singularities (F3), level
@@ -716,192 +643,10 @@
     return card;
   }
 
-  function _recomputeCriticalOrbits() {
-    if (!sState.schwarz) { sState.criticalOrbits = null; return; }
-    const seeds = QD.Schwarz.canonicalSeeds(sState.schwarz);
-    const out = [];
-    for (const s of seeds) {
-      const orbit = QD.Schwarz.makeOrbit(s.w, sState.schwarz,
-                                          { maxIter: sState.grid.maxIter });
-      out.push({ label: s.label, orbit });
-    }
-    sState.criticalOrbits = out;
-  }
-
-  function _findCycles() {
-    if (!sState.schwarz) return;
-    const n = +(document.getElementById('schwarz-cycle-n').value || 2);
-    const statusEl = document.getElementById('schwarz-cycle-count');
-    if (statusEl) statusEl.textContent = '…';
-    setTimeout(() => {
-      const t0 = performance.now();
-      let cycles = [];
-      try {
-        cycles = QD.Schwarz.findCycles(sState.schwarz, n, { gridSize: 18 });
-      } catch (_) { /* ignore */ }
-      const t1 = performance.now();
-      sState.cycles = cycles;
-      if (statusEl) statusEl.textContent =
-        cycles.length + ' cycles in ' + (t1 - t0).toFixed(0) + ' ms';
-      paintBoundaryOnTop();
-    }, 30);
-  }
-
-  // S6 / F8: PNG export. Composites whatever is currently visible on the
-  // Schwarz tab into a single PNG download. For GPU mode, that means the
-  // fractal layer from #schwarz-gl-canvas + the overlay layer from #canvas.
-  // For CPU / domain-coloring modes, only the 2D canvas is needed.
-  //
-  // High-res: when multiplier > 1, we briefly re-render the GPU canvas at
-  // multiplier·display-size, re-paint the 2D overlay onto an off-screen
-  // canvas of the same size, composite, export, restore.
-  function _exportPng() {
-    const mult = +(document.getElementById('schwarz-export-mult').value || 1);
-    const view  = sState.view;
-    const baseW = Math.round(view.cssW);
-    const baseH = Math.round(view.cssH);
-    const outW  = baseW * mult;
-    const outH  = baseH * mult;
-
-    // Off-screen composite canvas.
-    const out    = document.createElement('canvas');
-    out.width    = outW;
-    out.height   = outH;
-    const outCtx = out.getContext('2d');
-
-    // --- 1) Fractal layer ---
-    const glCanvas = document.getElementById('schwarz-gl-canvas');
-    const onGpu    = activeRenderer() === 'gpu' && glCanvas && sState.gpu;
-    if (onGpu && sState.mode === 'fractal') {
-      if (mult > 1) {
-        // Re-render at higher resolution. We construct a temporary view with
-        // larger css dimensions so the renderer chooses larger drawing-buffer.
-        const tmpView = Object.assign({}, view, { cssW: outW, cssH: outH });
-        try {
-          sState.gpu.setColormap(sState.grid.colormap);
-          sState.gpu.render(tmpView, {
-            maxIter:   sState.grid.maxIter,
-            scaleMode: sState.grid.scaleMode,
-            modK:      sState.grid.modK,
-          });
-          outCtx.drawImage(glCanvas, 0, 0, outW, outH);
-        } catch (e) {
-          console.warn('[export] high-res GPU render failed:', e);
-          outCtx.drawImage(glCanvas, 0, 0, outW, outH);
-        }
-      } else {
-        outCtx.drawImage(glCanvas, 0, 0, outW, outH);
-      }
-    } else {
-      // CPU / domain-coloring: the 2D canvas already has the fractal layer
-      // (or there isn't one). Nothing extra here.
-      outCtx.fillStyle = '#fafafa';
-      outCtx.fillRect(0, 0, outW, outH);
-    }
-
-    // --- 2) 2D overlay (boundary, orbits, markers, z-panel, etc.) ---
-    const ctx2d = getCtx();
-    if (ctx2d) {
-      const mainCanvas = getCanvas();
-      // Render the 2D layer at the target resolution. Easiest: scale the
-      // existing canvas with imageSmoothingEnabled = false. Boundary lines
-      // will be 1-px regardless of multiplier — acceptable for typical
-      // print/share use; pure-vector boundaries would need a re-render.
-      outCtx.imageSmoothingEnabled = false;
-      outCtx.drawImage(mainCanvas, 0, 0, outW, outH);
-    }
-
-    // --- 3) Restore GPU canvas to its display size ---
-    if (onGpu && mult > 1) {
-      try {
-        sState.gpu.render(view, {
-          maxIter:   sState.grid.maxIter,
-          scaleMode: sState.grid.scaleMode,
-          modK:      sState.grid.modK,
-        });
-      } catch (_) { /* ignore */ }
-    }
-
-    // --- 4) Download ---
-    out.toBlob((blob) => {
-      if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      a.download = `qd-schwarz-${ts}-${outW}x${outH}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }, 'image/png');
-  }
-
-  // F4: ψ-pullback of the current w-orbit. Each w in sState.orbit is run
-  // through sw.psi to get the corresponding z in 𝔻 (or 𝔻*); used to render
-  // the z-history inside the z-panel inset.
-  function _recomputeZPanelOrbit() {
-    if (!sState.schwarz || !sState.orbit || sState.orbit.length === 0) {
-      sState.zPanelOrbit = null;
-      return;
-    }
-    const out = [];
-    for (const w of sState.orbit) {
-      let z;
-      try { z = sState.schwarz.psi(w); } catch (_) { z = null; }
-      if (z && isFinite(z.re) && isFinite(z.im)) out.push(z);
-      else out.push(null);
-    }
-    sState.zPanelOrbit = out;
-  }
-
-  function _computeSweep() {
-    if (!sState.schwarz) return;
-    const N     = +(document.getElementById('schwarz-sweep-n').value     || 16);
-    const depth = +(document.getElementById('schwarz-sweep-depth').value || 12);
-    // Default sweep: horizontal line across the boundary bbox at y = centroid.
-    const bdy = sState.schwarz._boundaryPts || [];
-    let minRe = -1, maxRe = 1, cy = 0;
-    if (bdy.length > 0) {
-      minRe = Infinity; maxRe = -Infinity;
-      let cyAcc = 0;
-      for (const p of bdy) {
-        if (p.re < minRe) minRe = p.re;
-        if (p.re > maxRe) maxRe = p.re;
-        cyAcc += p.im;
-      }
-      cy = cyAcc / bdy.length;
-      const dx = maxRe - minRe;
-      minRe += 0.1 * dx; maxRe -= 0.1 * dx;
-    }
-    const seeds = QD.Schwarz.sampleSweepSeeds('line',
-      { from: { re: minRe, im: cy }, to: { re: maxRe, im: cy }, n: N });
-    const out = [];
-    for (const seed of seeds) {
-      if (!sState.schwarz.isInOmega(seed)) { out.push([]); continue; }
-      const orb = QD.Schwarz.makeOrbit(seed, sState.schwarz, { maxIter: depth });
-      out.push(orb);
-    }
-    sState.sweepOrbits = out;
-    paintBoundaryOnTop();
-  }
-
-  // Compute level curves on the current viewport. Triggered on toggle-on
-  // and on pan/zoom (so contours follow the view).
-  function _recomputeLevelCurves() {
-    if (!sState.schwarz) { sState.levelCurves = null; return; }
-    const v = sState.view;
-    const viewport = {
-      reMin: v.cx - (v.cssW / 2) / v.scale,
-      reMax: v.cx + (v.cssW / 2) / v.scale,
-      imMin: v.cy - (v.cssH / 2) / v.scale,
-      imMax: v.cy + (v.cssH / 2) / v.scale,
-    };
-    try {
-      sState.levelCurves = QD.Schwarz.computeSigmaLevelCurves(sState.schwarz,
-        { gridSize: 96, viewport });
-    } catch (_) { sState.levelCurves = null; }
-  }
+  // Forward-dynamics feature-compute (_recomputeCriticalOrbits / _findCycles /
+  // _computeSweep / _recomputeZPanelOrbit), σ level curves
+  // (_recomputeLevelCurves), and high-res PNG export (_exportPng) ->
+  // schwarz-features.js (Phase-3 item E).
 
   function setViewMode(mode) {
     if (mode !== 'plane' && mode !== 'sphere') return;
@@ -1334,105 +1079,9 @@
   function getCanvas() { return document.getElementById('canvas'); }
   function getCtx()    { const c = getCanvas(); return c ? c.getContext('2d') : null; }
 
-  let dragging = false, dragMoved = false, lastX = 0, lastY = 0;
-  function attachCanvasHandlers() {
-    const c = getCanvas();
-    if (!c) return;
-    c.addEventListener('mousemove', onMouseMove);
-    c.addEventListener('mouseleave', () => {
-      const r = document.getElementById('schwarz-readout');
-      if (r) r.textContent = '—';
-      // Drop the transient hover orbit when the cursor leaves the canvas.
-      if (sState._hoverRaf != null) { cancelAnimationFrame(sState._hoverRaf); sState._hoverRaf = null; }
-      if (sState.hoverOrbit) { sState.hoverOrbit = null; paintBoundaryOnTop(); }
-    });
-    // Fractal-mode interaction (plane view):
-    //   • single click → pin the forward σ-orbit (deferred so a double-click
-    //     can cancel it — see onCanvasClick / CLICK_DELAY);
-    //   • double click → seed a preimage tree (onCanvasDblClick);
-    //   • click-and-drag → pan (dragMoved suppresses the click).
-    c.addEventListener('click', onCanvasClick);
-    c.addEventListener('dblclick', onCanvasDblClick);
-    c.addEventListener('wheel', onWheel, { passive: false });
-    c.addEventListener('mousedown', e => {
-      if (e.button !== 0) return;
-      // S5 / E11: shift-drag draws a curve in Ω for forward-image rendering.
-      if (e.shiftKey && sState.schwarz) {
-        sState.isDrawingCurve = true;
-        sState.curveImageDraft = [];
-        const rect = c.getBoundingClientRect();
-        const w = pixelToWorld(e.clientX - rect.left, e.clientY - rect.top);
-        if (sState.schwarz.isInOmega(w)) sState.curveImageDraft.push(w);
-        c.style.cursor = 'crosshair';
-        return;
-      }
-      dragging = true; dragMoved = false;
-      lastX = e.clientX; lastY = e.clientY;
-      c.style.cursor = 'grabbing';
-    });
-    window.addEventListener('mousemove', e => {
-      if (sState.isDrawingCurve && isSchwarzActive()) {
-        const rect = c.getBoundingClientRect();
-        const w = pixelToWorld(e.clientX - rect.left, e.clientY - rect.top);
-        if (sState.schwarz && sState.schwarz.isInOmega(w)) {
-          // Add point only if it's noticeably distinct from the last (≥ 3 px).
-          const last = sState.curveImageDraft[sState.curveImageDraft.length - 1];
-          if (!last) sState.curveImageDraft.push(w);
-          else {
-            const lp = worldToPixel(last.re, last.im);
-            const np = worldToPixel(w.re, w.im);
-            if (Math.hypot(np.x - lp.x, np.y - lp.y) > 3) sState.curveImageDraft.push(w);
-          }
-          paintBoundaryOnTop();
-        }
-        return;
-      }
-      if (!dragging || !isSchwarzActive()) return;
-      const dx = e.clientX - lastX, dy = e.clientY - lastY;
-      if (dx !== 0 || dy !== 0) dragMoved = true;
-      lastX = e.clientX; lastY = e.clientY;
-      sState.view.cx -= dx / sState.view.scale;
-      sState.view.cy += dy / sState.view.scale;          // screen y is flipped
-      // GPU is fast enough (10-30 ms typical) to render every mousemove
-      // without debounce. CPU mode debounces because the pyramid is slow.
-      if (activeRenderer() === 'gpu') renderImmediate();
-      else { clearOverlay(); requestRecompute(); }
-    });
-    window.addEventListener('mouseup', () => {
-      if (sState.isDrawingCurve) {
-        sState.isDrawingCurve = false;
-        c.style.cursor = '';
-        const draft = sState.curveImageDraft || [];
-        if (draft.length >= 2 && sState.schwarz) {
-          sState.curveImage = QD.Schwarz.iterateCurveForward(
-            draft, sState.schwarz, sState.curveImageDepth);
-        } else {
-          sState.curveImage = null;
-        }
-        sState.curveImageDraft = null;
-        paintBoundaryOnTop();
-        return;
-      }
-      if (!dragging) return;
-      dragging = false;
-      c.style.cursor = '';
-      // After a real drag (mouse moved), trigger a fresh render so the
-      // final position is sharp even in CPU mode.
-      if (dragMoved && activeRenderer() !== 'gpu') requestRecompute();
-      // S4 / F12: re-compute level curves to the new viewport. Expensive
-      // (~10k σ-evals); only do this on mouseup, not on every move event.
-      if (dragMoved && sState.showLevelCurves) {
-        _recomputeLevelCurves();
-        paintBoundaryOnTop();
-      }
-      // S5 / F6: same for domain-coloring mode — re-render to new viewport.
-      if (dragMoved && sState.mode === 'domain-coloring') {
-        _recomputeDomainColoring();
-        paintAll();
-      }
-    });
-  }
-
+  // Canvas interaction -> schwarz-interaction.js (Phase-3 item E). The drag
+  // state + attachCanvasHandlers + the handlers below are installed near the
+  // end of this file; renderImmediate (used by render too) stays here.
   // Synchronous GPU re-render. Used during drag/zoom in GPU mode.
   function renderImmediate() {
     if (!sState.schwarz || !sState.gpu || activeRenderer() !== 'gpu') return;
@@ -1452,166 +1101,8 @@
     }
   }
 
-  function clearOverlay() {
-    const ctx = getCtx(); if (!ctx) return;
-    syncCanvasSize();
-    ctx.clearRect(0, 0, sState.view.cssW, sState.view.cssH);
-  }
-  function isSchwarzActive() {
-    const panel = document.getElementById('controls-schwarz');
-    return panel && !panel.hidden;
-  }
-  function onWheel(e) {
-    if (!isSchwarzActive() || !sState.schwarz) return;
-    e.preventDefault();
-    const c = getCanvas();
-    const rect = c.getBoundingClientRect();
-    const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
-    const w = pixelToWorld(sx, sy);
-    const k = (e.deltaY > 0) ? 0.85 : 1.18;
-    sState.view.scale *= k;
-    // Keep the world point under the cursor pinned in screen space.
-    const after = pixelToWorld(sx, sy);
-    sState.view.cx += w.re - after.re;
-    sState.view.cy += w.im - after.im;
-    if (activeRenderer() === 'gpu') renderImmediate();
-    else { clearOverlay(); requestRecompute(); }
-  }
-  function onMouseMove(e) {
-    if (!isSchwarzActive() || !sState.schwarz) return;
-    const c = getCanvas();
-    const rect = c.getBoundingClientRect();
-    const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
-    const w = pixelToWorld(sx, sy);
-    let info = `w = (${w.re.toFixed(3)}, ${w.im.toFixed(3)})`;
-    if (sState.field && sState.fieldW > 0) {
-      const gx = Math.floor(sx / sState.view.cssW  * sState.fieldW);
-      const gy = Math.floor(sy / sState.view.cssH  * sState.fieldH);
-      if (gx >= 0 && gx < sState.fieldW && gy >= 0 && gy < sState.fieldH) {
-        const idx = gy * sState.fieldW + gx;
-        const n = sState.field[idx];
-        const kind = sState.fieldKind ? sState.fieldKind[idx] : KIND_OUTSIDE;
-        info += '  ' + describeKind(kind, n);
-      }
-    } else if (activeRenderer() === 'gpu' && QD.Schwarz && QD.Schwarz.escapeTime) {
-      // GPU-mode parity (HANDOFF #33): the field array isn't populated in
-      // GPU mode, so do an ad-hoc per-cursor CPU iteration. Cheap — at most
-      // `maxIter` σ-evals (μs scale on typical scenarios).
-      try {
-        const et = QD.Schwarz.escapeTime(w, sState.schwarz, { maxIter: sState.grid.maxIter });
-        // escapeTime returns kind as a string; map to the KIND_* enum
-        // used by describeKind. Note: a pixel that was already outside Ω
-        // returns kind='fundamental' n=0 — display it as KIND_OUTSIDE.
-        const kindMap = { fundamental: KIND_FUND, escaped: KIND_ESC,
-                          interior: KIND_INT, invalid: KIND_INV };
-        let kindI = (et && kindMap[et.kind] != null) ? kindMap[et.kind] : KIND_OUTSIDE;
-        if (kindI === KIND_FUND && (et.n | 0) === 0) kindI = KIND_OUTSIDE;
-        info += '  ' + describeKind(kindI, et ? (et.n | 0) : 0);
-      } catch (err) { /* swallow; coordinate readout still shown */ }
-    }
-    const r = document.getElementById('schwarz-readout');
-    if (r) r.textContent = info;
-
-    // Live forward-orbit preview on hover (fractal/plane only, when enabled
-    // and not mid-pan / mid-curve-draw). σ is defined on Ω, so only points
-    // inside Ω get an orbit; outside Ω we clear any stale hover orbit.
-    if (sState.viewMode === 'plane' && sState.mode === 'fractal' &&
-        sState.hoverOrbitEnabled && !dragging && !sState.isDrawingCurve) {
-      if (sState.schwarz.isInOmega(w)) {
-        sState._pendingHoverW = w;
-        if (sState._hoverRaf == null) sState._hoverRaf = requestAnimationFrame(runHoverOrbit);
-      } else if (sState.hoverOrbit) {
-        sState.hoverOrbit = null;
-        paintBoundaryOnTop();
-      }
-    }
-  }
-  // rAF-coalesced hover-orbit recompute: at most one makeOrbit per frame, no
-  // matter how fast the cursor moves. Uses the small display maxIter (cheap
-  // forward σ-iteration), not the generous seed-gate cap.
-  function runHoverOrbit() {
-    sState._hoverRaf = null;
-    if (!isSchwarzActive() || !sState.schwarz) return;
-    if (sState.viewMode !== 'plane' || sState.mode !== 'fractal' || !sState.hoverOrbitEnabled) return;
-    const w = sState._pendingHoverW;
-    if (!w || !sState.schwarz.isInOmega(w)) { sState.hoverOrbit = null; paintBoundaryOnTop(); return; }
-    try {
-      sState.hoverOrbit = QD.Schwarz.makeOrbit(w, sState.schwarz, { maxIter: sState.grid.maxIter });
-    } catch (_) { sState.hoverOrbit = null; }
-    paintBoundaryOnTop();
-  }
-  function describeKind(kind, n) {
-    switch (kind) {
-      case KIND_FUND:    return 'escape time n=' + n;
-      case KIND_ESC:     return 'in escaping set';
-      case KIND_INT:     return 'still in Ω after maxIter (tiling-set interior)';
-      case KIND_INV:     return 'Newton diverged';
-      case KIND_OUTSIDE: return 'in Ω^c (fundamental tile)';
-      default:           return '';
-    }
-  }
-  // Shared guard for the click / double-click handlers: fractal plane view,
-  // not a drag-release, not a shift-drag curve gesture. Returns the world
-  // point on success, or null if the event should be ignored.
-  function _interactionPoint(e) {
-    if (!isSchwarzActive() || !sState.schwarz) return null;
-    if (sState.viewMode !== 'plane' || sState.mode !== 'fractal') return null;
-    if (dragMoved) return null;   // a pan just ended — not a click
-    if (e.shiftKey) return null;  // reserved for the E11 curve-draw gesture
-    const c = getCanvas();
-    const rect = c.getBoundingClientRect();
-    return pixelToWorld(e.clientX - rect.left, e.clientY - rect.top);
-  }
-
-  // Double-click → seed a preimage tree at the clicked point. Restricted to
-  // the tiling set: a point qualifies iff its forward σ-orbit escapes Ω into
-  // the fundamental tile in finitely many steps (escapeTime kind
-  // 'fundamental', which also covers Ω^c at n=0). Points in the limit set
-  // ('interior' / non-escaping), the escaping set, or where σ is invalid are
-  // ignored. Seeds exactly at the click (no fold-back to the fundamental tile).
-  function onCanvasDblClick(e) {
-    // Cancel the pending single-click pin so a double-click never also pins.
-    if (sState._clickTimer != null) { clearTimeout(sState._clickTimer); sState._clickTimer = null; }
-    const w = _interactionPoint(e);
-    if (!w) return;
-    let et;
-    try { et = QD.Schwarz.escapeTime(w, sState.schwarz, { maxIter: gateMaxIter() }); }
-    catch (_) { return; }                       // σ/ψ blew up — not seedable
-    if (!et || et.kind !== 'fundamental') return; // outside the tiling set
-    sState.preimageTree = QD.Schwarz.buildPreimageTree(w, sState.schwarz, {
-      depth:        sState.preimageDepth,
-      visualBudget: sState.preimageBudget,
-    });
-    paintBoundaryOnTop();
-    paintPreimageTree();
-    _refreshPreimageTreeStats();
-  }
-
-  // Single-click → pin the forward σ-orbit at the clicked point. Deferred by
-  // CLICK_DELAY so a double-click (tree seed) can cancel it via the dblclick
-  // handler above. Clicking outside Ω clears the pin.
-  function onCanvasClick(e) {
-    const w = _interactionPoint(e);
-    if (!w) return;
-    if (sState._clickTimer != null) clearTimeout(sState._clickTimer);
-    sState._clickTimer = setTimeout(() => { sState._clickTimer = null; pinOrbitAt(w); }, CLICK_DELAY);
-  }
-
-  // Commit the pinned forward orbit at world point w (inside Ω → its σ-orbit;
-  // outside Ω → clear the pin). Kept in sync with sState.orbit so downstream
-  // consumers (z-panel, sphere, sweep, PNG export) see the pinned orbit.
-  function pinOrbitAt(w) {
-    if (!isSchwarzActive() || !sState.schwarz) return;
-    sState.pinnedOrbit = sState.schwarz.isInOmega(w)
-      ? QD.Schwarz.makeOrbit(w, sState.schwarz, { maxIter: sState.grid.maxIter })
-      : [];
-    sState.orbit = sState.pinnedOrbit;
-    // S6 / F4: also refresh the z-pullback for the z-panel inset.
-    if (sState.showZPanel) _recomputeZPanelOrbit();
-    // Just redraw the overlay; the GPU fractal layer doesn't need re-render.
-    if (activeRenderer() === 'gpu') { paintBoundaryOnTop(); paintOrbit(); }
-    else paintAll();
-  }
+  // Canvas interaction (clearOverlay / isSchwarzActive / wheel / mousemove /
+  // hover / click / dblclick / pin) -> schwarz-interaction.js (Phase-3 item E).
 
   // ---------------------------------------------------------------------------
   // Coordinate transforms.
@@ -1651,205 +1142,12 @@
   // ---------------------------------------------------------------------------
   // Progressive renderer.
   // ---------------------------------------------------------------------------
-  let recomputeTimer = null;
-  function requestRecompute() {
-    if (recomputeTimer) clearTimeout(recomputeTimer);
-    recomputeTimer = setTimeout(() => { recomputeTimer = null; doRecompute(); }, 80);
-  }
-
-  function doRecompute() {
-    if (!sState.schwarz) { clearCanvas(); return; }
-    syncCanvasSize();
-
-    // Invalidate any prior render up front (covers CPU→GPU: the GPU branch
-    // below returns without touching renderToken, so a stale CPU-worker pass
-    // could otherwise paint over the GPU image). Cancelling the worker also
-    // frees it; a fresh render re-creates it on demand.
-    const myToken = ++sState.renderToken;
-    if (QD.SchwarzCpuWorker) QD.SchwarzCpuWorker.cancel();
-
-    // GPU path: synchronous, complete in one frame.
-    if (activeRenderer() === 'gpu') {
-      showGLLayer(true);
-      const t0 = performance.now();
-      try {
-        sState.gpu.setColormap(sState.grid.colormap);
-        sState.gpu.render(sState.view, {
-          maxIter:   sState.grid.maxIter,
-          scaleMode: sState.grid.scaleMode,
-          modK:      sState.grid.modK,
-        });
-      } catch (e) {
-        // GPU render failed (e.g. context lost). Fall through to CPU path.
-        sState.gpuMsg = 'GPU render failed; using CPU. ' + (e.message || e);
-        // Continue below — CPU pyramid.
-      }
-      if (!sState.gpuMsg || sState.gpuMsg.indexOf('failed') === -1) {
-        // Field/fieldKind aren't populated under GPU rendering — hover readout
-        // will fall back to coordinates-only.
-        sState.field = null; sState.fieldKind = null;
-        // Boundary + orbit overlays drawn on top (no field clearing needed).
-        paintBoundaryOnTop();
-        paintOrbit();
-        const ms = (performance.now() - t0).toFixed(0);
-        setProgress('GPU render: ' + ms + ' ms' + (sState.gpuMsg ? '  (' + sState.gpuMsg + ')' : ''));
-        return;
-      }
-    }
-
-    // CPU progressive pyramid path. Hide the GL layer so a stale GPU image
-    // doesn't peek through edge cases. (renderToken was already bumped at the
-    // top of doRecompute; myToken is captured there.)
-    showGLLayer(false);
-    sState.rendering = true;
-    setProgress('Pass 1/3 (coarse) ...');
-    // Allocate field at target resolution.
-    const res = sState.grid.resolution;
-    const aspect = sState.view.cssW / sState.view.cssH;
-    let W, H;
-    if (aspect >= 1) { W = res; H = Math.max(1, Math.round(res / aspect)); }
-    else             { H = res; W = Math.max(1, Math.round(res * aspect)); }
-    sState.field     = new Int16Array(W * H);
-    sState.fieldKind = new Uint8Array(W * H);
-    sState.fieldW = W; sState.fieldH = H;
-
-    // Prefer the dedicated CPU worker (A7) — it computes the whole pyramid
-    // off-thread and streams a field snapshot per pass. Falls back to the
-    // in-process pyramid (below) on file:// / no-Worker / clone failure.
-    if (QD.SchwarzCpuWorker && QD.SchwarzCpuWorker.isUsable()) {
-      _renderCpuViaWorker(myToken, W, H);
-      return;
-    }
-    _renderCpuPyramid(myToken);
-  }
-
-  // In-process progressive pyramid (main-thread fallback for doRecompute).
-  // Pass 1: every 4th pixel → 4×4 blocks; pass 2: 2×2; pass 3: per-pixel.
-  function _renderCpuPyramid(myToken) {
-    chainPass(myToken, 4, () =>
-      chainPass(myToken, 2, () =>
-        chainPass(myToken, 1, () => {
-          if (myToken !== sState.renderToken) return;
-          sState.rendering = false;
-          setProgress('');
-          paintAll();
-        })));
-  }
-
-  // Off-thread CPU render via QD.SchwarzCpuWorker (A7). The worker rebuilds the
-  // Schwarz handle from the serializable φ + boundary samples and posts one
-  // transferable field snapshot per pyramid pass; we adopt each snapshot, fill
-  // the coarse cells (reusing the same routine as the in-process path), and
-  // repaint. Stale snapshots (token mismatch) are discarded. Any failure path
-  // falls back to the in-process pyramid so the tab always renders.
-  function _renderCpuViaWorker(myToken, W, H) {
-    const v = sState.view;
-    const params = {
-      phi:         sState.phiSnapshot,
-      boundaryPts: sState.boundarySnapshot || [],
-      view:        { cx: v.cx, cy: v.cy, scale: v.scale, cssW: v.cssW, cssH: v.cssH },
-      W, H,
-      maxIter:     sState.grid.maxIter,
-      strides:     [4, 2, 1],
-    };
-    const fallback = () => {
-      if (myToken !== sState.renderToken) return;
-      _renderCpuPyramid(myToken);
-    };
-    sState._cpuWorkerHandle = QD.SchwarzCpuWorker.renderField(params, {
-      onPass(m) {
-        if (myToken !== sState.renderToken) return;   // superseded — discard
-        sState.field = m.field; sState.fieldKind = m.fieldKind;
-        sState.fieldW = m.W; sState.fieldH = m.H;
-        if (m.stride > 1) fillFromCoarseSamples(m.stride);
-        paintAll();
-        if (m.done) { sState.rendering = false; setProgress(''); }
-        else        { setProgress('Pass ' + ((4 / m.stride) | 0) + '/3 …'); }
-      },
-      onUnavailable: fallback,
-      onError(e) { console.warn('[schwarz cpu worker]', e); fallback(); },
-    });
-  }
-
-  function chainPass(token, stride, next) {
-    if (token !== sState.renderToken) return;
-    setProgress('Pass ' + (4 / stride | 0) + (stride === 1 ? '/3 (full)…' : '/3 (refining)…'));
-    const W = sState.fieldW, H = sState.fieldH;
-    const sw = sState.schwarz;
-    const maxIter = sState.grid.maxIter;
-    // Map field coords → world.
-    const cssW = sState.view.cssW, cssH = sState.view.cssH;
-    const cx = sState.view.cx, cy = sState.view.cy, scale = sState.view.scale;
-    const pxPerCellX = cssW / W, pxPerCellY = cssH / H;
-
-    let row = 0;
-    // Per-row warm-start chain: the converged ψ-seed from the left neighbor
-    // (same row, prior col) is reused as initialSeedHint for the current pixel.
-    // Adjacent pixels in w-space land on adjacent z-values in 𝔻, so Newton
-    // typically converges in 1–3 iters instead of 5–10. Reset at row start.
-    let leftSeed = null;
-    function chunk() {
-      if (token !== sState.renderToken) return;
-      const tStart = performance.now();
-      while (row < H) {
-        leftSeed = null;
-        for (let col = 0; col < W; col++) {
-          if ((row % stride) !== 0 || (col % stride) !== 0) continue;
-          const idx = row * W + col;
-          if (sState.fieldKind[idx] && stride > 1) continue;
-          const px = (col + 0.5) * pxPerCellX;
-          const py = (row + 0.5) * pxPerCellY;
-          const wRe = cx + (px - cssW / 2) / scale;
-          const wIm = cy - (py - cssH / 2) / scale;
-          const wpt = { re: wRe, im: wIm };
-          if (!sw.isInOmega(wpt)) {
-            sState.field[idx] = 0;
-            sState.fieldKind[idx] = KIND_OUTSIDE + 1;
-            // leftSeed stays — outside pixels don't update the chain.
-          } else {
-            const et = QD.Schwarz.escapeTime(wpt, sw, { maxIter, initialSeedHint: leftSeed });
-            sState.field[idx] = et.n;
-            sState.fieldKind[idx] =
-              (et.kind === 'fundamental' ? KIND_FUND :
-               et.kind === 'escaped'     ? KIND_ESC  :
-               et.kind === 'interior'    ? KIND_INT  :
-                                           KIND_INV) + 1;
-            // Carry forward only if ψ converged to a usable seed.
-            if (et.firstZ) leftSeed = et.firstZ;
-          }
-        }
-        row++;
-        if (performance.now() - tStart > 14) {
-          requestAnimationFrame(chunk);
-          paintAll();
-          return;
-        }
-      }
-      // After this pass: fill in any cells skipped by larger stride with the
-      // nearest sampled value (for the coarse-display effect).
-      fillFromCoarseSamples(stride);
-      paintAll();
-      next();
-    }
-    requestAnimationFrame(chunk);
-  }
-
-  // Fill un-resolved cells (kind === 0) with their nearest stride-aligned
-  // neighbor's value, so the coarse pass shows blocky filled-in content.
-  function fillFromCoarseSamples(stride) {
-    const W = sState.fieldW, H = sState.fieldH;
-    for (let row = 0; row < H; row++) {
-      const rAnchor = row - (row % stride);
-      for (let col = 0; col < W; col++) {
-        const idx = row * W + col;
-        if (sState.fieldKind[idx]) continue;
-        const cAnchor = col - (col % stride);
-        const aIdx = rAnchor * W + cAnchor;
-        sState.field[idx]     = sState.field[aIdx];
-        sState.fieldKind[idx] = sState.fieldKind[aIdx];
-      }
-    }
-  }
+  // Progressive renderer -> schwarz-render.js (Phase-3 item E). requestRecompute
+  // (the debounced entry) + doRecompute + the CPU pyramid (_renderCpuPyramid /
+  // _renderCpuViaWorker / chainPass / fillFromCoarseSamples) are installed after
+  // the paint install below; the rest of this file calls requestRecompute by the
+  // forward-declared name. The module reads sState + the paint fns + a few
+  // GPU/geometry helpers via sCtx.
 
   // ---------------------------------------------------------------------------
   // Painting.
@@ -1868,6 +1166,37 @@
     KIND_FUND, KIND_ESC, KIND_INT, KIND_INV, KIND_OUTSIDE,
   }));
 
+  // Progressive renderer (installed after paint so its paint deps are on sCtx).
+  ({ requestRecompute } = window.QD_UI.installSchwarzRender({
+    sState, clearCanvas, paintAll, paintBoundaryOnTop, paintOrbit, setProgress,
+    syncCanvasSize, activeRenderer, showGLLayer,
+    KIND_FUND, KIND_ESC, KIND_INT, KIND_INV, KIND_OUTSIDE,
+  }));
+
+  // Feature-compute methods (installed after paint+render so their paint deps
+  // are on sCtx; before interaction, which destructures the recompute hooks).
+  ({
+    _recomputeDomainColoring, _rebuildPreimageTreeIfActive, _refreshPreimageTreeStats,
+    _computeLimitSet, _clearLimitSet, _recomputeCriticalOrbits, _findCycles,
+    _exportPng, _recomputeZPanelOrbit, _computeSweep, _recomputeLevelCurves,
+  } = window.QD_UI.installSchwarzFeatures({
+    sState, paintBoundaryOnTop, paintPreimageTree, paintLimitSet,
+    activeRenderer, getCtx, getCanvas,
+  }));
+
+  // Canvas interaction (installed after paint+render so its renderer/paint deps
+  // are available; reads the per-feature recompute hooks + geometry via sCtx).
+  _schwarzInter = window.QD_UI.installSchwarzInteraction({
+    sState, getCanvas, getCtx, pixelToWorld, worldToPixel, syncCanvasSize,
+    activeRenderer, renderImmediate, requestRecompute,
+    paintBoundaryOnTop, paintOrbit, paintAll, paintPreimageTree,
+    gateMaxIter, _recomputeLevelCurves, _recomputeDomainColoring,
+    _recomputeZPanelOrbit, _refreshPreimageTreeStats,
+    KIND_FUND, KIND_ESC, KIND_INT, KIND_INV, KIND_OUTSIDE,
+  });
+  ({ attachCanvasHandlers, onCanvasClick, onCanvasDblClick, onMouseMove,
+     runHoverOrbit, pinOrbitAt } = _schwarzInter);
+
   // ---------------------------------------------------------------------------
   // Test-only hook (see node-test.js). Opt-in via a window sentinel so a normal
   // browser load NEVER attaches it. Exposes the fractal-mode interaction
@@ -1878,8 +1207,8 @@
     window.__schwarzUiTest = {
       sState, setMode, onCanvasClick, onCanvasDblClick, onMouseMove,
       runHoverOrbit, pinOrbitAt,
-      get CLICK_DELAY() { return CLICK_DELAY; },
-      set CLICK_DELAY(v) { CLICK_DELAY = v; },
+      get CLICK_DELAY() { return _schwarzInter.getClickDelay(); },
+      set CLICK_DELAY(v) { _schwarzInter.setClickDelay(v); },
     };
   }
 

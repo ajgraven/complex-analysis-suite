@@ -66,6 +66,7 @@ flowchart LR
     F2c["ui-modes / ui-pole-grid / ui-h-text / ui-solve / ui-url-state"]
     F4[ui.js]
     F5[direct/direct-ui.js]
+    F6a["schwarz/schwarz-paint / schwarz-render / schwarz-features / schwarz-interaction"]
     F6[schwarz/schwarz-ui.js]
     F7[param-slice/param-slice-ui.js]
   end
@@ -224,6 +225,32 @@ Two rules keep it correct:
   seam).
 
 Same pattern works for any future class or cluster extraction.
+
+#### `QD_UI.installSchwarzX(sCtx)` — the Schwarz-tab module split (Phase 3, item E)
+
+The same modularization carved the 2477-line `schwarz/schwarz-ui.js` down to
+~1215 by moving four cohesive clusters into sibling factory modules. The only
+twist vs. the Inverse-tab split is that `schwarz-ui.js` is an **IIFE**, so the
+host uses forward-`let` bindings inside the IIFE (`let paintAll, …;`) that the
+install assignments fill in — the captured names are then called bare
+everywhere else in the IIFE.
+
+| Module | Responsibility |
+| --- | --- |
+| [`app/schwarz/schwarz-paint.js`](app/schwarz/schwarz-paint.js) | the 2D-canvas output layer: `clearCanvas` / `paintAll` / `repaintField` / `paintBoundaryOnTop` / `paintOrbit` / `paintPreimageTree` / `paintLimitSet` / `setProgress` + the colormaps |
+| [`app/schwarz/schwarz-render.js`](app/schwarz/schwarz-render.js) | the progressive escape-time renderer: debounced `requestRecompute` + `doRecompute` + the CPU 4×4→2×2→1×1 pyramid (GPU path is one synchronous frame) |
+| [`app/schwarz/schwarz-features.js`](app/schwarz/schwarz-features.js) | the per-feature compute/recompute routines wired to the analysis / limit-set / forward-dynamics cards: σ domain-coloring, preimage-tree rebuild + stats, limit-set chaos game, σ level curves, critical orbits, cycle finder, orbit sweep, z-panel ψ-pullback, and high-res PNG export |
+| [`app/schwarz/schwarz-interaction.js`](app/schwarz/schwarz-interaction.js) | canvas hover / wheel / click / dblclick / pin handlers + `attachCanvasHandlers` (incl. the single-click `CLICK_DELAY` pin timer, exposed via `get/setClickDelay` for the test hook) |
+
+`schwarz-ui.js` builds ONE shared mutable `sCtx` (`sState` + the geometry/GPU
+helpers + the KIND_* constants) and installs in dependency order at the tail:
+**paint → render → features → interaction** — each installed once its `sCtx`
+deps exist (render needs the paint fns; interaction destructures the feature
+recompute hooks `_recomputeLevelCurves` / `_recomputeDomainColoring` /
+`_recomputeZPanelOrbit` / `_refreshPreimageTreeStats`). What **stays** in
+`schwarz-ui.js`: `sState` + constants, the lazy sidebar mount + the card
+builders, `setMode` / view-toggle, the φ-capture + GPU-init plumbing, and the
+coordinate transforms / `renderImmediate` that several modules share via `sCtx`.
 
 ### `qd.mjs` ESM façade (P1.1)
 

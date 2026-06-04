@@ -33,11 +33,18 @@ module.exports = async function run() {
         buildPreimageTree: (w) => ({ generations: [[{ re: w.re, im: w.im }]], edges: [], truncatedByBudget: false }),
       },
     };
-    // schwarz-ui.js installs the Phase-3 paint module at IIFE load
-    // (window.QD_UI.installSchwarzPaint), so make that factory available first.
-    // No paint function runs during install — it only destructures sCtx — so the
-    // jsdom 2D-context stubs aren't exercised here.
+    // schwarz-ui.js installs the Phase-3 paint + render + features + interaction
+    // modules at IIFE load (window.QD_UI.installSchwarzPaint / installSchwarzRender
+    // / installSchwarzFeatures / installSchwarzInteraction), so make those
+    // factories available first. None
+    // run any paint/render work during install — they only destructure sCtx — so
+    // the jsdom 2D-context stubs aren't exercised here. The interaction handlers
+    // this test drives (onCanvasClick/…) come from installSchwarzInteraction via
+    // the IIFE's forward-let capture + the __schwarzUiTest hook.
     W.eval(fs.readFileSync(path.join(APP_DIR, 'schwarz', 'schwarz-paint.js'), 'utf8'));
+    W.eval(fs.readFileSync(path.join(APP_DIR, 'schwarz', 'schwarz-render.js'), 'utf8'));
+    W.eval(fs.readFileSync(path.join(APP_DIR, 'schwarz', 'schwarz-features.js'), 'utf8'));
+    W.eval(fs.readFileSync(path.join(APP_DIR, 'schwarz', 'schwarz-interaction.js'), 'utf8'));
     const srcText = fs.readFileSync(path.join(APP_DIR, 'schwarz', 'schwarz-ui.js'), 'utf8');
     W.eval(srcText);
     const T = W.__schwarzUiTest;

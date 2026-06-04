@@ -119,10 +119,19 @@ visualizations, complementary to the headless runner.
     ├── schwarz/
     │   ├── schwarz-common.js          Schwarz-reflection dynamics math kernel +
     │   │                              per-family CPU adapters; orbit / escape-time
-    │   ├── schwarz-ui.js              Schwarz-tab UI: capture φ from Inverse tab,
-    │   │                              resolution / colormap / scale-mode controls,
-    │   │                              CPU / GPU renderer selection, pan / zoom /
-    │   │                              orbit-on-double-click
+    │   ├── schwarz-ui.js              Schwarz-tab UI hub: capture φ from Inverse tab,
+    │   │                              card builders, setMode / view-toggle, sCtx
+    │   │                              injection + the four module installs below
+    │   ├── schwarz-paint.js           2D-canvas output layer (field / boundary /
+    │   │                              orbit / tree / limit-set painters + colormaps)
+    │   ├── schwarz-render.js          progressive escape-time renderer (debounced
+    │   │                              recompute + GPU path + CPU pyramid)
+    │   ├── schwarz-features.js        per-feature compute (domain-coloring, limit
+    │   │                              set, level curves, orbits, cycles, sweep,
+    │   │                              z-panel, PNG export)
+    │   ├── schwarz-interaction.js     canvas hover / wheel / click / dblclick / pin
+    │   │                              handlers (all four: QD_UI.installSchwarzX(sCtx)
+    │   │                              factories, Phase-3 item E split of schwarz-ui.js)
     │   └── schwarz-webgl.js           WebGL 2 fragment-shader renderer (escape-time
     │                                  in a single GPU pass)
     │

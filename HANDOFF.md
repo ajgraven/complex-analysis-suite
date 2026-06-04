@@ -26,7 +26,50 @@ priors.
 > version:sync` refreshes it after any `app/` asset change; CI's
 > `npm run version:check` fails if it's stale.
 
-## (most recent) Phase 3 — UI modularization (ui.js split, item E)
+## (most recent) Phase 3 — UI modularization (schwarz-ui.js split, item E / PR-E2)
+
+The 2477-line `schwarz/schwarz-ui.js` Schwarz-tab monolith was carved down to
+**1215 lines (−51%)** by extracting four cohesive clusters into sibling factory
+modules — the same `QD_UI.installX` pattern as the ui.js split, adapted to an
+**IIFE host**. Landed in two PRs: **PR #11** merged part 1 (`schwarz-paint.js`)
+only; a **follow-up completion PR** lands parts 2–4 (`schwarz-render` /
+`schwarz-features` / `schwarz-interaction`) + these docs on top of it (parts 2–4
+had been pushed to the original branch *after* #11 was squash-merged, so they
+were re-landed cleanly onto current `main`).
+- **New modules** (each `QD_UI.installSchwarzX(sCtx)`; the IIFE captures the
+  returns into forward-`let` bindings so all call sites are unchanged):
+  `schwarz-paint.js` (2D-canvas output layer: field/boundary/orbit/tree/limit-set
+  painters + colormaps), `schwarz-render.js` (debounced `requestRecompute` +
+  GPU-one-frame + CPU pyramid), `schwarz-features.js` (per-feature compute:
+  domain-coloring, preimage-tree rebuild + stats, limit-set chaos game, σ level
+  curves, critical orbits, cycle finder, orbit sweep, z-panel pullback, PNG
+  export), and `schwarz-interaction.js` (canvas hover/wheel/click/dblclick/pin +
+  `attachCanvasHandlers`).
+- **Wiring (`sCtx`):** one shared context (`sState` + geometry/GPU helpers + the
+  `KIND_*` constants). Installed in **dependency order at the IIFE tail —
+  paint → render → features → interaction** — because render destructures the
+  paint fns and interaction destructures the feature recompute hooks
+  (`_recomputeLevelCurves`/`_recomputeDomainColoring`/`_recomputeZPanelOrbit`/
+  `_refreshPreimageTreeStats`). What STAYS in `schwarz-ui.js`: `sState` +
+  constants, the lazy sidebar mount + card builders, `setMode`/view-toggle, the
+  φ-capture + GPU-init plumbing, and the coord transforms / `renderImmediate`
+  that several modules share via `sCtx`.
+- **Gotchas it encodes:** (1) shared mutable state stays in ONE module — the
+  single-click `CLICK_DELAY` pin timer moved into `schwarz-interaction` with
+  `get/setClickDelay` accessors for the `window.__schwarzUiTest` hook (rather than
+  living on `sCtx` where two modules would race it). (2) The jsdom
+  `schwarz-ui.test.js` must `eval` each extracted module **before** `schwarz-ui.js`
+  (the IIFE calls the factories at load) — its load list was updated to add
+  paint/render/features/interaction in order.
+- **Verify:** `node app/node-test.js` → 1117 passed / 0 failed (baseline 1116 + 1
+  new parse-check); lint clean; `version:check` clean; browser smoke (φ capture,
+  fractal render, limit set 5000 pts + dim, cycle finder, sweep, σ-form, PNG
+  export, the four checkbox recompute hooks, domain-coloring↔fractal toggle —
+  zero console errors).
+- **Follow-ups:** PR-E3/E4 (direct-ui.js, param-slice-ui.js) per the same pattern
+  remain open.
+
+## (prior) Phase 3 — UI modularization (ui.js split, item E)
 
 The 3024-line `ui.js` Inverse-tab monolith was carved down to **1581 lines
 (−48%)** by extracting cohesive clusters into five sibling factory modules, all

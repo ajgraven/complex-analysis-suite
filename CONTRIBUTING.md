@@ -217,6 +217,20 @@ Tightly-coupled clusters that call each other and share mutable state (e.g. the
 solve→render→analyze pipeline and its `_solveAndRenderToken`) belong in ONE
 module, so those calls stay bare same-scope and the state never crosses a seam.
 
+**IIFE hosts (`schwarz/schwarz-ui.js`).** When the host file is itself an IIFE
+rather than a flat script, the forward-`let` bindings live *inside* the IIFE and
+the `({ … } = window.QD_UI.installSchwarzX(sCtx))` assignments fill them in at
+the tail — same pattern, no `window.` exposure needed. `schwarz-ui.js` was split
+this way into `schwarz-paint` / `schwarz-render` / `schwarz-features` /
+`schwarz-interaction`, installed in that **dependency order** (render needs the
+paint fns; interaction destructures the feature recompute hooks). Two gotchas:
+keep state that several modules mutate in ONE module and expose accessors (the
+single-click `CLICK_DELAY` lives in `schwarz-interaction` with `get/setClickDelay`
+for the test hook); and when a jsdom test `eval`s the host, it must `eval` each
+extracted module **first** (see the load list at the top of
+[`app/test/schwarz-ui.test.js`](app/test/schwarz-ui.test.js)), since the IIFE
+calls the `installSchwarzX` factories at load.
+
 ## Worker pool conventions
 
 Two Worker subsystems today:
