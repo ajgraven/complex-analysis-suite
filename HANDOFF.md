@@ -12,95 +12,51 @@ explain back to him.
 
 ---
 
-## 0. Current state (most recent: param-slice PQD univalence speed-up)
+## 0. Current state (most recent: continuationSolve for the 3 PQD families)
 
 **Full suite passing, 0 failed; `npm run lint` clean** (run `npm test` for the
-live count). Cache version `v50-paramslice-pqd-univalence-speedup`.
+live count). Cache version `v52-pqd-continuation`.
 
-**Param-slice PQD speed-up (most recent).** PQD slices were extremely slow even
-for one-point bounded. Profiled per valid PQD pixel at default Standard quality
-(N=128): the dominant cost was **`isBoundaryUnivalent` (~4.2 ms)**, NOT the Newton
-solve (warm refine 0.03 ms; cold 5.6 ms) or the identity verify (0.58 ms);
-invalid/non-realizable pixels reject in ~0.01 ms (so the empty plane is cheap).
-Two reducible parts: (a) **boundary sampling** — `isBoundaryUnivalent` used the
-naive per-point `sampleBoundary`, and for PQD each `evalPhi_PQD` re-runs a K=24
-arg-continuation walk *per point* (`phiAnchored`→`argContAt`), ~3200 `evalRHash`
-for one N=128 check; (b) **O(N²) `boundarySelfIntersects`** (~1.6 ms @128, ~25 ms
-@512). Four fixes (user picked Full scope):
-- **A — `solver.js isBoundaryUnivalent`**: when `_resolveFamily(phi)` has a
-  `sampleBoundary` override (the PQD families), sample via the family's
-  incremental-arg sweep (`sampleBoundaryAdaptive(phi, N, 0)`, WeakMap-cached) and
-  map `[{theta,w}]`→points; classical keeps the per-point path. ~20× less sampling.
-- **B — `solver.js boundarySelfIntersects`**: replaced the all-pairs loop with
-  **uniform spatial-grid bucketing** (only same-cell edge pairs tested via the
-  exact `segmentsCross`; identical verdict). Kept the O(N²) as
-  `boundarySelfIntersectsBruteForce` (small-N fast path, degenerate fallback, test
-  oracle). Both now exported.
-- **C — `param-slice-common.js _solveScenarioBody`**: cap the per-pixel
-  self-intersection N at `UNIVALENCE_SAMPLES_CAP = 64`, decoupled from the
-  identity verifier's N (which keeps the full quality-preset count for
-  `identityTol` accuracy). Cold path (rare) unchanged.
-- **D — `param-slice-ui.js runAdaptive2D`**: precompute ONE valid seed φ
-  (`PS.solveOnePoint(baseScenario, [], null, familyTag)`) and use it as the
-  warm-hint fallback in `dispatchPoints` when `nearestPhi` is null — so the
-  ~200+ coarse-pass points (and each worker chunk's first point) warm-refine
-  (0.03 ms) instead of cold-solving (5.6 ms). Wrong-basin seed is safe (cold
-  fallback in `_solveScenarioBody`).
-- **Measured (node, same source as workers):** univalence N=128 4.2 ms→0.41 ms
-  (~10×), N=512 33.7 ms→1.6 ms (~21×); warm PQD pixel ~5 ms→~0.86 ms (~6×).
-- **Tests** (`node-test.js`): `boundarySelfIntersects` == brute-force oracle on a
-  battery (square, bowtie, pentagram, circle N=33/300, ellipse, limaçon); PQD
-  `isBoundaryUnivalent` verdict unchanged old-vs-new sampler across the pole-angle
-  battery. `bench.js` gains a `powerQD: 1-pt α=2` scenario (and its module loader
-  was fixed to the canonical worker-bundle order — it was missing seeds-*.js, so
-  `npm run bench` had been throwing at `solver-uqd.js`).
-- **Verify:** full suite green (+5 assertions); lint clean; `node app/bench.js`
-  runs all 8 scenarios. Browser: the worker bundler fetches each source as
-  `?v=<CACHE_VERSION>` (`param-slice-pool.js:118`), so the grid render's workers
-  load the v50 fast code (confirmed the `solver.js?v=v50` URL serves it). NB the
-  query-less main-thread `<script>` copy can stay HTTP-cached stale until the SW
-  update cycle — affects only the hover live-solve / seed, not the grid render.
+> Branch note: `feat/pqd-continuation` is cut from `main` (does NOT include the
+> in-flight param-slice-PQD or dblclick PR work). The `CACHE_VERSION` line and
+> §0 heading will conflict trivially when the parallel branches land — keep the
+> later one.
 
-## (prior) Param-slice PQD α-routing fix
-
-**Param-slice PQD α-routing fix.** The Parameter-slice tab rendered
-PQDs as **classical** QDs — the grid classification AND the **Hovered-QD** preview
-both showed a plain `boundedQD` domain for what should be a power-weighted one
-(the user's report: "Hovered QD renders don't look right for one-point bounded
-non-singular PQDs"). Root cause, in `param-slice/param-slice-common.js`
-`_solveScenarioBody`: it rebuilt the solver `opts` from `s.norm` (w0/c/q/lqd/
-unbounded/singular) but **never copied `s.norm.alpha`**. The cold-solve
-`solveInverseQD(hData, opts)` then saw no `alpha`, so `selectFamily` couldn't match
-`Family.powerQD`/`powerQD_singular` and silently fell back to classical `boundedQD`.
-The first (cold) pixel produced a classical φ whose `family` ≠ the PQD tag, which
-**poisoned the warm-start chain** (no subsequent pixel could warm-start), so EVERY
-pixel went cold→classical. LQD was unaffected (its `lqd`/`q`/`c` flags *were*
-copied) — which is exactly why only PQDs looked wrong. Fixes:
-- **`opts.alpha = s.norm.alpha`** (the one-line root fix) + a defensive
-  `init.alpha = s.norm.alpha` sync in the warm-start branch (mirrors the existing
-  w0/c/q sync; α is never a sweepable axis so it's already constant, but kept in
-  lock-step for robustness).
-- **Hover live-solve** (`param-slice-ui.js` `runLiveSolve`) now passes
-  `PS.MODE_FAMILY_TAG[scenario.mode]` instead of `undefined` as `expectedFamilyTag`,
-  so a PQD/LQD hover can actually warm-start (the grid path already did this via
-  `_attachFamilyTag`; with `undefined`, only classical hints — also `family===undefined`
-  — ever matched).
-- **Regression test** (`node-test.js`, after the cardioid-sweep block): a bounded
-  non-singular PQD (α=2, `h=3/(w−3)`) solved via `PS.solveOnePoint` must land in
-  `family==='powerQD'` with `alpha===2` (cold), and a same-family warm hint must
-  engage (`warmUsed`) and stay `powerQD`. These assertions FAIL on the pre-fix code.
-- **Verify:** full suite green incl. the 4 new assertions; lint clean; browser-confirmed
-  in the live bundle — the param-slice cold path `solveInverseQD(hData,{alpha:2,w0,
-  bootstrapW0:false})` routes to `powerQD` (vs classical with α omitted), and a fresh
-  `ParamSlice.solveOnePoint` cold+warm both land `powerQD` with a proper α=2 boundary
-  (bbox ~1.18×1.16 around the pole, vs the classical fallback's ~3.46×3.46). NB: the
-  page `<script>` for `param-slice-common.js` has no `?v=` query, so the browser HTTP
-  disk-cache can serve the old file until the SW update cycle refreshes it (known
-  dev verify friction — bust via SW unregister + `cache:'no-store'` fetch).
+**continuationSolve for powerQD_singular / unboundedPQD / unboundedPQD_singular
+(most recent).** These three PQD families previously stubbed their continuation
+phase (`return {success:false, error:"…not implemented…"}`), so `solveInverseQD`
+relied on direct + multistart + diverse + deflation. Implemented a real one:
+- **Homotopy: continuation in α from the classical limit** — NOT the residue-
+  strength / continuation-in-c idioms the plan first proposed; those DEGENERATE
+  here (shrinking residues pushes 0 out of Ω for the SINGULAR families; a small
+  conformal radius blows the unbounded seed up, z_j = a_j/c → ∞). Instead
+  `QD.PqdCommon.continuationInAlpha(hData, norm, options)`: solve the near-
+  classical α≈1 problem with the standard pipeline (reliably in-basin there —
+  same premise as `diagnosePQDRealizability`), then warm-start-march α to the
+  target. One shared helper; the three families are thin wrappers. All reach the
+  target in ~4 steps at machine-precision residual.
+- **Recursion guard:** the α≈1 seed solve runs with `usePhases.continuation:false`
+  so it can never re-enter `continuationInAlpha`.
+- **Fold guard (important):** the α-march can cross a fold onto a branch that
+  satisfies the algebraic residual but is NOT univalent (a spurious QD). The
+  helper VERIFIES the endpoint is a univalent, identity-OK QD (at the pipeline's
+  N=500) before reporting success; else returns `{success:false}` and the
+  pipeline falls through to multistart — today's behavior. Without this guard a
+  spurious continuation result preempted multistart and broke the §DF UPQD
+  forward round-trip tests. Net: continuation strictly helps or no-ops.
+- **Files:** `solver-pqd-common.js` (new `continuationInAlpha` on `QD.PqdCommon`),
+  `solver-pqd-singular.js` / `solver-uqd-pqd.js` / `solver-uqd-pqd-singular.js`
+  (stub → wrapper). `node-test.js` §CONT battery (each family solves via
+  `method:'continuation-in-alpha'`; a continuation-ONLY pipeline solve is valid +
+  univalent and matches the multistart solution; degenerate-but-safe no-throw
+  check). Cache `v52`.
+- **Deviation from the approved plan** (which specified residue-strength +
+  continuation-in-c): testing proved both degenerate for these families; α-homotopy
+  is the correct, working idiom and is what the realizability diagnostic uses.
 
 ## (prior) Direct Domain-type unification + send-hook fix + param-slice PQD
 
-**Direct Domain-type unification + cross-tab send fix + param-slice PQD.**
+**Direct Domain-type unification + cross-tab send fix + param-slice PQD (most recent).**
 Three fixes in one slice:
 - **Direct tab Domain-type control** (`direct/direct-ui.js`) now mirrors the inverse
   tab's compact segmented control: a `#dir-dm-weight` (QD/PQD/LQD) × `#dir-dm-domain`
