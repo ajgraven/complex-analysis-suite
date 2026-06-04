@@ -498,7 +498,11 @@
     initialGuess: initialGuess_UPQDS,
     perturbedInitialGuess: perturbedInitialGuess_UPQDS,
     diverseInitialGuess: diverseInitialGuess_UPQDS,
-    continuationSolve() { return { success: false, error: "continuation not implemented for unboundedPQD_singular", trace: [] }; },
+    // Continuation in α from the classical limit (residue-/c-homotopies break
+    // the unbounded singular ansatz). See QD.PqdCommon.continuationInAlpha.
+    continuationSolve(hData, norm, options = {}) {
+      return QD.PqdCommon.continuationInAlpha(hData, norm, options);
+    },
     verifyQuadratureIdentity: verifyQuadratureIdentity_UPQDS,
     sampleBoundary: sampleBoundary_UPQDS,
   };

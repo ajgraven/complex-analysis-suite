@@ -528,7 +528,11 @@
     initialGuess: initialGuess_PQDS,
     perturbedInitialGuess: perturbedInitialGuess_PQDS,
     diverseInitialGuess: diverseInitialGuess_PQDS,
-    continuationSolve() { return { success: false, error: "continuation not implemented for powerQD_singular", trace: [] }; },
+    // Continuation in α from the classical limit (residue-/c-homotopies break
+    // 0∈Ω for singular families). See QD.PqdCommon.continuationInAlpha.
+    continuationSolve(hData, norm, options = {}) {
+      return QD.PqdCommon.continuationInAlpha(hData, norm, options);
+    },
     verifyQuadratureIdentity: verifyQuadratureIdentity_PQDS,
     sampleBoundary: sampleBoundary_PQDS,
   };

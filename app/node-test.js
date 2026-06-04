@@ -1283,6 +1283,58 @@ runFamilyBattery('powerQD_singular', [
 }
 
 // ---------------------------------------------------------------------------
+// §CONT: continuationSolve for the three PQD families that previously stubbed
+// it (powerQD_singular, unboundedPQD, unboundedPQD_singular). The homotopy is
+// continuation in α from the classical limit (QD.PqdCommon.continuationInAlpha):
+// residue-/c-homotopies degenerate here (singular → 0 leaves Ω; unbounded → the
+// small-c seed blows up). Each case: (a) family.continuationSolve reaches the
+// target via method 'continuation-in-alpha'; (b) a continuation-ONLY solve
+// (all other phases off) finds the SAME valid, univalent QD; (c) it matches the
+// full multistart solve. Plus a degenerate-but-safe (no throw / no recursion).
+{
+  const CONT_ONLY = { usePhases: { direct: false, continuation: true, multistart: false, diverse: false, deflation: false } };
+  const contCases = [
+    { name: 'powerQD_singular',      hData: { poles: [{ a: { re: 1, im: 0 }, principal: [{ re: 63 / 32, im: 0 }] }] }, opts: { alpha: 2, singular: true, w0: { re: 1, im: 0 } }, family: 'powerQD_singular' },
+    { name: 'unboundedPQD',          hData: { poles: [{ a: { re: 2, im: 0 }, principal: [{ re: 1, im: 0 }] }] },        opts: { unbounded: true, alpha: 2, c: 2 },                 family: 'unboundedPQD' },
+    { name: 'unboundedPQD_singular', hData: { poles: [], polyPart: [{ re: 1, im: 0 }] },                               opts: { unbounded: true, singular: true, alpha: 2, c: 1 }, family: 'unboundedPQD_singular' },
+  ];
+  for (const c of contCases) {
+    const fam = QD_NS.selectFamily(c.opts);
+    const norm = fam.normalizeOpts(c.opts, c.hData);
+    // (a) direct continuationSolve reaches the target via the α-homotopy.
+    const cs = fam.continuationSolve(c.hData, norm, { newton: { maxIter: 80, tolerance: 1e-10 } });
+    ok('§CONT ' + c.name + ': continuationSolve succeeds via α-homotopy',
+       cs.success && cs.method === 'continuation-in-alpha' && cs.residual < 1e-7 && cs.phi.family === c.family,
+       cs.success ? ('method=' + cs.method + ' resid=' + (cs.residual != null ? cs.residual.toExponential(2) : '-') + ' fam=' + cs.phi.family) : cs.error);
+    // (b) continuation-ONLY full solve finds a valid, univalent QD of this family.
+    const ro = solveInverseQD(c.hData, Object.assign({}, c.opts, CONT_ONLY));
+    ok('§CONT ' + c.name + ': continuation-only solve is valid + univalent',
+       ro.success && ro.primary.univalent && ro.primary.phi.family === c.family,
+       ro.success ? ('univ=' + ro.primary.univalent + ' fam=' + ro.primary.phi.family) : ro.error);
+    // (c) matches the full multistart solve (same domain — sorted |z_j|).
+    const rFull = solveInverseQD(c.hData, c.opts);
+    if (ro.success && rFull.success && ro.primary.phi.branches.length) {
+      const za = ro.primary.phi.branches.map(b => Math.hypot(b.z.re, b.z.im)).sort((x, y) => x - y);
+      const zb = rFull.primary.phi.branches.map(b => Math.hypot(b.z.re, b.z.im)).sort((x, y) => x - y);
+      const d = Math.max.apply(null, za.map((v, i) => Math.abs(v - (zb[i] || 0))));
+      ok('§CONT ' + c.name + ': continuation matches multistart (|z_j|)', d < 1e-5, 'maxΔ=' + d.toExponential(2));
+    } else {
+      ok('§CONT ' + c.name + ': continuation matches multistart (poly-only)', ro.success && rFull.success);
+    }
+  }
+  // Degenerate-but-safe: continuation on a non-realizable config must NOT throw
+  // or infinite-recurse (the α≈1 seed solve disables its own continuation), and
+  // must return a result object so the pipeline can fall through to multistart.
+  let threw = false, res = null;
+  try {
+    res = solveInverseQD({ poles: [{ a: { re: 0.3, im: 0 }, principal: [{ re: 5, im: 0 }] }] },
+                         Object.assign({ alpha: 2, singular: true, w0: { re: 1, im: 0 } }, CONT_ONLY));
+  } catch (e) { threw = true; }
+  ok('§CONT degenerate case: no throw / no recursion, returns a result',
+     !threw && res && typeof res.success === 'boolean');
+}
+
+// ---------------------------------------------------------------------------
 // §23: Automatic singular ↔ non-singular PQD regime switching. As the
 // quadrature residues grow, ∂Ω crosses the origin and the domain moves between
 // the non-singular family (0 ∉ Ω) and the singular family (0 ∈ Ω). With

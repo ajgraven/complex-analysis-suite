@@ -425,11 +425,93 @@
   }
 
   // ===========================================================================
+  // Continuation in α — the PQD continuation homotopy (shared by the three
+  // families whose `continuationSolve` was previously a stub).
+  //
+  // WHY α and not residue-strength / continuation-in-c: those degenerate here.
+  // Shrinking the residues toward 0 pulls Ω back to the disk around w₀, which
+  // pushes the ORIGIN out of Ω — breaking the 0∈Ω ansatz of the SINGULAR
+  // families; and a small conformal radius makes the unbounded seed blow up
+  // (z_j = a_j/c → ∞). Continuing in the weight exponent α from the classical
+  // limit avoids both: solve the near-classical α≈1 problem with the standard
+  // pipeline (reliably in-basin there — same premise as diagnosePQDRealizability)
+  // then warm-start-march α to the target. Returns the standard
+  // { success, phi, residual, trace, method, error? } envelope and does NOT
+  // canonicalize (the pipeline's evalCandidate does). On any failure the
+  // pipeline falls through to multistart — today's behavior — so this can only
+  // help or no-op.
+  //
+  // RECURSION GUARD: the α≈1 seed solve runs with usePhases.continuation:false,
+  // so it can never re-enter this function.
+  function continuationInAlpha(hData, norm, options = {}) {
+    const target = norm.alpha;
+    if (!(target > 0)) return { success: false, error: "continuation-in-α: no target α", trace: [] };
+    const { growFactor = 1.6, shrinkFactor = 0.5, minStep = 1e-3, maxSteps = 80, newton = {} } = options;
+    const dir = target >= 1 ? 1 : -1;
+    // Start just off the classical limit, on the same side as the target.
+    const alphaStart = 1 + dir * Math.min(0.05, Math.max(1e-3, Math.abs(target - 1) * 0.5));
+    // Near-classical seed via the standard pipeline, with continuation DISABLED
+    // (recursion guard). diverse on / deflation off mirrors a normal cold solve.
+    const seedOpts = {
+      alpha: alphaStart,
+      unbounded: !!norm.unbounded, singular: !!norm.singular,
+      c: norm.c, w0: norm.w0, q: norm.q,
+      usePhases: { direct: true, continuation: false, multistart: true, diverse: true, deflation: false },
+    };
+    const seedR = QD.solveInverseQD(hData, seedOpts);
+    if (!seedR.success || !seedR.primary) {
+      return { success: false, error: "continuation-in-α: seed solve at α=" + alphaStart.toFixed(3) + " failed", trace: [] };
+    }
+    let phi = seedR.primary.phi;
+    const trace = [{ alpha: alphaStart, ok: true, residual: seedR.primary.residual }];
+    let last = alphaStart;
+    let step = Math.max(Math.abs(target - alphaStart) * 0.25, minStep);
+    for (let i = 0; i < maxSteps; i++) {
+      if (Math.abs(last - target) < 1e-12) break;
+      const nextA = dir > 0 ? Math.min(target, last + step) : Math.max(target, last - step);
+      const trial = QD.clonePhi(phi); trial.alpha = nextA;
+      const ns = QD.newtonSolve(trial, hData, newton);
+      if (ns.success) {
+        phi = ns.phi; last = nextA;
+        trace.push({ alpha: nextA, ok: true, residual: ns.residual });
+        step *= growFactor;
+      } else {
+        step *= shrinkFactor;
+        trace.push({ alpha: nextA, ok: false, residual: ns.residual ?? null });
+        if (step < minStep) {
+          return { success: false, error: "continuation-in-α: step underflow at α=" + last.toFixed(4), phi, trace, lastAlpha: last };
+        }
+      }
+    }
+    if (Math.abs(last - target) > 1e-9) {
+      return { success: false, error: "continuation-in-α: max steps reached at α=" + last.toFixed(4), phi, trace, lastAlpha: last };
+    }
+    // The α-march can cross a FOLD onto a branch that satisfies the algebraic
+    // residual but is NOT a univalent QD (a spurious map). Verify the endpoint
+    // is a genuine univalent QD; if not, report failure so the pipeline falls
+    // through to multistart instead of returning — or letting the caller pick —
+    // a spurious solution. This is what keeps continuation strictly "help or
+    // no-op" (it never preempts multistart with a worse candidate).
+    const fam = QD.selectFamily(norm);
+    // Match the main pipeline's univalence resolution (default 500) so this gate
+    // agrees with evalCandidate's verdict — a lower N can false-reject a
+    // genuinely univalent unbounded boundary.
+    const uN = options.univalenceSamples || 500;
+    const univalent = QD.isBoundaryUnivalent(phi, uN);
+    const idOK = fam.verifyQuadratureIdentity(phi, hData, { numSamples: uN }).maxRelDiff < (options.identityTol || 1e-6);
+    if (!univalent || !idOK) {
+      return { success: false, error: "continuation-in-α: endpoint not a univalent QD at α=" + target, phi, trace, lastAlpha: last };
+    }
+    return { success: true, phi, iterations: 0, residual: trace[trace.length - 1].residual, trace, method: "continuation-in-alpha" };
+  }
+
+  // ===========================================================================
   // Expose under QD.PqdCommon (+ back-compat alias QD._rHashVanishingGuard,
   // referenced by solver-pqd-singular.js and node-test.js).
   // ===========================================================================
   QD.PqdCommon = {
     rHashVanishingGuard,
+    continuationInAlpha,
     argContAt,
     phiAnchored,
     sweepUnitCircle,

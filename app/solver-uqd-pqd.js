@@ -514,7 +514,11 @@
     initialGuess: initialGuess_UPQD,
     perturbedInitialGuess: perturbedInitialGuess_UPQD,
     diverseInitialGuess: diverseInitialGuess_UPQD,
-    continuationSolve() { return { success: false, error: "continuation not implemented for unboundedPQD", trace: [] }; },
+    // Continuation in α from the classical limit (a small conformal radius
+    // blows the unbounded seed up). See QD.PqdCommon.continuationInAlpha.
+    continuationSolve(hData, norm, options = {}) {
+      return QD.PqdCommon.continuationInAlpha(hData, norm, options);
+    },
     verifyQuadratureIdentity: verifyQuadratureIdentity_UPQD,
     sampleBoundary: sampleBoundary_UPQD,
   };
