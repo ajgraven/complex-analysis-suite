@@ -295,6 +295,10 @@ view is active.
   `C_{j,s}` field per order. Each complex field has an inline **2-D
   slider pad**: drag to set, wheel to zoom the pad's range,
   double-click to auto-fit.
+* **Domain plot gestures** — on the Ω plot, **drag a quadrature node** to
+  move its pole `a_j` (live re-solve), **double-click empty space** to drop a
+  new simple pole there (order 1, coefficient 1), and pan / wheel-zoom the
+  view. Pole placement/move is inverse-view only.
 * **Singular extras** — `q` (origin residue) and `c` (conformal radius)
   appear as 1-D sliders for the singular / unbounded families.
 * **φ(0)** — defaults to the centroid of the poles (manually overridable
