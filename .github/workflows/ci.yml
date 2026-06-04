@@ -27,6 +27,11 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      # Fail fast if an app/ asset changed without refreshing the content-hash
+      # cache version (run `npm run version:sync` to fix). Guards against stale
+      # service-worker caches / stale ?v= page scripts shipping to users.
+      - name: Check cache version
+        run: npm run version:check
       - name: Run tests
         run: npm test
       - name: Run linter

@@ -531,71 +531,25 @@
      Must load before anything that references QD_ASSET_MANIFEST. -->
 <script src="asset-manifest.js"></script>
 
-<!-- Backend math -->
-<script src="complex.js"></script>
-<script src="taylor.js"></script>
-<script src="solver.js"></script>                <!-- Shared infrastructure -->
-<script src="solver-faber.js"></script>          <!-- Shared inverse Faber primitives (QD.Faber) -->
-<script src="solvers/seeds/seeds-qd.js"></script> <!-- Seed strategy for Family.boundedQD (A6 template) -->
-<script src="solver-qd.js"></script>             <!-- Bounded classical QDs (Family.boundedQD) -->
-<script src="solvers/seeds/seeds-uqd.js"></script> <!-- Seed strategy for Family.unboundedQD -->
-<script src="solver-uqd.js"></script>            <!-- Unbounded classical QDs (Family.unboundedQD) -->
-<script src="solver-lqd-common.js"></script>     <!-- Shared LQD machinery (QD.LqdCommon) -->
-<script src="solvers/seeds/seeds-lqd.js"></script><!-- Seed strategy for Family.boundedLQD -->
-<script src="solver-lqd.js"></script>            <!-- Bounded non-singular LQDs (Family.boundedLQD) -->
-<script src="solvers/seeds/seeds-lqd-singular.js"></script><!-- Seed strategy for Family.boundedLQD_singular -->
-<script src="solver-lqd-singular.js"></script>   <!-- Bounded singular LQDs (Family.boundedLQD_singular) -->
-<script src="solvers/seeds/seeds-uqd-lqd.js"></script><!-- Seed strategy for Family.unboundedLQD -->
-<script src="solver-uqd-lqd.js"></script>        <!-- Unbounded non-singular LQDs (Family.unboundedLQD) -->
-<script src="solvers/seeds/seeds-uqd-lqd-singular.js"></script><!-- Seed strategy for Family.unboundedLQD_singular -->
-<script src="solver-uqd-lqd-singular.js"></script><!-- Unbounded singular LQDs (Family.unboundedLQD_singular) -->
-<script src="solver-pqd-common.js"></script>     <!-- Shared PQD machinery (QD.PqdCommon): sweep/sampler/verifier helpers -->
-<script src="solvers/seeds/seeds-pqd.js"></script><!-- Seed strategy for Family.powerQD (Q1) -->
-<script src="solver-pqd.js"></script>            <!-- Bounded power-weighted QDs, α>0 (Family.powerQD) -->
-<script src="solvers/seeds/seeds-pqd-singular.js"></script><!-- Seed strategy for Family.powerQD_singular -->
-<script src="solver-pqd-singular.js"></script>   <!-- Bounded singular PQDs, 0∈Ω (Family.powerQD_singular) -->
-<script src="solvers/seeds/seeds-uqd-pqd.js"></script><!-- Seed strategy for Family.unboundedPQD -->
-<script src="solver-uqd-pqd.js"></script>       <!-- Unbounded PQDs, 0∉Ω (Family.unboundedPQD) -->
-<script src="solvers/seeds/seeds-uqd-pqd-singular.js"></script><!-- Seed strategy for Family.unboundedPQD_singular -->
-<script src="solver-uqd-pqd-singular.js"></script> <!-- Unbounded singular PQDs, 0∈Ω (Family.unboundedPQD_singular) -->
-<script src="poly-helpers.js"></script>           <!-- QD.Poly — shared dense-polynomial arithmetic -->
-<script src="parse-h.js"></script>               <!-- Custom-text h(w) parser (QD.parseH / QD.formatH) -->
-<script src="critical-set.js"></script>           <!-- QD.findCriticalPoints — zeros of φ' -->
-<script src="univalence.js"></script>             <!-- QD.classifyUnivalence — convex / star-like / spiral-like -->
-<script src="cusps.js"></script>                  <!-- QD.classifyCusps — boundary cusp detection + (p,q) type -->
-<script src="primary-solution.js"></script>      <!-- QD.PrimarySolution: typed envelope + pub/sub for cross-tab readers -->
-<script src="primary-solver-worker.js"></script> <!-- QD.PrimarySolverWorker: single warm worker for solveAndRender -->
-
-<!-- ============== Direct-problem (φ → h) ============== -->
-<script src="direct/direct-common.js"></script>   <!-- QD.Direct math kernel -->
-
-<!-- ============== Schwarz dynamics (σⁿ visualization) ============== -->
-<script src="schwarz/schwarz-common.js"></script>  <!-- QD.Schwarz math kernel -->
-<script src="schwarz/schwarz-inverse.js"></script> <!-- σ⁻¹ + preimage tree (S1) -->
-<script src="schwarz/schwarz-analysis.js"></script><!-- σ analysis: explicit form + singularities + level curves (S4) -->
-<script src="schwarz/schwarz-forward.js"></script> <!-- forward dynamics: H7 H8 E10 E11 F6 (S5) -->
-<script src="schwarz/schwarz-webgl.js"></script>   <!-- WebGL 2 GPU renderer (optional) -->
-<script src="schwarz/schwarz-cpu-worker.js"></script><!-- QD.SchwarzCpuWorker: off-thread CPU escape-time field (A7) -->
-
-<!-- ============== Parameter-slice cartography (sweep h-parameters) ============== -->
-<script src="param-slice/param-slice-common.js"></script>  <!-- pure math kernel -->
-<script src="param-slice/param-slice-pool.js"></script>    <!-- Web Worker pool + Blob bundler -->
-
-<!-- Frontend UI -->
-<script src="qol.js"></script>                  <!-- QD.QoL: help buttons, hover tooltips, copy (HANDOFF #33) -->
-<script src="ui-presets.js"></script>            <!-- Preset library (P0 split, §1.1) -->
-<script src="ui-state.js"></script>              <!-- ui-tab state object (A1 split) -->
-<script src="ui-domain-plot.js"></script>        <!-- DomainPlot canvas class (P0 split, §1.1) -->
-<script src="riemann-latex.js"></script>         <!-- QD.RiemannLatex.build: pure Riemann-map LaTeX (Node-testable) -->
-<script src="ui.js"></script>
-<script src="direct/direct-ui.js"></script>   <!-- Direct-tab UI (mounts on tab activation) -->
-<script src="schwarz/schwarz-ui.js"></script> <!-- Schwarz-tab UI (mounts on tab activation) -->
-<script src="param-slice/param-slice-ui.js"></script>   <!-- Parameter-slice-tab UI (mounts on tab activation) -->
-
-<!-- ============== Riemann-sphere view (stereographic Schwarz fractal) ============== -->
-<script src="sphere/sphere-common.js"></script>   <!-- pure math kernel (SphereCommon) -->
-<script src="sphere/sphere-webgl.js"></script>    <!-- WebGL 2 renderer (QD.Sphere.createRenderer) -->
-<script src="sphere/sphere-ui.js"></script>       <!-- QD.SphereView adapter (mounted by the Schwarz tab; HANDOFF #29) -->
+<!-- Page-script loader. Every module <script> is injected from
+     QD_ASSET_MANIFEST.PAGE_SCRIPTS (the single source of truth for load order)
+     with a ?v=<CACHE_VERSION> query, so the browser HTTP cache can never serve
+     a stale page script after a deploy. document.write is used deliberately:
+     during initial parse it injects the scripts inline, preserving the strict
+     synchronous load order (each runs before the parser reaches the inline
+     tab/SW scripts below) — exactly the behaviour of the static tags it
+     replaces. To add/remove/reorder a module, edit asset-manifest.js, not here. -->
+<script>
+(function () {
+  'use strict';
+  var m = window.QD_ASSET_MANIFEST;
+  if (!m || !m.PAGE_SCRIPTS) throw new Error('asset-manifest.js must load before the page-script loader');
+  var v = encodeURIComponent(m.CACHE_VERSION);
+  for (var i = 0; i < m.PAGE_SCRIPTS.length; i++) {
+    document.write('<script src="' + m.PAGE_SCRIPTS[i] + '?v=' + v + '"><\/script>');
+  }
+})();
+</script>
 
 <!-- Tab switching: minimal, no framework. Each .tab-btn toggles which
      .tab-panel is visible. The plot canvas is shared; ui.js owns it for

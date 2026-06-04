@@ -1,0 +1,24 @@
+# Line-ending policy. Without this, normalization depends on each clone's
+# core.autocrlf, which produced "LF will be replaced by CRLF" churn warnings.
+# Store (and check out) all text as LF so diffs are deterministic everywhere.
+* text=auto eol=lf
+
+# Binary files — never normalize or diff as text.
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.eot   binary
+*.zip   binary
+*.mp4   binary
+
+# Explicitly-text assets (covered by `* text=auto` but called out for clarity).
+*.svg          text
+*.webmanifest  text
+*.json         text

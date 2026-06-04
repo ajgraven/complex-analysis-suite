@@ -29,22 +29,15 @@ const ctx = { module: { exports: {} }, exports: {}, global, require, console, pr
 ctx.global = ctx;
 vm.createContext(ctx);
 // Canonical worker-bundle order (each solver-*.js needs its seeds-*.js loaded
-// first — the solvers throw at load time otherwise). Kept in lock-step with
-// asset-manifest.js WORKER_BUNDLE_FILES so every family (incl. the PQDs) loads.
-for (const f of [
-  'complex.js', 'taylor.js', 'solver.js', 'solver-faber.js',
-  'solvers/seeds/seeds-qd.js', 'solver-qd.js',
-  'solvers/seeds/seeds-uqd.js', 'solver-uqd.js',
-  'solver-lqd-common.js', 'solvers/seeds/seeds-lqd.js', 'solver-lqd.js',
-  'solvers/seeds/seeds-lqd-singular.js', 'solver-lqd-singular.js',
-  'solvers/seeds/seeds-uqd-lqd.js', 'solver-uqd-lqd.js',
-  'solvers/seeds/seeds-uqd-lqd-singular.js', 'solver-uqd-lqd-singular.js',
-  'solver-pqd-common.js', 'solvers/seeds/seeds-pqd.js', 'solver-pqd.js',
-  'solvers/seeds/seeds-pqd-singular.js', 'solver-pqd-singular.js',
-  'solvers/seeds/seeds-uqd-pqd.js', 'solver-uqd-pqd.js',
-  'solvers/seeds/seeds-uqd-pqd-singular.js', 'solver-uqd-pqd-singular.js',
-  'poly-helpers.js', 'parse-h.js',
-]) {
+// first — the solvers throw at load time otherwise). Read from the single
+// source of truth (asset-manifest.js WORKER_BUNDLE_FILES) rather than a copy,
+// so a newly-added family can't silently go un-benchmarked. The manifest IIFE
+// resolves its target to globalThis here (no self/window in the vm), so it
+// sets ctx.QD_ASSET_MANIFEST.
+vm.runInContext(fs.readFileSync(path.join(__dirname, 'asset-manifest.js'), 'utf8'),
+                ctx, { filename: 'asset-manifest.js' });
+const WORKER_BUNDLE_FILES = vm.runInContext('QD_ASSET_MANIFEST.WORKER_BUNDLE_FILES', ctx);
+for (const f of WORKER_BUNDLE_FILES) {
   const src = fs.readFileSync(path.join(__dirname, f), 'utf8')
     .replace(/typeof window !== 'undefined'/g, 'false');
   vm.runInContext(src, ctx, { filename: f });

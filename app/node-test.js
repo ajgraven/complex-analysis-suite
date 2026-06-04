@@ -6337,5 +6337,65 @@ ok('CriticalSet: namespace exports',
   }
 })();
 
+// =============================================================================
+// Asset-manifest anti-drift battery (Phase-1 release hardening). Guards the
+// single-source-of-truth invariants the index.html loader + SW + cache-version
+// generator depend on. Self-contained: evaluates asset-manifest.js in a vm and
+// reads index.html.
+// =============================================================================
+(function () {
+  try {
+    const fsM = require('fs'), pathM = require('path'), vmM = require('vm');
+    const appDir = __dirname;
+    const sandbox = { self: {} };
+    vmM.createContext(sandbox);
+    vmM.runInContext(fsM.readFileSync(pathM.join(appDir, 'asset-manifest.js'), 'utf8'),
+                     sandbox, { filename: 'asset-manifest.js' });
+    const M = sandbox.self.QD_ASSET_MANIFEST;
+    ok('manifest: QD_ASSET_MANIFEST defined', !!M);
+
+    // PAGE_SCRIPTS structure: worker bundle, then page-only solver files, then UI.
+    const head = [...M.WORKER_BUNDLE_FILES, ...M.SOLVER_PAGE_ONLY_FILES];
+    const headOK = head.every((f, i) => M.PAGE_SCRIPTS[i] === f);
+    ok('manifest: PAGE_SCRIPTS begins with WORKER_BUNDLE_FILES + SOLVER_PAGE_ONLY_FILES', headOK);
+    ok('manifest: PAGE_SCRIPTS = head + PAGE_UI_FILES (lengths)',
+       M.PAGE_SCRIPTS.length === head.length + M.PAGE_UI_FILES.length);
+
+    // Regression for the SW-precache omissions this work fixed.
+    ok('manifest: ui-state.js in PAGE_SCRIPTS', M.PAGE_SCRIPTS.includes('ui-state.js'));
+    ok('manifest: ui-state.js in ALL_ASSETS', M.ALL_ASSETS.includes('ui-state.js'));
+    ok('manifest: asset-manifest.js in ALL_ASSETS', M.ALL_ASSETS.includes('asset-manifest.js'));
+
+    // Every page script exists on disk.
+    const missing = M.PAGE_SCRIPTS.filter(f => !fsM.existsSync(pathM.join(appDir, f)));
+    ok('manifest: every PAGE_SCRIPTS entry exists on disk', missing.length === 0,
+       missing.length ? 'missing: ' + missing.join(', ') : '');
+
+    // index.html must carry NO static same-origin module <script> tag except
+    // asset-manifest.js — everything else is injected by the loader with ?v=.
+    const html = fsM.readFileSync(pathM.join(appDir, 'index.html'), 'utf8');
+    const re = /<script\s+src="([^"]+)"/g; let mm; const staticJs = [];
+    while ((mm = re.exec(html))) {
+      const s = mm[1];
+      if (/\.js$/.test(s) && !/^https?:/.test(s)) staticJs.push(s);
+    }
+    ok('index.html: only asset-manifest.js is a static module <script>',
+       staticJs.length === 1 && staticJs[0] === 'asset-manifest.js',
+       'static .js tags: ' + JSON.stringify(staticJs));
+
+    // Committed CACHE_HASH must match a fresh recompute (reuse the real
+    // generator so the test can't drift from it).
+    const cp = require('child_process');
+    let genOK = true, genMsg = '';
+    try {
+      cp.execFileSync('node', [pathM.join(appDir, '..', 'scripts', 'gen-cache-version.js'), '--check'],
+                      { stdio: 'pipe' });
+    } catch (e) { genOK = false; genMsg = String((e.stderr || e.stdout || e).toString()).trim().split('\n').pop(); }
+    ok('manifest: committed CACHE_HASH is current (gen-cache-version --check)', genOK, genMsg);
+  } catch (e) {
+    ok('manifest anti-drift battery ran without error', false, String((e && e.stack) || e));
+  }
+})();
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail === 0 ? 0 : 1);
