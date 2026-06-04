@@ -61,7 +61,9 @@ flowchart LR
   subgraph UI["UI layer"]
     F1[qol.js]
     F2[ui-presets.js]
+    F2b[ui-state.js]
     F3[ui-domain-plot.js]
+    F2c["ui-modes / ui-pole-grid / ui-h-text / ui-solve / ui-url-state"]
     F4[ui.js]
     F5[direct/direct-ui.js]
     F6[schwarz/schwarz-ui.js]
@@ -180,7 +182,48 @@ const DomainPlot = window.QD_UI.installDomainPlot({
 const plot = new DomainPlot(canvasEl, readoutEl);
 ```
 
-Same pattern works for any future class extraction.
+#### `QD_UI.installX(uiCtx)` — the Inverse-tab module split (Phase 3, item E)
+
+The Phase-3 UI modularization carved the 3024-line `ui.js` down to ~1580 by
+moving cohesive clusters into sibling factory modules, all on the same pattern:
+
+| Module | Responsibility |
+| --- | --- |
+| [`app/ui-modes.js`](app/ui-modes.js) | `MODES` descriptor table + aggressiveness `PRESETS` + `modeDescriptor`/`currentPresetList` |
+| [`app/ui-pole-grid.js`](app/ui-pole-grid.js) | `renderPolesList` / `renderPolyCoefList` (the pole + poly-coef DOM builders) |
+| [`app/ui-h-text.js`](app/ui-h-text.js) | the `#h-text` ⇄ structured-grid mirror (`parseAndApplyHText`, `refreshHText`, `modeAllowsPoly`) |
+| [`app/ui-solve.js`](app/ui-solve.js) | the solve→render→analyze pipeline (`solveAndRender`, `showSolution`, the geom/cusp/realizability analysis, alternates, background search) |
+| [`app/ui-url-state.js`](app/ui-url-state.js) | `writeUrlState` / `applyUrlState` (B1 hash serialize+restore) |
+
+`ui.js` builds ONE shared mutable context object, `uiCtx`, carrying the closures
+the modules need (`state`, the descriptor tables, DOM helpers, the small shared
+render helpers `escapeHTML`/`formatExp`/`setStatus`, the hData/option builders,
+`plot`, …). Each module is `QD_UI.installX(uiCtx)` and returns its public
+functions; `ui.js` captures them into local bindings with their **original
+names**, so every existing call site is unchanged:
+
+```js
+const { MODES, PRESETS, modeDescriptor, currentPresetList } =
+  window.QD_UI.installModes(uiCtx);
+// …later, after every dependency is on uiCtx…
+({ solveAndRender, showSolution, refreshAlternatesPanel, /* … */ } =
+  window.QD_UI.installSolve(uiCtx));
+```
+
+Two rules keep it correct:
+- **Install where the deps exist.** Each module is installed at the point in
+  `ui.js` where everything it destructures is already on `uiCtx` (modes early,
+  after `buildW0`; the rest at the tail, after all helpers are defined). Bodies
+  destructure their deps at the factory top, so the moved code is verbatim.
+- **Cross-module peers go through `uiCtx` at call time.** When module A calls a
+  function that lives in module B (which may install later), it reads
+  `ui.fn()` at call time rather than destructuring at install — e.g.
+  `ui-solve`'s `solveAndRender` calls `ui.writeUrlState()`. Within a module,
+  all calls stay bare (which is why the coupled solve/output/analysis cluster is
+  one module — its shared `_solveAndRenderToken` and mutual calls never cross a
+  seam).
+
+Same pattern works for any future class or cluster extraction.
 
 ### `qd.mjs` ESM façade (P1.1)
 

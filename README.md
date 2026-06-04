@@ -98,8 +98,16 @@ visualizations, complementary to the headless runner.
     │                                  seed grid; powers the inverse-tab critical-
     │                                  set overlay
     │
-    ├── ui.js                          QD/LQD-tab UI: controls, sliders, canvas plot,
-    │                                  background alternate-solution search
+    ├── ui.js                          QD/LQD-tab UI hub: DOM wiring, shared helpers,
+    │                                  uiCtx injection + the module installs below
+    ├── ui-modes.js                    MODE descriptors + aggressiveness presets
+    ├── ui-pole-grid.js                pole / poly-coef control renderers
+    ├── ui-h-text.js                   h(w) text ⇄ structured-grid mirror
+    ├── ui-solve.js                    solve → render → analyze pipeline
+    │                                  (+ alternates + background search)
+    ├── ui-url-state.js                URL/hash serialize + restore (B1)
+    │                                  (all five: QD_UI.installX(uiCtx) factories,
+    │                                   Phase-3 item E split of ui.js)
     │
     ├── direct/
     │   ├── direct-common.js           Direct-problem kernels (polynomial / rational /

@@ -11,8 +11,9 @@
 //   * param-slice/param-slice-pool.js    — same (WORKER_BUNDLE_FILES + its kernel).
 //   * bench.js                           — reads WORKER_BUNDLE_FILES (node vm).
 //
-// The only remaining hand-synced copy of the bundle order is node-test.js's
-// loader (Phase-2 follow-up); a node-test guard checks the two stay consistent.
+// As of the Phase-2 test-harness split, the Node test bootstrap + parse-check
+// derive their file lists from this manifest too — there are no hand-synced
+// loader copies left to drift.
 //
 // Adding a new browser-loaded JS file? Add it to WORKER_BUNDLE_FILES (if it
 // must live in the worker bundle), SOLVER_PAGE_ONLY_FILES, or PAGE_UI_FILES —
@@ -38,7 +39,7 @@
   // version:sync` recomputes it. CACHE_LABEL is yours to set per release
   // (cosmetic, for human-readable cache names + the HANDOFF narrative).
   const CACHE_LABEL = 'preimage-tree-overlay';
-  const CACHE_HASH  = '659ecb09d0';   // gen-cache-version.js --write rewrites this
+  const CACHE_HASH  = '86874f0c77';   // gen-cache-version.js --write rewrites this
   const CACHE_VERSION = CACHE_LABEL + '-' + CACHE_HASH;
 
   // Files that get concatenated into a Worker bundle by the runtime
@@ -112,6 +113,7 @@
     'ui-modes.js',
     'ui-pole-grid.js',
     'ui-h-text.js',
+    'ui-solve.js',
     'ui-url-state.js',
     'ui.js',
     'direct/direct-ui.js',

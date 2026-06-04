@@ -188,6 +188,35 @@ When wiring a new cross-tab interaction:
   Define new such functions on `window.QD_UI.*` (one-direction
   namespace from UI to subsystems).
 
+## Extracting a UI cluster (factory pattern)
+
+`ui.js` (and, going forward, the other tab-UI files) keeps cohesive clusters in
+sibling modules via the `QD_UI.installX(uiCtx)` factory pattern (Phase-3, item E
+— see [ARCHITECTURE.md](ARCHITECTURE.md#qd_uiinstallxuictx--the-inverse-tab-module-split-phase-3-item-e)).
+To pull a new cluster out of `ui.js`:
+
+1. Create `app/ui-<name>.js` as an IIFE that sets
+   `global.QD_UI.installX = function (ui) { … return { … }; }`.
+2. Move the functions **verbatim**; at the factory top, destructure each ui.js
+   dependency with its original name (`const state = ui.state;` …) so the bodies
+   don't change. For a peer that lives in another extracted module (and may
+   install later), call it as `ui.fn()` at call time instead of destructuring.
+3. In `ui.js`: forward-declare the moved names as `let`s, populate the needed
+   helpers onto `uiCtx`, then `({ … } = window.QD_UI.installX(uiCtx))` at a point
+   where every dependency is already on `uiCtx`. Keep small shared helpers
+   (`escapeHTML` / `formatExp` / `setStatus`, the hData/option builders) in
+   `ui.js` — the retained handlers use them too.
+4. If a moved function is invoked synchronously at load (not just from event
+   handlers), relocate that call to after the install block.
+5. Add `app/ui-<name>.js` to `PAGE_UI_FILES` in `app/asset-manifest.js`
+   **before `ui.js`**, run `npm run version:sync`, and `npm test` (parse-check
+   covers the new file automatically). The pure-refactor guard is the test
+   pass-count invariant + a browser smoke (the only runtime check for `ui.js`).
+
+Tightly-coupled clusters that call each other and share mutable state (e.g. the
+solve→render→analyze pipeline and its `_solveAndRenderToken`) belong in ONE
+module, so those calls stay bare same-scope and the state never crosses a seam.
+
 ## Worker pool conventions
 
 Two Worker subsystems today:
