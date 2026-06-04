@@ -38,7 +38,7 @@
   // version:sync` recomputes it. CACHE_LABEL is yours to set per release
   // (cosmetic, for human-readable cache names + the HANDOFF narrative).
   const CACHE_LABEL = 'preimage-tree-overlay';
-  const CACHE_HASH  = 'f95fdb1463';   // gen-cache-version.js --write rewrites this
+  const CACHE_HASH  = '659ecb09d0';   // gen-cache-version.js --write rewrites this
   const CACHE_VERSION = CACHE_LABEL + '-' + CACHE_HASH;
 
   // Files that get concatenated into a Worker bundle by the runtime
@@ -107,6 +107,12 @@
     'ui-state.js',
     'ui-domain-plot.js',
     'riemann-latex.js',
+    // Phase-3 (item E) extracted Inverse-tab modules. Each exposes a
+    // QD_UI.installX(uiCtx) factory and MUST load before ui.js (which calls it).
+    'ui-modes.js',
+    'ui-pole-grid.js',
+    'ui-h-text.js',
+    'ui-url-state.js',
     'ui.js',
     'direct/direct-ui.js',
     'schwarz/schwarz-ui.js',
