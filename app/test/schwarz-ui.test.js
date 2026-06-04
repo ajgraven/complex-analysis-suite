@@ -33,6 +33,11 @@ module.exports = async function run() {
         buildPreimageTree: (w) => ({ generations: [[{ re: w.re, im: w.im }]], edges: [], truncatedByBudget: false }),
       },
     };
+    // schwarz-ui.js installs the Phase-3 paint module at IIFE load
+    // (window.QD_UI.installSchwarzPaint), so make that factory available first.
+    // No paint function runs during install — it only destructures sCtx — so the
+    // jsdom 2D-context stubs aren't exercised here.
+    W.eval(fs.readFileSync(path.join(APP_DIR, 'schwarz', 'schwarz-paint.js'), 'utf8'));
     const srcText = fs.readFileSync(path.join(APP_DIR, 'schwarz', 'schwarz-ui.js'), 'utf8');
     W.eval(srcText);
     const T = W.__schwarzUiTest;

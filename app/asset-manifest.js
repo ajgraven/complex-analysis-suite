@@ -39,7 +39,7 @@
   // version:sync` recomputes it. CACHE_LABEL is yours to set per release
   // (cosmetic, for human-readable cache names + the HANDOFF narrative).
   const CACHE_LABEL = 'preimage-tree-overlay';
-  const CACHE_HASH  = '86874f0c77';   // gen-cache-version.js --write rewrites this
+  const CACHE_HASH  = '5beeea2631';   // gen-cache-version.js --write rewrites this
   const CACHE_VERSION = CACHE_LABEL + '-' + CACHE_HASH;
 
   // Files that get concatenated into a Worker bundle by the runtime
@@ -117,6 +117,8 @@
     'ui-url-state.js',
     'ui.js',
     'direct/direct-ui.js',
+    // Phase-3 (item E) extracted Schwarz-tab modules — load before schwarz-ui.js.
+    'schwarz/schwarz-paint.js',
     'schwarz/schwarz-ui.js',
     'param-slice/param-slice-ui.js',
     'sphere/sphere-common.js',
