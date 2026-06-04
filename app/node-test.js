@@ -3176,6 +3176,49 @@ function solveAndSample(hData, opts) {
     ok('S1/cardioid: truncatedByBudget flag set when capped', tree.truncatedByBudget === true);
   }
 
+  // -------- Tiling-set seed gate (preimage-tree, fractal-mode overlay) --------
+  // The double-click handler in schwarz-ui.js accepts a seed iff
+  // escapeTime(w).kind === 'fundamental' — i.e. the point reaches the
+  // fundamental tile in finitely many σ-steps, so it lies in the tiling set
+  // (this also covers Ω^c at n=0). 'interior' (non-escaping / limit set),
+  // 'escaped', 'invalid', and null are rejected.
+  {
+    const gate = (et) => !!(et && et.kind === 'fundamental');
+    // (i) decision logic over every possible escapeTime verdict.
+    ok('Gate: accepts Ω^c (fundamental, n=0)',          gate({ kind: 'fundamental', n: 0 }) === true);
+    ok('Gate: accepts finite-escape (fundamental, n=k)', gate({ kind: 'fundamental', n: 5 }) === true);
+    ok('Gate: rejects non-escaping (interior/limit set)', gate({ kind: 'interior', n: 256 }) === false);
+    ok('Gate: rejects escaping set',                     gate({ kind: 'escaped', n: 3 }) === false);
+    ok('Gate: rejects invalid (σ undefined)',            gate({ kind: 'invalid', n: 0 }) === false);
+    ok('Gate: rejects null verdict',                     gate(null) === false);
+
+    // (ii) real points through escapeTime with the generous seed-gate cap
+    // (schwarz-ui uses max(256, maxIter*4)).
+    const GATE = Math.max(256, 24 * 4);
+    const etOut = Schwarz.escapeTime({ re: 1.4, im: 0.6 }, sw, { maxIter: GATE }); // outside cardioid
+    ok('Gate/cardioid: Ω^c point in tiling set (accepted)', gate(etOut) === true,
+       'kind=' + (etOut && etOut.kind) + ', n=' + (etOut && etOut.n));
+    // Interior points NEAR ∂Ω escape Ω in ~1 σ-step → they're in the tiling
+    // set and the gate accepts them. (The deepest interior points can hit a
+    // σ-singularity → 'invalid', so we scan near-boundary points instead.)
+    let cx = 0, cy = 0;
+    for (const p of boundaryPts) { cx += p.re; cy += p.im; }
+    cx /= boundaryPts.length; cy /= boundaryPts.length;
+    let acceptedInterior = false, lastKind = 'none';
+    for (let i = 0; i < boundaryPts.length && !acceptedInterior; i += 8) {
+      const bp = boundaryPts[i];
+      for (const f of [0.95, 0.85, 0.7, 0.5]) {
+        const p = { re: cx + f * (bp.re - cx), im: cy + f * (bp.im - cy) };
+        if (!sw.isInOmega(p)) continue;
+        const et = Schwarz.escapeTime(p, sw, { maxIter: GATE });
+        lastKind = et ? et.kind : 'null';
+        if (gate(et)) { acceptedInterior = true; break; }
+      }
+    }
+    ok('Gate/cardioid: a near-∂Ω interior point is in the tiling set (accepted)',
+       acceptedInterior, 'lastKind=' + lastKind);
+  }
+
   // -------- S3: limit-set chaos game + box-counting dimension --------
   // Cardioid σ has degree 2 → its limit set is the classical Schwarz limit
   // set of a degree-2 rational map. We sample a small cloud, confirm the
@@ -6192,6 +6235,105 @@ ok('CriticalSet: namespace exports',
     ok('DomainPlot dblclick: on an existing pole is ignored', added === null);
   } catch (e) {
     ok('DomainPlot dblclick: jsdom test ran without error', false, String((e && e.stack) || e));
+  }
+})();
+
+// =============================================================================
+// Schwarz fractal-mode interaction (jsdom): click/dblclick disambiguation,
+// tiling-set seed gate, hover-orbit toggle. schwarz-ui.js is a bare IIFE with
+// no factory, so it exposes a window-sentinel-gated test hook
+// (window.__schwarzUiTest) with the handlers + sState. We stub QD.Schwarz and
+// drive the handlers directly (the single-click PIN is deferred via setTimeout,
+// which the synchronous test can't await — so we verify the timer is scheduled
+// / cancelled, and exercise the pin body via the exposed pinOrbitAt()).
+// Skipped gracefully if jsdom is absent.
+// =============================================================================
+(function () {
+  let JSDOM;
+  try { ({ JSDOM } = require('jsdom')); }
+  catch (e) { ok('Schwarz UI: jsdom present (else skipped)', true, 'jsdom unavailable — skipped'); return; }
+  try {
+    const html = '<!DOCTYPE html><body>' +
+      '<div id="controls-schwarz"></div><canvas id="canvas"></canvas></body>';
+    const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true });
+    const W = dom.window;
+    // Opt into the test hook BEFORE the IIFE runs, and provide the QD global
+    // it needs (the module bails if QD is undefined).
+    W.__SCHWARZ_UI_TEST_HOOK__ = true;
+    const stub = { kind: 'fundamental' };                    // mutable gate verdict
+    W.QD = {
+      Schwarz: {
+        escapeTime: () => ({ kind: stub.kind, n: stub.kind === 'fundamental' ? 2 : 0 }),
+        makeOrbit: (w) => [{ re: w.re, im: w.im }, { re: w.re + 1, im: w.im }],
+        buildPreimageTree: (w) => ({ generations: [[{ re: w.re, im: w.im }]], edges: [], truncatedByBudget: false }),
+      },
+    };
+    const fs2 = require('fs'), path2 = require('path');
+    const srcText = fs2.readFileSync(path2.join(__dirname, 'schwarz', 'schwarz-ui.js'), 'utf8');
+    W.eval(srcText);
+    const T = W.__schwarzUiTest;
+    ok('Schwarz UI: test hook installed', !!T && typeof T.onCanvasClick === 'function');
+    if (!T) return;
+
+    // Minimal active fractal-mode state.
+    T.sState.mode = 'fractal';
+    T.sState.viewMode = 'plane';
+    T.sState.schwarz = { isInOmega: () => true };
+    T.CLICK_DELAY = 0;
+    const evt = (over) => Object.assign({ clientX: 12, clientY: 9, shiftKey: false }, over || {});
+
+    // (1) Single click schedules a deferred pin (does not pin synchronously).
+    T.sState._clickTimer = null; T.sState.pinnedOrbit = []; T.sState.orbit = [];
+    T.onCanvasClick(evt());
+    ok('Schwarz UI: single click schedules a deferred pin', T.sState._clickTimer != null);
+
+    // (2) pinOrbitAt body: inside Ω → orbit pinned (and mirrored to sState.orbit).
+    T.pinOrbitAt({ re: 0.3, im: 0.1 });
+    ok('Schwarz UI: pinOrbitAt inside Ω pins the orbit',
+       Array.isArray(T.sState.pinnedOrbit) && T.sState.pinnedOrbit.length > 0 &&
+       T.sState.orbit === T.sState.pinnedOrbit);
+    // Outside Ω → pin cleared.
+    T.sState.schwarz = { isInOmega: () => false };
+    T.pinOrbitAt({ re: 9, im: 9 });
+    ok('Schwarz UI: pinOrbitAt outside Ω clears the pin', T.sState.pinnedOrbit.length === 0);
+    T.sState.schwarz = { isInOmega: () => true };           // restore
+
+    // (3) Double-click cancels the pending pin AND seeds the tree (gate passes).
+    T.sState._clickTimer = null; T.sState.preimageTree = null; T.sState.pinnedOrbit = [];
+    stub.kind = 'fundamental';
+    T.onCanvasClick(evt());                                  // arm the pin
+    ok('Schwarz UI: pin armed before dblclick', T.sState._clickTimer != null);
+    T.onCanvasDblClick(evt());
+    ok('Schwarz UI: dblclick cancels the pending pin', T.sState._clickTimer == null);
+    ok('Schwarz UI: dblclick on tiling-set point seeds the tree', T.sState.preimageTree != null);
+    ok('Schwarz UI: dblclick does not pin an orbit', T.sState.pinnedOrbit.length === 0);
+
+    // (4) Gate rejects a non-tiling-set point (escapeTime kind 'interior').
+    T.sState.preimageTree = null; stub.kind = 'interior';
+    T.onCanvasDblClick(evt());
+    ok('Schwarz UI: dblclick on non-escaping point seeds NO tree', T.sState.preimageTree == null);
+
+    // (5) shift-drag gesture is ignored by both handlers (curve-draw reserved).
+    T.sState.preimageTree = null; stub.kind = 'fundamental';
+    T.onCanvasDblClick(evt({ shiftKey: true }));
+    ok('Schwarz UI: shift+dblclick is ignored (no tree)', T.sState.preimageTree == null);
+
+    // (6) Hover orbit: enabled+inside Ω computes; disabled or outside Ω does not.
+    T.sState.hoverOrbitEnabled = true; T.sState.hoverOrbit = null;
+    T.sState._pendingHoverW = { re: 0.2, im: 0.1 };
+    T.runHoverOrbit();
+    ok('Schwarz UI: hover (enabled, inside Ω) computes an orbit',
+       Array.isArray(T.sState.hoverOrbit) && T.sState.hoverOrbit.length > 0);
+    T.sState.hoverOrbit = null; T.sState.hoverOrbitEnabled = false;
+    T.sState._pendingHoverW = { re: 0.2, im: 0.1 };
+    T.runHoverOrbit();
+    ok('Schwarz UI: hover disabled → no orbit', T.sState.hoverOrbit == null);
+    T.sState.hoverOrbitEnabled = true; T.sState.schwarz = { isInOmega: () => false };
+    T.sState._pendingHoverW = { re: 9, im: 9 };
+    T.runHoverOrbit();
+    ok('Schwarz UI: hover outside Ω → no orbit', T.sState.hoverOrbit == null);
+  } catch (e) {
+    ok('Schwarz UI: jsdom interaction test ran without error', false, String((e && e.stack) || e));
   }
 })();
 

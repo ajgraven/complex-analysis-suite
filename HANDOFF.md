@@ -12,18 +12,45 @@ explain back to him.
 
 ---
 
-## 0. Current state (most recent: continuationSolve for the 3 PQD families)
+## 0. Current state (most recent: Schwarz preimage tree → fractal-mode overlay)
 
 **Full suite passing, 0 failed; `npm run lint` clean** (run `npm test` for the
-live count). Cache version `v53-pqd-continuation`.
+live count). Cache version `v54-preimage-tree-overlay`.
 
-> Trunk note: the three parallel feature branches — param-slice PQD fix +
-> univalence speed-up (PR #1), double-click to add a pole (PR #2), continuation
-> for the 3 PQD families (PR #3) — plus the gesture-docs PR #4 are all merged
-> into `main`. Interleaved branch merges briefly dropped THIS continuation entry
-> from HANDOFF and reverted `CACHE_VERSION` to v51; both are restored here
-> (cache → v53, covering all merged work). The double-click entry follows as a
-> prior; param-slice + earlier work are below it.
+**Schwarz "preimage tree" is now a fractal-mode overlay, seedable anywhere in
+the tiling set** (was: its own mode, seedable only in Ω^c). All in
+`app/schwarz/schwarz-ui.js`; `schwarz-common.js`/`schwarz-inverse.js` unchanged
+(reuse `escapeTime`, `makeOrbit`, `isInOmega`, `buildPreimageTree`).
+- **Modes collapsed** `fractal | preimage-tree | domain-coloring` →
+  `fractal | domain-coloring`. The tree is drawn over the GL fractal via the
+  existing `paintBoundaryOnTop()` overlay chain; its depth/budget controls moved
+  into the fractal-mode options block (`#schwarz-mode-options-fractal`).
+- **Double-click → seed a preimage tree** at the clicked point, **gated to the
+  tiling set**: accept iff `escapeTime(w).kind === 'fundamental'` (Ω^c at n=0, or
+  a finite-escape interior point) using a generous `gateMaxIter()` = max(256,
+  maxIter·4); reject `interior`/`escaped`/`invalid`. Seeds exactly at the click
+  (no fold-back). Replaces the old `isInOmega` gate that only allowed Ω^c.
+- **Forward-orbit interaction redesigned** (the user's call): orbit no longer on
+  double-click. Now **live on hover** (rAF-coalesced `makeOrbit`, inside Ω only,
+  toggle `#schwarz-hover-orbit` default ON) drawn light/dashed; **pinned by a
+  single click** (deferred `CLICK_DELAY=250ms` so a double-click cancels the pin
+  via the dblclick handler's leading `clearTimeout`). `sState.orbit` stays the
+  authoritative *pinned* orbit (mirrors `pinnedOrbit`) so z-panel/sphere/sweep/
+  PNG consumers are unaffected; transient `hoverOrbit` is separate.
+- **New `sState`:** `pinnedOrbit`, `hoverOrbit`, `hoverOrbitEnabled`, `_hoverRaf`,
+  `_pendingHoverW`, `_clickTimer`. Handlers: `onCanvasClick`/`onCanvasDblClick`
+  (replace `onDoubleClickOrbit`), `_interactionPoint` guard (fractal+plane,
+  !dragMoved, !shiftKey), `pinOrbitAt`, `runHoverOrbit`. Timers/rAF cancelled on
+  tab-leave + `mouseleave`.
+- **Tests** (`node-test.js`): tiling-set gate battery (verdict→accept/reject
+  logic + real Ω^c and near-∂Ω interior points classify as `fundamental`);
+  jsdom interaction test via a window-sentinel-gated test hook
+  (`window.__schwarzUiTest`) — single-click schedules a pin, dblclick cancels it
+  and seeds the tree only when the gate passes, shift-gesture ignored, hover
+  computes only when enabled+inside Ω. Defensive null-ctx guards added to
+  `paintPreimageTree`/`drawOrbitPolyline` (jsdom has no 2D context).
+
+## (prior) continuationSolve for the 3 PQD families
 
 **continuationSolve for powerQD_singular / unboundedPQD / unboundedPQD_singular.**
 These three PQD families previously stubbed their continuation phase

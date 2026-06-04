@@ -23,12 +23,17 @@
 // position:relative so it can host transparent overlays (boundary + orbit)
 // on top of the GPU pixels. The GL layer hides on tab-out.
 //
-// Double-click-to-orbit: plots {w₀, σ(w₀), σ²(w₀), …} as a polyline of small
-// dots. Single click is reserved for the start of a drag (dragMoved guard
-// suppresses orbit drops after pans).
+// Fractal-mode canvas interaction (plane view):
+//   • hover        → live forward σ-orbit preview {w₀, σ(w₀), …} (toggleable;
+//                    rAF-coalesced; only inside Ω where σ is defined)
+//   • single click → PIN that orbit (deferred by CLICK_DELAY so a double-click
+//                    can cancel it; dragMoved guard suppresses pins after pans)
+//   • double click → seed a preimage tree at the click, gated to the tiling
+//                    set (escapeTime kind 'fundamental'); drawn over the fractal
+// The preimage tree is a fractal-mode overlay, not a separate mode.
 //
-// Hover readout: pixel coords + escape time (CPU mode only — GPU doesn't
-// keep a per-pixel field array; hover shows coords only).
+// Hover readout: pixel coords + escape time (CPU mode keeps a per-pixel field;
+// GPU mode does an ad-hoc per-cursor escapeTime — see onMouseMove).
 // =============================================================================
 
 (function () {
@@ -68,7 +73,19 @@
     rendering: false,
     renderToken: 0,
 
-    orbit: [],                             // last-clicked orbit polyline
+    // Forward σ-orbit overlay. `orbit` is the AUTHORITATIVE pinned orbit
+    // (kept in sync with pinnedOrbit) because downstream consumers — the
+    // z-panel (_recomputeZPanelOrbit), sphere view, sweep, and PNG export —
+    // all read sState.orbit. The transient hover orbit lives separately in
+    // hoverOrbit and must NOT be assigned to `orbit` (so the z-panel etc.
+    // don't flicker as the cursor moves).
+    orbit:            [],                  // pinned forward-orbit polyline (= pinnedOrbit)
+    pinnedOrbit:      [],                  // single-click-pinned orbit
+    hoverOrbit:       null,                // transient hover-preview orbit (null = none)
+    hoverOrbitEnabled: true,               // "Live orbit on hover" toggle (default ON)
+    _hoverRaf:        null,                // rAF id coalescing hover-orbit recompute
+    _pendingHoverW:   null,                // latest hovered world point awaiting the rAF
+    _clickTimer:      null,                // deferred single-click pin (cancelled by dblclick)
 
     // View toggle (HANDOFF #29): 'plane' = Schwarz dynamics on the w-plane
     // (the original Schwarz tab), 'sphere' = same iteration textured onto a
@@ -77,12 +94,11 @@
     viewMode:   'plane',                   // 'plane' | 'sphere'
     sphereView: null,                      // QD.SphereView handle
 
-    // Mode toggle (S1): 'fractal' (default escape-time) or 'preimage-tree'
-    // (TODO #16 tiling-set construction). Plane-view only — sphere mode
-    // ignores this. Preimage-tree mode swaps the dblclick handler to seed
-    // a tree from clicks in Ω^c.
-    mode:           'fractal',             // 'fractal' | 'preimage-tree'
-    preimageTree:   null,                  // last-built tree (S1)
+    // Render mode. The preimage tree is no longer its own mode — it is a
+    // fractal-mode OVERLAY drawn on top of the GL fractal, seeded by
+    // double-clicking anywhere in the tiling set (TODO #16). Plane-view only.
+    mode:           'fractal',             // 'fractal' | 'domain-coloring'
+    preimageTree:   null,                  // last-built tree (S1; fractal-mode overlay)
     preimageDepth:  4,                     // current depth setting
     preimageBudget: 4096,                  // current visual budget
 
@@ -132,6 +148,16 @@
   // Kinds enum
   const KIND_FUND = 0, KIND_ESC = 1, KIND_INT = 2, KIND_INV = 3, KIND_OUTSIDE = 4;
 
+  // Interaction tuning. CLICK_DELAY defers the single-click orbit-pin long
+  // enough for a double-click (which seeds the preimage tree) to cancel it;
+  // the dblclick handler clears the pending timer. Exposed via the test hook.
+  let CLICK_DELAY = 250;                  // ms; single-click → pin debounce
+  // The preimage-tree seed gate runs escapeTime with a generous iteration cap
+  // so genuinely-fundamental (tiling-set) points that escape slowly aren't
+  // mis-classified as non-escaping `interior`. Display/hover use the smaller
+  // grid.maxIter — this larger cap is for the accept/reject decision only.
+  function gateMaxIter() { return Math.max(256, (sState.grid.maxIter | 0) * 4); }
+
   // ---------------------------------------------------------------------------
   // Lazy mount
   // ---------------------------------------------------------------------------
@@ -141,6 +167,11 @@
       // layers so they can't show through under another tab's drawing.
       sState.renderToken++;
       showGLLayer(false);
+      // Cancel any pending interaction timers/frames so they can't fire
+      // (and repaint into another tab) after we've left.
+      if (sState._hoverRaf != null) { cancelAnimationFrame(sState._hoverRaf); sState._hoverRaf = null; }
+      if (sState._clickTimer != null) { clearTimeout(sState._clickTimer); sState._clickTimer = null; }
+      sState.hoverOrbit = null;
       // HANDOFF #34: also wipe our pixels from the shared 2D canvas so the
       // CPU-pyramid pixmap and orbit-polyline overlay don't briefly bleed
       // through into whichever tab takes over. The receiving tab's
@@ -235,7 +266,9 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Mode card (S1): fractal vs preimage-tree. Plane-view only.
+  // Mode card: fractal vs domain-coloring. Plane-view only. The preimage tree
+  // is a fractal-mode overlay (seeded by double-click), not its own mode —
+  // its depth/budget controls live in the fractal-mode options block below.
   // ---------------------------------------------------------------------------
   function makeModeCard() {
     const card = document.createElement('section');
@@ -245,16 +278,21 @@
       <h2>Mode</h2>
       <div class="segmented" role="tablist" aria-label="Schwarz mode">
         <button class="seg-btn active" data-mode="fractal"        type="button">fractal</button>
-        <button class="seg-btn"        data-mode="preimage-tree"  type="button">preimage tree</button>
         <button class="seg-btn"        data-mode="domain-coloring" type="button">domain color</button>
       </div>
-      <div id="schwarz-mode-options-preimage-tree" style="display:none; margin-top:8px;">
+      <div id="schwarz-mode-options-fractal" style="margin-top:8px;">
         <div style="font-size:12px; color:#555; margin-bottom:6px;">
-          <b>Click outside Ω</b> to seed the tree. Each generation applies σ⁻¹
-          to every previous-generation point.
+          <b>Double-click</b> in the tiling set to seed a preimage tree (each
+          generation applies σ⁻¹). <b>Single-click</b> pins the forward orbit;
+          hover previews it.
         </div>
         <label style="display:block; font-size:12px; margin:4px 0;">
-          Depth:
+          <input type="checkbox" id="schwarz-hover-orbit" checked
+                 style="vertical-align:middle; margin-right:4px;">
+          Live orbit on hover
+        </label>
+        <label style="display:block; font-size:12px; margin:4px 0;">
+          Tree depth:
           <input type="range" min="1" max="8" value="4" id="schwarz-preimage-depth"
                  style="vertical-align:middle; margin-left:6px; width:120px;">
           <span id="schwarz-preimage-depth-val" style="font-family:monospace;">4</span>
@@ -274,6 +312,18 @@
       card.querySelectorAll('.seg-btn').forEach(btn => {
         btn.addEventListener('click', () => setMode(btn.dataset.mode));
       });
+      const hover = card.querySelector('#schwarz-hover-orbit');
+      if (hover) {
+        hover.addEventListener('change', () => {
+          sState.hoverOrbitEnabled = hover.checked;
+          if (!hover.checked) {
+            // Turning the preview off — drop any live hover orbit immediately.
+            if (sState._hoverRaf != null) { cancelAnimationFrame(sState._hoverRaf); sState._hoverRaf = null; }
+            sState.hoverOrbit = null;
+            paintBoundaryOnTop();
+          }
+        });
+      }
       const depthSlider = card.querySelector('#schwarz-preimage-depth');
       const depthVal    = card.querySelector('#schwarz-preimage-depth-val');
       if (depthSlider) {
@@ -295,31 +345,26 @@
   }
 
   function setMode(mode) {
-    if (mode !== 'fractal' && mode !== 'preimage-tree' && mode !== 'domain-coloring') return;
+    if (mode !== 'fractal' && mode !== 'domain-coloring') return;
     if (mode === sState.mode) return;
     sState.mode = mode;
     document.querySelectorAll('#schwarz-mode-card .seg-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.mode === mode);
     });
-    const opts = document.getElementById('schwarz-mode-options-preimage-tree');
-    if (opts) opts.style.display = (mode === 'preimage-tree') ? '' : 'none';
-    // Hide GL fractal in non-fractal modes.
-    if (mode === 'preimage-tree') {
-      showGLLayer(false);
-      sState.preimageTree = null;
-      sState.orbit = [];
-      clearCanvas();
-      paintBoundaryOnTop();
-    } else if (mode === 'domain-coloring') {
+    const opts = document.getElementById('schwarz-mode-options-fractal');
+    if (opts) opts.style.display = (mode === 'fractal') ? '' : 'none';
+    // All overlays (tree + orbits) are fractal-mode-only; clear them on any
+    // mode transition so they don't bleed into domain-coloring or linger when
+    // we re-enter fractal mode.
+    sState.preimageTree = null;
+    sState.orbit = []; sState.pinnedOrbit = []; sState.hoverOrbit = null;
+    if (mode === 'domain-coloring') {
       // S5 / F6: render σ-domain-coloring into the 2D canvas; hide GL.
       showGLLayer(false);
-      sState.orbit = [];
-      sState.preimageTree = null;
       _recomputeDomainColoring();
       paintAll();
     } else {
-      sState.preimageTree = null;
-      sState.domainColor  = null;
+      sState.domainColor = null;
       if (sState.schwarz) {
         showGLLayer(activeRenderer() === 'gpu');
         requestRecompute();
@@ -346,7 +391,7 @@
   // Re-build the tree from the existing seed (root of the previous tree)
   // when depth or budget changes. Cheap: σ⁻¹ runs are millisecond-scale.
   function _rebuildPreimageTreeIfActive() {
-    if (sState.mode !== 'preimage-tree') return;
+    if (sState.mode !== 'fractal') return;
     if (!sState.schwarz || !sState.preimageTree) return;
     const seed = sState.preimageTree.generations[0][0];
     sState.preimageTree = QD.Schwarz.buildPreimageTree(seed, sState.schwarz, {
@@ -700,7 +745,7 @@
   // S6 / F8: PNG export. Composites whatever is currently visible on the
   // Schwarz tab into a single PNG download. For GPU mode, that means the
   // fractal layer from #schwarz-gl-canvas + the overlay layer from #canvas.
-  // For CPU / domain-coloring / preimage-tree, only the 2D canvas is needed.
+  // For CPU / domain-coloring modes, only the 2D canvas is needed.
   //
   // High-res: when multiplier > 1, we briefly re-render the GPU canvas at
   // multiplier·display-size, re-paint the 2D overlay onto an off-screen
@@ -743,8 +788,8 @@
         outCtx.drawImage(glCanvas, 0, 0, outW, outH);
       }
     } else {
-      // CPU / preimage-tree / domain-coloring: the 2D canvas already has
-      // the fractal layer (or there isn't one). Nothing extra here.
+      // CPU / domain-coloring: the 2D canvas already has the fractal layer
+      // (or there isn't one). Nothing extra here.
       outCtx.fillStyle = '#fafafa';
       outCtx.fillRect(0, 0, outW, outH);
     }
@@ -1172,7 +1217,8 @@
     }
     sState.schwarz = QD.Schwarz.buildSchwarzFromPhi(
       sState.phiSnapshot, sState.hDataSnapshot, sState.boundarySnapshot);
-    sState.orbit = [];
+    sState.orbit = []; sState.pinnedOrbit = []; sState.hoverOrbit = null;
+    sState.preimageTree = null;
 
     // Try to bring up the GPU renderer (idempotent: only created once).
     ensureGPU();
@@ -1291,10 +1337,17 @@
     c.addEventListener('mouseleave', () => {
       const r = document.getElementById('schwarz-readout');
       if (r) r.textContent = '—';
+      // Drop the transient hover orbit when the cursor leaves the canvas.
+      if (sState._hoverRaf != null) { cancelAnimationFrame(sState._hoverRaf); sState._hoverRaf = null; }
+      if (sState.hoverOrbit) { sState.hoverOrbit = null; paintBoundaryOnTop(); }
     });
-    // Orbit on DOUBLE click only. Single click is reserved for click-and-drag
-    // panning (and for not adding an unwanted orbit).
-    c.addEventListener('dblclick', onDoubleClickOrbit);
+    // Fractal-mode interaction (plane view):
+    //   • single click → pin the forward σ-orbit (deferred so a double-click
+    //     can cancel it — see onCanvasClick / CLICK_DELAY);
+    //   • double click → seed a preimage tree (onCanvasDblClick);
+    //   • click-and-drag → pan (dragMoved suppresses the click).
+    c.addEventListener('click', onCanvasClick);
+    c.addEventListener('dblclick', onCanvasDblClick);
     c.addEventListener('wheel', onWheel, { passive: false });
     c.addEventListener('mousedown', e => {
       if (e.button !== 0) return;
@@ -1453,6 +1506,34 @@
     }
     const r = document.getElementById('schwarz-readout');
     if (r) r.textContent = info;
+
+    // Live forward-orbit preview on hover (fractal/plane only, when enabled
+    // and not mid-pan / mid-curve-draw). σ is defined on Ω, so only points
+    // inside Ω get an orbit; outside Ω we clear any stale hover orbit.
+    if (sState.viewMode === 'plane' && sState.mode === 'fractal' &&
+        sState.hoverOrbitEnabled && !dragging && !sState.isDrawingCurve) {
+      if (sState.schwarz.isInOmega(w)) {
+        sState._pendingHoverW = w;
+        if (sState._hoverRaf == null) sState._hoverRaf = requestAnimationFrame(runHoverOrbit);
+      } else if (sState.hoverOrbit) {
+        sState.hoverOrbit = null;
+        paintBoundaryOnTop();
+      }
+    }
+  }
+  // rAF-coalesced hover-orbit recompute: at most one makeOrbit per frame, no
+  // matter how fast the cursor moves. Uses the small display maxIter (cheap
+  // forward σ-iteration), not the generous seed-gate cap.
+  function runHoverOrbit() {
+    sState._hoverRaf = null;
+    if (!isSchwarzActive() || !sState.schwarz) return;
+    if (sState.viewMode !== 'plane' || sState.mode !== 'fractal' || !sState.hoverOrbitEnabled) return;
+    const w = sState._pendingHoverW;
+    if (!w || !sState.schwarz.isInOmega(w)) { sState.hoverOrbit = null; paintBoundaryOnTop(); return; }
+    try {
+      sState.hoverOrbit = QD.Schwarz.makeOrbit(w, sState.schwarz, { maxIter: sState.grid.maxIter });
+    } catch (_) { sState.hoverOrbit = null; }
+    paintBoundaryOnTop();
   }
   function describeKind(kind, n) {
     switch (kind) {
@@ -1464,47 +1545,67 @@
       default:           return '';
     }
   }
-  function onDoubleClickOrbit(e) {
-    if (!isSchwarzActive() || !sState.schwarz) return;
-    // dblclick can fire after the user double-clicks at the end of a drag —
-    // guard against that with the dragMoved sentinel.
-    if (dragMoved) return;
+  // Shared guard for the click / double-click handlers: fractal plane view,
+  // not a drag-release, not a shift-drag curve gesture. Returns the world
+  // point on success, or null if the event should be ignored.
+  function _interactionPoint(e) {
+    if (!isSchwarzActive() || !sState.schwarz) return null;
+    if (sState.viewMode !== 'plane' || sState.mode !== 'fractal') return null;
+    if (dragMoved) return null;   // a pan just ended — not a click
+    if (e.shiftKey) return null;  // reserved for the E11 curve-draw gesture
     const c = getCanvas();
     const rect = c.getBoundingClientRect();
-    const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
-    const w = pixelToWorld(sx, sy);
-    if (sState.mode === 'preimage-tree') {
-      // S1: seed the preimage tree from Ω^c (user-confirmed gate per TODO #16).
-      if (sState.schwarz.isInOmega(w)) {
-        // Click inside Ω — silently ignored (canonical framing requires
-        // Ω^c). A brief status update would be ideal but the existing status
-        // line already shows the family info.
-        return;
-      }
-      sState.preimageTree = QD.Schwarz.buildPreimageTree(w, sState.schwarz, {
-        depth:        sState.preimageDepth,
-        visualBudget: sState.preimageBudget,
-      });
-      paintBoundaryOnTop();
-      paintPreimageTree();
-      _refreshPreimageTreeStats();
-      return;
-    }
-    // Fractal mode (default): orbit-on-double-click.
-    if (!sState.schwarz.isInOmega(w)) {
-      sState.orbit = [];
-    } else {
-      sState.orbit = QD.Schwarz.makeOrbit(w, sState.schwarz, { maxIter: sState.grid.maxIter });
-    }
+    return pixelToWorld(e.clientX - rect.left, e.clientY - rect.top);
+  }
+
+  // Double-click → seed a preimage tree at the clicked point. Restricted to
+  // the tiling set: a point qualifies iff its forward σ-orbit escapes Ω into
+  // the fundamental tile in finitely many steps (escapeTime kind
+  // 'fundamental', which also covers Ω^c at n=0). Points in the limit set
+  // ('interior' / non-escaping), the escaping set, or where σ is invalid are
+  // ignored. Seeds exactly at the click (no fold-back to the fundamental tile).
+  function onCanvasDblClick(e) {
+    // Cancel the pending single-click pin so a double-click never also pins.
+    if (sState._clickTimer != null) { clearTimeout(sState._clickTimer); sState._clickTimer = null; }
+    const w = _interactionPoint(e);
+    if (!w) return;
+    let et;
+    try { et = QD.Schwarz.escapeTime(w, sState.schwarz, { maxIter: gateMaxIter() }); }
+    catch (_) { return; }                       // σ/ψ blew up — not seedable
+    if (!et || et.kind !== 'fundamental') return; // outside the tiling set
+    sState.preimageTree = QD.Schwarz.buildPreimageTree(w, sState.schwarz, {
+      depth:        sState.preimageDepth,
+      visualBudget: sState.preimageBudget,
+    });
+    paintBoundaryOnTop();
+    paintPreimageTree();
+    _refreshPreimageTreeStats();
+  }
+
+  // Single-click → pin the forward σ-orbit at the clicked point. Deferred by
+  // CLICK_DELAY so a double-click (tree seed) can cancel it via the dblclick
+  // handler above. Clicking outside Ω clears the pin.
+  function onCanvasClick(e) {
+    const w = _interactionPoint(e);
+    if (!w) return;
+    if (sState._clickTimer != null) clearTimeout(sState._clickTimer);
+    sState._clickTimer = setTimeout(() => { sState._clickTimer = null; pinOrbitAt(w); }, CLICK_DELAY);
+  }
+
+  // Commit the pinned forward orbit at world point w (inside Ω → its σ-orbit;
+  // outside Ω → clear the pin). Kept in sync with sState.orbit so downstream
+  // consumers (z-panel, sphere, sweep, PNG export) see the pinned orbit.
+  function pinOrbitAt(w) {
+    if (!isSchwarzActive() || !sState.schwarz) return;
+    sState.pinnedOrbit = sState.schwarz.isInOmega(w)
+      ? QD.Schwarz.makeOrbit(w, sState.schwarz, { maxIter: sState.grid.maxIter })
+      : [];
+    sState.orbit = sState.pinnedOrbit;
     // S6 / F4: also refresh the z-pullback for the z-panel inset.
     if (sState.showZPanel) _recomputeZPanelOrbit();
     // Just redraw the overlay; the GPU fractal layer doesn't need re-render.
-    if (activeRenderer() === 'gpu') {
-      paintBoundaryOnTop();
-      paintOrbit();
-    } else {
-      paintAll();
-    }
+    if (activeRenderer() === 'gpu') { paintBoundaryOnTop(); paintOrbit(); }
+    else paintAll();
   }
 
   // ---------------------------------------------------------------------------
@@ -1863,32 +1964,50 @@
     ctx.stroke();
   }
 
-  function paintOrbit() {
-    const pts = sState.orbit;
+  // Draw one forward-orbit polyline + dots in the given style. `style.dash`
+  // (optional) applies a dashed connecting line; it is reset afterwards so
+  // other overlays aren't affected.
+  function drawOrbitPolyline(pts, style) {
     if (!pts || pts.length === 0) return;
-    const ctx = getCtx();
-    // Connecting line.
-    ctx.strokeStyle = 'rgba(20, 160, 60, 0.95)';
-    ctx.lineWidth = 1.3;
+    const ctx = getCtx(); if (!ctx) return;
+    ctx.strokeStyle = style.line;
+    ctx.lineWidth   = style.lineWidth;
+    if (ctx.setLineDash) ctx.setLineDash(style.dash || []);
     ctx.beginPath();
     for (let i = 0; i < pts.length; i++) {
       const p = worldToPixel(pts[i].re, pts[i].im);
       if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
     }
     ctx.stroke();
-    // Dots.
+    if (ctx.setLineDash) ctx.setLineDash([]);
     for (let i = 0; i < pts.length; i++) {
       const p = worldToPixel(pts[i].re, pts[i].im);
       ctx.beginPath();
-      ctx.arc(p.x, p.y, i === 0 ? 4.5 : 2.8, 0, 2 * Math.PI);
-      ctx.fillStyle = i === 0 ? '#108a40' : 'rgba(20, 160, 60, 0.85)';
+      ctx.arc(p.x, p.y, i === 0 ? style.seedR : style.dotR, 0, 2 * Math.PI);
+      ctx.fillStyle = i === 0 ? style.seedFill : style.dotFill;
       ctx.fill();
-      if (i === 0) {
+      if (i === 0 && style.seedHalo) {
         ctx.strokeStyle = '#fff';
         ctx.lineWidth = 1.2;
         ctx.stroke();
       }
     }
+  }
+
+  // Draw the transient hover orbit (light, dashed, underneath) then the
+  // pinned orbit (solid green, on top). The hover orbit is the live preview;
+  // the pinned orbit is the single-click-committed one (= sState.orbit).
+  function paintOrbit() {
+    drawOrbitPolyline(sState.hoverOrbit, {
+      line: 'rgba(20, 160, 60, 0.45)', lineWidth: 1.0, dash: [3, 3],
+      seedR: 3.2, dotR: 2.0, seedFill: 'rgba(16,138,64,0.7)',
+      dotFill: 'rgba(20,160,60,0.45)', seedHalo: false,
+    });
+    drawOrbitPolyline(sState.pinnedOrbit, {
+      line: 'rgba(20, 160, 60, 0.95)', lineWidth: 1.3,
+      seedR: 4.5, dotR: 2.8, seedFill: '#108a40',
+      dotFill: 'rgba(20, 160, 60, 0.85)', seedHalo: true,
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -1902,7 +2021,7 @@
   function paintPreimageTree() {
     const tree = sState.preimageTree;
     if (!tree || !tree.generations || tree.generations.length === 0) return;
-    const ctx = getCtx();
+    const ctx = getCtx(); if (!ctx) return;
     const N = tree.generations.length;
 
     // Plasma-like ramp: gen 0 = #fde725 (yellow) → gen N-1 = #5d01a6 (deep purple).
@@ -2339,5 +2458,20 @@
     iceandfire: [[10,40,100],[60,120,200],[160,210,240],[245,245,245],[250,210,90],[235,120,40],[170,30,30]],
     twotone:    [[245,245,248],[120,130,200],[40,50,110],[20,30,70]],
   };
+
+  // ---------------------------------------------------------------------------
+  // Test-only hook (see node-test.js). Opt-in via a window sentinel so a normal
+  // browser load NEVER attaches it. Exposes the fractal-mode interaction
+  // handlers + state so the click/dblclick disambiguation and the tiling-set
+  // seed gate can be unit-tested without mounting the sidebar.
+  // ---------------------------------------------------------------------------
+  if (typeof window !== 'undefined' && window.__SCHWARZ_UI_TEST_HOOK__) {
+    window.__schwarzUiTest = {
+      sState, setMode, onCanvasClick, onCanvasDblClick, onMouseMove,
+      runHoverOrbit, pinOrbitAt,
+      get CLICK_DELAY() { return CLICK_DELAY; },
+      set CLICK_DELAY(v) { CLICK_DELAY = v; },
+    };
+  }
 
 })();
