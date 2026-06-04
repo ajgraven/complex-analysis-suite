@@ -25,7 +25,7 @@
   //                      append `?v=<CACHE_VERSION>` to every solver-source
   //                      fetch, busting the browser HTTP cache so a Worker can
   //                      never run stale solver source after a deploy.
-  const CACHE_VERSION = 'v51-dblclick-add-pole';
+  const CACHE_VERSION = 'v53-pqd-continuation';
 
   // Files that get concatenated into a Worker bundle by the runtime
   // bundlers in primary-solver-worker.js and param-slice/param-slice-pool.js.

@@ -12,7 +12,52 @@ explain back to him.
 
 ---
 
-## 0. Current state (most recent: double-click to add a pole)
+## 0. Current state (most recent: continuationSolve for the 3 PQD families)
+
+**Full suite passing, 0 failed; `npm run lint` clean** (run `npm test` for the
+live count). Cache version `v53-pqd-continuation`.
+
+> Trunk note: the three parallel feature branches — param-slice PQD fix +
+> univalence speed-up (PR #1), double-click to add a pole (PR #2), continuation
+> for the 3 PQD families (PR #3) — plus the gesture-docs PR #4 are all merged
+> into `main`. Interleaved branch merges briefly dropped THIS continuation entry
+> from HANDOFF and reverted `CACHE_VERSION` to v51; both are restored here
+> (cache → v53, covering all merged work). The double-click entry follows as a
+> prior; param-slice + earlier work are below it.
+
+**continuationSolve for powerQD_singular / unboundedPQD / unboundedPQD_singular.**
+These three PQD families previously stubbed their continuation phase
+(`return {success:false, error:"…not implemented…"}`), so `solveInverseQD`
+relied on direct + multistart + diverse + deflation. Implemented a real one:
+- **Homotopy: continuation in α from the classical limit** — NOT the residue-
+  strength / continuation-in-c idioms the plan first proposed; those DEGENERATE
+  here (shrinking residues pushes 0 out of Ω for the SINGULAR families; a small
+  conformal radius blows the unbounded seed up, z_j = a_j/c → ∞). Instead
+  `QD.PqdCommon.continuationInAlpha(hData, norm, options)`: solve the near-
+  classical α≈1 problem with the standard pipeline (reliably in-basin there —
+  same premise as `diagnosePQDRealizability`), then warm-start-march α to the
+  target. One shared helper; the three families are thin wrappers. All reach the
+  target in ~4 steps at machine-precision residual.
+- **Recursion guard:** the α≈1 seed solve runs with `usePhases.continuation:false`
+  so it can never re-enter `continuationInAlpha`.
+- **Fold guard (important):** the α-march can cross a fold onto a branch that
+  satisfies the algebraic residual but is NOT univalent (a spurious QD). The
+  helper VERIFIES the endpoint is a univalent, identity-OK QD (at the pipeline's
+  N=500) before reporting success; else returns `{success:false}` and the
+  pipeline falls through to multistart — today's behavior. Without this guard a
+  spurious continuation result preempted multistart and broke the §DF UPQD
+  forward round-trip tests. Net: continuation strictly helps or no-ops.
+- **Files:** `solver-pqd-common.js` (new `continuationInAlpha` on `QD.PqdCommon`),
+  `solver-pqd-singular.js` / `solver-uqd-pqd.js` / `solver-uqd-pqd-singular.js`
+  (stub → wrapper). `node-test.js` §CONT battery (each family solves via
+  `method:'continuation-in-alpha'`; a continuation-ONLY pipeline solve is valid +
+  univalent and matches the multistart solution; degenerate-but-safe no-throw
+  check).
+- **Deviation from the approved plan** (which specified residue-strength +
+  continuation-in-c): testing proved both degenerate for these families; α-homotopy
+  is the correct, working idiom and is what the realizability diagnostic uses.
+
+## (prior) Double-click to add a pole
 
 **Full suite passing, 0 failed; `npm run lint` clean** (run `npm test` for the
 live count). Cache version `v51-dblclick-add-pole`.
