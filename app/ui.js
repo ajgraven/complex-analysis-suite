@@ -447,6 +447,10 @@ document.addEventListener('tab-changed', e => {
 // alternates and background search get a proper pass at the new value.
 plot.onPoleDrag = (idx, w) => {
   if (idx < 0 || idx >= state.poles.length) return;
+  // Move the marker to the cursor IMMEDIATELY, decoupled from the solve, so the
+  // dot never appears stuck while a (possibly slow) live-solve frame is in
+  // flight. The boundary catches up when the live result lands.
+  plot.setLivePole(idx, w);
   const text = QD.Complex.toString(w, 4);
   state.poles[idx].a = text;
   // Update the matching text input in the side panel (no slider for a_j).

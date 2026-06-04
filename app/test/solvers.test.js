@@ -89,6 +89,34 @@ const verifyQuadratureIdentity = QD_NS.verifyQuadratureIdentity;     // moved to
   }
 }
 
+// liveSolveStep — the off-main-thread live-drag core (one warm Newton +
+// reduced-sample univalence/identity), shared by the live worker and its
+// main-thread fallback. Warm-starting from a valid solved φ on the same hData
+// must converge fast and report a valid QD; bad seeds must fail gracefully.
+{
+  const R = 1.4;
+  const hData = { poles: [{ a: {re:0,im:0}, principal: [{re: R*R, im:0}] }] };
+  const base = solveInverseQD(hData);
+  if (base.success) {
+    const seed = QD_NS.clonePhi(base.primary.phi);
+    const live = QD_NS.liveSolveStep(hData, seed,
+      { newton: { maxIter: 30 }, numSamples: 96, wantOriginInside: true });
+    ok('liveSolveStep: warm-start succeeds', !!live && live.success === true,
+       live ? (live.error || '') : 'no result');
+    ok('liveSolveStep: reports univalent', !!live && live.univalent === true);
+    ok('liveSolveStep: reports identityOK', !!live && live.identityOK === true);
+    ok('liveSolveStep: warm-start converges in ≤5 iters', !!live && live.iterations <= 5,
+       live ? ('iters=' + live.iterations) : 'no result');
+    ok('liveSolveStep: wantOriginInside returns a boolean',
+       !!live && typeof live.originInside === 'boolean');
+  }
+  // Guards: null / structurally-invalid seed return { success:false }, no throw.
+  ok('liveSolveStep: null seed → failure (no throw)',
+     QD_NS.liveSolveStep(hData, null, {}).success === false);
+  ok('liveSolveStep: seed without family → failure (no throw)',
+     QD_NS.liveSolveStep(hData, { branches: [] }, {}).success === false);
+}
+
 // 2-point QD
 {
   const hData = { poles: [

@@ -93,6 +93,19 @@
         return;
       }
       self.postMessage({ kind: 'altSearch', jobId, result });
+    } else if (msg.kind === 'liveSolve') {
+      // 'liveSolve' — one warm Newton + reduced-sample checks (QD.liveSolveStep),
+      // the per-drag-frame path. Runs on a dedicated live worker so a slow frame
+      // never blocks the UI; superseded jobs are dropped on the main side.
+      const { jobId, hData, initPhi, opts } = msg;
+      let result;
+      try {
+        result = self.QD.liveSolveStep(hData, initPhi, opts || {});
+      } catch (err) {
+        self.postMessage({ kind: 'liveSolve', jobId, error: String(err && err.stack || err) });
+        return;
+      }
+      self.postMessage({ kind: 'liveSolve', jobId, result });
     }
   };
 })();
@@ -323,10 +336,102 @@
   function cancelAux() { _disposeAux(); }
   function isAuxBusy() { return _auxInflight !== null; }
 
+  // ---------------------------------------------------------------------------
+  // Live worker — per-drag-frame warm-start solve (QD.liveSolveStep).
+  //
+  // A THIRD Worker instance from the same bundle, dedicated to the interactive
+  // drag path. Kept separate from the primary `solve` worker so a burst of live
+  // frames can't queue behind / preempt a debounced full solve (and vice
+  // versa). Cancellation is cancel-and-replace by DROPPING THE LISTENER — not
+  // terminate: each live job is a single bounded Newton (≈ms), so the worker
+  // frees itself almost immediately and a respawn-per-frame would cost more than
+  // it saves. The main side additionally guards with a token (ui-solve.js) so a
+  // late result can't overwrite newer state.
+  // ---------------------------------------------------------------------------
+  /** @type {Worker|null} */
+  let _liveWorker = null;
+  /** @type {Promise<void>|null} */
+  let _liveReady = null;
+  let _liveNextJobId = 1;
+  /** @type {InflightJob|null} */
+  let _liveInflight = null;
+
+  function _disposeLive() {
+    if (_liveWorker) {
+      try { _liveWorker.terminate(); } catch (_) { /* ignore */ }
+      _liveWorker = null;
+    }
+    _liveReady = null;
+    if (_liveInflight) {
+      _liveInflight.reject({ aborted: true });
+      _liveInflight = null;
+    }
+  }
+
+  async function ensureLiveReady() {
+    if (_mainThreadFallback) return;
+    if (_liveWorker) return;
+    if (_liveReady) { await _liveReady; return; }
+    _liveReady = (async () => {
+      const url = await getBundleURL();
+      const w = new Worker(url);
+      w.addEventListener('error', (ev) => {
+        console.error('[primary-solver live worker] error: '
+          + (ev.message || ev) + ' @ ' + (ev.filename || 'bundle') + ':' + (ev.lineno || '?'));
+      });
+      _liveWorker = w;
+    })().catch((err) => {
+      console.warn('[primary-solver-worker] Live worker unavailable (' + (err && err.message || err) +
+        '). Live drag solve will run on the main thread.');
+      _mainThreadFallback = true;
+      _liveReady = null;
+    });
+    await _liveReady;
+  }
+
+  // Run one live (drag-frame) solve off the main thread. `initPhi` is the
+  // caller-chosen seed (warm clone of the previous phi, or a fresh init); `opts`
+  // is forwarded to QD.liveSolveStep ({ newton, numSamples, wantOriginInside }).
+  // Posting a new request supersedes any prior in-flight live job (its promise
+  // rejects { aborted, superseded }). Falls back to a main-thread liveSolveStep
+  // when the worker bundle is unavailable (e.g. file:// origin).
+  function liveSolveAsync(hData, initPhi, opts) {
+    return ensureLiveReady().then(() => {
+      if (_mainThreadFallback || !_liveWorker) {
+        return Promise.resolve().then(() =>
+          global.QD.liveSolveStep(hData, initPhi, opts || {}));
+      }
+      if (_liveInflight) {
+        _liveInflight.reject({ aborted: true, superseded: true });
+        try { _liveWorker.removeEventListener('message', _liveInflight.onMessage); } catch (_) {}
+        _liveInflight = null;
+      }
+      const jobId = _liveNextJobId++;
+      return new Promise((resolve, reject) => {
+        const onMessage = (e) => {
+          const m = e.data;
+          if (!m || m.kind !== 'liveSolve' || m.jobId !== jobId) return;
+          try { _liveWorker.removeEventListener('message', onMessage); } catch (_) {}
+          _liveInflight = null;
+          if (m.error) reject(new Error(m.error));
+          else resolve(m.result);
+        };
+        _liveInflight = { jobId, resolve, reject, onMessage };
+        _liveWorker.addEventListener('message', onMessage);
+        _liveWorker.postMessage({ kind: 'liveSolve', jobId, hData, initPhi, opts: opts || {} });
+      });
+    });
+  }
+
+  function cancelLive() { _disposeLive(); }
+  function isLiveBusy() { return _liveInflight !== null; }
+
   // Expose under QD namespace if available, else stash on global.
   const ns = { ensureReady, solve, cancel, isBusy,
     // Background alternate-search (A3) — runs on a dedicated aux worker.
     searchAlternates: searchAlternatesAsync, cancelAux, isAuxBusy,
+    // Live drag-frame solve — runs on a dedicated live worker (Tier-2 pole-drag).
+    liveSolve: liveSolveAsync, cancelLive, isLiveBusy,
     // Diagnostics — used by tests / dev tools.
     _isMainThreadFallback() { return _mainThreadFallback; },
     _hasWorker()           { return _worker !== null; },

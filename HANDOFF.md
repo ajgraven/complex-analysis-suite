@@ -1344,6 +1344,53 @@ enforces c_1 ≠ 0.
 
 In rough chronological order across recent sessions:
 
+54. **PQD pole-drag responsiveness — live solve off the main thread + warm
+    starts (SHIPPED).** Fixed the "slow / gets stuck when dragging poles fast"
+    report, worst on PQD families. Root causes: (1) the live drag path
+    `quickSolveAndRender` (ui-solve.js) ran a *synchronous* `QD.solveInverseQD`
+    inline on every frame at an origin/identity-inconsistent warm-start (the old
+    `tryRegimeSwitch`), freezing the UI thread; (2) the dragged marker was only
+    repainted *after* a solve, so it appeared frozen; (3) every live frame ran
+    univalence + identity at full `state.samples`; (4) the drag-end full solve
+    started cold. Fixes, Tiers 1–2 of the perf plan:
+    * **1A — marker decoupled.** New `DomainPlot.setLivePole(idx, w)`
+      (ui-domain-plot.js) writes `data.poles[idx]` and rAF-repaints; `onPoleDrag`
+      (ui.js) calls it *before* scheduling any solve, so the dot tracks the
+      cursor 1:1 regardless of solve latency.
+    * **1B — no inline full solve.** `tryRegimeSwitch`'s synchronous
+      `solveInverseQD` is gone. On warm-start failure / regime inconsistency the
+      live path now only kicks the debounced worker `scheduleSolve()` (which
+      carries `autoSwitchSingular`) and still paints the live result.
+    * **1C — cheaper live checks.** Live univalence/identity use
+      `LIVE_SAMPLES = 96` (min with `state.samples`); the full solve keeps the
+      full count.
+    * **1D — warm-started drag-end.** `solveAndRender` passes the last good φ as
+      `opts.warmPhi`; `_solveOnce` (solver.js) tries it as the first Newton seed
+      (family-tag-gated via a `freshInit().family` probe; falls through to the
+      full pipeline on any miss — byte-identical when absent). Verified live:
+      drag-end reports `method: warm-start`, 0 Newton iterations.
+    * **2A/2B — live solve off-thread.** New `QD.liveSolveStep(hData, initPhi,
+      {newton, numSamples, wantOriginInside})` (solver.js) = one warm Newton +
+      reduced-sample checks, returning a plain clone-safe result. New dedicated
+      **live worker** channel in primary-solver-worker.js (`liveSolveAsync` /
+      `cancelLive` / `isLiveBusy`, `kind:'liveSolve'` handler), modelled on the
+      aux worker; cancel-and-replace by dropping the listener (no terminate —
+      each job is ~ms). `quickSolveAndRender` is now async: it seeds on the main
+      thread, posts to `PSW.liveSolve`, and commits under a `_liveSolveToken`
+      stale-guard. φ is plain data (`clonePhi` shape) → structured-clone-safe.
+    * **2C/2D — fallback.** `liveSolveAsync` falls back to a main-thread
+      `QD.liveSolveStep` (file:// / no-Worker / unit tests), same shape as
+      `solve()`.
+    Tier 3 (analytic Jacobian, multistart trimming, singular mass-sample cuts)
+    documented in the plan but **deferred**. Tests: `liveSolveStep` warm-start +
+    guards (solvers.test.js), live-worker surface + fallback resolve
+    (worker.test.js), `setLivePole` move/no-op (ui-domain-plot.test.js) — **1134
+    passed, 0 failed**, lint clean, `version:check` clean (hash `4bbfa0e19e`).
+    Browser-verified: 10 live frames all resolved via the worker (0 rejected),
+    marker tracked, drag-end warm-start, ✓ Valid QD, zero console errors. (The
+    headless preview pauses rAF in the hidden tab, so the live path was driven
+    with an rAF shim.) Branch `perf/pqd-pole-drag`.
+
 53. **Geometric univalence criteria — async checks + "Geometric properties"
     card (§25; SHIPPED).** Beyond plain univalence, the QD/Inverse tab now
     classifies the solved Ω as **convex / star-like / spiral-like**. New

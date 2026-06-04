@@ -17,6 +17,24 @@ module.exports = async function run() {
     ok('PrimarySolverWorker: has searchAlternates()', typeof PSW.searchAlternates === 'function');
     ok('PrimarySolverWorker: has cancelAux()', typeof PSW.cancelAux === 'function');
     ok('PrimarySolverWorker: has isAuxBusy()', typeof PSW.isAuxBusy === 'function');
+    // Tier-2 pole-drag: dedicated live-worker surface for per-frame drag solves.
+    ok('PrimarySolverWorker: has liveSolve()', typeof PSW.liveSolve === 'function');
+    ok('PrimarySolverWorker: has cancelLive()', typeof PSW.cancelLive === 'function');
+    ok('PrimarySolverWorker: has isLiveBusy()', typeof PSW.isLiveBusy === 'function');
+    // Functional: in the Node fallback (no Worker), liveSolve resolves via the
+    // main-thread QD.liveSolveStep. Warm-start from a solved disk φ.
+    if (typeof PSW.liveSolve === 'function') {
+      const R = 1.4;
+      const hData = { poles: [{ a: { re: 0, im: 0 }, principal: [{ re: R * R, im: 0 }] }] };
+      const base = QD_NS.solveInverseQD(hData);
+      if (base.success) {
+        const seed = QD_NS.clonePhi(base.primary.phi);
+        const res = await PSW.liveSolve(hData, seed, { newton: { maxIter: 30 }, numSamples: 64 });
+        ok('PrimarySolverWorker: liveSolve fallback resolves a valid live result',
+           !!res && res.success === true && res.univalent === true,
+           res ? (res.error || '') : 'no result');
+      }
+    }
   }
 
   ok('SchwarzCpuWorker: exported', !!SCW);

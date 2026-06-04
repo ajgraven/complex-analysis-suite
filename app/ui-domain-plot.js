@@ -246,6 +246,20 @@ class DomainPlot {
     this.render();
   }
 
+  // Live-update one pole marker's position WITHOUT waiting for a re-solve.
+  // Used during a pole drag so the dot tracks the cursor 1:1 even when the
+  // solver (which redraws the boundary + every marker via setData/showSolution)
+  // lags a frame or two behind. The next solve's showSolution() rewrites
+  // this.data.poles from the canonical hData, so the transient write here is
+  // harmless. render() is rAF-coalesced, so calling this every mousemove is
+  // cheap. No-op if there's no data yet or the index is out of range.
+  setLivePole(idx, w) {
+    if (!this.data || !this.data.poles) return;
+    if (idx < 0 || idx >= this.data.poles.length) return;
+    this.data.poles[idx] = { re: w.re, im: w.im };
+    this.render();
+  }
+
   // Public repaint entry point. Coalesces bursts of render() calls (pan,
   // wheel-zoom, resize, setData) into a single paint per animation frame so a
   // fast drag can't queue dozens of full redraws in one frame (A8). The actual

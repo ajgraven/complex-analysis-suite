@@ -1192,11 +1192,38 @@ function _solveOnce(hData, options = {}) {
   };
 
   let primary = null;
-  if (useDirect) {
+  // Warm-start seed (drag-end fast path, 1D). When the caller supplies the
+  // previous solution's phi via options.warmPhi (e.g. the last live-drag
+  // result), try it as the very first Newton seed: a valid result lets us skip
+  // the entire multistart pipeline. Gated to a structurally-matching family
+  // (the deterministic freshInit().family acts as the family-tag probe) so the
+  // seed and the candidate verifier agree — under autoSwitch this naturally
+  // confines the seed to the regime it came from. Any miss falls through to the
+  // normal phases below, so behavior is byte-identical to the no-seed path when
+  // warmPhi is absent or unusable.
+  const warmPhi = options.warmPhi || null;
+  if (warmPhi) {
+    let seed = null;
+    try {
+      const probe = freshInit();
+      if (probe && warmPhi.family === probe.family) seed = clonePhi(warmPhi);
+    } catch (_) { seed = null; }
+    if (seed) {
+      const warm = newtonSolve(seed, hData, newtonOpts);
+      attempts.push({ method: "warm-start", success: warm.success, residual: warm.residual });
+      if (warm.success) {
+        evalCandidate(warm, "warm-start");
+        if (isValidQD(candidates[candidates.length - 1])) primary = candidates[candidates.length - 1];
+      }
+    }
+  }
+  if (!primary && useDirect) {
     const direct = newtonSolve(freshInit(), hData, newtonOpts);
     attempts.push({ method: "direct", success: direct.success, residual: direct.residual });
-    if (direct.success) evalCandidate(direct, "direct");
-    if (candidates.length > 0 && isValidQD(candidates[0])) primary = candidates[0];
+    if (direct.success) {
+      evalCandidate(direct, "direct");
+      if (isValidQD(candidates[candidates.length - 1])) primary = candidates[candidates.length - 1];
+    }
   }
   if (!primary && useContinuation) {
     const cont = family.continuationSolve(hData, norm, { ...contOpts, newton: newtonOpts });
@@ -1393,6 +1420,54 @@ function diagnosePQDRealizability(hData, opts) {
   return pc.diagnosePQDRealizability(hData, opts);
 }
 
+// Live (drag) solve core (Tier-2 of the pole-drag perf work). This is the
+// cheap warm-start path the inverse tab runs on every drag frame, factored out
+// of ui-solve.js's quickSolveAndRender so it can run INSIDE the primary-solver
+// worker (off the main thread) as well as on the main thread when no Worker is
+// available. Given a caller-chosen initial phi — a warm-started clone of the
+// previous solution, or a fresh family.initialGuess — it runs ONE bounded
+// Newton solve (maxIter passed via opts.newton) plus reduced-sample univalence
+// + identity checks. Returns a plain, structured-clone-safe object the UI turns
+// into a 'live' solution. Deliberately NO multistart / continuation / deflation
+// / alternates — that's solveInverseQD's job on drag-end.
+//
+//   opts.newton           -> newtonSolve options (e.g. { ...preset.newton, maxIter: 30 })
+//   opts.numSamples       -> sample budget for univalence + identity (default 96)
+//   opts.wantOriginInside -> also report originInsideOmega(phi) (PQD regime check)
+function liveSolveStep(hData, initPhi, opts = {}) {
+  // A usable seed is any phi with at least one branch; the family is resolved
+  // from initPhi.family (with the boundedQD/unboundedQD legacy fallback in
+  // _resolveFamily), so we deliberately do NOT require an explicit .family tag.
+  if (!initPhi || !Array.isArray(initPhi.branches) || initPhi.branches.length === 0) {
+    return { success: false };
+  }
+  const newtonOpts = opts.newton || {};
+  const numSamples = opts.numSamples || 96;
+  const family = _resolveFamily(initPhi);
+  let res;
+  try {
+    res = newtonSolve(initPhi, hData, newtonOpts);
+  } catch (e) {
+    return { success: false, error: String((e && e.message) || e) };
+  }
+  if (!res.success) return { success: false, residual: res.residual };
+  const phi = family.canonicalizePhi(res.phi);
+  const univalent = isBoundaryUnivalent(phi, numSamples);
+  const identity = family.verifyQuadratureIdentity(phi, hData, { numSamples });
+  const identityOK = identity.maxRelDiff < 1e-6;
+  const originInside = opts.wantOriginInside ? originInsideOmega(phi) : undefined;
+  return {
+    success: true,
+    phi,
+    univalent,
+    identity,
+    identityOK,
+    originInside,
+    residual: res.residual,
+    iterations: res.iterations,
+  };
+}
+
 // --------- Exports --------------------------------------------------------
 // Family files may attach additional helpers to QD after this object is set
 // (e.g. QD.diskInitialGuess from solver-qd.js, QD.unboundedInitialGuess from
@@ -1411,6 +1486,9 @@ const _exports = {
   boundarySelfIntersects, boundarySelfIntersectsBruteForce, segmentsCross,
   binomialCoeff, diverseInitialGuess,
   solveInverseQD, searchAlternates, mulberry32,
+  // Live (drag) solve core — one warm Newton + reduced-sample checks. Runs in
+  // the primary-solver worker and the main-thread fallback (see ui-solve.js).
+  liveSolveStep,
   // §23 — auto-switch helpers (origin-in-Ω detection for the singular ↔
   // non-singular PQD transition; the switch itself is internal to solveInverseQD).
   originInsideOmega,

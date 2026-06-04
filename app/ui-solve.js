@@ -62,6 +62,17 @@ function scheduleQuickSolve() {
   });
 }
 
+// Reduced boundary-sample budget for the LIVE (drag) path's univalence +
+// identity checks. The debounced full solve re-verifies at the full
+// state.samples; during a drag we only need a cheap consistency signal, so we
+// cap the per-frame sampling to keep each live frame snappy.
+const LIVE_SAMPLES = 96;
+
+// Token bumped on every live (drag) frame. A worker result whose token is no
+// longer current — a newer frame superseded it — is dropped so a late paint
+// can't clobber newer state. Mirrors _solveAndRenderToken for the full solve.
+let _liveSolveToken = 0;
+
 function quickSolveAndRender() {
   const built = buildHData();
   if (!built || built.error) return;
@@ -73,9 +84,13 @@ function quickSolveAndRender() {
   const desc = modeDescriptor();
   const expectedFamilyTag = desc.familyTag;
 
-  // Select the Family backend so the rest of the quick-solve path is
-  // family-agnostic. Warm-start when the previous solution matches family
-  // tag, branch structure, and bounded/unbounded mode; otherwise fresh init.
+  // Pick the live Newton seed on the MAIN thread (cheap): warm-start from the
+  // previous solution when family tag / branch structure / bounded-mode all
+  // match, otherwise a fresh family.initialGuess. The expensive part — the
+  // Newton solve plus univalence + identity checks — then runs OFF the main
+  // thread via PSW.liveSolve (QD.liveSolveStep), so a slow frame never freezes
+  // the tab. Only this seed selection and the final paint stay on the main
+  // thread.
   const family = QD.selectFamily(norm);
   let initPhi = null;
   const prev = state.current && state.current.success && state.current.primary
@@ -95,100 +110,81 @@ function quickSolveAndRender() {
   state.altSearchActive = false;
   $('#alt-search-indicator').classList.add('hidden');
 
-  // §23 (mid-drag) regime switch. The warm-start below stays within the CURRENT
-  // family, but a drag can push the boundary across the origin and flip the
-  // singular ↔ non-singular regime. The debounced full solve (which carries
-  // autoSwitchSingular) won't fire until the drag pauses, so when the
-  // current-family result can't represent the live pole config we run the
-  // auto-switching solve INLINE (main thread — a one-off at the crossing; later
-  // frames warm-start cheaply in the new regime) and reflect the new family.
-  // Returns true iff it committed a switched result. Scoped to the four PQD
-  // modes via isPqdAuto; built/norm/preset are captured from the enclosing call.
+  // §23 (mid-drag) regime switch — DETECTION only, never an inline full solve
+  // (that synchronous solve every frame was what froze the tab). When the
+  // warm-start can't represent the live pole config (Newton fails, or the
+  // result is inconsistent with the current regime) we kick the debounced
+  // worker solve — solveAndRender carries autoSwitchSingular for the four PQD
+  // modes — and still paint the live current-family result so the boundary
+  // tracks the drag until the worker catches up on the next pause.
   const isPqdAuto = state.autoSwitchSingular && /^pqd-/.test(state.mode);
-  function tryRegimeSwitch() {
-    const swOpts = buildSolverOptions(preset, { findAlternates: false });
-    applyNormToOpts(swOpts, norm);
-    swOpts.autoSwitchSingular = true;
-    let swRes = null;
-    try { swRes = QD.solveInverseQD(built, swOpts); } catch (e) { swRes = null; }
-    if (!(swRes && swRes.regimeSwitched && swRes.success && swRes.primary && swRes.primary.phi)) {
-      return false;
+  const isSingularMode = state.mode.endsWith('-singular');
+
+  // Live Newton + verification budget. Reduced sample count keeps each frame
+  // cheap; the debounced full solve re-verifies at full state.samples.
+  const liveOpts = {
+    newton: { ...preset.newton, maxIter: 30 },
+    numSamples: Math.min(state.samples, LIVE_SAMPLES),
+    wantOriginInside: isPqdAuto,
+  };
+
+  const myToken = ++_liveSolveToken;
+  const PSW = QD.PrimarySolverWorker;
+  // Run the live step on the dedicated live worker (cancel-and-replace per
+  // frame); fall back to a synchronous main-thread liveSolveStep when no worker
+  // is available (file:// origin, unit tests).
+  const runLive = (PSW && typeof PSW.liveSolve === 'function')
+    ? PSW.liveSolve(built, initPhi, liveOpts)
+    : Promise.resolve().then(() => QD.liveSolveStep(built, initPhi, liveOpts));
+
+  runLive.then((result) => {
+    if (myToken !== _liveSolveToken) return;       // superseded by a newer frame
+    if (!result || !result.success) {
+      // Warm-start diverged (often a mid-drag regime crossing). Hand off to the
+      // debounced worker solve, which can multistart and auto-switch the regime.
+      scheduleSolve();
+      return;
     }
-    reflectFamilyMode(swRes.primary.phi.family);
-    swRes.hData = built;
-    swRes.w0Used = (swRes.primary.phi && swRes.primary.phi.w0) || norm.w0;
-    swRes.cUsed  = norm.c;
-    swRes.unbounded = !!norm.unbounded;
-    state.current = swRes;
+
+    // Is the warm-start result consistent with the current regime? "consistent"
+    // = univalent + identity + (origin Ω-membership matches singular/non-singular
+    // mode). If not (a clean origin crossing, or the invalid-ansatz case where
+    // the R# non-vanishing guard trips), kick the debounced worker solve to
+    // switch regime when the drag pauses; we still paint the result below so
+    // nothing appears stuck.
+    if (isPqdAuto) {
+      const consistent = result.univalent && result.identityOK &&
+                         result.originInside === isSingularMode;
+      if (!consistent) scheduleSolve();
+    }
+
+    const sol = {
+      success: true,
+      phi: result.phi,
+      method: 'live',
+      univalent: result.univalent,
+      identity: result.identity,
+      identityOK: result.identityOK,
+      residual: result.residual,
+      iterations: result.iterations,
+    };
+
+    state.current = {
+      success: true,
+      primary: sol,
+      alternates: [],
+      hData: built,
+      w0Used: norm.w0 || (sol.phi && sol.phi.w0),
+      cUsed:  norm.c,
+      unbounded,
+      attempts: [],
+    };
     state.selectedSolutionIdx = 0;
     publishPrimarySolution();
-    showSolution(swRes.primary, built, /*isPrimary=*/ false);
+
+    showSolution(sol, built, /*isPrimary=*/ false);
     refreshAlternatesPanel();
-    return true;
-  }
-
-  let result;
-  try {
-    // newtonSolve auto-dispatches Family from initPhi.family — works for QD/LQD.
-    result = QD.newtonSolve(initPhi, built, { ...preset.newton, maxIter: 30 });
-  } catch (e) { return; }
-
-  if (!result.success) {
-    // Warm-start diverged. A mid-drag regime crossing can make the current
-    // family's Newton fail outright (especially singular → non-singular as 0
-    // leaves Ω), so for PQD auto-switch modes attempt the inline regime switch
-    // before giving up; otherwise fall back to the debounced full solve.
-    if (isPqdAuto && tryRegimeSwitch()) return;
-    scheduleSolve();
-    return;
-  }
-
-  const phi = family.canonicalizePhi(result.phi);
-  const univalent = QD.isBoundaryUnivalent(phi, state.samples);
-  const identity  = family.verifyQuadratureIdentity(phi, built, { numSamples: state.samples });
-  const identityOK = identity.maxRelDiff < 1e-6;
-
-  // The warm-start succeeded; is it a VALID solution consistent with the current
-  // regime? "consistent" = univalent + identity + (origin Ω-membership matches
-  // the singular/non-singular mode). Inconsistency catches BOTH a clean crossing
-  // (origin membership flips) AND the invalid-ansatz case (the R# non-vanishing
-  // guard trips → identityOK false because 0 is on ∂Ω / in Ω while the family
-  // assumes otherwise) → switch inline. During normal valid dragging this is
-  // consistent, so the cheap warm-start path is taken and no full solve runs.
-  if (isPqdAuto) {
-    const isSingularMode = state.mode.endsWith('-singular');
-    const consistent = univalent && identityOK &&
-                       QD.originInsideOmega(phi) === isSingularMode;
-    // If a switch is warranted but didn't cleanly happen (auto-switch kept the
-    // same regime, or neither regime is valid), fall through and commit the
-    // current-family result as-is so the user still sees the live state.
-    if (!consistent && tryRegimeSwitch()) return;
-  }
-
-  const sol = {
-    ...result,
-    phi,
-    method: 'live',
-    univalent,
-    identity,
-  };
-  sol.identityOK = identityOK;
-
-  state.current = {
-    success: true,
-    primary: sol,
-    alternates: [],
-    hData: built,
-    w0Used: norm.w0 || (sol.phi && sol.phi.w0),
-    cUsed:  norm.c,
-    unbounded,
-    attempts: [],
-  };
-  state.selectedSolutionIdx = 0;
-  publishPrimarySolution();
-
-  showSolution(sol, built, /*isPrimary=*/ false);
-  refreshAlternatesPanel();
+  }).catch(() => { /* superseded / aborted live job — ignore */ });
 }
 
 // Token that increments every time solveAndRender() is called. Used to
@@ -290,6 +286,14 @@ function solveAndRender() {
       // non-singular transition (boundary crossing the origin) and re-dispatch
       // to the correct family. Scoped to the four PQD modes; gated by the toggle.
       opts.autoSwitchSingular = state.autoSwitchSingular && /^pqd-/.test(state.mode);
+      // 1D: warm-start the drag-end full solve from the last good φ (typically
+      // the live-drag result). The solver only uses it when the family matches
+      // and it converges; otherwise it falls through to the full pipeline, so
+      // this is a pure speedup with no behavior change. φ is plain data
+      // (clonePhi shape) → structured-clone-safe across the worker postMessage.
+      const warmPhi = state.current && state.current.success && state.current.primary
+                    ? state.current.primary.phi : null;
+      if (warmPhi) opts.warmPhi = warmPhi;
       result = await runOne(opts);
       if (myToken !== _solveAndRenderToken) return;   // superseded by a newer call
 
