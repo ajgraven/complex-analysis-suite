@@ -184,19 +184,19 @@ visualizations, complementary to the headless runner.
 |---|---|---|---|---|
 | QD (inverse) | boundedQD                  | 1                | Ω bounded                  | shipped |
 | QD (inverse) | unboundedQD                | 1                | Ω unbounded                | shipped |
-| QD (inverse) | boundedLQD                 | 1/|w|²           | 0 ∉ Ω̄                      | shipped |
-| QD (inverse) | boundedLQD_singular        | 1/|w|²           | 0 ∈ Ω                      | shipped |
-| QD (inverse) | unboundedLQD               | 1/|w|²           | 0 ∉ Ω̄, ∞ ∈ Ω               | shipped (incl. polynomial h) |
-| QD (inverse) | unboundedLQD_singular      | 1/|w|²           | 0 ∈ Ω, ∞ ∈ Ω               | shipped (incl. polynomial h + higher-order pole at 0) |
-| QD (inverse) | powerQD                    | |w|^{2(α−1)}     | Ω bounded, 0 ∉ Ω, any α>0 (α≠1) | shipped |
-| QD (inverse) | powerQD_singular           | |w|^{2(α−1)}     | Ω bounded, 0 ∈ Ω           | shipped |
-| QD (inverse) | unboundedPQD               | |w|^{2(α−1)}     | Ω unbounded, 0 ∉ Ω (incl. polynomial h) | shipped |
-| QD (inverse) | unboundedPQD_singular      | |w|^{2(α−1)}     | Ω unbounded, 0 ∈ Ω         | shipped |
+| QD (inverse) | boundedLQD                 | 1/\|w\|²           | 0 ∉ Ω̄                      | shipped |
+| QD (inverse) | boundedLQD_singular        | 1/\|w\|²           | 0 ∈ Ω                      | shipped |
+| QD (inverse) | unboundedLQD               | 1/\|w\|²           | 0 ∉ Ω̄, ∞ ∈ Ω               | shipped (incl. polynomial h) |
+| QD (inverse) | unboundedLQD_singular      | 1/\|w\|²           | 0 ∈ Ω, ∞ ∈ Ω               | shipped (incl. polynomial h + higher-order pole at 0) |
+| QD (inverse) | powerQD                    | \|w\|^{2(α−1)}     | Ω bounded, 0 ∉ Ω, any α>0 (α≠1) | shipped |
+| QD (inverse) | powerQD_singular           | \|w\|^{2(α−1)}     | Ω bounded, 0 ∈ Ω           | shipped |
+| QD (inverse) | unboundedPQD               | \|w\|^{2(α−1)}     | Ω unbounded, 0 ∉ Ω (incl. polynomial h) | shipped |
+| QD (inverse) | unboundedPQD_singular      | \|w\|^{2(α−1)}     | Ω unbounded, 0 ∈ Ω         | shipped |
 | QD (direct) | boundedQD (polynomial φ)     | 1                | polynomial Riemann map     | shipped |
 | QD (direct) | boundedQD (rational φ)       | 1                | rational P/Q, Q≠0 on 𝔻̄    | shipped |
 | QD (direct) | boundedQD (numerical)        | 1                | any math.js expression in z| shipped |
 | QD (direct) | unboundedQD (Laurent φ)      | 1                | φ = c·z + Σ F_l/z^l        | shipped |
-| —      | Algebraic QD                 | |R'|²            | arbitrary rational R       | deferred (`app/disabled/`) |
+| —      | Algebraic QD                 | \|R'\|²            | arbitrary rational R       | deferred (`app/disabled/`) |
 
 ## Mathematical approach (inverse problem, bounded classical sketch)
 
@@ -233,7 +233,7 @@ parametric forms for φ and family-specific residue preprocessing:
 | boundedLQD    | w₀ · exp(r#(z))                              | modified D_{j,s} = a_j C_{j,s} + C_{j,s+1} |
 | boundedLQD_singular | γ · b_{z₀}(z) · exp(r̃#(z))             | modified D + q-equation at the origin |
 | unboundedLQD  | c·z · exp(r̃#(z) + B(1/z))                    | modified D + ∞-gauge + β-correction for h's polyPart |
-| unboundedLQD_singular | c·|z₀|·z·b_{z₀}(z)·exp(r̃#(z) + B(1/z)) | modified D + q-equation + ∞-gauge + β + γ synth-branch at z₀ |
+| unboundedLQD_singular | c·\|z₀\|·z·b_{z₀}(z)·exp(r̃#(z) + B(1/z)) | modified D + q-equation + ∞-gauge + β + γ synth-branch at z₀ |
 
 All families share `QD.Faber.inverseFaberAtPole` (the per-pole inverse
 Faber primitive) and the residual / Newton / multistart / deflation
