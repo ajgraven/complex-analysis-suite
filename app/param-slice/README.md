@@ -12,7 +12,8 @@ pixel to load that φ back into the QD tab.
 | --- | --- |
 | `param-slice-common.js` | Pure math kernel: `ParamRef` descriptors, `listAvailableParams`, `applyParam`, `classifyResult`, colour LUT. |
 | `param-slice-pool.js` | Web Worker pool — runtime Blob bundle of the solver source (no build step). |
-| `param-slice-ui.js` | Tab UI (lazy mount). Axes pickers, range fields, render driver, click-to-load, mini-preview card, adaptive-mesh implementation. |
+| `param-slice-render.js` | `QD_UI.installParamSliceRender(psCtx)` — the adaptive 2-D render engine `runAdaptive2D` (progressive quadtree sweep + warm-hint spatial index + coverage fill). Phase-3 (item E) split out of `param-slice-ui.js`. |
+| `param-slice-ui.js` | Tab UI hub (lazy mount). Axes pickers, range fields, run orchestration (`startRun`), click-to-load, mini-preview card; captures `runAdaptive2D` from the render module via a forward-`let`. |
 
 ## Public surface
 
@@ -74,7 +75,7 @@ Each pixel falls into exactly one class:
 
 ## Adaptive mesh
 
-`runAdaptive2D` (in `param-slice-ui.js`) implements a quadtree
+`runAdaptive2D` (in `param-slice-render.js`) implements a quadtree
 refinement. Coarse pass solves a sparse grid; cells whose 4 corners
 disagree on classification OR have iter-spread > `REFINE_ITER_DELTA = 8`
 are split. Cross-cell warm-start hints come from a 16×16 spatial

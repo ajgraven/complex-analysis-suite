@@ -26,7 +26,36 @@ priors.
 > version:sync` refreshes it after any `app/` asset change; CI's
 > `npm run version:check` fails if it's stale.
 
-## (most recent) Phase 3 — UI modularization (direct-ui.js split, item E / PR-E3)
+## (most recent) Phase 3 — UI modularization (param-slice-ui.js split, item E / PR-E4 — COMPLETES item E)
+
+The 1396-line `param-slice/param-slice-ui.js` (IIFE) was carved to **1096 lines
+(−21%)** by lifting its one heavy compute cluster into a sibling factory module —
+the final piece of item E (all four UI monoliths now split: ui.js, schwarz-ui.js,
+direct-ui.js, param-slice-ui.js).
+- **New module:** `param-slice-render.js` — `QD_UI.installParamSliceRender(psCtx)`
+  exposing **`runAdaptive2D`**: the progressive quadtree sweep (coarse stride →
+  stride/2 refinement of corner-disagreeing cells → nearest-neighbour coverage
+  fill) plus the warm-hint **spatial index** (bucketed `insertPhi`/`nearestPhi`,
+  published on `sliceState` for the hover preview). All those helpers are nested
+  inside `runAdaptive2D`, so they moved as one verbatim block.
+- **Wiring (`psCtx`):** the cleanest extraction of the four — every per-run input
+  (worker `pool`, `paintCellBlock`/`paintImage`/`onProgress` callbacks,
+  `cancelToken`, axes/grid dims) already arrived via `runAdaptive2D`'s single
+  options arg, so the only cross-seam deps are `sliceState` + the
+  `cancelLiveSolve` host hook. `param-slice-ui.js` captures `runAdaptive2D` into a
+  forward-`let` and calls it from `startRun` unchanged; `REFINE_ITER_DELTA` moved
+  with it (`MINI_BOUNDARY_SAMPLES` stayed — used by the mini-preview).
+- **Verify:** node-test 1120/0 (baseline 1119 + 1 parse-check); lint clean;
+  `version:check` clean. The 2-D render is DOM+worker+canvas-driven (and the
+  headless preview leaves the shared `#canvas` backing-store at width 0), so
+  beyond the browser load check (module + factory present, zero console errors)
+  the engine was **driven end-to-end via the exposed factory with stub
+  callbacks**: grid built (16×16, `gridDims` + `classGrid` published), warm-hint
+  `nearestPhi` returns a cached φ, coarse+refine+coverage passes all fire
+  (`paintCellBlock`/`paintImage`/`onProgress` invoked), `cancelLiveSolve` hook
+  called — no throw.
+
+## (prior) Phase 3 — UI modularization (direct-ui.js split, item E / PR-E3)
 
 The 1662-line `direct/direct-ui.js` Direct-tab monolith was carved down to
 **1063 lines (−36%)** by extracting its two heaviest clusters into sibling

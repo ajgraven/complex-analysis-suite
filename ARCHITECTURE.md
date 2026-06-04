@@ -69,6 +69,7 @@ flowchart LR
     F5[direct/direct-ui.js]
     F6a["schwarz/schwarz-paint / schwarz-render / schwarz-features / schwarz-interaction"]
     F6[schwarz/schwarz-ui.js]
+    F7a[param-slice/param-slice-render.js]
     F7[param-slice/param-slice-ui.js]
   end
   subgraph Sphere["Sphere (lazy adapter)"]
@@ -275,6 +276,24 @@ coeff-field builders, the paste/expression-parse wiring, and the shared
 them). The host's mount flag is read inside the moved `recomputeAndRender` via
 the `dCtx.isMounted()` accessor — the one non-verbatim line, since a primitive
 can't be shared by value.
+
+#### `QD_UI.installParamSliceRender(psCtx)` — the Param-slice split (Phase 3, item E)
+
+The 1396-line `param-slice/param-slice-ui.js` (also an IIFE) was carved to ~1096
+by lifting its one heavy compute cluster — the adaptive 2-D render engine — into
+[`app/param-slice/param-slice-render.js`](app/param-slice/param-slice-render.js).
+
+That module is a single function, `runAdaptive2D`: the progressive quadtree sweep
+(coarse stride pass → stride/2 refinement of only the cells whose corners
+disagree → nearest-neighbour coverage fill), plus the warm-hint **spatial index**
+(bucketed `insertPhi`/`nearestPhi`, published on `sliceState` so the hover preview
+warm-starts) — all nested inside it. Every per-run input (the worker `pool`, the
+`paintCellBlock`/`paintImage`/`onProgress` callbacks, `cancelToken`, axes/grid
+dims) arrives via its single options argument, so the only cross-seam deps are
+`sliceState` and the `cancelLiveSolve` host hook, passed via
+`psCtx = { sliceState, cancelLiveSolve }`. `param-slice-ui.js` captures
+`runAdaptive2D` into a forward-`let` and calls it from `startRun` unchanged; the
+`sliceState`, card builders, canvas interaction, and run orchestration stay.
 
 ### `qd.mjs` ESM façade (P1.1)
 

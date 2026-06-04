@@ -158,8 +158,13 @@ visualizations, complementary to the headless runner.
     │   │                              classifyResult, color LUT
     │   ├── param-slice-pool.js        Web Worker pool — runtime Blob bundle of
     │   │                              the solver source (no build step)
-    │   └── param-slice-ui.js          Parameter-slice tab UI (lazy mount,
-    │                                  click-to-load)
+    │   ├── param-slice-render.js      adaptive 2-D render engine (runAdaptive2D:
+    │   │                              progressive quadtree sweep + warm-hint
+    │   │                              spatial index + coverage fill) —
+    │   │                              QD_UI.installParamSliceRender(psCtx),
+    │   │                              Phase-3 item E split of param-slice-ui.js
+    │   └── param-slice-ui.js          Parameter-slice tab UI hub (lazy mount,
+    │                                  cards, canvas interaction, run orchestration)
     │
     ├── disabled/                      Parked work-in-progress
     │   ├── README.md                  How to re-enable

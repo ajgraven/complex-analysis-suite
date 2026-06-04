@@ -39,7 +39,7 @@
   // version:sync` recomputes it. CACHE_LABEL is yours to set per release
   // (cosmetic, for human-readable cache names + the HANDOFF narrative).
   const CACHE_LABEL = 'preimage-tree-overlay';
-  const CACHE_HASH  = '8c86e2fa9b';   // gen-cache-version.js --write rewrites this
+  const CACHE_HASH  = 'a9472374ad';   // gen-cache-version.js --write rewrites this
   const CACHE_VERSION = CACHE_LABEL + '-' + CACHE_HASH;
 
   // Files that get concatenated into a Worker bundle by the runtime
@@ -126,6 +126,8 @@
     'schwarz/schwarz-features.js',
     'schwarz/schwarz-interaction.js',
     'schwarz/schwarz-ui.js',
+    // Phase-3 (item E) extracted Param-slice render engine — before param-slice-ui.js.
+    'param-slice/param-slice-render.js',
     'param-slice/param-slice-ui.js',
     'sphere/sphere-common.js',
     'sphere/sphere-webgl.js',
