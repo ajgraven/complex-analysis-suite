@@ -813,6 +813,15 @@ void main() {
     catch (e) { gl = null; }
     if (!gl) return null;
 
+    // WebGL context-loss handling. preventDefault() on 'webglcontextlost' is
+    // REQUIRED for the browser to ever fire 'webglcontextrestored'; without it
+    // the context stays permanently dead. After a loss, every GL object
+    // (program / buffers / uniforms) is invalid, so render() bails on
+    // isContextLost() and the owner (schwarz-ui ensureGPU) recreates the whole
+    // renderer on the 'webglcontextrestored' event rather than rebuilding in
+    // place. We only need the loss listener here.
+    canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); }, false);
+
     let prog, vs, fs, vbo;
     try {
       vs = compile(gl, gl.VERTEX_SHADER,   VERT_SRC);
@@ -1024,6 +1033,7 @@ void main() {
     }
 
     function render(view, opts) {
+      if (gl.isContextLost()) return;     // dead context — owner recreates on restore
       opts = opts || {};
       const W = Math.max(1, Math.floor(view.cssW * (window.devicePixelRatio || 1)));
       const H = Math.max(1, Math.floor(view.cssH * (window.devicePixelRatio || 1)));

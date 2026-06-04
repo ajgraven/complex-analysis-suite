@@ -123,6 +123,12 @@ void main() { fragColor = u_color; }`;
     catch (e) { gl = null; }
     if (!gl) return null;
 
+    // WebGL context-loss handling. preventDefault() is REQUIRED for the browser
+    // to fire 'webglcontextrestored'. After a loss the program / FBO / textures
+    // are all invalid; render() bails on isContextLost() and the owner
+    // (sphere-ui) recreates the renderer on restore rather than rebuilding here.
+    canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); }, false);
+
     // Pull shared helpers from schwarz-webgl.js (must be loaded first).
     const SW = QD.Schwarz;
     if (!SW || !SW._shaders || !SW._glHelpers || !SW._gpuCaps) {
@@ -439,6 +445,7 @@ void main() { fragColor = u_color; }`;
     // camera = { azimuth, elevation, distance }  (azimuth/elevation in radians)
     // size   = { W, H }  in physical pixels (canvas.width / canvas.height)
     function render(camera, size) {
+      if (gl.isContextLost()) return;     // dead context — owner recreates on restore
       const W = size ? size.W : canvas.clientWidth;
       const H = size ? size.H : canvas.clientHeight;
       if (canvas.width !== W || canvas.height !== H) {

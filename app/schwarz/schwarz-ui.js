@@ -213,6 +213,28 @@
     }
   });
 
+  // Repaint the Schwarz view on window resize. The shared 2D #canvas backing
+  // store is resized (and cleared) by the QD plot's global resize handler
+  // (ui.js); without this the Schwarz overlay/field is left blank or stale at
+  // the new size until the user pans/zooms. Only acts when the Schwarz tab is
+  // active + in plane mode; rAF-coalesced. Sphere mode has its own resize
+  // observer (sphere-ui.js). requestRecompute / _recomputeDomainColoring /
+  // paintAll are forward-declared lets, assigned by the installs at the tail —
+  // resolved by the time this fires.
+  let _schwarzResizeRaf = null;
+  window.addEventListener('resize', () => {
+    if (_schwarzResizeRaf) return;
+    _schwarzResizeRaf = requestAnimationFrame(() => {
+      _schwarzResizeRaf = null;
+      const panel = document.getElementById('controls-schwarz');
+      if (!panel || panel.hidden) return;
+      if (!sState.schwarz || sState.viewMode !== 'plane') return;
+      syncCanvasSize();
+      if (sState.mode === 'domain-coloring') { _recomputeDomainColoring(); paintAll(); }
+      else requestRecompute();
+    });
+  });
+
   function mountSchwarzSidebar() {
     const root = document.getElementById('controls-schwarz');
     if (!root) return;
@@ -1030,6 +1052,23 @@
       mainC.style.zIndex   = '1';
       mainC.style.background = 'transparent';
       plotArea.insertBefore(glC, mainC);
+      // WebGL context-loss recovery (attached once, with the canvas). On loss
+      // every GL object dies, so drop the renderer → activeRenderer() falls back
+      // to CPU until the context returns; on restore, recreate the renderer and
+      // re-render. (The renderer's own listener calls preventDefault, which is
+      // what lets the browser fire 'restored' at all.)
+      glC.addEventListener('webglcontextlost', () => {
+        sState.gpu = null;
+        sState.gpuMsg = 'GPU context lost; using CPU until it is restored.';
+      }, false);
+      glC.addEventListener('webglcontextrestored', () => {
+        sState.gpu = null; sState.gpuMsg = '';
+        ensureGPU();
+        const panel = document.getElementById('controls-schwarz');
+        if (sState.schwarz && panel && !panel.hidden && sState.viewMode === 'plane') {
+          requestRecompute();
+        }
+      }, false);
     }
     try {
       sState.gpu = QD.Schwarz.createGPURenderer(glC);
@@ -1085,6 +1124,10 @@
   // Synchronous GPU re-render. Used during drag/zoom in GPU mode.
   function renderImmediate() {
     if (!sState.schwarz || !sState.gpu || activeRenderer() !== 'gpu') return;
+    // Belt-and-suspenders: never re-show the GL layer / paint when the Schwarz
+    // tab isn't active (e.g. a late control event after a tab switch).
+    const _panel = document.getElementById('controls-schwarz');
+    if (_panel && _panel.hidden) return;
     showGLLayer(true);
     try {
       sState.gpu.setColormap(sState.grid.colormap);

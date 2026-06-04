@@ -46,6 +46,13 @@
   function paintAll() {
     const ctx = getCtx(); if (!ctx) return;
     syncCanvasSize();
+    // Clear up front so fieldless overlay modes don't ghost. paintField()
+    // clears + blits the escape field, but it returns early when there is no
+    // field (e.g. domain-coloring, or a bare boundary/limit-set/level-curve
+    // view). Without this, panning re-blits the cached domain-coloring image at
+    // a shifted transform over the un-cleared previous frame → offset ghosts.
+    // (paintBoundaryOnTop already clears for the GPU overlay path.)
+    ctx.clearRect(0, 0, sState.view.cssW, sState.view.cssH);
     paintField();
     paintDomainColoring();               // S5 / F6: under the rest
     paintSigmaLevelCurves();             // S4 / F12: under the boundary

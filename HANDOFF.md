@@ -1344,6 +1344,47 @@ enforces c_1 ≠ 0.
 
 In rough chronological order across recent sessions:
 
+55. **Schwarz domain-coloring ghosting fix + graphics hardening (SHIPPED).**
+    User report: dragging the view in the Schwarz tab's **domain-coloring** mode
+    left offset "ghost" copies of the σ-coloring. Root cause: `paintAll()`
+    (`schwarz-paint.js`) never cleared the 2D overlay canvas — it relied on
+    `paintField()`, which returns early when there's no escape field. Domain-
+    coloring is fieldless, so each pan re-blitted the cached 256×256 buffer at a
+    shifted transform (`drawImage` + `worldToPixel`) over the un-cleared previous
+    frame. (`paintBoundaryOnTop` already cleared; that's why GPU/CPU fractal
+    modes didn't ghost.) Fixes, plus an app-wide graphics/statefulness review:
+    * **P1 (the fix):** `paintAll()` now `clearRect`s up front — self-clearing
+      like `paintBoundaryOnTop`. Fixes ghosting for every fieldless overlay mode.
+    * **P2:** the Schwarz pan/wheel handlers (`schwarz-interaction.js`) special-
+      case domain-coloring: a new debounced `liveDomainColoringRepaint()` re-blits
+      the cached buffer live via `paintAll()` and re-sharpens after the gesture,
+      instead of kicking the fractal CPU pyramid (wrong mode + a flash; wheel had
+      never recomputed the coloring at all).
+    * **P3A:** active-tab guard in `doRecompute` (`schwarz-render.js`) and
+      `renderImmediate` (`schwarz-ui.js`) — the 80 ms debounced recompute could
+      fire after a tab switch (it re-bumps `renderToken`, so the token check
+      couldn't catch it) and re-show the GL layer / blit over the active tab.
+    * **P3B:** WebGL **context-loss** handling (none existed). `preventDefault`
+      on `webglcontextlost` + an `isContextLost()` render guard in both
+      `schwarz-webgl.js` and `sphere-webgl.js`; recreate-on-`webglcontextrestored`
+      wired in `schwarz-ui.js` ensureGPU (drop→CPU on loss, recreate on restore)
+      and `sphere-ui.js` mount (recreate renderer + re-apply captured φ/params).
+    * **P3C:** a window-resize repaint for the Schwarz tab (`schwarz-ui.js`) —
+      the shared `#canvas` backing store is resized/cleared by the QD plot's
+      global resize handler, leaving the Schwarz view blank until interaction.
+    * **Review — NOT bugs (verified):** async geom/cusp/realizability/alt-search
+      callbacks already token-guard stale results (`ui-solve.js`); live-drag
+      warm-start clones φ so the identity caches don't go stale. **Flagged, by
+      design (left as-is):** Schwarz/param-slice use an explicitly-captured φ
+      ("Use this φ") and don't auto-refresh on QD re-solve; the deeper
+      shared-`#canvas`-across-tabs dpr/ownership-on-resize cleanup (a separate
+      follow-up). Verified: node-test **1134/0**, lint clean, `version:check`
+      clean (hash `ae203a3290`). Browser-smoke: domain-coloring pan painted-pixel
+      fraction stayed flat (0.186→0.185, no accumulation) with `clearRect` firing
+      every frame; fractal/mode-switch no regression; zero console errors. (Real
+      GPU context loss can't be forced headless — P3B is defensive.) Branch
+      `fix/schwarz-domain-coloring-ghost`.
+
 54. **PQD pole-drag responsiveness — live solve off the main thread + warm
     starts (SHIPPED).** Fixed the "slow / gets stuck when dragging poles fast"
     report, worst on PQD families. Root causes: (1) the live drag path

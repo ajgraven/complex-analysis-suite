@@ -43,6 +43,14 @@
 
   function doRecompute() {
     if (!sState.schwarz) { clearCanvas(); return; }
+    // The debounced requestRecompute timer (~80 ms) can fire AFTER the user has
+    // left the Schwarz tab. doRecompute re-bumps renderToken below, so the token
+    // guard can't catch this; bail on the active-tab check instead, otherwise
+    // the GPU branch would re-show the GL layer and the pyramid would blit over
+    // whatever tab is now active. (The tab-leave handler cancels hover/click
+    // timers but not this debounce.)
+    const _panel = document.getElementById('controls-schwarz');
+    if (_panel && _panel.hidden) return;
     syncCanvasSize();
 
     // Invalidate any prior render up front (covers CPU→GPU: the GPU branch

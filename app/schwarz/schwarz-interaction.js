@@ -108,9 +108,14 @@
       lastX = e.clientX; lastY = e.clientY;
       sState.view.cx -= dx / sState.view.scale;
       sState.view.cy += dy / sState.view.scale;          // screen y is flipped
+      // Domain-coloring isn't a fractal field — re-blit the cached σ-coloring
+      // at the live transform (paintAll is self-clearing) instead of kicking the
+      // fractal pyramid (wrong mode + a transient flash). The cached buffer pans
+      // with the content; mouseup's _recomputeDomainColoring() re-sharpens it.
       // GPU is fast enough (10-30 ms typical) to render every mousemove
       // without debounce. CPU mode debounces because the pyramid is slow.
-      if (activeRenderer() === 'gpu') renderImmediate();
+      if (sState.mode === 'domain-coloring') liveDomainColoringRepaint();
+      else if (activeRenderer() === 'gpu') renderImmediate();
       else { clearOverlay(); requestRecompute(); }
     });
     window.addEventListener('mouseup', () => {
@@ -154,6 +159,23 @@
     syncCanvasSize();
     ctx.clearRect(0, 0, sState.view.cssW, sState.view.cssH);
   }
+
+  // Live domain-coloring repaint during a gesture: re-blit the cached σ-coloring
+  // at the current transform immediately (paintAll is self-clearing), then
+  // debounce a full recompute so the buffer re-sharpens once the gesture
+  // settles. Used by wheel-zoom (which has no mouseup to trigger a recompute);
+  // pan relies on mouseup's recompute but the live paintAll keeps it smooth.
+  let _dcRecomputeTimer = null;
+  function liveDomainColoringRepaint() {
+    paintAll();
+    if (_dcRecomputeTimer) clearTimeout(_dcRecomputeTimer);
+    _dcRecomputeTimer = setTimeout(() => {
+      _dcRecomputeTimer = null;
+      if (sState.mode !== 'domain-coloring' || !isSchwarzActive()) return;
+      _recomputeDomainColoring();
+      paintAll();
+    }, 120);
+  }
   function isSchwarzActive() {
     const panel = document.getElementById('controls-schwarz');
     return panel && !panel.hidden;
@@ -171,7 +193,8 @@
     const after = pixelToWorld(sx, sy);
     sState.view.cx += w.re - after.re;
     sState.view.cy += w.im - after.im;
-    if (activeRenderer() === 'gpu') renderImmediate();
+    if (sState.mode === 'domain-coloring') liveDomainColoringRepaint();
+    else if (activeRenderer() === 'gpu') renderImmediate();
     else { clearOverlay(); requestRecompute(); }
   }
   function onMouseMove(e) {

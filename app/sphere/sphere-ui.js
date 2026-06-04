@@ -102,6 +102,32 @@
     state.renderer.setRenderParams(state.params);
     state.renderer.setDisplayParams(state.display);
 
+    // WebGL context-loss recovery (attached once with the canvas). After a loss
+    // the program / FBO / textures are dead, so recreate the renderer and
+    // re-apply the captured φ + params from `state`. preventDefault() (in the
+    // renderer) is what lets the browser fire this event; render() bails on
+    // isContextLost() in the meantime so nothing draws on a dead context.
+    if (!glC._ctxRestoreWired) {
+      glC._ctxRestoreWired = true;
+      glC.addEventListener('webglcontextrestored', () => {
+        let r = null;
+        try { r = QD.Sphere.createRenderer(glC); } catch (e) { r = null; }
+        state.renderer = r;
+        if (!r) return;
+        r.setRenderParams(state.params);
+        r.setDisplayParams(state.display);
+        if (state.phiSnapshot) {
+          try {
+            r.setPhi(state.phiSnapshot, { boundaryPts: state.boundarySnapshot || [] });
+            if (state.polesSnapshot && state.polesSnapshot.length && r.setPolePts) {
+              r.setPolePts(state.polesSnapshot);
+            }
+          } catch (e) { /* keep the placeholder sphere on re-apply failure */ }
+        }
+        _requestRender(state);
+      }, false);
+    }
+
     // ---- Handle exposed to the host ----------------------------------------
     return {
       isAvailable: () => true,
