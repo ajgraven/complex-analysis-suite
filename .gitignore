@@ -31,3 +31,6 @@ coverage/
 
 # Claude local config (machine-specific; keep launch.json tracked)
 .claude/settings.local.json
+
+# Transient scheduled-wakeup lock (harness artifact)
+.claude/scheduled_tasks.lock

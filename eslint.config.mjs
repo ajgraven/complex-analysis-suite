@@ -158,4 +158,23 @@ export default [
       'no-redeclare': 'off',             // bench.js declares its own QD via vm context
     },
   },
+  // Split test suite (app/test/**). test/bootstrap.js installs the shared kernel
+  // namespaces + harness helpers (ok, C, T, solveInverseQD, Schwarz, PS, …) on
+  // `global`, so the per-subsystem *.test.js files reference them as bare names
+  // exactly as the old monolithic node-test.js did. no-undef is off because that
+  // shared API is injected at runtime, not imported per file; a genuinely
+  // undefined reference surfaces as a ReferenceError when the suite runs in CI.
+  {
+    files: ['app/test/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'script',
+      globals: { ...globals.node, ...QD_GLOBALS },
+    },
+    rules: {
+      'no-unused-vars': 'off',
+      'no-undef': 'off',
+      'no-redeclare': 'off',
+    },
+  },
 ];
