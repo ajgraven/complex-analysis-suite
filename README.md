@@ -386,9 +386,14 @@ view is active.
   too. Bounded-rational direct φ is supported via the
   `QD.Schwarz.buildSchwarzFromRational` entry point (no Direct-tab
   "Send to Schwarz" wiring yet).
-* **View mode toggle** (HANDOFF #29) — segmented control at the top of
-  the sidebar switches between two views of the same σ-iteration:
+* **View mode toggle** (HANDOFF #29; z-disk #59/#60) — segmented control at the
+  top of the sidebar switches between three views of the same σ-iteration:
   * **plane** (default): the 2-D w-plane fractal described above.
+  * **z-disk**: the same tiling uniformized onto the unit disk 𝔻 (or its
+    exterior 𝔻* for unbounded Ω) — each pixel takes `z`, lifts `w = φ(z)`, and
+    runs the same escape-time. Renders on the GPU for the six classical/LQD
+    families (a `u_viewMode` branch in the shared fragment shader) and on the CPU
+    otherwise, with full pan / zoom / click-pin / hover parity.
   * **sphere**: same iteration textured onto a Riemann sphere via
     stereographic projection (north-pole convention; ∞ → north pole).
     Three-pass WebGL 2 renderer with orbit camera (drag rotates, wheel
@@ -398,7 +403,7 @@ view is active.
     test passes at < 1e-12). The sphere view is particularly useful
     for unbounded Ω, where iterates wander to infinity and the
     spherical wrapping bounds the picture.
-  * The captured φ + boundary polygon is shared across both views,
+  * The captured φ + boundary polygon is shared across all three views,
     so toggling never requires re-capturing; render parameters
     (maxIter / colormap / scale / modK) also carry over.
 

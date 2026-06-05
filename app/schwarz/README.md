@@ -85,12 +85,24 @@ The four power-weighted families are **CPU-only** — `createGPURenderer`'s
 Bounded-rational direct φ is supported via `buildSchwarzFromRational`
 (no Direct-tab "Send to Schwarz" wiring yet — pipe `phi` in manually).
 
-## Sphere view (sibling module)
+## View modes (plane / z-disk / sphere)
 
-The Schwarz tab toggles to a Riemann-sphere view via the segmented
-control in its sidebar; that adapter lives in
-[`app/sphere/`](../sphere/README.md) and is lazy-mounted on first
-toggle. Captured φ + render params are shared across both views.
+A three-way segmented control in the sidebar switches between three views of the
+same σ-iteration:
+
+- **plane** — the w-plane escape-time tiling on Ω (default).
+- **z-disk** — the SAME tiling uniformized onto 𝔻 (or 𝔻* for unbounded Ω): each
+  pixel takes `z`, lifts `w = φ(z)` (the shader already evaluates `evalPhi`), and
+  runs the existing σ escape-time. Renders on the GPU for the six classical/LQD
+  families via the `u_viewMode` shader branch (PQDs fall back to CPU, like the
+  plane view); the 2-D overlay canvas stays transparent so the GL field shows
+  through. See HANDOFF #59 (CPU view) / #60 (GPU). `paintZView(overlayOnly)`
+  derives overlay-only mode from `activeRenderer()`.
+- **sphere** — the iteration textured onto a Riemann sphere; that adapter lives
+  in [`app/sphere/`](../sphere/README.md) and is lazy-mounted on first toggle.
+
+Captured φ + render params (maxIter / colormap / scale / modK) are shared across
+all three views, so toggling never re-captures.
 
 ## Where it's called from
 
