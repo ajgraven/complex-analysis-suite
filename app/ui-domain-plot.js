@@ -39,6 +39,13 @@ class DomainPlot {
     this.view = { cx: 0, cy: 0, scale: 100 };  // pixels per unit
     this.data = null;
 
+    // Vector-field perf: the field re-samples h(w) over the whole visible grid
+    // on every repaint (no cache), which is the dominant cost while dragging /
+    // panning / zooming. We defer it during an active gesture and recompute once
+    // when the gesture settles (~150 ms idle, or immediately on mouseup).
+    this._vfInteracting = false;
+    this._vfSettleTimer = null;
+
     // Callbacks for click-drag on quadrature-node dots. Set by ui.js.
     this.onPoleDrag    = null;   // (idx, worldPoint) -> void
     this.onPoleDragEnd = null;   // (idx)            -> void
@@ -135,11 +142,13 @@ class DomainPlot {
       const x = e.clientX - rect.left, y = e.clientY - rect.top;
 
       if (draggingPole >= 0) {
+        this._markVfInteracting();
         const w = this.toWorld(x, y);
         if (this.onPoleDrag) this.onPoleDrag(draggingPole, w);
         return;
       }
       if (panning) {
+        this._markVfInteracting();
         const dx = e.clientX - lastX, dy = e.clientY - lastY;
         this.view.cx -= dx / this.view.scale;
         this.view.cy += dy / this.view.scale;
@@ -170,6 +179,9 @@ class DomainPlot {
     });
 
     window.addEventListener('mouseup', () => {
+      // Gesture over → redraw the deferred vector field now (no-op if no gesture
+      // was active, so plain clicks don't force an extra repaint).
+      this._settleVectorField();
       if (draggingPole >= 0) {
         const idx = draggingPole;
         draggingPole = -1;
@@ -192,6 +204,7 @@ class DomainPlot {
       const wAfter = this.toWorld(x, y);
       this.view.cx += wBefore.re - wAfter.re;
       this.view.cy += wBefore.im - wAfter.im;
+      this._markVfInteracting();   // wheel has no mouseup; the settle timer redraws
       this.render();
     }, { passive: false });
 
@@ -260,6 +273,28 @@ class DomainPlot {
     this.render();
   }
 
+  // Mark the start/continuation of an interactive gesture (pan / pole-drag /
+  // wheel-zoom): suppress the expensive vector field for the duration and arm a
+  // settle timer that redraws it once the gesture goes idle (covers wheel-zoom,
+  // which has no mouseup). render() itself is unchanged — the boundary, markers
+  // and grid still repaint every frame; only drawVectorField() is gated.
+  _markVfInteracting() {
+    this._vfInteracting = true;
+    if (this._vfSettleTimer) clearTimeout(this._vfSettleTimer);
+    this._vfSettleTimer = setTimeout(() => {
+      this._vfSettleTimer = null;
+      this._vfInteracting = false;
+      this.render();
+    }, 150);
+  }
+
+  // Settle immediately (e.g. on mouseup). No-op when no gesture was in progress
+  // (a plain click) so we don't force an extra repaint.
+  _settleVectorField() {
+    if (this._vfSettleTimer) { clearTimeout(this._vfSettleTimer); this._vfSettleTimer = null; }
+    if (this._vfInteracting) { this._vfInteracting = false; this.render(); }
+  }
+
   // Public repaint entry point. Coalesces bursts of render() calls (pan,
   // wheel-zoom, resize, setData) into a single paint per animation frame so a
   // fast drag can't queue dozens of full redraws in one frame (A8). The actual
@@ -284,8 +319,12 @@ class DomainPlot {
     this.drawGrid();
     this.drawAxes();
 
-    // Vector field underlays the domain so the boundary remains crisp.
-    if (state.vectorFieldMode !== 'off' && this.data && this.data.hData) {
+    // Vector field underlays the domain so the boundary remains crisp. Skipped
+    // mid-gesture (drag / pan / zoom) — it re-samples h(w) over the whole grid
+    // with no cache, the dominant cost while interacting; _settleVectorField /
+    // the settle timer redraw it once the gesture ends.
+    if (state.vectorFieldMode !== 'off' && this.data && this.data.hData
+        && !this._vfInteracting) {
       this.drawVectorField();
     }
 
@@ -379,6 +418,11 @@ class DomainPlot {
     c.lineWidth = 1;
     c.lineCap = 'round';
 
+    // Pole screen positions are constant across grid samples — compute once so
+    // the per-sample proximity test is a cheap squared-distance check rather
+    // than O(poles) toScreen() + hypot() calls at every grid point.
+    const poleScreens = hData.poles.map(p => this.toScreen(p.a.re, p.a.im));
+
     for (let i = iMin; i <= iMax; i++) {
       for (let j = jMin; j <= jMax; j++) {
         const wRe = i * worldStep;
@@ -394,9 +438,9 @@ class DomainPlot {
         // Skip arrows that fall too close to any pole in screen-space; the
         // field diverges and the visual is meaningless there.
         let skip = false;
-        for (const p of hData.poles) {
-          const sp = this.toScreen(p.a.re, p.a.im);
-          if (Math.hypot(sp.x - sx, sp.y - sy) < 9) { skip = true; break; }
+        for (let k = 0; k < poleScreens.length; k++) {
+          const ddx = poleScreens[k].x - sx, ddy = poleScreens[k].y - sy;
+          if (ddx * ddx + ddy * ddy < 81) { skip = true; break; }   // <9px, squared
         }
         if (skip) continue;
 

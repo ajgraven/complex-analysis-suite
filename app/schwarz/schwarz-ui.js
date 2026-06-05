@@ -237,12 +237,14 @@
     const root = document.getElementById('controls-schwarz');
     if (!root) return;
     root.innerHTML = '';
+    // Source φ first — it's the first tile a user touches when opening the tab
+    // (capture a φ from the Inverse tab before anything else is meaningful).
+    root.appendChild(makeSourceCard());
     root.appendChild(makeViewToggleCard());
     root.appendChild(makeModeCard());
     root.appendChild(makeLimitSetCard());
     root.appendChild(makeAnalysisCard());
     root.appendChild(makeForwardCard());
-    root.appendChild(makeSourceCard());
     root.appendChild(makeRenderCard());
     root.appendChild(makeInfoCard());
     // Mount-time placeholder for SphereView's display + camera cards. The
@@ -261,13 +263,17 @@
     const H = window.QD.QoL.attachHelp;
     const root = document.getElementById('controls-schwarz');
     if (!root) return;
-    // The view-toggle card has no h2; the others do.
-    const headers = root.querySelectorAll('section.card h2');
-    if (headers[0]) H(headers[0],
-      `<b>Source φ.</b> The Schwarz dynamics tab iterates σ(w) = φ(1/φ⁻¹(w)),
-       the Schwarz reflection associated with Ω. Capture a φ from the QD tab
-       (after solving). Each pixel is colored by escape time of σ-iteration.`);
-    if (headers[1]) H(headers[1],
+    // Attach by card id (not header index) so sidebar reordering can't scramble
+    // which card a popover lands on. The Source φ tile is intentionally compact,
+    // so its full description lives here in the "?" help.
+    const help = (sel, html) => { const h = root.querySelector(sel + ' h2'); if (h) H(h, html); };
+    help('#schwarz-source-card',
+      `<b>Source φ.</b> The Schwarz reflection σ(w) = conj(F(ψ(w))) is built from a
+       Riemann map φ produced by the inverse solver. Solve on the Inverse tab, then
+       click <b>Use this φ</b> to snapshot it here; the tab iterates σ and colors each
+       pixel by escape time. All six inverse families are supported (classical
+       bounded / unbounded, and all four LQD variants).`);
+    help('#schwarz-render-card',
       `<b>Render.</b> The CPU fallback draws a progressive 4×4→2×2→1×1 pyramid,
        computed in a background Web Worker when available (falling back to an
        in-page, animation-frame-sliced render) so the page stays responsive
@@ -275,7 +281,7 @@
        <i>Colormap</i> + <i>scaleMode</i> change the escape-time → colour
        mapping; <i>maxIter</i> caps the σ-iteration before declaring a pixel
        interior; <i>mod k</i> emphasises orbit-period structure.`);
-    if (headers[2]) H(headers[2],
+    help('#schwarz-info-card',
       `<b>Click & hover.</b> Click pixels to trace and overlay individual σ
        orbits. Hover to read the w-plane coordinate + escape time (and, in
        CPU mode, the pixel kind). In plane view, drag to pan, scroll to zoom.`);
@@ -746,16 +752,12 @@
   function makeSourceCard() {
     const card = document.createElement('section');
     card.className = 'card';
+    card.id = 'schwarz-source-card';
+    // Compact: the explanatory text lives in the "?" hover help (attachSchwarzHelp)
+    // so this — the first/most-used tile — stays small (title + status + button).
     card.innerHTML = `
       <h2>Source φ (from Inverse tab)</h2>
-      <div class="hint">
-        The Schwarz reflection σ(w) = conj(F(ψ(w))) is built from a Riemann
-        map φ produced by the inverse solver. Solve on the Inverse tab,
-        then click <b>Use this φ</b> to snapshot it here.
-        <br>All six inverse families supported (classical bounded / unbounded,
-        and all four LQD variants).
-      </div>
-      <div id="schwarz-src-status" class="hint" style="color:#333; margin-top:8px;">
+      <div id="schwarz-src-status" class="hint" style="color:#333; margin-top:2px;">
         (no φ captured)
       </div>
       <div id="schwarz-bounded-warning" class="hint"
@@ -775,6 +777,7 @@
   function makeRenderCard() {
     const card = document.createElement('section');
     card.className = 'card';
+    card.id = 'schwarz-render-card';
     card.innerHTML = `
       <h2>Render</h2>
       <div class="row view-plane-only">
@@ -897,6 +900,7 @@
   function makeInfoCard() {
     const card = document.createElement('section');
     card.className = 'card view-plane-only';
+    card.id = 'schwarz-info-card';
     card.innerHTML = `
       <h2>Click & hover</h2>
       <div class="hint">

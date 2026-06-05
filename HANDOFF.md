@@ -1344,6 +1344,41 @@ enforces c_1 ≠ 0.
 
 In rough chronological order across recent sessions:
 
+56. **Schwarz "Source φ" tile to top + compact; vector-field drag perf
+    (SHIPPED).** Two UX/perf asks.
+    * **Source φ tile (schwarz-ui.js).** It's the first tile a user touches
+      (capture a φ) but sat 6th with a bulky description. `mountSchwarzSidebar`
+      now appends `makeSourceCard()` **first**; `makeSourceCard` is compacted to
+      title + status + `Use this φ` button (the σ-reflection / six-families
+      description moved into the "?" hover help). `attachSchwarzHelp` was
+      rewritten to attach by **card id** (`#schwarz-source-card` /
+      `#schwarz-render-card` / `#schwarz-info-card`) instead of header **index** —
+      the index form was already mis-aligned (7 `<h2>` cards, so the "Source φ"
+      help landed on the Mode card) and the reorder would have scrambled it
+      further; by-id fixes that and carries the moved Source description. Added
+      ids to the Render + Info cards. Browser-verified: Source first + compact,
+      "?" buttons now on the correct 3 cards, Source popover shows the
+      description.
+    * **Vector-field drag perf (ui-domain-plot.js).** `drawVectorField()`
+      re-sampled h(w) over the whole visible grid every `_renderNow()` with no
+      cache — the dominant cost while dragging/panning/zooming (worst case 2
+      full recomputes per pole-drag frame). Fix (chosen "recommended" option):
+      defer the field during an active gesture and recompute once on settle.
+      New `_vfInteracting` flag + `_markVfInteracting()` (sets it + arms a ~150 ms
+      settle timer that redraws) / `_settleVectorField()` (immediate settle on
+      mouseup, no-op for plain clicks); hooked into the pan / pole-drag / wheel
+      handlers; `_renderNow` gates `drawVectorField()` on `!this._vfInteracting`.
+      Behaviour-preserving at rest (gate false → identical). Micro-opt: hoist the
+      pole **screen** positions once per `drawVectorField` and use squared-
+      distance (was O(poles) `toScreen()`+`hypot()` per grid sample). Verified:
+      node-test **1134/0**, lint clean, `version:check` clean (hash `177717c568`),
+      no exceptions through a field-on drag/wheel/mode-switch, zero console
+      errors. NOTE: the headless preview pauses rAF (so `render()` jams and the
+      actual repaint suppression can't be exercised there) — a quick manual check
+      in a real browser (drag a pole with the field on → smooth, field reappears
+      on release) is recommended. Branch
+      `feat/schwarz-source-tile-and-vectorfield-perf`.
+
 55. **Schwarz domain-coloring ghosting fix + graphics hardening (SHIPPED).**
     User report: dragging the view in the Schwarz tab's **domain-coloring** mode
     left offset "ghost" copies of the σ-coloring. Root cause: `paintAll()`
