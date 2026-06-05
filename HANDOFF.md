@@ -1344,6 +1344,47 @@ enforces c_1 ≠ 0.
 
 In rough chronological order across recent sessions (newest first):
 
+62. **UI-input test coverage (the c-slider bug class) (SHIPPED).** The
+    conformal-radius `c` slider regression (entry #61 follow-up) slipped through
+    because the suite had **no test that drives a behavior-bearing UI control and
+    asserts the solve changes** — only two UI tests existed (`ui-domain-plot`
+    dblclick, `schwarz-ui` click/pin), both event-emission, not control→solve.
+    * **New `app/test/ui-inputs.test.js` (40 assertions, Node-VM seam — no
+      jsdom).** Loads `ui-modes.js` into the shared vm (`loadInCtx`; window masked
+      → factory registers on `ctx.QD_UI`) and installs the descriptors with a
+      minimal mock `uiCtx` (`state` + a `buildW0` mock — the only ui.js closure
+      the descriptors call). Four sections: **§1** every mode's
+      `warmStartUpdate` injects its gauge (c/α/w₀/q) into a clone — the exact fix
+      linchpin, all 10 modes; **§2** `buildNorm` reads the live `state` gauge;
+      **§3** changing the gauge re-solves to a *different* φ through the real
+      `solveInverseQD` (c via classical-unbounded, α via unbounded-PQD — φ.c /
+      φ.alpha track and the boundary scale moves); **§4** the exact c-bug
+      contract: a **stale** warm seed pins the OLD c, a **gauge-injected** seed
+      yields the new c. Verified the test discriminates the regression: stubbing
+      `warmStartUpdate` to a no-op makes §4 return c=0.5 → FAIL.
+    * Registered `'ui-inputs'` in `node-test.js` TESTS.
+    * **Coverage boundary (documented):** pole/order/residue/poly + family
+      routing are already covered by the solver/direct family batteries; the new
+      file closes the UI-gauge + warm-start gap. `composeMode`/`buildHData`/
+      `solveAndRender` live in DOM-coupled `ui.js`/`ui-solve.js` closures — per
+      the seam-not-jsdom choice they're guarded indirectly (descriptor hooks +
+      solver contract), not via a flaky full-page harness.
+    * **Suite-size floor guard** added at the end of `manifest.test.js` (last
+      TESTS entry): `report().pass >= 1150` — catches a mass regression (a whole
+      subsystem failing to load / a `run()` early-return) that would otherwise
+      pass quietly with `fail=0`.
+    * **Redundancy review (conservative):** swept all `app/test/*.test.js` —
+      **no dead or truly duplicate tests** to remove. All `skip` lines are
+      legitimate graceful fallbacks (mathjs/katex/jsdom absent, or solver-failed),
+      and the repeated per-family σ-boundary-closure blocks in `schwarz.test.js`
+      are **distinct** regression guards (per-family setup + tolerance) = coverage,
+      not redundancy — deliberately kept (consolidating 18 green assertions for
+      cosmetic line-savings was judged not worth the risk under "preserve all
+      coverage").
+    * Verify: node-test **1175 passed, 0 failed** (1134 + 40 + 1 floor); lint
+      clean; `version:check` clean (test files aren't page assets → cache hash
+      unchanged). Branch `test/ui-input-coverage`.
+
 61. **QD-tab UI streamline (SHIPPED).** Moderate production-polish pass on the QD
     tab (inverse + direct), mirroring the Schwarz streamline conventions
     (`.card`/`.seg-btn`, `<details>Advanced</details>`, help-by-id). **No element

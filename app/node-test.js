@@ -30,6 +30,7 @@ const TESTS = [
   'worker',
   'ui-domain-plot',
   'schwarz-ui',
+  'ui-inputs',
   'manifest',
 ];
 

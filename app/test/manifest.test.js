@@ -62,4 +62,15 @@ module.exports = async function run() {
   } catch (e) {
     ok('manifest anti-drift battery ran without error', false, String((e && e.stack) || e));
   }
+
+  // Suite-size floor (runs last — manifest is the final TESTS entry). A mass
+  // regression — a whole subsystem failing to load, or a run() early-returning —
+  // would otherwise pass quietly with a silently shrunken count (assertions that
+  // never run leave fail=0 → exit 0). This catches losing a whole section. The
+  // floor is deliberately well below the true total (~1175); raise it only if the
+  // suite legitimately grows a lot, lower it only on an intentional shrink.
+  const { report } = require('./harness');
+  const passSoFar = report().pass;   // all assertions so far, except this one
+  ok('suite size floor: ≥ 1150 assertions ran (mass-regression guard)',
+     passSoFar >= 1150, 'passSoFar=' + passSoFar);
 };
