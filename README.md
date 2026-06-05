@@ -125,6 +125,33 @@ the one intentional global surface; everything else is module-scoped.
 ([`src/cindyscript/init.ts`](src/cindyscript/init.ts)). They must agree; the
 inverse property of the JS pair is covered by `test/transforms.test.ts`.
 
+## Deployment
+
+```bash
+npm run build      # outputs static files to dist/
+npm run preview    # sanity-check the build locally
+```
+
+The Vite config sets `base: "./"`, so all asset URLs in the build are
+**relative** — `dist/` works whether it's served from a domain root or a
+sub-path (e.g. a GitHub Pages project site at `/ComplexDynamicsJS/`). The
+vendored CindyJS assets and favicon are copied into `dist/` automatically.
+
+To publish on **GitHub Pages**, serve the contents of `dist/` (for example via a
+`gh-pages` branch or a Pages GitHub Action that runs `npm ci && npm run build`
+and uploads `dist/`). No extra path configuration is needed because the base is
+already relative.
+
+## Troubleshooting
+
+| Symptom                                 | Likely cause / fix                                                                                                                         |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Both canvases are blank                 | WebGL unavailable or disabled in the browser. CindyGL requires WebGL; check the console for context-creation errors.                       |
+| `404` for `/vendor/cindyjs/*.js`        | Run via `npm run dev` / `npm run preview` (assets are served from `public/`). Opening `index.html` directly off the filesystem won't work. |
+| Dragging the `c` point does nothing     | A CindyScript callback references a symbol that isn't on `window` — see the `window` boundary note in [CONTRIBUTING](CONTRIBUTING.md).     |
+| `npm run dev` fails: port 5173 in use   | The port is pinned (`strictPort`). Stop the other process or change `server.port` in `vite.config.ts`.                                     |
+| A preset renders but the orbit is wrong | The escape predicate diverges from `f`; check the preset's `escape` expression in `src/presets.ts`.                                        |
+
 ## Known limitations
 
 - **Export resolution:** saved images use the canvas resolution (500×500), not
@@ -142,6 +169,12 @@ inverse property of the JS pair is covered by `test/transforms.test.ts`.
 CindyJS and CindyGL are vendored (pinned) under `public/vendor/cindyjs/` from
 the build distributed with the author's site (April 2025). Replace those three
 files to upgrade.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add a preset, extend the
+CindyScript, add a control, and the pre-PR checklist — plus the one runtime
+gotcha (the CindyScript `window` boundary).
 
 ## License
 
