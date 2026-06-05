@@ -242,6 +242,7 @@
     root.appendChild(makeSourceCard());
     root.appendChild(makeViewToggleCard());
     root.appendChild(makeModeCard());
+    root.appendChild(makeOverlaysCard());
     root.appendChild(makeLimitSetCard());
     root.appendChild(makeAnalysisCard());
     root.appendChild(makeForwardCard());
@@ -414,6 +415,77 @@
   // Feature-compute (σ domain-coloring, preimage-tree rebuild + stats) ->
   // schwarz-features.js (Phase-3 item E). Installed near the end of this file;
   // the card builders + interaction install call the captured names.
+
+  // ---------------------------------------------------------------------------
+  // Overlays card: clear controls for the plotted overlays. Individual overlay
+  // cards already carry per-feature "Clear" buttons (limit set, cycles, sweep,
+  // curve), but the click-pinned/hover orbit and the double-click preimage tree
+  // had no user-facing clear at all. This card adds a dedicated "Clear orbit"
+  // and a master "Clear all overlays" that wipes every COMPUTED/DRAWN overlay
+  // (orbit, preimage tree, limit set, cycles, sweep, curve image) in one click.
+  // It deliberately leaves the checkbox DISPLAY TOGGLES (σ-poles, level curves,
+  // canonical-point orbits, z-panel) as the user set them — those hide via
+  // their own checkboxes, so wiping their data while the box stays checked would
+  // be inconsistent. Plane-view only (overlays are a plane-view concept).
+  // ---------------------------------------------------------------------------
+  function makeOverlaysCard() {
+    const card = document.createElement('section');
+    card.className = 'card view-plane-only';
+    card.id = 'schwarz-overlays-card';
+    card.innerHTML = `
+      <h2>Overlays</h2>
+      <div style="font-size:12px; color:#555; margin-bottom:6px;">
+        Clear plotted overlays. <b>Clear all</b> removes orbits, the preimage
+        (inverse) tree, the limit set, cycles, sweeps and curve images; the
+        display-toggle checkboxes below are left as set.
+      </div>
+      <button type="button" id="schwarz-clear-orbit" class="small">Clear orbit</button>
+      <button type="button" id="schwarz-clear-overlays" class="small"
+              style="margin-left:6px;">Clear all overlays</button>
+    `;
+    setTimeout(() => {
+      card.querySelector('#schwarz-clear-orbit').addEventListener('click', clearOrbit);
+      card.querySelector('#schwarz-clear-overlays').addEventListener('click', clearAllOverlays);
+    }, 0);
+    return card;
+  }
+
+  // Clear the forward σ-orbit (both the pinned polyline and any live hover
+  // preview). The z-panel reads sState.orbit, so refresh its pullback when the
+  // panel is open (else just drop it). paintBoundaryOnTop repaints overlays over
+  // the GL/CPU field — the same repaint the per-feature clear buttons use.
+  function clearOrbit() {
+    if (sState._hoverRaf != null) { cancelAnimationFrame(sState._hoverRaf); sState._hoverRaf = null; }
+    sState.orbit = [];
+    sState.pinnedOrbit = [];
+    sState.hoverOrbit = null;
+    if (sState.showZPanel) _recomputeZPanelOrbit();
+    else sState.zPanelOrbit = null;
+    paintBoundaryOnTop();
+  }
+
+  // Master clear: every computed/drawn overlay. Leaves the checkbox display
+  // toggles (showSingularities / showLevelCurves / showCriticalOrbits /
+  // showZPanel) and their cached data untouched — those are dismissed via their
+  // own checkboxes (clearing the data while the box stays checked would desync).
+  function clearAllOverlays() {
+    clearOrbit();                       // orbit (+ z-panel pullback)
+    sState.preimageTree = null;         // S1 inverse tree
+    sState.limitSet = null;             // S3 limit set
+    sState.limitSetDim = null;
+    sState.cycles = null;               // E10 cycles
+    sState.sweepOrbits = null;          // H8 sweep
+    sState.curveImage = null;           // E11 curve forward-image
+    sState.curveImageDraft = null;
+    // Blank the status/count labels owned by the per-overlay cards so they
+    // don't claim a now-cleared overlay still exists.
+    ['schwarz-ls-status', 'schwarz-ls-dim', 'schwarz-cycle-count',
+     'schwarz-preimage-count'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = '';
+    });
+    paintBoundaryOnTop();
+  }
 
   // ---------------------------------------------------------------------------
   // Limit-set card (S3): chaos-game point cloud + dim_H readout.

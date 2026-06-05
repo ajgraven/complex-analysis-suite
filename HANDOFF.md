@@ -1344,6 +1344,37 @@ enforces c_1 ≠ 0.
 
 In rough chronological order across recent sessions:
 
+57. **Schwarz "Overlays" card — Clear orbit + Clear all overlays (SHIPPED).**
+    The Schwarz tab could accumulate ~9 overlays but several had **no user-facing
+    clear**: the click-pinned / hover forward orbit and the double-click preimage
+    (inverse) tree cleared only *implicitly* (mode switch, new-φ capture, click
+    outside Ω). The limit set / cycles / sweep / curve cards each had their own
+    inline "Clear", but there was no master reset. Added a new `makeOverlaysCard()`
+    (id `schwarz-overlays-card`, `view-plane-only`) mounted **right after the Mode
+    card** for accessibility, with two buttons:
+    * **Clear orbit** → `clearOrbit()`: cancels the hover rAF, empties
+      `orbit`/`pinnedOrbit`/`hoverOrbit`, and refreshes the z-panel pullback
+      (`_recomputeZPanelOrbit()` if the panel is open, else null), then
+      `paintBoundaryOnTop()`.
+    * **Clear all overlays** → `clearAllOverlays()`: calls `clearOrbit()` then nulls
+      every **computed/drawn** overlay — `preimageTree`, `limitSet`(+`limitSetDim`),
+      `cycles`, `sweepOrbits`, `curveImage`(+`curveImageDraft`) — and blanks the
+      per-card status/count labels (`schwarz-ls-status`, `schwarz-ls-dim`,
+      `schwarz-cycle-count`, `schwarz-preimage-count`).
+    Scope decision (per user): clears only computed/drawn overlays and **leaves the
+    checkbox DISPLAY TOGGLES as set** — `showSingularities` / `showLevelCurves` /
+    `showCriticalOrbits` / `showZPanel` and their cached data are untouched (those
+    hide via their own checkboxes; wiping data while the box stays checked would
+    desync). `clearOrbit`/`clearAllOverlays` are function declarations (hoisted) but
+    reference the `let`-bound `paintBoundaryOnTop` / `_recomputeZPanelOrbit`
+    installed at the file tail — fine since they only run on click, after the
+    installs. Repaint via `paintBoundaryOnTop()` matches every existing per-feature
+    clear button. Verified: node-test **1134/0**, lint clean, `node --check` clean,
+    `version:check` clean (hash `be665cd0b9`). Branch
+    `feat/schwarz-clear-overlays`. (Headless preview pauses rAF, so a quick manual
+    real-browser check — pin an orbit + compute a limit set, click each clear — is
+    recommended.)
+
 56. **Schwarz "Source φ" tile to top + compact; vector-field drag perf
     (SHIPPED).** Two UX/perf asks.
     * **Source φ tile (schwarz-ui.js).** It's the first tile a user touches
