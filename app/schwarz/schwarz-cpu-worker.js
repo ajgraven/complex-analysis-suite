@@ -87,6 +87,7 @@
     }
     const W = msg.W, H = msg.H, maxIter = msg.maxIter;
     const v = msg.view;
+    const domain = msg.domain || 'w';   // 'z' → sample 𝔻 and lift via w = φ(z)
     const cssW = v.cssW, cssH = v.cssH, cx = v.cx, cy = v.cy, scale = v.scale;
     const pxPerCellX = cssW / W, pxPerCellY = cssH / H;
     const field = new Int16Array(W * H);
@@ -104,9 +105,17 @@
           if (kind[idx] && stride > 1) continue;        // already resolved coarser
           const px = (col + 0.5) * pxPerCellX;
           const py = (row + 0.5) * pxPerCellY;
-          const wRe = cx + (px - cssW / 2) / scale;
-          const wIm = cy - (py - cssH / 2) / scale;     // y flip (screen → world)
-          const wpt = { re: wRe, im: wIm };
+          const aRe = cx + (px - cssW / 2) / scale;
+          const aIm = cy - (py - cssH / 2) / scale;     // y flip (screen → world)
+          let wpt;
+          if (domain === 'z') {
+            const r2 = aRe * aRe + aIm * aIm;
+            if (sw.unbounded ? r2 <= 1 : r2 >= 1) { field[idx] = 0; kind[idx] = 4 + 1; continue; }
+            wpt = sw.evalPhi({ re: aRe, im: aIm });
+            if (!wpt || !isFinite(wpt.re) || !isFinite(wpt.im)) { field[idx] = 0; kind[idx] = 4 + 1; continue; }
+          } else {
+            wpt = { re: aRe, im: aIm };
+          }
           if (!sw.isInOmega(wpt)) {
             field[idx] = 0;
             kind[idx]  = 4 + 1;                          // KIND_OUTSIDE + 1

@@ -1344,6 +1344,83 @@ enforces c_1 ≠ 0.
 
 In rough chronological order across recent sessions:
 
+59. **Schwarz z-plane VIEW + UI streamline (SHIPPED).** The decorative 180px
+    z-panel inset was promoted to a first-class **view mode** alongside plane and
+    sphere: the segmented View toggle is now **plane │ z-disk │ sphere**, and the
+    z-disk renders the Schwarz tiling **uniformized onto 𝔻** as the main plot (CPU:
+    sample z, lift w = φ(z), run the existing σ escape-time). Full interaction
+    parity (pan/zoom/click-pin/hover/double-click tree) maps through φ; every
+    overlay mirrors ψ-pulled-back into the disk.
+    * **State/transforms (schwarz-ui.js):** added `sState.zView` (independent
+      pan/zoom) + `pixelToZ`/`zToPixel` + `frameDisk()`/`fitToDisk()`. `viewMode`
+      is now `'plane'|'z'|'sphere'`. `setViewMode`/`_applyViewModeVisibility`
+      generalized to 4 CSS classes — `.view-plane-only` (fractal/domain seg +
+      Renderer select), `.view-z-only` (reserved), **`.view-2d`** (plane AND z:
+      overlays/analysis/dynamics/limit-set/info/render rows), `.view-sphere-only`.
+      Fixed a latent bug: the view highlight now scopes to `#schwarz-view-card`
+      (was `#controls-schwarz .seg-btn`, which deactivated the Mode card's
+      seg-btns). `_applyModeOptionsVisibility()` keeps the hover/tree controls
+      visible in z even if plane was left in domain-coloring.
+    * **CPU render (schwarz-render.js + schwarz-cpu-worker.js):** `doRecompute`
+      forces the CPU path in z (no GPU shader for φ(z)); a `domain:'z'` flag rides
+      the worker payload; both `chainPass` and the worker per-pixel loop add the
+      z-branch — disk-mask (`unbounded ? r²>1 : r²<1`) → off-disk = KIND_OUTSIDE,
+      else `wpt = sw.evalPhi(z)` then the unchanged escape-time. φ needs **zero**
+      extra serialization (the worker already rebuilds the handle; `evalPhi` is on
+      it).
+    * **Paint (schwarz-paint.js):** `paintZPanel` (inset) → `paintZView()`
+      (full-canvas: backdrop + field blit + ∂𝔻 circle + axes) plus the extracted
+      `paintZOverlays(ctx, zToPx)` (the PR-#58 ψ-pullback machinery, now
+      transform-parametrized). `paintAll`/`paintBoundaryOnTop` early-return to
+      `paintZView()` in z — the single chokepoint that keeps every w-side painter
+      out of z-mode. `paintField` paints off-disk pixels a neutral gray in z.
+    * **Interaction (schwarz-interaction.js):** `view2D()`, `activeView()`
+      (zView in z), `pixelToView`, and `eventToW(e)` (z→disk-gate→φ(z), null
+      off-disk). Pan/zoom mutate the active view; wheel zoom-to-cursor via
+      `pixelToView`; hover readout shows z + w=φ(z); `_interactionPoint` returns
+      `eventToW`; `pinOrbitAt` always refreshes the pullback. Shift-drag curve
+      draw stays plane-only.
+    * **UI streamline:** removed the old `Show z-panel` checkbox + `showZPanel`;
+      stripped the `(S4)/(S5+6)/(H7)/(E10)/(E11)/(H8)/(F4)/(F8)` parentheticals;
+      "Forward dynamics" → **Dynamics** with curve/sweep/export tucked under a
+      native `<details>` **Advanced**; added a **View** card `<h2>` + help; Fit
+      button dispatches Fit-to-Ω / Fit-to-𝔻 by view.
+    * Verified: node-test **1134/0**, lint clean, `node --check` clean,
+      `version:check` clean (hash `8da5964302`). **Browser-verified** (served, not
+      headless-blind): 3-way toggle, capture, z renders the uniformized tiling
+      (disk + off-disk backdrop + ∂𝔻 + 26-colour escape ramp), z/w hover readout,
+      Fit-to-𝔻, click-pin, and double-click preimage-tree mirrored into 𝔻 — zero
+      console errors. Branch `feat/schwarz-zview`. NOTE: a fresh capture frames the
+      z-view from the live canvas size; if the canvas was 0-wide at capture
+      (headless), click **Fit** to reframe.
+    * **Fix (z-view overlay drawing).** Three handlers called a bare w-plane
+      painter right after `paintBoundaryOnTop()` —
+      `onCanvasDblClick`/`_rebuildPreimageTreeIfActive` did `paintPreimageTree()`,
+      `_computeLimitSet` did `paintLimitSet()`. Those draw via `worldToPixel`, so
+      in the z-view they splattered the w-plane overlay across the disk, then
+      vanished on the next clean `paintZView` repaint — surfaced on the **unbounded
+      deltoid** (large/offset Ω) but latent for every family (near-invisible on a
+      near-disk bounded Ω where φ≈id). `paintBoundaryOnTop` already draws these for
+      the active view, so the bare calls were removed (redundant in plane, wrong in
+      z); the now-unused `paintPreimageTree`/`paintLimitSet` sCtx bindings were
+      dropped from schwarz-interaction.js + schwarz-features.js. Re-verified
+      node-test **1134/0**, lint clean, hash `7835270aea`.
+    * **Fix 2 (z-overlay transform signature — the real deltoid bug).** With the
+      stray w-painters gone, z-overlays STILL didn't draw: `paintZView` passed the
+      schwarz-ui **`zToPixel(re, im)`** (two scalar args) as the overlay transform,
+      but `paintZOverlays` (extracted from the inset) calls it as **`zToPanel(z)`**
+      — one **{re,im} object** (the inset's original contract). So every overlay
+      point became `zToPixel(zObject, undefined)` → `(zObject − cx)*scale` →
+      **(NaN, NaN)**, drawn off-canvas/invisible. The field (drawn by paintField,
+      not this transform) and the unit circle (`zToPixel(0,0)`, two args) were
+      unaffected, so ONLY the overlays vanished — and the near-disk bounded case
+      had masked it because the *stray* w-painter (worldToPixel, correct arity)
+      happened to land overlays in ≈ the right spot. Fix: `paintZView` passes an
+      adapter `(z) => zToPixel(z.re, z.im)`. **Browser-verified on the unbounded
+      deltoid**: double-click in z → the plasma-ramp preimage tree renders in 𝔻*
+      clustered toward |z|=1 (its limit set); orbit pin + overlays mirror; zero
+      console errors. node-test **1134/0**, lint clean, hash `de027b1edc`.
+
 58. **Schwarz z-panel mirrors ALL overlays (ψ-pullback) (SHIPPED).** The z-panel
     inset (S6 / F4) previously pulled only the forward orbit back into 𝔻/𝔻*. It
     now mirrors **every active w-plane overlay** — preimage tree, limit set,

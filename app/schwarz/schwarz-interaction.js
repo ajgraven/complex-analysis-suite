@@ -26,6 +26,7 @@
     const getCtx                  = s.getCtx;
     const pixelToWorld            = s.pixelToWorld;
     const worldToPixel            = s.worldToPixel;
+    const pixelToZ                = s.pixelToZ;
     const syncCanvasSize          = s.syncCanvasSize;
     const activeRenderer          = s.activeRenderer;
     const renderImmediate         = s.renderImmediate;
@@ -33,7 +34,6 @@
     const paintBoundaryOnTop      = s.paintBoundaryOnTop;
     const paintOrbit              = s.paintOrbit;
     const paintAll                = s.paintAll;
-    const paintPreimageTree       = s.paintPreimageTree;
     const gateMaxIter             = s.gateMaxIter;
     const _recomputeLevelCurves   = s._recomputeLevelCurves;
     const _recomputeDomainColoring = s._recomputeDomainColoring;
@@ -50,6 +50,32 @@
     // (exposed via getClickDelay/setClickDelay).
     let CLICK_DELAY = 250;                  // ms; single-click -> pin debounce
   let dragging = false, dragMoved = false, lastX = 0, lastY = 0;
+
+  // 2D views (plane or z) share interaction logic; sphere has its own handlers.
+  const view2D = () => sState.viewMode === 'plane' || sState.viewMode === 'z';
+  // The active pan/zoom transform: zView in z-mode, view otherwise.
+  function activeView() { return sState.viewMode === 'z' ? sState.zView : sState.view; }
+  function pixelToView(sx, sy) {
+    return sState.viewMode === 'z' ? pixelToZ(sx, sy) : pixelToWorld(sx, sy);
+  }
+  // Map a mouse event to a w-plane point. In z-view, gate to the domain disk and
+  // lift z → w = φ(z) (null off-disk, so clicks outside 𝔻 are ignored); in plane
+  // view, the plain pixelToWorld. All downstream orbit/tree logic works in w.
+  function eventToW(e) {
+    const c = getCanvas(); if (!c || !sState.schwarz) return null;
+    const rect = c.getBoundingClientRect();
+    const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+    if (sState.viewMode === 'z') {
+      const z = pixelToZ(sx, sy);
+      const r2 = z.re * z.re + z.im * z.im;
+      const inDisk = sState.schwarz.unbounded ? r2 > 1 : r2 < 1;
+      if (!inDisk) return null;
+      const w = sState.schwarz.evalPhi(z);
+      return (w && isFinite(w.re) && isFinite(w.im)) ? w : null;
+    }
+    return pixelToWorld(sx, sy);
+  }
+
   function attachCanvasHandlers() {
     const c = getCanvas();
     if (!c) return;
@@ -71,8 +97,9 @@
     c.addEventListener('wheel', onWheel, { passive: false });
     c.addEventListener('mousedown', e => {
       if (e.button !== 0) return;
-      // S5 / E11: shift-drag draws a curve in Ω for forward-image rendering.
-      if (e.shiftKey && sState.schwarz) {
+      // S5 / E11: shift-drag draws a curve in Ω for forward-image rendering
+      // (plane view only — the freehand curve maps screen→w directly).
+      if (e.shiftKey && sState.schwarz && sState.viewMode === 'plane') {
         sState.isDrawingCurve = true;
         sState.curveImageDraft = [];
         const rect = c.getBoundingClientRect();
@@ -106,15 +133,15 @@
       const dx = e.clientX - lastX, dy = e.clientY - lastY;
       if (dx !== 0 || dy !== 0) dragMoved = true;
       lastX = e.clientX; lastY = e.clientY;
-      sState.view.cx -= dx / sState.view.scale;
-      sState.view.cy += dy / sState.view.scale;          // screen y is flipped
-      // Domain-coloring isn't a fractal field — re-blit the cached σ-coloring
-      // at the live transform (paintAll is self-clearing) instead of kicking the
-      // fractal pyramid (wrong mode + a transient flash). The cached buffer pans
-      // with the content; mouseup's _recomputeDomainColoring() re-sharpens it.
-      // GPU is fast enough (10-30 ms typical) to render every mousemove
-      // without debounce. CPU mode debounces because the pyramid is slow.
-      if (sState.mode === 'domain-coloring') liveDomainColoringRepaint();
+      const av = activeView();
+      av.cx -= dx / av.scale;
+      av.cy += dy / av.scale;                            // screen y is flipped
+      // Repaint by view. z is always CPU → debounced recompute. Plane:
+      // domain-coloring re-blits the cached σ-image at the live transform
+      // (paintAll is self-clearing) instead of kicking the fractal pyramid;
+      // GPU renders every mousemove (10-30 ms); CPU debounces (slow pyramid).
+      if (sState.viewMode === 'z') { clearOverlay(); requestRecompute(); }
+      else if (sState.mode === 'domain-coloring') liveDomainColoringRepaint();
       else if (activeRenderer() === 'gpu') renderImmediate();
       else { clearOverlay(); requestRecompute(); }
     });
@@ -192,14 +219,16 @@
     const c = getCanvas();
     const rect = c.getBoundingClientRect();
     const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
-    const w = pixelToWorld(sx, sy);
+    const av = activeView();
+    const before = pixelToView(sx, sy);
     const k = (e.deltaY > 0) ? 0.85 : 1.18;
-    sState.view.scale *= k;
-    // Keep the world point under the cursor pinned in screen space.
-    const after = pixelToWorld(sx, sy);
-    sState.view.cx += w.re - after.re;
-    sState.view.cy += w.im - after.im;
-    if (sState.mode === 'domain-coloring') liveDomainColoringRepaint();
+    av.scale *= k;
+    // Keep the point under the cursor pinned in screen space.
+    const after = pixelToView(sx, sy);
+    av.cx += before.re - after.re;
+    av.cy += before.im - after.im;
+    if (sState.viewMode === 'z') { clearOverlay(); requestRecompute(); }
+    else if (sState.mode === 'domain-coloring') liveDomainColoringRepaint();
     else if (activeRenderer() === 'gpu') renderImmediate();
     else { clearOverlay(); requestRecompute(); }
   }
@@ -208,8 +237,20 @@
     const c = getCanvas();
     const rect = c.getBoundingClientRect();
     const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
-    const w = pixelToWorld(sx, sy);
-    let info = `w = (${w.re.toFixed(3)}, ${w.im.toFixed(3)})`;
+    const inZ = sState.viewMode === 'z';
+    // Coordinate readout: z-view shows z and its lift w = φ(z); plane shows w.
+    let w, info;
+    if (inZ) {
+      const z = pixelToZ(sx, sy);
+      const r2 = z.re * z.re + z.im * z.im;
+      const inDisk = sState.schwarz.unbounded ? r2 > 1 : r2 < 1;
+      w = inDisk ? sState.schwarz.evalPhi(z) : null;
+      info = `z = (${z.re.toFixed(3)}, ${z.im.toFixed(3)})`;
+      if (w && isFinite(w.re)) info += `   w = (${w.re.toFixed(3)}, ${w.im.toFixed(3)})`;
+    } else {
+      w = pixelToWorld(sx, sy);
+      info = `w = (${w.re.toFixed(3)}, ${w.im.toFixed(3)})`;
+    }
     if (sState.field && sState.fieldW > 0) {
       const gx = Math.floor(sx / sState.view.cssW  * sState.fieldW);
       const gy = Math.floor(sy / sState.view.cssH  * sState.fieldH);
@@ -219,7 +260,7 @@
         const kind = sState.fieldKind ? sState.fieldKind[idx] : KIND_OUTSIDE;
         info += '  ' + describeKind(kind, n);
       }
-    } else if (activeRenderer() === 'gpu' && QD.Schwarz && QD.Schwarz.escapeTime) {
+    } else if (!inZ && w && activeRenderer() === 'gpu' && QD.Schwarz && QD.Schwarz.escapeTime) {
       // GPU-mode parity (HANDOFF #33): the field array isn't populated in
       // GPU mode, so do an ad-hoc per-cursor CPU iteration. Cheap — at most
       // `maxIter` σ-evals (μs scale on typical scenarios).
@@ -238,12 +279,12 @@
     const r = document.getElementById('schwarz-readout');
     if (r) r.textContent = info;
 
-    // Live forward-orbit preview on hover (fractal/plane only, when enabled
-    // and not mid-pan / mid-curve-draw). σ is defined on Ω, so only points
-    // inside Ω get an orbit; outside Ω we clear any stale hover orbit.
-    if (sState.viewMode === 'plane' && sState.mode === 'fractal' &&
+    // Live forward-orbit preview on hover (fractal, plane or z, when enabled and
+    // not mid-pan / mid-curve-draw). The orbit is built in w (in z-view, w=φ(z));
+    // only points inside Ω get an orbit, else we clear any stale hover orbit.
+    if (view2D() && sState.mode === 'fractal' &&
         sState.hoverOrbitEnabled && !dragging && !sState.isDrawingCurve) {
-      if (sState.schwarz.isInOmega(w)) {
+      if (w && sState.schwarz.isInOmega(w)) {
         sState._pendingHoverW = w;
         if (sState._hoverRaf == null) sState._hoverRaf = requestAnimationFrame(runHoverOrbit);
       } else if (sState.hoverOrbit) {
@@ -258,7 +299,7 @@
   function runHoverOrbit() {
     sState._hoverRaf = null;
     if (!isSchwarzActive() || !sState.schwarz) return;
-    if (sState.viewMode !== 'plane' || sState.mode !== 'fractal' || !sState.hoverOrbitEnabled) return;
+    if (!view2D() || sState.mode !== 'fractal' || !sState.hoverOrbitEnabled) return;
     const w = sState._pendingHoverW;
     if (!w || !sState.schwarz.isInOmega(w)) { sState.hoverOrbit = null; paintBoundaryOnTop(); return; }
     try {
@@ -281,12 +322,10 @@
   // point on success, or null if the event should be ignored.
   function _interactionPoint(e) {
     if (!isSchwarzActive() || !sState.schwarz) return null;
-    if (sState.viewMode !== 'plane' || sState.mode !== 'fractal') return null;
+    if (!view2D() || sState.mode !== 'fractal') return null;
     if (dragMoved) return null;   // a pan just ended — not a click
     if (e.shiftKey) return null;  // reserved for the E11 curve-draw gesture
-    const c = getCanvas();
-    const rect = c.getBoundingClientRect();
-    return pixelToWorld(e.clientX - rect.left, e.clientY - rect.top);
+    return eventToW(e);           // w-plane point (z-view lifts through φ; null off-disk)
   }
 
   // Double-click → seed a preimage tree at the clicked point. Restricted to
@@ -308,8 +347,11 @@
       depth:        sState.preimageDepth,
       visualBudget: sState.preimageBudget,
     });
+    // paintBoundaryOnTop already draws the tree for the active view (w-plane
+    // chain in plane, paintZView in z). A bare paintPreimageTree() here would
+    // re-draw the w-plane tree through worldToPixel — correct-but-redundant in
+    // plane, but WRONG in the z-view (w-coords splattered across the z-disk).
     paintBoundaryOnTop();
-    paintPreimageTree();
     _refreshPreimageTreeStats();
   }
 
@@ -332,10 +374,12 @@
       ? QD.Schwarz.makeOrbit(w, sState.schwarz, { maxIter: sState.grid.maxIter })
       : [];
     sState.orbit = sState.pinnedOrbit;
-    // S6 / F4: also refresh the z-pullback for the z-panel inset.
-    if (sState.showZPanel) _recomputeZPanelOrbit();
-    // Just redraw the overlay; the GPU fractal layer doesn't need re-render.
-    if (activeRenderer() === 'gpu') { paintBoundaryOnTop(); paintOrbit(); }
+    // Keep the ψ-pullback (drawn in the z-view) in sync whenever the orbit
+    // changes, so switching to the z-disk shows the current orbit.
+    _recomputeZPanelOrbit();
+    // Redraw overlays. In z-view (always CPU) repaint the whole view; in plane
+    // GPU mode just re-blit the overlay layer over the unchanged fractal.
+    if (sState.viewMode !== 'z' && activeRenderer() === 'gpu') { paintBoundaryOnTop(); paintOrbit(); }
     else paintAll();
   }
 

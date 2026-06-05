@@ -60,8 +60,9 @@
     const myToken = ++sState.renderToken;
     if (QD.SchwarzCpuWorker) QD.SchwarzCpuWorker.cancel();
 
-    // GPU path: synchronous, complete in one frame.
-    if (activeRenderer() === 'gpu') {
+    // GPU path: synchronous, complete in one frame. The z-plane view has no GPU
+    // shader for φ(z), so it always takes the CPU path below.
+    if (sState.viewMode !== 'z' && activeRenderer() === 'gpu') {
       showGLLayer(true);
       const t0 = performance.now();
       try {
@@ -135,11 +136,13 @@
   // repaint. Stale snapshots (token mismatch) are discarded. Any failure path
   // falls back to the in-process pyramid so the tab always renders.
   function _renderCpuViaWorker(myToken, W, H) {
-    const v = sState.view;
+    const inZ = sState.viewMode === 'z';
+    const v = inZ ? sState.zView : sState.view;
     const params = {
       phi:         sState.phiSnapshot,
       boundaryPts: sState.boundarySnapshot || [],
       view:        { cx: v.cx, cy: v.cy, scale: v.scale, cssW: v.cssW, cssH: v.cssH },
+      domain:      inZ ? 'z' : 'w',          // 'z' → sample 𝔻, lift via w = φ(z)
       W, H,
       maxIter:     sState.grid.maxIter,
       strides:     [4, 2, 1],
@@ -169,9 +172,11 @@
     const W = sState.fieldW, H = sState.fieldH;
     const sw = sState.schwarz;
     const maxIter = sState.grid.maxIter;
-    // Map field coords → world.
-    const cssW = sState.view.cssW, cssH = sState.view.cssH;
-    const cx = sState.view.cx, cy = sState.view.cy, scale = sState.view.scale;
+    // Map field coords → world (plane) or z-disk (z-view).
+    const inZ = sState.viewMode === 'z';
+    const vv = inZ ? sState.zView : sState.view;
+    const cssW = vv.cssW, cssH = vv.cssH;
+    const cx = vv.cx, cy = vv.cy, scale = vv.scale;
     const pxPerCellX = cssW / W, pxPerCellY = cssH / H;
 
     let row = 0;
@@ -191,9 +196,22 @@
           if (sState.fieldKind[idx] && stride > 1) continue;
           const px = (col + 0.5) * pxPerCellX;
           const py = (row + 0.5) * pxPerCellY;
-          const wRe = cx + (px - cssW / 2) / scale;
-          const wIm = cy - (py - cssH / 2) / scale;
-          const wpt = { re: wRe, im: wIm };
+          const aRe = cx + (px - cssW / 2) / scale;
+          const aIm = cy - (py - cssH / 2) / scale;
+          let wpt;
+          if (inZ) {
+            // z-disk sample: mask off the domain disk, else lift to w = φ(z).
+            const r2 = aRe * aRe + aIm * aIm;
+            if (sw.unbounded ? r2 <= 1 : r2 >= 1) {
+              sState.field[idx] = 0; sState.fieldKind[idx] = KIND_OUTSIDE + 1; continue;
+            }
+            wpt = sw.evalPhi({ re: aRe, im: aIm });
+            if (!wpt || !isFinite(wpt.re) || !isFinite(wpt.im)) {
+              sState.field[idx] = 0; sState.fieldKind[idx] = KIND_OUTSIDE + 1; continue;
+            }
+          } else {
+            wpt = { re: aRe, im: aIm };
+          }
           if (!sw.isInOmega(wpt)) {
             sState.field[idx] = 0;
             sState.fieldKind[idx] = KIND_OUTSIDE + 1;

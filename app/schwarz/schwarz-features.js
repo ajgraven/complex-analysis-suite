@@ -26,8 +26,6 @@
   global.QD_UI.installSchwarzFeatures = function installSchwarzFeatures(s) {
     const sState             = s.sState;
     const paintBoundaryOnTop = s.paintBoundaryOnTop;
-    const paintPreimageTree  = s.paintPreimageTree;
-    const paintLimitSet      = s.paintLimitSet;
     const activeRenderer     = s.activeRenderer;
     const getCtx             = s.getCtx;
     const getCanvas          = s.getCanvas;
@@ -58,8 +56,9 @@
       depth:        sState.preimageDepth,
       visualBudget: sState.preimageBudget,
     });
+    // paintBoundaryOnTop draws the tree for the active view; no bare w-plane
+    // paintPreimageTree() (it would mis-draw onto the z-disk in z-view).
     paintBoundaryOnTop();
-    paintPreimageTree();
     _refreshPreimageTreeStats();
   }
 
@@ -105,8 +104,9 @@
           if (dimEl) dimEl.textContent = 'dim ≈ ' + (isFinite(r.dim) ? r.dim.toFixed(3) : 'NaN');
         } catch (_) { /* ignore */ }
       }
+      // paintBoundaryOnTop draws the limit set for the active view (paintZView
+      // in z); no bare w-plane paintLimitSet() (it would mis-draw in the z-view).
       paintBoundaryOnTop();
-      paintLimitSet();
     }, 30);
   }
 

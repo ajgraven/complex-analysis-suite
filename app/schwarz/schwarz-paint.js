@@ -24,6 +24,7 @@
     const getCtx          = s.getCtx;
     const syncCanvasSize  = s.syncCanvasSize;
     const worldToPixel    = s.worldToPixel;
+    const zToPixel        = s.zToPixel;       // z-disk → pixel (z-view transform)
     const KIND_FUND       = s.KIND_FUND;
     const KIND_ESC        = s.KIND_ESC;
     const KIND_INT        = s.KIND_INT;
@@ -46,6 +47,9 @@
   function paintAll() {
     const ctx = getCtx(); if (!ctx) return;
     syncCanvasSize();
+    // z-plane view is a self-contained render (tiling in 𝔻 + pulled-back
+    // overlays); none of the w-side painters below run in z-mode.
+    if (sState.viewMode === 'z') { paintZView(); return; }
     // Clear up front so fieldless overlay modes don't ghost. paintField()
     // clears + blits the escape field, but it returns early when there is no
     // field (e.g. domain-coloring, or a bare boundary/limit-set/level-curve
@@ -65,7 +69,6 @@
     paintCycles();                       // S5 / E10
     paintLimitSet();
     paintSigmaSingularities();           // S4 / F3: on top so markers are visible
-    paintZPanel();                       // S6 / F4: on top, inset corner
   }
   function repaintField() { if (sState.field) paintAll(); }
 
@@ -75,6 +78,7 @@
   // preimage tree to the overlay chain.
   function paintBoundaryOnTop() {
     const ctx = getCtx(); if (!ctx) return;
+    if (sState.viewMode === 'z') { paintZView(); return; }
     ctx.clearRect(0, 0, sState.view.cssW, sState.view.cssH);
     paintDomainColoring();               // S5 / F6
     paintSigmaLevelCurves();             // S4: contours under the boundary
@@ -87,7 +91,6 @@
     paintCycles();                       // S5 / E10
     paintLimitSet();
     paintSigmaSingularities();           // S4: markers on top
-    paintZPanel();                       // S6 / F4: inset corner
   }
 
   // Cached off-screen canvas + ImageData buffer for CPU repaint. Re-created
@@ -110,11 +113,14 @@
     const imgData = offImg;
     const maxIter = sState.grid.maxIter;
     const cmap = sState.grid.colormap;
+    // In z-view, KIND_OUTSIDE marks pixels off the unit disk (not part of the
+    // picture) → neutral backdrop; in plane view it's Ω^c, the fundamental tile.
+    const zMode = sState.viewMode === 'z';
     for (let i = 0; i < W * H; i++) {
       const kind = sState.fieldKind[i];
       const n    = sState.field[i];
       let r = 0, g = 0, b = 0;
-      if (kind === KIND_OUTSIDE + 1)        { r = 245; g = 245; b = 248; }     // fundamental tile
+      if (kind === KIND_OUTSIDE + 1)        { if (zMode) { r = 224; g = 226; b = 232; } else { r = 245; g = 245; b = 248; } }   // z: off-disk / plane: fundamental tile
       else if (kind === KIND_INT + 1)       { r = 28;  g = 28;  b = 36;  }     // interior (tiling-set limit)
       else if (kind === KIND_ESC + 1)       { r = 80;  g = 80;  b = 90;  }     // escaping set
       else if (kind === KIND_INV + 1)       { r = 180; g = 90;  b = 90;  }     // bad pixel
@@ -450,80 +456,44 @@
     }
   }
 
-  // S6 / F4: paint the z-panel inset in the top-right corner. Shows 𝔻
-  // (unit circle for bounded families, exterior of unit circle for
-  // unbounded), the boundary of 𝔻 highlighted, and the ψ-pullback of EVERY
-  // active w-plane overlay (orbit, preimage tree, limit set, cycles, sweep,
-  // curve image, critical orbits, σ-singularities, level curves), each colored
-  // to match its w-side counterpart. Overlays are clipped to the inset box.
-  function paintZPanel() {
-    if (!sState.showZPanel) return;
-    const ctx = getCtx();
-    // Inset geometry: 180×180 box in top-right, 14px from edge.
-    const W = 180, H = 180, pad = 14;
-    const x0 = sState.view.cssW - W - pad;
-    const y0 = pad;
-    // Background + frame.
+  // ---------------------------------------------------------------------------
+  // z-plane view (S6 / F4): the Schwarz tiling uniformized onto the unit disk 𝔻
+  // (or its exterior 𝔻* for unbounded Ω), drawn as the MAIN plot. The escape-
+  // time field — computed over the zView transform with w = φ(z) (see
+  // schwarz-render.js) — is in sState.field; blit it, stroke ∂𝔻 + axes, then
+  // draw the ψ-pulled-back overlays full-size. CPU / 2D only (no GL in z-mode).
+  // ---------------------------------------------------------------------------
+  function paintZView() {
+    const ctx = getCtx(); if (!ctx) return;
+    syncCanvasSize();
+    const cssW = sState.zView.cssW, cssH = sState.zView.cssH;
+    ctx.clearRect(0, 0, cssW, cssH);
+    ctx.fillStyle = '#f3f4f7';                 // backdrop shown until the field arrives
+    ctx.fillRect(0, 0, cssW, cssH);
+    paintField();                              // blits the z escape-time field if present
+    // Unit circle ∂𝔻 + faint axes through z = 0, in the live z-view transform.
+    const o = zToPixel(0, 0);
+    const Rpx = sState.zView.scale;            // 1 z-unit = scale px
     ctx.save();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
-    ctx.strokeStyle = '#777';
-    ctx.lineWidth = 1.2;
-    ctx.fillRect(x0, y0, W, H);
-    ctx.strokeRect(x0, y0, W, H);
-    // Header.
-    ctx.fillStyle = '#444';
-    ctx.font = '11px ui-monospace, Consolas, monospace';
-    ctx.textBaseline = 'top';
-    ctx.textAlign = 'left';
-    const isUnbounded = sState.schwarz && sState.schwarz.unbounded;
-    ctx.fillText(isUnbounded ? 'z ∈ 𝔻*  (|z|>1)' : 'z ∈ 𝔻  (|z|<1)', x0 + 6, y0 + 4);
-
-    // Clip everything below the header to the inset box: pulled-back overlay
-    // points can land far outside the disk (esp. unbounded 𝔻*), and without a
-    // clip they'd paint across the whole main canvas. The outer ctx.restore()
-    // at the end of this function removes the clip. (Cleared by ctx.save above.)
+    ctx.strokeStyle = '#d5d8e0'; ctx.lineWidth = 0.8;
     ctx.beginPath();
-    ctx.rect(x0, y0 + 17, W, H - 17);
-    ctx.clip();
-
-    // z-space → panel-pixel transform.
-    // For bounded: 𝔻 fits in a circle of radius 0.85·H/2 centered in the box.
-    // For unbounded: same disk, but show |z|>1 region (we draw |z| up to 2.5).
-    const cx = x0 + W / 2;
-    const cy = y0 + H / 2 + 6;
-    const Rpx = isUnbounded ? (H / 2 - 14) / 2.5 : (H / 2 - 18);
-    function zToPanel(z) {
-      return { x: cx + z.re * Rpx, y: cy - z.im * Rpx };
-    }
-    // Draw axes (faint).
-    ctx.strokeStyle = '#dadde3';
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.moveTo(x0 + 6, cy); ctx.lineTo(x0 + W - 6, cy);
-    ctx.moveTo(cx, y0 + 18); ctx.lineTo(cx, y0 + H - 6);
+    ctx.moveTo(0, o.y); ctx.lineTo(cssW, o.y);
+    ctx.moveTo(o.x, 0); ctx.lineTo(o.x, cssH);
     ctx.stroke();
-    // Unit circle.
-    ctx.strokeStyle = '#1a3e7a';
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.arc(cx, cy, Rpx, 0, 2 * Math.PI);
-    ctx.stroke();
-    // Tint the relevant region (𝔻 for bounded, 𝔻^c for unbounded).
-    ctx.beginPath();
-    if (isUnbounded) {
-      // Tint the EXTERIOR of the unit circle (within panel bounds).
-      ctx.rect(x0 + 4, y0 + 18, W - 8, H - 22);
-      ctx.arc(cx, cy, Rpx, 0, 2 * Math.PI, true);
-    } else {
-      ctx.arc(cx, cy, Rpx, 0, 2 * Math.PI);
-    }
-    ctx.fillStyle = 'rgba(86, 119, 168, 0.10)';
-    ctx.fill('evenodd');
+    ctx.strokeStyle = '#1a3e7a'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(o.x, o.y, Rpx, 0, 2 * Math.PI); ctx.stroke();
+    // paintZOverlays calls its transform as fn(zObject) (the inset's zToPanel(z)
+    // contract); zToPixel takes (re, im), so adapt — passing zToPixel directly
+    // made every overlay point map to (NaN, NaN) and silently vanish.
+    paintZOverlays(ctx, (z) => zToPixel(z.re, z.im));
+    ctx.restore();
+  }
 
-    // --- Mirrored overlays: ψ-pullbacks of the active w-plane overlays. ---
-    // Drawn bottom-to-top under the orbit; each is gated by the SAME condition
-    // that shows it in the w-plane, and uses its w-side palette. Pullbacks are
-    // cached by source identity (see _zc) so this stays cheap on repaint.
+  // Draw the ψ-pulled-back overlays into the z-view via the supplied z→pixel
+  // transform `zToPanel`. Each overlay is gated by the SAME condition that shows
+  // it in the w-plane and uses its w-side palette; pullbacks are cached by
+  // source identity (see _zc) so this stays cheap on repaint.
+  function paintZOverlays(ctx, zToPanel) {
     _zInvalidateIfPhiChanged();
 
     // S4 / F12 level curves (under everything): |σ| teal solid, arg(σ) magenta dashed.
@@ -667,7 +637,6 @@
         _zDrawDots(ctx, zToPanel, zsg.branchPoints, 3, '#1a3e7a');
       }
     }
-    ctx.restore();
   }
 
   // S5 / F6: paint domain-coloring field into the canvas. Caches an

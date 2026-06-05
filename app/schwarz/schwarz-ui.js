@@ -53,6 +53,15 @@
       cssW: 600, cssH: 600,
     },
 
+    // z-plane view transform (independent pan/zoom): the unit disk 𝔻 (bounded)
+    // or its exterior 𝔻* (unbounded). Kept separate from `view` so the w-plane
+    // and z-diskframings don't corrupt each other and so the w-side painters
+    // (which read `view` via worldToPixel) can never draw through a z-transform.
+    zView: {
+      cx: 0, cy: 0, scale: 200,           // px per unit (z-coordinates)
+      cssW: 600, cssH: 600,
+    },
+
     grid: {
       resolution: 384,                     // active sample count along the canvas's shorter side
       maxIter: 24,
@@ -88,10 +97,11 @@
     _clickTimer:      null,                // deferred single-click pin (cancelled by dblclick)
 
     // View toggle (HANDOFF #29): 'plane' = Schwarz dynamics on the w-plane
-    // (the original Schwarz tab), 'sphere' = same iteration textured onto a
-    // Riemann sphere. The sphere renderer is lazy-mounted via QD.SphereView
-    // on first switch to sphere mode.
-    viewMode:   'plane',                   // 'plane' | 'sphere'
+    // (the original Schwarz tab), 'z' = the same tiling uniformized onto the
+    // unit disk via z = ψ(w) (CPU-rendered: w = φ(z) then escape-time),
+    // 'sphere' = the iteration textured onto a Riemann sphere. The sphere
+    // renderer is lazy-mounted via QD.SphereView on first switch to sphere mode.
+    viewMode:   'plane',                   // 'plane' | 'z' | 'sphere'
     sphereView: null,                      // QD.SphereView handle
 
     // Render mode. The preimage tree is no longer its own mode — it is a
@@ -139,9 +149,7 @@
     // overlays the GPU/CPU fractal. Cached per φ-viewport.
     domainColor:        null,              // { buf, W, H, viewport }
 
-    // S6 / F4: z-panel inset showing 𝔻 (or 𝔻*) + the z-pullback of the
-    // current w-orbit. Toggle via the Forward card.
-    showZPanel:         false,
+    // ψ-pullback of the pinned w-orbit, drawn in the z-plane view.
     zPanelOrbit:        null,              // [{re, im}, ...] z-history of sState.orbit
   };
 
@@ -197,19 +205,20 @@
     }
     if (!sState.mounted) { mountSchwarzSidebar(); sState.mounted = true; }
     refreshSourceStatus();
-    if (sState.viewMode === 'plane') {
+    if (sState.viewMode === 'sphere') {
+      // sphere mode: hide the Schwarz GL layer, activate sphere view.
+      showGLLayer(false);
+      _activateSphereView();
+    } else {
+      // 2D views (plane or z). z is always CPU-rendered.
       if (sState.sphereView) sState.sphereView.deactivate();
       if (sState.schwarz) {
-        showGLLayer(activeRenderer() === 'gpu');
+        showGLLayer(sState.viewMode === 'plane' && activeRenderer() === 'gpu');
         requestRecompute();
       } else {
         showGLLayer(false);
         clearCanvas();
       }
-    } else {
-      // sphere mode: hide the Schwarz GL layer, activate sphere view.
-      showGLLayer(false);
-      _activateSphereView();
     }
   });
 
@@ -226,9 +235,9 @@
     if (_schwarzResizeRaf) return;
     _schwarzResizeRaf = requestAnimationFrame(() => {
       _schwarzResizeRaf = null;
-      if (!isSchwarzActive() || !sState.schwarz || sState.viewMode !== 'plane') return;
+      if (!isSchwarzActive() || !sState.schwarz || sState.viewMode === 'sphere') return;
       syncCanvasSize();
-      if (sState.mode === 'domain-coloring') { _recomputeDomainColoring(); paintAll(); }
+      if (sState.viewMode === 'plane' && sState.mode === 'domain-coloring') { _recomputeDomainColoring(); paintAll(); }
       else requestRecompute();
     });
   });
@@ -282,18 +291,29 @@
        <i>Colormap</i> + <i>scaleMode</i> change the escape-time → colour
        mapping; <i>maxIter</i> caps the σ-iteration before declaring a pixel
        interior; <i>mod k</i> emphasises orbit-period structure.`);
+    help('#schwarz-view-card',
+      `<b>View.</b> <b>plane</b> draws the σ-dynamics tiling on the w-plane (Ω).
+       <b>z-disk</b> shows the SAME tiling uniformized onto the unit disk 𝔻 (or 𝔻*
+       for unbounded Ω): each z is colored by the escape time of w = φ(z). Every
+       overlay (orbit, preimage tree, limit set, …) is shown ψ-pulled-back into 𝔻.
+       <b>sphere</b> textures the iteration onto the Riemann sphere. plane + z-disk
+       have independent pan/zoom and full click/hover interaction.`);
     help('#schwarz-info-card',
-      `<b>Click & hover.</b> Click pixels to trace and overlay individual σ
-       orbits. Hover to read the w-plane coordinate + escape time (and, in
-       CPU mode, the pixel kind). In plane view, drag to pan, scroll to zoom.`);
+      `<b>Click & hover.</b> Single-click in Ω to pin a σ-orbit; double-click in the
+       tiling set to seed a preimage tree; hover reads the coordinate + escape time
+       (and, in CPU mode, the pixel kind). Drag to pan, scroll to zoom. In the
+       z-disk view every click/hover point z maps to w = φ(z) before iterating.`);
   }
 
   function makeViewToggleCard() {
     const card = document.createElement('section');
     card.className = 'card';
+    card.id = 'schwarz-view-card';
     card.innerHTML = `
+      <h2>View</h2>
       <div class="segmented" role="tablist" aria-label="View mode">
-        <button class="seg-btn active" data-view="plane" type="button">plane</button>
+        <button class="seg-btn active" data-view="plane"  type="button">plane</button>
+        <button class="seg-btn"        data-view="z"      type="button">z-disk</button>
         <button class="seg-btn"        data-view="sphere" type="button">sphere</button>
       </div>
     `;
@@ -312,13 +332,15 @@
   // ---------------------------------------------------------------------------
   function makeModeCard() {
     const card = document.createElement('section');
-    card.className = 'card view-plane-only';
+    card.className = 'card view-2d';
     card.id = 'schwarz-mode-card';
     card.innerHTML = `
       <h2>Mode</h2>
-      <div class="segmented" role="tablist" aria-label="Schwarz mode">
-        <button class="seg-btn active" data-mode="fractal"        type="button">fractal</button>
-        <button class="seg-btn"        data-mode="domain-coloring" type="button">domain color</button>
+      <div class="view-plane-only">
+        <div class="segmented" role="tablist" aria-label="Schwarz mode">
+          <button class="seg-btn active" data-mode="fractal"        type="button">fractal</button>
+          <button class="seg-btn"        data-mode="domain-coloring" type="button">domain color</button>
+        </div>
       </div>
       <div id="schwarz-mode-options-fractal" style="margin-top:8px;">
         <div style="font-size:12px; color:#555; margin-bottom:6px;">
@@ -391,8 +413,7 @@
     document.querySelectorAll('#schwarz-mode-card .seg-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.mode === mode);
     });
-    const opts = document.getElementById('schwarz-mode-options-fractal');
-    if (opts) opts.style.display = (mode === 'fractal') ? '' : 'none';
+    _applyModeOptionsVisibility();
     // All overlays (tree + orbits) are fractal-mode-only; clear them on any
     // mode transition so they don't bleed into domain-coloring or linger when
     // we re-enter fractal mode.
@@ -430,7 +451,7 @@
   // ---------------------------------------------------------------------------
   function makeOverlaysCard() {
     const card = document.createElement('section');
-    card.className = 'card view-plane-only';
+    card.className = 'card view-2d';
     card.id = 'schwarz-overlays-card';
     card.innerHTML = `
       <h2>Overlays</h2>
@@ -459,8 +480,7 @@
     sState.orbit = [];
     sState.pinnedOrbit = [];
     sState.hoverOrbit = null;
-    if (sState.showZPanel) _recomputeZPanelOrbit();
-    else sState.zPanelOrbit = null;
+    _recomputeZPanelOrbit();           // orbit now empty → clears the z-view pullback
     paintBoundaryOnTop();
   }
 
@@ -494,7 +514,7 @@
   // ---------------------------------------------------------------------------
   function makeLimitSetCard() {
     const card = document.createElement('section');
-    card.className = 'card view-plane-only';
+    card.className = 'card view-2d';
     card.id = 'schwarz-limit-set-card';
     card.innerHTML = `
       <h2>Limit set</h2>
@@ -535,10 +555,10 @@
   // ---------------------------------------------------------------------------
   function makeAnalysisCard() {
     const card = document.createElement('section');
-    card.className = 'card view-plane-only';
+    card.className = 'card view-2d';
     card.id = 'schwarz-analysis-card';
     card.innerHTML = `
-      <h2>σ Analysis (S4)</h2>
+      <h2>σ analysis</h2>
       <div style="font-size:12px; margin-bottom:6px;">
         <button type="button" id="schwarz-show-sigma-form"
                 style="font-size:12px;">Show σ(w) form</button>
@@ -622,30 +642,14 @@
   // ---------------------------------------------------------------------------
   function makeForwardCard() {
     const card = document.createElement('section');
-    card.className = 'card view-plane-only';
+    card.className = 'card view-2d';
     card.id = 'schwarz-forward-card';
     card.innerHTML = `
-      <h2>Forward dynamics (S5+6)</h2>
+      <h2>Dynamics</h2>
       <label style="display:block; font-size:12px; margin:4px 0;">
-        <input type="checkbox" id="schwarz-show-critical-orbits"> Show canonical-point orbits (H7)
+        <input type="checkbox" id="schwarz-show-critical-orbits"> Show canonical-point orbits
       </label>
-      <label style="display:block; font-size:12px; margin:4px 0;">
-        <input type="checkbox" id="schwarz-show-z-panel"> Show z-panel (z↔w split, F4)
-      </label>
-      <div style="font-size:12px; margin:6px 0 4px;">
-        <b>Curve forward-image (E11):</b> shift-drag in Ω to draw.
-      </div>
-      <label style="display:block; font-size:12px; margin:4px 0;">
-        Iterations:
-        <input type="range" min="1" max="10" value="4" id="schwarz-curve-depth"
-               style="vertical-align:middle; margin-left:6px; width:100px;">
-        <span id="schwarz-curve-depth-val" style="font-family:monospace;">4</span>
-        <button type="button" id="schwarz-curve-clear"
-                style="font-size:11px; margin-left:6px;">Clear</button>
-      </label>
-      <div style="font-size:12px; margin:8px 0 4px;">
-        <b>Cycle finder (E10):</b>
-      </div>
+      <div style="font-size:12px; margin:8px 0 4px;"><b>Cycle finder:</b></div>
       <label style="display:block; font-size:12px; margin:4px 0;">
         Period: <select id="schwarz-cycle-n">
           <option value="1">1 (fixed)</option>
@@ -662,32 +666,42 @@
         <span id="schwarz-cycle-count"
               style="font-family:monospace; color:#777; margin-left:6px;"></span>
       </label>
-      <div style="font-size:12px; margin:8px 0 4px;">
-        <b>Orbit-family sweep (H8):</b>
-      </div>
-      <label style="display:block; font-size:12px; margin:4px 0;">
-        N: <input type="number" id="schwarz-sweep-n" value="16" min="2" max="64"
-                  style="width:48px;">
-        Depth: <input type="number" id="schwarz-sweep-depth" value="12" min="1" max="50"
-                      style="width:48px;">
-        <button type="button" id="schwarz-sweep-compute"
-                style="font-size:11px; margin-left:6px;">Sweep horizontal</button>
-        <button type="button" id="schwarz-sweep-clear"
-                style="font-size:11px; margin-left:4px;">Clear</button>
-      </label>
-      <div style="font-size:12px; margin:8px 0 4px;">
-        <b>Export (S6 / F8):</b>
-      </div>
-      <label style="display:block; font-size:12px; margin:4px 0;">
-        Multiplier:
-        <select id="schwarz-export-mult">
-          <option value="1">1× (display)</option>
-          <option value="2" selected>2×</option>
-          <option value="4">4×</option>
-        </select>
-        <button type="button" id="schwarz-export-png"
-                style="font-size:11px; margin-left:6px;">Export PNG</button>
-      </label>
+      <details style="margin-top:10px;">
+        <summary style="font-size:12px; cursor:pointer; color:#555;">Advanced</summary>
+        <div style="font-size:12px; margin:6px 0 4px;">
+          <b>Curve forward-image:</b> shift-drag in Ω to draw (plane view).
+        </div>
+        <label style="display:block; font-size:12px; margin:4px 0;">
+          Iterations:
+          <input type="range" min="1" max="10" value="4" id="schwarz-curve-depth"
+                 style="vertical-align:middle; margin-left:6px; width:100px;">
+          <span id="schwarz-curve-depth-val" style="font-family:monospace;">4</span>
+          <button type="button" id="schwarz-curve-clear"
+                  style="font-size:11px; margin-left:6px;">Clear</button>
+        </label>
+        <div style="font-size:12px; margin:8px 0 4px;"><b>Orbit-family sweep:</b></div>
+        <label style="display:block; font-size:12px; margin:4px 0;">
+          N: <input type="number" id="schwarz-sweep-n" value="16" min="2" max="64"
+                    style="width:48px;">
+          Depth: <input type="number" id="schwarz-sweep-depth" value="12" min="1" max="50"
+                        style="width:48px;">
+          <button type="button" id="schwarz-sweep-compute"
+                  style="font-size:11px; margin-left:6px;">Sweep horizontal</button>
+          <button type="button" id="schwarz-sweep-clear"
+                  style="font-size:11px; margin-left:4px;">Clear</button>
+        </label>
+        <div style="font-size:12px; margin:8px 0 4px;"><b>Export PNG:</b></div>
+        <label style="display:block; font-size:12px; margin:4px 0;">
+          Multiplier:
+          <select id="schwarz-export-mult">
+            <option value="1">1× (display)</option>
+            <option value="2" selected>2×</option>
+            <option value="4">4×</option>
+          </select>
+          <button type="button" id="schwarz-export-png"
+                  style="font-size:11px; margin-left:6px;">Export PNG</button>
+        </label>
+      </details>
     `;
     setTimeout(() => {
       // H7
@@ -695,12 +709,6 @@
         sState.showCriticalOrbits = e.target.checked;
         if (e.target.checked && sState.schwarz) _recomputeCriticalOrbits();
         else sState.criticalOrbits = null;
-        paintBoundaryOnTop();
-      });
-      // F4: z-panel toggle
-      card.querySelector('#schwarz-show-z-panel').addEventListener('change', (e) => {
-        sState.showZPanel = e.target.checked;
-        if (e.target.checked) _recomputeZPanelOrbit();
         paintBoundaryOnTop();
       });
       // E11
@@ -747,37 +755,51 @@
   // schwarz-features.js (Phase-3 item E).
 
   function setViewMode(mode) {
-    if (mode !== 'plane' && mode !== 'sphere') return;
+    if (mode !== 'plane' && mode !== 'z' && mode !== 'sphere') return;
     if (mode === sState.viewMode) return;
     sState.viewMode = mode;
-    // Update segmented-control highlight.
-    document.querySelectorAll('#controls-schwarz .seg-btn').forEach(btn => {
+    // Update the view-toggle highlight. Scope to the view card so the Mode
+    // card's fractal/domain seg-btns (which carry data-mode, not data-view)
+    // aren't deactivated as a side effect.
+    document.querySelectorAll('#schwarz-view-card .seg-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.view === mode);
     });
     _applyViewModeVisibility();
-    if (mode === 'plane') {
-      if (sState.sphereView) sState.sphereView.deactivate();
-      if (sState.schwarz) {
-        showGLLayer(activeRenderer() === 'gpu');
-        requestRecompute();
-      } else {
-        showGLLayer(false);
-        clearCanvas();
-      }
-    } else {
+    refreshSourceStatus();
+    if (mode === 'sphere') {
       showGLLayer(false);
       _activateSphereView();
+      return;
     }
-    refreshSourceStatus();
+    // 2D views (plane or z). z is always CPU-rendered (no GPU shader for φ(z));
+    // its zView transform was framed at capture, so just recompute.
+    if (sState.sphereView) sState.sphereView.deactivate();
+    if (!sState.schwarz) { showGLLayer(false); clearCanvas(); return; }
+    showGLLayer(mode === 'plane' && activeRenderer() === 'gpu');
+    requestRecompute();
   }
 
   function _applyViewModeVisibility() {
-    const planeShow  = sState.viewMode === 'plane';
-    const sphereShow = sState.viewMode === 'sphere';
-    document.querySelectorAll('#controls-schwarz .view-plane-only')
-      .forEach(el => { el.style.display = planeShow ? '' : 'none'; });
-    document.querySelectorAll('#controls-schwarz .view-sphere-only')
-      .forEach(el => { el.style.display = sphereShow ? '' : 'none'; });
+    const mode = sState.viewMode;
+    const is2D = mode === 'plane' || mode === 'z';
+    const set = (cls, show) => {
+      document.querySelectorAll('#controls-schwarz ' + cls)
+        .forEach(el => { el.style.display = show ? '' : 'none'; });
+    };
+    set('.view-plane-only',  mode === 'plane');   // plane-only (fractal/domain, GPU)
+    set('.view-z-only',      mode === 'z');        // z-only (reserved)
+    set('.view-2d',          is2D);                // plane AND z (shared overlays)
+    set('.view-sphere-only', mode === 'sphere');
+    _applyModeOptionsVisibility();
+  }
+
+  // The fractal-options block (hover toggle + preimage-tree controls + the
+  // click/double-click hint) applies to BOTH the plane fractal view and the
+  // z-disk view (z is tiling, i.e. fractal semantics). Show it whenever we're in
+  // z or in plane-fractal mode; hide only in plane domain-coloring.
+  function _applyModeOptionsVisibility() {
+    const opts = document.getElementById('schwarz-mode-options-fractal');
+    if (opts) opts.style.display = (sState.viewMode === 'z' || sState.mode === 'fractal') ? '' : 'none';
   }
 
   // Lazy-mount QD.SphereView the first time the user switches to sphere mode;
@@ -828,7 +850,7 @@
     // Compact: the explanatory text lives in the "?" hover help (attachSchwarzHelp)
     // so this — the first/most-used tile — stays small (title + status + button).
     card.innerHTML = `
-      <h2>Source φ (from Inverse tab)</h2>
+      <h2>Source φ</h2>
       <div id="schwarz-src-status" class="hint" style="color:#333; margin-top:2px;">
         (no φ captured)
       </div>
@@ -852,7 +874,7 @@
     card.id = 'schwarz-render-card';
     card.innerHTML = `
       <h2>Render</h2>
-      <div class="row view-plane-only">
+      <div class="row view-2d">
         <label>Resolution:
           <select id="schwarz-resolution">
             <option value="192">192</option>
@@ -909,11 +931,11 @@
           </select>
         </label>
       </div>
-      <div class="row view-plane-only" style="margin-top:10px;">
+      <div class="row view-2d" style="margin-top:10px;">
         <button id="schwarz-recompute" class="small">Recompute</button>
-        <button id="schwarz-fit" class="small" style="margin-left:6px;">Fit to Ω</button>
+        <button id="schwarz-fit" class="small" style="margin-left:6px;">Fit</button>
       </div>
-      <div id="schwarz-progress" class="hint view-plane-only" style="margin-top:8px; min-height:1.2em;"></div>
+      <div id="schwarz-progress" class="hint view-2d" style="margin-top:8px; min-height:1.2em;"></div>
     `;
     setTimeout(() => {
       document.getElementById('schwarz-renderer').addEventListener('change', e => {
@@ -929,37 +951,35 @@
         sState.grid.maxIter = Math.max(1, Math.min(200, +e.target.value || 24));
         // Broadcast to sphere view too — same shared sliders for both renderers.
         if (sState.sphereView) sState.sphereView.setRenderParams({ maxIter: sState.grid.maxIter });
-        if (sState.viewMode === 'plane') requestRecompute();
+        if (sState.viewMode !== 'sphere') requestRecompute();   // plane + z re-iterate
       });
+      // Recolor the current field without recomputing: GPU re-renders, CPU/z
+      // repaints the existing field. z is always CPU (never renderImmediate).
+      const recolor = () => {
+        if (sState.viewMode === 'plane' && activeRenderer() === 'gpu') renderImmediate();
+        else if (sState.viewMode !== 'sphere') repaintField();
+      };
       document.getElementById('schwarz-colormap').addEventListener('change', e => {
         sState.grid.colormap = e.target.value;
         if (sState.sphereView) sState.sphereView.setRenderParams({ colormap: sState.grid.colormap });
-        if (sState.viewMode === 'plane') {
-          // For GPU, just re-render (very fast). For CPU, repaint existing field.
-          if (activeRenderer() === 'gpu') renderImmediate();
-          else repaintField();
-        }
+        recolor();
       });
       document.getElementById('schwarz-scalemode').addEventListener('change', e => {
         sState.grid.scaleMode = e.target.value;
         updateModKVisibility();
         if (sState.sphereView) sState.sphereView.setRenderParams({ scaleMode: sState.grid.scaleMode });
-        if (sState.viewMode === 'plane') {
-          if (activeRenderer() === 'gpu') renderImmediate();
-          else repaintField();
-        }
+        recolor();
       });
       document.getElementById('schwarz-modk').addEventListener('change', e => {
         sState.grid.modK = Math.max(2, Math.min(64, +e.target.value || 8));
         if (sState.sphereView) sState.sphereView.setRenderParams({ modK: sState.grid.modK });
-        if (sState.viewMode === 'plane' && sState.grid.scaleMode === 'modulo') {
-          if (activeRenderer() === 'gpu') renderImmediate();
-          else repaintField();
-        }
+        if (sState.grid.scaleMode === 'modulo') recolor();
       });
       updateModKVisibility();
       document.getElementById('schwarz-recompute').addEventListener('click', requestRecompute);
-      document.getElementById('schwarz-fit').addEventListener('click', fitToOmega);
+      document.getElementById('schwarz-fit').addEventListener('click', () => {
+        if (sState.viewMode === 'z') fitToDisk(); else fitToOmega();
+      });
     }, 0);
     return card;
   }
@@ -971,14 +991,15 @@
 
   function makeInfoCard() {
     const card = document.createElement('section');
-    card.className = 'card view-plane-only';
+    card.className = 'card view-2d';
     card.id = 'schwarz-info-card';
     card.innerHTML = `
       <h2>Click & hover</h2>
       <div class="hint">
-        <b>Double-click</b> on Ω → plot the orbit {w₀, σ(w₀), σ²(w₀), …}<br>
-        <b>Hover</b> → show pixel coords + escape time.<br>
-        <b>Drag</b> to pan; <b>wheel</b> to zoom.
+        <b>Single-click</b> in Ω → pin the forward σ-orbit.<br>
+        <b>Double-click</b> in the tiling set → seed a preimage tree.<br>
+        <b>Hover</b> → coordinates + escape time; <b>drag</b> pans, <b>wheel</b> zooms.<br>
+        In the <b>z-disk</b> view, clicks map through z ↦ φ(z).
       </div>
       <div id="schwarz-readout" class="hint" style="font-family:ui-monospace,Consolas,monospace; margin-top:8px; min-height:1.4em;">
         —
@@ -1090,8 +1111,11 @@
     }
 
     refreshSourceStatus();
+    frameDisk();                       // pre-frame the z-view so a later switch is ready
     if (sState.viewMode === 'plane') {
       fitToOmega();
+    } else if (sState.viewMode === 'z') {
+      requestRecompute();
     } else if (sState.sphereView) {
       sState.sphereView.requestRender();
     }
@@ -1236,6 +1260,22 @@
       y: cssH / 2 - (im - cy) * scale,
     };
   }
+  // z-plane (unit-disk) transforms — parallel to pixelToWorld/worldToPixel but
+  // reading sState.zView, so the z-view has its own independent pan/zoom.
+  function pixelToZ(sx, sy) {
+    const { cx, cy, scale, cssW, cssH } = sState.zView;
+    return {
+      re: cx + (sx - cssW / 2) / scale,
+      im: cy - (sy - cssH / 2) / scale,
+    };
+  }
+  function zToPixel(re, im) {
+    const { cx, cy, scale, cssW, cssH } = sState.zView;
+    return {
+      x: cssW / 2 + (re - cx) * scale,
+      y: cssH / 2 - (im - cy) * scale,
+    };
+  }
   function fitToOmega() {
     if (!sState.boundarySnapshot || !sState.boundarySnapshot.length) return;
     const b = QD.Schwarz.polygonBounds(sState.boundarySnapshot);
@@ -1246,12 +1286,27 @@
     sState.view.scale = Math.min(sState.view.cssW, sState.view.cssH) / (2 * b.radius * margin);
     requestRecompute();
   }
+  // Frame the z-view on the unit disk (bounded: 𝔻 fills ~82% of the shorter
+  // half; unbounded: show |z| up to ~2.5 so 𝔻* is visible). Sets the transform
+  // only; fitToDisk also kicks a recompute.
+  function frameDisk() {
+    syncCanvasSize();
+    sState.zView.cx = 0;
+    sState.zView.cy = 0;
+    const unb  = !!(sState.phiSnapshot && sState.phiSnapshot.unbounded);
+    const half = Math.min(sState.zView.cssW, sState.zView.cssH) / 2;
+    sState.zView.scale = unb ? (half * 0.9) / 2.5 : half * 0.82;
+  }
+  function fitToDisk() { frameDisk(); requestRecompute(); }
   function syncCanvasSize() {
     const c = getCanvas();
     if (!c) return;
     const rect = c.getBoundingClientRect();
     sState.view.cssW = Math.max(50, rect.width);
     sState.view.cssH = Math.max(50, rect.height);
+    // The z-view shares the same physical canvas, so its css dims track view's.
+    sState.zView.cssW = sState.view.cssW;
+    sState.zView.cssH = sState.view.cssH;
   }
 
   // True when the Schwarz tab is the active tab (its controls panel is shown).
@@ -1287,7 +1342,7 @@
     clearCanvas, paintAll, repaintField, paintBoundaryOnTop, paintOrbit,
     paintPreimageTree, paintLimitSet, setProgress,
   } = window.QD_UI.installSchwarzPaint({
-    sState, getCtx, syncCanvasSize, worldToPixel,
+    sState, getCtx, syncCanvasSize, worldToPixel, zToPixel,
     KIND_FUND, KIND_ESC, KIND_INT, KIND_INV, KIND_OUTSIDE,
   }));
 
@@ -1312,8 +1367,8 @@
   // Canvas interaction (installed after paint+render so its renderer/paint deps
   // are available; reads the per-feature recompute hooks + geometry via sCtx).
   _schwarzInter = window.QD_UI.installSchwarzInteraction({
-    sState, getCanvas, getCtx, pixelToWorld, worldToPixel, syncCanvasSize,
-    activeRenderer, renderImmediate, requestRecompute,
+    sState, getCanvas, getCtx, pixelToWorld, worldToPixel, pixelToZ, zToPixel,
+    syncCanvasSize, activeRenderer, renderImmediate, requestRecompute,
     paintBoundaryOnTop, paintOrbit, paintAll, paintPreimageTree,
     gateMaxIter, _recomputeLevelCurves, _recomputeDomainColoring,
     _recomputeZPanelOrbit, _refreshPreimageTreeStats,
