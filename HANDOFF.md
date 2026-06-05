@@ -1344,6 +1344,47 @@ enforces c_1 ≠ 0.
 
 In rough chronological order across recent sessions:
 
+58. **Schwarz z-panel mirrors ALL overlays (ψ-pullback) (SHIPPED).** The z-panel
+    inset (S6 / F4) previously pulled only the forward orbit back into 𝔻/𝔻*. It
+    now mirrors **every active w-plane overlay** — preimage tree, limit set,
+    cycles, sweep, curve forward-image, critical orbits, σ-singularities, and
+    |σ|/arg(σ) level curves — each ψ-pulled-back and drawn in its w-side palette.
+    All work is in **`app/schwarz/schwarz-paint.js`** (`paintZPanel` + new
+    helpers); no UI/state changes, no new toggles — the inset auto-mirrors
+    whatever is shown in the w-plane (same as the orbit always did).
+    * **Pullback = ψ (`sState.schwarz.psi`), a per-point Newton solve.** Every
+      overlay is stored in the w-plane (all paint fns use `worldToPixel`); ψ maps
+      each w-point into the disk. ψ is **view-independent**, so pullbacks are
+      cached by `(φ handle, source-array reference)` in a module-level `_zc` +
+      `_zMemo(slot, src, compute)`: the inset repaints every frame during a GPU
+      pan but reuses the cache, and a pullback re-runs ONLY when its overlay is
+      recomputed/cleared (new array reference) or φ changes
+      (`_zInvalidateIfPhiChanged`). This identity-cache-in-paint design means NO
+      new wiring at the many overlay-mutation sites — it can't go stale. Safe
+      because level curves / domain-coloring recompute on **mouseup only**
+      (confirmed in schwarz-interaction.js), so references are stable across pan
+      frames.
+    * **Bounds:** points with no preimage in 𝔻/𝔻* (`psi → null`) become gaps
+      (same as the orbit). The limit set is **subsampled to ≤2000 pts**
+      (`LIMITSET_Z_CAP`) for the 180px inset; level curves are capped at 800
+      pulled-back segments per contour set (`LEVELCURVE_Z_SEG_CAP`), drawing a
+      segment only when **both** endpoints invert. A **clip rect** on the inset
+      box was added (pulled-back points can land far outside the disk, esp.
+      unbounded 𝔻* — without the clip they'd paint over the whole main canvas).
+    * **Cleanup:** extracted the preimage-tree generation ramp to a module-level
+      `preimageGenColor(g, N)` shared by `paintPreimageTree` (w-plane) and the
+      z-panel mirror.
+    * Drawing helpers `_zDrawPolyline` / `_zDrawDots` take the inset's local
+      `zToPanel` transform; overlays drawn bottom-to-top (level curves → sweep →
+      curve → critical → tree → limit set → cycles → orbit → singularities),
+      each gated by the SAME condition that shows it in the w-plane.
+    * Verified: node-test **1134/0**, lint clean, `node --check` clean,
+      `version:check` clean (hash `83fd54f050`). Branch
+      `feat/schwarz-zpanel-overlays`. NOTE: headless preview pauses rAF, so a
+      real-browser check is recommended — open the z-panel, then turn on the
+      limit set / preimage tree / cycles / singularities and confirm each appears
+      pulled-back inside the disk and that pan/zoom stays smooth.
+
 57. **Schwarz "Overlays" card — Clear orbit + Clear all overlays (SHIPPED).**
     The Schwarz tab could accumulate ~9 overlays but several had **no user-facing
     clear**: the click-pinned / hover forward orbit and the double-click preimage

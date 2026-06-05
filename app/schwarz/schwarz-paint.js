@@ -212,24 +212,9 @@
     const ctx = getCtx(); if (!ctx) return;
     const N = tree.generations.length;
 
-    // Plasma-like ramp: gen 0 = #fde725 (yellow) → gen N-1 = #5d01a6 (deep purple).
-    function genColor(g) {
-      const t = N > 1 ? (g / (N - 1)) : 0;
-      // crude two-stop interpolation through #f0844a → #b3147a → #5d01a6
-      if (t < 0.5) {
-        const u = t * 2;
-        const r = Math.round(253 + (240 - 253) * u);
-        const g0 = Math.round(231 + (132 - 231) * u);
-        const b = Math.round(37  + (74  - 37 ) * u);
-        return `rgba(${r},${g0},${b},0.92)`;
-      } else {
-        const u = (t - 0.5) * 2;
-        const r = Math.round(240 + (93  - 240) * u);
-        const g0 = Math.round(132 + (1   - 132) * u);
-        const b = Math.round(74  + (166 - 74 ) * u);
-        return `rgba(${r},${g0},${b},0.92)`;
-      }
-    }
+    // Plasma-like ramp (gen 0 yellow → gen N-1 deep purple), shared with the
+    // z-panel mirror via the module-level preimageGenColor.
+    const genColor = (g) => preimageGenColor(g, N);
 
     // Edges first (so dots sit on top).
     ctx.lineWidth = 0.9;
@@ -340,10 +325,137 @@
     if (ctx.setLineDash) ctx.setLineDash([]);
   }
 
+  // Shared preimage-tree generation color ramp (plasma-like: gen 0 yellow →
+  // last gen deep purple). Used by paintPreimageTree (w-plane) and the z-panel
+  // mirror so both read identically.
+  function preimageGenColor(g, N) {
+    const t = N > 1 ? (g / (N - 1)) : 0;
+    if (t < 0.5) {
+      const u = t * 2;
+      return `rgba(${Math.round(253 + (240 - 253) * u)},`
+           + `${Math.round(231 + (132 - 231) * u)},`
+           + `${Math.round(37  + (74  - 37 ) * u)},0.92)`;
+    }
+    const u = (t - 0.5) * 2;
+    return `rgba(${Math.round(240 + (93  - 240) * u)},`
+         + `${Math.round(132 + (1   - 132) * u)},`
+         + `${Math.round(74  + (166 - 74 ) * u)},0.92)`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // z-panel overlay mirroring (S6 / F4). Every Schwarz overlay is stored in the
+  // w-plane; to show it in the z-panel inset each w-point is pulled back through
+  // ψ (sState.schwarz.psi — a per-point Newton solve) into 𝔻 (or 𝔻*). ψ is
+  // VIEW-INDEPENDENT, so a pullback only changes when the source overlay (or the
+  // captured φ) changes — never on pan/zoom. We therefore cache each pullback
+  // keyed by (φ handle, source-array reference): the inset repaints every frame
+  // during a GPU pan but reuses the cache, and a pullback re-runs only when its
+  // overlay is recomputed/cleared. Points with no preimage in the target domain
+  // (ψ → null) become gaps, exactly as the orbit already handles.
+  // ---------------------------------------------------------------------------
+  const LIMITSET_Z_CAP = 2000;      // subsample the cloud for the 180px inset
+  const LEVELCURVE_Z_SEG_CAP = 800; // cap pulled-back segments per contour set
+  const _zc = {
+    phi: null, tree: null, limit: null, cycles: null,
+    sweep: null, curve: null, critical: null, sing: null, lc: null,
+  };
+  function _zInvalidateIfPhiChanged() {
+    if (_zc.phi !== sState.schwarz) {
+      _zc.phi = sState.schwarz;
+      for (const k in _zc) if (k !== 'phi') _zc[k] = null;
+    }
+  }
+  function _psiOrNull(w) {
+    if (!w || !sState.schwarz) return null;
+    let z;
+    try { z = sState.schwarz.psi(w); } catch (_) { return null; }
+    return (z && isFinite(z.re) && isFinite(z.im)) ? z : null;
+  }
+  function _psiArr(pts) {
+    const out = new Array(pts.length);
+    for (let i = 0; i < pts.length; i++) out[i] = _psiOrNull(pts[i]);
+    return out;
+  }
+  // Recompute compute(src) only when the source reference changed.
+  function _zMemo(slot, src, compute) {
+    const c = _zc[slot];
+    if (c && c.src === src) return c.out;
+    const out = src ? compute(src) : null;
+    _zc[slot] = { src, out };
+    return out;
+  }
+  const _zTree = () => _zMemo('tree', sState.preimageTree, (t) =>
+    (t.generations ? { generations: t.generations.map(_psiArr), edges: t.edges } : null));
+  const _zLimit = () => _zMemo('limit', sState.limitSet, (arr) => {
+    const nPts = arr.length >> 1;
+    const stride = Math.max(1, Math.ceil(nPts / LIMITSET_Z_CAP));
+    const out = [];
+    for (let i = 0; i < nPts; i += stride) {
+      out.push(_psiOrNull({ re: arr[2 * i], im: arr[2 * i + 1] }));
+    }
+    return out;
+  });
+  const _zCycles = () => _zMemo('cycles', sState.cycles, (cs) =>
+    cs.map(c => ({ period: c.period, z: _psiArr(c.points) })));
+  const _zSweep = () => _zMemo('sweep', sState.sweepOrbits, (sw) => sw.map(_psiArr));
+  const _zCurve = () => _zMemo('curve', sState.curveImage, (ci) => ci.map(_psiArr));
+  const _zCritical = () => _zMemo('critical', sState.criticalOrbits, (cos) =>
+    cos.map(o => ({ label: o.label, z: _psiArr(o.orbit) })));
+  const _zSing = () => _zMemo('sing', sState.sigmaSingularities, (s) => ({
+    poles:        (s.poles || []).map(p => _psiOrNull(p.w)),
+    branchPoints: (s.branchPoints || []).map(b => _psiOrNull(b.w)),
+  }));
+  const _zLevelCurves = () => _zMemo('lc', sState.levelCurves, (lc) => {
+    const pull = (contours) => {
+      const segs = [];
+      let budget = LEVELCURVE_Z_SEG_CAP;
+      for (const c of contours) {
+        for (const s of c.segments) {
+          if (budget-- <= 0) return segs;
+          const a = _psiOrNull({ re: s.x0, im: s.y0 });
+          const b = _psiOrNull({ re: s.x1, im: s.y1 });
+          if (a && b) segs.push([a, b]);
+        }
+      }
+      return segs;
+    };
+    return { abs: pull(lc.abs || []), arg: pull(lc.arg || []) };
+  });
+
+  // Draw a pulled-back z-polyline / dot cloud inside the inset. `zToPanel` is
+  // the inset's local z→pixel transform (defined in paintZPanel); null entries
+  // break the line (gaps) and are skipped as dots.
+  function _zDrawPolyline(ctx, zToPanel, pts, stroke, lw, dash) {
+    if (!pts) return;
+    ctx.strokeStyle = stroke; ctx.lineWidth = lw;
+    if (ctx.setLineDash) ctx.setLineDash(dash || []);
+    ctx.beginPath();
+    let first = true;
+    for (const z of pts) {
+      if (!z) { first = true; continue; }
+      const p = zToPanel(z);
+      if (first) { ctx.moveTo(p.x, p.y); first = false; }
+      else        ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+    if (ctx.setLineDash) ctx.setLineDash([]);
+  }
+  function _zDrawDots(ctx, zToPanel, pts, r, fill) {
+    if (!pts) return;
+    ctx.fillStyle = fill;
+    for (const z of pts) {
+      if (!z) continue;
+      const p = zToPanel(z);
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 2 * Math.PI); ctx.fill();
+    }
+  }
+
   // S6 / F4: paint the z-panel inset in the top-right corner. Shows 𝔻
   // (unit circle for bounded families, exterior of unit circle for
-  // unbounded), the boundary of 𝔻 highlighted, and the ψ-pullback of the
-  // current orbit colored to match the w-side orbit.
+  // unbounded), the boundary of 𝔻 highlighted, and the ψ-pullback of EVERY
+  // active w-plane overlay (orbit, preimage tree, limit set, cycles, sweep,
+  // curve image, critical orbits, σ-singularities, level curves), each colored
+  // to match its w-side counterpart. Overlays are clipped to the inset box.
   function paintZPanel() {
     if (!sState.showZPanel) return;
     const ctx = getCtx();
@@ -365,6 +477,14 @@
     ctx.textAlign = 'left';
     const isUnbounded = sState.schwarz && sState.schwarz.unbounded;
     ctx.fillText(isUnbounded ? 'z ∈ 𝔻*  (|z|>1)' : 'z ∈ 𝔻  (|z|<1)', x0 + 6, y0 + 4);
+
+    // Clip everything below the header to the inset box: pulled-back overlay
+    // points can land far outside the disk (esp. unbounded 𝔻*), and without a
+    // clip they'd paint across the whole main canvas. The outer ctx.restore()
+    // at the end of this function removes the clip. (Cleared by ctx.save above.)
+    ctx.beginPath();
+    ctx.rect(x0, y0 + 17, W, H - 17);
+    ctx.clip();
 
     // z-space → panel-pixel transform.
     // For bounded: 𝔻 fits in a circle of radius 0.85·H/2 centered in the box.
@@ -400,6 +520,113 @@
     ctx.fillStyle = 'rgba(86, 119, 168, 0.10)';
     ctx.fill('evenodd');
 
+    // --- Mirrored overlays: ψ-pullbacks of the active w-plane overlays. ---
+    // Drawn bottom-to-top under the orbit; each is gated by the SAME condition
+    // that shows it in the w-plane, and uses its w-side palette. Pullbacks are
+    // cached by source identity (see _zc) so this stays cheap on repaint.
+    _zInvalidateIfPhiChanged();
+
+    // S4 / F12 level curves (under everything): |σ| teal solid, arg(σ) magenta dashed.
+    if (sState.showLevelCurves && sState.levelCurves) {
+      const zlc = _zLevelCurves();
+      if (zlc) {
+        ctx.lineWidth = 0.8; ctx.strokeStyle = 'rgba(20, 130, 130, 0.6)';
+        if (ctx.setLineDash) ctx.setLineDash([]);
+        ctx.beginPath();
+        for (const [a, b] of zlc.abs) {
+          const pa = zToPanel(a), pb = zToPanel(b);
+          ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y);
+        }
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(170, 60, 130, 0.55)';
+        if (ctx.setLineDash) ctx.setLineDash([3, 2]);
+        ctx.beginPath();
+        for (const [a, b] of zlc.arg) {
+          const pa = zToPanel(a), pb = zToPanel(b);
+          ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y);
+        }
+        ctx.stroke();
+        if (ctx.setLineDash) ctx.setLineDash([]);
+      }
+    }
+
+    // S5 / H8 sweep family (hue ramp by seed position).
+    if (sState.sweepOrbits && sState.sweepOrbits.length) {
+      const zs = _zSweep();
+      for (let i = 0; i < zs.length; i++) {
+        const t = zs.length > 1 ? i / (zs.length - 1) : 0;
+        _zDrawPolyline(ctx, zToPanel, zs[i], `hsla(${Math.round(360 * t)}, 65%, 45%, 0.6)`, 0.8);
+      }
+    }
+
+    // S5 / E11 curve forward-image (blue → red ramp by iteration).
+    if (sState.curveImage) {
+      const zci = _zCurve();
+      const K = zci.length;
+      for (let it = 0; it < K; it++) {
+        const t = K > 1 ? it / (K - 1) : 0;
+        const r = Math.round(40 + (180 - 40) * t);
+        const g = Math.round(80 + (50 - 80) * t);
+        const b = Math.round(180 + (40 - 180) * t);
+        _zDrawPolyline(ctx, zToPanel, zci[it], `rgba(${r},${g},${b},${0.85 - 0.5 * t})`, it === 0 ? 1.4 : 0.9);
+      }
+    }
+
+    // S5 / H7 critical orbits.
+    if (sState.showCriticalOrbits && sState.criticalOrbits) {
+      const palette = ['#d4570b', '#7e2d8c', '#107a40', '#b8860b'];
+      const zco = _zCritical();
+      for (let i = 0; i < zco.length; i++) {
+        const col = palette[i % palette.length];
+        _zDrawPolyline(ctx, zToPanel, zco[i].z, col, 1.1);
+        _zDrawDots(ctx, zToPanel, zco[i].z.slice(0, 1), 3, col);
+      }
+    }
+
+    // S1 preimage tree (generation ramp; edges then dots).
+    if (sState.preimageTree && sState.preimageTree.generations) {
+      const zt = _zTree();
+      if (zt) {
+        const N = zt.generations.length;
+        ctx.lineWidth = 0.7;
+        for (const e of zt.edges) {
+          const a = zt.generations[e.fromGen][e.fromIdx];
+          const b = zt.generations[e.toGen][e.toIdx];
+          if (!a || !b) continue;
+          const pa = zToPanel(a), pb = zToPanel(b);
+          ctx.strokeStyle = preimageGenColor(e.toGen, N);
+          ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+        }
+        for (let g = 0; g < N; g++) {
+          _zDrawDots(ctx, zToPanel, zt.generations[g], Math.max(1, 3.2 - g * 0.4), preimageGenColor(g, N));
+        }
+      }
+    }
+
+    // S3 limit set (subsampled pale-yellow cloud).
+    if (sState.limitSet && sState.limitSet.length) {
+      const zl = _zLimit();
+      if (zl) {
+        ctx.fillStyle = 'rgba(255, 240, 80, 0.75)';
+        for (const z of zl) {
+          if (!z) continue;
+          const p = zToPanel(z);
+          ctx.fillRect(p.x - 0.5, p.y - 0.5, 1, 1);
+        }
+      }
+    }
+
+    // S5 / E10 cycles (dashed closed polyline + dots).
+    if (sState.cycles && sState.cycles.length) {
+      const palette = ['#108a40', '#b53030', '#5677a8', '#b8860b', '#7e2d8c'];
+      const zcy = _zCycles();
+      for (let i = 0; i < zcy.length; i++) {
+        const col = palette[i % palette.length];
+        _zDrawPolyline(ctx, zToPanel, zcy[i].z, col, 1.0, [3, 2]);
+        _zDrawDots(ctx, zToPanel, zcy[i].z, 2.5, col);
+      }
+    }
+
     // z-orbit polyline + dots, matching the w-orbit color palette (green).
     const zOrbit = sState.zPanelOrbit;
     if (zOrbit && zOrbit.length > 0) {
@@ -428,6 +655,16 @@
           ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.0;
           ctx.stroke();
         }
+      }
+    }
+
+    // S4 / F3 σ-singularities on top: poles (red) + branch points (blue).
+    // Markers only (no labels — the inset is too small); matches the w-side hues.
+    if (sState.showSingularities && sState.sigmaSingularities) {
+      const zsg = _zSing();
+      if (zsg) {
+        _zDrawDots(ctx, zToPanel, zsg.poles, 3, '#d12d2d');
+        _zDrawDots(ctx, zToPanel, zsg.branchPoints, 3, '#1a3e7a');
       }
     }
     ctx.restore();
