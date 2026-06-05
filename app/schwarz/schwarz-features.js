@@ -243,7 +243,7 @@
 
   // F4: ψ-pullback of the current w-orbit. Each w in sState.orbit is run
   // through sw.psi to get the corresponding z in 𝔻 (or 𝔻*); used to render
-  // the z-history inside the z-panel inset.
+  // the z-history in the z-disk view (paintZOverlays).
   function _recomputeZPanelOrbit() {
     if (!sState.schwarz || !sState.orbit || sState.orbit.length === 0) {
       sState.zPanelOrbit = null;

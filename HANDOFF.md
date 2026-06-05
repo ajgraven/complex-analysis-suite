@@ -1419,7 +1419,12 @@ In rough chronological order across recent sessions:
       adapter `(z) => zToPixel(z.re, z.im)`. **Browser-verified on the unbounded
       deltoid**: double-click in z → the plasma-ramp preimage tree renders in 𝔻*
       clustered toward |z|=1 (its limit set); orbit pin + overlays mirror; zero
-      console errors. node-test **1134/0**, lint clean, hash `de027b1edc`.
+      console errors. node-test **1134/0**, lint clean, hash `de027b1edc`. Shipped
+      as PR #23 (squash-merged to main).
+    * **Doc cleanup follow-up** (post-merge, PR #24): scrubbed stale comments left
+      by the inset→view refactor (referenced the removed `z-panel inset` /
+      `paintZPanel` / `showZPanel`) across schwarz-paint/features/ui.js — comments
+      only, no behavior change. node-test 1134/0, lint clean.
 
 58. **Schwarz z-panel mirrors ALL overlays (ψ-pullback) (SHIPPED).** The z-panel
     inset (S6 / F4) previously pulled only the forward orbit back into 𝔻/𝔻*. It

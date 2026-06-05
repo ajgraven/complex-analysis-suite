@@ -485,11 +485,11 @@
   }
 
   // Master clear: every computed/drawn overlay. Leaves the checkbox display
-  // toggles (showSingularities / showLevelCurves / showCriticalOrbits /
-  // showZPanel) and their cached data untouched — those are dismissed via their
-  // own checkboxes (clearing the data while the box stays checked would desync).
+  // toggles (showSingularities / showLevelCurves / showCriticalOrbits) and their
+  // cached data untouched — those are dismissed via their own checkboxes
+  // (clearing the data while the box stays checked would desync).
   function clearAllOverlays() {
-    clearOrbit();                       // orbit (+ z-panel pullback)
+    clearOrbit();                       // orbit (+ z-view pullback)
     sState.preimageTree = null;         // S1 inverse tree
     sState.limitSet = null;             // S3 limit set
     sState.limitSetDim = null;

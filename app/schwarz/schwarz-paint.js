@@ -349,13 +349,13 @@
   }
 
   // ---------------------------------------------------------------------------
-  // z-panel overlay mirroring (S6 / F4). Every Schwarz overlay is stored in the
-  // w-plane; to show it in the z-panel inset each w-point is pulled back through
+  // z-view overlay mirroring (S6 / F4). Every Schwarz overlay is stored in the
+  // w-plane; to show it in the z-disk view each w-point is pulled back through
   // ψ (sState.schwarz.psi — a per-point Newton solve) into 𝔻 (or 𝔻*). ψ is
   // VIEW-INDEPENDENT, so a pullback only changes when the source overlay (or the
   // captured φ) changes — never on pan/zoom. We therefore cache each pullback
-  // keyed by (φ handle, source-array reference): the inset repaints every frame
-  // during a GPU pan but reuses the cache, and a pullback re-runs only when its
+  // keyed by (φ handle, source-array reference): the z-view repaints every frame
+  // during a pan but reuses the cache, and a pullback re-runs only when its
   // overlay is recomputed/cleared. Points with no preimage in the target domain
   // (ψ → null) become gaps, exactly as the orbit already handles.
   // ---------------------------------------------------------------------------
@@ -428,8 +428,8 @@
     return { abs: pull(lc.abs || []), arg: pull(lc.arg || []) };
   });
 
-  // Draw a pulled-back z-polyline / dot cloud inside the inset. `zToPanel` is
-  // the inset's local z→pixel transform (defined in paintZPanel); null entries
+  // Draw a pulled-back z-polyline / dot cloud. `zToPanel` is the z→pixel
+  // transform supplied by paintZView (it takes a {re,im} object); null entries
   // break the line (gaps) and are skipped as dots.
   function _zDrawPolyline(ctx, zToPanel, pts, stroke, lw, dash) {
     if (!pts) return;
@@ -482,7 +482,7 @@
     ctx.stroke();
     ctx.strokeStyle = '#1a3e7a'; ctx.lineWidth = 1.6;
     ctx.beginPath(); ctx.arc(o.x, o.y, Rpx, 0, 2 * Math.PI); ctx.stroke();
-    // paintZOverlays calls its transform as fn(zObject) (the inset's zToPanel(z)
+    // paintZOverlays calls its transform as fn(zObject) (the zToPanel(z)
     // contract); zToPixel takes (re, im), so adapt — passing zToPixel directly
     // made every overlay point map to (NaN, NaN) and silently vanish.
     paintZOverlays(ctx, (z) => zToPixel(z.re, z.im));
@@ -629,7 +629,7 @@
     }
 
     // S4 / F3 σ-singularities on top: poles (red) + branch points (blue).
-    // Markers only (no labels — the inset is too small); matches the w-side hues.
+    // Markers only (no labels, to keep the z-view uncluttered); w-side hues.
     if (sState.showSingularities && sState.sigmaSingularities) {
       const zsg = _zSing();
       if (zsg) {
