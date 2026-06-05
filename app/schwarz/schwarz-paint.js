@@ -25,6 +25,7 @@
     const syncCanvasSize  = s.syncCanvasSize;
     const worldToPixel    = s.worldToPixel;
     const zToPixel        = s.zToPixel;       // z-disk → pixel (z-view transform)
+    const activeRenderer  = s.activeRenderer; // 'gpu' | 'cpu' (z field source)
     const KIND_FUND       = s.KIND_FUND;
     const KIND_ESC        = s.KIND_ESC;
     const KIND_INT        = s.KIND_INT;
@@ -462,18 +463,26 @@
   // time field — computed over the zView transform with w = φ(z) (see
   // schwarz-render.js) — comes from one of two sources:
   //   • CPU path: sState.field (blitted here via paintField), drawn on this 2D
-  //     canvas. Call paintZView() with no argument.
+  //     canvas — paint the backdrop + field.
   //   • GPU path: the WebGL layer below (u_viewMode=1 shader) already drew the
-  //     field. Call paintZView(true) — we skip the backdrop + paintField and
-  //     leave this 2D canvas transparent so the GL field shows through, drawing
-  //     only ∂𝔻 + axes + the ψ-pulled-back overlays on top.
+  //     field. We must skip the backdrop + paintField and leave this 2D canvas
+  //     transparent so the GL field shows through, drawing only ∂𝔻 + axes +
+  //     the ψ-pulled-back overlays on top.
+  // The source is derived from activeRenderer() (NOT a caller-passed flag) so
+  // that EVERY repaint path — doRecompute, renderImmediate, paintAll, hover-
+  // orbit, resize — does the right thing. Otherwise a stray full paintZView()
+  // (e.g. from a hover repaint) would fill the opaque backdrop over the GL
+  // field, making the GPU render vanish except while actively dragging (where
+  // renderImmediate keeps re-running the overlay-only paint). `overlayOnly`
+  // remains as an explicit override for safety.
   // ---------------------------------------------------------------------------
   function paintZView(overlayOnly) {
     const ctx = getCtx(); if (!ctx) return;
     syncCanvasSize();
     const cssW = sState.zView.cssW, cssH = sState.zView.cssH;
+    const glField = overlayOnly || (activeRenderer && activeRenderer() === 'gpu');
     ctx.clearRect(0, 0, cssW, cssH);
-    if (!overlayOnly) {
+    if (!glField) {
       ctx.fillStyle = '#f3f4f7';               // backdrop shown until the field arrives
       ctx.fillRect(0, 0, cssW, cssH);
       paintField();                            // blits the z escape-time field if present

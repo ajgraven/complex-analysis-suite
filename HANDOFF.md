@@ -1380,8 +1380,20 @@ In rough chronological order across recent sessions (newest first):
     * **PQD caveat preserved:** explicit `renderer:'gpu'` + a PQD returns `'gpu'`
       from `activeRenderer()` even on capacityError (pre-existing plane quirk);
       z inherits it unchanged — auto (the default) is unaffected. Not fixed here.
-    * Verify: node-test 1134/0, lint clean, `version:check` clean. Branch
-      `feat/schwarz-zview-gpu`.
+    * **Follow-up fix (repaint):** the GPU z field lives on the GL layer and the
+      2D canvas must stay transparent for it to show. `paintZView` originally took
+      a caller-passed `overlayOnly` flag, but stray full repaints — hover-orbit,
+      resize, `paintAll`, clear-overlays — called `paintZView()` with no flag and
+      filled the opaque `#f3f4f7` backdrop over the GL field, so the GPU render
+      only showed *while dragging* (where `renderImmediate` kept re-running the
+      overlay-only paint). Fixed by deriving the field source inside `paintZView`
+      from `activeRenderer()` (threaded into the paint module) instead of the
+      flag: when z + GPU, it always skips the backdrop/`paintField` and leaves the
+      canvas transparent; CPU still blits the field. `overlayOnly` kept as an
+      explicit override. Browser-verified: 2D center stays alpha 0 (GL shows
+      through) after hover/resize/clear in GPU; opaque field in CPU.
+    * Verify: node-test 1134/0, lint clean, `version:check` clean. Branches
+      `feat/schwarz-zview-gpu` (#25) + `fix/schwarz-zview-gpu-repaint`.
 
 59. **Schwarz z-plane VIEW + UI streamline (SHIPPED).** The decorative 180px
     z-panel inset was promoted to a first-class **view mode** alongside plane and

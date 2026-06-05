@@ -1355,7 +1355,7 @@
     clearCanvas, paintAll, repaintField, paintBoundaryOnTop, paintOrbit,
     paintPreimageTree, paintLimitSet, paintZView, setProgress,
   } = window.QD_UI.installSchwarzPaint({
-    sState, getCtx, syncCanvasSize, worldToPixel, zToPixel,
+    sState, getCtx, syncCanvasSize, worldToPixel, zToPixel, activeRenderer,
     KIND_FUND, KIND_ESC, KIND_INT, KIND_INV, KIND_OUTSIDE,
   }));
 
