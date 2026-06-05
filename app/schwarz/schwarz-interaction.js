@@ -165,9 +165,15 @@
   // debounce a full recompute so the buffer re-sharpens once the gesture
   // settles. Used by wheel-zoom (which has no mouseup to trigger a recompute);
   // pan relies on mouseup's recompute but the live paintAll keeps it smooth.
+  let _dcRepaintRaf = null;
   let _dcRecomputeTimer = null;
   function liveDomainColoringRepaint() {
-    paintAll();
+    // Coalesce the live re-blit to one paint per frame — a pan fires many
+    // mousemoves per frame and paintAll re-blits the buffer + every overlay.
+    // Matches the rAF pattern used elsewhere (DomainPlot.render / _schwarzResizeRaf).
+    if (!_dcRepaintRaf) {
+      _dcRepaintRaf = requestAnimationFrame(() => { _dcRepaintRaf = null; paintAll(); });
+    }
     if (_dcRecomputeTimer) clearTimeout(_dcRecomputeTimer);
     _dcRecomputeTimer = setTimeout(() => {
       _dcRecomputeTimer = null;

@@ -29,6 +29,7 @@
     const syncCanvasSize     = s.syncCanvasSize;
     const activeRenderer     = s.activeRenderer;
     const showGLLayer        = s.showGLLayer;
+    const isSchwarzActive    = s.isSchwarzActive;
     const KIND_FUND          = s.KIND_FUND;
     const KIND_ESC           = s.KIND_ESC;
     const KIND_INT           = s.KIND_INT;
@@ -49,8 +50,7 @@
     // the GPU branch would re-show the GL layer and the pyramid would blit over
     // whatever tab is now active. (The tab-leave handler cancels hover/click
     // timers but not this debounce.)
-    const _panel = document.getElementById('controls-schwarz');
-    if (_panel && _panel.hidden) return;
+    if (!isSchwarzActive()) return;
     syncCanvasSize();
 
     // Invalidate any prior render up front (covers CPU→GPU: the GPU branch

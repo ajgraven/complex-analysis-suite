@@ -226,9 +226,7 @@
     if (_schwarzResizeRaf) return;
     _schwarzResizeRaf = requestAnimationFrame(() => {
       _schwarzResizeRaf = null;
-      const panel = document.getElementById('controls-schwarz');
-      if (!panel || panel.hidden) return;
-      if (!sState.schwarz || sState.viewMode !== 'plane') return;
+      if (!isSchwarzActive() || !sState.schwarz || sState.viewMode !== 'plane') return;
       syncCanvasSize();
       if (sState.mode === 'domain-coloring') { _recomputeDomainColoring(); paintAll(); }
       else requestRecompute();
@@ -1064,8 +1062,7 @@
       glC.addEventListener('webglcontextrestored', () => {
         sState.gpu = null; sState.gpuMsg = '';
         ensureGPU();
-        const panel = document.getElementById('controls-schwarz');
-        if (sState.schwarz && panel && !panel.hidden && sState.viewMode === 'plane') {
+        if (sState.schwarz && isSchwarzActive() && sState.viewMode === 'plane') {
           requestRecompute();
         }
       }, false);
@@ -1126,8 +1123,7 @@
     if (!sState.schwarz || !sState.gpu || activeRenderer() !== 'gpu') return;
     // Belt-and-suspenders: never re-show the GL layer / paint when the Schwarz
     // tab isn't active (e.g. a late control event after a tab switch).
-    const _panel = document.getElementById('controls-schwarz');
-    if (_panel && _panel.hidden) return;
+    if (!isSchwarzActive()) return;
     showGLLayer(true);
     try {
       sState.gpu.setColormap(sState.grid.colormap);
@@ -1182,6 +1178,16 @@
     sState.view.cssH = Math.max(50, rect.height);
   }
 
+  // True when the Schwarz tab is the active tab (its controls panel is shown).
+  // Single predicate for the render-entry / resize / context-restore guards, so
+  // a late timer / global event can't paint into another tab. (Hoisted, so the
+  // resize listener above and the installSchwarzRender injection below can both
+  // use it regardless of source order.)
+  function isSchwarzActive() {
+    const p = document.getElementById('controls-schwarz');
+    return !!p && !p.hidden;
+  }
+
   // ---------------------------------------------------------------------------
   // Progressive renderer.
   // ---------------------------------------------------------------------------
@@ -1212,7 +1218,7 @@
   // Progressive renderer (installed after paint so its paint deps are on sCtx).
   ({ requestRecompute } = window.QD_UI.installSchwarzRender({
     sState, clearCanvas, paintAll, paintBoundaryOnTop, paintOrbit, setProgress,
-    syncCanvasSize, activeRenderer, showGLLayer,
+    syncCanvasSize, activeRenderer, showGLLayer, isSchwarzActive,
     KIND_FUND, KIND_ESC, KIND_INT, KIND_INV, KIND_OUTSIDE,
   }));
 
