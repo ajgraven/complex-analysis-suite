@@ -99,24 +99,32 @@
       </div>
 
       <div class="hint" id="pqd-hint" style="display:none; margin-top:6px;">
-        Power-weighted QD: <code>∫<sub>Ω</sub> f(w)·|w|<sup>2(α−1)</sup> dA = ∮<sub>∂Ω</sub> f·h dw</code>
+        <b>Power-weighted QD.</b> Bounded Ω, weight <code>|w|<sup>2(α−1)</sup></code>; <code>φ = (R<sup>#</sup>)<sup>1/α</sup></code>.
+        <details><summary>Details</summary>
+        <code>∫<sub>Ω</sub> f(w)·|w|<sup>2(α−1)</sup> dA = ∮<sub>∂Ω</sub> f·h dw</code>
         for real <code>α &gt; 0, α ≠ 1</code> (α=1 is the classical case). Riemann map
         factors as <code>φ(z) = (R<sup>#</sup>(z))<sup>1/α</sup></code>, where
         <code>R</code> is rational with poles at the preimages <code>z<sub>j</sub></code> of <code>p<sub>j</sub></code>.
         Realizability constraint: <code>C<sub>j,1</sub></code> must be large enough that
         the preimages stay inside <code>𝔻</code>.
+        </details>
       </div>
       <div class="hint" id="pqd-singular-hint" style="display:none; margin-top:6px;">
-        Bounded <i>singular</i> PQD: <code>0 ∈ Ω</code>. The Riemann map gains a
+        <b>Bounded singular PQD.</b> <code>0 ∈ Ω</code>; φ gains a Blaschke factor pinned by the mass constraint.
+        <details><summary>Details</summary>
+        The Riemann map gains a
         Blaschke factor, <code>φ(z) = b<sub>z₀</sub>(z)·(R<sup>#</sup>(z))<sup>1/α</sup></code>,
         where <code>φ(z<sub>0</sub>) = 0</code> (the origin's preimage). No point
         charge: the <code>|w|<sup>2(α−1)</sup></code> weight makes the quadrature
         data unique, and the <b>mass/area constraint</b> (the <code>f=1</code> case
         of the identity) pins <code>|z<sub>0</sub>|</code>. <code>w₀ = φ(0) ≠ 0</code>
         is a non-origin interior point.
+        </details>
       </div>
       <div class="hint" id="pqd-unbounded-hint" style="display:none; margin-top:6px;">
-        <i>Unbounded</i> PQD: Ω is unbounded with bounded complement K
+        <b>Unbounded PQD.</b> Ω reaches ∞ (<code>0 ∉ Ω</code>); <code>φ = z·(r<sup>#</sup>)<sup>1/α</sup></code> on <code>𝔻*</code>, conformal radius c.
+        <details><summary>Details</summary>
+        Ω is unbounded with bounded complement K
         (<code>0 ∉ Ω</code>). The test class is <code>A₀(Ω)</code> (analytic,
         vanishing at ∞), so the weighted integral converges for all α &gt; 0.
         Riemann map <code>φ(z) = z·(r<sup>#</sup>(z))<sup>1/α</sup></code> on
@@ -124,69 +132,56 @@
         (conformal radius <code>c</code>, a user input). Supports finite poles
         and a polynomial part of any degree (pole at ∞), e.g. monomial
         <code>h = α·k·w<sup>k−1</sup></code> (Thm 4.5.3).
+        </details>
       </div>
       <div class="hint" id="pqd-unbounded-singular-hint" style="display:none; margin-top:6px;">
-        <i>Unbounded singular</i> PQD: Ω unbounded with <code>0 ∈ Ω</code>. The
-        Riemann map gains a Blaschke factor,
+        <b>Unbounded singular PQD.</b> Ω unbounded with <code>0 ∈ Ω</code>; φ gains a Blaschke factor on <code>𝔻*</code>.
+        <details><summary>Details</summary>
+        The Riemann map gains a Blaschke factor,
         <code>φ(z) = z·b<sub>z₀</sub>(z)·(r<sup>#</sup>(z))<sup>1/α</sup></code> on
         <code>𝔻*</code>, where <code>z₀ ∈ 𝔻*</code> is the origin's preimage
         (<code>φ(z₀)=0</code>) and <code>r<sup>#</sup>(∞)=|cz₀|<sup>α</sup></code>.
         No point charge; z₀ is pinned by <code>r(z₀)=0</code> (Prop 4.6.3, h
         analytic at 0). c is the conformal radius.
+        </details>
       </div>
 
       <div class="hint" id="lqd-hint" style="display:none; margin-top:6px;">
-        Log-weighted QD: <code>∫<sub>Ω</sub> f(w)/|w|² dA = ∮<sub>∂Ω</sub> f·h dw</code>.
+        <b>Log-weighted QD.</b> Weight <code>1/|w|²</code>, non-singular (<code>0 ∉ Ω̄</code>).
+        <details><summary>Details</summary>
+        <code>∫<sub>Ω</sub> f(w)/|w|² dA = ∮<sub>∂Ω</sub> f·h dw</code>.
         Non-singular only: requires <code>0 ∉ Ω̄</code>, so <code>w₀ = φ(0)</code> must be nonzero.
+        </details>
       </div>
       <div class="hint" id="lqd-singular-hint" style="display:none; margin-top:6px;">
-        Singular log-weighted QD: <code>0 ∈ Ω</code>; test functions
+        <b>Singular log-weighted QD.</b> <code>0 ∈ Ω</code>; residue q at the origin; <code>φ = γ·b<sub>z₀</sub>·exp(r#)</code>.
+        <details><summary>Details</summary>
+        Test functions
         <code>f ∈ L¹<sub>a</sub>(Ω; ρ₀)</code> automatically vanish at 0. Riemann map
         factors as <code>φ(z) = γ · b<sub>z₀</sub>(z) · exp(r#(z))</code>. The pole of
         <code>h</code> at the origin contributes residue <code>q</code> (complex);
         <code>q = 0</code> is the degenerate case with no log-charge.
+        </details>
       </div>
       <div class="hint" id="lqd-unbounded-hint" style="display:none; margin-top:6px;">
-        Unbounded non-singular log-weighted QD: <code>0 ∉ Ω̄</code>, <code>∞ ∈ Ω</code>;
-        test functions <code>f ∈ L¹<sub>a</sub>(Ω; ρ₀)</code> vanish at <code>∞</code>.
+        <b>Unbounded log-weighted QD.</b> <code>0 ∉ Ω̄</code>, <code>∞ ∈ Ω</code>; <code>φ = c·z·exp(r#−r#(∞))</code> on <code>𝔻*</code>.
+        <details><summary>Details</summary>
+        Test functions <code>f ∈ L¹<sub>a</sub>(Ω; ρ₀)</code> vanish at <code>∞</code>.
         Riemann map: <code>φ(z) = c·z · exp(r#(z) − r#(∞))</code> on <code>𝔻*</code>,
         with conformal radius <code>c = φ′(∞)</code>. The <code>− r#(∞)</code>
         subtraction pins the leading coefficient at ∞ to exactly <code>c</code>.
+        </details>
       </div>
       <div class="hint" id="lqd-unbounded-singular-hint" style="display:none; margin-top:6px;">
-        Unbounded singular log-weighted QD: <code>0 ∈ Ω</code> AND <code>∞ ∈ Ω</code>;
-        test functions <code>f</code> vanish at BOTH 0 and ∞ (e.g.
+        <b>Unbounded singular log-weighted QD.</b> <code>0 ∈ Ω</code> and <code>∞ ∈ Ω</code>; Blaschke factor + residue q.
+        <details><summary>Details</summary>
+        Test functions <code>f</code> vanish at BOTH 0 and ∞ (e.g.
         <code>w/(w−b)<sup>k</sup></code> for <code>k ≥ 2</code>, <code>b ∈ K</code>).
         Riemann map: <code>φ(z) = c·|z₀|·z·b<sub>z₀</sub>(z) · exp(r#(z) − r#(∞))</code>
         with <code>z₀ ∈ 𝔻*</code> the preimage of 0, and <code>q</code> (complex)
         the residue of <code>h</code> at the origin. <code>q = 0</code> is the
         degenerate case with no log-charge.
-      </div>
-    </section>
-
-    <!-- Singular-LQD charge q. Visible only in lqd-bounded-singular mode. -->
-    <section class="card hidden" id="q-card">
-      <h2>Residue q at origin</h2>
-      <div class="hint">
-        Complex residue of <code>h</code> at the simple pole at <code>w = 0</code>
-        (the singular pole inside Ω). Dial via text or the |q| / arg(q) sliders.
-      </div>
-      <div class="row">
-        <label>q =
-          <input type="text" class="cnum" id="q-manual" value="0" aria-label="Point-charge residue q at the origin (complex)">
-        </label>
-      </div>
-      <div class="slider1d-row" style="margin-left: 0;">
-        <label>|q|</label>
-        <input type="range" id="q-mag-slider" class="slider1d"
-               min="0" max="3" step="any" value="0">
-        <span class="slider1d-val" id="q-mag-val">0.000</span>
-      </div>
-      <div class="slider1d-row" style="margin-left: 0;">
-        <label>arg</label>
-        <input type="range" id="q-arg-slider" class="slider1d"
-               min="-3.14159265" max="3.14159265" step="any" value="0">
-        <span class="slider1d-val" id="q-arg-val">0.000π</span>
+        </details>
       </div>
     </section>
 
@@ -240,44 +235,78 @@
       </div>
     </section>
 
-    <!-- Card #2A: bounded normalization (φ(0)) -->
-    <section class="card" id="w0-card">
-      <h2>Riemann map center φ(0)</h2>
-      <div class="row">
-        <label><input type="radio" name="w0mode" value="auto" checked> Centroid of poles</label>
-      </div>
-      <div class="row">
-        <label>
-          <input type="radio" name="w0mode" value="manual"> Manual:
-          <input type="text" class="cnum" id="w0-manual" value="0" disabled aria-label="Riemann-map center w₀ = φ(0) (complex)">
-        </label>
-      </div>
-    </section>
+    <!-- Map parameters: the scalar gauge/weight knobs of the Riemann map,
+         merged from the former φ(0), PQD-α, and singular-LQD-q cards. Each row
+         group shows only in the modes that use it; applyModeVisuals() (ui.js)
+         toggles #map-alpha-rows / #map-w0-rows / #map-q-rows and the card itself
+         from desc.cards.{alpha,w0,q}. (The unbounded conformal radius c stays in
+         #c-card, shown beside the φ(z) display inside the Domain-type card.)
+         All inner element ids are preserved verbatim from the former cards. -->
+    <section class="card" id="map-params-card">
+      <h2>Map parameters</h2>
 
-    <!-- Card #2A-PQD: α input for PQD mode. Hidden outside 'pqd-bounded'
-         mode (see setMode). Accepts any real α > 0, α ≠ 1 (α=1 is classical
-         Family.boundedQD; use the Classical group). Quick-pick buttons set
-         common values. -->
-    <section class="card hidden" id="alpha-card">
-      <h2>PQD power α</h2>
-      <div class="row">
-        <label style="display: inline-flex; align-items: center; gap: 8px;">
-          α =
-          <input type="number" id="alpha-input" min="0.05" step="0.05" value="2"
-                 style="width: 80px;" aria-label="Power-weight exponent α">
-        </label>
-        <span style="margin-left: 10px;">
-          <button type="button" class="alpha-quick" data-alpha="0.5">½</button>
-          <button type="button" class="alpha-quick" data-alpha="2">2</button>
-          <button type="button" class="alpha-quick" data-alpha="3">3</button>
-        </span>
+      <!-- PQD power α (pqd-* modes). -->
+      <div id="map-alpha-rows" class="hidden">
+        <div class="domain-mode-group-label" style="margin:0 0 4px;">PQD power α</div>
+        <div class="row">
+          <label style="display: inline-flex; align-items: center; gap: 8px;">
+            α =
+            <input type="number" id="alpha-input" min="0.05" step="0.05" value="2"
+                   style="width: 80px;" aria-label="Power-weight exponent α">
+          </label>
+          <span style="margin-left: 10px;">
+            <button type="button" class="alpha-quick" data-alpha="0.5">½</button>
+            <button type="button" class="alpha-quick" data-alpha="2">2</button>
+            <button type="button" class="alpha-quick" data-alpha="3">3</button>
+          </span>
+        </div>
+        <div class="hint" style="margin-top: 6px;">
+          Weight is <code>|w|<sup>2(α−1)</sup></code> for any real <code>α &gt; 0</code>
+          (<code>α ≠ 1</code>). <code>α &gt; 1</code>: weight vanishes at 0;
+          <code>α &lt; 1</code>: weight blows up at 0 (the LQD-limit regime,
+          <code>→ |w|<sup>−2</sup></code> as <code>α → 0⁺</code>). <code>α = 1</code>
+          is classical QD — use the Classical group above.
+        </div>
       </div>
-      <div class="hint" style="margin-top: 6px;">
-        Weight is <code>|w|<sup>2(α−1)</sup></code> for any real <code>α &gt; 0</code>
-        (<code>α ≠ 1</code>). <code>α &gt; 1</code>: weight vanishes at 0;
-        <code>α &lt; 1</code>: weight blows up at 0 (the LQD-limit regime,
-        <code>→ |w|<sup>−2</sup></code> as <code>α → 0⁺</code>). <code>α = 1</code>
-        is classical QD — use the Classical group above.
+
+      <!-- Riemann map center φ(0) (bounded families). -->
+      <div id="map-w0-rows">
+        <div class="domain-mode-group-label" style="margin:6px 0 4px;">Riemann map center φ(0)</div>
+        <div class="row">
+          <label><input type="radio" name="w0mode" value="auto" checked> Centroid of poles</label>
+        </div>
+        <div class="row">
+          <label>
+            <input type="radio" name="w0mode" value="manual"> Manual:
+            <input type="text" class="cnum" id="w0-manual" value="0" disabled aria-label="Riemann-map center w₀ = φ(0) (complex)">
+          </label>
+        </div>
+      </div>
+
+      <!-- Singular-LQD residue q at the origin (lqd-bounded-singular). -->
+      <div id="map-q-rows" class="hidden">
+        <div class="domain-mode-group-label" style="margin:6px 0 4px;">Residue q at origin</div>
+        <div class="hint">
+          Complex residue of <code>h</code> at the simple pole at <code>w = 0</code>
+          (the singular pole inside Ω). Dial via text or the |q| / arg(q) sliders.
+        </div>
+        <div class="row">
+          <label>q =
+            <input type="text" class="cnum" id="q-manual" value="0" aria-label="Point-charge residue q at the origin (complex)">
+          </label>
+        </div>
+        <div class="slider1d-row" style="margin-left: 0;">
+          <label>|q|</label>
+          <input type="range" id="q-mag-slider" class="slider1d"
+                 min="0" max="3" step="any" value="0">
+          <span class="slider1d-val" id="q-mag-val">0.000</span>
+        </div>
+        <div class="slider1d-row" style="margin-left: 0;">
+          <label>arg</label>
+          <input type="range" id="q-arg-slider" class="slider1d"
+                 min="-3.14159265" max="3.14159265" step="any" value="0">
+          <span class="slider1d-val" id="q-arg-val">0.000π</span>
+        </div>
       </div>
     </section>
 
@@ -315,23 +344,30 @@
       <div class="row">
         <label><input type="checkbox" id="auto-fit"> Auto-fit view on solve</label>
       </div>
-      <div class="row">
-        <label><input type="checkbox" id="auto-switch-singular" checked> Auto-switch singular ⇄ non-singular PQD when the boundary crosses the origin</label>
-      </div>
-      <div class="row">
-        <label>Vector field:
-          <select id="vector-field-mode">
-            <option value="off" selected>Off</option>
-            <option value="polya">Pólya field   h̄(w)</option>
-            <option value="external" id="vf-external-opt">External field   w − h̄(w)</option>
-          </select>
-        </label>
-      </div>
-      <div class="row">
-        <label title="Plot the w-plane images of {z : φ'(z) = 0}. Critical points inside the relevant disk (𝔻 for bounded, 𝔻* for unbounded) predict univalence loss; those near |z|=1 predict imminent degeneracy.">
-          <input type="checkbox" id="critical-set-toggle"> Critical-set image (zeros of φ′)
-        </label>
-      </div>
+
+      <!-- Visualization overlays + power-user solve behaviour. Collapsed by
+           default to keep the everyday solve controls above uncluttered. All
+           ids are preserved (applyModeVisuals reads #vf-external-opt by id). -->
+      <details class="solver-advanced" style="margin-top:8px;">
+        <summary style="cursor:pointer; user-select:none; font-size:12px; color:#555;">Visualization &amp; advanced</summary>
+        <div class="row" style="margin-top:6px;">
+          <label>Vector field:
+            <select id="vector-field-mode">
+              <option value="off" selected>Off</option>
+              <option value="polya">Pólya field   h̄(w)</option>
+              <option value="external" id="vf-external-opt">External field   w − h̄(w)</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label title="Plot the w-plane images of {z : φ'(z) = 0}. Critical points inside the relevant disk (𝔻 for bounded, 𝔻* for unbounded) predict univalence loss; those near |z|=1 predict imminent degeneracy.">
+            <input type="checkbox" id="critical-set-toggle"> Critical-set image (zeros of φ′)
+          </label>
+        </div>
+        <div class="row">
+          <label><input type="checkbox" id="auto-switch-singular" checked> Auto-switch singular ⇄ non-singular PQD when the boundary crosses the origin</label>
+        </div>
+      </details>
     </section>
 
     <!-- ============== Search options (advanced) ============== -->
@@ -352,31 +388,31 @@
         <!-- A. Phases -->
         <div class="search-opt-group">
           <div class="search-opt-group-title">Phases</div>
-          <div class="row"><label><input type="checkbox" id="so-phase-direct"        checked> Direct algebraic (A1)</label></div>
-          <div class="row"><label><input type="checkbox" id="so-phase-continuation"  checked> Continuation in t (A2)</label></div>
-          <div class="row"><label><input type="checkbox" id="so-phase-multistart"    checked> Multistart, perturbed (A3)</label></div>
-          <div class="row"><label><input type="checkbox" id="so-phase-diverse"       checked> Diverse seeds, log-uniform (A4)</label></div>
-          <div class="row"><label><input type="checkbox" id="so-phase-deflation"     checked> Deflation, Brown-Gearhart (A5)</label></div>
+          <div class="row"><label><input type="checkbox" id="so-phase-direct"        checked> Direct algebraic</label></div>
+          <div class="row"><label><input type="checkbox" id="so-phase-continuation"  checked> Continuation in t</label></div>
+          <div class="row"><label><input type="checkbox" id="so-phase-multistart"    checked> Multistart, perturbed</label></div>
+          <div class="row"><label><input type="checkbox" id="so-phase-diverse"       checked> Diverse seeds, log-uniform</label></div>
+          <div class="row"><label><input type="checkbox" id="so-phase-deflation"     checked> Deflation (Brown–Gearhart)</label></div>
         </div>
 
         <!-- B. Multistart budget -->
         <div class="search-opt-group">
           <div class="search-opt-group-title">Multistart budget</div>
-          <div class="row"><label>numRestarts <input type="number" id="so-num-restarts"   min="0"  step="1"   placeholder="preset" class="so-num"></label></div>
+          <div class="row"><label>Newton restarts <input type="number" id="so-num-restarts"   min="0"  step="1"   placeholder="preset" class="so-num"></label></div>
           <div class="row"><label>Diverse seeds <input type="number" id="so-num-diverse"  min="0"  step="1"   placeholder="auto"   class="so-num"></label></div>
           <div class="row"><label>Deflation seeds <input type="number" id="so-num-deflation" min="0" step="1" placeholder="auto"   class="so-num"></label></div>
-          <div class="row"><label>Bg alt chunks <input type="number" id="so-bg-chunks"   min="0"  step="1"   placeholder="preset" class="so-num"></label></div>
-          <div class="row"><label>Bg alt chunk size <input type="number" id="so-bg-chunk-size" min="1" step="1" placeholder="preset" class="so-num"></label></div>
+          <div class="row"><label>Background search chunks <input type="number" id="so-bg-chunks"   min="0"  step="1"   placeholder="preset" class="so-num"></label></div>
+          <div class="row"><label>Chunk size <input type="number" id="so-bg-chunk-size" min="1" step="1" placeholder="preset" class="so-num"></label></div>
           <div class="row"><label><input type="checkbox" id="so-keep-searching"> Keep searching (no chunk cap)</label></div>
         </div>
 
         <!-- C. Newton & continuation -->
         <div class="search-opt-group">
           <div class="search-opt-group-title">Newton &amp; continuation</div>
-          <div class="row"><label>Newton maxIter <input type="number" id="so-newton-maxiter" min="1" step="1" placeholder="preset" class="so-num"></label></div>
-          <div class="row"><label>Newton tol <input type="text"   id="so-newton-tol"    placeholder="preset" class="so-num"></label></div>
-          <div class="row"><label>Cont. tStart <input type="text" id="so-cont-tstart"   placeholder="preset" class="so-num"></label></div>
-          <div class="row"><label>Cont. growFactor <input type="text" id="so-cont-grow" placeholder="preset" class="so-num"></label></div>
+          <div class="row"><label>Newton max iterations <input type="number" id="so-newton-maxiter" min="1" step="1" placeholder="preset" class="so-num"></label></div>
+          <div class="row"><label>Newton tolerance <input type="text"   id="so-newton-tol"    placeholder="preset" class="so-num"></label></div>
+          <div class="row"><label>Continuation t-start <input type="text" id="so-cont-tstart"   placeholder="preset" class="so-num"></label></div>
+          <div class="row"><label>Continuation grow factor <input type="text" id="so-cont-grow" placeholder="preset" class="so-num"></label></div>
         </div>
 
         <!-- D. Deflation -->

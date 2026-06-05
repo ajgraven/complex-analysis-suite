@@ -599,7 +599,7 @@ function setC(c) {
 // CANONICAL mode-refresh. INVARIANT: any code path that assigns `state.mode`
 // programmatically MUST call this immediately after (or go through setMode, which
 // does). It is the single source of truth for mode-dependent card visibility
-// (#w0-card, #c-card, #alpha-card, #q-card, the poly section), α validation, the
+// (#c-card, the #map-params-card row groups, the poly section), α validation, the
 // c input (via setC), the poly list, and the domain-type segmented control (via
 // syncDomainModeControl). Bypassing it leaves stale UI until the next refresh
 // (the historical _sendHToInverseTab c-card bug). It is idempotent — safe to call
@@ -607,14 +607,20 @@ function setC(c) {
 function applyModeVisuals() {
   const desc = modeDescriptor();
   // Card visibility from descriptor.
-  $('#w0-card').classList.toggle('hidden',           !desc.cards.w0);
+  // Map-parameters card merges the φ(0), PQD-α, and singular-LQD-q knobs
+  // (index.html #map-params-card). Toggle each row group from its descriptor
+  // flag, and the parent card iff ANY group is shown. The conformal radius c
+  // stays in its own #c-card (nested under the φ(z) display in the Domain card).
+  $('#map-alpha-rows').classList.toggle('hidden', !desc.cards.alpha);
+  $('#map-w0-rows').classList.toggle('hidden',    !desc.cards.w0);
+  $('#map-q-rows').classList.toggle('hidden',     !desc.cards.q);
+  $('#map-params-card').classList.toggle('hidden',
+    !(desc.cards.alpha || desc.cards.w0 || desc.cards.q));
   $('#c-card').classList.toggle('hidden',            !desc.cards.c);
   $('#poly-part-section').classList.toggle('hidden', !desc.cards.poly);
-  $('#q-card').classList.toggle('hidden',            !desc.cards.q);
-  // α card: visible only in PQD modes. When hidden, force state.alpha back to 1
+  // α rows: visible only in PQD modes. When hidden, force state.alpha back to 1
   // so the next mode-switch doesn't carry a stale PQD config; when shown, ensure
   // state.alpha is a valid PQD value (> 0, ≠ 1; default 2).
-  $('#alpha-card').classList.toggle('hidden', !desc.cards.alpha);
   if (desc.cards.alpha) {
     if (!(state.alpha > 0) || state.alpha === 1) state.alpha = 2;
     const inp = $('#alpha-input');
@@ -868,18 +874,17 @@ function mountQolHelp() {
      Edit poles + residues structurally below, or paste a math.js expression
      in the textbox at the top. The inverse solver finds Ω whose
      quadrature data matches this h.`);
-  H(headerOf('#q-card'),
-    `<b>Residue at the origin (q).</b> For <i>singular LQDs</i> (0 ∈ Ω), q is a
-     free parameter — the residue of the log-weighted Schwarz function at w=0 —
-     linked to the finite poles and any polynomial part of h by a closed-form
-     constraint. (Singular PQDs need no q: the |w|<sup>2(α−1)</sup> weight makes
-     the quadrature data unique.)`);
-  H(headerOf('#w0-card'),
-    `<b>Riemann map center φ(0).</b> The image of the disk center 0 ∈ 𝔻; with c
-     it fixes the gauge of φ. Bounded families: a free parameter (set it
-     manually, or leave on Auto for the pole centroid). On Auto the centroid is
-     recomputed continuously as you drag a pole, so it stays inside the domain.
-     Unbounded families: implicit, not editable.`);
+  H(headerOf('#map-params-card'),
+    `<b>Map parameters.</b> The scalar knobs of the Riemann map, shown per family.
+     <b>PQD power α</b> (PQD modes): the weight is |w|<sup>2(α−1)</sup>; α = 1 is
+     classical. <b>Center φ(0)</b> (bounded families): the image of 0 ∈ 𝔻 — a free
+     parameter (Manual, or Auto = pole centroid, recomputed as you drag a pole);
+     implicit for unbounded families. <b>Residue q at origin</b> (singular LQDs,
+     0 ∈ Ω): the residue of the log-weighted Schwarz function at w=0, linked to
+     the finite poles and any polynomial part by a closed-form constraint.
+     (Singular PQDs need no q: the |w|<sup>2(α−1)</sup> weight makes the
+     quadrature data unique. The unbounded conformal radius c has its own control
+     beside φ(z) in the Domain-type card.)`);
   H(headerOf('#c-card'),
     `<b>Conformal radius c = φ'(∞).</b> Scales the Riemann map at infinity for
      unbounded families; with w₀ it fixes the gauge of φ. Unbounded QDs form a
@@ -1460,8 +1465,8 @@ window.QD.Direct._sendHToInverseTab = function (hData, opts) {
   //
   // INVARIANT (see applyModeVisuals): any programmatic `state.mode` write MUST be
   // followed by applyModeVisuals() — the single source of truth for which
-  // mode-dependent cards (#c-card, #alpha-card, #q-card, poly section, …) are
-  // visible and for syncing the domain-type control. The earlier bug here set
+  // mode-dependent UI (#c-card, the #map-params-card row groups, poly section, …)
+  // is visible and for syncing the domain-type control. The earlier bug here set
   // state.mode + syncDomainModeControl only, leaving #c-card hidden until a
   // refresh; applyModeVisuals fixes that and is idempotent.
   opts = opts || {};
@@ -1494,7 +1499,7 @@ window.QD.Direct._sendHToInverseTab = function (hData, opts) {
   state.mode = mode;
   applyModeVisuals();
 
-  // q (LQD-singular origin pole) lives in the now-visible q-card.
+  // q (LQD-singular origin pole) lives in the now-visible #map-q-rows group.
   if (opts.q) setQ(QD.Complex.toString(opts.q, 6));
 
   renderPolesList();

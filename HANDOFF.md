@@ -1344,6 +1344,63 @@ enforces c_1 ≠ 0.
 
 In rough chronological order across recent sessions (newest first):
 
+61. **QD-tab UI streamline (SHIPPED).** Moderate production-polish pass on the QD
+    tab (inverse + direct), mirroring the Schwarz streamline conventions
+    (`.card`/`.seg-btn`, `<details>Advanced</details>`, help-by-id). **No element
+    ids renamed** — achieved by relocating DOM nodes + retitling, so handlers /
+    `buildHData` / URL-state / jsdom tests are unaffected.
+    * **Merged 3 tiny mode-cards → one `#map-params-card`** ("Map parameters").
+      The former `#w0-card` (φ(0)), `#alpha-card` (PQD α), and `#q-card`
+      (singular-LQD residue q) are now row groups `#map-w0-rows` / `#map-alpha-rows`
+      / `#map-q-rows` inside one card, each with a small group sub-label; all
+      inner ids (`#alpha-input`, `.alpha-quick`, `#w0-manual`, `name=w0mode`,
+      `#q-manual`, `#q-*-slider`, …) preserved verbatim. `applyModeVisuals()`
+      (ui.js) now toggles the three row groups + the parent card (shown iff any
+      group is) from the unchanged `desc.cards.{w0,alpha,q}` flags; the α-reset
+      side-effect block is unchanged; `ui-modes.js` untouched. `mountQolHelp()`
+      dropped the stale `#w0-card`/`#q-card` help bindings and added one combined
+      `#map-params-card` help. **`#c-card` (conformal radius) stays nested under
+      the φ(z) display in `#domain-mode-card`** (lower-risk — its relocation logic
+      ~ui.js 982, help, and toggle are untouched).
+    * **Solver card split:** boundary samples / aggressiveness / auto-fit stay
+      visible; the viz/power-user toggles (`#vector-field-mode`,
+      `#critical-set-toggle`, `#auto-switch-singular`) moved into a
+      `<details>Visualization &amp; advanced</details>` inside the same card. Ids
+      preserved → `applyModeVisuals` still finds `#vf-external-opt`.
+    * **Relabels:** stripped the "(A1)…(A5)" phase codes in Search options and
+      spelled out the terse budget/Newton labels (`numRestarts`→`Newton restarts`,
+      `Cont. tStart`→`Continuation t-start`, …). `#so-*` ids unchanged.
+    * **Condensed hints:** the 8 per-mode formula hints in `#domain-mode-card`
+      each got a one-line bold summary + a `<details>Details</details>` wrapping
+      the formula prose. Outer `id`s kept, so the `applyModeVisuals` display toggle
+      is untouched.
+    * **Direct sub-mode (light pass):** already `.card`/`.seg-btn`-consistent;
+      wrapped the numerical-mode "Truncation degree (DFT cap)" knob in a
+      `<details>Advanced</details>`. Card titles already match inverse; no merges.
+    * **Follow-up fix (warm-start gauge — pre-existing bug, not from the UI
+      change):** the conformal-radius **c** slider (and α / manual w₀) appeared
+      inert for unbounded domains. Root cause in the **1D drag-end warm-start**
+      (`ui-solve.js solveAndRender`): it passed `opts.warmPhi = state.current.
+      primary.phi` (the previous φ) **without** injecting the current gauges. The
+      solver's warm-start trusts the seed's own gauge, so a stale warmPhi pinned
+      the OLD c/α/w₀ and converged in 0 iterations — the result kept the old c
+      regardless of the slider. (Confirmed at the solver level: `solveInverseQD`
+      with a c=0.5 warmPhi but `opts.c=2.0` returns c=0.5; injecting c into the
+      seed first returns c=2.0.) Fix: in `solveAndRender`, only pass the warm seed
+      when it is **family/structure-compatible** with the target (same test the
+      live `quickSolveAndRender` uses), and run the mode's `warmStartUpdate(warm,
+      norm)` to inject c/α/w₀ first. The compatibility guard also prevents
+      corrupting an incompatible seed after a mode/preset switch (an over-eager
+      first fix did exactly that → trivial φ≈z on the first solve). Browser-
+      verified: c slider now scales the unbounded domain (c=0.5→0.3→1.0→1.8 all
+      track); bounded still solves; no console errors.
+    * Verify: node-test **1134/0**, lint clean, `version:check` clean. Browser:
+      all six mode configs (classical bounded/unbounded, PQD bounded/unbounded,
+      LQD bounded-singular, reset) show exactly the right `#map-*` groups + `#c-card`
+      + poly section; a solve completes; Solver Advanced + Search-options +
+      condensed-hint disclosures work; direct view mounts with aligned titles; no
+      console errors. Branch `feat/qd-ui-streamline`.
+
 60. **Schwarz z-disk view: GPU support (SHIPPED).** The z-disk view (#59) was
     CPU-only because "there was no GPU shader for φ(z)". That premise was wrong —
     the WebGL fragment shader (`schwarz-webgl.js`) already contains `evalPhi(z)`

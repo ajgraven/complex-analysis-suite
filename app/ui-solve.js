@@ -291,9 +291,38 @@ function solveAndRender() {
       // and it converges; otherwise it falls through to the full pipeline, so
       // this is a pure speedup with no behavior change. φ is plain data
       // (clonePhi shape) → structured-clone-safe across the worker postMessage.
-      const warmPhi = state.current && state.current.success && state.current.primary
+      //
+      // CRITICAL: inject the CURRENT normalization gauges (c / α / w₀) into the
+      // warm seed via the mode's warmStartUpdate hook FIRST. The solver's
+      // warm-start trusts the seed's own gauge, so a stale warmPhi would pin the
+      // OLD c / α / w₀ and converge in 0 iterations — making the conformal-radius
+      // slider, the α input, and manual w₀ appear inert (state + the solver
+      // options changed, but the warm seed silently overrode them).
+      //
+      // Only pass the seed when it is family/structure-compatible with the target
+      // (same compatibility test the live quick-solve uses), so a mode switch or
+      // a preset change to a different pole structure starts fresh instead of
+      // warm-starting from — and corrupting with the gauge update — an
+      // incompatible φ.
+      const prevPhi = state.current && state.current.success && state.current.primary
                     ? state.current.primary.phi : null;
-      if (warmPhi) opts.warmPhi = warmPhi;
+      if (prevPhi) {
+        const wdesc = modeDescriptor();
+        const compatible =
+          prevPhi.family === wdesc.familyTag &&
+          !!prevPhi.unbounded === !!norm.unbounded &&
+          Array.isArray(prevPhi.branches) &&
+          prevPhi.branches.length === built.poles.length &&
+          prevPhi.branches.every((br, j) =>
+            br.A.length === built.poles[j].principal.length);
+        if (compatible) {
+          const warm = QD.clonePhi(prevPhi);
+          if (typeof wdesc.warmStartUpdate === 'function') {
+            try { wdesc.warmStartUpdate(warm, norm); } catch (e) { /* keep raw seed */ }
+          }
+          opts.warmPhi = warm;
+        }
+      }
       result = await runOne(opts);
       if (myToken !== _solveAndRenderToken) return;   // superseded by a newer call
 

@@ -702,12 +702,15 @@
       </div>
       <div class="dir-phi-num-msg" style="font-size: 11px; min-height: 1.2em; margin-bottom: 6px;"></div>
 
-      <div class="row">
-        <label>Truncation degree (DFT cap):
-          <input type="number" class="dir-phi-num-maxorder" min="1" max="32"
-                 value="${directState.numMaxOrder}" style="width: 64px;">
-        </label>
-      </div>
+      <details style="margin-bottom: 4px;">
+        <summary style="cursor:pointer; user-select:none; font-size:12px; color:#555;">Advanced</summary>
+        <div class="row" style="margin-top:6px;">
+          <label>Truncation degree (DFT cap):
+            <input type="number" class="dir-phi-num-maxorder" min="1" max="32"
+                   value="${directState.numMaxOrder}" style="width: 64px;">
+          </label>
+        </div>
+      </details>
 
       <div class="dir-phi-num-diag" style="margin-top: 8px; font-size: 11px; color: #5677a8; font-family: ui-monospace, monospace;"></div>
       <div class="dir-phi-num-warnings" style="margin-top: 4px; font-size: 11px; color: #b8860b;"></div>
