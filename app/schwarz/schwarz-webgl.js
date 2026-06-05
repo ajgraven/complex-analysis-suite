@@ -115,6 +115,10 @@ uniform int   u_maxIter;
 uniform float u_escapeR;
 uniform int   u_scaleMode;             // 0=smooth, 1=discrete, 2=log, 3=sqrt, 4=modulo
 uniform int   u_modK;                  // for modulo
+// View mode: 0 = plane (frag → w directly), 1 = z-disk (frag → z, then w = φ(z)).
+// In z-mode the same view-transform uniforms carry the zView frame, so the
+// fragment maps to a z-coordinate; we disk-clamp and lift via evalPhi(z).
+uniform int   u_viewMode;
 
 // Family enum:
 //   0 = boundedQD                 (φ = w₀ + Σ branches; F = conj(w₀) + R##)
@@ -542,10 +546,32 @@ void main() {
   // screen-y grows downward, but the canvas's CSS coordinate system is also
   // top-left. We compute world coords assuming y-up in world space.
   vec2 frag = gl_FragCoord.xy;        // (x: left→right, y: bottom→top)
-  // World coord at this fragment center, with y flipped so screen-up is +Im.
+  // Coordinate at this fragment center, with y flipped so screen-up is +Im.
+  // In plane mode this is the world point w; in z-disk mode it is z ∈ 𝔻/𝔻*
+  // (the same view-transform uniforms carry the zView frame).
+  vec2 p;
+  p.x = u_viewCenter.x + (frag.x - 0.5 * u_canvasSize.x) / u_pxPerUnit;
+  p.y = u_viewCenter.y + (frag.y - 0.5 * u_canvasSize.y) / u_pxPerUnit;
+
   vec2 w;
-  w.x = u_viewCenter.x + (frag.x - 0.5 * u_canvasSize.x) / u_pxPerUnit;
-  w.y = u_viewCenter.y + (frag.y - 0.5 * u_canvasSize.y) / u_pxPerUnit;
+  if (u_viewMode == 1) {
+    // z-disk view: p is z. Off-disk (outside 𝔻 bounded / inside the hole
+    // unbounded) → neutral gray matching the CPU z off-disk fill
+    // ([224,226,232], schwarz-paint.js). Otherwise lift z → w = φ(z).
+    float r2 = dot(p, p);
+    bool offDisk = (u_unbounded == 1) ? (r2 <= 1.0) : (r2 >= 1.0);
+    if (offDisk) {
+      outColor = vec4(224.0/255.0, 226.0/255.0, 232.0/255.0, 1.0);
+      return;
+    }
+    w = evalPhi(p);
+    if (any(isnan(w)) || any(isinf(w))) {
+      outColor = vec4(224.0/255.0, 226.0/255.0, 232.0/255.0, 1.0);
+      return;
+    }
+  } else {
+    w = p;
+  }
 
   if (!inOmega(w)) {
     outColor = kindToColor(4, 0);
@@ -848,7 +874,7 @@ void main() {
       'viewCenter','pxPerUnit','canvasSize','unbounded','w0','c',
       'polyA','polyALen','branchZ','branchA','branchACount','nBranches',
       'maxIter','escapeR','mask','maskCenter','maskHalfExtent','colormap',
-      'scaleMode','modK',
+      'scaleMode','modK','viewMode',
       // LQD-specific uniforms (zero/unset for classical families).
       'family','gamma','z0','absZ0','rInfConj',
       // Polynomial-h β-correction (HANDOFF #22 / #26): unbounded LQDs only.
@@ -1074,6 +1100,9 @@ void main() {
       const scaleModeId = SCALE_MODE_ID[opts.scaleMode || 'smooth'] | 0;
       gl.uniform1i(U.scaleMode, scaleModeId);
       gl.uniform1i(U.modK, Math.max(2, (opts.modK | 0) || 8));
+      // View mode: 1 = z-disk (frag → z → w = φ(z)), 0 = plane (frag → w).
+      // Default 0 keeps the plane path byte-for-byte unchanged.
+      gl.uniform1i(U.viewMode, opts.viewMode === 'z' ? 1 : 0);
 
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, phiState.mask);

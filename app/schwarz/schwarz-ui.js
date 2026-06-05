@@ -168,7 +168,7 @@
   // Forward bindings for the Phase-3 paint module (assigned by the install near
   // the end of this file; called by name throughout — see schwarz-paint.js).
   let clearCanvas, paintAll, repaintField, paintBoundaryOnTop, paintOrbit;
-  let paintPreimageTree, paintLimitSet, setProgress;
+  let paintPreimageTree, paintLimitSet, paintZView, setProgress;
   let requestRecompute;
   let attachCanvasHandlers, onCanvasClick, onCanvasDblClick, onMouseMove;
   let runHoverOrbit, pinOrbitAt, _schwarzInter;
@@ -210,10 +210,13 @@
       showGLLayer(false);
       _activateSphereView();
     } else {
-      // 2D views (plane or z). z is always CPU-rendered.
+      // 2D views (plane or z). Both can use the GPU (the shader's u_viewMode
+      // branch handles z → w = φ(z)); doRecompute owns the final GL visibility,
+      // this just avoids a flash. PQDs fall back to CPU via activeRenderer().
       if (sState.sphereView) sState.sphereView.deactivate();
       if (sState.schwarz) {
-        showGLLayer(sState.viewMode === 'plane' && activeRenderer() === 'gpu');
+        const is2D = sState.viewMode === 'plane' || sState.viewMode === 'z';
+        showGLLayer(is2D && activeRenderer() === 'gpu');
         requestRecompute();
       } else {
         showGLLayer(false);
@@ -771,11 +774,13 @@
       _activateSphereView();
       return;
     }
-    // 2D views (plane or z). z is always CPU-rendered (no GPU shader for φ(z));
-    // its zView transform was framed at capture, so just recompute.
+    // 2D views (plane or z). Both can use the GPU — the shader's u_viewMode
+    // branch lifts z → w = φ(z) for the z-disk view; doRecompute owns the final
+    // GL visibility, this just avoids a flash on switch. (PQD families have no
+    // GPU shader and fall back to CPU automatically via activeRenderer().)
     if (sState.sphereView) sState.sphereView.deactivate();
     if (!sState.schwarz) { showGLLayer(false); clearCanvas(); return; }
-    showGLLayer(mode === 'plane' && activeRenderer() === 'gpu');
+    showGLLayer((mode === 'plane' || mode === 'z') && activeRenderer() === 'gpu');
     requestRecompute();
   }
 
@@ -922,7 +927,7 @@
           <input id="schwarz-modk" type="number" min="2" max="64" value="8" style="width:52px;">
         </label>
       </div>
-      <div class="row view-plane-only" style="margin-top:8px;">
+      <div class="row view-2d" style="margin-top:8px;">
         <label>Renderer:
           <select id="schwarz-renderer">
             <option value="auto" selected>auto (GPU if available)</option>
@@ -953,10 +958,11 @@
         if (sState.sphereView) sState.sphereView.setRenderParams({ maxIter: sState.grid.maxIter });
         if (sState.viewMode !== 'sphere') requestRecompute();   // plane + z re-iterate
       });
-      // Recolor the current field without recomputing: GPU re-renders, CPU/z
-      // repaints the existing field. z is always CPU (never renderImmediate).
+      // Recolor the current field without recomputing: GPU re-renders (plane or
+      // z-disk — renderImmediate handles both), CPU repaints the existing field.
       const recolor = () => {
-        if (sState.viewMode === 'plane' && activeRenderer() === 'gpu') renderImmediate();
+        const is2D = sState.viewMode === 'plane' || sState.viewMode === 'z';
+        if (is2D && activeRenderer() === 'gpu') renderImmediate();
         else if (sState.viewMode !== 'sphere') repaintField();
       };
       document.getElementById('schwarz-colormap').addEventListener('change', e => {
@@ -1218,22 +1224,29 @@
   // Canvas interaction -> schwarz-interaction.js (Phase-3 item E). The drag
   // state + attachCanvasHandlers + the handlers below are installed near the
   // end of this file; renderImmediate (used by render too) stays here.
-  // Synchronous GPU re-render. Used during drag/zoom in GPU mode.
+  // Synchronous GPU re-render. Used during drag/zoom in GPU mode for both the
+  // plane and z-disk views (the shader's u_viewMode branch lifts z → w = φ(z)).
   function renderImmediate() {
     if (!sState.schwarz || !sState.gpu || activeRenderer() !== 'gpu') return;
     // Belt-and-suspenders: never re-show the GL layer / paint when the Schwarz
     // tab isn't active (e.g. a late control event after a tab switch).
     if (!isSchwarzActive()) return;
+    const inZ = sState.viewMode === 'z';
     showGLLayer(true);
     try {
       sState.gpu.setColormap(sState.grid.colormap);
-      sState.gpu.render(sState.view, {
+      sState.gpu.render(inZ ? sState.zView : sState.view, {
         maxIter:   sState.grid.maxIter,
         scaleMode: sState.grid.scaleMode,
         modK:      sState.grid.modK,
+        viewMode:  inZ ? 'z' : 'w',
       });
-      paintBoundaryOnTop();
-      paintOrbit();
+      if (inZ) {
+        paintZView(true);
+      } else {
+        paintBoundaryOnTop();
+        paintOrbit();
+      }
     } catch (e) {
       // Fall through silently; the next debounced recompute will surface
       // any persistent error.
@@ -1340,7 +1353,7 @@
   // ---------------------------------------------------------------------------
   ({
     clearCanvas, paintAll, repaintField, paintBoundaryOnTop, paintOrbit,
-    paintPreimageTree, paintLimitSet, setProgress,
+    paintPreimageTree, paintLimitSet, paintZView, setProgress,
   } = window.QD_UI.installSchwarzPaint({
     sState, getCtx, syncCanvasSize, worldToPixel, zToPixel,
     KIND_FUND, KIND_ESC, KIND_INT, KIND_INV, KIND_OUTSIDE,
@@ -1348,8 +1361,8 @@
 
   // Progressive renderer (installed after paint so its paint deps are on sCtx).
   ({ requestRecompute } = window.QD_UI.installSchwarzRender({
-    sState, clearCanvas, paintAll, paintBoundaryOnTop, paintOrbit, setProgress,
-    syncCanvasSize, activeRenderer, showGLLayer, isSchwarzActive,
+    sState, clearCanvas, paintAll, paintBoundaryOnTop, paintOrbit, paintZView,
+    setProgress, syncCanvasSize, activeRenderer, showGLLayer, isSchwarzActive,
     KIND_FUND, KIND_ESC, KIND_INT, KIND_INV, KIND_OUTSIDE,
   }));
 

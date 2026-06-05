@@ -1342,7 +1342,46 @@ enforces c_1 ≠ 0.
 
 ## 7. Recent work (this session)
 
-In rough chronological order across recent sessions:
+In rough chronological order across recent sessions (newest first):
+
+60. **Schwarz z-disk view: GPU support (SHIPPED).** The z-disk view (#59) was
+    CPU-only because "there was no GPU shader for φ(z)". That premise was wrong —
+    the WebGL fragment shader (`schwarz-webgl.js`) already contains `evalPhi(z)`
+    (it calls it inside the Newton inverse) and the full σ escape-time loop for
+    6 families (bounded/unbounded classical QD + the 4 LQDs). So z-disk GPU is
+    not a φ port; it's a one-uniform branch.
+    * **Shader (`schwarz-webgl.js`):** new `uniform int u_viewMode` (0 = plane,
+      1 = z-disk). `main()` computes `vec2 p` from the fragment via the existing
+      view-transform uniforms (which carry the **zView** frame in z-mode). When
+      `u_viewMode==1`: disk-clamp (`u_unbounded ? r2<=1 : r2>=1` → off-disk gray
+      `[224,226,232]`, **hard-coded to match** the CPU `paintField` z gray, NOT
+      `kindToColor(4)`'s plane gray `[245,245,248]`), else `w = evalPhi(p)`. Plane
+      path (`w = p`) unchanged. `render(view, opts)` sets the uniform from
+      `opts.viewMode === 'z'` (default 0 ⇒ plane is byte-for-byte identical).
+    * **Dispatch (`schwarz-render.js`):** `doRecompute` GPU guard dropped its
+      `viewMode!=='z'` clause; in z it passes `sState.zView` + `viewMode:'z'` to
+      `render()` and paints overlays via `paintZView(true)` (overlay-only). PQDs
+      have no GPU shader → `setPhi` sets `capacityError` → `activeRenderer()`
+      returns `'cpu'` (auto), so they keep the CPU z-path with **no new fallback
+      logic**.
+    * **Overlay-only paint (`schwarz-paint.js`):** `paintZView(overlayOnly)` —
+      when true (GPU drew the field on the GL layer), skips the backdrop fill +
+      `paintField` and leaves the 2D canvas transparent so the GL field shows
+      through, drawing only ∂𝔻 + axes + `paintZOverlays`. `paintZView` is now
+      **exported** from the paint module and threaded ui.js → render.js (and used
+      by `renderImmediate`).
+    * **Interactive parity (`schwarz-ui.js` `renderImmediate`, `schwarz-
+      interaction.js` pan/wheel):** `renderImmediate` generalized to z (zView +
+      `viewMode:'z'` + `paintZView(true)`); drag/zoom in z now use it when GPU is
+      active (was always CPU-debounce). The `recolor()` helper and `setViewMode`/
+      tab-handler `showGLLayer` gates were generalized from `plane` to `plane||z`.
+      Renderer `<select>` reclassified `view-plane-only` → `view-2d` (now applies
+      in z too).
+    * **PQD caveat preserved:** explicit `renderer:'gpu'` + a PQD returns `'gpu'`
+      from `activeRenderer()` even on capacityError (pre-existing plane quirk);
+      z inherits it unchanged — auto (the default) is unaffected. Not fixed here.
+    * Verify: node-test 1134/0, lint clean, `version:check` clean. Branch
+      `feat/schwarz-zview-gpu`.
 
 59. **Schwarz z-plane VIEW + UI streamline (SHIPPED).** The decorative 180px
     z-panel inset was promoted to a first-class **view mode** alongside plane and
@@ -1362,7 +1401,9 @@ In rough chronological order across recent sessions:
       seg-btns). `_applyModeOptionsVisibility()` keeps the hover/tree controls
       visible in z even if plane was left in domain-coloring.
     * **CPU render (schwarz-render.js + schwarz-cpu-worker.js):** `doRecompute`
-      forces the CPU path in z (no GPU shader for φ(z)); a `domain:'z'` flag rides
+      originally forced the CPU path in z (**superseded by #60**, which added the
+      GPU z-path; the CPU path below is now the *fallback* for PQDs / no-WebGL /
+      GPU failure); a `domain:'z'` flag rides
       the worker payload; both `chainPass` and the worker per-pixel loop add the
       z-branch — disk-mask (`unbounded ? r²>1 : r²<1`) → off-disk = KIND_OUTSIDE,
       else `wpt = sw.evalPhi(z)` then the unchanged escape-time. φ needs **zero**

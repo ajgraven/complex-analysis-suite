@@ -136,11 +136,15 @@
       const av = activeView();
       av.cx -= dx / av.scale;
       av.cy += dy / av.scale;                            // screen y is flipped
-      // Repaint by view. z is always CPU → debounced recompute. Plane:
-      // domain-coloring re-blits the cached σ-image at the live transform
-      // (paintAll is self-clearing) instead of kicking the fractal pyramid;
-      // GPU renders every mousemove (10-30 ms); CPU debounces (slow pyramid).
-      if (sState.viewMode === 'z') { clearOverlay(); requestRecompute(); }
+      // Repaint by view. z-disk: GPU renders every mousemove (renderImmediate,
+      // 10-30 ms); CPU debounces the pyramid. Plane: domain-coloring re-blits
+      // the cached σ-image at the live transform (paintAll is self-clearing)
+      // instead of kicking the fractal pyramid; GPU renders immediately; CPU
+      // debounces.
+      if (sState.viewMode === 'z') {
+        if (activeRenderer() === 'gpu') renderImmediate();
+        else { clearOverlay(); requestRecompute(); }
+      }
       else if (sState.mode === 'domain-coloring') liveDomainColoringRepaint();
       else if (activeRenderer() === 'gpu') renderImmediate();
       else { clearOverlay(); requestRecompute(); }
@@ -227,7 +231,10 @@
     const after = pixelToView(sx, sy);
     av.cx += before.re - after.re;
     av.cy += before.im - after.im;
-    if (sState.viewMode === 'z') { clearOverlay(); requestRecompute(); }
+    if (sState.viewMode === 'z') {
+      if (activeRenderer() === 'gpu') renderImmediate();
+      else { clearOverlay(); requestRecompute(); }
+    }
     else if (sState.mode === 'domain-coloring') liveDomainColoringRepaint();
     else if (activeRenderer() === 'gpu') renderImmediate();
     else { clearOverlay(); requestRecompute(); }

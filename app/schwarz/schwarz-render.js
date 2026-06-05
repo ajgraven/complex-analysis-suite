@@ -10,7 +10,7 @@
 // GPU path (one synchronous frame) or the CPU path (4x4 -> 2x2 -> 1x1, off-thread
 // via QD.SchwarzCpuWorker when usable, else chunked across rAF). Bodies are
 // VERBATIM moves. Deps via sCtx: sState, the paint fns (clearCanvas / paintAll /
-// paintBoundaryOnTop / paintOrbit / setProgress, from schwarz-paint.js), the
+// paintBoundaryOnTop / paintOrbit / paintZView / setProgress, from schwarz-paint.js), the
 // GPU/geometry helpers (syncCanvasSize / activeRenderer / showGLLayer), and the
 // KIND_* pixel-class constants. `QD` (incl. QD.SchwarzCpuWorker) is the global.
 // =============================================================================
@@ -25,6 +25,7 @@
     const paintAll           = s.paintAll;
     const paintBoundaryOnTop = s.paintBoundaryOnTop;
     const paintOrbit         = s.paintOrbit;
+    const paintZView         = s.paintZView;
     const setProgress        = s.setProgress;
     const syncCanvasSize     = s.syncCanvasSize;
     const activeRenderer     = s.activeRenderer;
@@ -60,17 +61,21 @@
     const myToken = ++sState.renderToken;
     if (QD.SchwarzCpuWorker) QD.SchwarzCpuWorker.cancel();
 
-    // GPU path: synchronous, complete in one frame. The z-plane view has no GPU
-    // shader for φ(z), so it always takes the CPU path below.
-    if (sState.viewMode !== 'z' && activeRenderer() === 'gpu') {
+    // GPU path: synchronous, complete in one frame. Used for both the plane and
+    // z-disk views — the shader's u_viewMode branch lifts z → w = φ(z) for z-disk
+    // (see schwarz-webgl.js). PQD families set capacityError in setPhi, so
+    // activeRenderer() returns 'cpu' for them and they take the CPU path below.
+    const inZ = sState.viewMode === 'z';
+    if (activeRenderer() === 'gpu') {
       showGLLayer(true);
       const t0 = performance.now();
       try {
         sState.gpu.setColormap(sState.grid.colormap);
-        sState.gpu.render(sState.view, {
+        sState.gpu.render(inZ ? sState.zView : sState.view, {
           maxIter:   sState.grid.maxIter,
           scaleMode: sState.grid.scaleMode,
           modK:      sState.grid.modK,
+          viewMode:  inZ ? 'z' : 'w',
         });
       } catch (e) {
         // GPU render failed (e.g. context lost). Fall through to CPU path.
@@ -81,9 +86,15 @@
         // Field/fieldKind aren't populated under GPU rendering — hover readout
         // will fall back to coordinates-only.
         sState.field = null; sState.fieldKind = null;
-        // Boundary + orbit overlays drawn on top (no field clearing needed).
-        paintBoundaryOnTop();
-        paintOrbit();
+        // Overlays drawn on top of the GL field (no field clearing needed).
+        // z-disk: paintZView in overlay-only mode (GL drew the field); plane:
+        // boundary + orbit.
+        if (inZ) {
+          paintZView(true);
+        } else {
+          paintBoundaryOnTop();
+          paintOrbit();
+        }
         const ms = (performance.now() - t0).toFixed(0);
         setProgress('GPU render: ' + ms + ' ms' + (sState.gpuMsg ? '  (' + sState.gpuMsg + ')' : ''));
         return;

@@ -460,17 +460,24 @@
   // z-plane view (S6 / F4): the Schwarz tiling uniformized onto the unit disk 𝔻
   // (or its exterior 𝔻* for unbounded Ω), drawn as the MAIN plot. The escape-
   // time field — computed over the zView transform with w = φ(z) (see
-  // schwarz-render.js) — is in sState.field; blit it, stroke ∂𝔻 + axes, then
-  // draw the ψ-pulled-back overlays full-size. CPU / 2D only (no GL in z-mode).
+  // schwarz-render.js) — comes from one of two sources:
+  //   • CPU path: sState.field (blitted here via paintField), drawn on this 2D
+  //     canvas. Call paintZView() with no argument.
+  //   • GPU path: the WebGL layer below (u_viewMode=1 shader) already drew the
+  //     field. Call paintZView(true) — we skip the backdrop + paintField and
+  //     leave this 2D canvas transparent so the GL field shows through, drawing
+  //     only ∂𝔻 + axes + the ψ-pulled-back overlays on top.
   // ---------------------------------------------------------------------------
-  function paintZView() {
+  function paintZView(overlayOnly) {
     const ctx = getCtx(); if (!ctx) return;
     syncCanvasSize();
     const cssW = sState.zView.cssW, cssH = sState.zView.cssH;
     ctx.clearRect(0, 0, cssW, cssH);
-    ctx.fillStyle = '#f3f4f7';                 // backdrop shown until the field arrives
-    ctx.fillRect(0, 0, cssW, cssH);
-    paintField();                              // blits the z escape-time field if present
+    if (!overlayOnly) {
+      ctx.fillStyle = '#f3f4f7';               // backdrop shown until the field arrives
+      ctx.fillRect(0, 0, cssW, cssH);
+      paintField();                            // blits the z escape-time field if present
+    }
     // Unit circle ∂𝔻 + faint axes through z = 0, in the live z-view transform.
     const o = zToPixel(0, 0);
     const Rpx = sState.zView.scale;            // 1 z-unit = scale px
@@ -856,7 +863,7 @@
 
     return {
       clearCanvas, paintAll, repaintField, paintBoundaryOnTop, paintOrbit,
-      paintPreimageTree, paintLimitSet, setProgress,
+      paintPreimageTree, paintLimitSet, paintZView, setProgress,
     };
   };
 })(typeof window !== 'undefined' ? window : globalThis);
