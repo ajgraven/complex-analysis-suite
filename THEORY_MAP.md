@@ -165,12 +165,23 @@ the inverse-tab plot. Severity classifier maps `|z|` to colours
 (critical / near / safe).
 
 **Critical conformal radius.** For an unbounded QD the scale `c = φ′(∞)` is a
-free gauge; as `c` grows a zero of φ′ migrates onto `|z| = 1` and univalence is
-lost (a cusp forms, then the boundary self-overlaps). The largest `c` for which
-a valid unbounded QD exists, `c*`, is found automatically by
-[`app/solver-cmax.js`](app/solver-cmax.js) (`QD.estimateMaxConformalRadius`):
-bracket + bisection on the solver's valid-QD gate (univalent **and** quadrature
-identity). UI: the **Estimate max c** button in the inverse tab's `#c-card`.
+free gauge; as `c` grows the domain grows until `c*` — usually a **cusp** (a zero
+of φ′ migrates onto `|z| = 1`, then the boundary self-overlaps), occasionally a
+**fold** (the branch ends with φ′ still non-vanishing). `c*` is found
+automatically by [`app/solver-cmax.js`](app/solver-cmax.js)
+(`QD.estimateMaxConformalRadius`) with a **two-regime gate**: away from the cusp it
+requires a genuine QD (univalent **and** the quadrature identity holds); near the
+cusp the complement (hole) thins until the identity verifier can no longer place
+interior test points, so it switches to the geometric cusp criterion
+`g = max|z|` over φ′ zeros ([`QD.findCriticalPoints`](app/critical-set.js), valid
+while `g < 1`). Returns `mechanism: 'cusp' | 'fold'` and `critAtMax`. UI: the
+**Estimate max c** button in the inverse tab's `#c-card`.
+
+The identity verifier's interior test points come from
+[`QD.chooseHoleTestPoints`](app/solver.js) — inside the hole (even-odd ray-cast),
+ranked by clearance from both ∂Ω and h's poles. The naive `centroid + 0.18·maxDev`
+placement it replaced drifted onto a pole as `c` grew, giving a spurious 100%
+identity error and the old c\* under-estimate (HANDOFF).
 
 ---
 
@@ -185,7 +196,8 @@ identity). UI: the **Estimate max c** button in the inverse tab's `#c-card`.
 | Top-level inverse solver | `solveInverseQD` — `solver.js:790` | Stages A1-A5 (direct / continuation / multistart / diverse seeds / deflation). |
 | Boundary sampler (adaptive) | `sampleBoundaryAdaptive` — `solver.js` | Used everywhere φ(∂𝔻) is needed. |
 | Univalence check | `isBoundaryUnivalent` — `solver.js` | Polygon self-intersection on sampled boundary. |
-| Max conformal radius c\* | `estimateMaxConformalRadius` — `solver-cmax.js` | Bracket+bisection on the valid-QD gate (univalent + identity); warm-start gauge injection + confirm-invalid guard. Dependency-injected `solveFn` (worker in browser, sync solver in tests). |
+| Identity test points | `chooseHoleTestPoints` — `solver.js` | Picks interior points in the hole (ray-cast) ranked by clearance from ∂Ω + poles; shared by the unbounded identity verifiers. |
+| Max conformal radius c\* | `estimateMaxConformalRadius` — `solver-cmax.js` | Bracket+bisection with a two-regime gate: genuine-QD (univalent + identity) away from the cusp, cusp criterion `g = max|z|` over φ′ zeros (`< 1`) near it. Reports `mechanism` (cusp/fold). Warm-start gauge injection + confirm-invalid guard; dependency-injected `solveFn` (worker in browser, sync solver in tests). |
 
 ---
 

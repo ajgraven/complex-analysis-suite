@@ -26,7 +26,49 @@ priors.
 > version:sync` refreshes it after any `app/` asset change; CI's
 > `npm run version:check` fails if it's stale.
 
-## (most recent) Phase 3 — UI modularization (param-slice-ui.js split, item E / PR-E4 — COMPLETES item E)
+## (most recent) Fix — "Estimate max c" (c\*) significant under-estimate
+
+**Symptom (user-reported).** `QD.estimateMaxConformalRadius` returned c\* far below
+the truth for many unbounded QDs. Canonical case: **h = 1.5/w + 0.5/w²** (order-2
+pole AT THE ORIGIN) reported c\* ≈ **0.52**; the true maximum is a CUSP at c\* ≈ **1.46**.
+
+**Root cause — the quadrature-identity verifier, not the estimator.** The
+unbounded verifiers checked the identity at interior test points `b` placed at
+`centroid + 0.18·maxDev` (geometry-blind). As the gauge c grows and the hole K
+distorts, a test point drifts onto a pole of h, where `RHS = Σ C/(a−b)^{k+s−1}`
+blows up and the contour-integral LHS is under-resolved — so a GENUINE QD reads as
+identity-failing (`maxRelDiff` → O(1)). Proof at c=1.0: test points at −0.65 and
+−0.92 give relDiff ≈ 1e-13 (identity holds), but the one at −0.38 (near the origin
+pole) gives ≈ 1.0 and sets `maxRelDiff`. The 500-node uniform sweep (shared with
+`univalenceSamples`) compounded it at moderate c. This also mis-flagged high-c
+domains in the MAIN tab (same verifier), not just the estimator.
+
+**Fix (two layers).**
+- **Verifier (`solver.js` `QD.chooseHoleTestPoints` + `solver-uqd.js`,
+  `solver-uqd-pqd.js`):** pick test points provably inside K (even-odd ray-cast)
+  ranked by **clearance = min(dist to ∂Ω, dist to nearest pole)** — the
+  generalisation of what the SINGULAR verifiers (`_UQDLS`/`_UPQDS`) already did.
+  Floor the contour integral at ≥1500 nodes and **decouple identity sampling from
+  `univalenceSamples`** via a new `identitySamples` option threaded through
+  `attachIdentity` (default = univalenceSamples, so bounded families / the
+  param-slice fast preset are unchanged; the unbounded verifiers floor internally;
+  the c\* estimator passes 3000). A degenerate (too-thin) hole now returns
+  `maxRelDiff = ∞` (indeterminate) rather than a false OK.
+- **Estimator (`solver-cmax.js`) — two-regime gate.** Away from the cusp it still
+  gates on *univalent + identityOK* (genuine QD). NEAR the cusp the hole thins so
+  the identity becomes unverifiable; there it gates on **univalence + the cusp
+  criterion g = max|z| over φ′ zeros (`QD.findCriticalPoints`), valid while g < 1**.
+  Smaller grow steps (1.2, → 1.06 once g ≥ 0.95) track the (possibly folding)
+  branch instead of leaping onto spurious roots. Returns `mechanism: 'cusp'|'fold'`
+  and `critAtMax`; UI note (`ui.js`) names the mechanism. Stub-driven tests still
+  pass: when φ′-zero info is absent, it falls back to the classic identity gate.
+
+**Result.** cardioid c\* ≈ **1.45 [cusp]** (browser worker path, 23 solves);
+deltoid 0.50; 1-pole h=1/(w−2) now ≈ 2.94 [fold] (was 2.44, also sampling-limited);
+1pt-neg 0.75. New regression: `cmax.test.js` §7. Full suite green; cardioid c=1.0
+main-tab solve now identityOK (maxRelDiff ≈ 5e-15).
+
+## Phase 3 — UI modularization (param-slice-ui.js split, item E / PR-E4 — COMPLETES item E)
 
 The 1396-line `param-slice/param-slice-ui.js` (IIFE) was carved to **1096 lines
 (−21%)** by lifting its one heavy compute cluster into a sibling factory module —

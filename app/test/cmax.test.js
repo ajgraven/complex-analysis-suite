@@ -129,4 +129,27 @@ module.exports = async function run() {
     ok('§6 deltoid: 0.99·c* is a valid QD', isValid(below));
     ok('§6 deltoid: 1.05·c* is NOT a valid QD', !isValid(above));
   }
+
+  // ---- §7 regression: cusp-limited family h = 1.5/w + 0.5/w² (pole at origin) ---
+  // The order-2 pole AT THE ORIGIN is the case that exposed the c* under-estimate
+  // bug: the naive identity test points drifted onto the origin pole, so a genuine
+  // QD read as identity-failing and c* was capped at ~0.52. The true c* ≈ 1.46 is a
+  // CUSP (a φ′ zero reaches |z| = 1); reaching it needs (a) the robust test-point
+  // verifier and (b) the estimator's cusp criterion past the (now unverifiable)
+  // near-cusp region. See HANDOFF.
+  {
+    const hData = { poles: [{ a: { re: 0, im: 0 }, principal: [{ re: 1.5, im: 0 }, { re: 0.5, im: 0 }] }], polyPart: [] };
+    const opts = { unbounded: true, identityTol: 1e-6 };
+    const res = await estimate(hData, opts, QD.solveInverseQD, { cStart: 0.5, relTol: 1e-2, maxSolves: 80 });
+    ok('§7 cardioid: bracketed a finite c*', res.found === true, 'reason=' + res.reason);
+    ok('§7 cardioid: c* ≈ 1.46 (NOT the ~0.52 under-estimate)', approxEq(res.cMax, 1.46, 6e-2), 'cMax=' + res.cMax);
+    ok('§7 cardioid: c* well above the old buggy cap', res.cMax > 1.0, 'cMax=' + res.cMax);
+    ok('§7 cardioid: mechanism is a cusp', res.mechanism === 'cusp', 'mechanism=' + res.mechanism);
+    // Identity now verifies a genuine QD in the mid-range (was a false 100% failure
+    // at the default sampling). c = 1.0 is comfortably inside the existence region.
+    const mid = QD.solveInverseQD(hData, { ...opts, c: 1.0, identitySamples: 4000 });
+    ok('§7 cardioid: c=1.0 is a genuine QD (univalent + identity)',
+       !!(mid && mid.success && mid.primary && mid.primary.univalent && mid.primary.identityOK),
+       'maxRelDiff=' + (mid && mid.primary && mid.primary.identity && mid.primary.identity.maxRelDiff));
+  }
 };

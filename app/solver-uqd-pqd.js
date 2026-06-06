@@ -417,28 +417,19 @@
   // |w|^{2(α-1)} weight and 1/α scaling on the LHS (the generalized Schwarz
   // function S_α = (1/α) w |w|^{2(α-1)} on ∂Ω).
   function verifyQuadratureIdentity_UPQD(phi, hData, options = {}) {
-    const N = options.numSamples ?? 600;
+    // ≥1500-node contour integral (see verifyQuadratureIdentity_UQD): the peaked
+    // 1/(w−b)^k integrand is grossly under-resolved at the old 600 nodes as c grows.
+    const N = Math.max(options.numSamples ?? 0, 1500);
     const maxOrder = options.maxDegree ?? 3;
     const numTestPoints = options.numTestPoints ?? 3;
     const alpha = phi.alpha;
 
     const samples = sweepUnitCircle_UPQD(phi, N);
 
-    let cx = 0, cy = 0;
-    for (const s of samples) { cx += s.w.re; cy += s.w.im; }
-    cx /= N; cy /= N;
-    const centroid = { re: cx, im: cy };
-    let maxDev = 0;
-    for (const s of samples) {
-      const d = Math.hypot(s.w.re - cx, s.w.im - cy);
-      if (d > maxDev) maxDev = d;
-    }
-    const testPoints = [centroid];
-    for (let i = 1; i < numTestPoints; i++) {
-      const ang = 2 * Math.PI * (i - 1) / Math.max(numTestPoints - 1, 1);
-      const rr = 0.18 * maxDev;
-      testPoints.push({ re: cx + rr * Math.cos(ang), im: cy + rr * Math.sin(ang) });
-    }
+    // Test points b ∈ K, ranked by clearance from ∂Ω and the poles of h (shared
+    // QD.chooseHoleTestPoints) — replaces the geometry-blind centroid+0.18·maxDev
+    // placement that drifted onto a pole/the boundary at large c (the c* bug).
+    const testPoints = QD.chooseHoleTestPoints(samples.map(s => s.w), hData.poles, { numTestPoints });
 
     let areaScale = 0;
     for (const pole of hData.poles) {
@@ -446,6 +437,12 @@
     }
     for (const cc of (hData.polyPart || [])) areaScale += Complex.abs(cc);
     if (areaScale === 0) areaScale = 1;
+
+    if (testPoints.length === 0) {
+      return { checks: [], maxRelDiff: Infinity, maxAbsDiff: Infinity, areaScale,
+               testPoints: [], maxDeg: maxOrder, numSamples: N, alpha, unbounded: true,
+               warning: 'no test points clear of ∂Ω/poles' };
+    }
 
     const checks = [];
     let maxRelDiff = 0, maxAbsDiff = 0;

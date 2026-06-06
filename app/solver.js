@@ -1078,6 +1078,97 @@ function originInsideOmega(phi, N = 256) {
   return phi.unbounded ? !inside : inside;
 }
 
+// §c* — Robust test-point selection for the unbounded-family quadrature-identity
+// verifiers. Each verifier checks the identity at test functions f(w)=1/(w−b)^k
+// for points b in the bounded complement K (the "hole" Ω encircles). A b chosen
+// too close to ∂Ω makes the LHS contour integral ∮ f·… dw under-resolved, and a
+// b too close to a pole a_j of h makes the RHS residue terms C/(a_j−b)^{k+s−1}
+// blow up; either way that one point's relative error spuriously dominates
+// maxRelDiff and a GENUINE quadrature domain reads as identity-failing. That false
+// negative is the root cause of the c* under-estimate (HANDOFF): the
+// `centroid + 0.18·maxDev` placement the non-singular verifiers used was
+// geometry-blind, so as the gauge c grows and the hole distorts a test point
+// drifts onto a pole / the boundary.
+//
+// We pick b's that are provably inside K (even-odd ray-cast against the sampled
+// boundary polygon) and rank them by CLEARANCE = min(distance to ∂Ω, distance to
+// the nearest pole of h), keeping the best-cleared `numTestPoints`. This is the
+// generalisation of the ranking the SINGULAR unbounded verifiers already used
+// (verifyQuadratureIdentity_UQDLS / _UPQDS), now shared so all families agree.
+//
+//   polygonPts : Array<{re,im}>  — sampled ∂Ω (= ∂K), one closed loop
+//   poles      : Array<{a:{re,im}, ...}> — h's finite poles (avoided by b)
+//   opts.numTestPoints (3), opts.radii ([0.1..0.6]), opts.nAngles (12),
+//   opts.avoidOriginEps (0; set >0 when 0 ∈ Ω so the origin isn't picked)
+// Returns up to numTestPoints {re,im}; [] when K is too thin to clear any point
+// (the caller then reports the identity as indeterminate rather than a false OK).
+function chooseHoleTestPoints(polygonPts, poles, opts) {
+  opts = opts || {};
+  const want   = opts.numTestPoints || 3;
+  const radii  = opts.radii || [0.1, 0.2, 0.3, 0.45, 0.6];
+  const nAng   = opts.nAngles || 12;
+  const origEps = opts.avoidOriginEps || 0;
+  const m = polygonPts.length;
+  if (m < 3) return [];
+
+  let cx = 0, cy = 0;
+  for (const w of polygonPts) { cx += w.re; cy += w.im; }
+  cx /= m; cy /= m;
+  let maxDev = 0;
+  for (const w of polygonPts) {
+    const d = Math.hypot(w.re - cx, w.im - cy);
+    if (d > maxDev) maxDev = d;
+  }
+  if (!(maxDev > 0)) return [];
+
+  // Even-odd ray-cast: is (x,y) inside the boundary polygon (= inside K)?
+  const inside = (x, y) => {
+    let cr = 0;
+    for (let i = 0, j = m - 1; i < m; j = i++) {
+      const yi = polygonPts[i].im, yj = polygonPts[j].im;
+      if ((yi > y) !== (yj > y)) {
+        const t = (y - yi) / (yj - yi);
+        if (polygonPts[i].re + t * (polygonPts[j].re - polygonPts[i].re) > x) cr++;
+      }
+    }
+    return (cr % 2) === 1;
+  };
+  const distBoundary = (x, y) => {
+    let mn = Infinity;
+    for (const w of polygonPts) {
+      const d = Math.hypot(w.re - x, w.im - y);
+      if (d < mn) mn = d;
+    }
+    return mn;
+  };
+  const distPole = (x, y) => {
+    let mn = Infinity;
+    for (const p of (poles || [])) {
+      if (!p || !p.a) continue;
+      const d = Math.hypot(p.a.re - x, p.a.im - y);
+      if (d < mn) mn = d;
+    }
+    return mn;   // Infinity when h has no finite poles (poly-only h)
+  };
+
+  const cand = [{ re: cx, im: cy }];
+  for (const frac of radii) {
+    for (let i = 0; i < nAng; i++) {
+      const a = 2 * Math.PI * i / nAng, r = frac * maxDev;
+      cand.push({ re: cx + r * Math.cos(a), im: cy + r * Math.sin(a) });
+    }
+  }
+  const ranked = [];
+  for (const b of cand) {
+    if (origEps > 0 && Math.hypot(b.re, b.im) < origEps) continue;  // origin ∈ Ω
+    if (!inside(b.re, b.im)) continue;
+    const clr = Math.min(distBoundary(b.re, b.im), distPole(b.re, b.im));
+    if (clr > 0) ranked.push({ b, clr });
+  }
+  ranked.sort((p, q) => q.clr - p.clr);
+  return ranked.slice(0, want).map(r => r.b);
+}
+
 function registerFamily(name) {
   if (familyDispatchOrder.indexOf(name) === -1) {
     familyDispatchOrder.unshift(name);
@@ -1171,10 +1262,19 @@ function _solveOnce(hData, options = {}) {
   const deflationP       = options.deflationP     ?? 2;
   const deflateFromValid = !!options.deflateFromValid;
 
+  // Identity sampling is DECOUPLED from univalenceSamples: the quadrature-identity
+  // contour integral needs far more nodes than the polygon self-intersection test
+  // (sharply-peaked 1/(w−b)^k integrands, esp. for high-order / origin poles), so a
+  // genuine QD is not mis-flagged identity-failing as the gauge c grows (the c*
+  // under-estimate root cause). Callers that need rigor pass identitySamples (the c*
+  // estimator does); otherwise it tracks univalenceSamples and the UNBOUNDED-family
+  // verifiers apply their own ≥1500 floor internally — so bounded families and the
+  // param-slice fast preset keep their cheap, low-N identity check unchanged.
+  const identitySamples = options.identitySamples ?? univalenceSamples;
   const freshInit = () => family.initialGuess(hData, norm);
   const attachIdentity = (sol) => {
     if (!identityCheck) return sol;
-    sol.identity = family.verifyQuadratureIdentity(sol.phi, hData, { numSamples: univalenceSamples });
+    sol.identity = family.verifyQuadratureIdentity(sol.phi, hData, { numSamples: identitySamples });
     sol.identityOK = sol.identity.maxRelDiff < identityTol;
     return sol;
   };
@@ -1484,6 +1584,7 @@ const _exports = {
   solveLinearSystem, solveLeastSquares, houseQR, numericalJacobian,
   isBoundaryUnivalent, sampleBoundary, sampleBoundaryAdaptive, refineBoundaryByDeviation,
   boundarySelfIntersects, boundarySelfIntersectsBruteForce, segmentsCross,
+  chooseHoleTestPoints,
   binomialCoeff, diverseInitialGuess,
   solveInverseQD, searchAlternates, mulberry32,
   // Live (drag) solve core — one warm Newton + reduced-sample checks. Runs in

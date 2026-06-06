@@ -1153,10 +1153,14 @@ if (cEstimateBtn) cEstimateBtn.addEventListener('click', () => {
       }
 
       const cStar = res.cMax;
-      // Note: where the boundary will cusp at c* (read from the near-critical φ).
-      let note = 'largest clean domain; beyond c* the boundary cusps and self-overlaps.';
+      // Note the mechanism that set c* (res.mechanism): a CUSP (a φ′ zero reaching
+      // |z| = 1, after which the boundary self-overlaps) vs a FOLD / existence limit
+      // (the QD branch simply ends, with no cusp). For a cusp, annotate the angle.
+      let note = (res.mechanism === 'fold')
+        ? 'largest existing domain; beyond c* no valid unbounded QD exists (an existence/fold limit, not a cusp).'
+        : 'largest clean domain; beyond c* the boundary cusps and self-overlaps.';
       try {
-        if (res.phiAtMax && QD.classifyCusps) {
+        if (res.mechanism !== 'fold' && res.phiAtMax && QD.classifyCusps) {
           const cz = QD.classifyCusps(res.phiAtMax);
           if (cz && cz.cusps && cz.cusps.length) {
             note = 'incipient cusp near θ ≈ ' + cz.cusps[0].thetaDeg.toFixed(0) +

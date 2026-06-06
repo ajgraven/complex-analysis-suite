@@ -358,7 +358,13 @@
   // 8. Identity verifier — test functions f(w) = 1/(w − b)^k for b ∈ K
   // ===========================================================================
   function verifyQuadratureIdentity_UQD(phi, hData, options = {}) {
-    const N             = options.numSamples ?? 500;
+    // Floor the contour-integral resolution: the identity integrand 1/(w−b)^k is
+    // sharply peaked (acutely so for high-order / origin poles), and a uniform
+    // 500-node sweep grossly under-resolves it as the gauge c grows — a genuine QD
+    // then reads identity-failing and the c* estimate is cut short. ≥1500 nodes
+    // (the singular siblings use ≥2000) restore machine-precision accuracy where
+    // the test points are well clear of ∂Ω.
+    const N             = Math.max(options.numSamples ?? 0, 1500);
     const maxOrder      = options.maxDegree ?? 3;
     const numTestPoints = options.numTestPoints ?? 3;
 
@@ -370,27 +376,26 @@
       samples[n] = { z, w: taylor[0], phiPrime: taylor[1] };
     }
 
-    let cx = 0, cy = 0;
-    for (const s of samples) { cx += s.w.re; cy += s.w.im; }
-    cx /= N; cy /= N;
-    const centroid = { re: cx, im: cy };
-    let maxDev = 0;
-    for (const s of samples) {
-      const d = Math.hypot(s.w.re - cx, s.w.im - cy);
-      if (d > maxDev) maxDev = d;
-    }
-    const testPoints = [centroid];
-    for (let i = 1; i < numTestPoints; i++) {
-      const ang = 2 * Math.PI * (i - 1) / Math.max(numTestPoints - 1, 1);
-      const r = 0.18 * maxDev;
-      testPoints.push({ re: cx + r * Math.cos(ang), im: cy + r * Math.sin(ang) });
-    }
+    // Test points b ∈ K, ray-cast-inside and ranked by clearance from BOTH ∂Ω and
+    // every pole of h (shared QD.chooseHoleTestPoints) — replaces the old
+    // geometry-blind `centroid + 0.18·maxDev` placement that drifted onto the
+    // origin pole at large c and produced a spurious 100% identity error.
+    const testPoints = QD.chooseHoleTestPoints(samples.map(s => s.w), hData.poles, { numTestPoints });
 
     let areaScale = 0;
     for (const pole of hData.poles) {
       if (pole.principal.length > 0) areaScale += Complex.abs(pole.principal[0]);
     }
     if (areaScale === 0) areaScale = 1;
+
+    // No point clears ∂Ω + the poles ⇒ the hole is too thin to verify the identity
+    // (the near-cusp regime). Report indeterminate (maxRelDiff = ∞) rather than a
+    // false OK; the c* estimator falls back to the cusp criterion there.
+    if (testPoints.length === 0) {
+      return { checks: [], maxRelDiff: Infinity, maxAbsDiff: Infinity, areaScale,
+               testPoints: [], maxDeg: maxOrder, numSamples: N, unbounded: true,
+               warning: 'no test points clear of ∂Ω/poles' };
+    }
 
     const checks = [];
     let maxRelDiff = 0;
