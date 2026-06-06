@@ -336,9 +336,12 @@ view is active.
 * **Estimate max c** (unbounded families) — a button beside the `c` slider
   that automatically finds the critical conformal radius `c*`: the largest `c`
   for which a valid unbounded QD still exists (univalent boundary + quadrature
-  identity). It brackets and bisects on the solver's validity gate, then caps
-  the slider at `c*` and jumps to ≈ 0.99·`c*` — the largest cusp-free domain.
-  Beyond `c*` the boundary develops a cusp and self-overlaps.
+  identity). It brackets and bisects with a two-regime gate — the genuine-QD
+  identity away from the cusp, and the geometric cusp criterion (a φ′ zero
+  reaching `|z| = 1`) near it, where the thinning complement makes the identity
+  hard to verify — then caps the slider at `c*` and jumps to ≈ 0.99·`c*`. The
+  result note reports whether `c*` is a **cusp** (beyond it the boundary
+  self-overlaps) or a **fold** (the QD simply ceases to exist).
 * **φ(0)** — defaults to the centroid of the poles (manually overridable
   in bounded mode).
 * **Solver settings** — boundary samples, aggressiveness preset (Quick /

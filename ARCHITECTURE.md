@@ -102,7 +102,7 @@ load order matters: every solver-family file calls
 | Critical set | `QD.findCriticalPoints`, `QD.CriticalSet.*` |
 | Geometric properties | `QD.classifyUnivalence`, `QD.Univalence.classifyUnivalence` |
 | Boundary cusps | `QD.classifyCusps`, `QD.Cusps.classifyCusps` |
-| Max conformal radius | `QD.estimateMaxConformalRadius` (unbounded c\*; bracket+bisection on the valid-QD gate — `solver-cmax.js`) |
+| Max conformal radius | `QD.estimateMaxConformalRadius` (unbounded c\*; bracket+bisection with a two-regime gate — genuine-QD identity away from the cusp, cusp criterion `max\|z\|` over φ′ zeros near it; returns `mechanism` cusp/fold — `solver-cmax.js`) |
 | Custom h(w) text | `QD.parseH`, `QD.formatH` |
 | Cross-tab envelope (P0.1a) | `QD.PrimarySolution.{get, hasSolution, subscribe, publish, update, clear}` |
 | Warm worker (P0.2) | `QD.PrimarySolverWorker.{ensureReady, solve, cancel, isBusy, searchAlternates, cancelAux, isAuxBusy}` |
