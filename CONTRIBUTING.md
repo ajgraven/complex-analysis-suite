@@ -257,6 +257,30 @@ the manifest (`bench.js` and the test bootstrap read the same list).
 - ESLint + Prettier configs land in P3.2; both will be tuned to match
   the existing style (no churn).
 
+## Styling (CSS design tokens)
+
+`app/style.css` opens with a `:root` block of **design tokens** — the core
+palette (`--c-primary`, `--c-ink`, `--c-border`, `--c-surface`, `--c-ok/-warn/
+-err`, …) plus a spacing scale (`--sp-1`…`--sp-5`). Conventions:
+
+- **Use the tokens, not literals.** New rules should reference `var(--c-…)` /
+  `var(--sp-…)` rather than hard-coding hexes or pixel gaps. Add a new shared
+  value to `:root` once and reference it everywhere (this is the single source of
+  truth that replaced ~20 duplicated `#5677a8`s).
+- **Avoid inline `style=` for anything themeable.** Inline width/colour literals
+  can't be overridden by media queries or future themes; prefer a class.
+- **Responsive.** The sidebar is fluid (`grid-template-columns:
+  clamp(360px,28vw,460px) 1fr`); a `@media (max-width: 860px)` block stacks the
+  controls above the plot and caps fixed-width inputs to the column.
+- **Dark mode is a deferred follow-up** that the tokens enable. It additionally
+  needs the JS plot renderer themed (the plot background is a JS fill in
+  `ui-domain-plot.js` and the 2-D data palette is light-tuned), so a tokens-only
+  flip would leave the plot pane light — do both together when it's tackled.
+- **CSS isn't `?v=`-busted** like the page scripts (`<link href="style.css">` is
+  static); the service worker refreshes it via the `CACHE_VERSION` bump, so run
+  `npm run version:sync` after editing `style.css` (any `app/` asset change) and
+  hard-reload in dev.
+
 ## License & attribution
 
 When citing this codebase, cite Andrew Graven's thesis (Caltech 2026)

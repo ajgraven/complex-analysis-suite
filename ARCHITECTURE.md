@@ -48,6 +48,9 @@ flowchart LR
   subgraph Utility
     D1[parse-h.js]
     D2[critical-set.js]
+    D2a[univalence.js]
+    D2b[cusps.js]
+    D2c[solver-cmax.js]
     D3[primary-solution.js]
     D4[primary-solver-worker.js]
   end
@@ -99,6 +102,7 @@ load order matters: every solver-family file calls
 | Critical set | `QD.findCriticalPoints`, `QD.CriticalSet.*` |
 | Geometric properties | `QD.classifyUnivalence`, `QD.Univalence.classifyUnivalence` |
 | Boundary cusps | `QD.classifyCusps`, `QD.Cusps.classifyCusps` |
+| Max conformal radius | `QD.estimateMaxConformalRadius` (unbounded c\*; bracket+bisection on the valid-QD gate — `solver-cmax.js`) |
 | Custom h(w) text | `QD.parseH`, `QD.formatH` |
 | Cross-tab envelope (P0.1a) | `QD.PrimarySolution.{get, hasSolution, subscribe, publish, update, clear}` |
 | Warm worker (P0.2) | `QD.PrimarySolverWorker.{ensureReady, solve, cancel, isBusy, searchAlternates, cancelAux, isAuxBusy}` |

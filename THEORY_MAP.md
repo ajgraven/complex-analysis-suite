@@ -164,6 +164,14 @@ parameters vary.
 the inverse-tab plot. Severity classifier maps `|z|` to colours
 (critical / near / safe).
 
+**Critical conformal radius.** For an unbounded QD the scale `c = φ′(∞)` is a
+free gauge; as `c` grows a zero of φ′ migrates onto `|z| = 1` and univalence is
+lost (a cusp forms, then the boundary self-overlaps). The largest `c` for which
+a valid unbounded QD exists, `c*`, is found automatically by
+[`app/solver-cmax.js`](app/solver-cmax.js) (`QD.estimateMaxConformalRadius`):
+bracket + bisection on the solver's valid-QD gate (univalent **and** quadrature
+identity). UI: the **Estimate max c** button in the inverse tab's `#c-card`.
+
 ---
 
 ## Numerical primitives
@@ -177,6 +185,7 @@ the inverse-tab plot. Severity classifier maps `|z|` to colours
 | Top-level inverse solver | `solveInverseQD` — `solver.js:790` | Stages A1-A5 (direct / continuation / multistart / diverse seeds / deflation). |
 | Boundary sampler (adaptive) | `sampleBoundaryAdaptive` — `solver.js` | Used everywhere φ(∂𝔻) is needed. |
 | Univalence check | `isBoundaryUnivalent` — `solver.js` | Polygon self-intersection on sampled boundary. |
+| Max conformal radius c\* | `estimateMaxConformalRadius` — `solver-cmax.js` | Bracket+bisection on the valid-QD gate (univalent + identity); warm-start gauge injection + confirm-invalid guard. Dependency-injected `solveFn` (worker in browser, sync solver in tests). |
 
 ---
 

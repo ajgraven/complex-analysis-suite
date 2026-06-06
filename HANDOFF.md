@@ -1389,6 +1389,13 @@ In rough chronological order across recent sessions (newest first):
     * **Verify:** node-test **1203/0**; lint clean; `version:check` clean
       (`f1abad5f1d`). UI/CSS files are largely untested by node-test (no
       regressions expected/observed); validated end-to-end in the browser.
+    * **Docs sweep (compaction prep).** Canonical reference docs updated to cover
+      #63 + #64: `ARCHITECTURE.md` (public-`QD.*` surface row for
+      `estimateMaxConformalRadius`; `solver-cmax.js`/`univalence.js`/`cusps.js`
+      added to the module graph's Utility layer), `THEORY_MAP.md` (critical
+      conformal-radius cross-ref + numerical-primitives row), `CONTRIBUTING.md`
+      (new "Styling (CSS design tokens)" section), and the `README.md` notes for
+      both features. Inline code comments verified on all new/changed files.
 
 63. **Estimate max conformal radius c\* for unbounded QDs (SHIPPED).** For an
     unbounded family `c = φ′(∞)` is a free gauge; as `c` grows the domain grows
