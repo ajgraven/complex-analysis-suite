@@ -28,7 +28,12 @@
 
   <!-- ============== LEFT: CONTROLS ============== -->
   <aside id="controls">
-    <h1>Quadrature Domain Solver</h1>
+    <div class="app-header-row" style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin:0 0 12px 0;">
+      <h1 style="margin:0;">Quadrature Domain Solver</h1>
+      <!-- Copy-link button is appended here by ui.js (reuses QD.QoL.copyButton +
+           the live URL-hash state); shares the whole configuration incl. tab. -->
+      <span id="copy-link-host"></span>
+    </div>
 
     <!-- Tab bar: QD/LQD (inverse) and Direct problem (given φ → h).
          Tab panels are siblings below. The AQD tab is deferred to a future
@@ -467,7 +472,7 @@
            the warm worker (B3). Hidden as soon as the solve settles. -->
       <div id="solve-busy-row" class="hidden" style="margin-top: 8px;">
         <span class="search-spinner"></span>
-        <span style="font-size: 11px; color: #777;">solving…</span>
+        <span style="font-size: 11px; color: var(--c-muted);">solving… <span id="solve-elapsed"></span></span>
         <button id="solve-cancel-btn" class="small" style="margin-left: 6px;">Cancel</button>
       </div>
       <div id="try-harder-row" style="margin-top: 8px;">

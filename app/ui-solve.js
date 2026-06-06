@@ -405,13 +405,26 @@ function solveAndRender() {
 // Shown for the duration of a primary solve. The Cancel button aborts the
 // warm worker mid-solve and bumps the solve token so any late completion is
 // treated as superseded (and therefore never paints).
+// Elapsed-time ticker shown next to the "solving…" spinner so a slow solve
+// reads as in-progress rather than frozen. Cleared whenever the busy row hides.
+let _solveElapsedTimer = null;
 function showSolveBusy() {
   const row = $('#solve-busy-row');
   if (row) row.classList.remove('hidden');
+  const elapsedEl = $('#solve-elapsed');
+  if (elapsedEl) {
+    const t0 = Date.now();
+    elapsedEl.textContent = '0.0s';
+    if (_solveElapsedTimer) clearInterval(_solveElapsedTimer);
+    _solveElapsedTimer = setInterval(() => {
+      elapsedEl.textContent = ((Date.now() - t0) / 1000).toFixed(1) + 's';
+    }, 100);
+  }
 }
 function hideSolveBusy() {
   const row = $('#solve-busy-row');
   if (row) row.classList.add('hidden');
+  if (_solveElapsedTimer) { clearInterval(_solveElapsedTimer); _solveElapsedTimer = null; }
 }
 function cancelSolve() {
   const PSW = QD.PrimarySolverWorker;

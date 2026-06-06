@@ -937,6 +937,20 @@ function mountQolHelp() {
 }
 mountQolHelp();
 
+// Copy-link affordance: surface the (already-maintained) URL-hash state as a
+// one-click shareable link. Reuses QD.QoL.copyButton (clipboard + toast); the
+// hash already encodes mode / h(w) / gauges / active tab via ui-url-state.js.
+(function mountCopyLink() {
+  const host = $('#copy-link-host');
+  if (!host || !(window.QD && QD.QoL && QD.QoL.copyButton)) return;
+  const btn = QD.QoL.copyButton(() => location.href,
+    { title: 'Copy a shareable link to this configuration' });
+  btn.classList.remove('copy-btn');
+  btn.classList.add('small');
+  btn.textContent = '🔗 Copy link';
+  host.appendChild(btn);
+})();
+
 // Relocate the advanced "Search options" card to the BOTTOM of the inverse
 // sidebar — it's rarely touched, so it shouldn't sit between the everyday
 // controls. (Done in JS rather than in markup to keep the source order readable

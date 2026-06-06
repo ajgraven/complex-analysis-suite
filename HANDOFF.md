@@ -1344,6 +1344,52 @@ enforces c_1 ≠ 0.
 
 In rough chronological order across recent sessions (newest first):
 
+64. **QOL pass — design tokens, responsive layout, copy-link, feedback (SHIPPED).**
+    A focused, practitioner-first UI quality pass after a 3-agent review of the
+    whole app. (The full prioritized review report lives in the plan file
+    `please-conduct-a-comprehensive-whimsical-harp.md`.)
+    * **CSS design tokens (`style.css`).** New `:root` block defines the core
+      palette (`--c-primary` … `--c-err`) + a spacing scale; the ~20 duplicated
+      hard-coded hexes were migrated to `var(...)` (mechanical, visual-identical).
+      Single source of truth; sets up future theming. Verified: `.card h2`
+      computes to `rgb(86,119,168)` = `--c-primary`.
+    * **Responsive layout (`style.css`).** Sidebar is now fluid
+      (`grid-template-columns: clamp(360px,28vw,460px) 1fr`); a
+      `@media (max-width: 860px)` block stacks controls (capped 45vh, scroll)
+      above the plot and caps fixed-width inputs to the column. Verified in
+      Preview: 1280→360px sidebar; 760px→stacked (rows 405/495); 375px mobile→no
+      horizontal scroll.
+    * **Copy-link affordance (`index.html` header + `ui.js mountCopyLink`).** A
+      "🔗 Copy link" button reusing `QD.QoL.copyButton(() => location.href)` —
+      surfaces the already-maintained URL-hash state (`ui-url-state.js`) as a
+      shareable link (whole config incl. active tab). Reuses previously-unused
+      infra.
+    * **Solve elapsed-timer (`index.html` + `ui-solve.js`).** `#solve-elapsed`
+      span ticks `N.Ns` next to the "solving…" spinner (interval started in
+      `showSolveBusy`, cleared in `hideSolveBusy`), so slow solves read as
+      in-progress not frozen.
+    * **Direct output empty-state (`direct/direct-recompute.js`).** When no `h`
+      is produced and no error is shown, `.dir-h-display` shows a one-line hint
+      instead of a blank box.
+    * **DEVIATIONS from the approved plan (transparent):** (a) **Dark mode
+      deferred** — coherent dark mode needs the JS plot renderer themed too (the
+      plot bg is a JS `#fafafa` fill at `ui-domain-plot.js:316` and the data
+      palette is light-tuned); chrome-only dark would look half-broken, so it's a
+      follow-up the tokens now enable. (b) **Dropped as already-handled / N/A:**
+      preset `<optgroup>` (the dropdown is already mode-scoped to one family),
+      alternates "none found" (the card already hides gracefully when empty),
+      Direct Verify color salience (`.dir-verify-result` is already
+      red/green/gold), Schwarz/Param-slice pre-render empty states (those tabs
+      already have intro/help cards). Several raw agent findings were stale
+      (e.g. "c-slider max doesn't update" — fixed in #63; "Direct has no toggle"
+      — `mountViewToggle()` provides one) and excluded.
+    * **Known wrinkle (pre-existing, noted):** `<link href="style.css">` isn't
+      `?v=`-busted like the page scripts, so CSS edits only reflect after the SW's
+      versioned cache refreshes (CACHE_VERSION bump) or a hard reload.
+    * **Verify:** node-test **1203/0**; lint clean; `version:check` clean
+      (`f1abad5f1d`). UI/CSS files are largely untested by node-test (no
+      regressions expected/observed); validated end-to-end in the browser.
+
 63. **Estimate max conformal radius c\* for unbounded QDs (SHIPPED).** For an
     unbounded family `c = φ′(∞)` is a free gauge; as `c` grows the domain grows
     and at a critical scale c\* the boundary cusps then self-overlaps. New

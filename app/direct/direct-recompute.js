@@ -97,6 +97,14 @@
     } else {
       recomputeNumerical(root, hDisp, hKatex, errBox);
     }
+
+    // Empty-state guidance: with no h produced (blank input / nothing computed
+    // yet) and no error shown, replace the blank output box with a one-line hint.
+    if (hDisp && !hDisp.textContent.trim()
+        && (!hKatex || !hKatex.innerHTML.trim())
+        && (!errBox || !errBox.textContent.trim())) {
+      hDisp.innerHTML = '<span style="color:var(--c-muted)">Enter or paste φ(z) above — the resulting h(w) appears here.</span>';
+    }
   }
 
   function recomputeNumerical(root, hDisp, hKatex, errBox) {

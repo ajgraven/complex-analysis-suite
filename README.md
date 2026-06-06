@@ -348,6 +348,10 @@ view is active.
   Newton / continuation tolerances, deflation strength, identity-tol,
   RNG seed.
 * **Status, Riemann map, Alternates** cards.
+* **🔗 Copy link** (top of the sidebar) — copies a shareable URL that encodes
+  the current configuration (mode, `h(w)`, gauges, active tab); paste it to
+  restore the exact state. The whole app is also responsive (the sidebar stacks
+  above the plot on narrow viewports).
 
 **Schwarz dynamics tab.**
 * **Source-of-φ card** — mirrors the Inverse tab's last solved φ. Click

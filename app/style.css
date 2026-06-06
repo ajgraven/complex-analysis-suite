@@ -1,22 +1,53 @@
+/* ===== Design tokens =====
+   Single source of truth for the core palette + spacing scale. Introduced in
+   the QOL pass to replace ~20 duplicated hard-coded hexes and to set up future
+   theming (e.g. dark mode, which additionally needs the JS plot renderer themed
+   — deferred). Add new shared values here rather than inlining literals. */
+:root {
+  /* palette */
+  --c-primary:       #5677a8;   /* accent: headers, sliders, links, focus */
+  --c-primary-hover: #4a6792;
+  --c-accent:        #2d70c8;   /* segmented-control active fill */
+  --c-ink:           #1a2a44;   /* strong text + headings */
+  --c-text:          #2a2a2a;   /* body text */
+  --c-muted:         #777;      /* secondary text / hints */
+  --c-muted-2:       #555;      /* readouts */
+  --c-border:        #d8dbe0;   /* primary separators / rule lines */
+  --c-border-soft:   #e3e5ea;   /* card + pole borders */
+  --c-border-input:  #c5c9d2;   /* input / button borders */
+  --c-bg:            #f3f4f6;   /* app background */
+  --c-surface:       #fff;      /* cards, controls column, inputs, buttons */
+  --c-surface-2:     #fbfcfd;   /* pole rows */
+  --c-plot-bg:       #fafafa;   /* plot area (also JS-painted in ui-domain-plot) */
+  --c-hover:         #eef2f7;   /* hover wash on tabs/buttons */
+  --c-ok:            #2a8f2a;
+  --c-warn:          #b8860b;
+  --c-err:           #b53030;
+  /* spacing scale */
+  --sp-1: 4px; --sp-2: 6px; --sp-3: 8px; --sp-4: 12px; --sp-5: 16px;
+}
+
 /* ===== Layout ===== */
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  color: #2a2a2a;
-  background: #f3f4f6;
+  color: var(--c-text);
+  background: var(--c-bg);
   overflow: hidden;
 }
 
 #app {
   display: grid;
-  grid-template-columns: 410px 1fr;
+  /* Fluid sidebar: ~410px at typical widths, but shrinks on small laptops and
+     grows a little on wide monitors instead of wasting canvas space. */
+  grid-template-columns: clamp(360px, 28vw, 460px) 1fr;
   height: 100vh;
 }
 
 #controls {
-  background: #fff;
-  border-right: 1px solid #d8dbe0;
+  background: var(--c-surface);
+  border-right: 1px solid var(--c-border);
   padding: 16px;
   overflow-y: auto;
 }
@@ -24,7 +55,7 @@ body {
   font-size: 18px;
   font-weight: 600;
   margin: 0 0 12px 0;
-  color: #1a2a44;
+  color: var(--c-ink);
 }
 
 /* ===== Tab bar ===== */
@@ -32,7 +63,7 @@ body {
   display: flex;
   gap: 2px;
   margin-bottom: 12px;
-  border-bottom: 1px solid #d8dbe0;
+  border-bottom: 1px solid var(--c-border);
 }
 #tab-bar .tab-btn {
   background: transparent;
@@ -43,15 +74,15 @@ body {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  color: #5677a8;
+  color: var(--c-primary);
   border-radius: 4px 4px 0 0;
   margin-bottom: -1px;
 }
-#tab-bar .tab-btn:hover { background: #eef2f7; }
+#tab-bar .tab-btn:hover { background: var(--c-hover); }
 #tab-bar .tab-btn.active {
-  background: #fff;
-  border-color: #d8dbe0;
-  color: #1a2a44;
+  background: var(--c-surface);
+  border-color: var(--c-border);
+  color: var(--c-ink);
   font-weight: 600;
 }
 .tab-panel { display: none; }
@@ -60,7 +91,7 @@ body {
 #plot-area {
   position: relative;
   overflow: hidden;
-  background: #fafafa;
+  background: var(--c-plot-bg);
 }
 #canvas {
   display: block;
@@ -76,7 +107,7 @@ body {
   display: flex;
   gap: 6px;
   background: rgba(255,255,255,0.85);
-  border: 1px solid #d8dbe0;
+  border: 1px solid var(--c-border);
   border-radius: 6px;
   padding: 4px 6px;
   font-size: 12px;
@@ -91,7 +122,7 @@ body {
   border-radius: 4px;
   color: #1a3e7a;
 }
-#plot-overlay button:hover { background: #eef2f7; }
+#plot-overlay button:hover { background: var(--c-hover); }
 
 #plot-readout {
   position: absolute;
@@ -99,7 +130,7 @@ body {
   left: 12px;
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
   font-size: 11px;
-  color: #555;
+  color: var(--c-muted-2);
   background: rgba(255,255,255,0.75);
   padding: 2px 6px;
   border-radius: 4px;
@@ -117,12 +148,12 @@ body {
   background: rgba(255, 255, 255, 0.58);
   -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
-  border: 1px solid #d8dbe0;
+  border: 1px solid var(--c-border);
   border-radius: 6px;
   padding: 6px 8px;
   font-size: 12px;
   line-height: 1.5;
-  color: #1a2a44;
+  color: var(--c-ink);
   pointer-events: auto;
   z-index: 3;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
@@ -133,9 +164,9 @@ body {
   gap: 8px;
 }
 #sp-badge { flex: 1; font-weight: 600; }
-#sp-badge .ok   { color: #2a8f2a; }
-#sp-badge .warn { color: #b8860b; }
-#sp-badge .err  { color: #b53030; }
+#sp-badge .ok   { color: var(--c-ok); }
+#sp-badge .warn { color: var(--c-warn); }
+#sp-badge .err  { color: var(--c-err); }
 #sp-collapse {
   padding: 0 6px;
   line-height: 1.4;
@@ -143,7 +174,7 @@ body {
   border: 0;
   cursor: pointer;
   font-size: 14px;
-  color: #5677a8;
+  color: var(--c-primary);
 }
 /* Collapsed: hide the body, leaving only the badge bar (the verdict stays
    visible). The chevron flips via the .collapsed class. */
@@ -156,22 +187,22 @@ body {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #777;
+  color: var(--c-muted);
   font-weight: 600;
 }
 #status-panel summary + div { margin-top: 4px; }
 /* Status spans reused from the old cards. */
-#status-panel .ok   { color: #2a8f2a; font-weight: 600; }
-#status-panel .warn { color: #b8860b; font-weight: 600; }
-#status-panel .err  { color: #b53030; font-weight: 600; }
-#status-panel .key  { color: #777; }
+#status-panel .ok   { color: var(--c-ok); font-weight: 600; }
+#status-panel .warn { color: var(--c-warn); font-weight: 600; }
+#status-panel .err  { color: var(--c-err); font-weight: 600; }
+#status-panel .key  { color: var(--c-muted); }
 /* Geometric-property rows carry their margin/angle in a hover tooltip. */
 #status-panel .geom-row { cursor: help; }
 
 /* ===== Cards ===== */
 .card {
-  background: #fff;
-  border: 1px solid #e3e5ea;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-soft);
   border-radius: 6px;
   padding: 10px 12px;
   margin-bottom: 12px;
@@ -181,12 +212,12 @@ body {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #5677a8;
+  color: var(--c-primary);
   margin: 0 0 8px 0;
 }
 .card .hint {
   font-size: 11px;
-  color: #777;
+  color: var(--c-muted);
   margin-bottom: 6px;
 }
 
@@ -200,14 +231,14 @@ body {
   padding: 0;
   font-size: 11px; font-weight: 600;
   line-height: 1;
-  color: #777;
+  color: var(--c-muted);
   background: #eef1f6;
-  border: 1px solid #c5c9d2;
+  border: 1px solid var(--c-border-input);
   border-radius: 50%;
   cursor: help;
   vertical-align: middle;
 }
-.help-btn:hover { color: #1a2a44; background: #dde3ee; border-color: #99a3b5; }
+.help-btn:hover { color: var(--c-ink); background: #dde3ee; border-color: #99a3b5; }
 .help-btn:focus { outline: 2px solid rgba(86, 119, 168, 0.4); outline-offset: 1px; }
 
 .help-popover {
@@ -217,13 +248,13 @@ body {
   padding: 8px 10px;
   font-size: 12px;
   line-height: 1.45;
-  color: #1a2a44;
+  color: var(--c-ink);
   background: #fffef7;
-  border: 1px solid #c5c9d2;
+  border: 1px solid var(--c-border-input);
   border-radius: 6px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
 }
-.help-popover h3 { margin: 0 0 4px 0; font-size: 12px; color: #5677a8; }
+.help-popover h3 { margin: 0 0 4px 0; font-size: 12px; color: var(--c-primary); }
 .help-popover code, .help-popover kbd {
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
   font-size: 11px;
@@ -243,14 +274,14 @@ body {
   font-size: 11px;
   line-height: 1.4;
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
-  color: #1a2a44;
+  color: var(--c-ink);
   background: #fffef7;
-  border: 1px solid #c5c9d2;
+  border: 1px solid var(--c-border-input);
   border-radius: 5px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
   white-space: nowrap;
 }
-.hover-tooltip .tt-class { display: block; font-family: inherit; color: #5677a8; font-weight: 600; margin-top: 2px; }
+.hover-tooltip .tt-class { display: block; font-family: inherit; color: var(--c-primary); font-weight: 600; margin-top: 2px; }
 .hover-tooltip .tt-row   { display: block; }
 
 .copy-btn {
@@ -261,14 +292,14 @@ body {
   width: 18px; height: 18px;
   padding: 0;
   font-size: 12px;
-  color: #777;
+  color: var(--c-muted);
   background: #eef1f6;
-  border: 1px solid #c5c9d2;
+  border: 1px solid var(--c-border-input);
   border-radius: 3px;
   cursor: pointer;
   vertical-align: middle;
 }
-.copy-btn:hover { color: #1a2a44; background: #dde3ee; border-color: #99a3b5; }
+.copy-btn:hover { color: var(--c-ink); background: #dde3ee; border-color: #99a3b5; }
 
 .copy-toast {
   position: absolute;
@@ -297,17 +328,17 @@ input[type="text"], input[type="number"], select {
   font: inherit;
   font-size: 13px;
   padding: 4px 6px;
-  border: 1px solid #c5c9d2;
+  border: 1px solid var(--c-border-input);
   border-radius: 4px;
-  background: #fff;
-  color: #1a2a44;
+  background: var(--c-surface);
+  color: var(--c-ink);
 }
 input[type="text"]:focus, input[type="number"]:focus, select:focus {
   outline: none;
-  border-color: #5677a8;
+  border-color: var(--c-primary);
   box-shadow: 0 0 0 2px rgba(86, 119, 168, 0.18);
 }
-input.invalid { border-color: #b53030; background: #fcf2f2; }
+input.invalid { border-color: var(--c-err); background: #fcf2f2; }
 input[type="text"].cnum { width: 100px; font-family: ui-monospace, "SF Mono", Consolas, monospace; }
 
 /* 1-D sliders (magnitude / argument) attached to residue inputs */
@@ -328,21 +359,21 @@ input[type="text"].cnum { width: 100px; font-family: ui-monospace, "SF Mono", Co
   width: 28px;
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
   font-size: 11px;
-  color: #5677a8;
+  color: var(--c-primary);
 }
 .slider1d {
   flex: 1 1 auto;
   min-width: 80px;
   height: 16px;
   margin: 0;
-  accent-color: #5677a8;
+  accent-color: var(--c-primary);
 }
 .slider1d-val {
   font-family: ui-monospace, monospace;
   font-size: 10px;
   width: 56px;
   text-align: right;
-  color: #555;
+  color: var(--c-muted-2);
 }
 
 label {
@@ -358,37 +389,37 @@ button {
   font: inherit;
   font-size: 13px;
   padding: 5px 10px;
-  border: 1px solid #c5c9d2;
-  background: #fff;
+  border: 1px solid var(--c-border-input);
+  background: var(--c-surface);
   border-radius: 4px;
   cursor: pointer;
-  color: #1a2a44;
+  color: var(--c-ink);
 }
-button:hover { background: #eef2f7; border-color: #5677a8; }
-button.primary { background: #5677a8; color: #fff; border-color: #5677a8; }
-button.primary:hover { background: #4a6792; }
+button:hover { background: var(--c-hover); border-color: var(--c-primary); }
+button.primary { background: var(--c-primary); color: #fff; border-color: var(--c-primary); }
+button.primary:hover { background: var(--c-primary-hover); }
 /* Visible keyboard-focus ring on all buttons (a11y). :focus-visible only
    shows it for keyboard/programmatic focus, not mouse clicks. */
 button:focus-visible {
-  outline: 2px solid #5677a8;
+  outline: 2px solid var(--c-primary);
   outline-offset: 2px;
 }
 button.small { padding: 2px 7px; font-size: 12px; }
-button.danger { color: #b53030; border-color: #e2c4c4; }
+button.danger { color: var(--c-err); border-color: #e2c4c4; }
 button.danger:hover { background: #fceeee; }
 
 /* ===== Pole entries ===== */
 .pole {
-  border: 1px solid #e3e5ea;
+  border: 1px solid var(--c-border-soft);
   border-radius: 5px;
   padding: 8px 10px;
   margin-bottom: 8px;
-  background: #fbfcfd;
+  background: var(--c-surface-2);
 }
 /* Separator between the mode selector and the solved Riemann-map display. */
 .dm-sep {
   border: 0;
-  border-top: 1px solid #e3e5ea;
+  border-top: 1px solid var(--c-border-soft);
   margin: 10px 0 0;
 }
 /* Riemann-map block at the bottom of the Domain-type tile. */
@@ -415,7 +446,7 @@ button.danger:hover { background: #fceeee; }
 .pole-header::-webkit-details-marker { display: none; }
 .pole-header::before {         /* …replace with our own chevron */
   content: '▸';
-  color: #5677a8;
+  color: var(--c-primary);
   font-size: 10px;
   transition: transform 0.12s ease;
 }
@@ -424,13 +455,13 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 .pole-num {
   font-weight: 600;
   font-size: 12px;
-  color: #5677a8;
+  color: var(--c-primary);
 }
 /* Location preview shown in the collapsed summary. flex:1 pushes the × right. */
 .pole-loc {
   flex: 1;
   font-size: 11px;
-  color: #777;
+  color: var(--c-muted);
   font-family: ui-monospace, Consolas, monospace;
   white-space: nowrap;
   overflow: hidden;
@@ -447,7 +478,7 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 .residue-row .label-fixed {
   width: 38px;
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
-  color: #5677a8;
+  color: var(--c-primary);
 }
 
 /* ===== Status ===== */
@@ -458,10 +489,10 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   font-size: 12px;
   line-height: 1.55;
 }
-#status .ok   { color: #2a8f2a; font-weight: 600; }
-#status .warn { color: #b8860b; font-weight: 600; }
-#status .err  { color: #b53030; font-weight: 600; }
-#status .key  { color: #777; }
+#status .ok   { color: var(--c-ok); font-weight: 600; }
+#status .warn { color: var(--c-warn); font-weight: 600; }
+#status .err  { color: var(--c-err); font-weight: 600; }
+#status .key  { color: var(--c-muted); }
 
 #alternates-card .alt {
   display: flex;
@@ -480,7 +511,7 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
               horizontal scroll for long expressions. */
 .rm-sym {
   background: #f4f6fb;
-  border-left: 3px solid #5677a8;
+  border-left: 3px solid var(--c-primary);
   padding: 6px 10px;
   margin: 4px 0 10px 0;
   overflow-x: auto;
@@ -500,7 +531,7 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 /* ===== Schwarz σ-form panel (KaTeX-typeset; #2 typesetting pass) ===== */
 #schwarz-sigma-form-out .ssf-fam {
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
-  color: #777;
+  color: var(--c-muted);
   margin-bottom: 4px;
 }
 #schwarz-sigma-form-out .ssf-row { overflow-x: auto; }
@@ -528,7 +559,7 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   position: absolute;
   pointer-events: none;
   background: rgba(255, 255, 255, 0.88);
-  border: 1px solid #d8dbe0;
+  border: 1px solid var(--c-border);
   border-radius: 4px;
   padding: 4px 8px;
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
@@ -545,8 +576,8 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 .search-spinner {
   display: inline-block;
   width: 10px; height: 10px;
-  border: 2px solid #c5c9d2;
-  border-top-color: #5677a8;
+  border: 2px solid var(--c-border-input);
+  border-top-color: var(--c-primary);
   border-radius: 50%;
   animation: spin 0.9s linear infinite;
   vertical-align: middle;
@@ -563,14 +594,14 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 .search-opt-group {
   margin-top: 10px;
   padding-top: 8px;
-  border-top: 1px dashed #d8dbe0;
+  border-top: 1px dashed var(--c-border);
 }
 .search-opt-group-title {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #555;
+  color: var(--c-muted-2);
   margin-bottom: 6px;
 }
 input.so-num {
@@ -588,7 +619,7 @@ input.so-num {
 }
 .domain-mode-group-label {
   font-size: 10px;
-  color: #777;
+  color: var(--c-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: 3px;
@@ -617,10 +648,31 @@ input.so-num {
 }
 .segmented .seg-btn:hover { background: #e8edf5; }
 .segmented .seg-btn.active {
-  background: #2d70c8;
+  background: var(--c-accent);
   color: #fff;
 }
 .segmented .seg-btn:not(:last-child) {
   border-right: 1px solid #c2cad6;
 }
+/* ===== Responsive: narrow viewports (tablets / small laptops / phones) =====
+   Below ~860px the fixed sidebar+canvas split is unusable, so stack the controls
+   above the plot. The controls column scrolls within a capped height; the plot
+   takes the rest. Fixed-pixel inline input/select widths are capped to the
+   column so they don't overflow (max-width caps the inline `width`). */
+@media (max-width: 860px) {
+  #app {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 45vh) 1fr;
+  }
+  #controls {
+    border-right: none;
+    border-bottom: 1px solid var(--c-border);
+  }
+  #controls input[type="text"],
+  #controls input[type="number"],
+  #controls select {
+    max-width: 100%;
+  }
+}
+
 /* .view-plane-only / .view-sphere-only — visibility toggled by JS. */
