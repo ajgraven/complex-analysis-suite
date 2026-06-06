@@ -1344,6 +1344,52 @@ enforces c_1 ≠ 0.
 
 In rough chronological order across recent sessions (newest first):
 
+63. **Estimate max conformal radius c\* for unbounded QDs (SHIPPED).** For an
+    unbounded family `c = φ′(∞)` is a free gauge; as `c` grows the domain grows
+    and at a critical scale c\* the boundary cusps then self-overlaps. New
+    feature finds c\* automatically and snaps the UI to the largest clean domain.
+    * **New `app/solver-cmax.js` — `QD.estimateMaxConformalRadius(hData, baseOpts,
+      solveFn, ctl)`.** Dependency-injected, async: `solveFn` is the off-thread
+      `PrimarySolverWorker.solve` in the browser and the sync `QD.solveInverseQD`
+      in Node tests (both await-safe). Does **bracket → bisection** on the
+      validity gate: confirm/establish a valid lower `cLo` (shrink ×0.5 if the
+      start is invalid) → grow ×1.6 (warm-started) to an invalid `cHi` (or the
+      ceiling) → bisect to `relTol` (1e-3). Returns `{ found, cMax, cLowValid,
+      phiAtMax, trace, reason, solves }`. Page-only (drives a worker; not in the
+      worker bundle) — registered in `asset-manifest.js` `SOLVER_PAGE_ONLY_FILES`.
+    * **Validity gate = the user-chosen criterion: univalent AND quadrature
+      identity.** CRITICAL: `solveInverseQD` returns `success:true` even for a
+      converged-but-non-univalent *fallback* root (it picks the best candidate),
+      so `success` alone is NOT the gate — the estimator checks
+      `primary.univalent && primary.identityOK` explicitly and forces
+      `identityCheck:true`.
+    * **Warm-start gauge injection (the entry-#61 c-bug lesson).** The solver
+      trusts the warm seed's gauge, so each warm probe does
+      `seed = clonePhi(lastValidφ); seed.c = c` before solving — never passes a
+      stale-`c` seed. **Confirm-invalid guard:** a *warm* failure is retried once
+      **fresh** (no seed) before being believed, so a bad seed can't shrink c\*.
+    * **UI (`#c-card`).** New **Estimate max c** button + busy spinner + result
+      line. On success: writes `c* ≈ …` (+ an optional `classifyCusps` θ note),
+      **caps `#c-slider`/`#c-manual` max at c\***, then `setC(0.99·c*)` +
+      `scheduleSolve()` to render the largest clean domain. Reuses the
+      `#try-harder-btn` async pattern + `buildHData`/`buildNormalization`/
+      `buildSolverOptions`(thorough)/`applyNormToOpts`. Guards on `norm.unbounded`
+      (the card is unbounded-only anyway). `mountQolHelp` `#c-card` text updated.
+    * **New `app/test/cmax.test.js` (27 assertions, Node-VM, no jsdom).** §1
+      bracket+bisection converges to a stubbed threshold; §2 always-valid →
+      `no-invalid-below-ceiling`; §3 always-invalid → `no-valid-at-start`; §4
+      **gauge injection** — every warm seed carries `c == queried c` (the c-bug
+      class); §5 **confirm-invalid guard** — a warm-only failure doesn't
+      underestimate c\*; §6 **real solver** — deltoid `h=w²` brackets c\*≈0.5,
+      0.99·c\* valid / 1.05·c\* invalid. Registered `'cmax'` in `node-test.js`;
+      raised the `manifest.test.js` suite floor 1150 → 1175.
+    * **Browser-verified** (Claude Preview): deltoid → c\*≈0.5000, "incipient cusp
+      near θ≈0°", slider capped at 0.5 + jumped to 0.495; α=2 one-pole PQD
+      (c=2) → c\*≈2.6703, slider capped + jumped to 2.6436, re-solve valid.
+    * **Verify:** node-test **1203/0**; lint clean; `version:check` clean
+      (`93e911f8b4`). Family-agnostic (drives the solver) → all 5 unbounded
+      families supported.
+
 62. **UI-input test coverage (the c-slider bug class) (SHIPPED).** The
     conformal-radius `c` slider regression (entry #61 follow-up) slipped through
     because the suite had **no test that drives a behavior-bearing UI control and

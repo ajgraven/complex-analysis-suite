@@ -333,6 +333,12 @@ view is active.
   view. Pole placement/move is inverse-view only.
 * **Singular extras** — `q` (origin residue) and `c` (conformal radius)
   appear as 1-D sliders for the singular / unbounded families.
+* **Estimate max c** (unbounded families) — a button beside the `c` slider
+  that automatically finds the critical conformal radius `c*`: the largest `c`
+  for which a valid unbounded QD still exists (univalent boundary + quadrature
+  identity). It brackets and bisects on the solver's validity gate, then caps
+  the slider at `c*` and jumps to ≈ 0.99·`c*` — the largest cusp-free domain.
+  Beyond `c*` the boundary develops a cusp and self-overlaps.
 * **φ(0)** — defaults to the centroid of the poles (manually overridable
   in bounded mode).
 * **Solver settings** — boundary samples, aggressiveness preset (Quick /

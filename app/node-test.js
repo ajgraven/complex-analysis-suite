@@ -31,6 +31,7 @@ const TESTS = [
   'ui-domain-plot',
   'schwarz-ui',
   'ui-inputs',
+  'cmax',
   'manifest',
 ];
 

@@ -889,7 +889,10 @@ function mountQolHelp() {
     `<b>Conformal radius c = φ'(∞).</b> Scales the Riemann map at infinity for
      unbounded families; with w₀ it fixes the gauge of φ. Unbounded QDs form a
      one-parameter family in c — sweep the slider to explore it; past the
-     critical c the simply-connected QD ceases to exist (the solver flags this).`);
+     critical c* the simply-connected QD ceases to exist (its boundary cusps,
+     then self-overlaps). <b>Estimate max c</b> finds c* automatically (bracket +
+     bisection on the solver's univalence + identity gate), then caps the slider
+     at c* and jumps to ≈0.99·c* — the largest clean domain.`);
   H(headerOf('#solver-settings-card'),
     `<b>Solver settings.</b> The <i>Aggressiveness</i> preset
      (Quick / Standard / Thorough) balances Newton iterations, identity-check
@@ -1061,6 +1064,117 @@ $('#c-manual').addEventListener('input', e => {
   setC(c);
   markAsCustom();
   scheduleSolve();
+});
+
+// "Estimate max c" — automatically find c* = the largest conformal radius for
+// which a VALID unbounded QD exists (univalent + quadrature identity), via the
+// bracket+bisection estimator in solver-cmax.js driven through the solver worker.
+// On success: cap the slider range at c* and jump to ≈0.99·c* (the largest clean
+// domain). Only meaningful for unbounded families (the #c-card is unbounded-only,
+// and the handler re-checks norm.unbounded).
+const cEstimateBtn = $('#c-estimate-btn');
+if (cEstimateBtn) cEstimateBtn.addEventListener('click', () => {
+  const btn      = $('#c-estimate-btn');
+  const busy     = $('#c-estimate-busy');
+  const busyText = $('#c-estimate-busy-text');
+  const resultEl = $('#c-estimate-result');
+  const valueEl  = $('#c-estimate-value');
+  const noteEl   = $('#c-estimate-note');
+  const showResult = (html, note) => {
+    if (valueEl) valueEl.innerHTML = html;
+    if (noteEl)  noteEl.textContent = note || '';
+    if (resultEl) resultEl.classList.remove('hidden');
+  };
+  if (!QD.estimateMaxConformalRadius) {
+    setStatus({ kind: 'err', text: 'Conformal-radius estimator is unavailable.' });
+    return;
+  }
+  btn.disabled = true;
+  if (busy) busy.classList.remove('hidden');
+  if (busyText) busyText.textContent = 'searching…';
+  (async () => {
+    try {
+      const built = buildHData();
+      if (!built || built.error) {
+        setStatus({ kind: 'err', text: (built && built.error) || 'No valid input.' });
+        return;
+      }
+      const norm = buildNormalization(built);
+      if (norm.error) { setStatus({ kind: 'err', text: norm.error }); return; }
+      if (!norm.unbounded) {
+        setStatus({ kind: 'warn', text: 'Estimate max c applies only to unbounded families.' });
+        return;
+      }
+      // Reuse the user's solver settings layered on a thorough preset (robust
+      // near the existence boundary, so a hard-to-find root isn't mis-read as
+      // "no valid QD"). findAlternates off — we only need the primary's validity.
+      const preset = PRESETS.thorough || PRESETS.standard;
+      const baseOpts = buildSolverOptions(preset, { findAlternates: false });
+      applyNormToOpts(baseOpts, norm);
+
+      const PSW = QD.PrimarySolverWorker;
+      const solveFn = (PSW && typeof PSW.solve === 'function')
+        ? (h, o) => PSW.solve(h, o)
+        : (h, o) => QD.solveInverseQD(h, o);
+
+      const res = await QD.estimateMaxConformalRadius(built, baseOpts, solveFn, {
+        cStart: state.c,
+        progress: (p) => {
+          if (busyText && p && isFinite(p.c)) busyText.textContent = 'searching… c≈' + (+p.c).toFixed(3);
+        },
+      });
+
+      if (!res.found) {
+        if (res.reason === 'no-invalid-below-ceiling') {
+          showResult('No finite maximum found',
+                     'the unbounded QD stays valid up to the search ceiling c ≤ ' + res.ceiling.toFixed(2) + '.');
+          setStatus({ kind: 'ok',
+            text: 'No critical c found below the ceiling — the unbounded QD remains valid up to c ≤ ' + res.ceiling.toFixed(2) + '.' });
+        } else {
+          showResult('No valid QD at this scale',
+                     'no valid unbounded QD at or below the current c — adjust the quadrature data.');
+          setStatus({ kind: 'warn', text: 'No valid unbounded QD found at or below the current scale.' });
+        }
+        return;
+      }
+
+      const cStar = res.cMax;
+      // Note: where the boundary will cusp at c* (read from the near-critical φ).
+      let note = 'largest clean domain; beyond c* the boundary cusps and self-overlaps.';
+      try {
+        if (res.phiAtMax && QD.classifyCusps) {
+          const cz = QD.classifyCusps(res.phiAtMax);
+          if (cz && cz.cusps && cz.cusps.length) {
+            note = 'incipient cusp near θ ≈ ' + cz.cusps[0].thetaDeg.toFixed(0) +
+                   '°; beyond c* the boundary cusps and self-overlaps.';
+          }
+        }
+      } catch (_) { /* annotation is best-effort */ }
+
+      showResult('Max conformal radius <strong>c* ≈ ' + cStar.toFixed(4) + '</strong>', note);
+
+      // Cap the slider range at c* (so dragging can't leave the existence region)
+      // and jump to just below c* to render the largest clean domain. Set the max
+      // FIRST so setC's auto-expand doesn't fight it.
+      const slider = $('#c-slider');
+      const text   = $('#c-manual');
+      const capStr = cStar.toFixed(4);
+      if (slider) slider.max = capStr;
+      if (text)   text.max   = capStr;
+      setC(Math.min(0.99 * cStar, cStar));
+      markAsCustom();
+      scheduleSolve();
+      setStatus({ kind: 'ok',
+        text: 'Estimated max conformal radius c* ≈ ' + cStar.toFixed(4) +
+              '. Slider capped at c*; showing c ≈ ' + (0.99 * cStar).toFixed(4) + '.' });
+    } catch (e) {
+      if (e && e.aborted) return;
+      setStatus({ kind: 'err', text: 'Estimate max c error: ' + ((e && e.message) || e) });
+    } finally {
+      btn.disabled = false;
+      if (busy) busy.classList.add('hidden');
+    }
+  })();
 });
 
 // Singular-LQD charge q (complex). Text input drives full solve; |q| / arg
