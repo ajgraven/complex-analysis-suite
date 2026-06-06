@@ -340,6 +340,13 @@ class DomainPlot {
     // Critical-set image overlay (zeros of φ', mapped to w-plane).  Drawn
     // last so the markers sit on top of everything; lazy-computed and
     // cached on state.current.criticalSet to avoid recomputing per render.
+    // Curvature heat-strip overlay: color ∂Ω by |κ| (brightest at a cusp).
+    // Lazy-computed + cached on state.current.observables (shared with the
+    // "Geometry & accuracy" card). Drawn over the boundary but under the
+    // critical-set / cusp markers.
+    if (state.showCurvature && this.data && this.data.phi) {
+      this.drawCurvature();
+    }
     if (state.showCriticalSet && this.data && this.data.phi) {
       this.drawCriticalSet();
     }
@@ -711,6 +718,50 @@ class DomainPlot {
     c.textAlign = 'left';
     c.textBaseline = 'top';
     c.fillText('φ(0)', s.x + 6, s.y + 4);
+  }
+
+  // -------------------------------------------------------------------------
+  // Curvature heat-strip: color ∂Ω by signed curvature |κ| from QD.boundary-
+  // Observables. The per-node curvature[] is aligned with the boundary points
+  // w[], so each segment is stroked with a color ramped by |κ|/maxκ (cool→hot);
+  // a cusp (κ → ∞) shows as the hottest stretch. Result is cached on
+  // state.current.observables (keyed by phi identity), shared with the card.
+  // -------------------------------------------------------------------------
+  drawCurvature() {
+    const phi = this.data.phi;
+    if (!phi || typeof QD === 'undefined' || !QD.boundaryObservables) return;
+    if (!state.current) return;
+
+    const cur = state.current.observables;
+    let obs = cur && cur.obs;
+    if (!(obs && obs._phiRef === phi)) {
+      try { obs = QD.boundaryObservables(phi, { samples: 720 }); } catch (e) { return; }
+      obs._phiRef = phi;
+      state.current.observables = Object.assign({}, cur, { obs });
+    }
+    if (!obs.w || obs.w.length < 2 || !(obs.maxCurvature > 0)) return;
+
+    const c = this.ctx;
+    const w = obs.w, kappa = obs.curvature, N = w.length;
+    const maxK = obs.maxCurvature;
+    c.save();
+    c.lineWidth = 3;
+    c.lineCap = 'round';
+    for (let i = 0; i < N; i++) {
+      const a = this.toScreen(w[i].re, w[i].im);
+      const b = this.toScreen(w[(i + 1) % N].re, w[(i + 1) % N].im);
+      // |κ| at this node, normalized; sqrt eases the dynamic range near a cusp.
+      let t = Math.abs(kappa[i]) / maxK;
+      if (!isFinite(t)) t = 1;
+      t = Math.max(0, Math.min(1, Math.sqrt(t)));
+      const hue = 210 - 210 * t;            // 210° (cool blue) → 0° (hot red)
+      c.strokeStyle = `hsl(${hue.toFixed(0)}, 85%, 45%)`;
+      c.beginPath();
+      c.moveTo(a.x, a.y);
+      c.lineTo(b.x, b.y);
+      c.stroke();
+    }
+    c.restore();
   }
 
   // -------------------------------------------------------------------------

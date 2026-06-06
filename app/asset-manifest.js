@@ -39,7 +39,7 @@
   // version:sync` recomputes it. CACHE_LABEL is yours to set per release
   // (cosmetic, for human-readable cache names + the HANDOFF narrative).
   const CACHE_LABEL = 'preimage-tree-overlay';
-  const CACHE_HASH  = '55ce6e5561';   // gen-cache-version.js --write rewrites this
+  const CACHE_HASH  = 'f80f6372ca';   // gen-cache-version.js --write rewrites this
   const CACHE_VERSION = CACHE_LABEL + '-' + CACHE_HASH;
 
   // Files that get concatenated into a Worker bundle by the runtime
@@ -85,6 +85,7 @@
     'critical-set.js',
     'univalence.js',
     'cusps.js',
+    'observables.js',          // boundary observables + harmonic measure + accuracy estimate
     'solver-cmax.js',          // max-conformal-radius estimator (drives the worker, page-only)
     'primary-solution.js',
     'primary-solver-worker.js',

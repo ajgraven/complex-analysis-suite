@@ -59,6 +59,7 @@ const state = {
   autoSwitchSingular: true,  // §23: auto-switch singular ⇄ non-singular PQD when ∂Ω crosses 0
   vectorFieldMode: 'off',    // 'off' | 'polya' | 'external'
   showCriticalSet: false,    // overlay w-images of {z : φ'(z) = 0}
+  showCurvature: false,      // overlay ∂Ω colored by curvature |κ| (cusp heat-strip)
 
   // Solver result
   current: null,             // last solve envelope (see PrimaryEnvelope typedef

@@ -198,6 +198,7 @@ identity error and the old c\* under-estimate (HANDOFF).
 | Univalence check | `isBoundaryUnivalent` — `solver.js` | Polygon self-intersection on sampled boundary. |
 | Identity test points | `chooseHoleTestPoints` — `solver.js` | Picks interior points in the hole (ray-cast) ranked by clearance from ∂Ω + poles; shared by the unbounded identity verifiers. |
 | Max conformal radius c\* | `estimateMaxConformalRadius` — `solver-cmax.js` | Bracket+bisection with a two-regime gate: genuine-QD (univalent + identity) away from the cusp, cusp criterion `g = max|z|` over φ′ zeros (`< 1`) near it. Reports `mechanism` (cusp/fold). Warm-start gauge injection + confirm-invalid guard; dependency-injected `solveFn` (worker in browser, sync solver in tests). |
+| Boundary observables | `boundaryObservables` / `harmonicMeasure` / `estimateAccuracy` — `observables.js` (page-only) | From a solved φ via one φ/φ′/φ″ sweep (`phiTaylorAt`): signed curvature κ(θ)=Im(conj γ′·γ″)/|γ′|³ (κ→∞ at cusps), area (shoelace) + perimeter + centroid + complex area moments `M_k=∬_Ω w^k dA` (Stokes); harmonic-measure density `ρ=1/(2π|φ′|)`; multi-resolution identity error → significant-digits + condition estimate. Foundational primitives for the dynamics features. |
 
 ---
 

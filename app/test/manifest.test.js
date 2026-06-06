@@ -71,6 +71,6 @@ module.exports = async function run() {
   // suite legitimately grows a lot, lower it only on an intentional shrink.
   const { report } = require('./harness');
   const passSoFar = report().pass;   // all assertions so far, except this one
-  ok('suite size floor: ≥ 1175 assertions ran (mass-regression guard)',
-     passSoFar >= 1175, 'passSoFar=' + passSoFar);
+  ok('suite size floor: ≥ 1200 assertions ran (mass-regression guard)',
+     passSoFar >= 1200, 'passSoFar=' + passSoFar);
 };

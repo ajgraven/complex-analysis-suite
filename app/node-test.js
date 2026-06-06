@@ -32,6 +32,7 @@ const TESTS = [
   'schwarz-ui',
   'ui-inputs',
   'cmax',
+  'observables',
   'manifest',
 ];
 

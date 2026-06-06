@@ -382,6 +382,11 @@
           </label>
         </div>
         <div class="row">
+          <label title="Color ∂Ω by its curvature |κ| (cool → hot). The hottest stretch marks the sharpest bend; κ → ∞ at a cusp. Reads the same data as the Geometry & accuracy panel.">
+            <input type="checkbox" id="curvature-toggle"> Curvature heat-strip (|κ| on ∂Ω)
+          </label>
+        </div>
+        <div class="row">
           <label><input type="checkbox" id="auto-switch-singular" checked> Auto-switch singular ⇄ non-singular PQD when the boundary crosses the origin</label>
         </div>
       </details>
@@ -572,6 +577,10 @@
         <details id="sp-cusps" open>
           <summary>Boundary singularities</summary>
           <div id="sp-cusps-content"></div>
+        </details>
+        <details id="sp-observables" open>
+          <summary>Geometry &amp; accuracy</summary>
+          <div id="sp-observables-content"></div>
         </details>
       </div>
     </aside>

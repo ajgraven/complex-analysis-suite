@@ -1323,6 +1323,10 @@ $('#critical-set-toggle').addEventListener('change', e => {
   state.showCriticalSet = e.target.checked;
   plot.render();
 });
+$('#curvature-toggle').addEventListener('change', e => {
+  state.showCurvature = e.target.checked;
+  plot.render();
+});
 
 // ---------- Search-options panel wiring ----------------------------------
 // Every field updates state.searchOptions on `input`/`change`. Inputs that

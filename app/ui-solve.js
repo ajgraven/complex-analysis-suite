@@ -184,6 +184,10 @@ function quickSolveAndRender() {
 
     showSolution(sol, built, /*isPrimary=*/ false);
     refreshAlternatesPanel();
+    // Live-refresh the status-panel cards (geometry / cusps / observables) so
+    // they track the drag. Throttled + accuracy-deferred (see scheduleLiveAnalysis);
+    // the drag-end full solve runs the authoritative pass.
+    scheduleLiveAnalysis();
   }).catch(() => { /* superseded / aborted live job — ignore */ });
 }
 
@@ -191,6 +195,14 @@ function quickSolveAndRender() {
 // discard stale worker results when the user edits faster than solves
 // complete.
 let _solveAndRenderToken = 0;
+
+// The status-panel analyses (geometric properties, boundary singularities,
+// geometry & accuracy) share their OWN token, separate from the solve token, so
+// the cheap passes can refresh live during a pole/slider drag (the quick-solve
+// path) without being tied to the full-solve cadence. A newer analysis request
+// supersedes any older in-flight idle callback.
+let _analysisToken = 0;
+let _liveAnalysisLast = 0;          // last live-analysis timestamp (throttle)
 
 // solveAndRender — the main (debounced) solve pipeline. Steps:
 //   1. buildHData() + buildNormalization() from the DOM; bail on parse errors.
@@ -393,8 +405,7 @@ function solveAndRender() {
     refreshAlternatesPanel();
 
     startBackgroundAltSearch(built, altNorm);
-    scheduleGeomClassification(result.primary, myToken);
-    scheduleCuspClassification(result.primary, myToken);
+    runStatusAnalyses();   // geometry / cusps / observables (authoritative, with accuracy)
    } finally {
      if (myToken === _solveAndRenderToken) hideSolveBusy();
    }
@@ -445,13 +456,38 @@ function cancelSolve() {
 // keeps the solve snappy; the `myToken === _solveAndRenderToken` guard discards
 // results from a superseded solve. Result is stashed on the envelope and
 // rendered into the dedicated card.
+
+// Run the three status-panel analyses against the CURRENT solution, off the
+// critical path. They share _analysisToken (bumped here) so older in-flight
+// idle callbacks are discarded — safe to call repeatedly. With opts.live the
+// observables pass is cheaper and skips the heavy accuracy estimate.
+function runStatusAnalyses(opts) {
+  const cur = state.current;
+  if (!cur || !cur.success || !cur.primary || !cur.primary.phi) return;
+  const token = ++_analysisToken;
+  scheduleGeomClassification(cur.primary, token);
+  scheduleCuspClassification(cur.primary, token);
+  scheduleObservables(cur.primary, cur.hData, token, opts);
+}
+
+// Throttled live refresh during a pole/slider drag (called per quick-solve
+// frame). Caps the rate so the cheap analyses track the drag without flooding;
+// the drag-end full solve runs the authoritative pass via runStatusAnalyses().
+const LIVE_ANALYSIS_MS = 120;
+function scheduleLiveAnalysis() {
+  const now = Date.now();
+  if (now - _liveAnalysisLast < LIVE_ANALYSIS_MS) return;
+  _liveAnalysisLast = now;
+  runStatusAnalyses({ live: true });
+}
+
 function scheduleGeomClassification(sol, token) {
   if (!sol || !sol.phi || !QD.classifyUnivalence) {
     renderGeomProps(null);
     return;
   }
   const run = () => {
-    if (token !== _solveAndRenderToken) return;     // superseded by a newer solve
+    if (token !== _analysisToken) return;           // superseded by a newer analysis
     let geom;
     try {
       geom = QD.classifyUnivalence(sol.phi, { samples: state.samples, univalent: sol.univalent });
@@ -459,7 +495,7 @@ function scheduleGeomClassification(sol, token) {
       renderGeomProps(null);
       return;
     }
-    if (token !== _solveAndRenderToken) return;
+    if (token !== _analysisToken) return;
     if (state.current) { state.current.geomProps = geom; publishPrimarySolution(); }
     renderGeomProps(geom);
   };
@@ -571,7 +607,7 @@ function scheduleCuspClassification(sol, token) {
     return;
   }
   const run = () => {
-    if (token !== _solveAndRenderToken) return;     // superseded by a newer solve
+    if (token !== _analysisToken) return;           // superseded by a newer analysis
     let res;
     try {
       res = QD.classifyCusps(sol.phi, { });
@@ -579,7 +615,7 @@ function scheduleCuspClassification(sol, token) {
       renderCusps(null);
       return;
     }
-    if (token !== _solveAndRenderToken) return;
+    if (token !== _analysisToken) return;
     if (state.current) { state.current.cuspProps = res; publishPrimarySolution(); }
     renderCusps(res);
     // Repaint so the cusp markers (drawn from state.current.cuspProps) appear.
@@ -619,6 +655,74 @@ function renderCusps(res) {
     }
   }
 
+  content.innerHTML = lines.join('<br>');
+}
+
+// Tier-0 foundational observables: boundary geometry (area / perimeter /
+// curvature) + an accuracy estimate, computed AFTER the boundary paints, off the
+// critical path (mirrors scheduleCuspClassification). Result is stashed on the
+// envelope (state.current.observables) so the curvature overlay can read it, and
+// rendered into the "Geometry & accuracy" card. `built` is the solved h-data.
+function scheduleObservables(sol, hData, token, opts) {
+  opts = opts || {};
+  if (!sol || !sol.phi || !QD.boundaryObservables) {
+    renderObservables(null);
+    return;
+  }
+  const run = () => {
+    if (token !== _analysisToken) return;           // superseded by a newer analysis
+    let res;
+    try {
+      // Live (drag) passes use a lighter sweep and SKIP the heavy accuracy
+      // estimate (two identity verifies + a Jacobian): the accuracy line carries
+      // its last value forward and refreshes on the drag-end full solve.
+      const obs = QD.boundaryObservables(sol.phi, { samples: opts.live ? 512 : 1024 });
+      obs._phiRef = sol.phi;              // lets the curvature overlay reuse this compute
+      let acc;
+      if (opts.live) {
+        acc = (state.current && state.current.observables) ? state.current.observables.acc : null;
+      } else {
+        acc = (hData && QD.estimateAccuracy) ? QD.estimateAccuracy(sol.phi, hData, {}) : null;
+      }
+      res = { obs, acc };
+    } catch (e) {
+      renderObservables(null);
+      return;
+    }
+    if (token !== _analysisToken) return;
+    if (state.current) { state.current.observables = res; publishPrimarySolution(); }
+    renderObservables(res);
+    // Repaint so the curvature overlay (drawn from state.current.observables) appears.
+    if (typeof plot !== 'undefined' && plot) plot.render();
+  };
+  const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 0));
+  idle(run, { timeout: 250 });
+}
+
+// Render the "Geometry & accuracy" card from a scheduleObservables result.
+function renderObservables(res) {
+  const content = $('#sp-observables-content');
+  if (!content) return;
+  if (!res || !res.obs) { content.innerHTML = ''; return; }
+  const obs = res.obs, acc = res.acc;
+  const num = (x) => {
+    if (x == null || !isFinite(x)) return '—';
+    const a = Math.abs(x);
+    if (x !== 0 && (a >= 1e4 || a < 1e-3)) return (+x).toExponential(3);
+    return (+x).toPrecision(4);
+  };
+  const lines = [];
+  lines.push(`<span class="geom-row"><span class="key">area:</span> ${num(obs.area)}</span>`);
+  lines.push(`<span class="geom-row"><span class="key">perimeter:</span> ${num(obs.perimeter)}</span>`);
+  const cuspDeg = (obs.argMaxCurvatureTheta * 180 / Math.PI).toFixed(1);
+  lines.push(`<span class="geom-row" title="max |κ| along ∂Ω at θ ≈ ${cuspDeg}° (κ → ∞ at a cusp)"><span class="key">max curvature:</span> ${num(obs.maxCurvature)}</span>`);
+  if (acc && acc.significantDigits != null) {
+    const tip = 'identity maxRelDiff  N=' + (acc.relN != null ? (+acc.relN).toExponential(2) : '—')
+      + ', 2N=' + (acc.rel2N != null ? (+acc.rel2N).toExponential(2) : '—')
+      + (acc.conditionEst != null ? ('   cond ≈ ' + (+acc.conditionEst).toExponential(2)) : '');
+    const warn = acc.underResolved ? ' <span class="warn">(under-resolved)</span>' : '';
+    lines.push(`<span class="geom-row" title="${escapeAttr(tip)}"><span class="key">accuracy:</span> ≈ ${acc.significantDigits.toFixed(1)} sig. digits${warn}</span>`);
+  }
   content.innerHTML = lines.join('<br>');
 }
 

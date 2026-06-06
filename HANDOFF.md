@@ -26,6 +26,58 @@ priors.
 > version:sync` refreshes it after any `app/` asset change; CI's
 > `npm run version:check` fails if it's stale.
 
+## (most recent) Tier-0 analysis primitives — `app/observables.js`
+
+**What shipped.** A new page-only module `app/observables.js` (loaded like
+`critical-set.js`/`cusps.js`; in `SOLVER_PAGE_ONLY_FILES`, NOT bundled into the
+Workers) with the foundational analysis primitives the Tier-1 dynamics features
+will build on. All are computed from an already-solved φ by one unit-circle sweep
+that reads φ, φ′, φ″ off `QD.phiTaylorAt(z, phi, 2)` (`a[1]=φ′`, `a[2]=φ″/2`) — no
+new solver math, family-agnostic.
+
+- **`QD.boundaryObservables(phi, {samples})`** — signed curvature κ(θ) of
+  γ(θ)=φ(e^{iθ}) (`κ = Im(conj γ′·γ″)/|γ′|³`; κ→∞ at a cusp), perimeter, enclosed
+  `area` (shoelace; `|signedArea|`, = the complement K's area for unbounded),
+  polygon `centroid`, complex area moments `M_k = ∬_Ω w^k dA` via Stokes
+  (k=0..4, `Re(M₀)≈signedArea` cross-check), the boundary points `w[]` (aligned
+  with `curvature[]`, for the overlay), and `minAbsPhiPrime{,Theta}`.
+- **`QD.harmonicMeasure(phi, {samples})`** — harmonic-measure density on ∂Ω
+  (from φ(0) bounded / ∞ unbounded), `ρ = 1/(2π|φ′|)`; returns `density[]`,
+  `integral` (`∮ρ ds ≈ 1` self-check), max/mean density + peak angle.
+- **`QD.estimateAccuracy(phi, hData, {samples})`** — multi-resolution identity
+  error (verifier `maxRelDiff` at N vs 2N → `underResolved` when relN≫rel2N),
+  `significantDigits ≈ −log10(rel2N ∨ residual)`, and a best-effort residual-
+  Jacobian `conditionEst` (`numericalJacobian`+`houseQR`, try/caught).
+- **`QD.minAbsPhiPrimeAngle(phi, samples)`** — standalone near-cusp angle scan.
+
+**UI.** A new "**Geometry & accuracy**" card (`#sp-observables-content` in the
+status panel) computed off the critical path via `scheduleObservables` in
+`ui-solve.js` (mirrors `scheduleGeomClassification`/`scheduleCuspClassification` —
+`requestIdleCallback` + stale-token guard, stashed on `state.current.observables`,
+published on the envelope). Shows area / perimeter / max curvature (+ cusp-angle
+tooltip) and an accuracy meter ("≈ N sig. digits", amber when under-resolved).
+Plus an opt-in **curvature heat-strip** overlay (`#curvature-toggle` →
+`state.showCurvature` → `DomainPlot.drawCurvature`), coloring ∂Ω by |κ| (cool→hot)
+from the same cached observables.
+
+**Live updates during drags.** All three status-panel cards (Geometric
+properties, Boundary singularities, Geometry & accuracy) now refresh in
+real-time as poles/sliders are dragged, not just on the drag-end full solve. The
+three analyses were unified behind `runStatusAnalyses(opts)` and given their own
+`_analysisToken` (separate from the solve token) so the cheap passes can supersede
+cleanly. The quick-solve (live) path calls `scheduleLiveAnalysis()` — a ~120 ms
+throttle that runs `runStatusAnalyses({ live: true })`: lighter boundary sweep and
+the heavy accuracy estimate (two identity verifies + Jacobian) is SKIPPED, with
+the accuracy line carrying its last value forward and refreshing on the drag-end
+full solve (`runStatusAnalyses()` with the full accuracy pass). Cusp markers + the
+curvature overlay therefore also track the drag.
+
+**Tests.** `app/test/observables.test.js` (registered in `node-test.js`): unit
+disk closed-form oracles (area=π, perimeter=2π, κ≡1, centroid=0, M₀=π, density
+≡1/2π, ∮ρ ds≈1, high significant digits, not under-resolved), and a cusp-forming
+cardioid (h=1.5/w+0.5/w², c=1.4) where κ spikes and `argMaxκ` matches the nearest
+φ′-zero angle from `findCriticalPoints`. Cache hash bumped (`version:sync`).
+
 ## (most recent) Fix — "Estimate max c" (c\*) significant under-estimate
 
 **Symptom (user-reported).** `QD.estimateMaxConformalRadius` returned c\* far below
