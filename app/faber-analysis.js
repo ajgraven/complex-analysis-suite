@@ -201,12 +201,17 @@
     const tol = opts.tol != null ? opts.tol : 1e-9;
     if (!Fn || !Fn.length) return '0';
 
+    // Exponents render as Unicode superscripts (ζ², not ζ^2) so the formula
+    // matches the coefficient table in the UI.
+    const supMap = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+    const sup = (k) => String(k).split('').map(d => supMap[+d] || d).join('');
+
     let out = '';
     let any = false;
     for (let k = Fn.length - 1; k >= 0; k--) {
       const co = Fn[k] || { re: 0, im: 0 };
       if (Math.hypot(co.re, co.im) < tol) continue;
-      const powStr = k === 0 ? '' : (k === 1 ? v : v + '^' + k);
+      const powStr = k === 0 ? '' : (k === 1 ? v : v + sup(k));
       const realOnly = Math.abs(co.im) < tol;
       let sign, body;
       if (realOnly) {

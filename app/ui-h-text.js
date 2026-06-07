@@ -21,6 +21,14 @@
   'use strict';
   global.QD_UI = global.QD_UI || {};
 
+  // Caps mirror the structured grid: pole order ∈ [1,6] (ui.js order input) and
+  // polynomial degree ∈ [-1,6] (ui.js #poly-degree). The text path must enforce
+  // the same limits so a pasted/typed `1/(w-2)^50` or huge polynomial can't slip
+  // a high order past the grid into the solver (Taylor truncation + an O((2m)²)
+  // dense Newton step per pole).
+  const POLE_ORDER_MAX = 6;
+  const POLY_DEGREE_MAX = 6;
+
   global.QD_UI.installHText = function installHText(ui) {
     const state = ui.state;
 
@@ -77,22 +85,38 @@
         return;
       }
 
+      let clamped = false;   // true if any order / degree exceeded the grid cap
+
       // Convert parsed.poles (Complex-typed) back to the state's string form.
       if (parsed.poles.length === 0) {
         // Need at least one row in the grid so the user can extend it.
         state.poles = [{ a: '0', order: 1, residues: ['0'] }];
       } else {
-        state.poles = parsed.poles.map(p => ({
-          a: QD.Complex.format(p.a),
-          order: p.order,
-          residues: p.residues.map(c => QD.Complex.format(c)),
-        }));
+        state.poles = parsed.poles.map(p => {
+          let order = p.order;
+          let residues = p.residues;
+          if (order > POLE_ORDER_MAX) {
+            clamped = true;
+            order = POLE_ORDER_MAX;
+            residues = residues.slice(0, POLE_ORDER_MAX);
+          }
+          return {
+            a: QD.Complex.format(p.a),
+            order,
+            residues: residues.map(c => QD.Complex.format(c)),
+          };
+        });
       }
 
       if (modeAllowsPoly(state.mode)) {
         if (parsed.polyCoeffs.length > 0) {
-          state.polyCoeffs = parsed.polyCoeffs.map(c => QD.Complex.format(c));
-          state.polyDegree = parsed.polyCoeffs.length - 1;
+          let coeffs = parsed.polyCoeffs;
+          if (coeffs.length - 1 > POLY_DEGREE_MAX) {
+            clamped = true;
+            coeffs = coeffs.slice(0, POLY_DEGREE_MAX + 1);
+          }
+          state.polyCoeffs = coeffs.map(c => QD.Complex.format(c));
+          state.polyDegree = coeffs.length - 1;
         } else {
           state.polyDegree = -1;
           state.polyCoeffs = [];
@@ -104,7 +128,10 @@
       ui.renderPolesList();
       ui.renderPolyCoefList();
       ui.markAsCustom();
-      if (parsed.warnings && parsed.warnings.length) {
+      if (clamped) {
+        setHTextMsg('Truncated to the supported limit: pole order ≤ ' + POLE_ORDER_MAX +
+          ', polynomial degree ≤ ' + POLY_DEGREE_MAX + '.', 'warn');
+      } else if (parsed.warnings && parsed.warnings.length) {
         setHTextMsg('Parsed with warning: ' + parsed.warnings[0], 'warn');
       } else {
         setHTextMsg('');

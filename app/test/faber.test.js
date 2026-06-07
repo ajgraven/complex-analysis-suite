@@ -155,9 +155,9 @@ module.exports = async function run() {
 
   // ---- formatFaberPoly readability ------------------------------------------
   {
-    const Fn = FA.faberPolynomial(phiJouk, 2);     // ζ^2 − 2
+    const Fn = FA.faberPolynomial(phiJouk, 2);     // ζ² − 2
     const s = FA.formatFaberPoly(Fn);
-    ok('format: F_2 renders as "ζ^2 − 2"', s === 'ζ^2 − 2', 'got="' + s + '"');
+    ok('format: F_2 renders as "ζ² − 2"', s === 'ζ² − 2', 'got="' + s + '"');
     const F1 = FA.faberPolynomial(phiDisk, 1);     // ζ
     ok('format: F_1(disk) renders as "ζ"', FA.formatFaberPoly(F1) === 'ζ', 'got="' + FA.formatFaberPoly(F1) + '"');
   }

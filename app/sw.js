@@ -83,7 +83,13 @@ self.addEventListener('fetch', (event) => {
 
 async function cacheFirst(req) {
   const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(req);
+  // ignoreSearch: the page loads scripts as `foo.js?v=<CACHE_VERSION>` but the
+  // install step pre-caches the bare paths. Matching with ignoreSearch lets the
+  // precache actually HIT (otherwise every request was a cache miss → needless
+  // re-fetch). This is safe because freshness across deploys is enforced by the
+  // versioned CACHE_NAME (a new release → new cache → activate drops the old),
+  // NOT by the `?v=` query — within one release every `?v=` value is identical.
+  const cached = await cache.match(req, { ignoreSearch: true });
   if (cached) return cached;
   try {
     const fresh = await fetch(req);

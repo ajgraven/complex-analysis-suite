@@ -43,10 +43,34 @@ unbounded-Laurent, or arbitrary expression) and computes the corresponding
 
 ## Running the app
 
-Open `app/index.html` in any modern browser. No build step required.
-Everything is vanilla HTML / JS, with [math.js](https://mathjs.org) loaded
-from a CDN for user-facing complex arithmetic (parsing pasted expressions)
-and [KaTeX](https://katex.org) loaded for math display.
+No build step — everything is vanilla HTML / JS. **Run it from a local web
+server** (not the `file://` protocol):
+
+```
+npm run serve        # python3 -m http.server --directory app 8000
+```
+
+then open <http://localhost:8000/>. Any static file server works
+(`npx serve app`, VS Code Live Server, etc.) — just serve the `app/` directory.
+
+> **Why a server?** The app registers a service worker and runs the solver in
+> Web Workers built from the source files. Opening `index.html` directly via
+> `file://` still works, but the service worker won't register and the workers
+> can't load — the app silently falls back to solving on the main thread (slower,
+> no offline cache, and some `file://` console warnings). Serving over HTTP avoids
+> all of that.
+
+Modern browser recommended (WebGL 2 is used for the Schwarz/sphere views, with a
+CPU fallback). [math.js](https://mathjs.org) and [KaTeX](https://katex.org) are
+loaded from a CDN (pinned + SRI) for expression parsing and math display.
+
+### Deploying / hosting
+
+To publish, copy the **`app/` directory** to any static host (GitHub Pages, a
+personal website, Netlify, …) and point at its `index.html`. Paths are relative,
+so it works under a sub-path too. Nothing outside `app/` is needed at runtime; you
+can omit the dev-only `app/node_modules/`, `app/test/`, `app/node-test.js`, and
+`app/bench.js` when copying (none are loaded by the page).
 
 ### Headless tests
 
@@ -595,37 +619,36 @@ Matching the thesis:
 * `dA = dx dy / π` is the normalized area measure, so the area of the
   unit disk is 1 (not π).
 
-## Recently shipped (HANDOFF #21–#27)
+## Recently shipped
 
 Highlights from the recent ship cadence — full retrospectives in `HANDOFF.md`:
 
-* **#21 — Polynomial-h for unbounded non-singular LQDs.** The (★)_F
-  equations match `phi.lqdBeta` to h's polynomial-at-∞ part via
-  `phiLaurentAtInfinity_UQDL` + `inverseFaberAtInfinity`.
-* **#22 — Polynomial-h for unbounded SINGULAR LQDs.** Andrew Graven
-  derived the full q-formula via the logarithmic generalized Schwarz
-  function S₀(w); the (●₀) q-equation gains a closed-form β-correction.
-* **#23 — UQDLS with no finite poles + polyPart.** Rejection check
-  widened so `h = q/w + polyPart` (no finite poles) is now accepted.
-* **#24 — Higher-order pole at the origin for UQDLS.** New
-  `phi.lqdGamma` Newton-vector slot encoding a synthetic Möbius branch
-  at z = z₀; (★)_Γ block pins γ to the user's principal at w = 0
-  directly via `inverseFaberAtPole`.
-* **#25 — polyPart contribution to the LQD-singular identity verifier.**
-  Closed-form `Res_∞(f · h_polyPart)` term added; previously the
-  verifier silently skipped this and `runFamilyBattery` only checked
-  residual.
-* **#26 — Schwarz dynamics tab supports polyPart + γ.** `clonePhi`
-  carries `lqdBeta` and `lqdGamma` through; CPU adapters add B(1/z)
-  to evalPhi/evalF/derivPhi and merge γ into branches via a
-  synthetic-branch helper; GPU shader gains `u_lqdBeta` uniforms and
-  the same γ-merge at upload.
-* **#27 — Code review + README refresh (this entry).** Centralized
-  duplicated `evalB_OverZ` / `bOverZTaylorAt` into `QD.LqdCommon`,
-  extracted named constants (`ZERO_THRESHOLD`, `DISK_CLAMP_OUT`,
-  `Z0_MAX_RADIUS`, `DEFAULT_FD_EPS`), memoized
-  `_phiWithSyntheticBranch` to amortize cost across Newton residual
-  evaluations, removed dead `checkLqdPolynomialGap` gate.
+* **Faber polynomials (UQD).** A **Faber polynomials** card computes the Faber
+  polynomials `Fₙ(ζ)` of the bounded complement `K = ℂ∖Ω` of a classical unbounded
+  QD from φ's Laurent expansion at ∞, shows them (formula + coefficient table) with
+  capacity / leading-coeff / convergence flags, and optionally plots their roots on
+  the domain canvas (roots cluster inside `K`). "Estimate max c" now jumps the slider
+  to *exactly* c\*. (`app/faber-analysis.js`, `app/ui-faber.js`.)
+* **Usability / clarity overhaul.** The on-plot status panel no longer obscures the
+  domain (shrunk + dockable, persisted), overlay toggles unified into an **Overlays /
+  Layers** card with color keys, an example-led first run + dismissible coachmark, a
+  plain-language "what you're solving" summary, an intro popover, per-tab subtitles,
+  and live solve-phase feedback.
+* **Thesis-example pack + analytic oracles.** A **Thesis example** gallery loads
+  curated canonical domains, each with a closed-form *analytic oracle*; an **Analytic
+  oracle** card shows computed-vs-expected with ✓ / ⚠ / ✗. (`app/thesis-examples.js`.)
+* **Annotated-phenomena overlay.** Labels the harmonic-measure hot spot (tip),
+  maximum-curvature point, and symmetry axes / group, with an exact symmetry detector
+  read off φ via the conformal-map intertwining (`app/symmetry.js`).
+* **Solver accuracy near cusps.** Adaptive quadrature-identity sample escalation,
+  Newton conditioning (central-difference Jacobian when ill-conditioned), a c\*
+  confidence estimate, and honest near-cusp accuracy reporting.
+* **Boundary observables.** Curvature heat-strip, area / perimeter / centroid /
+  moments, harmonic-measure density, and an accuracy estimate, surfaced in a
+  **Geometry & accuracy** card (`app/observables.js`).
+
+Earlier LQD/PQD ship cadence (polynomial-h for unbounded LQDs, the singular-LQD
+q-formula, Schwarz-tab polyPart/γ support, etc.) is retrospected in `HANDOFF.md`.
 
 ## Known limitations / future directions
 
@@ -666,3 +689,15 @@ Highlights from the recent ship cadence — full retrospectives in `HANDOFF.md`:
 
 [2] A. Graven and N. G. Makarov, *Quadrature Domains and the Faber
     Transform*, arXiv:2509.03777, 2025.
+
+## License & attribution
+
+Released under the **MIT License** — free to use, copy, modify, and redistribute,
+including for commercial purposes, provided the copyright and license notice are
+retained. See [`LICENSE`](LICENSE).
+
+If you use this tool in published work, a citation of the thesis (reference [1]
+above) is appreciated.
+
+Third-party libraries (loaded from a CDN, not bundled): [KaTeX](https://katex.org)
+(MIT) and [math.js](https://mathjs.org) (Apache-2.0).

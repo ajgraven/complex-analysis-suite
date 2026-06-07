@@ -48,7 +48,7 @@
         cards: { w0: true, c: false, poly: false, q: false, alpha: false },
         hint: null,
         presets:          () => QD_PRESETS_BOUNDED,
-        externalFieldLabel: 'External field   w − h̄(w)',
+        externalFieldLabel: 'External field: w − h̄(w)',
         externalFieldKind:  'qd',              // 'qd' = w − h̄;  'lqd' = ln|w|²/w̄ − h̄
         vectorFieldOriginAbs2Floor: 1e-30,     // origin not in Ω, no special clip
         extraHContrib:    null,                // no extra terms beyond polyPart + finite poles
@@ -67,7 +67,7 @@
         cards: { w0: true, c: false, poly: false, q: false, alpha: true },
         hint:             'pqd-hint',
         presets:          () => QD_PRESETS_BOUNDED_PQD,
-        externalFieldLabel: 'External field   (1/α)w|w|^{2(α−1)} − h̄(w)',
+        externalFieldLabel: 'External field: (1/α) w |w|^(2(α−1)) − h̄(w)',
         externalFieldKind:  'pqd',
         vectorFieldOriginAbs2Floor: 1e-30,
         extraHContrib:    null,
@@ -123,7 +123,7 @@
         cards: { w0: true, c: false, poly: false, q: false, alpha: true },
         hint:             'pqd-singular-hint',
         presets:          () => QD_PRESETS_BOUNDED_PQD_SINGULAR,
-        externalFieldLabel: 'External field   (1/α)w|w|^{2(α−1)} − h̄(w)',
+        externalFieldLabel: 'External field: (1/α) w |w|^(2(α−1)) − h̄(w)',
         externalFieldKind:  'pqd',
         vectorFieldOriginAbs2Floor: 1e-30,
         extraHContrib:    null,
@@ -159,7 +159,7 @@
         cards: { w0: false, c: true, poly: true, q: false, alpha: true },
         hint:             'pqd-unbounded-hint',
         presets:          () => QD_PRESETS_UNBOUNDED_PQD,
-        externalFieldLabel: 'External field   (1/α)w|w|^{2(α−1)} − h̄(w)',
+        externalFieldLabel: 'External field: (1/α) w |w|^(2(α−1)) − h̄(w)',
         externalFieldKind:  'pqd',
         vectorFieldOriginAbs2Floor: 1e-30,
         extraHContrib:    null,
@@ -184,7 +184,7 @@
         cards: { w0: false, c: true, poly: true, q: false, alpha: true },
         hint:             'pqd-unbounded-singular-hint',
         presets:          () => QD_PRESETS_UNBOUNDED_PQD_SINGULAR,
-        externalFieldLabel: 'External field   (1/α)w|w|^{2(α−1)} − h̄(w)',
+        externalFieldLabel: 'External field: (1/α) w |w|^(2(α−1)) − h̄(w)',
         externalFieldKind:  'pqd',
         vectorFieldOriginAbs2Floor: 1e-30,
         extraHContrib:    null,
@@ -209,7 +209,7 @@
         cards: { w0: false, c: true, poly: true, q: false },
         hint: null,
         presets:          () => QD_PRESETS_UNBOUNDED,
-        externalFieldLabel: 'External field   w − h̄(w)',
+        externalFieldLabel: 'External field: w − h̄(w)',
         externalFieldKind:  'qd',
         vectorFieldOriginAbs2Floor: 1e-30,
         extraHContrib:    null,
@@ -228,7 +228,7 @@
         cards: { w0: true, c: false, poly: false, q: false },
         hint:             'lqd-hint',
         presets:          () => LQD_PRESETS_BOUNDED,
-        externalFieldLabel: 'External field   ln|w|²/w̄ − h̄(w)',
+        externalFieldLabel: 'External field: ln|w|²/w̄ − h̄(w)',
         externalFieldKind:  'lqd',
         vectorFieldOriginAbs2Floor: 1e-30,     // 0 ∉ Ω̄, no special clip
         extraHContrib:    null,
@@ -250,7 +250,7 @@
         cards: { w0: false, c: true, poly: true, q: false },
         hint:             'lqd-unbounded-hint',
         presets:          () => LQD_PRESETS_UNBOUNDED,
-        externalFieldLabel: 'External field   ln|w|²/w̄ − h̄(w)',
+        externalFieldLabel: 'External field: ln|w|²/w̄ − h̄(w)',
         externalFieldKind:  'lqd',
         vectorFieldOriginAbs2Floor: 1e-30,    // 0 ∈ K, no special clip
         extraHContrib:    null,
@@ -269,7 +269,7 @@
         cards: { w0: false, c: true, poly: true, q: true },
         hint:             'lqd-unbounded-singular-hint',
         presets:          () => LQD_PRESETS_UNBOUNDED_SINGULAR,
-        externalFieldLabel: 'External field   ln|w|²/w̄ − h̄(w)',
+        externalFieldLabel: 'External field: ln|w|²/w̄ − h̄(w)',
         externalFieldKind:  'lqd',
         vectorFieldOriginAbs2Floor: 1e-4,      // 0 ∈ Ω; clip arrows near origin
         extraHContrib(w, hData, phi, state) {
@@ -305,7 +305,7 @@
         cards: { w0: true, c: false, poly: false, q: true },
         hint:             'lqd-singular-hint',
         presets:          () => LQD_PRESETS_BOUNDED_SINGULAR,
-        externalFieldLabel: 'External field   ln|w|²/w̄ − h̄(w)',
+        externalFieldLabel: 'External field: ln|w|²/w̄ − h̄(w)',
         externalFieldKind:  'lqd',
         vectorFieldOriginAbs2Floor: 1e-4,      // 0 ∈ Ω; clip arrows near origin
         // Singular LQDs add a simple pole of h at w = 0 with residue q.

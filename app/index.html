@@ -341,7 +341,7 @@
       <!-- Auto-estimate the critical conformal radius c* (largest c with a valid
            unbounded QD). On success: caps the slider at c* and jumps to ≈0.99·c*. -->
       <div id="c-estimate-row" style="margin-top: 8px;">
-        <button id="c-estimate-btn" class="small" type="button">Estimate max c</button>
+        <button id="c-estimate-btn" class="small" type="button" title="Estimate the critical conformal radius c* — the largest c with a valid unbounded QD. Sets the slider to c* (the extremal, just-cusped domain).">Estimate max c</button>
         <span id="c-estimate-busy" class="hidden" style="margin-left: 6px; font-size: 11px; color: #777;">
           <span class="search-spinner"></span> <span id="c-estimate-busy-text">searching…</span>
         </span>
@@ -394,8 +394,8 @@
         <label>Vector field:
           <select id="vector-field-mode">
             <option value="off" selected>Off</option>
-            <option value="polya">Pólya field   h̄(w)</option>
-            <option value="external" id="vf-external-opt">External field   w − h̄(w)</option>
+            <option value="polya">Pólya field: h̄(w)</option>
+            <option value="external" id="vf-external-opt">External field: w − h̄(w)</option>
           </select>
         </label>
       </div>
@@ -413,14 +413,14 @@
       </div>
       <div class="row ov-row">
         <span class="ov-key" aria-hidden="true"><span class="ov-dash"></span><span class="ov-dia" style="background:#0d9488;"></span></span>
-        <label title="Annotate the phenomena the cusp / critical-set overlays don't: the harmonic-measure hot spot (the tip, where ρ = 1/(2π|φ′|) peaks), the maximum-curvature point on ∂Ω, and the domain's symmetry axes (dashed) with its D_n / Z_n group.">
+        <label title="Annotate the phenomena the cusp / critical-set overlays don't: the harmonic-measure hot spot (the tip, where ρ = 1/(2π|φ′|) peaks), the maximum-curvature point on ∂Ω, and the domain's symmetry axes (dashed) with its dihedral (Dₙ) or cyclic (Zₙ) symmetry group.">
           <input type="checkbox" id="phenomena-toggle"> Annotated phenomena <span class="ov-note">tip · max-κ · symmetry axes</span>
         </label>
       </div>
       <div class="row ov-row">
         <span class="ov-key" aria-hidden="true"><span class="ov-dot" style="border:1.2px solid #0d9488;background:transparent;"></span><span class="ov-dia" style="background:#7c3aed;"></span></span>
-        <label title="Plot the roots of the Faber polynomials F_n of the bounded complement K (classical unbounded QD only). Roots cluster inside K — the hole of the unbounded domain. Teal circles = union of all roots up to N; violet diamonds = the single selected F_n. Drive N / the mode from the Faber polynomials card.">
-          <input type="checkbox" id="faber-roots-toggle"> Faber roots <span class="ov-note">roots of F_n — cluster in K (UQD only)</span>
+        <label title="Plot the roots of the Faber polynomials Fₙ of the bounded complement K (classical unbounded QD only). Roots cluster inside K — the hole of the unbounded domain. Teal circles = union of all roots up to N; violet diamonds = the single selected Fₙ. Drive N / the mode from the Faber polynomials card.">
+          <input type="checkbox" id="faber-roots-toggle"> Faber roots <span class="ov-note">roots of Fₙ — cluster in K (UQD only)</span>
         </label>
       </div>
     </section>
