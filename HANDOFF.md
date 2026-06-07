@@ -26,6 +26,66 @@ priors.
 > version:sync` refreshes it after any `app/` asset change; CI's
 > `npm run version:check` fails if it's stale.
 
+## (most recent) Solver accuracy near cusps (#11)
+
+**Problem.** As a QD approaches a **cusp** (a φ′ zero migrating onto |z|=1, the
+Hele-Shaw / Polubarinova–Galin blow-up) the solver and its checks lose accuracy in
+distinct ways. An empirical pass (see `app/test/cusp-accuracy.test.js`) found which
+levers actually matter — and falsified one plausible-sounding idea:
+
+- **Identity-verifier under-resolution is the real failure, and the fix is MORE
+  uniform nodes — not graded nodes.** The identity integrand on ∂Ω
+  (`1/(w−b)^k·conj(w)·φ′·z` for unbounded families) stays smooth and periodic, so the
+  uniform-θ trapezoid is *spectrally* accurate; grading nodes toward the cusp angle
+  only **hurts** it (measured: graded 1.25e+0 vs uniform 2.25e-10 at c=1.3 for the
+  cardioid `h=1.5/w+0.5/w²`). What actually happens near c\* is the integrand
+  *sharpens*, so a fixed node count under-resolves and a genuine QD reads
+  identity-failing (e.g. 4.66e-2 at N=1500, c=1.4). **Fix:** `verifyQuadratureIdentity_UQD`
+  now **escalates** the uniform node count (doubling to a 16k cap) when — and only
+  when — the cheap near-cusp gate fires (min|φ′|/mean|φ′| < 0.08, computed from the
+  pass it already runs) and the error is still above 1e-9 and improving. c=1.4 now
+  verifies at 2.42e-11 (escalated to 6000 nodes). Away from a cusp the gate is a
+  no-op and the result is **byte-for-byte** the single-pass uniform sum
+  (`adaptiveSamples:false` forces the old path for A/B). Implemented for the canonical
+  unbounded family; the pattern is a clean drop-in for the other unbounded LQD/PQD
+  verifiers if a cusp case ever needs it.
+- **Newton conditioning (W2).** `newtonSolve` now auto-switches the numerical
+  Jacobian from forward to **central differences** once a step's QR `condEst`
+  exceeds `CENTRAL_DIFF_COND_TRIGGER=1e5` (or the line search stalls, alpha≤¼) — the
+  near-cusp signatures — and iterative refinement runs a **bounded loop**
+  (`MAX_REFINE_STEPS=3`) instead of one step (gated `condEst>1e6`). Well-conditioned
+  iterations keep forward differences and one-step refinement, so the common path is
+  unchanged in cost and result. `jacobianMode:'auto'|'central'|'forward'`,
+  `centralDiffEps`, `maxRefine` thread through `options`; `liveSolveStep` inherits the
+  auto-trigger. New `leastSquaresWithCond` returns condEst from the same factorization
+  used to solve (no extra QR).
+- **c\* confidence (W4).** `QD.estimateMaxConformalRadius` now returns a
+  `confidence ∈ [0,1]` blending mechanism cleanliness (a cusp whose g→1 is an
+  unambiguous geometric signal; a fold/existence boundary is softer, ≈0.5 floor) with
+  the final bracket tightness. Surfaced next to "c\* ≈ …" in the Inverse tab. The c\*
+  value itself was already accurate (cardioid c\*≈1.449, cusp) — the only addition is
+  the honesty signal. (No change to `critical-set.js`: `findCriticalPoints` already
+  locates the boundary φ′-zero to machine precision, |g−1|=0 for the cardioid/deltoid
+  oracles, so no sharpening was warranted.)
+- **Honest reporting (W5).** `QD.estimateAccuracy` gained `nearCusp` /
+  `cuspDistance` (closest φ′-zero radial gap to |z|=1, via `findCriticalPoints`) /
+  `trustedSignal` ('geometry' near a cusp, 'identity' otherwise). The "Geometry &
+  accuracy" card shows a **near-cusp** row when flagged, explaining that the identity
+  check is unreliable (thin hole) and validity is governed by the geometric criterion
+  — the same two-regime logic `solver-cmax.js` uses.
+
+**Verification.** New `app/test/cusp-accuracy.test.js` (registered after `cusps`):
+§1 the cardioid family stays a converged univalent identity-satisfying QD up to
+c=1.4 (residuals 1e-16…1e-13, identity ≤ 2.4e-11); §2 escalation fires near the cusp
+(error 2.42e-11 vs 4.66e-2 fixed) and is byte-for-byte away from it; §3 critical
+modulus |g−1|=0 for constructed oracles; §4 c\*≈1.449 cusp, confidence 0.99; §5
+near/safe reporting. Full suite green; lint clean; `version:sync` run.
+
+**Files:** `app/solver.js` (central-diff Jacobian, bounded refinement,
+`leastSquaresWithCond`), `app/solver-uqd.js` (escalating verifier), `app/solver-cmax.js`
+(confidence), `app/observables.js` (near-cusp fields), `app/ui-solve.js` (card row),
+`app/ui.js` (c\* confidence), `app/test/cusp-accuracy.test.js`, `app/node-test.js`.
+
 ## (most recent) Tier-0 analysis primitives — `app/observables.js`
 
 **What shipped.** A new page-only module `app/observables.js` (loaded like

@@ -174,7 +174,8 @@ requires a genuine QD (univalent **and** the quadrature identity holds); near th
 cusp the complement (hole) thins until the identity verifier can no longer place
 interior test points, so it switches to the geometric cusp criterion
 `g = max|z|` over φ′ zeros ([`QD.findCriticalPoints`](app/critical-set.js), valid
-while `g < 1`). Returns `mechanism: 'cusp' | 'fold'` and `critAtMax`. UI: the
+while `g < 1`). Returns `mechanism: 'cusp' | 'fold'`, `critAtMax`, and a
+`confidence ∈ [0,1]` (mechanism cleanliness × bracket tightness). UI: the
 **Estimate max c** button in the inverse tab's `#c-card`.
 
 The identity verifier's interior test points come from
@@ -182,6 +183,18 @@ The identity verifier's interior test points come from
 ranked by clearance from both ∂Ω and h's poles. The naive `centroid + 0.18·maxDev`
 placement it replaced drifted onto a pole as `c` grew, giving a spurious 100%
 identity error and the old c\* under-estimate (HANDOFF).
+
+**Accuracy near a cusp (#11).** As `c → c*` the identity integrand on ∂Ω stays
+smooth and periodic but *sharpens*, so a fixed uniform-θ node count under-resolves
+it and a genuine QD reads identity-failing (grading the nodes only hurts the
+spectrally-accurate trapezoid — verified). `verifyQuadratureIdentity_UQD` therefore
+**escalates** its uniform node count (doubling to a cap) when a cheap near-cusp gate
+fires (`min|φ′|/mean|φ′| < 0.08`) and the error is still converging; the
+well-resolved case is untouched. Newton itself sharpens its numerical Jacobian
+(forward → central differences) once `condEst` flags ill-conditioning, with bounded
+iterative refinement. `QD.estimateAccuracy` reports `nearCusp` / `cuspDistance` /
+`trustedSignal` so the UI can say plainly that near a cusp the geometric criterion —
+not the identity verifier — governs validity. See `app/test/cusp-accuracy.test.js`.
 
 ---
 
@@ -192,12 +205,13 @@ identity error and the old c\* under-estimate (HANDOFF).
 | Householder QR (real, m ≥ n) | `houseQR` — `solver.js:195` | P1.2. Backward-stable; replaces Gauss-Jordan on the normal equations. Surfaces `condEst`. |
 | Square linear solve | `solveLinearSystem` — `solver.js` (post-QR) | Now routes through `houseQR.applyQt` + `backSolve`. |
 | Least-squares solve | `solveLeastSquares` — `solver.js` (post-QR) | Direct QR; no `A^T A` formation. |
-| Newton with Armijo + deflation | `newtonSolve` — `solver.js:341` | Damped Newton, finite-diff Jacobian, optional pluggable analytic Jacobian. |
+| Newton with Armijo + deflation | `newtonSolve` — `solver.js` | Damped Newton, finite-diff Jacobian (auto forward→central when ill-conditioned, #11), bounded iterative refinement, optional pluggable analytic Jacobian. |
 | Top-level inverse solver | `solveInverseQD` — `solver.js:790` | Stages A1-A5 (direct / continuation / multistart / diverse seeds / deflation). |
 | Boundary sampler (adaptive) | `sampleBoundaryAdaptive` — `solver.js` | Used everywhere φ(∂𝔻) is needed. |
 | Univalence check | `isBoundaryUnivalent` — `solver.js` | Polygon self-intersection on sampled boundary. |
 | Identity test points | `chooseHoleTestPoints` — `solver.js` | Picks interior points in the hole (ray-cast) ranked by clearance from ∂Ω + poles; shared by the unbounded identity verifiers. |
-| Max conformal radius c\* | `estimateMaxConformalRadius` — `solver-cmax.js` | Bracket+bisection with a two-regime gate: genuine-QD (univalent + identity) away from the cusp, cusp criterion `g = max|z|` over φ′ zeros (`< 1`) near it. Reports `mechanism` (cusp/fold). Warm-start gauge injection + confirm-invalid guard; dependency-injected `solveFn` (worker in browser, sync solver in tests). |
+| Max conformal radius c\* | `estimateMaxConformalRadius` — `solver-cmax.js` | Bracket+bisection with a two-regime gate: genuine-QD (univalent + identity) away from the cusp, cusp criterion `g = max|z|` over φ′ zeros (`< 1`) near it. Reports `mechanism` (cusp/fold) and `confidence ∈ [0,1]` (#11). Warm-start gauge injection + confirm-invalid guard; dependency-injected `solveFn` (worker in browser, sync solver in tests). |
+| Near-cusp identity resolution | `verifyQuadratureIdentity_UQD` — `solver-uqd.js` | Escalates the uniform-θ node count (doubling to a cap) when the near-cusp gate fires (`min/mean |φ′| < 0.08`) and the error is still converging, so a genuine QD near c\* is not mis-rejected. Uniform spectral trapezoid is kept away from cusps (grading would hurt it); `adaptiveSamples:false` forces single-pass (#11). |
 | Boundary observables | `boundaryObservables` / `harmonicMeasure` / `estimateAccuracy` — `observables.js` (page-only) | From a solved φ via one φ/φ′/φ″ sweep (`phiTaylorAt`): signed curvature κ(θ)=Im(conj γ′·γ″)/|γ′|³ (κ→∞ at cusps), area (shoelace) + perimeter + centroid + complex area moments `M_k=∬_Ω w^k dA` (Stokes); harmonic-measure density `ρ=1/(2π|φ′|)`; multi-resolution identity error → significant-digits + condition estimate. Foundational primitives for the dynamics features. |
 
 ---

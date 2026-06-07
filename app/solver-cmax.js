@@ -177,9 +177,15 @@
     // Build per-c options: force the identity gate on with a high-resolution
     // contour integral (idSamples), and inject c into a clone of the warm seed
     // (gauge injection) so Newton can't drift back to a stale c.
+    //
+    // adaptiveSamples:false (#11) — disable the verifier's near-cusp node
+    // escalation here: this estimator already switches to the GEOMETRIC criterion
+    // near the cusp (where escalation would otherwise fire), so escalating the
+    // identity there is wasted work; away from the cusp the gate never trips. The
+    // fixed high idSamples remains the genuine-QD-regime resolution.
     function mergeOpts(c, seedPhi) {
       const opts = Object.assign({}, baseOpts,
-        { c: c, identityCheck: true, identitySamples: idSamples });
+        { c: c, identityCheck: true, identitySamples: idSamples, adaptiveSamples: false });
       if (seedPhi) {
         const seed = QD.clonePhi(seedPhi);
         seed.c = c;
@@ -267,8 +273,21 @@
     // Mechanism that set c*: a forming cusp (a φ′ zero reached |z| = 1) vs a fold /
     // identity-existence boundary away from any cusp.
     const mechanism = (loCrit >= CUSP_NEAR) ? 'cusp' : 'fold';
+    // Confidence (#11): how trustworthy the reported c* is, in [0, 1]. Two factors:
+    //   • mechanism cleanliness — a cusp whose g climbed close to 1 is an
+    //     unambiguous geometric signal (high); a fold / identity-boundary is
+    //     inherently softer (≈0.5 floor).
+    //   • bracket tightness — the final [cLo, cHi] relative width (≤ relTol).
+    const clamp01 = (x) => Math.max(0, Math.min(1, x));
+    const relWidth = (cHi > 0) ? (cHi - cLo) / cHi : 1;
+    const bracketConf = clamp01(1 - relWidth);
+    const mechConf = (mechanism === 'cusp')
+      ? 0.6 + 0.4 * clamp01((loCrit - CUSP_NEAR) / (1 - CUSP_NEAR))
+      : 0.5;
+    const confidence = clamp01(mechConf * bracketConf);
     return { found: true, cMax: cLo, cLowValid: cLo, phiAtMax: loPhi,
-             trace, reason: 'bracketed', mechanism, critAtMax: loCrit, solves };
+             trace, reason: 'bracketed', mechanism, critAtMax: loCrit,
+             confidence, solves };
   }
 
   QD.estimateMaxConformalRadius = estimateMaxConformalRadius;

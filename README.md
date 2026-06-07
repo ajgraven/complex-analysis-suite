@@ -341,12 +341,20 @@ view is active.
   reaching `|z| = 1`) near it, where the thinning complement makes the identity
   hard to verify — then caps the slider at `c*` and jumps to ≈ 0.99·`c*`. The
   result note reports whether `c*` is a **cusp** (beyond it the boundary
-  self-overlaps) or a **fold** (the QD simply ceases to exist).
+  self-overlaps) or a **fold** (the QD simply ceases to exist), plus a
+  **confidence** percentage for the estimate.
 * **Geometry & accuracy** — after a solve, a panel card reports the domain's
   **area, perimeter, and maximum boundary curvature** (which blows up at a cusp),
   plus an **accuracy meter** (estimated significant digits of the solution, with
-  an under-resolution warning). An optional **curvature heat-strip** toggle colors
-  ∂Ω by |κ| (cool → hot) so the sharpest bends — and forming cusps — stand out.
+  an under-resolution warning) and a **near-cusp** note: when a φ′ zero approaches
+  `|z| = 1` the quadrature-identity check becomes unreliable (the complement
+  thins), so validity is governed by the geometric criterion instead — the card
+  says so and shows the distance to the cusp. Near `c*` the solver also resolves
+  the identity to tolerance automatically (adaptive node escalation) and sharpens
+  Newton's Jacobian (central differences) when the problem turns ill-conditioned,
+  so genuine near-cusp domains are no longer mis-rejected. An optional **curvature
+  heat-strip** toggle colors ∂Ω by |κ| (cool → hot) so the sharpest bends — and
+  forming cusps — stand out.
   These come from `app/observables.js` (`QD.boundaryObservables`,
   `QD.harmonicMeasure`, `QD.estimateAccuracy`), computed from the solved map φ.
 * **φ(0)** — defaults to the centroid of the poles (manually overridable

@@ -25,6 +25,7 @@ const TESTS = [
   'param-slice',
   'sphere',
   'cusps',
+  'cusp-accuracy',
   'riemann',
   'parse-check',
   'worker',

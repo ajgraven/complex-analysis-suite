@@ -230,8 +230,34 @@
     const out = {
       residual: null, relN: null, rel2N: null, samplesN: null,
       underResolved: false, significantDigits: null, conditionEst: null,
+      // Near-cusp regime (#11): nearCusp flags that a φ′ zero is within
+      // NEAR_CUSP_BAND of |z| = 1 (a forming cusp); cuspDistance is that radial
+      // gap (smaller ⇒ closer to c*); trustedSignal names which check to believe.
+      // In the near-cusp regime the quadrature-identity verifier becomes
+      // unreliable (the hole thins so interior test points can't clear ∂Ω) and
+      // the GEOMETRIC criterion (univalence + critical modulus) governs validity.
+      nearCusp: false, cuspDistance: null, trustedSignal: 'identity',
     };
     if (!phi || !hData) return out;
+
+    // Near-cusp detection via the critical set (page-only, like this module). The
+    // closest φ′ zero to |z| = 1 sets cuspDistance; within the band ⇒ near-cusp.
+    const NEAR_CUSP_BAND = 0.05;
+    try {
+      if (typeof QD.findCriticalPoints === 'function') {
+        const cs = QD.findCriticalPoints(phi);
+        let minDist = Infinity;
+        for (const pt of (cs && cs.points) || []) {
+          const d = Math.abs(pt.absZ - 1);
+          if (d < minDist) minDist = d;
+        }
+        if (isFinite(minDist)) {
+          out.cuspDistance = minDist;
+          out.nearCusp = minDist <= NEAR_CUSP_BAND;
+        }
+      }
+    } catch (e) { /* leave nearCusp=false */ }
+    out.trustedSignal = out.nearCusp ? 'geometry' : 'identity';
 
     // Solve residual ‖F(φ)‖.
     try { out.residual = QD.residualNorm(QD.residual(phi, hData)); } catch (e) { /* leave null */ }
