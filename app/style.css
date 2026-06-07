@@ -417,8 +417,19 @@ button.attention {
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
 }
+/* The overlay centers via translate(-50%,-50%), which only works if it has a
+   real size — so the inner popover must take part in normal flow (NOT absolute,
+   the .help-popover default, which would collapse the overlay to 0×0 and let the
+   panel hang off-center past the viewport bottom). Cap width/height to the
+   viewport and scroll if the shortcut list is long. */
+.shortcuts-overlay .help-popover {
+  position: static;
+  max-width: min(92vw, 460px);
+  max-height: 85vh;
+  overflow-y: auto;
+}
 .shortcuts-table { font-size: 12px; border-spacing: 6px 4px; }
-.shortcuts-table td:first-child { text-align: right; }
+.shortcuts-table td:first-child { text-align: right; white-space: nowrap; vertical-align: top; }
 
 /* ===== Inputs ===== */
 input[type="text"], input[type="number"], select {
