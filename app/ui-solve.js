@@ -468,6 +468,29 @@ function runStatusAnalyses(opts) {
   scheduleGeomClassification(cur.primary, token);
   scheduleCuspClassification(cur.primary, token);
   scheduleObservables(cur.primary, cur.hData, token, opts);
+  scheduleSymmetry(cur.primary, token);
+}
+
+// #9: detect the domain's symmetry group (for the annotated-phenomena overlay's
+// dashed axes + D_n / Z_n badge), off the idle path like the cusp classifier.
+// Cached on state.current.symmetry, keyed by phi identity.
+function scheduleSymmetry(sol, token) {
+  if (!sol || !sol.phi || !QD.detectSymmetry) return;
+  const phi = sol.phi;
+  const cached = state.current && state.current.symmetry;
+  if (cached && cached._phiRef === phi) return;     // already computed for this φ
+  const run = () => {
+    if (token !== _analysisToken) return;           // superseded by a newer analysis
+    let sym;
+    try { sym = QD.detectSymmetry(phi); } catch (e) { return; }
+    if (token !== _analysisToken) return;
+    if (sym) sym._phiRef = phi;
+    if (state.current) state.current.symmetry = sym;
+    // Repaint so the symmetry axes (drawn from state.current.symmetry) appear.
+    if (state.showPhenomena && typeof plot !== 'undefined' && plot) plot.render();
+  };
+  const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 0));
+  idle(run, { timeout: 250 });
 }
 
 // Throttled live refresh during a pole/slider drag (called per quick-solve

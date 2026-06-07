@@ -206,6 +206,11 @@
           <select id="preset-select" style="width: 240px;"></select>
         </label>
       </div>
+      <div class="row" style="margin-bottom: 8px;">
+        <label title="Curated canonical quadrature domains, each with an analytic oracle. Loading one frames the view, turns on the annotated-phenomena overlay, and shows a computed-vs-expected oracle card.">Thesis example:
+          <select id="thesis-select" style="width: 240px;"></select>
+        </label>
+      </div>
 
       <!-- Custom text input. Two-way coupled to the structured pole grid:
            grid edits refresh the text; Parse rebuilds the grid from text.
@@ -387,6 +392,11 @@
           </label>
         </div>
         <div class="row">
+          <label title="Annotate the phenomena the cusp / critical-set overlays don't: the harmonic-measure hot spot (the tip, where ρ = 1/(2π|φ′|) peaks), the maximum-curvature point on ∂Ω, and the domain's symmetry axes (dashed) with its D_n / Z_n group.">
+            <input type="checkbox" id="phenomena-toggle"> Annotated phenomena (tip · max-κ · symmetry axes)
+          </label>
+        </div>
+        <div class="row">
           <label><input type="checkbox" id="auto-switch-singular" checked> Auto-switch singular ⇄ non-singular PQD when the boundary crosses the origin</label>
         </div>
       </details>
@@ -486,6 +496,14 @@
           <span class="search-spinner"></span> running…
         </span>
       </div>
+    </section>
+
+    <!-- Thesis-example analytic-oracle card (#8). Hidden until an example is
+         loaded from the gallery; ui-thesis.js fills #oracle-content with the
+         computed-vs-expected comparison rows. -->
+    <section class="card hidden" id="oracle-card">
+      <h2>Analytic oracle</h2>
+      <div id="oracle-content"></div>
     </section>
 
     <!-- The Riemann map, geometric properties, and boundary singularities have

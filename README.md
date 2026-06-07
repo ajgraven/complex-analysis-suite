@@ -357,6 +357,20 @@ view is active.
   forming cusps — stand out.
   These come from `app/observables.js` (`QD.boundaryObservables`,
   `QD.harmonicMeasure`, `QD.estimateAccuracy`), computed from the solved map φ.
+* **Thesis examples + analytic oracles** — a **Thesis example** gallery loads
+  curated canonical quadrature domains (unit disk, symmetric multi-pole D₂/D₃/D₄
+  domains, the cusp-limited cardioid, the deltoid, a single exterior pole). Each
+  carries an *analytic oracle* — the closed-form quantities a correct solve must
+  reproduce (area, symmetry group, cusp count/type, `c*` + mechanism, achievable
+  significant digits) — and an **Analytic oracle** card shows computed vs expected
+  with ✓ / ⚠ / ✗ (the heavy `c*` check verifies on demand). From
+  `app/thesis-examples.js` (`QD.ThesisExamples`, `QD.checkOracle`).
+* **Annotated phenomena** — an optional overlay labels the features the
+  critical-set / cusp overlays don't: the **harmonic-measure hot spot** (the tip,
+  where `ρ = 1/(2π|φ′|)` peaks), the **maximum-curvature point** on ∂Ω, and the
+  domain's **symmetry axes** (dashed) with its `D_n` / `Z_n` group. Symmetry comes
+  from `app/symmetry.js` (`QD.detectSymmetry`), which reads the domain's symmetry
+  straight off φ via the conformal-map intertwining.
 * **φ(0)** — defaults to the centroid of the poles (manually overridable
   in bounded mode).
 * **Solver settings** — boundary samples, aggressiveness preset (Quick /
