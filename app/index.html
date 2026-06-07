@@ -71,9 +71,9 @@
       <div class="row" style="margin-bottom:6px; align-items:center;">
         <span class="domain-mode-group-label" style="width:52px; margin:0;">Weight</span>
         <div class="segmented" id="dm-weight" role="group" aria-label="Weight class">
-          <button type="button" class="seg-btn active" data-weight="classical" title="Classical quadrature domain — unweighted area integral ∫_Ω f dA.">QD</button>
-          <button type="button" class="seg-btn" data-weight="pqd" title="Power-weighted QD — weight |w|^{2(α−1)} in the area integral.">PQD</button>
-          <button type="button" class="seg-btn" data-weight="lqd" title="Log-weighted QD — weight 1/|w|² in the area integral.">LQD</button>
+          <button type="button" class="seg-btn active" data-weight="classical" data-str-title="tooltips.weightQD">QD</button>
+          <button type="button" class="seg-btn" data-weight="pqd" data-str-title="tooltips.weightPQD">PQD</button>
+          <button type="button" class="seg-btn" data-weight="lqd" data-str-title="tooltips.weightLQD">LQD</button>
         </div>
       </div>
       <div class="row" style="margin-bottom:6px; align-items:center;">
@@ -102,117 +102,34 @@
         <div class="dm-riemann-label">
           <span class="domain-mode-group-label" style="margin:0;">Riemann map φ(z)</span>
           <button type="button" id="dm-riemann-sym-toggle" class="help-btn"
-                  title="Show / hide the symbolic form">?</button>
+                  data-str-title="tooltips.riemannSym">?</button>
         </div>
         <div id="dm-riemann-sym" class="rm-sym hidden"></div>
         <div id="dm-riemann-numer" class="rm-numer"></div>
       </div>
 
-      <div class="hint" id="pqd-hint" style="display:none; margin-top:6px;">
-        <b>Power-weighted QD.</b> Bounded Ω, weight <code>|w|<sup>2(α−1)</sup></code>; <code>φ = (R<sup>#</sup>)<sup>1/α</sup></code>.
-        <details><summary>Details</summary>
-        <code>∫<sub>Ω</sub> f(w)·|w|<sup>2(α−1)</sup> dA = ∮<sub>∂Ω</sub> f·h dw</code>
-        for real <code>α &gt; 0, α ≠ 1</code> (α=1 is the classical case). Riemann map
-        factors as <code>φ(z) = (R<sup>#</sup>(z))<sup>1/α</sup></code>, where
-        <code>R</code> is rational with poles at the preimages <code>z<sub>j</sub></code> of <code>p<sub>j</sub></code>.
-        Realizability constraint: <code>C<sub>j,1</sub></code> must be large enough that
-        the preimages stay inside <code>𝔻</code>.
-        </details>
-      </div>
-      <div class="hint" id="pqd-singular-hint" style="display:none; margin-top:6px;">
-        <b>Bounded singular PQD.</b> <code>0 ∈ Ω</code>; φ gains a Blaschke factor pinned by the mass constraint.
-        <details><summary>Details</summary>
-        The Riemann map gains a
-        Blaschke factor, <code>φ(z) = b<sub>z₀</sub>(z)·(R<sup>#</sup>(z))<sup>1/α</sup></code>,
-        where <code>φ(z<sub>0</sub>) = 0</code> (the origin's preimage). No point
-        charge: the <code>|w|<sup>2(α−1)</sup></code> weight makes the quadrature
-        data unique, and the <b>mass/area constraint</b> (the <code>f=1</code> case
-        of the identity) pins <code>|z<sub>0</sub>|</code>. <code>w₀ = φ(0) ≠ 0</code>
-        is a non-origin interior point.
-        </details>
-      </div>
-      <div class="hint" id="pqd-unbounded-hint" style="display:none; margin-top:6px;">
-        <b>Unbounded PQD.</b> Ω reaches ∞ (<code>0 ∉ Ω</code>); <code>φ = z·(r<sup>#</sup>)<sup>1/α</sup></code> on <code>𝔻*</code>, conformal radius c.
-        <details><summary>Details</summary>
-        Ω is unbounded with bounded complement K
-        (<code>0 ∉ Ω</code>). The test class is <code>A₀(Ω)</code> (analytic,
-        vanishing at ∞), so the weighted integral converges for all α &gt; 0.
-        Riemann map <code>φ(z) = z·(r<sup>#</sup>(z))<sup>1/α</sup></code> on
-        <code>𝔻*</code> with <code>r<sup>#</sup>(∞) = c<sup>α</sup></code>
-        (conformal radius <code>c</code>, a user input). Supports finite poles
-        and a polynomial part of any degree (pole at ∞), e.g. monomial
-        <code>h = α·k·w<sup>k−1</sup></code> (Thm 4.5.3).
-        </details>
-      </div>
-      <div class="hint" id="pqd-unbounded-singular-hint" style="display:none; margin-top:6px;">
-        <b>Unbounded singular PQD.</b> Ω unbounded with <code>0 ∈ Ω</code>; φ gains a Blaschke factor on <code>𝔻*</code>.
-        <details><summary>Details</summary>
-        The Riemann map gains a Blaschke factor,
-        <code>φ(z) = z·b<sub>z₀</sub>(z)·(r<sup>#</sup>(z))<sup>1/α</sup></code> on
-        <code>𝔻*</code>, where <code>z₀ ∈ 𝔻*</code> is the origin's preimage
-        (<code>φ(z₀)=0</code>) and <code>r<sup>#</sup>(∞)=|cz₀|<sup>α</sup></code>.
-        No point charge; z₀ is pinned by <code>r(z₀)=0</code> (Prop 4.6.3, h
-        analytic at 0). c is the conformal radius.
-        </details>
-      </div>
+      <div class="hint" id="pqd-hint" style="display:none; margin-top:6px;" data-str-html="familyHints.pqdBounded"></div>
+      <div class="hint" id="pqd-singular-hint" style="display:none; margin-top:6px;" data-str-html="familyHints.pqdBoundedSingular"></div>
+      <div class="hint" id="pqd-unbounded-hint" style="display:none; margin-top:6px;" data-str-html="familyHints.pqdUnbounded"></div>
+      <div class="hint" id="pqd-unbounded-singular-hint" style="display:none; margin-top:6px;" data-str-html="familyHints.pqdUnboundedSingular"></div>
 
-      <div class="hint" id="lqd-hint" style="display:none; margin-top:6px;">
-        <b>Log-weighted QD.</b> Weight <code>1/|w|²</code>, non-singular (<code>0 ∉ Ω̄</code>).
-        <details><summary>Details</summary>
-        <code>∫<sub>Ω</sub> f(w)/|w|² dA = ∮<sub>∂Ω</sub> f·h dw</code>.
-        Non-singular only: requires <code>0 ∉ Ω̄</code>, so <code>w₀ = φ(0)</code> must be nonzero.
-        </details>
-      </div>
-      <div class="hint" id="lqd-singular-hint" style="display:none; margin-top:6px;">
-        <b>Singular log-weighted QD.</b> <code>0 ∈ Ω</code>; residue q at the origin; <code>φ = γ·b<sub>z₀</sub>·exp(r#)</code>.
-        <details><summary>Details</summary>
-        Test functions
-        <code>f ∈ L¹<sub>a</sub>(Ω; ρ₀)</code> automatically vanish at 0. Riemann map
-        factors as <code>φ(z) = γ · b<sub>z₀</sub>(z) · exp(r#(z))</code>. The pole of
-        <code>h</code> at the origin contributes residue <code>q</code> (complex);
-        <code>q = 0</code> is the degenerate case with no log-charge.
-        </details>
-      </div>
-      <div class="hint" id="lqd-unbounded-hint" style="display:none; margin-top:6px;">
-        <b>Unbounded log-weighted QD.</b> <code>0 ∉ Ω̄</code>, <code>∞ ∈ Ω</code>; <code>φ = c·z·exp(r#−r#(∞))</code> on <code>𝔻*</code>.
-        <details><summary>Details</summary>
-        Test functions <code>f ∈ L¹<sub>a</sub>(Ω; ρ₀)</code> vanish at <code>∞</code>.
-        Riemann map: <code>φ(z) = c·z · exp(r#(z) − r#(∞))</code> on <code>𝔻*</code>,
-        with conformal radius <code>c = φ′(∞)</code>. The <code>− r#(∞)</code>
-        subtraction pins the leading coefficient at ∞ to exactly <code>c</code>.
-        </details>
-      </div>
-      <div class="hint" id="lqd-unbounded-singular-hint" style="display:none; margin-top:6px;">
-        <b>Unbounded singular log-weighted QD.</b> <code>0 ∈ Ω</code> and <code>∞ ∈ Ω</code>; Blaschke factor + residue q.
-        <details><summary>Details</summary>
-        Test functions <code>f</code> vanish at BOTH 0 and ∞ (e.g.
-        <code>w/(w−b)<sup>k</sup></code> for <code>k ≥ 2</code>, <code>b ∈ K</code>).
-        Riemann map: <code>φ(z) = c·|z₀|·z·b<sub>z₀</sub>(z) · exp(r#(z) − r#(∞))</code>
-        with <code>z₀ ∈ 𝔻*</code> the preimage of 0, and <code>q</code> (complex)
-        the residue of <code>h</code> at the origin. <code>q = 0</code> is the
-        degenerate case with no log-charge.
-        </details>
-      </div>
+      <div class="hint" id="lqd-hint" style="display:none; margin-top:6px;" data-str-html="familyHints.lqdBounded"></div>
+      <div class="hint" id="lqd-singular-hint" style="display:none; margin-top:6px;" data-str-html="familyHints.lqdSingular"></div>
+      <div class="hint" id="lqd-unbounded-hint" style="display:none; margin-top:6px;" data-str-html="familyHints.lqdUnbounded"></div>
+      <div class="hint" id="lqd-unbounded-singular-hint" style="display:none; margin-top:6px;" data-str-html="familyHints.lqdUnboundedSingular"></div>
     </section>
 
     <section class="card" id="h-card">
       <h2>Quadrature function h(w)</h2>
-      <div class="hint">
-        h(w) = Σ<sub>j</sub> Σ<sub>s=1..m<sub>j</sub></sub> C<sub>j,s</sub> / (w − a<sub>j</sub>)<sup>s</sup>.
-        Enter complex values as e.g. <code>1+2i</code>.
-      </div>
-      <div class="hint" style="margin-bottom: 8px;">
-        New here? Pick a <strong>Preset</strong> below to start, drag poles
-        directly on the plot to reposition them, and press <kbd>?</kbd> for
-        keyboard shortcuts.
-      </div>
+      <div class="hint" data-str-html="hints.hSum"></div>
+      <div class="hint" style="margin-bottom: 8px;" data-str-html="hints.newHere"></div>
       <div class="row" style="margin-bottom: 8px;">
         <label>Preset:
           <select id="preset-select" style="width: 240px;"></select>
         </label>
       </div>
       <div class="row" style="margin-bottom: 8px;">
-        <label title="Curated canonical quadrature domains, each with an analytic oracle. Loading one frames the view, turns on the annotated-phenomena overlay, and shows a computed-vs-expected oracle card.">Thesis example:
+        <label data-str-title="tooltips.thesisSelect">Thesis example:
           <select id="thesis-select" style="width: 240px;"></select>
         </label>
       </div>
@@ -236,10 +153,7 @@
 
       <!-- Polynomial part of h (unbounded mode only). -->
       <div id="poly-part-section" class="hidden" style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed #d8dbe0;">
-        <div class="hint">
-          Polynomial part of h(w) = Σ<sub>l=0..m<sub>∞</sub></sub> C<sub>∞,l</sub> w<sup>l</sup>.
-          Quadrature nodes at infinity.
-        </div>
+        <div class="hint" data-str-html="hints.polyPart"></div>
         <div class="row">
           <label>Degree m<sub>∞</sub>:
             <input type="number" id="poly-degree" min="-1" max="6" value="-1" style="width: 56px;">
@@ -275,13 +189,7 @@
             <button type="button" class="alpha-quick" data-alpha="3">3</button>
           </span>
         </div>
-        <div class="hint" style="margin-top: 6px;">
-          Weight is <code>|w|<sup>2(α−1)</sup></code> for any real <code>α &gt; 0</code>
-          (<code>α ≠ 1</code>). <code>α &gt; 1</code>: weight vanishes at 0;
-          <code>α &lt; 1</code>: weight blows up at 0 (the LQD-limit regime,
-          <code>→ |w|<sup>−2</sup></code> as <code>α → 0⁺</code>). <code>α = 1</code>
-          is classical QD — use the Classical group above.
-        </div>
+        <div class="hint" style="margin-top: 6px;" data-str-html="hints.alpha"></div>
       </div>
 
       <!-- Riemann map center φ(0) (bounded families). -->
@@ -301,10 +209,7 @@
       <!-- Singular-LQD residue q at the origin (lqd-bounded-singular). -->
       <div id="map-q-rows" class="hidden">
         <div class="domain-mode-group-label" style="margin:6px 0 4px;">Residue q at origin</div>
-        <div class="hint">
-          Complex residue of <code>h</code> at the simple pole at <code>w = 0</code>
-          (the singular pole inside Ω). Dial via text or the |q| / arg(q) sliders.
-        </div>
+        <div class="hint" data-str-html="hints.qResidue"></div>
         <div class="row">
           <label>q =
             <input type="text" class="cnum" id="q-manual" value="0" aria-label="Point-charge residue q at the origin (complex)">
@@ -341,7 +246,7 @@
       <!-- Auto-estimate the critical conformal radius c* (largest c with a valid
            unbounded QD). On success: caps the slider at c* and jumps to ≈0.99·c*. -->
       <div id="c-estimate-row" style="margin-top: 8px;">
-        <button id="c-estimate-btn" class="small" type="button" title="Estimate the critical conformal radius c* — the largest c with a valid unbounded QD. Sets the slider to c* (the extremal, just-cusped domain).">Estimate max c</button>
+        <button id="c-estimate-btn" class="small" type="button" data-str-title="tooltips.estimateMaxC">Estimate max c</button>
         <span id="c-estimate-busy" class="hidden" style="margin-left: 6px; font-size: 11px; color: #777;">
           <span class="search-spinner"></span> <span id="c-estimate-busy-text">searching…</span>
         </span>
@@ -401,26 +306,26 @@
       </div>
       <div class="row ov-row">
         <span class="ov-key" aria-hidden="true"><span class="ov-dot" style="background:#d12d2d;"></span><span class="ov-dot" style="background:#d97706;"></span></span>
-        <label title="Plot the w-plane images of {z : φ'(z) = 0}. Critical points inside the relevant disk (𝔻 for bounded, 𝔻* for unbounded) predict univalence loss; those near |z|=1 predict imminent degeneracy.">
-          <input type="checkbox" id="critical-set-toggle"> Critical points <span class="ov-note">zeros of φ′ — red inside, orange near ∂Ω</span>
+        <label data-str-title="tooltips.criticalPoints">
+          <input type="checkbox" id="critical-set-toggle"> Critical points <span class="ov-note" data-str-html="notes.criticalPoints"></span>
         </label>
       </div>
       <div class="row ov-row">
         <span class="ov-key ov-key-grad" aria-hidden="true"></span>
-        <label title="Color ∂Ω by its curvature |κ| (cool → hot). The hottest stretch marks the sharpest bend; κ → ∞ at a cusp. Reads the same data as the Geometry & accuracy panel.">
-          <input type="checkbox" id="curvature-toggle"> Curvature heat-strip <span class="ov-note">|κ| on ∂Ω, blue → red (→ Geometry &amp; accuracy)</span>
+        <label data-str-title="tooltips.curvature">
+          <input type="checkbox" id="curvature-toggle"> Curvature heat-strip <span class="ov-note" data-str-html="notes.curvature"></span>
         </label>
       </div>
       <div class="row ov-row">
         <span class="ov-key" aria-hidden="true"><span class="ov-dash"></span><span class="ov-dia" style="background:#0d9488;"></span></span>
-        <label title="Annotate the phenomena the cusp / critical-set overlays don't: the harmonic-measure hot spot (the tip, where ρ = 1/(2π|φ′|) peaks), the maximum-curvature point on ∂Ω, and the domain's symmetry axes (dashed) with its dihedral (Dₙ) or cyclic (Zₙ) symmetry group.">
-          <input type="checkbox" id="phenomena-toggle"> Annotated phenomena <span class="ov-note">tip · max-κ · symmetry axes</span>
+        <label data-str-title="tooltips.phenomena">
+          <input type="checkbox" id="phenomena-toggle"> Annotated phenomena <span class="ov-note" data-str-html="notes.phenomena"></span>
         </label>
       </div>
       <div class="row ov-row">
         <span class="ov-key" aria-hidden="true"><span class="ov-dot" style="border:1.2px solid #0d9488;background:transparent;"></span><span class="ov-dia" style="background:#7c3aed;"></span></span>
-        <label title="Plot the roots of the Faber polynomials Fₙ of the bounded complement K (classical unbounded QD only). Roots cluster inside K — the hole of the unbounded domain. Teal circles = union of all roots up to N; violet diamonds = the single selected Fₙ. Drive N / the mode from the Faber polynomials card.">
-          <input type="checkbox" id="faber-roots-toggle"> Faber roots <span class="ov-note">roots of Fₙ — cluster in K (UQD only)</span>
+        <label data-str-title="tooltips.faberRoots">
+          <input type="checkbox" id="faber-roots-toggle"> Faber roots <span class="ov-note" data-str-html="notes.faberRoots"></span>
         </label>
       </div>
     </section>
@@ -435,10 +340,7 @@
           </h2>
         </summary>
 
-        <div class="hint" style="margin-top: 8px;">
-          Overrides for the aggressiveness preset. Leave a field blank to use
-          the preset's default. Phase checkboxes are enabled by default.
-        </div>
+        <div class="hint" style="margin-top: 8px;" data-str-html="hints.searchOptions"></div>
 
         <!-- A. Phases -->
         <div class="search-opt-group">
@@ -541,10 +443,7 @@
          main canvas (roots cluster inside K). -->
     <section class="card hidden" id="faber-card">
       <h2>Faber polynomials</h2>
-      <div class="hint" style="margin-bottom:6px;">
-        Faber polynomials F<sub>n</sub>(ζ) of the bounded complement K = ℂ∖Ω, read off φ's
-        Laurent expansion at ∞. Their roots cluster inside K.
-      </div>
+      <div class="hint" style="margin-bottom:6px;" data-str-html="hints.faberCard"></div>
       <div class="row">
         <label>Order N
           <input type="number" id="faber-order" min="1" max="30" step="1" value="6" style="width:64px;">
@@ -588,13 +487,7 @@
     <div id="controls-direct" style="display:none;">
       <section class="card">
         <h2>Direct problem</h2>
-        <div class="hint">
-          Given a Riemann map <code>φ : 𝔻 → Ω</code>, compute the quadrature
-          function <code>h</code> for which <code>Ω ∈ QD(h)</code>. Supports
-          bounded classical QD (polynomial and rational <code>φ</code>),
-          unbounded classical QD (Laurent at ∞), and a numerical-fallback
-          mode for arbitrary expressions.
-        </div>
+        <div class="hint" data-str-html="hints.directProblem"></div>
       </section>
     </div><!-- /#controls-direct -->
 
@@ -605,14 +498,7 @@
     <div id="controls-schwarz" class="tab-panel" role="tabpanel" hidden>
       <section class="card">
         <h2>Schwarz reflection dynamics</h2>
-        <div class="hint">
-          For a Riemann map <code>φ : 𝔻 → Ω</code>, the Schwarz reflection
-          <code>σ(w) = conj(F(ψ(w)))</code> is anti-meromorphic in Ω and fixes
-          <code>∂Ω</code>. This tab colors each <code>w ∈ Ω</code> by the
-          smallest <code>n</code> for which <code>σⁿ(w) ∈ Ω^c</code> (the
-          "fundamental tile"). Points whose orbit diverges to ∞ before
-          re-entering <code>Ω^c</code> are flagged as the escaping set.
-        </div>
+        <div class="hint" data-str-html="hints.schwarzDynamics"></div>
       </section>
     </div><!-- /#controls-schwarz -->
 
@@ -630,8 +516,8 @@
   <main id="plot-area">
     <canvas id="canvas"></canvas>
     <div id="plot-overlay">
-      <button id="btn-fit" title="Fit view to data">Fit</button>
-      <button id="btn-reset" title="Reset view">Reset</button>
+      <button id="btn-fit" data-str-title="tooltips.fit">Fit</button>
+      <button id="btn-reset" data-str-title="tooltips.reset">Reset</button>
     </div>
     <div id="plot-readout"></div>
 
@@ -642,8 +528,8 @@
     <aside id="status-panel" class="hidden" aria-label="Solution summary" aria-live="polite">
       <div id="status-panel-head">
         <span id="sp-badge"></span>
-        <button id="sp-dock" class="small" title="Dock the panel into the sidebar (clear the plot)" aria-pressed="false">⇤</button>
-        <button id="sp-collapse" class="small" title="Collapse panel" aria-expanded="true">⌄</button>
+        <button id="sp-dock" class="small" data-str-title="tooltips.dock" aria-pressed="false">⇤</button>
+        <button id="sp-collapse" class="small" data-str-title="tooltips.collapse" aria-expanded="true">⌄</button>
       </div>
       <div id="status-panel-body">
         <details id="sp-geom" open>
@@ -665,7 +551,7 @@
          and remembered in localStorage). Display is driven by inline style from
          ui.js so the #id rule can't fight a .hidden class. -->
     <div id="plot-coach" role="note">
-      <span><strong>On the plot:</strong> drag poles to reshape · double-click to add a pole · scroll to zoom · drag empty space to pan</span>
+      <span data-str-html="hints.coachmark"></span>
       <button id="plot-coach-dismiss" class="small">Got it</button>
     </div>
   </main>
@@ -696,6 +582,11 @@
   }
 })();
 </script>
+
+<!-- Populate the static helptext / tooltips / hints from the central strings
+     file (app/ui-strings.js → QD.Strings). Runs synchronously after the page
+     scripts above have loaded, so it fills [data-str*] elements before paint. -->
+<script>window.QD && window.QD.Strings && window.QD.Strings.apply();</script>
 
 <!-- Tab switching: minimal, no framework. Each .tab-btn toggles which
      .tab-panel is visible. The plot canvas is shared; ui.js owns it for

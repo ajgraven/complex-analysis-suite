@@ -35,6 +35,15 @@
     : (typeof module !== 'undefined' ? module.exports : null);
   if (!QD) return;
 
+  // Example blurbs live in the central strings file (QD.Strings.blurbs, in
+  // ui-strings.js — loaded before this module). Look them up by the example id
+  // (dash-case → camelCase key); '' if the strings module isn't present.
+  function blurbOf(id) {
+    const key = id.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
+    const B = QD.Strings && QD.Strings.blurbs;
+    return (B && B[key]) || '';
+  }
+
   // ---------------------------------------------------------------------------
   // The curated set. Configs reuse the exact preset/test constructions that are
   // already validated elsewhere; oracle values are the closed-form / locked
@@ -43,8 +52,7 @@
   const ThesisExamples = [
     {
       id: 'disk', label: 'Unit disk', mode: 'bounded',
-      blurb: 'The simplest QD: h = 1/w gives the unit disk. Area π, constant curvature, ' +
-             'uniform harmonic measure — an exact analytic baseline.',
+      blurb: blurbOf('disk'),
       poles: [{ a: '0', order: 1, residues: ['1'] }],
       view: { cx: 0, cy: 0, scale: 120 },
       oracle: { area: Math.PI, perimeter: 2 * Math.PI, M0: Math.PI,
@@ -53,8 +61,7 @@
     },
     {
       id: 'two-point-sym', label: 'Two-point symmetric', mode: 'bounded',
-      blurb: 'h = 1.5/(w−1) + 1.5/(w+1): two equal poles at ±1. The domain is a ' +
-             'symmetric oval with D₂ symmetry (a half-turn + two mirror axes).',
+      blurb: blurbOf('two-point-sym'),
       poles: [{ a: '1', order: 1, residues: ['1.5'] }, { a: '-1', order: 1, residues: ['1.5'] }],
       view: { cx: 0, cy: 0, scale: 80 },
       oracle: { rotationalOrder: 2, reflectionAxesCount: 2, cuspCount: 0,
@@ -62,8 +69,7 @@
     },
     {
       id: 'triangle', label: 'Equilateral 3-point', mode: 'bounded',
-      blurb: 'Three equal poles at the cube roots of unity → a rounded triangle with ' +
-             'D₃ symmetry (3-fold rotation + 3 mirror axes).',
+      blurb: blurbOf('triangle'),
       poles: [
         { a: '1', order: 1, residues: ['1'] },
         { a: '-0.5+0.8660254i', order: 1, residues: ['1'] },
@@ -75,7 +81,7 @@
     },
     {
       id: 'square-4pole', label: 'Four-fold symmetric', mode: 'bounded',
-      blurb: 'Four equal poles at ±1, ±i → a rounded square with D₄ symmetry.',
+      blurb: blurbOf('square-4pole'),
       poles: [
         { a: '1', order: 1, residues: ['1'] }, { a: '-1', order: 1, residues: ['1'] },
         { a: 'i', order: 1, residues: ['1'] }, { a: '-i', order: 1, residues: ['1'] },
@@ -86,8 +92,7 @@
     },
     {
       id: 'cardioid-unbounded', label: 'Cardioid (c*-limited cusp)', mode: 'unbounded', c: 1.0,
-      blurb: 'h = 1.5/w + 0.5/w² on the exterior. As the conformal radius c grows the ' +
-             'boundary cusps at c* ≈ 1.46 (a Hele-Shaw / Polubarinova–Galin blow-up).',
+      blurb: blurbOf('cardioid-unbounded'),
       poles: [{ a: '0', order: 2, residues: ['1.5', '0.5'] }],
       view: { cx: 0, cy: 0, scale: 60 },
       oracle: { cMax: 1.449, cMaxMechanism: 'cusp', significantDigitsMin: 6 },
@@ -95,16 +100,14 @@
     {
       id: 'deltoid-unbounded', label: 'Deltoid (3-cusp, c*-limited)', mode: 'unbounded', c: 0.45,
       polyCoeffs: ['0', '0', '1'],
-      blurb: 'h = w² on the exterior → the deltoid (3-cusp hypocycloid). The QD branch ' +
-             'ends at c* ≈ 0.5, where three Z₃-symmetric cusps form simultaneously.',
+      blurb: blurbOf('deltoid-unbounded'),
       poles: [],
       view: { cx: 0, cy: 0, scale: 90 },
       oracle: { cMax: 0.5, cMaxMechanism: 'cusp', significantDigitsMin: 6 },
     },
     {
       id: 'single-pole-unbounded', label: 'Single exterior pole', mode: 'unbounded', c: 0.6,
-      blurb: 'h = 1/(w−2): one simple pole off the origin. A smooth, mirror-symmetric ' +
-             'exterior QD — the canonical one-pole unbounded example.',
+      blurb: blurbOf('single-pole-unbounded'),
       poles: [{ a: '2', order: 1, residues: ['1'] }],
       view: { cx: 0.5, cy: 0, scale: 70 },
       oracle: { cuspCount: 0, reflectionAxesCount: 1, significantDigitsMin: 8 },

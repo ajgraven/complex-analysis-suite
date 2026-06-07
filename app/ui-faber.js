@@ -61,15 +61,11 @@
     let cache = null;                      // { phi, N, c, c0, coeffs, orders }
     let debounceTimer = null;
 
-    // Help popover on the header.
-    if (QD.QoL && QD.QoL.attachHelp) {
+    // Help popover on the header. Prose lives in QD.Strings.faber (ui-strings.js).
+    const STR = (QD.Strings && QD.Strings.faber) || {};
+    if (QD.QoL && QD.QoL.attachHelp && STR.help) {
       const h = card.querySelector('h2');
-      if (h) QD.QoL.attachHelp(h,
-        'Faber polynomials F_n(ζ) of the bounded complement K = ℂ∖Ω. For a classical ' +
-        'unbounded QD the solved map φ is the EXTERIOR map of K, so the F_n are read off ' +
-        'φ(z) = c·z + c₀ + c₁/z + … directly. Their roots cluster inside K (the hole of the ' +
-        'unbounded domain) — tick "Plot roots on domain" to overlay them. The capacity ' +
-        'cap(K) = c = φ′(∞). High orders are ill-conditioned; non-convergence is flagged.');
+      if (h) QD.QoL.attachHelp(h, STR.help);
     }
 
     function clampInt(v, lo, hi, dflt) {
@@ -170,7 +166,7 @@
         render(N, mode, sn);
         pushRoots(N, mode, sn);
       } catch (e) {
-        content.innerHTML = '<div class="warn">Faber analysis unavailable: ' +
+        content.innerHTML = '<div class="warn">' + esc(STR.unavailablePrefix || 'Faber analysis unavailable: ') +
           esc((e && e.message) || String(e)) + '</div>';
         ctx.setFaberRoots(null);
       }
@@ -201,7 +197,7 @@
     document.addEventListener('qd-customized', () => {
       cache = null;
       ctx.setFaberRoots(null);
-      if (activePhi) content.innerHTML = '<div class="hint">solving… Faber analysis pending</div>';
+      if (activePhi) content.innerHTML = '<div class="hint">' + esc(STR.pending || 'solving… Faber analysis pending') + '</div>';
     });
 
     // Refresh on every fresh primary solution. Show only for classical UQD.
