@@ -28,6 +28,7 @@ const TESTS = [
   'cusp-accuracy',
   'symmetry',
   'thesis-examples',
+  'faber',
   'riemann',
   'parse-check',
   'worker',

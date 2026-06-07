@@ -39,7 +39,7 @@
   // version:sync` recomputes it. CACHE_LABEL is yours to set per release
   // (cosmetic, for human-readable cache names + the HANDOFF narrative).
   const CACHE_LABEL = 'preimage-tree-overlay';
-  const CACHE_HASH  = '61e7fb1c05';   // gen-cache-version.js --write rewrites this
+  const CACHE_HASH  = 'e711528773';   // gen-cache-version.js --write rewrites this
   const CACHE_VERSION = CACHE_LABEL + '-' + CACHE_HASH;
 
   // Files that get concatenated into a Worker bundle by the runtime
@@ -89,6 +89,7 @@
     'symmetry.js',             // domain symmetry detector (#9 annotations / partial #11)
     'solver-cmax.js',          // max-conformal-radius estimator (drives the worker, page-only)
     'thesis-examples.js',      // curated examples + analytic-oracle engine (#8)
+    'faber-analysis.js',       // Faber polynomials of the complement of a UQD + root-finder
     'primary-solution.js',
     'primary-solver-worker.js',
   ];
@@ -120,6 +121,7 @@
     'ui-solve.js',
     'ui-url-state.js',
     'ui-thesis.js',           // thesis-example gallery + analytic-oracle card (#8)
+    'ui-faber.js',            // Faber-polynomials analysis card (UQD)
     'ui.js',
     // Phase-3 (item E) extracted Direct-tab modules — load before direct-ui.js.
     'direct/direct-recompute.js',

@@ -61,6 +61,8 @@ const state = {
   showCriticalSet: false,    // overlay w-images of {z : φ'(z) = 0}
   showCurvature: false,      // overlay ∂Ω colored by curvature |κ| (cusp heat-strip)
   showPhenomena: false,      // #9 annotated-phenomena overlay (harmonic/curvature peaks + symmetry axes)
+  showFaberRoots: false,     // overlay Faber-polynomial roots in the ζ-plane (UQD only)
+  faberRoots: null,          // payload from ui-faber.js: { mode:'all'|'single', N, n, sets:[{n,roots,converged}] }
 
   // Solver result
   current: null,             // last solve envelope (see PrimaryEnvelope typedef

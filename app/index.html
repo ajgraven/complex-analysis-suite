@@ -417,6 +417,12 @@
           <input type="checkbox" id="phenomena-toggle"> Annotated phenomena <span class="ov-note">tip · max-κ · symmetry axes</span>
         </label>
       </div>
+      <div class="row ov-row">
+        <span class="ov-key" aria-hidden="true"><span class="ov-dot" style="border:1.2px solid #0d9488;background:transparent;"></span><span class="ov-dia" style="background:#7c3aed;"></span></span>
+        <label title="Plot the roots of the Faber polynomials F_n of the bounded complement K (classical unbounded QD only). Roots cluster inside K — the hole of the unbounded domain. Teal circles = union of all roots up to N; violet diamonds = the single selected F_n. Drive N / the mode from the Faber polynomials card.">
+          <input type="checkbox" id="faber-roots-toggle"> Faber roots <span class="ov-note">roots of F_n — cluster in K (UQD only)</span>
+        </label>
+      </div>
     </section>
 
     <!-- ============== Search options (advanced) ============== -->
@@ -526,6 +532,35 @@
     <section class="card hidden" id="oracle-card">
       <h2>Analytic oracle</h2>
       <div id="oracle-content"></div>
+    </section>
+
+    <!-- Faber-polynomials analysis card. Hidden unless the solved domain is a
+         classical UNBOUNDED QD (family 'unboundedQD'). ui-faber.js computes the
+         Faber polynomials F_n of the bounded complement K = ℂ\Ω, renders them
+         (formula + coefficient table), and on demand pushes their roots to the
+         main canvas (roots cluster inside K). -->
+    <section class="card hidden" id="faber-card">
+      <h2>Faber polynomials</h2>
+      <div class="hint" style="margin-bottom:6px;">
+        Faber polynomials F<sub>n</sub>(ζ) of the bounded complement K = ℂ∖Ω, read off φ's
+        Laurent expansion at ∞. Their roots cluster inside K.
+      </div>
+      <div class="row">
+        <label>Order N
+          <input type="number" id="faber-order" min="1" max="30" step="1" value="6" style="width:64px;">
+        </label>
+        <span class="key" id="faber-cap" style="margin-left:8px;"></span>
+      </div>
+      <div class="row">
+        <label><input type="radio" name="faber-mode" id="faber-mode-all" value="all" checked> All roots up to N</label>
+        <label style="margin-left:10px;"><input type="radio" name="faber-mode" id="faber-mode-single" value="single"> Single F<sub>n</sub>, n =
+          <input type="number" id="faber-single-n" min="1" max="30" step="1" value="6" style="width:56px;"></label>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="faber-show-roots"> Plot roots on domain</label>
+        <label style="margin-left:10px;"><input type="checkbox" id="faber-show-polys" checked> Show polynomial</label>
+      </div>
+      <div id="faber-content"></div>
     </section>
 
     <!-- The Riemann map, geometric properties, and boundary singularities have
