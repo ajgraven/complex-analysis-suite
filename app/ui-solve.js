@@ -348,6 +348,10 @@ function solveAndRender() {
               !(result.primary.univalent && result.primary.identityOK))
           && state.searchOptions.autoEscalate
           && state.aggressiveness !== 'exhaustive') {
+        // Item 8: surface the phase transition — the first pass didn't find a
+        // valid QD, so we're now widening the search.
+        const phaseEl = $('#solve-phase');
+        if (phaseEl) phaseEl.textContent = 'escalating to exhaustive search…';
         const exh = buildSolverOptions(PRESETS.exhaustive, { findAlternates: false });
         applyNormToOpts(exh, norm);
         const escalated = await runOne(exh);
@@ -376,6 +380,9 @@ function solveAndRender() {
               '  reason: ' + result.error + '\n' +
               '  attempts: ' + (result.attempts ? result.attempts.length : 0),
       });
+      // Item 8: highlight the recovery affordance the guidance points at.
+      const th = $('#try-harder-btn');
+      if (th) th.classList.add('attention');
       plot.clear();
       $('#alternates-card').classList.add('hidden');
       renderRiemannMap(null);   // hide the φ(z) formula in the Domain-type tile
@@ -422,6 +429,12 @@ let _solveElapsedTimer = null;
 function showSolveBusy() {
   const row = $('#solve-busy-row');
   if (row) row.classList.remove('hidden');
+  // Item 8: reset the phase label and clear any prior failure cue on the
+  // "Try harder" button at the start of a fresh solve.
+  const phaseEl = $('#solve-phase');
+  if (phaseEl) phaseEl.textContent = 'solving…';
+  const th = $('#try-harder-btn');
+  if (th) th.classList.remove('attention');
   const elapsedEl = $('#solve-elapsed');
   if (elapsedEl) {
     const t0 = Date.now();

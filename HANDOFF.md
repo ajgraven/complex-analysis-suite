@@ -26,6 +26,43 @@ priors.
 > version:sync` refreshes it after any `app/` asset change; CI's
 > `npm run version:check` fails if it's stale.
 
+## (most recent) Usability / clarity overhaul (UX tiers 1–2)
+
+Eight grounded UX improvements (no solver-math changes); all UI in `index.html`,
+`style.css`, `ui.js`, `ui-domain-plot.js`, `ui-solve.js`.
+
+1. **Status panel no longer obscures the domain.** The on-plot `#status-panel` shrank
+   (`max-width min(34%,340px)`, more opaque) and gained a **dock** button (`#sp-dock`) that
+   moves the whole panel into the sidebar (`#status-dock-host`, a `.docked` class neutralizes
+   the absolute positioning) so the plot is fully clear. Collapse **and** dock state now
+   persist in `localStorage` (`qd-status-collapsed` / `qd-status-docked`).
+2. **Overlays "Layers" card.** The vector-field / critical-set / curvature / phenomena toggles
+   moved out of the collapsed *Advanced* `<details>` into an always-visible `#overlays-card`,
+   each with a small **color key** (`.ov-key` swatches) so the on-plot colors are
+   self-explaining. Input ids unchanged (handlers still bind). *Advanced solve behaviour*
+   `<details>` now holds just the auto-switch toggle.
+3. **Example-led first run.** A brand-new visitor (no `qd-seen` flag, no URL hash) is greeted
+   with the **cardioid** instead of the bare unit disk; returning visitors keep the default.
+   Plus an **empty-state CTA** drawn on the canvas (`DomainPlot.drawEmptyState`) when there's no
+   boundary and no poles.
+4. **First-run coachmark** (`#plot-coach`) over the plot — "drag poles · double-click to add ·
+   scroll to zoom · drag to pan" — shown once (`qd-coach-seen`), dismissible, auto-hides.
+5. **Plain-language Domain-type controls.** Tooltips on the QD/PQD/LQD buttons + a live
+   **"what you're solving"** summary (`#dm-summary`, set by `applyModeVisuals` / `modeSummary`,
+   seeded at init).
+6. **"What is a quadrature domain?" intro** — a "?" popover next to the title (via
+   `QD.QoL.attachHelp`) explaining QDs, the inverse problem, and how to start.
+7. **Tab subtitles** (`#tab-subtitle`, `updateTabSubtitle` on `tab-changed`) clarifying each
+   tab, with a **"using h(w) = …"** indicator on Schwarz / Param-slice so it's clear they share
+   the one solved domain.
+8. **Solve-phase feedback.** The busy row shows a phase label (`#solve-phase`, e.g. "escalating
+   to exhaustive search…"); a failed solve highlights the **Try harder** button
+   (`.attention`, reduced-motion-aware) that the failure guidance points at.
+
+Verification: full suite green; lint clean; `version:sync`. Browser-verified all eight (dock
+round-trip, overlays + legends, cardioid first-run, coachmark, summary, intro popover,
+subtitles, phase span); no console errors.
+
 ## (most recent) Thesis-example pack (#8) + annotated-phenomena overlay (#9)
 
 Two complementary teaching/validation features, built almost entirely on existing

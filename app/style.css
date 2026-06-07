@@ -142,10 +142,10 @@ body {
   position: absolute;
   bottom: 12px;
   right: 12px;
-  max-width: min(44%, 420px);
+  max-width: min(34%, 340px);
   max-height: calc(100% - 24px);
   overflow: auto;
-  background: rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.72);
   -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
   border: 1px solid var(--c-border);
@@ -198,6 +198,88 @@ body {
 #status-panel .key  { color: var(--c-muted); }
 /* Geometric-property rows carry their margin/angle in a hover tooltip. */
 #status-panel .geom-row { cursor: help; }
+
+/* Item 1: docked — the panel becomes a normal sidebar card (no plot overlay). */
+#status-panel.docked {
+  position: static;
+  max-width: none;
+  max-height: none;
+  background: var(--c-surface);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  border: 1px solid var(--c-border-soft);
+  margin-bottom: 12px;
+}
+#status-panel.docked #sp-dock { /* icon flips to "pop out" via JS title/text */ }
+
+/* Item 1: the dock button sits beside the collapse chevron. */
+#sp-dock {
+  padding: 0 4px;
+  background: transparent; border: 0; cursor: pointer;
+  font-size: 13px; color: var(--c-primary);
+}
+/* Item 1: when docked, the on-plot panel is removed entirely and the analysis
+   sections live in this sidebar card (no plot obstruction). */
+#status-dock { }
+#status-dock #status-panel-body { margin-top: 0; }
+#status-dock summary {
+  cursor: pointer; font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--c-muted); font-weight: 600;
+}
+#status-dock details { margin: 4px 0; }
+#status-dock .geom-row { cursor: help; }
+#status-dock .ok { color: var(--c-ok); font-weight: 600; }
+#status-dock .warn { color: var(--c-warn); font-weight: 600; }
+#status-dock .err { color: var(--c-err); font-weight: 600; }
+#status-dock .key { color: var(--c-muted); }
+
+/* Item 8: draw the eye to "Try harder" after a failed solve. */
+button.attention {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 2px rgba(45, 112, 200, 0.25);
+  animation: attn-pulse 1.6s ease-in-out 2;
+}
+@keyframes attn-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(45, 112, 200, 0.18); }
+  50%      { box-shadow: 0 0 0 3px rgba(45, 112, 200, 0.42); }
+}
+@media (prefers-reduced-motion: reduce) { button.attention { animation: none; } }
+
+/* Item 4: first-run coachmark over the plot. Hidden by default; ui.js sets
+   display:flex via inline style on a first visit. */
+#plot-coach {
+  display: none;
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  z-index: 5; align-items: center; gap: 10px;
+  max-width: calc(100% - 120px);
+  background: rgba(26, 42, 68, 0.93); color: #fff;
+  border-radius: 8px; padding: 8px 12px; font-size: 12px; line-height: 1.4;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+}
+#plot-coach button {
+  background: rgba(255, 255, 255, 0.20); color: #fff; border: 0;
+  border-radius: 5px; padding: 3px 9px; cursor: pointer; white-space: nowrap;
+}
+#plot-coach button:hover { background: rgba(255, 255, 255, 0.32); }
+
+/* Item 2: overlay (layers) card — color keys so the on-plot colors read clearly. */
+#overlays-card .ov-row { align-items: center; gap: 8px; }
+.ov-key {
+  flex: 0 0 auto; width: 26px; display: inline-flex; align-items: center;
+  justify-content: center; gap: 2px;
+}
+.ov-key-vf { color: var(--c-muted); font-weight: 700; }
+.ov-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.ov-dia { width: 8px; height: 8px; display: inline-block; transform: rotate(45deg); }
+.ov-key-grad {
+  width: 24px; height: 8px; border-radius: 2px;
+  background: linear-gradient(90deg, hsl(210,85%,45%), hsl(120,85%,42%), hsl(0,85%,48%));
+}
+.ov-dash {
+  width: 16px; height: 0; border-top: 2px dashed rgba(124,58,237,0.8); display: inline-block;
+}
+.ov-note { color: var(--c-muted); font-size: 10px; display: block; }
 
 /* ===== Cards ===== */
 .card {

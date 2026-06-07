@@ -356,6 +356,26 @@ class DomainPlot {
     // Annotated-phenomena overlay (#9): harmonic-measure / curvature peaks +
     // symmetry axes. Opt-in; reuses the cached observables + symmetry results.
     if (state.showPhenomena && this.data && this.data.phi) this.drawPhenomenaAnnotations();
+
+    // Empty-state hint (item 3/4): when there's no solved boundary and no poles
+    // to drag, the canvas would be an unexplained blank — tell the user how to
+    // begin instead.
+    const noBoundary = !(this.data && this.data.boundaryPts && this.data.boundaryPts.length > 0);
+    const noPoles = !(this.data && this.data.poles && this.data.poles.length > 0);
+    if (noBoundary && noPoles) this.drawEmptyState();
+  }
+
+  drawEmptyState() {
+    const c = this.ctx;
+    c.save();
+    c.textAlign = 'center';
+    c.fillStyle = '#9aa3b2';
+    c.font = '600 15px system-ui, -apple-system, sans-serif';
+    c.fillText('No domain yet', this.cssW / 2, this.cssH / 2 - 10);
+    c.font = '13px system-ui, -apple-system, sans-serif';
+    c.fillText('Pick a Preset or Thesis example, or double-click on the plot to add a pole.',
+               this.cssW / 2, this.cssH / 2 + 14);
+    c.restore();
   }
 
   drawOverlayBoundary() {
