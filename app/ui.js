@@ -1169,7 +1169,14 @@ if (cEstimateBtn) cEstimateBtn.addEventListener('click', () => {
         }
       } catch (_) { /* annotation is best-effort */ }
 
-      showResult('Max conformal radius <strong>c* ≈ ' + cStar.toFixed(4) + '</strong>', note);
+      // c* confidence (#11): how trustworthy the estimate is — a clean cusp with a
+      // tight bracket reads high; a soft fold/existence limit reads lower.
+      const confPct = (typeof res.confidence === 'number')
+        ? Math.round(res.confidence * 100) : null;
+      const confTag = (confPct != null)
+        ? ' <span class="muted" title="Confidence that c* is correctly located: blends the cusp/fold mechanism cleanliness with the final bracket tightness.">(confidence ' + confPct + '%)</span>'
+        : '';
+      showResult('Max conformal radius <strong>c* ≈ ' + cStar.toFixed(4) + '</strong>' + confTag, note);
 
       // Cap the slider range at c* (so dragging can't leave the existence region)
       // and jump to just below c* to render the largest clean domain. Set the max

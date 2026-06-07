@@ -723,6 +723,16 @@ function renderObservables(res) {
     const warn = acc.underResolved ? ' <span class="warn">(under-resolved)</span>' : '';
     lines.push(`<span class="geom-row" title="${escapeAttr(tip)}"><span class="key">accuracy:</span> ≈ ${acc.significantDigits.toFixed(1)} sig. digits${warn}</span>`);
   }
+  // Near-cusp honesty (#11): when a φ′ zero approaches |z|=1 the identity check
+  // is unreliable (the hole thins) and the geometric criterion governs validity.
+  if (acc && acc.nearCusp) {
+    const dist = acc.cuspDistance != null ? (+acc.cuspDistance).toExponential(2) : '—';
+    const tip = 'A φ′ zero is within ' + dist + ' of |z|=1 — a forming cusp. The '
+      + 'quadrature-identity check is unreliable here (the hole thins so interior '
+      + 'test points cannot clear ∂Ω); validity is governed by the geometric '
+      + 'criterion (univalence + critical modulus).';
+    lines.push(`<span class="geom-row" title="${escapeAttr(tip)}"><span class="key">near cusp:</span> <span class="warn">dist ≈ ${dist}</span> — trusting geometry</span>`);
+  }
   content.innerHTML = lines.join('<br>');
 }
 

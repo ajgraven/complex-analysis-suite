@@ -299,45 +299,84 @@ function houseQR(A) {
  * @param {number[]}   b   length-n right-hand side
  * @returns {number[]}     length-n solution; throws "singular" if R is rank-deficient
  */
-// Above this estimated condition number, run one iterative-refinement step
-// after the QR solve (C5). Chosen well below the ~1e8 scale where Float64 QR
-// starts losing digits, so refinement kicks in before accuracy degrades but
-// not on well-conditioned systems where it would just waste budget.
+// Above this estimated condition number, run iterative refinement after the QR
+// solve (C5). Chosen well below the ~1e8 scale where Float64 QR starts losing
+// digits, so refinement kicks in before accuracy degrades but not on
+// well-conditioned systems where it would just waste budget.
 const ILL_COND_REFINE_THRESHOLD = 1e6;
 
-function solveLinearSystem(A, b) {
+// Near-cusp accuracy (#11): when the residual Jacobian is ill-conditioned (the
+// signature of a forming cusp / fold) the single forward-difference Jacobian and
+// single refinement step cap how far Newton can drive the residual. We raise both
+// ceilings — but ONLY when conditioning warrants it, so well-conditioned solves
+// keep their current cost and byte-for-byte results.
+//   • MAX_REFINE_STEPS — bound on residual-correction steps (was effectively 1).
+//   • CENTRAL_FD_EPS    — step for central differences (≈ macheps^{1/3}); their
+//     O(eps²) truncation gives ~1e-10 Jacobian entries vs ~1e-7 for forward.
+//   • CENTRAL_DIFF_COND_TRIGGER — once a step's QR condEst exceeds this, switch
+//     the Jacobian to central differences for the remaining iterations.
+const MAX_REFINE_STEPS          = 3;
+const CENTRAL_FD_EPS            = 1e-5;
+const CENTRAL_DIFF_COND_TRIGGER = 1e5;
+
+function solveLinearSystem(A, b, maxRefine = MAX_REFINE_STEPS) {
   const n = A.length;
   if (n === 0 || A[0].length !== n) throw new Error("solveLinearSystem: not square");
   const qr = houseQR(A);
   const Qtb = qr.applyQt(b);
   let x = qr.backSolve(Qtb.slice(0, n));
-  // C5: one step of iterative refinement when the system is ill-conditioned.
-  // Cheap (one matvec + one Qt-apply + one backSolve) — buys back ~half a
-  // digit of accuracy on cond(A) > 1e8 systems. Skipped when condEst is
-  // well-behaved to avoid spending budget for nothing.
+  // C5: iterative refinement when the system is ill-conditioned. Cheap (one
+  // matvec + one Qt-apply + one backSolve per step) — buys back accuracy on
+  // cond(A) > 1e6 systems. Skipped entirely when condEst is well-behaved.
   if (qr.condEst > ILL_COND_REFINE_THRESHOLD && isFinite(qr.condEst)) {
-    x = _qrIterativeRefinementStep(A, b, x, qr);
+    x = _qrIterativeRefine(A, b, x, qr, maxRefine);
   }
   return x;
 }
 
-// One residual-correction step: r = b - A·x; dx = QR-solve(r); x ← x + dx.
-function _qrIterativeRefinementStep(A, b, x, qr) {
+// Bounded iterative refinement: repeat r = b - A·x; dx = QR-solve(r); x ← x + dx
+// until the correction stops shrinking or `maxSteps` is reached. One step
+// recovers ~½ digit on a cond≈1e6 system; the extra steps matter near a cusp
+// where the residual Jacobian climbs toward 1e8+. Operates on a copy of x.
+function _qrIterativeRefine(A, b, x, qr, maxSteps) {
   const m = A.length;
   const n = A[0].length;
-  const r = new Array(m);
-  for (let i = 0; i < m; i++) {
-    let s = b[i];
-    for (let j = 0; j < n; j++) s -= A[i][j] * x[j];
-    r[i] = s;
+  const steps = (maxSteps > 0) ? maxSteps : 1;
+  let out = x.slice();
+  let prevCorr = Infinity;
+  for (let s = 0; s < steps; s++) {
+    const r = new Array(m);
+    for (let i = 0; i < m; i++) {
+      let acc = b[i];
+      for (let j = 0; j < n; j++) acc -= A[i][j] * out[j];
+      r[i] = acc;
+    }
+    const Qtr = qr.applyQt(r);
+    let dx;
+    try { dx = qr.backSolve(Qtr.slice(0, n)); }
+    catch (_) { break; }   // singular — refinement is a no-op
+    let corr = 0;
+    for (let k = 0; k < n; k++) { out[k] += dx[k]; corr += dx[k] * dx[k]; }
+    corr = Math.sqrt(corr);
+    if (!(corr < prevCorr)) break;   // corrections no longer shrinking → stop
+    prevCorr = corr;
   }
-  const Qtr = qr.applyQt(r);
-  let dx;
-  try { dx = qr.backSolve(Qtr.slice(0, n)); }
-  catch (_) { return x; }   // singular — refinement is a no-op
-  const out = new Array(n);
-  for (let k = 0; k < n; k++) out[k] = x[k] + dx[k];
   return out;
+}
+
+// Least-squares solve that also reports the QR condition estimate, so callers
+// (newtonSolve) can adapt the Jacobian scheme to ill-conditioning without a
+// second factorization. Mirrors solveLeastSquares' refinement gate.
+// Returns { x, condEst }; throws "singular" exactly as backSolve does.
+function leastSquaresWithCond(A, b, maxRefine = MAX_REFINE_STEPS) {
+  const n = A[0].length;
+  const qr = houseQR(A);
+  const Qtb = qr.applyQt(b);
+  let x = qr.backSolve(Qtb.slice(0, n));
+  if (qr.condEst > ILL_COND_REFINE_THRESHOLD && isFinite(qr.condEst)) {
+    x = _qrIterativeRefine(A, b, x, qr, maxRefine);
+  }
+  return { x, condEst: qr.condEst };
 }
 
 /**
@@ -348,7 +387,7 @@ function _qrIterativeRefinementStep(A, b, x, qr) {
  * @param {number[]}   b   length-m
  * @returns {number[]}     least-squares solution (length n)
  */
-function solveLeastSquares(A, b) {
+function solveLeastSquares(A, b, maxRefine = MAX_REFINE_STEPS) {
   const m = A.length;
   if (m === 0) throw new Error("solveLeastSquares: empty matrix");
   const n = A[0].length;
@@ -365,21 +404,41 @@ function solveLeastSquares(A, b) {
   // already separates fit from residual); we skip it when condEst flags
   // near-rank-deficiency.
   if (qr.condEst > ILL_COND_REFINE_THRESHOLD && isFinite(qr.condEst)) {
-    x = _qrIterativeRefinementStep(A, b, x, qr);
+    x = _qrIterativeRefine(A, b, x, qr, maxRefine);
   }
   return x;
 }
 
-// Numerical Jacobian via forward differences.
+// Numerical Jacobian via finite differences.
 //
-// Forward differences need a baseline F(v). Most callers (newtonSolve) have
-// just evaluated F at the current iterate to test convergence; passing it
+// Forward differences (default) need a baseline F(v). Most callers (newtonSolve)
+// have just evaluated F at the current iterate to test convergence; passing it
 // in as `F0Opt` saves one residual evaluation per Newton step — roughly a
 // 1 / (n + 1) speedup, where n = packPhi length (typically 10–20 for QDs).
-function numericalJacobian(v, evalF, eps = DEFAULT_FD_EPS, F0Opt) {
+//
+// Central differences (mode === 'central', #11) cost 2n evaluations (F0 is
+// unused) but their truncation error is O(eps²) instead of O(eps), giving
+// ~1e-10 Jacobian entries vs ~1e-7. newtonSolve switches to this mode
+// automatically once a step's condEst flags ill-conditioning (a forming cusp),
+// where the more accurate Jacobian lets Newton drive the residual far lower.
+function numericalJacobian(v, evalF, eps = DEFAULT_FD_EPS, F0Opt, mode = 'forward') {
+  const n = v.length;
+  if (mode === 'central') {
+    let m = -1;
+    let J = null;
+    for (let j = 0; j < n; j++) {
+      const vPlus = v.slice();  vPlus[j] += eps;
+      const vMinus = v.slice(); vMinus[j] -= eps;
+      const Fp = evalF(vPlus);
+      const Fm = evalF(vMinus);
+      if (J === null) { m = Fp.length; J = Array.from({ length: m }, () => new Array(n)); }
+      const inv2e = 1 / (2 * eps);
+      for (let i = 0; i < m; i++) J[i][j] = (Fp[i] - Fm[i]) * inv2e;
+    }
+    return J || [];
+  }
   const F0 = F0Opt || evalF(v);
   const m = F0.length;
-  const n = v.length;
   const J = Array.from({ length: m }, () => new Array(n));
   for (let j = 0; j < n; j++) {
     const vPlus = v.slice();
@@ -410,6 +469,17 @@ function newtonSolve(phi_init, hData, options = {}) {
     deflationRoots = [],
     deflationAlpha = 1,
     deflationP     = 2,
+    // Near-cusp accuracy (#11). jacobianMode:
+    //   'auto'    (default) — forward differences until a step's QR condEst
+    //              exceeds CENTRAL_DIFF_COND_TRIGGER (a forming cusp / fold),
+    //              then central differences for the rest of the solve.
+    //   'central' — central differences from the first step (the c*-polish path).
+    //   'forward' — never upgrade (legacy behaviour, for A/B and perf-critical use).
+    // centralDiffEps / maxRefine tune the high-accuracy path; defaults leave
+    // well-conditioned solves unchanged.
+    jacobianMode  = 'auto',
+    centralDiffEps = CENTRAL_FD_EPS,
+    maxRefine      = MAX_REFINE_STEPS,
   } = options;
 
   const template = phi_init;
@@ -418,6 +488,13 @@ function newtonSolve(phi_init, hData, options = {}) {
   // { iter, condEst, noiseScale, Fnorm } so the UI / alternates panel can
   // surface "Newton perturbed by 3.2e-8 at iter 4" rather than a silent jolt.
   const recoveryEvents = [];
+
+  // Near-cusp accuracy (#11): adaptive Jacobian scheme. `centralMode` flips on
+  // once conditioning (or a stalling line search) signals a forming cusp/fold,
+  // then stays on for the rest of the solve. `canUpgrade` is false when the
+  // caller pinned the mode explicitly ('central' or 'forward').
+  let centralMode = (jacobianMode === 'central');
+  const canUpgrade = (jacobianMode === 'auto');
 
   const evalFRaw = (vec) => fam.residual(fam.unpackPhi(vec, template), hData);
   const deflationEta = (vec) => {
@@ -454,8 +531,12 @@ function newtonSolve(phi_init, hData, options = {}) {
                recoveryEvents: recoveryEvents.length ? recoveryEvents : undefined };
     }
     let J;
-    // Pass the just-computed F to the Jacobian builder so it doesn't re-evaluate.
-    try { J = jacobianFn(v, evalF, finiteDiffEps, F); }
+    // Pass the just-computed F to the Jacobian builder so it doesn't re-evaluate
+    // (forward mode only; central differences ignore it). centralMode raises the
+    // Jacobian accuracy once conditioning warrants it.
+    const jacEps = centralMode ? centralDiffEps : finiteDiffEps;
+    const jacModeArg = centralMode ? 'central' : 'forward';
+    try { J = jacobianFn(v, evalF, jacEps, F, jacModeArg); }
     catch (e) {
       return { success: false, error: "Jacobian failed: " + e.message, phi: fam.unpackPhi(v, template), iterations: iter,
                recoveryEvents: recoveryEvents.length ? recoveryEvents : undefined };
@@ -463,7 +544,14 @@ function newtonSolve(phi_init, hData, options = {}) {
 
     let delta;
     try {
-      delta = solveLeastSquares(J, F.map(x => -x));
+      // condEst comes back from the same factorization used to solve, so the
+      // central-difference upgrade costs no extra QR.
+      const sol = leastSquaresWithCond(J, F.map(x => -x), maxRefine);
+      delta = sol.x;
+      if (canUpgrade && !centralMode && isFinite(sol.condEst) &&
+          sol.condEst > CENTRAL_DIFF_COND_TRIGGER) {
+        centralMode = true;   // forming cusp/fold — sharpen the Jacobian from here
+      }
     } catch (e) {
       // C1: scale the singular-recovery perturbation by the current
       // residual magnitude and a coarse condition estimate (from the
@@ -539,6 +627,11 @@ function newtonSolve(phi_init, hData, options = {}) {
       return { success: false, error: "Line search failed at iter " + iter,
                phi: fam.unpackPhi(v, template), iterations: iter, residual: Fnorm };
     }
+
+    // Stall signal (#11): a heavily-backtracked step (alpha ≤ 1/4) is the other
+    // near-cusp signature — the forward-difference Jacobian is too coarse to take
+    // a full Newton step. Sharpen the Jacobian for the remaining iterations.
+    if (canUpgrade && !centralMode && alpha <= 0.25) centralMode = true;
 
     v = v_new; F = F_new; Fnorm = Fnorm_new;
   }
@@ -1274,7 +1367,11 @@ function _solveOnce(hData, options = {}) {
   const freshInit = () => family.initialGuess(hData, norm);
   const attachIdentity = (sol) => {
     if (!identityCheck) return sol;
-    sol.identity = family.verifyQuadratureIdentity(sol.phi, hData, { numSamples: identitySamples });
+    // adaptiveSamples (#11) flows through so callers can opt out of the near-cusp
+    // node escalation (the c* estimator does — it gates on geometry near the
+    // cusp). Undefined ⇒ default-on in the verifier.
+    sol.identity = family.verifyQuadratureIdentity(sol.phi, hData,
+      { numSamples: identitySamples, adaptiveSamples: options.adaptiveSamples });
     sol.identityOK = sol.identity.maxRelDiff < identityTol;
     return sol;
   };
