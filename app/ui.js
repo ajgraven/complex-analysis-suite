@@ -671,6 +671,20 @@ function applyModeVisuals() {
   // Reflect the current mode into the compact domain-type control. Runs on
   // EVERY mode change — interactive, §23 auto-switch, preset, URL restore.
   syncDomainModeControl(state.mode);
+  // Item 5: a plain-language one-liner of what's being solved.
+  const summ = $('#dm-summary');
+  if (summ) summ.textContent = modeSummary(state.mode);
+}
+
+// Item 5: plain-language description of the active mode, for #dm-summary.
+function modeSummary(mode) {
+  const d = decomposeMode(mode);
+  const weight = d.weight === 'classical' ? 'classical (unweighted)'
+    : d.weight === 'pqd' ? 'power-weighted (|w|^{2(α−1)})'
+    : 'log-weighted (1/|w|²)';
+  const extent = d.domain === 'bounded' ? 'bounded' : 'unbounded (reaches ∞)';
+  const sing = d.singular ? ', with the origin inside Ω' : '';
+  return `Solving for a ${extent} ${weight} quadrature domain Ω from your h(w)${sing}.`;
 }
 
 // ---------- Compact 3-axis domain-type control --------------------------
@@ -890,6 +904,18 @@ function mountQolHelp() {
     const card = document.querySelector(cardSelector);
     return card ? card.querySelector('h2') : null;
   };
+  // Item 6: an app-level "What is a quadrature domain?" intro, as a "?" next to
+  // the title — the missing on-ramp for a newcomer.
+  const title = document.querySelector('.app-header-row h1');
+  if (title) H(title,
+    `<b>What is this?</b> A <b>quadrature domain</b> Ω is a region where the area integral of any
+     analytic function f equals a finite sum of f (and its derivatives) at a few interior points —
+     encoded by the <b>quadrature data h(w)</b> you enter. This tool solves the <i>inverse</i>
+     problem: given h(w) it finds the domain Ω and its conformal map φ(z), then analyzes the
+     boundary (cusps, curvature, symmetry, accuracy).<br><br>
+     <b>To start:</b> pick a <b>Preset</b> or <b>Thesis example</b>, drag the red poles on the plot
+     to reshape Ω, and read the verdict + geometry in the panel. The <b>Schwarz</b> and
+     <b>Parameter slice</b> tabs explore the same solved domain. Press <b>?</b> for shortcuts.`);
   // Domain type
   H(headerOf('#domain-mode-card'),
     `<b>Domain type.</b> The quadrature identity Ω must satisfy.
@@ -1435,20 +1461,71 @@ $('#phenomena-toggle')?.addEventListener('change', e => {
   if (cancelBtn) cancelBtn.addEventListener('click', cancelSolve);
 }
 
-// Status-panel collapse toggle (collapses to just the verdict badge bar).
+// Status-panel collapse + dock (item 1). Collapse hides the body (badge stays);
+// dock moves the whole panel into the sidebar so it never covers the domain.
+// Both preferences persist in localStorage and survive reloads.
 {
   const panel = $('#status-panel');
-  const btn = $('#sp-collapse');
-  const apply = () => {
+  const collapseBtn = $('#sp-collapse');
+  const dockBtn = $('#sp-dock');
+  const dockHost = $('#status-dock-host');
+  const plotArea = $('#plot-area');
+  const LS_COLLAPSE = 'qd-status-collapsed';
+  const LS_DOCK = 'qd-status-docked';
+  let docked = false;
+  try {
+    state.statusPanelCollapsed = localStorage.getItem(LS_COLLAPSE) === '1';
+    docked = localStorage.getItem(LS_DOCK) === '1';
+  } catch (e) { /* private mode → defaults */ }
+
+  const applyCollapse = () => {
     if (!panel) return;
     panel.classList.toggle('collapsed', !!state.statusPanelCollapsed);
-    if (btn) btn.setAttribute('aria-expanded', state.statusPanelCollapsed ? 'false' : 'true');
+    if (collapseBtn) collapseBtn.setAttribute('aria-expanded', state.statusPanelCollapsed ? 'false' : 'true');
   };
-  if (btn) btn.addEventListener('click', () => {
+  const applyDock = () => {
+    if (!panel) return;
+    panel.classList.toggle('docked', docked);
+    if (docked && dockHost && panel.parentNode !== dockHost) dockHost.appendChild(panel);
+    else if (!docked && plotArea && panel.parentNode !== plotArea) plotArea.appendChild(panel);
+    if (dockBtn) {
+      dockBtn.textContent = docked ? '⇥' : '⇤';
+      dockBtn.title = docked ? 'Pop the panel back onto the plot' : 'Dock the panel into the sidebar (clear the plot)';
+      dockBtn.setAttribute('aria-pressed', docked ? 'true' : 'false');
+    }
+  };
+
+  if (collapseBtn) collapseBtn.addEventListener('click', () => {
     state.statusPanelCollapsed = !state.statusPanelCollapsed;
-    apply();
+    try { localStorage.setItem(LS_COLLAPSE, state.statusPanelCollapsed ? '1' : '0'); } catch (e) { /* ignore */ }
+    applyCollapse();
   });
-  apply();   // reflect the initial state
+  if (dockBtn) dockBtn.addEventListener('click', () => {
+    docked = !docked;
+    try { localStorage.setItem(LS_DOCK, docked ? '1' : '0'); } catch (e) { /* ignore */ }
+    applyDock();
+  });
+  applyCollapse();
+  applyDock();   // reflect the persisted dock state on load
+}
+
+// Item 4: first-run coachmark over the plot — shown once, then remembered.
+{
+  const coach = $('#plot-coach');
+  const dismissBtn = $('#plot-coach-dismiss');
+  let seen = true;
+  try { seen = localStorage.getItem('qd-coach-seen') === '1'; } catch (e) { /* treat as seen */ }
+  const hideCoach = () => {
+    if (coach) coach.style.display = 'none';
+    try { localStorage.setItem('qd-coach-seen', '1'); } catch (e) { /* ignore */ }
+  };
+  if (coach && !seen) {
+    coach.style.display = 'flex';
+    if (dismissBtn) dismissBtn.addEventListener('click', hideCoach);
+    setTimeout(hideCoach, 14000);   // never linger
+  } else if (coach) {
+    coach.style.display = 'none';
+  }
 }
 
 $('#try-harder-btn').addEventListener('click', () => {
@@ -1568,6 +1645,30 @@ if (window.QD_UI && window.QD_UI.installThesis) window.QD_UI.installThesis(uiCtx
 renderPolesList();
 renderPolyCoefList();
 $('#poly-part-section').classList.toggle('hidden', !modeAllowsPoly(state.mode));
+// Item 5: seed the "what you're solving" summary for the initial mode (later
+// mode changes refresh it via applyModeVisuals).
+{ const summ = $('#dm-summary'); if (summ) summ.textContent = modeSummary(state.mode); }
+
+// Item 7: per-tab subtitle clarifying what each view does and that they all
+// operate on the same solved domain (Schwarz / Param-slice show "using h(w)=…").
+const TAB_SUBTITLES = {
+  qd: 'Inverse problem: from your h(w), find the domain Ω and its conformal map φ.',
+  schwarz: 'Iterate the Schwarz reflection of your current domain — the fractal tiling set.',
+  'param-slice': 'Sweep a parameter and map where valid quadrature domains exist.',
+};
+function updateTabSubtitle(tab) {
+  const el = $('#tab-subtitle');
+  if (!el) return;
+  let text = TAB_SUBTITLES[tab] || '';
+  if (tab && tab !== 'qd') {
+    const hInput = $('#h-text');
+    const h = (hInput && hInput.value || '').trim();
+    if (h) text += '  ·  using h(w) = ' + h;
+  }
+  el.textContent = text;
+}
+document.addEventListener('tab-changed', (e) => updateTabSubtitle(e.detail && e.detail.tab));
+updateTabSubtitle('qd');
 
 // Keep the URL in sync when the active tab changes (the QD-config writes
 // happen via solveAndRender; this covers pure tab switches).
@@ -1576,11 +1677,24 @@ document.addEventListener('tab-changed', () => writeUrlState());
 document.addEventListener('tab-changed', () => updateStatusPanelVisibility());
 
 // Initial solve — restore a shared/bookmarked config from the URL if present,
-// otherwise solve the default state (B1).
+// otherwise solve the default state (B1). Item 3: a brand-new visitor (no saved
+// URL, no prior visit) is greeted with a more compelling default than the bare
+// unit disk — the cardioid (one pole, but it shows a cusp), so the first screen
+// demonstrates what the app does. Returning visitors keep the plain default.
 if (applyUrlState()) {
   scheduleSolve();             // ensure a solve even if no h param was present
 } else {
-  solveAndRender();
+  let firstVisit = false;
+  try {
+    firstVisit = !localStorage.getItem('qd-seen');
+    localStorage.setItem('qd-seen', '1');
+  } catch (e) { /* private mode → treat as returning */ }
+  if (firstVisit && currentPresetList().some(p => p.id === 'cardioid')) {
+    $('#preset-select').value = 'cardioid';
+    applyPreset('cardioid');
+  } else {
+    solveAndRender();
+  }
 }
 
 // ---------- Hooks for the Direct view (within the QD tab) ----------------------------

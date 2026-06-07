@@ -43,6 +43,9 @@
       <button class="tab-btn"        data-tab="schwarz" role="tab" aria-selected="false">Schwarz dynamics</button>
       <button class="tab-btn"        data-tab="param-slice" role="tab" aria-selected="false">Parameter slice</button>
     </div>
+    <!-- Item 7: one-line subtitle clarifying each tab + that they share one
+         solved domain. Set by updateTabSubtitle() in ui.js on tab-changed. -->
+    <div id="tab-subtitle" class="hint" style="margin:-4px 0 10px;"></div>
 
     <!-- ============== TAB 1: QD (inverse + direct, view-toggled) ============== -->
     <!-- HANDOFF #30: the standalone "Direct problem" tab was folded into this
@@ -68,9 +71,9 @@
       <div class="row" style="margin-bottom:6px; align-items:center;">
         <span class="domain-mode-group-label" style="width:52px; margin:0;">Weight</span>
         <div class="segmented" id="dm-weight" role="group" aria-label="Weight class">
-          <button type="button" class="seg-btn active" data-weight="classical">QD</button>
-          <button type="button" class="seg-btn" data-weight="pqd">PQD</button>
-          <button type="button" class="seg-btn" data-weight="lqd">LQD</button>
+          <button type="button" class="seg-btn active" data-weight="classical" title="Classical quadrature domain — unweighted area integral ∫_Ω f dA.">QD</button>
+          <button type="button" class="seg-btn" data-weight="pqd" title="Power-weighted QD — weight |w|^{2(α−1)} in the area integral.">PQD</button>
+          <button type="button" class="seg-btn" data-weight="lqd" title="Log-weighted QD — weight 1/|w|² in the area integral.">LQD</button>
         </div>
       </div>
       <div class="row" style="margin-bottom:6px; align-items:center;">
@@ -85,6 +88,8 @@
              singular variant. syncDomainModeControl() re-enables it for PQD/LQD. -->
         <input type="checkbox" id="dm-singular" disabled> singular (0 ∈ Ω)
       </label>
+      <!-- Item 5: plain-language "what you're solving" line, set by applyModeVisuals. -->
+      <div class="hint" id="dm-summary" style="margin-top:4px;"></div>
 
       <!-- Explicit Riemann map φ(z) of the solved domain (moved here from the
            on-plot status panel). The numerical closed form is shown inline; the
@@ -367,39 +372,51 @@
         <label><input type="checkbox" id="auto-fit"> Auto-fit view on solve</label>
       </div>
 
-      <!-- Visualization overlays + power-user solve behaviour. Collapsed by
-           default to keep the everyday solve controls above uncluttered. All
-           ids are preserved (applyModeVisuals reads #vf-external-opt by id). -->
+      <!-- Power-user solve behaviour. (Visualization overlays moved out to the
+           always-visible #overlays-card below for discoverability — item 2.) -->
       <details class="solver-advanced" style="margin-top:8px;">
-        <summary style="cursor:pointer; user-select:none; font-size:12px; color:#555;">Visualization &amp; advanced</summary>
+        <summary style="cursor:pointer; user-select:none; font-size:12px; color:#555;">Advanced solve behaviour</summary>
         <div class="row" style="margin-top:6px;">
-          <label>Vector field:
-            <select id="vector-field-mode">
-              <option value="off" selected>Off</option>
-              <option value="polya">Pólya field   h̄(w)</option>
-              <option value="external" id="vf-external-opt">External field   w − h̄(w)</option>
-            </select>
-          </label>
-        </div>
-        <div class="row">
-          <label title="Plot the w-plane images of {z : φ'(z) = 0}. Critical points inside the relevant disk (𝔻 for bounded, 𝔻* for unbounded) predict univalence loss; those near |z|=1 predict imminent degeneracy.">
-            <input type="checkbox" id="critical-set-toggle"> Critical-set image (zeros of φ′)
-          </label>
-        </div>
-        <div class="row">
-          <label title="Color ∂Ω by its curvature |κ| (cool → hot). The hottest stretch marks the sharpest bend; κ → ∞ at a cusp. Reads the same data as the Geometry & accuracy panel.">
-            <input type="checkbox" id="curvature-toggle"> Curvature heat-strip (|κ| on ∂Ω)
-          </label>
-        </div>
-        <div class="row">
-          <label title="Annotate the phenomena the cusp / critical-set overlays don't: the harmonic-measure hot spot (the tip, where ρ = 1/(2π|φ′|) peaks), the maximum-curvature point on ∂Ω, and the domain's symmetry axes (dashed) with its D_n / Z_n group.">
-            <input type="checkbox" id="phenomena-toggle"> Annotated phenomena (tip · max-κ · symmetry axes)
-          </label>
-        </div>
-        <div class="row">
           <label><input type="checkbox" id="auto-switch-singular" checked> Auto-switch singular ⇄ non-singular PQD when the boundary crosses the origin</label>
         </div>
       </details>
+    </section>
+
+    <!-- ============== Overlays (item 2) ==============
+         The plot-overlay toggles, surfaced as an always-visible "Layers" card
+         (they used to be loose checkboxes in a collapsed <details>). Each row
+         carries a small color key so the on-plot colors are self-explaining.
+         The input ids are unchanged so the ui.js toggle handlers still bind. -->
+    <section class="card" id="overlays-card">
+      <h2>Overlays</h2>
+      <div class="row ov-row">
+        <span class="ov-key ov-key-vf" aria-hidden="true">→</span>
+        <label>Vector field:
+          <select id="vector-field-mode">
+            <option value="off" selected>Off</option>
+            <option value="polya">Pólya field   h̄(w)</option>
+            <option value="external" id="vf-external-opt">External field   w − h̄(w)</option>
+          </select>
+        </label>
+      </div>
+      <div class="row ov-row">
+        <span class="ov-key" aria-hidden="true"><span class="ov-dot" style="background:#d12d2d;"></span><span class="ov-dot" style="background:#d97706;"></span></span>
+        <label title="Plot the w-plane images of {z : φ'(z) = 0}. Critical points inside the relevant disk (𝔻 for bounded, 𝔻* for unbounded) predict univalence loss; those near |z|=1 predict imminent degeneracy.">
+          <input type="checkbox" id="critical-set-toggle"> Critical points <span class="ov-note">zeros of φ′ — red inside, orange near ∂Ω</span>
+        </label>
+      </div>
+      <div class="row ov-row">
+        <span class="ov-key ov-key-grad" aria-hidden="true"></span>
+        <label title="Color ∂Ω by its curvature |κ| (cool → hot). The hottest stretch marks the sharpest bend; κ → ∞ at a cusp. Reads the same data as the Geometry & accuracy panel.">
+          <input type="checkbox" id="curvature-toggle"> Curvature heat-strip <span class="ov-note">|κ| on ∂Ω, blue → red (→ Geometry &amp; accuracy)</span>
+        </label>
+      </div>
+      <div class="row ov-row">
+        <span class="ov-key" aria-hidden="true"><span class="ov-dash"></span><span class="ov-dia" style="background:#0d9488;"></span></span>
+        <label title="Annotate the phenomena the cusp / critical-set overlays don't: the harmonic-measure hot spot (the tip, where ρ = 1/(2π|φ′|) peaks), the maximum-curvature point on ∂Ω, and the domain's symmetry axes (dashed) with its D_n / Z_n group.">
+          <input type="checkbox" id="phenomena-toggle"> Annotated phenomena <span class="ov-note">tip · max-κ · symmetry axes</span>
+        </label>
+      </div>
     </section>
 
     <!-- ============== Search options (advanced) ============== -->
@@ -487,7 +504,7 @@
            the warm worker (B3). Hidden as soon as the solve settles. -->
       <div id="solve-busy-row" class="hidden" style="margin-top: 8px;">
         <span class="search-spinner"></span>
-        <span style="font-size: 11px; color: var(--c-muted);">solving… <span id="solve-elapsed"></span></span>
+        <span style="font-size: 11px; color: var(--c-muted);"><span id="solve-phase">solving…</span> <span id="solve-elapsed"></span></span>
         <button id="solve-cancel-btn" class="small" style="margin-left: 6px;">Cancel</button>
       </div>
       <div id="try-harder-row" style="margin-top: 8px;">
@@ -497,6 +514,11 @@
         </span>
       </div>
     </section>
+
+    <!-- Item 1: sidebar dock target. When the user clicks "dock" on the on-plot
+         status panel, ui.js moves #status-panel here (clearing the plot); the
+         "pop out" control moves it back. Empty when the panel is floating. -->
+    <div id="status-dock-host"></div>
 
     <!-- Thesis-example analytic-oracle card (#8). Hidden until an example is
          loaded from the gallery; ui-thesis.js fills #oracle-content with the
@@ -585,6 +607,7 @@
     <aside id="status-panel" class="hidden" aria-label="Solution summary" aria-live="polite">
       <div id="status-panel-head">
         <span id="sp-badge"></span>
+        <button id="sp-dock" class="small" title="Dock the panel into the sidebar (clear the plot)" aria-pressed="false">⇤</button>
         <button id="sp-collapse" class="small" title="Collapse panel" aria-expanded="true">⌄</button>
       </div>
       <div id="status-panel-body">
@@ -602,6 +625,14 @@
         </details>
       </div>
     </aside>
+
+    <!-- Item 4: first-run coachmark over the plot (shown once, then dismissed
+         and remembered in localStorage). Display is driven by inline style from
+         ui.js so the #id rule can't fight a .hidden class. -->
+    <div id="plot-coach" role="note">
+      <span><strong>On the plot:</strong> drag poles to reshape · double-click to add a pole · scroll to zoom · drag empty space to pan</span>
+      <button id="plot-coach-dismiss" class="small">Got it</button>
+    </div>
   </main>
 
 </div>
