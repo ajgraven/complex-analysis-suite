@@ -353,6 +353,9 @@ class DomainPlot {
     // Boundary cusp markers (zeros of φ′ on ∂𝔻), from the async classifyCusps
     // result stashed on state.current.cuspProps. Drawn last, on top.
     if (this.data && this.data.phi) this.drawCusps();
+    // Annotated-phenomena overlay (#9): harmonic-measure / curvature peaks +
+    // symmetry axes. Opt-in; reuses the cached observables + symmetry results.
+    if (state.showPhenomena && this.data && this.data.phi) this.drawPhenomenaAnnotations();
   }
 
   drawOverlayBoundary() {
@@ -743,15 +746,26 @@ class DomainPlot {
 
     const c = this.ctx;
     const w = obs.w, kappa = obs.curvature, N = w.length;
-    const maxK = obs.maxCurvature;
+    // Robust color reference: at a cusp |κ| → ∞, so normalizing by the TRUE max
+    // crushes every other segment to ≈0 and the whole boundary reads uniform
+    // blue. Use a high percentile of |κ| as the reference instead — the cusp
+    // region then saturates to red while the rest of ∂Ω gets a real gradient.
+    const absK = [];
+    for (let i = 0; i < N; i++) { const v = Math.abs(kappa[i]); if (isFinite(v)) absK.push(v); }
+    absK.sort((p, q) => p - q);
+    let denom = absK.length
+      ? absK[Math.min(absK.length - 1, Math.floor(absK.length * 0.90))]
+      : obs.maxCurvature;
+    if (!(denom > 0)) denom = (obs.maxCurvature > 0 ? obs.maxCurvature : 1);
     c.save();
     c.lineWidth = 3;
     c.lineCap = 'round';
     for (let i = 0; i < N; i++) {
       const a = this.toScreen(w[i].re, w[i].im);
       const b = this.toScreen(w[(i + 1) % N].re, w[(i + 1) % N].im);
-      // |κ| at this node, normalized; sqrt eases the dynamic range near a cusp.
-      let t = Math.abs(kappa[i]) / maxK;
+      // |κ| at this node, normalized to the robust reference (cusp clamps to 1);
+      // sqrt eases the dynamic range so the ramp toward the cusp stays visible.
+      let t = Math.abs(kappa[i]) / denom;
       if (!isFinite(t)) t = 1;
       t = Math.max(0, Math.min(1, Math.sqrt(t)));
       const hue = 210 - 210 * t;            // 210° (cool blue) → 0° (hot red)
@@ -905,6 +919,93 @@ class DomainPlot {
       c.fillText('(' + cu.type[0] + ',' + cu.type[1] + ')', s.x + r + 3, s.y);
     }
     c.restore();
+  }
+
+  // -------------------------------------------------------------------------
+  // Annotated-phenomena overlay (#9) — labels the phenomena the cusp/critical
+  // overlays don't: the harmonic-measure hot spot (the tip, where ρ = 1/(2π|φ′|)
+  // peaks ⇔ |φ′| is smallest), the max-curvature point on ∂Ω, and the domain's
+  // symmetry axes. Reads the already-cached observables sweep + the
+  // detectSymmetry result (state.current.symmetry); adds no solve cost. Primary
+  // solution only (the caches are computed for it).
+  // -------------------------------------------------------------------------
+  drawPhenomenaAnnotations() {
+    if (!state.current || !this.data || !this.data.phi) return;
+    if ((state.selectedSolutionIdx || 0) !== 0) return;     // primary only
+    const phi = this.data.phi;
+    const c = this.ctx;
+    const sub = (n) => String(n).replace(/[0-9]/g, d => '₀₁₂₃₄₅₆₇₈₉'[+d]);
+
+    // ---- symmetry axes (dashed) + a D_n / Z_n / circle badge ----------------
+    const sym = state.current.symmetry;
+    if (sym && (sym.reflectionAxes.length || sym.rotationalOrder > 1 || sym.continuous)) {
+      const ctr = sym.center || { re: 0, im: 0 };
+      const sCtr = this.toScreen(ctr.re, ctr.im);
+      const L = (this.cssW + this.cssH) / this.view.scale;   // world length covering the canvas
+      c.save();
+      c.setLineDash([6, 5]);
+      c.strokeStyle = 'rgba(124, 58, 237, 0.55)';            // faint violet
+      c.lineWidth = 1.2;
+      for (const a of sym.reflectionAxes) {
+        const dx = Math.cos(a) * L, dy = Math.sin(a) * L;
+        const p1 = this.toScreen(ctr.re - dx, ctr.im - dy);
+        const p2 = this.toScreen(ctr.re + dx, ctr.im + dy);
+        c.beginPath(); c.moveTo(p1.x, p1.y); c.lineTo(p2.x, p2.y); c.stroke();
+      }
+      c.setLineDash([]);
+      const nAx = sym.reflectionAxes.length;
+      let badge = '';
+      if (sym.continuous) badge = '○ rotational';
+      else if (sym.rotationalOrder > 1) badge = (nAx ? 'D' : 'Z') + sub(sym.rotationalOrder);
+      else if (nAx) badge = 'mirror';
+      if (badge) {
+        c.font = '11px ui-monospace, Consolas, monospace';
+        c.fillStyle = 'rgba(124, 58, 237, 0.95)';
+        c.textBaseline = 'middle'; c.textAlign = 'left';
+        c.fillText(badge, sCtr.x + 6, sCtr.y - 7);
+      }
+      c.restore();
+    }
+
+    // ---- harmonic-measure peak + max-curvature point ------------------------
+    const obs = state.current.observables && state.current.observables.obs;
+    if (obs && obs._phiRef === phi && typeof QD !== 'undefined' && QD.evalPhi) {
+      c.save();
+      c.font = '10px ui-monospace, Consolas, monospace';
+      c.textBaseline = 'middle'; c.textAlign = 'left';
+      const mark = (theta, color, label) => {
+        let wpt; try { wpt = QD.evalPhi({ re: Math.cos(theta), im: Math.sin(theta) }, phi); }
+        catch (e) { return; }
+        if (!wpt || !isFinite(wpt.re) || !isFinite(wpt.im)) return;
+        const s = this.toScreen(wpt.re, wpt.im);
+        if (s.x < -40 || s.x > this.cssW + 40 || s.y < -40 || s.y > this.cssH + 40) return;
+        c.beginPath();                                       // diamond marker
+        c.moveTo(s.x, s.y - 5); c.lineTo(s.x + 5, s.y);
+        c.lineTo(s.x, s.y + 5); c.lineTo(s.x - 5, s.y); c.closePath();
+        c.fillStyle = color; c.fill();
+        c.strokeStyle = '#ffffff'; c.lineWidth = 1.2; c.stroke();
+        // Label sits BELOW the marker (with a short leader). A boundary cusp at
+        // this same point already labels its (p,q) type to the RIGHT at marker
+        // height, so dropping the phenomena label avoids overlapping it.
+        const lx = s.x + 8, ly = s.y + 15;
+        c.strokeStyle = color; c.lineWidth = 1;
+        c.beginPath(); c.moveTo(s.x + 3, s.y + 4); c.lineTo(lx - 2, ly - 3); c.stroke();
+        c.fillStyle = color; c.fillText(label, lx, ly);
+      };
+      const thHM = obs.minAbsPhiPrimeTheta, thK = obs.argMaxCurvatureTheta;
+      const maxK = obs.maxCurvature;
+      const angClose = (a, b) => {
+        let d = Math.abs(((a - b) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI));
+        return Math.min(d, 2 * Math.PI - d) < 0.09;          // ~5°
+      };
+      if (thHM != null && thK != null && maxK > 0 && angClose(thHM, thK)) {
+        mark(thHM, '#7c3aed', 'tip: ρ-peak · max|κ|=' + maxK.toFixed(2));
+      } else {
+        if (thHM != null) mark(thHM, '#0d9488', 'harmonic-measure peak');
+        if (thK != null && maxK > 0) mark(thK, '#dc2626', 'max |κ|=' + maxK.toFixed(2));
+      }
+      c.restore();
+    }
   }
 }
 

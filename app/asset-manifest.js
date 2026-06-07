@@ -39,7 +39,7 @@
   // version:sync` recomputes it. CACHE_LABEL is yours to set per release
   // (cosmetic, for human-readable cache names + the HANDOFF narrative).
   const CACHE_LABEL = 'preimage-tree-overlay';
-  const CACHE_HASH  = '8b2ffa835c';   // gen-cache-version.js --write rewrites this
+  const CACHE_HASH  = 'c536e8bc1b';   // gen-cache-version.js --write rewrites this
   const CACHE_VERSION = CACHE_LABEL + '-' + CACHE_HASH;
 
   // Files that get concatenated into a Worker bundle by the runtime
@@ -86,7 +86,9 @@
     'univalence.js',
     'cusps.js',
     'observables.js',          // boundary observables + harmonic measure + accuracy estimate
+    'symmetry.js',             // domain symmetry detector (#9 annotations / partial #11)
     'solver-cmax.js',          // max-conformal-radius estimator (drives the worker, page-only)
+    'thesis-examples.js',      // curated examples + analytic-oracle engine (#8)
     'primary-solution.js',
     'primary-solver-worker.js',
   ];
@@ -117,6 +119,7 @@
     'ui-h-text.js',
     'ui-solve.js',
     'ui-url-state.js',
+    'ui-thesis.js',           // thesis-example gallery + analytic-oracle card (#8)
     'ui.js',
     // Phase-3 (item E) extracted Direct-tab modules — load before direct-ui.js.
     'direct/direct-recompute.js',

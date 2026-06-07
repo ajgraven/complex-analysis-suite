@@ -26,6 +26,8 @@ const TESTS = [
   'sphere',
   'cusps',
   'cusp-accuracy',
+  'symmetry',
+  'thesis-examples',
   'riemann',
   'parse-check',
   'worker',

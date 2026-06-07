@@ -26,6 +26,68 @@ priors.
 > version:sync` refreshes it after any `app/` asset change; CI's
 > `npm run version:check` fails if it's stale.
 
+## (most recent) Thesis-example pack (#8) + annotated-phenomena overlay (#9)
+
+Two complementary teaching/validation features, built almost entirely on existing
+machinery (the preset system + the detectors).
+
+**#8 — Thesis-example pack with analytic oracles.**
+- `app/thesis-examples.js` (page-only): `QD.ThesisExamples` — 7 curated canonical QDs
+  (unit disk; two-point D₂; equilateral D₃; four-fold D₄; unbounded cardioid c\*≈1.449
+  **cusp**; deltoid h=w² c\*≈0.5 **cusp**; single exterior pole) — each carrying an
+  `oracle` of closed-form expectations. Plus `QD.thesisExampleHData(ex)` (string poles →
+  Complex hData) and **`QD.checkOracle(phi, hData, oracle, opts)`** — a pure async engine
+  that routes each oracle field to the matching detector (`boundaryObservables`,
+  `classifyCusps`, `detectSymmetry`, `estimateAccuracy`, `estimateMaxConformalRadius`) and
+  grades pass/warn/fail. The example field shape extends `ui-presets.js` with `mode` +
+  `view` + `oracle`.
+- UI: a **#thesis-select** gallery in the h-card and a hidden **#oracle-card** (status
+  panel), wired by `app/ui-thesis.js` (`QD_UI.installThesis`). Selecting an example calls
+  `ui.js`'s new `loadThesisExample(ex)` (switch family via the factored-out `applyConfig`,
+  frame the view, enable the #9 overlay, solve); on each solve `checkOracle` runs the cheap
+  rows and renders computed-vs-expected. The heavy **c\* row is opt-in** behind a button
+  using the off-thread primary-solver worker (same path as "Estimate max c"). A manual edit
+  or family-preset load fires a `qd-customized` event that clears the card.
+- **Correction to the plan:** the deltoid (h=w²) c\* mechanism is a **cusp**, not a fold —
+  the estimator (ground truth) confirmed it; the plan's "fold" guess was wrong. The 7
+  oracles are locked by `app/test/thesis-examples.test.js` (every example solved + checked,
+  52 assertions incl. both c\* estimates).
+
+**#9 — Annotated-phenomena overlay.**
+- `app/symmetry.js` (page-only): **`QD.detectSymmetry(phi)`** → `{ rotationalOrder,
+  reflectionAxes, center, confidence, continuous }`. Uses the **Riemann-map intertwining**
+  (φ(e^{2πi/n}z) = c + e^{2πi/n}(φ(z)−c)) so the rotational/reflection tests are EXACT index
+  maps on M=2520 boundary samples (divisible by every order 2..12 except 11) — no
+  interpolation, robust for non-star-shaped boundaries (deltoid cusps included). Partially
+  delivers TODO #11. Tested by `app/test/symmetry.test.js` (disk continuous, deltoid D₃,
+  cubic D₂, cardioid D₁, asymmetric trivial; 15 assertions).
+- `app/ui-domain-plot.js`: new `drawPhenomenaAnnotations()` (gated by `state.showPhenomena`)
+  labels the phenomena the cusp/critical overlays DON'T: the harmonic-measure hot spot (tip,
+  at `minAbsPhiPrimeTheta`), the max-curvature point (`argMaxCurvatureTheta`), and dashed
+  symmetry axes + a D_n/Z_n badge. Reuses the already-cached observables sweep +
+  `state.current.symmetry` (computed off-idle by a new `scheduleSymmetry` in `ui-solve.js`),
+  so it adds no solve cost. Toggle `#phenomena-toggle` in the display-options block; cusps
+  and critical-set keep their own independent overlays (no duplication).
+
+**Two follow-up fixes (Andrew feedback).**
+- **Curvature heat-strip washed out at a cusp.** `drawCurvature` normalized |κ| by the TRUE
+  max; at a cusp κ→∞ (measured 5.8e9 vs a P90 of 4.8 — a 1.2e9 ratio), so every other segment
+  divided to ≈0 and the whole boundary read uniform blue. Fixed by normalizing to the **P90 of
+  |κ|**: the cusp clamps to red and the rest of ∂Ω gets a real green→red gradient.
+- **Cusp (p,q) label vs tip label overlap.** A real cusp is also the tip / max-κ point, so the
+  `drawCusps` `(p,q)` label (right of the marker) and the phenomena tip label collided. The
+  phenomena labels now drop **below** the marker with a short leader.
+
+**Verification.** New suites `thesis-examples` + `symmetry` registered in `node-test.js`;
+full suite green; lint clean; `version:sync` run. Page-only modules go in
+`SOLVER_PAGE_ONLY_FILES` (symmetry, thesis-examples); `ui-thesis.js` in `PAGE_UI_FILES`
+before `ui.js`. Browser-verified: gallery loads each example (view framed, overlay on,
+oracle card ✓), c\* verifies on click, symmetry axes draw for the symmetric examples.
+
+**Files:** new `app/{symmetry,thesis-examples,ui-thesis}.js` + `app/test/{symmetry,thesis-examples}.test.js`;
+`app/ui-domain-plot.js`, `app/ui-solve.js`, `app/ui-state.js`, `app/ui.js`, `app/index.html`,
+`app/asset-manifest.js`, `app/node-test.js`.
+
 ## (most recent) Solver accuracy near cusps (#11)
 
 **Problem.** As a QD approaches a **cusp** (a φ′ zero migrating onto |z|=1, the

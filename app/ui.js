@@ -487,6 +487,13 @@ function populatePresetDropdown() {
 function applyPreset(id) {
   const p = currentPresetList().find(x => x.id === id);
   if (!p) return;
+  applyConfig(p);
+}
+
+// Apply a config object { poles, c, w0, alpha, q, polyCoeffs } to the live state
+// for the CURRENT mode (state.mode must already be set). Shared by family-preset
+// loads (applyPreset) and thesis-example loads (loadThesisExample, #8).
+function applyConfig(p) {
   state.poles = p.poles.map(po => ({
     a: po.a,
     order: po.order,
@@ -551,6 +558,24 @@ function applyPreset(id) {
   renderPolesList();
   renderPolyCoefList();
   scheduleSolve();
+}
+
+// Load a thesis example (#8): switch to its family, apply its config, frame the
+// view, and turn on the annotated-phenomena overlay. The oracle card + dropdown
+// bookkeeping live in ui-thesis.js; this is the ui.js-internal half that needs
+// setMode / applyConfig / plot. Exposed via uiCtx.loadThesisExample.
+function loadThesisExample(ex) {
+  if (!ex || !MODES[ex.mode]) return;
+  if (state.mode !== ex.mode) { state.mode = ex.mode; applyModeVisuals(); }
+  $('#preset-select').value = '';            // not a family preset
+  applyConfig(ex);                           // poles/c/q/alpha/w0/polyCoeffs (+ scheduleSolve)
+  if (ex.view && plot && plot.view) {
+    plot.view.cx = ex.view.cx; plot.view.cy = ex.view.cy; plot.view.scale = ex.view.scale;
+    state.autoFit = false;                   // honor the framed view (don't auto-fit over it)
+    plot.render();
+  }
+  state.showPhenomena = true;                // self-explaining exhibit
+  const tog = $('#phenomena-toggle'); if (tog) tog.checked = true;
 }
 
 // Programmatic setter for q (complex) that keeps text input, |q| / arg sliders,
@@ -707,7 +732,12 @@ function syncPolyDegreeInput() {
 
 // Selecting a preset loads it; the user editing anything afterward reverts
 // the dropdown to "— custom —".
-function markAsCustom() { $('#preset-select').value = ''; }
+function markAsCustom() {
+  $('#preset-select').value = '';
+  // A manual edit (or a family-preset load) means we're no longer showing a
+  // thesis example — ui-thesis.js listens for this to clear its oracle card.
+  document.dispatchEvent(new CustomEvent('qd-customized'));
+}
 
 // Per-pole event delegation. Handles three kinds of `input` events:
 //   • text fields for a_j, order, and C_{j,s}
@@ -1023,7 +1053,10 @@ populatePresetDropdown();
   if (sel && currentPresetList().some(p => p.id === 'unit-disk')) sel.value = 'unit-disk';
 }
 $('#preset-select').addEventListener('change', e => {
-  if (e.target.value) applyPreset(e.target.value);
+  if (e.target.value) {
+    document.dispatchEvent(new CustomEvent('qd-customized'));   // leaving any thesis example
+    applyPreset(e.target.value);
+  }
 });
 
 // Custom h(w) parse button + Enter-to-parse on the text input.
@@ -1334,6 +1367,10 @@ $('#curvature-toggle').addEventListener('change', e => {
   state.showCurvature = e.target.checked;
   plot.render();
 });
+$('#phenomena-toggle')?.addEventListener('change', e => {
+  state.showPhenomena = e.target.checked;
+  plot.render();
+});
 
 // ---------- Search-options panel wiring ----------------------------------
 // Every field updates state.searchOptions on `input`/`change`. Inputs that
@@ -1521,6 +1558,10 @@ Object.assign(uiCtx, { modeAllowsPoly, refreshHText, setHTextMsg, parseAndApplyH
 const { writeUrlState, applyUrlState } = window.QD_UI.installUrlState(uiCtx);
 uiCtx.writeUrlState = writeUrlState;
 uiCtx.applyUrlState = applyUrlState;
+
+// Thesis-example gallery + analytic-oracle card (#8) — ui-thesis.js.
+uiCtx.loadThesisExample = loadThesisExample;
+if (window.QD_UI && window.QD_UI.installThesis) window.QD_UI.installThesis(uiCtx);
 
 // Initial structured-grid render (relocated from just after the plot setup, so
 // the let-bound renderers + modeAllowsPoly exist by the time it runs).
