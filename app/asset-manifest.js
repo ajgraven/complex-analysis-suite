@@ -39,7 +39,7 @@
   // version:sync` recomputes it. CACHE_LABEL is yours to set per release
   // (cosmetic, for human-readable cache names + the HANDOFF narrative).
   const CACHE_LABEL = 'preimage-tree-overlay';
-  const CACHE_HASH  = 'c8f04a54e2';   // gen-cache-version.js --write rewrites this
+  const CACHE_HASH  = '10f89e5898';   // gen-cache-version.js --write rewrites this
   const CACHE_VERSION = CACHE_LABEL + '-' + CACHE_HASH;
 
   // Files that get concatenated into a Worker bundle by the runtime
@@ -82,6 +82,7 @@
   // Page-only solver-adjacent files. Loaded by index.html as classic
   // <script> tags but NOT bundled into the Workers.
   const SOLVER_PAGE_ONLY_FILES = [
+    'ui-strings.js',           // central editable UI prose (QD.Strings); before thesis-examples.js
     'critical-set.js',
     'univalence.js',
     'cusps.js',

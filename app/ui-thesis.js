@@ -38,11 +38,14 @@
     const content = $('#oracle-content');
     if (!sel || !card || !content) return {};
 
+    // Oracle-card prose lives in QD.Strings.oracle (ui-strings.js).
+    const STR = (QD.Strings && QD.Strings.oracle) || {};
+
     let active = null;       // the example currently on exhibit (null ⇒ card hidden)
     let suppressClear = false; // true while we're applying a thesis load
 
     // Populate the gallery.
-    sel.innerHTML = '<option value="">— pick an example —</option>' +
+    sel.innerHTML = '<option value="">' + esc(STR.pickExample || '— pick an example —') + '</option>' +
       examples.map(e => `<option value="${esc(e.id)}">${esc(e.label)}</option>`).join('');
 
     sel.addEventListener('change', (e) => {
@@ -58,7 +61,7 @@
       sel.value = ex.id;
       card.classList.remove('hidden');
       content.innerHTML = `<div class="hint">${esc(ex.blurb || '')}</div>` +
-        `<div class="key" style="margin-top:6px;">solving… oracle pending</div>`;
+        `<div class="key" style="margin-top:6px;">${esc(STR.pending || 'solving… oracle pending')}</div>`;
     });
 
     // Leaving the example (manual edit / family preset) clears the card.
@@ -71,13 +74,9 @@
     }
 
     // Help popover on the card header.
-    if (QD.QoL && QD.QoL.attachHelp) {
+    if (QD.QoL && QD.QoL.attachHelp && STR.help) {
       const h = card.querySelector('h2');
-      if (h) QD.QoL.attachHelp(h,
-        'Curated canonical quadrature domains, each with an ANALYTIC ORACLE — the ' +
-        'closed-form quantities a correct solve must reproduce (area, symmetry, cusps, ' +
-        'c*, accuracy). Rows show computed vs expected: ✓ pass, ⚠ marginal, ✗ off. The ' +
-        'c* row is verified on demand (it runs the conformal-radius estimator).');
+      if (h) QD.QoL.attachHelp(h, STR.help);
     }
 
     // Re-check the oracle whenever a fresh primary solution lands for the active
@@ -87,7 +86,7 @@
         if (!active || !active.oracle) return;
         if (!env || !env.success || !env.primary || !env.primary.phi || !env.hData) {
           content.innerHTML = `<div class="hint">${esc(active.blurb || '')}</div>` +
-            `<div class="warn">no valid solution to check against the oracle</div>`;
+            `<div class="warn">${esc(STR.noValid || 'no valid solution to check against the oracle')}</div>`;
           return;
         }
         const ex = active;
@@ -102,10 +101,10 @@
         `<div class="geom-row">${icon(r.status)} <span class="key">${esc(r.name)}:</span> ` +
         `${fmt(r.computed)} <span class="key">(exp ${fmt(r.expected)})</span></div>`).join('');
       const summary = res.allPass
-        ? '<span class="ok">✓ matches the analytic oracle</span>'
-        : '<span class="warn">⚠ some rows differ from the oracle</span>';
+        ? '<span class="ok">' + esc(STR.matches || '✓ matches the analytic oracle') + '</span>'
+        : '<span class="warn">' + esc(STR.someDiffer || '⚠ some rows differ from the oracle') + '</span>';
       const cmaxBtn = (ex.oracle.cMax != null)
-        ? `<button id="oracle-cmax-btn" class="oracle-cmax" style="margin-top:8px;">Verify c* (slow)</button>`
+        ? `<button id="oracle-cmax-btn" class="oracle-cmax" style="margin-top:8px;">${esc(STR.verifyCmax || 'Verify c* (slow)')}</button>`
         : '';
       content.innerHTML =
         `<div class="hint">${esc(ex.blurb || '')}</div>` +
@@ -116,7 +115,7 @@
 
     async function verifyCmax(ex, env, btn) {
       btn.disabled = true;
-      btn.textContent = 'estimating c*…';
+      btn.textContent = STR.estimating || 'estimating c*…';
       // Off-thread via the primary-solver worker, exactly like the "Estimate max c"
       // button — so the (heavy) bracket search doesn't block the UI.
       const PSW = QD.PrimarySolverWorker;
@@ -129,7 +128,7 @@
         if (active === ex) renderRows(ex, res, env);   // now includes the c* rows
       } catch (e) {
         btn.disabled = false;
-        btn.textContent = 'Verify c* (slow)';
+        btn.textContent = STR.verifyCmax || 'Verify c* (slow)';
       }
     }
 

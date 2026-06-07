@@ -5,6 +5,7 @@
 // engine, and locks the canonical numbers as regression anchors.
 // =============================================================================
 require('./bootstrap');
+loadInCtx('ui-strings.js');      // QD.Strings (example blurbs) — before thesis-examples.js
 loadInCtx('observables.js');     // boundaryObservables / harmonicMeasure / estimateAccuracy
 loadInCtx('solver-cmax.js');     // estimateMaxConformalRadius
 loadInCtx('symmetry.js');        // detectSymmetry

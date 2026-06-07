@@ -225,22 +225,25 @@ let _liveAnalysisLast = 0;          // last live-analysis timestamp (throttle)
 // user can act on, prepended to the raw solver `reason:` dump (B7). The intent
 // is to answer "what do I change?" rather than just reporting the failure.
 function failureGuidance(mode) {
+  // Guidance prose lives in QD.Strings.guidance (ui-strings.js); fall back to the
+  // inline defaults if the strings module isn't present.
+  const G = (typeof window !== 'undefined' && window.QD && window.QD.Strings && window.QD.Strings.guidance) || {};
   const tips = [];
   if (state.aggressiveness !== 'exhaustive') {
-    tips.push("try the “Try harder (exhaustive search)” button or raise Aggressiveness");
+    tips.push(G.tryHarder || "try the “Try harder (exhaustive search)” button or raise Aggressiveness");
   }
   if (/^lqd-/.test(mode)) {
     // LQD existence is genuinely bounded (Thm 5.3.2 / 5.6.2): not every h
     // admits a log-weighted QD. Smaller residues / different c can help.
-    tips.push("this h may have no log-weighted QD — try smaller residues, or adjust c");
+    tips.push(G.lqd || "this h may have no log-weighted QD — try smaller residues, or adjust c");
   } else if (/^pqd-/.test(mode)) {
     // PQD realizability needs the residue magnitude above a threshold
     // (C > (pᵃ − w₀ᵃ)²/α²) and an interior w₀.
-    tips.push("PQDs need a large-enough residue and an interior w₀ — try a bigger |C| or move w₀");
+    tips.push(G.pqd || "PQDs need a large-enough residue and an interior w₀ — try a bigger |C| or move w₀");
   } else {
-    tips.push("move poles away from each other and the boundary, or adjust residue magnitudes");
+    tips.push(G.poles || "move poles away from each other and the boundary, or adjust residue magnitudes");
   }
-  return 'No quadrature domain found. Suggestions: ' + tips.join('; ') + '.';
+  return (G.noSolutionPrefix || 'No quadrature domain found. Suggestions: ') + tips.join('; ') + '.';
 }
 
 function solveAndRender() {

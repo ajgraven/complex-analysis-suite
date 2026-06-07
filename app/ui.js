@@ -900,6 +900,10 @@ mountViewToggle();
 function mountQolHelp() {
   if (!window.QD || !window.QD.QoL || !window.QD.QoL.attachHelp) return;
   const H = window.QD.QoL.attachHelp;
+  // All help-popover prose lives in app/ui-strings.js (QD.Strings.help.*) so it
+  // can be edited in one place. Bail quietly if the strings module isn't loaded.
+  const help = window.QD.Strings && window.QD.Strings.help;
+  if (!help) return;
   const headerOf = (cardSelector) => {
     const card = document.querySelector(cardSelector);
     return card ? card.querySelector('h2') : null;
@@ -907,90 +911,19 @@ function mountQolHelp() {
   // Item 6: an app-level "What is a quadrature domain?" intro, as a "?" next to
   // the title — the missing on-ramp for a newcomer.
   const title = document.querySelector('.app-header-row h1');
-  if (title) H(title,
-    `<b>What is this?</b> A <b>quadrature domain</b> Ω is a region where the area integral of any
-     analytic function f equals a finite sum of f (and its derivatives) at a few interior points —
-     encoded by the <b>quadrature data h(w)</b> you enter. This tool solves the <i>inverse</i>
-     problem: given h(w) it finds the domain Ω and its conformal map φ(z), then analyzes the
-     boundary (cusps, curvature, symmetry, accuracy).<br><br>
-     <b>To start:</b> pick a <b>Preset</b> or <b>Thesis example</b>, drag the red poles on the plot
-     to reshape Ω, and read the verdict + geometry in the panel. The <b>Schwarz</b> and
-     <b>Parameter slice</b> tabs explore the same solved domain. Press <b>?</b> for shortcuts.`);
-  // Domain type
-  H(headerOf('#domain-mode-card'),
-    `<b>Domain type.</b> The quadrature identity Ω must satisfy.
-     <b>QD</b>: classical (unweighted). <b>PQD</b>: power weight
-     |w|<sup>2(α−1)</sup> (α on the card below). <b>LQD</b>: log weight 1/|w|².
-     <b>Bounded</b> = finite Ω; <b>unbounded</b> = Ω reaches ∞.
-     <b>Singular</b> = 0 ∈ Ω (φ gains a Blaschke factor); non-singular = 0 ∉ Ω.
-     Classical QD has no singular variant.`);
-  // Quadrature function h(w)
-  H(headerOf('#h-card'),
-    `<b>Quadrature data h(w).</b> Sum of rational and polynomial terms.
-     Edit poles + residues structurally below, or paste a math.js expression
-     in the textbox at the top. The inverse solver finds Ω whose
-     quadrature data matches this h.`);
-  H(headerOf('#map-params-card'),
-    `<b>Map parameters.</b> The scalar knobs of the Riemann map, shown per family.
-     <b>PQD power α</b> (PQD modes): the weight is |w|<sup>2(α−1)</sup>; α = 1 is
-     classical. <b>Center φ(0)</b> (bounded families): the image of 0 ∈ 𝔻 — a free
-     parameter (Manual, or Auto = pole centroid, recomputed as you drag a pole);
-     implicit for unbounded families. <b>Residue q at origin</b> (singular LQDs,
-     0 ∈ Ω): the residue of the log-weighted Schwarz function at w=0, linked to
-     the finite poles and any polynomial part by a closed-form constraint.
-     (Singular PQDs need no q: the |w|<sup>2(α−1)</sup> weight makes the
-     quadrature data unique. The unbounded conformal radius c has its own control
-     beside φ(z) in the Domain-type card.)`);
-  H(headerOf('#c-card'),
-    `<b>Conformal radius c = φ′(∞).</b> Scales the Riemann map at infinity for
-     unbounded families; with w₀ it fixes the gauge of φ. Unbounded QDs form a
-     one-parameter family in c — sweep the slider to explore it; past the
-     critical c* the simply-connected QD ceases to exist (its boundary cusps,
-     then self-overlaps). <b>Estimate max c</b> finds c* automatically (bracket +
-     bisection on the solver's univalence + identity gate), then caps the slider
-     at c* and jumps to it — the extremal domain (its boundary just cusps); nudge
-     c down slightly for a clean interior.`);
-  H(headerOf('#solver-settings-card'),
-    `<b>Solver settings.</b> The <i>Aggressiveness</i> preset
-     (Quick / Standard / Thorough) balances Newton iterations, identity-check
-     samples, and how many alternate branches are sought; fine-tune via
-     <i>Search options</i>. Also here: the boundary-sample count, the
-     vector-field overlay (Pólya h̄(w), or the family-specific external /
-     equilibrium field), the critical-set overlay, and <i>Auto-switch
-     singular ⇄ non-singular PQD</i> — which re-solves in the correct family
-     when a PQD boundary crosses the origin.`);
-  H(headerOf('#search-options-card'),
-    `<b>Search options.</b> Each phase is a distinct strategy for finding a φ
-     consistent with h(w). Direct = single Newton from the initial guess;
-     continuation = parameter-homotopy from a related solved scenario;
-     multistart = many random seeds; diverse + deflation = explicit
-     branch-finding.`);
-  H(headerOf('#status-card'),
-    `<b>Status.</b> Live readout of the solver: convergence diagnostics,
-     identity residual, univalence, and which branches succeeded.`);
-  H(document.querySelector('#sp-geom summary'),
-    `<b>Geometric properties.</b> Special univalence classes of the solved Ω,
-     checked asynchronously after each solve. <i>Star-like</i>: every ray from
-     the center (w₀ for bounded; ∞ for unbounded) stays in Ω
-     — Re(z·φ′/(φ−w₀)) &gt; 0. <i>Convex</i> (bounded): Re(1 + z·φ″/φ′) &gt; 0.
-     <i>Spiral-like</i>: a log-spiral generalization of star-like; λ is the
-     optimal spiral angle. The hierarchy is convex ⟹ star-like ⟹ spiral-like,
-     all ⟹ univalent.`);
-  H(document.querySelector('#sp-cusps summary'),
-    `<b>Boundary singularities.</b> Cusps of ∂Ω, found asynchronously after each
-     solve. A cusp sits where the Riemann map's derivative vanishes on the unit
-     circle, φ′(e<sup>iθ</sup>) = 0; the order m of that zero fixes the local
-     <i>type</i> (p,q) = (m+1, m+2): m = 1 is the ordinary 3⁄2-power (2,3) cusp.
-     A filled ● / magenta triangle marks an actual cusp; a hollow ○ marks an
-     <i>incipient</i> one — a φ′-zero near but not yet on ∂𝔻, shown with its
-     distance d (a "how close to a cusp" gauge). The (p,q) type is read exactly
-     from φ's Taylor coefficients and cross-checked numerically.`);
+  if (title) H(title, help.intro);
+  H(headerOf('#domain-mode-card'), help.domainType);
+  H(headerOf('#h-card'), help.hCard);
+  H(headerOf('#map-params-card'), help.mapParams);
+  H(headerOf('#c-card'), help.cCard);
+  H(headerOf('#solver-settings-card'), help.solverSettings);
+  H(headerOf('#search-options-card'), help.searchOptions);
+  H(headerOf('#status-card'), help.status);
+  H(document.querySelector('#sp-geom summary'), help.geom);
+  H(document.querySelector('#sp-cusps summary'), help.cusps);
   // (The Riemann-map symbolic identity is shown via the "?" toggle next to the
   // numerical φ(z) in the Domain-type tile — no separate help popover.)
-  H(headerOf('#alternates-card'),
-    `<b>Alternate solutions.</b> When more than one φ satisfies the same h
-     (multiple branches), the solver lists them here. Click an alternate to
-     promote it to the primary.`);
+  H(headerOf('#alternates-card'), help.alternates);
 }
 mountQolHelp();
 
@@ -1680,7 +1613,7 @@ $('#poly-part-section').classList.toggle('hidden', !modeAllowsPoly(state.mode));
 // Item 7: per-tab subtitle clarifying what each view does and that they all
 // operate on the same solved domain (Schwarz / Param-slice show "using h(w)=…").
 const TAB_SUBTITLES = {
-  qd: 'Inverse problem: from your h(w), find the domain Ω and its conformal map φ.',
+  qd: 'Inverse problem: Recover the domain Ω and associated conformal map φ from a given quadrature function h(w)',
   schwarz: 'Iterate the Schwarz reflection of your current domain — the fractal tiling set.',
   'param-slice': 'Sweep a parameter and map where valid quadrature domains exist.',
 };
