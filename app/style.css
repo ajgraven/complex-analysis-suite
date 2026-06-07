@@ -281,6 +281,21 @@ button.attention {
 }
 .ov-note { color: var(--c-muted); font-size: 10px; display: block; }
 
+/* Faber-polynomials card: monospace formula list + compact coefficient table. */
+#faber-card .faber-formula {
+  font-family: ui-monospace, Consolas, monospace; font-size: 11px;
+  color: var(--c-ink); margin: 2px 0; word-break: break-word;
+}
+#faber-card table.faber-coef {
+  border-collapse: collapse; font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px; margin: 4px 0;
+}
+#faber-card table.faber-coef th,
+#faber-card table.faber-coef td {
+  border: 1px solid var(--c-border-soft); padding: 1px 6px; text-align: left;
+}
+#faber-card table.faber-coef th { color: var(--c-muted); font-weight: 600; }
+
 /* ===== Cards ===== */
 .card {
   background: var(--c-surface);

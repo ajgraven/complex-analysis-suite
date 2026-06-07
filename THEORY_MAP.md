@@ -29,6 +29,20 @@ where Φ_φ⁻¹ is the inverse Faber transform and `f^#(z) = conj(f(1/conj(z)))
 | `QD.Faber.inverseFaberAtPole(residues, phiTilde)` | `solver-faber.js:60` | Per-pole inverse Faber transform yielding A_{j,k} |
 | `QD.Faber.inverseFaberAtInfinity(polyPart, f, c)` | `solver-faber.js:109` | Inverse Faber at ∞ for h's polynomial part (unbounded families) |
 
+The **forward** Faber polynomials F_n(ζ) of the complement K = ℂ∖Ω of a *classical
+unbounded* QD are read off φ's Laurent expansion at ∞ (φ is the exterior map of K),
+`φ(z) = c·z + c₀ + c₁/z + …`, via `F₀ = 1`, `F₁ = (ζ − c₀)/c`,
+`c·F_{n+1}(ζ) = (ζ − c₀)·Fₙ(ζ) − Σ_{k=1}^{n} c_k·F_{n−k}(ζ) − n·cₙ` — used by the
+**Faber-polynomials analysis card** (display + root plot). Oracles: disk ⇒ F_n = ζ^n,
+interval [−2,2] ⇒ F_n = 2·T_n(ζ/2) (Chebyshev). Code in
+[`app/faber-analysis.js`](app/faber-analysis.js):
+
+| Symbol | Where | Maps to |
+| --- | --- | --- |
+| `QD.FaberAnalysis.faberPolynomials(phi, N)` | `faber-analysis.js` | F₀..F_N coefficient lists from the φ-Laurent recurrence |
+| `QD.FaberAnalysis.polynomialRoots(coeffs, opts)` | `faber-analysis.js` | Complex polynomial roots (Durand–Kerner + Newton polish) |
+| `QD.FaberAnalysis.faberConvergence(phi, N)` | `faber-analysis.js` | Per-order roots + convergence flag (high-degree conditioning) |
+
 ---
 
 ## The (★) and (●) system (Theorems 3.2.1, 3.2.2)

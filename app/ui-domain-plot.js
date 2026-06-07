@@ -356,6 +356,13 @@ class DomainPlot {
     // Annotated-phenomena overlay (#9): harmonic-measure / curvature peaks +
     // symmetry axes. Opt-in; reuses the cached observables + symmetry results.
     if (state.showPhenomena && this.data && this.data.phi) this.drawPhenomenaAnnotations();
+    // Faber-polynomial roots overlay (UQD only): roots of the Faber polynomials
+    // F_n of the bounded complement K, plotted in the ζ = image plane (where ∂Ω
+    // lives). They cluster inside K, the "hole" of the unbounded domain. The
+    // payload is pushed by ui-faber.js onto state.faberRoots. Drawn last (top).
+    if (state.showFaberRoots && state.faberRoots && this.data && this.data.unbounded) {
+      this.drawFaberRoots();
+    }
 
     // Empty-state hint (item 3/4): when there's no solved boundary and no poles
     // to drag, the canvas would be an unexplained blank — tell the user how to
@@ -890,6 +897,75 @@ class DomainPlot {
       }
     }
     c.restore();
+  }
+
+  // -------------------------------------------------------------------------
+  // Faber-polynomial roots overlay (ζ = image plane). state.faberRoots:
+  //   { mode:'all'|'single', N, n, sets:[{ n, roots:[Complex], converged }] }
+  // 'all'    → union of roots of F_1..F_N as teal hollow circles, alpha fading
+  //            with order so the low orders read clearly (no labels — too many).
+  // 'single' → roots of one F_n as violet filled diamonds (distinct from the
+  //            critical-set disks / cusp triangles / phenomena diamonds), labelled.
+  // -------------------------------------------------------------------------
+  drawFaberRoots() {
+    const fr = state.faberRoots;
+    if (!fr || !fr.sets || !fr.sets.length) return;
+    const c = this.ctx;
+    c.save();
+    c.font = '10px ui-monospace, Consolas, monospace';
+    c.textBaseline = 'middle';
+    c.textAlign    = 'left';
+
+    const onScreen = (s) => s.x >= -40 && s.x <= this.cssW + 40 && s.y >= -40 && s.y <= this.cssH + 40;
+
+    if (fr.mode === 'single') {
+      const set = fr.sets[0];
+      if (!set || !set.roots) { c.restore(); return; }
+      const r = 4.5;
+      let labelled = false;
+      for (const root of set.roots) {
+        const s = this.toScreen(root.re, root.im);
+        if (!onScreen(s)) continue;
+        c.beginPath();
+        c.moveTo(s.x, s.y - r); c.lineTo(s.x + r, s.y);
+        c.lineTo(s.x, s.y + r); c.lineTo(s.x - r, s.y);
+        c.closePath();
+        c.fillStyle   = '#7c3aed';        // violet
+        c.fill();
+        c.strokeStyle = '#ffffff';
+        c.lineWidth   = 1.2;
+        c.stroke();
+        if (!labelled) {
+          c.fillStyle = '#5b21b6';
+          c.fillText('F' + this._sub(set.n) + ' roots', s.x + r + 3, s.y);
+          labelled = true;
+        }
+      }
+    } else {
+      // 'all' — union over orders, teal hollow circles fading with order.
+      const N = fr.sets.length;
+      for (let i = 0; i < N; i++) {
+        const set = fr.sets[i];
+        if (!set || !set.roots) continue;
+        const alpha = 0.35 + 0.55 * (set.n / Math.max(1, fr.N));   // higher order → brighter
+        c.strokeStyle = 'rgba(13,148,136,' + alpha.toFixed(3) + ')';   // teal
+        c.lineWidth   = 1.1;
+        for (const root of set.roots) {
+          const s = this.toScreen(root.re, root.im);
+          if (!onScreen(s)) continue;
+          c.beginPath();
+          c.arc(s.x, s.y, 3, 0, 2 * Math.PI);
+          c.stroke();
+        }
+      }
+    }
+    c.restore();
+  }
+
+  // Unicode subscript for small non-negative integers (for "Fₙ" labels).
+  _sub(n) {
+    const map = '₀₁₂₃₄₅₆₇₈₉';
+    return String(n).split('').map(d => map[+d] || d).join('');
   }
 
   // -------------------------------------------------------------------------

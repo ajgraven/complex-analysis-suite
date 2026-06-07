@@ -371,6 +371,15 @@ view is active.
   domain's **symmetry axes** (dashed) with its `D_n` / `Z_n` group. Symmetry comes
   from `app/symmetry.js` (`QD.detectSymmetry`), which reads the domain's symmetry
   straight off φ via the conformal-map intertwining.
+* **Faber polynomials** *(classical unbounded QD only)* — a **Faber polynomials**
+  card computes the Faber polynomials `F_n(ζ)` of the bounded complement `K = ℂ∖Ω`
+  straight from φ's Laurent expansion at ∞ (φ is the exterior map of K). It shows
+  the polynomials (formula + expandable coefficient table) with capacity `cap(K)=c`,
+  degree and leading coefficient, and per-order root-finder **convergence flags**, and
+  optionally **plots their roots** on the domain canvas — the union of all roots up to
+  order N (teal circles) or the roots of a single `F_n` (violet diamonds). Roots cluster
+  inside K, the "hole" of the unbounded domain. From `app/faber-analysis.js`
+  (`QD.FaberAnalysis`: `faberPolynomials`, `polynomialRoots` (Durand–Kerner)).
 * **φ(0)** — defaults to the centroid of the poles (manually overridable
   in bounded mode).
 * **Solver settings** — boundary samples, aggressiveness preset (Quick /

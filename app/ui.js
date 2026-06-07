@@ -1237,20 +1237,24 @@ if (cEstimateBtn) cEstimateBtn.addEventListener('click', () => {
         : '';
       showResult('Max conformal radius <strong>c* ≈ ' + cStar.toFixed(4) + '</strong>' + confTag, note);
 
-      // Cap the slider range at c* (so dragging can't leave the existence region)
-      // and jump to just below c* to render the largest clean domain. Set the max
-      // FIRST so setC's auto-expand doesn't fight it.
+      // Cap the slider range at c* and jump EXACTLY to c* — the extremal domain.
+      // c* (= res.cMax) is the largest c the estimator PROVED valid (cLowValid),
+      // so a re-solve at exactly c* succeeds; no 0.99 backoff is needed. Set the
+      // max FIRST (at full precision, so value == max) so setC's auto-expand
+      // doesn't fight it. Re-solving (rather than reusing res.phiAtMax) keeps the
+      // solution flowing through the normal pipeline so PrimarySolution subscribers
+      // — the oracle and Faber cards — refresh.
       const slider = $('#c-slider');
       const text   = $('#c-manual');
       const capStr = cStar.toFixed(4);
-      if (slider) slider.max = capStr;
-      if (text)   text.max   = capStr;
-      setC(Math.min(0.99 * cStar, cStar));
+      if (slider) slider.max = String(cStar);
+      if (text)   text.max   = String(cStar);
+      setC(cStar);
       markAsCustom();
       scheduleSolve();
       setStatus({ kind: 'ok',
-        text: 'Estimated max conformal radius c* ≈ ' + cStar.toFixed(4) +
-              '. Slider capped at c*; showing c ≈ ' + (0.99 * cStar).toFixed(4) + '.' });
+        text: 'Estimated max conformal radius c* ≈ ' + capStr +
+              '. Slider set to c* — the extremal (cusped/limit) domain; nudge c down slightly for a clean interior.' });
     } catch (e) {
       if (e && e.aborted) return;
       setStatus({ kind: 'err', text: 'Estimate max c error: ' + ((e && e.message) || e) });
@@ -1395,6 +1399,17 @@ $('#curvature-toggle').addEventListener('change', e => {
 });
 $('#phenomena-toggle')?.addEventListener('change', e => {
   state.showPhenomena = e.target.checked;
+  plot.render();
+});
+// Faber-roots overlay toggle. ui-faber.js keeps the card's "Plot roots" checkbox
+// in sync with this Layers toggle (and pushes the root payload onto state.faberRoots).
+$('#faber-roots-toggle')?.addEventListener('change', e => {
+  state.showFaberRoots = e.target.checked;
+  const cardBox = $('#faber-show-roots');
+  if (cardBox && cardBox.checked !== e.target.checked) {
+    cardBox.checked = e.target.checked;
+    cardBox.dispatchEvent(new Event('change'));
+  }
   plot.render();
 });
 
@@ -1639,6 +1654,18 @@ uiCtx.applyUrlState = applyUrlState;
 // Thesis-example gallery + analytic-oracle card (#8) — ui-thesis.js.
 uiCtx.loadThesisExample = loadThesisExample;
 if (window.QD_UI && window.QD_UI.installThesis) window.QD_UI.installThesis(uiCtx);
+
+// Faber-polynomials card (UQD) — ui-faber.js. setFaberRoots is the decoupling
+// hook: ui-faber.js writes the root payload + renders without touching `plot`.
+uiCtx.setFaberRoots = (payload) => {
+  state.faberRoots = payload;
+  if (payload && !state.showFaberRoots) {
+    state.showFaberRoots = true;
+    const t = $('#faber-roots-toggle'); if (t) t.checked = true;
+  }
+  plot.render();
+};
+if (window.QD_UI && window.QD_UI.installFaber) window.QD_UI.installFaber(uiCtx);
 
 // Initial structured-grid render (relocated from just after the plot setup, so
 // the let-bound renderers + modeAllowsPoly exist by the time it runs).
