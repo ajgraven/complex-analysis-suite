@@ -20,9 +20,19 @@
     return String(s).replace(/[&<>"]/g, c =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   }
+  // Subscripts index an object (Fₙ, c₀); superscripts are exponents (ζ², 1/cⁿ).
   function subDigits(n) {
     const map = '₀₁₂₃₄₅₆₇₈₉';
     return String(n).split('').map(d => map[+d] || d).join('');
+  }
+  function supDigits(n) {
+    const map = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+    return String(n).split('').map(d => map[+d] || d).join('');
+  }
+  // Format a complex value with the true minus sign (U+2212), matching the
+  // formula list (formatFaberPoly) so the card doesn't mix '-' and '−'.
+  function fmtC(z, digits) {
+    return (window.QD.Complex.format(z, { digits }) || '').replace(/-/g, '−');
   }
   function num(x, p) {
     if (typeof x !== 'number' || !isFinite(x)) return String(x);
@@ -93,7 +103,7 @@
 
     function leadingCoeffStr(c, n) {
       const lc = 1 / Math.pow(c, n);
-      return '1/c' + subDigits(n) + ' ≈ ' + num(lc, 5);
+      return '1/c' + supDigits(n) + ' ≈ ' + num(lc, 5);   // exponent → superscript
     }
 
     function render(N, mode, sn) {
@@ -103,7 +113,7 @@
       const parts = [];
       parts.push('<div class="geom-row"><span class="key">cap(K) = c:</span> ' + num(c, 6) + '</div>');
       parts.push('<div class="geom-row"><span class="key">c₀ (Laurent const):</span> ' +
-        esc(QD.Complex.format(c0, { digits: 5 })) + '</div>');
+        esc(fmtC(c0, 5)) + '</div>');
 
       // Polynomial display (formula list + expandable coefficient table for the focus order).
       if (showPolys.checked) {
@@ -121,8 +131,8 @@
         const Ff = coeffs[focus];
         let rows = '';
         for (let k = Ff.length - 1; k >= 0; k--) {
-          rows += '<tr><td>ζ' + (k === 0 ? '⁰' : subDigits(k)) + '</td><td>' +
-            esc(QD.Complex.format(Ff[k], { digits: 6 })) + '</td></tr>';
+          rows += '<tr><td>ζ' + supDigits(k) + '</td><td>' +    // ζ^k → superscript exponent
+            esc(fmtC(Ff[k], 6)) + '</td></tr>';
         }
         parts.push(
           '<details style="margin-top:6px;"><summary class="key" style="cursor:pointer;">' +

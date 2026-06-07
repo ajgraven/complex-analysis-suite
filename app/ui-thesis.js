@@ -25,7 +25,7 @@
   }
   function icon(status) {
     if (status === 'pass') return '<span class="ok">✓</span>';
-    return status === 'warn' ? '<span class="warn">⚠</span>' : '<span class="warn">✗</span>';
+    return status === 'warn' ? '<span class="warn">⚠</span>' : '<span class="err">✗</span>';
   }
 
   function installThesis(ctx) {

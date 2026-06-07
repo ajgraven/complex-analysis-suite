@@ -656,7 +656,7 @@ function applyModeVisuals() {
     if (inp) inp.value = '2';            // input default for next visit
   }
   // Hint elements: show only the one this mode names (if any).
-  for (const hintId of ['lqd-hint', 'lqd-singular-hint', 'pqd-hint', 'pqd-singular-hint', 'pqd-unbounded-hint', 'pqd-unbounded-singular-hint']) {
+  for (const hintId of ['lqd-hint', 'lqd-singular-hint', 'lqd-unbounded-hint', 'lqd-unbounded-singular-hint', 'pqd-hint', 'pqd-singular-hint', 'pqd-unbounded-hint', 'pqd-unbounded-singular-hint']) {
     const el = $('#' + hintId);
     if (el) el.style.display = (desc.hint === hintId) ? '' : 'none';
   }
@@ -680,7 +680,7 @@ function applyModeVisuals() {
 function modeSummary(mode) {
   const d = decomposeMode(mode);
   const weight = d.weight === 'classical' ? 'classical (unweighted)'
-    : d.weight === 'pqd' ? 'power-weighted (|w|^{2(α−1)})'
+    : d.weight === 'pqd' ? 'power-weighted (|w|^(2(α−1)))'
     : 'log-weighted (1/|w|²)';
   const extent = d.domain === 'bounded' ? 'bounded' : 'unbounded (reaches ∞)';
   const sing = d.singular ? ', with the origin inside Ω' : '';
@@ -942,13 +942,14 @@ function mountQolHelp() {
      quadrature data unique. The unbounded conformal radius c has its own control
      beside φ(z) in the Domain-type card.)`);
   H(headerOf('#c-card'),
-    `<b>Conformal radius c = φ'(∞).</b> Scales the Riemann map at infinity for
+    `<b>Conformal radius c = φ′(∞).</b> Scales the Riemann map at infinity for
      unbounded families; with w₀ it fixes the gauge of φ. Unbounded QDs form a
      one-parameter family in c — sweep the slider to explore it; past the
      critical c* the simply-connected QD ceases to exist (its boundary cusps,
      then self-overlaps). <b>Estimate max c</b> finds c* automatically (bracket +
      bisection on the solver's univalence + identity gate), then caps the slider
-     at c* and jumps to ≈0.99·c* — the largest clean domain.`);
+     at c* and jumps to it — the extremal domain (its boundary just cusps); nudge
+     c down slightly for a clean interior.`);
   H(headerOf('#solver-settings-card'),
     `<b>Solver settings.</b> The <i>Aggressiveness</i> preset
      (Quick / Standard / Thorough) balances Newton iterations, identity-check
@@ -978,7 +979,7 @@ function mountQolHelp() {
   H(document.querySelector('#sp-cusps summary'),
     `<b>Boundary singularities.</b> Cusps of ∂Ω, found asynchronously after each
      solve. A cusp sits where the Riemann map's derivative vanishes on the unit
-     circle, φ′(e^{iθ}) = 0; the order m of that zero fixes the local
+     circle, φ′(e<sup>iθ</sup>) = 0; the order m of that zero fixes the local
      <i>type</i> (p,q) = (m+1, m+2): m = 1 is the ordinary 3⁄2-power (2,3) cusp.
      A filled ● / magenta triangle marks an actual cusp; a hollow ○ marks an
      <i>incipient</i> one — a φ′-zero near but not yet on ∂𝔻, shown with its

@@ -178,11 +178,27 @@
       const url = await getBundleURL();
       const w = new Worker(url);
       w.addEventListener('error', (ev) => {
-        console.error('[primary-solver worker] error: '
-          + (ev.message || ev) + ' @ ' + (ev.filename || 'bundle') + ':' + (ev.lineno || '?'));
+        const detail = (ev.message || ev) + ' @ ' + (ev.filename || 'bundle') + ':' + (ev.lineno || '?');
+        console.error('[primary-solver worker] error: ' + detail);
+        // A worker-level error (bundle load/syntax error, crash, OOM) posts NO
+        // {error} message, so without this the in-flight solve() promise would
+        // never settle and the UI would spin "Solving…" forever. Reject it as a
+        // REAL error (not an abort, so the pipeline surfaces it) and respawn next.
+        if (_inflight) {
+          const job = _inflight; _inflight = null;
+          try { w.removeEventListener('message', job.onMessage); } catch (_) {}
+          job.reject(new Error('solver worker crashed: ' + detail));
+        }
+        _disposeWorker();
       });
       w.addEventListener('messageerror', (ev) => {
         console.error('[primary-solver worker] messageerror (postMessage clone failed):', ev);
+        if (_inflight) {
+          const job = _inflight; _inflight = null;
+          try { w.removeEventListener('message', job.onMessage); } catch (_) {}
+          job.reject(new Error('solver worker message error (structured-clone failed)'));
+        }
+        _disposeWorker();
       });
       _worker = w;
     })().catch((err) => {
@@ -289,8 +305,14 @@
       const url = await getBundleURL();
       const w = new Worker(url);
       w.addEventListener('error', (ev) => {
-        console.error('[primary-solver aux worker] error: '
-          + (ev.message || ev) + ' @ ' + (ev.filename || 'bundle') + ':' + (ev.lineno || '?'));
+        const detail = (ev.message || ev) + ' @ ' + (ev.filename || 'bundle') + ':' + (ev.lineno || '?');
+        console.error('[primary-solver aux worker] error: ' + detail);
+        if (_auxInflight) {
+          const job = _auxInflight; _auxInflight = null;
+          try { w.removeEventListener('message', job.onMessage); } catch (_) {}
+          job.reject(new Error('alt-search worker crashed: ' + detail));
+        }
+        _disposeAux();
       });
       _auxWorker = w;
     })().catch((err) => {
@@ -376,8 +398,14 @@
       const url = await getBundleURL();
       const w = new Worker(url);
       w.addEventListener('error', (ev) => {
-        console.error('[primary-solver live worker] error: '
-          + (ev.message || ev) + ' @ ' + (ev.filename || 'bundle') + ':' + (ev.lineno || '?'));
+        const detail = (ev.message || ev) + ' @ ' + (ev.filename || 'bundle') + ':' + (ev.lineno || '?');
+        console.error('[primary-solver live worker] error: ' + detail);
+        if (_liveInflight) {
+          const job = _liveInflight; _liveInflight = null;
+          try { w.removeEventListener('message', job.onMessage); } catch (_) {}
+          job.reject(new Error('live-solve worker crashed: ' + detail));
+        }
+        _disposeLive();
       });
       _liveWorker = w;
     })().catch((err) => {
