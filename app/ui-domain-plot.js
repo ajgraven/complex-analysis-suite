@@ -24,9 +24,10 @@
     const formatTick     = deps.formatTick;
     const sub            = deps.sub;
 
-    // Hover hit-test radius for the pole-proximity annotation in the readout
-    // (HANDOFF #33 / #35). Larger than the click hit-radius (9 px) so the
+    // Pole hit-test radii (CSS px). The hover-proximity annotation in the
+    // readout (HANDOFF #33 / #35) uses a larger radius than click-drag so the
     // cursor doesn't need to be pixel-perfect over the pole dot.
+    const POLE_CLICK_HIT_RADIUS_PX = 9;
     const POLE_HOVER_HIT_RADIUS_PX = 12;
 
 class DomainPlot {
@@ -59,7 +60,7 @@ class DomainPlot {
 
   // Returns the index of the pole dot under (x, y) in CSS pixels, or -1 if
   // none is within the hit-test radius.
-  _hitTestPole(x, y, radius = 9) {
+  _hitTestPole(x, y, radius = POLE_CLICK_HIT_RADIUS_PX) {
     if (!this.data || !this.data.poles) return -1;
     let bestI = -1, bestD2 = radius * radius;
     for (let i = 0; i < this.data.poles.length; i++) {

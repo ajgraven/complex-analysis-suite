@@ -228,18 +228,63 @@
     return btn;
   }
 
-  function _showToast(msg, anchorEl) {
+  // Transient toast. The second arg is either an anchor Element (positions the
+  // toast just below it — used by the copy buttons) OR an options object
+  // { anchor?, kind?: 'error', duration?: ms }. With no anchor the toast floats
+  // at the bottom-center of the viewport (used by QoL.toast for global notices).
+  function _showToast(msg, opts) {
+    opts = opts || {};
+    const isEl = opts.nodeType === 1;          // back-compat: bare element = anchor
+    const anchor = isEl ? opts : opts.anchor;
+    const kind = isEl ? null : opts.kind;
+    const duration = (isEl ? 0 : opts.duration) || 750;
     const t = document.createElement('div');
-    t.className = 'copy-toast';
+    t.className = 'copy-toast' + (kind === 'error' ? ' toast-error' : '');
     t.textContent = msg;
     document.body.appendChild(t);
-    const r = anchorEl.getBoundingClientRect();
-    t.style.left = (r.left + window.scrollX) + 'px';
-    t.style.top  = (r.bottom + 6 + window.scrollY) + 'px';
+    if (anchor && typeof anchor.getBoundingClientRect === 'function') {
+      const r = anchor.getBoundingClientRect();
+      t.style.left = (r.left + window.scrollX) + 'px';
+      t.style.top  = (r.bottom + 6 + window.scrollY) + 'px';
+    } else {
+      t.classList.add('toast-floating');
+    }
     setTimeout(() => {
       t.classList.add('fade');
       setTimeout(() => t.remove(), 350);
-    }, 750);
+    }, duration);
+  }
+
+  // Global last-resort error surface. Uncaught main-thread exceptions and
+  // unhandled promise rejections otherwise vanish silently into the console;
+  // this shows a brief toast so the user notices something went wrong (full
+  // detail still goes to the console). De-duped so an error storm can't spam the
+  // screen. The solve pipeline catches its own errors (ui-solve.js); this is the
+  // safety net for everything else (rendering, other tabs, async callbacks).
+  function _installGlobalErrorHandlers(win) {
+    // Guard addEventListener too: a minimal stub global (e.g. the qol.js load
+    // test's vm context) may set `window` without it — don't throw on load.
+    if (!win || typeof win.addEventListener !== 'function' || win.__qdErrHandlers) return;
+    win.__qdErrHandlers = true;
+    let lastKey = '', lastAt = 0;
+    function surface(label, detail) {
+      const key = label + '|' + detail, now = Date.now();
+      if (key === lastKey && now - lastAt < 4000) return;   // de-dupe a storm
+      lastKey = key; lastAt = now;
+      try { console.error('[qd] ' + label + (detail ? ': ' + detail : '')); } catch (e) {}
+      try { _showToast('⚠ ' + label + ' — see console for details', { kind: 'error', duration: 6000 }); } catch (e) {}
+    }
+    win.addEventListener('error', (ev) => {
+      // Ignore resource-load failures (img/script 404s carry no .error/.message
+      // and are usually non-fatal); surface only real script exceptions.
+      const msg = ev && (ev.message || (ev.error && ev.error.message));
+      if (msg) surface('Unexpected error', msg);
+    });
+    win.addEventListener('unhandledrejection', (ev) => {
+      const r = ev && ev.reason;
+      const msg = r && (r.message || (typeof r === 'string' ? r : ''));
+      surface('Unhandled error', msg || 'a background task failed');
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -316,6 +361,7 @@
   QoL.escapeHTML                = escapeHTML;
   QoL.attachHoverTooltip        = attachHoverTooltip;
   QoL.copyButton                = copyButton;
+  QoL.toast                     = function (msg, opts) { _showToast(msg, opts); };
   QoL.openShortcutsOverlay      = openShortcutsOverlay;
   QoL.closeShortcutsOverlay     = closeShortcutsOverlay;
   QoL.wireGlobalKeyboardShortcuts = wireGlobalKeyboardShortcuts;
@@ -327,6 +373,7 @@
     } else {
       wireGlobalKeyboardShortcuts();
     }
+    if (typeof window !== 'undefined') _installGlobalErrorHandlers(window);
   }
 
   if (typeof module !== 'undefined' && module.exports) module.exports = QoL;

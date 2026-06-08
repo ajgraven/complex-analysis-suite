@@ -100,6 +100,17 @@ const DISK_CLAMP_IN  = 0.9999;
 const Z0_MAX_RADIUS  = 1000;
 const DEFAULT_FD_EPS = 1e-7;
 
+// Boundary-sampling / univalence sample budgets (named for clarity; values
+// unchanged). UNIVALENCE_SAMPLES is the default ∂𝔻 resolution for the univalence
+// check; the adaptive sampler starts at BOUNDARY_BASE_SAMPLES and may add up to
+// BOUNDARY_MAX_EXTRA more; ORIGIN_RAYCAST_SAMPLES is the ∂Ω polygon resolution for
+// the origin-in-Ω ray cast; LIVE_SOLVE_SAMPLES is the reduced per-drag-frame budget.
+const UNIVALENCE_SAMPLES     = 500;
+const BOUNDARY_BASE_SAMPLES  = 500;
+const BOUNDARY_MAX_EXTRA     = 1500;
+const ORIGIN_RAYCAST_SAMPLES = 256;
+const LIVE_SOLVE_SAMPLES     = 96;
+
 // --------- Generic clone: must propagate every family-specific field ------
 function clonePhi(phi) {
   return {
@@ -668,7 +679,7 @@ function scaleHDataResidues(hData, s) {
 }
 
 // --------- Boundary sampling + univalence ---------------------------------
-function isBoundaryUnivalent(phi, samples = 500) {
+function isBoundaryUnivalent(phi, samples = UNIVALENCE_SAMPLES) {
   // Families with a continuous-arg sweep sampler (currently the powerQD
   // families, whose φ = (R#)^{1/α} needs αth-root branch tracking) get the
   // SAME boundary far more cheaply via the sweep than via N independent
@@ -818,7 +829,7 @@ function boundarySelfIntersects(pts) {
 // sampleBoundaryAdaptive used to re-evaluate ~500 φ-calls each render.
 // With the cache, only the first call per phi pays.
 const _boundaryCache = new WeakMap();    // phi → Map<budgetKey, samples>
-function sampleBoundaryAdaptive(phi, baseSamples = 500, maxExtra = 1500) {
+function sampleBoundaryAdaptive(phi, baseSamples = BOUNDARY_BASE_SAMPLES, maxExtra = BOUNDARY_MAX_EXTRA) {
   const key = baseSamples + 'x' + maxExtra;
   let inner = _boundaryCache.get(phi);
   if (inner) {
@@ -901,7 +912,7 @@ function refineBoundaryByDeviation(initialPts, evalMid, opts = {}) {
   return out.slice(0, out.length - 1);   // drop the closure duplicate
 }
 
-function _sampleBoundaryAdaptiveImpl(phi, baseSamples = 500, maxExtra = 1500) {
+function _sampleBoundaryAdaptiveImpl(phi, baseSamples = BOUNDARY_BASE_SAMPLES, maxExtra = BOUNDARY_MAX_EXTRA) {
   const N0 = baseSamples;
   const pts = [];
   for (let i = 0; i < N0; i++) {
@@ -1155,7 +1166,7 @@ function normFromPhi(phi) {
 // EXTERIOR of that loop, so 0 ∈ Ω ⟺ 0 lies OUTSIDE the loop — hence the
 // `phi.unbounded` inversion. (Self-contained ray-cast: QD.Schwarz.pointInPolygon
 // is not in the worker bundle.)
-function originInsideOmega(phi, N = 256) {
+function originInsideOmega(phi, N = ORIGIN_RAYCAST_SAMPLES) {
   if (!phi) return false;
   const pts = sampleBoundaryAdaptive(phi, N, Math.floor(N * 1.5)).map(p => p.w);
   const m = pts.length;
@@ -1337,7 +1348,7 @@ function _solveOnce(hData, options = {}) {
   const numRestarts       = options.numRestarts ?? 8;
   const numDiverseSeeds   = options.numDiverseSeeds   ?? Math.max(numRestarts, 12);
   const numDeflationSeeds = options.numDeflationSeeds ?? Math.max(numRestarts,  8);
-  const univalenceSamples = options.univalenceSamples ?? 500;
+  const univalenceSamples = options.univalenceSamples ?? UNIVALENCE_SAMPLES;
   const findAlternates    = options.findAlternates !== false;
   const newtonOpts        = options.newton ?? {};
   const contOpts          = options.continuation ?? {};
@@ -1534,7 +1545,7 @@ function searchAlternates(hData, norm, knownSolutions, options = {}) {
     numRestarts       = 16,
     seed              = 0xBEEF0001,
     newton            = {},
-    univalenceSamples = 500,
+    univalenceSamples = UNIVALENCE_SAMPLES,
     identityTol       = 1e-6,
     diverseFraction   = 0.5,
     deflateFromKnown  = true,
@@ -1639,7 +1650,7 @@ function liveSolveStep(hData, initPhi, opts = {}) {
     return { success: false };
   }
   const newtonOpts = opts.newton || {};
-  const numSamples = opts.numSamples || 96;
+  const numSamples = opts.numSamples || LIVE_SOLVE_SAMPLES;
   const family = _resolveFamily(initPhi);
   let res;
   try {
