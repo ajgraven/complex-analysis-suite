@@ -39,7 +39,7 @@
   // version:sync` recomputes it. CACHE_LABEL is yours to set per release
   // (cosmetic, for human-readable cache names + the HANDOFF narrative).
   const CACHE_LABEL = 'preimage-tree-overlay';
-  const CACHE_HASH  = '416c41a3a2';   // gen-cache-version.js --write rewrites this
+  const CACHE_HASH  = 'dce6100ee7';   // gen-cache-version.js --write rewrites this
   const CACHE_VERSION = CACHE_LABEL + '-' + CACHE_HASH;
 
   // Files that get concatenated into a Worker bundle by the runtime
@@ -175,8 +175,8 @@
   // cache fallback so offline reloads still get them).
   const CDN_ASSETS = [
     'https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.1/math.js',
-    'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css',
-    'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js',
+    'https://cdn.jsdelivr.net/npm/katex@0.16.47/dist/katex.min.css',
+    'https://cdn.jsdelivr.net/npm/katex@0.16.47/dist/katex.min.js',
   ];
 
   global.QD_ASSET_MANIFEST = {

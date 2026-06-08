@@ -28,7 +28,7 @@ to extend the app, see [CONTRIBUTING.md](CONTRIBUTING.md).
 flowchart LR
   subgraph CDN
     A1[math.js 12.4.1]
-    A2[KaTeX 0.16.11]
+    A2[KaTeX 0.16.47]
   end
   subgraph Math["Math primitives"]
     B1[complex.js]
