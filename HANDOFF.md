@@ -16,10 +16,17 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `416c41a3a2`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `dce6100ee7`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR):
+- **KaTeX security bump 0.16.11 → 0.16.47** (PR #46) — patches advisory
+  GHSA-cg87-wmx4-v546 (`\htmlData` does not validate attribute names; moderate, 0.16.0–0.16.20).
+  Bumped across all four surfaces that pin the version — `package.json` devDep (+ `package-lock.json`),
+  `asset-manifest.js` `CDN_ASSETS`, and the `index.html` `<link>`/`<script>` CDN tags with
+  **recomputed SRI hashes** (cross-checked: jsDelivr-served bytes == npm-published `dist/`) — plus the
+  ARCHITECTURE diagram label. `npm audit` is clean again; the node-test KaTeX parse-smoke (every
+  family) still passes on 0.16.47, and the math renders in-browser.
 - **Tech-debt Phase 1** (PR #45) — per-file test-assertion floors (`node-test.js`), a shared
   `QD.Format.{subscript,superscript}` (`poly-helpers.js`) replacing 9 drifted digit-maps, deploy
   `version:sync` docs, `engines>=20`, a non-blocking `npm audit` CI step, and removal of the parked

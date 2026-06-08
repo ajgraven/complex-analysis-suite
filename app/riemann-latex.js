@@ -7,7 +7,7 @@
 // NO DOM dependency. node-test.js renders `symbolic` and `numeric` through
 // KaTeX with throwOnError:true for every solved family, which guards the class
 // of bug where a formula silently renders as a KaTeX error node (e.g. the
-// `\\[2pt]` row separator that KaTeX 0.16.11 rejects).
+// `\\[2pt]` row separator that KaTeX rejects).
 //
 //   build(phi) → {
 //     symbolic: <LaTeX>,                 // the (1) symbolic identity
