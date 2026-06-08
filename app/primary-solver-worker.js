@@ -127,7 +127,15 @@
       // deploy (see asset-manifest.js CACHE_VERSION).
       const _ver = (global.QD_ASSET_MANIFEST && global.QD_ASSET_MANIFEST.CACHE_VERSION) || '0';
       for (const f of SOLVER_SRC_FILES) {
-        const resp = await fetch(f + '?v=' + encodeURIComponent(_ver));
+        let resp;
+        try {
+          resp = await fetch(f + '?v=' + encodeURIComponent(_ver));
+        } catch (e) {
+          // Name the file on a network-level rejection too — a bare fetch reject
+          // (offline / DNS / aborted) otherwise propagates without saying WHICH
+          // source file failed, making the worker-bundle failure hard to diagnose.
+          throw new Error('primary-solver-worker: network error fetching ' + f + ': ' + ((e && e.message) || e));
+        }
         if (!resp.ok) throw new Error('primary-solver-worker: failed to fetch ' + f + ' (' + resp.status + ')');
         parts.push('/*===== ' + f + ' =====*/\n');
         parts.push(await resp.text());

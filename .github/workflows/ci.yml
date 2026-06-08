@@ -27,6 +27,20 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      # Fail the build if a declared test dependency can't be loaded (dropped
+      # devDep / broken install). Without this the suite would silently SKIP the
+      # mathjs/jsdom/katex-gated sections and still go green (T3).
+      - name: Verify test dependencies present
+        run: node -e "require('mathjs'); require('jsdom'); require('katex'); console.log('test deps OK')"
+      # Guard the experimental/advanced-features (Growth / DLA) isolation: that
+      # research code must never reach main via an accidental merge (D6).
+      - name: Guard experimental isolation
+        run: |
+          if [ -d app/growth ]; then
+            echo "ERROR: app/growth/ (Growth/DLA experimental feature) must not exist on main."
+            echo "It is isolated on origin/experimental/advanced-features — do not merge it without an explicit ask."
+            exit 1
+          fi
       # Fail fast if an app/ asset changed without refreshing the content-hash
       # cache version (run `npm run version:sync` to fix). Guards against stale
       # service-worker caches / stale ?v= page scripts shipping to users.

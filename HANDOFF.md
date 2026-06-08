@@ -16,10 +16,18 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `dce6100ee7`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `bc5a7cf2c5`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR):
+- **Tech-debt Phase 2** (PR #48) — reliability pass from the tech-debt audit: a global
+  `window.onerror` / `unhandledrejection` handler that surfaces to a toast (`qol.js`); an SW
+  "new version available" refresh banner (`index.html` + the existing `sw.js`); a build/cache
+  version label in the sidebar footer; a CI step that FAILS (not skips) when a test devDep
+  (mathjs/jsdom/katex) is missing — and `mathjs` added as a devDep so `direct.test.js` runs in CI;
+  a CI guard blocking the experimental Growth/DLA paths (`app/growth/`) from reaching `main`;
+  worker-bundle network-error context (names the failing source file); named solver sample-count
+  constants (`UNIVALENCE_SAMPLES`, …); and `TODO.md` tracking of two open solver math-gaps.
 - **KaTeX security bump 0.16.11 → 0.16.47** (PR #46) — patches advisory
   GHSA-cg87-wmx4-v546 (`\htmlData` does not validate attribute names; moderate, 0.16.0–0.16.20).
   Bumped across all four surfaces that pin the version — `package.json` devDep (+ `package-lock.json`),

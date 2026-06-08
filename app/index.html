@@ -510,6 +510,12 @@
          into the Schwarz dynamics tab as a "plane | sphere" view toggle.
          Sphere-specific UI is mounted via QD.SphereView on first switch to
          sphere mode; see app/sphere/sphere-ui.js. -->
+
+    <!-- Build / cache version (I5): populated from QD_ASSET_MANIFEST.CACHE_VERSION
+         by the inline script near the end of <body>. Helps answer "which build
+         are you seeing?" without digging through DevTools. -->
+    <div id="app-version" class="hint" title="Build / cache version"
+         style="margin-top:14px; padding-top:8px; border-top:1px solid #e3e5ea; font-size:10px; text-align:center;"></div>
   </aside>
 
   <!-- ============== RIGHT: PLOT ============== -->
@@ -624,6 +630,14 @@
 })();
 </script>
 
+<!-- Service-worker "new version available" banner (I2). Hidden until an updated
+     SW finishes installing while a previous version is in control. -->
+<div id="sw-update-banner" hidden role="status" aria-live="polite">
+  <span>A new version is available.</span>
+  <button type="button" id="sw-update-refresh">Refresh</button>
+  <button type="button" id="sw-update-dismiss" aria-label="Dismiss">×</button>
+</div>
+
 <!-- PWA: register the service worker for offline support (P3.3). Skipped on
      file:// origins (service workers require http/https) — opening the app
      locally without a server is still fully functional, just not cached. -->
@@ -632,11 +646,47 @@
   'use strict';
   if (!('serviceWorker' in navigator)) return;
   if (location.protocol === 'file:') return;
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch((err) => {
+
+  // Show the "new version available" banner and wire its buttons (I2). The SW is
+  // skipWaiting + clients.claim, so the new version activates on its own; the
+  // banner just prompts a reload to swap the already-loaded (old) page assets.
+  function showUpdateBanner() {
+    var banner = document.getElementById('sw-update-banner');
+    if (!banner) return;
+    banner.hidden = false;
+    var refresh = document.getElementById('sw-update-refresh');
+    var dismiss = document.getElementById('sw-update-dismiss');
+    if (refresh) refresh.addEventListener('click', function () { location.reload(); });
+    if (dismiss) dismiss.addEventListener('click', function () { banner.hidden = true; });
+  }
+
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      reg.addEventListener('updatefound', function () {
+        var nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', function () {
+          // 'installed' + an existing controller ⇒ this is an UPDATE (not the
+          // first install) and the fresh assets are cached and ready.
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateBanner();
+          }
+        });
+      });
+    }).catch(function (err) {
       console.warn('[pwa] service worker registration failed:', err);
     });
   });
+})();
+</script>
+
+<!-- Populate the build/cache version label (I5). asset-manifest.js is the first
+     static <script>, so QD_ASSET_MANIFEST is already available here. -->
+<script>
+(function () {
+  var el = document.getElementById('app-version');
+  var m = window.QD_ASSET_MANIFEST;
+  if (el && m && m.CACHE_VERSION) el.textContent = 'v' + m.CACHE_VERSION;
 })();
 </script>
 </body>

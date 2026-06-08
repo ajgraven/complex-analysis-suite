@@ -68,6 +68,11 @@ function scheduleQuickSolve() {
 // cap the per-frame sampling to keep each live frame snappy.
 const LIVE_SAMPLES = 96;
 
+// Idle-callback deadline (ms) for the deferred heavy analyses (symmetry /
+// critical-set / geometry classification, and boundary observables): run when
+// the main thread next goes idle, but no later than this after scheduling.
+const IDLE_ANALYSIS_TIMEOUT_MS = 250;
+
 // Token bumped on every live (drag) frame. A worker result whose token is no
 // longer current — a newer frame superseded it — is dropped so a late paint
 // can't clobber newer state. Mirrors _solveAndRenderToken for the full solve.
@@ -506,7 +511,7 @@ function scheduleSymmetry(sol, token) {
     if (state.showPhenomena && typeof plot !== 'undefined' && plot) plot.render();
   };
   const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 0));
-  idle(run, { timeout: 250 });
+  idle(run, { timeout: IDLE_ANALYSIS_TIMEOUT_MS });
 }
 
 // Throttled live refresh during a pole/slider drag (called per quick-solve
@@ -735,7 +740,7 @@ function scheduleObservables(sol, hData, token, opts) {
     if (typeof plot !== 'undefined' && plot) plot.render();
   };
   const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 0));
-  idle(run, { timeout: 250 });
+  idle(run, { timeout: IDLE_ANALYSIS_TIMEOUT_MS });
 }
 
 // Render the "Geometry & accuracy" card from a scheduleObservables result.

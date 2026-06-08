@@ -410,6 +410,55 @@ button.attention {
   transition: opacity 0.3s;
 }
 .copy-toast.fade { opacity: 0; }
+/* Floating variant (no anchor element): fixed near the bottom-center of the
+   viewport. Used by QoL.toast() for global error notifications. */
+.copy-toast.toast-floating {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  max-width: min(90vw, 460px);
+  padding: 7px 14px;
+  font-size: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+/* Error styling — red instead of the default green. */
+.copy-toast.toast-error { background: rgba(150, 40, 40, 0.95); }
+
+/* Service-worker "new version available" banner (I2): fixed top-center. */
+#sw-update-banner {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1300;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: #fff;
+  background: rgba(40, 70, 120, 0.96);
+  border-radius: 6px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+/* Explicit, because the flex display above would otherwise override [hidden]. */
+#sw-update-banner[hidden] { display: none; }
+#sw-update-banner button {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 10px;
+}
+#sw-update-refresh { background: #fff; color: #234; font-weight: 600; }
+#sw-update-dismiss {
+  background: transparent;
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+}
 
 .shortcuts-overlay {
   position: fixed;

@@ -168,6 +168,23 @@ These are mathematical gaps surfaced by usage. The UI exposes the controls
 honestly (panel visible, inputs editable) but the solver throws a clear
 "not yet implemented" error rather than silently producing a wrong φ.
 
+- [ ] **UQDPS-origin-pole — Higher-order pole at 0 for singular power-QDs**
+  `app/solver-uqd-pqd-singular.js` (z₀-closure block, ~L329). The current
+  `(●_{z₀})` constraint `r(z₀) = 0` (Prop 4.6.3) handles only `h` with **no**
+  pole at the origin. The general case — `h` with a pole of order `m₀` at 0 ⇒
+  `r` has an order-(m₀-related) root/pole at `z₀` — is not yet derived/handled.
+  Surfaced as an in-code TODO; not a bug (the unsupported config is refused).
+
+- [ ] **PQD-branch-tracking — Continuous αth-root branch for α ≥ 3 power-QDs**
+  `app/solver-uqd-pqd*.js` boundary sampler + identity verifier (test note at
+  `app/test/solvers.test.js` ~L708). `phiTaylorAt_PQD` uses `Taylor.log`'s
+  principal branch independently at each boundary sample, which discontinuously
+  flips sheets when `R#(z)` winds around 0 on ∂𝔻 (typical for non-trivial
+  α ≥ 3 PQDs). Newton still converges, but the boundary samples land on
+  inconsistent sheets, so identity verification can fail. Needs continuous
+  branch-tracking of the αth root along ∂𝔻. Only α = 2 single-pole presets are
+  currently tested.
+
 - [x] **L-poly-h — Polynomial-h support for unbounded LQDs (non-singular)**  ✅ shipped
   Andrew Graven derived the correct formula: apply `Φ_φ⁻¹` not to `h(w)`
   but to `w·h(w)`. The decomposition collapses the finite-pole part of
