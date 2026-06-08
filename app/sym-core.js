@@ -893,6 +893,220 @@
     return B;
   }
 
+  // Normalize an order argument to an order OBJECT (with .cmp). Mirrors _orderCmp
+  // but returns the object (so leadingMono/cmp/varOrder are all available).
+  function _ord(order) { return (order && order.cmp) ? order : monomialOrder(order || 'grevlex'); }
+
+  // ---------------------------------------------------------------------------
+  // Zero-dimensional toolkit — once a Gröbner basis G is in hand, these read off
+  // the geometry of the variety: whether it is finite (zero-dimensional), the
+  // standard monomials (a basis of the quotient ring k[x]/I), and the quotient
+  // dimension = the number of solutions counted with multiplicity. The QD coefficient
+  // system is zero-dimensional once the quadrature data is fixed, so this is the gate
+  // for FGLM and the shape-position solver below.
+  // ---------------------------------------------------------------------------
+  const ZERO_DIM_MAX = 4096;   // cap on the enumerated quotient dimension
+
+  function leadingMonomials(G, order) { const o = _ord(order); return G.filter((g) => !g.isZero()).map((g) => g.leadingMono(o)); }
+  function _ambientVars(G, vars) {
+    if (vars) return vars.slice();
+    const s = new Set(); for (const g of G) for (const v of g.vars()) s.add(v); return [...s].sort();
+  }
+  // Cheap zero-dimensionality test: the ideal is zero-dimensional iff, for every
+  // ambient variable, some leading monomial is a pure power of that variable.
+  // (A unit leading monomial '1' means I = (1) — the empty variety, also zero-dim.)
+  function isZeroDimensional(G, order, vars) {
+    const lms = leadingMonomials(G, order);
+    if (lms.some((lm) => lm.size === 0)) return true;
+    const V = _ambientVars(G, vars);
+    return V.every((v) => lms.some((lm) => lm.size === 1 && lm.has(v)));
+  }
+  // Standard monomials: the monomials divisible by no leading monomial of G — a
+  // k-basis of k[x]/I. Returns the list (mono Maps) for a zero-dim ideal, [] for
+  // I=(1), or null if the ideal is positive-dimensional. opts.maxDim caps the size.
+  function standardMonomials(G, order, vars, opts) {
+    opts = opts || {};
+    const o = _ord(order);
+    const lms = leadingMonomials(G, order);
+    if (lms.some((lm) => lm.size === 0)) return [];          // I = (1)
+    const V = _ambientVars(G, vars);
+    const bound = {};
+    for (const v of V) {
+      let e = Infinity;
+      for (const lm of lms) if (lm.size === 1 && lm.has(v)) e = Math.min(e, lm.get(v));
+      if (e === Infinity) return null;                       // not zero-dim along v
+      bound[v] = e;
+    }
+    const maxDim = opts.maxDim != null ? opts.maxDim : ZERO_DIM_MAX;
+    const dims = V.map((v) => bound[v]);
+    const idx = V.map(() => 0);
+    const divBySome = (m) => lms.some((lm) => monoDivide(m, lm) !== null);
+    const out = [];
+    let guard = 0;
+    for (;;) {
+      const m = new Map();
+      for (let k = 0; k < V.length; k++) if (idx[k] > 0) m.set(V[k], idx[k]);
+      if (!divBySome(m)) {
+        out.push(m);
+        if (out.length > maxDim) throw new Error('standardMonomials: quotient dimension exceeds the cap (' + maxDim + '); use CAS export.');
+      }
+      let k = 0; while (k < V.length) { idx[k]++; if (idx[k] < dims[k]) break; idx[k] = 0; k++; }
+      if (k === V.length) break;
+      if (++guard > 1e7) throw new Error('standardMonomials: enumeration guard tripped');
+    }
+    // sort by the order (ascending) for a stable, meaningful basis listing
+    out.sort((a, b) => o.cmp(a, b));
+    return out;
+  }
+  // Quotient dimension = #standard monomials = #solutions with multiplicity (∞ if
+  // positive-dimensional).
+  function quotientDimension(G, order, vars) {
+    const s = standardMonomials(G, order, vars);
+    return s === null ? Infinity : s.length;
+  }
+
+  // ---------------------------------------------------------------------------
+  // FGLM — convert a Gröbner basis G1 (order1, typically the fast grevlex) into the
+  // Gröbner basis under order2 (typically lex, for elimination / solving) of the
+  // SAME zero-dimensional ideal, by linear algebra in the quotient ring. This is the
+  // standard CAS pipeline: compute a cheap grevlex basis, then FGLM to lex, instead
+  // of running Buchberger directly under the slow lex order. Throws if not zero-dim.
+  // ---------------------------------------------------------------------------
+  function _vecZero(n) { const a = new Array(n); for (let i = 0; i < n; i++) a[i] = Gaussian.fromInt(0); return a; }
+
+  function fglm(G1, order1, order2, vars) {
+    const o1 = _ord(order1), o2 = _ord(order2);
+    const B = standardMonomials(G1, o1, vars);
+    if (B === null) throw new Error('fglm: the ideal is not zero-dimensional');
+    const D = B.length;
+    const colOf = new Map(); B.forEach((m, i) => colOf.set(monoKey(m), i));
+    const V = _ambientVars(G1, vars);
+    // coordinate vector of NF(monomial) in the standard-monomial basis B
+    function nfVec(monoMap) {
+      const t = new MPoly(); t._addTerm(new Map(monoMap), Gaussian.fromInt(1));
+      const r = normalForm(t, G1, o1);
+      const v = _vecZero(D);
+      for (const term of r.terms.values()) {
+        const c = colOf.get(monoKey(term.mono));
+        if (c == null) throw new Error('fglm: normal form left the standard-monomial span (G1 is not a Gröbner basis?)');
+        v[c] = term.coeff;
+      }
+      return v;
+    }
+    const rows = [];        // echelon { vec, pivot, comb:Map(acceptedIndex→Gaussian) }; invariant vec = comb·accepted
+    const accepted = [];    // standard monomials under order2, in increasing-order2 acceptance order
+    function reduce(v) {
+      const w = v.slice(); const comb = new Map();
+      for (const row of rows) {
+        const p = row.pivot; if (w[p].isZero()) continue;
+        const f = w[p].div(row.vec[p]);
+        for (let i = 0; i < D; i++) w[i] = w[i].sub(f.mul(row.vec[i]));
+        for (const [k, c] of row.comb) comb.set(k, (comb.get(k) || Gaussian.fromInt(0)).add(f.mul(c)));
+      }
+      let piv = -1; for (let i = 0; i < D; i++) if (!w[i].isZero()) { piv = i; break; }
+      return { w, comb, piv };
+    }
+    const G2 = [], G2lm = [];
+    const divByG2 = (m) => G2lm.some((lm) => monoDivide(m, lm) !== null);
+    const processed = new Set();
+    let cand = [new Map()];   // start with the monomial 1
+    let guard = 0;
+    while (cand.length) {
+      let bi = 0; for (let k = 1; k < cand.length; k++) if (o2.cmp(cand[k], cand[bi]) < 0) bi = k;
+      const m = cand.splice(bi, 1)[0]; const mk = monoKey(m);
+      if (processed.has(mk)) continue; processed.add(mk);
+      if (divByG2(m)) continue;
+      const v = nfVec(m);
+      const { w, comb, piv } = reduce(v);
+      if (piv === -1) {                          // dependent → new G2 generator
+        let poly = new MPoly(); poly._addTerm(new Map(m), Gaussian.fromInt(1));
+        for (const [j, c] of comb) { const t = new MPoly(); t._addTerm(new Map(accepted[j]), c); poly = poly.sub(t); }
+        G2.push(poly); G2lm.push(m);
+      } else {                                   // independent → new standard monomial
+        const ai = accepted.length, pivVal = w[piv];
+        const ncomb = new Map();
+        for (const [k, c] of comb) ncomb.set(k, c.neg().div(pivVal));
+        ncomb.set(ai, Gaussian.fromInt(1).div(pivVal));
+        accepted.push(m);
+        rows.push({ vec: w.map((x) => x.div(pivVal)), pivot: piv, comb: ncomb });
+        for (const x of V) { const c = new Map(m); c.set(x, (c.get(x) || 0) + 1); cand.push(c); }
+      }
+      if (++guard > 1e6) throw new Error('fglm: guard tripped');
+    }
+    return reduceGroebner(G2, o2);
+  }
+
+  // ---------------------------------------------------------------------------
+  // solveZeroDim — numeric solutions of a zero-dimensional system via the SHAPE
+  // LEMMA: compute a grevlex GB, FGLM to a lex basis with the chosen solve-variable
+  // ranked lowest; if the basis is in shape position (one univariate generator in the
+  // solve variable, every other variable a polynomial in it), solve the univariate
+  // numerically (injected root finder — the app passes QD.FaberAnalysis.polynomialRoots)
+  // and back-substitute. Returns { ok, solutions:[{var:{re,im}}], … } or { ok:false,
+  // reason } (not zero-dim / not shape position / no convergence → use the CAS bridge).
+  // input: an array of MPolys (a system) or { G, order } (a precomputed GB).
+  // ---------------------------------------------------------------------------
+  function solveZeroDim(input, opts) {
+    opts = opts || {};
+    let G1, o1, vars;
+    if (Array.isArray(input)) {
+      vars = opts.vars || _ambientVars(input);
+      o1 = _ord(opts.order1 || monomialOrder('grevlex', vars));
+      try { G1 = buchberger(input, o1, opts); }
+      catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    } else { G1 = input.G; o1 = _ord(input.order); vars = opts.vars || _ambientVars(G1); }
+
+    if (!isZeroDimensional(G1, o1, vars)) {
+      return { ok: false, reason: 'the system is not zero-dimensional (infinitely many solutions / a positive-dimensional component)' };
+    }
+    const solveVar = opts.solveVar || vars[vars.length - 1];
+    const lexVars = vars.filter((v) => v !== solveVar).concat([solveVar]);   // solveVar lowest
+    const lex = monomialOrder('lex', lexVars);
+    let Glex;
+    try { Glex = fglm(G1, o1, lex, vars); }
+    catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+
+    // shape position: one generator univariate in solveVar; each other u is u = h(solveVar)
+    const uni = Glex.filter((g) => { const vs = g.vars(); return vs.has(solveVar) && [...vs].every((x) => x === solveVar); });
+    if (uni.length !== 1) return { ok: false, reason: 'lex basis is not in shape position (no single univariate generator) — use the CAS bridge', basis: Glex };
+    const f = uni[0];
+    const exprs = {};
+    for (const u of vars) {
+      if (u === solveVar) continue;
+      const gen = Glex.find((g) => { const vs = g.vars(); return vs.has(u) && [...vs].every((x) => x === u || x === solveVar) && g.degreeIn(u) === 1; });
+      if (!gen) return { ok: false, reason: 'lex basis not in shape position for ' + u + ' — use the CAS bridge', basis: Glex };
+      const cs = gen.coeffsIn(u);                 // u·c1 + c0(solveVar) = 0
+      if (cs[1].vars().size !== 0) return { ok: false, reason: 'lex basis not in shape position for ' + u + ' (leading coeff not constant)', basis: Glex };
+      exprs[u] = { c1: cs[1], c0: cs[0] };
+    }
+    const rootFinder = opts.rootFinder || _defaultRootFinder();
+    if (!rootFinder) return { ok: false, reason: 'no root finder available (pass opts.rootFinder)', basis: Glex };
+    const fc = f.coeffsIn(solveVar).map((c) => c.evalComplex({}));   // ascending {re,im}
+    const res = rootFinder(fc) || {};
+    const roots = res.roots || [];
+    if (res.converged === false && !opts.allowUnconverged) {
+      return { ok: false, reason: 'univariate root-finding did not converge (degree ' + f.degreeIn(solveVar) + ')', basis: Glex };
+    }
+    const c1c = {};
+    for (const u of vars) if (u !== solveVar) c1c[u] = exprs[u].c1.evalComplex({});
+    const solutions = roots.map((r) => {
+      const sol = {}; sol[solveVar] = { re: r.re, im: r.im };
+      for (const u of vars) {
+        if (u === solveVar) continue;
+        const c0 = exprs[u].c0.evalComplex({ [solveVar]: r });
+        sol[u] = cdiv({ re: -c0.re, im: -c0.im }, c1c[u]);     // u = −c0/c1
+      }
+      return sol;
+    });
+    return { ok: true, solutions, basis: Glex, dimension: quotientDimension(G1, o1, vars), univariateDegree: f.degreeIn(solveVar) };
+  }
+  function _defaultRootFinder() {
+    const G = (typeof window !== 'undefined' && window.QD) || (typeof global !== 'undefined' && global.QD)
+      || (typeof QD !== 'undefined' && QD) || null;
+    const FA = G && G.FaberAnalysis;
+    return (FA && FA.polynomialRoots) ? ((coeffsAsc) => FA.polynomialRoots(coeffsAsc)) : null;
+  }
+
   // Saturation ⟨polys⟩ : f^∞ via the Rabinowitsch trick: adjoin a fresh variable w
   // and the relation 1 − w·f, compute a Gröbner basis under an ELIMINATION order
   // (w in the top block), then drop every generator that still mentions w. This
@@ -1157,6 +1371,7 @@
     monoKey, monoCmp,
     mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, reduceGroebner, saturate,
+    leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, solveZeroDim,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
   };

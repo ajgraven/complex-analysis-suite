@@ -8,6 +8,7 @@
 // =============================================================================
 require('./bootstrap');
 loadInCtx('sym-core.js');
+loadInCtx('faber-analysis.js');   // Durand–Kerner finder for store.solve
 loadInCtx('qd-equations.js');
 loadInCtx('qd-constraints.js');
 loadInCtx('algebra/algebra-store.js');
@@ -220,6 +221,34 @@ module.exports = async function run() {
     const capped = st.groebner([gauge.id, loc.id], { maxBasis: 1 });
     ok('groebner: a cost-cap blow-up comes back as {ok:false, reason} (no throw)',
        capped.ok === false && /export|cap|basis|step/i.test(capped.reason));
+  }
+
+  // ---- dimension / numeric solve (zero-dim toolkit through the store) ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system);
+    const dim = st.dimension();
+    ok('dimension: reports a well-formed result over the seeded system',
+       dim.ok === true && typeof dim.zeroDim === 'boolean' && dim.numVars > 0);
+    // solve() must always return a well-formed result: either solutions that
+    // satisfy every equality, or a clear reason (not zero-dim / not shape position).
+    const res = st.solve();
+    ok('solve: returns a well-formed result (ok boolean; no throw)', typeof res.ok === 'boolean');
+    if (res.ok) {
+      const polys = st.list().filter((n) => n.rel === '=').map((n) => n.poly);
+      ok('solve: every returned solution satisfies all equality nodes',
+         res.solutions.length > 0 && res.solutions.every((s) =>
+           polys.every((p) => { const v = p.evalComplex(s); return Math.hypot(v.re, v.im) < 1e-5; })));
+    } else {
+      ok('solve: a non-solvable system reports a clear reason', typeof res.reason === 'string' && res.reason.length > 0);
+    }
+    // a guaranteed-zero-dimensional, shape-position handcrafted system solves end to end
+    const S = QD.Sym; const mv = (n) => S.mpolyVar(n), mi = (k) => S.mpolyInt(k);
+    const sysSolve = S.solveZeroDim([mv('x').pow(2).sub(mi(1)), mv('y').sub(mv('x'))],
+      { vars: ['x', 'y'], solveVar: 'x', rootFinder: (c) => QD.FaberAnalysis.polynomialRoots(c) });
+    ok('solve (via Sym): handcrafted ⟨x²−1, y−x⟩ → 2 solutions (±1, ±1)',
+       sysSolve.ok && sysSolve.solutions.length === 2 &&
+       sysSolve.solutions.every((s) => Math.abs(Math.abs(s.x.re) - 1) < 1e-7 && Math.abs(s.y.re - s.x.re) < 1e-7));
   }
 
   // ---- export shape ----

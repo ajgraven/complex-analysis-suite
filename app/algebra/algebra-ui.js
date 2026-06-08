@@ -108,6 +108,9 @@
         '    <select id="alg-gb-order"><option value="grevlex">grevlex</option><option value="grlex">grlex</option><option value="lex">lex</option></select></label>' +
         '  <input id="alg-gb-elim" class="small" type="text" placeholder="eliminate vars, e.g. z1,zb1" style="width:150px;" ' +
         '    title="Comma-separated RAW variable names to eliminate (uses a fast block elimination order; leave blank for a plain reduced basis)."></div>' +
+        '<div class="row" style="margin-top:4px; gap:4px;">' +
+        '  <button id="alg-dimension" class="small" type="button" data-str-title="tooltips.dimension">Dimension / count</button>' +
+        '  <button id="alg-solve" class="small" type="button" data-str-title="tooltips.solveNumeric">Solve (numeric)</button></div>' +
         '<div class="key" style="margin-top:6px;" title="Append a boundary-univalence condition as new node(s) — hover each button for its meaning">Add univalence constraint</div>' +
         '<div id="alg-palette" class="row" style="flex-wrap:wrap; gap:4px;"></div>' +
         '<div id="alg-elim" class="card-sub hidden" style="margin-top:8px;">' +
@@ -149,6 +152,8 @@
       $('#alg-eliminate').addEventListener('click', doEliminate);
       $('#alg-groebner').addEventListener('click', () => doGroebner(null));
       $('#alg-groebner-sel').addEventListener('click', () => doGroebner(canvas ? canvas.getSelection() : []));
+      $('#alg-dimension').addEventListener('click', doDimension);
+      $('#alg-solve').addEventListener('click', doSolve);
       $('#alg-gauge-elim').addEventListener('click', () => {
         if (!store.size) { if (!seedFromCurrent()) return; }
         const r = store.eliminateWithGauge();
@@ -214,6 +219,28 @@
       toast('Gröbner basis: ' + r.created.length + ' generator(s)' +
         (elim.length ? ' eliminating ' + elim.join(', ') : ' (' + order + ')') +
         (r.skipped.length ? '; skipped ' + r.skipped.length + ' non-equality' : ''));
+    }
+
+    // Report the dimension / solution count of the current equality system.
+    function doDimension() {
+      if (!store.size) { if (!seedFromCurrent()) return; }
+      const r = store.dimension();
+      if (!r.ok) { toast(r.reason || 'dimension unavailable', { kind: 'error' }); return; }
+      if (r.zeroDim) toast('Zero-dimensional: ' + r.dimension + ' solution(s) (with multiplicity), ' + r.numVars + ' variables.');
+      else toast('Positive-dimensional: infinitely many solutions (' + r.numVars + ' variables) — fix more data or add constraints.');
+    }
+    // Solve the current equality system numerically (shape-lemma path).
+    function doSolve() {
+      if (!store.size) { if (!seedFromCurrent()) return; }
+      const r = store.solve();
+      if (!r.ok) { toast('No numeric solve: ' + (r.reason || 'unavailable'), { kind: 'error' }); return; }
+      toast('Solved: ' + r.solutions.length + ' solution(s) (dimension ' + r.dimension + '). See console for coordinates.');
+      try {
+        console.table(r.solutions.map((s) => {
+          const row = {}; Object.keys(s).forEach((k) => { row[k] = s[k].re.toFixed(6) + (s[k].im >= 0 ? '+' : '−') + Math.abs(s[k].im).toFixed(6) + 'i'; });
+          return row;
+        }));
+      } catch (e) { /* console.table unavailable — ignore */ }
     }
 
     // crude plain-text rendering of a variable name for <option>/toasts

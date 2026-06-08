@@ -137,7 +137,8 @@ visualizations, complementary to the headless runner.
     │                                  complement + a Durand–Kerner complex root-finder
     ├── sym-core.js                    QD.Sym: exact symbolic algebra (Rational/Gaussian/
     │                                  MPoly/RatFn/FRatFn + power series, Lagrange reversion;
-    │                                  resultant/discriminant + Gröbner basis over ℚ(i))
+    │                                  resultant/discriminant + Gröbner basis over ℚ(i):
+    │                                  Buchberger/FGLM/solveZeroDim)
     ├── qd-equations.js                QD.QDEquations: symbolic coefficient system for a
     │                                  classical bounded QD (conjugate + real/imag reps)
     ├── qd-constraints.js              QD.QDConstraints: univalence/geometric constraints
@@ -164,7 +165,7 @@ visualizations, complementary to the headless runner.
     │   ├── algebra-canvas.js          QD.AlgebraCanvas: SVG + KaTeX DAG renderer
     │                                   (collapsible cards, reorder, copy-LaTeX, hovertext)
     │   └── algebra-ui.js              QD_UI.installAlgebra: tab, palette, eliminate,
-    │                                   Gröbner basis, export
+    │                                   Gröbner basis, dimension/solve, export
     │
     ├── direct/
     │   ├── direct-common.js           Direct-problem kernels (polynomial / rational /
@@ -452,9 +453,12 @@ view is active.
   injectivity, geometric border loci), then select two equation nodes + a shared variable
   and **eliminate** it by an exact Sylvester **resultant** — a derived equation appears one
   column over, with edges. For several equations / several shared variables at once, take a
-  **Gröbner basis** (pure-JS Buchberger over ℚ(i); pick the monomial order, or give an
-  *eliminate* list for a lex elimination order) — each basis generator becomes a derived
-  node. Cards are **collapsible** (collapsed by default — a one-line
+  **Gröbner basis** (pure-JS Buchberger over ℚ(i) with the Gebauer–Möller criteria +
+  sugar selection; pick the monomial order, or give an *eliminate* list for a fast block
+  elimination order) — each basis generator becomes a derived node. **Dimension / count**
+  reports whether the system has finitely many solutions and how many; **Solve (numeric)**
+  runs the shape-lemma path (FGLM to lex → Durand–Kerner → back-substitution). Cards are
+  **collapsible** (collapsed by default — a one-line
   preview; expand for the full form), **reorderable** within a column (▲/▼), copy as
   **LaTeX** individually (⧉), and carry **hovertext** (variable count, real-equation
   contribution, per-variable order, total degree, provenance); conjugate equations are

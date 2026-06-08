@@ -311,6 +311,54 @@
       return { ok: true, created, skipped };
     }
 
+    // The numeric root finder for solve() — the app's Durand–Kerner (faber-analysis).
+    function defaultRootFinder() {
+      const Q = (typeof window !== 'undefined' && window.QD) || (typeof global !== 'undefined' && global.QD) || (typeof QD !== 'undefined' && QD);
+      const FA = Q && Q.FaberAnalysis;
+      return (FA && FA.polynomialRoots) ? ((coeffsAsc) => FA.polynomialRoots(coeffsAsc)) : null;
+    }
+    function _eqPolys(ids) {
+      const sel = (ids && ids.length ? ids.map((id) => get(id)) : list()).filter(Boolean);
+      return sel.filter((n) => n.rel === '=').map((n) => n.poly);
+    }
+    function _varsOf(polys) {
+      const s = new Set(); for (const p of polys) for (const v of p.vars()) s.add(v); return [...s].sort();
+    }
+
+    // Geometry of the selected (or all) equality nodes: whether the variety is
+    // finite (zero-dimensional) and, if so, the solution count with multiplicity
+    // (= the quotient-ring dimension). Computes a grevlex Gröbner basis under the
+    // hood. Returns { ok, zeroDim, dimension, numVars, vars } or { ok:false, reason }.
+    function dimension(ids, opts) {
+      const S = getSym();
+      const polys = _eqPolys(ids);
+      if (polys.length < 1) return { ok: false, reason: 'no equality nodes to analyze' };
+      const vars = _varsOf(polys);
+      const ord = S.monomialOrder('grevlex', vars);
+      try {
+        const G = S.buchberger(polys, ord, opts || {});
+        const zeroDim = S.isZeroDimensional(G, ord, vars);
+        const dim = zeroDim ? S.quotientDimension(G, ord, vars) : Infinity;
+        return { ok: true, zeroDim, dimension: dim, numVars: vars.length, vars };
+      } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    }
+
+    // Numeric solutions of the selected (or all) equality nodes via the shape-lemma
+    // solver (grevlex GB → FGLM to lex → univariate Durand–Kerner + back-substitution).
+    // Returns Sym.solveZeroDim's result: { ok, solutions:[{var:{re,im}}], dimension, … }
+    // or { ok:false, reason } (not zero-dim / not in shape position / no convergence →
+    // route to the CAS bridge).
+    function solve(ids, opts) {
+      const S = getSym();
+      opts = opts || {};
+      const polys = _eqPolys(ids);
+      if (polys.length < 1) return { ok: false, reason: 'no equality nodes to solve' };
+      const vars = opts.vars || _varsOf(polys);
+      const rootFinder = opts.rootFinder || defaultRootFinder();
+      try { return S.solveZeroDim(polys, Object.assign({}, opts, { vars, rootFinder })); }
+      catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    }
+
     // Duplicate a node to start an alternative derivation line (accumulate alternatives).
     function duplicate(id) {
       const a = get(id); if (!a) return null;
@@ -388,7 +436,7 @@
     }
 
     return {
-      seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, duplicate, deleteNode,
+      seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, dimension, solve, duplicate, deleteNode,
       sharedVars, previewCost, exportDAG, nodeStats,
       moveNode, orderOf: ordOf, orderedColumn,
       undo, redo, reset,

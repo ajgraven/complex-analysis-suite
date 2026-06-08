@@ -7,6 +7,7 @@
 // =============================================================================
 require('./bootstrap');
 loadInCtx('sym-core.js');   // page-only module (not in the CORE bundle)
+loadInCtx('faber-analysis.js');   // Durand–Kerner finder used by solveZeroDim (Complex is in the core bundle)
 
 module.exports = async function run() {
   section('sym-core — QD.Sym exact symbolic algebra');
@@ -426,8 +427,65 @@ module.exports = async function run() {
       ok('block-elim and lex eliminants agree at a root projection',
          Math.abs(elim[0].evalComplex(vmRoot).re) < 1e-12 && Math.abs(Glex[0].evalComplex(vmRoot).re) < 1e-12);
     }
+
+    // Zero-dimensional toolkit: standard monomials / dimension / solution count.
+    {
+      const o = S.monomialOrder('grevlex', ['x', 'y']);
+      const G = S.buchberger([mv('x').pow(2).sub(mi(1)), mv('y').pow(2).sub(mi(1))], o);   // {±1}×{±1}
+      ok('isZeroDimensional: ⟨x²−1, y²−1⟩ is zero-dim', S.isZeroDimensional(G, o, ['x', 'y']));
+      ok('quotientDimension: ⟨x²−1, y²−1⟩ has 4 standard monomials (= 4 solutions)',
+         S.quotientDimension(G, o, ['x', 'y']) === 4);
+      ok('standardMonomials: basis is {1, y, x, xy} (grevlex-ascending)',
+         S.standardMonomials(G, o, ['x', 'y']).map((m) => _monoStr(m)).join(',') === '1,y,x,x*y');
+      const Gp = S.buchberger([mv('x').pow(2).sub(mv('y'))], o);     // a curve — positive-dimensional
+      ok('isZeroDimensional: ⟨x²−y⟩ is NOT zero-dim', !S.isZeroDimensional(Gp, o, ['x', 'y']));
+      ok('quotientDimension: positive-dim ideal reports Infinity', S.quotientDimension(Gp, o, ['x', 'y']) === Infinity);
+    }
+
+    // FGLM: grevlex → lex conversion equals a direct lex Buchberger (same reduced GB).
+    {
+      const o1 = S.monomialOrder('grevlex', ['x', 'y']), lex = S.monomialOrder('lex', ['x', 'y']);
+      const sys = [mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').sub(mv('y'))];
+      const viaFglm = S.fglm(S.buchberger(sys, o1), o1, lex, ['x', 'y']);
+      const direct = S.buchberger(sys, lex);
+      ok('fglm: grevlex→lex matches a direct lex Gröbner basis',
+         viaFglm.map((p) => p.key()).sort().join('|') === direct.map((p) => p.key()).sort().join('|'));
+      // and on a 0-dim square ideal
+      const sq = [mv('x').pow(2).sub(mi(1)), mv('y').pow(2).sub(mi(1))];
+      const f2 = S.fglm(S.buchberger(sq, o1), o1, lex, ['x', 'y']);
+      const d2 = S.buchberger(sq, lex);
+      ok('fglm: matches direct lex on ⟨x²−1, y²−1⟩',
+         f2.map((p) => p.key()).sort().join('|') === d2.map((p) => p.key()).sort().join('|'));
+      ok('fglm: throws on a positive-dimensional ideal', (() => {
+        try { S.fglm(S.buchberger([mv('x').pow(2).sub(mv('y'))], o1), o1, lex, ['x', 'y']); return false; }
+        catch (e) { return /zero-dimensional/i.test(String(e.message || e)); }
+      })());
+    }
+
+    // solveZeroDim: shape-lemma numeric solving via the real Durand–Kerner finder.
+    {
+      const sys = [mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').sub(mv('y'))];  // x=y=±1/√2
+      const sol = S.solveZeroDim(sys, { vars: ['x', 'y'], solveVar: 'y' });               // default finder = QD.FaberAnalysis
+      ok('solveZeroDim: succeeds (default Durand–Kerner finder) with 2 solutions',
+         sol.ok && sol.solutions.length === 2 && sol.dimension === 2);
+      ok('solveZeroDim: every returned solution satisfies the system', sol.ok &&
+         sol.solutions.every((s) => sys.every((p) => { const v = p.evalComplex(s); return Math.hypot(v.re, v.im) < 1e-7; })));
+      // a system with complex solutions: x²+1=0, y−x=0 → x=±i
+      const cplx = [mv('x').pow(2).add(mi(1)), mv('y').sub(mv('x'))];
+      const sc = S.solveZeroDim(cplx, { vars: ['x', 'y'], solveVar: 'x' });
+      ok('solveZeroDim: finds the complex roots of x²+1 (x=±i, y=x)', sc.ok && sc.solutions.length === 2 &&
+         sc.solutions.every((s) => Math.abs(Math.hypot(s.x.re, s.x.im) - 1) < 1e-7 && Math.abs(s.x.re) < 1e-7));
+      const bad = S.solveZeroDim([mv('x').pow(2).sub(mv('y'))], { vars: ['x', 'y'] });
+      ok('solveZeroDim: a positive-dimensional system returns {ok:false}', bad.ok === false && /zero-dimensional/i.test(bad.reason));
+    }
   }
 };
+
+// compact monomial string for assertions ('' → '1')
+function _monoStr(m) {
+  const parts = [...m.entries()].sort().map(([n, e]) => (e === 1 ? n : n + '^' + e));
+  return parts.join('*') || '1';
+}
 
 // monomial (Map) equals a plain {name:exp} object — for leading-term assertions
 function _monoEq(mono, obj) {

@@ -300,6 +300,8 @@
       openAlgebra: `Open this system in the Algebra tab — an interactive workspace for adding univalence constraints and eliminating variables (resultants).`,
       gaugeElim: `Eliminate a variable between the gauge equation and every other equation at once (one shared variable each). Because the gauge is linear in the A_{j,1}, this applies the gauge normalization throughout.`,
       groebner: `Compute a Gröbner basis of the selected equality nodes (or all of them) — the multivariate generalization of the resultant. With an "eliminate" list it uses a fast block elimination order to expose the elimination ideal in the remaining variables. Buchberger over ℚ(i) with the Gebauer–Möller criteria + sugar selection; exact, and a cost blow-up is reported and routed to the CAS export.`,
+      dimension: `Report whether the equality system has finitely many solutions (zero-dimensional) and, if so, the solution count with multiplicity — the quotient-ring dimension of a grevlex Gröbner basis.`,
+      solveNumeric: `Solve the equality system numerically: a grevlex Gröbner basis → FGLM to a lex basis → if it is in shape position, the univariate factor is solved by Durand–Kerner and back-substituted. Solutions print to the console; non-solvable systems report why (route to the CAS bridge).`,
       fit: `Fit view to data`,
       reset: `Reset view`,
       dock: `Dock the panel into the sidebar (clear the plot)`,
