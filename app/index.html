@@ -462,6 +462,31 @@
       <div id="faber-content"></div>
     </section>
 
+    <!-- Quadrature ↔ Riemann-map equation system (classical BOUNDED QD). Shown only
+         for a classical bounded solve (hidden for unbounded / PQD / LQD). ui-qd-
+         equations.js generates the explicit algebraic system relating the quadrature
+         coefficients {a_j, C_{j,s}, w₀} to the Riemann-map coefficients {z_j, A_{j,k}}
+         (QD.QDEquations), renders it with KaTeX, self-verifies it against the numeric
+         solution, and exports LaTeX / a CAS-agnostic JSON term list. -->
+    <section class="card hidden" id="qd-equations-card">
+      <h2>Quadrature ↔ map equations</h2>
+      <div class="hint" style="margin-bottom:6px;" data-str-html="hints.qdEquationsCard"></div>
+      <div class="row">
+        <span class="key">Representation:</span>
+        <label style="margin-left:6px;"><input type="radio" name="qdeq-rep" id="qdeq-rep-conj" value="conj" checked> Conjugate over ℚ(i)</label>
+        <label style="margin-left:10px;"><input type="radio" name="qdeq-rep" id="qdeq-rep-reim" value="reim"> Real / imaginary split</label>
+      </div>
+      <div class="row">
+        <label>Max pole order
+          <input type="number" id="qdeq-cap" min="1" max="12" step="1" value="6" style="width:56px;">
+        </label>
+        <button id="qdeq-generate" class="small" type="button" style="margin-left:8px;">Generate</button>
+        <button id="qdeq-copy-latex" class="small" type="button" style="margin-left:8px;" disabled>Copy LaTeX</button>
+        <button id="qdeq-download-json" class="small" type="button" style="margin-left:6px;" disabled>Download JSON</button>
+      </div>
+      <div id="qd-equations-content"></div>
+    </section>
+
     <!-- The Riemann map, geometric properties, and boundary singularities have
          moved to the transparent #status-panel overlaid on the plot view
          (bottom-right); see <main id="plot-area"> below and renderStatusPanel()

@@ -1602,6 +1602,9 @@ uiCtx.setFaberRoots = (payload) => {
 };
 if (window.QD_UI && window.QD_UI.installFaber) window.QD_UI.installFaber(uiCtx);
 
+// Quadrature↔map equation-system card (classical bounded QD) — ui-qd-equations.js.
+if (window.QD_UI && window.QD_UI.installQdEquations) window.QD_UI.installQdEquations(uiCtx);
+
 // Initial structured-grid render (relocated from just after the plot setup, so
 // the let-bound renderers + modeAllowsPoly exist by the time it runs).
 renderPolesList();

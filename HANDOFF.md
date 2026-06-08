@@ -16,10 +16,18 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `bc5a7cf2c5`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `67068e8f2e`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
-its own merged PR):
+its own merged PR), with one feature **in progress on a branch**:
+- **Symbolic QD equation generator** (`feature/symbolic-qd-equations`, NOT yet merged) — a new
+  symbolic-algebra track: `app/sym-core.js` (`QD.Sym`, exact Rational/Gaussian/MPoly/RatFn +
+  factored-denominator `FRatFn` + field-generic power series with Lagrange reversion) and
+  `app/qd-equations.js` (`QD.QDEquations`) generate the explicit algebraic system relating a
+  classical bounded QD's quadrature coefficients `{a_j, C_{j,s}, w₀}` to its Riemann-map
+  coefficients `{z_j, A_{j,k}}`, in BOTH a conjugate-variable model over ℚ(i) and a real/imaginary
+  split. `app/ui-qd-equations.js` renders + self-verifies + exports them (`#qd-equations-card`).
+  See the dedicated deep section below.
 - **Tech-debt Phase 2** (PR #48) — reliability pass from the tech-debt audit: a global
   `window.onerror` / `unhandledrejection` handler that surfaces to a toast (`qol.js`); an SW
   "new version available" refresh banner (`index.html` + the existing `sw.js`); a build/cache
@@ -74,6 +82,65 @@ items.
 > cache-first, so after pulling new `app/` assets a hard reload (Ctrl+Shift+R) or
 > SW unregister is needed to see them — a stale SW shows symptoms like a blank
 > Thesis-example dropdown (the module didn't load).
+
+## (most recent) Symbolic QD equation generator — branch `feature/symbolic-qd-equations`
+
+A new **symbolic-algebra track** (foundation for a later Gröbner / triangular-decomposition
+reducer). It produces the explicit algebraic system tying a **classical BOUNDED QD**'s
+quadrature-function coefficients to its Riemann-map coefficients, exactly (no floating point in
+the equations). **Not yet merged**; full suite green on the branch.
+
+**The math (conjugate-variable model).** Ansatz `φ(z) = w₀ + Σ_j Σ_{k=1}^{m_j} Ā_{j,k}·z^k/(1−z̄_j z)^k`;
+unknowns `{z_j, A_{j,k}}`, parameters `{a_j, C_{j,s}, w₀}` from `h(w)=Σ C_{j,s}/(w−a_j)^s`. z̄_j, Ā_{j,k}, …
+are treated as INDEPENDENT indeterminates over ℚ(i) (the reality slice z̄=conj z is imposed only at
+numeric evaluation). Three blocks, each a cleared `MPoly = 0`:
+- **(●) locator** `φ(z_j) − a_j = 0`.
+- **(★) FORWARD form** `C_{j,s} = Σ_{k=s}^{m_j} (k/s)·A_{j,k}·[t^k] φ̃_j(t)^s`, where
+  `φ̃_j(t)=φ(z_j+t)−φ(z_j)`. This is the dual of the solver's inverse-Faber (expresses h-coeffs FROM
+  map-coeffs); it needs only `seriesPow`, **no compositional inverse**, so the (1−z̄z) denominators
+  stay bounded instead of blowing up.
+- **(gauge)** `Σ_j (A_{j,1} − Ā_{j,1}) = 0` (= 2i·Σ Im A_{j,1}; fixes the rotational freedom).
+
+**Engine — `app/sym-core.js` (`QD.Sym`).** `Rational`(BigInt n/d) → `Gaussian`(ℚ(i)) → `MPoly`
+(sparse multivariate; `evalComplex`, `toLatex`, `termList`, `subst`, `realPart`/`imagPart`, `size`)
+→ `RatFn` (naive num/den) and **`FRatFn` (FACTORED denominator `num/Π pᵉ`)** — the key to taming the
+Möbius denominators: `(1−z̄z)` is tracked as a power and never expanded; `clearDenominators()` returns
+the bare numerator. Field-generic truncated power series (`seriesMul/Pow/Add/Compose/Inverse/Recip`
+and **`seriesReversion`**, Lagrange `ψ̃ₙ=(1/n)[tⁿ⁻¹](t/φ̃)ⁿ`). Effect: order-3 went 6587 terms/3s
+(naive RatFn) → **55 terms/7ms** (FRatFn); orders 2–6 sub-second.
+
+**Generator — `app/qd-equations.js` (`QD.QDEquations`).**
+- `generateClassicalBounded(hData, {maxPoleOrder=6}) → {model:'conjugate', n, orders, d,
+  blocks:{locator,star,gauge}, vars, counts}`. Reads only hData's STRUCTURE (pole count + orders);
+  h-coeffs stay symbolic. Throws past the cap (size grows intrinsically with order).
+- `reimSplit(system)` → the **real/imaginary representation**: substitutes `z_j→x_j+i·y_j`,
+  `A_{j,k}→p_{j,k}+i·q_{j,k}`, `a_j→a_j^{re}+i·a_j^{im}`, … then splits each Gaussian-coeff equation
+  into its real and imaginary real-coefficient parts (identically-zero parts dropped — so the gauge's
+  vanishing Re part leaves exactly 2n+2d+1 real equations).
+- `residualAtSolution` / `residualReimAtSolution` — **the correctness oracle**: evaluate every
+  equation at the solver's numeric φ (+ numeric h); must be ≈0. Verified on disk / two-point /
+  imaginary-pair (vs the live solver) and on the family `φ(z)=z+zⁿ/n ⇒ h=((n+1)/n)/w+(1/n)/wⁿ`
+  (n=2..6, exact φ). A faithfulness test confirms `conjugate-eqn == Re + i·Im` of the split at
+  arbitrary points.
+- `systemToLatex` / `systemToExport` (CAS-agnostic term lists) / `latexOf` for the UI + future reducer.
+
+**UI — `app/ui-qd-equations.js` (`QD_UI.installQdEquations`).** `#qd-equations-card`, gated on a
+classical BOUNDED QD (the bounded analog of the Faber UQD gate: `!phi.unbounded`, no
+family/alpha/lqdBeta/z0/gamma/q markers, one branch per pole). Mirrors the Faber feature wiring.
+Controls: representation (conjugate / re-im), max-pole-order cap, Generate, Copy LaTeX, Download JSON.
+Renders each equation with a local KaTeX helper (ui-solve.js's is IIFE-private; large polys >120 terms
+are elided with an export pointer), shows the self-verify residual + determinacy counts, and an ansatz
+legend. Help/hint prose in `QD.Strings.qdEquations` / `hints.qdEquationsCard`.
+
+**Wiring.** `sym-core.js` + `qd-equations.js` → `SOLVER_PAGE_ONLY_FILES` (after `faber-analysis.js`,
+before `primary-solution.js`); `ui-qd-equations.js` → `PAGE_UI_FILES` (after `ui-faber.js`). Tests:
+`app/test/sym-core.test.js` (42) + `app/test/qd-equations.test.js` (38), registered in `node-test.js`
+with FLOORS `sym-core:25, qd-equations:25`. `#qd-equations-content` `.ok/.warn/.key` + `.qdeq-*` layout
+in `style.css`. Ran `version:sync` (cache hash `67068e8f2e`).
+
+**Next (later sessions):** Gröbner / Comprehensive-Triangular-Decomposition reduction consuming the
+JSON export (no in-browser CAS — small-system Buchberger over ℚ(i) and/or WASM); then the
+Schwarz-function alternate formulation.
 
 ## (most recent) Central UI strings (QD.Strings) — PR #43
 

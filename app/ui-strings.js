@@ -251,6 +251,12 @@
         `Faber polynomials F<sub>n</sub>(ζ) of the bounded complement K = ℂ∖Ω, read off φ's
          Laurent expansion at ∞. Their roots cluster inside K.`,
 
+      qdEquationsCard:
+        `The explicit algebraic system relating the quadrature data
+         <code>{a<sub>j</sub>, C<sub>j,s</sub>, w<sub>0</sub>}</code> to the Riemann-map
+         coefficients <code>{z<sub>j</sub>, A<sub>j,k</sub>}</code>. Pick a representation,
+         then Generate; export as LaTeX or a CAS-ready JSON term list.`,
+
       searchOptions:
         `Overrides for the aggressiveness preset. Leave a field blank to use
          the preset's default. Phase checkboxes are enabled by default.`,
@@ -310,6 +316,21 @@
         `cap(K) = c = φ′(∞). High orders are ill-conditioned; non-convergence is flagged.`,
       pending: `solving… Faber analysis pending`,
       unavailablePrefix: `Faber analysis unavailable: `,
+    },
+
+    // ---- Quadrature↔map equation-system card (HTML help + messages) ---------
+    qdEquations: {
+      help:
+        `For a classical BOUNDED QD the solved map ` +
+        `φ(z) = w₀ + Σ Āⱼ,ₖ zᵏ/(1−z̄ⱼz)ᵏ and the quadrature function ` +
+        `h(w) = Σ Cⱼ,ₛ/(w−aⱼ)ˢ are tied by an explicit polynomial system: a LOCATOR ` +
+        `block φ(zⱼ)=aⱼ, a PRINCIPAL-PART (★) block giving each Cⱼ,ₛ from the Aⱼ,ₖ, and a ` +
+        `gauge normalization that fixes the rotational freedom. Choose the conjugate ` +
+        `model over ℚ(i) (z̄, Ā independent indeterminates) or the real/imaginary split ` +
+        `(zⱼ=xⱼ+iyⱼ, …). "self-check" evaluates every equation at the numeric solution — ` +
+        `it must be ≈0. Export feeds a future symbolic-reduction (Gröbner / triangular) step.`,
+      unavailablePrefix: `Equation generation unavailable: `,
+      pending: `solving… equation system pending`,
     },
 
     // ---- Analytic-oracle card (HTML help + whole-sentence messages) --------

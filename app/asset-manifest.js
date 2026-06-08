@@ -39,7 +39,7 @@
   // version:sync` recomputes it. CACHE_LABEL is yours to set per release
   // (cosmetic, for human-readable cache names + the HANDOFF narrative).
   const CACHE_LABEL = 'preimage-tree-overlay';
-  const CACHE_HASH  = 'bc5a7cf2c5';   // gen-cache-version.js --write rewrites this
+  const CACHE_HASH  = '67068e8f2e';   // gen-cache-version.js --write rewrites this
   const CACHE_VERSION = CACHE_LABEL + '-' + CACHE_HASH;
 
   // Files that get concatenated into a Worker bundle by the runtime
@@ -91,6 +91,8 @@
     'solver-cmax.js',          // max-conformal-radius estimator (drives the worker, page-only)
     'thesis-examples.js',      // curated examples + analytic-oracle engine (#8)
     'faber-analysis.js',       // Faber polynomials of the complement of a UQD + root-finder
+    'sym-core.js',             // QD.Sym — exact symbolic-algebra core (Rational/Gaussian/MPoly/…)
+    'qd-equations.js',         // QD.QDEquations — classical-bounded coefficient system (needs QD.Sym)
     'primary-solution.js',
     'primary-solver-worker.js',
   ];
@@ -123,6 +125,7 @@
     'ui-url-state.js',
     'ui-thesis.js',           // thesis-example gallery + analytic-oracle card (#8)
     'ui-faber.js',            // Faber-polynomials analysis card (UQD)
+    'ui-qd-equations.js',     // Quadrature↔map equation-system card (classical bounded QD)
     'ui.js',
     // Phase-3 (item E) extracted Direct-tab modules — load before direct-ui.js.
     'direct/direct-recompute.js',

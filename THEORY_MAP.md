@@ -73,6 +73,26 @@ The same shape repeats for every other family (`solver-uqd.js`,
 `solver-lqd*.js`, `solver-uqd-lqd*.js`) — see
 [CONTRIBUTING.md](CONTRIBUTING.md#adding-a-new-family) for how to add one.
 
+### Symbolic generation of this system (`QD.QDEquations`)
+
+The numeric solver assembles the (●)/(★)/gauge residual at floating-point values. A separate
+**symbolic** track emits the same system as exact polynomials in the coefficients — the foundation
+for explicit elimination (a later Gröbner / triangular-decomposition reducer).
+
+| Block | Symbol | Where |
+| --- | --- | --- |
+| Exact symbolic core (Rational/Gaussian/MPoly/RatFn/**FRatFn** + power series, Lagrange reversion) | `QD.Sym` | [`app/sym-core.js`](app/sym-core.js) |
+| Generate `{(●), (★), gauge}` as cleared `MPoly = 0` (conjugate model over ℚ(i)) | `QDEquations.generateClassicalBounded` | [`app/qd-equations.js`](app/qd-equations.js) |
+| Real/imaginary-split representation (`z_j = x_j+i y_j`, …) | `QDEquations.reimSplit` | `app/qd-equations.js` |
+| Correctness oracle — every equation ≈0 at the numeric solution | `QDEquations.residualAtSolution` / `residualReimAtSolution` | `app/qd-equations.js` |
+| LaTeX / CAS-agnostic export for display + reduction | `QDEquations.systemToLatex` / `systemToExport` | `app/qd-equations.js` |
+| Display card (`#qd-equations-card`, classical bounded QD only) | `QD_UI.installQdEquations` | [`app/ui-qd-equations.js`](app/ui-qd-equations.js) |
+
+The (★) block uses the **forward** form `C_{j,s} = Σ_{k=s}^{m_j} (k/s)·A_{j,k}·[t^k] φ̃_j(t)^s`
+(the dual of the inverse-Faber statement above) — only `seriesPow`, no compositional inverse — and a
+factored-denominator engine that never expands `(1−z̄_j z)`. Verified against the live solver and the
+family `φ(z)=z+zⁿ/n ⇒ h(w)=((n+1)/n)/w+(1/n)/wⁿ`.
+
 ---
 
 ## LQD families (Thesis Chapter V)

@@ -651,13 +651,26 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #status .err  { color: var(--c-err); font-weight: 600; }
 #status .key  { color: var(--c-muted); }
 
-/* Analytic-oracle (#8) and Faber-polynomials cards reuse the .ok/.warn/.err/.key
-   convention; the status-panel rules above are id-scoped, so give the cards their
-   own copy (otherwise ✓ pass / ⚠ marginal / ✗ off all render in the default ink). */
-#oracle-content .ok,   #faber-content .ok   { color: var(--c-ok);    font-weight: 600; }
-#oracle-content .warn, #faber-content .warn { color: var(--c-warn);  font-weight: 600; }
-#oracle-content .err,  #faber-content .err  { color: var(--c-err);   font-weight: 600; }
-#oracle-content .key,  #faber-content .key  { color: var(--c-muted); }
+/* Analytic-oracle (#8), Faber-polynomials, and Quadrature↔map-equations cards reuse
+   the .ok/.warn/.err/.key convention; the status-panel rules above are id-scoped, so
+   give the cards their own copy (otherwise ✓ pass / ⚠ marginal / ✗ off all render in
+   the default ink). */
+#oracle-content .ok,   #faber-content .ok,   #qd-equations-content .ok   { color: var(--c-ok);    font-weight: 600; }
+#oracle-content .warn, #faber-content .warn, #qd-equations-content .warn { color: var(--c-warn);  font-weight: 600; }
+#oracle-content .err,  #faber-content .err,  #qd-equations-content .err  { color: var(--c-err);   font-weight: 600; }
+#oracle-content .key,  #faber-content .key,  #qd-equations-content .key  { color: var(--c-muted); }
+
+/* Quadrature↔map-equations card: ansatz legend + one boxed, horizontally-scrollable
+   KaTeX row per equation (the cleared polynomials can be wide). */
+#qd-equations-content .qdeq-legend { margin: 6px 0 2px; }
+#qd-equations-content .qdeq-legend-line { margin: 2px 0; overflow-x: auto; }
+#qd-equations-content .qdeq-block-title { margin-top: 8px; }
+#qd-equations-content .qdeq-eq {
+  margin: 4px 0 6px 6px; padding-left: 6px;
+  border-left: 2px solid var(--c-border-soft);
+}
+#qd-equations-content .qdeq-eq-label { margin-bottom: 1px; }
+#qd-equations-content .qdeq-eq-math { overflow-x: auto; max-width: 100%; }
 
 #alternates-card .alt {
   display: flex;

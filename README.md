@@ -135,6 +135,10 @@ visualizations, complementary to the headless runner.
     ├── thesis-examples.js             curated examples + analytic-oracle engine
     ├── faber-analysis.js              QD.FaberAnalysis: Faber polynomials of a UQD
     │                                  complement + a Durand–Kerner complex root-finder
+    ├── sym-core.js                    QD.Sym: exact symbolic algebra (Rational/Gaussian/
+    │                                  MPoly/RatFn/FRatFn + power series, Lagrange reversion)
+    ├── qd-equations.js                QD.QDEquations: symbolic coefficient system for a
+    │                                  classical bounded QD (conjugate + real/imag reps)
     ├── ui-strings.js                  QD.Strings: editable UI prose (SINGLE SOURCE) +
     │                                  the data-str applier (see HELPTEXT.md)
     │
@@ -148,7 +152,9 @@ visualizations, complementary to the headless runner.
     ├── ui-url-state.js                URL/hash serialize + restore (B1)
     ├── ui-thesis.js                   thesis-example gallery + analytic-oracle card
     ├── ui-faber.js                    Faber-polynomials card + roots overlay (UQD)
-    │                                  (all seven: QD_UI.installX(uiCtx) factories,
+    ├── ui-qd-equations.js             Quadrature↔map equation-system card (classical
+    │                                  bounded QD): LaTeX display + self-verify + export
+    │                                  (all: QD_UI.installX(uiCtx) factories,
     │                                   Phase-3 item E split of ui.js)
     │
     ├── direct/
@@ -422,6 +428,15 @@ view is active.
   order N (teal circles) or the roots of a single `F_n` (violet diamonds). Roots cluster
   inside K, the "hole" of the unbounded domain. From `app/faber-analysis.js`
   (`QD.FaberAnalysis`: `faberPolynomials`, `polynomialRoots` (Durand–Kerner)).
+* **Quadrature ↔ map equations** *(classical bounded QD only)* — a **Quadrature ↔ map
+  equations** card generates the explicit *algebraic* system relating the quadrature data
+  `{a_j, C_{j,s}, w_0}` to the Riemann-map coefficients `{z_j, A_{j,k}}` — a locator block
+  `φ(z_j)=a_j`, a principal-part block giving each `C_{j,s}` from the `A_{j,k}`, and a gauge
+  normalization. Choose the **conjugate model over ℚ(i)** or the **real/imaginary split**; the
+  system is rendered with KaTeX, **self-verified** against the numeric solution (every equation
+  ≈0), and exportable as LaTeX or a CAS-agnostic JSON term list. Exact arithmetic throughout
+  (`app/sym-core.js` `QD.Sym`; `app/qd-equations.js` `QD.QDEquations`) — the foundation for a
+  future symbolic-reduction (Gröbner / triangular-decomposition) step.
 * **φ(0)** — defaults to the centroid of the poles (manually overridable
   in bounded mode).
 * **Solver settings** — boundary samples, aggressiveness preset (Quick /
