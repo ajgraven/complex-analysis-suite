@@ -245,6 +245,17 @@ module.exports = async function run() {
        Math.abs(disc.evalComplex({ b: { re: 2, im: 0 }, c: { re: 1, im: 0 } }).re) < 1e-12);
     ok('disc_x(x²+bx+c) nonzero at b=0,c=−1',
        Math.abs(disc.evalComplex({ b: { re: 0, im: 0 }, c: { re: -1, im: 0 } }).re) > 1e-9);
+
+    // matrix-size cap: a resultant whose Sylvester dimension exceeds the cap throws
+    // (rather than hanging on a huge Bareiss determinant) — the guard that keeps the
+    // heavy geometric-border discriminant from blowing up interactively.
+    let threw = false, msg = '';
+    try { S.resultant(mv('x').pow(6).add(mv('y')), mv('x').pow(6).add(mi(1)), 'x'); }
+    catch (e) { threw = true; msg = String(e.message || e); }
+    ok('resultant throws a clear cap error when the Sylvester matrix is too large (12×12 > 10)',
+       threw && /cap/i.test(msg), msg);
+    ok('resultant honors an explicit higher cap override',
+       !!S.resultant(mv('x').pow(6).add(mv('y')), mv('x').pow(6).add(mi(1)), 'x', 16));
   }
 };
 

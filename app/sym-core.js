@@ -496,12 +496,21 @@
     }
     return acc;
   }
+  // Hard cap on the Sylvester dimension. The Bareiss determinant is O(N³) ring ops
+  // with intermediate entries that grow, so a large N over many-variable MPolys
+  // explodes (e.g. an order-2 geometric border discriminant is a 15×15 over ~8
+  // variables — minutes-to-never). Interactive pairwise eliminations are small
+  // (N ≤ ~6); anything larger should go to the CAS export path instead.
+  const RESULTANT_MATRIX_CAP = 10;
   // Sylvester resultant Res_x(f, g): eliminate `varName`, returning an MPoly in the
   // remaining variables whose vanishing is necessary for f, g to share a root in
   // `varName`. Edge cases: a constant-in-var input c gives c^(deg of the other);
   // both constant → 1 (nothing to eliminate); a zero input → 0. A ≡0 result means
-  // f, g share a component (caller should treat as "no new information").
-  function resultant(f, g, varName) {
+  // f, g share a component (caller should treat as "no new information"). Throws a
+  // clear cap error when the Sylvester matrix would exceed `maxMatrix` (default 10)
+  // — callers (the workspace, the geometric-border generator) surface that as
+  // "too large; use CAS export" rather than hanging.
+  function resultant(f, g, varName, maxMatrix) {
     if (f.isZero() || g.isZero()) return MPoly.zero();
     const a = f.coeffsIn(varName);   // a[m] leading, nonzero by construction
     const b = g.coeffsIn(varName);
@@ -510,6 +519,11 @@
     if (m === 0) return a[0].pow(n);
     if (n === 0) return b[0].pow(m);
     const size = m + n;
+    const cap = (maxMatrix == null) ? RESULTANT_MATRIX_CAP : maxMatrix;
+    if (size > cap) {
+      throw new Error('resultant: Sylvester matrix ' + size + '×' + size +
+        ' exceeds the cap (' + cap + '); eliminate lower-degree terms or use CAS export.');
+    }
     const aRow = []; for (let k = m; k >= 0; k--) aRow.push(a[k]);   // high → low
     const bRow = []; for (let k = n; k >= 0; k--) bRow.push(b[k]);
     const M = [];
