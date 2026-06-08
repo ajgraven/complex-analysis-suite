@@ -302,6 +302,18 @@
       for (const t of this.terms.values()) { const e = t.mono.get(varName) || 0; if (e > d) d = e; }
       return d;
     }
+    // Total (graded) degree: the max over terms of the sum of its exponents
+    // (-1 for the zero polynomial, 0 for a nonzero constant). Used for display
+    // metadata and as a size proxy for elimination/Gröbner cost.
+    totalDegree() {
+      if (this.isZero()) return -1;
+      let d = 0;
+      for (const t of this.terms.values()) {
+        let s = 0; for (const e of t.mono.values()) s += e;
+        if (s > d) d = s;
+      }
+      return d;
+    }
     // Dense coefficient list [c_0, …, c_d] with this = Σ_k c_k·varName^k, each c_k
     // an MPoly in the remaining variables. (Returns [0] for the zero polynomial.)
     coeffsIn(varName) {

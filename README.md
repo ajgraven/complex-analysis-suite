@@ -161,6 +161,7 @@ visualizations, complementary to the headless runner.
     ├── algebra/                       Algebra tab — symbolic elimination workspace:
     │   ├── algebra-store.js           QD.AlgebraStore: equation-DAG model (DOM-free)
     │   ├── algebra-canvas.js          QD.AlgebraCanvas: SVG + KaTeX DAG renderer
+    │                                   (collapsible cards, reorder, copy-LaTeX, hovertext)
     │   └── algebra-ui.js              QD_UI.installAlgebra: tab, palette, eliminate, export
     │
     ├── direct/
@@ -448,7 +449,11 @@ view is active.
   add **univalence constraints** (convex, star-like, spiral-like, `φ′≠0`, global boundary
   injectivity, geometric border loci), then select two equation nodes + a shared variable
   and **eliminate** it by an exact Sylvester **resultant** — a derived equation appears one
-  column over, with edges. Undo/redo, a cost preview, and JSON/LaTeX export. From
+  column over, with edges. Cards are **collapsible** (collapsed by default — a one-line
+  preview; expand for the full form), **reorderable** within a column (▲/▼), copy as
+  **LaTeX** individually (⧉), and carry **hovertext** (variable count, real-equation
+  contribution, per-variable order, total degree, provenance); conjugate equations are
+  paired adjacently. Undo/redo, a cost preview, and JSON/LaTeX export. From
   `app/qd-constraints.js` (`QD.QDConstraints`) + `app/algebra/`; foundation for a later
   Gröbner-basis / RCTD reduction step.
 * **φ(0)** — defaults to the centroid of the poles (manually overridable

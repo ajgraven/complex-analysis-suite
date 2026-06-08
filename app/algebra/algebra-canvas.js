@@ -8,6 +8,15 @@
 // single CSS transform on the wrapper holding both the SVG and the card layer.
 // Selection (≤2 nodes) drives the elimination panel in algebra-ui.js.
 //
+// Each card has a header toolbar: a collapse chevron (cards are COLLAPSED by
+// default — only the one-line equation preview shows; expand to see the full
+// typeset form), up/down arrows that reorder the card within its column (delegated
+// to store.moveNode), and a copy button that copies the equation as LaTeX (via
+// handlers.onCopy). A title (hovertext) summarizing the node — variable count,
+// real-equation contribution, per-variable order, degree, provenance — is supplied
+// by handlers.titleOf. Rows are stacked by MEASURED card height so expanded cards
+// don't overlap, and conjugate pairs sit adjacent (the store's display order).
+//
 // SVG+HTML (not the raster #canvas used by the plot/sphere tabs) because nodes
 // need real typeset math, text selection, and per-card hit-testing.
 // =============================================================================
@@ -17,7 +26,8 @@
 
   const SVGNS = 'http://www.w3.org/2000/svg';
   const DISPLAY_CAP = 120;            // elide KaTeX above this term count
-  const COLW = 340, ROWH = 130, CARDW = 300;
+  const COLW = 360, CARDW = 300;      // column pitch (x) and card width
+  const ROWGAP = 18, TOP = 24, LEFT = 24;   // vertical gap between stacked cards; layout origin
 
   // Local KaTeX renderer with the codebase's plain-text fallback.
   function renderKatex(el, expr, display) {
@@ -27,6 +37,17 @@
   }
   function div(cls) { const d = document.createElement('div'); if (cls) d.className = cls; return d; }
   function relSuffix(rel) { return rel === '>' ? ' > 0' : rel === '≠' ? ' \\neq 0' : ' = 0'; }
+  function relTag(rel) { return rel === '>' ? ' (inequality)' : rel === '≠' ? ' (≠ 0)' : ''; }
+  // A small header toolbar button. `onClick` is wrapped to stop propagation so it
+  // never triggers card selection or background pan.
+  function iconBtn(cls, glyph, title, onClick) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'algebra-icon ' + cls; b.textContent = glyph;
+    if (title) b.title = title;
+    b.addEventListener('mousedown', (e) => e.stopPropagation());
+    b.addEventListener('click', (e) => { e.stopPropagation(); onClick(e); });
+    return b;
+  }
 
   function create(container, handlers) {
     handlers = handlers || {};
@@ -38,9 +59,11 @@
     const layer = div('algebra-nodes');
     wrap.appendChild(svg); wrap.appendChild(layer); viewport.appendChild(wrap); container.appendChild(viewport);
 
-    let tx = 24, ty = 24, scale = 1;
+    let tx = LEFT, ty = TOP, scale = 1;
     let selected = [];
     let lastStore = null, lastLatexOf = null;
+    const collapsed = new Map();        // id -> bool (default: collapsed). Persists across rerenders.
+    function isCollapsed(id) { return collapsed.has(id) ? collapsed.get(id) : true; }
 
     function applyTransform() { wrap.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; }
 
@@ -77,39 +100,92 @@
     function getSelection() { return selected.slice(); }
     function clearSelection() { selected = []; renderSelection(); if (handlers.onSelect) handlers.onSelect([]); }
 
+    // Build one card's DOM (header toolbar + math body). Collapse state controls
+    // whether the math is the one-line preview or the full typeset form.
+    function buildCard(store, latexOf, n) {
+      const card = div('algebra-node algebra-' + n.kind);
+      card.dataset.id = n.id;
+      card.style.width = CARDW + 'px';
+      if (handlers.titleOf) { const t = handlers.titleOf(n.id); if (t) card.title = t; }
+
+      const head = div('algebra-node-head');
+      const chevron = iconBtn('algebra-chevron', isCollapsed(n.id) ? '▸' : '▾',
+        isCollapsed(n.id) ? 'Expand' : 'Collapse', () => setCollapsed(n.id, !isCollapsed(n.id)));
+      const title = div('algebra-node-title'); title.textContent = n.label + relTag(n.rel);
+      const tools = div('algebra-node-tools');
+      tools.appendChild(iconBtn('algebra-up', '▲', 'Move up', () => { if (handlers.onMove) handlers.onMove(n.id, -1); }));
+      tools.appendChild(iconBtn('algebra-down', '▼', 'Move down', () => { if (handlers.onMove) handlers.onMove(n.id, 1); }));
+      tools.appendChild(iconBtn('algebra-copy', '⧉', 'Copy LaTeX', () => { if (handlers.onCopy) handlers.onCopy(n.id); }));
+      head.appendChild(chevron); head.appendChild(title); head.appendChild(tools);
+      card.appendChild(head);
+
+      const math = div('algebra-node-math' + (isCollapsed(n.id) ? ' collapsed' : ''));
+      if (n.poly.size() > DISPLAY_CAP) {
+        math.innerHTML = '<span class="hint">[' + n.poly.size() + ' terms — Copy / Export]</span>';
+      } else {
+        renderKatex(math, n.poly.toLatex(latexOf) + relSuffix(n.rel), false);
+      }
+      card.appendChild(math);
+
+      // A click anywhere on the card body toggles selection (buttons stopPropagation).
+      card.addEventListener('click', (ev) => { ev.stopPropagation(); toggleSelect(n.id); if (handlers.onClick) handlers.onClick(n.id); });
+      return card;
+    }
+
+    // Toggle collapse for one card in place (no full rerender): swap the body class
+    // and the chevron, then restack + redraw edges since the height changed.
+    function setCollapsed(id, val) {
+      collapsed.set(id, val);
+      const card = layer.querySelector('.algebra-node[data-id="' + id + '"]');
+      if (!card) return;
+      const math = card.querySelector('.algebra-node-math');
+      const chev = card.querySelector('.algebra-chevron');
+      if (math) math.classList.toggle('collapsed', val);
+      if (chev) { chev.textContent = val ? '▸' : '▾'; chev.title = val ? 'Expand' : 'Collapse'; }
+      relayout();
+    }
+
     function render(store, latexOf) {
       lastStore = store; lastLatexOf = latexOf;
       layer.innerHTML = '';
       while (svg.firstChild) svg.removeChild(svg.firstChild);
       selected = selected.filter((id) => store.get(id));
 
+      // Cards first (so offsetHeight is measurable), then position + edges.
+      for (const n of store.list()) layer.appendChild(buildCard(store, latexOf, n));
+      renderSelection();
+      relayout();
+    }
+
+    // Position every card by MEASURED height (so expanded cards don't overlap):
+    // columns by store display order, stacked top-to-bottom with ROWGAP. Then draw
+    // edges between actual card anchor points and size the SVG to the content.
+    function relayout() {
+      const store = lastStore; if (!store) return;
       const cols = new Map();
       for (const n of store.list()) { const c = n.column || 0; if (!cols.has(c)) cols.set(c, []); cols.get(c).push(n); }
-      const pos = new Map();
-      for (const [c, arr] of cols) arr.forEach((n, row) => pos.set(n.id, { x: 24 + c * COLW, y: 24 + row * ROWH }));
 
-      for (const n of store.list()) {
-        const p = pos.get(n.id);
-        const card = div('algebra-node algebra-' + n.kind);
-        card.dataset.id = n.id;
-        card.style.left = p.x + 'px'; card.style.top = p.y + 'px'; card.style.width = CARDW + 'px';
-        const head = div('algebra-node-head');
-        head.textContent = n.label + (n.rel === '>' ? '  (inequality)' : n.rel === '≠' ? '  (≠ 0)' : '');
-        card.appendChild(head);
-        const math = div('algebra-node-math');
-        if (n.poly.size() > DISPLAY_CAP) math.innerHTML = '<span class="hint">[' + n.poly.size() + ' terms — Inspect / Export]</span>';
-        else renderKatex(math, n.poly.toLatex(latexOf) + relSuffix(n.rel), false);
-        card.appendChild(math);
-        card.addEventListener('click', (ev) => { ev.stopPropagation(); toggleSelect(n.id); if (handlers.onClick) handlers.onClick(n.id); });
-        layer.appendChild(card);
-        p.el = card;
+      const pos = new Map();
+      for (const [c, arr] of cols) {
+        arr.sort((a, b) => (store.orderOf(a.id) - store.orderOf(b.id)) || a.id.localeCompare(b.id));
+        let y = TOP;
+        const x = LEFT + c * COLW;
+        for (const n of arr) {
+          const el = layer.querySelector('.algebra-node[data-id="' + n.id + '"]');
+          if (!el) continue;
+          el.style.left = x + 'px'; el.style.top = y + 'px';
+          const h = el.offsetHeight || 60;
+          pos.set(n.id, { x, y, w: el.offsetWidth || CARDW, h });
+          y += h + ROWGAP;
+        }
       }
 
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
       for (const e of store.edges) {
         const a = pos.get(e.from), b = pos.get(e.to);
-        if (!a || !b || !a.el || !b.el) continue;
-        const ax = a.x + a.el.offsetWidth, ay = a.y + a.el.offsetHeight / 2;
-        const bx = b.x, by = b.y + b.el.offsetHeight / 2;
+        if (!a || !b) continue;
+        const ax = a.x + a.w, ay = a.y + a.h / 2;
+        const bx = b.x, by = b.y + b.h / 2;
         const mx = (ax + bx) / 2;
         const path = document.createElementNS(SVGNS, 'path');
         path.setAttribute('d', 'M' + ax + ',' + ay + ' C' + mx + ',' + ay + ' ' + mx + ',' + by + ' ' + bx + ',' + by);
@@ -118,12 +194,11 @@
       }
 
       let maxX = 0, maxY = 0;
-      for (const [, p] of pos) if (p.el) { maxX = Math.max(maxX, p.x + p.el.offsetWidth); maxY = Math.max(maxY, p.y + p.el.offsetHeight); }
+      for (const [, p] of pos) { maxX = Math.max(maxX, p.x + p.w); maxY = Math.max(maxY, p.y + p.h); }
       svg.style.width = (maxX + 60) + 'px'; svg.style.height = (maxY + 60) + 'px';
-      renderSelection();
     }
     function rerender() { if (lastStore) render(lastStore, lastLatexOf); }
-    function fit() { tx = 24; ty = 24; scale = 1; applyTransform(); }
+    function fit() { tx = LEFT; ty = TOP; scale = 1; applyTransform(); }
 
     applyTransform();
     return { render, rerender, fit, getSelection, clearSelection };

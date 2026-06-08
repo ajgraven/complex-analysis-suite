@@ -33,6 +33,7 @@
     let seq = 0;
     const nodes = new Map();      // id -> node
     let edges = [];               // { from, to }
+    let order = new Map();        // id -> display order WITHIN its column (small = top)
     const undoStack = [];         // snapshots (most recent last)
     const redoStack = [];
     let model = 'conjugate';
@@ -40,21 +41,59 @@
     function nid() { return 'n' + (++seq); }
 
     // --- snapshot-based undo (sizes are small; snapshots beat inverse-op bookkeeping) ---
+    // The display `order` map is part of the snapshot so reordering is undoable and
+    // so undo/redo of structural ops restores the exact card layout too. Node
+    // objects are never mutated in place (only added), so a shallow node-map copy
+    // is a safe snapshot; `order` is copied because moveNode mutates it.
     function snapshot() {
-      return { nodes: new Map([...nodes].map(([k, v]) => [k, v])), edges: edges.slice(), model, seq };
+      return { nodes: new Map([...nodes].map(([k, v]) => [k, v])), edges: edges.slice(), order: new Map(order), model, seq };
     }
     function restore(s) {
       nodes.clear(); for (const [k, v] of s.nodes) nodes.set(k, v);
-      edges = s.edges.slice(); model = s.model; seq = s.seq;
+      edges = s.edges.slice(); order = new Map(s.order || []); model = s.model; seq = s.seq;
     }
     function checkpoint() { undoStack.push(snapshot()); redoStack.length = 0; }
     function undo() { if (!undoStack.length) return false; redoStack.push(snapshot()); restore(undoStack.pop()); return true; }
     function redo() { if (!redoStack.length) return false; undoStack.push(snapshot()); restore(redoStack.pop()); return true; }
 
-    function addNode(n) { nodes.set(n.id, n); return n; }
+    function addNode(n) {
+      nodes.set(n.id, n);
+      if (!order.has(n.id)) {                 // append to the bottom of its column by default
+        let mx = -1;
+        for (const m of nodes.values()) if (m.id !== n.id && m.column === n.column) mx = Math.max(mx, ordOf(m.id));
+        order.set(n.id, mx + 1);
+      }
+      return n;
+    }
     function list() { return [...nodes.values()]; }
     function get(id) { return nodes.get(id); }
-    function reset() { nodes.clear(); edges = []; seq = 0; undoStack.length = 0; redoStack.length = 0; }
+    function reset() { nodes.clear(); edges = []; order = new Map(); seq = 0; undoStack.length = 0; redoStack.length = 0; }
+
+    // --- display order within a column ---------------------------------------
+    // Cards are laid out top-to-bottom by `order` (then id, for stability).
+    // Fractional orders are used transiently (a conjugate companion is inserted
+    // at primal+0.5) and then integerized by normalizeColumn so up/down swaps stay
+    // simple. orderOf falls back to +∞ so an un-ordered node sinks to the bottom.
+    function ordOf(id) { return order.has(id) ? order.get(id) : Number.POSITIVE_INFINITY; }
+    function colNodes(c) { return list().filter((n) => n.column === c); }
+    function orderedColumn(c) {
+      return colNodes(c).sort((a, b) => (ordOf(a.id) - ordOf(b.id)) || a.id.localeCompare(b.id));
+    }
+    function normalizeColumn(c) { orderedColumn(c).forEach((n, i) => order.set(n.id, i)); }
+
+    // Move a node one slot up (-1) or down (+1) within its column. Undoable.
+    // Returns true if it moved (false at a column boundary or for a bad id).
+    function moveNode(id, dir) {
+      const n = get(id); if (!n) return false;
+      const arr = orderedColumn(n.column);
+      const i = arr.findIndex((x) => x.id === id);
+      const j = i + (dir < 0 ? -1 : 1);
+      if (i < 0 || j < 0 || j >= arr.length) return false;
+      checkpoint();
+      const oi = ordOf(arr[i].id), oj = ordOf(arr[j].id);
+      order.set(arr[i].id, oj); order.set(arr[j].id, oi);
+      return true;
+    }
 
     // In the conjugate-variable model an equation E and its conjugate Ē are
     // INDEPENDENT polynomials, and on the reality slice E=0 ⇔ {Re E=0, Im E=0} ⇔
@@ -70,11 +109,13 @@
       const conj = QC.conjMPoly(node.poly);
       if (node.poly.sub(conj).isZero() || node.poly.add(conj).isZero()) return null;   // self-conjugate
       for (const m of nodes.values()) if (m.poly.equals(conj)) return null;            // already present
-      return addNode({
+      const comp = addNode({
         id: nid(), kind: node.kind, poly: conj, rel: node.rel,
         label: node.label + ' (conj)', model: node.model,
         provenance: { op: 'conjugate', inputs: [node.id] }, column: node.column, meta: node.meta,
       });
+      order.set(comp.id, ordOf(node.id) + 0.5);   // pair the conjugate right under its primal
+      return comp;
     }
 
     // Seed the graph from a generated (●)/(★)/(gauge) system. Clears first. In the
@@ -97,6 +138,7 @@
         }
       }
       if (withConj && model === 'conjugate') for (const p of primals) maybeAddConjugate(p);
+      normalizeColumn(0);          // integerize the primal+0.5 conjugate insertions
       return list();
     }
 
@@ -119,6 +161,7 @@
         }));
       }
       if (withConj && model === 'conjugate') for (const m of made.slice()) maybeAddConjugate(m);
+      normalizeColumn(0);          // keep each constraint adjacent to its conjugate companion
       return made;
     }
 
@@ -220,6 +263,42 @@
       return [...doomed];
     }
 
+    // Per-node descriptive stats for the card hovertext / Inspect. Reports the
+    // variable count, the (real) equation count this node contributes, each
+    // variable with its polynomial order, plus total degree, term count, the
+    // conjugacy status and a human-readable provenance string.
+    //
+    // Real-equation accounting (conjugate model): a complex equality E=0 is
+    // equivalent on the reality slice to TWO real equations {Re E=0, Im E=0}
+    // UNLESS E is self-conjugate (Ē=±E, e.g. the gauge or a Hermitian form), which
+    // is ONE. The store splits a non-self-conjugate equality into two nodes (E and
+    // its conjugate companion), so when that companion is present each node carries
+    // ONE real equation; if the companion was opted out (withConjugates:false) the
+    // single node still stands for the full TWO. Inequalities/≠ contribute one
+    // real condition each.
+    function nodeStats(id) {
+      const n = get(id); if (!n) return null;
+      const QC = getQC();
+      const vars = [...n.poly.vars()].sort();
+      const varOrders = vars.map((name) => ({ name, order: n.poly.degreeIn(name) }));
+      let selfConj = false, hasCompanion = false;
+      if (QC && QC.conjMPoly) {
+        const conj = QC.conjMPoly(n.poly);
+        selfConj = n.poly.sub(conj).isZero() || n.poly.add(conj).isZero();
+        if (!selfConj) for (const m of nodes.values()) if (m.id !== n.id && m.poly.equals(conj)) { hasCompanion = true; break; }
+      }
+      let realEquations;
+      if (n.rel === '=') realEquations = selfConj ? 1 : (hasCompanion ? 1 : 2);
+      else realEquations = 1;                          // '>' inequality or '≠' condition
+      return {
+        id, kind: n.kind, rel: n.rel, label: n.label,
+        numVars: vars.length, varOrders,
+        totalDegree: n.poly.totalDegree(), terms: n.poly.size(),
+        realEquations, selfConj, hasCompanion,
+        provenance: n.provenance, meta: n.meta,
+      };
+    }
+
     // CAS-agnostic export: model + every node as a term list (exact ℚ(i) coeffs) + edges.
     function exportDAG() {
       return {
@@ -234,7 +313,8 @@
 
     return {
       seedFromSystem, addConstraint, eliminate, eliminateWithGauge, duplicate, deleteNode,
-      sharedVars, previewCost, exportDAG,
+      sharedVars, previewCost, exportDAG, nodeStats,
+      moveNode, orderOf: ordOf, orderedColumn,
       undo, redo, reset,
       list, get,
       get edges() { return edges; },

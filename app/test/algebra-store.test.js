@@ -134,6 +134,56 @@ module.exports = async function run() {
        made.length === 2 && made[0].kind === 'constraint' && made[0].rel === '>' && made[1].rel === '=');
   }
 
+  // ---- conjugate pairing in the column display order ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system);
+    const ord = st.orderedColumn(0);
+    let paired = true;
+    ord.forEach((n, i) => {
+      if (n.provenance.op === 'conjugate') {
+        const prev = ord[i - 1];
+        if (!prev || prev.id !== n.provenance.inputs[0]) paired = false;
+      }
+    });
+    ok('order: each conjugate companion sits directly under its primal', paired);
+  }
+
+  // ---- reordering within a column (moveNode) ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system);
+    const ord0 = st.orderedColumn(0);
+    const first = ord0[0].id, second = ord0[1].id;
+    ok('moveNode: down swaps a card with the next one',
+       st.moveNode(first, 1) && st.orderedColumn(0)[0].id === second && st.orderedColumn(0)[1].id === first);
+    ok('moveNode: undo reverts the reorder', st.undo() && st.orderedColumn(0)[0].id === first);
+    ok('moveNode: refuses to move the top card up', st.moveNode(st.orderedColumn(0)[0].id, -1) === false);
+  }
+
+  // ---- per-node stats (the card hovertext) ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system);
+    const loc = st.list()[0];
+    const s = st.nodeStats(loc.id);
+    ok('nodeStats: numVars matches poly.vars().size', s.numVars === loc.poly.vars().size);
+    ok('nodeStats: varOrders report degreeIn for every variable',
+       s.varOrders.length === s.numVars && s.varOrders.every((v) => v.order === loc.poly.degreeIn(v.name)));
+    ok('nodeStats: total degree matches poly.totalDegree()', s.totalDegree === loc.poly.totalDegree());
+    ok('nodeStats: a non-self-conjugate equality with a companion contributes 1 real equation',
+       s.rel === '=' && s.hasCompanion && s.realEquations === 1);
+    const gauge = st.list().find((n) => n.meta && n.meta.block === 'gauge');
+    const gs = st.nodeStats(gauge.id);
+    ok('nodeStats: the gauge is self-conjugate → 1 real equation, no companion',
+       gs.selfConj && gs.realEquations === 1 && !gs.hasCompanion);
+    const st2 = QD.AlgebraStore.create();
+    st2.seedFromSystem(system, { withConjugates: false });
+    const s2 = st2.nodeStats(st2.list()[0].id);
+    ok('nodeStats: a lone non-self-conjugate equality stands for 2 real equations',
+       !s2.hasCompanion && !s2.selfConj && s2.realEquations === 2);
+  }
+
   // ---- export shape ----
   {
     const st = QD.AlgebraStore.create();

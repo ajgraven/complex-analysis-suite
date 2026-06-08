@@ -697,10 +697,35 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #algebra-graph .algebra-generated  { border-left: 3px solid var(--c-accent, #2b7); }
 #algebra-graph .algebra-constraint { border-left: 3px solid var(--c-warn, #d80); }
 #algebra-graph .algebra-derived    { border-left: 3px solid var(--c-muted, #88a); }
-#algebra-graph .algebra-node-head { font-weight: 600; color: var(--c-muted); margin-bottom: 3px; font-size: 11px; }
+/* Header is a flex toolbar: chevron · title (grows) · reorder/copy tools. */
+#algebra-graph .algebra-node-head {
+  display: flex; align-items: center; gap: 4px;
+  font-weight: 600; color: var(--c-muted); margin-bottom: 3px; font-size: 11px;
+}
+#algebra-graph .algebra-node-title {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#algebra-graph .algebra-node-tools { display: flex; gap: 2px; flex: none; }
+#algebra-graph .algebra-icon {
+  flex: none; border: none; background: transparent; cursor: pointer;
+  color: var(--c-muted, #88a); font-size: 11px; line-height: 1;
+  padding: 1px 3px; border-radius: 3px;
+}
+#algebra-graph .algebra-icon:hover { background: var(--c-border-soft, #eee); color: var(--c-text, #222); }
+#algebra-graph .algebra-chevron { font-size: 10px; }
+/* Collapsed body: single-line equation preview, clipped with an ellipsis.
+   Expanded body: full typeset math, horizontally scrollable if it overflows. */
 #algebra-graph .algebra-node-math { overflow-x: auto; max-width: 100%; }
+#algebra-graph .algebra-node-math.collapsed {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#algebra-graph .algebra-node-math.collapsed .katex-display { display: none; }
 #controls-algebra .card-sub { border-top: 1px solid var(--c-border-soft, #eee); padding-top: 6px; }
 #controls-algebra .card-sub.hidden { display: none; }
+#controls-algebra #alg-help.hidden { display: none; }
+#controls-algebra .algebra-help-q {
+  flex: none; width: 22px; padding: 0; font-weight: 700; border-radius: 50%;
+}
 
 #alternates-card .alt {
   display: flex;

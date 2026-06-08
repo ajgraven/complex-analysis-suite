@@ -15,14 +15,17 @@
 (function () {
   'use strict';
 
+  // Each palette button carries a concise tooltip (the detailed math lives in the
+  // collapsible "?" help and the per-card hovertext, per CAS-UX: terse surface,
+  // depth on demand).
   const CONSTRAINT_BUTTONS = [
-    { form: 'convex', label: 'Convex' },
-    { form: 'star', label: 'Star-like' },
-    { form: 'spiral', label: 'Spiral-like' },
-    { form: 'localUniv', label: 'φ′≠0 (local)' },
-    { form: 'injectivity', label: 'Injectivity (global)' },
-    { form: 'convexBorder', label: 'Convex border' },
-    { form: 'starBorder', label: 'Star border' },
+    { form: 'convex', label: 'Convex', tip: 'Re(1 + ζφ″/φ′) > 0 on |ζ|=1 — Ω is convex.' },
+    { form: 'star', label: 'Star-like', tip: 'Re(ζφ′/(φ−w₀)) > 0 — Ω is star-like about w₀.' },
+    { form: 'spiral', label: 'Spiral-like', tip: 'Re(e^{iλ}ζφ′/(φ−w₀)) > 0 for some λ (existential-λ).' },
+    { form: 'localUniv', label: 'φ′≠0 (local)', tip: 'Local univalence: φ′ has no zero in 𝔻 (Rabinowitsch witness).' },
+    { form: 'injectivity', label: 'Injectivity (global)', tip: 'Global: (φ(ζ₁)−φ(ζ₂))/(ζ₁−ζ₂) ≠ 0 on the boundary.' },
+    { form: 'convexBorder', label: 'Convex border', tip: 'Discriminant locus where convexity is lost (export-only for order ≥ 2).' },
+    { form: 'starBorder', label: 'Star border', tip: 'Discriminant locus where star-likeness is lost (export-only for order ≥ 2).' },
   ];
 
   function installAlgebra(ctx) {
@@ -85,33 +88,41 @@
       const panel = $('#controls-algebra');
       if (!panel) return;
       panel.innerHTML =
-        '<div class="hint" data-str-html="hints.algebraCard"></div>' +
-        '<div class="row"><button id="alg-seed" class="small" type="button">Generate / re-seed</button>' +
-        '<button id="alg-undo" class="small" type="button" style="margin-left:6px;">Undo</button>' +
-        '<button id="alg-redo" class="small" type="button" style="margin-left:4px;">Redo</button>' +
-        '<button id="alg-fit" class="small" type="button" style="margin-left:4px;">Fit</button></div>' +
+        // Terse one-liner + a "?" that toggles the full help (depth on demand).
+        '<div class="row" style="align-items:flex-start; gap:6px;">' +
+        '  <div class="hint" data-str-html="hints.algebraCard" style="flex:1;"></div>' +
+        '  <button id="alg-help-toggle" class="small algebra-help-q" type="button" title="Show / hide help">?</button>' +
+        '</div>' +
+        '<div id="alg-help" class="hint card-sub hidden" data-str-html="algebra.help" style="margin:4px 0;"></div>' +
+        '<div class="row"><button id="alg-seed" class="small" type="button" ' +
+        'title="Generate the (●)/(★)/gauge system from the current bounded solve (replaces the graph)">Generate / re-seed</button>' +
+        '<button id="alg-undo" class="small" type="button" style="margin-left:6px;" title="Undo">Undo</button>' +
+        '<button id="alg-redo" class="small" type="button" style="margin-left:4px;" title="Redo">Redo</button>' +
+        '<button id="alg-fit" class="small" type="button" style="margin-left:4px;" title="Reset pan / zoom">Fit</button></div>' +
         '<div id="alg-status" class="hint" style="margin:4px 0;"></div>' +
         '<div class="row" style="margin-top:4px;"><button id="alg-gauge-elim" class="small" type="button" ' +
         'data-str-title="tooltips.gaugeElim">Eliminate with gauge (all)</button></div>' +
-        '<div class="key" style="margin-top:6px;">Add univalence constraint</div>' +
+        '<div class="key" style="margin-top:6px;" title="Append a boundary-univalence condition as new node(s) — hover each button for its meaning">Add univalence constraint</div>' +
         '<div id="alg-palette" class="row" style="flex-wrap:wrap; gap:4px;"></div>' +
         '<div id="alg-elim" class="card-sub hidden" style="margin-top:8px;">' +
-        '  <div class="key">Eliminate a variable</div>' +
+        '  <div class="key" title="Take the Sylvester resultant of the two selected nodes in the chosen variable">Eliminate a variable</div>' +
         '  <div id="alg-elim-sel" class="hint"></div>' +
         '  <div class="row" style="margin-top:4px;"><label>Variable ' +
         '    <select id="alg-var"></select></label>' +
         '    <button id="alg-eliminate" class="small" type="button" style="margin-left:6px;">Eliminate</button></div>' +
-        '  <div id="alg-cost" class="hint" style="margin-top:2px;"></div>' +
+        '  <div id="alg-cost" class="hint" style="margin-top:2px;" title="Sylvester matrix size and term counts — the elimination cost"></div>' +
         '</div>' +
-        '<div class="key" style="margin-top:8px;">Export</div>' +
-        '<div class="row" style="gap:4px;"><button id="alg-export-json" class="small" type="button">Download DAG (JSON)</button>' +
-        '<button id="alg-copy-latex" class="small" type="button">Copy LaTeX</button></div>';
+        '<div class="key" style="margin-top:8px;" title="Export the whole system for an external CAS (Gröbner / RCTD) or a paper">Export</div>' +
+        '<div class="row" style="gap:4px;"><button id="alg-export-json" class="small" type="button" ' +
+        'title="Download every node as an exact ℚ(i) term list + edges (CAS-ready JSON)">Download DAG (JSON)</button>' +
+        '<button id="alg-copy-latex" class="small" type="button" title="Copy all equations as a gathered LaTeX block">Copy LaTeX</button></div>';
 
       // constraint palette buttons
       const pal = $('#alg-palette');
       CONSTRAINT_BUTTONS.forEach((b) => {
         const btn = document.createElement('button');
         btn.className = 'small'; btn.type = 'button'; btn.textContent = b.label; btn.dataset.form = b.form;
+        if (b.tip) btn.title = b.tip;
         btn.addEventListener('click', () => {
           if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
           if (!store.size) seedFromCurrent();
@@ -121,6 +132,8 @@
         pal.appendChild(btn);
       });
 
+      const helpBtn = $('#alg-help-toggle');
+      if (helpBtn) helpBtn.addEventListener('click', () => { const h = $('#alg-help'); if (h) h.classList.toggle('hidden'); });
       $('#alg-seed').addEventListener('click', seedFromCurrent);
       $('#alg-undo').addEventListener('click', () => { if (store.undo()) rerender(); });
       $('#alg-redo').addEventListener('click', () => { if (store.redo()) rerender(); });
@@ -191,15 +204,51 @@
       setTimeout(() => URL.revokeObjectURL(url), 0);
       toast('Exported ' + data.nodes.length + ' nodes (JSON)');
     }
-    function copyLatex() {
-      const lines = store.list().map((n) => {
-        const suffix = n.rel === '>' ? ' > 0' : n.rel === '≠' ? ' \\neq 0' : ' = 0';
-        return '\\text{[' + n.id + ']}\\quad ' + n.poly.toLatex(latexOf) + suffix;
-      });
-      const tex = '\\begin{gathered}\n' + lines.join(' \\\\[4pt]\n') + '\n\\end{gathered}';
-      const done = (okp) => toast(okp ? 'LaTeX copied' : 'Copy failed', okp ? {} : { kind: 'error' });
+    function relSuffix(rel) { return rel === '>' ? ' > 0' : rel === '≠' ? ' \\neq 0' : ' = 0'; }
+    function writeClipboard(tex, label) {
+      const done = (okp) => toast(okp ? (label || 'LaTeX') + ' copied' : 'Copy failed', okp ? {} : { kind: 'error' });
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(tex).then(() => done(true), () => done(false));
       else done(false);
+    }
+    // Copy ALL nodes as a gathered LaTeX environment (sidebar "Copy LaTeX").
+    function copyLatex() {
+      const lines = store.list().map((n) => '\\text{[' + n.id + ']}\\quad ' + n.poly.toLatex(latexOf) + relSuffix(n.rel));
+      writeClipboard('\\begin{gathered}\n' + lines.join(' \\\\[4pt]\n') + '\n\\end{gathered}', 'LaTeX');
+    }
+    // Copy ONE node's equation as LaTeX (the per-card copy button).
+    function copyNodeLatex(id) {
+      const n = store.get(id); if (!n) return;
+      writeClipboard(n.poly.toLatex(latexOf) + relSuffix(n.rel), n.label + ' LaTeX');
+    }
+
+    // ---- per-card hovertext (driven by store.nodeStats) ---------------------
+    function provText(prov) {
+      if (!prov) return '';
+      switch (prov.op) {
+        case 'generate': return 'generated (' + (prov.block || '?') + ' block)';
+        case 'conjugate': return 'conjugate companion of ' + (prov.inputs || []).join(', ');
+        case 'resultant': return 'eliminated ' + latexPlain(prov.variable) + ' from ' + (prov.inputs || []).join(', ');
+        case 'constraint': return 'univalence constraint (' + (prov.form || '?') + ')';
+        case 'duplicate': return 'copy of ' + (prov.inputs || []).join(', ');
+        default: return prov.op || '';
+      }
+    }
+    function nodeTitle(id) {
+      const s = store.nodeStats(id); if (!s) return '';
+      const conj = s.selfConj ? ' (self-conjugate)' : s.hasCompanion ? ' (½ of a conjugate pair)' : '';
+      const lines = [
+        s.label,
+        'Variables: ' + s.numVars,
+        'Real equations contributed: ' + s.realEquations + conj,
+        'Total degree: ' + s.totalDegree + '   ·   terms: ' + s.terms,
+      ];
+      if (s.varOrders.length) {
+        lines.push('Order in each variable:');
+        s.varOrders.forEach((v) => lines.push('   ' + latexPlain(v.name) + ' : ' + v.order));
+      }
+      const prov = provText(s.provenance);
+      if (prov) lines.push('Origin: ' + prov);
+      return lines.join('\n');
     }
 
     // ---- surface (graph) over #plot-area ------------------------------------
@@ -209,7 +258,12 @@
       surface.id = 'algebra-graph';
       surface.className = 'hidden';
       area.appendChild(surface);
-      canvas = QD.AlgebraCanvas.create(surface, { onSelect: updateElimPanel });
+      canvas = QD.AlgebraCanvas.create(surface, {
+        onSelect: updateElimPanel,
+        onCopy: copyNodeLatex,
+        onMove: (id, dir) => { if (store.moveNode(id, dir)) rerender(); },
+        titleOf: nodeTitle,
+      });
     }
     function showSurface(on) { if (surface) surface.classList.toggle('hidden', !on); }
 

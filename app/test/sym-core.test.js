@@ -199,6 +199,8 @@ module.exports = async function run() {
     const f0 = mv('x').pow(2).mul(mv('y')).add(mv('x')).sub(mi(3)); // y·x² + x − 3
     ok('degreeIn(x)=2, degreeIn(y)=1, degreeIn(z)=0',
        f0.degreeIn('x') === 2 && f0.degreeIn('y') === 1 && f0.degreeIn('z') === 0);
+    ok('totalDegree(y·x²+x−3)=3; const=0; zero=−1',
+       f0.totalDegree() === 3 && mi(7).totalDegree() === 0 && S.MPoly.zero().totalDegree() === -1);
     const cs = f0.coeffsIn('x');   // [ −3, 1, y ]
     ok('coeffsIn(x): c0=−3, c1=1, c2=y',
        cs.length === 3 && cs[0].equals(mi(-3)) && cs[1].equals(mi(1)) && cs[2].equals(mv('y')));

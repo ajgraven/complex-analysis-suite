@@ -258,12 +258,9 @@
          then Generate; export as LaTeX or a CAS-ready JSON term list.`,
 
       algebraCard:
-        `Interactive symbolic workspace. <b>Generate</b> seeds the (●)/(★)/gauge system
-         from the current bounded solve; add <b>univalence constraints</b> (convex, star-like,
-         spiral-like, φ′≠0, global injectivity, geometric borders); then select <b>two
-         equation nodes</b> on the graph and a shared variable to <b>eliminate</b> it by
-         resultant — a new node appears one column over. Undo/redo, Fit, and export
-         (JSON term lists / LaTeX) are below.`,
+        `Symbolic workspace: <b>Generate</b> the system, add <b>constraints</b>, then select
+         <b>two nodes</b> + a shared variable to <b>eliminate</b> by resultant. Hover any
+         control for details, or press <b>?</b> for the full guide.`,
 
       searchOptions:
         `Overrides for the aggressiveness preset. Leave a field blank to use
