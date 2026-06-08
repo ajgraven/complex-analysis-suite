@@ -461,7 +461,11 @@ view is active.
   reports whether the system has finitely many solutions and how many; **Solve (numeric)**
   runs the shape-lemma path (FGLM to lex → Durand–Kerner → back-substitution). The
   Gröbner and Solve actions run **off the main thread** in a Web Worker with live
-  progress and a **Cancel** button (a main-thread fallback covers `file://`). Cards are
+  progress and a **Cancel** button (a main-thread fallback covers `file://`). Variables
+  to eliminate are chosen from a **dropdown checklist**; you can **assume chosen
+  variables are real** (z̄ⱼ ≡ zⱼ) to regenerate a simplified system — often the
+  difference between an intractable and a feasible Gröbner basis. Op failures show in a
+  **persistent, dismissible error panel** with actionable guidance. Cards are
   **collapsible** (collapsed by default — a one-line
   preview; expand for the full form), **reorderable** within a column (▲/▼), copy as
   **LaTeX** individually (⧉), and carry **hovertext** (variable count, real-equation

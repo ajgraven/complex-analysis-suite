@@ -727,6 +727,35 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   flex: none; width: 22px; padding: 0; font-weight: 700; border-radius: 50%;
 }
 
+/* Variable picker (dropdown checklist) for eliminate / assume-real */
+#controls-algebra .algebra-picker { position: relative; display: inline-block; }
+#controls-algebra .algebra-picker-menu {
+  position: absolute; z-index: 30; top: 100%; left: 0; margin-top: 2px;
+  min-width: 150px; max-height: 220px; overflow: auto;
+  background: var(--c-bg, #fff); border: 1px solid var(--c-border, #ccc);
+  border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 4px;
+}
+#controls-algebra .algebra-picker-menu.hidden { display: none; }
+#controls-algebra .algebra-picker-row {
+  display: flex; align-items: center; gap: 6px; padding: 2px 4px;
+  font-size: 12px; white-space: nowrap; cursor: pointer;
+}
+#controls-algebra .algebra-picker-row:hover { background: var(--c-border-soft, #f0f0f0); }
+
+/* Persistent, dismissible error panel */
+#controls-algebra .algebra-error {
+  display: flex; align-items: flex-start; gap: 6px; margin: 4px 0; padding: 6px 8px;
+  font-size: 12px; border-radius: 4px;
+  background: var(--c-error-bg, #fdecea); border: 1px solid var(--c-error, #d9534f);
+  color: var(--c-error-text, #a02622);
+}
+#controls-algebra .algebra-error.hidden { display: none; }
+#controls-algebra .algebra-error-msg { flex: 1; }
+#controls-algebra .algebra-error-close {
+  flex: none; border: none; background: transparent; cursor: pointer;
+  font-size: 16px; line-height: 1; padding: 0 2px; color: inherit; font-weight: 700;
+}
+
 #alternates-card .alt {
   display: flex;
   align-items: center;

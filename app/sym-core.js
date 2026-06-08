@@ -812,11 +812,21 @@
 
   // Caps — Buchberger can blow up super-exponentially, so bound the run and throw
   // a clear "use CAS export" error rather than hanging (mirrors RESULTANT_MATRIX_CAP).
-  // All overridable via opts {maxBasis, maxSteps, maxDegree, maxTerms}.
-  const GROEBNER_MAX_BASIS = 80;     // generators in the working basis
-  const GROEBNER_MAX_STEPS = 8000;   // S-pair reductions
-  const GROEBNER_MAX_DEGREE = 40;    // total degree of any new generator
-  const GROEBNER_MAX_TERMS = 8000;   // term count of any new generator
+  // All overridable via opts {maxBasis, maxSteps, maxDegree, maxTerms}. These are set
+  // GENEROUSLY because the heavy ops now run in a cancellable Web Worker (sym-worker.js)
+  // that keeps the UI responsive — a long run can be cancelled rather than guessed-at, so
+  // real systems (e.g. the reality-reduced cardioid: 118 generators) complete instead of
+  // erroring on a too-tight bound. The caps remain finite as a backstop against a true
+  // runaway; past them the error suggests asserting reality / eliminating / CAS export.
+  // Tuned so feasible interactive systems complete (e.g. the reality-reduced cardioid:
+  // 118 generators, ~10 s) while a genuinely intractable one (the FULL conjugate
+  // cardioid is 478 generators / ~6.7 min — and 478 cards would choke the canvas)
+  // errors with actionable guidance (assume variables real / eliminate / CAS export)
+  // instead of grinding. Overridable per call for power users.
+  const GROEBNER_MAX_BASIS = 300;      // generators in the working basis
+  const GROEBNER_MAX_STEPS = 150000;   // S-pair reductions
+  const GROEBNER_MAX_DEGREE = 200;     // total degree of any new generator
+  const GROEBNER_MAX_TERMS = 100000;   // term count of any new generator
 
   // Buchberger's algorithm → a Gröbner basis of ⟨polys⟩ under `order` (a
   // monomialOrder object, an order kind string, or omitted → grevlex). Uses the
@@ -1186,6 +1196,15 @@
       const out = { ok: res.ok, reason: res.reason, dimension: res.dimension, univariateDegree: res.univariateDegree };
       if (res.ok) out.solutions = res.solutions;       // {var:{re,im}} — JSON-safe
       return out;
+    }
+    if (kind === 'dimension') {
+      const vars = payload.vars || _ambientVars(polys);
+      const order = monomialOrder('grevlex', vars);
+      const opts = Object.assign({}, payload.opts, onProgress ? { onProgress } : {});
+      const G = buchberger(polys, order, opts);
+      const zeroDim = isZeroDimensional(G, order, vars);
+      // Infinity isn't JSON-cloneable → report zeroDim + a finite count (null if ∞)
+      return { zeroDim, dimension: zeroDim ? quotientDimension(G, order, vars) : null, numVars: vars.length };
     }
     throw new Error('runJob: unknown kind ' + kind);
   }

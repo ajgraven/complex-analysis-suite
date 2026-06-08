@@ -42,6 +42,8 @@
     let mounted = false;
     let activeEnv = null;          // latest classical-bounded solve envelope
     let lastCap = 6;
+    const elimSel = new Set();     // raw variable names chosen to eliminate (Gröbner)
+    const realSel = new Set();     // primal variable names asserted real
 
     // LaTeX for the conjugate-model vars + the constraint boundary/aux vars.
     const baseLatex = QE.latexOf('conjugate');
@@ -67,13 +69,67 @@
     function toast(msg, opts) { if (QD.QoL && QD.QoL.toast) QD.QoL.toast(msg, opts || {}); }
     function rerender() { if (canvas) canvas.render(store, latexOf); updateElimPanel(canvas ? canvas.getSelection() : []); }
 
+    // ---- persistent, dismissible error panel --------------------------------
+    function showError(msg) {
+      const e = $('#alg-error'), m = $('#alg-error-msg');
+      if (e && m) { m.textContent = msg; e.classList.remove('hidden'); }
+      else toast(msg, { kind: 'error' });
+    }
+    function clearError() { const e = $('#alg-error'); if (e) e.classList.add('hidden'); }
+
+    // ---- variable picker (dropdown checklist) -------------------------------
+    // A discoverable replacement for free-text variable entry: a button that opens
+    // a checklist of the available variables, toggling membership in `selected`.
+    // getOptions() returns the raw names (rebuilt each open); `selected` is a Set
+    // that the picker mutates; onChange fires after each toggle.
+    let _openMenu = null;
+    function buildPicker(host, opts) {
+      if (!host) return;
+      host.innerHTML = '';
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'small algebra-picker-btn';
+      const menu = document.createElement('div');
+      menu.className = 'algebra-picker-menu hidden';
+      host.appendChild(btn); host.appendChild(menu);
+      const label = () => {
+        const n = opts.selected.size;
+        btn.textContent = (opts.label || 'pick') + (n ? ' (' + n + ') ▾' : ' ▾');
+      };
+      function render() {
+        menu.innerHTML = '';
+        const names = opts.getOptions() || [];
+        if (!names.length) { const d = document.createElement('div'); d.className = 'hint'; d.textContent = 'no variables yet'; menu.appendChild(d); return; }
+        names.forEach((raw) => {
+          const row = document.createElement('label'); row.className = 'algebra-picker-row';
+          const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = raw; cb.checked = opts.selected.has(raw);
+          cb.addEventListener('change', () => { if (cb.checked) opts.selected.add(raw); else opts.selected.delete(raw); label(); if (opts.onChange) opts.onChange(); });
+          const span = document.createElement('span'); span.textContent = (opts.friendly ? opts.friendly(raw) : raw);
+          row.appendChild(cb); row.appendChild(span); menu.appendChild(row);
+        });
+      }
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const willOpen = menu.classList.contains('hidden');
+        if (_openMenu && _openMenu !== menu) _openMenu.classList.add('hidden');
+        if (willOpen) { render(); menu.classList.remove('hidden'); _openMenu = menu; }
+        else { menu.classList.add('hidden'); _openMenu = null; }
+      });
+      menu.addEventListener('click', (ev) => ev.stopPropagation());
+      label();
+      return { refresh: label };
+    }
+    function friendlyVar(raw) { return latexPlain(raw) + ' · ' + raw; }
+
     // ---- seeding -------------------------------------------------------------
     function seedFromCurrent() {
       if (!activeEnv) { setStatus(STR.noSolve || 'No classical bounded QD solved yet.'); return false; }
       try {
+        clearError();
         const sys = QE.generateClassicalBounded(activeEnv.hData, { maxPoleOrder: lastCap });
-        store.seedFromSystem(sys);
-        setStatus((STR.seeded || 'Seeded') + ' ' + store.size + ' equations (incl. conjugates; ' + sys.n + ' pole' + (sys.n === 1 ? '' : 's') + ', order ' + sys.d + ').');
+        const reals = [...realSel];
+        store.seedFromSystem(sys, { realVars: reals });
+        setStatus((STR.seeded || 'Seeded') + ' ' + store.size + ' equations (incl. conjugates; ' + sys.n + ' pole' + (sys.n === 1 ? '' : 's') + ', order ' + sys.d + ')' +
+          (reals.length ? '; assuming ' + reals.map(latexPlain).join(', ') + ' real' : '') + '.');
         rerender();
         return true;
       } catch (e) {
@@ -100,14 +156,22 @@
         '<button id="alg-redo" class="small" type="button" style="margin-left:4px;" title="Redo">Redo</button>' +
         '<button id="alg-fit" class="small" type="button" style="margin-left:4px;" title="Reset pan / zoom">Fit</button></div>' +
         '<div id="alg-status" class="hint" style="margin:4px 0;"></div>' +
+        // Persistent, dismissible error panel (stays until × is clicked).
+        '<div id="alg-error" class="algebra-error hidden">' +
+        '  <span id="alg-error-msg" class="algebra-error-msg"></span>' +
+        '  <button id="alg-error-close" class="algebra-error-close" type="button" title="Dismiss">×</button>' +
+        '</div>' +
+        // Assume-real picker: assert chosen variables are real, then re-seed simplified.
+        '<div class="row" style="margin-top:4px; gap:4px; align-items:center;">' +
+        '  <span style="font-size:11px;">Assume real:</span><span id="alg-real-pick" class="algebra-picker"></span>' +
+        '  <button id="alg-real-apply" class="small" type="button" data-str-title="tooltips.assumeReal">Apply &amp; re-seed</button></div>' +
         '<div class="row" style="margin-top:4px;"><button id="alg-gauge-elim" class="small" type="button" ' +
         'data-str-title="tooltips.gaugeElim">Eliminate with gauge (all)</button></div>' +
         '<div class="row" style="margin-top:4px; flex-wrap:wrap; gap:4px; align-items:center;">' +
         '  <button id="alg-groebner" class="small" type="button" data-str-title="tooltips.groebner">Gröbner basis (all eqns)</button>' +
         '  <label style="font-size:11px;" title="Monomial order. lex = elimination order; grevlex = fastest general.">order ' +
         '    <select id="alg-gb-order"><option value="grevlex">grevlex</option><option value="grlex">grlex</option><option value="lex">lex</option></select></label>' +
-        '  <input id="alg-gb-elim" class="small" type="text" placeholder="eliminate vars, e.g. z1,zb1" style="width:150px;" ' +
-        '    title="Comma-separated RAW variable names to eliminate (uses a fast block elimination order; leave blank for a plain reduced basis)."></div>' +
+        '  <span style="font-size:11px;">eliminate:</span><span id="alg-elim-pick" class="algebra-picker"></span></div>' +
         '<div class="row" style="margin-top:4px; gap:4px;">' +
         '  <button id="alg-dimension" class="small" type="button" data-str-title="tooltips.dimension">Dimension / count</button>' +
         '  <button id="alg-solve" class="small" type="button" data-str-title="tooltips.solveNumeric">Solve (numeric)</button>' +
@@ -166,6 +230,14 @@
       });
       $('#alg-export-json').addEventListener('click', exportJson);
       $('#alg-copy-latex').addEventListener('click', copyLatex);
+      $('#alg-error-close').addEventListener('click', clearError);
+      $('#alg-real-apply').addEventListener('click', () => { seedFromCurrent(); });
+
+      // variable pickers (eliminate = all current vars; assume-real = primal base vars)
+      buildPicker($('#alg-elim-pick'), { label: 'pick', friendly: friendlyVar, selected: elimSel, getOptions: () => store.variables() });
+      buildPicker($('#alg-real-pick'), { label: 'pick', friendly: (raw) => latexPlain(raw) + ' · ' + raw, selected: realSel, getOptions: () => store.baseVariables() });
+      // close any open picker menu when clicking elsewhere
+      document.addEventListener('click', () => { if (_openMenu) { _openMenu.classList.add('hidden'); _openMenu = null; } });
 
       if (QD.Strings && QD.Strings.apply) QD.Strings.apply(panel);
       setStatus(activeEnv ? '' : (STR.noSolve || 'No classical bounded QD solved yet.'));
@@ -216,17 +288,25 @@
     function cancelOp() { if (_abort) { try { _abort.abort(); } catch (e) { /* ignore */ } } if (QD.SymWorker) QD.SymWorker.cancel(); }
     function _newAbort() { return (typeof AbortController !== 'undefined') ? new AbortController() : null; }
 
+    // Append a CAS-route hint to cap/too-large failures (the recurring case).
+    function withGuidance(reason) {
+      return /export|cap|exceed|too large|step|basis|degree|terms/i.test(reason || '')
+        ? (reason + '  Try: assume variables real (simplifies the system), eliminate fewer variables, or use the CAS export.')
+        : reason;
+    }
+
     // Gröbner basis of a node selection (null/empty ⇒ every equality node), run
     // off the main thread via QD.SymWorker (falls back to sync if unavailable).
-    // Reads the order selector and the comma-separated "eliminate" list.
+    // Reads the order selector and the elimination-variable picker.
     function doGroebner(sel) {
       if (_abort) return;                       // an op is already running
       if (!store.size) { if (!seedFromCurrent()) return; }
+      clearError();
       const ids = (sel && sel.length) ? sel.slice()
         : store.list().filter((n) => n.rel === '=').map((n) => n.id);
-      const orderEl = $('#alg-gb-order'), elimEl = $('#alg-gb-elim');
+      const orderEl = $('#alg-gb-order');
       const order = (orderEl && orderEl.value) || 'grevlex';
-      const elim = (elimEl && elimEl.value || '').split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+      const elim = [...elimSel];
       const opts = elim.length ? { eliminate: elim } : { order };
       const ctrl = _newAbort(); _abort = ctrl;
       setBusy(true, 'Computing Gröbner basis…');
@@ -236,29 +316,40 @@
       }).then((r) => {
         _abort = null; setBusy(false);
         if (r.aborted) { setStatus('Cancelled.'); toast('Cancelled'); return; }
-        if (!r.ok) { toast(r.reason || 'Gröbner basis failed', { kind: 'error' }); setStatus(''); return; }
+        if (!r.ok) { showError('Gröbner basis: ' + withGuidance(r.reason || 'failed')); setStatus(''); return; }
         if (canvas) canvas.clearSelection();
         rerender(); setStatus('');
         toast('Gröbner basis: ' + r.created.length + ' generator(s)' +
-          (elim.length ? ' eliminating ' + elim.join(', ') : ' (' + order + ')') +
+          (elim.length ? ' eliminating ' + elim.map(latexPlain).join(', ') : ' (' + order + ')') +
           (r.skipped.length ? '; skipped ' + r.skipped.length + ' non-equality' : ''));
       });
     }
 
-    // Report the dimension / solution count of the current equality system (sync —
-    // it's a quick grevlex-basis check).
+    // Report the dimension / solution count of the current equality system, off the
+    // main thread (falls back to sync) so a heavy grevlex basis can't freeze the UI.
     function doDimension() {
+      if (_abort) return;
       if (!store.size) { if (!seedFromCurrent()) return; }
-      const r = store.dimension();
-      if (!r.ok) { toast(r.reason || 'dimension unavailable', { kind: 'error' }); return; }
-      if (r.zeroDim) toast('Zero-dimensional: ' + r.dimension + ' solution(s) (with multiplicity), ' + r.numVars + ' variables.');
-      else toast('Positive-dimensional: infinitely many solutions (' + r.numVars + ' variables) — fix more data or add constraints.');
+      clearError();
+      const ctrl = _newAbort(); _abort = ctrl;
+      setBusy(true, 'Computing dimension…');
+      store.dimensionAsync(null, {}, {
+        signal: ctrl && ctrl.signal,
+        onProgress: (info) => setStatus('Dimension… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
+      }).then((r) => {
+        _abort = null; setBusy(false); setStatus('');
+        if (r.aborted) { toast('Cancelled'); return; }
+        if (!r.ok) { showError('Dimension: ' + withGuidance(r.reason || 'unavailable')); return; }
+        if (r.zeroDim) toast('Zero-dimensional: ' + r.dimension + ' solution(s) (with multiplicity), ' + r.numVars + ' variables.');
+        else toast('Positive-dimensional: infinitely many solutions (' + r.numVars + ' variables) — assume more variables real or add constraints.');
+      });
     }
     // Solve the current equality system numerically (shape-lemma path), off the main
     // thread via QD.SymWorker (falls back to sync if unavailable).
     function doSolve() {
       if (_abort) return;
       if (!store.size) { if (!seedFromCurrent()) return; }
+      clearError();
       const ctrl = _newAbort(); _abort = ctrl;
       setBusy(true, 'Solving (Gröbner → FGLM → roots)…');
       store.solveAsync(null, {}, {
@@ -267,7 +358,7 @@
       }).then((r) => {
         _abort = null; setBusy(false); setStatus('');
         if (r.aborted) { toast('Cancelled'); return; }
-        if (!r.ok) { toast('No numeric solve: ' + (r.reason || 'unavailable'), { kind: 'error' }); return; }
+        if (!r.ok) { showError('Numeric solve: ' + withGuidance(r.reason || 'unavailable')); return; }
         toast('Solved: ' + r.solutions.length + ' solution(s) (dimension ' + r.dimension + '). See console for coordinates.');
         try {
           console.table(r.solutions.map((s) => {

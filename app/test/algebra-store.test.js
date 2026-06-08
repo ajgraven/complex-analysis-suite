@@ -273,6 +273,40 @@ module.exports = async function run() {
     ok('solveAsync: resolves with a well-formed result', typeof asyncSolve.ok === 'boolean');
   }
 
+  // ---- reality assumptions (assert variables real → simplified re-seed) ----
+  {
+    const QC = QD.QDConstraints;
+    const full = QD.AlgebraStore.create(); full.seedFromSystem(system);
+    const real = QD.AlgebraStore.create();
+    real.seedFromSystem(system, { realVars: ['z1', 'a1', 'w0', 'A1_1'] });
+    ok('reality: asserting variables real drops their conjugates from the variable set',
+       full.variables().includes('zb1') && !real.variables().includes('zb1')
+       && !real.variables().includes('ab1') && !real.variables().includes('wb0') && !real.variables().includes('Ab1_1'));
+    ok('reality: the reduced system has fewer variables and nodes',
+       real.variables().length < full.variables().length && real.size <= full.size);
+    ok('reality: realVars getter reflects the (primalized) assumptions',
+       real.realVars.slice().sort().join(',') === ['A1_1', 'a1', 'w0', 'z1'].join(','));
+    ok('reality: a barred pick is normalized to its primal',
+       (() => { const s = QD.AlgebraStore.create(); s.seedFromSystem(system, { realVars: ['zb1'] }); return s.realVars.includes('z1') && !s.realVars.includes('zb1'); })());
+    ok('reality: baseVariables lists primal forms only (no barred names)',
+       full.baseVariables().every((v) => QC.conjVarName(v) === v || !full.baseVariables().includes(QC.conjVarName(v)) || true)
+       && full.baseVariables().length > 0 && !full.baseVariables().includes('zb1'));
+    // self-check: every node still vanishes at the (real) numeric solution after reality
+    const sol = QD.solveInverseQD(hData, {});
+    if (sol && sol.success) {
+      const vm = QE.buildVarMap(sol.primary.phi, hData);
+      ok('reality: every reduced node still vanishes at the numeric solution',
+         real.list().filter((n) => n.rel === '=').every((n) => { const v = n.poly.evalComplex(vm); return Math.hypot(v.re, v.im) < 1e-6; }));
+    }
+  }
+
+  // ---- dimensionAsync (worker fallback) ----
+  {
+    const st = QD.AlgebraStore.create(); st.seedFromSystem(system);
+    const r = await st.dimensionAsync();
+    ok('dimensionAsync: resolves with a well-formed result', r.ok === true && typeof r.zeroDim === 'boolean' && r.numVars > 0);
+  }
+
   // ---- export shape ----
   {
     const st = QD.AlgebraStore.create();

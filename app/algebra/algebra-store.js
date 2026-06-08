@@ -37,8 +37,28 @@
     const undoStack = [];         // snapshots (most recent last)
     const redoStack = [];
     let model = 'conjugate';
+    let realVars = [];            // base (primal) variables ASSERTED REAL (z̄ⱼ ≡ zⱼ, …)
 
     function nid() { return 'n' + (++seq); }
+
+    // --- reality assumptions: assert chosen variables are real -----------------
+    // In the conjugate model v and v̄ are independent; asserting v real identifies
+    // them (v̄ → v), which simplifies the system (and is the biggest lever for making
+    // a Gröbner basis tractable — it halves the offending variables). A name is
+    // normalized to its PRIMAL (non-barred) form; the rename then maps the barred
+    // partner onto it. conjMPoly reintroduces barred names, so the rename is applied
+    // AFTER conjugation too (see maybeAddConjugate), which lets companions collapse.
+    const _BARRED_RE = /^(zb\d+|Ab\d+_\d+|Cb\d+_\d+|ab\d+|wb0|Zb\d*)$/;
+    function _primalName(name) { const QC = getQC(); return (QC && QC.conjVarName && _BARRED_RE.test(name)) ? QC.conjVarName(name) : name; }
+    function _realityRename() {
+      if (!realVars.length) return null;
+      const QC = getQC(); if (!QC || !QC.conjVarName) return null;
+      const map = {};
+      for (const rv of realVars) { const c = QC.conjVarName(rv); if (c !== rv) map[c] = rv; }
+      if (!Object.keys(map).length) return null;
+      return (n) => (Object.prototype.hasOwnProperty.call(map, n) ? map[n] : n);
+    }
+    function _applyReality(poly) { const r = _realityRename(); return r ? poly.relabel(r) : poly; }
 
     // --- snapshot-based undo (sizes are small; snapshots beat inverse-op bookkeeping) ---
     // The display `order` map is part of the snapshot so reordering is undoable and
@@ -46,11 +66,11 @@
     // objects are never mutated in place (only added), so a shallow node-map copy
     // is a safe snapshot; `order` is copied because moveNode mutates it.
     function snapshot() {
-      return { nodes: new Map([...nodes].map(([k, v]) => [k, v])), edges: edges.slice(), order: new Map(order), model, seq };
+      return { nodes: new Map([...nodes].map(([k, v]) => [k, v])), edges: edges.slice(), order: new Map(order), model, seq, realVars: realVars.slice() };
     }
     function restore(s) {
       nodes.clear(); for (const [k, v] of s.nodes) nodes.set(k, v);
-      edges = s.edges.slice(); order = new Map(s.order || []); model = s.model; seq = s.seq;
+      edges = s.edges.slice(); order = new Map(s.order || []); model = s.model; seq = s.seq; realVars = (s.realVars || []).slice();
     }
     function checkpoint() { undoStack.push(snapshot()); redoStack.length = 0; }
     function undo() { if (!undoStack.length) return false; redoStack.push(snapshot()); restore(undoStack.pop()); return true; }
@@ -106,8 +126,8 @@
     function maybeAddConjugate(node) {
       if (node.rel === '>') return null;                    // Hermitian inequality: one real condition
       const QC = getQC(); if (!QC || !QC.conjMPoly) return null;
-      const conj = QC.conjMPoly(node.poly);
-      if (node.poly.sub(conj).isZero() || node.poly.add(conj).isZero()) return null;   // self-conjugate
+      const conj = _applyReality(QC.conjMPoly(node.poly));   // reality folds barred→primal post-conjugation
+      if (node.poly.sub(conj).isZero() || node.poly.add(conj).isZero()) return null;   // self-conjugate (incl. under reality)
       for (const m of nodes.values()) if (m.poly.equals(conj)) return null;            // already present
       const comp = addNode({
         id: nid(), kind: node.kind, poly: conj, rel: node.rel,
@@ -121,17 +141,23 @@
     // Seed the graph from a generated (●)/(★)/(gauge) system. Clears first. In the
     // conjugate model, each non-self-conjugate equation also gets its conjugate
     // companion (opts.withConjugates, default true) so the system is complete.
+    // opts.realVars asserts those (base) variables real (z̄ⱼ≡zⱼ, …) — substituted in
+    // throughout, which simplifies the system; the choice persists for later
+    // addConstraint calls until the next seed changes it.
     function seedFromSystem(system, opts) {
       opts = opts || {};
       const withConj = opts.withConjugates !== false;
+      if (opts.realVars !== undefined) realVars = (opts.realVars || []).map(_primalName);
       checkpoint();
       reset();
       model = system.model || 'conjugate';
       const primals = [];
       for (const block of ['locator', 'star', 'gauge']) {
         for (const item of system.blocks[block]) {
+          const poly = _applyReality(item.eq);
+          if (poly.isZero()) continue;                       // reality made it trivial
           primals.push(addNode({
-            id: nid(), kind: 'generated', poly: item.eq, rel: '=',
+            id: nid(), kind: 'generated', poly, rel: '=',
             label: item.label, model,
             provenance: { op: 'generate', inputs: [], block }, column: 0, meta: { block },
           }));
@@ -154,8 +180,10 @@
       checkpoint();
       const made = [];
       for (const d of descs) {
+        const poly = _applyReality(d.poly);
+        if (poly.isZero()) continue;
         made.push(addNode({
-          id: nid(), kind: 'constraint', poly: d.poly, rel: d.rel,
+          id: nid(), kind: 'constraint', poly, rel: d.rel,
           label: d.label, model,
           provenance: { op: 'constraint', inputs: [], form }, column: 0, meta: d.meta || { form },
         }));
@@ -382,6 +410,19 @@
         return { ok: true, zeroDim, dimension: dim, numVars: vars.length, vars };
       } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
     }
+    // Off-main-thread dimension via QD.SymWorker (Promise). Falls back to sync.
+    function dimensionAsync(ids, opts, runOpts) {
+      const polys = _eqPolys(ids);
+      if (polys.length < 1) return Promise.resolve({ ok: false, reason: 'no equality nodes to analyze' });
+      const SW = symWorker();
+      if (!SW) return Promise.resolve(dimension(ids, opts));
+      const vars = _varsOf(polys);
+      const payload = { polys: polys.map((p) => p.termList()), vars, opts: _capOpts(opts || {}) };
+      return SW.run('dimension', payload, runOpts || {}).then(
+        (res) => ({ ok: true, zeroDim: res.zeroDim, dimension: res.zeroDim ? res.dimension : Infinity, numVars: res.numVars, vars }),
+        (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
+          : { ok: false, reason: (err && err.message) || String(err) });
+    }
 
     // Numeric solutions of the selected (or all) equality nodes via the shape-lemma
     // solver (grevlex GB → FGLM to lex → univariate Durand–Kerner + back-substitution).
@@ -491,15 +532,26 @@
       };
     }
 
+    // Distinct variable names across all nodes (sorted) — for the UI variable pickers.
+    function variables() {
+      const s = new Set(); for (const n of nodes.values()) for (const v of n.poly.vars()) s.add(v); return [...s].sort();
+    }
+    // Distinct PRIMAL (non-barred) base variables — the candidates for "assume real".
+    function baseVariables() {
+      const s = new Set(); for (const v of variables()) s.add(_primalName(v)); return [...s].sort();
+    }
+
     return {
-      seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync, dimension, solve, solveAsync, duplicate, deleteNode,
-      sharedVars, previewCost, exportDAG, nodeStats,
+      seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
+      dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
+      sharedVars, previewCost, exportDAG, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       undo, redo, reset,
       list, get,
       get edges() { return edges; },
       get model() { return model; },
       set model(m) { model = m; },
+      get realVars() { return realVars.slice(); },
       get size() { return nodes.size; },
     };
   }
