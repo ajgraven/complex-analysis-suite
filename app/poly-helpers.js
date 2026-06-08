@@ -91,11 +91,30 @@
 
   const Poly = { zero, one, variable, trim, add, neg, mul, scale, pow, linearPower };
 
+  // ---------------------------------------------------------------------------
+  // Display formatting — Unicode sub/superscripts for integer indices/exponents.
+  //
+  // Consolidated from ~9 byte-identical-but-stylistically-drifted inline copies
+  // (ui.js, ui-domain-plot.js ×3, ui-faber.js, faber-analysis.js,
+  // param-slice-common.js, schwarz-analysis.js). It lives in poly-helpers.js
+  // because this module loads FIRST in every execution context — the page, both
+  // Worker bundles, and the test bootstrap (it's in WORKER_BUNDLE_FILES) — so
+  // QD.Format is always resolvable wherever a consumer renders a label.
+  //
+  // Non-digit characters (signs, separators) pass through unchanged, matching the
+  // old `map[+d] || d` behaviour. Display-only; never used in solver math.
+  const SUBSCRIPT_DIGITS   = '₀₁₂₃₄₅₆₇₈₉';
+  const SUPERSCRIPT_DIGITS = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+  function subscript(n)   { return String(n).replace(/\d/g, d => SUBSCRIPT_DIGITS[+d]); }
+  function superscript(n) { return String(n).replace(/\d/g, d => SUPERSCRIPT_DIGITS[+d]); }
+  const Format = { subscript, superscript };
+
   // Namespace plumbing mirrors the other solver modules: browser stashes on
   // window.QD; node-test's vm exposes the QD namespace as module.exports (set
-  // by solver.js); worker bundle uses global.QD. Attach Poly without clobbering.
+  // by solver.js); worker bundle uses global.QD. Attach without clobbering.
   const QD = (typeof window !== 'undefined' && window.QD)
     ? window.QD
     : (typeof module !== 'undefined' && module.exports ? module.exports : (global.QD || (global.QD = {})));
   QD.Poly = Poly;
+  QD.Format = Format;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

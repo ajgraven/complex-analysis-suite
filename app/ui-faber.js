@@ -21,14 +21,10 @@
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   }
   // Subscripts index an object (Fₙ, c₀); superscripts are exponents (ζ², 1/cⁿ).
-  function subDigits(n) {
-    const map = '₀₁₂₃₄₅₆₇₈₉';
-    return String(n).split('').map(d => map[+d] || d).join('');
-  }
-  function supDigits(n) {
-    const map = '⁰¹²³⁴⁵⁶⁷⁸⁹';
-    return String(n).split('').map(d => map[+d] || d).join('');
-  }
+  // Delegate to the shared QD.Format helpers (poly-helpers.js) so the digit maps
+  // live in exactly one place.
+  function subDigits(n) { return window.QD.Format.subscript(n); }
+  function supDigits(n) { return window.QD.Format.superscript(n); }
   // Format a complex value with the true minus sign (U+2212), matching the
   // formula list (formatFaberPoly) so the card doesn't mix '-' and '−'.
   function fmtC(z, digits) {

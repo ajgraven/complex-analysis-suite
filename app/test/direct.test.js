@@ -16,6 +16,11 @@ module.exports = async function run() {
 let mathjs = null;
 try { mathjs = require('mathjs'); } catch (e) { /* skip if not installed */ }
 
+// Emit a skip marker so this file always contributes ≥1 assertion (mathjs is an
+// optional devDep; node-test.js's per-file floor relies on a nonzero count, and
+// this mirrors the skip markers in riemann/ui-domain-plot tests).
+if (!mathjs) ok('Direct parser tests (mathjs not installed — skipped)', true);
+
 if (mathjs) {
   const P = (e) => Direct.parsePolynomialInZ(e, mathjs);
   function near(a, b, tol) { return Math.hypot(a.re - b.re, a.im - b.im) < (tol || 1e-12); }

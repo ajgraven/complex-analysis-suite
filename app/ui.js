@@ -207,8 +207,9 @@ function buildAltSearchOptions(preset, seed) {
 }
 
 // ---------- Helpers ------------------------------------------------------
-const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
-const sub  = n => String(n).split('').map(d => subs[+d] || d).join('');
+// Subscript formatter (injected into DomainPlot / pole-grid). Single source of
+// truth for the digit map is QD.Format in poly-helpers.js.
+const sub = n => window.QD.Format.subscript(n);
 
 function $(sel, parent = document) { return parent.querySelector(sel); }
 function $$(sel, parent = document) { return Array.from(parent.querySelectorAll(sel)); }
@@ -370,7 +371,7 @@ function removePoleAt(idx) {
 function escapeHTML(s) {
   return (window.QD && window.QD.QoL && window.QD.QoL.escapeHTML)
     ? window.QD.QoL.escapeHTML(s)
-    : String(s).replace(/[&<>]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c]));
+    : String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
 function formatExp(x) {
   if (x === null || x === undefined || !isFinite(x)) return '—';

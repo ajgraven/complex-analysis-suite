@@ -202,9 +202,8 @@
     if (!Fn || !Fn.length) return '0';
 
     // Exponents render as Unicode superscripts (ζ², not ζ^2) so the formula
-    // matches the coefficient table in the UI.
-    const supMap = '⁰¹²³⁴⁵⁶⁷⁸⁹';
-    const sup = (k) => String(k).split('').map(d => supMap[+d] || d).join('');
+    // matches the coefficient table in the UI. Shared helper (poly-helpers.js).
+    const sup = (k) => QD.Format.superscript(k);
 
     let out = '';
     let any = false;

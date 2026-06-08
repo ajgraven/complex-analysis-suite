@@ -69,9 +69,8 @@
   // Polynomial-h (pole at ∞) is allowed for every UNBOUNDED family.
   function modeAllowsPoly(mode)  { return mode === 'unbounded' || mode === 'pqd-unbounded' || mode === 'pqd-unbounded-singular' || mode === 'lqd-unbounded' || mode === 'lqd-unbounded-singular'; }
 
-  // Subscript helper
-  const SUBS = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
-  function sub(n) { return String(n).split('').map(d => SUBS[+d] || d).join(''); }
+  // Subscript helper — delegates to the shared QD.Format (poly-helpers.js).
+  function sub(n) { return QD.Format.subscript(n); }
 
   // Format a ParamRef as a human-readable label.
   function formatParamLabel(ref) {
