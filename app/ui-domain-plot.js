@@ -167,9 +167,7 @@ class DomainPlot {
         const hitIdx = this._hitTestPole(x, y, POLE_HOVER_HIT_RADIUS_PX);
         if (hitIdx >= 0) {
           const a = this.data.poles[hitIdx];
-          const SUBS = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
-          const sub = String(hitIdx + 1).split('').map(d => SUBS[+d] || d).join('');
-          text += `  ·  near pole a${sub} = ${a.re.toFixed(3)}${a.im >= 0 ? '+' : '-'}${Math.abs(a.im).toFixed(3)}i`;
+          text += `  ·  near pole a${sub(hitIdx + 1)} = ${a.re.toFixed(3)}${a.im >= 0 ? '+' : '-'}${Math.abs(a.im).toFixed(3)}i`;
         }
         this.readout.textContent = text;
         if (!panning && draggingPole < 0) {
@@ -962,11 +960,9 @@ class DomainPlot {
     c.restore();
   }
 
-  // Unicode subscript for small non-negative integers (for "Fₙ" labels).
-  _sub(n) {
-    const map = '₀₁₂₃₄₅₆₇₈₉';
-    return String(n).split('').map(d => map[+d] || d).join('');
-  }
+  // Unicode subscript for "Fₙ" labels — delegates to the injected formatter
+  // (ui.js → QD.Format), the single source of truth for digit maps.
+  _sub(n) { return sub(n); }
 
   // -------------------------------------------------------------------------
   // Boundary cusp markers — the w-plane locations of (incipient) cusps from
@@ -1030,7 +1026,6 @@ class DomainPlot {
     if ((state.selectedSolutionIdx || 0) !== 0) return;     // primary only
     const phi = this.data.phi;
     const c = this.ctx;
-    const sub = (n) => String(n).replace(/[0-9]/g, d => '₀₁₂₃₄₅₆₇₈₉'[+d]);
 
     // ---- symmetry axes (dashed) + a D_n / Z_n / circle badge ----------------
     const sym = state.current.symmetry;

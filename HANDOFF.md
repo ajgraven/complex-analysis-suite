@@ -14,11 +14,16 @@ explain back to him.
 
 ## 0. Current state
 
-**Full suite passing: 1365 passed / 0 failed; `npm run lint` clean;
-`npm run version:check` clean** (cache hash `10f89e5898`). The app is
+**Full suite green** (run `npm test` for the live count — it's the source of
+truth; prose counts drift, so they're intentionally not pinned here); **`npm run
+lint` clean; `npm run version:check` clean** (cache hash `416c41a3a2`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR):
+- **Tech-debt Phase 1** (PR #45) — per-file test-assertion floors (`node-test.js`), a shared
+  `QD.Format.{subscript,superscript}` (`poly-helpers.js`) replacing 9 drifted digit-maps, deploy
+  `version:sync` docs, `engines>=20`, a non-blocking `npm audit` CI step, and removal of the parked
+  `app/disabled/aqd/` scaffolding. From the tech-debt audit's Phase 1 batch.
 - **Central UI strings** (PR #43) — every editable description/helptext/tooltip/blurb
   moved into `app/ui-strings.js` (`QD.Strings`); a `data-str*` applier injects the static
   HTML. **Edit UI prose THERE** (see `HELPTEXT.md` for the residual map).

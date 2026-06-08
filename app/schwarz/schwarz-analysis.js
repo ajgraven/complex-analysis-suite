@@ -51,10 +51,7 @@
   // (A LaTeX numeric-substitution formatter was removed here as dead code —
   // current LaTeX strings use abstract symbols. See HANDOFF "deferred" TODOs
   // if a numerical-substitution σ panel is revived.)
-  function sub(k) {
-    const digits = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
-    return String(k).split('').map(d => digits[+d] || d).join('');
-  }
+  function sub(k) { return QD.Format.subscript(k); }   // shared helper (poly-helpers.js)
 
   // ---------------------------------------------------------------------------
   // 1. explicitSigmaForm — per-family formula expressions.

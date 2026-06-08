@@ -66,6 +66,14 @@ loaded from a CDN (pinned + SRI) for expression parsing and math display.
 
 ### Deploying / hosting
 
+> **Before publishing, run `npm run version:sync`** (then `npm test` + `npm run
+> lint`). This recomputes the content-hash cache version so the service worker
+> and the `?v=` page-script URLs invalidate on update — skip it and returning
+> visitors keep getting the *old* code from the cache-first service worker until a
+> hard reload. CI's `npm run version:check` fails the build if the hash is stale,
+> so a forgotten sync is caught before merge; running it locally just means the
+> copy you publish is already current.
+
 To publish, copy the **`app/` directory** to any static host (GitHub Pages, a
 personal website, Netlify, …) and point at its `index.html`. Paths are relative,
 so it works under a sub-path too. Nothing outside `app/` is needed at runtime; you

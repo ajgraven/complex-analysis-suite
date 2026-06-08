@@ -36,6 +36,14 @@ jobs:
         run: npm test
       - name: Run linter
         run: npm run lint
+      # Dependency audit: informational / non-blocking. Surfaces known advisories
+      # in the (dev-only) dependency tree in the CI log without failing the build
+      # — advisories are often transitive and not always immediately actionable,
+      # and the app ships zero runtime deps. Review the output and bump deps
+      # deliberately (a flagged advisory is a prompt to act, not an auto-fail).
+      - name: Audit dependencies
+        continue-on-error: true
+        run: npm audit
       # Benchmark check: non-blocking. Reports >25% slowdowns as a warning
       # but doesn't fail the build — CI runners have variable load and the
       # threshold can produce false positives. Flip `continue-on-error: false`
