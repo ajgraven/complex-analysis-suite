@@ -103,8 +103,8 @@ see arXiv:2001.09431 for the RCTD-of-QDs method this anticipates.
 | Object | Symbol | Where |
 | --- | --- | --- |
 | Sylvester resultant / discriminant (fraction-free Bareiss) | `QD.Sym.resultant` / `discriminant` / `mpolyDet` | [`app/sym-core.js`](app/sym-core.js) |
-| Monomial order (lex/grlex/grevlex) + normal form + S-polynomial | `QD.Sym.monomialOrder` / `normalForm` / `sPoly` | [`app/sym-core.js`](app/sym-core.js) |
-| Gröbner basis (Buchberger over ℚ(i), reduced) + saturation `I:f^∞` | `QD.Sym.buchberger` / `reduceGroebner` / `saturate` | [`app/sym-core.js`](app/sym-core.js) |
+| Monomial orders (lex/grlex/grevlex + block/elimination) + normal form + S-poly | `QD.Sym.monomialOrder` / `eliminationOrder` / `normalForm` / `sPoly` | [`app/sym-core.js`](app/sym-core.js) |
+| Gröbner basis (Buchberger over ℚ(i): Gebauer–Möller + sugar, reduced) + saturation `I:f^∞` | `QD.Sym.buchberger` / `reduceGroebner` / `saturate` | [`app/sym-core.js`](app/sym-core.js) |
 | Gröbner workspace op (selected/all equality nodes) | `QD.AlgebraStore.groebner` | [`app/algebra/algebra-store.js`](app/algebra/algebra-store.js) |
 | φ, φ′, φ″ at a generic boundary point ζ | `QDConstraints.phiData` (reuses `phiSeriesAt` at ζ) | [`app/qd-constraints.js`](app/qd-constraints.js) |
 | convex `Re(1+ζφ″/φ′)>0`, star `Re(ζφ′/(φ−w₀))>0`, spiral (∃λ) | `QDConstraints.convexIneq` / `starIneq` / `spiralIneq` | `app/qd-constraints.js` |

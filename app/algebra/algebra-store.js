@@ -259,16 +259,26 @@
       if (eqNodes.length < 2) {
         return { ok: false, reason: 'select at least two equality nodes for a Gröbner basis', created: [], skipped };
       }
-      // monomial order: an explicit eliminate list ⇒ lex with those vars highest.
+      // monomial order: an explicit eliminate list ⇒ a block ELIMINATION order
+      // (elim vars in the top block, rest in the second) — far cheaper than pure
+      // lex while exposing the same elimination ideal. An explicit opts.order
+      // overrides (e.g. force 'lex'); otherwise grevlex when nothing is eliminated.
       const elim = (opts.eliminate || []).slice();
-      let kind = opts.order || (elim.length ? 'lex' : 'grevlex');
-      let varOrder = opts.varOrder || null;
-      if (!varOrder && elim.length) {
+      let kind = opts.order || (elim.length ? 'elim' : 'grevlex');
+      let order;
+      if (kind === 'elim') {
         const rest = new Set();
         for (const n of eqNodes) for (const v of n.poly.vars()) if (!elim.includes(v)) rest.add(v);
-        varOrder = [...elim, ...[...rest].sort()];
+        order = S.eliminationOrder(elim, [...rest].sort());
+      } else {
+        let varOrder = opts.varOrder || null;
+        if (!varOrder && elim.length) {
+          const rest = new Set();
+          for (const n of eqNodes) for (const v of n.poly.vars()) if (!elim.includes(v)) rest.add(v);
+          varOrder = [...elim, ...[...rest].sort()];
+        }
+        order = S.monomialOrder(kind, varOrder);
       }
-      const order = S.monomialOrder(kind, varOrder);
       let basis;
       try {
         basis = S.buchberger(eqNodes.map((n) => n.poly), order, opts);

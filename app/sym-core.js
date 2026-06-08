@@ -594,15 +594,20 @@
     return monoCmp;
   }
 
-  // Build a monomial order. kind ∈ {'lex','grlex','grevlex'} (default grevlex —
-  // the fastest general order for Buchberger). `varOrder` ranks variables from
-  // HIGHEST priority to lowest; variables absent from the list rank below all
-  // listed ones, alphabetically among themselves (so the order is total even on
-  // monomials in newly-introduced variables). For ELIMINATION, use 'lex' with the
-  // variables to eliminate at the front of varOrder. Returns { kind, varOrder, cmp },
-  // where cmp(a,b) returns -1 / 0 / 1 (a<b / a=b / a>b), matching monoCmp.
+  // Build a monomial order. kind ∈ {'lex','grlex','grevlex','block'} (default
+  // grevlex — the fastest general order for Buchberger). For the three classic
+  // kinds, `varOrder` ranks variables from HIGHEST priority to lowest; variables
+  // absent from the list rank below all listed ones, alphabetically among
+  // themselves (so the order is total even on monomials in newly-introduced
+  // variables). For ELIMINATION, prefer the 'block' kind (or eliminationOrder())
+  // over pure 'lex' — a product/block order is far cheaper for Buchberger while
+  // exposing the same elimination ideal. With kind 'block', `varOrder` is an ARRAY
+  // OF BLOCKS (each a variable-name array); blocks are compared grevlex, in order,
+  // and any unlisted variables form a trailing alphabetical block. Returns
+  // { kind, varOrder, cmp }, where cmp(a,b) returns -1 / 0 / 1 (a<b / a=b / a>b).
   function monomialOrder(kind, varOrder) {
     kind = kind || 'grevlex';
+    if (kind === 'block') return { kind, varOrder, cmp: _blockGrevlexCmp(varOrder || []) };
     const rank = new Map();
     if (varOrder) varOrder.forEach((v, i) => rank.set(v, i));
     function varCmp(x, y) {
@@ -650,6 +655,45 @@
       };
     }
     return { kind, varOrder: varOrder ? varOrder.slice() : null, cmp };
+  }
+
+  // Product (block) order: compare grevlex within block 1; on a tie, grevlex within
+  // block 2; etc. Unlisted variables form a trailing alphabetical block, keeping the
+  // order total. Because a monomial with ANY positive exponent in an earlier block
+  // outranks one without, putting the variables to eliminate in block 1 makes this an
+  // ELIMINATION order: the elimination ideal is the set of basis generators whose
+  // leading monomial (indeed whole support) avoids the block-1 variables.
+  function _blockGrevlexCmp(blocks) {
+    const listed = new Set();
+    blocks.forEach((b) => b.forEach((v) => listed.add(v)));
+    function grevlexOnBlock(blk, a, b) {
+      let da = 0, db = 0;
+      for (const v of blk) { da += a.get(v) || 0; db += b.get(v) || 0; }
+      if (da !== db) return da < db ? -1 : 1;
+      for (let k = blk.length - 1; k >= 0; k--) {        // reverse-lex within the block
+        const v = blk[k], ea = a.get(v) || 0, eb = b.get(v) || 0;
+        if (ea !== eb) return ea < eb ? 1 : -1;          // smaller last-var exp ⇒ larger
+      }
+      return 0;
+    }
+    return function (a, b) {
+      for (const blk of blocks) { const c = grevlexOnBlock(blk, a, b); if (c) return c; }
+      // trailing block of any variables not named in `blocks` (alphabetical)
+      const extra = new Set();
+      for (const k of a.keys()) if (!listed.has(k)) extra.add(k);
+      for (const k of b.keys()) if (!listed.has(k)) extra.add(k);
+      if (extra.size) return grevlexOnBlock([...extra].sort(), a, b);
+      return 0;
+    };
+  }
+  // Convenience: an elimination order that ranks `elimVars` (block 1) above
+  // `keepVars` (block 2), both compared grevlex. The Gröbner basis under this order
+  // exposes ⟨…⟩ ∩ k[keepVars] as the generators free of every elimVar — much cheaper
+  // than pure lex. (keepVars may be omitted; unlisted vars trail alphabetically.)
+  function eliminationOrder(elimVars, keepVars) {
+    const blocks = [elimVars.slice()];
+    if (keepVars && keepVars.length) blocks.push(keepVars.slice());
+    return monomialOrder('block', blocks);
   }
 
   // lcm of two monomials (max exponent per variable).
@@ -724,9 +768,14 @@
 
   // Buchberger's algorithm → a Gröbner basis of ⟨polys⟩ under `order` (a
   // monomialOrder object, an order kind string, or omitted → grevlex). Uses the
-  // first criterion (coprime leading monomials ⇒ the S-poly reduces to 0, skip).
-  // Returns the REDUCED Gröbner basis (canonical: monic, inter-reduced) unless
-  // opts.reduced === false. Throws a capped-cost error past the GROEBNER_* limits.
+  // **Gebauer–Möller** pair-update installation (Buchberger's first/coprime
+  // criterion AND the chain criterion) to discard the great majority of useless
+  // S-pairs, and the **sugar** selection strategy (smallest sugar first, tie-broken
+  // by the order) — both standard and essential for non-homogeneous input like the
+  // QD systems. Returns the canonical REDUCED basis unless opts.reduced === false.
+  // opts: {maxBasis, maxSteps, maxDegree, maxTerms} caps (overridable; throw a clear
+  // "use CAS export" error past the limit) and opts.onProgress({basis,pairs,steps})
+  // (called per reduction; the seam the Web-Worker offload reports/cancels through).
   function buchberger(polys, order, opts) {
     opts = opts || {};
     const ord = (order && order.cmp) ? order : monomialOrder(order || 'grevlex');
@@ -734,30 +783,71 @@
     const maxSteps = opts.maxSteps != null ? opts.maxSteps : GROEBNER_MAX_STEPS;
     const maxDegree = opts.maxDegree != null ? opts.maxDegree : GROEBNER_MAX_DEGREE;
     const maxTerms = opts.maxTerms != null ? opts.maxTerms : GROEBNER_MAX_TERMS;
-    const G = (polys || []).filter((p) => p && !p.isZero()).map((p) => p.clone());
+    const onProgress = typeof opts.onProgress === 'function' ? opts.onProgress : null;
+
+    const G = [];           // append-only basis elements { poly, lm, sugar }
+    const divisors = [];    // G[k].poly, kept parallel for normalForm
+    let P = [];             // active pairs { i, j, lcm, sugar }
+
+    // Gebauer–Möller update on having appended element index t.
+    function update(t) {
+      const lmt = G[t].lm;
+      const C = [];
+      for (let i = 0; i < t; i++) C.push({ i, j: t, lcm: monoLcm(G[i].lm, lmt) });
+      // chain criterion: keep p unless another candidate's lcm divides p.lcm
+      const D = [];
+      const dividedBy = (arr, p) => arr.some((q) => q !== p && monoDivide(p.lcm, q.lcm) !== null);
+      while (C.length) {
+        const p = C.pop();
+        if (_monoCoprime(G[p.i].lm, lmt) || (!dividedBy(C, p) && !dividedBy(D, p))) D.push(p);
+      }
+      // drop coprime survivors (1st criterion: their S-poly reduces to 0)
+      const E = D.filter((p) => !_monoCoprime(G[p.i].lm, lmt));
+      // B_k criterion: prune existing pairs that lmt makes redundant
+      P = P.filter((p) => {
+        if (monoDivide(p.lcm, lmt) === null) return true;          // lmt ∤ lcm(p)
+        return _monoEqual(monoLcm(G[p.i].lm, lmt), p.lcm)          // escape clauses
+            || _monoEqual(monoLcm(G[p.j].lm, lmt), p.lcm);
+      });
+      for (const p of E) {
+        const si = G[p.i].sugar + (monoTotalDeg(p.lcm) - monoTotalDeg(G[p.i].lm));
+        const sj = G[t].sugar + (monoTotalDeg(p.lcm) - monoTotalDeg(lmt));
+        p.sugar = Math.max(si, sj);
+        P.push(p);
+      }
+    }
+    function addElement(poly, sugar) {
+      G.push({ poly, lm: poly.leadingMono(ord), sugar });
+      divisors.push(poly);
+      update(G.length - 1);
+      if (G.length > maxBasis)
+        throw new Error('buchberger: basis exceeded ' + maxBasis + ' generators; use CAS export.');
+    }
+
+    for (const p of (polys || [])) if (p && !p.isZero()) addElement(p.clone(), p.totalDegree());
     if (!G.length) return [];
-    const pairs = [];
-    for (let i = 0; i < G.length; i++) for (let j = i + 1; j < G.length; j++) pairs.push([i, j]);
+
     let steps = 0;
-    while (pairs.length) {
+    while (P.length) {
       if (++steps > maxSteps)
         throw new Error('buchberger: exceeded ' + maxSteps + ' S-pair steps; the system is too large — use CAS export.');
-      const [i, j] = pairs.shift();
-      const lmi = G[i].leadingMono(ord), lmj = G[j].leadingMono(ord);
-      if (_monoCoprime(lmi, lmj)) continue;             // first criterion
-      const r = normalForm(sPoly(G[i], G[j], ord), G, ord);
+      // sugar selection: minimal sugar, tie-broken by minimal lcm under the order
+      let bi = 0;
+      for (let k = 1; k < P.length; k++) {
+        if (P[k].sugar < P[bi].sugar
+          || (P[k].sugar === P[bi].sugar && ord.cmp(P[k].lcm, P[bi].lcm) < 0)) bi = k;
+      }
+      const pair = P.splice(bi, 1)[0];
+      const r = normalForm(sPoly(G[pair.i].poly, G[pair.j].poly, ord), divisors, ord);
+      if (onProgress) onProgress({ basis: G.length, pairs: P.length, steps });
       if (r.isZero()) continue;
       if (r.totalDegree() > maxDegree)
         throw new Error('buchberger: generator degree ' + r.totalDegree() + ' exceeds the cap (' + maxDegree + '); use CAS export.');
       if (r.size() > maxTerms)
         throw new Error('buchberger: a generator reached ' + r.size() + ' terms (cap ' + maxTerms + '); use CAS export.');
-      G.push(r);
-      if (G.length > maxBasis)
-        throw new Error('buchberger: basis exceeded ' + maxBasis + ' generators; use CAS export.');
-      const ni = G.length - 1;
-      for (let k = 0; k < ni; k++) pairs.push([k, ni]);
+      addElement(r, pair.sugar);
     }
-    return opts.reduced === false ? G : reduceGroebner(G, ord);
+    return opts.reduced === false ? divisors.slice() : reduceGroebner(divisors, ord);
   }
 
   // Reduce a Gröbner basis to the canonical REDUCED basis: monic leading
@@ -804,20 +894,20 @@
   }
 
   // Saturation ⟨polys⟩ : f^∞ via the Rabinowitsch trick: adjoin a fresh variable w
-  // and the relation 1 − w·f, compute a Gröbner basis under a lex order with w
-  // ranked highest (eliminating w), then drop every generator that still mentions
-  // w. This removes the components on which f vanishes — e.g. saturating by the
-  // φ′ numerator drops the non-univalent locus (form (a)'s witness 1 − ω·numφ′ is
-  // exactly this relation, so passing that witness as `f` recovers it). Returns the
-  // generator list (MPolys in the original variables).
+  // and the relation 1 − w·f, compute a Gröbner basis under an ELIMINATION order
+  // (w in the top block), then drop every generator that still mentions w. This
+  // removes the components on which f vanishes — e.g. saturating by the φ′ numerator
+  // drops the non-univalent locus (form (a)'s witness 1 − ω·numφ′ is exactly this
+  // relation, so passing that witness as `f` recovers it). Returns the generator
+  // list (MPolys in the original variables).
   function saturate(polys, f, wName, opts) {
     wName = wName || '_w';
     const w = MPoly.variable(wName);
     const rab = MPoly.fromInt(1).sub(w.mul(f));
-    const vs = new Set([wName]);
+    const vs = new Set();
     for (const p of (polys || []).concat([f])) for (const v of p.vars()) vs.add(v);
     const rest = [...vs].filter((v) => v !== wName).sort();
-    const order = monomialOrder('lex', [wName, ...rest]);
+    const order = eliminationOrder([wName], rest);
     const G = buchberger((polys || []).concat([rab]), order, opts);
     return G.filter((g) => !g.vars().has(wName));
   }
@@ -1066,7 +1156,7 @@
     rat, gauss, gaussInt, mpolyVar, mpolyConst, mpolyInt,
     monoKey, monoCmp,
     mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv,
-    monomialOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, reduceGroebner, saturate,
+    monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, reduceGroebner, saturate,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
   };

@@ -107,7 +107,7 @@
         '  <label style="font-size:11px;" title="Monomial order. lex = elimination order; grevlex = fastest general.">order ' +
         '    <select id="alg-gb-order"><option value="grevlex">grevlex</option><option value="grlex">grlex</option><option value="lex">lex</option></select></label>' +
         '  <input id="alg-gb-elim" class="small" type="text" placeholder="eliminate vars, e.g. z1,zb1" style="width:150px;" ' +
-        '    title="Comma-separated RAW variable names to eliminate (forces a lex order; leave blank for a plain reduced basis)."></div>' +
+        '    title="Comma-separated RAW variable names to eliminate (uses a fast block elimination order; leave blank for a plain reduced basis)."></div>' +
         '<div class="key" style="margin-top:6px;" title="Append a boundary-univalence condition as new node(s) — hover each button for its meaning">Add univalence constraint</div>' +
         '<div id="alg-palette" class="row" style="flex-wrap:wrap; gap:4px;"></div>' +
         '<div id="alg-elim" class="card-sub hidden" style="margin-top:8px;">' +

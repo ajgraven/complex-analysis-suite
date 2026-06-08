@@ -217,9 +217,9 @@ module.exports = async function run() {
     // guards: fewer than two equality nodes, and a cap blow-up surfaced as {ok:false}
     ok('groebner: refuses a selection of fewer than two equality nodes',
        st.groebner([gauge.id]).ok === false);
-    const capped = st.groebner([gauge.id, loc.id], { maxSteps: 0 });
+    const capped = st.groebner([gauge.id, loc.id], { maxBasis: 1 });
     ok('groebner: a cost-cap blow-up comes back as {ok:false, reason} (no throw)',
-       capped.ok === false && /export|cap|step/i.test(capped.reason));
+       capped.ok === false && /export|cap|basis|step/i.test(capped.reason));
   }
 
   // ---- export shape ----

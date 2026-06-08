@@ -374,14 +374,57 @@ module.exports = async function run() {
          !S.normalForm(mv('x'), sat, ord).isZero());
     }
 
-    // cost cap: a deliberately explosive system throws a clear "use CAS export" error
+    // cost cap: tripping the step limit throws a clear "use CAS export" error.
+    // The leading monomials x², xy share x (NOT coprime), so a real S-pair survives
+    // the Gebauer–Möller criteria and the step loop runs — maxSteps:0 trips it.
     {
       let threw = false, msg = '';
       try {
-        S.buchberger([mv('x').pow(2).add(mv('y')), mv('y').pow(2).add(mv('z')), mv('z').pow(2).add(mv('x'))],
-          S.monomialOrder('grevlex', ['x', 'y', 'z']), { maxSteps: 1 });
+        S.buchberger([mv('x').pow(2).add(mv('y')), mv('x').mul(mv('y')).add(mv('x'))],
+          S.monomialOrder('grevlex', ['x', 'y']), { maxSteps: 0 });
       } catch (e) { threw = true; msg = String(e.message || e); }
       ok('buchberger throws a clear cap error past the step limit', threw && /export/i.test(msg), msg);
+    }
+
+    // Gebauer–Möller + sugar: the output is a genuine Gröbner basis (every S-pair
+    // reduces to 0) AND canonical across runs. The 3-variable cyclic-style system
+    // exercises the chain criterion heavily.
+    {
+      const verifyGB = (G, ord) => {
+        for (let i = 0; i < G.length; i++) for (let j = i + 1; j < G.length; j++) {
+          if (!S.normalForm(S.sPoly(G[i], G[j], ord), G, ord).isZero()) return false;
+        }
+        return true;
+      };
+      const sys = [mv('x').pow(2).add(mv('y')), mv('y').pow(2).add(mv('z')), mv('z').pow(2).add(mv('x'))];
+      const ord = S.monomialOrder('grevlex', ['x', 'y', 'z']);
+      const G = S.buchberger(sys, ord);
+      ok('GM/sugar: output is a valid Gröbner basis (all S-polys reduce to 0)', verifyGB(G, ord));
+      // determinism: a re-run and a permuted input give the identical reduced basis
+      const G2 = S.buchberger([sys[2], sys[0], sys[1]], ord);
+      ok('GM/sugar: reduced basis is canonical regardless of input order',
+         G.map((p) => p.key()).sort().join('|') === G2.map((p) => p.key()).sort().join('|'));
+    }
+
+    // Block / elimination order: cheaper than lex, same elimination ideal.
+    {
+      const f = mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), g = mv('x').add(mv('y'));
+      const be = S.eliminationOrder(['x'], ['y']);
+      ok('eliminationOrder reports kind "block"', be.kind === 'block');
+      // an x-monomial outranks a pure-y monomial of higher total degree (elim property)
+      ok('block order: x¹ ≻ y³ (elim block dominates)', be.cmp(new Map([['x', 1]]), new Map([['y', 3]])) > 0);
+      const G = S.buchberger([f, g], be);
+      const elim = G.filter((p) => !p.vars().has('x'));
+      ok('block-elim GB exposes the elimination ideal (a generator free of x)', elim.length >= 1);
+      const Res = S.resultant(f, g, 'x');
+      ok('block-elim GB contains the resultant (Res reduces to 0 mod the GB)',
+         S.normalForm(Res, G, be).isZero());
+      // the block-elim eliminant and the lex eliminant cut out the same y-locus
+      const lex = S.monomialOrder('lex', ['x', 'y']);
+      const Glex = S.buchberger([f, g], lex).filter((p) => !p.vars().has('x'));
+      const vmRoot = { y: { re: Math.SQRT1_2, im: 0 } };       // y=1/√2 is a common-root projection
+      ok('block-elim and lex eliminants agree at a root projection',
+         Math.abs(elim[0].evalComplex(vmRoot).re) < 1e-12 && Math.abs(Glex[0].evalComplex(vmRoot).re) < 1e-12);
     }
   }
 };
