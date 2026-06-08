@@ -110,7 +110,8 @@
         '    title="Comma-separated RAW variable names to eliminate (uses a fast block elimination order; leave blank for a plain reduced basis)."></div>' +
         '<div class="row" style="margin-top:4px; gap:4px;">' +
         '  <button id="alg-dimension" class="small" type="button" data-str-title="tooltips.dimension">Dimension / count</button>' +
-        '  <button id="alg-solve" class="small" type="button" data-str-title="tooltips.solveNumeric">Solve (numeric)</button></div>' +
+        '  <button id="alg-solve" class="small" type="button" data-str-title="tooltips.solveNumeric">Solve (numeric)</button>' +
+        '  <button id="alg-cancel" class="small hidden" type="button" title="Cancel the running computation">Cancel</button></div>' +
         '<div class="key" style="margin-top:6px;" title="Append a boundary-univalence condition as new node(s) — hover each button for its meaning">Add univalence constraint</div>' +
         '<div id="alg-palette" class="row" style="flex-wrap:wrap; gap:4px;"></div>' +
         '<div id="alg-elim" class="card-sub hidden" style="margin-top:8px;">' +
@@ -154,6 +155,7 @@
       $('#alg-groebner-sel').addEventListener('click', () => doGroebner(canvas ? canvas.getSelection() : []));
       $('#alg-dimension').addEventListener('click', doDimension);
       $('#alg-solve').addEventListener('click', doSolve);
+      $('#alg-cancel').addEventListener('click', cancelOp);
       $('#alg-gauge-elim').addEventListener('click', () => {
         if (!store.size) { if (!seedFromCurrent()) return; }
         const r = store.eliminateWithGauge();
@@ -202,26 +204,49 @@
       rerender();
       toast('Eliminated ' + latexPlain(v) + ' → ' + r.node.poly.size() + '-term equation');
     }
-    // Gröbner basis of a node selection (null/empty ⇒ every equality node). Reads
-    // the order selector and the comma-separated "eliminate" list from the sidebar.
+    // Busy-state manager for the off-main-thread (worker) ops — disables the heavy
+    // controls, reveals Cancel, and routes progress to the status line.
+    let _abort = null;
+    function setBusy(on, label) {
+      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-gauge-elim', 'alg-eliminate', 'alg-seed']
+        .forEach((id) => { const b = $('#' + id); if (b) b.disabled = on; });
+      const cancel = $('#alg-cancel'); if (cancel) cancel.classList.toggle('hidden', !on);
+      if (on && label) setStatus(label);
+    }
+    function cancelOp() { if (_abort) { try { _abort.abort(); } catch (e) { /* ignore */ } } if (QD.SymWorker) QD.SymWorker.cancel(); }
+    function _newAbort() { return (typeof AbortController !== 'undefined') ? new AbortController() : null; }
+
+    // Gröbner basis of a node selection (null/empty ⇒ every equality node), run
+    // off the main thread via QD.SymWorker (falls back to sync if unavailable).
+    // Reads the order selector and the comma-separated "eliminate" list.
     function doGroebner(sel) {
+      if (_abort) return;                       // an op is already running
       if (!store.size) { if (!seedFromCurrent()) return; }
-      let ids = (sel && sel.length) ? sel.slice()
+      const ids = (sel && sel.length) ? sel.slice()
         : store.list().filter((n) => n.rel === '=').map((n) => n.id);
       const orderEl = $('#alg-gb-order'), elimEl = $('#alg-gb-elim');
       const order = (orderEl && orderEl.value) || 'grevlex';
       const elim = (elimEl && elimEl.value || '').split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
       const opts = elim.length ? { eliminate: elim } : { order };
-      const r = store.groebner(ids, opts);
-      if (!r.ok) { toast(r.reason || 'Gröbner basis failed', { kind: 'error' }); return; }
-      if (canvas) canvas.clearSelection();
-      rerender();
-      toast('Gröbner basis: ' + r.created.length + ' generator(s)' +
-        (elim.length ? ' eliminating ' + elim.join(', ') : ' (' + order + ')') +
-        (r.skipped.length ? '; skipped ' + r.skipped.length + ' non-equality' : ''));
+      const ctrl = _newAbort(); _abort = ctrl;
+      setBusy(true, 'Computing Gröbner basis…');
+      store.groebnerAsync(ids, opts, {
+        signal: ctrl && ctrl.signal,
+        onProgress: (info) => setStatus('Gröbner… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
+      }).then((r) => {
+        _abort = null; setBusy(false);
+        if (r.aborted) { setStatus('Cancelled.'); toast('Cancelled'); return; }
+        if (!r.ok) { toast(r.reason || 'Gröbner basis failed', { kind: 'error' }); setStatus(''); return; }
+        if (canvas) canvas.clearSelection();
+        rerender(); setStatus('');
+        toast('Gröbner basis: ' + r.created.length + ' generator(s)' +
+          (elim.length ? ' eliminating ' + elim.join(', ') : ' (' + order + ')') +
+          (r.skipped.length ? '; skipped ' + r.skipped.length + ' non-equality' : ''));
+      });
     }
 
-    // Report the dimension / solution count of the current equality system.
+    // Report the dimension / solution count of the current equality system (sync —
+    // it's a quick grevlex-basis check).
     function doDimension() {
       if (!store.size) { if (!seedFromCurrent()) return; }
       const r = store.dimension();
@@ -229,18 +254,28 @@
       if (r.zeroDim) toast('Zero-dimensional: ' + r.dimension + ' solution(s) (with multiplicity), ' + r.numVars + ' variables.');
       else toast('Positive-dimensional: infinitely many solutions (' + r.numVars + ' variables) — fix more data or add constraints.');
     }
-    // Solve the current equality system numerically (shape-lemma path).
+    // Solve the current equality system numerically (shape-lemma path), off the main
+    // thread via QD.SymWorker (falls back to sync if unavailable).
     function doSolve() {
+      if (_abort) return;
       if (!store.size) { if (!seedFromCurrent()) return; }
-      const r = store.solve();
-      if (!r.ok) { toast('No numeric solve: ' + (r.reason || 'unavailable'), { kind: 'error' }); return; }
-      toast('Solved: ' + r.solutions.length + ' solution(s) (dimension ' + r.dimension + '). See console for coordinates.');
-      try {
-        console.table(r.solutions.map((s) => {
-          const row = {}; Object.keys(s).forEach((k) => { row[k] = s[k].re.toFixed(6) + (s[k].im >= 0 ? '+' : '−') + Math.abs(s[k].im).toFixed(6) + 'i'; });
-          return row;
-        }));
-      } catch (e) { /* console.table unavailable — ignore */ }
+      const ctrl = _newAbort(); _abort = ctrl;
+      setBusy(true, 'Solving (Gröbner → FGLM → roots)…');
+      store.solveAsync(null, {}, {
+        signal: ctrl && ctrl.signal,
+        onProgress: (info) => setStatus('Solving… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
+      }).then((r) => {
+        _abort = null; setBusy(false); setStatus('');
+        if (r.aborted) { toast('Cancelled'); return; }
+        if (!r.ok) { toast('No numeric solve: ' + (r.reason || 'unavailable'), { kind: 'error' }); return; }
+        toast('Solved: ' + r.solutions.length + ' solution(s) (dimension ' + r.dimension + '). See console for coordinates.');
+        try {
+          console.table(r.solutions.map((s) => {
+            const row = {}; Object.keys(s).forEach((k) => { row[k] = s[k].re.toFixed(6) + (s[k].im >= 0 ? '+' : '−') + Math.abs(s[k].im).toFixed(6) + 'i'; });
+            return row;
+          }));
+        } catch (e) { /* console.table unavailable — ignore */ }
+      });
     }
 
     // crude plain-text rendering of a variable name for <option>/toasts

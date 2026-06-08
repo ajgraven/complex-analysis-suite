@@ -478,6 +478,31 @@ module.exports = async function run() {
       const bad = S.solveZeroDim([mv('x').pow(2).sub(mv('y'))], { vars: ['x', 'y'] });
       ok('solveZeroDim: a positive-dimensional system returns {ok:false}', bad.ok === false && /zero-dimensional/i.test(bad.reason));
     }
+
+    // Serialization (worker boundary): MPoly ⇄ term list round-trip, and runJob —
+    // the serialized op dispatcher used by the Web-Worker offload (sym-worker.js).
+    {
+      const iC = S.mpolyConst(S.gaussInt(0, 1));
+      const p = mv('x').pow(2).mul(mv('y')).add(mv('x').mul(iC).scale(S.gaussInt(3))).sub(mi(5));  // x²y + 3i·x − 5
+      ok('fromTermList: round-trips an MPoly (incl. ℚ(i) coeffs) exactly', S.polyFromTermList(p.termList()).equals(p));
+      ok('fromTermList: empty list → zero polynomial', S.polyFromTermList([]).isZero());
+      // runJob groebner: serialized in → serialized out, equals the direct basis
+      const sys = [mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').sub(mv('y'))];
+      let progressCalls = 0;
+      const rj = S.runJob('groebner', { polys: sys.map((q) => q.termList()), orderSpec: { kind: 'grevlex', varOrder: ['x', 'y'] } }, () => progressCalls++);
+      const direct = S.buchberger(sys, S.monomialOrder('grevlex', ['x', 'y']));
+      ok('runJob groebner: generators match a direct Buchberger run',
+         rj.generators.map((tl) => S.polyFromTermList(tl).key()).sort().join('|') === direct.map((g) => g.key()).sort().join('|'));
+      // runJob with a block elimination spec
+      const rjE = S.runJob('groebner', { polys: sys.map((q) => q.termList()), orderSpec: { kind: 'block', blocks: [['x'], ['y']] } });
+      ok('runJob groebner: block-order spec yields an x-free elimination generator',
+         rjE.generators.map((tl) => S.polyFromTermList(tl)).some((g) => !g.vars().has('x')));
+      // runJob solveZeroDim
+      const rs = S.runJob('solveZeroDim', { polys: [mv('x').pow(2).sub(mi(2)), mv('y').sub(mv('x'))].map((q) => q.termList()), vars: ['x', 'y'], solveVar: 'x' });
+      ok('runJob solveZeroDim: 2 solutions x=±√2 (JSON-safe)',
+         rs.ok && rs.solutions.length === 2 && rs.solutions.every((s) => Math.abs(Math.abs(s.x.re) - Math.SQRT2) < 1e-7));
+      ok('runJob: unknown op throws', (() => { try { S.runJob('nope', {}); return false; } catch (e) { return /unknown/i.test(String(e.message || e)); } })());
+    }
   }
 };
 

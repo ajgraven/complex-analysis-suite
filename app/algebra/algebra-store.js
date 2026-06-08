@@ -250,54 +250,54 @@
     // Inequality/≠ nodes are skipped (they are semi-algebraic — the CAS/RCTD path).
     // Returns { ok, created[], reason?, skipped[] }. A blow-up past the caps comes
     // back as { ok:false, reason } (the algorithm threw "use CAS export").
-    function groebner(ids, opts) {
+    // Plan a Gröbner run from a selection: validate, pick the monomial order, and
+    // emit both the live order object (for the sync/main-thread path) and a
+    // serializable order SPEC (for the Web-Worker path). Returns { ok:false, reason,
+    // skipped } or { ok:true, eqNodes, inputIds, polys, order, orderSpec, kind, elim }.
+    function _groebnerPlan(ids, opts) {
       const S = getSym();
       opts = opts || {};
       const sel = (ids || []).map((id) => get(id)).filter(Boolean);
       const eqNodes = sel.filter((n) => n.rel === '=');
       const skipped = sel.filter((n) => n.rel !== '=').map((n) => ({ id: n.id, reason: 'not an equality (' + n.rel + ')' }));
       if (eqNodes.length < 2) {
-        return { ok: false, reason: 'select at least two equality nodes for a Gröbner basis', created: [], skipped };
+        return { ok: false, reason: 'select at least two equality nodes for a Gröbner basis', skipped };
       }
-      // monomial order: an explicit eliminate list ⇒ a block ELIMINATION order
-      // (elim vars in the top block, rest in the second) — far cheaper than pure
-      // lex while exposing the same elimination ideal. An explicit opts.order
-      // overrides (e.g. force 'lex'); otherwise grevlex when nothing is eliminated.
+      // An explicit eliminate list ⇒ a block ELIMINATION order (elim vars in the top
+      // block) — far cheaper than pure lex while exposing the same elimination ideal.
+      // opts.order overrides (e.g. force 'lex'); else grevlex when nothing is eliminated.
       const elim = (opts.eliminate || []).slice();
-      let kind = opts.order || (elim.length ? 'elim' : 'grevlex');
-      let order;
+      const kind = opts.order || (elim.length ? 'elim' : 'grevlex');
+      const restOf = () => { const r = new Set(); for (const n of eqNodes) for (const v of n.poly.vars()) if (!elim.includes(v)) r.add(v); return [...r].sort(); };
+      let order, orderSpec;
       if (kind === 'elim') {
-        const rest = new Set();
-        for (const n of eqNodes) for (const v of n.poly.vars()) if (!elim.includes(v)) rest.add(v);
-        order = S.eliminationOrder(elim, [...rest].sort());
+        const rest = restOf();
+        order = S.eliminationOrder(elim, rest);
+        orderSpec = { kind: 'block', blocks: [elim.slice(), rest] };
       } else {
-        let varOrder = opts.varOrder || null;
-        if (!varOrder && elim.length) {
-          const rest = new Set();
-          for (const n of eqNodes) for (const v of n.poly.vars()) if (!elim.includes(v)) rest.add(v);
-          varOrder = [...elim, ...[...rest].sort()];
-        }
+        let varOrder = opts.varOrder || (elim.length ? [...elim, ...restOf()] : null);
         order = S.monomialOrder(kind, varOrder);
+        orderSpec = { kind, varOrder };
       }
-      let basis;
-      try {
-        basis = S.buchberger(eqNodes.map((n) => n.poly), order, opts);
-      } catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [], skipped }; }
+      return { ok: true, eqNodes, inputIds: eqNodes.map((n) => n.id), polys: eqNodes.map((n) => n.poly), order, orderSpec, kind, elim, skipped };
+    }
+    // Insert a computed Gröbner basis (generator MPolys) as derived nodes — the
+    // shared tail of the sync and async paths. Single undo step.
+    function _groebnerFinish(plan, basis, opts) {
+      opts = opts || {};
+      const { elim, kind, inputIds, eqNodes, skipped } = plan;
       let gens = basis;
-      if (elim.length && !opts.keepEliminated) {
-        gens = basis.filter((g) => { const vs = g.vars(); return !elim.some((v) => vs.has(v)); });
-      }
+      if (elim.length && !opts.keepEliminated) gens = gens.filter((g) => { const vs = g.vars(); return !elim.some((v) => vs.has(v)); });
       gens = gens.filter((g) => !g.isZero());
       if (!gens.length) {
-        return { ok: false, reason: elim.length
+        return { ok: false, created: [], skipped, reason: elim.length
           ? 'the elimination ideal in the remaining variables is trivial (no generator free of ' + elim.join(', ') + ')'
-          : 'empty Gröbner basis', created: [], skipped };
+          : 'empty Gröbner basis' };
       }
       checkpoint();
-      const inputIds = eqNodes.map((n) => n.id);
       const col = Math.max.apply(null, eqNodes.map((n) => n.column)) + 1;
-      const created = [];
       const tag = elim.length ? 'elim ' + elim.join(',') : kind;
+      const created = [];
       gens.forEach((poly, i) => {
         const node = addNode({
           id: nid(), kind: 'derived', poly, rel: '=',
@@ -309,6 +309,46 @@
         created.push(node);
       });
       return { ok: true, created, skipped };
+    }
+    // Synchronous Gröbner (main thread). See groebnerAsync for the offloaded path.
+    function groebner(ids, opts) {
+      const S = getSym();
+      const plan = _groebnerPlan(ids, opts);
+      if (!plan.ok) return { ok: false, reason: plan.reason, created: [], skipped: plan.skipped || [] };
+      let basis;
+      try { basis = S.buchberger(plan.polys, plan.order, opts || {}); }
+      catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [], skipped: plan.skipped }; }
+      return _groebnerFinish(plan, basis, opts || {});
+    }
+    // Off-main-thread Gröbner via QD.SymWorker (Promise). runOpts: { onProgress, signal }.
+    // Falls back to the synchronous path when the worker is unavailable.
+    function groebnerAsync(ids, opts, runOpts) {
+      const S = getSym();
+      opts = opts || {};
+      const plan = _groebnerPlan(ids, opts);
+      if (!plan.ok) return Promise.resolve({ ok: false, reason: plan.reason, created: [], skipped: plan.skipped || [] });
+      const SW = symWorker();
+      if (!SW) { return Promise.resolve(groebner(ids, opts)); }
+      const payload = { polys: plan.polys.map((p) => p.termList()), orderSpec: plan.orderSpec, opts: _capOpts(opts) };
+      return SW.run('groebner', payload, runOpts || {}).then(
+        (res) => _groebnerFinish(plan, (res.generators || []).map((tl) => S.polyFromTermList(tl)), opts),
+        (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled', created: [], skipped: plan.skipped }
+          : { ok: false, reason: (err && err.message) || String(err), created: [], skipped: plan.skipped });
+    }
+
+    // QD.SymWorker handle (off-main-thread runner), or null if unavailable.
+    function symWorker() {
+      const Q = (typeof window !== 'undefined' && window.QD) || (typeof global !== 'undefined' && global.QD) || (typeof QD !== 'undefined' && QD);
+      return (Q && Q.SymWorker) || null;
+    }
+    // Keep only the structured-clone-safe numeric caps for the worker payload
+    // (drop functions like rootFinder/onProgress, which can't be postMessage'd).
+    function _capOpts(opts) {
+      const out = {};
+      for (const k of ['maxBasis', 'maxSteps', 'maxDegree', 'maxTerms', 'reduced', 'keepEliminated']) {
+        if (opts && opts[k] != null) out[k] = opts[k];
+      }
+      return out;
     }
 
     // The numeric root finder for solve() — the app's Durand–Kerner (faber-analysis).
@@ -357,6 +397,22 @@
       const rootFinder = opts.rootFinder || defaultRootFinder();
       try { return S.solveZeroDim(polys, Object.assign({}, opts, { vars, rootFinder })); }
       catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    }
+    // Off-main-thread numeric solve via QD.SymWorker (Promise). runOpts: { onProgress,
+    // signal }. The worker bundles faber-analysis so its own default Durand–Kerner is
+    // used. Falls back to the synchronous solve() when the worker is unavailable.
+    function solveAsync(ids, opts, runOpts) {
+      opts = opts || {};
+      const polys = _eqPolys(ids);
+      if (polys.length < 1) return Promise.resolve({ ok: false, reason: 'no equality nodes to solve' });
+      const SW = symWorker();
+      if (!SW) return Promise.resolve(solve(ids, opts));
+      const vars = opts.vars || _varsOf(polys);
+      const payload = { polys: polys.map((p) => p.termList()), vars, solveVar: opts.solveVar, opts: _capOpts(opts) };
+      return SW.run('solveZeroDim', payload, runOpts || {}).then(
+        (res) => res,
+        (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
+          : { ok: false, reason: (err && err.message) || String(err) });
     }
 
     // Duplicate a node to start an alternative derivation line (accumulate alternatives).
@@ -436,7 +492,7 @@
     }
 
     return {
-      seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, dimension, solve, duplicate, deleteNode,
+      seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync, dimension, solve, solveAsync, duplicate, deleteNode,
       sharedVars, previewCost, exportDAG, nodeStats,
       moveNode, orderOf: ordOf, orderedColumn,
       undo, redo, reset,

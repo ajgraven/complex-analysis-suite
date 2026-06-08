@@ -174,6 +174,23 @@
       p.terms.set(name + '^1', { mono: new Map([[name, 1]]), coeff: Gaussian.fromInt(1) });
       return p;
     }
+    // Rebuild an MPoly from the CAS-agnostic term list produced by termList()
+    // (the inverse of termList). Coefficients are exact Gaussian rationals carried
+    // as [numerator, denominator] decimal strings (BigInt-safe), so this is the
+    // structured-clone-safe (de)serialization used by the Web-Worker offload and by
+    // CAS import. Unknown/empty input → the zero polynomial.
+    static fromTermList(list) {
+      const p = new MPoly();
+      for (const t of (list || [])) {
+        const mono = new Map();
+        const m = t.mono || {};
+        for (const k in m) if (Object.prototype.hasOwnProperty.call(m, k)) mono.set(k, m[k]);
+        const re = new Rational(BigInt(t.coeff.re[0]), BigInt(t.coeff.re[1]));
+        const im = new Rational(BigInt(t.coeff.im[0]), BigInt(t.coeff.im[1]));
+        p._addTerm(mono, new Gaussian(re, im));
+      }
+      return p;
+    }
 
     _addTerm(mono, coeff) {
       if (coeff.isZero()) return;
@@ -1107,6 +1124,37 @@
     return (FA && FA.polynomialRoots) ? ((coeffsAsc) => FA.polynomialRoots(coeffsAsc)) : null;
   }
 
+  // ---------------------------------------------------------------------------
+  // runJob — a serialization-friendly op dispatcher: takes SERIALIZED input (term
+  // lists from MPoly.termList, an order spec) and returns SERIALIZED output, so the
+  // SAME code runs on the main thread or inside a Web Worker (sym-worker.js) with no
+  // class instances crossing the postMessage boundary. onProgress(info) is forwarded
+  // to Buchberger (the worker throttles + posts it back). This is the single source
+  // of truth for the offloaded heavy ops.
+  // ---------------------------------------------------------------------------
+  function _orderFromSpec(spec) {
+    if (!spec) return monomialOrder('grevlex');
+    if (spec.kind === 'block') return monomialOrder('block', spec.blocks || []);
+    return monomialOrder(spec.kind || 'grevlex', spec.varOrder || null);
+  }
+  function runJob(kind, payload, onProgress) {
+    payload = payload || {};
+    const polys = (payload.polys || []).map((tl) => MPoly.fromTermList(tl));
+    if (kind === 'groebner') {
+      const order = _orderFromSpec(payload.orderSpec);
+      const opts = Object.assign({}, payload.opts, onProgress ? { onProgress } : {});
+      return { generators: buchberger(polys, order, opts).map((g) => g.termList()) };
+    }
+    if (kind === 'solveZeroDim') {
+      const opts = Object.assign({}, payload.opts, { vars: payload.vars, solveVar: payload.solveVar }, onProgress ? { onProgress } : {});
+      const res = solveZeroDim(polys, opts);
+      const out = { ok: res.ok, reason: res.reason, dimension: res.dimension, univariateDegree: res.univariateDegree };
+      if (res.ok) out.solutions = res.solutions;       // {var:{re,im}} — JSON-safe
+      return out;
+    }
+    throw new Error('runJob: unknown kind ' + kind);
+  }
+
   // Saturation ⟨polys⟩ : f^∞ via the Rabinowitsch trick: adjoin a fresh variable w
   // and the relation 1 − w·f, compute a Gröbner basis under an ELIMINATION order
   // (w in the top block), then drop every generator that still mentions w. This
@@ -1368,10 +1416,11 @@
   const Sym = {
     Rational, Gaussian, MPoly, RatFn, FRatFn,
     rat, gauss, gaussInt, mpolyVar, mpolyConst, mpolyInt,
+    polyFromTermList: (list) => MPoly.fromTermList(list),
     monoKey, monoCmp,
     mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, reduceGroebner, saturate,
-    leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, solveZeroDim,
+    leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, solveZeroDim, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
   };

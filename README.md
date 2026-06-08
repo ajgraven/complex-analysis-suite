@@ -161,6 +161,8 @@ visualizations, complementary to the headless runner.
     │                                  (all: QD_UI.installX(uiCtx) factories,
     │                                   Phase-3 item E split of ui.js)
     ├── algebra/                       Algebra tab — symbolic elimination workspace:
+    │   ├── sym-worker.js              QD.SymWorker: off-main-thread Gröbner/solve
+    │   │                              (Blob Web Worker; progress + cancel)
     │   ├── algebra-store.js           QD.AlgebraStore: equation-DAG model (DOM-free)
     │   ├── algebra-canvas.js          QD.AlgebraCanvas: SVG + KaTeX DAG renderer
     │                                   (collapsible cards, reorder, copy-LaTeX, hovertext)
@@ -457,7 +459,9 @@ view is active.
   sugar selection; pick the monomial order, or give an *eliminate* list for a fast block
   elimination order) — each basis generator becomes a derived node. **Dimension / count**
   reports whether the system has finitely many solutions and how many; **Solve (numeric)**
-  runs the shape-lemma path (FGLM to lex → Durand–Kerner → back-substitution). Cards are
+  runs the shape-lemma path (FGLM to lex → Durand–Kerner → back-substitution). The
+  Gröbner and Solve actions run **off the main thread** in a Web Worker with live
+  progress and a **Cancel** button (a main-thread fallback covers `file://`). Cards are
   **collapsible** (collapsed by default — a one-line
   preview; expand for the full form), **reorderable** within a column (▲/▼), copy as
   **LaTeX** individually (⧉), and carry **hovertext** (variable count, real-equation

@@ -9,6 +9,7 @@
 require('./bootstrap');
 loadInCtx('sym-core.js');
 loadInCtx('faber-analysis.js');   // Durand–Kerner finder for store.solve
+loadInCtx('algebra/sym-worker.js');  // QD.SymWorker (main-thread fallback in Node)
 loadInCtx('qd-equations.js');
 loadInCtx('qd-constraints.js');
 loadInCtx('algebra/algebra-store.js');
@@ -249,6 +250,27 @@ module.exports = async function run() {
     ok('solve (via Sym): handcrafted ⟨x²−1, y−x⟩ → 2 solutions (±1, ±1)',
        sysSolve.ok && sysSolve.solutions.length === 2 &&
        sysSolve.solutions.every((s) => Math.abs(Math.abs(s.x.re) - 1) < 1e-7 && Math.abs(s.y.re - s.x.re) < 1e-7));
+  }
+
+  // ---- async (worker-offloaded) ops, exercised via the main-thread fallback ----
+  {
+    ok('QD.SymWorker exposed', !!QD.SymWorker && typeof QD.SymWorker.run === 'function');
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system);
+    const ns = st.list();
+    const ids = [ns[0].id, ns[1].id];
+    // groebnerAsync must match the synchronous groebner (same created polynomials)
+    const stSync = QD.AlgebraStore.create(); stSync.seedFromSystem(system);
+    const sync = stSync.groebner([stSync.list()[0].id, stSync.list()[1].id], { order: 'grevlex' });
+    const asyncR = await st.groebnerAsync(ids, { order: 'grevlex' });
+    ok('groebnerAsync: resolves with derived groebner nodes', asyncR.ok && asyncR.created.length >= 1
+       && asyncR.created.every((n) => n.provenance.op === 'groebner'));
+    ok('groebnerAsync: result matches the synchronous groebner basis',
+       sync.ok && asyncR.created.map((n) => n.poly.key()).sort().join('|') === sync.created.map((n) => n.poly.key()).sort().join('|'));
+    ok('SymWorker ran via the main-thread fallback in Node', QD.SymWorker._isFallback() === true);
+    // solveAsync must resolve (fallback → runJob) with a well-formed result
+    const asyncSolve = await st.solveAsync();
+    ok('solveAsync: resolves with a well-formed result', typeof asyncSolve.ok === 'boolean');
   }
 
   // ---- export shape ----

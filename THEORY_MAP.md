@@ -107,6 +107,7 @@ see arXiv:2001.09431 for the RCTD-of-QDs method this anticipates.
 | Gröbner basis (Buchberger over ℚ(i): Gebauer–Möller + sugar, reduced) + saturation `I:f^∞` | `QD.Sym.buchberger` / `reduceGroebner` / `saturate` | [`app/sym-core.js`](app/sym-core.js) |
 | Zero-dim toolkit: standard monomials / quotient dimension / solution count | `QD.Sym.standardMonomials` / `isZeroDimensional` / `quotientDimension` | [`app/sym-core.js`](app/sym-core.js) |
 | FGLM (grevlex→lex) + shape-lemma numeric solving (Durand–Kerner back-substitution) | `QD.Sym.fglm` / `solveZeroDim`; `QD.AlgebraStore.dimension` / `solve` | [`app/sym-core.js`](app/sym-core.js) |
+| Off-main-thread Gröbner/solve (Web Worker, progress + cancel) | `QD.SymWorker` (via `Sym.runJob` / `MPoly.fromTermList`); `AlgebraStore.groebnerAsync` / `solveAsync` | [`app/algebra/sym-worker.js`](app/algebra/sym-worker.js) |
 | Gröbner workspace op (selected/all equality nodes) | `QD.AlgebraStore.groebner` | [`app/algebra/algebra-store.js`](app/algebra/algebra-store.js) |
 | φ, φ′, φ″ at a generic boundary point ζ | `QDConstraints.phiData` (reuses `phiSeriesAt` at ζ) | [`app/qd-constraints.js`](app/qd-constraints.js) |
 | convex `Re(1+ζφ″/φ′)>0`, star `Re(ζφ′/(φ−w₀))>0`, spiral (∃λ) | `QDConstraints.convexIneq` / `starIneq` / `spiralIneq` | `app/qd-constraints.js` |
