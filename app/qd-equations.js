@@ -71,19 +71,21 @@
     return num / den;
   }
 
-  // Build φ(z_j + t) as a truncated power series in t (length L+1), coefficients
-  // FRatFn (FACTORED denominators) in the conjugate-model indeterminates. Index 0
-  // is φ(z_j). Each branch's Möbius denominator (1 − z̄(z_j+t))^{k'} is reciprocated
-  // via the binomial series  1/(D0 − z̄t)^{k'} = Σ_i C(k'+i−1, i)·z̄^i·t^i / D0^{k'+i},
-  // where D0 = (1 − z̄_{j'}·z_j). So D0 is tracked as a denominator POWER and never
+  // Build φ(p + t) as a truncated power series in t (length L+1), coefficients
+  // FRatFn (FACTORED denominators) in the conjugate-model indeterminates, where the
+  // expansion point is the variable named `zPointName` (a pole var V.z(j) for the
+  // (●)/(★) generator, or a generic 'Z' for the constraint module's φ,φ′,φ″). Index
+  // 0 is φ(p). Each branch's Möbius denominator (1 − z̄(p+t))^{k'} is reciprocated via
+  // the binomial series  1/(D0 − z̄t)^{k'} = Σ_i C(k'+i−1, i)·z̄^i·t^i / D0^{k'+i},
+  // where D0 = (1 − z̄_{j'}·p). So D0 is tracked as a denominator POWER and never
   // expanded — this is what keeps higher orders tractable (no super-exponential
   // term growth).
-  function phiSeriesAt(S, poles, j, L) {
+  function phiSeriesAt(S, poles, zPointName, L) {
     const { FRatFn, mpolyVar, mpolyInt, mpolyConst, gauss, rat } = S;
     const fVar = (name) => FRatFn.fromPoly(mpolyVar(name));
     const fInt = (k) => FRatFn.fromInt(k);
     const constBig = (b) => mpolyConst(gauss(rat(b, 1)));      // BigInt → constant MPoly
-    const zj = mpolyVar(V.z(j));                               // MPoly z_j
+    const zj = mpolyVar(zPointName);                           // MPoly expansion point
     let phi = S.seriesConst(fVar(V.w0), L);                    // start with w₀
     for (let jp = 0; jp < poles.length; jp++) {
       const mjp = poles[jp].principal.length;
@@ -139,7 +141,7 @@
     for (let i = 0; i < n; i++) {
       const j = i + 1;
       const mj = orders[i];
-      const phiS = phiSeriesAt(S, poles, j, mj);     // φ(z_j+t), orders 0..m_j
+      const phiS = phiSeriesAt(S, poles, V.z(j), mj);     // φ(z_j+t), orders 0..m_j
 
       // (●_j): φ(z_j) − a_j = 0  → clear denominator → MPoly
       const locator = phiS[0].sub(rfVar(V.a(j)));
@@ -449,6 +451,7 @@
     residualAtSolution, residualReimAtSolution,
     buildVarMap, buildRealVarMap,
     systemToLatex, systemToExport, latexOf: latexOfFor,
+    phiSeriesAt,                       // φ(p+t) series; reused by QD.QDConstraints
     VARS: V, VARS_REAL: VR,
   };
 

@@ -257,6 +257,14 @@
          coefficients <code>{z<sub>j</sub>, A<sub>j,k</sub>}</code>. Pick a representation,
          then Generate; export as LaTeX or a CAS-ready JSON term list.`,
 
+      algebraCard:
+        `Interactive symbolic workspace. <b>Generate</b> seeds the (●)/(★)/gauge system
+         from the current bounded solve; add <b>univalence constraints</b> (convex, star-like,
+         spiral-like, φ′≠0, global injectivity, geometric borders); then select <b>two
+         equation nodes</b> on the graph and a shared variable to <b>eliminate</b> it by
+         resultant — a new node appears one column over. Undo/redo, Fit, and export
+         (JSON term lists / LaTeX) are below.`,
+
       searchOptions:
         `Overrides for the aggressiveness preset. Leave a field blank to use
          the preset's default. Phase checkboxes are enabled by default.`,
@@ -292,6 +300,8 @@
       curvature: `Color ∂Ω by its curvature |κ| (cool → hot). The hottest stretch marks the sharpest bend; κ → ∞ at a cusp. Reads the same data as the Geometry & accuracy panel.`,
       phenomena: `Annotate the phenomena the cusp / critical-set overlays don't: the harmonic-measure hot spot (the tip, where ρ = 1/(2π|φ′|) peaks), the maximum-curvature point on ∂Ω, and the domain's symmetry axes (dashed) with its dihedral (Dₙ) or cyclic (Zₙ) symmetry group.`,
       faberRoots: `Plot the roots of the Faber polynomials Fₙ of the bounded complement K (classical unbounded QD only). Roots cluster inside K. Teal circles = union of all roots up to N; violet diamonds = the single selected Fₙ. Drive N / the mode from the Faber polynomials card.`,
+      openAlgebra: `Open this system in the Algebra tab — an interactive workspace for adding univalence constraints and eliminating variables (resultants).`,
+      gaugeElim: `Eliminate a variable between the gauge equation and every other equation at once (one shared variable each). Because the gauge is linear in the A_{j,1}, this applies the gauge normalization throughout.`,
       fit: `Fit view to data`,
       reset: `Reset view`,
       dock: `Dock the panel into the sidebar (clear the plot)`,
@@ -331,6 +341,21 @@
         `it must be ≈0. Export feeds a future symbolic-reduction (Gröbner / triangular) step.`,
       unavailablePrefix: `Equation generation unavailable: `,
       pending: `solving… equation system pending`,
+    },
+
+    // ---- Algebra workspace tab (HTML help + status messages) ----------------
+    algebra: {
+      help:
+        `Symbolic elimination workspace for the classical bounded QD system. Nodes are ` +
+        `equations (●/★/gauge), univalence constraints, or derived eliminants; edges are ` +
+        `derivations. Select two nodes + a shared variable and Eliminate to take their ` +
+        `Sylvester resultant (exact over ℚ(i)). Constraints: convex/star/spiral inequalities, ` +
+        `φ′≠0 (local univalence), the global boundary-injectivity divided difference, and the ` +
+        `geometric border loci. Export feeds a future Gröbner / RCTD step.`,
+      noSolve: `No classical bounded QD solved yet — solve one on the QD tab first.`,
+      ready: `Ready — click “Generate / re-seed” to load the system.`,
+      seeded: `Seeded`,
+      unavailablePrefix: `Generation unavailable: `,
     },
 
     // ---- Analytic-oracle card (HTML help + whole-sentence messages) --------

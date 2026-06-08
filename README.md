@@ -139,6 +139,8 @@ visualizations, complementary to the headless runner.
     │                                  MPoly/RatFn/FRatFn + power series, Lagrange reversion)
     ├── qd-equations.js                QD.QDEquations: symbolic coefficient system for a
     │                                  classical bounded QD (conjugate + real/imag reps)
+    ├── qd-constraints.js              QD.QDConstraints: univalence/geometric constraints
+    │                                  (convex/star/spiral, φ′≠0, global injectivity, borders)
     ├── ui-strings.js                  QD.Strings: editable UI prose (SINGLE SOURCE) +
     │                                  the data-str applier (see HELPTEXT.md)
     │
@@ -156,6 +158,10 @@ visualizations, complementary to the headless runner.
     │                                  bounded QD): LaTeX display + self-verify + export
     │                                  (all: QD_UI.installX(uiCtx) factories,
     │                                   Phase-3 item E split of ui.js)
+    ├── algebra/                       Algebra tab — symbolic elimination workspace:
+    │   ├── algebra-store.js           QD.AlgebraStore: equation-DAG model (DOM-free)
+    │   ├── algebra-canvas.js          QD.AlgebraCanvas: SVG + KaTeX DAG renderer
+    │   └── algebra-ui.js              QD_UI.installAlgebra: tab, palette, eliminate, export
     │
     ├── direct/
     │   ├── direct-common.js           Direct-problem kernels (polynomial / rational /
@@ -437,6 +443,14 @@ view is active.
   ≈0), and exportable as LaTeX or a CAS-agnostic JSON term list. Exact arithmetic throughout
   (`app/sym-core.js` `QD.Sym`; `app/qd-equations.js` `QD.QDEquations`) — the foundation for a
   future symbolic-reduction (Gröbner / triangular-decomposition) step.
+* **Algebra tab** *(classical bounded QD only)* — an interactive **equation-derivation
+  workspace**. The generated (●)/(★)/gauge system appears as KaTeX nodes in a graph;
+  add **univalence constraints** (convex, star-like, spiral-like, `φ′≠0`, global boundary
+  injectivity, geometric border loci), then select two equation nodes + a shared variable
+  and **eliminate** it by an exact Sylvester **resultant** — a derived equation appears one
+  column over, with edges. Undo/redo, a cost preview, and JSON/LaTeX export. From
+  `app/qd-constraints.js` (`QD.QDConstraints`) + `app/algebra/`; foundation for a later
+  Gröbner-basis / RCTD reduction step.
 * **φ(0)** — defaults to the centroid of the poles (manually overridable
   in bounded mode).
 * **Solver settings** — boundary samples, aggressiveness preset (Quick /

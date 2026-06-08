@@ -187,6 +187,65 @@ module.exports = async function run() {
     const Tr = S.seriesReversion(sNum, 3);
     ok('seriesReversion(t+t^2) = [0,1,-1,2]', ceq(Tr[1], 1) && ceq(Tr[2], -1) && ceq(Tr[3], 2));
   }
+
+  // ---- Elimination layer: univariate view, determinant, resultant ----
+  // Oracle style: the eliminant must VANISH at the true common solutions and be
+  // nonzero elsewhere; Bareiss det is cross-checked against Laplace cofactor.
+  {
+    const mv = (n) => S.mpolyVar(n), mi = (k) => S.mpolyInt(k);
+    const iC = S.mpolyConst(S.gaussInt(0, 1));   // the constant i as an MPoly
+
+    // degreeIn / coeffsIn
+    const f0 = mv('x').pow(2).mul(mv('y')).add(mv('x')).sub(mi(3)); // y·x² + x − 3
+    ok('degreeIn(x)=2, degreeIn(y)=1, degreeIn(z)=0',
+       f0.degreeIn('x') === 2 && f0.degreeIn('y') === 1 && f0.degreeIn('z') === 0);
+    const cs = f0.coeffsIn('x');   // [ −3, 1, y ]
+    ok('coeffsIn(x): c0=−3, c1=1, c2=y',
+       cs.length === 3 && cs[0].equals(mi(-3)) && cs[1].equals(mi(1)) && cs[2].equals(mv('y')));
+    ok('derivativeIn(x) of y·x²+x−3 = 2y·x + 1',
+       f0.derivativeIn('x').equals(mv('y').mul(mv('x')).scale(S.gaussInt(2)).add(mi(1))));
+
+    // (1) eliminate x from { x²−y, x−1 } → vanishes at y=1, not at y=2
+    const r1 = S.resultant(mv('x').pow(2).sub(mv('y')), mv('x').sub(mi(1)), 'x');
+    ok('Res_x(x²−y, x−1) vanishes at y=1', Math.hypot(r1.evalComplex({ y: { re: 1, im: 0 } }).re,
+       r1.evalComplex({ y: { re: 1, im: 0 } }).im) < 1e-12);
+    ok('Res_x(x²−y, x−1) nonzero at y=2', Math.hypot(r1.evalComplex({ y: { re: 2, im: 0 } }).re,
+       r1.evalComplex({ y: { re: 2, im: 0 } }).im) > 1e-9);
+
+    // (2) circle ∩ line: eliminate x from { x²+y²−1, x+y } → 2y²−1, roots y=±1/√2
+    const r2 = S.resultant(mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').add(mv('y')), 'x');
+    ok('Res_x(circle,line) vanishes at y=1/√2',
+       Math.abs(r2.evalComplex({ y: { re: Math.SQRT1_2, im: 0 } }).re) < 1e-12);
+    ok('Res_x(circle,line) nonzero at y=0',
+       Math.abs(r2.evalComplex({ y: { re: 0, im: 0 } }).re) > 1e-9);
+
+    // (3) ℚ(i): x−i shares the root i with x²+1 (≡0); x−i and x−2 do not
+    ok('Res_x(x−i, x²+1) ≡ 0 (shared factor)', S.resultant(mv('x').sub(iC), mv('x').pow(2).add(mi(1)), 'x').isZero());
+    ok('Res_x(x−i, x−2) is a nonzero ℚ(i) constant',
+       !S.resultant(mv('x').sub(iC), mv('x').sub(mi(2)), 'x').isZero());
+
+    // (4) Bareiss det == Laplace det on small MPoly matrices (incl. a zero pivot)
+    const M3 = [[mv('x'), mi(1), mv('y')], [mi(0), mv('x'), mi(2)], [mv('y'), mi(1), mv('x')]];
+    ok('mpolyDet (Bareiss) == Laplace, 3×3', S.mpolyDet(M3).equals(S.mpolyDetLaplace(M3)));
+    const M4 = [[mv('x'), mi(2), mi(0), mv('y')], [mi(1), mv('y'), mi(3), mi(0)],
+                [mi(0), mi(1), mv('x'), mi(2)], [mv('y'), mi(0), mi(1), mv('x')]];
+    ok('mpolyDet (Bareiss) == Laplace, 4×4', S.mpolyDet(M4).equals(S.mpolyDetLaplace(M4)));
+    const Msw = [[mi(0), mi(1)], [mi(1), mi(0)]];   // forces a pivot row-swap → det −1
+    ok('mpolyDet handles zero pivot (row swap), det[[0,1],[1,0]]=−1', S.mpolyDet(Msw).equals(mi(-1)));
+
+    // (5) edge cases
+    ok('Res(f, const c, x) = c^{deg f}: Res(x²−y, 3, x)=9',
+       S.resultant(mv('x').pow(2).sub(mv('y')), mi(3), 'x').equals(mi(9)));
+    ok('Res(const, const, x) = 1', S.resultant(mi(5), mi(7), 'x').equals(mi(1)));
+    ok('Res(0, g, x) = 0', S.resultant(S.MPoly.zero(), mv('x').add(mi(1)), 'x').isZero());
+
+    // discriminant of x²+bx+c (in x) is b²−4c (up to sign): vanishes at the double-root line
+    const disc = S.discriminant(mv('x').pow(2).add(mv('b').mul(mv('x'))).add(mv('c')), 'x');
+    ok('disc_x(x²+bx+c) vanishes at b=2,c=1 (double root)',
+       Math.abs(disc.evalComplex({ b: { re: 2, im: 0 }, c: { re: 1, im: 0 } }).re) < 1e-12);
+    ok('disc_x(x²+bx+c) nonzero at b=0,c=−1',
+       Math.abs(disc.evalComplex({ b: { re: 0, im: 0 }, c: { re: -1, im: 0 } }).re) > 1e-9);
+  }
 };
 
 // ---- local complex helpers ----

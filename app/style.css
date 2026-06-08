@@ -672,6 +672,36 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #qd-equations-content .qdeq-eq-label { margin-bottom: 1px; }
 #qd-equations-content .qdeq-eq-math { overflow-x: auto; max-width: 100%; }
 
+/* ===== Algebra tab: equation-derivation DAG workspace ===== */
+/* Full-area graph surface laid over the shared #plot-area while the Algebra tab
+   is active (SVG edges + absolutely-positioned KaTeX node cards). */
+#algebra-graph {
+  position: absolute; inset: 0; z-index: 5;
+  background: var(--c-bg, #fff); overflow: hidden;
+}
+#algebra-graph.hidden { display: none; }
+#algebra-graph .algebra-viewport {
+  position: absolute; inset: 0; overflow: hidden; cursor: grab;
+}
+#algebra-graph .algebra-wrap { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+#algebra-graph .algebra-edges { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
+#algebra-graph .algebra-edge { fill: none; stroke: var(--c-border, #bbb); stroke-width: 1.5; }
+#algebra-graph .algebra-nodes { position: absolute; top: 0; left: 0; }
+#algebra-graph .algebra-node {
+  position: absolute; box-sizing: border-box;
+  background: var(--c-surface, #fff); border: 1px solid var(--c-border, #ccc);
+  border-radius: 6px; padding: 6px 8px; font-size: 12px; cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+#algebra-graph .algebra-node.selected { border-color: var(--c-accent, #2b7); box-shadow: 0 0 0 2px var(--c-accent, #2b7); }
+#algebra-graph .algebra-generated  { border-left: 3px solid var(--c-accent, #2b7); }
+#algebra-graph .algebra-constraint { border-left: 3px solid var(--c-warn, #d80); }
+#algebra-graph .algebra-derived    { border-left: 3px solid var(--c-muted, #88a); }
+#algebra-graph .algebra-node-head { font-weight: 600; color: var(--c-muted); margin-bottom: 3px; font-size: 11px; }
+#algebra-graph .algebra-node-math { overflow-x: auto; max-width: 100%; }
+#controls-algebra .card-sub { border-top: 1px solid var(--c-border-soft, #eee); padding-top: 6px; }
+#controls-algebra .card-sub.hidden { display: none; }
+
 #alternates-card .alt {
   display: flex;
   align-items: center;

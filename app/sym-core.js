@@ -129,6 +129,32 @@
     for (const [name, e] of b) out.set(name, (out.get(name) || 0) + e);
     return out;
   }
+  function monoTotalDeg(mono) { let d = 0; for (const e of mono.values()) d += e; return d; }
+  // Global monomial order (graded-lex): higher total degree wins; ties broken
+  // lexicographically by the higher exponent on the alphabetically-earliest
+  // differing variable. Used only by the exact-division step of the determinant —
+  // any well-founded order makes that division terminate; grlex keeps it cheap.
+  function monoCmp(a, b) {
+    const da = monoTotalDeg(a), db = monoTotalDeg(b);
+    if (da !== db) return da < db ? -1 : 1;
+    const names = new Set(); for (const k of a.keys()) names.add(k); for (const k of b.keys()) names.add(k);
+    const sorted = [...names].sort();
+    for (const nm of sorted) {
+      const ea = a.get(nm) || 0, eb = b.get(nm) || 0;
+      if (ea !== eb) return ea < eb ? -1 : 1;
+    }
+    return 0;
+  }
+  // a / b exponentwise (Map) if every resulting exponent ≥ 0, else null.
+  function monoDivide(a, b) {
+    const out = new Map(a);
+    for (const [name, e] of b) {
+      const cur = (out.get(name) || 0) - e;
+      if (cur < 0) return null;
+      if (cur === 0) out.delete(name); else out.set(name, cur);
+    }
+    return out;
+  }
 
   // ---------------------------------------------------------------------------
   // MPoly — multivariate polynomial over Gaussian. Sparse term map.
@@ -242,11 +268,64 @@
       }
       return p;
     }
+    // Conjugate every coefficient (the ℚ(i) bar); variables untouched.
+    conjCoeffs() {
+      const p = new MPoly();
+      for (const [k, t] of this.terms) p.terms.set(k, { mono: new Map(t.mono), coeff: t.coeff.conj() });
+      return p;
+    }
+    // Rename variables via nameFn(name)->newName; re-expands, merging any collisions.
+    // (With conjCoeffs, this builds the full complex conjugate of an expression in
+    // the conjugate-variable model: bar the coeffs, swap each var with its partner.)
+    relabel(nameFn) {
+      const p = new MPoly();
+      for (const t of this.terms.values()) {
+        const mono = new Map();
+        for (const [nm, e] of t.mono) { const nn = nameFn(nm); mono.set(nn, (mono.get(nn) || 0) + e); }
+        p._addTerm(mono, t.coeff);
+      }
+      return p;
+    }
 
     vars() {
       const s = new Set();
       for (const t of this.terms.values()) for (const name of t.mono.keys()) s.add(name);
       return s;
+    }
+
+    // --- "univariate-in-varName" view, for resultant elimination ---------------
+    // Highest power of varName present (-1 for the zero polynomial; 0 if the
+    // variable is absent but the polynomial is nonzero).
+    degreeIn(varName) {
+      if (this.isZero()) return -1;
+      let d = 0;
+      for (const t of this.terms.values()) { const e = t.mono.get(varName) || 0; if (e > d) d = e; }
+      return d;
+    }
+    // Dense coefficient list [c_0, …, c_d] with this = Σ_k c_k·varName^k, each c_k
+    // an MPoly in the remaining variables. (Returns [0] for the zero polynomial.)
+    coeffsIn(varName) {
+      const d = this.degreeIn(varName);
+      if (d < 0) return [MPoly.zero()];
+      const out = []; for (let i = 0; i <= d; i++) out.push(new MPoly());
+      for (const t of this.terms.values()) {
+        const e = t.mono.get(varName) || 0;
+        const mono = new Map(t.mono); mono.delete(varName);
+        out[e]._addTerm(mono, t.coeff);
+      }
+      return out;
+    }
+    // ∂/∂varName (termwise; for discriminants).
+    derivativeIn(varName) {
+      const p = new MPoly();
+      for (const t of this.terms.values()) {
+        const e = t.mono.get(varName) || 0;
+        if (e === 0) continue;
+        const mono = new Map(t.mono);
+        if (e === 1) mono.delete(varName); else mono.set(varName, e - 1);
+        p._addTerm(mono, t.coeff.mul(new Gaussian(new Rational(BigInt(e), 1n), RZERO)));
+      }
+      return p;
     }
 
     // Evaluate at complex values. varMap: name -> {re,im}. Returns {re,im}.
@@ -333,6 +412,123 @@
       return { sign: '+', body: r.toLatex() + ' ' + monoStr };
     }
     return { sign: '+', body: coeff.toLatex() + ' ' + monoStr };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Elimination layer — determinant + Sylvester resultant over MPoly.
+  // The coefficient ring is the integral domain MPoly-over-ℚ(i), so a fraction-
+  // free Bareiss determinant stays polynomial (no denominator inflation). Bareiss
+  // needs ONE ring op beyond +,−,×: exact division of an MPoly by an MPoly known
+  // to divide it (the Bareiss identity guarantees divisibility). Since the coeff
+  // field ℚ(i) is a field, exact division is ordinary leading-term polynomial
+  // division under the grlex monomial order, terminating with zero remainder.
+  // ---------------------------------------------------------------------------
+  function _leadTerm(poly) {
+    let best = null;
+    for (const t of poly.terms.values()) {
+      if (best === null || monoCmp(t.mono, best.mono) > 0) best = t;
+    }
+    return best; // { mono, coeff } or null (zero polynomial)
+  }
+  // q with f = q·g exactly (assumes g ≠ 0 and g | f). Throws if not divisible.
+  function mpolyExactDiv(f, g) {
+    if (g.isZero()) throw new Error('mpolyExactDiv: division by zero');
+    const gLead = _leadTerm(g);
+    let rem = f.clone();
+    let q = MPoly.zero();
+    let guard = 0;
+    while (!rem.isZero()) {
+      const rLead = _leadTerm(rem);
+      const qm = monoDivide(rLead.mono, gLead.mono);
+      if (qm === null) throw new Error('mpolyExactDiv: not divisible (invariant violated)');
+      const qc = rLead.coeff.div(gLead.coeff);          // exact in ℚ(i)
+      const term = new MPoly(); term._addTerm(qm, qc);
+      q = q.add(term);
+      rem = rem.sub(term.mul(g));
+      if (++guard > 1e6) throw new Error('mpolyExactDiv: non-terminating');
+    }
+    return q;
+  }
+  // Determinant via fraction-free Bareiss elimination with row-pivoting.
+  function mpolyDet(matrix) {
+    const n = matrix.length;
+    if (n === 0) return MPoly.fromInt(1);
+    const M = matrix.map((row) => row.map((e) => e.clone()));
+    let sign = 1;
+    let prev = MPoly.fromInt(1);
+    for (let k = 0; k < n - 1; k++) {
+      if (M[k][k].isZero()) {
+        let r = k + 1;
+        while (r < n && M[r][k].isZero()) r++;
+        if (r === n) return MPoly.zero();               // singular column
+        const tmp = M[k]; M[k] = M[r]; M[r] = tmp; sign = -sign;
+      }
+      const pivot = M[k][k];
+      for (let i = k + 1; i < n; i++) {
+        for (let j = k + 1; j < n; j++) {
+          const num = pivot.mul(M[i][j]).sub(M[i][k].mul(M[k][j]));
+          M[i][j] = mpolyExactDiv(num, prev);
+        }
+        M[i][k] = MPoly.zero();
+      }
+      prev = pivot;
+    }
+    const det = M[n - 1][n - 1];
+    return sign === 1 ? det : det.neg();
+  }
+  // Division-free Laplace cofactor expansion — O(n!), used as the test oracle for
+  // Bareiss on small matrices (and a safe path for tiny ones).
+  function mpolyDetLaplace(matrix) {
+    const n = matrix.length;
+    if (n === 0) return MPoly.fromInt(1);
+    if (n === 1) return matrix[0][0].clone();
+    let acc = MPoly.zero();
+    for (let j = 0; j < n; j++) {
+      const minor = [];
+      for (let i = 1; i < n; i++) {
+        const row = [];
+        for (let c = 0; c < n; c++) if (c !== j) row.push(matrix[i][c]);
+        minor.push(row);
+      }
+      let term = matrix[0][j].mul(mpolyDetLaplace(minor));
+      if (j % 2 === 1) term = term.neg();
+      acc = acc.add(term);
+    }
+    return acc;
+  }
+  // Sylvester resultant Res_x(f, g): eliminate `varName`, returning an MPoly in the
+  // remaining variables whose vanishing is necessary for f, g to share a root in
+  // `varName`. Edge cases: a constant-in-var input c gives c^(deg of the other);
+  // both constant → 1 (nothing to eliminate); a zero input → 0. A ≡0 result means
+  // f, g share a component (caller should treat as "no new information").
+  function resultant(f, g, varName) {
+    if (f.isZero() || g.isZero()) return MPoly.zero();
+    const a = f.coeffsIn(varName);   // a[m] leading, nonzero by construction
+    const b = g.coeffsIn(varName);
+    const m = a.length - 1, n = b.length - 1;
+    if (m === 0 && n === 0) return MPoly.fromInt(1);
+    if (m === 0) return a[0].pow(n);
+    if (n === 0) return b[0].pow(m);
+    const size = m + n;
+    const aRow = []; for (let k = m; k >= 0; k--) aRow.push(a[k]);   // high → low
+    const bRow = []; for (let k = n; k >= 0; k--) bRow.push(b[k]);
+    const M = [];
+    for (let r = 0; r < n; r++) {
+      const row = []; for (let c = 0; c < size; c++) row.push(MPoly.zero());
+      for (let c = 0; c < aRow.length; c++) row[r + c] = aRow[c];
+      M.push(row);
+    }
+    for (let r = 0; r < m; r++) {
+      const row = []; for (let c = 0; c < size; c++) row.push(MPoly.zero());
+      for (let c = 0; c < bRow.length; c++) row[r + c] = bRow[c];
+      M.push(row);
+    }
+    return mpolyDet(M);
+  }
+  // Discriminant (up to the leading-coefficient/sign factor): Res(p, ∂p/∂var).
+  // Its zero set contains the double-root locus — the geometric border loci.
+  function discriminant(p, varName) {
+    return resultant(p, p.derivativeIn(varName), varName);
   }
 
   // ---------------------------------------------------------------------------
@@ -577,7 +773,8 @@
   const Sym = {
     Rational, Gaussian, MPoly, RatFn, FRatFn,
     rat, gauss, gaussInt, mpolyVar, mpolyConst, mpolyInt,
-    monoKey,
+    monoKey, monoCmp,
+    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
   };

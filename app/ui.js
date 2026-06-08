@@ -1605,6 +1605,9 @@ if (window.QD_UI && window.QD_UI.installFaber) window.QD_UI.installFaber(uiCtx);
 // Quadrature↔map equation-system card (classical bounded QD) — ui-qd-equations.js.
 if (window.QD_UI && window.QD_UI.installQdEquations) window.QD_UI.installQdEquations(uiCtx);
 
+// Algebra tab: symbolic elimination workspace (classical bounded QD) — algebra/algebra-ui.js.
+if (window.QD_UI && window.QD_UI.installAlgebra) window.QD_UI.installAlgebra(uiCtx);
+
 // Initial structured-grid render (relocated from just after the plot setup, so
 // the let-bound renderers + modeAllowsPoly exist by the time it runs).
 renderPolesList();
@@ -1620,6 +1623,7 @@ const TAB_SUBTITLES = {
   qd: 'Inverse problem: Recover the domain Ω and associated conformal map φ from a given quadrature function h(w)',
   schwarz: 'Iterate the Schwarz reflection of your current domain — the fractal tiling set.',
   'param-slice': 'Sweep a parameter and map where valid quadrature domains exist.',
+  algebra: 'Symbolic workspace: derive eliminants and add univalence constraints to the solved QD system.',
 };
 function updateTabSubtitle(tab) {
   const el = $('#tab-subtitle');

@@ -42,6 +42,7 @@
       <button class="tab-btn active" data-tab="qd"      role="tab" aria-selected="true">QD</button>
       <button class="tab-btn"        data-tab="schwarz" role="tab" aria-selected="false">Schwarz dynamics</button>
       <button class="tab-btn"        data-tab="param-slice" role="tab" aria-selected="false">Parameter slice</button>
+      <button class="tab-btn"        data-tab="algebra" role="tab" aria-selected="false">Algebra</button>
     </div>
     <!-- Item 7: one-line subtitle clarifying each tab + that they share one
          solved domain. Set by updateTabSubtitle() in ui.js on tab-changed. -->
@@ -484,6 +485,9 @@
         <button id="qdeq-copy-latex" class="small" type="button" style="margin-left:8px;" disabled>Copy LaTeX</button>
         <button id="qdeq-download-json" class="small" type="button" style="margin-left:6px;" disabled>Download JSON</button>
       </div>
+      <div class="row">
+        <button id="qdeq-open-algebra" class="small" type="button" data-str-title="tooltips.openAlgebra">Open in Algebra workspace ↗</button>
+      </div>
       <div id="qd-equations-content"></div>
     </section>
 
@@ -530,6 +534,11 @@
     <!-- ============== TAB 3: Parameter slice ============== -->
     <!-- Populated lazily by param-slice/param-slice-ui.js on first tab activation. -->
     <div id="controls-param-slice" class="tab-panel" role="tabpanel" hidden></div>
+
+    <!-- ============== TAB 4: Algebra (symbolic elimination workspace) ============== -->
+    <!-- Populated lazily by algebra/algebra-ui.js on first tab activation. The DAG
+         graph surface (#algebra-graph) is created over #plot-area by the same module. -->
+    <div id="controls-algebra" class="tab-panel" role="tabpanel" hidden></div>
 
     <!-- NOTE (HANDOFF #29): the standalone Riemann-sphere tab was folded
          into the Schwarz dynamics tab as a "plane | sphere" view toggle.
@@ -634,6 +643,7 @@
     qd:           document.getElementById('controls-qd'),
     schwarz:      document.getElementById('controls-schwarz'),
     'param-slice': document.getElementById('controls-param-slice'),
+    algebra:      document.getElementById('controls-algebra'),
   };
   function activate(tabId) {
     tabs.forEach(t => {

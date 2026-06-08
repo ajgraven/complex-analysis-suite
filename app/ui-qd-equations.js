@@ -75,6 +75,7 @@
     const genBtn  = $('#qdeq-generate');
     const copyBtn = $('#qdeq-copy-latex');
     const jsonBtn = $('#qdeq-download-json');
+    const openBtn = $('#qdeq-open-algebra');
 
     let activeEnv = null;     // latest gated bounded solve envelope
     let lastSystem = null;    // generated system (MPoly eqs) for export
@@ -283,6 +284,8 @@
     if (genBtn)  genBtn.addEventListener('click', generate);
     if (copyBtn) copyBtn.addEventListener('click', () => { if (lastSystem) copyText(fullLatex(lastSystem), QD); });
     if (jsonBtn) jsonBtn.addEventListener('click', downloadJson);
+    // Hand off to the full Algebra workspace (tab installed separately; resolved at click time).
+    if (openBtn) openBtn.addEventListener('click', () => { if (ctx.openAlgebra) ctx.openAlgebra(); });
     if (capInp)  capInp.addEventListener('input', generateDebounced);
     const repInputs = card.querySelectorAll('input[name="qdeq-rep"]');
     for (let i = 0; i < repInputs.length; i++) repInputs[i].addEventListener('change', generate);

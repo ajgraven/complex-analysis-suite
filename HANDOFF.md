@@ -16,10 +16,20 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `67068e8f2e`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `aa3fb9ba3e`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
+- **Symbolic Algebra workspace** (`feature/symbolic-qd-equations`, NOT yet merged; builds on the
+  generator below) — a dedicated **Algebra tab** with an interactive equation-derivation DAG.
+  `app/sym-core.js` gains an elimination layer (`resultant`/`discriminant` via a fraction-free
+  Bareiss `mpolyDet`, `coeffsIn`/`degreeIn`/`derivativeIn`/`mpolyExactDiv`); `app/qd-constraints.js`
+  (`QD.QDConstraints`) generates the four univalence-constraint forms (convex/star/spiral
+  inequalities, Schur–Cohn φ′≠0 + Rabinowitsch witness, geometric discriminant borders, global
+  boundary-injectivity divided difference); `app/algebra/` holds the DOM-free `QD.AlgebraStore`,
+  the SVG+KaTeX `QD.AlgebraCanvas`, and `QD_UI.installAlgebra`. The `#qd-equations-card` gained an
+  "Open in Algebra workspace" launcher. Phase 1 of a multi-phase plan (Gröbner + RCTD bridge later);
+  see the deep section below.
 - **Symbolic QD equation generator** (`feature/symbolic-qd-equations`, NOT yet merged) — a new
   symbolic-algebra track: `app/sym-core.js` (`QD.Sym`, exact Rational/Gaussian/MPoly/RatFn +
   factored-denominator `FRatFn` + field-generic power series with Lagrange reversion) and
@@ -82,6 +92,25 @@ items.
 > cache-first, so after pulling new `app/` assets a hard reload (Ctrl+Shift+R) or
 > SW unregister is needed to see them — a stale SW shows symptoms like a blank
 > Thesis-example dropdown (the module didn't load).
+
+## (most recent) Symbolic Algebra workspace — branch `feature/symbolic-qd-equations`
+
+**Phase 1** of the symbolic-reduction roadmap (plan: `.claude/plans/please-conduct-a-comprehensive-whimsical-harp.md`). Adds univalence constraints + interactive resultant elimination on top of the generator below. **Not yet merged**; full suite green on the branch.
+
+**Elimination layer (`app/sym-core.js`).** New `MPoly` methods `degreeIn`/`coeffsIn`/`derivativeIn` (the univariate-in-a-chosen-var view) and module functions `mpolyDet` (fraction-free **Bareiss** determinant — exact over the MPoly integral domain via `mpolyExactDiv`), `mpolyDetLaplace` (cofactor oracle for tests), `resultant(f,g,var)` (Sylvester), `discriminant`, plus `conjCoeffs`/`relabel` (the conjugate-variable bar). All exact over ℚ(i); a `≡0` resultant flags a shared component.
+
+**Constraint generators (`app/qd-constraints.js`, `QD.QDConstraints`).** φ, φ′, φ″ at a generic boundary point ζ are obtained by reusing the now-generalized `QD.QDEquations.phiSeriesAt` (expanded at a chosen point var). The four forms (all in the conjugate model; circle `ζζ̄=1` carried as a companion relation):
+- **(c) inequalities** — convex `Re(1+ζφ″/φ′)>0`, star `Re(ζφ′/(φ−w₀))>0`, spiral `Re(e^{iλ}·…)>0` (existential-λ via `cosλ,sinλ`). Built as the Hermitian numerator `N·D̄+N̄·D` (= 2|D|²·Re, same sign), real on the reality slice.
+- **(b) geometric borders** — `discriminant_ζ` of the on-circle polynomial (where convexity/star-likeness is lost).
+- **(a) local univalence** — φ′ numerator (≠0 in 𝔻) + Rabinowitsch saturation witness `1−ω·numφ′` (Schur–Cohn inequality reduction deferred to the CAS export).
+- **(d) global injectivity** — the divided difference `(φ(ζ₁)−φ(ζ₂))/(ζ₁−ζ₂)` (diagonal removed via `mpolyExactDiv`) + its conjugate + two circle relations: the TRUE-univalence boundary.
+Numeric oracle (`qd-constraints.test.js`): convex/star sign-match the float `univalence.js` criterion; the (d) numerator vanishes at the known φ=z+z² boundary self-crossing.
+
+**Workspace (`app/algebra/`).** `algebra-store.js` (`QD.AlgebraStore`, DOM-free): nodes/edges/op-log with `seedFromSystem`, `addConstraint`, `eliminate` (resultant → derived node one column deeper; refuses ≡0), `duplicate`, `deleteNode` (cascade), `undo/redo`, `exportDAG`. `algebra-canvas.js` (`QD.AlgebraCanvas`): SVG edges + absolutely-positioned HTML KaTeX node cards in `#algebra-graph` over `#plot-area`, columns = elimination depth, pan/zoom, ≤2-node selection. `algebra-ui.js` (`QD_UI.installAlgebra`): the **Algebra tab** — constraint palette, selection-driven variable picker + Sylvester cost preview, Eliminate, undo/redo/Fit, Download-DAG-JSON / Copy-LaTeX. Gated on classical bounded QD (`isClassicalBounded`); lazy-mount on `tab-changed` like param-slice/sphere.
+
+**Wiring.** `qd-constraints.js` → `SOLVER_PAGE_ONLY_FILES`; `algebra/algebra-{store,canvas,ui}.js` → `PAGE_UI_FILES` (before `ui.js`). New tab button/panel/`panels`-map entry in `index.html`; `installAlgebra` call + `TAB_SUBTITLES.algebra` in `ui.js`; `QD.Strings.algebra` + `hints.algebraCard` + the `openAlgebra` tooltip. CSS for `#algebra-graph`/`.algebra-*`. `version:sync` → `aa3fb9ba3e`. Tests: `sym-core` (FLOOR 40), new `qd-constraints` (12) + `algebra-store` (10), registered in `node-test.js`. NOTE: in the conjugate model the store seeds each non-self-conjugate equation's **conjugate companion** too (gauge/Hermitian inequalities are self-conjugate → none), so the seeded node count = the real-equation count 2n+2d+1; `seedFromSystem(system,{withConjugates:false})` opts out. `store.eliminateWithGauge()` (UI: "Eliminate with gauge (all)") batch-eliminates the gauge against every other equality node (one shared variable each) in a single undo step — since the gauge is linear in the A_{j,1}, this applies the gauge normalization throughout.
+
+**Later phases (seams left in place):** Phase 2 pure-JS Buchberger Gröbner (monomial order + normal form + S-poly; consumes the same nodes; the Rabinowitsch witness is the saturation input); Phase 3 external-CAS bridge for RCTD (export the `rel`-tagged semi-algebraic system to Maple `RealComprehensiveTriangularize`/Sage/Singular; import cells/border curves as nodes).
 
 ## (most recent) Symbolic QD equation generator — branch `feature/symbolic-qd-equations`
 

@@ -93,6 +93,27 @@ The (★) block uses the **forward** form `C_{j,s} = Σ_{k=s}^{m_j} (k/s)·A_{j,
 factored-denominator engine that never expands `(1−z̄_j z)`. Verified against the live solver and the
 family `φ(z)=z+zⁿ/n ⇒ h(w)=((n+1)/n)/w+(1/n)/wⁿ`.
 
+### Univalence constraints + interactive elimination (`QD.QDConstraints`, Algebra tab)
+
+The Algebra tab lets the user ADD univalence constraints to the generated system and ELIMINATE
+variables (resultants) to derive consequences — Phase 1 of the symbolic-reduction track (Gröbner /
+RCTD later). All exact over ℚ(i); see arXiv:2001.09431 for the RCTD-of-QDs method this anticipates.
+
+| Object | Symbol | Where |
+| --- | --- | --- |
+| Sylvester resultant / discriminant (fraction-free Bareiss) | `QD.Sym.resultant` / `discriminant` / `mpolyDet` | [`app/sym-core.js`](app/sym-core.js) |
+| φ, φ′, φ″ at a generic boundary point ζ | `QDConstraints.phiData` (reuses `phiSeriesAt` at ζ) | [`app/qd-constraints.js`](app/qd-constraints.js) |
+| convex `Re(1+ζφ″/φ′)>0`, star `Re(ζφ′/(φ−w₀))>0`, spiral (∃λ) | `QDConstraints.convexIneq` / `starIneq` / `spiralIneq` | `app/qd-constraints.js` |
+| local univalence φ′≠0 in 𝔻 (Schur–Cohn) + saturation witness | `QDConstraints.localUnivalence` | `app/qd-constraints.js` |
+| geometric border (discriminant of the on-circle polynomial) | `QDConstraints.geometricBorder` | `app/qd-constraints.js` |
+| global boundary injectivity `(φ(ζ₁)−φ(ζ₂))/(ζ₁−ζ₂)` | `QDConstraints.injectivity` | `app/qd-constraints.js` |
+| equation-DAG store / SVG-KaTeX canvas / tab | `QD.AlgebraStore` / `QD.AlgebraCanvas` / `QD_UI.installAlgebra` | [`app/algebra/`](app/algebra/) |
+
+Inequalities use the Hermitian numerator `Re(N/D) ∝ N·D̄ + N̄·D` (conjugate-variable bar); the circle
+`|ζ|=1` is carried as a companion relation `ζζ̄−1=0`. Borders are `discriminant_ζ` of the on-circle
+polynomial. Each generated object is verified numerically (`qd-constraints.test.js`) against the float
+criteria in `univalence.js` and the known `φ=z+z²` boundary self-crossing.
+
 ---
 
 ## LQD families (Thesis Chapter V)
