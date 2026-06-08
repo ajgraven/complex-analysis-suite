@@ -88,6 +88,15 @@ Within each layer, files are loaded in the order shown above. The
 load order matters: every solver-family file calls
 `QD.registerFamily('X')` at top level, so `solver.js` must run first.
 
+The diagram is illustrative, not exhaustive — `app/asset-manifest.js` is the
+authoritative load order. The Utility layer also loads several page-only analysis
+modules not drawn above: `observables.js`, `symmetry.js`, `thesis-examples.js`,
+`faber-analysis.js`, and **`ui-strings.js`** (loaded *first* in
+`SOLVER_PAGE_ONLY_FILES`, since `thesis-examples.js` reads `QD.Strings.blurbs` at
+load). `ui-strings.js` defines `QD.Strings` (the editable-prose source of truth) and
+its `apply()` is invoked by a one-line inline `<script>` in `index.html` after the
+page-script loader to fill `[data-str*]` elements before paint.
+
 ## Public `QD.*` surface
 
 | Group | Exports |
@@ -96,6 +105,7 @@ load order matters: every solver-family file calls
 | Solver core | `evalPhi`, `phiTaylorAt`, `residual`, `residualNorm`, `packPhi`, `unpackPhi`, `newtonSolve`, `solveInverseQD`, `searchAlternates`, `isBoundaryUnivalent`, `sampleBoundary`, `sampleBoundaryAdaptive`, `binomialCoeff`, `selectFamily`, `registerFamily`, `packPhiBySchema`, `unpackPhiBySchema`, `applySchemaClamps` |
 | Linear algebra (P1.2) | `solveLinearSystem`, `solveLeastSquares`, `houseQR`, `numericalJacobian` |
 | Inverse Faber | `QD.Faber.inverseFaberAtPole`, `QD.Faber.inverseFaberAtInfinity` |
+| Faber polynomials (forward) | `QD.FaberAnalysis.{faberPolynomials, faberPolynomial, polynomialRoots, formatFaberPoly, faberConvergence}` — Faber polynomials of the complement of a classical UQD + a Durand–Kerner complex root-finder (`faber-analysis.js`) |
 | Direct problem | `QD.Direct.*` (see [`app/direct/README.md`](app/direct/README.md)) |
 | Schwarz dynamics | `QD.Schwarz.*` (see [`app/schwarz/README.md`](app/schwarz/README.md)) |
 | Riemann sphere | `QD.Sphere.*` (see [`app/sphere/README.md`](app/sphere/README.md)) |
@@ -104,6 +114,7 @@ load order matters: every solver-family file calls
 | Boundary cusps | `QD.classifyCusps`, `QD.Cusps.classifyCusps` |
 | Max conformal radius | `QD.estimateMaxConformalRadius` (unbounded c\*; bracket+bisection with a two-regime gate — genuine-QD identity away from the cusp, cusp criterion `max\|z\|` over φ′ zeros near it; returns `mechanism` cusp/fold — `solver-cmax.js`) |
 | Custom h(w) text | `QD.parseH`, `QD.formatH` |
+| Editable UI prose | `QD.Strings.{help, familyHints, hints, tooltips, notes, faber, oracle, blurbs, guidance, get, apply}` — single source of truth for descriptions/helptext/tooltips/blurbs; `apply()` injects static HTML into `[data-str]`/`[data-str-html]`/`[data-str-title]` elements (`ui-strings.js`; see `HELPTEXT.md`) |
 | Cross-tab envelope (P0.1a) | `QD.PrimarySolution.{get, hasSolution, subscribe, publish, update, clear}` |
 | Warm worker (P0.2) | `QD.PrimarySolverWorker.{ensureReady, solve, cancel, isBusy, searchAlternates, cancelAux, isAuxBusy}` |
 | Family registry | `QD.Family.boundedQD`, `QD.Family.unboundedQD`, `QD.Family.boundedLQD`, `QD.Family.boundedLQD_singular`, `QD.Family.unboundedLQD`, `QD.Family.unboundedLQD_singular` |

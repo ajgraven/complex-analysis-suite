@@ -121,6 +121,14 @@ visualizations, complementary to the headless runner.
     ├── critical-set.js                complex Newton on φ'(z) = 0 from a polar
     │                                  seed grid; powers the inverse-tab critical-
     │                                  set overlay
+    ├── observables.js                 boundary observables (area / perimeter /
+    │                                  curvature / harmonic measure / accuracy)
+    ├── symmetry.js                    QD.detectSymmetry (D_n / Z_n via φ intertwining)
+    ├── thesis-examples.js             curated examples + analytic-oracle engine
+    ├── faber-analysis.js              QD.FaberAnalysis: Faber polynomials of a UQD
+    │                                  complement + a Durand–Kerner complex root-finder
+    ├── ui-strings.js                  QD.Strings: editable UI prose (SINGLE SOURCE) +
+    │                                  the data-str applier (see HELPTEXT.md)
     │
     ├── ui.js                          QD/LQD-tab UI hub: DOM wiring, shared helpers,
     │                                  uiCtx injection + the module installs below
@@ -130,7 +138,9 @@ visualizations, complementary to the headless runner.
     ├── ui-solve.js                    solve → render → analyze pipeline
     │                                  (+ alternates + background search)
     ├── ui-url-state.js                URL/hash serialize + restore (B1)
-    │                                  (all five: QD_UI.installX(uiCtx) factories,
+    ├── ui-thesis.js                   thesis-example gallery + analytic-oracle card
+    ├── ui-faber.js                    Faber-polynomials card + roots overlay (UQD)
+    │                                  (all seven: QD_UI.installX(uiCtx) factories,
     │                                   Phase-3 item E split of ui.js)
     │
     ├── direct/
