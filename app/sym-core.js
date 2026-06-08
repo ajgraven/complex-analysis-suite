@@ -43,6 +43,12 @@
     constructor(n, d = 1n) {
       n = BigInt(n); d = BigInt(d);
       if (d === 0n) throw new Error('Rational: zero denominator');
+      // Fast paths for the overwhelmingly common cases (integer coefficients,
+      // unit/zero) — skip the BigInt gcd entirely. The symbolic-core coefficients
+      // are mostly small integers (±1, ±2, i, …), so this is a broad win.
+      if (d === 1n) { this.n = n; this.d = 1n; return; }
+      if (n === 0n) { this.n = 0n; this.d = 1n; return; }
+      if (d === -1n) { this.n = -n; this.d = 1n; return; }
       if (d < 0n) { n = -n; d = -d; }
       const g = bgcd(n, d) || 1n;
       this.n = n / g;
@@ -129,7 +135,18 @@
     for (const [name, e] of b) out.set(name, (out.get(name) || 0) + e);
     return out;
   }
-  function monoTotalDeg(mono) { let d = 0; for (const e of mono.values()) d += e; return d; }
+  // Total degree of a monomial, MEMOIZED on the monomial Map (monomials are treated
+  // as immutable here, so the cache is always valid). monoTotalDeg is the hottest
+  // helper in graded-order comparisons (every leadingTerm scan / pair selection in
+  // Buchberger calls it), so caching it is a broad constant-factor win. A WeakMap
+  // keeps it off the Map object and lets GC reclaim entries with their monomials.
+  const _tdegCache = (typeof WeakMap !== 'undefined') ? new WeakMap() : null;
+  function monoTotalDeg(mono) {
+    if (_tdegCache) { const c = _tdegCache.get(mono); if (c !== undefined) return c; }
+    let d = 0; for (const e of mono.values()) d += e;
+    if (_tdegCache) _tdegCache.set(mono, d);
+    return d;
+  }
   // Global monomial order (graded-lex): higher total degree wins; ties broken
   // lexicographically by the higher exponent on the alphabetically-earliest
   // differing variable. Used only by the exact-division step of the determinant —
@@ -730,11 +747,30 @@
   // r is divisible by any leading monomial LT(divisorᵢ) under `order`. Returns
   // { quotients:[MPoly], remainder:MPoly }. The remainder is the NORMAL FORM of f
   // modulo the divisor set (canonical when the divisors are a Gröbner basis).
+  // p -= (qc · x^qm) · g, mutating p.terms IN PLACE. This is the geobucket-style
+  // win for the division loop: the running dividend never gets reallocated into a
+  // fresh term Map each step (the old `p = p.sub(term.mul(g))` was O(size p) per
+  // reduction), only the O(size g) affected entries are touched. g is small (a
+  // single basis element), so each reduction is cheap regardless of how big p is.
+  function _subTermTimesPoly(p, qm, qc, g) {
+    for (const tg of g.terms.values()) {
+      const mono = monoMul(qm, tg.mono);
+      const key = monoKey(mono);
+      const sub = qc.mul(tg.coeff);
+      const cur = p.terms.get(key);
+      if (cur) {
+        const c = cur.coeff.sub(sub);
+        if (c.isZero()) p.terms.delete(key); else cur.coeff = c;
+      } else if (!sub.isZero()) {
+        p.terms.set(key, { mono, coeff: sub.neg() });
+      }
+    }
+  }
   function mpolyDivMod(f, divisors, order) {
     const lts = divisors.map((g) => g.leadingTerm(order));
     const quotients = divisors.map(() => MPoly.zero());
-    let r = MPoly.zero();
-    let p = f.clone();
+    const r = MPoly.zero();
+    const p = f.clone();                                 // mutated in place below
     let guard = 0;
     while (!p.isZero()) {
       const lp = p.leadingTerm(order);
@@ -744,17 +780,16 @@
         if (!lg) continue;
         const md = monoDivide(lp.mono, lg.mono);
         if (md !== null) {
-          const term = new MPoly(); term._addTerm(md, lp.coeff.div(lg.coeff));
-          quotients[i] = quotients[i].add(term);
-          p = p.sub(term.mul(divisors[i]));
+          const qc = lp.coeff.div(lg.coeff);
+          quotients[i]._addTerm(md, qc);
+          _subTermTimesPoly(p, md, qc, divisors[i]);    // in place; cancels LT(p)
           divided = true;
           break;
         }
       }
       if (!divided) {                                   // LT(p) is irreducible → move to r
-        const lt = new MPoly(); lt._addTerm(new Map(lp.mono), lp.coeff);
-        r = r.add(lt);
-        p = p.sub(lt);
+        r._addTerm(new Map(lp.mono), lp.coeff);
+        p.terms.delete(monoKey(lp.mono));
       }
       if (++guard > 2e6) throw new Error('mpolyDivMod: non-terminating (guard tripped)');
     }

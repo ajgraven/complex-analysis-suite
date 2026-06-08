@@ -26,6 +26,11 @@ module.exports = async function run() {
     ok('Q: (1/3)/(2/3) = 1/2', third.div(new Rational(2n, 3n)).equals(half));
     ok('Q: 2/4 normalizes to 1/2', new Rational(2n, 4n).equals(half));
     ok('Q: -1/-2 normalizes to 1/2', new Rational(-1n, -2n).equals(half));
+    // normalization fast-paths (integer/zero/unit denominators)
+    ok('Q: 0/5 normalizes to 0/1', new Rational(0n, 5n).equals(new Rational(0n, 1n)));
+    ok('Q: 4/-2 normalizes to -2/1', new Rational(4n, -2n).equals(new Rational(-2n, 1n)));
+    ok('Q: 6/4 still reduces to 3/2 (gcd path)', new Rational(6n, 4n).equals(new Rational(3n, 2n)));
+    ok('Q: 7/1 stays 7/1', new Rational(7n, 1n).n === 7n && new Rational(7n, 1n).d === 1n);
     ok('Q: toNumber(3/8)=0.375', approxEq(new Rational(3n, 8n).toNumber(), 0.375, 1e-12));
   }
 
