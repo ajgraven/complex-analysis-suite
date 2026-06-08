@@ -28,11 +28,14 @@ its own merged PR), with one feature **in progress on a branch**:
   inequalities, Schur–Cohn φ′≠0 + Rabinowitsch witness, geometric discriminant borders, global
   boundary-injectivity divided difference); `app/algebra/` holds the DOM-free `QD.AlgebraStore`,
   the SVG+KaTeX `QD.AlgebraCanvas`, and `QD_UI.installAlgebra`. The `#qd-equations-card` gained an
-  "Open in Algebra workspace" launcher. Now also includes **Phase 2 — a pure-JS Gröbner basis**
-  (`QD.Sym` Buchberger over ℚ(i): `monomialOrder` lex/grlex/grevlex, `MPoly.leadingTerm`,
-  `mpolyDivMod`/`normalForm`, `sPoly`, `buchberger`, `reduceGroebner`, `saturate`) consumed by
-  `AlgebraStore.groebner(ids, opts)` and a "Gröbner basis" workspace control (order selector +
-  eliminate-vars list). RCTD bridge is the remaining Phase 3; see the deep section below.
+  "Open in Algebra workspace" launcher. Now also includes a **pure-JS Gröbner / solving engine**
+  and an Algebra-tab UX pass: `QD.Sym` Buchberger over ℚ(i) with **Gebauer–Möller + sugar**, lex/
+  grlex/grevlex + **block elimination** orders, **FGLM** + shape-lemma **`solveZeroDim`** (zero-dim
+  toolkit), perf (memoized degree, in-place reduction, Rational gcd fast-path), and an off-main-thread
+  **Web Worker** (`QD.SymWorker`) with progress + Cancel; the tab has variable-**picker** dropdowns
+  (eliminate / **assume-real**), a **persistent error panel**, and worker-backed Gröbner/dimension/
+  solve. Tip `2038924`; tests **1618/0**; hash `e976d18425`. RCTD bridge is the remaining Phase 3;
+  see the deep section below.
 - **Symbolic QD equation generator** (`feature/symbolic-qd-equations`, NOT yet merged) — a new
   symbolic-algebra track: `app/sym-core.js` (`QD.Sym`, exact Rational/Gaussian/MPoly/RatFn +
   factored-denominator `FRatFn` + field-generic power series with Lagrange reversion) and
