@@ -299,6 +299,7 @@
       faberRoots: `Plot the roots of the Faber polynomials Fₙ of the bounded complement K (classical unbounded QD only). Roots cluster inside K. Teal circles = union of all roots up to N; violet diamonds = the single selected Fₙ. Drive N / the mode from the Faber polynomials card.`,
       openAlgebra: `Open this system in the Algebra tab — an interactive workspace for adding univalence constraints and eliminating variables (resultants).`,
       gaugeElim: `Eliminate a variable between the gauge equation and every other equation at once (one shared variable each). Because the gauge is linear in the A_{j,1}, this applies the gauge normalization throughout.`,
+      groebner: `Compute a Gröbner basis of the selected equality nodes (or all of them) — the multivariate generalization of the resultant. With an "eliminate" list it uses a lex order to expose the elimination ideal in the remaining variables. Exact over ℚ(i); a cost blow-up is reported and routed to the CAS export.`,
       fit: `Fit view to data`,
       reset: `Reset view`,
       dock: `Dock the panel into the sidebar (clear the plot)`,
@@ -346,9 +347,11 @@
         `Symbolic elimination workspace for the classical bounded QD system. Nodes are ` +
         `equations (●/★/gauge), univalence constraints, or derived eliminants; edges are ` +
         `derivations. Select two nodes + a shared variable and Eliminate to take their ` +
-        `Sylvester resultant (exact over ℚ(i)). Constraints: convex/star/spiral inequalities, ` +
-        `φ′≠0 (local univalence), the global boundary-injectivity divided difference, and the ` +
-        `geometric border loci. Export feeds a future Gröbner / RCTD step.`,
+        `Sylvester resultant (exact over ℚ(i)). For several equations / several shared ` +
+        `variables at once, use “Gröbner basis” — the multivariate generalization; an ` +
+        `“eliminate” list switches it to a lex elimination order. Constraints: convex/star/` +
+        `spiral inequalities, φ′≠0 (local univalence), the global boundary-injectivity divided ` +
+        `difference, and the geometric border loci. Export feeds the CAS Gröbner / RCTD step.`,
       noSolve: `No classical bounded QD solved yet — solve one on the QD tab first.`,
       ready: `Ready — click “Generate / re-seed” to load the system.`,
       seeded: `Seeded`,

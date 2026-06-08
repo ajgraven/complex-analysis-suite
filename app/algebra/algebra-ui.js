@@ -102,6 +102,12 @@
         '<div id="alg-status" class="hint" style="margin:4px 0;"></div>' +
         '<div class="row" style="margin-top:4px;"><button id="alg-gauge-elim" class="small" type="button" ' +
         'data-str-title="tooltips.gaugeElim">Eliminate with gauge (all)</button></div>' +
+        '<div class="row" style="margin-top:4px; flex-wrap:wrap; gap:4px; align-items:center;">' +
+        '  <button id="alg-groebner" class="small" type="button" data-str-title="tooltips.groebner">Gröbner basis (all eqns)</button>' +
+        '  <label style="font-size:11px;" title="Monomial order. lex = elimination order; grevlex = fastest general.">order ' +
+        '    <select id="alg-gb-order"><option value="grevlex">grevlex</option><option value="grlex">grlex</option><option value="lex">lex</option></select></label>' +
+        '  <input id="alg-gb-elim" class="small" type="text" placeholder="eliminate vars, e.g. z1,zb1" style="width:150px;" ' +
+        '    title="Comma-separated RAW variable names to eliminate (forces a lex order; leave blank for a plain reduced basis)."></div>' +
         '<div class="key" style="margin-top:6px;" title="Append a boundary-univalence condition as new node(s) — hover each button for its meaning">Add univalence constraint</div>' +
         '<div id="alg-palette" class="row" style="flex-wrap:wrap; gap:4px;"></div>' +
         '<div id="alg-elim" class="card-sub hidden" style="margin-top:8px;">' +
@@ -109,7 +115,9 @@
         '  <div id="alg-elim-sel" class="hint"></div>' +
         '  <div class="row" style="margin-top:4px;"><label>Variable ' +
         '    <select id="alg-var"></select></label>' +
-        '    <button id="alg-eliminate" class="small" type="button" style="margin-left:6px;">Eliminate</button></div>' +
+        '    <button id="alg-eliminate" class="small" type="button" style="margin-left:6px;">Eliminate</button>' +
+        '    <button id="alg-groebner-sel" class="small" type="button" style="margin-left:4px;" ' +
+        '      title="Gröbner basis of the two selected nodes (uses every shared variable, not just one)">Gröbner</button></div>' +
         '  <div id="alg-cost" class="hint" style="margin-top:2px;" title="Sylvester matrix size and term counts — the elimination cost"></div>' +
         '</div>' +
         '<div class="key" style="margin-top:8px;" title="Export the whole system for an external CAS (Gröbner / RCTD) or a paper">Export</div>' +
@@ -139,6 +147,8 @@
       $('#alg-redo').addEventListener('click', () => { if (store.redo()) rerender(); });
       $('#alg-fit').addEventListener('click', () => { if (canvas) canvas.fit(); });
       $('#alg-eliminate').addEventListener('click', doEliminate);
+      $('#alg-groebner').addEventListener('click', () => doGroebner(null));
+      $('#alg-groebner-sel').addEventListener('click', () => doGroebner(canvas ? canvas.getSelection() : []));
       $('#alg-gauge-elim').addEventListener('click', () => {
         if (!store.size) { if (!seedFromCurrent()) return; }
         const r = store.eliminateWithGauge();
@@ -187,6 +197,25 @@
       rerender();
       toast('Eliminated ' + latexPlain(v) + ' → ' + r.node.poly.size() + '-term equation');
     }
+    // Gröbner basis of a node selection (null/empty ⇒ every equality node). Reads
+    // the order selector and the comma-separated "eliminate" list from the sidebar.
+    function doGroebner(sel) {
+      if (!store.size) { if (!seedFromCurrent()) return; }
+      let ids = (sel && sel.length) ? sel.slice()
+        : store.list().filter((n) => n.rel === '=').map((n) => n.id);
+      const orderEl = $('#alg-gb-order'), elimEl = $('#alg-gb-elim');
+      const order = (orderEl && orderEl.value) || 'grevlex';
+      const elim = (elimEl && elimEl.value || '').split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+      const opts = elim.length ? { eliminate: elim } : { order };
+      const r = store.groebner(ids, opts);
+      if (!r.ok) { toast(r.reason || 'Gröbner basis failed', { kind: 'error' }); return; }
+      if (canvas) canvas.clearSelection();
+      rerender();
+      toast('Gröbner basis: ' + r.created.length + ' generator(s)' +
+        (elim.length ? ' eliminating ' + elim.join(', ') : ' (' + order + ')') +
+        (r.skipped.length ? '; skipped ' + r.skipped.length + ' non-equality' : ''));
+    }
+
     // crude plain-text rendering of a variable name for <option>/toasts
     function latexPlain(name) {
       return name.replace(/^Ab/, 'Ā').replace(/^A/, 'A').replace(/^Cb/, 'C̄').replace(/^zb/, 'z̄')
@@ -228,6 +257,9 @@
         case 'generate': return 'generated (' + (prov.block || '?') + ' block)';
         case 'conjugate': return 'conjugate companion of ' + (prov.inputs || []).join(', ');
         case 'resultant': return 'eliminated ' + latexPlain(prov.variable) + ' from ' + (prov.inputs || []).join(', ');
+        case 'groebner': return 'Gröbner basis (' + (prov.eliminate && prov.eliminate.length
+          ? 'elim ' + prov.eliminate.map(latexPlain).join(', ') : (prov.order || 'grevlex'))
+          + ') of ' + (prov.inputs || []).join(', ');
         case 'constraint': return 'univalence constraint (' + (prov.form || '?') + ')';
         case 'duplicate': return 'copy of ' + (prov.inputs || []).join(', ');
         default: return prov.op || '';

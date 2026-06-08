@@ -259,7 +259,140 @@ module.exports = async function run() {
     ok('resultant honors an explicit higher cap override',
        !!S.resultant(mv('x').pow(6).add(mv('y')), mv('x').pow(6).add(mi(1)), 'x', 16));
   }
+
+  // ---- Gröbner basis layer (Buchberger over ℚ(i)) ---------------------------
+  // The multivariate generalization of the resultant. Oracles: ideal membership
+  // (a polynomial is in the ideal iff its normal form is 0), the division
+  // identity f = Σqᵢ·gᵢ + r, canonicity of the reduced basis, and a cross-check
+  // that the lex-elimination GB contains the resultant (Res reduces to 0 mod GB).
+  {
+    const mv = (n) => S.mpolyVar(n), mi = (k) => S.mpolyInt(k);
+
+    // monomial orders pick the expected leading term
+    {
+      const p = mv('x').pow(2).add(mv('y').pow(3)).add(mv('x').mul(mv('y')));  // x² + y³ + xy
+      const lex = S.monomialOrder('lex', ['x', 'y']);
+      const grlex = S.monomialOrder('grlex', ['x', 'y']);
+      const grevlex = S.monomialOrder('grevlex', ['x', 'y']);
+      ok('order: lex(x>y) leads with x²', _monoEq(p.leadingMono(lex), { x: 2 }));
+      ok('order: grlex leads with y³ (top total degree)', _monoEq(p.leadingMono(grlex), { y: 3 }));
+      ok('order: grevlex leads with y³ (top total degree)', _monoEq(p.leadingMono(grevlex), { y: 3 }));
+      // grevlex vs grlex differ on equal-degree monomials: x²y vs xy² (deg 3)
+      const q = mv('x').pow(2).mul(mv('y')).add(mv('x').mul(mv('y').pow(2)));   // x²y + xy²
+      ok('order: grlex(x>y) leads x²y; grevlex leads x²y too here',
+         _monoEq(q.leadingMono(grlex), { x: 2, y: 1 }) && _monoEq(q.leadingMono(grevlex), { x: 2, y: 1 }));
+      ok('order: leadingCoeff of 3x²+… (lex) is 3',
+         mv('x').pow(2).scale(S.gaussInt(3)).add(mv('y')).leadingCoeff(lex).equals(S.gaussInt(3)));
+    }
+
+    // multivariate division identity: f = Σ qᵢ·gᵢ + r, and r has no LT divisible by any LT(gᵢ)
+    {
+      const ord = S.monomialOrder('lex', ['x', 'y']);
+      const f = mv('x').pow(2).mul(mv('y')).add(mv('x').mul(mv('y').pow(2))).add(mv('y').pow(2)); // x²y+xy²+y²
+      const g1 = mv('x').mul(mv('y')).sub(mi(1)), g2 = mv('y').pow(2).sub(mi(1));
+      const dm = S.mpolyDivMod(f, [g1, g2], ord);
+      let recon = dm.remainder;
+      recon = recon.add(dm.quotients[0].mul(g1)).add(dm.quotients[1].mul(g2));
+      ok('divmod: f = Σ qᵢ·gᵢ + r exactly', recon.equals(f));
+    }
+
+    // S-polynomial cancels leading terms
+    {
+      const ord = S.monomialOrder('grlex', ['x', 'y']);
+      const f = mv('x').pow(2).mul(mv('y')).add(mi(1)), g = mv('x').mul(mv('y').pow(2)).add(mi(1));
+      const s = S.sPoly(f, g, ord);
+      // S = y·f − x·g = y − x  (leading x²y² cancels)
+      ok('sPoly(x²y+1, xy²+1) = y − x', s.equals(mv('y').sub(mv('x'))));
+    }
+
+    // ideal membership via Buchberger: I = (x²+y²−1, x−y)
+    {
+      const ord = S.monomialOrder('grevlex', ['x', 'y']);
+      const f = mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), g = mv('x').sub(mv('y'));
+      const G = S.buchberger([f, g], ord);
+      ok('buchberger: reduced GB of (x²+y²−1, x−y) has 2 generators', G.length === 2);
+      ok('buchberger: every generator is monic (leadingCoeff = 1)',
+         G.every((p) => p.leadingCoeff(ord).equals(S.gaussInt(1))));
+      ok('membership: both generators of I reduce to 0',
+         S.normalForm(f, G, ord).isZero() && S.normalForm(g, G, ord).isZero());
+      ok('membership: x·(x−y) ∈ I reduces to 0', S.normalForm(mv('x').mul(g), G, ord).isZero());
+      ok('membership: x ∉ I reduces to nonzero', !S.normalForm(mv('x'), G, ord).isZero());
+    }
+
+    // reduced GB is canonical: same ideal, two generating sets → identical reduced GB
+    {
+      const ord = S.monomialOrder('grevlex', ['x', 'y']);
+      const f = mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), g = mv('x').sub(mv('y'));
+      const G1 = S.buchberger([f, g], ord);
+      // a different generating set of the SAME ideal: {g, f + 3·(x−y)·something within ideal}
+      const alt = f.add(g.mul(mv('x').add(mi(2))));        // f + (x+2)(x−y) — same ideal
+      const G2 = S.buchberger([g, alt], ord);
+      const keys1 = G1.map((p) => p.key()).sort().join('|');
+      const keys2 = G2.map((p) => p.key()).sort().join('|');
+      ok('reduced GB is canonical (independent of the generating set)', keys1 === keys2, keys1 + ' vs ' + keys2);
+    }
+
+    // lex-elimination GB contains the resultant: Res_x(f,g) reduces to 0 mod the lex GB
+    {
+      const f = mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), g = mv('x').add(mv('y'));
+      const lex = S.monomialOrder('lex', ['x', 'y']);
+      const G = S.buchberger([f, g], lex);
+      const elim = G.filter((p) => !p.vars().has('x'));   // elimination ideal ∩ ℚ[y]
+      ok('lex-elim GB has a generator free of x (the elimination ideal)', elim.length >= 1);
+      const Res = S.resultant(f, g, 'x');
+      ok('resultant lies in the ideal: Res_x(f,g) reduces to 0 mod the lex GB',
+         S.normalForm(Res, G, lex).isZero());
+    }
+
+    // numeric vanishing: GB generators vanish wherever the inputs do
+    {
+      const ord = S.monomialOrder('grevlex', ['x', 'y']);
+      const f = mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), g = mv('x').sub(mv('y'));
+      const G = S.buchberger([f, g], ord);
+      // common solution x=y=1/√2 (on the circle and the line)
+      const vm = { x: { re: Math.SQRT1_2, im: 0 }, y: { re: Math.SQRT1_2, im: 0 } };
+      ok('every GB generator vanishes at a common solution of the inputs',
+         G.every((p) => Math.hypot(p.evalComplex(vm).re, p.evalComplex(vm).im) < 1e-12));
+    }
+
+    // ℚ(i) coefficients: GB of (x²+1, x−i) collapses (x−i divides x²+1) → basis {x−i}
+    {
+      const iC = S.mpolyConst(S.gaussInt(0, 1));
+      const ord = S.monomialOrder('lex', ['x']);
+      const G = S.buchberger([mv('x').pow(2).add(mi(1)), mv('x').sub(iC)], ord);
+      ok('buchberger over ℚ(i): (x²+1, x−i) → reduced basis {x − i}',
+         G.length === 1 && G[0].equals(mv('x').sub(iC)));
+    }
+
+    // saturation (Rabinowitsch): ⟨x·y⟩ : x^∞ = ⟨y⟩ (drop the x=0 component)
+    {
+      const sat = S.saturate([mv('x').mul(mv('y'))], mv('x'));
+      // result generates ⟨y⟩: y reduces to 0, x does not
+      const ord = S.monomialOrder('grevlex', ['x', 'y']);
+      ok('saturate(⟨xy⟩ : x^∞) = ⟨y⟩ (y in, x out)',
+         sat.length === 1 && S.normalForm(mv('y'), sat, ord).isZero() &&
+         !S.normalForm(mv('x'), sat, ord).isZero());
+    }
+
+    // cost cap: a deliberately explosive system throws a clear "use CAS export" error
+    {
+      let threw = false, msg = '';
+      try {
+        S.buchberger([mv('x').pow(2).add(mv('y')), mv('y').pow(2).add(mv('z')), mv('z').pow(2).add(mv('x'))],
+          S.monomialOrder('grevlex', ['x', 'y', 'z']), { maxSteps: 1 });
+      } catch (e) { threw = true; msg = String(e.message || e); }
+      ok('buchberger throws a clear cap error past the step limit', threw && /export/i.test(msg), msg);
+    }
+  }
 };
+
+// monomial (Map) equals a plain {name:exp} object — for leading-term assertions
+function _monoEq(mono, obj) {
+  const keys = Object.keys(obj);
+  if (mono.size !== keys.length) return false;
+  for (const k of keys) if ((mono.get(k) || 0) !== obj[k]) return false;
+  return true;
+}
 
 // ---- local complex helpers ----
 function approxEqC(a, b, tol) { tol = tol || 1e-9; return Math.abs(a.re - b.re) < tol && Math.abs(a.im - b.im) < tol; }

@@ -136,7 +136,8 @@ visualizations, complementary to the headless runner.
     ├── faber-analysis.js              QD.FaberAnalysis: Faber polynomials of a UQD
     │                                  complement + a Durand–Kerner complex root-finder
     ├── sym-core.js                    QD.Sym: exact symbolic algebra (Rational/Gaussian/
-    │                                  MPoly/RatFn/FRatFn + power series, Lagrange reversion)
+    │                                  MPoly/RatFn/FRatFn + power series, Lagrange reversion;
+    │                                  resultant/discriminant + Gröbner basis over ℚ(i))
     ├── qd-equations.js                QD.QDEquations: symbolic coefficient system for a
     │                                  classical bounded QD (conjugate + real/imag reps)
     ├── qd-constraints.js              QD.QDConstraints: univalence/geometric constraints
@@ -162,7 +163,8 @@ visualizations, complementary to the headless runner.
     │   ├── algebra-store.js           QD.AlgebraStore: equation-DAG model (DOM-free)
     │   ├── algebra-canvas.js          QD.AlgebraCanvas: SVG + KaTeX DAG renderer
     │                                   (collapsible cards, reorder, copy-LaTeX, hovertext)
-    │   └── algebra-ui.js              QD_UI.installAlgebra: tab, palette, eliminate, export
+    │   └── algebra-ui.js              QD_UI.installAlgebra: tab, palette, eliminate,
+    │                                   Gröbner basis, export
     │
     ├── direct/
     │   ├── direct-common.js           Direct-problem kernels (polynomial / rational /
@@ -449,7 +451,10 @@ view is active.
   add **univalence constraints** (convex, star-like, spiral-like, `φ′≠0`, global boundary
   injectivity, geometric border loci), then select two equation nodes + a shared variable
   and **eliminate** it by an exact Sylvester **resultant** — a derived equation appears one
-  column over, with edges. Cards are **collapsible** (collapsed by default — a one-line
+  column over, with edges. For several equations / several shared variables at once, take a
+  **Gröbner basis** (pure-JS Buchberger over ℚ(i); pick the monomial order, or give an
+  *eliminate* list for a lex elimination order) — each basis generator becomes a derived
+  node. Cards are **collapsible** (collapsed by default — a one-line
   preview; expand for the full form), **reorderable** within a column (▲/▼), copy as
   **LaTeX** individually (⧉), and carry **hovertext** (variable count, real-equation
   contribution, per-variable order, total degree, provenance); conjugate equations are

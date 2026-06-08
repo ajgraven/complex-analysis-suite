@@ -184,6 +184,44 @@ module.exports = async function run() {
        !s2.hasCompanion && !s2.selfConj && s2.realEquations === 2);
   }
 
+  // ---- Gröbner basis op (multivariate elimination over the selected nodes) ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system);
+    // gauge (linear) + the locator: a small, fast ideal to exercise the op end-to-end
+    const gauge = st.list().find((n) => n.meta && n.meta.block === 'gauge');
+    const loc = st.list().find((n) => n.meta && n.meta.block === 'locator' && n.provenance.op === 'generate');
+    const before = st.size;
+    const r = st.groebner([gauge.id, loc.id], { order: 'grevlex' });
+    ok('groebner: succeeds and adds ≥1 derived generator', r.ok && r.created.length >= 1
+       && r.created.every((n) => n.kind === 'derived' && n.provenance.op === 'groebner'));
+    ok('groebner: derived generators land one column past the inputs',
+       r.created.every((n) => n.column === Math.max(gauge.column, loc.column) + 1));
+    ok('groebner: each input is wired to every generator',
+       r.created.every((n) => st.edges.some((e) => e.from === gauge.id && e.to === n.id)
+                          && st.edges.some((e) => e.from === loc.id && e.to === n.id)));
+    // ideal-membership oracle: both inputs reduce to 0 modulo the produced basis
+    const S = QD.Sym;
+    const ord = S.monomialOrder('grevlex');
+    const basis = r.created.map((n) => n.poly);
+    ok('groebner: both input polynomials reduce to 0 modulo the basis (ideal membership)',
+       S.normalForm(gauge.poly, basis, ord).isZero() && S.normalForm(loc.poly, basis, ord).isZero());
+    // vanishing oracle: every generator vanishes at the numeric solution
+    const sol = QD.solveInverseQD(hData, {});
+    if (sol && sol.success) {
+      const vm = QE.buildVarMap(sol.primary.phi, hData);
+      ok('groebner: every generator vanishes at the numeric solution',
+         basis.every((p) => { const v = p.evalComplex(vm); return Math.hypot(v.re, v.im) < 1e-6; }));
+    }
+    ok('groebner: undo reverts the whole basis in one step', st.undo() && st.size === before);
+    // guards: fewer than two equality nodes, and a cap blow-up surfaced as {ok:false}
+    ok('groebner: refuses a selection of fewer than two equality nodes',
+       st.groebner([gauge.id]).ok === false);
+    const capped = st.groebner([gauge.id, loc.id], { maxSteps: 0 });
+    ok('groebner: a cost-cap blow-up comes back as {ok:false, reason} (no throw)',
+       capped.ok === false && /export|cap|step/i.test(capped.reason));
+  }
+
   // ---- export shape ----
   {
     const st = QD.AlgebraStore.create();

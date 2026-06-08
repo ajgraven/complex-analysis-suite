@@ -96,12 +96,16 @@ family `φ(z)=z+zⁿ/n ⇒ h(w)=((n+1)/n)/w+(1/n)/wⁿ`.
 ### Univalence constraints + interactive elimination (`QD.QDConstraints`, Algebra tab)
 
 The Algebra tab lets the user ADD univalence constraints to the generated system and ELIMINATE
-variables (resultants) to derive consequences — Phase 1 of the symbolic-reduction track (Gröbner /
-RCTD later). All exact over ℚ(i); see arXiv:2001.09431 for the RCTD-of-QDs method this anticipates.
+variables — pairwise by **resultant**, or across several equations / variables at once by **Gröbner
+basis** (Phases 1–2 of the symbolic-reduction track; RCTD bridge is Phase 3). All exact over ℚ(i);
+see arXiv:2001.09431 for the RCTD-of-QDs method this anticipates.
 
 | Object | Symbol | Where |
 | --- | --- | --- |
 | Sylvester resultant / discriminant (fraction-free Bareiss) | `QD.Sym.resultant` / `discriminant` / `mpolyDet` | [`app/sym-core.js`](app/sym-core.js) |
+| Monomial order (lex/grlex/grevlex) + normal form + S-polynomial | `QD.Sym.monomialOrder` / `normalForm` / `sPoly` | [`app/sym-core.js`](app/sym-core.js) |
+| Gröbner basis (Buchberger over ℚ(i), reduced) + saturation `I:f^∞` | `QD.Sym.buchberger` / `reduceGroebner` / `saturate` | [`app/sym-core.js`](app/sym-core.js) |
+| Gröbner workspace op (selected/all equality nodes) | `QD.AlgebraStore.groebner` | [`app/algebra/algebra-store.js`](app/algebra/algebra-store.js) |
 | φ, φ′, φ″ at a generic boundary point ζ | `QDConstraints.phiData` (reuses `phiSeriesAt` at ζ) | [`app/qd-constraints.js`](app/qd-constraints.js) |
 | convex `Re(1+ζφ″/φ′)>0`, star `Re(ζφ′/(φ−w₀))>0`, spiral (∃λ) | `QDConstraints.convexIneq` / `starIneq` / `spiralIneq` | `app/qd-constraints.js` |
 | local univalence φ′≠0 in 𝔻 (Schur–Cohn) + saturation witness | `QDConstraints.localUnivalence` | `app/qd-constraints.js` |

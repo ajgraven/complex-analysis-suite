@@ -340,6 +340,20 @@
       return p;
     }
 
+    // --- monomial-order views, for Gröbner / normal-form reduction ------------
+    // The "leading" term/monomial/coefficient under a monomial order (an object
+    // with a `.cmp(monoA, monoB)` from `monomialOrder`, a bare cmp function, or
+    // omitted → the default grlex `monoCmp`). leadingTerm returns the stored term
+    // object { mono, coeff } (or null for the zero polynomial) — DO NOT mutate it.
+    leadingTerm(order) {
+      const cmp = _orderCmp(order);
+      let best = null;
+      for (const t of this.terms.values()) if (best === null || cmp(t.mono, best.mono) > 0) best = t;
+      return best;
+    }
+    leadingCoeff(order) { const t = this.leadingTerm(order); return t ? t.coeff : Gaussian.fromInt(0); }
+    leadingMono(order) { const t = this.leadingTerm(order); return t ? new Map(t.mono) : new Map(); }
+
     // Evaluate at complex values. varMap: name -> {re,im}. Returns {re,im}.
     // Integer exponents only; missing variables throw (caller must supply all).
     evalComplex(varMap) {
@@ -555,6 +569,257 @@
   // Its zero set contains the double-root locus — the geometric border loci.
   function discriminant(p, varName) {
     return resultant(p, p.derivativeIn(varName), varName);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Gröbner-basis layer — Buchberger over the field ℚ(i) (Gaussian-rational
+  // coefficients). This is the multivariate generalization of the resultant: a
+  // Gröbner basis of an ideal under an ELIMINATION order (lex with the variables
+  // to drop ranked highest) exposes the elimination ideal — the consequences that
+  // survive in the remaining variables — which is exactly what the QD elimination
+  // needs when more than two equations / more than one variable are in play.
+  //
+  // Everything is exact. The cost can blow up super-exponentially, so the same
+  // discipline as the resultant applies: hard caps that throw a clear "use CAS
+  // export" error instead of hanging (see GROEBNER_* below; overridable per call).
+  // ---------------------------------------------------------------------------
+
+  // Resolve an `order` argument to a monomial-comparison function. Accepts an
+  // order object (with `.cmp`) from monomialOrder(), a bare cmp function, or
+  // null/undefined → the default graded-lex (monoCmp).
+  function _orderCmp(order) {
+    if (!order) return monoCmp;
+    if (typeof order === 'function') return order;
+    if (typeof order.cmp === 'function') return order.cmp;
+    return monoCmp;
+  }
+
+  // Build a monomial order. kind ∈ {'lex','grlex','grevlex'} (default grevlex —
+  // the fastest general order for Buchberger). `varOrder` ranks variables from
+  // HIGHEST priority to lowest; variables absent from the list rank below all
+  // listed ones, alphabetically among themselves (so the order is total even on
+  // monomials in newly-introduced variables). For ELIMINATION, use 'lex' with the
+  // variables to eliminate at the front of varOrder. Returns { kind, varOrder, cmp },
+  // where cmp(a,b) returns -1 / 0 / 1 (a<b / a=b / a>b), matching monoCmp.
+  function monomialOrder(kind, varOrder) {
+    kind = kind || 'grevlex';
+    const rank = new Map();
+    if (varOrder) varOrder.forEach((v, i) => rank.set(v, i));
+    function varCmp(x, y) {
+      const rx = rank.has(x) ? rank.get(x) : Infinity;
+      const ry = rank.has(y) ? rank.get(y) : Infinity;
+      if (rx !== ry) return rx < ry ? -1 : 1;          // smaller index = higher priority
+      return x < y ? -1 : (x > y ? 1 : 0);             // alphabetical fallback
+    }
+    function names(a, b) {
+      const s = new Set();
+      for (const k of a.keys()) s.add(k);
+      for (const k of b.keys()) s.add(k);
+      return [...s].sort(varCmp);                       // highest priority first
+    }
+    let cmp;
+    if (kind === 'lex') {
+      cmp = function (a, b) {
+        for (const nm of names(a, b)) {
+          const ea = a.get(nm) || 0, eb = b.get(nm) || 0;
+          if (ea !== eb) return ea < eb ? -1 : 1;
+        }
+        return 0;
+      };
+    } else if (kind === 'grlex') {
+      cmp = function (a, b) {
+        const da = monoTotalDeg(a), db = monoTotalDeg(b);
+        if (da !== db) return da < db ? -1 : 1;
+        for (const nm of names(a, b)) {
+          const ea = a.get(nm) || 0, eb = b.get(nm) || 0;
+          if (ea !== eb) return ea < eb ? -1 : 1;
+        }
+        return 0;
+      };
+    } else {                                            // grevlex
+      cmp = function (a, b) {
+        const da = monoTotalDeg(a), db = monoTotalDeg(b);
+        if (da !== db) return da < db ? -1 : 1;
+        const ns = names(a, b);
+        for (let k = ns.length - 1; k >= 0; k--) {      // lowest priority var first
+          const nm = ns[k];
+          const ea = a.get(nm) || 0, eb = b.get(nm) || 0;
+          if (ea !== eb) return ea < eb ? 1 : -1;       // smaller last-var exp ⇒ larger
+        }
+        return 0;
+      };
+    }
+    return { kind, varOrder: varOrder ? varOrder.slice() : null, cmp };
+  }
+
+  // lcm of two monomials (max exponent per variable).
+  function monoLcm(a, b) {
+    const out = new Map(a);
+    for (const [name, e] of b) out.set(name, Math.max(out.get(name) || 0, e));
+    return out;
+  }
+  function _monoCoprime(a, b) { for (const k of a.keys()) if (b.has(k)) return false; return true; }
+  function _monoEqual(a, b) {
+    if (a.size !== b.size) return false;
+    for (const [k, e] of a) if ((b.get(k) || 0) !== e) return false;
+    return true;
+  }
+
+  // Multivariate division with remainder: f = Σ qᵢ·divisorᵢ + r, where no term of
+  // r is divisible by any leading monomial LT(divisorᵢ) under `order`. Returns
+  // { quotients:[MPoly], remainder:MPoly }. The remainder is the NORMAL FORM of f
+  // modulo the divisor set (canonical when the divisors are a Gröbner basis).
+  function mpolyDivMod(f, divisors, order) {
+    const lts = divisors.map((g) => g.leadingTerm(order));
+    const quotients = divisors.map(() => MPoly.zero());
+    let r = MPoly.zero();
+    let p = f.clone();
+    let guard = 0;
+    while (!p.isZero()) {
+      const lp = p.leadingTerm(order);
+      let divided = false;
+      for (let i = 0; i < divisors.length; i++) {
+        const lg = lts[i];
+        if (!lg) continue;
+        const md = monoDivide(lp.mono, lg.mono);
+        if (md !== null) {
+          const term = new MPoly(); term._addTerm(md, lp.coeff.div(lg.coeff));
+          quotients[i] = quotients[i].add(term);
+          p = p.sub(term.mul(divisors[i]));
+          divided = true;
+          break;
+        }
+      }
+      if (!divided) {                                   // LT(p) is irreducible → move to r
+        const lt = new MPoly(); lt._addTerm(new Map(lp.mono), lp.coeff);
+        r = r.add(lt);
+        p = p.sub(lt);
+      }
+      if (++guard > 2e6) throw new Error('mpolyDivMod: non-terminating (guard tripped)');
+    }
+    return { quotients, remainder: r };
+  }
+  // Normal form (remainder) of f modulo a divisor set under `order`.
+  function normalForm(f, divisors, order) { return mpolyDivMod(f, divisors, order).remainder; }
+
+  // S-polynomial of f, g: S = (L/LT(f))·f − (L/LT(g))·g with L = lcm(LM f, LM g).
+  // The construction cancels the leading terms; its normal form modulo the basis
+  // is what Buchberger feeds back in.
+  function sPoly(f, g, order) {
+    const ltf = f.leadingTerm(order), ltg = g.leadingTerm(order);
+    if (!ltf || !ltg) return MPoly.zero();
+    const L = monoLcm(ltf.mono, ltg.mono);
+    const tf = new MPoly(); tf._addTerm(monoDivide(L, ltf.mono), Gaussian.fromInt(1).div(ltf.coeff));
+    const tg = new MPoly(); tg._addTerm(monoDivide(L, ltg.mono), Gaussian.fromInt(1).div(ltg.coeff));
+    return tf.mul(f).sub(tg.mul(g));
+  }
+
+  // Caps — Buchberger can blow up super-exponentially, so bound the run and throw
+  // a clear "use CAS export" error rather than hanging (mirrors RESULTANT_MATRIX_CAP).
+  // All overridable via opts {maxBasis, maxSteps, maxDegree, maxTerms}.
+  const GROEBNER_MAX_BASIS = 80;     // generators in the working basis
+  const GROEBNER_MAX_STEPS = 8000;   // S-pair reductions
+  const GROEBNER_MAX_DEGREE = 40;    // total degree of any new generator
+  const GROEBNER_MAX_TERMS = 8000;   // term count of any new generator
+
+  // Buchberger's algorithm → a Gröbner basis of ⟨polys⟩ under `order` (a
+  // monomialOrder object, an order kind string, or omitted → grevlex). Uses the
+  // first criterion (coprime leading monomials ⇒ the S-poly reduces to 0, skip).
+  // Returns the REDUCED Gröbner basis (canonical: monic, inter-reduced) unless
+  // opts.reduced === false. Throws a capped-cost error past the GROEBNER_* limits.
+  function buchberger(polys, order, opts) {
+    opts = opts || {};
+    const ord = (order && order.cmp) ? order : monomialOrder(order || 'grevlex');
+    const maxBasis = opts.maxBasis != null ? opts.maxBasis : GROEBNER_MAX_BASIS;
+    const maxSteps = opts.maxSteps != null ? opts.maxSteps : GROEBNER_MAX_STEPS;
+    const maxDegree = opts.maxDegree != null ? opts.maxDegree : GROEBNER_MAX_DEGREE;
+    const maxTerms = opts.maxTerms != null ? opts.maxTerms : GROEBNER_MAX_TERMS;
+    const G = (polys || []).filter((p) => p && !p.isZero()).map((p) => p.clone());
+    if (!G.length) return [];
+    const pairs = [];
+    for (let i = 0; i < G.length; i++) for (let j = i + 1; j < G.length; j++) pairs.push([i, j]);
+    let steps = 0;
+    while (pairs.length) {
+      if (++steps > maxSteps)
+        throw new Error('buchberger: exceeded ' + maxSteps + ' S-pair steps; the system is too large — use CAS export.');
+      const [i, j] = pairs.shift();
+      const lmi = G[i].leadingMono(ord), lmj = G[j].leadingMono(ord);
+      if (_monoCoprime(lmi, lmj)) continue;             // first criterion
+      const r = normalForm(sPoly(G[i], G[j], ord), G, ord);
+      if (r.isZero()) continue;
+      if (r.totalDegree() > maxDegree)
+        throw new Error('buchberger: generator degree ' + r.totalDegree() + ' exceeds the cap (' + maxDegree + '); use CAS export.');
+      if (r.size() > maxTerms)
+        throw new Error('buchberger: a generator reached ' + r.size() + ' terms (cap ' + maxTerms + '); use CAS export.');
+      G.push(r);
+      if (G.length > maxBasis)
+        throw new Error('buchberger: basis exceeded ' + maxBasis + ' generators; use CAS export.');
+      const ni = G.length - 1;
+      for (let k = 0; k < ni; k++) pairs.push([k, ni]);
+    }
+    return opts.reduced === false ? G : reduceGroebner(G, ord);
+  }
+
+  // Reduce a Gröbner basis to the canonical REDUCED basis: monic leading
+  // coefficients, no generator's leading monomial divisible by another's, and
+  // every generator fully reduced modulo the rest. Output sorted by leading
+  // monomial (descending) for a stable, comparable result.
+  function reduceGroebner(G, order) {
+    const ord = (order && order.cmp) ? order : monomialOrder(order || 'grevlex');
+    const monic = (g) => g.scale(Gaussian.fromInt(1).div(g.leadingCoeff(ord)));
+    let B = G.filter((g) => !g.isZero()).map(monic);
+    // minimalize: drop g whose leading monomial is a multiple of another's
+    const keep = [];
+    for (let i = 0; i < B.length; i++) {
+      const lmi = B[i].leadingMono(ord);
+      let redundant = false;
+      for (let j = 0; j < B.length; j++) {
+        if (i === j) continue;
+        const lmj = B[j].leadingMono(ord);
+        if (monoDivide(lmi, lmj) !== null) {            // lmj | lmi
+          if (_monoEqual(lmi, lmj)) { if (j < i) { redundant = true; break; } }   // keep the earlier of equals
+          else { redundant = true; break; }
+        }
+      }
+      if (!redundant) keep.push(B[i]);
+    }
+    B = keep;
+    // inter-reduce tails (leading monomials are minimal, so only tails change)
+    let changed = true, guard = 0;
+    while (changed) {
+      changed = false;
+      for (let i = 0; i < B.length; i++) {
+        const others = B.filter((_, k) => k !== i);
+        const nf = normalForm(B[i], others, ord);
+        if (!nf.equals(B[i])) {
+          B[i] = nf.isZero() ? null : monic(nf);
+          changed = true;
+        }
+      }
+      B = B.filter(Boolean);
+      if (++guard > 10000) throw new Error('reduceGroebner: non-terminating (guard tripped)');
+    }
+    B.sort((a, b) => ord.cmp(b.leadingMono(ord), a.leadingMono(ord)) || (a.key() < b.key() ? -1 : 1));
+    return B;
+  }
+
+  // Saturation ⟨polys⟩ : f^∞ via the Rabinowitsch trick: adjoin a fresh variable w
+  // and the relation 1 − w·f, compute a Gröbner basis under a lex order with w
+  // ranked highest (eliminating w), then drop every generator that still mentions
+  // w. This removes the components on which f vanishes — e.g. saturating by the
+  // φ′ numerator drops the non-univalent locus (form (a)'s witness 1 − ω·numφ′ is
+  // exactly this relation, so passing that witness as `f` recovers it). Returns the
+  // generator list (MPolys in the original variables).
+  function saturate(polys, f, wName, opts) {
+    wName = wName || '_w';
+    const w = MPoly.variable(wName);
+    const rab = MPoly.fromInt(1).sub(w.mul(f));
+    const vs = new Set([wName]);
+    for (const p of (polys || []).concat([f])) for (const v of p.vars()) vs.add(v);
+    const rest = [...vs].filter((v) => v !== wName).sort();
+    const order = monomialOrder('lex', [wName, ...rest]);
+    const G = buchberger((polys || []).concat([rab]), order, opts);
+    return G.filter((g) => !g.vars().has(wName));
   }
 
   // ---------------------------------------------------------------------------
@@ -801,6 +1066,7 @@
     rat, gauss, gaussInt, mpolyVar, mpolyConst, mpolyInt,
     monoKey, monoCmp,
     mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv,
+    monomialOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, reduceGroebner, saturate,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
   };

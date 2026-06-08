@@ -235,6 +235,72 @@
       return { ok: created.length > 0, created, skipped };
     }
 
+    // Gröbner basis of the selected EQUALITY nodes (the multivariate generalization
+    // of pairwise resultant elimination). Computes a reduced Gröbner basis of the
+    // ideal they generate under a monomial order, and adds ONE derived node per
+    // basis generator in a new column (single undo step), with edges from every
+    // input. Options:
+    //   opts.order      'grevlex' (default) | 'grlex' | 'lex'
+    //   opts.eliminate  [varNames] to eliminate — forces a lex order with those
+    //                   variables ranked highest (so the basis exposes the
+    //                   elimination ideal in the remaining variables). Generators
+    //                   that still contain an eliminated variable are dropped unless
+    //                   opts.keepEliminated is set.
+    //   opts.maxBasis / maxSteps / maxDegree / maxTerms — Buchberger cost caps.
+    // Inequality/≠ nodes are skipped (they are semi-algebraic — the CAS/RCTD path).
+    // Returns { ok, created[], reason?, skipped[] }. A blow-up past the caps comes
+    // back as { ok:false, reason } (the algorithm threw "use CAS export").
+    function groebner(ids, opts) {
+      const S = getSym();
+      opts = opts || {};
+      const sel = (ids || []).map((id) => get(id)).filter(Boolean);
+      const eqNodes = sel.filter((n) => n.rel === '=');
+      const skipped = sel.filter((n) => n.rel !== '=').map((n) => ({ id: n.id, reason: 'not an equality (' + n.rel + ')' }));
+      if (eqNodes.length < 2) {
+        return { ok: false, reason: 'select at least two equality nodes for a Gröbner basis', created: [], skipped };
+      }
+      // monomial order: an explicit eliminate list ⇒ lex with those vars highest.
+      const elim = (opts.eliminate || []).slice();
+      let kind = opts.order || (elim.length ? 'lex' : 'grevlex');
+      let varOrder = opts.varOrder || null;
+      if (!varOrder && elim.length) {
+        const rest = new Set();
+        for (const n of eqNodes) for (const v of n.poly.vars()) if (!elim.includes(v)) rest.add(v);
+        varOrder = [...elim, ...[...rest].sort()];
+      }
+      const order = S.monomialOrder(kind, varOrder);
+      let basis;
+      try {
+        basis = S.buchberger(eqNodes.map((n) => n.poly), order, opts);
+      } catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [], skipped }; }
+      let gens = basis;
+      if (elim.length && !opts.keepEliminated) {
+        gens = basis.filter((g) => { const vs = g.vars(); return !elim.some((v) => vs.has(v)); });
+      }
+      gens = gens.filter((g) => !g.isZero());
+      if (!gens.length) {
+        return { ok: false, reason: elim.length
+          ? 'the elimination ideal in the remaining variables is trivial (no generator free of ' + elim.join(', ') + ')'
+          : 'empty Gröbner basis', created: [], skipped };
+      }
+      checkpoint();
+      const inputIds = eqNodes.map((n) => n.id);
+      const col = Math.max.apply(null, eqNodes.map((n) => n.column)) + 1;
+      const created = [];
+      const tag = elim.length ? 'elim ' + elim.join(',') : kind;
+      gens.forEach((poly, i) => {
+        const node = addNode({
+          id: nid(), kind: 'derived', poly, rel: '=',
+          label: 'Gröbner ' + (i + 1) + '/' + gens.length + ' (' + tag + ')', model,
+          provenance: { op: 'groebner', inputs: inputIds.slice(), order: kind, eliminate: elim.slice() },
+          column: col, meta: { order: kind, eliminate: elim.slice() },
+        });
+        for (const src of inputIds) edges.push({ from: src, to: node.id });
+        created.push(node);
+      });
+      return { ok: true, created, skipped };
+    }
+
     // Duplicate a node to start an alternative derivation line (accumulate alternatives).
     function duplicate(id) {
       const a = get(id); if (!a) return null;
@@ -312,7 +378,7 @@
     }
 
     return {
-      seedFromSystem, addConstraint, eliminate, eliminateWithGauge, duplicate, deleteNode,
+      seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, duplicate, deleteNode,
       sharedVars, previewCost, exportDAG, nodeStats,
       moveNode, orderOf: ordOf, orderedColumn,
       undo, redo, reset,
