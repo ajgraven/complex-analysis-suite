@@ -810,6 +810,244 @@
     return tf.mul(f).sub(tg.mul(g));
   }
 
+  // ===========================================================================
+  // Packed exponent-vector kernel (Phase A) — the Buchberger HOT PATH.
+  //
+  // The name-keyed Map<varName,exp> monomial + monoKey() string (sort+join on
+  // every term op) and the Set-building order `cmp` dominate Buchberger's cost.
+  // Here a monomial is an Int32Array of exponents in a FIXED variable layout
+  // (one lane per variable), so: tdeg = lane sum, lcm = lane max, divide = lane
+  // subtract, multiply = lane add, coprime = no shared positive lane, and the
+  // monomial order is a direct index walk — no Map iteration, no Set, no sort,
+  // no string concatenation per comparison. The term key is one UTF-16 code unit
+  // per lane (collision-free while every exponent ≤ 0xFFFF, far above the degree
+  // caps). Coefficients stay Gaussian (ℚ(i)); the field is abstracted in Phase B.
+  //
+  // This kernel runs ONLY inside buchberger(); inputs are converted from MPoly on
+  // entry and the raw basis back to MPoly on exit (then handed to the unchanged
+  // reduceGroebner). Because the reduced Gröbner basis is UNIQUE for a given ideal
+  // and order, a correct kernel yields a bit-identical result to the old MPoly
+  // path. The public MPoly division/normalForm/sPoly primitives are untouched.
+  // ===========================================================================
+
+  // Build the fixed variable layout + order comparator + tdeg for a ring over
+  // `allVars`, replicating monomialOrder()'s variable ranking exactly so the
+  // packed comparator agrees with the Map-based one term for term.
+  function _packedContext(order, allVars) {
+    const kind = (order && order.kind) || 'grevlex';
+    let layout = [];
+    let ranges = null;                                   // block kind only: [[lo,hi),…]
+    if (kind === 'block') {
+      const blks = (order && order.varOrder) || [];
+      const present = new Set(allVars);
+      const listed = new Set();
+      blks.forEach((b) => b.forEach((v) => listed.add(v)));
+      ranges = [];
+      for (const b of blks) {
+        const start = layout.length;
+        for (const v of b) if (present.has(v)) layout.push(v);
+        if (layout.length > start) ranges.push([start, layout.length]);
+      }
+      const trailing = allVars.filter((v) => !listed.has(v)).sort();
+      if (trailing.length) {
+        const start = layout.length;
+        for (const v of trailing) layout.push(v);
+        ranges.push([start, layout.length]);
+      }
+    } else {
+      const rank = new Map();
+      if (order && order.varOrder) order.varOrder.forEach((v, i) => rank.set(v, i));
+      const varCmp = (x, y) => {
+        const rx = rank.has(x) ? rank.get(x) : Infinity;
+        const ry = rank.has(y) ? rank.get(y) : Infinity;
+        if (rx !== ry) return rx < ry ? -1 : 1;
+        return x < y ? -1 : (x > y ? 1 : 0);
+      };
+      layout = allVars.slice().sort(varCmp);
+    }
+    const n = layout.length;
+    const index = new Map();
+    layout.forEach((v, i) => index.set(v, i));
+    const tdeg = (e) => { let d = 0; for (let i = 0; i < n; i++) d += e[i]; return d; };
+    let cmp;
+    if (kind === 'lex') {
+      cmp = (a, b) => { for (let i = 0; i < n; i++) if (a[i] !== b[i]) return a[i] < b[i] ? -1 : 1; return 0; };
+    } else if (kind === 'grlex') {
+      cmp = (a, b) => {
+        const da = tdeg(a), db = tdeg(b);
+        if (da !== db) return da < db ? -1 : 1;
+        for (let i = 0; i < n; i++) if (a[i] !== b[i]) return a[i] < b[i] ? -1 : 1;
+        return 0;
+      };
+    } else if (kind === 'block') {
+      cmp = (a, b) => {
+        for (const [lo, hi] of ranges) {
+          let da = 0, db = 0;
+          for (let i = lo; i < hi; i++) { da += a[i]; db += b[i]; }
+          if (da !== db) return da < db ? -1 : 1;
+          for (let i = hi - 1; i >= lo; i--) if (a[i] !== b[i]) return a[i] < b[i] ? 1 : -1;
+        }
+        return 0;
+      };
+    } else {                                             // grevlex
+      cmp = (a, b) => {
+        const da = tdeg(a), db = tdeg(b);
+        if (da !== db) return da < db ? -1 : 1;
+        for (let i = n - 1; i >= 0; i--) if (a[i] !== b[i]) return a[i] < b[i] ? 1 : -1;
+        return 0;
+      };
+    }
+    return { vars: layout, index, n, cmp, tdeg };
+  }
+
+  // Packed-monomial primitives (Int32Array lanes).
+  function _pKey(e) { let s = ''; for (let i = 0; i < e.length; i++) s += String.fromCharCode(e[i]); return s; }
+  function _pMul(a, b) { const n = a.length, o = new Int32Array(n); for (let i = 0; i < n; i++) o[i] = a[i] + b[i]; return o; }
+  function _pLcmV(a, b) { const n = a.length, o = new Int32Array(n); for (let i = 0; i < n; i++) o[i] = a[i] > b[i] ? a[i] : b[i]; return o; }
+  function _pDivV(a, b) { const n = a.length, o = new Int32Array(n); for (let i = 0; i < n; i++) { const d = a[i] - b[i]; if (d < 0) return null; o[i] = d; } return o; }
+  function _pCoprimeV(a, b) { const n = a.length; for (let i = 0; i < n; i++) if (a[i] > 0 && b[i] > 0) return false; return true; }
+  function _pEqualV(a, b) { const n = a.length; for (let i = 0; i < n; i++) if (a[i] !== b[i]) return false; return true; }
+
+  // Packed polynomial = Map<key, { e:Int32Array, coeff:Gaussian }>. Exponent
+  // arrays and coeffs are never mutated in place (replaced wholesale), so terms
+  // may be shared across clones.
+  function _ppFromMPoly(ctx, poly) {
+    const terms = new Map();
+    for (const t of poly.terms.values()) {
+      const e = new Int32Array(ctx.n);
+      for (const [nm, ex] of t.mono) e[ctx.index.get(nm)] = ex;
+      terms.set(_pKey(e), { e, coeff: t.coeff });
+    }
+    return terms;
+  }
+  function _ppToMPoly(ctx, terms) {
+    const out = MPoly.zero();
+    for (const t of terms.values()) {
+      const mono = new Map();
+      for (let i = 0; i < ctx.n; i++) if (t.e[i] !== 0) mono.set(ctx.vars[i], t.e[i]);
+      out._addTerm(mono, t.coeff);
+    }
+    return out;
+  }
+  function _ppLeading(ctx, terms) {
+    let best = null;
+    for (const t of terms.values()) if (best === null || ctx.cmp(t.e, best.e) > 0) best = t;
+    return best;
+  }
+  function _ppTotalDeg(ctx, terms) { let d = -1; for (const t of terms.values()) { const td = ctx.tdeg(t.e); if (td > d) d = td; } return d; }
+
+  // p -= (qc · x^qe) · g, mutating the packed map p in place (mirrors _subTermTimesPoly).
+  function _ppSubTermTimesPoly(p, qe, qc, g) {
+    for (const tg of g.values()) {
+      const e = _pMul(qe, tg.e);
+      const key = _pKey(e);
+      const sub = qc.mul(tg.coeff);
+      const cur = p.get(key);
+      if (cur) { const c = cur.coeff.sub(sub); if (c.isZero()) p.delete(key); else cur.coeff = c; }
+      else if (!sub.isZero()) p.set(key, { e, coeff: sub.neg() });
+    }
+  }
+  // Normal form of packed f modulo divs (each { terms, le, lc } — leading e/coeff
+  // precomputed). Returns a packed map.
+  function _ppNormalForm(ctx, fTerms, divs) {
+    const p = new Map(); for (const [k, t] of fTerms) p.set(k, { e: t.e, coeff: t.coeff });
+    const r = new Map();
+    let guard = 0;
+    while (p.size) {
+      const lp = _ppLeading(ctx, p);
+      let divided = false;
+      for (let i = 0; i < divs.length; i++) {
+        const md = _pDivV(lp.e, divs[i].le);
+        if (md !== null) {
+          const qc = lp.coeff.div(divs[i].lc);
+          _ppSubTermTimesPoly(p, md, qc, divs[i].terms);
+          divided = true;
+          break;
+        }
+      }
+      if (!divided) { r.set(_pKey(lp.e), { e: lp.e, coeff: lp.coeff }); p.delete(_pKey(lp.e)); }
+      if (++guard > 2e6) throw new Error('normalForm(packed): non-terminating (guard tripped)');
+    }
+    return r;
+  }
+  // S-polynomial of packed f,g with precomputed leading e/coeff. Mirrors sPoly.
+  function _ppSPoly(ctx, f, g, lef, lcf, leg, lcg) {
+    const L = _pLcmV(lef, leg);
+    const af = _pDivV(L, lef), ag = _pDivV(L, leg);
+    const cf = Gaussian.fromInt(1).div(lcf), cg = Gaussian.fromInt(1).div(lcg);
+    const out = new Map();
+    for (const t of f.values()) { const e = _pMul(af, t.e); out.set(_pKey(e), { e, coeff: cf.mul(t.coeff) }); }
+    for (const t of g.values()) {
+      const e = _pMul(ag, t.e); const key = _pKey(e); const sub = cg.mul(t.coeff);
+      const cur = out.get(key);
+      if (cur) { const c = cur.coeff.sub(sub); if (c.isZero()) out.delete(key); else cur.coeff = c; }
+      else if (!sub.isZero()) out.set(key, { e, coeff: sub.neg() });
+    }
+    return out;
+  }
+
+  // The packed Buchberger main loop (Gebauer–Möller + sugar, identical control
+  // flow to the MPoly version) → array of packed term maps (the raw basis).
+  function _buchbergerPacked(ctx, packedPolys, caps) {
+    const G = [];           // { terms, le, lc, sugar }
+    const divs = [];        // { terms, le, lc } parallel for normalForm
+    let P = [];             // { i, j, lcm, sugar }
+    function update(t) {
+      const lmt = G[t].le;
+      const C = [];
+      for (let i = 0; i < t; i++) C.push({ i, j: t, lcm: _pLcmV(G[i].le, lmt) });
+      const D = [];
+      const dividedBy = (arr, p) => arr.some((q) => q !== p && _pDivV(p.lcm, q.lcm) !== null);
+      while (C.length) {
+        const p = C.pop();
+        if (_pCoprimeV(G[p.i].le, lmt) || (!dividedBy(C, p) && !dividedBy(D, p))) D.push(p);
+      }
+      const E = D.filter((p) => !_pCoprimeV(G[p.i].le, lmt));
+      P = P.filter((p) => {
+        if (_pDivV(p.lcm, lmt) === null) return true;
+        return _pEqualV(_pLcmV(G[p.i].le, lmt), p.lcm) || _pEqualV(_pLcmV(G[p.j].le, lmt), p.lcm);
+      });
+      for (const p of E) {
+        const si = G[p.i].sugar + (ctx.tdeg(p.lcm) - ctx.tdeg(G[p.i].le));
+        const sj = G[t].sugar + (ctx.tdeg(p.lcm) - ctx.tdeg(lmt));
+        p.sugar = Math.max(si, sj);
+        P.push(p);
+      }
+    }
+    function addElement(terms, sugar) {
+      const lt = _ppLeading(ctx, terms);
+      G.push({ terms, le: lt.e, lc: lt.coeff, sugar });
+      divs.push({ terms, le: lt.e, lc: lt.coeff });
+      update(G.length - 1);
+      if (G.length > caps.maxBasis)
+        throw new Error('buchberger: basis exceeded ' + caps.maxBasis + ' generators; use CAS export.');
+    }
+    for (const pt of packedPolys) if (pt.size) addElement(pt, _ppTotalDeg(ctx, pt));
+    if (!G.length) return [];
+    let steps = 0;
+    while (P.length) {
+      if (++steps > caps.maxSteps)
+        throw new Error('buchberger: exceeded ' + caps.maxSteps + ' S-pair steps; the system is too large — use CAS export.');
+      let bi = 0;
+      for (let k = 1; k < P.length; k++) {
+        if (P[k].sugar < P[bi].sugar
+          || (P[k].sugar === P[bi].sugar && ctx.cmp(P[k].lcm, P[bi].lcm) < 0)) bi = k;
+      }
+      const pair = P.splice(bi, 1)[0];
+      const sp = _ppSPoly(ctx, G[pair.i].terms, G[pair.j].terms, G[pair.i].le, G[pair.i].lc, G[pair.j].le, G[pair.j].lc);
+      const r = _ppNormalForm(ctx, sp, divs);
+      if (caps.onProgress) caps.onProgress({ basis: G.length, pairs: P.length, steps });
+      if (r.size === 0) continue;
+      const rdeg = _ppTotalDeg(ctx, r);
+      if (rdeg > caps.maxDegree)
+        throw new Error('buchberger: generator degree ' + rdeg + ' exceeds the cap (' + caps.maxDegree + '); use CAS export.');
+      if (r.size > caps.maxTerms)
+        throw new Error('buchberger: a generator reached ' + r.size + ' terms (cap ' + caps.maxTerms + '); use CAS export.');
+      addElement(r, pair.sugar);
+    }
+    return divs.map((d) => d.terms);
+  }
+
   // Caps — Buchberger can blow up super-exponentially, so bound the run and throw
   // a clear "use CAS export" error rather than hanging (mirrors RESULTANT_MATRIX_CAP).
   // All overridable via opts {maxBasis, maxSteps, maxDegree, maxTerms}. These are set
@@ -841,75 +1079,26 @@
   function buchberger(polys, order, opts) {
     opts = opts || {};
     const ord = (order && order.cmp) ? order : monomialOrder(order || 'grevlex');
-    const maxBasis = opts.maxBasis != null ? opts.maxBasis : GROEBNER_MAX_BASIS;
-    const maxSteps = opts.maxSteps != null ? opts.maxSteps : GROEBNER_MAX_STEPS;
-    const maxDegree = opts.maxDegree != null ? opts.maxDegree : GROEBNER_MAX_DEGREE;
-    const maxTerms = opts.maxTerms != null ? opts.maxTerms : GROEBNER_MAX_TERMS;
-    const onProgress = typeof opts.onProgress === 'function' ? opts.onProgress : null;
+    const caps = {
+      maxBasis: opts.maxBasis != null ? opts.maxBasis : GROEBNER_MAX_BASIS,
+      maxSteps: opts.maxSteps != null ? opts.maxSteps : GROEBNER_MAX_STEPS,
+      maxDegree: opts.maxDegree != null ? opts.maxDegree : GROEBNER_MAX_DEGREE,
+      maxTerms: opts.maxTerms != null ? opts.maxTerms : GROEBNER_MAX_TERMS,
+      onProgress: typeof opts.onProgress === 'function' ? opts.onProgress : null,
+    };
 
-    const G = [];           // append-only basis elements { poly, lm, sugar }
-    const divisors = [];    // G[k].poly, kept parallel for normalForm
-    let P = [];             // active pairs { i, j, lcm, sugar }
-
-    // Gebauer–Möller update on having appended element index t.
-    function update(t) {
-      const lmt = G[t].lm;
-      const C = [];
-      for (let i = 0; i < t; i++) C.push({ i, j: t, lcm: monoLcm(G[i].lm, lmt) });
-      // chain criterion: keep p unless another candidate's lcm divides p.lcm
-      const D = [];
-      const dividedBy = (arr, p) => arr.some((q) => q !== p && monoDivide(p.lcm, q.lcm) !== null);
-      while (C.length) {
-        const p = C.pop();
-        if (_monoCoprime(G[p.i].lm, lmt) || (!dividedBy(C, p) && !dividedBy(D, p))) D.push(p);
-      }
-      // drop coprime survivors (1st criterion: their S-poly reduces to 0)
-      const E = D.filter((p) => !_monoCoprime(G[p.i].lm, lmt));
-      // B_k criterion: prune existing pairs that lmt makes redundant
-      P = P.filter((p) => {
-        if (monoDivide(p.lcm, lmt) === null) return true;          // lmt ∤ lcm(p)
-        return _monoEqual(monoLcm(G[p.i].lm, lmt), p.lcm)          // escape clauses
-            || _monoEqual(monoLcm(G[p.j].lm, lmt), p.lcm);
-      });
-      for (const p of E) {
-        const si = G[p.i].sugar + (monoTotalDeg(p.lcm) - monoTotalDeg(G[p.i].lm));
-        const sj = G[t].sugar + (monoTotalDeg(p.lcm) - monoTotalDeg(lmt));
-        p.sugar = Math.max(si, sj);
-        P.push(p);
-      }
-    }
-    function addElement(poly, sugar) {
-      G.push({ poly, lm: poly.leadingMono(ord), sugar });
-      divisors.push(poly);
-      update(G.length - 1);
-      if (G.length > maxBasis)
-        throw new Error('buchberger: basis exceeded ' + maxBasis + ' generators; use CAS export.');
-    }
-
-    for (const p of (polys || [])) if (p && !p.isZero()) addElement(p.clone(), p.totalDegree());
-    if (!G.length) return [];
-
-    let steps = 0;
-    while (P.length) {
-      if (++steps > maxSteps)
-        throw new Error('buchberger: exceeded ' + maxSteps + ' S-pair steps; the system is too large — use CAS export.');
-      // sugar selection: minimal sugar, tie-broken by minimal lcm under the order
-      let bi = 0;
-      for (let k = 1; k < P.length; k++) {
-        if (P[k].sugar < P[bi].sugar
-          || (P[k].sugar === P[bi].sugar && ord.cmp(P[k].lcm, P[bi].lcm) < 0)) bi = k;
-      }
-      const pair = P.splice(bi, 1)[0];
-      const r = normalForm(sPoly(G[pair.i].poly, G[pair.j].poly, ord), divisors, ord);
-      if (onProgress) onProgress({ basis: G.length, pairs: P.length, steps });
-      if (r.isZero()) continue;
-      if (r.totalDegree() > maxDegree)
-        throw new Error('buchberger: generator degree ' + r.totalDegree() + ' exceeds the cap (' + maxDegree + '); use CAS export.');
-      if (r.size() > maxTerms)
-        throw new Error('buchberger: a generator reached ' + r.size() + ' terms (cap ' + maxTerms + '); use CAS export.');
-      addElement(r, pair.sugar);
-    }
-    return opts.reduced === false ? divisors.slice() : reduceGroebner(divisors, ord);
+    // Run the main loop on the packed exponent-vector kernel (see above), then
+    // hand the raw basis back to the unchanged MPoly reduceGroebner. The reduced
+    // basis is canonical/unique, so this is bit-identical to the old MPoly path.
+    const cleaned = (polys || []).filter((p) => p && !p.isZero());
+    if (!cleaned.length) return [];
+    const allVars = new Set();
+    for (const p of cleaned) for (const v of p.vars()) allVars.add(v);
+    const ctx = _packedContext(ord, [...allVars]);
+    const packed = cleaned.map((p) => _ppFromMPoly(ctx, p));
+    const rawPacked = _buchbergerPacked(ctx, packed, caps);
+    const raw = rawPacked.map((t) => _ppToMPoly(ctx, t));
+    return opts.reduced === false ? raw : reduceGroebner(raw, ord);
   }
 
   // Reduce a Gröbner basis to the canonical REDUCED basis: monic leading

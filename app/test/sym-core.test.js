@@ -412,6 +412,84 @@ module.exports = async function run() {
          G.map((p) => p.key()).sort().join('|') === G2.map((p) => p.key()).sort().join('|'));
     }
 
+    // Phase A — packed exponent-vector kernel: DIFFERENTIAL vs an independent,
+    // naive textbook Buchberger built only from the public MPoly primitives
+    // (sPoly + normalForm + reduceGroebner). Because the reduced Gröbner basis is
+    // UNIQUE for a given ideal and order, the optimized packed kernel inside
+    // S.buchberger must return a bit-identical basis (same generator keys) to any
+    // correct algorithm — this pins correctness of the whole rewrite.
+    {
+      // Independent reference: add every nonzero S-poly normal form until closed,
+      // then canonicalize. O(pairs²) and slow, but correct — used on SMALL systems.
+      const naiveGB = (polys, ord) => {
+        const basis = polys.filter((p) => !p.isZero()).map((p) => p.clone());
+        let changed = true, guard = 0;
+        while (changed) {
+          changed = false;
+          const cur = basis.slice();
+          for (let i = 0; i < cur.length; i++) for (let j = i + 1; j < cur.length; j++) {
+            const r = S.normalForm(S.sPoly(cur[i], cur[j], ord), basis, ord);
+            if (!r.isZero()) { basis.push(r); changed = true; }
+            if (++guard > 200000) throw new Error('naiveGB: guard tripped');
+          }
+        }
+        return S.reduceGroebner(basis, ord);
+      };
+      const keys = (G) => G.map((p) => p.key()).sort().join('|');
+      const iC = S.mpolyConst(S.Gaussian.I);   // the constant i as an MPoly
+      const cases = [
+        { name: '⟨x²+y²−1, x−y⟩ lex(x>y)',
+          sys: [mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').sub(mv('y'))],
+          ord: S.monomialOrder('lex', ['x', 'y']) },
+        { name: '⟨x²+y²−1, x−y⟩ grlex',
+          sys: [mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').sub(mv('y'))],
+          ord: S.monomialOrder('grlex', ['x', 'y']) },
+        { name: '3-var cyclic-style grevlex',
+          sys: [mv('x').pow(2).add(mv('y')), mv('y').pow(2).add(mv('z')), mv('z').pow(2).add(mv('x'))],
+          ord: S.monomialOrder('grevlex', ['x', 'y', 'z']) },
+        { name: 'ℚ(i): ⟨x²+1, xy−i⟩ grevlex',
+          sys: [mv('x').pow(2).add(mi(1)), mv('x').mul(mv('y')).sub(iC)],
+          ord: S.monomialOrder('grevlex', ['x', 'y']) },
+        { name: 'block elimination ⟨x²+y²−1, x+y⟩ elim x',
+          sys: [mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').add(mv('y'))],
+          ord: S.eliminationOrder(['x'], ['y']) },
+      ];
+      let allMatch = true, detail = '';
+      for (const c of cases) {
+        const a = keys(S.buchberger(c.sys, c.ord));
+        const b = keys(naiveGB(c.sys, c.ord));
+        if (a !== b) { allMatch = false; detail = c.name; break; }
+      }
+      ok('packed kernel == naive textbook Buchberger on every case (canonical basis)' + (allMatch ? '' : ' — MISMATCH: ' + detail), allMatch);
+    }
+
+    // Phase A — benchmark: cyclic-5 grevlex (a genuinely heavy run) completes and
+    // yields a valid Gröbner basis. Timing is logged, not asserted (machine-
+    // dependent); the assertion is that the packed kernel produces a real GB.
+    {
+      const v = (k) => mv('c' + k);
+      const cyc = [];
+      cyc.push(v(0).add(v(1)).add(v(2)).add(v(3)).add(v(4)));                       // e1
+      cyc.push(v(0).mul(v(1)).add(v(1).mul(v(2))).add(v(2).mul(v(3))).add(v(3).mul(v(4))).add(v(4).mul(v(0))));
+      cyc.push(v(0).mul(v(1)).mul(v(2)).add(v(1).mul(v(2)).mul(v(3))).add(v(2).mul(v(3)).mul(v(4)))
+        .add(v(3).mul(v(4)).mul(v(0))).add(v(4).mul(v(0)).mul(v(1))));
+      cyc.push(v(0).mul(v(1)).mul(v(2)).mul(v(3)).add(v(1).mul(v(2)).mul(v(3)).mul(v(4)))
+        .add(v(2).mul(v(3)).mul(v(4)).mul(v(0))).add(v(3).mul(v(4)).mul(v(0)).mul(v(1)))
+        .add(v(4).mul(v(0)).mul(v(1)).mul(v(2))));
+      cyc.push(v(0).mul(v(1)).mul(v(2)).mul(v(3)).mul(v(4)).sub(mi(1)));            // e5 − 1
+      const ord = S.monomialOrder('grevlex', ['c0', 'c1', 'c2', 'c3', 'c4']);
+      const t0 = Date.now();
+      const G = S.buchberger(cyc, ord);
+      const ms = Date.now() - t0;
+      const valid = (() => {
+        for (let i = 0; i < G.length; i++) for (let j = i + 1; j < G.length; j++)
+          if (!S.normalForm(S.sPoly(G[i], G[j], ord), G, ord).isZero()) return false;
+        return true;
+      })();
+      console.log('      [bench] cyclic-5 grevlex: ' + G.length + ' generators in ' + ms + ' ms (packed kernel)');
+      ok('cyclic-5: packed kernel produces a valid Gröbner basis (' + G.length + ' gens, ' + ms + ' ms)', valid && G.length > 0);
+    }
+
     // Block / elimination order: cheaper than lex, same elimination ideal.
     {
       const f = mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), g = mv('x').add(mv('y'));
