@@ -16,7 +16,7 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `ffa1852d6b`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `64e7dde31c`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
@@ -34,13 +34,18 @@ its own merged PR), with one feature **in progress on a branch**:
   toolkit), perf (memoized degree, in-place reduction, Rational gcd fast-path), and an off-main-thread
   **Web Worker** (`QD.SymWorker`) with progress + Cancel; the tab has variable-**picker** dropdowns
   (eliminate / **assume-real**), a **persistent error panel**, and worker-backed Gröbner/dimension/
-  solve. A **Gröbner performance & scale roadmap** (bit-packing → modular GB → F4 → polish; plan in
-  `.claude/plans/please-conduct-a-comprehensive-whimsical-harp.md`) is now underway: **Phase A —
-  exponent-vector bit-packing** is done (a packed Int32Array-monomial kernel drives `buchberger`'s
-  main loop; conversion only at the boundary, `reduceGroebner` unchanged so the basis is provably
-  bit-identical — the reduced GB is unique). Measured **4.2× on the hot path** / **2.3× end-to-end**
-  on cyclic-5 grevlex. Tip `2038924` (+ uncommitted Phase A); tests **1618/0** (+2 differential/
-  benchmark); hash `ffa1852d6b`. RCTD bridge remains Phase 3; see the deep section below.
+  solve. A **Gröbner performance roadmap** (plan in
+  `.claude/plans/please-conduct-a-comprehensive-whimsical-harp.md`) landed two bit-identical wins on
+  the EXACT path (the reduced GB is unique, so a correct packed kernel is provably bit-identical):
+  **Phase A — exponent-vector bit-packing** (packed Int32Array monomials drive `buchberger`'s main
+  loop) and **Phase D — packed `reduceGroebner` + content removal** (reduction stays packed;
+  per-generator Gaussian-integer content is divided out to bound coefficient size). Net **≈4.5×
+  end-to-end on cyclic-5** vs the original, all bit-identical. **Modular / multi-modular GB was
+  built, verified, and then reverted** — hard benchmarks showed it slower on these systems and the
+  full cardioid (14 vars, ~478 gens) is combinatorially intractable for any plain-Buchberger variant
+  (a single 𝔽_{p²} prime > 12 min; exact > 41 min); reality reduction remains the real lever. Tip
+  `2e50f6a` (Phase A) + uncommitted Phase D; tests **1620/0**; hash `64e7dde31c`. RCTD bridge remains
+  Phase 3; see the deep section below.
 - **Symbolic QD equation generator** (`feature/symbolic-qd-equations`, NOT yet merged) — a new
   symbolic-algebra track: `app/sym-core.js` (`QD.Sym`, exact Rational/Gaussian/MPoly/RatFn +
   factored-denominator `FRatFn` + field-generic power series with Lagrange reversion) and

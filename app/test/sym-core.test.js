@@ -453,6 +453,15 @@ module.exports = async function run() {
         { name: 'block elimination ⟨x²+y²−1, x+y⟩ elim x',
           sys: [mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').add(mv('y'))],
           ord: S.eliminationOrder(['x'], ['y']) },
+        // large/denominator coefficients — exercises CONTENT REMOVAL (Phase D): the
+        // working basis is kept primitive (Gaussian-integer gcd cleared), yet the
+        // canonical reduced basis must still match the naive (no-content) path.
+        { name: 'content removal: ⟨6x²−10, 15y−21x⟩ lex',
+          sys: [mv('x').pow(2).scale(S.gaussInt(6)).sub(mi(10)), mv('y').scale(S.gaussInt(15)).sub(mv('x').scale(S.gaussInt(21)))],
+          ord: S.monomialOrder('lex', ['x', 'y']) },
+        { name: 'content removal ℚ(i): ⟨(3+3i)x²−(6−6i), x−y⟩ grevlex',
+          sys: [mv('x').pow(2).scale(S.gaussInt(3, 3)).sub(S.mpolyConst(S.gaussInt(6, -6))), mv('x').sub(mv('y'))],
+          ord: S.monomialOrder('grevlex', ['x', 'y']) },
       ];
       let allMatch = true, detail = '';
       for (const c of cases) {

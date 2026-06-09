@@ -1015,6 +1015,7 @@
       }
     }
     function addElement(terms, sugar) {
+      terms = _ppMakePrimitive(terms);                 // content removal: keep coeffs small
       const lt = _ppLeading(ctx, terms);
       G.push({ terms, le: lt.e, lc: lt.coeff, sugar });
       divs.push({ terms, le: lt.e, lc: lt.coeff });
@@ -1046,6 +1047,106 @@
       addElement(r, pair.sugar);
     }
     return divs.map((d) => d.terms);
+  }
+
+  // Packed-poly equality (same monomials, same Gaussian coeffs).
+  function _ppEqual(a, b) {
+    if (a.size !== b.size) return false;
+    for (const [k, t] of a) { const u = b.get(k); if (!u || !t.coeff.sub(u.coeff).isZero()) return false; }
+    return true;
+  }
+
+  // --- Content removal (Phase D) ---------------------------------------------
+  // Keep working-basis coefficients SMALL by dividing out the Gaussian-integer
+  // content of each new generator. Scaling a generator by a nonzero constant
+  // leaves the ideal, leading monomial, and sugar unchanged, so the run's control
+  // flow and the final monic reduced basis are bit-identical — only intermediate
+  // coefficient SIZE (BigInt digit count, hence memory + arithmetic cost) shrinks.
+  function _blcm(a, b) { if (a === 0n || b === 0n) return 0n; return (a / bgcd(a, b)) * b; }
+  function _bRoundDiv(x, n) { let q = x / n; const r = x - q * n; const ar = r < 0n ? -r : r; if (2n * ar >= n) q += (x < 0n ? -1n : 1n); return q; }
+  // GCD of two Gaussian integers (a,b = {re,im} BigInt), up to a unit — Euclidean
+  // with nearest-integer (rounding) division so the norm strictly decreases.
+  function _gaussGCD(a, b) {
+    let x = a, y = b;
+    let guard = 0;
+    while (!(y.re === 0n && y.im === 0n)) {
+      const nb = y.re * y.re + y.im * y.im;
+      const pr = x.re * y.re + x.im * y.im;        // x·conj(y), real
+      const pi = x.im * y.re - x.re * y.im;        // imag
+      const qr = _bRoundDiv(pr, nb), qi = _bRoundDiv(pi, nb);
+      const r = { re: x.re - (qr * y.re - qi * y.im), im: x.im - (qr * y.im + qi * y.re) };
+      x = y; y = r;
+      if (++guard > 100000) break;
+    }
+    return x;
+  }
+  // Replace a packed poly's coefficients by a primitive Gaussian-INTEGER multiple:
+  // clear denominators (×lcm), then divide by the Gaussian gcd of the numerators.
+  function _ppMakePrimitive(terms) {
+    if (terms.size === 0) return terms;
+    let L = 1n;
+    for (const t of terms.values()) { L = _blcm(L, t.coeff.re.d); L = _blcm(L, t.coeff.im.d); }
+    const ints = [];
+    let g = null;
+    for (const t of terms.values()) {
+      const re = t.coeff.re.n * (L / t.coeff.re.d);
+      const im = t.coeff.im.n * (L / t.coeff.im.d);
+      ints.push({ e: t.e, re, im });
+      g = g === null ? { re, im } : _gaussGCD(g, { re, im });
+    }
+    const ng = g.re * g.re + g.im * g.im;
+    if (ng === 0n) return terms;                    // all-zero (shouldn't happen)
+    const out = new Map();
+    for (const it of ints) {
+      const pr = it.re * g.re + it.im * g.im;        // (re+im·i)/g = (re+im·i)·conj(g)/N(g)
+      const pi = it.im * g.re - it.re * g.im;
+      out.set(_pKey(it.e), { e: it.e, coeff: new Gaussian(new Rational(pr / ng, 1n), new Rational(pi / ng, 1n)) });
+    }
+    return out;
+  }
+  // The canonical REDUCED basis, computed entirely on packed exponent vectors
+  // (Phase D) — monic leading coeffs, no leading monomial divisible by another's,
+  // every generator fully reduced modulo the rest, sorted by leading monomial
+  // (descending). Mirrors reduceGroebner exactly but stays packed, so the exact
+  // path no longer rebuilds MPolys and re-runs the Map/string normal form for the
+  // reduction phase (which dominated end-to-end time once the main loop was packed).
+  // The reduced Gröbner basis is UNIQUE, so the result is bit-identical.
+  function _reduceGroebnerPacked(ctx, basis) {
+    const monic = (terms) => {
+      const inv = Gaussian.fromInt(1).div(_ppLeading(ctx, terms).coeff);
+      const out = new Map();
+      for (const [k, t] of terms) out.set(k, { e: t.e, coeff: inv.mul(t.coeff) });
+      return out;
+    };
+    let B = basis.filter((t) => t.size).map(monic);
+    const lead = B.map((t) => _ppLeading(ctx, t).e);
+    const keep = [];
+    for (let i = 0; i < B.length; i++) {
+      let red = false;
+      for (let j = 0; j < B.length; j++) {
+        if (i === j) continue;
+        if (_pDivV(lead[i], lead[j]) !== null) {
+          if (_pEqualV(lead[i], lead[j])) { if (j < i) { red = true; break; } }   // keep the earlier of equals
+          else { red = true; break; }
+        }
+      }
+      if (!red) keep.push(B[i]);
+    }
+    B = keep;
+    let changed = true, guard = 0;
+    while (changed) {
+      changed = false;
+      for (let i = 0; i < B.length; i++) {
+        const divs = [];
+        for (let k = 0; k < B.length; k++) { if (k === i) continue; const lt = _ppLeading(ctx, B[k]); divs.push({ terms: B[k], le: lt.e, lc: lt.coeff }); }
+        const nf = _ppNormalForm(ctx, B[i], divs);
+        if (!_ppEqual(B[i], nf)) { B[i] = nf.size ? monic(nf) : null; changed = true; }
+      }
+      B = B.filter(Boolean);
+      if (++guard > 10000) throw new Error('reduceGroebnerPacked: non-terminating (guard tripped)');
+    }
+    B.sort((a, b) => ctx.cmp(_ppLeading(ctx, b).e, _ppLeading(ctx, a).e));   // leading monos distinct ⇒ total
+    return B;
   }
 
   // Caps — Buchberger can blow up super-exponentially, so bound the run and throw
@@ -1087,9 +1188,10 @@
       onProgress: typeof opts.onProgress === 'function' ? opts.onProgress : null,
     };
 
-    // Run the main loop on the packed exponent-vector kernel (see above), then
-    // hand the raw basis back to the unchanged MPoly reduceGroebner. The reduced
-    // basis is canonical/unique, so this is bit-identical to the old MPoly path.
+    // Run BOTH the main loop and the reduction on the packed exponent-vector
+    // kernel (see above); convert back to MPoly only at the very end. The reduced
+    // Gröbner basis is canonical/unique, so this is bit-identical to the old MPoly
+    // path while keeping the whole computation off the Map/string representation.
     const cleaned = (polys || []).filter((p) => p && !p.isZero());
     if (!cleaned.length) return [];
     const allVars = new Set();
@@ -1097,8 +1199,8 @@
     const ctx = _packedContext(ord, [...allVars]);
     const packed = cleaned.map((p) => _ppFromMPoly(ctx, p));
     const rawPacked = _buchbergerPacked(ctx, packed, caps);
-    const raw = rawPacked.map((t) => _ppToMPoly(ctx, t));
-    return opts.reduced === false ? raw : reduceGroebner(raw, ord);
+    if (opts.reduced === false) return rawPacked.map((t) => _ppToMPoly(ctx, t));
+    return _reduceGroebnerPacked(ctx, rawPacked).map((t) => _ppToMPoly(ctx, t));
   }
 
   // Reduce a Gröbner basis to the canonical REDUCED basis: monic leading
