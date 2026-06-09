@@ -68,6 +68,10 @@ currently exploited before `buchberger` runs.
 
 ## Tier 2 — A better solve engine (medium effort, big class expansion for *solving*)
 
+> **STATUS: S1 SHIPPED** (`Sym.solveByEigenvalues` + `multiplicationMatrix`; `solveZeroDim` falls
+> back to it on any shape-position failure → solves every radical zero-dim ideal). S2 (certified
+> numerics) deferred as an optional hardening follow-up.
+
 - **S1 — Eigenvalue / quotient-ring solving (Möller–Stetter + reordered-Schur). ★ highest solve-path
   ROI.** For a zero-dim ideal, `R/I` has the **standard monomials** as a basis — which
   `standardMonomials()` **already computes** — and multiplication-by-`xᵢ` is a matrix `Mᵢ` whose

@@ -1482,24 +1482,35 @@
     if (!isZeroDimensional(G1, o1, vars)) {
       return { ok: false, reason: 'the system is not zero-dimensional (infinitely many solutions / a positive-dimensional component)' };
     }
+    // The shape-lemma path below is fast and gives exact back-substitution, but it
+    // requires the lex basis to be in SHAPE POSITION. When it isn't (multiple
+    // solutions share the solve-var coordinate, or a variable isn't a polynomial in
+    // it), fall back to eigenvalue/quotient-ring solving, which handles EVERY radical
+    // zero-dim ideal (Tier 2). The fallback reuses the grevlex basis G1 — no FGLM,
+    // no shape requirement.
+    const eigenFallback = (reason) => {
+      if (opts.noEigen) return { ok: false, reason: reason + ' — use the CAS bridge' };
+      const r = solveByEigenvalues({ G: G1, order: o1 }, Object.assign({}, opts, { vars }));
+      return r.ok ? Object.assign(r, { shapePosition: false, fallbackFrom: reason }) : { ok: false, reason: reason + '; eigenvalue fallback also failed: ' + r.reason };
+    };
     const solveVar = opts.solveVar || vars[vars.length - 1];
     const lexVars = vars.filter((v) => v !== solveVar).concat([solveVar]);   // solveVar lowest
     const lex = monomialOrder('lex', lexVars);
     let Glex;
     try { Glex = fglm(G1, o1, lex, vars); }
-    catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    catch (e) { return eigenFallback('FGLM/order-change failed (' + ((e && e.message) || e) + ')'); }
 
     // shape position: one generator univariate in solveVar; each other u is u = h(solveVar)
     const uni = Glex.filter((g) => { const vs = g.vars(); return vs.has(solveVar) && [...vs].every((x) => x === solveVar); });
-    if (uni.length !== 1) return { ok: false, reason: 'lex basis is not in shape position (no single univariate generator) — use the CAS bridge', basis: Glex };
+    if (uni.length !== 1) return eigenFallback('lex basis not in shape position (no single univariate generator)');
     const f = uni[0];
     const exprs = {};
     for (const u of vars) {
       if (u === solveVar) continue;
       const gen = Glex.find((g) => { const vs = g.vars(); return vs.has(u) && [...vs].every((x) => x === u || x === solveVar) && g.degreeIn(u) === 1; });
-      if (!gen) return { ok: false, reason: 'lex basis not in shape position for ' + u + ' — use the CAS bridge', basis: Glex };
+      if (!gen) return eigenFallback('lex basis not in shape position for ' + u);
       const cs = gen.coeffsIn(u);                 // u·c1 + c0(solveVar) = 0
-      if (cs[1].vars().size !== 0) return { ok: false, reason: 'lex basis not in shape position for ' + u + ' (leading coeff not constant)', basis: Glex };
+      if (cs[1].vars().size !== 0) return eigenFallback('lex basis not in shape position for ' + u + ' (leading coeff not constant)');
       exprs[u] = { c1: cs[1], c0: cs[0] };
     }
     const rootFinder = opts.rootFinder || _defaultRootFinder();
@@ -1530,6 +1541,150 @@
     return (FA && FA.polynomialRoots) ? ((coeffsAsc) => FA.polynomialRoots(coeffsAsc)) : null;
   }
 
+  // ===========================================================================
+  // Eigenvalue (Möller–Stetter) solving on the quotient ring R/I (Tier 2).
+  //
+  // For a zero-dim ideal the quotient R/I is a finite-dim ℂ-space with the STANDARD
+  // MONOMIALS as a basis B (|B| = #solutions w/ multiplicity), and multiplication by a
+  // variable x is a linear operator Mₓ on R/I. Stickelberger: the eigenvalues of Mₓ are
+  // the x-coordinates of the solutions, and the {Mₓ} COMMUTE, so they share eigenvectors
+  // — the LEFT eigenvectors are the point-evaluation functionals. Take a generic
+  // combination M = Σ cₖ M_{xₖ} (distinct eigenvalues), find its eigenvalues (char poly
+  // via the existing Bareiss det + the injected univariate root finder) and per
+  // eigenvalue its left eigenvector w; then xₖ(p) = (wᵀ M_{xₖ})/wᵀ (a Rayleigh read-off).
+  // Needs NO shape position — solves every radical zero-dim ideal, the gap the
+  // shape-lemma path rejects. Numeric in the eigen-step (exact Mₓ over ℚ(i)).
+  // ===========================================================================
+
+  // Mₓ as a D×D Gaussian matrix: column j = normalForm(x·B[j]) written in the basis B.
+  function multiplicationMatrix(G, order, vars, varName) {
+    const o = _ord(order);
+    const B = standardMonomials(G, o, vars);
+    if (B === null) throw new Error('multiplicationMatrix: positive-dimensional ideal');
+    const D = B.length;
+    const idx = new Map(); B.forEach((m, j) => idx.set(monoKey(m), j));
+    const xv = MPoly.variable(varName);
+    const M = [];
+    for (let i = 0; i < D; i++) { const row = new Array(D); for (let j = 0; j < D; j++) row[j] = Gaussian.fromInt(0); M.push(row); }
+    for (let j = 0; j < D; j++) {
+      const bj = new MPoly(); bj._addTerm(new Map(B[j]), Gaussian.fromInt(1));
+      const nf = normalForm(xv.mul(bj), G, o);
+      for (const t of nf.terms.values()) {
+        const k = idx.get(monoKey(t.mono));
+        if (k === undefined) throw new Error('multiplicationMatrix: normal form escaped the standard-monomial basis (not a Gröbner basis?)');
+        M[k][j] = t.coeff;
+      }
+    }
+    return { M, B, D };
+  }
+
+  // A unit-free null vector of a complex n×n matrix A ({re,im} entries), i.e. w≠0 with
+  // A·w = 0 (Gaussian elimination with partial pivoting; returns null if A has full rank).
+  function _complexNullVector(A, n) {
+    const M = A.map((row) => row.map((c) => ({ re: c.re, im: c.im })));
+    const cabs2 = (a) => a.re * a.re + a.im * a.im;
+    const pivCol = new Array(n).fill(-1);   // pivCol[r] = column pivoted at row r
+    const rowOfCol = new Array(n).fill(-1); // rowOfCol[c] = pivot row for column c (or -1)
+    let row = 0, scale = 1;
+    for (const r0 of M) for (const c of r0) scale = Math.max(scale, Math.abs(c.re), Math.abs(c.im));
+    const tol = 1e-12 * scale * scale;
+    for (let col = 0; col < n && row < n; col++) {
+      let best = row, bestAbs = cabs2(M[row][col]);
+      for (let r = row + 1; r < n; r++) { const a = cabs2(M[r][col]); if (a > bestAbs) { bestAbs = a; best = r; } }
+      if (bestAbs <= tol) continue;          // free column
+      const tmp = M[row]; M[row] = M[best]; M[best] = tmp;
+      const pv = M[row][col];
+      for (let c = col; c < n; c++) M[row][c] = cdiv(M[row][c], pv);
+      for (let r = 0; r < n; r++) {
+        if (r === row) continue;
+        const f = M[r][col];
+        if (cabs2(f) === 0) continue;
+        for (let c = col; c < n; c++) M[r][c] = { re: M[r][c].re - (f.re * M[row][c].re - f.im * M[row][c].im), im: M[r][c].im - (f.re * M[row][c].im + f.im * M[row][c].re) };
+      }
+      pivCol[row] = col; rowOfCol[col] = row; row++;
+    }
+    let freeCol = -1;
+    for (let c = 0; c < n; c++) if (rowOfCol[c] === -1) { freeCol = c; break; }
+    if (freeCol === -1) return null;         // full rank → trivial null space only
+    const w = []; for (let i = 0; i < n; i++) w.push({ re: 0, im: 0 });
+    w[freeCol] = { re: 1, im: 0 };
+    for (let c = 0; c < n; c++) if (rowOfCol[c] !== -1) { const r = rowOfCol[c]; w[c] = { re: -M[r][freeCol].re, im: -M[r][freeCol].im }; }
+    return w;
+  }
+
+  // Solve a zero-dimensional system via eigenvalues of the multiplication matrices.
+  // input: an array of MPolys, or { G, order } (a precomputed grevlex GB). Returns
+  // { ok, solutions:[{var:{re,im}}], dimension, method } or { ok:false, reason }.
+  function solveByEigenvalues(input, opts) {
+    opts = opts || {};
+    let G, o, vars;
+    if (Array.isArray(input)) {
+      vars = opts.vars || _ambientVars(input);
+      o = _ord(opts.order1 || monomialOrder('grevlex', vars));
+      try { G = buchberger(input, o, opts); } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    } else { G = input.G; o = _ord(input.order); vars = opts.vars || _ambientVars(G); }
+    if (!isZeroDimensional(G, o, vars)) return { ok: false, reason: 'the system is not zero-dimensional' };
+    const B = standardMonomials(G, o, vars);
+    if (B === null) return { ok: false, reason: 'positive-dimensional ideal' };
+    const D = B.length;
+    if (D === 0) return { ok: true, solutions: [], dimension: 0, method: 'eigenvalue' };
+    const MAXDIM = opts.maxEigenDim != null ? opts.maxEigenDim : 64;
+    if (D > MAXDIM) return { ok: false, reason: 'quotient dimension ' + D + ' exceeds the eigenvalue-solver cap (' + MAXDIM + ') — use the CAS bridge' };
+    const rootFinder = opts.rootFinder || _defaultRootFinder();
+    if (!rootFinder) return { ok: false, reason: 'no root finder available (pass opts.rootFinder)' };
+
+    const Mk = {};
+    for (const v of vars) Mk[v] = multiplicationMatrix(G, o, vars, v).M;
+    const MkNum = {}; for (const v of vars) MkNum[v] = Mk[v].map((r) => r.map((g) => g.toComplex()));
+    const tol = opts.verifyTol != null ? opts.verifyTol : 1e-6;
+    const satisfies = (sol) => G.every((g) => { const z = g.evalComplex(sol); return Math.abs(z.re) < tol && Math.abs(z.im) < tol; });
+
+    // Try a few generic integer coefficient vectors until we recover all D solutions
+    // (a "separating" combination makes the eigenvalues distinct → simple eigenvectors).
+    const COEFF_SETS = [vars.map((_, i) => i + 1), [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53], vars.map((_, i) => 1 + ((i * 2 + 1) % 7) + i * 11)];
+    let bestSols = [];
+    for (let attempt = 0; attempt < COEFF_SETS.length; attempt++) {
+      const cv = {}; vars.forEach((v, i) => { cv[v] = COEFF_SETS[attempt][i % COEFF_SETS[attempt].length] || (i + 1); });
+      // M = Σ cᵥ·Mᵥ  (exact Gaussian)
+      const Mcomb = [];
+      for (let i = 0; i < D; i++) { const row = new Array(D); for (let j = 0; j < D; j++) { let s = Gaussian.fromInt(0); for (const v of vars) s = s.add(Mk[v][i][j].mul(Gaussian.fromInt(cv[v]))); row[j] = s; } Mcomb.push(row); }
+      // char poly det(λI − M) via Bareiss, then the injected univariate root finder
+      const LAM = '__lambda';
+      const lamMat = [];
+      for (let i = 0; i < D; i++) { const row = []; for (let j = 0; j < D; j++) { let e = MPoly.constant(Mcomb[i][j].neg()); if (i === j) e = e.add(MPoly.variable(LAM)); row.push(e); } lamMat.push(row); }
+      const asc = mpolyDet(lamMat).coeffsIn(LAM).map((c) => c.evalComplex({}));
+      const res = rootFinder(asc) || {};
+      const eig = res.roots || [];
+      const McombNum = Mcomb.map((r) => r.map((g) => g.toComplex()));
+      const sols = [];
+      const seen = new Set();
+      for (const mu of eig) {
+        const A = [];                                    // A = Mᵀ − μI (left eigvec of M = null vec of A)
+        for (let i = 0; i < D; i++) { const row = new Array(D); for (let j = 0; j < D; j++) row[j] = McombNum[j][i]; A.push(row); }
+        for (let i = 0; i < D; i++) A[i][i] = { re: A[i][i].re - mu.re, im: A[i][i].im - mu.im };
+        const w = _complexNullVector(A, D);
+        if (!w) continue;
+        let jmax = 0, bestAbs = w[0].re * w[0].re + w[0].im * w[0].im;
+        for (let j = 1; j < D; j++) { const a = w[j].re * w[j].re + w[j].im * w[j].im; if (a > bestAbs) { bestAbs = a; jmax = j; } }
+        const sol = {};
+        for (const v of vars) {
+          let num = { re: 0, im: 0 };
+          for (let i = 0; i < D; i++) num = cadd(num, cmul(MkNum[v][i][jmax], w[i]));   // (wᵀ Mᵥ)[jmax]
+          sol[v] = cdiv(num, w[jmax]);
+        }
+        if (!satisfies(sol)) continue;
+        const nz = (x) => { const r = +x.toFixed(6); return r === 0 ? '0' : String(r); };   // normalize ±0
+        const key = vars.map((v) => nz(sol[v].re) + ',' + nz(sol[v].im)).join('|');
+        if (seen.has(key)) continue;
+        seen.add(key); sols.push(sol);
+      }
+      if (sols.length > bestSols.length) bestSols = sols;
+      if (bestSols.length >= D) break;
+    }
+    if (!bestSols.length) return { ok: false, reason: 'eigenvalue solve produced no verified solutions (clustered/non-radical?) — use the CAS bridge' };
+    return { ok: true, solutions: bestSols, dimension: D, method: 'eigenvalue', complete: bestSols.length >= D };
+  }
+
   // ---------------------------------------------------------------------------
   // runJob — a serialization-friendly op dispatcher: takes SERIALIZED input (term
   // lists from MPoly.termList, an order spec) and returns SERIALIZED output, so the
@@ -1554,7 +1709,7 @@
     if (kind === 'solveZeroDim') {
       const opts = Object.assign({}, payload.opts, { vars: payload.vars, solveVar: payload.solveVar }, onProgress ? { onProgress } : {});
       const res = solveZeroDim(polys, opts);
-      const out = { ok: res.ok, reason: res.reason, dimension: res.dimension, univariateDegree: res.univariateDegree };
+      const out = { ok: res.ok, reason: res.reason, dimension: res.dimension, univariateDegree: res.univariateDegree, method: res.method, eliminatedVars: res.eliminatedVars, shapePosition: res.shapePosition };
       if (res.ok) out.solutions = res.solutions;       // {var:{re,im}} — JSON-safe
       return out;
     }
@@ -1835,7 +1990,8 @@
     monoKey, monoCmp,
     mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, reduceGroebner, saturate,
-    leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim, runJob,
+    leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
+    multiplicationMatrix, solveByEigenvalues, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
   };

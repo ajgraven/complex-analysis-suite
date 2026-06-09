@@ -600,6 +600,48 @@ module.exports = async function run() {
          rl.ok && rl.solutions.length === 1 && rl.eliminatedVars === 3 && near(p.x.re, 1) && near(p.y.re, 2) && near(p.z.re, 3));
     }
 
+    // Tier-2 eigenvalue (Möller–Stetter) solving: solves zero-dim ideals that are NOT
+    // in shape position — the gap the shape-lemma path rejects. ⟨x²−1, y²−1⟩ has 4
+    // solutions {±1}×{±1} but no single variable expresses the others, so the lex
+    // basis is not in shape position; eigenvalue solving handles it.
+    {
+      const near = (a, b) => Math.abs(a - b) < 1e-6;
+      const nz = (x) => { const r = +x.toFixed(4); return r === 0 ? '0' : String(r); };
+      const setOf = (sols, vs) => sols.map((s) => vs.map((v) => nz(s[v].re) + ',' + nz(s[v].im)).join('|')).sort().join(' ; ');
+      const grid = [mv('x').pow(2).sub(mi(1)), mv('y').pow(2).sub(mi(1))];
+
+      const eig = S.solveByEigenvalues(grid, {});
+      ok('solveByEigenvalues: ⟨x²−1, y²−1⟩ → 4 complete solutions', eig.ok && eig.solutions.length === 4 && eig.complete === true);
+      ok('solveByEigenvalues: solutions are exactly {±1}×{±1}',
+         setOf(eig.solutions, ['x', 'y']) === '-1,0|-1,0 ; -1,0|1,0 ; 1,0|-1,0 ; 1,0|1,0');
+      ok('solveByEigenvalues: every solution satisfies the system',
+         eig.solutions.every((s) => grid.every((g) => { const z = g.evalComplex(s); return near(z.re, 0) && near(z.im, 0); })));
+
+      // solveZeroDim now FALLS BACK to eigenvalue solving on this non-shape system
+      const sz = S.solveZeroDim(grid, {});
+      ok('solveZeroDim: falls back to the eigenvalue method on a non-shape-position ideal',
+         sz.ok && sz.solutions.length === 4 && sz.method === 'eigenvalue' && sz.shapePosition === false);
+      ok('solveZeroDim: opts.noEigen disables the fallback (returns a clear reason)',
+         S.solveZeroDim(grid, { noEigen: true }).ok === false);
+
+      // complex roots, non-shape: ⟨x²+1, y²+1⟩ → (±i)×(±i)
+      const cgrid = [mv('x').pow(2).add(mi(1)), mv('y').pow(2).add(mi(1))];
+      const ce = S.solveByEigenvalues(cgrid, {});
+      ok('solveByEigenvalues: ⟨x²+1, y²+1⟩ → 4 solutions (±i)×(±i)',
+         ce.ok && ce.solutions.length === 4 && ce.solutions.every((s) => near(Math.abs(s.x.im), 1) && near(s.x.re, 0) && near(Math.abs(s.y.im), 1) && near(s.y.re, 0)));
+
+      // a SHAPE-position system: eigenvalue and shape-lemma agree on the solution set
+      const cl = [mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').sub(mv('y'))];
+      ok('solveByEigenvalues agrees with the shape-lemma on a shape-position system',
+         setOf(S.solveByEigenvalues(cl, {}).solutions, ['x', 'y']) === setOf(S.solveZeroDim(cl, { noEigen: true }).solutions, ['x', 'y']));
+
+      // multiplicationMatrix sanity: M_x for ⟨x²−1,y²−1⟩ squares to the identity on R/I
+      const o = S.monomialOrder('grevlex', ['x', 'y']);
+      const G = S.buchberger(grid, o);
+      const mm = S.multiplicationMatrix(G, o, ['x', 'y'], 'x');
+      ok('multiplicationMatrix: quotient dimension is 4 (the solution count)', mm.D === 4);
+    }
+
     // Serialization (worker boundary): MPoly ⇄ term list round-trip, and runJob —
     // the serialized op dispatcher used by the Web-Worker offload (sym-worker.js).
     {
@@ -622,6 +664,10 @@ module.exports = async function run() {
       const rs = S.runJob('solveZeroDim', { polys: [mv('x').pow(2).sub(mi(2)), mv('y').sub(mv('x'))].map((q) => q.termList()), vars: ['x', 'y'], solveVar: 'x' });
       ok('runJob solveZeroDim: 2 solutions x=±√2 (JSON-safe)',
          rs.ok && rs.solutions.length === 2 && rs.solutions.every((s) => Math.abs(Math.abs(s.x.re) - Math.SQRT2) < 1e-7));
+      // runJob solveZeroDim on a NON-shape ideal → eigenvalue fallback survives the worker boundary
+      const rgrid = S.runJob('solveZeroDim', { polys: [mv('x').pow(2).sub(mi(1)), mv('y').pow(2).sub(mi(1))].map((q) => q.termList()), vars: ['x', 'y'] });
+      ok('runJob solveZeroDim: eigenvalue fallback returns 4 JSON-safe solutions (method tagged)',
+         rgrid.ok && rgrid.solutions.length === 4 && rgrid.method === 'eigenvalue');
       ok('runJob: unknown op throws', (() => { try { S.runJob('nope', {}); return false; } catch (e) { return /unknown/i.test(String(e.message || e)); } })());
     }
   }

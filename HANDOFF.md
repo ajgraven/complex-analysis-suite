@@ -16,7 +16,7 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `99c6c277f5`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `4f3e44468f`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
@@ -50,8 +50,13 @@ its own merged PR), with one feature **in progress on a branch**:
   linear-substitution preprocessing** (`Sym.linearReduce`: strip degree-1-with-constant-coeff
   variables before solving, lift them back; integrated into `solveZeroDim`) is done (strips the QD
   gauge + general linear vars — modest for the cleared-denominator conjugate model, but a correct,
-  portable, zero-risk solve-class win). Next: Tier 2 (eigenvalue/quotient-ring solver to remove the
-  shape-position failure) and Tier 3 (signature-based GVW Buchberger).
+  portable, zero-risk solve-class win). **Tier 2 — eigenvalue/quotient-ring solving** is done
+  (`Sym.solveByEigenvalues` + `multiplicationMatrix`: Möller–Stetter multiplication matrices from the
+  standard monomials → generic combination → characteristic polynomial via Bareiss + the Durand–Kerner
+  finder → per-eigenvalue left eigenvector → Rayleigh read-off; `solveZeroDim` now **falls back to it
+  whenever the lex basis is not in shape position**, so it solves every radical zero-dim ideal — the
+  gap the shape-lemma rejected, e.g. ⟨x²−1, y²−1⟩→4 solutions). Next: Tier 3 (signature-based GVW
+  Buchberger). See `GROEBNER_INVESTIGATION.md`.
 - **Symbolic QD equation generator** (`feature/symbolic-qd-equations`, NOT yet merged) — a new
   symbolic-algebra track: `app/sym-core.js` (`QD.Sym`, exact Rational/Gaussian/MPoly/RatFn +
   factored-denominator `FRatFn` + field-generic power series with Lagrange reversion) and

@@ -59,7 +59,7 @@ const FLOORS = {
   solvers: 30, direct: 1, schwarz: 20, 'param-slice': 15, sphere: 5,
   cusps: 5, 'cusp-accuracy': 5, symmetry: 2, 'thesis-examples': 8, faber: 8,
   riemann: 1, 'parse-check': 3, worker: 3, 'ui-domain-plot': 1, 'schwarz-ui': 1,
-  'ui-inputs': 1, cmax: 3, observables: 5, 'sym-core': 66, 'qd-equations': 25, 'qd-constraints': 12,
+  'ui-inputs': 1, cmax: 3, observables: 5, 'sym-core': 74, 'qd-equations': 25, 'qd-constraints': 12,
   'algebra-store': 14, manifest: 3,
 };
 const DEFAULT_FLOOR = 3;
