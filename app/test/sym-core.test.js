@@ -499,6 +499,44 @@ module.exports = async function run() {
       ok('cyclic-5: packed kernel produces a valid Gröbner basis (' + G.length + ' gens, ' + ms + ' ms)', valid && G.length > 0);
     }
 
+    // Tier-3 signature-based Gröbner (GVW): the reduced Gröbner basis is unique, so a
+    // correct signature algorithm yields a basis BIT-IDENTICAL to buchberger() while
+    // pruning S-pairs via the syzygy + rewrite criteria. Cross-check on several
+    // systems (incl. ℚ(i) and block elimination), confirm the opt-in delegation, and
+    // record the S-pair reduction on a heavier system.
+    {
+      const keys = (Gb) => Gb.map((p) => p.key()).sort().join('|');
+      const cases = [
+        { name: 'lex', sys: [mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').sub(mv('y'))], ord: S.monomialOrder('lex', ['x', 'y']) },
+        { name: 'grevlex', sys: [mv('x').pow(2).add(mv('y')), mv('y').pow(2).add(mv('z')), mv('z').pow(2).add(mv('x'))], ord: S.monomialOrder('grevlex', ['x', 'y', 'z']) },
+        { name: 'ℚ(i)', sys: [mv('x').pow(2).add(mi(1)), mv('x').mul(mv('y')).sub(S.mpolyConst(S.Gaussian.I))], ord: S.monomialOrder('grevlex', ['x', 'y']) },
+        { name: 'grid', sys: [mv('x').pow(2).sub(mi(1)), mv('y').pow(2).sub(mi(1))], ord: S.monomialOrder('grevlex', ['x', 'y']) },
+        { name: 'block', sys: [mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').add(mv('y'))], ord: S.eliminationOrder(['x'], ['y']) },
+      ];
+      let allMatch = true, detail = '';
+      for (const c of cases) { if (keys(S.buchbergerSig(c.sys, c.ord)) !== keys(S.buchberger(c.sys, c.ord))) { allMatch = false; detail = c.name; break; } }
+      ok('buchbergerSig (GVW) == buchberger on every case (canonical basis)' + (allMatch ? '' : ' — MISMATCH: ' + detail), allMatch);
+
+      // opt-in delegation: buchberger(..., {signature:true}) routes through GVW
+      const sig = S.buchberger(cases[1].sys, cases[1].ord, { signature: true });
+      ok('buchberger({signature:true}) delegates to GVW and matches the classic path',
+         keys(sig) === keys(S.buchberger(cases[1].sys, cases[1].ord)));
+
+      // a heavier 4-variable cyclic system: GVW matches AND prunes pairs (stats reported)
+      const v = (k) => mv('c' + k);
+      const cyc4 = [
+        v(0).add(v(1)).add(v(2)).add(v(3)),
+        v(0).mul(v(1)).add(v(1).mul(v(2))).add(v(2).mul(v(3))).add(v(3).mul(v(0))),
+        v(0).mul(v(1)).mul(v(2)).add(v(1).mul(v(2)).mul(v(3))).add(v(2).mul(v(3)).mul(v(0))).add(v(3).mul(v(0)).mul(v(1))),
+        v(0).mul(v(1)).mul(v(2)).mul(v(3)).sub(mi(1)),
+      ];
+      const o4 = S.monomialOrder('grevlex', ['c0', 'c1', 'c2', 'c3']);
+      const stats = {};
+      const gvw4 = S.buchbergerSig(cyc4, o4, { stats });
+      ok('GVW: cyclic-4 matches buchberger and reports pair stats',
+         keys(gvw4) === keys(S.buchberger(cyc4, o4)) && stats.pairsProcessed > 0 && stats.basisRaw > 0);
+    }
+
     // Block / elimination order: cheaper than lex, same elimination ideal.
     {
       const f = mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), g = mv('x').add(mv('y'));

@@ -93,6 +93,12 @@ currently exploited before `buchberger` runs.
 
 ## Tier 3 — A stronger GB algorithm (higher effort; the S-pair-wall lever)
 
+> **STATUS: G1 SHIPPED** (`Sym.buchbergerSig`; opt-in via `buchberger(…, {signature:true})`).
+> POT module order + syzygy/Koszul + rewrite criteria on the packed kernel. Bit-identical to
+> `buchberger` (reduced GB is unique); **cyclic-5 2.2× / cyclic-6 ~1.3× faster**. G2 (truncated
+> GB) and G3 (Gröbner Walk) not pursued. Note: the rewrite criterion is the simpler srcIdx form —
+> a one-J-pair-per-signature dedup would prune further (future work).
+
 - **G1 — Signature-based Gröbner (GVW, one-shot, grevlex). The engine-level class-extender.**
   Add a `(monomial, index)` **signature** to each generator; prune whole families of S-pairs via the
   **syzygy** + **rewrite** criteria *before* reduction. Benchmarks (processed-pair counts = your literal

@@ -1149,6 +1149,122 @@
     return B;
   }
 
+  // shift a packed poly by a monomial t: each term's exponent vector += t.
+  function _ppShift(p, t) { const out = new Map(); for (const term of p.values()) { const e = _pMul(t, term.e); out.set(_pKey(e), { e, coeff: term.coeff }); } return out; }
+
+  // ===========================================================================
+  // Signature-based Gröbner basis — GVW (Gao–Volny–Wang) on the packed kernel (Tier 3).
+  //
+  // Each labeled polynomial carries a SIGNATURE (monomial · e_index) = the leading term
+  // of its provenance in the free module Rᵐ. Two history-based criteria prune whole
+  // families of S-pairs BEFORE reduction — the SYZYGY criterion (a J-pair whose
+  // signature is a multiple of a known syzygy signature reduces to 0) and the REWRITE
+  // criterion (keep only the newest generator per signature). A "J-pair" is a single
+  // multiple t·(s,v) (the larger-signature side); REGULAR reduction (only steps that
+  // strictly lower the signature) handles the cancellation. The polynomials of the
+  // resulting signature basis form a Gröbner basis → reduced here to the SAME canonical
+  // basis as buchberger() (the reduced GB is unique, so this is the correctness oracle).
+  // Module order: TOP (term-over-position) — any module order is correct.
+  // ===========================================================================
+  function buchbergerSig(polys, order, opts) {
+    opts = opts || {};
+    const ord = (order && order.cmp) ? order : monomialOrder(order || 'grevlex');
+    const stats = opts.stats || {};
+    const caps = {
+      maxBasis: opts.maxBasis != null ? opts.maxBasis : GROEBNER_MAX_BASIS,
+      maxSteps: opts.maxSteps != null ? opts.maxSteps : GROEBNER_MAX_STEPS,
+      maxDegree: opts.maxDegree != null ? opts.maxDegree : GROEBNER_MAX_DEGREE,
+      maxTerms: opts.maxTerms != null ? opts.maxTerms : GROEBNER_MAX_TERMS,
+      onProgress: typeof opts.onProgress === 'function' ? opts.onProgress : null,
+    };
+    const cleaned = (polys || []).filter((p) => p && !p.isZero());
+    if (!cleaned.length) return [];
+    const allVars = new Set();
+    for (const p of cleaned) for (const v of p.vars()) allVars.add(v);
+    const ctx = _packedContext(ord, [...allVars]);
+    const F = cleaned.map((p) => _ppFromMPoly(ctx, p));
+    const m = F.length;
+    const ONE = new Int32Array(ctx.n);
+
+    // signature = { sm: packed monomial, si: index }; POT order (position-over-term):
+    // index primary (lower index processed first → INCREMENTAL, like F5), then term order.
+    // POT lets every lower-index basis element regular-reduce a higher-index polynomial
+    // (its signature is automatically smaller), which is what makes signatures efficient.
+    const sigCmp = (a, b) => { if (a.si !== b.si) return a.si - b.si; return ctx.cmp(a.sm, b.sm); };
+    const sigDivides = (g, s) => g.si === s.si && _pDivV(s.sm, g.sm) !== null;   // g | s
+    const lead = (p) => _ppLeading(ctx, p);
+
+    const G = [];            // { sm, si, p, lm, lc }
+    const Syz = [];          // syzygy signatures { sm, si }
+    let P = [];              // J-pairs / initial labeled polys: { sm, si, p, srcIdx }
+    for (let i = 0; i < m; i++) P.push({ sm: ONE, si: i, p: F[i], srcIdx: -1 });
+
+    const isRewritable = (cand) => { for (let k = cand.srcIdx + 1; k < G.length; k++) if (sigDivides(G[k], cand)) return true; return false; };
+    const jPair = (a, ai, b, bi) => {
+      const t = _pLcmV(a.lm, b.lm);
+      const ta = _pDivV(t, a.lm), tb = _pDivV(t, b.lm);
+      const sa = { sm: _pMul(ta, a.sm), si: a.si }, sb = { sm: _pMul(tb, b.sm), si: b.si };
+      const c = sigCmp(sa, sb);
+      if (c === 0) return null;                       // equal signatures ⇒ syzygy, no J-pair
+      return c > 0 ? { sm: sa.sm, si: sa.si, p: _ppShift(a.p, ta), srcIdx: ai }
+                   : { sm: sb.sm, si: sb.si, p: _ppShift(b.p, tb), srcIdx: bi };
+    };
+    // regular signature reduction of cand.p (signature held at cand): only subtract a
+    // multiple whose signature is STRICTLY below cand — keeps the leading signature fixed.
+    const sigReduce = (cand) => {
+      const p = new Map(); for (const [k, t] of cand.p) p.set(k, { e: t.e, coeff: t.coeff });
+      let guard = 0;
+      while (p.size) {
+        const lt = lead(p);
+        let reduced = false;
+        for (const g of G) {
+          const md = _pDivV(lt.e, g.lm);
+          if (md === null) continue;
+          if (sigCmp({ sm: _pMul(md, g.sm), si: g.si }, cand) >= 0) continue;   // not signature-lowering
+          _ppSubTermTimesPoly(p, md, lt.coeff.div(g.lc), g.p);
+          reduced = true;
+          break;
+        }
+        if (!reduced) break;                          // lead term is regular-reduced
+        if (++guard > 2e6) throw new Error('buchbergerSig: non-terminating reduction (guard tripped)');
+      }
+      return p;
+    };
+
+    let steps = 0, generated = m;
+    while (P.length) {
+      if (++steps > caps.maxSteps) throw new Error('buchbergerSig: exceeded ' + caps.maxSteps + ' signature steps; use CAS export.');
+      let bi = 0;
+      for (let k = 1; k < P.length; k++) if (sigCmp(P[k], P[bi]) < 0) bi = k;
+      const cand = P.splice(bi, 1)[0];
+      if (Syz.some((z) => sigDivides(z, cand))) continue;     // syzygy criterion
+      if (isRewritable(cand)) continue;                       // rewrite criterion
+      const r = sigReduce(cand);
+      if (caps.onProgress) caps.onProgress({ basis: G.length, pairs: P.length, steps });
+      if (r.size === 0) { Syz.push({ sm: cand.sm, si: cand.si }); continue; }
+      const lt = lead(r);
+      if (ctx.tdeg(lt.e) > caps.maxDegree) throw new Error('buchbergerSig: generator degree exceeds the cap (' + caps.maxDegree + '); use CAS export.');
+      if (r.size > caps.maxTerms) throw new Error('buchbergerSig: a generator reached ' + r.size + ' terms; use CAS export.');
+      const lp = { sm: cand.sm, si: cand.si, p: r, lm: lt.e, lc: lt.coeff };
+      const idx = G.length;
+      for (let gi = 0; gi < G.length; gi++) {
+        const g = G[gi];
+        // F5 / Koszul syzygy criterion: the principal syzygy lm(g)·sig(lp) vs lm(lp)·sig(g)
+        // is a known syzygy — register its (larger) signature so future J-pairs that are
+        // its multiples are pruned before reduction. This is what makes signatures fast.
+        const s1 = { sm: _pMul(g.lm, lp.sm), si: lp.si }, s2 = { sm: _pMul(lp.lm, g.sm), si: g.si };
+        Syz.push(sigCmp(s1, s2) >= 0 ? s1 : s2);
+        const jp = jPair(lp, idx, g, gi); if (jp) { P.push(jp); generated++; }
+      }
+      G.push(lp);
+      if (G.length > caps.maxBasis) throw new Error('buchbergerSig: basis exceeded ' + caps.maxBasis + ' generators; use CAS export.');
+    }
+    stats.pairsProcessed = steps; stats.pairsGenerated = generated; stats.basisRaw = G.length;
+    const raw = G.map((g) => g.p);
+    if (opts.reduced === false) return raw.map((t) => _ppToMPoly(ctx, t));
+    return _reduceGroebnerPacked(ctx, raw).map((t) => _ppToMPoly(ctx, t));
+  }
+
   // Caps — Buchberger can blow up super-exponentially, so bound the run and throw
   // a clear "use CAS export" error rather than hanging (mirrors RESULTANT_MATRIX_CAP).
   // All overridable via opts {maxBasis, maxSteps, maxDegree, maxTerms}. These are set
@@ -1179,6 +1295,7 @@
   // (called per reduction; the seam the Web-Worker offload reports/cancels through).
   function buchberger(polys, order, opts) {
     opts = opts || {};
+    if (opts.signature) return buchbergerSig(polys, order, opts);   // opt-in signature/GVW path
     const ord = (order && order.cmp) ? order : monomialOrder(order || 'grevlex');
     const caps = {
       maxBasis: opts.maxBasis != null ? opts.maxBasis : GROEBNER_MAX_BASIS,
@@ -1989,7 +2106,7 @@
     polyFromTermList: (list) => MPoly.fromTermList(list),
     monoKey, monoCmp,
     mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv,
-    monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, reduceGroebner, saturate,
+    monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, solveByEigenvalues, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
