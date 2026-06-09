@@ -571,6 +571,35 @@ module.exports = async function run() {
       ok('solveZeroDim: a positive-dimensional system returns {ok:false}', bad.ok === false && /zero-dimensional/i.test(bad.reason));
     }
 
+    // Tier-1 linear-substitution preprocessing: linearReduce strips linear variables
+    // before Buchberger, and solveZeroDim lifts them back — same solution set, fewer
+    // variables in the residual (the lever that lets larger systems reach a solve).
+    {
+      const near = (a, b) => Math.abs(a - b) < 1e-9;
+      // {x²+y²−1, x−y, z−x}: z and x are linear ⇒ stripped, residual is univariate in y
+      const sys = [mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').sub(mv('y')), mv('z').sub(mv('x'))];
+      const lr = S.linearReduce(sys);
+      const rvars = new Set(lr.reduced.flatMap((p) => [...p.vars()]));
+      ok('linearReduce: eliminates the 2 linear variables (x, z)', lr.eliminated.length === 2 && lr.eliminated.map((e) => e.name).sort().join(',') === 'x,z');
+      ok('linearReduce: residual system is in the single surviving variable y', rvars.size === 1 && rvars.has('y'));
+      ok('linearReduce: not flagged inconsistent', lr.inconsistent === false);
+
+      const keyset = (R) => (R.solutions || []).map((s) => ['x', 'y', 'z'].map((v) => s[v].re.toFixed(6) + ',' + s[v].im.toFixed(6)).join('|')).sort().join(' ; ');
+      const withPre = S.solveZeroDim(sys, {});
+      const noPre = S.solveZeroDim(sys, { preprocess: false });
+      ok('solveZeroDim+preprocess: 2 solutions, reports eliminatedVars', withPre.ok && withPre.solutions.length === 2 && withPre.eliminatedVars === 2);
+      ok('solveZeroDim: preprocessing yields the SAME solution set as without', keyset(withPre) === keyset(noPre));
+      ok('solveZeroDim+preprocess: every lifted solution satisfies the full system',
+         withPre.solutions.every((s) => sys.every((eq) => { const v = eq.evalComplex(s); return near(v.re, 0) && near(v.im, 0); })));
+
+      // a fully-linear system collapses to a single point with no Buchberger at all
+      const lin = [mv('x').sub(mi(1)), mv('y').sub(mi(2)), mv('z').sub(mv('x')).sub(mv('y'))];
+      const rl = S.solveZeroDim(lin, {});
+      const p = (rl.solutions || [])[0] || {};
+      ok('solveZeroDim: fully-linear system → unique solution (1,2,3) via preprocessing only',
+         rl.ok && rl.solutions.length === 1 && rl.eliminatedVars === 3 && near(p.x.re, 1) && near(p.y.re, 2) && near(p.z.re, 3));
+    }
+
     // Serialization (worker boundary): MPoly ⇄ term list round-trip, and runJob —
     // the serialized op dispatcher used by the Web-Worker offload (sym-worker.js).
     {

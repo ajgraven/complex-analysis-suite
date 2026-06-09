@@ -1399,8 +1399,78 @@
   // reason } (not zero-dim / not shape position / no convergence → use the CAS bridge).
   // input: an array of MPolys (a system) or { G, order } (a precomputed GB).
   // ---------------------------------------------------------------------------
+  // Linear-substitution preprocessing (Tier 1). Repeatedly find a generator that is
+  // degree 1 in some variable v with a CONSTANT nonzero leading coefficient — i.e.
+  // c₁·v + c₀ with c₁ ∈ ℚ(i)\{0} and v ∉ c₀ — AND whose solved form v = −c₀/c₁ is
+  // itself LINEAR (total degree ≤ 1, so substituting it NEVER raises any generator's
+  // total degree). Solve v, substitute into every other generator (dropping this one),
+  // recurse to a fixpoint. Each step removes one variable for free, so the residual
+  // system handed to Buchberger/solveZeroDim is strictly smaller — often the
+  // difference between "reaches shape position / finishes" and "hangs" (the QD gauge
+  // and the locator/star rows are exactly such linear generators).
+  // Returns { reduced:[MPoly over the surviving vars], eliminated:[{name, expr}] (each
+  // expr already chained-substituted to the surviving vars, so a solution of `reduced`
+  // lifts to the eliminated vars by direct evaluation), inconsistent }.
+  function linearReduce(polys) {
+    let cur = (polys || []).filter((p) => p && !p.isZero()).map((p) => p.clone());
+    const eliminated = [];
+    let changed = true, inconsistent = false;
+    while (changed) {
+      changed = false;
+      for (let i = 0; i < cur.length && !changed; i++) {
+        const g = cur[i];
+        for (const v of g.vars()) {
+          if (g.degreeIn(v) !== 1) continue;
+          const cs = g.coeffsIn(v);                          // g = c₁·v + c₀
+          const c1 = cs[1];
+          if (c1.isZero() || c1.vars().size !== 0) continue; // need a nonzero CONSTANT leading coeff
+          const expr = cs[0].scale(Gaussian.fromInt(-1).div([...c1.terms.values()][0].coeff));   // v = −c₀/c₁
+          if (expr.totalDegree() > 1) continue;              // keep substitutions linear → no degree growth
+          const map = {}; map[v] = expr;
+          const next = [];
+          for (let j = 0; j < cur.length; j++) {
+            if (j === i) continue;
+            const s = cur[j].subst(map);
+            if (s.isZero()) continue;
+            if (s.vars().size === 0) inconsistent = true;    // a nonzero constant ⇒ no solutions
+            next.push(s);
+          }
+          for (const el of eliminated) el.expr = el.expr.subst(map);   // chain prior exprs to surviving vars
+          eliminated.push({ name: v, expr });
+          cur = next;
+          changed = true;
+          break;
+        }
+      }
+    }
+    return { reduced: cur, eliminated, inconsistent };
+  }
+  function _liftEliminated(partialSol, eliminated) {
+    const sol = Object.assign({}, partialSol);
+    for (const el of eliminated) sol[el.name] = el.expr.evalComplex(partialSol);
+    return sol;
+  }
+
   function solveZeroDim(input, opts) {
     opts = opts || {};
+    // Tier-1 preprocessing: strip linear variables first, solve the smaller residual
+    // system, then lift the eliminated variables back. Expands the solvable class
+    // (fewer variables ⇒ more systems reach zero-dim / shape position).
+    if (Array.isArray(input) && opts.preprocess !== false) {
+      const lr = linearReduce(input);
+      if (lr.eliminated.length) {
+        if (lr.inconsistent) return { ok: true, solutions: [], basis: [], dimension: 0, univariateDegree: 0, eliminatedVars: lr.eliminated.length };
+        if (lr.reduced.length === 0 || _ambientVars(lr.reduced).length === 0) {
+          return { ok: true, solutions: [_liftEliminated({}, lr.eliminated)], basis: [], dimension: 1, univariateDegree: 0, eliminatedVars: lr.eliminated.length };
+        }
+        const sub = solveZeroDim(lr.reduced, Object.assign({}, opts, { preprocess: false, vars: undefined, solveVar: undefined }));
+        if (!sub.ok) return sub;
+        return Object.assign({}, sub, {
+          solutions: sub.solutions.map((s) => _liftEliminated(s, lr.eliminated)),
+          eliminatedVars: lr.eliminated.length,
+        });
+      }
+    }
     let G1, o1, vars;
     if (Array.isArray(input)) {
       vars = opts.vars || _ambientVars(input);
@@ -1765,7 +1835,7 @@
     monoKey, monoCmp,
     mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, reduceGroebner, saturate,
-    leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, solveZeroDim, runJob,
+    leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
   };
