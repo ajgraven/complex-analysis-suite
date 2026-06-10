@@ -71,6 +71,7 @@
     if (!card || !content || !QE) return {};
 
     const repReim = $('#qdeq-rep-reim');
+    const w0Fix   = $('#qdeq-w0-fix');
     const capInp  = $('#qdeq-cap');
     const genBtn  = $('#qdeq-generate');
     const copyBtn = $('#qdeq-copy-latex');
@@ -173,6 +174,26 @@
           c.realEquations + ' equations / ' + c.realUnknowns +
           ' unknowns <span class="hint">(= 2·(n+d) reals; the +1 gauge fixes the rotational freedom)</span></div>');
       }
+      // φ(0) normalization line: fixed (the value is baked into the equations as an
+      // exact rational — the variable inventory drops w₀/w̄₀) or symbolic.
+      if (sys.w0Fixed) {
+        const fr = (pair) => (pair[1] === '1' ? pair[0] : pair[0] + '/' + pair[1]);
+        const ax = sys.w0Fixed.approx || { re: 0, im: 0 };
+        // provenance is data-derived: the default φ(0) is the centroid of the poles
+        let cRe = 0, cIm = 0;
+        const ps = (activeEnv && activeEnv.hData && activeEnv.hData.poles) || [];
+        for (const p of ps) { cRe += p.a.re; cIm += p.a.im; }
+        if (ps.length) { cRe /= ps.length; cIm /= ps.length; }
+        const isCentroid = ps.length && Math.hypot(ax.re - cRe, ax.im - cIm) < 1e-12;
+        const mode = isCentroid ? 'centroid of the poles (default)' : 'manual selection';
+        head.push('<div class="geom-row"><span class="key">φ(0) = w₀ fixed:</span> ' +
+          esc(QD.Complex ? QD.Complex.toString(ax, 6) : (ax.re + (ax.im >= 0 ? '+' : '') + ax.im + 'i')) +
+          ' <span class="hint">(exact ' + esc(fr(sys.w0Fixed.re)) + (sys.w0Fixed.im[0] === '0' ? '' : ' + ' + esc(fr(sys.w0Fixed.im)) + '·i') +
+          '; ' + esc(mode) + ' — change under Map parameters ▸ Riemann map center φ(0))</span></div>');
+      } else {
+        head.push('<div class="geom-row"><span class="key">φ(0) = w₀:</span> ' +
+          '<span class="hint">symbolic parameter (tick “Fix φ(0)” to substitute the selected center)</span></div>');
+      }
       const verified = res.max < 1e-6;
       head.push('<div class="geom-row"><span class="' + (verified ? 'ok' : 'warn') + '">' +
         (verified ? '✓' : '⚠') + '</span> <span class="key">self-check:</span> ' +
@@ -225,9 +246,14 @@
       const cap = clampInt(capInp ? capInp.value : 6, 1, 12, 6);
       if (capInp && String(cap) !== capInp.value) capInp.value = String(cap);
 
+      // Fix φ(0)=w₀ to the solve's selected center (the Map-parameters φ(0) control:
+      // CENTROID OF THE POLES by default, or the user's manual value). Changing the
+      // selection re-solves and republishes, which regenerates the system here.
+      const w0Sel = (w0Fix && !w0Fix.checked) ? null : (activeEnv.w0Used || phi.w0);
+
       let displaySys, res;
       try {
-        const sys = QE.generateClassicalBounded(hData, { maxPoleOrder: cap });
+        const sys = QE.generateClassicalBounded(hData, { maxPoleOrder: cap, w0: w0Sel || undefined });
         if (model === 'reim') {
           displaySys = QE.reimSplit(sys);
           res = QE.residualReimAtSolution(displaySys, phi, hData);
@@ -287,6 +313,7 @@
     // Hand off to the full Algebra workspace (tab installed separately; resolved at click time).
     if (openBtn) openBtn.addEventListener('click', () => { if (ctx.openAlgebra) ctx.openAlgebra(); });
     if (capInp)  capInp.addEventListener('input', generateDebounced);
+    if (w0Fix)   w0Fix.addEventListener('change', generate);
     const repInputs = card.querySelectorAll('input[name="qdeq-rep"]');
     for (let i = 0; i < repInputs.length; i++) repInputs[i].addEventListener('change', generate);
 

@@ -38,6 +38,7 @@
     const redoStack = [];
     let model = 'conjugate';
     let realVars = [];            // base (primal) variables ASSERTED REAL (z̄ⱼ ≡ zⱼ, …)
+    let w0Fixed = null;           // φ(0) fixed: { re:[n,d], im:[n,d] } (BigInt strings) or null
 
     function nid() { return 'n' + (++seq); }
 
@@ -60,17 +61,34 @@
     }
     function _applyReality(poly) { const r = _realityRename(); return r ? poly.relabel(r) : poly; }
 
+    // --- fixed φ(0): substitute the seed system's w₀ value into later polys -----
+    // When the seed system was generated with a FIXED Riemann-map center (system
+    // .w0Fixed from generateClassicalBounded(…, {w0}) — the UI defaults it to the
+    // centroid of the poles), the seeded equations already lack w₀/w̄₀. But the
+    // univalence CONSTRAINTS rebuild φ from scratch with the w₀ symbol (e.g. the
+    // star form's φ − w₀), so the same exact value must be substituted into every
+    // constraint poly for the workspace to stay on one normalization.
+    function _applyW0(poly) {
+      if (!w0Fixed) return poly;
+      const vs = poly.vars();
+      if (!vs.has('w0') && !vs.has('wb0')) return poly;
+      const S = getSym();
+      const g = S.gauss(S.rat(BigInt(w0Fixed.re[0]), BigInt(w0Fixed.re[1])),
+                        S.rat(BigInt(w0Fixed.im[0]), BigInt(w0Fixed.im[1])));
+      return poly.subst({ w0: S.mpolyConst(g), wb0: S.mpolyConst(g.conj()) });
+    }
+
     // --- snapshot-based undo (sizes are small; snapshots beat inverse-op bookkeeping) ---
     // The display `order` map is part of the snapshot so reordering is undoable and
     // so undo/redo of structural ops restores the exact card layout too. Node
     // objects are never mutated in place (only added), so a shallow node-map copy
     // is a safe snapshot; `order` is copied because moveNode mutates it.
     function snapshot() {
-      return { nodes: new Map([...nodes].map(([k, v]) => [k, v])), edges: edges.slice(), order: new Map(order), model, seq, realVars: realVars.slice() };
+      return { nodes: new Map([...nodes].map(([k, v]) => [k, v])), edges: edges.slice(), order: new Map(order), model, seq, realVars: realVars.slice(), w0Fixed };
     }
     function restore(s) {
       nodes.clear(); for (const [k, v] of s.nodes) nodes.set(k, v);
-      edges = s.edges.slice(); order = new Map(s.order || []); model = s.model; seq = s.seq; realVars = (s.realVars || []).slice();
+      edges = s.edges.slice(); order = new Map(s.order || []); model = s.model; seq = s.seq; realVars = (s.realVars || []).slice(); w0Fixed = s.w0Fixed || null;
     }
     function checkpoint() { undoStack.push(snapshot()); redoStack.length = 0; }
     function undo() { if (!undoStack.length) return false; redoStack.push(snapshot()); restore(undoStack.pop()); return true; }
@@ -126,7 +144,7 @@
     function maybeAddConjugate(node) {
       if (node.rel === '>') return null;                    // Hermitian inequality: one real condition
       const QC = getQC(); if (!QC || !QC.conjMPoly) return null;
-      const conj = _applyReality(QC.conjMPoly(node.poly));   // reality folds barred→primal post-conjugation
+      const conj = _applyReality(_applyW0(QC.conjMPoly(node.poly)));   // reality folds barred→primal post-conjugation; fixed w₀ stays substituted
       if (node.poly.sub(conj).isZero() || node.poly.add(conj).isZero()) return null;   // self-conjugate (incl. under reality)
       for (const m of nodes.values()) if (m.poly.equals(conj)) return null;            // already present
       const comp = addNode({
@@ -151,10 +169,11 @@
       checkpoint();
       reset();
       model = system.model || 'conjugate';
+      w0Fixed = system.w0Fixed || null;   // remember the fixed φ(0) for later constraints
       const primals = [];
       for (const block of ['locator', 'star', 'gauge']) {
         for (const item of system.blocks[block]) {
-          const poly = _applyReality(item.eq);
+          const poly = _applyReality(_applyW0(item.eq));
           if (poly.isZero()) continue;                       // reality made it trivial
           primals.push(addNode({
             id: nid(), kind: 'generated', poly, rel: '=',
@@ -180,7 +199,7 @@
       checkpoint();
       const made = [];
       for (const d of descs) {
-        const poly = _applyReality(d.poly);
+        const poly = _applyReality(_applyW0(d.poly));
         if (poly.isZero()) continue;
         made.push(addNode({
           id: nid(), kind: 'constraint', poly, rel: d.rel,
@@ -524,6 +543,7 @@
     function exportDAG() {
       return {
         model,
+        w0Fixed,
         nodes: list().map((n) => ({
           id: n.id, kind: n.kind, label: n.label, rel: n.rel, column: n.column,
           provenance: n.provenance, terms: n.poly.termList(),
@@ -552,6 +572,7 @@
       get model() { return model; },
       set model(m) { model = m; },
       get realVars() { return realVars.slice(); },
+      get w0Fixed() { return w0Fixed; },
       get size() { return nodes.size; },
     };
   }

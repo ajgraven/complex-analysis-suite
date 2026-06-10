@@ -125,10 +125,18 @@
       if (!activeEnv) { setStatus(STR.noSolve || 'No classical bounded QD solved yet.'); return false; }
       try {
         clearError();
-        const sys = QE.generateClassicalBounded(activeEnv.hData, { maxPoleOrder: lastCap });
+        // φ(0)=w₀ fixed by default: substitute the solve's selected center (the Map-
+        // parameters φ(0) control — centroid of the poles unless set manually), so
+        // w₀/w̄₀ drop out of the workspace variables. Untick #alg-w0-fix for the
+        // fully-symbolic system.
+        const w0cb = $('#alg-w0-fix');
+        const fixW0 = !w0cb || w0cb.checked;
+        const w0Sel = fixW0 ? (activeEnv.w0Used || (activeEnv.primary && activeEnv.primary.phi && activeEnv.primary.phi.w0)) : undefined;
+        const sys = QE.generateClassicalBounded(activeEnv.hData, { maxPoleOrder: lastCap, w0: w0Sel });
         const reals = [...realSel];
         store.seedFromSystem(sys, { realVars: reals });
         setStatus((STR.seeded || 'Seeded') + ' ' + store.size + ' equations (incl. conjugates; ' + sys.n + ' pole' + (sys.n === 1 ? '' : 's') + ', order ' + sys.d + ')' +
+          (w0Sel ? '; φ(0) fixed to ' + (QD.Complex ? QD.Complex.toString(w0Sel, 4) : '') : '; w₀ symbolic') +
           (reals.length ? '; assuming ' + reals.map(latexPlain).join(', ') + ' real' : '') + '.');
         rerender();
         return true;
@@ -161,6 +169,11 @@
         '  <span id="alg-error-msg" class="algebra-error-msg"></span>' +
         '  <button id="alg-error-close" class="algebra-error-close" type="button" title="Dismiss">×</button>' +
         '</div>' +
+        // Fixed φ(0): bake the solve's selected Riemann-map center (centroid of the
+        // poles by default) into the seeded equations — w₀/w̄₀ stop being variables.
+        '<div class="row" style="margin-top:4px; gap:4px; align-items:center;">' +
+        '  <label style="font-size:11px;" data-str-title="tooltips.algFixW0">' +
+        '    <input type="checkbox" id="alg-w0-fix" checked> fix φ(0) = w₀ (selected center; centroid by default)</label></div>' +
         // Assume-real picker: assert chosen variables are real, then re-seed simplified.
         '<div class="row" style="margin-top:4px; gap:4px; align-items:center;">' +
         '  <span style="font-size:11px;">Assume real:</span><span id="alg-real-pick" class="algebra-picker"></span>' +
@@ -211,6 +224,8 @@
       const helpBtn = $('#alg-help-toggle');
       if (helpBtn) helpBtn.addEventListener('click', () => { const h = $('#alg-help'); if (h) h.classList.toggle('hidden'); });
       $('#alg-seed').addEventListener('click', seedFromCurrent);
+      const w0FixCb = $('#alg-w0-fix');
+      if (w0FixCb) w0FixCb.addEventListener('change', () => { if (store.size) seedFromCurrent(); });
       $('#alg-undo').addEventListener('click', () => { if (store.undo()) rerender(); });
       $('#alg-redo').addEventListener('click', () => { if (store.redo()) rerender(); });
       $('#alg-fit').addEventListener('click', () => { if (canvas) canvas.fit(); });

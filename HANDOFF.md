@@ -16,7 +16,7 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `643877ab31`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `e3d98b547d`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
@@ -60,7 +60,15 @@ its own merged PR), with one feature **in progress on a branch**:
   syzygy/Koszul + rewrite criteria; opt-in via `buchberger(…, {signature:true})`). Produces a
   basis **bit-identical** to `buchberger` (the reduced GB is unique — the correctness oracle) while
   pruning S-pairs: **cyclic-5 2.2× faster, cyclic-6 ~1.3× faster**. All three investigation tiers
-  shipped. See `GROEBNER_INVESTIGATION.md`.
+  shipped. See `GROEBNER_INVESTIGATION.md`. **Selectable φ(0):** the Riemann-map center w₀ = φ(0)
+  (Map parameters ▸ "Riemann map center φ(0)": **centroid of the poles by default**, or manual) now
+  also drives the SYMBOLIC system — `generateClassicalBounded(hData, {w0})` substitutes the exact
+  ℚ(i) rationalization (0.2 → 1/5) for w₀/w̄₀ and drops them from the params (`system.w0Fixed`);
+  the equations card regenerates on any φ(0) change (default-on "Fix φ(0)" checkbox + value/
+  provenance line), `reimSplit`/`systemToExport` carry it, and the Algebra store remembers it
+  (`store.w0Fixed`, snapshot/undo/exportDAG) so univalence constraints that rebuild φ with the w₀
+  SYMBOL (the star form's φ−w₀) get the same substitution (sidebar "fix φ(0)" checkbox, default on
+  — 2 fewer workspace variables).
 - **Symbolic QD equation generator** (`feature/symbolic-qd-equations`, NOT yet merged) — a new
   symbolic-algebra track: `app/sym-core.js` (`QD.Sym`, exact Rational/Gaussian/MPoly/RatFn +
   factored-denominator `FRatFn` + field-generic power series with Lagrange reversion) and

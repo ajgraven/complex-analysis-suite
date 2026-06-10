@@ -300,6 +300,29 @@ module.exports = async function run() {
     }
   }
 
+  // ---- fixed φ(0): seed from a w₀-fixed system (the UI default = the centroid
+  //      of the poles, here 0 for the single disk pole); later constraints that
+  //      rebuild φ with the w₀ SYMBOL (e.g. the star form's φ − w₀) get the same
+  //      exact substitution, keeping the whole workspace on one normalization. ----
+  {
+    const sysFixed = QE.generateClassicalBounded(hData, { w0: { re: 0, im: 0 } });
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(sysFixed);
+    ok('w0Fixed: seeded workspace has no w0/wb0 variables',
+       st.variables().indexOf('w0') === -1 && st.variables().indexOf('wb0') === -1);
+    ok('w0Fixed: store records the fixed value', !!st.w0Fixed && st.w0Fixed.re[0] === '0' && st.w0Fixed.re[1] === '1');
+    ok('w0Fixed: same node count as the symbolic seeding (5 for the disk)', st.list().length === 5);
+    const made = st.addConstraint('star', hData);
+    ok('w0Fixed: star constraint (φ−w₀ form) gets the substitution — no w0/wb0 anywhere',
+       made.length > 0 && st.list().every((n) => !n.poly.vars().has('w0') && !n.poly.vars().has('wb0')));
+    ok('w0Fixed: undo keeps the fixed value', st.undo() && !!st.w0Fixed);
+    ok('w0Fixed: exportDAG carries w0Fixed', !!st.exportDAG().w0Fixed);
+    const st2 = QD.AlgebraStore.create();
+    st2.seedFromSystem(QE.generateClassicalBounded(hData));
+    ok('w0Fixed: a symbolic seed leaves w0Fixed null and keeps w0 as a variable',
+       st2.w0Fixed === null && st2.variables().indexOf('w0') !== -1);
+  }
+
   // ---- dimensionAsync (worker fallback) ----
   {
     const st = QD.AlgebraStore.create(); st.seedFromSystem(system);

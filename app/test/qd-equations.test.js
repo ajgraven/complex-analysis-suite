@@ -122,6 +122,53 @@ module.exports = async function run() {
     ok('order-8 (beyond default cap 6) throws a clear error rather than hanging', threw);
   }
 
+  // ---- φ(0) selection (opts.w0): fix the Riemann-map center in the equations.
+  //      The exact ℚ(i) rationalization of the chosen w₀ is substituted for the
+  //      w₀/w̄₀ symbols, dropping them from the parameter inventory. Oracle: the
+  //      TRANSLATED cardioid Ω+¼ has the exact map φ(z) = ¼ + z + z²/2 (node a=¼,
+  //      same C as the cardioid, w₀=¼; every value binary-exact). ----
+  {
+    const hData = { poles: [{ a: { re: 0.25, im: 0 }, principal: [{ re: 1.5, im: 0 }, { re: 0.5, im: 0 }] }] };
+    const phi = { unbounded: false, w0: { re: 0.25, im: 0 }, branches: [{ z: { re: 0, im: 0 }, A: [{ re: 1, im: 0 }, { re: 0.5, im: 0 }] }] };
+    const free = QE.generateClassicalBounded(hData);
+    ok('w0-fix: FREE system residual ≈0 at the exact translated-cardioid φ',
+       QE.residualAtSolution(free, phi, hData).max < 1e-10);
+
+    const fixed = QE.generateClassicalBounded(hData, { w0: { re: 0.25, im: 0 } });
+    const allVars = new Set();
+    for (const b of ['locator', 'star', 'gauge']) for (const it of fixed.blocks[b]) for (const v of it.eq.vars()) allVars.add(v);
+    ok('w0-fix: no equation mentions w0/wb0 after fixing', !allVars.has('w0') && !allVars.has('wb0'));
+    ok('w0-fix: params drop w0/wb0', fixed.vars.params.indexOf('w0') === -1 && fixed.vars.params.indexOf('wb0') === -1);
+    ok('w0-fix: exact rationalization 0.25 → 1/4',
+       !!fixed.w0Fixed && fixed.w0Fixed.re[0] === '1' && fixed.w0Fixed.re[1] === '4' && fixed.w0Fixed.im[0] === '0');
+    ok('w0-fix: FIXED system residual ≈0 at the exact φ',
+       QE.residualAtSolution(fixed, phi, hData).max < 1e-10);
+
+    const rs = QE.reimSplit(fixed);
+    ok('w0-fix: re/im split drops wx0/wy0 from params and carries w0Fixed',
+       rs.vars.params.indexOf('wx0') === -1 && rs.vars.params.indexOf('wy0') === -1 && !!rs.w0Fixed);
+    ok('w0-fix: split residual ≈0 at the exact φ',
+       QE.residualReimAtSolution(rs, phi, hData).max < 1e-10);
+    ok('w0-fix: systemToExport records the fixed value', QE.systemToExport(fixed).w0Fixed.re[1] === '4');
+
+    // end-to-end: the SOLVER honors the same φ(0) selection (opts.w0), and the
+    // fixed system verifies against that genuinely-solved normalization
+    const sol = QD.solveInverseQD(hData, { w0: { re: 0.25, im: 0 } });
+    ok('w0-fix: solver succeeded with the selected φ(0)', !!(sol && sol.success), sol && sol.error);
+    if (sol && sol.success) {
+      ok('w0-fix: solver honored φ(0) = 1/4',
+         Math.hypot(sol.primary.phi.w0.re - 0.25, sol.primary.phi.w0.im) < 1e-12);
+      const res = QE.residualAtSolution(fixed, sol.primary.phi, hData);
+      ok('w0-fix: fixed-system residual ≈0 at the solver solution', res.max < 1e-6,
+         'max=' + res.max.toExponential(2));
+    }
+
+    // rationalization: repeating decimals come back as the simple fractions
+    const third = QE.generateClassicalBounded(hData, { w0: { re: 1 / 3, im: -2 / 7 } });
+    ok('w0-fix: 1/3 and −2/7 rationalize exactly',
+       third.w0Fixed.re.join('/') === '1/3' && third.w0Fixed.im.join('/') === '-2/7');
+  }
+
   // ---- Re/im split FAITHFULNESS. At an ARBITRARY (non-solution) reality-sliced
   //      point, each conjugate-model equation E must equal (Re-part) + i·(Im-part)
   //      of its split, evaluated at the matching real point. This proves the

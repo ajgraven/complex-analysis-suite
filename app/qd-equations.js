@@ -63,6 +63,39 @@
     wy0: 'wy0',
   };
 
+  // Best exact-rational representation of a float: the simplest p/q (continued
+  // fractions, q ≤ 10⁶) within 1e-12·max(1,|x|) — so user-style decimals come back
+  // exact (0.25 → 1/4, 1/3-as-float → 1/3) — else the 15-significant-digit decimal
+  // p/10^k (exactly the value the user sees printed). Returns [pBigInt, qBigInt].
+  function _ratApprox(x) {
+    if (!isFinite(x)) throw new Error('QDEquations: non-finite φ(0) component');
+    if (x === 0) return [0n, 1n];
+    const tol = 1e-12 * Math.max(1, Math.abs(x));
+    const sign = x < 0 ? -1n : 1n;
+    let a = Math.abs(x);
+    // continued-fraction convergents p/q with q capped
+    let p0 = 0, q0 = 1, p1 = 1, q1 = 0, v = a;
+    for (let i = 0; i < 40; i++) {
+      const ai = Math.floor(v);
+      const p2 = ai * p1 + p0, q2 = ai * q1 + q0;
+      if (q2 > 1e6) break;
+      p0 = p1; q0 = q1; p1 = p2; q1 = q2;
+      if (Math.abs(p1 / q1 - a) <= tol) return [sign * BigInt(p1), BigInt(q1)];
+      const frac = v - ai;
+      if (frac < 1e-15) break;
+      v = 1 / frac;
+    }
+    // fallback: the 15-significant-digit decimal, exactly
+    const s = Math.abs(x).toPrecision(15);
+    const m = /^(\d+)(?:\.(\d+))?(?:e([+-]\d+))?$/i.exec(s);
+    if (!m) throw new Error('QDEquations: cannot rationalize ' + x);
+    const digits = m[1] + (m[2] || '');
+    const exp = (m[3] ? parseInt(m[3], 10) : 0) - (m[2] ? m[2].length : 0);
+    let n = BigInt(digits), d = 1n;
+    if (exp >= 0) n *= 10n ** BigInt(exp); else d = 10n ** BigInt(-exp);
+    return [sign * n, d];
+  }
+
   // Exact integer binomial coefficient C(n, i) as a BigInt.
   function binomBig(n, i) {
     if (i < 0 || i > n) return 0n;
@@ -180,13 +213,39 @@
     }
     blocks.gauge.push({ label: '(gauge)', eq: gauge });
 
+    // FIX φ(0): opts.w0 = {re, im} selects the Riemann-map center w₀ = φ(0) (the
+    // normalization choice; the solve UI defaults it to the CENTROID OF THE POLES).
+    // The exact ℚ(i) rationalization is substituted for the w₀/w̄₀ symbols in every
+    // equation, so the system is regenerated FOR that normalization: w₀ stops being
+    // a symbolic parameter (2 fewer variables downstream — Gröbner/Algebra win) and
+    // the equations display with the concrete center baked in. Only the locator
+    // block actually contains w₀ (the (★) rows use the local expansion, which drops
+    // the constant; the gauge never had it), but the substitution is applied
+    // uniformly. system.w0Fixed records the exact value (JSON-safe BigInt strings).
+    let w0Fixed = null;
+    if (opts.w0) {
+      const [rn, rd] = _ratApprox(opts.w0.re || 0);
+      const [im_n, im_d] = _ratApprox(opts.w0.im || 0);
+      const g = S.gauss(S.rat(rn, rd), S.rat(im_n, im_d));
+      const sub = {};
+      sub[V.w0] = S.mpolyConst(g);
+      sub[V.wb0] = S.mpolyConst(g.conj());
+      for (const name of ['locator', 'star', 'gauge']) {
+        blocks[name] = blocks[name].map((item) => ({ label: item.label, eq: item.eq.subst(sub) }));
+      }
+      w0Fixed = {
+        re: [rn.toString(), rd.toString()], im: [im_n.toString(), im_d.toString()],
+        approx: { re: opts.w0.re || 0, im: opts.w0.im || 0 },
+      };
+    }
+
     const unknowns = [];
     for (let i = 0; i < n; i++) {
       const j = i + 1;
       unknowns.push(V.z(j), V.zb(j));
       for (let k = 1; k <= orders[i]; k++) unknowns.push(V.A(j, k), V.Ab(j, k));
     }
-    const params = [V.w0, V.wb0];
+    const params = w0Fixed ? [] : [V.w0, V.wb0];
     for (let i = 0; i < n; i++) {
       const j = i + 1;
       params.push(V.a(j), V.ab(j));
@@ -198,6 +257,7 @@
       model: 'conjugate',
       n, orders, d,
       blocks,
+      w0Fixed,
       vars: { unknowns, params },
       counts: {
         poles: n, totalOrder: d,
@@ -270,7 +330,8 @@
       unknowns.push(VR.zx(j), VR.zy(j));
       for (let k = 1; k <= orders[i]; k++) unknowns.push(VR.Ax(j, k), VR.Ay(j, k));
     }
-    const params = [VR.wx0, VR.wy0];
+    // w₀ fixed upstream ⇒ the split equations contain no wx0/wy0 either.
+    const params = system.w0Fixed ? [] : [VR.wx0, VR.wy0];
     for (let i = 0; i < n; i++) {
       const j = i + 1;
       params.push(VR.ax(j), VR.ay(j));
@@ -281,6 +342,7 @@
       model: 'reim',
       n, orders, d,
       blocks,
+      w0Fixed: system.w0Fixed || null,
       vars: { unknowns, params },
       counts: {
         poles: n, totalOrder: d,
@@ -440,6 +502,7 @@
     return {
       model: system.model,
       n: system.n, orders: system.orders, d: system.d,
+      w0Fixed: system.w0Fixed || null,
       vars: system.vars,
       counts: system.counts,
       equations,
