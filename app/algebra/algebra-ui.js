@@ -249,6 +249,27 @@
       toast('Assumed ' + vars.map(latexPlain).join(', ') + ' real → column ' + r.column + ' (' + r.created.length + ' equation' + (r.created.length === 1 ? '' : 's') + ')');
     }
 
+    // Auto reality: detect real-axis symmetry of h and, when the data is fully real,
+    // assume every base variable real in one click (collapses the conjugate model — the
+    // 478→118-generator lever). Conjugate-pole-pair symmetry is detected but not auto-
+    // applied (per-variable reality isn't valid there — pair the variables by hand).
+    function doAutoReality() {
+      if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
+      const sym = QE.realAxisSymmetry(activeEnv.hData);
+      if (!sym.allReal) {
+        toast(sym.conjugationClosed
+          ? 'h is real-axis symmetric via conjugate pole pairs — per-variable reality is not valid; pair the conjugate variables by hand.'
+          : 'No real-axis symmetry detected in h — reality cannot be assumed automatically.', { kind: 'error' });
+        return;
+      }
+      if (!store.size && !seedFromCurrent()) return;
+      const vars = store.baseVariables();
+      const r = store.assumeReal(vars);
+      if (!r.ok) { showError('Auto reality: ' + (r.reason || 'failed')); return; }
+      rerender(); refreshPickers();
+      toast('Real-axis-symmetric h → assumed ' + vars.length + ' base variable(s) real → column ' + r.column + ' (' + r.created.length + ' equation' + (r.created.length === 1 ? '' : 's') + ')');
+    }
+
     // Fix the chosen variable to an exact value → a new labeled column, then (if the
     // propagate box is ticked) cascade the consequence as a further column.
     function doSubstituteValue() {
@@ -302,7 +323,8 @@
         // Assume-real picker: assert chosen variables are real → a NEW labeled column.
         '<div class="row" style="margin-top:4px; gap:4px; align-items:center;">' +
         '  <span style="font-size:11px;">Assume real:</span><span id="alg-real-pick" class="algebra-picker"></span>' +
-        '  <button id="alg-real-apply" class="small" type="button" data-str-title="tooltips.assumeReal">Apply (new column)</button></div>' +
+        '  <button id="alg-real-apply" class="small" type="button" data-str-title="tooltips.assumeReal">Apply (new column)</button>' +
+        '  <button id="alg-real-auto" class="small" type="button" title="Detect real-axis symmetry of h and, if the data is fully real, assume every base variable real in one step (the biggest tractability lever)">Auto</button></div>' +
         // Specify-value: fix a variable to an exact value → a NEW labeled column, then
         // auto-propagate (linear cascade) so the value eliminates dependent variables.
         '<div class="row" style="margin-top:4px; gap:4px; align-items:center; flex-wrap:wrap;">' +
@@ -390,6 +412,7 @@
       $('#alg-copy-latex').addEventListener('click', copyLatex);
       $('#alg-error-close').addEventListener('click', clearError);
       $('#alg-real-apply').addEventListener('click', doAssumeReal);
+      $('#alg-real-auto').addEventListener('click', doAutoReality);
       $('#alg-val-apply').addEventListener('click', doSubstituteValue);
 
       // variable pickers (eliminate = all current vars; assume-real = primal base vars)

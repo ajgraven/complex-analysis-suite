@@ -514,8 +514,41 @@
     };
   }
 
+  // Real-axis reflection symmetry of the quadrature data h (w ↦ w̄). When it holds,
+  // there is a conjugation-symmetric solution (φ(z̄)=conj φ(z)), so the conjugate
+  // model collapses under a reality assumption — the biggest practical lever for
+  // making the Gröbner/triangular reduction tractable. Returns:
+  //   allReal          — every pole a_j AND every principal coeff C_{j,s} is real ⇒ a
+  //                      fully real solution exists ⇒ EVERY base variable may be taken
+  //                      real (the per-variable reality the workspace's assumeReal needs).
+  //   conjugationClosed — the pole multiset is closed under a_j ↦ conj(a_j) with
+  //                      CONJUGATE principal parts (h is real-axis symmetric, possibly
+  //                      via conjugate POLE PAIRS). allReal ⇒ conjugationClosed.
+  function realAxisSymmetry(hData, tol) {
+    tol = tol || 1e-9;
+    const poles = (hData && hData.poles) || [];
+    if (!poles.length) return { allReal: false, conjugationClosed: false };
+    const isReal = (z) => Math.abs((z && z.im) || 0) <= tol;
+    const allReal = poles.every((p) => isReal(p.a) && (p.principal || []).every(isReal));
+    const used = new Array(poles.length).fill(false);
+    let closed = true;
+    const conjEq = (u, v) => Math.abs((v.re || 0) - (u.re || 0)) <= tol && Math.abs((v.im || 0) + (u.im || 0)) <= tol;
+    for (let i = 0; i < poles.length && closed; i++) {
+      if (used[i]) continue;
+      if (isReal(poles[i].a)) { used[i] = true; continue; }          // a real pole is self-conjugate
+      let found = -1;
+      for (let j = 0; j < poles.length; j++) {
+        if (used[j] || j === i || !conjEq(poles[i].a, poles[j].a)) continue;
+        const pi = poles[i].principal || [], pj = poles[j].principal || [];
+        if (pi.length === pj.length && pi.every((c, s) => conjEq(c, pj[s] || {}))) { found = j; break; }
+      }
+      if (found === -1) closed = false; else { used[i] = true; used[found] = true; }
+    }
+    return { allReal, conjugationClosed: closed };
+  }
+
   const QDEquations = {
-    generateClassicalBounded, reimSplit,
+    generateClassicalBounded, reimSplit, realAxisSymmetry,
     residualAtSolution, residualReimAtSolution,
     buildVarMap, buildRealVarMap,
     systemToLatex, systemToExport, latexOf: latexOfFor,

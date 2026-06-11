@@ -266,6 +266,33 @@ module.exports = async function run() {
        exp.equations.every((e) => Array.isArray(e.terms)) &&
        exp.equations.some((e) => e.part === 're') && exp.equations.some((e) => e.part === 'im'));
   }
+
+  // ---- real-axis symmetry detection (auto-reality lever) ----
+  {
+    const realH = { poles: [{ a: { re: 0, im: 0 }, principal: [{ re: 1.96, im: 0 }] }] };
+    const s1 = QE.realAxisSymmetry(realH);
+    ok('realAxisSymmetry: all-real data ⇒ allReal & conjugationClosed', s1.allReal === true && s1.conjugationClosed === true);
+
+    // a conjugate pole PAIR with conjugate principal parts: real-axis symmetric but NOT all-real
+    const pairH = { poles: [
+      { a: { re: 1, im: 2 }, principal: [{ re: 3, im: 1 }] },
+      { a: { re: 1, im: -2 }, principal: [{ re: 3, im: -1 }] },
+    ] };
+    const s2 = QE.realAxisSymmetry(pairH);
+    ok('realAxisSymmetry: conjugate pole pair ⇒ conjugationClosed but not allReal',
+       s2.allReal === false && s2.conjugationClosed === true);
+
+    // a lone complex pole with no conjugate partner: no symmetry
+    const asym = { poles: [{ a: { re: 0, im: 1 }, principal: [{ re: 1, im: 0 }] }] };
+    const s3 = QE.realAxisSymmetry(asym);
+    ok('realAxisSymmetry: lone complex pole ⇒ neither allReal nor conjugationClosed',
+       s3.allReal === false && s3.conjugationClosed === false);
+
+    // a real pole but a COMPLEX principal coefficient ⇒ not all-real
+    const cprin = { poles: [{ a: { re: 0, im: 0 }, principal: [{ re: 1, im: 0.5 }] }] };
+    const s4 = QE.realAxisSymmetry(cprin);
+    ok('realAxisSymmetry: real pole with complex principal ⇒ not allReal', s4.allReal === false);
+  }
 };
 
 function scrub(o) {
