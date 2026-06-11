@@ -14,7 +14,11 @@
 //   MPoly     -- multivariate polynomial: sparse Map<monomialKey, term>, term =
 //                { mono: Map<varName,exp>, coeff: Gaussian }. Variables are bare
 //                string names (e.g. 'z1', 'zb1', 'A_1_1', 'Ab_1_1', 'a1', …).
-//   Elimination -- resultant/discriminant via fraction-free Bareiss (mpolyDet).
+//   Elimination -- resultant/discriminant via fraction-free Bareiss (mpolyDet);
+//                exact-division (mpolyExactDiv); and `factor` — RADICAL polynomial
+//                factorization (monomial + variable-separable products via the
+//                mixed-partial test + univariate via verified numeric roots) used
+//                to case-split a variety V(p)=⋃V(fᵢ) (see the block above `factor`).
 //   Gröbner   -- monomial orders (lex/grlex/grevlex/block), normal form, the
 //                packed exponent-vector kernel, Buchberger (Gebauer–Möller +
 //                sugar) and the signature-based GVW variant (buchbergerSig),
@@ -31,6 +35,11 @@
 //   Series    -- truncated power series in a local variable t, coeffs = RatFn,
 //                with mul / pow / compose / compositional-inverse (mirrors the
 //                numeric taylor.js, but symbolic) — drives the (★) Faber block.
+//
+// Worker bridge: `runJob(op, payload)` is a serialized dispatcher (term-list in,
+// term-list out) over the heavy ops (groebner / solveZeroDim / dimension) so the
+// Algebra tab can offload them to app/algebra/sym-worker.js (a Blob Web Worker) and
+// stay responsive; it also runs synchronously on the main thread as the fallback.
 //
 // Pure module: no DOM, no dependencies (a minimal {re,im} complex arithmetic is
 // inlined for evalComplex — QD.Complex is NOT assumed loaded). Namespace idiom
@@ -639,7 +648,11 @@
   // opts.rootFinder overrides the Durand–Kerner finder; opts.ratApprox (a float→
   // [num,den] BigInt pair, e.g. QDEquations.ratApprox) enables method (3).
   // ---------------------------------------------------------------------------
+  // Leading coefficient under the default (grlex) order — a stable scalar for the
+  // monic normalization below. Returns 0 for the zero polynomial.
   function _factorLeadCoeff(p) { const t = _leadTerm(p); return t ? t.coeff : Gaussian.fromInt(0); }
+  // Canonical (monic) form: divide by the leading coefficient so two factors that are
+  // equal up to a nonzero scalar compare equal (used only for dedup keys, not output).
   function _factorMonic(p) { const c = _factorLeadCoeff(p); return c.isZero() ? p : p.scale(Gaussian.fromInt(1).div(c)); }
   // Push p as a distinct non-constant factor (dedup up to a nonzero scalar via monic form).
   function _factorPush(list, p) {
@@ -720,6 +733,13 @@
     if (!factors.length) return null;
     return { factors, cofactor };
   }
+  // Recursive driver that accumulates the distinct (radical) factors of `p` into `out`
+  // (a dedup'd list, via _factorPush), applying the three methods in order of cost:
+  //   (1) peel monomial factors (a variable dividing every term → the case v=0),
+  //   (2) split a variable-separable product and recurse on each factor,
+  //   (3) factor a truly-univariate remainder into verified linear factors + cofactor.
+  // A remainder none of these split is pushed whole (irreducible by our methods). Every
+  // step strictly shrinks `cur`, so the recursion terminates; constants are dropped.
   function _factorRec(p, rootFinder, ratApprox, out) {
     if (p.vars().size === 0) return;
     let cur = p;

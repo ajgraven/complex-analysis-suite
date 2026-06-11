@@ -17,9 +17,21 @@
 // here by `columnInfo` and passed as the canvas `colInfo` handler — names the
 // transformation relating it to the previous column, with eqn/var counts + a Δ.
 //
+// SIDEBAR is a NODE-EDITOR model (mountSidebar): a pinned header (★ Auto-reduce & solve +
+// Generate + status table + error), the φ/h reference shown by default, collapsible
+// <details> workflow sections (Assumptions / Reduce / Analyze / Univalence constraints /
+// Export), and a CONTEXTUAL INSPECTOR (renderInspector) that replaces the sections when a
+// node is selected: 1 node → its equation + Duplicate/Copy/Delete + Attempt-to-factor
+// (doFactor → store.applyFactor, a V(p)=⋃V(fᵢ) case split); 2 nodes → the eliminate panel.
+// View/history live in a FLOATING TOOLBAR over the graph (buildToolbar: zoom/fit/fit-width/
+// expand/collapse/undo/redo); a REDUCTION BREADCRUMB (buildBreadcrumb) jumps to any lane via
+// canvas.scrollToColumn. Export covers DAG-JSON, LaTeX, and MATHEMATICA (a column, all
+// columns, or one node). provText/columnLabel render provenance.op (see the store's
+// provenance-op contract; keep them in sync).
+//
 // CAS-UX (Stoutemyer): preview-before-commit (cost), navigable derivation tree +
 // backtracking (DAG + undo), equation selection, accumulate alternatives (branch/
-// duplicate), derivational view (the graph is the work). Gated on classical
+// duplicate/factor), derivational view (the graph is the work). Gated on classical
 // bounded QD (hidden otherwise). All algebra is in QD.Sym/QDEquations/QDConstraints.
 // =============================================================================
 
@@ -656,6 +668,9 @@
       select.onchange = updateCost;
       updateCost();
     }
+    // Update the 2-node inspector's cost line with the Sylvester-matrix size + term/degree
+    // counts for eliminating the chosen shared variable (store.previewCost). Cleared unless
+    // exactly two nodes are selected and a variable is chosen.
     function updateCost() {
       const sel = canvas ? canvas.getSelection() : [];
       const v = $('#alg-var') && $('#alg-var').value;
@@ -664,6 +679,8 @@
       const c = store.previewCost(sel[0], sel[1], v);
       costEl.textContent = 'Sylvester ' + c.matrix + '×' + c.matrix + ' (deg ' + c.degA + ', ' + c.degB + '; ' + c.termsA + '+' + c.termsB + ' terms)';
     }
+    // Eliminate the chosen shared variable from the two selected nodes by their exact
+    // Sylvester resultant (store.eliminate) → a derived node in the current column.
     function doEliminate() {
       const sel = canvas ? canvas.getSelection() : [];
       const v = $('#alg-var') && $('#alg-var').value;
@@ -742,9 +759,6 @@
         (r.freeVars.length ? '; free variable(s) ' + r.freeVars.map(latexPlain).join(', ') + ' ⇒ a positive-dimensional family' : ' ⇒ zero-dimensional (finitely many solutions)'));
     }
 
-    // Existence / uniqueness verdict over the REAL (reim) system: how many real
-    // solutions (= quadrature domains) the current system has, with inconsistent /
-    // positive-dimensional / non-radical distinctions surfaced.
     // Semi-autonomous "Auto-reduce & solve": chain the reductions (auto-reality →
     // linear propagation), each appended as a labeled column, then determine existence/
     // uniqueness and the explicit real solutions. The reduction history stays visible.

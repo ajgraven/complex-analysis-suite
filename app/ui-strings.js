@@ -352,14 +352,23 @@
     // ---- Algebra workspace tab (HTML help + status messages) ----------------
     algebra: {
       help:
-        `Symbolic elimination workspace for the classical bounded QD system. Nodes are ` +
-        `equations (●/★/gauge), univalence constraints, or derived eliminants; edges are ` +
-        `derivations. Select two nodes + a shared variable and Eliminate to take their ` +
-        `Sylvester resultant (exact over ℚ(i)). For several equations / several shared ` +
-        `variables at once, use “Gröbner basis” — the multivariate generalization; an ` +
-        `“eliminate” list switches it to a lex elimination order. Constraints: convex/star/` +
-        `spiral inequalities, φ′≠0 (local univalence), the global boundary-injectivity divided ` +
-        `difference, and the geometric border loci. Export feeds the CAS Gröbner / RCTD step.`,
+        `Symbolic workspace for the classical bounded QD system, organised as an AUDIT TRAIL ` +
+        `of columns: column 0 is the original (●/★/gauge) system, and every assumption or ` +
+        `reduction appends a new labeled column (the lane header names the step; the ` +
+        `breadcrumb jumps between lanes). Reductions: Assume real (and one-click Auto when h ` +
+        `is real-axis symmetric), Set values (fix variables to exact ℚ(i) values — each also ` +
+        `fixes its conjugate — auto-propagating the linear cascade), select two nodes + a ` +
+        `shared variable to Eliminate by Sylvester resultant, batch gauge elimination, ` +
+        `“Gröbner basis” (the multivariate generalization; an “eliminate” list switches it to ` +
+        `a lex elimination order), and Triangular decomposition (Wu). Select one equation to ` +
+        `Attempt to factor it — V(p)=⋃V(fᵢ) — and pursue a factor as a new “case” column. ` +
+        `Analyze the CURRENT (last) column: Existence / uniqueness counts the REAL solutions ` +
+        `(= quadrature domains) via the Hermite trace form; Dimension / count and Solve ` +
+        `(numeric); ★ Auto-reduce & solve chains the reductions and reports the verdict. ` +
+        `Add univalence constraints (convex/star/spiral, φ′≠0, boundary injectivity, geometric ` +
+        `borders). The φ / h reference shows the symbolic forms. Export as DAG-JSON, LaTeX, or ` +
+        `Mathematica (a column, all columns, or one equation); the export also feeds an ` +
+        `external CAS (Gröbner / RCTD) for systems beyond the in-browser engine.`,
       noSolve: `No classical bounded QD solved yet — solve one on the QD tab first.`,
       ready: `Ready — click “Generate / re-seed” to load the system.`,
       seeded: `Seeded`,

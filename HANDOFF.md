@@ -73,8 +73,9 @@ its own merged PR), with one feature **in progress on a branch**:
   — 2 fewer workspace variables). **Reduction audit-trail + existence/uniqueness + autonomy** (latest
   engagement, 9 commits `15bad81…305ef3c`): every assumption is now an **append-column reduction**
   (column 0 stays the original system; each later column is a labeled step with a header) — `store`
-  gains `substituteValue` (fix a variable to an exact ℚ(i) value, auto-propagating the linear cascade
-  so φ(0)=0 ⟹ w₀=0 can force z₁), `reducePropagate`, `assumeReal`, `fixW0`. A one-click **"Auto"**
+  gains `substituteValue`/`substituteValues` (fix one or several variables to exact ℚ(i) values in one
+  column, auto-propagating the linear cascade so φ(0)=0 ⟹ w₀=0 can force z₁), `reducePropagate`,
+  `assumeReal`, `fixW0`. A one-click **"Auto"**
   reality button uses `QDEquations.realAxisSymmetry(hData)` (all-real h ⇒ assume every base var real —
   the 478→118 collapse). A new **alternative eliminator**, triangular decomposition (`Sym.pseudoRemainder`
   + `Sym.triangularize`, Wu pseudo-elimination), exhibits free variables / no-solution and appends a
@@ -99,7 +100,15 @@ its own merged PR), with one feature **in progress on a branch**:
   / Reduce / Analyze / Constraints / Export), a floating canvas toolbar (zoom/fit/expand/undo/redo),
   and a contextual node **inspector** on selection (1 node → equation + Duplicate/Copy/Delete; 2 →
   the eliminate panel). "Set values" became a multi-row table over **base variables only** (the store
-  `substituteValues` also fixes each value's conjugate — z₁=1+i ⟹ z̄₁=1−i — in one column).
+  `substituteValues` also fixes each value's conjugate — z₁=1+i ⟹ z̄₁=1−i — in one column). Then a
+  **navigation/export/factoring pass**: a clickable **reduction breadcrumb** over the graph +
+  `canvas.scrollToColumn`/`fitWidth` ("Fit ↔") and a dismissible onboarding steps strip; **Mathematica
+  export** (`store.mathematicaColumn`/`mathematicaNode`/`mathematicaAll` → a paste-ready Wolfram list,
+  with an Export column picker + per-node "Copy Mathematica"); and **Attempt to factor** — `Sym.factor`
+  (RADICAL factorization: monomial + variable-separable via the mixed-partial test + univariate via
+  verified numeric roots, every factor checked by exact division) behind `store.factorOf`/`applyFactor`,
+  which split an equation `p = f·g` into candidate systems `V(p)=⋃V(fᵢ)` and pursue one factor as a
+  `case fₖ = 0` column (the others reachable via undo; branch existence counts ADD). Full suite 1749/0.
 - **Symbolic QD equation generator** (`feature/symbolic-qd-equations`, NOT yet merged) — a new
   symbolic-algebra track: `app/sym-core.js` (`QD.Sym`, exact Rational/Gaussian/MPoly/RatFn +
   factored-denominator `FRatFn` + field-generic power series with Lagrange reversion) and

@@ -324,6 +324,50 @@ Load order requirement: classic scripts must run first to populate
 → Worker pool → UI) is documented at the top of `qd.mjs`. This file is
 **stage 1**: a no-risk façade. Stages 2-5 are open follow-ups.
 
+## Algebra module (the symbolic track)
+
+The **Algebra tab** is a self-contained four-layer stack for setting up and reducing the
+polynomial system that decides existence/uniqueness of a classical bounded quadrature
+domain. Data flows one way; all exact math lives at the bottom.
+
+```
+ generators                 store (DOM-free)          view                 heavy ops
+ ───────────                ────────────────          ────                 ─────────
+ qd-equations.js ─┐                                  algebra-canvas.js
+ (●/★/gauge system)├─seed→  algebra-store.js  ─render→ (QD.AlgebraCanvas:    sym-worker.js
+ qd-constraints.js┘         (QD.AlgebraStore:          column lanes,         (QD.SymWorker:
+ (univalence forms)         append-column audit       SVG edges, verdict)   Blob worker;
+                            trail DAG of equation                            groebner/solve/
+                            nodes; reductions;     ↑drive│ ↑select           dimension; main-
+ sym-core.js  ◀──all exact  classify/solve/factor) │     │                  thread fallback)
+ (QD.Sym: ℚ(i),  math       │        ▲              algebra-ui.js
+  MPoly, Gröbner,           └────────┘              (QD_UI.installAlgebra:
+  solvers, factor)            offload heavy ops      node-editor sidebar,
+                              ────────────────▶      inspector, toolbar,
+                                                     breadcrumb, exports)
+```
+
+- **`sym-core.js` (`QD.Sym`)** — exact Rational/Gaussian(ℚ(i))/MPoly, Gröbner/FGLM/zero-dim
+  solvers, Hermite real-solution counting, Wu triangularization, and `factor`. No DOM, no deps.
+- **`qd-equations.js` / `qd-constraints.js`** — generate the (●)/(★)/gauge system and the
+  univalence constraints (the `{poly, rel, label, meta}` node specs the store seeds from).
+- **`algebra-store.js` (`QD.AlgebraStore`)** — DOM-free model: an **append-column audit-trail
+  DAG** (column 0 = original; each reduction appends a labeled column), plus analysis
+  (`classify`/`solve`/`dimension`/`factorOf`/`applyFactor`) defaulting to the *current* (last)
+  column. Heavy ops route through `sym-worker.js`.
+- **`algebra-canvas.js` (`QD.AlgebraCanvas`)** — renders the store as structured column lanes
+  (sticky headers, arrowed SVG edges, zoom); exposes `scrollToColumn`/`fitWidth`/`setVerdict`.
+- **`algebra-ui.js` (`QD_UI.installAlgebra`)** — the node-editor sidebar + inspector + floating
+  toolbar + breadcrumb; drives the store and reads selection back from the canvas via `onSelect`.
+
+**Provenance-op contract** (the one cross-layer coupling to know): every store reduction stamps
+`provenance.op` ∈ `{generate, conjugate, resultant, groebner, constraint, duplicate, substitute,
+linear-reduce, assume-real, fix-w0, triangular, factor}`, and `algebra-ui.js`'s `provText` +
+`columnLabel` switch on exactly those strings — a new reduction op must be added in **both** the
+store (emit) and the UI (render), or its column shows as a bare "column N". See the headers of
+`algebra-store.js` and `algebra-ui.js`, and the THEORY_MAP rows for the per-feature function→file
+index.
+
 ## Worker bundles
 
 Both Worker subsystems (`primary-solver-worker.js`,

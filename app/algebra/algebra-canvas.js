@@ -21,7 +21,9 @@
 // Also: an empty state (with a Generate call-to-action) before seeding, an
 // expand/collapse-all hook, and a dismissible verdict panel (setVerdict) for the
 // existence/uniqueness result. Public API: create() → { render, rerender, fit,
-// getSelection, clearSelection, setZoom, setAllCollapsed, setVerdict }.
+// fitWidth (zoom so all lanes fit the width), scrollToColumn (jump to + flash a lane —
+// the sidebar's reduction breadcrumb drives this), getSelection, clearSelection, setZoom,
+// setAllCollapsed, setVerdict }.
 //
 // SVG+HTML (not the raster #canvas used by the plot/sphere tabs) because nodes need
 // real typeset math, text selection, and per-card hit-testing.

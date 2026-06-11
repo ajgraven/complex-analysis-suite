@@ -27,14 +27,22 @@
 // reducePropagate (linear-substitution fixpoint via Sym.linearReduce), assumeReal
 // (identify v̄≡v), fixW0 (φ(0)=w₀ → value), eliminate / eliminateWithGauge (Sylvester
 // resultant), groebner / groebnerAsync, triangularize (Wu pseudo-elimination → a chain
-// column). Analysis (default to the CURRENT system = the last column via
+// column), and applyFactor (factor an equation p = f·g and pursue ONE factor as a
+// "case fₖ = 0" column — a disjunctive branch of V(p)=⋃V(fᵢ); factorOf is the pure
+// query). Analysis (default to the CURRENT system = the last column via
 // currentColumnIds): dimension / dimensionAsync, solve / solveAsync; classify (existence/
 // uniqueness — # REAL solutions = # quadrature domains, via currentReimSystem + the
 // Hermite trace form, known parameters pinned) and solveReal (explicit real solutions);
 // columnStats / columns (per-lane eqn/var counts for the UI headers). seedFromSystem takes
 // opts.bakeAssumptions (the compact path that bakes realVars at column 0 for the autosolve).
 // Plus duplicate, deleteNode (cascade), moveNode (reorder within a column), undo/redo
-// (snapshot stack), nodeStats, variables/baseVariables, exportDAG.
+// (snapshot stack), nodeStats, variables/baseVariables, exportDAG, and a copy-paste
+// Mathematica export (mathematicaColumn / mathematicaNode / mathematicaAll).
+//
+// Provenance-op contract: every reduction writes provenance.op ∈ { generate, conjugate,
+// resultant, groebner, constraint, duplicate, substitute, linear-reduce, assume-real,
+// fix-w0, triangular, factor }. The UI's provText + columnLabel (algebra-ui.js) switch on
+// exactly these strings — ADD A NEW OP IN BOTH PLACES or it renders as a bare "column N".
 // =============================================================================
 
 (function (global) {
@@ -947,6 +955,7 @@
     // Mathematica, so A1_1 → A1$1 ($ is a legal symbol character). Coefficients are
     // exact ℚ(i) rationals; the imaginary unit is `I`.
     function _mmaName(name) { return name.replace(/_/g, '$'); }
+    // A [numerator, denominator] string pair → a Mathematica rational ('n' or 'n/d').
     function _mmaRat(p) { return p[1] === '1' ? p[0] : p[0] + '/' + p[1]; }
     // a + b·I as a Mathematica expression, eliding zero / unit parts.
     function _mmaCoeff(re, im) {
