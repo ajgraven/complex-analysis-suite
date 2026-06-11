@@ -52,6 +52,7 @@
     const elimSel = new Set();     // raw variable names chosen to eliminate (Gröbner)
     const realSel = new Set();     // primal variable names asserted real
     let _elimPicker = null, _realPicker = null;   // picker handles (for label refresh)
+    let _seededHData = null;       // the hData the store was last seeded from (A4: detect a stale seed)
 
     // LaTeX for the conjugate-model vars + the constraint boundary/aux vars.
     const baseLatex = QE.latexOf('conjugate');
@@ -144,6 +145,7 @@
         const w0Sel = fixW0 ? (activeEnv.w0Used || (activeEnv.primary && activeEnv.primary.phi && activeEnv.primary.phi.w0)) : undefined;
         const sys = QE.generateClassicalBounded(activeEnv.hData, { maxPoleOrder: lastCap, w0: w0Sel });
         store.seedFromSystem(sys);
+        _seededHData = activeEnv.hData;                 // remember what we seeded from (A4)
         // A fresh seed invalidates prior picker selections (A8) — clear and refresh.
         realSel.clear(); elimSel.clear(); refreshPickers();
         setStatus((STR.seeded || 'Seeded') + ' ' + store.size + ' equations (incl. conjugates; ' + sys.n + ' pole' + (sys.n === 1 ? '' : 's') + ', order ' + sys.d + ')' +
@@ -467,11 +469,15 @@
       toast('Eliminated ' + latexPlain(v) + ' → ' + r.node.poly.size() + '-term equation');
     }
     // Busy-state manager for the off-main-thread (worker) ops — disables the heavy
-    // controls, reveals Cancel, and routes progress to the status line.
+    // controls AND the graph-mutating controls (undo/redo, reductions, palette) so a
+    // mutation can't land mid-op and orphan an in-flight derivation (A5), reveals
+    // Cancel, and routes progress to the status line.
     let _abort = null;
     function setBusy(on, label) {
-      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-classify', 'alg-autosolve', 'alg-gauge-elim', 'alg-eliminate', 'alg-seed']
+      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-classify', 'alg-autosolve',
+        'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-val-apply']
         .forEach((id) => { const b = $('#' + id); if (b) b.disabled = on; });
+      const pal = $('#alg-palette'); if (pal) pal.querySelectorAll('button').forEach((b) => { b.disabled = on; });
       const cancel = $('#alg-cancel'); if (cancel) cancel.classList.toggle('hidden', !on);
       if (on && label) setStatus(label);
     }
@@ -814,8 +820,14 @@
       QD.PrimarySolution.subscribe((env) => {
         const phi = env && env.success && env.primary && env.primary.phi;
         activeEnv = isClassicalBounded(phi, env && env.hData) ? env : null;
+        // A4: a NEW solve makes any graph seeded from the OLD one stale — clear the
+        // stale picker selections and prompt a re-seed instead of letting a later op
+        // splice new-hData constraints onto an old-hData graph.
+        const staleSeed = store.size && _seededHData && activeEnv && _seededHData !== activeEnv.hData;
+        if (staleSeed) { realSel.clear(); elimSel.clear(); }
         if (mounted) {
           if (!activeEnv) setStatus(STR.noSolve || 'No classical bounded QD solved yet.');
+          else if (staleSeed) { refreshPickers(); setStatus('Solve changed — click Generate / re-seed to refresh the workspace for the new domain.'); }
           else setStatus((STR.ready || 'Ready — click Generate / re-seed.'));
           const ref = $('#alg-ref'); if (ref && !ref.classList.contains('hidden')) buildReference();
         }

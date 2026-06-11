@@ -604,11 +604,14 @@
     }
     // Keep only the structured-clone-safe numeric caps for the worker payload
     // (drop functions like rootFinder/onProgress, which can't be postMessage'd).
+    // The structured-clone-safe numeric caps forwarded to the worker. A9: keep this in
+    // sync with the numeric opts the sym-core ops accept (NON-serializable opts like
+    // rootFinder/onProgress/order1/paramValues are intentionally dropped — they can't be
+    // postMessage'd; the worker uses its own defaults). The unit test asserts coverage.
+    const _CAP_KEYS = ['maxBasis', 'maxSteps', 'maxDegree', 'maxTerms', 'maxEigenDim', 'maxHermiteDim', 'maxRounds', 'reduced', 'keepEliminated'];
     function _capOpts(opts) {
       const out = {};
-      for (const k of ['maxBasis', 'maxSteps', 'maxDegree', 'maxTerms', 'reduced', 'keepEliminated']) {
-        if (opts && opts[k] != null) out[k] = opts[k];
-      }
+      for (const k of _CAP_KEYS) if (opts && opts[k] != null) out[k] = opts[k];
       return out;
     }
 
