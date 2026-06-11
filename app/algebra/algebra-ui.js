@@ -562,6 +562,37 @@
       writeClipboard(code, 'Mathematica (all ' + (store.maxColumn() + 1) + ' columns)');
     }
 
+    // Attempt to factor an equation: show its factors; picking one pursues that case
+    // (V(fᵢ)=0) as a new "case" column. The other factors remain — undo and pick another.
+    function doFactor(id, box) {
+      const fr = store.factorOf(id);
+      if (!fr.ok) { toast('No nontrivial factorization: ' + (fr.reason || 'irreducible by our methods (monomial / separable / univariate)'), { kind: 'error' }); return; }
+      let chooser = box.querySelector('.algebra-factor-chooser');
+      if (chooser) chooser.remove();
+      chooser = document.createElement('div'); chooser.className = 'algebra-factor-chooser';
+      const lab = document.createElement('div'); lab.className = 'hint';
+      lab.textContent = 'V(p) = ' + fr.factors.map((_, i) => 'V(f' + (i + 1) + ')').join(' ∪ ') + ' — pick a case to pursue:';
+      chooser.appendChild(lab);
+      const RL = QD.RiemannLatex;
+      fr.factors.forEach((f, i) => {
+        const row = document.createElement('div'); row.className = 'algebra-factor-row';
+        const eq = document.createElement('span'); eq.className = 'algebra-factor-eq';
+        const tex = 'f_{' + (i + 1) + '} = ' + f.toLatex(latexOf);
+        if (RL && RL.render) RL.render(eq, tex, false); else eq.textContent = tex;
+        const use = document.createElement('button'); use.type = 'button'; use.className = 'small'; use.textContent = 'case f' + (i + 1) + '=0';
+        use.title = 'Replace this equation with f' + (i + 1) + ' = 0 in a new column';
+        use.addEventListener('click', () => {
+          const r = store.applyFactor(id, i);
+          if (!r.ok) { showError('Factor: ' + (r.reason || 'failed')); return; }
+          if (canvas) canvas.clearSelection();
+          rerender(); refreshPickers();
+          toast('Factored → case ' + (i + 1) + ' of ' + r.factorCount + ' (column ' + r.column + '); undo to pursue another case.');
+        });
+        row.appendChild(eq); row.appendChild(use); chooser.appendChild(row);
+      });
+      box.appendChild(chooser);
+    }
+
     // ---- contextual node inspector (driven by canvas selection) -------------
     // 0 selected → hide the inspector, show the workflow sections; 1 selected → that
     // node's equation + provenance + per-node actions (Duplicate / Copy / Delete);
@@ -600,6 +631,11 @@
         acts.appendChild(mkBtn('Copy LaTeX', 'Copy this equation as LaTeX', () => copyNodeLatex(sel[0])));
         acts.appendChild(mkBtn('Copy Mathematica', 'Copy this equation as Wolfram-Language (lhs == 0)', () => { const code = store.mathematicaNode(sel[0]); if (code) writeClipboard(code, n.label + ' (Mathematica)'); }));
         acts.appendChild(mkBtn('Delete', 'Delete this node and its descendants', () => { const removed = store.deleteNode(sel[0]); if (canvas) canvas.clearSelection(); rerender(); toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)'); }));
+        // Attempt to factor (equalities in the current system only): split p=f·g into
+        // candidate systems V(p)=⋃V(fᵢ), pursued one case (factor) at a time.
+        if (n.rel === '=' && n.column === store.maxColumn()) {
+          acts.appendChild(mkBtn('Attempt to factor', 'Factor this equation; pick a factor fᵢ to pursue V(fᵢ)=0 as a new "case" column (V(p)=⋃ᵢV(fᵢ))', () => doFactor(sel[0], box)));
+        }
         box.appendChild(acts);
         return;
       }
@@ -928,6 +964,7 @@
         case 'assume-real': return 'assumed ' + (prov.vars || []).map(latexPlain).join(', ') + ' real';
         case 'fix-w0': return 'fixed φ(0) = ' + valStr(prov.value);
         case 'triangular': return prov.contradiction ? 'triangular decomposition (inconsistent)' : 'triangular decomposition (Wu) of ' + (prov.inputs || []).join(', ');
+        case 'factor': return prov.carried ? 'carried through a factor split' : 'factor: case ' + ((prov.caseIndex || 0) + 1) + ' of ' + (prov.caseCount || '?') + ' (V(p)=⋃V(fᵢ))';
         default: return prov.op || '';
       }
     }
@@ -945,6 +982,11 @@
         case 'resultant': return '↳ eliminate ' + latexPlain(p.variable);
         case 'groebner': return '↳ Gröbner · ' + (p.eliminate && p.eliminate.length ? 'elim ' + p.eliminate.map(latexPlain).join(',') : (p.order || 'grevlex'));
         case 'triangular': return p.contradiction ? '↳ triangular · inconsistent' : '↳ triangular decomposition';
+        case 'factor': {
+          const cn = (ns || []).find((n) => n.provenance && n.provenance.op === 'factor' && !n.provenance.carried);
+          const cp = (cn && cn.provenance) || p;
+          return '↳ factor · case ' + ((cp.caseIndex || 0) + 1) + '/' + (cp.caseCount || '?');
+        }
         default: return '↳ column ' + c;
       }
     }

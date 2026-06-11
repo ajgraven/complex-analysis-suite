@@ -563,4 +563,30 @@ module.exports = async function run() {
     ok('mathematica: mathematicaAll labels each column (col0 = {…}; col1 = {…})',
        /col0\s*=\s*\{/.test(all) && /col1\s*=\s*\{/.test(all) && /\(\* column 0/.test(all));
   }
+
+  // ---- factoring: factorOf (query) + applyFactor (case-split column) ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(QE.generateClassicalBounded(hData));
+    // Setting A₁,₁=0 makes the star equation C₁,₁·(1 − z₁z̄₁)² — factorable into
+    // C₁,₁ and the Möbius factor (z₁z̄₁ − 1).
+    const sub = st.substituteValue('A1_1', { re: 0, im: 0 }, { propagate: false });
+    const target = st.list().find((n) => n.column === sub.column && st.factorOf(n.id).ok);
+    ok('factor: at least one equation factors after A₁,₁=0', !!target);
+    const fr = st.factorOf(target.id);
+    ok('factor: factorOf returns ≥2 factors, each dividing the original equation', fr.ok && fr.factors.length >= 2 &&
+       fr.factors.every((f) => { try { QD.Sym.mpolyExactDiv(target.poly, f); return true; } catch (e) { return false; } }));
+    const beforeCols = st.maxColumn();
+    const ap = st.applyFactor(target.id, 0);
+    ok('factor: applyFactor appends a new "case" column', ap.ok && ap.column === beforeCols + 1 && ap.factorCount === fr.factors.length);
+    const newCol = st.list().filter((n) => n.column === ap.column);
+    ok('factor: the case column carries the same node count as the current system',
+       newCol.length === st.list().filter((n) => n.column === beforeCols).length);
+    ok('factor: exactly one node in the case column is the chosen factor (provenance op:factor, caseIndex 0)',
+       newCol.some((n) => n.provenance && n.provenance.op === 'factor' && n.provenance.caseIndex === 0 && n.poly.equals(fr.factors[0])));
+    // applying a factor to an irreducible equation in the CURRENT column fails cleanly
+    const irr = newCol.find((n) => n.rel === '=' && !st.factorOf(n.id).ok);
+    ok('factor: applyFactor on an irreducible current-column equation returns ok:false',
+       irr ? (() => { const r = st.applyFactor(irr.id, 0); return !r.ok && /no nontrivial|factoriz/.test(r.reason || ''); })() : true);
+  }
 };

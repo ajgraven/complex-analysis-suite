@@ -829,6 +829,48 @@ module.exports = async function run() {
       ok('runJob: unknown op throws', (() => { try { S.runJob('nope', {}); return false; } catch (e) { return /unknown/i.test(String(e.message || e)); } })());
     }
   }
+
+  // ---- factor(poly): radical factorization for case-splitting V(p)=⋃V(fᵢ) ----
+  {
+    const x = S.mpolyVar('x'), y = S.mpolyVar('y'), k = (n) => S.mpolyInt(n);
+    const ra = (t) => [BigInt(Math.round(t)), 1n];            // nearest-integer rationalizer (Gaussian-integer roots)
+    const opts = { ratApprox: ra };                            // default Durand–Kerner root finder (faber-analysis loaded)
+    const divides = (f, p) => { try { S.mpolyExactDiv(p, f); return true; } catch (e) { return false; } };
+
+    // (3) univariate over ℚ: (x−1)(x−2)
+    const fu = S.factor(x.sub(k(1)).mul(x.sub(k(2))), opts);
+    ok('factor: univariate (x−1)(x−2) → 2 factors, each dividing the input',
+       fu.ok && fu.factors.length === 2 && fu.factors.every((f) => divides(f, x.sub(k(1)).mul(x.sub(k(2))))));
+
+    // (3) univariate over ℚ(i): x²+1 = (x−i)(x+i)
+    const p2 = x.mul(x).add(k(1));
+    const fi = S.factor(p2, opts);
+    ok('factor: x²+1 → (x−i)(x+i) over ℚ(i), each dividing', fi.ok && fi.factors.length === 2 && fi.factors.every((f) => divides(f, p2)));
+
+    // (1) monomial: x²−xy = x·(x−y)
+    const p3 = x.mul(x).sub(x.mul(y));
+    const f3 = S.factor(p3, opts);
+    ok('factor: x²−xy → x and (x−y), each dividing', f3.ok && f3.factors.length === 2 && f3.factors.every((f) => divides(f, p3)) && f3.factors.some((f) => f.equals(x)));
+
+    // (2) separable product with mixed monomials: (x−1)(y−2) = xy−2x−y+2
+    const p4 = x.sub(k(1)).mul(y.sub(k(2)));
+    const f4 = S.factor(p4, opts);
+    ok('factor: separable (x−1)(y−2) (despite the xy cross term) → 2 factors, each dividing',
+       f4.ok && f4.factors.length === 2 && f4.factors.every((f) => divides(f, p4)));
+
+    // radical: (x−1)²(x−2) → DISTINCT {x−1, x−2}
+    const p6 = x.sub(k(1)).pow(2).mul(x.sub(k(2)));
+    const f6 = S.factor(p6, opts);
+    ok('factor: (x−1)²(x−2) → distinct radical factors {x−1, x−2}, each dividing',
+       f6.ok && f6.factors.length === 2 && f6.factors.every((f) => divides(f, p6)));
+
+    // irreducible: xy+1 (separable test keeps it whole; no monomial/univariate split)
+    const f5 = S.factor(x.mul(y).add(k(1)), opts);
+    ok('factor: xy+1 is irreducible by our methods → ok:false', !f5.ok && f5.factors.length === 1);
+
+    // a nonzero constant has no nontrivial factorization
+    ok('factor: a constant → ok:false', !S.factor(k(3), opts).ok);
+  }
 };
 
 // compact monomial string for assertions ('' → '1')

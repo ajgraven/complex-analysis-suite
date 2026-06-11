@@ -475,7 +475,10 @@ view is active.
   preview; expand for the full form), **reorderable** within a column (▲/▼), copy as
   **LaTeX** individually (⧉), and carry **hovertext** (variable count, real-equation
   contribution, per-variable order, total degree, provenance); conjugate equations are
-  paired adjacently. Undo/redo, a cost preview, and export as JSON, LaTeX, or
+  paired adjacently. **Attempt to factor** an equation (in the node inspector) splits
+  `p = f·g` into candidate systems `V(p) = ⋃ V(fᵢ)` — pick a factor to pursue that case
+  as a new column (exact: monomial + separable-product + univariate factoring, every
+  factor verified by exact division). Undo/redo, a cost preview, and export as JSON, LaTeX, or
   **Mathematica** (a chosen column, all columns, or a single equation — a paste-ready
   Wolfram-Language list). A **reduction breadcrumb** over the graph jumps to any column.
   Every assumption is now an **append-column reduction** — column 0 stays the original

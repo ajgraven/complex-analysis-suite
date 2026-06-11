@@ -623,6 +623,130 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Polynomial factorization (RADICAL — distinct factors, for case-splitting a
+  // variety V(p) = ⋃ V(fᵢ)). factor(p, opts) → { ok, factors:[MPoly], reason }.
+  // EVERY returned factor is verified to divide p exactly (mpolyExactDiv), so a
+  // returned factorization is provably correct; an input we cannot split returns
+  // ok:false with factors:[p]. Three exact methods, applied in order:
+  //   (1) MONOMIAL — a variable dividing every term ⇒ that variable is a case
+  //       (peel x^min, push the factor x).
+  //   (2) VARIABLE-DISJOINT product — when the variables partition into groups
+  //       with no term mixing two groups, test p = A·B by substituting one group
+  //       to a constant and VERIFYING A·B = κ·p exactly.
+  //   (3) UNIVARIATE (one variable only) — numeric roots → exact ℚ(i) value via
+  //       opts.ratApprox → keep each linear factor (v−r) that divides exactly.
+  // Multiplicities collapse (only distinct zero sets matter for the case split).
+  // opts.rootFinder overrides the Durand–Kerner finder; opts.ratApprox (a float→
+  // [num,den] BigInt pair, e.g. QDEquations.ratApprox) enables method (3).
+  // ---------------------------------------------------------------------------
+  function _factorLeadCoeff(p) { const t = _leadTerm(p); return t ? t.coeff : Gaussian.fromInt(0); }
+  function _factorMonic(p) { const c = _factorLeadCoeff(p); return c.isZero() ? p : p.scale(Gaussian.fromInt(1).div(c)); }
+  // Push p as a distinct non-constant factor (dedup up to a nonzero scalar via monic form).
+  function _factorPush(list, p) {
+    if (p.vars().size === 0) return;
+    const m = _factorMonic(p);
+    if (list.some((q) => _factorMonic(q).equals(m))) return;
+    list.push(p);
+  }
+  // Minimum exponent of `v` across all terms of p (0 ⇒ v does not divide every term).
+  function _minExp(p, v) {
+    let mn = Infinity;
+    for (const t of p.terms.values()) { const e = t.mono.get(v) || 0; if (e < mn) mn = e; if (mn === 0) break; }
+    return mn === Infinity ? 0 : mn;
+  }
+  // Multiplicative variable groups via the SEPARABILITY test: variables u, w belong to
+  // the same factor iff  p·∂²p/∂u∂w − (∂p/∂u)(∂p/∂w) ≢ 0  (for p = A·B with u∈A, w∈B that
+  // difference is identically zero). Union-find on the nonzero pairs ⇒ the finest grouping
+  // into multiplicative factors. Returns the array of variable groups (≥1).
+  function _separableGroups(p) {
+    const vars = [...p.vars()];
+    const parent = {}; vars.forEach((v) => { parent[v] = v; });
+    const find = (x) => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+    for (let i = 0; i < vars.length; i++) {
+      const du = p.derivativeIn(vars[i]);
+      for (let j = i + 1; j < vars.length; j++) {
+        if (find(vars[i]) === find(vars[j])) continue;
+        const d = p.mul(du.derivativeIn(vars[j])).sub(du.mul(p.derivativeIn(vars[j])));
+        if (!d.isZero()) parent[find(vars[i])] = find(vars[j]);   // u, w share a factor
+      }
+    }
+    const comps = {};
+    for (const v of vars) { const r = find(v); (comps[r] = comps[r] || []).push(v); }
+    return Object.values(comps);
+  }
+  // p = ∏ Aᵢ(Sᵢ) over the separable variable groups: project p onto each group by
+  // substituting the OTHER groups to a constant (a few trial values), then VERIFY the
+  // product equals κ·p exactly. Returns the array of factors, or null.
+  function _separableSplit(p) {
+    const vars = [...p.vars()];
+    if (vars.length < 2 || vars.length > 8 || p.terms.size > 300) return null;   // size guard
+    const groups = _separableGroups(p);
+    if (groups.length < 2) return null;
+    const constOf = (val) => MPoly.constant(gauss(rat(val, 1n), rat(0n, 1n)));
+    for (const val of [0n, 1n, 2n, -1n, 3n]) {
+      const facs = groups.map((grp) => {
+        const grpSet = new Set(grp), sub = {};
+        for (const v of vars) if (!grpSet.has(v)) sub[v] = constOf(val);
+        return p.subst(sub);                                  // factor in `grp` vars (× a constant)
+      });
+      if (facs.some((f) => f.vars().size === 0)) continue;    // degenerate value — retry
+      let prod = facs[0]; for (let i = 1; i < facs.length; i++) prod = prod.mul(facs[i]);
+      const ltP = _leadTerm(prod), lp = _leadTerm(p);
+      if (!ltP || !lp || lp.coeff.isZero()) continue;
+      if (prod.equals(p.scale(ltP.coeff.div(lp.coeff)))) return facs;   // EXACT verification
+    }
+    return null;
+  }
+  // Univariate (one variable) linear-factor extraction via numeric roots → exact ℚ(i)
+  // rationalization → keep each (v − r) that divides EXACTLY. Returns {factors, cofactor}.
+  function _univariateFactor(p, rootFinder, ratApprox) {
+    const vs = [...p.vars()];
+    if (vs.length !== 1 || !rootFinder || !ratApprox) return null;
+    const v = vs[0];
+    if (p.degreeIn(v) < 2) return null;                       // already linear/constant — nothing to split
+    let res;
+    try { res = rootFinder(p.coeffsIn(v).map((c) => c.evalComplex({}))) || {}; } catch (e) { return null; }
+    if (res.converged === false) return null;
+    const roots = res.roots || [];
+    const factors = [];
+    let cofactor = p;
+    for (const r of roots) {
+      const [rn, rd] = ratApprox(r.re), [iN, iD] = ratApprox(r.im);
+      const g = gauss(rat(rn, rd), rat(iN, iD));
+      const lin = MPoly.variable(v).sub(MPoly.constant(g));    // (v − r)
+      try { const q = mpolyExactDiv(cofactor, lin); cofactor = q; _factorPush(factors, lin); }
+      catch (e) { /* root not exactly rational over ℚ(i) — skip */ }
+    }
+    if (!factors.length) return null;
+    return { factors, cofactor };
+  }
+  function _factorRec(p, rootFinder, ratApprox, out) {
+    if (p.vars().size === 0) return;
+    let cur = p;
+    for (const v of [...cur.vars()]) {                         // (1) monomial factors
+      const k = _minExp(cur, v);
+      if (k > 0) { _factorPush(out, MPoly.variable(v)); cur = mpolyExactDiv(cur, MPoly.variable(v).pow(k)); }
+    }
+    if (cur.vars().size === 0) return;
+    const facs = _separableSplit(cur);                         // (2) separable (variable-disjoint) product
+    if (facs) { facs.forEach((f) => _factorRec(f, rootFinder, ratApprox, out)); return; }
+    const uni = _univariateFactor(cur, rootFinder, ratApprox); // (3) univariate
+    if (uni) { uni.factors.forEach((f) => _factorPush(out, f)); _factorPush(out, uni.cofactor); return; }
+    _factorPush(out, cur);                                     // irreducible by our methods
+  }
+  function factor(poly, opts) {
+    opts = opts || {};
+    if (!poly || poly.isZero()) return { ok: false, reason: 'cannot factor the zero polynomial', factors: [] };
+    if (poly.vars().size === 0) return { ok: false, reason: 'a constant has no nontrivial factorization', factors: [poly] };
+    const rootFinder = opts.rootFinder || _defaultRootFinder();
+    const out = [];
+    try { _factorRec(poly, rootFinder, opts.ratApprox, out); }
+    catch (e) { return { ok: false, reason: (e && e.message) || String(e), factors: [poly] }; }
+    if (out.length <= 1) return { ok: false, reason: 'no nontrivial factorization found', factors: [poly] };
+    return { ok: true, factors: out, reason: '' };
+  }
+
+  // ---------------------------------------------------------------------------
   // Gröbner-basis layer — Buchberger over the field ℚ(i) (Gaussian-rational
   // coefficients). This is the multivariate generalization of the resultant: a
   // Gröbner basis of an ideal under an ELIMINATION order (lex with the variables
@@ -2393,7 +2517,7 @@
     rat, gauss, gaussInt, mpolyVar, mpolyConst, mpolyInt,
     polyFromTermList: (list) => MPoly.fromTermList(list),
     monoKey, monoCmp,
-    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv,
+    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, solveByEigenvalues, realSolutionCount, pseudoRemainder, triangularize, runJob,

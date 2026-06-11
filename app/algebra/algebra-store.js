@@ -1002,6 +1002,43 @@
       return blocks.join('\n\n');
     }
 
+    // ---- factoring: split an equation by its factors (V(p)=⋃V(fᵢ)) ----
+    // Pure query: attempt to factor a node's polynomial into the radical case factors.
+    // Equalities only (f·g=0 ⟺ f=0 or g=0; an inequality f·g>0 does NOT split that way).
+    // Returns { ok, factors:[MPoly], reason }.
+    function factorOf(id) {
+      const S = getSym(), QE = getQE();
+      const n = get(id);
+      if (!n) return { ok: false, reason: 'node not found', factors: [] };
+      if (n.rel !== '=') return { ok: false, reason: 'only equality equations can be factored', factors: [] };
+      return S.factor(n.poly, { ratApprox: QE && QE.ratApprox });
+    }
+    // Pursue ONE factor as a new candidate system: replace the factored equation with
+    // factor k ("case fₖ = 0") in a new column; the rest of the current system is carried
+    // forward unchanged. The other factors stay available (undo, then pick another). The
+    // node must be an equality in the current system (last column). Returns the append
+    // result (+ .factorCount, .factors). NB: V(original) = ⋃ₖ V(case k), so the existence
+    // counts of the branches ADD (minus overlaps) to the original system's.
+    function applyFactor(id, k) {
+      const n = get(id);
+      if (!n) return { ok: false, reason: 'node not found', created: [] };
+      if (n.column !== maxColumn()) return { ok: false, reason: 'factor an equation in the current system (the last column)', created: [] };
+      const fr = factorOf(id);
+      if (!fr.ok) return { ok: false, reason: fr.reason || 'no nontrivial factorization', created: [] };
+      const chosen = fr.factors[k];
+      if (!chosen) return { ok: false, reason: 'no such factor index', created: [] };
+      const cnt = fr.factors.length;
+      const label = 'factor: case ' + (k + 1) + ' of ' + cnt;
+      const res = _appendReduction((m) => ({
+        poly: m.id === id ? chosen : m.poly,
+        provenance: m.id === id
+          ? { op: 'factor', inputs: [id], caseIndex: k, caseCount: cnt }
+          : { op: 'factor', inputs: [m.id], carried: true }, label,
+      }));
+      if (res.ok) { res.factorCount = cnt; res.factors = fr.factors; }
+      return res;
+    }
+
     // Distinct variable names across all nodes (sorted) — for the UI variable pickers.
     function variables() {
       const s = new Set(); for (const n of nodes.values()) for (const v of n.poly.vars()) s.add(v); return [...s].sort();
@@ -1014,7 +1051,7 @@
     return {
       seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
-      substituteValue, substituteValues, reducePropagate, assumeReal, fixW0, triangularize: triangularizeNodes,
+      substituteValue, substituteValues, reducePropagate, assumeReal, fixW0, factorOf, applyFactor, triangularize: triangularizeNodes,
       currentReimSystem, classify, solveReal, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, mathematicaColumn, mathematicaNode, mathematicaAll, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
