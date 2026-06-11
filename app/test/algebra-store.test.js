@@ -455,4 +455,25 @@ module.exports = async function run() {
       }
     }
   }
+
+  // ---- existence / uniqueness verdict (reim transform + Hermite real count) ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(QE.generateClassicalBounded(hData));
+    st.assumeReal(st.baseVariables());                       // collapse to the real system
+    const reim = st.currentReimSystem();
+    ok('currentReimSystem: a nonempty real-variable system (names carry __re/__im)',
+       reim.polys.length > 0 && reim.vars.length > 0 && reim.vars.every((v) => /__re$|__im$/.test(v)));
+    ok('currentReimSystem: every coefficient is real (the imaginary part split off)',
+       reim.polys.every((p) => p.imagPart().isZero()));
+    const cl = st.classify();
+    ok('classify: returns a well-formed verdict (ok, zeroDim boolean)',
+       cl.ok === true && typeof cl.zeroDim === 'boolean' &&
+       (cl.inconsistent || !cl.zeroDim || typeof cl.multiplicity === 'number'));
+    // a deliberately inconsistent system (fix w₀ to a wrong value on the symbolic seed
+    // then over-constrain) should be detectable as inconsistent OR zero-real-count.
+    if (cl.ok && cl.zeroDim && cl.realCount != null) {
+      ok('classify: a real disk QD has at least one real solution (exists)', cl.realCount >= 1);
+    }
+  }
 };

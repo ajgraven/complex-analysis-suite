@@ -660,6 +660,81 @@
           : { ok: false, reason: (err && err.message) || String(err) });
     }
 
+    // Substitute a { varName: {re,im} } value map into a poly list, rationalizing each
+    // value exactly (continued fractions). Used to PIN the known quadrature-data
+    // parameters (a_j, C_{j,s}) before an existence/uniqueness verdict — they are GIVEN,
+    // not unknowns, so the verdict should count only the genuine unknowns (z_j, A, w₀).
+    function _applyParamValues(polys, paramValues) {
+      if (!paramValues) return polys;
+      const S = getSym();
+      const sub = {};
+      for (const name of Object.keys(paramValues)) {
+        try { sub[name] = S.mpolyConst(_ratGauss(paramValues[name]).g); } catch (e) { /* skip a bad value */ }
+      }
+      if (!Object.keys(sub).length) return polys;
+      return polys.map((p) => p.subst(sub)).filter((p) => !p.isZero());
+    }
+
+    // Core reim transform on a given poly list (see currentReimSystem).
+    function _reimTransform(polys) {
+      const S = getSym();
+      const realSet = new Set(realVars);
+      const I = S.mpolyConst(S.gaussInt(0, 1));
+      const allVars = new Set();
+      for (const p of polys) for (const v of p.vars()) allVars.add(v);
+      const sub = {};
+      for (const v of allVars) {
+        const prim = _primalName(v);
+        const xn = prim + '__re', yn = prim + '__im';
+        if (realSet.has(prim)) { sub[v] = S.mpolyVar(xn); }       // assumed real ⇒ x only
+        else { const x = S.mpolyVar(xn), y = S.mpolyVar(yn); sub[v] = (prim !== v) ? x.sub(I.mul(y)) : x.add(I.mul(y)); }
+      }
+      const out = [];
+      for (const p of polys) {
+        const e = p.subst(sub);
+        const re = e.realPart(), im = e.imagPart();
+        if (!re.isZero()) out.push(re);
+        if (!im.isZero()) out.push(im);
+      }
+      const rv = new Set(); for (const p of out) for (const v of p.vars()) rv.add(v);
+      return { polys: out, vars: [...rv].sort() };
+    }
+
+    // The REAL (reim) system of the current column. opts.paramValues ({ varName:{re,im} })
+    // pins the known quadrature-data parameters (a_j, C_{j,s}) to their values FIRST, so
+    // only the genuine unknowns (z_j, A_{j,k}, w₀) remain. The real solutions of the
+    // result are the actual quadrature domains. Returns { polys, vars }.
+    function currentReimSystem(ids, opts) {
+      opts = opts || {};
+      const inputs = ((ids && ids.length) ? ids.map(get) : lastColumnNodes()).filter(Boolean).filter((n) => n.rel === '=');
+      const polys = _applyParamValues(inputs.map((n) => n.poly), opts.paramValues);
+      return _reimTransform(polys);
+    }
+
+    // Existence / uniqueness verdict for the current system, computed on the REAL (reim)
+    // system: inconsistency (1 ∈ I ⇒ no QD), zero/positive dimension, the number of REAL
+    // solutions (= actual QDs, via the Hermite trace form) and the number of distinct
+    // complex solutions / the multiplicity. opts.paramValues pins the known data. Returns
+    // { ok, inconsistent, zeroDim, realCount, complexCount, multiplicity, numVars, reason }.
+    function classify(ids, opts) {
+      const S = getSym();
+      const reim = currentReimSystem(ids, opts);
+      if (!reim.polys.length) return { ok: false, reason: 'no equality nodes to analyze' };
+      try {
+        const ord = S.monomialOrder('grevlex', reim.vars);
+        const G = S.buchberger(reim.polys, ord);
+        if (G.length === 1 && G[0].vars().size === 0 && !G[0].isZero()) {
+          return { ok: true, inconsistent: true, zeroDim: true, realCount: 0, complexCount: 0, multiplicity: 0, numVars: reim.vars.length };
+        }
+        const zeroDim = S.isZeroDimensional(G, ord, reim.vars);
+        if (!zeroDim) return { ok: true, inconsistent: false, zeroDim: false, realCount: null, complexCount: null, multiplicity: null, numVars: reim.vars.length };
+        const multiplicity = S.quotientDimension(G, ord, reim.vars);
+        const rc = S.realSolutionCount({ G, order: ord }, null, reim.vars);
+        if (!rc.ok) return { ok: true, inconsistent: false, zeroDim: true, realCount: null, complexCount: null, multiplicity, reason: rc.reason, numVars: reim.vars.length };
+        return { ok: true, inconsistent: false, zeroDim: true, realCount: rc.realCount, complexCount: rc.complexCount, multiplicity, numVars: reim.vars.length };
+      } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    }
+
     // Numeric solutions of the selected (or all) equality nodes via the shape-lemma
     // solver (grevlex GB → FGLM to lex → univariate Durand–Kerner + back-substitution).
     // Returns Sym.solveZeroDim's result: { ok, solutions:[{var:{re,im}}], dimension, … }
@@ -818,7 +893,8 @@
     return {
       seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
-      substituteValue, reducePropagate, assumeReal, fixW0, triangularize: triangularizeNodes, currentColumnIds, maxColumn,
+      substituteValue, reducePropagate, assumeReal, fixW0, triangularize: triangularizeNodes,
+      currentReimSystem, classify, currentColumnIds, maxColumn,
       sharedVars, previewCost, exportDAG, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       undo, redo, reset,

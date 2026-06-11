@@ -343,6 +343,7 @@
         '  <span style="font-size:11px;">eliminate:</span><span id="alg-elim-pick" class="algebra-picker"></span></div>' +
         '<div class="row" style="margin-top:4px; gap:4px; flex-wrap:wrap;">' +
         '  <button id="alg-triangular" class="small" type="button" title="Triangular decomposition (Wu pseudo-elimination) of the current system — an alternative to Gröbner that exhibits the solution structure (free variables, no-solution)">Triangular decomp.</button>' +
+        '  <button id="alg-classify" class="small" type="button" title="Existence / uniqueness: count the REAL solutions (= actual quadrature domains) of the current system via the Hermite trace form, plus distinct-complex / inconsistent / positive-dimensional verdicts">Existence / uniqueness</button>' +
         '  <button id="alg-dimension" class="small" type="button" data-str-title="tooltips.dimension">Dimension / count</button>' +
         '  <button id="alg-solve" class="small" type="button" data-str-title="tooltips.solveNumeric">Solve (numeric)</button>' +
         '  <button id="alg-cancel" class="small hidden" type="button" title="Cancel the running computation">Cancel</button></div>' +
@@ -399,6 +400,7 @@
       $('#alg-groebner').addEventListener('click', () => doGroebner(null));
       $('#alg-groebner-sel').addEventListener('click', () => doGroebner(canvas ? canvas.getSelection() : []));
       $('#alg-triangular').addEventListener('click', doTriangular);
+      $('#alg-classify').addEventListener('click', doClassify);
       $('#alg-dimension').addEventListener('click', doDimension);
       $('#alg-solve').addEventListener('click', doSolve);
       $('#alg-cancel').addEventListener('click', cancelOp);
@@ -465,7 +467,7 @@
     // controls, reveals Cancel, and routes progress to the status line.
     let _abort = null;
     function setBusy(on, label) {
-      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-gauge-elim', 'alg-eliminate', 'alg-seed']
+      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-classify', 'alg-gauge-elim', 'alg-eliminate', 'alg-seed']
         .forEach((id) => { const b = $('#' + id); if (b) b.disabled = on; });
       const cancel = $('#alg-cancel'); if (cancel) cancel.classList.toggle('hidden', !on);
       if (on && label) setStatus(label);
@@ -523,6 +525,54 @@
       if (r.contradiction) { toast('Triangular decomposition: system is INCONSISTENT — no solution.'); return; }
       toast('Triangular decomposition: ' + r.created.length + ' element(s)' +
         (r.freeVars.length ? '; free variable(s) ' + r.freeVars.map(latexPlain).join(', ') + ' ⇒ a positive-dimensional family' : ' ⇒ zero-dimensional (finitely many solutions)'));
+    }
+
+    // Existence / uniqueness verdict over the REAL (reim) system: how many real
+    // solutions (= quadrature domains) the current system has, with inconsistent /
+    // positive-dimensional / non-radical distinctions surfaced.
+    // The known quadrature-data values (a_j, C_{j,s} and their conjugates) keyed by the
+    // conjugate-model variable names — to PIN the parameters for the existence verdict
+    // (they are given data, not unknowns).
+    function hDataParamValues() {
+      const hData = activeEnv && activeEnv.hData; if (!hData) return null;
+      const m = {};
+      (hData.poles || []).forEach((pole, i) => {
+        const j = i + 1, a = pole.a || { re: 0, im: 0 };
+        m['a' + j] = { re: a.re || 0, im: a.im || 0 };
+        m['ab' + j] = { re: a.re || 0, im: -(a.im || 0) };
+        (pole.principal || []).forEach((C, s) => {
+          m['C' + j + '_' + (s + 1)] = { re: C.re || 0, im: C.im || 0 };
+          m['Cb' + j + '_' + (s + 1)] = { re: C.re || 0, im: -(C.im || 0) };
+        });
+      });
+      return m;
+    }
+    function doClassify() {
+      if (_abort) return;
+      if (!store.size && !seedFromCurrent()) return;
+      clearError();
+      setBusy(true, 'Counting real solutions (existence / uniqueness)…');
+      // sync, but yield once so the busy state paints
+      setTimeout(() => {
+        const sel = canvas && canvas.getSelection().length ? canvas.getSelection() : null;
+        let r; try { r = store.classify(sel, { paramValues: hDataParamValues() }); }
+        catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
+        setBusy(false); setStatus('');
+        if (!r.ok) { showError('Existence / uniqueness: ' + withGuidance(r.reason || 'unavailable')); return; }
+        let verdict;
+        if (r.inconsistent) verdict = 'No quadrature domain: the system is inconsistent (1 ∈ I).';
+        else if (!r.zeroDim) verdict = 'Infinitely many: a positive-dimensional family (' + r.numVars + ' real variables).';
+        else if (r.realCount == null) verdict = 'Zero-dimensional: ' + r.multiplicity + ' complex solution(s) with multiplicity (real count unavailable: ' + (r.reason || '') + ').';
+        else {
+          const cx = r.complexCount, mult = r.multiplicity;
+          const tail = (cx != null ? ' (of ' + cx + ' distinct complex' + (mult != null && mult > cx ? '; ' + mult + ' with multiplicity' : '') + ')' : '');
+          if (r.realCount === 0) verdict = 'No real quadrature domain' + tail + '.';
+          else if (r.realCount === 1) verdict = 'Unique quadrature domain — exactly 1 real solution' + tail + '.';
+          else verdict = r.realCount + ' real quadrature domains' + tail + '.';
+        }
+        setStatus(verdict);
+        toast(verdict, r.inconsistent || r.realCount === 0 ? { kind: 'error' } : {});
+      }, 20);
     }
 
     // Report the dimension / solution count of the current equality system, off the
