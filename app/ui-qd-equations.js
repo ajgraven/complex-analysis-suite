@@ -9,7 +9,10 @@
 // model over ℚ(i) or the real/imaginary split (QD.QDEquations.reimSplit), renders
 // each equation with KaTeX, self-verifies the system against the numeric solution
 // (max |eqn| must be ≈0), and exports it as copy-able LaTeX or a CAS-agnostic JSON
-// term list (the input to a future Gröbner/triangular reducer).
+// term list. A default-on "Fix φ(0) = w₀" checkbox bakes the solve's selected
+// Riemann-map center (centroid of the poles by default) into the equations as an
+// exact rational. The "Open in Algebra workspace ↗" button hands the same system
+// to the in-browser elimination/Gröbner reducer (the Algebra tab).
 //
 // The card is hidden for any unbounded or weighted solve (UQD / PQD / LQD) — the
 // inverse-system blocks here are specifically the bounded classical ansatz. UI
@@ -178,6 +181,16 @@
       // exact rational — the variable inventory drops w₀/w̄₀) or symbolic.
       if (sys.w0Fixed) {
         const fr = (pair) => (pair[1] === '1' ? pair[0] : pair[0] + '/' + pair[1]);
+        // exact a + b·i, sign-aware (b's sign is on its numerator string) so a negative
+        // imaginary part reads "… − 2/7·i" rather than the doubled "… + -2/7·i".
+        const exactStr = (() => {
+          let s = 'exact ' + fr(sys.w0Fixed.re);
+          if (sys.w0Fixed.im[0] !== '0') {
+            const neg = sys.w0Fixed.im[0][0] === '-';
+            s += (neg ? ' − ' : ' + ') + fr([sys.w0Fixed.im[0].replace('-', ''), sys.w0Fixed.im[1]]) + '·i';
+          }
+          return s;
+        })();
         const ax = sys.w0Fixed.approx || { re: 0, im: 0 };
         // provenance is data-derived: the default φ(0) is the centroid of the poles
         let cRe = 0, cIm = 0;
@@ -188,7 +201,7 @@
         const mode = isCentroid ? 'centroid of the poles (default)' : 'manual selection';
         head.push('<div class="geom-row"><span class="key">φ(0) = w₀ fixed:</span> ' +
           esc(QD.Complex ? QD.Complex.toString(ax, 6) : (ax.re + (ax.im >= 0 ? '+' : '') + ax.im + 'i')) +
-          ' <span class="hint">(exact ' + esc(fr(sys.w0Fixed.re)) + (sys.w0Fixed.im[0] === '0' ? '' : ' + ' + esc(fr(sys.w0Fixed.im)) + '·i') +
+          ' <span class="hint">(' + esc(exactStr) +
           '; ' + esc(mode) + ' — change under Map parameters ▸ Riemann map center φ(0))</span></div>');
       } else {
         head.push('<div class="geom-row"><span class="key">φ(0) = w₀:</span> ' +

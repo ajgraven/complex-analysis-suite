@@ -9,7 +9,7 @@
 // API (QD.SymWorker):
 //   ensureReady() -> Promise<void>                       lazy-create the worker
 //   run(op, payload, { onProgress?, signal? }) -> Promise<result>
-//       op ∈ {'groebner','solveZeroDim'}; payload/result are SERIALIZED
+//       op ∈ {'groebner','solveZeroDim','dimension'}; payload/result are SERIALIZED
 //       (term lists, plain objects) exactly as QD.Sym.runJob expects/returns.
 //   cancel() -> void                                     abort the in-flight job
 //   isBusy() -> bool

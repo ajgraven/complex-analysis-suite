@@ -169,6 +169,29 @@ module.exports = async function run() {
        third.w0Fixed.re.join('/') === '1/3' && third.w0Fixed.im.join('/') === '-2/7');
   }
 
+  // ---- φ(0) fix at a COMPLEX center, residual-verified through the whole pipeline.
+  //      Translating a domain by a complex shift Δ gives the exact map φ_Δ(z) =
+  //      φ(z) + Δ with pole nodes a_j → a_j + Δ and w₀ → w₀ + Δ — so taking the disk
+  //      (φ = z, w₀ = 0, one pole a = 0, C = R²) and Δ = 0.3 − 0.4·i yields an EXACT
+  //      QD with a genuinely complex w₀. This exercises the wb0 ↦ conj substitution
+  //      and the re/im split of complex constant coefficients — a sign error in
+  //      either would leave the residual nonzero (the real-w₀ cases can't catch it). ----
+  {
+    // Translated disk of radius R: φ(z) = R·z + Δ ⇒ Riemann coeff A₁,₁ = R, node
+    // a = Δ, C₁,₁ = R² = A·Ā, preimage z₁ = 0, w₀ = φ(0) = Δ.
+    const R = 1.3, dRe = 0.3, dIm = -0.4;
+    const hData = { poles: [{ a: { re: dRe, im: dIm }, principal: [{ re: R * R, im: 0 }] }] };
+    const phi = { unbounded: false, w0: { re: dRe, im: dIm }, branches: [{ z: { re: 0, im: 0 }, A: [{ re: R, im: 0 }] }] };
+    const fixed = QE.generateClassicalBounded(hData, { w0: { re: dRe, im: dIm } });
+    ok('w0-fix(complex): exact rationalization 0.3 − 0.4·i → 3/10, −2/5',
+       fixed.w0Fixed.re.join('/') === '3/10' && fixed.w0Fixed.im.join('/') === '-2/5');
+    ok('w0-fix(complex): no w0/wb0 in the fixed system', !(() => { const s = new Set(); for (const b of ['locator', 'star', 'gauge']) for (const it of fixed.blocks[b]) for (const v of it.eq.vars()) s.add(v); return s; })().has('wb0'));
+    ok('w0-fix(complex): conjugate-model residual ≈0 at the exact φ',
+       QE.residualAtSolution(fixed, phi, hData).max < 1e-10);
+    ok('w0-fix(complex): re/im-split residual ≈0 at the exact φ (catches a conj/split sign error)',
+       QE.residualReimAtSolution(QE.reimSplit(fixed), phi, hData).max < 1e-10);
+  }
+
   // ---- Re/im split FAITHFULNESS. At an ARBITRARY (non-solution) reality-sliced
   //      point, each conjugate-model equation E must equal (Re-part) + i·(Im-part)
   //      of its split, evaluated at the matching real point. This proves the

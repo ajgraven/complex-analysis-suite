@@ -138,7 +138,8 @@ visualizations, complementary to the headless runner.
     ├── sym-core.js                    QD.Sym: exact symbolic algebra (Rational/Gaussian/
     │                                  MPoly/RatFn/FRatFn + power series, Lagrange reversion;
     │                                  resultant/discriminant + Gröbner basis over ℚ(i):
-    │                                  Buchberger/FGLM/solveZeroDim)
+    │                                  Buchberger (+ signature/GVW), FGLM, linearReduce,
+    │                                  solveZeroDim + Möller–Stetter eigenvalue solving)
     ├── qd-equations.js                QD.QDEquations: symbolic coefficient system for a
     │                                  classical bounded QD (conjugate + real/imag reps)
     ├── qd-constraints.js              QD.QDConstraints: univalence/geometric constraints
@@ -446,9 +447,11 @@ view is active.
   `φ(z_j)=a_j`, a principal-part block giving each `C_{j,s}` from the `A_{j,k}`, and a gauge
   normalization. Choose the **conjugate model over ℚ(i)** or the **real/imaginary split**; the
   system is rendered with KaTeX, **self-verified** against the numeric solution (every equation
-  ≈0), and exportable as LaTeX or a CAS-agnostic JSON term list. Exact arithmetic throughout
-  (`app/sym-core.js` `QD.Sym`; `app/qd-equations.js` `QD.QDEquations`) — the foundation for a
-  future symbolic-reduction (Gröbner / triangular-decomposition) step.
+  ≈0), and exportable as LaTeX or a CAS-agnostic JSON term list. A default-on **"Fix φ(0) = w₀"**
+  checkbox bakes the solve's selected Riemann-map center (centroid of the poles by default) into
+  the equations as an *exact rational*, dropping w₀/w̄₀ from the variables. Exact arithmetic
+  throughout (`app/sym-core.js` `QD.Sym`; `app/qd-equations.js` `QD.QDEquations`); the
+  "Open in Algebra workspace ↗" button feeds the in-browser elimination/Gröbner reducer below.
 * **Algebra tab** *(classical bounded QD only)* — an interactive **equation-derivation
   workspace**. The generated (●)/(★)/gauge system appears as KaTeX nodes in a graph;
   add **univalence constraints** (convex, star-like, spiral-like, `φ′≠0`, global boundary
@@ -459,7 +462,9 @@ view is active.
   sugar selection; pick the monomial order, or give an *eliminate* list for a fast block
   elimination order) — each basis generator becomes a derived node. **Dimension / count**
   reports whether the system has finitely many solutions and how many; **Solve (numeric)**
-  runs the shape-lemma path (FGLM to lex → Durand–Kerner → back-substitution). The
+  runs the shape-lemma path (FGLM to lex → Durand–Kerner → back-substitution), falling back
+  to Möller–Stetter **eigenvalue solving** when the lex basis is not in shape position (so it
+  handles any radical zero-dimensional system). The
   Gröbner and Solve actions run **off the main thread** in a Web Worker with live
   progress and a **Cancel** button (a main-thread fallback covers `file://`). Variables
   to eliminate are chosen from a **dropdown checklist**; you can **assume chosen
@@ -470,11 +475,12 @@ view is active.
   preview; expand for the full form), **reorderable** within a column (▲/▼), copy as
   **LaTeX** individually (⧉), and carry **hovertext** (variable count, real-equation
   contribution, per-variable order, total degree, provenance); conjugate equations are
-  paired adjacently. Undo/redo, a cost preview, and JSON/LaTeX export. From
-  `app/qd-constraints.js` (`QD.QDConstraints`) + `app/algebra/`; foundation for a later
-  Gröbner-basis / RCTD reduction step.
-* **φ(0)** — defaults to the centroid of the poles (manually overridable
-  in bounded mode).
+  paired adjacently. Re-seeding (toggle **fix φ(0)** / **assume real**) is undoable. Undo/redo,
+  a cost preview, and JSON/LaTeX export. From `app/qd-constraints.js` (`QD.QDConstraints`) +
+  `app/algebra/`; an external-CAS / RCTD bridge is the remaining future step.
+* **φ(0)** — the Riemann-map center w₀ = φ(0) defaults to the centroid of the poles
+  (manually overridable in bounded mode), and now also drives the **symbolic** equation
+  system and the Algebra-tab seeding (exact-rational substitution).
 * **Solver settings** — boundary samples, aggressiveness preset (Quick /
   Standard / Thorough), auto-fit toggle, vector-field overlay (`h̄(w)`
   Pólya field, or `w − h̄(w)` external field).

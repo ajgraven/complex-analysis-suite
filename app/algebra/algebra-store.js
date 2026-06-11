@@ -11,10 +11,20 @@
 //            column, meta }
 //   edge = { from, to }
 //
-// Ops: seedFromSystem (●/★/gauge from generateClassicalBounded), addConstraint
-// (the four univalence forms), eliminate (Sylvester resultant of two nodes over a
-// shared variable → a new derived node one column deeper), duplicate/branch,
-// deleteNode (cascade to descendants), undo/redo (snapshot stack), exportDAG.
+// Seeded normalization state (part of the snapshot, so undo/redo restore it):
+//   model    -- 'conjugate' | 'reim'
+//   realVars -- base (primal) variables asserted REAL (z̄ⱼ≡zⱼ, …); substituted into
+//               every seeded equation and every later constraint/conjugate companion.
+//   w0Fixed  -- the fixed Riemann-map center φ(0)=w₀ ({re:[n,d], im:[n,d]} BigInt
+//               strings) when the seed system was generated with {w0}; substituted
+//               into any later constraint that rebuilds φ with the w₀ symbol.
+//
+// Ops: seedFromSystem (●/★/gauge from generateClassicalBounded, + conjugate
+// companions, realVars, w0Fixed), addConstraint (the four univalence forms),
+// eliminate / eliminateWithGauge (Sylvester resultant → a derived node one column
+// deeper), groebner / groebnerAsync, dimension / dimensionAsync, solve / solveAsync,
+// duplicate, deleteNode (cascade to descendants), moveNode (reorder within a column),
+// undo/redo (snapshot stack), nodeStats, variables/baseVariables, exportDAG.
 // =============================================================================
 
 (function (global) {
@@ -105,7 +115,13 @@
     }
     function list() { return [...nodes.values()]; }
     function get(id) { return nodes.get(id); }
-    function reset() { nodes.clear(); edges = []; order = new Map(); seq = 0; undoStack.length = 0; redoStack.length = 0; }
+    // Clear the graph itself (nodes/edges/order/ids) but KEEP the seeded normalization
+    // (model/realVars/w0Fixed) and the undo history. seedFromSystem uses this after a
+    // checkpoint so re-seeding is undoable. The public reset() is the full wipe.
+    function clearGraph() { nodes.clear(); edges = []; order = new Map(); seq = 0; }
+    // FULL reset — also drops the undo/redo history and the normalization state. For
+    // tearing the store down (tests / a fresh start), NOT for re-seeding.
+    function reset() { clearGraph(); model = 'conjugate'; realVars = []; w0Fixed = null; undoStack.length = 0; redoStack.length = 0; }
 
     // --- display order within a column ---------------------------------------
     // Cards are laid out top-to-bottom by `order` (then id, for stability).
@@ -165,10 +181,14 @@
     function seedFromSystem(system, opts) {
       opts = opts || {};
       const withConj = opts.withConjugates !== false;
-      if (opts.realVars !== undefined) realVars = (opts.realVars || []).map(_primalName);
+      // checkpoint FIRST (capturing the OLD graph + realVars + w0Fixed) so re-seeding
+      // is undoable; only THEN clear the graph and apply the new normalization. (The
+      // realVars assignment must follow the checkpoint, or undo would restore the old
+      // graph paired with the new reality assumptions.)
       checkpoint();
-      reset();
+      clearGraph();
       model = system.model || 'conjugate';
+      if (opts.realVars !== undefined) realVars = (opts.realVars || []).map(_primalName);
       w0Fixed = system.w0Fixed || null;   // remember the fixed φ(0) for later constraints
       const primals = [];
       for (const block of ['locator', 'star', 'gauge']) {
@@ -523,7 +543,12 @@
       const varOrders = vars.map((name) => ({ name, order: n.poly.degreeIn(name) }));
       let selfConj = false, hasCompanion = false;
       if (QC && QC.conjMPoly) {
-        const conj = QC.conjMPoly(n.poly);
+        // Compute the conjugate the SAME way maybeAddConjugate does — fold fixed φ(0)
+        // and reality back in — so self-conjugacy / companion detection matches the
+        // nodes actually seeded. Without this, under reality assumptions the bare
+        // conjugate reintroduces barred names that match nothing, mis-reporting the
+        // real-equation count in the hovertext.
+        const conj = _applyReality(_applyW0(QC.conjMPoly(n.poly)));
         selfConj = n.poly.sub(conj).isZero() || n.poly.add(conj).isZero();
         if (!selfConj) for (const m of nodes.values()) if (m.id !== n.id && m.poly.equals(conj)) { hasCompanion = true; break; }
       }

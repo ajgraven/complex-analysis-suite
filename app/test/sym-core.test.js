@@ -535,6 +535,38 @@ module.exports = async function run() {
       const gvw4 = S.buchbergerSig(cyc4, o4, { stats });
       ok('GVW: cyclic-4 matches buchberger and reports pair stats',
          keys(gvw4) === keys(S.buchberger(cyc4, o4)) && stats.pairsProcessed > 0 && stats.basisRaw > 0);
+
+      // GVW honors the caps (a 0-step budget throws a clear error, like buchberger)
+      ok('buchbergerSig: throws a clear cap error past the step budget', (() => {
+        try { S.buchbergerSig(cyc4, o4, { maxSteps: 0 }); return false; }
+        catch (e) { return /signature steps|use CAS export/i.test(String(e.message || e)); }
+      })());
+    }
+
+    // Code-review coverage: edge cases the review flagged as untested.
+    {
+      // linearReduce on an INCONSISTENT system: a nonzero constant survives the
+      // substitutions ⇒ no solutions. solveZeroDim must return ok with an empty set,
+      // not throw or mis-lift. {x−1, x−2, y−x}: x=1 then x−2 → −1 (a nonzero constant).
+      const inc = [mv('x').sub(mi(1)), mv('x').sub(mi(2)), mv('y').sub(mv('x'))];
+      const lr = S.linearReduce(inc);
+      ok('linearReduce: flags an inconsistent system', lr.inconsistent === true);
+      const sinc = S.solveZeroDim(inc, {});
+      ok('solveZeroDim: an inconsistent system → ok with zero solutions (no throw)',
+         sinc.ok === true && sinc.solutions.length === 0);
+
+      // preprocessing must respect opts.vars: a requested variable left UNCONSTRAINED
+      // after linear elimination is free ⇒ positive-dimensional over that ambient space.
+      // {y−1} with vars [x,y]: y is pinned, x is free.
+      const pos = S.solveZeroDim([mv('y').sub(mi(1))], { vars: ['x', 'y'] });
+      ok('solveZeroDim: a free requested variable ⇒ {ok:false} (not a bogus solution)',
+         pos.ok === false && /zero-dimensional|unconstrained/i.test(pos.reason));
+
+      // the eigenvalue solver honors its dimension cap
+      const grid = [mv('x').pow(2).sub(mi(1)), mv('y').pow(2).sub(mi(1))];   // quotient dim 4
+      const capped = S.solveByEigenvalues(grid, { maxEigenDim: 2 });
+      ok('solveByEigenvalues: quotient dimension over the cap → {ok:false} (no throw)',
+         capped.ok === false && /cap/i.test(capped.reason));
     }
 
     // Block / elimination order: cheaper than lex, same elimination ideal.

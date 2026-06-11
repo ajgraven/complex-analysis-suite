@@ -43,9 +43,9 @@ its own merged PR), with one feature **in progress on a branch**:
   end-to-end on cyclic-5** vs the original, all bit-identical. **Modular / multi-modular GB was
   built, verified, and then reverted** — hard benchmarks showed it slower on these systems and the
   full cardioid (14 vars, ~478 gens) is combinatorially intractable for any plain-Buchberger variant
-  (a single 𝔽_{p²} prime > 12 min; exact > 41 min); reality reduction remains the real lever. Tip
-  `2e50f6a` (Phase A) + uncommitted Phase D; tests **1620/0**; hash `64e7dde31c`. RCTD bridge remains
-  Phase 3; see the deep section below. A follow-on **"expand the solvable class" investigation**
+  (a single 𝔽_{p²} prime > 12 min; exact > 41 min); reality reduction remains the real lever. Phases A
+  and D both committed (Net ≈4.5× end-to-end on cyclic-5). RCTD bridge remains Phase 3; see the deep
+  section below. A follow-on **"expand the solvable class" investigation**
   (`GROEBNER_INVESTIGATION.md`, 4 research threads) is now being implemented in tiers: **Tier 1 —
   linear-substitution preprocessing** (`Sym.linearReduce`: strip degree-1-with-constant-coeff
   variables before solving, lift them back; integrated into `solveZeroDim`) is done (strips the QD
@@ -59,8 +59,10 @@ its own merged PR), with one feature **in progress on a branch**:
   Buchberger** is done (`Sym.buchbergerSig`: GVW on the packed kernel with POT module order +
   syzygy/Koszul + rewrite criteria; opt-in via `buchberger(…, {signature:true})`). Produces a
   basis **bit-identical** to `buchberger` (the reduced GB is unique — the correctness oracle) while
-  pruning S-pairs: **cyclic-5 2.2× faster, cyclic-6 ~1.3× faster**. All three investigation tiers
-  shipped. See `GROEBNER_INVESTIGATION.md`. **Selectable φ(0):** the Riemann-map center w₀ = φ(0)
+  pruning S-pairs: **cyclic-5 2.2× faster, cyclic-6 ~1.3× faster**. The headline item of each tier
+  (L1 / S1 / G1) shipped; the deeper levers (Tier-1 L2–L6, Tier-2 certified numerics, Tier-3 Gröbner
+  Walk / truncated GB) remain open. See `GROEBNER_INVESTIGATION.md`. **Selectable φ(0):** the
+  Riemann-map center w₀ = φ(0)
   (Map parameters ▸ "Riemann map center φ(0)": **centroid of the poles by default**, or manual) now
   also drives the SYMBOLIC system — `generateClassicalBounded(hData, {w0})` substitutes the exact
   ℚ(i) rationalization (0.2 → 1/5) for w₀/w̄₀ and drops them from the params (`system.w0Fixed`);

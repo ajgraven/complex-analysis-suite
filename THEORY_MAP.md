@@ -76,8 +76,11 @@ The same shape repeats for every other family (`solver-uqd.js`,
 ### Symbolic generation of this system (`QD.QDEquations`)
 
 The numeric solver assembles the (●)/(★)/gauge residual at floating-point values. A separate
-**symbolic** track emits the same system as exact polynomials in the coefficients — the foundation
-for explicit elimination (a later Gröbner / triangular-decomposition reducer).
+**symbolic** track emits the same system as exact polynomials in the coefficients, feeding the
+in-browser elimination / Gröbner reducer (the Algebra tab; an external-CAS / RCTD bridge is the
+remaining future step). The Riemann-map center φ(0)=w₀ can be FIXED into the symbolic system as an
+exact rational — `generateClassicalBounded(hData, {w0})` substitutes it and drops w₀/w̄₀ from the
+inventory (`system.w0Fixed`); the UI defaults it to the centroid of the poles.
 
 | Block | Symbol | Where |
 | --- | --- | --- |
@@ -104,11 +107,14 @@ see arXiv:2001.09431 for the RCTD-of-QDs method this anticipates.
 | --- | --- | --- |
 | Sylvester resultant / discriminant (fraction-free Bareiss) | `QD.Sym.resultant` / `discriminant` / `mpolyDet` | [`app/sym-core.js`](app/sym-core.js) |
 | Monomial orders (lex/grlex/grevlex + block/elimination) + normal form + S-poly | `QD.Sym.monomialOrder` / `eliminationOrder` / `normalForm` / `sPoly` | [`app/sym-core.js`](app/sym-core.js) |
-| Gröbner basis (Buchberger over ℚ(i): Gebauer–Möller + sugar, reduced) + saturation `I:f^∞` | `QD.Sym.buchberger` / `reduceGroebner` / `saturate` | [`app/sym-core.js`](app/sym-core.js) |
+| Gröbner basis (Buchberger over ℚ(i): Gebauer–Möller + sugar; bit-packed kernel + content removal; reduced) + saturation `I:f^∞` | `QD.Sym.buchberger` / `reduceGroebner` / `saturate` | [`app/sym-core.js`](app/sym-core.js) |
+| Signature-based Gröbner (GVW, POT; bit-identical, fewer S-pairs) — opt-in `buchberger(…,{signature:true})` | `QD.Sym.buchbergerSig` | [`app/sym-core.js`](app/sym-core.js) |
+| Linear-substitution preprocessing (strip degree-1-with-constant-coeff variables, lift back) | `QD.Sym.linearReduce` (in `solveZeroDim`'s `preprocess` step) | [`app/sym-core.js`](app/sym-core.js) |
 | Zero-dim toolkit: standard monomials / quotient dimension / solution count | `QD.Sym.standardMonomials` / `isZeroDimensional` / `quotientDimension` | [`app/sym-core.js`](app/sym-core.js) |
-| FGLM (grevlex→lex) + shape-lemma numeric solving (Durand–Kerner back-substitution) | `QD.Sym.fglm` / `solveZeroDim`; `QD.AlgebraStore.dimension` / `solve` | [`app/sym-core.js`](app/sym-core.js) |
+| FGLM (grevlex→lex) + shape-lemma numeric solving, with a Möller–Stetter **eigenvalue** fallback for non-shape-position ideals | `QD.Sym.fglm` / `solveZeroDim` / `solveByEigenvalues` / `multiplicationMatrix`; `QD.AlgebraStore.dimension` / `solve` | [`app/sym-core.js`](app/sym-core.js) |
 | Off-main-thread Gröbner/solve (Web Worker, progress + cancel) | `QD.SymWorker` (via `Sym.runJob` / `MPoly.fromTermList`); `AlgebraStore.groebnerAsync` / `solveAsync` / `dimensionAsync` | [`app/algebra/sym-worker.js`](app/algebra/sym-worker.js) |
 | Reality assumption (assert variables real → simplified re-seed) | `AlgebraStore.seedFromSystem(system, {realVars})` (v̄→v post-conjugation) | [`app/algebra/algebra-store.js`](app/algebra/algebra-store.js) |
+| Fixed φ(0)=w₀ remembered + substituted into later constraints (e.g. star form φ−w₀) | `AlgebraStore` `w0Fixed` / `seedFromSystem` (from `system.w0Fixed`) | [`app/algebra/algebra-store.js`](app/algebra/algebra-store.js) |
 | Gröbner workspace op (selected/all equality nodes) | `QD.AlgebraStore.groebner` | [`app/algebra/algebra-store.js`](app/algebra/algebra-store.js) |
 | φ, φ′, φ″ at a generic boundary point ζ | `QDConstraints.phiData` (reuses `phiSeriesAt` at ζ) | [`app/qd-constraints.js`](app/qd-constraints.js) |
 | convex `Re(1+ζφ″/φ′)>0`, star `Re(ζφ′/(φ−w₀))>0`, spiral (∃λ) | `QDConstraints.convexIneq` / `starIneq` / `spiralIneq` | `app/qd-constraints.js` |

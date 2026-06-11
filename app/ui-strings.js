@@ -304,7 +304,7 @@
       qdeqFixW0: `Substitute the selected Riemann-map center w₀ = φ(0) into the equations as an exact rational, regenerating the system for that normalization (w₀/w̄₀ stop being parameters). The value comes from Map parameters ▸ "Riemann map center φ(0)" — the centroid of the poles by default, or your manual choice; changing it re-solves and regenerates here. Untick to keep w₀ symbolic.`,
       algFixW0: `Seed the workspace with the selected φ(0) = w₀ substituted in as an exact rational (centroid of the poles by default; set manually under Map parameters). Removes w₀/w̄₀ from the variables — 2 fewer for elimination / Gröbner — and the same value is substituted into any univalence constraint added later (e.g. the star form's φ − w₀). Untick for the fully-symbolic system.`,
       dimension: `Report whether the equality system has finitely many solutions (zero-dimensional) and, if so, the solution count with multiplicity — the quotient-ring dimension of a grevlex Gröbner basis.`,
-      solveNumeric: `Solve the equality system numerically: a grevlex Gröbner basis → FGLM to a lex basis → if it is in shape position, the univariate factor is solved by Durand–Kerner and back-substituted. Solutions print to the console; non-solvable systems report why (route to the CAS bridge).`,
+      solveNumeric: `Solve the equality system numerically: a grevlex Gröbner basis → FGLM to a lex basis → if it is in shape position, the univariate factor is solved by Durand–Kerner and back-substituted; otherwise it falls back to Möller–Stetter eigenvalue solving (the multiplication matrices of the quotient ring), which handles any radical zero-dimensional system. Solutions print to the console; truly unsolvable systems (positive-dimensional, or past the size cap) report why (route to the CAS bridge).`,
       fit: `Fit view to data`,
       reset: `Reset view`,
       dock: `Dock the panel into the sidebar (clear the plot)`,
@@ -340,8 +340,11 @@
         `block φ(zⱼ)=aⱼ, a PRINCIPAL-PART (★) block giving each Cⱼ,ₛ from the Aⱼ,ₖ, and a ` +
         `gauge normalization that fixes the rotational freedom. Choose the conjugate ` +
         `model over ℚ(i) (z̄, Ā independent indeterminates) or the real/imaginary split ` +
-        `(zⱼ=xⱼ+iyⱼ, …). "self-check" evaluates every equation at the numeric solution — ` +
-        `it must be ≈0. Export feeds a future symbolic-reduction (Gröbner / triangular) step.`,
+        `(zⱼ=xⱼ+iyⱼ, …). Tick "Fix φ(0) = w₀" to bake the selected Riemann-map center ` +
+        `(centroid of the poles by default) into the equations as an exact rational. ` +
+        `"self-check" evaluates every equation at the numeric solution — it must be ≈0. ` +
+        `"Open in Algebra workspace" hands the system to the in-browser elimination / ` +
+        `Gröbner reducer (the Algebra tab); Export also feeds an external CAS.`,
       unavailablePrefix: `Equation generation unavailable: `,
       pending: `solving… equation system pending`,
     },

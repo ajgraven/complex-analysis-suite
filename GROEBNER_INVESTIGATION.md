@@ -28,11 +28,18 @@ Everything below is rated on **(payoff × portability ÷ effort)** for *this* to
 
 ## Tier 1 — Structural & preprocessing wins (cheap, portable, no engine changes) ★ start here
 
-The QD coefficient blocks are massively linear in the parameters and low-index coefficients
+> **STATUS: L1 SHIPPED** (`Sym.linearReduce`, integrated into `solveZeroDim` as a default-on
+> `preprocess` step; also fixing φ(0) — `generateClassicalBounded(hData,{w0})` — removes w₀/w̄₀ up
+> front). Honest scope: for the cleared-denominator conjugate model L1 strips the *gauge* (1 var)
+> but not more — the (★) rows carry the A-coefficients with non-constant (z/z̄-dependent) leading
+> coefficients, so they aren't constant-linear. L2–L6 (linear gauge elim, auto-reality, symmetry
+> relations, grevlex→FGLM routing, Möbius saturation) remain open.
+
+The QD coefficient blocks are linear in the parameters and low-index coefficients
 (`qd-equations.js generateClassicalBounded`): the **gauge** is linear in every `A_{j,1}`; each
-**`(★)_{j,s}`** row is linear in its `C_{j,s}`; **`(★)_{j,1}`** is linear in the `A`'s; the **locator**
-is linear in `a_j`. And the systems carry provable *linear* symmetry relations. None of this is
-currently exploited before `buchberger` runs.
+**`(★)_{j,s}`** row is linear in its `C_{j,s}`; the **locator** is linear in `a_j`. And the systems
+carry provable *linear* symmetry relations. L1 below now exploits the genuinely-constant-linear
+generators before solving (the gauge); the rest is L2–L6.
 
 - **L1 — Linear-substitution preprocessing (`Sym.linearReduce`).** Repeatedly: find a generator of
   total degree 1 in some variable with constant leading coefficient, solve it, `MPoly.subst` into the

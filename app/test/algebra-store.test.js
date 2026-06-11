@@ -323,6 +323,37 @@ module.exports = async function run() {
        st2.w0Fixed === null && st2.variables().indexOf('w0') !== -1);
   }
 
+  // ---- re-seeding is UNDOABLE (code-review fix): seeding checkpoints the prior
+  //      graph instead of wiping the undo history, so toggling fix-φ(0) / assume-real
+  //      (both of which re-seed) doesn't silently and irreversibly discard a
+  //      derivation. ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system);                       // seed #1
+    const ns = st.list();
+    st.eliminate(ns[0].id, ns[1].id, st.sharedVars(ns[0].id, ns[1].id)[0]);   // a derived node
+    const derivedSize = st.size;
+    ok('re-seed undo: a derivation exists before re-seeding', derivedSize > 5);
+    st.seedFromSystem(system, { realVars: ['z1', 'a1', 'w0', 'A1_1'] });       // seed #2 (different normalization)
+    ok('re-seed undo: re-seed replaced the graph and the reality assumptions',
+       st.realVars.length === 4 && st.size !== derivedSize);
+    ok('re-seed undo: undo restores the prior derivation AND its (empty) reality state',
+       st.undo() && st.size === derivedSize && st.realVars.length === 0);
+    ok('re-seed undo: redo re-applies the re-seed', st.redo() && st.realVars.length === 4);
+  }
+
+  // ---- nodeStats real-equation accounting respects reality assumptions (review
+  //      fix): under reality the conjugacy check must fold reality in, or it
+  //      mis-counts. With z1,a1,w0,A1_1 real, the disk locator/star become
+  //      self-conjugate-under-reality (1 real equation each), not 2. ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system, { realVars: ['z1', 'a1', 'w0', 'A1_1'] });
+    const eqNodes = st.list().filter((n) => n.rel === '=');
+    ok('nodeStats(reality): every equality node reports 1 real equation (self-conjugate under reality)',
+       eqNodes.length > 0 && eqNodes.every((n) => st.nodeStats(n.id).realEquations === 1));
+  }
+
   // ---- dimensionAsync (worker fallback) ----
   {
     const st = QD.AlgebraStore.create(); st.seedFromSystem(system);

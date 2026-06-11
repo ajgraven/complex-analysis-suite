@@ -2,9 +2,12 @@
 // algebra-ui.js -- the Algebra tab: an interactive equation-derivation workspace
 // (QD_UI.installAlgebra). Hosts a QD.AlgebraStore rendered by QD.AlgebraCanvas in
 // a full-area #algebra-graph surface over #plot-area, with sidebar controls in
-// #controls-algebra: seed from the current classical-bounded solve, a univalence-
-// constraint palette, pairwise resultant elimination (select 2 nodes + a shared
-// variable → derived node, with a cost preview), undo/redo, and DAG/LaTeX export.
+// #controls-algebra: seed from the current classical-bounded solve (with fix-φ(0)
+// and assume-real options), a univalence-constraint palette, pairwise resultant
+// elimination (select 2 nodes + a shared variable → derived node, with a cost
+// preview) and batch gauge elimination, Gröbner basis / dimension / numeric solve
+// (off the main thread, with a Cancel button), a persistent dismissible error
+// panel, undo/redo, and DAG/LaTeX export.
 //
 // CAS-UX (Stoutemyer): preview-before-commit (cost), navigable derivation tree +
 // backtracking (DAG + undo), equation selection, accumulate alternatives (branch/
@@ -214,7 +217,7 @@
         if (b.tip) btn.title = b.tip;
         btn.addEventListener('click', () => {
           if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
-          if (!store.size) seedFromCurrent();
+          if (!store.size && !seedFromCurrent()) return;   // bail if seeding failed (e.g. order over cap) — don't add to an unseeded graph
           try { const made = store.addConstraint(b.form, activeEnv.hData); rerender(); toast('Added ' + made.length + ' node(s): ' + b.label); }
           catch (e) { toast((e && e.message) || String(e), { kind: 'error' }); }
         });

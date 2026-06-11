@@ -1,10 +1,12 @@
 // =============================================================================
 // sym-core.js -- Exact symbolic-algebra core (QD.Sym).
 //
-// The foundation for the app's symbolic track (the classical-QD equation
-// generator in qd-equations.js, and a future Gröbner/CTD reducer). Everything
+// The foundation for the app's symbolic track: the classical-QD equation
+// generator (qd-equations.js), the univalence constraints (qd-constraints.js),
+// and the Algebra-tab elimination/Gröbner workspace (app/algebra/). Everything
 // here is EXACT (BigInt rationals) so downstream elimination is meaningful;
-// floating point only ever appears in evalComplex (the numeric-residual oracle).
+// floating point appears only in evalComplex (the numeric-residual oracle) and
+// in the numeric eigen/root steps of the two solvers.
 //
 // Layers, smallest to largest:
 //   Rational  -- BigInt n/d, normalized (d > 0, gcd 1).
@@ -12,6 +14,14 @@
 //   MPoly     -- multivariate polynomial: sparse Map<monomialKey, term>, term =
 //                { mono: Map<varName,exp>, coeff: Gaussian }. Variables are bare
 //                string names (e.g. 'z1', 'zb1', 'A_1_1', 'Ab_1_1', 'a1', …).
+//   Elimination -- resultant/discriminant via fraction-free Bareiss (mpolyDet).
+//   Gröbner   -- monomial orders (lex/grlex/grevlex/block), normal form, the
+//                packed exponent-vector kernel, Buchberger (Gebauer–Möller +
+//                sugar) and the signature-based GVW variant (buchbergerSig),
+//                reduced bases, saturation; linearReduce preprocessing.
+//   Zero-dim  -- standard monomials / quotient dimension, FGLM (grevlex→lex),
+//                solveZeroDim (shape lemma) with a Möller–Stetter eigenvalue
+//                fallback (solveByEigenvalues) for non-shape-position ideals.
 //   RatFn     -- MPoly/MPoly (the fraction field) — needed because the QD ansatz
 //                and Taylor inversion introduce (1 − z̄·z) and φ′ denominators;
 //                an equation RatFn = 0 clears to its numerator MPoly = 0.
@@ -19,8 +29,9 @@
 //                with mul / pow / compose / compositional-inverse (mirrors the
 //                numeric taylor.js, but symbolic) — drives the (★) Faber block.
 //
-// Pure module: no DOM. Loads in node-test (after complex.js, for evalComplex).
-// Namespace idiom mirrors poly-helpers.js.
+// Pure module: no DOM, no dependencies (a minimal {re,im} complex arithmetic is
+// inlined for evalComplex — QD.Complex is NOT assumed loaded). Namespace idiom
+// mirrors poly-helpers.js.
 // =============================================================================
 
 (function (global) {
@@ -149,8 +160,11 @@
   }
   // Global monomial order (graded-lex): higher total degree wins; ties broken
   // lexicographically by the higher exponent on the alphabetically-earliest
-  // differing variable. Used only by the exact-division step of the determinant —
-  // any well-founded order makes that division terminate; grlex keeps it cheap.
+  // differing variable. This is the DEFAULT order whenever an `order` argument is
+  // omitted (_orderCmp(null) → monoCmp, so leadingTerm / mpolyDivMod / normalForm /
+  // sPoly without an explicit order use it), and the order the determinant's
+  // exact-division step relies on — any well-founded order makes that division
+  // terminate; grlex keeps it cheap. Also exported as Sym.monoCmp.
   function monoCmp(a, b) {
     const da = monoTotalDeg(a), db = monoTotalDeg(b);
     if (da !== db) return da < db ? -1 : 1;
@@ -736,7 +750,6 @@
     for (const [name, e] of b) out.set(name, Math.max(out.get(name) || 0, e));
     return out;
   }
-  function _monoCoprime(a, b) { for (const k of a.keys()) if (b.has(k)) return false; return true; }
   function _monoEqual(a, b) {
     if (a.size !== b.size) return false;
     for (const [k, e] of a) if ((b.get(k) || 0) !== e) return false;
@@ -820,14 +833,17 @@
   // subtract, multiply = lane add, coprime = no shared positive lane, and the
   // monomial order is a direct index walk — no Map iteration, no Set, no sort,
   // no string concatenation per comparison. The term key is one UTF-16 code unit
-  // per lane (collision-free while every exponent ≤ 0xFFFF, far above the degree
-  // caps). Coefficients stay Gaussian (ℚ(i)); the field is abstracted in Phase B.
+  // per lane (collision-free for exponents ≤ 0xFFFF — enforced in _pMul and
+  // _ppFromMPoly, see _P_EXP_MAX). Coefficients stay Gaussian (ℚ(i)).
   //
-  // This kernel runs ONLY inside buchberger(); inputs are converted from MPoly on
-  // entry and the raw basis back to MPoly on exit (then handed to the unchanged
-  // reduceGroebner). Because the reduced Gröbner basis is UNIQUE for a given ideal
-  // and order, a correct kernel yields a bit-identical result to the old MPoly
-  // path. The public MPoly division/normalForm/sPoly primitives are untouched.
+  // This kernel powers the whole Gröbner layer: buchberger()'s main loop AND its
+  // reduction phase (_reduceGroebnerPacked), the signature-based buchbergerSig,
+  // and content removal (_ppMakePrimitive). Inputs convert from MPoly on entry
+  // and the basis back to MPoly only at the very end. Because the reduced Gröbner
+  // basis is UNIQUE for a given ideal and order, a correct kernel yields a result
+  // bit-identical to the original MPoly path. The public MPoly division/
+  // normalForm/sPoly primitives are untouched (still used by fglm/saturate and
+  // exported); reduceGroebner survives as their reduction counterpart.
   // ===========================================================================
 
   // Build the fixed variable layout + order comparator + tdeg for a ring over
@@ -902,7 +918,23 @@
 
   // Packed-monomial primitives (Int32Array lanes).
   function _pKey(e) { let s = ''; for (let i = 0; i < e.length; i++) s += String.fromCharCode(e[i]); return s; }
-  function _pMul(a, b) { const n = a.length, o = new Int32Array(n); for (let i = 0; i < n; i++) o[i] = a[i] + b[i]; return o; }
+  // Per-variable exponents must stay ≤ 0xFFFF for _pKey's one-UTF-16-code-unit-
+  // per-lane encoding to be collision-free (String.fromCharCode applies ToUint16,
+  // so 65536 would key like 0 and silently merge distinct terms). Graded orders
+  // can't exceed it (GROEBNER_MAX_DEGREE caps accepted generators and division
+  // never raises total degree there), but under a pure-lex order intermediate
+  // reduction CAN raise degree — so the two growth points (term products here,
+  // input conversion in _ppFromMPoly) enforce the bound with a clear throw.
+  const _P_EXP_MAX = 0xFFFF;
+  function _pMul(a, b) {
+    const n = a.length, o = new Int32Array(n);
+    for (let i = 0; i < n; i++) {
+      const s = a[i] + b[i];
+      if (s > _P_EXP_MAX) throw new Error('packed kernel: exponent ' + s + ' exceeds the 16-bit key bound; use CAS export.');
+      o[i] = s;
+    }
+    return o;
+  }
   function _pLcmV(a, b) { const n = a.length, o = new Int32Array(n); for (let i = 0; i < n; i++) o[i] = a[i] > b[i] ? a[i] : b[i]; return o; }
   function _pDivV(a, b) { const n = a.length, o = new Int32Array(n); for (let i = 0; i < n; i++) { const d = a[i] - b[i]; if (d < 0) return null; o[i] = d; } return o; }
   function _pCoprimeV(a, b) { const n = a.length; for (let i = 0; i < n; i++) if (a[i] > 0 && b[i] > 0) return false; return true; }
@@ -915,7 +947,10 @@
     const terms = new Map();
     for (const t of poly.terms.values()) {
       const e = new Int32Array(ctx.n);
-      for (const [nm, ex] of t.mono) e[ctx.index.get(nm)] = ex;
+      for (const [nm, ex] of t.mono) {
+        if (ex > _P_EXP_MAX) throw new Error('packed kernel: input exponent ' + ex + ' exceeds the 16-bit key bound; use CAS export.');
+        e[ctx.index.get(nm)] = ex;
+      }
       terms.set(_pKey(e), { e, coeff: t.coeff });
     }
     return terms;
@@ -1076,7 +1111,11 @@
       const qr = _bRoundDiv(pr, nb), qi = _bRoundDiv(pi, nb);
       const r = { re: x.re - (qr * y.re - qi * y.im), im: x.im - (qr * y.im + qi * y.re) };
       x = y; y = r;
-      if (++guard > 100000) break;
+      // The nearest-integer step at least halves N(y) each iteration, so this is
+      // unreachable for real inputs — but a silent `break` here would hand back a
+      // non-divisor and _ppMakePrimitive's truncating division would then corrupt
+      // coefficients, so fail loudly like every other guard in this file.
+      if (++guard > 100000) throw new Error('gaussGCD: non-terminating (guard tripped)');
     }
     return x;
   }
@@ -1164,7 +1203,11 @@
   // strictly lower the signature) handles the cancellation. The polynomials of the
   // resulting signature basis form a Gröbner basis → reduced here to the SAME canonical
   // basis as buchberger() (the reduced GB is unique, so this is the correctness oracle).
-  // Module order: TOP (term-over-position) — any module order is correct.
+  // Module order: POT (position-over-term, index primary — see sigCmp below), the
+  // incremental F5-style choice that makes regular reduction effective.
+  // opts: the same {maxBasis, maxSteps, maxDegree, maxTerms, onProgress, reduced}
+  // caps as buchberger, plus opts.stats (out-param, filled with
+  // {pairsProcessed, pairsGenerated, basisRaw}).
   // ===========================================================================
   function buchbergerSig(polys, order, opts) {
     opts = opts || {};
@@ -1252,8 +1295,13 @@
         // F5 / Koszul syzygy criterion: the principal syzygy lm(g)·sig(lp) vs lm(lp)·sig(g)
         // is a known syzygy — register its (larger) signature so future J-pairs that are
         // its multiples are pruned before reduction. This is what makes signatures fast.
+        // On a TIE the two module leading terms may CANCEL (module coefficients aren't
+        // tracked), so the true syzygy signature could be strictly smaller — registering
+        // it would over-prune and could lose basis elements. Skip the tie case (sound:
+        // fewer registered syzygies only costs pruning power, never correctness).
         const s1 = { sm: _pMul(g.lm, lp.sm), si: lp.si }, s2 = { sm: _pMul(lp.lm, g.sm), si: g.si };
-        Syz.push(sigCmp(s1, s2) >= 0 ? s1 : s2);
+        const sc = sigCmp(s1, s2);
+        if (sc !== 0) Syz.push(sc > 0 ? s1 : s2);
         const jp = jPair(lp, idx, g, gi); if (jp) { P.push(jp); generated++; }
       }
       G.push(lp);
@@ -1267,17 +1315,13 @@
 
   // Caps — Buchberger can blow up super-exponentially, so bound the run and throw
   // a clear "use CAS export" error rather than hanging (mirrors RESULTANT_MATRIX_CAP).
-  // All overridable via opts {maxBasis, maxSteps, maxDegree, maxTerms}. These are set
-  // GENEROUSLY because the heavy ops now run in a cancellable Web Worker (sym-worker.js)
-  // that keeps the UI responsive — a long run can be cancelled rather than guessed-at, so
-  // real systems (e.g. the reality-reduced cardioid: 118 generators) complete instead of
-  // erroring on a too-tight bound. The caps remain finite as a backstop against a true
-  // runaway; past them the error suggests asserting reality / eliminating / CAS export.
-  // Tuned so feasible interactive systems complete (e.g. the reality-reduced cardioid:
-  // 118 generators, ~10 s) while a genuinely intractable one (the FULL conjugate
-  // cardioid is 478 generators / ~6.7 min — and 478 cards would choke the canvas)
-  // errors with actionable guidance (assume variables real / eliminate / CAS export)
-  // instead of grinding. Overridable per call for power users.
+  // All overridable per call via opts {maxBasis, maxSteps, maxDegree, maxTerms} (0 is
+  // honored). The values are tuned for the cancellable Web Worker (sym-worker.js):
+  // feasible interactive systems complete (the reality-reduced cardioid — 118
+  // generators, ~10 s — fits comfortably) while a genuinely intractable one (the FULL
+  // conjugate cardioid: 478 generators / minutes, and that many cards would choke the
+  // canvas anyway) errors with actionable guidance (assume variables real / fix φ(0) /
+  // eliminate / CAS export) instead of grinding.
   const GROEBNER_MAX_BASIS = 300;      // generators in the working basis
   const GROEBNER_MAX_STEPS = 150000;   // S-pair reductions
   const GROEBNER_MAX_DEGREE = 200;     // total degree of any new generator
@@ -1291,8 +1335,11 @@
   // by the order) — both standard and essential for non-homogeneous input like the
   // QD systems. Returns the canonical REDUCED basis unless opts.reduced === false.
   // opts: {maxBasis, maxSteps, maxDegree, maxTerms} caps (overridable; throw a clear
-  // "use CAS export" error past the limit) and opts.onProgress({basis,pairs,steps})
-  // (called per reduction; the seam the Web-Worker offload reports/cancels through).
+  // "use CAS export" error past the limit); opts.onProgress({basis,pairs,steps})
+  // (called per reduction; the seam the Web-Worker offload reports/cancels through);
+  // opts.reduced === false returns the raw (unreduced) basis; opts.signature === true
+  // delegates to the signature-based GVW variant (buchbergerSig) — same canonical
+  // reduced basis, usually fewer S-pair reductions.
   function buchberger(polys, order, opts) {
     opts = opts || {};
     if (opts.signature) return buchbergerSig(polys, order, opts);   // opt-in signature/GVW path
@@ -1512,9 +1559,18 @@
   // ranked lowest; if the basis is in shape position (one univariate generator in the
   // solve variable, every other variable a polynomial in it), solve the univariate
   // numerically (injected root finder — the app passes QD.FaberAnalysis.polynomialRoots)
-  // and back-substitute. Returns { ok, solutions:[{var:{re,im}}], … } or { ok:false,
-  // reason } (not zero-dim / not shape position / no convergence → use the CAS bridge).
+  // and back-substitute. When the lex basis is NOT in shape position it falls back to
+  // the Möller–Stetter eigenvalue solver (solveByEigenvalues), so it solves every
+  // radical zero-dim ideal; pass opts.noEigen:true to suppress the fallback.
+  // Returns { ok, solutions:[{var:{re,im}}], … } or { ok:false, reason } (not zero-dim
+  // / eigen-solve failed / no convergence → use the CAS bridge).
   // input: an array of MPolys (a system) or { G, order } (a precomputed GB).
+  // opts: {vars, solveVar, order1, rootFinder, preprocess (default true; linear
+  //   pre-elimination), noEigen, maxEigenDim} plus the buchberger caps.
+  // NOTE the result shape varies by path: the shape route adds {basis, univariateDegree};
+  //   the eigen fallback adds {method:'eigenvalue', shapePosition:false, fallbackFrom,
+  //   complete} (complete:false ⇒ a PARTIAL solution set); preprocessing adds
+  //   {eliminatedVars}. Callers should probe fields defensively.
   // ---------------------------------------------------------------------------
   // Linear-substitution preprocessing (Tier 1). Repeatedly find a generator that is
   // degree 1 in some variable v with a CONSTANT nonzero leading coefficient — i.e.
@@ -1576,11 +1632,26 @@
     if (Array.isArray(input) && opts.preprocess !== false) {
       const lr = linearReduce(input);
       if (lr.eliminated.length) {
+        // A nonzero constant in the ideal ⇒ no solutions at all (over ANY ambient space).
         if (lr.inconsistent) return { ok: true, solutions: [], basis: [], dimension: 0, univariateDegree: 0, eliminatedVars: lr.eliminated.length };
+        // Respect a caller-supplied ambient space (opts.vars): a requested variable
+        // that was neither eliminated nor survives in the residual generators is
+        // FREE — the system is positive-dimensional over opts.vars even though the
+        // residual alone may look zero-dimensional (e.g. [y−1] with vars ['x','y']).
+        const elimNames = new Set(lr.eliminated.map((e) => e.name));
+        const surviving = opts.vars ? opts.vars.filter((v) => !elimNames.has(v)) : undefined;
+        if (surviving) {
+          const rv = new Set(_ambientVars(lr.reduced));
+          if (surviving.some((v) => !rv.has(v))) {
+            return { ok: false, reason: 'the system is not zero-dimensional (a requested variable is unconstrained after linear reduction)' };
+          }
+        }
         if (lr.reduced.length === 0 || _ambientVars(lr.reduced).length === 0) {
           return { ok: true, solutions: [_liftEliminated({}, lr.eliminated)], basis: [], dimension: 1, univariateDegree: 0, eliminatedVars: lr.eliminated.length };
         }
-        const sub = solveZeroDim(lr.reduced, Object.assign({}, opts, { preprocess: false, vars: undefined, solveVar: undefined }));
+        // Keep the caller's solveVar when it survives elimination; drop it otherwise.
+        const sv = (opts.solveVar && !elimNames.has(opts.solveVar)) ? opts.solveVar : undefined;
+        const sub = solveZeroDim(lr.reduced, Object.assign({}, opts, { preprocess: false, vars: surviving, solveVar: sv }));
         if (!sub.ok) return sub;
         return Object.assign({}, sub, {
           solutions: sub.solutions.map((s) => _liftEliminated(s, lr.eliminated)),
@@ -1649,7 +1720,11 @@
       }
       return sol;
     });
-    return { ok: true, solutions, basis: Glex, dimension: quotientDimension(G1, o1, vars), univariateDegree: f.degreeIn(solveVar) };
+    // quotientDimension can throw past ZERO_DIM_MAX; the solve itself succeeded,
+    // so report the solutions with an unknown dimension rather than throwing.
+    let qdim = null;
+    try { qdim = quotientDimension(G1, o1, vars); } catch (e) { qdim = null; }
+    return { ok: true, solutions, basis: Glex, dimension: qdim, univariateDegree: f.degreeIn(solveVar) };
   }
   function _defaultRootFinder() {
     const G = (typeof window !== 'undefined' && window.QD) || (typeof global !== 'undefined' && global.QD)
@@ -1700,7 +1775,6 @@
   function _complexNullVector(A, n) {
     const M = A.map((row) => row.map((c) => ({ re: c.re, im: c.im })));
     const cabs2 = (a) => a.re * a.re + a.im * a.im;
-    const pivCol = new Array(n).fill(-1);   // pivCol[r] = column pivoted at row r
     const rowOfCol = new Array(n).fill(-1); // rowOfCol[c] = pivot row for column c (or -1)
     let row = 0, scale = 1;
     for (const r0 of M) for (const c of r0) scale = Math.max(scale, Math.abs(c.re), Math.abs(c.im));
@@ -1718,7 +1792,7 @@
         if (cabs2(f) === 0) continue;
         for (let c = col; c < n; c++) M[r][c] = { re: M[r][c].re - (f.re * M[row][c].re - f.im * M[row][c].im), im: M[r][c].im - (f.re * M[row][c].im + f.im * M[row][c].re) };
       }
-      pivCol[row] = col; rowOfCol[col] = row; row++;
+      rowOfCol[col] = row; row++;
     }
     let freeCol = -1;
     for (let c = 0; c < n; c++) if (rowOfCol[c] === -1) { freeCol = c; break; }
@@ -1741,7 +1815,11 @@
       try { G = buchberger(input, o, opts); } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
     } else { G = input.G; o = _ord(input.order); vars = opts.vars || _ambientVars(G); }
     if (!isZeroDimensional(G, o, vars)) return { ok: false, reason: 'the system is not zero-dimensional' };
-    const B = standardMonomials(G, o, vars);
+    // standardMonomials THROWS past ZERO_DIM_MAX (4096); keep this function's
+    // { ok:false, reason } contract by catching it here.
+    let B;
+    try { B = standardMonomials(G, o, vars); }
+    catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
     if (B === null) return { ok: false, reason: 'positive-dimensional ideal' };
     const D = B.length;
     if (D === 0) return { ok: true, solutions: [], dimension: 0, method: 'eigenvalue' };
@@ -1826,7 +1904,11 @@
     if (kind === 'solveZeroDim') {
       const opts = Object.assign({}, payload.opts, { vars: payload.vars, solveVar: payload.solveVar }, onProgress ? { onProgress } : {});
       const res = solveZeroDim(polys, opts);
-      const out = { ok: res.ok, reason: res.reason, dimension: res.dimension, univariateDegree: res.univariateDegree, method: res.method, eliminatedVars: res.eliminatedVars, shapePosition: res.shapePosition };
+      const out = {
+        ok: res.ok, reason: res.reason, dimension: res.dimension, univariateDegree: res.univariateDegree,
+        method: res.method, eliminatedVars: res.eliminatedVars, shapePosition: res.shapePosition,
+        complete: res.complete, fallbackFrom: res.fallbackFrom,   // eigenvalue-path flags (complete=false ⇒ PARTIAL solution set)
+      };
       if (res.ok) out.solutions = res.solutions;       // {var:{re,im}} — JSON-safe
       return out;
     }
@@ -1855,6 +1937,9 @@
     const rab = MPoly.fromInt(1).sub(w.mul(f));
     const vs = new Set();
     for (const p of (polys || []).concat([f])) for (const v of p.vars()) vs.add(v);
+    // The Rabinowitsch variable must be FRESH — a collision would silently change
+    // the ideal instead of computing the saturation.
+    if (vs.has(wName)) throw new Error('saturate: witness variable "' + wName + '" already appears in the input — pass a fresh wName.');
     const rest = [...vs].filter((v) => v !== wName).sort();
     const order = eliminationOrder([wName], rest);
     const G = buchberger((polys || []).concat([rab]), order, opts);

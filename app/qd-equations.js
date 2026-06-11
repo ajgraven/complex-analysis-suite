@@ -5,16 +5,21 @@
 // coefficients {z_j, A_{j,k}}, mirroring the Newton residual blocks the numeric
 // solver assembles (solver-qd.js, Theorem 3.2.2):
 //
-//   (●_j)     φ(z_j) − a_j = 0                              (locator)
-//   (★_{j,k}) A_{j,k} − Σ_{s≥k}(s/k)·C_{j,s}·[t^s]ψ̃_j^k = 0  (principal-part match)
-//   (gauge)   Σ_j (A_{j,1} − Ā_{j,1}) = 0                   (= Σ_j Im A_{j,1} = 0)
+//   (●_j)       φ(z_j) − a_j = 0                              (locator)
+//   (★_{j,s})   C_{j,s} − Σ_{k=s}^{m_j}(k/s)·A_{j,k}·[t^k] φ̃_j^s = 0   (principal-part match)
+//   (gauge)     Σ_j (A_{j,1} − Ā_{j,1}) = 0                   (= 2i·Σ_j Im A_{j,1} = 0)
 //
-// with φ(z) = w₀ + Σ_j Σ_{k=1}^{m_j} Ā_{j,k}·z^k/(1 − z̄_j z)^k and ψ̃_j the
-// compositional inverse of phiTilde_j(t) = φ(z_j+t) − φ(z_j) (the local series).
+// with φ(z) = w₀ + Σ_j Σ_{k=1}^{m_j} Ā_{j,k}·z^k/(1 − z̄_j z)^k and φ̃_j(t) =
+// φ(z_j+t) − φ(z_j) (the local expansion). Note (★) is generated in the FORWARD
+// form (C from A, using only seriesPow of φ̃ — no compositional inverse), the dual
+// of the solver's inverse-Faber direction; it has the same variety but keeps the
+// (1 − z̄·z) denominators bounded. See the inline comment at the (★) block.
 //
 // CONJUGATE-VARIABLE MODEL: z_j, z̄_j, A_{j,k}, Ā_{j,k}, a_j, ā_j, C_{j,s}, C̄_{j,s},
 // w₀, w̄₀ are independent indeterminates over ℚ(i) (the reality slice z̄=conj z is
-// applied only at evaluation). The real/imaginary split is a later increment.
+// applied only at evaluation). reimSplit produces the real/imaginary split.
+// generateClassicalBounded(hData, {w0}) can FIX φ(0)=w₀ (exact-rational substitution,
+// dropping w₀/w̄₀ from the inventory) — see system.w0Fixed.
 //
 // Built on QD.Sym (exact arithmetic). Pure module: no DOM; loads in node-test
 // after sym-core.js. The numeric residual oracle (residualAtSolution) evaluates
