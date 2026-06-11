@@ -258,9 +258,9 @@
          then Generate; export as LaTeX or a CAS-ready JSON term list.`,
 
       algebraCard:
-        `Symbolic workspace: <b>Generate</b> the system, add <b>constraints</b>, then select
-         <b>two nodes</b> + a shared variable to <b>eliminate</b> by resultant. Hover any
-         control for details, or press <b>?</b> for the full guide.`,
+        `Symbolic workspace for the solved QD system below. Add assumptions and reductions —
+         each becomes a new column. Hover any control for details, or press <b>?</b> for the
+         full guide.`,
 
       searchOptions:
         `Overrides for the aggressiveness preset. Leave a field blank to use

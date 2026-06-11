@@ -153,9 +153,15 @@
         _seededHData = activeEnv.hData;                 // remember what we seeded from (A4)
         // A fresh seed invalidates prior picker selections (A8) — clear and refresh.
         realSel.clear(); elimSel.clear(); refreshPickers();
-        setStatus((STR.seeded || 'Seeded') + ' ' + store.size + ' equations (incl. conjugates; ' + sys.n + ' pole' + (sys.n === 1 ? '' : 's') + ', order ' + sys.d + ')' +
-          (w0Sel ? '; φ(0) fixed to ' + (QD.Complex ? QD.Complex.toString(w0Sel, 4) : '') : '; w₀ symbolic') +
-          '. Add assumptions (Assume real / Specify value) — each becomes a new column.');
+        const w0txt = w0Sel ? 'fixed to ' + (QD.Complex ? QD.Complex.toString(w0Sel, 4) : '0') : 'symbolic w₀';
+        setStatusHTML(
+          '<table class="algebra-seed-table"><tbody>' +
+          '<tr><th>Equations</th><td><b>' + store.size + '</b> <span class="hint">(incl. conjugates)</span></td></tr>' +
+          '<tr><th>Poles</th><td>' + sys.n + ' · order ' + sys.d + '</td></tr>' +
+          '<tr><th>φ(0)</th><td>' + w0txt + '</td></tr>' +
+          '</tbody></table>' +
+          '<div class="hint">Each assumption below adds a new column.</div>');
+        buildReference();
         rerender();
         return true;
       } catch (e) {
@@ -239,6 +245,7 @@
       if (_elimPicker && _elimPicker.refresh) _elimPicker.refresh();
       if (_realPicker && _realPicker.refresh) _realPicker.refresh();
       refreshValueVars();
+      refreshMmaColumns();
     }
     // ---- "Set values" table: fix several variables at once in ONE column ----
     // The picker lists BASE variables only (not their conjugates) — a value fully
@@ -356,6 +363,7 @@
 
     // ---- sidebar -------------------------------------------------------------
     function setStatus(t) { const el = $('#alg-status'); if (el) el.textContent = t; }
+    function setStatusHTML(html) { const el = $('#alg-status'); if (el) el.innerHTML = html; }
     function mountSidebar() {
       const panel = $('#controls-algebra');
       if (!panel) return;
@@ -378,22 +386,20 @@
         '    <button id="alg-error-close" class="algebra-error-close" type="button" title="Dismiss">×</button>' +
         '  </div>' +
         '</div>' +
+        // ---- φ / h REFERENCE (always visible at the top: the symbolic forms + legend) ----
+        '<div class="algebra-ref-block">' +
+        '  <div class="row algebra-ref-controls">' +
+        '    <span class="algebra-line-label">φ / h reference</span>' +
+        '    <label class="algebra-ref-opt" data-str-title="tooltips.algFixW0"><input type="checkbox" id="alg-w0-fix" checked> fix φ(0)=w₀</label>' +
+        '    <label class="algebra-ref-opt"><input type="checkbox" id="alg-ref-values"> show values</label>' +
+        '  </div>' +
+        '  <div id="alg-ref" class="algebra-ref"></div>' +
+        '</div>' +
         // ---- CONTEXTUAL NODE INSPECTOR (shown only when ≥1 node is selected) ----
         '<div id="alg-inspector" class="algebra-inspector hidden"></div>' +
         // ---- WORKFLOW SECTIONS (collapsible; hidden while the inspector is up) ----
         '<div id="alg-sections">' +
-        // 1. System & reference
-        '  <details class="algebra-section">' +
-        '    <summary>System &amp; reference</summary>' +
-        '    <div class="algebra-section-body">' +
-        '      <label class="algebra-line" data-str-title="tooltips.algFixW0"><input type="checkbox" id="alg-w0-fix" checked> fix φ(0) = w₀ (selected center; centroid by default)</label>' +
-        '      <div class="row" style="gap:6px; align-items:center;">' +
-        '        <button id="alg-ref-toggle" class="small" type="button" title="Show the symbolic forms of φ and h and what each variable represents">φ / h reference ▸</button>' +
-        '        <label style="font-size:11px;"><input type="checkbox" id="alg-ref-values"> show values</label></div>' +
-        '      <div id="alg-ref" class="card-sub hidden algebra-ref"></div>' +
-        '    </div>' +
-        '  </details>' +
-        // 2. Assumptions (open by default — the most common first step)
+        // 1. Assumptions (open by default — the most common first step)
         '  <details class="algebra-section" open>' +
         '    <summary>Assumptions</summary>' +
         '    <div class="algebra-section-body">' +
@@ -442,9 +448,14 @@
         // 6. Export
         '  <details class="algebra-section">' +
         '    <summary>Export</summary>' +
-        '    <div class="algebra-section-body"><div class="row" style="gap:4px;">' +
-        '      <button id="alg-export-json" class="small" type="button" title="Download every node as an exact ℚ(i) term list + edges (CAS-ready JSON)">Download DAG (JSON)</button>' +
-        '      <button id="alg-copy-latex" class="small" type="button" title="Copy all equations as a gathered LaTeX block">Copy LaTeX</button></div></div>' +
+        '    <div class="algebra-section-body">' +
+        '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
+        '        <button id="alg-export-json" class="small" type="button" title="Download every node as an exact ℚ(i) term list + edges (CAS-ready JSON)">Download DAG (JSON)</button>' +
+        '        <button id="alg-copy-latex" class="small" type="button" title="Copy all equations as a gathered LaTeX block">Copy LaTeX</button></div>' +
+        '      <div class="algebra-line" style="margin-top:4px;"><span class="algebra-line-label">Mathematica</span>' +
+        '        <select id="alg-mma-col" title="Which column of equations to export"></select>' +
+        '        <button id="alg-copy-mma" class="small" type="button" title="Copy the chosen column as a Wolfram-Language list of equations ({lhs == 0, …}) ready to paste into Mathematica">Copy</button></div>' +
+        '    </div>' +
         '  </details>' +
         '</div>';
 
@@ -465,15 +476,8 @@
 
       const helpBtn = $('#alg-help-toggle');
       if (helpBtn) helpBtn.addEventListener('click', () => { const h = $('#alg-help'); if (h) h.classList.toggle('hidden'); });
-      const refBtn = $('#alg-ref-toggle');
-      if (refBtn) refBtn.addEventListener('click', () => {
-        const r = $('#alg-ref'); if (!r) return;
-        const open = r.classList.toggle('hidden') === false;
-        refBtn.textContent = 'φ / h reference ' + (open ? '▾' : '▸');
-        if (open) buildReference();
-      });
       const refVals = $('#alg-ref-values');
-      if (refVals) refVals.addEventListener('change', () => { const r = $('#alg-ref'); if (r && !r.classList.contains('hidden')) buildReference(); });
+      if (refVals) refVals.addEventListener('change', buildReference);
       $('#alg-seed').addEventListener('click', seedFromCurrent);
       const w0FixCb = $('#alg-w0-fix');
       if (w0FixCb) w0FixCb.addEventListener('change', () => { if (store.size) seedFromCurrent(); });
@@ -494,6 +498,7 @@
       });
       $('#alg-export-json').addEventListener('click', exportJson);
       $('#alg-copy-latex').addEventListener('click', copyLatex);
+      $('#alg-copy-mma').addEventListener('click', copyMathematica);
       $('#alg-error-close').addEventListener('click', clearError);
       $('#alg-real-apply').addEventListener('click', doAssumeReal);
       $('#alg-real-auto').addEventListener('click', doAutoReality);
@@ -504,11 +509,37 @@
       _elimPicker = buildPicker($('#alg-elim-pick'), { label: 'pick', friendly: friendlyVar, selected: elimSel, getOptions: () => store.variables() });
       _realPicker = buildPicker($('#alg-real-pick'), { label: 'pick', friendly: (raw) => latexPlain(raw) + ' · ' + raw, selected: realSel, getOptions: () => store.baseVariables() });
       refreshValueVars();   // seeds the first value-table row
+      refreshMmaColumns();  // populate the Mathematica-export column picker
       // close any open picker menu when clicking elsewhere
       document.addEventListener('click', () => { if (_openMenu) { _openMenu.classList.add('hidden'); _openMenu = null; } });
 
       if (QD.Strings && QD.Strings.apply) QD.Strings.apply(panel);
+      buildReference();     // the φ/h reference is visible by default
       setStatus(activeEnv ? '' : (STR.noSolve || 'No classical bounded QD solved yet.'));
+    }
+
+    // Populate the Mathematica-export column <select> with one option per column
+    // (labeled by its transition), preserving the prior choice; defaults to the current.
+    function refreshMmaColumns() {
+      const sel = $('#alg-mma-col'); if (!sel) return;
+      const prev = sel.value;
+      sel.innerHTML = '';
+      const mx = store.maxColumn();
+      for (let c = 0; c <= mx; c++) {
+        const o = document.createElement('option'); o.value = String(c);
+        o.textContent = 'col ' + c + (c === 0 ? ' · original' : '') + (c === mx ? ' · current' : '');
+        sel.appendChild(o);
+      }
+      sel.value = (prev !== '' && Number(prev) <= mx) ? prev : String(mx);
+    }
+    // Copy the chosen column as a Wolfram-Language list of equations.
+    function copyMathematica() {
+      if (!store.size) { toast('Nothing to export — seed a system first.', { kind: 'error' }); return; }
+      const sel = $('#alg-mma-col');
+      const c = sel ? Number(sel.value) : store.maxColumn();
+      const code = store.mathematicaColumn(c);
+      if (!code) { toast('Column ' + c + ' has no equations.', { kind: 'error' }); return; }
+      writeClipboard(code, 'Mathematica (column ' + c + ')');
     }
 
     // ---- contextual node inspector (driven by canvas selection) -------------
@@ -1001,7 +1032,8 @@
           if (!activeEnv) setStatus(STR.noSolve || 'No classical bounded QD solved yet.');
           else if (staleSeed) { refreshPickers(); setStatus('Solve changed — click Generate / re-seed to refresh the workspace for the new domain.'); }
           else setStatus((STR.ready || 'Ready — click Generate / re-seed.'));
-          const ref = $('#alg-ref'); if (ref && !ref.classList.contains('hidden')) buildReference();
+          buildReference();   // the φ/h reference is always visible — keep it in sync
+          refreshMmaColumns();
         }
       });
     }

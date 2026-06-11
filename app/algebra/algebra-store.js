@@ -942,6 +942,50 @@
       };
     }
 
+    // ---- Mathematica export (one column → a copy-paste list of equations) ----
+    // Variable names are sanitized for Wolfram-Language symbols: `_` is Blank in
+    // Mathematica, so A1_1 → A1$1 ($ is a legal symbol character). Coefficients are
+    // exact ℚ(i) rationals; the imaginary unit is `I`.
+    function _mmaName(name) { return name.replace(/_/g, '$'); }
+    function _mmaRat(p) { return p[1] === '1' ? p[0] : p[0] + '/' + p[1]; }
+    // a + b·I as a Mathematica expression, eliding zero / unit parts.
+    function _mmaCoeff(re, im) {
+      const reZero = re[0] === '0', imZero = im[0] === '0';
+      if (imZero) return _mmaRat(re);
+      const imNeg = im[0][0] === '-';
+      const imAbsRat = _mmaRat([imNeg ? im[0].slice(1) : im[0], im[1]]);
+      const imBody = imAbsRat === '1' ? 'I' : imAbsRat + '*I';
+      if (reZero) return (imNeg ? '-' : '') + imBody;
+      return '(' + _mmaRat(re) + (imNeg ? ' - ' : ' + ') + imBody + ')';
+    }
+    // One polynomial → a Mathematica InputForm string (sum of coeff·monomial terms).
+    function _polyToMathematica(poly) {
+      const terms = poly.termList();
+      if (!terms.length) return '0';
+      const parts = terms.map((t) => {
+        const c = _mmaCoeff(t.coeff.re, t.coeff.im);
+        const mono = Object.keys(t.mono).sort().map((nm) => {
+          const e = t.mono[nm], b = _mmaName(nm); return e === 1 ? b : b + '^' + e;
+        }).join('*');
+        if (!mono) return c;
+        if (c === '1') return mono;
+        if (c === '-1') return '-' + mono;
+        return c + '*' + mono;
+      });
+      return parts.join(' + ').replace(/\+ -/g, '- ');
+    }
+    // A whole column → `{ lhs1 == 0, lhs2 > 0, … }` (the equality/inequality list ready
+    // to paste into Mathematica / Solve / GroebnerBasis). Returns '' for an empty column.
+    function mathematicaColumn(c) {
+      const ns = orderedColumn(c);
+      if (!ns.length) return '';
+      const lines = ns.map((n) => {
+        const rel = n.rel === '>' ? ' > 0' : n.rel === '≠' ? ' != 0' : ' == 0';
+        return _polyToMathematica(n.poly) + rel;
+      });
+      return '{' + lines.join(',\n ') + '}';
+    }
+
     // Distinct variable names across all nodes (sorted) — for the UI variable pickers.
     function variables() {
       const s = new Set(); for (const n of nodes.values()) for (const v of n.poly.vars()) s.add(v); return [...s].sort();
@@ -956,7 +1000,7 @@
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, substituteValues, reducePropagate, assumeReal, fixW0, triangularize: triangularizeNodes,
       currentReimSystem, classify, solveReal, currentColumnIds, maxColumn, columnStats, columns,
-      sharedVars, previewCost, exportDAG, nodeStats, variables, baseVariables,
+      sharedVars, previewCost, exportDAG, mathematicaColumn, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       undo, redo, reset,
       list, get,

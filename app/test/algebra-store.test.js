@@ -534,4 +534,22 @@ module.exports = async function run() {
     const cols = st.columns();
     ok('columns: lists the columns in order with stats', cols.length === 2 && cols[0].index === 0 && cols[1].index === 1 && typeof cols[1].varCount === 'number');
   }
+
+  // ---- Mathematica export of a column ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system);                       // symbolic disk → column 0
+    const code = st.mathematicaColumn(0);
+    const eqs = st.list().filter((n) => n.column === 0);
+    ok('mathematica: wraps the column equations in a Wolfram-Language list',
+       code.startsWith('{') && code.endsWith('}') && (code.match(/== 0|> 0|!= 0/g) || []).length === eqs.length);
+    ok('mathematica: sanitizes subscript underscores to $ (Blank is reserved)',
+       !/[A-Za-z]\d*_\d/.test(code) && /\$/.test(code));
+    ok('mathematica: uses I for the imaginary unit and ^ for powers (no LaTeX braces)',
+       !/\\|\^\{/.test(code));
+    // round-trip sanity: the column's variable names appear (sanitized) in the code
+    const present = new Set(st.variables());
+    if (present.has('z1')) ok('mathematica: a present variable appears in the code', /\bz1\b/.test(code));
+    ok('mathematica: an empty / missing column yields the empty string', st.mathematicaColumn(99) === '');
+  }
 };

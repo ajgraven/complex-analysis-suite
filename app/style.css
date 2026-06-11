@@ -875,6 +875,30 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #algebra-graph .algebra-toolbar .algebra-tb-btn { padding: 1px 7px; }
 #algebra-graph .algebra-toolbar-zoom { font-size: 11px; min-width: 36px; text-align: center; color: var(--c-muted, #667); }
 
+/* Smaller sidebar description / prose text (~70% of the card default) */
+#controls-algebra .hint { font-size: 70%; line-height: 1.4; }
+
+/* φ / h reference shown at the top of the Algebra sidebar (always visible, compact math) */
+#controls-algebra .algebra-ref-block {
+  border-top: 1px solid var(--c-border-soft, #eee); border-bottom: 1px solid var(--c-border-soft, #eee);
+  padding: 4px 2px; margin-bottom: 2px;
+}
+#controls-algebra .algebra-ref-controls { gap: 8px; align-items: center; flex-wrap: wrap; }
+#controls-algebra .algebra-ref-opt { font-size: 70%; color: var(--c-muted, #667); }
+#controls-algebra .algebra-ref { margin: 2px 0; max-height: 230px; overflow: auto; }
+#controls-algebra .algebra-ref-math .katex-display,
+#controls-algebra .algebra-ref-math .katex { font-size: 0.72em; }
+#controls-algebra .algebra-ref-math .katex-display { margin: 2px 0; }
+#controls-algebra .algebra-ref-legend { font-size: 9px; }
+
+/* Seed summary as a compact table (replaces the run-on status sentence) */
+#controls-algebra .algebra-seed-table { border-collapse: collapse; margin: 2px 0; }
+#controls-algebra .algebra-seed-table th {
+  text-align: left; font-weight: 600; color: var(--c-muted, #667);
+  padding: 1px 8px 1px 0; vertical-align: top; white-space: nowrap;
+}
+#controls-algebra .algebra-seed-table td { padding: 1px 0; }
+
 #alternates-card .alt {
   display: flex;
   align-items: center;
