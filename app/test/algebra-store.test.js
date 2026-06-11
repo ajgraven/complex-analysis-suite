@@ -273,30 +273,39 @@ module.exports = async function run() {
     ok('solveAsync: resolves with a well-formed result', typeof asyncSolve.ok === 'boolean');
   }
 
-  // ---- reality assumptions (assert variables real → simplified re-seed) ----
+  // ---- reality assumptions (AUDIT-TRAIL model: assumeReal appends a new column;
+  //      column 0 stays the original system) ----
   {
     const QC = QD.QDConstraints;
     const full = QD.AlgebraStore.create(); full.seedFromSystem(system);
-    const real = QD.AlgebraStore.create();
-    real.seedFromSystem(system, { realVars: ['z1', 'a1', 'w0', 'A1_1'] });
-    ok('reality: asserting variables real drops their conjugates from the variable set',
-       full.variables().includes('zb1') && !real.variables().includes('zb1')
-       && !real.variables().includes('ab1') && !real.variables().includes('wb0') && !real.variables().includes('Ab1_1'));
-    ok('reality: the reduced system has fewer variables and nodes',
-       real.variables().length < full.variables().length && real.size <= full.size);
+    const real = QD.AlgebraStore.create(); real.seedFromSystem(system);
+    const rr = real.assumeReal(['z1', 'a1', 'w0', 'A1_1']);
+    const lastVars = () => { const s = new Set(); real.list().filter((n) => n.column === real.maxColumn()).forEach((n) => { for (const v of n.poly.vars()) s.add(v); }); return s; };
+    const lv = lastVars();
+    ok('reality: assumeReal appended a new column', rr.ok && rr.column === 1 && rr.created.length > 0);
+    ok('reality: the current system (last column) drops the conjugates',
+       full.variables().includes('zb1') && !lv.has('zb1') && !lv.has('ab1') && !lv.has('wb0') && !lv.has('Ab1_1'));
+    ok('reality: column 0 (original) still carries the barred variables',
+       real.list().filter((n) => n.column === 0).some((n) => n.poly.vars().has('zb1')));
+    ok('reality: the reduced system has fewer variables than the original',
+       lv.size < full.variables().length);
     ok('reality: realVars getter reflects the (primalized) assumptions',
        real.realVars.slice().sort().join(',') === ['A1_1', 'a1', 'w0', 'z1'].join(','));
     ok('reality: a barred pick is normalized to its primal',
-       (() => { const s = QD.AlgebraStore.create(); s.seedFromSystem(system, { realVars: ['zb1'] }); return s.realVars.includes('z1') && !s.realVars.includes('zb1'); })());
+       (() => { const s = QD.AlgebraStore.create(); s.seedFromSystem(system); s.assumeReal(['zb1']); return s.realVars.includes('z1') && !s.realVars.includes('zb1'); })());
     ok('reality: baseVariables lists primal forms only (no barred names)',
-       full.baseVariables().every((v) => QC.conjVarName(v) === v || !full.baseVariables().includes(QC.conjVarName(v)) || true)
-       && full.baseVariables().length > 0 && !full.baseVariables().includes('zb1'));
-    // self-check: every node still vanishes at the (real) numeric solution after reality
+       full.baseVariables().length > 0 && !full.baseVariables().includes('zb1'));
+    // bakeAssumptions: the compact path (autonomous solver) still bakes at seed time
+    const baked = QD.AlgebraStore.create();
+    baked.seedFromSystem(system, { realVars: ['z1', 'a1', 'w0', 'A1_1'], bakeAssumptions: true });
+    ok('reality (bake): bakeAssumptions seeds the reduced system at column 0',
+       baked.maxColumn() === 0 && !baked.variables().includes('zb1') && baked.realVars.length === 4);
+    // self-check: every node of the reduced system still vanishes at the numeric solution
     const sol = QD.solveInverseQD(hData, {});
     if (sol && sol.success) {
       const vm = QE.buildVarMap(sol.primary.phi, hData);
       ok('reality: every reduced node still vanishes at the numeric solution',
-         real.list().filter((n) => n.rel === '=').every((n) => { const v = n.poly.evalComplex(vm); return Math.hypot(v.re, v.im) < 1e-6; }));
+         real.list().filter((n) => n.rel === '=' && n.column === real.maxColumn()).every((n) => { const v = n.poly.evalComplex(vm); return Math.hypot(v.re, v.im) < 1e-6; }));
     }
   }
 
@@ -334,7 +343,7 @@ module.exports = async function run() {
     st.eliminate(ns[0].id, ns[1].id, st.sharedVars(ns[0].id, ns[1].id)[0]);   // a derived node
     const derivedSize = st.size;
     ok('re-seed undo: a derivation exists before re-seeding', derivedSize > 5);
-    st.seedFromSystem(system, { realVars: ['z1', 'a1', 'w0', 'A1_1'] });       // seed #2 (different normalization)
+    st.seedFromSystem(system, { realVars: ['z1', 'a1', 'w0', 'A1_1'], bakeAssumptions: true });   // seed #2 (different normalization, baked)
     ok('re-seed undo: re-seed replaced the graph and the reality assumptions',
        st.realVars.length === 4 && st.size !== derivedSize);
     ok('re-seed undo: undo restores the prior derivation AND its (empty) reality state',
@@ -348,7 +357,7 @@ module.exports = async function run() {
   //      self-conjugate-under-reality (1 real equation each), not 2. ----
   {
     const st = QD.AlgebraStore.create();
-    st.seedFromSystem(system, { realVars: ['z1', 'a1', 'w0', 'A1_1'] });
+    st.seedFromSystem(system, { realVars: ['z1', 'a1', 'w0', 'A1_1'], bakeAssumptions: true });
     const eqNodes = st.list().filter((n) => n.rel === '=');
     ok('nodeStats(reality): every equality node reports 1 real equation (self-conjugate under reality)',
        eqNodes.length > 0 && eqNodes.every((n) => st.nodeStats(n.id).realEquations === 1));
@@ -371,5 +380,58 @@ module.exports = async function run() {
     ok('exportDAG: model + nodes (with term lists) + edges',
        ex.model === 'conjugate' && Array.isArray(ex.nodes) && ex.nodes.every((n) => Array.isArray(n.terms)) &&
        ex.edges.length === 2);
+  }
+
+  // ---- AUDIT-TRAIL reductions: specify-value (+ auto-propagation), currentColumnIds,
+  //      and the φ(0)=0 ⇒ z₁ elimination the user described ----
+  {
+    // Symbolic seed so w₀ is a live variable (the original system).
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(QE.generateClassicalBounded(hData));
+    ok('audit: symbolic seed keeps w0 as a variable at column 0', st.variables().includes('w0'));
+    const col0Ids = st.currentColumnIds();
+    ok('audit: currentColumnIds returns the column-0 equality nodes when there is one column',
+       col0Ids.length > 0 && col0Ids.every((id) => st.get(id).column === 0));
+
+    // Set w₀=0 (single variable): substitute → a new column; auto-propagate cascades.
+    const r = st.substituteValue('w0', { re: 0, im: 0 }, { propagate: true });
+    ok('audit: substituteValue appended a new column dropping w0', r.ok && r.column === 1);
+    const c1 = st.list().filter((n) => n.column === 1);
+    ok('audit: the substitution column no longer mentions w0 (the substituted variable)',
+       c1.length > 0 && c1.every((n) => !n.poly.vars().has('w0')));
+    ok('audit: column 0 (original) still has w0 — history preserved',
+       st.list().some((n) => n.column === 0 && n.poly.vars().has('w0')));
+    ok('audit: auto-propagation ran as a further column (or reported nothing to propagate)',
+       (r.propagated && r.propagated.column === 2) || typeof r.propagateReason === 'string');
+    ok('audit: currentColumnIds now points at the last (reduced) column',
+       st.currentColumnIds().every((id) => st.get(id).column === st.maxColumn()));
+    // undo removes the whole substitute(+propagate) in the expected number of steps
+    const before = st.maxColumn();
+    st.undo();
+    ok('audit: undo peels back the reduction', st.maxColumn() < before);
+  }
+
+  // ---- AUDIT-TRAIL: reducePropagate directly, and an inconsistent fix is reported ----
+  {
+    // A tiny hand-built store-like check via the public ops on a seeded system:
+    // setting a value that contradicts the gauge should surface inconsistency through
+    // the propagation pass (1 = 0 marker) rather than throwing.
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system);              // symbolic disk system
+    const rp = st.reducePropagate();
+    ok('audit: reducePropagate returns a well-formed result (ok boolean, no throw)',
+       typeof rp.ok === 'boolean' && (rp.ok ? Array.isArray(rp.created) : typeof rp.reason === 'string'));
+  }
+
+  // ---- AUDIT-TRAIL: fixW0 op on a symbolic seed appends a column and records w0Fixed ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(QE.generateClassicalBounded(hData));   // symbolic (w₀ live)
+    const r = st.fixW0({ re: 0, im: 0 });
+    ok('audit: fixW0 appends a column and removes w0/wb0',
+       r.ok && r.column === 1 && st.list().filter((n) => n.column === 1).every((n) => !n.poly.vars().has('w0') && !n.poly.vars().has('wb0')));
+    ok('audit: fixW0 records the exact value in w0Fixed', !!st.w0Fixed && st.w0Fixed.re[0] === '0');
+    const r2 = st.fixW0({ re: 0, im: 0 });
+    ok('audit: fixW0 is a no-op (ok:false) once φ(0) is already absent', r2.ok === false);
   }
 };

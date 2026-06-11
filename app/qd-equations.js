@@ -520,6 +520,7 @@
     buildVarMap, buildRealVarMap,
     systemToLatex, systemToExport, latexOf: latexOfFor,
     phiSeriesAt,                       // φ(p+t) series; reused by QD.QDConstraints
+    ratApprox: _ratApprox,             // exact-rational of a float; reused by AlgebraStore (specify-value / fix-φ(0))
     VARS: V, VARS_REAL: VR,
   };
 

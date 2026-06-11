@@ -19,12 +19,16 @@
 //               strings) when the seed system was generated with {w0}; substituted
 //               into any later constraint that rebuilds φ with the w₀ symbol.
 //
-// Ops: seedFromSystem (●/★/gauge from generateClassicalBounded, + conjugate
-// companions, realVars, w0Fixed), addConstraint (the four univalence forms),
-// eliminate / eliminateWithGauge (Sylvester resultant → a derived node one column
-// deeper), groebner / groebnerAsync, dimension / dimensionAsync, solve / solveAsync,
-// duplicate, deleteNode (cascade to descendants), moveNode (reorder within a column),
-// undo/redo (snapshot stack), nodeStats, variables/baseVariables, exportDAG.
+// Ops: seedFromSystem (●/★/gauge from generateClassicalBounded → the ORIGINAL system
+// at column 0; + conjugate companions), addConstraint (the four univalence forms).
+// AUDIT-TRAIL reductions — each appends a new labeled column, leaving column 0 intact:
+// substituteValue (fix a variable's value, exact ℚ(i), auto-propagating by default),
+// reducePropagate (linear-substitution fixpoint via Sym.linearReduce), assumeReal
+// (identify v̄≡v), fixW0 (φ(0)=w₀ → value), eliminate / eliminateWithGauge (Sylvester
+// resultant), groebner / groebnerAsync. Analysis: dimension / dimensionAsync, solve /
+// solveAsync (default to the CURRENT system = the last column via currentColumnIds).
+// Plus duplicate, deleteNode (cascade), moveNode (reorder within a column), undo/redo
+// (snapshot stack), nodeStats, variables/baseVariables, exportDAG.
 // =============================================================================
 
 (function (global) {
@@ -37,6 +41,10 @@
   function getQC() {
     return (typeof window !== 'undefined' && window.QD && window.QD.QDConstraints)
       || (typeof global !== 'undefined' && global.QD && global.QD.QDConstraints) || (typeof QD !== 'undefined' && QD.QDConstraints);
+  }
+  function getQE() {
+    return (typeof window !== 'undefined' && window.QD && window.QD.QDEquations)
+      || (typeof global !== 'undefined' && global.QD && global.QD.QDEquations) || (typeof QD !== 'undefined' && QD.QDEquations);
   }
 
   function create() {
@@ -175,12 +183,18 @@
     // Seed the graph from a generated (●)/(★)/(gauge) system. Clears first. In the
     // conjugate model, each non-self-conjugate equation also gets its conjugate
     // companion (opts.withConjugates, default true) so the system is complete.
-    // opts.realVars asserts those (base) variables real (z̄ⱼ≡zⱼ, …) — substituted in
-    // throughout, which simplifies the system; the choice persists for later
-    // addConstraint calls until the next seed changes it.
+    //
+    // AUDIT-TRAIL MODEL (default): seeding builds the ORIGINAL system at column 0 only;
+    // assumptions (assume-real, fix-φ(0), specify-value, linear propagation) are then
+    // applied as APPEND-COLUMN reductions (assumeReal/fixW0/substituteValue/
+    // reducePropagate), each a visible labeled step, so column 0 stays pristine and the
+    // last column is the system under the stated assumptions. opts.realVars is therefore
+    // IGNORED at seed time unless opts.bakeAssumptions is set — the compact mode used by
+    // the autonomous solver, which bakes opts.realVars into column 0 (the old behavior).
     function seedFromSystem(system, opts) {
       opts = opts || {};
       const withConj = opts.withConjugates !== false;
+      const bake = !!opts.bakeAssumptions;
       // checkpoint FIRST (capturing the OLD graph + realVars + w0Fixed) so re-seeding
       // is undoable; only THEN clear the graph and apply the new normalization. (The
       // realVars assignment must follow the checkpoint, or undo would restore the old
@@ -188,7 +202,7 @@
       checkpoint();
       clearGraph();
       model = system.model || 'conjugate';
-      if (opts.realVars !== undefined) realVars = (opts.realVars || []).map(_primalName);
+      realVars = (bake && opts.realVars !== undefined) ? (opts.realVars || []).map(_primalName) : [];
       w0Fixed = system.w0Fixed || null;   // remember the fixed φ(0) for later constraints
       const primals = [];
       for (const block of ['locator', 'star', 'gauge']) {
@@ -230,6 +244,182 @@
       if (withConj && model === 'conjugate') for (const m of made.slice()) maybeAddConjugate(m);
       normalizeColumn(0);          // keep each constraint adjacent to its conjugate companion
       return made;
+    }
+
+    // === Audit-trail reductions: each appends a NEW labeled column ============
+    // The current "system" is the highest-numbered column. A reduction reads that
+    // column's nodes, transforms each polynomial, and emits the (nonzero, de-
+    // duplicated) results as a new column — so every assumption is a visible,
+    // labeled, undoable step and column 0 stays the original system. The canvas
+    // derives a column header from the column's nodes' provenance.
+    function maxColumn() { let mx = 0; for (const n of nodes.values()) mx = Math.max(mx, n.column || 0); return mx; }
+    function lastColumnNodes() { return orderedColumn(maxColumn()); }
+    // The equality-node ids of the current system (the last column) — the default
+    // input to dimension/solve/groebner so those operate on the reduced system, not
+    // a mix of every column. Falls back to ALL equality nodes if there is one column.
+    function currentColumnIds() { return lastColumnNodes().filter((n) => n.rel === '=').map((n) => n.id); }
+
+    // Apply a per-node transform to every node of the current last column, emitting
+    // the results as a new column (single undo step). make(node) → { poly, rel?,
+    // provenance, label, meta? } or a falsy value / zero poly to drop the node.
+    // Returns { ok, created[], column, reason? }; nothing is mutated on failure.
+    function _appendReduction(make) {
+      const src = lastColumnNodes();
+      if (!src.length) return { ok: false, reason: 'no system to reduce (seed first)', created: [] };
+      const built = [], seen = [];
+      for (const n of src) {
+        let spec;
+        try { spec = make(n); } catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [] }; }
+        if (!spec || !spec.poly || spec.poly.isZero()) continue;
+        if (seen.some((p) => p.equals(spec.poly))) continue;     // dedup nodes that collapsed together
+        seen.push(spec.poly);
+        built.push({ src: n, spec });
+      }
+      if (!built.length) return { ok: false, reason: 'reduction produced an empty system', created: [] };
+      checkpoint();
+      const col = maxColumn() + 1;
+      const created = [];
+      for (const { src: s, spec } of built) {
+        const node = addNode({
+          id: nid(), kind: 'derived', poly: spec.poly, rel: spec.rel || s.rel,
+          label: spec.label, model, provenance: spec.provenance, column: col, meta: spec.meta || s.meta,
+        });
+        edges.push({ from: s.id, to: node.id });
+        created.push(node);
+      }
+      normalizeColumn(col);
+      return { ok: true, created, column: col };
+    }
+
+    // Exact ℚ(i) value + a JSON-safe record from a {re,im} float pair (reuses the one
+    // rationalizer in QDEquations — continued fractions, the same path φ(0) uses).
+    function _ratGauss(value) {
+      const S = getSym(), QE = getQE();
+      if (!QE || !QE.ratApprox) throw new Error('AlgebraStore: QD.QDEquations.ratApprox unavailable');
+      const re = (value && value.re) || 0, im = (value && value.im) || 0;
+      const [rn, rd] = QE.ratApprox(re), [inn, idd] = QE.ratApprox(im);
+      return {
+        g: S.gauss(S.rat(rn, rd), S.rat(inn, idd)),
+        record: { re: [rn.toString(), rd.toString()], im: [inn.toString(), idd.toString()], approx: { re, im } },
+      };
+    }
+    // Compact value string for a node/column label (from the original float approx).
+    function _valShort(approx) {
+      const f = (x) => String(Math.round(x * 1e6) / 1e6);
+      const re = (approx && approx.re) || 0, im = (approx && approx.im) || 0;
+      if (!im) return f(re);
+      if (!re) return f(im) + 'i';
+      return f(re) + (im < 0 ? ' − ' : ' + ') + f(Math.abs(im)) + 'i';
+    }
+
+    // Specify a variable's value: substitute the exact ℚ(i) rationalization of `value`
+    // ({re,im} floats) for `varName` in the current system → a new column. Drops the
+    // variable. By default (opts.propagate !== false) chains a linear-propagation pass
+    // (reducePropagate) so a fixed value cascades — e.g. φ(0)=0 ⇒ w₀=0 can then force
+    // z₁ — visible as its own column. Returns the append result (+ .propagated).
+    function substituteValue(varName, value, opts) {
+      opts = opts || {};
+      const S = getSym();
+      if (!lastColumnNodes().some((n) => n.poly.vars().has(varName))) {
+        return { ok: false, reason: 'variable ' + varName + ' is not in the current system', created: [] };
+      }
+      let g, record;
+      try { ({ g, record } = _ratGauss(value)); } catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [] }; }
+      const sub = {}; sub[varName] = S.mpolyConst(g);
+      const label = 'set ' + varName + ' = ' + _valShort(record.approx);
+      const res = _appendReduction((n) => ({
+        poly: n.poly.vars().has(varName) ? n.poly.subst(sub) : n.poly,
+        provenance: { op: 'substitute', inputs: [n.id], variable: varName, value: record }, label,
+      }));
+      if (res.ok && opts.propagate !== false) {
+        const pr = reducePropagate();
+        if (pr.ok) res.propagated = pr; else res.propagateReason = pr.reason;
+      }
+      return res;
+    }
+
+    // Linear-propagation pass: run Sym.linearReduce on the current system's equalities
+    // (eliminate every degree-1, constant-leading-coeff variable to a fixpoint) → a new
+    // column. Inequalities are carried forward with the eliminated assignments applied.
+    // An inconsistent system collapses to a single 1 = 0 marker (meta.inconsistent).
+    // Returns { ok, created[], column, eliminated[], inconsistent } or { ok:false, reason }.
+    function reducePropagate() {
+      const S = getSym();
+      const src = lastColumnNodes();
+      if (!src.length) return { ok: false, reason: 'no system to reduce (seed first)', created: [] };
+      const eqs = src.filter((n) => n.rel === '='), others = src.filter((n) => n.rel !== '=');
+      if (!eqs.length) return { ok: false, reason: 'no equality nodes to propagate', created: [] };
+      let lr;
+      try { lr = S.linearReduce(eqs.map((n) => n.poly)); }
+      catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [] }; }
+      if (!lr.eliminated.length) return { ok: false, reason: 'no linear variable to propagate', created: [] };
+      const subMap = {}; for (const el of lr.eliminated) subMap[el.name] = el.expr;
+      const elimNames = lr.eliminated.map((e) => e.name);
+      const prov = { op: 'linear-reduce', inputs: eqs.map((n) => n.id), eliminated: elimNames.slice() };
+      const label = 'propagate: eliminate ' + elimNames.join(', ');
+      checkpoint();
+      const col = maxColumn() + 1;
+      const created = [], seen = [];
+      const emit = (poly, rel, meta) => {
+        if (!poly || poly.isZero()) return;
+        if (seen.some((p) => p.equals(poly))) return;
+        seen.push(poly);
+        const node = addNode({ id: nid(), kind: 'derived', poly, rel, label, model, provenance: prov, column: col, meta: meta || {} });
+        for (const s of eqs) edges.push({ from: s.id, to: node.id });
+        created.push(node);
+      };
+      if (lr.inconsistent) {
+        emit(S.mpolyConst(S.gauss(S.rat(1n, 1n), S.rat(0n, 1n))), '=', { inconsistent: true });
+      } else {
+        for (const g of lr.reduced) emit(g, '=', {});
+        for (const o of others) emit(o.poly.subst(subMap), o.rel, o.meta);
+      }
+      if (!created.length) { undoStack.pop(); return { ok: false, reason: 'reduction produced an empty system', created: [] }; }
+      normalizeColumn(col);
+      return { ok: true, created, column: col, eliminated: elimNames, inconsistent: !!lr.inconsistent };
+    }
+
+    // Assume the given (base) variables are REAL: identify v̄ ≡ v in the current system
+    // → a new column. Records the assumption in realVars so later conjugate companions
+    // / constraints / nodeStats fold it in too. Returns the append result.
+    function assumeReal(vars, opts) {
+      const QC = getQC();
+      if (!QC || !QC.conjVarName) return { ok: false, reason: 'QD.QDConstraints not loaded', created: [] };
+      const prim = [...new Set((vars || []).map(_primalName))];
+      if (!prim.length) return { ok: false, reason: 'no variables selected', created: [] };
+      const map = {};
+      for (const rv of prim) { const c = QC.conjVarName(rv); if (c !== rv) map[c] = rv; }
+      if (!Object.keys(map).length) return { ok: false, reason: 'selected variable(s) have no conjugate partner', created: [] };
+      const rename = (n) => (Object.prototype.hasOwnProperty.call(map, n) ? map[n] : n);
+      const label = 'assume real: ' + prim.join(', ');
+      const res = _appendReduction((n) => ({
+        poly: n.poly.relabel(rename),
+        provenance: { op: 'assume-real', inputs: [n.id], vars: prim.slice() }, label,
+      }));
+      if (res.ok) realVars = [...new Set([...realVars, ...prim])];
+      return res;
+    }
+
+    // Fix φ(0) = w₀ to `value` ({re,im} floats): substitute the exact ℚ(i) value for
+    // w₀/w̄₀ in the current system → a new column. Records w0Fixed (so later constraints
+    // that rebuild φ with the w₀ symbol use the same center). No-op (ok:false) if the
+    // current system already lacks w₀/w̄₀. Returns the append result.
+    function fixW0(value) {
+      const S = getSym();
+      if (!lastColumnNodes().some((n) => { const v = n.poly.vars(); return v.has('w0') || v.has('wb0'); })) {
+        return { ok: false, reason: 'φ(0)=w₀ is already absent from the current system', created: [] };
+      }
+      let g, record;
+      try { ({ g, record } = _ratGauss(value)); } catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [] }; }
+      const sub = { w0: S.mpolyConst(g), wb0: S.mpolyConst(g.conj()) };
+      const label = 'fix φ(0) = ' + _valShort(record.approx);
+      const res = _appendReduction((n) => {
+        const v = n.poly.vars();
+        return { poly: (v.has('w0') || v.has('wb0')) ? n.poly.subst(sub) : n.poly,
+          provenance: { op: 'fix-w0', inputs: [n.id], value: record }, label };
+      });
+      if (res.ok) w0Fixed = record;
+      return res;
     }
 
     // Variables eliminable from a pair: those appearing in BOTH nodes' polynomials.
@@ -286,12 +476,16 @@
     // ≡0 resultant are reported in `skipped`. Returns { ok, created[], skipped[] }.
     function eliminateWithGauge(opts) {
       opts = opts || {};
-      const gauge = list().find((n) => n.meta && n.meta.block === 'gauge');
-      if (!gauge) return { ok: false, reason: 'no gauge equation in the system', created: [], skipped: [] };
+      // Operate on the CURRENT system (the last column), so gauge elimination applies
+      // to the reduced system rather than mixing in earlier columns.
+      const cur = lastColumnNodes();
+      const gauge = cur.find((n) => n.meta && n.meta.block === 'gauge');
+      if (!gauge) return { ok: false, reason: 'no gauge equation in the current system', created: [], skipped: [] };
       checkpoint();
       const created = [], skipped = [];
-      const targets = list().filter((n) => n.id !== gauge.id && n.rel === '='
-        && (opts.includeDerived ? true : n.kind !== 'derived'));
+      // Every other equality in the current column is a target (the column IS the
+      // current system; there is no stale-derived mixing to guard against anymore).
+      const targets = cur.filter((n) => n.id !== gauge.id && n.rel === '=');
       for (const n of targets) {
         const shared = sharedVars(gauge.id, n.id);
         if (!shared.length) { skipped.push({ id: n.id, reason: 'no shared variable with the gauge' }); continue; }
@@ -424,8 +618,11 @@
       const FA = Q && Q.FaberAnalysis;
       return (FA && FA.polynomialRoots) ? ((coeffsAsc) => FA.polynomialRoots(coeffsAsc)) : null;
     }
+    // Equality polys for an op. An explicit id list is honored; otherwise the default
+    // is the CURRENT SYSTEM (the last column's equalities), not every column — so
+    // dimension/solve analyze the reduced system, not a mix of original + reductions.
     function _eqPolys(ids) {
-      const sel = (ids && ids.length ? ids.map((id) => get(id)) : list()).filter(Boolean);
+      const sel = (ids && ids.length ? ids.map((id) => get(id)) : lastColumnNodes()).filter(Boolean);
       return sel.filter((n) => n.rel === '=').map((n) => n.poly);
     }
     function _varsOf(polys) {
@@ -589,6 +786,7 @@
     return {
       seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
+      substituteValue, reducePropagate, assumeReal, fixW0, currentColumnIds, maxColumn,
       sharedVars, previewCost, exportDAG, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       undo, redo, reset,

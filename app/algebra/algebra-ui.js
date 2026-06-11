@@ -2,12 +2,16 @@
 // algebra-ui.js -- the Algebra tab: an interactive equation-derivation workspace
 // (QD_UI.installAlgebra). Hosts a QD.AlgebraStore rendered by QD.AlgebraCanvas in
 // a full-area #algebra-graph surface over #plot-area, with sidebar controls in
-// #controls-algebra: seed from the current classical-bounded solve (with fix-φ(0)
-// and assume-real options), a univalence-constraint palette, pairwise resultant
-// elimination (select 2 nodes + a shared variable → derived node, with a cost
-// preview) and batch gauge elimination, Gröbner basis / dimension / numeric solve
-// (off the main thread, with a Cancel button), a persistent dismissible error
-// panel, undo/redo, and DAG/LaTeX export.
+// #controls-algebra: seed the ORIGINAL (●)/(★)/gauge system from the current
+// classical-bounded solve (φ(0) fixed at generation time by default) at column 0,
+// then apply AUDIT-TRAIL reductions that each append a new labeled column — Assume
+// real (identify v̄≡v), Specify value (fix a variable to an exact ℚ(i) value, auto-
+// propagating the linear cascade), pairwise resultant elimination (select 2 nodes +
+// a shared variable, with a cost preview), batch gauge elimination, and Gröbner basis.
+// Plus a univalence-constraint palette, dimension / numeric solve over the CURRENT
+// system (the last column, off the main thread with a Cancel button), a persistent
+// dismissible error panel, undo/redo, and DAG/LaTeX export. Column headers (rendered
+// by algebra-canvas via colHeaderOf) name each assumption so the history is legible.
 //
 // CAS-UX (Stoutemyer): preview-before-commit (cost), navigable derivation tree +
 // backtracking (DAG + undo), equation selection, accumulate alternatives (branch/
@@ -47,6 +51,7 @@
     let lastCap = 6;
     const elimSel = new Set();     // raw variable names chosen to eliminate (Gröbner)
     const realSel = new Set();     // primal variable names asserted real
+    let _elimPicker = null, _realPicker = null;   // picker handles (for label refresh)
 
     // LaTeX for the conjugate-model vars + the constraint boundary/aux vars.
     const baseLatex = QE.latexOf('conjugate');
@@ -124,29 +129,75 @@
     function friendlyVar(raw) { return latexPlain(raw) + ' · ' + raw; }
 
     // ---- seeding -------------------------------------------------------------
+    // Seed the ORIGINAL system at column 0. Assumptions are NOT baked here — they are
+    // applied as append-column reductions (Assume real / Specify value) so the graph
+    // keeps a visible history. φ(0) fixation IS a generation choice (it changes which
+    // system is generated): with #alg-w0-fix ticked the solve's selected center
+    // (centroid of the poles by default) is baked into the seed, so column 0 is the
+    // system "as generated" and its header notes φ(0) is fixed; untick for symbolic w₀.
     function seedFromCurrent() {
       if (!activeEnv) { setStatus(STR.noSolve || 'No classical bounded QD solved yet.'); return false; }
       try {
         clearError();
-        // φ(0)=w₀ fixed by default: substitute the solve's selected center (the Map-
-        // parameters φ(0) control — centroid of the poles unless set manually), so
-        // w₀/w̄₀ drop out of the workspace variables. Untick #alg-w0-fix for the
-        // fully-symbolic system.
         const w0cb = $('#alg-w0-fix');
         const fixW0 = !w0cb || w0cb.checked;
         const w0Sel = fixW0 ? (activeEnv.w0Used || (activeEnv.primary && activeEnv.primary.phi && activeEnv.primary.phi.w0)) : undefined;
         const sys = QE.generateClassicalBounded(activeEnv.hData, { maxPoleOrder: lastCap, w0: w0Sel });
-        const reals = [...realSel];
-        store.seedFromSystem(sys, { realVars: reals });
+        store.seedFromSystem(sys);
+        // A fresh seed invalidates prior picker selections (A8) — clear and refresh.
+        realSel.clear(); elimSel.clear(); refreshPickers();
         setStatus((STR.seeded || 'Seeded') + ' ' + store.size + ' equations (incl. conjugates; ' + sys.n + ' pole' + (sys.n === 1 ? '' : 's') + ', order ' + sys.d + ')' +
           (w0Sel ? '; φ(0) fixed to ' + (QD.Complex ? QD.Complex.toString(w0Sel, 4) : '') : '; w₀ symbolic') +
-          (reals.length ? '; assuming ' + reals.map(latexPlain).join(', ') + ' real' : '') + '.');
+          '. Add assumptions (Assume real / Specify value) — each becomes a new column.');
         rerender();
         return true;
       } catch (e) {
         setStatus((STR.unavailablePrefix || 'Generation unavailable: ') + ((e && e.message) || e));
         return false;
       }
+    }
+
+    // Refresh picker button labels + the specify-value variable list (after a seed or
+    // a reduction changes the variable set / clears selections).
+    function refreshPickers() {
+      if (_elimPicker && _elimPicker.refresh) _elimPicker.refresh();
+      if (_realPicker && _realPicker.refresh) _realPicker.refresh();
+      refreshValueVars();
+    }
+    function refreshValueVars() {
+      const sel = $('#alg-val-var'); if (!sel) return;
+      const prev = sel.value;
+      sel.innerHTML = '';
+      store.variables().forEach((v) => { const o = document.createElement('option'); o.value = v; o.textContent = latexPlain(v) + ' · ' + v; sel.appendChild(o); });
+      if (prev) sel.value = prev;
+    }
+
+    // Assume the picked base variables real → a new labeled column (store.assumeReal).
+    function doAssumeReal() {
+      if (!store.size && !seedFromCurrent()) return;
+      const vars = [...realSel];
+      if (!vars.length) { toast('Pick one or more variables to assume real.', { kind: 'error' }); return; }
+      const r = store.assumeReal(vars);
+      if (!r.ok) { showError('Assume real: ' + (r.reason || 'failed')); return; }
+      rerender(); refreshPickers();
+      toast('Assumed ' + vars.map(latexPlain).join(', ') + ' real → column ' + r.column + ' (' + r.created.length + ' equation' + (r.created.length === 1 ? '' : 's') + ')');
+    }
+
+    // Fix the chosen variable to an exact value → a new labeled column, then (if the
+    // propagate box is ticked) cascade the consequence as a further column.
+    function doSubstituteValue() {
+      if (!store.size && !seedFromCurrent()) return;
+      const v = $('#alg-val-var') && $('#alg-val-var').value;
+      if (!v) { toast('No variable selected.', { kind: 'error' }); return; }
+      const re = parseFloat($('#alg-val-re') && $('#alg-val-re').value) || 0;
+      const im = parseFloat($('#alg-val-im') && $('#alg-val-im').value) || 0;
+      const propagate = !$('#alg-val-prop') || $('#alg-val-prop').checked;
+      const r = store.substituteValue(v, { re, im }, { propagate });
+      if (!r.ok) { showError('Set value: ' + (r.reason || 'failed')); return; }
+      rerender(); refreshPickers();
+      let msg = 'Set ' + latexPlain(v) + ' = ' + (im ? re + (im < 0 ? '−' : '+') + Math.abs(im) + 'i' : re) + ' → column ' + r.column;
+      if (r.propagated) msg += '; propagated (eliminated ' + r.propagated.eliminated.map(latexPlain).join(', ') + (r.propagated.inconsistent ? '; system inconsistent — no solution' : '') + ')';
+      toast(msg);
     }
 
     // ---- sidebar -------------------------------------------------------------
@@ -162,7 +213,7 @@
         '</div>' +
         '<div id="alg-help" class="hint card-sub hidden" data-str-html="algebra.help" style="margin:4px 0;"></div>' +
         '<div class="row"><button id="alg-seed" class="small" type="button" ' +
-        'title="Generate the (●)/(★)/gauge system from the current bounded solve (replaces the graph)">Generate / re-seed</button>' +
+        'title="Generate the original (●)/(★)/gauge system from the current bounded solve at column 0 (replaces the graph; assumptions are then added as columns)">Generate / re-seed</button>' +
         '<button id="alg-undo" class="small" type="button" style="margin-left:6px;" title="Undo">Undo</button>' +
         '<button id="alg-redo" class="small" type="button" style="margin-left:4px;" title="Redo">Redo</button>' +
         '<button id="alg-fit" class="small" type="button" style="margin-left:4px;" title="Reset pan / zoom">Fit</button></div>' +
@@ -177,10 +228,19 @@
         '<div class="row" style="margin-top:4px; gap:4px; align-items:center;">' +
         '  <label style="font-size:11px;" data-str-title="tooltips.algFixW0">' +
         '    <input type="checkbox" id="alg-w0-fix" checked> fix φ(0) = w₀ (selected center; centroid by default)</label></div>' +
-        // Assume-real picker: assert chosen variables are real, then re-seed simplified.
+        // Assume-real picker: assert chosen variables are real → a NEW labeled column.
         '<div class="row" style="margin-top:4px; gap:4px; align-items:center;">' +
         '  <span style="font-size:11px;">Assume real:</span><span id="alg-real-pick" class="algebra-picker"></span>' +
-        '  <button id="alg-real-apply" class="small" type="button" data-str-title="tooltips.assumeReal">Apply &amp; re-seed</button></div>' +
+        '  <button id="alg-real-apply" class="small" type="button" data-str-title="tooltips.assumeReal">Apply (new column)</button></div>' +
+        // Specify-value: fix a variable to an exact value → a NEW labeled column, then
+        // auto-propagate (linear cascade) so the value eliminates dependent variables.
+        '<div class="row" style="margin-top:4px; gap:4px; align-items:center; flex-wrap:wrap;">' +
+        '  <span style="font-size:11px;">Set value:</span>' +
+        '  <select id="alg-val-var" style="max-width:120px;"></select>' +
+        '  <input id="alg-val-re" type="number" step="any" placeholder="Re" style="width:60px;" title="Real part">' +
+        '  <input id="alg-val-im" type="number" step="any" placeholder="Im" style="width:60px;" title="Imaginary part">' +
+        '  <label style="font-size:11px;" title="After substituting, run a linear-propagation pass (eliminate forced variables) as a further column."><input type="checkbox" id="alg-val-prop" checked> propagate</label>' +
+        '  <button id="alg-val-apply" class="small" type="button" title="Substitute the exact value (continued-fraction ℚ(i)) for this variable → a new column">Apply</button></div>' +
         '<div class="row" style="margin-top:4px;"><button id="alg-gauge-elim" class="small" type="button" ' +
         'data-str-title="tooltips.gaugeElim">Eliminate with gauge (all)</button></div>' +
         '<div class="row" style="margin-top:4px; flex-wrap:wrap; gap:4px; align-items:center;">' +
@@ -249,11 +309,13 @@
       $('#alg-export-json').addEventListener('click', exportJson);
       $('#alg-copy-latex').addEventListener('click', copyLatex);
       $('#alg-error-close').addEventListener('click', clearError);
-      $('#alg-real-apply').addEventListener('click', () => { seedFromCurrent(); });
+      $('#alg-real-apply').addEventListener('click', doAssumeReal);
+      $('#alg-val-apply').addEventListener('click', doSubstituteValue);
 
       // variable pickers (eliminate = all current vars; assume-real = primal base vars)
-      buildPicker($('#alg-elim-pick'), { label: 'pick', friendly: friendlyVar, selected: elimSel, getOptions: () => store.variables() });
-      buildPicker($('#alg-real-pick'), { label: 'pick', friendly: (raw) => latexPlain(raw) + ' · ' + raw, selected: realSel, getOptions: () => store.baseVariables() });
+      _elimPicker = buildPicker($('#alg-elim-pick'), { label: 'pick', friendly: friendlyVar, selected: elimSel, getOptions: () => store.variables() });
+      _realPicker = buildPicker($('#alg-real-pick'), { label: 'pick', friendly: (raw) => latexPlain(raw) + ' · ' + raw, selected: realSel, getOptions: () => store.baseVariables() });
+      refreshValueVars();
       // close any open picker menu when clicking elsewhere
       document.addEventListener('click', () => { if (_openMenu) { _openMenu.classList.add('hidden'); _openMenu = null; } });
 
@@ -321,7 +383,7 @@
       if (!store.size) { if (!seedFromCurrent()) return; }
       clearError();
       const ids = (sel && sel.length) ? sel.slice()
-        : store.list().filter((n) => n.rel === '=').map((n) => n.id);
+        : store.currentColumnIds();      // default: the CURRENT system (last column), not every column
       const orderEl = $('#alg-gb-order');
       const order = (orderEl && orderEl.value) || 'grevlex';
       const elim = [...elimSel];
@@ -422,6 +484,14 @@
     }
 
     // ---- per-card hovertext (driven by store.nodeStats) ---------------------
+    // Compact display of a stored {re:[n,d], im:[n,d], approx} value record.
+    function valStr(rec) {
+      const a = rec && rec.approx; if (!a) return '?';
+      const f = (x) => String(Math.round(x * 1e6) / 1e6);
+      if (!a.im) return f(a.re);
+      if (!a.re) return f(a.im) + 'i';
+      return f(a.re) + (a.im < 0 ? ' − ' : ' + ') + f(Math.abs(a.im)) + 'i';
+    }
     function provText(prov) {
       if (!prov) return '';
       switch (prov.op) {
@@ -433,7 +503,28 @@
           + ') of ' + (prov.inputs || []).join(', ');
         case 'constraint': return 'univalence constraint (' + (prov.form || '?') + ')';
         case 'duplicate': return 'copy of ' + (prov.inputs || []).join(', ');
+        case 'substitute': return 'set ' + latexPlain(prov.variable) + ' = ' + valStr(prov.value);
+        case 'linear-reduce': return 'linear propagation (eliminated ' + (prov.eliminated || []).map(latexPlain).join(', ') + ')';
+        case 'assume-real': return 'assumed ' + (prov.vars || []).map(latexPlain).join(', ') + ' real';
+        case 'fix-w0': return 'fixed φ(0) = ' + valStr(prov.value);
         default: return prov.op || '';
+      }
+    }
+    // The per-column header label (audit trail): column 0 is the original system; each
+    // later column is the assumption/reduction that produced it (uniform provenance).
+    function columnHeader(c, ns) {
+      if (!ns || !ns.length) return '';
+      if (c === 0) return 'Original system' + (store.w0Fixed ? ' · φ(0) fixed' : '');
+      const rep = ns.find((n) => n.provenance && n.provenance.op !== 'conjugate') || ns[0];
+      const p = rep.provenance || {};
+      switch (p.op) {
+        case 'substitute': return 'set ' + latexPlain(p.variable) + ' = ' + valStr(p.value);
+        case 'linear-reduce': return 'propagate · eliminate ' + (p.eliminated || []).map(latexPlain).join(', ');
+        case 'assume-real': return 'assume real · ' + (p.vars || []).map(latexPlain).join(', ');
+        case 'fix-w0': return 'fix φ(0) = ' + valStr(p.value);
+        case 'resultant': return 'eliminate ' + latexPlain(p.variable);
+        case 'groebner': return 'Gröbner · ' + (p.eliminate && p.eliminate.length ? 'elim ' + p.eliminate.map(latexPlain).join(',') : (p.order || 'grevlex'));
+        default: return 'column ' + c;
       }
     }
     function nodeTitle(id) {
@@ -466,6 +557,7 @@
         onCopy: copyNodeLatex,
         onMove: (id, dir) => { if (store.moveNode(id, dir)) rerender(); },
         titleOf: nodeTitle,
+        colHeaderOf: columnHeader,
       });
     }
     function showSurface(on) { if (surface) surface.classList.toggle('hidden', !on); }

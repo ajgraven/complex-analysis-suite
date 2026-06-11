@@ -687,6 +687,13 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #algebra-graph .algebra-edges { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
 #algebra-graph .algebra-edge { fill: none; stroke: var(--c-border, #bbb); stroke-width: 1.5; }
 #algebra-graph .algebra-nodes { position: absolute; top: 0; left: 0; }
+#algebra-graph .algebra-col-headers { position: absolute; top: 0; left: 0; pointer-events: none; }
+#algebra-graph .algebra-col-header {
+  position: absolute; box-sizing: border-box;
+  font-size: 11px; font-weight: 600; color: var(--c-muted, #667);
+  border-bottom: 1px solid var(--c-border-soft, #ddd);
+  padding: 0 4px 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 #algebra-graph .algebra-node {
   position: absolute; box-sizing: border-box;
   background: var(--c-surface, #fff); border: 1px solid var(--c-border, #ccc);

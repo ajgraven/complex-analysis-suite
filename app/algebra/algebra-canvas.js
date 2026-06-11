@@ -2,9 +2,11 @@
 // algebra-canvas.js -- DAG renderer for the Algebra workspace (QD.AlgebraCanvas).
 //
 // Renders a QD.AlgebraStore as a horizontal derivation graph: equation nodes laid
-// out in columns (column = elimination depth), SVG cubic-Bézier edges for
-// derivations, and absolutely-positioned HTML cards (KaTeX math) so nodes stay
-// selectable / copyable / scrollable. Pan (drag background) + zoom (wheel) via a
+// out in columns (column = reduction depth — column 0 is the original system, each
+// successive column an applied assumption/reduction, labeled by a per-column header
+// band from handlers.colHeaderOf), SVG cubic-Bézier edges for derivations, and
+// absolutely-positioned HTML cards (KaTeX math) so nodes stay selectable / copyable /
+// scrollable. Pan (drag background) + zoom (wheel) via a
 // single CSS transform on the wrapper holding both the SVG and the card layer.
 // Selection (≤2 nodes) drives the elimination panel in algebra-ui.js.
 //
@@ -27,7 +29,8 @@
   const SVGNS = 'http://www.w3.org/2000/svg';
   const DISPLAY_CAP = 120;            // elide KaTeX above this term count
   const COLW = 360, CARDW = 300;      // column pitch (x) and card width
-  const ROWGAP = 18, TOP = 24, LEFT = 24;   // vertical gap between stacked cards; layout origin
+  const ROWGAP = 18, TOP = 48, LEFT = 24;   // vertical gap between stacked cards; layout origin (TOP leaves room for column headers)
+  const HEADERY = 6;                  // y of the per-column header band (cards start at TOP)
 
   // Local KaTeX renderer with the codebase's plain-text fallback.
   function renderKatex(el, expr, display) {
@@ -57,7 +60,8 @@
     const wrap = div('algebra-wrap');
     const svg = document.createElementNS(SVGNS, 'svg'); svg.setAttribute('class', 'algebra-edges');
     const layer = div('algebra-nodes');
-    wrap.appendChild(svg); wrap.appendChild(layer); viewport.appendChild(wrap); container.appendChild(viewport);
+    const headers = div('algebra-col-headers');   // per-column header band (audit-trail labels)
+    wrap.appendChild(svg); wrap.appendChild(headers); wrap.appendChild(layer); viewport.appendChild(wrap); container.appendChild(viewport);
 
     let tx = LEFT, ty = TOP, scale = 1;
     let selected = [];
@@ -165,11 +169,20 @@
       const cols = new Map();
       for (const n of store.list()) { const c = n.column || 0; if (!cols.has(c)) cols.set(c, []); cols.get(c).push(n); }
 
+      headers.innerHTML = '';
       const pos = new Map();
       for (const [c, arr] of cols) {
         arr.sort((a, b) => (store.orderOf(a.id) - store.orderOf(b.id)) || a.id.localeCompare(b.id));
         let y = TOP;
         const x = LEFT + c * COLW;
+        // Per-column header: the audit-trail label for the reduction that produced it.
+        const htext = handlers.colHeaderOf ? handlers.colHeaderOf(c, arr) : null;
+        if (htext) {
+          const h = div('algebra-col-header');
+          h.textContent = htext; h.title = htext;
+          h.style.left = x + 'px'; h.style.top = HEADERY + 'px'; h.style.width = CARDW + 'px';
+          headers.appendChild(h);
+        }
         for (const n of arr) {
           const el = layer.querySelector('.algebra-node[data-id="' + n.id + '"]');
           if (!el) continue;
