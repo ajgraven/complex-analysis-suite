@@ -1,36 +1,38 @@
 // =============================================================================
 // algebra-canvas.js -- DAG renderer for the Algebra workspace (QD.AlgebraCanvas).
 //
-// Renders a QD.AlgebraStore as a horizontal derivation graph: equation nodes laid
-// out in columns (column = reduction depth — column 0 is the original system, each
-// successive column an applied assumption/reduction, labeled by a per-column header
-// band from handlers.colHeaderOf), SVG cubic-Bézier edges for derivations, and
-// absolutely-positioned HTML cards (KaTeX math) so nodes stay selectable / copyable /
-// scrollable. Pan (drag background) + zoom (wheel) via a
-// single CSS transform on the wrapper holding both the SVG and the card layer.
-// Selection (≤2 nodes) drives the elimination panel in algebra-ui.js.
+// Renders a QD.AlgebraStore as a left-to-right derivation PIPELINE of STRUCTURED
+// COLUMN LANES: each column (= reduction depth — column 0 is the original system,
+// each later column an applied assumption) is a real DOM container with a STICKY
+// header that names the transformation relating it to the previous column (from
+// handlers.colInfo) and shows its equation/variable counts. The lanes live in a flex
+// `.algebra-track` inside a natively-scrolling `.algebra-scroll`; a `transform:scale`
+// zoom (sized via `.algebra-sizer` so the scrollbars stay correct) lets a wide
+// pipeline fit. An SVG overlay inside the track draws the derivation edges (arrowed,
+// `marker-end`) between card anchor points; because the SVG scales with the track it
+// only needs redrawing on layout changes (render / collapse / reorder / resize / zoom),
+// not on scroll.
 //
-// Each card has a header toolbar: a collapse chevron (cards are COLLAPSED by
-// default — only the one-line equation preview shows; expand to see the full
-// typeset form), up/down arrows that reorder the card within its column (delegated
-// to store.moveNode), and a copy button that copies the equation as LaTeX (via
-// handlers.onCopy). A title (hovertext) summarizing the node — variable count,
-// real-equation contribution, per-variable order, degree, provenance — is supplied
-// by handlers.titleOf. Rows are stacked by MEASURED card height so expanded cards
-// don't overlap, and conjugate pairs sit adjacent (the store's display order).
+// Each card keeps its header toolbar: a collapse chevron (cards COLLAPSED by default —
+// a one-line preview; expand for the full typeset form), up/down reorder arrows
+// (store.moveNode), and a copy-as-LaTeX button; a hovertext from handlers.titleOf.
+// Cards FLOW in their column body (flex), so collapse/reorder reflow naturally.
 //
-// SVG+HTML (not the raster #canvas used by the plot/sphere tabs) because nodes
-// need real typeset math, text selection, and per-card hit-testing.
+// Also: an empty state (with a Generate call-to-action) before seeding, an
+// expand/collapse-all hook, and a dismissible verdict panel (setVerdict) for the
+// existence/uniqueness result. Public API: create() → { render, rerender, fit,
+// getSelection, clearSelection, setZoom, setAllCollapsed, setVerdict }.
+//
+// SVG+HTML (not the raster #canvas used by the plot/sphere tabs) because nodes need
+// real typeset math, text selection, and per-card hit-testing.
 // =============================================================================
 
 (function () {
   'use strict';
 
   const SVGNS = 'http://www.w3.org/2000/svg';
-  const DISPLAY_CAP = 120;            // elide KaTeX above this term count
-  const COLW = 360, CARDW = 300;      // column pitch (x) and card width
-  const ROWGAP = 18, TOP = 48, LEFT = 24;   // vertical gap between stacked cards; layout origin (TOP leaves room for column headers)
-  const HEADERY = 6;                  // y of the per-column header band (cards start at TOP)
+  const DISPLAY_CAP = 120;            // elide KaTeX above this term count (card lane width is CSS-driven)
+  const ZMIN = 0.4, ZMAX = 1.6;       // zoom clamp
 
   // KaTeX render with the codebase's plain-text fallback (shared helper in
   // riemann-latex.js; a local wrapper keeps the call sites + a fallback if it's absent).
@@ -45,7 +47,7 @@
   function relSuffix(rel) { return rel === '>' ? ' > 0' : rel === '≠' ? ' \\neq 0' : ' = 0'; }
   function relTag(rel) { return rel === '>' ? ' (inequality)' : rel === '≠' ? ' (≠ 0)' : ''; }
   // A small header toolbar button. `onClick` is wrapped to stop propagation so it
-  // never triggers card selection or background pan.
+  // never triggers card selection.
   function iconBtn(cls, glyph, title, onClick) {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'algebra-icon ' + cls; b.textContent = glyph;
@@ -59,42 +61,47 @@
     handlers = handlers || {};
     container.innerHTML = '';
     container.classList.add('algebra-graph');
-    const viewport = div('algebra-viewport');
-    const wrap = div('algebra-wrap');
-    const svg = document.createElementNS(SVGNS, 'svg'); svg.setAttribute('class', 'algebra-edges');
-    const layer = div('algebra-nodes');
-    const headers = div('algebra-col-headers');   // per-column header band (audit-trail labels)
-    wrap.appendChild(svg); wrap.appendChild(headers); wrap.appendChild(layer); viewport.appendChild(wrap); container.appendChild(viewport);
 
-    let tx = LEFT, ty = TOP, scale = 1;
+    const scroll = div('algebra-scroll');
+    const sizer = div('algebra-sizer');
+    const track = div('algebra-track');
+    const svg = document.createElementNS(SVGNS, 'svg'); svg.setAttribute('class', 'algebra-edges');
+    // arrowhead marker (scales with the track)
+    const defs = document.createElementNS(SVGNS, 'defs');
+    const marker = document.createElementNS(SVGNS, 'marker');
+    marker.setAttribute('id', 'alg-arrow'); marker.setAttribute('viewBox', '0 0 10 10');
+    marker.setAttribute('refX', '9'); marker.setAttribute('refY', '5');
+    marker.setAttribute('markerWidth', '7'); marker.setAttribute('markerHeight', '7');
+    marker.setAttribute('orient', 'auto-start-reverse');
+    const mpath = document.createElementNS(SVGNS, 'path');
+    mpath.setAttribute('d', 'M0,0 L10,5 L0,10 z'); mpath.setAttribute('class', 'algebra-arrowhead');
+    marker.appendChild(mpath); defs.appendChild(marker); svg.appendChild(defs);
+    track.appendChild(svg);
+    sizer.appendChild(track);
+    scroll.appendChild(sizer);
+    container.appendChild(scroll);
+
+    const empty = div('algebra-empty hidden');
+    container.appendChild(empty);
+    const verdict = div('algebra-verdict hidden');
+    container.appendChild(verdict);
+
+    let zoom = 1;
     let selected = [];
     let lastStore = null, lastLatexOf = null;
     const collapsed = new Map();        // id -> bool (default: collapsed). Persists across rerenders.
     function isCollapsed(id) { return collapsed.has(id) ? collapsed.get(id) : true; }
 
-    function applyTransform() { wrap.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')'; }
-
-    // Pan when the drag starts on the empty background (not on a card).
-    viewport.addEventListener('mousedown', (e) => {
-      if (e.target !== viewport && e.target !== wrap && e.target !== svg) return;
-      const sx = e.clientX, sy = e.clientY, ox = tx, oy = ty;
-      const mv = (ev) => { tx = ox + (ev.clientX - sx); ty = oy + (ev.clientY - sy); applyTransform(); };
-      const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); };
-      document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
-    });
-    // Zoom about the cursor.
-    viewport.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      const r = viewport.getBoundingClientRect();
-      const mx = e.clientX - r.left, my = e.clientY - r.top;
-      const f = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-      const ns = Math.max(0.25, Math.min(3, scale * f));
-      tx = mx - (mx - tx) * (ns / scale); ty = my - (my - ty) * (ns / scale); scale = ns;
-      applyTransform();
-    }, { passive: false });
+    // Redraw edges (and re-size) when the lane heights change (collapse / reorder) or the
+    // viewport resizes. Scroll does NOT trigger this — the SVG scrolls with the track.
+    let _ro = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      _ro = new ResizeObserver(() => { if (lastStore) relayout(); });
+      _ro.observe(scroll);
+    }
 
     function renderSelection() {
-      layer.querySelectorAll('.algebra-node').forEach((el) =>
+      track.querySelectorAll('.algebra-node').forEach((el) =>
         el.classList.toggle('selected', selected.indexOf(el.dataset.id) >= 0));
     }
     function toggleSelect(id) {
@@ -112,7 +119,6 @@
     function buildCard(store, latexOf, n) {
       const card = div('algebra-node algebra-' + n.kind);
       card.dataset.id = n.id;
-      card.style.width = CARDW + 'px';
       if (handlers.titleOf) { const t = handlers.titleOf(n.id); if (t) card.title = t; }
 
       const head = div('algebra-node-head');
@@ -134,90 +140,143 @@
       }
       card.appendChild(math);
 
-      // A click anywhere on the card body toggles selection (buttons stopPropagation).
       card.addEventListener('click', (ev) => { ev.stopPropagation(); toggleSelect(n.id); if (handlers.onClick) handlers.onClick(n.id); });
       return card;
     }
 
-    // Toggle collapse for one card in place (no full rerender): swap the body class
-    // and the chevron, then restack + redraw edges since the height changed.
+    // Toggle collapse in place: swap the body class + chevron, then re-size + redraw edges
+    // (flex reflows the card positions; only the heights/edges need updating).
     function setCollapsed(id, val) {
       collapsed.set(id, val);
-      const card = layer.querySelector('.algebra-node[data-id="' + id + '"]');
-      if (!card) return;
-      const math = card.querySelector('.algebra-node-math');
-      const chev = card.querySelector('.algebra-chevron');
-      if (math) math.classList.toggle('collapsed', val);
-      if (chev) { chev.textContent = val ? '▸' : '▾'; chev.title = val ? 'Expand' : 'Collapse'; }
+      const card = track.querySelector('.algebra-node[data-id="' + id + '"]');
+      if (card) {
+        const math = card.querySelector('.algebra-node-math');
+        const chev = card.querySelector('.algebra-chevron');
+        if (math) math.classList.toggle('collapsed', val);
+        if (chev) { chev.textContent = val ? '▸' : '▾'; chev.title = val ? 'Expand' : 'Collapse'; }
+      }
       relayout();
+    }
+    // Expand / collapse every card (the sidebar toggle).
+    function setAllCollapsed(val) {
+      if (!lastStore) return;
+      for (const n of lastStore.list()) collapsed.set(n.id, val);
+      render(lastStore, lastLatexOf);
+    }
+
+    // One column lane: a sticky header (from handlers.colInfo) + a body of cards.
+    function buildColumn(store, latexOf, c, nodes, isLast) {
+      const col = div('algebra-column' + (isLast ? ' is-current' : ''));
+      const head = div('algebra-column-head');
+      const info = (handlers.colInfo ? handlers.colInfo(c, nodes) : null) || { step: String(c + 1), label: 'Column ' + c, stats: '', isCurrent: isLast };
+      const step = div('algebra-column-step'); step.textContent = info.step;
+      const label = div('algebra-column-label'); label.textContent = info.label; label.title = info.label;
+      const top = div('algebra-column-top'); top.appendChild(step); top.appendChild(label);
+      if (info.isCurrent) { const chip = div('algebra-column-chip'); chip.textContent = 'current system'; top.appendChild(chip); }
+      head.appendChild(top);
+      if (info.stats) { const s = div('algebra-column-stats'); s.textContent = info.stats; head.appendChild(s); }
+      col.appendChild(head);
+
+      const body = div('algebra-column-body');
+      for (const n of nodes) body.appendChild(buildCard(store, latexOf, n));
+      col.appendChild(body);
+      return col;
     }
 
     function render(store, latexOf) {
       lastStore = store; lastLatexOf = latexOf;
-      layer.innerHTML = '';
-      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      verdict.classList.add('hidden');                 // a new render = a changed system; the old verdict is stale
       selected = selected.filter((id) => store.get(id));
+      // clear columns (keep the svg overlay)
+      track.querySelectorAll('.algebra-column').forEach((el) => el.remove());
 
-      // Cards first (so offsetHeight is measurable), then position + edges.
-      for (const n of store.list()) layer.appendChild(buildCard(store, latexOf, n));
+      const all = store.list();
+      if (!all.length) { empty.classList.remove('hidden'); scroll.classList.add('hidden'); relayout(); return; }
+      empty.classList.add('hidden'); scroll.classList.remove('hidden');
+
+      const cols = new Map();
+      for (const n of all) { const c = n.column || 0; if (!cols.has(c)) cols.set(c, []); cols.get(c).push(n); }
+      const idxs = [...cols.keys()].sort((a, b) => a - b);
+      const last = idxs[idxs.length - 1];
+      for (const c of idxs) {
+        const arr = cols.get(c).sort((a, b) => (store.orderOf(a.id) - store.orderOf(b.id)) || a.id.localeCompare(b.id));
+        track.appendChild(buildColumn(store, latexOf, c, arr, c === last));
+      }
       renderSelection();
       relayout();
     }
 
-    // Position every card by MEASURED height (so expanded cards don't overlap):
-    // columns by store display order, stacked top-to-bottom with ROWGAP. Then draw
-    // edges between actual card anchor points and size the SVG to the content.
+    // Size the zoom sizer + draw the edges. The track is `transform:scale(zoom)`; its
+    // natural (unscaled) box is offsetWidth/offsetHeight, so the sizer is that × zoom to
+    // keep the scrollbars correct, and the SVG (inside the track) uses NATURAL coords.
     function relayout() {
-      const store = lastStore; if (!store) return;
-      const cols = new Map();
-      for (const n of store.list()) { const c = n.column || 0; if (!cols.has(c)) cols.set(c, []); cols.get(c).push(n); }
+      const w = track.offsetWidth, h = track.offsetHeight;
+      sizer.style.width = (w * zoom) + 'px';
+      sizer.style.height = (h * zoom) + 'px';
+      svg.setAttribute('width', w); svg.setAttribute('height', h);
+      svg.style.width = w + 'px'; svg.style.height = h + 'px';
+      drawEdges();
+    }
 
-      headers.innerHTML = '';
-      const pos = new Map();
-      for (const [c, arr] of cols) {
-        arr.sort((a, b) => (store.orderOf(a.id) - store.orderOf(b.id)) || a.id.localeCompare(b.id));
-        let y = TOP;
-        const x = LEFT + c * COLW;
-        // Per-column header: the audit-trail label for the reduction that produced it.
-        const htext = handlers.colHeaderOf ? handlers.colHeaderOf(c, arr) : null;
-        if (htext) {
-          const h = div('algebra-col-header');
-          h.textContent = htext; h.title = htext;
-          h.style.left = x + 'px'; h.style.top = HEADERY + 'px'; h.style.width = CARDW + 'px';
-          headers.appendChild(h);
-        }
-        for (const n of arr) {
-          const el = layer.querySelector('.algebra-node[data-id="' + n.id + '"]');
-          if (!el) continue;
-          el.style.left = x + 'px'; el.style.top = y + 'px';
-          const h = el.offsetHeight || 60;
-          pos.set(n.id, { x, y, w: el.offsetWidth || CARDW, h });
-          y += h + ROWGAP;
-        }
-      }
-
-      while (svg.firstChild) svg.removeChild(svg.firstChild);
-      for (const e of store.edges) {
-        const a = pos.get(e.from), b = pos.get(e.to);
+    function drawEdges() {
+      // remove old paths (keep <defs>)
+      svg.querySelectorAll('path.algebra-edge').forEach((p) => p.remove());
+      if (!lastStore) return;
+      const tr = track.getBoundingClientRect();
+      const anchor = (id) => {
+        const el = track.querySelector('.algebra-node[data-id="' + id + '"]');
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        // screen rect → natural track coords (track is scaled by `zoom`)
+        return { l: (r.left - tr.left) / zoom, r: (r.right - tr.left) / zoom, cy: (r.top + r.height / 2 - tr.top) / zoom };
+      };
+      for (const e of lastStore.edges) {
+        const a = anchor(e.from), b = anchor(e.to);
         if (!a || !b) continue;
-        const ax = a.x + a.w, ay = a.y + a.h / 2;
-        const bx = b.x, by = b.y + b.h / 2;
+        const ax = a.r, ay = a.cy, bx = b.l, by = b.cy;
         const mx = (ax + bx) / 2;
         const path = document.createElementNS(SVGNS, 'path');
         path.setAttribute('d', 'M' + ax + ',' + ay + ' C' + mx + ',' + ay + ' ' + mx + ',' + by + ' ' + bx + ',' + by);
         path.setAttribute('class', 'algebra-edge');
+        path.setAttribute('marker-end', 'url(#alg-arrow)');
         svg.appendChild(path);
       }
-
-      let maxX = 0, maxY = 0;
-      for (const [, p] of pos) { maxX = Math.max(maxX, p.x + p.w); maxY = Math.max(maxY, p.y + p.h); }
-      svg.style.width = (maxX + 60) + 'px'; svg.style.height = (maxY + 60) + 'px';
     }
-    function rerender() { if (lastStore) render(lastStore, lastLatexOf); }
-    function fit() { tx = LEFT; ty = TOP; scale = 1; applyTransform(); }
 
-    applyTransform();
-    return { render, rerender, fit, getSelection, clearSelection };
+    function rerender() { if (lastStore) render(lastStore, lastLatexOf); }
+    function setZoom(z) {
+      zoom = Math.max(ZMIN, Math.min(ZMAX, z));
+      track.style.transform = 'scale(' + zoom + ')';
+      relayout();
+      return zoom;
+    }
+    function fit() { setZoom(1); scroll.scrollLeft = 0; scroll.scrollTop = 0; }
+
+    // The verdict result card (existence/uniqueness). data: { text, solutionsText? }.
+    function setVerdict(data) {
+      if (!data || !data.text) { verdict.classList.add('hidden'); return; }
+      verdict.innerHTML = '';
+      const close = iconBtn('algebra-verdict-close', '×', 'Dismiss', () => verdict.classList.add('hidden'));
+      const head = div('algebra-verdict-head'); head.textContent = 'Existence / uniqueness'; head.appendChild(close);
+      const body = div('algebra-verdict-body'); body.textContent = data.text;
+      verdict.appendChild(head); verdict.appendChild(body);
+      if (data.solutionsText) { const pre = document.createElement('pre'); pre.className = 'algebra-verdict-sols'; pre.textContent = data.solutionsText; verdict.appendChild(pre); }
+      verdict.classList.remove('hidden');
+    }
+
+    // Empty-state content (rebuilt once; the Generate button calls the handler).
+    (function buildEmpty() {
+      empty.innerHTML = '';
+      const t = div('algebra-empty-title'); t.textContent = 'No system yet';
+      const p = div('algebra-empty-hint');
+      p.textContent = 'Generate the (●)/(★)/gauge system from the current bounded solve, then add assumptions — each becomes a new labeled column.';
+      const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'small algebra-empty-btn'; btn.textContent = 'Generate / re-seed';
+      btn.addEventListener('click', () => { if (handlers.onSeed) handlers.onSeed(); });
+      empty.appendChild(t); empty.appendChild(p); empty.appendChild(btn);
+    })();
+
+    track.style.transform = 'scale(1)';
+    return { render, rerender, fit, getSelection, clearSelection, setZoom, setAllCollapsed, setVerdict };
   }
 
   window.QD = window.QD || {};

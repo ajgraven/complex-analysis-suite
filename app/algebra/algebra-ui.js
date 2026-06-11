@@ -53,6 +53,7 @@
     const realSel = new Set();     // primal variable names asserted real
     let _elimPicker = null, _realPicker = null;   // picker handles (for label refresh)
     let _seededHData = null;       // the hData the store was last seeded from (A4: detect a stale seed)
+    let _zoom = 1;                 // canvas zoom level (View ± controls)
 
     // LaTeX for the conjugate-model vars + the constraint boundary/aux vars.
     const baseLatex = QE.latexOf('conjugate');
@@ -310,7 +311,13 @@
         'title="Generate the original (●)/(★)/gauge system from the current bounded solve at column 0 (replaces the graph; assumptions are then added as columns)">Generate / re-seed</button>' +
         '<button id="alg-undo" class="small" type="button" style="margin-left:6px;" title="Undo">Undo</button>' +
         '<button id="alg-redo" class="small" type="button" style="margin-left:4px;" title="Redo">Redo</button>' +
-        '<button id="alg-fit" class="small" type="button" style="margin-left:4px;" title="Reset pan / zoom">Fit</button></div>' +
+        '<button id="alg-fit" class="small" type="button" style="margin-left:4px;" title="Reset zoom &amp; scroll to the start">Fit</button></div>' +
+        '<div class="row" style="margin-top:4px; gap:4px; align-items:center;">' +
+        '  <span style="font-size:11px;">View:</span>' +
+        '  <button id="alg-zoom-out" class="small" type="button" title="Zoom out (fit more columns)">−</button>' +
+        '  <button id="alg-zoom-in" class="small" type="button" title="Zoom in">+</button>' +
+        '  <button id="alg-collapse-all" class="small" type="button" title="Collapse every card to a one-line preview">Collapse all</button>' +
+        '  <button id="alg-expand-all" class="small" type="button" title="Expand every card to the full typeset form">Expand all</button></div>' +
         '<div id="alg-status" class="hint" style="margin:4px 0;"></div>' +
         // Persistent, dismissible error panel (stays until × is clicked).
         '<div id="alg-error" class="algebra-error hidden">' +
@@ -399,7 +406,11 @@
       if (w0FixCb) w0FixCb.addEventListener('change', () => { if (store.size) seedFromCurrent(); });
       $('#alg-undo').addEventListener('click', () => { if (store.undo()) rerender(); });
       $('#alg-redo').addEventListener('click', () => { if (store.redo()) rerender(); });
-      $('#alg-fit').addEventListener('click', () => { if (canvas) canvas.fit(); });
+      $('#alg-fit').addEventListener('click', () => { if (canvas) { canvas.fit(); _zoom = 1; } });
+      $('#alg-zoom-out').addEventListener('click', () => { if (canvas) _zoom = canvas.setZoom(_zoom / 1.15); });
+      $('#alg-zoom-in').addEventListener('click', () => { if (canvas) _zoom = canvas.setZoom(_zoom * 1.15); });
+      $('#alg-collapse-all').addEventListener('click', () => { if (canvas) canvas.setAllCollapsed(true); });
+      $('#alg-expand-all').addEventListener('click', () => { if (canvas) canvas.setAllCollapsed(false); });
       $('#alg-eliminate').addEventListener('click', doEliminate);
       $('#alg-groebner').addEventListener('click', () => doGroebner(null));
       $('#alg-groebner-sel').addEventListener('click', () => doGroebner(canvas ? canvas.getSelection() : []));
@@ -577,17 +588,22 @@
                 : cl.realCount + ' real quadrature domains')
             + (cl.complexCount != null ? ' of ' + cl.complexCount + ' distinct complex' : '')) + '.';
           // 4. explicit real solutions when zero-dimensional
-          let coords = '';
+          let coords = '', solutionsText = '';
           if (cl.zeroDim && !cl.inconsistent) {
             const sr = store.solveReal(null, { paramValues: params });
             if (sr.ok && sr.solutions && sr.solutions.length) {
               const reals = sr.solutions.filter((s) => Object.keys(s).every((k) => Math.abs(s[k].im) < 1e-6));
-              coords = ' Explicit: ' + reals.length + ' real solution(s) — see console.';
+              coords = ' Explicit: ' + reals.length + ' real solution(s) — see the verdict card / console.';
+              // a compact text table for the verdict card (real solutions; vars sorted)
+              const fmt = (x) => (Math.round(x * 1e6) / 1e6);
+              solutionsText = (reals.length ? reals : sr.solutions).slice(0, 6).map((s, i) =>
+                '#' + (i + 1) + '  ' + Object.keys(s).sort().map((k) => latexPlain(k) + '=' + fmt(s[k].re) + (Math.abs(s[k].im) < 1e-6 ? '' : (s[k].im >= 0 ? '+' : '−') + fmt(Math.abs(s[k].im)) + 'i')).join('  ')).join('\n');
               try { console.table(sr.solutions.map((s) => { const row = {}; Object.keys(s).forEach((k) => { row[k] = s[k].re.toFixed(6) + (s[k].im >= 0 ? '+' : '−') + Math.abs(s[k].im).toFixed(6) + 'i'; }); return row; })); } catch (e) { /* ignore */ }
             }
           }
           setBusy(false); refreshPickers();
           setStatus(verdict + coords);
+          if (canvas) canvas.setVerdict({ text: verdict, solutionsText });
           toast(verdict, cl.inconsistent || cl.realCount === 0 ? { kind: 'error' } : {});
         } catch (e) { setBusy(false); showError('Auto-reduce & solve: ' + ((e && e.message) || String(e))); }
       })();
@@ -634,6 +650,7 @@
           else verdict = r.realCount + ' real quadrature domains' + tail + '.';
         }
         setStatus(verdict);
+        if (canvas) canvas.setVerdict({ text: verdict });
         toast(verdict, r.inconsistent || r.realCount === 0 ? { kind: 'error' } : {});
       }, 20);
     }
@@ -744,23 +761,35 @@
         default: return prov.op || '';
       }
     }
-    // The per-column header label (audit trail): column 0 is the original system; each
-    // later column is the assumption/reduction that produced it (uniform provenance).
-    function columnHeader(c, ns) {
-      if (!ns || !ns.length) return '';
+    // The per-column LABEL (the relationship to the previous column): column 0 is the
+    // original system; each later column is phrased as the transformation that derived it.
+    function columnLabel(c, ns) {
       if (c === 0) return 'Original system' + (store.w0Fixed ? ' · φ(0) fixed' : '');
-      const rep = ns.find((n) => n.provenance && n.provenance.op !== 'conjugate') || ns[0];
-      const p = rep.provenance || {};
+      const rep = (ns || []).find((n) => n.provenance && n.provenance.op !== 'conjugate') || (ns || [])[0];
+      const p = (rep && rep.provenance) || {};
       switch (p.op) {
-        case 'substitute': return 'set ' + latexPlain(p.variable) + ' = ' + valStr(p.value);
-        case 'linear-reduce': return 'propagate · eliminate ' + (p.eliminated || []).map(latexPlain).join(', ');
-        case 'assume-real': return 'assume real · ' + (p.vars || []).map(latexPlain).join(', ');
-        case 'fix-w0': return 'fix φ(0) = ' + valStr(p.value);
-        case 'resultant': return 'eliminate ' + latexPlain(p.variable);
-        case 'groebner': return 'Gröbner · ' + (p.eliminate && p.eliminate.length ? 'elim ' + p.eliminate.map(latexPlain).join(',') : (p.order || 'grevlex'));
-        case 'triangular': return p.contradiction ? 'triangular · inconsistent' : 'triangular decomposition';
-        default: return 'column ' + c;
+        case 'substitute': return '↳ set ' + latexPlain(p.variable) + ' = ' + valStr(p.value);
+        case 'linear-reduce': return '↳ propagate · eliminate ' + (p.eliminated || []).map(latexPlain).join(', ');
+        case 'assume-real': return '↳ assume real · ' + (p.vars || []).map(latexPlain).join(', ');
+        case 'fix-w0': return '↳ fix φ(0) = ' + valStr(p.value);
+        case 'resultant': return '↳ eliminate ' + latexPlain(p.variable);
+        case 'groebner': return '↳ Gröbner · ' + (p.eliminate && p.eliminate.length ? 'elim ' + p.eliminate.map(latexPlain).join(',') : (p.order || 'grevlex'));
+        case 'triangular': return p.contradiction ? '↳ triangular · inconsistent' : '↳ triangular decomposition';
+        default: return '↳ column ' + c;
       }
+    }
+    // Structured column-header data for the canvas lane headers: step badge, the
+    // transition label (relationship to the previous column), a stats line with the Δ in
+    // variable count vs the previous column, and whether this is the CURRENT system.
+    function columnInfo(c, ns) {
+      const st = store.columnStats(c);
+      let stats = st.eqCount + ' eqn' + (st.eqCount === 1 ? '' : 's') + ' · ' + st.varCount + ' var' + (st.varCount === 1 ? '' : 's');
+      if (c > 0) {
+        const prev = store.columnStats(c - 1);
+        const d = st.varCount - prev.varCount;
+        if (d !== 0) stats += '  (' + (d > 0 ? '+' : '−') + Math.abs(d) + ' var' + (Math.abs(d) === 1 ? '' : 's') + ')';
+      }
+      return { step: String(c + 1), label: columnLabel(c, ns), stats, isCurrent: c === store.maxColumn() };
     }
     function nodeTitle(id) {
       const s = store.nodeStats(id); if (!s) return '';
@@ -792,7 +821,8 @@
         onCopy: copyNodeLatex,
         onMove: (id, dir) => { if (store.moveNode(id, dir)) rerender(); },
         titleOf: nodeTitle,
-        colHeaderOf: columnHeader,
+        colInfo: columnInfo,
+        onSeed: seedFromCurrent,
       });
     }
     function showSurface(on) { if (surface) surface.classList.toggle('hidden', !on); }

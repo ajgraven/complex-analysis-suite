@@ -258,6 +258,20 @@
     // input to dimension/solve/groebner so those operate on the reduced system, not
     // a mix of every column. Falls back to ALL equality nodes if there is one column.
     function currentColumnIds() { return lastColumnNodes().filter((n) => n.rel === '=').map((n) => n.id); }
+    // Per-column size: equation-node count + the number of distinct variables across the
+    // column (the union of each node's vars). Drives the column-header stats + Δ display.
+    function columnStats(c) {
+      const ns = colNodes(c);
+      const vars = new Set();
+      let eqCount = 0;
+      for (const n of ns) { if (n.rel === '=') eqCount++; for (const v of n.poly.vars()) vars.add(v); }
+      return { eqCount, varCount: vars.size, nodeCount: ns.length };
+    }
+    // Ordered list of the columns present, each with its stats — for the UI lane headers.
+    function columns() {
+      const cs = new Set(); for (const n of nodes.values()) cs.add(n.column || 0);
+      return [...cs].sort((a, b) => a - b).map((c) => Object.assign({ index: c }, columnStats(c)));
+    }
 
     // Apply a per-node transform to every node of the current last column, emitting
     // the results as a new column (single undo step). make(node) → { poly, rel?,
@@ -911,7 +925,7 @@
       seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, reducePropagate, assumeReal, fixW0, triangularize: triangularizeNodes,
-      currentReimSystem, classify, solveReal, currentColumnIds, maxColumn,
+      currentReimSystem, classify, solveReal, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       undo, redo, reset,

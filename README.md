@@ -488,8 +488,13 @@ view is active.
   solutions (= actual quadrature domains) exactly via the Hermite trace form — "Unique
   QD", "N real QDs (of M complex)", "No QD", or "a positive-dimensional family" — and
   **★ Auto-reduce & solve** chains the reductions and reports the verdict plus the
-  explicit real solutions in one click. From `app/qd-constraints.js` (`QD.QDConstraints`)
-  + `app/algebra/`; an external-CAS / RCTD bridge is the remaining future step.
+  explicit real solutions in one click. The reductions render as **structured column
+  lanes** — each a sticky-headed container naming the transformation that derived it
+  from the previous column (e.g. `① Original system` → `↳ assume real · …`) with its
+  equation/variable counts and a Δ, the **current system** lane badged, arrowed edges
+  between cards, native scroll + a zoom control, and the verdict surfaced as a result
+  card. From `app/qd-constraints.js` (`QD.QDConstraints`) + `app/algebra/`; an
+  external-CAS / RCTD bridge is the remaining future step.
 * **φ(0)** — the Riemann-map center w₀ = φ(0) defaults to the centroid of the poles
   (manually overridable in bounded mode), and now also drives the **symbolic** equation
   system and the Algebra-tab seeding (exact-rational substitution).

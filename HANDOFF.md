@@ -86,8 +86,14 @@ its own merged PR), with one feature **in progress on a branch**:
   chains auto-reality → propagation → classify → `solveReal` (explicit real solutions), each a visible
   column. Plus an **φ / h reference panel** (symbolic forms + variable legend), a `solveZeroDim`
   order-retry heuristic (reversed-order on a cap, order-independent ⇒ safe), and robustness (busy-lock
-  undo/redo/palette, stale-seed detection). Full suite 1716/0. See the plan file's MASTER PLAN
-  PROGRESS block for the per-commit map.
+  undo/redo/palette, stale-seed detection). A follow-on **UI rework** then replaced the free-form
+  pan/zoom canvas with **structured column lanes** ([algebra-canvas.js](app/algebra/algebra-canvas.js)
+  rewrite): each column is a sticky-headed flex container labeling the transformation relating it to
+  the previous column (`① Original system` → `↳ assume real · …`) with `store.columnStats` (eqn/var
+  counts + Δ), the last lane badged "current system", arrowed SVG edges, native scroll + a
+  transform-scale zoom (`.algebra-sizer` keeps scrollbars correct), an empty-state CTA, expand/
+  collapse-all, and the existence/uniqueness verdict as a floating result card. Full suite 1720/0.
+  See the plan file's MASTER PLAN PROGRESS + UI REWORK PLAN for the per-commit map.
 - **Symbolic QD equation generator** (`feature/symbolic-qd-equations`, NOT yet merged) — a new
   symbolic-algebra track: `app/sym-core.js` (`QD.Sym`, exact Rational/Gaussian/MPoly/RatFn +
   factored-denominator `FRatFn` + field-generic power series with Lagrange reversion) and

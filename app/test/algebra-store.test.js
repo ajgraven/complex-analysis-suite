@@ -479,4 +479,18 @@ module.exports = async function run() {
     const sr = st.solveReal(null, {});
     ok('solveReal: returns a well-formed result over the reim system', typeof sr.ok === 'boolean');
   }
+
+  // ---- per-column stats (UI lane headers) ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system);                       // symbolic disk → column 0
+    const c0 = st.columnStats(0);
+    ok('columnStats: column 0 reports the seeded equation + variable counts',
+       c0.eqCount === st.list().filter((n) => n.column === 0 && n.rel === '=').length && c0.varCount > 0);
+    st.assumeReal(st.baseVariables());               // → column 1, fewer variables
+    const c1 = st.columnStats(1);
+    ok('columnStats: the reduced column has strictly fewer variables', c1.varCount < c0.varCount);
+    const cols = st.columns();
+    ok('columns: lists the columns in order with stats', cols.length === 2 && cols[0].index === 0 && cols[1].index === 1 && typeof cols[1].varCount === 'number');
+  }
 };
