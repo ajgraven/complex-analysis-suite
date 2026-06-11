@@ -870,6 +870,25 @@ module.exports = async function run() {
 
     // a nonzero constant has no nontrivial factorization
     ok('factor: a constant → ok:false', !S.factor(k(3), opts).ok);
+
+    // ---- univariate GCD + square-free over ℚ(i) ----
+    // gcd((x−1)(x−2), (x−1)(x−3)) = x−1 (monic)
+    const g1 = S.univariateGCD(x.sub(k(1)).mul(x.sub(k(2))), x.sub(k(1)).mul(x.sub(k(3))), 'x');
+    ok('univariateGCD: gcd((x−1)(x−2),(x−1)(x−3)) = x−1', g1.equals(x.sub(k(1))));
+    // coprime → gcd is a unit (degree 0)
+    const g2 = S.univariateGCD(x.sub(k(1)), x.sub(k(2)), 'x');
+    ok('univariateGCD: coprime linear factors → constant gcd', g2.degreeIn('x') === 0 && !g2.isZero());
+    // gcd over ℚ(i): gcd((x−i)(x−1), (x−i)(x+1)) = x−i
+    const xi = x.sub(S.mpolyConst(S.gauss(S.rat(0n, 1n), S.rat(1n, 1n))));   // x − i
+    const g3 = S.univariateGCD(xi.mul(x.sub(k(1))), xi.mul(x.add(k(1))), 'x');
+    ok('univariateGCD: gcd over ℚ(i) recovers x−i', g3.equals(xi));
+    // square-free part collapses multiplicity: (x−1)²(x−2) → (x−1)(x−2)
+    const sf = S.squareFreePart(x.sub(k(1)).pow(2).mul(x.sub(k(2))), 'x');
+    ok('squareFreePart: (x−1)²(x−2) → degree-2 radical, divides the input and is square-free',
+       sf.degreeIn('x') === 2 && divides(sf, x.sub(k(1)).pow(2).mul(x.sub(k(2)))) &&
+       S.univariateGCD(sf, sf.derivativeIn('x'), 'x').degreeIn('x') === 0);
+    // an already square-free input is returned (same degree)
+    ok('squareFreePart: square-free input is unchanged in degree', S.squareFreePart(p2, 'x').degreeIn('x') === 2);
   }
 };
 

@@ -649,6 +649,11 @@
   // Multiplicities collapse (only distinct zero sets matter for the case split).
   // opts.rootFinder overrides the Durand–Kerner finder; opts.ratApprox (a float→
   // [num,den] BigInt pair, e.g. QDEquations.ratApprox) enables method (3).
+  // KNOWN GAP: factors that are IRREDUCIBLE over ℚ(i) of degree ≥ 2 are not separated
+  // (e.g. x⁴+x²+1 = (x²+x+1)(x²−x+1) is returned whole). Closing it needs a full ℚ(i)
+  // univariate factorizer — the norm trick: factor N(f)=f·f̄ over ℚ (Berlekamp–Zassenhaus:
+  // square-free → Cantor–Zassenhaus mod p → Hensel lift → recombination) and gcd-recover.
+  // The square-free / univariateGCD primitives below are that factorizer's prerequisite.
   // ---------------------------------------------------------------------------
   // Leading coefficient under the default (grlex) order — a stable scalar for the
   // monic normalization below. Returns 0 for the zero polynomial.
@@ -712,19 +717,73 @@
     }
     return null;
   }
-  // Univariate (one variable) linear-factor extraction via numeric roots → exact ℚ(i)
-  // rationalization → keep each (v − r) that divides EXACTLY. Returns {factors, cofactor}.
+  // ---- univariate GCD + square-free over ℚ(i) (a single variable) -------------
+  // Gaussian coefficient of a constant MPoly (the empty-monomial term), else 0.
+  function _constGauss(p) { for (const t of p.terms.values()) if (t.mono.size === 0) return t.coeff; return Gaussian.fromInt(0); }
+  // MPoly univariate in v → ascending Gaussian coefficient array [c₀, c₁, …, c_d].
+  function _uniToArr(p, v) { return p.coeffsIn(v).map((c) => _constGauss(c)); }
+  // Ascending Gaussian array → MPoly Σ aᵢ·v^i (zero coefficients skipped).
+  function _uniFromArr(arr, v) {
+    let out = MPoly.zero();
+    for (let i = 0; i < arr.length; i++) {
+      if (arr[i].isZero()) continue;
+      const t = new MPoly(); t._addTerm(new Map(i > 0 ? [[v, i]] : []), arr[i]); out = out.add(t);
+    }
+    return out;
+  }
+  // Monic GCD of two univariate Gaussian-coefficient arrays via the Euclidean algorithm
+  // (ℚ(i) is a field, so the remainder sequence terminates). Returns a monic array; [1]
+  // for coprime inputs, [0] only if both inputs are zero.
+  function _uniGCDArr(a, b) {
+    const trim = (x) => { while (x.length && x[x.length - 1].isZero()) x.pop(); return x; };
+    let f = trim(a.slice()), g = trim(b.slice());
+    let guard = 0;
+    while (g.length) {
+      const r = f.slice(), lcg = g[g.length - 1];
+      while (trim(r).length >= g.length && r.length) {
+        const lc = r[r.length - 1], q = lc.div(lcg), shift = r.length - g.length;
+        for (let i = 0; i < g.length; i++) r[shift + i] = r[shift + i].sub(q.mul(g[i]));
+        trim(r);
+        if (++guard > 1e6) throw new Error('univariateGCD: non-terminating');
+      }
+      f = g; g = trim(r);
+    }
+    if (!f.length) return [Gaussian.fromInt(0)];
+    const lc = f[f.length - 1];
+    return f.map((c) => c.div(lc));                            // monic
+  }
+  // Monic univariate GCD of two polynomials in the single variable v over ℚ(i).
+  function univariateGCD(p, q, v) { return _uniFromArr(_uniGCDArr(_uniToArr(p, v), _uniToArr(q, v)), v); }
+  // Square-free part (radical) of a univariate p in v: p / gcd(p, p′). Same zero set as
+  // p but every root simple. p must be univariate in v (else returns p unchanged).
+  function squareFreePart(p, v) {
+    if (p.vars().size !== 1) return p;
+    const dp = p.derivativeIn(v);
+    if (dp.isZero()) return p;
+    const g = univariateGCD(p, dp, v);
+    if (g.degreeIn(v) <= 0) return p;                          // already square-free
+    return mpolyExactDiv(p, g);
+  }
+  // Univariate (one variable) linear-factor extraction. The numeric root finder runs on
+  // the SQUARE-FREE PART (distinct roots ⇒ better-conditioned roots), then each (v − r)
+  // whose rationalized root divides EXACTLY is kept. Returns {factors, cofactor}; the
+  // factors divide the square-free part (hence p), and V(square-free)=V(p), so the case
+  // split is correct. (Irreducible factors of degree ≥ 2 are NOT separated — that needs a
+  // full ℚ(i) factorizer via the norm trick; see the factor() block.)
   function _univariateFactor(p, rootFinder, ratApprox) {
     const vs = [...p.vars()];
     if (vs.length !== 1 || !rootFinder || !ratApprox) return null;
     const v = vs[0];
     if (p.degreeIn(v) < 2) return null;                       // already linear/constant — nothing to split
+    let work = p;
+    try { work = squareFreePart(p, v); } catch (e) { work = p; }
+    if (work.degreeIn(v) < 1) return null;
     let res;
-    try { res = rootFinder(p.coeffsIn(v).map((c) => c.evalComplex({}))) || {}; } catch (e) { return null; }
+    try { res = rootFinder(work.coeffsIn(v).map((c) => c.evalComplex({}))) || {}; } catch (e) { return null; }
     if (res.converged === false) return null;
     const roots = res.roots || [];
     const factors = [];
-    let cofactor = p;
+    let cofactor = work;
     for (const r of roots) {
       const [rn, rd] = ratApprox(r.re), [iN, iD] = ratApprox(r.im);
       const g = gauss(rat(rn, rd), rat(iN, iD));
@@ -2546,7 +2605,7 @@
     rat, gauss, gaussInt, mpolyVar, mpolyConst, mpolyInt,
     polyFromTermList: (list) => MPoly.fromTermList(list),
     monoKey, monoCmp,
-    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor,
+    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, univariateGCD, squareFreePart,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, solveByEigenvalues, realSolutionCount, pseudoRemainder, triangularize, runJob,
