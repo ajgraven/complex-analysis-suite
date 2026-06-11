@@ -735,6 +735,20 @@
       } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
     }
 
+    // Explicit REAL solutions (the actual quadrature domains): solve the pinned reim
+    // system numerically (opts.paramValues pins the known data). Each solution is keyed
+    // by the real variable names (v__re / v__im); the REAL ones (tiny imaginary part) are
+    // the QDs. Returns Sym.solveZeroDim's result over the reim system, or { ok:false }.
+    function solveReal(ids, opts) {
+      opts = opts || {};
+      const S = getSym();
+      const reim = currentReimSystem(ids, opts);
+      if (!reim.polys.length) return { ok: false, reason: 'no equality nodes to solve' };
+      const rootFinder = opts.rootFinder || defaultRootFinder();
+      try { return S.solveZeroDim(reim.polys, Object.assign({}, opts, { vars: reim.vars, rootFinder })); }
+      catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    }
+
     // Numeric solutions of the selected (or all) equality nodes via the shape-lemma
     // solver (grevlex GB → FGLM to lex → univariate Durand–Kerner + back-substitution).
     // Returns Sym.solveZeroDim's result: { ok, solutions:[{var:{re,im}}], dimension, … }
@@ -894,7 +908,7 @@
       seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, reducePropagate, assumeReal, fixW0, triangularize: triangularizeNodes,
-      currentReimSystem, classify, currentColumnIds, maxColumn,
+      currentReimSystem, classify, solveReal, currentColumnIds, maxColumn,
       sharedVars, previewCost, exportDAG, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       undo, redo, reset,

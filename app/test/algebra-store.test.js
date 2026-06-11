@@ -475,5 +475,8 @@ module.exports = async function run() {
     if (cl.ok && cl.zeroDim && cl.realCount != null) {
       ok('classify: a real disk QD has at least one real solution (exists)', cl.realCount >= 1);
     }
+    // solveReal returns a well-formed result over the (pinned) reim system
+    const sr = st.solveReal(null, {});
+    ok('solveReal: returns a well-formed result over the reim system', typeof sr.ok === 'boolean');
   }
 };

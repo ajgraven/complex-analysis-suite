@@ -341,6 +341,8 @@
         '  <label style="font-size:11px;" title="Monomial order. lex = elimination order; grevlex = fastest general.">order ' +
         '    <select id="alg-gb-order"><option value="grevlex">grevlex</option><option value="grlex">grlex</option><option value="lex">lex</option></select></label>' +
         '  <span style="font-size:11px;">eliminate:</span><span id="alg-elim-pick" class="algebra-picker"></span></div>' +
+        '<div class="row" style="margin-top:6px; gap:4px;">' +
+        '  <button id="alg-autosolve" class="small" type="button" style="font-weight:600;" title="Semi-autonomous: auto-assume reality (if h is symmetric), propagate linear consequences, then determine existence/uniqueness and the explicit real solutions — each step a new labeled column">★ Auto-reduce &amp; solve</button></div>' +
         '<div class="row" style="margin-top:4px; gap:4px; flex-wrap:wrap;">' +
         '  <button id="alg-triangular" class="small" type="button" title="Triangular decomposition (Wu pseudo-elimination) of the current system — an alternative to Gröbner that exhibits the solution structure (free variables, no-solution)">Triangular decomp.</button>' +
         '  <button id="alg-classify" class="small" type="button" title="Existence / uniqueness: count the REAL solutions (= actual quadrature domains) of the current system via the Hermite trace form, plus distinct-complex / inconsistent / positive-dimensional verdicts">Existence / uniqueness</button>' +
@@ -399,6 +401,7 @@
       $('#alg-eliminate').addEventListener('click', doEliminate);
       $('#alg-groebner').addEventListener('click', () => doGroebner(null));
       $('#alg-groebner-sel').addEventListener('click', () => doGroebner(canvas ? canvas.getSelection() : []));
+      $('#alg-autosolve').addEventListener('click', doAutoSolve);
       $('#alg-triangular').addEventListener('click', doTriangular);
       $('#alg-classify').addEventListener('click', doClassify);
       $('#alg-dimension').addEventListener('click', doDimension);
@@ -467,7 +470,7 @@
     // controls, reveals Cancel, and routes progress to the status line.
     let _abort = null;
     function setBusy(on, label) {
-      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-classify', 'alg-gauge-elim', 'alg-eliminate', 'alg-seed']
+      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-classify', 'alg-autosolve', 'alg-gauge-elim', 'alg-eliminate', 'alg-seed']
         .forEach((id) => { const b = $('#' + id); if (b) b.disabled = on; });
       const cancel = $('#alg-cancel'); if (cancel) cancel.classList.toggle('hidden', !on);
       if (on && label) setStatus(label);
@@ -530,6 +533,60 @@
     // Existence / uniqueness verdict over the REAL (reim) system: how many real
     // solutions (= quadrature domains) the current system has, with inconsistent /
     // positive-dimensional / non-radical distinctions surfaced.
+    // Semi-autonomous "Auto-reduce & solve": chain the reductions (auto-reality →
+    // linear propagation), each appended as a labeled column, then determine existence/
+    // uniqueness and the explicit real solutions. The reduction history stays visible.
+    function doAutoSolve() {
+      if (_abort) return;
+      if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
+      if (!store.size && !seedFromCurrent()) return;
+      clearError();
+      setBusy(true, 'Auto-reduce & solve…');
+      const tick = () => new Promise((res) => setTimeout(res, 30));
+      (async () => {
+        try {
+          // 1. auto reality (if h is real-axis symmetric and not already collapsed)
+          const sym = QE.realAxisSymmetry(activeEnv.hData);
+          if (sym.allReal && !store.realVars.length) {
+            const r = store.assumeReal(store.baseVariables());
+            if (r.ok) { rerender(); setStatus('Auto: assumed reality → column ' + r.column); await tick(); }
+          }
+          // 2. linear-propagation passes (to a fixpoint)
+          for (let i = 0; i < 4; i++) {
+            const pr = store.reducePropagate();
+            if (!pr.ok) break;
+            rerender(); setStatus('Auto: linear propagation → column ' + pr.column + (pr.inconsistent ? ' (inconsistent)' : '')); await tick();
+            if (pr.inconsistent) break;
+          }
+          // 3. existence / uniqueness verdict (parameters pinned)
+          const params = hDataParamValues();
+          const cl = store.classify(null, { paramValues: params });
+          if (!cl.ok) { setBusy(false); showError('Auto-reduce & solve: ' + withGuidance(cl.reason || 'failed')); return; }
+          let verdict;
+          if (cl.inconsistent) verdict = 'No quadrature domain: the reduced system is inconsistent.';
+          else if (!cl.zeroDim) verdict = 'A positive-dimensional family of solutions (' + cl.numVars + ' real variables) — add a constraint or fix a value to pin it.';
+          else verdict = (cl.realCount == null ? cl.multiplicity + ' solution(s) with multiplicity'
+            : (cl.realCount === 0 ? 'No real quadrature domain'
+              : cl.realCount === 1 ? 'Unique quadrature domain (1 real solution)'
+                : cl.realCount + ' real quadrature domains')
+            + (cl.complexCount != null ? ' of ' + cl.complexCount + ' distinct complex' : '')) + '.';
+          // 4. explicit real solutions when zero-dimensional
+          let coords = '';
+          if (cl.zeroDim && !cl.inconsistent) {
+            const sr = store.solveReal(null, { paramValues: params });
+            if (sr.ok && sr.solutions && sr.solutions.length) {
+              const reals = sr.solutions.filter((s) => Object.keys(s).every((k) => Math.abs(s[k].im) < 1e-6));
+              coords = ' Explicit: ' + reals.length + ' real solution(s) — see console.';
+              try { console.table(sr.solutions.map((s) => { const row = {}; Object.keys(s).forEach((k) => { row[k] = s[k].re.toFixed(6) + (s[k].im >= 0 ? '+' : '−') + Math.abs(s[k].im).toFixed(6) + 'i'; }); return row; })); } catch (e) { /* ignore */ }
+            }
+          }
+          setBusy(false); refreshPickers();
+          setStatus(verdict + coords);
+          toast(verdict, cl.inconsistent || cl.realCount === 0 ? { kind: 'error' } : {});
+        } catch (e) { setBusy(false); showError('Auto-reduce & solve: ' + ((e && e.message) || String(e))); }
+      })();
+    }
+
     // The known quadrature-data values (a_j, C_{j,s} and their conjugates) keyed by the
     // conjugate-model variable names — to PIN the parameters for the existence verdict
     // (they are given data, not unknowns).
