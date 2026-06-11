@@ -122,7 +122,16 @@
       nodes.clear(); for (const [k, v] of s.nodes) nodes.set(k, v);
       edges = s.edges.slice(); order = new Map(s.order || []); model = s.model; seq = s.seq; realVars = (s.realVars || []).slice(); w0Fixed = s.w0Fixed || null;
     }
-    function checkpoint() { undoStack.push(snapshot()); redoStack.length = 0; }
+    // Cap the undo history so a long derivation can't grow the snapshot stack without
+    // bound (each snapshot holds a copy of the whole node map). 200 steps is far beyond
+    // any interactive session; the oldest snapshot is dropped when exceeded.
+    function checkpoint() { undoStack.push(snapshot()); if (undoStack.length > 200) undoStack.shift(); redoStack.length = 0; }
+    // Memoized variable set per POLYNOMIAL (MPolys are immutable, so the Set is stable).
+    // A WeakMap keeps it off the object and GC-friendly; removes repeated full-term walks
+    // of the same polynomial across variables()/baseVariables()/columnStats/_varsOf/etc.
+    const _varsMemo = new WeakMap();
+    function polyVars(p) { let v = _varsMemo.get(p); if (!v) { v = p.vars(); _varsMemo.set(p, v); } return v; }
+    function nodeVars(n) { return polyVars(n.poly); }
     function undo() { if (!undoStack.length) return false; redoStack.push(snapshot()); restore(undoStack.pop()); return true; }
     function redo() { if (!redoStack.length) return false; undoStack.push(snapshot()); restore(redoStack.pop()); return true; }
 
@@ -280,7 +289,7 @@
       const ns = colNodes(c);
       const vars = new Set();
       let eqCount = 0;
-      for (const n of ns) { if (n.rel === '=') eqCount++; for (const v of n.poly.vars()) vars.add(v); }
+      for (const n of ns) { if (n.rel === '=') eqCount++; for (const v of nodeVars(n)) vars.add(v); }
       return { eqCount, varCount: vars.size, nodeCount: ns.length };
     }
     // Ordered list of the columns present, each with its stats — for the UI lane headers.
@@ -374,12 +383,12 @@
         }
       } catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [] }; }
       const subVars = Object.keys(sub);
-      if (!lastColumnNodes().some((n) => { const vs = n.poly.vars(); return subVars.some((v) => vs.has(v)); })) {
+      if (!lastColumnNodes().some((n) => { const vs = nodeVars(n); return subVars.some((v) => vs.has(v)); })) {
         return { ok: false, reason: 'none of ' + pairs.map((p) => p.varName).join(', ') + ' are in the current system', created: [] };
       }
       const label = 'set ' + recs.map((r) => r.name + ' = ' + _valShort(r.value.approx)).join(', ');
       const res = _appendReduction((n) => ({
-        poly: subVars.some((v) => n.poly.vars().has(v)) ? n.poly.subst(sub) : n.poly,
+        poly: subVars.some((v) => nodeVars(n).has(v)) ? n.poly.subst(sub) : n.poly,
         provenance: { op: 'substitute', inputs: [n.id], variables: recs }, label,
       }));
       if (res.ok && opts.propagate !== false) {
@@ -686,7 +695,7 @@
       return sel.filter((n) => n.rel === '=').map((n) => n.poly);
     }
     function _varsOf(polys) {
-      const s = new Set(); for (const p of polys) for (const v of p.vars()) s.add(v); return [...s].sort();
+      const s = new Set(); for (const p of polys) for (const v of polyVars(p)) s.add(v); return [...s].sort();
     }
 
     // Geometry of the selected (or all) equality nodes: whether the variety is
@@ -1066,7 +1075,7 @@
 
     // Distinct variable names across all nodes (sorted) — for the UI variable pickers.
     function variables() {
-      const s = new Set(); for (const n of nodes.values()) for (const v of n.poly.vars()) s.add(v); return [...s].sort();
+      const s = new Set(); for (const n of nodes.values()) for (const v of nodeVars(n)) s.add(v); return [...s].sort();
     }
     // Distinct PRIMAL (non-barred) base variables — the candidates for "assume real".
     function baseVariables() {

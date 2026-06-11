@@ -517,20 +517,22 @@
     return best; // { mono, coeff } or null (zero polynomial)
   }
   // q with f = q·g exactly (assumes g ≠ 0 and g | f). Throws if not divisible.
+  // Uses the in-place _subTermTimesPoly reduction (the same geobucket-style win as
+  // mpolyDivMod): the running remainder is never reallocated into a fresh term Map each
+  // step — only the O(size g) affected entries are touched. Result is bit-identical.
   function mpolyExactDiv(f, g) {
     if (g.isZero()) throw new Error('mpolyExactDiv: division by zero');
     const gLead = _leadTerm(g);
-    let rem = f.clone();
-    let q = MPoly.zero();
+    const rem = f.clone();                               // mutated in place below
+    const q = MPoly.zero();
     let guard = 0;
     while (!rem.isZero()) {
       const rLead = _leadTerm(rem);
       const qm = monoDivide(rLead.mono, gLead.mono);
       if (qm === null) throw new Error('mpolyExactDiv: not divisible (invariant violated)');
       const qc = rLead.coeff.div(gLead.coeff);          // exact in ℚ(i)
-      const term = new MPoly(); term._addTerm(qm, qc);
-      q = q.add(term);
-      rem = rem.sub(term.mul(g));
+      q._addTerm(qm, qc);
+      _subTermTimesPoly(rem, qm, qc, g);                // rem -= (qc·x^qm)·g, cancels LT(rem)
       if (++guard > 1e6) throw new Error('mpolyExactDiv: non-terminating');
     }
     return q;

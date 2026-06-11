@@ -1070,6 +1070,20 @@
       buildToolbar(surface);
       breadcrumb = document.createElement('div'); breadcrumb.className = 'algebra-breadcrumb';
       surface.appendChild(breadcrumb);
+      // Keyboard a11y (active only while the Algebra tab is visible, and not while typing in
+      // a field): Esc clears the selection; Delete/Backspace deletes a single selected node.
+      document.addEventListener('keydown', (ev) => {
+        if (!surface || surface.classList.contains('hidden')) return;
+        const ae = document.activeElement;
+        if (ae && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return;
+        const sel = canvas ? canvas.getSelection() : [];
+        if (ev.key === 'Escape') { if (sel.length && canvas) { canvas.clearSelection(); ev.preventDefault(); } }
+        else if ((ev.key === 'Delete' || ev.key === 'Backspace') && sel.length === 1) {
+          if (busyGuard()) return;
+          const removed = store.deleteNode(sel[0]); if (canvas) canvas.clearSelection(); rerender();
+          toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)'); ev.preventDefault();
+        }
+      });
     }
     // The reduction breadcrumb: a clickable chip per column (① original → ↳ assume real → …)
     // floating over the top of the graph. Clicking a chip scrolls that lane into view and

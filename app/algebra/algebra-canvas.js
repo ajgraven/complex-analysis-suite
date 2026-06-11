@@ -92,6 +92,11 @@
     let selected = [];
     let lastStore = null, lastLatexOf = null;
     const collapsed = new Map();        // id -> bool (default: collapsed). Persists across rerenders.
+    // KaTeX is the dominant render cost, and a full rerender rebuilds every card even when
+    // only one column changed. Cache the typeset HTML keyed by the LaTeX string (a pure
+    // function of the immutable poly + rel + the stable latexOf): an unchanged equation
+    // reuses its rendered HTML instead of re-running KaTeX. Soft-capped to bound memory.
+    const katexCache = new Map();
     function isCollapsed(id) { return collapsed.has(id) ? collapsed.get(id) : true; }
 
     // Redraw edges (and re-size) when the lane heights change (collapse / reorder) or the
@@ -138,11 +143,23 @@
       if (n.poly.size() > DISPLAY_CAP) {
         math.innerHTML = '<span class="hint">[' + n.poly.size() + ' terms — Copy / Export]</span>';
       } else {
-        renderKatex(math, n.poly.toLatex(latexOf) + relSuffix(n.rel), false);
+        const tex = n.poly.toLatex(latexOf) + relSuffix(n.rel);
+        const hit = katexCache.get(tex);
+        if (hit !== undefined) { math.innerHTML = hit; }
+        else {
+          renderKatex(math, tex, false);
+          katexCache.set(tex, math.innerHTML);
+          if (katexCache.size > 800) katexCache.delete(katexCache.keys().next().value);   // drop oldest
+        }
       }
       card.appendChild(math);
 
       card.addEventListener('click', (ev) => { ev.stopPropagation(); toggleSelect(n.id); if (handlers.onClick) handlers.onClick(n.id); });
+      // Keyboard-selectable (a11y): focusable, and Enter/Space toggles selection.
+      card.tabIndex = 0; card.setAttribute('role', 'button'); card.setAttribute('aria-label', n.label);
+      card.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.stopPropagation(); toggleSelect(n.id); if (handlers.onClick) handlers.onClick(n.id); }
+      });
       return card;
     }
 
