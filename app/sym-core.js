@@ -1662,9 +1662,19 @@
     let G1, o1, vars;
     if (Array.isArray(input)) {
       vars = opts.vars || _ambientVars(input);
-      o1 = _ord(opts.order1 || monomialOrder('grevlex', vars));
-      try { G1 = buchberger(input, o1, opts); }
-      catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+      // L5 — monomial-order heuristic: try grevlex on the natural variable order; if it
+      // hits a cost cap, retry once with the REVERSED order (a different elimination
+      // order can shrink the basis by orders of magnitude). The variety — hence the
+      // solutions — is order-independent, so this is safe; keep the first order that
+      // completes. opts.order1 overrides (use exactly that order, no retry).
+      const cand = opts.order1 ? [opts.order1]
+        : [monomialOrder('grevlex', vars), monomialOrder('grevlex', vars.slice().reverse())];
+      let lastErr = null;
+      for (const co of cand) {
+        try { o1 = _ord(co); G1 = buchberger(input, o1, opts); lastErr = null; break; }
+        catch (e) { lastErr = e; G1 = null; }
+      }
+      if (!G1) return { ok: false, reason: (lastErr && lastErr.message) || String(lastErr) };
     } else { G1 = input.G; o1 = _ord(input.order); vars = opts.vars || _ambientVars(G1); }
 
     if (!isZeroDimensional(G1, o1, vars)) {

@@ -782,6 +782,16 @@ module.exports = async function run() {
       // cap: a tiny term cap routes to {ok:false} rather than running away
       ok('triangularize: a size cap → {ok:false, reason} (no throw)',
          S.triangularize([mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').sub(mv('y'))], ['x', 'y'], { maxTerms: 1 }).ok === false);
+
+      // L5 — monomial-order heuristic: solveZeroDim's solutions are order-independent
+      // (the retry with a reversed order is therefore safe).
+      const sys = [mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').sub(mv('y'))];
+      const nz = (x) => { const r = +x.toFixed(4); return r === 0 ? '0' : String(r); };
+      const setOf = (sols, vs) => sols.map((s) => vs.map((v) => nz(s[v].re) + ',' + nz(s[v].im)).join('|')).sort().join(' ; ');
+      const a5 = S.solveZeroDim(sys, { noEigen: true });
+      const b5 = S.solveZeroDim(sys, { noEigen: true, order1: S.monomialOrder('grevlex', ['y', 'x']) });
+      ok('solveZeroDim L5: solutions are independent of the grevlex variable order',
+         a5.ok && b5.ok && setOf(a5.solutions, ['x', 'y']) === setOf(b5.solutions, ['x', 'y']));
     }
 
     // Serialization (worker boundary): MPoly ⇄ term list round-trip, and runJob —
