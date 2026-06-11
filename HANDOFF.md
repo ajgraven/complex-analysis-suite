@@ -70,7 +70,24 @@ its own merged PR), with one feature **in progress on a branch**:
   provenance line), `reimSplit`/`systemToExport` carry it, and the Algebra store remembers it
   (`store.w0Fixed`, snapshot/undo/exportDAG) so univalence constraints that rebuild φ with the w₀
   SYMBOL (the star form's φ−w₀) get the same substitution (sidebar "fix φ(0)" checkbox, default on
-  — 2 fewer workspace variables).
+  — 2 fewer workspace variables). **Reduction audit-trail + existence/uniqueness + autonomy** (latest
+  engagement, 9 commits `15bad81…305ef3c`): every assumption is now an **append-column reduction**
+  (column 0 stays the original system; each later column is a labeled step with a header) — `store`
+  gains `substituteValue` (fix a variable to an exact ℚ(i) value, auto-propagating the linear cascade
+  so φ(0)=0 ⟹ w₀=0 can force z₁), `reducePropagate`, `assumeReal`, `fixW0`. A one-click **"Auto"**
+  reality button uses `QDEquations.realAxisSymmetry(hData)` (all-real h ⇒ assume every base var real —
+  the 478→118 collapse). A new **alternative eliminator**, triangular decomposition (`Sym.pseudoRemainder`
+  + `Sym.triangularize`, Wu pseudo-elimination), exhibits free variables / no-solution and appends a
+  chain column. **Existence/uniqueness**: `Sym.realSolutionCount` (Hermite trace form — signature =
+  #real solutions = #actual QDs, rank = #distinct complex, exact via `_rationalInertia`) feeds a store
+  `classify` over `currentReimSystem` (substitutes each conjugate pair v→x±iy and splits real/imag,
+  pinning the known a_j/C_{j,s}); an **"Existence / uniqueness"** button reports "Unique QD" / "N real
+  QDs (of M complex)" / "No QD" / "positive-dimensional family". A **"★ Auto-reduce & solve"** button
+  chains auto-reality → propagation → classify → `solveReal` (explicit real solutions), each a visible
+  column. Plus an **φ / h reference panel** (symbolic forms + variable legend), a `solveZeroDim`
+  order-retry heuristic (reversed-order on a cap, order-independent ⇒ safe), and robustness (busy-lock
+  undo/redo/palette, stale-seed detection). Full suite 1716/0. See the plan file's MASTER PLAN
+  PROGRESS block for the per-commit map.
 - **Symbolic QD equation generator** (`feature/symbolic-qd-equations`, NOT yet merged) — a new
   symbolic-algebra track: `app/sym-core.js` (`QD.Sym`, exact Rational/Gaussian/MPoly/RatFn +
   factored-denominator `FRatFn` + field-generic power series with Lagrange reversion) and

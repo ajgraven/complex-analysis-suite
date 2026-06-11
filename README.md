@@ -475,9 +475,21 @@ view is active.
   preview; expand for the full form), **reorderable** within a column (▲/▼), copy as
   **LaTeX** individually (⧉), and carry **hovertext** (variable count, real-equation
   contribution, per-variable order, total degree, provenance); conjugate equations are
-  paired adjacently. Re-seeding (toggle **fix φ(0)** / **assume real**) is undoable. Undo/redo,
-  a cost preview, and JSON/LaTeX export. From `app/qd-constraints.js` (`QD.QDConstraints`) +
-  `app/algebra/`; an external-CAS / RCTD bridge is the remaining future step.
+  paired adjacently. Undo/redo, a cost preview, and JSON/LaTeX export.
+  Every assumption is now an **append-column reduction** — column 0 stays the original
+  system and each later column is a labeled step (its own header), so the chain of
+  assumptions is legible: **Set value** fixes a variable to an exact ℚ(i) value and
+  **auto-propagates** the linear cascade (so φ(0)=0 ⟹ w₀=0 can force z₁), **Assume real**
+  (with a one-click **Auto** when *h* is real-axis symmetric — the big tractability lever)
+  and **fix φ(0)** each append a column, as do elimination, Gröbner, and a new
+  **Triangular decomposition** (Wu pseudo-elimination, an alternative eliminator that
+  exhibits free variables / no-solution). A **φ / h reference** panel shows the symbolic
+  forms and what every variable means. **Existence / uniqueness** counts the **real**
+  solutions (= actual quadrature domains) exactly via the Hermite trace form — "Unique
+  QD", "N real QDs (of M complex)", "No QD", or "a positive-dimensional family" — and
+  **★ Auto-reduce & solve** chains the reductions and reports the verdict plus the
+  explicit real solutions in one click. From `app/qd-constraints.js` (`QD.QDConstraints`)
+  + `app/algebra/`; an external-CAS / RCTD bridge is the remaining future step.
 * **φ(0)** — the Riemann-map center w₀ = φ(0) defaults to the centroid of the poles
   (manually overridable in bounded mode), and now also drives the **symbolic** equation
   system and the Algebra-tab seeding (exact-rational substitution).
