@@ -1880,6 +1880,93 @@
     return { ok: true, solutions: bestSols, dimension: D, method: 'eigenvalue', complete: bestSols.length >= D };
   }
 
+  // ===========================================================================
+  // CERTIFIED REAL-SOLUTION COUNTING (Hermite / trace form).
+  // For a zero-dimensional ideal I with quotient A = R/I (dim D), the Hermite
+  // bilinear form on the standard-monomial basis B is H[i][j] = trace(M_{b_i·b_j}) =
+  // trace(M_{b_i}·M_{b_j}). Over a REAL coefficient field, H is a real symmetric matrix
+  // and (Hermite / Pedersen–Roy–Szpirglas):
+  //     rank(H)      = number of DISTINCT complex solutions,
+  //     signature(H) = number of DISTINCT real solutions.
+  // For QD, the REAL solutions are the actual quadrature domains, so this is run on the
+  // REAL (reim) system (real-coefficient MPolys in real variables): then every M_v is
+  // rational, H is rational symmetric, and its inertia is computed EXACTLY (no floats).
+  // ===========================================================================
+
+  // Exact inertia { pos, neg, zero } of a symmetric matrix of Gaussian entries that are
+  // real (im = 0). Symmetric LDLᵀ-style congruence with a hyperbolic step (EᵀAE folding
+  // column/row m into k) for a zero diagonal pivot; signature = pos − neg, rank = pos + neg.
+  function _rationalInertia(A0) {
+    const n = A0.length;
+    const A = A0.map((row) => row.map((g) => new Gaussian(g.re, g.im)));   // working copy
+    let pos = 0, neg = 0, zero = 0, guard = 0;
+    for (let k = 0; k < n; k++) {
+      if (++guard > 4 * (n + 1) * (n + 1)) throw new Error('realSolutionCount: inertia did not converge');
+      if (A[k][k].isZero()) {
+        let m = -1; for (let j = k + 1; j < n; j++) if (!A[k][j].isZero()) { m = j; break; }
+        if (m === -1) { zero++; continue; }                 // entire remaining row/col is zero ⇒ kernel direction
+        for (let i = 0; i < n; i++) A[i][k] = A[i][k].add(A[i][m]);   // col k += col m  (right mult by E)
+        for (let j = 0; j < n; j++) A[k][j] = A[k][j].add(A[m][j]);   // row k += row m  (left mult by Eᵀ) ⇒ A[k][k] = 2·a + b ≠ 0
+        if (A[k][k].isZero()) { zero++; continue; }
+      }
+      const piv = A[k][k];
+      const s = piv.re.sign();
+      if (s > 0) pos++; else if (s < 0) neg++; else { zero++; continue; }
+      for (let i = k + 1; i < n; i++) {
+        if (A[i][k].isZero()) continue;
+        const f = A[i][k].div(piv);
+        for (let j = k; j < n; j++) A[i][j] = A[i][j].sub(f.mul(A[k][j]));   // symmetric Schur update of the trailing block
+      }
+    }
+    return { pos, neg, zero };
+  }
+
+  // realSolutionCount(input, order, vars, opts) → { ok, realCount, complexCount,
+  // multiplicityCount, reason }. input: an array of MPolys (a system) or { G, order }
+  // (a precomputed GB). Counts over the REAL variety — pass the REAL (reim) system for
+  // the count to mean "number of quadrature domains"; a non-real-coefficient system is
+  // rejected (its trace form is Hermitian over ℚ(i), not the real signature we want).
+  function realSolutionCount(input, order, vars, opts) {
+    opts = opts || {};
+    const fail = (reason) => ({ ok: false, realCount: null, complexCount: null, multiplicityCount: null, reason });
+    let G, o, vrs;
+    if (Array.isArray(input)) {
+      vrs = vars || opts.vars || _ambientVars(input);
+      o = _ord(order || monomialOrder('grevlex', vrs));
+      try { G = buchberger(input, o, opts); } catch (e) { return fail((e && e.message) || String(e)); }
+    } else { G = input.G; o = _ord(input.order); vrs = vars || opts.vars || _ambientVars(G); }
+    if (!isZeroDimensional(G, o, vrs)) return fail('the system is not zero-dimensional (infinitely many / a positive-dimensional family)');
+    let B;
+    try { B = standardMonomials(G, o, vrs); } catch (e) { return fail((e && e.message) || String(e)); }
+    if (B === null) return fail('positive-dimensional ideal');
+    const D = B.length;
+    if (D === 0) return { ok: true, realCount: 0, complexCount: 0, multiplicityCount: 0 };   // I = (1): no solutions
+    const MAXDIM = opts.maxHermiteDim != null ? opts.maxHermiteDim : 64;
+    if (D > MAXDIM) return fail('quotient dimension ' + D + ' exceeds the Hermite-form cap (' + MAXDIM + ') — use the CAS bridge');
+
+    // Variable multiplication matrices, then M_{b_k} for each basis monomial (the M_v
+    // commute, so a monomial's matrix is the product of variable-matrix powers).
+    const Mv = {}; for (const v of vrs) Mv[v] = multiplicationMatrix(G, o, vrs, v).M;
+    const matMul = (X, Y) => { const C = []; for (let i = 0; i < D; i++) { const r = new Array(D); for (let j = 0; j < D; j++) { let s = Gaussian.fromInt(0); for (let t = 0; t < D; t++) s = s.add(X[i][t].mul(Y[t][j])); r[j] = s; } C.push(r); } return C; };
+    const ident = () => { const I = []; for (let i = 0; i < D; i++) { const r = new Array(D); for (let j = 0; j < D; j++) r[j] = Gaussian.fromInt(i === j ? 1 : 0); I.push(r); } return I; };
+    const Mb = B.map((mono) => { let Mm = ident(); for (const [vn, e] of mono) { for (let p = 0; p < e; p++) Mm = matMul(Mm, Mv[vn]); } return Mm; });
+
+    // Hermite form H[i][j] = trace(M_{b_i}·M_{b_j}) = Σ_{a,b} M_{b_i}[a][b]·M_{b_j}[b][a].
+    const H = []; let hasImag = false;
+    for (let i = 0; i < D; i++) H.push(new Array(D));
+    for (let i = 0; i < D; i++) {
+      for (let j = 0; j <= i; j++) {
+        let s = Gaussian.fromInt(0);
+        for (let a = 0; a < D; a++) for (let b = 0; b < D; b++) s = s.add(Mb[i][a][b].mul(Mb[j][b][a]));
+        if (!s.im.isZero()) hasImag = true;
+        H[i][j] = s; H[j][i] = s;
+      }
+    }
+    if (hasImag) return fail('real-solution counting requires a real-coefficient (reim) system');
+    const inertia = _rationalInertia(H);
+    return { ok: true, realCount: inertia.pos - inertia.neg, complexCount: inertia.pos + inertia.neg, multiplicityCount: D };
+  }
+
   // ---------------------------------------------------------------------------
   // runJob — a serialization-friendly op dispatcher: takes SERIALIZED input (term
   // lists from MPoly.termList, an order spec) and returns SERIALIZED output, so the
@@ -2193,7 +2280,7 @@
     mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
-    multiplicationMatrix, solveByEigenvalues, runJob,
+    multiplicationMatrix, solveByEigenvalues, realSolutionCount, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
   };

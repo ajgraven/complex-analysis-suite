@@ -712,6 +712,46 @@ module.exports = async function run() {
       ok('multiplicationMatrix: quotient dimension is 4 (the solution count)', mm.D === 4);
     }
 
+    // Certified REAL-solution counting (Hermite / trace form). signature(H) = #distinct
+    // real solutions, rank(H) = #distinct complex solutions, D = #with multiplicity.
+    {
+      const iC = S.mpolyConst(S.gaussInt(0, 1));
+      // ⟨x²−1, y²−1⟩ — 4 solutions {±1}², all real.
+      const grid = [mv('x').pow(2).sub(mi(1)), mv('y').pow(2).sub(mi(1))];
+      const r1 = S.realSolutionCount(grid, null, ['x', 'y']);
+      ok('realSolutionCount: ⟨x²−1, y²−1⟩ → 4 real, 4 complex, 4 with multiplicity',
+         r1.ok && r1.realCount === 4 && r1.complexCount === 4 && r1.multiplicityCount === 4);
+      // ⟨x²+1, y²+1⟩ — 4 complex solutions (±i)², NONE real.
+      const cgrid = [mv('x').pow(2).add(mi(1)), mv('y').pow(2).add(mi(1))];
+      const r2 = S.realSolutionCount(cgrid, null, ['x', 'y']);
+      ok('realSolutionCount: ⟨x²+1, y²+1⟩ → 0 real, 4 complex',
+         r2.ok && r2.realCount === 0 && r2.complexCount === 4 && r2.multiplicityCount === 4);
+      // ⟨x²+y²−1, x−y⟩ — 2 real solutions (±1/√2, ±1/√2) (the triangular worked example).
+      const circ = [mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').sub(mv('y'))];
+      const r3 = S.realSolutionCount(circ, null, ['x', 'y']);
+      ok('realSolutionCount: ⟨x²+y²−1, x−y⟩ → 2 real, 2 complex', r3.ok && r3.realCount === 2 && r3.complexCount === 2);
+      // ⟨x²⟩ — one real point x=0 of multiplicity 2: distinct counts 1, multiplicity 2.
+      const dbl = S.realSolutionCount([mv('x').pow(2)], null, ['x']);
+      ok('realSolutionCount: ⟨x²⟩ → 1 distinct real, multiplicity 2 (rank<dim ⇒ non-radical)',
+         dbl.ok && dbl.realCount === 1 && dbl.complexCount === 1 && dbl.multiplicityCount === 2);
+      // mixed: ⟨x²−1, y²+1⟩ — 4 complex, only the x=±1 with y=±i ⇒ 0 real points.
+      const mix = S.realSolutionCount([mv('x').pow(2).sub(mi(1)), mv('y').pow(2).add(mi(1))], null, ['x', 'y']);
+      ok('realSolutionCount: ⟨x²−1, y²+1⟩ → 0 real, 4 complex', mix.ok && mix.realCount === 0 && mix.complexCount === 4);
+      // cross-check vs the eigenvalue solver: #real = eigen solutions with vanishing imag part
+      const eigSols = S.solveByEigenvalues(grid, {}).solutions;
+      const eigReal = eigSols.filter((s) => ['x', 'y'].every((v) => Math.abs(s[v].im) < 1e-6)).length;
+      ok('realSolutionCount agrees with the eigenvalue solver on the real-solution count', r1.realCount === eigReal);
+      // a genuinely complex-coefficient system is rejected (Hermitian, not the real signature)
+      const cplx = S.realSolutionCount([mv('x').pow(2).sub(iC)], null, ['x']);   // x² = i
+      ok('realSolutionCount: complex-coefficient system → {ok:false} (needs the reim system)',
+         cplx.ok === false && /real-coefficient|reim/.test(cplx.reason || ''));
+      // positive-dimensional → {ok:false}; over the cap → {ok:false}
+      ok('realSolutionCount: positive-dimensional ideal → {ok:false}',
+         S.realSolutionCount([mv('x').pow(2).sub(mi(1))], null, ['x', 'y']).ok === false);
+      ok('realSolutionCount: quotient dimension over the cap → {ok:false} (no throw)',
+         S.realSolutionCount(grid, null, ['x', 'y'], { maxHermiteDim: 2 }).ok === false);
+    }
+
     // Serialization (worker boundary): MPoly ⇄ term list round-trip, and runJob —
     // the serialized op dispatcher used by the Web-Worker offload (sym-worker.js).
     {
