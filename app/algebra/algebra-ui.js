@@ -50,6 +50,7 @@
     const store = QD.AlgebraStore.create();
     let canvas = null;
     let surface = null;            // the #algebra-graph element
+    let breadcrumb = null;         // the reduction-chain chip rail over the graph
     let mounted = false;
     let activeEnv = null;          // latest classical-bounded solve envelope
     let lastCap = 6;
@@ -81,7 +82,7 @@
         && Array.isArray(phi.branches) && phi.branches.length === hData.poles.length);
     }
     function toast(msg, opts) { if (QD.QoL && QD.QoL.toast) QD.QoL.toast(msg, opts || {}); }
-    function rerender() { if (canvas) canvas.render(store, latexOf); renderInspector(canvas ? canvas.getSelection() : []); }
+    function rerender() { if (canvas) canvas.render(store, latexOf); renderInspector(canvas ? canvas.getSelection() : []); buildBreadcrumb(); }
 
     // ---- persistent, dismissible error panel --------------------------------
     function showError(msg) {
@@ -375,6 +376,10 @@
         '    <button id="alg-help-toggle" class="small algebra-help-q" type="button" title="Show / hide help">?</button>' +
         '  </div>' +
         '  <div id="alg-help" class="hint card-sub hidden" data-str-html="algebra.help" style="margin:4px 0;"></div>' +
+        '  <div id="alg-steps" class="algebra-steps">' +
+        '    <span>① Seed</span><span>② Assume / Set</span><span>③ Reduce</span><span>④ Analyze</span>' +
+        '    <button id="alg-steps-x" class="algebra-steps-x" type="button" title="Hide this hint">×</button>' +
+        '  </div>' +
         '  <div class="row algebra-primary">' +
         '    <button id="alg-autosolve" class="small heavy-op" type="button" title="Semi-autonomous: auto-assume reality (if h is symmetric), propagate linear consequences, then determine existence/uniqueness and the explicit real solutions — each step a new labeled column">★ Auto-reduce &amp; solve</button>' +
         '    <button id="alg-seed" class="small" type="button" title="Generate the original (●)/(★)/gauge system from the current bounded solve at column 0 (replaces the graph; assumptions are then added as columns)">Generate / re-seed</button>' +
@@ -454,7 +459,8 @@
         '        <button id="alg-copy-latex" class="small" type="button" title="Copy all equations as a gathered LaTeX block">Copy LaTeX</button></div>' +
         '      <div class="algebra-line" style="margin-top:4px;"><span class="algebra-line-label">Mathematica</span>' +
         '        <select id="alg-mma-col" title="Which column of equations to export"></select>' +
-        '        <button id="alg-copy-mma" class="small" type="button" title="Copy the chosen column as a Wolfram-Language list of equations ({lhs == 0, …}) ready to paste into Mathematica">Copy</button></div>' +
+        '        <button id="alg-copy-mma" class="small" type="button" title="Copy the chosen column as a Wolfram-Language list of equations ({lhs == 0, …}) ready to paste into Mathematica">Copy</button>' +
+        '        <button id="alg-copy-mma-all" class="small" type="button" title="Copy every column as labeled Wolfram-Language lists (col0 = {…}; col1 = {…}; …)">Copy all</button></div>' +
         '    </div>' +
         '  </details>' +
         '</div>';
@@ -499,7 +505,14 @@
       $('#alg-export-json').addEventListener('click', exportJson);
       $('#alg-copy-latex').addEventListener('click', copyLatex);
       $('#alg-copy-mma').addEventListener('click', copyMathematica);
+      $('#alg-copy-mma-all').addEventListener('click', copyMathematicaAll);
       $('#alg-error-close').addEventListener('click', clearError);
+      // dismissible numbered-steps onboarding hint (remembered for the session)
+      const steps = $('#alg-steps');
+      if (steps) {
+        if (sessionStorage.getItem('algStepsHidden') === '1') steps.classList.add('hidden');
+        $('#alg-steps-x').addEventListener('click', () => { steps.classList.add('hidden'); try { sessionStorage.setItem('algStepsHidden', '1'); } catch (e) { /* ignore */ } });
+      }
       $('#alg-real-apply').addEventListener('click', doAssumeReal);
       $('#alg-real-auto').addEventListener('click', doAutoReality);
       $('#alg-val-apply').addEventListener('click', doSubstituteValue);
@@ -541,6 +554,13 @@
       if (!code) { toast('Column ' + c + ' has no equations.', { kind: 'error' }); return; }
       writeClipboard(code, 'Mathematica (column ' + c + ')');
     }
+    // Copy every column as labeled Wolfram-Language lists.
+    function copyMathematicaAll() {
+      if (!store.size) { toast('Nothing to export — seed a system first.', { kind: 'error' }); return; }
+      const code = store.mathematicaAll();
+      if (!code) { toast('No equations to export.', { kind: 'error' }); return; }
+      writeClipboard(code, 'Mathematica (all ' + (store.maxColumn() + 1) + ' columns)');
+    }
 
     // ---- contextual node inspector (driven by canvas selection) -------------
     // 0 selected → hide the inspector, show the workflow sections; 1 selected → that
@@ -578,6 +598,7 @@
         const acts = document.createElement('div'); acts.className = 'row'; acts.style.gap = '4px'; acts.style.marginTop = '4px';
         acts.appendChild(mkBtn('Duplicate', 'Copy this equation into a new node', () => { if (store.duplicate(sel[0])) { rerender(); toast('Duplicated ' + n.label); } }));
         acts.appendChild(mkBtn('Copy LaTeX', 'Copy this equation as LaTeX', () => copyNodeLatex(sel[0])));
+        acts.appendChild(mkBtn('Copy Mathematica', 'Copy this equation as Wolfram-Language (lhs == 0)', () => { const code = store.mathematicaNode(sel[0]); if (code) writeClipboard(code, n.label + ' (Mathematica)'); }));
         acts.appendChild(mkBtn('Delete', 'Delete this node and its descendants', () => { const removed = store.deleteNode(sel[0]); if (canvas) canvas.clearSelection(); rerender(); toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)'); }));
         box.appendChild(acts);
         return;
@@ -974,6 +995,30 @@
         onSeed: seedFromCurrent,
       });
       buildToolbar(surface);
+      breadcrumb = document.createElement('div'); breadcrumb.className = 'algebra-breadcrumb';
+      surface.appendChild(breadcrumb);
+    }
+    // The reduction breadcrumb: a clickable chip per column (① original → ↳ assume real → …)
+    // floating over the top of the graph. Clicking a chip scrolls that lane into view and
+    // pulses it. Rebuilt on every rerender (columns change). The last chip = current system.
+    function buildBreadcrumb() {
+      if (!breadcrumb) return;
+      breadcrumb.innerHTML = '';
+      if (!store.size) { breadcrumb.classList.add('hidden'); return; }
+      breadcrumb.classList.remove('hidden');
+      const cols = store.columns();
+      const mx = store.maxColumn();
+      cols.forEach((c, i) => {
+        if (i > 0) { const arr = document.createElement('span'); arr.className = 'algebra-bc-sep'; arr.textContent = '→'; breadcrumb.appendChild(arr); }
+        const info = columnInfo(c.index, store.list().filter((n) => n.column === c.index));
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'algebra-bc-chip' + (c.index === mx ? ' is-current' : '');
+        chip.textContent = info.step + (c.index === 0 ? ' original' : ' ' + (info.label || '').replace(/^↳\s*/, ''));
+        chip.title = info.label + '  ·  ' + info.stats;
+        chip.addEventListener('click', () => { if (canvas && canvas.scrollToColumn) canvas.scrollToColumn(c.index); });
+        breadcrumb.appendChild(chip);
+      });
     }
     // Floating view/history toolbar over the graph (node-editor pattern): zoom, fit,
     // expand/collapse-all, undo/redo. Appended AFTER canvas.create (which clears the
@@ -991,6 +1036,7 @@
       bar.appendChild(zlabel);
       bar.appendChild(btn('+', 'Zoom in', () => setZ(_zoom * 1.15)));
       bar.appendChild(btn('Fit', 'Reset zoom & scroll to the start', () => { if (canvas) { canvas.fit(); _zoom = 1; zlabel.textContent = '100%'; } }));
+      bar.appendChild(btn('Fit ↔', 'Zoom so every column lane fits the width', () => { if (canvas && canvas.fitWidth) { _zoom = canvas.fitWidth(); zlabel.textContent = Math.round(_zoom * 100) + '%'; } }));
       bar.appendChild(btn('Expand', 'Expand every card to the full typeset form', () => { if (canvas) canvas.setAllCollapsed(false); }));
       bar.appendChild(btn('Collapse', 'Collapse every card to a one-line preview', () => { if (canvas) canvas.setAllCollapsed(true); }));
       bar.appendChild(btn('↶', 'Undo', () => { if (store.undo()) rerender(); }, 'alg-undo'));

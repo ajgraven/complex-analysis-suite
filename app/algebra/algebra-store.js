@@ -985,6 +985,22 @@
       });
       return '{' + lines.join(',\n ') + '}';
     }
+    // A single node → one Mathematica equation (`lhs == 0` / `> 0` / `!= 0`), or '' if absent.
+    function mathematicaNode(id) {
+      const n = get(id); if (!n) return '';
+      const rel = n.rel === '>' ? ' > 0' : n.rel === '≠' ? ' != 0' : ' == 0';
+      return _polyToMathematica(n.poly) + rel;
+    }
+    // Every column → a single paste-able block, each column commented with its column index
+    // and a list assigned to a column-indexed symbol (col0, col1, …) for use in Mathematica.
+    function mathematicaAll() {
+      const blocks = [];
+      for (let c = 0; c <= maxColumn(); c++) {
+        const code = mathematicaColumn(c);
+        if (code) blocks.push('(* column ' + c + (c === 0 ? ' — original' : '') + ' *)\ncol' + c + ' = ' + code + ';');
+      }
+      return blocks.join('\n\n');
+    }
 
     // Distinct variable names across all nodes (sorted) — for the UI variable pickers.
     function variables() {
@@ -1000,7 +1016,7 @@
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, substituteValues, reducePropagate, assumeReal, fixW0, triangularize: triangularizeNodes,
       currentReimSystem, classify, solveReal, currentColumnIds, maxColumn, columnStats, columns,
-      sharedVars, previewCost, exportDAG, mathematicaColumn, nodeStats, variables, baseVariables,
+      sharedVars, previewCost, exportDAG, mathematicaColumn, mathematicaNode, mathematicaAll, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       undo, redo, reset,
       list, get,

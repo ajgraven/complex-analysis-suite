@@ -167,6 +167,7 @@
     // One column lane: a sticky header (from handlers.colInfo) + a body of cards.
     function buildColumn(store, latexOf, c, nodes, isLast) {
       const col = div('algebra-column' + (isLast ? ' is-current' : ''));
+      col.dataset.col = c;
       const head = div('algebra-column-head');
       const info = (handlers.colInfo ? handlers.colInfo(c, nodes) : null) || { step: String(c + 1), label: 'Column ' + c, stats: '', isCurrent: isLast };
       const step = div('algebra-column-step'); step.textContent = info.step;
@@ -259,6 +260,23 @@
       return zoom;
     }
     function fit() { setZoom(1); scroll.scrollLeft = 0; scroll.scrollTop = 0; }
+    // Zoom so all lanes fit the viewport width (clamped by setZoom's [ZMIN, ZMAX]).
+    function fitWidth() {
+      const natural = track.offsetWidth || 1;
+      const avail = (scroll.clientWidth || natural) - 8;
+      scroll.scrollLeft = 0;
+      return setZoom(avail / natural);
+    }
+    // Scroll a column lane into view (left-aligned) and pulse a brief highlight. `offsetLeft`
+    // is the NATURAL layout x within the track; the sizer is scaled by `zoom`, so the scroll
+    // position is that × zoom.
+    function scrollToColumn(c) {
+      const el = track.querySelector('.algebra-column[data-col="' + c + '"]');
+      if (!el) return;
+      scroll.scrollTo({ left: Math.max(0, el.offsetLeft * zoom - 16), behavior: 'smooth' });
+      el.classList.add('algebra-column-flash');
+      el.addEventListener('animationend', () => el.classList.remove('algebra-column-flash'), { once: true });
+    }
 
     // The verdict result card (existence/uniqueness). data: { text, solutionsText? }.
     function setVerdict(data) {
@@ -284,7 +302,7 @@
     })();
 
     track.style.transform = 'scale(1)';
-    return { render, rerender, fit, getSelection, clearSelection, setZoom, setAllCollapsed, setVerdict };
+    return { render, rerender, fit, fitWidth, scrollToColumn, getSelection, clearSelection, setZoom, setAllCollapsed, setVerdict };
   }
 
   window.QD = window.QD || {};

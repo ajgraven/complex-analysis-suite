@@ -475,7 +475,9 @@ view is active.
   preview; expand for the full form), **reorderable** within a column (▲/▼), copy as
   **LaTeX** individually (⧉), and carry **hovertext** (variable count, real-equation
   contribution, per-variable order, total degree, provenance); conjugate equations are
-  paired adjacently. Undo/redo, a cost preview, and JSON/LaTeX export.
+  paired adjacently. Undo/redo, a cost preview, and export as JSON, LaTeX, or
+  **Mathematica** (a chosen column, all columns, or a single equation — a paste-ready
+  Wolfram-Language list). A **reduction breadcrumb** over the graph jumps to any column.
   Every assumption is now an **append-column reduction** — column 0 stays the original
   system and each later column is a labeled step (its own header), so the chain of
   assumptions is legible: **Set values** fixes one or more variables to exact ℚ(i) values

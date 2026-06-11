@@ -891,6 +891,40 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #controls-algebra .algebra-ref-math .katex-display { margin: 2px 0; }
 #controls-algebra .algebra-ref-legend { font-size: 9px; }
 
+/* Numbered onboarding steps strip (dismissible) */
+#controls-algebra .algebra-steps {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  font-size: 70%; color: var(--c-muted, #667); margin: 4px 0 2px;
+}
+#controls-algebra .algebra-steps.hidden { display: none; }
+#controls-algebra .algebra-steps span {
+  background: var(--c-border-soft, #f0f0f2); border-radius: 8px; padding: 1px 7px; white-space: nowrap;
+}
+#controls-algebra .algebra-steps-x {
+  margin-left: auto; border: none; background: transparent; cursor: pointer;
+  font-size: 13px; line-height: 1; color: var(--c-muted, #88a); padding: 0 2px;
+}
+
+/* Reduction breadcrumb: a clickable chip rail floating over the graph (bottom-left) */
+#algebra-graph .algebra-breadcrumb {
+  position: absolute; left: 8px; bottom: 8px; z-index: 11; display: flex; align-items: center; gap: 2px;
+  max-width: 62%; overflow-x: auto; padding: 3px 5px;
+  background: var(--c-surface, #fff); border: 1px solid var(--c-border, #ccc);
+  border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.14);
+}
+#algebra-graph .algebra-breadcrumb.hidden { display: none; }
+#algebra-graph .algebra-bc-chip {
+  border: 1px solid var(--c-border-soft, #ddd); background: var(--c-bg, #fff); cursor: pointer;
+  font-size: 11px; border-radius: 10px; padding: 1px 8px; white-space: nowrap; color: var(--c-text, #222);
+}
+#algebra-graph .algebra-bc-chip:hover { background: var(--c-border-soft, #eef); }
+#algebra-graph .algebra-bc-chip.is-current { border-color: var(--c-accent, #2b7); font-weight: 600; }
+#algebra-graph .algebra-bc-sep { color: var(--c-muted, #88a); font-size: 11px; }
+
+/* Brief highlight when a breadcrumb chip scrolls its lane into view */
+@keyframes algebra-col-flash { 0%, 100% { background: transparent; } 30% { background: rgba(34,170,119,0.16); } }
+#algebra-graph .algebra-column.algebra-column-flash { animation: algebra-col-flash 0.9s ease; border-radius: 6px; }
+
 /* Seed summary as a compact table (replaces the run-on status sentence) */
 #controls-algebra .algebra-seed-table { border-collapse: collapse; margin: 2px 0; }
 #controls-algebra .algebra-seed-table th {

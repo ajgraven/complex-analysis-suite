@@ -551,5 +551,16 @@ module.exports = async function run() {
     const present = new Set(st.variables());
     if (present.has('z1')) ok('mathematica: a present variable appears in the code', /\bz1\b/.test(code));
     ok('mathematica: an empty / missing column yields the empty string', st.mathematicaColumn(99) === '');
+
+    // single-node + all-columns variants
+    const id0 = st.list().find((n) => n.column === 0).id;
+    const one = st.mathematicaNode(id0);
+    ok('mathematica: mathematicaNode is a single equation (one relation, no list braces)',
+       /== 0|> 0|!= 0/.test(one) && one.indexOf('{') === -1);
+    ok('mathematica: mathematicaNode of a missing id is the empty string', st.mathematicaNode('nope') === '');
+    st.assumeReal(st.baseVariables());                 // add a column so "all" spans ≥2
+    const all = st.mathematicaAll();
+    ok('mathematica: mathematicaAll labels each column (col0 = {…}; col1 = {…})',
+       /col0\s*=\s*\{/.test(all) && /col1\s*=\s*\{/.test(all) && /\(\* column 0/.test(all));
   }
 };
