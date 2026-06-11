@@ -22,7 +22,8 @@
 // Ops: seedFromSystem (●/★/gauge from generateClassicalBounded → the ORIGINAL system
 // at column 0; + conjugate companions), addConstraint (the four univalence forms).
 // AUDIT-TRAIL reductions — each appends a new labeled column, leaving column 0 intact:
-// substituteValue (fix a variable's value, exact ℚ(i), auto-propagating by default),
+// substituteValue / substituteValues (fix one / several variables' values in one column,
+// exact ℚ(i), each value ALSO fixes the variable's conjugate, auto-propagating by default),
 // reducePropagate (linear-substitution fixpoint via Sym.linearReduce), assumeReal
 // (identify v̄≡v), fixW0 (φ(0)=w₀ → value), eliminate / eliminateWithGauge (Sylvester
 // resultant), groebner / groebnerAsync, triangularize (Wu pseudo-elimination → a chain
@@ -331,30 +332,54 @@
       return f(re) + (im < 0 ? ' − ' : ' + ') + f(Math.abs(im)) + 'i';
     }
 
-    // Specify a variable's value: substitute the exact ℚ(i) rationalization of `value`
-    // ({re,im} floats) for `varName` in the current system → a new column. Drops the
-    // variable. By default (opts.propagate !== false) chains a linear-propagation pass
-    // (reducePropagate) so a fixed value cascades — e.g. φ(0)=0 ⇒ w₀=0 can then force
+    // Specify several variables' values in ONE column: substitute the exact ℚ(i)
+    // rationalization of each `value` ({re,im} floats) for its `varName` in the current
+    // system → a single new column (one undo step, one provenance). `pairs` is
+    // [{ varName, value }, …]. A value fully determines the variable's CONJUGATE
+    // (z₁=1+i ⟹ z̄₁=1−i), so each substitution ALSO substitutes the conjugate variable
+    // with the conjugate value (the same logic fixW0 uses for w₀/w̄₀) — `poly.subst`
+    // silently skips a conjugate that is absent (e.g. already collapsed by assume-real).
+    // By default (opts.propagate !== false) chains a linear-propagation pass
+    // (reducePropagate) so the fixed values cascade — e.g. φ(0)=0 ⇒ w₀=0 can then force
     // z₁ — visible as its own column. Returns the append result (+ .propagated).
-    function substituteValue(varName, value, opts) {
+    function substituteValues(pairs, opts) {
       opts = opts || {};
-      const S = getSym();
-      if (!lastColumnNodes().some((n) => n.poly.vars().has(varName))) {
-        return { ok: false, reason: 'variable ' + varName + ' is not in the current system', created: [] };
+      const S = getSym(), QC = getQC();
+      pairs = (pairs || []).filter((p) => p && p.varName);
+      if (!pairs.length) return { ok: false, reason: 'no variables to set', created: [] };
+      const sub = {}, recs = [];
+      try {
+        for (const p of pairs) {
+          const { g, record } = _ratGauss(p.value);
+          sub[p.varName] = S.mpolyConst(g);
+          let conjugate = null;
+          if (QC && QC.conjVarName) {
+            const c = QC.conjVarName(p.varName);
+            if (c && c !== p.varName) { sub[c] = S.mpolyConst(g.conj()); conjugate = c; }
+          }
+          recs.push({ name: p.varName, value: record, conjugate });
+        }
+      } catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [] }; }
+      const subVars = Object.keys(sub);
+      if (!lastColumnNodes().some((n) => { const vs = n.poly.vars(); return subVars.some((v) => vs.has(v)); })) {
+        return { ok: false, reason: 'none of ' + pairs.map((p) => p.varName).join(', ') + ' are in the current system', created: [] };
       }
-      let g, record;
-      try { ({ g, record } = _ratGauss(value)); } catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [] }; }
-      const sub = {}; sub[varName] = S.mpolyConst(g);
-      const label = 'set ' + varName + ' = ' + _valShort(record.approx);
+      const label = 'set ' + recs.map((r) => r.name + ' = ' + _valShort(r.value.approx)).join(', ');
       const res = _appendReduction((n) => ({
-        poly: n.poly.vars().has(varName) ? n.poly.subst(sub) : n.poly,
-        provenance: { op: 'substitute', inputs: [n.id], variable: varName, value: record }, label,
+        poly: subVars.some((v) => n.poly.vars().has(v)) ? n.poly.subst(sub) : n.poly,
+        provenance: { op: 'substitute', inputs: [n.id], variables: recs }, label,
       }));
       if (res.ok && opts.propagate !== false) {
         const pr = reducePropagate();
         if (pr.ok) res.propagated = pr; else res.propagateReason = pr.reason;
       }
       return res;
+    }
+
+    // Single-variable convenience wrapper (back-compat): substitute one variable's value
+    // (and its conjugate) in a new column. Delegates to substituteValues.
+    function substituteValue(varName, value, opts) {
+      return substituteValues([{ varName, value }], opts);
     }
 
     // Linear-propagation pass: run Sym.linearReduce on the current system's equalities
@@ -929,7 +954,7 @@
     return {
       seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
-      substituteValue, reducePropagate, assumeReal, fixW0, triangularize: triangularizeNodes,
+      substituteValue, substituteValues, reducePropagate, assumeReal, fixW0, triangularize: triangularizeNodes,
       currentReimSystem, classify, solveReal, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,

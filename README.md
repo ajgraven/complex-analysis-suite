@@ -478,8 +478,10 @@ view is active.
   paired adjacently. Undo/redo, a cost preview, and JSON/LaTeX export.
   Every assumption is now an **append-column reduction** — column 0 stays the original
   system and each later column is a labeled step (its own header), so the chain of
-  assumptions is legible: **Set value** fixes a variable to an exact ℚ(i) value and
-  **auto-propagates** the linear cascade (so φ(0)=0 ⟹ w₀=0 can force z₁), **Assume real**
+  assumptions is legible: **Set values** fixes one or more variables to exact ℚ(i) values
+  in a single column (a base-variable-only table — each value also fixes its conjugate,
+  z₁=1+i ⟹ z̄₁=1−i) and **auto-propagates** the linear cascade (so φ(0)=0 ⟹ w₀=0 can
+  force z₁), **Assume real**
   (with a one-click **Auto** when *h* is real-axis symmetric — the big tractability lever)
   and **fix φ(0)** each append a column, as do elimination, Gröbner, and a new
   **Triangular decomposition** (Wu pseudo-elimination, an alternative eliminator that
@@ -492,9 +494,14 @@ view is active.
   lanes** — each a sticky-headed container naming the transformation that derived it
   from the previous column (e.g. `① Original system` → `↳ assume real · …`) with its
   equation/variable counts and a Δ, the **current system** lane badged, arrowed edges
-  between cards, native scroll + a zoom control, and the verdict surfaced as a result
-  card. From `app/qd-constraints.js` (`QD.QDConstraints`) + `app/algebra/`; an
-  external-CAS / RCTD bridge is the remaining future step.
+  between cards, and the verdict surfaced as a result card. The sidebar follows a
+  **node-editor** model: a pinned primary-action header (★ Auto-reduce & solve +
+  Generate), collapsible workflow sections (System & reference / Assumptions / Reduce /
+  Analyze / Constraints / Export), a floating canvas toolbar (zoom · fit · expand /
+  collapse · undo / redo), and a contextual **inspector** when you select a node (its
+  equation + Duplicate / Copy / Delete, or the eliminate panel for two). From
+  `app/qd-constraints.js` (`QD.QDConstraints`) + `app/algebra/`; an external-CAS / RCTD
+  bridge is the remaining future step.
 * **φ(0)** — the Riemann-map center w₀ = φ(0) defaults to the centroid of the poles
   (manually overridable in bounded mode), and now also drives the **symbolic** equation
   system and the Algebra-tab seeding (exact-rational substitution).

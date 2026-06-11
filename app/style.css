@@ -828,6 +828,53 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   font-size: 16px; line-height: 1; padding: 0 2px; color: inherit; font-weight: 700;
 }
 
+/* ---- Node-editor sidebar: pinned header, workflow sections, value table, inspector ---- */
+#controls-algebra .algebra-head { position: sticky; top: 0; z-index: 4; background: var(--c-bg, #fff); padding-bottom: 4px; }
+#controls-algebra .algebra-primary { gap: 4px; margin-top: 4px; }
+#controls-algebra .algebra-primary #alg-autosolve { flex: 1; }
+/* Heavy / async operations get an accent so they read as "this does real work". */
+#controls-algebra .heavy-op { border-color: var(--c-accent, #2b7); font-weight: 600; }
+
+/* Collapsible workflow sections (native <details>) */
+#controls-algebra .algebra-section { border-top: 1px solid var(--c-border-soft, #eee); }
+#controls-algebra .algebra-section > summary {
+  cursor: pointer; padding: 7px 2px; font-size: 12px; font-weight: 600; color: var(--c-text, #222);
+  list-style: none; user-select: none;
+}
+#controls-algebra .algebra-section > summary::-webkit-details-marker { display: none; }
+#controls-algebra .algebra-section > summary::before { content: '▸ '; color: var(--c-muted, #88a); font-weight: 400; }
+#controls-algebra .algebra-section[open] > summary::before { content: '▾ '; }
+#controls-algebra .algebra-section-body { padding: 2px 2px 8px; display: flex; flex-direction: column; gap: 6px; }
+#controls-algebra .algebra-advanced > summary { cursor: pointer; font-size: 11px; color: var(--c-muted, #88a); padding: 2px 0; }
+#controls-algebra .algebra-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+#controls-algebra .algebra-line-label { font-size: 11px; font-weight: 600; color: var(--c-muted, #667); }
+
+/* "Set values" multi-row table */
+#controls-algebra .algebra-value-row { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
+#controls-algebra .algebra-value-row select { max-width: 116px; flex: 1 1 auto; }
+#controls-algebra .algebra-value-row input { width: 52px; }
+#controls-algebra .alg-val-preview { flex: 1 1 100%; font-size: 11px; }
+#controls-algebra .algebra-value-rm { flex: none; padding: 0 6px; }
+
+/* Univalence-constraint palette as a 2-column grid */
+#controls-algebra .algebra-palette { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+#controls-algebra .algebra-palette button { white-space: normal; }
+
+/* Contextual node inspector (replaces the sidebar sections when ≥1 node is selected) */
+#controls-algebra .algebra-inspector { padding: 4px 2px 8px; display: flex; flex-direction: column; gap: 4px; }
+#controls-algebra .algebra-inspector.hidden { display: none; }
+#controls-algebra .algebra-inspector-head { display: flex; align-items: center; justify-content: space-between; }
+#controls-algebra .algebra-inspector-eq { overflow-x: auto; padding: 4px 0; border-bottom: 1px dashed var(--c-border-soft, #eee); }
+
+/* Floating view/history toolbar over the graph */
+#algebra-graph .algebra-toolbar {
+  position: absolute; top: 8px; right: 8px; z-index: 11; display: flex; align-items: center; gap: 2px;
+  background: var(--c-surface, #fff); border: 1px solid var(--c-border, #ccc);
+  border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.14); padding: 3px 5px;
+}
+#algebra-graph .algebra-toolbar .algebra-tb-btn { padding: 1px 7px; }
+#algebra-graph .algebra-toolbar-zoom { font-size: 11px; min-width: 36px; text-align: center; color: var(--c-muted, #667); }
+
 #alternates-card .alt {
   display: flex;
   align-items: center;

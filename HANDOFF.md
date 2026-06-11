@@ -93,7 +93,13 @@ its own merged PR), with one feature **in progress on a branch**:
   counts + Δ), the last lane badged "current system", arrowed SVG edges, native scroll + a
   transform-scale zoom (`.algebra-sizer` keeps scrollbars correct), an empty-state CTA, expand/
   collapse-all, and the existence/uniqueness verdict as a floating result card. Full suite 1720/0.
-  See the plan file's MASTER PLAN PROGRESS + UI REWORK PLAN for the per-commit map.
+  See the plan file's MASTER PLAN PROGRESS + UI REWORK PLAN for the per-commit map. A further
+  **node-editor sidebar pass** then reorganized the controls into a pinned primary-action header
+  (★ Auto-reduce & solve + Generate), collapsible workflow sections (System & reference / Assumptions
+  / Reduce / Analyze / Constraints / Export), a floating canvas toolbar (zoom/fit/expand/undo/redo),
+  and a contextual node **inspector** on selection (1 node → equation + Duplicate/Copy/Delete; 2 →
+  the eliminate panel). "Set values" became a multi-row table over **base variables only** (the store
+  `substituteValues` also fixes each value's conjugate — z₁=1+i ⟹ z̄₁=1−i — in one column).
 - **Symbolic QD equation generator** (`feature/symbolic-qd-equations`, NOT yet merged) — a new
   symbolic-algebra track: `app/sym-core.js` (`QD.Sym`, exact Rational/Gaussian/MPoly/RatFn +
   factored-denominator `FRatFn` + field-generic power series with Lagrange reversion) and

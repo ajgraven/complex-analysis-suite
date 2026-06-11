@@ -411,6 +411,47 @@ module.exports = async function run() {
     ok('audit: undo peels back the reduction', st.maxColumn() < before);
   }
 
+  // ---- AUDIT-TRAIL: substituteValues (several variables in ONE column) + conjugate fill ----
+  {
+    const QC = QD.QDConstraints;
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(QE.generateClassicalBounded(hData));
+    const present = new Set(st.variables());
+    // base variables present in the system whose conjugate partner is ALSO present
+    const bases = st.baseVariables().filter((v) => {
+      const c = QC.conjVarName(v); return present.has(v) && c !== v && present.has(c);
+    });
+    ok('subvals: found ≥2 base variables with conjugate partners to test', bases.length >= 2);
+    const [v1, v2] = bases, c1 = QC.conjVarName(v1), c2 = QC.conjVarName(v2);
+    const r = st.substituteValues(
+      [{ varName: v1, value: { re: 1, im: 2 } }, { varName: v2, value: { re: 0, im: 0 } }],
+      { propagate: false });
+    ok('subvals: substituteValues appends exactly ONE new column for several vars', r.ok && r.column === 1);
+    const col1 = st.list().filter((n) => n.column === 1);
+    ok('subvals: the column drops BOTH chosen variables',
+       col1.length > 0 && col1.every((n) => !n.poly.vars().has(v1) && !n.poly.vars().has(v2)));
+    ok('subvals: the column ALSO drops both conjugates (a value fully specifies its conjugate)',
+       col1.every((n) => !n.poly.vars().has(c1) && !n.poly.vars().has(c2)));
+    const rep = col1.find((n) => n.provenance && n.provenance.op === 'substitute');
+    ok('subvals: provenance records a variables[] array of length 2',
+       rep && rep.provenance.variables && rep.provenance.variables.length === 2);
+    ok('subvals: provenance records each conjugate partner name',
+       rep && rep.provenance.variables.every((v) => v.conjugate === QC.conjVarName(v.name)));
+
+    // The single-variable wrapper now ALSO fills the conjugate.
+    const st2 = QD.AlgebraStore.create();
+    st2.seedFromSystem(QE.generateClassicalBounded(hData));
+    const r2 = st2.substituteValue(v1, { re: 1, im: 2 }, { propagate: false });
+    const s2c1 = st2.list().filter((n) => n.column === 1);
+    ok('subvals: single substituteValue drops the variable AND its conjugate',
+       r2.ok && s2c1.every((n) => !n.poly.vars().has(v1) && !n.poly.vars().has(c1)));
+
+    // A substitution naming no in-system variable is reported, not thrown.
+    const r3 = st2.substituteValues([{ varName: 'nope_xyz', value: { re: 0, im: 0 } }], { propagate: false });
+    ok('subvals: a substitution naming no in-system variable returns ok:false',
+       !r3.ok && /current system/.test(r3.reason || ''));
+  }
+
   // ---- AUDIT-TRAIL: reducePropagate directly, and an inconsistent fix is reported ----
   {
     // A tiny hand-built store-like check via the public ops on a seeded system:

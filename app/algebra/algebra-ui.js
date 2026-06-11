@@ -81,7 +81,7 @@
         && Array.isArray(phi.branches) && phi.branches.length === hData.poles.length);
     }
     function toast(msg, opts) { if (QD.QoL && QD.QoL.toast) QD.QoL.toast(msg, opts || {}); }
-    function rerender() { if (canvas) canvas.render(store, latexOf); updateElimPanel(canvas ? canvas.getSelection() : []); }
+    function rerender() { if (canvas) canvas.render(store, latexOf); renderInspector(canvas ? canvas.getSelection() : []); }
 
     // ---- persistent, dismissible error panel --------------------------------
     function showError(msg) {
@@ -240,14 +240,70 @@
       if (_realPicker && _realPicker.refresh) _realPicker.refresh();
       refreshValueVars();
     }
-    // Rebuild the "Set value" variable <select> from the store's current variables,
-    // preserving the prior selection when it still exists.
+    // ---- "Set values" table: fix several variables at once in ONE column ----
+    // The picker lists BASE variables only (not their conjugates) — a value fully
+    // specifies the conjugate (z₁=1+i ⟹ z̄₁=1−i), and the store fills it automatically.
+    function valBaseVars() { try { return store.baseVariables(); } catch (e) { return []; } }
+    // Exact ℚ(i) string for the inline preview (same continued-fraction rationalizer the
+    // store uses), so the user sees 0.2 → 1/5 before applying.
+    function fmtRat(x) {
+      try { const r = QE.ratApprox(x || 0); return String(r[1]) === '1' ? String(r[0]) : String(r[0]) + '/' + String(r[1]); }
+      catch (e) { return String(x || 0); }
+    }
+    function exactValueStr(re, im) {
+      re = re || 0; im = im || 0;
+      if (!im) return fmtRat(re);
+      const iAbs = fmtRat(Math.abs(im)) + 'i';
+      if (!re) return (im < 0 ? '−' : '') + iAbs;
+      return fmtRat(re) + (im < 0 ? ' − ' : ' + ') + iAbs;
+    }
+    function updateRowPreview(row) {
+      const prev = row.querySelector('.alg-val-preview'); if (!prev) return;
+      const re = parseFloat(row.querySelector('.alg-val-re').value) || 0;
+      const im = parseFloat(row.querySelector('.alg-val-im').value) || 0;
+      prev.textContent = (re || im) ? '= ' + exactValueStr(re, im) : '';
+    }
+    // Build one (variable, Re, Im) row with a live exact-value preview + a remove button.
+    function addValueRow(preVar) {
+      const host = $('#alg-val-rows'); if (!host) return null;
+      const row = document.createElement('div'); row.className = 'algebra-value-row';
+      const sel = document.createElement('select'); sel.className = 'alg-val-var';
+      valBaseVars().forEach((v) => { const o = document.createElement('option'); o.value = v; o.textContent = latexPlain(v) + ' · ' + v; sel.appendChild(o); });
+      if (preVar) sel.value = preVar;
+      const re = document.createElement('input'); re.type = 'number'; re.step = 'any'; re.placeholder = 'Re'; re.className = 'alg-val-re'; re.title = 'Real part';
+      const im = document.createElement('input'); im.type = 'number'; im.step = 'any'; im.placeholder = 'Im'; im.className = 'alg-val-im'; im.title = 'Imaginary part';
+      const prev = document.createElement('span'); prev.className = 'alg-val-preview hint';
+      const rm = document.createElement('button'); rm.type = 'button'; rm.className = 'small algebra-value-rm'; rm.textContent = '×'; rm.title = 'Remove this variable';
+      rm.addEventListener('click', () => { row.remove(); if (!host.querySelector('.algebra-value-row')) addValueRow(); });
+      re.addEventListener('input', () => updateRowPreview(row));
+      im.addEventListener('input', () => updateRowPreview(row));
+      row.appendChild(sel); row.appendChild(re); row.appendChild(im); row.appendChild(prev); row.appendChild(rm);
+      host.appendChild(row);
+      return row;
+    }
+    // Read the table into a [{ varName, value:{re,im} }] list (rows with a chosen var).
+    function valuePairs() {
+      const host = $('#alg-val-rows'); if (!host) return [];
+      return [...host.querySelectorAll('.algebra-value-row')].map((row) => {
+        const v = row.querySelector('.alg-val-var');
+        if (!v || !v.value) return null;
+        return { varName: v.value, value: { re: parseFloat(row.querySelector('.alg-val-re').value) || 0, im: parseFloat(row.querySelector('.alg-val-im').value) || 0 } };
+      }).filter(Boolean);
+    }
+    // Rebuild every row's variable <select> from the current base variables (after a seed
+    // or reduction changes the variable set), preserving each row's prior selection, and
+    // ensure at least one row exists.
     function refreshValueVars() {
-      const sel = $('#alg-val-var'); if (!sel) return;
-      const prev = sel.value;
-      sel.innerHTML = '';
-      store.variables().forEach((v) => { const o = document.createElement('option'); o.value = v; o.textContent = latexPlain(v) + ' · ' + v; sel.appendChild(o); });
-      if (prev) sel.value = prev;
+      const host = $('#alg-val-rows'); if (!host) return;
+      const opts = valBaseVars();
+      const rows = [...host.querySelectorAll('.algebra-value-row')];
+      if (!rows.length) { addValueRow(); return; }
+      rows.forEach((row) => {
+        const sel = row.querySelector('.alg-val-var'); const prev = sel.value;
+        sel.innerHTML = '';
+        opts.forEach((v) => { const o = document.createElement('option'); o.value = v; o.textContent = latexPlain(v) + ' · ' + v; sel.appendChild(o); });
+        if (prev && opts.indexOf(prev) !== -1) sel.value = prev;
+      });
     }
 
     // Assume the picked base variables real → a new labeled column (store.assumeReal).
@@ -282,19 +338,18 @@
       toast('Real-axis-symmetric h → assumed ' + vars.length + ' base variable(s) real → column ' + r.column + ' (' + r.created.length + ' equation' + (r.created.length === 1 ? '' : 's') + ')');
     }
 
-    // Fix the chosen variable to an exact value → a new labeled column, then (if the
-    // propagate box is ticked) cascade the consequence as a further column.
+    // Fix the chosen variables to exact values in ONE new labeled column (each value also
+    // fixes its conjugate), then (if the propagate box is ticked) cascade the consequence
+    // as a further column.
     function doSubstituteValue() {
       if (!store.size && !seedFromCurrent()) return;
-      const v = $('#alg-val-var') && $('#alg-val-var').value;
-      if (!v) { toast('No variable selected.', { kind: 'error' }); return; }
-      const re = parseFloat($('#alg-val-re') && $('#alg-val-re').value) || 0;
-      const im = parseFloat($('#alg-val-im') && $('#alg-val-im').value) || 0;
+      const pairs = valuePairs();
+      if (!pairs.length) { toast('Pick at least one variable and give it a value.', { kind: 'error' }); return; }
       const propagate = !$('#alg-val-prop') || $('#alg-val-prop').checked;
-      const r = store.substituteValue(v, { re, im }, { propagate });
+      const r = store.substituteValues(pairs, { propagate });
       if (!r.ok) { showError('Set value: ' + (r.reason || 'failed')); return; }
       rerender(); refreshPickers();
-      let msg = 'Set ' + latexPlain(v) + ' = ' + (im ? re + (im < 0 ? '−' : '+') + Math.abs(im) + 'i' : re) + ' → column ' + r.column;
+      let msg = 'Set ' + pairs.map((p) => latexPlain(p.varName) + ' = ' + exactValueStr(p.value.re, p.value.im)).join(', ') + ' → column ' + r.column;
       if (r.propagated) msg += '; propagated (eliminated ' + r.propagated.eliminated.map(latexPlain).join(', ') + (r.propagated.inconsistent ? '; system inconsistent — no solution' : '') + ')';
       toast(msg);
     }
@@ -305,86 +360,95 @@
       const panel = $('#controls-algebra');
       if (!panel) return;
       panel.innerHTML =
-        // Terse one-liner + a "?" that toggles the full help (depth on demand).
-        '<div class="row" style="align-items:flex-start; gap:6px;">' +
-        '  <div class="hint" data-str-html="hints.algebraCard" style="flex:1;"></div>' +
-        '  <button id="alg-help-toggle" class="small algebra-help-q" type="button" title="Show / hide help">?</button>' +
+        // ---- PINNED HEADER: intro + help, the primary CTA, status + error ----
+        '<div class="algebra-head">' +
+        '  <div class="row" style="align-items:flex-start; gap:6px;">' +
+        '    <div class="hint" data-str-html="hints.algebraCard" style="flex:1;"></div>' +
+        '    <button id="alg-help-toggle" class="small algebra-help-q" type="button" title="Show / hide help">?</button>' +
+        '  </div>' +
+        '  <div id="alg-help" class="hint card-sub hidden" data-str-html="algebra.help" style="margin:4px 0;"></div>' +
+        '  <div class="row algebra-primary">' +
+        '    <button id="alg-autosolve" class="small heavy-op" type="button" title="Semi-autonomous: auto-assume reality (if h is symmetric), propagate linear consequences, then determine existence/uniqueness and the explicit real solutions — each step a new labeled column">★ Auto-reduce &amp; solve</button>' +
+        '    <button id="alg-seed" class="small" type="button" title="Generate the original (●)/(★)/gauge system from the current bounded solve at column 0 (replaces the graph; assumptions are then added as columns)">Generate / re-seed</button>' +
+        '    <button id="alg-cancel" class="small hidden" type="button" title="Cancel the running computation">Cancel</button>' +
+        '  </div>' +
+        '  <div id="alg-status" class="hint" style="margin:4px 0;"></div>' +
+        '  <div id="alg-error" class="algebra-error hidden">' +
+        '    <span id="alg-error-msg" class="algebra-error-msg"></span>' +
+        '    <button id="alg-error-close" class="algebra-error-close" type="button" title="Dismiss">×</button>' +
+        '  </div>' +
         '</div>' +
-        '<div id="alg-help" class="hint card-sub hidden" data-str-html="algebra.help" style="margin:4px 0;"></div>' +
-        // φ / h reference: the symbolic forms + a legend of what each variable means.
-        '<div class="row" style="margin-top:4px; gap:6px; align-items:center;">' +
-        '  <button id="alg-ref-toggle" class="small" type="button" title="Show the symbolic forms of φ and h and what each variable represents">φ / h reference ▸</button>' +
-        '  <label style="font-size:11px;"><input type="checkbox" id="alg-ref-values"> show values</label></div>' +
-        '<div id="alg-ref" class="card-sub hidden algebra-ref"></div>' +
-        '<div class="row"><button id="alg-seed" class="small" type="button" ' +
-        'title="Generate the original (●)/(★)/gauge system from the current bounded solve at column 0 (replaces the graph; assumptions are then added as columns)">Generate / re-seed</button>' +
-        '<button id="alg-undo" class="small" type="button" style="margin-left:6px;" title="Undo">Undo</button>' +
-        '<button id="alg-redo" class="small" type="button" style="margin-left:4px;" title="Redo">Redo</button>' +
-        '<button id="alg-fit" class="small" type="button" style="margin-left:4px;" title="Reset zoom &amp; scroll to the start">Fit</button></div>' +
-        '<div class="row" style="margin-top:4px; gap:4px; align-items:center;">' +
-        '  <span style="font-size:11px;">View:</span>' +
-        '  <button id="alg-zoom-out" class="small" type="button" title="Zoom out (fit more columns)">−</button>' +
-        '  <button id="alg-zoom-in" class="small" type="button" title="Zoom in">+</button>' +
-        '  <button id="alg-collapse-all" class="small" type="button" title="Collapse every card to a one-line preview">Collapse all</button>' +
-        '  <button id="alg-expand-all" class="small" type="button" title="Expand every card to the full typeset form">Expand all</button></div>' +
-        '<div id="alg-status" class="hint" style="margin:4px 0;"></div>' +
-        // Persistent, dismissible error panel (stays until × is clicked).
-        '<div id="alg-error" class="algebra-error hidden">' +
-        '  <span id="alg-error-msg" class="algebra-error-msg"></span>' +
-        '  <button id="alg-error-close" class="algebra-error-close" type="button" title="Dismiss">×</button>' +
-        '</div>' +
-        // Fixed φ(0): bake the solve's selected Riemann-map center (centroid of the
-        // poles by default) into the seeded equations — w₀/w̄₀ stop being variables.
-        '<div class="row" style="margin-top:4px; gap:4px; align-items:center;">' +
-        '  <label style="font-size:11px;" data-str-title="tooltips.algFixW0">' +
-        '    <input type="checkbox" id="alg-w0-fix" checked> fix φ(0) = w₀ (selected center; centroid by default)</label></div>' +
-        // Assume-real picker: assert chosen variables are real → a NEW labeled column.
-        '<div class="row" style="margin-top:4px; gap:4px; align-items:center;">' +
-        '  <span style="font-size:11px;">Assume real:</span><span id="alg-real-pick" class="algebra-picker"></span>' +
-        '  <button id="alg-real-apply" class="small" type="button" data-str-title="tooltips.assumeReal">Apply (new column)</button>' +
-        '  <button id="alg-real-auto" class="small" type="button" title="Detect real-axis symmetry of h and, if the data is fully real, assume every base variable real in one step (the biggest tractability lever)">Auto</button></div>' +
-        // Specify-value: fix a variable to an exact value → a NEW labeled column, then
-        // auto-propagate (linear cascade) so the value eliminates dependent variables.
-        '<div class="row" style="margin-top:4px; gap:4px; align-items:center; flex-wrap:wrap;">' +
-        '  <span style="font-size:11px;">Set value:</span>' +
-        '  <select id="alg-val-var" style="max-width:120px;"></select>' +
-        '  <input id="alg-val-re" type="number" step="any" placeholder="Re" style="width:60px;" title="Real part">' +
-        '  <input id="alg-val-im" type="number" step="any" placeholder="Im" style="width:60px;" title="Imaginary part">' +
-        '  <label style="font-size:11px;" title="After substituting, run a linear-propagation pass (eliminate forced variables) as a further column."><input type="checkbox" id="alg-val-prop" checked> propagate</label>' +
-        '  <button id="alg-val-apply" class="small" type="button" title="Substitute the exact value (continued-fraction ℚ(i)) for this variable → a new column">Apply</button></div>' +
-        '<div class="row" style="margin-top:4px;"><button id="alg-gauge-elim" class="small" type="button" ' +
-        'data-str-title="tooltips.gaugeElim">Eliminate with gauge (all)</button></div>' +
-        '<div class="row" style="margin-top:4px; flex-wrap:wrap; gap:4px; align-items:center;">' +
-        '  <button id="alg-groebner" class="small" type="button" data-str-title="tooltips.groebner">Gröbner basis (all eqns)</button>' +
-        '  <label style="font-size:11px;" title="Monomial order. lex = elimination order; grevlex = fastest general.">order ' +
-        '    <select id="alg-gb-order"><option value="grevlex">grevlex</option><option value="grlex">grlex</option><option value="lex">lex</option></select></label>' +
-        '  <span style="font-size:11px;">eliminate:</span><span id="alg-elim-pick" class="algebra-picker"></span></div>' +
-        '<div class="row" style="margin-top:6px; gap:4px;">' +
-        '  <button id="alg-autosolve" class="small" type="button" style="font-weight:600;" title="Semi-autonomous: auto-assume reality (if h is symmetric), propagate linear consequences, then determine existence/uniqueness and the explicit real solutions — each step a new labeled column">★ Auto-reduce &amp; solve</button></div>' +
-        '<div class="row" style="margin-top:4px; gap:4px; flex-wrap:wrap;">' +
-        '  <button id="alg-triangular" class="small" type="button" title="Triangular decomposition (Wu pseudo-elimination) of the current system — an alternative to Gröbner that exhibits the solution structure (free variables, no-solution)">Triangular decomp.</button>' +
-        '  <button id="alg-classify" class="small" type="button" title="Existence / uniqueness: count the REAL solutions (= actual quadrature domains) of the current system via the Hermite trace form, plus distinct-complex / inconsistent / positive-dimensional verdicts">Existence / uniqueness</button>' +
-        '  <button id="alg-dimension" class="small" type="button" data-str-title="tooltips.dimension">Dimension / count</button>' +
-        '  <button id="alg-solve" class="small" type="button" data-str-title="tooltips.solveNumeric">Solve (numeric)</button>' +
-        '  <button id="alg-cancel" class="small hidden" type="button" title="Cancel the running computation">Cancel</button></div>' +
-        '<div class="key" style="margin-top:6px;" title="Append a boundary-univalence condition as new node(s) — hover each button for its meaning">Add univalence constraint</div>' +
-        '<div id="alg-palette" class="row" style="flex-wrap:wrap; gap:4px;"></div>' +
-        '<div id="alg-elim" class="card-sub hidden" style="margin-top:8px;">' +
-        '  <div class="key" title="Take the Sylvester resultant of the two selected nodes in the chosen variable">Eliminate a variable</div>' +
-        '  <div id="alg-elim-sel" class="hint"></div>' +
-        '  <div class="row" style="margin-top:4px;"><label>Variable ' +
-        '    <select id="alg-var"></select></label>' +
-        '    <button id="alg-eliminate" class="small" type="button" style="margin-left:6px;">Eliminate</button>' +
-        '    <button id="alg-groebner-sel" class="small" type="button" style="margin-left:4px;" ' +
-        '      title="Gröbner basis of the two selected nodes (uses every shared variable, not just one)">Gröbner</button></div>' +
-        '  <div id="alg-cost" class="hint" style="margin-top:2px;" title="Sylvester matrix size and term counts — the elimination cost"></div>' +
-        '</div>' +
-        '<div class="key" style="margin-top:8px;" title="Export the whole system for an external CAS (Gröbner / RCTD) or a paper">Export</div>' +
-        '<div class="row" style="gap:4px;"><button id="alg-export-json" class="small" type="button" ' +
-        'title="Download every node as an exact ℚ(i) term list + edges (CAS-ready JSON)">Download DAG (JSON)</button>' +
-        '<button id="alg-copy-latex" class="small" type="button" title="Copy all equations as a gathered LaTeX block">Copy LaTeX</button></div>';
+        // ---- CONTEXTUAL NODE INSPECTOR (shown only when ≥1 node is selected) ----
+        '<div id="alg-inspector" class="algebra-inspector hidden"></div>' +
+        // ---- WORKFLOW SECTIONS (collapsible; hidden while the inspector is up) ----
+        '<div id="alg-sections">' +
+        // 1. System & reference
+        '  <details class="algebra-section">' +
+        '    <summary>System &amp; reference</summary>' +
+        '    <div class="algebra-section-body">' +
+        '      <label class="algebra-line" data-str-title="tooltips.algFixW0"><input type="checkbox" id="alg-w0-fix" checked> fix φ(0) = w₀ (selected center; centroid by default)</label>' +
+        '      <div class="row" style="gap:6px; align-items:center;">' +
+        '        <button id="alg-ref-toggle" class="small" type="button" title="Show the symbolic forms of φ and h and what each variable represents">φ / h reference ▸</button>' +
+        '        <label style="font-size:11px;"><input type="checkbox" id="alg-ref-values"> show values</label></div>' +
+        '      <div id="alg-ref" class="card-sub hidden algebra-ref"></div>' +
+        '    </div>' +
+        '  </details>' +
+        // 2. Assumptions (open by default — the most common first step)
+        '  <details class="algebra-section" open>' +
+        '    <summary>Assumptions</summary>' +
+        '    <div class="algebra-section-body">' +
+        '      <div class="algebra-line"><span class="algebra-line-label">Assume real</span><span id="alg-real-pick" class="algebra-picker"></span>' +
+        '        <button id="alg-real-apply" class="small" type="button" data-str-title="tooltips.assumeReal">Apply</button>' +
+        '        <button id="alg-real-auto" class="small" type="button" title="Detect real-axis symmetry of h and, if the data is fully real, assume every base variable real in one step (the biggest tractability lever)">Auto</button></div>' +
+        '      <div class="algebra-line-label" style="margin-top:8px;">Set values <span class="hint" style="font-weight:400;">(each value also fixes its conjugate)</span></div>' +
+        '      <div id="alg-val-rows"></div>' +
+        '      <div class="row" style="gap:4px; align-items:center; margin-top:2px;">' +
+        '        <button id="alg-val-add" class="small" type="button" title="Add another variable to fix in the same column">＋ add variable</button>' +
+        '        <label style="font-size:11px;" title="After substituting, run a linear-propagation pass (eliminate forced variables) as a further column."><input type="checkbox" id="alg-val-prop" checked> propagate</label>' +
+        '        <button id="alg-val-apply" class="small" type="button" title="Substitute the exact values (continued-fraction ℚ(i)) for these variables — and their conjugates — in one new column">Apply</button></div>' +
+        '    </div>' +
+        '  </details>' +
+        // 3. Reduce (alternative eliminators; order/eliminate behind Advanced)
+        '  <details class="algebra-section">' +
+        '    <summary>Reduce</summary>' +
+        '    <div class="algebra-section-body">' +
+        '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
+        '        <button id="alg-gauge-elim" class="small" type="button" data-str-title="tooltips.gaugeElim">Eliminate with gauge (all)</button>' +
+        '        <button id="alg-groebner" class="small heavy-op" type="button" data-str-title="tooltips.groebner">Gröbner basis (all eqns)</button>' +
+        '        <button id="alg-triangular" class="small" type="button" title="Triangular decomposition (Wu pseudo-elimination) of the current system — an alternative to Gröbner that exhibits the solution structure (free variables, no-solution)">Triangular decomp.</button></div>' +
+        '      <details class="algebra-advanced"><summary>Advanced</summary>' +
+        '        <div class="algebra-line"><span class="algebra-line-label" title="Monomial order. lex = elimination order; grevlex = fastest general.">order</span>' +
+        '          <select id="alg-gb-order"><option value="grevlex">grevlex</option><option value="grlex">grlex</option><option value="lex">lex</option></select></div>' +
+        '        <div class="algebra-line"><span class="algebra-line-label">eliminate</span><span id="alg-elim-pick" class="algebra-picker"></span></div>' +
+        '      </details>' +
+        '    </div>' +
+        '  </details>' +
+        // 4. Analyze
+        '  <details class="algebra-section">' +
+        '    <summary>Analyze</summary>' +
+        '    <div class="algebra-section-body"><div class="row" style="flex-wrap:wrap; gap:4px;">' +
+        '      <button id="alg-classify" class="small heavy-op" type="button" title="Existence / uniqueness: count the REAL solutions (= actual quadrature domains) of the current system via the Hermite trace form, plus distinct-complex / inconsistent / positive-dimensional verdicts">Existence / uniqueness</button>' +
+        '      <button id="alg-dimension" class="small" type="button" data-str-title="tooltips.dimension">Dimension / count</button>' +
+        '      <button id="alg-solve" class="small" type="button" data-str-title="tooltips.solveNumeric">Solve (numeric)</button></div></div>' +
+        '  </details>' +
+        // 5. Univalence constraints (2-column grid palette)
+        '  <details class="algebra-section">' +
+        '    <summary>Univalence constraints</summary>' +
+        '    <div class="algebra-section-body">' +
+        '      <div class="hint" id="alg-palette-note" style="margin-bottom:4px;">Append a boundary-univalence condition as new node(s) — hover each for its meaning.</div>' +
+        '      <div id="alg-palette" class="algebra-palette"></div>' +
+        '    </div>' +
+        '  </details>' +
+        // 6. Export
+        '  <details class="algebra-section">' +
+        '    <summary>Export</summary>' +
+        '    <div class="algebra-section-body"><div class="row" style="gap:4px;">' +
+        '      <button id="alg-export-json" class="small" type="button" title="Download every node as an exact ℚ(i) term list + edges (CAS-ready JSON)">Download DAG (JSON)</button>' +
+        '      <button id="alg-copy-latex" class="small" type="button" title="Copy all equations as a gathered LaTeX block">Copy LaTeX</button></div></div>' +
+        '  </details>' +
+        '</div>';
 
-      // constraint palette buttons
+      // constraint palette buttons (2-col grid)
       const pal = $('#alg-palette');
       CONSTRAINT_BUTTONS.forEach((b) => {
         const btn = document.createElement('button');
@@ -413,16 +477,7 @@
       $('#alg-seed').addEventListener('click', seedFromCurrent);
       const w0FixCb = $('#alg-w0-fix');
       if (w0FixCb) w0FixCb.addEventListener('change', () => { if (store.size) seedFromCurrent(); });
-      $('#alg-undo').addEventListener('click', () => { if (store.undo()) rerender(); });
-      $('#alg-redo').addEventListener('click', () => { if (store.redo()) rerender(); });
-      $('#alg-fit').addEventListener('click', () => { if (canvas) { canvas.fit(); _zoom = 1; } });
-      $('#alg-zoom-out').addEventListener('click', () => { if (canvas) _zoom = canvas.setZoom(_zoom / 1.15); });
-      $('#alg-zoom-in').addEventListener('click', () => { if (canvas) _zoom = canvas.setZoom(_zoom * 1.15); });
-      $('#alg-collapse-all').addEventListener('click', () => { if (canvas) canvas.setAllCollapsed(true); });
-      $('#alg-expand-all').addEventListener('click', () => { if (canvas) canvas.setAllCollapsed(false); });
-      $('#alg-eliminate').addEventListener('click', doEliminate);
       $('#alg-groebner').addEventListener('click', () => doGroebner(null));
-      $('#alg-groebner-sel').addEventListener('click', () => doGroebner(canvas ? canvas.getSelection() : []));
       $('#alg-autosolve').addEventListener('click', doAutoSolve);
       $('#alg-triangular').addEventListener('click', doTriangular);
       $('#alg-classify').addEventListener('click', doClassify);
@@ -443,11 +498,12 @@
       $('#alg-real-apply').addEventListener('click', doAssumeReal);
       $('#alg-real-auto').addEventListener('click', doAutoReality);
       $('#alg-val-apply').addEventListener('click', doSubstituteValue);
+      $('#alg-val-add').addEventListener('click', () => addValueRow());
 
       // variable pickers (eliminate = all current vars; assume-real = primal base vars)
       _elimPicker = buildPicker($('#alg-elim-pick'), { label: 'pick', friendly: friendlyVar, selected: elimSel, getOptions: () => store.variables() });
       _realPicker = buildPicker($('#alg-real-pick'), { label: 'pick', friendly: (raw) => latexPlain(raw) + ' · ' + raw, selected: realSel, getOptions: () => store.baseVariables() });
-      refreshValueVars();
+      refreshValueVars();   // seeds the first value-table row
       // close any open picker menu when clicking elsewhere
       document.addEventListener('click', () => { if (_openMenu) { _openMenu.classList.add('hidden'); _openMenu = null; } });
 
@@ -455,20 +511,62 @@
       setStatus(activeEnv ? '' : (STR.noSolve || 'No classical bounded QD solved yet.'));
     }
 
-    // ---- elimination panel (driven by canvas selection) ---------------------
-    function updateElimPanel(sel) {
-      const box = $('#alg-elim'); if (!box) return;
-      if (!sel || sel.length !== 2) { box.classList.add('hidden'); return; }
-      const a = store.get(sel[0]), b = store.get(sel[1]);
-      if (!a || !b) { box.classList.add('hidden'); return; }
+    // ---- contextual node inspector (driven by canvas selection) -------------
+    // 0 selected → hide the inspector, show the workflow sections; 1 selected → that
+    // node's equation + provenance + per-node actions (Duplicate / Copy / Delete);
+    // 2 selected → the eliminate-a-variable (Sylvester resultant) panel.
+    function renderInspector(sel) {
+      const box = $('#alg-inspector'), sections = $('#alg-sections');
+      if (!box) return;
+      sel = (sel || []).filter((id) => store.get(id));
+      if (!sel.length) {
+        box.classList.add('hidden'); box.innerHTML = '';
+        if (sections) sections.classList.remove('hidden');
+        return;
+      }
       box.classList.remove('hidden');
-      $('#alg-elim-sel').textContent = a.label + '   ×   ' + b.label;
+      if (sections) sections.classList.add('hidden');
+      box.innerHTML = '';
+      const head = document.createElement('div'); head.className = 'algebra-inspector-head';
+      const title = document.createElement('span'); title.className = 'algebra-line-label';
+      title.textContent = sel.length === 1 ? 'Selected equation' : 'Eliminate a variable';
+      const done = document.createElement('button'); done.type = 'button'; done.className = 'small'; done.textContent = 'Done';
+      done.title = 'Clear selection'; done.addEventListener('click', () => { if (canvas) canvas.clearSelection(); });
+      head.appendChild(title); head.appendChild(done); box.appendChild(head);
+      const mkBtn = (txt, tip, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'small'; b.textContent = txt; if (tip) b.title = tip; b.addEventListener('click', fn); return b; };
+
+      if (sel.length === 1) {
+        const n = store.get(sel[0]);
+        const lab = document.createElement('div'); lab.className = 'hint'; lab.textContent = n.label; box.appendChild(lab);
+        const eq = document.createElement('div'); eq.className = 'algebra-inspector-eq';
+        const RL = QD.RiemannLatex; const tex = n.poly.toLatex(latexOf) + relSuffix(n.rel);
+        if (RL && RL.render) RL.render(eq, tex, true); else eq.textContent = tex;
+        box.appendChild(eq);
+        const prov = provText(n.provenance);
+        if (prov) { const p = document.createElement('div'); p.className = 'hint'; p.textContent = 'Origin: ' + prov; box.appendChild(p); }
+        const acts = document.createElement('div'); acts.className = 'row'; acts.style.gap = '4px'; acts.style.marginTop = '4px';
+        acts.appendChild(mkBtn('Duplicate', 'Copy this equation into a new node', () => { if (store.duplicate(sel[0])) { rerender(); toast('Duplicated ' + n.label); } }));
+        acts.appendChild(mkBtn('Copy LaTeX', 'Copy this equation as LaTeX', () => copyNodeLatex(sel[0])));
+        acts.appendChild(mkBtn('Delete', 'Delete this node and its descendants', () => { const removed = store.deleteNode(sel[0]); if (canvas) canvas.clearSelection(); rerender(); toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)'); }));
+        box.appendChild(acts);
+        return;
+      }
+
+      // two nodes: the resultant elimination panel
+      const a = store.get(sel[0]), b = store.get(sel[1]);
+      const selLine = document.createElement('div'); selLine.className = 'hint'; selLine.textContent = a.label + '   ×   ' + b.label; box.appendChild(selLine);
+      const line = document.createElement('div'); line.className = 'algebra-line';
+      const varLabel = document.createElement('span'); varLabel.className = 'algebra-line-label'; varLabel.textContent = 'Variable';
+      const select = document.createElement('select'); select.id = 'alg-var';
       const vars = store.sharedVars(sel[0], sel[1]);
-      const select = $('#alg-var'); select.innerHTML = '';
       vars.forEach((v) => { const o = document.createElement('option'); o.value = v; o.textContent = latexPlain(v); select.appendChild(o); });
-      $('#alg-eliminate').disabled = vars.length === 0;
-      updateCost();
+      const elimBtn = mkBtn('Eliminate', 'Take the Sylvester resultant of the two selected nodes in the chosen variable', doEliminate); elimBtn.id = 'alg-eliminate'; elimBtn.disabled = vars.length === 0;
+      const gbBtn = mkBtn('Gröbner', 'Gröbner basis of the two selected nodes (uses every shared variable, not just one)', () => doGroebner(canvas ? canvas.getSelection() : [])); gbBtn.id = 'alg-groebner-sel';
+      line.appendChild(varLabel); line.appendChild(select); line.appendChild(elimBtn); line.appendChild(gbBtn);
+      box.appendChild(line);
+      const cost = document.createElement('div'); cost.className = 'hint'; cost.id = 'alg-cost'; cost.title = 'Sylvester matrix size and term counts — the elimination cost'; box.appendChild(cost);
       select.onchange = updateCost;
+      updateCost();
     }
     function updateCost() {
       const sel = canvas ? canvas.getSelection() : [];
@@ -755,6 +853,13 @@
       if (!a.re) return f(a.im) + 'i';
       return f(a.re) + (a.im < 0 ? ' − ' : ' + ') + f(Math.abs(a.im)) + 'i';
     }
+    // A substitute provenance lists one or more (name = value) assignments. New records
+    // carry a `variables` array ([{name, value, conjugate}]); older snapshots carried a
+    // single `variable`/`value` pair — render either.
+    function substList(prov) {
+      const vs = prov.variables || (prov.variable ? [{ name: prov.variable, value: prov.value }] : []);
+      return vs.map((v) => latexPlain(v.name) + ' = ' + valStr(v.value)).join(', ');
+    }
     function provText(prov) {
       if (!prov) return '';
       switch (prov.op) {
@@ -766,7 +871,7 @@
           + ') of ' + (prov.inputs || []).join(', ');
         case 'constraint': return 'univalence constraint (' + (prov.form || '?') + ')';
         case 'duplicate': return 'copy of ' + (prov.inputs || []).join(', ');
-        case 'substitute': return 'set ' + latexPlain(prov.variable) + ' = ' + valStr(prov.value);
+        case 'substitute': return 'set ' + substList(prov);
         case 'linear-reduce': return 'linear propagation (eliminated ' + (prov.eliminated || []).map(latexPlain).join(', ') + ')';
         case 'assume-real': return 'assumed ' + (prov.vars || []).map(latexPlain).join(', ') + ' real';
         case 'fix-w0': return 'fixed φ(0) = ' + valStr(prov.value);
@@ -781,7 +886,7 @@
       const rep = (ns || []).find((n) => n.provenance && n.provenance.op !== 'conjugate') || (ns || [])[0];
       const p = (rep && rep.provenance) || {};
       switch (p.op) {
-        case 'substitute': return '↳ set ' + latexPlain(p.variable) + ' = ' + valStr(p.value);
+        case 'substitute': return '↳ set ' + substList(p);
         case 'linear-reduce': return '↳ propagate · eliminate ' + (p.eliminated || []).map(latexPlain).join(', ');
         case 'assume-real': return '↳ assume real · ' + (p.vars || []).map(latexPlain).join(', ');
         case 'fix-w0': return '↳ fix φ(0) = ' + valStr(p.value);
@@ -830,13 +935,37 @@
       surface.className = 'hidden';
       area.appendChild(surface);
       canvas = QD.AlgebraCanvas.create(surface, {
-        onSelect: updateElimPanel,
+        onSelect: renderInspector,
         onCopy: copyNodeLatex,
         onMove: (id, dir) => { if (store.moveNode(id, dir)) rerender(); },
         titleOf: nodeTitle,
         colInfo: columnInfo,
         onSeed: seedFromCurrent,
       });
+      buildToolbar(surface);
+    }
+    // Floating view/history toolbar over the graph (node-editor pattern): zoom, fit,
+    // expand/collapse-all, undo/redo. Appended AFTER canvas.create (which clears the
+    // container once), so it persists across re-renders. Undo/Redo keep the alg-undo/
+    // alg-redo ids so the busy-lock (setBusy) still disables them during a worker op.
+    function buildToolbar(host) {
+      const bar = document.createElement('div'); bar.className = 'algebra-toolbar';
+      const zlabel = document.createElement('span'); zlabel.className = 'algebra-toolbar-zoom';
+      const setZ = (z) => { if (canvas) { _zoom = canvas.setZoom(z); zlabel.textContent = Math.round(_zoom * 100) + '%'; } };
+      const btn = (glyph, title, fn, id) => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'small algebra-tb-btn'; b.textContent = glyph; b.title = title;
+        if (id) b.id = id; b.addEventListener('click', fn); return b;
+      };
+      bar.appendChild(btn('−', 'Zoom out (fit more columns)', () => setZ(_zoom / 1.15)));
+      bar.appendChild(zlabel);
+      bar.appendChild(btn('+', 'Zoom in', () => setZ(_zoom * 1.15)));
+      bar.appendChild(btn('Fit', 'Reset zoom & scroll to the start', () => { if (canvas) { canvas.fit(); _zoom = 1; zlabel.textContent = '100%'; } }));
+      bar.appendChild(btn('Expand', 'Expand every card to the full typeset form', () => { if (canvas) canvas.setAllCollapsed(false); }));
+      bar.appendChild(btn('Collapse', 'Collapse every card to a one-line preview', () => { if (canvas) canvas.setAllCollapsed(true); }));
+      bar.appendChild(btn('↶', 'Undo', () => { if (store.undo()) rerender(); }, 'alg-undo'));
+      bar.appendChild(btn('↷', 'Redo', () => { if (store.redo()) rerender(); }, 'alg-redo'));
+      zlabel.textContent = Math.round(_zoom * 100) + '%';
+      host.appendChild(bar);
     }
     function showSurface(on) { if (surface) surface.classList.toggle('hidden', !on); }
 
