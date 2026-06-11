@@ -452,7 +452,8 @@
         '    <div class="algebra-section-body"><div class="row" style="flex-wrap:wrap; gap:4px;">' +
         '      <button id="alg-classify" class="small heavy-op" type="button" title="Existence / uniqueness: count the REAL solutions (= actual quadrature domains) of the current system via the Hermite trace form, plus distinct-complex / inconsistent / positive-dimensional verdicts">Existence / uniqueness</button>' +
         '      <button id="alg-dimension" class="small" type="button" data-str-title="tooltips.dimension">Dimension / count</button>' +
-        '      <button id="alg-solve" class="small" type="button" data-str-title="tooltips.solveNumeric">Solve (numeric)</button></div></div>' +
+        '      <button id="alg-solve" class="small" type="button" data-str-title="tooltips.solveNumeric">Solve (numeric)</button>' +
+        '      <button id="alg-univalence" class="small heavy-op" type="button" title="Certify univalence: solve for the real solutions, reconstruct each candidate Riemann map φ, and test whether it is univalent (schlicht) on 𝔻 — reports how many real solutions are GENUINE quadrature domains (the rest are algebraic solutions whose φ folds or self-intersects)">Certify univalence</button></div></div>' +
         '  </details>' +
         // 5. Univalence constraints (2-column grid palette)
         '  <details class="algebra-section">' +
@@ -505,6 +506,7 @@
       $('#alg-classify').addEventListener('click', doClassify);
       $('#alg-dimension').addEventListener('click', doDimension);
       $('#alg-solve').addEventListener('click', doSolve);
+      $('#alg-univalence').addEventListener('click', doCertifyUnivalence);
       $('#alg-cancel').addEventListener('click', cancelOp);
       $('#alg-gauge-elim').addEventListener('click', () => {
         if (!store.size) { if (!seedFromCurrent()) return; }
@@ -701,7 +703,7 @@
     // Cancel, and routes progress to the status line.
     let _abort = null;
     function setBusy(on, label) {
-      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-classify', 'alg-autosolve',
+      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-classify', 'alg-univalence', 'alg-autosolve',
         'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-val-apply']
         .forEach((id) => { const b = $('#' + id); if (b) b.disabled = on; });
       const pal = $('#alg-palette'); if (pal) pal.querySelectorAll('button').forEach((b) => { b.disabled = on; });
@@ -879,6 +881,72 @@
         setStatus(verdict);
         if (canvas) canvas.setVerdict({ text: verdict });
         toast(verdict, r.inconsistent || r.realCount === 0 ? { kind: 'error' } : {});
+      }, 20);
+    }
+
+    // Reconstruct a numeric Riemann map φ from one real solution of the reim system. The
+    // reim variables are named <primal>__re / <primal>__im (z1, A1_1, w0, …); an assumed-
+    // real variable has no __im (⇒ 0), and a fixed φ(0) comes from store.w0Fixed. The pole
+    // structure (count + order) is read from hData. Returns a boundedQD φ object that
+    // QD.evalPhi / isBoundaryUnivalent / findCriticalPoints understand, or null if any map
+    // parameter was eliminated from the current system (φ can't be rebuilt — report it).
+    function phiFromAlgebraSolution(sol, hData) {
+      const num = (name) => { const re = sol[name + '__re']; if (!re) return undefined; const im = sol[name + '__im']; return { re: re.re, im: im ? im.re : 0 }; };
+      let w0 = num('w0');
+      if (!w0 && store.w0Fixed) {                 // φ(0) fixed ⇒ not a solved variable; read its value
+        const wf = store.w0Fixed, rat = (p) => (p ? Number(p[0]) / Number(p[1]) : 0);
+        w0 = wf.approx ? { re: wf.approx.re || 0, im: wf.approx.im || 0 } : { re: rat(wf.re), im: rat(wf.im) };
+      }
+      if (!w0) return null;
+      const poles = (hData && hData.poles) || [];
+      const branches = [];
+      for (let j = 0; j < poles.length; j++) {
+        const z = num('z' + (j + 1)); if (!z) return null;
+        const A = [], order = (poles[j].principal || []).length;
+        for (let k = 1; k <= order; k++) { const a = num('A' + (j + 1) + '_' + k); if (!a) return null; A.push(a); }
+        branches.push({ z, A });
+      }
+      return { unbounded: false, family: 'boundedQD', w0, branches };
+    }
+    // Certified univalence filter (the genuine-QD count): solve the current system for its
+    // REAL solutions, reconstruct each candidate φ, and test univalence — a real algebraic
+    // solution is a GENUINE quadrature domain only if its φ is schlicht on 𝔻. Two numeric
+    // tests reuse the main solver: φ′≠0 strictly inside 𝔻 (QD.findCriticalPoints; boundary
+    // critical points = cusps are allowed) and the boundary curve φ(∂𝔻) is simple
+    // (QD.isBoundaryUnivalent — no self-intersection). NB the algebraic # real solutions and
+    // the # genuine QDs are DIFFERENT questions (the classic balayage-vs-algebra distinction);
+    // this filter reconciles them.
+    function doCertifyUnivalence() {
+      if (_abort) return;
+      if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
+      if (typeof QD.isBoundaryUnivalent !== 'function') { showError('Univalence: the numeric univalence machinery (solver.js) is not loaded.'); return; }
+      if (!store.size && !seedFromCurrent()) return;
+      clearError();
+      setBusy(true, 'Certifying univalence (genuine QDs)…');
+      setTimeout(() => {
+        let r; try { r = store.solveReal(null, { paramValues: hDataParamValues() }); }
+        catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
+        setBusy(false); setStatus('');
+        if (!r.ok) { showError('Univalence: ' + withGuidance(r.reason || 'solve failed')); return; }
+        const real = (r.solutions || []).filter((s) => Object.keys(s).every((k) => Math.abs(s[k].im) < 1e-4));
+        if (!real.length) { const v = 'No real solutions — no quadrature domain.'; setStatus(v); if (canvas) canvas.setVerdict({ text: v }); toast(v, { kind: 'error' }); return; }
+        const hData = activeEnv.hData;
+        let genuine = 0, folded = 0, selfInt = 0, unrec = 0; const rows = [];
+        real.forEach((sol, idx) => {
+          const phi = phiFromAlgebraSolution(sol, hData);
+          if (!phi) { unrec++; rows.push('#' + (idx + 1) + ': φ not reconstructable (map variables eliminated — run on the seeded system)'); return; }
+          let fold = false;
+          try { const crit = (typeof QD.findCriticalPoints === 'function') ? QD.findCriticalPoints(phi, {}) : null; fold = !!(crit && crit.points && crit.points.some((p) => p.inDomain)); } catch (e) { /* treat as no fold */ }
+          let simple = true; try { simple = QD.isBoundaryUnivalent(phi, 360); } catch (e) { simple = true; }
+          if (fold) { folded++; rows.push('#' + (idx + 1) + ': φ′ = 0 inside 𝔻 (fold) — not univalent'); }
+          else if (!simple) { selfInt++; rows.push('#' + (idx + 1) + ': boundary φ(∂𝔻) self-intersects — not univalent'); }
+          else { genuine++; rows.push('#' + (idx + 1) + ': univalent ✓ — genuine quadrature domain'); }
+        });
+        const rejected = [folded ? folded + ' fold' : '', selfInt ? selfInt + ' self-intersecting' : '', unrec ? unrec + ' unreconstructable' : ''].filter(Boolean).join(', ');
+        const verdict = genuine + ' genuine quadrature domain' + (genuine === 1 ? '' : 's') + ' of ' + real.length + ' real solution' + (real.length === 1 ? '' : 's') + (rejected ? ' (' + rejected + ')' : '');
+        setStatus(verdict);
+        if (canvas) canvas.setVerdict({ text: verdict, solutionsText: rows.join('\n') });
+        toast(verdict, genuine ? {} : { kind: 'error' });
       }, 20);
     }
 
