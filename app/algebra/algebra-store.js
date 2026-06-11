@@ -184,7 +184,9 @@
       const QC = getQC(); if (!QC || !QC.conjMPoly) return null;
       const conj = _applyReality(_applyW0(QC.conjMPoly(node.poly)));   // reality folds barred→primal post-conjugation; fixed w₀ stays substituted
       if (node.poly.sub(conj).isZero() || node.poly.add(conj).isZero()) return null;   // self-conjugate (incl. under reality)
-      for (const m of nodes.values()) if (m.poly.equals(conj)) return null;            // already present
+      // Suppress only if the companion is already in THIS node's column — a poly equal to
+      // conj sitting in an earlier column must not block the companion this column needs.
+      for (const m of nodes.values()) if (m.column === node.column && m.poly.equals(conj)) return null;
       const comp = addNode({
         id: nid(), kind: node.kind, poly: conj, rel: node.rel,
         label: node.label + ' (conj)', model: node.model,
@@ -299,8 +301,11 @@
         let spec;
         try { spec = make(n); } catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [] }; }
         if (!spec || !spec.poly || spec.poly.isZero()) continue;
-        if (seen.some((p) => p.equals(spec.poly))) continue;     // dedup nodes that collapsed together
-        seen.push(spec.poly);
+        const rel = spec.rel || n.rel;
+        // Dedup on (poly, rel) — two nodes collapse only if BOTH the polynomial and the
+        // relation match; an equality f=0 and an inequality f>0 sharing a poly are distinct.
+        if (seen.some((s) => s.rel === rel && s.poly.equals(spec.poly))) continue;
+        seen.push({ poly: spec.poly, rel });
         built.push({ src: n, spec });
       }
       if (!built.length) return { ok: false, reason: 'reduction produced an empty system', created: [] };
@@ -771,7 +776,18 @@
     // solutions (= actual QDs, via the Hermite trace form) and the number of distinct
     // complex solutions / the multiplicity. opts.paramValues pins the known data. Returns
     // { ok, inconsistent, zeroDim, realCount, complexCount, multiplicity, numVars, reason }.
+    // If the analyzed column is one CASE of a factor split (applyFactor), its counts are
+    // for that branch only — V(original) = ⋃ₖ V(caseₖ), so branch counts ADD. Detect it so
+    // the verdict can say so. Returns { partialBranch, caseIndex, caseCount } or {}.
+    function _factorBranchInfo(ids) {
+      const ns = (ids && ids.length) ? ids.map(get).filter(Boolean) : lastColumnNodes();
+      const f = ns.find((n) => n.provenance && n.provenance.op === 'factor' && !n.provenance.carried);
+      return f ? { partialBranch: true, caseIndex: f.provenance.caseIndex, caseCount: f.provenance.caseCount } : {};
+    }
     function classify(ids, opts) {
+      return Object.assign(_classifyImpl(ids, opts), _factorBranchInfo(ids));
+    }
+    function _classifyImpl(ids, opts) {
       const S = getSym();
       const reim = currentReimSystem(ids, opts);
       if (!reim.polys.length) return { ok: false, reason: 'no equality nodes to analyze' };

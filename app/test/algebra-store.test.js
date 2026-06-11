@@ -588,5 +588,18 @@ module.exports = async function run() {
     const irr = newCol.find((n) => n.rel === '=' && !st.factorOf(n.id).ok);
     ok('factor: applyFactor on an irreducible current-column equation returns ok:false',
        irr ? (() => { const r = st.applyFactor(irr.id, 0); return !r.ok && /no nontrivial|factoriz/.test(r.reason || ''); })() : true);
+    // classify on a factor "case" column flags partialBranch (counts are for ONE branch)
+    const cl = st.classify();
+    ok('factor: classify on a case column reports partialBranch with the case count',
+       cl.partialBranch === true && cl.caseCount === ap.factorCount && cl.caseIndex === 0);
+
+    // undo after applyFactor restores the pre-factor column, then the OTHER case can be pursued
+    st.undo();
+    ok('factor: undo removes the case column', st.maxColumn() === beforeCols);
+    if (fr.factors.length >= 2) {
+      const ap2 = st.applyFactor(target.id, 1);
+      ok('factor: after undo, a different case can be applied', ap2.ok && ap2.column === beforeCols + 1 &&
+         st.list().some((n) => n.column === ap2.column && n.provenance.op === 'factor' && n.provenance.caseIndex === 1));
+    }
   }
 };

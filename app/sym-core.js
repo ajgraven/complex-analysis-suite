@@ -763,6 +763,13 @@
     try { _factorRec(poly, rootFinder, opts.ratApprox, out); }
     catch (e) { return { ok: false, reason: (e && e.message) || String(e), factors: [poly] }; }
     if (out.length <= 1) return { ok: false, reason: 'no nontrivial factorization found', factors: [poly] };
+    // Defensive: make the contract literal — every returned factor must divide `poly`
+    // exactly. The separable leaves are only transitively verified inside _factorRec, so
+    // confirm each here; a (theoretically impossible) bad divisor downgrades to ok:false.
+    for (const f of out) {
+      try { mpolyExactDiv(poly, f); }
+      catch (e) { return { ok: false, reason: 'internal: a candidate factor did not divide the input', factors: [poly] }; }
+    }
     return { ok: true, factors: out, reason: '' };
   }
 

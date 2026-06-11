@@ -577,6 +577,7 @@
     // Attempt to factor an equation: show its factors; picking one pursues that case
     // (V(fᵢ)=0) as a new "case" column. The other factors remain — undo and pick another.
     function doFactor(id, box) {
+      if (busyGuard()) return;
       const fr = store.factorOf(id);
       if (!fr.ok) { toast('No nontrivial factorization: ' + (fr.reason || 'irreducible by our methods (monomial / separable / univariate)'), { kind: 'error' }); return; }
       let chooser = box.querySelector('.algebra-factor-chooser');
@@ -594,6 +595,7 @@
         const use = document.createElement('button'); use.type = 'button'; use.className = 'small'; use.textContent = 'case f' + (i + 1) + '=0';
         use.title = 'Replace this equation with f' + (i + 1) + ' = 0 in a new column';
         use.addEventListener('click', () => {
+          if (busyGuard()) return;
           const r = store.applyFactor(id, i);
           if (!r.ok) { showError('Factor: ' + (r.reason || 'failed')); return; }
           if (canvas) canvas.clearSelection();
@@ -639,10 +641,10 @@
         const prov = provText(n.provenance);
         if (prov) { const p = document.createElement('div'); p.className = 'hint'; p.textContent = 'Origin: ' + prov; box.appendChild(p); }
         const acts = document.createElement('div'); acts.className = 'row'; acts.style.gap = '4px'; acts.style.marginTop = '4px';
-        acts.appendChild(mkBtn('Duplicate', 'Copy this equation into a new node', () => { if (store.duplicate(sel[0])) { rerender(); toast('Duplicated ' + n.label); } }));
+        acts.appendChild(mkBtn('Duplicate', 'Copy this equation into a new node', () => { if (busyGuard()) return; if (store.duplicate(sel[0])) { rerender(); toast('Duplicated ' + n.label); } }));
         acts.appendChild(mkBtn('Copy LaTeX', 'Copy this equation as LaTeX', () => copyNodeLatex(sel[0])));
         acts.appendChild(mkBtn('Copy Mathematica', 'Copy this equation as Wolfram-Language (lhs == 0)', () => { const code = store.mathematicaNode(sel[0]); if (code) writeClipboard(code, n.label + ' (Mathematica)'); }));
-        acts.appendChild(mkBtn('Delete', 'Delete this node and its descendants', () => { const removed = store.deleteNode(sel[0]); if (canvas) canvas.clearSelection(); rerender(); toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)'); }));
+        acts.appendChild(mkBtn('Delete', 'Delete this node and its descendants', () => { if (busyGuard()) return; const removed = store.deleteNode(sel[0]); if (canvas) canvas.clearSelection(); rerender(); toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)'); }));
         // Attempt to factor (equalities in the current system only): split p=f·g into
         // candidate systems V(p)=⋃V(fᵢ), pursued one case (factor) at a time.
         if (n.rel === '=' && n.column === store.maxColumn()) {
@@ -675,6 +677,7 @@
       const sel = canvas ? canvas.getSelection() : [];
       const v = $('#alg-var') && $('#alg-var').value;
       const costEl = $('#alg-cost');
+      if (!costEl) return;
       if (sel.length !== 2 || !v) { costEl.textContent = ''; return; }
       const c = store.previewCost(sel[0], sel[1], v);
       costEl.textContent = 'Sylvester ' + c.matrix + '×' + c.matrix + ' (deg ' + c.degA + ', ' + c.degB + '; ' + c.termsA + '+' + c.termsB + ' terms)';
@@ -682,6 +685,7 @@
     // Eliminate the chosen shared variable from the two selected nodes by their exact
     // Sylvester resultant (store.eliminate) → a derived node in the current column.
     function doEliminate() {
+      if (busyGuard()) return;
       const sel = canvas ? canvas.getSelection() : [];
       const v = $('#alg-var') && $('#alg-var').value;
       if (sel.length !== 2 || !v) return;
@@ -706,6 +710,14 @@
     }
     function cancelOp() { if (_abort) { try { _abort.abort(); } catch (e) { /* ignore */ } } if (QD.SymWorker) QD.SymWorker.cancel(); }
     function _newAbort() { return (typeof AbortController !== 'undefined') ? new AbortController() : null; }
+    // Guard a graph-mutating action so it can't land while a worker op is in flight. The
+    // inspector's action buttons (Duplicate / Delete / Attempt-to-factor / factor cases)
+    // are rebuilt on every selection, so they can't be reached by setBusy's id list (A5) —
+    // they call this instead. Returns true (and warns) when an op is running.
+    function busyGuard() {
+      if (_abort) { toast('Busy — wait for the current computation to finish (or Cancel).', { kind: 'error' }); return true; }
+      return false;
+    }
 
     // Append a CAS-route hint to cap/too-large failures (the recurring case).
     function withGuidance(reason) {
@@ -862,6 +874,8 @@
           else if (r.realCount === 1) verdict = 'Unique quadrature domain — exactly 1 real solution' + tail + '.';
           else verdict = r.realCount + ' real quadrature domains' + tail + '.';
         }
+        // A factor "case" column counts ONE branch of V(p)=⋃V(fᵢ) — the branches add up.
+        if (r.partialBranch) verdict += '  [case ' + ((r.caseIndex || 0) + 1) + ' of ' + r.caseCount + ' of a factor split — this counts THIS branch only; the branches add up to the original.]';
         setStatus(verdict);
         if (canvas) canvas.setVerdict({ text: verdict });
         toast(verdict, r.inconsistent || r.realCount === 0 ? { kind: 'error' } : {});
@@ -902,7 +916,10 @@
         _abort = null; setBusy(false); setStatus('');
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Numeric solve: ' + withGuidance(r.reason || 'unavailable')); return; }
-        toast('Solved: ' + r.solutions.length + ' solution(s) (dimension ' + r.dimension + '). See console for coordinates.');
+        // The eigenvalue fallback can return a PARTIAL set on clustered/near-multiple roots.
+        const partial = r.complete === false ? ' — PARTIAL: clustered roots, some solutions may be missing' : '';
+        toast('Solved: ' + r.solutions.length + ' solution(s) (dimension ' + r.dimension + ')' + partial + '. See console for coordinates.',
+          partial ? { kind: 'error' } : {});
         try {
           console.table(r.solutions.map((s) => {
             const row = {}; Object.keys(s).forEach((k) => { row[k] = s[k].re.toFixed(6) + (s[k].im >= 0 ? '+' : '−') + Math.abs(s[k].im).toFixed(6) + 'i'; });
