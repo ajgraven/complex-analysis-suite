@@ -20,8 +20,11 @@
 //                sugar) and the signature-based GVW variant (buchbergerSig),
 //                reduced bases, saturation; linearReduce preprocessing.
 //   Zero-dim  -- standard monomials / quotient dimension, FGLM (grevlex→lex),
-//                solveZeroDim (shape lemma) with a Möller–Stetter eigenvalue
-//                fallback (solveByEigenvalues) for non-shape-position ideals.
+//                solveZeroDim (shape lemma; a reversed-order retry on a cap, then a
+//                Möller–Stetter eigenvalue fallback for non-shape-position ideals),
+//                certified REAL-solution counting via the Hermite trace form
+//                (realSolutionCount), and an alternative eliminator — triangular
+//                decomposition by Wu pseudo-elimination (pseudoRemainder/triangularize).
 //   RatFn     -- MPoly/MPoly (the fraction field) — needed because the QD ansatz
 //                and Taylor inversion introduce (1 − z̄·z) and φ′ denominators;
 //                an equation RatFn = 0 clears to its numerator MPoly = 0.

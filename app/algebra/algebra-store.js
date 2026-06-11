@@ -25,8 +25,13 @@
 // substituteValue (fix a variable's value, exact ℚ(i), auto-propagating by default),
 // reducePropagate (linear-substitution fixpoint via Sym.linearReduce), assumeReal
 // (identify v̄≡v), fixW0 (φ(0)=w₀ → value), eliminate / eliminateWithGauge (Sylvester
-// resultant), groebner / groebnerAsync. Analysis: dimension / dimensionAsync, solve /
-// solveAsync (default to the CURRENT system = the last column via currentColumnIds).
+// resultant), groebner / groebnerAsync, triangularize (Wu pseudo-elimination → a chain
+// column). Analysis (default to the CURRENT system = the last column via
+// currentColumnIds): dimension / dimensionAsync, solve / solveAsync; classify (existence/
+// uniqueness — # REAL solutions = # quadrature domains, via currentReimSystem + the
+// Hermite trace form, known parameters pinned) and solveReal (explicit real solutions);
+// columnStats / columns (per-lane eqn/var counts for the UI headers). seedFromSystem takes
+// opts.bakeAssumptions (the compact path that bakes realVars at column 0 for the autosolve).
 // Plus duplicate, deleteNode (cascade), moveNode (reorder within a column), undo/redo
 // (snapshot stack), nodeStats, variables/baseVariables, exportDAG.
 // =============================================================================

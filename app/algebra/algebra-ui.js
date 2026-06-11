@@ -7,11 +7,15 @@
 // then apply AUDIT-TRAIL reductions that each append a new labeled column — Assume
 // real (identify v̄≡v), Specify value (fix a variable to an exact ℚ(i) value, auto-
 // propagating the linear cascade), pairwise resultant elimination (select 2 nodes +
-// a shared variable, with a cost preview), batch gauge elimination, and Gröbner basis.
-// Plus a univalence-constraint palette, dimension / numeric solve over the CURRENT
-// system (the last column, off the main thread with a Cancel button), a persistent
-// dismissible error panel, undo/redo, and DAG/LaTeX export. Column headers (rendered
-// by algebra-canvas via colHeaderOf) name each assumption so the history is legible.
+// a shared variable, with a cost preview), batch gauge elimination, Gröbner basis, and
+// triangular decomposition. Plus a univalence-constraint palette, a φ/h reference panel,
+// dimension / numeric solve and an existence/uniqueness verdict (# real solutions =
+// # quadrature domains) + a one-click ★ Auto-reduce & solve, all over the CURRENT system
+// (the last column, off the main thread with a Cancel button), a persistent dismissible
+// error panel, undo/redo, zoom + expand/collapse-all, and DAG/LaTeX export. The reductions
+// render as STRUCTURED COLUMN LANES (algebra-canvas): each lane's sticky header — built
+// here by `columnInfo` and passed as the canvas `colInfo` handler — names the
+// transformation relating it to the previous column, with eqn/var counts + a Δ.
 //
 // CAS-UX (Stoutemyer): preview-before-commit (cost), navigable derivation tree +
 // backtracking (DAG + undo), equation selection, accumulate alternatives (branch/
@@ -189,6 +193,9 @@
       });
       return 'h(w) \\;=\\; ' + (terms.length ? terms.join(' + ') : '0');
     }
+    // Populate the φ / h reference panel: the symbolic forms of φ (RiemannLatex.build) and
+    // h (buildHForm), plus a legend mapping every variable to its meaning + (optionally) its
+    // value. Rebuilt on open, on the show-values toggle, and when the active solve changes.
     function buildReference() {
       const box = $('#alg-ref'); if (!box) return;
       box.innerHTML = '';
@@ -233,6 +240,8 @@
       if (_realPicker && _realPicker.refresh) _realPicker.refresh();
       refreshValueVars();
     }
+    // Rebuild the "Set value" variable <select> from the store's current variables,
+    // preserving the prior selection when it still exists.
     function refreshValueVars() {
       const sel = $('#alg-val-var'); if (!sel) return;
       const prev = sel.value;
@@ -626,6 +635,10 @@
       });
       return m;
     }
+    // Existence / uniqueness verdict for the current system (store.classify over the reim
+    // system, known parameters pinned): renders "No QD (inconsistent)" / "Unique QD" /
+    // "N real QDs (of M complex)" / "positive-dimensional family" to the status line + the
+    // canvas verdict card. Runs behind a setTimeout so the busy state paints first.
     function doClassify() {
       if (_abort) return;
       if (!store.size && !seedFromCurrent()) return;

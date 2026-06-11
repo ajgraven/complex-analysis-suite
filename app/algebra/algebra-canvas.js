@@ -183,6 +183,9 @@
       return col;
     }
 
+    // Full render: rebuild the column lanes from the store (grouped by node.column,
+    // ordered within each by store.orderOf), then size the zoom sizer + draw the edges.
+    // Shows the empty state when the store has no nodes.
     function render(store, latexOf) {
       lastStore = store; lastLatexOf = latexOf;
       verdict.classList.add('hidden');                 // a new render = a changed system; the old verdict is stale
@@ -218,6 +221,9 @@
       drawEdges();
     }
 
+    // Redraw the derivation edges: for each store edge, anchor source-right → target-left
+    // in NATURAL track coordinates (measured screen rects ÷ zoom, since the track is scaled)
+    // and draw an arrowed cubic bézier. Called from relayout (render/collapse/reorder/resize/zoom).
     function drawEdges() {
       // remove old paths (keep <defs>)
       svg.querySelectorAll('path.algebra-edge').forEach((p) => p.remove());
@@ -244,6 +250,8 @@
     }
 
     function rerender() { if (lastStore) render(lastStore, lastLatexOf); }
+    // Set the track zoom (clamped to [ZMIN, ZMAX]); re-size the sizer + redraw edges.
+    // Returns the applied zoom so the caller can track it.
     function setZoom(z) {
       zoom = Math.max(ZMIN, Math.min(ZMAX, z));
       track.style.transform = 'scale(' + zoom + ')';
