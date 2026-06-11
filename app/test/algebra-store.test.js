@@ -434,4 +434,25 @@ module.exports = async function run() {
     const r2 = st.fixW0({ re: 0, im: 0 });
     ok('audit: fixW0 is a no-op (ok:false) once φ(0) is already absent', r2.ok === false);
   }
+
+  // ---- triangular decomposition op (alternative eliminator → a new column) ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(QE.generateClassicalBounded(hData));   // symbolic disk
+    st.assumeReal(st.baseVariables());                       // collapse the conjugate model first
+    const tr = st.triangularize();
+    ok('triangularize: store op returns a well-formed result', typeof tr.ok === 'boolean');
+    if (tr.ok && !tr.contradiction) {
+      ok('triangularize: appends a triangular-chain column with provenance + edges',
+         tr.column === st.maxColumn() && tr.created.length > 0 &&
+         tr.created.every((n) => n.provenance.op === 'triangular') &&
+         st.edges.some((e) => e.to === tr.created[0].id));
+      const sol = QD.solveInverseQD(hData, {});
+      if (sol && sol.success) {
+        const vm = QE.buildVarMap(sol.primary.phi, hData);
+        ok('triangularize: every chain polynomial vanishes at the numeric solution',
+           tr.created.every((n) => { const v = n.poly.evalComplex(vm); return Math.hypot(v.re, v.im) < 1e-6; }));
+      }
+    }
+  }
 };

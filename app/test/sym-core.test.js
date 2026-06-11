@@ -752,6 +752,38 @@ module.exports = async function run() {
          S.realSolutionCount(grid, null, ['x', 'y'], { maxHermiteDim: 2 }).ok === false);
     }
 
+    // Triangular decomposition (Wu-style pseudo-elimination) — the alternative eliminator.
+    {
+      const near = (a, b) => Math.abs(a - b) < 1e-6;
+      // pseudo-remainder worked step: prem(x²+y²−1, x−y, x) = 2y²−1.
+      const prem = S.pseudoRemainder(mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').sub(mv('y')), 'x');
+      ok('pseudoRemainder: prem(x²+y²−1, x−y, x) = 2y²−1', prem.equals(mv('y').pow(2).mul(mi(2)).sub(mi(1))));
+      ok('pseudoRemainder: g a unit in the variable ⇒ 0', S.pseudoRemainder(mv('x').pow(2), mi(3), 'x').isZero());
+
+      // triangularize the circle×diagonal: chain [2y²−1, x−y] (lowest var first), zero-dim.
+      const t = S.triangularize([mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').sub(mv('y'))], ['x', 'y']);
+      ok('triangularize: ⟨x²+y²−1, x−y⟩ → a 2-element triangular chain, zero-dim',
+         t.ok && t.chain.length === 2 && t.mainVars.join(',') === 'y,x' && t.freeVars.length === 0 && t.contradiction === false);
+      ok('triangularize: the lowest element is univariate (degree 2 in y) ⇒ ≤2 branches',
+         t.chain[0].vars().size === 1 && t.chain[0].degreeIn('y') === 2);
+      // the chain vanishes at the actual solutions (cross-check vs the solver)
+      const sol = S.solveZeroDim([mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').sub(mv('y'))], {});
+      ok('triangularize: every chain polynomial vanishes at each solution',
+         sol.ok && sol.solutions.every((s) => t.chain.every((g) => { const z = g.evalComplex(s); return near(z.re, 0) && near(z.im, 0); })));
+
+      // a free variable ⇒ positive-dimensional family
+      const f = S.triangularize([mv('x').sub(mv('y'))], ['x', 'y']);
+      ok('triangularize: ⟨x−y⟩ → y is free (positive-dimensional)', f.ok && f.freeVars.join(',') === 'y' && f.mainVars.join(',') === 'x');
+
+      // an inconsistent system ⇒ contradiction (no solution), not a throw
+      const c = S.triangularize([mv('x'), mv('x').sub(mi(1))], ['x']);
+      ok('triangularize: ⟨x, x−1⟩ → contradiction (no solution)', c.ok && c.contradiction === true);
+
+      // cap: a tiny term cap routes to {ok:false} rather than running away
+      ok('triangularize: a size cap → {ok:false, reason} (no throw)',
+         S.triangularize([mv('x').pow(2).add(mv('y').pow(2)).sub(mi(1)), mv('x').sub(mv('y'))], ['x', 'y'], { maxTerms: 1 }).ok === false);
+    }
+
     // Serialization (worker boundary): MPoly ⇄ term list round-trip, and runJob —
     // the serialized op dispatcher used by the Web-Worker offload (sym-worker.js).
     {

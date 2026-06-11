@@ -1967,6 +1967,97 @@
     return { ok: true, realCount: inertia.pos - inertia.neg, complexCount: inertia.pos + inertia.neg, multiplicityCount: D };
   }
 
+  // ===========================================================================
+  // TRIANGULAR DECOMPOSITION (Wu-style successive pseudo-elimination).
+  // An ALTERNATIVE eliminator to Gröbner: produce a TRIANGULAR set (one polynomial
+  // per variable, each with a leading initial in the lower variables) by Ritt
+  // pseudo-remainder elimination, top variable first. Often far cheaper than a full
+  // Gröbner basis on structured systems, and it exhibits the solution structure
+  // directly: the lowest-variable polynomial's roots, back-substituted, parameterize
+  // the set; a nonzero constant ⇒ no solution (off the initials); a variable that is
+  // never a main variable ⇒ free ⇒ a positive-dimensional family. Complements (does NOT
+  // replace) the Gröbner solve path — the reduced GB stays the correctness oracle.
+  // ===========================================================================
+
+  // Ritt pseudo-remainder prem(f, g) w.r.t. varName, in k(other vars)[varName]: the
+  // remainder of pseudo-dividing f by g (lc(g)^{deg f − deg g + 1}·f = q·g + prem),
+  // built from lc(g)·f − lc_r·x^{Δ}·g steps (polynomial, exact — no division).
+  function pseudoRemainder(f, g, varName) {
+    const dg = g.degreeIn(varName);
+    if (dg < 0) throw new Error('pseudoRemainder: divisor is zero in ' + varName);
+    if (dg === 0) return MPoly.zero();          // g is a unit in varName ⇒ remainder 0
+    const lcg = g.coeffsIn(varName)[dg];          // initial of g (a poly in the other vars)
+    const xv = MPoly.variable(varName);
+    let r = f, guard = 0;
+    while (true) {
+      const dr = r.degreeIn(varName);
+      if (dr < dg) return r;
+      if (++guard > 1e6) throw new Error('pseudoRemainder: non-terminating');
+      const lcr = r.coeffsIn(varName)[dr];        // leading coeff of r in varName
+      r = r.mul(lcg).sub(lcr.mul(xv.pow(dr - dg)).mul(g));   // r ← lc(g)·r − lc(r)·x^{dr−dg}·g
+    }
+  }
+
+  // triangularize(polys, varOrder, opts) → { ok, chain:[MPoly] (low variable LAST → solve
+  // bottom-up: chain is ordered with the lowest-ranked main variable FIRST), initials,
+  // mainVars, freeVars, contradiction, reason }. varOrder ranks variables highest→lowest
+  // (varOrder[0] is eliminated first); defaults to the ambient variables. Caps mirror the
+  // engine idiom (rounds / degree / terms) and throw "use CAS export"; the boundary
+  // catches them into { ok:false, reason }.
+  function triangularize(polys, varOrder, opts) {
+    opts = opts || {};
+    try {
+      const MAXROUNDS = opts.maxRounds != null ? opts.maxRounds : 64;
+      const MAXDEG = opts.maxDegree != null ? opts.maxDegree : 200;
+      const MAXTERMS = opts.maxTerms != null ? opts.maxTerms : 100000;
+      const vord = (varOrder && varOrder.length) ? varOrder.slice() : _ambientVars(polys);
+      const rankOf = {}; vord.forEach((v, i) => { rankOf[v] = i; });
+      const mainVar = (p) => {
+        let best = null, bestRank = Infinity;
+        for (const v of p.vars()) { const r = rankOf[v]; if (r != null && r < bestRank) { bestRank = r; best = v; } }
+        return best;
+      };
+      const tooBig = (p) => p.totalDegree() > MAXDEG || p.size() > MAXTERMS;
+      const contradiction = () => ({ ok: true, chain: [], initials: [], mainVars: [], freeVars: [], contradiction: true });
+
+      let work = (polys || []).filter((p) => p && !p.isZero());
+      for (const p of work) if (p.vars().size === 0) return contradiction();   // a nonzero constant in the input
+      const chain = [];
+      for (let ri = 0; ri < vord.length; ri++) {
+        const v = vord[ri];
+        let withV = work.filter((p) => mainVar(p) === v);
+        const without = work.filter((p) => mainVar(p) !== v);
+        if (!withV.length) continue;            // no constraint with main var v ⇒ v stays free
+        let guard = 0;
+        while (withV.length > 1) {
+          if (++guard > MAXROUNDS * (withV.length + 1)) throw new Error('triangularize: exceeded the elimination-round cap; use CAS export.');
+          withV.sort((a, b) => a.degreeIn(v) - b.degreeIn(v));
+          const pivot = withV[0];
+          const next = [pivot];
+          for (let i = 1; i < withV.length; i++) {
+            const r = pseudoRemainder(withV[i], pivot, v);
+            if (r.isZero()) continue;
+            if (tooBig(r)) throw new Error('triangularize: an intermediate polynomial exceeds the size cap; use CAS export.');
+            if (r.vars().size === 0) return contradiction();   // pseudo-remainder collapsed to a nonzero constant
+            if (mainVar(r) === v) next.push(r); else without.push(r);
+          }
+          withV = next;
+        }
+        const g = withV[0];
+        if (g.vars().size === 0) return contradiction();
+        chain.push(g);
+        work = without;                          // v eliminated from the rest; descend
+      }
+      for (const p of work) if (p.vars().size === 0) return contradiction();
+      // order the chain lowest-ranked main variable FIRST (bottom-up solve order)
+      chain.sort((a, b) => rankOf[mainVar(b)] - rankOf[mainVar(a)]);
+      const mainVars = chain.map(mainVar);
+      const initials = chain.map((g) => g.coeffsIn(mainVar(g))[g.degreeIn(mainVar(g))]);
+      const freeVars = vord.filter((v) => mainVars.indexOf(v) === -1);
+      return { ok: true, chain, initials, mainVars, freeVars, contradiction: false };
+    } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+  }
+
   // ---------------------------------------------------------------------------
   // runJob — a serialization-friendly op dispatcher: takes SERIALIZED input (term
   // lists from MPoly.termList, an order spec) and returns SERIALIZED output, so the
@@ -2280,7 +2371,7 @@
     mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
-    multiplicationMatrix, solveByEigenvalues, realSolutionCount, runJob,
+    multiplicationMatrix, solveByEigenvalues, realSolutionCount, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
   };

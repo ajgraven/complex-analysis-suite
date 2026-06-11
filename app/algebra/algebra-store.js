@@ -692,6 +692,38 @@
           : { ok: false, reason: (err && err.message) || String(err) });
     }
 
+    // Triangular decomposition (Wu pseudo-elimination) of the current system (or a
+    // selection) → a triangular chain appended as a new column. An ALTERNATIVE to the
+    // Gröbner eliminate path that exhibits solution structure: a contradiction ⇒ a 1=0
+    // marker (no solution); free variables ⇒ a positive-dimensional family (reported).
+    // Returns { ok, created[], column, contradiction, mainVars, freeVars } or { ok:false, reason }.
+    function triangularizeNodes(ids, opts) {
+      const S = getSym();
+      const inputs = ((ids && ids.length) ? ids.map(get) : lastColumnNodes()).filter(Boolean).filter((n) => n.rel === '=');
+      if (inputs.length < 1) return { ok: false, reason: 'no equality nodes to triangularize', created: [] };
+      const polys = inputs.map((n) => n.poly);
+      const vars = _varsOf(polys);
+      const res = S.triangularize(polys, vars, opts || {});
+      if (!res.ok) return { ok: false, reason: res.reason, created: [] };
+      const inputIds = inputs.map((n) => n.id);
+      checkpoint();
+      const col = maxColumn() + 1;
+      const created = [];
+      const emit = (poly, label, meta) => {
+        const node = addNode({ id: nid(), kind: 'derived', poly, rel: '=', label, model,
+          provenance: { op: 'triangular', inputs: inputIds.slice(), contradiction: !!res.contradiction, freeVars: (res.freeVars || []).slice() }, column: col, meta: meta || {} });
+        for (const id of inputIds) edges.push({ from: id, to: node.id });
+        created.push(node);
+      };
+      if (res.contradiction) {
+        emit(S.mpolyConst(S.gauss(S.rat(1n, 1n), S.rat(0n, 1n))), 'triangular: inconsistent (no solution)', { inconsistent: true });
+      } else {
+        res.chain.forEach((g, i) => emit(g, 'triangular ' + (i + 1) + '/' + res.chain.length + ' (main ' + res.mainVars[i] + ')', { mainVar: res.mainVars[i] }));
+      }
+      normalizeColumn(col);
+      return { ok: true, created, column: col, contradiction: !!res.contradiction, mainVars: res.mainVars || [], freeVars: res.freeVars || [] };
+    }
+
     // Duplicate a node to start an alternative derivation line (accumulate alternatives).
     function duplicate(id) {
       const a = get(id); if (!a) return null;
@@ -786,7 +818,7 @@
     return {
       seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
-      substituteValue, reducePropagate, assumeReal, fixW0, currentColumnIds, maxColumn,
+      substituteValue, reducePropagate, assumeReal, fixW0, triangularize: triangularizeNodes, currentColumnIds, maxColumn,
       sharedVars, previewCost, exportDAG, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       undo, redo, reset,

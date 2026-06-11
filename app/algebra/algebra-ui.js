@@ -341,7 +341,8 @@
         '  <label style="font-size:11px;" title="Monomial order. lex = elimination order; grevlex = fastest general.">order ' +
         '    <select id="alg-gb-order"><option value="grevlex">grevlex</option><option value="grlex">grlex</option><option value="lex">lex</option></select></label>' +
         '  <span style="font-size:11px;">eliminate:</span><span id="alg-elim-pick" class="algebra-picker"></span></div>' +
-        '<div class="row" style="margin-top:4px; gap:4px;">' +
+        '<div class="row" style="margin-top:4px; gap:4px; flex-wrap:wrap;">' +
+        '  <button id="alg-triangular" class="small" type="button" title="Triangular decomposition (Wu pseudo-elimination) of the current system — an alternative to Gröbner that exhibits the solution structure (free variables, no-solution)">Triangular decomp.</button>' +
         '  <button id="alg-dimension" class="small" type="button" data-str-title="tooltips.dimension">Dimension / count</button>' +
         '  <button id="alg-solve" class="small" type="button" data-str-title="tooltips.solveNumeric">Solve (numeric)</button>' +
         '  <button id="alg-cancel" class="small hidden" type="button" title="Cancel the running computation">Cancel</button></div>' +
@@ -397,6 +398,7 @@
       $('#alg-eliminate').addEventListener('click', doEliminate);
       $('#alg-groebner').addEventListener('click', () => doGroebner(null));
       $('#alg-groebner-sel').addEventListener('click', () => doGroebner(canvas ? canvas.getSelection() : []));
+      $('#alg-triangular').addEventListener('click', doTriangular);
       $('#alg-dimension').addEventListener('click', doDimension);
       $('#alg-solve').addEventListener('click', doSolve);
       $('#alg-cancel').addEventListener('click', cancelOp);
@@ -463,7 +465,7 @@
     // controls, reveals Cancel, and routes progress to the status line.
     let _abort = null;
     function setBusy(on, label) {
-      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-gauge-elim', 'alg-eliminate', 'alg-seed']
+      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-gauge-elim', 'alg-eliminate', 'alg-seed']
         .forEach((id) => { const b = $('#' + id); if (b) b.disabled = on; });
       const cancel = $('#alg-cancel'); if (cancel) cancel.classList.toggle('hidden', !on);
       if (on && label) setStatus(label);
@@ -506,6 +508,21 @@
           (elim.length ? ' eliminating ' + elim.map(latexPlain).join(', ') : ' (' + order + ')') +
           (r.skipped.length ? '; skipped ' + r.skipped.length + ' non-equality' : ''));
       });
+    }
+
+    // Triangular decomposition of the current system → a triangular chain column.
+    function doTriangular() {
+      if (_abort) return;
+      if (!store.size && !seedFromCurrent()) return;
+      clearError();
+      const sel = canvas ? canvas.getSelection() : [];
+      const r = store.triangularize(sel.length ? sel : null);
+      if (!r.ok) { showError('Triangular decomposition: ' + withGuidance(r.reason || 'failed')); return; }
+      if (canvas) canvas.clearSelection();
+      rerender();
+      if (r.contradiction) { toast('Triangular decomposition: system is INCONSISTENT — no solution.'); return; }
+      toast('Triangular decomposition: ' + r.created.length + ' element(s)' +
+        (r.freeVars.length ? '; free variable(s) ' + r.freeVars.map(latexPlain).join(', ') + ' ⇒ a positive-dimensional family' : ' ⇒ zero-dimensional (finitely many solutions)'));
     }
 
     // Report the dimension / solution count of the current equality system, off the
@@ -610,6 +627,7 @@
         case 'linear-reduce': return 'linear propagation (eliminated ' + (prov.eliminated || []).map(latexPlain).join(', ') + ')';
         case 'assume-real': return 'assumed ' + (prov.vars || []).map(latexPlain).join(', ') + ' real';
         case 'fix-w0': return 'fixed φ(0) = ' + valStr(prov.value);
+        case 'triangular': return prov.contradiction ? 'triangular decomposition (inconsistent)' : 'triangular decomposition (Wu) of ' + (prov.inputs || []).join(', ');
         default: return prov.op || '';
       }
     }
@@ -627,6 +645,7 @@
         case 'fix-w0': return 'fix φ(0) = ' + valStr(p.value);
         case 'resultant': return 'eliminate ' + latexPlain(p.variable);
         case 'groebner': return 'Gröbner · ' + (p.eliminate && p.eliminate.length ? 'elim ' + p.eliminate.map(latexPlain).join(',') : (p.order || 'grevlex'));
+        case 'triangular': return p.contradiction ? 'triangular · inconsistent' : 'triangular decomposition';
         default: return 'column ' + c;
       }
     }
