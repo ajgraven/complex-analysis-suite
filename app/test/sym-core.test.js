@@ -737,6 +737,12 @@ module.exports = async function run() {
       // mixed: ⟨x²−1, y²+1⟩ — 4 complex, only the x=±1 with y=±i ⇒ 0 real points.
       const mix = S.realSolutionCount([mv('x').pow(2).sub(mi(1)), mv('y').pow(2).add(mi(1))], null, ['x', 'y']);
       ok('realSolutionCount: ⟨x²−1, y²+1⟩ → 0 real, 4 complex', mix.ok && mix.realCount === 0 && mix.complexCount === 4);
+      // ⟨x⁴−1⟩ — standard monomials {1,x,x²,x³}; the Hermite diagonal H[x][x] = Σ p² over
+      // {1,−1,i,−i} is ZERO, exercising the inertia routine's zero-pivot (swap) branch.
+      // 2 real roots (±1), 4 distinct complex.
+      const q4 = S.realSolutionCount([mv('x').pow(4).sub(mi(1))], null, ['x']);
+      ok('realSolutionCount: ⟨x⁴−1⟩ → 2 real, 4 complex (zero-diagonal inertia pivot)',
+         q4.ok && q4.realCount === 2 && q4.complexCount === 4 && q4.multiplicityCount === 4);
       // cross-check vs the eigenvalue solver: #real = eigen solutions with vanishing imag part
       const eigSols = S.solveByEigenvalues(grid, {}).solutions;
       const eigReal = eigSols.filter((s) => ['x', 'y'].every((v) => Math.abs(s[v].im) < 1e-6)).length;

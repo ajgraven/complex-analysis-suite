@@ -1904,24 +1904,36 @@
   // ===========================================================================
 
   // Exact inertia { pos, neg, zero } of a symmetric matrix of Gaussian entries that are
-  // real (im = 0). Symmetric LDLᵀ-style congruence with a hyperbolic step (EᵀAE folding
-  // column/row m into k) for a zero diagonal pivot; signature = pos − neg, rank = pos + neg.
+  // real (im = 0). Symmetric LDLᵀ-style congruence; signature = pos − neg, rank = pos + neg.
+  // A zero diagonal pivot is handled by FIRST trying a symmetric pivot SWAP with a nonzero
+  // trailing diagonal (a permutation congruence — preserves inertia); only when EVERY
+  // trailing diagonal is zero do we use a hyperbolic fold (EᵀAE: col/row m into k), which is
+  // then SAFE — with A[m][m]=0 the new diagonal is exactly 2·A[k][m] ≠ 0, so it can't cancel.
+  // (Folding first is wrong: for [[0,a],[a,b]] with b=−2a it gives 2a+b=0 and would miscount
+  // an indefinite direction as a kernel direction.)
   function _rationalInertia(A0) {
     const n = A0.length;
     const A = A0.map((row) => row.map((g) => new Gaussian(g.re, g.im)));   // working copy
+    const swapKM = (k, m) => {
+      for (let j = 0; j < n; j++) { const t = A[k][j]; A[k][j] = A[m][j]; A[m][j] = t; }
+      for (let i = 0; i < n; i++) { const t = A[i][k]; A[i][k] = A[i][m]; A[i][m] = t; }
+    };
     let pos = 0, neg = 0, zero = 0, guard = 0;
     for (let k = 0; k < n; k++) {
       if (++guard > 4 * (n + 1) * (n + 1)) throw new Error('realSolutionCount: inertia did not converge');
       if (A[k][k].isZero()) {
-        let m = -1; for (let j = k + 1; j < n; j++) if (!A[k][j].isZero()) { m = j; break; }
-        if (m === -1) { zero++; continue; }                 // entire remaining row/col is zero ⇒ kernel direction
-        for (let i = 0; i < n; i++) A[i][k] = A[i][k].add(A[i][m]);   // col k += col m  (right mult by E)
-        for (let j = 0; j < n; j++) A[k][j] = A[k][j].add(A[m][j]);   // row k += row m  (left mult by Eᵀ) ⇒ A[k][k] = 2·a + b ≠ 0
-        if (A[k][k].isZero()) { zero++; continue; }
+        let sw = -1; for (let m = k + 1; m < n; m++) if (!A[m][m].isZero()) { sw = m; break; }
+        if (sw !== -1) { swapKM(k, sw); }                   // bring a nonzero diagonal up (inertia-preserving)
+        else {                                              // all trailing diagonals zero ⇒ a safe hyperbolic fold
+          let m = -1; for (let j = k + 1; j < n; j++) if (!A[k][j].isZero()) { m = j; break; }
+          if (m === -1) { zero++; continue; }               // entire remaining row/col is zero ⇒ kernel direction
+          for (let i = 0; i < n; i++) A[i][k] = A[i][k].add(A[i][m]);   // col k += col m
+          for (let j = 0; j < n; j++) A[k][j] = A[k][j].add(A[m][j]);   // row k += row m ⇒ A[k][k] = 2·A[k][m] ≠ 0
+        }
       }
       const piv = A[k][k];
       const s = piv.re.sign();
-      if (s > 0) pos++; else if (s < 0) neg++; else { zero++; continue; }
+      if (s > 0) pos++; else if (s < 0) neg++; else { zero++; continue; }   // (defensive; piv is nonzero here)
       for (let i = k + 1; i < n; i++) {
         if (A[i][k].isZero()) continue;
         const f = A[i][k].div(piv);
