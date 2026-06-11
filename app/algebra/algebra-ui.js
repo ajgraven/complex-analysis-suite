@@ -157,6 +157,72 @@
       }
     }
 
+    // ---- φ / h reference panel ----------------------------------------------
+    // The symbolic forms of the map φ and the quadrature data h for the current solve,
+    // plus a legend of what each workspace variable represents. Independent of the
+    // store reductions — it documents the ORIGINAL variables' meanings.
+    const _refMeaning = [
+      [/^w_0/, 'φ(0) — Riemann-map center'],
+      [/^z_/, 'pre-image of the pole in 𝔻'],
+      [/^A_/, 'Riemann-map (Faber) coefficient'],
+      [/^C_/, 'principal-part coefficient of h'],
+      [/^a_/, 'quadrature node (pole of h)'],
+      [/^c$/, 'logarithmic capacity'],
+      [/^F_/, 'polynomial-part coefficient'],
+    ];
+    function refMeaning(name) { for (const [re, m] of _refMeaning) if (re.test(name)) return m; return ''; }
+    // h(w) = Σ_j Σ_{s≥1} C_{j,s}/(w − a_j)^s — symbolic names, or values substituted.
+    function buildHForm(hData, numeric) {
+      const RL = QD.RiemannLatex;
+      const terms = [];
+      (hData.poles || []).forEach((pole, j) => {
+        const aSym = numeric ? RL.katexCmpxParen(pole.a) : 'a_{' + (j + 1) + '}';
+        (pole.principal || []).forEach((C, s) => {
+          const power = s + 1;
+          const num = numeric ? RL.katexCmpxParen(C) : 'C_{' + (j + 1) + ',' + power + '}';
+          const den = power === 1 ? '(w - ' + aSym + ')' : '(w - ' + aSym + ')^{' + power + '}';
+          terms.push('\\dfrac{' + num + '}{' + den + '}');
+        });
+      });
+      return 'h(w) \\;=\\; ' + (terms.length ? terms.join(' + ') : '0');
+    }
+    function buildReference() {
+      const box = $('#alg-ref'); if (!box) return;
+      box.innerHTML = '';
+      const phi = activeEnv && activeEnv.primary && activeEnv.primary.phi;
+      const hData = activeEnv && activeEnv.hData;
+      if (!phi || !hData) { box.innerHTML = '<div class="hint">Solve a classical bounded QD to see φ and h.</div>'; return; }
+      const RL = QD.RiemannLatex;
+      const showVals = $('#alg-ref-values') && $('#alg-ref-values').checked;
+      const built = RL.build(phi);
+      const mathRow = (title, latex) => {
+        const k = document.createElement('div'); k.className = 'key'; k.style.marginTop = '4px'; k.textContent = title;
+        const m = document.createElement('div'); m.className = 'algebra-ref-math';
+        RL.render(m, latex, true);
+        box.appendChild(k); box.appendChild(m);
+      };
+      mathRow('Map  φ : 𝔻 → Ω', showVals ? built.numeric : built.symbolic);
+      mathRow('Quadrature data  h', buildHForm(hData, showVals));
+      // legend: φ params (w₀, z_j, A_{j,k}) + h params (a_j, C_{j,s})
+      const hParams = [];
+      (hData.poles || []).forEach((pole, j) => {
+        hParams.push({ name: 'a_{' + (j + 1) + '}', value: pole.a });
+        (pole.principal || []).forEach((C, s) => hParams.push({ name: 'C_{' + (j + 1) + ',' + (s + 1) + '}', value: C }));
+      });
+      const k = document.createElement('div'); k.className = 'key'; k.style.marginTop = '4px'; k.textContent = 'Variables';
+      box.appendChild(k);
+      const tbl = document.createElement('table'); tbl.className = 'algebra-ref-legend';
+      built.params.concat(hParams).forEach((p) => {
+        const tr = document.createElement('tr');
+        const tdN = document.createElement('td'); RL.render(tdN, p.name, false);
+        const tdM = document.createElement('td'); tdM.className = 'hint'; tdM.textContent = refMeaning(p.name);
+        const tr2 = document.createElement('td');
+        if (showVals && p.value) RL.render(tr2, RL.katexCmpx(p.value), false);
+        tr.appendChild(tdN); tr.appendChild(tdM); tr.appendChild(tr2); tbl.appendChild(tr);
+      });
+      box.appendChild(tbl);
+    }
+
     // Refresh picker button labels + the specify-value variable list (after a seed or
     // a reduction changes the variable set / clears selections).
     function refreshPickers() {
@@ -212,6 +278,11 @@
         '  <button id="alg-help-toggle" class="small algebra-help-q" type="button" title="Show / hide help">?</button>' +
         '</div>' +
         '<div id="alg-help" class="hint card-sub hidden" data-str-html="algebra.help" style="margin:4px 0;"></div>' +
+        // φ / h reference: the symbolic forms + a legend of what each variable means.
+        '<div class="row" style="margin-top:4px; gap:6px; align-items:center;">' +
+        '  <button id="alg-ref-toggle" class="small" type="button" title="Show the symbolic forms of φ and h and what each variable represents">φ / h reference ▸</button>' +
+        '  <label style="font-size:11px;"><input type="checkbox" id="alg-ref-values"> show values</label></div>' +
+        '<div id="alg-ref" class="card-sub hidden algebra-ref"></div>' +
         '<div class="row"><button id="alg-seed" class="small" type="button" ' +
         'title="Generate the original (●)/(★)/gauge system from the current bounded solve at column 0 (replaces the graph; assumptions are then added as columns)">Generate / re-seed</button>' +
         '<button id="alg-undo" class="small" type="button" style="margin-left:6px;" title="Undo">Undo</button>' +
@@ -286,6 +357,15 @@
 
       const helpBtn = $('#alg-help-toggle');
       if (helpBtn) helpBtn.addEventListener('click', () => { const h = $('#alg-help'); if (h) h.classList.toggle('hidden'); });
+      const refBtn = $('#alg-ref-toggle');
+      if (refBtn) refBtn.addEventListener('click', () => {
+        const r = $('#alg-ref'); if (!r) return;
+        const open = r.classList.toggle('hidden') === false;
+        refBtn.textContent = 'φ / h reference ' + (open ? '▾' : '▸');
+        if (open) buildReference();
+      });
+      const refVals = $('#alg-ref-values');
+      if (refVals) refVals.addEventListener('change', () => { const r = $('#alg-ref'); if (r && !r.classList.contains('hidden')) buildReference(); });
       $('#alg-seed').addEventListener('click', seedFromCurrent);
       const w0FixCb = $('#alg-w0-fix');
       if (w0FixCb) w0FixCb.addEventListener('change', () => { if (store.size) seedFromCurrent(); });
@@ -588,6 +668,7 @@
         if (mounted) {
           if (!activeEnv) setStatus(STR.noSolve || 'No classical bounded QD solved yet.');
           else setStatus((STR.ready || 'Ready — click Generate / re-seed.'));
+          const ref = $('#alg-ref'); if (ref && !ref.classList.contains('hidden')) buildReference();
         }
       });
     }

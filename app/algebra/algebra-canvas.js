@@ -32,8 +32,11 @@
   const ROWGAP = 18, TOP = 48, LEFT = 24;   // vertical gap between stacked cards; layout origin (TOP leaves room for column headers)
   const HEADERY = 6;                  // y of the per-column header band (cards start at TOP)
 
-  // Local KaTeX renderer with the codebase's plain-text fallback.
+  // KaTeX render with the codebase's plain-text fallback (shared helper in
+  // riemann-latex.js; a local wrapper keeps the call sites + a fallback if it's absent).
   function renderKatex(el, expr, display) {
+    const RL = window.QD && window.QD.RiemannLatex;
+    if (RL && RL.render) { RL.render(el, expr, display); return; }
     if (typeof katex === 'undefined') { el.textContent = expr; return; }
     try { katex.render(expr, el, { displayMode: !!display, throwOnError: false }); }
     catch (e) { el.textContent = expr; }

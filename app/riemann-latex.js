@@ -354,6 +354,16 @@
     return { symbolic, numeric, params };
   }
 
-  QD.RiemannLatex = { build, katexCmpx, katexCmpxParen, getRiemannFragment };
+  // Shared KaTeX render-into-element with the codebase's plain-text fallback (katex
+  // absent or a parse error → drop the raw LaTeX as text). One helper so the algebra
+  // canvas / reference panel don't each carry their own copy.
+  function render(el, latex, display) {
+    if (!el) return;
+    if (typeof katex === 'undefined') { el.textContent = latex; return; }
+    try { katex.render(latex, el, { displayMode: !!display, throwOnError: false }); }
+    catch (e) { el.textContent = latex; }
+  }
+
+  QD.RiemannLatex = { build, katexCmpx, katexCmpxParen, getRiemannFragment, render };
 
 })();

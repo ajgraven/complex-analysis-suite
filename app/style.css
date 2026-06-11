@@ -686,6 +686,11 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #algebra-graph .algebra-wrap { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
 #algebra-graph .algebra-edges { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
 #algebra-graph .algebra-edge { fill: none; stroke: var(--c-border, #bbb); stroke-width: 1.5; }
+.algebra-ref { margin: 4px 0; max-height: 320px; overflow: auto; }
+.algebra-ref-math { overflow-x: auto; margin: 2px 0 4px; }
+.algebra-ref-legend { border-collapse: collapse; font-size: 11px; width: 100%; }
+.algebra-ref-legend td { padding: 1px 6px 1px 0; vertical-align: middle; }
+.algebra-ref-legend td:nth-child(2) { width: 100%; }
 #algebra-graph .algebra-nodes { position: absolute; top: 0; left: 0; }
 #algebra-graph .algebra-col-headers { position: absolute; top: 0; left: 0; pointer-events: none; }
 #algebra-graph .algebra-col-header {
