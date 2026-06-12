@@ -908,14 +908,49 @@
       }
       return { unbounded: false, family: 'boundedQD', w0, branches };
     }
+    // EXACT (Schur–Cohn) local-fold test for one candidate solution. Build num(φ′) as a
+    // univariate polynomial in ζ with exact ℚ(i) coefficients — rationalize the candidate's
+    // numeric coordinates (QE.ratApprox) and substitute the barred pole vars z̄_j = conj(z_j),
+    // Ā_{j,k} = conj(A_{j,k}) into QC.phiPrimeNumerator — then count its roots inside 𝔻 by the
+    // Hermitian Schur–Cohn inertia (Sym.schurCohn): exact integer/rational linear algebra, NO
+    // numeric root-finding. Returns { inside, degenerate }: inside>0 ⇒ φ′ has a zero in 𝔻 (a
+    // fold); inside===0 (and not degenerate) ⇒ φ′≠0 strictly in 𝔻. `degenerate` (a singular /
+    // self-inversive matrix — also raised by an on-circle φ′ zero = a cusp) is AMBIGUOUS and the
+    // caller must fall back to the numeric test, never certify from it. null ⇒ φ′ / the map vars
+    // are unavailable (e.g. the map variables were eliminated) ⇒ caller uses the numeric test.
+    function schurCohnFold(sol, hData) {
+      const Sym = QD && QD.Sym;
+      if (!Sym || !QC || typeof Sym.schurCohn !== 'function' || typeof Sym.uniCoeffs !== 'function' ||
+          typeof QC.phiPrimeNumerator !== 'function' || !QE || typeof QE.ratApprox !== 'function') return null;
+      const num = (name) => { const re = sol[name + '__re']; if (!re) return undefined; const im = sol[name + '__im']; return { re: re.re, im: im ? im.re : 0 }; };
+      const ratG = (v) => { const a = QE.ratApprox(v.re || 0), b = QE.ratApprox(v.im || 0); return Sym.gauss(Sym.rat(a[0], a[1]), Sym.rat(b[0], b[1])); };
+      const poles = (hData && hData.poles) || [];
+      const sub = {};
+      for (let j = 0; j < poles.length; j++) {
+        const z = num('z' + (j + 1)); if (!z) return null;
+        sub['zb' + (j + 1)] = Sym.mpolyConst(ratG(z).conj());                   // z̄_j = conj(z_j)
+        const order = (poles[j].principal || []).length;
+        for (let k = 1; k <= order; k++) {
+          const a = num('A' + (j + 1) + '_' + k); if (!a) return null;
+          sub['Ab' + (j + 1) + '_' + k] = Sym.mpolyConst(ratG(a).conj());       // Ā_{j,k} = conj(A_{j,k})
+        }
+      }
+      let numP; try { numP = QC.phiPrimeNumerator(hData); } catch (e) { return null; }
+      try {
+        const sc = Sym.schurCohn(Sym.uniCoeffs(numP.subst(sub), 'Z'));          // univariate in ζ (= 'Z')
+        return { inside: sc.inside, degenerate: sc.degenerate };
+      } catch (e) { return null; }
+    }
     // Certified univalence filter (the genuine-QD count): solve the current system for its
     // REAL solutions, reconstruct each candidate φ, and test univalence — a real algebraic
-    // solution is a GENUINE quadrature domain only if its φ is schlicht on 𝔻. Two numeric
-    // tests reuse the main solver: φ′≠0 strictly inside 𝔻 (QD.findCriticalPoints; boundary
-    // critical points = cusps are allowed) and the boundary curve φ(∂𝔻) is simple
-    // (QD.isBoundaryUnivalent — no self-intersection). NB the algebraic # real solutions and
-    // the # genuine QDs are DIFFERENT questions (the classic balayage-vs-algebra distinction);
-    // this filter reconciles them.
+    // solution is a GENUINE quadrature domain only if its φ is schlicht on 𝔻. The LOCAL test
+    // (φ′≠0 strictly inside 𝔻) uses the EXACT Schur–Cohn inertia of num(φ′) over ℚ(i)
+    // (schurCohnFold — no numeric root-finding); on a degenerate (singular/self-inversive)
+    // matrix — which also covers an on-circle φ′ zero = a cusp, allowed — it falls back to the
+    // numeric QD.findCriticalPoints so a fold is never mis-certified. The boundary test (φ(∂𝔻)
+    // simple, no self-intersection) stays numeric (QD.isBoundaryUnivalent). NB the algebraic #
+    // real solutions and the # genuine QDs are DIFFERENT questions (the classic balayage-vs-
+    // algebra distinction); this filter reconciles them.
     function doCertifyUnivalence() {
       if (_abort) return;
       if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
@@ -935,12 +970,17 @@
         real.forEach((sol, idx) => {
           const phi = phiFromAlgebraSolution(sol, hData);
           if (!phi) { unrec++; rows.push('#' + (idx + 1) + ': φ not reconstructable (map variables eliminated — run on the seeded system)'); return; }
-          let fold = false;
-          try { const crit = (typeof QD.findCriticalPoints === 'function') ? QD.findCriticalPoints(phi, {}) : null; fold = !!(crit && crit.points && crit.points.some((p) => p.inDomain)); } catch (e) { /* treat as no fold */ }
+          // Local fold test: EXACT Schur–Cohn on num(φ′) when non-degenerate; honest numeric
+          // fallback (findCriticalPoints) on a singular/self-inversive matrix or when unavailable.
+          let fold = false, exact = false;
+          const scf = schurCohnFold(sol, hData);
+          if (scf && !scf.degenerate) { fold = scf.inside > 0; exact = true; }
+          else { try { const crit = (typeof QD.findCriticalPoints === 'function') ? QD.findCriticalPoints(phi, {}) : null; fold = !!(crit && crit.points && crit.points.some((p) => p.inDomain)); } catch (e) { /* treat as no fold */ } }
+          const tag = exact ? 'Schur–Cohn' : 'numeric';
           let simple = true; try { simple = QD.isBoundaryUnivalent(phi, 360); } catch (e) { simple = true; }
-          if (fold) { folded++; rows.push('#' + (idx + 1) + ': φ′ = 0 inside 𝔻 (fold) — not univalent'); }
+          if (fold) { folded++; rows.push('#' + (idx + 1) + ': φ′ = 0 inside 𝔻 (fold, ' + tag + ') — not univalent'); }
           else if (!simple) { selfInt++; rows.push('#' + (idx + 1) + ': boundary φ(∂𝔻) self-intersects — not univalent'); }
-          else { genuine++; rows.push('#' + (idx + 1) + ': univalent ✓ — genuine quadrature domain'); }
+          else { genuine++; rows.push('#' + (idx + 1) + ': univalent ✓ — genuine quadrature domain' + (exact ? ' (φ′≠0 in 𝔻 certified)' : '')); }
         });
         const rejected = [folded ? folded + ' fold' : '', selfInt ? selfInt + ' self-intersecting' : '', unrec ? unrec + ' unreconstructable' : ''].filter(Boolean).join(', ');
         const verdict = genuine + ' genuine quadrature domain' + (genuine === 1 ? '' : 's') + ' of ' + real.length + ' real solution' + (real.length === 1 ? '' : 's') + (rejected ? ' (' + rejected + ')' : '');

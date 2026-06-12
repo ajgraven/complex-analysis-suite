@@ -2205,6 +2205,98 @@
   }
 
   // ===========================================================================
+  // SCHUR–COHN: exact count of polynomial roots inside the open unit disk.
+  // For p(z) = a₀ + a₁z + … + a_n z^n (a_n ≠ 0) the Hermitian Schur–Cohn matrix
+  //     C = A·Aᴴ − B·Bᴴ,   A = lower-tri Toeplitz of (a₀,…,a_{n−1}),
+  //                         B = lower-tri Toeplitz of (ā_n,…,ā₁)
+  // (both n×n; A[i][j]=a_{i−j}, B[i][j]=ā_{n−(i−j)} for i≥j, else 0) is Hermitian, and by
+  // the Schur–Cohn / Bezoutian theory its inertia counts the roots by location:
+  //     #{|z|<1} = (# negative eigenvalues),   #{|z|>1} = (# positive),
+  //     #{|z|=1} contributes to the nullity.
+  // Computed EXACTLY over ℚ(i) via Hermitian congruence inertia (no floats, no root-
+  // finding) — so a clean (nonsingular) C gives a CERTIFIED disk-root count.
+  //
+  // DEGENERACY (the honest-fallback trigger): a nonzero nullity is AMBIGUOUS. It arises
+  // both from genuine on-circle roots AND from SELF-INVERSIVE factors — reciprocal root
+  // pairs (r off the circle ⇒ 1/r̄ its mirror), e.g. (z−½)(z−2)=z²−5/2·z+1, which make C
+  // singular WITHOUT any on-circle root. The matrix alone cannot tell the two apart, so
+  // `schurCohn` reports `degenerate:true` whenever the nullity is positive and the caller
+  // must NOT certify from it (fall back to a numeric/separate test). For a nonsingular C
+  // the inside/outside split is exact and trustworthy.
+  // ===========================================================================
+
+  // Exact inertia { pos, neg, zero } of a HERMITIAN matrix of Gaussian entries (A[i][j] =
+  // conj(A[j][i]); the diagonal is real). LDLᴴ-style congruence (Hermitian Schur update).
+  // Mirrors _rationalInertia's zero-pivot handling: first a symmetric pivot SWAP to a
+  // nonzero trailing diagonal (a permutation congruence — inertia-preserving); only when
+  // EVERY trailing diagonal is zero, a Hermitian fold with λ = conj(A[k][m]) (col k += λ·col
+  // m; row k += conj(λ)·row m) ⇒ the new diagonal is 2|A[k][m]|² > 0, which cannot cancel.
+  function _hermitianInertia(A0) {
+    const n = A0.length;
+    const A = A0.map((row) => row.map((g) => new Gaussian(g.re, g.im)));   // working copy
+    const swapKM = (k, m) => {
+      for (let j = 0; j < n; j++) { const t = A[k][j]; A[k][j] = A[m][j]; A[m][j] = t; }
+      for (let i = 0; i < n; i++) { const t = A[i][k]; A[i][k] = A[i][m]; A[i][m] = t; }
+    };
+    let pos = 0, neg = 0, zero = 0, guard = 0;
+    for (let k = 0; k < n; k++) {
+      if (++guard > 4 * (n + 1) * (n + 1)) throw new Error('schurCohn: inertia did not converge');
+      if (A[k][k].isZero()) {
+        let sw = -1; for (let m = k + 1; m < n; m++) if (!A[m][m].isZero()) { sw = m; break; }
+        if (sw !== -1) { swapKM(k, sw); }                   // bring a nonzero diagonal up (inertia-preserving)
+        else {                                              // all trailing diagonals zero ⇒ a safe Hermitian fold
+          let m = -1; for (let j = k + 1; j < n; j++) if (!A[k][j].isZero()) { m = j; break; }
+          if (m === -1) { zero++; continue; }               // entire remaining row/col is zero ⇒ kernel direction
+          const lam = A[k][m].conj(), lamC = A[k][m];        // λ = conj(A[k][m]); conj(λ) = A[k][m]
+          for (let i = 0; i < n; i++) A[i][k] = A[i][k].add(lam.mul(A[i][m]));    // col k += λ·col m
+          for (let j = 0; j < n; j++) A[k][j] = A[k][j].add(lamC.mul(A[m][j]));   // row k += conj(λ)·row m ⇒ A[k][k] = 2|A[k][m]|²
+        }
+      }
+      const piv = A[k][k];                                  // real (Hermitian diagonal)
+      const s = piv.re.sign();
+      if (s > 0) pos++; else if (s < 0) neg++; else { zero++; continue; }   // (defensive; piv is nonzero here)
+      for (let i = k + 1; i < n; i++) {
+        if (A[i][k].isZero()) continue;
+        const f = A[i][k].div(piv);                         // piv real ⇒ f = A[i][k]/piv
+        for (let j = k; j < n; j++) A[i][j] = A[i][j].sub(f.mul(A[k][j]));   // Hermitian Schur update of the trailing block
+      }
+    }
+    return { pos, neg, zero };
+  }
+
+  // schurCohn(coeffs) → { inside, outside, onCircle, degenerate, degree }. coeffs is an
+  // ASCENDING Gaussian array [a₀,…,a_n] (trailing zeros trimmed). inside/outside are the
+  // CERTIFIED open-disk / outside counts when `degenerate` is false; when `degenerate`
+  // (nullity > 0 — on-circle OR self-inversive) the split is unreliable → do not certify.
+  function schurCohn(coeffs) {
+    const Z = Gaussian.fromInt(0);
+    let a = (coeffs || []).map((c) => new Gaussian(c.re, c.im));
+    while (a.length && a[a.length - 1].isZero()) a.pop();       // trim leading (high-degree) zeros
+    const n = a.length - 1;                                     // degree
+    if (n <= 0) return { inside: 0, outside: 0, onCircle: 0, degenerate: false, degree: Math.max(n, 0) };
+    const A = [], B = [];
+    for (let i = 0; i < n; i++) {
+      A.push(new Array(n)); B.push(new Array(n));
+      for (let j = 0; j < n; j++) {
+        if (i >= j) { A[i][j] = a[i - j]; B[i][j] = a[n - (i - j)].conj(); }
+        else { A[i][j] = Z; B[i][j] = Z; }
+      }
+    }
+    // C = A·Aᴴ − B·Bᴴ  (Hermitian).
+    const C = [];
+    for (let i = 0; i < n; i++) {
+      C.push(new Array(n));
+      for (let k = 0; k < n; k++) {
+        let s = Z;
+        for (let j = 0; j < n; j++) s = s.add(A[i][j].mul(A[k][j].conj())).sub(B[i][j].mul(B[k][j].conj()));
+        C[i][k] = s;
+      }
+    }
+    const inertia = _hermitianInertia(C);
+    return { inside: inertia.neg, outside: inertia.pos, onCircle: inertia.zero, degenerate: inertia.zero > 0, degree: n };
+  }
+
+  // ===========================================================================
   // TRIANGULAR DECOMPOSITION (Wu-style successive pseudo-elimination).
   // An ALTERNATIVE eliminator to Gröbner: produce a TRIANGULAR set (one polynomial
   // per variable, each with a leading initial in the lower variables) by Ritt
@@ -2608,7 +2700,7 @@
     mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, univariateGCD, squareFreePart,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
-    multiplicationMatrix, solveByEigenvalues, realSolutionCount, pseudoRemainder, triangularize, runJob,
+    multiplicationMatrix, solveByEigenvalues, realSolutionCount, schurCohn, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
   };

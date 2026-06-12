@@ -758,6 +758,48 @@ module.exports = async function run() {
          S.realSolutionCount(grid, null, ['x', 'y'], { maxHermiteDim: 2 }).ok === false);
     }
 
+    // Schur–Cohn: exact count of roots inside the open unit disk via the Hermitian
+    // C = A·Aᴴ − B·Bᴴ inertia (inside = #neg, outside = #pos, on-circle ⊂ nullity).
+    // ascending Gaussian coeff arrays; gr = real rational a/d, gI = integer a+bi.
+    {
+      const gr = (n, d) => S.gauss(S.rat(n, d == null ? 1 : d), S.rat(0));
+      const gI = (a, b) => S.gaussInt(a, b || 0);
+      const sc = (arr) => S.schurCohn(arr);
+      const shows = (r, ins, out, onc, deg) =>
+        r.inside === ins && r.outside === out && r.onCircle === onc && r.degenerate === deg &&
+        r.inside + r.outside + r.onCircle === r.degree;
+      // (1) z − 1/2: single real root 1/2 strictly inside.
+      ok('schurCohn: z − 1/2 → 1 inside (root 1/2)', shows(sc([gr(-1, 2), gI(1)]), 1, 0, 0, false));
+      // (2) z − 2 and (3) z + 2: a single root outside.
+      ok('schurCohn: z − 2 → 1 outside', shows(sc([gI(-2), gI(1)]), 0, 1, 0, false));
+      ok('schurCohn: z + 2 → 1 outside', shows(sc([gI(2), gI(1)]), 0, 1, 0, false));
+      // (4) 2z − 1: scaling-invariant — still root 1/2 inside.
+      ok('schurCohn: 2z − 1 → 1 inside (leading-coeff invariance)', shows(sc([gI(-1), gI(2)]), 1, 0, 0, false));
+      // (5) z² − 1/4 = (z−½)(z+½): both roots inside.
+      ok('schurCohn: z² − 1/4 → 2 inside', shows(sc([gr(-1, 4), gI(0), gI(1)]), 2, 0, 0, false));
+      // (6) z² − 4: both roots outside.
+      ok('schurCohn: z² − 4 → 2 outside', shows(sc([gI(-4), gI(0), gI(1)]), 0, 2, 0, false));
+      // (7) z² − 1: roots ±1 on the circle ⇒ nullity 2, degenerate (C = 0).
+      ok('schurCohn: z² − 1 → on-circle, degenerate', shows(sc([gI(-1), gI(0), gI(1)]), 0, 0, 2, true));
+      // (8) z² + 1: roots ±i on the circle ⇒ nullity 2, degenerate.
+      ok('schurCohn: z² + 1 → on-circle, degenerate', shows(sc([gI(1), gI(0), gI(1)]), 0, 0, 2, true));
+      // (9) THE DEGENERACY: (z−½)(z−2) = z² − 5/2·z + 1 is SELF-INVERSIVE (reciprocal pair
+      //     ½ inside / 2 outside) ⇒ C singular WITHOUT any on-circle root ⇒ degenerate:true.
+      //     This is exactly the case the honest fallback must NOT certify from.
+      ok('schurCohn: z² − 5/2·z + 1 (self-inversive) → degenerate (no certified split)',
+         sc([gI(1), gr(-5, 2), gI(1)]).degenerate === true);
+      // (10) (z−½)(z−3) = z² − 7/2·z + 3/2: NOT self-inversive (root product 3/2 ≠ 1) ⇒
+      //      nonsingular C ⇒ certified 1 inside / 1 outside.
+      ok('schurCohn: z² − 7/2·z + 3/2 → 1 inside, 1 outside (certified, non-degenerate)',
+         shows(sc([gr(3, 2), gr(-7, 2), gI(1)]), 1, 1, 0, false));
+      // (11) complex root inside: z − i/2 (|i/2| = 1/2 < 1).
+      ok('schurCohn: z − i/2 → 1 inside (complex root)', shows(sc([S.gauss(S.rat(0), S.rat(-1, 2)), gI(1)]), 1, 0, 0, false));
+      // edge: a constant has no roots; trailing (high-degree) zeros are trimmed.
+      ok('schurCohn: constant → no roots', shows(sc([gI(3)]), 0, 0, 0, false));
+      ok('schurCohn: trailing zeros trimmed (z − 1/2 padded) → 1 inside',
+         shows(sc([gr(-1, 2), gI(1), gI(0), gI(0)]), 1, 0, 0, false));
+    }
+
     // Triangular decomposition (Wu-style pseudo-elimination) — the alternative eliminator.
     {
       const near = (a, b) => Math.abs(a - b) < 1e-6;
