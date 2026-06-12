@@ -101,6 +101,30 @@ module.exports = async function run() {
        nodes.length === 4 && nodes[2].meta.role === 'circle' && nodes[3].meta.role === 'circle');
   }
 
+  // ---- (d-exact) boundaryDoublePointCount: EXACT real circle double-point count ----
+  // Substitute exact ℚ(i) barred pole values into the shared divided difference, reim-split
+  // over the two circle points, and count REAL double points via the Hermite trace form.
+  {
+    const S = QD.Sym;
+    const c = (re, im) => S.mpolyConst(S.gauss(S.rat(re, 1), S.rat(im || 0, 1)));
+    // φ=z+z² (zb1=0, A1_1=A1_2=1): the divided difference is exactly 1 + ζ₁ + ζ₂.
+    const ddQuad = QC.phiDividedDifference(hQuad).subst({ zb1: c(0), Ab1_1: c(1), Ab1_2: c(1) });
+    ok('phiDividedDifference(φ=z+z²) = 1 + ζ₁ + ζ₂',
+       ddQuad.equals(S.mpolyInt(1).add(S.mpolyVar('Z1')).add(S.mpolyVar('Z2'))));
+    // disk φ=z (zb1=0, A1_1=1): boundary simple ⇒ 0 double points (system reduces to 1∈I).
+    const rDisk = QC.boundaryDoublePointCount(hDisk, { zb1: c(0), Ab1_1: c(1) });
+    ok('boundaryDoublePointCount: disk φ=z → 0 (boundary simple)', rDisk.ok && rDisk.count === 0);
+    // φ=z+z² self-crosses on |ζ|=1 at ζ=e^{±i2π/3} (both map to −1) ⇒ 2 ordered double points
+    // (the unordered crossing {ζ₁,ζ₂} counted both ways); x₁=x₂=−½, y₁=−y₂=±√3/2 (irrational
+    // roots counted EXACTLY by signature, no root-finding).
+    const rQuad = QC.boundaryDoublePointCount(hQuad, { zb1: c(0), Ab1_1: c(1), Ab1_2: c(1) });
+    ok('boundaryDoublePointCount: φ=z+z² → 2 ordered boundary double points (self-crosses)',
+       rQuad.ok && rQuad.count === 2, 'count=' + (rQuad && rQuad.count));
+    // honest fallback: a tiny Hermite-dim cap ⇒ {ok:false} (no throw) so the UI uses numeric.
+    const rCap = QC.boundaryDoublePointCount(hQuad, { zb1: c(0), Ab1_1: c(1), Ab1_2: c(1) }, { maxHermiteDim: 1 });
+    ok('boundaryDoublePointCount: over the Hermite cap → {ok:false} (numeric fallback)', rCap.ok === false);
+  }
+
   // ---- (b) geometric border: computes a node (or hits the cap) without crashing ----
   {
     let okBorder = false;

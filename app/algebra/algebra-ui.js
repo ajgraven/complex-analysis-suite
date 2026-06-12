@@ -921,7 +921,23 @@
     function schurCohnFold(sol, hData) {
       const Sym = QD && QD.Sym;
       if (!Sym || !QC || typeof Sym.schurCohn !== 'function' || typeof Sym.uniCoeffs !== 'function' ||
-          typeof QC.phiPrimeNumerator !== 'function' || !QE || typeof QE.ratApprox !== 'function') return null;
+          typeof QC.phiPrimeNumerator !== 'function') return null;
+      const sub = poleSubst(sol, hData);
+      if (!sub) return null;
+      let numP; try { numP = QC.phiPrimeNumerator(hData); } catch (e) { return null; }
+      try {
+        const sc = Sym.schurCohn(Sym.uniCoeffs(numP.subst(sub), 'Z'));          // univariate in ζ (= 'Z')
+        return { inside: sc.inside, degenerate: sc.degenerate };
+      } catch (e) { return null; }
+    }
+    // Shared exact-ℚ(i) substitution map for the BARRED pole vars from a candidate's numeric
+    // solution: { z̄_j → conj(rat(z_j)), Ā_{j,k} → conj(rat(A_{j,k})) } (continued-fraction
+    // rationalization via QE.ratApprox). Used by both the local Schur–Cohn fold test and the
+    // exact boundary-injectivity test. null if Sym/QE are unavailable or a map var is missing
+    // (e.g. the map variables were eliminated from the system).
+    function poleSubst(sol, hData) {
+      const Sym = QD && QD.Sym;
+      if (!Sym || !QE || typeof QE.ratApprox !== 'function') return null;
       const num = (name) => { const re = sol[name + '__re']; if (!re) return undefined; const im = sol[name + '__im']; return { re: re.re, im: im ? im.re : 0 }; };
       const ratG = (v) => { const a = QE.ratApprox(v.re || 0), b = QE.ratApprox(v.im || 0); return Sym.gauss(Sym.rat(a[0], a[1]), Sym.rat(b[0], b[1])); };
       const poles = (hData && hData.poles) || [];
@@ -935,11 +951,21 @@
           sub['Ab' + (j + 1) + '_' + k] = Sym.mpolyConst(ratG(a).conj());       // Ā_{j,k} = conj(A_{j,k})
         }
       }
-      let numP; try { numP = QC.phiPrimeNumerator(hData); } catch (e) { return null; }
-      try {
-        const sc = Sym.schurCohn(Sym.uniCoeffs(numP.subst(sub), 'Z'));          // univariate in ζ (= 'Z')
-        return { inside: sc.inside, degenerate: sc.degenerate };
-      } catch (e) { return null; }
+      return sub;
+    }
+    // EXACT boundary-injectivity test for one candidate: is φ(∂𝔻) a SIMPLE curve? Returns
+    // { simple } when QC.boundaryDoublePointCount certifies (count of real circle double points;
+    // 0 ⇔ simple), or null when it can't (no Sym / positive-dim / over the Hermite cap) ⇒ the
+    // caller falls back to the numeric QD.isBoundaryUnivalent. PRECONDITION: the caller invokes
+    // this ONLY when the local Schur–Cohn was non-degenerate with no in-disk fold (φ′≠0 on 𝔻̄),
+    // so there are no diagonal/cusp solutions and the count is exactly the self-intersections.
+    function boundarySimpleExact(sol, hData) {
+      if (!QC || typeof QC.boundaryDoublePointCount !== 'function') return null;
+      const sub = poleSubst(sol, hData);
+      if (!sub) return null;
+      let r; try { r = QC.boundaryDoublePointCount(hData, sub); } catch (e) { return null; }
+      if (!r || !r.ok) return null;
+      return { simple: r.count === 0 };
     }
     // Certified univalence filter (the genuine-QD count): solve the current system for its
     // REAL solutions, reconstruct each candidate φ, and test univalence — a real algebraic
@@ -947,10 +973,12 @@
     // (φ′≠0 strictly inside 𝔻) uses the EXACT Schur–Cohn inertia of num(φ′) over ℚ(i)
     // (schurCohnFold — no numeric root-finding); on a degenerate (singular/self-inversive)
     // matrix — which also covers an on-circle φ′ zero = a cusp, allowed — it falls back to the
-    // numeric QD.findCriticalPoints so a fold is never mis-certified. The boundary test (φ(∂𝔻)
-    // simple, no self-intersection) stays numeric (QD.isBoundaryUnivalent). NB the algebraic #
-    // real solutions and the # genuine QDs are DIFFERENT questions (the classic balayage-vs-
-    // algebra distinction); this filter reconciles them.
+    // numeric QD.findCriticalPoints so a fold is never mis-certified. The BOUNDARY test (φ(∂𝔻)
+    // simple, no self-intersection) is also EXACT when the local test certified φ′≠0 on 𝔻̄
+    // (boundarySimpleExact → QC.boundaryDoublePointCount: count real circle double points via the
+    // Hermite trace form; 0 ⇔ simple) and falls back to the numeric QD.isBoundaryUnivalent on a
+    // cusp/positive-dim/over-cap case. NB the algebraic # real solutions and the # genuine QDs
+    // are DIFFERENT questions (the classic balayage-vs-algebra distinction); this reconciles them.
     function doCertifyUnivalence() {
       if (_abort) return;
       if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
@@ -977,10 +1005,16 @@
           if (scf && !scf.degenerate) { fold = scf.inside > 0; exact = true; }
           else { try { const crit = (typeof QD.findCriticalPoints === 'function') ? QD.findCriticalPoints(phi, {}) : null; fold = !!(crit && crit.points && crit.points.some((p) => p.inDomain)); } catch (e) { /* treat as no fold */ } }
           const tag = exact ? 'Schur–Cohn' : 'numeric';
-          let simple = true; try { simple = QD.isBoundaryUnivalent(phi, 360); } catch (e) { simple = true; }
+          // Boundary test: EXACT (real circle double-point count) when the local test certified
+          // φ′≠0 on 𝔻̄ (exact && !fold); else honest numeric fallback. Only the exact path may
+          // declare "simple" certified — never mis-certifies.
+          let simple = true, simpleExact = false;
+          if (exact && !fold) { const bs = boundarySimpleExact(sol, hData); if (bs) { simple = bs.simple; simpleExact = true; } }
+          if (!simpleExact) { try { simple = QD.isBoundaryUnivalent(phi, 360); } catch (e) { simple = true; } }
+          const bTag = simpleExact ? 'real-count' : 'numeric';
           if (fold) { folded++; rows.push('#' + (idx + 1) + ': φ′ = 0 inside 𝔻 (fold, ' + tag + ') — not univalent'); }
-          else if (!simple) { selfInt++; rows.push('#' + (idx + 1) + ': boundary φ(∂𝔻) self-intersects — not univalent'); }
-          else { genuine++; rows.push('#' + (idx + 1) + ': univalent ✓ — genuine quadrature domain' + (exact ? ' (φ′≠0 in 𝔻 certified)' : '')); }
+          else if (!simple) { selfInt++; rows.push('#' + (idx + 1) + ': boundary φ(∂𝔻) self-intersects (' + bTag + ') — not univalent'); }
+          else { genuine++; rows.push('#' + (idx + 1) + ': univalent ✓ — genuine quadrature domain' + (exact && simpleExact ? ' (Schur–Cohn + real-count certified)' : (exact ? ' (φ′≠0 in 𝔻 certified)' : ''))); }
         });
         const rejected = [folded ? folded + ' fold' : '', selfInt ? selfInt + ' self-intersecting' : '', unrec ? unrec + ' unreconstructable' : ''].filter(Boolean).join(', ');
         const verdict = genuine + ' genuine quadrature domain' + (genuine === 1 ? '' : 's') + ' of ' + real.length + ' real solution' + (real.length === 1 ? '' : 's') + (rejected ? ' (' + rejected + ')' : '');

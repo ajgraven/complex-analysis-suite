@@ -202,16 +202,25 @@
         meta: { form: 'localUniv', role: 'witness', params: [WSAT] } },
     ];
   }
-  // Global injectivity (d): the divided difference numerator + its conjugate, with
-  // the two circle relations. φ(ζ₁)=φ(ζ₂) with ζ₁≠ζ₂ on the circle ⇔ a self-cross.
-  function injectivity(hData) {
+  // The divided-difference numerator (φ(ζ₁)−φ(ζ₂))/(ζ₁−ζ₂) as an MPoly in {Z1, Z2,
+  // z̄_j, Ā_{j,k}} — the w₀ constants cancel in φ(ζ₁)−φ(ζ₂), so only the barred pole vars
+  // appear. Zero ⇔ φ(ζ₁)=φ(ζ₂) with the diagonal ζ₁=ζ₂ divided out (where it equals
+  // φ′·(Möbius denominator ≠ 0 on 𝔻̄), so a diagonal zero ⇔ a boundary cusp φ′=0). Shared by
+  // injectivity (the symbolic constraint generator) and boundaryDoublePointCount (the exact
+  // per-solution boundary-injectivity test).
+  function phiDividedDifference(hData) {
     const S = getSym(); const QE = getQE();
     const poles = (hData && hData.poles) || [];
     const phi1 = QE.phiSeriesAt(S, poles, Z1, 0)[0];     // FRatFn φ(ζ₁)
     const phi2 = QE.phiSeriesAt(S, poles, Z2, 0)[0];     // FRatFn φ(ζ₂)
     const numD = phi1.sub(phi2).clearDenominators();     // vanishes at ζ₁=ζ₂
-    const z1mz2 = S.mpolyVar(Z1).sub(S.mpolyVar(Z2));
-    const numPhi = S.mpolyExactDiv(numD, z1mz2);          // divided difference (diagonal removed)
+    return S.mpolyExactDiv(numD, S.mpolyVar(Z1).sub(S.mpolyVar(Z2)));   // divided difference (diagonal removed)
+  }
+  // Global injectivity (d): the divided difference numerator + its conjugate, with
+  // the two circle relations. φ(ζ₁)=φ(ζ₂) with ζ₁≠ζ₂ on the circle ⇔ a self-cross.
+  function injectivity(hData) {
+    const S = getSym();
+    const numPhi = phiDividedDifference(hData);
     return [
       { label: 'injectivity: (φ(ζ₁)−φ(ζ₂))/(ζ₁−ζ₂) = 0', poly: numPhi, rel: '=',
         meta: { form: 'injectivity', role: 'divided-difference' } },
@@ -222,6 +231,38 @@
       { label: 'circle: ζ₂ζ̄₂ = 1', poly: circleRel(S, Z2, ZB2), rel: '=',
         meta: { form: 'injectivity', role: 'circle' } },
     ];
+  }
+
+  // EXACT boundary-injectivity count for one candidate solution. Substitute the candidate's
+  // exact ℚ(i) barred pole values (poleSubst: { z̄_j → const, Ā_{j,k} → const } — the SAME map
+  // the Schur–Cohn local test builds) into the divided-difference numerator, then count the
+  // REAL double points on the circle: substitute ζ_k → x_k + i·y_k (real x_k,y_k), split into
+  // real/imaginary parts, append the two circle quadrics x_k²+y_k²−1, and run the Hermite
+  // trace form (Sym.realSolutionCount). Returns { ok, count, reason }: count = #DISTINCT real
+  // ordered off-diagonal solutions on |ζ₁|=|ζ₂|=1 (each unordered crossing appears twice);
+  // count === 0 ⇔ the boundary curve φ(∂𝔻) is SIMPLE.
+  //
+  // PRECONDITION (the caller's gate): φ′ ≠ 0 on the CLOSED disk — i.e. the local Schur–Cohn
+  // returned non-degenerate with no in-disk fold. Then numPhi(ζ,ζ)=φ′(ζ)·(≠0) has NO zero on
+  // the circle, so there are no diagonal solutions and `count` is exactly the genuine boundary
+  // self-intersections. ok:false (positive-dimensional / over the Hermite cap / no Sym) ⇒ the
+  // caller falls back to the numeric QD.isBoundaryUnivalent — never mis-certifies.
+  function boundaryDoublePointCount(hData, poleSubst, opts) {
+    const S = getSym();
+    if (!S || typeof S.realSolutionCount !== 'function') return { ok: false, count: null, reason: 'QD.Sym.realSolutionCount unavailable' };
+    let N;
+    try { N = phiDividedDifference(hData).subst(poleSubst || {}); }
+    catch (e) { return { ok: false, count: null, reason: (e && e.message) || String(e) }; }
+    const iC = S.mpolyConst(S.gaussInt(0, 1));
+    const cx = (x, y) => S.mpolyVar(x).add(iC.mul(S.mpolyVar(y)));      // x + i·y
+    const Nreim = N.subst({ [Z1]: cx('x1', 'y1'), [Z2]: cx('x2', 'y2') });
+    const circ = (x, y) => S.mpolyVar(x).pow(2).add(S.mpolyVar(y).pow(2)).sub(S.mpolyInt(1));
+    const system = [Nreim.realPart(), Nreim.imagPart(), circ('x1', 'y1'), circ('x2', 'y2')].filter((p) => !p.isZero());
+    let r;
+    try { r = S.realSolutionCount(system, null, ['x1', 'y1', 'x2', 'y2'], opts || {}); }
+    catch (e) { return { ok: false, count: null, reason: (e && e.message) || String(e) }; }
+    if (!r.ok) return { ok: false, count: null, reason: r.reason };
+    return { ok: true, count: r.realCount, complexCount: r.complexCount };
   }
 
   // Dispatcher: form → node descriptors.
@@ -257,6 +298,7 @@
   const QDConstraints = {
     generateConstraint, FORMS: Object.keys(FORMS),
     convexIneq, starIneq, spiralIneq, geometricBorder, localUnivalence, injectivity,
+    phiDividedDifference, boundaryDoublePointCount,
     phiData, phiPrimeNumerator, hermitianReNum, foldCircle, conjMPoly, conjVarName, conjFR,
     boundaryVarMap,
     VARS: { Z, ZB, Z1, ZB1, Z2, ZB2, COSL, SINL, WSAT },
