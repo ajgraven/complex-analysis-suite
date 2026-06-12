@@ -109,4 +109,20 @@ module.exports = async function run() {
     ok('exterior-h numeric oracle: solveInverseQD → φ=z+½z² (A₁,₁≈1, A₁,₂≈½), univalent',
        !!b && approxEq(b.A[0].re, 1, 1e-3) && approxEq(b.A[1].re, 0.5, 1e-3) && Math.abs(b.z.re) < 1e-6 && r.primary.univalent === true);
   }
+
+  // ---- gauge quotient: QD.sameDomain merges rotation-related maps to one domain ----
+  // The realCount=2 above is the ±φ′(0) rotation pair, ONE domain. sameDomain (canonicalize
+  // by the disk rotation that makes φ′(0) real-positive, then phisEquivalent) collapses it.
+  {
+    const phi = (A) => ({ unbounded: false, w0: { re: 0, im: 0 }, branches: [{ z: { re: 0, im: 0 }, A }] });
+    const card = phi([{ re: 1, im: 0 }, { re: 0.5, im: 0 }]);              // φ = z + ½z²
+    const refl = phi([{ re: -1, im: 0 }, { re: 0.5, im: 0 }]);             // π-rotation z↦−z: −z + ½z²
+    const rotI = phi([{ re: 0, im: 1 }, { re: -0.5, im: 0 }]);             // z↦iz: A₁=i, A₂=½·i²=−½
+    const disk = phi([{ re: 1, im: 0 }]);                                  // φ = z (unit disk)
+    const big = phi([{ re: 2, im: 0 }, { re: 1, im: 0 }]);                 // 2× cardioid (different size)
+    ok('sameDomain: cardioid ≡ its π-rotation (−z+½z²) — one domain, not two', QD.sameDomain(card, refl) === true);
+    ok('sameDomain: cardioid ≡ its z↦iz rotation', QD.sameDomain(card, rotI) === true);
+    ok('sameDomain: cardioid ≠ disk', QD.sameDomain(card, disk) === false);
+    ok('sameDomain: cardioid ≠ a 2× scaled cardioid (distinct domain)', QD.sameDomain(card, big) === false);
+  }
 };

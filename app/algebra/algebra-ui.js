@@ -874,7 +874,7 @@
           const tail = (cx != null ? ' (of ' + cx + ' distinct complex' + (mult != null && mult > cx ? '; ' + mult + ' with multiplicity' : '') + ')' : '');
           if (r.realCount === 0) verdict = 'No real quadrature domain' + tail + '.';
           else if (r.realCount === 1) verdict = 'Unique quadrature domain — exactly 1 real solution' + tail + '.';
-          else verdict = r.realCount + ' real quadrature domains' + tail + '.';
+          else verdict = r.realCount + ' real algebraic solutions' + tail + ' — run Certify univalence for the genuine-QD count (gauge copies merged, non-univalent ones filtered).';
         }
         // A factor "case" column counts ONE branch of V(p)=⋃V(fᵢ) — the branches add up.
         if (r.partialBranch) verdict += '  [case ' + ((r.caseIndex || 0) + 1) + ' of ' + r.caseCount + ' of a factor split — this counts THIS branch only; the branches add up to the original.]';
@@ -979,6 +979,13 @@
     // Hermite trace form; 0 ⇔ simple) and falls back to the numeric QD.isBoundaryUnivalent on a
     // cusp/positive-dim/over-cap case. NB the algebraic # real solutions and the # genuine QDs
     // are DIFFERENT questions (the classic balayage-vs-algebra distinction); this reconciles them.
+    //
+    // UNIFIED EXISTENCE/UNIQUENESS VERDICT: this is the authoritative verdict, composing the
+    // regime (classify: inconsistent ⇒ no QD; positive-dimensional ⇒ underdetermined, "fix the
+    // gauge"; zero-dimensional ⇒ count) with the univalence filter AND a GAUGE QUOTIENT — real
+    // algebraic solutions related by a disk rotation (QD.sameDomain) are the SAME domain, so the
+    // raw solution count (e.g. the ±φ′(0) pair) is collapsed to the geometric quadrature-domain
+    // count. This is what turns "N real solutions" into "K distinct genuine quadrature domains".
     function doCertifyUnivalence() {
       if (_abort) return;
       if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
@@ -987,14 +994,23 @@
       clearError();
       setBusy(true, 'Certifying univalence (genuine QDs)…');
       setTimeout(() => {
-        let r; try { r = store.solveReal(null, { paramValues: hDataParamValues() }); }
+        const params = hDataParamValues();
+        // 1) REGIME (dimension + consistency), exact via the Hermite form — cheap front-matter.
+        let cl; try { cl = store.classify(null, { paramValues: params }); }
+        catch (e) { cl = { ok: false, reason: (e && e.message) || String(e) }; }
+        if (!cl.ok) { setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + withGuidance(cl.reason || 'classify failed')); return; }
+        const finalVerdict = (text, bad) => { setBusy(false); setStatus(text); if (canvas) canvas.setVerdict({ text: text }); toast(text, bad ? { kind: 'error' } : {}); };
+        if (cl.inconsistent) { finalVerdict('No quadrature domain: the system is inconsistent (1 ∈ I).', true); return; }
+        if (!cl.zeroDim) { finalVerdict('Underdetermined: a positive-dimensional family (' + cl.numVars + ' real variables). Fix the rotation gauge (φ′(0) real-positive) or pin a forced variable (e.g. a pole pre-image), then re-run.', true); return; }
+        // 2) ZERO-DIMENSIONAL: solve for the real solutions (= the algebraic quadrature domains).
+        let r; try { r = store.solveReal(null, { paramValues: params }); }
         catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
         setBusy(false); setStatus('');
         if (!r.ok) { showError('Univalence: ' + withGuidance(r.reason || 'solve failed')); return; }
         const real = (r.solutions || []).filter((s) => Object.keys(s).every((k) => Math.abs(s[k].im) < 1e-4));
-        if (!real.length) { const v = 'No real solutions — no quadrature domain.'; setStatus(v); if (canvas) canvas.setVerdict({ text: v }); toast(v, { kind: 'error' }); return; }
+        if (!real.length) { const v = 'No real quadrature domain' + (cl.complexCount != null ? ' (of ' + cl.complexCount + ' distinct complex)' : '') + '.'; setStatus(v); if (canvas) canvas.setVerdict({ text: v }); toast(v, { kind: 'error' }); return; }
         const hData = activeEnv.hData;
-        let genuine = 0, folded = 0, selfInt = 0, unrec = 0; const rows = [];
+        let folded = 0, selfInt = 0, unrec = 0; const rows = []; const genuinePhis = [];
         real.forEach((sol, idx) => {
           const phi = phiFromAlgebraSolution(sol, hData);
           if (!phi) { unrec++; rows.push('#' + (idx + 1) + ': φ not reconstructable (map variables eliminated — run on the seeded system)'); return; }
@@ -1014,13 +1030,26 @@
           const bTag = simpleExact ? 'real-count' : 'numeric';
           if (fold) { folded++; rows.push('#' + (idx + 1) + ': φ′ = 0 inside 𝔻 (fold, ' + tag + ') — not univalent'); }
           else if (!simple) { selfInt++; rows.push('#' + (idx + 1) + ': boundary φ(∂𝔻) self-intersects (' + bTag + ') — not univalent'); }
-          else { genuine++; rows.push('#' + (idx + 1) + ': univalent ✓ — genuine quadrature domain' + (exact && simpleExact ? ' (Schur–Cohn + real-count certified)' : (exact ? ' (φ′≠0 in 𝔻 certified)' : ''))); }
+          else { genuinePhis.push(phi); rows.push('#' + (idx + 1) + ': univalent ✓ — genuine quadrature domain' + (exact && simpleExact ? ' (Schur–Cohn + real-count certified)' : (exact ? ' (φ′≠0 in 𝔻 certified)' : ''))); }
         });
-        const rejected = [folded ? folded + ' fold' : '', selfInt ? selfInt + ' self-intersecting' : '', unrec ? unrec + ' unreconstructable' : ''].filter(Boolean).join(', ');
-        const verdict = genuine + ' genuine quadrature domain' + (genuine === 1 ? '' : 's') + ' of ' + real.length + ' real solution' + (real.length === 1 ? '' : 's') + (rejected ? ' (' + rejected + ')' : '');
+        // 3) GAUGE QUOTIENT: genuine solutions related by a disk rotation are the SAME domain.
+        const distinct = [];
+        genuinePhis.forEach((phi) => { if (!distinct.some((d) => typeof QD.sameDomain === 'function' && QD.sameDomain(d, phi))) distinct.push(phi); });
+        const D = distinct.length, gaugeMerged = genuinePhis.length - D;
+        // 4) UNIFIED VERDICT.
+        const bits = [];
+        if (gaugeMerged > 0) bits.push(gaugeMerged + ' gauge/rotation ' + (gaugeMerged === 1 ? 'copy' : 'copies') + ' merged');
+        const rej = [folded ? folded + ' fold' : '', selfInt ? selfInt + ' self-intersecting' : '', unrec ? unrec + ' unreconstructable' : ''].filter(Boolean).join(', ');
+        if (rej) bits.push(rej + ' rejected');
+        const tail = bits.length ? ' (' + bits.join('; ') + ')' : '';
+        const nReal = real.length, plur = nReal === 1 ? '' : 's';
+        let verdict;
+        if (D === 0) verdict = 'No genuine quadrature domain: ' + nReal + ' real algebraic solution' + plur + ', none univalent' + tail + '.';
+        else if (D === 1) verdict = 'Unique quadrature domain ✓ — 1 genuine QD of ' + nReal + ' real solution' + plur + tail + '.';
+        else verdict = D + ' distinct quadrature domains of ' + nReal + ' real solution' + plur + tail + '.';
         setStatus(verdict);
         if (canvas) canvas.setVerdict({ text: verdict, solutionsText: rows.join('\n') });
-        toast(verdict, genuine ? {} : { kind: 'error' });
+        toast(verdict, D ? {} : { kind: 'error' });
       }, 20);
     }
 

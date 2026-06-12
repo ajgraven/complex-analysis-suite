@@ -1615,6 +1615,41 @@ function phisEquivalent(a, b, tol = 1e-4) {
   return Complex.abs(Complex.sub(a.w0 || {re:0,im:0}, b.w0 || {re:0,im:0})) < tol;
 }
 
+// Rotate the domain's Riemann map by the disk rotation z ↦ μ·z so that φ′(0) becomes
+// REAL and POSITIVE — the canonical representative of the rotation gauge. Under z↦μz the
+// bounded-ansatz coefficients transform as z_j ↦ μ·z_j, A_{j,k} ↦ μ^k·A_{j,k} (w₀ fixed);
+// φ′(0) ↦ μ̄·φ′(0), so μ = φ′(0)/|φ′(0)| sends it to |φ′(0)| > 0. Degenerate (|φ′(0)|≈0 ⇒
+// the center is a critical point, not univalent) returns the input unchanged.
+function canonicalizeByRotation(phi, tol = 1e-9) {
+  let d;
+  try { d = phiTaylorAt({ re: 0, im: 0 }, phi, 1)[1]; } catch (e) { return phi; }   // φ′(0)
+  const mag = Complex.abs(d || { re: 0, im: 0 });
+  if (!(mag > tol)) return phi;
+  const mu = { re: d.re / mag, im: d.im / mag };                                     // unit phase of φ′(0)
+  const out = { unbounded: !!phi.unbounded, w0: phi.w0 ? { re: phi.w0.re, im: phi.w0.im } : { re: 0, im: 0 }, branches: [] };
+  if (phi.family) out.family = phi.family;
+  let muPow = { re: 1, im: 0 };                                                       // μ^k, k starting at 1 below
+  for (const br of (phi.branches || [])) {
+    const A = [];
+    muPow = { re: mu.re, im: mu.im };                                                // μ^1
+    for (let k = 0; k < br.A.length; k++) {
+      A.push(Complex.mul(br.A[k], muPow));                                           // A_{j,k+1} · μ^{k+1}
+      muPow = Complex.mul(muPow, mu);
+    }
+    out.branches.push({ z: Complex.mul(br.z, mu), A });                              // z_j · μ
+  }
+  return out;
+}
+
+// Same QUADRATURE DOMAIN up to the rotation gauge: two normalized maps φ_a, φ_b describe
+// the same Ω iff one is the other precomposed with a disk rotation z↦μz. Canonicalize both
+// (φ′(0) real-positive) and compare coefficients with phisEquivalent. This is what makes the
+// existence/uniqueness count GEOMETRIC — e.g. the cardioid z+½z² and its π-rotation −z+½z²
+// are one domain, not two.
+function sameDomain(a, b, tol = 1e-4) {
+  return phisEquivalent(canonicalizeByRotation(a), canonicalizeByRotation(b), tol);
+}
+
 // Realizability diagnostic for bounded PQDs (α-homotopy fold tracer). Thin
 // pass-through to QD.PqdCommon.diagnosePQDRealizability, which is attached by
 // solver-pqd-common.js (loaded AFTER this file) — so resolve it at call time.
@@ -1687,7 +1722,7 @@ const _exports = {
   // Dispatchers + shared
   evalPhi, phiTaylorAt, residual, residualNorm,
   packPhi, unpackPhi, canonicalizePhi,
-  clonePhi, phisEquivalent,
+  clonePhi, phisEquivalent, sameDomain, canonicalizeByRotation,
   newtonSolve, scaleHDataPoles, scaleHDataResidues,
   solveLinearSystem, solveLeastSquares, houseQR, numericalJacobian,
   isBoundaryUnivalent, sampleBoundary, sampleBoundaryAdaptive, refineBoundaryByDeviation,
