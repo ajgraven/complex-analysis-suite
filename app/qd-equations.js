@@ -547,8 +547,48 @@
     return { allReal, conjugationClosed: closed };
   }
 
+  // ---- Interior point-functional QD system (the Aharonov–Shapiro formulation) ----
+  // Companion to generateClassicalBounded's EXTERIOR (●)/(★)/gauge form. For a bounded
+  // simply-connected QD with a single order-2 node, Aharonov & Shapiro use the INTERIOR
+  // quadrature identity  ∫_Ω f dA = M₀ f(0) + M₁ f′(0)  (M₀ = area > 0, M₁ ∈ ℂ). The
+  // normalized Riemann map is a degree-2 polynomial φ(z) = w₁z + w₂z²  (φ(0)=0, rotation
+  // gauge w₁ = φ′(0) > 0 real). A direct moment computation — ∫_Ω f dA = ∫_𝔻 f(φ)|φ′|² dA
+  // with ∫_𝔻 z^a z̄^b dA = δ_{ab}/(a+1) (area measure normalized so π→1) — gives
+  //      M₀ = w₁² + 2|w₂|²   (= area),     M₁ = w₁² w̄₂.
+  // Splitting w₂ = u₂ + i·v₂ and M₁ = m₁ + i·n₁, the REAL system is
+  //      M₀ = w₁² + 2(u₂²+v₂²),    m₁ = w₁² u₂,    n₁ = −w₁² v₂,
+  // and eliminating w₂ yields the resolvent cubic in s = w₁²:  s³ − M₀ s² + 2|M₁|² = 0.
+  // Univalence is degree-2-special: φ′(z) = w₁ + 2w₂z ≠ 0 in 𝔻 (⇔ w₁ ≥ 2|w₂|) is here
+  // NECESSARY AND SUFFICIENT — so Sym.schurCohn on [w₁, 2w₂] settles it. A&S's theorem:
+  // exactly one root of the cubic with w₁>0 gives a univalent map ⇒ the QD is unique; the
+  // cardioid φ = √3/6·(2z+z²) is the cusp case (w₁ = 2|w₂|, the cubic's double root).
+  //
+  // Returns { polys (MPolys in w1,u2,v2), vars, params }. With `data = {M0, M1:{re,im}}`
+  // the quadrature data is substituted as EXACT ℚ constants (continued-fraction rational of
+  // each float, via ratApprox); with `data` omitted, M0/m1/n1 are left as symbolic params
+  // (for the resolvent/discriminant elimination). Coefficient field stays ℚ(i)/ℚ.
+  function pointFunctionalSystem(data) {
+    const S = getSym();
+    if (!S) throw new Error('QD.QDEquations: QD.Sym not loaded');
+    const { mpolyVar: mv, mpolyConst: mc, mpolyInt: mi, gauss, rat } = S;
+    const w1 = mv('w1'), u2 = mv('u2'), v2 = mv('v2');
+    let M0, m1, n1; const params = [];
+    if (data) {
+      const cr = (x) => { const [n, d] = _ratApprox(x || 0); return mc(gauss(rat(n, d), rat(0))); };
+      M0 = cr(data.M0); m1 = cr(data.M1 && data.M1.re); n1 = cr(data.M1 && data.M1.im);
+    } else {
+      M0 = mv('M0'); m1 = mv('m1'); n1 = mv('n1'); params.push('M0', 'm1', 'n1');
+    }
+    const polys = [
+      M0.sub(w1.pow(2)).sub(u2.pow(2).add(v2.pow(2)).mul(mi(2))),   // M₀ − w₁² − 2(u₂²+v₂²)
+      m1.sub(w1.pow(2).mul(u2)),                                    // m₁ − w₁²·u₂
+      n1.add(w1.pow(2).mul(v2)),                                    // n₁ + w₁²·v₂
+    ];
+    return { polys, vars: ['w1', 'u2', 'v2'], params };
+  }
+
   const QDEquations = {
-    generateClassicalBounded, reimSplit, realAxisSymmetry,
+    generateClassicalBounded, pointFunctionalSystem, reimSplit, realAxisSymmetry,
     residualAtSolution, residualReimAtSolution,
     buildVarMap, buildRealVarMap,
     systemToLatex, systemToExport, latexOf: latexOfFor,
