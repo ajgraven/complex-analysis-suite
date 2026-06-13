@@ -109,6 +109,50 @@ its own merged PR), with one feature **in progress on a branch**:
   verified numeric roots, every factor checked by exact division) behind `store.factorOf`/`applyFactor`,
   which split an equation `p = f·g` into candidate systems `V(p)=⋃V(fᵢ)` and pursue one factor as a
   `case fₖ = 0` column (the others reachable via undo; branch existence counts ADD). Full suite 1749/0.
+  Then the **certified-univalence + Aharonov–Shapiro engagement** (6 commits `4a3bc30…f51baff`,
+  full suite **1801/0**), which made the genuine-QD test EXACT and used it to reproduce a published
+  uniqueness theorem:
+  - **`4a3bc30` exact local fold test** — `Sym.schurCohn(coeffs)` counts a ℚ(i) polynomial's roots
+    inside 𝔻 via the Hermitian Schur–Cohn matrix `C = A·Aᴴ − B·Bᴴ` and its EXACT inertia
+    (`_hermitianInertia`); returns `{inside, outside, onCircle, degenerate}` (degenerate = singular C
+    ⇒ on-circle OR self-inversive ⇒ caller must not certify). Wired into `doCertifyUnivalence`'s local
+    test (`schurCohnFold`: rationalize the candidate → substitute the barred pole vars into
+    `QC.phiPrimeNumerator` → count roots in 𝔻), with a numeric `findCriticalPoints` fallback on the
+    degenerate/cusp case. Exports `Sym.schurCohn`, `Sym.uniCoeffs`.
+  - **`f001dd1` exact boundary (global) injectivity** — `QC.phiDividedDifference(hData)` (factored out
+    of `injectivity`) + `QC.boundaryDoublePointCount(hData, poleSubst, opts)`: substitute the candidate's
+    ℚ(i) values, reim-split the divided difference over the two circle points, add the circle quadrics,
+    and count REAL circle double points via `Sym.realSolutionCount` (0 ⇔ boundary simple). Wired as the
+    BOUNDARY test (`boundarySimpleExact`) when the local test certified φ′≠0 on 𝔻̄ (so no diagonal/cusp
+    solutions); else numeric `isBoundaryUnivalent`.
+  - **`a8d9464` Aharonov–Shapiro cardioid uniqueness reproduction** — `QDEquations.pointFunctionalSystem(data)`
+    (the INTERIOR degree-2 system: `M₀=w₁²+2|w₂|²`, `M₁=w₁²w̄₂`; resolvent cubic `s³−M₀s²+2|M₁|²`, s=w₁²)
+    + `AHARONOV_SHAPIRO.md` + `app/test/cardioid-uniqueness.test.js`. Shows the engine (`realSolutionCount`
+    + `schurCohn` + Gröbner elimination) reproduces A&S's order-2 uniqueness theorem; the cusp is the
+    resolvent's double root. The app's exterior `h=1.5/w+0.5/w²` recovers the same φ=z+½z² once the forced
+    pole pre-image `z₁=0` is pinned (the positive-dim cause was the locator factoring through z₁ — NOT a
+    missing area equation). Full parametric uniqueness over all (M₀,M₁) is the deferred RCTD/CAS frontier.
+  - **`48253bb` unified gauge-aware verdict** — `solver.js` `sameDomain(a,b)` / `canonicalizeByRotation`
+    (rotation-aware "same quadrature domain": canonicalize each map so φ′(0)>0 real via `z_j→μz_j`,
+    `A_{j,k}→μᵏA_{j,k}`, then `phisEquivalent`). `doCertifyUnivalence` became the authoritative verdict:
+    regime front-matter (inconsistent / **positive-dimensional ⇒ "fix the gauge / pin a forced variable"**
+    / zero-dim) + the univalence filter + a **gauge quotient** collapsing the raw ±φ′(0) count to the
+    geometric QD count ("Unique quadrature domain ✓ — 1 genuine QD … (1 gauge copy merged)").
+  - **`462ae02` resolvent/discriminant (#3) + spurious-component detection (#2)** — `Sym.resolvent(input,
+    varName, vars, opts)` = the univariate eliminant `χ_v(x)=det(x·I − M_v)` (char poly of mult-by-v on
+    R/I via `multiplicationMatrix`+`mpolyDet`) with squareFree (distinct roots) + a cap-free `degenerate`
+    flag (repeated root ⇒ cusp/coincident); `store.resolventOf`/`reimVariables` + a "Resolvent /
+    discriminant" Analyze control. `store.spuriousFactors(ids, opts)` factors the param-pinned reim
+    equations; a degree-1 univariate factor ⇒ a one-click **[Pin v=0]** suggestion (else [Split into
+    cases]) surfaced in the positive-dim verdict (`canvas.setVerdict` gained an `actions` array).
+  - **`f51baff` numeric-oracle cross-check (#4)** — `crossCheckPhis(phis, hData)` validates each genuine
+    QD against two oracles (residual ≈0 against the freshly-regenerated original system via
+    `QE.residualAtSolution`; `sameDomain` to the numeric solver `activeEnv.primary.phi`) and annotates the
+    verdict (`· cross-check ✓ …` / `· ⚠ … reduction chain may be unsound`).
+  **Deferred (review items #5/#6, not started):** the interior point-functional generalization to order-n;
+  the parametric RCTD / external-CAS bridge. Known limitation: the certify path can't reconstruct φ when
+  reductions eliminate the map variables ("unreconstructable — run on the seeded system"); the cross-check
+  and gauge dedup ride on top of reconstruction. See the plan file's per-engagement sections.
 - **Symbolic QD equation generator** (`feature/symbolic-qd-equations`, NOT yet merged) — a new
   symbolic-algebra track: `app/sym-core.js` (`QD.Sym`, exact Rational/Gaussian/MPoly/RatFn +
   factored-denominator `FRatFn` + field-generic power series with Lagrange reversion) and

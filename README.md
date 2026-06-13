@@ -10,6 +10,8 @@ Faber-transform approach to both problems from Andrew Graven's PhD thesis,
 > **Navigation:** [ARCHITECTURE.md](ARCHITECTURE.md) — script load
 > order, namespace map, cross-tab contracts.
 > [THEORY_MAP.md](THEORY_MAP.md) — thesis equations → file:line.
+> [AHARONOV_SHAPIRO.md](AHARONOV_SHAPIRO.md) — reproducing the A&S cardioid
+> uniqueness theorem with the Algebra engine.
 > [CONTRIBUTING.md](CONTRIBUTING.md) — how to add a family, schema
 > runtime, test conventions. Per-module READMEs in
 > [`app/direct/`](app/direct/README.md),
@@ -139,11 +141,15 @@ visualizations, complementary to the headless runner.
     │                                  MPoly/RatFn/FRatFn + power series, Lagrange reversion;
     │                                  resultant/discriminant + Gröbner basis over ℚ(i):
     │                                  Buchberger (+ signature/GVW), FGLM, linearReduce,
-    │                                  solveZeroDim + Möller–Stetter eigenvalue solving)
+    │                                  solveZeroDim + Möller–Stetter eigenvalue solving;
+    │                                  realSolutionCount, schurCohn (exact disk-root count),
+    │                                  resolvent (char-poly eliminant + discriminant))
     ├── qd-equations.js                QD.QDEquations: symbolic coefficient system for a
-    │                                  classical bounded QD (conjugate + real/imag reps)
+    │                                  classical bounded QD (conjugate + real/imag reps;
+    │                                  pointFunctionalSystem = the interior A&S form)
     ├── qd-constraints.js              QD.QDConstraints: univalence/geometric constraints
-    │                                  (convex/star/spiral, φ′≠0, global injectivity, borders)
+    │                                  (convex/star/spiral, φ′≠0, global injectivity, borders;
+    │                                  boundaryDoublePointCount = exact boundary injectivity)
     ├── ui-strings.js                  QD.Strings: editable UI prose (SINGLE SOURCE) +
     │                                  the data-str applier (see HELPTEXT.md)
     │
