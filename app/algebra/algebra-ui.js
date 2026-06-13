@@ -1075,10 +1075,36 @@
         if (D === 0) verdict = 'No genuine quadrature domain: ' + nReal + ' real algebraic solution' + plur + ', none univalent' + tail + '.';
         else if (D === 1) verdict = 'Unique quadrature domain ✓ — 1 genuine QD of ' + nReal + ' real solution' + plur + tail + '.';
         else verdict = D + ' distinct quadrature domains of ' + nReal + ' real solution' + plur + tail + '.';
+        // 5) NUMERIC CROSS-CHECK (#4): the reconstructed QDs must satisfy the ORIGINAL generated
+        // system (reduction integrity) and agree with the independent numeric solver (oracle).
+        const cc = crossCheckPhis(distinct, hData);
+        let bad = !D;
+        if (cc.checked) {
+          if (cc.maxResidual < 1e-4 && cc.oracleMatch) verdict += ' · cross-check ✓ (residual ' + cc.maxResidual.toExponential(1) + '; matches the numeric solver)';
+          else { bad = true; const why = cc.maxResidual >= 1e-4 ? ('residual ' + cc.maxResidual.toExponential(1) + ' ≫ 0 — the reduction chain may be unsound') : 'no match to the numeric solver'; verdict += ' · ⚠ cross-check: ' + why; }
+        }
         setStatus(verdict);
         if (canvas) canvas.setVerdict({ text: verdict, solutionsText: rows.join('\n') });
-        toast(verdict, D ? {} : { kind: 'error' });
+        toast(verdict, bad ? { kind: 'error' } : {});
       }, 20);
+    }
+    // Numeric cross-check of reconstructed quadrature-domain maps against two independent
+    // oracles (#4): (1) reduction integrity — each φ must satisfy the FRESHLY-regenerated
+    // original conjugate-model system (QE.residualAtSolution ≈ 0; a large residual ⇒ the
+    // reduce/solve/reconstruct chain is unsound); (2) independent-solver agreement — some φ
+    // matches the numeric inverse solver's map (activeEnv.primary.phi) up to the rotation gauge
+    // (QD.sameDomain). Cheap (polynomial evaluation, no Gröbner), read-only. Returns
+    // { checked, maxResidual, oracleMatch }; checked=false when nothing is reconstructable.
+    function crossCheckPhis(phis, hData) {
+      if (!phis || !phis.length || !QE || typeof QE.residualAtSolution !== 'function') return { checked: false, maxResidual: 0, oracleMatch: false };
+      const w0cb = $('#alg-w0-fix'), fixW0 = !w0cb || w0cb.checked;
+      const w0Sel = fixW0 ? (activeEnv && (activeEnv.w0Used || (activeEnv.primary && activeEnv.primary.phi && activeEnv.primary.phi.w0))) : undefined;
+      let system; try { system = QE.generateClassicalBounded(hData, { maxPoleOrder: lastCap, w0: w0Sel }); } catch (e) { return { checked: false, maxResidual: 0, oracleMatch: false }; }
+      let maxResidual = 0;
+      for (const phi of phis) { try { const r = QE.residualAtSolution(system, phi, hData); if (r && r.max > maxResidual) maxResidual = r.max; } catch (e) { /* skip */ } }
+      const numPhi = activeEnv && activeEnv.primary && activeEnv.primary.phi;
+      const oracleMatch = !!(numPhi && typeof QD.sameDomain === 'function' && phis.some((p) => { try { return QD.sameDomain(p, numPhi); } catch (e) { return false; } }));
+      return { checked: true, maxResidual, oracleMatch };
     }
 
     // Friendly label for a reim variable name (A1_1__re → "A1,1 (Re)").

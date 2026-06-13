@@ -138,4 +138,23 @@ module.exports = async function run() {
     ok('sameDomain: cardioid ≠ disk', QD.sameDomain(card, disk) === false);
     ok('sameDomain: cardioid ≠ a 2× scaled cardioid (distinct domain)', QD.sameDomain(card, big) === false);
   }
+
+  // ---- #4 numeric cross-check: a genuine QD must satisfy the ORIGINAL generated system
+  //      (reduction integrity, QE.residualAtSolution≈0) AND match the numeric solver (oracle,
+  //      QD.sameDomain). A perturbed φ must FAIL the residual oracle — proving the check bites.
+  {
+    const hData = { poles: [{ a: { re: 0, im: 0 }, principal: [{ re: 1.5, im: 0 }, { re: 0.5, im: 0 }] }] };
+    const phi = (A) => ({ unbounded: false, w0: { re: 0, im: 0 }, branches: [{ z: { re: 0, im: 0 }, A }] });
+    const system = QE.generateClassicalBounded(hData, { w0: { re: 0, im: 0 } });
+    const card = phi([{ re: 1, im: 0 }, { re: 0.5, im: 0 }]);              // φ = z + ½z² (the true QD)
+    ok('#4 cross-check: cardioid φ=z+½z² satisfies the original system (residual ≈ 0)',
+       QE.residualAtSolution(system, card, hData).max < 1e-9);
+    const sr = QD.solveInverseQD(hData, { boundaryPts: 300 });
+    const numPhi = sr && sr.primary && sr.primary.phi;
+    ok('#4 cross-check: cardioid φ matches the numeric solver up to gauge (sameDomain)',
+       !!numPhi && QD.sameDomain(card, numPhi) === true);
+    const bad = phi([{ re: 1, im: 0 }, { re: 0.9, im: 0 }]);              // wrong A₁,₂ ⇒ not a QD
+    ok('#4 cross-check: a perturbed φ (A₁,₂=0.9) FAILS the residual oracle (residual ≫ 0)',
+       QE.residualAtSolution(system, bad, hData).max > 1e-3);
+  }
 };
