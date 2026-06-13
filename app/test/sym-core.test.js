@@ -935,6 +935,71 @@ module.exports = async function run() {
     // a nonzero constant has no nontrivial factorization
     ok('factor: a constant → ok:false', !S.factor(k(3), opts).ok);
 
+    // ---- full ℚ(i) univariate factorization (the closed KNOWN GAP) ----
+    // Helpers: multiply a factor list back, and a unit (degree-0, nonzero) test.
+    const iC = S.mpolyConst(S.gauss(S.rat(0n, 1n), S.rat(1n, 1n)));        // i
+    const mulAll = (fs) => fs.reduce((acc, f) => acc.mul(f), k(1));
+    const dividesAndUnitBack = (fs, p) => {
+      if (!fs.every((f) => divides(f, p))) return false;                  // each divides
+      let q; try { q = S.mpolyExactDiv(p, mulAll(fs)); } catch (e) { return false; }
+      return q.vars().size === 0 && !q.isZero();                          // product = p up to a unit
+    };
+
+    // THE GAP: x⁴+x²+1 = (x²+x+1)(x²−x+1), both IRREDUCIBLE over ℚ(i) (deg ≥ 2).
+    const g6 = x.pow(4).add(x.pow(2)).add(k(1));
+    const fg6 = S.factor(g6, opts);
+    ok('factor: x⁴+x²+1 → {x²+x+1, x²−x+1} (irreducible-over-ℚ(i) quadratics separated)',
+       fg6.ok && fg6.factors.length === 2 &&
+       fg6.factors.every((f) => f.degreeIn('x') === 2) && dividesAndUnitBack(fg6.factors, g6));
+
+    // product of two distinct irreducible-over-ℚ(i) quadratics: (x²+x+1)(x²+2).
+    const q2 = x.pow(2).add(x).add(k(1)).mul(x.pow(2).add(k(2)));
+    const fq2 = S.factor(q2, opts);
+    ok('factor: (x²+x+1)(x²+2) → 2 irreducible quadratics, multiplying back to the input',
+       fq2.ok && fq2.factors.length === 2 && dividesAndUnitBack(fq2.factors, q2));
+
+    // conjugate-pair split needing the SHIFTED norm trick: (x²+ix+1)(x²−ix+1) = x⁴+3x²+1,
+    // a rational quartic irreducible over ℚ but splitting into two conjugate ℚ(i) quadratics.
+    const hConj = x.pow(2).add(iC.mul(x)).add(k(1));
+    const cq = hConj.mul(x.pow(2).sub(iC.mul(x)).add(k(1)));
+    const fcq = S.factor(cq, opts);
+    ok('factor: x⁴+3x²+1 → two conjugate ℚ(i) quadratics (shifted-norm recovery)',
+       fcq.ok && fcq.factors.length === 2 &&
+       fcq.factors.every((f) => f.degreeIn('x') === 2) && dividesAndUnitBack(fcq.factors, cq));
+
+    // x⁴+1 splits over ℚ(i) as (x²−i)(x²+i) (irreducible over ℚ, reducible over ℚ(i)).
+    const f41 = S.factor(x.pow(4).add(k(1)), opts);
+    ok('factor: x⁴+1 → (x²−i)(x²+i) over ℚ(i)',
+       f41.ok && f41.factors.length === 2 && dividesAndUnitBack(f41.factors, x.pow(4).add(k(1))));
+
+    // mixed linear + quadratic over ℚ(i): (x−1)(x−2)(x²+x+1) → 3 distinct factors.
+    const mix = x.sub(k(1)).mul(x.sub(k(2))).mul(x.pow(2).add(x).add(k(1)));
+    const fmix = S.factor(mix, opts);
+    ok('factor: (x−1)(x−2)(x²+x+1) → 3 factors (linear + irreducible quadratic)',
+       fmix.ok && fmix.factors.length === 3 && dividesAndUnitBack(fmix.factors, mix));
+
+    // a genuinely irreducible-over-ℚ(i) quartic stays whole: x⁴+4x²+1 (roots ±i√(2±√3)).
+    const irrQ = S.factor(x.pow(4).add(x.pow(2).mul(k(4))).add(k(1)), opts);
+    ok('factor: x⁴+4x²+1 is irreducible over ℚ(i) → ok:false', !irrQ.ok && irrQ.factors.length === 1);
+
+    // ---- factorOverQ: Berlekamp–Zassenhaus over ℚ (distinct rational irreducibles) ----
+    const foq = S.factorOverQ(x.pow(4).add(x.pow(2).mul(k(5))).add(k(4)), 'x');   // (x²+1)(x²+4)
+    ok('factorOverQ: x⁴+5x²+4 → {x²+1, x²+4} over ℚ',
+       foq.length === 2 && foq.every((f) => f.degreeIn('x') === 2) &&
+       dividesAndUnitBack(foq, x.pow(4).add(x.pow(2).mul(k(5))).add(k(4))));
+    // an irreducible rational poly comes back whole (degree preserved).
+    const foq2 = S.factorOverQ(x.pow(2).add(x).add(k(1)), 'x');
+    ok('factorOverQ: x²+x+1 irreducible over ℚ → single factor', foq2.length === 1 && foq2[0].degreeIn('x') === 2);
+
+    // ---- qiFactor: the complete ℚ(i) irreducible factorization, directly ----
+    const qf = S.qiFactor(x.pow(4).add(x.pow(2)).add(k(1)), 'x');
+    ok('qiFactor: x⁴+x²+1 → 2 irreducible factors covering the full degree',
+       qf.length === 2 && qf.reduce((a, f) => a + f.degreeIn('x'), 0) === 4 &&
+       dividesAndUnitBack(qf, x.pow(4).add(x.pow(2)).add(k(1))));
+    // each returned factor is itself irreducible (re-factoring returns it whole).
+    ok('qiFactor: every returned factor is irreducible over ℚ(i)',
+       qf.every((f) => S.qiFactor(f, 'x').length === 1));
+
     // ---- univariate GCD + square-free over ℚ(i) ----
     // gcd((x−1)(x−2), (x−1)(x−3)) = x−1 (monic)
     const g1 = S.univariateGCD(x.sub(k(1)).mul(x.sub(k(2))), x.sub(k(1)).mul(x.sub(k(3))), 'x');

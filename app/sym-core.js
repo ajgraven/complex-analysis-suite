@@ -644,16 +644,13 @@
   //   (2) VARIABLE-DISJOINT product — when the variables partition into groups
   //       with no term mixing two groups, test p = A·B by substituting one group
   //       to a constant and VERIFYING A·B = κ·p exactly.
-  //   (3) UNIVARIATE (one variable only) — numeric roots → exact ℚ(i) value via
-  //       opts.ratApprox → keep each linear factor (v−r) that divides exactly.
+  //   (3) UNIVARIATE (one variable only) — the EXACT ℚ(i) factorizer (_qiFactor):
+  //       the shifted norm trick + Berlekamp–Zassenhaus over ℚ returns the COMPLETE
+  //       irreducible factorization, including factors irreducible over ℚ(i) of
+  //       degree ≥ 2 (e.g. x⁴+x²+1 → {x²+x+1, x²−x+1}).
   // Multiplicities collapse (only distinct zero sets matter for the case split).
-  // opts.rootFinder overrides the Durand–Kerner finder; opts.ratApprox (a float→
-  // [num,den] BigInt pair, e.g. QDEquations.ratApprox) enables method (3).
-  // KNOWN GAP: factors that are IRREDUCIBLE over ℚ(i) of degree ≥ 2 are not separated
-  // (e.g. x⁴+x²+1 = (x²+x+1)(x²−x+1) is returned whole). Closing it needs a full ℚ(i)
-  // univariate factorizer — the norm trick: factor N(f)=f·f̄ over ℚ (Berlekamp–Zassenhaus:
-  // square-free → Cantor–Zassenhaus mod p → Hensel lift → recombination) and gcd-recover.
-  // The square-free / univariateGCD primitives below are that factorizer's prerequisite.
+  // opts is accepted for back-compat (older callers pass rootFinder/ratApprox) but
+  // the univariate path is now exact and needs neither.
   // ---------------------------------------------------------------------------
   // Leading coefficient under the default (grlex) order — a stable scalar for the
   // monic normalization below. Returns 0 for the zero polynomial.
@@ -764,44 +761,312 @@
     if (g.degreeIn(v) <= 0) return p;                          // already square-free
     return mpolyExactDiv(p, g);
   }
-  // Univariate (one variable) linear-factor extraction. The numeric root finder runs on
-  // the SQUARE-FREE PART (distinct roots ⇒ better-conditioned roots), then each (v − r)
-  // whose rationalized root divides EXACTLY is kept. Returns {factors, cofactor}; the
-  // factors divide the square-free part (hence p), and V(square-free)=V(p), so the case
-  // split is correct. (Irreducible factors of degree ≥ 2 are NOT separated — that needs a
-  // full ℚ(i) factorizer via the norm trick; see the factor() block.)
-  function _univariateFactor(p, rootFinder, ratApprox) {
-    const vs = [...p.vars()];
-    if (vs.length !== 1 || !rootFinder || !ratApprox) return null;
-    const v = vs[0];
-    if (p.degreeIn(v) < 2) return null;                       // already linear/constant — nothing to split
-    let work = p;
-    try { work = squareFreePart(p, v); } catch (e) { work = p; }
-    if (work.degreeIn(v) < 1) return null;
-    let res;
-    try { res = rootFinder(work.coeffsIn(v).map((c) => c.evalComplex({}))) || {}; } catch (e) { return null; }
-    if (res.converged === false) return null;
-    const roots = res.roots || [];
-    const factors = [];
-    let cofactor = work;
-    for (const r of roots) {
-      const [rn, rd] = ratApprox(r.re), [iN, iD] = ratApprox(r.im);
-      const g = gauss(rat(rn, rd), rat(iN, iD));
-      const lin = MPoly.variable(v).sub(MPoly.constant(g));    // (v − r)
-      try { const q = mpolyExactDiv(cofactor, lin); cofactor = q; _factorPush(factors, lin); }
-      catch (e) { /* root not exactly rational over ℚ(i) — skip */ }
+  // ===========================================================================
+  // EXACT univariate factorization over ℚ(i) — the shifted norm trick (Trager's
+  // algorithm specialized to k = ℚ(i)), built on Berlekamp–Zassenhaus over ℚ.
+  //
+  // To factor f ∈ ℚ(i)[x]: for a rational shift s, form b(x) = f(x − s·i); its
+  // NORM N(b) = b·b̄ (conjugate the coefficients, i→−i) lies in ℚ[x] and is
+  // SQUARE-FREE exactly when gcd(b, b̄) = 1. Factor N(b) over ℚ; each ℚ(i)-
+  // irreducible factor of f is then recovered as gcd(f, Rⱼ(x + s·i)) for a
+  // rational irreducible factor Rⱼ of N(b). The plain "N(f) = f·f̄" prescription
+  // is the s = 0 case; a nonzero shift is needed precisely when f shares a factor
+  // with its conjugate (e.g. f = x²+1 = (x−i)(x+i): N(f) = (x²+1)² is NOT square-
+  // free, so s bumps to 2, where N = (x²+1)(x²+9) splits and the gcds give x±i).
+  // When N(b) is square-free the recovery is provably complete (Trager): the gcds
+  // are exactly the distinct irreducible factors of f. Every factor is still
+  // exact-division verified by the caller, so the result is certified regardless.
+  //
+  // The norm reduces ℚ(i)-factoring to factoring over ℚ — Berlekamp–Zassenhaus:
+  // square-free → Cantor–Zassenhaus mod a good prime p → Hensel lift past the
+  // Mignotte bound → naïve subset recombination (fine for the moderate degrees in
+  // QD systems). Refs: Hart–van Hoeij ISSAC'10; K. Conrad's ℤ[i] notes (norm
+  // property); FLINT fmpz_poly_factor as the correctness oracle.
+  // ---------------------------------------------------------------------------
+  // ---- BigInt scalar helpers (_blcm is shared with the Gröbner content-reduction below) ----
+  function _bpow(a, e) { let r = 1n; for (let i = 0n; i < e; i++) r *= a; return r; }
+  function _isqrt(n) {
+    if (n < 0n) throw new Error('isqrt: negative'); if (n < 2n) return n;
+    let x = n, y = (x + 1n) / 2n;
+    while (y < x) { x = y; y = (x + n / x) / 2n; }
+    return x;
+  }
+  function _modInv(a, p) {                                     // a⁻¹ mod p (p prime), via extended Euclid
+    let t = 0n, nt = 1n, r = p, nr = ((a % p) + p) % p;
+    while (nr !== 0n) { const q = r / nr; [t, nt] = [nt, t - q * nt]; [r, nr] = [nr, r - q * nr]; }
+    if (r > 1n) throw new Error('modInv: not invertible'); return ((t % p) + p) % p;
+  }
+  // ---- integer polynomials (ascending BigInt arrays, trailing zeros trimmed) ----
+  function _ipTrim(a) { const b = a.slice(); while (b.length && b[b.length - 1] === 0n) b.pop(); return b; }
+  function _ipDeg(a) { let d = a.length - 1; while (d >= 0 && a[d] === 0n) d--; return d; }
+  // Exact quotient of A by a MONIC integer divisor D (D | A over ℤ), else null.
+  function _ipDivExactMonic(A, D) {
+    const r = A.slice(); const d = _ipDeg(D);
+    if (d < 0) return null;
+    const q = []; for (let k = 0; k <= Math.max(_ipDeg(r) - d, -1); k++) q.push(0n);
+    for (let i = _ipDeg(r); i >= d; i--) {
+      const c = r[i]; if (c === 0n) continue;
+      q[i - d] = c;                                            // D monic ⇒ quotient coeff = c
+      for (let j = 0; j <= d; j++) r[i - d + j] -= c * D[j];
     }
-    if (!factors.length) return null;
-    return { factors, cofactor };
+    for (let i = 0; i < d; i++) if ((r[i] || 0n) !== 0n) return null;
+    return _ipTrim(q);
+  }
+  // ---- modular polynomials over ℤ/M (M a prime p in 𝔽_p ops, or p^k in Hensel) ----
+  function _pmRedux(a, M) { return _ipTrim(a.map((c) => ((c % M) + M) % M)); }
+  function _pmAdd(a, b, M) { const n = Math.max(a.length, b.length), o = []; for (let i = 0; i < n; i++) o.push((((a[i] || 0n) + (b[i] || 0n)) % M + M) % M); return _ipTrim(o); }
+  function _pmSub(a, b, M) { const n = Math.max(a.length, b.length), o = []; for (let i = 0; i < n; i++) o.push((((a[i] || 0n) - (b[i] || 0n)) % M + M) % M); return _ipTrim(o); }
+  function _pmScale(a, c, M) { const cc = ((c % M) + M) % M; return _ipTrim(a.map((x) => (x * cc) % M)); }
+  function _pmMul(a, b, M) {
+    if (!a.length || !b.length) return [];
+    const o = new Array(a.length + b.length - 1).fill(0n);
+    for (let i = 0; i < a.length; i++) { if (a[i] === 0n) continue; for (let j = 0; j < b.length; j++) o[i + j] = (o[i + j] + a[i] * b[j]) % M; }
+    return _pmRedux(o, M);
+  }
+  // Division mod a PRIME p (field): a = q·b + r, deg r < deg b. b may be non-monic.
+  function _pmDivModF(a, b, p) {
+    const r = _pmRedux(a, p); const bb = _pmRedux(b, p); const db = _ipDeg(bb);
+    if (db < 0) throw new Error('pmDivModF: division by zero');
+    const inv = _modInv(bb[db], p); const q = [];
+    let dr = _ipDeg(r); for (let k = 0; k <= Math.max(dr - db, -1); k++) q.push(0n);
+    while (dr >= db) {
+      const coef = (r[dr] * inv) % p; q[dr - db] = coef;
+      for (let j = 0; j <= db; j++) r[dr - db + j] = ((r[dr - db + j] - coef * bb[j]) % p + p) % p;
+      r.length = dr;                                           // drop the now-zero leading slot
+      dr = _ipDeg(r);
+    }
+    return { q: _ipTrim(q), r: _ipTrim(r) };
+  }
+  function _pmRemF(a, b, p) { return _pmDivModF(a, b, p).r; }
+  function _pmGcdF(a, b, p) {                                  // monic gcd over 𝔽_p
+    let x = _pmRedux(a, p), y = _pmRedux(b, p);
+    while (_ipDeg(y) >= 0) { const r = _pmRemF(x, y, p); x = y; y = r; }
+    if (_ipDeg(x) < 0) return [];
+    return _pmScale(x, _modInv(x[_ipDeg(x)], p), p);           // make monic
+  }
+  function _pmDeriv(a, M) { const o = []; for (let k = 1; k < a.length; k++) o.push((a[k] * BigInt(k)) % M); return _pmRedux(o, M); }
+  // Division by a MONIC divisor mod any modulus M (no inverse needed): used in Hensel.
+  function _pmDivModMonic(a, b, M) {
+    const r = _pmRedux(a, M); const bb = _pmRedux(b, M); const db = _ipDeg(bb);
+    const q = []; let dr = _ipDeg(r); for (let k = 0; k <= Math.max(dr - db, -1); k++) q.push(0n);
+    while (dr >= db && dr >= 0) {
+      const coef = r[dr]; q[dr - db] = coef;
+      for (let j = 0; j <= db; j++) r[dr - db + j] = ((r[dr - db + j] - coef * bb[j]) % M + M) % M;
+      r.length = dr; dr = _ipDeg(r);
+    }
+    return { q: _ipTrim(q), r: _ipTrim(r) };
+  }
+  function _pmPowMod(base, e, mod, p) {                        // base^e mod `mod` over 𝔽_p (mod monic)
+    let result = [1n], b = _pmRemF(base, mod, p), ee = e;
+    while (ee > 0n) { if (ee & 1n) result = _pmRemF(_pmMul(result, b, p), mod, p); ee >>= 1n; if (ee > 0n) b = _pmRemF(_pmMul(b, b, p), mod, p); }
+    return result;
+  }
+  function _prodMod(list, M) { let r = [1n]; for (const g of list) r = _pmMul(r, g, M); return r; }
+  // Symmetric (balanced) residues in (−M/2, M/2] — recovers the true small integers.
+  function _balanced(a, M) { const h = M / 2n; return _ipTrim(a.map((c) => { let r = ((c % M) + M) % M; if (r > h) r -= M; return r; })); }
+  // ---- Cantor–Zassenhaus over 𝔽_p (input: monic square-free mod p) ----
+  // Deterministic LCG so equal-degree splitting is reproducible across runs (the
+  // commit history's "fresh seed" rule: derive the seed from the input so distinct
+  // polynomials get distinct streams while a given input is always reproducible).
+  function _mkRng(seed) {
+    const MASK = (1n << 64n) - 1n; let s = ((seed % MASK) + MASK) % MASK; if (s === 0n) s = 0x2545f4914f6cdd1dn;
+    return function (mod) { s = (s * 6364136223846793005n + 1442695040888963407n) & MASK; return (s >> 11n) % mod; };
+  }
+  function _randPoly(n, p, rng) { const a = []; for (let k = 0; k < n; k++) a.push(rng(p)); return _ipTrim(a); }
+  function _ddf(f, p) {                                        // distinct-degree: [{f, d}], each f a product of deg-d irreducibles
+    const res = []; let fstar = _pmRedux(f, p); let h = [0n, 1n]; const X = [0n, 1n]; let i = 0;
+    while (_ipDeg(fstar) > 0) {
+      i++; h = _pmPowMod(h, p, f, p);                          // h = x^(pⁱ) mod f
+      const g = _pmGcdF(_pmSub(h, X, p), fstar, p);
+      if (_ipDeg(g) > 0) { res.push({ f: g, d: i }); fstar = _pmDivModF(fstar, g, p).q; }
+      if (_ipDeg(fstar) > 0 && _ipDeg(fstar) < 2 * (i + 1)) { res.push({ f: _pmScale(fstar, _modInv(fstar[_ipDeg(fstar)], p), p), d: _ipDeg(fstar) }); break; }
+    }
+    return res;
+  }
+  function _edf(f, d, p, rng) {                                // equal-degree: split f (∏ of deg-d irreducibles) into them
+    const out = []; const stack = [_pmScale(f, _modInv(f[_ipDeg(f)], p), p)];
+    const e = (_bpow(p, BigInt(d)) - 1n) / 2n;
+    while (stack.length) {
+      const g = stack.pop();
+      if (_ipDeg(g) === d) { out.push(g); continue; }
+      let split = null;
+      for (let tries = 0; tries < 100000 && !split; tries++) {
+        const a = _randPoly(_ipDeg(g), p, rng);
+        if (_ipDeg(a) <= 0) continue;
+        let gg = _pmGcdF(a, g, p);
+        if (_ipDeg(gg) > 0 && _ipDeg(gg) < _ipDeg(g)) { split = gg; break; }
+        const b = _pmSub(_pmPowMod(a, e, g, p), [1n], p);      // a^((pᵈ−1)/2) − 1 mod g
+        gg = _pmGcdF(b, g, p);
+        if (_ipDeg(gg) > 0 && _ipDeg(gg) < _ipDeg(g)) split = gg;
+      }
+      if (!split) throw new Error('factorOverQ: Cantor–Zassenhaus failed to split (bad prime?)');
+      split = _pmScale(split, _modInv(split[_ipDeg(split)], p), p);
+      stack.push(split, _pmDivModF(g, split, p).q);
+    }
+    return out;
+  }
+  function _czFactor(f, p, rng) { const out = []; for (const part of _ddf(f, p)) for (const g of _edf(part.f, part.d, p, rng)) out.push(g); return out; }
+  // ---- Hensel lifting (linear step, binary tree over the mod-p factors) ----
+  function _bezout(g, h, p) {                                  // s·g + t·h ≡ 1 (mod p), deg s < deg h
+    let r0 = _pmRedux(g, p), r1 = _pmRedux(h, p), s0 = [1n], s1 = [], t0 = [], t1 = [1n];
+    while (_ipDeg(r1) >= 0) {
+      const { q } = _pmDivModF(r0, r1, p); const r2 = _pmSub(r0, _pmMul(q, r1, p), p);
+      const s2 = _pmSub(s0, _pmMul(q, s1, p), p), t2 = _pmSub(t0, _pmMul(q, t1, p), p);
+      r0 = r1; r1 = r2; s0 = s1; s1 = s2; t0 = t1; t1 = t2;
+    }
+    const inv = _modInv(r0[_ipDeg(r0)], p); let s = _pmScale(s0, inv, p), t = _pmScale(t0, inv, p);
+    const { q, r } = _pmDivModF(s, h, p); s = r; t = _pmAdd(t, _pmMul(q, g, p), p);   // reduce deg s < deg h
+    return { s, t };
+  }
+  function _henselLinear(f, g, h, s, t, p, pa) {               // lift f ≡ gh from mod pa to mod pa·p (g,h monic)
+    const P = BigInt(p), pap = pa * P;
+    const diff = _pmSub(_pmRedux(f, pap), _pmMul(g, h, pap), pap);   // ≡ 0 (mod pa)
+    const delta = _pmRedux(diff.map((c) => (c / pa)), P);     // (f − gh)/pa  reduced mod p
+    const { q, r } = _pmDivModMonic(_pmMul(t, delta, P), g, P);      // t·δ = q·g + r, deg r < deg g
+    const dg = r, dh = _pmAdd(_pmMul(s, delta, P), _pmMul(q, h, P), P);
+    return { g: _pmRedux(_pmAdd(g, _pmScale(dg, pa, pap), pap), pap), h: _pmRedux(_pmAdd(h, _pmScale(dh, pa, pap), pap), pap) };
+  }
+  function _henselTree(f, facts, p, K) {                       // lift the mod-p factorization of monic f to mod p^K
+    const M = _bpow(BigInt(p), BigInt(K));
+    if (facts.length === 1) return [_pmRedux(f, M)];
+    const mid = facts.length >> 1, left = facts.slice(0, mid), right = facts.slice(mid);
+    let g = _prodMod(left, BigInt(p)), h = _prodMod(right, BigInt(p));
+    const { s, t } = _bezout(g, h, BigInt(p)); let pa = BigInt(p);
+    for (let a = 1; a < K; a++) { const st = _henselLinear(f, g, h, s, t, p, pa); g = st.g; h = st.h; pa *= BigInt(p); }
+    g = _pmRedux(g, M); h = _pmRedux(h, M);
+    return _henselTree(g, left, p, K).concat(_henselTree(h, right, p, K));
+  }
+  // ---- subset recombination of the lifted factors into true ℤ irreducibles ----
+  function _combinations(n, k) {                               // index k-subsets of [0,n)
+    const out = []; const idx = []; (function rec(start) {
+      if (idx.length === k) { out.push(idx.slice()); return; }
+      for (let i = start; i < n; i++) { idx.push(i); rec(i + 1); idx.pop(); }
+    })(0); return out;
+  }
+  function _recombine(B, lifted, M) {                          // B monic over ℤ; lifted: monic factors mod M
+    const factors = []; let remaining = lifted.slice(); let Bcur = _ipTrim(B.slice()); let size = 1;
+    while (remaining.length > 0 && size <= remaining.length) {
+      let found = false;
+      for (const idx of _combinations(remaining.length, size)) {
+        let prod = [1n]; for (const j of idx) prod = _pmMul(prod, remaining[j], M);
+        const cand = _balanced(prod, M);                      // monic integer candidate
+        const quo = _ipDivExactMonic(Bcur, cand);
+        if (quo) { factors.push(cand); Bcur = quo; const drop = new Set(idx); remaining = remaining.filter((_, j) => !drop.has(j)); found = true; break; }
+      }
+      if (found) { size = 1; continue; }
+      size++;
+    }
+    if (_ipDeg(Bcur) > 0) factors.push(Bcur);                  // leftover is the final irreducible factor
+    return factors;
+  }
+  // ---- MPoly(univariate, rational coeffs) ↔ primitive integer poly ----
+  function _mpolyToIntPrimitive(p, v) {
+    const g = _uniToArr(p, v); const nums = [], dens = [];
+    for (const c of g) { if (!c.im.isZero()) throw new Error('factorOverQ: non-rational coefficient'); nums.push(c.re.n); dens.push(c.re.d); }
+    let L = 1n; for (const d of dens) L = _blcm(L, d) || 1n;
+    let arr = nums.map((n, k) => n * (L / dens[k]));
+    let cont = 0n; for (const a of arr) cont = bgcd(cont, a);
+    if (cont === 0n) return [];
+    arr = arr.map((a) => a / cont);
+    if (arr[_ipDeg(arr)] < 0n) arr = arr.map((a) => -a);      // leading coefficient positive
+    return _ipTrim(arr);
+  }
+  function _ipToMonicMPoly(arr, v) {                          // integer factor → monic MPoly over ℚ(i)
+    const a = _ipTrim(arr.slice()); const d = _ipDeg(a); const lc = a[d];
+    let out = MPoly.zero();
+    for (let k = 0; k <= d; k++) {
+      if (a[k] === 0n) continue;
+      const term = new MPoly(); term._addTerm(new Map(k > 0 ? [[v, k]] : []), gauss(new Rational(a[k], lc), RZERO));
+      out = out.add(term);
+    }
+    return out;
+  }
+  function _nextPrime(n) {
+    let c = n + 1n; if (c < 3n) return 3n; if (c % 2n === 0n) c++;
+    for (; ; c += 2n) { let prime = true; for (let d = 3n; d * d <= c; d += 2n) if (c % d === 0n) { prime = false; break; } if (prime) return c; }
+  }
+  // Factor a RATIONAL (real-coefficient) univariate MPoly into DISTINCT monic
+  // irreducible rational factors via Berlekamp–Zassenhaus. Square-free input is
+  // taken (radical) defensively, so every returned factor is distinct.
+  function _factorOverQ(poly, v) {
+    let R = poly;
+    try { R = squareFreePart(poly, v); } catch (e) { R = poly; }
+    const A = _mpolyToIntPrimitive(R, v); const n = _ipDeg(A);
+    if (n <= 0) return [];
+    if (n === 1) return [_ipToMonicMPoly(A, v)];
+    const lc = A[n];
+    // Monic transform B(y) = lc^{n−1}·A(y/lc): bₖ = aₖ·lc^{n−1−k} (k<n), bₙ = 1.
+    const B = []; for (let k = 0; k < n; k++) B.push(A[k] * _bpow(lc, BigInt(n - 1 - k))); B.push(1n);
+    // Choose a prime p with B mod p square-free (B monic ⇒ p ∤ lc automatically).
+    let p = 2n, rng = null, modp = null;
+    for (let tries = 0; tries < 200; tries++) {
+      p = _nextPrime(p < 3n ? 2n : p);
+      const Bp = _pmRedux(B, p);
+      if (_ipDeg(Bp) !== n) continue;
+      if (_ipDeg(_pmGcdF(Bp, _pmDeriv(Bp, p), p)) !== 0) continue;   // not square-free mod p
+      modp = _pmScale(Bp, _modInv(Bp[n], p), p);             // monic mod p
+      break;
+    }
+    if (!modp) throw new Error('factorOverQ: no usable prime found');
+    rng = _mkRng(B.reduce((acc, c) => acc + babs(c), 0n) + p + BigInt(n));
+    const cz = _czFactor(modp, p, rng);
+    if (cz.length <= 1) return [_ipToMonicMPoly(A, v)];        // B irreducible ⇒ A irreducible
+    // Hensel lift past the Mignotte coefficient bound 2ⁿ·‖B‖₂, then recombine.
+    let norm2 = 0n; for (const c of B) norm2 += c * c;
+    const bound = (1n << BigInt(n)) * (_isqrt(norm2) + 1n);
+    const need = 2n * bound + 1n;
+    let K = 1, pk = p; while (pk < need) { pk *= p; K++; }
+    const lifted = _henselTree(B, cz, Number(p), K);
+    const facsB = _recombine(B, lifted, _bpow(p, BigInt(K)));
+    // Map each monic factor Bⱼ(y) of B back to a factor of A: primpart(Bⱼ(lc·x)).
+    return facsB.map((Bj) => _ipToMonicMPoly(Bj.map((c, k) => c * _bpow(lc, BigInt(k))), v));
+  }
+  // Full ℚ(i) univariate factorization (RADICAL): returns the DISTINCT monic
+  // irreducible factors of f over ℚ(i). Uses the shifted norm trick above. The
+  // factors divide squareFreePart(f) (hence f), and V(square-free) = V(f), so the
+  // case split V(f) = ⋃ V(fᵢ) is exact. Returns [monic f] when f is irreducible.
+  function _qiFactor(f, v) {
+    if (f.vars().size !== 1 || [...f.vars()][0] !== v) return [f];
+    let work = f;
+    try { work = squareFreePart(f, v); } catch (e) { work = f; }
+    const lcW = _factorLeadCoeff(work);
+    if (!lcW.isZero()) work = work.scale(Gaussian.fromInt(1).div(lcW));   // monic over ℚ(i)
+    const deg = work.degreeIn(v);
+    if (deg <= 1) return [work];
+    const SMAX = 2 * deg + 8;
+    for (let s = 0; s <= SMAX; s++) {
+      // b(x) = work(x − s·i); s = 0 leaves work unchanged.
+      const b = (s === 0) ? work
+        : work.subst({ [v]: MPoly.variable(v).sub(MPoly.constant(gauss(RZERO, new Rational(BigInt(s), 1n)))) });
+      const bbar = b.conjCoeffs();
+      if (univariateGCD(b, bbar, v).degreeIn(v) > 0) continue;            // N(b) not square-free ⇒ bump s
+      const N = b.mul(bbar);                                              // norm ∈ ℚ[x] (im parts vanish)
+      let ratFactors;
+      try { ratFactors = _factorOverQ(N, v); } catch (e) { continue; }
+      if (!ratFactors.length) continue;
+      const factors = [];
+      for (const q of ratFactors) {
+        // Undo the shift on the rational factor: Rⱼ(x + s·i), then gcd with f.
+        const qShift = (s === 0) ? q
+          : q.subst({ [v]: MPoly.variable(v).add(MPoly.constant(gauss(RZERO, new Rational(BigInt(s), 1n)))) });
+        const h = univariateGCD(work, qShift, v);
+        if (h.degreeIn(v) >= 1) _factorPush(factors, h);
+      }
+      // Completeness: distinct irreducible factors of a square-free poly partition
+      // its degree. If they don't (a bad shift), bump s; otherwise accept.
+      let degSum = 0; for (const h of factors) degSum += h.degreeIn(v);
+      if (factors.length && degSum === deg) return factors;
+    }
+    return [work];                                                        // irreducible (or no clean shift found)
   }
   // Recursive driver that accumulates the distinct (radical) factors of `p` into `out`
   // (a dedup'd list, via _factorPush), applying the three methods in order of cost:
   //   (1) peel monomial factors (a variable dividing every term → the case v=0),
   //   (2) split a variable-separable product and recurse on each factor,
-  //   (3) factor a truly-univariate remainder into verified linear factors + cofactor.
-  // A remainder none of these split is pushed whole (irreducible by our methods). Every
-  // step strictly shrinks `cur`, so the recursion terminates; constants are dropped.
-  function _factorRec(p, rootFinder, ratApprox, out) {
+  //   (3) factor a truly-univariate remainder fully over ℚ(i) (the norm trick).
+  // A remainder none of these split is pushed whole (irreducible). Every step
+  // strictly shrinks `cur`, so the recursion terminates; constants are dropped.
+  function _factorRec(p, out) {
     if (p.vars().size === 0) return;
     let cur = p;
     for (const v of [...cur.vars()]) {                         // (1) monomial factors
@@ -810,18 +1075,19 @@
     }
     if (cur.vars().size === 0) return;
     const facs = _separableSplit(cur);                         // (2) separable (variable-disjoint) product
-    if (facs) { facs.forEach((f) => _factorRec(f, rootFinder, ratApprox, out)); return; }
-    const uni = _univariateFactor(cur, rootFinder, ratApprox); // (3) univariate
-    if (uni) { uni.factors.forEach((f) => _factorPush(out, f)); _factorPush(out, uni.cofactor); return; }
+    if (facs) { facs.forEach((f) => _factorRec(f, out)); return; }
+    if (cur.vars().size === 1) {                               // (3) univariate over ℚ(i)
+      const v = [...cur.vars()][0];
+      if (cur.degreeIn(v) >= 2) { _qiFactor(cur, v).forEach((f) => _factorPush(out, f)); return; }
+    }
     _factorPush(out, cur);                                     // irreducible by our methods
   }
   function factor(poly, opts) {
-    opts = opts || {};
+    opts = opts || {};   // accepted for back-compat (rootFinder/ratApprox); the univariate path is now exact
     if (!poly || poly.isZero()) return { ok: false, reason: 'cannot factor the zero polynomial', factors: [] };
     if (poly.vars().size === 0) return { ok: false, reason: 'a constant has no nontrivial factorization', factors: [poly] };
-    const rootFinder = opts.rootFinder || _defaultRootFinder();
     const out = [];
-    try { _factorRec(poly, rootFinder, opts.ratApprox, out); }
+    try { _factorRec(poly, out); }
     catch (e) { return { ok: false, reason: (e && e.message) || String(e), factors: [poly] }; }
     if (out.length <= 1) return { ok: false, reason: 'no nontrivial factorization found', factors: [poly] };
     // Defensive: make the contract literal — every returned factor must divide `poly`
@@ -2746,7 +3012,7 @@
     rat, gauss, gaussInt, mpolyVar, mpolyConst, mpolyInt,
     polyFromTermList: (list) => MPoly.fromTermList(list),
     monoKey, monoCmp,
-    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, univariateGCD, squareFreePart,
+    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, solveByEigenvalues, realSolutionCount, schurCohn, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
