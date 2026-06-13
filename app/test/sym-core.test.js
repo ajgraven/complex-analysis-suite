@@ -800,6 +800,28 @@ module.exports = async function run() {
          shows(sc([gr(-1, 2), gI(1), gI(0), gI(0)]), 1, 0, 0, false));
     }
 
+    // Resolvent — the univariate eliminant χ_v(x) = det(x·I − M_v) of a zero-dim ideal.
+    // squareFreePart = distinct v-values; a repeated root (distinctDegree < degree, disc 0)
+    // ⇔ coincident solutions / a degeneracy.
+    {
+      // ⟨x²−1, y²−1⟩ in x: each x-value (±1) sits in 2 y-fibres ⇒ χ_x = (x²−1)² ⇒ degenerate.
+      const gr2 = [mv('x').pow(2).sub(mi(1)), mv('y').pow(2).sub(mi(1))];
+      const rx = S.resolvent(gr2, 'x', ['x', 'y']);
+      ok('resolvent: ⟨x²−1,y²−1⟩ in x → χ_x = (x²−1)² (deg 4, 2 distinct), degenerate',
+         rx.ok && rx.degree === 4 && rx.distinctDegree === 2 && rx.degenerate === true &&
+         rx.poly.equals(mv('x').pow(2).sub(mi(1)).pow(2)) && rx.squareFree.equals(mv('x').pow(2).sub(mi(1))));
+      // separating ⟨x²−1, y−x⟩ in x: χ_x = x²−1 (deg 2 = #solutions), non-degenerate, disc ≠ 0.
+      const sep = [mv('x').pow(2).sub(mi(1)), mv('y').sub(mv('x'))];
+      const rs = S.resolvent(sep, 'x', ['x', 'y']);
+      ok('resolvent: ⟨x²−1,y−x⟩ in x → χ_x = x²−1, degree 2, non-degenerate (disc ≠ 0)',
+         rs.ok && rs.degree === 2 && rs.distinctDegree === 2 && rs.degenerate === false &&
+         rs.poly.equals(mv('x').pow(2).sub(mi(1))) && !!rs.discriminant && !rs.discriminant.isZero());
+      ok('resolvent: positive-dimensional ideal → {ok:false} (no finite resolvent)',
+         S.resolvent([mv('x').pow(2).sub(mi(1))], 'x', ['x', 'y']).ok === false);
+      ok('resolvent: a variable not in the system → {ok:false}',
+         S.resolvent(gr2, 'z', ['x', 'y']).ok === false);
+    }
+
     // Triangular decomposition (Wu-style pseudo-elimination) — the alternative eliminator.
     {
       const near = (a, b) => Math.abs(a - b) < 1e-6;

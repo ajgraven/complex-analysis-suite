@@ -306,6 +306,17 @@
       const body = div('algebra-verdict-body'); body.textContent = data.text;
       verdict.appendChild(head); verdict.appendChild(body);
       if (data.solutionsText) { const pre = document.createElement('pre'); pre.className = 'algebra-verdict-sols'; pre.textContent = data.solutionsText; verdict.appendChild(pre); }
+      // Optional one-click actions (e.g. spurious-component pin/split suggestions).
+      if (data.actions && data.actions.length) {
+        const bar = div('algebra-verdict-actions');
+        data.actions.forEach((a) => {
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'small'; b.textContent = a.label;
+          if (a.title) b.title = a.title;
+          b.addEventListener('click', () => { try { a.onClick(); } catch (e) { /* ignore */ } });
+          bar.appendChild(b);
+        });
+        verdict.appendChild(bar);
+      }
       verdict.classList.remove('hidden');
     }
 

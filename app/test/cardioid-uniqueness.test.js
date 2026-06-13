@@ -96,13 +96,26 @@ module.exports = async function run() {
     const st = QD.AlgebraStore.create();
     st.seedFromSystem(QE.generateClassicalBounded(hData, { w0: { re: 0, im: 0 } }));
     st.assumeReal(st.baseVariables().map((v) => v.raw || v.name || v));
+    // #2 spurious-component detection: the seeded system is positive-dimensional because the
+    // locator's real part factors through z₁ (eq = z₁·…). spuriousFactors flags it with a
+    // one-click "pin z₁ = 0" suggestion (the forced pole pre-image).
+    const sf = st.spuriousFactors(null, { paramValues: params });
+    ok('spuriousFactors: flags the locator factoring through z₁ ⇒ suggest pin z₁ = 0',
+       sf.some((h) => h.factors.some((f) => f.kind === 'variable' && f.pinVar === 'z1' &&
+         Math.abs(f.pinValue.re) < 1e-9 && Math.abs(f.pinValue.im) < 1e-9)));
     // φ(0)=a₁=0 with a single pole at the origin ⇒ the pole preimage z₁=0 is forced. Pinning it
-    // removes the spurious z₁≠0 component (the locator factors through z₁) ⇒ zero-dimensional,
-    // matching the interior realCount=2.
+    // (the suggested action) removes the spurious z₁≠0 component ⇒ zero-dimensional, matching
+    // the interior realCount=2.
     st.substituteValues([{ varName: 'z1', value: { re: 0, im: 0 } }], { propagate: true });
     const cls = st.classify(null, { paramValues: params });
     ok('exterior-h: after z₁=0 the reim system is zero-dimensional with realCount = 2',
        cls.ok && cls.zeroDim === true && cls.realCount === 2, 'cls=' + JSON.stringify(cls));
+    // resolvent (#3) in A₁,₁: the cusp shows up as a REPEATED root ⇒ degenerate. (base name
+    // A1_1 resolves to the reim real part A1_1__re; χ = ½ − 3/2·A₁,₁⁴ + A₁,₁⁶, distinct 4 of 6.)
+    const rv = st.resolventOf(null, 'A1_1', { paramValues: params });
+    ok('exterior-h resolvent in A₁,₁: degenerate (cusp = repeated root), degree 6, 4 distinct',
+       rv.ok && rv.degenerate === true && rv.degree === 6 && rv.distinct === 4, 'rv=' + JSON.stringify(rv && { ok: rv.ok, deg: rv.degree, dist: rv.distinct, degen: rv.degenerate }));
+    ok('resolventOf: an unknown variable → {ok:false}', st.resolventOf(null, 'nope', { paramValues: params }).ok === false);
     // numeric oracle: the inverse solver recovers φ = z + ½z² (A₁,₁≈1, A₁,₂≈½, z₁=0, univalent).
     const r = QD.solveInverseQD(hData, { boundaryPts: 300 });
     const phi = r && r.primary && r.primary.phi, b = phi && phi.branches && phi.branches[0];

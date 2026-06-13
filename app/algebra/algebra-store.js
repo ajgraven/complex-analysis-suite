@@ -815,6 +815,35 @@
       } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
     }
 
+    // The univariate RESOLVENT χ_v of the current column in a chosen REAL variable v — the
+    // characteristic polynomial of multiplication-by-v on the quotient ring (Sym.resolvent over
+    // the reim system). Its roots are v's values across the solutions; a REPEATED root
+    // (degenerate) ⇔ coincident solutions / a degeneracy (e.g. a cusp). `varName` may be a reim
+    // name (A1_1__re) or a base name (A1_1 → its real part A1_1__re). opts.paramValues pins the
+    // known data (like classify). Returns { ok, variable, latex, squareFreeLatex, degree,
+    // distinct, multiplicity, degenerate, discLatex, reason }.
+    function resolventOf(ids, varName, opts) {
+      const S = getSym();
+      const reim = currentReimSystem(ids, opts);
+      if (!reim.polys.length) return { ok: false, reason: 'no equality nodes to analyze' };
+      let v = varName;
+      if (reim.vars.indexOf(v) === -1) {                       // resolve a base name → its real part
+        if (reim.vars.indexOf(v + '__re') !== -1) v = v + '__re';
+        else return { ok: false, reason: 'variable "' + varName + '" is not a real variable of the current system' };
+      }
+      let r; try { r = S.resolvent(reim.polys, v, reim.vars, {}); }
+      catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+      if (!r.ok) return { ok: false, reason: r.reason };
+      return {
+        ok: true, variable: v,
+        latex: r.poly.toLatex(), squareFreeLatex: r.squareFree.toLatex(),
+        degree: r.degree, distinct: r.distinctDegree, multiplicity: r.dimension,
+        degenerate: r.degenerate, discLatex: r.discriminant ? r.discriminant.toLatex() : null,
+      };
+    }
+    // The real (reim) variable names of the current column — for the resolvent variable picker.
+    function reimVariables(ids, opts) { return currentReimSystem(ids, opts || {}).vars; }
+
     // Explicit REAL solutions (the actual quadrature domains): solve the pinned reim
     // system numerically (opts.paramValues pins the known data). Each solution is keyed
     // by the real variable names (v__re / v__im); the REAL ones (tiny imaginary part) are
@@ -1073,6 +1102,43 @@
       return res;
     }
 
+    // Spurious-component detection: factor the current column's REAL (reim) equations — the
+    // common cause of a positive-dimensional seeded system is a locator/gauge equation that
+    // FACTORS (e.g. the locator factors through the pole pre-image z₁: eq = z₁·(…), splitting
+    // the variety into {z₁=0} (the QD) ∪ {cofactor=0} (spurious)). opts.paramValues pins the
+    // known data (so factoring sees concrete ℚ coefficients, like classify). For each split,
+    // classify each factor: a degree-1 univariate factor c·v+d ⇒ a 'variable' suggestion to
+    // PIN the BASE variable (the reim var X__re/X__im mapped back to X) at the root; anything
+    // else ⇒ a 'general' factor (case-split via the node-level "Attempt to factor"). Returns
+    // [{ index, label, factorCount, factors:[{ factorIndex, kind, text, reimVar?, pinVar?,
+    // pinValue? }] }]. Pure/DOM-free. (saturate is deliberately NOT suggested — saturating by
+    // z₁ would delete the z₁=0 QD component.)
+    function spuriousFactors(ids, opts) {
+      const S = getSym(), QE = getQE();
+      const reim = currentReimSystem(ids, opts || {});
+      const out = [];
+      reim.polys.forEach((poly, i) => {
+        let fr; try { fr = S.factor(poly, { ratApprox: QE && QE.ratApprox }); } catch (e) { return; }
+        if (!fr.ok || !fr.factors || fr.factors.length < 2) return;
+        const factors = fr.factors.map((f, k) => {
+          const vs = [...f.vars()];
+          if (vs.length === 1 && f.degreeIn(vs[0]) === 1) {        // c·v + d ⇒ pin v = −d/c
+            try {
+              const cs = S.uniCoeffs(f, vs[0]);                    // [c0, c1] as Gaussians
+              const root = cs[0].mul(S.gaussInt(-1)).div(cs[1]);
+              const reimVar = vs[0], m = /^(.*)__(re|im)$/.exec(reimVar), base = m ? m[1] : reimVar;
+              const rr = root.re.toNumber();                       // the reim var is real-valued on the slice
+              const pinValue = (m && m[2] === 'im') ? { re: 0, im: rr } : { re: rr, im: 0 };
+              return { factorIndex: k, kind: 'variable', text: f.toLatex(), reimVar, pinVar: base, pinValue };
+            } catch (e) { /* fall through to general */ }
+          }
+          return { factorIndex: k, kind: 'general', text: f.toLatex() };
+        });
+        out.push({ index: i, label: 'real eqn ' + (i + 1), factorCount: fr.factors.length, factors });
+      });
+      return out;
+    }
+
     // Distinct variable names across all nodes (sorted) — for the UI variable pickers.
     function variables() {
       const s = new Set(); for (const n of nodes.values()) for (const v of nodeVars(n)) s.add(v); return [...s].sort();
@@ -1085,8 +1151,8 @@
     return {
       seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
-      substituteValue, substituteValues, reducePropagate, assumeReal, fixW0, factorOf, applyFactor, triangularize: triangularizeNodes,
-      currentReimSystem, classify, solveReal, currentColumnIds, maxColumn, columnStats, columns,
+      substituteValue, substituteValues, reducePropagate, assumeReal, fixW0, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
+      currentReimSystem, classify, resolventOf, reimVariables, solveReal, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, mathematicaColumn, mathematicaNode, mathematicaAll, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       undo, redo, reset,

@@ -2297,6 +2297,55 @@
   }
 
   // ===========================================================================
+  // RESOLVENT — the univariate eliminant of a zero-dimensional ideal in one variable.
+  // For I zero-dimensional and a variable v, the resolvent is the CHARACTERISTIC POLYNOMIAL of
+  // multiplication-by-v on the quotient A = R/I (dim D):  χ_v(x) = det(x·I − M_v). Its roots
+  // are the v-coordinates of the solutions, with algebraic multiplicity = the quotient
+  // multiplicity. Reading it off:
+  //   • squareFreePart(χ_v) = the DISTINCT v-values (the minimal polynomial of v on A);
+  //   • a REPEATED root (squareFree drops degree ⇔ disc χ_v = 0) ⇔ COINCIDENT solutions / a
+  //     degeneracy. When v SEPARATES the solutions (shape position) this is a genuine
+  //     degeneracy — e.g. the cusp, where the cardioid resolvent 2s³−3s²+1 = (s−1)²(2s+1) has a
+  //     double root; otherwise a repeat is just fibre multiplicity from projecting onto v.
+  // Built from shipped primitives (multiplicationMatrix → Bareiss mpolyDet → squareFreePart);
+  // the multiplicationMatrix caps (positive-dim throw, Hermite dim) propagate as { ok:false }.
+  // `degenerate` is exact and cap-free (from squareFreePart's gcd); the `discriminant` polynomial
+  // is best-effort (null if its Sylvester matrix exceeds the resultant cap).
+  // ===========================================================================
+  function resolvent(input, varName, vars, opts) {
+    opts = opts || {};
+    const fail = (reason) => ({ ok: false, reason });
+    if (!varName) return fail('resolvent: no variable given');
+    let G, o, vrs;
+    if (Array.isArray(input)) {
+      vrs = vars || opts.vars || _ambientVars(input);
+      o = _ord(opts.order || monomialOrder('grevlex', vrs));
+      try { G = buchberger(input, o, opts); } catch (e) { return fail((e && e.message) || String(e)); }
+    } else { G = input.G; o = _ord(input.order); vrs = vars || opts.vars || _ambientVars(G); }
+    if (vrs.indexOf(varName) === -1) return fail('resolvent: variable "' + varName + '" is not in the system');
+    if (!isZeroDimensional(G, o, vrs)) return fail('the system is not zero-dimensional (positive-dimensional family) — no finite resolvent');
+    let mm;
+    try { mm = multiplicationMatrix(G, o, vrs, varName); } catch (e) { return fail((e && e.message) || String(e)); }
+    const D = mm.D, M = mm.M;
+    if (D === 0) return { ok: true, poly: MPoly.fromInt(1), degree: 0, squareFree: MPoly.fromInt(1), distinctDegree: 0, discriminant: MPoly.fromInt(0), degenerate: false, dimension: 0 };
+    // χ_v(x) = det(x·I − M_v): the M entries are Gaussian constants, so this is univariate in v.
+    const xv = MPoly.variable(varName);
+    const negC = (g) => MPoly.constant(g.mul(Gaussian.fromInt(-1)));
+    const mat = [];
+    for (let i = 0; i < D; i++) {
+      const row = new Array(D);
+      for (let j = 0; j < D; j++) row[j] = (i === j) ? xv.add(negC(M[i][j])) : negC(M[i][j]);
+      mat.push(row);
+    }
+    const chi = mpolyDet(mat);
+    const sf = squareFreePart(chi, varName);
+    const deg = chi.degreeIn(varName), sdeg = sf.degreeIn(varName);
+    let disc = null;                                   // the discriminant polynomial (best-effort)
+    try { disc = resultant(chi, chi.derivativeIn(varName), varName, 2 * deg + 2); } catch (e) { disc = null; }
+    return { ok: true, poly: chi, degree: deg, squareFree: sf, distinctDegree: sdeg, discriminant: disc, degenerate: sdeg < deg, dimension: D };
+  }
+
+  // ===========================================================================
   // TRIANGULAR DECOMPOSITION (Wu-style successive pseudo-elimination).
   // An ALTERNATIVE eliminator to Gröbner: produce a TRIANGULAR set (one polynomial
   // per variable, each with a leading initial in the lower variables) by Ritt
@@ -2700,7 +2749,7 @@
     mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, univariateGCD, squareFreePart,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
-    multiplicationMatrix, solveByEigenvalues, realSolutionCount, schurCohn, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
+    multiplicationMatrix, solveByEigenvalues, realSolutionCount, schurCohn, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
   };

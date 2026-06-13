@@ -453,7 +453,10 @@
         '      <button id="alg-classify" class="small heavy-op" type="button" title="Existence / uniqueness: count the REAL solutions (= actual quadrature domains) of the current system via the Hermite trace form, plus distinct-complex / inconsistent / positive-dimensional verdicts">Existence / uniqueness</button>' +
         '      <button id="alg-dimension" class="small" type="button" data-str-title="tooltips.dimension">Dimension / count</button>' +
         '      <button id="alg-solve" class="small" type="button" data-str-title="tooltips.solveNumeric">Solve (numeric)</button>' +
-        '      <button id="alg-univalence" class="small heavy-op" type="button" title="Certify univalence: solve for the real solutions, reconstruct each candidate Riemann map φ, and test whether it is univalent (schlicht) on 𝔻 — reports how many real solutions are GENUINE quadrature domains (the rest are algebraic solutions whose φ folds or self-intersects)">Certify univalence</button></div></div>' +
+        '      <button id="alg-univalence" class="small heavy-op" type="button" title="Certify univalence: solve for the real solutions, reconstruct each candidate Riemann map φ, and test whether it is univalent (schlicht) on 𝔻 — reports how many real solutions are GENUINE quadrature domains (the rest are algebraic solutions whose φ folds or self-intersects)">Certify univalence</button></div>' +
+        '    <div class="row" style="flex-wrap:wrap; gap:4px; margin-top:4px;">' +
+        '      <label class="small">Resolvent in <select id="alg-resolvent-var" title="The real variable to eliminate to. The resolvent χ_v is the characteristic polynomial of multiplication-by-v on the quotient ring; its roots are v’s values across the solutions."></select></label>' +
+        '      <button id="alg-resolvent" class="small heavy-op" type="button" title="Resolvent / discriminant: the univariate eliminant χ_v(x)=det(x·I − M_v) of the current system in the chosen variable. squareFreePart = distinct v-values; a repeated root (discriminant 0) ⇒ coincident solutions / a degeneracy (e.g. a cusp). NB a repeat can also be fibre multiplicity if v does not separate the solutions.">Resolvent / discriminant</button></div></div>' +
         '  </details>' +
         // 5. Univalence constraints (2-column grid palette)
         '  <details class="algebra-section">' +
@@ -507,6 +510,8 @@
       $('#alg-dimension').addEventListener('click', doDimension);
       $('#alg-solve').addEventListener('click', doSolve);
       $('#alg-univalence').addEventListener('click', doCertifyUnivalence);
+      $('#alg-resolvent').addEventListener('click', doResolvent);
+      $('#alg-resolvent-var').addEventListener('mousedown', refreshResolventVars);
       $('#alg-cancel').addEventListener('click', cancelOp);
       $('#alg-gauge-elim').addEventListener('click', () => {
         if (!store.size) { if (!seedFromCurrent()) return; }
@@ -703,7 +708,7 @@
     // Cancel, and routes progress to the status line.
     let _abort = null;
     function setBusy(on, label) {
-      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-classify', 'alg-univalence', 'alg-autosolve',
+      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-classify', 'alg-univalence', 'alg-resolvent', 'alg-autosolve',
         'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-val-apply']
         .forEach((id) => { const b = $('#' + id); if (b) b.disabled = on; });
       const pal = $('#alg-palette'); if (pal) pal.querySelectorAll('button').forEach((b) => { b.disabled = on; });
@@ -1001,7 +1006,30 @@
         if (!cl.ok) { setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + withGuidance(cl.reason || 'classify failed')); return; }
         const finalVerdict = (text, bad) => { setBusy(false); setStatus(text); if (canvas) canvas.setVerdict({ text: text }); toast(text, bad ? { kind: 'error' } : {}); };
         if (cl.inconsistent) { finalVerdict('No quadrature domain: the system is inconsistent (1 ∈ I).', true); return; }
-        if (!cl.zeroDim) { finalVerdict('Underdetermined: a positive-dimensional family (' + cl.numVars + ' real variables). Fix the rotation gauge (φ′(0) real-positive) or pin a forced variable (e.g. a pole pre-image), then re-run.', true); return; }
+        if (!cl.zeroDim) {
+          // Positive-dimensional ⇒ underdetermined. Detect FACTORABLE causes (a locator/gauge
+          // equation that splits the variety) and offer one-click pin/split actions (#2).
+          setBusy(false); setStatus('');
+          const text = 'Underdetermined: a positive-dimensional family (' + cl.numVars + ' real variables). Fix the rotation gauge (φ′(0) real-positive) or pin a forced variable — see the suggestions below, or use “Set values”.';
+          const actions = []; const seen = {};
+          let hits = []; try { hits = store.spuriousFactors(null, { paramValues: hDataParamValues() }) || []; } catch (e) { hits = []; }
+          hits.forEach((h) => h.factors.forEach((f) => {
+            if (f.kind === 'variable' && f.pinVar) {
+              const v = latexPlain(f.pinVar), val = f.pinValue || { re: 0, im: 0 };
+              const vs = val.re + (val.im ? (val.im > 0 ? '+' : '') + val.im + 'i' : '');
+              const key = 'pin:' + f.pinVar; if (seen[key]) return; seen[key] = 1;
+              actions.push({ label: 'Pin ' + v + ' = ' + vs, title: 'An equation factors through ' + v + ' — pin it to isolate the component (substitute + propagate).',
+                onClick: () => { const r = store.substituteValues([{ varName: f.pinVar, value: val }], { propagate: true }); if (r && r.ok !== false) { rerender(); refreshPickers(); doCertifyUnivalence(); } } });
+            } else {
+              const key = 'split:' + h.nodeId; if (seen[key]) return; seen[key] = 1;
+              actions.push({ label: 'Split ' + (h.label || 'equation') + ' into cases', title: 'This equation factors — split V(p)=⋃V(fᵢ) into candidate case columns (Attempt to factor).',
+                onClick: () => { const r = store.applyFactor(h.nodeId, f.factorIndex); if (r && r.ok) { rerender(); refreshPickers(); doCertifyUnivalence(); } } });
+            }
+          }));
+          if (canvas) canvas.setVerdict({ text, actions: actions.slice(0, 6) });
+          setStatus(text); toast('Positive-dimensional — fix the gauge / pin a forced variable.', { kind: 'error' });
+          return;
+        }
         // 2) ZERO-DIMENSIONAL: solve for the real solutions (= the algebraic quadrature domains).
         let r; try { r = store.solveReal(null, { paramValues: params }); }
         catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
@@ -1050,6 +1078,51 @@
         setStatus(verdict);
         if (canvas) canvas.setVerdict({ text: verdict, solutionsText: rows.join('\n') });
         toast(verdict, D ? {} : { kind: 'error' });
+      }, 20);
+    }
+
+    // Friendly label for a reim variable name (A1_1__re → "A1,1 (Re)").
+    function friendlyReim(name) {
+      const m = /^(.*)__(re|im)$/.exec(name);
+      return m ? latexPlain(m[1]) + (m[2] === 're' ? ' (Re)' : ' (Im)') : latexPlain(name);
+    }
+    // Repopulate the resolvent variable picker from the current column's reim variables.
+    function refreshResolventVars() {
+      const sel = $('#alg-resolvent-var'); if (!sel) return;
+      let vars = []; try { vars = store.reimVariables(null, { paramValues: hDataParamValues() }) || []; } catch (e) { /* none */ }
+      const prev = sel.value;
+      sel.innerHTML = vars.map((v) => '<option value="' + v + '">' + friendlyReim(v) + '</option>').join('');
+      if (vars.indexOf(prev) !== -1) sel.value = prev;
+    }
+    // The univariate RESOLVENT χ_v of the current system in a chosen real variable: det(x·I−M_v),
+    // the char poly of multiplication-by-v on the quotient ring (store.resolventOf → Sym.resolvent).
+    // Roots = v's values across the solutions; a repeated root (discriminant 0) ⇒ coincident
+    // solutions / a degeneracy (e.g. a cusp). Surfaces the degree / distinct-vs-multiplicity count
+    // + the degeneracy verdict; the polynomial (LaTeX) goes to the verdict card detail.
+    function doResolvent() {
+      if (_abort) return;
+      if (!store.size && !seedFromCurrent()) return;
+      clearError();
+      refreshResolventVars();
+      const sel = $('#alg-resolvent-var'); const v = sel && sel.value;
+      if (!v) { showError('Resolvent: no real variable available — reduce to a finite (reality-assumed) system first.'); return; }
+      setBusy(true, 'Computing the resolvent…');
+      setTimeout(() => {
+        let r; try { r = store.resolventOf(null, v, { paramValues: hDataParamValues() }); }
+        catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
+        setBusy(false); setStatus('');
+        if (!r.ok) { showError('Resolvent: ' + withGuidance(r.reason || 'unavailable')); return; }
+        const fv = friendlyReim(r.variable);
+        const distWord = r.distinct === 1 ? 'value' : 'values';
+        const degLine = 'degree ' + r.degree + ' — ' + r.distinct + ' distinct ' + distWord + (r.multiplicity > r.distinct ? ' (' + r.multiplicity + ' with multiplicity)' : '');
+        const degenLine = r.degenerate
+          ? 'discriminant = 0 ⇒ DEGENERATE (coincident solutions / cusp)'
+          : 'discriminant ≠ 0 ⇒ simple roots (no degeneracy in ' + fv + ')';
+        const text = 'Resolvent χ in ' + fv + ': ' + degLine + '. ' + degenLine + '.';
+        const detail = 'χ = ' + r.latex + '\nsquare-free (distinct roots) = ' + r.squareFreeLatex + (r.discLatex ? '\ndiscriminant = ' + r.discLatex : '');
+        setStatus(text);
+        if (canvas) canvas.setVerdict({ text, solutionsText: detail });
+        toast(text, r.degenerate ? { kind: 'error' } : {});
       }, 20);
     }
 
