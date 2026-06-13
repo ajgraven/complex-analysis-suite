@@ -82,6 +82,30 @@ in‑engine here; it is the external‑CAS bridge noted as deferred elsewhere in
 What the tool delivers in its place is the symbolic resolvent cubic, its discriminant (the
 cusp/double‑root locus), and exact certification across a parameter sweep.
 
+## Order‑n generalization (`pointFunctionalSystem({order: n})`)
+
+The builder is not limited to the A&S order‑2 case. For a degree‑`n` Riemann map
+φ(z) = Σ_{k=1}^{n} w_k z^k (φ(0)=0, gauge w₁ > 0 real) and an **order‑n point functional**
+∫_Ω f dA = Σ_{p=0}^{n-1} M_p f^{(p)}(0), the same moment computation (now with
+∫_𝔻 z^a z̄^b dA = δ_{ab}/(a+1)) gives, for p = 0,…,n−1,
+
+> **p! · M_p = Σ_{a=p}^{n-1} c_a^{(p)} · w̄_{a+1},   c_a^{(p)} = [z^a]( φ(z)^p φ′(z) ).**
+
+The p = 0 row is the polynomial‑image **area law** M₀ = Σ_k k|w_k|²; the order ↔ degree
+match is exact because φ^p φ′ has lowest z‑degree p, so ∫_Ω w^p dA ≡ 0 for p ≥ n. Splitting
+each complex moment into Re + i·Im yields **2n−1 real equations in 2n−1 real unknowns**
+(w₁ real; w_k = u_k + i v_k for k ≥ 2). `QDEquations.pointFunctionalSystem(data, {order: n})`
+emits this system — symbolic params `M0, m1, n1, …, m_{n-1}, n_{n-1}`, or exact ℚ(i)
+constants when `data` supplies the moments — in variables `[w1, u2, v2, …, un, vn]`. Order 2
+is bit‑identical to the A&S system above.
+
+**Scope for n ≥ 3.** The system is delivered for *per‑instance* solving (`realSolutionCount`
+/ `solveZeroDim` + the `schurCohn` univalence filter, exactly as in the order‑2 worked
+example); the *fully parametric* uniqueness count for general n is the same RCTD/CAS frontier
+noted above, not claimed in‑engine. Correctness of the generated system is regression‑checked
+in [`app/test/qd-equations.test.js`](app/test/qd-equations.test.js) against an independent 2‑D
+disk‑quadrature of the moments (the built system vanishes at the generating φ).
+
 ## References
 
 - D. Aharonov, H. S. Shapiro, *Domains on which analytic functions satisfy quadrature

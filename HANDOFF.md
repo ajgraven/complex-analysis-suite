@@ -149,8 +149,19 @@ its own merged PR), with one feature **in progress on a branch**:
     QD against two oracles (residual ≈0 against the freshly-regenerated original system via
     `QE.residualAtSolution`; `sameDomain` to the numeric solver `activeEnv.primary.phi`) and annotates the
     verdict (`· cross-check ✓ …` / `· ⚠ … reduction chain may be unsound`).
-  **Deferred (review items #5/#6, not started):** the interior point-functional generalization to order-n;
-  the parametric RCTD / external-CAS bridge. Known limitation: the certify path can't reconstruct φ when
+  - **`08da88c` maintainability dedup + A4/A8** — single-sourced `isClassicalBounded`
+    (`QDEquations.isClassicalBounded`; the two byte-identical UI copies delegate) and the `renderKatex`
+    copies (delegate to `RiemannLatex.render`); `algebra-ui.js` gained `ensureSeed()` so every op refuses
+    to run on a STALE seed (graph seeded from a different solve's hData) with a re-seed prompt instead of
+    splicing new-domain constraints onto the old graph, and re-seed clears the canvas selection.
+  - **`#5` order-n point-functional** — `QDEquations.pointFunctionalSystem(data, {order:n})` generalizes the
+    A&S order-2 builder to a degree-n map ↔ order-n functional: `p!·M_p = Σ_{a=p}^{n-1} [zᵃ](φᵖφ′)·w̄_{a+1}`
+    (p=0 = the area law `M₀=Σ k|w_k|²`), 2n−1 real eqns in `[w1,u2,v2,…,un,vn]`. Order 2 is bit-identical to
+    the A&S system; n≥3 is delivered for per-instance solving (`realSolutionCount`/`solveZeroDim` + schurCohn
+    filter) — parametric uniqueness stays the RCTD frontier (#6). Regression in `qd-equations.test.js`
+    cross-checks the generated system against an independent 2-D disk-quadrature of the moments.
+  **Deferred (review item #6, not started):** the parametric RCTD / external-CAS bridge. Known limitation:
+  the certify path can't reconstruct φ when
   reductions eliminate the map variables ("unreconstructable — run on the seeded system"); the cross-check
   and gauge dedup ride on top of reconstruction. See the plan file's per-engagement sections.
 - **Symbolic QD equation generator** (`feature/symbolic-qd-equations`, NOT yet merged) — a new

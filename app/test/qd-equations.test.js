@@ -313,6 +313,69 @@ module.exports = async function run() {
     ok('isClassicalBounded: branch count ≠ pole count ⇒ false',
        QE.isClassicalBounded({ ...phiOk, branches: [] }, hData) === false);
   }
+
+  // ---- order-n point-functional generalization (#5). The A&S order-2 builder generalized
+  //      to a degree-n map φ=Σ w_k z^k with an order-n point functional ∫f dA = Σ M_p f^{(p)}(0):
+  //      p!·M_p = Σ_{a=p}^{n-1} [z^a](φ^p φ′)·w̄_{a+1}. n=2 is unchanged (A&S); n≥3 is new. ----
+  {
+    const S = QD.Sym, mv = S.mpolyVar, mi = S.mpolyInt;
+
+    // backward-compat: default order 2 = the A&S system (var/param/poly shape unchanged).
+    const s2 = QE.pointFunctionalSystem();
+    ok('pointFunctionalSystem order-2 default: vars [w1,u2,v2], params [M0,m1,n1], 3 polys',
+       s2.vars.join(',') === 'w1,u2,v2' && s2.params.join(',') === 'M0,m1,n1' && s2.polys.length === 3);
+
+    // order 3: degree-3 map ⇒ 2n−1 = 5 real eqns in 5 unknowns; params M0,m1,n1,m2,n2.
+    const s3 = QE.pointFunctionalSystem(null, { order: 3 });
+    ok('pointFunctionalSystem order-3: vars [w1,u2,v2,u3,v3], 5 polys, params M0,m1,n1,m2,n2',
+       s3.vars.join(',') === 'w1,u2,v2,u3,v3' && s3.polys.length === 5 && s3.params.join(',') === 'M0,m1,n1,m2,n2');
+
+    // the p=0 equation is exactly the polynomial-image AREA law  M₀ = Σ_k k|w_k|².
+    const area = mv('M0').sub(mv('w1').pow(2))
+      .sub(mv('u2').pow(2).add(mv('v2').pow(2)).mul(mi(2)))
+      .sub(mv('u3').pow(2).add(mv('v3').pow(2)).mul(mi(3)));
+    ok('order-3 p=0 equation = area law  M₀ − (w₁²+2|w₂|²+3|w₃|²)', s3.polys[0].equals(area));
+
+    // order 4: shape only (degree-4 ⇒ 7 eqns / 7 unknowns).
+    const s4 = QE.pointFunctionalSystem(null, { order: 4 });
+    ok('pointFunctionalSystem order-4: 7 vars / 7 polys',
+       s4.vars.length === 7 && s4.polys.length === 7 && s4.params.join(',') === 'M0,m1,n1,m2,n2,m3,n3');
+
+    // INDEPENDENT numeric oracle: take a concrete degree-3 φ, compute its moments M_p by a
+    // 2-D disk quadrature of ∫_𝔻 φ^p|φ′|² dA (area-normalized π→1) — NO symbolic input — then
+    // build the system from those numbers and confirm it VANISHES at that φ's real coords.
+    // This checks the moment identities AND the convolution / reim-split code at once.
+    {
+      const w = [null, { re: 1, im: 0 }, { re: 0.3, im: -0.15 }, { re: -0.2, im: 0.1 }];  // w₁ real gauge
+      const n = 3;
+      const cmul = (a, b) => ({ re: a.re * b.re - a.im * b.im, im: a.re * b.im + a.im * b.re });
+      const cadd = (a, b) => ({ re: a.re + b.re, im: a.im + b.im });
+      const phi = (z) => { let s = { re: 0, im: 0 }, zp = { re: 1, im: 0 }; for (let k = 1; k <= n; k++) { zp = cmul(zp, z); s = cadd(s, cmul(w[k], zp)); } return s; };
+      const dphi = (z) => { let s = { re: 0, im: 0 }, zp = { re: 1, im: 0 }; for (let k = 1; k <= n; k++) { s = cadd(s, cmul({ re: k * w[k].re, im: k * w[k].im }, zp)); zp = cmul(zp, z); } return s; };
+      const NR = 600, NT = 720;
+      const M = [{ re: 0, im: 0 }, { re: 0, im: 0 }, { re: 0, im: 0 }];
+      for (let i = 0; i < NR; i++) {
+        const r = (i + 0.5) / NR;
+        for (let j = 0; j < NT; j++) {
+          const t = 2 * Math.PI * (j + 0.5) / NT;
+          const z = { re: r * Math.cos(t), im: r * Math.sin(t) };
+          const dp = dphi(z);
+          const wgt = (dp.re * dp.re + dp.im * dp.im) * r * (1 / NR) * (2 * Math.PI / NT);
+          let php = { re: 1, im: 0 };
+          for (let p = 0; p < n; p++) { M[p] = cadd(M[p], { re: php.re * wgt, im: php.im * wgt }); php = cmul(php, phi(z)); }
+        }
+      }
+      const fact = [1, 1, 2];
+      for (let p = 0; p < n; p++) { M[p] = { re: M[p].re / Math.PI / fact[p], im: M[p].im / Math.PI / fact[p] }; }
+      ok('order-3 numeric oracle: M₀ (the area) is real', Math.abs(M[0].im) < 1e-6);
+      const sys = QE.pointFunctionalSystem({ M0: M[0].re, M1: M[1], M2: M[2] }, { order: 3 });
+      const vmap = { w1: { re: 1, im: 0 }, u2: { re: w[2].re, im: 0 }, v2: { re: w[2].im, im: 0 }, u3: { re: w[3].re, im: 0 }, v3: { re: w[3].im, im: 0 } };
+      let worst = 0;
+      for (const p of sys.polys) { const v = p.evalComplex(vmap); worst = Math.max(worst, Math.abs(v.re), Math.abs(v.im)); }
+      ok('order-3 numeric oracle: disk-quadrature moments ⇒ system vanishes at the true φ',
+         worst < 1e-3, 'worst=' + worst.toExponential(2));
+    }
+  }
 };
 
 function scrub(o) {

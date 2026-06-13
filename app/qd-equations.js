@@ -549,42 +549,124 @@
 
   // ---- Interior point-functional QD system (the Aharonov–Shapiro formulation) ----
   // Companion to generateClassicalBounded's EXTERIOR (●)/(★)/gauge form. For a bounded
-  // simply-connected QD with a single order-2 node, Aharonov & Shapiro use the INTERIOR
-  // quadrature identity  ∫_Ω f dA = M₀ f(0) + M₁ f′(0)  (M₀ = area > 0, M₁ ∈ ℂ). The
-  // normalized Riemann map is a degree-2 polynomial φ(z) = w₁z + w₂z²  (φ(0)=0, rotation
-  // gauge w₁ = φ′(0) > 0 real). A direct moment computation — ∫_Ω f dA = ∫_𝔻 f(φ)|φ′|² dA
-  // with ∫_𝔻 z^a z̄^b dA = δ_{ab}/(a+1) (area measure normalized so π→1) — gives
-  //      M₀ = w₁² + 2|w₂|²   (= area),     M₁ = w₁² w̄₂.
-  // Splitting w₂ = u₂ + i·v₂ and M₁ = m₁ + i·n₁, the REAL system is
-  //      M₀ = w₁² + 2(u₂²+v₂²),    m₁ = w₁² u₂,    n₁ = −w₁² v₂,
-  // and eliminating w₂ yields the resolvent cubic in s = w₁²:  s³ − M₀ s² + 2|M₁|² = 0.
-  // Univalence is degree-2-special: φ′(z) = w₁ + 2w₂z ≠ 0 in 𝔻 (⇔ w₁ ≥ 2|w₂|) is here
-  // NECESSARY AND SUFFICIENT — so Sym.schurCohn on [w₁, 2w₂] settles it. A&S's theorem:
-  // exactly one root of the cubic with w₁>0 gives a univalent map ⇒ the QD is unique; the
-  // cardioid φ = √3/6·(2z+z²) is the cusp case (w₁ = 2|w₂|, the cubic's double root).
+  // simply-connected QD whose quadrature functional is a single point functional at 0 of
+  // ORDER n,
+  //      ∫_Ω f dA = Σ_{p=0}^{n-1} M_p f^{(p)}(0)   (M₀ = area > 0; M_p ∈ ℂ),
+  // the normalized Riemann map is a degree-n polynomial φ(z) = Σ_{k=1}^{n} w_k z^k
+  // (φ(0)=0, rotation gauge w₁ = φ′(0) > 0 real). Order n ↔ degree n: testing f = w^p and
+  // using ∫_Ω f dA = ∫_𝔻 f(φ)|φ′|² dA with ∫_𝔻 z^a z̄^b dA = δ_{ab}/(a+1) (area measure
+  // normalized so π→1) gives the moment identities
+  //      p! · M_p = Σ_{a=p}^{n-1} c_a^{(p)} · w̄_{a+1},     c_a^{(p)} = [z^a]( φ(z)^p φ′(z) ),
+  // for p = 0,…,n-1 (and ∫_Ω w^p dA ≡ 0 for p ≥ n automatically, since φ^p φ′ has lowest
+  // z-degree p). p=0 reduces to the polynomial-image AREA formula  M₀ = Σ_k k|w_k|²; the
+  // p=0 imaginary part vanishes identically (M₀ real). Each complex moment equation splits
+  // into Re + i·Im, giving 2n−1 real equations in the 2n−1 real unknowns (w₁ real; w_k =
+  // u_k + i v_k for k≥2). ORDER 2 is exactly Aharonov–Shapiro:  M₀ = w₁²+2|w₂|², M₁ = w₁²w̄₂,
+  // eliminating to the resolvent cubic s³ − M₀s² + 2|M₁|² (s = w₁²); univalence there is
+  // degree-2-special (φ′ ≠ 0 in 𝔻 ⇔ w₁ ≥ 2|w₂|, the Sym.schurCohn count) and A&S prove the
+  // QD unique — the cardioid φ = √3/6·(2z+z²) being the cusp (the cubic's double root). For
+  // n ≥ 3 the system is delivered for per-instance solving (realSolutionCount / solveZeroDim
+  // + the schurCohn univalence filter); the FULL parametric uniqueness count is the RCTD/CAS
+  // frontier (see AHARONOV_SHAPIRO.md), not claimed here.
   //
-  // Returns { polys (MPolys in w1,u2,v2), vars, params }. With `data = {M0, M1:{re,im}}`
-  // the quadrature data is substituted as EXACT ℚ constants (continued-fraction rational of
-  // each float, via ratApprox); with `data` omitted, M0/m1/n1 are left as symbolic params
-  // (for the resolvent/discriminant elimination). Coefficient field stays ℚ(i)/ℚ.
-  function pointFunctionalSystem(data) {
+  // Variables: ['w1','u2','v2',…,'un','vn'] (length 2n−1). Returns { polys, vars, params }.
+  // `opts.order` (default 2) sets n; with `data` and no explicit order, n is inferred from
+  // the consecutive M0,M1,… keys present. With `data` the moments are substituted as EXACT
+  // ℚ(i) constants (continued-fraction rational of each float, via ratApprox): data.M0 is a
+  // real number (or {re,…}; its imaginary part is ignored — the area is real), data.M_p (p≥1)
+  // is {re,im}. With `data` omitted the moments are symbolic params M0, m_p, n_p (Re/Im of
+  // M_p) — params ['M0','m1','n1',…] — for the resolvent/discriminant elimination. Coefficient
+  // field stays ℚ(i)/ℚ throughout.
+  function pointFunctionalSystem(data, opts) {
     const S = getSym();
     if (!S) throw new Error('QD.QDEquations: QD.Sym not loaded');
     const { mpolyVar: mv, mpolyConst: mc, mpolyInt: mi, gauss, rat } = S;
-    const w1 = mv('w1'), u2 = mv('u2'), v2 = mv('v2');
-    let M0, m1, n1; const params = [];
-    if (data) {
-      const cr = (x) => { const [n, d] = _ratApprox(x || 0); return mc(gauss(rat(n, d), rat(0))); };
-      M0 = cr(data.M0); m1 = cr(data.M1 && data.M1.re); n1 = cr(data.M1 && data.M1.im);
-    } else {
-      M0 = mv('M0'); m1 = mv('m1'); n1 = mv('n1'); params.push('M0', 'm1', 'n1');
+
+    // Map degree = functional order n. Explicit opts.order wins; else infer from the
+    // consecutive M0,M1,… present in data; else default 2 (the A&S / no-arg case).
+    let n = opts && opts.order;
+    if (!n) {
+      if (data) { n = 0; while (data['M' + n] != null) n++; }
+      n = n || 2;
     }
-    const polys = [
-      M0.sub(w1.pow(2)).sub(u2.pow(2).add(v2.pow(2)).mul(mi(2))),   // M₀ − w₁² − 2(u₂²+v₂²)
-      m1.sub(w1.pow(2).mul(u2)),                                    // m₁ − w₁²·u₂
-      n1.add(w1.pow(2).mul(v2)),                                    // n₁ + w₁²·v₂
-    ];
-    return { polys, vars: ['w1', 'u2', 'v2'], params };
+    if (!(n >= 1)) throw new Error('pointFunctionalSystem: order must be ≥ 1');
+
+    const I = mc(gauss(rat(0), rat(1)));            // the imaginary unit i as an MPoly const
+    const ZERO = mi(0);
+    const gconst = (re, im) => {                    // exact ℚ(i) constant from floats
+      const [rn, rd] = _ratApprox(re || 0);
+      const [inum, iden] = _ratApprox(im || 0);
+      return mc(gauss(rat(rn, rd), rat(inum, iden)));
+    };
+
+    // Complex coefficients w_k and their conjugates w̄_k (k = 1..n). w₁ is the real gauge
+    // variable 'w1' (no imaginary part); w_k = u_k + i v_k for k ≥ 2.
+    const W = [null], Wb = [null], vars = [];
+    for (let k = 1; k <= n; k++) {
+      if (k === 1) { const u = mv('w1'); vars.push('w1'); W.push(u); Wb.push(u); }
+      else {
+        const uk = mv('u' + k), vk = mv('v' + k);
+        vars.push('u' + k, 'v' + k);
+        W.push(uk.add(I.mul(vk)));
+        Wb.push(uk.sub(I.mul(vk)));
+      }
+    }
+
+    // Moments M_p as complex MPolys (substituted constants, or symbolic m_p + i·n_p).
+    const params = [];
+    const Mval = [];
+    for (let p = 0; p < n; p++) {
+      if (data) {
+        const Mp = data['M' + p];
+        const re = (typeof Mp === 'number') ? Mp : (Mp && Mp.re) || 0;
+        const im = (p === 0 || typeof Mp === 'number') ? 0 : ((Mp && Mp.im) || 0);  // M₀ is real (the area)
+        Mval.push(gconst(re, im));
+      } else if (p === 0) {
+        Mval.push(mv('M0')); params.push('M0');
+      } else {
+        Mval.push(mv('m' + p).add(I.mul(mv('n' + p)))); params.push('m' + p, 'n' + p);
+      }
+    }
+
+    // φ and φ′ as z-power-indexed arrays of MPoly coefficients (in the w_k vars).
+    const phi = new Array(n + 1).fill(ZERO);        // φ[k] = w_k (φ[0] = 0)
+    for (let k = 1; k <= n; k++) phi[k] = W[k];
+    const dphi = new Array(n).fill(ZERO);           // φ′[b] = (b+1) w_{b+1}
+    for (let b = 0; b < n; b++) dphi[b] = W[b + 1].mul(mi(b + 1));
+
+    // Polynomial (in z) multiply of two coefficient arrays.
+    const pmul = (A, B) => {
+      const out = new Array(A.length + B.length - 1).fill(ZERO);
+      for (let i = 0; i < A.length; i++) {
+        if (A[i].isZero()) continue;
+        for (let j = 0; j < B.length; j++) {
+          if (B[j].isZero()) continue;
+          out[i + j] = out[i + j].add(A[i].mul(B[j]));
+        }
+      }
+      return out;
+    };
+    const fact = (k) => { let f = 1; for (let j = 2; j <= k; j++) f *= j; return f; };
+
+    // Moment equation for each p:  p!·M_p − Σ_{a=p}^{n-1} [z^a](φ^p φ′) · w̄_{a+1} = 0,
+    // split into real + imaginary parts (the only i's live in coefficients, so realPart /
+    // imagPart extract Re/Im with every variable treated as real). For order 2 this is
+    // bit-identical to the hand-derived A&S system.
+    const polys = [];
+    let phip = [mi(1)];                             // φ^0 = 1
+    for (let p = 0; p < n; p++) {
+      const Ap = pmul(phip, dphi);                  // [z^a]( φ^p φ′ )
+      let rhs = ZERO;
+      for (let a = p; a < n; a++) {
+        if (a < Ap.length && !Ap[a].isZero()) rhs = rhs.add(Ap[a].mul(Wb[a + 1]));
+      }
+      const eqn = Mval[p].mul(mi(fact(p))).sub(rhs);
+      const re = eqn.realPart(), im = eqn.imagPart();
+      if (!re.isZero()) polys.push(re);
+      if (!im.isZero()) polys.push(im);
+      if (p < n - 1) phip = pmul(phip, phi);        // advance φ^p → φ^{p+1}
+    }
+    return { polys, vars, params };
   }
 
   // Classical BOUNDED QD gate (the bounded analog of the Faber UQD gate): bounded,
