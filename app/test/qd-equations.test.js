@@ -293,6 +293,26 @@ module.exports = async function run() {
     const s4 = QE.realAxisSymmetry(cprin);
     ok('realAxisSymmetry: real pole with complex principal ⇒ not allReal', s4.allReal === false);
   }
+
+  // ---- isClassicalBounded gate (the shared predicate; the equation-card and Algebra-tab
+  //      gates both delegate here, replacing two byte-identical private copies). ----
+  {
+    const hData = { poles: [{ a: { re: 0.5, im: 0 }, principal: [{ re: 0.2, im: 0 }] }] };
+    const phiOk = { unbounded: false, family: 'boundedQD',
+      branches: [{ z: { re: 0.3, im: 0 }, A: [{ re: 0.5, im: 0 }] }] };
+    ok('isClassicalBounded: classical bounded φ (one branch per pole) ⇒ true',
+       QE.isClassicalBounded(phiOk, hData) === true);
+    ok('isClassicalBounded: missing hData/poles ⇒ false',
+       QE.isClassicalBounded(phiOk, { poles: [] }) === false && QE.isClassicalBounded(phiOk, null) === false);
+    ok('isClassicalBounded: unbounded φ ⇒ false',
+       QE.isClassicalBounded({ ...phiOk, unbounded: true }, hData) === false);
+    ok('isClassicalBounded: weighted-family markers (alpha/lqdBeta/z0/gamma/q) ⇒ false',
+       QE.isClassicalBounded({ ...phiOk, alpha: 2 }, hData) === false &&
+       QE.isClassicalBounded({ ...phiOk, lqdBeta: 1 }, hData) === false &&
+       QE.isClassicalBounded({ ...phiOk, z0: { re: 0, im: 0 } }, hData) === false);
+    ok('isClassicalBounded: branch count ≠ pole count ⇒ false',
+       QE.isClassicalBounded({ ...phiOk, branches: [] }, hData) === false);
+  }
 };
 
 function scrub(o) {

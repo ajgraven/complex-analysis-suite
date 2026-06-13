@@ -85,14 +85,9 @@
       }
     }
 
-    function isClassicalBounded(phi, hData) {
-      return !!(phi && !phi.unbounded
-        && (!phi.family || phi.family === 'boundedQD')
-        && phi.alpha == null && phi.lqdBeta == null
-        && phi.z0 == null && phi.gamma == null && phi.q == null
-        && hData && hData.poles && hData.poles.length
-        && Array.isArray(phi.branches) && phi.branches.length === hData.poles.length);
-    }
+    // Classical BOUNDED QD gate — the shared predicate (QD.QDEquations.isClassicalBounded;
+    // QE is non-null past the install guard above).
+    const isClassicalBounded = QE.isClassicalBounded;
     function toast(msg, opts) { if (QD.QoL && QD.QoL.toast) QD.QoL.toast(msg, opts || {}); }
     function rerender() { if (canvas) canvas.render(store, latexOf); renderInspector(canvas ? canvas.getSelection() : []); buildBreadcrumb(); }
 
@@ -164,8 +159,11 @@
         const sys = QE.generateClassicalBounded(activeEnv.hData, { maxPoleOrder: lastCap, w0: w0Sel });
         store.seedFromSystem(sys);
         _seededHData = activeEnv.hData;                 // remember what we seeded from (A4)
-        // A fresh seed invalidates prior picker selections (A8) — clear and refresh.
+        // A fresh seed invalidates prior picker selections AND any node selection whose
+        // IDs no longer exist (A8) — clear them so a stale inspector can't act on dead
+        // nodes. (canvas.render also filters dead IDs; this fires onSelect([]) explicitly.)
         realSel.clear(); elimSel.clear(); refreshPickers();
+        if (canvas) canvas.clearSelection();
         const w0txt = w0Sel ? 'fixed to ' + (QD.Complex ? QD.Complex.toString(w0Sel, 4) : '0') : 'symbolic w₀';
         setStatusHTML(
           '<table class="algebra-seed-table"><tbody>' +
@@ -181,6 +179,22 @@
         setStatus((STR.unavailablePrefix || 'Generation unavailable: ') + ((e && e.message) || e));
         return false;
       }
+    }
+
+    // (A4) Gate every mutating/analysis op so it never runs against a missing or STALE
+    // seed. An empty store seeds from the current solve. A store seeded from a DIFFERENT
+    // hData than the active solve is stale — proceeding would either splice new-domain
+    // constraints onto the old graph (the palette ops) or analyze the old domain while
+    // the UI shows the new one. Rather than silently wiping the user's reduction chain,
+    // we refuse and prompt an explicit re-seed (the #alg-seed button → seedFromCurrent,
+    // which is itself undoable). Returns true when the store is ready to operate on.
+    function ensureSeed() {
+      if (!store.size) return seedFromCurrent();
+      if (activeEnv && _seededHData && _seededHData !== activeEnv.hData) {
+        setStatus('Solve changed — click Generate / re-seed to refresh the workspace for the new domain.');
+        return false;
+      }
+      return true;
     }
 
     // ---- φ / h reference panel ----------------------------------------------
@@ -328,7 +342,7 @@
 
     // Assume the picked base variables real → a new labeled column (store.assumeReal).
     function doAssumeReal() {
-      if (!store.size && !seedFromCurrent()) return;
+      if (!ensureSeed()) return;
       const vars = [...realSel];
       if (!vars.length) { toast('Pick one or more variables to assume real.', { kind: 'error' }); return; }
       const r = store.assumeReal(vars);
@@ -350,7 +364,7 @@
           : 'No real-axis symmetry detected in h — reality cannot be assumed automatically.', { kind: 'error' });
         return;
       }
-      if (!store.size && !seedFromCurrent()) return;
+      if (!ensureSeed()) return;
       const vars = store.baseVariables();
       const r = store.assumeReal(vars);
       if (!r.ok) { showError('Auto reality: ' + (r.reason || 'failed')); return; }
@@ -362,7 +376,7 @@
     // fixes its conjugate), then (if the propagate box is ticked) cascade the consequence
     // as a further column.
     function doSubstituteValue() {
-      if (!store.size && !seedFromCurrent()) return;
+      if (!ensureSeed()) return;
       const pairs = valuePairs();
       if (!pairs.length) { toast('Pick at least one variable and give it a value.', { kind: 'error' }); return; }
       const propagate = !$('#alg-val-prop') || $('#alg-val-prop').checked;
@@ -489,7 +503,7 @@
         if (b.tip) btn.title = b.tip;
         btn.addEventListener('click', () => {
           if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
-          if (!store.size && !seedFromCurrent()) return;   // bail if seeding failed (e.g. order over cap) — don't add to an unseeded graph
+          if (!ensureSeed()) return;   // bail if seeding failed (e.g. order over cap) — don't add to an unseeded graph
           try { const made = store.addConstraint(b.form, activeEnv.hData); rerender(); toast('Added ' + made.length + ' node(s): ' + b.label); }
           catch (e) { toast((e && e.message) || String(e), { kind: 'error' }); }
         });
@@ -514,7 +528,7 @@
       $('#alg-resolvent-var').addEventListener('mousedown', refreshResolventVars);
       $('#alg-cancel').addEventListener('click', cancelOp);
       $('#alg-gauge-elim').addEventListener('click', () => {
-        if (!store.size) { if (!seedFromCurrent()) return; }
+        if (!ensureSeed()) return;
         const r = store.eliminateWithGauge();
         if (!r.ok) { toast(r.reason || 'nothing to eliminate with the gauge', { kind: 'error' }); return; }
         rerender();
@@ -738,7 +752,7 @@
     // Reads the order selector and the elimination-variable picker.
     function doGroebner(sel) {
       if (_abort) return;                       // an op is already running
-      if (!store.size) { if (!seedFromCurrent()) return; }
+      if (!ensureSeed()) return;
       clearError();
       const ids = (sel && sel.length) ? sel.slice()
         : store.currentColumnIds();      // default: the CURRENT system (last column), not every column
@@ -766,7 +780,7 @@
     // Triangular decomposition of the current system → a triangular chain column.
     function doTriangular() {
       if (_abort) return;
-      if (!store.size && !seedFromCurrent()) return;
+      if (!ensureSeed()) return;
       clearError();
       const sel = canvas ? canvas.getSelection() : [];
       const r = store.triangularize(sel.length ? sel : null);
@@ -784,7 +798,7 @@
     function doAutoSolve() {
       if (_abort) return;
       if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
-      if (!store.size && !seedFromCurrent()) return;
+      if (!ensureSeed()) return;
       clearError();
       setBusy(true, 'Auto-reduce & solve…');
       const tick = () => new Promise((res) => setTimeout(res, 30));
@@ -860,7 +874,7 @@
     // canvas verdict card. Runs behind a setTimeout so the busy state paints first.
     function doClassify() {
       if (_abort) return;
-      if (!store.size && !seedFromCurrent()) return;
+      if (!ensureSeed()) return;
       clearError();
       setBusy(true, 'Counting real solutions (existence / uniqueness)…');
       // sync, but yield once so the busy state paints
@@ -995,7 +1009,7 @@
       if (_abort) return;
       if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
       if (typeof QD.isBoundaryUnivalent !== 'function') { showError('Univalence: the numeric univalence machinery (solver.js) is not loaded.'); return; }
-      if (!store.size && !seedFromCurrent()) return;
+      if (!ensureSeed()) return;
       clearError();
       setBusy(true, 'Certifying univalence (genuine QDs)…');
       setTimeout(() => {
@@ -1127,7 +1141,7 @@
     // + the degeneracy verdict; the polynomial (LaTeX) goes to the verdict card detail.
     function doResolvent() {
       if (_abort) return;
-      if (!store.size && !seedFromCurrent()) return;
+      if (!ensureSeed()) return;
       clearError();
       refreshResolventVars();
       const sel = $('#alg-resolvent-var'); const v = sel && sel.value;
@@ -1156,7 +1170,7 @@
     // main thread (falls back to sync) so a heavy grevlex basis can't freeze the UI.
     function doDimension() {
       if (_abort) return;
-      if (!store.size) { if (!seedFromCurrent()) return; }
+      if (!ensureSeed()) return;
       clearError();
       const ctrl = _newAbort(); _abort = ctrl;
       setBusy(true, 'Computing dimension…');
@@ -1175,7 +1189,7 @@
     // thread via QD.SymWorker (falls back to sync if unavailable).
     function doSolve() {
       if (_abort) return;
-      if (!store.size) { if (!seedFromCurrent()) return; }
+      if (!ensureSeed()) return;
       clearError();
       const ctrl = _newAbort(); _abort = ctrl;
       setBusy(true, 'Solving (Gröbner → FGLM → roots)…');

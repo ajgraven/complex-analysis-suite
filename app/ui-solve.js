@@ -938,9 +938,12 @@ function renderRiemannMap(phi) {
   box.classList.remove('hidden');
 }
 
-// Render LaTeX `expr` into the given element. Uses KaTeX if available;
-// falls back to a plain-text placeholder if the CDN failed to load.
+// Render LaTeX `expr` into the given element. Delegates to the shared
+// QD.RiemannLatex.render (loaded before this file per the manifest); falls back to
+// KaTeX directly, then to a plain-text placeholder if the CDN failed to load.
 function renderKatex(el, expr, display) {
+  const RL = window.QD && window.QD.RiemannLatex;
+  if (RL && RL.render) { RL.render(el, expr, display); return; }
   if (typeof katex === 'undefined') {
     el.textContent = expr;
     return;

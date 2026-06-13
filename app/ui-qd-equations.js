@@ -27,9 +27,11 @@
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   }
 
-  // Local KaTeX renderer — ui-solve.js's renderKatex is private to its IIFE, so we
-  // keep a tiny copy here with the same plain-text fallback when the CDN is absent.
+  // KaTeX render — delegate to the shared QD.RiemannLatex.render (loaded before this
+  // file per the manifest), with the same plain-text fallback if it's somehow absent.
   function renderKatex(el, expr, display) {
+    const RL = window.QD && window.QD.RiemannLatex;
+    if (RL && RL.render) { RL.render(el, expr, display); return; }
     if (typeof katex === 'undefined') { el.textContent = expr; return; }
     try { katex.render(expr, el, { displayMode: !!display, throwOnError: false }); }
     catch (e) { el.textContent = expr; }
@@ -102,18 +104,8 @@
       if (jsonBtn) jsonBtn.disabled = !on;
     }
 
-    // Classical BOUNDED QD gate (the bounded analog of the Faber UQD gate): bounded,
-    // no weighted-family markers, and a φ with one branch per pole (so the bounded
-    // {z_j, A_{j,k}} representation is present). PQD/LQD carry alpha/lqdBeta/z0/
-    // gamma/q and are excluded — their inverse system isn't this plain ansatz.
-    function isClassicalBounded(phi, hData) {
-      return !!(phi && !phi.unbounded
-        && (!phi.family || phi.family === 'boundedQD')
-        && phi.alpha == null && phi.lqdBeta == null
-        && phi.z0 == null && phi.gamma == null && phi.q == null
-        && hData && hData.poles && hData.poles.length
-        && Array.isArray(phi.branches) && phi.branches.length === hData.poles.length);
-    }
+    // Classical BOUNDED QD gate — the shared predicate (QD.QDEquations.isClassicalBounded).
+    const isClassicalBounded = QE.isClassicalBounded;
 
     // Render the ansatz + variable-convention legend for the chosen model.
     function renderLegendInto(el, model) {

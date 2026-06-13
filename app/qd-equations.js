@@ -587,8 +587,24 @@
     return { polys, vars: ['w1', 'u2', 'v2'], params };
   }
 
+  // Classical BOUNDED QD gate (the bounded analog of the Faber UQD gate): bounded,
+  // no weighted-family markers, and a φ with one branch per pole (so the bounded
+  // {z_j, A_{j,k}} representation is present). PQD/LQD carry alpha/lqdBeta/z0/gamma/q
+  // and are excluded — their inverse system isn't this plain ansatz. The single source
+  // of truth for both the equation-card gate (ui-qd-equations.js) and the Algebra-tab
+  // gate (algebra-ui.js), which used to carry byte-identical private copies.
+  function isClassicalBounded(phi, hData) {
+    return !!(phi && !phi.unbounded
+      && (!phi.family || phi.family === 'boundedQD')
+      && phi.alpha == null && phi.lqdBeta == null
+      && phi.z0 == null && phi.gamma == null && phi.q == null
+      && hData && hData.poles && hData.poles.length
+      && Array.isArray(phi.branches) && phi.branches.length === hData.poles.length);
+  }
+
   const QDEquations = {
     generateClassicalBounded, pointFunctionalSystem, reimSplit, realAxisSymmetry,
+    isClassicalBounded,
     residualAtSolution, residualReimAtSolution,
     buildVarMap, buildRealVarMap,
     systemToLatex, systemToExport, latexOf: latexOfFor,
