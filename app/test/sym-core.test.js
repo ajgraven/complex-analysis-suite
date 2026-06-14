@@ -783,11 +783,15 @@ module.exports = async function run() {
       ok('schurCohn: z² − 1 → on-circle, degenerate', shows(sc([gI(-1), gI(0), gI(1)]), 0, 0, 2, true));
       // (8) z² + 1: roots ±i on the circle ⇒ nullity 2, degenerate.
       ok('schurCohn: z² + 1 → on-circle, degenerate', shows(sc([gI(1), gI(0), gI(1)]), 0, 0, 2, true));
-      // (9) THE DEGENERACY: (z−½)(z−2) = z² − 5/2·z + 1 is SELF-INVERSIVE (reciprocal pair
-      //     ½ inside / 2 outside) ⇒ C singular WITHOUT any on-circle root ⇒ degenerate:true.
-      //     This is exactly the case the honest fallback must NOT certify from.
-      ok('schurCohn: z² − 5/2·z + 1 (self-inversive) → degenerate (no certified split)',
-         sc([gI(1), gr(-5, 2), gI(1)]).degenerate === true);
+      // (9) THE DEGENERACY, now RESOLVED EXACTLY: (z−½)(z−2) = z² − 5/2·z + 1 is SELF-INVERSIVE
+      //     (reciprocal pair ½ inside / 2 outside) ⇒ C singular WITHOUT any on-circle root. The
+      //     self-inversive peel recovers the exact split: 1 inside, 1 outside, 0 on-circle, and
+      //     since onCircle = 0 it is NOT a boundary degeneracy ⇒ degenerate:false, resolved:true.
+      {
+        const r = sc([gI(1), gr(-5, 2), gI(1)]);
+        ok('schurCohn: z² − 5/2·z + 1 (self-inversive) → resolved 1 inside / 1 outside, not degenerate',
+           shows(r, 1, 1, 0, false) && r.resolved === true);
+      }
       // (10) (z−½)(z−3) = z² − 7/2·z + 3/2: NOT self-inversive (root product 3/2 ≠ 1) ⇒
       //      nonsingular C ⇒ certified 1 inside / 1 outside.
       ok('schurCohn: z² − 7/2·z + 3/2 → 1 inside, 1 outside (certified, non-degenerate)',
@@ -798,6 +802,25 @@ module.exports = async function run() {
       ok('schurCohn: constant → no roots', shows(sc([gI(3)]), 0, 0, 0, false));
       ok('schurCohn: trailing zeros trimmed (z − 1/2 padded) → 1 inside',
          shows(sc([gr(-1, 2), gI(1), gI(0), gI(0)]), 1, 0, 0, false));
+      // (12) CUSP: φ′ = 1 + z has its only root at z = −1, exactly ON the circle ⇒ the resolved
+      //      count is 1 on-circle, 0 inside (the cardioid's boundary cusp). degenerate stays true
+      //      (a genuine boundary zero), but resolved:true with the exact split.
+      {
+        const r = sc([gI(1), gI(1)]);
+        ok('schurCohn: 1 + z (cusp) → resolved 0 inside / 1 on-circle, degenerate (boundary zero)',
+           r.inside === 0 && r.outside === 0 && r.onCircle === 1 && r.degenerate === true && r.resolved === true);
+      }
+      // (13) MULTIPLE on-circle root: (1+z)² → the square-free reduction counts DISTINCT
+      //      locations, so 1 on-circle / 0 inside (sum < degree because of the multiplicity).
+      {
+        const r = sc([gI(1), gI(2), gI(1)]);
+        ok('schurCohn: (1+z)² → 1 distinct on-circle root, 0 inside (square-free reduced)',
+           r.inside === 0 && r.onCircle === 1 && r.resolved === true);
+      }
+      // unitCircleRootCount (the exact on-circle primitive, reused by the boundary test):
+      ok('unitCircleRootCount: 1+z → 1 (root −1 on the circle)', S.unitCircleRootCount([gI(1), gI(1)]).count === 1);
+      ok('unitCircleRootCount: z²+1 → 2 (roots ±i on the circle)', S.unitCircleRootCount([gI(1), gI(0), gI(1)]).count === 2);
+      ok('unitCircleRootCount: z²−¼ → 0 (both roots inside)', S.unitCircleRootCount([gr(-1, 4), gI(0), gI(1)]).count === 0);
     }
 
     // Resolvent — the univariate eliminant χ_v(x) = det(x·I − M_v) of a zero-dim ideal.

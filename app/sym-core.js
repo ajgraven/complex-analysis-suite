@@ -2530,10 +2530,56 @@
     return { pos, neg, zero };
   }
 
-  // schurCohn(coeffs) → { inside, outside, onCircle, degenerate, degree }. coeffs is an
-  // ASCENDING Gaussian array [a₀,…,a_n] (trailing zeros trimmed). inside/outside are the
-  // CERTIFIED open-disk / outside counts when `degenerate` is false; when `degenerate`
-  // (nullity > 0 — on-circle OR self-inversive) the split is unreliable → do not certify.
+  // Build a univariate MPoly Σ arr[k]·var^k from an ASCENDING Gaussian coeff array.
+  function _polyFromCoeffs(arr, varName) {
+    let p = mpolyInt(0); const X = mpolyVar(varName);
+    for (let k = 0; k < arr.length; k++) if (!arr[k].isZero()) p = p.add(mpolyConst(arr[k]).mul(X.pow(k)));
+    return p;
+  }
+
+  // unitCircleRootCount(coeffs, opts) → { ok, count } : the number of DISTINCT roots of
+  // p(z) = Σ coeffs[k]·z^k (ascending Gaussian array) that lie ON the unit circle |z|=1,
+  // computed EXACTLY over ℚ — no floats, no root-finding. Substitute z = x + i·y, split
+  // p into its real and imaginary parts (real ℚ coefficients), adjoin the circle relation
+  // x²+y²−1 = 0, and count the real solutions via the shipped Hermite trace form
+  // (realSolutionCount). The same construction as boundaryDoublePointCount. Returns
+  // { ok:false, reason } when realSolutionCount can't (positive-dim / over the Hermite cap).
+  // This is the on-circle primitive the degenerate Schur–Cohn (below) and the exact
+  // cusp-aware boundary test reuse.
+  function unitCircleRootCount(coeffs, opts) {
+    let a = (coeffs || []).map((c) => new Gaussian(c.re, c.im));
+    while (a.length && a[a.length - 1].isZero()) a.pop();
+    const deg = a.length - 1;
+    if (deg <= 0) return { ok: true, count: 0 };
+    const I = mpolyConst(gaussInt(0, 1));
+    const Zc = mpolyVar('x').add(I.mul(mpolyVar('y')));         // z = x + i·y
+    let p = mpolyInt(0), zp = mpolyInt(1);
+    for (let k = 0; k <= deg; k++) { if (!a[k].isZero()) p = p.add(mpolyConst(a[k]).mul(zp)); if (k < deg) zp = zp.mul(Zc); }
+    const circle = mpolyVar('x').pow(2).add(mpolyVar('y').pow(2)).sub(mpolyInt(1));
+    const sys = [p.realPart(), p.imagPart(), circle].filter((q) => !q.isZero());
+    let rc; try { rc = realSolutionCount(sys, null, ['x', 'y'], opts || {}); }
+    catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    if (!rc.ok) return { ok: false, reason: rc.reason };
+    return { ok: true, count: rc.realCount };
+  }
+
+  // schurCohn(coeffs) → { inside, outside, onCircle, degenerate, degree, resolved? }. coeffs is
+  // an ASCENDING Gaussian array [a₀,…,a_n] (trailing zeros trimmed).
+  //   • Nonsingular C (nullity 0): inside/outside are the CERTIFIED open-disk/outside counts
+  //     WITH MULTIPLICITY, onCircle 0, degenerate false.
+  //   • Singular C (the old ambiguous case): resolved EXACTLY by peeling the self-inversive
+  //     factor — square-free reduce p̂, form the reciprocal-conjugate p̂†(z)=zᵈ·conj(p̂)(1/z),
+  //     s = gcd(p̂,p̂†) (self-inversive: s†=s up to a unit), cofactor q = p̂/s (no circle/paired
+  //     roots ⇒ nonsingular ⇒ schurCohn(q) is exact). The on-circle count is
+  //     unitCircleRootCount(s); s's remaining roots are reciprocal pairs {ρ,1/ρ̄} splitting
+  //     evenly in/out. So onCircle = on, inside = q_in + (deg s − on)/2, outside likewise —
+  //     here counting DISTINCT root LOCATIONS (the square-free reduction). `resolved:true`.
+  //     `degenerate` is then true IFF onCircle > 0 (a genuine boundary zero — a cusp): the
+  //     clean self-inversive case (e.g. (z−½)(z−2): on 0, in 1, out 1) becomes degenerate:false
+  //     so callers can trust its in/out split, while a real on-circle zero still reads
+  //     degenerate (callers either fall back or treat it as the allowed boundary cusp).
+  //   • If the on-circle count is unavailable (positive-dim / over the Hermite cap), fall back
+  //     to the legacy honest signal: degenerate:true with the raw (unreliable) inertia counts.
   function schurCohn(coeffs) {
     const Z = Gaussian.fromInt(0);
     let a = (coeffs || []).map((c) => new Gaussian(c.re, c.im));
@@ -2559,7 +2605,27 @@
       }
     }
     const inertia = _hermitianInertia(C);
-    return { inside: inertia.neg, outside: inertia.pos, onCircle: inertia.zero, degenerate: inertia.zero > 0, degree: n };
+    if (inertia.zero === 0) {
+      return { inside: inertia.neg, outside: inertia.pos, onCircle: 0, degenerate: false, degree: n };
+    }
+    // Singular C ⇒ resolve the on-circle / self-inversive ambiguity exactly (see header).
+    try {
+      const v = 'z';
+      const pHat = squareFreePart(_polyFromCoeffs(a, v), v);
+      const aHat = _uniToArr(pHat, v); const dh = aHat.length - 1;
+      const star = []; for (let k = 0; k <= dh; k++) star.push(aHat[dh - k].conj());   // p̂†
+      const s = univariateGCD(pHat, _polyFromCoeffs(star, v), v);                       // self-inversive part
+      const degS = s.degreeIn(v);
+      const on = unitCircleRootCount(_uniToArr(s, v));
+      if (!on.ok) throw new Error(on.reason || 'on-circle count unavailable');
+      if ((degS - on.count) % 2 !== 0) throw new Error('self-inversive split parity');
+      const half = (degS - on.count) / 2;
+      const qc = schurCohn(_uniToArr(mpolyExactDiv(pHat, s), v));                        // cofactor: nonsingular ⇒ exact
+      return { inside: qc.inside + half, outside: qc.outside + half, onCircle: on.count, degenerate: on.count > 0, degree: n, resolved: true };
+    } catch (e) {
+      // honest fallback: counts unreliable (cap / parity) — preserve the legacy degenerate signal.
+      return { inside: inertia.neg, outside: inertia.pos, onCircle: inertia.zero, degenerate: true, degree: n, resolved: false };
+    }
   }
 
   // ===========================================================================
@@ -3036,7 +3102,7 @@
     mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
-    multiplicationMatrix, solveByEigenvalues, realSolutionCount, schurCohn, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
+    multiplicationMatrix, solveByEigenvalues, realSolutionCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
   };
