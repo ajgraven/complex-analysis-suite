@@ -261,10 +261,8 @@ function buildW0(hData) {
     if (!w0) return { error: 'Invalid value for φ(0)' };
     return { w0 };
   }
-  // centroid
-  let sumRe = 0, sumIm = 0;
-  for (const p of hData.poles) { sumRe += p.a.re; sumIm += p.a.im; }
-  return { w0: { re: sumRe / hData.poles.length, im: sumIm / hData.poles.length } };
+  // centroid of the poles (the shared QD.poleCentroid; empty-pole fallback → 0)
+  return { w0: QD.poleCentroid(hData) };
 }
 uiCtx.buildW0 = buildW0;  // available before the first solve (ui-modes buildNorm uses it)
 

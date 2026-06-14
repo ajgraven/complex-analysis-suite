@@ -1650,6 +1650,20 @@ function sameDomain(a, b, tol = 1e-4) {
   return phisEquivalent(canonicalizeByRotation(a), canonicalizeByRotation(b), tol);
 }
 
+// Arithmetic mean of the pole positions a_j — the default Riemann-map center φ(0) for the
+// bounded families (it lands inside Ω for a roughly convex pole cloud). Returns `fallback`
+// when there are no poles, so each caller keeps the degenerate-case center its family wants
+// (PQD/auto-w₀ → 0; LQD → 1, since 0 ∉ Ω̄ is required there). Single source for what were
+// three open-coded copies (ui.js buildW0, solver-pqd bootstrap, solver-lqd normalizeOpts).
+function poleCentroid(hData, fallback) {
+  const poles = (hData && hData.poles) || [];
+  const n = poles.length;
+  if (n === 0) return fallback ? { re: fallback.re, im: fallback.im } : { re: 0, im: 0 };
+  let sumRe = 0, sumIm = 0;
+  for (const p of poles) { sumRe += p.a.re; sumIm += p.a.im; }
+  return { re: sumRe / n, im: sumIm / n };
+}
+
 // Realizability diagnostic for bounded PQDs (α-homotopy fold tracer). Thin
 // pass-through to QD.PqdCommon.diagnosePQDRealizability, which is attached by
 // solver-pqd-common.js (loaded AFTER this file) — so resolve it at call time.
@@ -1722,7 +1736,7 @@ const _exports = {
   // Dispatchers + shared
   evalPhi, phiTaylorAt, residual, residualNorm,
   packPhi, unpackPhi, canonicalizePhi,
-  clonePhi, phisEquivalent, sameDomain, canonicalizeByRotation,
+  clonePhi, phisEquivalent, sameDomain, canonicalizeByRotation, poleCentroid,
   newtonSolve, scaleHDataPoles, scaleHDataResidues,
   solveLinearSystem, solveLeastSquares, houseQR, numericalJacobian,
   isBoundaryUnivalent, sampleBoundary, sampleBoundaryAdaptive, refineBoundaryByDeviation,

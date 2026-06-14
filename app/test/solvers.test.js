@@ -1823,4 +1823,15 @@ runFamilyBattery('unboundedLQD', [
   }
 }
 
+// QD.poleCentroid — the shared default-φ(0) helper (single source for what were three
+// open-coded copies in ui.js buildW0 / solver-pqd / solver-lqd). Mean of the pole
+// positions a_j; `fallback` (per-caller) when there are no poles.
+{
+  const h2 = { poles: [{ a: { re: 1, im: 2 } }, { a: { re: 3, im: -4 } }] };
+  ok('poleCentroid: mean of pole positions', approxEq(QD.poleCentroid(h2), { re: 2, im: -1 }, 1e-12));
+  ok('poleCentroid: no poles → provided fallback', approxEq(QD.poleCentroid({ poles: [] }, { re: 1, im: 0 }), { re: 1, im: 0 }, 1e-12));
+  ok('poleCentroid: no poles + no fallback → origin', approxEq(QD.poleCentroid({ poles: [] }), { re: 0, im: 0 }, 1e-12));
+  ok('poleCentroid: single pole → that pole', approxEq(QD.poleCentroid({ poles: [{ a: { re: -0.5, im: 0.25 } }] }), { re: -0.5, im: 0.25 }, 1e-12));
+}
+
 };

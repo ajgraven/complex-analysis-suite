@@ -398,11 +398,9 @@
     normalizeOpts(opts, hData) {
       let w0 = opts.w0;
       if (!w0) {
-        // Default: centroid of poles. Warn (via thrown error) if centroid is at 0.
-        let sumRe = 0, sumIm = 0;
-        for (const p of hData.poles) { sumRe += p.a.re; sumIm += p.a.im; }
-        const n = hData.poles.length;
-        w0 = n > 0 ? { re: sumRe / n, im: sumIm / n } : { re: 1, im: 0 };
+        // Default: centroid of poles (shared QD.poleCentroid). Empty-pole fallback → 1
+        // (LQD requires 0 ∉ Ω̄); the abs2 check below rejects a centroid that lands at 0.
+        w0 = QD.poleCentroid(hData, { re: 1, im: 0 });
       }
       if (Complex.abs2(w0) < QD.ZERO_THRESHOLD) {
         throw new Error("Family.boundedLQD: w₀ = φ(0) must be nonzero (0 ∉ Ω̄ required)");

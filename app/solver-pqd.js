@@ -512,10 +512,7 @@
   //   which re-solve millions of times, can skip the nested classical solves.
   // ===========================================================================
   function poleCentroid_PQD(hData) {
-    let sr = 0, si = 0;
-    const n = hData.poles.length;
-    for (const p of hData.poles) { sr += p.a.re; si += p.a.im; }
-    return n > 0 ? { re: sr / n, im: si / n } : { re: 0, im: 0 };
+    return QD.poleCentroid(hData, { re: 0, im: 0 });   // shared helper; empty-pole fallback → 0
   }
 
   function bootstrapW0_PQD(hData, opts) {
