@@ -519,6 +519,14 @@ module.exports = async function run() {
     // solveReal returns a well-formed result over the (pinned) reim system
     const sr = st.solveReal(null, {});
     ok('solveReal: returns a well-formed result over the reim system', typeof sr.ok === 'boolean');
+    // classifyAsync / solveRealAsync — worker-offloaded twins. In Node the SymWorker falls
+    // back to the main thread, so they must match the synchronous classify / solveReal.
+    const cla = await st.classifyAsync(null, {});
+    ok('classifyAsync: matches sync classify (main-thread fallback)',
+       cla.ok === cl.ok && cla.zeroDim === cl.zeroDim && cla.realCount === cl.realCount && cla.complexCount === cl.complexCount);
+    const sra = await st.solveRealAsync(null, {});
+    ok('solveRealAsync: matches sync solveReal ok-status (main-thread fallback)',
+       typeof sra.ok === 'boolean' && sra.ok === sr.ok);
   }
 
   // ---- per-column stats (UI lane headers) ----

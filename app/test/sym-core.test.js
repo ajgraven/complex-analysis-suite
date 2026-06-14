@@ -890,6 +890,15 @@ module.exports = async function run() {
       const rgrid = S.runJob('solveZeroDim', { polys: [mv('x').pow(2).sub(mi(1)), mv('y').pow(2).sub(mi(1))].map((q) => q.termList()), vars: ['x', 'y'] });
       ok('runJob solveZeroDim: eigenvalue fallback returns 4 JSON-safe solutions (method tagged)',
          rgrid.ok && rgrid.solutions.length === 4 && rgrid.method === 'eigenvalue');
+      // runJob classify — existence/uniqueness over a real system (the worker twin of
+      // AlgebraStore._classifyImpl): Gröbner + zero-dim test + Hermite real count, JSON-safe.
+      const rcl = S.runJob('classify', { polys: [mv('x').pow(2).sub(mi(1)), mv('y').pow(2).sub(mi(1))].map((q) => q.termList()), vars: ['x', 'y'] });
+      ok('runJob classify: ⟨x²−1,y²−1⟩ → zero-dim, 4 real solutions (JSON-safe)',
+         rcl.ok && rcl.zeroDim === true && rcl.realCount === 4 && rcl.complexCount === 4 && rcl.multiplicity === 4);
+      const rincon = S.runJob('classify', { polys: [mv('x').sub(mi(1)), mv('x')].map((q) => q.termList()), vars: ['x'] });
+      ok('runJob classify: inconsistent system (1 ∈ I) flagged', rincon.ok && rincon.inconsistent === true && rincon.realCount === 0);
+      const rpos = S.runJob('classify', { polys: [mv('x')].map((q) => q.termList()), vars: ['x', 'y'] });
+      ok('runJob classify: ⟨x⟩ in (x,y) is positive-dimensional', rpos.ok && rpos.zeroDim === false && rpos.realCount === null);
       ok('runJob: unknown op throws', (() => { try { S.runJob('nope', {}); return false; } catch (e) { return /unknown/i.test(String(e.message || e)); } })());
     }
   }

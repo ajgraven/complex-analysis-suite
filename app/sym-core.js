@@ -2743,6 +2743,27 @@
       // Infinity isn't JSON-cloneable → report zeroDim + a finite count (null if ∞)
       return { zeroDim, dimension: zeroDim ? quotientDimension(G, order, vars) : null, numVars: vars.length };
     }
+    if (kind === 'classify') {
+      // Existence/uniqueness verdict over a REAL (reim) system (the off-main-thread twin of
+      // AlgebraStore._classifyImpl). `polys`/`vars` are the already-pinned reim equations;
+      // returns JSON-safe { ok, inconsistent, zeroDim, realCount, complexCount, multiplicity,
+      // numVars, reason }. The heavy part (grevlex Gröbner + Hermite real count) runs here.
+      const vars = payload.vars || _ambientVars(polys);
+      const order = monomialOrder('grevlex', vars);
+      const opts = Object.assign({}, payload.opts, onProgress ? { onProgress } : {});
+      let G;
+      try { G = buchberger(polys, order, opts); }
+      catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+      if (G.length === 1 && G[0].vars().size === 0 && !G[0].isZero()) {
+        return { ok: true, inconsistent: true, zeroDim: true, realCount: 0, complexCount: 0, multiplicity: 0, numVars: vars.length };
+      }
+      const zeroDim = isZeroDimensional(G, order, vars);
+      if (!zeroDim) return { ok: true, inconsistent: false, zeroDim: false, realCount: null, complexCount: null, multiplicity: null, numVars: vars.length };
+      const multiplicity = quotientDimension(G, order, vars);
+      const rc = realSolutionCount({ G, order }, null, vars, opts);
+      if (!rc.ok) return { ok: true, inconsistent: false, zeroDim: true, realCount: null, complexCount: null, multiplicity, reason: rc.reason, numVars: vars.length };
+      return { ok: true, inconsistent: false, zeroDim: true, realCount: rc.realCount, complexCount: rc.complexCount, multiplicity, numVars: vars.length };
+    }
     throw new Error('runJob: unknown kind ' + kind);
   }
 

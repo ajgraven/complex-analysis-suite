@@ -814,6 +814,24 @@
         return { ok: true, inconsistent: false, zeroDim: true, realCount: rc.realCount, complexCount: rc.complexCount, multiplicity, numVars: reim.vars.length };
       } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
     }
+    // Off-main-thread classify via QD.SymWorker (Promise). runOpts: { onProgress, signal }.
+    // The reim transform + paramValue pinning is cheap and stays on the main thread; the
+    // heavy reim Gröbner + Hermite real-count run in the worker (runJob 'classify'). Falls
+    // back to the synchronous classify() when the worker is unavailable. The factor-branch
+    // annotation (cheap, main-thread) is folded onto the result either way.
+    function classifyAsync(ids, opts, runOpts) {
+      opts = opts || {};
+      const branch = _factorBranchInfo(ids);
+      const reim = currentReimSystem(ids, opts);
+      if (!reim.polys.length) return Promise.resolve(Object.assign({ ok: false, reason: 'no equality nodes to analyze' }, branch));
+      const SW = symWorker();
+      if (!SW) return Promise.resolve(classify(ids, opts));
+      const payload = { polys: reim.polys.map((p) => p.termList()), vars: reim.vars, opts: _capOpts(opts) };
+      return SW.run('classify', payload, runOpts || {}).then(
+        (res) => Object.assign(res, branch),
+        (err) => Object.assign((err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
+          : { ok: false, reason: (err && err.message) || String(err) }, branch));
+    }
 
     // The univariate RESOLVENT χ_v of the current column in a chosen REAL variable v — the
     // characteristic polynomial of multiplication-by-v on the quotient ring (Sym.resolvent over
@@ -856,6 +874,22 @@
       const rootFinder = opts.rootFinder || defaultRootFinder();
       try { return S.solveZeroDim(reim.polys, Object.assign({}, opts, { vars: reim.vars, rootFinder })); }
       catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    }
+    // Off-main-thread explicit REAL solve via QD.SymWorker (Promise). Like solveReal but the
+    // reim Gröbner→FGLM→roots run in the worker (runJob 'solveZeroDim'; it bundles
+    // faber-analysis, so its own Durand–Kerner is used — no rootFinder crosses postMessage).
+    // runOpts: { onProgress, signal }. Falls back to the synchronous solveReal().
+    function solveRealAsync(ids, opts, runOpts) {
+      opts = opts || {};
+      const reim = currentReimSystem(ids, opts);
+      if (!reim.polys.length) return Promise.resolve({ ok: false, reason: 'no equality nodes to solve' });
+      const SW = symWorker();
+      if (!SW) return Promise.resolve(solveReal(ids, opts));
+      const payload = { polys: reim.polys.map((p) => p.termList()), vars: reim.vars, opts: _capOpts(opts) };
+      return SW.run('solveZeroDim', payload, runOpts || {}).then(
+        (res) => res,
+        (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
+          : { ok: false, reason: (err && err.message) || String(err) });
     }
 
     // Numeric solutions of the selected (or all) equality nodes via the shape-lemma
@@ -1152,7 +1186,7 @@
       seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, substituteValues, reducePropagate, assumeReal, fixW0, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
-      currentReimSystem, classify, resolventOf, reimVariables, solveReal, currentColumnIds, maxColumn, columnStats, columns,
+      currentReimSystem, classify, classifyAsync, resolventOf, reimVariables, solveReal, solveRealAsync, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, mathematicaColumn, mathematicaNode, mathematicaAll, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       undo, redo, reset,

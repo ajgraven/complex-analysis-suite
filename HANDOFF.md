@@ -160,6 +160,12 @@ its own merged PR), with one feature **in progress on a branch**:
     the A&S system; n≥3 is delivered for per-instance solving (`realSolutionCount`/`solveZeroDim` + schurCohn
     filter) — parametric uniqueness stays the RCTD frontier (#6). Regression in `qd-equations.test.js`
     cross-checks the generated system against an independent 2-D disk-quadrature of the moments.
+  - **worker-offload of classify / auto-reduce-&-solve** — the heavy reim Gröbner + Hermite real-count no
+    longer run on the main thread: new `runJob` kind `'classify'` (the off-main-thread twin of
+    `_classifyImpl`) + store `classifyAsync` / `solveRealAsync` (reim-system Promises, fall back to sync when
+    no Worker). `doClassify` and `doAutoSolve` now run via `QD.SymWorker` with progress + a working Cancel
+    (autosolve gained an AbortController). The reim transform + paramValue pinning stays on the main thread
+    (cheap); only the Gröbner/solve cross the boundary. `_CAP_KEYS` already covered the forwarded caps.
   **Deferred (review item #6, not started):** the parametric RCTD / external-CAS bridge. Known limitation:
   the certify path can't reconstruct φ when
   reductions eliminate the map variables ("unreconstructable — run on the seeded system"); the cross-check

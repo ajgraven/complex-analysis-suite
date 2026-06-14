@@ -800,6 +800,8 @@
       if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
       if (!ensureSeed()) return;
       clearError();
+      const ctrl = _newAbort(); _abort = ctrl;
+      const runOpts = { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Auto: ' + info.basis + ' generators, ' + info.pairs + ' pairs left') };
       setBusy(true, 'Auto-reduce & solve…');
       const tick = () => new Promise((res) => setTimeout(res, 30));
       (async () => {
@@ -817,10 +819,11 @@
             rerender(); setStatus('Auto: linear propagation → column ' + pr.column + (pr.inconsistent ? ' (inconsistent)' : '')); await tick();
             if (pr.inconsistent) break;
           }
-          // 3. existence / uniqueness verdict (parameters pinned)
+          // 3. existence / uniqueness verdict (parameters pinned) — off the main thread
           const params = hDataParamValues();
-          const cl = store.classify(null, { paramValues: params });
-          if (!cl.ok) { setBusy(false); showError('Auto-reduce & solve: ' + withGuidance(cl.reason || 'failed')); return; }
+          const cl = await store.classifyAsync(null, { paramValues: params }, runOpts);
+          if (cl.aborted) { _abort = null; setBusy(false); setStatus('Cancelled.'); toast('Cancelled'); return; }
+          if (!cl.ok) { _abort = null; setBusy(false); showError('Auto-reduce & solve: ' + withGuidance(cl.reason || 'failed')); return; }
           let verdict;
           if (cl.inconsistent) verdict = 'No quadrature domain: the reduced system is inconsistent.';
           else if (!cl.zeroDim) verdict = 'A positive-dimensional family of solutions (' + cl.numVars + ' real variables) — add a constraint or fix a value to pin it.';
@@ -829,10 +832,11 @@
               : cl.realCount === 1 ? 'Unique quadrature domain (1 real solution)'
                 : cl.realCount + ' real quadrature domains')
             + (cl.complexCount != null ? ' of ' + cl.complexCount + ' distinct complex' : '')) + '.';
-          // 4. explicit real solutions when zero-dimensional
+          // 4. explicit real solutions when zero-dimensional — off the main thread
           let coords = '', solutionsText = '';
           if (cl.zeroDim && !cl.inconsistent) {
-            const sr = store.solveReal(null, { paramValues: params });
+            const sr = await store.solveRealAsync(null, { paramValues: params }, runOpts);
+            if (sr.aborted) { _abort = null; setBusy(false); setStatus('Cancelled.'); toast('Cancelled'); return; }
             if (sr.ok && sr.solutions && sr.solutions.length) {
               const reals = sr.solutions.filter((s) => Object.keys(s).every((k) => Math.abs(s[k].im) < 1e-6));
               coords = ' Explicit: ' + reals.length + ' real solution(s) — see the verdict card / console.';
@@ -843,11 +847,11 @@
               try { console.table(sr.solutions.map((s) => { const row = {}; Object.keys(s).forEach((k) => { row[k] = s[k].re.toFixed(6) + (s[k].im >= 0 ? '+' : '−') + Math.abs(s[k].im).toFixed(6) + 'i'; }); return row; })); } catch (e) { /* ignore */ }
             }
           }
-          setBusy(false); refreshPickers();
+          _abort = null; setBusy(false); refreshPickers();
           setStatus(verdict + coords);
           if (canvas) canvas.setVerdict({ text: verdict, solutionsText });
           toast(verdict, cl.inconsistent || cl.realCount === 0 ? { kind: 'error' } : {});
-        } catch (e) { setBusy(false); showError('Auto-reduce & solve: ' + ((e && e.message) || String(e))); }
+        } catch (e) { _abort = null; setBusy(false); showError('Auto-reduce & solve: ' + ((e && e.message) || String(e))); }
       })();
     }
 
@@ -876,13 +880,15 @@
       if (_abort) return;
       if (!ensureSeed()) return;
       clearError();
+      const sel = canvas && canvas.getSelection().length ? canvas.getSelection() : null;
+      const ctrl = _newAbort(); _abort = ctrl;
       setBusy(true, 'Counting real solutions (existence / uniqueness)…');
-      // sync, but yield once so the busy state paints
-      setTimeout(() => {
-        const sel = canvas && canvas.getSelection().length ? canvas.getSelection() : null;
-        let r; try { r = store.classify(sel, { paramValues: hDataParamValues() }); }
-        catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
-        setBusy(false); setStatus('');
+      store.classifyAsync(sel, { paramValues: hDataParamValues() }, {
+        signal: ctrl && ctrl.signal,
+        onProgress: (info) => setStatus('Existence / uniqueness… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
+      }).then((r) => {
+        _abort = null; setBusy(false); setStatus('');
+        if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Existence / uniqueness: ' + withGuidance(r.reason || 'unavailable')); return; }
         let verdict;
         if (r.inconsistent) verdict = 'No quadrature domain: the system is inconsistent (1 ∈ I).';
@@ -900,7 +906,7 @@
         setStatus(verdict);
         if (canvas) canvas.setVerdict({ text: verdict });
         toast(verdict, r.inconsistent || r.realCount === 0 ? { kind: 'error' } : {});
-      }, 20);
+      });
     }
 
     // Reconstruct a numeric Riemann map φ from one real solution of the reim system. The
