@@ -938,11 +938,13 @@
     // numeric coordinates (QE.ratApprox) and substitute the barred pole vars z̄_j = conj(z_j),
     // Ā_{j,k} = conj(A_{j,k}) into QC.phiPrimeNumerator — then count its roots inside 𝔻 by the
     // Hermitian Schur–Cohn inertia (Sym.schurCohn): exact integer/rational linear algebra, NO
-    // numeric root-finding. Returns { inside, degenerate }: inside>0 ⇒ φ′ has a zero in 𝔻 (a
-    // fold); inside===0 (and not degenerate) ⇒ φ′≠0 strictly in 𝔻. `degenerate` (a singular /
-    // self-inversive matrix — also raised by an on-circle φ′ zero = a cusp) is AMBIGUOUS and the
-    // caller must fall back to the numeric test, never certify from it. null ⇒ φ′ / the map vars
-    // are unavailable (e.g. the map variables were eliminated) ⇒ caller uses the numeric test.
+    // numeric root-finding. Returns { inside, onCircle, degenerate, resolved }: inside>0 ⇒ φ′
+    // has a zero in 𝔻 (a fold); onCircle = # DISTINCT zeros of φ′ ON ∂𝔻 (each a CUSP); inside===0
+    // & onCircle===0 ⇒ φ′≠0 on the closed disk. `resolved` is true when the (post-Commit-A) exact
+    // count is trustworthy — including the self-inversive/cusp cases — so the caller may use inside
+    // & onCircle even when `degenerate` (which now means onCircle>0, a boundary zero). Only an
+    // over-cap result (degenerate:true & !resolved) is ambiguous ⇒ numeric fallback. null ⇒ φ′ /
+    // the map vars are unavailable (e.g. eliminated) ⇒ caller uses the numeric test.
     function schurCohnFold(sol, hData) {
       const Sym = QD && QD.Sym;
       if (!Sym || !QC || typeof Sym.schurCohn !== 'function' || typeof Sym.uniCoeffs !== 'function' ||
@@ -952,7 +954,7 @@
       let numP; try { numP = QC.phiPrimeNumerator(hData); } catch (e) { return null; }
       try {
         const sc = Sym.schurCohn(Sym.uniCoeffs(numP.subst(sub), 'Z'));          // univariate in ζ (= 'Z')
-        return { inside: sc.inside, degenerate: sc.degenerate };
+        return { inside: sc.inside, onCircle: sc.onCircle || 0, degenerate: sc.degenerate, resolved: !!sc.resolved };
       } catch (e) { return null; }
     }
     // Shared exact-ℚ(i) substitution map for the BARRED pole vars from a candidate's numeric
@@ -978,19 +980,22 @@
       }
       return sub;
     }
-    // EXACT boundary-injectivity test for one candidate: is φ(∂𝔻) a SIMPLE curve? Returns
-    // { simple } when QC.boundaryDoublePointCount certifies (count of real circle double points;
-    // 0 ⇔ simple), or null when it can't (no Sym / positive-dim / over the Hermite cap) ⇒ the
-    // caller falls back to the numeric QD.isBoundaryUnivalent. PRECONDITION: the caller invokes
-    // this ONLY when the local Schur–Cohn was non-degenerate with no in-disk fold (φ′≠0 on 𝔻̄),
-    // so there are no diagonal/cusp solutions and the count is exactly the self-intersections.
-    function boundarySimpleExact(sol, hData) {
+    // EXACT boundary-injectivity test for one candidate: is φ(∂𝔻) a SIMPLE closed curve (a Jordan
+    // boundary, possibly WITH cusps)? QC.boundaryDoublePointCount returns the count of real circle
+    // solutions of the divided difference = 2·(genuine self-crossings) + (#diagonal cusp points),
+    // because on the diagonal ζ₁=ζ₂ the divided difference equals φ′·(Möbius≠0), so each on-circle
+    // zero of φ′ (a CUSP) contributes one diagonal solution. Subtracting `cusps` (the schurCohn
+    // on-circle count) isolates the genuine self-intersections ⇒ simple ⟺ count === cusps. Returns
+    // { simple } when it certifies, null otherwise (no Sym / positive-dim / over the Hermite cap) ⇒
+    // numeric fallback. PRECONDITION: φ′≠0 strictly INSIDE 𝔻 (the caller's no-fold gate); on-circle
+    // zeros (cusps) are allowed and subtracted here.
+    function boundarySimpleExact(sol, hData, cusps) {
       if (!QC || typeof QC.boundaryDoublePointCount !== 'function') return null;
       const sub = poleSubst(sol, hData);
       if (!sub) return null;
       let r; try { r = QC.boundaryDoublePointCount(hData, sub); } catch (e) { return null; }
       if (!r || !r.ok) return null;
-      return { simple: r.count === 0 };
+      return { simple: r.count === (cusps || 0) };
     }
     // Certified univalence filter (the genuine-QD count): solve the current system for its
     // REAL solutions, reconstruct each candidate φ, and test univalence — a real algebraic
@@ -1064,21 +1069,29 @@
           if (!phi) { unrec++; rows.push('#' + (idx + 1) + ': φ not reconstructable (map variables eliminated — run on the seeded system)'); return; }
           // Local fold test: EXACT Schur–Cohn on num(φ′) when non-degenerate; honest numeric
           // fallback (findCriticalPoints) on a singular/self-inversive matrix or when unavailable.
-          let fold = false, exact = false;
+          let fold = false, exact = false, cusps = 0;
           const scf = schurCohnFold(sol, hData);
-          if (scf && !scf.degenerate) { fold = scf.inside > 0; exact = true; }
+          // Exact-usable when the (post-A) count is trustworthy: non-degenerate, the clean
+          // self-inversive case, OR a resolved cusp (degenerate but resolved). inside>0 ⇒ fold;
+          // onCircle = the boundary cusp count (an ALLOWED degeneracy — see the boundary test).
+          if (scf && (!scf.degenerate || scf.resolved)) { fold = scf.inside > 0; cusps = scf.onCircle || 0; exact = true; }
           else { try { const crit = (typeof QD.findCriticalPoints === 'function') ? QD.findCriticalPoints(phi, {}) : null; fold = !!(crit && crit.points && crit.points.some((p) => p.inDomain)); } catch (e) { /* treat as no fold */ } }
           const tag = exact ? 'Schur–Cohn' : 'numeric';
-          // Boundary test: EXACT (real circle double-point count) when the local test certified
-          // φ′≠0 on 𝔻̄ (exact && !fold); else honest numeric fallback. Only the exact path may
-          // declare "simple" certified — never mis-certifies.
+          // Boundary test: EXACT real circle double-point count when φ′≠0 strictly INSIDE 𝔻
+          // (exact && !fold); the diagonal cusp solutions are subtracted (simple ⟺ count===cusps),
+          // so a cusped boundary (the cardioid) still certifies SIMPLE. Else numeric fallback.
           let simple = true, simpleExact = false;
-          if (exact && !fold) { const bs = boundarySimpleExact(sol, hData); if (bs) { simple = bs.simple; simpleExact = true; } }
+          if (exact && !fold) { const bs = boundarySimpleExact(sol, hData, cusps); if (bs) { simple = bs.simple; simpleExact = true; } }
           if (!simpleExact) { try { simple = QD.isBoundaryUnivalent(phi, 360); } catch (e) { simple = true; } }
           const bTag = simpleExact ? 'real-count' : 'numeric';
           if (fold) { folded++; rows.push('#' + (idx + 1) + ': φ′ = 0 inside 𝔻 (fold, ' + tag + ') — not univalent'); }
           else if (!simple) { selfInt++; rows.push('#' + (idx + 1) + ': boundary φ(∂𝔻) self-intersects (' + bTag + ') — not univalent'); }
-          else { genuinePhis.push(phi); rows.push('#' + (idx + 1) + ': univalent ✓ — genuine quadrature domain' + (exact && simpleExact ? ' (Schur–Cohn + real-count certified)' : (exact ? ' (φ′≠0 in 𝔻 certified)' : ''))); }
+          else {
+            genuinePhis.push(phi);
+            const cuspNote = (cusps > 0) ? ' — boundary cusp ×' + cusps : '';
+            rows.push('#' + (idx + 1) + ': univalent ✓ — genuine quadrature domain' + cuspNote +
+              (exact && simpleExact ? ' (Schur–Cohn + real-count certified)' : (exact ? ' (φ′≠0 in 𝔻 certified)' : '')));
+          }
         });
         // 3) GAUGE QUOTIENT: genuine solutions related by a disk rotation are the SAME domain.
         const distinct = [];

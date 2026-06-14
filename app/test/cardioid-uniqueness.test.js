@@ -77,6 +77,23 @@ module.exports = async function run() {
     ok('overshoot φ′=1+2z: schurCohn inside 1 (φ′=0 in 𝔻) ⇒ rejected', over.inside === 1);
   }
 
+  // ---- exact cusp-aware boundary injectivity (math-completeness B). φ′ = 1 + z has ONE zero
+  //      on ∂𝔻 (the cardioid cusp at ζ=−1). The divided-difference boundary count equals
+  //      2·(genuine self-crossings) + (#cusps) — on the diagonal ζ₁=ζ₂ the divided difference is
+  //      φ′·(Möbius≠0), so each on-circle φ′ zero contributes one diagonal solution. For the
+  //      cardioid (no self-crossings) the count is exactly the cusp count ⇒ boundary SIMPLE (a
+  //      Jordan curve with one cusp) ⇒ certified univalent (the certify path's cusp branch). ----
+  {
+    const QC = QD.QDConstraints;
+    const hD = { poles: [{ a: { re: 0, im: 0 }, principal: [{ re: 1.5, im: 0 }, { re: 0.5, im: 0 }] }] };
+    const sub = { zb1: S.mpolyConst(S.gaussInt(0, 0)), Ab1_1: S.mpolyConst(S.gaussInt(1, 0)), Ab1_2: S.mpolyConst(S.gauss(S.rat(1, 2), S.rat(0))) };
+    const cusps = S.unitCircleRootCount(S.uniCoeffs(QC.phiPrimeNumerator(hD).subst(sub), 'Z'));
+    ok('cusp boundary: cardioid φ′=1+z has exactly 1 on-circle cusp', cusps.ok && cusps.count === 1);
+    const bdp = QC.boundaryDoublePointCount(hD, sub);
+    ok('cusp boundary: divided-difference count === cusp count ⇒ simple Jordan boundary (with cusp)',
+       bdp.ok && bdp.count === cusps.count);
+  }
+
   // ---- uniqueness mechanism: ≥2 algebraic solutions, the filter keeps exactly one ----
   {
     // Data with TWO positive resolvent roots s=w₁²∈{2,16}: candidates w₁=4 (univalent) and
