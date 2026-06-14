@@ -437,6 +437,12 @@ module.exports = async function run() {
        rep && rep.provenance.variables && rep.provenance.variables.length === 2);
     ok('subvals: provenance records each conjugate partner name',
        rep && rep.provenance.variables.every((v) => v.conjugate === QC.conjVarName(v.name)));
+    // (C) knownValues recovers the pinned constants so φ can be reconstructed after the
+    // variables leave the system.
+    const kv = st.knownValues();
+    ok('knownValues: recovers the pinned constants (' + v1 + '=1+2i, ' + v2 + '=0)',
+       kv[v1] && Math.abs(kv[v1].re - 1) < 1e-12 && Math.abs(kv[v1].im - 2) < 1e-12 &&
+       kv[v2] && Math.abs(kv[v2].re) < 1e-12 && Math.abs(kv[v2].im) < 1e-12);
 
     // The single-variable wrapper now ALSO fills the conjugate.
     const st2 = QD.AlgebraStore.create();

@@ -916,7 +916,15 @@
     // QD.evalPhi / isBoundaryUnivalent / findCriticalPoints understand, or null if any map
     // parameter was eliminated from the current system (φ can't be rebuilt — report it).
     function phiFromAlgebraSolution(sol, hData) {
-      const num = (name) => { const re = sol[name + '__re']; if (!re) return undefined; const im = sol[name + '__im']; return { re: re.re, im: im ? im.re : 0 }; };
+      // (C) a map variable PINNED/eliminated by an earlier reduction (e.g. z₁=0) is no longer a
+      // solved unknown — fall back to its recorded value (store.knownValues) so φ still rebuilds.
+      const known = (store.knownValues && store.knownValues()) || {};
+      const num = (name) => {
+        const re = sol[name + '__re'];
+        if (re) { const im = sol[name + '__im']; return { re: re.re, im: im ? im.re : 0 }; }
+        if (known[name]) return { re: known[name].re || 0, im: known[name].im || 0 };
+        return undefined;
+      };
       let w0 = num('w0');
       if (!w0 && store.w0Fixed) {                 // φ(0) fixed ⇒ not a solved variable; read its value
         const wf = store.w0Fixed, rat = (p) => (p ? Number(p[0]) / Number(p[1]) : 0);
@@ -965,7 +973,16 @@
     function poleSubst(sol, hData) {
       const Sym = QD && QD.Sym;
       if (!Sym || !QE || typeof QE.ratApprox !== 'function') return null;
-      const num = (name) => { const re = sol[name + '__re']; if (!re) return undefined; const im = sol[name + '__im']; return { re: re.re, im: im ? im.re : 0 }; };
+      // (C) fall back to a variable's PINNED/eliminated value (store.knownValues) when it is no
+      // longer a solved unknown — so the exact Schur–Cohn / boundary tests work after a reduction
+      // (e.g. z₁=0) removed a map variable.
+      const known = (store.knownValues && store.knownValues()) || {};
+      const num = (name) => {
+        const re = sol[name + '__re'];
+        if (re) { const im = sol[name + '__im']; return { re: re.re, im: im ? im.re : 0 }; }
+        if (known[name]) return { re: known[name].re || 0, im: known[name].im || 0 };
+        return undefined;
+      };
       const ratG = (v) => { const a = QE.ratApprox(v.re || 0), b = QE.ratApprox(v.im || 0); return Sym.gauss(Sym.rat(a[0], a[1]), Sym.rat(b[0], b[1])); };
       const poles = (hData && hData.poles) || [];
       const sub = {};

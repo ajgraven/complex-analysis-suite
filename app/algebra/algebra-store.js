@@ -421,7 +421,14 @@
       if (!lr.eliminated.length) return { ok: false, reason: 'no linear variable to propagate', created: [] };
       const subMap = {}; for (const el of lr.eliminated) subMap[el.name] = el.expr;
       const elimNames = lr.eliminated.map((e) => e.name);
-      const prov = { op: 'linear-reduce', inputs: eqs.map((n) => n.id), eliminated: elimNames.slice() };
+      // Persist CONSTANT eliminations (var → a number) so φ can be reconstructed after the
+      // variable leaves the system (C). A non-constant expr (var = a combo of others) isn't
+      // recorded — it would need the solution to evaluate.
+      const elimValues = [];
+      for (const e of lr.eliminated) {
+        try { if (e.expr && e.expr.vars && e.expr.vars().size === 0) { const c = e.expr.evalComplex({}); elimValues.push({ name: e.name, value: { re: c.re, im: c.im } }); } } catch (_) { /* skip */ }
+      }
+      const prov = { op: 'linear-reduce', inputs: eqs.map((n) => n.id), eliminated: elimNames.slice(), values: elimValues };
       const label = 'propagate: eliminate ' + elimNames.join(', ');
       checkpoint();
       const col = maxColumn() + 1;
@@ -833,6 +840,28 @@
           : { ok: false, reason: (err && err.message) || String(err) }, branch));
     }
 
+    // Numeric values of variables an earlier reduction PINNED or ELIMINATED to a CONSTANT
+    // (substituteValue, a constant linear-propagation step, or fix-w0), keyed varName → {re,im}.
+    // After a reduction removes a map variable from the system it is no longer a solved unknown,
+    // but its value is recorded in the provenance — so φ can still be reconstructed (C). Walks
+    // every node (a constant pin is permanent; the variable can't reappear).
+    function knownValues() {
+      const out = {};
+      for (const n of nodes.values()) {
+        const pv = n.provenance; if (!pv) continue;
+        if (pv.op === 'substitute' && Array.isArray(pv.variables)) {
+          for (const rec of pv.variables) {
+            const ap = rec && rec.value && rec.value.approx;
+            if (rec && rec.name && ap) out[rec.name] = { re: ap.re || 0, im: ap.im || 0 };
+          }
+        } else if (pv.op === 'linear-reduce' && Array.isArray(pv.values)) {
+          for (const rec of pv.values) if (rec && rec.name && rec.value) out[rec.name] = { re: rec.value.re || 0, im: rec.value.im || 0 };
+        }
+      }
+      if (w0Fixed) { const rat = (p) => (p ? Number(p[0]) / Number(p[1]) : 0); out.w0 = w0Fixed.approx ? { re: w0Fixed.approx.re || 0, im: w0Fixed.approx.im || 0 } : { re: rat(w0Fixed.re), im: rat(w0Fixed.im) }; }
+      return out;
+    }
+
     // The univariate RESOLVENT χ_v of the current column in a chosen REAL variable v — the
     // characteristic polynomial of multiplication-by-v on the quotient ring (Sym.resolvent over
     // the reim system). Its roots are v's values across the solutions; a REPEATED root
@@ -1186,7 +1215,7 @@
       seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, substituteValues, reducePropagate, assumeReal, fixW0, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
-      currentReimSystem, classify, classifyAsync, resolventOf, reimVariables, solveReal, solveRealAsync, currentColumnIds, maxColumn, columnStats, columns,
+      currentReimSystem, classify, classifyAsync, resolventOf, reimVariables, solveReal, solveRealAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, mathematicaColumn, mathematicaNode, mathematicaAll, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       undo, redo, reset,

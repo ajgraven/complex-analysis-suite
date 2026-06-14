@@ -166,10 +166,19 @@ its own merged PR), with one feature **in progress on a branch**:
     no Worker). `doClassify` and `doAutoSolve` now run via `QD.SymWorker` with progress + a working Cancel
     (autosolve gained an AbortController). The reim transform + paramValue pinning stays on the main thread
     (cheap); only the Gröbner/solve cross the boundary. `_CAP_KEYS` already covered the forwarded caps.
-  **Deferred (review item #6, not started):** the parametric RCTD / external-CAS bridge. Known limitation:
-  the certify path can't reconstruct φ when
-  reductions eliminate the map variables ("unreconstructable — run on the seeded system"); the cross-check
-  and gauge dedup ride on top of reconstruction. See the plan file's per-engagement sections.
+  - **math-completeness A/B/C** — (A) `sym-core` exact DEGENERATE Schur–Cohn: peel the self-inversive part
+    (gcd with the reciprocal-conjugate) and count its on-circle roots via the new exact `unitCircleRootCount`
+    (reim+circle → Hermite `realSolutionCount`), so `schurCohn` now returns trustworthy inside/on/outside even
+    for self-inversive/cusp inputs (`resolved:true`; `degenerate` now means onCircle>0). (B) certify path
+    treats a φ′ on-circle zero as an ALLOWED boundary CUSP: `boundarySimpleExact` subtracts the diagonal cusp
+    solutions (boundary simple ⟺ count===cusps), and a cusped map certifies "univalent ✓ — boundary cusp ×k".
+    (C) φ-RECONSTRUCTION after reduction: `store.knownValues()` recovers variables an earlier reduction pinned/
+    eliminated to a constant (substitute / constant linear-propagation / fix-w0); `phiFromAlgebraSolution` and
+    `poleSubst` fall back to it, so φ rebuilds (and the exact Schur–Cohn / boundary / cross-check fire) even
+    after e.g. z₁=0 is pinned. End-to-end: the **cardioid** now certifies "Unique quadrature domain ✓ … boundary
+    cusp ×1 (Schur–Cohn + real-count certified) · cross-check ✓ (residual 2.2e-16)".
+  **Deferred (review item #6, not started):** the parametric RCTD / external-CAS bridge. See the plan file's
+  per-engagement sections.
 - **Symbolic QD equation generator** (`feature/symbolic-qd-equations`, NOT yet merged) — a new
   symbolic-algebra track: `app/sym-core.js` (`QD.Sym`, exact Rational/Gaussian/MPoly/RatFn +
   factored-denominator `FRatFn` + field-generic power series with Lagrange reversion) and
