@@ -1,0 +1,163 @@
+// =============================================================================
+// cas-export.js -- Format an exact ℚ(i) algebraic system as input for an external
+// computer-algebra system (QD.CASExport). The Algebra workspace can solve / count
+// pointwise in-engine, but the FULLY PARAMETRIC real-uniqueness statement (e.g.
+// Aharonov–Shapiro "exactly one univalent root for ALL M₀>0, M₁∈ℂ") needs REAL
+// COMPREHENSIVE TRIANGULAR DECOMPOSITION — parametric real quantifier elimination,
+// which Ameur–Helmer–Tellander ran in Maple's RegularChains. That does NOT run in the
+// browser; this module is the BRIDGE: it emits copy-paste-ready CAS input. The user
+// runs it in their own Maple / Singular / Sage. (Importing the cells back is a separate
+// follow-on — see the project plan; this file is export-only.)
+//
+// Dialects:
+//   'maple'       — RegularChains: a PolynomialRing + the system as p=0 / p>0 / p<>0,
+//                   with PARAMETERS declared LAST and a ready RealComprehensiveTriangularize
+//                   (or RealTriangularize when there are no parameters) call. THE PRIMARY
+//                   target — the only one of these that does parametric real triangularization.
+//   'singular'    — ring (0,i),(vars),dp + minpoly i^2+1; the equality ideal + std() (a
+//                   Gröbner cross-check of the complex variety; inequalities are commented).
+//   'sage'        — NumberField(x²+1) + PolynomialRing + the equality ideal's groebner_basis()
+//                   (likewise a variety cross-check).
+//   'mathematica' — the canonical printer the AlgebraStore Mathematica export delegates to
+//                   (so there is ONE polynomial printer, no drift).
+//
+// Input is the serialization-safe term-list form (MPoly.termList()): each equation is
+// { terms, rel } with rel ∈ {'=','>','≠'} and terms = [{ coeff:{re:[n,d],im:[n,d]}, mono:{var:exp} }].
+// Pure module: no DOM, no QD.Sym dependency (operates on the already-serialized term lists).
+// Loads before algebra-store.js (which delegates its Mathematica export here).
+// =============================================================================
+
+(function (global) {
+  'use strict';
+
+  // Per-dialect lexical choices: the imaginary unit symbol, a variable-name sanitizer,
+  // the power and product operators, and the relation suffix. Everything else (rational
+  // coefficients, term assembly) is dialect-independent.
+  const DIALECTS = {
+    // Wolfram-Language: `_` is Blank, so A1_1 → A1$1; imaginary unit I; rel == / > / !=.
+    mathematica: { I: 'I', name: (n) => n.replace(/_/g, '$'), pow: '^', mul: '*', rel: (r) => (r === '>' ? ' > 0' : r === '≠' ? ' != 0' : ' == 0') },
+    // Maple RegularChains: `_` legal; imaginary unit I; equalities p = 0, strict p > 0, p <> 0.
+    maple: { I: 'I', name: (n) => n, pow: '^', mul: '*', rel: (r) => (r === '>' ? ' > 0' : r === '≠' ? ' <> 0' : ' = 0') },
+    // Sage over a NumberField with generator I; bare polynomials feed an ideal (equalities).
+    sage: { I: 'I', name: (n) => n, pow: '^', mul: '*', rel: (r) => '' },
+    // Singular over (0,i) with minpoly i^2+1; bare polynomials feed an ideal (equalities).
+    singular: { I: 'i', name: (n) => n, pow: '^', mul: '*', rel: (r) => '' },
+  };
+
+  // [numerator, denominator] BigInt-string pair → 'n' or 'n/d'.
+  function _rat(p) { return p[1] === '1' ? p[0] : p[0] + '/' + p[1]; }
+
+  // a + b·(imaginary unit) as a CAS expression, eliding zero / unit parts. Mirrors the
+  // AlgebraStore _mmaCoeff logic, parameterized by the dialect's imaginary symbol + product op.
+  function _coeff(re, im, D) {
+    const reZero = re[0] === '0', imZero = im[0] === '0';
+    if (imZero) return _rat(re);
+    const imNeg = im[0][0] === '-';
+    const imAbs = _rat([imNeg ? im[0].slice(1) : im[0], im[1]]);
+    const imBody = imAbs === '1' ? D.I : imAbs + D.mul + D.I;
+    if (reZero) return (imNeg ? '-' : '') + imBody;
+    return '(' + _rat(re) + (imNeg ? ' - ' : ' + ') + imBody + ')';
+  }
+
+  // One polynomial (term list) → a CAS InputForm string (sum of coeff·monomial terms).
+  function polyToCAS(terms, dialect) {
+    const D = DIALECTS[dialect]; if (!D) throw new Error('CASExport: unknown dialect ' + dialect);
+    terms = terms || [];
+    if (!terms.length) return '0';
+    const parts = terms.map((t) => {
+      const c = _coeff(t.coeff.re, t.coeff.im, D);
+      const mono = Object.keys(t.mono).sort().map((nm) => {
+        const e = t.mono[nm], b = D.name(nm); return e === 1 ? b : b + D.pow + e;
+      }).join(D.mul);
+      if (!mono) return c;
+      if (c === '1') return mono;
+      if (c === '-1') return '-' + mono;
+      return c + D.mul + mono;
+    });
+    return parts.join(' + ').replace(/\+ -/g, '- ');
+  }
+
+  // One equation { terms, rel } → 'lhs <relsuffix>' (e.g. 'p = 0', 'p > 0', or bare 'p'
+  // for the ideal dialects where rel suffixes are empty).
+  function equationToCAS(eq, dialect) {
+    return polyToCAS(eq.terms, dialect) + DIALECTS[dialect].rel(eq.rel || '=');
+  }
+
+  // Variable inventory of a system: the sorted union of every monomial variable, split into
+  // unknowns and the caller-designated parameters (only those actually present are kept).
+  function _varSplit(items, params) {
+    const set = new Set();
+    for (const it of items) for (const t of (it.terms || [])) for (const v of Object.keys(t.mono || {})) set.add(v);
+    const all = [...set].sort();
+    const ps = new Set(params || []);
+    const parameters = all.filter((v) => ps.has(v));
+    const unknowns = all.filter((v) => !ps.has(v));
+    return { all, unknowns, parameters };
+  }
+
+  // Format a whole system as a runnable CAS script. `items` = [{ terms, rel, label? }];
+  // opts.params = variable names to treat as PARAMETERS (Maple RCTD); opts.title = a header
+  // comment. The variable order is unknowns first, then parameters last (the RCTD convention).
+  function systemToCAS(items, dialect, opts) {
+    items = items || []; opts = opts || {};
+    if (!DIALECTS[dialect]) throw new Error('CASExport: unknown dialect ' + dialect);
+    const { unknowns, parameters } = _varSplit(items, opts.params);
+    const orderedVars = unknowns.concat(parameters).map(DIALECTS[dialect].name);
+    const eqs = items.filter((it) => (it.rel || '=') === '=');
+    const ineqs = items.filter((it) => (it.rel || '=') !== '=');
+    const title = opts.title ? String(opts.title) : 'QD algebraic system';
+
+    if (dialect === 'maple') {
+      const sysList = items.map((it) => '  ' + equationToCAS(it, 'maple') + (it.label ? '   # ' + _ascii(it.label) : '')).join(',\n');
+      const np = parameters.length;
+      const call = np > 0
+        ? 'dec := RealComprehensiveTriangularize(sys, ' + np + ', R):\n# ' + np + ' parameter(s) [' + parameters.join(', ') + '] declared last; each cell = [regular_system, parameter_constraints].'
+        : 'dec := RealTriangularize(sys, R):';
+      return '# ' + title + ' — Maple RegularChains (parametric real triangular decomposition)\n'
+        + 'with(RegularChains):\n'
+        + 'R := PolynomialRing([' + orderedVars.join(', ') + ']):   # unknowns first, parameters last\n'
+        + 'sys := [\n' + sysList + '\n]:\n'
+        + call + '\n';
+    }
+    if (dialect === 'singular') {
+      const ideal = eqs.map((it) => '  ' + polyToCAS(it.terms, 'singular')).join(',\n');
+      const ineqLines = ineqs.map((it) => '// inequality (not in the ideal): ' + equationToCASInfo(it)).join('\n');
+      return '// ' + title + ' — Singular (equality ideal over ℚ(i); Gröbner cross-check of the variety)\n'
+        + 'ring r = (0,i),(' + orderedVars.join(', ') + '),dp;\n'
+        + 'minpoly = i^2+1;\n'
+        + 'ideal Id =\n' + (ideal || '  0') + ';\n'
+        + 'option(redSB);\n'
+        + 'std(Id);\n'
+        + (ineqLines ? ineqLines + '\n' : '');
+    }
+    if (dialect === 'sage') {
+      const eqList = eqs.map((it) => '  ' + polyToCAS(it.terms, 'sage')).join(',\n');
+      const ineqLines = ineqs.map((it) => '# inequality (not in the ideal): ' + equationToCASInfo(it)).join('\n');
+      return '# ' + title + ' — Sage (equality ideal over ℚ(I); Gröbner cross-check of the variety)\n'
+        + 'x = polygen(QQ)\n'
+        + 'K.<I> = NumberField(x^2 + 1)\n'
+        + 'R.<' + orderedVars.join(', ') + '> = PolynomialRing(K, order=\'degrevlex\')\n'
+        + 'J = R.ideal([\n' + (eqList || '  R(0)') + '\n])\n'
+        + 'print(J.groebner_basis())\n'
+        + (ineqLines ? ineqLines + '\n' : '');
+    }
+    // mathematica: a Wolfram-Language list of (in)equalities, ready for Solve / GroebnerBasis.
+    return '{' + items.map((it) => equationToCAS(it, 'mathematica')).join(',\n ') + '}';
+  }
+
+  // Inequality info string (the lhs + a readable relation) for the equality-only dialects'
+  // comments, so the dropped constraints are still visible to the user.
+  function equationToCASInfo(it) {
+    const rel = it.rel === '>' ? ' > 0' : it.rel === '≠' ? ' <> 0' : ' = 0';
+    return polyToCAS(it.terms, 'maple') + rel + (it.label ? '   (' + _ascii(it.label) + ')' : '');
+  }
+
+  // Strip a label to ASCII for a CAS comment (● / ★ and subscripts aren't safe everywhere).
+  function _ascii(s) { return String(s).replace(/●/g, 'locator').replace(/★/g, 'star').replace(/[^\x20-\x7E]/g, '').trim(); }
+
+  const ns = { polyToCAS, equationToCAS, systemToCAS, dialects: ['maple', 'singular', 'sage', 'mathematica'] };
+  if (global.QD) global.QD.CASExport = ns;
+  else if (global.module && global.module.exports) global.module.exports = ns;
+  else global.QD_CASExport = ns;
+
+})(typeof window !== 'undefined' ? window : (typeof self !== 'undefined' ? self : globalThis));

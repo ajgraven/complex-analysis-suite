@@ -78,9 +78,12 @@ the engine certifies uniqueness without floating‑point root‑finding. The **f
 parametric** statement — "exactly one univalent root for *all* M₀ > 0, M₁ ∈ ℂ" — is *real
 comprehensive triangular decomposition* (parametric quantifier elimination over the
 parameter space), which AHT ran in Maple's RegularChains. That parametric step is **not**
-in‑engine here; it is the external‑CAS bridge noted as deferred elsewhere in the project.
-What the tool delivers in its place is the symbolic resolvent cubic, its discriminant (the
-cusp/double‑root locus), and exact certification across a parameter sweep.
+in‑engine here. What the tool delivers in its place is the symbolic resolvent cubic, its
+discriminant (the cusp/double‑root locus), and exact certification across a parameter sweep —
+**plus**, via the **CAS/RCTD export** (`QD.CASExport`, the Algebra tab's Export ▸ "CAS / RCTD"
+line), the parametric system formatted as ready‑to‑run Maple `RealComprehensiveTriangularize`
+input (parameters declared last), so the fully parametric decomposition can be run in Maple
+externally. (Importing the returned cells back into the workspace is the remaining follow‑on.)
 
 ## Order‑n generalization (`pointFunctionalSystem({order: n})`)
 

@@ -491,6 +491,11 @@
         '        <select id="alg-mma-col" title="Which column of equations to export"></select>' +
         '        <button id="alg-copy-mma" class="small" type="button" title="Copy the chosen column as a Wolfram-Language list of equations ({lhs == 0, …}) ready to paste into Mathematica">Copy</button>' +
         '        <button id="alg-copy-mma-all" class="small" type="button" title="Copy every column as labeled Wolfram-Language lists (col0 = {…}; col1 = {…}; …)">Copy all</button></div>' +
+        '      <div class="algebra-line" style="margin-top:4px;"><span class="algebra-line-label">CAS / RCTD</span>' +
+        '        <select id="alg-cas-dialect" title="Maple RCTD = parametric REAL triangular decomposition (RealComprehensiveTriangularize) — the fully-parametric uniqueness route; Singular / Sage = equality-ideal Gröbner cross-checks of the variety.">' +
+        '          <option value="maple">Maple RCTD</option><option value="singular">Singular</option><option value="sage">Sage</option></select>' +
+        '        <input id="alg-cas-params" class="small" type="text" placeholder="params e.g. a1,C1_1" title="Comma-separated variable names to treat as PARAMETERS — declared last for Maple RealComprehensiveTriangularize. Blank ⇒ non-parametric RealTriangularize." style="width:8.5em;" />' +
+        '        <button id="alg-copy-cas" class="small" type="button" title="Copy the chosen column (above) as CAS input for the selected dialect (runs in your own Maple / Singular / Sage — nothing executes in-browser)">Copy</button></div>' +
         '    </div>' +
         '  </details>' +
         '</div>';
@@ -539,6 +544,7 @@
       $('#alg-copy-latex').addEventListener('click', copyLatex);
       $('#alg-copy-mma').addEventListener('click', copyMathematica);
       $('#alg-copy-mma-all').addEventListener('click', copyMathematicaAll);
+      $('#alg-copy-cas').addEventListener('click', copyCAS);
       $('#alg-error-close').addEventListener('click', clearError);
       // dismissible numbered-steps onboarding hint (remembered for the session)
       const steps = $('#alg-steps');
@@ -593,6 +599,20 @@
       const code = store.mathematicaAll();
       if (!code) { toast('No equations to export.', { kind: 'error' }); return; }
       writeClipboard(code, 'Mathematica (all ' + (store.maxColumn() + 1) + ' columns)');
+    }
+    // Copy the chosen column as external-CAS input (Maple RCTD / Singular / Sage). The comma-
+    // separated params field designates the RCTD parameters (declared last). Nothing executes
+    // in-browser — the user runs the script in their own CAS (see the project's RCTD note).
+    function copyCAS() {
+      if (!store.size) { toast('Nothing to export — seed a system first.', { kind: 'error' }); return; }
+      const c = Number(($('#alg-mma-col') || {}).value || store.maxColumn());
+      const dialect = ($('#alg-cas-dialect') || {}).value || 'maple';
+      const raw = (($('#alg-cas-params') || {}).value || '').trim();
+      const params = raw ? raw.split(/[,\s]+/).filter(Boolean) : [];
+      const code = store.casColumn(c, dialect, { params });
+      if (!code) { toast('Column ' + c + ' has no equations.', { kind: 'error' }); return; }
+      const label = dialect === 'maple' ? 'Maple RCTD' : dialect.charAt(0).toUpperCase() + dialect.slice(1);
+      writeClipboard(code, label + ' (column ' + c + ')');
     }
 
     // Attempt to factor an equation: show its factors; picking one pursues that case

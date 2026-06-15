@@ -177,8 +177,17 @@ its own merged PR), with one feature **in progress on a branch**:
     `poleSubst` fall back to it, so φ rebuilds (and the exact Schur–Cohn / boundary / cross-check fire) even
     after e.g. z₁=0 is pinned. End-to-end: the **cardioid** now certifies "Unique quadrature domain ✓ … boundary
     cusp ×1 (Schur–Cohn + real-count certified) · cross-check ✓ (residual 2.2e-16)".
-  **Deferred (review item #6, not started):** the parametric RCTD / external-CAS bridge. See the plan file's
-  per-engagement sections.
+  - **#6 P1 — external-CAS / RCTD export bridge** — `QD.CASExport` (`app/algebra/cas-export.js`): a shared
+    polynomial printer over MPoly term lists with dialects `maple` (RegularChains: a PolynomialRing with the
+    PARAMETERS declared last + a ready `RealComprehensiveTriangularize(sys, np, R)` — the parametric real
+    triangular decomposition AHT used; `RealTriangularize` when np=0), `singular` (ℚ(i) ring `(0,i)` + minpoly
+    + equality ideal + `std`), `sage` (`NumberField(x²+1)` + ideal + `groebner_basis`), and `mathematica` (the
+    store's existing Mathematica export now DELEGATES here — one printer, no drift). Store `casColumn(c,
+    dialect, {params})` / `casNode`; Export panel gained a "CAS / RCTD" line (dialect select + comma-separated
+    params + Copy). Nothing executes in-browser — copy-out to the user's own Maple/Singular/Sage.
+  **Deferred (review item #6, P2/P3 — not started):** the IMPORT half (parse RCTD cells back as `op:'rctd'`
+  columns via a defined term-list JSON + a Maple post-script) and the worked parametric cardioid example.
+  See the plan file's per-engagement sections.
 - **Symbolic QD equation generator** (`feature/symbolic-qd-equations`, NOT yet merged) — a new
   symbolic-algebra track: `app/sym-core.js` (`QD.Sym`, exact Rational/Gaussian/MPoly/RatFn +
   factored-denominator `FRatFn` + field-generic power series with Lagrange reversion) and

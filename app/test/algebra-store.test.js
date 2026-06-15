@@ -12,6 +12,7 @@ loadInCtx('faber-analysis.js');   // Durand–Kerner finder for store.solve
 loadInCtx('algebra/sym-worker.js');  // QD.SymWorker (main-thread fallback in Node)
 loadInCtx('qd-equations.js');
 loadInCtx('qd-constraints.js');
+loadInCtx('algebra/cas-export.js');  // QD.CASExport — the store's Mathematica/CAS export delegates here
 loadInCtx('algebra/algebra-store.js');
 
 module.exports = async function run() {
@@ -576,6 +577,27 @@ module.exports = async function run() {
     const all = st.mathematicaAll();
     ok('mathematica: mathematicaAll labels each column (col0 = {…}; col1 = {…})',
        /col0\s*=\s*\{/.test(all) && /col1\s*=\s*\{/.test(all) && /\(\* column 0/.test(all));
+  }
+
+  // ---- external-CAS export (Maple RCTD / Singular) via the shared QD.CASExport ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(QE.generateClassicalBounded(hData));
+    // Maple RegularChains, treating the data params a₁/C₁,₁ as PARAMETERS (declared last).
+    const maple = st.casColumn(0, 'maple', { params: ['a1', 'ab1', 'C1_1', 'Cb1_1'] });
+    ok('cas: Maple export emits a RegularChains script with an RCTD call',
+       /with\(RegularChains\)/.test(maple) && /PolynomialRing\(\[/.test(maple) &&
+       /RealComprehensiveTriangularize\(sys, \d+, R\)/.test(maple));
+    ok('cas: Maple declares the parameters LAST in the ring (unknowns precede a1/C1_1)',
+       (() => { const m = /PolynomialRing\(\[([^\]]*)\]/.exec(maple); if (!m) return false; const vars = m[1].split(',').map((s) => s.trim());
+         const iz = vars.indexOf('z1'), ia = vars.indexOf('a1'); return iz >= 0 && ia >= 0 && iz < ia; })());
+    ok('cas: Maple equalities use "= 0" (RegularChains form), not "== 0"',
+       / = 0/.test(maple) && !/== 0/.test(maple));
+    // Singular: equality ideal over ℚ(i) with the minpoly.
+    const sing = st.casColumn(0, 'singular', {});
+    ok('cas: Singular export sets the ℚ(i) ground field and an ideal',
+       /minpoly = i\^2\+1/.test(sing) && /ideal Id =/.test(sing) && /std\(Id\)/.test(sing));
+    ok('cas: an empty / missing column yields the empty string', st.casColumn(99, 'maple') === '');
   }
 
   // ---- factoring: factorOf (query) + applyFactor (case-split column) ----

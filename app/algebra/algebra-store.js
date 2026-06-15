@@ -1071,52 +1071,34 @@
     // Variable names are sanitized for Wolfram-Language symbols: `_` is Blank in
     // Mathematica, so A1_1 → A1$1 ($ is a legal symbol character). Coefficients are
     // exact ℚ(i) rationals; the imaginary unit is `I`.
-    function _mmaName(name) { return name.replace(/_/g, '$'); }
-    // A [numerator, denominator] string pair → a Mathematica rational ('n' or 'n/d').
-    function _mmaRat(p) { return p[1] === '1' ? p[0] : p[0] + '/' + p[1]; }
-    // a + b·I as a Mathematica expression, eliding zero / unit parts.
-    function _mmaCoeff(re, im) {
-      const reZero = re[0] === '0', imZero = im[0] === '0';
-      if (imZero) return _mmaRat(re);
-      const imNeg = im[0][0] === '-';
-      const imAbsRat = _mmaRat([imNeg ? im[0].slice(1) : im[0], im[1]]);
-      const imBody = imAbsRat === '1' ? 'I' : imAbsRat + '*I';
-      if (reZero) return (imNeg ? '-' : '') + imBody;
-      return '(' + _mmaRat(re) + (imNeg ? ' - ' : ' + ') + imBody + ')';
+    // The shared CAS formatter (QD.CASExport; loaded before this file per the manifest).
+    function _getCAS() {
+      const Q = (typeof window !== 'undefined' && window.QD) || (typeof global !== 'undefined' && global.QD) || (typeof QD !== 'undefined' && QD);
+      return (Q && Q.CASExport) || null;
     }
-    // One polynomial → a Mathematica InputForm string (sum of coeff·monomial terms).
-    function _polyToMathematica(poly) {
-      const terms = poly.termList();
-      if (!terms.length) return '0';
-      const parts = terms.map((t) => {
-        const c = _mmaCoeff(t.coeff.re, t.coeff.im);
-        const mono = Object.keys(t.mono).sort().map((nm) => {
-          const e = t.mono[nm], b = _mmaName(nm); return e === 1 ? b : b + '^' + e;
-        }).join('*');
-        if (!mono) return c;
-        if (c === '1') return mono;
-        if (c === '-1') return '-' + mono;
-        return c + '*' + mono;
-      });
-      return parts.join(' + ').replace(/\+ -/g, '- ');
+    // A column's nodes → the serialization-safe { terms, rel, label } items CASExport consumes.
+    function _columnItems(c) {
+      return orderedColumn(c).map((n) => ({ terms: n.poly.termList(), rel: n.rel, label: n.label }));
     }
-    // A whole column → `{ lhs1 == 0, lhs2 > 0, … }` (the equality/inequality list ready
-    // to paste into Mathematica / Solve / GroebnerBasis). Returns '' for an empty column.
-    function mathematicaColumn(c) {
-      const ns = orderedColumn(c);
-      if (!ns.length) return '';
-      const lines = ns.map((n) => {
-        const rel = n.rel === '>' ? ' > 0' : n.rel === '≠' ? ' != 0' : ' == 0';
-        return _polyToMathematica(n.poly) + rel;
-      });
-      return '{' + lines.join(',\n ') + '}';
+    // External-CAS export of a column → a runnable script for `dialect` ('maple'|'singular'|
+    // 'sage'|'mathematica'). opts.params = variable names to treat as PARAMETERS (Maple RCTD).
+    // Returns '' for an empty column or when QD.CASExport is unavailable.
+    function casColumn(c, dialect, opts) {
+      const CAS = _getCAS(); if (!CAS) return '';
+      const items = _columnItems(c);
+      if (!items.length) return '';
+      return CAS.systemToCAS(items, dialect || 'maple', opts || {});
     }
+    // External-CAS export of a single node → one (in)equation in `dialect`.
+    function casNode(id, dialect) {
+      const CAS = _getCAS(); const n = get(id); if (!CAS || !n) return '';
+      return CAS.equationToCAS({ terms: n.poly.termList(), rel: n.rel }, dialect || 'maple');
+    }
+    // A whole column → `{ lhs1 == 0, lhs2 > 0, … }` (Mathematica list ready for Solve /
+    // GroebnerBasis). Thin caller over the shared formatter. '' for an empty column.
+    function mathematicaColumn(c) { return casColumn(c, 'mathematica'); }
     // A single node → one Mathematica equation (`lhs == 0` / `> 0` / `!= 0`), or '' if absent.
-    function mathematicaNode(id) {
-      const n = get(id); if (!n) return '';
-      const rel = n.rel === '>' ? ' > 0' : n.rel === '≠' ? ' != 0' : ' == 0';
-      return _polyToMathematica(n.poly) + rel;
-    }
+    function mathematicaNode(id) { return casNode(id, 'mathematica'); }
     // Every column → a single paste-able block, each column commented with its column index
     // and a list assigned to a column-indexed symbol (col0, col1, …) for use in Mathematica.
     function mathematicaAll() {
@@ -1216,7 +1198,7 @@
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, substituteValues, reducePropagate, assumeReal, fixW0, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
       currentReimSystem, classify, classifyAsync, resolventOf, reimVariables, solveReal, solveRealAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
-      sharedVars, previewCost, exportDAG, mathematicaColumn, mathematicaNode, mathematicaAll, nodeStats, variables, baseVariables,
+      sharedVars, previewCost, exportDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       undo, redo, reset,
       list, get,
