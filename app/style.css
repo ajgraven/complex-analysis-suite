@@ -829,6 +829,19 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   font-size: 16px; line-height: 1; padding: 0 2px; color: inherit; font-weight: 700;
 }
 
+/* Auto-detected reality suggestions ("an equation forces this variable real") — an info-
+   colored sibling of the error panel; one row per detected variable. */
+#controls-algebra .algebra-suggest {
+  margin: 4px 0; padding: 4px 8px; font-size: 12px; border-radius: 4px;
+  background: var(--c-info-bg, #eaf3fb); border: 1px solid var(--c-accent, #2b7);
+  color: var(--c-info-text, #245);
+}
+#controls-algebra .algebra-suggest.hidden { display: none; }
+#controls-algebra .algebra-suggest-row {
+  display: flex; align-items: center; gap: 6px; padding: 2px 0;
+}
+#controls-algebra .algebra-suggest-msg { flex: 1; }
+
 /* ---- Node-editor sidebar: pinned header, workflow sections, value table, inspector ---- */
 #controls-algebra .algebra-head { position: sticky; top: 0; z-index: 4; background: var(--c-bg, #fff); padding-bottom: 4px; }
 #controls-algebra .algebra-primary { gap: 4px; margin-top: 4px; }

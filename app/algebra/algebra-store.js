@@ -473,6 +473,49 @@
       return res;
     }
 
+    // Detect base variables FORCED REAL by the equations themselves (pure query, no mutation).
+    // An equality node whose polynomial is, up to a nonzero Gaussian scalar, exactly `v − v̄`
+    // (e.g. the gauge A₁,₁ − Ā₁,₁ = 0) says `v` is real. The test is exact (no floats): the
+    // poly must have exactly two terms, each a single variable to exponent 1; the two names
+    // must be a conjugate pair {v, conjVarName(v)} with conjVarName(v) ≠ v; and their Gaussian
+    // coefficients must satisfy cv + cc = 0 (the `v − v̄` form, scale-invariant). The sibling
+    // cv − cc = 0 (`v + v̄`, ⇒ v IMAGINARY) is intentionally NOT emitted — imaginary needs a
+    // different, substitution-based fold (deferred). Scans the current column (or the column of
+    // `ids`); skips any variable already in realVars (its v̄ is folded away). De-duped by primal
+    // name. Returns [{ nodeId, varName /*primal*/, kind:'real', label }]. The UI applies a hit
+    // via the shipped assumeReal([varName]) — there is no separate apply op. Restricting to this
+    // certain single-variable form means we never claim a reality that isn't forced (a
+    // multivariate p − p̄ = 0 does not pin any one variable real).
+    function detectRealityConstraints(ids) {
+      const QC = getQC();
+      if (!QC || !QC.conjVarName) return [];
+      const real = new Set(realVars);
+      const src = (ids && ids.length) ? ids.map(get).filter(Boolean) : lastColumnNodes();
+      const out = [], seen = new Set();
+      for (const n of src) {
+        if (n.rel !== '=' || n.poly.terms.size !== 2) continue;
+        // collect name → Gaussian coeff, requiring every term be a lone variable^1
+        const byName = {}; let ok = true;
+        for (const { mono, coeff } of n.poly.terms.values()) {
+          if (mono.size !== 1) { ok = false; break; }
+          const name = mono.keys().next().value;
+          if (mono.get(name) !== 1) { ok = false; break; }
+          byName[name] = coeff;
+        }
+        if (!ok) continue;
+        const names = Object.keys(byName);
+        if (names.length !== 2) continue;                       // (a self-term v·v would have size 1)
+        const [a, b] = names;
+        if (QC.conjVarName(a) !== b) continue;                  // not a conjugate pair
+        if (!byName[a].add(byName[b]).isZero()) continue;       // not the v − v̄ form (skip v + v̄ → imaginary)
+        const v = _primalName(a);
+        if (real.has(v) || seen.has(v)) continue;
+        seen.add(v);
+        out.push({ nodeId: n.id, varName: v, kind: 'real', label: n.label });
+      }
+      return out;
+    }
+
     // Fix φ(0) = w₀ to `value` ({re,im} floats): substitute the exact ℚ(i) value for
     // w₀/w̄₀ in the current system → a new column. Records w0Fixed (so later constraints
     // that rebuild φ with the w₀ symbol use the same center). No-op (ok:false) if the
@@ -996,6 +1039,40 @@
       });
     }
 
+    // Add the conjugate equation p̄ = 0 of a node as a paired companion in the SAME column —
+    // the user-invoked, undoable form of the seed-time maybeAddConjugate. The conjugate FOLDS IN
+    // the current reality (and fixed-φ(0)) assumptions: conj = _applyReality(_applyW0(conjMPoly(p))),
+    // so a variable already assumed real has its v̄ collapsed to v (no bar appears). Skips when the
+    // node is self-conjugate (p̄ = ±p ⇒ no independent equation, e.g. the gauge) or when an equal
+    // companion already sits in the column. Returns { ok, node } or { ok:false, reason }. Useful for
+    // DERIVED equations (after elimination / Gröbner / substitution) that did not get a seed-time
+    // companion. provenance.op:'conjugate' (rendered by the UI's provText); same-column placement
+    // means columnLabel is not involved.
+    function generateConjugate(id, opts) {
+      opts = opts || {};
+      const node = get(id);
+      if (!node) return { ok: false, reason: 'node not found' };
+      if (node.rel === '>') return { ok: false, reason: 'a Hermitian inequality is one real condition — it has no independent conjugate' };
+      const QC = getQC();
+      if (!QC || !QC.conjMPoly) return { ok: false, reason: 'QD.QDConstraints not loaded' };
+      const conj = (opts.incorporateReality === false)
+        ? _applyW0(QC.conjMPoly(node.poly))
+        : _applyReality(_applyW0(QC.conjMPoly(node.poly)));
+      if (node.poly.sub(conj).isZero() || node.poly.add(conj).isZero())
+        return { ok: false, reason: 'this equation is self-conjugate — its conjugate is the same equation' };
+      for (const m of nodes.values()) if (m.column === node.column && m.poly.equals(conj))
+        return { ok: false, reason: 'the conjugate equation is already present in this column' };
+      checkpoint();
+      const comp = addNode({
+        id: nid(), kind: node.kind, poly: conj, rel: node.rel,
+        label: node.label + ' (conj)', model: node.model,
+        provenance: { op: 'conjugate', inputs: [node.id] }, column: node.column, meta: node.meta,
+      });
+      order.set(comp.id, ordOf(node.id) + 0.5);   // pair the conjugate right under its primal
+      normalizeColumn(node.column);
+      return { ok: true, node: comp };
+    }
+
     // Delete a node and all of its descendants (derived from it), with their edges.
     function deleteNode(id) {
       if (!nodes.has(id)) return [];
@@ -1250,7 +1327,7 @@
     return {
       seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
-      substituteValue, substituteValues, reducePropagate, assumeReal, fixW0, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
+      substituteValue, substituteValues, reducePropagate, assumeReal, detectRealityConstraints, generateConjugate, fixW0, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
       currentReimSystem, classify, classifyAsync, resolventOf, reimVariables, solveReal, solveRealAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,

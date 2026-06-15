@@ -89,7 +89,53 @@
     // QE is non-null past the install guard above).
     const isClassicalBounded = QE.isClassicalBounded;
     function toast(msg, opts) { if (QD.QoL && QD.QoL.toast) QD.QoL.toast(msg, opts || {}); }
-    function rerender() { if (canvas) canvas.render(store, latexOf); renderInspector(canvas ? canvas.getSelection() : []); buildBreadcrumb(); }
+    function rerender() { if (canvas) canvas.render(store, latexOf); renderInspector(canvas ? canvas.getSelection() : []); buildBreadcrumb(); renderSuggestions(); }
+
+    // ---- auto-detected reality suggestions ("popup the moment an equation forces a var real")
+    // store.detectRealityConstraints scans the current equations for the v − v̄ = 0 form (e.g.
+    // the gauge A₁,₁ − Ā₁,₁ = 0) and reports the forced-real base variables. We surface each as a
+    // one-click "Assume … real" in the #alg-suggest banner, skipping any the user dismissed this
+    // session. Re-run from rerender() so it tracks the system as it reduces.
+    const _dismissedReal = new Set();
+    function renderSuggestions() {
+      const box = $('#alg-suggest'); if (!box) return;
+      let hits = [];
+      try { hits = store.detectRealityConstraints ? (store.detectRealityConstraints() || []) : []; } catch (e) { hits = []; }
+      hits = hits.filter((h) => !_dismissedReal.has(h.varName));
+      if (!hits.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+      box.innerHTML = '';
+      hits.forEach((h) => {
+        const row = document.createElement('div'); row.className = 'algebra-suggest-row';
+        const msg = document.createElement('span'); msg.className = 'algebra-suggest-msg';
+        msg.textContent = '“' + h.label + '” implies ' + latexPlain(h.varName) + ' is real.';
+        const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'small';
+        apply.textContent = 'Assume ' + latexPlain(h.varName) + ' real';
+        apply.title = 'Identify ' + latexPlain(h.varName) + ' with its conjugate (v̄ ≡ v) in a new column';
+        apply.addEventListener('click', () => {
+          if (busyGuard()) return;
+          const r = store.assumeReal([h.varName]);
+          if (!r.ok) { showError('Assume real: ' + (r.reason || 'failed')); return; }
+          rerender(); refreshPickers();
+          toast('Assumed ' + latexPlain(h.varName) + ' real → column ' + r.column);
+        });
+        const x = document.createElement('button'); x.type = 'button'; x.className = 'algebra-error-close';
+        x.textContent = '×'; x.title = 'Dismiss this suggestion for the session';
+        x.addEventListener('click', () => { _dismissedReal.add(h.varName); renderSuggestions(); });
+        row.appendChild(msg); row.appendChild(apply); row.appendChild(x);
+        box.appendChild(row);
+      });
+      box.classList.remove('hidden');
+    }
+    // Manual "Detect reality": clear the session dismissals so every forced-real variable
+    // re-surfaces, then re-render the suggestions (and report when none are forced).
+    function doDetectReality() {
+      _dismissedReal.clear();
+      renderSuggestions();
+      let hits = [];
+      try { hits = store.detectRealityConstraints ? (store.detectRealityConstraints() || []) : []; } catch (e) { hits = []; }
+      if (!hits.length) toast('No variable is forced real by the current equations.');
+      else toast(hits.length + ' variable(s) forced real — see the suggestion' + (hits.length === 1 ? '' : 's') + ' above.');
+    }
 
     // ---- persistent, dismissible error panel --------------------------------
     function showError(msg) {
@@ -416,6 +462,9 @@
         '    <span id="alg-error-msg" class="algebra-error-msg"></span>' +
         '    <button id="alg-error-close" class="algebra-error-close" type="button" title="Dismiss">×</button>' +
         '  </div>' +
+        // Auto-detected reality suggestions: when an equation forces a variable real
+        // (v − v̄ = 0), a one-click "Assume … real" appears here (populated by renderSuggestions).
+        '  <div id="alg-suggest" class="algebra-suggest hidden"></div>' +
         '</div>' +
         // ---- φ / h REFERENCE (always visible at the top: the symbolic forms + legend) ----
         '<div class="algebra-ref-block">' +
@@ -436,7 +485,8 @@
         '    <div class="algebra-section-body">' +
         '      <div class="algebra-line"><span class="algebra-line-label">Assume real</span><span id="alg-real-pick" class="algebra-picker"></span>' +
         '        <button id="alg-real-apply" class="small" type="button" data-str-title="tooltips.assumeReal">Apply</button>' +
-        '        <button id="alg-real-auto" class="small" type="button" title="Detect real-axis symmetry of h and, if the data is fully real, assume every base variable real in one step (the biggest tractability lever)">Auto</button></div>' +
+        '        <button id="alg-real-auto" class="small" type="button" title="Detect real-axis symmetry of h and, if the data is fully real, assume every base variable real in one step (the biggest tractability lever)">Auto</button>' +
+        '        <button id="alg-real-detect" class="small" type="button" title="Scan the current equations for any that force a variable real (v − v̄ = 0, e.g. the gauge) and surface a one-click suggestion">Detect reality</button></div>' +
         '      <div class="algebra-line-label" style="margin-top:8px;">Set values <span class="hint" style="font-weight:400;">(each value also fixes its conjugate)</span></div>' +
         '      <div id="alg-val-rows"></div>' +
         '      <div class="row" style="gap:4px; align-items:center; margin-top:2px;">' +
@@ -560,6 +610,7 @@
       }
       $('#alg-real-apply').addEventListener('click', doAssumeReal);
       $('#alg-real-auto').addEventListener('click', doAutoReality);
+      $('#alg-real-detect').addEventListener('click', doDetectReality);
       $('#alg-val-apply').addEventListener('click', doSubstituteValue);
       $('#alg-val-add').addEventListener('click', () => addValueRow());
 
@@ -720,6 +771,16 @@
         acts.appendChild(mkBtn('Copy LaTeX', 'Copy this equation as LaTeX', () => copyNodeLatex(sel[0])));
         acts.appendChild(mkBtn('Copy Mathematica', 'Copy this equation as Wolfram-Language (lhs == 0)', () => { const code = store.mathematicaNode(sel[0]); if (code) writeClipboard(code, n.label + ' (Mathematica)'); }));
         acts.appendChild(mkBtn('Delete', 'Delete this node and its descendants', () => { if (busyGuard()) return; const removed = store.deleteNode(sel[0]); if (canvas) canvas.clearSelection(); rerender(); toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)'); }));
+        // Generate the conjugate equation p̄ = 0 (folding in variables already assumed real).
+        // Useful for derived equations that did not get a seed-time companion. Equalities/≠ only.
+        if (n.rel !== '>') {
+          acts.appendChild(mkBtn('Generate conjugate', 'Add the conjugate equation p̄ = 0 as a paired companion, folding in any variables already assumed real (v̄ ≡ v)', () => {
+            if (busyGuard()) return;
+            const r = store.generateConjugate(sel[0]);
+            if (!r.ok) { toast(r.reason || 'could not generate the conjugate', { kind: 'error' }); return; }
+            rerender(); toast('Added conjugate: ' + r.node.label);
+          }));
+        }
         // Attempt to factor (equalities in the current system only): split p=f·g into
         // candidate systems V(p)=⋃V(fᵢ), pursued one case (factor) at a time.
         if (n.rel === '=' && n.column === store.maxColumn()) {
@@ -777,7 +838,7 @@
     let _abort = null;
     function setBusy(on, label) {
       ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-classify', 'alg-univalence', 'alg-resolvent', 'alg-autosolve',
-        'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-val-apply']
+        'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-real-detect', 'alg-val-apply']
         .forEach((id) => { const b = $('#' + id); if (b) b.disabled = on; });
       const pal = $('#alg-palette'); if (pal) pal.querySelectorAll('button').forEach((b) => { b.disabled = on; });
       const cancel = $('#alg-cancel'); if (cancel) cancel.classList.toggle('hidden', !on);

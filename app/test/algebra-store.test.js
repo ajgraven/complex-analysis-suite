@@ -641,6 +641,53 @@ module.exports = async function run() {
     ok('rctd: an empty decomposition → ok:false (nothing imported)', !res3.ok);
   }
 
+  // ---- auto-infer forced-real variables (detectRealityConstraints) ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system);                                   // disk, with conjugate companions
+    const hits = st.detectRealityConstraints();
+    const a11 = hits.find((h) => h.varName === 'A1_1');
+    ok('detect-real: the gauge A₁,₁ − Ā₁,₁ = 0 flags A₁,₁ as forced real',
+       !!a11 && a11.kind === 'real');
+    const gauge = st.list().find((n) => n.meta.block === 'gauge');
+    ok('detect-real: the flagged equation is the gauge node', a11 && a11.nodeId === gauge.id);
+    const locator = st.list().find((n) => n.meta.block === 'locator' && n.provenance.op === 'generate');
+    ok('detect-real: the (non v−v̄) locator equation is NOT flagged',
+       !hits.some((h) => h.nodeId === locator.id));
+    // Once applied, the variable is no longer reported (its conjugate is folded away).
+    const ar = st.assumeReal(['A1_1']);
+    ok('detect-real: after assumeReal(A₁,₁), it is no longer detected',
+       ar.ok && !st.detectRealityConstraints().some((h) => h.varName === 'A1_1'));
+  }
+
+  // ---- per-equation Generate conjugate (generateConjugate) ----
+  {
+    const QC = QD.QDConstraints;
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system, { withConjugates: false });        // no seed-time companions
+    const locator = st.list().find((n) => n.meta.block === 'locator');
+    const before = st.size;
+    const r = st.generateConjugate(locator.id);
+    ok('gen-conj: a non-self-conjugate equation gets its conjugate companion',
+       r.ok && st.size === before + 1 && r.node.provenance.op === 'conjugate' && r.node.column === locator.column);
+    ok('gen-conj: the companion equals conjMPoly(p) (no reality assumed yet)',
+       r.node.poly.equals(QC.conjMPoly(locator.poly)));
+    const gauge = st.list().find((n) => n.meta.block === 'gauge');
+    const rg = st.generateConjugate(gauge.id);
+    ok('gen-conj: the self-conjugate gauge reports ok:false (no independent conjugate)',
+       !rg.ok && /self-conjugate/.test(rg.reason || ''));
+    st.undo();
+    ok('gen-conj: the add is a single undo step', st.size === before);
+    // After assuming z₁ real, the generated conjugate folds z̄₁ → z₁ (no bar appears).
+    const st2 = QD.AlgebraStore.create();
+    st2.seedFromSystem(system, { withConjugates: false });
+    st2.assumeReal(['z1']);
+    const loc2 = st2.list().find((n) => n.column === st2.maxColumn() && n.poly.vars().has('z1'));
+    const r2 = st2.generateConjugate(loc2.id);
+    ok('gen-conj: with z₁ real, the conjugate folds in reality (no z̄₁ in the companion)',
+       r2.ok && !r2.node.poly.vars().has('zb1'));
+  }
+
   // ---- factoring: factorOf (query) + applyFactor (case-split column) ----
   {
     const st = QD.AlgebraStore.create();
