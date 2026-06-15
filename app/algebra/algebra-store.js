@@ -1094,6 +1094,60 @@
       const CAS = _getCAS(); const n = get(id); if (!CAS || !n) return '';
       return CAS.equationToCAS({ terms: n.poly.termList(), rel: n.rel }, dialect || 'maple');
     }
+    // ---- RCTD import (the return trip for the Maple RealComprehensiveTriangularize export) ----
+    // Land an external parametric-RCTD decomposition back into the workspace as a new column of
+    // `op:'rctd'` nodes. `input` is either the parsed object from QD.CASExport.parseRCTD (with a
+    // .cells array) or a bare cells array of the same shape: [{ index, realCount,
+    // constraints:[{terms,rel}], chain:[{terms}] }]. Each cell contributes its parameter
+    // CONSTRAINTS (rel-tagged: the region where the cell applies) and its regular-CHAIN
+    // polynomials (equalities), every node tagged meta.cell (the cell index), meta.realCount (the
+    // real-solution count Maple reported for that cell), and meta.role ('constraint'|'chain').
+    // Polynomials are built from the term lists via QD.Sym.polyFromTermList; the whole import is
+    // ONE undoable step. Lands at a new column (or column 0 if the graph is empty). Returns
+    // { ok, created[], column, cellCount, cells:[{index, realCount}] } or { ok:false, reason }.
+    function importRCTD(input, opts) {
+      opts = opts || {};
+      const S = getSym();
+      const cells = Array.isArray(input) ? input : (input && input.cells);
+      if (!Array.isArray(cells) || !cells.length) return { ok: false, reason: 'no RCTD cells to import', created: [] };
+      // Build (and so validate) every polynomial BEFORE mutating — a malformed term list aborts
+      // the whole import cleanly with nothing changed.
+      const buf = [];
+      try {
+        cells.forEach((cell, ci) => {
+          const index = (cell && cell.index != null) ? cell.index : ci + 1;
+          const realCount = (cell && cell.realCount != null) ? cell.realCount : null;
+          (cell.constraints || []).forEach((c, k) => {
+            buf.push({ poly: S.polyFromTermList(c.terms || []), rel: (c.rel === '>' || c.rel === '≠') ? c.rel : '=',
+              role: 'constraint', index, realCount,
+              label: 'cell ' + index + ': constraint ' + (k + 1) + (c.rel && c.rel !== '=' ? ' (' + c.rel + ')' : '') });
+          });
+          (cell.chain || []).forEach((c, k) => {
+            buf.push({ poly: S.polyFromTermList(c.terms || []), rel: '=', role: 'chain', index, realCount,
+              label: 'cell ' + index + ': chain ' + (k + 1) });
+          });
+        });
+      } catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [] }; }
+      const live = buf.filter((b) => b.poly && !b.poly.isZero());
+      if (!live.length) return { ok: false, reason: 'the RCTD cells contained no nonzero polynomials', created: [] };
+      checkpoint();
+      const col = (nodes.size === 0) ? 0 : maxColumn() + 1;
+      const created = [];
+      for (const b of live) {
+        const node = addNode({
+          id: nid(), kind: 'derived', poly: b.poly, rel: b.rel, label: b.label, model,
+          provenance: { op: 'rctd', inputs: [], cell: b.index, role: b.role, realCount: b.realCount },
+          column: col, meta: { cell: b.index, realCount: b.realCount, role: b.role },
+        });
+        created.push(node);
+      }
+      normalizeColumn(col);
+      const summary = cells.map((cell, ci) => ({
+        index: (cell && cell.index != null) ? cell.index : ci + 1,
+        realCount: (cell && cell.realCount != null) ? cell.realCount : null,
+      }));
+      return { ok: true, created, column: col, cellCount: cells.length, cells: summary };
+    }
     // A whole column → `{ lhs1 == 0, lhs2 > 0, … }` (Mathematica list ready for Solve /
     // GroebnerBasis). Thin caller over the shared formatter. '' for an empty column.
     function mathematicaColumn(c) { return casColumn(c, 'mathematica'); }
@@ -1198,7 +1252,7 @@
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, substituteValues, reducePropagate, assumeReal, fixW0, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
       currentReimSystem, classify, classifyAsync, resolventOf, reimVariables, solveReal, solveRealAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
-      sharedVars, previewCost, exportDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, nodeStats, variables, baseVariables,
+      sharedVars, previewCost, exportDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       undo, redo, reset,
       list, get,

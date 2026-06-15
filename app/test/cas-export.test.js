@@ -85,4 +85,42 @@ module.exports = async function run() {
        /NumberField\(x\^2 \+ 1\)/.test(sage) && /PolynomialRing\(K/.test(sage) && /groebner_basis\(\)/.test(sage));
     ok('sage: the inequality is commented out (not in the ideal)', /# inequality/.test(sage));
   }
+
+  // ---- IMPORT: parseRCTD round-trips the qd-rctd JSON (the return trip for the export) ----
+  {
+    ok('QD.CASExport.parseRCTD exposed', typeof CAS.parseRCTD === 'function');
+    // A hand-authored 2-cell decomposition fixture (the cardioid resolvent shape, schematically):
+    // cell 1 with a parameter constraint M0>0 and a chain poly (1 real soln); cell 2 degenerate (2).
+    const s = mv('s'), M0 = mv('M0');
+    const cell1chain = s.pow(3).sub(M0.mul(s.pow(2))).add(mi(2));    // s³ − M0·s² + 2
+    const json = JSON.stringify({
+      format: 'qd-rctd', version: 1, params: ['M0', 'm1', 'n1'],
+      cells: [
+        { index: 1, realCount: 1, constraints: [{ terms: tl(M0), rel: '>' }], chain: [{ terms: tl(cell1chain) }] },
+        { index: 2, realCount: 2, constraints: [{ terms: tl(M0.sub(mi(3))), rel: '=' }], chain: [{ terms: tl(s.sub(mi(1))) }] },
+      ],
+    });
+    const r = CAS.parseRCTD(json);
+    ok('parseRCTD: ok with the right format / version / params',
+       r.ok && r.format === 'qd-rctd' && r.version === 1 && r.params.join(',') === 'M0,m1,n1');
+    ok('parseRCTD: returns both cells with their indices + real-solution counts',
+       r.cells.length === 2 && r.cells[0].index === 1 && r.cells[0].realCount === 1 && r.cells[1].realCount === 2);
+    ok('parseRCTD: cell 1 carries a ">" parameter constraint and a chain polynomial',
+       r.cells[0].constraints.length === 1 && r.cells[0].constraints[0].rel === '>' && r.cells[0].chain.length === 1);
+    ok('parseRCTD: the chain term list rebuilds the original polynomial exactly',
+       S.polyFromTermList(r.cells[0].chain[0].terms).equals(cell1chain));
+    // Relation spellings: accept Maple's <> (≠) and >= / > (strict cell side).
+    const r2 = CAS.parseRCTD(JSON.stringify({ cells: [{ index: 1, constraints: [{ terms: tl(M0), rel: '<>' }, { terms: tl(s), rel: '>=' }], chain: [] }] }));
+    ok('parseRCTD: maps "<>"→≠ and ">="→>',
+       r2.ok && r2.cells[0].constraints[0].rel === '≠' && r2.cells[0].constraints[1].rel === '>');
+    // Robustness — every bad input is reported, never thrown.
+    ok('parseRCTD: invalid JSON → ok:false (reason names it)',
+       (() => { const x = CAS.parseRCTD('{not json'); return !x.ok && /invalid JSON/.test(x.reason); })());
+    ok('parseRCTD: unrecognized format → ok:false',
+       (() => { const x = CAS.parseRCTD(JSON.stringify({ format: 'maple-native', cells: [] })); return !x.ok; })());
+    ok('parseRCTD: empty / missing cells → ok:false (reason mentions cells)',
+       (() => { const x = CAS.parseRCTD(JSON.stringify({ cells: [] })); return !x.ok && /cells/.test(x.reason); })());
+    ok('parseRCTD: a malformed term list → ok:false (located reason)',
+       (() => { const x = CAS.parseRCTD(JSON.stringify({ cells: [{ index: 1, chain: [{ terms: [{ coeff: { re: ['1'] }, mono: {} }] }] }] })); return !x.ok && /coeff/.test(x.reason); })());
+  }
 };

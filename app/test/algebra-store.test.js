@@ -600,6 +600,47 @@ module.exports = async function run() {
     ok('cas: an empty / missing column yields the empty string', st.casColumn(99, 'maple') === '');
   }
 
+  // ---- RCTD import (the return trip): parseRCTD JSON → importRCTD column ----
+  {
+    const S = QD.Sym, CAS = QD.CASExport;
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system);
+    const baseCols = st.maxColumn();
+    // A hand-authored 2-cell parametric decomposition fixture (resolvent shape).
+    const sv = S.mpolyVar('s'), M0 = S.mpolyVar('M0');
+    const chain1 = sv.pow(3).sub(M0.mul(sv.pow(2))).add(S.mpolyInt(2));   // s³ − M0·s² + 2
+    const parsed = CAS.parseRCTD(JSON.stringify({
+      format: 'qd-rctd', version: 1, params: ['M0'],
+      cells: [
+        { index: 1, realCount: 1, constraints: [{ terms: M0.termList(), rel: '>' }], chain: [{ terms: chain1.termList() }] },
+        { index: 2, realCount: 2, constraints: [{ terms: M0.sub(S.mpolyInt(3)).termList(), rel: '=' }], chain: [{ terms: sv.sub(S.mpolyInt(1)).termList() }] },
+      ],
+    }));
+    const res = st.importRCTD(parsed);
+    ok('rctd: importRCTD appends ONE new column for the decomposition',
+       res.ok && res.column === baseCols + 1 && res.cellCount === 2);
+    const col = st.list().filter((n) => n.column === res.column);
+    ok('rctd: every imported node carries op:"rctd" provenance + a cell index',
+       col.length === res.created.length && col.length > 0 && col.every((n) => n.provenance.op === 'rctd' && n.provenance.cell != null));
+    const c1chain = col.find((n) => n.provenance.cell === 1 && n.meta.role === 'chain');
+    ok('rctd: a cell-1 chain node rebuilds the original chain polynomial exactly', c1chain && c1chain.poly.equals(chain1));
+    const c1con = col.find((n) => n.provenance.cell === 1 && n.meta.role === 'constraint');
+    ok('rctd: the cell-1 parameter constraint M0>0 imports as a ">" node', c1con && c1con.rel === '>');
+    ok('rctd: nodes record their cell real-solution count in meta + provenance',
+       col.every((n) => n.meta.realCount === 1 || n.meta.realCount === 2) &&
+       (c1chain && c1chain.provenance.realCount === 1));
+    ok('rctd: the result summarizes per-cell real counts',
+       res.cells.length === 2 && res.cells[0].realCount === 1 && res.cells[1].realCount === 2);
+    // The whole import is ONE undo step.
+    st.undo();
+    ok('rctd: the whole import is a single undo step', st.maxColumn() === baseCols);
+    // A bare cells array is also accepted; an empty decomposition is reported, not thrown.
+    const res2 = st.importRCTD(parsed.cells);
+    ok('rctd: importRCTD also accepts a bare cells array', res2.ok && res2.cellCount === 2);
+    const res3 = st.importRCTD({ cells: [] });
+    ok('rctd: an empty decomposition → ok:false (nothing imported)', !res3.ok);
+  }
+
   // ---- factoring: factorOf (query) + applyFactor (case-split column) ----
   {
     const st = QD.AlgebraStore.create();

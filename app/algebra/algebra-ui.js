@@ -496,6 +496,11 @@
         '          <option value="maple">Maple RCTD</option><option value="singular">Singular</option><option value="sage">Sage</option></select>' +
         '        <input id="alg-cas-params" class="small" type="text" placeholder="params e.g. a1,C1_1" title="Comma-separated variable names to treat as PARAMETERS — declared last for Maple RealComprehensiveTriangularize. Blank ⇒ non-parametric RealTriangularize." style="width:8.5em;" />' +
         '        <button id="alg-copy-cas" class="small" type="button" title="Copy the chosen column (above) as CAS input for the selected dialect (runs in your own Maple / Singular / Sage — nothing executes in-browser)">Copy</button></div>' +
+        '      <div class="algebra-line" style="margin-top:6px; align-items:flex-start;"><span class="algebra-line-label">Import RCTD</span>' +
+        '        <div style="flex:1; min-width:0;">' +
+        '          <textarea id="alg-rctd-json" class="small" rows="3" placeholder=\'paste the qd-rctd JSON from your Maple run (see the post-script)\' title="Paste the parametric RealComprehensiveTriangularize result, serialized to the qd-rctd term-list JSON by the documented Maple post-script. Imports as a new RCTD column (one node per cell constraint / chain poly)." style="width:100%; box-sizing:border-box; font-family:monospace; resize:vertical;"></textarea>' +
+        '          <div class="row" style="gap:4px; margin-top:2px;"><button id="alg-import-rctd" class="small heavy-op" type="button" title="Parse the qd-rctd JSON and append a new column of the decomposition cells">Import cells</button></div>' +
+        '        </div></div>' +
         '    </div>' +
         '  </details>' +
         '</div>';
@@ -545,6 +550,7 @@
       $('#alg-copy-mma').addEventListener('click', copyMathematica);
       $('#alg-copy-mma-all').addEventListener('click', copyMathematicaAll);
       $('#alg-copy-cas').addEventListener('click', copyCAS);
+      $('#alg-import-rctd').addEventListener('click', doImportRCTD);
       $('#alg-error-close').addEventListener('click', clearError);
       // dismissible numbered-steps onboarding hint (remembered for the session)
       const steps = $('#alg-steps');
@@ -613,6 +619,34 @@
       if (!code) { toast('Column ' + c + ' has no equations.', { kind: 'error' }); return; }
       const label = dialect === 'maple' ? 'Maple RCTD' : dialect.charAt(0).toUpperCase() + dialect.slice(1);
       writeClipboard(code, label + ' (column ' + c + ')');
+    }
+    // Import a parametric RCTD result (the return trip for the Maple RealComprehensiveTriangularize
+    // export). Parse the pasted qd-rctd JSON with QD.CASExport.parseRCTD, land the cells as a new
+    // RCTD column via store.importRCTD, and summarize the per-cell real-solution counts in the
+    // verdict card. Nothing executed Maple in-browser — this just reads its serialized output back.
+    function doImportRCTD() {
+      if (busyGuard()) return;
+      const ta = $('#alg-rctd-json');
+      const text = (ta && ta.value || '').trim();
+      if (!text) { toast('Paste the qd-rctd JSON from your Maple run first.', { kind: 'error' }); return; }
+      const CAS = QD.CASExport;
+      if (!CAS || !CAS.parseRCTD) { showError('CAS import unavailable (QD.CASExport.parseRCTD missing).'); return; }
+      const parsed = CAS.parseRCTD(text);
+      if (!parsed.ok) { showError('RCTD import: ' + (parsed.reason || 'could not parse the JSON')); return; }
+      const res = store.importRCTD(parsed);
+      if (!res.ok) { showError('RCTD import: ' + (res.reason || 'failed')); return; }
+      if (canvas) canvas.clearSelection();
+      rerender(); refreshPickers();
+      // Verdict summary: the per-cell real-solution counts (the parametric uniqueness picture).
+      const counted = res.cells.filter((c) => c.realCount != null);
+      const total = counted.reduce((s, c) => s + c.realCount, 0);
+      const text2 = 'Imported ' + res.cellCount + ' RCTD parameter cell' + (res.cellCount === 1 ? '' : 's')
+        + ' (column ' + res.column + '), ' + res.created.length + ' node(s).'
+        + (counted.length ? '  Real solutions per cell: ' + counted.map((c) => 'cell ' + c.index + ' → ' + c.realCount).join(', ') + '.' : '');
+      const rows = res.cells.map((c) => 'cell ' + c.index + ': ' + (c.realCount != null ? c.realCount + ' real solution' + (c.realCount === 1 ? '' : 's') : 'real count not reported'));
+      setStatus(text2);
+      if (canvas) canvas.setVerdict({ text: 'RCTD: ' + res.cellCount + ' parameter cell' + (res.cellCount === 1 ? '' : 's') + (counted.length ? ' · ' + total + ' real solution(s) total' : ''), solutionsText: rows.join('\n') });
+      toast(text2);
     }
 
     // Attempt to factor an equation: show its factors; picking one pursues that case
@@ -1336,6 +1370,7 @@
         case 'fix-w0': return 'fixed φ(0) = ' + valStr(prov.value);
         case 'triangular': return prov.contradiction ? 'triangular decomposition (inconsistent)' : 'triangular decomposition (Wu) of ' + (prov.inputs || []).join(', ');
         case 'factor': return prov.carried ? 'carried through a factor split' : 'factor: case ' + ((prov.caseIndex || 0) + 1) + ' of ' + (prov.caseCount || '?') + ' (V(p)=⋃V(fᵢ))';
+        case 'rctd': return 'RCTD cell ' + (prov.cell != null ? prov.cell : '?') + ' · ' + (prov.role || 'chain') + (prov.realCount != null ? ' (' + prov.realCount + ' real soln' + (prov.realCount === 1 ? '' : 's') + ')' : '');
         default: return prov.op || '';
       }
     }
@@ -1357,6 +1392,10 @@
           const cn = (ns || []).find((n) => n.provenance && n.provenance.op === 'factor' && !n.provenance.carried);
           const cp = (cn && cn.provenance) || p;
           return '↳ factor · case ' + ((cp.caseIndex || 0) + 1) + '/' + (cp.caseCount || '?');
+        }
+        case 'rctd': {
+          const cells = new Set((ns || []).map((n) => n.provenance && n.provenance.cell).filter((v) => v != null));
+          return '↳ RCTD · ' + cells.size + ' parameter cell' + (cells.size === 1 ? '' : 's');
         }
         default: return '↳ column ' + c;
       }

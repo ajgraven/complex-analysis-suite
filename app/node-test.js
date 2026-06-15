@@ -62,7 +62,7 @@ const FLOORS = {
   cusps: 5, 'cusp-accuracy': 5, symmetry: 2, 'thesis-examples': 8, faber: 8,
   riemann: 1, 'parse-check': 3, worker: 3, 'ui-domain-plot': 1, 'schwarz-ui': 1,
   'ui-inputs': 1, cmax: 3, observables: 5, 'sym-core': 180, 'qd-equations': 44, 'qd-constraints': 16,
-  'algebra-store': 115, 'cas-export': 12, 'cardioid-uniqueness': 19, manifest: 3,
+  'algebra-store': 130, 'cas-export': 24, 'cardioid-uniqueness': 19, manifest: 3,
 };
 const DEFAULT_FLOOR = 3;
 

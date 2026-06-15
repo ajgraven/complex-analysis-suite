@@ -6,8 +6,9 @@
 // COMPREHENSIVE TRIANGULAR DECOMPOSITION — parametric real quantifier elimination,
 // which Ameur–Helmer–Tellander ran in Maple's RegularChains. That does NOT run in the
 // browser; this module is the BRIDGE: it emits copy-paste-ready CAS input. The user
-// runs it in their own Maple / Singular / Sage. (Importing the cells back is a separate
-// follow-on — see the project plan; this file is export-only.)
+// runs it in their own Maple / Singular / Sage, then pastes the result back: `parseRCTD`
+// (below) reads the cells back in (via the term-list JSON this module defines), and
+// AlgebraStore.importRCTD lands them as an `op:'rctd'` column.
 //
 // Dialects:
 //   'maple'       — RegularChains: a PolynomialRing + the system as p=0 / p>0 / p<>0,
@@ -155,7 +156,77 @@
   // Strip a label to ASCII for a CAS comment (● / ★ and subscripts aren't safe everywhere).
   function _ascii(s) { return String(s).replace(/●/g, 'locator').replace(/★/g, 'star').replace(/[^\x20-\x7E]/g, '').trim(); }
 
-  const ns = { polyToCAS, equationToCAS, systemToCAS, dialects: ['maple', 'singular', 'sage', 'mathematica'] };
+  // ===========================================================================
+  // IMPORT — read an external RCTD result back into the workspace.
+  //
+  // The PARAMETRIC decomposition (Maple RealComprehensiveTriangularize) returns a list of
+  // CELLS: each a region of parameter space (given by parameter CONSTRAINTS) together with a
+  // regular CHAIN (a triangular equality system valid there) and the number of REAL solutions
+  // there. Rather than parse Maple's pretty-printed native output (brittle, version-specific),
+  // the user serializes the decomposition with the documented Maple post-script (see
+  // AHARONOV_SHAPIRO.md → "Maple post-script") into the term-list JSON THIS MODULE DEFINES, and
+  // pastes it back. `parseRCTD` validates + normalizes that JSON into the cell structure the
+  // AlgebraStore.importRCTD consumes. Pure (no QD.Sym): it returns the term lists verbatim; the
+  // store builds the MPolys from them via QD.Sym.polyFromTermList.
+  //
+  // JSON shape (qd-rctd v1):
+  //   { "format":"qd-rctd", "version":1, "params":["M0","m1","n1"],
+  //     "cells":[ { "index":1, "realCount":1,
+  //                 "constraints":[ { "terms":[…], "rel":">" }, … ],
+  //                 "chain":[ { "terms":[…] }, … ] }, … ] }
+  // where each `terms` is exactly an MPoly.termList(): [{ coeff:{re:[n,d],im:[n,d]}, mono:{var:exp} }].
+  // `format`/`version`/`params` are optional; `cells` is required and non-empty.
+
+  // Validate one term list (the serialization-safe shape), throwing a located error if malformed.
+  function _checkTerms(terms, where) {
+    if (!Array.isArray(terms)) throw new Error(where + ': "terms" must be an array');
+    for (const t of terms) {
+      if (!t || typeof t !== 'object') throw new Error(where + ': each term must be an object');
+      const c = t.coeff;
+      if (!c || !Array.isArray(c.re) || c.re.length !== 2 || !Array.isArray(c.im) || c.im.length !== 2)
+        throw new Error(where + ': each term needs coeff.re=[num,den] and coeff.im=[num,den]');
+      if (t.mono != null && typeof t.mono !== 'object') throw new Error(where + ': "mono" must be an object');
+    }
+    return terms;
+  }
+  // Normalize a relation symbol to the workspace's {'=','>','≠'}, accepting the CAS spellings
+  // a serializer might emit ('<>'/'!=' for ≠; '>='/'≥'/'>' for the strict cell-defining side).
+  function _normRel(rel) {
+    if (rel === '<>' || rel === '!=' || rel === '≠') return '≠';
+    if (rel === '>' || rel === '>=' || rel === '≥') return '>';
+    return '=';
+  }
+  // Parse + validate an RCTD JSON string (or an already-parsed object) → normalized cells.
+  // Returns { ok:true, format, version, params, cells } or { ok:false, reason } (never throws).
+  function parseRCTD(jsonText) {
+    let obj;
+    try { obj = (typeof jsonText === 'string') ? JSON.parse(jsonText) : jsonText; }
+    catch (e) { return { ok: false, reason: 'invalid JSON: ' + ((e && e.message) || String(e)) }; }
+    if (!obj || typeof obj !== 'object') return { ok: false, reason: 'expected a JSON object with a "cells" array' };
+    if (obj.format && obj.format !== 'qd-rctd') return { ok: false, reason: 'unrecognized format "' + obj.format + '" (expected "qd-rctd")' };
+    const rawCells = obj.cells;
+    if (!Array.isArray(rawCells) || !rawCells.length) return { ok: false, reason: 'no "cells" array, or it is empty (nothing to import)' };
+    const cells = [];
+    try {
+      rawCells.forEach((cell, ci) => {
+        if (!cell || typeof cell !== 'object') throw new Error('cell ' + (ci + 1) + ': must be an object');
+        const index = (cell.index != null) ? cell.index : ci + 1;
+        const realCount = (cell.realCount != null && isFinite(cell.realCount)) ? Number(cell.realCount) : null;
+        const constraints = (cell.constraints || []).map((c, k) => {
+          if (!c || typeof c !== 'object') throw new Error('cell ' + index + ' constraint ' + (k + 1) + ': must be an object');
+          return { terms: _checkTerms(c.terms || [], 'cell ' + index + ' constraint ' + (k + 1)), rel: _normRel(c.rel) };
+        });
+        const chain = (cell.chain || []).map((c, k) => {
+          if (!c || typeof c !== 'object') throw new Error('cell ' + index + ' chain ' + (k + 1) + ': must be an object');
+          return { terms: _checkTerms(c.terms || [], 'cell ' + index + ' chain ' + (k + 1)), rel: '=' };
+        });
+        cells.push({ index, realCount, constraints, chain });
+      });
+    } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    return { ok: true, format: 'qd-rctd', version: obj.version || 1, params: Array.isArray(obj.params) ? obj.params.slice() : [], cells };
+  }
+
+  const ns = { polyToCAS, equationToCAS, systemToCAS, parseRCTD, dialects: ['maple', 'singular', 'sage', 'mathematica'] };
   if (global.QD) global.QD.CASExport = ns;
   else if (global.module && global.module.exports) global.module.exports = ns;
   else global.QD_CASExport = ns;

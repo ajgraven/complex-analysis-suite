@@ -83,7 +83,60 @@ discriminant (the cusp/double‑root locus), and exact certification across a pa
 **plus**, via the **CAS/RCTD export** (`QD.CASExport`, the Algebra tab's Export ▸ "CAS / RCTD"
 line), the parametric system formatted as ready‑to‑run Maple `RealComprehensiveTriangularize`
 input (parameters declared last), so the fully parametric decomposition can be run in Maple
-externally. (Importing the returned cells back into the workspace is the remaining follow‑on.)
+externally — and then **imported back** (Export ▸ "Import RCTD", below): the returned cells land
+as an `op:'rctd'` column, each cell carrying its parameter constraints, regular chain, and
+real‑solution count, so the parametric uniqueness picture is read straight off the workspace.
+
+## The RCTD round trip (export → Maple → import)
+
+The bridge is deliberately a **defined JSON interchange**, not a parser for Maple's
+pretty‑printed native output (which is brittle and version‑specific). The cycle is:
+
+1. **Export.** In the Algebra tab, Export ▸ "CAS / RCTD" ▸ *Maple RCTD*, with the data moments
+   (e.g. `M0,m1,n1`) typed into the params field, copies a ready `RegularChains` script with the
+   parameters declared last and a `RealComprehensiveTriangularize(sys, np, R)` call.
+2. **Run + serialize in Maple.** Run that script, then append the **post‑script** below. It walks
+   the decomposition `dec` and prints the `qd-rctd` JSON this app defines — each cell's parameter
+   constraints, its regular chain, and the number of real solutions there.
+3. **Import.** Paste that JSON into Export ▸ "Import RCTD" ▸ *Import cells*. `QD.CASExport.parseRCTD`
+   validates it and `AlgebraStore.importRCTD` lands the cells as a new RCTD column; the verdict card
+   summarizes the per‑cell real‑solution counts (the parametric uniqueness statement).
+
+The `qd-rctd` term‑list shape (one cell shown; `terms` is exactly an `MPoly.termList()`):
+
+```json
+{ "format": "qd-rctd", "version": 1, "params": ["M0", "m1", "n1"],
+  "cells": [
+    { "index": 1, "realCount": 1,
+      "constraints": [ { "terms": [ /* coeff/mono term list */ ], "rel": ">" } ],
+      "chain":       [ { "terms": [ /* … */ ] } ] }
+  ] }
+```
+
+**Maple post‑script** (append after the `RealComprehensiveTriangularize` call; emits the JSON
+above — coefficients are written as exact integer `[numerator, denominator]` pairs over ℚ(i),
+matching the app's `coeff:{re:[n,d],im:[n,d]}` shape). Adapt the per‑cell `RealRootCounting` to
+your Maple version; the structure (constraints + chain + real count per cell) is what `parseRCTD`
+consumes:
+
+```maple
+# --- qd-rctd serializer: walk `dec` (the RealComprehensiveTriangularize result) ---
+# For each cell, emit its parameter constraints, the regular chain's polynomials, and the
+# real-solution count, as the qd-rctd JSON the QD Algebra tab imports. (Pseudocode for the
+# polynomial → term-list step: split each coefficient into Re/Im over ℚ(i) and write
+# [numer, denom] integer-string pairs; write each monomial's exponents as {var: exp}.)
+#
+#   for each cell C in dec:
+#     constraints := the parameter (in)equalities defining C   # rel ∈ { "=", ">", "<>" }
+#     chain       := Equations(RegularChain(C), R)             # the triangular system
+#     realCount   := <number of real points of the chain in C>  # e.g. via RealRootCounting / RealRootIsolate
+#     print the cell as { "index": i, "realCount": realCount,
+#                         "constraints": [ {terms, rel}, … ], "chain": [ {terms}, … ] }
+#
+# Assemble the cells into { "format":"qd-rctd", "version":1, "params":[…], "cells":[…] } and
+# print that JSON. (A small worked serializer for the order-2 cardioid system ships as the P3
+# regression fixture — see app/test/cardioid-uniqueness.test.js.)
+```
 
 ## Order‑n generalization (`pointFunctionalSystem({order: n})`)
 
