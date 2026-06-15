@@ -98,7 +98,12 @@
     // (⇒ identify x = ±y). Each is surfaced as a one-click apply in the #alg-suggest banner,
     // skipping any the user dismissed this session. Re-run from rerender() so it tracks reductions.
     const _dismissedRel = new Set();
-    function _relKey(h) { return h.kind === 'identify' ? ('id:' + h.keep + '=' + h.drop) : (h.kind + ':' + h.varName); }
+    function _relKey(h) {
+      if (h.kind === 'identify') return 'id:' + h.keep + '=' + h.drop;
+      if (h.kind === 'linear') return 'lin:' + h.vars.slice().sort().join(',');
+      if (h.kind === 'conjugate-pair') return 'cp:' + [h.var, h.other].sort().join(',');
+      return h.kind + ':' + h.varName;
+    }
     function _detectRels() { try { return store.detectVariableRelations ? (store.detectVariableRelations() || []) : []; } catch (e) { return []; } }
     function renderSuggestions() {
       const box = $('#alg-suggest'); if (!box) return;
@@ -119,26 +124,34 @@
           btnText = 'Assume ' + latexPlain(h.varName) + ' imaginary';
           btnTip = 'Substitute v̄ ≡ −v (Re ' + latexPlain(h.varName) + ' = 0) in a new column';
           apply = () => store.assumeImaginary([h.varName]);
-        } else {                                                  // identify
+        } else if (h.kind === 'identify') {
           const rhs = (h.sign < 0 ? '−' : '') + latexPlain(h.keep);
           msg.textContent = '“' + h.label + '” identifies ' + latexPlain(h.drop) + ' = ' + rhs + '.';
           btnText = 'Identify ' + latexPlain(h.drop) + ' = ' + rhs;
           btnTip = 'Substitute ' + latexPlain(h.drop) + ' = ' + rhs + ' (and its conjugate) in a new column';
           apply = () => store.identifyVariables(h.keep, h.drop, h.sign);
+        } else if (h.kind === 'linear') {                         // FLAG only (no auto-apply)
+          msg.textContent = '“' + h.label + '” is a linear relation between ' + latexPlain(h.vars[0]) + ' and ' + latexPlain(h.vars[1]) + ' (non-unit ratio) — eliminate it with Reduce ▸ propagate.';
+        } else {                                                  // conjugate-pair — FLAG only (no auto-apply)
+          msg.textContent = '“' + h.label + '” links ' + latexPlain(h.var) + ' to the conjugate of ' + latexPlain(h.other) + ' — a conjugate-pole-pair symmetry; pair the variables by hand (per-variable reality is not valid here).';
         }
-        const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'small';
-        btn.textContent = btnText; btn.title = btnTip;
-        btn.addEventListener('click', () => {
-          if (busyGuard()) return;
-          const r = apply();
-          if (!r || !r.ok) { showError('Apply symmetry: ' + ((r && r.reason) || 'failed')); return; }
-          rerender(); refreshPickers();
-          toast(btnText + ' → column ' + r.column);
-        });
+        row.appendChild(msg);
+        if (apply) {                                              // applicable kinds (real / imaginary / identify) get a button
+          const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'small';
+          btn.textContent = btnText; btn.title = btnTip;
+          btn.addEventListener('click', () => {
+            if (busyGuard()) return;
+            const r = apply();
+            if (!r || !r.ok) { showError('Apply symmetry: ' + ((r && r.reason) || 'failed')); return; }
+            rerender(); refreshPickers();
+            toast(btnText + ' → column ' + r.column);
+          });
+          row.appendChild(btn);
+        }
         const x = document.createElement('button'); x.type = 'button'; x.className = 'algebra-error-close';
         x.textContent = '×'; x.title = 'Dismiss this suggestion for the session';
         x.addEventListener('click', () => { _dismissedRel.add(_relKey(h)); renderSuggestions(); });
-        row.appendChild(msg); row.appendChild(btn); row.appendChild(x);
+        row.appendChild(x);
         box.appendChild(row);
       });
       box.classList.remove('hidden');

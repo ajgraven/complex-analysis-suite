@@ -541,13 +541,16 @@
     // variable to exponent 1 (exact, no floats). Classified:
     //   • a,b a conjugate pair (b = conjVarName(a)): α+β=0 ⇒ a − ā = 0 ⇒ a REAL;
     //                                                 α−β=0 ⇒ a + ā = 0 ⇒ a IMAGINARY.
-    //   • a,b distinct PRIMAL base variables: α+β=0 ⇒ a = b (sign +1); α−β=0 ⇒ a = −b (sign −1)
-    //     ⇒ an IDENTIFY relation (a clean ±1 unit relation only — a general ratio is left to the
-    //     linear-propagation reducer). Returns [{ nodeId, kind:'real'|'imaginary'|'identify',
-    //     label, varName? (real/imaginary), keep?/drop?/sign? (identify) }]. Skips variables
-    //     already folded (in realVars / imagVars). De-duped. Applied via assumeReal /
-    //     assumeImaginary / identifyVariables respectively. Restricting to this certain
-    //     two-variable form means we never claim a symmetry that isn't forced.
+    //   • a,b two DISTINCT variables of the same barred-ness, unit ratio: a = ±b ⇒ an IDENTIFY
+    //     relation (one-click, applied via identifyVariables).
+    //   • a,b two distinct primal variables, NON-unit ratio (a = c·b): a LINEAR relation — FLAGGED
+    //     only (eliminate via the linear-propagation reducer; not auto-applied).
+    //   • a,b opposite barred-ness of DIFFERENT index (e.g. z₂ = ±z̄₁): a CONJUGATE-POLE-PAIR
+    //     symmetry — FLAGGED only. Per-variable reality is NOT valid here (it's a pairing); the
+    //     user pairs the conjugate variables by hand. Returns [{ nodeId, kind:'real'|'imaginary'|
+    //     'identify'|'linear'|'conjugate-pair', label, varName? / keep?,drop?,sign? / vars? /
+    //     var?,other?,sign? }]. Skips variables already folded (realVars / imagVars). De-duped.
+    //     Restricting to these certain forms means we never claim a symmetry that isn't forced.
     function detectVariableRelations(ids) {
       const QC = getQC();
       if (!QC || !QC.conjVarName) return [];
@@ -568,18 +571,31 @@
         if (names.length !== 2) continue;                       // (a self-term v·v would have size 1)
         const [a, b] = names, ca = byName[a], cb = byName[b];
         const sum0 = ca.add(cb).isZero(), diff0 = ca.sub(cb).isZero();
-        if (QC.conjVarName(a) === b) {                          // conjugate pair: reality / imaginary
-          const v = _primalName(a);
+        const aB = _BARRED_RE.test(a), bB = _BARRED_RE.test(b);
+        const pa = _primalName(a), pb = _primalName(b);
+        if (QC.conjVarName(a) === b) {                          // same-index conjugate pair: reality / imaginary
+          const v = pa;
           if (sum0) { if (real.has(v) || seen.has('r:' + v)) continue; seen.add('r:' + v); out.push({ nodeId: n.id, kind: 'real', varName: v, label: n.label }); }
           else if (diff0) { if (imag.has(v) || seen.has('i:' + v)) continue; seen.add('i:' + v); out.push({ nodeId: n.id, kind: 'imaginary', varName: v, label: n.label }); }
-        } else if (!_BARRED_RE.test(a) && !_BARRED_RE.test(b)) { // two distinct primal vars: a = ±b
-          let sign = null;
-          if (sum0) sign = 1;                                   // a − b = 0 ⇒ a = b
-          else if (diff0) sign = -1;                            // a + b = 0 ⇒ a = −b
-          if (sign === null) continue;
-          const keep = (a < b) ? a : b, drop = (a < b) ? b : a;
-          const key = 'id:' + keep + '=' + drop; if (seen.has(key)) continue; seen.add(key);
-          out.push({ nodeId: n.id, kind: 'identify', keep, drop, sign, label: n.label });
+          // a non-unit conjugate-pair relation (αa+βā=0, |α|≠|β|) forces nothing certain from a
+          // single equation (it needs its own conjugate) — skip.
+        } else if (pa === pb) {
+          continue;                                             // same primal, not a conj pair ⇒ a===b (already excluded)
+        } else if (aB === bB) {                                 // two DISTINCT variables of the same barred-ness
+          const keep = (pa < pb) ? pa : pb, drop = (pa < pb) ? pb : pa;
+          if (sum0 || diff0) {                                  // unit relation a = ±b ⇒ one-click IDENTIFY (applicable)
+            const sign = sum0 ? 1 : -1;
+            const key = 'id:' + keep + '=' + drop; if (seen.has(key)) continue; seen.add(key);
+            out.push({ nodeId: n.id, kind: 'identify', keep, drop, sign, label: n.label });
+          } else {                                              // general non-unit linear relation a = c·b ⇒ FLAG only
+            const key = 'lin:' + keep + ',' + drop; if (seen.has(key)) continue; seen.add(key);
+            out.push({ nodeId: n.id, kind: 'linear', vars: [keep, drop], label: n.label });
+          }
+        } else {                                                // opposite barred-ness, DIFFERENT index ⇒ conjugate-pole-pair
+          const v = aB ? pb : pa, other = aB ? pa : pb;         // v = c·conj(other) (e.g. z₂ = ±z̄₁) — FLAG only
+          const lo = (v < other) ? v : other, hi = (v < other) ? other : v;
+          const key = 'cp:' + lo + ',' + hi; if (seen.has(key)) continue; seen.add(key);
+          out.push({ nodeId: n.id, kind: 'conjugate-pair', var: v, other, sign: sum0 ? 1 : (diff0 ? -1 : 0), label: n.label });
         }
       }
       return out;

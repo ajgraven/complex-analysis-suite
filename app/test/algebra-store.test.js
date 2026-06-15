@@ -671,6 +671,19 @@ module.exports = async function run() {
     const idh = stid.detectVariableRelations().find((h) => h.kind === 'identify');
     ok('detect-sym: z₁ − z₂ = 0 is flagged as IDENTIFY (keep z1, drop z2, sign +1)',
        !!idh && idh.keep === 'z1' && idh.drop === 'z2' && idh.sign === 1);
+    // LINEAR (non-unit ratio between distinct primal vars) — FLAGGED, not identifiable as ±.
+    const sysLin = { model: 'conjugate', w0Fixed: null, blocks: { locator: [{ eq: S.mpolyInt(2).mul(z1).sub(S.mpolyInt(3).mul(z2)), label: '2z₁−3z₂' }], star: [], gauge: [] } };
+    const stl = QD.AlgebraStore.create(); stl.seedFromSystem(sysLin);
+    const lh = stl.detectVariableRelations();
+    ok('detect-sym: 2z₁ − 3z₂ = 0 is flagged as LINEAR (non-unit), NOT identify',
+       lh.some((h) => h.kind === 'linear' && h.vars.indexOf('z1') !== -1 && h.vars.indexOf('z2') !== -1) &&
+       !lh.some((h) => h.kind === 'identify'));
+    // CONJUGATE-POLE-PAIR (z₂ = z̄₁: a primal var equals another index's conjugate) — FLAGGED.
+    const sysCp = { model: 'conjugate', w0Fixed: null, blocks: { locator: [{ eq: z2.sub(zb1), label: 'z₂−z̄₁' }], star: [], gauge: [] } };
+    const stc = QD.AlgebraStore.create(); stc.seedFromSystem(sysCp);
+    const ch = stc.detectVariableRelations().find((h) => h.kind === 'conjugate-pair');
+    ok('detect-sym: z₂ − z̄₁ = 0 is flagged as CONJUGATE-POLE-PAIR (z₂ ↔ conj z₁)',
+       !!ch && ((ch.var === 'z2' && ch.other === 'z1') || (ch.var === 'z1' && ch.other === 'z2')));
   }
 
   // ---- assumeImaginary (v̄ ≡ −v substitution fold) ----
