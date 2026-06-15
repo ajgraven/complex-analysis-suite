@@ -91,50 +91,66 @@
     function toast(msg, opts) { if (QD.QoL && QD.QoL.toast) QD.QoL.toast(msg, opts || {}); }
     function rerender() { if (canvas) canvas.render(store, latexOf); renderInspector(canvas ? canvas.getSelection() : []); buildBreadcrumb(); renderSuggestions(); }
 
-    // ---- auto-detected reality suggestions ("popup the moment an equation forces a var real")
-    // store.detectRealityConstraints scans the current equations for the v − v̄ = 0 form (e.g.
-    // the gauge A₁,₁ − Ā₁,₁ = 0) and reports the forced-real base variables. We surface each as a
-    // one-click "Assume … real" in the #alg-suggest banner, skipping any the user dismissed this
-    // session. Re-run from rerender() so it tracks the system as it reduces.
-    const _dismissedReal = new Set();
+    // ---- auto-detected variable-symmetry suggestions ("popup the moment an equation forces a
+    // variable real/imaginary, or identifies two variables"). store.detectVariableRelations scans
+    // the current equations for two-variable linear relations: v − v̄ = 0 (⇒ v real, e.g. the
+    // gauge A₁,₁ − Ā₁,₁ = 0), v + v̄ = 0 (⇒ v imaginary), or x ∓ y = 0 between distinct primal vars
+    // (⇒ identify x = ±y). Each is surfaced as a one-click apply in the #alg-suggest banner,
+    // skipping any the user dismissed this session. Re-run from rerender() so it tracks reductions.
+    const _dismissedRel = new Set();
+    function _relKey(h) { return h.kind === 'identify' ? ('id:' + h.keep + '=' + h.drop) : (h.kind + ':' + h.varName); }
+    function _detectRels() { try { return store.detectVariableRelations ? (store.detectVariableRelations() || []) : []; } catch (e) { return []; } }
     function renderSuggestions() {
       const box = $('#alg-suggest'); if (!box) return;
-      let hits = [];
-      try { hits = store.detectRealityConstraints ? (store.detectRealityConstraints() || []) : []; } catch (e) { hits = []; }
-      hits = hits.filter((h) => !_dismissedReal.has(h.varName));
+      const hits = _detectRels().filter((h) => !_dismissedRel.has(_relKey(h)));
       if (!hits.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
       box.innerHTML = '';
       hits.forEach((h) => {
         const row = document.createElement('div'); row.className = 'algebra-suggest-row';
         const msg = document.createElement('span'); msg.className = 'algebra-suggest-msg';
-        msg.textContent = '“' + h.label + '” implies ' + latexPlain(h.varName) + ' is real.';
-        const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'small';
-        apply.textContent = 'Assume ' + latexPlain(h.varName) + ' real';
-        apply.title = 'Identify ' + latexPlain(h.varName) + ' with its conjugate (v̄ ≡ v) in a new column';
-        apply.addEventListener('click', () => {
+        let btnText, btnTip, apply;
+        if (h.kind === 'real') {
+          msg.textContent = '“' + h.label + '” implies ' + latexPlain(h.varName) + ' is real.';
+          btnText = 'Assume ' + latexPlain(h.varName) + ' real';
+          btnTip = 'Identify ' + latexPlain(h.varName) + ' with its conjugate (v̄ ≡ v) in a new column';
+          apply = () => store.assumeReal([h.varName]);
+        } else if (h.kind === 'imaginary') {
+          msg.textContent = '“' + h.label + '” implies ' + latexPlain(h.varName) + ' is imaginary.';
+          btnText = 'Assume ' + latexPlain(h.varName) + ' imaginary';
+          btnTip = 'Substitute v̄ ≡ −v (Re ' + latexPlain(h.varName) + ' = 0) in a new column';
+          apply = () => store.assumeImaginary([h.varName]);
+        } else {                                                  // identify
+          const rhs = (h.sign < 0 ? '−' : '') + latexPlain(h.keep);
+          msg.textContent = '“' + h.label + '” identifies ' + latexPlain(h.drop) + ' = ' + rhs + '.';
+          btnText = 'Identify ' + latexPlain(h.drop) + ' = ' + rhs;
+          btnTip = 'Substitute ' + latexPlain(h.drop) + ' = ' + rhs + ' (and its conjugate) in a new column';
+          apply = () => store.identifyVariables(h.keep, h.drop, h.sign);
+        }
+        const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'small';
+        btn.textContent = btnText; btn.title = btnTip;
+        btn.addEventListener('click', () => {
           if (busyGuard()) return;
-          const r = store.assumeReal([h.varName]);
-          if (!r.ok) { showError('Assume real: ' + (r.reason || 'failed')); return; }
+          const r = apply();
+          if (!r || !r.ok) { showError('Apply symmetry: ' + ((r && r.reason) || 'failed')); return; }
           rerender(); refreshPickers();
-          toast('Assumed ' + latexPlain(h.varName) + ' real → column ' + r.column);
+          toast(btnText + ' → column ' + r.column);
         });
         const x = document.createElement('button'); x.type = 'button'; x.className = 'algebra-error-close';
         x.textContent = '×'; x.title = 'Dismiss this suggestion for the session';
-        x.addEventListener('click', () => { _dismissedReal.add(h.varName); renderSuggestions(); });
-        row.appendChild(msg); row.appendChild(apply); row.appendChild(x);
+        x.addEventListener('click', () => { _dismissedRel.add(_relKey(h)); renderSuggestions(); });
+        row.appendChild(msg); row.appendChild(btn); row.appendChild(x);
         box.appendChild(row);
       });
       box.classList.remove('hidden');
     }
-    // Manual "Detect reality": clear the session dismissals so every forced-real variable
-    // re-surfaces, then re-render the suggestions (and report when none are forced).
-    function doDetectReality() {
-      _dismissedReal.clear();
+    // Manual "Detect symmetry": clear the session dismissals so every detected relation
+    // re-surfaces, then re-render the suggestions (and report when none are found).
+    function doDetectSymmetry() {
+      _dismissedRel.clear();
       renderSuggestions();
-      let hits = [];
-      try { hits = store.detectRealityConstraints ? (store.detectRealityConstraints() || []) : []; } catch (e) { hits = []; }
-      if (!hits.length) toast('No variable is forced real by the current equations.');
-      else toast(hits.length + ' variable(s) forced real — see the suggestion' + (hits.length === 1 ? '' : 's') + ' above.');
+      const hits = _detectRels();
+      if (!hits.length) toast('No variable symmetry is forced by the current equations.');
+      else toast(hits.length + ' variable symmetr' + (hits.length === 1 ? 'y' : 'ies') + ' detected — see the suggestion' + (hits.length === 1 ? '' : 's') + ' above.');
     }
 
     // ---- persistent, dismissible error panel --------------------------------
@@ -486,7 +502,7 @@
         '      <div class="algebra-line"><span class="algebra-line-label">Assume real</span><span id="alg-real-pick" class="algebra-picker"></span>' +
         '        <button id="alg-real-apply" class="small" type="button" data-str-title="tooltips.assumeReal">Apply</button>' +
         '        <button id="alg-real-auto" class="small" type="button" title="Detect real-axis symmetry of h and, if the data is fully real, assume every base variable real in one step (the biggest tractability lever)">Auto</button>' +
-        '        <button id="alg-real-detect" class="small" type="button" title="Scan the current equations for any that force a variable real (v − v̄ = 0, e.g. the gauge) and surface a one-click suggestion">Detect reality</button></div>' +
+        '        <button id="alg-real-detect" class="small" type="button" title="Scan the current equations for variable symmetries — a variable forced real (v − v̄ = 0, e.g. the gauge) or imaginary (v + v̄ = 0), or two variables identified (x ∓ y = 0) — and surface one-click suggestions">Detect symmetry</button></div>' +
         '      <div class="algebra-line-label" style="margin-top:8px;">Set values <span class="hint" style="font-weight:400;">(each value also fixes its conjugate)</span></div>' +
         '      <div id="alg-val-rows"></div>' +
         '      <div class="row" style="gap:4px; align-items:center; margin-top:2px;">' +
@@ -610,7 +626,7 @@
       }
       $('#alg-real-apply').addEventListener('click', doAssumeReal);
       $('#alg-real-auto').addEventListener('click', doAutoReality);
-      $('#alg-real-detect').addEventListener('click', doDetectReality);
+      $('#alg-real-detect').addEventListener('click', doDetectSymmetry);
       $('#alg-val-apply').addEventListener('click', doSubstituteValue);
       $('#alg-val-add').addEventListener('click', () => addValueRow());
 
@@ -779,6 +795,18 @@
             const r = store.generateConjugate(sel[0]);
             if (!r.ok) { toast(r.reason || 'could not generate the conjugate', { kind: 'error' }); return; }
             rerender(); toast('Added conjugate: ' + r.node.label);
+          }));
+        }
+        // Propagate a constraint forward into the current system, folding in every assumption
+        // (reality / imaginary / fixed φ(0) / pinned values) applied across the columns.
+        if (n.column < store.maxColumn()) {
+          acts.appendChild(mkBtn('Propagate to current system', 'Carry this equation into the last column with all assumptions (reality, imaginary, fixed φ(0), pinned values) applied to it', () => {
+            if (busyGuard()) return;
+            const r = store.propagateNode(sel[0]);
+            if (!r.ok) { toast(r.reason || 'could not propagate', { kind: 'error' }); return; }
+            if (canvas) canvas.clearSelection();
+            rerender(); refreshPickers();
+            toast('Propagated to column ' + r.column + (r.applied && r.applied.length ? ' (applied ' + r.applied.join(', ') + ')' : ''));
           }));
         }
         // Attempt to factor (equalities in the current system only): split p=f·g into
@@ -1428,10 +1456,13 @@
         case 'substitute': return 'set ' + substList(prov);
         case 'linear-reduce': return 'linear propagation (eliminated ' + (prov.eliminated || []).map(latexPlain).join(', ') + ')';
         case 'assume-real': return 'assumed ' + (prov.vars || []).map(latexPlain).join(', ') + ' real';
+        case 'assume-imaginary': return 'assumed ' + (prov.vars || []).map(latexPlain).join(', ') + ' imaginary';
+        case 'identify': return 'identified ' + latexPlain(prov.drop) + ' = ' + (prov.sign < 0 ? '−' : '') + latexPlain(prov.keep);
         case 'fix-w0': return 'fixed φ(0) = ' + valStr(prov.value);
         case 'triangular': return prov.contradiction ? 'triangular decomposition (inconsistent)' : 'triangular decomposition (Wu) of ' + (prov.inputs || []).join(', ');
         case 'factor': return prov.carried ? 'carried through a factor split' : 'factor: case ' + ((prov.caseIndex || 0) + 1) + ' of ' + (prov.caseCount || '?') + ' (V(p)=⋃V(fᵢ))';
         case 'rctd': return 'RCTD cell ' + (prov.cell != null ? prov.cell : '?') + ' · ' + (prov.role || 'chain') + (prov.realCount != null ? ' (' + prov.realCount + ' real soln' + (prov.realCount === 1 ? '' : 's') + ')' : '');
+        case 'propagate': return 'propagated from column ' + (prov.from != null ? prov.from : '?') + (prov.applied && prov.applied.length ? ' (applied ' + prov.applied.join(', ') + ')' : '');
         default: return prov.op || '';
       }
     }
@@ -1439,12 +1470,14 @@
     // original system; each later column is phrased as the transformation that derived it.
     function columnLabel(c, ns) {
       if (c === 0) return 'Original system' + (store.w0Fixed ? ' · φ(0) fixed' : '');
-      const rep = (ns || []).find((n) => n.provenance && n.provenance.op !== 'conjugate') || (ns || [])[0];
+      const rep = (ns || []).find((n) => n.provenance && n.provenance.op !== 'conjugate' && n.provenance.op !== 'propagate') || (ns || [])[0];
       const p = (rep && rep.provenance) || {};
       switch (p.op) {
         case 'substitute': return '↳ set ' + substList(p);
         case 'linear-reduce': return '↳ propagate · eliminate ' + (p.eliminated || []).map(latexPlain).join(', ');
         case 'assume-real': return '↳ assume real · ' + (p.vars || []).map(latexPlain).join(', ');
+        case 'assume-imaginary': return '↳ assume imaginary · ' + (p.vars || []).map(latexPlain).join(', ');
+        case 'identify': return '↳ identify ' + latexPlain(p.drop) + ' = ' + (p.sign < 0 ? '−' : '') + latexPlain(p.keep);
         case 'fix-w0': return '↳ fix φ(0) = ' + valStr(p.value);
         case 'resultant': return '↳ eliminate ' + latexPlain(p.variable);
         case 'groebner': return '↳ Gröbner · ' + (p.eliminate && p.eliminate.length ? 'elim ' + p.eliminate.map(latexPlain).join(',') : (p.order || 'grevlex'));

@@ -641,23 +641,99 @@ module.exports = async function run() {
     ok('rctd: an empty decomposition → ok:false (nothing imported)', !res3.ok);
   }
 
-  // ---- auto-infer forced-real variables (detectRealityConstraints) ----
+  // ---- auto-infer variable symmetries (detectVariableRelations: real / imaginary / identify) ----
   {
     const st = QD.AlgebraStore.create();
     st.seedFromSystem(system);                                   // disk, with conjugate companions
-    const hits = st.detectRealityConstraints();
+    const hits = st.detectVariableRelations();
     const a11 = hits.find((h) => h.varName === 'A1_1');
-    ok('detect-real: the gauge A₁,₁ − Ā₁,₁ = 0 flags A₁,₁ as forced real',
+    ok('detect-sym: the gauge A₁,₁ − Ā₁,₁ = 0 flags A₁,₁ as forced real',
        !!a11 && a11.kind === 'real');
     const gauge = st.list().find((n) => n.meta.block === 'gauge');
-    ok('detect-real: the flagged equation is the gauge node', a11 && a11.nodeId === gauge.id);
+    ok('detect-sym: the flagged equation is the gauge node', a11 && a11.nodeId === gauge.id);
     const locator = st.list().find((n) => n.meta.block === 'locator' && n.provenance.op === 'generate');
-    ok('detect-real: the (non v−v̄) locator equation is NOT flagged',
+    ok('detect-sym: the (non v−v̄) locator equation is NOT flagged',
        !hits.some((h) => h.nodeId === locator.id));
-    // Once applied, the variable is no longer reported (its conjugate is folded away).
     const ar = st.assumeReal(['A1_1']);
-    ok('detect-real: after assumeReal(A₁,₁), it is no longer detected',
-       ar.ok && !st.detectRealityConstraints().some((h) => h.varName === 'A1_1'));
+    ok('detect-sym: after assumeReal(A₁,₁), it is no longer detected',
+       ar.ok && !st.detectVariableRelations().some((h) => h.varName === 'A1_1'));
+
+    // IMAGINARY detection: a hand-crafted system whose equation is z₁ + z̄₁ = 0 ⇒ z₁ imaginary.
+    const S = QD.Sym, z1 = S.mpolyVar('z1'), zb1 = S.mpolyVar('zb1');
+    const sysImag = { model: 'conjugate', w0Fixed: null, blocks: { locator: [{ eq: z1.add(zb1), label: 'test z₁+z̄₁' }], star: [], gauge: [] } };
+    const sti = QD.AlgebraStore.create(); sti.seedFromSystem(sysImag);
+    const ih = sti.detectVariableRelations().find((h) => h.kind === 'imaginary');
+    ok('detect-sym: z₁ + z̄₁ = 0 is flagged as IMAGINARY (z₁)', !!ih && ih.varName === 'z1');
+    // IDENTIFY detection: a hand-crafted system z₁ − z₂ = 0 ⇒ identify z₁ = z₂.
+    const z2 = S.mpolyVar('z2');
+    const sysId = { model: 'conjugate', w0Fixed: null, blocks: { locator: [{ eq: z1.sub(z2), label: 'test z₁−z₂' }], star: [], gauge: [] } };
+    const stid = QD.AlgebraStore.create(); stid.seedFromSystem(sysId);
+    const idh = stid.detectVariableRelations().find((h) => h.kind === 'identify');
+    ok('detect-sym: z₁ − z₂ = 0 is flagged as IDENTIFY (keep z1, drop z2, sign +1)',
+       !!idh && idh.keep === 'z1' && idh.drop === 'z2' && idh.sign === 1);
+  }
+
+  // ---- assumeImaginary (v̄ ≡ −v substitution fold) ----
+  {
+    const S = QD.Sym, z1 = S.mpolyVar('z1'), zb1 = S.mpolyVar('zb1');
+    // System with an equation carrying z̄₁ so the fold is observable: z₁·z̄₁ − 1 = 0.
+    const sys = { model: 'conjugate', w0Fixed: null, blocks: { locator: [{ eq: z1.mul(zb1).sub(S.mpolyInt(1)), label: '|z₁|²−1' }], star: [], gauge: [] } };
+    const st = QD.AlgebraStore.create(); st.seedFromSystem(sys);
+    const r = st.assumeImaginary(['z1']);
+    ok('assume-imag: appends a new column with op:assume-imaginary',
+       r.ok && r.column === 1 && r.created.every((n) => n.provenance.op === 'assume-imaginary'));
+    // z₁·z̄₁ with z̄₁→−z₁ becomes −z₁², so the equation is −z₁² − 1 = 0 (no z̄₁ left).
+    const node = st.list().find((n) => n.column === 1 && n.rel === '=');
+    const expect = z1.mul(z1).neg().sub(S.mpolyInt(1));
+    ok('assume-imag: z̄₁ folded to −z₁ (|z₁|²−1 ⇒ −z₁²−1, no z̄₁)',
+       node && !node.poly.vars().has('zb1') && node.poly.equals(expect));
+    ok('assume-imag: the assumption is recorded (re-detect no longer flags z₁ imaginary)',
+       !st.detectVariableRelations().some((h) => h.kind === 'imaginary' && h.varName === 'z1'));
+  }
+
+  // ---- identifyVariables (substitute drop = ±keep, conjugates too) ----
+  {
+    const S = QD.Sym, z1 = S.mpolyVar('z1'), z2 = S.mpolyVar('z2'), zb2 = S.mpolyVar('zb2');
+    const sys = { model: 'conjugate', w0Fixed: null, blocks: { locator: [{ eq: z2.add(zb2).sub(S.mpolyInt(1)), label: 'z₂+z̄₂−1' }], star: [], gauge: [] } };
+    const st = QD.AlgebraStore.create(); st.seedFromSystem(sys);
+    const r = st.identifyVariables('z1', 'z2', 1);              // z₂ → z₁ (and z̄₂ → z̄₁)
+    ok('identify: appends a column substituting z₂→z₁ and z̄₂→z̄₁',
+       r.ok && r.column === 1 && r.created.every((n) => n.provenance.op === 'identify'));
+    const node = st.list().find((n) => n.column === 1 && n.rel === '=');
+    const zb1 = S.mpolyVar('zb1');
+    ok('identify: z₂,z̄₂ replaced by z₁,z̄₁ (z₁+z̄₁−1, no z₂/z̄₂)',
+       node && !node.poly.vars().has('z2') && !node.poly.vars().has('zb2') &&
+       node.poly.equals(z1.add(zb1).sub(S.mpolyInt(1))));
+  }
+
+  // ---- propagateNode: carry a column-0 node into the current system with assumptions applied ----
+  {
+    const S = QD.Sym, z1 = S.mpolyVar('z1'), zb1 = S.mpolyVar('zb1');
+    // (a) REALITY propagation: a column-0 equation with z̄₁; assumeReal(z₁) makes column 1.
+    const sys = { model: 'conjugate', w0Fixed: null, blocks: { locator: [{ eq: z1.mul(zb1).sub(S.mpolyInt(1)), label: '|z₁|²−1' }], star: [], gauge: [] } };
+    const st = QD.AlgebraStore.create(); st.seedFromSystem(sys, { withConjugates: false });
+    const col0 = st.list().find((n) => n.column === 0);
+    st.assumeReal(['z1']);                                       // column 1: z̄₁ → z₁ ⇒ z₁² − 1
+    const r = st.propagateNode(col0.id);
+    ok('propagate: a column-0 node lands in the current (last) column',
+       r.ok && r.column === st.maxColumn() && r.node.provenance.op === 'propagate' && r.node.provenance.from === 0);
+    ok('propagate: reality was applied (z̄₁ folded to z₁ ⇒ z₁²−1, no z̄₁)',
+       !r.node.poly.vars().has('zb1') && r.node.poly.equals(z1.mul(z1).sub(S.mpolyInt(1))) && r.applied.indexOf('reality') !== -1);
+    ok('propagate: a node already in the current column is rejected',
+       !st.propagateNode(r.node.id).ok);
+
+    // (b) PINNED-VALUE propagation: a column-0 equation A₁,₁ + z₁; substitute z₁ = 2 makes column 1.
+    const A11 = S.mpolyVar('A1_1');
+    const sys2 = { model: 'conjugate', w0Fixed: null, blocks: { locator: [{ eq: A11.add(z1), label: 'A₁,₁+z₁' }], star: [], gauge: [] } };
+    const st2 = QD.AlgebraStore.create(); st2.seedFromSystem(sys2, { withConjugates: false });
+    const c0 = st2.list().find((n) => n.column === 0);
+    st2.substituteValues([{ varName: 'z1', value: { re: 2, im: 0 } }], { propagate: false });
+    const r2 = st2.propagateNode(c0.id);
+    ok('propagate: a pinned constant (z₁=2) is substituted into the propagated constraint (A₁,₁+2)',
+       r2.ok && !r2.node.poly.vars().has('z1') && r2.node.poly.equals(A11.add(S.mpolyInt(2))) && r2.applied.indexOf('pinned values') !== -1);
+    const before = st2.size;
+    st2.undo();
+    ok('propagate: the propagation is a single undo step', st2.size === before - 1);
   }
 
   // ---- per-equation Generate conjugate (generateConjugate) ----

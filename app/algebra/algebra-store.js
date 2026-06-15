@@ -70,6 +70,7 @@
     const redoStack = [];
     let model = 'conjugate';
     let realVars = [];            // base (primal) variables ASSERTED REAL (z̄ⱼ ≡ zⱼ, …)
+    let imagVars = [];            // base (primal) variables ASSERTED IMAGINARY (z̄ⱼ ≡ −zⱼ, …)
     let w0Fixed = null;           // φ(0) fixed: { re:[n,d], im:[n,d] } (BigInt strings) or null
 
     function nid() { return 'n' + (++seq); }
@@ -92,6 +93,24 @@
       return (n) => (Object.prototype.hasOwnProperty.call(map, n) ? map[n] : n);
     }
     function _applyReality(poly) { const r = _realityRename(); return r ? poly.relabel(r) : poly; }
+
+    // --- imaginary assumptions: assert chosen variables are purely imaginary --------
+    // v imaginary ⟺ Re(v)=0 ⟺ v = −v̄ ⟺ v̄ = −v. Unlike reality (a pure RENAME v̄→v),
+    // this is a SUBSTITUTION v̄ → −v, so it can't share _realityRename's relabel path.
+    // imagVars and realVars are disjoint (a nonzero variable can't be both); reality is
+    // folded first (relabel), then imaginary (subst) on the still-barred names.
+    function _applyImaginary(poly) {
+      if (!imagVars.length) return poly;
+      const QC = getQC(), S = getSym(); if (!QC || !QC.conjVarName) return poly;
+      const sub = {};
+      for (const iv of imagVars) { const c = QC.conjVarName(iv); if (c !== iv) sub[c] = S.mpolyVar(iv).neg(); }
+      return Object.keys(sub).length ? poly.subst(sub) : poly;
+    }
+    // The cumulative pointwise assumption fold applied to a freshly built polynomial
+    // (seeded equation, univalence constraint, or generated conjugate): fixed φ(0), then
+    // reality (v̄≡v), then imaginary (v̄≡−v). With no assumptions set this is the identity,
+    // so existing flows are unchanged.
+    function _applyAssumed(poly) { return _applyImaginary(_applyReality(_applyW0(poly))); }
 
     // --- fixed φ(0): substitute the seed system's w₀ value into later polys -----
     // When the seed system was generated with a FIXED Riemann-map center (system
@@ -116,11 +135,11 @@
     // objects are never mutated in place (only added), so a shallow node-map copy
     // is a safe snapshot; `order` is copied because moveNode mutates it.
     function snapshot() {
-      return { nodes: new Map([...nodes].map(([k, v]) => [k, v])), edges: edges.slice(), order: new Map(order), model, seq, realVars: realVars.slice(), w0Fixed };
+      return { nodes: new Map([...nodes].map(([k, v]) => [k, v])), edges: edges.slice(), order: new Map(order), model, seq, realVars: realVars.slice(), imagVars: imagVars.slice(), w0Fixed };
     }
     function restore(s) {
       nodes.clear(); for (const [k, v] of s.nodes) nodes.set(k, v);
-      edges = s.edges.slice(); order = new Map(s.order || []); model = s.model; seq = s.seq; realVars = (s.realVars || []).slice(); w0Fixed = s.w0Fixed || null;
+      edges = s.edges.slice(); order = new Map(s.order || []); model = s.model; seq = s.seq; realVars = (s.realVars || []).slice(); imagVars = (s.imagVars || []).slice(); w0Fixed = s.w0Fixed || null;
     }
     // Cap the undo history so a long derivation can't grow the snapshot stack without
     // bound (each snapshot holds a copy of the whole node map). 200 steps is far beyond
@@ -191,7 +210,7 @@
     function maybeAddConjugate(node) {
       if (node.rel === '>') return null;                    // Hermitian inequality: one real condition
       const QC = getQC(); if (!QC || !QC.conjMPoly) return null;
-      const conj = _applyReality(_applyW0(QC.conjMPoly(node.poly)));   // reality folds barred→primal post-conjugation; fixed w₀ stays substituted
+      const conj = _applyAssumed(QC.conjMPoly(node.poly));   // reality/imaginary fold barred names post-conjugation; fixed w₀ stays substituted
       if (node.poly.sub(conj).isZero() || node.poly.add(conj).isZero()) return null;   // self-conjugate (incl. under reality)
       // Suppress only if the companion is already in THIS node's column — a poly equal to
       // conj sitting in an earlier column must not block the companion this column needs.
@@ -228,11 +247,12 @@
       clearGraph();
       model = system.model || 'conjugate';
       realVars = (bake && opts.realVars !== undefined) ? (opts.realVars || []).map(_primalName) : [];
+      imagVars = [];
       w0Fixed = system.w0Fixed || null;   // remember the fixed φ(0) for later constraints
       const primals = [];
       for (const block of ['locator', 'star', 'gauge']) {
         for (const item of system.blocks[block]) {
-          const poly = _applyReality(_applyW0(item.eq));
+          const poly = _applyAssumed(item.eq);
           if (poly.isZero()) continue;                       // reality made it trivial
           primals.push(addNode({
             id: nid(), kind: 'generated', poly, rel: '=',
@@ -258,7 +278,7 @@
       checkpoint();
       const made = [];
       for (const d of descs) {
-        const poly = _applyReality(_applyW0(d.poly));
+        const poly = _applyAssumed(d.poly);
         if (poly.isZero()) continue;
         made.push(addNode({
           id: nid(), kind: 'constraint', poly, rel: d.rel,
@@ -473,28 +493,69 @@
       return res;
     }
 
-    // Detect base variables FORCED REAL by the equations themselves (pure query, no mutation).
-    // An equality node whose polynomial is, up to a nonzero Gaussian scalar, exactly `v − v̄`
-    // (e.g. the gauge A₁,₁ − Ā₁,₁ = 0) says `v` is real. The test is exact (no floats): the
-    // poly must have exactly two terms, each a single variable to exponent 1; the two names
-    // must be a conjugate pair {v, conjVarName(v)} with conjVarName(v) ≠ v; and their Gaussian
-    // coefficients must satisfy cv + cc = 0 (the `v − v̄` form, scale-invariant). The sibling
-    // cv − cc = 0 (`v + v̄`, ⇒ v IMAGINARY) is intentionally NOT emitted — imaginary needs a
-    // different, substitution-based fold (deferred). Scans the current column (or the column of
-    // `ids`); skips any variable already in realVars (its v̄ is folded away). De-duped by primal
-    // name. Returns [{ nodeId, varName /*primal*/, kind:'real', label }]. The UI applies a hit
-    // via the shipped assumeReal([varName]) — there is no separate apply op. Restricting to this
-    // certain single-variable form means we never claim a reality that isn't forced (a
-    // multivariate p − p̄ = 0 does not pin any one variable real).
-    function detectRealityConstraints(ids) {
+    // Assume the given (base) variables are PURELY IMAGINARY: v̄ ≡ −v in the current system
+    // → a new column. Unlike assumeReal (a rename v̄→v), this SUBSTITUTES v̄ → −v, and records
+    // the assumption in imagVars so later conjugate companions / constraints / propagation fold
+    // it in too. Returns the append result.
+    function assumeImaginary(vars, opts) {
+      const QC = getQC(), S = getSym();
+      if (!QC || !QC.conjVarName) return { ok: false, reason: 'QD.QDConstraints not loaded', created: [] };
+      const prim = [...new Set((vars || []).map(_primalName))];
+      if (!prim.length) return { ok: false, reason: 'no variables selected', created: [] };
+      const sub = {};
+      for (const iv of prim) { const c = QC.conjVarName(iv); if (c !== iv) sub[c] = S.mpolyVar(iv).neg(); }
+      if (!Object.keys(sub).length) return { ok: false, reason: 'selected variable(s) have no conjugate partner', created: [] };
+      const label = 'assume imaginary: ' + prim.join(', ');
+      const res = _appendReduction((n) => ({
+        poly: n.poly.subst(sub),
+        provenance: { op: 'assume-imaginary', inputs: [n.id], vars: prim.slice() }, label,
+      }));
+      if (res.ok) imagVars = [...new Set([...imagVars, ...prim])];
+      return res;
+    }
+
+    // Identify two DISTINCT base variables in the current system: substitute drop → sign·keep
+    // (sign ∈ {+1,−1}) — and their conjugates — → a new column. The apply for a detected linear
+    // symmetry x = ±y (detectVariableRelations kind:'identify'). Returns the append result.
+    function identifyVariables(keep, drop, sign) {
+      const QC = getQC(), S = getSym();
+      sign = (sign < 0) ? -1 : 1;
+      keep = _primalName(keep); drop = _primalName(drop);
+      if (!keep || !drop || keep === drop) return { ok: false, reason: 'need two distinct variables to identify', created: [] };
+      const kv = S.mpolyVar(keep); const repl = (sign < 0) ? kv.neg() : kv;
+      const sub = {}; sub[drop] = repl;
+      if (QC && QC.conjVarName) {                                // a value identifies the conjugates too
+        const dc = QC.conjVarName(drop), kc = QC.conjVarName(keep);
+        if (dc !== drop && kc) { const kcv = S.mpolyVar(kc); sub[dc] = (sign < 0) ? kcv.neg() : kcv; }
+      }
+      const label = 'identify ' + drop + ' = ' + (sign < 0 ? '−' : '') + keep;
+      return _appendReduction((n) => ({
+        poly: n.poly.subst(sub),
+        provenance: { op: 'identify', inputs: [n.id], keep, drop, sign }, label,
+      }));
+    }
+
+    // Detect VARIABLE SYMMETRIES forced by the equations themselves (pure query, no mutation).
+    // Scans the current column (or the column of `ids`) for equality nodes that are, up to a
+    // nonzero Gaussian scalar, a two-variable linear relation α·a + β·b = 0 with a,b each a lone
+    // variable to exponent 1 (exact, no floats). Classified:
+    //   • a,b a conjugate pair (b = conjVarName(a)): α+β=0 ⇒ a − ā = 0 ⇒ a REAL;
+    //                                                 α−β=0 ⇒ a + ā = 0 ⇒ a IMAGINARY.
+    //   • a,b distinct PRIMAL base variables: α+β=0 ⇒ a = b (sign +1); α−β=0 ⇒ a = −b (sign −1)
+    //     ⇒ an IDENTIFY relation (a clean ±1 unit relation only — a general ratio is left to the
+    //     linear-propagation reducer). Returns [{ nodeId, kind:'real'|'imaginary'|'identify',
+    //     label, varName? (real/imaginary), keep?/drop?/sign? (identify) }]. Skips variables
+    //     already folded (in realVars / imagVars). De-duped. Applied via assumeReal /
+    //     assumeImaginary / identifyVariables respectively. Restricting to this certain
+    //     two-variable form means we never claim a symmetry that isn't forced.
+    function detectVariableRelations(ids) {
       const QC = getQC();
       if (!QC || !QC.conjVarName) return [];
-      const real = new Set(realVars);
+      const real = new Set(realVars), imag = new Set(imagVars);
       const src = (ids && ids.length) ? ids.map(get).filter(Boolean) : lastColumnNodes();
       const out = [], seen = new Set();
       for (const n of src) {
         if (n.rel !== '=' || n.poly.terms.size !== 2) continue;
-        // collect name → Gaussian coeff, requiring every term be a lone variable^1
         const byName = {}; let ok = true;
         for (const { mono, coeff } of n.poly.terms.values()) {
           if (mono.size !== 1) { ok = false; break; }
@@ -505,13 +566,21 @@
         if (!ok) continue;
         const names = Object.keys(byName);
         if (names.length !== 2) continue;                       // (a self-term v·v would have size 1)
-        const [a, b] = names;
-        if (QC.conjVarName(a) !== b) continue;                  // not a conjugate pair
-        if (!byName[a].add(byName[b]).isZero()) continue;       // not the v − v̄ form (skip v + v̄ → imaginary)
-        const v = _primalName(a);
-        if (real.has(v) || seen.has(v)) continue;
-        seen.add(v);
-        out.push({ nodeId: n.id, varName: v, kind: 'real', label: n.label });
+        const [a, b] = names, ca = byName[a], cb = byName[b];
+        const sum0 = ca.add(cb).isZero(), diff0 = ca.sub(cb).isZero();
+        if (QC.conjVarName(a) === b) {                          // conjugate pair: reality / imaginary
+          const v = _primalName(a);
+          if (sum0) { if (real.has(v) || seen.has('r:' + v)) continue; seen.add('r:' + v); out.push({ nodeId: n.id, kind: 'real', varName: v, label: n.label }); }
+          else if (diff0) { if (imag.has(v) || seen.has('i:' + v)) continue; seen.add('i:' + v); out.push({ nodeId: n.id, kind: 'imaginary', varName: v, label: n.label }); }
+        } else if (!_BARRED_RE.test(a) && !_BARRED_RE.test(b)) { // two distinct primal vars: a = ±b
+          let sign = null;
+          if (sum0) sign = 1;                                   // a − b = 0 ⇒ a = b
+          else if (diff0) sign = -1;                            // a + b = 0 ⇒ a = −b
+          if (sign === null) continue;
+          const keep = (a < b) ? a : b, drop = (a < b) ? b : a;
+          const key = 'id:' + keep + '=' + drop; if (seen.has(key)) continue; seen.add(key);
+          out.push({ nodeId: n.id, kind: 'identify', keep, drop, sign, label: n.label });
+        }
       }
       return out;
     }
@@ -1057,7 +1126,7 @@
       if (!QC || !QC.conjMPoly) return { ok: false, reason: 'QD.QDConstraints not loaded' };
       const conj = (opts.incorporateReality === false)
         ? _applyW0(QC.conjMPoly(node.poly))
-        : _applyReality(_applyW0(QC.conjMPoly(node.poly)));
+        : _applyAssumed(QC.conjMPoly(node.poly));
       if (node.poly.sub(conj).isZero() || node.poly.add(conj).isZero())
         return { ok: false, reason: 'this equation is self-conjugate — its conjugate is the same equation' };
       for (const m of nodes.values()) if (m.column === node.column && m.poly.equals(conj))
@@ -1071,6 +1140,49 @@
       order.set(comp.id, ordOf(node.id) + 0.5);   // pair the conjugate right under its primal
       normalizeColumn(node.column);
       return { ok: true, node: comp };
+    }
+
+    // Propagate a node (typically a univalence CONSTRAINT added at column 0) forward into the
+    // CURRENT system (the last column), with all the workspace's pointwise ASSUMPTIONS applied to
+    // it: reality (v̄≡v), imaginary (v̄≡−v), fixed φ(0), and every variable an earlier reduction
+    // PINNED to a constant (substitute / linear-reduce / fix-w0 — recovered via knownValues, plus
+    // each one's conjugate). This is the cumulative composition of the assumption columns — it does
+    // NOT replay the system-level ELIMINATIONS (Gröbner / resultant / triangular), which aren't
+    // pointwise maps; the constraint simply rides forward folded by the assumptions, ready to be
+    // combined with the reduced system. Emits ONE node in the last column (provenance op:'propagate',
+    // linked to the source) — undoable. Returns { ok, node, column, applied[] } or { ok:false }.
+    function propagateNode(id) {
+      const S = getSym(), QC = getQC();
+      const node = get(id);
+      if (!node) return { ok: false, reason: 'node not found' };
+      const last = maxColumn();
+      if (node.column === last) return { ok: false, reason: 'this equation is already in the current system (the last column)' };
+      let poly = _applyAssumed(node.poly);            // reality + imaginary + fixed φ(0)
+      const kv = knownValues();                        // pinned constants (substitute / linear-reduce / w0)
+      const sub = {};
+      for (const name in kv) {
+        if (!Object.prototype.hasOwnProperty.call(kv, name)) continue;
+        let g; try { ({ g } = _ratGauss(kv[name])); } catch (e) { continue; }
+        sub[name] = S.mpolyConst(g);
+        if (QC && QC.conjVarName) { const c = QC.conjVarName(name); if (c !== name) sub[c] = S.mpolyConst(g.conj()); }
+      }
+      if (Object.keys(sub).length) poly = poly.subst(sub);
+      if (poly.isZero()) return { ok: false, reason: 'the constraint reduces to 0 under the current assumptions (already satisfied)' };
+      const applied = [];
+      if (realVars.length) applied.push('reality');
+      if (imagVars.length) applied.push('imaginary');
+      if (w0Fixed) applied.push('φ(0)');
+      if (Object.keys(kv).filter((k) => k !== 'w0').length) applied.push('pinned values');
+      checkpoint();
+      const napp = addNode({
+        id: nid(), kind: node.kind, poly, rel: node.rel,
+        label: node.label + ' (propagated)', model,
+        provenance: { op: 'propagate', inputs: [node.id], from: node.column, applied: applied.slice() },
+        column: last, meta: node.meta,
+      });
+      edges.push({ from: node.id, to: napp.id });
+      normalizeColumn(last);
+      return { ok: true, node: napp, column: last, applied };
     }
 
     // Delete a node and all of its descendants (derived from it), with their edges.
@@ -1327,7 +1439,7 @@
     return {
       seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
-      substituteValue, substituteValues, reducePropagate, assumeReal, detectRealityConstraints, generateConjugate, fixW0, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
+      substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, detectVariableRelations, generateConjugate, propagateNode, fixW0, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
       currentReimSystem, classify, classifyAsync, resolventOf, reimVariables, solveReal, solveRealAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
