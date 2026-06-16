@@ -105,6 +105,25 @@
       return h.kind + ':' + h.varName;
     }
     function _detectRels() { try { return store.detectVariableRelations ? (store.detectVariableRelations() || []) : []; } catch (e) { return []; } }
+    // Compact prefix for a substitution ratio Gaussian c: '' for 1, '−' for −1, else '(c)·'.
+    function fmtRatio(g) {
+      try {
+        const re = g.re.toNumber(), im = g.im.toNumber();
+        if (im === 0 && re === 1) return '';
+        if (im === 0 && re === -1) return '−';
+        return '(' + exactValueStr(re, im) + ')·';
+      } catch (e) { return '(c)·'; }
+    }
+    // Ratio prefix from a serialized {re:[n,d],im:[n,d]} provenance record (falls back to a ±1
+    // `sign` for pre-ratio snapshots). '' for 1, '−' for −1, else '(c)·'.
+    function ratioStrRec(rec, sign) {
+      if (!rec) return (sign != null && sign < 0) ? '−' : '';
+      const f = (p) => (p ? Number(p[0]) / Number(p[1]) : 0);
+      const re = f(rec.re), im = f(rec.im);
+      if (im === 0 && re === 1) return '';
+      if (im === 0 && re === -1) return '−';
+      return '(' + exactValueStr(re, im) + ')·';
+    }
     function renderSuggestions() {
       const box = $('#alg-suggest'); if (!box) return;
       const hits = _detectRels().filter((h) => !_dismissedRel.has(_relKey(h)));
@@ -130,10 +149,18 @@
           btnText = 'Identify ' + latexPlain(h.drop) + ' = ' + rhs;
           btnTip = 'Substitute ' + latexPlain(h.drop) + ' = ' + rhs + ' (and its conjugate) in a new column';
           apply = () => store.identifyVariables(h.keep, h.drop, h.sign);
-        } else if (h.kind === 'linear') {                         // FLAG only (no auto-apply)
-          msg.textContent = '“' + h.label + '” is a linear relation between ' + latexPlain(h.vars[0]) + ' and ' + latexPlain(h.vars[1]) + ' (non-unit ratio) — eliminate it with Reduce ▸ propagate.';
-        } else {                                                  // conjugate-pair — FLAG only (no auto-apply)
-          msg.textContent = '“' + h.label + '” links ' + latexPlain(h.var) + ' to the conjugate of ' + latexPlain(h.other) + ' — a conjugate-pole-pair symmetry; pair the variables by hand (per-variable reality is not valid here).';
+        } else if (h.kind === 'linear') {                         // general ratio drop = c·keep
+          const rhs = fmtRatio(h.ratio) + latexPlain(h.vars[0]);
+          msg.textContent = '“' + h.label + '” is a linear relation: ' + latexPlain(h.vars[1]) + ' = ' + rhs + '.';
+          btnText = 'Identify ' + latexPlain(h.vars[1]) + ' = ' + rhs;
+          btnTip = 'Substitute ' + latexPlain(h.vars[1]) + ' = ' + rhs + ' (and its conjugate) in a new column';
+          apply = () => store.identifyVariables(h.vars[0], h.vars[1], h.ratio);
+        } else {                                                  // conjugate-pair: var = c·conj(other)
+          const rhs = fmtRatio(h.ratio) + 'conj(' + latexPlain(h.other) + ')';
+          msg.textContent = '“' + h.label + '” links ' + latexPlain(h.var) + ' to the conjugate of ' + latexPlain(h.other) + ' (conjugate-pole-pair symmetry).';
+          btnText = 'Identify ' + latexPlain(h.var) + ' = ' + rhs;
+          btnTip = 'Substitute ' + latexPlain(h.var) + ' = ' + rhs + ' in a new column (pairs the conjugate poles)';
+          apply = () => store.applyConjugatePair(h.var, h.other, h.ratio);
         }
         row.appendChild(msg);
         if (apply) {                                              // applicable kinds (real / imaginary / identify) get a button
@@ -531,7 +558,8 @@
         '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
         '        <button id="alg-gauge-elim" class="small" type="button" data-str-title="tooltips.gaugeElim">Eliminate with gauge (all)</button>' +
         '        <button id="alg-groebner" class="small heavy-op" type="button" data-str-title="tooltips.groebner">Gröbner basis (all eqns)</button>' +
-        '        <button id="alg-triangular" class="small" type="button" title="Triangular decomposition (Wu pseudo-elimination) of the current system — an alternative to Gröbner that exhibits the solution structure (free variables, no-solution)">Triangular decomp.</button></div>' +
+        '        <button id="alg-triangular" class="small" type="button" title="Triangular decomposition (Wu pseudo-elimination) of the current system — an alternative to Gröbner that exhibits the solution structure (free variables, no-solution)">Triangular decomp.</button>' +
+        '        <button id="alg-propagate-all" class="small" type="button" title="Carry EVERY univalence constraint into the current system in one step, with all assumptions (reality, imaginary, fixed φ(0), pinned values) applied to each">Propagate constraints → current</button></div>' +
         '      <details class="algebra-advanced"><summary>Advanced</summary>' +
         '        <div class="algebra-line"><span class="algebra-line-label" title="Monomial order. lex = elimination order; grevlex = fastest general.">order</span>' +
         '          <select id="alg-gb-order"><option value="grevlex">grevlex</option><option value="grlex">grlex</option><option value="lex">lex</option></select></div>' +
@@ -609,6 +637,7 @@
       $('#alg-groebner').addEventListener('click', () => doGroebner(null));
       $('#alg-autosolve').addEventListener('click', doAutoSolve);
       $('#alg-triangular').addEventListener('click', doTriangular);
+      $('#alg-propagate-all').addEventListener('click', doPropagateAll);
       $('#alg-classify').addEventListener('click', doClassify);
       $('#alg-dimension').addEventListener('click', doDimension);
       $('#alg-solve').addEventListener('click', doSolve);
@@ -879,7 +908,7 @@
     let _abort = null;
     function setBusy(on, label) {
       ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-classify', 'alg-univalence', 'alg-resolvent', 'alg-autosolve',
-        'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-real-detect', 'alg-val-apply']
+        'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-real-detect', 'alg-propagate-all', 'alg-val-apply']
         .forEach((id) => { const b = $('#' + id); if (b) b.disabled = on; });
       const pal = $('#alg-palette'); if (pal) pal.querySelectorAll('button').forEach((b) => { b.disabled = on; });
       const cancel = $('#alg-cancel'); if (cancel) cancel.classList.toggle('hidden', !on);
@@ -946,6 +975,16 @@
       if (r.contradiction) { toast('Triangular decomposition: system is INCONSISTENT — no solution.'); return; }
       toast('Triangular decomposition: ' + r.created.length + ' element(s)' +
         (r.freeVars.length ? '; free variable(s) ' + r.freeVars.map(latexPlain).join(', ') + ' ⇒ a positive-dimensional family' : ' ⇒ zero-dimensional (finitely many solutions)'));
+    }
+    // Carry every univalence constraint into the current system, assumptions applied (batch).
+    function doPropagateAll() {
+      if (busyGuard()) return;
+      if (!store.size) { toast('Nothing to propagate — seed a system first.', { kind: 'error' }); return; }
+      const r = store.propagateAllConstraints();
+      if (!r.ok) { toast(r.reason || 'nothing to propagate', { kind: 'error' }); return; }
+      if (canvas) canvas.clearSelection();
+      rerender(); refreshPickers();
+      toast('Propagated ' + r.count + ' constraint' + (r.count === 1 ? '' : 's') + ' → column ' + r.column);
     }
 
     // Semi-autonomous "Auto-reduce & solve": chain the reductions (auto-reality →
@@ -1481,7 +1520,8 @@
         case 'linear-reduce': return 'linear propagation (eliminated ' + (prov.eliminated || []).map(latexPlain).join(', ') + ')';
         case 'assume-real': return 'assumed ' + (prov.vars || []).map(latexPlain).join(', ') + ' real';
         case 'assume-imaginary': return 'assumed ' + (prov.vars || []).map(latexPlain).join(', ') + ' imaginary';
-        case 'identify': return 'identified ' + latexPlain(prov.drop) + ' = ' + (prov.sign < 0 ? '−' : '') + latexPlain(prov.keep);
+        case 'identify': return 'identified ' + latexPlain(prov.drop) + ' = ' + ratioStrRec(prov.ratio, prov.sign) + latexPlain(prov.keep);
+        case 'identify-conj': return 'identified ' + latexPlain(prov.var) + ' = ' + ratioStrRec(prov.ratio) + 'conj(' + latexPlain(prov.other) + ')';
         case 'fix-w0': return 'fixed φ(0) = ' + valStr(prov.value);
         case 'triangular': return prov.contradiction ? 'triangular decomposition (inconsistent)' : 'triangular decomposition (Wu) of ' + (prov.inputs || []).join(', ');
         case 'factor': return prov.carried ? 'carried through a factor split' : 'factor: case ' + ((prov.caseIndex || 0) + 1) + ' of ' + (prov.caseCount || '?') + ' (V(p)=⋃V(fᵢ))';
@@ -1501,7 +1541,8 @@
         case 'linear-reduce': return '↳ propagate · eliminate ' + (p.eliminated || []).map(latexPlain).join(', ');
         case 'assume-real': return '↳ assume real · ' + (p.vars || []).map(latexPlain).join(', ');
         case 'assume-imaginary': return '↳ assume imaginary · ' + (p.vars || []).map(latexPlain).join(', ');
-        case 'identify': return '↳ identify ' + latexPlain(p.drop) + ' = ' + (p.sign < 0 ? '−' : '') + latexPlain(p.keep);
+        case 'identify': return '↳ identify ' + latexPlain(p.drop) + ' = ' + ratioStrRec(p.ratio, p.sign) + latexPlain(p.keep);
+        case 'identify-conj': return '↳ identify ' + latexPlain(p.var) + ' = ' + ratioStrRec(p.ratio) + 'conj(' + latexPlain(p.other) + ')';
         case 'fix-w0': return '↳ fix φ(0) = ' + valStr(p.value);
         case 'resultant': return '↳ eliminate ' + latexPlain(p.variable);
         case 'groebner': return '↳ Gröbner · ' + (p.eliminate && p.eliminate.length ? 'elim ' + p.eliminate.map(latexPlain).join(',') : (p.order || 'grevlex'));

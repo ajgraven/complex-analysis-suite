@@ -749,6 +749,73 @@ module.exports = async function run() {
     ok('propagate: the propagation is a single undo step', st2.size === before - 1);
   }
 
+  // ---- propagateAllConstraints: batch every constraint into the current system ----
+  {
+    // no reduction column yet ⇒ nothing to propagate THROUGH
+    const st0 = QD.AlgebraStore.create(); st0.seedFromSystem(system); st0.addConstraint('localUniv', hData);
+    ok('propagate-all: no reduction column ⇒ ok:false', !st0.propagateAllConstraints().ok);
+    // realistic order: REDUCE first (a reduction re-emits the current column), THEN add a
+    // constraint — it lands at column 0, STRANDED behind the reduction, so it must be propagated.
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system);
+    st.assumeReal(st.baseVariables());                           // column 1 (the current system; no constraints)
+    const made = st.addConstraint('localUniv', hData);           // constraint node(s) at column 0 (stranded)
+    ok('propagate-all: addConstraint seeded ≥1 constraint at column 0', made.length >= 1 &&
+       st.list().some((n) => n.kind === 'constraint' && n.column === 0));
+    const before = st.size, last = st.maxColumn();
+    const r = st.propagateAllConstraints();
+    ok('propagate-all: lands the stranded constraint(s) in the current column with op:propagate',
+       r.ok && r.column === last && r.count >= 1 &&
+       st.list().filter((n) => n.column === last && n.provenance.op === 'propagate').length === r.count);
+    st.undo();
+    ok('propagate-all: the whole batch is one undo step', st.size === before);
+  }
+
+  // ---- identifyVariables with a general (non-unit) Gaussian ratio ----
+  {
+    const S = QD.Sym, z1 = S.mpolyVar('z1'), z2 = S.mpolyVar('z2'), zb2 = S.mpolyVar('zb2'), zb1 = S.mpolyVar('zb1');
+    // System carrying z₂ (and z̄₂) in a SEPARATE equation so the substitution is observable.
+    const sys = { model: 'conjugate', w0Fixed: null, blocks: { locator: [{ eq: z2.add(zb2).sub(S.mpolyInt(1)), label: 'z₂+z̄₂−1' }], star: [], gauge: [] } };
+    const st = QD.AlgebraStore.create(); st.seedFromSystem(sys, { withConjugates: false });
+    const ratio = { re: ['2', '3'], im: ['0', '1'] };            // z₂ = (2/3)·z₁
+    const r = st.identifyVariables('z1', 'z2', ratio);
+    const node = st.list().find((n) => n.column === 1 && n.rel === '=');
+    const twoThird = S.mpolyConst(S.gauss(S.rat(2n, 3n), S.rat(0n, 1n)));
+    ok('identify-ratio: z₂→(2/3)z₁ and z̄₂→(2/3)z̄₁ (no z₂/z̄₂ left)',
+       r.ok && node && !node.poly.vars().has('z2') && !node.poly.vars().has('zb2') &&
+       node.poly.equals(z1.mul(twoThird).add(zb1.mul(twoThird)).sub(S.mpolyInt(1))));
+    // back-compat: the ±1 sign contract still works
+    const st2 = QD.AlgebraStore.create(); st2.seedFromSystem({ model: 'conjugate', w0Fixed: null, blocks: { locator: [{ eq: z2.add(zb2) }], star: [], gauge: [] } }, { withConjugates: false });
+    ok('identify-ratio: the ±1 sign contract is preserved (identifyVariables(.,.,1))',
+       st2.identifyVariables('z1', 'z2', 1).ok);
+    // the detector supplies a ratio whose apply reproduces the substitution
+    const st3 = QD.AlgebraStore.create();
+    st3.seedFromSystem({ model: 'conjugate', w0Fixed: null, blocks: { locator: [{ eq: S.mpolyInt(2).mul(z1).sub(S.mpolyInt(3).mul(z2)), label: '2z₁−3z₂' }, { eq: z2.sub(S.mpolyInt(5)) }], star: [], gauge: [] } }, { withConjugates: false });
+    const lh = st3.detectVariableRelations().find((h) => h.kind === 'linear');
+    const ra = st3.identifyVariables(lh.vars[0], lh.vars[1], lh.ratio);   // drop z2 = (2/3) z1
+    ok('identify-ratio: detector ratio applied drops z₂ (z₂=5 ⇒ (2/3)z₁−5)', ra.ok &&
+       !st3.list().some((n) => n.column === ra.column && n.poly.vars().has('z2')));
+  }
+
+  // ---- applyConjugatePair: var = ratio·conj(other) ----
+  {
+    const S = QD.Sym, z2 = S.mpolyVar('z2'), zb2 = S.mpolyVar('zb2'), z1 = S.mpolyVar('z1'), zb1 = S.mpolyVar('zb1');
+    const sys = { model: 'conjugate', w0Fixed: null, blocks: { locator: [{ eq: z2.add(zb2).sub(S.mpolyInt(1)), label: 'z₂+z̄₂−1' }], star: [], gauge: [] } };
+    const st = QD.AlgebraStore.create(); st.seedFromSystem(sys, { withConjugates: false });
+    const r = st.applyConjugatePair('z2', 'z1', 1);              // z₂ = z̄₁ ⇒ z₂→z̄₁, z̄₂→z₁
+    const node = st.list().find((n) => n.column === 1 && n.rel === '=');
+    ok('conj-pair apply: z₂→z̄₁ and z̄₂→z₁ (z̄₁+z₁−1, no z₂/z̄₂)',
+       r.ok && node && !node.poly.vars().has('z2') && !node.poly.vars().has('zb2') &&
+       node.poly.equals(zb1.add(z1).sub(S.mpolyInt(1))));
+    // detector ratio for a conjugate-pair relation reproduces the pairing
+    const st2 = QD.AlgebraStore.create();
+    st2.seedFromSystem({ model: 'conjugate', w0Fixed: null, blocks: { locator: [{ eq: z2.sub(zb1), label: 'z₂−z̄₁' }, { eq: z2.add(zb2) }], star: [], gauge: [] } }, { withConjugates: false });
+    const ch = st2.detectVariableRelations().find((h) => h.kind === 'conjugate-pair');
+    const ra = st2.applyConjugatePair(ch.var, ch.other, ch.ratio);
+    ok('conj-pair apply: detector ratio drops z₂ via the conjugate pairing', ra.ok &&
+       !st2.list().some((n) => n.column === ra.column && n.poly.vars().has('z2')));
+  }
+
   // ---- per-equation Generate conjugate (generateConjugate) ----
   {
     const QC = QD.QDConstraints;

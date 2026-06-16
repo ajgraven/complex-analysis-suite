@@ -514,24 +514,71 @@
       return res;
     }
 
-    // Identify two DISTINCT base variables in the current system: substitute drop → sign·keep
-    // (sign ∈ {+1,−1}) — and their conjugates — → a new column. The apply for a detected linear
-    // symmetry x = ±y (detectVariableRelations kind:'identify'). Returns the append result.
-    function identifyVariables(keep, drop, sign) {
+    // --- Gaussian ↔ serializable record (for substitution ratios in provenance) ---
+    function _gaussRecord(g) {
+      return { re: [g.re.n.toString(), g.re.d.toString()], im: [g.im.n.toString(), g.im.d.toString()] };
+    }
+    function _gaussFromRecord(rec) {
+      const S = getSym();
+      return S.gauss(S.rat(BigInt(rec.re[0]), BigInt(rec.re[1])), S.rat(BigInt(rec.im[0]), BigInt(rec.im[1])));
+    }
+    // Coerce a ratio argument to a Gaussian. Accepts a NUMBER ±1 (a sign — the shipped
+    // identifyVariables contract), a serializable record { re:[n,d], im:[n,d] }, or a Gaussian.
+    function _toGauss(ratio) {
+      const S = getSym();
+      if (ratio == null) return S.gaussInt(1);
+      if (typeof ratio === 'number') return S.gaussInt(ratio < 0 ? -1 : 1);
+      if (Array.isArray(ratio.re)) return _gaussFromRecord(ratio);
+      return ratio;                                              // assume a Gaussian
+    }
+    // Compact label fragment for a ratio c: '' for 1, '−' for −1, else '(c)·'.
+    function _ratioLabel(g) {
+      const re = g.re.toNumber(), im = g.im.toNumber();
+      if (im === 0 && re === 1) return '';
+      if (im === 0 && re === -1) return '−';
+      return '(' + _valShort({ re, im }) + ')·';
+    }
+
+    // Identify two DISTINCT base variables in the current system: substitute drop → ratio·keep —
+    // and the conjugate drop̄ → c̄onj(ratio)·keep̄ — → a new column. `ratio` is a Gaussian / record /
+    // a ±1 number (the shipped sign contract; +1 ⇒ drop=keep, −1 ⇒ drop=−keep). The apply for a
+    // detected IDENTIFY (unit ratio) or LINEAR (general ratio drop = c·keep) symmetry. Returns the
+    // append result.
+    function identifyVariables(keep, drop, ratio) {
       const QC = getQC(), S = getSym();
-      sign = (sign < 0) ? -1 : 1;
       keep = _primalName(keep); drop = _primalName(drop);
       if (!keep || !drop || keep === drop) return { ok: false, reason: 'need two distinct variables to identify', created: [] };
-      const kv = S.mpolyVar(keep); const repl = (sign < 0) ? kv.neg() : kv;
-      const sub = {}; sub[drop] = repl;
+      const g = _toGauss(ratio), rec = _gaussRecord(g);
+      const sub = {}; sub[drop] = S.mpolyVar(keep).mul(S.mpolyConst(g));
       if (QC && QC.conjVarName) {                                // a value identifies the conjugates too
         const dc = QC.conjVarName(drop), kc = QC.conjVarName(keep);
-        if (dc !== drop && kc) { const kcv = S.mpolyVar(kc); sub[dc] = (sign < 0) ? kcv.neg() : kcv; }
+        if (dc !== drop && kc) sub[dc] = S.mpolyVar(kc).mul(S.mpolyConst(g.conj()));
       }
-      const label = 'identify ' + drop + ' = ' + (sign < 0 ? '−' : '') + keep;
+      const label = 'identify ' + drop + ' = ' + _ratioLabel(g) + keep;
       return _appendReduction((n) => ({
         poly: n.poly.subst(sub),
-        provenance: { op: 'identify', inputs: [n.id], keep, drop, sign }, label,
+        provenance: { op: 'identify', inputs: [n.id], keep, drop, ratio: rec }, label,
+      }));
+    }
+
+    // Apply a CONJUGATE-POLE-PAIR symmetry varName = ratio·conj(other) (e.g. z₂ = ±z̄₁): substitute
+    // varName → ratio·conjVarName(other) and conj(varName) → c̄onj(ratio)·other → a new column. The
+    // apply for a detected kind:'conjugate-pair'. `ratio` is a Gaussian / record / ±1 number.
+    function applyConjugatePair(varName, otherName, ratio) {
+      const QC = getQC(), S = getSym();
+      if (!QC || !QC.conjVarName) return { ok: false, reason: 'QD.QDConstraints not loaded', created: [] };
+      const v = _primalName(varName), other = _primalName(otherName);
+      if (!v || !other || v === other) return { ok: false, reason: 'need two distinct variables', created: [] };
+      const vc = QC.conjVarName(v), oc = QC.conjVarName(other);
+      if (vc === v || oc === other) return { ok: false, reason: 'variables have no conjugate partner', created: [] };
+      const g = _toGauss(ratio), rec = _gaussRecord(g);
+      const sub = {};
+      sub[v] = S.mpolyVar(oc).mul(S.mpolyConst(g));               // v = ratio·conj(other)
+      sub[vc] = S.mpolyVar(other).mul(S.mpolyConst(g.conj()));    // v̄ = conj(ratio)·other
+      const label = 'identify ' + v + ' = ' + _ratioLabel(g) + 'conj(' + other + ')';
+      return _appendReduction((n) => ({
+        poly: n.poly.subst(sub),
+        provenance: { op: 'identify-conj', inputs: [n.id], var: v, other, ratio: rec }, label,
       }));
     }
 
@@ -552,8 +599,9 @@
     //     var?,other?,sign? }]. Skips variables already folded (realVars / imagVars). De-duped.
     //     Restricting to these certain forms means we never claim a symmetry that isn't forced.
     function detectVariableRelations(ids) {
-      const QC = getQC();
+      const QC = getQC(), S = getSym();
       if (!QC || !QC.conjVarName) return [];
+      const negOne = S.gaussInt(-1);
       const real = new Set(realVars), imag = new Set(imagVars);
       const src = (ids && ids.length) ? ids.map(get).filter(Boolean) : lastColumnNodes();
       const out = [], seen = new Set();
@@ -587,15 +635,21 @@
             const sign = sum0 ? 1 : -1;
             const key = 'id:' + keep + '=' + drop; if (seen.has(key)) continue; seen.add(key);
             out.push({ nodeId: n.id, kind: 'identify', keep, drop, sign, label: n.label });
-          } else {                                              // general non-unit linear relation a = c·b ⇒ FLAG only
+          } else {                                              // general non-unit linear relation drop = ratio·keep
             const key = 'lin:' + keep + ',' + drop; if (seen.has(key)) continue; seen.add(key);
-            out.push({ nodeId: n.id, kind: 'linear', vars: [keep, drop], label: n.label });
+            // drop = −(c_keep / c_drop)·keep (conjugated when the relation is in barred names)
+            const cKeep = (pa === keep) ? ca : cb, cDrop = (pa === drop) ? ca : cb;
+            let ratio = negOne.mul(cKeep).div(cDrop); if (aB) ratio = ratio.conj();
+            out.push({ nodeId: n.id, kind: 'linear', vars: [keep, drop], ratio, label: n.label });
           }
         } else {                                                // opposite barred-ness, DIFFERENT index ⇒ conjugate-pole-pair
-          const v = aB ? pb : pa, other = aB ? pa : pb;         // v = c·conj(other) (e.g. z₂ = ±z̄₁) — FLAG only
+          const v = aB ? pb : pa, other = aB ? pa : pb;         // v = ratio·conj(other) (e.g. z₂ = ±z̄₁)
           const lo = (v < other) ? v : other, hi = (v < other) ? other : v;
           const key = 'cp:' + lo + ',' + hi; if (seen.has(key)) continue; seen.add(key);
-          out.push({ nodeId: n.id, kind: 'conjugate-pair', var: v, other, sign: sum0 ? 1 : (diff0 ? -1 : 0), label: n.label });
+          // v = −(c_w / c_u)·conj(other), where u is the unbarred name (coeff c_u) and w the barred (c_w)
+          const cU = aB ? cb : ca, cW = aB ? ca : cb;
+          const ratio = negOne.mul(cW).div(cU);
+          out.push({ nodeId: n.id, kind: 'conjugate-pair', var: v, other, ratio, sign: sum0 ? 1 : (diff0 ? -1 : 0), label: n.label });
         }
       }
       return out;
@@ -1167,12 +1221,12 @@
     // pointwise maps; the constraint simply rides forward folded by the assumptions, ready to be
     // combined with the reduced system. Emits ONE node in the last column (provenance op:'propagate',
     // linked to the source) — undoable. Returns { ok, node, column, applied[] } or { ok:false }.
-    function propagateNode(id) {
+    // The cumulative pointwise-assumption fold of a node's polynomial (reality / imaginary /
+    // fixed φ(0) via _applyAssumed, then every variable an earlier reduction pinned to a CONSTANT
+    // via knownValues + each conjugate). Shared by propagateNode + propagateAllConstraints.
+    // Returns { poly, applied } (applied = the human-readable list of assumption kinds folded in).
+    function _propagatePoly(node) {
       const S = getSym(), QC = getQC();
-      const node = get(id);
-      if (!node) return { ok: false, reason: 'node not found' };
-      const last = maxColumn();
-      if (node.column === last) return { ok: false, reason: 'this equation is already in the current system (the last column)' };
       let poly = _applyAssumed(node.poly);            // reality + imaginary + fixed φ(0)
       const kv = knownValues();                        // pinned constants (substitute / linear-reduce / w0)
       const sub = {};
@@ -1183,12 +1237,20 @@
         if (QC && QC.conjVarName) { const c = QC.conjVarName(name); if (c !== name) sub[c] = S.mpolyConst(g.conj()); }
       }
       if (Object.keys(sub).length) poly = poly.subst(sub);
-      if (poly.isZero()) return { ok: false, reason: 'the constraint reduces to 0 under the current assumptions (already satisfied)' };
       const applied = [];
       if (realVars.length) applied.push('reality');
       if (imagVars.length) applied.push('imaginary');
       if (w0Fixed) applied.push('φ(0)');
       if (Object.keys(kv).filter((k) => k !== 'w0').length) applied.push('pinned values');
+      return { poly, applied };
+    }
+    function propagateNode(id) {
+      const node = get(id);
+      if (!node) return { ok: false, reason: 'node not found' };
+      const last = maxColumn();
+      if (node.column === last) return { ok: false, reason: 'this equation is already in the current system (the last column)' };
+      const { poly, applied } = _propagatePoly(node);
+      if (poly.isZero()) return { ok: false, reason: 'the constraint reduces to 0 under the current assumptions (already satisfied)' };
       checkpoint();
       const napp = addNode({
         id: nid(), kind: node.kind, poly, rel: node.rel,
@@ -1199,6 +1261,42 @@
       edges.push({ from: node.id, to: napp.id });
       normalizeColumn(last);
       return { ok: true, node: napp, column: last, applied };
+    }
+
+    // Batch form of propagateNode: carry EVERY univalence-constraint node (kind:'constraint',
+    // including conjugate companions) into the current system in ONE undoable step, each folded by
+    // _propagatePoly. Skips constraints already in the last column, drops zero results, and de-dups
+    // on (poly, rel) against the existing last column AND within the batch. Returns { ok, created,
+    // column, count } or { ok:false, reason }.
+    function propagateAllConstraints() {
+      const last = maxColumn();
+      if (last === 0) return { ok: false, reason: 'no reduction columns to propagate through (constraints are already in the current system)', created: [] };
+      const constraints = list().filter((n) => n.kind === 'constraint' && n.column < last);
+      if (!constraints.length) return { ok: false, reason: 'no constraints to propagate (add a univalence constraint first)', created: [] };
+      const lastNodes = colNodes(last);
+      const built = [], seen = [];
+      for (const c of constraints) {
+        let res; try { res = _propagatePoly(c); } catch (e) { continue; }
+        const poly = res.poly; if (!poly || poly.isZero()) continue;
+        if (lastNodes.some((m) => m.rel === c.rel && m.poly.equals(poly))) continue;   // already present
+        if (seen.some((s) => s.rel === c.rel && s.poly.equals(poly))) continue;        // dup within the batch
+        seen.push({ poly, rel: c.rel });
+        built.push({ src: c, poly, applied: res.applied });
+      }
+      if (!built.length) return { ok: false, reason: 'every constraint is already present in the current system (or folds to 0)', created: [] };
+      checkpoint();
+      const created = [];
+      for (const { src, poly, applied } of built) {
+        const node = addNode({
+          id: nid(), kind: src.kind, poly, rel: src.rel, label: src.label + ' (propagated)', model,
+          provenance: { op: 'propagate', inputs: [src.id], from: src.column, applied: applied.slice() },
+          column: last, meta: src.meta,
+        });
+        edges.push({ from: src.id, to: node.id });
+        created.push(node);
+      }
+      normalizeColumn(last);
+      return { ok: true, created, column: last, count: created.length };
     }
 
     // Delete a node and all of its descendants (derived from it), with their edges.
@@ -1455,7 +1553,7 @@
     return {
       seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
-      substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, detectVariableRelations, generateConjugate, propagateNode, fixW0, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
+      substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
       currentReimSystem, classify, classifyAsync, resolventOf, reimVariables, solveReal, solveRealAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
