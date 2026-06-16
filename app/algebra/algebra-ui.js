@@ -1195,19 +1195,24 @@
       if (typeof QD.isBoundaryUnivalent !== 'function') { showError('Univalence: the numeric univalence machinery (solver.js) is not loaded.'); return; }
       if (!ensureSeed()) return;
       clearError();
+      const ctrl = _newAbort(); _abort = ctrl;
       setBusy(true, 'Certifying univalence (genuine QDs)…');
-      setTimeout(() => {
-        const params = hDataParamValues();
-        // 1) REGIME (dimension + consistency), exact via the Hermite form — cheap front-matter.
-        let cl; try { cl = store.classify(null, { paramValues: params }); }
-        catch (e) { cl = { ok: false, reason: (e && e.message) || String(e) }; }
-        if (!cl.ok) { setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + withGuidance(cl.reason || 'classify failed')); return; }
-        const finalVerdict = (text, bad) => { setBusy(false); setStatus(text); if (canvas) canvas.setVerdict({ text: text }); toast(text, bad ? { kind: 'error' } : {}); };
+      const params = hDataParamValues();
+      const finalVerdict = (text, bad) => { _abort = null; setBusy(false); setStatus(text); if (canvas) canvas.setVerdict({ text: text }); toast(text, bad ? { kind: 'error' } : {}); };
+      // 1) REGIME (dimension + consistency): the heavy reim Gröbner + Hermite real-count run in the
+      // WORKER (classifyAsync) so the UI stays responsive and the op is cancellable; the per-solution
+      // univalence certificate (below) is cheap and stays on the main thread.
+      store.classifyAsync(null, { paramValues: params }, {
+        signal: ctrl && ctrl.signal,
+        onProgress: (info) => setStatus('Certifying univalence… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
+      }).then((cl) => {
+        if (cl.aborted) { _abort = null; setBusy(false); setStatus(''); toast('Cancelled'); return; }
+        if (!cl.ok) { _abort = null; setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + withGuidance(cl.reason || 'classify failed')); return; }
         if (cl.inconsistent) { finalVerdict('No quadrature domain: the system is inconsistent (1 ∈ I).', true); return; }
         if (!cl.zeroDim) {
           // Positive-dimensional ⇒ underdetermined. Detect FACTORABLE causes (a locator/gauge
           // equation that splits the variety) and offer one-click pin/split actions (#2).
-          setBusy(false); setStatus('');
+          _abort = null; setBusy(false); setStatus('');
           const text = 'Underdetermined: a positive-dimensional family (' + cl.numVars + ' real variables). Fix the rotation gauge (φ′(0) real-positive) or pin a forced variable — see the suggestions below, or use “Set values”.';
           const actions = []; const seen = {};
           let hits = []; try { hits = store.spuriousFactors(null, { paramValues: hDataParamValues() }) || []; } catch (e) { hits = []; }
@@ -1228,10 +1233,15 @@
           setStatus(text); toast('Positive-dimensional — fix the gauge / pin a forced variable.', { kind: 'error' });
           return;
         }
-        // 2) ZERO-DIMENSIONAL: solve for the real solutions (= the algebraic quadrature domains).
-        let r; try { r = store.solveReal(null, { paramValues: params }); }
-        catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
-        setBusy(false); setStatus('');
+        // 2) ZERO-DIMENSIONAL: solve for the real solutions (= the algebraic quadrature domains),
+        // again in the WORKER (solveRealAsync). The per-solution univalence work below stays on the
+        // main thread (it operates on concrete substituted candidates — cheap).
+        store.solveRealAsync(null, { paramValues: params }, {
+          signal: ctrl && ctrl.signal,
+          onProgress: (info) => setStatus('Solving the real system… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
+        }).then((r) => {
+        _abort = null; setBusy(false); setStatus('');
+        if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Univalence: ' + withGuidance(r.reason || 'solve failed')); return; }
         const real = (r.solutions || []).filter((s) => Object.keys(s).every((k) => Math.abs(s[k].im) < 1e-4));
         if (!real.length) { const v = 'No real quadrature domain' + (cl.complexCount != null ? ' (of ' + cl.complexCount + ' distinct complex)' : '') + '.'; setStatus(v); if (canvas) canvas.setVerdict({ text: v }); toast(v, { kind: 'error' }); return; }
@@ -1292,7 +1302,8 @@
         setStatus(verdict);
         if (canvas) canvas.setVerdict({ text: verdict, solutionsText: rows.join('\n') });
         toast(verdict, bad ? { kind: 'error' } : {});
-      }, 20);
+        });   // solveRealAsync.then
+      });     // classifyAsync.then
     }
     // Numeric cross-check of reconstructed quadrature-domain maps against two independent
     // oracles (#4): (1) reduction integrity — each φ must satisfy the FRESHLY-regenerated
