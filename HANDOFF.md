@@ -16,7 +16,7 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `e3d98b547d`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `43ff40c1c3`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
@@ -44,8 +44,11 @@ its own merged PR), with one feature **in progress on a branch**:
   built, verified, and then reverted** — hard benchmarks showed it slower on these systems and the
   full cardioid (14 vars, ~478 gens) is combinatorially intractable for any plain-Buchberger variant
   (a single 𝔽_{p²} prime > 12 min; exact > 41 min); reality reduction remains the real lever. Phases A
-  and D both committed (Net ≈4.5× end-to-end on cyclic-5). RCTD bridge remains Phase 3; see the deep
-  section below. A follow-on **"expand the solvable class" investigation**
+  and D both committed (Net ≈4.5× end-to-end on cyclic-5). The external-CAS / **RCTD bridge** (export +
+  import) shipped (#6 P1/P2); the tab also now does **variable-symmetry inference** (real / imaginary /
+  identify / linear / conjugate-pair, auto-suggested + one-click apply), per-equation **generate-conjugate**,
+  **constraint propagation** through the assumption columns (single + batch), and a worker-offloaded
+  **Certify** path — see the per-feature bullets lower in this section. A follow-on **"expand the solvable class" investigation**
   (`GROEBNER_INVESTIGATION.md`, 4 research threads) is now being implemented in tiers: **Tier 1 —
   linear-substitution preprocessing** (`Sym.linearReduce`: strip degree-1-with-constant-coeff
   variables before solving, lift them back; integrated into `solveZeroDim`) is done (strips the QD
@@ -185,9 +188,43 @@ its own merged PR), with one feature **in progress on a branch**:
     store's existing Mathematica export now DELEGATES here — one printer, no drift). Store `casColumn(c,
     dialect, {params})` / `casNode`; Export panel gained a "CAS / RCTD" line (dialect select + comma-separated
     params + Copy). Nothing executes in-browser — copy-out to the user's own Maple/Singular/Sage.
-  **Deferred (review item #6, P2/P3 — not started):** the IMPORT half (parse RCTD cells back as `op:'rctd'`
-  columns via a defined term-list JSON + a Maple post-script) and the worked parametric cardioid example.
-  See the plan file's per-engagement sections.
+  - **#6 P2 — RCTD IMPORT (the return trip)** — `QD.CASExport.parseRCTD(jsonText)` validates/normalizes a
+    `qd-rctd` term-list JSON we DEFINE (cells of `{constraints[{terms,rel}], chain[{terms}], realCount}`;
+    robust `{ok:false,reason}` on bad input; accepts Maple `<>`/`>=` spellings). `AlgebraStore.importRCTD(input)`
+    lands the cells as ONE undoable `op:'rctd'` column, each node tagged `meta.cell`/`realCount`/`role`
+    (polys rebuilt via `Sym.polyFromTermList`). UI: Export ▸ "Import RCTD" textarea + button → verdict-card
+    per-cell real-solution summary; `provText`/`columnLabel` `'rctd'` cases. The Maple post-script that emits
+    the JSON lives in `AHARONOV_SHAPIRO.md` ("The RCTD round trip"). (`6909abe`→`cea845e`.)
+  - **Variable-symmetry inference + apply** — `store.detectVariableRelations(ids)` (pure query) scans the
+    current equality nodes for an exact two-variable linear relation α·a+β·b=0 (each a lone var^1) and
+    classifies: **real** (v−v̄), **imaginary** (v+v̄), **identify** (x=±y, distinct primals, unit), **linear**
+    (x=c·y, non-unit), **conjugate-pair** (x=±z̄ⱼ, an opposite-barred-index pairing). The auto `#alg-suggest`
+    banner (rendered from `rerender`, session-dismissible) + a manual "Detect symmetry" button surface them
+    with a one-click APPLY for every kind: `assumeReal` / `assumeImaginary` (v̄≡−v subst, tracked in `imagVars`,
+    threaded through snapshot/seed + the `_applyAssumed` fold = w0∘reality∘imaginary) / `identifyVariables(keep,
+    drop, ratio)` (generalized from a ±1 sign to a Gaussian RATIO; `_gaussRecord`/`_gaussFromRecord` serialize
+    it to provenance) / `applyConjugatePair(var, other, ratio)`. The detector attaches the exact Gaussian ratio
+    to its linear/conjugate-pair hits. Restricted to certain forms so a symmetry is never falsely claimed.
+    (`70dd188` real+`generateConjugate`; `5fd30ea` imaginary+detect+propagate; `e93f291` linear/conj-pair flag;
+    `b11f20b` linear/conj-pair apply.)
+  - **per-equation `generateConjugate(id)`** — the undoable single-node form of the seed-time `maybeAddConjugate`
+    (companion p̄=0 folding in current reality/imaginary/w0); inspector action "Generate conjugate". Useful for
+    DERIVED equations that never got a seed-time companion. (`70dd188`.)
+  - **propagate a constraint through the columns** — `propagateNode(id)` carries a node (e.g. a univalence
+    constraint stranded at column 0 after reductions) into the CURRENT column with the cumulative pointwise
+    assumptions applied (reality + imaginary + fixed φ(0) + pinned constants via `knownValues`); it does NOT
+    replay system-level ELIMINATIONS (Gröbner/resultant/triangular — not pointwise). Inspector "Propagate to
+    current system"; batch `propagateAllConstraints()` (shared `_propagatePoly`) + Reduce-section "Propagate
+    constraints → current" button do every constraint at once, deduped, one undo. (`5fd30ea`, `b11f20b`.)
+  - **certify path worker-offloaded** — `doCertifyUnivalence` now runs the heavy regime+solve via
+    `classifyAsync(...).then(cl => solveRealAsync(...).then(r => …))` (AbortController signal + onProgress +
+    Cancel), mirroring `doClassify`/`doAutoSolve`; the per-solution univalence certificate (exact Schur–Cohn /
+    boundary count / cross-check) stays on the main thread (cheap, concrete candidates). (`cfbac03`.)
+  **Deferred (not started):** **#6 P3** — the worked PARAMETRIC cardioid example (run the interior
+  `pointFunctionalSystem` (M₀,M₁) system through Maple RCTD offline, capture the qd-rctd cell JSON as a
+  regression fixture + an AHARONOV_SHAPIRO.md section; needs an offline Maple run). Exotic/research-tier:
+  higher-multiplicity on-circle cusp (the boundary cusp count uses DISTINCT roots → numeric fallback, safe);
+  Schwarz-function alternate formulation; the full parametric-RCTD uniqueness frontier. See the plan file.
 - **Symbolic QD equation generator** (`feature/symbolic-qd-equations`, NOT yet merged) — a new
   symbolic-algebra track: `app/sym-core.js` (`QD.Sym`, exact Rational/Gaussian/MPoly/RatFn +
   factored-denominator `FRatFn` + field-generic power series with Lagrange reversion) and
