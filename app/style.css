@@ -977,6 +977,21 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   font-size: 11px; border-radius: 10px; padding: 1px 8px; white-space: nowrap; color: var(--c-text, #222);
 }
 #algebra-graph .algebra-track-fork:hover { background: var(--c-border-soft, #eef); border-color: var(--c-accent, #2b7); }
+/* A6: per-branch existence/uniqueness verdict badge on each track chip + the "classify all" button */
+#algebra-graph .algebra-track-verdict {
+  font-size: 9px; border-radius: 6px; padding: 0 4px; margin-left: 2px; font-weight: 700;
+  white-space: nowrap; border: 1px solid currentColor;
+}
+#algebra-graph .algebra-track-verdict.v-none    { color: var(--c-danger, #c33); }
+#algebra-graph .algebra-track-verdict.v-unique  { color: var(--c-accent, #1a7f37); }
+#algebra-graph .algebra-track-verdict.v-multi   { color: var(--c-link, #1a56db); }
+#algebra-graph .algebra-track-verdict.v-open    { color: #b54708; }
+#algebra-graph .algebra-track-verdict.v-unknown { color: var(--c-muted, #667); }
+#algebra-graph .algebra-track-verdicts {
+  border: 1px solid var(--c-border, #ccc); background: var(--c-bg, #fff); cursor: pointer;
+  font-size: 11px; border-radius: 10px; padding: 1px 8px; white-space: nowrap; color: var(--c-muted, #667);
+}
+#algebra-graph .algebra-track-verdicts:hover { background: var(--c-border-soft, #eef); color: var(--c-text, #222); }
 
 /* Brief highlight when a breadcrumb chip scrolls its lane into view */
 @keyframes algebra-col-flash { 0%, 100% { background: transparent; } 30% { background: rgba(34,170,119,0.16); } }

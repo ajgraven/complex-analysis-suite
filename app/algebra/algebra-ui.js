@@ -64,6 +64,7 @@
     let surface = null;            // the #algebra-graph element
     let breadcrumb = null;         // the reduction-chain chip rail over the graph
     let trackbar = null;           // the parallel-branch (track) switcher rail over the graph
+    const _trackVerdict = new Map(); // A6: tid -> { sig, badge, state, title } existence/uniqueness chip cache
     let mounted = false;
     let activeEnv = null;          // latest classical-bounded solve envelope
     let lastCap = 6;
@@ -1173,6 +1174,7 @@
         if (r.partialBranch) verdict += '  [case ' + ((r.caseIndex || 0) + 1) + ' of ' + r.caseCount + ' of a factor split — this counts THIS branch only; the branches add up to the original.]';
         setStatus(verdict);
         if (canvas) canvas.setVerdict({ text: verdict });
+        if (!sel) cacheActiveVerdict(r);   // A6: stamp the active branch's chip (whole last column analyzed)
         toast(verdict, r.inconsistent || r.realCount === 0 ? { kind: 'error' } : {});
       });
     }
@@ -1750,6 +1752,15 @@
           : 'the original derivation' + (t.id === active ? ' · current branch' : ' · click to view');
         if (t.id !== active) name.addEventListener('click', () => switchTrack(t.id));
         chip.appendChild(name);
+        // A6: existence/uniqueness verdict badge — shown only while the cached result still
+        // matches the branch's current last column (the signature), so it greys out when stale.
+        const cached = _trackVerdict.get(t.id);
+        if (cached && cached.badge && cached.sig === _branchSig(t.id)) {
+          const vb = document.createElement('span');
+          vb.className = 'algebra-track-verdict v-' + (cached.state || 'unknown');
+          vb.textContent = cached.badge; vb.title = cached.title || '';
+          chip.appendChild(vb);
+        }
         if (t.id !== 't0') {
           const x = document.createElement('button');
           x.type = 'button'; x.className = 'algebra-track-x'; x.textContent = '×';
@@ -1764,6 +1775,65 @@
       fork.title = 'Fork the current system into a new parallel branch — explore a different line of assumptions without disturbing this one';
       fork.addEventListener('click', () => doFork(store.maxColumn()));
       trackbar.appendChild(fork);
+      if (store.tracks().length > 1) {
+        const vbtn = document.createElement('button');
+        vbtn.type = 'button'; vbtn.className = 'algebra-track-verdicts'; vbtn.textContent = '⟳ verdicts';
+        vbtn.title = 'Classify every branch (existence / uniqueness via the certified real-solution count) and show each verdict on its chip';
+        vbtn.addEventListener('click', classifyAllBranches);
+        trackbar.appendChild(vbtn);
+      }
+    }
+    // A6: per-branch verdict chips. Helpers + the "classify all branches" action.
+    function _lastColIds(tid) { return store.orderedColumn(store.maxColumn(tid), tid).map((n) => n.id); }
+    // Cheap content signature of a branch's CURRENT last column — changes whenever the system
+    // changes (a new reduction, fork, undo), so a cached verdict is shown only while still valid.
+    function _branchSig(tid) { return store.maxColumn(tid) + '|' + _lastColIds(tid).join(','); }
+    // Map a classify result → a compact chip badge { badge, state, title }.
+    function _verdictBadge(r) {
+      if (!r || r.aborted) return null;
+      if (!r.ok) return { badge: '?', state: 'unknown', title: r.reason || 'classify unavailable' };
+      if (r.inconsistent) return { badge: '∅', state: 'none', title: 'no QD — system inconsistent (1 ∈ I)' };
+      if (!r.zeroDim) return { badge: '∞', state: 'open', title: 'positive-dimensional family (' + r.numVars + ' real variables)' };
+      const tail = r.partialBranch ? ' [case ' + ((r.caseIndex || 0) + 1) + '/' + r.caseCount + ' of a factor split]' : '';
+      if (r.realCount == null) return { badge: 'fin', state: 'unknown', title: r.multiplicity + ' complex solution(s); real count over the cap' + tail };
+      if (r.realCount === 0) return { badge: '0 QD', state: 'none', title: 'no real quadrature domain' + tail };
+      if (r.realCount === 1) return { badge: '✓ 1 QD', state: 'unique', title: 'unique real quadrature domain' + tail };
+      return { badge: r.realCount + ' QD', state: 'multi', title: r.realCount + ' real algebraic solutions' + tail };
+    }
+    // Cache the active branch's verdict from a single-branch classify (doClassify) so its chip
+    // updates too — only when the whole last column was analyzed (no node sub-selection).
+    function cacheActiveVerdict(r) {
+      const b = _verdictBadge(r); if (!b) return;
+      _trackVerdict.set(store.activeTrack, Object.assign({ sig: _branchSig(store.activeTrack) }, b));
+      buildTrackBar();
+    }
+    // Classify EVERY branch (sequential — one worker job at a time) and stamp each chip's
+    // verdict. Cancellable + busy-locked like the other worker ops; progressive chip updates.
+    async function classifyAllBranches() {
+      if (busyGuard()) return;
+      if (!store.size) return;
+      const params = hDataParamValues();
+      const tlist = store.tracks();
+      const ctrl = _newAbort(); _abort = ctrl;
+      setBusy(true, 'Classifying ' + tlist.length + ' branch' + (tlist.length === 1 ? '' : 'es') + '…');
+      let done = 0;
+      try {
+        for (const t of tlist) {
+          if (ctrl && ctrl.signal && ctrl.signal.aborted) break;
+          const ids = _lastColIds(t.id), sig = _branchSig(t.id);
+          let r;
+          try {
+            r = await store.classifyAsync(ids, { paramValues: params }, {
+              signal: ctrl && ctrl.signal,
+              onProgress: (info) => setStatus(t.label + '… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
+            });
+          } catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
+          if (r && r.aborted) break;
+          _trackVerdict.set(t.id, Object.assign({ sig }, _verdictBadge(r) || { badge: '?', state: 'unknown', title: 'unavailable' }));
+          done++; buildTrackBar();
+        }
+      } finally { _abort = null; setBusy(false); setStatus(''); }
+      toast(done ? ('Updated ' + done + ' branch verdict' + (done === 1 ? '' : 's')) : 'Cancelled');
     }
     // Switch the on-screen branch (a view change — clears the selection, which may point
     // at off-branch nodes, then rerenders the now-active branch's lanes).
