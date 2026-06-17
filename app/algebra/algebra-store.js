@@ -78,6 +78,20 @@
     let imagVars = [];            // base (primal) variables ASSERTED IMAGINARY (z̄ⱼ ≡ −zⱼ, …)
     let w0Fixed = null;           // φ(0) fixed: { re:[n,d], im:[n,d] } (BigInt strings) or null
 
+    // --- BRANCHING (tracks): the derivation is no longer a single linear chain --------
+    // Each node carries a `track` id; the column index is the depth WITHIN its track.
+    // One track is ACTIVE; every reduction/analysis reads + appends to the active track,
+    // so the existing ops work unchanged once the column queries below are made
+    // track-relative. `forkTrack` copies a column into a new parallel track. (Per-track
+    // ASSUMPTION isolation — realVars/imagVars/w0Fixed per branch — is the next step C3;
+    // in A1 those stay global, so assumptions made before a fork are shared ancestry and
+    // assumptions made after a fork are NOT yet isolated between branches.)
+    let trackSeq = 0;
+    let activeTrackId = 't0';
+    let tracks = [{ id: 't0', label: 'main', parentId: null, forkColumn: null }];
+    function mkTrackId() { return 't' + (++trackSeq); }
+    function hasTrack(id) { return tracks.some((t) => t.id === id); }
+
     function nid() { return 'n' + (++seq); }
 
     // --- reality assumptions: assert chosen variables are real -----------------
@@ -140,11 +154,16 @@
     // objects are never mutated in place (only added), so a shallow node-map copy
     // is a safe snapshot; `order` is copied because moveNode mutates it.
     function snapshot() {
-      return { nodes: new Map([...nodes].map(([k, v]) => [k, v])), edges: edges.slice(), order: new Map(order), model, formulation, seq, realVars: realVars.slice(), imagVars: imagVars.slice(), w0Fixed };
+      return { nodes: new Map([...nodes].map(([k, v]) => [k, v])), edges: edges.slice(), order: new Map(order), model, formulation, seq,
+        realVars: realVars.slice(), imagVars: imagVars.slice(), w0Fixed,
+        tracks: tracks.map((t) => ({ id: t.id, label: t.label, parentId: t.parentId, forkColumn: t.forkColumn })), activeTrackId, trackSeq };
     }
     function restore(s) {
       nodes.clear(); for (const [k, v] of s.nodes) nodes.set(k, v);
       edges = s.edges.slice(); order = new Map(s.order || []); model = s.model; formulation = s.formulation || 'classical'; seq = s.seq; realVars = (s.realVars || []).slice(); imagVars = (s.imagVars || []).slice(); w0Fixed = s.w0Fixed || null;
+      tracks = (s.tracks && s.tracks.length) ? s.tracks.map((t) => ({ id: t.id, label: t.label, parentId: t.parentId, forkColumn: t.forkColumn })) : [{ id: 't0', label: 'main', parentId: null, forkColumn: null }];
+      trackSeq = s.trackSeq || 0;
+      activeTrackId = (s.activeTrackId && hasTrack(s.activeTrackId)) ? s.activeTrackId : tracks[0].id;
     }
     // Cap the undo history so a long derivation can't grow the snapshot stack without
     // bound (each snapshot holds a copy of the whole node map). 200 steps is far beyond
@@ -160,10 +179,11 @@
     function redo() { if (!redoStack.length) return false; undoStack.push(snapshot()); restore(redoStack.pop()); return true; }
 
     function addNode(n) {
+      if (n.track === undefined) n.track = activeTrackId;   // stamp the active branch
       nodes.set(n.id, n);
-      if (!order.has(n.id)) {                 // append to the bottom of its column by default
+      if (!order.has(n.id)) {                 // append to the bottom of its (track, column) by default
         let mx = -1;
-        for (const m of nodes.values()) if (m.id !== n.id && m.column === n.column) mx = Math.max(mx, ordOf(m.id));
+        for (const m of nodes.values()) if (m.id !== n.id && m.column === n.column && m.track === n.track) mx = Math.max(mx, ordOf(m.id));
         order.set(n.id, mx + 1);
       }
       return n;
@@ -173,10 +193,11 @@
     // Clear the graph itself (nodes/edges/order/ids) but KEEP the seeded normalization
     // (model/realVars/w0Fixed) and the undo history. seedFromSystem uses this after a
     // checkpoint so re-seeding is undoable. The public reset() is the full wipe.
-    function clearGraph() { nodes.clear(); edges = []; order = new Map(); seq = 0; }
+    // Also collapses to a single active track — a fresh seed is one main branch.
+    function clearGraph() { nodes.clear(); edges = []; order = new Map(); seq = 0; tracks = [{ id: 't0', label: 'main', parentId: null, forkColumn: null }]; activeTrackId = 't0'; trackSeq = 0; }
     // FULL reset — also drops the undo/redo history and the normalization state. For
     // tearing the store down (tests / a fresh start), NOT for re-seeding.
-    function reset() { clearGraph(); model = 'conjugate'; formulation = 'classical'; realVars = []; w0Fixed = null; undoStack.length = 0; redoStack.length = 0; }
+    function reset() { clearGraph(); model = 'conjugate'; formulation = 'classical'; realVars = []; imagVars = []; w0Fixed = null; undoStack.length = 0; redoStack.length = 0; }
 
     // --- display order within a column ---------------------------------------
     // Cards are laid out top-to-bottom by `order` (then id, for stability).
@@ -184,11 +205,13 @@
     // at primal+0.5) and then integerized by normalizeColumn so up/down swaps stay
     // simple. orderOf falls back to +∞ so an un-ordered node sinks to the bottom.
     function ordOf(id) { return order.has(id) ? order.get(id) : Number.POSITIVE_INFINITY; }
-    function colNodes(c) { return list().filter((n) => n.column === c); }
-    function orderedColumn(c) {
-      return colNodes(c).sort((a, b) => (ordOf(a.id) - ordOf(b.id)) || a.id.localeCompare(b.id));
+    // Column queries are TRACK-RELATIVE: they default to the active track, so every
+    // existing op (which calls them with no track arg) operates within the active branch.
+    function colNodes(c, track) { track = track || activeTrackId; return list().filter((n) => n.column === c && (n.track || 't0') === track); }
+    function orderedColumn(c, track) {
+      return colNodes(c, track).sort((a, b) => (ordOf(a.id) - ordOf(b.id)) || a.id.localeCompare(b.id));
     }
-    function normalizeColumn(c) { orderedColumn(c).forEach((n, i) => order.set(n.id, i)); }
+    function normalizeColumn(c, track) { orderedColumn(c, track).forEach((n, i) => order.set(n.id, i)); }
 
     // Move a node one slot up (-1) or down (+1) within its column. Undoable.
     // Returns true if it moved (false at a column boundary or for a bad id).
@@ -219,7 +242,7 @@
       if (node.poly.sub(conj).isZero() || node.poly.add(conj).isZero()) return null;   // self-conjugate (incl. under reality)
       // Suppress only if the companion is already in THIS node's column — a poly equal to
       // conj sitting in an earlier column must not block the companion this column needs.
-      for (const m of nodes.values()) if (m.column === node.column && m.poly.equals(conj)) return null;
+      for (const m of nodes.values()) if (m.column === node.column && (m.track || 't0') === (node.track || 't0') && m.poly.equals(conj)) return null;
       const comp = addNode({
         id: nid(), kind: node.kind, poly: conj, rel: node.rel,
         label: node.label + ' (conj)', model: node.model,
@@ -303,26 +326,75 @@
     // duplicated) results as a new column — so every assumption is a visible,
     // labeled, undoable step and column 0 stays the original system. The canvas
     // derives a column header from the column's nodes' provenance.
-    function maxColumn() { let mx = 0; for (const n of nodes.values()) mx = Math.max(mx, n.column || 0); return mx; }
-    function lastColumnNodes() { return orderedColumn(maxColumn()); }
+    function maxColumn(track) { track = track || activeTrackId; let mx = 0; for (const n of nodes.values()) if ((n.track || 't0') === track) mx = Math.max(mx, n.column || 0); return mx; }
+    function lastColumnNodes(track) { track = track || activeTrackId; return orderedColumn(maxColumn(track), track); }
     // The equality-node ids of the current system (the last column) — the default
     // input to dimension/solve/groebner so those operate on the reduced system, not
     // a mix of every column. Falls back to ALL equality nodes if there is one column.
     function currentColumnIds() { return lastColumnNodes().filter((n) => n.rel === '=').map((n) => n.id); }
     // Per-column size: equation-node count + the number of distinct variables across the
     // column (the union of each node's vars). Drives the column-header stats + Δ display.
-    function columnStats(c) {
-      const ns = colNodes(c);
+    function columnStats(c, track) {
+      const ns = colNodes(c, track);
       const vars = new Set();
       let eqCount = 0;
       for (const n of ns) { if (n.rel === '=') eqCount++; for (const v of nodeVars(n)) vars.add(v); }
       return { eqCount, varCount: vars.size, nodeCount: ns.length };
     }
-    // Ordered list of the columns present, each with its stats — for the UI lane headers.
-    function columns() {
-      const cs = new Set(); for (const n of nodes.values()) cs.add(n.column || 0);
-      return [...cs].sort((a, b) => a - b).map((c) => Object.assign({ index: c }, columnStats(c)));
+    // Ordered list of the columns present in a track (default active), each with stats — for the UI lane headers.
+    function columns(track) {
+      track = track || activeTrackId;
+      const cs = new Set(); for (const n of nodes.values()) if ((n.track || 't0') === track) cs.add(n.column || 0);
+      return [...cs].sort((a, b) => a - b).map((c) => Object.assign({ index: c }, columnStats(c, track)));
     }
+
+    // === Branching (tracks) ===================================================
+    // Fork a column of a source track into a NEW parallel track: deep-copy the
+    // column's nodes (fresh ids) as the new track's column 0, link each copy to its
+    // source (op:'fork'), and make the new track active so subsequent reductions
+    // append to it — leaving the source track untouched. fromColumn defaults to the
+    // source track's last column. One undo step. Returns { ok, track, created, column }.
+    function forkTrack(opts) {
+      opts = opts || {};
+      const fromTrack = opts.fromTrack || activeTrackId;
+      if (!hasTrack(fromTrack)) return { ok: false, reason: 'unknown source track' };
+      const fromCol = (opts.fromColumn != null) ? opts.fromColumn : maxColumn(fromTrack);
+      const src = orderedColumn(fromCol, fromTrack);
+      if (!src.length) return { ok: false, reason: 'nothing to fork from' };
+      checkpoint();
+      const tid = mkTrackId();
+      tracks.push({ id: tid, label: opts.label || ('branch ' + tid), parentId: fromTrack, forkColumn: fromCol });
+      const created = [];
+      src.forEach((s, i) => {
+        const copy = addNode({
+          id: nid(), kind: s.kind, poly: s.poly, rel: s.rel, label: s.label, model: s.model,
+          provenance: { op: 'fork', inputs: [s.id], fromTrack, fromColumn: fromCol },
+          column: 0, meta: s.meta, track: tid,
+        });
+        order.set(copy.id, i);
+        edges.push({ from: s.id, to: copy.id });
+        created.push(copy);
+      });
+      activeTrackId = tid;
+      return { ok: true, track: tid, created, column: 0 };
+    }
+    // Switch the active track (a view/working-context change — NOT undoable on its own;
+    // structural ops that follow checkpoint with the active track recorded).
+    function setActiveTrack(id) { if (!hasTrack(id)) return false; activeTrackId = id; return true; }
+    // Delete a non-main track (and its nodes/edges). Refuses 't0' and any track that
+    // still has child branches forked from it (to avoid orphans). Undoable.
+    function deleteTrack(id) {
+      if (id === 't0' || !hasTrack(id)) return { ok: false, reason: 'cannot delete this track' };
+      if (tracks.some((t) => t.parentId === id)) return { ok: false, reason: 'track has child branches; delete those first' };
+      checkpoint();
+      for (const n of [...nodes.values()]) if ((n.track || 't0') === id) { nodes.delete(n.id); order.delete(n.id); }
+      edges = edges.filter((e) => nodes.has(e.from) && nodes.has(e.to));
+      const t = tracks.find((x) => x.id === id);
+      tracks = tracks.filter((x) => x.id !== id);
+      if (activeTrackId === id) activeTrackId = (t && hasTrack(t.parentId)) ? t.parentId : 't0';
+      return { ok: true };
+    }
+    function tracksList() { return tracks.map((t) => ({ id: t.id, label: t.label, parentId: t.parentId, forkColumn: t.forkColumn })); }
 
     // Apply a per-node transform to every node of the current last column, emitting
     // the results as a new column (single undo step). make(node) → { poly, rel?,
@@ -705,6 +777,7 @@
       const S = getSym();
       const a = get(idA), b = get(idB);
       if (!a || !b) return { ok: false, reason: 'node not found' };
+      if ((a.track || 't0') !== (b.track || 't0')) return { ok: false, reason: 'select nodes from one branch' };
       if (!a.poly.vars().has(varName) || !b.poly.vars().has(varName)) {
         return { ok: false, reason: 'variable ' + varName + ' is not shared by both equations' };
       }
@@ -716,7 +789,7 @@
         id: nid(), kind: 'derived', poly: res, rel: '=',
         label: 'elim ' + varName + ' (' + a.id + ',' + b.id + ')', model,
         provenance: { op: 'resultant', inputs: [idA, idB], variable: varName },
-        column: Math.max(a.column, b.column) + 1, meta: {},
+        column: Math.max(a.column, b.column) + 1, track: a.track || 't0', meta: {},
       });
       edges.push({ from: idA, to: node.id }, { from: idB, to: node.id });
       return { ok: true, node };
@@ -1394,8 +1467,10 @@
         model,
         formulation,
         w0Fixed,
+        tracks: tracksList(),
+        activeTrack: activeTrackId,
         nodes: list().map((n) => ({
-          id: n.id, kind: n.kind, label: n.label, rel: n.rel, column: n.column,
+          id: n.id, kind: n.kind, label: n.label, rel: n.rel, column: n.column, track: n.track || 't0',
           provenance: n.provenance, terms: n.poly.termList(),
         })),
         edges: edges.slice(),
@@ -1589,9 +1664,11 @@
       currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
+      forkTrack, setActiveTrack, deleteTrack, tracks: tracksList,
       undo, redo, reset,
       list, get,
       get edges() { return edges; },
+      get activeTrack() { return activeTrackId; },
       get model() { return model; },
       set model(m) { model = m; },
       get formulation() { return formulation; },

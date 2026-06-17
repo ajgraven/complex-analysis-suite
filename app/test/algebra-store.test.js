@@ -905,6 +905,62 @@ module.exports = async function run() {
       ok('solveForVariable: inequality node ⇒ ok:false', !r3.ok); }
   }
 
+  // ---- branching: parallel derivation tracks (A1) ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system);
+    ok('tracks: fresh seed has one track t0 active', st.tracks().length === 1 && st.activeTrack === 't0');
+
+    const fk = st.forkTrack();                              // fork from t0 column 0
+    ok('tracks: forkTrack creates a new active branch', fk.ok && fk.track !== 't0' && st.activeTrack === fk.track && st.tracks().length === 2);
+    ok('tracks: the fork starts at column 0 (copied system)', st.maxColumn() === 0 && st.columns().length === 1);
+    const forkNodes = st.list().filter((n) => n.track === fk.track);
+    const srcCol0 = st.list().filter((n) => n.track === 't0' && n.column === 0);
+    ok('tracks: fork copied the source column (matching node count > 0)', forkNodes.length === srcCol0.length && forkNodes.length > 0);
+    ok('tracks: fork copies are fresh op:fork nodes linked to their source',
+       forkNodes.every((n) => n.provenance.op === 'fork') &&
+       forkNodes.every((n) => srcCol0.some((s) => s.id === n.provenance.inputs[0])) &&
+       forkNodes.every((n) => !srcCol0.some((s) => s.id === n.id)));
+
+    st.assumeReal(st.baseVariables());                      // a reduction on the ACTIVE (fork) track
+    ok('tracks: a reduction appends to the active (fork) branch', st.maxColumn() === 1);
+    ok('tracks: setActiveTrack switches branch; the main track is untouched',
+       st.setActiveTrack('t0') && st.activeTrack === 't0' && st.maxColumn() === 0);
+
+    const ex = st.exportDAG();
+    ok('tracks: exportDAG carries tracks + activeTrack + per-node track',
+       Array.isArray(ex.tracks) && ex.tracks.length === 2 && typeof ex.activeTrack === 'string' && ex.nodes.every((n) => typeof n.track === 'string'));
+
+    // undo removes a freshly-forked branch and restores the active track
+    const st2t = QD.AlgebraStore.create(); st2t.seedFromSystem(system);
+    st2t.forkTrack();
+    ok('tracks: pre-undo there are two tracks', st2t.tracks().length === 2);
+    st2t.undo();
+    ok('tracks: undo removes the forked branch + restores active t0',
+       st2t.tracks().length === 1 && st2t.activeTrack === 't0' && !st2t.list().some((n) => n.track && n.track !== 't0'));
+
+    // deleteTrack: removes a non-main branch, refuses the main one
+    const st3 = QD.AlgebraStore.create(); st3.seedFromSystem(system);
+    const f3 = st3.forkTrack();
+    const del = st3.deleteTrack(f3.track);
+    ok('tracks: deleteTrack removes a non-main branch + falls back to t0',
+       del.ok && st3.tracks().length === 1 && st3.activeTrack === 't0' && !st3.list().some((n) => n.track === f3.track));
+    ok('tracks: deleteTrack refuses the main track t0', !st3.deleteTrack('t0').ok);
+
+    // cross-branch elimination is refused
+    const st4 = QD.AlgebraStore.create(); st4.seedFromSystem(system);
+    const a0 = st4.currentColumnIds()[0];
+    const f4 = st4.forkTrack();
+    const b1 = st4.list().find((n) => n.track === f4.track && n.rel === '=').id;
+    const er = st4.eliminate(a0, b1, st4.variables()[0]);
+    ok('tracks: eliminate refuses a cross-branch node pair', !er.ok && /one branch/.test(er.reason || ''));
+
+    // regression: a store that never forks behaves exactly as before (single track t0)
+    const st5 = QD.AlgebraStore.create(); st5.seedFromSystem(system);
+    st5.assumeReal(st5.baseVariables());
+    ok('tracks: no-fork store stays single-track with the usual columns', st5.tracks().length === 1 && st5.activeTrack === 't0' && st5.maxColumn() >= 1);
+  }
+
   // ---- factoring: factorOf (query) + applyFactor (case-split column) ----
   {
     const st = QD.AlgebraStore.create();

@@ -1578,6 +1578,7 @@
       if (!prov) return '';
       switch (prov.op) {
         case 'generate': return 'generated (' + (prov.block || '?') + ' block)';
+        case 'fork': return 'forked from ' + (prov.fromTrack || '?') + ' · column ' + (prov.fromColumn != null ? prov.fromColumn : '?');
         case 'conjugate': return 'conjugate companion of ' + (prov.inputs || []).join(', ');
         case 'resultant': return 'eliminated ' + latexPlain(prov.variable) + ' from ' + (prov.inputs || []).join(', ');
         case 'groebner': return 'Gröbner basis (' + (prov.eliminate && prov.eliminate.length

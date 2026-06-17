@@ -16,7 +16,7 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `efc6ef2b55`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `cea6bd06d8`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
@@ -246,6 +246,20 @@ its own merged PR), with one feature **in progress on a branch**:
     copy-LaTeX. Engine added to `asset-manifest.js` after `sym-core.js`; no `sym-core.js`/worker change. Tests:
     `app/test/sym-radical.test.js` (oracle-based — every root verifies at random samples; the x⁶ headline; casus
     irreducibilis; factored quintic; Abel–Ruffini refusal) + an `algebra-store` `solveForVariable` block.
+  - **Branching workspace — A1 (branch-capable store model)** — the FIRST step of the Algebra-improvements
+    roadmap (the full 23-item roadmap lives in `.claude/plans/please-conduct-a-comprehensive-whimsical-harp.md`).
+    Generalizes the single linear column chain into parallel **tracks**: every node carries a `track` id; the
+    column index is depth WITHIN its track; one track is ACTIVE. The column queries (`maxColumn`/`orderedColumn`/
+    `columns`/`columnStats`/`lastColumnNodes`/`currentColumnIds`) became **track-relative (default = active track)**,
+    so every existing reduction/analysis op works unchanged on the active branch with no per-op edits. New store
+    ops: `forkTrack({fromTrack,fromColumn,label})` (deep-copy a column into a new active track, `op:'fork'` links),
+    `setActiveTrack(id)`, `deleteTrack(id)` (refuses `t0`/parents), `tracks()`, getter `activeTrack`; snapshot/
+    restore/exportDAG carry `tracks`+`activeTrack`+per-node `track`; `eliminate` refuses cross-branch pairs. The
+    canvas renders the **active track only** (filters `list()` by `activeTrack`; the edge drawer already skips
+    off-track endpoints) — visually identical to before when there's one track. **Store-only:** the fork button +
+    multi-track layout + switcher are **A2** (next); per-track ASSUMPTION isolation (realVars/imagVars/w0Fixed stay
+    global for now) is **C3**. Tests: an `algebra-store` "branching (tracks)" block (fork copies the source column,
+    reductions stay on the active branch, undo removes a fork, deleteTrack, cross-branch guard, no-fork regression).
   **Deferred (not started):** **#6 P3** — the worked PARAMETRIC cardioid example (run the interior
   `pointFunctionalSystem` (M₀,M₁) system through Maple RCTD offline, capture the qd-rctd cell JSON as a
   regression fixture + an AHARONOV_SHAPIRO.md section; needs an offline Maple run). Exotic/research-tier:

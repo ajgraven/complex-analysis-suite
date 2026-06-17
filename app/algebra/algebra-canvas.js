@@ -213,7 +213,11 @@
       // clear columns (keep the svg overlay)
       track.querySelectorAll('.algebra-column').forEach((el) => el.remove());
 
-      const all = store.list();
+      // Render only the ACTIVE track's lanes (branching: other tracks exist in the
+      // store but are off-screen until switched to). store.columns()/orderedColumn are
+      // already active-track-relative; the edge drawer skips edges to off-track nodes.
+      const at = (typeof store.activeTrack !== 'undefined') ? store.activeTrack : 't0';
+      const all = store.list().filter((n) => (n.track || 't0') === at);
       if (!all.length) { empty.classList.remove('hidden'); scroll.classList.add('hidden'); relayout(); return; }
       empty.classList.add('hidden'); scroll.classList.remove('hidden');
 
