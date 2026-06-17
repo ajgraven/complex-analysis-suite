@@ -884,6 +884,10 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #controls-algebra .algebra-factor-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
 #controls-algebra .algebra-factor-eq { flex: 1; overflow-x: auto; }
 #controls-algebra .algebra-factor-row button { flex: none; }
+/* Solve-for-a-variable (in radicals) → picker + rendered closed-form roots */
+#controls-algebra .algebra-solve-panel { margin-top: 6px; border-top: 1px dashed var(--c-border-soft, #eee); padding-top: 4px; }
+#controls-algebra .algebra-solve-out { margin-top: 4px; }
+#controls-algebra .algebra-solve-root { overflow-x: auto; padding: 3px 0; }
 
 /* Floating view/history toolbar over the graph */
 #algebra-graph .algebra-toolbar {

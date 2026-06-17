@@ -798,6 +798,61 @@
       box.appendChild(chooser);
     }
 
+    // Solve a single equation for one variable IN RADICALS (closed form). Shows a
+    // variable picker; the result (closed-form roots) renders as KaTeX in the
+    // inspector + the verdict card, with a numeric "verified ✓ (N samples)" line.
+    // Read-only (radicals are not polynomials, so nothing is added to the DAG).
+    function doSolveRadical(id, box) {
+      const n = store.get(id); if (!n) return;
+      const SR = QD.SymRadical, S = QD.Sym, RL = QD.RiemannLatex;
+      let panel = box.querySelector('.algebra-solve-panel');
+      if (panel) panel.remove();
+      panel = document.createElement('div'); panel.className = 'algebra-solve-panel';
+      const row = document.createElement('div'); row.className = 'algebra-line';
+      const lab = document.createElement('span'); lab.className = 'algebra-line-label'; lab.textContent = 'Solve for';
+      const sel = document.createElement('select');
+      [...n.poly.vars()].forEach((v) => { const o = document.createElement('option'); o.value = v; o.textContent = latexPlain(v); sel.appendChild(o); });
+      const go = document.createElement('button'); go.type = 'button'; go.className = 'small'; go.textContent = 'Solve (radicals)';
+      row.appendChild(lab); row.appendChild(sel); row.appendChild(go); panel.appendChild(row);
+      const out = document.createElement('div'); out.className = 'algebra-solve-out'; panel.appendChild(out);
+      box.appendChild(panel);
+      const run = () => {
+        out.innerHTML = '';
+        if (!SR || typeof SR.solveByRadicals !== 'function') { const e = document.createElement('div'); e.className = 'warn'; e.textContent = 'Radical solver unavailable (QD.SymRadical not loaded).'; out.appendChild(e); return; }
+        const r = store.solveForVariable(id, sel.value);
+        if (!r.ok) { const e = document.createElement('div'); e.className = 'warn'; e.textContent = 'Cannot solve: ' + withGuidance(r.reason || 'unavailable'); out.appendChild(e); setStatus(''); return; }
+        const verOk = r.verify && r.verify.checked > 0 && r.verify.maxResidual < 1e-6;
+        const head = document.createElement('div'); head.className = 'hint';
+        head.appendChild(document.createTextNode(r.count + ' root' + (r.count === 1 ? '' : 's') + ' · ' + r.method + ' · '));
+        const vspan = document.createElement('span'); vspan.className = verOk ? 'ok' : 'warn';
+        vspan.textContent = verOk
+          ? 'verified ✓ (' + r.verify.checked + ' samples, residual ≤ ' + r.verify.maxResidual.toExponential(1) + ')'
+          : '⚠ not numerically verified';
+        head.appendChild(vspan);
+        out.appendChild(head);
+        const latexes = [];
+        r.roots.forEach((root) => {
+          const tex = latexPlain(sel.value) + ' = ' + SR.radicalToLatex(root, latexOf, S);
+          latexes.push(tex);
+          const d = document.createElement('div'); d.className = 'algebra-solve-root';
+          if (RL && RL.render) RL.render(d, tex, true); else d.textContent = tex;
+          out.appendChild(d);
+        });
+        if (r.count) {
+          const cp = document.createElement('button'); cp.type = 'button'; cp.className = 'small'; cp.textContent = 'Copy LaTeX';
+          cp.addEventListener('click', () => writeClipboard(latexes.join(' \\\\\n'), 'roots of ' + n.label + ' (LaTeX)'));
+          out.appendChild(cp);
+        }
+        const summary = 'Solved ' + latexPlain(sel.value) + ': ' + r.count + ' root' + (r.count === 1 ? '' : 's') + ' — ' + r.method + (verOk ? ' (verified ✓)' : '');
+        setStatus(summary);
+        if (canvas) canvas.setVerdict({ text: summary, solutionsText: latexes.length ? latexes.join('\n') : '(no roots)' });
+        toast(summary, verOk ? {} : { kind: 'error' });
+      };
+      go.addEventListener('click', run);
+      sel.addEventListener('change', run);
+      run();   // solve immediately for the default (first) variable
+    }
+
     // ---- contextual node inspector (driven by canvas selection) -------------
     // 0 selected → hide the inspector, show the workflow sections; 1 selected → that
     // node's equation + provenance + per-node actions (Duplicate / Copy / Delete);
@@ -862,6 +917,12 @@
         // candidate systems V(p)=⋃V(fᵢ), pursued one case (factor) at a time.
         if (n.rel === '=' && n.column === store.maxColumn()) {
           acts.appendChild(mkBtn('Attempt to factor', 'Factor this equation; pick a factor fᵢ to pursue V(fᵢ)=0 as a new "case" column (V(p)=⋃ᵢV(fᵢ))', () => doFactor(sel[0], box)));
+        }
+        // Solve this equation for one variable in radicals (closed form), keeping the
+        // others symbolic — degree ≤4 or reducible (e.g. x⁶+b x⁴+c x²+d as a cubic in x²).
+        // Read-only display (roots are radicals, not polynomials); any equality, any column.
+        if (n.rel === '=') {
+          acts.appendChild(mkBtn('Solve for a variable', 'Solve this equation for one chosen variable in radicals (closed form), keeping the remaining variables symbolic; degree ≤4 or reducible (quasi-polynomial / factorable). Result is displayed + numerically verified, not added to the graph.', () => doSolveRadical(sel[0], box)));
         }
         box.appendChild(acts);
         return;

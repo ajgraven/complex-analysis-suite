@@ -39,7 +39,7 @@
   // version:sync` recomputes it. CACHE_LABEL is yours to set per release
   // (cosmetic, for human-readable cache names + the HANDOFF narrative).
   const CACHE_LABEL = 'preimage-tree-overlay';
-  const CACHE_HASH  = '3f9480a264';   // gen-cache-version.js --write rewrites this
+  const CACHE_HASH  = 'efc6ef2b55';   // gen-cache-version.js --write rewrites this
   const CACHE_VERSION = CACHE_LABEL + '-' + CACHE_HASH;
 
   // Files that get concatenated into a Worker bundle by the runtime
@@ -92,6 +92,7 @@
     'thesis-examples.js',      // curated examples + analytic-oracle engine (#8)
     'faber-analysis.js',       // Faber polynomials of the complement of a UQD + root-finder
     'sym-core.js',             // QD.Sym — exact symbolic-algebra core (Rational/Gaussian/MPoly/…)
+    'sym-radical.js',          // QD.SymRadical — solve one equation for one variable in radicals (needs QD.Sym)
     'qd-equations.js',         // QD.QDEquations — classical-bounded coefficient system (needs QD.Sym)
     'qd-constraints.js',       // QD.QDConstraints — univalence/geometric constraints (needs QD.Sym + QDEquations)
     'primary-solution.js',

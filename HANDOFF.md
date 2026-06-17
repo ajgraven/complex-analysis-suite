@@ -16,7 +16,7 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `3f9480a264`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `efc6ef2b55`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
@@ -231,6 +231,21 @@ its own merged PR), with one feature **in progress on a branch**:
     chosen formulation (`system.formulation` threaded through `seedFromSystem`/snapshot/undo/`exportDAG` →
     `store.formulation`; column-0 label reads "(Schwarz formulation)"). reim split + φ(0) fix compose unchanged.
     Bounded simply-connected scope only. Doc: `SCHWARZ_FORMULATION.md`. Oracle tests in qd-equations/algebra-store.
+  - **Solve one equation for one variable IN RADICALS** — NEW engine `app/sym-radical.js` (`QD.SymRadical`):
+    `solveByRadicals(poly, varName)` returns the closed-form roots as a small RADICAL-expression AST (rational
+    ℚ(i) leaves + add/mul/neg/div/pow/n-th-root/root-of-unity; `radicalToLatex` + `evalComplex`). Degree-≤4 closed
+    forms (quadratic / **Cardano** / **Ferrari**, the last feeding its resolvent-cubic root + √(2y) back through
+    the same solvers) + the **x^g quasi-polynomial reduction** (e.g. x⁶+b x⁴+c x²+d as a cubic in x², via
+    `seriesReversion`-free index-gcd regrouping + g-th roots) + **factorization** (`Sym.factor` / numeric
+    `qiFactor`, solve each varName-factor) ; honest Abel–Ruffini `ok:false` for irreducible degree ≥5. Cardano
+    uses v=−p/(3u) so the principal-branch numeric eval lands on a true root (casus irreducibilis returns the real
+    roots via complex radicals). Store `solveForVariable(id, varName)` runs the numeric ORACLE (`verifyRoots`:
+    sample the remaining vars at random ℚ(i) points, check the residual ≈0) and is **display-only** (radicals are
+    not MPolys → no DAG node). UI: a **"Solve for a variable"** inspector action (any equality) + a variable picker;
+    roots render as KaTeX in the inspector + verdict with a "verified ✓ (N samples, residual ≤ …)" line +
+    copy-LaTeX. Engine added to `asset-manifest.js` after `sym-core.js`; no `sym-core.js`/worker change. Tests:
+    `app/test/sym-radical.test.js` (oracle-based — every root verifies at random samples; the x⁶ headline; casus
+    irreducibilis; factored quintic; Abel–Ruffini refusal) + an `algebra-store` `solveForVariable` block.
   **Deferred (not started):** **#6 P3** — the worked PARAMETRIC cardioid example (run the interior
   `pointFunctionalSystem` (M₀,M₁) system through Maple RCTD offline, capture the qd-rctd cell JSON as a
   regression fixture + an AHARONOV_SHAPIRO.md section; needs an offline Maple run). Exotic/research-tier:

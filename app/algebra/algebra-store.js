@@ -60,6 +60,10 @@
     return (typeof window !== 'undefined' && window.QD && window.QD.QDEquations)
       || (typeof global !== 'undefined' && global.QD && global.QD.QDEquations) || (typeof QD !== 'undefined' && QD.QDEquations);
   }
+  function getSR() {
+    return (typeof window !== 'undefined' && window.QD && window.QD.SymRadical)
+      || (typeof global !== 'undefined' && global.QD && global.QD.SymRadical) || (typeof QD !== 'undefined' && QD.SymRadical);
+  }
 
   function create() {
     let seq = 0;
@@ -1075,6 +1079,31 @@
     // The real (reim) variable names of the current column — for the resolvent variable picker.
     function reimVariables(ids, opts) { return currentReimSystem(ids, opts || {}).vars; }
 
+    // Solve a SINGLE equation node for one variable IN RADICALS (closed form), with
+    // the remaining variables kept as symbolic coefficients (QD.SymRadical). Degree
+    // ≤4 closed forms + the x^g quasi-polynomial reduction + factorization; honest
+    // Abel–Ruffini refusal otherwise. Roots are RADICAL expressions (not MPolys), so
+    // this is a display-only query (no graph mutation) — the UI renders them. The
+    // numeric oracle (verifyRoots) substitutes random sample values for the remaining
+    // variables and checks the equation residual ≈0. Returns { ok, variable, roots
+    // (Radical AST nodes), count, method, verify:{checked,samples,maxResidual}, reason }.
+    function solveForVariable(id, varName, opts) {
+      opts = opts || {};
+      const SR = getSR();
+      if (!SR || typeof SR.solveByRadicals !== 'function') return { ok: false, reason: 'QD.SymRadical not loaded' };
+      const node = nodes.get(id);
+      if (!node) return { ok: false, reason: 'node not found' };
+      if (node.rel && node.rel !== '=') return { ok: false, reason: 'only equalities (p = 0) can be solved for a variable' };
+      if (!node.poly.vars().has(varName)) return { ok: false, reason: varName + ' does not appear in this equation' };
+      let r; try { r = SR.solveByRadicals(node.poly, varName); }
+      catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+      if (!r.ok) return { ok: false, reason: r.reason };
+      let verify = { checked: 0, samples: 0, maxResidual: Infinity };
+      try { verify = SR.verifyRoots(node.poly, varName, r.roots, { samples: opts.samples || 6 }); }
+      catch (e) { /* leave the default — UI flags an unverified result */ }
+      return { ok: true, variable: varName, roots: r.roots, count: r.roots.length, method: r.method, verify: verify };
+    }
+
     // Explicit REAL solutions (the actual quadrature domains): solve the pinned reim
     // system numerically (opts.paramValues pins the known data). Each solution is keyed
     // by the real variable names (v__re / v__im); the REAL ones (tiny imaginary part) are
@@ -1557,7 +1586,7 @@
       seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
-      currentReimSystem, classify, classifyAsync, resolventOf, reimVariables, solveReal, solveRealAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
+      currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       undo, redo, reset,

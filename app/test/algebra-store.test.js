@@ -8,6 +8,7 @@
 // =============================================================================
 require('./bootstrap');
 loadInCtx('sym-core.js');
+loadInCtx('sym-radical.js');      // QD.SymRadical — store.solveForVariable
 loadInCtx('faber-analysis.js');   // Durand–Kerner finder for store.solve
 loadInCtx('algebra/sym-worker.js');  // QD.SymWorker (main-thread fallback in Node)
 loadInCtx('qd-equations.js');
@@ -873,6 +874,35 @@ module.exports = async function run() {
     st3.seedFromSystem({ model: 'conjugate', w0Fixed: null,
       blocks: { locator: [{ eq: z2.add(zb2) }], star: [], gauge: [] } }, { withConjugates: false });
     ok('schwarz-seed: omitted formulation defaults to classical', st3.formulation === 'classical');
+  }
+
+  // ---- solveForVariable: closed-form (radical) solve of a single node --------
+  {
+    const S = QD.Sym, SR = QD.SymRadical;
+    const x = S.mpolyVar('z1'), a = S.mpolyVar('A1_1'), b = S.mpolyVar('a1');
+    // seed a hand-crafted quadratic in z1: A1_1·z1² + a1·z1 + 1 = 0
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem({ model: 'conjugate', w0Fixed: null,
+      blocks: { locator: [{ eq: a.mul(x.pow(2)).add(b.mul(x)).add(S.mpolyInt(1)), label: 'quad' }], star: [], gauge: [] } },
+      { withConjugates: false });
+    const node = st.list().find((n) => n.poly.vars().has('z1'));
+    const r = st.solveForVariable(node.id, 'z1');
+    ok('solveForVariable: solves the quadratic (2 roots, verified)',
+       r.ok && r.count === 2 && r.verify.checked > 0 && r.verify.maxResidual < 1e-6,
+       r.ok ? ('maxRel=' + r.verify.maxResidual.toExponential(2)) : r.reason);
+    ok('solveForVariable: roots render to LaTeX via radicalToLatex',
+       r.ok && /\\sqrt/.test(SR.radicalToLatex(r.roots[0], null, S)));
+    // a variable not present ⇒ ok:false
+    const r2 = st.solveForVariable(node.id, 'zb9');
+    ok('solveForVariable: absent variable ⇒ ok:false', !r2.ok);
+    // a non-equality (inequality) node ⇒ ok:false
+    const st2 = QD.AlgebraStore.create();
+    st2.seedFromSystem({ model: 'conjugate', w0Fixed: null,
+      blocks: { locator: [{ eq: a.mul(x.pow(2)).add(b.mul(x)).add(S.mpolyInt(1)) }], star: [], gauge: [] } },
+      { withConjugates: false });
+    const nn = st2.list()[0];
+    if (nn) { nn.rel = '>'; const r3 = st2.solveForVariable(nn.id, 'z1');
+      ok('solveForVariable: inequality node ⇒ ok:false', !r3.ok); }
   }
 
   // ---- factoring: factorOf (query) + applyFactor (case-split column) ----
