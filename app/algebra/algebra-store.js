@@ -12,12 +12,15 @@
 //   edge = { from, to }
 //
 // Seeded normalization state (part of the snapshot, so undo/redo restore it):
-//   model    -- 'conjugate' | 'reim'
-//   realVars -- base (primal) variables asserted REAL (z̄ⱼ≡zⱼ, …); substituted into
-//               every seeded equation and every later constraint/conjugate companion.
-//   w0Fixed  -- the fixed Riemann-map center φ(0)=w₀ ({re:[n,d], im:[n,d]} BigInt
-//               strings) when the seed system was generated with {w0}; substituted
-//               into any later constraint that rebuilds φ with the w₀ symbol.
+//   model    -- 'conjugate' | 'reim' (store-wide)
+//   PER-TRACK assumptions (C3 — `trackAssume`, one record per branch; a fork inherits its
+//   parent's at fork time, then diverges):
+//     realVars -- base (primal) variables asserted REAL (z̄ⱼ≡zⱼ, …); substituted into
+//                 every seeded equation and every later constraint/conjugate companion.
+//     imagVars -- base (primal) variables asserted IMAGINARY (z̄ⱼ≡−zⱼ, …).
+//     w0Fixed  -- the fixed Riemann-map center φ(0)=w₀ ({re:[n,d], im:[n,d]} BigInt
+//                 strings) when the seed system was generated with {w0}; substituted
+//                 into any later constraint that rebuilds φ with the w₀ symbol.
 //
 // Ops: seedFromSystem (●/★/gauge from generateClassicalBounded → the ORIGINAL system
 // at column 0; + conjugate companions), addConstraint (the four univalence forms).
@@ -74,23 +77,38 @@
     const redoStack = [];
     let model = 'conjugate';
     let formulation = 'classical';   // 'classical' (forward) | 'schwarz' (σ-principal-parts)
-    let realVars = [];            // base (primal) variables ASSERTED REAL (z̄ⱼ ≡ zⱼ, …)
-    let imagVars = [];            // base (primal) variables ASSERTED IMAGINARY (z̄ⱼ ≡ −zⱼ, …)
-    let w0Fixed = null;           // φ(0) fixed: { re:[n,d], im:[n,d] } (BigInt strings) or null
-
     // --- BRANCHING (tracks): the derivation is no longer a single linear chain --------
     // Each node carries a `track` id; the column index is the depth WITHIN its track.
     // One track is ACTIVE; every reduction/analysis reads + appends to the active track,
     // so the existing ops work unchanged once the column queries below are made
-    // track-relative. `forkTrack` copies a column into a new parallel track. (Per-track
-    // ASSUMPTION isolation — realVars/imagVars/w0Fixed per branch — is the next step C3;
-    // in A1 those stay global, so assumptions made before a fork are shared ancestry and
-    // assumptions made after a fork are NOT yet isolated between branches.)
+    // track-relative. `forkTrack` copies a column into a new parallel track.
     let trackSeq = 0;
     let activeTrackId = 't0';
     let tracks = [{ id: 't0', label: 'main', parentId: null, forkColumn: null }];
     function mkTrackId() { return 't' + (++trackSeq); }
     function hasTrack(id) { return tracks.some((t) => t.id === id); }
+
+    // --- PER-TRACK ASSUMPTIONS (C3) ---------------------------------------------------
+    // Reality (z̄ⱼ≡zⱼ), imaginary (z̄ⱼ≡−zⱼ) and the fixed Riemann-map center φ(0)=w₀ are
+    // scoped PER BRANCH, so an assumption made AFTER a fork is isolated to that branch.
+    // A fork INHERITS the parent's assumptions at fork time (shared ancestry, divergent
+    // thereafter). The _apply* folds + the assume* ops read/write the ACTIVE track's record;
+    // classify / the reim transform use the ANALYZED track's (resolved from the node ids).
+    //   realVars  -- base (primal) variables ASSERTED REAL
+    //   imagVars  -- base (primal) variables ASSERTED IMAGINARY
+    //   w0Fixed   -- φ(0) fixed: { re:[n,d], im:[n,d], approx? } (BigInt strings) or null
+    const trackAssume = new Map();   // trackId -> { realVars:[], imagVars:[], w0Fixed:null }
+    function assumeOf(track) {
+      track = track || activeTrackId;
+      let a = trackAssume.get(track);
+      if (!a) { a = { realVars: [], imagVars: [], w0Fixed: null }; trackAssume.set(track, a); }
+      return a;
+    }
+    function serializeAssume() {
+      return [...trackAssume].map(([k, a]) => [k, { realVars: a.realVars.slice(), imagVars: a.imagVars.slice(), w0Fixed: a.w0Fixed }]);
+    }
+    // Track of a node id (for resolving WHICH branch's assumptions an analysis uses).
+    function trackOf(id) { const n = nodes.get(id); return (n && n.track) || 't0'; }
 
     function nid() { return 'n' + (++seq); }
 
@@ -104,6 +122,7 @@
     const _BARRED_RE = /^(zb\d+|Ab\d+_\d+|Cb\d+_\d+|ab\d+|wb0|Zb\d*)$/;
     function _primalName(name) { const QC = getQC(); return (QC && QC.conjVarName && _BARRED_RE.test(name)) ? QC.conjVarName(name) : name; }
     function _realityRename() {
+      const realVars = assumeOf().realVars;
       if (!realVars.length) return null;
       const QC = getQC(); if (!QC || !QC.conjVarName) return null;
       const map = {};
@@ -119,6 +138,7 @@
     // imagVars and realVars are disjoint (a nonzero variable can't be both); reality is
     // folded first (relabel), then imaginary (subst) on the still-barred names.
     function _applyImaginary(poly) {
+      const imagVars = assumeOf().imagVars;
       if (!imagVars.length) return poly;
       const QC = getQC(), S = getSym(); if (!QC || !QC.conjVarName) return poly;
       const sub = {};
@@ -139,6 +159,7 @@
     // star form's φ − w₀), so the same exact value must be substituted into every
     // constraint poly for the workspace to stay on one normalization.
     function _applyW0(poly) {
+      const w0Fixed = assumeOf().w0Fixed;
       if (!w0Fixed) return poly;
       const vs = poly.vars();
       if (!vs.has('w0') && !vs.has('wb0')) return poly;
@@ -155,15 +176,18 @@
     // is a safe snapshot; `order` is copied because moveNode mutates it.
     function snapshot() {
       return { nodes: new Map([...nodes].map(([k, v]) => [k, v])), edges: edges.slice(), order: new Map(order), model, formulation, seq,
-        realVars: realVars.slice(), imagVars: imagVars.slice(), w0Fixed,
+        trackAssume: serializeAssume(),
         tracks: tracks.map((t) => ({ id: t.id, label: t.label, parentId: t.parentId, forkColumn: t.forkColumn })), activeTrackId, trackSeq };
     }
     function restore(s) {
       nodes.clear(); for (const [k, v] of s.nodes) nodes.set(k, v);
-      edges = s.edges.slice(); order = new Map(s.order || []); model = s.model; formulation = s.formulation || 'classical'; seq = s.seq; realVars = (s.realVars || []).slice(); imagVars = (s.imagVars || []).slice(); w0Fixed = s.w0Fixed || null;
+      edges = s.edges.slice(); order = new Map(s.order || []); model = s.model; formulation = s.formulation || 'classical'; seq = s.seq;
       tracks = (s.tracks && s.tracks.length) ? s.tracks.map((t) => ({ id: t.id, label: t.label, parentId: t.parentId, forkColumn: t.forkColumn })) : [{ id: 't0', label: 'main', parentId: null, forkColumn: null }];
       trackSeq = s.trackSeq || 0;
       activeTrackId = (s.activeTrackId && hasTrack(s.activeTrackId)) ? s.activeTrackId : tracks[0].id;
+      trackAssume.clear();
+      if (s.trackAssume) { for (const [k, a] of s.trackAssume) trackAssume.set(k, { realVars: (a.realVars || []).slice(), imagVars: (a.imagVars || []).slice(), w0Fixed: a.w0Fixed || null }); }
+      else { trackAssume.set('t0', { realVars: (s.realVars || []).slice(), imagVars: (s.imagVars || []).slice(), w0Fixed: s.w0Fixed || null }); }   // legacy snapshot
     }
     // Cap the undo history so a long derivation can't grow the snapshot stack without
     // bound (each snapshot holds a copy of the whole node map). 200 steps is far beyond
@@ -194,10 +218,14 @@
     // (model/realVars/w0Fixed) and the undo history. seedFromSystem uses this after a
     // checkpoint so re-seeding is undoable. The public reset() is the full wipe.
     // Also collapses to a single active track — a fresh seed is one main branch.
-    function clearGraph() { nodes.clear(); edges = []; order = new Map(); seq = 0; tracks = [{ id: 't0', label: 'main', parentId: null, forkColumn: null }]; activeTrackId = 't0'; trackSeq = 0; }
+    function clearGraph() {
+      nodes.clear(); edges = []; order = new Map(); seq = 0;
+      tracks = [{ id: 't0', label: 'main', parentId: null, forkColumn: null }]; activeTrackId = 't0'; trackSeq = 0;
+      const t0a = assumeOf('t0'); trackAssume.clear(); trackAssume.set('t0', t0a);   // collapse to one branch; keep t0's normalization (seedFromSystem resets it next)
+    }
     // FULL reset — also drops the undo/redo history and the normalization state. For
     // tearing the store down (tests / a fresh start), NOT for re-seeding.
-    function reset() { clearGraph(); model = 'conjugate'; formulation = 'classical'; realVars = []; imagVars = []; w0Fixed = null; undoStack.length = 0; redoStack.length = 0; }
+    function reset() { clearGraph(); model = 'conjugate'; formulation = 'classical'; trackAssume.clear(); trackAssume.set('t0', { realVars: [], imagVars: [], w0Fixed: null }); undoStack.length = 0; redoStack.length = 0; }
 
     // --- display order within a column ---------------------------------------
     // Cards are laid out top-to-bottom by `order` (then id, for stability).
@@ -275,9 +303,10 @@
       clearGraph();
       model = system.model || 'conjugate';
       formulation = system.formulation || 'classical';   // 'classical' | 'schwarz'
-      realVars = (bake && opts.realVars !== undefined) ? (opts.realVars || []).map(_primalName) : [];
-      imagVars = [];
-      w0Fixed = system.w0Fixed || null;   // remember the fixed φ(0) for later constraints
+      const a0 = assumeOf('t0');           // fresh seed = one main branch; set its assumptions
+      a0.realVars = (bake && opts.realVars !== undefined) ? (opts.realVars || []).map(_primalName) : [];
+      a0.imagVars = [];
+      a0.w0Fixed = system.w0Fixed || null;   // remember the fixed φ(0) for later constraints
       const primals = [];
       for (const block of ['locator', 'star', 'gauge']) {
         for (const item of system.blocks[block]) {
@@ -364,6 +393,10 @@
       checkpoint();
       const tid = mkTrackId();
       tracks.push({ id: tid, label: opts.label || ('branch ' + tid), parentId: fromTrack, forkColumn: fromCol });
+      // C3: the fork INHERITS the parent branch's assumptions at fork time (shared ancestry),
+      // and diverges thereafter (assume-real/imaginary/fix-φ(0) on the fork touch only its record).
+      const pa = assumeOf(fromTrack);
+      trackAssume.set(tid, { realVars: pa.realVars.slice(), imagVars: pa.imagVars.slice(), w0Fixed: pa.w0Fixed });
       const created = [];
       src.forEach((s, i) => {
         const copy = addNode({
@@ -391,6 +424,7 @@
       edges = edges.filter((e) => nodes.has(e.from) && nodes.has(e.to));
       const t = tracks.find((x) => x.id === id);
       tracks = tracks.filter((x) => x.id !== id);
+      trackAssume.delete(id);                       // C3: drop the deleted branch's assumptions
       if (activeTrackId === id) activeTrackId = (t && hasTrack(t.parentId)) ? t.parentId : 't0';
       return { ok: true };
     }
@@ -567,7 +601,7 @@
         poly: n.poly.relabel(rename),
         provenance: { op: 'assume-real', inputs: [n.id], vars: prim.slice() }, label,
       }));
-      if (res.ok) realVars = [...new Set([...realVars, ...prim])];
+      if (res.ok) { const a = assumeOf(); a.realVars = [...new Set([...a.realVars, ...prim])]; }
       return res;
     }
 
@@ -588,7 +622,7 @@
         poly: n.poly.subst(sub),
         provenance: { op: 'assume-imaginary', inputs: [n.id], vars: prim.slice() }, label,
       }));
-      if (res.ok) imagVars = [...new Set([...imagVars, ...prim])];
+      if (res.ok) { const a = assumeOf(); a.imagVars = [...new Set([...a.imagVars, ...prim])]; }
       return res;
     }
 
@@ -680,7 +714,8 @@
       const QC = getQC(), S = getSym();
       if (!QC || !QC.conjVarName) return [];
       const negOne = S.gaussInt(-1);
-      const real = new Set(realVars), imag = new Set(imagVars);
+      const _a = assumeOf();
+      const real = new Set(_a.realVars), imag = new Set(_a.imagVars);
       const src = (ids && ids.length) ? ids.map(get).filter(Boolean) : lastColumnNodes();
       const out = [], seen = new Set();
       for (const n of src) {
@@ -751,7 +786,7 @@
         return { poly: (v.has('w0') || v.has('wb0')) ? n.poly.subst(sub) : n.poly,
           provenance: { op: 'fix-w0', inputs: [n.id], value: record }, label };
       });
-      if (res.ok) w0Fixed = record;
+      if (res.ok) assumeOf().w0Fixed = record;
       return res;
     }
 
@@ -1013,9 +1048,9 @@
     }
 
     // Core reim transform on a given poly list (see currentReimSystem).
-    function _reimTransform(polys) {
+    function _reimTransform(polys, realVars) {
       const S = getSym();
-      const realSet = new Set(realVars);
+      const realSet = new Set(realVars || assumeOf().realVars);
       const I = S.mpolyConst(S.gaussInt(0, 1));
       const allVars = new Set();
       for (const p of polys) for (const v of p.vars()) allVars.add(v);
@@ -1044,8 +1079,11 @@
     function currentReimSystem(ids, opts) {
       opts = opts || {};
       const inputs = ((ids && ids.length) ? ids.map(get) : lastColumnNodes()).filter(Boolean).filter((n) => n.rel === '=');
+      // Use the ANALYZED branch's reality assumptions (resolved from the ids), not the active
+      // branch's — so classifying an off-screen branch (A6) reads its own assumptions (C3).
+      const track = (ids && ids.length) ? trackOf(ids[0]) : activeTrackId;
       const polys = _applyParamValues(inputs.map((n) => n.poly), opts.paramValues);
-      return _reimTransform(polys);
+      return _reimTransform(polys, assumeOf(track).realVars);
     }
 
     // Existence / uniqueness verdict for the current system, computed on the REAL (reim)
@@ -1106,9 +1144,11 @@
     // After a reduction removes a map variable from the system it is no longer a solved unknown,
     // but its value is recorded in the provenance — so φ can still be reconstructed (C). Walks
     // every node (a constant pin is permanent; the variable can't reappear).
-    function knownValues() {
+    function knownValues(track) {
+      track = track || activeTrackId;
       const out = {};
       for (const n of nodes.values()) {
+        if ((n.track || 't0') !== track) continue;   // C3: only THIS branch's pinned constants
         const pv = n.provenance; if (!pv) continue;
         if (pv.op === 'substitute' && Array.isArray(pv.variables)) {
           for (const rec of pv.variables) {
@@ -1119,6 +1159,7 @@
           for (const rec of pv.values) if (rec && rec.name && rec.value) out[rec.name] = { re: rec.value.re || 0, im: rec.value.im || 0 };
         }
       }
+      const w0Fixed = assumeOf(track).w0Fixed;
       if (w0Fixed) { const rat = (p) => (p ? Number(p[0]) / Number(p[1]) : 0); out.w0 = w0Fixed.approx ? { re: w0Fixed.approx.re || 0, im: w0Fixed.approx.im || 0 } : { re: rat(w0Fixed.re), im: rat(w0Fixed.im) }; }
       return out;
     }
@@ -1342,9 +1383,10 @@
       }
       if (Object.keys(sub).length) poly = poly.subst(sub);
       const applied = [];
-      if (realVars.length) applied.push('reality');
-      if (imagVars.length) applied.push('imaginary');
-      if (w0Fixed) applied.push('φ(0)');
+      const _a = assumeOf();
+      if (_a.realVars.length) applied.push('reality');
+      if (_a.imagVars.length) applied.push('imaginary');
+      if (_a.w0Fixed) applied.push('φ(0)');
       if (Object.keys(kv).filter((k) => k !== 'w0').length) applied.push('pinned values');
       return { poly, applied };
     }
@@ -1466,7 +1508,8 @@
       return {
         model,
         formulation,
-        w0Fixed,
+        w0Fixed: assumeOf().w0Fixed,              // active branch's (back-compat)
+        assumptions: serializeAssume(),           // C3: per-track reality / imaginary / fixed-φ(0)
         tracks: tracksList(),
         activeTrack: activeTrackId,
         nodes: list().map((n) => ({
@@ -1672,8 +1715,9 @@
       get model() { return model; },
       set model(m) { model = m; },
       get formulation() { return formulation; },
-      get realVars() { return realVars.slice(); },
-      get w0Fixed() { return w0Fixed; },
+      get realVars() { return assumeOf().realVars.slice(); },
+      get imagVars() { return assumeOf().imagVars.slice(); },
+      get w0Fixed() { return assumeOf().w0Fixed; },
       get size() { return nodes.size; },
     };
   }

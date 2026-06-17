@@ -961,6 +961,51 @@ module.exports = async function run() {
     ok('tracks: no-fork store stays single-track with the usual columns', st5.tracks().length === 1 && st5.activeTrack === 't0' && st5.maxColumn() >= 1);
   }
 
+  // ---- per-track assumptions (C3): reality / imaginary / fixed-φ(0) scoped per branch ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system);
+    st.assumeReal(['z1']);                                  // main branch: z1 real
+    ok('C3: the main branch records its reality assumption', st.realVars.includes('z1'));
+    const fk = st.forkTrack();                              // fork inherits z1-real at fork time
+    ok('C3: a fork inherits the parent assumptions at fork time', st.realVars.includes('z1'));
+    st.assumeReal(['a1']);                                  // fork-only: also a1 real
+    ok('C3: an assumption on the fork is recorded on the fork', st.realVars.includes('z1') && st.realVars.includes('a1'));
+    st.setActiveTrack('t0');
+    ok('C3: the main branch did NOT gain the fork-only assumption', st.realVars.includes('z1') && !st.realVars.includes('a1'));
+    st.setActiveTrack(fk.track);
+    ok('C3: switching back to the fork restores its own assumptions', st.realVars.includes('a1'));
+
+    // w0Fixed is per-track too
+    const stw = QD.AlgebraStore.create(); stw.seedFromSystem(system);
+    stw.forkTrack();
+    const rw = stw.fixW0({ re: 0, im: 0 });
+    const forkHasW0 = rw.ok && !!stw.w0Fixed;
+    stw.setActiveTrack('t0');
+    ok('C3: fixW0 on a fork sets w0Fixed on the fork but NOT on main', forkHasW0 && stw.w0Fixed === null);
+
+    // the headline: each branch's reim system uses ITS OWN reality (resolved from the node ids),
+    // regardless of which branch is active — so an off-screen branch classifies correctly (A6).
+    const stc = QD.AlgebraStore.create(); stc.seedFromSystem(system);
+    const fc = stc.forkTrack();
+    stc.assumeReal(['z1']);                                 // fork-only: z1 real
+    const mainIds = stc.orderedColumn(stc.maxColumn('t0'), 't0').map((n) => n.id);
+    const forkIds = stc.orderedColumn(stc.maxColumn(fc.track), fc.track).map((n) => n.id);
+    const mainReim = stc.reimVariables(mainIds);            // active is the fork, but ids resolve to main
+    const forkReim = stc.reimVariables(forkIds);
+    ok('C3: reim resolves each branch\'s own reality (z1 imag part present on main, absent on the z1-real fork)',
+       mainReim.includes('z1__im') && !forkReim.includes('z1__im'));
+
+    // knownValues is branch-scoped: a value pinned on a fork does not leak to main
+    const stk = QD.AlgebraStore.create(); stk.seedFromSystem(system);
+    const fkk = stk.forkTrack();
+    stk.substituteValue('A1_1', { re: 1, im: 0 }, { propagate: false });   // pin on the fork
+    const forkKnown = stk.knownValues();
+    const mainKnown = stk.knownValues('t0');
+    ok('C3: knownValues is branch-scoped (pinned on the fork, absent on main)',
+       forkKnown.A1_1 && !mainKnown.A1_1 && fkk.ok);
+  }
+
   // ---- factoring: factorOf (query) + applyFactor (case-split column) ----
   {
     const st = QD.AlgebraStore.create();

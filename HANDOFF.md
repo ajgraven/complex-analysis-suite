@@ -16,7 +16,7 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `4d8a61533b`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `c5955b5ab6`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
@@ -270,8 +270,25 @@ its own merged PR), with one feature **in progress on a branch**:
     is undoable. The reduction **breadcrumb** is now active-track-aware (filters nodes by `activeTrack` before
     labelling). Files: `algebra-ui.js` (`buildTrackBar`/`switchTrack`/`doFork`/`deleteBranch` + the inspector
     button + breadcrumb filter), `style.css` (`.algebra-trackbar`/chips/fork/`×`). Verified in-browser: fork→
-    "branch 1" active, switch back to main, delete, inspector fork — console clean. **Next = A6** (per-branch
-    status chips: each track shows its verdict via `classify`), then **C3** (per-branch assumption isolation).
+    "branch 1" active, switch back to main, delete, inspector fork — console clean.
+  - **Branching workspace — A6 (per-branch verdict chips)** — each track chip carries an existence/uniqueness
+    badge (`∅` no-QD · `∞` positive-dim family · `✓ 1 QD` unique · `N QD` · `?`/`fin`), color-coded, full phrasing
+    in the tooltip. A **"⟳ verdicts"** button (shown when >1 branch) classifies every branch sequentially via the
+    shipped `classifyAsync` (cancellable, busy-locked); the single-branch "Existence / uniqueness" action also
+    stamps the active chip. Badges are cached by a content signature of each branch's last column, so they blank
+    when that branch changes. UI-only (`algebra-ui.js` + `style.css`); reuses the reim-Gröbner + Hermite real-count.
+  - **Branching workspace — C3 (per-branch assumptions)** — reality / imaginary / fixed-φ(0) are now scoped PER
+    BRANCH (`trackAssume` map + `assumeOf(track)` in `algebra-store.js`; was global). A fork **inherits** the
+    parent's assumptions at fork time, then diverges — `assumeReal`/`assumeImaginary`/`fixW0` touch only the active
+    branch's record. `_reimTransform`/`currentReimSystem` resolve the analyzed branch from the node ids and use ITS
+    reality (so an off-screen branch — A6 — classifies under its own assumptions); `knownValues(track)` is
+    branch-scoped (a pinned value no longer leaks across branches). snapshot/restore + exportDAG carry per-track
+    assumptions; the getters `realVars`/`imagVars`/`w0Fixed` return the active branch's. Verified in-browser: on
+    the disk, assume-all-real on a fork → that branch reports **4 QD** while main stays **∞** (positive-dim) — the
+    assumption is isolated AND each branch classifies under its own. Tests: an `algebra-store` "per-track
+    assumptions (C3)" block (inherit-at-fork, isolate-after-fork, per-track w0Fixed, reim divergence, branch-scoped
+    knownValues); `algebra-store` now 203 (FLOOR 203). **Next = Phase 2 legibility** (C1 active-hypotheses strip,
+    C2 imaginary inference, B3 edge labels, …) per the roadmap.
   **Deferred (not started):** **#6 P3** — the worked PARAMETRIC cardioid example (run the interior
   `pointFunctionalSystem` (M₀,M₁) system through Maple RCTD offline, capture the qd-rctd cell JSON as a
   regression fixture + an AHARONOV_SHAPIRO.md section; needs an offline Maple run). Exotic/research-tier:
