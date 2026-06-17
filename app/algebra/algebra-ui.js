@@ -902,6 +902,20 @@
     // 0 selected → hide the inspector, show the workflow sections; 1 selected → that
     // node's equation + provenance + per-node actions (Duplicate / Copy / Delete);
     // 2 selected → the eliminate-a-variable (Sylvester resultant) panel.
+    // D3 — does this equality node actually factor? (guarded; the inspector hides the
+    // "Attempt to factor" action on irreducible equations). Cached per id+poly so repeated
+    // renders of the same selection don't refactor.
+    const _factorCache = new Map();
+    function _factorable(id) {
+      const n = store.get(id); if (!n) return false;
+      const key = id + ':' + (n.poly && n.poly.size ? n.poly.size() : 0);
+      if (_factorCache.has(key)) return _factorCache.get(key);
+      let ok = false;
+      try { ok = !!(store.factorOf && store.factorOf(id).ok); } catch (e) { ok = false; }
+      _factorCache.set(key, ok);
+      if (_factorCache.size > 256) _factorCache.delete(_factorCache.keys().next().value);
+      return ok;
+    }
     function renderInspector(sel) {
       const box = $('#alg-inspector'), sections = $('#alg-sections');
       if (!box) return;
@@ -959,14 +973,16 @@
           }));
         }
         // Attempt to factor (equalities in the current system only): split p=f·g into
-        // candidate systems V(p)=⋃V(fᵢ), pursued one case (factor) at a time.
-        if (n.rel === '=' && n.column === store.maxColumn()) {
+        // candidate systems V(p)=⋃V(fᵢ), pursued one case (factor) at a time. D3: shown only
+        // when the equation ACTUALLY factors (store.factorOf(id).ok) — not on irreducible ones.
+        if (n.rel === '=' && n.column === store.maxColumn() && _factorable(sel[0])) {
           acts.appendChild(mkBtn('Attempt to factor', 'Factor this equation; pick a factor fᵢ to pursue V(fᵢ)=0 as a new "case" column (V(p)=⋃ᵢV(fᵢ))', () => doFactor(sel[0], box)));
         }
         // Solve this equation for one variable in radicals (closed form), keeping the
         // others symbolic — degree ≤4 or reducible (e.g. x⁶+b x⁴+c x²+d as a cubic in x²).
         // Read-only display (roots are radicals, not polynomials); any equality, any column.
-        if (n.rel === '=') {
+        // D3: shown only when the equation actually has a variable to solve for.
+        if (n.rel === '=' && n.poly.vars().size >= 1) {
           acts.appendChild(mkBtn('Solve for a variable', 'Solve this equation for one chosen variable in radicals (closed form), keeping the remaining variables symbolic; degree ≤4 or reducible (quasi-polynomial / factorable). Result is displayed + numerically verified, not added to the graph.', () => doSolveRadical(sel[0], box)));
         }
         // Fork a new parallel branch starting from THIS node's column (A2) — explore a
