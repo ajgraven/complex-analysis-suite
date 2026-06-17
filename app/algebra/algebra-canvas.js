@@ -115,9 +115,43 @@
       _ro.observe(scroll);
     }
 
+    // B1 — derivation lineage: the transitive ancestors + descendants of the selection,
+    // walked over the store edges. "Propagation through the DAG" rendered as a visual lineage
+    // (this store is immutable / append-only, so nodes are never stale — the useful question
+    // is what a node was DERIVED FROM and what was derived FROM it).
+    let lineageSet = new Set();
+    function computeLineage() {
+      const lin = new Set();
+      if (!lastStore || !selected.length) { lineageSet = lin; return lin; }
+      const fwd = new Map(), bwd = new Map();
+      for (const e of lastStore.edges) {
+        if (!fwd.has(e.from)) fwd.set(e.from, []);
+        fwd.get(e.from).push(e.to);
+        if (!bwd.has(e.to)) bwd.set(e.to, []);
+        bwd.get(e.to).push(e.from);
+      }
+      const walk = (start, adj) => { const q = [start]; while (q.length) { const x = q.shift(); for (const y of (adj.get(x) || [])) if (!lin.has(y)) { lin.add(y); q.push(y); } } };
+      for (const s of selected) { walk(s, fwd); walk(s, bwd); }
+      for (const s of selected) lin.delete(s);   // the seeds carry .selected, not .lineage
+      lineageSet = lin; return lin;
+    }
+    // Toggle the .lineage class on the edge paths whose BOTH endpoints are in the lineage
+    // (selected ∪ ancestors ∪ descendants). Cheap; runs on selection change + after relayout.
+    function colorEdgeLineage() {
+      const inLin = (id) => selected.indexOf(id) >= 0 || lineageSet.has(id);
+      svg.querySelectorAll('path.algebra-edge').forEach((p) => {
+        const on = selected.length > 0 && inLin(p.getAttribute('data-from')) && inLin(p.getAttribute('data-to'));
+        p.classList.toggle('lineage', !!on);
+      });
+    }
     function renderSelection() {
-      track.querySelectorAll('.algebra-node').forEach((el) =>
-        el.classList.toggle('selected', selected.indexOf(el.dataset.id) >= 0));
+      computeLineage();
+      track.querySelectorAll('.algebra-node').forEach((el) => {
+        const id = el.dataset.id;
+        el.classList.toggle('selected', selected.indexOf(id) >= 0);
+        el.classList.toggle('lineage', lineageSet.has(id));
+      });
+      colorEdgeLineage();
     }
     function toggleSelect(id) {
       const i = selected.indexOf(id);
@@ -279,6 +313,9 @@
         path.setAttribute('d', 'M' + ax + ',' + ay + ' C' + mx + ',' + ay + ' ' + mx + ',' + by + ' ' + bx + ',' + by);
         path.setAttribute('class', 'algebra-edge');
         path.setAttribute('marker-end', 'url(#alg-arrow)');
+        path.setAttribute('data-from', e.from); path.setAttribute('data-to', e.to);   // B1: lineage hit-testing
+        const inLin = (id) => selected.indexOf(id) >= 0 || lineageSet.has(id);
+        if (selected.length && inLin(e.from) && inLin(e.to)) path.classList.add('lineage');
         svg.appendChild(path);
         // B3 — operation label on the arrow: a hover <title> on every edge, plus a small
         // visible label at the midpoint of CROSS-column edges (deduped per transition bundle,

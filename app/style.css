@@ -746,6 +746,9 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 #algebra-graph .algebra-node.selected { border-color: var(--c-accent, #2b7); box-shadow: 0 0 0 2px var(--c-accent, #2b7); }
+/* B1: derivation lineage — softer ring on the selection's ancestors/descendants + lit edges */
+#algebra-graph .algebra-node.lineage:not(.selected) { border-color: var(--c-accent, #2b7); box-shadow: 0 0 0 2px rgba(43,187,119,0.4); }
+#algebra-graph .algebra-edge.lineage { stroke: var(--c-accent, #2b7); stroke-width: 2.2; }
 #algebra-graph .algebra-generated  { border-left: 3px solid var(--c-accent, #2b7); }
 #algebra-graph .algebra-constraint { border-left: 3px solid var(--c-warn, #d80); }
 #algebra-graph .algebra-derived    { border-left: 3px solid var(--c-muted, #88a); }

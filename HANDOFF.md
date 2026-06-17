@@ -16,7 +16,7 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `c5955b5ab6`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `4b65d029c9`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
@@ -287,8 +287,23 @@ its own merged PR), with one feature **in progress on a branch**:
     the disk, assume-all-real on a fork → that branch reports **4 QD** while main stays **∞** (positive-dim) — the
     assumption is isolated AND each branch classifies under its own. Tests: an `algebra-store` "per-track
     assumptions (C3)" block (inherit-at-fork, isolate-after-fork, per-track w0Fixed, reim divergence, branch-scoped
-    knownValues); `algebra-store` now 203 (FLOOR 203). **Next = Phase 2 legibility** (C1 active-hypotheses strip,
-    C2 imaginary inference, B3 edge labels, …) per the roadmap.
+    knownValues); `algebra-store` now 203 (FLOOR 203).
+  - **Branching/legibility — Phase 2 (C1, C2, B3, B1, B2, D3)** — six legibility & reactivity items, each its
+    own commit (all UI/canvas-only; no store/engine change):
+    • **C1** active-hypotheses strip (`d64ba59`) — the active branch's real/imaginary/fixed-φ(0)/pinned chips.
+    • **C2** imaginary-variable inference — already shipped (the detector emits `kind:'imaginary'`; `renderSuggestions`
+      surfaces the "Assume … imaginary" apply button). No new work.
+    • **B3** inline edge op-labels (`3f77021`) — `handlers.edgeLabelOf` → a hover `<title>` on every derivation arrow
+      + a deduped visible op word on cross-column edges (white-halo text).
+    • **B2** DAG minimap (`fa997e3`) — a toggleable bird's-eye (▣ map) of the lanes with a draggable viewport box;
+      `canvas.setMinimap`.
+    • **D3** context-scoped node actions (`b4f4982`) — the inspector hides "Attempt to factor" on irreducible
+      equations (`store.factorOf().ok`) and "Solve for a variable" on constants (no variables).
+    • **B1** derivation-lineage highlighting (`<this commit>`) — REFRAMED from the roadmap's "dirty-mark descendants /
+      recompute" (which assumes mutable nodes; this store is immutable/append-only). Selecting a node highlights its
+      transitive ancestors + descendants + the connecting edges (BFS over `store.edges`) — "propagation through the
+      DAG" as a visual lineage view. Branch foundation + Phase 2 are now done; **Next = Phase 3** (E1 session
+      save/load, E3 literate-LaTeX export, E4 CAS-script export) per the roadmap.
   **Deferred (not started):** **#6 P3** — the worked PARAMETRIC cardioid example (run the interior
   `pointFunctionalSystem` (M₀,M₁) system through Maple RCTD offline, capture the qd-rctd cell JSON as a
   regression fixture + an AHARONOV_SHAPIRO.md section; needs an offline Maple run). Exotic/research-tier:
