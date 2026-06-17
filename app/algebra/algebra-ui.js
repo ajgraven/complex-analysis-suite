@@ -91,7 +91,7 @@
     // QE is non-null past the install guard above).
     const isClassicalBounded = QE.isClassicalBounded;
     function toast(msg, opts) { if (QD.QoL && QD.QoL.toast) QD.QoL.toast(msg, opts || {}); }
-    function rerender() { if (canvas) canvas.render(store, latexOf); renderInspector(canvas ? canvas.getSelection() : []); buildBreadcrumb(); buildTrackBar(); renderSuggestions(); }
+    function rerender() { if (canvas) canvas.render(store, latexOf); renderInspector(canvas ? canvas.getSelection() : []); buildBreadcrumb(); buildTrackBar(); renderSuggestions(); renderHypotheses(); }
 
     // ---- auto-detected variable-symmetry suggestions ("popup the moment an equation forces a
     // variable real/imaginary, or identifies two variables"). store.detectVariableRelations scans
@@ -193,6 +193,44 @@
       const hits = _detectRels();
       if (!hits.length) toast('No variable symmetry is forced by the current equations.');
       else toast(hits.length + ' variable symmetr' + (hits.length === 1 ? 'y' : 'ies') + ' detected — see the suggestion' + (hits.length === 1 ? '' : 's') + ' above.');
+    }
+
+    // ---- active-hypotheses context strip (C1) -------------------------------
+    // A compact, always-visible readout of the assumptions conditioning the CURRENT branch's
+    // system: variables assumed real / imaginary, the fixed φ(0), and any pinned constant
+    // values (substitute / linear-reduce). Per-branch since C3, so it names the active branch
+    // when more than one exists. Re-run from rerender() so it tracks every reduction.
+    function _fmtComplex(v) {
+      if (!v) return '?';
+      const f = (x) => String(Math.round(x * 1e6) / 1e6);
+      if (!v.im) return f(v.re);
+      if (!v.re) return f(v.im) + 'i';
+      return f(v.re) + (v.im < 0 ? ' − ' : ' + ') + f(Math.abs(v.im)) + 'i';
+    }
+    function renderHypotheses() {
+      const box = $('#alg-hypotheses'); if (!box) return;
+      if (!store.size) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+      const real = store.realVars || [], imag = store.imagVars || [];
+      const known = (store.knownValues && store.knownValues()) || {};
+      const pinned = Object.keys(known).filter((k) => k !== 'w0');
+      const chips = [];
+      if (real.length) chips.push({ cls: 'h-real', text: 'real: ' + real.map(latexPlain).join(', ') });
+      if (imag.length) chips.push({ cls: 'h-imag', text: 'imaginary: ' + imag.map(latexPlain).join(', ') });
+      if (store.w0Fixed) chips.push({ cls: 'h-w0', text: 'φ(0) = ' + _fmtComplex(known.w0) });
+      if (pinned.length) chips.push({ cls: 'h-pin', text: 'pinned: ' + pinned.map((k) => latexPlain(k) + ' = ' + _fmtComplex(known[k])).join(', ') });
+      box.innerHTML = '';
+      const lbl = document.createElement('span'); lbl.className = 'algebra-hyp-label';
+      const multi = (store.tracks && store.tracks().length > 1);
+      lbl.textContent = multi ? ('Hypotheses · ' + trackLabelOf(store.activeTrack)) : 'Active hypotheses';
+      box.appendChild(lbl);
+      if (!chips.length) {
+        const none = document.createElement('span'); none.className = 'algebra-hyp-none';
+        none.textContent = 'none yet — column 0 is the original system';
+        box.appendChild(none);
+      } else {
+        chips.forEach((c) => { const s = document.createElement('span'); s.className = 'algebra-hyp-chip ' + c.cls; s.textContent = c.text; box.appendChild(s); });
+      }
+      box.classList.remove('hidden');
     }
 
     // ---- persistent, dismissible error panel --------------------------------
@@ -530,6 +568,9 @@
         // Auto-detected reality suggestions: when an equation forces a variable real
         // (v − v̄ = 0), a one-click "Assume … real" appears here (populated by renderSuggestions).
         '  <div id="alg-suggest" class="algebra-suggest hidden"></div>' +
+        // Active-hypotheses strip (C1): the assumptions conditioning the CURRENT branch's
+        // system — reality / imaginary / fixed φ(0) / pinned values (populated by renderHypotheses).
+        '  <div id="alg-hypotheses" class="algebra-hypotheses hidden"></div>' +
         '</div>' +
         // ---- φ / h REFERENCE (always visible at the top: the symbolic forms + legend) ----
         '<div class="algebra-ref-block">' +
