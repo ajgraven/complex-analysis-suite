@@ -946,6 +946,38 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #algebra-graph .algebra-bc-chip.is-current { border-color: var(--c-accent, #2b7); font-weight: 600; }
 #algebra-graph .algebra-bc-sep { color: var(--c-muted, #88a); font-size: 11px; }
 
+/* Track switcher: parallel derivation branches, a chip rail floating over the graph.
+   Stacked just ABOVE the column breadcrumb (bottom-left) — branches are the outer
+   context, columns the inner — so it never collides with the top-right view toolbar. */
+#algebra-graph .algebra-trackbar {
+  position: absolute; left: 8px; bottom: 40px; z-index: 11; display: flex; align-items: center; gap: 4px;
+  max-width: 62%; overflow-x: auto; padding: 3px 6px;
+  background: var(--c-surface, #fff); border: 1px solid var(--c-border, #ccc);
+  border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.14);
+}
+#algebra-graph .algebra-trackbar.hidden { display: none; }
+#algebra-graph .algebra-track-lbl { color: var(--c-muted, #88a); font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
+#algebra-graph .algebra-track-chip {
+  display: inline-flex; align-items: center; gap: 2px;
+  border: 1px solid var(--c-border-soft, #ddd); background: var(--c-bg, #fff);
+  font-size: 11px; border-radius: 10px; padding: 1px 6px 1px 8px; white-space: nowrap; color: var(--c-text, #222);
+}
+#algebra-graph .algebra-track-chip.is-current { border-color: var(--c-accent, #2b7); font-weight: 600; }
+#algebra-graph .algebra-track-name { border: none; background: transparent; cursor: pointer; font: inherit; color: inherit; padding: 0; }
+#algebra-graph .algebra-track-chip.is-current .algebra-track-name { cursor: default; }
+#algebra-graph .algebra-track-name:hover { text-decoration: underline; }
+#algebra-graph .algebra-track-chip.is-current .algebra-track-name:hover { text-decoration: none; }
+#algebra-graph .algebra-track-x {
+  border: none; background: transparent; cursor: pointer; color: var(--c-muted, #88a);
+  font-size: 13px; line-height: 1; padding: 0 1px;
+}
+#algebra-graph .algebra-track-x:hover { color: var(--c-danger, #c33); }
+#algebra-graph .algebra-track-fork {
+  border: 1px dashed var(--c-border, #bbb); background: var(--c-bg, #fff); cursor: pointer;
+  font-size: 11px; border-radius: 10px; padding: 1px 8px; white-space: nowrap; color: var(--c-text, #222);
+}
+#algebra-graph .algebra-track-fork:hover { background: var(--c-border-soft, #eef); border-color: var(--c-accent, #2b7); }
+
 /* Brief highlight when a breadcrumb chip scrolls its lane into view */
 @keyframes algebra-col-flash { 0%, 100% { background: transparent; } 30% { background: rgba(34,170,119,0.16); } }
 #algebra-graph .algebra-column.algebra-column-flash { animation: algebra-col-flash 0.9s ease; border-radius: 6px; }

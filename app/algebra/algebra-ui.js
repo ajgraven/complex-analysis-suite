@@ -63,6 +63,7 @@
     let canvas = null;
     let surface = null;            // the #algebra-graph element
     let breadcrumb = null;         // the reduction-chain chip rail over the graph
+    let trackbar = null;           // the parallel-branch (track) switcher rail over the graph
     let mounted = false;
     let activeEnv = null;          // latest classical-bounded solve envelope
     let lastCap = 6;
@@ -89,7 +90,7 @@
     // QE is non-null past the install guard above).
     const isClassicalBounded = QE.isClassicalBounded;
     function toast(msg, opts) { if (QD.QoL && QD.QoL.toast) QD.QoL.toast(msg, opts || {}); }
-    function rerender() { if (canvas) canvas.render(store, latexOf); renderInspector(canvas ? canvas.getSelection() : []); buildBreadcrumb(); renderSuggestions(); }
+    function rerender() { if (canvas) canvas.render(store, latexOf); renderInspector(canvas ? canvas.getSelection() : []); buildBreadcrumb(); buildTrackBar(); renderSuggestions(); }
 
     // ---- auto-detected variable-symmetry suggestions ("popup the moment an equation forces a
     // variable real/imaginary, or identifies two variables"). store.detectVariableRelations scans
@@ -925,6 +926,9 @@
         if (n.rel === '=') {
           acts.appendChild(mkBtn('Solve for a variable', 'Solve this equation for one chosen variable in radicals (closed form), keeping the remaining variables symbolic; degree ≤4 or reducible (quasi-polynomial / factorable). Result is displayed + numerically verified, not added to the graph.', () => doSolveRadical(sel[0], box)));
         }
+        // Fork a new parallel branch starting from THIS node's column (A2) — explore a
+        // different line of assumptions from here while leaving the current branch intact.
+        acts.appendChild(mkBtn('Fork from here', 'Start a new parallel branch from this column: copies the column into a fresh track you can reduce independently, leaving the current branch untouched.', () => { if (canvas) canvas.clearSelection(); doFork(n.column); }));
         box.appendChild(acts);
         return;
       }
@@ -1679,6 +1683,8 @@
       buildToolbar(surface);
       breadcrumb = document.createElement('div'); breadcrumb.className = 'algebra-breadcrumb';
       surface.appendChild(breadcrumb);
+      trackbar = document.createElement('div'); trackbar.className = 'algebra-trackbar hidden';
+      surface.appendChild(trackbar);
       // Keyboard a11y (active only while the Algebra tab is visible, and not while typing in
       // a field): Esc clears the selection; Delete/Backspace deletes a single selected node.
       document.addEventListener('keydown', (ev) => {
@@ -1704,9 +1710,10 @@
       breadcrumb.classList.remove('hidden');
       const cols = store.columns();
       const mx = store.maxColumn();
+      const at = store.activeTrack;
       cols.forEach((c, i) => {
         if (i > 0) { const arr = document.createElement('span'); arr.className = 'algebra-bc-sep'; arr.textContent = '→'; breadcrumb.appendChild(arr); }
-        const info = columnInfo(c.index, store.list().filter((n) => n.column === c.index));
+        const info = columnInfo(c.index, store.list().filter((n) => (n.track || 't0') === at && n.column === c.index));
         const chip = document.createElement('button');
         chip.type = 'button';
         chip.className = 'algebra-bc-chip' + (c.index === mx ? ' is-current' : '');
@@ -1715,6 +1722,77 @@
         chip.addEventListener('click', () => { if (canvas && canvas.scrollToColumn) canvas.scrollToColumn(c.index); });
         breadcrumb.appendChild(chip);
       });
+    }
+    // ---- parallel derivation branches (tracks, A2) --------------------------
+    // The track switcher rail (top-left over the graph): one chip per branch in
+    // store.tracks(). The ACTIVE branch is highlighted; the canvas renders only that
+    // branch's lanes, so clicking another chip (a view change — not undoable on its own)
+    // swaps which derivation is on screen. A non-main branch carries an × to delete it
+    // (store refuses 't0' and any branch with children). The trailing "＋ Fork" button
+    // forks the active branch at its current/last column into a fresh parallel track.
+    // Rebuilt on every rerender; shown whenever a system exists.
+    function trackLabelOf(id) { const t = store.tracks().find((x) => x.id === id); return t ? t.label : id; }
+    function buildTrackBar() {
+      if (!trackbar) return;
+      trackbar.innerHTML = '';
+      if (!store.size) { trackbar.classList.add('hidden'); return; }
+      trackbar.classList.remove('hidden');
+      const active = store.activeTrack;
+      const lbl = document.createElement('span'); lbl.className = 'algebra-track-lbl'; lbl.textContent = 'branches';
+      trackbar.appendChild(lbl);
+      store.tracks().forEach((t) => {
+        const chip = document.createElement('span');
+        chip.className = 'algebra-track-chip' + (t.id === active ? ' is-current' : '');
+        const name = document.createElement('button');
+        name.type = 'button'; name.className = 'algebra-track-name'; name.textContent = t.label;
+        name.title = t.parentId
+          ? ('forked from ' + (trackLabelOf(t.parentId) || t.parentId) + ' at column ' + (t.forkColumn != null ? t.forkColumn : '?') + (t.id === active ? ' · current branch' : ' · click to view'))
+          : 'the original derivation' + (t.id === active ? ' · current branch' : ' · click to view');
+        if (t.id !== active) name.addEventListener('click', () => switchTrack(t.id));
+        chip.appendChild(name);
+        if (t.id !== 't0') {
+          const x = document.createElement('button');
+          x.type = 'button'; x.className = 'algebra-track-x'; x.textContent = '×';
+          x.title = 'Delete this branch (and its derivation)';
+          x.addEventListener('click', (ev) => { ev.stopPropagation(); deleteBranch(t.id); });
+          chip.appendChild(x);
+        }
+        trackbar.appendChild(chip);
+      });
+      const fork = document.createElement('button');
+      fork.type = 'button'; fork.className = 'algebra-track-fork'; fork.textContent = '＋ Fork';
+      fork.title = 'Fork the current system into a new parallel branch — explore a different line of assumptions without disturbing this one';
+      fork.addEventListener('click', () => doFork(store.maxColumn()));
+      trackbar.appendChild(fork);
+    }
+    // Switch the on-screen branch (a view change — clears the selection, which may point
+    // at off-branch nodes, then rerenders the now-active branch's lanes).
+    function switchTrack(id) {
+      if (busyGuard()) return;
+      if (!store.setActiveTrack(id)) return;
+      if (canvas) canvas.clearSelection();
+      rerender(); refreshPickers();
+      toast('Viewing ' + trackLabelOf(id));
+    }
+    // Fork the active branch at `fromColumn` into a new parallel track (deep-copies the
+    // column as the new branch's column 0, makes it active). Undoable. Clears the
+    // selection so the inspector doesn't dangle on a now-off-screen node.
+    function doFork(fromColumn) {
+      if (busyGuard()) return;
+      const r = store.forkTrack({ fromTrack: store.activeTrack, fromColumn: fromColumn, label: 'branch ' + store.tracks().length });
+      if (!r || !r.ok) { toast((r && r.reason) || 'could not fork', { kind: 'error' }); return; }
+      if (canvas) canvas.clearSelection();
+      rerender(); refreshPickers();
+      toast('Forked ' + trackLabelOf(r.track) + ' from column ' + fromColumn);
+    }
+    // Delete a non-main branch (store refuses 't0' / branches with children, surfaced as a toast).
+    function deleteBranch(id) {
+      if (busyGuard()) return;
+      const r = store.deleteTrack(id);
+      if (!r || !r.ok) { toast((r && r.reason) || 'could not delete this branch', { kind: 'error' }); return; }
+      if (canvas) canvas.clearSelection();
+      rerender(); refreshPickers();
+      toast('Deleted branch');
     }
     // Floating view/history toolbar over the graph (node-editor pattern): zoom, fit,
     // expand/collapse-all, undo/redo. Appended AFTER canvas.create (which clears the

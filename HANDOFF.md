@@ -16,7 +16,7 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `cea6bd06d8`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `4d8a61533b`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
@@ -260,6 +260,18 @@ its own merged PR), with one feature **in progress on a branch**:
     multi-track layout + switcher are **A2** (next); per-track ASSUMPTION isolation (realVars/imagVars/w0Fixed stay
     global for now) is **C3**. Tests: an `algebra-store` "branching (tracks)" block (fork copies the source column,
     reductions stay on the active branch, undo removes a fork, deleteTrack, cross-branch guard, no-fork regression).
+  - **Branching workspace — A2 (fork / parallel-tracks UI)** — makes A1 visible (UI-only; no store/engine change).
+    A **track switcher rail** floats over the graph (bottom-left, stacked just above the column breadcrumb —
+    branches are the outer context, columns the inner): one chip per `store.tracks()`, the ACTIVE branch
+    highlighted, clicking another switches (a view change — clears the selection + rerenders the now-active
+    branch's lanes), a non-main chip carries an `×` to delete it, and a trailing **`＋ Fork`** button forks the
+    active branch at its current/last column. The node **inspector** gains a **"Fork from here"** action (forks
+    from that node's column). All three wire `forkTrack`/`setActiveTrack`/`deleteTrack` through `busyGuard`; fork
+    is undoable. The reduction **breadcrumb** is now active-track-aware (filters nodes by `activeTrack` before
+    labelling). Files: `algebra-ui.js` (`buildTrackBar`/`switchTrack`/`doFork`/`deleteBranch` + the inspector
+    button + breadcrumb filter), `style.css` (`.algebra-trackbar`/chips/fork/`×`). Verified in-browser: fork→
+    "branch 1" active, switch back to main, delete, inspector fork — console clean. **Next = A6** (per-branch
+    status chips: each track shows its verdict via `classify`), then **C3** (per-branch assumption isolation).
   **Deferred (not started):** **#6 P3** — the worked PARAMETRIC cardioid example (run the interior
   `pointFunctionalSystem` (M₀,M₁) system through Maple RCTD offline, capture the qd-rctd cell JSON as a
   regression fixture + an AHARONOV_SHAPIRO.md section; needs an offline Maple run). Exotic/research-tier:
