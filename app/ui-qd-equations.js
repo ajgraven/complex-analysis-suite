@@ -76,6 +76,7 @@
     if (!card || !content || !QE) return {};
 
     const repReim = $('#qdeq-rep-reim');
+    const formSchwarz = $('#qdeq-form-schwarz');
     const w0Fix   = $('#qdeq-w0-fix');
     const capInp  = $('#qdeq-cap');
     const genBtn  = $('#qdeq-generate');
@@ -86,6 +87,7 @@
     let activeEnv = null;     // latest gated bounded solve envelope
     let lastSystem = null;    // generated system (MPoly eqs) for export
     let lastModel = 'conjugate';
+    let lastFormulation = 'classical';
     let debounceTimer = null;
 
     const STR = (QD.Strings && QD.Strings.qdEquations) || {};
@@ -143,7 +145,8 @@
       gauge: 'Gauge normalization:  Σ Im A_{j,1} = 0',
     };
 
-    function render(sys, res, model) {
+    function render(sys, res, model, formulation) {
+      const schwarz = formulation === 'schwarz' || sys.formulation === 'schwarz';
       const lx = QE.systemToLatex(sys);
       const c = sys.counts;
       const nEq = lx.blocks.locator.length + lx.blocks.star.length + lx.blocks.gauge.length;
@@ -152,7 +155,8 @@
       const head = [];
       head.push('<div class="geom-row"><span class="key">structure:</span> ' +
         sys.n + ' pole' + (sys.n === 1 ? '' : 's') + ', total order ' + sys.d +
-        ' <span class="hint">(' + (model === 'reim' ? 'real/imaginary split' : 'conjugate model over ℚ(i)') + ')</span></div>');
+        ' <span class="hint">(' + (schwarz ? 'Schwarz formulation, ' : '') +
+        (model === 'reim' ? 'real/imaginary split' : 'conjugate model over ℚ(i)') + ')</span></div>');
       const breakdown = lx.blocks.locator.length + ' locator + ' + lx.blocks.star.length +
         ' star + ' + lx.blocks.gauge.length + ' gauge';
       if (model === 'reim') {
@@ -210,6 +214,15 @@
       legend.className = 'qdeq-legend';
       content.appendChild(legend);
       renderLegendInto(legend, model);
+      if (schwarz) {
+        const sn = document.createElement('div');
+        sn.className = 'hint';
+        sn.innerHTML = 'Schwarz formulation: the (★) block is replaced by matching each ' +
+          'C<sub>j,s</sub> to the principal parts of the Schwarz function σ(w) at the node ' +
+          'a<sub>j</sub> = φ(z<sub>j</sub>) (the inverse-direction dual of the forward block). ' +
+          'Same variety, different polynomials.';
+        legend.appendChild(sn);
+      }
 
       for (const block of ['locator', 'star', 'gauge']) {
         const items = lx.blocks[block];
@@ -218,7 +231,9 @@
         sec.className = 'qdeq-block';
         const title = document.createElement('div');
         title.className = 'key qdeq-block-title';
-        title.textContent = BLOCK_TITLES[block] || block;
+        title.textContent = (schwarz && block === 'star')
+          ? 'Schwarz principal-part match (★_S):  C_{j,s} ← σ poles at a_j'
+          : (BLOCK_TITLES[block] || block);
         sec.appendChild(title);
         for (const it of items) {
           const row = document.createElement('div');
@@ -248,6 +263,11 @@
       const hData = activeEnv.hData;
       const model = (repReim && repReim.checked) ? 'reim' : 'conjugate';
       lastModel = model;
+      // Formulation (orthogonal to representation): the Schwarz-function alternate
+      // system (σ-principal-parts) vs the default classical/forward system. Either
+      // can then be shown in the conjugate or reim representation.
+      const schwarz = !!(formSchwarz && formSchwarz.checked);
+      lastFormulation = schwarz ? 'schwarz' : 'classical';
       const cap = clampInt(capInp ? capInp.value : 6, 1, 12, 6);
       if (capInp && String(cap) !== capInp.value) capInp.value = String(cap);
 
@@ -258,7 +278,8 @@
 
       let displaySys, res;
       try {
-        const sys = QE.generateClassicalBounded(hData, { maxPoleOrder: cap, w0: w0Sel || undefined });
+        const gen = schwarz ? QE.generateSchwarzBounded : QE.generateClassicalBounded;
+        const sys = gen(hData, { maxPoleOrder: cap, w0: w0Sel || undefined });
         if (model === 'reim') {
           displaySys = QE.reimSplit(sys);
           res = QE.residualReimAtSolution(displaySys, phi, hData);
@@ -275,7 +296,7 @@
         return;
       }
       lastSystem = displaySys;
-      render(displaySys, res, model);
+      render(displaySys, res, model, lastFormulation);
       setExportEnabled(true);
     }
 
@@ -303,7 +324,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'qd-equations-' + lastModel + '.json';
+      a.download = 'qd-equations-' + lastFormulation + '-' + lastModel + '.json';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -319,7 +340,7 @@
     if (openBtn) openBtn.addEventListener('click', () => { if (ctx.openAlgebra) ctx.openAlgebra(); });
     if (capInp)  capInp.addEventListener('input', generateDebounced);
     if (w0Fix)   w0Fix.addEventListener('change', generate);
-    const repInputs = card.querySelectorAll('input[name="qdeq-rep"]');
+    const repInputs = card.querySelectorAll('input[name="qdeq-rep"], input[name="qdeq-form"]');
     for (let i = 0; i < repInputs.length; i++) repInputs[i].addEventListener('change', generate);
 
     // A manual edit invalidates the current solution: grey the card until re-solve.

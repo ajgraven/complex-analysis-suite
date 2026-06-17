@@ -69,6 +69,7 @@
     const undoStack = [];         // snapshots (most recent last)
     const redoStack = [];
     let model = 'conjugate';
+    let formulation = 'classical';   // 'classical' (forward) | 'schwarz' (σ-principal-parts)
     let realVars = [];            // base (primal) variables ASSERTED REAL (z̄ⱼ ≡ zⱼ, …)
     let imagVars = [];            // base (primal) variables ASSERTED IMAGINARY (z̄ⱼ ≡ −zⱼ, …)
     let w0Fixed = null;           // φ(0) fixed: { re:[n,d], im:[n,d] } (BigInt strings) or null
@@ -135,11 +136,11 @@
     // objects are never mutated in place (only added), so a shallow node-map copy
     // is a safe snapshot; `order` is copied because moveNode mutates it.
     function snapshot() {
-      return { nodes: new Map([...nodes].map(([k, v]) => [k, v])), edges: edges.slice(), order: new Map(order), model, seq, realVars: realVars.slice(), imagVars: imagVars.slice(), w0Fixed };
+      return { nodes: new Map([...nodes].map(([k, v]) => [k, v])), edges: edges.slice(), order: new Map(order), model, formulation, seq, realVars: realVars.slice(), imagVars: imagVars.slice(), w0Fixed };
     }
     function restore(s) {
       nodes.clear(); for (const [k, v] of s.nodes) nodes.set(k, v);
-      edges = s.edges.slice(); order = new Map(s.order || []); model = s.model; seq = s.seq; realVars = (s.realVars || []).slice(); imagVars = (s.imagVars || []).slice(); w0Fixed = s.w0Fixed || null;
+      edges = s.edges.slice(); order = new Map(s.order || []); model = s.model; formulation = s.formulation || 'classical'; seq = s.seq; realVars = (s.realVars || []).slice(); imagVars = (s.imagVars || []).slice(); w0Fixed = s.w0Fixed || null;
     }
     // Cap the undo history so a long derivation can't grow the snapshot stack without
     // bound (each snapshot holds a copy of the whole node map). 200 steps is far beyond
@@ -171,7 +172,7 @@
     function clearGraph() { nodes.clear(); edges = []; order = new Map(); seq = 0; }
     // FULL reset — also drops the undo/redo history and the normalization state. For
     // tearing the store down (tests / a fresh start), NOT for re-seeding.
-    function reset() { clearGraph(); model = 'conjugate'; realVars = []; w0Fixed = null; undoStack.length = 0; redoStack.length = 0; }
+    function reset() { clearGraph(); model = 'conjugate'; formulation = 'classical'; realVars = []; w0Fixed = null; undoStack.length = 0; redoStack.length = 0; }
 
     // --- display order within a column ---------------------------------------
     // Cards are laid out top-to-bottom by `order` (then id, for stability).
@@ -246,6 +247,7 @@
       checkpoint();
       clearGraph();
       model = system.model || 'conjugate';
+      formulation = system.formulation || 'classical';   // 'classical' | 'schwarz'
       realVars = (bake && opts.realVars !== undefined) ? (opts.realVars || []).map(_primalName) : [];
       imagVars = [];
       w0Fixed = system.w0Fixed || null;   // remember the fixed φ(0) for later constraints
@@ -1361,6 +1363,7 @@
     function exportDAG() {
       return {
         model,
+        formulation,
         w0Fixed,
         nodes: list().map((n) => ({
           id: n.id, kind: n.kind, label: n.label, rel: n.rel, column: n.column,
@@ -1562,6 +1565,7 @@
       get edges() { return edges; },
       get model() { return model; },
       set model(m) { model = m; },
+      get formulation() { return formulation; },
       get realVars() { return realVars.slice(); },
       get w0Fixed() { return w0Fixed; },
       get size() { return nodes.size; },

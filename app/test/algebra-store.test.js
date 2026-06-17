@@ -844,6 +844,37 @@ module.exports = async function run() {
        r2.ok && !r2.node.poly.vars().has('zb1'));
   }
 
+  // ---- Schwarz-function formulation seeds cleanly (system.formulation threaded) ----
+  {
+    const S = QD.Sym;
+    const swSys = QE.generateSchwarzBounded(hData);
+    ok('schwarz-seed: generator tags the system formulation:schwarz', swSys.formulation === 'schwarz');
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(swSys);
+    ok('schwarz-seed: store.formulation reflects the seeded system', st.formulation === 'schwarz');
+    ok('schwarz-seed: same node count as the classical seed (●+★_S+gauge incl. conjugates)',
+       st.size === swSys.counts.realEquations);
+    ok('schwarz-seed: conjugate companions still added (locator + star)',
+       st.list().filter((n) => n.provenance.op === 'conjugate').length === 2);
+    ok('schwarz-seed: exportDAG carries the formulation', st.exportDAG().formulation === 'schwarz');
+    // a reduction column then undo preserves/restores the formulation tag
+    st.assumeReal(st.baseVariables());
+    ok('schwarz-seed: formulation survives a reduction', st.formulation === 'schwarz');
+    st.undo();
+    ok('schwarz-seed: formulation survives undo', st.formulation === 'schwarz');
+    // a hand-crafted schwarz system (the test idiom) also tags through
+    const z2 = S.mpolyVar('z2'), zb2 = S.mpolyVar('zb2');
+    const st2 = QD.AlgebraStore.create();
+    st2.seedFromSystem({ model: 'conjugate', formulation: 'schwarz', w0Fixed: null,
+      blocks: { locator: [{ eq: z2.add(zb2), label: 'test' }], star: [], gauge: [] } }, { withConjugates: false });
+    ok('schwarz-seed: hand-crafted formulation:schwarz is honored', st2.formulation === 'schwarz');
+    // and the default (no formulation field) stays classical
+    const st3 = QD.AlgebraStore.create();
+    st3.seedFromSystem({ model: 'conjugate', w0Fixed: null,
+      blocks: { locator: [{ eq: z2.add(zb2) }], star: [], gauge: [] } }, { withConjugates: false });
+    ok('schwarz-seed: omitted formulation defaults to classical', st3.formulation === 'classical');
+  }
+
   // ---- factoring: factorOf (query) + applyFactor (case-split column) ----
   {
     const st = QD.AlgebraStore.create();

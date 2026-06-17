@@ -258,7 +258,13 @@
         const w0cb = $('#alg-w0-fix');
         const fixW0 = !w0cb || w0cb.checked;
         const w0Sel = fixW0 ? (activeEnv.w0Used || (activeEnv.primary && activeEnv.primary.phi && activeEnv.primary.phi.w0)) : undefined;
-        const sys = QE.generateClassicalBounded(activeEnv.hData, { maxPoleOrder: lastCap, w0: w0Sel });
+        // Formulation follows the equations-card selector (classical/forward by default,
+        // or the Schwarz-function σ-principal-parts alternate) — the same DOM radio so
+        // the workspace seeds whichever system the user chose on the card.
+        const useSchwarz = !!($('#qdeq-form-schwarz') && $('#qdeq-form-schwarz').checked) &&
+          typeof QE.generateSchwarzBounded === 'function';
+        const gen = useSchwarz ? QE.generateSchwarzBounded : QE.generateClassicalBounded;
+        const sys = gen(activeEnv.hData, { maxPoleOrder: lastCap, w0: w0Sel });
         store.seedFromSystem(sys);
         _seededHData = activeEnv.hData;                 // remember what we seeded from (A4)
         // A fresh seed invalidates prior picker selections AND any node selection whose
@@ -271,6 +277,7 @@
           '<table class="algebra-seed-table"><tbody>' +
           '<tr><th>Equations</th><td><b>' + store.size + '</b> <span class="hint">(incl. conjugates)</span></td></tr>' +
           '<tr><th>Poles</th><td>' + sys.n + ' · order ' + sys.d + '</td></tr>' +
+          '<tr><th>Formulation</th><td>' + (useSchwarz ? 'Schwarz function (★_S)' : 'classical (forward)') + '</td></tr>' +
           '<tr><th>φ(0)</th><td>' + w0txt + '</td></tr>' +
           '</tbody></table>' +
           '<div class="hint">Each assumption below adds a new column.</div>');
@@ -1533,7 +1540,8 @@
     // The per-column LABEL (the relationship to the previous column): column 0 is the
     // original system; each later column is phrased as the transformation that derived it.
     function columnLabel(c, ns) {
-      if (c === 0) return 'Original system' + (store.w0Fixed ? ' · φ(0) fixed' : '');
+      if (c === 0) return 'Original system' + (store.formulation === 'schwarz' ? ' (Schwarz formulation)' : '') +
+        (store.w0Fixed ? ' · φ(0) fixed' : '');
       const rep = (ns || []).find((n) => n.provenance && n.provenance.op !== 'conjugate' && n.provenance.op !== 'propagate') || (ns || [])[0];
       const p = (rep && rep.provenance) || {};
       switch (p.op) {

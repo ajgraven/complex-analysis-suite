@@ -376,6 +376,70 @@ module.exports = async function run() {
          worst < 1e-3, 'worst=' + worst.toExponential(2));
     }
   }
+
+  // ---- Schwarz-function formulation (generateSchwarzBounded): the σ-principal-parts
+  //      ALTERNATIVE to the forward (★). Same {z_j,A_{j,k}} variety, algebraically
+  //      different (★_S) block (matches C_{j,s} to the Schwarz function's principal
+  //      parts at a_j=φ(z_j) via series reversion). Oracle: residual ≈0 at the true φ. ----
+  {
+    ok('generateSchwarzBounded is exposed', typeof QE.generateSchwarzBounded === 'function');
+
+    // order-2 translated cardioid: φ(z)=¼+z+z²/2 — exact, no solver needed.
+    const hData = { poles: [{ a: { re: 0.25, im: 0 }, principal: [{ re: 1.5, im: 0 }, { re: 0.5, im: 0 }] }] };
+    const phi = { unbounded: false, w0: { re: 0.25, im: 0 }, branches: [{ z: { re: 0, im: 0 }, A: [{ re: 1, im: 0 }, { re: 0.5, im: 0 }] }] };
+    const sw = QE.generateSchwarzBounded(hData);
+    const cl = QE.generateClassicalBounded(hData);
+
+    ok('schwarz: formulation tag', sw.formulation === 'schwarz');
+    ok('schwarz: same equation counts as classical (●+★_S+gauge)',
+       sw.blocks.locator.length === cl.blocks.locator.length &&
+       sw.blocks.star.length === cl.blocks.star.length &&
+       sw.blocks.gauge.length === cl.blocks.gauge.length);
+    ok('schwarz: ORACLE — residual ≈0 at the exact cardioid φ',
+       QE.residualAtSolution(sw, phi, hData).max < 1e-10);
+    ok('schwarz: classical residual also ≈0 (same variety)',
+       QE.residualAtSolution(cl, phi, hData).max < 1e-10);
+
+    // genuine alternate presentation: at least one (★_S) poly differs from the (★) poly.
+    let differ = false;
+    for (let i = 0; i < sw.blocks.star.length; i++) {
+      if (!sw.blocks.star[i].eq.equals(cl.blocks.star[i].eq)) differ = true;
+    }
+    ok('schwarz: (★_S) polynomials differ from (★) (not the same equations)', differ);
+    // locator + gauge are reused verbatim (identical polys).
+    ok('schwarz: locator/gauge blocks identical to classical (reused verbatim)',
+       sw.blocks.locator[0].eq.equals(cl.blocks.locator[0].eq) &&
+       sw.blocks.gauge[0].eq.equals(cl.blocks.gauge[0].eq));
+
+    // re/im split composes with the Schwarz system.
+    ok('schwarz: reim-split residual ≈0 at the exact φ',
+       QE.residualReimAtSolution(QE.reimSplit(sw), phi, hData).max < 1e-10);
+
+    // φ(0) fix composes: the FIXED Schwarz system drops w0/wb0 and still verifies.
+    const swFixed = QE.generateSchwarzBounded(hData, { w0: { re: 0.25, im: 0 } });
+    const sv = new Set();
+    for (const b of ['locator', 'star', 'gauge']) for (const it of swFixed.blocks[b]) for (const v of it.eq.vars()) sv.add(v);
+    ok('schwarz: φ(0)-fixed system mentions no w0/wb0', !sv.has('w0') && !sv.has('wb0'));
+    ok('schwarz: φ(0)-fixed residual ≈0 at the exact φ',
+       QE.residualAtSolution(swFixed, phi, hData).max < 1e-10);
+
+    // simple-pole sanity: the disk h=1/w (order 1) ⇒ C_{1,1}=|φ′(z₁)|², residual ≈0.
+    const hd2 = { poles: [{ a: { re: 0, im: 0 }, principal: [{ re: 1, im: 0 }] }] };
+    const phi2 = { unbounded: false, w0: { re: 0, im: 0 }, branches: [{ z: { re: 0, im: 0 }, A: [{ re: 1, im: 0 }] }] };
+    ok('schwarz: unit-disk (simple pole) residual ≈0', QE.residualAtSolution(QE.generateSchwarzBounded(hd2), phi2, hd2).max < 1e-10);
+
+    // negative control: a perturbed φ makes the Schwarz residual large (the oracle bites).
+    const bad = { unbounded: false, w0: { re: 0.25, im: 0 }, branches: [{ z: { re: 0, im: 0 }, A: [{ re: 1.2, im: 0 }, { re: 0.5, im: 0 }] }] };
+    ok('schwarz: residual is LARGE at a perturbed φ (oracle is discriminating)',
+       QE.residualAtSolution(sw, bad, hData).max > 1e-3);
+
+    // end-to-end with the genuine numeric solver (no hand-built φ): cardioid h.
+    const sol = QD.solveInverseQD(hData, { w0: { re: 0.25, im: 0 } });
+    if (sol && sol.success) {
+      ok('schwarz: residual ≈0 at the SOLVER solution (cardioid)',
+         QE.residualAtSolution(swFixed, sol.primary.phi, hData).max < 1e-6);
+    }
+  }
 };
 
 function scrub(o) {

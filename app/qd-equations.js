@@ -146,6 +146,33 @@
     return phi;
   }
 
+  // ---- Conjugate-model conjugation (for the Schwarz formulation) --------------
+  // The reality-slice "bar": swap each indeterminate with its conjugate partner.
+  // qd-constraints.js has equivalents (conjVarName/conjMPoly/conjFR) but loads
+  // AFTER this file, so we keep self-contained local copies covering exactly the
+  // bounded-model names {z_j, A_{j,k}, a_j, C_{j,s}, w₀}. (Future dedup: a shared
+  // conj util in sym-core — deliberately not pulled in here.)
+  function conjVarName(name) {
+    if (name === V.w0) return V.wb0; if (name === V.wb0) return V.w0;
+    let m;
+    if ((m = /^Ab(\d+)_(\d+)$/.exec(name))) return 'A' + m[1] + '_' + m[2];
+    if ((m = /^A(\d+)_(\d+)$/.exec(name))) return 'Ab' + m[1] + '_' + m[2];
+    if ((m = /^Cb(\d+)_(\d+)$/.exec(name))) return 'C' + m[1] + '_' + m[2];
+    if ((m = /^C(\d+)_(\d+)$/.exec(name))) return 'Cb' + m[1] + '_' + m[2];
+    if ((m = /^zb(\d+)$/.exec(name))) return 'z' + m[1];
+    if ((m = /^z(\d+)$/.exec(name))) return 'zb' + m[1];
+    if ((m = /^ab(\d+)$/.exec(name))) return 'a' + m[1];
+    if ((m = /^a(\d+)$/.exec(name))) return 'ab' + m[1];
+    return name;
+  }
+  // Complex conjugate of an MPoly in the conjugate model: bar the coefficients
+  // (i→−i) AND swap every variable with its partner.
+  function conjMPoly(p) { return p.conjCoeffs().relabel(conjVarName); }
+  // Complex conjugate of an FRatFn (numerator + each factored-denominator factor).
+  function conjFR(S, fr) {
+    return new S.FRatFn(conjMPoly(fr.num), fr.den.map((f) => ({ p: conjMPoly(f.p), e: f.e })));
+  }
+
   // Generate the full classical-bounded system from hData's STRUCTURE (pole
   // count n and orders m_j). h-coefficients stay symbolic. Returns the equations
   // as cleared MPolys, grouped by block, plus the variable inventory + counts.
@@ -272,6 +299,84 @@
         realEquations: 2 * n + 2 * d + 1,
       },
     };
+  }
+
+  // Generate the bounded-QD inverse system in the SCHWARZ-FUNCTION formulation —
+  // an algebraically-distinct ALTERNATIVE to generateClassicalBounded over the SAME
+  // {z_j, A_{j,k}} variables, expressing the SAME solution variety. The locator (●)
+  // and gauge blocks are reused verbatim; only the FORWARD principal-part block (★)
+  // is replaced by the SCHWARZ block (★_S). Where (★) computes C from A by the local
+  // power series of φ (no compositional inverse), (★_S) matches the prescribed C_{j,s}
+  // to the principal parts of the Schwarz function σ(w) at the quadrature node
+  // a_j = φ(z_j) — the inverse direction your own direct-problem map already uses.
+  // By the direct identity (THEORY_MAP §3.4; thesis §3.2; the verified numeric port
+  // direct/direct-common.js boundedQD/forwardLocalPrincipal):
+  //
+  //   (★_S)_{j,k}:  C_{j,k} − Σ_{l=k}^{m_j} conj(c_{j,l})·c_{j,1}^{l}·[ζ^{l−k}] u_j(ζ)^{−l} = 0,
+  //
+  // where c_{j,l} = [t^l] φ(z_j+t) (the local Taylor coefficients of φ at the pole
+  // pre-image z_j), ψ̃_j is the compositional inverse of φ̃_j = [0, c_{j,1}, …]
+  // (Sym.seriesReversion — runs over FRatFn with bounded denominators, no blow-up),
+  // and ψ̃_j(ζ) = ψ̃_j[1]·ζ·u_j(ζ) with u_j(0)=1. Same variety, different polynomials:
+  // the numeric residual at the solver's φ is ≈0 for both (residualAtSolution, the
+  // oracle), but the (★_S) polynomials are NOT termwise-equal to (★). The cleared
+  // equations carry (1−z̄z)/φ′(z_j) denominator factors that are nonzero on the QD
+  // regime (|z_j|<1, φ′≠0 in 𝔻) — the same "clear the Möbius/critical denominator"
+  // philosophy as the forward (★). Returns the generateClassicalBounded contract plus
+  // formulation:'schwarz'. Scope mirrors generateClassicalBounded (bounded simply-
+  // connected classical QD); same maxPoleOrder cap (inherited via the base call).
+  function generateSchwarzBounded(hData, opts) {
+    opts = opts || {};
+    const S = getSym();
+    if (!S) throw new Error('QD.QDEquations: QD.Sym not loaded');
+    const { FRatFn } = S;
+    // Reuse (●)+(gauge)+w0Fixed+vars+counts+caps; we replace only blocks.star.
+    const base = generateClassicalBounded(hData, opts);
+    const poles = (hData && hData.poles) || [];
+    const orders = base.orders;
+    const rfVar = (name) => FRatFn.fromPoly(S.mpolyVar(name));
+
+    const star = [];
+    for (let i = 0; i < poles.length; i++) {
+      const j = i + 1;
+      const mj = orders[i];
+      const phiS = phiSeriesAt(S, poles, V.z(j), mj);       // [φ(z_j), c_1, …, c_{m_j}]
+
+      // φ̃_j = [0, c_1, …, c_{m_j}]; revert; factor ψ̃ = ψ̃[1]·ζ·u(ζ), u(0)=1.
+      const phiTilde = [FRatFn.fromInt(0)];
+      for (let o = 1; o <= mj; o++) phiTilde.push(phiS[o]);
+      const psi = S.seriesReversion(phiTilde, mj);          // ψ̃, indices 0..m_j, psi[0]=0
+
+      // u(ζ): u[0]=1 (exact, not psi[1]/psi[1] — avoids a spurious self-cancel in the
+      // cleared numerator); u[i]=ψ̃[i+1]/ψ̃[1] for i=1..m_j−1.
+      const uLen = Math.max(mj - 1, 0);
+      const u = [FRatFn.fromInt(1)];
+      for (let ii = 1; ii <= uLen; ii++) u.push(psi[ii + 1].div(psi[1]));
+
+      // u^{−l} for l=1..m_j, each to order ζ^{m_j−1}; c_1^l prefactors.
+      const uInv = S.seriesRecip(u, uLen);
+      const uPowNeg = [null, uInv];
+      for (let l = 2; l <= mj; l++) uPowNeg[l] = S.seriesMul(uPowNeg[l - 1], uInv, uLen);
+      const c1Pow = [FRatFn.fromInt(1)];
+      for (let l = 1; l <= mj; l++) c1Pow.push(c1Pow[l - 1].mul(phiS[1]));
+
+      // C_{j,k} = Σ_{l≥k} conj(c_l)·c_1^l·[ζ^{l−k}] u^{−l}.
+      for (let k = 1; k <= mj; k++) {
+        let acc = FRatFn.fromInt(0);
+        for (let l = k; l <= mj; l++) {
+          const idx = l - k;
+          if (idx >= uPowNeg[l].length) continue;
+          acc = acc.add(conjFR(S, phiS[l]).mul(c1Pow[l]).mul(uPowNeg[l][idx]));
+        }
+        const eq = rfVar(V.C(j, k)).sub(acc);
+        star.push({ label: '(★_S)_{' + j + ',' + k + '}', eq: eq.clearDenominators() });
+      }
+    }
+    base.blocks.star = star;
+    // (★_S) carries no w₀ (the local expansion drops the constant term), so the
+    // base's φ(0) fix already covers the system — no extra substitution needed.
+    base.formulation = 'schwarz';
+    return base;
   }
 
   // ---- Real/imaginary split ----------------------------------------------------
@@ -685,7 +790,7 @@
   }
 
   const QDEquations = {
-    generateClassicalBounded, pointFunctionalSystem, reimSplit, realAxisSymmetry,
+    generateClassicalBounded, generateSchwarzBounded, pointFunctionalSystem, reimSplit, realAxisSymmetry,
     isClassicalBounded,
     residualAtSolution, residualReimAtSolution,
     buildVarMap, buildRealVarMap,

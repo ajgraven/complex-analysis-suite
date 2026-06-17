@@ -16,7 +16,7 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `43ff40c1c3`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `3f9480a264`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
@@ -220,11 +220,23 @@ its own merged PR), with one feature **in progress on a branch**:
     `classifyAsync(...).then(cl => solveRealAsync(...).then(r => …))` (AbortController signal + onProgress +
     Cancel), mirroring `doClassify`/`doAutoSolve`; the per-solution univalence certificate (exact Schur–Cohn /
     boundary count / cross-check) stays on the main thread (cheap, concrete candidates). (`cfbac03`.)
+  - **Schwarz-function alternate formulation** — `QDEquations.generateSchwarzBounded(hData, opts)`: a selectable
+    ALTERNATIVE bounded-QD inverse system over the same `{z_j, A_{j,k}}` variety. Reuses the (●) locator + gauge
+    blocks verbatim and REPLACES the forward (★) block with the Schwarz block (★_S), which matches each `C_{j,s}`
+    to the principal parts of the Schwarz function σ(w) at `a_j = φ(z_j)` — the symbolic dual of the verified
+    direct map (`direct/direct-common.js`; thesis §3.2), built with `Sym.seriesReversion` over `FRatFn` (bounded
+    denominators) + a local conjugation (`conjFR`). Same variety (residual ≈0 at the true φ for BOTH systems),
+    algebraically different polynomials. UI: a **Formulation** radio on `#qd-equations-card` (Classical/forward
+    default, Schwarz) orthogonal to the conjugate/reim representation; "Open in Algebra workspace" seeds the
+    chosen formulation (`system.formulation` threaded through `seedFromSystem`/snapshot/undo/`exportDAG` →
+    `store.formulation`; column-0 label reads "(Schwarz formulation)"). reim split + φ(0) fix compose unchanged.
+    Bounded simply-connected scope only. Doc: `SCHWARZ_FORMULATION.md`. Oracle tests in qd-equations/algebra-store.
   **Deferred (not started):** **#6 P3** — the worked PARAMETRIC cardioid example (run the interior
   `pointFunctionalSystem` (M₀,M₁) system through Maple RCTD offline, capture the qd-rctd cell JSON as a
   regression fixture + an AHARONOV_SHAPIRO.md section; needs an offline Maple run). Exotic/research-tier:
   higher-multiplicity on-circle cusp (the boundary cusp count uses DISTINCT roots → numeric fallback, safe);
-  Schwarz-function alternate formulation; the full parametric-RCTD uniqueness frontier. See the plan file.
+  the **Schwarz GLOBAL rational-reflection identity** `S(φ(z))=φ*(1/z)` (Option B — rational-φ assembly; the
+  σ-principal-parts form above is shipped); the full parametric-RCTD uniqueness frontier. See the plan file.
 - **Symbolic QD equation generator** (`feature/symbolic-qd-equations`, NOT yet merged) — a new
   symbolic-algebra track: `app/sym-core.js` (`QD.Sym`, exact Rational/Gaussian/MPoly/RatFn +
   factored-denominator `FRatFn` + field-generic power series with Lagrange reversion) and
