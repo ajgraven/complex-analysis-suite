@@ -1690,6 +1690,32 @@
       }
       return { step: String(c + 1), label: columnLabel(c, ns), stats, isCurrent: c === store.maxColumn() };
     }
+    // B3 — a terse operation label for a derivation edge (drawn on the arrow + as its hover
+    // title by the canvas). Describes the transformation that produced the TARGET node;
+    // reuses the provenance the column header / node title already render, compacted.
+    function edgeLabel(edge) {
+      const to = store.get(edge.to); if (!to) return null;
+      const p = to.provenance; if (!p) return null;
+      switch (p.op) {
+        case 'conjugate': return 'conj';
+        case 'fork': return 'fork';
+        case 'resultant': return 'elim ' + latexPlain(p.variable);
+        case 'groebner': return p.eliminate && p.eliminate.length ? 'Gröbner · elim ' + p.eliminate.map(latexPlain).join(',') : 'Gröbner';
+        case 'triangular': return 'triangular';
+        case 'assume-real': return 'assume real';
+        case 'assume-imaginary': return 'assume imag';
+        case 'identify': return 'identify ' + latexPlain(p.drop);
+        case 'identify-conj': return 'identify ' + latexPlain(p.var);
+        case 'substitute': return 'set ' + (((p.variables || []).map((r) => latexPlain(r.name))).join(', ') || (p.variable ? latexPlain(p.variable) : 'value'));
+        case 'linear-reduce': return 'propagate';
+        case 'fix-w0': return 'fix φ(0)';
+        case 'factor': return p.carried ? 'carry' : 'factor case';
+        case 'propagate': return 'propagate';
+        case 'rctd': return 'RCTD';
+        case 'duplicate': return 'copy';
+        default: return p.op || null;
+      }
+    }
     function nodeTitle(id) {
       const s = store.nodeStats(id); if (!s) return '';
       const conj = s.selfConj ? ' (self-conjugate)' : s.hasCompanion ? ' (½ of a conjugate pair)' : '';
@@ -1721,6 +1747,7 @@
         onMove: (id, dir) => { if (store.moveNode(id, dir)) rerender(); },
         titleOf: nodeTitle,
         colInfo: columnInfo,
+        edgeLabelOf: edgeLabel,
         onSeed: seedFromCurrent,
       });
       buildToolbar(surface);

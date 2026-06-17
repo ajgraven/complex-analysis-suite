@@ -700,6 +700,11 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #algebra-graph .algebra-edges { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; z-index: 0; }
 #algebra-graph .algebra-edge { fill: none; stroke: var(--c-border, #bbb); stroke-width: 1.5; }
 #algebra-graph .algebra-arrowhead { fill: var(--c-border, #bbb); }
+/* B3: inline operation label on a derivation edge (white halo so it reads over the bézier) */
+#algebra-graph .algebra-edge-label {
+  font-size: 9px; fill: var(--c-muted, #667); pointer-events: none;
+  paint-order: stroke; stroke: var(--c-surface, #fff); stroke-width: 3px; stroke-linejoin: round;
+}
 .algebra-ref { margin: 4px 0; max-height: 320px; overflow: auto; }
 .algebra-ref-math { overflow-x: auto; margin: 2px 0 4px; }
 .algebra-ref-legend { border-collapse: collapse; font-size: 11px; width: 100%; }

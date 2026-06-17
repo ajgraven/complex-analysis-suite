@@ -249,8 +249,8 @@
     // in NATURAL track coordinates (measured screen rects ÷ zoom, since the track is scaled)
     // and draw an arrowed cubic bézier. Called from relayout (render/collapse/reorder/resize/zoom).
     function drawEdges() {
-      // remove old paths (keep <defs>)
-      svg.querySelectorAll('path.algebra-edge').forEach((p) => p.remove());
+      // remove old paths + labels (keep <defs>)
+      svg.querySelectorAll('path.algebra-edge, text.algebra-edge-label').forEach((p) => p.remove());
       if (!lastStore) return;
       const tr = track.getBoundingClientRect();
       const anchor = (id) => {
@@ -260,6 +260,7 @@
         // screen rect → natural track coords (track is scaled by `zoom`)
         return { l: (r.left - tr.left) / zoom, r: (r.right - tr.left) / zoom, cy: (r.top + r.height / 2 - tr.top) / zoom };
       };
+      const seenLabel = new Set();   // B3: dedupe the visible op label per (fromCol→toCol, op) bundle
       for (const e of lastStore.edges) {
         const a = anchor(e.from), b = anchor(e.to);
         if (!a || !b) continue;
@@ -270,6 +271,26 @@
         path.setAttribute('class', 'algebra-edge');
         path.setAttribute('marker-end', 'url(#alg-arrow)');
         svg.appendChild(path);
+        // B3 — operation label on the arrow: a hover <title> on every edge, plus a small
+        // visible label at the midpoint of CROSS-column edges (deduped per transition bundle,
+        // so a fan of parallel arrows shows the op once). handlers.edgeLabelOf(edge) → string|null.
+        const lbl = handlers.edgeLabelOf ? handlers.edgeLabelOf(e) : null;
+        if (lbl) {
+          const title = document.createElementNS(SVGNS, 'title'); title.textContent = lbl; path.appendChild(title);
+          const fn = lastStore.get(e.from), tn = lastStore.get(e.to);
+          const fc = fn && fn.column, tc = tn && tn.column;
+          if (fc != null && tc != null && fc !== tc) {
+            const key = fc + '>' + tc + '>' + lbl;
+            if (!seenLabel.has(key)) {
+              seenLabel.add(key);
+              const t = document.createElementNS(SVGNS, 'text');
+              t.setAttribute('x', mx); t.setAttribute('y', (ay + by) / 2 - 3);
+              t.setAttribute('class', 'algebra-edge-label'); t.setAttribute('text-anchor', 'middle');
+              t.textContent = lbl;
+              svg.appendChild(t);
+            }
+          }
+        }
       }
     }
 
