@@ -792,6 +792,8 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   margin: 6px 0 0; padding: 6px; background: var(--c-border-soft, #f4f4f6); border-radius: 4px;
   font-size: 11px; max-height: 140px; overflow: auto; white-space: pre;
 }
+#algebra-graph .algebra-verdict-math { margin: 6px 0 0; max-height: 200px; overflow: auto; }
+#algebra-graph .algebra-verdict-mathrow { overflow-x: auto; padding: 3px 0; }
 #algebra-graph .algebra-verdict-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 #controls-algebra .card-sub { border-top: 1px solid var(--c-border-soft, #eee); padding-top: 6px; }
 #controls-algebra .card-sub.hidden { display: none; }

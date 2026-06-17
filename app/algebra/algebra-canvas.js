@@ -297,14 +297,21 @@
       el.addEventListener('animationend', () => el.classList.remove('algebra-column-flash'), { once: true });
     }
 
-    // The verdict result card (existence/uniqueness). data: { text, solutionsText? }.
+    // The verdict result card. data: { text, title?, solutionsLatex?:[…], solutionsText? }.
+    // solutionsLatex entries are TYPESET (KaTeX); solutionsText is shown verbatim in a
+    // <pre> (for already-formatted / non-math detail).
     function setVerdict(data) {
       if (!data || !data.text) { verdict.classList.add('hidden'); return; }
       verdict.innerHTML = '';
       const close = iconBtn('algebra-verdict-close', '×', 'Dismiss', () => verdict.classList.add('hidden'));
-      const head = div('algebra-verdict-head'); head.textContent = 'Existence / uniqueness'; head.appendChild(close);
+      const head = div('algebra-verdict-head'); head.textContent = data.title || 'Existence / uniqueness'; head.appendChild(close);
       const body = div('algebra-verdict-body'); body.textContent = data.text;
       verdict.appendChild(head); verdict.appendChild(body);
+      if (data.solutionsLatex && data.solutionsLatex.length) {
+        const box = div('algebra-verdict-math');
+        data.solutionsLatex.forEach((tex) => { const d = div('algebra-verdict-mathrow'); renderKatex(d, tex, true); box.appendChild(d); });
+        verdict.appendChild(box);
+      }
       if (data.solutionsText) { const pre = document.createElement('pre'); pre.className = 'algebra-verdict-sols'; pre.textContent = data.solutionsText; verdict.appendChild(pre); }
       // Optional one-click actions (e.g. spurious-component pin/split suggestions).
       if (data.actions && data.actions.length) {

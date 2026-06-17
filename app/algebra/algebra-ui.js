@@ -845,7 +845,8 @@
         }
         const summary = 'Solved ' + latexPlain(sel.value) + ': ' + r.count + ' root' + (r.count === 1 ? '' : 's') + ' — ' + r.method + (verOk ? ' (verified ✓)' : '');
         setStatus(summary);
-        if (canvas) canvas.setVerdict({ text: summary, solutionsText: latexes.length ? latexes.join('\n') : '(no roots)' });
+        // Verdict card: TYPESET roots (solutionsLatex) — not raw LaTeX. Copy-LaTeX lives below.
+        if (canvas) canvas.setVerdict({ title: 'Solve for a variable', text: summary, solutionsLatex: latexes });
         toast(summary, verOk ? {} : { kind: 'error' });
       };
       go.addEventListener('click', run);
