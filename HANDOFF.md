@@ -299,7 +299,7 @@ its own merged PR), with one feature **in progress on a branch**:
       `canvas.setMinimap`.
     • **D3** context-scoped node actions (`b4f4982`) — the inspector hides "Attempt to factor" on irreducible
       equations (`store.factorOf().ok`) and "Solve for a variable" on constants (no variables).
-    • **B1** derivation-lineage highlighting (`<this commit>`) — REFRAMED from the roadmap's "dirty-mark descendants /
+    • **B1** derivation-lineage highlighting (`821f1af`) — REFRAMED from the roadmap's "dirty-mark descendants /
       recompute" (which assumes mutable nodes; this store is immutable/append-only). Selecting a node highlights its
       transitive ancestors + descendants + the connecting edges (BFS over `store.edges`) — "propagation through the
       DAG" as a visual lineage view. Branch foundation + Phase 2 are now done; **Next = Phase 3** (E1 session
