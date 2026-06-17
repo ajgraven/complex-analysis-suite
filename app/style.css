@@ -923,7 +923,26 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.14); padding: 3px 5px;
 }
 #algebra-graph .algebra-toolbar .algebra-tb-btn { padding: 1px 7px; }
+#algebra-graph .algebra-toolbar .algebra-tb-btn.active { border-color: var(--c-accent, #2b7); color: var(--c-accent, #2b7); font-weight: 600; }
 #algebra-graph .algebra-toolbar-zoom { font-size: 11px; min-width: 36px; text-align: center; color: var(--c-muted, #667); }
+
+/* B2: DAG minimap — a scaled bird's-eye of the lanes with a draggable viewport box (top-left) */
+#algebra-graph .algebra-minimap {
+  position: absolute; left: 8px; top: 8px; z-index: 12; width: 168px; height: 116px;
+  background: var(--c-surface, #fff); border: 1px solid var(--c-border, #ccc);
+  border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.16); cursor: pointer; overflow: hidden;
+}
+#algebra-graph .algebra-minimap.hidden { display: none; }
+#algebra-graph .algebra-minimap-inner { position: relative; width: 168px; height: 116px; }
+#algebra-graph .algebra-mm-lane {
+  position: absolute; background: var(--c-border-soft, #e6e6ee); border: 1px solid var(--c-border, #ccd);
+  border-radius: 2px;
+}
+#algebra-graph .algebra-mm-lane.is-current { background: var(--c-accent, #2b7); opacity: 0.45; border-color: var(--c-accent, #2b7); }
+#algebra-graph .algebra-minimap-view {
+  position: absolute; border: 1.5px solid var(--c-accent, #2b7); background: rgba(43,187,119,0.12);
+  pointer-events: none; border-radius: 2px;
+}
 
 /* Smaller sidebar description / prose text (~70% of the card default) */
 #controls-algebra .hint { font-size: 70%; line-height: 1.4; }

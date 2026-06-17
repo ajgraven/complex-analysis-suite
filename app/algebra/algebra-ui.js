@@ -73,6 +73,7 @@
     let _elimPicker = null, _realPicker = null;   // picker handles (for label refresh)
     let _seededHData = null;       // the hData the store was last seeded from (A4: detect a stale seed)
     let _zoom = 1;                 // canvas zoom level (View ± controls)
+    let _minimapOn = false;        // DAG minimap toggle (B2)
 
     // LaTeX for the conjugate-model vars + the constraint boundary/aux vars.
     const baseLatex = QE.latexOf('conjugate');
@@ -1951,6 +1952,10 @@
       bar.appendChild(btn('Fit ↔', 'Zoom so every column lane fits the width', () => { if (canvas && canvas.fitWidth) { _zoom = canvas.fitWidth(); zlabel.textContent = Math.round(_zoom * 100) + '%'; } }));
       bar.appendChild(btn('Expand', 'Expand every card to the full typeset form', () => { if (canvas) canvas.setAllCollapsed(false); }));
       bar.appendChild(btn('Collapse', 'Collapse every card to a one-line preview', () => { if (canvas) canvas.setAllCollapsed(true); }));
+      const mapBtn = btn('▣ map', 'Toggle the DAG minimap (a bird\'s-eye of all lanes with a draggable viewport)', () => {
+        if (!canvas) return; _minimapOn = canvas.setMinimap(!_minimapOn); mapBtn.classList.toggle('active', _minimapOn);
+      });
+      bar.appendChild(mapBtn);
       bar.appendChild(btn('↶', 'Undo', () => { if (store.undo()) rerender(); }, 'alg-undo'));
       bar.appendChild(btn('↷', 'Redo', () => { if (store.redo()) rerender(); }, 'alg-redo'));
       zlabel.textContent = Math.round(_zoom * 100) + '%';

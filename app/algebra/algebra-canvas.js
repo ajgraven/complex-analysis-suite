@@ -87,8 +87,16 @@
     container.appendChild(empty);
     const verdict = div('algebra-verdict hidden');
     container.appendChild(verdict);
+    // B2 — DAG minimap: a scaled bird's-eye of the active track's lanes with a draggable
+    // viewport box; toggled off by default. Click/drag scrolls the main view.
+    const minimap = div('algebra-minimap hidden');
+    const mmInner = div('algebra-minimap-inner');
+    const mmView = div('algebra-minimap-view');
+    minimap.appendChild(mmInner); minimap.appendChild(mmView);
+    container.appendChild(minimap);
 
     let zoom = 1;
+    let minimapOn = false;
     let selected = [];
     let lastStore = null, lastLatexOf = null;
     const collapsed = new Map();        // id -> bool (default: collapsed). Persists across rerenders.
@@ -243,6 +251,7 @@
       svg.setAttribute('width', w); svg.setAttribute('height', h);
       svg.style.width = w + 'px'; svg.style.height = h + 'px';
       drawEdges();
+      updateMinimap();
     }
 
     // Redraw the derivation edges: for each store edge, anchor source-right → target-left
@@ -293,6 +302,58 @@
         }
       }
     }
+
+    // ---- B2: DAG minimap ----------------------------------------------------
+    const MM_W = 168, MM_H = 116;     // minimap inner coordinate box (matches the CSS size)
+    function mmScale() {
+      const natW = track.offsetWidth || 1, natH = track.offsetHeight || 1;
+      return Math.min(MM_W / natW, MM_H / natH) || 0;
+    }
+    // Rebuild the minimap lanes (one mini-rect per column lane) + the viewport box.
+    function updateMinimap() {
+      if (!minimapOn || !lastStore) return;
+      const s = mmScale(); if (!s) return;
+      const tr = track.getBoundingClientRect();
+      mmInner.innerHTML = '';
+      track.querySelectorAll('.algebra-column').forEach((col) => {
+        const cr = col.getBoundingClientRect();
+        const x = (cr.left - tr.left) / zoom, y = (cr.top - tr.top) / zoom, w = cr.width / zoom, h = cr.height / zoom;
+        const lane = document.createElement('div');
+        lane.className = 'algebra-mm-lane' + (col.classList.contains('is-current') ? ' is-current' : '');
+        lane.style.left = (x * s) + 'px'; lane.style.top = (y * s) + 'px';
+        lane.style.width = Math.max(2, w * s) + 'px'; lane.style.height = Math.max(2, h * s) + 'px';
+        mmInner.appendChild(lane);
+      });
+      updateMinimapView(s);
+    }
+    // Move the viewport box to reflect the main scroll window (cheap — runs on scroll).
+    function updateMinimapView(s) {
+      if (!minimapOn) return;
+      s = s || mmScale(); if (!s) return;
+      mmView.style.left = ((scroll.scrollLeft / zoom) * s) + 'px';
+      mmView.style.top = ((scroll.scrollTop / zoom) * s) + 'px';
+      mmView.style.width = ((scroll.clientWidth / zoom) * s) + 'px';
+      mmView.style.height = ((scroll.clientHeight / zoom) * s) + 'px';
+    }
+    function setMinimap(on) {
+      minimapOn = !!on;
+      minimap.classList.toggle('hidden', !minimapOn);
+      if (minimapOn) updateMinimap();
+      return minimapOn;
+    }
+    // Click / drag the minimap to centre the main view on that point.
+    function mmScrollTo(ev) {
+      const s = mmScale(); if (!s) return;
+      const r = mmInner.getBoundingClientRect();
+      const natX = (ev.clientX - r.left) / s, natY = (ev.clientY - r.top) / s;
+      scroll.scrollLeft = Math.max(0, natX * zoom - scroll.clientWidth / 2);
+      scroll.scrollTop = Math.max(0, natY * zoom - scroll.clientHeight / 2);
+    }
+    let mmDrag = false;
+    minimap.addEventListener('mousedown', (ev) => { mmDrag = true; mmScrollTo(ev); ev.preventDefault(); });
+    window.addEventListener('mousemove', (ev) => { if (mmDrag) mmScrollTo(ev); });
+    window.addEventListener('mouseup', () => { mmDrag = false; });
+    scroll.addEventListener('scroll', () => { if (minimapOn) updateMinimapView(); });
 
     function rerender() { if (lastStore) render(lastStore, lastLatexOf); }
     // Set the track zoom (clamped to [ZMIN, ZMAX]); re-size the sizer + redraw edges.
@@ -364,7 +425,7 @@
     })();
 
     track.style.transform = 'scale(1)';
-    return { render, rerender, fit, fitWidth, scrollToColumn, getSelection, clearSelection, setZoom, setAllCollapsed, setVerdict };
+    return { render, rerender, fit, fitWidth, scrollToColumn, getSelection, clearSelection, setZoom, setAllCollapsed, setVerdict, setMinimap };
   }
 
   window.QD = window.QD || {};
