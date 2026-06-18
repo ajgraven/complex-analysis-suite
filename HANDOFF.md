@@ -16,7 +16,7 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `e077e73aa0`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `e1c5fc90d2`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
@@ -339,11 +339,17 @@ its own merged PR), with one feature **in progress on a branch**:
       DISCRIMINANT appears among the conditions (the cardioid cusp locus = the 1↔3-real boundary of
       s³−M₀s²+2|M₁|²). Degenerate strata (a vanishing principal coeff) defer to the exact G5 count.
       **⚠ MATH-REVIEW (Andrew):** the ε/sign convention is pinned EMPIRICALLY (220 random polys + the
-      parametric cubic vs G5), not hand-proved in generality. `sym-core` 243. (Andrew's Phase-5 calls:
-      **G1 → in-engine CGS (full)**; **C4 → hard-filter assumption pruning of solver output**.)
-    **Remaining engine work:** **G1** Comprehensive Gröbner Systems (Suzuki–Sato, full in-engine — Andrew's
-    call), **C4** hard-filter assumption pruning, **and Phase 6** (G10 SOS checker, G11 msolve bridge, D5
-    show-steps).
+      parametric cubic vs G5), not hand-proved in generality. `sym-core` 243.
+    • **G1** Comprehensive Gröbner System (`<this commit>`) — `Sym.comprehensiveGroebnerSystem(F, params)`:
+      the in-engine Suzuki–Sato algorithm. Returns a finite list of segments {eqs=0, neqs≠0, gb} that
+      disjointly cover parameter space, each `gb` specializing to a Gröbner basis of ⟨F⟩ at every parameter
+      point in the segment (a block order X̄≫Ā GB, recursive split on vanishing X̄-leading coefficients;
+      Rabinowitsch consistency tests; defective strata flagged). **Andrew's call: full in-engine** (not
+      lean-on-RCTD). Verified by SAMPLING (each segment's gb vs the freshly-computed GB at random in-segment
+      points). **⚠ MATH-REVIEW (Andrew):** full Suzuki–Sato is subtle; verified by oracle, not machine-proved.
+      `sym-core` 254.
+    **Remaining engine work:** **C4** hard-filter assumption pruning of solver output (Andrew's call),
+    **and Phase 6** (G10 SOS checker, G11 msolve bridge, D5 show-steps).
   **Deferred (not started):** **#6 P3** — the worked PARAMETRIC cardioid example (run the interior
   `pointFunctionalSystem` (M₀,M₁) system through Maple RCTD offline, capture the qd-rctd cell JSON as a
   regression fixture + an AHARONOV_SHAPIRO.md section; needs an offline Maple run). Exotic/research-tier:

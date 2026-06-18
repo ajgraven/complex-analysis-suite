@@ -878,6 +878,70 @@ module.exports = async function run() {
          S.realRootCountSturm(mv('a').mul(x.pow(2)).add(mv('b')), 'x').ok === false);
     }
 
+    // G1 — Comprehensive Gröbner System (Suzuki–Sato), parametric.
+    // ORACLE: each returned segment's gb must SPECIALIZE to the freshly-computed reduced GB
+    // of the specialized system at random parameter points INSIDE the segment.
+    {
+      const mv = (n) => S.mpolyVar(n), mi = (k) => S.mpolyInt(k);
+      const grev = S.monomialOrder('grevlex');
+      // reduced-GB fingerprint of a numeric (param-free) polynomial set
+      const gbKey = (polys) => S.buchberger(polys.filter((p) => p && !p.isZero()), grev).map((g) => g.key()).sort().join('|') || 'EMPTY';
+      const specialize = (polys, vals) => { const sub = {}; for (const k of Object.keys(vals)) sub[k] = mi(vals[k]); return polys.map((p) => p.subst(sub)); };
+      // sample a parameter point in { eqs = 0, neqs ≠ 0 }; eqs handled only when each is a
+      // single-parameter monomial (⇒ that param = 0) — enough for the test strata.
+      let seed = 0x1234567 >>> 0;
+      const rnd = () => { seed ^= seed << 13; seed >>>= 0; seed ^= seed >>> 17; seed ^= seed << 5; seed >>>= 0; return seed; };
+      const sample = (eqs, neqs, params) => {
+        for (let a = 0; a < 60; a++) {
+          const vals = {}; let okEq = true;
+          for (const e of eqs) {
+            const vs = [...e.vars()];
+            if (vs.length === 1 && e.degreeIn(vs[0]) === 1 && e.coeffsIn(vs[0])[0].isZero()) vals[vs[0]] = 0;
+            else { okEq = false; break; }
+          }
+          if (!okEq) return null;
+          for (const p of params) if (!(p in vals)) vals[p] = (rnd() % 9) - 4;
+          const em = {}; for (const k of Object.keys(vals)) em[k] = { re: vals[k], im: 0 };
+          let good = true;
+          for (const e of eqs) { const z = e.evalComplex(em); if (Math.abs(z.re) + Math.abs(z.im) > 1e-9) { good = false; break; } }
+          if (good) for (const n of neqs) { const z = n.evalComplex(em); if (Math.abs(z.re) + Math.abs(z.im) < 1e-9) { good = false; break; } }
+          if (good) return vals;
+        }
+        return null;
+      };
+      const checkCGS = (label, F, params, expectSegs) => {
+        const r = S.comprehensiveGroebnerSystem(F, params);
+        ok(label + ': ok', r.ok, r.reason);
+        if (!r.ok) return r;
+        if (expectSegs != null) ok(label + ': ' + expectSegs + ' segment(s)', r.segments.length === expectSegs, 'got ' + r.segments.length);
+        let verified = 0, sampled = 0;
+        for (const seg of r.segments) {
+          for (let t = 0; t < 3; t++) {
+            const vals = sample(seg.eqs, seg.neqs, params);
+            if (!vals) break;
+            sampled++;
+            const fk = gbKey(specialize(F, vals)), gk = gbKey(specialize(seg.gb, vals));
+            if (fk === gk) verified++;
+          }
+        }
+        ok(label + ': every sampled in-segment point matches the freshly-computed GB', sampled > 0 && verified === sampled, verified + '/' + sampled);
+        return r;
+      };
+
+      const x = mv('x'), y = mv('y'), a = mv('a'), b = mv('b'), c = mv('c');
+      // a·x − 1: generic a≠0 → {x − 1/a}; a = 0 → ⟨1⟩ (no solution). Two segments.
+      const r1 = checkCGS('CGS a·x−1', [a.mul(x).sub(mi(1))], ['a'], 2);
+      ok('CGS a·x−1: exactly one no-solution segment (a=0)', r1.ok && r1.segments.filter((s) => s.empty).length === 1);
+      // parametric quadratic a·x²+b·x+c: a≠0 (quadratic), a=0&b≠0 (linear), a=0&b=0&c≠0 (no soln), a=b=c=0 (whole line)
+      checkCGS('CGS a·x²+b·x+c', [a.mul(x.pow(2)).add(b.mul(x)).add(c)], ['a', 'b', 'c'], null);
+      // two unknowns, one parameter, no strata (constant leading coeffs): single segment.
+      checkCGS('CGS {x−a, y−x²} (no branching)', [x.sub(a), y.sub(x.pow(2))], ['a'], 1);
+
+      // degenerate input / cap behavior
+      ok('CGS: no non-parameter variable → ok:false', S.comprehensiveGroebnerSystem([a.sub(mi(1))], ['a']).ok === false);
+      ok('CGS: empty system → trivial single (zero-ideal) segment', S.comprehensiveGroebnerSystem([], ['a']).segments.length === 1);
+    }
+
     // G7 — multivariate GCD over ℚ(i) (recursive primitive PRS) + zero-dim radical.
     {
       const mv = (n) => S.mpolyVar(n), mi = (k) => S.mpolyInt(k);

@@ -3089,6 +3089,144 @@
   }
 
   // ===========================================================================
+  // G1 — COMPREHENSIVE GRÖBNER SYSTEM (Suzuki–Sato), in-engine.
+  //
+  // A PARAMETRIC ideal ⟨F⟩ ⊆ ℚ(i)[Ā][X̄] (Ā = parameters, X̄ = the unknowns) does NOT have a
+  // single Gröbner basis valid for all parameter values — the leading coefficients are
+  // polynomials in Ā that can vanish on subvarieties, changing the basis. A comprehensive
+  // Gröbner SYSTEM is a finite list of triples (segment, GB), where each segment is a
+  // locally-closed subset of parameter space { ā : eqs(ā)=0, neqs(ā)≠0 } and `gb`
+  // SPECIALIZES to a Gröbner basis of ⟨F(ā,·)⟩ for EVERY ā in that segment; the segments
+  // disjointly cover all of parameter space. This is the in-engine cousin of the deferred
+  // RCTD bridge — for the cardioid the relevant (M₀,M₁) family is tiny.
+  //
+  // ALGORITHM (Suzuki–Sato 2006, "A simple algorithm to compute comprehensive Gröbner bases
+  // using Gröbner bases"): compute the reduced GB of F ∪ eqs over ℚ(i)[Ā,X̄] under a BLOCK
+  // order with X̄ ≫ Ā (so leading monomials live in X̄, their coefficients in Ā). Classify:
+  //   • G0 = generators whose leading monomial avoids X̄ ⇒ pure-parameter polynomials in the
+  //     ideal. Where some g0 ≠ 0 the specialized ideal is ⟨1⟩ (no solutions; gb = {1}); where
+  //     ALL g0 = 0 we descend.
+  //   • Gm = the rest. Let h = ∏ (X̄-leading coefficient of g) ∈ ℚ(i)[Ā]. On {all g0=0, h≠0}
+  //     Gm is a faithful GB (the generic stratum). On {all g0=0, h=0} recurse (h added to eqs)
+  //     — a strictly larger parameter ideal, so the recursion terminates (Noetherian).
+  // The branches form a DISJOINT cover. Consistency of each segment (is V(eqs)\V(∏neqs)
+  // nonempty over ℂ?) is the Rabinowitsch test 1 ∉ ⟨eqs, 1−w·∏neqs⟩.
+  //
+  // SCOPE / honesty: segments are over the ALGEBRAICALLY CLOSED field (params ∈ ℂ); the
+  // real-existence refinement is G2/realSolutionCount territory. Defective strata (all X̄-
+  // leading coefficients vanishing identically on a sub-stratum) are emitted with
+  // `defective:true` rather than split further. Capped (maxSegments / maxDepth / GB caps) →
+  // { ok:false, reason } past the cap. ⚠ MATH-REVIEW NOTE (Andrew): full Suzuki–Sato is
+  // subtle; this implementation is verified by SAMPLING (each segment's gb specializes to the
+  // freshly-computed GB at random in-segment points) but not machine-proved — flagged for
+  // your review like the RUR (G6). Refs: Suzuki–Sato 2006; Kapur–Sun–Wang 2010.
+  // ---------------------------------------------------------------------------
+  // X̄-leading coefficient (a polynomial in Ā): group g's terms by the X̄-part of its leading
+  // monomial under `order`, strip the X̄ part. (The full leading term is monic in a reduced
+  // GB, but the X̄-leading coefficient still collects a nontrivial Ā-polynomial.)
+  function _xLeadCoeffA(g, xset, order) {
+    const lm = g.leadingMono(order);
+    const mx = new Map(); for (const [k, e] of lm) if (xset.has(k)) mx.set(k, e);
+    const res = new MPoly();
+    for (const t of g.terms.values()) {
+      let ok = true;
+      for (const [k, e] of t.mono) if (xset.has(k) && (mx.get(k) || 0) !== e) { ok = false; break; }
+      if (ok) for (const [k, e] of mx) if ((t.mono.get(k) || 0) !== e) { ok = false; break; }
+      if (!ok) continue;
+      const aMono = new Map(); for (const [k, e] of t.mono) if (!xset.has(k)) aMono.set(k, e);
+      res._addTerm(aMono, t.coeff);
+    }
+    return res;
+  }
+  // 1 ∈ ⟨polys⟩ ? (the ideal is the whole ring). A nonzero constant generator, or a constant
+  // in the reduced GB.
+  function _oneInIdeal(polys) {
+    const c = (polys || []).filter((p) => p && !p.isZero());
+    if (!c.length) return false;
+    if (c.some((p) => p.vars().size === 0)) return true;
+    const G = buchberger(c, monomialOrder('grevlex'));
+    return G.some((g) => !g.isZero() && g.vars().size === 0);
+  }
+  // Is the segment { eqs = 0, ∏neqs ≠ 0 } nonempty over ℂ? ⟺ ∏neqs ∉ √⟨eqs⟩ ⟺
+  // 1 ∉ ⟨eqs, 1 − w·∏neqs⟩ (Rabinowitsch, fresh w).
+  function _cgsConsistent(eqs, neqs) {
+    let N = MPoly.fromInt(1);
+    for (const n of (neqs || [])) { if (!n || n.isZero()) return false; N = N.mul(n); }
+    const rab = MPoly.fromInt(1).sub(MPoly.variable('__cgs_w').mul(N));
+    return !_oneInIdeal((eqs || []).concat([rab]));
+  }
+  function _cgsRec(F, eqs, neqs, xset, ordBlock, state, depth) {
+    if (state.calls++ > state.maxCalls || depth > state.maxDepth || state.segs > state.maxSegs) { state.capped = true; return []; }
+    if (!_cgsConsistent(eqs, neqs)) return [];
+    const G = buchberger(F.concat(eqs), ordBlock);
+    if (G.some((g) => !g.isZero() && g.vars().size === 0)) {   // 1 ∈ ideal ⇒ no solutions here
+      state.segs++; return [{ eqs: eqs.slice(), neqs: neqs.slice(), gb: [MPoly.fromInt(1)], empty: true }];
+    }
+    const Gm = [], G0 = [];
+    for (const g of G) {
+      const lm = g.leadingMono(ordBlock);
+      let hasX = false; for (const k of lm.keys()) if (xset.has(k)) { hasX = true; break; }
+      (hasX ? Gm : G0).push(g);
+    }
+    const out = [];
+    // region where some pure-parameter g0 ≠ 0 ⇒ specialized ideal = ⟨1⟩ (no solutions)
+    const accum = eqs.slice();
+    for (let j = 0; j < G0.length; j++) {
+      if (_cgsConsistent(accum, neqs.concat([G0[j]]))) {
+        state.segs++; out.push({ eqs: accum.slice(), neqs: neqs.concat([G0[j]]), gb: [MPoly.fromInt(1)], empty: true });
+      }
+      accum.push(G0[j]);                                       // descend into {g0_0..g0_j = 0}
+    }
+    // region where ALL g0 = 0 (accum = eqs ∪ G0):
+    if (!Gm.length) {                                          // F reduced to 0 ⇒ zero ideal, whole X̄-space
+      if (_cgsConsistent(accum, neqs)) { state.segs++; out.push({ eqs: accum.slice(), neqs: neqs.slice(), gb: [] }); }
+      return out;
+    }
+    const lcs = Gm.map((g) => _xLeadCoeffA(g, xset, ordBlock));
+    let h = MPoly.fromInt(1); for (const c of lcs) h = h.mul(c);
+    // generic stratum: all leading coefficients nonzero ⇒ Gm is a faithful GB
+    if (_cgsConsistent(accum, neqs.concat([h]))) { state.segs++; out.push({ eqs: accum.slice(), neqs: neqs.concat([h]), gb: Gm }); }
+    // degenerate stratum h = 0: recurse only if it STRICTLY grows the parameter ideal
+    // (else it would be an infinite loop on a defective stratum — emit it honestly instead).
+    const gAccum = buchberger(accum.length ? accum : [MPoly.zero()], monomialOrder('grevlex'));
+    const hRed = accum.length ? normalForm(h, gAccum, monomialOrder('grevlex')) : h;
+    if (!hRed.isZero()) {
+      out.push.apply(out, _cgsRec(F, accum.concat([h]), neqs, xset, ordBlock, state, depth + 1));
+    } else if (_cgsConsistent(accum, neqs)) {
+      state.segs++; state.defective = true;
+      out.push({ eqs: accum.slice(), neqs: neqs.slice(), gb: Gm, defective: true });
+    }
+    return out;
+  }
+  // comprehensiveGroebnerSystem(F, params, opts) → { ok, params, variables, segments:[{ eqs,
+  // neqs, gb, empty?, defective? }], defective }. params = the parameter variable NAMES (Ā);
+  // every other variable in F is an unknown (X̄). Each segment's `gb` specializes to a Gröbner
+  // basis of ⟨F⟩ at every parameter point with eqs=0 ∧ each neq≠0; `empty` ⇒ gb {1} (no
+  // solutions there). Caps → { ok:false, reason }.
+  function comprehensiveGroebnerSystem(F, params, opts) {
+    opts = opts || {};
+    const polys = (F || []).filter((p) => p && !p.isZero());
+    if (!polys.length) return { ok: true, params: (params || []).slice(), variables: [], segments: [{ eqs: [], neqs: [], gb: [] }], defective: false };
+    const allVars = new Set(); for (const p of polys) for (const v of p.vars()) allVars.add(v);
+    const paramSet = new Set(params || []);
+    const xs = [...allVars].filter((v) => !paramSet.has(v)).sort();
+    if (!xs.length) return { ok: false, reason: 'no non-parameter variables to solve for' };
+    const xset = new Set(xs);
+    const ordBlock = monomialOrder('block', [xs.slice(), [...paramSet].sort()]);
+    const state = {
+      calls: 0, segs: 0, defective: false, capped: false,
+      maxCalls: opts.maxCalls != null ? opts.maxCalls : 400,
+      maxSegs: opts.maxSegments != null ? opts.maxSegments : 96,
+      maxDepth: opts.maxDepth != null ? opts.maxDepth : 32,
+    };
+    let segments;
+    try { segments = _cgsRec(polys, [], [], xset, ordBlock, state, 0); }
+    catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    if (state.capped) return { ok: false, reason: 'comprehensive Gröbner system exceeded the segment/recursion cap; use CAS export' };
+    return { ok: true, params: [...paramSet], variables: xs, segments, defective: state.defective };
+  }
+
+  // ===========================================================================
   // RESOLVENT — the univariate eliminant of a zero-dimensional ideal in one variable.
   // For I zero-dimensional and a variable v, the resolvent is the CHARACTERISTIC POLYNOMIAL of
   // multiplication-by-v on the quotient A = R/I (dim D):  χ_v(x) = det(x·I − M_v). Its roots
@@ -3559,7 +3697,7 @@
     rat, gauss, gaussInt, mpolyVar, mpolyConst, mpolyInt,
     polyFromTermList: (list) => MPoly.fromTermList(list),
     monoKey, monoCmp,
-    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep,
+    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, comprehensiveGroebnerSystem, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, solveByEigenvalues, realSolutionCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
