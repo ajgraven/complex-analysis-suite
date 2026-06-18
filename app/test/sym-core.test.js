@@ -848,6 +848,38 @@ module.exports = async function run() {
       ok('radicalZeroDim: a radical ideal ⟨x²−1⟩ keeps dim 2', r4.ok && S.quotientDimension(r4.basis, ord1, ['x']) === 2);
     }
 
+    // G6 — Rational Univariate Representation (separating form t, min poly f(t), coords xᵢ=gᵢ(t)).
+    // ⚠ from-scratch power-basis RUR (not Rouillier's trace formula); oracle-checked against the
+    // eigenvalue solver. The oracle needs no univariate root finder: it takes the eigen solutions,
+    // forms each one's t-value, and checks f(t)=0 and gᵢ(t)=xᵢ there.
+    {
+      const mv = (n) => S.mpolyVar(n), mi = (k) => S.mpolyInt(k);
+      const x = mv('x'), y = mv('y');
+      const capprox = (a, b) => Math.hypot(a.re - b.re, a.im - b.im) < 1e-6;
+      function checkRUR(label, sys, vrs, expDeg) {
+        const rur = S.rationalUnivariateRep(sys, { vars: vrs });
+        ok(label + ': ok, min poly degree ' + expDeg, rur.ok && rur.degree === expDeg, rur.reason || ('deg ' + (rur && rur.degree)));
+        if (!rur.ok) return;
+        const eig = S.solveByEigenvalues(sys, { vars: vrs });
+        if (!eig.ok) { ok(label + ': eigen cross-check available', false, eig.reason); return; }
+        const tval = (sol) => { let re = 0, im = 0; vrs.forEach((v, i) => { re += rur.separating[i] * sol[v].re; im += rur.separating[i] * sol[v].im; }); return { re: re, im: im }; };
+        let good = true;
+        for (const sol of eig.solutions) {
+          const tv = tval(sol);
+          const fv = rur.minPoly.evalComplex({ [rur.tName]: tv });
+          if (Math.hypot(fv.re, fv.im) > 1e-5) good = false;
+          for (const v of vrs) if (!capprox(rur.coords[v].evalComplex({ [rur.tName]: tv }), sol[v])) good = false;
+        }
+        ok(label + ': f(t)=0 at every solution & gᵢ(t) reproduce each coordinate', good);
+        const tset = new Set(eig.solutions.map((sol) => { const t = tval(sol); return t.re.toFixed(4) + ',' + t.im.toFixed(4); }));
+        ok(label + ': the separating form yields ' + expDeg + ' distinct t-values', tset.size === expDeg);
+      }
+      checkRUR('RUR ⟨x²−2, y−x⟩', [x.pow(2).sub(mi(2)), y.sub(x)], ['x', 'y'], 2);
+      checkRUR('RUR ⟨x²−1, y²−1⟩ (4 points)', [x.pow(2).sub(mi(1)), y.pow(2).sub(mi(1))], ['x', 'y'], 4);
+      checkRUR('RUR ⟨x²⟩ (radical ⟨x⟩, single point)', [x.pow(2)], ['x'], 1);
+      ok('RUR: positive-dimensional ⇒ ok:false', !S.rationalUnivariateRep([x.pow(2).sub(mi(1))], { vars: ['x', 'y'] }).ok);
+    }
+
     // Schur–Cohn: exact count of roots inside the open unit disk via the Hermitian
     // C = A·Aᴴ − B·Bᴴ inertia (inside = #neg, outside = #pos, on-circle ⊂ nullity).
     // ascending Gaussian coeff arrays; gr = real rational a/d, gI = integer a+bi.

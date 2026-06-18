@@ -16,7 +16,7 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `bfc8c5f54b`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `916dcf0cf0`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
@@ -314,9 +314,25 @@ its own merged PR), with one feature **in progress on a branch**:
       literals, then RECOMPUTES substitution steps (assume real/imaginary, set, fix φ(0), identify) via `.subs`
       from the previous column, and gives engine reductions (Gröbner/resultant/…) as exact ℚ(i) literals.
       `cas-export.js` gains `polyToSympy`/`sympyValue` (exact `Rational`/`I`); store `sympyDerivation()`.
-      `algebra-store` 216. **The roadmap's Workspace track (Phases 1–3) is now complete**; what remains is the
-      **Engine track** (Phase 4: G7 multivariate GCD/partial-fractions, G5 real-root isolation + Krawczyk, G8
-      radical denesting, G6 RUR; Phase 5 parametric G2/G1/C4; Phase 6 G10/G11/D5).
+      `algebra-store` 216. **The roadmap's Workspace track (Phases 1–3) is complete.**
+  - **Engine track — Phase 4 (G5, G7, G8, G6)** — exact computer-algebra primitives in `sym-core.js`/
+    `sym-radical.js`, each its own commit, all oracle-tested (engine-only → no browser surface):
+    • **G5** real-root isolation (`a72ff5a`) — `Sym.realRootIsolate(p,v)`: certified isolating intervals
+      (exact rational endpoints) via Sturm sequences + bisection; exact rational roots reported precisely.
+      `Sym.realRootCount(p,v,lo,hi)`. (Named accurately: Sturm+bisection, *not* interval-Newton — the
+      enclosure is unconditionally exact.)
+    • **G7** multivariate GCD + zero-dim radical (`bf99953`) — `Sym.gcdMV`/`gcdList` (recursive primitive
+      PRS over ℚ(i)); `Sym.radicalZeroDim` (Seidenberg, via `resolvent`+`squareFreePart`). Partial fractions
+      (the 3rd G7 sub-item) DEFERRED — needs an exact ℚ(i) linear solve / square-free factorization.
+    • **G8** radical denesting (`2576a84`) — `QD.SymRadical.denest`: √(perfect-square)→rational and
+      √(a+b√c)→√x±√y (real rational case); `solveByRadicals` denests its roots (oracle-verified).
+    • **G6** Rational Univariate Representation (`<this commit>`) — `Sym.rationalUnivariateRep`: separating
+      form t, min poly f(t), and EXACT coordinate maps xᵢ=gᵢ(t) via a power-basis ℚ(i) linear solve on the
+      radical. **⚠ MATH-REVIEW (Andrew):** from-scratch power-basis RUR (not Rouillier's trace formula) —
+      exact + oracle-checked against the eigenvalue solver, but warrants your eyes before paper use.
+    `sym-core` 233, `sym-radical` 50. **Remaining engine work = Phase 5** (parametric: G2 Sturm–Habicht,
+    G1 Comprehensive Gröbner Systems, C4 — G1/C4 are math-judgment calls for Andrew) **and Phase 6** (G10
+    SOS checker, G11 msolve bridge, D5 show-steps).
   **Deferred (not started):** **#6 P3** — the worked PARAMETRIC cardioid example (run the interior
   `pointFunctionalSystem` (M₀,M₁) system through Maple RCTD offline, capture the qd-rctd cell JSON as a
   regression fixture + an AHARONOV_SHAPIRO.md section; needs an offline Maple run). Exotic/research-tier:

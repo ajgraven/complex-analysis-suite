@@ -995,6 +995,92 @@
     try { basis = buchberger(G.concat(extra), order); } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
     return { ok: true, basis, order };
   }
+
+  // ===========================================================================
+  // G6 — RATIONAL UNIVARIATE REPRESENTATION of a zero-dimensional ideal.
+  //
+  // Represents the solution set by ONE univariate polynomial f(t) for a separating linear
+  // form t = Σ cᵢ·xᵢ, plus each coordinate as a polynomial xᵢ = gᵢ(t) (mod f). Built on the
+  // RADICAL (via radicalZeroDim) so the quotient ℚ(i)[x]/√I is a product of D fields at the D
+  // distinct points; a separating t makes the powers {1,t,…,t^{D−1}} a basis (Vandermonde), so
+  // each xᵢ is the UNIQUE polynomial gᵢ(t) found by an EXACT ℚ(i) linear solve of P·gᵢ = NF(xᵢ),
+  // where P's columns are the quotient-vectors of tʲ (= Mₜʲ·⟨1⟩). f(t) is the characteristic
+  // polynomial of Mₜ (squarefree ⟺ t separates ⟺ deg = D). All arithmetic exact; the solve is
+  // self-checking and tests cross-check gᵢ(rootₖ) against the eigenvalue solver's coordinates.
+  //
+  // ⚠ MATH-REVIEW NOTE (Andrew): this is a from-scratch RUR using the power-basis-of-t solve
+  // (NOT Rouillier's trace parametrization). It is exact + oracle-verified, but warrants your
+  // eyes before being relied on for a paper. It overlaps solveByEigenvalues (already solving
+  // every radical zero-dim ideal); RUR adds the EXACT symbolic coordinate maps gᵢ(t).
+  // ---------------------------------------------------------------------------
+  function _matZeroG(D) { const M = []; for (let i = 0; i < D; i++) { const r = new Array(D); for (let j = 0; j < D; j++) r[j] = Gaussian.fromInt(0); M.push(r); } return M; }
+  function _matAddScaledG(M, A, s) { for (let i = 0; i < M.length; i++) for (let j = 0; j < M.length; j++) M[i][j] = M[i][j].add(s.mul(A[i][j])); }
+  function _matVecG(M, v) { const out = []; for (let i = 0; i < M.length; i++) { let acc = Gaussian.fromInt(0); for (let j = 0; j < M.length; j++) acc = acc.add(M[i][j].mul(v[j])); out.push(acc); } return out; }
+  // Exact solve A·x = b over ℚ(i) (Gaussian elimination); null if A is singular.
+  function _gaussSolveG(A, b, n) {
+    const M = A.map((r, i) => r.slice().concat([b[i]]));
+    for (let col = 0; col < n; col++) {
+      let piv = -1; for (let r = col; r < n; r++) if (!M[r][col].isZero()) { piv = r; break; }
+      if (piv < 0) return null;
+      if (piv !== col) { const t = M[piv]; M[piv] = M[col]; M[col] = t; }
+      const pv = M[col][col];
+      for (let c = col; c <= n; c++) M[col][c] = M[col][c].div(pv);
+      for (let r = 0; r < n; r++) { if (r === col) continue; const f = M[r][col]; if (f.isZero()) continue; for (let c = col; c <= n; c++) M[r][c] = M[r][c].sub(f.mul(M[col][c])); }
+    }
+    return M.map((r) => r[n]);
+  }
+  // Characteristic polynomial det(t·I − M) of a Gaussian D×D matrix, as an MPoly in `t`.
+  function _charPolyG(M, D, t) {
+    const tv = MPoly.variable(t), A = [];
+    for (let i = 0; i < D; i++) { const row = []; for (let j = 0; j < D; j++) { let e = MPoly.constant(M[i][j].neg()); if (i === j) e = e.add(tv); row.push(e); } A.push(row); }
+    return mpolyDet(A);
+  }
+  // Deterministic separating-form candidates: each single coordinate, then t = Σ jⁱ·xᵢ.
+  function _sepCandidates(n, max) {
+    const list = [];
+    for (let i = 0; i < n; i++) { const v = new Array(n).fill(0); v[i] = 1; list.push(v); }
+    for (let j = 1; list.length < max; j++) { const v = []; for (let i = 0; i < n; i++) v.push(Math.pow(j, i)); list.push(v); if (j > max) break; }
+    return list;
+  }
+  function rationalUnivariateRep(input, opts) {
+    opts = opts || {};
+    const tName = opts.tName || '_t';
+    const arr = Array.isArray(input) ? input : (input && input.G);
+    if (!Array.isArray(arr) || !arr.length) return { ok: false, reason: 'expected a non-empty generator list' };
+    const vars = (opts.vars && opts.vars.length) ? opts.vars.slice() : [...new Set(arr.flatMap((p) => [...p.vars()]))].sort();
+    if (!vars.length) return { ok: false, reason: 'no variables' };
+    if (vars.indexOf(tName) >= 0) return { ok: false, reason: 'reserved RUR variable ' + tName + ' clashes with a system variable (pass opts.tName)' };
+    const rad = radicalZeroDim(input, { vars });
+    if (!rad.ok) return { ok: false, reason: 'radical/zero-dim step failed: ' + rad.reason };
+    const G = rad.basis, order = rad.order;
+    let B, D, oneIdx; const mats = {};
+    try {
+      const base = multiplicationMatrix(G, order, vars, vars[0]);
+      B = base.B; D = base.D; mats[vars[0]] = base.M;
+      oneIdx = B.findIndex((m) => m.size === 0);
+      if (oneIdx < 0) return { ok: false, reason: 'standard-monomial basis missing the unit monomial' };
+      if (D > (opts.maxDim || 64)) return { ok: false, reason: 'quotient dimension ' + D + ' over the cap (' + (opts.maxDim || 64) + ')' };
+      for (let i = 1; i < vars.length; i++) mats[vars[i]] = multiplicationMatrix(G, order, vars, vars[i]).M;
+    } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    const eOne = new Array(D).fill(Gaussian.fromInt(0)); eOne[oneIdx] = Gaussian.fromInt(1);
+    for (const cs of _sepCandidates(vars.length, opts.maxTries || 48)) {
+      const Mt = _matZeroG(D);
+      vars.forEach((v, i) => { if (cs[i]) _matAddScaledG(Mt, mats[v], Gaussian.fromInt(cs[i])); });
+      const f = _charPolyG(Mt, D, tName);
+      if (squareFreePart(f, tName).degreeIn(tName) !== D) continue;        // not separating (repeated t-values)
+      const cols = []; let cur = eOne; for (let j = 0; j < D; j++) { cols.push(cur); cur = _matVecG(Mt, cur); }
+      const P = []; for (let i = 0; i < D; i++) { const row = []; for (let j = 0; j < D; j++) row.push(cols[j][i]); P.push(row); }
+      const coords = {}; let solved = true;
+      for (const v of vars) {
+        const g = _gaussSolveG(P, _matVecG(mats[v], eOne), D);
+        if (!g) { solved = false; break; }
+        coords[v] = _uniFromArr(g, tName);                                  // xᵥ = Σ g[j]·tʲ  (mod f)
+      }
+      if (!solved) continue;
+      return { ok: true, separating: cs.slice(), tName, minPoly: f, degree: D, coords, order, radicalBasis: G };
+    }
+    return { ok: false, reason: 'no separating linear form found in ' + (opts.maxTries || 48) + ' tries' };
+  }
   // ===========================================================================
   // EXACT univariate factorization over ℚ(i) — the shifted norm trick (Trager's
   // algorithm specialized to k = ℚ(i)), built on Berlekamp–Zassenhaus over ℚ.
@@ -3333,7 +3419,7 @@
     rat, gauss, gaussInt, mpolyVar, mpolyConst, mpolyInt,
     polyFromTermList: (list) => MPoly.fromTermList(list),
     monoKey, monoCmp,
-    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, gcdMV, gcdList, radicalZeroDim,
+    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, solveByEigenvalues, realSolutionCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
