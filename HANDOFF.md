@@ -16,7 +16,7 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `916dcf0cf0`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `e077e73aa0`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
@@ -330,9 +330,20 @@ its own merged PR), with one feature **in progress on a branch**:
       form t, min poly f(t), and EXACT coordinate maps xᵢ=gᵢ(t) via a power-basis ℚ(i) linear solve on the
       radical. **⚠ MATH-REVIEW (Andrew):** from-scratch power-basis RUR (not Rouillier's trace formula) —
       exact + oracle-checked against the eigenvalue solver, but warrants your eyes before paper use.
-    `sym-core` 233, `sym-radical` 50. **Remaining engine work = Phase 5** (parametric: G2 Sturm–Habicht,
-    G1 Comprehensive Gröbner Systems, C4 — G1/C4 are math-judgment calls for Andrew) **and Phase 6** (G10
-    SOS checker, G11 msolve bridge, D5 show-steps).
+    `sym-core` 233, `sym-radical` 50.
+  - **Engine track — Phase 5 (parametric), in progress:**
+    • **G2** Sturm–Habicht real-root counting (`<this commit>`) — `Sym.sturmHabicht(p,v)` returns the
+      principal Sturm–Habicht coefficients as POLYNOMIALS in the parameters (division-stable Sylvester-style
+      determinants — `psc_j` via `mpolyDet`, `ε_j` sign, `stha_p`=lc, `stha_{p−1}`=lc(p′)); `Sym.realRootCountSturm`
+      reads #distinct real roots off their signs (permanences−variations). Specializes everywhere; the
+      DISCRIMINANT appears among the conditions (the cardioid cusp locus = the 1↔3-real boundary of
+      s³−M₀s²+2|M₁|²). Degenerate strata (a vanishing principal coeff) defer to the exact G5 count.
+      **⚠ MATH-REVIEW (Andrew):** the ε/sign convention is pinned EMPIRICALLY (220 random polys + the
+      parametric cubic vs G5), not hand-proved in generality. `sym-core` 243. (Andrew's Phase-5 calls:
+      **G1 → in-engine CGS (full)**; **C4 → hard-filter assumption pruning of solver output**.)
+    **Remaining engine work:** **G1** Comprehensive Gröbner Systems (Suzuki–Sato, full in-engine — Andrew's
+    call), **C4** hard-filter assumption pruning, **and Phase 6** (G10 SOS checker, G11 msolve bridge, D5
+    show-steps).
   **Deferred (not started):** **#6 P3** — the worked PARAMETRIC cardioid example (run the interior
   `pointFunctionalSystem` (M₀,M₁) system through Maple RCTD offline, capture the qd-rctd cell JSON as a
   regression fixture + an AHARONOV_SHAPIRO.md section; needs an offline Maple run). Exotic/research-tier:

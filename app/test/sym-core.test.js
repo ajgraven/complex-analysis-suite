@@ -802,6 +802,82 @@ module.exports = async function run() {
          S.realRootCount(cubic, 'x', S.rat(0), S.rat(5, 2)) === 2);
     }
 
+    // G2 — Sturm–Habicht (signed subresultant) real-root counting (PARAMETRIC).
+    // ORACLE: the exact G5 `realRootCount` (distinct real roots). The Sturm–Habicht
+    // principal-coefficient sign count must AGREE with it across an exhaustive battery
+    // of random integer polynomials AND specialize correctly for symbolic coefficients.
+    {
+      const mv = (n) => S.mpolyVar(n), mi = (k) => S.mpolyInt(k);
+      const x = mv('x');
+      const polyOf = (co) => { let p = mi(0); for (let k = 0; k < co.length; k++) if (co[k] !== 0) p = p.add(mi(co[k]).mul(x.pow(k))); return p; };
+      // deterministic xorshift32 (reproducible — no Math.random in the suite)
+      let seed = 0x9e3779b9 >>> 0;
+      const rnd = () => { seed ^= seed << 13; seed >>>= 0; seed ^= seed >>> 17; seed ^= seed << 5; seed >>>= 0; return seed; };
+      const ri = (lo, hi) => lo + (rnd() % (hi - lo + 1));
+      // exhaustive cross-check: degrees 1..6, integer coeffs in [−3,3], leading ≠ 0.
+      let trials = 0, agree = 0, realPath = 0;
+      for (let t = 0; t < 220; t++) {
+        const deg = ri(1, 6), co = [];
+        for (let k = 0; k <= deg; k++) co.push(ri(-3, 3));
+        if (co[deg] === 0) co[deg] = (ri(0, 1) ? 1 : -1) * ri(1, 3);
+        const p = polyOf(co);
+        const oracle = S.realRootCount(p, 'x');
+        const r = S.realRootCountSturm(p, 'x');
+        trials++;
+        if (r.ok && r.count === oracle) agree++;
+        if (r.ok && !r.degenerate) realPath++;   // count came from the Sturm–Habicht PmV path (not the G5 fallback)
+      }
+      ok('realRootCountSturm: agrees with G5 on ALL ' + trials + ' random integer polynomials (deg 1..6)', agree === trials, agree + '/' + trials);
+      ok('realRootCountSturm: most cases exercised the Sturm–Habicht PmV path (not the fallback)', realPath > trials * 0.7, realPath + '/' + trials + ' non-degenerate');
+
+      // targeted known counts (square-free, so the generic PmV path is exercised)
+      ok('realRootCountSturm: (x−1)(x−2)(x−3) → 3 real roots',
+         S.realRootCountSturm(x.sub(mi(1)).mul(x.sub(mi(2))).mul(x.sub(mi(3))), 'x').count === 3);
+      ok('realRootCountSturm: x²+1 → 0 real roots', S.realRootCountSturm(x.pow(2).add(mi(1)), 'x').count === 0);
+      ok('realRootCountSturm: x³+x (one real root, two complex) → 1', S.realRootCountSturm(x.pow(3).add(x), 'x').count === 1);
+
+      // degenerate stratum: a multiple root makes a principal coefficient vanish ⇒ flag +
+      // defer to the exact G5 count (distinct roots). (x−1)²(x+2) → 2 distinct real roots.
+      {
+        const p = x.sub(mi(1)).pow(2).mul(x.add(mi(2)));
+        const r = S.realRootCountSturm(p, 'x');
+        ok('realRootCountSturm: (x−1)²(x+2) → degenerate flagged, count = 2 distinct (G5 fallback)',
+           r.ok && r.degenerate === true && r.count === 2 && r.oracle === 2);
+      }
+
+      // PARAMETRIC: the depressed cubic x³ + b·x + c. The discriminant −4b³−27c² governs the
+      // 1-vs-3-real-root split; sturmHabicht's principal coefficients carry that sign condition.
+      {
+        const b = mv('b'), c = mv('c');
+        const cubic = x.pow(3).add(b.mul(x)).add(c);
+        const sh = S.sturmHabicht(cubic, 'x');
+        ok('sturmHabicht: depressed cubic → degree 3, 4 principal coefficients in the params {b,c}',
+           sh.ok && sh.degree === 3 && sh.stha.length === 4 &&
+           sh.stha.some((t) => { const vs = t.coeff.vars(); return vs.has('b') || vs.has('c'); }));
+        // specialize to (b,c) on both sides of the cusp + the cusp itself; cross-check vs G5.
+        const cases = [
+          { b: 0, c: 0, name: 'x³ (triple root)' },              // disc 0 — degenerate
+          { b: -1, c: 0, name: 'x³−x = x(x−1)(x+1)' },           // disc 4 > 0 — 3 real
+          { b: 1, c: 0, name: 'x³+x' },                          // disc −4 < 0 — 1 real
+          { b: -3, c: 1, name: 'x³−3x+1' },                      // disc 81 > 0 — 3 real
+          { b: 3, c: 2, name: 'x³+3x+2' },                       // disc < 0 — 1 real
+        ];
+        let allMatch = true, lines = [];
+        for (const cs of cases) {
+          const r = S.realRootCountSturm(cubic, 'x', { values: { b: S.gaussInt(cs.b), c: S.gaussInt(cs.c) } });
+          const num = x.pow(3).add(mi(cs.b).mul(x)).add(mi(cs.c));
+          const oracle = S.realRootCount(num, 'x');
+          if (!(r.ok && r.count === oracle)) { allMatch = false; lines.push(cs.name + ': ' + (r.count) + '≠' + oracle); }
+        }
+        ok('realRootCountSturm: parametric cubic specializes correctly across the cusp (vs G5)', allMatch, lines.join('; '));
+      }
+
+      // degenerate / invalid input handling
+      ok('sturmHabicht: degree-0 (constant in v) → ok:false', S.sturmHabicht(mi(5), 'x').ok === false);
+      ok('realRootCountSturm: unresolved parameters with no values → ok:false',
+         S.realRootCountSturm(mv('a').mul(x.pow(2)).add(mv('b')), 'x').ok === false);
+    }
+
     // G7 — multivariate GCD over ℚ(i) (recursive primitive PRS) + zero-dim radical.
     {
       const mv = (n) => S.mpolyVar(n), mi = (k) => S.mpolyInt(k);

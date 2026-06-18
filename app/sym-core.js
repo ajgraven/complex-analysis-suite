@@ -911,6 +911,146 @@
   }
 
   // ===========================================================================
+  // G2 — STURM–HABICHT (signed subresultant) real-root counting, PARAMETRIC.
+  //
+  // G5's Sturm chain divides by the (numeric) leading coefficients, so it cannot be
+  // specialized symbolically: a parametric leading coefficient might vanish, and the
+  // division is invalid there. The SIGNED SUBRESULTANT / Sturm–Habicht machinery is the
+  // DIVISION-STABLE cousin — every principal coefficient is a POLYNOMIAL in the original
+  // coefficients (hence in the parameters), computed as a Sylvester-style determinant
+  // (no division at all), so it specializes correctly everywhere. The number of DISTINCT
+  // real roots of p is then a function of the SIGNS of those principal Sturm–Habicht
+  // coefficients — i.e. a tree of parametric sign conditions. The discriminant appears
+  // among them (sthaj₀ ∝ ±Res(p,p′) ∝ disc), so e.g. the cardioid resolvent cubic
+  // s³−M₀s²+2|M₁|² yields the cusp locus (disc = 0) as the boundary between its 1-real
+  // and 3-real strata. Refs: Basu–Pollack–Roy "Algorithms in Real Algebraic Geometry"
+  // §4.2 (signed subresultants) & §9 (real-root counting); González-Vega–Lombardi–Recio–
+  // Roy, Sturm–Habicht sequences.
+  //
+  // The construction (validated by hand on the quadratic/cubic and exhaustively against
+  // G5 in the test suite):
+  //   • stha_p     = lc_v(p)            (leading coefficient)
+  //   • stha_{p−1} = lc_v(p′) = p·a_p   (the (p−1)-subresultant is p′ itself)
+  //   • stha_j     = εⱼ · psc_j  for 0 ≤ j ≤ p−2,  εⱼ = (−1)^{(p−j)(p−j−1)/2},
+  //     psc_j = the j-th principal SUBRESULTANT coefficient of (p, p′) = the determinant
+  //     of the Sylvester submatrix with (q−j) shifted rows of p and (p−j) shifted rows of
+  //     p′ over the first (p+q−2j) columns (q = deg p′ = p−1). psc_0 = Res(p, p′) exactly.
+  //   • #distinct real roots = PmV(stha_p, …, stha_0)  (permanences minus variations over
+  //     consecutive NONZERO signs) — Sturm's theorem read off the Sturm–Habicht principal
+  //     coefficients.
+  //
+  // SCOPE / honesty: the sign conditions classify the GENERIC stratum (no principal
+  // coefficient vanishing). On a specialization where one vanishes (a case boundary / a
+  // multiple root) realRootCountSturm reports `degenerate:true` and DEFERS the count to the
+  // exact numeric G5 `realRootCount` (which uses the square-free part, so it counts distinct
+  // roots correctly even there). The full parameter case-tree is G1 (comprehensive Gröbner
+  // systems). ⚠ MATH-REVIEW NOTE (Andrew): the sign/ε convention below is pinned EMPIRICALLY
+  // by the numeric oracle (random specializations vs G5), not hand-proved in generality —
+  // flagged for your review like the RUR (G6).
+  // ---------------------------------------------------------------------------
+  function _lcInV(p, v) { const d = p.degreeIn(v); return d < 0 ? MPoly.zero() : p.coeffsIn(v)[d]; }
+  // εⱼ = (−1)^{(p−j)(p−j−1)/2}: the sign relating the j-th subresultant to the j-th
+  // Sturm–Habicht polynomial (the ½(p−j)(p−j−1) triangular exponent mod 2 → the ++−− period).
+  function _epsSign(p, j) { const m = p - j; return ((((m * (m - 1)) / 2) % 2) === 0) ? 1 : -1; }
+  // j-th principal subresultant coefficient of (P, Pp) in v (0 ≤ j ≤ p−2), as a determinant
+  // over MPoly (Bareiss; no division). j = 0 reproduces the Sylvester resultant Res(P, Pp).
+  function _principalSubresCoeff(P, Pp, v, j) {
+    const p = P.degreeIn(v), q = Pp.degreeIn(v);
+    const aCo = P.coeffsIn(v), bCo = Pp.coeffsIn(v);
+    const aRow = []; for (let k = p; k >= 0; k--) aRow.push(aCo[k]);   // high → low
+    const bRow = []; for (let k = q; k >= 0; k--) bRow.push(bCo[k]);
+    const rowsA = q - j, rowsB = p - j, size = rowsA + rowsB;          // = p + q − 2j
+    const M = [];
+    for (let r = 0; r < rowsA; r++) {
+      const row = []; for (let c = 0; c < size; c++) row.push(MPoly.zero());
+      for (let c = 0; c < aRow.length && (r + c) < size; c++) row[r + c] = aRow[c];
+      M.push(row);
+    }
+    for (let r = 0; r < rowsB; r++) {
+      const row = []; for (let c = 0; c < size; c++) row.push(MPoly.zero());
+      for (let c = 0; c < bRow.length && (r + c) < size; c++) row[r + c] = bRow[c];
+      M.push(row);
+    }
+    return mpolyDet(M);
+  }
+  // sturmHabicht(p, v) → { ok, degree, stha:[{ j, coeff:MPoly }] (j = p, p−1, …, 0) }.
+  // The `coeff` MPolys are the principal Sturm–Habicht coefficients — polynomials in the
+  // PARAMETERS (the variables of p other than v); their signs drive the real-root count.
+  function sturmHabicht(p, v) {
+    if (!(p instanceof MPoly) || p.isZero()) return { ok: false, reason: 'zero or invalid polynomial' };
+    const deg = p.degreeIn(v);
+    if (deg < 1) return { ok: false, reason: 'polynomial has degree < 1 in ' + v };
+    const pp = p.derivativeIn(v);
+    const stha = [{ j: deg, coeff: _lcInV(p, v) }];
+    stha.push({ j: deg - 1, coeff: _lcInV(pp, v) });          // the (p−1)-subresultant is p′
+    try {
+      for (let j = deg - 2; j >= 0; j--) {
+        let c = _principalSubresCoeff(p, pp, v, j);
+        if (_epsSign(deg, j) < 0) c = c.neg();
+        stha.push({ j, coeff: c });
+      }
+    } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    return { ok: true, degree: deg, stha };
+  }
+  // Permanences − variations over a sign list (ordered stha_p … stha_0), zeros skipped.
+  function _pmv(signs) {
+    let prev = 0, c = 0;
+    for (const s of signs) { if (s === 0) continue; if (prev !== 0) c += (s === prev) ? 1 : -1; prev = s; }
+    return c;
+  }
+  function _toReIm(val) {
+    if (val instanceof Gaussian) return val.toComplex();
+    if (typeof val === 'number') return { re: val, im: 0 };
+    return { re: (val && val.re) || 0, im: (val && val.im) || 0 };
+  }
+  function _constFromValue(val) {
+    if (val instanceof Gaussian) return MPoly.constant(val);
+    if (typeof val === 'number' && Number.isInteger(val)) return MPoly.fromInt(val);
+    return null;   // non-exact value ⇒ no exact substitution (oracle skipped)
+  }
+  // realRootCountSturm(p, v, opts) — number of DISTINCT real roots of p over all of ℝ, via
+  // the Sturm–Habicht principal-coefficient signs. p may carry PARAMETERS; opts.values maps
+  // each parameter → an exact Gaussian (or integer/number) specialization. Returns
+  // { ok, count, degenerate, oracle?, note? }: when p specializes to a real univariate it
+  // also computes the exact G5 count as `oracle` and PREFERS it on a degenerate stratum
+  // (a vanishing principal coefficient). reason on failure.
+  function realRootCountSturm(p, v, opts) {
+    opts = opts || {};
+    const sh = sturmHabicht(p, v);
+    if (!sh.ok) return sh;
+    const tol = opts.tol != null ? Number(opts.tol) : 1e-9;
+    const values = opts.values || {};
+    const numMap = {}; for (const k of Object.keys(values)) numMap[k] = _toReIm(values[k]);
+    let degenerate = false, indeterminate = false;
+    const signs = sh.stha.map(({ coeff }) => {
+      for (const vn of coeff.vars()) if (!(vn in numMap)) { indeterminate = true; return null; }
+      const z = coeff.evalComplex(numMap);
+      if (Math.abs(z.im) > tol) { indeterminate = true; return null; }
+      if (Math.abs(z.re) <= tol) { degenerate = true; return 0; }
+      return z.re > 0 ? 1 : -1;
+    });
+    // exact oracle (G5) when p specializes to a real univariate in v
+    let oracle = null;
+    const subMap = {}; let exactSub = true;
+    for (const k of Object.keys(values)) { const c = _constFromValue(values[k]); if (c) subMap[k] = c; else exactSub = false; }
+    if (exactSub) {
+      const pn = Object.keys(subMap).length ? p.subst(subMap) : p;
+      if (pn.vars().size <= 1 && (pn.vars().size === 0 || pn.vars().has(v))) {
+        let real = true;
+        for (const g of _uniToArr(pn, v)) if (!g.im.isZero()) { real = false; break; }
+        if (real) oracle = realRootCount(pn, v);
+      }
+    }
+    if (indeterminate) {
+      if (oracle != null) return { ok: true, count: oracle, degenerate: false, oracle, note: 'numeric count via G5 (some parametric signs unresolved)' };
+      return { ok: false, reason: 'cannot count: coefficients remain parametric (supply opts.values) or are non-real' };
+    }
+    const count = _pmv(signs);
+    if (degenerate && oracle != null) return { ok: true, count: oracle, degenerate: true, oracle };
+    return { ok: true, count, degenerate, oracle };
+  }
+
+  // ===========================================================================
   // G7 — MULTIVARIATE GCD over ℚ(i) (recursive primitive PRS) + ZERO-DIM RADICAL.
   //
   // ℚ(i)[x₁…xₙ] is a UFD, so the GCD is well defined up to a unit (a nonzero ℚ(i) scalar).
@@ -3419,7 +3559,7 @@
     rat, gauss, gaussInt, mpolyVar, mpolyConst, mpolyInt,
     polyFromTermList: (list) => MPoly.fromTermList(list),
     monoKey, monoCmp,
-    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep,
+    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, solveByEigenvalues, realSolutionCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
