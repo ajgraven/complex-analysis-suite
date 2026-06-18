@@ -310,7 +310,7 @@ its own merged PR), with one feature **in progress on a branch**:
       is byte-identical (idempotent), undoable. `algebra-store` 211.
     • **E3** literate-LaTeX derivation (`aaf0e61`) — "Copy derivation (LaTeX)": the active branch as one
       `\begin{align}` block per column with `% Step k — <transition>` annotations + the hypotheses preamble.
-    • **E4** reproducible SymPy script (`<this commit>`) — "Copy SymPy script": declares the symbols + col0
+    • **E4** reproducible SymPy script (`af4032e`) — "Copy SymPy script": declares the symbols + col0
       literals, then RECOMPUTES substitution steps (assume real/imaginary, set, fix φ(0), identify) via `.subs`
       from the previous column, and gives engine reductions (Gröbner/resultant/…) as exact ℚ(i) literals.
       `cas-export.js` gains `polyToSympy`/`sympyValue` (exact `Rational`/`I`); store `sympyDerivation()`.
