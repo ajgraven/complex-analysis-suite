@@ -646,7 +646,8 @@
         '        <button id="alg-export-json" class="small" type="button" title="Download the whole session as exact ℚ(i) term lists + edges + tracks + assumptions (round-trips via Load)">Download DAG (JSON)</button>' +
         '        <button id="alg-import-json" class="small" type="button" title="Load a previously downloaded DAG JSON — rebuilds the whole workspace (nodes, branches, assumptions). Replaces the current graph (undoable).">Load DAG (JSON)</button>' +
         '        <input id="alg-import-file" type="file" accept="application/json,.json" style="display:none;" />' +
-        '        <button id="alg-copy-latex" class="small" type="button" title="Copy all equations as a gathered LaTeX block">Copy LaTeX</button></div>' +
+        '        <button id="alg-copy-latex" class="small" type="button" title="Copy all equations as a gathered LaTeX block">Copy LaTeX</button>' +
+        '        <button id="alg-copy-derivation" class="small" type="button" title="Copy the active branch as a literate LaTeX derivation — one align block per column, each annotated with the transition that produced it + the active hypotheses">Copy derivation (LaTeX)</button></div>' +
         '      <div class="algebra-line" style="margin-top:4px;"><span class="algebra-line-label">Mathematica</span>' +
         '        <select id="alg-mma-col" title="Which column of equations to export"></select>' +
         '        <button id="alg-copy-mma" class="small" type="button" title="Copy the chosen column as a Wolfram-Language list of equations ({lhs == 0, …}) ready to paste into Mathematica">Copy</button>' +
@@ -710,6 +711,7 @@
       $('#alg-import-json').addEventListener('click', () => { const f = $('#alg-import-file'); if (f) f.click(); });
       $('#alg-import-file').addEventListener('change', importJson);
       $('#alg-copy-latex').addEventListener('click', copyLatex);
+      $('#alg-copy-derivation').addEventListener('click', copyLatexDerivation);
       $('#alg-copy-mma').addEventListener('click', copyMathematica);
       $('#alg-copy-mma-all').addEventListener('click', copyMathematicaAll);
       $('#alg-copy-cas').addEventListener('click', copyCAS);
@@ -1643,6 +1645,40 @@
     function copyNodeLatex(id) {
       const n = store.get(id); if (!n) return;
       writeClipboard(n.poly.toLatex(latexOf) + relSuffix(n.rel), n.label + ' LaTeX');
+    }
+    // E3 — literate LaTeX derivation: the ACTIVE branch as a sequence of `align` blocks, one
+    // per column, each preceded by a comment naming the transition that produced it (the same
+    // provenance the column header / edge labels show), with the active hypotheses as a preamble.
+    // A reproducible, paper-ready transcript of the reduction. Copied to the clipboard.
+    function alignRel(rel) { return rel === '>' ? '&> 0' : rel === '≠' ? '&\\neq 0' : '&= 0'; }
+    function latexDerivation() {
+      const at = store.activeTrack;
+      const real = store.realVars || [], imag = store.imagVars || [];
+      const known = (store.knownValues && store.knownValues()) || {};
+      const pinned = Object.keys(known).filter((k) => k !== 'w0');
+      const head = ['% QD Algebra derivation — branch "' + trackLabelOf(at) + '"' +
+        (store.formulation === 'schwarz' ? ' (Schwarz formulation)' : '')];
+      const hyp = [];
+      if (real.length) hyp.push('real ' + real.map(latexPlain).join(', '));
+      if (imag.length) hyp.push('imaginary ' + imag.map(latexPlain).join(', '));
+      if (store.w0Fixed) hyp.push('\\varphi(0)=' + _fmtComplex(known.w0));
+      if (pinned.length) hyp.push('pinned ' + pinned.map((k) => latexPlain(k) + '=' + _fmtComplex(known[k])).join(', '));
+      if (hyp.length) head.push('% Active hypotheses: ' + hyp.join('; '));
+      const out = [head.join('\n')];
+      store.columns().forEach((c) => {
+        const ns = store.list().filter((n) => (n.track || 't0') === at && n.column === c.index);
+        if (!ns.length) return;
+        const label = columnLabel(c.index, ns).replace(/^↳\s*/, '');
+        const eqs = ns.sort((p, q) => store.orderOf(p.id) - store.orderOf(q.id))
+          .map((n) => '  ' + n.poly.toLatex(latexOf) + ' ' + alignRel(n.rel) + ' \\\\');
+        out.push('% Step ' + (c.index + 1) + ' — ' + label + '  (' + c.eqCount + ' eqn, ' + c.varCount + ' var)\n' +
+          '\\begin{align}\n' + eqs.join('\n') + '\n\\end{align}');
+      });
+      return out.join('\n\n');
+    }
+    function copyLatexDerivation() {
+      if (!store.size) { toast('Nothing to export — seed or load a system first.', { kind: 'error' }); return; }
+      writeClipboard(latexDerivation(), 'LaTeX derivation');
     }
 
     // ---- per-card hovertext (driven by store.nodeStats) ---------------------
