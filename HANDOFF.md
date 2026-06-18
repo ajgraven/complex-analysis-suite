@@ -326,7 +326,7 @@ its own merged PR), with one feature **in progress on a branch**:
       (the 3rd G7 sub-item) DEFERRED — needs an exact ℚ(i) linear solve / square-free factorization.
     • **G8** radical denesting (`2576a84`) — `QD.SymRadical.denest`: √(perfect-square)→rational and
       √(a+b√c)→√x±√y (real rational case); `solveByRadicals` denests its roots (oracle-verified).
-    • **G6** Rational Univariate Representation (`<this commit>`) — `Sym.rationalUnivariateRep`: separating
+    • **G6** Rational Univariate Representation (`69ce644`) — `Sym.rationalUnivariateRep`: separating
       form t, min poly f(t), and EXACT coordinate maps xᵢ=gᵢ(t) via a power-basis ℚ(i) linear solve on the
       radical. **⚠ MATH-REVIEW (Andrew):** from-scratch power-basis RUR (not Rouillier's trace formula) —
       exact + oracle-checked against the eigenvalue solver, but warrants your eyes before paper use.
