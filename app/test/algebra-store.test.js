@@ -1036,6 +1036,26 @@ module.exports = async function run() {
     ok('E1: importDAG rejects non-DAG input', !QD.AlgebraStore.create().importDAG({ foo: 1 }).ok);
   }
 
+  // ---- reproducible SymPy derivation script (E4) ----
+  {
+    const a = QD.AlgebraStore.create();
+    a.seedFromSystem(system);
+    a.assumeReal(['z1']);                  // a substitution-family step → recomputed via .subs
+    const py = a.sympyDerivation();
+    ok('E4: sympy script has the imports + a symbols() declaration', /from sympy import symbols, Rational, I, expand, groebner/.test(py) && /= symbols\(/.test(py));
+    ok('E4: sympy script defines col0 (the original system)', /col0 = \[/.test(py));
+    ok('E4: a reality step is RECOMPUTED via .subs from the previous column',
+       /SUBS1 = \{[^}]*zb1: z1/.test(py) && /col1 = \[q for q in \(expand\(p\.subs\(SUBS1\)\) for p in col0\)/.test(py));
+    ok('E4: coefficients are exact (no bare float division outside Rational(...))', !/\d\/\d/.test(py.replace(/Rational\([^)]*\)/g, '')));
+    // a Gröbner column is given as literals (engine reduction — not a one-liner subs)
+    const g = QD.AlgebraStore.create(); g.seedFromSystem(system); g.assumeReal(g.baseVariables());
+    const gr = g.groebner(g.currentColumnIds(), { order: 'grevlex' });
+    if (gr && gr.ok) {
+      const py2 = g.sympyDerivation();
+      ok('E4: a Gröbner step is emitted as exact literals (not a subs)', /-- Groebner/.test(py2) && /engine reduction; the exact stored result/.test(py2));
+    } else { ok('E4: (Gröbner step skipped — reduction unavailable)', true); }
+  }
+
   // ---- factoring: factorOf (query) + applyFactor (case-split column) ----
   {
     const st = QD.AlgebraStore.create();

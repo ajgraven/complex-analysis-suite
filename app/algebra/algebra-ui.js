@@ -647,7 +647,8 @@
         '        <button id="alg-import-json" class="small" type="button" title="Load a previously downloaded DAG JSON — rebuilds the whole workspace (nodes, branches, assumptions). Replaces the current graph (undoable).">Load DAG (JSON)</button>' +
         '        <input id="alg-import-file" type="file" accept="application/json,.json" style="display:none;" />' +
         '        <button id="alg-copy-latex" class="small" type="button" title="Copy all equations as a gathered LaTeX block">Copy LaTeX</button>' +
-        '        <button id="alg-copy-derivation" class="small" type="button" title="Copy the active branch as a literate LaTeX derivation — one align block per column, each annotated with the transition that produced it + the active hypotheses">Copy derivation (LaTeX)</button></div>' +
+        '        <button id="alg-copy-derivation" class="small" type="button" title="Copy the active branch as a literate LaTeX derivation — one align block per column, each annotated with the transition that produced it + the active hypotheses">Copy derivation (LaTeX)</button>' +
+        '        <button id="alg-copy-sympy" class="small" type="button" title="Copy the active branch as a runnable SymPy script — substitution steps are recomputed by SymPy from the previous column; engine reductions (Gröbner / resultant) are given as exact ℚ(i) literals">Copy SymPy script</button></div>' +
         '      <div class="algebra-line" style="margin-top:4px;"><span class="algebra-line-label">Mathematica</span>' +
         '        <select id="alg-mma-col" title="Which column of equations to export"></select>' +
         '        <button id="alg-copy-mma" class="small" type="button" title="Copy the chosen column as a Wolfram-Language list of equations ({lhs == 0, …}) ready to paste into Mathematica">Copy</button>' +
@@ -712,6 +713,12 @@
       $('#alg-import-file').addEventListener('change', importJson);
       $('#alg-copy-latex').addEventListener('click', copyLatex);
       $('#alg-copy-derivation').addEventListener('click', copyLatexDerivation);
+      $('#alg-copy-sympy').addEventListener('click', () => {
+        if (!store.size) { toast('Nothing to export — seed or load a system first.', { kind: 'error' }); return; }
+        const code = store.sympyDerivation();
+        if (!code) { toast('SymPy export unavailable', { kind: 'error' }); return; }
+        writeClipboard(code, 'SymPy script');
+      });
       $('#alg-copy-mma').addEventListener('click', copyMathematica);
       $('#alg-copy-mma-all').addEventListener('click', copyMathematicaAll);
       $('#alg-copy-cas').addEventListener('click', copyCAS);

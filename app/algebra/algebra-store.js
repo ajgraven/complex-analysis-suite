@@ -1590,6 +1590,120 @@
       const CAS = _getCAS(); const n = get(id); if (!CAS || !n) return '';
       return CAS.equationToCAS({ terms: n.poly.termList(), rel: n.rel }, dialect || 'maple');
     }
+    // ---- E4: reproducible SymPy derivation script for the ACTIVE branch ----
+    // Conjugate of a value record { re:[n,d], im:[n,d] } (negate the imaginary part).
+    function _conjRec(rec) {
+      const im0 = rec.im[0];
+      const negd = (im0 === '0') ? rec.im : [(im0[0] === '-' ? im0.slice(1) : '-' + im0), rec.im[1]];
+      return { re: rec.re, im: negd };
+    }
+    // A SymPy substitution dict { sympyVar: sympyExpr } that REPRODUCES a substitution-family
+    // reduction from the previous column (null for engine reductions that don't map to a subs).
+    function _subsForRepro(prov) {
+      const QC = getQC(), CAS = _getCAS(); if (!prov || !QC || !QC.conjVarName || !CAS) return null;
+      const cj = (v) => QC.conjVarName(v);
+      const map = {};
+      switch (prov.op) {
+        case 'assume-real':
+          for (const v of (prov.vars || [])) { const c = cj(v); if (c !== v) map[c] = v; }
+          break;
+        case 'assume-imaginary':
+          for (const v of (prov.vars || [])) { const c = cj(v); if (c !== v) map[c] = '-' + v; }
+          break;
+        case 'substitute':
+          for (const rec of (prov.variables || [])) {
+            if (!rec || !rec.name || !rec.value || !rec.value.re) return null;
+            map[rec.name] = CAS.sympyValue(rec.value);
+            const c = rec.conjugate || (cj(rec.name) !== rec.name ? cj(rec.name) : null);
+            if (c) map[c] = CAS.sympyValue(_conjRec(rec.value));
+          }
+          break;
+        case 'fix-w0':
+          if (!prov.value || !prov.value.re) return null;
+          map.w0 = CAS.sympyValue(prov.value); map.wb0 = CAS.sympyValue(_conjRec(prov.value));
+          break;
+        case 'identify': {
+          if (!prov.ratio || !prov.ratio.re || !prov.drop || !prov.keep) return null;
+          map[prov.drop] = '(' + CAS.sympyValue(prov.ratio) + ')*' + prov.keep;
+          const cd = cj(prov.drop), ck = cj(prov.keep);
+          if (cd !== prov.drop) map[cd] = '(' + CAS.sympyValue(_conjRec(prov.ratio)) + ')*' + ck;
+          break;
+        }
+        case 'identify-conj': {
+          if (!prov.ratio || !prov.ratio.re || !prov.var || !prov.other) return null;
+          map[prov.var] = '(' + CAS.sympyValue(prov.ratio) + ')*' + cj(prov.other);
+          const cv = cj(prov.var);
+          if (cv !== prov.var) map[cv] = '(' + CAS.sympyValue(_conjRec(prov.ratio)) + ')*' + prov.other;
+          break;
+        }
+        default: return null;
+      }
+      return Object.keys(map).length ? map : null;
+    }
+    // A terse, ASCII transition label for a column's representative provenance (store-side; the
+    // UI's provText isn't available here).
+    function _shortProv(p) {
+      if (!p) return 'reduction';
+      switch (p.op) {
+        case 'generate': return 'original system';
+        case 'assume-real': return 'assume real: ' + (p.vars || []).join(', ');
+        case 'assume-imaginary': return 'assume imaginary: ' + (p.vars || []).join(', ');
+        case 'substitute': return 'set ' + (p.variables || []).map((r) => r.name).join(', ');
+        case 'fix-w0': return 'fix phi(0)';
+        case 'identify': return 'identify ' + p.drop + ' = ' + p.keep;
+        case 'identify-conj': return 'identify ' + p.var + ' = conj(' + p.other + ')';
+        case 'linear-reduce': return 'linear propagation';
+        case 'resultant': return 'eliminate ' + p.variable;
+        case 'groebner': return 'Groebner (' + (p.order || 'grevlex') + ')';
+        case 'triangular': return 'triangular decomposition';
+        case 'factor': return 'factor case';
+        case 'rctd': return 'RCTD cell';
+        case 'propagate': return 'propagate constraint';
+        default: return p.op || 'reduction';
+      }
+    }
+    // Build a runnable SymPy script that reproduces the ACTIVE branch's derivation: declare the
+    // symbols, define col0 as the original system (exact ℚ(i) literals), then for each later
+    // column either RECOMPUTE it from the previous column (substitution-family steps, via .subs)
+    // or give the exact stored result (engine reductions — Gröbner/resultant/… don't map to a
+    // one-liner). Returns '' if QD.CASExport is unavailable or there is nothing to export.
+    function sympyDerivation() {
+      const CAS = _getCAS(); if (!CAS || !CAS.polyToSympy) return '';
+      const at = activeTrackId;
+      const cols = columns();                              // active-track columns, ascending
+      if (!cols.length) return '';
+      const symset = new Set();
+      for (const n of nodes.values()) if ((n.track || 't0') === at) for (const v of nodeVars(n)) symset.add(v);
+      const syms = [...symset].sort();
+      if (!syms.length) return '';
+      const asc = (s) => String(s).replace(/●/g, '(o)').replace(/★/g, '(*)').replace(/[^\x20-\x7E]/g, '').trim();
+      const lbl = asc((tracks.find((t) => t.id === at) || {}).label || at);
+      const litList = (cidx, name) => name + ' = [\n' +
+        orderedColumn(cidx, at).map((n) => '    ' + CAS.polyToSympy(n.poly.termList()) + ',  # ' + asc(n.label)).join('\n') + '\n]';
+      const L = [];
+      L.push('# QD Algebra derivation -- branch "' + lbl + '"' + (formulation === 'schwarz' ? ' (Schwarz formulation)' : '') + ' -- reproducible SymPy transcript');
+      L.push('# Substitution steps (assume real/imaginary, set values, fix phi(0), identify) are RECOMPUTED');
+      L.push('# by SymPy from the previous column; engine reductions (Groebner / resultant / triangular /');
+      L.push('# factor) are given as the exact stored result. colK = the system after step K+1.');
+      L.push('from sympy import symbols, Rational, I, expand, groebner');
+      L.push(syms.join(', ') + (syms.length === 1 ? ',' : '') + ' = symbols(\'' + syms.join(' ') + '\')');
+      L.push(''); L.push('# Step 1 -- original system'); L.push(litList(cols[0].index, 'col0'));
+      for (let i = 1; i < cols.length; i++) {
+        const c = cols[i].index, prev = cols[i - 1].index;
+        const ns = orderedColumn(c, at);
+        const prov = (ns.find((n) => n.provenance && n.provenance.op !== 'conjugate') || ns[0] || {}).provenance;
+        const subs = _subsForRepro(prov);
+        L.push(''); L.push('# Step ' + (c + 1) + ' -- ' + asc(_shortProv(prov)));
+        if (subs) {
+          L.push('SUBS' + c + ' = {' + Object.keys(subs).map((k) => k + ': ' + subs[k]).join(', ') + '}');
+          L.push('col' + c + ' = [q for q in (expand(p.subs(SUBS' + c + ')) for p in col' + prev + ') if q != 0]');
+        } else {
+          if (prov && prov.op) L.push('# (' + asc(prov.op) + ' -- engine reduction; the exact stored result)');
+          L.push(litList(c, 'col' + c));
+        }
+      }
+      return L.join('\n') + '\n';
+    }
     // ---- RCTD import (the return trip for the Maple RealComprehensiveTriangularize export) ----
     // Land an external parametric-RCTD decomposition back into the workspace as a new column of
     // `op:'rctd'` nodes. `input` is either the parsed object from QD.CASExport.parseRCTD (with a
@@ -1748,7 +1862,7 @@
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
       currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
-      sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, importRCTD, nodeStats, variables, baseVariables,
+      sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       forkTrack, setActiveTrack, deleteTrack, tracks: tracksList,
       undo, redo, reset,

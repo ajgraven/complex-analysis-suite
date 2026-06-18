@@ -16,7 +16,7 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `4b65d029c9`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `bfc8c5f54b`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
@@ -302,8 +302,21 @@ its own merged PR), with one feature **in progress on a branch**:
     • **B1** derivation-lineage highlighting (`821f1af`) — REFRAMED from the roadmap's "dirty-mark descendants /
       recompute" (which assumes mutable nodes; this store is immutable/append-only). Selecting a node highlights its
       transitive ancestors + descendants + the connecting edges (BFS over `store.edges`) — "propagation through the
-      DAG" as a visual lineage view. Branch foundation + Phase 2 are now done; **Next = Phase 3** (E1 session
-      save/load, E3 literate-LaTeX export, E4 CAS-script export) per the roadmap.
+      DAG" as a visual lineage view.
+  - **Branching/persistence — Phase 3 (E1, E3, E4)** — persistence & reproducibility, each its own commit:
+    • **E1** session save/load (`7b0e6fb`) — `store.importDAG` rebuilds the whole workspace (nodes, branches,
+      per-branch assumptions, columns, order, edges) from a "Download DAG (JSON)" snapshot — the inverse of
+      exportDAG (now `version`-stamped with per-node `order`); a "Load DAG (JSON)" button + file input. Round-trip
+      is byte-identical (idempotent), undoable. `algebra-store` 211.
+    • **E3** literate-LaTeX derivation (`aaf0e61`) — "Copy derivation (LaTeX)": the active branch as one
+      `\begin{align}` block per column with `% Step k — <transition>` annotations + the hypotheses preamble.
+    • **E4** reproducible SymPy script (`<this commit>`) — "Copy SymPy script": declares the symbols + col0
+      literals, then RECOMPUTES substitution steps (assume real/imaginary, set, fix φ(0), identify) via `.subs`
+      from the previous column, and gives engine reductions (Gröbner/resultant/…) as exact ℚ(i) literals.
+      `cas-export.js` gains `polyToSympy`/`sympyValue` (exact `Rational`/`I`); store `sympyDerivation()`.
+      `algebra-store` 216. **The roadmap's Workspace track (Phases 1–3) is now complete**; what remains is the
+      **Engine track** (Phase 4: G7 multivariate GCD/partial-fractions, G5 real-root isolation + Krawczyk, G8
+      radical denesting, G6 RUR; Phase 5 parametric G2/G1/C4; Phase 6 G10/G11/D5).
   **Deferred (not started):** **#6 P3** — the worked PARAMETRIC cardioid example (run the interior
   `pointFunctionalSystem` (M₀,M₁) system through Maple RCTD offline, capture the qd-rctd cell JSON as a
   regression fixture + an AHARONOV_SHAPIRO.md section; needs an offline Maple run). Exotic/research-tier:

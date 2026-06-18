@@ -84,6 +84,37 @@
     return polyToCAS(eq.terms, dialect) + DIALECTS[dialect].rel(eq.rel || '=');
   }
 
+  // ---- SymPy (Python) formatting — needs EXACT Rational(n, d) coefficients (n/d would be
+  // Python float division) + `**` powers + the imaginary unit I. Used by the reproducible
+  // derivation-script export (E4). polyToCAS's `_rat` is unsafe here, hence a dedicated path.
+  function _ratPy(p) { return p[1] === '1' ? p[0] : 'Rational(' + p[0] + ', ' + p[1] + ')'; }
+  function _coeffPy(re, im) {
+    const reZero = re[0] === '0', imZero = im[0] === '0';
+    if (imZero) return _ratPy(re);
+    const imNeg = im[0][0] === '-';
+    const imAbs = _ratPy([imNeg ? im[0].slice(1) : im[0], im[1]]);
+    const imBody = imAbs === '1' ? 'I' : imAbs + '*I';
+    if (reZero) return (imNeg ? '-' : '') + imBody;
+    return '(' + _ratPy(re) + (imNeg ? ' - ' : ' + ') + imBody + ')';
+  }
+  // One polynomial (term list) → a SymPy expression string.
+  function polyToSympy(terms) {
+    terms = terms || [];
+    if (!terms.length) return '0';
+    const parts = terms.map((t) => {
+      const c = _coeffPy(t.coeff.re, t.coeff.im);
+      const mono = Object.keys(t.mono).sort().map((nm) => { const e = t.mono[nm]; return e === 1 ? nm : nm + '**' + e; }).join('*');
+      if (!mono) return c;
+      if (c === '1') return mono;
+      if (c === '-1') return '-' + mono;
+      return c + '*' + mono;
+    });
+    return parts.join(' + ').replace(/\+ -/g, '- ');
+  }
+  // A scalar value record { re:[n,d], im:[n,d] } → a SymPy scalar expression (e.g. a pinned
+  // value or a substitution ratio). Same coefficient grammar as a polynomial's constant term.
+  function sympyValue(rec) { return (rec && rec.re && rec.im) ? _coeffPy(rec.re, rec.im) : '0'; }
+
   // Variable inventory of a system: the sorted union of every monomial variable, split into
   // unknowns and the caller-designated parameters (only those actually present are kept).
   function _varSplit(items, params) {
@@ -226,7 +257,7 @@
     return { ok: true, format: 'qd-rctd', version: obj.version || 1, params: Array.isArray(obj.params) ? obj.params.slice() : [], cells };
   }
 
-  const ns = { polyToCAS, equationToCAS, systemToCAS, parseRCTD, dialects: ['maple', 'singular', 'sage', 'mathematica'] };
+  const ns = { polyToCAS, equationToCAS, systemToCAS, polyToSympy, sympyValue, parseRCTD, dialects: ['maple', 'singular', 'sage', 'mathematica'] };
   if (global.QD) global.QD.CASExport = ns;
   else if (global.module && global.module.exports) global.module.exports = ns;
   else global.QD_CASExport = ns;
