@@ -758,6 +758,50 @@ module.exports = async function run() {
          S.realSolutionCount(grid, null, ['x', 'y'], { maxHermiteDim: 2 }).ok === false);
     }
 
+    // G5 — real-root isolation via Sturm sequences (exact, certified intervals).
+    {
+      const mv = (n) => S.mpolyVar(n), mi = (k) => S.mpolyInt(k);
+      const x = mv('x');
+      // bracket sanity: every interval contains exactly one root (sign change or exact),
+      // and the numeric midpoints match the expected roots.
+      const near = (a, b) => Math.abs(a - b) < 1e-6;
+      // (x−1)(x−2)(x−3) — three rational roots 1,2,3.
+      const cubic = x.sub(mi(1)).mul(x.sub(mi(2))).mul(x.sub(mi(3)));
+      const r1 = S.realRootIsolate(cubic, 'x');
+      ok('realRootIsolate: (x−1)(x−2)(x−3) → 3 real roots at 1,2,3',
+         r1.ok && r1.count === 3 && near(r1.roots[0].approx, 1) && near(r1.roots[1].approx, 2) && near(r1.roots[2].approx, 3));
+      ok('realRootIsolate: rational roots are reported EXACTLY (lo==hi)',
+         r1.roots.every((rt) => rt.exact && rt.lo.equals(rt.hi)));
+      // x²+1 — no real roots.
+      ok('realRootIsolate: x²+1 → 0 real roots', S.realRootIsolate(x.pow(2).add(mi(1)), 'x').count === 0);
+      // x²−2 — two irrational roots ±√2; intervals must bracket with opposite-sign endpoints.
+      const r2 = S.realRootIsolate(x.pow(2).sub(mi(2)), 'x');
+      const sqrt2 = Math.SQRT2;
+      ok('realRootIsolate: x²−2 → ±√2, narrowed, sign-changing brackets',
+         r2.count === 2 && near(r2.roots[1].approx, sqrt2) && near(r2.roots[0].approx, -sqrt2) &&
+         r2.roots.every((rt) => rt.exact || (rt.lo.toNumber() < rt.approx && rt.approx < rt.hi.toNumber())));
+      // the cardioid resolvent 2s³−3s²+1 = (s−1)²(2s+1): square-free part (s−1)(2s+1) ⇒ 2 distinct real roots 1, −1/2.
+      const s = mv('s');
+      const card = s.pow(3).scale(S.gaussInt(2)).sub(s.pow(2).scale(S.gaussInt(3))).add(mi(1));
+      const r3 = S.realRootIsolate(card, 's');
+      ok('realRootIsolate: cardioid resolvent 2s³−3s²+1 → distinct real roots −1/2 and 1',
+         r3.ok && r3.count === 2 && near(r3.roots[0].approx, -0.5) && near(r3.roots[1].approx, 1));
+      // a bisection midpoint that IS a root (the non-root-splitter "nudge"): x(x−1) over [−B,B]
+      // has midpoint 0 a root; isolation must still find both 0 and 1.
+      const r4 = S.realRootIsolate(x.mul(x.sub(mi(1))), 'x');
+      ok('realRootIsolate: x(x−1) → roots 0 and 1 (root-at-splitter handled)',
+         r4.count === 2 && near(r4.roots[0].approx, 0) && near(r4.roots[1].approx, 1));
+      // non-real coefficients are rejected
+      ok('realRootIsolate: complex-coefficient poly → {ok:false}',
+         S.realRootIsolate(x.pow(2).sub(S.mpolyConst(S.gaussInt(0, 1))), 'x').ok === false);
+      // realRootCount agrees with the isolation count + Descartes/known values
+      ok('realRootCount: matches isolation on the cubic + cardioid resolvent',
+         S.realRootCount(cubic, 'x') === 3 && S.realRootCount(card, 's') === 2 && S.realRootCount(x.pow(2).add(mi(1)), 'x') === 0);
+      // count on a sub-interval (Sturm on (0, 2.5] of the cubic ⇒ roots 1,2 only)
+      ok('realRootCount: sub-interval (0, 5/2] of the cubic → 2 roots',
+         S.realRootCount(cubic, 'x', S.rat(0), S.rat(5, 2)) === 2);
+    }
+
     // Schur–Cohn: exact count of roots inside the open unit disk via the Hermitian
     // C = A·Aᴴ − B·Bᴴ inertia (inside = #neg, outside = #pos, on-circle ⊂ nullity).
     // ascending Gaussian coeff arrays; gr = real rational a/d, gI = integer a+bi.

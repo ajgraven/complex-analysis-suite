@@ -761,6 +761,154 @@
     if (g.degreeIn(v) <= 0) return p;                          // already square-free
     return mpolyExactDiv(p, g);
   }
+
+  // ===========================================================================
+  // G5 — REAL-ROOT ISOLATION over ℚ via STURM SEQUENCES (exact, certified).
+  //
+  // For a univariate polynomial with RATIONAL (real) coefficients, returns a list of
+  // isolating intervals [lo,hi] with exact rational endpoints, each enclosing exactly ONE
+  // distinct real root. The count in every interval is a Sturm count — V(lo)−V(hi), the drop
+  // in sign-variations of the Sturm chain — which is EXACT (all arithmetic over ℚ), and each
+  // bracket has opposite-sign endpoints (or coincident endpoints at an exact rational root).
+  // The certification is therefore unconditional; intervals are refined to width < opts.tol
+  // by exact bisection (chosen over interval-Newton so the enclosure stays rigorous with no
+  // floating point). Operates on the SQUARE-FREE part, so the roots reported are the distinct
+  // real roots. Refs: Basu–Pollack–Roy "Algorithms in Real Algebraic Geometry" §2.2 (Sturm).
+  // ---------------------------------------------------------------------------
+  // Rational-array (ascending) polynomial helpers — a real univariate over ℚ.
+  function _raTrim(a) { a = a.slice(); while (a.length && a[a.length - 1].isZero()) a.pop(); return a; }
+  function _raEval(a, x) { let acc = RZERO; for (let i = a.length - 1; i >= 0; i--) acc = acc.mul(x).add(a[i]); return acc; }
+  function _raDeriv(a) { const out = []; for (let i = 1; i < a.length; i++) out.push(a[i].mul(Rational.fromInt(i))); return _raTrim(out); }
+  // Remainder of f ÷ g over ℚ (both ascending Rational arrays, g ≠ 0).
+  function _raRem(f, g) {
+    let r = _raTrim(f); g = _raTrim(g);
+    const dg = g.length - 1, lcg = g[dg];
+    let guard = 0;
+    while (r.length - 1 >= dg && r.length) {
+      const dr = r.length - 1, factor = r[dr].div(lcg), shift = dr - dg;
+      for (let i = 0; i <= dg; i++) r[shift + i] = r[shift + i].sub(factor.mul(g[i]));
+      r = _raTrim(r);
+      if (++guard > 1e6) throw new Error('realRootIsolate: non-terminating remainder');
+    }
+    return r;
+  }
+  // Sturm chain of a square-free real poly: s₀ = p, s₁ = p′, s_{k+1} = −rem(s_{k-1}, s_k).
+  function _sturmChain(a) {
+    const chain = [_raTrim(a)]; const d = _raDeriv(a); if (!d.length) return chain;
+    chain.push(d);
+    let guard = 0;
+    while (true) {
+      const r = _raRem(chain[chain.length - 2], chain[chain.length - 1]);
+      if (!r.length) break;
+      chain.push(r.map((c) => c.neg()));
+      if (++guard > 1e5) throw new Error('realRootIsolate: Sturm chain too long');
+    }
+    return chain;
+  }
+  // Sign-variation count V(x) of the chain at a rational x (zeros skipped).
+  function _sturmV(chain, x) {
+    let prev = 0, vars = 0;
+    for (const s of chain) { const sg = _raEval(s, x).sign(); if (sg === 0) continue; if (prev !== 0 && sg !== prev) vars++; prev = sg; }
+    return vars;
+  }
+  // Cauchy root bound (1 + max|aᵢ|/|a_deg|) as a Rational, bumped until ±B are non-roots.
+  function _cauchyBound(a) {
+    const d = a.length - 1, lc = a[d]; let m = RZERO;
+    const rabs = (r) => (r.sign() < 0 ? r.neg() : r);
+    for (let i = 0; i < d; i++) { const q = rabs(a[i].div(lc)); if (q.sub(m).sign() > 0) m = q; }
+    let B = m.add(RONE);
+    let guard = 0;
+    while (_raEval(a, B).isZero() || _raEval(a, B.neg()).isZero()) { B = B.add(RONE); if (++guard > 1e4) break; }
+    return B;
+  }
+  // Clear a Rational ascending array to a BigInt integer array (×lcm of denominators).
+  function _raToIntArr(a) { let L = 1n; for (const r of a) L = _blcm(L, r.d) || 1n; return a.map((r) => r.n * (L / r.d)); }
+  // Positive divisors of |n| (capped — caller guards the magnitude).
+  function _bdivisors(n) {
+    n = n < 0n ? -n : n; if (n === 0n) return [1n];
+    const ds = [];
+    for (let i = 1n; i * i <= n; i++) { if (n % i === 0n) { ds.push(i); if (i !== n / i) ds.push(n / i); } }
+    return ds;
+  }
+  // Exact rational roots of a square-free real univariate (rational-root theorem). Returns []
+  // (still catching x=0) when the leading/trailing integer coefficients are too large to factor
+  // cheaply — isolation then reports those roots as narrow brackets rather than exact rationals.
+  function _rationalRootsOf(a) {
+    const ia = _raToIntArr(a); const d = ia.length - 1; if (d < 1) return [];
+    const roots = [];
+    if (ia[0] === 0n) roots.push(RZERO);                  // x = 0
+    let k = 0; while (k < ia.length && ia[k] === 0n) k++;  // trailing (low) zeros → nonzero const
+    const a0 = ia[k] < 0n ? -ia[k] : ia[k], aN = ia[d] < 0n ? -ia[d] : ia[d];
+    const CAP = 1000000000n;                               // 1e9 — keeps the divisor sieve fast
+    if (a0 > CAP || aN > CAP) return roots;
+    const P = _bdivisors(a0), Q = _bdivisors(aN), seen = new Set();
+    for (const pp of P) for (const q of Q) for (const sgn of [1n, -1n]) {
+      const r = new Rational(sgn * pp, q), key = r.n + '/' + r.d;
+      if (seen.has(key)) continue; seen.add(key);
+      if (_raEval(a, r).isZero()) roots.push(r);
+    }
+    return roots;
+  }
+  function realRootIsolate(p, v, opts) {
+    opts = opts || {};
+    const tol = (opts.tol != null) ? Number(opts.tol) : 1e-9;
+    if (!(p instanceof MPoly) || p.isZero()) return { ok: false, reason: 'zero or invalid polynomial' };
+    const vs = p.vars();
+    if (vs.size > 1 || (vs.size === 1 && !vs.has(v))) return { ok: false, reason: 'not univariate in ' + v };
+    for (const g of _uniToArr(p, v)) if (!g.im.isZero()) return { ok: false, reason: 'polynomial has non-real coefficients' };
+    const sf = squareFreePart(p, v);
+    const a = _raTrim(_uniToArr(sf, v).map((g) => g.re));
+    if (a.length <= 1) return { ok: true, count: 0, roots: [] };   // constant ⇒ no roots
+    let chain; try { chain = _sturmChain(a); } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    const half = new Rational(1n, 2n);
+    const isRoot = (x) => _raEval(a, x).isZero();
+    const ratRoots = _rationalRootsOf(a);                  // exact rational roots (reported as lo==hi)
+    // Refine a count-1 bracket (lo,hi] to width < tol by exact bisection — unless an exact
+    // rational root lies in it, in which case report that root precisely.
+    const refine = (lo, hi) => {
+      for (const r of ratRoots) if (lo.sub(r).sign() <= 0 && r.sub(hi).sign() <= 0) return { lo: r, hi: r, exact: true, approx: r.toNumber() };
+      let g = 0;
+      while (hi.sub(lo).toNumber() >= tol && g < 200) {
+        const m = lo.add(hi).mul(half);
+        if (isRoot(m)) return { lo: m, hi: m, exact: true, approx: m.toNumber() };
+        // root is in (lo,hi]; keep the half whose right end still has the sign drop
+        if (_sturmV(chain, lo) - _sturmV(chain, m) >= 1) hi = m; else lo = m;
+        g++;
+      }
+      return { lo, hi, exact: false, approx: hi.add(lo).mul(half).toNumber() };
+    };
+    const out = [];
+    const B = _cauchyBound(a);
+    // Work-list of (lo,hi] brackets with their Sturm counts; split at a non-root midpoint.
+    const stack = [[B.neg(), B]];
+    let guard = 0;
+    while (stack.length) {
+      if (++guard > 100000) return { ok: false, reason: 'isolation did not terminate (degenerate input)' };
+      const [lo, hi] = stack.pop();
+      const cnt = _sturmV(chain, lo) - _sturmV(chain, hi);
+      if (cnt <= 0) continue;
+      if (cnt === 1) { out.push(refine(lo, hi)); continue; }
+      let m = lo.add(hi).mul(half);
+      let nudge = 0;
+      while (isRoot(m) && nudge < 60) { m = lo.add(m).mul(half); nudge++; }   // pick a non-root splitter
+      stack.push([lo, m], [m, hi]);
+    }
+    out.sort((x, y) => x.approx - y.approx);
+    return { ok: true, count: out.length, roots: out };
+  }
+  // Number of distinct real roots of a real univariate p in (lo, hi] (defaults to all of ℝ via
+  // the Cauchy bound) — a thin Sturm-count wrapper (also the primitive Phase-5 Sturm work wants).
+  function realRootCount(p, v, lo, hi) {
+    if (!(p instanceof MPoly) || p.isZero()) return null;
+    const vs = p.vars(); if (vs.size > 1 || (vs.size === 1 && !vs.has(v))) return null;
+    for (const g of _uniToArr(p, v)) if (!g.im.isZero()) return null;
+    const a = _raTrim(_uniToArr(squareFreePart(p, v), v).map((g) => g.re));
+    if (a.length <= 1) return 0;
+    const chain = _sturmChain(a);
+    const B = _cauchyBound(a);
+    const L = (lo != null) ? lo : B.neg(), H = (hi != null) ? hi : B;
+    return _sturmV(chain, L) - _sturmV(chain, H);
+  }
   // ===========================================================================
   // EXACT univariate factorization over ℚ(i) — the shifted norm trick (Trager's
   // algorithm specialized to k = ℚ(i)), built on Berlekamp–Zassenhaus over ℚ.
@@ -3099,7 +3247,7 @@
     rat, gauss, gaussInt, mpolyVar, mpolyConst, mpolyInt,
     polyFromTermList: (list) => MPoly.fromTermList(list),
     monoKey, monoCmp,
-    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart,
+    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, solveByEigenvalues, realSolutionCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
