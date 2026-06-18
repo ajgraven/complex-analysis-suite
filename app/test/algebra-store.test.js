@@ -1006,6 +1006,36 @@ module.exports = async function run() {
        forkKnown.A1_1 && !mainKnown.A1_1 && fkk.ok);
   }
 
+  // ---- session save/load: exportDAG → importDAG round-trip (E1) ----
+  {
+    const a = QD.AlgebraStore.create();
+    a.seedFromSystem(system);
+    a.assumeReal(['z1']);                  // a reduction column + an assumption on t0
+    const fk = a.forkTrack();              // a 2nd branch (inherits z1-real), now active
+    a.assumeImaginary(['a1']);             // a fork-only assumption
+    const dump = a.exportDAG();
+
+    const b = QD.AlgebraStore.create();
+    const r = b.importDAG(dump);
+    ok('E1: importDAG ok with the right node/track counts', r.ok && r.nodes === a.list().length && r.tracks === a.tracks().length);
+    ok('E1: round-trip preserves the active branch + its assumptions (z1 real, a1 imaginary on the fork)',
+       b.activeTrack === a.activeTrack && b.realVars.includes('z1') && b.imagVars.includes('a1') &&
+       JSON.stringify(b.realVars) === JSON.stringify(a.realVars) && JSON.stringify(b.imagVars) === JSON.stringify(a.imagVars));
+    ok('E1: re-export is byte-identical to the import (idempotent)', JSON.stringify(b.exportDAG()) === JSON.stringify(dump));
+    // a node polynomial round-trips EXACTLY (same MPoly, column, track, rel)
+    const an = a.list()[0], bn = b.get(an.id);
+    ok('E1: a node polynomial round-trips exactly', !!bn && bn.poly.equals(an.poly) && bn.column === an.column && (bn.track || 't0') === (an.track || 't0') && bn.rel === an.rel);
+    ok('E1: edges round-trip', b.edges.length === a.edges.length);
+    // main branch keeps ITS assumptions (z1 real, but NOT a1 imaginary — that was fork-only)
+    b.setActiveTrack('t0');
+    ok('E1: the main branch round-trips its own assumptions (z1 real, a1 not imaginary)', b.realVars.includes('z1') && !b.imagVars.includes('a1'));
+    // importDAG is undoable (restores the empty store)
+    b.undo();
+    ok('E1: importDAG is undoable (back to empty)', b.size === 0);
+    // garbage input is rejected, not thrown
+    ok('E1: importDAG rejects non-DAG input', !QD.AlgebraStore.create().importDAG({ foo: 1 }).ok);
+  }
+
   // ---- factoring: factorOf (query) + applyFactor (case-split column) ----
   {
     const st = QD.AlgebraStore.create();

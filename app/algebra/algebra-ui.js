@@ -643,7 +643,9 @@
         '    <summary>Export</summary>' +
         '    <div class="algebra-section-body">' +
         '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
-        '        <button id="alg-export-json" class="small" type="button" title="Download every node as an exact ℚ(i) term list + edges (CAS-ready JSON)">Download DAG (JSON)</button>' +
+        '        <button id="alg-export-json" class="small" type="button" title="Download the whole session as exact ℚ(i) term lists + edges + tracks + assumptions (round-trips via Load)">Download DAG (JSON)</button>' +
+        '        <button id="alg-import-json" class="small" type="button" title="Load a previously downloaded DAG JSON — rebuilds the whole workspace (nodes, branches, assumptions). Replaces the current graph (undoable).">Load DAG (JSON)</button>' +
+        '        <input id="alg-import-file" type="file" accept="application/json,.json" style="display:none;" />' +
         '        <button id="alg-copy-latex" class="small" type="button" title="Copy all equations as a gathered LaTeX block">Copy LaTeX</button></div>' +
         '      <div class="algebra-line" style="margin-top:4px;"><span class="algebra-line-label">Mathematica</span>' +
         '        <select id="alg-mma-col" title="Which column of equations to export"></select>' +
@@ -705,6 +707,8 @@
           (r.skipped.length ? ', skipped ' + r.skipped.length : ''));
       });
       $('#alg-export-json').addEventListener('click', exportJson);
+      $('#alg-import-json').addEventListener('click', () => { const f = $('#alg-import-file'); if (f) f.click(); });
+      $('#alg-import-file').addEventListener('change', importJson);
       $('#alg-copy-latex').addEventListener('click', copyLatex);
       $('#alg-copy-mma').addEventListener('click', copyMathematica);
       $('#alg-copy-mma-all').addEventListener('click', copyMathematicaAll);
@@ -1604,6 +1608,25 @@
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 0);
       toast('Exported ' + data.nodes.length + ' nodes (JSON)');
+    }
+    // E1 — load a downloaded DAG JSON and rebuild the whole workspace (store.importDAG).
+    // Replaces the current graph (undoable). Resets stale picker/selection state, like a re-seed.
+    function importJson(ev) {
+      if (busyGuard()) { ev.target.value = ''; return; }
+      const file = ev.target.files && ev.target.files[0];
+      ev.target.value = '';                      // allow re-loading the same file later
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        let data; try { data = JSON.parse(reader.result); } catch (e) { showError('Load DAG: not valid JSON — ' + ((e && e.message) || '')); return; }
+        const r = store.importDAG(data);
+        if (!r || !r.ok) { showError('Load DAG: ' + withGuidance((r && r.reason) || 'import failed')); return; }
+        if (canvas) canvas.clearSelection();
+        clearError(); rerender(); refreshPickers();
+        toast('Loaded ' + r.nodes + ' node(s) across ' + r.tracks + ' branch' + (r.tracks === 1 ? '' : 'es'));
+      };
+      reader.onerror = () => showError('Load DAG: could not read the file');
+      reader.readAsText(file);
     }
     function relSuffix(rel) { return rel === '>' ? ' > 0' : rel === '≠' ? ' \\neq 0' : ' = 0'; }
     function writeClipboard(tex, label) {

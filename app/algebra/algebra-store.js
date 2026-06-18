@@ -1504,8 +1504,11 @@
     }
 
     // CAS-agnostic export: model + every node as a term list (exact ℚ(i) coeffs) + edges.
+    // `version` + per-node `order`/`meta` make it a faithful SESSION snapshot that importDAG
+    // (E1) can round-trip — not only a CAS feed.
     function exportDAG() {
       return {
+        version: 1,
         model,
         formulation,
         w0Fixed: assumeOf().w0Fixed,              // active branch's (back-compat)
@@ -1514,10 +1517,50 @@
         activeTrack: activeTrackId,
         nodes: list().map((n) => ({
           id: n.id, kind: n.kind, label: n.label, rel: n.rel, column: n.column, track: n.track || 't0',
-          provenance: n.provenance, terms: n.poly.termList(),
+          order: ordOf(n.id), meta: n.meta, provenance: n.provenance, terms: n.poly.termList(),
         })),
         edges: edges.slice(),
       };
+    }
+    // E1 — rebuild the whole workspace from an exportDAG() snapshot (the inverse of exportDAG).
+    // Undoable (checkpoint + clearGraph, like seedFromSystem). Reconstructs each node's MPoly
+    // from its term list, restores per-node column/track/order/provenance, the tracks + active
+    // track, and the per-track assumptions; bumps the id counter past the imported ids so further
+    // work can't collide. Returns { ok, nodes, tracks } or { ok:false, reason }.
+    function importDAG(data) {
+      if (!data || !Array.isArray(data.nodes)) return { ok: false, reason: 'not a valid DAG export (no nodes array)' };
+      const S = getSym(); if (!S || !S.polyFromTermList) return { ok: false, reason: 'QD.Sym unavailable' };
+      let built;
+      try {
+        built = data.nodes.map((nd) => ({ nd, poly: S.polyFromTermList(nd.terms || []) }));
+      } catch (e) { return { ok: false, reason: 'could not parse node polynomials: ' + ((e && e.message) || String(e)) }; }
+      checkpoint();
+      clearGraph();
+      model = data.model || 'conjugate';
+      formulation = data.formulation || 'classical';
+      // tracks (+ track-id counter past the highest 't<n>')
+      tracks = (data.tracks && data.tracks.length)
+        ? data.tracks.map((t) => ({ id: t.id, label: t.label, parentId: t.parentId, forkColumn: t.forkColumn }))
+        : [{ id: 't0', label: 'main', parentId: null, forkColumn: null }];
+      trackSeq = 0; for (const t of tracks) { const m = /^t(\d+)$/.exec(t.id); if (m) trackSeq = Math.max(trackSeq, +m[1]); }
+      activeTrackId = (data.activeTrack && hasTrack(data.activeTrack)) ? data.activeTrack : tracks[0].id;
+      // per-track assumptions (C3); fall back to a single t0 record from the legacy top-level w0Fixed
+      trackAssume.clear();
+      if (data.assumptions) { for (const [k, a] of data.assumptions) trackAssume.set(k, { realVars: (a.realVars || []).slice(), imagVars: (a.imagVars || []).slice(), w0Fixed: a.w0Fixed || null }); }
+      else { trackAssume.set('t0', { realVars: [], imagVars: [], w0Fixed: data.w0Fixed || null }); }
+      // nodes (+ id counter past the highest 'n<n>')
+      let maxSeq = 0;
+      for (const { nd, poly } of built) {
+        nodes.set(nd.id, {
+          id: nd.id, kind: nd.kind || 'derived', poly, rel: nd.rel || '=', label: nd.label || nd.id,
+          model, provenance: nd.provenance, column: nd.column || 0, track: nd.track || 't0', meta: nd.meta,
+        });
+        if (nd.order != null) order.set(nd.id, nd.order);
+        const m = /^n(\d+)$/.exec(nd.id); if (m) maxSeq = Math.max(maxSeq, +m[1]);
+      }
+      seq = maxSeq;
+      edges = (data.edges || []).filter((e) => nodes.has(e.from) && nodes.has(e.to)).map((e) => ({ from: e.from, to: e.to }));
+      return { ok: true, nodes: nodes.size, tracks: tracks.length };
     }
 
     // ---- Mathematica export (one column → a copy-paste list of equations) ----
@@ -1705,7 +1748,7 @@
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
       currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
-      sharedVars, previewCost, exportDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, importRCTD, nodeStats, variables, baseVariables,
+      sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       forkTrack, setActiveTrack, deleteTrack, tracks: tracksList,
       undo, redo, reset,
