@@ -802,6 +802,52 @@ module.exports = async function run() {
          S.realRootCount(cubic, 'x', S.rat(0), S.rat(5, 2)) === 2);
     }
 
+    // G7 — multivariate GCD over ℚ(i) (recursive primitive PRS) + zero-dim radical.
+    {
+      const mv = (n) => S.mpolyVar(n), mi = (k) => S.mpolyInt(k);
+      const x = mv('x'), y = mv('y');
+      const divides = (f, q) => { try { S.mpolyExactDiv(f, q); return true; } catch (e) { return false; } };
+      // univariate: gcd(x²−1, x−1) = x−1
+      ok('gcdMV: gcd(x²−1, x−1) = x−1', S.gcdMV(x.pow(2).sub(mi(1)), x.sub(mi(1))).equals(x.sub(mi(1))));
+      // coprime ⇒ 1
+      ok('gcdMV: gcd(x, y) = 1 (coprime)', S.gcdMV(x, y).equals(mi(1)));
+      ok('gcdMV: gcd(x+1, x+2) = 1', S.gcdMV(x.add(mi(1)), x.add(mi(2))).equals(mi(1)));
+      // bivariate: gcd((x−y)(x+y), x−y) = x−y (up to the monic normalization)
+      const xmy = x.sub(y), xpy = x.add(y);
+      ok('gcdMV: gcd((x−y)(x+y), x−y) = x−y', S.gcdMV(xmy.mul(xpy), xmy).equals(S.gcdList([xmy])));
+      // the defining identity: gcd(f·h, g·h) = h·gcd(f,g); with f,g coprime ⇒ = h (monic-normalized)
+      const f = x.add(y), g = x.sub(y), h = x.pow(2).add(y.pow(2)).add(mi(1));
+      const G = S.gcdMV(f.mul(h), g.mul(h));
+      ok('gcdMV: gcd(f·h, g·h) = h for coprime f,g (up to a unit)', G.equals(S.gcdList([h])));
+      ok('gcdMV: the GCD divides both inputs exactly', divides(f.mul(h), G) && divides(g.mul(h), G));
+      // ℚ(i) coefficients: gcd((x−i)(x+1), (x−i)) = x−i
+      const iC = S.mpolyConst(S.gaussInt(0, 1));
+      const xmi = x.sub(iC);
+      ok('gcdMV: gcd((x−i)(x+1), x−i) = x−i over ℚ(i)', S.gcdMV(xmi.mul(x.add(mi(1))), xmi).equals(S.gcdList([xmi])));
+      // gcdList of several
+      ok('gcdList: gcd(x²−1, x²−x, x−1) = x−1', S.gcdList([x.pow(2).sub(mi(1)), x.pow(2).sub(x), x.sub(mi(1))]).equals(x.sub(mi(1))));
+
+      // ---- zero-dim radical (Seidenberg) ----
+      const ord1 = S.monomialOrder('grevlex', ['x']);
+      // ⟨x²⟩ → √ = ⟨x⟩ : quotient dimension drops 2 → 1
+      const r1 = S.radicalZeroDim([x.pow(2)], { vars: ['x'] });
+      ok('radicalZeroDim: √⟨x²⟩ = ⟨x⟩ (dim 2 → 1)',
+         r1.ok && S.quotientDimension(r1.basis, ord1, ['x']) === 1 && r1.basis.length === 1 && r1.basis[0].equals(x));
+      // ⟨(x−1)²(x−2)⟩ → √ has the two distinct roots 1,2 (dim 3 → 2)
+      const p2 = x.sub(mi(1)).pow(2).mul(x.sub(mi(2)));
+      const r2 = S.radicalZeroDim([p2], { vars: ['x'] });
+      ok('radicalZeroDim: √⟨(x−1)²(x−2)⟩ has dim 2 (distinct roots 1,2)',
+         r2.ok && S.quotientDimension(r2.basis, ord1, ['x']) === 2);
+      // ⟨x², y²⟩ → ⟨x, y⟩ : the single point (0,0), dim 4 → 1
+      const ord2 = S.monomialOrder('grevlex', ['x', 'y']);
+      const r3 = S.radicalZeroDim([x.pow(2), y.pow(2)], { vars: ['x', 'y'] });
+      ok('radicalZeroDim: √⟨x², y²⟩ = ⟨x, y⟩ (dim 4 → 1)',
+         r3.ok && S.quotientDimension(r3.basis, ord2, ['x', 'y']) === 1);
+      // an already-radical ideal is unchanged in dimension: ⟨x²−1⟩ stays dim 2
+      const r4 = S.radicalZeroDim([x.pow(2).sub(mi(1))], { vars: ['x'] });
+      ok('radicalZeroDim: a radical ideal ⟨x²−1⟩ keeps dim 2', r4.ok && S.quotientDimension(r4.basis, ord1, ['x']) === 2);
+    }
+
     // Schur–Cohn: exact count of roots inside the open unit disk via the Hermitian
     // C = A·Aᴴ − B·Bᴴ inertia (inside = #neg, outside = #pos, on-circle ⊂ nullity).
     // ascending Gaussian coeff arrays; gr = real rational a/d, gI = integer a+bi.

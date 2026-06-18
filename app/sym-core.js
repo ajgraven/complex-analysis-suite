@@ -909,6 +909,92 @@
     const L = (lo != null) ? lo : B.neg(), H = (hi != null) ? hi : B;
     return _sturmV(chain, L) - _sturmV(chain, H);
   }
+
+  // ===========================================================================
+  // G7 — MULTIVARIATE GCD over ℚ(i) (recursive primitive PRS) + ZERO-DIM RADICAL.
+  //
+  // ℚ(i)[x₁…xₙ] is a UFD, so the GCD is well defined up to a unit (a nonzero ℚ(i) scalar).
+  // gcdMV(f,g) recurses on the main variable x: content_x = gcd of the x-coefficients (a
+  // polynomial in the OTHER variables — one fewer, so the recursion terminates at constants),
+  // primitive part = poly / content; the GCD of the primitive parts is the last nonzero term
+  // of a PRIMITIVE polynomial-remainder sequence (pseudo-remainder, then divide out content
+  // each step — textbook, slower than subresultant PRS but immune to its sign/β subtleties),
+  // and gcd(f,g) = gcd(content_f,content_g) · primitive-part-gcd. Normalized monic in grevlex.
+  // (Partial fractions over ℚ(i) — the third G7 sub-item — is DEFERRED: it needs an exact
+  // ℚ(i) linear solve / square-free factorization, a separate piece.) Ref: GCL "Algorithms
+  // for Computer Algebra" §7.2 (primitive PRS).
+  // ---------------------------------------------------------------------------
+  function _gcdNormalize(p) {
+    if (p.isZero()) return p;
+    const vs = [...p.vars()].sort();
+    if (!vs.length) return MPoly.constant(Gaussian.fromInt(1));   // nonzero constant ⇒ unit
+    const lc = p.leadingCoeff(monomialOrder('grevlex', vs));
+    return lc.isZero() ? p : p.scale(Gaussian.fromInt(1).div(lc));
+  }
+  function gcdMV(f, g) {
+    if (!(f instanceof MPoly) || !(g instanceof MPoly)) throw new Error('gcdMV: MPoly expected');
+    if (f.isZero()) return _gcdNormalize(g);
+    if (g.isZero()) return _gcdNormalize(f);
+    const vars = new Set([...f.vars(), ...g.vars()]);
+    if (vars.size === 0) return MPoly.constant(Gaussian.fromInt(1));   // both nonzero constants
+    const x = [...vars].sort()[0];                                     // main variable (deterministic)
+    const contentOf = (p) => {
+      const cs = p.coeffsIn(x).filter((c) => !c.isZero());   // coeffs are x-free by construction
+      if (!cs.length) return MPoly.constant(Gaussian.fromInt(1));
+      let c = cs[0];
+      // fold the gcd over the remaining coefficients; stop early once it collapses to a unit.
+      for (let i = 1; i < cs.length && c.vars().size > 0; i++) c = gcdMV(c, cs[i]);
+      return c;
+    };
+    const cf = contentOf(f), cg = contentOf(g);
+    const cc = gcdMV(cf, cg);
+    let A = mpolyExactDiv(f, cf), B = mpolyExactDiv(g, cg);            // primitive parts in x
+    if (A.degreeIn(x) < B.degreeIn(x)) { const t = A; A = B; B = t; }
+    let guard = 0;
+    while (!B.isZero()) {
+      const R = pseudoRemainder(A, B, x);
+      A = B;
+      B = R.isZero() ? MPoly.zero() : mpolyExactDiv(R, contentOf(R));  // primitive part of R
+      if (++guard > 1e5) throw new Error('gcdMV: non-terminating PRS');
+    }
+    const ppGCD = (A.degreeIn(x) > 0) ? mpolyExactDiv(A, contentOf(A)) : MPoly.constant(Gaussian.fromInt(1));
+    return _gcdNormalize(cc.mul(ppGCD));
+  }
+  // GCD of a list (≥1) of MPolys over ℚ(i), folded via gcdMV.
+  function gcdList(polys) {
+    const ps = (polys || []).filter((p) => p instanceof MPoly);
+    if (!ps.length) return MPoly.zero();
+    let g = ps[0];
+    for (let i = 1; i < ps.length; i++) { g = gcdMV(g, ps[i]); if (g.vars().size === 0 && !g.isZero()) break; }
+    return _gcdNormalize(g);
+  }
+
+  // RADICAL of a ZERO-DIMENSIONAL ideal (Seidenberg): √I = I + (squarefree(χ_v) : v ∈ vars),
+  // where χ_v is the characteristic polynomial of multiplication-by-v on ℚ(i)[x]/I (Sym.resolvent).
+  // Its square-free part has the same v-coordinates with multiplicity 1, so adding them strips all
+  // multiplicities. Returns { ok, basis (reduced Gröbner basis of √I), order, reason }. Requires a
+  // zero-dimensional input (else resolvent fails → {ok:false}). Reuses resolvent + squareFreePart.
+  function radicalZeroDim(input, opts) {
+    opts = opts || {};
+    const arr = Array.isArray(input) ? input : (input && input.G);
+    if (!Array.isArray(arr) || !arr.length) return { ok: false, reason: 'expected a non-empty generator list' };
+    const vars = (opts.vars && opts.vars.length) ? opts.vars.slice()
+      : [...new Set(arr.flatMap((p) => [...p.vars()]))].sort();
+    if (!vars.length) return { ok: false, reason: 'no variables' };
+    const order = (input && input.order) || monomialOrder('grevlex', vars);
+    let G;
+    try { G = (input && input.G) ? input.G : buchberger(arr, order); } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    const extra = [];
+    for (const v of vars) {
+      let r; try { r = resolvent(G.length ? G : arr, v, vars, opts); }
+      catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+      if (!r || !r.ok) return { ok: false, reason: (r && r.reason) || ('resolvent failed for ' + v) };
+      extra.push(squareFreePart(r.poly, v));
+    }
+    let basis;
+    try { basis = buchberger(G.concat(extra), order); } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    return { ok: true, basis, order };
+  }
   // ===========================================================================
   // EXACT univariate factorization over ℚ(i) — the shifted norm trick (Trager's
   // algorithm specialized to k = ℚ(i)), built on Berlekamp–Zassenhaus over ℚ.
@@ -3247,7 +3333,7 @@
     rat, gauss, gaussInt, mpolyVar, mpolyConst, mpolyInt,
     polyFromTermList: (list) => MPoly.fromTermList(list),
     monoKey, monoCmp,
-    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount,
+    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, gcdMV, gcdList, radicalZeroDim,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, solveByEigenvalues, realSolutionCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
