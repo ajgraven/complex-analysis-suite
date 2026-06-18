@@ -96,4 +96,34 @@ module.exports = async function run() {
     ok('radicalToLatex emits a \\sqrt and \\frac for the quadratic formula',
        /\\sqrt\{/.test(tex) && /\\frac\{/.test(tex), tex);
   }
+
+  // ---- G8: depth-2 radical denesting (exact, real principal-root case) --------
+  {
+    const Rx = SR.builders;
+    const ratK = (k) => Rx.rat(S.RatFn.fromInt(k));
+    const sqrtOf = (nd) => Rx.root(nd, 2);
+    const num = (nd) => SR.evalRadical(nd, {});
+    const same = (a, b) => Math.abs(a - b) < 1e-9;
+    // √(3+2√2) = 1+√2
+    const n1 = sqrtOf(Rx.add(ratK(3), Rx.mul(ratK(2), sqrtOf(ratK(2)))));
+    const d1 = SR.denest(n1);
+    ok('denest √(3+2√2): value preserved (= 1+√2)', same(num(d1).re, num(n1).re) && same(num(d1).re, 1 + Math.SQRT2) && Math.abs(num(d1).im) < 1e-9);
+    ok('denest √(3+2√2): no longer a top-level √ (denested to a sum)', d1.k === 'add');
+    // √(5+2√6) = √2+√3
+    const n2 = sqrtOf(Rx.add(ratK(5), Rx.mul(ratK(2), sqrtOf(ratK(6)))));
+    const d2 = SR.denest(n2);
+    ok('denest √(5+2√6): value preserved (= √2+√3)', same(num(d2).re, Math.sqrt(2) + Math.sqrt(3)) && d2.k === 'add');
+    // √(2+√3) = (√6+√2)/2 — non-integer inner radicands
+    const n3 = sqrtOf(Rx.add(ratK(2), sqrtOf(ratK(3))));
+    ok('denest √(2+√3): value preserved (non-integer x,y)', same(num(SR.denest(n3)).re, Math.sqrt(2 + Math.sqrt(3))) && SR.denest(n3).k === 'add');
+    // √(perfect square) → rational
+    const d4 = SR.denest(sqrtOf(ratK(4)));
+    ok('denest √4 = 2 (rational leaf)', d4.k === 'rat' && same(num(d4).re, 2));
+    ok('denest √(9/16) = 3/4', same(num(SR.denest(sqrtOf(Rx.div(ratK(9), ratK(16))))).re, 0.75));
+    // NON-denestable: a²−b²c < 0 ⇒ left nested
+    const n5 = sqrtOf(Rx.add(ratK(1), sqrtOf(ratK(2))));   // √(1+√2): disc 1−2 = −1
+    ok('denest leaves √(1+√2) nested (discriminant < 0)', SR.denest(n5).k === 'root' && same(num(SR.denest(n5)).re, Math.sqrt(1 + Math.SQRT2)));
+    // symbolic radicand untouched
+    ok('denest leaves a symbolic radicand √a untouched', SR.denest(sqrtOf(V('a'))).k === 'root');
+  }
 };

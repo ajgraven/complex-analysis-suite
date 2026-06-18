@@ -218,7 +218,91 @@
 
   // ---- the top-level solver --------------------------------------------------
   // Returns { ok, roots:[Radical], method, degree, reason }.
+  // ---- G8: depth-2 radical DENESTING (exact, real principal-root case) ---------
+  // √(perfect-square rational) → rational, and √(a+b√c) → √x ± √y when a,c ≥ 0 are real
+  // rationals, b rational, and the discriminant a²−b²c is a perfect rational square s²:
+  // x=(a+s)/2, y=(a−s)/2 ⇒ √(a+b√c) = √x + sign(b)·√y (all real principal roots, since a≥0 ⇒
+  // x,y ≥ 0 and (√x±√y)² = a ± |b|√c). Only fires on CONCRETE real-rational radicands;
+  // symbolic / complex ones are left untouched, and the radical solver's numeric oracle
+  // re-verifies every simplified root, so a missed guard can't produce a wrong value.
+  // Refs: classic surd denesting — √(3+2√2)=1+√2, √(5+2√6)=√2+√3.
+  function _bisqrt(n) {
+    if (n < 0n) return null; if (n < 2n) return n;
+    let x = n, y = (x + 1n) / 2n;
+    while (y < x) { x = y; y = (x + n / x) / 2n; }
+    return x * x === n ? x : null;
+  }
+  function denest(node) {
+    const S = getSym(); if (!S || !node || typeof node !== 'object') return node;
+    const rat0 = S.rat(0);
+    const ratNode = (r) => Rx.rat(S.RatFn.fromInt(r.n).div(S.RatFn.fromInt(r.d)));
+    const constReal = (mp) => {                       // constant real-rational MPoly → Rational | null
+      const tl = mp.termList();
+      if (tl.length === 0) return rat0;
+      if (tl.length > 1) return null;
+      const t = tl[0];
+      if (Object.keys(t.mono).length || t.coeff.im[0] !== '0') return null;
+      return S.rat(BigInt(t.coeff.re[0]), BigInt(t.coeff.re[1]));
+    };
+    const ratValue = (nd) => {                        // concrete real-rational value of a node | null
+      if (nd.k === 'neg') { const v = ratValue(nd.a); return v ? v.neg() : null; }
+      if (nd.k !== 'rat') return null;
+      const n = constReal(nd.v.num), d = constReal(nd.v.den);
+      return (n && d && !d.isZero()) ? n.div(d) : null;
+    };
+    const ratSqrt = (r) => {                          // Rational ≥0 → exact Rational √ | null
+      if (r.sign() < 0) return null;
+      if (r.isZero()) return rat0;
+      const ns = _bisqrt(r.n), ds = _bisqrt(r.d);
+      return (ns != null && ds != null) ? S.rat(ns, ds) : null;
+    };
+    const sqrtTerm = (nd) => {                         // node == b·√c (b,c real rationals, c≥0) → {b,c} | null
+      if (nd.k === 'neg') { const t = sqrtTerm(nd.a); return t ? { b: t.b.neg(), c: t.c } : null; }
+      if (nd.k === 'root' && nd.n === 2) { const c = ratValue(nd.a); return (c != null && c.sign() >= 0) ? { b: S.rat(1), c: c } : null; }
+      if (nd.k === 'mul') {
+        const ra = ratValue(nd.a), rb = ratValue(nd.b);
+        if (ra != null) { const t = sqrtTerm(nd.b); return t ? { b: ra.mul(t.b), c: t.c } : null; }
+        if (rb != null) { const t = sqrtTerm(nd.a); return t ? { b: rb.mul(t.b), c: t.c } : null; }
+      }
+      return null;
+    };
+    const cur = {}; for (const k in node) cur[k] = node[k];   // recurse into children first
+    if (node.a) cur.a = denest(node.a);
+    if (node.b) cur.b = denest(node.b);
+    if (cur.k === 'root' && cur.n === 2) {
+      const rv = ratValue(cur.a);
+      if (rv != null) { const sq = ratSqrt(rv); if (sq != null) return ratNode(sq); }     // √(square) → rational
+      if (cur.a.k === 'add') {                                                             // √(a+b√c) → √x ± √y
+        let aVal = null, st = null;
+        for (const part of [cur.a.a, cur.a.b]) {
+          const rp = ratValue(part);
+          if (rp != null && aVal == null) aVal = rp;
+          else if (st == null) { const s = sqrtTerm(part); if (s) st = s; }
+        }
+        if (aVal != null && st != null && aVal.sign() >= 0) {
+          const s = ratSqrt(aVal.mul(aVal).sub(st.b.mul(st.b).mul(st.c)));                 // √(a²−b²c)
+          if (s != null) {
+            const half = S.rat(1, 2);
+            const sx = denest(Rx.root(ratNode(aVal.add(s).mul(half)), 2));
+            const sy = denest(Rx.root(ratNode(aVal.sub(s).mul(half)), 2));
+            return st.b.sign() >= 0 ? Rx.add(sx, sy) : Rx.sub(sx, sy);
+          }
+        }
+      }
+    }
+    return cur;
+  }
+  // Public entry: solve, then DENEST each root at the outermost call (depth 0; opt-out via
+  // opts.denest === false). Recursive sub-solves run undenested; the final roots are simplified.
   function solveByRadicals(poly, varName, opts) {
+    opts = opts || {};
+    const res = _solveRadicals(poly, varName, opts);
+    if (res && res.ok && Array.isArray(res.roots) && !opts._depth && opts.denest !== false) {
+      res.roots = res.roots.map((r) => { try { return denest(r); } catch (e) { return r; } });
+    }
+    return res;
+  }
+  function _solveRadicals(poly, varName, opts) {
     const S = getSym();
     if (!S) throw new Error('QD.SymRadical: QD.Sym not loaded');
     opts = opts || {};
@@ -343,7 +427,7 @@
     return { checked: checked, samples: want, maxResidual: maxResidual };
   }
 
-  const ns = { solveByRadicals, verifyRoots, evalRadical, radicalToLatex, builders: Rx };
+  const ns = { solveByRadicals, denest, verifyRoots, evalRadical, radicalToLatex, builders: Rx };
 
   const QD = (typeof window !== 'undefined' && window.QD)
     ? window.QD
