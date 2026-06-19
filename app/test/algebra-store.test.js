@@ -315,6 +315,20 @@ module.exports = async function run() {
     const dsE = stE.derivationSteps(el.node.id);
     ok('derivationSteps: an eliminate node → input(s) + method summary, last step is the node poly',
        dsE.ok && dsE.progressive === false && dsE.steps.length >= 2 && dsE.steps[dsE.steps.length - 1].poly.equals(el.node.poly));
+
+    // ULTRA-REVIEW #5: pinning a variable AND its conjugate to INDEPENDENT values in ONE call —
+    // the replay (simultaneous accumulation) must still reproduce the node poly exactly. (A naive
+    // sequential replay would diverge because substituteValues applies one simultaneous subst.)
+    const stC = QD.AlgebraStore.create(); stC.seedFromSystem(system);
+    const rc = stC.substituteValues([{ varName: 'z1', value: { re: 1, im: 1 } }, { varName: 'zb1', value: { re: 5, im: 5 } }], { propagate: false });
+    if (rc.ok && rc.created.length) {
+      const cn = rc.created.find((n) => n.provenance && n.provenance.op === 'substitute') || rc.created[0];
+      const dc = stC.derivationSteps(cn.id);
+      ok('derivationSteps: conjugate-conflict substitution still replays to EXACTLY the node poly',
+         dc.ok && dc.steps.length >= 2 && dc.steps[dc.steps.length - 1].poly.equals(cn.poly));
+    } else {
+      ok('derivationSteps: conjugate-conflict substitution (z1 & zb1 both pinned) applied', rc.ok);
+    }
   }
 
   // ---- async (worker-offloaded) ops, exercised via the main-thread fallback ----

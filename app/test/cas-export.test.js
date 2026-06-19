@@ -161,5 +161,18 @@ module.exports = async function run() {
        out3.ok && out3.count === 1 && out3.solutions[0].t.approx === 1.5);
     ok('parseMsolveSolutions: no bracketed output → ok:false',
        CAS.parseMsolveSolutions('no solutions here', {}).ok === false);
+    // ULTRA-REVIEW #2: a stray non-numeric char (here a literal '/') must NOT hang or throw — the
+    // tolerant contract requires a well-formed return, not an infinite loop in the token scanner.
+    ok('parseMsolveSolutions: a stray non-numeric char does not hang/throw (returns a well-formed result)',
+       (() => { let r; try { r = CAS.parseMsolveSolutions('[0, [[1/2, 3]]]', { vars: ['x'] }); } catch (e) { return false; } return r && typeof r.ok === 'boolean'; })());
+    // ULTRA-REVIEW #3: a 2-variable solution with bare-integer boxes must NOT be misread as one
+    // univariate interval (dropping y). With opts.vars the per-variable count disambiguates.
+    {
+      const ms2 = CAS.parseMsolveSolutions('[0, [ [[1,2],[3,4]] ] ]', { vars: ['x', 'y'] });
+      ok('parseMsolveSolutions: 2-var bare-integer boxes → x∈[1,2], y∈[3,4] (no variable dropped)',
+         ms2.ok && ms2.count === 1 && ms2.solutions[0].x && ms2.solutions[0].y &&
+         ms2.solutions[0].x.lo === 1 && ms2.solutions[0].x.hi === 2 &&
+         ms2.solutions[0].y.lo === 3 && ms2.solutions[0].y.hi === 4);
+    }
   }
 };

@@ -1045,9 +1045,16 @@
       if (oracle != null) return { ok: true, count: oracle, degenerate: false, oracle, note: 'numeric count via G5 (some parametric signs unresolved)' };
       return { ok: false, reason: 'cannot count: coefficients remain parametric (supply opts.values) or are non-real' };
     }
-    const count = _pmv(signs);
-    if (degenerate && oracle != null) return { ok: true, count: oracle, degenerate: true, oracle };
-    return { ok: true, count, degenerate, oracle };
+    // A DEGENERATE stratum (a vanishing principal coefficient ⇒ an internal zero in the sign
+    // sequence) is NOT counted by the naive permanences−variations of _pmv — that needs the
+    // generalized BPR gap rule. So on a degenerate stratum we MUST defer to the exact G5 oracle;
+    // if it isn't available (e.g. a non-integer/non-Gaussian float value couldn't be substituted
+    // exactly) we report ok:false rather than return the naive — and wrong — count.
+    if (degenerate) {
+      if (oracle != null) return { ok: true, count: oracle, degenerate: true, oracle };
+      return { ok: false, degenerate: true, reason: 'degenerate stratum (a principal Sturm–Habicht coefficient vanishes); supply exact integer/Gaussian values so the exact G5 count can certify it — the naive sign count is unreliable here' };
+    }
+    return { ok: true, count: _pmv(signs), degenerate: false, oracle };
   }
 
   // ===========================================================================
@@ -2958,6 +2965,11 @@
     if (Array.isArray(x) && x.length === 2) return new Gaussian(new Rational(BigInt(x[0]), BigInt(x[1])), RZERO);
     throw new Error('verifySOS: cannot interpret coefficient ' + JSON.stringify(x));
   }
+  // True iff every coefficient of the MPoly is REAL (imaginary part zero). SOS is a real
+  // notion — q² ≥ 0 only for a REAL polynomial q (e.g. (i·x)² = −x² ≤ 0), and the rational
+  // inertia / PSD test below is sound only for a real symmetric Gram. So both certificate
+  // forms must reject complex coefficients, or the checker would accept invalid certificates.
+  function _isRealMPoly(p) { for (const t of p.terms.values()) if (!t.coeff.im.isZero()) return false; return true; }
   // Value (MPoly) of one SOS sub-certificate + whether it is a valid SOS (coeffs ≥ 0 / Gram PSD).
   function _sosCertValue(cert) {
     if (!cert || typeof cert !== 'object') return { ok: false, reason: 'missing certificate' };
@@ -2966,6 +2978,7 @@
       for (const sq of cert.squares) {
         const poly = (sq instanceof MPoly) ? sq : sq.poly;
         if (!(poly instanceof MPoly)) return { ok: false, reason: 'square entry is not an MPoly' };
+        if (!_isRealMPoly(poly)) return { ok: false, reason: 'a square polynomial has non-real (complex) coefficients — q² ≥ 0 holds only for a REAL q' };
         const coeff = (sq instanceof MPoly || sq.coeff == null) ? Gaussian.fromInt(1) : _toRealGaussian(sq.coeff);
         if (!coeff.im.isZero() || coeff.re.sign() < 0) return { ok: false, reason: 'square weight must be a nonnegative real' };
         value = value.add(poly.mul(poly).scale(coeff));
@@ -2975,7 +2988,9 @@
     if (Array.isArray(cert.monomials) && Array.isArray(cert.gram)) {
       const m = cert.monomials, G = cert.gram, n = m.length;
       if (G.length !== n || G.some((row) => row.length !== n)) return { ok: false, reason: 'Gram matrix is not ' + n + '×' + n };
+      for (const mm of m) if (!(mm instanceof MPoly) || !_isRealMPoly(mm)) return { ok: false, reason: 'a Gram monomial is missing or has non-real (complex) coefficients' };
       const Gg = G.map((row) => row.map(_toRealGaussian));
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (!Gg[i][j].im.isZero()) return { ok: false, reason: 'Gram matrix has a non-real (complex) entry — SOS requires a real symmetric Gram' };
       for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (!Gg[i][j].sub(Gg[j][i]).isZero()) return { ok: false, reason: 'Gram matrix is not symmetric' };
       let value = MPoly.zero();
       for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (!Gg[i][j].isZero()) value = value.add(m[i].mul(m[j]).scale(Gg[i][j]));

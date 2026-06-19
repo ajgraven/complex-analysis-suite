@@ -16,7 +16,7 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `39aa33c70f`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `49ecf9a946`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
@@ -375,6 +375,15 @@ its own merged PR), with one feature **in progress on a branch**:
       an honest input(s) → method → output summary. A "Show steps" button in the node inspector renders the
       steps as KaTeX (toggle). `algebra-store` 231. **The roadmap's Phase 6 — and the entire 23-item Algebra
       roadmap — is now COMPLETE.**
+  - **Ultra-review fixes (`<this commit>`)** — a multi-agent adversarial review (19 agents) of the Phase-5/6
+    commits surfaced 6 confirmed findings (6 others adversarially dismissed as intended/unreachable); all 6
+    fixed + regression-tested: **G10** `verifySOS` now rejects COMPLEX coefficients in squares / Gram entries /
+    monomials (q²≥0 only for real q — closed a soundness hole that certified −x² as SOS); **G2**
+    `realRootCountSturm` on a degenerate stratum WITHOUT an exact oracle now returns `ok:false` instead of the
+    naive (wrong) count; **G11** `parseMsolveSolutions` no longer infinite-loops on a stray non-numeric char
+    (tolerant) and disambiguates a 2-var bare-integer box via the variable count; **D5** `derivationSteps`
+    substitution replay uses simultaneous accumulation so it reproduces the node exactly under a
+    variable/conjugate pin conflict. `sym-core` 268, `cas-export` 36, `algebra-store` 232.
     **Remaining engine work:** none on the roadmap. Deferred (documented, not started): G7 partial-fractions
     follow-on; the deeper RCTD/CAS-bridge automation; an in-browser SDP for SOS *search* (G10 is checker-only).
   **Deferred (not started):** **#6 P3** — the worked PARAMETRIC cardioid example (run the interior

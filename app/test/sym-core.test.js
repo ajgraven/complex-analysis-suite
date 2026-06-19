@@ -876,6 +876,17 @@ module.exports = async function run() {
       ok('sturmHabicht: degree-0 (constant in v) → ok:false', S.sturmHabicht(mi(5), 'x').ok === false);
       ok('realRootCountSturm: unresolved parameters with no values → ok:false',
          S.realRootCountSturm(mv('a').mul(x.pow(2)).add(mv('b')), 'x').ok === false);
+      // ULTRA-REVIEW #4: a DEGENERATE stratum (internal sign-zero) reached with a NON-EXACT float
+      // value must NOT return the naive (wrong) count — the G5 oracle can't be built, so ok:false.
+      {
+        const a = mv('a');
+        const p = mi(3).mul(x.pow(3)).add(mi(3).mul(x.pow(2))).add(mi(2).mul(a).mul(x));   // 3x³+3x²+2a·x
+        ok('realRootCountSturm: degenerate stratum + non-exact float value ⇒ ok:false (no silent wrong count)',
+           S.realRootCountSturm(p, 'x', { values: { a: 0.5 } }).ok === false);
+        const di = S.realRootCountSturm(p, 'x', { values: { a: S.gaussInt(0) } });   // exact value ⇒ G5 oracle certifies
+        ok('realRootCountSturm: degenerate stratum + exact value ⇒ count via the G5 oracle',
+           di.ok === true && di.count === S.realRootCount(p.subst({ a: mi(0) }), 'x'));
+      }
     }
 
     // G1 — Comprehensive Gröbner System (Suzuki–Sato), parametric.
@@ -981,6 +992,17 @@ module.exports = async function run() {
       // Positivstellensatz with a WRONG multiplier ⇒ identity fails
       ok('verifySOS: a Positivstellensatz whose identity fails ⇒ ok:false',
          S.verifySOS(x.add(y), { constraints: [{ g: x, multiplier: { squares: [mi(1)] } }] }).ok === false);
+      // ULTRA-REVIEW #1/#6: complex coefficients must be REJECTED — q²≥0 holds only for a REAL q
+      // (e.g. (i·x)² = −x² ≤ 0). Without these guards −x² would be falsely certified as SOS.
+      {
+        const Im = S.mpolyConst(S.gaussInt(0, 1));
+        ok('verifySOS: a complex-coefficient SQUARE (i·x) is rejected (−x² is NOT a sum of real squares)',
+           S.verifySOS(x.pow(2).neg(), { squares: [Im.mul(x)] }).ok === false);
+        ok('verifySOS: a complex Gram ENTRY is rejected',
+           S.verifySOS(x.pow(2), { monomials: [x], gram: [[S.gaussInt(0, 1)]] }).ok === false);
+        ok('verifySOS: a complex Gram MONOMIAL (i·x) is rejected',
+           S.verifySOS(x.pow(2).neg(), { monomials: [Im.mul(x)], gram: [[1]] }).ok === false);
+      }
     }
 
     // G7 — multivariate GCD over ℚ(i) (recursive primitive PRS) + zero-dim radical.

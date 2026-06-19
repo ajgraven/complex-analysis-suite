@@ -302,6 +302,8 @@
       }
       let j = i; if (s[j] === '-' || s[j] === '+') j++;
       while (j < s.length && s[j] >= '0' && s[j] <= '9') j++;
+      if (j === i) { i++; return NaN; }   // unknown char (e.g. '/', '.', a letter) — ADVANCE so the
+                                          // enclosing array loop can't spin forever (tolerant contract)
       const tok = s.slice(i, j); i = j;
       return parseInt(tok, 10);
     }
@@ -336,8 +338,14 @@
     }
     if (!sols) return { ok: false, reason: 'could not locate the solution list in the msolve output', dim };
     const vars = opts.vars || null;
+    const nv = vars ? vars.length : null;
+    // Interpret each solution into its per-variable interval list. When the variable COUNT is
+    // known (the store always passes opts.vars), use it — this disambiguates the case where a
+    // 2-variable solution with bare-integer boxes (e.g. [[1,2],[3,4]]) would otherwise look like
+    // a single univariate interval. Without a hint, fall back to the shape heuristic.
+    const toIntervals = (s) => (nv === 1 ? [s] : (nv != null ? s : (isInterval(s) ? [s] : s)));
     const solutions = sols.map((s) => {
-      const intervals = isInterval(s) ? [s] : s;
+      const intervals = toIntervals(s);
       const rec = {};
       intervals.forEach((iv, k) => {
         const lo = val(iv[0]), hi = val(iv[1]);

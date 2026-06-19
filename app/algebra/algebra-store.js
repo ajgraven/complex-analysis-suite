@@ -1678,12 +1678,15 @@
       const replayHead = () => push('start — column ' + base.column + ' equation', base.poly);
 
       if (op === 'substitute' && Array.isArray(prov.variables)) {
-        replayHead(); let cur = base.poly;
+        // substituteValues applies all pairs as ONE simultaneous subst (last-write-wins per key);
+        // replay by accumulating the SAME map and re-substituting the ORIGINAL each step (not
+        // sequentially on the running poly) so the final step equals the node EXACTLY even when a
+        // variable and its conjugate are pinned independently in one call.
+        replayHead(); const acc = {};
         for (const rec of prov.variables) {
-          const g = _gaussFromRecord(rec.value); const sub = {}; sub[rec.name] = S.mpolyConst(g);
-          if (rec.conjugate) sub[rec.conjugate] = S.mpolyConst(g.conj());
-          cur = cur.subst(sub);
-          push('substitute ' + rec.name + ' = ' + _valShort(rec.value.approx) + (rec.conjugate ? ' (and ' + rec.conjugate + ')' : ''), cur);
+          const g = _gaussFromRecord(rec.value); acc[rec.name] = S.mpolyConst(g);
+          if (rec.conjugate) acc[rec.conjugate] = S.mpolyConst(g.conj());
+          push('substitute ' + rec.name + ' = ' + _valShort(rec.value.approx) + (rec.conjugate ? ' (and ' + rec.conjugate + ')' : ''), base.poly.subst(acc));
         }
         return { ok: true, op, progressive: true, steps };
       }
