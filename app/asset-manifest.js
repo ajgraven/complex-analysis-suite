@@ -39,7 +39,7 @@
   // version:sync` recomputes it. CACHE_LABEL is yours to set per release
   // (cosmetic, for human-readable cache names + the HANDOFF narrative).
   const CACHE_LABEL = 'preimage-tree-overlay';
-  const CACHE_HASH  = '49ecf9a946';   // gen-cache-version.js --write rewrites this
+  const CACHE_HASH  = '880d23abf0';   // gen-cache-version.js --write rewrites this
   const CACHE_VERSION = CACHE_LABEL + '-' + CACHE_HASH;
 
   // Files that get concatenated into a Worker bundle by the runtime
@@ -130,6 +130,7 @@
     'ui-qd-equations.js',     // Quadrature↔map equation-system card (classical bounded QD)
     'algebra/sym-worker.js',     // QD.SymWorker — off-main-thread Gröbner/solve (Blob worker)
     'algebra/cas-export.js',     // QD.CASExport — external-CAS (Maple RCTD / Singular / Sage) formatter
+    'algebra/expr-parser.js',    // QD.ExprParser — typed-expression string → exact ℚ(i) MPoly (needs QD.Sym)
     'algebra/algebra-store.js',  // QD.AlgebraStore — equation-DAG model (DOM-free)
     'algebra/algebra-canvas.js', // QD.AlgebraCanvas — SVG+HTML DAG renderer
     'algebra/algebra-ui.js',     // QD_UI.installAlgebra — the Algebra tab workspace

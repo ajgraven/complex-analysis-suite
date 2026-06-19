@@ -900,6 +900,14 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #controls-algebra .alg-val-preview { flex: 1 1 100%; font-size: 11px; }
 #controls-algebra .algebra-value-rm { flex: none; padding: 0 6px; }
 
+/* Define-substitution control: name := expression + Apply */
+#controls-algebra .algebra-define-row { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
+#controls-algebra .algebra-define-row .alg-def-name { width: 40px; flex: none; text-align: center; }
+#controls-algebra .algebra-define-row .alg-def-eq { font-size: 11px; opacity: 0.7; }
+#controls-algebra .algebra-define-row .alg-def-expr { flex: 1 1 auto; min-width: 60px; }
+#controls-algebra .alg-def-preview { font-size: 11px; min-height: 1em; margin: 1px 0 2px; overflow-x: auto; }
+#controls-algebra .alg-def-preview.alg-def-error { color: var(--danger, #c0392b); }
+
 /* Univalence-constraint palette as a 2-column grid */
 #controls-algebra .algebra-palette { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 #controls-algebra .algebra-palette button { white-space: normal; }

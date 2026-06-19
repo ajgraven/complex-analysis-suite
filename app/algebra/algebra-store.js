@@ -120,13 +120,35 @@
     // partner onto it. conjMPoly reintroduces barred names, so the rename is applied
     // AFTER conjugation too (see maybeAddConjugate), which lets companions collapse.
     const _BARRED_RE = /^(zb\d+|Ab\d+_\d+|Cb\d+_\d+|ab\d+|wb0|Zb\d*)$/;
-    function _primalName(name) { const QC = getQC(); return (QC && QC.conjVarName && _BARRED_RE.test(name)) ? QC.conjVarName(name) : name; }
+    // --- user-defined substitution symbols: conjugate-partner OVERLAY ----------------
+    // A define-substitution (defineSubstitution) can introduce a fresh symbol t := g. When
+    // g is NOT self-conjugate, t has a genuine conjugate t̄ (a second fresh symbol) that must
+    // thread through the conjugate-model machinery (conjugation, reality split, reim). The base
+    // QC.conjVarName table can't know these symbols, so the store keeps an OVERLAY: `substConj`
+    // maps each registered name to its partner (both directions); `substBarred` is the set of
+    // the "barred" members so _primalName resolves t̄ → t. For a self-conjugate g (real t)
+    // nothing is registered — the default (conjVarName(t)=t, i.e. t is its own conjugate) is right.
+    let substConj = new Map();     // name -> conjugate-partner name (both directions)
+    let substBarred = new Set();   // the barred member of each registered substitution pair
+    function _conjName(name) {
+      if (substConj.has(name)) return substConj.get(name);
+      const QC = getQC();
+      return (QC && QC.conjVarName) ? QC.conjVarName(name) : name;
+    }
+    // Complex conjugate of an MPoly, overlay-aware (so a poly containing a defined symbol t
+    // conjugates to one in t̄). Identical to QC.conjMPoly when no substitution symbol is present.
+    function _conjMPoly(poly) { return poly.conjCoeffs().relabel(_conjName); }
+    function _primalName(name) {
+      if (substBarred.has(name)) return substConj.get(name);
+      const QC = getQC();
+      return (QC && QC.conjVarName && _BARRED_RE.test(name)) ? QC.conjVarName(name) : name;
+    }
     function _realityRename() {
       const realVars = assumeOf().realVars;
       if (!realVars.length) return null;
       const QC = getQC(); if (!QC || !QC.conjVarName) return null;
       const map = {};
-      for (const rv of realVars) { const c = QC.conjVarName(rv); if (c !== rv) map[c] = rv; }
+      for (const rv of realVars) { const c = _conjName(rv); if (c !== rv) map[c] = rv; }
       if (!Object.keys(map).length) return null;
       return (n) => (Object.prototype.hasOwnProperty.call(map, n) ? map[n] : n);
     }
@@ -142,7 +164,7 @@
       if (!imagVars.length) return poly;
       const QC = getQC(), S = getSym(); if (!QC || !QC.conjVarName) return poly;
       const sub = {};
-      for (const iv of imagVars) { const c = QC.conjVarName(iv); if (c !== iv) sub[c] = S.mpolyVar(iv).neg(); }
+      for (const iv of imagVars) { const c = _conjName(iv); if (c !== iv) sub[c] = S.mpolyVar(iv).neg(); }
       return Object.keys(sub).length ? poly.subst(sub) : poly;
     }
     // The cumulative pointwise assumption fold applied to a freshly built polynomial
@@ -176,12 +198,13 @@
     // is a safe snapshot; `order` is copied because moveNode mutates it.
     function snapshot() {
       return { nodes: new Map([...nodes].map(([k, v]) => [k, v])), edges: edges.slice(), order: new Map(order), model, formulation, seq,
-        trackAssume: serializeAssume(),
+        trackAssume: serializeAssume(), substConj: [...substConj], substBarred: [...substBarred],
         tracks: tracks.map((t) => ({ id: t.id, label: t.label, parentId: t.parentId, forkColumn: t.forkColumn })), activeTrackId, trackSeq };
     }
     function restore(s) {
       nodes.clear(); for (const [k, v] of s.nodes) nodes.set(k, v);
       edges = s.edges.slice(); order = new Map(s.order || []); model = s.model; formulation = s.formulation || 'classical'; seq = s.seq;
+      substConj = new Map(s.substConj || []); substBarred = new Set(s.substBarred || []);
       tracks = (s.tracks && s.tracks.length) ? s.tracks.map((t) => ({ id: t.id, label: t.label, parentId: t.parentId, forkColumn: t.forkColumn })) : [{ id: 't0', label: 'main', parentId: null, forkColumn: null }];
       trackSeq = s.trackSeq || 0;
       activeTrackId = (s.activeTrackId && hasTrack(s.activeTrackId)) ? s.activeTrackId : tracks[0].id;
@@ -220,6 +243,7 @@
     // Also collapses to a single active track — a fresh seed is one main branch.
     function clearGraph() {
       nodes.clear(); edges = []; order = new Map(); seq = 0;
+      substConj = new Map(); substBarred = new Set();   // a fresh seed has no user-defined substitution symbols
       tracks = [{ id: 't0', label: 'main', parentId: null, forkColumn: null }]; activeTrackId = 't0'; trackSeq = 0;
       const t0a = assumeOf('t0'); trackAssume.clear(); trackAssume.set('t0', t0a);   // collapse to one branch; keep t0's normalization (seedFromSystem resets it next)
     }
@@ -266,7 +290,7 @@
     function maybeAddConjugate(node) {
       if (node.rel === '>') return null;                    // Hermitian inequality: one real condition
       const QC = getQC(); if (!QC || !QC.conjMPoly) return null;
-      const conj = _applyAssumed(QC.conjMPoly(node.poly));   // reality/imaginary fold barred names post-conjugation; fixed w₀ stays substituted
+      const conj = _applyAssumed(_conjMPoly(node.poly));   // overlay-aware conj (swaps any defined t↔t̄); reality/imaginary fold barred names post-conjugation; fixed w₀ stays substituted
       if (node.poly.sub(conj).isZero() || node.poly.add(conj).isZero()) return null;   // self-conjugate (incl. under reality)
       // Suppress only if the companion is already in THIS node's column — a poly equal to
       // conj sitting in an earlier column must not block the companion this column needs.
@@ -643,6 +667,35 @@
       if (Array.isArray(ratio.re)) return _gaussFromRecord(ratio);
       return ratio;                                              // assume a Gaussian
     }
+    // --- PLAIN-text (no-LaTeX) rendering of an MPoly, for node/column labels (which the canvas
+    // shows as textContent). KaTeX rendering happens on the node's polynomial body, not the label.
+    function _ratPlain(r) { return r.d === 1n ? r.n.toString() : (r.n.toString() + '/' + r.d.toString()); }
+    function _gaussPlain(c) {
+      const reZ = c.re.n === 0n, imZ = c.im.n === 0n;
+      if (reZ && imZ) return '0';
+      if (imZ) return _ratPlain(c.re);
+      const neg = c.im.n < 0n;
+      const imMag = _ratPlain({ n: neg ? -c.im.n : c.im.n, d: c.im.d });
+      const imStr = (imMag === '1' ? '' : imMag) + 'i';
+      if (reZ) return (neg ? '-' : '') + imStr;
+      return _ratPlain(c.re) + (neg ? ' - ' : ' + ') + imStr;
+    }
+    const _SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+    function _plainPoly(g) {
+      const terms = [...g.terms.values()];
+      if (!terms.length) return '0';
+      const sup = (e) => (e === 1 ? '' : String(e).replace(/[-0-9]/g, (d) => _SUP[d] || ('^' + d)));
+      const parts = terms.map((t) => {
+        const monoStr = [...t.mono.entries()].map(([v, e]) => v + sup(e)).join('·');
+        const cStr = _gaussPlain(t.coeff);
+        if (!monoStr) return cStr;
+        if (cStr === '1') return monoStr;
+        if (cStr === '-1') return '-' + monoStr;
+        const complex = t.coeff.re.n !== 0n && t.coeff.im.n !== 0n;
+        return (complex ? '(' + cStr + ')' : cStr) + '·' + monoStr;
+      });
+      return parts.join(' + ').replace(/\+ -/g, '- ');
+    }
     // Compact label fragment for a ratio c: '' for 1, '−' for −1, else '(c)·'.
     function _ratioLabel(g) {
       const re = g.re.toNumber(), im = g.im.toNumber();
@@ -692,6 +745,398 @@
         poly: n.poly.subst(sub),
         provenance: { op: 'identify-conj', inputs: [n.id], var: v, other, ratio: rec }, label,
       }));
+    }
+
+    // ============================================================================
+    // CUSTOM USER-DEFINED VARIABLE SUBSTITUTIONS — introduce a fresh symbol t := g(vars)
+    // and substitute it into the current system (an append-column reduction). Three regimes,
+    // auto-dispatched by the SHAPE of g (defineSubstitution picks; opts.regime overrides):
+    //   • LINEAR    — g is degree-1 in some variable v with a constant leading coeff: solve
+    //                 v = (t − r)/c and substitute (exact, pure rewrite, 1:1 with the system).
+    //                 The conjugate v̄ is paired (v̄ = (t̄ − r̄)/c̄) when v has a DISTINCT
+    //                 conjugate that does NOT appear in g (non-circular); a self-conjugate
+    //                 pivot with self-conjugate g substitutes v alone (t is then real).
+    //   • MONOMIAL  — g = c·μ is a single monomial (e.g. s := w₁², t := z₁z̄₁ = |z₁|²): a
+    //                 SYNTACTIC exponent rewrite (a node is rewritable iff every term's
+    //                 exponents over μ's variables are the same non-negative multiple of μ's).
+    //                 Non-rewritable nodes are CARRIED through; the defining equation t − μ = 0
+    //                 is emitted only when μ's variables survive, so the variety is unchanged.
+    //   • GENERAL   — anything else (ideal-theoretic). Adjoin t − g (+ the conjugate t̄ − ḡ
+    //                 when g isn't self-conjugate) to the system. opts.dropVars=[] (default)
+    //                 just ADDS the definition (variety unchanged); a non-empty dropVars
+    //                 ELIMINATES those variables via a block Gröbner basis (heavy → also
+    //                 available off-thread as defineSubstitutionAsync).
+    // When g is NOT self-conjugate the new symbol's conjugate t̄ is REGISTERED (substConj /
+    // substBarred overlay) so reality / conjugation / reim treat the pair correctly. The
+    // mutually-circular conjugate-sum case (the chosen variable's own conjugate appears in g,
+    // e.g. u := z₁+z̄₁) can't be eliminated by substitution and is routed to the GENERAL
+    // (add-definition) regime — Andrew's call.
+    // ============================================================================
+
+    // The constant (empty-monomial) Gaussian coefficient of a variable-free MPoly.
+    function _constGaussOf(poly) {
+      const S = getSym();
+      for (const t of poly.terms.values()) if (t.mono.size === 0) return t.coeff;
+      return S.gaussInt(0);
+    }
+    // g^k for a Gaussian g (k ≥ 0).
+    function _powGauss(g, k) { const S = getSym(); let r = S.gaussInt(1); for (let i = 0; i < k; i++) r = r.mul(g); return r; }
+    // A fresh short symbol name for an auto-suggested substitution (avoid the QD letters + i/e).
+    const _SUBST_RESERVED = new Set(['c', 'w', 'z', 'a', 'A', 'C', 'F', 'i', 'I', 'e']);
+    function _nameTaken() { const s = new Set(variables()); for (const k of substConj.keys()) s.add(k); return s; }
+    function _freshSubstName(preferred) {
+      const taken = _nameTaken();
+      const free = (nm) => nm && !taken.has(nm) && !_SUBST_RESERVED.has(nm);
+      if (free(preferred)) return preferred;
+      for (const ch of 'stuvpqrhkmn') if (free(ch)) return ch;
+      for (let i = 1; i < 100000; i++) { const nm = 's' + i; if (free(nm)) return nm; }
+      return 's' + variables().length;   // unreachable in practice
+    }
+    // A fresh "barred" name for the conjugate of a primal substitution symbol.
+    function _barName(primal) {
+      const taken = _nameTaken();
+      let b = primal + 'b'; if (b !== primal && !taken.has(b)) return b;
+      b = primal + '_bar'; let i = 0; while (taken.has(b)) b = primal + '_bar' + (++i);
+      return b;
+    }
+    // Is g self-conjugate (g = ḡ, i.e. g is REAL on the reality slice)? Then t := g is real.
+    function _isSelfConj(g) { return g.equals(_conjMPoly(g)); }
+    // The variable g is degree-1 in with a constant (variable-free) nonzero leading coeff, or null.
+    function _linearElimVar(g) {
+      for (const v of g.vars()) {
+        if (g.degreeIn(v) !== 1) continue;
+        const cs = g.coeffsIn(v);                 // [c0, c1]; c1 = ∂g/∂v
+        if (cs.length === 2 && cs[1].vars().size === 0 && !cs[1].isZero()) return v;
+      }
+      return null;
+    }
+    // Pick the substitution regime from the shape of g (opts.regime overrides).
+    function _substRegime(g, opts) {
+      if (opts && opts.regime) return opts.regime;
+      if (g.terms.size === 1) return 'monomial';
+      const v = _linearElimVar(g);
+      if (v != null) {
+        const vc = _conjName(v);
+        if (vc !== v) return g.vars().has(vc) ? 'general' : 'linear';   // distinct conj: circular ⇒ ideal
+        return _isSelfConj(g) ? 'linear' : 'general';                   // self-conj pivot: linear only if g real
+      }
+      return 'general';
+    }
+
+    // Validate the (newVar, exprPoly) request shared by every regime. Returns { ok } / { ok:false, reason }.
+    function _validateDefine(newVar, g) {
+      if (!getSym()) return { ok: false, reason: 'QD.Sym unavailable' };
+      if (!g || typeof g.vars !== 'function') return { ok: false, reason: 'no expression to define' };
+      if (g.isZero()) return { ok: false, reason: 'the expression is identically zero' };
+      if (!newVar) return { ok: false, reason: 'a name for the new variable is required' };
+      if (/[^A-Za-z0-9_]/.test(newVar)) return { ok: false, reason: 'the new variable name must be alphanumeric / underscore only' };
+      const existing = new Set(variables());
+      if (existing.has(newVar) || substConj.has(newVar)) return { ok: false, reason: '"' + newVar + '" is already a variable in the system' };
+      const gVars = [...g.vars()];
+      const missing = gVars.filter((v) => !existing.has(v));
+      if (missing.length) return { ok: false, reason: 'unknown variable(s) in the expression: ' + missing.join(', ') };
+      const last = new Set(); for (const n of lastColumnNodes()) for (const v of nodeVars(n)) last.add(v);
+      if (!gVars.some((v) => last.has(v))) return { ok: false, reason: 'none of the expression variables are in the current system' };
+      return { ok: true };
+    }
+
+    // INTRODUCE t := g and substitute it in. Auto-dispatches the regime. Returns the append
+    // result { ok, created, column, regime, newVar } or { ok:false, reason }.
+    function defineSubstitution(newVar, exprPoly, opts) {
+      opts = opts || {};
+      newVar = String(newVar || '').trim();
+      const v = _validateDefine(newVar, exprPoly);
+      if (!v.ok) return Object.assign(v, { created: [] });
+      const regime = _substRegime(exprPoly, opts);
+      if (regime === 'linear') return _defineLinear(newVar, exprPoly, opts);
+      if (regime === 'monomial') return _defineMonomial(newVar, exprPoly, opts);
+      return _defineGeneral(newVar, exprPoly, opts);
+    }
+
+    // Shared committer for the substitution-MAP regimes (linear): dry-build the rewritten
+    // column (dedup on (poly,rel)), then ONE checkpoint, register the conjugate pair, add the
+    // nodes. checkpoint precedes registration so undo unregisters. `reg` = { real, bar, newVar }.
+    function _commitSubstMap(sub, prov, label, reg) {
+      const src = lastColumnNodes();
+      if (!src.length) return { ok: false, reason: 'no system to reduce (seed first)', created: [] };
+      const subVars = Object.keys(sub);
+      const built = [], seen = [];
+      for (const n of src) {
+        const poly = subVars.some((vv) => nodeVars(n).has(vv)) ? n.poly.subst(sub) : n.poly;
+        if (poly.isZero()) continue;
+        if (seen.some((s) => s.rel === n.rel && s.poly.equals(poly))) continue;
+        seen.push({ poly, rel: n.rel }); built.push({ src: n, poly });
+      }
+      if (!built.length) return { ok: false, reason: 'the substitution emptied the system', created: [] };
+      checkpoint();
+      if (reg && !reg.real && reg.bar) { substConj.set(reg.newVar, reg.bar); substConj.set(reg.bar, reg.newVar); substBarred.add(reg.bar); }
+      const col = maxColumn() + 1, created = [];
+      for (const b of built) {
+        const node = addNode({ id: nid(), kind: 'derived', poly: b.poly, rel: b.src.rel, label, model,
+          provenance: Object.assign({ inputs: [b.src.id] }, prov), column: col, meta: b.src.meta });
+        edges.push({ from: b.src.id, to: node.id }); created.push(node);
+      }
+      normalizeColumn(col);
+      return { ok: true, created, column: col, regime: prov.regime, newVar: prov.newVar };
+    }
+
+    // LINEAR regime: t := g with g degree-1 in v (constant coeff c). v = (t − r)/c.
+    function _defineLinear(newVar, g, opts) {
+      const S = getSym();
+      const v = _linearElimVar(g);
+      if (v == null) return { ok: false, reason: 'the expression is not linear in any variable', created: [] };
+      const vc = _conjName(v);
+      const cG = _constGaussOf(g.coeffsIn(v)[1]);                 // leading (constant) coeff of v in g
+      const r = g.sub(S.mpolyVar(v).mul(S.mpolyConst(cG)));       // r = g − c·v (free of v)
+      const t = S.mpolyVar(newVar);
+      const cInv = S.mpolyConst(S.gaussInt(1).div(cG));
+      const sub = {}; sub[v] = t.sub(r).mul(cInv);               // v = (t − r)/c
+      let real = true, bar = null;
+      if (vc !== v) {                                            // distinct conjugate, non-circular (regime-guaranteed) ⇒ g is NOT self-conj
+        real = false; bar = _barName(newVar);
+        const tBar = S.mpolyVar(bar);
+        const cBarInv = S.mpolyConst(S.gaussInt(1).div(cG.conj()));
+        sub[vc] = tBar.sub(_conjMPoly(r)).mul(cBarInv);          // v̄ = (t̄ − r̄)/c̄
+      }                                                          // else: self-conjugate pivot with self-conjugate g ⇒ t is real, substitute v alone
+      const label = 'define ' + newVar + ' := ' + _plainPoly(g);
+      const prov = { op: 'define-subst', newVar, exprTerms: g.termList(), regime: 'linear', eliminated: v, real };
+      return _commitSubstMap(sub, prov, label, { real, bar, newVar });
+    }
+
+    // Rewrite a polynomial as a polynomial in `varName` standing for the monomial μ (exponent
+    // map `e`, coeff c): returns the rewritten MPoly, or null if some term is not a clean
+    // non-negative multiple of μ over μ's variables (⇒ the node is not rewritable).
+    function _rewriteByMonomial(poly, e, cG, varName) {
+      const S = getSym();
+      const V = [...e.keys()];
+      let out = S.mpolyInt(0);
+      for (const term of poly.terms.values()) {
+        let k = null;
+        for (const vn of V) {
+          const need = e.get(vn), have = term.mono.get(vn) || 0;
+          if (have % need !== 0) return null;
+          const ki = have / need;
+          if (k === null) k = ki; else if (ki !== k) return null;
+        }
+        if (k === null) k = 0;
+        let coeff = term.coeff;
+        if (k > 0) coeff = coeff.div(_powGauss(cG, k));          // μ = c·(monomial) ⇒ (monomial)^k = (t/c)^k
+        let tm = S.mpolyConst(coeff);
+        for (const [vn, ex] of term.mono) { if (e.has(vn)) continue; tm = tm.mul(S.mpolyVar(vn).pow(ex)); }
+        if (k > 0) tm = tm.mul(S.mpolyVar(varName).pow(k));
+        out = out.add(tm);
+      }
+      return out;
+    }
+    function _rewriteNodeMonomial(poly, rewriters) {
+      let cur = poly;
+      for (const rw of rewriters) { cur = _rewriteByMonomial(cur, rw.mono, rw.coeff, rw.varName); if (cur === null) return null; }
+      return cur;
+    }
+
+    // MONOMIAL regime: t := c·μ (single monomial). Syntactic exponent rewrite.
+    function _defineMonomial(newVar, g, opts) {
+      opts = opts || {};
+      const S = getSym();
+      let e = null, cG = null;
+      for (const t of g.terms.values()) { e = t.mono; cG = t.coeff; }
+      if (!e || e.size === 0) return { ok: false, reason: 'the expression is a constant (no monomial to abbreviate)', created: [] };
+      const real = _isSelfConj(g);
+      const bar = real ? null : _barName(newVar);
+      const rewriters = [{ mono: e, coeff: cG, varName: newVar }];
+      if (!real) {                                               // also rewrite conj(μ) → t̄ (keeps conjugation-closure)
+        const eb = new Map(); for (const [vn, ex] of e) eb.set(_conjName(vn), ex);
+        rewriters.push({ mono: eb, coeff: cG.conj(), varName: bar });
+      }
+      const src = lastColumnNodes();
+      if (!src.length) return { ok: false, reason: 'no system to reduce (seed first)', created: [] };
+      const built = [], seen = []; let anyRewritten = false;
+      for (const n of src) {
+        let poly = _rewriteNodeMonomial(n.poly, rewriters), carried = false;
+        if (poly === null) { poly = n.poly; carried = true; } else if (!poly.equals(n.poly)) anyRewritten = true;
+        if (poly.isZero()) continue;
+        if (seen.some((s) => s.rel === n.rel && s.poly.equals(poly))) continue;
+        seen.push({ poly, rel: n.rel }); built.push({ src: n, poly, carried });
+      }
+      if (!anyRewritten && !opts.force) return { ok: false, reason: 'the expression "' + _plainPoly(g) + '" does not appear as a clean power anywhere in the current system', created: [] };
+      // Do μ's variables still appear after the rewrite? If so, pin the new symbol with its
+      // defining equation t − μ = 0 (so the system + definition is the SAME variety). If they
+      // vanished entirely (the headline s := w₁² case), the abbreviation is complete — no def node.
+      const muVars = new Set(); for (const rw of rewriters) for (const vn of rw.mono.keys()) muVars.add(vn);
+      const needDef = built.some((b) => [...muVars].some((vn) => b.poly.vars().has(vn)));
+      checkpoint();
+      if (!real) { substConj.set(newVar, bar); substConj.set(bar, newVar); substBarred.add(bar); }
+      const col = maxColumn() + 1, created = [];
+      const label = 'define ' + newVar + ' := ' + _plainPoly(g);
+      const prov = { op: 'define-subst', newVar, exprTerms: g.termList(), regime: 'monomial', real };
+      for (const b of built) {
+        const node = addNode({ id: nid(), kind: 'derived', poly: b.poly, rel: b.src.rel, label, model,
+          provenance: Object.assign({ inputs: [b.src.id], carried: b.carried }, prov), column: col, meta: b.src.meta });
+        edges.push({ from: b.src.id, to: node.id }); created.push(node);
+      }
+      if (needDef) {
+        const defP = S.mpolyVar(newVar).sub(g);
+        created.push(addNode({ id: nid(), kind: 'derived', poly: defP, rel: '=', label: 'definition ' + newVar + ' = ' + _plainPoly(g), model,
+          provenance: Object.assign({ inputs: [], definition: true }, prov), column: col }));
+        if (!real) {
+          const gb = _conjMPoly(g), defB = S.mpolyVar(bar).sub(gb);
+          created.push(addNode({ id: nid(), kind: 'derived', poly: defB, rel: '=', label: 'definition ' + bar + ' = ' + _plainPoly(gb), model,
+            provenance: Object.assign({ inputs: [], definition: true }, prov), column: col }));
+        }
+      }
+      normalizeColumn(col);
+      return { ok: true, created, column: col, regime: 'monomial', newVar, rewritten: anyRewritten };
+    }
+
+    // GENERAL (ideal-theoretic) regime: adjoin t − g (+ conjugate). opts.dropVars=[] ⇒ ADD the
+    // definition(s) only (variety unchanged); a non-empty dropVars ⇒ block-Gröbner ELIMINATE them.
+    function _defineGeneralDefs(newVar, g) {
+      const S = getSym();
+      const real = _isSelfConj(g);
+      const bar = real ? null : _barName(newVar);
+      const defs = [{ poly: S.mpolyVar(newVar).sub(g), label: 'definition ' + newVar + ' = ' + _plainPoly(g) }];
+      if (!real) { const gb = _conjMPoly(g); defs.push({ poly: S.mpolyVar(bar).sub(gb), label: 'definition ' + bar + ' = ' + _plainPoly(gb) }); }
+      return { real, bar, defs };
+    }
+    function _defineGeneral(newVar, g, opts) {
+      opts = opts || {};
+      const S = getSym();
+      const dropVars = (opts.dropVars || []).slice();
+      const { real, bar, defs } = _defineGeneralDefs(newVar, g);
+      const src = lastColumnNodes();
+      if (!src.length) return { ok: false, reason: 'no system to reduce (seed first)', created: [] };
+
+      if (!dropVars.length) {
+        // ADD the definition(s) to the CURRENT column — no elimination, variety unchanged.
+        const col = maxColumn();
+        const present = (poly) => [...nodes.values()].some((m) => m.column === col && (m.track || 't0') === activeTrackId && m.poly.equals(poly));
+        const toAdd = defs.filter((d) => !present(d.poly));
+        if (!toAdd.length) return { ok: false, reason: 'this definition is already present in the current system', created: [] };
+        checkpoint();
+        if (!real) { substConj.set(newVar, bar); substConj.set(bar, newVar); substBarred.add(bar); }
+        const created = [], prov = { op: 'define-subst', newVar, exprTerms: g.termList(), regime: 'general', dropVars: [], real };
+        for (const d of toAdd) {
+          created.push(addNode({ id: nid(), kind: 'derived', poly: d.poly, rel: '=', label: d.label, model,
+            provenance: Object.assign({ inputs: [], definition: true }, prov), column: col }));
+        }
+        normalizeColumn(col);
+        return { ok: true, created, column: col, regime: 'general', newVar };
+      }
+
+      // ELIMINATE dropVars from ⟨current equalities, defs⟩ via a block Gröbner basis.
+      const eqs = src.filter((n) => n.rel === '=');
+      const polys = eqs.map((n) => n.poly).concat(defs.map((d) => d.poly));
+      const keep = (() => { const s = new Set(); for (const p of polys) for (const vn of p.vars()) if (!dropVars.includes(vn)) s.add(vn); return [...s].sort(); })();
+      let basis;
+      try { basis = S.buchberger(polys, S.eliminationOrder(dropVars, keep), opts); }
+      catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [] }; }
+      return _defineGeneralFinish(newVar, g, { real, bar, dropVars, inputIds: eqs.map((n) => n.id), col: maxColumn() + 1 }, basis);
+    }
+    // Emit the dropVars-free generators of a general-elimination Gröbner basis (shared sync/async tail).
+    function _defineGeneralFinish(newVar, g, plan, basis) {
+      const gens = (basis || []).filter((b) => { const vs = b.vars(); return !plan.dropVars.some((v) => vs.has(v)); }).filter((b) => !b.isZero());
+      if (!gens.length) return { ok: false, reason: 'eliminating ' + plan.dropVars.join(', ') + ' left no generator (the elimination ideal is trivial)', created: [] };
+      checkpoint();
+      if (!plan.real) { substConj.set(newVar, plan.bar); substConj.set(plan.bar, newVar); substBarred.add(plan.bar); }
+      const created = [], col = plan.col;
+      const label = 'define ' + newVar + ' := ' + _plainPoly(g) + ' · eliminate ' + plan.dropVars.join(', ');
+      const prov = { op: 'define-subst', newVar, exprTerms: g.termList(), regime: 'general', dropVars: plan.dropVars.slice(), real: plan.real };
+      gens.forEach((poly, i) => {
+        const node = addNode({ id: nid(), kind: 'derived', poly, rel: '=', label: label + ' (' + (i + 1) + '/' + gens.length + ')', model,
+          provenance: Object.assign({ inputs: plan.inputIds.slice() }, prov), column: col });
+        for (const src of plan.inputIds) edges.push({ from: src, to: node.id });
+        created.push(node);
+      });
+      normalizeColumn(col);
+      return { ok: true, created, column: col, regime: 'general', newVar };
+    }
+    // Off-main-thread general elimination via QD.SymWorker (the heavy dropVars Gröbner). Only the
+    // dropVars-elimination path is offloaded; the cheap regimes resolve to the sync result.
+    function defineSubstitutionAsync(newVar, exprPoly, opts, runOpts) {
+      opts = opts || {};
+      newVar = String(newVar || '').trim();
+      const v = _validateDefine(newVar, exprPoly);
+      if (!v.ok) return Promise.resolve(Object.assign(v, { created: [] }));
+      const regime = _substRegime(exprPoly, opts);
+      const dropVars = (opts.dropVars || []).slice();
+      if (regime !== 'general' || !dropVars.length) return Promise.resolve(defineSubstitution(newVar, exprPoly, opts));
+      const SW = symWorker();
+      if (!SW) return Promise.resolve(defineSubstitution(newVar, exprPoly, opts));
+      const S = getSym();
+      const { real, bar, defs } = _defineGeneralDefs(newVar, exprPoly);
+      const eqs = lastColumnNodes().filter((n) => n.rel === '=');
+      const polys = eqs.map((n) => n.poly).concat(defs.map((d) => d.poly));
+      const keep = (() => { const s = new Set(); for (const p of polys) for (const vn of p.vars()) if (!dropVars.includes(vn)) s.add(vn); return [...s].sort(); })();
+      const payload = { polys: polys.map((p) => p.termList()), orderSpec: { kind: 'block', blocks: [dropVars.slice(), keep] }, opts: _capOpts(opts) };
+      const plan = { real, bar, dropVars, inputIds: eqs.map((n) => n.id), col: maxColumn() + 1 };
+      return SW.run('groebner', payload, runOpts || {}).then(
+        (res) => _defineGeneralFinish(newVar, exprPoly, plan, (res.generators || []).map((tl) => S.polyFromTermList(tl))),
+        (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled', created: [] }
+          : { ok: false, reason: (err && err.message) || String(err), created: [] });
+    }
+
+    function _gcdInt(a, b) { a = Math.abs(a); b = Math.abs(b); while (b) { const t = a % b; a = b; b = t; } return a; }
+    // Auto-SUGGEST custom substitutions from structural regularities in the current system (pure
+    // query, no mutation). Ranked hits — each Apply calls defineSubstitution(newVar, expr, {regime}):
+    //   • MODULUS  z·z̄ = |z|² recurring within terms (highest — QD-meaningful, real).
+    //   • POWER    a variable appearing only with exponents sharing gcd g>1 ⇒ s := v^g (the s=w₁²
+    //              cardioid-resolvent reduction).
+    //   • GCD      a nontrivial factor shared by every equation (Sym.gcdList) — abbreviate it.
+    //   • CONJ-SUM v + v̄ (a real coordinate, 2·Re v) when both appear linearly (routed to the
+    //              ideal/add-definition regime — the mutually-circular conjugate-sum case).
+    // Returns [{ kind, newVar, expr (MPoly), exprTerms, label, score, regime, real }], top-N by score.
+    function detectSubstitutions(ids) {
+      const S = getSym();
+      if (!S) return [];
+      const src = (ids && ids.length ? ids.map(get).filter(Boolean) : lastColumnNodes()).filter((n) => n.rel === '=');
+      if (!src.length) return [];
+      const polys = src.map((n) => n.poly);
+      const out = [], taken = _nameTaken();
+      const pick = (pref) => { let nm = _freshSubstName(pref); let i = 1; while (taken.has(nm)) { nm = _freshSubstName((pref || 's') + i); i++; } taken.add(nm); return nm; };
+      const mkHit = (kind, expr, regime, real, score, pref, label) => {
+        if (!expr || expr.isZero() || expr.vars().size === 0) return;
+        out.push({ kind, newVar: pick(pref), expr, exprTerms: expr.termList(), regime, real: !!real, score, label });
+      };
+      const conj = (v) => _conjName(v);
+      const allVars = new Set(); for (const p of polys) for (const v of p.vars()) allVars.add(v);
+
+      // (1) modulus z·z̄ recurring within a single term
+      const pairCount = new Map();
+      for (const p of polys) for (const t of p.terms.values()) for (const v of t.mono.keys()) {
+        // count once per term per pair: only from the PRIMAL side (else z·z̄ counts twice)
+        if (v !== _primalName(v)) continue;
+        const c = conj(v); if (c !== v && t.mono.has(c)) pairCount.set(v, (pairCount.get(v) || 0) + 1);
+      }
+      for (const [prim, cnt] of pairCount) {
+        const c = conj(prim); if (c === prim) continue;
+        mkHit('modulus', S.mpolyVar(prim).mul(S.mpolyVar(c)), 'monomial', true, 100 + cnt, 't',
+          'abbreviate |' + prim + '|² = ' + prim + '·' + c + ' (recurs ' + cnt + '×)');
+      }
+      // (2) even / common-power v^g
+      for (const v of allVars) {
+        let g = 0, appears = false;
+        for (const p of polys) for (const t of p.terms.values()) { const e = t.mono.get(v) || 0; if (e > 0) { appears = true; g = _gcdInt(g, e); } }
+        if (appears && g >= 2) {
+          const expr = S.mpolyVar(v).pow(g);
+          mkHit('power', expr, 'monomial', _isSelfConj(expr), 60 + g, 's', v + ' appears only as ' + v + '^' + g + ' — set s := ' + v + '^' + g);
+        }
+      }
+      // (3) gcd common factor across all equations
+      try {
+        if (polys.length >= 2) {
+          const gg = S.gcdList(polys);
+          if (gg && gg.vars && gg.vars().size > 0 && !gg.isZero()) mkHit('gcd', gg, _substRegime(gg, {}), _isSelfConj(gg), 45, 't', 'every equation shares the factor ' + _plainPoly(gg));
+        }
+      } catch (e) { /* gcd is best-effort */ }
+      // (4) conjugate-sum real coordinate v + v̄ (both present, linear)
+      for (const v of allVars) {
+        const c = conj(v); if (c === v || v > c || !allVars.has(c)) continue;
+        const lin = (x) => polys.some((p) => [...p.terms.values()].some((t) => (t.mono.get(x) || 0) === 1));
+        if (!lin(v) || !lin(c)) continue;
+        mkHit('conj-sum', S.mpolyVar(v).add(S.mpolyVar(c)), 'general', true, 20, 'u', v + ' + ' + c + ' = 2·Re ' + _primalName(v) + ' as a real coordinate');
+      }
+      out.sort((a, b) => b.score - a.score);
+      return out.slice(0, 8);
     }
 
     // Detect VARIABLE SYMMETRIES forced by the equations themselves (pure query, no mutation).
@@ -1374,8 +1819,8 @@
       const QC = getQC();
       if (!QC || !QC.conjMPoly) return { ok: false, reason: 'QD.QDConstraints not loaded' };
       const conj = (opts.incorporateReality === false)
-        ? _applyW0(QC.conjMPoly(node.poly))
-        : _applyAssumed(QC.conjMPoly(node.poly));
+        ? _applyW0(_conjMPoly(node.poly))
+        : _applyAssumed(_conjMPoly(node.poly));
       if (node.poly.sub(conj).isZero() || node.poly.add(conj).isZero())
         return { ok: false, reason: 'this equation is self-conjugate — its conjugate is the same equation' };
       for (const m of nodes.values()) if (m.column === node.column && m.poly.equals(conj))
@@ -1521,7 +1966,7 @@
         // nodes actually seeded. Without this, under reality assumptions the bare
         // conjugate reintroduces barred names that match nothing, mis-reporting the
         // real-equation count in the hovertext.
-        const conj = _applyReality(_applyW0(QC.conjMPoly(n.poly)));
+        const conj = _applyReality(_applyW0(_conjMPoly(n.poly)));
         selfConj = n.poly.sub(conj).isZero() || n.poly.add(conj).isZero();
         if (!selfConj) for (const m of nodes.values()) if (m.id !== n.id && m.poly.equals(conj)) { hasCompanion = true; break; }
       }
@@ -1547,6 +1992,7 @@
         formulation,
         w0Fixed: assumeOf().w0Fixed,              // active branch's (back-compat)
         assumptions: serializeAssume(),           // C3: per-track reality / imaginary / fixed-φ(0)
+        substConj: [...substConj], substBarred: [...substBarred],   // user-defined substitution conjugate pairs
         tracks: tracksList(),
         activeTrack: activeTrackId,
         nodes: list().map((n) => ({
@@ -1572,6 +2018,7 @@
       clearGraph();
       model = data.model || 'conjugate';
       formulation = data.formulation || 'classical';
+      substConj = new Map(data.substConj || []); substBarred = new Set(data.substBarred || []);   // restore the substitution conjugate overlay
       // tracks (+ track-id counter past the highest 't<n>')
       tracks = (data.tracks && data.tracks.length)
         ? data.tracks.map((t) => ({ id: t.id, label: t.label, parentId: t.parentId, forkColumn: t.forkColumn }))
@@ -1717,6 +2164,7 @@
         factor: 'factor case',
         identify: 'identify ' + (prov.drop || '') + ' = ' + (prov.keep || ''),
         'identify-conj': 'identify ' + (prov.var || '') + ' via conj(' + (prov.other || '') + ')',
+        'define-subst': 'define ' + (prov.newVar || 't') + ' := g (' + (prov.regime || '') + ')' + (prov.dropVars && prov.dropVars.length ? ', eliminate ' + prov.dropVars.join(', ') : ''),
         resolvent: 'resolvent (characteristic polynomial of multiplication-by-v)',
         rctd: 'imported RCTD cell',
       }[op] || op;
@@ -1786,6 +2234,7 @@
         case 'fix-w0': return 'fix phi(0)';
         case 'identify': return 'identify ' + p.drop + ' = ' + p.keep;
         case 'identify-conj': return 'identify ' + p.var + ' = conj(' + p.other + ')';
+        case 'define-subst': return 'define ' + p.newVar + (p.dropVars && p.dropVars.length ? ' (elim ' + p.dropVars.join(', ') + ')' : '');
         case 'linear-reduce': return 'linear propagation';
         case 'resultant': return 'eliminate ' + p.variable;
         case 'groebner': return 'Groebner (' + (p.order || 'grevlex') + ')';
@@ -1994,7 +2443,7 @@
     return {
       seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
-      substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
+      substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
       currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, msolveColumn, msolveVarOrder, importMsolve, derivationSteps, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,

@@ -108,6 +108,8 @@
       return h.kind + ':' + h.varName;
     }
     function _detectRels() { try { return store.detectVariableRelations ? (store.detectVariableRelations() || []) : []; } catch (e) { return []; } }
+    function _detectSubsts() { try { return store.detectSubstitutions ? (store.detectSubstitutions() || []) : []; } catch (e) { return []; } }
+    function _substKey(h) { return 'subst:' + h.kind + ':' + (h.exprTerms ? JSON.stringify(h.exprTerms) : h.newVar); }
     // Compact prefix for a substitution ratio Gaussian c: '' for 1, '−' for −1, else '(c)·'.
     function fmtRatio(g) {
       try {
@@ -130,7 +132,8 @@
     function renderSuggestions() {
       const box = $('#alg-suggest'); if (!box) return;
       const hits = _detectRels().filter((h) => !_dismissedRel.has(_relKey(h)));
-      if (!hits.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+      const subHits = _detectSubsts().filter((h) => !_dismissedRel.has(_substKey(h)));
+      if (!hits.length && !subHits.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
       box.innerHTML = '';
       hits.forEach((h) => {
         const row = document.createElement('div'); row.className = 'algebra-suggest-row';
@@ -181,6 +184,28 @@
         const x = document.createElement('button'); x.type = 'button'; x.className = 'algebra-error-close';
         x.textContent = '×'; x.title = 'Dismiss this suggestion for the session';
         x.addEventListener('click', () => { _dismissedRel.add(_relKey(h)); renderSuggestions(); });
+        row.appendChild(x);
+        box.appendChild(row);
+      });
+      // structural-regularity substitution suggestions (modulus / power / gcd / conjugate-sum)
+      subHits.forEach((h) => {
+        const row = document.createElement('div'); row.className = 'algebra-suggest-row';
+        const msg = document.createElement('span'); msg.className = 'algebra-suggest-msg';
+        msg.textContent = h.label + '.';
+        const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'small';
+        const btnText = 'Define ' + latexPlain(h.newVar);
+        btn.textContent = btnText; btn.title = 'Introduce ' + latexPlain(h.newVar) + ' as this abbreviation in a new step';
+        btn.addEventListener('click', () => {
+          if (busyGuard()) return;
+          let r; try { r = store.defineSubstitution(h.newVar, h.expr, { regime: h.regime }); } catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
+          if (!r || !r.ok) { showError('Define substitution: ' + ((r && r.reason) || 'failed')); return; }
+          rerender(); refreshPickers();
+          toast(btnText + ' → column ' + r.column);
+        });
+        row.appendChild(msg); row.appendChild(btn);
+        const x = document.createElement('button'); x.type = 'button'; x.className = 'algebra-error-close';
+        x.textContent = '×'; x.title = 'Dismiss this suggestion for the session';
+        x.addEventListener('click', () => { _dismissedRel.add(_substKey(h)); renderSuggestions(); });
         row.appendChild(x);
         box.appendChild(row);
       });
@@ -538,6 +563,46 @@
       toast(msg);
     }
 
+    // Live preview for the "Define substitution" control: parse the typed expression against the
+    // current variables and render it (KaTeX); surface a parse error and disable Apply when invalid.
+    function previewSubst() {
+      const box = $('#alg-def-preview'), btn = $('#alg-def-apply');
+      if (!box) return;
+      const exprStr = (($('#alg-def-expr') || {}).value || '').trim();
+      const nm = (($('#alg-def-name') || {}).value || '').trim();
+      if (!exprStr) { box.textContent = ''; box.classList.remove('alg-def-error'); if (btn) btn.disabled = false; return; }
+      const S = (typeof QD !== 'undefined' && QD.Sym), P = (typeof QD !== 'undefined' && QD.ExprParser);
+      if (!S || !P) { box.textContent = ''; return; }
+      let g;
+      try { g = P.parse(exprStr, store.variables(), S); }
+      catch (e) { box.textContent = '⚠ ' + ((e && e.message) || 'parse error'); box.classList.add('alg-def-error'); if (btn) btn.disabled = true; return; }
+      box.classList.remove('alg-def-error'); if (btn) btn.disabled = false;
+      const tex = (nm ? latexPlain(nm) + ' := ' : '') + g.toLatex(latexOf);
+      box.innerHTML = '';
+      if (typeof katex !== 'undefined') { try { katex.render(tex, box, { throwOnError: false }); return; } catch (e) { /* fall through */ } }
+      box.textContent = (nm ? nm + ' := ' : '') + exprStr;
+    }
+    // Introduce a user-defined symbol t := g and substitute it into the current system (a new column).
+    function doDefineSubst() {
+      if (!ensureSeed()) return;
+      const nm = (($('#alg-def-name') || {}).value || '').trim();
+      const exprStr = (($('#alg-def-expr') || {}).value || '').trim();
+      if (!nm) { toast('Give the new symbol a name.', { kind: 'error' }); return; }
+      if (!exprStr) { toast('Enter an expression to abbreviate.', { kind: 'error' }); return; }
+      const S = QD.Sym, P = QD.ExprParser;
+      let g;
+      try { g = P.parse(exprStr, store.variables(), S); }
+      catch (e) { showError('Define substitution: ' + ((e && e.message) || 'parse error')); return; }
+      if (busyGuard()) return;
+      let r; try { r = store.defineSubstitution(nm, g); } catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
+      if (!r || !r.ok) { showError('Define substitution: ' + ((r && r.reason) || 'failed')); return; }
+      if ($('#alg-def-name')) $('#alg-def-name').value = '';
+      if ($('#alg-def-expr')) $('#alg-def-expr').value = '';
+      previewSubst();
+      rerender(); refreshPickers();
+      toast('Defined ' + latexPlain(nm) + ' := ' + exprStr + ' (' + r.regime + ') → column ' + r.column);
+    }
+
     // ---- sidebar -------------------------------------------------------------
     function setStatus(t) { const el = $('#alg-status'); if (el) el.textContent = t; }
     function setStatusHTML(html) { const el = $('#alg-status'); if (el) el.innerHTML = html; }
@@ -600,6 +665,13 @@
         '        <button id="alg-val-add" class="small" type="button" title="Add another variable to fix in the same column">＋ add variable</button>' +
         '        <label style="font-size:11px;" title="After substituting, run a linear-propagation pass (eliminate forced variables) as a further column."><input type="checkbox" id="alg-val-prop" checked> propagate</label>' +
         '        <button id="alg-val-apply" class="small" type="button" title="Substitute the exact values (continued-fraction ℚ(i)) for these variables — and their conjugates — in one new column">Apply</button></div>' +
+        '      <div class="algebra-line-label" style="margin-top:8px;">Define substitution <span class="hint" style="font-weight:400;">(abbreviate a sub-expression as a new symbol)</span></div>' +
+        '      <div class="algebra-define-row">' +
+        '        <input id="alg-def-name" class="alg-def-name" type="text" placeholder="t" autocomplete="off" spellcheck="false" title="A fresh name for the new symbol" />' +
+        '        <span class="alg-def-eq">:=</span>' +
+        '        <input id="alg-def-expr" class="alg-def-expr" type="text" placeholder="e.g.  w1^2,  z1+zb1,  z1*zb1" autocomplete="off" spellcheck="false" title="An expression in the current variables.  + − * / ^ ( ),  i = imaginary unit,  exact rationals" />' +
+        '        <button id="alg-def-apply" class="small" type="button" title="Introduce the new symbol and substitute it into the current system (a new labeled column)">Apply</button></div>' +
+        '      <div id="alg-def-preview" class="alg-def-preview hint"></div>' +
         '    </div>' +
         '  </details>' +
         // 3. Reduce (alternative eliminators; order/eliminate behind Advanced)
@@ -737,6 +809,9 @@
       $('#alg-real-detect').addEventListener('click', doDetectSymmetry);
       $('#alg-val-apply').addEventListener('click', doSubstituteValue);
       $('#alg-val-add').addEventListener('click', () => addValueRow());
+      $('#alg-def-apply').addEventListener('click', doDefineSubst);
+      $('#alg-def-expr').addEventListener('input', previewSubst);
+      $('#alg-def-name').addEventListener('input', previewSubst);
 
       // variable pickers (eliminate = all current vars; assume-real = primal base vars)
       _elimPicker = buildPicker($('#alg-elim-pick'), { label: 'pick', friendly: friendlyVar, selected: elimSel, getOptions: () => store.variables() });
@@ -1098,7 +1173,7 @@
     let _abort = null;
     function setBusy(on, label) {
       ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-classify', 'alg-univalence', 'alg-resolvent', 'alg-autosolve',
-        'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-real-detect', 'alg-propagate-all', 'alg-val-apply']
+        'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-real-detect', 'alg-propagate-all', 'alg-val-apply', 'alg-def-apply']
         .forEach((id) => { const b = $('#' + id); if (b) b.disabled = on; });
       const pal = $('#alg-palette'); if (pal) pal.querySelectorAll('button').forEach((b) => { b.disabled = on; });
       const cancel = $('#alg-cancel'); if (cancel) cancel.classList.toggle('hidden', !on);
@@ -1770,6 +1845,9 @@
         case 'identify': return 'identified ' + latexPlain(prov.drop) + ' = ' + ratioStrRec(prov.ratio, prov.sign) + latexPlain(prov.keep);
         case 'identify-conj': return 'identified ' + latexPlain(prov.var) + ' = ' + ratioStrRec(prov.ratio) + 'conj(' + latexPlain(prov.other) + ')';
         case 'fix-w0': return 'fixed φ(0) = ' + valStr(prov.value);
+        case 'define-subst': return (prov.definition ? 'defining equation for ' : 'define ') + latexPlain(prov.newVar)
+          + (prov.dropVars && prov.dropVars.length ? ' · eliminate ' + prov.dropVars.map(latexPlain).join(', ') : '')
+          + (prov.carried ? ' (carried through)' : '');
         case 'triangular': return prov.contradiction ? 'triangular decomposition (inconsistent)' : 'triangular decomposition (Wu) of ' + (prov.inputs || []).join(', ');
         case 'factor': return prov.carried ? 'carried through a factor split' : 'factor: case ' + ((prov.caseIndex || 0) + 1) + ' of ' + (prov.caseCount || '?') + ' (V(p)=⋃V(fᵢ))';
         case 'rctd': return 'RCTD cell ' + (prov.cell != null ? prov.cell : '?') + ' · ' + (prov.role || 'chain') + (prov.realCount != null ? ' (' + prov.realCount + ' real soln' + (prov.realCount === 1 ? '' : 's') + ')' : '');
@@ -1792,6 +1870,8 @@
         case 'identify': return '↳ identify ' + latexPlain(p.drop) + ' = ' + ratioStrRec(p.ratio, p.sign) + latexPlain(p.keep);
         case 'identify-conj': return '↳ identify ' + latexPlain(p.var) + ' = ' + ratioStrRec(p.ratio) + 'conj(' + latexPlain(p.other) + ')';
         case 'fix-w0': return '↳ fix φ(0) = ' + valStr(p.value);
+        case 'define-subst': return '↳ define ' + latexPlain(p.newVar)
+          + (p.dropVars && p.dropVars.length ? ' · elim ' + p.dropVars.map(latexPlain).join(',') : '');
         case 'resultant': return '↳ eliminate ' + latexPlain(p.variable);
         case 'groebner': return '↳ Gröbner · ' + (p.eliminate && p.eliminate.length ? 'elim ' + p.eliminate.map(latexPlain).join(',') : (p.order || 'grevlex'));
         case 'triangular': return p.contradiction ? '↳ triangular · inconsistent' : '↳ triangular decomposition';
@@ -1839,6 +1919,7 @@
         case 'substitute': return 'set ' + (((p.variables || []).map((r) => latexPlain(r.name))).join(', ') || (p.variable ? latexPlain(p.variable) : 'value'));
         case 'linear-reduce': return 'propagate';
         case 'fix-w0': return 'fix φ(0)';
+        case 'define-subst': return p.carried ? 'carry' : 'define ' + latexPlain(p.newVar);
         case 'factor': return p.carried ? 'carry' : 'factor case';
         case 'propagate': return 'propagate';
         case 'rctd': return 'RCTD';

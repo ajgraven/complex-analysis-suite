@@ -271,6 +271,30 @@ its own merged PR), with one feature **in progress on a branch**:
     labelling). Files: `algebra-ui.js` (`buildTrackBar`/`switchTrack`/`doFork`/`deleteBranch` + the inspector
     button + breadcrumb filter), `style.css` (`.algebra-trackbar`/chips/fork/`×`). Verified in-browser: fork→
     "branch 1" active, switch back to main, delete, inspector fork — console clean.
+  - **Custom user-defined variable substitutions + auto-suggestions** (latest) — introduce a fresh symbol
+    `t := g(vars)` and substitute it in (an append-column reduction). NEW `app/algebra/expr-parser.js`
+    (`QD.ExprParser.parse(str, knownVars, S)`: a no-eval recursive-descent parser turning a typed expression
+    — `+ − * / ^ ( )`, `i`, exact rationals, longest-match variable names — into an exact ℚ(i) MPoly; it's the
+    INPUT counterpart to `cas-export.js`). `store.defineSubstitution(newVar, exprPoly, opts)` auto-dispatches
+    three regimes by the shape of `g`: **linear** (deg-1 in some var v with constant coeff ⇒ `v=(t−r)/c` pure
+    subst, pairing the conjugate v̄ when non-circular), **monomial** (`g=c·μ` ⇒ syntactic exponent rewrite — a
+    node is rewritable iff every term's exponents over μ are the same multiple; non-rewritable nodes are carried
+    + a defining node `t−μ=0` emitted only when μ's vars survive; the `s:=w₁²` cardioid-resolvent case),
+    **general** (ideal-theoretic: adjoin `t−g` (+ conjugate); `opts.dropVars=[]` default just ADDS the
+    definition, a non-empty `dropVars` block-Gröbner-ELIMINATES them, sync + `defineSubstitutionAsync` worker).
+    When `g` is NOT self-conjugate the new symbol's conjugate t̄ is REGISTERED in a store conjugate overlay
+    (`substConj`/`substBarred`, carried in snapshot/undo/exportDAG, consulted by a new overlay-aware `_conjName`/
+    `_conjMPoly` threaded through reality/imaginary/reim/maybeAddConjugate) so the conjugate model stays
+    consistent. The mutually-circular conjugate-sum case (`u:=z₁+z̄₁`, the chosen var's own conjugate appears in
+    `g`) is routed to the general add-definition regime (Andrew's call — it's one relation, can't eliminate the
+    pair). `store.detectSubstitutions()` auto-suggests four structural regularities — modulus `z·z̄=|z|²`,
+    even-power `v^g`, gcd common factor, conjugate-sum `v+v̄` — rendered in the `#alg-suggest` banner alongside
+    the symmetry hits (one-click Apply). UI: a **"Define substitution"** control in the Assumptions section
+    (name `:=` expression input + live KaTeX preview + Apply). New `provenance.op:'define-subst'` registered in
+    `provText`/`columnLabel`/`edgeLabel`/`_shortProv`/`derivationSteps`; labels use a plain-text MPoly formatter
+    (`_plainPoly`, no LaTeX — the canvas shows labels as textContent). Tests: `app/test/expr-parser.test.js`
+    (25) + `app/test/define-subst.test.js` (32, exact subst round-trip as the oracle: linear/monomial/modulus/
+    conjugate-pair/general-elim/collision/detector/undo/DAG round-trip). No `sym-core.js` math change.
   - **Branching workspace — A6 (per-branch verdict chips)** — each track chip carries an existence/uniqueness
     badge (`∅` no-QD · `∞` positive-dim family · `✓ 1 QD` unique · `N QD` · `?`/`fin`), color-coded, full phrasing
     in the tooltip. A **"⟳ verdicts"** button (shown when >1 branch) classifies every branch sequentially via the
