@@ -123,4 +123,43 @@ module.exports = async function run() {
     ok('parseRCTD: a malformed term list → ok:false (located reason)',
        (() => { const x = CAS.parseRCTD(JSON.stringify({ cells: [{ index: 1, chain: [{ terms: [{ coeff: { re: ['1'] }, mono: {} }] }] }] })); return !x.ok && /coeff/.test(x.reason); })());
   }
+
+  // ---- G11: msolve `.ms` export + real-solution output parse ----
+  {
+    // export a real-coefficient system: variables line, characteristic 0, the polynomials
+    const sys = [{ terms: tl(mv('x').pow(2).sub(mi(2))), rel: '=' }];     // x²−2
+    const ms = CAS.systemToMsolve(sys, {});
+    const lines = ms.trim().split('\n');
+    ok('systemToMsolve: line 1 = variables, line 2 = characteristic 0',
+       lines[0] === 'x' && lines[1] === '0' && /x\^2/.test(ms) && !/\bi\b/.test(ms));
+    // ℚ(i) coefficients ⇒ i becomes a variable and i²+1 is appended
+    const sysC = [{ terms: tl(I.mul(mv('x')).add(mi(1))), rel: '=' }];    // i·x + 1
+    const msC = CAS.systemToMsolve(sysC, {});
+    ok('systemToMsolve: complex coeffs ⇒ i is a variable + i^2+1 is added',
+       /(^|,\s*|\b)i\b/.test(msC.split('\n')[0]) && /i\^2\+1/.test(msC));
+    // inequalities are dropped (msolve solves varieties): only the equality x−1 remains
+    {
+      const msDrop = CAS.systemToMsolve([{ terms: tl(mv('x')), rel: '>' }, { terms: tl(mv('x').sub(mi(1))), rel: '=' }], {});
+      ok('systemToMsolve: inequalities are dropped (one polynomial line: x − 1)',
+         msDrop.split('\n').filter(Boolean).length === 3 && /x - 1/.test(msDrop));
+    }
+
+    // parse a documented-shape msolve real-root output [dim, [ solutions ]]
+    // univariate x²−2: two intervals ±√2 ⇒ [0, [[[1,1],[3,2]], [[-3,2],[-1,1]]]]
+    const out1 = CAS.parseMsolveSolutions('[0, [[[1,1],[3,2]], [[-3,2],[-1,1]]]]', { vars: ['x'] });
+    ok('parseMsolveSolutions: x²−2 → 2 real roots bracketing ±√2',
+       out1.ok && out1.dim === 0 && out1.count === 2 &&
+       Math.abs(out1.solutions[0].x.approx - 1.25) < 1e-9 && out1.solutions[1].x.approx < 0);
+    // two-variable: each solution is a list of two intervals
+    const out2 = CAS.parseMsolveSolutions('[0, [ [[[0,1],[0,1]],[[1,1],[1,1]]], [[[2,1],[2,1]],[[-1,1],[-1,1]]] ] ]', { vars: ['x', 'y'] });
+    ok('parseMsolveSolutions: 2-var output → solutions keyed by x,y',
+       out2.ok && out2.count === 2 && out2.solutions[0].x.approx === 0 && out2.solutions[0].y.approx === 1 &&
+       out2.solutions[1].x.approx === 2 && out2.solutions[1].y.approx === -1);
+    // tolerant of a trailing ':' / whitespace and bare-integer endpoints
+    const out3 = CAS.parseMsolveSolutions('[0, [[1, 2]]]:\n', { vars: ['t'] });
+    ok('parseMsolveSolutions: bare-integer endpoints + trailing colon tolerated',
+       out3.ok && out3.count === 1 && out3.solutions[0].t.approx === 1.5);
+    ok('parseMsolveSolutions: no bracketed output → ok:false',
+       CAS.parseMsolveSolutions('no solutions here', {}).ok === false);
+  }
 };

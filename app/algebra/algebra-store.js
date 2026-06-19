@@ -1624,6 +1624,37 @@
       const CAS = _getCAS(); const n = get(id); if (!CAS || !n) return '';
       return CAS.equationToCAS({ terms: n.poly.termList(), rel: n.rel }, dialect || 'maple');
     }
+    // G11: a column's equality system → msolve `.ms` input text (over ℚ, with i a variable +
+    // i²+1 when the coefficients are complex). Defaults to the current column. '' if empty / no CAS.
+    function msolveColumn(c, opts) {
+      const CAS = _getCAS(); if (!CAS) return '';
+      const col = (c == null) ? maxColumn() : c;
+      const items = _columnItems(col);
+      if (!items.length) return '';
+      return CAS.systemToMsolve(items, opts || {});
+    }
+    // The variable order msolve will report solutions in (matches systemToMsolve): the column's
+    // unknowns then parameters, plus a trailing `i` when the system carries complex coefficients.
+    function msolveVarOrder(c, opts) {
+      const col = (c == null) ? maxColumn() : c;
+      const items = _columnItems(col);
+      const ps = new Set((opts && opts.params) || []);
+      const set = new Set();
+      for (const it of items) for (const t of it.terms) for (const v of Object.keys(t.mono || {})) set.add(v);
+      const all = [...set].sort();
+      const order = all.filter((v) => !ps.has(v)).concat(all.filter((v) => ps.has(v)));
+      const needI = items.some((it) => it.terms.some((t) => t.coeff.im[0] !== '0'));
+      if (needI) order.push('i');
+      return order;
+    }
+    // G11: parse msolve's real-solution output back into solutions keyed by the column's variable
+    // order. Display-only (numeric boxes, not polynomials) — returns CASExport.parseMsolveSolutions.
+    function importMsolve(text, opts) {
+      const CAS = _getCAS(); if (!CAS) return { ok: false, reason: 'QD.CASExport unavailable' };
+      opts = opts || {};
+      const vars = opts.vars || msolveVarOrder(opts.column, opts);
+      return CAS.parseMsolveSolutions(text, { vars });
+    }
     // ---- E4: reproducible SymPy derivation script for the ACTIVE branch ----
     // Conjugate of a value record { re:[n,d], im:[n,d] } (negate the imaginary part).
     function _conjRec(rec) {
@@ -1896,7 +1927,7 @@
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
       currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
-      sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
+      sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, msolveColumn, msolveVarOrder, importMsolve, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       forkTrack, setActiveTrack, deleteTrack, tracks: tracksList,
       undo, redo, reset,

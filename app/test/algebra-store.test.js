@@ -627,6 +627,26 @@ module.exports = async function run() {
     ok('cas: Singular export sets the ℚ(i) ground field and an ideal',
        /minpoly = i\^2\+1/.test(sing) && /ideal Id =/.test(sing) && /std\(Id\)/.test(sing));
     ok('cas: an empty / missing column yields the empty string', st.casColumn(99, 'maple') === '');
+    // G11: msolve `.ms` export of the seeded column + variable order + import round-trip
+    const ms = st.msolveColumn(0);
+    ok('msolve: column 0 exports a .ms system (vars line, characteristic 0, polynomials)',
+       /^.+\n0\n/.test(ms) && ms.length > 8);
+    const order = st.msolveVarOrder(0);
+    ok('msolve: variable order lists the column unknowns (e.g. A1_1)', order.length > 0 && order.indexOf('A1_1') !== -1);
+    // i-path: a system with a genuine Gaussian-imaginary coefficient ⇒ i variable + i^2+1
+    {
+      const S = QD.Sym, mv = (n) => S.mpolyVar(n), mi = (k) => S.mpolyInt(k);
+      const Ii = S.mpolyConst(S.gaussInt(0, 1));
+      const stC = QD.AlgebraStore.create();
+      stC.seedFromSystem({ model: 'conjugate', formulation: 'classical', w0Fixed: null,
+        blocks: { locator: [{ eq: Ii.mul(mv('z1')).add(mi(1)), label: 'loc' }], star: [], gauge: [] } }, { withConjugates: false });
+      const msC = stC.msolveColumn(0), orderC = stC.msolveVarOrder(0);
+      ok('msolve: a Gaussian-imaginary coefficient ⇒ i appended to the var order + i^2+1 in the file',
+         orderC[orderC.length - 1] === 'i' && /i\^2\+1/.test(msC));
+    }
+    const imp = st.importMsolve('[0, [[1, 2]]]', { vars: ['t'] });
+    ok('msolve: importMsolve parses an msolve real-solution output', imp.ok && imp.count === 1 && imp.solutions[0].t.approx === 1.5);
+    ok('msolve: an empty / missing column yields the empty string', st.msolveColumn(99) === '');
   }
 
   // ---- RCTD import (the return trip): parseRCTD JSON → importRCTD column ----

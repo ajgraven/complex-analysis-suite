@@ -657,7 +657,8 @@
         '        <select id="alg-cas-dialect" title="Maple RCTD = parametric REAL triangular decomposition (RealComprehensiveTriangularize) — the fully-parametric uniqueness route; Singular / Sage = equality-ideal Gröbner cross-checks of the variety.">' +
         '          <option value="maple">Maple RCTD</option><option value="singular">Singular</option><option value="sage">Sage</option></select>' +
         '        <input id="alg-cas-params" class="small" type="text" placeholder="params e.g. a1,C1_1" title="Comma-separated variable names to treat as PARAMETERS — declared last for Maple RealComprehensiveTriangularize. Blank ⇒ non-parametric RealTriangularize." style="width:8.5em;" />' +
-        '        <button id="alg-copy-cas" class="small" type="button" title="Copy the chosen column (above) as CAS input for the selected dialect (runs in your own Maple / Singular / Sage — nothing executes in-browser)">Copy</button></div>' +
+        '        <button id="alg-copy-cas" class="small" type="button" title="Copy the chosen column (above) as CAS input for the selected dialect (runs in your own Maple / Singular / Sage — nothing executes in-browser)">Copy</button>' +
+        '        <button id="alg-copy-msolve" class="small" type="button" title="Copy the chosen column as msolve .ms input (over ℚ; complex coefficients become a variable i with i²+1). Run offline: msolve -f sys.ms -o out. Nothing executes in-browser.">Copy msolve (.ms)</button></div>' +
         '      <div class="algebra-line" style="margin-top:6px; align-items:flex-start;"><span class="algebra-line-label">Import RCTD</span>' +
         '        <div style="flex:1; min-width:0;">' +
         '          <textarea id="alg-rctd-json" class="small" rows="3" placeholder=\'paste the qd-rctd JSON from your Maple run (see the post-script)\' title="Paste the parametric RealComprehensiveTriangularize result, serialized to the qd-rctd term-list JSON by the documented Maple post-script. Imports as a new RCTD column (one node per cell constraint / chain poly)." style="width:100%; box-sizing:border-box; font-family:monospace; resize:vertical;"></textarea>' +
@@ -722,6 +723,7 @@
       $('#alg-copy-mma').addEventListener('click', copyMathematica);
       $('#alg-copy-mma-all').addEventListener('click', copyMathematicaAll);
       $('#alg-copy-cas').addEventListener('click', copyCAS);
+      $('#alg-copy-msolve').addEventListener('click', copyMsolve);
       $('#alg-import-rctd').addEventListener('click', doImportRCTD);
       $('#alg-error-close').addEventListener('click', clearError);
       // dismissible numbered-steps onboarding hint (remembered for the session)
@@ -792,6 +794,17 @@
       if (!code) { toast('Column ' + c + ' has no equations.', { kind: 'error' }); return; }
       const label = dialect === 'maple' ? 'Maple RCTD' : dialect.charAt(0).toUpperCase() + dialect.slice(1);
       writeClipboard(code, label + ' (column ' + c + ')');
+    }
+    // G11: copy the chosen column as msolve `.ms` input (over ℚ; complex coefficients map to a
+    // variable i with i²+1). The user runs msolve offline; nothing executes in-browser.
+    function copyMsolve() {
+      if (!store.size) { toast('Nothing to export — seed a system first.', { kind: 'error' }); return; }
+      const c = Number(($('#alg-mma-col') || {}).value || store.maxColumn());
+      const raw = (($('#alg-cas-params') || {}).value || '').trim();
+      const params = raw ? raw.split(/[,\s]+/).filter(Boolean) : [];
+      const code = store.msolveColumn(c, { params });
+      if (!code) { toast('Column ' + c + ' has no equality system to export.', { kind: 'error' }); return; }
+      writeClipboard(code, 'msolve .ms (column ' + c + ')');
     }
     // Import a parametric RCTD result (the return trip for the Maple RealComprehensiveTriangularize
     // export). Parse the pasted qd-rctd JSON with QD.CASExport.parseRCTD, land the cells as a new

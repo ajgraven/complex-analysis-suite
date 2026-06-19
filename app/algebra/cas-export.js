@@ -43,6 +43,9 @@
     sage: { I: 'I', name: (n) => n, pow: '^', mul: '*', rel: (r) => '' },
     // Singular over (0,i) with minpoly i^2+1; bare polynomials feed an ideal (equalities).
     singular: { I: 'i', name: (n) => n, pow: '^', mul: '*', rel: (r) => '' },
+    // msolve `.ms` input is over ℚ — so the imaginary unit becomes a VARIABLE `i` (the caller
+    // appends its minimal polynomial i^2+1); bare polynomials, no rel suffix.
+    msolve: { I: 'i', name: (n) => n, pow: '^', mul: '*', rel: (r) => '' },
   };
 
   // [numerator, denominator] BigInt-string pair → 'n' or 'n/d'.
@@ -257,7 +260,95 @@
     return { ok: true, format: 'qd-rctd', version: obj.version || 1, params: Array.isArray(obj.params) ? obj.params.slice() : [], cells };
   }
 
-  const ns = { polyToCAS, equationToCAS, systemToCAS, polyToSympy, sympyValue, parseRCTD, dialects: ['maple', 'singular', 'sage', 'mathematica'] };
+  // ===========================================================================
+  // G11 — msolve `.ms` BRIDGE (export the system; parse the real-solution output back).
+  //
+  // msolve (https://msolve.lip6.fr) is a fast external solver for polynomial systems over ℚ.
+  // It does NOT run in the browser; this is the bridge (like the RCTD export): emit a `.ms`
+  // input file the user runs offline (`msolve -f sys.ms -o out`), then paste the output back
+  // for `parseMsolveSolutions`. Because msolve is over ℚ (not ℚ(i)), an ℚ(i) system is mapped
+  // to ℚ by treating the imaginary unit as a VARIABLE `i` and appending its minimal polynomial
+  // i²+1 — so the exported variety is the same. `.ms` format: line 1 = comma-separated
+  // variables; line 2 = field characteristic (0 for ℚ); then the equality polynomials,
+  // comma-separated. (Inequalities are dropped — msolve solves varieties.)
+  // ---------------------------------------------------------------------------
+  function systemToMsolve(items, opts) {
+    items = items || []; opts = opts || {};
+    const { unknowns, parameters } = _varSplit(items, opts.params);
+    const eqs = items.filter((it) => (it.rel || '=') === '=');
+    const needI = items.some((it) => (it.terms || []).some((t) => t.coeff && t.coeff.im && t.coeff.im[0] !== '0'));
+    const vars = unknowns.concat(parameters);
+    const polyLines = eqs.map((it) => polyToCAS(it.terms, 'msolve'));
+    if (needI) { vars.push('i'); polyLines.unshift('i^2+1'); }   // ℚ(i) → ℚ + i a variable, i²+1=0
+    if (!vars.length || !polyLines.length) return '';
+    return vars.join(', ') + '\n0\n' + polyLines.join(',\n') + '\n';
+  }
+
+  // Tolerant recursive-descent parser for msolve's bracketed integer-nested-list output
+  // (ignoring any non-bracket prefix/suffix and the trailing ':'). Returns nested JS arrays of
+  // integers, or null if no bracketed structure is present.
+  function _parseNestedInts(text) {
+    const s = String(text); let i = 0;
+    while (i < s.length && s[i] !== '[') i++;
+    if (i >= s.length) return null;
+    const skip = () => { while (i < s.length && (/\s/.test(s[i]) || s[i] === ',')) i++; };
+    function parseVal() {
+      skip();
+      if (s[i] === '[') {
+        i++; const arr = []; skip();
+        while (i < s.length && s[i] !== ']') { arr.push(parseVal()); skip(); }
+        if (s[i] === ']') i++;
+        return arr;
+      }
+      let j = i; if (s[j] === '-' || s[j] === '+') j++;
+      while (j < s.length && s[j] >= '0' && s[j] <= '9') j++;
+      const tok = s.slice(i, j); i = j;
+      return parseInt(tok, 10);
+    }
+    return parseVal();
+  }
+  // Parse msolve's real-root output → { ok, dim, count, solutions:[{ var:{lo,hi,approx} }] }.
+  // msolve emits [dim, [ solution, … ]] where a solution is a list of per-variable rational
+  // intervals (one interval for the univariate case), each interval [[lo_n,lo_d],[hi_n,hi_d]]
+  // (an endpoint may also be a bare integer). opts.vars supplies the variable order (defaults to
+  // x1,x2,…). The exported `i` variable, if present, should be passed last in opts.vars.
+  function parseMsolveSolutions(text, opts) {
+    opts = opts || {};
+    const tree = _parseNestedInts(text);
+    if (!Array.isArray(tree)) return { ok: false, reason: 'no bracketed msolve output found' };
+    const isInt = (x) => typeof x === 'number' && !isNaN(x);
+    const isRatEnd = (x) => isInt(x) || (Array.isArray(x) && x.length === 2 && isInt(x[0]) && isInt(x[1]));
+    const isInterval = (x) => Array.isArray(x) && x.length === 2 && isRatEnd(x[0]) && isRatEnd(x[1]);
+    const isSolution = (x) => isInterval(x) || (Array.isArray(x) && x.length > 0 && x.every(isInterval));
+    const val = (e) => (isInt(e) ? e : (e[1] === 0 ? NaN : e[0] / e[1]));
+    const dim = (tree.length && isInt(tree[0])) ? tree[0] : null;
+    // primary: msolve's documented [dim, solList] — solList is the last array element
+    let sols = null;
+    const last = tree.length ? tree[tree.length - 1] : null;
+    if (Array.isArray(last) && last.length && last.every(isSolution)) sols = last;
+    if (!sols) {                                   // fallback: search for the solution list
+      const visit = (node) => {
+        if (!Array.isArray(node)) return;
+        if (!sols && node.length > 0 && !isInterval(node) && node.every(isSolution)) sols = node;
+        for (const c of node) if (!sols) visit(c);
+      };
+      visit(tree);
+    }
+    if (!sols) return { ok: false, reason: 'could not locate the solution list in the msolve output', dim };
+    const vars = opts.vars || null;
+    const solutions = sols.map((s) => {
+      const intervals = isInterval(s) ? [s] : s;
+      const rec = {};
+      intervals.forEach((iv, k) => {
+        const lo = val(iv[0]), hi = val(iv[1]);
+        rec[(vars && vars[k]) ? vars[k] : ('x' + (k + 1))] = { lo, hi, approx: (lo + hi) / 2 };
+      });
+      return rec;
+    });
+    return { ok: true, dim, count: solutions.length, solutions };
+  }
+
+  const ns = { polyToCAS, equationToCAS, systemToCAS, polyToSympy, sympyValue, parseRCTD, systemToMsolve, parseMsolveSolutions, dialects: ['maple', 'singular', 'sage', 'mathematica', 'msolve'] };
   if (global.QD) global.QD.CASExport = ns;
   else if (global.module && global.module.exports) global.module.exports = ns;
   else global.QD_CASExport = ns;

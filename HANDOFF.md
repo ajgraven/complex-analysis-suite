@@ -16,7 +16,7 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `062a28a2d4`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `91ee3790fc`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
@@ -362,7 +362,13 @@ its own merged PR), with one feature **in progress on a branch**:
       exact rational inertia reused from the Hermite-trace machinery), and Positivstellensatz
       `{base, constraints:[{g, multiplier}]}` (p = σ₀ + Σ gⱼσⱼ, each σ an SOS). Reports `{ok, identity, psd}`.
       `sym-core` 263.
-    **Remaining engine work:** **G11** msolve `.ms` export+import bridge · **D5** progressive show-steps.
+    • **G11** msolve `.ms` bridge (`<this commit>`) — `CASExport.systemToMsolve` emits an msolve `.ms`
+      input file (over ℚ; ℚ(i) coefficients map to a variable `i` + the relation i²+1, so the variety is
+      preserved); `CASExport.parseMsolveSolutions` parses msolve's real-root output (nested rational
+      intervals) back into solution boxes. Store `msolveColumn`/`msolveVarOrder`/`importMsolve`; a "Copy
+      msolve (.ms)" export button in the Algebra Export section. The user runs msolve offline (like the RCTD
+      bridge); nothing executes in-browser. `cas-export` 34, `algebra-store` 226.
+    **Remaining engine work:** **D5** progressive show-steps (the last Phase-6 item).
   **Deferred (not started):** **#6 P3** — the worked PARAMETRIC cardioid example (run the interior
   `pointFunctionalSystem` (M₀,M₁) system through Maple RCTD offline, capture the qd-rctd cell JSON as a
   regression fixture + an AHARONOV_SHAPIRO.md section; needs an offline Maple run). Exotic/research-tier:
