@@ -2931,6 +2931,86 @@
   }
 
   // ===========================================================================
+  // G10 — SOS / POSITIVSTELLENSATZ certificate CHECKER (exact over ℚ).
+  //
+  // Proving a polynomial p NONNEGATIVE is, in general, found by an external SDP solver — but
+  // the certificate it returns can be CHECKED exactly and cheaply, with no floating point.
+  // This is that checker (the SEARCH stays external; cf. the deferred msolve/CAS bridges).
+  // Three certificate shapes (real-coefficient polynomials throughout — SOS is a real notion):
+  //   • squares:  { squares: [MPoly | { coeff, poly }] }  ⇒ value = Σ coeffᵢ·polyᵢ²  (coeffᵢ ≥ 0
+  //     rational, default 1). A sum of (nonnegative-weighted) squares is manifestly ≥ 0.
+  //   • Gram:     { monomials:[MPoly], gram:[[entry]] }   ⇒ value = mᵀ·G·m. Valid iff G is
+  //     SYMMETRIC and POSITIVE SEMIDEFINITE — checked EXACTLY via the rational inertia
+  //     (PSD ⟺ no negative eigenvalue) reused from the Hermite-trace machinery above.
+  //   • Positivstellensatz: { base: cert, constraints:[{ g:MPoly, multiplier: cert }] } ⇒
+  //     value = base + Σ gⱼ·multiplierⱼ, where base and every multiplier are themselves SOS
+  //     certs (recursively). This certifies p ≥ 0 on the basic closed semialgebraic set
+  //     { gⱼ ≥ 0 } (Putinar/Schmüdgen form; the checker does NOT re-derive that the gⱼ cut out
+  //     the intended region — it verifies the algebraic identity + the SOS-ness of each piece).
+  // verifySOS(p, cert) → { ok, reason, identity (p = Σ exactly), psd (all Gram blocks PSD) }.
+  // Entries/coeffs accept a Rational, Gaussian (real), integer Number, or { n, d } pair.
+  // ---------------------------------------------------------------------------
+  function _toRealGaussian(x) {
+    if (x instanceof Gaussian) return x;
+    if (x instanceof Rational) return new Gaussian(x, RZERO);
+    if (typeof x === 'number' && Number.isInteger(x)) return Gaussian.fromInt(x);
+    if (x && x.n !== undefined && x.d !== undefined) return new Gaussian(new Rational(BigInt(x.n), BigInt(x.d)), RZERO);
+    if (Array.isArray(x) && x.length === 2) return new Gaussian(new Rational(BigInt(x[0]), BigInt(x[1])), RZERO);
+    throw new Error('verifySOS: cannot interpret coefficient ' + JSON.stringify(x));
+  }
+  // Value (MPoly) of one SOS sub-certificate + whether it is a valid SOS (coeffs ≥ 0 / Gram PSD).
+  function _sosCertValue(cert) {
+    if (!cert || typeof cert !== 'object') return { ok: false, reason: 'missing certificate' };
+    if (Array.isArray(cert.squares)) {
+      let value = MPoly.zero();
+      for (const sq of cert.squares) {
+        const poly = (sq instanceof MPoly) ? sq : sq.poly;
+        if (!(poly instanceof MPoly)) return { ok: false, reason: 'square entry is not an MPoly' };
+        const coeff = (sq instanceof MPoly || sq.coeff == null) ? Gaussian.fromInt(1) : _toRealGaussian(sq.coeff);
+        if (!coeff.im.isZero() || coeff.re.sign() < 0) return { ok: false, reason: 'square weight must be a nonnegative real' };
+        value = value.add(poly.mul(poly).scale(coeff));
+      }
+      return { ok: true, value };
+    }
+    if (Array.isArray(cert.monomials) && Array.isArray(cert.gram)) {
+      const m = cert.monomials, G = cert.gram, n = m.length;
+      if (G.length !== n || G.some((row) => row.length !== n)) return { ok: false, reason: 'Gram matrix is not ' + n + '×' + n };
+      const Gg = G.map((row) => row.map(_toRealGaussian));
+      for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (!Gg[i][j].sub(Gg[j][i]).isZero()) return { ok: false, reason: 'Gram matrix is not symmetric' };
+      let value = MPoly.zero();
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (!Gg[i][j].isZero()) value = value.add(m[i].mul(m[j]).scale(Gg[i][j]));
+      const inertia = _rationalInertia(Gg);
+      if (inertia.neg > 0) return { ok: false, reason: 'Gram matrix is not positive semidefinite (' + inertia.neg + ' negative eigenvalue(s))', value, psd: false };
+      return { ok: true, value, psd: true };
+    }
+    return { ok: false, reason: 'unrecognized certificate shape (expected squares | gram | constraints)' };
+  }
+  function verifySOS(p, cert, opts) {
+    opts = opts || {};
+    if (!(p instanceof MPoly)) return { ok: false, reason: 'p must be an MPoly' };
+    let psdAll = true, total = MPoly.zero();
+    const pieces = [];
+    if (cert && Array.isArray(cert.constraints)) {
+      const base = cert.base || { squares: [] };
+      pieces.push({ g: null, c: base });
+      for (const con of cert.constraints) {
+        if (!(con.g instanceof MPoly)) return { ok: false, reason: 'each constraint needs a polynomial g (MPoly)' };
+        pieces.push({ g: con.g, c: con.multiplier });
+      }
+    } else {
+      pieces.push({ g: null, c: cert });
+    }
+    for (const pc of pieces) {
+      const v = _sosCertValue(pc.c);
+      if (!v.value) return { ok: false, reason: v.reason, identity: false, psd: false };   // structural: no value computed
+      if (v.psd === false) psdAll = false;                                                  // value present but Gram not PSD
+      total = total.add(pc.g ? pc.g.mul(v.value) : v.value);
+    }
+    const identity = p.sub(total).isZero();
+    return { ok: identity && psdAll, identity, psd: psdAll, reason: identity ? (psdAll ? 'verified' : 'a Gram block is not PSD') : 'identity p = Σ does not hold exactly' };
+  }
+
+  // ===========================================================================
   // SCHUR–COHN: exact count of polynomial roots inside the open unit disk.
   // For p(z) = a₀ + a₁z + … + a_n z^n (a_n ≠ 0) the Hermitian Schur–Cohn matrix
   //     C = A·Aᴴ − B·Bᴴ,   A = lower-tri Toeplitz of (a₀,…,a_{n−1}),
@@ -3697,7 +3777,7 @@
     rat, gauss, gaussInt, mpolyVar, mpolyConst, mpolyInt,
     polyFromTermList: (list) => MPoly.fromTermList(list),
     monoKey, monoCmp,
-    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, comprehensiveGroebnerSystem, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep,
+    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, comprehensiveGroebnerSystem, verifySOS, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, solveByEigenvalues, realSolutionCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,

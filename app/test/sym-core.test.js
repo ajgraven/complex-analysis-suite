@@ -942,6 +942,47 @@ module.exports = async function run() {
       ok('CGS: empty system → trivial single (zero-ideal) segment', S.comprehensiveGroebnerSystem([], ['a']).segments.length === 1);
     }
 
+    // G10 — SOS / Positivstellensatz certificate CHECKER (exact).
+    {
+      const mv = (n) => S.mpolyVar(n), mi = (k) => S.mpolyInt(k);
+      const x = mv('x'), y = mv('y');
+      // explicit square: x²−2x+1 = (x−1)²
+      ok('verifySOS: x²−2x+1 = (x−1)² (sum of squares)',
+         S.verifySOS(x.pow(2).sub(mi(2).mul(x)).add(mi(1)), { squares: [x.sub(mi(1))] }).ok === true);
+      // weighted squares: 2x²+8 = 2·x² + 8·1²  (nonnegative weights)
+      ok('verifySOS: 2x²+8 = 2·x² + 8·1² (weighted squares)',
+         S.verifySOS(mi(2).mul(x.pow(2)).add(mi(8)), { squares: [{ coeff: 2, poly: x }, { coeff: { n: 8, d: 1 }, poly: mi(1) }] }).ok === true);
+      // a NEGATIVE weight is not a valid SOS
+      ok('verifySOS: a negative square weight ⇒ ok:false',
+         S.verifySOS(x.pow(2).neg(), { squares: [{ coeff: -1, poly: x }] }).ok === false);
+      // identity must hold EXACTLY: x²+1 ≠ (x)²
+      {
+        const r = S.verifySOS(x.pow(2).add(mi(1)), { squares: [x] });
+        ok('verifySOS: x²+1 vs x² ⇒ ok:false, identity:false', r.ok === false && r.identity === false);
+      }
+      // Gram (PSD) form: x²+2xy+y² = [x,y]·[[1,1],[1,1]]·[x,y]ᵀ, Gram PSD (eigvals 2,0)
+      ok('verifySOS: Gram form x²+2xy+y² with a PSD rank-1 Gram ⇒ verified',
+         S.verifySOS(x.pow(2).add(mi(2).mul(x).mul(y)).add(y.pow(2)), { monomials: [x, y], gram: [[1, 1], [1, 1]] }).ok === true);
+      // identity holds but the Gram is INDEFINITE ⇒ ok:false (psd:false), identity:true
+      {
+        const r = S.verifySOS(x.pow(2).sub(y.pow(2)), { monomials: [x, y], gram: [[1, 0], [0, -1]] });
+        ok('verifySOS: x²−y² with an indefinite Gram ⇒ identity true, psd false, ok false',
+           r.ok === false && r.identity === true && r.psd === false);
+      }
+      // non-symmetric Gram is rejected
+      ok('verifySOS: a non-symmetric Gram ⇒ ok:false',
+         S.verifySOS(x.pow(2), { monomials: [x, y], gram: [[1, 2], [0, 0]] }).ok === false);
+      // Positivstellensatz: x+y ≥ 0 on { x ≥ 0, y ≥ 0 }  via  x+y = 0 + x·1 + y·1
+      ok('verifySOS: x+y = 0 + x·1² + y·1² (Positivstellensatz on x≥0, y≥0)',
+         S.verifySOS(x.add(y), { base: { squares: [] }, constraints: [
+           { g: x, multiplier: { squares: [mi(1)] } },
+           { g: y, multiplier: { squares: [mi(1)] } },
+         ] }).ok === true);
+      // Positivstellensatz with a WRONG multiplier ⇒ identity fails
+      ok('verifySOS: a Positivstellensatz whose identity fails ⇒ ok:false',
+         S.verifySOS(x.add(y), { constraints: [{ g: x, multiplier: { squares: [mi(1)] } }] }).ok === false);
+    }
+
     // G7 — multivariate GCD over ℚ(i) (recursive primitive PRS) + zero-dim radical.
     {
       const mv = (n) => S.mpolyVar(n), mi = (k) => S.mpolyInt(k);
