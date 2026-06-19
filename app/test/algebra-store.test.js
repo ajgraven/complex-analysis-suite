@@ -254,6 +254,34 @@ module.exports = async function run() {
        sysSolve.solutions.every((s) => Math.abs(Math.abs(s.x.re) - 1) < 1e-7 && Math.abs(s.y.re - s.x.re) < 1e-7));
   }
 
+  // ---- C4: hard-filter the solver output by the active branch's assumptions ----
+  {
+    const S = QD.Sym; const mv = (n) => S.mpolyVar(n), mi = (k) => S.mpolyInt(k);
+    const mkSys = (locEq) => ({
+      model: 'conjugate', formulation: 'classical', w0Fixed: null,
+      blocks: { locator: [{ eq: locEq, label: 'loc' }], star: [{ eq: mv('A1_1').sub(mv('z1')), label: 'star' }], gauge: [] },
+    });
+    // (a) z₁·z̄₁ + 1 = 0  ⟹ (under z₁ REAL, z̄₁→z₁)  z₁²+1 = 0  ⟹ z₁ = ±i: BOTH violate "z₁ real".
+    const sa = QD.AlgebraStore.create();
+    sa.seedFromSystem(mkSys(mv('z1').mul(mv('zb1')).add(mi(1))), { withConjugates: false });
+    ok('C4 setup: assumeReal(z1) appended a column', sa.assumeReal(['z1']).ok);
+    const solR = sa.solve(sa.currentColumnIds());
+    ok('C4: assuming z₁ REAL hard-drops the ±i solutions',
+       solR.ok && solR.solutions.length === 0 && solR.prunedByAssumptions === 2 && (solR.allSolutions || []).length === 2,
+       JSON.stringify({ n: solR.solutions && solR.solutions.length, pruned: solR.prunedByAssumptions, reason: solR.reason }));
+    // opt-out returns the full (unpruned) set
+    const solAll = sa.solve(sa.currentColumnIds(), { pruneByAssumptions: false });
+    ok('C4: pruneByAssumptions:false keeps all solutions', solAll.ok && solAll.solutions.length === 2 && !solAll.prunedByAssumptions);
+    // (b) z₁·z̄₁ − 1 = 0  ⟹ (under z₁ IMAGINARY, z̄₁→−z₁)  −z₁²−1 = 0  ⟹ z₁ = ±i: consistent ⇒ KEPT.
+    const sb = QD.AlgebraStore.create();
+    sb.seedFromSystem(mkSys(mv('z1').mul(mv('zb1')).sub(mi(1))), { withConjugates: false });
+    ok('C4 setup: assumeImaginary(z1) appended a column', sb.assumeImaginary(['z1']).ok);
+    const solI = sb.solve(sb.currentColumnIds());
+    ok('C4: assuming z₁ IMAGINARY keeps the ±i solutions (re≈0, none dropped)',
+       solI.ok && solI.solutions.length === 2 && !solI.prunedByAssumptions,
+       JSON.stringify({ n: solI.solutions && solI.solutions.length, pruned: solI.prunedByAssumptions, reason: solI.reason }));
+  }
+
   // ---- async (worker-offloaded) ops, exercised via the main-thread fallback ----
   {
     ok('QD.SymWorker exposed', !!QD.SymWorker && typeof QD.SymWorker.run === 'function');

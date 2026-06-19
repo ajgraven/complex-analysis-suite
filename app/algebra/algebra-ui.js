@@ -1590,7 +1590,9 @@
         if (!r.ok) { showError('Numeric solve: ' + withGuidance(r.reason || 'unavailable')); return; }
         // The eigenvalue fallback can return a PARTIAL set on clustered/near-multiple roots.
         const partial = r.complete === false ? ' — PARTIAL: clustered roots, some solutions may be missing' : '';
-        toast('Solved: ' + r.solutions.length + ' solution(s) (dimension ' + r.dimension + ')' + partial + '. See console for coordinates.',
+        // C4: report how many complex solutions the active assumptions filtered out.
+        const pruned = r.prunedByAssumptions ? ' (' + r.prunedByAssumptions + ' dropped by active assumptions)' : '';
+        toast('Solved: ' + r.solutions.length + ' solution(s)' + pruned + ' (dimension ' + r.dimension + ')' + partial + '. See console for coordinates.',
           partial ? { kind: 'error' } : {});
         try {
           console.table(r.solutions.map((s) => {

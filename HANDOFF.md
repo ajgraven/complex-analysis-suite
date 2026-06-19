@@ -16,7 +16,7 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `e1c5fc90d2`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `cf3f9c8203`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
@@ -348,8 +348,14 @@ its own merged PR), with one feature **in progress on a branch**:
       lean-on-RCTD). Verified by SAMPLING (each segment's gb vs the freshly-computed GB at random in-segment
       points). **⚠ MATH-REVIEW (Andrew):** full Suzuki–Sato is subtle; verified by oracle, not machine-proved.
       `sym-core` 254.
-    **Remaining engine work:** **C4** hard-filter assumption pruning of solver output (Andrew's call),
-    **and Phase 6** (G10 SOS checker, G11 msolve bridge, D5 show-steps).
+    • **C4** hard-filter assumption pruning of solver output (`<this commit>`) — `store.solve`/`solveAsync`
+      now DROP any conjugate-model solution that violates the active branch's assumptions (a variable asserted
+      REAL with a nonzero imaginary part, an IMAGINARY one with a nonzero real part, or a value disagreeing
+      with a pinned/φ(0) constant). Andrew's call: hard-filter (not annotate). The dropped count is reported
+      (`prunedByAssumptions`), originals kept as `allSolutions`, opt-out via `pruneByAssumptions:false`; the
+      "Solve" toast shows "(N dropped by active assumptions)". `algebra-store` 221. (solveReal already enforces
+      reality structurally via the reim transform.) **The roadmap's Phase 5 (parametric) is complete.**
+    **Remaining engine work:** **Phase 6** (G10 SOS checker, G11 msolve bridge, D5 show-steps).
   **Deferred (not started):** **#6 P3** — the worked PARAMETRIC cardioid example (run the interior
   `pointFunctionalSystem` (M₀,M₁) system through Maple RCTD offline, capture the qd-rctd cell JSON as a
   regression fixture + an AHARONOV_SHAPIRO.md section; needs an offline Maple run). Exotic/research-tier:

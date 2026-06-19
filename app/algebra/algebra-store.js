@@ -1248,11 +1248,45 @@
           : { ok: false, reason: (err && err.message) || String(err) });
     }
 
+    // C4 — HARD-FILTER the solver output by the ACTIVE branch's assumptions. A complex
+    // solution of the conjugate-model system that violates an active assumption — a variable
+    // asserted REAL coming out with a nonzero imaginary part, an IMAGINARY one with a nonzero
+    // real part, or a value disagreeing with a pinned/φ(0) constant — is not an actual QD on
+    // this branch, so it is DROPPED (Andrew's call: hard-filter, not annotate). The dropped
+    // count is reported as `prunedByAssumptions` and the originals kept as `allSolutions` so
+    // nothing is silently lost. Opt out with opts.pruneByAssumptions === false. (solveReal
+    // already enforces reality structurally via the reim transform, so this is the lever for
+    // the conjugate-model `solve`.)
+    function _pruneSolutionsByAssumptions(result, opts) {
+      if (!result || !result.ok || !Array.isArray(result.solutions)) return result;
+      if (opts && opts.pruneByAssumptions === false) return result;
+      const a = assumeOf();
+      const reals = new Set(a.realVars || []), imags = new Set(a.imagVars || []);
+      const kv = knownValues();
+      const tol = (opts && opts.assumeTol != null) ? opts.assumeTol : 1e-6;
+      if (!reals.size && !imags.size && !Object.keys(kv).length) return result;
+      const consistent = (sol) => {
+        for (const v of Object.keys(sol)) {
+          const val = sol[v]; if (!val) continue;
+          const prim = _primalName(v);
+          if ((reals.has(prim) || reals.has(v)) && Math.abs(val.im || 0) > tol) return false;
+          if ((imags.has(prim) || imags.has(v)) && Math.abs(val.re || 0) > tol) return false;
+          const k = kv[v] || kv[prim];
+          if (k && (Math.abs((val.re || 0) - (k.re || 0)) > tol || Math.abs((val.im || 0) - (k.im || 0)) > tol)) return false;
+        }
+        return true;
+      };
+      const kept = result.solutions.filter(consistent);
+      const pruned = result.solutions.length - kept.length;
+      if (!pruned) return Object.assign({}, result, { prunedByAssumptions: 0 });
+      return Object.assign({}, result, { solutions: kept, allSolutions: result.solutions, prunedByAssumptions: pruned });
+    }
+
     // Numeric solutions of the selected (or all) equality nodes via the shape-lemma
     // solver (grevlex GB → FGLM to lex → univariate Durand–Kerner + back-substitution).
     // Returns Sym.solveZeroDim's result: { ok, solutions:[{var:{re,im}}], dimension, … }
-    // or { ok:false, reason } (not zero-dim / not in shape position / no convergence →
-    // route to the CAS bridge).
+    // (filtered by the active assumptions — see _pruneSolutionsByAssumptions, C4) or
+    // { ok:false, reason } (not zero-dim / not in shape position / no convergence → CAS bridge).
     function solve(ids, opts) {
       const S = getSym();
       opts = opts || {};
@@ -1260,7 +1294,7 @@
       if (polys.length < 1) return { ok: false, reason: 'no equality nodes to solve' };
       const vars = opts.vars || _varsOf(polys);
       const rootFinder = opts.rootFinder || defaultRootFinder();
-      try { return S.solveZeroDim(polys, Object.assign({}, opts, { vars, rootFinder })); }
+      try { return _pruneSolutionsByAssumptions(S.solveZeroDim(polys, Object.assign({}, opts, { vars, rootFinder })), opts); }
       catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
     }
     // Off-main-thread numeric solve via QD.SymWorker (Promise). runOpts: { onProgress,
@@ -1275,7 +1309,7 @@
       const vars = opts.vars || _varsOf(polys);
       const payload = { polys: polys.map((p) => p.termList()), vars, solveVar: opts.solveVar, opts: _capOpts(opts) };
       return SW.run('solveZeroDim', payload, runOpts || {}).then(
-        (res) => res,
+        (res) => _pruneSolutionsByAssumptions(res, opts),
         (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
           : { ok: false, reason: (err && err.message) || String(err) });
     }
