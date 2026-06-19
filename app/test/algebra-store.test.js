@@ -282,6 +282,41 @@ module.exports = async function run() {
        JSON.stringify({ n: solI.solutions && solI.solutions.length, pruned: solI.prunedByAssumptions, reason: solI.reason }));
   }
 
+  // ---- D5: progressive "show steps" derivation of a node ----
+  {
+    // a seeded node has no inputs ⇒ a single "original" step
+    const st0 = QD.AlgebraStore.create(); st0.seedFromSystem(system);
+    const seed = st0.list()[0];
+    const ds0 = st0.derivationSteps(seed.id);
+    ok('derivationSteps: a seeded node → one (input-less) step', ds0.ok && ds0.steps.length === 1 && ds0.progressive === false);
+
+    // substitution: replayed one variable at a time; the final step reproduces the node poly
+    const stS = QD.AlgebraStore.create(); stS.seedFromSystem(system);
+    const rs = stS.substituteValues([{ varName: 'A1_1', value: { re: 0.5, im: 0 } }], { propagate: false });
+    ok('derivationSteps setup: substituteValues created a column', rs.ok && rs.created.length > 0);
+    // pick a created node that actually involves A1_1 (so a substitution happened)
+    const subNode = rs.created.find((n) => n.provenance && n.provenance.op === 'substitute') || rs.created[0];
+    const dsS = stS.derivationSteps(subNode.id);
+    ok('derivationSteps: substitution is progressive (start + one step per variable) and the last step equals the node',
+       dsS.ok && dsS.progressive === true && dsS.steps.length >= 2 && dsS.steps[dsS.steps.length - 1].poly.equals(subNode.poly));
+
+    // assume-real: progressive, final reproduces the node poly
+    const stR = QD.AlgebraStore.create(); stR.seedFromSystem(system);
+    const rr = stR.assumeReal(['z1']);
+    const realNode = rr.created.find((n) => n.provenance && n.provenance.op === 'assume-real') || rr.created[0];
+    const dsR = stR.derivationSteps(realNode.id);
+    ok('derivationSteps: assume-real is progressive and the last step equals the node',
+       dsR.ok && dsR.progressive === true && dsR.steps[dsR.steps.length - 1].poly.equals(realNode.poly));
+
+    // engine reduction (resultant eliminate): a non-progressive input(s) → method → output summary
+    const stE = QD.AlgebraStore.create(); stE.seedFromSystem(system);
+    const ns = stE.list(); const shared = stE.sharedVars(ns[0].id, ns[1].id);
+    const el = stE.eliminate(ns[0].id, ns[1].id, shared[0]);
+    const dsE = stE.derivationSteps(el.node.id);
+    ok('derivationSteps: an eliminate node → input(s) + method summary, last step is the node poly',
+       dsE.ok && dsE.progressive === false && dsE.steps.length >= 2 && dsE.steps[dsE.steps.length - 1].poly.equals(el.node.poly));
+  }
+
   // ---- async (worker-offloaded) ops, exercised via the main-thread fallback ----
   {
     ok('QD.SymWorker exposed', !!QD.SymWorker && typeof QD.SymWorker.run === 'function');

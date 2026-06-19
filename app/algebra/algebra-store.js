@@ -1655,6 +1655,72 @@
       const vars = opts.vars || msolveVarOrder(opts.column, opts);
       return CAS.parseMsolveSolutions(text, { vars });
     }
+    // D5 — progressive "show steps" for how a derived node was obtained from its input(s).
+    // For the substitution-family reductions (substitute / assume-real / assume-imaginary /
+    // fix-w0) the transformation is REPLAYED one variable at a time on the source equation, so
+    // each step carries the running polynomial (a genuine intermediate, recomputed exactly via
+    // QD.Sym) — the final step provably equals this node's polynomial. For engine reductions
+    // (resultant / Gröbner / triangular / …) a full internal trace is intractable, so the steps
+    // are an honest input(s) → method → output summary. Returns { ok, op, progressive, steps:[{
+    // rule, poly }] }; the UI renders each `poly` as KaTeX. Seeded (input-less) nodes give a
+    // single "original equation" step.
+    function derivationSteps(id) {
+      const S = getSym(), QC = getQC();
+      const n = get(id);
+      if (!n) return { ok: false, reason: 'no such node' };
+      const prov = n.provenance || {};
+      const op = prov.op || 'generate';
+      const inputs = (prov.inputs || []).map(get).filter(Boolean);
+      const steps = [];
+      const push = (rule, poly) => steps.push({ rule, poly });
+      if (!inputs.length) { push(n.label || 'original equation (seeded)', n.poly); return { ok: true, op, progressive: false, steps }; }
+      const base = inputs[0];
+      const replayHead = () => push('start — column ' + base.column + ' equation', base.poly);
+
+      if (op === 'substitute' && Array.isArray(prov.variables)) {
+        replayHead(); let cur = base.poly;
+        for (const rec of prov.variables) {
+          const g = _gaussFromRecord(rec.value); const sub = {}; sub[rec.name] = S.mpolyConst(g);
+          if (rec.conjugate) sub[rec.conjugate] = S.mpolyConst(g.conj());
+          cur = cur.subst(sub);
+          push('substitute ' + rec.name + ' = ' + _valShort(rec.value.approx) + (rec.conjugate ? ' (and ' + rec.conjugate + ')' : ''), cur);
+        }
+        return { ok: true, op, progressive: true, steps };
+      }
+      if (op === 'fix-w0' && prov.value) {
+        replayHead(); const g = _gaussFromRecord(prov.value); const sub = { w0: S.mpolyConst(g) };
+        if (QC && QC.conjVarName) { const c = QC.conjVarName('w0'); if (c !== 'w0') sub[c] = S.mpolyConst(g.conj()); }
+        push('fix φ(0) = w0 = ' + _valShort(prov.value.approx), base.poly.subst(sub));
+        return { ok: true, op, progressive: true, steps };
+      }
+      if ((op === 'assume-real' || op === 'assume-imaginary') && Array.isArray(prov.vars) && QC && QC.conjVarName) {
+        replayHead(); let cur = base.poly;
+        for (const v of prov.vars) {
+          const c = QC.conjVarName(v); if (c === v) continue;
+          if (op === 'assume-real') { cur = cur.relabel((nm) => (nm === c ? v : nm)); push('assume ' + v + ' real (' + c + ' ≡ ' + v + ')', cur); }
+          else { const sub = {}; sub[c] = S.mpolyVar(v).neg(); cur = cur.subst(sub); push('assume ' + v + ' imaginary (' + c + ' ≡ −' + v + ')', cur); }
+        }
+        return { ok: true, op, progressive: true, steps };
+      }
+      // engine reductions: input(s) → method → output summary (no fine-grained internal trace)
+      const method = {
+        resultant: 'eliminate via the resultant Res_' + (prov.variable || '?') + '(P, Q)',
+        groebner: 'Gröbner basis (' + (prov.order || 'grevlex') + ((prov.eliminate && prov.eliminate.length) ? ', eliminating ' + prov.eliminate.join(', ') : '') + ')',
+        triangular: 'triangular (Wu) decomposition' + ((n.meta && n.meta.mainVar) ? ', main variable ' + n.meta.mainVar : ''),
+        'linear-reduce': 'linear propagation' + ((prov.eliminated && prov.eliminated.length) ? ' (eliminate ' + prov.eliminated.join(', ') + ')' : ''),
+        propagate: 'propagate the constraint into the current system',
+        conjugate: 'conjugate companion (p̄ = 0)',
+        duplicate: 'duplicate',
+        factor: 'factor case',
+        identify: 'identify ' + (prov.drop || '') + ' = ' + (prov.keep || ''),
+        'identify-conj': 'identify ' + (prov.var || '') + ' via conj(' + (prov.other || '') + ')',
+        resolvent: 'resolvent (characteristic polynomial of multiplication-by-v)',
+        rctd: 'imported RCTD cell',
+      }[op] || op;
+      inputs.forEach((inp, k) => push('input ' + (k + 1) + (inputs.length > 1 ? '/' + inputs.length : '') + ' — column ' + inp.column, inp.poly));
+      push(method + ' →', n.poly);
+      return { ok: true, op, progressive: false, steps };
+    }
     // ---- E4: reproducible SymPy derivation script for the ACTIVE branch ----
     // Conjugate of a value record { re:[n,d], im:[n,d] } (negate the imaginary part).
     function _conjRec(rec) {
@@ -1927,7 +1993,7 @@
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
       currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
-      sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, msolveColumn, msolveVarOrder, importMsolve, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
+      sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, msolveColumn, msolveVarOrder, importMsolve, derivationSteps, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       forkTrack, setActiveTrack, deleteTrack, tracks: tracksList,
       undo, redo, reset,

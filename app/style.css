@@ -918,6 +918,12 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #controls-algebra .algebra-solve-panel { margin-top: 6px; border-top: 1px dashed var(--c-border-soft, #eee); padding-top: 4px; }
 #controls-algebra .algebra-solve-out { margin-top: 4px; }
 #controls-algebra .algebra-solve-root { overflow-x: auto; padding: 3px 0; }
+/* D5 — step-by-step derivation panel in the inspector */
+#controls-algebra .algebra-steps-panel { margin-top: 6px; border-top: 1px dashed var(--c-border-soft, #eee); padding-top: 4px; }
+#controls-algebra .algebra-steps-list { margin: 4px 0 0; padding-left: 1.4em; }
+#controls-algebra .algebra-steps-list li { margin-bottom: 5px; }
+#controls-algebra .algebra-step-rule { font-size: 0.85em; color: var(--c-muted, #777); }
+#controls-algebra .algebra-step-eq { overflow-x: auto; padding: 2px 0; }
 
 /* Floating view/history toolbar over the graph */
 #algebra-graph .algebra-toolbar {

@@ -868,6 +868,32 @@
       box.appendChild(chooser);
     }
 
+    // D5: render the step-by-step derivation of a node in the inspector (toggle). Each step
+    // shows the rule applied and the resulting equation (KaTeX). For substitution / reality
+    // reductions the steps are genuine intermediates replayed one variable at a time; for
+    // engine reductions they summarize input(s) → method → output.
+    function doShowSteps(id, box) {
+      const RL = QD.RiemannLatex;
+      let panel = box.querySelector('.algebra-steps-panel');
+      if (panel) { panel.remove(); return; }                 // toggle off
+      const r = store.derivationSteps(id);
+      panel = document.createElement('div'); panel.className = 'algebra-steps-panel';
+      if (!r.ok) { const e = document.createElement('div'); e.className = 'warn'; e.textContent = 'No steps: ' + (r.reason || 'unavailable'); panel.appendChild(e); box.appendChild(panel); return; }
+      const head = document.createElement('div'); head.className = 'hint';
+      head.textContent = r.progressive ? 'Derivation (' + r.op + ') — replayed step by step:' : 'Derivation (' + r.op + ') — input(s) → method → output:';
+      panel.appendChild(head);
+      const ol = document.createElement('ol'); ol.className = 'algebra-steps-list';
+      r.steps.forEach((st) => {
+        const li = document.createElement('li');
+        const rule = document.createElement('div'); rule.className = 'algebra-step-rule'; rule.textContent = st.rule;
+        const eq = document.createElement('div'); eq.className = 'algebra-step-eq';
+        const tex = st.poly.toLatex(latexOf);
+        if (RL && RL.render) RL.render(eq, tex, true); else eq.textContent = tex;
+        li.appendChild(rule); li.appendChild(eq); ol.appendChild(li);
+      });
+      panel.appendChild(ol); box.appendChild(panel);
+    }
+
     // Solve a single equation for one variable IN RADICALS (closed form). Shows a
     // variable picker; the result (closed-form roots) renders as KaTeX in the
     // inspector + the verdict card, with a numeric "verified ✓ (N samples)" line.
@@ -975,6 +1001,12 @@
         acts.appendChild(mkBtn('Duplicate', 'Copy this equation into a new node', () => { if (busyGuard()) return; if (store.duplicate(sel[0])) { rerender(); toast('Duplicated ' + n.label); } }));
         acts.appendChild(mkBtn('Copy LaTeX', 'Copy this equation as LaTeX', () => copyNodeLatex(sel[0])));
         acts.appendChild(mkBtn('Copy Mathematica', 'Copy this equation as Wolfram-Language (lhs == 0)', () => { const code = store.mathematicaNode(sel[0]); if (code) writeClipboard(code, n.label + ' (Mathematica)'); }));
+        // D5: show how this derived equation was obtained from its input(s) — for substitutions
+        // / reality assumptions the transformation is replayed one variable at a time (genuine
+        // intermediate polynomials); engine reductions get an input → method → output summary.
+        if (n.provenance && (n.provenance.inputs || []).length) {
+          acts.appendChild(mkBtn('Show steps', 'Show how this equation was derived from its input(s); substitutions and reality assumptions are replayed one variable at a time', () => doShowSteps(sel[0], box)));
+        }
         acts.appendChild(mkBtn('Delete', 'Delete this node and its descendants', () => { if (busyGuard()) return; const removed = store.deleteNode(sel[0]); if (canvas) canvas.clearSelection(); rerender(); toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)'); }));
         // Generate the conjugate equation p̄ = 0 (folding in variables already assumed real).
         // Useful for derived equations that did not get a seed-time companion. Equalities/≠ only.

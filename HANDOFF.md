@@ -16,7 +16,7 @@ explain back to him.
 
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
-lint` clean; `npm run version:check` clean** (cache hash `91ee3790fc`). The app is
+lint` clean; `npm run version:check` clean** (cache hash `39aa33c70f`). The app is
 **publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
 static host). `main` is at the most-recent merges, newest first (all on `main`, each
 its own merged PR), with one feature **in progress on a branch**:
@@ -368,7 +368,15 @@ its own merged PR), with one feature **in progress on a branch**:
       intervals) back into solution boxes. Store `msolveColumn`/`msolveVarOrder`/`importMsolve`; a "Copy
       msolve (.ms)" export button in the Algebra Export section. The user runs msolve offline (like the RCTD
       bridge); nothing executes in-browser. `cas-export` 34, `algebra-store` 226.
-    **Remaining engine work:** **D5** progressive show-steps (the last Phase-6 item).
+    • **D5** progressive show-steps (`<this commit>`) — `store.derivationSteps(id)` reconstructs how a derived
+      node was obtained from its input(s): for substitution / assume-real / assume-imaginary / fix-φ(0) it
+      REPLAYS the transformation one variable at a time (genuine intermediate polynomials, recomputed exactly
+      — the last step provably equals the node); engine reductions (resultant / Gröbner / triangular / …) get
+      an honest input(s) → method → output summary. A "Show steps" button in the node inspector renders the
+      steps as KaTeX (toggle). `algebra-store` 231. **The roadmap's Phase 6 — and the entire 23-item Algebra
+      roadmap — is now COMPLETE.**
+    **Remaining engine work:** none on the roadmap. Deferred (documented, not started): G7 partial-fractions
+    follow-on; the deeper RCTD/CAS-bridge automation; an in-browser SDP for SOS *search* (G10 is checker-only).
   **Deferred (not started):** **#6 P3** — the worked PARAMETRIC cardioid example (run the interior
   `pointFunctionalSystem` (M₀,M₁) system through Maple RCTD offline, capture the qd-rctd cell JSON as a
   regression fixture + an AHARONOV_SHAPIRO.md section; needs an offline Maple run). Exotic/research-tier:
