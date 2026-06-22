@@ -1,12 +1,11 @@
 /**
- * Canvas <-> plot coordinate transforms (the JavaScript-side single source of
- * truth). The CindyScript side defines matching `PltToCanv*` / `CanvToPlt*`
- * functions in {@link ./cindyscript/init.ts}; the two MUST agree. The inverse
- * property between these functions is covered by `test/transforms.test.ts`.
+ * Canvas <-> plot coordinate transforms. The canvas uses the fixed visible
+ * rectangle `[0,2] x [0,2]`, so the centre of the plot maps to canvas coordinate
+ * `(1, 1)` and one plot unit spans `zoom` canvas units. The inverse property
+ * between these functions is covered by `test/transforms.test.ts`.
  *
- * The canvas uses the fixed visible rectangle `[0,2] x [0,2]`, so the centre of
- * the plot maps to canvas coordinate `(1, 1)` and one plot unit spans `zoom`
- * canvas units.
+ * The WebGL fragment shader does its own pixel→plot mapping (see
+ * {@link ./render/shaderBuilder}); the overlay uses these helpers for plot↔pixel.
  */
 
 import type { Vec2 } from "./arrays";
