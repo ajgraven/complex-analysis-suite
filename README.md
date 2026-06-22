@@ -207,10 +207,11 @@ already relative.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add a preset, extend the
-CindyScript, add a control, and the pre-PR checklist — plus the one runtime
-gotcha (the CindyScript `window` boundary).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add a preset, add a function to
+the expression language, change the colouring, add a control, and the pre-PR
+checklist — plus the two gotchas (keeping the GLSL/JS backends in sync and the
+df64 reference/barrier).
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Bundled CindyJS/CindyGL are Apache-2.0.
+MIT — see [LICENSE](LICENSE).

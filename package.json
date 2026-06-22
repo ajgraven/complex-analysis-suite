@@ -1,7 +1,7 @@
 {
   "name": "complex-dynamics-js",
   "version": "1.0.0",
-  "description": "Interactive complex-dynamics visualizer (parameter space + dynamical plane) built on CindyJS/CindyGL.",
+  "description": "Interactive complex-dynamics visualizer (parameter space + dynamical plane) on a pure WebGL2 engine.",
   "type": "module",
   "license": "MIT",
   "author": "Andrew Graven <andrew@graven.com>",
