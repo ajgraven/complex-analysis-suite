@@ -1,14 +1,12 @@
 /**
- * Application entry point. Creates the two plots, wires the apply/preset
- * orchestration, and exposes on `window` the handful of symbols that the
- * runtime CindyScript `javascript(...)` callbacks and the inline HTML handlers
- * reference by name.
+ * Application entry point. Creates the two WebGL2 plots ({@link GLPlot}), wires
+ * the apply/preset orchestration, and (for now) a basic per-canvas PNG download.
+ * Overlay rendering, native interaction, and full high-resolution export are
+ * layered on in subsequent steps of the WebGL port.
  */
 
 import "./styles/main.css";
-import { scaleArray } from "./arrays";
-import { formatComplex } from "./complex";
-import { FractalPlot } from "./fractalPlot";
+import { GLPlot } from "./render/glPlot";
 import { dynPresets, paramPresets, type Preset, type PresetName } from "./presets";
 import { byId } from "./ui/dom";
 import {
@@ -25,43 +23,13 @@ import {
   getParamResInput,
   getParamZoomInput,
   populateInputs,
-  setCInput,
-  setDynCenterInput,
-  setDynZoomInput,
-  setParamCenterInput,
-  setParamZoomInput,
 } from "./ui/controls";
 
-const dynamicalPlot = new FractalPlot(
-  "dynamicalPlot",
-  dynPresets.mandelbrot,
-  "JCSCanvas",
-  "JCSCanvas",
-  {
-    keydown: ["setDynZoomInput(dynamicalPlot.zoom)", "setDynCenterInput(dynamicalPlot.center)"],
-  },
-  "dyn",
-  500,
-  500,
-  500,
-);
-
-const parameterPlot = new FractalPlot(
-  "parameterPlot",
+const dynamicalPlot = new GLPlot(byId<HTMLCanvasElement>("JCSCanvas"), dynPresets.mandelbrot, "dyn");
+const parameterPlot = new GLPlot(
+  byId<HTMLCanvasElement>("MCSCanvas"),
   paramPresets.mandelbrot,
-  "MCSCanvas",
-  "MCSCanvas",
-  {
-    move: [
-      "dynamicalPlot.c = formatComplex(parameterPlot.z0)",
-      "if (parameterPlot.isPtSelected) {setCInput(parameterPlot.z0)}",
-    ],
-    keydown: ["setParamZoomInput(parameterPlot.zoom)", "setParamCenterInput(parameterPlot.center)"],
-  },
   "param",
-  500,
-  500,
-  500,
 );
 
 /** Current control-input values as `[parameterPreset, dynamicalPreset]`. */
@@ -90,7 +58,7 @@ function readPresetsFromInputs(): [Preset, Preset] {
   ];
 }
 
-/** Apply the current input values to both plots and resize their render images. */
+/** Apply the current input values to both plots and resize their render targets. */
 function applyChanges(): void {
   const [paramPreset, dynPreset] = readPresetsFromInputs();
   dynamicalPlot.ApplyPreset(dynPreset);
@@ -106,9 +74,22 @@ function applyPreset(name: PresetName): void {
   parameterPlot.ApplyPreset(paramPresets[name]);
 }
 
+/** Download a plot's current canvas as a PNG (basic export; high-res export is ported next). */
+function downloadCanvas(plot: GLPlot, canvasId: string, filename: string): void {
+  plot.render();
+  byId<HTMLCanvasElement>(canvasId).toBlob((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, "image/png");
+}
+
 // --- wire up the UI controls --------------------------------------------
 
-// Apply changes when Enter is pressed.
 document.addEventListener("keyup", (event) => {
   if (event.key === "Enter") applyChanges();
 });
@@ -118,37 +99,8 @@ byId("apply_preset").addEventListener("click", () => {
   applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
 });
 byId("print_param_space").addEventListener("click", () => {
-  parameterPlot.exportImage(byId<HTMLInputElement>("mImageName").value);
+  downloadCanvas(parameterPlot, "MCSCanvas", byId<HTMLInputElement>("mImageName").value);
 });
 byId("print_dyn_plane").addEventListener("click", () => {
-  dynamicalPlot.exportImage(byId<HTMLInputElement>("jImageName").value);
-});
-
-// --- expose the runtime-global surface ----------------------------------
-// The CindyScript callbacks are evaluated in global (window) scope by CindyJS,
-// so every symbol they reference by name must live on `window`.
-declare global {
-  interface Window {
-    dynamicalPlot: FractalPlot;
-    parameterPlot: FractalPlot;
-    scaleArray: typeof scaleArray;
-    formatComplex: typeof formatComplex;
-    setCInput: typeof setCInput;
-    setDynZoomInput: typeof setDynZoomInput;
-    setDynCenterInput: typeof setDynCenterInput;
-    setParamZoomInput: typeof setParamZoomInput;
-    setParamCenterInput: typeof setParamCenterInput;
-  }
-}
-
-Object.assign(window, {
-  dynamicalPlot,
-  parameterPlot,
-  scaleArray,
-  formatComplex,
-  setCInput,
-  setDynZoomInput,
-  setDynCenterInput,
-  setParamZoomInput,
-  setParamCenterInput,
+  downloadCanvas(dynamicalPlot, "JCSCanvas", byId<HTMLInputElement>("jImageName").value);
 });
