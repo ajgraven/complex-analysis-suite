@@ -14,7 +14,7 @@ import { canvToPlot, plotRange, plotToCanv } from "../transforms";
 import type { Preset } from "../presets";
 import { parse } from "../expr/parser";
 import type { Node } from "../expr/ast";
-import { buildFragmentShader, VERTEX_SHADER } from "./shaderBuilder";
+import { buildFragmentShader, VERTEX_SHADER, type Precision } from "./shaderBuilder";
 
 export type FractType = "dyn" | "param";
 
@@ -53,11 +53,32 @@ function createProgram(gl: WebGL2RenderingContext, vs: string, fs: string): WebG
 
 interface Uniforms {
   uResolution: WebGLUniformLocation | null;
-  uCenter: WebGLUniformLocation | null;
   uZoom: WebGLUniformLocation | null;
   uN: WebGLUniformLocation | null;
   uC: WebGLUniformLocation | null;
   uFractType: WebGLUniformLocation | null;
+  uCenter: WebGLUniformLocation | null; // single precision
+  uCenterX: WebGLUniformLocation | null; // df64 hi/lo
+  uCenterY: WebGLUniformLocation | null;
+  uOne: WebGLUniformLocation | null; // df64 optimization barrier
+}
+
+interface CompiledProgram {
+  program: WebGLProgram;
+  uniforms: Uniforms;
+}
+
+/**
+ * Switch to the df64 program once `zoom * max(1, |center|)` exceeds this — i.e.
+ * when single-precision (~24-bit mantissa) would start to pixelate. Below it,
+ * single precision renders (faster).
+ */
+const DF64_THRESHOLD = 8000;
+
+/** Split a double into a df64 (hi, lo) pair of IEEE singles for a uniform. */
+function splitDouble(x: number): [number, number] {
+  const hi = Math.fround(x);
+  return [hi, Math.fround(x - hi)];
 }
 
 export class GLPlot {
@@ -65,8 +86,10 @@ export class GLPlot {
   private readonly canvas: HTMLCanvasElement;
   private readonly fractType: FractType;
 
-  private program: WebGLProgram | null = null;
-  private uniforms: Uniforms | null = null;
+  private programs: { single: CompiledProgram | null; df64: CompiledProgram | null } = {
+    single: null,
+    df64: null,
+  };
   private renderScheduled = false;
   private _draft = false;
   /** Last compile error message, or null when the current program is valid. */
@@ -129,30 +152,66 @@ export class GLPlot {
     this.scheduleRender();
   }
 
-  /** Rebuild the fragment program from the current f/escape ASTs. Keeps the old one on error. */
-  private rebuild(): void {
-    try {
-      const gl = this.gl;
-      const program = createProgram(
-        gl,
-        VERTEX_SHADER,
-        buildFragmentShader(this._fAst, this._escAst, "single"),
-      );
-      if (this.program) gl.deleteProgram(this.program);
-      this.program = program;
-      this.uniforms = {
+  /** Compile one precision variant into a {@link CompiledProgram}. */
+  private compile(precision: Precision): CompiledProgram {
+    const gl = this.gl;
+    const program = createProgram(
+      gl,
+      VERTEX_SHADER,
+      buildFragmentShader(this._fAst, this._escAst, precision),
+    );
+    return {
+      program,
+      uniforms: {
         uResolution: gl.getUniformLocation(program, "uResolution"),
-        uCenter: gl.getUniformLocation(program, "uCenter"),
         uZoom: gl.getUniformLocation(program, "uZoom"),
         uN: gl.getUniformLocation(program, "uN"),
         uC: gl.getUniformLocation(program, "uC"),
         uFractType: gl.getUniformLocation(program, "uFractType"),
-      };
-      this.lastError = null;
+        uCenter: gl.getUniformLocation(program, "uCenter"),
+        uCenterX: gl.getUniformLocation(program, "uCenterX"),
+        uCenterY: gl.getUniformLocation(program, "uCenterY"),
+        uOne: gl.getUniformLocation(program, "uOne"),
+      },
+    };
+  }
+
+  /**
+   * Rebuild both precision programs from the current f/escape ASTs, each
+   * independently so a single-precision failure (bad expression) or a df64
+   * failure (driver limits) doesn't take down the other. Keeps the old program
+   * for whichever variant fails.
+   */
+  private rebuild(): void {
+    const gl = this.gl;
+    let single = this.programs.single;
+    let df64 = this.programs.df64;
+    let error: string | null = null;
+    try {
+      const next = this.compile("single");
+      if (single) gl.deleteProgram(single.program);
+      single = next;
     } catch (err) {
-      this.lastError = err instanceof Error ? err.message : String(err);
-      console.error(`[${this.fractType}] shader build failed:`, this.lastError);
+      error = err instanceof Error ? err.message : String(err);
+      console.error(`[${this.fractType}] single shader build failed:`, error);
     }
+    try {
+      const next = this.compile("df64");
+      if (df64) gl.deleteProgram(df64.program);
+      df64 = next;
+    } catch (err) {
+      // df64 is optional — losing it only disables deep zoom.
+      console.warn(`[${this.fractType}] df64 shader build failed (deep zoom disabled):`, err);
+    }
+    this.programs = { single, df64 };
+    this.lastError = error;
+  }
+
+  /** Pick the precision to render at, given the current zoom and centre. */
+  private activePrecision(): Precision {
+    if (!this.programs.df64) return "single";
+    const m = Math.max(1, Math.abs(this._center[0]), Math.abs(this._center[1]));
+    return this._zoom * m > DF64_THRESHOLD ? "df64" : "single";
   }
 
   scheduleRender(): void {
@@ -164,23 +223,33 @@ export class GLPlot {
     });
   }
 
-  /** Bind the program and set all uniforms for a draw at the given target size. */
-  private useUniforms(width: number, height: number): void {
+  /** Bind the active program and set all uniforms for a draw at the given size. Returns false if no program. */
+  private setupDraw(width: number, height: number): boolean {
+    const precision = this.activePrecision();
+    const cp = this.programs[precision];
+    if (!cp) return false;
     const gl = this.gl;
-    const u = this.uniforms;
-    if (!this.program || !u) return;
-    gl.useProgram(this.program);
+    const u = cp.uniforms;
+    gl.useProgram(cp.program);
     gl.uniform2f(u.uResolution, width, height);
-    gl.uniform2f(u.uCenter, this._center[0], this._center[1]);
     gl.uniform1f(u.uZoom, this._zoom);
     gl.uniform1i(u.uN, Math.max(1, Math.round(Number(this._n))));
     gl.uniform2f(u.uC, this._cVal[0], this._cVal[1]);
     gl.uniform1i(u.uFractType, this.fractType === "param" ? 1 : 0);
+    if (precision === "df64") {
+      const [hx, lx] = splitDouble(this._center[0]);
+      const [hy, ly] = splitDouble(this._center[1]);
+      gl.uniform2f(u.uCenterX, hx, lx);
+      gl.uniform2f(u.uCenterY, hy, ly);
+      gl.uniform1f(u.uOne, 1.0);
+    } else {
+      gl.uniform2f(u.uCenter, this._center[0], this._center[1]);
+    }
+    return true;
   }
 
   render(): void {
-    if (!this.program || !this.uniforms) return;
-    this.useUniforms(this.canvas.width, this.canvas.height);
+    if (!this.setupDraw(this.canvas.width, this.canvas.height)) return;
     this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
     this.afterRender?.();
   }
@@ -193,7 +262,9 @@ export class GLPlot {
    */
   renderToImageData(size: number): ImageData {
     const gl = this.gl;
-    if (!this.program || !this.uniforms) throw new Error("No compiled program to export");
+    if (!this.programs.single && !this.programs.df64) {
+      throw new Error("No compiled program to export");
+    }
 
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -205,7 +276,7 @@ export class GLPlot {
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
 
     gl.viewport(0, 0, size, size);
-    this.useUniforms(size, size);
+    this.setupDraw(size, size);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
     const pixels = new Uint8Array(size * size * 4);
