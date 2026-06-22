@@ -11,6 +11,7 @@
 
 import type { Vec2 } from "../arrays";
 import type { Preset } from "../presets";
+import { clampExportSize, downloadCanvas, ensurePngName, getMaxTextureSize } from "../hiResExport";
 import { GLPlot, type FractType } from "./glPlot";
 import { drawOverlay } from "./overlay";
 
@@ -68,6 +69,48 @@ export class PlotView {
     this.plot.res = res;
     this.syncOverlaySize();
     this.plot.scheduleRender();
+  }
+
+  /** Render the plot at `size` (true detail) and download it as a PNG, overlay optional. */
+  async exportPng(opts: { size: number; overlays: boolean; filename: string }): Promise<void> {
+    const maxTex = getMaxTextureSize();
+    const { size, clamped } = clampExportSize(opts.size, maxTex);
+    const image = this.plot.renderToImageData(size);
+    const out = document.createElement("canvas");
+    out.width = size;
+    out.height = size;
+    const ctx = out.getContext("2d");
+    if (!ctx) throw new Error("2D context unavailable for export");
+    ctx.putImageData(image, 0, 0);
+    if (opts.overlays) {
+      // Draw the overlay on its own canvas (drawOverlay clears first), then
+      // composite it over the fractal so the fractal isn't wiped.
+      const ov = document.createElement("canvas");
+      ov.width = size;
+      ov.height = size;
+      const octx = ov.getContext("2d");
+      if (octx) {
+        drawOverlay(octx, {
+          fAst: this.plot.fAst,
+          escapeAst: this.plot.escAst,
+          z0: this.plot.z0,
+          c: this.plot.cValue,
+          center: this.plot.center,
+          zoom: this.plot.zoom,
+          nplot: Math.max(1, Math.round(Number(this.plot.nplot))),
+          fractType: this.fractType,
+          size,
+        });
+        ctx.drawImage(ov, 0, 0);
+      }
+    }
+    await downloadCanvas(out, ensurePngName(opts.filename));
+    if (clamped) {
+      window.alert(
+        `Requested size exceeded this device's maximum of ${maxTex}px; ` +
+          `exported at ${size}×${size} instead.`,
+      );
+    }
   }
 
   private syncOverlaySize(): void {

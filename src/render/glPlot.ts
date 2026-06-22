@@ -164,19 +164,66 @@ export class GLPlot {
     });
   }
 
-  render(): void {
+  /** Bind the program and set all uniforms for a draw at the given target size. */
+  private useUniforms(width: number, height: number): void {
     const gl = this.gl;
     const u = this.uniforms;
     if (!this.program || !u) return;
     gl.useProgram(this.program);
-    gl.uniform2f(u.uResolution, this.canvas.width, this.canvas.height);
+    gl.uniform2f(u.uResolution, width, height);
     gl.uniform2f(u.uCenter, this._center[0], this._center[1]);
     gl.uniform1f(u.uZoom, this._zoom);
     gl.uniform1i(u.uN, Math.max(1, Math.round(Number(this._n))));
     gl.uniform2f(u.uC, this._cVal[0], this._cVal[1]);
     gl.uniform1i(u.uFractType, this.fractType === "param" ? 1 : 0);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  render(): void {
+    if (!this.program || !this.uniforms) return;
+    this.useUniforms(this.canvas.width, this.canvas.height);
+    this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
     this.afterRender?.();
+  }
+
+  /**
+   * Render the fractal at an arbitrary square `size` into an off-screen RGBA8
+   * framebuffer and read it back as top-down {@link ImageData}. Used for
+   * high-resolution export; the live canvas is left untouched. `size` should be
+   * within the GPU's max texture size.
+   */
+  renderToImageData(size: number): ImageData {
+    const gl = this.gl;
+    if (!this.program || !this.uniforms) throw new Error("No compiled program to export");
+
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    const fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+
+    gl.viewport(0, 0, size, size);
+    this.useUniforms(size, size);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    const pixels = new Uint8Array(size * size * 4);
+    gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.deleteFramebuffer(fbo);
+    gl.deleteTexture(tex);
+    this.applyRenderSize(); // restore the live viewport
+
+    // WebGL reads bottom-up; ImageData is top-down, so flip rows.
+    const out = new Uint8ClampedArray(size * size * 4);
+    const rowBytes = size * 4;
+    for (let row = 0; row < size; row++) {
+      const src = row * rowBytes;
+      out.set(pixels.subarray(src, src + rowBytes), (size - 1 - row) * rowBytes);
+    }
+    return new ImageData(out, size, size);
   }
 
   ApplyPreset(preset: Preset): void {
