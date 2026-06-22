@@ -94,6 +94,16 @@ export function renderScale(): number {
   return Math.min(window.devicePixelRatio || 1, 2);
 }
 
+/**
+ * Progressive quality ladder: fractions of the full (DPR-scaled) buffer, drawn
+ * coarse → fine over successive frames so a slow render shows structure quickly
+ * and sharpens in. Only used for renders the heuristic deems heavy (deep zoom,
+ * large canvas, or many iterations); cheap renders go straight to full to avoid
+ * a needless soft-then-sharp flash. During interaction only the coarse level is
+ * drawn.
+ */
+const PROGRESSIVE_LADDER = [0.5, 1.0];
+
 export class GLPlot {
   private readonly gl: WebGL2RenderingContext;
   private readonly canvas: HTMLCanvasElement;
@@ -105,6 +115,8 @@ export class GLPlot {
   };
   private renderScheduled = false;
   private _draft = false;
+  /** Index into {@link PROGRESSIVE_LADDER} for the next frame; reset to 0 on each change. */
+  private _level = 0;
   /** The df64 program is compiled lazily (it can be huge/slow), only when a deep zoom needs it. */
   private df64Dirty = true;
   /** Last compile error message, or null when the current program is valid. */
@@ -149,23 +161,24 @@ export class GLPlot {
   }
 
   /**
-   * Reconcile the canvas sizing with the current resolution, draft state, and
-   * device pixel ratio. Three concerns:
+   * Reconcile the canvas sizing with the current resolution, progressive level,
+   * and device pixel ratio. Two independent sizes:
    *
-   * - the **drawing buffer** (`canvas.width/height` + GL viewport) is the render
-   *   resolution: `_res` (or halved while drafting for responsiveness), times the
-   *   capped {@link renderScale} so the plot is crisp on HiDPI/Retina displays;
+   * - the **drawing buffer** (`canvas.width/height` + GL viewport) is the full
+   *   resolution `_res ×` {@link renderScale} (crisp on HiDPI), times `fraction`
+   *   — the progressive quality level (a coarse pass renders fewer pixels, then
+   *   refines up to `fraction = 1`);
    * - the **CSS display size** (`canvas.style.width`) is pinned to the logical
    *   `_res` so the on-screen plot keeps the same physical size regardless of the
-   *   draft buffer or pixel ratio. Without this pin the canvas (no explicit CSS
+   *   buffer fraction or pixel ratio. Without this pin the canvas (no explicit CSS
    *   width) would take its intrinsic = drawing-buffer size, so changing the
    *   buffer would visibly resize the whole plot — most obvious during wheel-zoom.
    *   `max-width: 100%` still scales it down on narrow viewports; `height: auto`
    *   keeps it square.
    */
-  private applyRenderSize(): void {
-    const base = this._draft ? Math.max(128, this._res >> 1) : this._res;
-    const size = Math.round(base * renderScale());
+  private applyRenderSize(fraction = 1): void {
+    const full = Math.round(this._res * renderScale());
+    const size = Math.max(64, Math.round(full * fraction));
     if (this.canvas.width !== size) {
       this.canvas.width = size;
       this.canvas.height = size;
@@ -178,13 +191,13 @@ export class GLPlot {
   }
 
   /**
-   * Toggle draft mode: render at half resolution for responsiveness during
-   * interaction (pan / drag), then restore full resolution on release.
+   * Toggle draft mode: while on (during pan / drag / wheel) only the coarse
+   * progressive level is drawn for responsiveness; turning it off lets the
+   * render refine back up to full resolution.
    */
   setDraft(on: boolean): void {
     if (this._draft === on) return;
     this._draft = on;
-    this.applyRenderSize();
     this.scheduleRender();
   }
 
@@ -269,7 +282,24 @@ export class GLPlot {
     return this._zoom * m > DF64_THRESHOLD ? "df64" : "single";
   }
 
+  /**
+   * Whether an idle render is heavy enough to be worth a coarse progressive pass
+   * first. Cheap renders (small canvas, low iterations, single precision) go
+   * straight to full so there's no soft-then-sharp flash on simple changes.
+   */
+  private wantsProgressive(): boolean {
+    if (this.desiredPrecision() === "df64") return true; // deep zoom
+    if (Math.round(this._res * renderScale()) >= 900) return true; // large canvas
+    return Math.round(Number(this._n)) >= 150; // many iterations
+  }
+
+  /** Request a render, restarting the progressive ladder from the coarsest level. */
   scheduleRender(): void {
+    this._level = 0;
+    this.requestFrame();
+  }
+
+  private requestFrame(): void {
     if (this.renderScheduled) return;
     this.renderScheduled = true;
     requestAnimationFrame(() => {
@@ -309,10 +339,28 @@ export class GLPlot {
     return true;
   }
 
+  /**
+   * Draw one frame. During interaction only the coarse level is drawn; when idle
+   * and the render is heavy, each frame refines one step up the ladder to full
+   * resolution and schedules the next; cheap idle renders draw full immediately.
+   */
   render(): void {
+    let fraction = 1;
+    let refine = false;
+    if (this._draft) {
+      fraction = PROGRESSIVE_LADDER[0]; // coarse while interacting
+    } else if (this.wantsProgressive()) {
+      fraction = PROGRESSIVE_LADDER[this._level];
+      refine = this._level < PROGRESSIVE_LADDER.length - 1;
+    }
+    this.applyRenderSize(fraction);
     if (!this.setupDraw(this.canvas.width, this.canvas.height)) return;
     this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
     this.afterRender?.();
+    if (refine) {
+      this._level++;
+      this.requestFrame();
+    }
   }
 
   /**
@@ -346,7 +394,7 @@ export class GLPlot {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.deleteFramebuffer(fbo);
     gl.deleteTexture(tex);
-    this.applyRenderSize(); // restore the live viewport
+    this.scheduleRender(); // restore the live viewport + re-render the canvas
 
     // WebGL reads bottom-up; ImageData is top-down, so flip rows.
     const out = new Uint8ClampedArray(size * size * 4);
@@ -472,7 +520,6 @@ export class GLPlot {
   }
   set res(resVal: number | string) {
     this._res = Number(resVal);
-    this.applyRenderSize();
     this.scheduleRender();
   }
 
