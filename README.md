@@ -13,7 +13,9 @@ A draggable white point in the parameter space sets `c`; the dynamical plane
 updates in real time as you drag it. A draggable point in the dynamical plane
 sets the orbit start `z₀`, whose first several iterates are drawn as a polyline.
 
-Built on [CindyJS / CindyGL](https://cindyjs.org).
+Built on a hand-written **WebGL2** engine with no rendering dependencies: a small
+compiler turns the editable `f(z, c)` / `escape(z, c)` expressions into GLSL
+fragment shaders, with an emulated double-float (df64) path for deep zoom.
 
 ## Running
 
@@ -32,8 +34,7 @@ Other scripts:
 | `npm run lint`    | ESLint over `src/` and config |
 | `npm run format`  | Format with Prettier          |
 
-CindyJS/CindyGL are vendored under `public/vendor/cindyjs/` and loaded as global
-`<script>` tags, so the app runs standalone with no external asset dependency.
+The app has no runtime dependencies — everything is bundled by Vite.
 
 ## How it works
 
@@ -47,83 +48,120 @@ time to an RGB ramp.
 - The **dynamical-plane** iterator runs `z₀ = pixel, z ↦ f(z, c)` for the fixed
   selected `c`.
 
-The heavy per-pixel iteration runs on the GPU via CindyGL's `colorplot`.
+The heavy per-pixel iteration runs on the GPU in a WebGL2 fragment shader,
+generated per expression by the compiler in [`src/expr/`](src/expr/). The orbit
+polyline is computed on the CPU by the same expression evaluator and drawn on a
+2D overlay canvas stacked over the WebGL one.
 
 ## Presets
 
 Presets live in [`src/presets.ts`](src/presets.ts) as two dictionaries
 (`paramPresets`, `dynPresets`) sharing the same keys. Each entry is a `Preset`:
 
-| Field    | Meaning                                                  |
-| -------- | -------------------------------------------------------- |
-| `f`      | Iteration function `f(z, c)` (CindyScript expression)    |
-| `c`      | Parameter value, a complex literal like `-.7-.4*i`       |
-| `n`      | Maximum iterations per pixel                             |
-| `nplot`  | Number of orbit iterates to draw                         |
-| `escape` | Escape predicate `escape(z, c)` (CindyScript expression) |
-| `zoom`   | Default zoom level                                       |
-| `center` | Plot centre `[x, y]`                                     |
-| `z0`     | Orbit start point (dynamical-plane presets only)         |
+| Field    | Meaning                                             |
+| -------- | --------------------------------------------------- |
+| `f`      | Iteration function `f(z, c)` (an expression string) |
+| `c`      | Parameter value, a complex literal like `-.7-.4*i`  |
+| `n`      | Maximum iterations per pixel                        |
+| `nplot`  | Number of orbit iterates to draw                    |
+| `escape` | Escape predicate `escape(z, c)` (expression string) |
+| `zoom`   | Default zoom level                                  |
+| `center` | Plot centre `[x, y]`                                |
+| `z0`     | Orbit start point (dynamical-plane presets only)    |
 
 Included presets: Mandelbrot set, tricorn, burning ship, butterfly,
 exponential map, teardrop Schwarz, exp Schwarz.
 
-### Supported CindyScript objects
+### Supported expression objects
+
+The `f` / `escape` expression language (a CindyScript-compatible subset) supports:
 
 - **Constants:** `e`, `pi`, `i`.
-- **Operations:** `z*w`, `z^w`, `z+w`, `z-w`, `z/w`, `|z|`, `sqrt`, `exp`,
-  `log`, `sin`, `cos`, `tan`, `arcsin`, `arccos`, `arctan`, `arctan2(x,y)`,
-  `lambertw`, `re`, `im`, `conjugate`, `arg`, `mod(x,y)`, `round`, `floor`,
-  `ceil`.
-- **Misc:** `random(x)`, `randomint(n)`, `randombool()`.
+- **Operators:** `+ - * / ^` (complex powers, principal branch), comparisons
+  `> < ==`, and `if(cond, a, b)`, `not(...)`, `true`/`false`.
+- **Functions:** `sqrt`, `exp`, `log`, `sin`, `cos`, `tan`, `arcsin`, `arccos`,
+  `arctan`, `arctan2(x,y)`, `lambertw`, `re`, `im`, `conjugate`, `abs`, `arg`,
+  `mod(x,y)`, `round`, `floor`, `ceil`.
+- **Statements:** `;`-separated, with local assignment (e.g. `u=…; …; result`).
+  The `escape` predicate may call `f(z, c)`.
 
-`lambertw` is a custom complex implementation; see
-[`src/cindyscript/mathlib.ts`](src/cindyscript/mathlib.ts).
+`lambertw` is a custom complex implementation (a seeded approximation refined by
+Halley steps); the principal `log`/`sqrt`/`pow` branches match the original
+CindyScript. The compiler emits both GLSL (for rendering) and a JS evaluator (for
+the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
 
 ## Controls
 
 - Move the plot window with the **arrow keys** or by click-dragging the
   background.
-- Zoom with the **+/- keys**.
+- Zoom with the **+/- keys** or the **mouse wheel** (zooms toward the cursor).
 - Drag the **white point** in either plot to change its value.
 - Press **Enter** (or the **apply changes** button) to apply edits to the
   input fields.
+
+## Saving images
+
+Each plot has a **Save** button in the Downloads panel with two adjacent
+controls:
+
+- **Size** — the output resolution in pixels (e.g. `2000`, `4000`, `8000`). The
+  plot is re-rendered off-screen at this size and downloaded as a PNG at full
+  detail; the on-screen plots are untouched. Sizes beyond the GPU's maximum
+  texture size are disabled automatically. The `screen (500)` option matches the
+  on-screen canvas.
+- **overlays** — when ticked, the exported image includes the orbit polyline,
+  white point, and coordinate label (sized to the chosen resolution); when
+  unticked, you get a clean fractal-only image.
+
+The renderer draws into an off-screen RGBA8 framebuffer
+([`GLPlot.renderToImageData`](src/render/glPlot.ts)), so the export is true
+single-pass detail at the requested size — no render-image cap. The scaled
+overlay is composited on top and downloaded
+([`PlotView.exportPng`](src/render/plotView.ts)).
 
 ## Architecture
 
 ```
 index.html                  Vite entry; markup only (no inline styles/handlers)
-public/vendor/cindyjs/      Vendored, version-pinned CindyJS + CindyGL + CSS
 src/
-  main.ts                   Entry: builds both plots, wires controls, exposes
-                            the runtime-global surface CindyScript needs
-  fractalPlot.ts            FractalPlot class (owns one CindyJS instance)
+  main.ts                   Entry: builds both plots, wires controls + coupling
   presets.ts                Preset type + the two preset dictionaries
   complex.ts                Complex-number parse / format
-  transforms.ts             Canvas <-> plot coordinate transforms (JS side)
+  transforms.ts             Canvas <-> plot coordinate transforms
   arrays.ts                 2-vector helpers
-  cindyscript/
-    init.ts                 Builds the CindyScript init program
-    handlers.ts             Builds the move/keydown/drag event scripts
-    mathlib.ts              Shared CindyScript definitions (lambertw, ...)
+  hiResExport.ts            Engine-agnostic export helpers (clamp, filename, ...)
+  expr/                     The f / escape expression compiler
+    lexer.ts parser.ts ast.ts   Source -> AST
+    glsl.ts                 AST -> GLSL (abstract complex ops)
+    evaluate.ts complexJs.ts    AST -> value (JS doubles); orbit + tests
+  glsl/                     GLSL stdlib (TS modules exporting shader source)
+    complexSingle.glsl.ts   Single-precision base ops (vec2)
+    df64.glsl.ts complexDf64.glsl.ts   Double-float base ops (vec4) + df64Ref.ts
+    complexDerived.glsl.ts  Precision-agnostic cpow / lambertw / inverse trig
+  render/
+    shaderBuilder.ts        Assembles the fragment shader (stdlib + f/escape + loop)
+    glPlot.ts               GLPlot: WebGL2 renderer + state (single + df64 programs)
+    overlay.ts              Orbit polyline / point / label on a 2D overlay canvas
+    plotView.ts             GLPlot + overlay + native pointer/keyboard interaction
   ui/
     controls.ts             Typed read/write over the control inputs
     dom.ts                  Small typed DOM helpers
-  types/cindyjs.d.ts        Ambient types for the CindyJS API used here
   styles/main.css           Stylesheet (CSS grid, responsive)
-test/                       Vitest unit tests (pure modules)
+test/                       Vitest unit tests (pure modules + the compiler)
 ```
 
-**The CindyScript global boundary.** CindyJS evaluates `javascript("…")`
-callbacks in the global (`window`) scope at runtime. `main.ts` therefore exposes
-exactly the symbols those callbacks reference (`dynamicalPlot`, `parameterPlot`,
-`scaleArray`, `formatComplex`, and the `set*Input` helpers) on `window`. This is
-the one intentional global surface; everything else is module-scoped.
+**One AST, two backends.** The expression compiler parses `f`/`escape` once and
+emits both a GLSL function (for the GPU render) and a JS evaluator (for the orbit
+overlay and unit tests) in terms of abstract complex ops (`cmul`, `cexp`, …). The
+GLSL stdlib provides those ops in two precisions behind the same names, so the
+compiled shader code is precision-agnostic; `GLPlot` compiles a single- and a
+df64-precision program and selects df64 only once the zoom passes a threshold.
 
-**Coordinate transforms exist twice** — once in JavaScript
-([`src/transforms.ts`](src/transforms.ts)) and once in CindyScript
-([`src/cindyscript/init.ts`](src/cindyscript/init.ts)). They must agree; the
-inverse property of the JS pair is covered by `test/transforms.test.ts`.
+**Deep zoom (df64).** Single-precision GPU floats pixelate past ~10⁴× zoom. The
+df64 path represents each real as a hi+lo float pair (~double precision) using
+error-free transforms; a `* uOne` uniform barrier stops the shader compiler from
+reassociating those transforms away. The algorithms are validated against a JS
+`Math.fround` reference (`test/df64.test.ts`).
 
 ## Deployment
 
@@ -134,8 +172,8 @@ npm run preview    # sanity-check the build locally
 
 The Vite config sets `base: "./"`, so all asset URLs in the build are
 **relative** — `dist/` works whether it's served from a domain root or a
-sub-path (e.g. a GitHub Pages project site at `/ComplexDynamicsJS/`). The
-vendored CindyJS assets and favicon are copied into `dist/` automatically.
+sub-path (e.g. a GitHub Pages project site at `/ComplexDynamicsJS/`). The favicon
+is copied from `public/` into `dist/` automatically.
 
 To publish on **GitHub Pages**, serve the contents of `dist/` (for example via a
 `gh-pages` branch or a Pages GitHub Action that runs `npm ci && npm run build`
@@ -144,31 +182,28 @@ already relative.
 
 ## Troubleshooting
 
-| Symptom                                 | Likely cause / fix                                                                                                                         |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Both canvases are blank                 | WebGL unavailable or disabled in the browser. CindyGL requires WebGL; check the console for context-creation errors.                       |
-| `404` for `/vendor/cindyjs/*.js`        | Run via `npm run dev` / `npm run preview` (assets are served from `public/`). Opening `index.html` directly off the filesystem won't work. |
-| Dragging the `c` point does nothing     | A CindyScript callback references a symbol that isn't on `window` — see the `window` boundary note in [CONTRIBUTING](CONTRIBUTING.md).     |
-| `npm run dev` fails: port 5173 in use   | The port is pinned (`strictPort`). Stop the other process or change `server.port` in `vite.config.ts`.                                     |
-| A preset renders but the orbit is wrong | The escape predicate diverges from `f`; check the preset's `escape` expression in `src/presets.ts`.                                        |
+| Symptom                                 | Likely cause / fix                                                                                                        |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Both canvases are blank                 | WebGL2 unavailable or disabled in the browser; check the console for context-creation or shader-compile errors.           |
+| A custom `f` / `escape` won't render    | A parse/compile error; the renderer keeps the last good shader. Check the console for the message and fix the expression. |
+| Deep zoom of a Schwarz preset stalls    | The first deep zoom compiles a large df64 shader (one-time, a few seconds). Subsequent renders are fast.                  |
+| `npm run dev` fails: port 5173 in use   | The port is pinned (`strictPort`). Stop the other process or change `server.port` in `vite.config.ts`.                    |
+| A preset renders but the orbit is wrong | The escape predicate diverges from `f`; check the preset's `escape` expression in `src/presets.ts`.                       |
 
 ## Known limitations
 
-- **Export resolution:** saved images use the canvas resolution (500×500), not
-  the value in the resolution field. The resolution field controls the GPU
-  render-image quality, not the exported PNG size. (CindyGL's `exportPNG` simply
-  serializes the canvas via `toDataURL()`.)
-- **Deep zoom accuracy:** GPU single-precision limits accuracy past a certain
-  zoom depth.
+- **Export size cap:** high-resolution export is bounded by the GPU's maximum
+  texture size (commonly 4096–16384px); larger options are disabled in the size
+  dropdown. See [Saving images](#saving-images).
+- **Deep zoom depth:** the df64 path extends usable zoom to ~10¹²× (vs ~10⁴× for
+  single precision); beyond that, df64 precision runs out and the image
+  pixelates. Going deeper would need perturbation-theory techniques.
+- **Heavy df64 shaders:** the first deep zoom of a transcendental-heavy preset
+  (the Schwarz maps) compiles a large df64 shader, a one-time pause of a few
+  seconds. The compiled program is cached afterwards.
 - **`npm audit`:** the only reported advisories are in dev-only tooling
   (esbuild/Vite dev server). `npm audit --omit=dev` reports zero — nothing ships
   to production.
-
-## CindyJS version
-
-CindyJS and CindyGL are vendored (pinned) under `public/vendor/cindyjs/` from
-the build distributed with the author's site (April 2025). Replace those three
-files to upgrade.
 
 ## Contributing
 

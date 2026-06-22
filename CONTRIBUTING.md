@@ -1,8 +1,8 @@
 # Contributing
 
-This guide is for anyone extending the tool — adding a fractal, a control, or a
-new bit of math. It assumes you've read the [README](README.md) (especially the
-**Architecture** section) and have the dev server running:
+This guide is for anyone extending the tool — adding a fractal, a control, a math
+function, or working on the renderer. It assumes you've read the [README](README.md)
+(especially the **Architecture** section) and have the dev server running:
 
 ```bash
 npm install
@@ -20,112 +20,100 @@ npm run build     # production build succeeds
 npm run format    # Prettier (run it; commit the result)
 ```
 
-Pure logic (parsing, transforms, presets) is unit-tested. The CindyGL render
-loop can't be unit-tested, so **verify rendering by hand** in `npm run dev`:
-both plots draw, dragging the `c` point updates the dynamical plane, presets
-switch, and apply/export work.
+Pure logic — the expression compiler (lexer/parser/evaluator), the df64
+primitives, transforms, presets — is unit-tested. The WebGL render itself can't
+be unit-tested (no GPU in the test env), so **verify rendering by hand** in
+`npm run dev`: both plots draw, dragging the `c` point updates the dynamical
+plane, panning/zoom/presets work, a deep zoom stays sharp, and export works.
 
-## The one gotcha: the `window` boundary
+## How the renderer fits together
 
-CindyJS evaluates its `javascript("…")` event callbacks in the **global
-(`window`) scope at runtime** — not in module scope. So any JavaScript symbol
-you reference _inside a CindyScript callback string_ must be exposed on `window`.
+`f` and `escape` are arbitrary expressions. The compiler in [`src/expr/`](src/expr/)
+parses each into one AST and emits **two backends**:
 
-That exposure happens in one place, [`src/main.ts`](src/main.ts):
+- **GLSL** ([`glsl.ts`](src/expr/glsl.ts)) — used to build the fragment shader
+  ([`render/shaderBuilder.ts`](src/render/shaderBuilder.ts)) that does the
+  per-pixel iteration on the GPU.
+- **A JS evaluator** ([`evaluate.ts`](src/expr/evaluate.ts) + [`complexJs.ts`](src/expr/complexJs.ts))
+  — used to compute the orbit polyline and as the reference in unit tests.
 
-```ts
-declare global {
-  interface Window {
-    /* ...add the symbol's type here... */
-  }
-}
-Object.assign(window, {
-  dynamicalPlot,
-  parameterPlot,
-  scaleArray,
-  formatComplex,
-  setCInput /* ... */,
-});
-```
+Both are written in terms of abstract complex ops (`cmul`, `cexp`, …). The GLSL
+stdlib supplies those ops in **two precisions** behind the same names — single
+([`complexSingle.glsl.ts`](src/glsl/complexSingle.glsl.ts)) and df64
+([`df64.glsl.ts`](src/glsl/df64.glsl.ts) + [`complexDf64.glsl.ts`](src/glsl/complexDf64.glsl.ts)) —
+plus a precision-agnostic derived layer ([`complexDerived.glsl.ts`](src/glsl/complexDerived.glsl.ts)).
+[`GLPlot`](src/render/glPlot.ts) compiles both programs and switches to df64 past
+a zoom threshold.
 
-If you add a callback like `"recenter(parameterPlot.center)"` (in a builder in
-[`src/cindyscript/handlers.ts`](src/cindyscript/handlers.ts) or a callback array
-passed to `FractalPlot`), you must also add `recenter` to that `Object.assign`
-and the `Window` interface. Symptom of forgetting: a silent `ReferenceError` in
-the browser console when the callback fires, and the interaction does nothing.
+## Two gotchas
 
-Everything else is ordinary module-scoped code — only this CindyScript-facing
-surface needs `window`.
+1. **Keep the GLSL and JS backends in agreement.** If you change how a function
+   is computed, change it in both `src/expr/glsl.ts` (or the GLSL stdlib) **and**
+   `src/expr/complexJs.ts`, or the orbit will disagree with the shader. The
+   `evaluate.ts` tests are the safety net.
+
+2. **df64 has a JS reference.** The df64 GLSL ([`df64.glsl.ts`](src/glsl/df64.glsl.ts))
+   is a line-for-line transliteration of [`df64Ref.ts`](src/glsl/df64Ref.ts),
+   which is unit-tested. Edit the reference first, get the test passing, then port.
+   Note the `* uOne` optimization barriers on the error-free transforms — without
+   them the shader compiler reassociates the math and df64 silently collapses to
+   single precision.
 
 ## Common tasks
 
 ### Add a fractal preset
 
 1. Add an entry — keyed by the new name — to **both** `paramPresets` and
-   `dynPresets` in [`src/presets.ts`](src/presets.ts). See the `Preset` type for
-   the fields; dynamical presets also need a `z0`.
+   `dynPresets` in [`src/presets.ts`](src/presets.ts). Dynamical presets also need a `z0`.
 2. Add the name to the `PresetName` union in the same file.
 3. Add an `<option value="your name">` to the `#fractal_presets` `<select>` in
    [`index.html`](index.html).
 
 `presetNames` is derived from the dictionary keys, so the integrity test in
-`test/presets.test.ts` will automatically check your new entry is well-formed
-(non-empty `f`/`c`/`n`/`nplot`/`escape`, numeric `zoom`, 2-element `center`).
+`test/presets.test.ts` checks your entry is well-formed, and `test/expr.test.ts`
+checks the `f`/`escape` strings parse.
 
 ```ts
 // src/presets.ts
-export const paramPresets: Record<PresetName, Preset> = {
-  // ...
-  "my fractal": {
-    f: "z^3+c",
-    c: "-.5+.2*i",
-    n: "100",
-    nplot: "6",
-    escape: "abs(z)>2",
-    zoom: 0.7,
-    center: [0, 0],
-  },
-};
+"my fractal": { f: "z^3+c", c: "-.5+.2*i", n: "100", nplot: "6", escape: "abs(z)>2", zoom: 0.7, center: [0, 0] },
 ```
 
-### Extend the CindyScript math
+### Add a function to the expression language
 
-Add definitions to `MATHLIB_CS` in
-[`src/cindyscript/mathlib.ts`](src/cindyscript/mathlib.ts). It is injected into
-every plot's init program, so anything defined there is callable from `f`,
-`escape`, and other CindyScript. (This is where the custom `lambertw` lives.)
+1. Add it to the AST function sets in [`src/expr/ast.ts`](src/expr/ast.ts) and
+   parse it in [`src/expr/parser.ts`](src/expr/parser.ts) if it isn't a plain call.
+2. Implement it for the JS backend in [`src/expr/complexJs.ts`](src/expr/complexJs.ts)
+   and dispatch it in [`evaluate.ts`](src/expr/evaluate.ts); add a parity test.
+3. Implement it for GLSL: map the name in [`src/expr/glsl.ts`](src/expr/glsl.ts)
+   and add the `c…` op to **both** precision stdlibs (single + df64), or to the
+   derived layer if it's expressible in terms of existing ops.
 
 ### Change the colouring
 
-Edit `colorFcn` in
-[`src/cindyscript/init.ts`](src/cindyscript/init.ts). It maps escape time `u`
-(or `n` for "never escaped" → black) to an `(r, g, b)` triple.
+Edit `colorFcn` in [`src/render/shaderBuilder.ts`](src/render/shaderBuilder.ts).
+It maps escape time `u` (or `n` for "never escaped" → black) to an `(r, g, b)`.
 
 ### Add a control input
 
 1. Add the field markup in [`index.html`](index.html) with a unique `id` and a
    matching `<label for="…">`.
-2. Register the id in `INPUT_IDS` in
-   [`src/ui/controls.ts`](src/ui/controls.ts), and add a getter/setter beside the
-   others. If it should be set when a preset loads, also handle it in
-   `populateInputs`.
-3. Consume it in [`src/main.ts`](src/main.ts) — typically in
-   `readPresetsFromInputs` (used by **apply changes**) or in the button wiring.
+2. Register the id in `INPUT_IDS` in [`src/ui/controls.ts`](src/ui/controls.ts)
+   and add a getter/setter; if a preset should set it, handle it in `populateInputs`.
+3. Consume it in [`src/main.ts`](src/main.ts) — usually in `readPresetsFromInputs`
+   or the button wiring.
 
-### Keep the two coordinate transforms in sync
+### Coordinate transforms
 
-The canvas↔plot transforms exist in both JavaScript
-([`src/transforms.ts`](src/transforms.ts)) and CindyScript (the `PltToCanv*` /
-`CanvToPlt*` functions in [`src/cindyscript/init.ts`](src/cindyscript/init.ts)) —
-the JS side for geometry, the CindyScript side for the GPU. If you change one,
-change the other to match. The JS pair's inverse property is asserted in
+The canvas↔plot transforms live in [`src/transforms.ts`](src/transforms.ts) (used
+by the overlay and interaction). The shader does its own pixel→plot mapping in
+[`render/shaderBuilder.ts`](src/render/shaderBuilder.ts); if you change the
+coordinate convention, change both. The JS pair's inverse property is asserted in
 `test/transforms.test.ts`.
 
 ## Code style
 
-- TypeScript, strict mode. Prefer module scope; only the documented CindyScript
-  surface touches `window`.
+- TypeScript, strict mode; module scope (no globals).
 - Formatting and linting are enforced by Prettier + ESLint — run `npm run format`
   before committing.
-- Add unit tests for any new pure function (complex math, transforms, preset
-  shape). Keep tests in `test/` mirroring the `src/` layout.
+- Add unit tests for any new pure function (expression eval, complex/df64 math,
+  transforms, preset shape). Keep tests in `test/` mirroring the `src/` layout.

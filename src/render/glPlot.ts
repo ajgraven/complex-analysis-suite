@@ -1,6 +1,6 @@
 /**
- * WebGL2 fractal renderer for one plot — the replacement for the CindyJS-backed
- * `FractalPlot`. Owns a WebGL2 context on its canvas, compiles a fragment program
+ * WebGL2 fractal renderer for one plot (parameter space or dynamical plane).
+ * Owns a WebGL2 context on its canvas, compiles a fragment program
  * from the current `f`/`escape` expressions (recompiling only when those change),
  * and renders on demand. Exposes the same state surface (`center`, `zoom`, `c`,
  * `f`, `esc`, `n`, `nplot`, `z0`, `res`, `range`, `ApplyPreset`, `keypress`,
