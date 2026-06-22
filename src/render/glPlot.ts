@@ -92,6 +92,8 @@ export class GLPlot {
   };
   private renderScheduled = false;
   private _draft = false;
+  /** The df64 program is compiled lazily (it can be huge/slow), only when a deep zoom needs it. */
+  private df64Dirty = true;
   /** Last compile error message, or null when the current program is valid. */
   lastError: string | null = null;
   /** Optional hook run at the end of each render (used to redraw the 2D overlay). */
@@ -177,39 +179,42 @@ export class GLPlot {
   }
 
   /**
-   * Rebuild both precision programs from the current f/escape ASTs, each
-   * independently so a single-precision failure (bad expression) or a df64
-   * failure (driver limits) doesn't take down the other. Keeps the old program
-   * for whichever variant fails.
+   * Rebuild the single-precision program from the current f/escape ASTs (keeping
+   * the old one on error). The df64 program is left to {@link ensureDf64} — it can
+   * be very large (e.g. the Schwarz presets) and slow to compile, so we only pay
+   * that cost when a deep zoom actually needs it.
    */
   private rebuild(): void {
     const gl = this.gl;
-    let single = this.programs.single;
-    let df64 = this.programs.df64;
-    let error: string | null = null;
     try {
       const next = this.compile("single");
-      if (single) gl.deleteProgram(single.program);
-      single = next;
+      if (this.programs.single) gl.deleteProgram(this.programs.single.program);
+      this.programs.single = next;
+      this.lastError = null;
     } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
-      console.error(`[${this.fractType}] single shader build failed:`, error);
+      this.lastError = err instanceof Error ? err.message : String(err);
+      console.error(`[${this.fractType}] single shader build failed:`, this.lastError);
     }
-    try {
-      const next = this.compile("df64");
-      if (df64) gl.deleteProgram(df64.program);
-      df64 = next;
-    } catch (err) {
-      // df64 is optional — losing it only disables deep zoom.
-      console.warn(`[${this.fractType}] df64 shader build failed (deep zoom disabled):`, err);
-    }
-    this.programs = { single, df64 };
-    this.lastError = error;
+    this.df64Dirty = true;
   }
 
-  /** Pick the precision to render at, given the current zoom and centre. */
-  private activePrecision(): Precision {
-    if (!this.programs.df64) return "single";
+  /** Compile the df64 program on demand (once per f/escape change). */
+  private ensureDf64(): void {
+    if (!this.df64Dirty) return;
+    this.df64Dirty = false;
+    const gl = this.gl;
+    try {
+      const next = this.compile("df64");
+      if (this.programs.df64) gl.deleteProgram(this.programs.df64.program);
+      this.programs.df64 = next;
+    } catch (err) {
+      // df64 is optional — losing it only disables deep zoom for this expression.
+      console.warn(`[${this.fractType}] df64 shader build failed (deep zoom disabled):`, err);
+    }
+  }
+
+  /** The precision a deep-enough zoom calls for (ignores whether df64 is compiled yet). */
+  private desiredPrecision(): Precision {
     const m = Math.max(1, Math.abs(this._center[0]), Math.abs(this._center[1]));
     return this._zoom * m > DF64_THRESHOLD ? "df64" : "single";
   }
@@ -225,7 +230,11 @@ export class GLPlot {
 
   /** Bind the active program and set all uniforms for a draw at the given size. Returns false if no program. */
   private setupDraw(width: number, height: number): boolean {
-    const precision = this.activePrecision();
+    let precision = this.desiredPrecision();
+    if (precision === "df64") {
+      this.ensureDf64();
+      if (!this.programs.df64) precision = "single"; // df64 unavailable → fall back
+    }
     const cp = this.programs[precision];
     if (!cp) return false;
     const gl = this.gl;

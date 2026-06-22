@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { df, dfAdd, dfDiv, dfMul, dfSqrt, dfSub, toNumber } from "../src/glsl/df64Ref";
+import {
+  df,
+  dfAdd,
+  dfAtan2,
+  dfDiv,
+  dfExp,
+  dfLog,
+  dfMul,
+  dfSinCos,
+  dfSqrt,
+  dfSub,
+  toNumber,
+} from "../src/glsl/df64Ref";
 
 const f = Math.fround;
 
@@ -45,5 +57,42 @@ describe("df64 primitives extend precision beyond single float", () => {
     expect(toNumber(dfSub(dfAdd(a, b), b))).toBeCloseTo(toNumber(a), 13);
     // (a * b) / b ≈ a
     expect(toNumber(dfDiv(dfMul(a, b), b))).toBeCloseTo(toNumber(a), 12);
+  });
+});
+
+describe("df64 transcendentals match Math to ~13 digits", () => {
+  it("exp", () => {
+    for (const x of [0, 1, -1, 0.5, -3.7, 5.25]) {
+      expect(toNumber(dfExp(df(x)))).toBeCloseTo(Math.exp(x), 11);
+    }
+  });
+  it("log", () => {
+    for (const x of [1, 2, 0.5, 10, 1e-4, 1234.5]) {
+      expect(toNumber(dfLog(df(x)))).toBeCloseTo(Math.log(x), 11);
+    }
+  });
+  it("exp and log are inverse", () => {
+    const x = df(0.7436438870371587);
+    expect(toNumber(dfLog(dfExp(x)))).toBeCloseTo(toNumber(x), 12);
+  });
+  it("sin and cos", () => {
+    for (const x of [0, 0.5, 1, -1, 2.5, 3.1, -4.2, 6.0]) {
+      const { sin, cos } = dfSinCos(df(x));
+      expect(toNumber(sin)).toBeCloseTo(Math.sin(x), 11);
+      expect(toNumber(cos)).toBeCloseTo(Math.cos(x), 11);
+    }
+  });
+  it("atan2 in all quadrants", () => {
+    const cases: [number, number][] = [
+      [1, 1],
+      [1, -1],
+      [-1, -1],
+      [-1, 1],
+      [0.3, 2],
+      [-2.5, 0.1],
+    ];
+    for (const [y, x] of cases) {
+      expect(toNumber(dfAtan2(df(y), df(x)))).toBeCloseTo(Math.atan2(y, x), 11);
+    }
   });
 });

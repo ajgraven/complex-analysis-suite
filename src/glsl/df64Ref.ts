@@ -111,3 +111,67 @@ export function dfCmp(a: DF, b: DF): number {
   if (a[1] > b[1]) return 1;
   return 0;
 }
+
+// --- df64 transcendentals (seed-in-float + df64 refinement / series) ----------
+//
+// These are the spec for the GLSL ports in `./df64.glsl`. Range reduction uses
+// only the hi limb (so the integer k/q match the single-precision GLSL), then the
+// reduced argument and the series run in df64.
+
+const LN2: DF = df(Math.LN2);
+const PI_2: DF = df(Math.PI / 2);
+
+/** df64 exp: reduce a = k·ln2 + r (|r| ≤ ln2/2), Taylor exp(r), scale by 2^k. */
+export function dfExp(a: DF): DF {
+  if (a[0] <= -88) return [0, 0];
+  const k = Math.round(a[0] / Math.LN2);
+  const r = dfSub(a, dfMul(LN2, df(k)));
+  let term: DF = [1, 0];
+  let sum: DF = [1, 0];
+  for (let n = 1; n <= 14; n++) {
+    term = dfMul(term, dfDiv(r, df(n)));
+    sum = dfAdd(sum, term);
+  }
+  return dfMul(sum, df(Math.pow(2, k)));
+}
+
+/** df64 log: single-precision seed refined by two Newton steps y += a·e^-y − 1. */
+export function dfLog(a: DF): DF {
+  let y = df(Math.log(a[0]));
+  for (let i = 0; i < 2; i++) {
+    y = dfAdd(y, dfSub(dfMul(a, dfExp(dfNeg(y))), [1, 0]));
+  }
+  return y;
+}
+
+/** df64 sin and cos together: reduce to a quadrant with |r| ≤ π/4, then Taylor. */
+export function dfSinCos(a: DF): { sin: DF; cos: DF } {
+  const q = Math.round(a[0] / (Math.PI / 2));
+  const r = dfSub(a, dfMul(PI_2, df(q)));
+  const r2 = dfMul(r, r);
+  let cterm: DF = [1, 0];
+  let csum: DF = [1, 0];
+  let sterm: DF = r;
+  let ssum: DF = r;
+  for (let n = 1; n <= 8; n++) {
+    cterm = dfMul(cterm, dfDiv(dfNeg(r2), df((2 * n - 1) * (2 * n))));
+    csum = dfAdd(csum, cterm);
+    sterm = dfMul(sterm, dfDiv(dfNeg(r2), df(2 * n * (2 * n + 1))));
+    ssum = dfAdd(ssum, sterm);
+  }
+  const qm = ((q % 4) + 4) % 4;
+  if (qm === 0) return { sin: ssum, cos: csum };
+  if (qm === 1) return { sin: csum, cos: dfNeg(ssum) };
+  if (qm === 2) return { sin: dfNeg(ssum), cos: dfNeg(csum) };
+  return { sin: dfNeg(csum), cos: ssum };
+}
+
+/** df64 atan2: single seed θ₀, then one small-angle correction by rotating (x,y) by −θ₀. */
+export function dfAtan2(y: DF, x: DF): DF {
+  if (x[0] === 0 && y[0] === 0) return [0, 0];
+  const t0 = Math.atan2(y[0], x[0]);
+  const { sin: s, cos: c } = dfSinCos(df(t0));
+  const rx = dfAdd(dfMul(x, c), dfMul(y, s));
+  const ry = dfSub(dfMul(y, c), dfMul(x, s));
+  return dfAdd(df(t0), dfDiv(ry, rx));
+}

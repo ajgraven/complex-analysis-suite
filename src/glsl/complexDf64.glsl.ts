@@ -4,9 +4,9 @@
  * derived stdlib (`./complexDerived.glsl`) work unchanged. A complex value is a
  * `vec4`: real = `.xy` (df64), imaginary = `.zw` (df64). Requires `./df64.glsl`.
  *
- * Phase C: arithmetic (add/sub/mul/div/abs/…) is true df64 → deep zoom for the
- * polynomial maps. The transcendentals (exp/log/sqrt/trig/arg) are computed in
- * single precision on the hi limbs for now; Phase D upgrades them to df64.
+ * Arithmetic and transcendentals (exp/log/sqrt/trig/arg, and via the derived
+ * stdlib cpow/lambertw) are all true df64, so every preset deep-zooms. `cmod`/
+ * `cround`/`cfloor`/`cceil` stay single (integer-ish ops where df64 adds nothing).
  */
 
 export const COMPLEX_DF64_GLSL = /* glsl */ `
@@ -41,18 +41,41 @@ cvec cabs(cvec a) {
   return vec4(df_sqrt(df_add(df_mul(a.xy, a.xy), df_mul(a.zw, a.zw))), 0.0, 0.0);
 }
 
-// --- transcendentals: single-precision (hi-limb) for now (Phase D upgrades) ---
-cvec carg(cvec a) { return vec4(atan(a.z, a.x), 0.0, 0.0, 0.0); }
-cvec cexp(cvec a) { float r = exp(a.x); return vec4(r * cos(a.z), 0.0, r * sin(a.z), 0.0); }
-cvec clog(cvec a) { return vec4(log(length(vec2(a.x, a.z))), 0.0, atan(a.z, a.x), 0.0); }
-cvec csqrt(cvec a) {
-  float rr = length(vec2(a.x, a.z));
-  float im = sqrt(max((rr - a.x) * 0.5, 0.0));
-  return vec4(sqrt(max((rr + a.x) * 0.5, 0.0)), 0.0, a.z < 0.0 ? -im : im, 0.0);
+// --- transcendentals: true df64 (built on df_exp/df_log/df_sincos/df_atan2) ---
+cvec carg(cvec a) { return vec4(df_atan2(a.zw, a.xy), 0.0, 0.0); }
+cvec cexp(cvec a) {
+  vec2 e = df_exp(a.xy);
+  vec4 sc = df_sincos(a.zw); // sin in .xy, cos in .zw
+  return vec4(df_mul(e, sc.zw), df_mul(e, sc.xy));
 }
-cvec csin(cvec a) { return vec4(sin(a.x) * cosh(a.z), 0.0, cos(a.x) * sinh(a.z), 0.0); }
-cvec ccos(cvec a) { return vec4(cos(a.x) * cosh(a.z), 0.0, -sin(a.x) * sinh(a.z), 0.0); }
-cvec carctan2(cvec x, cvec y) { return vec4(atan(y.x, x.x), 0.0, 0.0, 0.0); }
+cvec clog(cvec a) {
+  vec2 mag2 = df_add(df_mul(a.xy, a.xy), df_mul(a.zw, a.zw));
+  vec2 logr = df_mul(df_log(mag2), vec2(0.5, 0.0)); // log|z| = 0.5·log(re²+im²)
+  return vec4(logr, df_atan2(a.zw, a.xy));
+}
+cvec csqrt(cvec a) {
+  vec2 rr = df_sqrt(df_add(df_mul(a.xy, a.xy), df_mul(a.zw, a.zw)));
+  vec2 sr = df_sqrt(df_mul(df_add(rr, a.xy), vec2(0.5, 0.0)));
+  vec2 si = df_sqrt(df_mul(df_sub(rr, a.xy), vec2(0.5, 0.0)));
+  return vec4(sr, a.z < 0.0 ? df_neg(si) : si);
+}
+cvec csin(cvec a) {
+  vec4 sc = df_sincos(a.xy);
+  vec2 ey = df_exp(a.zw);
+  vec2 eny = df_exp(df_neg(a.zw));
+  vec2 chy = df_mul(df_add(ey, eny), vec2(0.5, 0.0));
+  vec2 shy = df_mul(df_sub(ey, eny), vec2(0.5, 0.0));
+  return vec4(df_mul(sc.xy, chy), df_mul(sc.zw, shy));
+}
+cvec ccos(cvec a) {
+  vec4 sc = df_sincos(a.xy);
+  vec2 ey = df_exp(a.zw);
+  vec2 eny = df_exp(df_neg(a.zw));
+  vec2 chy = df_mul(df_add(ey, eny), vec2(0.5, 0.0));
+  vec2 shy = df_mul(df_sub(ey, eny), vec2(0.5, 0.0));
+  return vec4(df_mul(sc.zw, chy), df_neg(df_mul(sc.xy, shy)));
+}
+cvec carctan2(cvec x, cvec y) { return vec4(df_atan2(y.xy, x.xy), 0.0, 0.0); }
 cvec cmod(cvec x, cvec y) { return vec4(mod(x.x, y.x), 0.0, 0.0, 0.0); }
 cvec cround(cvec a) { return vec4(floor(a.x + 0.5), 0.0, 0.0, 0.0); }
 cvec cfloor(cvec a) { return vec4(floor(a.x), 0.0, 0.0, 0.0); }
