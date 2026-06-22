@@ -220,3 +220,68 @@ footer {
   color: var(--muted);
   font-size: 0.85rem;
 }
+
+/* --- Status: error banners, invalid fields, toasts -------------------- */
+.banner,
+.input-errors {
+  margin: 0 0 var(--gap);
+  padding: 0.75rem 1rem;
+  border: 1px solid #c0392b;
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: #fdecea;
+  color: #8a1c12;
+  font-size: 0.9rem;
+}
+
+.input-errors ul {
+  margin: 0;
+  padding-left: 1.4rem;
+}
+
+.input-errors li {
+  margin: 0.15rem 0;
+}
+
+/* Placed after the base input rule so it wins on equal specificity. */
+input.invalid,
+textarea.invalid,
+select.invalid {
+  border-color: #c0392b;
+  background: #fdecea;
+}
+
+.toasts {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  max-width: min(90vw, 480px);
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius);
+  color: #fff;
+  font-size: 0.9rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+}
+
+.toast-info {
+  background: var(--accent);
+}
+
+.toast-warn {
+  background: #b7791f;
+}
+
+.toast-error {
+  background: #c0392b;
+}

@@ -9,7 +9,7 @@
 import type { Vec2 } from "../arrays";
 import { formatComplex, parseComplex, truncateComplex, type Complex } from "../complex";
 import { dynPresets, paramPresets, type PresetName } from "../presets";
-import { setValue, valueOf } from "./dom";
+import { byId, setValue, valueOf } from "./dom";
 
 /** Centralised ids of every control input in index.html. */
 export const INPUT_IDS = {
@@ -80,6 +80,24 @@ export function setDynCenterInput(centerval: Vec2): void {
 
 export const setParamZoomInput = (zoomval: number): void => setValue(INPUT_IDS.paramZoom, zoomval);
 export const setDynZoomInput = (zoomval: number): void => setValue(INPUT_IDS.dynZoom, zoomval);
+
+// --- validation state ----------------------------------------------------
+
+/** Flag an input as invalid (red border + `aria-invalid`). */
+export function markInvalid(id: string): void {
+  const el = byId(id);
+  el.classList.add("invalid");
+  el.setAttribute("aria-invalid", "true");
+}
+
+/** Clear the invalid flag from every control input. */
+export function clearAllInvalid(): void {
+  for (const id of Object.values(INPUT_IDS)) {
+    const el = byId(id);
+    el.classList.remove("invalid");
+    el.removeAttribute("aria-invalid");
+  }
+}
 
 /** Fill every input from the named preset (parameter + dynamical dictionaries). */
 export function populateInputs(name: PresetName): void {

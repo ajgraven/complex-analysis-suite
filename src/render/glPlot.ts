@@ -196,6 +196,20 @@ export class GLPlot {
   }
 
   /**
+   * Parse an expression, recording a parse error in {@link lastError} instead of
+   * throwing. Returns `null` on failure so callers can keep the last-good AST.
+   */
+  private tryParse(src: string): Node | null {
+    try {
+      return parse(src);
+    } catch (err) {
+      this.lastError = err instanceof Error ? err.message : String(err);
+      console.error(`[${this.fractType}] expression parse failed:`, this.lastError);
+      return null;
+    }
+  }
+
+  /**
    * Rebuild the single-precision program from the current f/escape ASTs (keeping
    * the old one on error). The df64 program is left to {@link ensureDf64} — it can
    * be very large (e.g. the Schwarz presets) and slow to compile, so we only pay
@@ -332,8 +346,13 @@ export class GLPlot {
     this._nplot = preset.nplot;
     this._f = preset.f;
     this._esc = preset.escape;
-    this._fAst = parse(preset.f);
-    this._escAst = parse(preset.escape);
+    const fAst = this.tryParse(preset.f);
+    const escAst = this.tryParse(preset.escape);
+    if (fAst && escAst) {
+      this._fAst = fAst;
+      this._escAst = escAst;
+      this.rebuild();
+    }
     if (this.fractType === "param") {
       this._z0 = parseComplex(preset.c);
     } else if (typeof preset.z0 === "string") {
@@ -341,7 +360,6 @@ export class GLPlot {
     } else if (preset.z0) {
       this._z0 = preset.z0;
     }
-    this.rebuild();
     this.scheduleRender();
   }
 
@@ -390,13 +408,17 @@ export class GLPlot {
   }
   set f(fval: string) {
     this._f = fval;
-    this._fAst = parse(fval);
+    const ast = this.tryParse(fval);
+    if (!ast) return; // keep the last-good AST + program
+    this._fAst = ast;
     this.rebuild();
     this.scheduleRender();
   }
   set esc(escval: string) {
     this._esc = escval;
-    this._escAst = parse(escval);
+    const ast = this.tryParse(escval);
+    if (!ast) return; // keep the last-good AST + program
+    this._escAst = ast;
     this.rebuild();
     this.scheduleRender();
   }

@@ -12,6 +12,7 @@
 import type { Vec2 } from "../arrays";
 import type { Preset } from "../presets";
 import { clampExportSize, downloadCanvas, ensurePngName, getMaxTextureSize } from "../hiResExport";
+import { showToast } from "../ui/toast";
 import { GLPlot, type FractType } from "./glPlot";
 import { drawOverlay } from "./overlay";
 
@@ -106,9 +107,10 @@ export class PlotView {
     }
     await downloadCanvas(out, ensurePngName(opts.filename));
     if (clamped) {
-      window.alert(
+      showToast(
         `Requested size exceeded this device's maximum of ${maxTex}px; ` +
           `exported at ${size}×${size} instead.`,
+        "warn",
       );
     }
   }

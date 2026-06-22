@@ -15,6 +15,9 @@
     <div class="page">
       <h1>Complex Dynamics Visualization Tool</h1>
 
+      <div id="webgl-error" class="banner" role="alert" hidden></div>
+      <div id="input-errors" class="input-errors" role="alert" aria-live="assertive" hidden></div>
+
       <main class="plots">
         <!-- ============================ Parameter space ============== -->
         <section class="plot" aria-labelledby="param-heading">
@@ -202,10 +205,6 @@
               arcsin, arccos, arctan, arctan2(x,y), lambertw, re, im, conjugate, arg, mod(x,y),
               round, floor, ceil.
             </li>
-            <li>
-              <b>Misc. functions:</b> random(x) (random float in (0,x)), randomint(n) (random
-              integer in [0,n]), randombool() (random true/false).
-            </li>
           </ul>
         </div>
 
@@ -238,5 +237,7 @@
         <p>Created by Andrew Graven.</p>
       </footer>
     </div>
+
+    <div id="toasts" class="toasts" aria-live="polite"></div>
   </body>
 </html>
