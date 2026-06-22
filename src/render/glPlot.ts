@@ -133,12 +133,29 @@ export class GLPlot {
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
   }
 
-  /** Size the drawing buffer to the current render resolution (halved while drafting). */
+  /**
+   * Reconcile the canvas sizing with the current resolution and draft state.
+   * Two *independent* sizes are set here:
+   *
+   * - the **drawing buffer** (`canvas.width/height` + GL viewport) is the render
+   *   resolution — full `_res`, or halved while drafting for responsiveness;
+   * - the **CSS display size** (`canvas.style.width`) is pinned to the full
+   *   `_res` so the on-screen plot stays the same physical size regardless of the
+   *   draft buffer. Without this pin the canvas (which has no explicit CSS width)
+   *   takes its intrinsic = drawing-buffer size, so halving the buffer for draft
+   *   visibly shrinks the whole plot and it snaps back on release — most obvious
+   *   during wheel-zoom. `max-width: 100%` (in the stylesheet) still scales it
+   *   down to fit narrow viewports; `height: auto` keeps it square.
+   */
   private applyRenderSize(): void {
     const size = this._draft ? Math.max(128, this._res >> 1) : this._res;
     if (this.canvas.width !== size) {
       this.canvas.width = size;
       this.canvas.height = size;
+    }
+    const cssWidth = `${this._res}px`;
+    if (this.canvas.style.width !== cssWidth) {
+      this.canvas.style.width = cssWidth;
     }
     this.gl.viewport(0, 0, size, size);
   }
