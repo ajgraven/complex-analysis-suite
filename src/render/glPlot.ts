@@ -68,8 +68,11 @@ export class GLPlot {
   private program: WebGLProgram | null = null;
   private uniforms: Uniforms | null = null;
   private renderScheduled = false;
+  private _draft = false;
   /** Last compile error message, or null when the current program is valid. */
   lastError: string | null = null;
+  /** Optional hook run at the end of each render (used to redraw the 2D overlay). */
+  afterRender: (() => void) | null = null;
 
   private _center: Vec2 = [0, 0];
   private _zoom = 1;
@@ -92,7 +95,7 @@ export class GLPlot {
     if (!gl) throw new Error("WebGL2 is not available in this browser");
     this.gl = gl;
     this.setupQuad();
-    this.resize(res);
+    this.applyRenderSize();
     this.ApplyPreset(preset);
   }
 
@@ -105,10 +108,25 @@ export class GLPlot {
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
   }
 
-  private resize(res: number): void {
-    this.canvas.width = res;
-    this.canvas.height = res;
-    this.gl.viewport(0, 0, res, res);
+  /** Size the drawing buffer to the current render resolution (halved while drafting). */
+  private applyRenderSize(): void {
+    const size = this._draft ? Math.max(128, this._res >> 1) : this._res;
+    if (this.canvas.width !== size) {
+      this.canvas.width = size;
+      this.canvas.height = size;
+    }
+    this.gl.viewport(0, 0, size, size);
+  }
+
+  /**
+   * Toggle draft mode: render at half resolution for responsiveness during
+   * interaction (pan / drag), then restore full resolution on release.
+   */
+  setDraft(on: boolean): void {
+    if (this._draft === on) return;
+    this._draft = on;
+    this.applyRenderSize();
+    this.scheduleRender();
   }
 
   /** Rebuild the fragment program from the current f/escape ASTs. Keeps the old one on error. */
@@ -158,6 +176,7 @@ export class GLPlot {
     gl.uniform2f(u.uC, this._cVal[0], this._cVal[1]);
     gl.uniform1i(u.uFractType, this.fractType === "param" ? 1 : 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    this.afterRender?.();
   }
 
   ApplyPreset(preset: Preset): void {
@@ -257,9 +276,16 @@ export class GLPlot {
     this._z0 = z0Val;
     this.scheduleRender();
   }
+  /**
+   * Update the white-point coordinate WITHOUT re-rendering the fractal (which
+   * does not depend on it) — only the overlay needs to redraw. Used while dragging.
+   */
+  moveZ0(z0Val: Vec2): void {
+    this._z0 = z0Val;
+  }
   set res(resVal: number | string) {
     this._res = Number(resVal);
-    this.resize(this._res);
+    this.applyRenderSize();
     this.scheduleRender();
   }
 

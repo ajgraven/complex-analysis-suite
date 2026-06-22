@@ -73,6 +73,30 @@ h2 {
   border-radius: var(--radius);
 }
 
+/* --- Stacked WebGL canvas + 2D interaction/overlay canvas -------------- */
+.canvas-stack {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.canvas-stack > canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.canvas-stack > .overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border-radius: var(--radius);
+  touch-action: none;
+  cursor: crosshair;
+}
+
 /* --- Control fields ---------------------------------------------------- */
 .controls {
   display: flex;
@@ -156,6 +180,17 @@ button:hover {
   display: flex;
   gap: 0.5rem;
   align-items: flex-end;
+}
+
+/* Inline checkbox + label (e.g. the export "overlays" toggle). */
+label.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+  color: var(--fg);
+  white-space: nowrap;
+  padding-bottom: 0.35rem;
 }
 
 /* --- Documentation ----------------------------------------------------- */

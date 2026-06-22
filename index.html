@@ -22,7 +22,10 @@
         <!-- ============================ Parameter space ============== -->
         <section class="plot" aria-labelledby="param-heading">
           <h2 id="param-heading">Parameter Space</h2>
-          <canvas id="MCSCanvas"></canvas>
+          <div class="canvas-stack">
+            <canvas id="MCSCanvas"></canvas>
+            <canvas id="MCSOverlay" class="overlay" tabindex="0"></canvas>
+          </div>
 
           <div class="controls">
             <div class="field">
@@ -61,7 +64,10 @@
         <!-- ============================ Dynamical plane ============== -->
         <section class="plot" aria-labelledby="dyn-heading">
           <h2 id="dyn-heading">Dynamical Plane</h2>
-          <canvas id="JCSCanvas"></canvas>
+          <div class="canvas-stack">
+            <canvas id="JCSCanvas"></canvas>
+            <canvas id="JCSOverlay" class="overlay" tabindex="0"></canvas>
+          </div>
 
           <div class="controls">
             <div class="field">
@@ -123,6 +129,16 @@
             <label for="mImageName">Parameter space image</label>
             <div class="inline-actions">
               <input type="text" id="mImageName" value="ParamSpace.png" size="14" />
+              <select id="paramExportSize" aria-label="Parameter space export size (px)">
+                <option value="500">screen (500)</option>
+                <option value="1000">1000</option>
+                <option value="2000" selected>2000</option>
+                <option value="4000">4000</option>
+                <option value="8000">8000</option>
+              </select>
+              <label class="checkbox">
+                <input type="checkbox" id="paramExportOverlay" /> overlays
+              </label>
               <button id="print_param_space" type="button">Save</button>
             </div>
           </div>
@@ -130,6 +146,16 @@
             <label for="jImageName">Dynamical plane image</label>
             <div class="inline-actions">
               <input type="text" id="jImageName" value="DynPlane.png" size="14" />
+              <select id="dynExportSize" aria-label="Dynamical plane export size (px)">
+                <option value="500">screen (500)</option>
+                <option value="1000">1000</option>
+                <option value="2000" selected>2000</option>
+                <option value="4000">4000</option>
+                <option value="8000">8000</option>
+              </select>
+              <label class="checkbox">
+                <input type="checkbox" id="dynExportOverlay" /> overlays
+              </label>
               <button id="print_dyn_plane" type="button">Save</button>
             </div>
           </div>
@@ -187,11 +213,21 @@
         </div>
 
         <div>
-          <h3>Known limitations</h3>
+          <h3>Saving images</h3>
           <ul>
             <li>
-              Saved images use the canvas resolution (500&times;500), not the user-specified
-              resolution field. The resolution field controls render quality, not export size.
+              Each plot can be saved at a chosen resolution using the size dropdown next to its Save
+              button. The image is re-rendered off-screen at that size, so it is sharp at any
+              resolution (the on-screen plots are unaffected).
+            </li>
+            <li>
+              Tick "overlays" to include the orbit polyline, white point, and coordinate label;
+              leave it unticked for a clean fractal-only image.
+            </li>
+            <li>
+              Very large sizes take a moment to render. To stay within GPU memory, the fractal is
+              computed at up to 4096&times;4096 and smoothly scaled up to larger output sizes; sizes
+              above your GPU's maximum texture size are disabled in the dropdown.
             </li>
           </ul>
         </div>
