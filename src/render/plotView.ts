@@ -13,7 +13,7 @@ import type { Vec2 } from "../arrays";
 import type { Preset } from "../presets";
 import { clampExportSize, downloadCanvas, ensurePngName, getMaxTextureSize } from "../hiResExport";
 import { showToast } from "../ui/toast";
-import { GLPlot, type FractType } from "./glPlot";
+import { GLPlot, renderScale, type FractType } from "./glPlot";
 import { drawOverlay } from "./overlay";
 
 /** Hooks linking a plot to the rest of the app (the parameter→dynamical coupling, input sync). */
@@ -116,9 +116,13 @@ export class PlotView {
   }
 
   private syncOverlaySize(): void {
-    if (this.overlay.width !== this.plot.res) {
-      this.overlay.width = this.plot.res;
-      this.overlay.height = this.plot.res;
+    // Match the WebGL buffer's HiDPI scaling so the overlay stays pixel-aligned
+    // and crisp. The overlay's CSS size (100% of the stack) stays at the logical
+    // resolution; pointer math uses getBoundingClientRect, so it's unaffected.
+    const size = Math.round(this.plot.res * renderScale());
+    if (this.overlay.width !== size) {
+      this.overlay.width = size;
+      this.overlay.height = size;
     }
   }
 

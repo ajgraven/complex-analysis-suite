@@ -38,6 +38,15 @@ import {
   setParamZoomInput,
 } from "./ui/controls";
 
+/** Maps each "coloring" dropdown option to a (colormap, smooth) pair. */
+const COLORINGS: Record<string, { colormap: number; smooth: boolean }> = {
+  classic: { colormap: 0, smooth: false },
+  smooth: { colormap: 0, smooth: true },
+  viridis: { colormap: 1, smooth: true },
+  magma: { colormap: 2, smooth: true },
+  grayscale: { colormap: 3, smooth: true },
+};
+
 /** Show the WebGL2-unavailable banner (or a generic init error) and stop. */
 function showFatalBanner(message: string): void {
   const banner = document.getElementById("webgl-error");
@@ -226,11 +235,22 @@ function init(): void {
     }
   }
 
+  /** Apply the selected coloring (colormap + smoothing) to both plots. */
+  function applyColoring(): void {
+    const value = byId<HTMLSelectElement>("coloring").value;
+    const { colormap, smooth } = COLORINGS[value] ?? COLORINGS.classic;
+    parameterView.plot.setColoring(colormap, smooth);
+    dynamicalView.plot.setColoring(colormap, smooth);
+  }
+
   // --- wire up the UI controls ------------------------------------------
 
   document.addEventListener("keyup", (event) => {
     if (event.key === "Enter") applyChanges();
   });
+
+  byId("coloring").addEventListener("change", applyColoring);
+  applyColoring();
 
   byId("apply_all").addEventListener("click", applyChanges);
   byId("apply_preset").addEventListener("click", () => {

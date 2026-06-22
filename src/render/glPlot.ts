@@ -61,6 +61,8 @@ interface Uniforms {
   uCenterX: WebGLUniformLocation | null; // df64 hi/lo
   uCenterY: WebGLUniformLocation | null;
   uOne: WebGLUniformLocation | null; // df64 optimization barrier
+  uColormap: WebGLUniformLocation | null;
+  uSmooth: WebGLUniformLocation | null;
 }
 
 interface CompiledProgram {
@@ -79,6 +81,17 @@ const DF64_THRESHOLD = 8000;
 function splitDouble(x: number): [number, number] {
   const hi = Math.fround(x);
   return [hi, Math.fround(x - hi)];
+}
+
+/**
+ * Device-pixel ratio used to size the drawing buffer, so plots are crisp on
+ * HiDPI/Retina displays. Capped at 2× because per-pixel fractal iteration cost
+ * scales with the square of this — beyond 2× the sharpness rarely justifies the
+ * GPU work, especially at deep zoom. Shared with the overlay canvas so the two
+ * stay pixel-aligned.
+ */
+export function renderScale(): number {
+  return Math.min(window.devicePixelRatio || 1, 2);
 }
 
 export class GLPlot {
@@ -110,6 +123,8 @@ export class GLPlot {
   private _n = "100";
   private _nplot = "7";
   private _z0: Vec2 = [0, 0];
+  private _colormap = 0;
+  private _smooth = false;
   private _res: number;
 
   constructor(canvas: HTMLCanvasElement, preset: Preset, fractType: FractType, res = 500) {
@@ -134,21 +149,23 @@ export class GLPlot {
   }
 
   /**
-   * Reconcile the canvas sizing with the current resolution and draft state.
-   * Two *independent* sizes are set here:
+   * Reconcile the canvas sizing with the current resolution, draft state, and
+   * device pixel ratio. Three concerns:
    *
    * - the **drawing buffer** (`canvas.width/height` + GL viewport) is the render
-   *   resolution — full `_res`, or halved while drafting for responsiveness;
-   * - the **CSS display size** (`canvas.style.width`) is pinned to the full
-   *   `_res` so the on-screen plot stays the same physical size regardless of the
-   *   draft buffer. Without this pin the canvas (which has no explicit CSS width)
-   *   takes its intrinsic = drawing-buffer size, so halving the buffer for draft
-   *   visibly shrinks the whole plot and it snaps back on release — most obvious
-   *   during wheel-zoom. `max-width: 100%` (in the stylesheet) still scales it
-   *   down to fit narrow viewports; `height: auto` keeps it square.
+   *   resolution: `_res` (or halved while drafting for responsiveness), times the
+   *   capped {@link renderScale} so the plot is crisp on HiDPI/Retina displays;
+   * - the **CSS display size** (`canvas.style.width`) is pinned to the logical
+   *   `_res` so the on-screen plot keeps the same physical size regardless of the
+   *   draft buffer or pixel ratio. Without this pin the canvas (no explicit CSS
+   *   width) would take its intrinsic = drawing-buffer size, so changing the
+   *   buffer would visibly resize the whole plot — most obvious during wheel-zoom.
+   *   `max-width: 100%` still scales it down on narrow viewports; `height: auto`
+   *   keeps it square.
    */
   private applyRenderSize(): void {
-    const size = this._draft ? Math.max(128, this._res >> 1) : this._res;
+    const base = this._draft ? Math.max(128, this._res >> 1) : this._res;
+    const size = Math.round(base * renderScale());
     if (this.canvas.width !== size) {
       this.canvas.width = size;
       this.canvas.height = size;
@@ -191,6 +208,8 @@ export class GLPlot {
         uCenterX: gl.getUniformLocation(program, "uCenterX"),
         uCenterY: gl.getUniformLocation(program, "uCenterY"),
         uOne: gl.getUniformLocation(program, "uOne"),
+        uColormap: gl.getUniformLocation(program, "uColormap"),
+        uSmooth: gl.getUniformLocation(program, "uSmooth"),
       },
     };
   }
@@ -276,6 +295,8 @@ export class GLPlot {
     gl.uniform1i(u.uN, Math.max(1, Math.round(Number(this._n))));
     gl.uniform2f(u.uC, this._cVal[0], this._cVal[1]);
     gl.uniform1i(u.uFractType, this.fractType === "param" ? 1 : 0);
+    gl.uniform1i(u.uColormap, this._colormap);
+    gl.uniform1i(u.uSmooth, this._smooth ? 1 : 0);
     if (precision === "df64") {
       const [hx, lx] = splitDouble(this._center[0]);
       const [hy, ly] = splitDouble(this._center[1]);
@@ -452,6 +473,17 @@ export class GLPlot {
   set res(resVal: number | string) {
     this._res = Number(resVal);
     this.applyRenderSize();
+    this.scheduleRender();
+  }
+
+  /**
+   * Set the colour mapping: `colormap` (0 classic, 1 viridis, 2 magma,
+   * 3 grayscale) and whether to use smooth/continuous escape-time colouring.
+   * Both are shader uniforms, so this only re-renders — no recompile.
+   */
+  setColoring(colormap: number, smooth: boolean): void {
+    this._colormap = colormap;
+    this._smooth = smooth;
     this.scheduleRender();
   }
 
