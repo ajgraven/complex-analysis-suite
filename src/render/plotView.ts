@@ -29,6 +29,12 @@ export interface PlotViewHooks {
 /** Pixel radius around the white point that counts as grabbing it. */
 const GRAB_RADIUS = 12;
 
+/** Optional progress reporting + cancellation for an export. */
+interface ExportProgress {
+  onProgress?: (fraction: number) => void;
+  isCancelled?: () => boolean;
+}
+
 export class PlotView {
   readonly plot: GLPlot;
   private readonly overlay: HTMLCanvasElement;
@@ -79,15 +85,16 @@ export class PlotView {
    * `size`, clamped to the GPU's max texture size. Shared by {@link exportPng}
    * (download) and {@link copyPng} (clipboard).
    */
-  private renderExportCanvas(opts: { size: number; overlays: boolean }): {
-    canvas: HTMLCanvasElement;
-    size: number;
-    clamped: boolean;
-    maxTex: number;
-  } {
+  private async renderExportCanvas(
+    opts: { size: number; overlays: boolean } & ExportProgress,
+  ): Promise<{ canvas: HTMLCanvasElement; size: number; clamped: boolean; maxTex: number } | null> {
     const maxTex = getMaxTextureSize();
     const { size, clamped } = clampExportSize(opts.size, maxTex);
-    const image = this.plot.renderToImageData(size);
+    const image = await this.plot.renderToImageData(size, {
+      onProgress: opts.onProgress,
+      isCancelled: opts.isCancelled,
+    });
+    if (!image) return null; // cancelled
     const out = document.createElement("canvas");
     out.width = size;
     out.height = size;
@@ -120,32 +127,38 @@ export class PlotView {
   }
 
   /** Render the plot at `size` (true detail) and download it as a PNG, overlay optional. */
-  async exportPng(opts: { size: number; overlays: boolean; filename: string }): Promise<void> {
-    const { canvas, size, clamped, maxTex } = this.renderExportCanvas(opts);
-    await downloadCanvas(canvas, ensurePngName(opts.filename));
-    if (clamped) {
+  async exportPng(
+    opts: { size: number; overlays: boolean; filename: string } & ExportProgress,
+  ): Promise<void> {
+    const result = await this.renderExportCanvas(opts);
+    if (!result) return; // cancelled
+    await downloadCanvas(result.canvas, ensurePngName(opts.filename));
+    if (result.clamped) {
       showToast(
-        `Requested size exceeded this device's maximum of ${maxTex}px; ` +
-          `exported at ${size}×${size} instead.`,
+        `Requested size exceeded this device's maximum of ${result.maxTex}px; ` +
+          `exported at ${result.size}×${result.size} instead.`,
         "warn",
       );
     }
   }
 
   /** Render the plot at `size` and copy it to the clipboard as a PNG, overlay optional. */
-  async copyPng(opts: { size: number; overlays: boolean }): Promise<void> {
+  async copyPng(opts: { size: number; overlays: boolean } & ExportProgress): Promise<void> {
     if (!navigator.clipboard || typeof ClipboardItem === "undefined") {
       throw new Error("Copying images to the clipboard isn't supported in this browser");
     }
-    const { canvas, size, clamped, maxTex } = this.renderExportCanvas(opts);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    const result = await this.renderExportCanvas(opts);
+    if (!result) return; // cancelled
+    const blob = await new Promise<Blob | null>((resolve) =>
+      result.canvas.toBlob(resolve, "image/png"),
+    );
     if (!blob) throw new Error("Failed to encode the image");
     await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
     showToast(
-      clamped
-        ? `Copied at ${size}×${size} (this device's maximum is ${maxTex}px).`
+      result.clamped
+        ? `Copied at ${result.size}×${result.size} (this device's maximum is ${result.maxTex}px).`
         : "Image copied to the clipboard.",
-      clamped ? "warn" : "info",
+      result.clamped ? "warn" : "info",
     );
   }
 

@@ -16,9 +16,13 @@ All of these must pass:
 ```bash
 npm test          # Vitest unit suite
 npm run lint      # ESLint
+npm run typecheck # tsc --noEmit
 npm run build     # production build succeeds
 npm run format    # Prettier (run it; commit the result)
 ```
+
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the same checks on
+every push and PR.
 
 Pure logic — the expression compiler (lexer/parser/evaluator), the df64
 primitives, transforms, presets — is unit-tested. The WebGL render itself can't
@@ -42,10 +46,16 @@ stdlib supplies those ops in **two precisions** behind the same names — single
 ([`complexSingle.glsl.ts`](src/glsl/complexSingle.glsl.ts)) and df64
 ([`df64.glsl.ts`](src/glsl/df64.glsl.ts) + [`complexDf64.glsl.ts`](src/glsl/complexDf64.glsl.ts)) —
 plus a precision-agnostic derived layer ([`complexDerived.glsl.ts`](src/glsl/complexDerived.glsl.ts)).
-[`GLPlot`](src/render/glPlot.ts) compiles both programs and switches to df64 past
-a zoom threshold.
+[`GLPlot`](src/render/glPlot.ts) compiles the single-precision program eagerly and
+the df64 one lazily and **asynchronously** (it can be huge), switching to df64 past
+a zoom threshold once it's ready — so the first deep zoom shows single precision and
+upgrades when the build finishes, never freezing the interaction.
 
-## Two gotchas
+Rendering is progressive (coarse → fine), HiDPI-aware, and reduces resolution/
+iterations during drag; see the `render`/`applyRenderSize`/`setupDraw` flow in
+`GLPlot`.
+
+## Three gotchas
 
 1. **Keep the GLSL and JS backends in agreement.** If you change how a function
    is computed, change it in both `src/expr/glsl.ts` (or the GLSL stdlib) **and**
@@ -58,6 +68,13 @@ a zoom threshold.
    Note the `* uOne` optimization barriers on the error-free transforms — without
    them the shader compiler reassociates the math and df64 silently collapses to
    single precision.
+
+3. **Off-screen passes vs. the `uCdf` sampler.** Histogram colouring and PNG
+   export render into a texture-backed framebuffer. The shader declares a `uCdf`
+   sampler (default texture unit 0); if the render-target texture is left bound to
+   unit 0 it's a feedback loop and the draw comes out black. `GLPlot.updateCdf` and
+   `GLPlot.renderToImageData` detach the target (`bindTexture(TEXTURE_2D, null)`)
+   after attaching it to the FBO — keep that if you touch those paths.
 
 ## Common tasks
 
@@ -90,8 +107,16 @@ checks the `f`/`escape` strings parse.
 
 ### Change the colouring
 
-Edit `colorFcn` in [`src/render/shaderBuilder.ts`](src/render/shaderBuilder.ts).
-It maps escape time `u` (or `n` for "never escaped" → black) to an `(r, g, b)`.
+Colouring is driven by three shader uniforms set in
+[`src/render/shaderBuilder.ts`](src/render/shaderBuilder.ts): `uMode` (escape /
+smooth / histogram / distance / orbit-trap / domain), `uPalette` (classic /
+viridis / magma / grayscale), and `uAA` (supersampling). The per-pixel logic lives
+in `colorAt` (and `distanceColor` for the edge mode); `palette(t)` maps a scalar to
+RGB. To add a **palette**, extend `palette()` and add an `<option>` to the
+`#palette` dropdown (mapped in `PALETTES` in [`src/main.ts`](src/main.ts)). To add a
+**mode**, add a branch in `colorAt`, an `<option>` to `#mode`, and an entry in
+`MODES`. Histogram is special: it needs the CPU CDF pre-pass in `GLPlot.updateCdf`
+(an escape-time render → readback → lookup texture).
 
 ### Add a control input
 

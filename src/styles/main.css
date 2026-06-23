@@ -294,3 +294,76 @@ select.invalid {
 .toast-error {
   background: #c0392b;
 }
+
+/* --- Export progress overlay ------------------------------------------ */
+.export-progress {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.export-card {
+  min-width: 16rem;
+  text-align: center;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+}
+
+.export-card p {
+  margin: 0 0 0.75rem;
+}
+
+.export-card progress {
+  width: 100%;
+}
+
+.export-card button {
+  margin-top: 0.75rem;
+}
+
+/* --- First-run onboarding --------------------------------------------- */
+.onboarding {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.onboarding-card {
+  max-width: 30rem;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+}
+
+.onboarding-card h2 {
+  margin-top: 0;
+}
+
+.onboarding-card ul {
+  padding-left: 1.1rem;
+}
+
+.onboarding-card li {
+  margin-bottom: 0.4rem;
+}
+
+.onboarding-card button {
+  margin-top: 0.5rem;
+}

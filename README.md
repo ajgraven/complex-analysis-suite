@@ -125,12 +125,12 @@ clipboard) buttons in the Downloads panel, with two adjacent controls:
   white point, and coordinate label (sized to the chosen resolution); when
   unticked, you get a clean fractal-only image.
 
-The renderer draws into an off-screen RGBA8 framebuffer
-([`GLPlot.renderToImageData`](src/render/glPlot.ts)), so the export is true
-single-pass detail at the requested size — no render-image cap. The scaled
-overlay is composited on top, then downloaded
-([`PlotView.exportPng`](src/render/plotView.ts)) or copied to the clipboard
-([`PlotView.copyPng`](src/render/plotView.ts)).
+The renderer draws into an off-screen RGBA8 framebuffer in horizontal strips
+([`GLPlot.renderToImageData`](src/render/glPlot.ts)) — full detail at the requested
+size (no render-image cap), shown behind a progress bar with a **Cancel** button so
+large exports stay responsive. The scaled overlay is composited on top, then
+downloaded ([`PlotView.exportPng`](src/render/plotView.ts)) or copied to the
+clipboard ([`PlotView.copyPng`](src/render/plotView.ts)).
 
 ## Colouring
 
@@ -216,13 +216,13 @@ already relative.
 
 ## Troubleshooting
 
-| Symptom                                 | Likely cause / fix                                                                                                        |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Both canvases are blank                 | WebGL2 unavailable or disabled in the browser; check the console for context-creation or shader-compile errors.           |
-| A custom `f` / `escape` won't render    | A parse/compile error; the renderer keeps the last good shader. Check the console for the message and fix the expression. |
-| Deep zoom of a Schwarz preset stalls    | The first deep zoom compiles a large df64 shader (one-time, a few seconds). Subsequent renders are fast.                  |
-| `npm run dev` fails: port 5173 in use   | The port is pinned (`strictPort`). Stop the other process or change `server.port` in `vite.config.ts`.                    |
-| A preset renders but the orbit is wrong | The escape predicate diverges from `f`; check the preset's `escape` expression in `src/presets.ts`.                       |
+| Symptom                                          | Likely cause / fix                                                                                                                                         |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Both canvases are blank                          | WebGL2 unavailable or disabled in the browser; check the console for context-creation or shader-compile errors.                                            |
+| A custom `f` / `escape` won't render             | A parse/compile error; the renderer keeps the last good shader. Check the console for the message and fix the expression.                                  |
+| Deep zoom briefly looks pixelated, then sharpens | The df64 shader compiles in the background on the first deep zoom; the view shows single precision and upgrades to full precision when the build finishes. |
+| `npm run dev` fails: port 5173 in use            | The port is pinned (`strictPort`). Stop the other process or change `server.port` in `vite.config.ts`.                                                     |
+| A preset renders but the orbit is wrong          | The escape predicate diverges from `f`; check the preset's `escape` expression in `src/presets.ts`.                                                        |
 
 ## Known limitations
 
@@ -233,8 +233,9 @@ already relative.
   single precision); beyond that, df64 precision runs out and the image
   pixelates. Going deeper would need perturbation-theory techniques.
 - **Heavy df64 shaders:** the first deep zoom of a transcendental-heavy preset
-  (the Schwarz maps) compiles a large df64 shader, a one-time pause of a few
-  seconds. The compiled program is cached afterwards.
+  (the Schwarz maps) compiles a large df64 shader. This now happens in the
+  background (the view shows single precision and upgrades when ready), so it no
+  longer freezes interaction; the compiled program is cached afterwards.
 - **`npm audit`:** the only reported advisories are in dev-only tooling
   (esbuild/Vite dev server). `npm audit --omit=dev` reports zero — nothing ships
   to production.

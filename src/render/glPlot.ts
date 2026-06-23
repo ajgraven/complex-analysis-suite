@@ -72,6 +72,13 @@ interface CompiledProgram {
   uniforms: Uniforms;
 }
 
+/** A program whose compile/link has been started but whose status hasn't been checked yet. */
+interface PendingProgram {
+  program: WebGLProgram;
+  vertex: WebGLShader;
+  fragment: WebGLShader;
+}
+
 /**
  * Switch to the df64 program once `zoom * max(1, |center|)` exceeds this — i.e.
  * when single-precision (~24-bit mantissa) would start to pixelate. Below it,
@@ -106,10 +113,17 @@ export function renderScale(): number {
  */
 const PROGRESSIVE_LADDER = [0.5, 1.0];
 
+/** During interaction, heavy renders also drop the iteration cap (to this fraction,
+ *  floored at {@link DRAFT_MIN_ITERS}) for responsiveness; full count on release. */
+const DRAFT_ITER_FACTOR = 0.5;
+const DRAFT_MIN_ITERS = 30;
+
 export class GLPlot {
   private readonly gl: WebGL2RenderingContext;
   private readonly canvas: HTMLCanvasElement;
   private readonly fractType: FractType;
+  /** KHR_parallel_shader_compile, when available — lets df64 compile off the main thread. */
+  private readonly parallelExt: { COMPLETION_STATUS_KHR: number } | null;
 
   private programs: { single: CompiledProgram | null; df64: CompiledProgram | null } = {
     single: null,
@@ -123,8 +137,9 @@ export class GLPlot {
   private _draft = false;
   /** Index into {@link PROGRESSIVE_LADDER} for the next frame; reset to 0 on each change. */
   private _level = 0;
-  /** The df64 program is compiled lazily (it can be huge/slow), only when a deep zoom needs it. */
-  private df64Dirty = true;
+  /** df64 is compiled lazily and asynchronously (it can be huge); these track the in-flight build. */
+  private df64Compiling = false;
+  private df64Gen = 0;
   /** Last compile error message, or null when the current program is valid. */
   lastError: string | null = null;
   /** Optional hook run at the end of each render (used to redraw the 2D overlay). */
@@ -153,6 +168,9 @@ export class GLPlot {
     const gl = canvas.getContext("webgl2", { preserveDrawingBuffer: true });
     if (!gl) throw new Error("WebGL2 is not available in this browser");
     this.gl = gl;
+    this.parallelExt = gl.getExtension("KHR_parallel_shader_compile") as {
+      COMPLETION_STATUS_KHR: number;
+    } | null;
     this.setupQuad();
     this.applyRenderSize();
     this.ApplyPreset(preset);
@@ -208,32 +226,34 @@ export class GLPlot {
     this.scheduleRender();
   }
 
-  /** Compile one precision variant into a {@link CompiledProgram}. */
-  private compile(precision: Precision): CompiledProgram {
+  /** All uniform locations for a linked program. */
+  private getUniforms(program: WebGLProgram): Uniforms {
     const gl = this.gl;
+    return {
+      uResolution: gl.getUniformLocation(program, "uResolution"),
+      uZoom: gl.getUniformLocation(program, "uZoom"),
+      uN: gl.getUniformLocation(program, "uN"),
+      uC: gl.getUniformLocation(program, "uC"),
+      uFractType: gl.getUniformLocation(program, "uFractType"),
+      uCenter: gl.getUniformLocation(program, "uCenter"),
+      uCenterX: gl.getUniformLocation(program, "uCenterX"),
+      uCenterY: gl.getUniformLocation(program, "uCenterY"),
+      uOne: gl.getUniformLocation(program, "uOne"),
+      uMode: gl.getUniformLocation(program, "uMode"),
+      uPalette: gl.getUniformLocation(program, "uPalette"),
+      uAA: gl.getUniformLocation(program, "uAA"),
+      uCdf: gl.getUniformLocation(program, "uCdf"),
+    };
+  }
+
+  /** Compile one precision variant synchronously into a {@link CompiledProgram}. */
+  private compile(precision: Precision): CompiledProgram {
     const program = createProgram(
-      gl,
+      this.gl,
       VERTEX_SHADER,
       buildFragmentShader(this._fAst, this._escAst, precision),
     );
-    return {
-      program,
-      uniforms: {
-        uResolution: gl.getUniformLocation(program, "uResolution"),
-        uZoom: gl.getUniformLocation(program, "uZoom"),
-        uN: gl.getUniformLocation(program, "uN"),
-        uC: gl.getUniformLocation(program, "uC"),
-        uFractType: gl.getUniformLocation(program, "uFractType"),
-        uCenter: gl.getUniformLocation(program, "uCenter"),
-        uCenterX: gl.getUniformLocation(program, "uCenterX"),
-        uCenterY: gl.getUniformLocation(program, "uCenterY"),
-        uOne: gl.getUniformLocation(program, "uOne"),
-        uMode: gl.getUniformLocation(program, "uMode"),
-        uPalette: gl.getUniformLocation(program, "uPalette"),
-        uAA: gl.getUniformLocation(program, "uAA"),
-        uCdf: gl.getUniformLocation(program, "uCdf"),
-      },
-    };
+    return { program, uniforms: this.getUniforms(program) };
   }
 
   /**
@@ -267,22 +287,95 @@ export class GLPlot {
       this.lastError = err instanceof Error ? err.message : String(err);
       console.error(`[${this.fractType}] single shader build failed:`, this.lastError);
     }
-    this.df64Dirty = true;
+    // The df64 program (if any) is now for the old expression — drop it so a deep
+    // zoom recompiles, and bump the generation to discard any in-flight build.
+    if (this.programs.df64) gl.deleteProgram(this.programs.df64.program);
+    this.programs.df64 = null;
+    this.df64Gen++;
+    this.df64Compiling = false;
   }
 
-  /** Compile the df64 program on demand (once per f/escape change). */
+  /**
+   * Compile the df64 program on demand, asynchronously. Until it's ready, deep
+   * zooms fall back to single precision; when it finishes we re-render so the view
+   * upgrades to df64 — so the (potentially multi-second) build never blocks the
+   * interaction. Polls KHR_parallel_shader_compile when available.
+   */
   private ensureDf64(): void {
-    if (!this.df64Dirty) return;
-    this.df64Dirty = false;
-    const gl = this.gl;
+    if (this.programs.df64 || this.df64Compiling) return;
+    this.df64Compiling = true;
+    const gen = this.df64Gen;
+    let pending: PendingProgram;
     try {
-      const next = this.compile("df64");
-      if (this.programs.df64) gl.deleteProgram(this.programs.df64.program);
-      this.programs.df64 = next;
+      pending = this.linkProgramAsync(buildFragmentShader(this._fAst, this._escAst, "df64"));
     } catch (err) {
-      // df64 is optional — losing it only disables deep zoom for this expression.
+      this.df64Compiling = false;
       console.warn(`[${this.fractType}] df64 shader build failed (deep zoom disabled):`, err);
+      return;
     }
+    const ext = this.parallelExt;
+    const finish = (): void => {
+      this.df64Compiling = false;
+      if (gen !== this.df64Gen) {
+        this.disposePending(pending); // expression changed mid-build — drop it
+        return;
+      }
+      try {
+        this.programs.df64 = this.finalizeProgram(pending);
+        this.scheduleRender(); // upgrade the current view to df64 now that it's ready
+      } catch (err) {
+        this.disposePending(pending);
+        console.warn(`[${this.fractType}] df64 shader build failed (deep zoom disabled):`, err);
+      }
+    };
+    const poll = (): void => {
+      if (ext && !this.gl.getProgramParameter(pending.program, ext.COMPLETION_STATUS_KHR)) {
+        window.setTimeout(poll, 16);
+      } else {
+        finish();
+      }
+    };
+    if (ext) poll();
+    else window.setTimeout(finish, 0); // defer the blocking status check off this frame
+  }
+
+  /** Start compiling+linking a program without blocking on compile/link status. */
+  private linkProgramAsync(fs: string): PendingProgram {
+    const gl = this.gl;
+    const vertex = gl.createShader(gl.VERTEX_SHADER);
+    const fragment = gl.createShader(gl.FRAGMENT_SHADER);
+    const program = gl.createProgram();
+    if (!vertex || !fragment || !program) throw new Error("Failed to create df64 program");
+    gl.shaderSource(vertex, VERTEX_SHADER);
+    gl.compileShader(vertex);
+    gl.shaderSource(fragment, fs);
+    gl.compileShader(fragment);
+    gl.attachShader(program, vertex);
+    gl.attachShader(program, fragment);
+    gl.linkProgram(program);
+    return { program, vertex, fragment };
+  }
+
+  /** Check a started program's status; return the compiled program or throw. */
+  private finalizeProgram(p: PendingProgram): CompiledProgram {
+    const gl = this.gl;
+    for (const shader of [p.vertex, p.fragment]) {
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        throw new Error(`Shader compile error: ${gl.getShaderInfoLog(shader)}`);
+      }
+    }
+    if (!gl.getProgramParameter(p.program, gl.LINK_STATUS)) {
+      throw new Error(`Program link error: ${gl.getProgramInfoLog(p.program)}`);
+    }
+    gl.deleteShader(p.vertex);
+    gl.deleteShader(p.fragment);
+    return { program: p.program, uniforms: this.getUniforms(p.program) };
+  }
+
+  private disposePending(p: PendingProgram): void {
+    this.gl.deleteShader(p.vertex);
+    this.gl.deleteShader(p.fragment);
+    this.gl.deleteProgram(p.program);
   }
 
   /** The precision a deep-enough zoom calls for (ignores whether df64 is compiled yet). */
@@ -341,7 +434,12 @@ export class GLPlot {
     gl.useProgram(cp.program);
     gl.uniform2f(u.uResolution, width, height);
     gl.uniform1f(u.uZoom, this._zoom);
-    gl.uniform1i(u.uN, Math.max(1, Math.round(Number(this._n))));
+    const fullN = Math.max(1, Math.round(Number(this._n)));
+    const iterN =
+      this._draft && this.wantsProgressive()
+        ? Math.max(DRAFT_MIN_ITERS, Math.round(fullN * DRAFT_ITER_FACTOR))
+        : fullN;
+    gl.uniform1i(u.uN, iterN);
     gl.uniform2f(u.uC, this._cVal[0], this._cVal[1]);
     gl.uniform1i(u.uFractType, this.fractType === "param" ? 1 : 0);
     const mode = modeOverride ?? this.effectiveMode();
@@ -455,7 +553,10 @@ export class GLPlot {
    * high-resolution export; the live canvas is left untouched. `size` should be
    * within the GPU's max texture size.
    */
-  renderToImageData(size: number): ImageData {
+  async renderToImageData(
+    size: number,
+    opts: { onProgress?: (fraction: number) => void; isCancelled?: () => boolean } = {},
+  ): Promise<ImageData | null> {
     const gl = this.gl;
     if (!this.programs.single && !this.programs.df64) {
       throw new Error("No compiled program to export");
@@ -468,25 +569,47 @@ export class GLPlot {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     const fbo = gl.createFramebuffer();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
     gl.bindTexture(gl.TEXTURE_2D, null); // detach from the unit so it isn't a sampler feedback loop
 
-    gl.viewport(0, 0, size, size);
-    this.setupDraw(size, size);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
+    const rowBytes = size * 4;
     const pixels = new Uint8Array(size * size * 4);
-    gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    const STRIP = 256;
+    const strips = Math.max(1, Math.ceil(size / STRIP));
+    let cancelled = false;
+
+    // Render in horizontal strips, yielding between them so the UI stays
+    // responsive and the export can report progress / be cancelled. Each strip
+    // re-binds the FBO + uniforms in case a live render ran during a yield.
+    for (let s = 0; s < strips; s++) {
+      if (opts.isCancelled?.()) {
+        cancelled = true;
+        break;
+      }
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      if (!this.setupDraw(size, size)) {
+        cancelled = true;
+        break;
+      }
+      const y0 = s * STRIP;
+      const h = Math.min(STRIP, size - y0);
+      gl.viewport(0, y0, size, h);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      const strip = new Uint8Array(size * h * 4);
+      gl.readPixels(0, y0, size, h, gl.RGBA, gl.UNSIGNED_BYTE, strip);
+      pixels.set(strip, y0 * rowBytes);
+      opts.onProgress?.((s + 1) / strips);
+      if (s < strips - 1) await new Promise((resolve) => window.setTimeout(resolve, 0));
+    }
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.deleteFramebuffer(fbo);
     gl.deleteTexture(tex);
     this.scheduleRender(); // restore the live viewport + re-render the canvas
+    if (cancelled) return null;
 
     // WebGL reads bottom-up; ImageData is top-down, so flip rows.
     const out = new Uint8ClampedArray(size * size * 4);
-    const rowBytes = size * 4;
     for (let row = 0; row < size; row++) {
       const src = row * rowBytes;
       out.set(pixels.subarray(src, src + rowBytes), (size - 1 - row) * rowBytes);

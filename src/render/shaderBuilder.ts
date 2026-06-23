@@ -108,10 +108,13 @@ ${coordinate}
   cvec cc = (uFractType == 1) ? z : vec_(uC.x, uC.y);
 
   if (uMode == 4) {
-    // Domain colouring: one application of f; hue = arg, brightness grows with |f|.
+    // Domain colouring: one application of f. hue = arg; brightness grows with |f|,
+    // with subtle magnitude contour bands (a classic domain-colouring cue).
     cvec w = fFn(z, cc);
+    float mag = cabsf(w);
     float hue = cre1(carg(w)) * 0.15915494 + 0.5;
-    return hsv2rgb(vec3(hue, 0.9, 1.0 - 1.0 / (1.0 + cabsf(w))));
+    float val = (1.0 - 1.0 / (1.0 + mag)) * (0.9 + 0.1 * fract(log2(mag + 1.0)));
+    return hsv2rgb(vec3(hue, 0.9, val));
   }
 
   float trap = 1e20;
@@ -122,7 +125,7 @@ ${coordinate}
     kmax = k + 1;
     trap = min(trap, min(abs(cre1(z)), abs(cre1(cim(z))))); // cross (axes) trap
   }
-  if (uMode == 3) return palette(1.0 - 1.0 / (1.0 + trap * 8.0)); // orbit trap
+  if (uMode == 3) return palette(1.0 - clamp(sqrt(trap) * 1.3, 0.0, 1.0)); // orbit trap (axes)
   if (kmax == uN) return vec3(0.0); // never escaped → interior
 
   if (uMode == 5) {

@@ -73,6 +73,68 @@ function hoverReadout(elementId: string): (coord: Vec2 | null) => void {
   };
 }
 
+/** Show the first-run onboarding once (dismissal remembered in localStorage). */
+function setupOnboarding(): void {
+  const el = byId("onboarding");
+  let seen = false;
+  try {
+    seen = localStorage.getItem("cdjs.onboarded") === "1";
+  } catch {
+    // localStorage may be unavailable (private mode); just show the hint.
+  }
+  if (seen) return;
+  el.hidden = false;
+  const dismiss = (): void => {
+    el.hidden = true;
+    try {
+      localStorage.setItem("cdjs.onboarded", "1");
+    } catch {
+      // ignore storage failures — worst case the hint shows again next visit
+    }
+  };
+  byId("onboarding_dismiss").addEventListener("click", dismiss);
+  el.addEventListener("click", (e) => {
+    if (e.target === el) dismiss(); // click the backdrop to dismiss
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !el.hidden) dismiss();
+  });
+  byId<HTMLButtonElement>("onboarding_dismiss").focus();
+}
+
+/** Show the export-progress overlay; returns progress + cancel hooks and a closer. */
+function beginExport(label: string): {
+  onProgress: (fraction: number) => void;
+  isCancelled: () => boolean;
+  done: () => void;
+} {
+  const overlay = byId("export-progress");
+  const bar = byId<HTMLProgressElement>("export-progress-bar");
+  const text = byId("export-progress-label");
+  const cancelBtn = byId<HTMLButtonElement>("export-cancel");
+  let cancelled = false;
+  const onCancel = (): void => {
+    cancelled = true;
+    cancelBtn.disabled = true;
+    text.textContent = "Cancelling…";
+  };
+  text.textContent = label;
+  bar.value = 0;
+  cancelBtn.disabled = false;
+  cancelBtn.addEventListener("click", onCancel);
+  overlay.hidden = false;
+  return {
+    onProgress: (fraction) => {
+      bar.value = fraction;
+    },
+    isCancelled: () => cancelled,
+    done: () => {
+      overlay.hidden = true;
+      cancelBtn.removeEventListener("click", onCancel);
+    },
+  };
+}
+
 /** Build both plots and wire all controls. Throws if WebGL2 is unavailable. */
 function init(): void {
   const dynamicalView = new PlotView(
@@ -228,12 +290,20 @@ function init(): void {
     const label = button.textContent;
     button.disabled = true;
     button.textContent = "Rendering…";
+    const progress = beginExport(`Rendering ${size}×${size}…`);
     try {
-      await view.exportPng({ size, overlays, filename });
+      await view.exportPng({
+        size,
+        overlays,
+        filename,
+        onProgress: progress.onProgress,
+        isCancelled: progress.isCancelled,
+      });
     } catch (err) {
       console.error("Export failed:", err);
       showToast(`Export failed: ${err instanceof Error ? err.message : String(err)}`, "error");
     } finally {
+      progress.done();
       button.disabled = false;
       button.textContent = label;
     }
@@ -252,12 +322,19 @@ function init(): void {
     const label = button.textContent;
     button.disabled = true;
     button.textContent = "Copying…";
+    const progress = beginExport(`Copying ${size}×${size}…`);
     try {
-      await view.copyPng({ size, overlays });
+      await view.copyPng({
+        size,
+        overlays,
+        onProgress: progress.onProgress,
+        isCancelled: progress.isCancelled,
+      });
     } catch (err) {
       console.error("Copy failed:", err);
       showToast(`Copy failed: ${err instanceof Error ? err.message : String(err)}`, "error");
     } finally {
+      progress.done();
       button.disabled = false;
       button.textContent = label;
     }
@@ -336,6 +413,7 @@ function init(): void {
   });
 
   disableUnsupportedSizes();
+  setupOnboarding();
 }
 
 try {
