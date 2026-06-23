@@ -69,12 +69,15 @@ iterations during drag; see the `render`/`applyRenderSize`/`setupDraw` flow in
    them the shader compiler reassociates the math and df64 silently collapses to
    single precision.
 
-3. **Off-screen passes vs. the `uCdf` sampler.** Histogram colouring and PNG
-   export render into a texture-backed framebuffer. The shader declares a `uCdf`
-   sampler (default texture unit 0); if the render-target texture is left bound to
-   unit 0 it's a feedback loop and the draw comes out black. `GLPlot.updateCdf` and
-   `GLPlot.renderToImageData` detach the target (`bindTexture(TEXTURE_2D, null)`)
-   after attaching it to the FBO — keep that if you touch those paths.
+3. **Off-screen passes: bind the FBO, then detach the texture.** Histogram
+   colouring, the post-processing pass, and PNG export each render into a
+   texture-backed framebuffer (`GLPlot.updateCdf` / `ensureSceneTarget` /
+   `renderToImageData`). Two rules for these paths: **(a)** bind the framebuffer
+   _before_ `framebufferTexture2D`, or the attachment silently targets the default
+   framebuffer (`INVALID_OPERATION`) and the FBO renders black; **(b)** the shader
+   declares a `uCdf` sampler (default texture unit 0), so after attaching, detach
+   the target with `bindTexture(TEXTURE_2D, null)` — otherwise the render target is
+   also bound as a sampler (a feedback loop) and the draw comes out black.
 
 ## Common tasks
 
@@ -117,6 +120,12 @@ RGB. To add a **palette**, extend `palette()` and add an `<option>` to the
 **mode**, add a branch in `colorAt`, an `<option>` to `#mode`, and an entry in
 `MODES`. Histogram is special: it needs the CPU CDF pre-pass in `GLPlot.updateCdf`
 (an escape-time render → readback → lookup texture).
+
+Relief lighting and post-processing are separate shader stages, not palette/mode
+branches: lighting is applied in `main()` after the per-pixel colour
+(`reliefHeight`/`applyLighting` in `shaderBuilder.ts`, driven by `GLPlot.setLighting`),
+and post-processing is a second fullscreen pass (`POST_FRAGMENT_SHADER`) over the
+rendered scene texture (`GLPlot.drawPost`, driven by `setPost`).
 
 ### Add a control input
 

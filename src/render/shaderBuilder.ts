@@ -25,6 +25,29 @@ layout(location = 0) in vec2 aPos;
 void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
 `;
 
+/**
+ * Post-processing pass: sample the rendered scene texture and apply a vignette and
+ * output gamma. Precision-independent (it samples a colour texture), so it is
+ * compiled once regardless of fractal precision. The render-to-texture + fullscreen
+ * pass scaffold here is reused later (temporal accumulation, pan reuse).
+ */
+export const POST_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+uniform sampler2D uScene;
+uniform vec2 uResolution;
+uniform float uVignette; // 0 = none .. 1 = strong corner darkening
+uniform float uGamma;    // output gamma (1 = unchanged)
+out vec4 fragColor;
+void main() {
+  vec2 uv = gl_FragCoord.xy / uResolution;
+  vec3 col = texture(uScene, uv).rgb;
+  col = pow(max(col, 0.0), vec3(1.0 / uGamma));
+  float r = length(uv - 0.5) * 1.41421356;
+  col *= 1.0 - uVignette * smoothstep(0.4, 1.0, r);
+  fragColor = vec4(col, 1.0);
+}
+`;
+
 /** Build the fragment shader for a plot. `fractType`: 1 = parameter space, 0 = dynamical. */
 export function buildFragmentShader(fAst: Node, escapeAst: Node, precision: Precision): string {
   const isDf64 = precision === "df64";
@@ -58,6 +81,9 @@ uniform int uMode;      // 0 escape, 1 smooth, 2 distance, 3 orbit-trap, 4 domai
 uniform int uPalette;   // 0 classic, 1 viridis, 2 magma, 3 grayscale
 uniform int uAA;        // supersamples per axis (1 = off)
 uniform sampler2D uCdf; // histogram equalisation lookup (mode 5), indexed by escape time
+uniform int uLight;         // relief lighting on/off
+uniform vec3 uLightDir;     // normalised light direction (from azimuth/elevation)
+uniform float uLightHeight; // relief depth — scales the escape-time gradient
 out vec4 fragColor;
 
 // Perceptual colormaps as degree-6 polynomial fits (t in [0,1]). viridis/magma
@@ -180,6 +206,42 @@ ${coordinate}
   return kmax;
 }
 
+// Continuous escape-time "height" for relief lighting; -1.0 for interior pixels.
+// Mirrors the smooth-iteration field so the surface gradient tracks the colour bands.
+float reliefHeight(vec2 fragXY) {
+  vec2 uv = fragXY / uResolution;
+${coordinate}
+  cvec cc = (uFractType == 1) ? z : vec_(uC.x, uC.y);
+  int kmax = 0;
+  for (int k = 0; k < uN; k++) {
+    if (escapeFn(z, cc)) break;
+    z = fFn(z, cc);
+    kmax = k + 1;
+  }
+  if (kmax == uN) return -1.0; // never escaped → interior
+  float s = float(kmax);
+  float az = cabsf(z);
+  if (az > 1.0) s = float(kmax) + 1.0 - log(log(az)) / log(2.0);
+  return s;
+}
+
+// Relief-shade a base colour: build a surface normal from the screen-space gradient
+// of the escape-time height (works for any f — no analytic derivative needed), then
+// apply a Lambertian + specular + hemisphere model. Interior pixels stay flat.
+vec3 applyLighting(vec3 col, vec2 fragXY) {
+  float h = reliefHeight(fragXY);
+  if (h < 0.0) return col;
+  vec2 g = vec2(dFdx(h), dFdy(h)) * uLightHeight;
+  vec3 N = normalize(vec3(-g, 1.0));
+  vec3 L = uLightDir;
+  float diff = max(dot(N, L), 0.0);
+  vec3 H = normalize(L + vec3(0.0, 0.0, 1.0));
+  float spec = pow(max(dot(N, H), 0.0), 24.0) * 0.4;
+  float hemi = 0.5 + 0.5 * N.z; // sky↔ground hemisphere ambient
+  const float ambient = 0.35;
+  return col * (ambient + (1.0 - ambient) * diff) * (0.7 + 0.3 * hemi) + spec;
+}
+
 void main() {
   if (uMode == 6) {
     // Histogram pre-pass: output the escape count encoded in R,G (kmax = R + 256*G).
@@ -199,7 +261,9 @@ void main() {
       acc += colorAt(gl_FragCoord.xy + sub);
     }
   }
-  fragColor = vec4(acc / float(n * n), 1.0);
+  vec3 col = acc / float(n * n);
+  if (uLight == 1 && uMode != 4) col = applyLighting(col, gl_FragCoord.xy);
+  fragColor = vec4(col, 1.0);
 }
 `;
 }

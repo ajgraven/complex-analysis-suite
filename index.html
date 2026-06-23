@@ -215,6 +215,36 @@ z^2+c</textarea
               <option value="3">3&times;</option>
             </select>
           </div>
+          <div class="field">
+            <label class="checkbox" for="light">
+              <input type="checkbox" id="light" /> relief lighting
+            </label>
+            <div class="light-controls" title="Light direction and relief depth">
+              <label
+                >az <input type="range" id="lightAz" min="0" max="360" value="135" disabled
+              /></label>
+              <label
+                >el <input type="range" id="lightEl" min="0" max="90" value="45" disabled
+              /></label>
+              <label
+                >depth <input type="range" id="lightHeight" min="0" max="100" value="40" disabled
+              /></label>
+            </div>
+          </div>
+          <div class="field">
+            <label class="checkbox" for="post">
+              <input type="checkbox" id="post" /> post-processing
+            </label>
+            <div class="post-controls" title="Vignette and output gamma">
+              <label
+                >vignette
+                <input type="range" id="postVignette" min="0" max="100" value="30" disabled
+              /></label>
+              <label
+                >gamma <input type="range" id="postGamma" min="0" max="100" value="50" disabled
+              /></label>
+            </div>
+          </div>
         </div>
         <div class="inline-actions">
           <button id="apply_all" type="button">apply changes</button>
@@ -317,7 +347,9 @@ z^2+c</textarea
             </li>
             <li>
               Pick a colouring mode, palette, and anti-aliasing level with the coloring controls
-              (smooth, histogram, distance/edges, orbit trap, and domain colouring).
+              (smooth, histogram, distance/edges, orbit trap, and domain colouring), and toggle
+              <strong>relief lighting</strong> to shade the fractal as a lit 3-D surface or
+              <strong>post-processing</strong> for an on-screen vignette and gamma grade.
             </li>
           </ul>
 

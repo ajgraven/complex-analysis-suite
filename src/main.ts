@@ -364,6 +364,32 @@ function init(): void {
     dynamicalView.plot.setColoring(mode, palette, aa);
   }
 
+  /** Apply the relief-lighting controls (checkbox + azimuth/elevation/depth) to both plots. */
+  function applyLighting(): void {
+    const on = byId<HTMLInputElement>("light").checked;
+    const az = Number(byId<HTMLInputElement>("lightAz").value);
+    const el = Number(byId<HTMLInputElement>("lightEl").value);
+    const height = Number(byId<HTMLInputElement>("lightHeight").value) / 20; // slider 0–100 → depth 0–5
+    parameterView.plot.setLighting(on, az, el, height);
+    dynamicalView.plot.setLighting(on, az, el, height);
+    // The sliders only matter when lighting is on — disable them otherwise.
+    for (const id of ["lightAz", "lightEl", "lightHeight"]) {
+      byId<HTMLInputElement>(id).disabled = !on;
+    }
+  }
+
+  /** Apply the post-processing controls (checkbox + vignette/gamma) to both plots. */
+  function applyPost(): void {
+    const on = byId<HTMLInputElement>("post").checked;
+    const vignette = Number(byId<HTMLInputElement>("postVignette").value) / 100; // 0..1
+    const gamma = Math.pow(2, (Number(byId<HTMLInputElement>("postGamma").value) - 50) / 50); // 0.5..2 (1 at 50)
+    parameterView.plot.setPost(on, vignette, gamma);
+    dynamicalView.plot.setPost(on, vignette, gamma);
+    for (const id of ["postVignette", "postGamma"]) {
+      byId<HTMLInputElement>(id).disabled = !on;
+    }
+  }
+
   // --- wire up the UI controls ------------------------------------------
 
   document.addEventListener("keyup", (event) => {
@@ -375,16 +401,35 @@ function init(): void {
   }
   applyColoring();
 
+  for (const id of ["light", "lightAz", "lightEl", "lightHeight"]) {
+    byId(id).addEventListener("input", applyLighting);
+  }
+  applyLighting();
+
+  for (const id of ["post", "postVignette", "postGamma"]) {
+    byId(id).addEventListener("input", applyPost);
+  }
+  applyPost();
+
   byId("apply_all").addEventListener("click", applyChanges);
   byId("apply_preset").addEventListener("click", () => {
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
   });
   byId("reset_all").addEventListener("click", () => {
-    // Reset every option, including coloring (which presets don't carry).
+    // Reset every option, including coloring + lighting (which presets don't carry).
     byId<HTMLSelectElement>("mode").value = "escape";
     byId<HTMLSelectElement>("palette").value = "classic";
     byId<HTMLSelectElement>("aa").value = "1";
     applyColoring();
+    byId<HTMLInputElement>("light").checked = false;
+    byId<HTMLInputElement>("lightAz").value = "135";
+    byId<HTMLInputElement>("lightEl").value = "45";
+    byId<HTMLInputElement>("lightHeight").value = "40";
+    applyLighting();
+    byId<HTMLInputElement>("post").checked = false;
+    byId<HTMLInputElement>("postVignette").value = "30";
+    byId<HTMLInputElement>("postGamma").value = "50";
+    applyPost();
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
   });
   byId("print_param_space").addEventListener("click", () => {
@@ -414,6 +459,16 @@ function init(): void {
 
   disableUnsupportedSizes();
   setupOnboarding();
+
+  // Dev-only: expose the two views so the renderer can be driven/inspected from the
+  // console (e.g. the synchronous `renderToImageData` path, which works even when a
+  // backgrounded tab has paused requestAnimationFrame). Stripped from prod builds.
+  if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
+    (window as unknown as { __views: unknown }).__views = {
+      param: parameterView,
+      dyn: dynamicalView,
+    };
+  }
 }
 
 try {

@@ -134,7 +134,7 @@ clipboard ([`PlotView.copyPng`](src/render/plotView.ts)).
 
 ## Colouring
 
-Three shared controls drive how the plots are coloured (defaults reproduce the
+Several shared controls drive how the plots are coloured (defaults reproduce the
 classic look; all are shader uniforms, so switching never recompiles):
 
 - **Coloring (mode)** — how each pixel is coloured:
@@ -152,6 +152,14 @@ classic look; all are shader uniforms, so switching never recompiles):
   to the scalar modes.
 - **Anti-aliasing** — Off / 2× / 3× supersampling, on full-resolution renders only
   (disabled during interaction for responsiveness).
+- **Relief lighting** — an optional toggle that shades the fractal as a lit 3-D
+  surface (azimuth / elevation / depth sliders). The surface normal is taken from
+  the screen-space gradient of the escape-time field, so it works for any `f`; it
+  applies to the escape-based modes (not domain colouring) and is skipped during
+  interaction for responsiveness.
+- **Post-processing** — an optional final fullscreen pass adding a vignette and
+  output gamma. On-screen only for now: exported PNGs include lighting (it lives in
+  the fractal shader) but not this grade.
 
 ## Architecture
 
@@ -229,6 +237,9 @@ already relative.
 - **Export size cap:** high-resolution export is bounded by the GPU's maximum
   texture size (commonly 4096–16384px); larger options are disabled in the size
   dropdown. See [Saving images](#saving-images).
+- **Post-processing in exports:** relief lighting is included in exported images
+  (it's part of the fractal shader), but the post-processing grade (vignette /
+  gamma) is currently applied on-screen only.
 - **Deep zoom depth:** the df64 path extends usable zoom to ~10¹²× (vs ~10⁴× for
   single precision); beyond that, df64 precision runs out and the image
   pixelates. Going deeper would need perturbation-theory techniques.

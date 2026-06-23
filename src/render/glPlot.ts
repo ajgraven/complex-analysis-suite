@@ -14,7 +14,12 @@ import { canvToPlot, plotRange, plotToCanv } from "../transforms";
 import type { Preset } from "../presets";
 import { parse } from "../expr/parser";
 import type { Node } from "../expr/ast";
-import { buildFragmentShader, VERTEX_SHADER, type Precision } from "./shaderBuilder";
+import {
+  buildFragmentShader,
+  POST_FRAGMENT_SHADER,
+  VERTEX_SHADER,
+  type Precision,
+} from "./shaderBuilder";
 
 export type FractType = "dyn" | "param";
 
@@ -65,11 +70,22 @@ interface Uniforms {
   uPalette: WebGLUniformLocation | null;
   uAA: WebGLUniformLocation | null;
   uCdf: WebGLUniformLocation | null;
+  uLight: WebGLUniformLocation | null;
+  uLightDir: WebGLUniformLocation | null;
+  uLightHeight: WebGLUniformLocation | null;
 }
 
 interface CompiledProgram {
   program: WebGLProgram;
   uniforms: Uniforms;
+}
+
+/** Uniforms for the post-processing pass (vignette + gamma). */
+interface PostUniforms {
+  uScene: WebGLUniformLocation | null;
+  uResolution: WebGLUniformLocation | null;
+  uVignette: WebGLUniformLocation | null;
+  uGamma: WebGLUniformLocation | null;
 }
 
 /** A program whose compile/link has been started but whose status hasn't been checked yet. */
@@ -133,6 +149,11 @@ export class GLPlot {
   private histoFbo: WebGLFramebuffer | null = null;
   private histoTex: WebGLTexture | null = null;
   private cdfTex: WebGLTexture | null = null;
+  /** Post-processing (vignette + gamma): a program + an offscreen scene render target. */
+  private postProgram: { program: WebGLProgram; uniforms: PostUniforms } | null = null;
+  private sceneFbo: WebGLFramebuffer | null = null;
+  private sceneTex: WebGLTexture | null = null;
+  private sceneSize = 0;
   private renderScheduled = false;
   private _draft = false;
   /** Index into {@link PROGRESSIVE_LADDER} for the next frame; reset to 0 on each change. */
@@ -159,6 +180,13 @@ export class GLPlot {
   private _mode = 0; // 0 escape, 1 smooth, 2 distance, 3 orbit-trap, 4 domain
   private _palette = 0; // 0 classic, 1 viridis, 2 magma, 3 grayscale
   private _aa = 1; // supersamples per axis (1 = off)
+  private _light = false; // relief lighting on/off
+  private _lightAz = 135; // light azimuth, degrees
+  private _lightEl = 45; // light elevation, degrees
+  private _lightHeight = 2.0; // relief depth (escape-gradient scale)
+  private _post = false; // post-processing on/off
+  private _vignette = 0.3; // vignette strength (0..1)
+  private _gamma = 1.0; // output gamma (1 = unchanged)
   private _res: number;
 
   constructor(canvas: HTMLCanvasElement, preset: Preset, fractType: FractType, res = 500) {
@@ -172,6 +200,7 @@ export class GLPlot {
       COMPLETION_STATUS_KHR: number;
     } | null;
     this.setupQuad();
+    this.compilePostProgram();
     this.applyRenderSize();
     this.ApplyPreset(preset);
   }
@@ -243,6 +272,9 @@ export class GLPlot {
       uPalette: gl.getUniformLocation(program, "uPalette"),
       uAA: gl.getUniformLocation(program, "uAA"),
       uCdf: gl.getUniformLocation(program, "uCdf"),
+      uLight: gl.getUniformLocation(program, "uLight"),
+      uLightDir: gl.getUniformLocation(program, "uLightDir"),
+      uLightHeight: gl.getUniformLocation(program, "uLightHeight"),
     };
   }
 
@@ -451,6 +483,19 @@ export class GLPlot {
       gl.bindTexture(gl.TEXTURE_2D, this.cdfTex);
       gl.uniform1i(u.uCdf, 0);
     }
+    // Relief lighting: off for the raw pre-pass (mode 6) and while drafting (it
+    // re-walks the escape loop, so we keep interaction snappy without it).
+    const lightOn = this._light && mode !== 6 && !this._draft;
+    gl.uniform1i(u.uLight, lightOn ? 1 : 0);
+    const lightAz = (this._lightAz * Math.PI) / 180;
+    const lightEl = (this._lightEl * Math.PI) / 180;
+    gl.uniform3f(
+      u.uLightDir,
+      Math.cos(lightEl) * Math.cos(lightAz),
+      Math.cos(lightEl) * Math.sin(lightAz),
+      Math.sin(lightEl),
+    );
+    gl.uniform1f(u.uLightHeight, this._lightHeight);
     if (precision === "df64") {
       const [hx, lx] = splitDouble(this._center[0]);
       const [hy, ly] = splitDouble(this._center[1]);
@@ -522,6 +567,60 @@ export class GLPlot {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   }
 
+  /** Compile the post-processing program (vignette + gamma); independent of f/precision. */
+  private compilePostProgram(): void {
+    const gl = this.gl;
+    try {
+      const program = createProgram(gl, VERTEX_SHADER, POST_FRAGMENT_SHADER);
+      this.postProgram = {
+        program,
+        uniforms: {
+          uScene: gl.getUniformLocation(program, "uScene"),
+          uResolution: gl.getUniformLocation(program, "uResolution"),
+          uVignette: gl.getUniformLocation(program, "uVignette"),
+          uGamma: gl.getUniformLocation(program, "uGamma"),
+        },
+      };
+    } catch (err) {
+      console.warn(`[${this.fractType}] post-processing program failed (disabled):`, err);
+    }
+  }
+
+  /** (Re)allocate the offscreen scene texture + FBO at `size`² for the post pass. */
+  private ensureSceneTarget(size: number): void {
+    const gl = this.gl;
+    if (!this.sceneTex) this.sceneTex = gl.createTexture();
+    if (this.sceneSize !== size) {
+      gl.bindTexture(gl.TEXTURE_2D, this.sceneTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      this.sceneSize = size;
+    }
+    if (!this.sceneFbo) this.sceneFbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.sceneFbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.sceneTex, 0);
+    gl.bindTexture(gl.TEXTURE_2D, null); // detach so it isn't a sampler feedback loop
+  }
+
+  /** Composite the scene texture into the visible framebuffer through the post pass. */
+  private drawPost(size: number): void {
+    const gl = this.gl;
+    const pp = this.postProgram;
+    if (!pp) return;
+    gl.useProgram(pp.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.sceneTex);
+    gl.uniform1i(pp.uniforms.uScene, 0);
+    gl.uniform2f(pp.uniforms.uResolution, size, size);
+    gl.uniform1f(pp.uniforms.uVignette, this._vignette);
+    gl.uniform1f(pp.uniforms.uGamma, this._gamma);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindTexture(gl.TEXTURE_2D, null); // unbind so it can be a render target next frame
+  }
+
   /**
    * Draw one frame. During interaction only the coarse level is drawn; when idle
    * and the render is heavy, each frame refines one step up the ladder to full
@@ -537,9 +636,26 @@ export class GLPlot {
       refine = this._level < PROGRESSIVE_LADDER.length - 1;
     }
     this.applyRenderSize(fraction);
-    if (this.effectiveMode() === 5) this.updateCdf(this.canvas.width, this.canvas.height);
-    if (!this.setupDraw(this.canvas.width, this.canvas.height)) return;
-    this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
+    const gl = this.gl;
+    const size = this.canvas.width;
+    if (this.effectiveMode() === 5) this.updateCdf(size, size);
+    if (this._post && this.postProgram) {
+      // Render the fractal to an offscreen texture, then composite it through the
+      // post-processing pass (vignette + gamma) into the visible framebuffer.
+      this.ensureSceneTarget(size);
+      gl.viewport(0, 0, size, size);
+      if (!this.setupDraw(size, size)) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        return;
+      }
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, size, size);
+      this.drawPost(size);
+    } else {
+      if (!this.setupDraw(size, size)) return;
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
     this.afterRender?.();
     if (refine) {
       this._level++;
@@ -569,6 +685,7 @@ export class GLPlot {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     const fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); // bind first, else the attach targets the default FB
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
     gl.bindTexture(gl.TEXTURE_2D, null); // detach from the unit so it isn't a sampler feedback loop
 
@@ -744,6 +861,32 @@ export class GLPlot {
     this._mode = mode;
     this._palette = palette;
     this._aa = aa;
+    this.scheduleRender();
+  }
+
+  /**
+   * Set relief lighting: `on`, light `azimuth`/`elevation` in degrees, and relief
+   * `height` (how strongly the escape-time gradient tilts the surface normal). A
+   * shader-uniform set, so this only re-renders — no recompile. Applies to the
+   * escape-based modes (not domain colouring) and is skipped while drafting.
+   */
+  setLighting(on: boolean, azimuth: number, elevation: number, height: number): void {
+    this._light = on;
+    this._lightAz = azimuth;
+    this._lightEl = elevation;
+    this._lightHeight = height;
+    this.scheduleRender();
+  }
+
+  /**
+   * Set post-processing: `on`, `vignette` strength (0..1 corner darkening), and
+   * output `gamma` (1 = unchanged). Applied on-screen as a final fullscreen pass;
+   * a render-only change. Note: not yet applied to high-resolution exports.
+   */
+  setPost(on: boolean, vignette: number, gamma: number): void {
+    this._post = on;
+    this._vignette = vignette;
+    this._gamma = gamma;
     this.scheduleRender();
   }
 
