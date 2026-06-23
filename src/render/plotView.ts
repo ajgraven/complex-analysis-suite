@@ -22,6 +22,8 @@ export interface PlotViewHooks {
   coupling?: { setC: (z0: Vec2) => void; setDraft: (on: boolean) => void };
   /** Called when the view (centre/zoom) changes, to reflect it back into the inputs. */
   onViewChanged?: (center: Vec2, zoom: number) => void;
+  /** Called on pointer hover with the plot coordinate under the cursor (null on leave). */
+  onHover?: (coord: Vec2 | null) => void;
 }
 
 /** Pixel radius around the white point that counts as grabbing it. */
@@ -72,8 +74,17 @@ export class PlotView {
     this.plot.scheduleRender();
   }
 
-  /** Render the plot at `size` (true detail) and download it as a PNG, overlay optional. */
-  async exportPng(opts: { size: number; overlays: boolean; filename: string }): Promise<void> {
+  /**
+   * Render the plot (and optionally the overlay) to a fresh off-screen canvas at
+   * `size`, clamped to the GPU's max texture size. Shared by {@link exportPng}
+   * (download) and {@link copyPng} (clipboard).
+   */
+  private renderExportCanvas(opts: { size: number; overlays: boolean }): {
+    canvas: HTMLCanvasElement;
+    size: number;
+    clamped: boolean;
+    maxTex: number;
+  } {
     const maxTex = getMaxTextureSize();
     const { size, clamped } = clampExportSize(opts.size, maxTex);
     const image = this.plot.renderToImageData(size);
@@ -105,7 +116,13 @@ export class PlotView {
         ctx.drawImage(ov, 0, 0);
       }
     }
-    await downloadCanvas(out, ensurePngName(opts.filename));
+    return { canvas: out, size, clamped, maxTex };
+  }
+
+  /** Render the plot at `size` (true detail) and download it as a PNG, overlay optional. */
+  async exportPng(opts: { size: number; overlays: boolean; filename: string }): Promise<void> {
+    const { canvas, size, clamped, maxTex } = this.renderExportCanvas(opts);
+    await downloadCanvas(canvas, ensurePngName(opts.filename));
     if (clamped) {
       showToast(
         `Requested size exceeded this device's maximum of ${maxTex}px; ` +
@@ -113,6 +130,23 @@ export class PlotView {
         "warn",
       );
     }
+  }
+
+  /** Render the plot at `size` and copy it to the clipboard as a PNG, overlay optional. */
+  async copyPng(opts: { size: number; overlays: boolean }): Promise<void> {
+    if (!navigator.clipboard || typeof ClipboardItem === "undefined") {
+      throw new Error("Copying images to the clipboard isn't supported in this browser");
+    }
+    const { canvas, size, clamped, maxTex } = this.renderExportCanvas(opts);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!blob) throw new Error("Failed to encode the image");
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    showToast(
+      clamped
+        ? `Copied at ${size}×${size} (this device's maximum is ${maxTex}px).`
+        : "Image copied to the clipboard.",
+      clamped ? "warn" : "info",
+    );
   }
 
   private syncOverlaySize(): void {
@@ -198,11 +232,20 @@ export class PlotView {
         this.dragMode = "pan";
         this.plot.setDraft(true);
       }
+      el.style.cursor = "grabbing";
     });
 
     el.addEventListener("pointermove", (e) => {
-      if (this.dragMode === "none") return;
       const uv = this.uvOf(e);
+      if (this.dragMode === "none") {
+        // Hover: cursor affordance over the white point + live coordinate readout.
+        const r = el.getBoundingClientRect();
+        const pUv = this.pointUv();
+        const dist = Math.hypot((uv[0] - pUv[0]) * r.width, (uv[1] - pUv[1]) * r.height);
+        el.style.cursor = dist <= GRAB_RADIUS ? "grab" : "crosshair";
+        this.hooks.onHover?.(this.uvToPlot(uv));
+        return;
+      }
       if (this.dragMode === "point") {
         const plot = this.uvToPlot(uv);
         this.plot.moveZ0(plot);
@@ -226,9 +269,17 @@ export class PlotView {
         this.hooks.coupling?.setDraft(false);
       }
       this.dragMode = "none";
+      el.style.cursor = "crosshair";
     };
     el.addEventListener("pointerup", endDrag);
     el.addEventListener("pointercancel", endDrag);
+
+    el.addEventListener("pointerleave", () => {
+      if (this.dragMode === "none") {
+        el.style.cursor = "crosshair";
+        this.hooks.onHover?.(null);
+      }
+    });
 
     el.addEventListener(
       "wheel",

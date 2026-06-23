@@ -26,15 +26,30 @@
             <canvas id="MCSCanvas"></canvas>
             <canvas id="MCSOverlay" class="overlay" tabindex="0"></canvas>
           </div>
+          <p class="readout" id="MCSReadout" aria-live="off"></p>
 
           <div class="controls">
             <div class="field">
               <label for="inpc">c</label>
-              <input type="text" id="inpc" placeholder="a+b*i" value="-.7-.4*i" size="14" />
+              <input
+                type="text"
+                id="inpc"
+                placeholder="a+b*i"
+                value="-.7-.4*i"
+                size="14"
+                title="Parameter c as a complex number, e.g. -.7-.4*i"
+              />
             </div>
             <div class="field">
               <label for="inpme">escape(z,c)</label>
-              <textarea id="inpme" rows="1" cols="14">abs(z)>2</textarea>
+              <textarea
+                id="inpme"
+                rows="1"
+                cols="14"
+                title="Iteration stops when this is true, e.g. abs(z)>2"
+              >
+abs(z)>2</textarea
+              >
             </div>
             <div class="field">
               <label for="inpparamcenter">center</label>
@@ -44,19 +59,39 @@
                 placeholder="-.75,0"
                 value="-.75,0"
                 size="14"
+                title="Plot centre as 'x,y', e.g. -.75,0"
               />
             </div>
             <div class="field">
               <label for="inpparamzoom">zoom</label>
-              <input type="text" id="inpparamzoom" placeholder=".75" value=".75" size="10" />
+              <input
+                type="text"
+                id="inpparamzoom"
+                placeholder=".75"
+                value=".75"
+                size="10"
+                title="Zoom factor — larger is closer in"
+              />
             </div>
             <div class="field">
               <label for="inpmn">max # iterations</label>
-              <input type="text" id="inpmn" value="100" size="10" />
+              <input
+                type="text"
+                id="inpmn"
+                value="100"
+                size="10"
+                title="Max iterations per pixel — higher is more detail but slower"
+              />
             </div>
             <div class="field">
               <label for="inpParamRes">resolution</label>
-              <input type="text" id="inpParamRes" value="500" size="10" />
+              <input
+                type="text"
+                id="inpParamRes"
+                value="500"
+                size="10"
+                title="On-screen canvas size in pixels"
+              />
             </div>
           </div>
         </section>
@@ -68,27 +103,61 @@
             <canvas id="JCSCanvas"></canvas>
             <canvas id="JCSOverlay" class="overlay" tabindex="0"></canvas>
           </div>
+          <p class="readout" id="JCSReadout" aria-live="off"></p>
 
           <div class="controls">
             <div class="field">
               <label for="inpje">escape(z,c)</label>
-              <textarea id="inpje" rows="1" cols="14">abs(z)>2</textarea>
+              <textarea
+                id="inpje"
+                rows="1"
+                cols="14"
+                title="Iteration stops when this is true, e.g. abs(z)>2"
+              >
+abs(z)>2</textarea
+              >
             </div>
             <div class="field">
               <label for="inpdyncenter">center</label>
-              <input type="text" id="inpdyncenter" placeholder="0,0" value="0,0" size="14" />
+              <input
+                type="text"
+                id="inpdyncenter"
+                placeholder="0,0"
+                value="0,0"
+                size="14"
+                title="Plot centre as 'x,y', e.g. 0,0"
+              />
             </div>
             <div class="field">
               <label for="inpdynzoom">zoom</label>
-              <input type="text" id="inpdynzoom" placeholder=".65" value=".65" size="10" />
+              <input
+                type="text"
+                id="inpdynzoom"
+                placeholder=".65"
+                value=".65"
+                size="10"
+                title="Zoom factor — larger is closer in"
+              />
             </div>
             <div class="field">
               <label for="inpjn">max # iterations</label>
-              <input type="text" id="inpjn" value="100" size="10" />
+              <input
+                type="text"
+                id="inpjn"
+                value="100"
+                size="10"
+                title="Max iterations per pixel — higher is more detail but slower"
+              />
             </div>
             <div class="field">
               <label for="inpDynRes">resolution</label>
-              <input type="text" id="inpDynRes" value="500" size="10" />
+              <input
+                type="text"
+                id="inpDynRes"
+                value="500"
+                size="10"
+                title="On-screen canvas size in pixels"
+              />
             </div>
           </div>
         </section>
@@ -99,7 +168,9 @@
         <div class="panel-group">
           <div class="field">
             <label for="inpf">f(z,c)</label>
-            <textarea id="inpf" rows="2" cols="22">z^2+c</textarea>
+            <textarea id="inpf" rows="2" cols="22" title="Iteration function f(z,c), e.g. z^2+c">
+z^2+c</textarea
+            >
           </div>
           <div class="field">
             <label for="fractal_presets">Presets</label>
@@ -129,6 +200,13 @@
         </div>
         <div class="inline-actions">
           <button id="apply_all" type="button">apply changes</button>
+          <button
+            id="reset_all"
+            type="button"
+            title="Revert all fields and the view to the selected preset"
+          >
+            reset
+          </button>
         </div>
       </section>
 
@@ -150,6 +228,9 @@
                 <input type="checkbox" id="paramExportOverlay" /> overlays
               </label>
               <button id="print_param_space" type="button">Save</button>
+              <button id="copy_param_space" type="button" title="Copy the image to the clipboard">
+                Copy
+              </button>
             </div>
           </div>
           <div class="field">
@@ -167,6 +248,9 @@
                 <input type="checkbox" id="dynExportOverlay" /> overlays
               </label>
               <button id="print_dyn_plane" type="button">Save</button>
+              <button id="copy_dyn_plane" type="button" title="Copy the image to the clipboard">
+                Copy
+              </button>
             </div>
           </div>
         </div>

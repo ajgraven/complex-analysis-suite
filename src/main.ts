@@ -7,6 +7,7 @@
  */
 
 import "./styles/main.css";
+import type { Vec2 } from "./arrays";
 import { formatComplex } from "./complex";
 import { getMaxTextureSize } from "./hiResExport";
 import { PlotView } from "./render/plotView";
@@ -56,6 +57,20 @@ function showFatalBanner(message: string): void {
   }
 }
 
+/** Format a plot coordinate as a complex number for the hover readout. */
+function formatCoord([x, y]: Vec2): string {
+  const f = (v: number): string => Number(v.toPrecision(6)).toString();
+  return `${f(x)} ${y >= 0 ? "+" : "-"} ${f(Math.abs(y))}i`;
+}
+
+/** Build an `onHover` handler that writes the coordinate into a readout element. */
+function hoverReadout(elementId: string): (coord: Vec2 | null) => void {
+  const el = byId(elementId);
+  return (coord) => {
+    el.textContent = coord ? formatCoord(coord) : "";
+  };
+}
+
 /** Build both plots and wire all controls. Throws if WebGL2 is unavailable. */
 function init(): void {
   const dynamicalView = new PlotView(
@@ -69,6 +84,7 @@ function init(): void {
         setDynCenterInput(center);
         setDynZoomInput(zoom);
       },
+      onHover: hoverReadout("JCSReadout"),
     },
   );
 
@@ -90,6 +106,7 @@ function init(): void {
         setParamCenterInput(center);
         setParamZoomInput(zoom);
       },
+      onHover: hoverReadout("MCSReadout"),
     },
   );
 
@@ -220,6 +237,30 @@ function init(): void {
     }
   }
 
+  /** Render a plot at the chosen size and copy it to the clipboard, with button feedback. */
+  async function runCopy(
+    view: PlotView,
+    sizeId: string,
+    overlayId: string,
+    buttonId: string,
+  ): Promise<void> {
+    const button = byId<HTMLButtonElement>(buttonId);
+    const size = Number(byId<HTMLSelectElement>(sizeId).value);
+    const overlays = byId<HTMLInputElement>(overlayId).checked;
+    const label = button.textContent;
+    button.disabled = true;
+    button.textContent = "Copying…";
+    try {
+      await view.copyPng({ size, overlays });
+    } catch (err) {
+      console.error("Copy failed:", err);
+      showToast(`Copy failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+    } finally {
+      button.disabled = false;
+      button.textContent = label;
+    }
+  }
+
   /** Disable export-size options the current GPU can't handle. */
   function disableUnsupportedSizes(): void {
     const max = getMaxTextureSize();
@@ -256,6 +297,9 @@ function init(): void {
   byId("apply_preset").addEventListener("click", () => {
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
   });
+  byId("reset_all").addEventListener("click", () => {
+    applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
+  });
   byId("print_param_space").addEventListener("click", () => {
     void runExport(
       parameterView,
@@ -273,6 +317,12 @@ function init(): void {
       "jImageName",
       "print_dyn_plane",
     );
+  });
+  byId("copy_param_space").addEventListener("click", () => {
+    void runCopy(parameterView, "paramExportSize", "paramExportOverlay", "copy_param_space");
+  });
+  byId("copy_dyn_plane").addEventListener("click", () => {
+    void runCopy(dynamicalView, "dynExportSize", "dynExportOverlay", "copy_dyn_plane");
   });
 
   disableUnsupportedSizes();
