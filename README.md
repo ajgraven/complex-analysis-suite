@@ -134,18 +134,24 @@ overlay is composited on top, then downloaded
 
 ## Colouring
 
-The **coloring** control (shared by both plots) selects how escape time is
-mapped to colour:
+Three shared controls drive how the plots are coloured (defaults reproduce the
+classic look; all are shader uniforms, so switching never recompiles):
 
-- **Classic** — the original escape-time ramp (discrete bands).
-- **Smooth** — continuous (smooth) escape time, same palette, no banding.
-- **Viridis**, **Magma**, **Grayscale** — perceptual palettes with smooth
-  shading (Viridis is colourblind-safe).
-
-Smooth colouring uses the normalized iteration count and applies to
-magnitude-divergence escapes (`abs(z) > R`); other predicates fall back to
-discrete bands. Colouring is driven by shader uniforms, so switching never
-recompiles.
+- **Coloring (mode)** — how each pixel is coloured:
+  - _Escape time_ — discrete escape-time bands (the classic look).
+  - _Escape time (smooth)_ — continuous escape time (no banding); applies to
+    magnitude-divergence escapes (`abs(z) > R`), otherwise falls back to discrete.
+  - _Escape time (histogram)_ — histogram-equalised escape time, so colours cover
+    roughly equal area regardless of the iteration cap.
+  - _Distance (edges)_ — a screen-space distance estimate that highlights the
+    boundary and filaments.
+  - _Orbit trap_ — colours by how close the orbit passes to the axes.
+  - _Domain colouring_ — hue = arg, brightness = magnitude of one application of
+    `f(z, c)` (most meaningful on the dynamical plane; ignores the palette).
+- **Palette** — Classic, Viridis (colourblind-safe), Magma, or Grayscale; applies
+  to the scalar modes.
+- **Anti-aliasing** — Off / 2× / 3× supersampling, on full-resolution renders only
+  (disabled during interaction for responsiveness).
 
 ## Architecture
 

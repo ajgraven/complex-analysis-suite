@@ -188,13 +188,31 @@ z^2+c</textarea
             </div>
           </div>
           <div class="field">
-            <label for="coloring">coloring</label>
-            <select id="coloring">
+            <label for="mode">coloring</label>
+            <select id="mode" title="How escape time is turned into colour">
+              <option value="escape">Escape time</option>
+              <option value="smooth">Escape time (smooth)</option>
+              <option value="histogram">Escape time (histogram)</option>
+              <option value="distance">Distance (edges)</option>
+              <option value="orbit">Orbit trap</option>
+              <option value="domain">Domain coloring</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="palette">palette</label>
+            <select id="palette" title="Colour palette (ignored by domain coloring)">
               <option value="classic">Classic</option>
-              <option value="smooth">Smooth</option>
-              <option value="viridis">Viridis (smooth)</option>
-              <option value="magma">Magma (smooth)</option>
-              <option value="grayscale">Grayscale (smooth)</option>
+              <option value="viridis">Viridis</option>
+              <option value="magma">Magma</option>
+              <option value="grayscale">Grayscale</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="aa">anti-aliasing</label>
+            <select id="aa" title="Supersampling — smoother edges, slower to render">
+              <option value="1">Off</option>
+              <option value="2">2&times;</option>
+              <option value="3">3&times;</option>
             </select>
           </div>
         </div>
@@ -298,8 +316,8 @@ z^2+c</textarea
               selected preset.
             </li>
             <li>
-              Pick a colour scheme with the "coloring" control (smooth shading and several
-              palettes).
+              Pick a colouring mode, palette, and anti-aliasing level with the coloring controls
+              (smooth, histogram, distance/edges, orbit trap, and domain colouring).
             </li>
           </ul>
 

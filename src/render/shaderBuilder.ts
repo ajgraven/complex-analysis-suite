@@ -54,8 +54,10 @@ uniform float uZoom;
 uniform int uN;
 uniform vec2 uC;
 uniform int uFractType; // 1 = parameter space, 0 = dynamical plane
-uniform int uColormap;  // 0 classic, 1 viridis, 2 magma, 3 grayscale
-uniform int uSmooth;    // 1 = continuous (smooth) escape-time colouring
+uniform int uMode;      // 0 escape, 1 smooth, 2 distance, 3 orbit-trap, 4 domain, 5 histogram, 6 raw
+uniform int uPalette;   // 0 classic, 1 viridis, 2 magma, 3 grayscale
+uniform int uAA;        // supersamples per axis (1 = off)
+uniform sampler2D uCdf; // histogram equalisation lookup (mode 5), indexed by escape time
 out vec4 fragColor;
 
 // Perceptual colormaps as degree-6 polynomial fits (t in [0,1]). viridis/magma
@@ -87,14 +89,63 @@ vec3 classicColor(float t) {
 }
 vec3 palette(float t) {
   t = clamp(t, 0.0, 1.0);
-  if (uColormap == 1) return viridis(t);
-  if (uColormap == 2) return magma(t);
-  if (uColormap == 3) return vec3(t);
+  if (uPalette == 1) return viridis(t);
+  if (uPalette == 2) return magma(t);
+  if (uPalette == 3) return vec3(t);
   return classicColor(t);
 }
 
-void main() {
-  vec2 uv = gl_FragCoord.xy / uResolution;
+// HSV→RGB for domain colouring.
+vec3 hsv2rgb(vec3 c) {
+  vec3 p = abs(fract(c.xxx + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0);
+  return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);
+}
+
+// Per-pixel colour for the AA-averaged modes (escape / smooth / orbit-trap / domain).
+vec3 colorAt(vec2 fragXY) {
+  vec2 uv = fragXY / uResolution;
+${coordinate}
+  cvec cc = (uFractType == 1) ? z : vec_(uC.x, uC.y);
+
+  if (uMode == 4) {
+    // Domain colouring: one application of f; hue = arg, brightness grows with |f|.
+    cvec w = fFn(z, cc);
+    float hue = cre1(carg(w)) * 0.15915494 + 0.5;
+    return hsv2rgb(vec3(hue, 0.9, 1.0 - 1.0 / (1.0 + cabsf(w))));
+  }
+
+  float trap = 1e20;
+  int kmax = 0;
+  for (int k = 0; k < uN; k++) {
+    if (escapeFn(z, cc)) break;
+    z = fFn(z, cc);
+    kmax = k + 1;
+    trap = min(trap, min(abs(cre1(z)), abs(cre1(cim(z))))); // cross (axes) trap
+  }
+  if (uMode == 3) return palette(1.0 - 1.0 / (1.0 + trap * 8.0)); // orbit trap
+  if (kmax == uN) return vec3(0.0); // never escaped → interior
+
+  if (uMode == 5) {
+    // Histogram equalisation: map escape time through the precomputed CDF so each
+    // colour covers roughly equal area, independent of the iteration cap.
+    float t = texture(uCdf, vec2((float(kmax) + 0.5) / float(uN + 1), 0.5)).r;
+    return palette(t);
+  }
+
+  float iters = float(kmax);
+  if (uMode == 1) {
+    // Smooth (continuous) escape time; needs a magnitude-divergence escape.
+    float az = cabsf(z);
+    if (az > 1.0) iters = float(kmax) + 1.0 - log(log(az)) / log(2.0);
+  }
+  return palette(iters / float(uN));
+}
+
+// Screen-space distance estimate (edges): darken where the smooth-iteration field
+// changes fastest (near the boundary). Uses fwidth, so it is a single sample
+// (it can't be averaged by the supersampling loop).
+vec3 distanceColor(vec2 fragXY) {
+  vec2 uv = fragXY / uResolution;
 ${coordinate}
   cvec cc = (uFractType == 1) ? z : vec_(uC.x, uC.y);
   int kmax = 0;
@@ -103,18 +154,49 @@ ${coordinate}
     z = fFn(z, cc);
     kmax = k + 1;
   }
-  if (kmax == uN) {
-    fragColor = vec4(0.0, 0.0, 0.0, 1.0); // never escaped → interior
+  if (kmax == uN) return vec3(0.0);
+  float s = float(kmax);
+  float az = cabsf(z);
+  if (az > 1.0) s = float(kmax) + 1.0 - log(log(az)) / log(2.0);
+  float grad = length(vec2(dFdx(s), dFdy(s)));
+  float edge = 1.0 / (1.0 + grad * grad);
+  return palette(clamp(s / float(uN), 0.0, 1.0)) * edge;
+}
+
+// Raw escape count (no colour) for the histogram pre-pass.
+int escapeCount(vec2 fragXY) {
+  vec2 uv = fragXY / uResolution;
+${coordinate}
+  cvec cc = (uFractType == 1) ? z : vec_(uC.x, uC.y);
+  int kmax = 0;
+  for (int k = 0; k < uN; k++) {
+    if (escapeFn(z, cc)) break;
+    z = fFn(z, cc);
+    kmax = k + 1;
+  }
+  return kmax;
+}
+
+void main() {
+  if (uMode == 6) {
+    // Histogram pre-pass: output the escape count encoded in R,G (kmax = R + 256*G).
+    int k = escapeCount(gl_FragCoord.xy);
+    fragColor = vec4(float(k % 256) / 255.0, float(k / 256) / 255.0, 0.0, 1.0);
     return;
   }
-  float iters = float(kmax);
-  if (uSmooth == 1) {
-    // Continuous escape time: requires a magnitude-divergence escape (|z| large).
-    // For non-divergence predicates (|z| <= 1 at escape) we fall back to discrete.
-    float az = cabsf(z);
-    if (az > 1.0) iters = float(kmax) + 1.0 - log(log(az)) / log(2.0);
+  if (uMode == 2) {
+    fragColor = vec4(distanceColor(gl_FragCoord.xy), 1.0); // edges: no supersampling
+    return;
   }
-  fragColor = vec4(palette(iters / float(uN)), 1.0);
+  int n = max(uAA, 1);
+  vec3 acc = vec3(0.0);
+  for (int sy = 0; sy < n; sy++) {
+    for (int sx = 0; sx < n; sx++) {
+      vec2 sub = (vec2(float(sx), float(sy)) + 0.5) / float(n) - 0.5;
+      acc += colorAt(gl_FragCoord.xy + sub);
+    }
+  }
+  fragColor = vec4(acc / float(n * n), 1.0);
 }
 `;
 }

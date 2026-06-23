@@ -39,14 +39,16 @@ import {
   setParamZoomInput,
 } from "./ui/controls";
 
-/** Maps each "coloring" dropdown option to a (colormap, smooth) pair. */
-const COLORINGS: Record<string, { colormap: number; smooth: boolean }> = {
-  classic: { colormap: 0, smooth: false },
-  smooth: { colormap: 0, smooth: true },
-  viridis: { colormap: 1, smooth: true },
-  magma: { colormap: 2, smooth: true },
-  grayscale: { colormap: 3, smooth: true },
+/** Coloring "mode" and "palette" dropdown values → shader uniform indices. */
+const MODES: Record<string, number> = {
+  escape: 0,
+  smooth: 1,
+  distance: 2,
+  orbit: 3,
+  domain: 4,
+  histogram: 5,
 };
+const PALETTES: Record<string, number> = { classic: 0, viridis: 1, magma: 2, grayscale: 3 };
 
 /** Show the WebGL2-unavailable banner (or a generic init error) and stop. */
 function showFatalBanner(message: string): void {
@@ -276,12 +278,13 @@ function init(): void {
     }
   }
 
-  /** Apply the selected coloring (colormap + smoothing) to both plots. */
+  /** Apply the selected coloring mode, palette, and anti-aliasing to both plots. */
   function applyColoring(): void {
-    const value = byId<HTMLSelectElement>("coloring").value;
-    const { colormap, smooth } = COLORINGS[value] ?? COLORINGS.classic;
-    parameterView.plot.setColoring(colormap, smooth);
-    dynamicalView.plot.setColoring(colormap, smooth);
+    const mode = MODES[byId<HTMLSelectElement>("mode").value] ?? 0;
+    const palette = PALETTES[byId<HTMLSelectElement>("palette").value] ?? 0;
+    const aa = Math.max(1, Number(byId<HTMLSelectElement>("aa").value) || 1);
+    parameterView.plot.setColoring(mode, palette, aa);
+    dynamicalView.plot.setColoring(mode, palette, aa);
   }
 
   // --- wire up the UI controls ------------------------------------------
@@ -290,7 +293,9 @@ function init(): void {
     if (event.key === "Enter") applyChanges();
   });
 
-  byId("coloring").addEventListener("change", applyColoring);
+  for (const id of ["mode", "palette", "aa"]) {
+    byId(id).addEventListener("change", applyColoring);
+  }
   applyColoring();
 
   byId("apply_all").addEventListener("click", applyChanges);
@@ -299,7 +304,9 @@ function init(): void {
   });
   byId("reset_all").addEventListener("click", () => {
     // Reset every option, including coloring (which presets don't carry).
-    byId<HTMLSelectElement>("coloring").value = "classic";
+    byId<HTMLSelectElement>("mode").value = "escape";
+    byId<HTMLSelectElement>("palette").value = "classic";
+    byId<HTMLSelectElement>("aa").value = "1";
     applyColoring();
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
   });

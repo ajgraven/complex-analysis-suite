@@ -61,8 +61,10 @@ interface Uniforms {
   uCenterX: WebGLUniformLocation | null; // df64 hi/lo
   uCenterY: WebGLUniformLocation | null;
   uOne: WebGLUniformLocation | null; // df64 optimization barrier
-  uColormap: WebGLUniformLocation | null;
-  uSmooth: WebGLUniformLocation | null;
+  uMode: WebGLUniformLocation | null;
+  uPalette: WebGLUniformLocation | null;
+  uAA: WebGLUniformLocation | null;
+  uCdf: WebGLUniformLocation | null;
 }
 
 interface CompiledProgram {
@@ -113,6 +115,10 @@ export class GLPlot {
     single: null,
     df64: null,
   };
+  /** Histogram-mode (5) resources: an escape-time render target and a CPU-built CDF lookup. */
+  private histoFbo: WebGLFramebuffer | null = null;
+  private histoTex: WebGLTexture | null = null;
+  private cdfTex: WebGLTexture | null = null;
   private renderScheduled = false;
   private _draft = false;
   /** Index into {@link PROGRESSIVE_LADDER} for the next frame; reset to 0 on each change. */
@@ -135,8 +141,9 @@ export class GLPlot {
   private _n = "100";
   private _nplot = "7";
   private _z0: Vec2 = [0, 0];
-  private _colormap = 0;
-  private _smooth = false;
+  private _mode = 0; // 0 escape, 1 smooth, 2 distance, 3 orbit-trap, 4 domain
+  private _palette = 0; // 0 classic, 1 viridis, 2 magma, 3 grayscale
+  private _aa = 1; // supersamples per axis (1 = off)
   private _res: number;
 
   constructor(canvas: HTMLCanvasElement, preset: Preset, fractType: FractType, res = 500) {
@@ -221,8 +228,10 @@ export class GLPlot {
         uCenterX: gl.getUniformLocation(program, "uCenterX"),
         uCenterY: gl.getUniformLocation(program, "uCenterY"),
         uOne: gl.getUniformLocation(program, "uOne"),
-        uColormap: gl.getUniformLocation(program, "uColormap"),
-        uSmooth: gl.getUniformLocation(program, "uSmooth"),
+        uMode: gl.getUniformLocation(program, "uMode"),
+        uPalette: gl.getUniformLocation(program, "uPalette"),
+        uAA: gl.getUniformLocation(program, "uAA"),
+        uCdf: gl.getUniformLocation(program, "uCdf"),
       },
     };
   }
@@ -308,8 +317,18 @@ export class GLPlot {
     });
   }
 
-  /** Bind the active program and set all uniforms for a draw at the given size. Returns false if no program. */
-  private setupDraw(width: number, height: number): boolean {
+  /** The colouring mode actually drawn. Histogram (5) falls back to smooth (1) while
+   *  drafting, since it needs a full-resolution readback we skip during interaction. */
+  private effectiveMode(): number {
+    return this._mode === 5 && this._draft ? 1 : this._mode;
+  }
+
+  /**
+   * Bind the active program and set all uniforms for a draw at the given size.
+   * `modeOverride` forces a colouring mode (the histogram raw pre-pass uses 6).
+   * Returns false if no program.
+   */
+  private setupDraw(width: number, height: number, modeOverride?: number): boolean {
     let precision = this.desiredPrecision();
     if (precision === "df64") {
       this.ensureDf64();
@@ -325,8 +344,15 @@ export class GLPlot {
     gl.uniform1i(u.uN, Math.max(1, Math.round(Number(this._n))));
     gl.uniform2f(u.uC, this._cVal[0], this._cVal[1]);
     gl.uniform1i(u.uFractType, this.fractType === "param" ? 1 : 0);
-    gl.uniform1i(u.uColormap, this._colormap);
-    gl.uniform1i(u.uSmooth, this._smooth ? 1 : 0);
+    const mode = modeOverride ?? this.effectiveMode();
+    gl.uniform1i(u.uMode, mode);
+    gl.uniform1i(u.uPalette, this._palette);
+    gl.uniform1i(u.uAA, mode === 6 || this._draft ? 1 : this._aa); // no AA while drafting / raw pass
+    if (mode === 5 && this.cdfTex) {
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.cdfTex);
+      gl.uniform1i(u.uCdf, 0);
+    }
     if (precision === "df64") {
       const [hx, lx] = splitDouble(this._center[0]);
       const [hy, ly] = splitDouble(this._center[1]);
@@ -337,6 +363,65 @@ export class GLPlot {
       gl.uniform2f(u.uCenter, this._center[0], this._center[1]);
     }
     return true;
+  }
+
+  /**
+   * Histogram-equalisation pre-pass (mode 5): render the raw escape count to an
+   * off-screen buffer at (w, h), read it back, build a cumulative distribution
+   * over escaped pixels on the CPU, and upload it as the {@link cdfTex} lookup.
+   * Leaves the default framebuffer bound with a (w, h) viewport.
+   */
+  private updateCdf(w: number, h: number): void {
+    const gl = this.gl;
+    const n = Math.max(1, Math.round(Number(this._n)));
+
+    // (a) render the raw escape count (encoded in R,G) into an internal target.
+    if (!this.histoTex) this.histoTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.histoTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    if (!this.histoFbo) this.histoFbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.histoFbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.histoTex, 0);
+    gl.bindTexture(gl.TEXTURE_2D, null); // detach from the unit so it isn't a sampler feedback loop
+    gl.viewport(0, 0, w, h);
+    if (!this.setupDraw(w, h, 6)) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      return;
+    }
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    // (b) read back and accumulate the distribution over escaped pixels (k < n).
+    const px = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, w, h);
+
+    const hist = new Float64Array(n + 1);
+    let escaped = 0;
+    for (let i = 0; i < px.length; i += 4) {
+      const k = px[i] + px[i + 1] * 256;
+      if (k < n) {
+        hist[k]++;
+        escaped++;
+      }
+    }
+    const cdf = new Uint8Array((n + 1) * 4);
+    let cum = 0;
+    for (let k = 0; k <= n; k++) {
+      if (k < n) cum += hist[k];
+      cdf[k * 4] = Math.round((escaped > 0 ? cum / escaped : 0) * 255);
+    }
+
+    // (c) upload the CDF as a 1-D lookup texture (escape time → equalised t in R).
+    if (!this.cdfTex) this.cdfTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.cdfTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, n + 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, cdf);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   }
 
   /**
@@ -354,6 +439,7 @@ export class GLPlot {
       refine = this._level < PROGRESSIVE_LADDER.length - 1;
     }
     this.applyRenderSize(fraction);
+    if (this.effectiveMode() === 5) this.updateCdf(this.canvas.width, this.canvas.height);
     if (!this.setupDraw(this.canvas.width, this.canvas.height)) return;
     this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
     this.afterRender?.();
@@ -374,6 +460,7 @@ export class GLPlot {
     if (!this.programs.single && !this.programs.df64) {
       throw new Error("No compiled program to export");
     }
+    if (this._mode === 5) this.updateCdf(size, size); // build the CDF before binding the export FBO
 
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -383,6 +470,7 @@ export class GLPlot {
     const fbo = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.bindTexture(gl.TEXTURE_2D, null); // detach from the unit so it isn't a sampler feedback loop
 
     gl.viewport(0, 0, size, size);
     this.setupDraw(size, size);
@@ -524,13 +612,15 @@ export class GLPlot {
   }
 
   /**
-   * Set the colour mapping: `colormap` (0 classic, 1 viridis, 2 magma,
-   * 3 grayscale) and whether to use smooth/continuous escape-time colouring.
-   * Both are shader uniforms, so this only re-renders — no recompile.
+   * Set the colouring: `mode` (0 escape, 1 smooth, 2 distance, 3 orbit-trap,
+   * 4 domain), `palette` (0 classic, 1 viridis, 2 magma, 3 grayscale), and `aa`
+   * (supersamples per axis; 1 = off). All are shader uniforms, so this only
+   * re-renders — no recompile.
    */
-  setColoring(colormap: number, smooth: boolean): void {
-    this._colormap = colormap;
-    this._smooth = smooth;
+  setColoring(mode: number, palette: number, aa: number): void {
+    this._mode = mode;
+    this._palette = palette;
+    this._aa = aa;
     this.scheduleRender();
   }
 
