@@ -298,6 +298,9 @@ function init(): void {
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
   });
   byId("reset_all").addEventListener("click", () => {
+    // Reset every option, including coloring (which presets don't carry).
+    byId<HTMLSelectElement>("coloring").value = "classic";
+    applyColoring();
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
   });
   byId("print_param_space").addEventListener("click", () => {

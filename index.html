@@ -285,10 +285,22 @@ z^2+c</textarea
         <div>
           <h3>Controls</h3>
           <ul>
-            <li>Move the plot window with the arrow keys or by clicking and dragging.</li>
-            <li>Adjust the zoom level with the +/- keys.</li>
-            <li>Drag the white point in each plot to change its value.</li>
-            <li>Press "enter" to apply changes.</li>
+            <li>
+              Move the plot window with the arrow keys or by clicking and dragging the background.
+            </li>
+            <li>Zoom with the +/- keys or the mouse wheel (zooms toward the cursor).</li>
+            <li>
+              Drag the white point in each plot to change its value; the coordinate under the cursor
+              is shown beneath each plot.
+            </li>
+            <li>
+              Press "enter" or "apply changes" to apply edits; "reset" reverts every option to the
+              selected preset.
+            </li>
+            <li>
+              Pick a colour scheme with the "coloring" control (smooth shading and several
+              palettes).
+            </li>
           </ul>
 
           <h3>Predefined objects</h3>
@@ -306,18 +318,19 @@ z^2+c</textarea
           <h3>Saving images</h3>
           <ul>
             <li>
-              Each plot can be saved at a chosen resolution using the size dropdown next to its Save
-              button. The image is re-rendered off-screen at that size, so it is sharp at any
-              resolution (the on-screen plots are unaffected).
+              Each plot can be saved to a file (Save) or copied to the clipboard (Copy) at a chosen
+              resolution using the size dropdown next to the buttons. The image is re-rendered
+              off-screen at that exact size, so it is sharp at any resolution (the on-screen plots
+              are unaffected).
             </li>
             <li>
               Tick "overlays" to include the orbit polyline, white point, and coordinate label;
               leave it unticked for a clean fractal-only image.
             </li>
             <li>
-              Very large sizes take a moment to render. To stay within GPU memory, the fractal is
-              computed at up to 4096&times;4096 and smoothly scaled up to larger output sizes; sizes
-              above your GPU's maximum texture size are disabled in the dropdown.
+              Very large sizes take a moment to render. The plot is rendered at the exact size you
+              choose (no upscaling), up to your GPU's maximum texture size; larger sizes are
+              disabled in the dropdown.
             </li>
           </ul>
         </div>

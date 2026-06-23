@@ -26,15 +26,18 @@ npm run dev        # start the Vite dev server (http://localhost:5173)
 
 Other scripts:
 
-| Script            | Purpose                       |
-| ----------------- | ----------------------------- |
-| `npm run build`   | Production build into `dist/` |
-| `npm run preview` | Serve the production build    |
-| `npm test`        | Run the Vitest unit suite     |
-| `npm run lint`    | ESLint over `src/` and config |
-| `npm run format`  | Format with Prettier          |
+| Script              | Purpose                        |
+| ------------------- | ------------------------------ |
+| `npm run build`     | Production build into `dist/`  |
+| `npm run preview`   | Serve the production build     |
+| `npm test`          | Run the Vitest unit suite      |
+| `npm run lint`      | ESLint over `src/` and config  |
+| `npm run typecheck` | Type-check with `tsc --noEmit` |
+| `npm run format`    | Format with Prettier           |
 
-The app has no runtime dependencies — everything is bundled by Vite.
+The app has no runtime dependencies — everything is bundled by Vite. CI (GitHub
+Actions, [`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lint,
+typecheck, tests, and build on every push and pull request.
 
 ## How it works
 
@@ -52,6 +55,11 @@ The heavy per-pixel iteration runs on the GPU in a WebGL2 fragment shader,
 generated per expression by the compiler in [`src/expr/`](src/expr/). The orbit
 polyline is computed on the CPU by the same expression evaluator and drawn on a
 2D overlay canvas stacked over the WebGL one.
+
+Rendering is HiDPI-aware (the drawing buffer scales with `devicePixelRatio`,
+capped at 2× to bound cost) and progressive: heavy or deep-zoom views draw a
+quick coarse pass first and then refine to full resolution, so interaction stays
+responsive.
 
 ## Presets
 
@@ -95,14 +103,18 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
 - Move the plot window with the **arrow keys** or by click-dragging the
   background.
 - Zoom with the **+/- keys** or the **mouse wheel** (zooms toward the cursor).
-- Drag the **white point** in either plot to change its value.
-- Press **Enter** (or the **apply changes** button) to apply edits to the
-  input fields.
+- Drag the **white point** in either plot to change its value (the cursor shows
+  a grab affordance over it); the complex coordinate under the cursor is shown
+  beneath each plot.
+- Press **Enter** (or **apply changes**) to apply edits to the input fields;
+  **reset** reverts every option (including colouring) to the selected preset.
+- Choose a colour scheme with the **coloring** control — see
+  [Colouring](#colouring).
 
 ## Saving images
 
-Each plot has a **Save** button in the Downloads panel with two adjacent
-controls:
+Each plot has **Save** (download a PNG) and **Copy** (copy a PNG to the
+clipboard) buttons in the Downloads panel, with two adjacent controls:
 
 - **Size** — the output resolution in pixels (e.g. `2000`, `4000`, `8000`). The
   plot is re-rendered off-screen at this size and downloaded as a PNG at full
@@ -116,8 +128,24 @@ controls:
 The renderer draws into an off-screen RGBA8 framebuffer
 ([`GLPlot.renderToImageData`](src/render/glPlot.ts)), so the export is true
 single-pass detail at the requested size — no render-image cap. The scaled
-overlay is composited on top and downloaded
-([`PlotView.exportPng`](src/render/plotView.ts)).
+overlay is composited on top, then downloaded
+([`PlotView.exportPng`](src/render/plotView.ts)) or copied to the clipboard
+([`PlotView.copyPng`](src/render/plotView.ts)).
+
+## Colouring
+
+The **coloring** control (shared by both plots) selects how escape time is
+mapped to colour:
+
+- **Classic** — the original escape-time ramp (discrete bands).
+- **Smooth** — continuous (smooth) escape time, same palette, no banding.
+- **Viridis**, **Magma**, **Grayscale** — perceptual palettes with smooth
+  shading (Viridis is colourblind-safe).
+
+Smooth colouring uses the normalized iteration count and applies to
+magnitude-divergence escapes (`abs(z) > R`); other predicates fall back to
+discrete bands. Colouring is driven by shader uniforms, so switching never
+recompiles.
 
 ## Architecture
 
