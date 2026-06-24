@@ -435,6 +435,14 @@ function init(): void {
     byId<HTMLInputElement>("equiDensity").disabled = !on;
   }
 
+  /** Toggle Newton's-method iteration on both plots, surfacing any non-differentiable f. */
+  function applyNewton(): void {
+    const on = byId<HTMLInputElement>("newton").checked;
+    parameterView.plot.setNewton(on);
+    dynamicalView.plot.setNewton(on);
+    reportCompileErrors();
+  }
+
   // --- wire up the UI controls ------------------------------------------
 
   document.addEventListener("keyup", (event) => {
@@ -470,6 +478,8 @@ function init(): void {
   }
   applyEquipotential();
 
+  byId("newton").addEventListener("change", applyNewton);
+
   byId("apply_all").addEventListener("click", applyChanges);
   byId("apply_preset").addEventListener("click", () => {
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
@@ -501,6 +511,8 @@ function init(): void {
     byId<HTMLInputElement>("equipotential").checked = false;
     byId<HTMLInputElement>("equiDensity").value = "20";
     applyEquipotential();
+    byId<HTMLInputElement>("newton").checked = false;
+    applyNewton();
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
   });
   byId("print_param_space").addEventListener("click", () => {

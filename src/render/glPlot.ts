@@ -21,6 +21,7 @@ import {
   type Precision,
 } from "./shaderBuilder";
 import { buildGradient, DEFAULT_GRADIENT, type GradientStop } from "../palettes";
+import { newtonIteration } from "../expr/derivative";
 
 export type FractType = "dyn" | "param";
 
@@ -183,6 +184,9 @@ export class GLPlot {
   private _fAst: Node = parse("z^2+c");
   private _esc = "abs(z)>2";
   private _escAst: Node = parse("abs(z)>2");
+  private _newton = false; // Newton's-method iteration
+  private _iterAst: Node = parse("z^2+c"); // effective iterated fn (Newton map when _newton)
+  private _iterEscAst: Node = parse("abs(z)>2"); // effective escape predicate
   private _n = "100";
   private _nplot = "7";
   private _z0: Vec2 = [0, 0];
@@ -305,7 +309,7 @@ export class GLPlot {
     const program = createProgram(
       this.gl,
       VERTEX_SHADER,
-      buildFragmentShader(this._fAst, this._escAst, precision),
+      buildFragmentShader(this._iterAst, this._iterEscAst, precision),
     );
     return { program, uniforms: this.getUniforms(program) };
   }
@@ -330,13 +334,38 @@ export class GLPlot {
    * be very large (e.g. the Schwarz presets) and slow to compile, so we only pay
    * that cost when a deep zoom actually needs it.
    */
+  /**
+   * Recompute the iterated AST + escape predicate. Normally these are the user's
+   * f/escape; in Newton mode they become the Newton map `z - f/f'` and a
+   * convergence test `|f| < eps`. Returns a message (and falls back to the plain f)
+   * if differentiation failed — i.e. Newton's method is unavailable for this f.
+   */
+  private updateIteration(): string | null {
+    if (this._newton) {
+      try {
+        const { iter, escape } = newtonIteration(this._fAst);
+        this._iterAst = iter;
+        this._iterEscAst = escape;
+        return null;
+      } catch (err) {
+        this._iterAst = this._fAst;
+        this._iterEscAst = this._escAst;
+        return err instanceof Error ? err.message : String(err);
+      }
+    }
+    this._iterAst = this._fAst;
+    this._iterEscAst = this._escAst;
+    return null;
+  }
+
   private rebuild(): void {
     const gl = this.gl;
+    const iterError = this.updateIteration();
     try {
       const next = this.compile("single");
       if (this.programs.single) gl.deleteProgram(this.programs.single.program);
       this.programs.single = next;
-      this.lastError = null;
+      this.lastError = iterError;
     } catch (err) {
       this.lastError = err instanceof Error ? err.message : String(err);
       console.error(`[${this.fractType}] single shader build failed:`, this.lastError);
@@ -361,7 +390,7 @@ export class GLPlot {
     const gen = this.df64Gen;
     let pending: PendingProgram;
     try {
-      pending = this.linkProgramAsync(buildFragmentShader(this._fAst, this._escAst, "df64"));
+      pending = this.linkProgramAsync(buildFragmentShader(this._iterAst, this._iterEscAst, "df64"));
     } catch (err) {
       this.df64Compiling = false;
       console.warn(`[${this.fractType}] df64 shader build failed (deep zoom disabled):`, err);
@@ -977,6 +1006,17 @@ export class GLPlot {
     this.scheduleRender();
   }
 
+  /**
+   * Toggle Newton's-method iteration: iterate the Newton map `z - f/f'` (the current
+   * f is read as the polynomial whose roots are sought) and colour by convergence.
+   * Recompiles; sets {@link lastError} if f isn't differentiable.
+   */
+  setNewton(on: boolean): void {
+    this._newton = on;
+    this.rebuild();
+    this.scheduleRender();
+  }
+
   get c(): string {
     return this._c;
   }
@@ -1011,10 +1051,10 @@ export class GLPlot {
     return plotRange(this._center, this._zoom);
   }
   get fAst(): Node {
-    return this._fAst;
+    return this._iterAst;
   }
   get escAst(): Node {
-    return this._escAst;
+    return this._iterEscAst;
   }
   get glContext(): WebGL2RenderingContext {
     return this.gl;

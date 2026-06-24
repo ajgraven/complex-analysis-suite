@@ -300,6 +300,11 @@ z^2+c</textarea
               /></label>
             </div>
           </div>
+          <div class="field">
+            <label class="checkbox" for="newton">
+              <input type="checkbox" id="newton" /> Newton's method
+            </label>
+          </div>
         </div>
         <div class="inline-actions">
           <button id="apply_all" type="button">apply changes</button>
@@ -420,6 +425,10 @@ z^2+c</textarea
               fate (escapes / fixed point / cycle / bounded); add the
               <strong>critical orbit</strong> (a Julia-connectivity test) or
               <strong>equipotential</strong> contours.
+            </li>
+            <li>
+              Tick <strong>Newton's method</strong> to iterate the Newton map of
+              <code>f</code> (e.g. <code>z^3-1</code>) and colour the root basins by convergence.
             </li>
           </ul>
 

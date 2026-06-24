@@ -134,6 +134,13 @@ by fate; the critical-orbit toggle is held on `PlotView` (`setCriticalOrbit`). T
 **equipotential** overlay is instead a shader stage (`uEquipotential` in
 `shaderBuilder.ts`, driven by `GLPlot.setEquipotential`).
 
+**Newton's method** (`GLPlot.setNewton`) swaps the iterated AST for the Newton map
+`z - f/f'` built by [`src/expr/derivative.ts`](src/expr/derivative.ts)
+(`differentiate` / `newtonIteration`) — a build-time AST substitution, so the shader
+loops are unchanged. `differentiate` covers the holomorphic subset and throws for
+non-holomorphic builtins; if you add a new differentiable function, add its chain-rule
+case there too.
+
 Relief lighting and post-processing are separate shader stages, not palette/mode
 branches: lighting is applied in `main()` after the per-pixel colour
 (`reliefHeight`/`applyLighting` in `shaderBuilder.ts`, driven by `GLPlot.setLighting`),

@@ -188,6 +188,15 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
 - **Equipotential** — an optional shader overlay of escape-potential contours (a
   topographic "escape-velocity" map), with a density slider.
 
+## Newton's method
+
+Tick **Newton's method** to iterate the Newton map `z − f/f'` instead of `f` (the
+current `f` is read as the polynomial whose roots are sought) and colour by
+convergence — e.g. `f = z^3 - 1` gives the classic root-basin fractal. The
+derivative is computed symbolically
+([`src/expr/derivative.ts`](src/expr/derivative.ts)); it's available for holomorphic
+`f` and reports a clear error for non-holomorphic builtins (`abs`, `re`, `im`, …).
+
 ## Architecture
 
 ```
