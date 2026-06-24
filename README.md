@@ -124,6 +124,9 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
 - **Share link** copies a URL whose hash encodes the current view — formula, both planes'
   centre/zoom/iterations, colouring mode/palette, and every toggle — so opening it
   reproduces the view. (The orbit start z₀ and custom gradients aren't encoded yet.)
+- **Save view** stores the current view under a name (in the browser); pick it from the
+  **Saved views** dropdown to restore it, or **Delete** to remove it. Saved views persist
+  across visits (localStorage) and capture the same state as a share link.
 - When `f` uses the free variable **`a`**, an `a` slider appears under the formula — drag
   it to sweep a live parameter and watch the fractal change.
 - **Auto iterations** raises the iteration cap automatically as you zoom in, so deep

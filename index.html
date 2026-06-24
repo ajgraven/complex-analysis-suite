@@ -368,6 +368,27 @@ z^2+c</textarea
           >
             Share link
           </button>
+          <input
+            type="text"
+            id="view-name"
+            size="10"
+            placeholder="view name"
+            title="Name for saving the current view"
+          />
+          <button id="save-view-btn" type="button" title="Save the current view under this name">
+            Save view
+          </button>
+          <select id="saved-views" title="Load a saved view">
+            <option value="">Saved views…</option>
+          </select>
+          <button
+            id="delete-view-btn"
+            type="button"
+            disabled
+            title="Delete the selected saved view"
+          >
+            Delete
+          </button>
         </div>
       </section>
 
@@ -587,6 +608,10 @@ z^2+c</textarea
             <li>
               Click <strong>Share link</strong> to copy a URL that reopens the current view —
               formula, zoom, colouring, and toggles.
+            </li>
+            <li>
+              <strong>Save view</strong> keeps the current view under a name in your browser; reopen
+              it from <strong>Saved views</strong> or remove it with <strong>Delete</strong>.
             </li>
           </ul>
 

@@ -20,7 +20,14 @@ import { DEFAULT_GRADIENT } from "./palettes";
 import { setupGradientEditor } from "./ui/gradient";
 import { canRecord, startRecording, downloadBlob } from "./ui/recorder";
 import { interpolateView, type Keyframe } from "./render/keyframes";
-import { readAppState, applyAppState, encodeState, decodeState } from "./state/appState";
+import {
+  readAppState,
+  applyAppState,
+  encodeState,
+  decodeState,
+  loadSavedViews,
+  saveSavedViews,
+} from "./state/appState";
 import GIF from "gif.js";
 import gifWorkerUrl from "gif.js/dist/gif.worker.js?url";
 import { parse } from "./expr/parser";
@@ -638,6 +645,61 @@ function init(): void {
     return true;
   }
 
+  /** Refresh the saved-views dropdown from localStorage. */
+  function populateViewSelect(): void {
+    const select = byId<HTMLSelectElement>("saved-views");
+    const names = Object.keys(loadSavedViews()).sort();
+    select.innerHTML = '<option value="">Saved views…</option>';
+    for (const name of names) {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      select.appendChild(opt);
+    }
+    byId<HTMLButtonElement>("delete-view-btn").disabled = true;
+  }
+
+  /** Save the current view under the name typed in the view-name input. */
+  function saveCurrentView(): void {
+    const input = byId<HTMLInputElement>("view-name");
+    const name = input.value.trim();
+    if (!name) {
+      showToast("Type a name for the view first.", "warn");
+      return;
+    }
+    const views = loadSavedViews();
+    views[name] = readAppState();
+    saveSavedViews(views);
+    populateViewSelect();
+    byId<HTMLSelectElement>("saved-views").value = name;
+    byId<HTMLButtonElement>("delete-view-btn").disabled = false;
+    input.value = "";
+    showToast(`Saved view “${name}”.`, "info");
+  }
+
+  /** Load the view selected in the dropdown. */
+  function loadSelectedView(): void {
+    const name = byId<HTMLSelectElement>("saved-views").value;
+    byId<HTMLButtonElement>("delete-view-btn").disabled = !name;
+    if (!name) return;
+    const state = loadSavedViews()[name];
+    if (!state) return;
+    applyAppState(state);
+    applyAllControls();
+    showToast(`Loaded view “${name}”.`, "info");
+  }
+
+  /** Delete the selected saved view. */
+  function deleteSelectedView(): void {
+    const name = byId<HTMLSelectElement>("saved-views").value;
+    if (!name) return;
+    const views = loadSavedViews();
+    delete views[name];
+    saveSavedViews(views);
+    populateViewSelect();
+    showToast(`Deleted view “${name}”.`, "info");
+  }
+
   /**
    * Phase 17 — animation recording. Drive `apply(t)` (t: 0→1) for `durationMs` via
    * requestAnimationFrame while capturing `plot`'s canvas to a WebM clip, then download it
@@ -941,6 +1003,9 @@ function init(): void {
   byId("share-btn").addEventListener("click", () => {
     void shareLink();
   });
+  byId("save-view-btn").addEventListener("click", saveCurrentView);
+  byId("saved-views").addEventListener("change", loadSelectedView);
+  byId("delete-view-btn").addEventListener("click", deleteSelectedView);
 
   byId("apply_all").addEventListener("click", applyChanges);
   byId("apply_preset").addEventListener("click", () => {
@@ -1051,6 +1116,7 @@ function init(): void {
   applyParamA();
   updateParamAVisibility();
   updateKeyframeUI();
+  populateViewSelect();
   loadFromHash(); // apply a shared view if the URL carries one
 
   // Dev-only: expose the two views so the renderer can be driven/inspected from the

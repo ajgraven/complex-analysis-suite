@@ -103,3 +103,27 @@ export function decodeState(encoded: string): AppState | null {
     return null;
   }
 }
+
+// --- saved named views (localStorage-backed) ----------------------------------
+
+const VIEWS_KEY = "cdjs.savedViews";
+
+/** Load the map of saved views (name → state) from localStorage; {} if unavailable. */
+export function loadSavedViews(): Record<string, AppState> {
+  try {
+    const raw = localStorage.getItem(VIEWS_KEY);
+    const obj: unknown = raw ? JSON.parse(raw) : {};
+    return obj && typeof obj === "object" ? (obj as Record<string, AppState>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Persist the map of saved views to localStorage (no-op if unavailable). */
+export function saveSavedViews(views: Record<string, AppState>): void {
+  try {
+    localStorage.setItem(VIEWS_KEY, JSON.stringify(views));
+  } catch {
+    /* storage unavailable (private mode / quota) — keep the in-memory map only */
+  }
+}
