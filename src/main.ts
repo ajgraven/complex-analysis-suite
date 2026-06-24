@@ -521,6 +521,13 @@ function init(): void {
     dynamicalView.plot.setAutoIterations(on);
   }
 
+  /** Toggle temporal anti-aliasing (idle accumulation) on both plots. */
+  function applyAccumulate(): void {
+    const on = byId<HTMLInputElement>("accumulate").checked;
+    parameterView.plot.setAccumulate(on);
+    dynamicalView.plot.setAccumulate(on);
+  }
+
   // --- wire up the UI controls ------------------------------------------
 
   document.addEventListener("keyup", (event) => {
@@ -558,6 +565,7 @@ function init(): void {
 
   byId("newton").addEventListener("change", applyNewton);
   byId("autoiter").addEventListener("change", applyAutoIter);
+  byId("accumulate").addEventListener("change", applyAccumulate);
 
   byId("apply_all").addEventListener("click", applyChanges);
   byId("apply_preset").addEventListener("click", () => {
@@ -594,6 +602,8 @@ function init(): void {
     applyNewton();
     byId<HTMLInputElement>("autoiter").checked = false;
     applyAutoIter();
+    byId<HTMLInputElement>("accumulate").checked = false;
+    applyAccumulate();
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
   });
   byId("print_param_space").addEventListener("click", () => {

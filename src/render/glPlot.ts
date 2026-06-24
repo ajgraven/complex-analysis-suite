@@ -81,6 +81,7 @@ interface Uniforms {
   uOutlineWidth: WebGLUniformLocation | null;
   uEquipotential: WebGLUniformLocation | null;
   uEquiDensity: WebGLUniformLocation | null;
+  uJitter: WebGLUniformLocation | null;
 }
 
 interface CompiledProgram {
@@ -94,6 +95,7 @@ interface PostUniforms {
   uResolution: WebGLUniformLocation | null;
   uVignette: WebGLUniformLocation | null;
   uGamma: WebGLUniformLocation | null;
+  uAccumScale: WebGLUniformLocation | null;
 }
 
 /** A program whose compile/link has been started but whose status hasn't been checked yet. */
@@ -142,12 +144,30 @@ const PROGRESSIVE_LADDER = [0.5, 1.0];
 const DRAFT_ITER_FACTOR = 0.5;
 const DRAFT_MIN_ITERS = 30;
 
+/** Max jittered samples accumulated for temporal anti-aliasing (idle only). */
+const MAX_ACCUM = 16;
+
+/** van der Corput / Halton low-discrepancy value in [0,1) for `index` in base `b`. */
+function halton(index: number, b: number): number {
+  let result = 0;
+  let f = 1;
+  let i = index;
+  while (i > 0) {
+    f /= b;
+    result += f * (i % b);
+    i = Math.floor(i / b);
+  }
+  return result;
+}
+
 export class GLPlot {
   private readonly gl: WebGL2RenderingContext;
   private readonly canvas: HTMLCanvasElement;
   private readonly fractType: FractType;
   /** KHR_parallel_shader_compile, when available — lets df64 compile off the main thread. */
   private readonly parallelExt: { COMPLETION_STATUS_KHR: number } | null;
+  /** EXT_color_buffer_float — needed to render into the float temporal-AA accumulator. */
+  private readonly floatExt: EXT_color_buffer_float | null;
 
   private programs: { single: CompiledProgram | null; df64: CompiledProgram | null } = {
     single: null,
@@ -164,6 +184,12 @@ export class GLPlot {
   private sceneSize = 0;
   /** Custom-gradient palette: a 256×1 ramp texture sampled when uPalette == 4. */
   private gradientTex: WebGLTexture | null = null;
+  /** Temporal anti-aliasing: a float accumulator for jittered idle samples. */
+  private accumFbo: WebGLFramebuffer | null = null;
+  private accumTex: WebGLTexture | null = null;
+  private accumSize = 0;
+  private accumCount = 0;
+  private _jitter: [number, number] = [0, 0];
   private renderScheduled = false;
   private _draft = false;
   private contextLost = false;
@@ -191,6 +217,7 @@ export class GLPlot {
   private _n = "100";
   private _nplot = "7";
   private _autoIter = false; // scale the iteration cap with zoom depth
+  private _accumulate = false; // temporal anti-aliasing (idle accumulation)
   private _z0: Vec2 = [0, 0];
   private _mode = 0; // 0 escape, 1 smooth, 2 distance, 3 orbit-trap, 4 domain
   private _palette = 0; // 0 classic, 1 viridis, 2 magma, 3 grayscale
@@ -220,6 +247,7 @@ export class GLPlot {
     this.parallelExt = gl.getExtension("KHR_parallel_shader_compile") as {
       COMPLETION_STATUS_KHR: number;
     } | null;
+    this.floatExt = gl.getExtension("EXT_color_buffer_float");
     this.attachContextHandlers();
     this.setupQuad();
     this.compilePostProgram();
@@ -264,6 +292,10 @@ export class GLPlot {
     this.sceneTex = null;
     this.sceneSize = 0;
     this.gradientTex = null;
+    this.accumFbo = null;
+    this.accumTex = null;
+    this.accumSize = 0;
+    this.accumCount = 0;
     this.postProgram = null;
     this.setupQuad();
     this.compilePostProgram();
@@ -339,6 +371,7 @@ export class GLPlot {
       uOutlineWidth: gl.getUniformLocation(program, "uOutlineWidth"),
       uEquipotential: gl.getUniformLocation(program, "uEquipotential"),
       uEquiDensity: gl.getUniformLocation(program, "uEquiDensity"),
+      uJitter: gl.getUniformLocation(program, "uJitter"),
     };
   }
 
@@ -519,6 +552,7 @@ export class GLPlot {
   /** Request a render, restarting the progressive ladder from the coarsest level. */
   scheduleRender(): void {
     this._level = 0;
+    this.accumCount = 0;
     this.requestFrame();
   }
 
@@ -592,6 +626,7 @@ export class GLPlot {
       gl.activeTexture(gl.TEXTURE0); // leave unit 0 active (updateCdf assumes it)
     }
     gl.uniform1f(u.uGradientOffset, this._gradientOffset);
+    gl.uniform2f(u.uJitter, this._jitter[0], this._jitter[1]);
     const outlineOn = this._outline && mode !== 6 && !this._draft;
     gl.uniform1i(u.uOutline, outlineOn ? 1 : 0);
     gl.uniform1f(u.uOutlineWidth, this._outlineWidth);
@@ -694,6 +729,7 @@ export class GLPlot {
           uResolution: gl.getUniformLocation(program, "uResolution"),
           uVignette: gl.getUniformLocation(program, "uVignette"),
           uGamma: gl.getUniformLocation(program, "uGamma"),
+          uAccumScale: gl.getUniformLocation(program, "uAccumScale"),
         },
       };
     } catch (err) {
@@ -744,18 +780,41 @@ export class GLPlot {
     gl.bindTexture(gl.TEXTURE_2D, null); // detach so it isn't a sampler feedback loop
   }
 
-  /** Composite the scene texture into the visible framebuffer through the post pass. */
-  private drawPost(size: number): void {
+  /** (Re)allocate the RGBA16F float accumulator (+ FBO) for temporal anti-aliasing. */
+  private ensureAccumTarget(size: number): void {
+    const gl = this.gl;
+    if (!this.accumTex) this.accumTex = gl.createTexture();
+    if (this.accumSize !== size) {
+      gl.bindTexture(gl.TEXTURE_2D, this.accumTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, size, size, 0, gl.RGBA, gl.HALF_FLOAT, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      this.accumSize = size;
+    }
+    if (!this.accumFbo) this.accumFbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.accumFbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.accumTex, 0);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
+  /**
+   * Composite a source texture into the visible framebuffer through the post pass.
+   * `scale` divides the source (1 normally; 1/frames when showing the accumulator).
+   */
+  private drawPost(size: number, sourceTex: WebGLTexture | null = this.sceneTex, scale = 1): void {
     const gl = this.gl;
     const pp = this.postProgram;
     if (!pp) return;
     gl.useProgram(pp.program);
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.sceneTex);
+    gl.bindTexture(gl.TEXTURE_2D, sourceTex);
     gl.uniform1i(pp.uniforms.uScene, 0);
     gl.uniform2f(pp.uniforms.uResolution, size, size);
     gl.uniform1f(pp.uniforms.uVignette, this._vignette);
     gl.uniform1f(pp.uniforms.uGamma, this._gamma);
+    gl.uniform1f(pp.uniforms.uAccumScale, scale);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindTexture(gl.TEXTURE_2D, null); // unbind so it can be a render target next frame
   }
@@ -767,6 +826,11 @@ export class GLPlot {
    */
   render(): void {
     if (this.contextLost) return;
+    if (this._accumulate && this.postProgram !== null && this.floatExt !== null && !this._draft) {
+      this.renderAccumulate();
+      this.afterRender?.();
+      return;
+    }
     let fraction = 1;
     let refine = false;
     if (this._draft) {
@@ -801,6 +865,38 @@ export class GLPlot {
       this._level++;
       this.requestFrame();
     }
+  }
+
+  /**
+   * One temporal-AA accumulation frame: add a jittered sample to the float
+   * accumulator and display its running average; schedule the next up to MAX_ACCUM.
+   */
+  private renderAccumulate(): void {
+    const gl = this.gl;
+    this.applyRenderSize(1); // accumulate at full resolution
+    const size = this.canvas.width;
+    if (this.effectiveMode() === 5) this.updateCdf(size, size);
+    this.ensureAccumTarget(size);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.accumFbo);
+    gl.viewport(0, 0, size, size);
+    if (this.accumCount === 0) {
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+    }
+    // Jittered sub-pixel offset for this sample (Halton bases 2 and 3, in [-0.5, 0.5]).
+    this._jitter = [halton(this.accumCount + 1, 2) - 0.5, halton(this.accumCount + 1, 3) - 0.5];
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE); // additive accumulation
+    const ok = this.setupDraw(size, size);
+    if (ok) gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.disable(gl.BLEND);
+    this._jitter = [0, 0];
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, size, size);
+    if (!ok) return;
+    this.accumCount++;
+    this.drawPost(size, this.accumTex, 1 / this.accumCount); // display the running average
+    if (this.accumCount < MAX_ACCUM) this.requestFrame();
   }
 
   /**
@@ -1071,6 +1167,16 @@ export class GLPlot {
   /** Toggle auto-scaling of the iteration cap with zoom depth. Render-only. */
   setAutoIterations(on: boolean): void {
     this._autoIter = on;
+    this.scheduleRender();
+  }
+
+  /**
+   * Toggle temporal anti-aliasing: while idle, jittered samples accumulate into a
+   * float buffer and converge to a smoother image. Needs EXT_color_buffer_float and
+   * falls back to the normal render if unsupported. Render-only.
+   */
+  setAccumulate(on: boolean): void {
+    this._accumulate = on;
     this.scheduleRender();
   }
 

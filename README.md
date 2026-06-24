@@ -169,6 +169,10 @@ classic look; all are shader uniforms, so switching never recompiles):
   to every palette.
 - **Anti-aliasing** — Off / 2× / 3× supersampling, on full-resolution renders only
   (disabled during interaction for responsiveness).
+- **Smooth (idle AA)** — while the view sits still, accumulates jittered sub-pixel
+  samples into a float buffer and shows their running average, converging to a much
+  cleaner image over a few frames at no interaction cost. Needs float render targets
+  (`EXT_color_buffer_float`); falls back to the normal render if unsupported.
 - **Relief lighting** — an optional toggle that shades the fractal as a lit 3-D
   surface (azimuth / elevation / depth sliders). The surface normal is taken from
   the screen-space gradient of the escape-time field, so it works for any `f`; it

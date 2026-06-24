@@ -35,12 +35,13 @@ export const POST_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 uniform sampler2D uScene;
 uniform vec2 uResolution;
-uniform float uVignette; // 0 = none .. 1 = strong corner darkening
-uniform float uGamma;    // output gamma (1 = unchanged)
+uniform float uVignette;   // 0 = none .. 1 = strong corner darkening
+uniform float uGamma;      // output gamma (1 = unchanged)
+uniform float uAccumScale; // 1, or 1/frames when displaying the temporal accumulator
 out vec4 fragColor;
 void main() {
   vec2 uv = gl_FragCoord.xy / uResolution;
-  vec3 col = texture(uScene, uv).rgb;
+  vec3 col = texture(uScene, uv).rgb * uAccumScale;
   col = pow(max(col, 0.0), vec3(1.0 / uGamma));
   float r = length(uv - 0.5) * 1.41421356;
   col *= 1.0 - uVignette * smoothstep(0.4, 1.0, r);
@@ -90,6 +91,7 @@ uniform int uOutline;          // boundary-outline overlay on/off
 uniform float uOutlineWidth;   // boundary-outline strength
 uniform int uEquipotential;    // equipotential (level-curve) overlay on/off
 uniform float uEquiDensity;    // equipotential contour spacing
+uniform vec2 uJitter;          // sub-pixel jitter for temporal supersampling
 out vec4 fragColor;
 
 // Perceptual colormaps as degree-6 polynomial fits (t in [0,1]). viridis/magma
@@ -296,14 +298,15 @@ vec3 applyLighting(vec3 col, float h) {
 }
 
 void main() {
+  vec2 fc = gl_FragCoord.xy + uJitter; // temporal-AA sub-pixel offset (0 when off)
   if (uMode == 6) {
     // Histogram pre-pass: output the escape count encoded in R,G (kmax = R + 256*G).
-    int k = escapeCount(gl_FragCoord.xy);
+    int k = escapeCount(fc);
     fragColor = vec4(float(k % 256) / 255.0, float(k / 256) / 255.0, 0.0, 1.0);
     return;
   }
   if (uMode == 2) {
-    fragColor = vec4(distanceColor(gl_FragCoord.xy), 1.0); // edges: no supersampling
+    fragColor = vec4(distanceColor(fc), 1.0); // edges: no supersampling
     return;
   }
   int n = max(uAA, 1);
@@ -311,12 +314,12 @@ void main() {
   for (int sy = 0; sy < n; sy++) {
     for (int sx = 0; sx < n; sx++) {
       vec2 sub = (vec2(float(sx), float(sy)) + 0.5) / float(n) - 0.5;
-      acc += colorAt(gl_FragCoord.xy + sub);
+      acc += colorAt(fc + sub);
     }
   }
   vec3 col = acc / float(n * n);
   if ((uLight == 1 || uOutline == 1 || uEquipotential == 1) && uMode != 4) {
-    float h = reliefHeight(gl_FragCoord.xy);
+    float h = reliefHeight(fc);
     if (uLight == 1) col = applyLighting(col, h);
     if (uOutline == 1 && h >= 0.0) {
       // Screen-space boundary emphasis: darken where the escape field changes fastest.

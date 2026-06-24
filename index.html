@@ -236,6 +236,11 @@ z^2+c</textarea
               <option value="3">3&times;</option>
             </select>
           </div>
+          <div class="field">
+            <label class="checkbox" for="accumulate">
+              <input type="checkbox" id="accumulate" /> smooth (idle AA)
+            </label>
+          </div>
           <details class="control-group">
             <summary>Effects</summary>
             <div class="control-grid">
@@ -455,6 +460,10 @@ z^2+c</textarea
             <li>
               Tick <strong>auto iterations</strong> to raise the iteration cap automatically as you
               zoom in.
+            </li>
+            <li>
+              Tick <strong>smooth (idle AA)</strong> to accumulate extra anti-aliasing while the view
+              sits still — it converges to a cleaner image over a few seconds.
             </li>
           </ul>
 
