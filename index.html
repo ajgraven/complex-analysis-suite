@@ -439,6 +439,37 @@ z^2+c</textarea
               </button>
             </div>
           </div>
+          <div class="field">
+            <label for="kf-add">Keyframe path <span id="kf-count">(0)</span></label>
+            <div class="inline-actions">
+              <button
+                id="kf-add"
+                type="button"
+                title="Capture the current parameter-plane view as a keyframe"
+              >
+                Add keyframe
+              </button>
+              <button id="kf-clear" type="button" title="Remove all keyframes">Clear</button>
+              <input
+                type="range"
+                id="kf-scrub"
+                min="0"
+                max="1"
+                step="0.001"
+                value="0"
+                disabled
+                title="Scrub along the keyframe path (needs 2+ keyframes)"
+              />
+              <button
+                id="kf-record"
+                type="button"
+                disabled
+                title="Play the keyframe path and save it as a WebM video"
+              >
+                Record path
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -522,6 +553,10 @@ z^2+c</textarea
             <li>
               Put the variable <strong>a</strong> in <code>f</code> (e.g. <code>a*z*(1-z)</code>) to
               get a live slider that sweeps it in real time.
+            </li>
+            <li>
+              Build a <strong>keyframe path</strong>: <strong>Add keyframe</strong> at a few
+              parameter-space views, then scrub or <strong>Record path</strong> to fly between them.
             </li>
           </ul>
 

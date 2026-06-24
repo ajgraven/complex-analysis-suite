@@ -159,6 +159,9 @@ capture isn't black):
   current point, morphing the dynamical plane.
 - **Record zoom-in** zooms into the parameter plane (log-interpolated) from the current
   view — navigate onto some structure first.
+- **Keyframe path** — capture parameter-plane views with **Add keyframe**, scrub between
+  them with the slider, and **Record path** to save the interpolated fly-through (centre
+  linear, zoom geometric).
 
 Frames are forced to full resolution during capture. Keep the tab focused while
 recording (the loop is paced by `requestAnimationFrame`). See

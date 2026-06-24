@@ -19,6 +19,7 @@ import { validateInputs, type FieldError } from "./ui/validate";
 import { DEFAULT_GRADIENT } from "./palettes";
 import { setupGradientEditor } from "./ui/gradient";
 import { canRecord, startRecording, downloadBlob } from "./ui/recorder";
+import { interpolateView, type Keyframe } from "./render/keyframes";
 import { parse } from "./expr/parser";
 import { toLatex } from "./expr/latex";
 import katex from "katex";
@@ -689,6 +690,66 @@ function init(): void {
     );
   }
 
+  // Phase 17 — keyframe timeline: a path of parameter-plane views to scrub / record.
+  const keyframes: Keyframe[] = [];
+
+  function updateKeyframeUI(): void {
+    byId("kf-count").textContent = `(${keyframes.length})`;
+    const ready = keyframes.length >= 2;
+    byId<HTMLInputElement>("kf-scrub").disabled = !ready;
+    byId<HTMLButtonElement>("kf-record").disabled = !ready;
+  }
+
+  /** Capture the current parameter-plane view as a keyframe. */
+  function addKeyframe(): void {
+    const [cx, cy] = parameterView.plot.center;
+    keyframes.push({ center: [cx, cy], zoom: parameterView.plot.zoom });
+    updateKeyframeUI();
+    showToast(`Keyframe ${keyframes.length} added`, "info");
+  }
+
+  function clearKeyframes(): void {
+    keyframes.length = 0;
+    byId<HTMLInputElement>("kf-scrub").value = "0";
+    updateKeyframeUI();
+  }
+
+  /** Seek the parameter plane to the scrub position along the keyframe path. */
+  function applyScrub(): void {
+    if (keyframes.length < 2) return;
+    const v = interpolateView(keyframes, Number(byId<HTMLInputElement>("kf-scrub").value));
+    parameterView.plot.center = v.center;
+    parameterView.plot.zoom = v.zoom;
+  }
+
+  /** Play the keyframe path and record it to a WebM clip. */
+  function recordKeyframePath(): void {
+    if (keyframes.length < 2) {
+      showToast("Add at least two keyframes first.", "warn");
+      return;
+    }
+    const plot = parameterView.plot;
+    const [sx, sy] = plot.center;
+    const startZoom = plot.zoom;
+    void recordAnimation(
+      plot,
+      byId<HTMLButtonElement>("kf-record"),
+      "keyframe-path.webm",
+      Math.max(2000, (keyframes.length - 1) * 2500),
+      (t) => {
+        const v = interpolateView(keyframes, t);
+        plot.center = v.center;
+        plot.zoom = v.zoom;
+        plot.render();
+      },
+      () => {
+        plot.center = [sx, sy];
+        plot.zoom = startZoom;
+        plot.scheduleRender();
+      },
+    );
+  }
+
   // --- wire up the UI controls ------------------------------------------
 
   document.addEventListener("keyup", (event) => {
@@ -771,6 +832,7 @@ function init(): void {
     applyPerturbation();
     byId<HTMLInputElement>("param-a").value = "1";
     applyParamA();
+    clearKeyframes();
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
   });
   byId("print_param_space").addEventListener("click", () => {
@@ -817,6 +879,12 @@ function init(): void {
   byId("record_zoom").addEventListener("click", () => {
     void recordZoomMovie();
   });
+  byId("kf-add").addEventListener("click", addKeyframe);
+  byId("kf-clear").addEventListener("click", clearKeyframes);
+  byId("kf-scrub").addEventListener("input", applyScrub);
+  byId("kf-record").addEventListener("click", () => {
+    void recordKeyframePath();
+  });
 
   disableUnsupportedSizes();
   setupOnboarding();
@@ -825,6 +893,7 @@ function init(): void {
   setupTheme();
   applyParamA();
   updateParamAVisibility();
+  updateKeyframeUI();
 
   // Dev-only: expose the two views so the renderer can be driven/inspected from the
   // console (e.g. the synchronous `renderToImageData` path, which works even when a
