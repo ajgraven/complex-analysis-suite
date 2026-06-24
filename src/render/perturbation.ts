@@ -15,6 +15,8 @@
  * this orbit to double-double / bignum to reach 1e28 and beyond.
  */
 
+import { type DD, ddAdd, ddMul, ddSub, ddToNumber } from "./dd";
+
 export interface ReferenceOrbit {
   /** Number of stored samples (Z_0 … Z_{length-1}). */
   length: number;
@@ -50,6 +52,39 @@ export function computeReferenceOrbit(cx: number, cy: number, maxIter: number): 
     const nx = zx * zx - zy * zy + cx;
     zy = 2 * zx * zy + cy;
     zx = nx;
+  }
+  const length = Math.min(n + 1, cap + 1);
+  return { length, xy, escaped: escapedAt < 0 ? length : escapedAt };
+}
+
+/**
+ * Same as {@link computeReferenceOrbit} but with the centre in double-double precision
+ * (~31 digits), so the orbit stays accurate at zoom depths a plain double can't locate
+ * (up to ~1e28). The orbit values are still O(1) and stored as single floats.
+ */
+export function computeReferenceOrbitDD(cx: DD, cy: DD, maxIter: number): ReferenceOrbit {
+  const cap = Math.max(1, Math.floor(maxIter));
+  const xy = new Float32Array((cap + 1) * 2);
+  let zx: DD = [0, 0];
+  let zy: DD = [0, 0];
+  let n = 0;
+  let escapedAt = -1;
+  for (; n <= cap; n++) {
+    const rx = ddToNumber(zx);
+    const ry = ddToNumber(zy);
+    xy[2 * n] = rx;
+    xy[2 * n + 1] = ry;
+    if (rx * rx + ry * ry > BAILOUT2) {
+      escapedAt = n;
+      break;
+    }
+    if (n === cap) break;
+    // Z² = (zx² − zy²) + i·(2·zx·zy), then + c0 — all in double-double.
+    const x2 = ddSub(ddMul(zx, zx), ddMul(zy, zy));
+    const zxzy = ddMul(zx, zy);
+    const y2 = ddAdd(zxzy, zxzy);
+    zx = ddAdd(x2, cx);
+    zy = ddAdd(y2, cy);
   }
   const length = Math.min(n + 1, cap + 1);
   return { length, xy, escaped: escapedAt < 0 ? length : escapedAt };

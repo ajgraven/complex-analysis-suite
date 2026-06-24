@@ -308,15 +308,14 @@ export class PlotView {
       (e) => {
         e.preventDefault();
         const uv = this.uvOf(e);
-        const under = this.uvToPlot(uv);
         const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-        const newZoom = this.plot.zoom * factor;
-        // Keep the plot point under the cursor fixed while zooming.
+        const oldZoom = this.plot.zoom;
+        const newZoom = oldZoom * factor;
+        // Keep the plot point under the cursor fixed while zooming, accumulating the
+        // shift in double-double so the centre keeps precision at deep zoom.
+        const k = 1 / oldZoom - 1 / newZoom;
         this.plot.zoom = newZoom;
-        this.plot.center = [
-          under[0] - (uv[0] * 2 - 1) / newZoom,
-          under[1] - ((1 - uv[1]) * 2 - 1) / newZoom,
-        ];
+        this.plot.shift([(uv[0] * 2 - 1) * k, ((1 - uv[1]) * 2 - 1) * k]);
         this.plot.setDraft(true);
         window.clearTimeout(this.wheelTimer);
         this.wheelTimer = window.setTimeout(() => {

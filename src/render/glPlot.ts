@@ -8,7 +8,6 @@
  */
 
 import type { Vec2 } from "../arrays";
-import { addArrays } from "../arrays";
 import { parseComplex, type Complex } from "../complex";
 import { canvToPlot, plotRange, plotToCanv } from "../transforms";
 import type { Preset } from "../presets";
@@ -24,7 +23,8 @@ import {
 import { buildGradient, DEFAULT_GRADIENT, type GradientStop } from "../palettes";
 import { newtonIteration } from "../expr/derivative";
 import { makeComplexFn } from "../expr/evaluate";
-import { computeReferenceOrbit } from "./perturbation";
+import { computeReferenceOrbitDD } from "./perturbation";
+import { type DD, dd, ddAddNumber, ddToNumber } from "./dd";
 
 export type FractType = "dyn" | "param";
 
@@ -203,6 +203,11 @@ export class GLPlot {
   private orbitDirty = true;
   private _perturbation = false; // perturbation deep-zoom toggle
   private _perturbEligible = false; // current f is z²+c (auto-detected)
+  /** View centre in double-double precision, accumulated across pan/zoom for deep zoom. */
+  private _centerDD: [DD, DD] = [
+    [0, 0],
+    [0, 0],
+  ];
   private sceneFbo: WebGLFramebuffer | null = null;
   private sceneTex: WebGLTexture | null = null;
   private sceneSize = 0;
@@ -735,7 +740,7 @@ export class GLPlot {
   private ensureOrbit(maxIter: number): void {
     if (!this.orbitDirty && this.orbitLen > 0) return;
     const gl = this.gl;
-    const orbit = computeReferenceOrbit(this._center[0], this._center[1], maxIter);
+    const orbit = computeReferenceOrbitDD(this._centerDD[0], this._centerDD[1], maxIter);
     this.orbitLen = orbit.length;
     if (!this.orbitTex) this.orbitTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.orbitTex);
@@ -1138,6 +1143,7 @@ export class GLPlot {
 
   ApplyPreset(preset: Preset): void {
     this._center = preset.center;
+    this._centerDD = [dd(preset.center[0]), dd(preset.center[1])];
     this._zoom = preset.zoom;
     this._c = preset.c;
     this._cVal = parseComplex(preset.c);
@@ -1167,7 +1173,14 @@ export class GLPlot {
   }
 
   shift(vec: Vec2): void {
-    this.center = addArrays(this._center, vec);
+    // Accumulate the pan in double-double so the centre keeps sub-double precision at
+    // deep zoom (a plain double would drop the tiny delta against the large coordinate).
+    this._centerDD = [
+      ddAddNumber(this._centerDD[0], vec[0]),
+      ddAddNumber(this._centerDD[1], vec[1]),
+    ];
+    this._center = [ddToNumber(this._centerDD[0]), ddToNumber(this._centerDD[1])];
+    this.scheduleRender();
   }
 
   keypress(key: number): void {
@@ -1235,6 +1248,7 @@ export class GLPlot {
   }
   set center(centerval: Vec2) {
     this._center = centerval;
+    this._centerDD = [dd(centerval[0]), dd(centerval[1])];
     this.scheduleRender();
   }
   set z0(z0Val: Vec2) {
@@ -1364,6 +1378,12 @@ export class GLPlot {
   /** Whether the current f is z²+c (so perturbation could apply on the param plane). */
   get perturbationEligible(): boolean {
     return this._perturbEligible;
+  }
+
+  /** Sub-double (lo) limbs of the double-double centre — non-zero once pan/zoom has
+   *  accumulated precision beyond a plain double. Diagnostic for deep-zoom verification. */
+  get centerDDLo(): [number, number] {
+    return [this._centerDD[0][1], this._centerDD[1][1]];
   }
 
   get c(): string {
