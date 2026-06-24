@@ -419,6 +419,22 @@ function init(): void {
     byId<HTMLInputElement>("outlineWidth").disabled = !on;
   }
 
+  /** Toggle the critical-orbit overlay on both plots. */
+  function applyCriticalOrbit(): void {
+    const on = byId<HTMLInputElement>("critorbit").checked;
+    parameterView.setCriticalOrbit(on);
+    dynamicalView.setCriticalOrbit(on);
+  }
+
+  /** Apply the equipotential-overlay controls (checkbox + density) to both plots. */
+  function applyEquipotential(): void {
+    const on = byId<HTMLInputElement>("equipotential").checked;
+    const density = Number(byId<HTMLInputElement>("equiDensity").value) / 100; // slider 5–100 → 0.05–1
+    parameterView.plot.setEquipotential(on, density);
+    dynamicalView.plot.setEquipotential(on, density);
+    byId<HTMLInputElement>("equiDensity").disabled = !on;
+  }
+
   // --- wire up the UI controls ------------------------------------------
 
   document.addEventListener("keyup", (event) => {
@@ -446,6 +462,14 @@ function init(): void {
   }
   applyOutline();
 
+  byId("critorbit").addEventListener("change", applyCriticalOrbit);
+  applyCriticalOrbit();
+
+  for (const id of ["equipotential", "equiDensity"]) {
+    byId(id).addEventListener("input", applyEquipotential);
+  }
+  applyEquipotential();
+
   byId("apply_all").addEventListener("click", applyChanges);
   byId("apply_preset").addEventListener("click", () => {
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
@@ -472,6 +496,11 @@ function init(): void {
     byId<HTMLInputElement>("outline").checked = false;
     byId<HTMLInputElement>("outlineWidth").value = "30";
     applyOutline();
+    byId<HTMLInputElement>("critorbit").checked = false;
+    applyCriticalOrbit();
+    byId<HTMLInputElement>("equipotential").checked = false;
+    byId<HTMLInputElement>("equiDensity").value = "20";
+    applyEquipotential();
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
   });
   byId("print_param_space").addEventListener("click", () => {

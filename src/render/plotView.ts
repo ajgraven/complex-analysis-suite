@@ -46,6 +46,7 @@ export class PlotView {
   private lastUv: Vec2 = [0, 0];
   private overlayScheduled = false;
   private wheelTimer = 0;
+  private showCritical = false;
 
   constructor(
     glCanvas: HTMLCanvasElement,
@@ -78,6 +79,12 @@ export class PlotView {
     this.plot.res = res;
     this.syncOverlaySize();
     this.plot.scheduleRender();
+  }
+
+  /** Toggle the critical-orbit overlay (redraws the overlay only — no re-render). */
+  setCriticalOrbit(on: boolean): void {
+    this.showCritical = on;
+    this.requestOverlay();
   }
 
   /**
@@ -118,6 +125,7 @@ export class PlotView {
           zoom: this.plot.zoom,
           nplot: Math.max(1, Math.round(Number(this.plot.nplot))),
           fractType: this.fractType,
+          critical: this.showCritical,
           size,
         });
         ctx.drawImage(ov, 0, 0);
@@ -183,6 +191,7 @@ export class PlotView {
       zoom: this.plot.zoom,
       nplot: Math.max(1, Math.round(Number(this.plot.nplot))),
       fractType: this.fractType,
+      critical: this.showCritical,
       size: this.overlay.width,
     });
   }

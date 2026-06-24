@@ -127,6 +127,13 @@ samples a 256×1 ramp texture built by [`src/palettes.ts`](src/palettes.ts)
 ([`src/ui/gradient.ts`](src/ui/gradient.ts)) emits via `GLPlot.setGradient`. The
 gradient texture is on texture unit 1 (`uCdf` keeps unit 0).
 
+The **dynamics overlays** live in [`src/render/overlay.ts`](src/render/overlay.ts):
+`classifyOrbit` determines an orbit's fate (escape / fixed point / cycle / bounded) and
+`drawOverlay` renders the white-point and (optional, dashed) critical orbit colour-coded
+by fate; the critical-orbit toggle is held on `PlotView` (`setCriticalOrbit`). The
+**equipotential** overlay is instead a shader stage (`uEquipotential` in
+`shaderBuilder.ts`, driven by `GLPlot.setEquipotential`).
+
 Relief lighting and post-processing are separate shader stages, not palette/mode
 branches: lighting is applied in `main()` after the per-pixel colour
 (`reliefHeight`/`applyLighting` in `shaderBuilder.ts`, driven by `GLPlot.setLighting`),

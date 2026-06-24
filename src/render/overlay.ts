@@ -51,6 +51,91 @@ export function computeOrbit(
   return points;
 }
 
+export type OrbitFate = "escaped" | "converged" | "periodic" | "bounded";
+
+export interface OrbitInfo {
+  fate: OrbitFate;
+  /** Cycle length for converged (1 = fixed point) / periodic orbits; 0 otherwise. */
+  period: number;
+  /** Iterations until escape for escaped orbits; 0 otherwise. */
+  escapeIter: number;
+}
+
+/**
+ * Classify the long-run fate of the orbit of `z0` under `f` (parameter `cc`):
+ * escaped, converged to a fixed point, settled into a period-p cycle, or bounded
+ * (none of those within `maxIter`). Cycles are detected by the orbit returning
+ * within EPS of one of the last {@link MAX_PERIOD} points.
+ */
+export function classifyOrbit(
+  fAst: Node,
+  escapeAst: Node,
+  z0: Vec2,
+  cc: Complex,
+  maxIter = 512,
+): OrbitInfo {
+  const f = makeComplexFn(fAst);
+  const esc = makeEscapeFn(escapeAst, fAst);
+  const EPS = 1e-6; // tolerance for "returned near an earlier point"
+  const CONV_EPS = 1e-4; // window-collapse tolerance (fixed point vs genuine cycle)
+  const MAX_PERIOD = 64;
+  const history: Complex[] = [];
+  let z: Complex = [z0[0], z0[1]];
+  for (let k = 0; k < maxIter; k++) {
+    if (esc(z, cc)) return { fate: "escaped", period: 0, escapeIter: k };
+    for (let pd = 1; pd <= history.length; pd++) {
+      const prev = history[history.length - pd];
+      if (Math.abs(z[0] - prev[0]) < EPS && Math.abs(z[1] - prev[1]) < EPS) {
+        // Returned near z_{k-pd}. It's a genuine period-pd cycle only if those pd
+        // points are spread out; a collapsed window means the orbit converged to a
+        // fixed point (e.g. a negative multiplier makes it return at pd=2 first).
+        let minRe = z[0],
+          maxRe = z[0],
+          minIm = z[1],
+          maxIm = z[1];
+        for (let i = 1; i <= pd; i++) {
+          const q = history[history.length - i];
+          minRe = Math.min(minRe, q[0]);
+          maxRe = Math.max(maxRe, q[0]);
+          minIm = Math.min(minIm, q[1]);
+          maxIm = Math.max(maxIm, q[1]);
+        }
+        const spread = Math.max(maxRe - minRe, maxIm - minIm);
+        if (spread < CONV_EPS) return { fate: "converged", period: 1, escapeIter: 0 };
+        return { fate: "periodic", period: pd, escapeIter: 0 };
+      }
+    }
+    history.push(z);
+    if (history.length > MAX_PERIOD) history.shift();
+    z = f(z, cc);
+    if (!Number.isFinite(z[0]) || !Number.isFinite(z[1])) {
+      return { fate: "escaped", period: 0, escapeIter: k + 1 };
+    }
+  }
+  return { fate: "bounded", period: 0, escapeIter: 0 };
+}
+
+const FATE_COLOR: Record<OrbitFate, string> = {
+  escaped: "#ff6b6b",
+  converged: "#63e6a4",
+  periodic: "#5cc8ff",
+  bounded: "#ffd166",
+};
+
+/** Short human label for an orbit's fate (shown next to the white-point coordinate). */
+export function fateLabel(info: OrbitInfo): string {
+  switch (info.fate) {
+    case "escaped":
+      return `escapes (n=${info.escapeIter})`;
+    case "converged":
+      return "fixed point";
+    case "periodic":
+      return `period ${info.period}`;
+    case "bounded":
+      return "bounded";
+  }
+}
+
 export interface OverlayParams {
   fAst: Node;
   escapeAst: Node;
@@ -62,6 +147,9 @@ export interface OverlayParams {
   zoom: number;
   nplot: number;
   fractType: "dyn" | "param";
+  /** Also draw the orbit of the critical point (`criticalPoint`, default 0) dashed. */
+  critical?: boolean;
+  criticalPoint?: Vec2;
   /** Overlay backing-store size in px. */
   size: number;
 }
@@ -73,9 +161,11 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
   const s = size / OVERLAY_BASE;
   const cc: Complex = p.fractType === "param" ? [p.z0[0], p.z0[1]] : p.c;
   const orbit = computeOrbit(p.fAst, p.escapeAst, p.z0, cc, p.nplot);
+  const info = classifyOrbit(p.fAst, p.escapeAst, p.z0, cc);
+  const fateColor = FATE_COLOR[info.fate];
 
-  // Orbit polyline.
-  ctx.strokeStyle = "white";
+  // Orbit polyline, coloured by the orbit's long-run fate.
+  ctx.strokeStyle = fateColor;
   ctx.lineWidth = 1.8 * s;
   ctx.beginPath();
   orbit.forEach((pt, k) => {
@@ -85,7 +175,38 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
   });
   ctx.stroke();
 
-  // White point + coordinate label.
+  // A dot at each iterate, same fate colour.
+  ctx.fillStyle = fateColor;
+  orbit.forEach((pt) => {
+    const [dx, dy] = plotToPx(pt, p.center, p.zoom, size);
+    ctx.beginPath();
+    ctx.arc(dx, dy, 2 * s, 0, 2 * Math.PI);
+    ctx.fill();
+  });
+
+  // Optional critical orbit (from the critical point, default 0), drawn dashed so it
+  // reads apart from the white-point orbit. Bounded → Julia set connected.
+  if (p.critical) {
+    const crit = p.criticalPoint ?? [0, 0];
+    const critOrbit = computeOrbit(p.fAst, p.escapeAst, crit, cc, p.nplot);
+    const critColor = FATE_COLOR[classifyOrbit(p.fAst, p.escapeAst, crit, cc).fate];
+    ctx.strokeStyle = critColor;
+    ctx.lineWidth = 1.4 * s;
+    ctx.setLineDash([5 * s, 4 * s]);
+    ctx.beginPath();
+    critOrbit.forEach((pt, k) => {
+      const [qx, qy] = plotToPx(pt, p.center, p.zoom, size);
+      if (k === 0) ctx.moveTo(qx, qy);
+      else ctx.lineTo(qx, qy);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const [cx, cy] = plotToPx(crit, p.center, p.zoom, size);
+    ctx.fillStyle = critColor;
+    ctx.fillRect(cx - 3 * s, cy - 3 * s, 6 * s, 6 * s);
+  }
+
+  // White point + coordinate / fate label.
   const [px, py] = plotToPx(p.z0, p.center, p.zoom, size);
   ctx.fillStyle = "white";
   ctx.beginPath();
@@ -96,7 +217,7 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
   ctx.font = `${15 * s}px sans-serif`;
   ctx.textBaseline = "bottom";
   ctx.fillText(
-    `${label}${formatComplex(truncateComplex([p.z0[0], p.z0[1]]))}`,
+    `${label}${formatComplex(truncateComplex([p.z0[0], p.z0[1]]))} · ${fateLabel(info)}`,
     px + 6 * s,
     py - 6 * s,
   );

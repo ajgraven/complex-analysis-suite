@@ -172,6 +172,20 @@ classic look; all are shader uniforms, so switching never recompiles):
   (screen-space, from the escape-field gradient) with a width slider; composes with
   any escape-based mode.
 
+## Overlays
+
+Beyond the colouring, the 2D overlay visualises the dynamics directly:
+
+- **Orbit + fate** — the white point's orbit is drawn and classified by its long-run
+  fate (escaped / fixed point / period-_p_ cycle / bounded); the polyline and its dots
+  are colour-coded and the fate is shown in the label. On the parameter plane this reads
+  as "is _c_ in the set?"; on the dynamical plane it's the chosen start point's dynamics.
+- **Critical orbit** — an optional dashed overlay of the critical point's orbit (0 for the
+  polynomial presets). A bounded critical orbit means the Julia set is connected; an
+  escaping one means it is a Cantor dust.
+- **Equipotential** — an optional shader overlay of escape-potential contours (a
+  topographic "escape-velocity" map), with a density slider.
+
 ## Architecture
 
 ```

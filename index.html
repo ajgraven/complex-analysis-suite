@@ -270,6 +270,21 @@ z^2+c</textarea
               /></label>
             </div>
           </div>
+          <div class="field">
+            <label class="checkbox" for="critorbit">
+              <input type="checkbox" id="critorbit" /> critical orbit
+            </label>
+          </div>
+          <div class="field">
+            <label class="checkbox" for="equipotential">
+              <input type="checkbox" id="equipotential" /> equipotential
+            </label>
+            <div class="post-controls" title="Contour spacing">
+              <label
+                >density <input type="range" id="equiDensity" min="5" max="100" value="20" disabled
+              /></label>
+            </div>
+          </div>
         </div>
         <div class="inline-actions">
           <button id="apply_all" type="button">apply changes</button>
@@ -384,6 +399,12 @@ z^2+c</textarea
               spin the rotation slider to cycle colours, and toggle
               <strong>relief lighting</strong>, <strong>post-processing</strong> (vignette/gamma),
               or a <strong>boundary outline</strong>.
+            </li>
+            <li>
+              Toggle dynamics overlays: the white-point <strong>orbit</strong> is classified by its
+              fate (escapes / fixed point / cycle / bounded); add the
+              <strong>critical orbit</strong> (a Julia-connectivity test) or
+              <strong>equipotential</strong> contours.
             </li>
           </ul>
 

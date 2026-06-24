@@ -88,6 +88,8 @@ uniform sampler2D uGradient;   // custom gradient ramp (uPalette == 4)
 uniform float uGradientOffset; // palette rotation / colour cycling
 uniform int uOutline;          // boundary-outline overlay on/off
 uniform float uOutlineWidth;   // boundary-outline strength
+uniform int uEquipotential;    // equipotential (level-curve) overlay on/off
+uniform float uEquiDensity;    // equipotential contour spacing
 out vec4 fragColor;
 
 // Perceptual colormaps as degree-6 polynomial fits (t in [0,1]). viridis/magma
@@ -295,13 +297,19 @@ void main() {
     }
   }
   vec3 col = acc / float(n * n);
-  if ((uLight == 1 || uOutline == 1) && uMode != 4) {
+  if ((uLight == 1 || uOutline == 1 || uEquipotential == 1) && uMode != 4) {
     float h = reliefHeight(gl_FragCoord.xy);
     if (uLight == 1) col = applyLighting(col, h);
     if (uOutline == 1 && h >= 0.0) {
       // Screen-space boundary emphasis: darken where the escape field changes fastest.
       float g = length(vec2(dFdx(h), dFdy(h)));
       col = mix(col, vec3(0.0), clamp(g * uOutlineWidth, 0.0, 1.0));
+    }
+    if (uEquipotential == 1 && h >= 0.0) {
+      // Equipotential contours: darken thin bands at integer levels of the potential.
+      float fp = fract(h * uEquiDensity);
+      float line = smoothstep(0.0, 0.06, min(fp, 1.0 - fp));
+      col *= 0.35 + 0.65 * line;
     }
   }
   fragColor = vec4(col, 1.0);

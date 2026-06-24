@@ -78,6 +78,8 @@ interface Uniforms {
   uGradientOffset: WebGLUniformLocation | null;
   uOutline: WebGLUniformLocation | null;
   uOutlineWidth: WebGLUniformLocation | null;
+  uEquipotential: WebGLUniformLocation | null;
+  uEquiDensity: WebGLUniformLocation | null;
 }
 
 interface CompiledProgram {
@@ -198,6 +200,8 @@ export class GLPlot {
   private _gradientOffset = 0; // palette rotation (0..1)
   private _outline = false; // boundary outline on/off
   private _outlineWidth = 1.5; // boundary outline strength
+  private _equipotential = false; // equipotential overlay on/off
+  private _equiDensity = 0.2; // equipotential contour spacing
   private _res: number;
 
   constructor(canvas: HTMLCanvasElement, preset: Preset, fractType: FractType, res = 500) {
@@ -291,6 +295,8 @@ export class GLPlot {
       uGradientOffset: gl.getUniformLocation(program, "uGradientOffset"),
       uOutline: gl.getUniformLocation(program, "uOutline"),
       uOutlineWidth: gl.getUniformLocation(program, "uOutlineWidth"),
+      uEquipotential: gl.getUniformLocation(program, "uEquipotential"),
+      uEquiDensity: gl.getUniformLocation(program, "uEquiDensity"),
     };
   }
 
@@ -510,6 +516,9 @@ export class GLPlot {
     const outlineOn = this._outline && mode !== 6 && !this._draft;
     gl.uniform1i(u.uOutline, outlineOn ? 1 : 0);
     gl.uniform1f(u.uOutlineWidth, this._outlineWidth);
+    const equiOn = this._equipotential && mode !== 6 && !this._draft;
+    gl.uniform1i(u.uEquipotential, equiOn ? 1 : 0);
+    gl.uniform1f(u.uEquiDensity, this._equiDensity);
     // Relief lighting: off for the raw pre-pass (mode 6) and while drafting (it
     // re-walks the escape loop, so we keep interaction snappy without it).
     const lightOn = this._light && mode !== 6 && !this._draft;
@@ -958,6 +967,13 @@ export class GLPlot {
   setOutline(on: boolean, width: number): void {
     this._outline = on;
     this._outlineWidth = width;
+    this.scheduleRender();
+  }
+
+  /** Toggle the equipotential (level-curve) overlay and its contour `density`. */
+  setEquipotential(on: boolean, density: number): void {
+    this._equipotential = on;
+    this._equiDensity = density;
     this.scheduleRender();
   }
 
