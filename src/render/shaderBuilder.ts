@@ -50,6 +50,117 @@ void main() {
 `;
 
 /** Build the fragment shader for a plot. `fractType`: 1 = parameter space, 0 = dynamical. */
+/**
+ * Shared colormap + palette GLSL. Requires the caller to declare `uPalette`,
+ * `uGradient`, and `uGradientOffset`. Used by both the main shader and the
+ * perturbation kernel so colouring stays identical across precision paths.
+ */
+export const COLOR_GLSL = `
+// Perceptual colormaps as degree-6 polynomial fits (t in [0,1]). viridis/magma
+// are the widely used approximations by Matt Zucker; viridis is colourblind-safe.
+vec3 viridis(float t) {
+  const vec3 c0 = vec3(0.2777273272234177, 0.005407344544966578, 0.3340998053353061);
+  const vec3 c1 = vec3(0.1050930431085774, 1.404613529898575, 1.384590162594685);
+  const vec3 c2 = vec3(-0.3308618287255563, 0.214847559468213, 0.09509516302823659);
+  const vec3 c3 = vec3(-4.634230498983486, -5.799100973351585, -19.33244095627987);
+  const vec3 c4 = vec3(6.228269936347081, 14.17993336680509, 56.69055260068105);
+  const vec3 c5 = vec3(4.776384997670288, -13.74514537774601, -65.35303263337234);
+  const vec3 c6 = vec3(-5.435455855934631, 4.645852612178535, 26.3124352495832);
+  return c0 + t * (c1 + t * (c2 + t * (c3 + t * (c4 + t * (c5 + t * c6)))));
+}
+vec3 magma(float t) {
+  const vec3 c0 = vec3(-0.002136485053939, -0.000749655052795, -0.005386127855323);
+  const vec3 c1 = vec3(0.2516605407371642, 0.6775232436837668, 2.494026599312351);
+  const vec3 c2 = vec3(8.353717279216625, -3.577719514958484, 0.3144679030132573);
+  const vec3 c3 = vec3(-27.66873308576866, 14.26473078096533, -13.64921318813922);
+  const vec3 c4 = vec3(52.17613981234068, -27.94360607168351, 12.94416944238394);
+  const vec3 c5 = vec3(-50.76852536473588, 29.04658282127291, 4.234152993845878);
+  const vec3 c6 = vec3(18.65570506591883, -11.48977351997711, -5.601961508734096);
+  return c0 + t * (c1 + t * (c2 + t * (c3 + t * (c4 + t * (c5 + t * c6)))));
+}
+// The original CindyScript ramp, kept as the default ("classic") colormap.
+vec3 classicColor(float t) {
+  float s = 3.0 * t / (2.0 * t + 1.0);
+  return vec3(4.0 * s, 1.3 * s, (1.0 - s) * (1.0 - s) * 0.7);
+}
+vec3 palette(float t) {
+  t = fract(t + uGradientOffset); // rotation / colour cycling
+  if (uPalette == 4) return texture(uGradient, vec2(t, 0.5)).rgb; // custom gradient
+  if (uPalette == 1) return viridis(t);
+  if (uPalette == 2) return magma(t);
+  if (uPalette == 3) return vec3(t);
+  return classicColor(t);
+}
+`;
+
+/**
+ * Perturbation deep-zoom kernel for z²+c on the parameter plane (Phase 15). Each
+ * pixel iterates a small delta δz around a CPU-computed reference orbit Z_n (supplied
+ * as the RG32F texture `uOrbit`): z_n = Z_n + δz_n, δz_{n+1} = 2·Z_n·δz_n + δz_n² + δc,
+ * with δc = the pixel's offset from the reference (view centre). The reference carries
+ * the precision, so the GPU work is ordinary single-float — fast and deep.
+ */
+export const PERTURBATION_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform vec2 uResolution;
+uniform float uZoom;
+uniform int uN;          // iteration cap
+uniform int uOrbitLen;   // stored reference-orbit length
+uniform sampler2D uOrbit; // reference orbit Z_n (RG32F), texel n
+uniform int uMode;       // 0 escape, 1 smooth (others fall back to escape)
+uniform int uPalette;
+uniform int uAA;
+uniform sampler2D uGradient;
+uniform float uGradientOffset;
+uniform vec2 uJitter;
+out vec4 fragColor;
+
+${COLOR_GLSL}
+
+// One pixel's colour via perturbation about the reference orbit.
+vec3 pColorAt(vec2 fragXY) {
+  vec2 uv = fragXY / uResolution;
+  vec2 dc = (uv * 2.0 - 1.0) / uZoom; // δc: offset from the reference (view centre)
+  vec2 dz = vec2(0.0);                // δz_0 = 0
+  vec2 z = vec2(0.0);
+  int kmax = 0;
+  bool escaped = false;
+  int lim = min(uN, uOrbitLen);
+  for (int k = 0; k < lim; k++) {
+    vec2 Z = texelFetch(uOrbit, ivec2(k, 0), 0).rg;
+    z = Z + dz; // full iterate z_k
+    if (dot(z, z) > 4.0) { escaped = true; break; }
+    // δz_{k+1} = 2·Z·δz + δz² + δc  (complex arithmetic)
+    vec2 twoZdz = 2.0 * vec2(Z.x * dz.x - Z.y * dz.y, Z.x * dz.y + Z.y * dz.x);
+    vec2 dz2 = vec2(dz.x * dz.x - dz.y * dz.y, 2.0 * dz.x * dz.y);
+    dz = twoZdz + dz2 + dc;
+    kmax = k + 1;
+  }
+  if (!escaped) return vec3(0.0); // interior (or ran past the reference orbit)
+  float iters = float(kmax);
+  if (uMode == 1) {
+    float az = length(z); // smooth (continuous) escape time
+    if (az > 1.0) iters = float(kmax) + 1.0 - log(log(az)) / log(2.0);
+  }
+  return palette(iters / float(uN));
+}
+
+void main() {
+  vec2 fc = gl_FragCoord.xy + uJitter;
+  int n = max(uAA, 1);
+  vec3 acc = vec3(0.0);
+  for (int sy = 0; sy < n; sy++) {
+    for (int sx = 0; sx < n; sx++) {
+      vec2 sub = (vec2(float(sx), float(sy)) + 0.5) / float(n) - 0.5;
+      acc += pColorAt(fc + sub);
+    }
+  }
+  fragColor = vec4(acc / float(n * n), 1.0);
+}
+`;
+
 export function buildFragmentShader(fAst: Node, escapeAst: Node, precision: Precision): string {
   const isDf64 = precision === "df64";
   const baseStdlib = isDf64 ? DF64_GLSL + COMPLEX_DF64_GLSL : COMPLEX_SINGLE_GLSL;
@@ -94,41 +205,7 @@ uniform float uEquiDensity;    // equipotential contour spacing
 uniform vec2 uJitter;          // sub-pixel jitter for temporal supersampling
 out vec4 fragColor;
 
-// Perceptual colormaps as degree-6 polynomial fits (t in [0,1]). viridis/magma
-// are the widely used approximations by Matt Zucker; viridis is colourblind-safe.
-vec3 viridis(float t) {
-  const vec3 c0 = vec3(0.2777273272234177, 0.005407344544966578, 0.3340998053353061);
-  const vec3 c1 = vec3(0.1050930431085774, 1.404613529898575, 1.384590162594685);
-  const vec3 c2 = vec3(-0.3308618287255563, 0.214847559468213, 0.09509516302823659);
-  const vec3 c3 = vec3(-4.634230498983486, -5.799100973351585, -19.33244095627987);
-  const vec3 c4 = vec3(6.228269936347081, 14.17993336680509, 56.69055260068105);
-  const vec3 c5 = vec3(4.776384997670288, -13.74514537774601, -65.35303263337234);
-  const vec3 c6 = vec3(-5.435455855934631, 4.645852612178535, 26.3124352495832);
-  return c0 + t * (c1 + t * (c2 + t * (c3 + t * (c4 + t * (c5 + t * c6)))));
-}
-vec3 magma(float t) {
-  const vec3 c0 = vec3(-0.002136485053939, -0.000749655052795, -0.005386127855323);
-  const vec3 c1 = vec3(0.2516605407371642, 0.6775232436837668, 2.494026599312351);
-  const vec3 c2 = vec3(8.353717279216625, -3.577719514958484, 0.3144679030132573);
-  const vec3 c3 = vec3(-27.66873308576866, 14.26473078096533, -13.64921318813922);
-  const vec3 c4 = vec3(52.17613981234068, -27.94360607168351, 12.94416944238394);
-  const vec3 c5 = vec3(-50.76852536473588, 29.04658282127291, 4.234152993845878);
-  const vec3 c6 = vec3(18.65570506591883, -11.48977351997711, -5.601961508734096);
-  return c0 + t * (c1 + t * (c2 + t * (c3 + t * (c4 + t * (c5 + t * c6)))));
-}
-// The original CindyScript ramp, kept as the default ("classic") colormap.
-vec3 classicColor(float t) {
-  float s = 3.0 * t / (2.0 * t + 1.0);
-  return vec3(4.0 * s, 1.3 * s, (1.0 - s) * (1.0 - s) * 0.7);
-}
-vec3 palette(float t) {
-  t = fract(t + uGradientOffset); // rotation / colour cycling
-  if (uPalette == 4) return texture(uGradient, vec2(t, 0.5)).rgb; // custom gradient
-  if (uPalette == 1) return viridis(t);
-  if (uPalette == 2) return magma(t);
-  if (uPalette == 3) return vec3(t);
-  return classicColor(t);
-}
+${COLOR_GLSL}
 
 // HSV→RGB for domain colouring.
 vec3 hsv2rgb(vec3 c) {

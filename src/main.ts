@@ -528,6 +528,16 @@ function init(): void {
     dynamicalView.plot.setAccumulate(on);
   }
 
+  /** Toggle perturbation deep zoom (z²+c parameter plane) on both plots. */
+  function applyPerturbation(): void {
+    const on = byId<HTMLInputElement>("perturbation").checked;
+    parameterView.plot.setPerturbation(on);
+    dynamicalView.plot.setPerturbation(on);
+    if (on && !parameterView.plot.perturbationEligible) {
+      showToast("Perturbation deep zoom applies to z²+c (Mandelbrot).", "info");
+    }
+  }
+
   // --- wire up the UI controls ------------------------------------------
 
   document.addEventListener("keyup", (event) => {
@@ -566,6 +576,7 @@ function init(): void {
   byId("newton").addEventListener("change", applyNewton);
   byId("autoiter").addEventListener("change", applyAutoIter);
   byId("accumulate").addEventListener("change", applyAccumulate);
+  byId("perturbation").addEventListener("change", applyPerturbation);
 
   byId("apply_all").addEventListener("click", applyChanges);
   byId("apply_preset").addEventListener("click", () => {
@@ -604,6 +615,8 @@ function init(): void {
     applyAutoIter();
     byId<HTMLInputElement>("accumulate").checked = false;
     applyAccumulate();
+    byId<HTMLInputElement>("perturbation").checked = false;
+    applyPerturbation();
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
   });
   byId("print_param_space").addEventListener("click", () => {

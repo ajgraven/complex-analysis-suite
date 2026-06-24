@@ -17,11 +17,14 @@ import type { Node } from "../expr/ast";
 import {
   buildFragmentShader,
   POST_FRAGMENT_SHADER,
+  PERTURBATION_FRAGMENT_SHADER,
   VERTEX_SHADER,
   type Precision,
 } from "./shaderBuilder";
 import { buildGradient, DEFAULT_GRADIENT, type GradientStop } from "../palettes";
 import { newtonIteration } from "../expr/derivative";
+import { makeComplexFn } from "../expr/evaluate";
+import { computeReferenceOrbit } from "./perturbation";
 
 export type FractType = "dyn" | "param";
 
@@ -96,6 +99,20 @@ interface PostUniforms {
   uVignette: WebGLUniformLocation | null;
   uGamma: WebGLUniformLocation | null;
   uAccumScale: WebGLUniformLocation | null;
+}
+
+interface PerturbUniforms {
+  uResolution: WebGLUniformLocation | null;
+  uZoom: WebGLUniformLocation | null;
+  uN: WebGLUniformLocation | null;
+  uOrbitLen: WebGLUniformLocation | null;
+  uOrbit: WebGLUniformLocation | null;
+  uMode: WebGLUniformLocation | null;
+  uPalette: WebGLUniformLocation | null;
+  uAA: WebGLUniformLocation | null;
+  uGradient: WebGLUniformLocation | null;
+  uGradientOffset: WebGLUniformLocation | null;
+  uJitter: WebGLUniformLocation | null;
 }
 
 /** A program whose compile/link has been started but whose status hasn't been checked yet. */
@@ -179,6 +196,13 @@ export class GLPlot {
   private cdfTex: WebGLTexture | null = null;
   /** Post-processing (vignette + gamma): a program + an offscreen scene render target. */
   private postProgram: { program: WebGLProgram; uniforms: PostUniforms } | null = null;
+  /** Perturbation deep-zoom program (z²+c parameter plane) + its reference-orbit texture. */
+  private perturbProgram: { program: WebGLProgram; uniforms: PerturbUniforms } | null = null;
+  private orbitTex: WebGLTexture | null = null;
+  private orbitLen = 0;
+  private orbitDirty = true;
+  private _perturbation = false; // perturbation deep-zoom toggle
+  private _perturbEligible = false; // current f is z²+c (auto-detected)
   private sceneFbo: WebGLFramebuffer | null = null;
   private sceneTex: WebGLTexture | null = null;
   private sceneSize = 0;
@@ -251,6 +275,7 @@ export class GLPlot {
     this.attachContextHandlers();
     this.setupQuad();
     this.compilePostProgram();
+    this.compilePerturbProgram();
     this.uploadGradient();
     this.applyRenderSize();
     this.ApplyPreset(preset);
@@ -297,8 +322,13 @@ export class GLPlot {
     this.accumSize = 0;
     this.accumCount = 0;
     this.postProgram = null;
+    this.perturbProgram = null;
+    this.orbitTex = null;
+    this.orbitLen = 0;
+    this.orbitDirty = true;
     this.setupQuad();
     this.compilePostProgram();
+    this.compilePerturbProgram();
     this.uploadGradient();
     this.rebuild();
     this.scheduleRender();
@@ -432,6 +462,8 @@ export class GLPlot {
   private rebuild(): void {
     const gl = this.gl;
     const iterError = this.updateIteration();
+    this._perturbEligible = this.probeMandelbrot();
+    this.orbitDirty = true;
     try {
       const next = this.compile("single");
       if (this.programs.single) gl.deleteProgram(this.programs.single.program);
@@ -553,6 +585,7 @@ export class GLPlot {
   scheduleRender(): void {
     this._level = 0;
     this.accumCount = 0;
+    this.orbitDirty = true;
     this.requestFrame();
   }
 
@@ -658,6 +691,114 @@ export class GLPlot {
     return true;
   }
 
+  /** Numerically probe whether the current iterated map is z²+c (perturbation's domain). */
+  private probeMandelbrot(): boolean {
+    try {
+      const f = makeComplexFn(this._iterAst);
+      const pts: [Complex, Complex][] = [
+        [
+          [0.3, -0.2],
+          [0.1, 0.4],
+        ],
+        [
+          [-0.5, 0.7],
+          [0.2, -0.3],
+        ],
+        [
+          [1.1, 0.05],
+          [-0.6, 0.25],
+        ],
+      ];
+      for (const [z, c] of pts) {
+        const got = f(z, c);
+        const wantRe = z[0] * z[0] - z[1] * z[1] + c[0];
+        const wantIm = 2 * z[0] * z[1] + c[1];
+        if (Math.abs(got[0] - wantRe) > 1e-9 || Math.abs(got[1] - wantIm) > 1e-9) return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Whether the perturbation kernel should drive this frame. */
+  private usePerturbation(): boolean {
+    return (
+      this._perturbation &&
+      this._perturbEligible &&
+      this.fractType === "param" &&
+      this.perturbProgram !== null
+    );
+  }
+
+  /** Recompute + upload the reference orbit (RG32F texture) when the view changed. */
+  private ensureOrbit(maxIter: number): void {
+    if (!this.orbitDirty && this.orbitLen > 0) return;
+    const gl = this.gl;
+    const orbit = computeReferenceOrbit(this._center[0], this._center[1], maxIter);
+    this.orbitLen = orbit.length;
+    if (!this.orbitTex) this.orbitTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.orbitTex);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RG32F,
+      orbit.length,
+      1,
+      0,
+      gl.RG,
+      gl.FLOAT,
+      orbit.xy.subarray(0, orbit.length * 2),
+    );
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    this.orbitDirty = false;
+  }
+
+  /** Configure the perturbation program for a draw at (width, height). */
+  private setupPerturbDraw(width: number, height: number, modeOverride?: number): boolean {
+    const pp = this.perturbProgram;
+    if (!pp) return false;
+    const gl = this.gl;
+    const u = pp.uniforms;
+    const fullN = this.targetIterations();
+    this.ensureOrbit(fullN); // computed at the full cap so it's reused across draft/refine
+    const iterN =
+      this._draft && this.wantsProgressive()
+        ? Math.max(DRAFT_MIN_ITERS, Math.round(fullN * DRAFT_ITER_FACTOR))
+        : fullN;
+    const mode = modeOverride ?? this.effectiveMode();
+    gl.useProgram(pp.program);
+    gl.uniform2f(u.uResolution, width, height);
+    gl.uniform1f(u.uZoom, this._zoom);
+    gl.uniform1i(u.uN, iterN);
+    gl.uniform1i(u.uOrbitLen, this.orbitLen);
+    gl.uniform1i(u.uMode, mode === 1 ? 1 : 0); // escape / smooth; other modes fall back to escape
+    gl.uniform1i(u.uPalette, this._palette);
+    gl.uniform1i(u.uAA, this._draft ? 1 : this._aa);
+    gl.uniform1f(u.uGradientOffset, this._gradientOffset);
+    gl.uniform2f(u.uJitter, this._jitter[0], this._jitter[1]);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.orbitTex);
+    gl.uniform1i(u.uOrbit, 0);
+    if (this.gradientTex) {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.gradientTex);
+      gl.uniform1i(u.uGradient, 1);
+      gl.activeTexture(gl.TEXTURE0);
+    }
+    return true;
+  }
+
+  /** Draw the fractal via the perturbation kernel when active, else the normal shader. */
+  private drawFractal(width: number, height: number, modeOverride?: number): boolean {
+    if (this.usePerturbation()) return this.setupPerturbDraw(width, height, modeOverride);
+    return this.setupDraw(width, height, modeOverride);
+  }
+
   /**
    * Histogram-equalisation pre-pass (mode 5): render the raw escape count to an
    * off-screen buffer at (w, h), read it back, build a cumulative distribution
@@ -734,6 +875,31 @@ export class GLPlot {
       };
     } catch (err) {
       console.warn(`[${this.fractType}] post-processing program failed (disabled):`, err);
+    }
+  }
+
+  private compilePerturbProgram(): void {
+    const gl = this.gl;
+    try {
+      const program = createProgram(gl, VERTEX_SHADER, PERTURBATION_FRAGMENT_SHADER);
+      this.perturbProgram = {
+        program,
+        uniforms: {
+          uResolution: gl.getUniformLocation(program, "uResolution"),
+          uZoom: gl.getUniformLocation(program, "uZoom"),
+          uN: gl.getUniformLocation(program, "uN"),
+          uOrbitLen: gl.getUniformLocation(program, "uOrbitLen"),
+          uOrbit: gl.getUniformLocation(program, "uOrbit"),
+          uMode: gl.getUniformLocation(program, "uMode"),
+          uPalette: gl.getUniformLocation(program, "uPalette"),
+          uAA: gl.getUniformLocation(program, "uAA"),
+          uGradient: gl.getUniformLocation(program, "uGradient"),
+          uGradientOffset: gl.getUniformLocation(program, "uGradientOffset"),
+          uJitter: gl.getUniformLocation(program, "uJitter"),
+        },
+      };
+    } catch (err) {
+      console.warn(`[${this.fractType}] perturbation program failed (disabled):`, err);
     }
   }
 
@@ -848,7 +1014,7 @@ export class GLPlot {
       // post-processing pass (vignette + gamma) into the visible framebuffer.
       this.ensureSceneTarget(size);
       gl.viewport(0, 0, size, size);
-      if (!this.setupDraw(size, size)) {
+      if (!this.drawFractal(size, size)) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         return;
       }
@@ -857,7 +1023,7 @@ export class GLPlot {
       gl.viewport(0, 0, size, size);
       this.drawPost(size);
     } else {
-      if (!this.setupDraw(size, size)) return;
+      if (!this.drawFractal(size, size)) return;
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
     this.afterRender?.();
@@ -887,7 +1053,7 @@ export class GLPlot {
     this._jitter = [halton(this.accumCount + 1, 2) - 0.5, halton(this.accumCount + 1, 3) - 0.5];
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE); // additive accumulation
-    const ok = this.setupDraw(size, size);
+    const ok = this.drawFractal(size, size);
     if (ok) gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.disable(gl.BLEND);
     this._jitter = [0, 0];
@@ -1178,6 +1344,26 @@ export class GLPlot {
   setAccumulate(on: boolean): void {
     this._accumulate = on;
     this.scheduleRender();
+  }
+
+  /**
+   * Toggle perturbation deep zoom (z²+c on the parameter plane). When off, not
+   * eligible, or on the dynamical plane, the normal renderer is used instead.
+   */
+  setPerturbation(on: boolean): void {
+    this._perturbation = on;
+    this.orbitDirty = true;
+    this.scheduleRender();
+  }
+
+  /** Whether perturbation is actually driving the render right now. */
+  get perturbationActive(): boolean {
+    return this.usePerturbation();
+  }
+
+  /** Whether the current f is z²+c (so perturbation could apply on the param plane). */
+  get perturbationEligible(): boolean {
+    return this._perturbEligible;
   }
 
   get c(): string {

@@ -252,6 +252,15 @@ error-free transforms; a `* uOne` uniform barrier stops the shader compiler from
 reassociating those transforms away. The algorithms are validated against a JS
 `Math.fround` reference (`test/df64.test.ts`).
 
+**Perturbation (deep zoom, z²+c).** For the Mandelbrot map on the parameter plane,
+the **perturbation (deep zoom)** toggle goes deeper than df64. The CPU iterates one
+high-precision _reference orbit_ at the view centre; the GPU then renders every pixel
+as a small delta around it (`z = Z + δz`, `δz' = 2·Z·δz + δz² + δc`) in ordinary
+single-float arithmetic — fast, and limited by the reference precision rather than the
+GPU's. The reference orbit is iterated in plain doubles and unit-tested against a
+Mandelbrot oracle (`test/perturbation.test.ts`); only z²+c on the parameter plane is
+eligible (other maps fall back to df64).
+
 ## Deployment
 
 ```bash
@@ -288,8 +297,12 @@ already relative.
   (it's part of the fractal shader), but the post-processing grade (vignette /
   gamma) is currently applied on-screen only.
 - **Deep zoom depth:** the df64 path extends usable zoom to ~10¹²× (vs ~10⁴× for
-  single precision); beyond that, df64 precision runs out and the image
-  pixelates. Going deeper would need perturbation-theory techniques.
+  single precision); beyond that, df64 precision runs out and the image pixelates.
+  For z²+c on the parameter plane, the **perturbation (deep zoom)** toggle goes
+  further still (structure resolves where df64 has flattened). It currently uses a
+  double-precision centre (so depth tops out around ~10¹³–10¹⁴×) and has no glitch
+  rebasing yet, so a view centred on a short-orbit exterior point can under-render;
+  a double-double centre (≈10²⁸×) and a bignum reference are planned next.
 - **Heavy df64 shaders:** the first deep zoom of a transcendental-heavy preset
   (the Schwarz maps) compiles a large df64 shader. This now happens in the
   background (the view shows single precision and upgrades when ready), so it no
