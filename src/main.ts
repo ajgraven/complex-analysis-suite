@@ -52,6 +52,7 @@ const MODES: Record<string, number> = {
   stripe: 7,
   triangle: 8,
   decomposition: 9,
+  period: 10,
 };
 const PALETTES: Record<string, number> = {
   classic: 0,

@@ -113,7 +113,7 @@ checks the `f`/`escape` strings parse.
 Colouring is driven by shader uniforms set in
 [`src/render/shaderBuilder.ts`](src/render/shaderBuilder.ts): `uMode` (escape /
 smooth / histogram / distance / orbit-trap / stripe / triangle / decomposition /
-domain), `uPalette` (classic / viridis / magma / grayscale / custom), `uAA`
+period / domain), `uPalette` (classic / viridis / magma / grayscale / custom), `uAA`
 (supersampling), and the gradient-rotation / lighting / post / outline uniforms. The
 per-pixel logic lives in `colorAt` (and `distanceColor` for the edge mode);
 `palette(t)` maps a scalar to RGB. To add a **mode**, add a branch in `colorAt`, an

@@ -182,6 +182,24 @@ ${coordinate}
     return palette(mix(prev, avg, frac));
   }
 
+  if (uMode == 10) {
+    // Interior structure: colour non-escaping points by their attracting-cycle period.
+    if (kmax < uN) return vec3(0.0); // exterior
+    cvec zr = z;
+    for (int s = 0; s < 24; s++) zr = fFn(zr, cc); // settle onto the cycle
+    int period = 0;
+    cvec zz = fFn(zr, cc);
+    for (int q = 1; q <= 24; q++) {
+      if (cabsf(csub(zz, zr)) < 1e-4) {
+        period = q;
+        break;
+      }
+      zz = fFn(zz, cc);
+    }
+    if (period == 0) return vec3(0.12); // no small cycle found
+    return palette(fract(float(period) * 0.618)); // distinct hue per period
+  }
+
   if (kmax == uN) return vec3(0.0); // never escaped → interior
 
   if (uMode == 9) {

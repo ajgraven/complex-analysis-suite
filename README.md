@@ -153,6 +153,8 @@ classic look; all are shader uniforms, so switching never recompiles):
   - _Triangle average_ — triangle-inequality average (exact for `z² + c`,
     approximate for other `f`), giving flame-like filaments.
   - _Binary decomposition_ — escape-time bands split by the escape half-plane.
+  - _Period (interior)_ — colours non-escaping points by their attracting-cycle
+    period, revealing the hyperbolic components (cardioid, bulbs).
   - _Domain colouring_ — hue = arg, brightness = magnitude of one application of
     `f(z, c)` (most meaningful on the dynamical plane; ignores the palette).
 - **Palette** — Classic, Viridis (colourblind-safe), Magma, Grayscale, or a
