@@ -603,6 +603,55 @@
       toast('Defined ' + latexPlain(nm) + ' := ' + exprStr + ' (' + r.regime + ') → column ' + r.column);
     }
 
+    // B2 — iterated auto-CSE: apply every detected substitution to a fixpoint in one click.
+    function doAutoAbbreviate() {
+      if (busyGuard()) return;
+      if (!ensureSeed()) return;
+      const r = store.autoAbbreviate();
+      if (!r || !r.count) { toast('No repeated-expression abbreviations found in the current system.'); return; }
+      rerender(); refreshPickers();
+      const last = r.applied[r.applied.length - 1];
+      toast('Auto-abbreviated: ' + r.applied.map((a) => latexPlain(a.newVar)).join(', ') + ' → column ' + last.column);
+    }
+
+    // B3 — live preview for the "Add equation" control: parse the typed polynomial + render `g rel 0`.
+    function previewEquation() {
+      const box = $('#alg-eq-preview'), btn = $('#alg-eq-apply');
+      if (!box) return;
+      const exprStr = (($('#alg-eq-expr') || {}).value || '').trim();
+      const rel = (($('#alg-eq-rel') || {}).value) || '=';
+      if (!exprStr) { box.textContent = ''; box.classList.remove('alg-def-error'); if (btn) btn.disabled = false; return; }
+      const S = (typeof QD !== 'undefined' && QD.Sym), P = (typeof QD !== 'undefined' && QD.ExprParser);
+      if (!S || !P) { box.textContent = ''; return; }
+      let g;
+      try { g = P.parse(exprStr, store.variables(), S); }
+      catch (e) { box.textContent = '⚠ ' + ((e && e.message) || 'parse error'); box.classList.add('alg-def-error'); if (btn) btn.disabled = true; return; }
+      box.classList.remove('alg-def-error'); if (btn) btn.disabled = false;
+      const relTex = rel === '=' ? '= 0' : (rel === '>' ? '> 0' : '\\ne 0');
+      box.innerHTML = '';
+      if (typeof katex !== 'undefined') { try { katex.render(g.toLatex(latexOf) + ' ' + relTex, box, { throwOnError: false }); return; } catch (e) { /* fall through */ } }
+      box.textContent = exprStr + ' ' + (rel === '>' ? '> 0' : rel === '≠' ? '≠ 0' : '= 0');
+    }
+    // B3 — add a free-form typed equation/inequality to the current system.
+    function doAddEquation() {
+      if (!ensureSeed()) return;
+      const exprStr = (($('#alg-eq-expr') || {}).value || '').trim();
+      const rel = (($('#alg-eq-rel') || {}).value) || '=';
+      if (!exprStr) { toast('Enter a polynomial for the equation.', { kind: 'error' }); return; }
+      const S = QD.Sym, P = QD.ExprParser;
+      let g;
+      try { g = P.parse(exprStr, store.variables(), S); }
+      catch (e) { showError('Add equation: ' + ((e && e.message) || 'parse error')); return; }
+      if (busyGuard()) return;
+      const withConjugate = !$('#alg-eq-conj') || $('#alg-eq-conj').checked;
+      let r; try { r = store.addEquation(g, rel, { withConjugate }); } catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
+      if (!r || !r.ok) { showError('Add equation: ' + ((r && r.reason) || 'failed')); return; }
+      if ($('#alg-eq-expr')) $('#alg-eq-expr').value = '';
+      previewEquation();
+      rerender(); refreshPickers();
+      toast('Added equation → column ' + r.column);
+    }
+
     // ---- sidebar -------------------------------------------------------------
     function setStatus(t) { const el = $('#alg-status'); if (el) el.textContent = t; }
     function setStatusHTML(html) { const el = $('#alg-status'); if (el) el.innerHTML = html; }
@@ -672,6 +721,14 @@
         '        <input id="alg-def-expr" class="alg-def-expr" type="text" placeholder="e.g.  w1^2,  z1+zb1,  z1*zb1" autocomplete="off" spellcheck="false" title="An expression in the current variables.  + − * / ^ ( ),  i = imaginary unit,  exact rationals" />' +
         '        <button id="alg-def-apply" class="small" type="button" title="Introduce the new symbol and substitute it into the current system (a new labeled column)">Apply</button></div>' +
         '      <div id="alg-def-preview" class="alg-def-preview hint"></div>' +
+        '      <div class="row" style="margin-top:4px;"><button id="alg-abbrev" class="small" type="button" title="Repeatedly apply the highest-value detected substitution (repeated expressions / structural regularities) until none remain — abbreviate the whole system in one step">Auto-abbreviate</button></div>' +
+        '      <div class="algebra-line-label" style="margin-top:8px;">Add equation <span class="hint" style="font-weight:400;">(impose a custom condition)</span></div>' +
+        '      <div class="algebra-define-row">' +
+        '        <input id="alg-eq-expr" class="alg-def-expr" type="text" placeholder="e.g.  A1_1 - 1,  z1*zb1 - 1" autocomplete="off" spellcheck="false" title="A polynomial in the current variables.  + − * / ^ ( ),  i = imaginary unit,  exact rationals" />' +
+        '        <select id="alg-eq-rel" class="alg-eq-rel" title="Relation: = 0 (equality), ≠ 0 (non-vanishing), or > 0 (Hermitian inequality)"><option value="=">= 0</option><option value="≠">≠ 0</option><option value="&gt;">&gt; 0</option></select>' +
+        '        <button id="alg-eq-apply" class="small" type="button" title="Add this equation/inequality as a new node in the current system">Apply</button></div>' +
+        '      <div id="alg-eq-preview" class="alg-def-preview hint"></div>' +
+        '      <label style="font-size:11px;" title="In the conjugate model, also add the conjugate equation p̄ = 0 (keeps the system conjugation-closed for reim / existence analysis)."><input type="checkbox" id="alg-eq-conj" checked> add conjugate</label>' +
         '    </div>' +
         '  </details>' +
         // 3. Reduce (alternative eliminators; order/eliminate behind Advanced)
@@ -812,6 +869,10 @@
       $('#alg-def-apply').addEventListener('click', doDefineSubst);
       $('#alg-def-expr').addEventListener('input', previewSubst);
       $('#alg-def-name').addEventListener('input', previewSubst);
+      $('#alg-abbrev').addEventListener('click', doAutoAbbreviate);
+      $('#alg-eq-apply').addEventListener('click', doAddEquation);
+      $('#alg-eq-expr').addEventListener('input', previewEquation);
+      $('#alg-eq-rel').addEventListener('change', previewEquation);
 
       // variable pickers (eliminate = all current vars; assume-real = primal base vars)
       _elimPicker = buildPicker($('#alg-elim-pick'), { label: 'pick', friendly: friendlyVar, selected: elimSel, getOptions: () => store.variables() });
@@ -1173,7 +1234,7 @@
     let _abort = null;
     function setBusy(on, label) {
       ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-classify', 'alg-univalence', 'alg-resolvent', 'alg-autosolve',
-        'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-real-detect', 'alg-propagate-all', 'alg-val-apply', 'alg-def-apply']
+        'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-real-detect', 'alg-propagate-all', 'alg-val-apply', 'alg-def-apply', 'alg-abbrev', 'alg-eq-apply']
         .forEach((id) => { const b = $('#' + id); if (b) b.disabled = on; });
       const pal = $('#alg-palette'); if (pal) pal.querySelectorAll('button').forEach((b) => { b.disabled = on; });
       const cancel = $('#alg-cancel'); if (cancel) cancel.classList.toggle('hidden', !on);
@@ -1848,6 +1909,7 @@
         case 'define-subst': return (prov.definition ? 'defining equation for ' : 'define ') + latexPlain(prov.newVar)
           + (prov.dropVars && prov.dropVars.length ? ' · eliminate ' + prov.dropVars.map(latexPlain).join(', ') : '')
           + (prov.carried ? ' (carried through)' : '');
+        case 'add-equation': return 'custom equation (added by hand)';
         case 'triangular': return prov.contradiction ? 'triangular decomposition (inconsistent)' : 'triangular decomposition (Wu) of ' + (prov.inputs || []).join(', ');
         case 'factor': return prov.carried ? 'carried through a factor split' : 'factor: case ' + ((prov.caseIndex || 0) + 1) + ' of ' + (prov.caseCount || '?') + ' (V(p)=⋃V(fᵢ))';
         case 'rctd': return 'RCTD cell ' + (prov.cell != null ? prov.cell : '?') + ' · ' + (prov.role || 'chain') + (prov.realCount != null ? ' (' + prov.realCount + ' real soln' + (prov.realCount === 1 ? '' : 's') + ')' : '');

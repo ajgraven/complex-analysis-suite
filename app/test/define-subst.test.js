@@ -155,4 +155,44 @@ module.exports = async function run() {
     ok('DAG round-trip: t/t̄ overlay restored ⇒ t collides on re-define',
        !st2.defineSubstitution('t', parse('z1', ['z1'])).ok && st2.variables().indexOf('t') !== -1);
   }
+
+  // ---- B2: iterated auto-CSE (autoAbbreviate) ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(mkSys([parse('z1*zb1 - 1', ['z1', 'zb1']), parse('w1^2 + w1^2*z1*zb1', ['w1', 'z1', 'zb1'])]), { withConjugates: false });
+    const before = st.detectSubstitutions().length;
+    ok('auto-abbreviate: there are abbreviations to apply', before > 0);
+    const r = st.autoAbbreviate();
+    ok('auto-abbreviate: applied ≥ 1 substitution', r.ok && r.count >= 1, 'count=' + r.count);
+    ok('auto-abbreviate: never exceeds the iteration cap', r.count <= 12);
+    ok('auto-abbreviate: reaches a fixpoint (a second pass finds nothing)', st.autoAbbreviate().count === 0);
+    ok('auto-abbreviate: every applied abbreviation variable is now a system variable',
+       r.applied.every((a) => st.variables().indexOf(a.newVar) !== -1));
+  }
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(mkSys([parse('A1_1 - 1', ['A1_1'])]), { withConjugates: false });   // no repeated structure
+    ok('auto-abbreviate: no-op when nothing recurs', st.autoAbbreviate().count === 0);
+  }
+
+  // ---- B3: free-form custom equation (addEquation) ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(mkSys([parse('z1 + A1_1', ['z1', 'A1_1'])]), { withConjugates: false });
+    const col = st.maxColumn(), before = st.size;
+    const eq = parse('A1_1 - 1', ['A1_1', 'Ab1_1', 'z1', 'zb1']);
+    const r = st.addEquation(eq, '=', { withConjugate: true });
+    ok('add-equation: ok, lands in the current column', r.ok && r.column === col);
+    ok('add-equation: the node carries the typed polynomial + provenance', r.node && r.node.poly.equals(eq) && r.node.provenance.op === 'add-equation');
+    ok('add-equation: a conjugate companion was added (A1_1 − 1 is not self-conjugate)', st.size === before + 2);
+    ok('add-equation: dedup rejects an identical re-add', !st.addEquation(eq, '=').ok);
+    ok('add-equation: a zero polynomial is rejected', !st.addEquation(parse('A1_1 - A1_1', ['A1_1']), '=').ok);
+  }
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(mkSys([parse('z1 + A1_1', ['z1', 'A1_1'])]), { withConjugates: false });
+    const before = st.size;
+    const r = st.addEquation(parse('z1*zb1 - 1', ['z1', 'zb1']), '>', { withConjugate: true });
+    ok('add-equation: a > 0 inequality adds one node (no conjugate companion for >)', r.ok && st.size === before + 1 && r.node.rel === '>');
+  }
 };

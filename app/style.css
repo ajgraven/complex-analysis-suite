@@ -907,6 +907,7 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #controls-algebra .algebra-define-row .alg-def-expr { flex: 1 1 auto; min-width: 60px; }
 #controls-algebra .alg-def-preview { font-size: 11px; min-height: 1em; margin: 1px 0 2px; overflow-x: auto; }
 #controls-algebra .alg-def-preview.alg-def-error { color: var(--danger, #c0392b); }
+#controls-algebra .algebra-define-row .alg-eq-rel { flex: none; }
 
 /* Univalence-constraint palette as a 2-column grid */
 #controls-algebra .algebra-palette { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }

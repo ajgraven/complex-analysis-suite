@@ -295,6 +295,20 @@ its own merged PR), with one feature **in progress on a branch**:
     (`_plainPoly`, no LaTeX — the canvas shows labels as textContent). Tests: `app/test/expr-parser.test.js`
     (25) + `app/test/define-subst.test.js` (32, exact subst round-trip as the oracle: linear/monomial/modulus/
     conjugate-pair/general-elim/collision/detector/undo/DAG round-trip). No `sym-core.js` math change.
+  - **Algebra-reach Phase 1 — iterated CSE (B2) + free-form equation (B3)** (latest) — two pure store+UI
+    follow-ons to the substitution work. **B2 `store.autoAbbreviate(opts)`**: an "Auto-abbreviate" button
+    (Assumptions section) loops `detectSubstitutions → defineSubstitution` on the top-ranked hit to a
+    FIXPOINT (dedup by the hit's expression, capped at `maxIters` 12), collapsing every repeated
+    expression / structural regularity into fresh symbols across one-or-more columns in a single click;
+    each application stays its own undo step. **B3 `store.addEquation(poly, rel, opts)`**: an "Add equation"
+    control (expression input + `= / ≠ / >` rel select + KaTeX preview + "add conjugate" checkbox, reusing
+    `QD.ExprParser`) adds a free-form typed equation/inequality node to the CURRENT column in place (like
+    `generateConjugate`), with `maybeAddConjugate` keeping the conjugate model closed; new
+    `provenance.op:'add-equation'` registered in `provText`/`_shortProv`. The roadmap's **A4 (Möbius
+    auto-saturate) was DEFERRED** (Andrew's call — `∏(1−z̄ⱼzⱼ)` saturation would delete a genuine `z_j=0`
+    QD component, the cardioid hazard; it stays manual-only when eventually built). Tests: `define-subst.test.js`
+    +12 (autoAbbreviate fixpoint/cap/no-op; addEquation column placement/conjugate/dedup/zero/inequality).
+    No `sym-core.js`/manifest change.
   - **Branching workspace — A6 (per-branch verdict chips)** — each track chip carries an existence/uniqueness
     badge (`∅` no-QD · `∞` positive-dim family · `✓ 1 QD` unique · `N QD` · `?`/`fin`), color-coded, full phrasing
     in the tooltip. A **"⟳ verdicts"** button (shown when >1 branch) classifies every branch sequentially via the

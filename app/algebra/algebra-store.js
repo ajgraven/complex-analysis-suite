@@ -1139,6 +1139,55 @@
       return out.slice(0, 8);
     }
 
+    // B2 — iterated automatic CSE: repeatedly apply the highest-ranked detected substitution
+    // (detectSubstitutions → defineSubstitution) to a FIXPOINT, abbreviating every repeated
+    // expression / structural regularity into a fresh symbol. Each application is its own
+    // append-column (its own undo step). Dedup by the hit's expression so a persistent suggestion
+    // (e.g. a shared gcd factor that survives) can't loop forever; capped at opts.maxIters
+    // (default 12). Every detector regime is SYNCHRONOUS (modulus/power = monomial, gcd = its own
+    // regime, conj-sum = general add-definition), so no worker is needed. Returns
+    // { ok, applied:[{ newVar, kind, column }], count }.
+    function autoAbbreviate(opts) {
+      opts = opts || {};
+      const maxIters = opts.maxIters || 12;
+      const applied = [], seen = new Set();
+      for (let i = 0; i < maxIters; i++) {
+        const hits = detectSubstitutions();
+        if (!hits.length) break;
+        const hit = hits.find((h) => !seen.has(h.kind + ':' + JSON.stringify(h.exprTerms)));
+        if (!hit) break;
+        seen.add(hit.kind + ':' + JSON.stringify(hit.exprTerms));
+        const r = defineSubstitution(hit.newVar, hit.expr, { regime: hit.regime });
+        if (!r || !r.ok) break;
+        applied.push({ newVar: hit.newVar, kind: hit.kind, column: r.column });
+      }
+      return { ok: applied.length > 0, applied, count: applied.length };
+    }
+
+    // B3 — add a FREE-FORM user equation/inequality to the current system. Adds the typed polynomial
+    // as a node IN THE CURRENT COLUMN (in place, like generateConjugate — it augments the current
+    // system rather than deriving a new column). For a non-self-conjugate equality in the conjugate
+    // model the conjugate companion is added too (maybeAddConjugate) so reim/classify stay
+    // conjugation-closed; opt out with opts.withConjugate === false. rel ∈ {'=','>','≠'}. Returns
+    // { ok, node, column } or { ok:false, reason }.
+    function addEquation(poly, rel, opts) {
+      opts = opts || {};
+      if (!poly || typeof poly.vars !== 'function') return { ok: false, reason: 'no polynomial to add' };
+      if (poly.isZero()) return { ok: false, reason: 'the equation is 0 = 0 (trivial)' };
+      rel = rel || '=';
+      const col = maxColumn();
+      for (const m of nodes.values()) if (m.column === col && (m.track || 't0') === activeTrackId && m.rel === rel && m.poly.equals(poly))
+        return { ok: false, reason: 'an identical equation is already in the current system' };
+      const relSuffix = rel === '=' ? ' = 0' : (rel === '>' ? ' > 0' : ' ≠ 0');
+      checkpoint();
+      const node = addNode({ id: nid(), kind: 'constraint', poly, rel,
+        label: opts.label || ('custom: ' + _plainPoly(poly) + relSuffix), model,
+        provenance: { op: 'add-equation', inputs: [], custom: true }, column: col, meta: {} });
+      if (rel === '=' && model === 'conjugate' && opts.withConjugate !== false) maybeAddConjugate(node);
+      normalizeColumn(col);
+      return { ok: true, node, column: col };
+    }
+
     // Detect VARIABLE SYMMETRIES forced by the equations themselves (pure query, no mutation).
     // Scans the current column (or the column of `ids`) for equality nodes that are, up to a
     // nonzero Gaussian scalar, a two-variable linear relation α·a + β·b = 0 with a,b each a lone
@@ -2235,6 +2284,7 @@
         case 'identify': return 'identify ' + p.drop + ' = ' + p.keep;
         case 'identify-conj': return 'identify ' + p.var + ' = conj(' + p.other + ')';
         case 'define-subst': return 'define ' + p.newVar + (p.dropVars && p.dropVars.length ? ' (elim ' + p.dropVars.join(', ') + ')' : '');
+        case 'add-equation': return 'custom equation';
         case 'linear-reduce': return 'linear propagation';
         case 'resultant': return 'eliminate ' + p.variable;
         case 'groebner': return 'Groebner (' + (p.order || 'grevlex') + ')';
@@ -2443,7 +2493,7 @@
     return {
       seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
-      substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
+      substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, autoAbbreviate, addEquation, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
       currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, msolveColumn, msolveVarOrder, importMsolve, derivationSteps, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
