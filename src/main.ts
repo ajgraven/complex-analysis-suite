@@ -20,6 +20,7 @@ import { DEFAULT_GRADIENT } from "./palettes";
 import { setupGradientEditor } from "./ui/gradient";
 import { canRecord, startRecording, downloadBlob } from "./ui/recorder";
 import { interpolateView, type Keyframe } from "./render/keyframes";
+import { readAppState, applyAppState, encodeState, decodeState } from "./state/appState";
 import GIF from "gif.js";
 import gifWorkerUrl from "gif.js/dist/gif.worker.js?url";
 import { parse } from "./expr/parser";
@@ -158,7 +159,6 @@ function setupTour(): void {
   });
 }
 
-/** Show the first-run onboarding once (dismissal remembered in localStorage). */
 /** Colour-theme toggle cycling auto → dark → light, persisted in localStorage. */
 function setupTheme(): void {
   const btn = document.getElementById("theme-btn");
@@ -192,6 +192,7 @@ function setupTheme(): void {
   });
 }
 
+/** Show the first-run onboarding once (dismissal remembered in localStorage). */
 function setupOnboarding(): void {
   const el = byId("onboarding");
   let seen = false;
@@ -598,6 +599,45 @@ function init(): void {
     byId("param-a-field").hidden = !uses;
   }
 
+  /** Re-apply every control to the plots (used after loading a shared permalink). */
+  function applyAllControls(): void {
+    applyChanges();
+    applyColoring();
+    applyLighting();
+    applyPost();
+    applyOutline();
+    applyCriticalOrbit();
+    applyEquipotential();
+    applyNewton();
+    applyAutoIter();
+    applyAccumulate();
+    applyPerturbation();
+    applyParamA();
+  }
+
+  /** Serialize the current view into the URL hash and copy a shareable link. */
+  async function shareLink(): Promise<void> {
+    const url = `${location.origin}${location.pathname}#s=${encodeState(readAppState())}`;
+    history.replaceState(null, "", url);
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast("Shareable link copied to the clipboard.", "info");
+    } catch {
+      showToast("Shareable link is in the address bar.", "info");
+    }
+  }
+
+  /** If the URL hash holds a shared view, apply it. Returns whether it did. */
+  function loadFromHash(): boolean {
+    const match = /^#s=(.+)$/.exec(location.hash);
+    if (!match) return false;
+    const state = decodeState(match[1]);
+    if (!state) return false;
+    applyAppState(state);
+    applyAllControls();
+    return true;
+  }
+
   /**
    * Phase 17 — animation recording. Drive `apply(t)` (t: 0→1) for `durationMs` via
    * requestAnimationFrame while capturing `plot`'s canvas to a WebM clip, then download it
@@ -898,6 +938,9 @@ function init(): void {
   byId("accumulate").addEventListener("change", applyAccumulate);
   byId("perturbation").addEventListener("change", applyPerturbation);
   byId("param-a").addEventListener("input", applyParamA);
+  byId("share-btn").addEventListener("click", () => {
+    void shareLink();
+  });
 
   byId("apply_all").addEventListener("click", applyChanges);
   byId("apply_preset").addEventListener("click", () => {
@@ -1008,6 +1051,7 @@ function init(): void {
   applyParamA();
   updateParamAVisibility();
   updateKeyframeUI();
+  loadFromHash(); // apply a shared view if the URL carries one
 
   // Dev-only: expose the two views so the renderer can be driven/inspected from the
   // console (e.g. the synchronous `renderToImageData` path, which works even when a

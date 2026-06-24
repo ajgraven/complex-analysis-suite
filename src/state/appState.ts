@@ -1,0 +1,105 @@
+/**
+ * Shareable application state (Phase 16). The UI controls already hold the full
+ * view-defining state, so an "AppState" is just the values of an allow-list of controls.
+ * `readAppState`/`applyAppState` move between the DOM and a plain object; `encodeState`/
+ * `decodeState` round-trip that object through a URL-hash-safe string for permalinks.
+ *
+ * Not (yet) captured: the dynamical orbit start z₀ and a custom gradient's stops — a
+ * shared link reproduces the formula, view, colouring mode/palette, and all toggles.
+ */
+
+/** Control element ids whose values define a shareable view. */
+export const SHARE_IDS = [
+  "inpc",
+  "inpf",
+  "inpmn",
+  "inpjn",
+  "inpme",
+  "inpje",
+  "inpparamcenter",
+  "inpparamzoom",
+  "inpdyncenter",
+  "inpdynzoom",
+  "inpParamRes",
+  "inpDynRes",
+  "mode",
+  "palette",
+  "aa",
+  "paletteRotation",
+  "light",
+  "lightAz",
+  "lightEl",
+  "lightHeight",
+  "post",
+  "postVignette",
+  "postGamma",
+  "outline",
+  "outlineWidth",
+  "critorbit",
+  "equipotential",
+  "equiDensity",
+  "newton",
+  "autoiter",
+  "accumulate",
+  "perturbation",
+  "param-a",
+] as const;
+
+export type AppState = Record<string, string | boolean>;
+
+type Control = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+
+function isCheckbox(el: Control): el is HTMLInputElement {
+  return el instanceof HTMLInputElement && el.type === "checkbox";
+}
+
+/** Read the shareable state from the DOM controls. */
+export function readAppState(): AppState {
+  const state: AppState = {};
+  for (const id of SHARE_IDS) {
+    const el = document.getElementById(id) as Control | null;
+    if (!el) continue;
+    state[id] = isCheckbox(el) ? el.checked : el.value;
+  }
+  return state;
+}
+
+/** Write a shareable state onto the DOM controls (does not itself re-render). */
+export function applyAppState(state: AppState): void {
+  for (const id of SHARE_IDS) {
+    if (!(id in state)) continue;
+    const el = document.getElementById(id) as Control | null;
+    if (!el) continue;
+    if (isCheckbox(el)) el.checked = Boolean(state[id]);
+    else el.value = String(state[id]);
+  }
+}
+
+// --- URL-hash codec (unicode-safe base64, no deprecated escape/unescape) -------
+
+function toBase64(s: string): string {
+  const bytes = new TextEncoder().encode(s);
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
+function fromBase64(b64: string): string {
+  const bin = atob(b64);
+  return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+}
+
+/** Encode state to a compact, URL-hash-safe string. */
+export function encodeState(state: AppState): string {
+  return toBase64(JSON.stringify(state));
+}
+
+/** Decode a hash string back to state, or null if it's missing/corrupt. */
+export function decodeState(encoded: string): AppState | null {
+  try {
+    const obj: unknown = JSON.parse(fromBase64(encoded));
+    return obj && typeof obj === "object" ? (obj as AppState) : null;
+  } catch {
+    return null;
+  }
+}
