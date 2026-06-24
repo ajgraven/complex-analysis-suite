@@ -139,6 +139,15 @@ large exports stay responsive. The scaled overlay is composited on top, then
 downloaded ([`PlotView.exportPng`](src/render/plotView.ts)) or copied to the
 clipboard ([`PlotView.copyPng`](src/render/plotView.ts)).
 
+## Animation
+
+The Downloads panel has a **Record Julia morph** button: it sweeps the parameter `c`
+around a small circle about the current point while re-rendering the dynamical plane,
+and records the result to a **WebM** video (`MediaRecorder` over the canvas'
+`captureStream`, no dependency — the GL canvases use `preserveDrawingBuffer` so the
+capture isn't black). Keep the tab focused while it records (the loop is paced by
+`requestAnimationFrame`). See [`src/ui/recorder.ts`](src/ui/recorder.ts).
+
 ## Colouring
 
 Several shared controls drive how the plots are coloured (defaults reproduce the

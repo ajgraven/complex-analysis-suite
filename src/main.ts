@@ -17,6 +17,7 @@ import { showToast } from "./ui/toast";
 import { validateInputs, type FieldError } from "./ui/validate";
 import { DEFAULT_GRADIENT } from "./palettes";
 import { setupGradientEditor } from "./ui/gradient";
+import { canRecord, startRecording, downloadBlob } from "./ui/recorder";
 import { parse } from "./expr/parser";
 import { toLatex } from "./expr/latex";
 import katex from "katex";
@@ -538,6 +539,57 @@ function init(): void {
     }
   }
 
+  /**
+   * Phase 17: record a looping "Julia morph" — sweep the parameter c around a small
+   * circle about the current point while re-rendering the dynamical plane, captured to a
+   * WebM clip. Uses requestAnimationFrame for real-time pacing, so keep the tab focused.
+   */
+  let recordingMorph = false;
+  async function recordJuliaMorph(): Promise<void> {
+    if (recordingMorph) return;
+    if (!canRecord()) {
+      showToast("Video recording isn't supported in this browser.", "warn");
+      return;
+    }
+    const plot = dynamicalView.plot;
+    const canvas = plot.glContext.canvas as HTMLCanvasElement;
+    const [cx, cy] = parameterView.plot.z0; // sweep centre = current parameter point
+    const radius = 0.03;
+    const durationMs = 4000;
+    const btn = byId<HTMLButtonElement>("record_morph");
+    recordingMorph = true;
+    btn.disabled = true;
+    btn.textContent = "recording…";
+    try {
+      const rec = startRecording(canvas, 30);
+      const start = performance.now();
+      await new Promise<void>((resolve) => {
+        const frame = (): void => {
+          const t = (performance.now() - start) / durationMs;
+          if (t >= 1) {
+            resolve();
+            return;
+          }
+          const ang = t * 2 * Math.PI;
+          plot.c = formatComplex([cx + radius * Math.cos(ang), cy + radius * Math.sin(ang)]);
+          plot.render();
+          requestAnimationFrame(frame);
+        };
+        frame();
+      });
+      const blob = await rec.stop();
+      downloadBlob(blob, "julia-morph.webm");
+      showToast("Saved julia-morph.webm", "info");
+    } catch (err) {
+      showToast(`Recording failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+    } finally {
+      syncDynamicalC(); // restore c to the parameter point
+      btn.disabled = false;
+      btn.textContent = "Record Julia morph";
+      recordingMorph = false;
+    }
+  }
+
   // --- wire up the UI controls ------------------------------------------
 
   document.addEventListener("keyup", (event) => {
@@ -642,6 +694,9 @@ function init(): void {
   });
   byId("copy_dyn_plane").addEventListener("click", () => {
     void runCopy(dynamicalView, "dynExportSize", "dynExportOverlay", "copy_dyn_plane");
+  });
+  byId("record_morph").addEventListener("click", () => {
+    void recordJuliaMorph();
   });
 
   disableUnsupportedSizes();
