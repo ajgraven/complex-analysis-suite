@@ -369,12 +369,14 @@ function init(): void {
     view: PlotView,
     sizeId: string,
     overlayId: string,
+    scaleBarId: string,
     filenameId: string,
     buttonId: string,
   ): Promise<void> {
     const button = byId<HTMLButtonElement>(buttonId);
     const size = Number(byId<HTMLSelectElement>(sizeId).value);
     const overlays = byId<HTMLInputElement>(overlayId).checked;
+    const scaleBar = byId<HTMLInputElement>(scaleBarId).checked;
     const filename = byId<HTMLInputElement>(filenameId).value;
     const label = button.textContent;
     button.disabled = true;
@@ -384,6 +386,7 @@ function init(): void {
       await view.exportPng({
         size,
         overlays,
+        scaleBar,
         filename,
         onProgress: progress.onProgress,
         isCancelled: progress.isCancelled,
@@ -403,11 +406,13 @@ function init(): void {
     view: PlotView,
     sizeId: string,
     overlayId: string,
+    scaleBarId: string,
     buttonId: string,
   ): Promise<void> {
     const button = byId<HTMLButtonElement>(buttonId);
     const size = Number(byId<HTMLSelectElement>(sizeId).value);
     const overlays = byId<HTMLInputElement>(overlayId).checked;
+    const scaleBar = byId<HTMLInputElement>(scaleBarId).checked;
     const label = button.textContent;
     button.disabled = true;
     button.textContent = "Copying…";
@@ -416,6 +421,7 @@ function init(): void {
       await view.copyPng({
         size,
         overlays,
+        scaleBar,
         onProgress: progress.onProgress,
         isCancelled: progress.isCancelled,
       });
@@ -720,6 +726,7 @@ function init(): void {
       parameterView,
       "paramExportSize",
       "paramExportOverlay",
+      "paramExportScaleBar",
       "mImageName",
       "print_param_space",
     );
@@ -729,15 +736,28 @@ function init(): void {
       dynamicalView,
       "dynExportSize",
       "dynExportOverlay",
+      "dynExportScaleBar",
       "jImageName",
       "print_dyn_plane",
     );
   });
   byId("copy_param_space").addEventListener("click", () => {
-    void runCopy(parameterView, "paramExportSize", "paramExportOverlay", "copy_param_space");
+    void runCopy(
+      parameterView,
+      "paramExportSize",
+      "paramExportOverlay",
+      "paramExportScaleBar",
+      "copy_param_space",
+    );
   });
   byId("copy_dyn_plane").addEventListener("click", () => {
-    void runCopy(dynamicalView, "dynExportSize", "dynExportOverlay", "copy_dyn_plane");
+    void runCopy(
+      dynamicalView,
+      "dynExportSize",
+      "dynExportOverlay",
+      "dynExportScaleBar",
+      "copy_dyn_plane",
+    );
   });
   byId("record_morph").addEventListener("click", () => {
     void recordJuliaMorph();

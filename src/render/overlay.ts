@@ -154,6 +154,52 @@ export interface OverlayParams {
   size: number;
 }
 
+/**
+ * Draw a scale bar (bottom-left) labelled with its width in plot coordinates. `size` is
+ * the square canvas size and `zoom` the plot zoom (the view spans 2/zoom in plot units
+ * across the width). All metrics scale with `size`, so it reads correctly on
+ * high-resolution exports.
+ */
+export function drawScaleBar(ctx: CanvasRenderingContext2D, size: number, zoom: number): void {
+  const viewSpan = 2 / zoom; // plot units across the full canvas width
+  const exp = Math.floor(Math.log10(0.22 * viewSpan)); // aim for ~22% of the width
+  const frac = (0.22 * viewSpan) / Math.pow(10, exp);
+  const niceFrac = frac >= 5 ? 5 : frac >= 2 ? 2 : 1; // round down to 1 / 2 / 5
+  const niceLen = niceFrac * Math.pow(10, exp);
+  const barPx = (niceLen / viewSpan) * size;
+  const m = Math.round(size * 0.045);
+  const font = Math.max(9, Math.round(size * 0.024));
+  const tick = Math.max(3, size * 0.012);
+  const lw = Math.max(1.5, size * 0.0035);
+  const pad = font * 0.5;
+  const label =
+    exp >= -3 && exp < 4 ? String(Number(niceLen.toPrecision(2))) : `${niceFrac}e${exp}`;
+  const x0 = m;
+  const y = size - m;
+  ctx.save();
+  ctx.font = `${font}px system-ui, -apple-system, sans-serif`;
+  ctx.textBaseline = "alphabetic";
+  const contentW = Math.max(barPx, ctx.measureText(label).width);
+  // translucent backing so the bar stays legible over any colour
+  ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+  ctx.fillRect(x0 - pad, y - tick - font - pad, contentW + pad * 2, tick + font + pad * 1.8);
+  // white bar with end ticks
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = lw;
+  ctx.beginPath();
+  ctx.moveTo(x0, y);
+  ctx.lineTo(x0 + barPx, y);
+  ctx.moveTo(x0, y - tick);
+  ctx.lineTo(x0, y);
+  ctx.moveTo(x0 + barPx, y - tick);
+  ctx.lineTo(x0 + barPx, y);
+  ctx.stroke();
+  // width label (in plot coordinates) above the bar
+  ctx.fillStyle = "#fff";
+  ctx.fillText(label, x0, y - tick - pad * 0.6);
+  ctx.restore();
+}
+
 /** Render the orbit polyline, white point, and label onto `ctx`. */
 export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): void {
   const { size } = p;

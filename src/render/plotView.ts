@@ -14,7 +14,7 @@ import type { Preset } from "../presets";
 import { clampExportSize, downloadCanvas, ensurePngName, getMaxTextureSize } from "../hiResExport";
 import { showToast } from "../ui/toast";
 import { GLPlot, renderScale, type FractType } from "./glPlot";
-import { drawOverlay } from "./overlay";
+import { drawOverlay, drawScaleBar } from "./overlay";
 
 /** Hooks linking a plot to the rest of the app (the parameter→dynamical coupling, input sync). */
 export interface PlotViewHooks {
@@ -93,7 +93,7 @@ export class PlotView {
    * (download) and {@link copyPng} (clipboard).
    */
   private async renderExportCanvas(
-    opts: { size: number; overlays: boolean } & ExportProgress,
+    opts: { size: number; overlays: boolean; scaleBar?: boolean } & ExportProgress,
   ): Promise<{ canvas: HTMLCanvasElement; size: number; clamped: boolean; maxTex: number } | null> {
     const maxTex = getMaxTextureSize();
     const { size, clamped } = clampExportSize(opts.size, maxTex);
@@ -131,12 +131,18 @@ export class PlotView {
         ctx.drawImage(ov, 0, 0);
       }
     }
+    if (opts.scaleBar) drawScaleBar(ctx, size, this.plot.zoom);
     return { canvas: out, size, clamped, maxTex };
   }
 
   /** Render the plot at `size` (true detail) and download it as a PNG, overlay optional. */
   async exportPng(
-    opts: { size: number; overlays: boolean; filename: string } & ExportProgress,
+    opts: {
+      size: number;
+      overlays: boolean;
+      scaleBar?: boolean;
+      filename: string;
+    } & ExportProgress,
   ): Promise<void> {
     const result = await this.renderExportCanvas(opts);
     if (!result) return; // cancelled
@@ -151,7 +157,9 @@ export class PlotView {
   }
 
   /** Render the plot at `size` and copy it to the clipboard as a PNG, overlay optional. */
-  async copyPng(opts: { size: number; overlays: boolean } & ExportProgress): Promise<void> {
+  async copyPng(
+    opts: { size: number; overlays: boolean; scaleBar?: boolean } & ExportProgress,
+  ): Promise<void> {
     if (!navigator.clipboard || typeof ClipboardItem === "undefined") {
       throw new Error("Copying images to the clipboard isn't supported in this browser");
     }

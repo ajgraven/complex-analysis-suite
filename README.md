@@ -131,6 +131,9 @@ clipboard) buttons in the Downloads panel, with two adjacent controls:
 - **overlays** — when ticked, the exported image includes the orbit polyline,
   white point, and coordinate label (sized to the chosen resolution); when
   unticked, you get a clean fractal-only image.
+- **scale bar** — when ticked, the exported image gets a scale bar (bottom-left)
+  labelled with its width in plot coordinates, so a shared image carries its zoom
+  scale. Independent of **overlays**, so you can add it to a clean image.
 
 The renderer draws into an off-screen RGBA8 framebuffer in horizontal strips
 ([`GLPlot.renderToImageData`](src/render/glPlot.ts)) — full detail at the requested
