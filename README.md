@@ -94,6 +94,9 @@ The `f` / `escape` expression language (a CindyScript-compatible subset) support
   `mod(x,y)`, `round`, `floor`, `ceil`.
 - **Statements:** `;`-separated, with local assignment (e.g. `u=…; …; result`).
   The `escape` predicate may call `f(z, c)`.
+- **Variables:** `z` and `c`, plus a live parameter **`a`** — when `f` (or `escape`) uses
+  `a` as a free variable, a slider appears under the formula to sweep it in real time
+  (e.g. `a*z*(1-z)`). A local assignment to `a` shadows the parameter as usual.
 
 `lambertw` is a custom complex implementation (a seeded approximation refined by
 Halley steps); the principal `log`/`sqrt`/`pow` branches match the original
@@ -116,6 +119,8 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
   **tour** button runs a short guided walkthrough of the interface.
 - The **Theme** button cycles auto / dark / light (auto follows your OS colour scheme);
   the choice is remembered across visits.
+- When `f` uses the free variable **`a`**, an `a` slider appears under the formula — drag
+  it to sweep a live parameter and watch the fractal change.
 - **Auto iterations** raises the iteration cap automatically as you zoom in, so deep
   views keep their detail; and the renderer recovers automatically if the WebGL
   context is lost.

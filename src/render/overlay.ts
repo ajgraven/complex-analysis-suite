@@ -37,9 +37,10 @@ export function computeOrbit(
   z0: Vec2,
   cc: Complex,
   nplot: number,
+  a: Complex = [0, 0],
 ): Complex[] {
-  const f = makeComplexFn(fAst);
-  const esc = makeEscapeFn(escapeAst, fAst);
+  const f = makeComplexFn(fAst, a);
+  const esc = makeEscapeFn(escapeAst, fAst, a);
   const points: Complex[] = [[z0[0], z0[1]]];
   let z: Complex = [z0[0], z0[1]];
   for (let k = 0; k < nplot; k++) {
@@ -72,10 +73,11 @@ export function classifyOrbit(
   escapeAst: Node,
   z0: Vec2,
   cc: Complex,
+  a: Complex = [0, 0],
   maxIter = 512,
 ): OrbitInfo {
-  const f = makeComplexFn(fAst);
-  const esc = makeEscapeFn(escapeAst, fAst);
+  const f = makeComplexFn(fAst, a);
+  const esc = makeEscapeFn(escapeAst, fAst, a);
   const EPS = 1e-6; // tolerance for "returned near an earlier point"
   const CONV_EPS = 1e-4; // window-collapse tolerance (fixed point vs genuine cycle)
   const MAX_PERIOD = 64;
@@ -152,6 +154,8 @@ export interface OverlayParams {
   criticalPoint?: Vec2;
   /** Overlay backing-store size in px. */
   size: number;
+  /** Live parameter `a`, bound in f / escape when used as a free variable. */
+  a?: Complex;
 }
 
 /**
@@ -206,8 +210,9 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
   ctx.clearRect(0, 0, size, size);
   const s = size / OVERLAY_BASE;
   const cc: Complex = p.fractType === "param" ? [p.z0[0], p.z0[1]] : p.c;
-  const orbit = computeOrbit(p.fAst, p.escapeAst, p.z0, cc, p.nplot);
-  const info = classifyOrbit(p.fAst, p.escapeAst, p.z0, cc);
+  const a = p.a ?? [0, 0];
+  const orbit = computeOrbit(p.fAst, p.escapeAst, p.z0, cc, p.nplot, a);
+  const info = classifyOrbit(p.fAst, p.escapeAst, p.z0, cc, a);
   const fateColor = FATE_COLOR[info.fate];
 
   // Orbit polyline, coloured by the orbit's long-run fate.
@@ -234,8 +239,8 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
   // reads apart from the white-point orbit. Bounded → Julia set connected.
   if (p.critical) {
     const crit = p.criticalPoint ?? [0, 0];
-    const critOrbit = computeOrbit(p.fAst, p.escapeAst, crit, cc, p.nplot);
-    const critColor = FATE_COLOR[classifyOrbit(p.fAst, p.escapeAst, crit, cc).fate];
+    const critOrbit = computeOrbit(p.fAst, p.escapeAst, crit, cc, p.nplot, a);
+    const critColor = FATE_COLOR[classifyOrbit(p.fAst, p.escapeAst, crit, cc, a).fate];
     ctx.strokeStyle = critColor;
     ctx.lineWidth = 1.4 * s;
     ctx.setLineDash([5 * s, 4 * s]);

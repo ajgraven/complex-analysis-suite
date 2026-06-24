@@ -13,6 +13,7 @@ import { canvToPlot, plotRange, plotToCanv } from "../transforms";
 import type { Preset } from "../presets";
 import { parse } from "../expr/parser";
 import type { Node } from "../expr/ast";
+import { isFreeParameter } from "../expr/ast";
 import {
   buildFragmentShader,
   POST_FRAGMENT_SHADER,
@@ -66,6 +67,7 @@ interface Uniforms {
   uZoom: WebGLUniformLocation | null;
   uN: WebGLUniformLocation | null;
   uC: WebGLUniformLocation | null;
+  uA: WebGLUniformLocation | null;
   uFractType: WebGLUniformLocation | null;
   uCenter: WebGLUniformLocation | null; // single precision
   uCenterX: WebGLUniformLocation | null; // df64 hi/lo
@@ -249,6 +251,7 @@ export class GLPlot {
   private _autoIter = false; // scale the iteration cap with zoom depth
   private _accumulate = false; // temporal anti-aliasing (idle accumulation)
   private _forceFull = false; // render full-res every frame (while recording animation)
+  private _paramA: [number, number] = [0, 0]; // live parameter a (real, imaginary)
   private _z0: Vec2 = [0, 0];
   private _mode = 0; // 0 escape, 1 smooth, 2 distance, 3 orbit-trap, 4 domain
   private _palette = 0; // 0 classic, 1 viridis, 2 magma, 3 grayscale
@@ -390,6 +393,7 @@ export class GLPlot {
       uZoom: gl.getUniformLocation(program, "uZoom"),
       uN: gl.getUniformLocation(program, "uN"),
       uC: gl.getUniformLocation(program, "uC"),
+      uA: gl.getUniformLocation(program, "uA"),
       uFractType: gl.getUniformLocation(program, "uFractType"),
       uCenter: gl.getUniformLocation(program, "uCenter"),
       uCenterX: gl.getUniformLocation(program, "uCenterX"),
@@ -648,6 +652,7 @@ export class GLPlot {
         : fullN;
     gl.uniform1i(u.uN, iterN);
     gl.uniform2f(u.uC, this._cVal[0], this._cVal[1]);
+    gl.uniform2f(u.uA, this._paramA[0], this._paramA[1]);
     gl.uniform1i(u.uFractType, this.fractType === "param" ? 1 : 0);
     const mode = modeOverride ?? this.effectiveMode();
     gl.uniform1i(u.uMode, mode);
@@ -1383,6 +1388,22 @@ export class GLPlot {
    *  used while recording an animation so every captured frame is sharp. */
   setForceFullRender(on: boolean): void {
     this._forceFull = on;
+  }
+
+  /** Set the live parameter `a` (real part `re`, optional imaginary `im`); re-renders. */
+  setParamA(re: number, im = 0): void {
+    this._paramA = [re, im];
+    this.scheduleRender();
+  }
+
+  /** Current live parameter `a` value, [re, im]. */
+  get paramA(): [number, number] {
+    return this._paramA;
+  }
+
+  /** Whether f or escape references `a` as a free variable (so the `a` slider applies). */
+  get usesParamA(): boolean {
+    return isFreeParameter(this._fAst, "a") || isFreeParameter(this._escAst, "a");
   }
 
   /**

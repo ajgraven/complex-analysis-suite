@@ -173,6 +173,18 @@ z^2+c</textarea
             >
             <div id="formula-latex" class="formula-latex" aria-hidden="true"></div>
           </div>
+          <div class="field" id="param-a-field" hidden>
+            <label for="param-a">a = <span id="param-a-value">1.00</span></label>
+            <input
+              type="range"
+              id="param-a"
+              min="-2"
+              max="4"
+              step="0.01"
+              value="1"
+              title="Live parameter a — sweep to morph f (appears when f uses the variable a)"
+            />
+          </div>
           <div class="field">
             <label for="fractal_presets">Presets</label>
             <div class="inline-actions">
@@ -506,6 +518,10 @@ z^2+c</textarea
               Use <strong>Record Julia morph</strong> or <strong>Record zoom-in</strong> in the
               Downloads panel to save a WebM video — the dynamical plane morphing as the parameter
               sweeps a circle, or a zoom into the parameter plane.
+            </li>
+            <li>
+              Put the variable <strong>a</strong> in <code>f</code> (e.g. <code>a*z*(1-z)</code>) to
+              get a live slider that sweeps it in real time.
             </li>
           </ul>
 

@@ -132,6 +132,7 @@ class Evaluator {
       const scope = new Map<string, Complex>([
         ["z", z],
         ["c", c],
+        ["a", this.scope.get("a") ?? [0, 0]],
       ]);
       return new Evaluator(scope, this.fAst, this.depth + 1).complex(this.fAst);
     }
@@ -144,27 +145,38 @@ class Evaluator {
 }
 
 /** Evaluate an AST with the given `z` and `c`; `fAst` enables `f(...)` calls. */
-export function evaluate(ast: Node, z: Complex, c: Complex, fAst?: Node): Value {
+export function evaluate(
+  ast: Node,
+  z: Complex,
+  c: Complex,
+  fAst?: Node,
+  a: Complex = [0, 0],
+): Value {
   const scope = new Map<string, Complex>([
     ["z", z],
     ["c", c],
+    ["a", a],
   ]);
   return new Evaluator(scope, fAst, 0).eval(ast);
 }
 
-/** Build a reusable `(z, c) → Complex` closure from an `f` AST. */
-export function makeComplexFn(ast: Node): (z: Complex, c: Complex) => Complex {
+/** Build a reusable `(z, c) → Complex` closure from an `f` AST, with the live `a`. */
+export function makeComplexFn(ast: Node, a: Complex = [0, 0]): (z: Complex, c: Complex) => Complex {
   return (z, c) => {
-    const v = evaluate(ast, z, c, ast);
+    const v = evaluate(ast, z, c, ast, a);
     if (!isComplex(v)) throw new ExprError("f must return a number", 0);
     return v;
   };
 }
 
 /** Build a reusable `(z, c) → boolean` closure from an `escape` AST (may call `f`). */
-export function makeEscapeFn(escapeAst: Node, fAst: Node): (z: Complex, c: Complex) => boolean {
+export function makeEscapeFn(
+  escapeAst: Node,
+  fAst: Node,
+  a: Complex = [0, 0],
+): (z: Complex, c: Complex) => boolean {
   return (z, c) => {
-    const v = evaluate(escapeAst, z, c, fAst);
+    const v = evaluate(escapeAst, z, c, fAst, a);
     return isComplex(v) ? v[0] !== 0 : v;
   };
 }

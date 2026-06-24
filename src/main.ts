@@ -384,6 +384,7 @@ function init(): void {
     syncDynamicalC();
     reportCompileErrors();
     renderFormula();
+    updateParamAVisibility();
   }
 
   /** Load a named preset into the inputs and both plots. */
@@ -395,6 +396,7 @@ function init(): void {
     syncDynamicalC();
     reportCompileErrors();
     renderFormula();
+    updateParamAVisibility();
   }
 
   /** Render a plot at the chosen size and download it, with button feedback. */
@@ -579,6 +581,20 @@ function init(): void {
     }
   }
 
+  /** Apply the live parameter `a` slider value to both plots and update its readout. */
+  function applyParamA(): void {
+    const value = Number(byId<HTMLInputElement>("param-a").value);
+    byId("param-a-value").textContent = value.toFixed(2);
+    parameterView.plot.setParamA(value);
+    dynamicalView.plot.setParamA(value);
+  }
+
+  /** Show the `a` slider only when the current f or escape references `a`. */
+  function updateParamAVisibility(): void {
+    const uses = parameterView.plot.usesParamA || dynamicalView.plot.usesParamA;
+    byId("param-a-field").hidden = !uses;
+  }
+
   /**
    * Phase 17 — animation recording. Drive `apply(t)` (t: 0→1) for `durationMs` via
    * requestAnimationFrame while capturing `plot`'s canvas to a WebM clip, then download it
@@ -712,6 +728,7 @@ function init(): void {
   byId("autoiter").addEventListener("change", applyAutoIter);
   byId("accumulate").addEventListener("change", applyAccumulate);
   byId("perturbation").addEventListener("change", applyPerturbation);
+  byId("param-a").addEventListener("input", applyParamA);
 
   byId("apply_all").addEventListener("click", applyChanges);
   byId("apply_preset").addEventListener("click", () => {
@@ -752,6 +769,8 @@ function init(): void {
     applyAccumulate();
     byId<HTMLInputElement>("perturbation").checked = false;
     applyPerturbation();
+    byId<HTMLInputElement>("param-a").value = "1";
+    applyParamA();
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
   });
   byId("print_param_space").addEventListener("click", () => {
@@ -804,6 +823,8 @@ function init(): void {
   renderFormula();
   setupTour();
   setupTheme();
+  applyParamA();
+  updateParamAVisibility();
 
   // Dev-only: expose the two views so the renderer can be driven/inspected from the
   // console (e.g. the synchronous `renderToImageData` path, which works even when a

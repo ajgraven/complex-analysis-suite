@@ -184,6 +184,8 @@ precision highp int;
 ${baseStdlib}
 ${COMPLEX_DERIVED_GLSL}
 
+uniform vec2 uA; // live parameter a — declared before fFn/escapeFn, which reference it when free
+
 ${compileF(fAst)}
 ${compileEscape(escapeAst)}
 

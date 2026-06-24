@@ -126,6 +126,7 @@ export class PlotView {
           nplot: Math.max(1, Math.round(Number(this.plot.nplot))),
           fractType: this.fractType,
           critical: this.showCritical,
+          a: this.plot.paramA,
           size,
         });
         ctx.drawImage(ov, 0, 0);
@@ -200,6 +201,7 @@ export class PlotView {
       nplot: Math.max(1, Math.round(Number(this.plot.nplot))),
       fractType: this.fractType,
       critical: this.showCritical,
+      a: this.plot.paramA,
       size: this.overlay.width,
     });
   }

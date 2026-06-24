@@ -11,7 +11,7 @@
  */
 
 import type { Node } from "./ast";
-import { ExprError } from "./ast";
+import { ExprError, isFreeParameter } from "./ast";
 
 /** Function-call names for unary complex builtins → GLSL stdlib names. */
 const UNARY_GLSL: Record<string, string> = {
@@ -160,14 +160,21 @@ function emitBody(ast: Node, emitFinal: (n: Node) => string): string {
   return lines.join("\n");
 }
 
+/** Live-parameter alias: bind `a` to the `uA` uniform when it's a free variable (used
+ *  but not assigned as a local of the same name). Empty otherwise, so locals named `a`
+ *  keep working. */
+function paramAlias(ast: Node): string {
+  return isFreeParameter(ast, "a") ? "  cvec a = uA;\n" : "";
+}
+
 /** GLSL for `cvec fFn(cvec z, cvec c) { … }`. */
 export function compileF(ast: Node): string {
-  return `cvec fFn(cvec z, cvec c) {\n${emitBody(ast, emitComplex)}\n}`;
+  return `cvec fFn(cvec z, cvec c) {\n${paramAlias(ast)}${emitBody(ast, emitComplex)}\n}`;
 }
 
 /** GLSL for `bool escapeFn(cvec z, cvec c) { … }`. */
 export function compileEscape(ast: Node): string {
-  return `bool escapeFn(cvec z, cvec c) {\n${emitBody(ast, emitBool)}\n}`;
+  return `bool escapeFn(cvec z, cvec c) {\n${paramAlias(ast)}${emitBody(ast, emitBool)}\n}`;
 }
 
 export { isBool };
