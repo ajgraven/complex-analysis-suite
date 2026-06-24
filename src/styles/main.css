@@ -143,6 +143,15 @@ select {
   width: 9rem;
 }
 
+/* Live KaTeX rendering of the entered f(z, c), under the formula input. */
+.formula-latex {
+  margin-top: 0.3rem;
+  min-height: 1.3em;
+  max-width: 22rem;
+  overflow-x: auto;
+  color: var(--fg);
+}
+
 textarea {
   resize: vertical;
 }

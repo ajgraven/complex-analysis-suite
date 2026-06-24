@@ -112,6 +112,8 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
   **reset** reverts every option (including colouring) to the selected preset.
 - Choose a colour scheme with the **coloring** control — see
   [Colouring](#colouring).
+- The entered **f(z, c)** is typeset live (KaTeX) beneath the formula input, and the
+  **tour** button runs a short guided walkthrough of the interface.
 
 ## Saving images
 

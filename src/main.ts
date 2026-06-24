@@ -17,6 +17,12 @@ import { showToast } from "./ui/toast";
 import { validateInputs, type FieldError } from "./ui/validate";
 import { DEFAULT_GRADIENT } from "./palettes";
 import { setupGradientEditor } from "./ui/gradient";
+import { parse } from "./expr/parser";
+import { toLatex } from "./expr/latex";
+import katex from "katex";
+import "katex/dist/katex.min.css";
+import { driver } from "driver.js";
+import "driver.js/dist/driver.css";
 import {
   INPUT_IDS,
   clearAllInvalid,
@@ -83,6 +89,68 @@ function hoverReadout(elementId: string): (coord: Vec2 | null) => void {
   return (coord) => {
     el.textContent = coord ? formatCoord(coord) : "";
   };
+}
+
+/** Typeset the current f(z,c) with KaTeX into the formula display (best-effort). */
+function renderFormula(): void {
+  const el = document.getElementById("formula-latex");
+  if (!el) return;
+  try {
+    katex.render(toLatex(parse(getFInput())), el, { throwOnError: false, displayMode: false });
+  } catch {
+    el.textContent = "";
+  }
+}
+
+/** Wire the "tour" button to a short guided walkthrough (driver.js). */
+function setupTour(): void {
+  const btn = document.getElementById("tour-btn");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    driver({
+      showProgress: true,
+      steps: [
+        {
+          element: "#MCSCanvas",
+          popover: {
+            title: "Parameter space",
+            description:
+              "Each point is a value of c. Drag the white point to choose c — the dynamical plane updates live.",
+          },
+        },
+        {
+          element: "#JCSCanvas",
+          popover: {
+            title: "Dynamical plane",
+            description:
+              "The Julia-style set for the chosen c. Drag its white point to move the orbit start.",
+          },
+        },
+        {
+          element: "#inpf",
+          popover: {
+            title: "Function f(z, c)",
+            description: "Edit the iterated function — it is typeset live just below.",
+          },
+        },
+        {
+          element: "#fractal_presets",
+          popover: {
+            title: "Presets",
+            description: "Jump to a built-in family — Mandelbrot, burning ship, magnet, and more.",
+          },
+        },
+        {
+          element: "#mode",
+          popover: {
+            title: "Colouring & more",
+            description:
+              "Choose a colouring mode and palette, or enable lighting, overlays, or Newton's method.",
+          },
+        },
+      ],
+    }).drive();
+  });
 }
 
 /** Show the first-run onboarding once (dismissal remembered in localStorage). */
@@ -280,6 +348,7 @@ function init(): void {
     dynamicalView.setRes(getDynResInput());
     syncDynamicalC();
     reportCompileErrors();
+    renderFormula();
   }
 
   /** Load a named preset into the inputs and both plots. */
@@ -290,6 +359,7 @@ function init(): void {
     parameterView.applyPreset(paramPresets[name]);
     syncDynamicalC();
     reportCompileErrors();
+    renderFormula();
   }
 
   /** Render a plot at the chosen size and download it, with button feedback. */
@@ -543,6 +613,8 @@ function init(): void {
 
   disableUnsupportedSizes();
   setupOnboarding();
+  renderFormula();
+  setupTour();
 
   // Dev-only: expose the two views so the renderer can be driven/inspected from the
   // console (e.g. the synchronous `renderToImageData` path, which works even when a
