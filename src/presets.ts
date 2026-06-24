@@ -33,12 +33,17 @@ export interface Preset {
 
 export type PresetName =
   | "mandelbrot"
+  | "cubic"
   | "tricorn"
   | "burning ship"
   | "butterfly"
+  | "celtic"
+  | "magnet"
+  | "lambda"
   | "exponential map"
   | "teardrop Schwarz"
-  | "exp Schwarz";
+  | "exp Schwarz"
+  | "biomorph";
 
 export const paramPresets: Record<PresetName, Preset> = {
   mandelbrot: {
@@ -103,6 +108,51 @@ export const paramPresets: Record<PresetName, Preset> = {
     escape: "abs(lambertw(-c^2/f(z,c)))>abs(c)",
     center: [1, 0],
     zoom: 0.5,
+  },
+  cubic: {
+    f: "z^3+c",
+    c: "0.3+0.3*i",
+    n: "100",
+    nplot: "7",
+    escape: "abs(z)>2",
+    zoom: 0.7,
+    center: [0, 0],
+  },
+  celtic: {
+    f: "abs(re(z^2))+i*im(z^2)+c",
+    c: "-0.6+0.4*i",
+    n: "100",
+    nplot: "6",
+    escape: "abs(z)>2",
+    zoom: 0.6,
+    center: [-0.4, 0],
+  },
+  magnet: {
+    f: "((z^2+c-1)/(2*z+c-2))^2",
+    c: "1.5+0.5*i",
+    n: "100",
+    nplot: "6",
+    escape: "abs(z)>3",
+    zoom: 0.45,
+    center: [1.5, 0],
+  },
+  lambda: {
+    f: "c*z*(1-z)",
+    c: "2+0.5*i",
+    n: "100",
+    nplot: "6",
+    escape: "abs(z)>10",
+    zoom: 0.4,
+    center: [1, 0],
+  },
+  biomorph: {
+    f: "z^3+c",
+    c: "0.5+0*i",
+    n: "30",
+    nplot: "6",
+    escape: "if(abs(re(z))>10,true,abs(im(z))>10)",
+    zoom: 0.6,
+    center: [0, 0],
   },
 };
 
@@ -177,6 +227,56 @@ export const dynPresets: Record<PresetName, Preset> = {
     escape: "if(re(z)<-5,true,if(abs(lambertw(-c^2/f(z,c)))>abs(c),true,false));",
     center: [6, 0],
     zoom: 0.15,
+  },
+  cubic: {
+    f: "z^3+c",
+    c: "0.3+0.3*i",
+    z0: "0",
+    n: "100",
+    nplot: "7",
+    escape: "abs(z)>2",
+    zoom: 0.7,
+    center: [0, 0],
+  },
+  celtic: {
+    f: "abs(re(z^2))+i*im(z^2)+c",
+    c: "-0.6+0.4*i",
+    z0: "0",
+    n: "100",
+    nplot: "6",
+    escape: "abs(z)>2",
+    zoom: 0.6,
+    center: [0, 0],
+  },
+  magnet: {
+    f: "((z^2+c-1)/(2*z+c-2))^2",
+    c: "1.5+0.5*i",
+    z0: "0",
+    n: "100",
+    nplot: "6",
+    escape: "abs(z)>3",
+    zoom: 0.5,
+    center: [1, 0],
+  },
+  lambda: {
+    f: "c*z*(1-z)",
+    c: "2.5+0.3*i",
+    z0: "0.5",
+    n: "100",
+    nplot: "6",
+    escape: "abs(z)>10",
+    zoom: 0.5,
+    center: [0.5, 0],
+  },
+  biomorph: {
+    f: "z^3+c",
+    c: "0.5+0*i",
+    z0: "0",
+    n: "30",
+    nplot: "6",
+    escape: "if(abs(re(z))>10,true,abs(im(z))>10)",
+    zoom: 0.5,
+    center: [0, 0],
   },
 };
 

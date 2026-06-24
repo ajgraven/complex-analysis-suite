@@ -77,8 +77,10 @@ Presets live in [`src/presets.ts`](src/presets.ts) as two dictionaries
 | `center` | Plot centre `[x, y]`                                |
 | `z0`     | Orbit start point (dynamical-plane presets only)    |
 
-Included presets: Mandelbrot set, tricorn, burning ship, butterfly,
-exponential map, teardrop Schwarz, exp Schwarz.
+Included presets (grouped in the picker): Mandelbrot and cubic (`z³+c`);
+the abs-variants tricorn, burning ship, butterfly, and celtic; the rational/logistic
+magnet and lambda; the transcendental exponential map, teardrop Schwarz, and exp
+Schwarz; and a biomorph.
 
 ### Supported expression objects
 

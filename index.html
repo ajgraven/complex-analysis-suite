@@ -176,13 +176,28 @@ z^2+c</textarea
             <label for="fractal_presets">Presets</label>
             <div class="inline-actions">
               <select id="fractal_presets">
-                <option value="mandelbrot">Mandelbrot set</option>
-                <option value="tricorn">tricorn</option>
-                <option value="burning ship">burning ship</option>
-                <option value="butterfly">butterfly</option>
-                <option value="exponential map">exponential map</option>
-                <option value="teardrop Schwarz">teardrop Schwarz</option>
-                <option value="exp Schwarz">exp Schwarz</option>
+                <optgroup label="Polynomial">
+                  <option value="mandelbrot">Mandelbrot set</option>
+                  <option value="cubic">cubic (z³+c)</option>
+                </optgroup>
+                <optgroup label="Abs variants">
+                  <option value="tricorn">tricorn</option>
+                  <option value="burning ship">burning ship</option>
+                  <option value="butterfly">butterfly</option>
+                  <option value="celtic">celtic</option>
+                </optgroup>
+                <optgroup label="Rational / logistic">
+                  <option value="magnet">magnet</option>
+                  <option value="lambda">lambda (logistic)</option>
+                </optgroup>
+                <optgroup label="Transcendental">
+                  <option value="exponential map">exponential map</option>
+                  <option value="teardrop Schwarz">teardrop Schwarz</option>
+                  <option value="exp Schwarz">exp Schwarz</option>
+                </optgroup>
+                <optgroup label="Other">
+                  <option value="biomorph">biomorph</option>
+                </optgroup>
               </select>
               <button id="apply_preset" type="button">apply</button>
             </div>
