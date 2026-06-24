@@ -152,6 +152,29 @@ select {
   color: var(--fg);
 }
 
+/* Collapsible advanced-control groups (Effects, Dynamics & overlays). */
+.control-group {
+  flex-basis: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.7rem;
+}
+
+.control-group > summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--muted);
+  user-select: none;
+}
+
+.control-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin-top: 0.6rem;
+}
+
 textarea {
   resize: vertical;
 }
