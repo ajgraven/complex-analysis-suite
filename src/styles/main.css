@@ -139,6 +139,10 @@ select {
   color: var(--fg);
 }
 
+.field input[type="range"] {
+  width: 9rem;
+}
+
 textarea {
   resize: vertical;
 }
@@ -390,4 +394,73 @@ select.invalid {
 
 .onboarding-card button {
   margin-top: 0.5rem;
+}
+
+/* --- Custom gradient editor ------------------------------------------- */
+.gradient-editor {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0.6rem;
+}
+
+.gradient-bar {
+  position: relative;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: copy;
+  touch-action: none;
+}
+
+.gradient-handles {
+  position: absolute;
+  inset: 0;
+}
+
+.gradient-handle {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 12px;
+  transform: translateX(-50%);
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+  cursor: grab;
+}
+
+.gradient-handle.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.gradient-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gradient-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.gradient-io {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.gradient-io textarea {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.7rem;
+}
+
+.gradient-io textarea.invalid {
+  border-color: #c0392b;
+  background: #fdecea;
 }

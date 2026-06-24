@@ -195,6 +195,9 @@ z^2+c</textarea
               <option value="histogram">Escape time (histogram)</option>
               <option value="distance">Distance (edges)</option>
               <option value="orbit">Orbit trap</option>
+              <option value="stripe">Stripe average</option>
+              <option value="triangle">Triangle average</option>
+              <option value="decomposition">Binary decomposition</option>
               <option value="domain">Domain coloring</option>
             </select>
           </div>
@@ -205,7 +208,19 @@ z^2+c</textarea
               <option value="viridis">Viridis</option>
               <option value="magma">Magma</option>
               <option value="grayscale">Grayscale</option>
+              <option value="custom">Custom gradient</option>
             </select>
+          </div>
+          <div class="field">
+            <label for="paletteRotation">rotation</label>
+            <input
+              type="range"
+              id="paletteRotation"
+              min="0"
+              max="100"
+              value="0"
+              title="Rotate the palette (colour cycling)"
+            />
           </div>
           <div class="field">
             <label for="aa">anti-aliasing</label>
@@ -245,6 +260,16 @@ z^2+c</textarea
               /></label>
             </div>
           </div>
+          <div class="field">
+            <label class="checkbox" for="outline">
+              <input type="checkbox" id="outline" /> boundary outline
+            </label>
+            <div class="post-controls" title="Boundary outline width">
+              <label
+                >width <input type="range" id="outlineWidth" min="0" max="100" value="30" disabled
+              /></label>
+            </div>
+          </div>
         </div>
         <div class="inline-actions">
           <button id="apply_all" type="button">apply changes</button>
@@ -257,6 +282,13 @@ z^2+c</textarea
           </button>
         </div>
       </section>
+
+      <section
+        id="gradient-editor"
+        class="panel gradient-editor"
+        aria-label="Custom gradient editor"
+        hidden
+      ></section>
 
       <!-- ============================ Downloads ====================== -->
       <section class="panel" aria-label="Download plots">
@@ -347,9 +379,11 @@ z^2+c</textarea
             </li>
             <li>
               Pick a colouring mode, palette, and anti-aliasing level with the coloring controls
-              (smooth, histogram, distance/edges, orbit trap, and domain colouring), and toggle
-              <strong>relief lighting</strong> to shade the fractal as a lit 3-D surface or
-              <strong>post-processing</strong> for an on-screen vignette and gamma grade.
+              (smooth, histogram, distance/edges, orbit trap, stripe/triangle average, binary
+              decomposition, and domain colouring), design a <strong>custom gradient</strong> or
+              spin the rotation slider to cycle colours, and toggle
+              <strong>relief lighting</strong>, <strong>post-processing</strong> (vignette/gamma),
+              or a <strong>boundary outline</strong>.
             </li>
           </ul>
 

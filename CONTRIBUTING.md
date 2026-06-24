@@ -110,16 +110,22 @@ checks the `f`/`escape` strings parse.
 
 ### Change the colouring
 
-Colouring is driven by three shader uniforms set in
+Colouring is driven by shader uniforms set in
 [`src/render/shaderBuilder.ts`](src/render/shaderBuilder.ts): `uMode` (escape /
-smooth / histogram / distance / orbit-trap / domain), `uPalette` (classic /
-viridis / magma / grayscale), and `uAA` (supersampling). The per-pixel logic lives
-in `colorAt` (and `distanceColor` for the edge mode); `palette(t)` maps a scalar to
-RGB. To add a **palette**, extend `palette()` and add an `<option>` to the
-`#palette` dropdown (mapped in `PALETTES` in [`src/main.ts`](src/main.ts)). To add a
-**mode**, add a branch in `colorAt`, an `<option>` to `#mode`, and an entry in
-`MODES`. Histogram is special: it needs the CPU CDF pre-pass in `GLPlot.updateCdf`
-(an escape-time render → readback → lookup texture).
+smooth / histogram / distance / orbit-trap / stripe / triangle / decomposition /
+domain), `uPalette` (classic / viridis / magma / grayscale / custom), `uAA`
+(supersampling), and the gradient-rotation / lighting / post / outline uniforms. The
+per-pixel logic lives in `colorAt` (and `distanceColor` for the edge mode);
+`palette(t)` maps a scalar to RGB. To add a **mode**, add a branch in `colorAt`, an
+`<option>` to `#mode`, and an entry in `MODES` ([`src/main.ts`](src/main.ts)).
+Histogram is special: it needs the CPU CDF pre-pass in `GLPlot.updateCdf` (an
+escape-time render → readback → lookup texture).
+
+Built-in **palettes** live in `palette()`; the **Custom gradient** (`uPalette == 4`)
+samples a 256×1 ramp texture built by [`src/palettes.ts`](src/palettes.ts)
+(`buildGradient`) from the colour stops the editor
+([`src/ui/gradient.ts`](src/ui/gradient.ts)) emits via `GLPlot.setGradient`. The
+gradient texture is on texture unit 1 (`uCdf` keeps unit 0).
 
 Relief lighting and post-processing are separate shader stages, not palette/mode
 branches: lighting is applied in `main()` after the per-pixel colour

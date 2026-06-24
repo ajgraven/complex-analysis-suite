@@ -146,10 +146,18 @@ classic look; all are shader uniforms, so switching never recompiles):
   - _Distance (edges)_ — a screen-space distance estimate that highlights the
     boundary and filaments.
   - _Orbit trap_ — colours by how close the orbit passes to the axes.
+  - _Stripe average_ — average of `½ + ½·sin(s·arg z)` over the orbit (smoothed),
+    the classic radial "stripe" filaments; works for any `f`.
+  - _Triangle average_ — triangle-inequality average (exact for `z² + c`,
+    approximate for other `f`), giving flame-like filaments.
+  - _Binary decomposition_ — escape-time bands split by the escape half-plane.
   - _Domain colouring_ — hue = arg, brightness = magnitude of one application of
     `f(z, c)` (most meaningful on the dynamical plane; ignores the palette).
-- **Palette** — Classic, Viridis (colourblind-safe), Magma, or Grayscale; applies
-  to the scalar modes.
+- **Palette** — Classic, Viridis (colourblind-safe), Magma, Grayscale, or a
+  **Custom gradient** — an editable colour-stop ramp (drag/add/remove stops on the
+  preview bar, randomise, import/export JSON). Applies to the scalar modes.
+- **Rotation** — rotates the palette through the colours (colour cycling); applies
+  to every palette.
 - **Anti-aliasing** — Off / 2× / 3× supersampling, on full-resolution renders only
   (disabled during interaction for responsiveness).
 - **Relief lighting** — an optional toggle that shades the fractal as a lit 3-D
@@ -160,6 +168,9 @@ classic look; all are shader uniforms, so switching never recompiles):
 - **Post-processing** — an optional final fullscreen pass adding a vignette and
   output gamma. On-screen only for now: exported PNGs include lighting (it lives in
   the fractal shader) but not this grade.
+- **Boundary outline** — an optional overlay that darkens the set boundary
+  (screen-space, from the escape-field gradient) with a width slider; composes with
+  any escape-based mode.
 
 ## Architecture
 

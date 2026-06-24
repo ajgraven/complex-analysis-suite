@@ -15,6 +15,8 @@ import { dynPresets, paramPresets, type Preset, type PresetName } from "./preset
 import { byId } from "./ui/dom";
 import { showToast } from "./ui/toast";
 import { validateInputs, type FieldError } from "./ui/validate";
+import { DEFAULT_GRADIENT } from "./palettes";
+import { setupGradientEditor } from "./ui/gradient";
 import {
   INPUT_IDS,
   clearAllInvalid,
@@ -47,8 +49,17 @@ const MODES: Record<string, number> = {
   orbit: 3,
   domain: 4,
   histogram: 5,
+  stripe: 7,
+  triangle: 8,
+  decomposition: 9,
 };
-const PALETTES: Record<string, number> = { classic: 0, viridis: 1, magma: 2, grayscale: 3 };
+const PALETTES: Record<string, number> = {
+  classic: 0,
+  viridis: 1,
+  magma: 2,
+  grayscale: 3,
+  custom: 4,
+};
 
 /** Show the WebGL2-unavailable banner (or a generic init error) and stop. */
 function showFatalBanner(message: string): void {
@@ -175,6 +186,11 @@ function init(): void {
   );
 
   const errorBox = byId<HTMLDivElement>("input-errors");
+
+  const gradientEditor = setupGradientEditor(byId("gradient-editor"), DEFAULT_GRADIENT, (stops) => {
+    parameterView.plot.setGradient(stops);
+    dynamicalView.plot.setGradient(stops);
+  });
 
   /** Show the given field errors (red-border the fields, list the reasons). */
   function showInputErrors(errors: FieldError[]): void {
@@ -360,8 +376,12 @@ function init(): void {
     const mode = MODES[byId<HTMLSelectElement>("mode").value] ?? 0;
     const palette = PALETTES[byId<HTMLSelectElement>("palette").value] ?? 0;
     const aa = Math.max(1, Number(byId<HTMLSelectElement>("aa").value) || 1);
-    parameterView.plot.setColoring(mode, palette, aa);
-    dynamicalView.plot.setColoring(mode, palette, aa);
+    const rotation = Number(byId<HTMLInputElement>("paletteRotation").value) / 100; // 0..1
+    for (const v of [parameterView, dynamicalView]) {
+      v.plot.setColoring(mode, palette, aa);
+      v.plot.setGradientRotation(rotation);
+    }
+    gradientEditor.setVisible(byId<HTMLSelectElement>("palette").value === "custom");
   }
 
   /** Apply the relief-lighting controls (checkbox + azimuth/elevation/depth) to both plots. */
@@ -390,6 +410,15 @@ function init(): void {
     }
   }
 
+  /** Apply the boundary-outline controls (checkbox + width) to both plots. */
+  function applyOutline(): void {
+    const on = byId<HTMLInputElement>("outline").checked;
+    const width = Number(byId<HTMLInputElement>("outlineWidth").value) / 20; // slider 0–100 → 0–5
+    parameterView.plot.setOutline(on, width);
+    dynamicalView.plot.setOutline(on, width);
+    byId<HTMLInputElement>("outlineWidth").disabled = !on;
+  }
+
   // --- wire up the UI controls ------------------------------------------
 
   document.addEventListener("keyup", (event) => {
@@ -399,6 +428,7 @@ function init(): void {
   for (const id of ["mode", "palette", "aa"]) {
     byId(id).addEventListener("change", applyColoring);
   }
+  byId("paletteRotation").addEventListener("input", applyColoring);
   applyColoring();
 
   for (const id of ["light", "lightAz", "lightEl", "lightHeight"]) {
@@ -411,6 +441,11 @@ function init(): void {
   }
   applyPost();
 
+  for (const id of ["outline", "outlineWidth"]) {
+    byId(id).addEventListener("input", applyOutline);
+  }
+  applyOutline();
+
   byId("apply_all").addEventListener("click", applyChanges);
   byId("apply_preset").addEventListener("click", () => {
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
@@ -420,6 +455,10 @@ function init(): void {
     byId<HTMLSelectElement>("mode").value = "escape";
     byId<HTMLSelectElement>("palette").value = "classic";
     byId<HTMLSelectElement>("aa").value = "1";
+    byId<HTMLInputElement>("paletteRotation").value = "0";
+    gradientEditor.setStops(DEFAULT_GRADIENT);
+    parameterView.plot.setGradient(DEFAULT_GRADIENT);
+    dynamicalView.plot.setGradient(DEFAULT_GRADIENT);
     applyColoring();
     byId<HTMLInputElement>("light").checked = false;
     byId<HTMLInputElement>("lightAz").value = "135";
@@ -430,6 +469,9 @@ function init(): void {
     byId<HTMLInputElement>("postVignette").value = "30";
     byId<HTMLInputElement>("postGamma").value = "50";
     applyPost();
+    byId<HTMLInputElement>("outline").checked = false;
+    byId<HTMLInputElement>("outlineWidth").value = "30";
+    applyOutline();
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
   });
   byId("print_param_space").addEventListener("click", () => {

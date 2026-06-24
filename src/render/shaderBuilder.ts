@@ -84,6 +84,10 @@ uniform sampler2D uCdf; // histogram equalisation lookup (mode 5), indexed by es
 uniform int uLight;         // relief lighting on/off
 uniform vec3 uLightDir;     // normalised light direction (from azimuth/elevation)
 uniform float uLightHeight; // relief depth — scales the escape-time gradient
+uniform sampler2D uGradient;   // custom gradient ramp (uPalette == 4)
+uniform float uGradientOffset; // palette rotation / colour cycling
+uniform int uOutline;          // boundary-outline overlay on/off
+uniform float uOutlineWidth;   // boundary-outline strength
 out vec4 fragColor;
 
 // Perceptual colormaps as degree-6 polynomial fits (t in [0,1]). viridis/magma
@@ -114,7 +118,8 @@ vec3 classicColor(float t) {
   return vec3(4.0 * s, 1.3 * s, (1.0 - s) * (1.0 - s) * 0.7);
 }
 vec3 palette(float t) {
-  t = clamp(t, 0.0, 1.0);
+  t = fract(t + uGradientOffset); // rotation / colour cycling
+  if (uPalette == 4) return texture(uGradient, vec2(t, 0.5)).rgb; // custom gradient
   if (uPalette == 1) return viridis(t);
   if (uPalette == 2) return magma(t);
   if (uPalette == 3) return vec3(t);
@@ -144,15 +149,44 @@ ${coordinate}
   }
 
   float trap = 1e20;
+  float avgSum = 0.0, avgLast = 0.0, avgPrev = 0.0, avgCount = 0.0; // stripe / triangle orbit averages
   int kmax = 0;
   for (int k = 0; k < uN; k++) {
     if (escapeFn(z, cc)) break;
+    cvec zp = z;
     z = fFn(z, cc);
     kmax = k + 1;
     trap = min(trap, min(abs(cre1(z)), abs(cre1(cim(z))))); // cross (axes) trap
+    if (uMode == 7 && k > 0) { // stripe average colouring
+      float add = 0.5 + 0.5 * sin(5.0 * cre1(carg(z)));
+      avgPrev = avgLast; avgLast = add; avgSum += add; avgCount += 1.0;
+    } else if (uMode == 8 && k > 0) { // triangle inequality average
+      float zn2 = cabsf(zp); zn2 = zn2 * zn2;
+      float ca = cabsf(cc);
+      float lo = abs(zn2 - ca), hi = zn2 + ca;
+      float add = (hi > lo + 1e-12) ? clamp((cabsf(z) - lo) / (hi - lo), 0.0, 1.0) : 0.0;
+      avgPrev = avgLast; avgLast = add; avgSum += add; avgCount += 1.0;
+    }
   }
   if (uMode == 3) return palette(1.0 - clamp(sqrt(trap) * 1.3, 0.0, 1.0)); // orbit trap (axes)
+
+  if (uMode == 7 || uMode == 8) {
+    // Stripe / triangle-inequality average, smoothed by the escape fraction.
+    if (kmax == uN || avgCount < 1.0) return vec3(0.0);
+    float az = cabsf(z);
+    float frac = (az > 1.0) ? fract(float(kmax) + 1.0 - log(log(az)) / log(2.0)) : 1.0;
+    float avg = avgSum / avgCount;
+    float prev = (avgCount > 1.0) ? (avgSum - avgLast) / (avgCount - 1.0) : avg;
+    return palette(mix(prev, avg, frac));
+  }
+
   if (kmax == uN) return vec3(0.0); // never escaped → interior
+
+  if (uMode == 9) {
+    // Binary decomposition: escape-time bands split by the escape half-plane.
+    vec3 c = palette(float(kmax) / float(uN));
+    return (cre1(cim(z)) < 0.0) ? c * 0.6 : c;
+  }
 
   if (uMode == 5) {
     // Histogram equalisation: map escape time through the precomputed CDF so each
@@ -228,8 +262,7 @@ ${coordinate}
 // Relief-shade a base colour: build a surface normal from the screen-space gradient
 // of the escape-time height (works for any f — no analytic derivative needed), then
 // apply a Lambertian + specular + hemisphere model. Interior pixels stay flat.
-vec3 applyLighting(vec3 col, vec2 fragXY) {
-  float h = reliefHeight(fragXY);
+vec3 applyLighting(vec3 col, float h) {
   if (h < 0.0) return col;
   vec2 g = vec2(dFdx(h), dFdy(h)) * uLightHeight;
   vec3 N = normalize(vec3(-g, 1.0));
@@ -262,7 +295,15 @@ void main() {
     }
   }
   vec3 col = acc / float(n * n);
-  if (uLight == 1 && uMode != 4) col = applyLighting(col, gl_FragCoord.xy);
+  if ((uLight == 1 || uOutline == 1) && uMode != 4) {
+    float h = reliefHeight(gl_FragCoord.xy);
+    if (uLight == 1) col = applyLighting(col, h);
+    if (uOutline == 1 && h >= 0.0) {
+      // Screen-space boundary emphasis: darken where the escape field changes fastest.
+      float g = length(vec2(dFdx(h), dFdy(h)));
+      col = mix(col, vec3(0.0), clamp(g * uOutlineWidth, 0.0, 1.0));
+    }
+  }
   fragColor = vec4(col, 1.0);
 }
 `;

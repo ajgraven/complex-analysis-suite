@@ -20,6 +20,7 @@ import {
   VERTEX_SHADER,
   type Precision,
 } from "./shaderBuilder";
+import { buildGradient, DEFAULT_GRADIENT, type GradientStop } from "../palettes";
 
 export type FractType = "dyn" | "param";
 
@@ -73,6 +74,10 @@ interface Uniforms {
   uLight: WebGLUniformLocation | null;
   uLightDir: WebGLUniformLocation | null;
   uLightHeight: WebGLUniformLocation | null;
+  uGradient: WebGLUniformLocation | null;
+  uGradientOffset: WebGLUniformLocation | null;
+  uOutline: WebGLUniformLocation | null;
+  uOutlineWidth: WebGLUniformLocation | null;
 }
 
 interface CompiledProgram {
@@ -154,6 +159,8 @@ export class GLPlot {
   private sceneFbo: WebGLFramebuffer | null = null;
   private sceneTex: WebGLTexture | null = null;
   private sceneSize = 0;
+  /** Custom-gradient palette: a 256×1 ramp texture sampled when uPalette == 4. */
+  private gradientTex: WebGLTexture | null = null;
   private renderScheduled = false;
   private _draft = false;
   /** Index into {@link PROGRESSIVE_LADDER} for the next frame; reset to 0 on each change. */
@@ -187,6 +194,10 @@ export class GLPlot {
   private _post = false; // post-processing on/off
   private _vignette = 0.3; // vignette strength (0..1)
   private _gamma = 1.0; // output gamma (1 = unchanged)
+  private _gradientStops: GradientStop[] = DEFAULT_GRADIENT; // custom-gradient stops
+  private _gradientOffset = 0; // palette rotation (0..1)
+  private _outline = false; // boundary outline on/off
+  private _outlineWidth = 1.5; // boundary outline strength
   private _res: number;
 
   constructor(canvas: HTMLCanvasElement, preset: Preset, fractType: FractType, res = 500) {
@@ -201,6 +212,7 @@ export class GLPlot {
     } | null;
     this.setupQuad();
     this.compilePostProgram();
+    this.uploadGradient();
     this.applyRenderSize();
     this.ApplyPreset(preset);
   }
@@ -275,6 +287,10 @@ export class GLPlot {
       uLight: gl.getUniformLocation(program, "uLight"),
       uLightDir: gl.getUniformLocation(program, "uLightDir"),
       uLightHeight: gl.getUniformLocation(program, "uLightHeight"),
+      uGradient: gl.getUniformLocation(program, "uGradient"),
+      uGradientOffset: gl.getUniformLocation(program, "uGradientOffset"),
+      uOutline: gl.getUniformLocation(program, "uOutline"),
+      uOutlineWidth: gl.getUniformLocation(program, "uOutlineWidth"),
     };
   }
 
@@ -483,6 +499,17 @@ export class GLPlot {
       gl.bindTexture(gl.TEXTURE_2D, this.cdfTex);
       gl.uniform1i(u.uCdf, 0);
     }
+    // Custom-gradient palette samples uGradient on texture unit 1 (uCdf uses 0).
+    if (this.gradientTex) {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.gradientTex);
+      gl.uniform1i(u.uGradient, 1);
+      gl.activeTexture(gl.TEXTURE0); // leave unit 0 active (updateCdf assumes it)
+    }
+    gl.uniform1f(u.uGradientOffset, this._gradientOffset);
+    const outlineOn = this._outline && mode !== 6 && !this._draft;
+    gl.uniform1i(u.uOutline, outlineOn ? 1 : 0);
+    gl.uniform1f(u.uOutlineWidth, this._outlineWidth);
     // Relief lighting: off for the raw pre-pass (mode 6) and while drafting (it
     // re-walks the escape loop, so we keep interaction snappy without it).
     const lightOn = this._light && mode !== 6 && !this._draft;
@@ -584,6 +611,30 @@ export class GLPlot {
     } catch (err) {
       console.warn(`[${this.fractType}] post-processing program failed (disabled):`, err);
     }
+  }
+
+  /** Build and upload the custom-gradient ramp texture from the current stops. */
+  private uploadGradient(): void {
+    const gl = this.gl;
+    if (!this.gradientTex) this.gradientTex = gl.createTexture();
+    const ramp = buildGradient(this._gradientStops);
+    gl.bindTexture(gl.TEXTURE_2D, this.gradientTex);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA8,
+      ramp.length / 4,
+      1,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      ramp,
+    );
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.bindTexture(gl.TEXTURE_2D, null);
   }
 
   /** (Re)allocate the offscreen scene texture + FBO at `size`² for the post pass. */
@@ -887,6 +938,26 @@ export class GLPlot {
     this._post = on;
     this._vignette = vignette;
     this._gamma = gamma;
+    this.scheduleRender();
+  }
+
+  /** Replace the custom-gradient colour stops (uPalette == 4) and re-upload. */
+  setGradient(stops: GradientStop[]): void {
+    this._gradientStops = stops;
+    this.uploadGradient();
+    this.scheduleRender();
+  }
+
+  /** Set the palette rotation / colour-cycling offset (0..1). Render-only. */
+  setGradientRotation(offset: number): void {
+    this._gradientOffset = offset;
+    this.scheduleRender();
+  }
+
+  /** Toggle the screen-space boundary-outline overlay and its `width` strength. */
+  setOutline(on: boolean, width: number): void {
+    this._outline = on;
+    this._outlineWidth = width;
     this.scheduleRender();
   }
 
