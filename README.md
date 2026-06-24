@@ -35,9 +35,11 @@ Other scripts:
 | `npm run typecheck` | Type-check with `tsc --noEmit` |
 | `npm run format`    | Format with Prettier           |
 
-The app has no runtime dependencies — everything is bundled by Vite. CI (GitHub
-Actions, [`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lint,
-typecheck, tests, and build on every push and pull request.
+The rendering engine has no dependencies (hand-written WebGL2); a few small libraries
+power peripheral features (KaTeX for formula typesetting, driver.js for the tour, gif.js
+for GIF export), all bundled by Vite. CI (GitHub Actions,
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lint, typecheck, tests, and
+build on every push and pull request.
 
 ## How it works
 
@@ -162,6 +164,8 @@ capture isn't black):
 - **Keyframe path** — capture parameter-plane views with **Add keyframe**, scrub between
   them with the slider, and **Record path** to save the interpolated fly-through (centre
   linear, zoom geometric).
+- **GIF export** — **Morph GIF** and the keyframe **GIF** button encode the same
+  animations to a downscaled animated GIF (gif.js, in web workers) for easy sharing.
 
 Frames are forced to full resolution during capture. Keep the tab focused while
 recording (the loop is paced by `requestAnimationFrame`). See

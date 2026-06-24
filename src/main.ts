@@ -20,6 +20,8 @@ import { DEFAULT_GRADIENT } from "./palettes";
 import { setupGradientEditor } from "./ui/gradient";
 import { canRecord, startRecording, downloadBlob } from "./ui/recorder";
 import { interpolateView, type Keyframe } from "./render/keyframes";
+import GIF from "gif.js";
+import gifWorkerUrl from "gif.js/dist/gif.worker.js?url";
 import { parse } from "./expr/parser";
 import { toLatex } from "./expr/latex";
 import katex from "katex";
@@ -698,6 +700,7 @@ function init(): void {
     const ready = keyframes.length >= 2;
     byId<HTMLInputElement>("kf-scrub").disabled = !ready;
     byId<HTMLButtonElement>("kf-record").disabled = !ready;
+    byId<HTMLButtonElement>("kf-gif").disabled = !ready;
   }
 
   /** Capture the current parameter-plane view as a keyframe. */
@@ -736,6 +739,111 @@ function init(): void {
       byId<HTMLButtonElement>("kf-record"),
       "keyframe-path.webm",
       Math.max(2000, (keyframes.length - 1) * 2500),
+      (t) => {
+        const v = interpolateView(keyframes, t);
+        plot.center = v.center;
+        plot.zoom = v.zoom;
+        plot.render();
+      },
+      () => {
+        plot.center = [sx, sy];
+        plot.zoom = startZoom;
+        plot.scheduleRender();
+      },
+    );
+  }
+
+  /**
+   * Encode an animation to an animated GIF (gif.js, in web workers) at a downscaled size.
+   * Renders `frames` frames via `apply(t)`, snapshots each to a scratch canvas, then
+   * encodes. Unlike the WebM path this isn't real-time, so it works frame-by-frame.
+   */
+  async function recordGif(
+    plot: GLPlot,
+    btn: HTMLButtonElement,
+    filename: string,
+    frames: number,
+    apply: (t: number) => void,
+    restore: () => void,
+  ): Promise<void> {
+    if (recording) return;
+    recording = true;
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = "encoding…";
+    const src = plot.glContext.canvas as HTMLCanvasElement;
+    const w = Math.min(360, src.width);
+    const h = Math.min(360, src.height);
+    const scratch = document.createElement("canvas");
+    scratch.width = w;
+    scratch.height = h;
+    const sctx = scratch.getContext("2d");
+    plot.setForceFullRender(true);
+    try {
+      if (!sctx) throw new Error("2D context unavailable");
+      const gif = new GIF({
+        workers: 2,
+        quality: 10,
+        workerScript: gifWorkerUrl,
+        width: w,
+        height: h,
+      });
+      for (let i = 0; i < frames; i++) {
+        apply(i / Math.max(1, frames - 1));
+        sctx.drawImage(src, 0, 0, w, h);
+        gif.addFrame(sctx, { copy: true, delay: 60 });
+      }
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        gif.on("finished", resolve);
+        gif.on("abort", () => reject(new Error("GIF encoding aborted")));
+        gif.render();
+      });
+      downloadBlob(blob, filename);
+      showToast(`Saved ${filename}`, "info");
+    } catch (err) {
+      showToast(`GIF export failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+    } finally {
+      plot.setForceFullRender(false);
+      restore();
+      btn.disabled = false;
+      btn.textContent = label;
+      recording = false;
+    }
+  }
+
+  /** Export the Julia morph as an animated GIF. */
+  function recordJuliaMorphGif(): void {
+    const plot = dynamicalView.plot;
+    const [cx, cy] = parameterView.plot.z0;
+    const radius = 0.03;
+    void recordGif(
+      plot,
+      byId<HTMLButtonElement>("gif-morph"),
+      "julia-morph.gif",
+      36,
+      (t) => {
+        const ang = t * 2 * Math.PI;
+        plot.c = formatComplex([cx + radius * Math.cos(ang), cy + radius * Math.sin(ang)]);
+        plot.render();
+      },
+      () => syncDynamicalC(),
+    );
+  }
+
+  /** Export the keyframe path as an animated GIF. */
+  function recordKeyframeGif(): void {
+    if (keyframes.length < 2) {
+      showToast("Add at least two keyframes first.", "warn");
+      return;
+    }
+    const plot = parameterView.plot;
+    const [sx, sy] = plot.center;
+    const startZoom = plot.zoom;
+    void recordGif(
+      plot,
+      byId<HTMLButtonElement>("kf-gif"),
+      "keyframe-path.gif",
+      Math.min(72, Math.max(24, (keyframes.length - 1) * 24)),
       (t) => {
         const v = interpolateView(keyframes, t);
         plot.center = v.center;
@@ -884,6 +992,12 @@ function init(): void {
   byId("kf-scrub").addEventListener("input", applyScrub);
   byId("kf-record").addEventListener("click", () => {
     void recordKeyframePath();
+  });
+  byId("gif-morph").addEventListener("click", () => {
+    void recordJuliaMorphGif();
+  });
+  byId("kf-gif").addEventListener("click", () => {
+    void recordKeyframeGif();
   });
 
   disableUnsupportedSizes();
