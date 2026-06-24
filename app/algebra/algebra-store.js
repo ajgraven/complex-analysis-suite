@@ -42,10 +42,12 @@
 // (snapshot stack), nodeStats, variables/baseVariables, exportDAG, and a copy-paste
 // Mathematica export (mathematicaColumn / mathematicaNode / mathematicaAll).
 //
-// Provenance-op contract: every reduction writes provenance.op ∈ { generate, conjugate,
+// Provenance-op contract: every node writes provenance.op ∈ { generate, fork, conjugate,
 // resultant, groebner, constraint, duplicate, substitute, linear-reduce, assume-real,
-// fix-w0, triangular, factor }. The UI's provText + columnLabel (algebra-ui.js) switch on
-// exactly these strings — ADD A NEW OP IN BOTH PLACES or it renders as a bare "column N".
+// assume-imaginary, identify, identify-conj, fix-w0, define-subst, add-equation, triangular,
+// factor, rctd, propagate }. ADDING A NEW OP means registering it in SIX switch statements or
+// it renders as a bare label: provText + columnLabel + edgeLabel (algebra-ui.js) and _shortProv
+// + derivationSteps (+ _subsForRepro if it maps to a SymPy .subs) here in the store.
 // =============================================================================
 
 (function (global) {
@@ -532,7 +534,7 @@
           sub[p.varName] = S.mpolyConst(g);
           let conjugate = null;
           if (QC && QC.conjVarName) {
-            const c = QC.conjVarName(p.varName);
+            const c = _conjName(p.varName);   // overlay-aware: pins a defined symbol's conjugate t̄ too
             if (c && c !== p.varName) { sub[c] = S.mpolyConst(g.conj()); conjugate = c; }
           }
           recs.push({ name: p.varName, value: record, conjugate });
@@ -617,7 +619,7 @@
       const prim = [...new Set((vars || []).map(_primalName))];
       if (!prim.length) return { ok: false, reason: 'no variables selected', created: [] };
       const map = {};
-      for (const rv of prim) { const c = QC.conjVarName(rv); if (c !== rv) map[c] = rv; }
+      for (const rv of prim) { const c = _conjName(rv); if (c !== rv) map[c] = rv; }   // overlay-aware (defined symbols too)
       if (!Object.keys(map).length) return { ok: false, reason: 'selected variable(s) have no conjugate partner', created: [] };
       const rename = (n) => (Object.prototype.hasOwnProperty.call(map, n) ? map[n] : n);
       const label = 'assume real: ' + prim.join(', ');
@@ -639,7 +641,7 @@
       const prim = [...new Set((vars || []).map(_primalName))];
       if (!prim.length) return { ok: false, reason: 'no variables selected', created: [] };
       const sub = {};
-      for (const iv of prim) { const c = QC.conjVarName(iv); if (c !== iv) sub[c] = S.mpolyVar(iv).neg(); }
+      for (const iv of prim) { const c = _conjName(iv); if (c !== iv) sub[c] = S.mpolyVar(iv).neg(); }   // overlay-aware (defined symbols too)
       if (!Object.keys(sub).length) return { ok: false, reason: 'selected variable(s) have no conjugate partner', created: [] };
       const label = 'assume imaginary: ' + prim.join(', ');
       const res = _appendReduction((n) => ({
@@ -716,7 +718,7 @@
       const g = _toGauss(ratio), rec = _gaussRecord(g);
       const sub = {}; sub[drop] = S.mpolyVar(keep).mul(S.mpolyConst(g));
       if (QC && QC.conjVarName) {                                // a value identifies the conjugates too
-        const dc = QC.conjVarName(drop), kc = QC.conjVarName(keep);
+        const dc = _conjName(drop), kc = _conjName(keep);   // overlay-aware (defined symbols too)
         if (dc !== drop && kc) sub[dc] = S.mpolyVar(kc).mul(S.mpolyConst(g.conj()));
       }
       const label = 'identify ' + drop + ' = ' + _ratioLabel(g) + keep;
@@ -734,7 +736,7 @@
       if (!QC || !QC.conjVarName) return { ok: false, reason: 'QD.QDConstraints not loaded', created: [] };
       const v = _primalName(varName), other = _primalName(otherName);
       if (!v || !other || v === other) return { ok: false, reason: 'need two distinct variables', created: [] };
-      const vc = QC.conjVarName(v), oc = QC.conjVarName(other);
+      const vc = _conjName(v), oc = _conjName(other);   // overlay-aware (defined symbols too)
       if (vc === v || oc === other) return { ok: false, reason: 'variables have no conjugate partner', created: [] };
       const g = _toGauss(ratio), rec = _gaussRecord(g);
       const sub = {};
@@ -1907,7 +1909,7 @@
         if (!Object.prototype.hasOwnProperty.call(kv, name)) continue;
         let g; try { ({ g } = _ratGauss(kv[name])); } catch (e) { continue; }
         sub[name] = S.mpolyConst(g);
-        if (QC && QC.conjVarName) { const c = QC.conjVarName(name); if (c !== name) sub[c] = S.mpolyConst(g.conj()); }
+        if (QC && QC.conjVarName) { const c = _conjName(name); if (c !== name) sub[c] = S.mpolyConst(g.conj()); }   // overlay-aware (defined symbols too)
       }
       if (Object.keys(sub).length) poly = poly.subst(sub);
       const applied = [];

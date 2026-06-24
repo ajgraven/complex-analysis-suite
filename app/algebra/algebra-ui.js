@@ -1695,6 +1695,14 @@
       const m = /^(.*)__(re|im)$/.exec(name);
       return m ? latexPlain(m[1]) + (m[2] === 're' ? ' (Re)' : ' (Im)') : latexPlain(name);
     }
+    // Make a reim-system LaTeX string KaTeX-safe: the reim variable names (A1_1__re / z1__im) have a
+    // DOUBLE underscore that KaTeX rejects (double subscript). Render each as a braced clean symbol
+    // with a Re/Im superscript, so a trailing power (…^{k} from toLatex) applies to the whole token.
+    function reimSafeLatex(tex) {
+      if (!tex) return tex;
+      return String(tex).replace(/([A-Za-z][A-Za-z0-9]*(?:_\d+)*)__(re|im)/g,
+        (m, base, ri) => '{' + latexOf(base) + '^{\\mathrm{' + ri + '}}}');
+    }
     // Repopulate the resolvent variable picker from the current column's reim variables.
     function refreshResolventVars() {
       const sel = $('#alg-resolvent-var'); if (!sel) return;
@@ -1715,11 +1723,12 @@
       refreshResolventVars();
       const sel = $('#alg-resolvent-var'); const v = sel && sel.value;
       if (!v) { showError('Resolvent: no real variable available — reduce to a finite (reality-assumed) system first.'); return; }
+      const ctrl = _newAbort(); _abort = ctrl;   // coherent busy state (guards re-entry / inspector mutations)
       setBusy(true, 'Computing the resolvent…');
       setTimeout(() => {
         let r; try { r = store.resolventOf(null, v, { paramValues: hDataParamValues() }); }
         catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
-        setBusy(false); setStatus('');
+        _abort = null; setBusy(false); setStatus('');
         if (!r.ok) { showError('Resolvent: ' + withGuidance(r.reason || 'unavailable')); return; }
         const fv = friendlyReim(r.variable);
         const distWord = r.distinct === 1 ? 'value' : 'values';
@@ -1728,9 +1737,12 @@
           ? 'discriminant = 0 ⇒ DEGENERATE (coincident solutions / cusp)'
           : 'discriminant ≠ 0 ⇒ simple roots (no degeneracy in ' + fv + ')';
         const text = 'Resolvent χ in ' + fv + ': ' + degLine + '. ' + degenLine + '.';
-        const detail = 'χ = ' + r.latex + '\nsquare-free (distinct roots) = ' + r.squareFreeLatex + (r.discLatex ? '\ndiscriminant = ' + r.discLatex : '');
+        // The resolvent / square-free / discriminant are LaTeX — render them as KaTeX (solutionsLatex),
+        // not as plain solutionsText (the canvas shows solutionsText as <pre> textContent → raw LaTeX leak).
+        const mathLatex = ['\\chi = ' + reimSafeLatex(r.latex), '\\text{square-free} = ' + reimSafeLatex(r.squareFreeLatex)];
+        if (r.discLatex) mathLatex.push('\\operatorname{disc} = ' + reimSafeLatex(r.discLatex));
         setStatus(text);
-        if (canvas) canvas.setVerdict({ text, solutionsText: detail });
+        if (canvas) canvas.setVerdict({ text, solutionsLatex: mathLatex });
         toast(text, r.degenerate ? { kind: 'error' } : {});
       }, 20);
     }
@@ -1934,6 +1946,7 @@
         case 'fix-w0': return '↳ fix φ(0) = ' + valStr(p.value);
         case 'define-subst': return '↳ define ' + latexPlain(p.newVar)
           + (p.dropVars && p.dropVars.length ? ' · elim ' + p.dropVars.map(latexPlain).join(',') : '');
+        case 'add-equation': return '↳ custom equation';
         case 'resultant': return '↳ eliminate ' + latexPlain(p.variable);
         case 'groebner': return '↳ Gröbner · ' + (p.eliminate && p.eliminate.length ? 'elim ' + p.eliminate.map(latexPlain).join(',') : (p.order || 'grevlex'));
         case 'triangular': return p.contradiction ? '↳ triangular · inconsistent' : '↳ triangular decomposition';
@@ -1982,6 +1995,7 @@
         case 'linear-reduce': return 'propagate';
         case 'fix-w0': return 'fix φ(0)';
         case 'define-subst': return p.carried ? 'carry' : 'define ' + latexPlain(p.newVar);
+        case 'add-equation': return 'custom eqn';
         case 'factor': return p.carried ? 'carry' : 'factor case';
         case 'propagate': return 'propagate';
         case 'rctd': return 'RCTD';

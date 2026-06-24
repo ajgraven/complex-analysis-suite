@@ -41,8 +41,8 @@
     if (dot < 0) { n = BigInt(numStr); d = 1n; }
     else {
       const ip = numStr.slice(0, dot) || '0';
-      const fp = numStr.slice(dot + 1) || '';
-      n = BigInt(ip + (fp || '0'));   // concatenate the digits, scale by 10^len(fp)
+      const fp = numStr.slice(dot + 1) || '';     // may be '' for a trailing dot ("5." → 5/1)
+      n = BigInt(ip + fp);            // concatenate the digits, scale by 10^len(fp)
       d = 10n ** BigInt(fp.length);
     }
     return S.mpolyConst(S.gauss(S.rat(n, d)));
@@ -118,6 +118,13 @@
       return left;
     }
     function parseFactor() {
+      // A leading unary sign applies to the WHOLE power, not just the base, so −z1^2 = −(z1^2)
+      // (the universal math convention) rather than (−z1)^2. Handled here, ABOVE the `^` loop.
+      if (peek() && (peek().t === '-' || peek().t === '+')) {
+        const op = toks[p++].t;
+        const f = parseFactor();
+        return op === '-' ? f.neg() : f;
+      }
       let base = parseBase();
       while (peek() && peek().t === '^') {
         p++;
@@ -135,8 +142,6 @@
     function parseBase() {
       const tk = peek();
       if (!tk) throw new Error('unexpected end of expression');
-      if (tk.t === '-') { p++; return parseBase().neg(); }
-      if (tk.t === '+') { p++; return parseBase(); }
       if (tk.t === '(') {
         p++;
         const e = parseExpr();

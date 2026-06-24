@@ -309,6 +309,21 @@ its own merged PR), with one feature **in progress on a branch**:
     QD component, the cardioid hazard; it stays manual-only when eventually built). Tests: `define-subst.test.js`
     +12 (autoAbbreviate fixpoint/cap/no-op; addEquation column placement/conjugate/dedup/zero/inequality).
     No `sym-core.js`/manifest change.
+  - **Algebra-branch review-fix batch** (latest) — an adversarial 4-agent review of the whole symbolic track
+    (~11.3k lines) found a handful of subtle, untested-path defects; all verified + fixed: **(parser)**
+    `QD.ExprParser` unary minus now binds LOOSER than `^` (`-z1^2 = −(z1²)`, was `+z1²`) and a trailing-dot
+    decimal parses exactly (`5.`→5, was 50); **(store conjugate overlay)** six value/assumption-pairing ops
+    (`substituteValues`, `assumeReal`, `assumeImaginary`, `identifyVariables`, `applyConjugatePair`,
+    `_propagatePoly`) now use the overlay-aware `_conjName` instead of raw `QC.conjVarName`, so a *defined
+    complex symbol*'s conjugate `t̄` is correctly pinned/folded (was a silent QD-overcount path); **(resolvent
+    UI)** the verdict now renders χ / square-free / discriminant as KaTeX via `solutionsLatex` + a `reimSafeLatex`
+    helper that makes the `x__re`/`x__im` reim names KaTeX-safe (was raw LaTeX in a `<pre>`), and `doResolvent`
+    sets `_abort` for a coherent busy state; **(labels)** `add-equation` registered in `columnLabel`/`edgeLabel`;
+    **(hygiene)** the store provenance-op contract header refreshed to all 20 ops / 6 switch sites, and four
+    exact-pinned test floors loosened (`sym-core 250`, `sym-radical 45`, `algebra-store 220`, `cas-export 33`).
+    Tests: expr-parser +6 (precedence/decimal), define-subst +4 (overlay reaches a defined symbol's conjugate).
+    Deferred (judgment calls, NOT in this batch): wire-or-drop the dead `defineSubstitutionAsync`; make
+    `autoAbbreviate` async on large systems; the `solve(ids)` active-vs-analyzed-track prune inconsistency.
   - **Branching workspace — A6 (per-branch verdict chips)** — each track chip carries an existence/uniqueness
     badge (`∅` no-QD · `∞` positive-dim family · `✓ 1 QD` unique · `N QD` · `?`/`fin`), color-coded, full phrasing
     in the tooltip. A **"⟳ verdicts"** button (shown when >1 branch) classifies every branch sequentially via the

@@ -195,4 +195,25 @@ module.exports = async function run() {
     const r = st.addEquation(parse('z1*zb1 - 1', ['z1', 'zb1']), '>', { withConjugate: true });
     ok('add-equation: a > 0 inequality adds one node (no conjugate companion for >)', r.ok && st.size === before + 1 && r.node.rel === '>');
   }
+
+  // ---- conjugate-overlay: value/assumption ops reach a DEFINED complex symbol's conjugate ----
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(mkSys([parse('A1_1 + Ab1_1', ['A1_1', 'Ab1_1'])]), { withConjugates: false });
+    st.defineSubstitution('t', parse('A1_1', ['A1_1']));   // complex ⇒ registers t / t̄ (tb)
+    ok('overlay: defining a complex symbol registered t/t̄', st.exportDAG().substConj.some(([k]) => k === 't'));
+    // substituteValue('t', …) must ALSO pin the conjugate t̄ (was the raw-conjVarName bug)
+    const r1 = st.substituteValues([{ varName: 't', value: { re: 1, im: 0 } }], { propagate: false });
+    const lastVars = new Set(); for (const n of st.list().filter((n) => n.column === st.maxColumn())) for (const v of n.poly.vars()) lastVars.add(v);
+    ok('overlay: setting t = value also pins t̄ (neither survives)', r1.ok && !lastVars.has('t') && !lastVars.has('tb'));
+  }
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(mkSys([parse('A1_1 + Ab1_1', ['A1_1', 'Ab1_1'])]), { withConjugates: false });
+    st.defineSubstitution('t', parse('A1_1', ['A1_1']));
+    const r = st.assumeReal(['t']);   // must succeed (t̄ ≡ t), via the overlay
+    ok('overlay: assumeReal on a defined complex symbol succeeds', r.ok, r.reason);
+    const lastVars = new Set(); for (const n of st.list().filter((n) => n.column === st.maxColumn())) for (const v of n.poly.vars()) lastVars.add(v);
+    ok('overlay: after assume-real the conjugate t̄ is folded away', !lastVars.has('tb'));
+  }
 };
