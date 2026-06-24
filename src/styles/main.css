@@ -16,6 +16,32 @@
     Roboto,
     Arial,
     sans-serif;
+  color-scheme: light dark;
+}
+
+/* --- Dark theme -------------------------------------------------------- */
+/* Follow the OS by default; the theme toggle can force light or dark. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15171a;
+    --fg: #e6e6e6;
+    --muted: #9aa0a6;
+    --border: #3a3f44;
+    --accent: #4a90d9;
+    --field-bg: #1e2125;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #15171a;
+  --fg: #e6e6e6;
+  --muted: #9aa0a6;
+  --border: #3a3f44;
+  --accent: #4a90d9;
+  --field-bg: #1e2125;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 * {

@@ -156,6 +156,39 @@ function setupTour(): void {
 }
 
 /** Show the first-run onboarding once (dismissal remembered in localStorage). */
+/** Colour-theme toggle cycling auto → dark → light, persisted in localStorage. */
+function setupTheme(): void {
+  const btn = document.getElementById("theme-btn");
+  if (!btn) return;
+  const read = (): string | null => {
+    try {
+      return localStorage.getItem("theme");
+    } catch {
+      return null;
+    }
+  };
+  const apply = (mode: string | null): void => {
+    if (mode === "light" || mode === "dark") {
+      document.documentElement.setAttribute("data-theme", mode);
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+    btn.textContent = `Theme: ${mode ?? "auto"}`;
+  };
+  let mode = read(); // null = follow the OS
+  apply(mode);
+  btn.addEventListener("click", () => {
+    mode = mode === null ? "dark" : mode === "dark" ? "light" : null;
+    try {
+      if (mode) localStorage.setItem("theme", mode);
+      else localStorage.removeItem("theme");
+    } catch {
+      /* storage unavailable (private mode) — keep the in-memory choice */
+    }
+    apply(mode);
+  });
+}
+
 function setupOnboarding(): void {
   const el = byId("onboarding");
   let seen = false;
@@ -770,6 +803,7 @@ function init(): void {
   setupOnboarding();
   renderFormula();
   setupTour();
+  setupTheme();
 
   // Dev-only: expose the two views so the renderer can be driven/inspected from the
   // console (e.g. the synchronous `renderToImageData` path, which works even when a

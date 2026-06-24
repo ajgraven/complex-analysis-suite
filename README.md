@@ -114,6 +114,8 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
   [Colouring](#colouring).
 - The entered **f(z, c)** is typeset live (KaTeX) beneath the formula input, and the
   **tour** button runs a short guided walkthrough of the interface.
+- The **Theme** button cycles auto / dark / light (auto follows your OS colour scheme);
+  the choice is remembered across visits.
 - **Auto iterations** raises the iteration cap automatically as you zoom in, so deep
   views keep their detail; and the renderer recovers automatically if the WebGL
   context is lost.
