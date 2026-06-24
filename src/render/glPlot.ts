@@ -166,6 +166,7 @@ export class GLPlot {
   private gradientTex: WebGLTexture | null = null;
   private renderScheduled = false;
   private _draft = false;
+  private contextLost = false;
   /** Index into {@link PROGRESSIVE_LADDER} for the next frame; reset to 0 on each change. */
   private _level = 0;
   /** df64 is compiled lazily and asynchronously (it can be huge); these track the in-flight build. */
@@ -189,6 +190,7 @@ export class GLPlot {
   private _iterEscAst: Node = parse("abs(z)>2"); // effective escape predicate
   private _n = "100";
   private _nplot = "7";
+  private _autoIter = false; // scale the iteration cap with zoom depth
   private _z0: Vec2 = [0, 0];
   private _mode = 0; // 0 escape, 1 smooth, 2 distance, 3 orbit-trap, 4 domain
   private _palette = 0; // 0 classic, 1 viridis, 2 magma, 3 grayscale
@@ -218,6 +220,7 @@ export class GLPlot {
     this.parallelExt = gl.getExtension("KHR_parallel_shader_compile") as {
       COMPLETION_STATUS_KHR: number;
     } | null;
+    this.attachContextHandlers();
     this.setupQuad();
     this.compilePostProgram();
     this.uploadGradient();
@@ -232,6 +235,41 @@ export class GLPlot {
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  }
+
+  /** Listen for GPU context loss/restore so a dropped context (deep df64 renders can
+   *  trip the watchdog) recovers instead of leaving a dead canvas. */
+  private attachContextHandlers(): void {
+    this.canvas.addEventListener("webglcontextlost", (e) => {
+      e.preventDefault(); // required for the context to become restorable
+      this.contextLost = true;
+      console.warn(`[${this.fractType}] WebGL context lost`);
+    });
+    this.canvas.addEventListener("webglcontextrestored", () => {
+      this.contextLost = false;
+      this.restoreContext();
+      console.info(`[${this.fractType}] WebGL context restored`);
+    });
+  }
+
+  /** Recreate every GL resource after the context was lost and restored. */
+  private restoreContext(): void {
+    this.programs = { single: null, df64: null };
+    this.df64Gen++;
+    this.df64Compiling = false;
+    this.histoFbo = null;
+    this.histoTex = null;
+    this.cdfTex = null;
+    this.sceneFbo = null;
+    this.sceneTex = null;
+    this.sceneSize = 0;
+    this.gradientTex = null;
+    this.postProgram = null;
+    this.setupQuad();
+    this.compilePostProgram();
+    this.uploadGradient();
+    this.rebuild();
+    this.scheduleRender();
   }
 
   /**
@@ -500,6 +538,18 @@ export class GLPlot {
   }
 
   /**
+   * Effective base iteration cap: the user's `n`, optionally scaled up with zoom
+   * depth (auto-iterations) so deep zooms keep their detail. Capped to bound cost.
+   */
+  private targetIterations(): number {
+    const base = Math.max(1, Math.round(Number(this._n)));
+    if (!this._autoIter) return base;
+    const depth = this._zoom * Math.max(1, Math.abs(this._center[0]), Math.abs(this._center[1]));
+    const scaled = Math.round(base * (1 + 0.5 * Math.log2(Math.max(1, depth))));
+    return Math.min(5000, Math.max(base, scaled));
+  }
+
+  /**
    * Bind the active program and set all uniforms for a draw at the given size.
    * `modeOverride` forces a colouring mode (the histogram raw pre-pass uses 6).
    * Returns false if no program.
@@ -517,7 +567,7 @@ export class GLPlot {
     gl.useProgram(cp.program);
     gl.uniform2f(u.uResolution, width, height);
     gl.uniform1f(u.uZoom, this._zoom);
-    const fullN = Math.max(1, Math.round(Number(this._n)));
+    const fullN = this.targetIterations();
     const iterN =
       this._draft && this.wantsProgressive()
         ? Math.max(DRAFT_MIN_ITERS, Math.round(fullN * DRAFT_ITER_FACTOR))
@@ -716,6 +766,7 @@ export class GLPlot {
    * resolution and schedules the next; cheap idle renders draw full immediately.
    */
   render(): void {
+    if (this.contextLost) return;
     let fraction = 1;
     let refine = false;
     if (this._draft) {
@@ -1017,6 +1068,12 @@ export class GLPlot {
     this.scheduleRender();
   }
 
+  /** Toggle auto-scaling of the iteration cap with zoom depth. Render-only. */
+  setAutoIterations(on: boolean): void {
+    this._autoIter = on;
+    this.scheduleRender();
+  }
+
   get c(): string {
     return this._c;
   }
@@ -1031,6 +1088,10 @@ export class GLPlot {
   }
   get n(): string {
     return this._n;
+  }
+  /** The iteration cap currently in effect (after any auto-scaling). */
+  get currentIterations(): number {
+    return this.targetIterations();
   }
   get nplot(): string {
     return this._nplot;

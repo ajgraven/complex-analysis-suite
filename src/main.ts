@@ -514,6 +514,13 @@ function init(): void {
     reportCompileErrors();
   }
 
+  /** Toggle auto-scaling of the iteration cap with zoom on both plots. */
+  function applyAutoIter(): void {
+    const on = byId<HTMLInputElement>("autoiter").checked;
+    parameterView.plot.setAutoIterations(on);
+    dynamicalView.plot.setAutoIterations(on);
+  }
+
   // --- wire up the UI controls ------------------------------------------
 
   document.addEventListener("keyup", (event) => {
@@ -550,6 +557,7 @@ function init(): void {
   applyEquipotential();
 
   byId("newton").addEventListener("change", applyNewton);
+  byId("autoiter").addEventListener("change", applyAutoIter);
 
   byId("apply_all").addEventListener("click", applyChanges);
   byId("apply_preset").addEventListener("click", () => {
@@ -584,6 +592,8 @@ function init(): void {
     applyEquipotential();
     byId<HTMLInputElement>("newton").checked = false;
     applyNewton();
+    byId<HTMLInputElement>("autoiter").checked = false;
+    applyAutoIter();
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
   });
   byId("print_param_space").addEventListener("click", () => {
