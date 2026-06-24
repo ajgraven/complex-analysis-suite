@@ -279,8 +279,9 @@ as a small delta around it (`z = Z + δz`, `δz' = 2·Z·δz + δz² + δc`) in 
 single-float arithmetic — fast, and limited by the reference precision rather than the
 GPU's. The view centre is carried in **double-double** precision (`src/render/dd.ts`,
 ~31 digits) and the reference orbit is iterated at that centre, so views stay locatable
-to ~10²⁸×; both are unit-tested (`test/perturbation.test.ts`, `test/dd.test.ts`). Only
-z²+c on the parameter plane is eligible (other maps fall back to df64).
+to ~10²⁸×; both are unit-tested (`test/perturbation.test.ts`, `test/dd.test.ts`). Both
+planes are eligible for z²+c — the Mandelbrot set (parameter plane) and its Julia sets
+(dynamical plane); other maps fall back to df64.
 
 ## Deployment
 

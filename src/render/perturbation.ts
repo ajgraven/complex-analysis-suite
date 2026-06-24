@@ -62,11 +62,17 @@ export function computeReferenceOrbit(cx: number, cy: number, maxIter: number): 
  * (~31 digits), so the orbit stays accurate at zoom depths a plain double can't locate
  * (up to ~1e28). The orbit values are still O(1) and stored as single floats.
  */
-export function computeReferenceOrbitDD(cx: DD, cy: DD, maxIter: number): ReferenceOrbit {
+export function computeReferenceOrbitDDFrom(
+  z0x: DD,
+  z0y: DD,
+  addX: DD,
+  addY: DD,
+  maxIter: number,
+): ReferenceOrbit {
   const cap = Math.max(1, Math.floor(maxIter));
   const xy = new Float32Array((cap + 1) * 2);
-  let zx: DD = [0, 0];
-  let zy: DD = [0, 0];
+  let zx = z0x;
+  let zy = z0y;
   let n = 0;
   let escapedAt = -1;
   for (; n <= cap; n++) {
@@ -79,13 +85,23 @@ export function computeReferenceOrbitDD(cx: DD, cy: DD, maxIter: number): Refere
       break;
     }
     if (n === cap) break;
-    // Z² = (zx² − zy²) + i·(2·zx·zy), then + c0 — all in double-double.
+    // Z² = (zx² − zy²) + i·(2·zx·zy), then + the additive constant — all in double-double.
     const x2 = ddSub(ddMul(zx, zx), ddMul(zy, zy));
     const zxzy = ddMul(zx, zy);
     const y2 = ddAdd(zxzy, zxzy);
-    zx = ddAdd(x2, cx);
-    zy = ddAdd(y2, cy);
+    zx = ddAdd(x2, addX);
+    zy = ddAdd(y2, addY);
   }
   const length = Math.min(n + 1, cap + 1);
   return { length, xy, escaped: escapedAt < 0 ? length : escapedAt };
+}
+
+/**
+ * Same as {@link computeReferenceOrbit} but with the centre in double-double precision
+ * (~31 digits) — the parameter-plane (Mandelbrot) orbit Z_0 = 0, Z_{n+1} = Z_n² + c0.
+ * For the dynamical (Julia) plane use {@link computeReferenceOrbitDDFrom} with Z_0 = the
+ * view centre and the additive constant = the fixed parameter c.
+ */
+export function computeReferenceOrbitDD(cx: DD, cy: DD, maxIter: number): ReferenceOrbit {
+  return computeReferenceOrbitDDFrom([0, 0], [0, 0], cx, cy, maxIter);
 }

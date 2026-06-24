@@ -575,7 +575,7 @@ function init(): void {
     parameterView.plot.setPerturbation(on);
     dynamicalView.plot.setPerturbation(on);
     if (on && !parameterView.plot.perturbationEligible) {
-      showToast("Perturbation deep zoom applies to z²+c (Mandelbrot).", "info");
+      showToast("Perturbation deep zoom applies to z²+c (Mandelbrot and its Julia sets).", "info");
     }
   }
 

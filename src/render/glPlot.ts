@@ -23,7 +23,7 @@ import {
 import { buildGradient, DEFAULT_GRADIENT, type GradientStop } from "../palettes";
 import { newtonIteration } from "../expr/derivative";
 import { makeComplexFn } from "../expr/evaluate";
-import { computeReferenceOrbitDD } from "./perturbation";
+import { computeReferenceOrbitDD, computeReferenceOrbitDDFrom } from "./perturbation";
 import { type DD, dd, ddAddNumber, ddToNumber } from "./dd";
 
 export type FractType = "dyn" | "param";
@@ -106,6 +106,7 @@ interface PerturbUniforms {
   uZoom: WebGLUniformLocation | null;
   uN: WebGLUniformLocation | null;
   uOrbitLen: WebGLUniformLocation | null;
+  uJuliaMode: WebGLUniformLocation | null;
   uOrbit: WebGLUniformLocation | null;
   uMode: WebGLUniformLocation | null;
   uPalette: WebGLUniformLocation | null;
@@ -729,19 +730,26 @@ export class GLPlot {
 
   /** Whether the perturbation kernel should drive this frame. */
   private usePerturbation(): boolean {
-    return (
-      this._perturbation &&
-      this._perturbEligible &&
-      this.fractType === "param" &&
-      this.perturbProgram !== null
-    );
+    // Eligible for both planes: parameter (Mandelbrot) and dynamical (Julia) for z²+c.
+    return this._perturbation && this._perturbEligible && this.perturbProgram !== null;
   }
 
   /** Recompute + upload the reference orbit (RG32F texture) when the view changed. */
   private ensureOrbit(maxIter: number): void {
     if (!this.orbitDirty && this.orbitLen > 0) return;
     const gl = this.gl;
-    const orbit = computeReferenceOrbitDD(this._centerDD[0], this._centerDD[1], maxIter);
+    // Parameter plane: Z_0 = 0, add = centre. Dynamical (Julia) plane: Z_0 = centre,
+    // add = the fixed parameter c (folded into the reference orbit).
+    const orbit =
+      this.fractType === "param"
+        ? computeReferenceOrbitDD(this._centerDD[0], this._centerDD[1], maxIter)
+        : computeReferenceOrbitDDFrom(
+            this._centerDD[0],
+            this._centerDD[1],
+            dd(this._cVal[0]),
+            dd(this._cVal[1]),
+            maxIter,
+          );
     this.orbitLen = orbit.length;
     if (!this.orbitTex) this.orbitTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.orbitTex);
@@ -782,6 +790,7 @@ export class GLPlot {
     gl.uniform1f(u.uZoom, this._zoom);
     gl.uniform1i(u.uN, iterN);
     gl.uniform1i(u.uOrbitLen, this.orbitLen);
+    gl.uniform1i(u.uJuliaMode, this.fractType === "dyn" ? 1 : 0);
     gl.uniform1i(u.uMode, mode === 1 ? 1 : 0); // escape / smooth; other modes fall back to escape
     gl.uniform1i(u.uPalette, this._palette);
     gl.uniform1i(u.uAA, this._draft ? 1 : this._aa);
@@ -895,6 +904,7 @@ export class GLPlot {
           uZoom: gl.getUniformLocation(program, "uZoom"),
           uN: gl.getUniformLocation(program, "uN"),
           uOrbitLen: gl.getUniformLocation(program, "uOrbitLen"),
+          uJuliaMode: gl.getUniformLocation(program, "uJuliaMode"),
           uOrbit: gl.getUniformLocation(program, "uOrbit"),
           uMode: gl.getUniformLocation(program, "uMode"),
           uPalette: gl.getUniformLocation(program, "uPalette"),

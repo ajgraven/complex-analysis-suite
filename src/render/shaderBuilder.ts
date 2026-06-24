@@ -108,6 +108,7 @@ uniform vec2 uResolution;
 uniform float uZoom;
 uniform int uN;          // iteration cap
 uniform int uOrbitLen;   // stored reference-orbit length
+uniform int uJuliaMode;  // 1 = dynamical (Julia) plane, 0 = parameter (Mandelbrot)
 uniform sampler2D uOrbit; // reference orbit Z_n (RG32F), texel n
 uniform int uMode;       // 0 escape, 1 smooth (others fall back to escape)
 uniform int uPalette;
@@ -122,8 +123,11 @@ ${COLOR_GLSL}
 // One pixel's colour via perturbation about the reference orbit.
 vec3 pColorAt(vec2 fragXY) {
   vec2 uv = fragXY / uResolution;
-  vec2 dc = (uv * 2.0 - 1.0) / uZoom; // δc: offset from the reference (view centre)
-  vec2 dz = vec2(0.0);                // δz_0 = 0
+  vec2 dc = (uv * 2.0 - 1.0) / uZoom; // pixel offset from the reference (view centre)
+  // Mandelbrot (param): perturb c — δz_0 = 0, add δc every step.
+  // Julia (dyn): perturb the initial z — δz_0 = δc, c is fixed (folded into the orbit).
+  vec2 dz = uJuliaMode == 1 ? dc : vec2(0.0);
+  vec2 cAdd = uJuliaMode == 1 ? vec2(0.0) : dc;
   vec2 z = vec2(0.0);
   int kmax = 0;
   bool escaped = false;
@@ -132,10 +136,10 @@ vec3 pColorAt(vec2 fragXY) {
     vec2 Z = texelFetch(uOrbit, ivec2(k, 0), 0).rg;
     z = Z + dz; // full iterate z_k
     if (dot(z, z) > 4.0) { escaped = true; break; }
-    // δz_{k+1} = 2·Z·δz + δz² + δc  (complex arithmetic)
+    // δz_{k+1} = 2·Z·δz + δz² + cAdd  (complex arithmetic)
     vec2 twoZdz = 2.0 * vec2(Z.x * dz.x - Z.y * dz.y, Z.x * dz.y + Z.y * dz.x);
     vec2 dz2 = vec2(dz.x * dz.x - dz.y * dz.y, 2.0 * dz.x * dz.y);
-    dz = twoZdz + dz2 + dc;
+    dz = twoZdz + dz2 + cAdd;
     kmax = k + 1;
   }
   if (!escaped) return vec3(0.0); // interior (or ran past the reference orbit)
