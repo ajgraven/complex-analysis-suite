@@ -11,6 +11,7 @@ import type { Vec2 } from "./arrays";
 import { formatComplex } from "./complex";
 import { getMaxTextureSize } from "./hiResExport";
 import { PlotView } from "./render/plotView";
+import type { GLPlot } from "./render/glPlot";
 import { dynPresets, paramPresets, type Preset, type PresetName } from "./presets";
 import { byId } from "./ui/dom";
 import { showToast } from "./ui/toast";
@@ -540,26 +541,31 @@ function init(): void {
   }
 
   /**
-   * Phase 17: record a looping "Julia morph" — sweep the parameter c around a small
-   * circle about the current point while re-rendering the dynamical plane, captured to a
-   * WebM clip. Uses requestAnimationFrame for real-time pacing, so keep the tab focused.
+   * Phase 17 — animation recording. Drive `apply(t)` (t: 0→1) for `durationMs` via
+   * requestAnimationFrame while capturing `plot`'s canvas to a WebM clip, then download it
+   * and `restore()` the view. Full-resolution frames are forced during the capture. Keep
+   * the tab focused (rAF pacing). One recording at a time.
    */
-  let recordingMorph = false;
-  async function recordJuliaMorph(): Promise<void> {
-    if (recordingMorph) return;
+  let recording = false;
+  async function recordAnimation(
+    plot: GLPlot,
+    btn: HTMLButtonElement,
+    filename: string,
+    durationMs: number,
+    apply: (t: number) => void,
+    restore: () => void,
+  ): Promise<void> {
+    if (recording) return;
     if (!canRecord()) {
       showToast("Video recording isn't supported in this browser.", "warn");
       return;
     }
-    const plot = dynamicalView.plot;
-    const canvas = plot.glContext.canvas as HTMLCanvasElement;
-    const [cx, cy] = parameterView.plot.z0; // sweep centre = current parameter point
-    const radius = 0.03;
-    const durationMs = 4000;
-    const btn = byId<HTMLButtonElement>("record_morph");
-    recordingMorph = true;
+    recording = true;
     btn.disabled = true;
+    const label = btn.textContent;
     btn.textContent = "recording…";
+    const canvas = plot.glContext.canvas as HTMLCanvasElement;
+    plot.setForceFullRender(true);
     try {
       const rec = startRecording(canvas, 30);
       const start = performance.now();
@@ -570,24 +576,62 @@ function init(): void {
             resolve();
             return;
           }
-          const ang = t * 2 * Math.PI;
-          plot.c = formatComplex([cx + radius * Math.cos(ang), cy + radius * Math.sin(ang)]);
-          plot.render();
+          apply(t);
           requestAnimationFrame(frame);
         };
         frame();
       });
-      const blob = await rec.stop();
-      downloadBlob(blob, "julia-morph.webm");
-      showToast("Saved julia-morph.webm", "info");
+      downloadBlob(await rec.stop(), filename);
+      showToast(`Saved ${filename}`, "info");
     } catch (err) {
       showToast(`Recording failed: ${err instanceof Error ? err.message : String(err)}`, "error");
     } finally {
-      syncDynamicalC(); // restore c to the parameter point
+      plot.setForceFullRender(false);
+      restore();
       btn.disabled = false;
-      btn.textContent = "Record Julia morph";
-      recordingMorph = false;
+      btn.textContent = label;
+      recording = false;
     }
+  }
+
+  /** Record a looping "Julia morph": sweep c around a small circle (dynamical plane). */
+  function recordJuliaMorph(): void {
+    const plot = dynamicalView.plot;
+    const [cx, cy] = parameterView.plot.z0; // sweep centre = current parameter point
+    const radius = 0.03;
+    void recordAnimation(
+      plot,
+      byId<HTMLButtonElement>("record_morph"),
+      "julia-morph.webm",
+      4000,
+      (t) => {
+        const ang = t * 2 * Math.PI;
+        plot.c = formatComplex([cx + radius * Math.cos(ang), cy + radius * Math.sin(ang)]);
+        plot.render();
+      },
+      () => syncDynamicalC(), // restore c to the parameter point
+    );
+  }
+
+  /** Record a zoom-in into the parameter plane (log-interpolated zoom over the clip). */
+  function recordZoomMovie(): void {
+    const plot = parameterView.plot;
+    const z0 = plot.zoom;
+    const factor = 1000; // total zoom-in across the clip
+    void recordAnimation(
+      plot,
+      byId<HTMLButtonElement>("record_zoom"),
+      "zoom.webm",
+      6000,
+      (t) => {
+        plot.zoom = z0 * Math.pow(factor, t);
+        plot.render();
+      },
+      () => {
+        plot.zoom = z0;
+        plot.scheduleRender();
+      },
+    );
   }
 
   // --- wire up the UI controls ------------------------------------------
@@ -697,6 +741,9 @@ function init(): void {
   });
   byId("record_morph").addEventListener("click", () => {
     void recordJuliaMorph();
+  });
+  byId("record_zoom").addEventListener("click", () => {
+    void recordZoomMovie();
   });
 
   disableUnsupportedSizes();

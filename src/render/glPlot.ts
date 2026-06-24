@@ -247,6 +247,7 @@ export class GLPlot {
   private _nplot = "7";
   private _autoIter = false; // scale the iteration cap with zoom depth
   private _accumulate = false; // temporal anti-aliasing (idle accumulation)
+  private _forceFull = false; // render full-res every frame (while recording animation)
   private _z0: Vec2 = [0, 0];
   private _mode = 0; // 0 escape, 1 smooth, 2 distance, 3 orbit-trap, 4 domain
   private _palette = 0; // 0 classic, 1 viridis, 2 magma, 3 grayscale
@@ -997,14 +998,22 @@ export class GLPlot {
    */
   render(): void {
     if (this.contextLost) return;
-    if (this._accumulate && this.postProgram !== null && this.floatExt !== null && !this._draft) {
+    if (
+      this._accumulate &&
+      !this._forceFull &&
+      this.postProgram !== null &&
+      this.floatExt !== null &&
+      !this._draft
+    ) {
       this.renderAccumulate();
       this.afterRender?.();
       return;
     }
     let fraction = 1;
     let refine = false;
-    if (this._draft) {
+    if (this._forceFull) {
+      // full-resolution single pass — used while recording an animation
+    } else if (this._draft) {
       fraction = PROGRESSIVE_LADDER[0]; // coarse while interacting
     } else if (this.wantsProgressive()) {
       fraction = PROGRESSIVE_LADDER[this._level];
@@ -1358,6 +1367,12 @@ export class GLPlot {
   setAccumulate(on: boolean): void {
     this._accumulate = on;
     this.scheduleRender();
+  }
+
+  /** Force full-resolution single-pass rendering (no draft / progressive / accumulate) —
+   *  used while recording an animation so every captured frame is sharp. */
+  setForceFullRender(on: boolean): void {
+    this._forceFull = on;
   }
 
   /**

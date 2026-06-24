@@ -141,12 +141,18 @@ clipboard ([`PlotView.copyPng`](src/render/plotView.ts)).
 
 ## Animation
 
-The Downloads panel has a **Record Julia morph** button: it sweeps the parameter `c`
-around a small circle about the current point while re-rendering the dynamical plane,
-and records the result to a **WebM** video (`MediaRecorder` over the canvas'
+The Downloads panel records short **WebM** clips (`MediaRecorder` over the canvas'
 `captureStream`, no dependency — the GL canvases use `preserveDrawingBuffer` so the
-capture isn't black). Keep the tab focused while it records (the loop is paced by
-`requestAnimationFrame`). See [`src/ui/recorder.ts`](src/ui/recorder.ts).
+capture isn't black):
+
+- **Record Julia morph** sweeps the parameter `c` around a small circle about the
+  current point, morphing the dynamical plane.
+- **Record zoom-in** zooms into the parameter plane (log-interpolated) from the current
+  view — navigate onto some structure first.
+
+Frames are forced to full resolution during capture. Keep the tab focused while
+recording (the loop is paced by `requestAnimationFrame`). See
+[`src/ui/recorder.ts`](src/ui/recorder.ts).
 
 ## Colouring
 
