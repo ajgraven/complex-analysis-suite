@@ -32,10 +32,10 @@ describe("pinchStateOf", () => {
       [0.2, 0.5],
       [0.6, 0.5],
     ]);
-    expect(s).not.toBeNull();
-    expect(s!.dist).toBeCloseTo(0.4, 12);
-    expect(s!.mid[0]).toBeCloseTo(0.4, 12);
-    expect(s!.mid[1]).toBeCloseTo(0.5, 12);
+    if (s === null) throw new Error("expected a pinch state for two pointers");
+    expect(s.dist).toBeCloseTo(0.4, 12);
+    expect(s.mid[0]).toBeCloseTo(0.4, 12);
+    expect(s.mid[1]).toBeCloseTo(0.5, 12);
   });
 });
 

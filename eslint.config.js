@@ -12,6 +12,14 @@ export default tseslint.config(
     languageOptions: {
       globals: { ...globals.browser },
     },
+    rules: {
+      // Guardrails locking in the codebase's current hygiene so regressions are caught.
+      // (Type-aware rules like no-floating-promises are intentionally NOT enabled: the UI
+      //  layer uses fire-and-forget async handlers, and they'd need `void` noise everywhere.)
+      eqeqeq: ["error", "always"],
+      "no-console": ["error", { allow: ["warn", "info", "error"] }],
+      "@typescript-eslint/no-non-null-assertion": "error",
+    },
   },
   {
     // Test and config files may use Node globals.
