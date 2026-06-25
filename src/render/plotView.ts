@@ -15,6 +15,7 @@ import { clampExportSize, downloadCanvas, ensurePngName, getMaxTextureSize } fro
 import { showToast } from "../ui/toast";
 import { GLPlot, renderScale, type FractType } from "./glPlot";
 import { drawOverlay, drawScaleBar } from "./overlay";
+import { pinchShift, pinchStateOf, type PinchState } from "./pinch";
 
 /** Hooks linking a plot to the rest of the app (the parameter→dynamical coupling, input sync). */
 export interface PlotViewHooks {
@@ -42,11 +43,15 @@ export class PlotView {
   private readonly fractType: FractType;
   private readonly hooks: PlotViewHooks;
 
-  private dragMode: "none" | "pan" | "point" = "none";
+  private dragMode: "none" | "pan" | "point" | "pinch" = "none";
   private lastUv: Vec2 = [0, 0];
   private overlayScheduled = false;
   private wheelTimer = 0;
   private showCritical = false;
+  /** Active pointers (id → current uv), tracked so two fingers drive a pinch. */
+  private readonly pointers = new Map<number, Vec2>();
+  /** The previous pinch snapshot, while a two-finger gesture is in progress. */
+  private pinchPrev: PinchState | null = null;
 
   constructor(
     glCanvas: HTMLCanvasElement,
@@ -253,6 +258,20 @@ export class PlotView {
     el.addEventListener("pointerdown", (e) => {
       capture(e.pointerId, true);
       const uv = this.uvOf(e);
+      this.pointers.set(e.pointerId, uv);
+
+      // A second finger begins a pinch (two-finger pan + zoom). Abandon any
+      // single-finger drag that was in progress.
+      if (this.pointers.size === 2) {
+        if (this.dragMode === "point") this.hooks.coupling?.setDraft(false);
+        this.dragMode = "pinch";
+        this.plot.setDraft(true);
+        this.pinchPrev = pinchStateOf([...this.pointers.values()]);
+        el.style.cursor = "grabbing";
+        return;
+      }
+      if (this.pointers.size > 2) return; // ignore additional fingers
+
       const pUv = this.pointUv();
       const r = el.getBoundingClientRect();
       const dist = Math.hypot((uv[0] - pUv[0]) * r.width, (uv[1] - pUv[1]) * r.height);
@@ -269,6 +288,19 @@ export class PlotView {
 
     el.addEventListener("pointermove", (e) => {
       const uv = this.uvOf(e);
+      if (this.pointers.has(e.pointerId)) this.pointers.set(e.pointerId, uv);
+
+      if (this.dragMode === "pinch") {
+        const cur = pinchStateOf([...this.pointers.values()]);
+        if (!cur || !this.pinchPrev) return;
+        const { newZoom, panShift, zoomShift } = pinchShift(this.pinchPrev, cur, this.plot.zoom);
+        this.plot.shift(panShift); // two-finger pan
+        this.plot.zoom = newZoom; // pinch scale...
+        this.plot.shift(zoomShift); // ...anchored on the gesture midpoint
+        this.pinchPrev = cur;
+        return;
+      }
+
       if (this.dragMode === "none") {
         // Hover: cursor affordance over the white point + live coordinate readout.
         const r = el.getBoundingClientRect();
@@ -292,8 +324,32 @@ export class PlotView {
     });
 
     const endDrag = (e: PointerEvent): void => {
-      if (this.dragMode === "none") return;
       capture(e.pointerId, false);
+      this.pointers.delete(e.pointerId);
+
+      if (this.dragMode === "pinch") {
+        // Two or more fingers still down (a third finger lifted): keep pinching,
+        // but reset the baseline so the distance ratio doesn't jump.
+        if (this.pointers.size >= 2) {
+          this.pinchPrev = pinchStateOf([...this.pointers.values()]);
+          return;
+        }
+        this.pinchPrev = null;
+        // One finger remains → continue as a single-finger pan without a jump.
+        const remaining = this.pointers.size === 1 ? [...this.pointers.values()][0] : undefined;
+        if (remaining) {
+          this.dragMode = "pan";
+          this.lastUv = remaining;
+          return;
+        }
+        this.plot.setDraft(false);
+        this.hooks.onViewChanged?.(this.plot.center, this.plot.zoom);
+        this.dragMode = "none";
+        el.style.cursor = "crosshair";
+        return;
+      }
+
+      if (this.dragMode === "none") return;
       if (this.dragMode === "pan") {
         this.plot.setDraft(false);
         this.hooks.onViewChanged?.(this.plot.center, this.plot.zoom);

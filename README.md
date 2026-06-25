@@ -113,6 +113,9 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
 - Drag the **white point** in either plot to change its value (the cursor shows
   a grab affordance over it); the complex coordinate under the cursor is shown
   beneath each plot.
+- On a **touch screen**, one finger pans (or drags the white point) and a
+  **two-finger pinch** zooms toward the gesture midpoint — lift to one finger
+  mid-pinch and it continues as a pan.
 - Press **Enter** (or **apply changes**) to apply edits to the input fields;
   **reset** reverts every option (including colouring) to the selected preset.
 - **↶ undo / ↷ redo** (or **Ctrl+Z** / **Ctrl+Y**) step through your recent changes —
