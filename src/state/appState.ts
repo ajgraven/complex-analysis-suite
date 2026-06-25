@@ -4,8 +4,10 @@
  * `readAppState`/`applyAppState` move between the DOM and a plain object; `encodeState`/
  * `decodeState` round-trip that object through a URL-hash-safe string for permalinks.
  *
- * Not (yet) captured: the dynamical orbit start z₀ and a custom gradient's stops — a
- * shared link reproduces the formula, view, colouring mode/palette, and all toggles.
+ * This module captures the allow-listed DOM controls. The dynamical orbit-start z₀ and
+ * the custom-gradient stops can't be reached by an id list, so `main.ts` layers them onto
+ * the state object as `_z0`/`_grad` (see readFullState/applyFullState) before encoding —
+ * a shared link / saved view / undo step reproduces those too.
  */
 
 /** Control element ids whose values define a shareable view. */

@@ -8,7 +8,7 @@
 
 import "./styles/main.css";
 import type { Vec2 } from "./arrays";
-import { formatComplex } from "./complex";
+import { formatComplex, parseComplex } from "./complex";
 import { getMaxTextureSize } from "./hiResExport";
 import { PlotView } from "./render/plotView";
 import type { GLPlot } from "./render/glPlot";
@@ -16,7 +16,7 @@ import { dynPresets, paramPresets, type Preset, type PresetName } from "./preset
 import { byId } from "./ui/dom";
 import { showToast } from "./ui/toast";
 import { validateInputs, type FieldError } from "./ui/validate";
-import { DEFAULT_GRADIENT } from "./palettes";
+import { DEFAULT_GRADIENT, type GradientStop } from "./palettes";
 import { setupGradientEditor } from "./ui/gradient";
 import { canRecord, startRecording, downloadBlob } from "./ui/recorder";
 import { interpolateView, type Keyframe } from "./render/keyframes";
@@ -627,9 +627,40 @@ function init(): void {
     applyParamA();
   }
 
+  /**
+   * Full serializable state: the DOM controls ({@link readAppState}) plus the two
+   * view-defining bits the control allow-list can't reach — the custom-gradient
+   * stops and the dynamical orbit-start z₀ (read from the live plot, since
+   * `readPresetsFromInputs` only ever reflects the *current* z₀, not a saved one).
+   */
+  function readFullState(): AppState {
+    const state = readAppState();
+    state._grad = JSON.stringify(gradientEditor.getStops());
+    state._z0 = formatComplex(dynamicalView.plot.z0);
+    return state;
+  }
+
+  /** Apply a full state: the DOM controls, the custom gradient, and the dynamical z₀. */
+  function applyFullState(state: AppState): void {
+    applyAppState(state);
+    if (typeof state._grad === "string") {
+      try {
+        const stops = JSON.parse(state._grad) as GradientStop[];
+        gradientEditor.setStops(stops); // setStops doesn't emit onChange — push to the plots too
+        parameterView.plot.setGradient(stops);
+        dynamicalView.plot.setGradient(stops);
+      } catch {
+        /* malformed gradient in the link/snapshot — keep the current gradient */
+      }
+    }
+    // Set z₀ before applyAllControls so readPresetsFromInputs picks it up and re-applies it.
+    if (typeof state._z0 === "string") dynamicalView.plot.z0 = parseComplex(state._z0);
+    applyAllControls();
+  }
+
   /** Serialize the current view into the URL hash and copy a shareable link. */
   async function shareLink(): Promise<void> {
-    const url = `${location.origin}${location.pathname}#s=${encodeState(readAppState())}`;
+    const url = `${location.origin}${location.pathname}#s=${encodeState(readFullState())}`;
     history.replaceState(null, "", url);
     try {
       await navigator.clipboard.writeText(url);
@@ -645,8 +676,7 @@ function init(): void {
     if (!match) return false;
     const state = decodeState(match[1]);
     if (!state) return false;
-    applyAppState(state);
-    applyAllControls();
+    applyFullState(state);
     return true;
   }
 
@@ -673,7 +703,7 @@ function init(): void {
       return;
     }
     const views = loadSavedViews();
-    views[name] = readAppState();
+    views[name] = readFullState();
     saveSavedViews(views);
     populateViewSelect();
     byId<HTMLSelectElement>("saved-views").value = name;
@@ -689,8 +719,7 @@ function init(): void {
     if (!name) return;
     const state = loadSavedViews()[name];
     if (!state) return;
-    applyAppState(state);
-    applyAllControls();
+    applyFullState(state);
     scheduleRecord();
     showToast(`Loaded view “${name}”.`, "info");
   }
@@ -720,7 +749,7 @@ function init(): void {
 
   /** Commit a history entry if the state changed since the last snapshot. */
   function recordHistory(): void {
-    const cur = readAppState();
+    const cur = readFullState();
     if (JSON.stringify(cur) === JSON.stringify(lastSnapshot)) return;
     undoStack.push(lastSnapshot);
     if (undoStack.length > MAX_HISTORY) undoStack.shift();
@@ -739,8 +768,7 @@ function init(): void {
   function restoreSnapshot(state: AppState): void {
     window.clearTimeout(recordTimer); // drop any pending commit
     lastSnapshot = state;
-    applyAppState(state);
-    applyAllControls();
+    applyFullState(state);
     updateHistoryButtons();
   }
 
@@ -1190,7 +1218,7 @@ function init(): void {
   updateKeyframeUI();
   populateViewSelect();
   loadFromHash(); // apply a shared view if the URL carries one
-  lastSnapshot = readAppState(); // history baseline (after any shared view is applied)
+  lastSnapshot = readFullState(); // history baseline (after any shared view is applied)
   window.clearTimeout(recordTimer);
   updateHistoryButtons();
 
