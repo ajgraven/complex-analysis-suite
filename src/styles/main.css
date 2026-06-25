@@ -48,6 +48,14 @@
   box-sizing: border-box;
 }
 
+/* The `hidden` attribute must always win. Author rules that set `display`
+   (e.g. the modal overlays below, which are flex containers) otherwise defeat
+   the UA `[hidden] { display: none }` rule, leaving the element permanently
+   visible even when JS sets `el.hidden = true`. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   padding: 1.5rem clamp(0.75rem, 3vw, 2rem) 3rem;
