@@ -96,7 +96,12 @@ function emitBool(node: Node): string {
     case "compare": {
       const a = emitComplex(node.left);
       const b = emitComplex(node.right);
-      if (node.op === "==") return `(${a} == ${b})`;
+      // Compare real AND imaginary parts via the limb accessors. A raw `cvec == cvec`
+      // is correct in single precision (vec2) but in df64 (vec4) it also compares the
+      // error limbs, so equal values with different hi/lo splits would test unequal —
+      // diverging from the JS evaluator (which compares re/im only).
+      if (node.op === "==")
+        return `(cre1(${a}) == cre1(${b}) && cre1(cim(${a})) == cre1(cim(${b})))`;
       return `(cre1(${a}) ${node.op} cre1(${b}))`;
     }
     case "if":
@@ -162,9 +167,11 @@ function emitBody(ast: Node, emitFinal: (n: Node) => string): string {
 
 /** Live-parameter alias: bind `a` to the `uA` uniform when it's a free variable (used
  *  but not assigned as a local of the same name). Empty otherwise, so locals named `a`
- *  keep working. */
+ *  keep working. Built via `vec_(uA.x, uA.y)` (the precision-agnostic complex constructor)
+ *  rather than `= uA`, so it is valid in the df64 build where `cvec` is a `vec4` — a raw
+ *  `cvec a = uA;` would be a vec4=vec2 type error that silently fails df64 compilation. */
 function paramAlias(ast: Node): string {
-  return isFreeParameter(ast, "a") ? "  cvec a = uA;\n" : "";
+  return isFreeParameter(ast, "a") ? "  cvec a = vec_(uA.x, uA.y);\n" : "";
 }
 
 /** GLSL for `cvec fFn(cvec z, cvec c) { … }`. */
