@@ -140,6 +140,14 @@ h2 {
   color: var(--muted);
 }
 
+/* Persistent one-line caption under each plot, explaining its role and the
+   parameter→dynamical coupling (the dynamical caption tracks the live c). */
+.plot-caption {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 /* --- Control fields ---------------------------------------------------- */
 .controls {
   display: flex;

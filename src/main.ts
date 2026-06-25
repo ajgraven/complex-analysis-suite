@@ -291,6 +291,7 @@ function init(): void {
         setC: (z0) => {
           dynamicalView.plot.c = formatComplex(z0);
           setCInput(z0);
+          updateDynCaption();
         },
         setDraft: (on) => dynamicalView.plot.setDraft(on),
       },
@@ -349,9 +350,27 @@ function init(): void {
     if (errors.length > 0) showInputErrors(errors);
   }
 
+  const dynCValue = byId("dyn-c-value");
+  /** Format a complex literal (`-0.7-i*0.4`) as a clean `a + bi` for display. */
+  function prettyComplex(s: string): string {
+    const f = (x: number): string => Number.parseFloat(x.toPrecision(4)).toString();
+    const [re, im] = parseComplex(s);
+    const r = f(re);
+    if (im === 0) return r;
+    const sign = im < 0 ? "-" : "+";
+    const imStr = Math.abs(im) === 1 ? "i" : `${f(Math.abs(im))}i`;
+    if (re === 0) return `${im < 0 ? "-" : ""}${imStr}`;
+    return `${r} ${sign} ${imStr}`;
+  }
+  /** Update the dynamical-plane caption to the current parameter c. */
+  function updateDynCaption(): void {
+    dynCValue.textContent = prettyComplex(dynamicalView.plot.c);
+  }
+
   /** Keep the dynamical plane's `c` tied to the parameter-space white point. */
   function syncDynamicalC(): void {
     dynamicalView.plot.c = formatComplex(parameterView.plot.z0);
+    updateDynCaption();
     dynamicalView.plot.scheduleRender();
   }
   syncDynamicalC();
