@@ -98,7 +98,9 @@ export function encodeState(state: AppState): string {
 export function decodeState(encoded: string): AppState | null {
   try {
     const obj: unknown = JSON.parse(fromBase64(encoded));
-    return obj && typeof obj === "object" ? (obj as AppState) : null;
+    // Reject non-objects AND arrays (typeof [] === "object") — only a plain
+    // key→value map is a valid AppState; a crafted permalink could be anything.
+    return obj && typeof obj === "object" && !Array.isArray(obj) ? (obj as AppState) : null;
   } catch {
     return null;
   }
@@ -113,7 +115,9 @@ export function loadSavedViews(): Record<string, AppState> {
   try {
     const raw = localStorage.getItem(VIEWS_KEY);
     const obj: unknown = raw ? JSON.parse(raw) : {};
-    return obj && typeof obj === "object" ? (obj as Record<string, AppState>) : {};
+    return obj && typeof obj === "object" && !Array.isArray(obj)
+      ? (obj as Record<string, AppState>)
+      : {};
   } catch {
     return {};
   }

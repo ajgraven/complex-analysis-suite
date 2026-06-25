@@ -26,4 +26,12 @@ describe("app-state permalink codec", () => {
     expect(decodeState("")).toBeNull();
     expect(decodeState("@@@not-base64@@@")).toBeNull();
   });
+
+  it("rejects valid base64 of non-object JSON (array / primitive / null)", () => {
+    // typeof [] === "object", so an array must be explicitly rejected.
+    expect(decodeState(encodeState([1, 2, 3] as unknown as AppState))).toBeNull();
+    expect(decodeState(encodeState(42 as unknown as AppState))).toBeNull();
+    expect(decodeState(encodeState("hi" as unknown as AppState))).toBeNull();
+    expect(decodeState(encodeState(null as unknown as AppState))).toBeNull();
+  });
 });

@@ -32,14 +32,24 @@ export function ensurePngName(name: string): string {
   return /\.png$/i.test(base) ? base : `${base}.png`;
 }
 
-/** Query the GPU's maximum texture size via a throwaway WebGL context. */
+/** Memoized GPU max texture size — the value is fixed per device, and creating a
+ *  WebGL context per query leaks contexts (browsers cap live contexts at ~16, so
+ *  repeated exports/copies would eventually start failing). */
+let cachedMaxTextureSize: number | null = null;
+
+/** Query the GPU's maximum texture size via a throwaway WebGL context (cached). */
 export function getMaxTextureSize(): number {
+  if (cachedMaxTextureSize !== null) return cachedMaxTextureSize;
+  const canvas = document.createElement("canvas");
   const gl =
-    (document.createElement("canvas").getContext("webgl2") as WebGL2RenderingContext | null) ??
-    (document.createElement("canvas").getContext("webgl") as WebGLRenderingContext | null);
-  if (!gl) return DEFAULT_MAX_TEXTURE_SIZE;
+    (canvas.getContext("webgl2") as WebGL2RenderingContext | null) ??
+    (canvas.getContext("webgl") as WebGLRenderingContext | null);
+  if (!gl) return DEFAULT_MAX_TEXTURE_SIZE; // don't cache: a real context may appear later
   const max = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
-  return typeof max === "number" && max > 0 ? max : DEFAULT_MAX_TEXTURE_SIZE;
+  // Release the throwaway context immediately rather than waiting for GC.
+  gl.getExtension("WEBGL_lose_context")?.loseContext();
+  cachedMaxTextureSize = typeof max === "number" && max > 0 ? max : DEFAULT_MAX_TEXTURE_SIZE;
+  return cachedMaxTextureSize;
 }
 
 /** Encode a canvas to a PNG and trigger a browser download (off the main thread). */
