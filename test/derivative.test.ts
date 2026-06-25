@@ -37,8 +37,32 @@ describe("differentiate", () => {
     });
   }
 
+  // The remaining chain-rule builtins + the general u^w rule (which feeds Newton's
+  // method), each at a point inside its principal domain (away from branch cuts).
+  const extra: Array<{ src: string; z: Complex }> = [
+    { src: "tan(z)", z: [0.5, 0.3] },
+    { src: "tan(z)", z: [-0.4, 0.6] },
+    { src: "arcsin(z)", z: [0.3, 0.2] },
+    { src: "arccos(z)", z: [0.2, -0.3] },
+    { src: "arctan(z)", z: [0.5, 0.3] },
+    { src: "lambertw(z)", z: [0.8, 0.2] },
+    { src: "z^z", z: [0.6, 0.3] }, // general u^w (non-constant exponent)
+    { src: "(z + c)^2", z: [0.7, -0.2] }, // u^k with a non-trivial inner u
+    { src: "exp(z^2)", z: [0.4, 0.5] }, // nested chain rule
+  ];
+  for (const { src, z } of extra) {
+    it(`matches finite differences for ${src} at ${z.join(",")}`, () => {
+      const a = analytic(src, z);
+      const b = numeric(src, z);
+      expect(Math.abs(a[0] - b[0])).toBeLessThan(1e-3);
+      expect(Math.abs(a[1] - b[1])).toBeLessThan(1e-3);
+    });
+  }
+
   it("throws for non-holomorphic builtins", () => {
     expect(() => differentiate(parse("abs(z)"))).toThrow();
     expect(() => differentiate(parse("conjugate(z)"))).toThrow();
+    expect(() => differentiate(parse("arg(z)"))).toThrow();
+    expect(() => differentiate(parse("mod(z, c)"))).toThrow(); // binary builtin
   });
 });

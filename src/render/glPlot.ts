@@ -168,7 +168,7 @@ const DRAFT_MIN_ITERS = 30;
 const MAX_ACCUM = 16;
 
 /** van der Corput / Halton low-discrepancy value in [0,1) for `index` in base `b`. */
-function halton(index: number, b: number): number {
+export function halton(index: number, b: number): number {
   let result = 0;
   let f = 1;
   let i = index;
