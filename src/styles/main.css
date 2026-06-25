@@ -434,6 +434,15 @@ button.primary.attention {
   align-items: flex-end;
 }
 
+/* Download area, split into "Export image" and "Animate" titled sections. */
+.downloads {
+  margin-top: var(--gap);
+}
+
+.downloads .panel {
+  margin-top: 0;
+}
+
 /* Inline checkbox + label (e.g. the export "overlays" toggle). */
 label.checkbox {
   display: flex;
