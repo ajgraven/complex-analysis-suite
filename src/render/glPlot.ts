@@ -204,6 +204,9 @@ export class GLPlot {
   private orbitTex: WebGLTexture | null = null;
   private orbitLen = 0;
   private orbitDirty = true;
+  /** Histogram CDF cache: rebuilt only when the distribution or render size changes. */
+  private cdfDirty = true;
+  private cdfSize = 0;
   private _perturbation = false; // perturbation deep-zoom toggle
   private _perturbEligible = false; // current f is z²+c (auto-detected)
   /** View centre in double-double precision, accumulated across pan/zoom for deep zoom. */
@@ -336,6 +339,13 @@ export class GLPlot {
     this.orbitTex = null;
     this.orbitLen = 0;
     this.orbitDirty = true;
+    // Histogram pre-pass resources were lost with the context; drop the stale handles
+    // and invalidate the CDF cache so it rebuilds against the restored context.
+    this.histoTex = null;
+    this.histoFbo = null;
+    this.cdfTex = null;
+    this.cdfDirty = true;
+    this.cdfSize = 0;
     this.setupQuad();
     this.compilePostProgram();
     this.compilePerturbProgram();
@@ -597,6 +607,7 @@ export class GLPlot {
     this._level = 0;
     this.accumCount = 0;
     this.orbitDirty = true;
+    this.cdfDirty = true; // the escape-count distribution may have changed → rebuild the CDF
     this.requestFrame();
   }
 
@@ -820,6 +831,22 @@ export class GLPlot {
   }
 
   /**
+   * Build the histogram CDF only when needed. The escape-count distribution depends
+   * only on the fractal content (invalidated via {@link cdfDirty} at the same points
+   * as `orbitDirty`) and the render size, so it is identical across the temporal-AA
+   * accumulate loop and progressive frames at the same size — reusing it there avoids
+   * a per-frame GPU draw + synchronous `readPixels` stall.
+   */
+  private ensureCdf(size: number): void {
+    if (!this.cdfDirty && this.cdfTex && this.cdfSize === size) return;
+    this.updateCdf(size, size);
+    if (this.cdfTex) {
+      this.cdfDirty = false;
+      this.cdfSize = size;
+    }
+  }
+
+  /**
    * Histogram-equalisation pre-pass (mode 5): render the raw escape count to an
    * off-screen buffer at (w, h), read it back, build a cumulative distribution
    * over escaped pixels on the CPU, and upload it as the {@link cdfTex} lookup.
@@ -1037,7 +1064,7 @@ export class GLPlot {
     this.applyRenderSize(fraction);
     const gl = this.gl;
     const size = this.canvas.width;
-    if (this.effectiveMode() === 5) this.updateCdf(size, size);
+    if (this.effectiveMode() === 5) this.ensureCdf(size);
     if (this._post && this.postProgram) {
       // Render the fractal to an offscreen texture, then composite it through the
       // post-processing pass (vignette + gamma) into the visible framebuffer.
@@ -1070,7 +1097,7 @@ export class GLPlot {
     const gl = this.gl;
     this.applyRenderSize(1); // accumulate at full resolution
     const size = this.canvas.width;
-    if (this.effectiveMode() === 5) this.updateCdf(size, size);
+    if (this.effectiveMode() === 5) this.ensureCdf(size);
     this.ensureAccumTarget(size);
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.accumFbo);
     gl.viewport(0, 0, size, size);
@@ -1108,7 +1135,10 @@ export class GLPlot {
     if (!this.programs.single && !this.programs.df64) {
       throw new Error("No compiled program to export");
     }
-    if (this._mode === 5) this.updateCdf(size, size); // build the CDF before binding the export FBO
+    if (this._mode === 5) {
+      this.updateCdf(size, size); // build the CDF before binding the export FBO
+      this.cdfDirty = true; // this overwrote the shared CDF at export size — rebuild for the live view
+    }
 
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
