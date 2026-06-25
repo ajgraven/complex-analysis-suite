@@ -116,22 +116,31 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
 - On a **touch screen**, one finger pans (or drags the white point) and a
   **two-finger pinch** zooms toward the gesture midpoint — lift to one finger
   mid-pinch and it continues as a pan.
-- Press **Enter** (or **apply changes**) to apply edits to the input fields;
+- Press **Enter** (or **apply changes**) to apply edits to the input fields — while
+  edits are pending an "unapplied edits" hint shows and the Apply button is ringed;
   **reset** reverts every option (including colouring) to the selected preset.
+- Each plot's precise fields (**c**, escape test, centre, zoom, max iterations, canvas
+  size) are tucked behind a **view chip** below the plot showing `centre · zoom ·
+iterations`; click **edit ▾** to expand and type exact values. A caption under each plot
+  names the coupling — the parameter-space white point sets **c**, and the dynamical plane
+  shows that **c**.
 - **↶ undo / ↷ redo** (or **Ctrl+Z** / **Ctrl+Y**) step through your recent changes —
   formula, view, colouring, and toggles — as a single history.
 - Choose a colour scheme with the **coloring** control — see
   [Colouring](#colouring).
 - The entered **f(z, c)** is typeset live (KaTeX) beneath the formula input, and the
   **tour** button runs a short guided walkthrough of the interface.
+- The top **app bar** holds the global actions: **Theme**, **tour**, **Share link**, and
+  a **Views ▾** menu.
 - The **Theme** button cycles auto / dark / light (auto follows your OS colour scheme);
   the choice is remembered across visits.
 - **Share link** copies a URL whose hash encodes the current view — formula, both planes'
   centre/zoom/iterations, colouring mode/palette, every toggle, the dynamical orbit start
   z₀, and the custom-gradient stops — so opening it reproduces the view.
-- **Save view** stores the current view under a name (in the browser); pick it from the
-  **Saved views** dropdown to restore it, or **Delete** to remove it. Saved views persist
-  across visits (localStorage) and capture the same state as a share link.
+- Under the **Views ▾** menu: **Save view** stores the current view under a name (in the
+  browser); pick it from the **Saved views** dropdown to restore it, or **Delete** to
+  remove it. Saved views persist across visits (localStorage) and capture the same state
+  as a share link.
 - When `f` uses the free variable **`a`**, an `a` slider appears under the formula — drag
   it to sweep a live parameter and watch the fractal change.
 - **Auto iterations** raises the iteration cap automatically as you zoom in, so deep
@@ -141,7 +150,7 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
 ## Saving images
 
 Each plot has **Save** (download a PNG) and **Copy** (copy a PNG to the
-clipboard) buttons in the Downloads panel, with two adjacent controls:
+clipboard) buttons in the **Export image** section, with two adjacent controls:
 
 - **Size** — the output resolution in pixels (e.g. `2000`, `4000`, `8000`). The
   plot is re-rendered off-screen at this size and downloaded as a PNG at full
@@ -164,7 +173,7 @@ clipboard ([`PlotView.copyPng`](src/render/plotView.ts)).
 
 ## Animation
 
-The Downloads panel records short **WebM** clips (`MediaRecorder` over the canvas'
+The **Animate** section records short **WebM** clips (`MediaRecorder` over the canvas'
 `captureStream`, no dependency — the GL canvases use `preserveDrawingBuffer` so the
 capture isn't black):
 
