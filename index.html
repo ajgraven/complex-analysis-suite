@@ -13,7 +13,54 @@
     <script type="module" src="/src/main.ts"></script>
 
     <div class="page">
-      <h1>Complex Dynamics Visualization Tool</h1>
+      <header class="app-bar">
+        <h1>Complex Dynamics Visualization Tool</h1>
+        <div class="app-bar-actions">
+          <button id="theme-btn" type="button" title="Switch colour theme (auto / dark / light)">
+            Theme: auto
+          </button>
+          <button id="tour-btn" type="button" title="Take a guided tour">tour</button>
+          <button
+            id="share-btn"
+            type="button"
+            title="Copy a shareable link that restores this view (formula, zoom, colouring, toggles)"
+          >
+            Share link
+          </button>
+          <details class="views-menu" id="views-menu">
+            <summary>Views ▾</summary>
+            <div class="views-panel">
+              <input
+                type="text"
+                id="view-name"
+                size="10"
+                placeholder="view name"
+                title="Name for saving the current view"
+              />
+              <button
+                id="save-view-btn"
+                type="button"
+                class="primary"
+                title="Save the current view under this name"
+              >
+                Save view
+              </button>
+              <select id="saved-views" title="Load a saved view">
+                <option value="">Saved views…</option>
+              </select>
+              <button
+                id="delete-view-btn"
+                type="button"
+                class="danger"
+                disabled
+                title="Delete the selected saved view"
+              >
+                Delete
+              </button>
+            </div>
+          </details>
+        </div>
+      </header>
 
       <div id="webgl-error" class="banner" role="alert" hidden></div>
       <div id="input-errors" class="input-errors" role="alert" aria-live="assertive" hidden></div>
@@ -347,8 +394,8 @@ z^2+c</textarea
                   <input type="checkbox" id="perturbation" /> perturbation (deep zoom)
                 </label>
                 <p id="perturbation-note" class="control-note" hidden>
-                  Perturbation renders escape / smooth colouring only — relief lighting,
-                  boundary outline, and equipotential overlays use the standard view.
+                  Perturbation renders escape / smooth colouring only — relief lighting, boundary
+                  outline, and equipotential overlays use the standard view.
                 </p>
               </div>
             </div>
@@ -370,39 +417,6 @@ z^2+c</textarea
           <button id="undo-btn" type="button" disabled title="Undo (Ctrl+Z)">↶ undo</button>
           <button id="redo-btn" type="button" disabled title="Redo (Ctrl+Y / Ctrl+Shift+Z)">
             ↷ redo
-          </button>
-          <button id="tour-btn" type="button" title="Take a guided tour">tour</button>
-          <button id="theme-btn" type="button" title="Switch colour theme (auto / dark / light)">
-            Theme: auto
-          </button>
-          <button
-            id="share-btn"
-            type="button"
-            title="Copy a shareable link that restores this view (formula, zoom, colouring, toggles)"
-          >
-            Share link
-          </button>
-          <input
-            type="text"
-            id="view-name"
-            size="10"
-            placeholder="view name"
-            title="Name for saving the current view"
-          />
-          <button id="save-view-btn" type="button" title="Save the current view under this name">
-            Save view
-          </button>
-          <select id="saved-views" title="Load a saved view">
-            <option value="">Saved views…</option>
-          </select>
-          <button
-            id="delete-view-btn"
-            type="button"
-            class="danger"
-            disabled
-            title="Delete the selected saved view"
-          >
-            Delete
           </button>
         </div>
       </section>
@@ -707,8 +721,8 @@ z^2+c</textarea
           </li>
           <li>
             Scroll to zoom toward the cursor, drag the background to pan, and edit
-            <code>f(z, c)</code> or pick a preset below. On a touch screen, drag with one
-            finger and pinch with two to zoom.
+            <code>f(z, c)</code> or pick a preset below. On a touch screen, drag with one finger and
+            pinch with two to zoom.
           </li>
         </ul>
         <button id="onboarding_dismiss" type="button" class="primary">Got it</button>

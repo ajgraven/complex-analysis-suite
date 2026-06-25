@@ -79,6 +79,68 @@ h2 {
   margin: 0 auto;
 }
 
+/* --- Top app bar: title + global actions (theme, tour, share, views) --- */
+.app-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.app-bar h1 {
+  margin: 0;
+}
+
+.app-bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* "Views" dropdown (save / load / delete named views) as a popover menu. */
+.views-menu {
+  position: relative;
+}
+
+.views-menu > summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--field-bg);
+  color: var(--fg);
+  user-select: none;
+}
+
+.views-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.views-menu > summary:hover {
+  border-color: var(--accent);
+}
+
+.views-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.3rem);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 12rem;
+  padding: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+}
+
 /* --- Plots: two columns that stack on narrow screens ------------------- */
 .plots {
   display: grid;

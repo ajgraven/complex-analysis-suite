@@ -638,8 +638,7 @@ function init(): void {
    * a note, so toggling them isn't a silent no-op.
    */
   function updatePerturbationGating(): void {
-    const active =
-      parameterView.plot.perturbationActive || dynamicalView.plot.perturbationActive;
+    const active = parameterView.plot.perturbationActive || dynamicalView.plot.perturbationActive;
     for (const id of ["light", "outline", "equipotential"] as const) {
       byId<HTMLInputElement>(id).disabled = active;
     }
@@ -1143,9 +1142,20 @@ function init(): void {
   byId("share-btn").addEventListener("click", () => {
     void shareLink();
   });
+  const viewsMenu = byId<HTMLDetailsElement>("views-menu");
+  const closeViewsMenu = (): void => {
+    viewsMenu.open = false;
+  };
   byId("save-view-btn").addEventListener("click", saveCurrentView);
-  byId("saved-views").addEventListener("change", loadSelectedView);
+  byId("saved-views").addEventListener("change", () => {
+    loadSelectedView();
+    closeViewsMenu();
+  });
   byId("delete-view-btn").addEventListener("click", deleteSelectedView);
+  // Close the Views popover when clicking anywhere outside it.
+  document.addEventListener("click", (e) => {
+    if (viewsMenu.open && !viewsMenu.contains(e.target as Node)) closeViewsMenu();
+  });
   byId("undo-btn").addEventListener("click", undo);
   byId("redo-btn").addEventListener("click", redo);
   document.addEventListener("change", scheduleRecord);
