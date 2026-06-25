@@ -27,6 +27,7 @@ import {
   decodeState,
   loadSavedViews,
   saveSavedViews,
+  type AppState,
 } from "./state/appState";
 import GIF from "gif.js";
 import gifWorkerUrl from "gif.js/dist/gif.worker.js?url";
@@ -273,6 +274,7 @@ function init(): void {
       onViewChanged: (center, zoom) => {
         setDynCenterInput(center);
         setDynZoomInput(zoom);
+        scheduleRecord();
       },
       onHover: hoverReadout("JCSReadout"),
     },
@@ -295,6 +297,7 @@ function init(): void {
       onViewChanged: (center, zoom) => {
         setParamCenterInput(center);
         setParamZoomInput(zoom);
+        scheduleRecord();
       },
       onHover: hoverReadout("MCSReadout"),
     },
@@ -396,6 +399,7 @@ function init(): void {
     reportCompileErrors();
     renderFormula();
     updateParamAVisibility();
+    scheduleRecord();
   }
 
   /** Load a named preset into the inputs and both plots. */
@@ -408,6 +412,7 @@ function init(): void {
     reportCompileErrors();
     renderFormula();
     updateParamAVisibility();
+    scheduleRecord();
   }
 
   /** Render a plot at the chosen size and download it, with button feedback. */
@@ -686,6 +691,7 @@ function init(): void {
     if (!state) return;
     applyAppState(state);
     applyAllControls();
+    scheduleRecord();
     showToast(`Loaded view “${name}”.`, "info");
   }
 
@@ -698,6 +704,56 @@ function init(): void {
     saveSavedViews(views);
     populateViewSelect();
     showToast(`Deleted view “${name}”.`, "info");
+  }
+
+  // --- undo / redo (a debounced history stack over the AppState) ---------
+  const undoStack: AppState[] = [];
+  const redoStack: AppState[] = [];
+  let lastSnapshot: AppState = {};
+  let recordTimer = 0;
+  const MAX_HISTORY = 50;
+
+  function updateHistoryButtons(): void {
+    byId<HTMLButtonElement>("undo-btn").disabled = undoStack.length === 0;
+    byId<HTMLButtonElement>("redo-btn").disabled = redoStack.length === 0;
+  }
+
+  /** Commit a history entry if the state changed since the last snapshot. */
+  function recordHistory(): void {
+    const cur = readAppState();
+    if (JSON.stringify(cur) === JSON.stringify(lastSnapshot)) return;
+    undoStack.push(lastSnapshot);
+    if (undoStack.length > MAX_HISTORY) undoStack.shift();
+    redoStack.length = 0;
+    lastSnapshot = cur;
+    updateHistoryButtons();
+  }
+
+  /** Debounced commit — collapses rapid edits / slider drags into one entry. */
+  function scheduleRecord(): void {
+    window.clearTimeout(recordTimer);
+    recordTimer = window.setTimeout(recordHistory, 350);
+  }
+
+  /** Apply a snapshot to the controls + plots (event-free, so it doesn't self-record). */
+  function restoreSnapshot(state: AppState): void {
+    window.clearTimeout(recordTimer); // drop any pending commit
+    lastSnapshot = state;
+    applyAppState(state);
+    applyAllControls();
+    updateHistoryButtons();
+  }
+
+  function undo(): void {
+    if (undoStack.length === 0) return;
+    redoStack.push(lastSnapshot);
+    restoreSnapshot(undoStack.pop() as AppState);
+  }
+
+  function redo(): void {
+    if (redoStack.length === 0) return;
+    undoStack.push(lastSnapshot);
+    restoreSnapshot(redoStack.pop() as AppState);
   }
 
   /**
@@ -1006,6 +1062,22 @@ function init(): void {
   byId("save-view-btn").addEventListener("click", saveCurrentView);
   byId("saved-views").addEventListener("change", loadSelectedView);
   byId("delete-view-btn").addEventListener("click", deleteSelectedView);
+  byId("undo-btn").addEventListener("click", undo);
+  byId("redo-btn").addEventListener("click", redo);
+  document.addEventListener("change", scheduleRecord);
+  document.addEventListener("input", scheduleRecord);
+  document.addEventListener("keydown", (e) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    const tag = (e.target as HTMLElement | null)?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return; // leave native text undo alone
+    if (e.key === "z" && !e.shiftKey) {
+      e.preventDefault();
+      undo();
+    } else if (e.key === "y" || (e.key === "z" && e.shiftKey)) {
+      e.preventDefault();
+      redo();
+    }
+  });
 
   byId("apply_all").addEventListener("click", applyChanges);
   byId("apply_preset").addEventListener("click", () => {
@@ -1118,6 +1190,9 @@ function init(): void {
   updateKeyframeUI();
   populateViewSelect();
   loadFromHash(); // apply a shared view if the URL carries one
+  lastSnapshot = readAppState(); // history baseline (after any shared view is applied)
+  window.clearTimeout(recordTimer);
+  updateHistoryButtons();
 
   // Dev-only: expose the two views so the renderer can be driven/inspected from the
   // console (e.g. the synchronous `renderToImageData` path, which works even when a

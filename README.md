@@ -115,6 +115,8 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
   beneath each plot.
 - Press **Enter** (or **apply changes**) to apply edits to the input fields;
   **reset** reverts every option (including colouring) to the selected preset.
+- **↶ undo / ↷ redo** (or **Ctrl+Z** / **Ctrl+Y**) step through your recent changes —
+  formula, view, colouring, and toggles — as a single history.
 - Choose a colour scheme with the **coloring** control — see
   [Colouring](#colouring).
 - The entered **f(z, c)** is typeset live (KaTeX) beneath the formula input, and the
