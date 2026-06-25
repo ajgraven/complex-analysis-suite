@@ -275,6 +275,7 @@ function init(): void {
         setDynCenterInput(center);
         setDynZoomInput(zoom);
         updateViewChips();
+        announce(`Dynamical plane — ${dynChip.textContent}`);
         scheduleRecord();
       },
       onHover: hoverReadout("JCSReadout"),
@@ -293,6 +294,7 @@ function init(): void {
           dynamicalView.plot.c = formatComplex(z0);
           setCInput(z0);
           updateDynCaption();
+          announce(`Parameter c = ${dynCValue.textContent}`);
         },
         setDraft: (on) => dynamicalView.plot.setDraft(on),
       },
@@ -300,6 +302,7 @@ function init(): void {
         setParamCenterInput(center);
         setParamZoomInput(zoom);
         updateViewChips();
+        announce(`Parameter space — ${paramChip.textContent}`);
         scheduleRecord();
       },
       onHover: hoverReadout("MCSReadout"),
@@ -394,6 +397,16 @@ function init(): void {
     dynChip.textContent = fmt(dynamicalView, INPUT_IDS.dynN);
   }
 
+  const srStatus = byId("sr-status");
+  let announceTimer = 0;
+  /** Debounced screen-reader announcement via the aria-live status region. */
+  function announce(text: string): void {
+    window.clearTimeout(announceTimer);
+    announceTimer = window.setTimeout(() => {
+      srStatus.textContent = text;
+    }, 500);
+  }
+
   /** Keep the dynamical plane's `c` tied to the parameter-space white point. */
   function syncDynamicalC(): void {
     dynamicalView.plot.c = formatComplex(parameterView.plot.z0);
@@ -449,6 +462,7 @@ function init(): void {
     updatePerturbationGating(); // a new f may change z²+c eligibility
     setDirty(false);
     updateViewChips();
+    announce(`Changes applied. Dynamical plane for c = ${dynCValue.textContent}.`);
     scheduleRecord();
   }
 

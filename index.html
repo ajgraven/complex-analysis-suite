@@ -70,8 +70,14 @@
         <section class="plot" aria-labelledby="param-heading">
           <h2 id="param-heading">Parameter Space</h2>
           <div class="canvas-stack">
-            <canvas id="MCSCanvas"></canvas>
-            <canvas id="MCSOverlay" class="overlay" tabindex="0"></canvas>
+            <canvas id="MCSCanvas" aria-hidden="true"></canvas>
+            <canvas
+              id="MCSOverlay"
+              class="overlay"
+              tabindex="0"
+              role="application"
+              aria-label="Parameter space — interactive fractal plot. Arrow keys pan; the + and − keys zoom; drag to move the parameter point c."
+            ></canvas>
           </div>
           <p class="plot-caption">drag the white point to set <em>c</em> &rarr;</p>
           <p class="readout" id="MCSReadout" aria-live="off"></p>
@@ -154,8 +160,14 @@ abs(z)>2</textarea
         <section class="plot" aria-labelledby="dyn-heading">
           <h2 id="dyn-heading">Dynamical Plane</h2>
           <div class="canvas-stack">
-            <canvas id="JCSCanvas"></canvas>
-            <canvas id="JCSOverlay" class="overlay" tabindex="0"></canvas>
+            <canvas id="JCSCanvas" aria-hidden="true"></canvas>
+            <canvas
+              id="JCSOverlay"
+              class="overlay"
+              tabindex="0"
+              role="application"
+              aria-label="Dynamical plane — interactive fractal plot. Arrow keys pan; the + and − keys zoom; drag to move the orbit start z₀."
+            ></canvas>
           </div>
           <p class="plot-caption">for <em>c</em> = <span id="dyn-c-value">…</span></p>
           <p class="readout" id="JCSReadout" aria-live="off"></p>
@@ -715,6 +727,9 @@ z^2+c</textarea
     </div>
 
     <div id="toasts" class="toasts" aria-live="polite"></div>
+
+    <!-- Visually-hidden live region: announces view/parameter changes to screen readers. -->
+    <div id="sr-status" class="sr-only" role="status" aria-live="polite"></div>
 
     <!-- Export progress overlay (shown while rendering a high-res image). -->
     <div id="export-progress" class="export-progress" hidden>
