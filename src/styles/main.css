@@ -514,6 +514,13 @@ select.invalid {
   color: var(--muted);
 }
 
+/* Small explanatory note under a control (e.g. why some options are disabled). */
+.control-note {
+  margin: 0.3rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
 .gradient-io {
   display: flex;
   gap: 0.5rem;

@@ -399,6 +399,7 @@ function init(): void {
     reportCompileErrors();
     renderFormula();
     updateParamAVisibility();
+    updatePerturbationGating(); // a new f may change z²+c eligibility
     scheduleRecord();
   }
 
@@ -595,6 +596,21 @@ function init(): void {
     if (on && !parameterView.plot.perturbationEligible) {
       showToast("Perturbation deep zoom applies to z²+c (Mandelbrot and its Julia sets).", "info");
     }
+    updatePerturbationGating();
+  }
+
+  /**
+   * The perturbation kernel honours only escape/smooth colouring. When it's actually
+   * active, disable the controls it ignores (lighting, outline, equipotential) and show
+   * a note, so toggling them isn't a silent no-op.
+   */
+  function updatePerturbationGating(): void {
+    const active =
+      parameterView.plot.perturbationActive || dynamicalView.plot.perturbationActive;
+    for (const id of ["light", "outline", "equipotential"] as const) {
+      byId<HTMLInputElement>(id).disabled = active;
+    }
+    byId("perturbation-note").hidden = !active;
   }
 
   /** Apply the live parameter `a` slider value to both plots and update its readout. */
