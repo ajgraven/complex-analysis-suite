@@ -127,8 +127,8 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
 - The **Theme** button cycles auto / dark / light (auto follows your OS colour scheme);
   the choice is remembered across visits.
 - **Share link** copies a URL whose hash encodes the current view — formula, both planes'
-  centre/zoom/iterations, colouring mode/palette, and every toggle — so opening it
-  reproduces the view. (The orbit start z₀ and custom gradients aren't encoded yet.)
+  centre/zoom/iterations, colouring mode/palette, every toggle, the dynamical orbit start
+  z₀, and the custom-gradient stops — so opening it reproduces the view.
 - **Save view** stores the current view under a name (in the browser); pick it from the
   **Saved views** dropdown to restore it, or **Delete** to remove it. Saved views persist
   across visits (localStorage) and capture the same state as a share link.
