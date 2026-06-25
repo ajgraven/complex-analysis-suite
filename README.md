@@ -84,6 +84,14 @@ the abs-variants tricorn, burning ship, butterfly, and celtic; the rational/logi
 magnet and lambda; the transcendental exponential map, teardrop Schwarz, and exp
 Schwarz; and a biomorph.
 
+A few use non-textbook conventions, noted here for honesty: **tricorn** and **celtic**
+are faithful (`conj(z)²+c` and `|Re(z²)|+i·Im(z²)+c`); **burning ship** is parameterised
+with `−c` (intentional — it places the classic ship at a positive centre); **magnet** is
+Magnet I (`((z²+c−1)/(2z+c−2))²`) and escapes on either divergence (`|z|>3`) or
+convergence to its fixed point `z=1`; **lambda** is the logistic `c·z(1−z)`; and
+**butterfly**, **teardrop Schwarz**, and **exp Schwarz** are custom maps (the "Schwarz"
+names are decorative — they are not Schwarz-triangle maps).
+
 ### Supported expression objects
 
 The `f` / `escape` expression language (a CindyScript-compatible subset) supports:
@@ -250,8 +258,9 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   are colour-coded and the fate is shown in the label. On the parameter plane this reads
   as "is _c_ in the set?"; on the dynamical plane it's the chosen start point's dynamics.
 - **Critical orbit** — an optional dashed overlay of the critical point's orbit (0 for the
-  polynomial presets). A bounded critical orbit means the Julia set is connected; an
-  escaping one means it is a Cantor dust.
+  `zⁿ+c` family, ½ for lambda; a custom `f` is assumed to have its critical point at 0).
+  A bounded critical orbit means the Julia set is connected; an escaping one means it is a
+  Cantor dust.
 - **Equipotential** — an optional shader overlay of escape-potential contours (a
   topographic "escape-velocity" map), with a density slider.
 
@@ -259,8 +268,10 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
 
 Tick **Newton's method** to iterate the Newton map `z − f/f'` instead of `f` (the
 current `f` is read as the polynomial whose roots are sought) and colour by
-convergence — e.g. `f = z^3 - 1` gives the classic root-basin fractal. The
-derivative is computed symbolically
+convergence — e.g. `f = z^3 - 1` gives the classic root-basin fractal. It is a
+root-finder, so it's most meaningful for an `f` with several roots; on the escape-time
+families (e.g. `z² + c`) it is mathematically degenerate. The derivative is computed
+symbolically
 ([`src/expr/derivative.ts`](src/expr/derivative.ts)); it's available for holomorphic
 `f` and reports a clear error for non-holomorphic builtins (`abs`, `re`, `im`, …).
 
