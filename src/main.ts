@@ -1179,12 +1179,18 @@ function init(): void {
   const closeViewsMenu = (): void => {
     viewsMenu.open = false;
   };
-  byId("save-view-btn").addEventListener("click", saveCurrentView);
+  byId("save-view-btn").addEventListener("click", () => {
+    saveCurrentView();
+    closeViewsMenu();
+  });
   byId("saved-views").addEventListener("change", () => {
     loadSelectedView();
     closeViewsMenu();
   });
-  byId("delete-view-btn").addEventListener("click", deleteSelectedView);
+  byId("delete-view-btn").addEventListener("click", () => {
+    deleteSelectedView();
+    closeViewsMenu();
+  });
   // Close the Views popover when clicking anywhere outside it.
   document.addEventListener("click", (e) => {
     if (viewsMenu.open && !viewsMenu.contains(e.target as Node)) closeViewsMenu();

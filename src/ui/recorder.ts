@@ -48,6 +48,14 @@ export function downloadBlob(blob: Blob, filename: string): void {
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  // Defer cleanup so the download isn't cancelled mid-flight (revoking the URL
+  // synchronously after click() drops larger downloads in Firefox). Mirrors
+  // downloadCanvas in hiResExport.ts.
+  window.setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 1000);
 }

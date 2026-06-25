@@ -29,6 +29,12 @@ export interface Preset {
    * static presets; a `[re, im]` tuple when collected live from a plot.
    */
   z0?: string | Vec2;
+  /**
+   * Critical point of `f` (a root of ∂f/∂z = 0), used as the start of the
+   * critical-orbit overlay. Defaults to 0, which is correct for the zⁿ+c /
+   * Multibrot family; set it where the critical point is known and non-zero.
+   */
+  criticalPoint?: Vec2;
 }
 
 export type PresetName =
@@ -144,6 +150,7 @@ export const paramPresets: Record<PresetName, Preset> = {
     escape: "abs(z)>10",
     zoom: 0.4,
     center: [1, 0],
+    criticalPoint: [0.5, 0],
   },
   biomorph: {
     f: "z^3+c",
@@ -267,6 +274,7 @@ export const dynPresets: Record<PresetName, Preset> = {
     escape: "abs(z)>10",
     zoom: 0.5,
     center: [0.5, 0],
+    criticalPoint: [0.5, 0],
   },
   biomorph: {
     f: "z^3+c",

@@ -258,6 +258,7 @@ export class GLPlot {
   private _forceFull = false; // render full-res every frame (while recording animation)
   private _paramA: [number, number] = [0, 0]; // live parameter a (real, imaginary)
   private _z0: Vec2 = [0, 0];
+  private _criticalPoint: Vec2 = [0, 0]; // critical point of f (0 for zⁿ+c) — start of the critical-orbit overlay
   private _mode = 0; // 0 escape, 1 smooth, 2 distance, 3 orbit-trap, 4 domain
   private _palette = 0; // 0 classic, 1 viridis, 2 magma, 3 grayscale
   private _aa = 1; // supersamples per axis (1 = off)
@@ -1209,6 +1210,7 @@ export class GLPlot {
     this._cVal = parseComplex(preset.c);
     this._n = preset.n;
     this._nplot = preset.nplot;
+    this._criticalPoint = preset.criticalPoint ?? [0, 0];
     this._f = preset.f;
     this._esc = preset.escape;
     const fAst = this.tryParse(preset.f);
@@ -1498,6 +1500,10 @@ export class GLPlot {
   }
   get z0(): Vec2 {
     return this._z0;
+  }
+  /** Critical point of `f` (start of the critical-orbit overlay; 0 for zⁿ+c). */
+  get criticalPoint(): Vec2 {
+    return this._criticalPoint;
   }
   get res(): number {
     return this._res;
