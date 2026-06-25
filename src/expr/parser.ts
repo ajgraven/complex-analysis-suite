@@ -44,7 +44,16 @@ class Parser {
         continue;
       }
       stmts.push(this.parseStatement());
-      if (this.peek().type === "semi") this.next();
+      // A statement must be followed by ';' or end-of-input. Without this, two
+      // adjacent expressions ("z c", "1.2.3", "1 e") silently parse as a multi-
+      // statement sequence whose value is the last one — a typo becoming a wrong
+      // result instead of an error.
+      const after = this.peek();
+      if (after.type === "semi") {
+        this.next();
+      } else if (after.type !== "eof") {
+        throw new ExprError(`Expected ';' or end of input`, after.pos);
+      }
     }
     if (stmts.length === 0) throw new ExprError("Empty expression", 0);
     return stmts.length === 1 ? stmts[0] : { kind: "seq", stmts };
