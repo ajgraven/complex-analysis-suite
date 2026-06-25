@@ -306,6 +306,18 @@ function init(): void {
 
   const errorBox = byId<HTMLDivElement>("input-errors");
 
+  const dirtyIndicator = byId("dirty-indicator");
+  const applyBtn = byId("apply_all");
+  /**
+   * Toggle the "unapplied edits" hint and emphasise the Apply button. Only the
+   * deferred text fields ({@link INPUT_IDS}) feed this; the live controls
+   * (dropdowns, sliders, checkboxes) apply on change and never go "dirty".
+   */
+  function setDirty(on: boolean): void {
+    dirtyIndicator.hidden = !on;
+    applyBtn.classList.toggle("attention", on);
+  }
+
   const gradientEditor = setupGradientEditor(byId("gradient-editor"), DEFAULT_GRADIENT, (stops) => {
     parameterView.plot.setGradient(stops);
     dynamicalView.plot.setGradient(stops);
@@ -419,6 +431,7 @@ function init(): void {
     renderFormula();
     updateParamAVisibility();
     updatePerturbationGating(); // a new f may change z²+c eligibility
+    setDirty(false);
     scheduleRecord();
   }
 
@@ -432,6 +445,7 @@ function init(): void {
     reportCompileErrors();
     renderFormula();
     updateParamAVisibility();
+    setDirty(false);
     scheduleRecord();
   }
 
@@ -1084,6 +1098,13 @@ function init(): void {
   document.addEventListener("keyup", (event) => {
     if (event.key === "Enter") applyChanges();
   });
+
+  // Deferred text fields: a user edit marks the view "dirty" until applied.
+  // (Programmatic updates via setValue, e.g. pan/zoom writing back the centre,
+  // don't fire "input", so dragging the plot never shows the hint.)
+  for (const id of Object.values(INPUT_IDS)) {
+    byId(id).addEventListener("input", () => setDirty(true));
+  }
 
   for (const id of ["mode", "palette", "aa"]) {
     byId(id).addEventListener("change", applyColoring);

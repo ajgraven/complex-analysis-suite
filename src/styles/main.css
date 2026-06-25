@@ -276,6 +276,23 @@ button.danger:hover {
   color: #fff;
 }
 
+/* "Unapplied edits" hint: shown when a deferred text field (formula, c,
+   centre, zoom, iterations, canvas size) is edited but not yet applied. The
+   live controls (dropdowns, sliders, checkboxes) apply immediately, so this
+   only tracks the fields that need Enter / "apply changes". */
+.dirty-indicator {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  font-size: 0.8rem;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+button.primary.attention {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
 /* --- Shared controls + downloads -------------------------------------- */
 .panel {
   display: flex;
