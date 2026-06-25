@@ -80,6 +80,7 @@ const PALETTES: Record<string, number> = {
   magma: 2,
   grayscale: 3,
   custom: 4,
+  cividis: 5,
 };
 
 /** Show the WebGL2-unavailable banner (or a generic init error) and stop. */

@@ -83,12 +83,31 @@ vec3 classicColor(float t) {
   float s = 3.0 * t / (2.0 * t + 1.0);
   return vec3(4.0 * s, 1.3 * s, (1.0 - s) * (1.0 - s) * 0.7);
 }
+// Cividis: a colourblind-safe sequential map (dark blue → grey → yellow). It varies
+// along the blue–yellow axis with monotonic luminance, so deuteranopes and protanopes
+// read it almost identically to typical vision. Piecewise-linear over six anchors of
+// the matplotlib cividis ramp.
+vec3 cividis(float t) {
+  const vec3 a = vec3(0.000, 0.133, 0.306);
+  const vec3 b = vec3(0.231, 0.286, 0.424);
+  const vec3 c = vec3(0.439, 0.443, 0.451);
+  const vec3 d = vec3(0.647, 0.612, 0.455);
+  const vec3 e = vec3(0.824, 0.757, 0.353);
+  const vec3 f = vec3(1.000, 0.918, 0.275);
+  t = clamp(t, 0.0, 1.0) * 5.0;
+  if (t < 1.0) return mix(a, b, t);
+  if (t < 2.0) return mix(b, c, t - 1.0);
+  if (t < 3.0) return mix(c, d, t - 2.0);
+  if (t < 4.0) return mix(d, e, t - 3.0);
+  return mix(e, f, t - 4.0);
+}
 vec3 palette(float t) {
   t = fract(t + uGradientOffset); // rotation / colour cycling
   if (uPalette == 4) return texture(uGradient, vec2(t, 0.5)).rgb; // custom gradient
   if (uPalette == 1) return viridis(t);
   if (uPalette == 2) return magma(t);
   if (uPalette == 3) return vec3(t);
+  if (uPalette == 5) return cividis(t);
   return classicColor(t);
 }
 `;
@@ -196,7 +215,7 @@ uniform int uN;
 uniform vec2 uC;
 uniform int uFractType; // 1 = parameter space, 0 = dynamical plane
 uniform int uMode;      // 0 escape, 1 smooth, 2 distance, 3 orbit-trap, 4 domain, 5 histogram, 6 raw
-uniform int uPalette;   // 0 classic, 1 viridis, 2 magma, 3 grayscale
+uniform int uPalette;   // 0 classic, 1 viridis, 2 magma, 3 grayscale, 4 custom, 5 cividis
 uniform int uAA;        // supersamples per axis (1 = off)
 uniform sampler2D uCdf; // histogram equalisation lookup (mode 5), indexed by escape time
 uniform int uLight;         // relief lighting on/off

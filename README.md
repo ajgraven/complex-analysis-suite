@@ -218,9 +218,9 @@ classic look; all are shader uniforms, so switching never recompiles):
     period, revealing the hyperbolic components (cardioid, bulbs).
   - _Domain colouring_ — hue = arg, brightness = magnitude of one application of
     `f(z, c)` (most meaningful on the dynamical plane; ignores the palette).
-- **Palette** — Classic, Viridis (colourblind-safe), Magma, Grayscale, or a
-  **Custom gradient** — an editable colour-stop ramp (drag/add/remove stops on the
-  preview bar, randomise, import/export JSON). Applies to the scalar modes.
+- **Palette** — Classic, Viridis and Cividis (both colourblind-safe), Magma,
+  Grayscale, or a **Custom gradient** — an editable colour-stop ramp (drag/add/remove
+  stops on the preview bar, randomise, import/export JSON). Applies to the scalar modes.
 - **Rotation** — rotates the palette through the colours (colour cycling); applies
   to every palette.
 - **Anti-aliasing** — Off / 2× / 3× supersampling, on full-resolution renders only
