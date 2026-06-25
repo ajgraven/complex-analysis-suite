@@ -75,8 +75,8 @@ export function validateInputs(): { ok: boolean; errors: FieldError[] } {
   checkPositive(INPUT_IDS.dynZoom, "zoom (dynamical plane)", errors);
   checkPositive(INPUT_IDS.paramN, "max iterations (parameter space)", errors, true);
   checkPositive(INPUT_IDS.dynN, "max iterations (dynamical plane)", errors, true);
-  checkPositive(INPUT_IDS.paramRes, "resolution (parameter space)", errors, true);
-  checkPositive(INPUT_IDS.dynRes, "resolution (dynamical plane)", errors, true);
+  checkPositive(INPUT_IDS.paramRes, "canvas size (parameter space)", errors, true);
+  checkPositive(INPUT_IDS.dynRes, "canvas size (dynamical plane)", errors, true);
 
   return { ok: errors.length === 0, errors };
 }

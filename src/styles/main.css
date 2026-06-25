@@ -221,18 +221,51 @@ button:focus-visible {
   outline-offset: 1px;
 }
 
+/* Button hierarchy. The base style is a calm "secondary" (outline) so that
+   buttons no longer all shout in the same accent colour; `.primary` is the
+   filled call-to-action (one per functional group), and `.danger` marks
+   destructive actions (reset, delete a saved view). */
 button {
   font-size: 0.95rem;
   padding: 0.4rem 0.9rem;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--accent);
-  color: var(--accent-contrast);
+  background: var(--field-bg);
+  color: var(--fg);
   cursor: pointer;
 }
 
 button:hover {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button:disabled:hover {
+  border-color: var(--border);
+}
+
+button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+button.primary:hover {
   filter: brightness(1.08);
+}
+
+button.danger {
+  color: #c0392b;
+}
+
+button.danger:hover {
+  border-color: #c0392b;
+  background: #c0392b;
+  color: #fff;
 }
 
 /* --- Shared controls + downloads -------------------------------------- */

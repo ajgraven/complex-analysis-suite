@@ -30,7 +30,7 @@
 
           <div class="controls">
             <div class="field">
-              <label for="inpc">c</label>
+              <label for="inpc">c (parameter)</label>
               <input
                 type="text"
                 id="inpc"
@@ -41,7 +41,7 @@
               />
             </div>
             <div class="field">
-              <label for="inpme">escape(z,c)</label>
+              <label for="inpme">escape test</label>
               <textarea
                 id="inpme"
                 rows="1"
@@ -84,7 +84,7 @@ abs(z)>2</textarea
               />
             </div>
             <div class="field">
-              <label for="inpParamRes">resolution</label>
+              <label for="inpParamRes">canvas size (px)</label>
               <input
                 type="text"
                 id="inpParamRes"
@@ -107,7 +107,7 @@ abs(z)>2</textarea
 
           <div class="controls">
             <div class="field">
-              <label for="inpje">escape(z,c)</label>
+              <label for="inpje">escape test</label>
               <textarea
                 id="inpje"
                 rows="1"
@@ -150,7 +150,7 @@ abs(z)>2</textarea
               />
             </div>
             <div class="field">
-              <label for="inpDynRes">resolution</label>
+              <label for="inpDynRes">canvas size (px)</label>
               <input
                 type="text"
                 id="inpDynRes"
@@ -188,7 +188,7 @@ z^2+c</textarea
           <div class="field">
             <label for="fractal_presets">Presets</label>
             <div class="inline-actions">
-              <select id="fractal_presets">
+              <select id="fractal_presets" title="Pick a named fractal, then apply">
                 <optgroup label="Polynomial">
                   <option value="mandelbrot">Mandelbrot set</option>
                   <option value="cubic">cubic (z³+c)</option>
@@ -212,14 +212,14 @@ z^2+c</textarea
                   <option value="biomorph">biomorph</option>
                 </optgroup>
               </select>
-              <button id="apply_preset" type="button">apply</button>
+              <button id="apply_preset" type="button" class="primary">apply</button>
             </div>
           </div>
           <div class="field">
             <label for="mode">coloring</label>
             <select id="mode" title="How escape time is turned into colour">
               <option value="escape">Escape time</option>
-              <option value="smooth">Escape time (smooth)</option>
+              <option value="smooth">Smooth (continuous)</option>
               <option value="histogram">Escape time (histogram)</option>
               <option value="distance">Distance (edges)</option>
               <option value="orbit">Orbit trap</option>
@@ -250,7 +250,7 @@ z^2+c</textarea
           </div>
           <div class="field">
             <label class="checkbox" for="accumulate">
-              <input type="checkbox" id="accumulate" /> smooth (idle AA)
+              <input type="checkbox" id="accumulate" /> refine while idle
             </label>
           </div>
           <details class="control-group">
@@ -353,10 +353,11 @@ z^2+c</textarea
           </details>
         </div>
         <div class="inline-actions">
-          <button id="apply_all" type="button">apply changes</button>
+          <button id="apply_all" type="button" class="primary">apply changes</button>
           <button
             id="reset_all"
             type="button"
+            class="danger"
             title="Revert all fields and the view to the selected preset"
           >
             reset
@@ -392,6 +393,7 @@ z^2+c</textarea
           <button
             id="delete-view-btn"
             type="button"
+            class="danger"
             disabled
             title="Delete the selected saved view"
           >
@@ -427,7 +429,7 @@ z^2+c</textarea
               <label class="checkbox">
                 <input type="checkbox" id="paramExportScaleBar" /> scale bar
               </label>
-              <button id="print_param_space" type="button">Save</button>
+              <button id="print_param_space" type="button" class="primary">Save</button>
               <button id="copy_param_space" type="button" title="Copy the image to the clipboard">
                 Copy
               </button>
@@ -450,7 +452,7 @@ z^2+c</textarea
               <label class="checkbox">
                 <input type="checkbox" id="dynExportScaleBar" /> scale bar
               </label>
-              <button id="print_dyn_plane" type="button">Save</button>
+              <button id="print_dyn_plane" type="button" class="primary">Save</button>
               <button id="copy_dyn_plane" type="button" title="Copy the image to the clipboard">
                 Copy
               </button>
@@ -589,7 +591,7 @@ z^2+c</textarea
               zoom in.
             </li>
             <li>
-              Tick <strong>smooth (idle AA)</strong> to accumulate extra anti-aliasing while the
+              Tick <strong>refine while idle</strong> to accumulate extra anti-aliasing while the
               view sits still — it converges to a cleaner image over a few seconds.
             </li>
             <li>
@@ -704,7 +706,7 @@ z^2+c</textarea
             finger and pinch with two to zoom.
           </li>
         </ul>
-        <button id="onboarding_dismiss" type="button">Got it</button>
+        <button id="onboarding_dismiss" type="button" class="primary">Got it</button>
       </div>
     </div>
   </body>

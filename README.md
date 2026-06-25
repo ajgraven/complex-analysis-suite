@@ -189,7 +189,7 @@ classic look; all are shader uniforms, so switching never recompiles):
 
 - **Coloring (mode)** — how each pixel is coloured:
   - _Escape time_ — discrete escape-time bands (the classic look).
-  - _Escape time (smooth)_ — continuous escape time (no banding); applies to
+  - _Smooth (continuous)_ — continuous escape time (no banding); applies to
     magnitude-divergence escapes (`abs(z) > R`), otherwise falls back to discrete.
   - _Escape time (histogram)_ — histogram-equalised escape time, so colours cover
     roughly equal area regardless of the iteration cap.
@@ -212,7 +212,7 @@ classic look; all are shader uniforms, so switching never recompiles):
   to every palette.
 - **Anti-aliasing** — Off / 2× / 3× supersampling, on full-resolution renders only
   (disabled during interaction for responsiveness).
-- **Smooth (idle AA)** — while the view sits still, accumulates jittered sub-pixel
+- **Refine while idle** — while the view sits still, accumulates jittered sub-pixel
   samples into a float buffer and shows their running average, converging to a much
   cleaner image over a few frames at no interaction cost. Needs float render targets
   (`EXT_color_buffer_float`); falls back to the normal render if unsupported.
