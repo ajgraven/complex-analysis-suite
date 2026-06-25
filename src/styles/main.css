@@ -210,6 +210,59 @@ h2 {
   color: var(--muted);
 }
 
+/* Per-plot "view chip": a collapsed summary of centre · zoom · iterations that
+   expands to the precise per-plot fields (escape test, c, centre, zoom, max
+   iterations, canvas size). Keeps the everyday view uncluttered — those fields
+   are normally set by dragging/scrolling, not typing. */
+.plot-details {
+  margin-top: 0.35rem;
+}
+
+.plot-details > summary.view-chip {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: var(--field-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.25rem 0.55rem;
+  user-select: none;
+}
+
+.plot-details > summary.view-chip::-webkit-details-marker {
+  display: none;
+}
+
+.plot-details > summary.view-chip:hover {
+  border-color: var(--accent);
+}
+
+.view-chip-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.view-chip-edit {
+  color: var(--accent);
+}
+
+.plot-details[open] > summary.view-chip {
+  margin-bottom: 0.6rem;
+}
+
+.plot-details > .controls {
+  margin-top: 0;
+}
+
+/* A closed <details> normally hides its content, but `.controls { display: flex }`
+   overrides the UA rule; force the fields hidden while the chip is collapsed. */
+.plot-details:not([open]) > .controls {
+  display: none;
+}
+
 /* --- Control fields ---------------------------------------------------- */
 .controls {
   display: flex;

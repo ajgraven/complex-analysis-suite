@@ -274,6 +274,7 @@ function init(): void {
       onViewChanged: (center, zoom) => {
         setDynCenterInput(center);
         setDynZoomInput(zoom);
+        updateViewChips();
         scheduleRecord();
       },
       onHover: hoverReadout("JCSReadout"),
@@ -298,6 +299,7 @@ function init(): void {
       onViewChanged: (center, zoom) => {
         setParamCenterInput(center);
         setParamZoomInput(zoom);
+        updateViewChips();
         scheduleRecord();
       },
       onHover: hoverReadout("MCSReadout"),
@@ -379,6 +381,19 @@ function init(): void {
     dynCValue.textContent = prettyComplex(dynamicalView.plot.c);
   }
 
+  const paramChip = byId("param-view-chip");
+  const dynChip = byId("dyn-view-chip");
+  /** Refresh the per-plot "view chip" summaries (centre · zoom · iterations). */
+  function updateViewChips(): void {
+    const fmt = (v: PlotView, nId: string): string => {
+      const p = (x: number, n: number): string => Number.parseFloat(x.toPrecision(n)).toString();
+      const [cx, cy] = v.plot.center;
+      return `center ${p(cx, 4)}, ${p(cy, 4)} · zoom ${p(v.plot.zoom, 3)} · ${byId<HTMLInputElement>(nId).value} it`;
+    };
+    paramChip.textContent = fmt(parameterView, INPUT_IDS.paramN);
+    dynChip.textContent = fmt(dynamicalView, INPUT_IDS.dynN);
+  }
+
   /** Keep the dynamical plane's `c` tied to the parameter-space white point. */
   function syncDynamicalC(): void {
     dynamicalView.plot.c = formatComplex(parameterView.plot.z0);
@@ -386,6 +401,7 @@ function init(): void {
     dynamicalView.plot.scheduleRender();
   }
   syncDynamicalC();
+  updateViewChips();
 
   /** Current control-input values as `[parameterPreset, dynamicalPreset]`. */
   function readPresetsFromInputs(): [Preset, Preset] {
@@ -432,6 +448,7 @@ function init(): void {
     updateParamAVisibility();
     updatePerturbationGating(); // a new f may change z²+c eligibility
     setDirty(false);
+    updateViewChips();
     scheduleRecord();
   }
 
@@ -446,6 +463,7 @@ function init(): void {
     renderFormula();
     updateParamAVisibility();
     setDirty(false);
+    updateViewChips();
     scheduleRecord();
   }
 
