@@ -207,6 +207,8 @@ export class GLPlot {
   /** Histogram CDF cache: rebuilt only when the distribution or render size changes. */
   private cdfDirty = true;
   private cdfSize = 0;
+  /** Fullscreen-quad vertex buffer — kept so it can be replaced on context-restore. */
+  private quadBuffer: WebGLBuffer | null = null;
   private _perturbation = false; // perturbation deep-zoom toggle
   private _perturbEligible = false; // current f is z²+c (auto-detected)
   /** View centre in double-double precision, accumulated across pan/zoom for deep zoom. */
@@ -296,7 +298,10 @@ export class GLPlot {
 
   private setupQuad(): void {
     const gl = this.gl;
+    if (this.quadBuffer) gl.deleteBuffer(this.quadBuffer); // replace, don't orphan, on rebuild
     const buffer = gl.createBuffer();
+    if (!buffer) throw new Error("Failed to create the fullscreen-quad vertex buffer");
+    this.quadBuffer = buffer;
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);
@@ -346,6 +351,7 @@ export class GLPlot {
     this.cdfTex = null;
     this.cdfDirty = true;
     this.cdfSize = 0;
+    this.quadBuffer = null; // the old handle died with the context; setupQuad makes a fresh one
     this.setupQuad();
     this.compilePostProgram();
     this.compilePerturbProgram();
