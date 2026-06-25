@@ -124,7 +124,10 @@ const PI_2: DF = df(Math.PI / 2);
 /** df64 exp: reduce a = k·ln2 + r (|r| ≤ ln2/2), Taylor exp(r), scale by 2^k. */
 export function dfExp(a: DF): DF {
   if (a[0] <= -88) return [0, 0];
-  const k = Math.round(a[0] / Math.LN2);
+  // Pick k with the hi-limb constant in float32, matching the GLSL exactly (it can only
+  // divide by the single-precision LN2_HI = f(Math.LN2) = LN2[0]); dividing by the
+  // full-precision Math.LN2 here could pick a different k at a tie boundary.
+  const k = Math.round(f(a[0] / LN2[0]));
   const r = dfSub(a, dfMul(LN2, df(k)));
   let term: DF = [1, 0];
   let sum: DF = [1, 0];
@@ -146,7 +149,8 @@ export function dfLog(a: DF): DF {
 
 /** df64 sin and cos together: reduce to a quadrant with |r| ≤ π/4, then Taylor. */
 export function dfSinCos(a: DF): { sin: DF; cos: DF } {
-  const q = Math.round(a[0] / (Math.PI / 2));
+  // Quadrant index via the hi-limb π/2 in float32, matching the GLSL (see dfExp).
+  const q = Math.round(f(a[0] / PI_2[0]));
   const r = dfSub(a, dfMul(PI_2, df(q)));
   const r2 = dfMul(r, r);
   let cterm: DF = [1, 0];
