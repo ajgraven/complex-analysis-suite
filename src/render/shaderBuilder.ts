@@ -241,6 +241,37 @@ ${coordinate}
     ? "  if (uMode == 11) { fragColor = vec4(distanceColorAnalytic(fc), 1.0); return; }\n"
     : "";
 
+  // Analytic relief slope from the running derivative — the distance-field gradient
+  // direction (Re,Im)(z/der), scaled by relief depth. Sharper than the screen-space
+  // (fwidth) normal and stable at deep zoom. Only emitted when fZFn/fCFn exist.
+  const analyticNormalGLSL = hasDeriv
+    ? `
+vec3 reliefSlopeAnalytic(vec2 fragXY) {
+  vec2 uv = fragXY / uResolution;
+${coordinate}
+  cvec cc = (uFractType == 1) ? z : vec_(uC.x, uC.y);
+  cvec der = (uFractType == 1) ? vec_(0.0, 0.0) : vec_(1.0, 0.0);
+  int kmax = 0;
+  for (int k = 0; k < uN; k++) {
+    if (escapeFn(z, cc)) break;
+    cvec zp = z;
+    der = cadd(cmul(fZFn(zp, cc), der), (uFractType == 1) ? fCFn(zp, cc) : vec_(0.0, 0.0));
+    z = fFn(z, cc);
+    kmax = k + 1;
+  }
+  if (kmax == uN) return vec3(0.0, 0.0, -1.0); // interior — skip lighting
+  cvec u = cdiv(z, der);
+  float ulen = cabsf(u);
+  vec2 g = (ulen > 0.0) ? vec2(cre1(u), cre1(cim(u))) / ulen * uLightHeight : vec2(0.0);
+  return vec3(g, 1.0);
+}
+`
+    : "";
+  // Relief lighting in main(): analytic normal when available, else screen-space.
+  const lightingStmt = hasDeriv
+    ? "if (uLight == 1) { vec3 ag = reliefSlopeAnalytic(fc); col = ag.z >= 0.0 ? shadeWithGradient(col, ag.xy) : col; }"
+    : "if (uLight == 1) col = applyLighting(col, h);";
+
   return `#version 300 es
 precision highp float;
 precision highp int;
@@ -431,9 +462,10 @@ ${coordinate}
 // Relief-shade a base colour: build a surface normal from the screen-space gradient
 // of the escape-time height (works for any f — no analytic derivative needed), then
 // apply a Lambertian + specular + hemisphere model. Interior pixels stay flat.
-vec3 applyLighting(vec3 col, float h) {
-  if (h < 0.0) return col;
-  vec2 g = vec2(dFdx(h), dFdy(h)) * uLightHeight;
+// Lambertian + specular + hemisphere shading from a 2D surface slope g (the
+// height-field gradient scaled by relief depth). Shared by the screen-space and
+// analytic relief paths.
+vec3 shadeWithGradient(vec3 col, vec2 g) {
   vec3 N = normalize(vec3(-g, 1.0));
   vec3 L = uLightDir;
   float diff = max(dot(N, L), 0.0);
@@ -443,7 +475,11 @@ vec3 applyLighting(vec3 col, float h) {
   const float ambient = 0.35;
   return col * (ambient + (1.0 - ambient) * diff) * (0.7 + 0.3 * hemi) + spec;
 }
-${distanceAnalyticGLSL}
+vec3 applyLighting(vec3 col, float h) {
+  if (h < 0.0) return col;
+  return shadeWithGradient(col, vec2(dFdx(h), dFdy(h)) * uLightHeight);
+}
+${distanceAnalyticGLSL}${analyticNormalGLSL}
 void main() {
   vec2 fc = gl_FragCoord.xy + uJitter; // temporal-AA sub-pixel offset (0 when off)
   if (uMode == 6) {
@@ -467,7 +503,7 @@ ${analyticDispatch}  int n = max(uAA, 1);
   vec3 col = acc / float(n * n);
   if ((uLight == 1 || uOutline == 1 || uEquipotential == 1) && uMode != 4) {
     float h = reliefHeight(fc);
-    if (uLight == 1) col = applyLighting(col, h);
+    ${lightingStmt}
     if (uOutline == 1 && h >= 0.0) {
       // Screen-space boundary emphasis: darken where the escape field changes fastest.
       float g = length(vec2(dFdx(h), dFdy(h)));

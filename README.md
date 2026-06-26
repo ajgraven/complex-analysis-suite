@@ -242,10 +242,11 @@ classic look; all are shader uniforms, so switching never recompiles):
   cleaner image over a few frames at no interaction cost. Needs float render targets
   (`EXT_color_buffer_float`); falls back to the normal render if unsupported.
 - **Relief lighting** — an optional toggle that shades the fractal as a lit 3-D
-  surface (azimuth / elevation / depth sliders). The surface normal is taken from
-  the screen-space gradient of the escape-time field, so it works for any `f`; it
-  applies to the escape-based modes (not domain colouring) and is skipped during
-  interaction for responsiveness.
+  surface (azimuth / elevation / depth sliders). For holomorphic `f` the surface normal
+  comes from the **analytic** running derivative (`z/z′`), which stays sharp at any zoom;
+  for abs-maps and other non-holomorphic `f` it falls back to the screen-space gradient of
+  the escape-time field. Applies to the escape-based modes (not domain colouring) and is
+  skipped during interaction for responsiveness.
 - **Post-processing** — an optional final fullscreen pass adding a vignette and
   output gamma. On-screen only for now: exported PNGs include lighting (it lives in
   the fractal shader) but not this grade.
