@@ -8,10 +8,12 @@
 
 import "./styles/main.css";
 import type { Vec2 } from "./arrays";
-import { formatComplex, parseComplex } from "./complex";
+import { formatComplex, parseComplex, truncateComplex } from "./complex";
 import { getMaxTextureSize } from "./hiResExport";
 import { PlotView } from "./render/plotView";
-import type { GLPlot } from "./render/glPlot";
+import type { GLPlot, FractType } from "./render/glPlot";
+import type { InspectResult } from "./render/inspect";
+import type { OrbitFate } from "./render/overlay";
 import { dynPresets, paramPresets, type Preset, type PresetName } from "./presets";
 import { byId } from "./ui/dom";
 import { showToast } from "./ui/toast";
@@ -105,6 +107,46 @@ function hoverReadout(elementId: string): (coord: Vec2 | null) => void {
   return (coord) => {
     el.textContent = coord ? formatCoord(coord) : "";
   };
+}
+
+const FATE_TEXT: Record<OrbitFate, string> = {
+  escaped: "escapes to ∞",
+  converged: "attracting fixed point",
+  periodic: "attracting cycle",
+  bounded: "bounded (no cycle found)",
+};
+
+/** Render a click-to-inspect orbit report into the inspector panel. */
+function showInspect(info: InspectResult, point: Vec2, plane: FractType): void {
+  const pt = truncateComplex([point[0], point[1]]);
+  byId("inspector-title").textContent =
+    plane === "param" ? `Parameter c = ${formatComplex(pt)}` : `Orbit of z₀ = ${formatComplex(pt)}`;
+
+  const rows: [string, string][] = [["Fate", FATE_TEXT[info.fate]]];
+  if (info.fate === "escaped") rows.push(["Escape time", `${info.escapeIter} iterations`]);
+  if (info.period > 0) rows.push(["Period", String(info.period)]);
+  if (info.multiplier && info.multiplierMag !== null) {
+    const deg = ((Math.atan2(info.multiplier[1], info.multiplier[0]) * 180) / Math.PI + 360) % 360;
+    const kind =
+      info.multiplierMag < 1 ? "attracting" : info.multiplierMag > 1 ? "repelling" : "indifferent";
+    rows.push([
+      "Multiplier |λ|",
+      `${info.multiplierMag.toFixed(4)} ∠ ${deg.toFixed(0)}° (${kind})`,
+    ]);
+  }
+  if (info.rotation) rows.push(["Internal angle", `${info.rotation.p}/${info.rotation.q}`]);
+  if (info.distance !== null) rows.push(["Distance to set", info.distance.toExponential(2)]);
+
+  const body = byId("inspector-body");
+  body.replaceChildren();
+  for (const [key, value] of rows) {
+    const dt = document.createElement("dt");
+    dt.textContent = key;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    body.append(dt, dd);
+  }
+  byId("inspector").hidden = false;
 }
 
 /** Typeset the current f(z,c) with KaTeX into the formula display (best-effort). */
@@ -281,6 +323,7 @@ function init(): void {
         scheduleRecord();
       },
       onHover: hoverReadout("JCSReadout"),
+      onInspect: showInspect,
     },
   );
 
@@ -308,6 +351,7 @@ function init(): void {
         scheduleRecord();
       },
       onHover: hoverReadout("MCSReadout"),
+      onInspect: showInspect,
     },
   );
 
@@ -1169,6 +1213,9 @@ function init(): void {
   byId("paletteRotation").addEventListener("input", applyColoring);
   applyColoring();
   updateDerivativeGating();
+  byId("inspector-close").addEventListener("click", () => {
+    byId("inspector").hidden = true;
+  });
 
   for (const id of ["light", "lightAz", "lightEl", "lightHeight"]) {
     byId(id).addEventListener("input", applyLighting);

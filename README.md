@@ -268,6 +268,13 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   Cantor dust.
 - **Equipotential** — an optional shader overlay of escape-potential contours (a
   topographic "escape-velocity" map), with a density slider.
+- **Point inspector** — click either plot (or drag its white point) to open a small report
+  on that point's orbit: its fate, the attracting-cycle **period**, the cycle **multiplier**
+  `λ = ∏ f′` (magnitude, argument, and attracting/repelling/indifferent), the **internal
+  angle** _p_/_q_ (the bulb's combinatorial rotation number — ½ at the period-2 neck, ⅓ at
+  the period-3 bulb …), and, for escaping points, the **distance to the set**. The parameter
+  plane inspects the critical orbit at the clicked `c`; the dynamical plane the clicked
+  `z₀`. Multiplier and distance need a holomorphic `f` (period and angle hold for any `f`).
 
 ## Newton's method
 

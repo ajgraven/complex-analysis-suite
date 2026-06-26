@@ -236,6 +236,16 @@ abs(z)>2</textarea
         </section>
       </main>
 
+      <!-- Point inspector: click either plot to report its orbit's dynamics. -->
+      <aside id="inspector" class="inspector" hidden aria-live="polite">
+        <div class="inspector-head">
+          <strong id="inspector-title">Point inspector</strong>
+          <button id="inspector-close" type="button" title="Close the inspector">×</button>
+        </div>
+        <dl class="inspector-body" id="inspector-body"></dl>
+        <p class="inspector-hint">Click a plot to inspect a point's orbit.</p>
+      </aside>
+
       <!-- ============================ Shared controls ================ -->
       <section class="panel" aria-label="Function and presets">
         <div class="panel-group">

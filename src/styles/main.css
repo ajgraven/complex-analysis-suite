@@ -732,3 +732,61 @@ select.invalid {
   border-color: #c0392b;
   background: #fdecea;
 }
+
+/* Point inspector — click-to-inspect orbit report. */
+.inspector {
+  max-width: var(--max-width);
+  margin: 0 auto var(--gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--field-bg);
+  padding: 0.6rem 0.8rem;
+}
+
+.inspector-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.inspector-head strong {
+  font-size: 0.9rem;
+}
+
+#inspector-close {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+
+.inspector-body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 1rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+}
+
+.inspector-body dt {
+  color: var(--muted);
+}
+
+.inspector-body dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.inspector-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.inspector-body:not(:empty) + .inspector-hint {
+  display: none;
+}

@@ -14,6 +14,7 @@ import type { Preset } from "../presets";
 import { clampExportSize, downloadCanvas, ensurePngName, getMaxTextureSize } from "../hiResExport";
 import { showToast } from "../ui/toast";
 import { GLPlot, renderScale, type FractType } from "./glPlot";
+import { inspect, type InspectResult } from "./inspect";
 import { drawOverlay, drawScaleBar } from "./overlay";
 import { pinchShift, pinchStateOf, type PinchState } from "./pinch";
 
@@ -25,10 +26,15 @@ export interface PlotViewHooks {
   onViewChanged?: (center: Vec2, zoom: number) => void;
   /** Called on pointer hover with the plot coordinate under the cursor (null on leave). */
   onHover?: (coord: Vec2 | null) => void;
+  /** Called when a click (or white-point drag) commits, with the inspected orbit report. */
+  onInspect?: (info: InspectResult, point: Vec2, plane: FractType) => void;
 }
 
 /** Pixel radius around the white point that counts as grabbing it. */
 const GRAB_RADIUS = 12;
+
+/** A pointer that moves less than this (px) between down and up counts as a click, not a drag. */
+const CLICK_SLOP = 4;
 
 /** Optional progress reporting + cancellation for an export. */
 interface ExportProgress {
@@ -45,6 +51,7 @@ export class PlotView {
 
   private dragMode: "none" | "pan" | "point" | "pinch" = "none";
   private lastUv: Vec2 = [0, 0];
+  private downUv: Vec2 = [0, 0]; // pointerdown position, to tell a click from a drag
   private overlayScheduled = false;
   private wheelTimer = 0;
   private showCritical = false;
@@ -236,6 +243,21 @@ export class PlotView {
     return [c[0] + (ux * 2 - 1) / z, c[1] + ((1 - uy) * 2 - 1) / z];
   }
 
+  /** Orbit start + parameter c to inspect: the critical orbit on the parameter plane, the
+   *  white point's orbit (at the fixed c) on the dynamical plane. */
+  private inspectInputs(): { z0: Vec2; c: Vec2 } {
+    if (this.fractType === "param") return { z0: this.plot.criticalPoint, c: this.plot.z0 };
+    return { z0: this.plot.z0, c: this.plot.cValue };
+  }
+
+  /** Classify the orbit at the white point and report it to the inspector. */
+  private fireInspect(): void {
+    if (!this.hooks.onInspect) return;
+    const { z0, c } = this.inspectInputs();
+    const info = inspect(this.plot.fAst, this.plot.escAst, this.fractType, z0, c, this.plot.paramA);
+    this.hooks.onInspect(info, this.plot.z0, this.fractType);
+  }
+
   /** uv (y-down) of the current white point, for hit-testing. */
   private pointUv(): Vec2 {
     const c = this.plot.center;
@@ -278,6 +300,7 @@ export class PlotView {
       const r = el.getBoundingClientRect();
       const dist = Math.hypot((uv[0] - pUv[0]) * r.width, (uv[1] - pUv[1]) * r.height);
       this.lastUv = uv;
+      this.downUv = uv;
       if (dist <= GRAB_RADIUS) {
         this.dragMode = "point";
         this.hooks.coupling?.setDraft(true);
@@ -352,11 +375,29 @@ export class PlotView {
       }
 
       if (this.dragMode === "none") return;
+      const upUv = this.uvOf(e);
+      const r = el.getBoundingClientRect();
+      const movedPx = Math.hypot(
+        (upUv[0] - this.downUv[0]) * r.width,
+        (upUv[1] - this.downUv[1]) * r.height,
+      );
+      const isClick = movedPx < CLICK_SLOP;
       if (this.dragMode === "pan") {
         this.plot.setDraft(false);
-        this.hooks.onViewChanged?.(this.plot.center, this.plot.zoom);
+        if (isClick) {
+          // A click in empty space moves the white point here, then inspects it.
+          const plot = this.uvToPlot(upUv);
+          this.plot.moveZ0(plot);
+          this.requestOverlay();
+          this.hooks.coupling?.setC(plot);
+          this.fireInspect();
+        } else {
+          this.hooks.onViewChanged?.(this.plot.center, this.plot.zoom);
+        }
       } else {
+        // Grabbed the white point (dragged or just clicked) → inspect its final spot.
         this.hooks.coupling?.setDraft(false);
+        this.fireInspect();
       }
       this.dragMode = "none";
       el.style.cursor = "crosshair";
