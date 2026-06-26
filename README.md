@@ -268,6 +268,11 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   Cantor dust.
 - **Equipotential** — an optional shader overlay of escape-potential contours (a
   topographic "escape-velocity" map), with a density slider.
+- **Farey bulb labels** — on the Mandelbrot parameter plane, label the hyperbolic
+  components attached to the main cardioid by their internal angle _p_/_q_ (½ at the
+  period-2 neck, ⅓ and ⅔ for the period-3 bulbs …), placed at the attachment point
+  `c = μ/2 − μ²/4`, `μ = e^{2πi·p/q}`. Finer fractions appear as you zoom in; the option
+  is available only for `z²+c`.
 - **Point inspector** — click either plot (or drag its white point) to open a small report
   on that point's orbit: its fate, the attracting-cycle **period**, the cycle **multiplier**
   `λ = ∏ f′` (magnitude, argument, and attracting/repelling/indifferent), the **internal

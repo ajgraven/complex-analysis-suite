@@ -13,6 +13,7 @@ import type { Vec2 } from "../arrays";
 import { formatComplex, truncateComplex, type Complex } from "../complex";
 import type { Node } from "../expr/ast";
 import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
+import { fareyLabels } from "./farey";
 
 const OVERLAY_BASE = 500;
 
@@ -152,6 +153,8 @@ export interface OverlayParams {
   /** Also draw the orbit of the critical point (`criticalPoint`, default 0) dashed. */
   critical?: boolean;
   criticalPoint?: Vec2;
+  /** Label the Farey bulbs of the main cardioid (parameter plane, z²+c). */
+  farey?: boolean;
   /** Overlay backing-store size in px. */
   size: number;
   /** Live parameter `a`, bound in f / escape when used as a free variable. */
@@ -201,6 +204,48 @@ export function drawScaleBar(ctx: CanvasRenderingContext2D, size: number, zoom: 
   // width label (in plot coordinates) above the bar
   ctx.fillStyle = "#fff";
   ctx.fillText(label, x0, y - tick - pad * 0.6);
+  ctx.restore();
+}
+
+/**
+ * Label the Farey bulbs on the main cardioid (parameter plane). Labels whose pixel
+ * positions would collide with an already-placed one are skipped; the visible set grows
+ * with zoom, so finer fractions appear as you zoom in.
+ */
+function drawFareyLabels(
+  ctx: CanvasRenderingContext2D,
+  center: Vec2,
+  zoom: number,
+  size: number,
+): void {
+  const s = size / OVERLAY_BASE;
+  const maxQ = Math.min(16, Math.max(4, Math.round(4 + Math.log2(Math.max(1, zoom)))));
+  const labels = fareyLabels(center, zoom, maxQ);
+  const placed: Vec2[] = [];
+  const minSep = 26 * s;
+  ctx.save();
+  ctx.font = `${12 * s}px system-ui, -apple-system, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const lab of labels) {
+    const [px, py] = plotToPx(lab.c, center, zoom, size);
+    const off = 16 * s;
+    const ax = px + lab.normal[0] * off;
+    const ay = py - lab.normal[1] * off; // canvas y is flipped
+    if (placed.some(([qx, qy]) => Math.hypot(qx - ax, qy - ay) < minSep)) continue;
+    placed.push([ax, ay]);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
+    ctx.lineWidth = 1 * s;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(ax, ay);
+    ctx.stroke();
+    const w = ctx.measureText(lab.text).width;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.fillRect(ax - w / 2 - 3 * s, ay - 8 * s, w + 6 * s, 16 * s);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(lab.text, ax, ay);
+  }
   ctx.restore();
 }
 
@@ -256,6 +301,9 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
     ctx.fillStyle = critColor;
     ctx.fillRect(cx - 3 * s, cy - 3 * s, 6 * s, 6 * s);
   }
+
+  // Farey bulb labels on the main cardioid (parameter plane only).
+  if (p.farey && p.fractType === "param") drawFareyLabels(ctx, p.center, p.zoom, size);
 
   // White point + coordinate / fate label.
   const [px, py] = plotToPx(p.z0, p.center, p.zoom, size);

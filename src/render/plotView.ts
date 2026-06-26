@@ -55,6 +55,7 @@ export class PlotView {
   private overlayScheduled = false;
   private wheelTimer = 0;
   private showCritical = false;
+  private showFarey = false;
   /** Active pointers (id → current uv), tracked so two fingers drive a pinch. */
   private readonly pointers = new Map<number, Vec2>();
   /** The previous pinch snapshot, while a two-finger gesture is in progress. */
@@ -99,6 +100,12 @@ export class PlotView {
     this.requestOverlay();
   }
 
+  /** Toggle the Farey bulb labels (parameter plane; redraws the overlay only). */
+  setFarey(on: boolean): void {
+    this.showFarey = on;
+    this.requestOverlay();
+  }
+
   /**
    * Render the plot (and optionally the overlay) to a fresh off-screen canvas at
    * `size`, clamped to the GPU's max texture size. Shared by {@link exportPng}
@@ -139,6 +146,7 @@ export class PlotView {
           fractType: this.fractType,
           critical: this.showCritical,
           criticalPoint: this.plot.criticalPoint,
+          farey: this.showFarey,
           a: this.plot.paramA,
           size,
         });
@@ -215,6 +223,7 @@ export class PlotView {
       fractType: this.fractType,
       critical: this.showCritical,
       criticalPoint: this.plot.criticalPoint,
+      farey: this.showFarey,
       a: this.plot.paramA,
       size: this.overlay.width,
     });

@@ -507,6 +507,7 @@ function init(): void {
     updateParamAVisibility();
     updatePerturbationGating(); // a new f may change z²+c eligibility
     updateDerivativeGating(); // a new f may change holomorphicity
+    applyFarey(); // a new f may change z²+c eligibility for bulb labels
     setDirty(false);
     updateViewChips();
     announce(`Changes applied. Dynamical plane for c = ${dynCValue.textContent}.`);
@@ -524,6 +525,7 @@ function init(): void {
     renderFormula();
     updateParamAVisibility();
     updateDerivativeGating();
+    applyFarey();
     setDirty(false);
     updateViewChips();
     scheduleRecord();
@@ -668,6 +670,14 @@ function init(): void {
     const on = byId<HTMLInputElement>("critorbit").checked;
     parameterView.setCriticalOrbit(on);
     dynamicalView.setCriticalOrbit(on);
+  }
+
+  /** Toggle Farey bulb labels on the parameter plane; disabled unless f is z²+c. */
+  function applyFarey(): void {
+    const eligible = parameterView.plot.perturbationEligible;
+    const cb = byId<HTMLInputElement>("farey");
+    cb.disabled = !eligible;
+    parameterView.setFarey(eligible && cb.checked);
   }
 
   /** Apply the equipotential-overlay controls (checkbox + density) to both plots. */
@@ -1234,6 +1244,8 @@ function init(): void {
 
   byId("critorbit").addEventListener("change", applyCriticalOrbit);
   applyCriticalOrbit();
+  byId("farey").addEventListener("change", applyFarey);
+  applyFarey();
 
   for (const id of ["equipotential", "equiDensity"]) {
     byId(id).addEventListener("input", applyEquipotential);
@@ -1313,6 +1325,8 @@ function init(): void {
     applyOutline();
     byId<HTMLInputElement>("critorbit").checked = false;
     applyCriticalOrbit();
+    byId<HTMLInputElement>("farey").checked = false;
+    applyFarey();
     byId<HTMLInputElement>("equipotential").checked = false;
     byId<HTMLInputElement>("equiDensity").value = "20";
     applyEquipotential();
