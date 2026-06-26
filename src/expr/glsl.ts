@@ -174,9 +174,11 @@ function paramAlias(ast: Node): string {
   return isFreeParameter(ast, "a") ? "  cvec a = vec_(uA.x, uA.y);\n" : "";
 }
 
-/** GLSL for `cvec fFn(cvec z, cvec c) { … }`. */
-export function compileF(ast: Node): string {
-  return `cvec fFn(cvec z, cvec c) {\n${paramAlias(ast)}${emitBody(ast, emitComplex)}\n}`;
+/** GLSL for `cvec <name>(cvec z, cvec c) { … }` (default name `fFn`). The name param
+ *  lets the symbolic derivatives ∂f/∂z and ∂f/∂c be emitted as `fZFn`/`fCFn` for the
+ *  analytic distance-estimate and normal-lighting paths. */
+export function compileF(ast: Node, name = "fFn"): string {
+  return `cvec ${name}(cvec z, cvec c) {\n${paramAlias(ast)}${emitBody(ast, emitComplex)}\n}`;
 }
 
 /** GLSL for `bool escapeFn(cvec z, cvec c) { … }`. */

@@ -22,7 +22,7 @@ import {
   type Precision,
 } from "./shaderBuilder";
 import { buildGradient, DEFAULT_GRADIENT, type GradientStop } from "../palettes";
-import { newtonIteration } from "../expr/derivative";
+import { differentiate, newtonIteration } from "../expr/derivative";
 import { makeComplexFn } from "../expr/evaluate";
 import { computeReferenceOrbitDD, computeReferenceOrbitDDFrom } from "./perturbation";
 import { type DD, dd, ddAddNumber, ddToNumber } from "./dd";
@@ -251,6 +251,9 @@ export class GLPlot {
   private _newton = false; // Newton's-method iteration
   private _iterAst: Node = parse("z^2+c"); // effective iterated fn (Newton map when _newton)
   private _iterEscAst: Node = parse("abs(z)>2"); // effective escape predicate
+  private _fZAst: Node | null = null; // ∂f/∂z (null when f is non-holomorphic)
+  private _fCAst: Node | null = null; // ∂f/∂c (null when f is non-holomorphic)
+  private _holomorphic = false; // both derivatives available — gates analytic DE / normals / multiplier
   private _n = "100";
   private _nplot = "7";
   private _autoIter = false; // scale the iteration cap with zoom depth
@@ -438,7 +441,7 @@ export class GLPlot {
     const program = createProgram(
       this.gl,
       VERTEX_SHADER,
-      buildFragmentShader(this._iterAst, this._iterEscAst, precision),
+      buildFragmentShader(this._iterAst, this._iterEscAst, precision, this._fZAst, this._fCAst),
     );
     return { program, uniforms: this.getUniforms(program) };
   }
@@ -470,6 +473,18 @@ export class GLPlot {
    * if differentiation failed — i.e. Newton's method is unavailable for this f.
    */
   private updateIteration(): string | null {
+    // Symbolic derivatives of the RAW f (not the Newton map), for the analytic DE /
+    // normals / multiplier features. Non-holomorphic f (abs-maps, ;-assignment presets,
+    // f()-recursion) makes differentiate() throw → fall back (features gate off).
+    try {
+      this._fZAst = differentiate(this._fAst, "z");
+      this._fCAst = differentiate(this._fAst, "c");
+      this._holomorphic = true;
+    } catch {
+      this._fZAst = null;
+      this._fCAst = null;
+      this._holomorphic = false;
+    }
     if (this._newton) {
       try {
         const { iter, escape } = newtonIteration(this._fAst);
@@ -521,7 +536,9 @@ export class GLPlot {
     const gen = this.df64Gen;
     let pending: PendingProgram;
     try {
-      pending = this.linkProgramAsync(buildFragmentShader(this._iterAst, this._iterEscAst, "df64"));
+      pending = this.linkProgramAsync(
+        buildFragmentShader(this._iterAst, this._iterEscAst, "df64", this._fZAst, this._fCAst),
+      );
     } catch (err) {
       this.df64Compiling = false;
       console.warn(`[${this.fractType}] df64 shader build failed (deep zoom disabled):`, err);
@@ -1504,6 +1521,11 @@ export class GLPlot {
   /** Critical point of `f` (start of the critical-orbit overlay; 0 for zⁿ+c). */
   get criticalPoint(): Vec2 {
     return this._criticalPoint;
+  }
+  /** Whether ∂f/∂z and ∂f/∂c are available (f is holomorphic) — gates analytic
+   *  distance estimation, analytic normals, and the multiplier readout. */
+  get holomorphic(): boolean {
+    return this._holomorphic;
   }
   get res(): number {
     return this._res;

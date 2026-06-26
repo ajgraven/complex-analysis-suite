@@ -184,8 +184,17 @@ void main() {
 }
 `;
 
-export function buildFragmentShader(fAst: Node, escapeAst: Node, precision: Precision): string {
+export function buildFragmentShader(
+  fAst: Node,
+  escapeAst: Node,
+  precision: Precision,
+  fZAst: Node | null = null,
+  fCAst: Node | null = null,
+): string {
   const isDf64 = precision === "df64";
+  // Symbolic derivatives ∂f/∂z and ∂f/∂c, emitted as fZFn/fCFn for the analytic
+  // distance-estimate and normal-lighting paths. Empty when f is non-holomorphic.
+  const derivFns = fZAst && fCAst ? `\n${compileF(fZAst, "fZFn")}\n${compileF(fCAst, "fCFn")}` : "";
   const baseStdlib = isDf64 ? DF64_GLSL + COMPLEX_DF64_GLSL : COMPLEX_SINGLE_GLSL;
   const centerUniforms = isDf64
     ? "uniform vec2 uCenterX;\nuniform vec2 uCenterY;"
@@ -206,7 +215,7 @@ ${COMPLEX_DERIVED_GLSL}
 uniform vec2 uA; // live parameter a — declared before fFn/escapeFn, which reference it when free
 
 ${compileF(fAst)}
-${compileEscape(escapeAst)}
+${compileEscape(escapeAst)}${derivFns}
 
 uniform vec2 uResolution;
 ${centerUniforms}
