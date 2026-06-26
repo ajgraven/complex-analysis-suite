@@ -31,6 +31,7 @@ import {
   saveSavedViews,
   type AppState,
 } from "./state/appState";
+import { PLACES } from "./state/places";
 import GIF from "gif.js";
 import gifWorkerUrl from "gif.js/dist/gif.worker.js?url";
 import { parse } from "./expr/parser";
@@ -817,6 +818,22 @@ function init(): void {
     return state;
   }
 
+  /** Populate the "Places" dropdown and fly to a selection (undoable via applyFullState). */
+  function setupPlaces(): void {
+    const sel = byId<HTMLSelectElement>("places");
+    for (const place of PLACES) {
+      const opt = document.createElement("option");
+      opt.value = place.name;
+      opt.textContent = place.name;
+      sel.append(opt);
+    }
+    sel.addEventListener("change", () => {
+      const place = PLACES.find((p) => p.name === sel.value);
+      sel.value = ""; // snap back to the "Places…" label so the same entry can be re-picked
+      if (place) applyFullState(place.state);
+    });
+  }
+
   /** Apply a full state: the DOM controls, the custom gradient, and the dynamical z₀. */
   function applyFullState(state: AppState): void {
     applyAppState(state);
@@ -1424,6 +1441,7 @@ function init(): void {
   renderFormula();
   setupTour();
   setupTheme();
+  setupPlaces();
   applyParamA();
   updateParamAVisibility();
   updateKeyframeUI();

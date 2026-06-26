@@ -153,6 +153,10 @@ iterations`; click **edit ▾** to expand and type exact values. A caption under
   browser); pick it from the **Saved views** dropdown to restore it, or **Delete** to
   remove it. Saved views persist across visits (localStorage) and capture the same state
   as a share link.
+- The **Places…** dropdown flies the parameter plane to a famous spot in the Mandelbrot set
+  (Seahorse Valley, Elephant Valley, the Triple Spiral, the Feigenbaum point, a Misiurewicz
+  point …); it sets `f = z²+c` and the centre/zoom, leaving your colouring as-is, and is
+  undoable like any other view change.
 - When `f` uses the free variable **`a`**, an `a` slider appears under the formula — drag
   it to sweep a live parameter and watch the fractal change.
 - **Auto iterations** raises the iteration cap automatically as you zoom in, so deep
