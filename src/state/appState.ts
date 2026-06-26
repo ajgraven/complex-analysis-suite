@@ -40,6 +40,8 @@ export const SHARE_IDS = [
   "outlineWidth",
   "critorbit",
   "farey",
+  "rays",
+  "ray-angle",
   "equipotential",
   "equiDensity",
   "newton",

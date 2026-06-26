@@ -56,6 +56,7 @@ export class PlotView {
   private wheelTimer = 0;
   private showCritical = false;
   private showFarey = false;
+  private rayAngle: number | null = null;
   /** Active pointers (id → current uv), tracked so two fingers drive a pinch. */
   private readonly pointers = new Map<number, Vec2>();
   /** The previous pinch snapshot, while a two-finger gesture is in progress. */
@@ -106,6 +107,12 @@ export class PlotView {
     this.requestOverlay();
   }
 
+  /** Set the external-ray angle to trace (in turns), or null to clear. Overlay-only. */
+  setRays(angle: number | null): void {
+    this.rayAngle = angle;
+    this.requestOverlay();
+  }
+
   /**
    * Render the plot (and optionally the overlay) to a fresh off-screen canvas at
    * `size`, clamped to the GPU's max texture size. Shared by {@link exportPng}
@@ -147,6 +154,7 @@ export class PlotView {
           critical: this.showCritical,
           criticalPoint: this.plot.criticalPoint,
           farey: this.showFarey,
+          rayAngle: this.rayAngle,
           a: this.plot.paramA,
           size,
         });
@@ -224,6 +232,7 @@ export class PlotView {
       critical: this.showCritical,
       criticalPoint: this.plot.criticalPoint,
       farey: this.showFarey,
+      rayAngle: this.rayAngle,
       a: this.plot.paramA,
       size: this.overlay.width,
     });

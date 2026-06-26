@@ -14,6 +14,7 @@ import { PlotView } from "./render/plotView";
 import type { GLPlot, FractType } from "./render/glPlot";
 import type { InspectResult } from "./render/inspect";
 import type { OrbitFate } from "./render/overlay";
+import { parseAngle } from "./render/rays";
 import { dynPresets, paramPresets, type Preset, type PresetName } from "./presets";
 import { byId } from "./ui/dom";
 import { showToast } from "./ui/toast";
@@ -517,6 +518,7 @@ function init(): void {
     updatePerturbationGating(); // a new f may change z²+c eligibility
     updateDerivativeGating(); // a new f may change holomorphicity
     applyFarey(); // a new f may change z²+c eligibility for bulb labels
+    applyRays(); // …and for external rays
     setDirty(false);
     updateViewChips();
     announce(`Changes applied. Dynamical plane for c = ${dynCValue.textContent}.`);
@@ -535,6 +537,7 @@ function init(): void {
     updateParamAVisibility();
     updateDerivativeGating();
     applyFarey();
+    applyRays();
     setDirty(false);
     updateViewChips();
     scheduleRecord();
@@ -696,6 +699,19 @@ function init(): void {
     const cb = byId<HTMLInputElement>("farey");
     cb.disabled = !eligible;
     parameterView.setFarey(eligible && cb.checked);
+  }
+
+  /** Trace the entered external-ray angle on both planes; gated to z²+c. */
+  function applyRays(): void {
+    const eligible = parameterView.plot.perturbationEligible;
+    const on = byId<HTMLInputElement>("rays").checked;
+    const angle = parseAngle(byId<HTMLInputElement>("ray-angle").value);
+    byId<HTMLInputElement>("rays").disabled = !eligible;
+    byId<HTMLInputElement>("ray-angle").disabled = !eligible || !on;
+    const active = eligible && on && angle !== null;
+    parameterView.setRays(active ? angle : null);
+    dynamicalView.setRays(active ? angle : null);
+    byId("rays-note").hidden = !active;
   }
 
   /** Apply the equipotential-overlay controls (checkbox + density) to both plots. */
@@ -1281,6 +1297,9 @@ function init(): void {
   applyCriticalOrbit();
   byId("farey").addEventListener("change", applyFarey);
   applyFarey();
+  byId("rays").addEventListener("change", applyRays);
+  byId("ray-angle").addEventListener("input", applyRays);
+  applyRays();
 
   for (const id of ["equipotential", "equiDensity"]) {
     byId(id).addEventListener("input", applyEquipotential);
@@ -1363,6 +1382,9 @@ function init(): void {
     applyCriticalOrbit();
     byId<HTMLInputElement>("farey").checked = false;
     applyFarey();
+    byId<HTMLInputElement>("rays").checked = false;
+    byId<HTMLInputElement>("ray-angle").value = "1/3";
+    applyRays();
     byId<HTMLInputElement>("equipotential").checked = false;
     byId<HTMLInputElement>("equiDensity").value = "20";
     applyEquipotential();

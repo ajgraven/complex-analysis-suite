@@ -280,6 +280,12 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   period-2 neck, ⅓ and ⅔ for the period-3 bulbs …), placed at the attachment point
   `c = μ/2 − μ²/4`, `μ = e^{2πi·p/q}`. Finer fractions appear as you zoom in; the option
   is available only for `z²+c`.
+- **External rays** — enter an external angle (a fraction like `1/3`, `1/7`, or a decimal in
+  turns) and trace its ray on both planes: the **parameter ray** of the Mandelbrot set and
+  the **dynamic ray** of the current Julia set, drawn by Newton continuation of the Böttcher
+  coordinate. The angle-`0` ray lands at the cusp `c = 1/4`, `1/2` at the antenna tip
+  `c = −2`, and `1/7`, `2/7` at the period-3 bulb neck. Available for `z²+c`; double-precision,
+  so it is accurate at shallow-to-moderate zoom (deep-zoom rays would need extended precision).
 - **Point inspector** — click either plot (or drag its white point) to open a small report
   on that point's orbit: its fate, the attracting-cycle **period**, the cycle **multiplier**
   `λ = ∏ f′` (magnitude, argument, and attracting/repelling/indifferent), the **internal

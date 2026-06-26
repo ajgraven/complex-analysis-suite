@@ -14,6 +14,7 @@ import { formatComplex, truncateComplex, type Complex } from "../complex";
 import type { Node } from "../expr/ast";
 import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
 import { fareyLabels } from "./farey";
+import { dynamicRay, parameterRay } from "./rays";
 
 const OVERLAY_BASE = 500;
 
@@ -155,6 +156,8 @@ export interface OverlayParams {
   criticalPoint?: Vec2;
   /** Label the Farey bulbs of the main cardioid (parameter plane, z²+c). */
   farey?: boolean;
+  /** External-ray angle in turns to trace (parameter + dynamical, z²+c), or null for none. */
+  rayAngle?: number | null;
   /** Overlay backing-store size in px. */
   size: number;
   /** Live parameter `a`, bound in f / escape when used as a free variable. */
@@ -249,6 +252,41 @@ function drawFareyLabels(
   ctx.restore();
 }
 
+/**
+ * Draw an external-ray polyline (parameter or dynamical plane). Far-field points beyond a
+ * few view-widths are dropped so deep-zoom pixel coordinates stay finite — the dense
+ * near-landing points are what is visible anyway.
+ */
+function drawRays(
+  ctx: CanvasRenderingContext2D,
+  pts: Vec2[],
+  center: Vec2,
+  zoom: number,
+  size: number,
+): void {
+  const s = size / OVERLAY_BASE;
+  const lim = size * 6;
+  ctx.save();
+  ctx.strokeStyle = "rgba(120, 220, 255, 0.95)";
+  ctx.lineWidth = 1.6 * s;
+  ctx.beginPath();
+  let started = false;
+  for (const pt of pts) {
+    const [px, py] = plotToPx(pt, center, zoom, size);
+    if (Math.abs(px) > lim || Math.abs(py) > lim) {
+      started = false; // drop the far-field tail; resume when the ray re-enters the view
+      continue;
+    }
+    if (started) ctx.lineTo(px, py);
+    else {
+      ctx.moveTo(px, py);
+      started = true;
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 /** Render the orbit polyline, white point, and label onto `ctx`. */
 export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): void {
   const { size } = p;
@@ -304,6 +342,12 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
 
   // Farey bulb labels on the main cardioid (parameter plane only).
   if (p.farey && p.fractType === "param") drawFareyLabels(ctx, p.center, p.zoom, size);
+
+  // External rays: parameter rays on the param plane, dynamic rays (for c = cc) on the dyn plane.
+  if (typeof p.rayAngle === "number") {
+    const rayPts = p.fractType === "param" ? parameterRay(p.rayAngle) : dynamicRay(p.rayAngle, cc);
+    drawRays(ctx, rayPts, p.center, p.zoom, size);
+  }
 
   // White point + coordinate / fate label.
   const [px, py] = plotToPx(p.z0, p.center, p.zoom, size);
