@@ -220,7 +220,10 @@ classic look; all are shader uniforms, so switching never recompiles):
     the running derivative, giving razor-sharp, resolution-independent filaments. Only for
     holomorphic `f` (the option is disabled for abs-maps like Burning Ship, under Newton,
     and under perturbation — use the screen-space estimate there).
-  - _Orbit trap_ — colours by how close the orbit passes to the axes.
+  - _Orbit trap_ — colours by the orbit's closest approach to a chosen **trap shape**
+    (a "trap shape" dropdown appears): cross (the axes), point (the origin), line (the
+    real axis), circle (|z|=1), or a Gaussian-integer lattice. Switching shape is a
+    shader-uniform change (no recompile) and works for any `f`.
   - _Stripe average_ — average of `½ + ½·sin(s·arg z)` over the orbit (smoothed),
     the classic radial "stripe" filaments; works for any `f`.
   - _Triangle average_ — triangle-inequality average (exact for `z² + c`,

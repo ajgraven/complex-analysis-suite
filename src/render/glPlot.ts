@@ -75,6 +75,7 @@ interface Uniforms {
   uOne: WebGLUniformLocation | null; // df64 optimization barrier
   uMode: WebGLUniformLocation | null;
   uPalette: WebGLUniformLocation | null;
+  uTrapType: WebGLUniformLocation | null;
   uAA: WebGLUniformLocation | null;
   uCdf: WebGLUniformLocation | null;
   uLight: WebGLUniformLocation | null;
@@ -264,6 +265,7 @@ export class GLPlot {
   private _criticalPoint: Vec2 = [0, 0]; // critical point of f (0 for zⁿ+c) — start of the critical-orbit overlay
   private _mode = 0; // 0 escape, 1 smooth, 2 distance, 3 orbit-trap, 4 domain
   private _palette = 0; // 0 classic, 1 viridis, 2 magma, 3 grayscale
+  private _trapType = 0; // orbit-trap shape: 0 cross, 1 point, 2 line, 3 circle, 4 lattice
   private _aa = 1; // supersamples per axis (1 = off)
   private _light = false; // relief lighting on/off
   private _lightAz = 135; // light azimuth, degrees
@@ -421,6 +423,7 @@ export class GLPlot {
       uOne: gl.getUniformLocation(program, "uOne"),
       uMode: gl.getUniformLocation(program, "uMode"),
       uPalette: gl.getUniformLocation(program, "uPalette"),
+      uTrapType: gl.getUniformLocation(program, "uTrapType"),
       uAA: gl.getUniformLocation(program, "uAA"),
       uCdf: gl.getUniformLocation(program, "uCdf"),
       uLight: gl.getUniformLocation(program, "uLight"),
@@ -692,6 +695,7 @@ export class GLPlot {
     const mode = modeOverride ?? this.effectiveMode();
     gl.uniform1i(u.uMode, mode);
     gl.uniform1i(u.uPalette, this._palette);
+    gl.uniform1i(u.uTrapType, this._trapType);
     gl.uniform1i(u.uAA, mode === 6 || this._draft ? 1 : this._aa); // no AA while drafting / raw pass
     if (mode === 5 && this.cdfTex) {
       gl.activeTexture(gl.TEXTURE0);
@@ -1356,6 +1360,13 @@ export class GLPlot {
     this._mode = mode;
     this._palette = palette;
     this._aa = aa;
+    this.scheduleRender();
+  }
+
+  /** Set the orbit-trap shape (0 cross, 1 point, 2 line, 3 circle, 4 lattice). A
+   *  shader-uniform set used only by the orbit-trap mode, so this only re-renders. */
+  setTrap(type: number): void {
+    this._trapType = type;
     this.scheduleRender();
   }
 

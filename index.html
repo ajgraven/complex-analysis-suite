@@ -327,6 +327,19 @@ z^2+c</textarea
               <option value="custom">Custom gradient</option>
             </select>
           </div>
+          <div class="field" id="trap-field" hidden>
+            <label for="trap">trap shape</label>
+            <select
+              id="trap"
+              title="Orbit-trap shape — the orbit is coloured by its closest approach"
+            >
+              <option value="cross">Cross (axes)</option>
+              <option value="point">Point (origin)</option>
+              <option value="line">Line (real axis)</option>
+              <option value="circle">Circle (|z|=1)</option>
+              <option value="lattice">Gaussian lattice</option>
+            </select>
+          </div>
           <details class="control-group">
             <summary>Appearance</summary>
             <div class="control-grid">

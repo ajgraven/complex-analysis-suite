@@ -85,6 +85,14 @@ const PALETTES: Record<string, number> = {
   custom: 4,
   cividis: 5,
 };
+/** Orbit-trap shape dropdown values → shader uniform indices. */
+const TRAPS: Record<string, number> = {
+  cross: 0,
+  point: 1,
+  line: 2,
+  circle: 3,
+  lattice: 4,
+};
 
 /** Show the WebGL2-unavailable banner (or a generic init error) and stop. */
 function showFatalBanner(message: string): void {
@@ -628,6 +636,15 @@ function init(): void {
       v.plot.setGradientRotation(rotation);
     }
     gradientEditor.setVisible(byId<HTMLSelectElement>("palette").value === "custom");
+    applyTrap();
+  }
+
+  /** Apply the orbit-trap shape to both plots; its control shows only in orbit-trap mode. */
+  function applyTrap(): void {
+    const trap = TRAPS[byId<HTMLSelectElement>("trap").value] ?? 0;
+    parameterView.plot.setTrap(trap);
+    dynamicalView.plot.setTrap(trap);
+    byId("trap-field").hidden = byId<HTMLSelectElement>("mode").value !== "orbit";
   }
 
   /** Apply the relief-lighting controls (checkbox + azimuth/elevation/depth) to both plots. */
@@ -1220,6 +1237,7 @@ function init(): void {
   for (const id of ["mode", "palette", "aa"]) {
     byId(id).addEventListener("change", applyColoring);
   }
+  byId("trap").addEventListener("change", applyTrap);
   byId("paletteRotation").addEventListener("input", applyColoring);
   applyColoring();
   updateDerivativeGating();
@@ -1305,6 +1323,7 @@ function init(): void {
     // Reset every option, including coloring + lighting (which presets don't carry).
     byId<HTMLSelectElement>("mode").value = "escape";
     byId<HTMLSelectElement>("palette").value = "classic";
+    byId<HTMLSelectElement>("trap").value = "cross";
     byId<HTMLSelectElement>("aa").value = "1";
     byId<HTMLInputElement>("paletteRotation").value = "0";
     gradientEditor.setStops(DEFAULT_GRADIENT);

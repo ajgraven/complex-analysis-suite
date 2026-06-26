@@ -26,6 +26,7 @@ export const SHARE_IDS = [
   "inpDynRes",
   "mode",
   "palette",
+  "trap",
   "aa",
   "paletteRotation",
   "light",

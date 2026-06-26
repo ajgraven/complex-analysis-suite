@@ -292,6 +292,7 @@ uniform vec2 uC;
 uniform int uFractType; // 1 = parameter space, 0 = dynamical plane
 uniform int uMode;      // 0 escape, 1 smooth, 2 distance, 3 orbit-trap, 4 domain, 5 histogram, 6 raw
 uniform int uPalette;   // 0 classic, 1 viridis, 2 magma, 3 grayscale, 4 custom, 5 cividis
+uniform int uTrapType;  // orbit-trap shape: 0 cross, 1 point, 2 line, 3 circle, 4 lattice
 uniform int uAA;        // supersamples per axis (1 = off)
 uniform sampler2D uCdf; // histogram equalisation lookup (mode 5), indexed by escape time
 uniform int uLight;         // relief lighting on/off
@@ -312,6 +313,19 @@ ${COLOR_GLSL}
 vec3 hsv2rgb(vec3 c) {
   vec3 p = abs(fract(c.xxx + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0);
   return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);
+}
+
+// Distance from an orbit iterate to the selected trap shape (orbit-trap colouring).
+float trapDistance(cvec z) {
+  float re = cre1(z);
+  float im = cre1(cim(z));
+  float r = cabsf(z);
+  if (uTrapType == 1) return r; // point at the origin
+  if (uTrapType == 2) return abs(im); // horizontal line (the real axis)
+  if (uTrapType == 3) return abs(r - 1.0); // unit circle
+  if (uTrapType == 4) // nearest Gaussian-integer lattice point
+    return length(vec2(re, im) - vec2(floor(re + 0.5), floor(im + 0.5)));
+  return min(abs(re), abs(im)); // 0 = cross (both axes), default
 }
 
 // Per-pixel colour for the AA-averaged modes (escape / smooth / orbit-trap / domain).
@@ -338,7 +352,7 @@ ${coordinate}
     cvec zp = z;
     z = fFn(z, cc);
     kmax = k + 1;
-    trap = min(trap, min(abs(cre1(z)), abs(cre1(cim(z))))); // cross (axes) trap
+    trap = min(trap, trapDistance(z)); // closest approach to the trap shape
     if (uMode == 7 && k > 0) { // stripe average colouring
       float add = 0.5 + 0.5 * sin(5.0 * cre1(carg(z)));
       avgPrev = avgLast; avgLast = add; avgSum += add; avgCount += 1.0;
