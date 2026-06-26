@@ -214,8 +214,12 @@ classic look; all are shader uniforms, so switching never recompiles):
     magnitude-divergence escapes (`abs(z) > R`), otherwise falls back to discrete.
   - _Escape time (histogram)_ — histogram-equalised escape time, so colours cover
     roughly equal area regardless of the iteration cap.
-  - _Distance (edges)_ — a screen-space distance estimate that highlights the
-    boundary and filaments.
+  - _Distance (edges, screen-space)_ — a screen-space distance estimate that highlights
+    the boundary and filaments.
+  - _Distance (analytic)_ — the true exterior distance estimate `|z|·log|z| / |z′|` from
+    the running derivative, giving razor-sharp, resolution-independent filaments. Only for
+    holomorphic `f` (the option is disabled for abs-maps like Burning Ship, under Newton,
+    and under perturbation — use the screen-space estimate there).
   - _Orbit trap_ — colours by how close the orbit passes to the axes.
   - _Stripe average_ — average of `½ + ½·sin(s·arg z)` over the orbit (smoothed),
     the classic radial "stripe" filaments; works for any `f`.

@@ -66,6 +66,7 @@ const MODES: Record<string, number> = {
   escape: 0,
   smooth: 1,
   distance: 2,
+  distanceAnalytic: 11,
   orbit: 3,
   domain: 4,
   histogram: 5,
@@ -461,6 +462,7 @@ function init(): void {
     renderFormula();
     updateParamAVisibility();
     updatePerturbationGating(); // a new f may change z²+c eligibility
+    updateDerivativeGating(); // a new f may change holomorphicity
     setDirty(false);
     updateViewChips();
     announce(`Changes applied. Dynamical plane for c = ${dynCValue.textContent}.`);
@@ -477,6 +479,7 @@ function init(): void {
     reportCompileErrors();
     renderFormula();
     updateParamAVisibility();
+    updateDerivativeGating();
     setDirty(false);
     updateViewChips();
     scheduleRecord();
@@ -638,6 +641,7 @@ function init(): void {
     parameterView.plot.setNewton(on);
     dynamicalView.plot.setNewton(on);
     reportCompileErrors();
+    updateDerivativeGating(); // Newton iterates the Newton map, not f — analytic DE n/a
   }
 
   /** Toggle auto-scaling of the iteration cap with zoom on both plots. */
@@ -663,6 +667,7 @@ function init(): void {
       showToast("Perturbation deep zoom applies to z²+c (Mandelbrot and its Julia sets).", "info");
     }
     updatePerturbationGating();
+    updateDerivativeGating();
   }
 
   /**
@@ -676,6 +681,26 @@ function init(): void {
       byId<HTMLInputElement>(id).disabled = active;
     }
     byId("perturbation-note").hidden = !active;
+  }
+
+  /**
+   * The analytic distance mode (mode 11) needs ∂f/∂z and ∂f/∂c — available only for
+   * holomorphic f, not under Newton (the shader iterates the Newton map, not f), and not
+   * under perturbation (its kernel ignores the mode). Disable the option when unavailable,
+   * and fall back to the screen-space distance if it was selected.
+   */
+  function updateDerivativeGating(): void {
+    const available =
+      parameterView.plot.holomorphic &&
+      !byId<HTMLInputElement>("newton").checked &&
+      !parameterView.plot.perturbationActive &&
+      !dynamicalView.plot.perturbationActive;
+    byId<HTMLOptionElement>("mode-distance-analytic").disabled = !available;
+    const sel = byId<HTMLSelectElement>("mode");
+    if (!available && sel.value === "distanceAnalytic") {
+      sel.value = "distance";
+      applyColoring();
+    }
   }
 
   /** Apply the live parameter `a` slider value to both plots and update its readout. */
@@ -1143,6 +1168,7 @@ function init(): void {
   }
   byId("paletteRotation").addEventListener("input", applyColoring);
   applyColoring();
+  updateDerivativeGating();
 
   for (const id of ["light", "lightAz", "lightEl", "lightHeight"]) {
     byId(id).addEventListener("input", applyLighting);

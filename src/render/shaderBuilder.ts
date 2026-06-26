@@ -192,6 +192,7 @@ export function buildFragmentShader(
   fCAst: Node | null = null,
 ): string {
   const isDf64 = precision === "df64";
+  const hasDeriv = fZAst !== null && fCAst !== null;
   // Symbolic derivatives ∂f/∂z and ∂f/∂c, emitted as fZFn/fCFn for the analytic
   // distance-estimate and normal-lighting paths. Empty when f is non-holomorphic.
   const derivFns = fZAst && fCAst ? `\n${compileF(fZAst, "fZFn")}\n${compileF(fCAst, "fCFn")}` : "";
@@ -204,6 +205,41 @@ export function buildFragmentShader(
   cvec z = vec4(df_add(uCenterX, vec2(off.x, 0.0)), df_add(uCenterY, vec2(off.y, 0.0)));`
     : `  vec2 plot = uCenter + (uv * 2.0 - 1.0) / uZoom;
   cvec z = vec_(plot.x, plot.y);`;
+
+  // Analytic exterior distance estimate (mode 11): carry the running derivative
+  // der = ∂z/∂z₀ (dynamical) or ∂z/∂c (parameter), then d ≈ |z|·log|z| / |der|
+  // scaled to pixel width — crisp, resolution-independent filaments. Needs fZFn/fCFn
+  // (holomorphic f); only emitted, and only dispatched, when those exist.
+  const distanceAnalyticGLSL = hasDeriv
+    ? `
+vec3 distanceColorAnalytic(vec2 fragXY) {
+  vec2 uv = fragXY / uResolution;
+${coordinate}
+  cvec cc = (uFractType == 1) ? z : vec_(uC.x, uC.y);
+  cvec der = (uFractType == 1) ? vec_(0.0, 0.0) : vec_(1.0, 0.0);
+  int kmax = 0;
+  for (int k = 0; k < uN; k++) {
+    if (escapeFn(z, cc)) break;
+    cvec zp = z; // derivative is taken at the current iterate, before advancing z
+    der = cadd(cmul(fZFn(zp, cc), der), (uFractType == 1) ? fCFn(zp, cc) : vec_(0.0, 0.0));
+    z = fFn(z, cc);
+    kmax = k + 1;
+  }
+  if (kmax == uN) return vec3(0.0); // interior
+  float az = cabsf(z);
+  float dmag = cabsf(der);
+  float d = (dmag > 0.0) ? 0.5 * az * log(az) / dmag : 0.0; // exterior distance (plot units)
+  float px = 2.0 / (uZoom * uResolution.y);                 // plot units per pixel
+  float de = clamp(d / px, 0.0, 1.0);                       // ~0 at the boundary → 1 away
+  float s = float(kmax);
+  if (az > 1.0) s = float(kmax) + 1.0 - log(log(az)) / log(2.0);
+  return palette(clamp(s / float(uN), 0.0, 1.0)) * de;
+}
+`
+    : "";
+  const analyticDispatch = hasDeriv
+    ? "  if (uMode == 11) { fragColor = vec4(distanceColorAnalytic(fc), 1.0); return; }\n"
+    : "";
 
   return `#version 300 es
 precision highp float;
@@ -407,7 +443,7 @@ vec3 applyLighting(vec3 col, float h) {
   const float ambient = 0.35;
   return col * (ambient + (1.0 - ambient) * diff) * (0.7 + 0.3 * hemi) + spec;
 }
-
+${distanceAnalyticGLSL}
 void main() {
   vec2 fc = gl_FragCoord.xy + uJitter; // temporal-AA sub-pixel offset (0 when off)
   if (uMode == 6) {
@@ -420,7 +456,7 @@ void main() {
     fragColor = vec4(distanceColor(fc), 1.0); // edges: no supersampling
     return;
   }
-  int n = max(uAA, 1);
+${analyticDispatch}  int n = max(uAA, 1);
   vec3 acc = vec3(0.0);
   for (int sy = 0; sy < n; sy++) {
     for (int sx = 0; sx < n; sx++) {
