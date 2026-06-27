@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { juliaExteriorCoeffs, evalExterior } from "../src/render/uniformize";
+import {
+  juliaExteriorCoeffs,
+  mandelbrotExteriorCoeffs,
+  evalExterior,
+} from "../src/render/uniformize";
 import type { Complex } from "../src/complex";
 import * as C from "../src/expr/complexJs";
 
@@ -89,5 +93,54 @@ describe("evalExterior", () => {
       w,
     );
     expect(cdist(got, [2 + 1 + 2, 0])).toBeLessThan(1e-15); // 2 + 1 + 4/2
+  });
+});
+
+describe("mandelbrotExteriorCoeffs — d = 2 (the Mandelbrot set)", () => {
+  it("matches the classical rationals -1/2, 1/8, -1/4, 15/128 and is real", () => {
+    const a = mandelbrotExteriorCoeffs(2, 5);
+    expect(a[0][0]).toBeCloseTo(-1 / 2, 12);
+    expect(a[1][0]).toBeCloseTo(1 / 8, 12);
+    expect(a[2][0]).toBeCloseTo(-1 / 4, 12);
+    expect(a[3][0]).toBeCloseTo(15 / 128, 12);
+    // M is symmetric about the real axis ⇒ the coefficients are real.
+    for (const z of a) expect(Math.abs(z[1])).toBeLessThan(1e-12);
+  });
+
+  it("returns n+1 coefficients and rejects bad input", () => {
+    expect(mandelbrotExteriorCoeffs(2, 7)).toHaveLength(8);
+    expect(mandelbrotExteriorCoeffs(1, 4)).toEqual([]);
+    expect(mandelbrotExteriorCoeffs(2.5, 4)).toEqual([]);
+    expect(mandelbrotExteriorCoeffs(2, -1)).toEqual([]);
+  });
+});
+
+describe("mandelbrotExteriorCoeffs — Ψ inverts the numerically-iterated Böttcher map", () => {
+  // Φ_M(c) via the convergent product Φ(c) = c·Π_k (1 + c·Z_k^{-d})^{1/d^{k+1}} (factors → 1,
+  // so the principal roots are unambiguous — unlike the naive Z_n^{1/d^n} limit, which wraps
+  // the argument). This is direct complex arithmetic, independent of the series machinery, so
+  // Ψ(Φ(c)) ≈ c validates the coefficients without any memorised constant.
+  const numericPhi = (d: number, c: Complex, steps: number): Complex => {
+    let z: Complex = [c[0], c[1]];
+    let prod: Complex = [1, 0];
+    for (let k = 0; k < steps; k++) {
+      const zd = C.intPow(z, d);
+      const factor = C.pow(C.add([1, 0], C.div(c, zd)), [1 / d ** (k + 1), 0]);
+      prod = C.mul(prod, factor);
+      z = C.add(zd, c);
+    }
+    return C.mul(c, prod);
+  };
+
+  it("d = 2: round-trips a point outside the set", () => {
+    const c: Complex = [3, 1];
+    const back = evalExterior(mandelbrotExteriorCoeffs(2, 40), numericPhi(2, c, 6));
+    expect(cdist(back, c)).toBeLessThan(1e-6);
+  });
+
+  it("d = 3: round-trips a point outside the set", () => {
+    const c: Complex = [2.5, -0.6];
+    const back = evalExterior(mandelbrotExteriorCoeffs(3, 40), numericPhi(3, c, 5));
+    expect(cdist(back, c)).toBeLessThan(1e-6);
   });
 });

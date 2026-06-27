@@ -1,7 +1,8 @@
 /**
  * Exterior Riemann maps of the z^d + c family — the Laurent coefficients of the inverse
- * Böttcher map ψ that uniformizes the complement of the filled Julia set K_c. (A later step
- * adds the multibrot connectedness locus M_d; both share `evalExterior` / the series toolkit.)
+ * Böttcher map ψ that uniformizes the complement of the filled Julia set K_c, and of the
+ * exterior map Ψ of the multibrot connectedness locus M_d (the z^d + c parameter-space
+ * fractal; M_2 = the Mandelbrot set). Both share `evalExterior` and the series toolkit.
  *
  * For f(z) = z^d + c the Böttcher coordinate φ conjugates f to w ↦ w^d near ∞ with φ(z) ~ z,
  * so its inverse ψ = φ⁻¹ satisfies the functional equation
@@ -17,6 +18,12 @@
  * Matching the coefficient of u^m gives d·g_m + P_m(g_1…g_{m-1}) on the right and g_{m/d}
  * (or 0) on the left, so each g_m is fixed by the lower ones and c — a triangular recursion
  * that solves to any order with no boundary sampling. The returned b_k = g_{k+1}.
+ *
+ * The multibrot map has no such functional equation (c is both the parameter and the point
+ * Φ is evaluated at), so its coefficients come from the Böttcher product along the
+ * critical-value orbit, Φ(c) = c·Π_{k≥0} (1 + c·Z_k^{-d})^{1/d^{k+1}} with Z_0 = c and
+ * Z_{k+1} = Z_k^d + c, expanded as a series in 1/c (only finitely many factors reach a given
+ * order) and then reverted. For d = 2 these are the classical rationals −½, ⅛, −¼, 15/128, …
  *
  * Pure (no DOM/GL), so it is unit-tested. Valid only where K_c is connected (c ∈ M_d); the
  * caller gates on that. The series converges for |w| > ρ ≥ 1, reaching the boundary |w| = 1
@@ -66,6 +73,63 @@ function seriesPow(a: Series, d: number, n: number): Series {
   return result;
 }
 
+/** A length-(n+1) all-zero series. */
+function zeros(n: number): Series {
+  return Array.from({ length: n + 1 }, () => [0, 0] as Complex);
+}
+
+/** Multiplicative inverse 1/a of a power series with a[0] ≠ 0, truncated to order `n`. */
+function seriesInverse(a: Series, n: number): Series {
+  const b = zeros(n);
+  const a0 = a[0];
+  b[0] = C.div([1, 0], a0);
+  for (let k = 1; k <= n; k++) {
+    let s: Complex = [0, 0];
+    for (let i = 1; i <= k; i++) s = C.add(s, C.mul(a[i] ?? ZERO, b[k - i]));
+    b[k] = C.neg(C.div(s, a0));
+  }
+  return b;
+}
+
+/**
+ * Compositional inverse of a series with a[0] = 0, a[1] ≠ 0 (so a(b(x)) = x), via Lagrange
+ * inversion b_m = (1/m)·[x^{m-1}] (x/a(x))^m. Truncated to order `n`.
+ */
+function seriesReverse(a: Series, n: number): Series {
+  const aOverX = zeros(n); // a(x)/x
+  for (let i = 0; i <= n; i++) aOverX[i] = a[i + 1] ?? ZERO;
+  const h = seriesInverse(aOverX, n); // x / a(x)
+  const b = zeros(n);
+  let hPow = unitSeries(n); // (x/a(x))^0
+  for (let m = 1; m <= n; m++) {
+    hPow = seriesMul(hPow, h, n); // (x/a(x))^m
+    b[m] = C.div(hPow[m - 1], [m, 0]);
+  }
+  return b;
+}
+
+/** (1 + x)^alpha for a series x with x[0] = 0 (binomial series), truncated to order `n`. */
+function seriesBinomPow(x: Series, alpha: number, n: number): Series {
+  const res = unitSeries(n);
+  let coef: Complex = [1, 0]; // C(alpha, j), real (alpha is real)
+  let xPow = unitSeries(n); // x^0
+  for (let j = 1; j <= n; j++) {
+    const f = (alpha - (j - 1)) / j; // C(alpha, j) = C(alpha, j-1)·(alpha-(j-1))/j
+    coef = [coef[0] * f, coef[1] * f];
+    xPow = seriesMul(xPow, x, n); // x^j — lowest order ≥ j, so it empties past order n
+    if (xPow.every((z) => z[0] === 0 && z[1] === 0)) break;
+    for (let i = 0; i <= n; i++) res[i] = C.add(res[i], C.mul(coef, xPow[i]));
+  }
+  return res;
+}
+
+/** Shift a series up by `s` orders (multiply by uˢ), truncated to order `n`. */
+function shiftUp(a: Series, s: number, n: number): Series {
+  const b = zeros(n);
+  for (let i = s; i <= n; i++) b[i] = a[i - s];
+  return b;
+}
+
 /**
  * Laurent coefficients [b_0, b_1, …, b_n] of the inverse Böttcher map ψ(w) = w + Σ b_k w^{-k}
  * of the filled Julia set K_c for z^d + c, solving g(u^d) = g(u)^d + c·u^d order by order.
@@ -90,6 +154,38 @@ export function juliaExteriorCoeffs(d: number, c: Complex, n: number): Complex[]
     g[m] = [num[0] / d, num[1] / d];
   }
   return g.slice(1, N + 1); // b_0 … b_n  (= g_1 … g_{n+1})
+}
+
+/**
+ * Laurent coefficients [a_0, a_1, …, a_n] of the exterior map Ψ_{M_d}(w) = w + Σ a_m w^{-m} of
+ * the multibrot connectedness locus M_d for z^d + c (M_2 = the Mandelbrot set). Built from the
+ * Böttcher product Φ(c) = c·Π_k (1 + c·Z_k^{-d})^{1/d^{k+1}} along the critical-value orbit
+ * Z_0 = c, Z_{k+1} = Z_k^d + c — normalised to a power series in v = 1/c via Y_k = Z_k·v^{d^k}
+ * (so Y_0 = 1, Y_{k+1} = Y_k^d + v^{d^{k+1}-1} and X_k = c·Z_k^{-d} = v^{d^{k+1}-1}·Y_k^{-d}) —
+ * then reverted: with u = 1/w, w = Φ ⇒ u = v/Q̃(v), so Ψ(w) = 1/v(u). Capacity-1 (leading w).
+ * For d = 2 these are the classical rationals −1/2, 1/8, −1/4, 15/128, …  Returns [] for
+ * invalid input (d an integer ≥ 2, n ≥ 0).
+ */
+export function mandelbrotExteriorCoeffs(d: number, n: number): Complex[] {
+  if (!Number.isInteger(d) || d < 2 || n < 0) return [];
+  const M = n + 4; // work a few orders high — the reversion / inversions shed the top order or two
+  let qtilde = unitSeries(M); // Q̃(v) = Φ(c)/c, a series in v = 1/c
+  let y = unitSeries(M); // Y_0 = 1
+  for (let k = 0; d ** (k + 1) - 1 <= M; k++) {
+    const dk1 = d ** (k + 1);
+    const e = dk1 - 1; // X_k = v^e · Y_k^{-d} starts at order e
+    const yd = seriesPow(y, d, M); // Y_k^d
+    const x = shiftUp(seriesInverse(yd, M), e, M); // X_k
+    qtilde = seriesMul(qtilde, seriesBinomPow(x, 1 / dk1, M), M); // ·(1 + X_k)^{1/d^{k+1}}
+    y = yd; // Y_{k+1} = Y_k^d + v^e
+    y[e] = C.add(y[e], [1, 0]);
+  }
+  const s = shiftUp(seriesInverse(qtilde, M), 1, M); // u = v / Q̃(v)
+  const v = seriesReverse(s, M); // v(u)
+  const w = zeros(M); // V/u = 1 + …
+  for (let i = 0; i <= M; i++) w[i] = v[i + 1] ?? ZERO;
+  const iw = seriesInverse(w, M); // 1/(V/u); Ψ(w) = (1/u)·iw = w + iw_1 + iw_2/w + …
+  return iw.slice(1, n + 2); // a_0 … a_n
 }
 
 /**
