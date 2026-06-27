@@ -781,6 +781,61 @@ select.invalid {
   font-size: 0.8rem;
 }
 
+/* --- Exterior-map (uniformization) readout ---------------------------- */
+.exterior-status {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted, #666);
+}
+
+.exterior-n-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.exterior-n-label input {
+  width: 4rem;
+}
+
+.exterior-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.exterior-block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.exterior-actions {
+  display: inline-flex;
+  gap: 0.3rem;
+}
+
+.exterior-actions button {
+  padding: 0.1rem 0.45rem;
+  font-size: 0.75rem;
+}
+
+.exterior-coeffs {
+  max-height: 9rem;
+  margin: 0;
+  overflow: auto;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  white-space: pre;
+  background: var(--panel-alt, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
 /* --- Custom gradient editor ------------------------------------------- */
 .gradient-editor {
   flex-direction: column;

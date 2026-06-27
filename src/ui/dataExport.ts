@@ -18,11 +18,7 @@ const FATE_LABEL: Record<OrbitFate, string> = {
 };
 
 /** The inspected orbit's report as clipboard-friendly plain text (full precision). */
-export function inspectToText(
-  info: InspectResult,
-  point: Complex,
-  plane: "param" | "dyn",
-): string {
+export function inspectToText(info: InspectResult, point: Complex, plane: "param" | "dyn"): string {
   const lines: string[] = [
     plane === "param"
       ? `Parameter c = ${formatComplex(point)}`
@@ -45,4 +41,21 @@ export function orbitToCsv(points: Complex[]): string {
   const rows = ["n,re,im"];
   points.forEach((p, n) => rows.push(`${n},${p[0]},${p[1]}`));
   return rows.join("\n");
+}
+
+/**
+ * Exterior-map Laurent coefficients as CSV with a `k,re,im` header — k is the power of w^{-k}
+ * in ψ(w) = w + Σ b_k w^{-k} (full precision).
+ */
+export function coeffsToCsv(coeffs: Complex[]): string {
+  const rows = ["k,re,im"];
+  coeffs.forEach((b, k) => rows.push(`${k},${b[0]},${b[1]}`));
+  return rows.join("\n");
+}
+
+/** Exterior-map Laurent coefficients as readable plain text (full precision). */
+export function coeffsToText(coeffs: Complex[], title: string): string {
+  const lines = [title, "psi(w) = w + sum_k b_k * w^-k"];
+  coeffs.forEach((b, k) => lines.push(`b_${k} = ${formatComplex(b)}`));
+  return lines.join("\n");
 }

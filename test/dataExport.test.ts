@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { inspectToText, orbitToCsv } from "../src/ui/dataExport";
+import { coeffsToCsv, coeffsToText, inspectToText, orbitToCsv } from "../src/ui/dataExport";
 import type { InspectResult } from "../src/render/inspect";
 
 describe("orbitToCsv", () => {
@@ -57,5 +57,30 @@ describe("inspectToText", () => {
     expect(txt).toContain("Orbit of z0 = -0.123456789012345");
     expect(txt).toContain("Escape time: 7 iterations");
     expect(txt).toContain("Distance to set: 0.000015");
+  });
+});
+
+describe("coeffsToCsv", () => {
+  it("emits a k,re,im header and one row per coefficient (full precision)", () => {
+    const csv = coeffsToCsv([
+      [-0.5, 0],
+      [0, 0.125],
+    ]);
+    expect(csv.split("\n")).toEqual(["k,re,im", "0,-0.5,0", "1,0,0.125"]);
+  });
+});
+
+describe("coeffsToText", () => {
+  it("titles the block and lists b_k = re + i*im", () => {
+    const txt = coeffsToText(
+      [
+        [-0.5, 0],
+        [0.125, 0],
+      ],
+      "Mandelbrot exterior map",
+    );
+    expect(txt).toContain("Mandelbrot exterior map");
+    expect(txt).toContain("b_0 = -0.5+i*0");
+    expect(txt).toContain("b_1 = 0.125+i*0");
   });
 });

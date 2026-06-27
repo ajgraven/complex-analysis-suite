@@ -212,6 +212,7 @@ export class GLPlot {
   private quadBuffer: WebGLBuffer | null = null;
   private _perturbation = false; // perturbation deep-zoom toggle
   private _perturbEligible = false; // current f is z²+c (auto-detected)
+  private _monicDegree: number | null = null; // degree d if f is z^d + c, else null
   /** View centre in double-double precision, accumulated across pan/zoom for deep zoom. */
   private _centerDD: [DD, DD] = [
     [0, 0],
@@ -509,6 +510,7 @@ export class GLPlot {
     const gl = this.gl;
     const iterError = this.updateIteration();
     this._perturbEligible = this.probeMandelbrot();
+    this._monicDegree = this.probeMonicDegree();
     this.orbitDirty = true;
     try {
       const next = this.compile("single");
@@ -769,6 +771,55 @@ export class GLPlot {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  /** The degree d if the iterated map is the monic family z^d + c (integer d ≥ 2), else null —
+   *  gates the exterior-map / Laurent-coefficient feature. Mirrors {@link probeMandelbrot}. */
+  private probeMonicDegree(): number | null {
+    try {
+      const f = makeComplexFn(this._iterAst);
+      // Reject maps depending on the free parameter a (z^d + c + a is not the pure family).
+      const fa = makeComplexFn(this._iterAst, [1, 0.5]);
+      const p0 = f([0.3, -0.2], [0.1, 0.4]);
+      const pa = fa([0.3, -0.2], [0.1, 0.4]);
+      if (Math.abs(p0[0] - pa[0]) > 1e-12 || Math.abs(p0[1] - pa[1]) > 1e-12) return null;
+      // Degree from f(2, 0) = 2^d, then verify f(z, c) = z^d + c at complex samples.
+      const f20 = f([2, 0], [0, 0]);
+      if (!Number.isFinite(f20[0]) || Math.abs(f20[1]) > 1e-9 || f20[0] <= 1.5) return null;
+      const d = Math.round(Math.log2(f20[0]));
+      if (d < 2 || d > 64 || Math.abs(f20[0] - 2 ** d) > 1e-6) return null;
+      const samples: [Complex, Complex][] = [
+        [
+          [0.3, -0.2],
+          [0.1, 0.4],
+        ],
+        [
+          [-0.5, 0.7],
+          [0.2, -0.3],
+        ],
+        [
+          [1.1, 0.05],
+          [-0.6, 0.25],
+        ],
+      ];
+      for (const [z, c] of samples) {
+        const got = f(z, c);
+        let pr = 1;
+        let pi = 0; // z^d via repeated complex multiply
+        for (let k = 0; k < d; k++) {
+          const nr = pr * z[0] - pi * z[1];
+          const ni = pr * z[1] + pi * z[0];
+          pr = nr;
+          pi = ni;
+        }
+        if (Math.abs(got[0] - (pr + c[0])) > 1e-9 || Math.abs(got[1] - (pi + c[1])) > 1e-9) {
+          return null;
+        }
+      }
+      return d;
+    } catch {
+      return null;
     }
   }
 
@@ -1490,6 +1541,12 @@ export class GLPlot {
   /** Whether the current f is z²+c (so perturbation could apply on the param plane). */
   get perturbationEligible(): boolean {
     return this._perturbEligible;
+  }
+
+  /** Degree d if the iterated map is z^d + c (d ≥ 2), else null — gates the exterior-map
+   *  (Laurent-coefficient / uniformization) readout and overlay. */
+  get monicDegree(): number | null {
+    return this._monicDegree;
   }
 
   /** Sub-double (lo) limbs of the double-double centre — non-zero once pan/zoom has

@@ -203,3 +203,21 @@ export function evalExterior(coeffs: Complex[], w: Complex): Complex {
   }
   return sum;
 }
+
+/**
+ * Whether the filled Julia set K_c of z^d + c is connected — i.e. the critical orbit (z = 0)
+ * stays bounded, the condition under which {@link juliaExteriorCoeffs} is valid. A quick
+ * numeric escape test with radius max(2, |c|), which bounds the z^d + c orbit for d ≥ 2.
+ */
+export function juliaConnected(d: number, c: Complex, maxIter = 256): boolean {
+  if (!Number.isInteger(d) || d < 2) return false;
+  const r = Math.max(2, Math.hypot(c[0], c[1]));
+  const r2 = r * r;
+  let z: Complex = [0, 0];
+  for (let k = 0; k < maxIter; k++) {
+    z = C.add(C.intPow(z, d), c); // z ← z^d + c
+    if (!Number.isFinite(z[0]) || !Number.isFinite(z[1])) return false;
+    if (z[0] * z[0] + z[1] * z[1] > r2) return false;
+  }
+  return true;
+}

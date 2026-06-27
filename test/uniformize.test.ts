@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  juliaConnected,
   juliaExteriorCoeffs,
   mandelbrotExteriorCoeffs,
   evalExterior,
@@ -142,5 +143,21 @@ describe("mandelbrotExteriorCoeffs — Ψ inverts the numerically-iterated Bött
     const c: Complex = [2.5, -0.6];
     const back = evalExterior(mandelbrotExteriorCoeffs(3, 40), numericPhi(3, c, 5));
     expect(cdist(back, c)).toBeLessThan(1e-6);
+  });
+});
+
+describe("juliaConnected", () => {
+  it("d = 2: interior c are connected, exterior c are not", () => {
+    expect(juliaConnected(2, [0, 0])).toBe(true);
+    expect(juliaConnected(2, [-1, 0])).toBe(true); // basilica (period 2)
+    expect(juliaConnected(2, [-0.122, 0.745])).toBe(true); // Douady rabbit (period 3)
+    expect(juliaConnected(2, [2, 0])).toBe(false); // outside M
+    expect(juliaConnected(2, [1, 1])).toBe(false);
+  });
+
+  it("works for d = 3 and rejects a bad degree", () => {
+    expect(juliaConnected(3, [0, 0])).toBe(true);
+    expect(juliaConnected(3, [1.5, 0])).toBe(false);
+    expect(juliaConnected(1, [0, 0])).toBe(false);
   });
 });

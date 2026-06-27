@@ -8,12 +8,13 @@
 
 import "./styles/main.css";
 import type { Vec2 } from "./arrays";
-import { formatComplex, parseComplex, truncateComplex } from "./complex";
+import { formatComplex, parseComplex, truncateComplex, type Complex } from "./complex";
 import { getMaxTextureSize } from "./hiResExport";
 import { PlotView } from "./render/plotView";
 import type { GLPlot, FractType } from "./render/glPlot";
 import { inspect, findNucleus, type InspectResult } from "./render/inspect";
 import { classifyOrbit, computeOrbit, type OrbitFate } from "./render/overlay";
+import { juliaConnected, juliaExteriorCoeffs, mandelbrotExteriorCoeffs } from "./render/uniformize";
 import { drawOrbitPreview } from "./render/orbitPreview";
 import { parseAngle } from "./render/rays";
 import { dynPresets, paramPresets, type Preset, type PresetName } from "./presets";
@@ -24,7 +25,7 @@ import { validateInputs, type FieldError } from "./ui/validate";
 import { DEFAULT_GRADIENT } from "./palettes";
 import { parseGradientStops, setupGradientEditor } from "./ui/gradient";
 import { canRecord, startRecording, downloadBlob } from "./ui/recorder";
-import { inspectToText, orbitToCsv } from "./ui/dataExport";
+import { coeffsToCsv, coeffsToText, inspectToText, orbitToCsv } from "./ui/dataExport";
 import { interpolateView, type Keyframe } from "./render/keyframes";
 import {
   readAppState,
@@ -636,6 +637,60 @@ function init(): void {
     // The parameter white point IS this c, so both captions show the same value — making
     // the parameter↔dynamical link explicit.
     paramCValue.textContent = txt;
+    updateExteriorMap(); // dyn coefficients depend on c (a no-op while the panel is collapsed)
+  }
+
+  // --- Exterior-map (uniformization) readout -------------------------------
+  let lastParamCoeffs: Complex[] | null = null;
+  let lastDynCoeffs: Complex[] | null = null;
+
+  /** Truncated display of a coefficient list (full precision is kept for copy / export). */
+  function coeffsPreview(coeffs: Complex[]): string {
+    return coeffs.map((b, k) => `b${k} = ${formatComplex(truncateComplex(b))}`).join("\n");
+  }
+
+  function setExteriorButtons(paramOn: boolean, dynOn: boolean): void {
+    byId<HTMLButtonElement>("exterior-param-copy").disabled = !paramOn;
+    byId<HTMLButtonElement>("exterior-param-csv").disabled = !paramOn;
+    byId<HTMLButtonElement>("exterior-dyn-copy").disabled = !dynOn;
+    byId<HTMLButtonElement>("exterior-dyn-csv").disabled = !dynOn;
+  }
+
+  /**
+   * Recompute the exterior-map coefficients for the current view — the multibrot Ψ_{M_d}
+   * (parameter plane, universal per degree) and the inverse Böttcher map ψ_c (dynamical plane,
+   * at the live c). View-level, not click-driven; skipped while the panel is collapsed.
+   */
+  function updateExteriorMap(): void {
+    if (!byId<HTMLDetailsElement>("exterior-group").open) return; // collapsed → no work
+    const d = parameterView.plot.monicDegree; // both planes share f
+    const status = byId("exterior-status");
+    const paramList = byId("exterior-param-list");
+    const dynList = byId("exterior-dyn-list");
+    if (d === null) {
+      status.textContent = "Available for zᵈ + c maps only (e.g. z²+c, z³+c) — not the current f.";
+      paramList.textContent = "";
+      dynList.textContent = "";
+      lastParamCoeffs = null;
+      lastDynCoeffs = null;
+      setExteriorButtons(false, false);
+      return;
+    }
+    const raw = Number(byId<HTMLInputElement>("exterior-n").value);
+    const n = Math.max(1, Math.min(64, Math.round(Number.isFinite(raw) ? raw : 12)));
+    status.textContent = `z^${d} + c · ψ(w) = w + Σ bₖ·w⁻ᵏ (leading w, capacity 1).`;
+    lastParamCoeffs = mandelbrotExteriorCoeffs(d, n);
+    paramList.textContent = coeffsPreview(lastParamCoeffs);
+    const c = dynamicalView.plot.cValue;
+    if (juliaConnected(d, c)) {
+      lastDynCoeffs = juliaExteriorCoeffs(d, c, n);
+      dynList.textContent = coeffsPreview(lastDynCoeffs);
+      setExteriorButtons(true, true);
+    } else {
+      lastDynCoeffs = null;
+      dynList.textContent = "Julia set disconnected (c ∉ Mᵈ) — exterior map undefined here.";
+      setExteriorButtons(true, false);
+    }
   }
 
   const paramChip = byId("param-view-chip");
@@ -718,6 +773,7 @@ function init(): void {
     applyFarey(); // a new f may change z²+c eligibility for bulb labels
     applyRays(); // …and for external rays
     applyRayPairs(); // …and for bulb ray pairs
+    updateExteriorMap(); // a new f may change the degree / coefficients
     setDirty(false);
     updateViewChips();
     announce(`Changes applied. Dynamical plane for c = ${dynCValue.textContent}.`);
@@ -739,6 +795,7 @@ function init(): void {
     applyFarey();
     applyRays();
     applyRayPairs();
+    updateExteriorMap();
     setDirty(false);
     updateViewChips();
     scheduleRecord();
@@ -1607,6 +1664,36 @@ function init(): void {
     byId(id).addEventListener("input", applyEquipotential);
   }
   applyEquipotential();
+
+  // Exterior-map readout: recompute on open / coefficient-count change (c & f changes route
+  // through updateDynCaption / applyChanges). Copy + CSV export at full precision.
+  byId("exterior-group").addEventListener("toggle", updateExteriorMap);
+  byId("exterior-n").addEventListener("input", updateExteriorMap);
+  const copyCoeffs = (coeffs: Complex[] | null, title: string): void => {
+    if (!coeffs) return;
+    void navigator.clipboard
+      .writeText(coeffsToText(coeffs, title))
+      .then(() => showToast("Coefficients copied to the clipboard.", "info"))
+      .catch(() => showToast("Couldn't access the clipboard.", "warn"));
+  };
+  const exportCoeffs = (coeffs: Complex[] | null, file: string): void => {
+    if (!coeffs) return;
+    downloadBlob(new Blob([coeffsToCsv(coeffs)], { type: "text/csv" }), file);
+    showToast(`Exported ${coeffs.length} coefficients to ${file}.`, "info");
+  };
+  byId("exterior-param-copy").addEventListener("click", () =>
+    copyCoeffs(lastParamCoeffs, "Multibrot/Mandelbrot exterior map"),
+  );
+  byId("exterior-param-csv").addEventListener("click", () =>
+    exportCoeffs(lastParamCoeffs, "multibrot-exterior-map.csv"),
+  );
+  byId("exterior-dyn-copy").addEventListener("click", () =>
+    copyCoeffs(lastDynCoeffs, "Filled Julia exterior map"),
+  );
+  byId("exterior-dyn-csv").addEventListener("click", () =>
+    exportCoeffs(lastDynCoeffs, "julia-exterior-map.csv"),
+  );
+  updateExteriorMap();
 
   byId("newton").addEventListener("change", applyNewton);
   byId("autoiter").addEventListener("change", applyAutoIter);
