@@ -216,7 +216,7 @@ vec3 distanceColorAnalytic(vec2 fragXY) {
   vec2 uv = fragXY / uResolution;
 ${coordinate}
   cvec cc = (uFractType == 1) ? z : vec_(uC.x, uC.y);
-  cvec der = (uFractType == 1) ? vec_(0.0, 0.0) : vec_(1.0, 0.0);
+  cvec der = vec_(1.0, 0.0); // der₀ = d(z₀)/d(param) = 1 (z₀ = c on param, z₀ on dyn)
   int kmax = 0;
   for (int k = 0; k < uN; k++) {
     if (escapeFn(z, cc)) break;
@@ -250,7 +250,7 @@ vec3 reliefSlopeAnalytic(vec2 fragXY) {
   vec2 uv = fragXY / uResolution;
 ${coordinate}
   cvec cc = (uFractType == 1) ? z : vec_(uC.x, uC.y);
-  cvec der = (uFractType == 1) ? vec_(0.0, 0.0) : vec_(1.0, 0.0);
+  cvec der = vec_(1.0, 0.0); // der₀ = d(z₀)/d(param) = 1 (z₀ = c on param, z₀ on dyn)
   int kmax = 0;
   for (int k = 0; k < uN; k++) {
     if (escapeFn(z, cc)) break;

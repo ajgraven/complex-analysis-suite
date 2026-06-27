@@ -569,6 +569,7 @@ function init(): void {
     reportCompileErrors();
     renderFormula();
     updateParamAVisibility();
+    updatePerturbationGating(); // a new preset may change z²+c eligibility (re-enables light/outline/equipotential)
     updateDerivativeGating();
     applyFarey();
     applyRays();
