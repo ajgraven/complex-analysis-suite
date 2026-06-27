@@ -272,6 +272,61 @@ ${coordinate}
     ? "if (uLight == 1) { vec3 ag = reliefSlopeAnalytic(fc); col = ag.z >= 0.0 ? shadeWithGradient(col, ag.xy) : col; }"
     : "if (uLight == 1) col = applyLighting(col, h);";
 
+  // Multiplier-map interior colouring (mode 12): for a non-escaping pixel, find the
+  // attracting cycle (settle + periodicity, as in the period mode) and accumulate the
+  // cycle multiplier λ = ∏ f′(z_k) via fZFn; hue = arg λ (the internal angle), brightness
+  // from |λ| (white at the superattracting centre → dark toward the component boundary).
+  // Escaping pixels keep the smooth escape-time palette — the classic "internal
+  // coordinates" look. Needs fZFn (holomorphic f); only emitted, and only dispatched,
+  // when those exist — so the program still links for non-holomorphic f.
+  const multiplierGLSL = hasDeriv
+    ? `
+vec3 multiplierColor(vec2 fragXY) {
+  vec2 uv = fragXY / uResolution;
+${coordinate}
+  cvec cc = (uFractType == 1) ? z : vec_(uC.x, uC.y);
+  int kmax = 0;
+  for (int k = 0; k < uN; k++) {
+    if (escapeFn(z, cc)) break;
+    z = fFn(z, cc);
+    kmax = k + 1;
+  }
+  if (kmax < uN) {
+    // Exterior: smooth escape-time palette so the boundary structure still reads.
+    float az = cabsf(z);
+    float s = float(kmax);
+    if (az > 1.0) s = float(kmax) + 1.0 - log(log(az)) / log(2.0);
+    return palette(clamp(s / float(uN), 0.0, 1.0));
+  }
+  // Interior: settle onto the attracting cycle, then detect its period.
+  cvec zr = z;
+  for (int si = 0; si < 24; si++) zr = fFn(zr, cc);
+  int period = 0;
+  cvec zz = fFn(zr, cc);
+  for (int q = 1; q <= 24; q++) {
+    if (cabsf(csub(zz, zr)) < 1e-4) { period = q; break; }
+    zz = fFn(zz, cc);
+  }
+  if (period == 0) return vec3(0.12); // no small cycle found
+  // Cycle multiplier λ = ∏ f′(z_k) over one period (barrier ops keep df64 exact).
+  cvec lam = vec_(1.0, 0.0);
+  cvec w = zr;
+  for (int q = 1; q <= 24; q++) {
+    lam = cmul(lam, fZFn(w, cc));
+    w = fFn(w, cc);
+    if (q >= period) break;
+  }
+  float mag = clamp(cabsf(lam), 0.0, 1.0);
+  float hue = cre1(carg(lam)) * 0.15915494 + 0.5; // arg(λ)/2π + ½ → internal angle
+  float val = sqrt(1.0 - mag);                    // bright centre (|λ|→0) → dark boundary
+  return hsv2rgb(vec3(hue, 0.9, val));
+}
+`
+    : "";
+  const multiplierDispatch = hasDeriv
+    ? "  if (uMode == 12) { fragColor = vec4(multiplierColor(fc), 1.0); return; }\n"
+    : "";
+
   return `#version 300 es
 precision highp float;
 precision highp int;
@@ -490,7 +545,7 @@ vec3 applyLighting(vec3 col, float h) {
   if (h < 0.0) return col;
   return shadeWithGradient(col, vec2(dFdx(h), dFdy(h)) * uLightHeight);
 }
-${distanceAnalyticGLSL}${analyticNormalGLSL}
+${distanceAnalyticGLSL}${analyticNormalGLSL}${multiplierGLSL}
 void main() {
   vec2 fc = gl_FragCoord.xy + uJitter; // temporal-AA sub-pixel offset (0 when off)
   if (uMode == 6) {
@@ -503,7 +558,7 @@ void main() {
     fragColor = vec4(distanceColor(fc), 1.0); // edges: no supersampling
     return;
   }
-${analyticDispatch}  int n = max(uAA, 1);
+${analyticDispatch}${multiplierDispatch}  int n = max(uAA, 1);
   vec3 acc = vec3(0.0);
   for (int sy = 0; sy < n; sy++) {
     for (int sx = 0; sx < n; sx++) {

@@ -78,6 +78,7 @@ const MODES: Record<string, number> = {
   triangle: 8,
   decomposition: 9,
   period: 10,
+  multiplier: 12,
 };
 const PALETTES: Record<string, number> = {
   classic: 0,
@@ -835,10 +836,10 @@ function init(): void {
   }
 
   /**
-   * The analytic distance mode (mode 11) needs ∂f/∂z and ∂f/∂c — available only for
-   * holomorphic f, not under Newton (the shader iterates the Newton map, not f), and not
-   * under perturbation (its kernel ignores the mode). Disable the option when unavailable,
-   * and fall back to the screen-space distance if it was selected.
+   * The analytic distance mode (11) and the multiplier map (12) both need ∂f/∂z (and ∂f/∂c)
+   * — available only for holomorphic f, not under Newton (the shader iterates the Newton map,
+   * not f), and not under perturbation (its kernel ignores the mode). Disable both options
+   * when unavailable, falling the selection back to a safe mode if one was active.
    */
   function updateDerivativeGating(): void {
     const available =
@@ -847,9 +848,13 @@ function init(): void {
       !parameterView.plot.perturbationActive &&
       !dynamicalView.plot.perturbationActive;
     byId<HTMLOptionElement>("mode-distance-analytic").disabled = !available;
+    byId<HTMLOptionElement>("mode-multiplier").disabled = !available;
     const sel = byId<HTMLSelectElement>("mode");
     if (!available && sel.value === "distanceAnalytic") {
       sel.value = "distance";
+      applyColoring();
+    } else if (!available && sel.value === "multiplier") {
+      sel.value = "smooth";
       applyColoring();
     }
   }

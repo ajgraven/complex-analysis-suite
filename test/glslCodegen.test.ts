@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { parse } from "../src/expr/parser";
 import { compileF, compileEscape } from "../src/expr/glsl";
+import { buildFragmentShader } from "../src/render/shaderBuilder";
+import { differentiate } from "../src/expr/derivative";
 
 // These guard the two df64-correctness fixes in the GLSL backend. The emitted code is
 // shared verbatim by the single (cvec=vec2) and df64 (cvec=vec4) builds, so any construct
@@ -39,5 +41,35 @@ describe("equality comparison (df64-safe)", () => {
 
   it("still emits ordering comparisons via the real-part accessor", () => {
     expect(compileEscape(parse("abs(z) > 2"))).toContain("cre1(");
+  });
+});
+
+describe("multiplier-map mode (uMode 12) gating + df64 safety", () => {
+  const f = parse("z*z + c");
+  const esc = parse("abs(z) > 2");
+  const fz = differentiate(f, "z");
+  const fc = differentiate(f, "c");
+
+  it("emits the multiplier branch (cycle product + arg→hue) when f is holomorphic", () => {
+    const src = buildFragmentShader(f, esc, "single", fz, fc);
+    expect(src).toContain("vec3 multiplierColor(");
+    expect(src).toContain("uMode == 12");
+    expect(src).toContain("cmul(lam, fZFn("); // λ = ∏ f′(z_k) over the cycle
+    expect(src).toContain("carg(lam)"); // hue from arg λ
+    expect(src).toContain("hsv2rgb(");
+  });
+
+  it("uses df64-safe barrier ops only on λ (no raw cvec arithmetic / length)", () => {
+    const src = buildFragmentShader(f, esc, "df64", fz, fc);
+    expect(src).toContain("vec3 multiplierColor(");
+    expect(src).not.toMatch(/lam\s*\*/); // never `lam * …` (vec4 mul is wrong in df64)
+    expect(src).not.toContain("length(lam)"); // |λ| via cabsf, not length()
+  });
+
+  it("omits the branch and any fZFn use for a non-holomorphic f (so the program still links)", () => {
+    const src = buildFragmentShader(parse("conjugate(z)^2 + c"), esc, "single");
+    expect(src).not.toContain("multiplierColor");
+    expect(src).not.toContain("uMode == 12");
+    expect(src).not.toContain("fZFn");
   });
 });
