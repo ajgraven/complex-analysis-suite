@@ -105,3 +105,28 @@ describe("inspect — non-holomorphic fallback", () => {
     expect(r.distance).toBeNull(); // non-holomorphic ⇒ no analytic DE
   });
 });
+
+describe("inspect — located cycle points", () => {
+  it("captures the attracting cycle (param plane, c=-1 → superattracting 2-cycle {0,-1})", () => {
+    const r = inspect(F, ESC, "param", O, [-1, 0]);
+    expect(r.cyclePoints).not.toBeNull();
+    expect(r.cyclePoints?.length).toBe(r.period);
+    expect(r.cyclePoints?.length).toBe(2);
+    // The critical 2-cycle of z²−1 is {0, −1} (in some rotation); both points are real.
+    const xs = (r.cyclePoints ?? []).map((p) => p[0]).sort((a, b) => a - b);
+    expect(xs[0]).toBeCloseTo(-1, 6);
+    expect(xs[1]).toBeCloseTo(0, 6);
+    for (const p of r.cyclePoints ?? []) expect(Math.abs(p[1])).toBeLessThan(1e-6);
+  });
+
+  it("captures the cycle on the dynamical plane (z₀=0 in the basilica basin)", () => {
+    const r = inspect(F, ESC, "dyn", O, [-1, 0]);
+    expect(r.cyclePoints?.length).toBe(2);
+  });
+
+  it("is null when the orbit escapes", () => {
+    const r = inspect(F, ESC, "param", O, [2, 0]);
+    expect(r.fate).toBe("escaped");
+    expect(r.cyclePoints).toBeNull();
+  });
+});

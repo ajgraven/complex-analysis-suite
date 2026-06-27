@@ -40,6 +40,12 @@ export interface InspectResult {
   rotation: { p: number; q: number } | null;
   /** Exterior distance estimate in plot units (escaped + holomorphic only), else null. */
   distance: number | null;
+  /**
+   * Attracting-cycle points in orbit order (z-plane values), or null when the orbit
+   * does not settle to a finite cycle. These live in the dynamical (z) plane, so they
+   * are meaningful to draw on the dynamical plot only — never on the parameter plane.
+   */
+  cyclePoints: Complex[] | null;
 }
 
 const MAX_DE_ITER = 1024; // cap for the CPU distance-estimate loop
@@ -185,6 +191,7 @@ export function inspect(
     multiplierMag: null,
     rotation: null,
     distance: null,
+    cyclePoints: null,
   };
   const deriv = derivatives(fAst, a);
 
@@ -192,6 +199,7 @@ export function inspect(
     const f = makeComplexFn(fAst, a);
     const cycle = locateCycle(f, z0, c, info.period);
     if (cycle.length === info.period) {
+      out.cyclePoints = cycle;
       out.rotation = rotationNumber(cycle);
       if (deriv) {
         let lam: Complex = [1, 0];

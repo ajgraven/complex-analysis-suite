@@ -57,6 +57,13 @@ export class PlotView {
   private showCritical = false;
   private showFarey = false;
   private rayAngle: number | null = null;
+  /**
+   * Attracting cycle from the last dynamical-plane inspection (z-plane points), and the
+   * `c` it was found at. The cycle is a function of `c` only, so the markers survive
+   * pan/zoom but are dropped once `c` changes (e.g. the coupled parameter point moves).
+   */
+  private lastCyclePoints: Vec2[] | null = null;
+  private lastCycleC: Vec2 | null = null;
   /** Active pointers (id → current uv), tracked so two fingers drive a pinch. */
   private readonly pointers = new Map<number, Vec2>();
   /** The previous pinch snapshot, while a two-finger gesture is in progress. */
@@ -85,6 +92,9 @@ export class PlotView {
 
   applyPreset(preset: Preset): void {
     this.plot.ApplyPreset(preset);
+    // A new f / escape invalidates any cycle markers from the previous map.
+    this.lastCyclePoints = null;
+    this.lastCycleC = null;
     this.syncOverlaySize();
     this.plot.scheduleRender();
   }
@@ -155,6 +165,7 @@ export class PlotView {
           criticalPoint: this.plot.criticalPoint,
           farey: this.showFarey,
           rayAngle: this.rayAngle,
+          cyclePoints: this.currentCyclePoints(),
           a: this.plot.paramA,
           size,
         });
@@ -233,6 +244,7 @@ export class PlotView {
       criticalPoint: this.plot.criticalPoint,
       farey: this.showFarey,
       rayAngle: this.rayAngle,
+      cyclePoints: this.currentCyclePoints(),
       a: this.plot.paramA,
       size: this.overlay.width,
     });
@@ -268,12 +280,32 @@ export class PlotView {
     return { z0: this.plot.z0, c: this.plot.cValue };
   }
 
+  /**
+   * Cycle markers to draw this frame: dynamical plane only, and only while `c` is
+   * unchanged since the inspection that found them (the cycle depends on `c`).
+   */
+  private currentCyclePoints(): Vec2[] | undefined {
+    if (this.fractType !== "dyn" || !this.lastCyclePoints || !this.lastCycleC) return undefined;
+    const c = this.plot.cValue;
+    if (c[0] !== this.lastCycleC[0] || c[1] !== this.lastCycleC[1]) return undefined;
+    return this.lastCyclePoints;
+  }
+
   /** Classify the orbit at the white point and report it to the inspector. */
   private fireInspect(): void {
-    if (!this.hooks.onInspect) return;
     const { z0, c } = this.inspectInputs();
     const info = inspect(this.plot.fAst, this.plot.escAst, this.fractType, z0, c, this.plot.paramA);
-    this.hooks.onInspect(info, this.plot.z0, this.fractType);
+    // Cache the attracting cycle for the dynamical-plane overlay (z-plane points). The
+    // parameter plane never draws them (they would be z-values on a c-plane).
+    if (this.fractType === "dyn" && info.cyclePoints) {
+      this.lastCyclePoints = info.cyclePoints;
+      this.lastCycleC = [c[0], c[1]];
+    } else {
+      this.lastCyclePoints = null;
+      this.lastCycleC = null;
+    }
+    this.hooks.onInspect?.(info, this.plot.z0, this.fractType);
+    this.requestOverlay();
   }
 
   /** uv (y-down) of the current white point, for hit-testing. */

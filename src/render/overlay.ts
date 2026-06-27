@@ -158,6 +158,11 @@ export interface OverlayParams {
   farey?: boolean;
   /** External-ray angle in turns to trace (parameter + dynamical, z²+c), or null for none. */
   rayAngle?: number | null;
+  /**
+   * Attracting-cycle points (z-plane) to highlight, from the click-to-inspect result.
+   * Drawn on the dynamical plane only — they are z-values, meaningless on the c-plane.
+   */
+  cyclePoints?: Vec2[];
   /** Overlay backing-store size in px. */
   size: number;
   /** Live parameter `a`, bound in f / escape when used as a free variable. */
@@ -408,6 +413,40 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
   if (typeof p.rayAngle === "number") {
     const rayPts = cachedRay(p.fractType, p.rayAngle, cc, rayDepthForZoom(p.zoom));
     drawRays(ctx, rayPts, p.center, p.zoom, size);
+  }
+
+  // Attracting cycle located by the inspector, joined in orbit order and marked with
+  // ringed dots (dark backing ring keeps them legible over any fill). Dynamical plane
+  // only: these are z-plane values, so they have no meaning on the parameter (c) plane.
+  if (p.fractType === "dyn" && p.cyclePoints && p.cyclePoints.length > 0) {
+    const cyc = p.cyclePoints;
+    const cycColor = "#ffd166";
+    if (cyc.length > 1) {
+      ctx.strokeStyle = cycColor;
+      ctx.lineWidth = 1.6 * s;
+      ctx.beginPath();
+      cyc.forEach((pt, k) => {
+        const [qx, qy] = plotToPx(pt, p.center, p.zoom, size);
+        if (k === 0) ctx.moveTo(qx, qy);
+        else ctx.lineTo(qx, qy);
+      });
+      ctx.closePath();
+      ctx.stroke();
+    }
+    cyc.forEach((pt) => {
+      const [qx, qy] = plotToPx(pt, p.center, p.zoom, size);
+      ctx.beginPath();
+      ctx.arc(qx, qy, 4.5 * s, 0, 2 * Math.PI);
+      ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+      ctx.fill();
+      ctx.lineWidth = 1.8 * s;
+      ctx.strokeStyle = cycColor;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(qx, qy, 2 * s, 0, 2 * Math.PI);
+      ctx.fillStyle = cycColor;
+      ctx.fill();
+    });
   }
 
   // White point + coordinate / fate label.
