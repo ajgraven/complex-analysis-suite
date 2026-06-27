@@ -4,6 +4,7 @@ import {
   juliaExteriorCoeffs,
   mandelbrotExteriorCoeffs,
   evalExterior,
+  reconstructBoundary,
 } from "../src/render/uniformize";
 import type { Complex } from "../src/complex";
 import * as C from "../src/expr/complexJs";
@@ -159,5 +160,23 @@ describe("juliaConnected", () => {
     expect(juliaConnected(3, [0, 0])).toBe(true);
     expect(juliaConnected(3, [1.5, 0])).toBe(false);
     expect(juliaConnected(1, [0, 0])).toBe(false);
+  });
+});
+
+describe("reconstructBoundary", () => {
+  it("returns `samples` finite points sampling ψ on |w| = r", () => {
+    const coeffs = juliaExteriorCoeffs(2, [-0.5, 0], 8);
+    const pts = reconstructBoundary(coeffs, 1.1, 64);
+    expect(pts).toHaveLength(64);
+    expect(Math.abs(pts[0][1])).toBeLessThan(1e-12); // ψ(r) is real for a real c
+    for (const p of pts) {
+      expect(Number.isFinite(p[0]) && Number.isFinite(p[1])).toBe(true);
+      expect(Math.hypot(p[0], p[1])).toBeLessThan(4);
+    }
+  });
+
+  it("c = 0 reproduces the circle of radius r (Julia set = unit circle, ψ(w) = w)", () => {
+    const pts = reconstructBoundary(juliaExteriorCoeffs(2, [0, 0], 4), 1.3, 32);
+    for (const p of pts) expect(Math.hypot(p[0], p[1])).toBeCloseTo(1.3, 10);
   });
 });

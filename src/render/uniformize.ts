@@ -221,3 +221,18 @@ export function juliaConnected(d: number, c: Complex, maxIter = 256): boolean {
   }
   return true;
 }
+
+/**
+ * The reconstructed boundary ψ(r·e^{2πiθ}) sampled at `samples` equally-spaced angles, as an
+ * open list of points (the caller closes the loop). r = 1 is the boundary itself; r slightly
+ * above 1 is a smooth equipotential just outside it — used by the overlay to stay clear of the
+ * r → 1 limit, where the series only reaches the boundary for locally-connected sets.
+ */
+export function reconstructBoundary(coeffs: Complex[], r: number, samples: number): Complex[] {
+  const pts: Complex[] = [];
+  for (let k = 0; k < samples; k++) {
+    const t = (2 * Math.PI * k) / samples;
+    pts.push(evalExterior(coeffs, [r * Math.cos(t), r * Math.sin(t)]));
+  }
+  return pts;
+}

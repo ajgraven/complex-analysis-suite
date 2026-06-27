@@ -58,6 +58,7 @@ export class PlotView {
   private showFarey = false;
   private showRayPairs = false;
   private rayAngle: number | null = null;
+  private laurentBoundary: { coeffs: Vec2[]; r: number } | null = null;
   /**
    * Attracting cycle from the last dynamical-plane inspection (z-plane points), and the
    * `c` it was found at. The cycle is a function of `c` only, so the markers survive
@@ -130,6 +131,13 @@ export class PlotView {
     this.requestOverlay();
   }
 
+  /** Set the reconstructed exterior-map boundary to draw (coeffs in plot space, radius r), or
+   *  null to clear. Overlay-only. */
+  setLaurentBoundary(coeffs: Vec2[] | null, r: number): void {
+    this.laurentBoundary = coeffs ? { coeffs, r } : null;
+    this.requestOverlay();
+  }
+
   /** Redraw the overlay from outside (e.g. after a programmatic white-point move). */
   refreshOverlay(): void {
     this.requestOverlay();
@@ -178,6 +186,7 @@ export class PlotView {
           farey: this.showFarey,
           rayAngle: this.rayAngle,
           rayPairs: this.showRayPairs,
+          laurentBoundary: this.laurentBoundary ?? undefined,
           cyclePoints: this.currentCyclePoints(),
           a: this.plot.paramA,
           size,
@@ -258,6 +267,7 @@ export class PlotView {
       farey: this.showFarey,
       rayAngle: this.rayAngle,
       rayPairs: this.showRayPairs,
+      laurentBoundary: this.laurentBoundary ?? undefined,
       cyclePoints: this.currentCyclePoints(),
       a: this.plot.paramA,
       size: this.overlay.width,

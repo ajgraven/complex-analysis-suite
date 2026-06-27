@@ -638,6 +638,7 @@ function init(): void {
     // the parameter↔dynamical link explicit.
     paramCValue.textContent = txt;
     updateExteriorMap(); // dyn coefficients depend on c (a no-op while the panel is collapsed)
+    applyLaurent(); // …and so does the dynamical boundary (a no-op while the toggle is off)
   }
 
   // --- Exterior-map (uniformization) readout -------------------------------
@@ -691,6 +692,39 @@ function init(): void {
       dynList.textContent = "Julia set disconnected (c ∉ Mᵈ) — exterior map undefined here.";
       setExteriorButtons(true, false);
     }
+  }
+
+  // Reconstructed-boundary overlay — the visual form of the same coefficients.
+  let lastBoundaryKey = ""; // memo: rebuild the (c-independent) param coeffs only when d/order change
+  let lastBoundaryParam: Complex[] = [];
+  /**
+   * Push the reconstructed exterior-map boundary to both plots when the toggle is on and f is
+   * z^d + c: the multibrot ∂M_d on the parameter plane, ∂K_c (if connected) on the dynamical
+   * plane. Gated like the readout; recomputed on toggle / order / radius / c / f.
+   */
+  function applyLaurent(): void {
+    const d = parameterView.plot.monicDegree;
+    const eligible = d !== null;
+    const cb = byId<HTMLInputElement>("laurent");
+    cb.disabled = !eligible;
+    byId<HTMLInputElement>("laurent-n").disabled = !eligible;
+    byId<HTMLInputElement>("laurent-r").disabled = !eligible;
+    if (!eligible || !cb.checked) {
+      parameterView.setLaurentBoundary(null, 1);
+      dynamicalView.setLaurentBoundary(null, 1);
+      return;
+    }
+    const rawN = Number(byId<HTMLInputElement>("laurent-n").value);
+    const n = Math.max(2, Math.min(128, Math.round(Number.isFinite(rawN) ? rawN : 48)));
+    const r = Math.max(1, Math.min(1.5, Number(byId<HTMLInputElement>("laurent-r").value) / 100));
+    const key = `${d}:${n}`;
+    if (key !== lastBoundaryKey) {
+      lastBoundaryParam = mandelbrotExteriorCoeffs(d, n); // c-independent — memoised across c-drags
+      lastBoundaryKey = key;
+    }
+    parameterView.setLaurentBoundary(lastBoundaryParam, r);
+    const c = dynamicalView.plot.cValue;
+    dynamicalView.setLaurentBoundary(juliaConnected(d, c) ? juliaExteriorCoeffs(d, c, n) : null, r);
   }
 
   const paramChip = byId("param-view-chip");
@@ -774,6 +808,7 @@ function init(): void {
     applyRays(); // …and for external rays
     applyRayPairs(); // …and for bulb ray pairs
     updateExteriorMap(); // a new f may change the degree / coefficients
+    applyLaurent();
     setDirty(false);
     updateViewChips();
     announce(`Changes applied. Dynamical plane for c = ${dynCValue.textContent}.`);
@@ -796,6 +831,7 @@ function init(): void {
     applyRays();
     applyRayPairs();
     updateExteriorMap();
+    applyLaurent();
     setDirty(false);
     updateViewChips();
     scheduleRecord();
@@ -1695,6 +1731,22 @@ function init(): void {
   );
   updateExteriorMap();
 
+  // Boundary-overlay controls (in the same group as the readout).
+  const laurentRValue = byId("laurent-r-value");
+  const updateLaurentR = (): void => {
+    laurentRValue.textContent = (Number(byId<HTMLInputElement>("laurent-r").value) / 100).toFixed(
+      2,
+    );
+  };
+  byId("laurent").addEventListener("change", applyLaurent);
+  byId("laurent-n").addEventListener("input", applyLaurent);
+  byId("laurent-r").addEventListener("input", () => {
+    updateLaurentR();
+    applyLaurent();
+  });
+  updateLaurentR();
+  applyLaurent();
+
   byId("newton").addEventListener("change", applyNewton);
   byId("autoiter").addEventListener("change", applyAutoIter);
   byId("accumulate").addEventListener("change", applyAccumulate);
@@ -1779,6 +1831,11 @@ function init(): void {
     byId<HTMLInputElement>("equipotential").checked = false;
     byId<HTMLInputElement>("equiDensity").value = "20";
     applyEquipotential();
+    byId<HTMLInputElement>("laurent").checked = false;
+    byId<HTMLInputElement>("laurent-n").value = "48";
+    byId<HTMLInputElement>("laurent-r").value = "102";
+    updateLaurentR();
+    applyLaurent();
     byId<HTMLInputElement>("newton").checked = false;
     applyNewton();
     byId<HTMLInputElement>("autoiter").checked = false;

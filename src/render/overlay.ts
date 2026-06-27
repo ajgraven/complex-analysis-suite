@@ -15,6 +15,7 @@ import type { Node } from "../expr/ast";
 import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
 import { fareyLabels } from "./farey";
 import { bulbRayAngles, dynamicRay, parameterRay, rayDepthForZoom } from "./rays";
+import { reconstructBoundary } from "./uniformize";
 
 const OVERLAY_BASE = 500;
 
@@ -160,6 +161,8 @@ export interface OverlayParams {
   rayAngle?: number | null;
   /** Draw both landing rays for every visible Farey bulb (parameter plane, z²+c). */
   rayPairs?: boolean;
+  /** Reconstructed exterior-map boundary to draw (ψ on |w| = r); coeffs in plot space. */
+  laurentBoundary?: { coeffs: Vec2[]; r: number };
   /**
    * Attracting-cycle points (z-plane) to highlight, from the click-to-inspect result.
    * Drawn on the dynamical plane only — they are z-values, meaningless on the c-plane.
@@ -351,6 +354,54 @@ function drawBulbRayPairs(
   }
 }
 
+// Reconstructed-boundary cache (per plane). The points are ψ(r·e^{2πiθ}) in plot space —
+// independent of centre/zoom — so pan/zoom reuse them and only re-project. Keyed by the coeffs
+// array identity (main replaces it only on a c / f / order / radius change) and r.
+const BOUNDARY_SAMPLES = 512;
+const boundaryCache = new Map<"dyn" | "param", { coeffs: Vec2[]; r: number; pts: Vec2[] }>();
+function cachedBoundary(plane: "dyn" | "param", coeffs: Vec2[], r: number): Vec2[] {
+  const slot = boundaryCache.get(plane);
+  if (slot && slot.coeffs === coeffs && slot.r === r) return slot.pts;
+  const pts = reconstructBoundary(coeffs, r, BOUNDARY_SAMPLES);
+  boundaryCache.set(plane, { coeffs, r, pts });
+  return pts;
+}
+
+/**
+ * Draw the reconstructed exterior-map boundary (a closed polyline of ψ on |w| = r). Clipped in
+ * plot space like the rays, so at deep zoom only the visible arc is drawn.
+ */
+function drawLaurentBoundary(
+  ctx: CanvasRenderingContext2D,
+  pts: Vec2[],
+  center: Vec2,
+  zoom: number,
+  size: number,
+): void {
+  const s = size / OVERLAY_BASE;
+  const margin = 40 / zoom;
+  ctx.save();
+  ctx.strokeStyle = "rgba(200, 140, 255, 0.95)";
+  ctx.lineWidth = 1.8 * s;
+  ctx.beginPath();
+  let started = false;
+  for (let i = 0; i <= pts.length; i++) {
+    const pt = pts[i % pts.length]; // wrap once to close the loop
+    if (Math.abs(pt[0] - center[0]) > margin || Math.abs(pt[1] - center[1]) > margin) {
+      started = false;
+      continue;
+    }
+    const [px, py] = plotToPx(pt, center, zoom, size);
+    if (started) ctx.lineTo(px, py);
+    else {
+      ctx.moveTo(px, py);
+      started = true;
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 interface OrbitCacheEntry {
   fAst: Node;
   escapeAst: Node;
@@ -493,6 +544,12 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
       ctx.fillStyle = cycColor;
       ctx.fill();
     });
+  }
+
+  // Reconstructed exterior-map boundary (ψ on |w| = r) — both planes.
+  if (p.laurentBoundary && p.laurentBoundary.coeffs.length > 0) {
+    const bpts = cachedBoundary(p.fractType, p.laurentBoundary.coeffs, p.laurentBoundary.r);
+    drawLaurentBoundary(ctx, bpts, p.center, p.zoom, size);
   }
 
   // White point + coordinate / fate label.
