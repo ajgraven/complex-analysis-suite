@@ -236,6 +236,11 @@ classic look; all are shader uniforms, so switching never recompiles):
   - _Binary decomposition_ — escape-time bands split by the escape half-plane.
   - _Period (interior)_ — colours non-escaping points by their attracting-cycle
     period, revealing the hyperbolic components (cardioid, bulbs).
+  - _Multiplier map (interior)_ — colours non-escaping points by the attracting-cycle
+    **multiplier** `λ = ∏ f′`: hue = arg λ (the internal angle), brightness fading from
+    white at the superattracting centre to dark toward the component boundary (|λ| → 1);
+    escaping points keep the smooth escape-time palette (the classic "internal coordinates"
+    look). Needs a holomorphic `f`.
   - _Domain colouring_ — hue = arg, brightness = magnitude of one application of
     `f(z, c)` (most meaningful on the dynamical plane; ignores the palette).
 - **Palette** — Classic, Viridis and Cividis (both colourblind-safe), Magma,
@@ -287,6 +292,10 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   coordinate. The angle-`0` ray lands at the cusp `c = 1/4`, `1/2` at the antenna tip
   `c = −2`, and `1/7`, `2/7` at the period-3 bulb neck. Available for `z²+c`; double-precision,
   so it is accurate at shallow-to-moderate zoom (deep-zoom rays would need extended precision).
+- **Bulb ray pairs** — a toggle that draws, for every visible Farey bulb, the **two** external
+  parameter rays landing at its root — the angles bounding the bulb's wake (⅓ and ⅔ at the
+  period-2 neck, 1/7 and 2/7 for the ⅓ bulb …). It pairs with the Farey labels (same visible
+  set); parameter plane, `z²+c` only.
 - **Point inspector** — click either plot (or drag its white point) to open a small report
   on that point's orbit: its fate, the attracting-cycle **period**, the cycle **multiplier**
   `λ = ∏ f′` (magnitude, argument, and attracting/repelling/indifferent), the **internal
@@ -294,6 +303,9 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   the period-3 bulb …), and, for escaping points, the **distance to the set**. The parameter
   plane inspects the critical orbit at the clicked `c`; the dynamical plane the clicked
   `z₀`. Multiplier and distance need a holomorphic `f` (period and angle hold for any `f`).
+  On the **dynamical plane** the located attracting cycle is marked (ringed dots joined in
+  orbit order). On the **parameter plane**, when a finite cycle is found, a **Find nucleus**
+  button Newton-snaps `c` to the exact superattracting centre of that hyperbolic component.
 
 ## Newton's method
 
