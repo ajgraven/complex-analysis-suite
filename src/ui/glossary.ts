@@ -88,6 +88,28 @@ export const GLOSSARY: GlossaryEntry[] = [
     term: "Perturbation (deep zoom)",
     defn: "A deep-zoom method for z²+c: compute one high-precision reference orbit, then track every pixel as a small difference from it in ordinary precision — reaching far past the float64 zoom limit.",
   },
+  {
+    id: "bottcher",
+    term: "Böttcher coordinate",
+    defn: "The conformal change of variable φ near ∞ that turns f(z) = zᵈ + c into the pure power map w ↦ wᵈ (with φ(z) ~ z). Its inverse ψ = φ⁻¹ uniformizes the outside of the filled Julia set; external rays and equipotentials are its straight rays and circles.",
+    latex: "\\varphi(f(z)) = \\varphi(z)^d",
+  },
+  {
+    id: "uniformization",
+    term: "Exterior map / uniformization",
+    defn: "The conformal map ψ from the outside of the unit disk onto the outside of the set — the filled Julia set Kᶜ, or the multibrot Mᵈ in parameter space — normalised ψ(w) = w + O(1). The 'Exterior map' panel reconstructs its Laurent coefficients.",
+    latex: "\\psi(w) = w + \\sum_{k\\ge 0} b_k\\, w^{-k}",
+  },
+  {
+    id: "laurent-coefficients",
+    term: "Laurent coefficients",
+    defn: "The numbers bₖ in ψ(w) = w + Σ bₖ·w⁻ᵏ. For zᵈ + c they follow exact recursions (a triangular solve for Kᶜ; a Böttcher-product reversion for Mᵈ), so they are computed, not curve-fitted. For the Mandelbrot set they are the classical rationals −½, ⅛, −¼, 15/128, …",
+  },
+  {
+    id: "capacity",
+    term: "Logarithmic capacity",
+    defn: "A conformal 'size' of a compact set, equal to the leading factor of its exterior map. A monic polynomial's filled Julia set and the multibrot set both have capacity 1, so the exterior map's leading term is exactly w.",
+  },
 ];
 
 /** The app's deliberate, non-textbook conventions — stated for honesty / research use. */

@@ -315,6 +315,35 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   preview of its critical orbit (green if bounded → connected Julia set; orange if it
   escapes → Cantor dust), pinned to the plot's corner.
 
+## Exterior map (uniformization)
+
+For the **z^d + c** family, the **Exterior map** panel reconstructs the Laurent
+coefficients of the conformal map that uniformizes the _outside_ of the set — the inverse
+Böttcher map
+
+    ψ(w) = w + b₀ + b₁/w + b₂/w² + …   (leading term w; these sets have capacity 1)
+
+for two objects at once:
+
+- **Parameter plane — ∂M_d.** The exterior map of the multibrot connectedness locus (the
+  Mandelbrot set for d = 2). Its coefficients are _universal constants_ per degree; for
+  d = 2 they are the classical rationals −½, ⅛, −¼, 15/128, …
+- **Dynamical plane — ∂K_c.** The exterior map of the filled Julia set at the live `c`
+  (shown only when `c ∈ M_d`, so K_c is connected — otherwise the Julia set is a Cantor
+  dust with no single Böttcher chart).
+
+The coefficients come from **exact recursions**, not curve-fitting: a triangular solve of
+the functional equation `ψ(wᵈ) = ψ(w)ᵈ + c` for K_c, and a Böttcher-product series
+reversion for M_d. Choose how many to show, then **Copy** them or download a **CSV** (full
+precision).
+
+Tick **Draw the reconstructed boundary on the plots** to overlay the curve `ψ(r·e^{2πiθ})`
+on each fractal — raise the **order** and watch it tighten onto the true boundary. The
+**radius r** defaults to just above 1 (a smooth equipotential just outside the set); push
+it toward r = 1 for the boundary itself, where the series converges cleanly only for
+locally-connected sets. The panel is available only for `z^d + c`; the `?` button opens the
+glossary (Böttcher coordinate, uniformization, Laurent coefficients, capacity).
+
 ## Newton's method
 
 Tick **Newton's method** to iterate the Newton map `z − f/f'` instead of `f` (the

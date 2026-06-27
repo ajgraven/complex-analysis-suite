@@ -717,9 +717,18 @@ z^2+c</textarea
       <details class="control-group" id="exterior-group">
         <summary>Exterior map (uniformization)</summary>
         <div class="controls">
-          <p class="exterior-status" id="exterior-status">
-            Laurent coefficients of the exterior Riemann map ψ(w) = w + Σ bₖ·w⁻ᵏ.
+          <p class="exterior-status">
+            Laurent coefficients of the exterior Riemann map.
+            <button
+              type="button"
+              class="gloss-link"
+              data-term="uniformization"
+              aria-label="About the exterior map"
+            >
+              ?
+            </button>
           </p>
+          <p class="exterior-status" id="exterior-status">z² + c · ψ(w) = w + Σ bₖ·w⁻ᵏ.</p>
           <label class="exterior-n-label">
             Coefficients
             <input

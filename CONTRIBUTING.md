@@ -142,11 +142,14 @@ The richer instruments are **pure, unit-tested modules** consumed by `overlay.ts
 [`inspect.ts`](src/render/inspect.ts) (click-to-inspect period / multiplier λ / rotation /
 distance, plus `findNucleus`), [`farey.ts`](src/render/farey.ts) (bulb labels),
 [`rays.ts`](src/render/rays.ts) (external rays + `bulbRayAngles`),
-[`orbitPreview.ts`](src/render/orbitPreview.ts) (the hover preview), and
+[`orbitPreview.ts`](src/render/orbitPreview.ts) (the hover preview),
+[`uniformize.ts`](src/render/uniformize.ts) (exterior-map Laurent coefficients of the filled
+Julia set and the multibrot — exact recursions — plus `reconstructBoundary`), and
 [`src/state/places.ts`](src/state/places.ts) (curated locations). User-facing **jargon is
 defined once** in [`src/ui/glossary.ts`](src/ui/glossary.ts) (the Glossary modal + inline
 `?` links) — add an entry there when you introduce a new term. Many of these (rays, Farey,
-multiplier) are gated to `z²+c` via `perturbationEligible`.
+multiplier) are gated to `z²+c` via `perturbationEligible`; the exterior-map panel is gated
+to `z^d+c` via `GLPlot.monicDegree`.
 
 **Newton's method** (`GLPlot.setNewton`) swaps the iterated AST for the Newton map
 `z - f/f'` built by [`src/expr/derivative.ts`](src/expr/derivative.ts)

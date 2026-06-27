@@ -28,6 +28,7 @@ describe("glossary", () => {
       "farey-bulb",
       "external-ray",
       "equipotential",
+      "uniformization",
     ];
     const ids = new Set(GLOSSARY.map((e) => e.id));
     for (const id of linked) expect(ids.has(id)).toBe(true);

@@ -180,3 +180,35 @@ describe("reconstructBoundary", () => {
     for (const p of pts) expect(Math.hypot(p[0], p[1])).toBeCloseTo(1.3, 10);
   });
 });
+
+describe("juliaExteriorCoeffs — Ψ inverts the numerically-iterated Böttcher map (cross-method)", () => {
+  // φ_c(z) = z·Π_k (1 + c·z_k^{-d})^{1/d^{k+1}} along z_k = f^k(z) — direct complex arithmetic,
+  // independent of the recursion. ψ(φ_c(z)) ≈ z for z outside K_c validates the coefficients
+  // across several connected parameters without any closed form.
+  const numericBottcher = (d: number, c: Complex, z0: Complex, steps: number): Complex => {
+    let z: Complex = [z0[0], z0[1]];
+    let prod: Complex = [1, 0];
+    for (let k = 0; k < steps; k++) {
+      const zd = C.intPow(z, d);
+      prod = C.mul(prod, C.pow(C.add([1, 0], C.div(c, zd)), [1 / d ** (k + 1), 0]));
+      z = C.add(zd, c);
+    }
+    return C.mul(z0, prod);
+  };
+
+  it("round-trips a point outside K_c for several connected parameters", () => {
+    const z0: Complex = [3.2, 1.8]; // well outside the filled Julia set
+    const cases: Complex[] = [
+      [-0.5, 0],
+      [-0.122, 0.745],
+      [0.25, 0],
+      [-1, 0.05],
+    ];
+    for (const c of cases) {
+      const back = evalExterior(juliaExteriorCoeffs(2, c, 40), numericBottcher(2, c, z0, 6));
+      expect(cdist(back, z0)).toBeLessThan(1e-5);
+    }
+    const w3 = numericBottcher(3, [0.2, 0], z0, 5);
+    expect(cdist(evalExterior(juliaExteriorCoeffs(3, [0.2, 0], 40), w3), z0)).toBeLessThan(1e-5);
+  });
+});
