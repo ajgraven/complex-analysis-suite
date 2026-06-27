@@ -750,6 +750,11 @@ select.invalid {
   line-height: 1;
 }
 
+.copy-coords {
+  align-self: flex-start;
+  font-size: 0.8rem;
+}
+
 /* --- Custom gradient editor ------------------------------------------- */
 .gradient-editor {
   flex-direction: column;

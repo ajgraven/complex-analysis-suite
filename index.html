@@ -96,6 +96,14 @@
               <span class="view-chip-edit">edit ▾</span>
             </summary>
             <div class="controls">
+              <button
+                id="param-copy-coords"
+                type="button"
+                class="copy-coords"
+                title="Copy c, centre and zoom (full precision) to the clipboard"
+              >
+                Copy coordinates
+              </button>
               <div class="field">
                 <label for="inpc">c (parameter)</label>
                 <input
@@ -186,6 +194,14 @@ abs(z)>2</textarea
               <span class="view-chip-edit">edit ▾</span>
             </summary>
             <div class="controls">
+              <button
+                id="dyn-copy-coords"
+                type="button"
+                class="copy-coords"
+                title="Copy c, centre and zoom (full precision) to the clipboard"
+              >
+                Copy coordinates
+              </button>
               <div class="field">
                 <label for="inpje">escape test</label>
                 <textarea
@@ -273,6 +289,22 @@ abs(z)>2</textarea
           hidden
         >
           Show bulb rays
+        </button>
+        <button
+          id="inspector-copy"
+          type="button"
+          title="Copy this point's report to the clipboard"
+          hidden
+        >
+          Copy report
+        </button>
+        <button
+          id="inspector-orbit"
+          type="button"
+          title="Download this point's orbit as a CSV file"
+          hidden
+        >
+          Export orbit
         </button>
         <p class="inspector-hint">
           Click any point on a plot to inspect its orbit — period, multiplier, internal angle, and

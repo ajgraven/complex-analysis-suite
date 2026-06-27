@@ -13,7 +13,7 @@ import { getMaxTextureSize } from "./hiResExport";
 import { PlotView } from "./render/plotView";
 import type { GLPlot, FractType } from "./render/glPlot";
 import { inspect, findNucleus, type InspectResult } from "./render/inspect";
-import type { OrbitFate } from "./render/overlay";
+import { computeOrbit, type OrbitFate } from "./render/overlay";
 import { parseAngle } from "./render/rays";
 import { dynPresets, paramPresets, type Preset, type PresetName } from "./presets";
 import { byId } from "./ui/dom";
@@ -23,6 +23,7 @@ import { validateInputs, type FieldError } from "./ui/validate";
 import { DEFAULT_GRADIENT } from "./palettes";
 import { parseGradientStops, setupGradientEditor } from "./ui/gradient";
 import { canRecord, startRecording, downloadBlob } from "./ui/recorder";
+import { inspectToText, orbitToCsv } from "./ui/dataExport";
 import { interpolateView, type Keyframe } from "./render/keyframes";
 import {
   readAppState,
@@ -491,6 +492,7 @@ function init(): void {
 
   // --- Click-to-inspect → nucleus finder (parameter plane) ----------------
   let lastNucleusSeed: { point: Vec2; period: number } | null = null;
+  let lastInspect: { info: InspectResult; point: Vec2; plane: FractType } | null = null;
 
   /** Show the "Find nucleus" button only when a finite cycle was found on a holomorphic
    *  parameter plane, and remember the seed (clicked c + detected period) for Newton. */
@@ -513,6 +515,10 @@ function init(): void {
     showInspect(info, point, plane);
     updateNucleusButton(info, point, plane);
     updateBulbRaysButton(info, plane);
+    // Any inspected point can be copied as a report / exported as an orbit.
+    lastInspect = { info, point: [point[0], point[1]], plane };
+    byId("inspector-copy").hidden = false;
+    byId("inspector-orbit").hidden = false;
   }
 
   const errorBox = byId<HTMLDivElement>("input-errors");
@@ -1500,6 +1506,42 @@ function init(): void {
     applyRayPairs();
     byId("overlays-group").setAttribute("open", "");
   });
+  byId("inspector-copy").addEventListener("click", () => {
+    if (!lastInspect) return;
+    const text = inspectToText(lastInspect.info, lastInspect.point, lastInspect.plane);
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => showToast("Inspector report copied to the clipboard.", "info"))
+      .catch(() => showToast("Couldn't access the clipboard.", "warn"));
+  });
+  byId("inspector-orbit").addEventListener("click", () => {
+    if (!lastInspect) return;
+    const onParam = lastInspect.plane === "param";
+    const view = onParam ? parameterView : dynamicalView;
+    // Match inspect's plane semantics: param = critical orbit at the clicked c; dyn = the
+    // clicked z₀ at the fixed c.
+    const z0: Vec2 = onParam ? parameterView.plot.criticalPoint : lastInspect.point;
+    const cc: Vec2 = onParam ? lastInspect.point : dynamicalView.plot.cValue;
+    const pts = computeOrbit(view.plot.fAst, view.plot.escAst, z0, cc, 512, view.plot.paramA);
+    downloadBlob(new Blob([orbitToCsv(pts)], { type: "text/csv" }), "orbit.csv");
+    showToast(`Exported ${pts.length} orbit points to orbit.csv.`, "info");
+  });
+
+  /** Copy the full-precision c / centre / zoom of a plot to the clipboard. */
+  function copyCoords(view: PlotView, cValue: Vec2): void {
+    const p = view.plot;
+    const text = `c = ${formatComplex(cValue)}\ncenter = ${p.center[0]},${p.center[1]}\nzoom = ${p.zoom}`;
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => showToast("Coordinates copied to the clipboard.", "info"))
+      .catch(() => showToast("Couldn't access the clipboard.", "warn"));
+  }
+  byId("param-copy-coords").addEventListener("click", () =>
+    copyCoords(parameterView, parameterView.plot.z0),
+  );
+  byId("dyn-copy-coords").addEventListener("click", () =>
+    copyCoords(dynamicalView, dynamicalView.plot.cValue),
+  );
 
   for (const id of ["light", "lightAz", "lightEl", "lightHeight"]) {
     byId(id).addEventListener("input", applyLighting);
