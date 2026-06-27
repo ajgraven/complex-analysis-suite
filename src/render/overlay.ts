@@ -14,7 +14,7 @@ import { formatComplex, truncateComplex, type Complex } from "../complex";
 import type { Node } from "../expr/ast";
 import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
 import { fareyLabels } from "./farey";
-import { dynamicRay, parameterRay, rayDepthForZoom } from "./rays";
+import { bulbRayAngles, dynamicRay, parameterRay, rayDepthForZoom } from "./rays";
 
 const OVERLAY_BASE = 500;
 
@@ -158,6 +158,8 @@ export interface OverlayParams {
   farey?: boolean;
   /** External-ray angle in turns to trace (parameter + dynamical, z²+c), or null for none. */
   rayAngle?: number | null;
+  /** Draw both landing rays for every visible Farey bulb (parameter plane, z²+c). */
+  rayPairs?: boolean;
   /**
    * Attracting-cycle points (z-plane) to highlight, from the click-to-inspect result.
    * Drawn on the dynamical plane only — they are z-values, meaningless on the c-plane.
@@ -308,6 +310,47 @@ function drawRays(
   ctx.restore();
 }
 
+// Keyed cache of parameter rays for the bulb-pair overlay — unlike the single-slot
+// `rayCache`, many rays are drawn per frame. Parameter rays depend only on angle + depth,
+// so the cache is reused across pans/zooms within a depth step; it is cleared when the
+// zoom-derived depth changes.
+const rayPairCache = new Map<string, Vec2[]>();
+let rayPairDepth = -1;
+function cachedPairRay(angle: number, depth: number): Vec2[] {
+  if (depth !== rayPairDepth) {
+    rayPairCache.clear();
+    rayPairDepth = depth;
+  }
+  const key = String(angle);
+  let pts = rayPairCache.get(key);
+  if (!pts) {
+    pts = parameterRay(angle, { depth });
+    rayPairCache.set(key, pts);
+  }
+  return pts;
+}
+
+/**
+ * Draw the two external parameter rays landing at the root of every visible Farey bulb
+ * (parameter plane, z²+c). Uses the same visible-bulb set (and maxQ) as the Farey labels,
+ * so the rays line up 1:1 with them.
+ */
+function drawBulbRayPairs(
+  ctx: CanvasRenderingContext2D,
+  center: Vec2,
+  zoom: number,
+  size: number,
+): void {
+  const maxQ = Math.min(16, Math.max(4, Math.round(4 + Math.log2(Math.max(1, zoom)))));
+  const depth = rayDepthForZoom(zoom);
+  for (const lab of fareyLabels(center, zoom, maxQ)) {
+    const angles = bulbRayAngles(lab.p, lab.q);
+    if (!angles) continue;
+    drawRays(ctx, cachedPairRay(angles[0], depth), center, zoom, size);
+    drawRays(ctx, cachedPairRay(angles[1], depth), center, zoom, size);
+  }
+}
+
 interface OrbitCacheEntry {
   fAst: Node;
   escapeAst: Node;
@@ -414,6 +457,9 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
     const rayPts = cachedRay(p.fractType, p.rayAngle, cc, rayDepthForZoom(p.zoom));
     drawRays(ctx, rayPts, p.center, p.zoom, size);
   }
+
+  // Landing-ray pair for every visible Farey bulb (parameter plane only).
+  if (p.rayPairs && p.fractType === "param") drawBulbRayPairs(ctx, p.center, p.zoom, size);
 
   // Attracting cycle located by the inspector, joined in orbit order and marked with
   // ringed dots (dark backing ring keeps them legible over any fill). Dynamical plane

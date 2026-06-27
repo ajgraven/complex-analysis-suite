@@ -56,6 +56,7 @@ export class PlotView {
   private wheelTimer = 0;
   private showCritical = false;
   private showFarey = false;
+  private showRayPairs = false;
   private rayAngle: number | null = null;
   /**
    * Attracting cycle from the last dynamical-plane inspection (z-plane points), and the
@@ -123,6 +124,12 @@ export class PlotView {
     this.requestOverlay();
   }
 
+  /** Toggle the landing-ray pair for every visible Farey bulb (parameter plane). Overlay-only. */
+  setRayPairs(on: boolean): void {
+    this.showRayPairs = on;
+    this.requestOverlay();
+  }
+
   /** Redraw the overlay from outside (e.g. after a programmatic white-point move). */
   refreshOverlay(): void {
     this.requestOverlay();
@@ -170,6 +177,7 @@ export class PlotView {
           criticalPoint: this.plot.criticalPoint,
           farey: this.showFarey,
           rayAngle: this.rayAngle,
+          rayPairs: this.showRayPairs,
           cyclePoints: this.currentCyclePoints(),
           a: this.plot.paramA,
           size,
@@ -249,6 +257,7 @@ export class PlotView {
       criticalPoint: this.plot.criticalPoint,
       farey: this.showFarey,
       rayAngle: this.rayAngle,
+      rayPairs: this.showRayPairs,
       cyclePoints: this.currentCyclePoints(),
       a: this.plot.paramA,
       size: this.overlay.width,

@@ -42,6 +42,7 @@ export const SHARE_IDS = [
   "farey",
   "rays",
   "ray-angle",
+  "ray-pairs",
   "equipotential",
   "equiDensity",
   "newton",

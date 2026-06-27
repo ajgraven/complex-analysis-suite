@@ -570,6 +570,7 @@ function init(): void {
     updateDerivativeGating(); // a new f may change holomorphicity
     applyFarey(); // a new f may change z²+c eligibility for bulb labels
     applyRays(); // …and for external rays
+    applyRayPairs(); // …and for bulb ray pairs
     setDirty(false);
     updateViewChips();
     announce(`Changes applied. Dynamical plane for c = ${dynCValue.textContent}.`);
@@ -590,6 +591,7 @@ function init(): void {
     updateDerivativeGating();
     applyFarey();
     applyRays();
+    applyRayPairs();
     setDirty(false);
     updateViewChips();
     scheduleRecord();
@@ -765,6 +767,14 @@ function init(): void {
     parameterView.setRays(active ? angle : null);
     dynamicalView.setRays(active ? angle : null);
     byId("rays-note").hidden = !active;
+  }
+
+  /** Draw the landing-ray pair for each visible Farey bulb (parameter plane); z²+c only. */
+  function applyRayPairs(): void {
+    const eligible = parameterView.plot.perturbationEligible;
+    const cb = byId<HTMLInputElement>("ray-pairs");
+    cb.disabled = !eligible;
+    parameterView.setRayPairs(eligible && cb.checked);
   }
 
   /** Apply the equipotential-overlay controls (checkbox + density) to both plots. */
@@ -1390,6 +1400,8 @@ function init(): void {
   byId("rays").addEventListener("change", applyRays);
   byId("ray-angle").addEventListener("input", applyRays);
   applyRays();
+  byId("ray-pairs").addEventListener("change", applyRayPairs);
+  applyRayPairs();
 
   for (const id of ["equipotential", "equiDensity"]) {
     byId(id).addEventListener("input", applyEquipotential);
@@ -1475,6 +1487,8 @@ function init(): void {
     byId<HTMLInputElement>("rays").checked = false;
     byId<HTMLInputElement>("ray-angle").value = "1/3";
     applyRays();
+    byId<HTMLInputElement>("ray-pairs").checked = false;
+    applyRayPairs();
     byId<HTMLInputElement>("equipotential").checked = false;
     byId<HTMLInputElement>("equiDensity").value = "20";
     applyEquipotential();

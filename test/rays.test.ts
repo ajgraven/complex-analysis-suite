@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { parameterRay, dynamicRay, parseAngle, rayDepthForZoom } from "../src/render/rays";
+import {
+  parameterRay,
+  dynamicRay,
+  parseAngle,
+  rayDepthForZoom,
+  bulbRayAngles,
+} from "../src/render/rays";
+import { bulbRoot } from "../src/render/farey";
 import type { Vec2 } from "../src/arrays";
 
 const last = (pts: Vec2[]): Vec2 => pts[pts.length - 1];
@@ -70,5 +77,44 @@ describe("parseAngle", () => {
     expect(parseAngle("-1/3")).toBeCloseTo(-1 / 3, 12);
     expect(parseAngle(" 1/2 ")).toBe(0.5);
     expect(parseAngle("1/2/3")).toBeNull();
+  });
+});
+
+describe("bulbRayAngles", () => {
+  it("returns the known landing pairs of the main-cardioid bulbs", () => {
+    expect(bulbRayAngles(1, 2)).toEqual([1 / 3, 2 / 3]);
+    expect(bulbRayAngles(1, 3)).toEqual([1 / 7, 2 / 7]);
+    expect(bulbRayAngles(2, 3)).toEqual([5 / 7, 6 / 7]);
+    expect(bulbRayAngles(1, 4)).toEqual([1 / 15, 2 / 15]);
+    expect(bulbRayAngles(3, 4)).toEqual([13 / 15, 14 / 15]); // smallest gap is the wrap
+  });
+
+  it("rejects non-reduced or degenerate p/q", () => {
+    expect(bulbRayAngles(2, 4)).toBeNull();
+    expect(bulbRayAngles(0, 3)).toBeNull();
+    expect(bulbRayAngles(3, 3)).toBeNull();
+    expect(bulbRayAngles(1, 1)).toBeNull();
+  });
+
+  it("both rays land at the bulb root (cross-checked against bulbRoot)", () => {
+    const cases: [number, number][] = [
+      [1, 2],
+      [1, 3],
+      [2, 3],
+      [1, 4],
+      [2, 5],
+    ];
+    // Bulb roots are parabolic, so external rays approach them slowly (~1/depth, not
+    // geometrically) — a depth-45 landing sits within ~0.1 of the root. That is far
+    // tighter than the inter-bulb spacing (> 0.3), so it still pins each pair to the
+    // correct bulb; this checks the angle↔bulb correspondence, not ray precision.
+    for (const [p, q] of cases) {
+      const angles = bulbRayAngles(p, q);
+      expect(angles).not.toBeNull();
+      const root = bulbRoot(p, q).c;
+      for (const ang of angles ?? []) {
+        expect(dist(last(parameterRay(ang, { depth: 45 })), root)).toBeLessThan(0.12);
+      }
+    }
   });
 });

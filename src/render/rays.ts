@@ -125,6 +125,61 @@ export function rayDepthForZoom(zoom: number): number {
   return Math.max(28, Math.min(50, d));
 }
 
+function gcdInt(a: number, b: number): number {
+  return b === 0 ? a : gcdInt(b, a % b);
+}
+
+/**
+ * The two external angles (in turns) of the parameter rays landing at the root of the
+ * p/q satellite bulb of the main cardioid. Among the period-q cycles of the doubling map
+ * x ↦ 2x (mod 2^q − 1), exactly one is order-isomorphic to rigid rotation by p/q; the two
+ * angles bounding its smallest circular gap are the landing rays (1/2 → {1/3, 2/3},
+ * 1/3 → {1/7, 2/7}, 2/3 → {5/7, 6/7}, 1/4 → {1/15, 2/15}). Returns null for q < 2 or a
+ * non-reduced p/q.
+ */
+export function bulbRayAngles(p: number, q: number): [number, number] | null {
+  if (q < 2 || p < 1 || p >= q || gcdInt(p, q) !== 1) return null;
+  const denom = 2 ** q - 1;
+  const seen = new Set<number>();
+  for (let start = 1; start < denom; start++) {
+    if (seen.has(start)) continue;
+    const orbit: number[] = [];
+    let x = start;
+    do {
+      orbit.push(x);
+      seen.add(x);
+      x = (2 * x) % denom;
+    } while (x !== start);
+    if (orbit.length !== q) continue; // not a period-q cycle
+    const sorted = [...orbit].sort((m, n) => m - n);
+    const idx = new Map<number, number>();
+    sorted.forEach((v, i) => idx.set(v, i));
+    // Order-isomorphic to rotation by p? sorted[i] must double to sorted[(i+p) mod q].
+    let isRotation = true;
+    for (let i = 0; i < q && isRotation; i++) {
+      if (idx.get((2 * sorted[i]) % denom) !== (i + p) % q) isRotation = false;
+    }
+    if (!isRotation) continue;
+    // The landing pair bounds the smallest circular gap between adjacent cycle points
+    // (the "characteristic arc"); check the wrap-around gap too.
+    let bestGap = Infinity;
+    let ea = sorted[0];
+    let eb = sorted[q - 1];
+    for (let i = 0; i < q; i++) {
+      const prev = sorted[(i - 1 + q) % q];
+      const cur = sorted[i];
+      const gap = i === 0 ? cur + denom - prev : cur - prev;
+      if (gap < bestGap) {
+        bestGap = gap;
+        ea = prev;
+        eb = cur;
+      }
+    }
+    return [Math.min(ea, eb) / denom, Math.max(ea, eb) / denom];
+  }
+  return null;
+}
+
 /** Parse an external angle written as a fraction "p/q" or a decimal; null if unparseable. */
 export function parseAngle(input: string): number | null {
   const s = input.trim();

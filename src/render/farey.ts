@@ -15,6 +15,9 @@ import type { Vec2 } from "../arrays";
 export interface FareyLabel {
   /** "p/q". */
   text: string;
+  /** Numerator and denominator of the bulb's internal angle p/q (reduced). */
+  p: number;
+  q: number;
   /** Cardioid attachment point of the p/q bulb, in plot coordinates. */
   c: Vec2;
   /** Outward unit normal at the attachment (points into the bulb), plot coordinates. */
@@ -56,7 +59,7 @@ export function fareyLabels(center: Vec2, zoom: number, maxQ = 8): FareyLabel[] 
       const { c, normal } = bulbRoot(p, q);
       if (Math.abs(c[0] - center[0]) > half * 1.15 || Math.abs(c[1] - center[1]) > half * 1.15)
         continue;
-      out.push({ text: `${p}/${q}`, c, normal });
+      out.push({ text: `${p}/${q}`, p, q, c, normal });
     }
   }
   return out;
