@@ -20,6 +20,9 @@
             Theme: auto
           </button>
           <button id="tour-btn" type="button" title="Take a guided tour">tour</button>
+          <button id="help-btn" type="button" title="Open the glossary &amp; conventions">
+            Glossary
+          </button>
           <button
             id="share-btn"
             type="button"
@@ -508,6 +511,14 @@ z^2+c</textarea
                 >
                   <input type="checkbox" id="critorbit" /> critical orbit
                 </label>
+                <button
+                  class="gloss-link"
+                  type="button"
+                  data-term="critical-orbit"
+                  aria-label="What is the critical orbit?"
+                >
+                  ?
+                </button>
               </div>
               <div class="field">
                 <label
@@ -517,6 +528,14 @@ z^2+c</textarea
                 >
                   <input type="checkbox" id="farey" /> Farey bulb labels
                 </label>
+                <button
+                  class="gloss-link"
+                  type="button"
+                  data-term="farey-bulb"
+                  aria-label="What is a Farey bulb?"
+                >
+                  ?
+                </button>
               </div>
               <div class="field">
                 <label
@@ -526,6 +545,14 @@ z^2+c</textarea
                 >
                   <input type="checkbox" id="rays" /> external ray
                 </label>
+                <button
+                  class="gloss-link"
+                  type="button"
+                  data-term="external-ray"
+                  aria-label="What is an external ray?"
+                >
+                  ?
+                </button>
                 <div class="post-controls">
                   <label
                     >angle
@@ -558,6 +585,14 @@ z^2+c</textarea
                 >
                   <input type="checkbox" id="equipotential" /> equipotential
                 </label>
+                <button
+                  class="gloss-link"
+                  type="button"
+                  data-term="equipotential"
+                  aria-label="What is an equipotential?"
+                >
+                  ?
+                </button>
                 <div class="post-controls" title="Contour spacing">
                   <label
                     >density
@@ -982,6 +1017,23 @@ z^2+c</textarea
           <button id="onboarding-tour" type="button">Take the tour</button>
           <button id="onboarding_dismiss" type="button" class="primary">Got it</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Glossary & conventions modal (opened from the app-bar "Glossary" button and the
+         inline "?" links; populated from src/ui/glossary.ts). -->
+    <div id="glossary" class="onboarding glossary-overlay" hidden>
+      <div
+        class="onboarding-card glossary-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="glossary-title"
+      >
+        <div class="glossary-head">
+          <h2 id="glossary-title">Glossary &amp; conventions</h2>
+          <button id="glossary-close" type="button" aria-label="Close glossary">×</button>
+        </div>
+        <div id="glossary-body" class="glossary-body"></div>
       </div>
     </div>
   </body>

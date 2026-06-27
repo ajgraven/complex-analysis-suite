@@ -18,6 +18,7 @@ import { parseAngle } from "./render/rays";
 import { dynPresets, paramPresets, type Preset, type PresetName } from "./presets";
 import { byId } from "./ui/dom";
 import { showToast } from "./ui/toast";
+import { GLOSSARY, CONVENTIONS, type GlossaryEntry } from "./ui/glossary";
 import { validateInputs, type FieldError } from "./ui/validate";
 import { DEFAULT_GRADIENT } from "./palettes";
 import { parseGradientStops, setupGradientEditor } from "./ui/gradient";
@@ -127,6 +128,18 @@ const FATE_TEXT: Record<OrbitFate, string> = {
   bounded: "bounded (no cycle found)",
 };
 
+/** Opens the glossary modal at an optional term anchor; assigned by setupGlossary(). */
+let openGlossary: (termId?: string) => void = () => {};
+
+/** Inspector row label → glossary term id, for the inline "?" links. */
+const TERM_FOR_ROW: Record<string, string> = {
+  Fate: "escape-time",
+  Period: "period",
+  "Multiplier |λ|": "multiplier",
+  "Internal angle": "internal-angle",
+  "Distance to set": "distance-estimate",
+};
+
 /** Render a click-to-inspect orbit report into the inspector panel. */
 function showInspect(info: InspectResult, point: Vec2, plane: FractType): void {
   const pt = truncateComplex([point[0], point[1]]);
@@ -153,6 +166,16 @@ function showInspect(info: InspectResult, point: Vec2, plane: FractType): void {
   for (const [key, value] of rows) {
     const dt = document.createElement("dt");
     dt.textContent = key;
+    const term = TERM_FOR_ROW[key];
+    if (term) {
+      const q = document.createElement("button");
+      q.type = "button";
+      q.className = "gloss-link";
+      q.textContent = "?";
+      q.setAttribute("aria-label", `Define ${key}`);
+      q.addEventListener("click", () => openGlossary(term));
+      dt.append(" ", q);
+    }
     const dd = document.createElement("dd");
     dd.textContent = value;
     body.append(dt, dd);
@@ -316,6 +339,72 @@ function setupOnboarding(): void {
     if (e.key === "Escape" && !el.hidden) dismiss();
   });
   byId<HTMLButtonElement>("onboarding_dismiss").focus();
+}
+
+/** Populate + wire the glossary modal, and set the module-level {@link openGlossary} opener
+ *  used by the app-bar button, the inspector "?" links, and the overlay "?" links. */
+function setupGlossary(): void {
+  const overlay = byId("glossary");
+  const body = byId("glossary-body");
+
+  const addSection = (title: string, entries: GlossaryEntry[]): void => {
+    const h = document.createElement("h3");
+    h.textContent = title;
+    body.append(h);
+    for (const e of entries) {
+      const item = document.createElement("div");
+      item.className = "glossary-item";
+      item.id = `gl-${e.id}`;
+      const name = document.createElement("strong");
+      name.textContent = e.term;
+      const p = document.createElement("p");
+      p.textContent = e.defn;
+      item.append(name, p);
+      if (e.latex) {
+        const math = document.createElement("div");
+        math.className = "glossary-math";
+        try {
+          katex.render(e.latex, math, { throwOnError: false, displayMode: true });
+        } catch {
+          math.textContent = e.latex;
+        }
+        item.append(math);
+      }
+      body.append(item);
+    }
+  };
+  addSection("Terms", GLOSSARY);
+  addSection("Conventions in this app", CONVENTIONS);
+
+  const close = (): void => {
+    overlay.hidden = true;
+  };
+  openGlossary = (termId?: string): void => {
+    overlay.hidden = false;
+    if (termId) {
+      const t = document.getElementById(`gl-${termId}`);
+      if (t) {
+        t.scrollIntoView({ block: "center" });
+        t.classList.add("glossary-flash");
+        window.setTimeout(() => t.classList.remove("glossary-flash"), 1200);
+      }
+    }
+  };
+  byId("help-btn").addEventListener("click", () => openGlossary());
+  byId("glossary-close").addEventListener("click", close);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) close(); // backdrop click
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !overlay.hidden) close();
+  });
+  // Static "?" links on the overlay labels (the inspector-row ones are wired in showInspect).
+  for (const btn of document.querySelectorAll<HTMLButtonElement>(".gloss-link[data-term]")) {
+    btn.addEventListener("click", () => {
+      const term = btn.dataset.term;
+      if (term) openGlossary(term);
+    });
+  }
 }
 
 /** Show the export-progress overlay; returns progress + cancel hooks and a closer. */
@@ -1598,6 +1687,7 @@ function init(): void {
 
   disableUnsupportedSizes();
   setupOnboarding();
+  setupGlossary();
   renderFormula();
   setupTour();
   setupTheme();
