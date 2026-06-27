@@ -473,12 +473,9 @@ ${coordinate}
   return s;
 }
 
-// Relief-shade a base colour: build a surface normal from the screen-space gradient
-// of the escape-time height (works for any f — no analytic derivative needed), then
-// apply a Lambertian + specular + hemisphere model. Interior pixels stay flat.
 // Lambertian + specular + hemisphere shading from a 2D surface slope g (the
-// height-field gradient scaled by relief depth). Shared by the screen-space and
-// analytic relief paths.
+// height-field gradient scaled by relief depth). Shared by the screen-space relief
+// path (gradient via fwidth) and the analytic path (gradient from z/z′).
 vec3 shadeWithGradient(vec3 col, vec2 g) {
   vec3 N = normalize(vec3(-g, 1.0));
   vec3 L = uLightDir;

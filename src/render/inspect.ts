@@ -89,7 +89,26 @@ export function rotationNumber(cycle: Complex[]): { p: number; q: number } | nul
   }
   cx /= q;
   cy /= q;
-  const ang = cycle.map((w) => Math.atan2(w[1] - cy, w[0] - cx));
+  // A collinear cycle (e.g. a real period-q window, q ≥ 3) has no winding around the
+  // centroid — the points cluster at two angles, so the angular order, and any rotation
+  // number from it, is ill-defined. Detect collinearity via the cross product against the
+  // longest centroid-relative vector and bail. (q = 2 is genuinely ½ and is kept.)
+  const rel = cycle.map((w): Complex => [w[0] - cx, w[1] - cy]);
+  if (q >= 3) {
+    let ref = rel[0];
+    let maxR = 0;
+    for (const u of rel) {
+      const r = Math.hypot(u[0], u[1]);
+      if (r > maxR) {
+        maxR = r;
+        ref = u;
+      }
+    }
+    let maxCross = 0;
+    for (const u of rel) maxCross = Math.max(maxCross, Math.abs(ref[0] * u[1] - ref[1] * u[0]));
+    if (maxCross < 1e-6 * maxR * maxR) return null;
+  }
+  const ang = rel.map((u) => Math.atan2(u[1], u[0]));
   // Rank the points by angle around the centroid (CCW order).
   const order = [...ang.keys()].sort((i, j) => ang[i] - ang[j]);
   const rank = new Array<number>(q);

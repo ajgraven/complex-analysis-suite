@@ -27,6 +27,24 @@ describe("rotationNumber", () => {
   it("is null for a single point", () => {
     expect(rotationNumber([[1, 0]])).toBeNull();
   });
+
+  it("is null for a collinear (real) cycle of period ≥ 3 — no winding", () => {
+    expect(
+      rotationNumber([
+        [1, 0],
+        [-0.5, 0],
+        [-2, 0],
+      ]),
+    ).toBeNull();
+    expect(
+      rotationNumber([
+        [0, 1],
+        [0, -0.3],
+        [0, 2],
+        [0, -1.5],
+      ]),
+    ).toBeNull();
+  });
 });
 
 describe("inspect — parameter plane (critical orbit)", () => {

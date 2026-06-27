@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { encodeState, decodeState, type AppState } from "../src/state/appState";
+import indexHtml from "../index.html?raw";
+import { encodeState, decodeState, SHARE_IDS, type AppState } from "../src/state/appState";
 
 describe("app-state permalink codec", () => {
   it("round-trips a state object", () => {
@@ -33,5 +34,14 @@ describe("app-state permalink codec", () => {
     expect(decodeState(encodeState(42 as unknown as AppState))).toBeNull();
     expect(decodeState(encodeState("hi" as unknown as AppState))).toBeNull();
     expect(decodeState(encodeState(null as unknown as AppState))).toBeNull();
+  });
+});
+
+describe("SHARE_IDS DOM coverage", () => {
+  // Guards that every serialized control (permalink / saved view / undo) has a real
+  // element — so adding an id to SHARE_IDS without a matching control fails CI.
+  it("every SHARE_IDS id exists in index.html", () => {
+    const missing = SHARE_IDS.filter((id) => !indexHtml.includes(`id="${id}"`));
+    expect(missing).toEqual([]);
   });
 });
