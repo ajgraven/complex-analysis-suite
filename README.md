@@ -213,8 +213,8 @@ recording (the loop is paced by `requestAnimationFrame`). See
 
 ## Colouring
 
-Several shared controls drive how the plots are coloured (defaults reproduce the
-classic look; all are shader uniforms, so switching never recompiles):
+Several shared controls drive how the plots are coloured (the default is **Smooth**;
+all are shader uniforms, so switching never recompiles):
 
 - **Coloring (mode)** — how each pixel is coloured:
   - _Escape time_ — discrete escape-time bands (the classic look).
