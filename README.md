@@ -125,7 +125,8 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
   **two-finger pinch** zooms toward the gesture midpoint — lift to one finger
   mid-pinch and it continues as a pan.
 - **Accessibility:** each plot is keyboard-focusable (`Tab` to it, then arrow keys
-  pan and +/− zoom) and exposes an ARIA label; a visually-hidden live region
+  pan, +/− zoom, and **Enter** sets the point — `c` or `z₀` — to the view centre and
+  opens the inspector) and exposes an ARIA label; a visually-hidden live region
   announces the view (centre/zoom) and the parameter `c` to screen readers as they
   change.
 - Press **Enter** (or **apply changes**) to apply edits to the input fields — while

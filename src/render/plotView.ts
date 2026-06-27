@@ -463,6 +463,16 @@ export class PlotView {
       "-": 189,
     };
     el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === "i") {
+        // Keyboard equivalent of a click: place the point at the view centre and inspect it.
+        e.preventDefault();
+        const c: Vec2 = [this.plot.center[0], this.plot.center[1]];
+        this.plot.moveZ0(c);
+        this.requestOverlay();
+        this.hooks.coupling?.setC(c);
+        this.fireInspect();
+        return;
+      }
       const code = KEYS[e.key];
       if (code === undefined) return;
       e.preventDefault();

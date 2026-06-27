@@ -79,7 +79,7 @@
               class="overlay"
               tabindex="0"
               role="application"
-              aria-label="Parameter space — interactive fractal plot. Arrow keys pan; the + and − keys zoom; drag to move the parameter point c."
+              aria-label="Parameter space — interactive fractal plot. Arrow keys pan; the + and − keys zoom; drag (or press Enter) to set the parameter point c to the view centre and inspect it."
             ></canvas>
           </div>
           <p class="plot-caption">drag the white point to set <em>c</em> &rarr;</p>
@@ -169,7 +169,7 @@ abs(z)>2</textarea
               class="overlay"
               tabindex="0"
               role="application"
-              aria-label="Dynamical plane — interactive fractal plot. Arrow keys pan; the + and − keys zoom; drag to move the orbit start z₀."
+              aria-label="Dynamical plane — interactive fractal plot. Arrow keys pan; the + and − keys zoom; drag (or press Enter) to set the orbit start z₀ to the view centre and inspect it."
             ></canvas>
           </div>
           <p class="plot-caption">for <em>c</em> = <span id="dyn-c-value">…</span></p>
@@ -243,7 +243,14 @@ abs(z)>2</textarea
       <aside id="inspector" class="inspector" aria-live="polite">
         <div class="inspector-head">
           <strong id="inspector-title">Point inspector</strong>
-          <button id="inspector-close" type="button" title="Close the inspector">×</button>
+          <button
+            id="inspector-close"
+            type="button"
+            title="Close the inspector"
+            aria-label="Close inspector"
+          >
+            ×
+          </button>
         </div>
         <dl class="inspector-body" id="inspector-body"></dl>
         <p class="inspector-hint">
