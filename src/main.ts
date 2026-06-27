@@ -19,8 +19,8 @@ import { dynPresets, paramPresets, type Preset, type PresetName } from "./preset
 import { byId } from "./ui/dom";
 import { showToast } from "./ui/toast";
 import { validateInputs, type FieldError } from "./ui/validate";
-import { DEFAULT_GRADIENT, type GradientStop } from "./palettes";
-import { setupGradientEditor } from "./ui/gradient";
+import { DEFAULT_GRADIENT } from "./palettes";
+import { parseGradientStops, setupGradientEditor } from "./ui/gradient";
 import { canRecord, startRecording, downloadBlob } from "./ui/recorder";
 import { interpolateView, type Keyframe } from "./render/keyframes";
 import {
@@ -890,17 +890,20 @@ function init(): void {
   function applyFullState(state: AppState): void {
     applyAppState(state);
     if (typeof state._grad === "string") {
-      try {
-        const stops = JSON.parse(state._grad) as GradientStop[];
+      // Validate the untrusted gradient the same way the manual loader does; ignore if bad.
+      const stops = parseGradientStops(state._grad);
+      if (stops) {
         gradientEditor.setStops(stops); // setStops doesn't emit onChange — push to the plots too
         parameterView.plot.setGradient(stops);
         dynamicalView.plot.setGradient(stops);
-      } catch {
-        /* malformed gradient in the link/snapshot — keep the current gradient */
       }
     }
     // Set z₀ before applyAllControls so readPresetsFromInputs picks it up and re-applies it.
-    if (typeof state._z0 === "string") dynamicalView.plot.z0 = parseComplex(state._z0);
+    // Ignore a non-finite z₀ from a corrupt link rather than feeding NaN into the GL uniform.
+    if (typeof state._z0 === "string") {
+      const z = parseComplex(state._z0);
+      if (Number.isFinite(z[0]) && Number.isFinite(z[1])) dynamicalView.plot.z0 = z;
+    }
     applyAllControls();
   }
 

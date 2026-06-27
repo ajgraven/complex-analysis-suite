@@ -45,6 +45,12 @@ describe("rayDepthForZoom", () => {
     expect(rayDepthForZoom(1e12)).toBe(50); // clamped
     expect(rayDepthForZoom(1e9)).toBeGreaterThan(rayDepthForZoom(1e3));
   });
+
+  it("clamps exactly at the f64 budget and floors below zoom 1", () => {
+    expect(rayDepthForZoom(2 ** 22)).toBe(50); // 28 + 22 = 50 (the knee)
+    expect(rayDepthForZoom(2 ** 23)).toBe(50); // beyond → still clamped
+    expect(rayDepthForZoom(0.01)).toBe(28); // zoom < 1 → floored at 28
+  });
 });
 
 describe("parseAngle", () => {
@@ -58,5 +64,11 @@ describe("parseAngle", () => {
     expect(parseAngle("1/0")).toBeNull();
     expect(parseAngle("abc")).toBeNull();
     expect(parseAngle("")).toBeNull();
+  });
+
+  it("handles negative fractions and whitespace, rejects multi-slash", () => {
+    expect(parseAngle("-1/3")).toBeCloseTo(-1 / 3, 12);
+    expect(parseAngle(" 1/2 ")).toBe(0.5);
+    expect(parseAngle("1/2/3")).toBeNull();
   });
 });

@@ -74,6 +74,34 @@ function randomStops(): GradientStop[] {
   return stops;
 }
 
+/**
+ * Parse + validate a gradient-stops JSON string into clamped `{t, color}` stops, or null
+ * if malformed. Shared by the editor's "load JSON" control and the permalink / saved-view
+ * restore path so both reject bad input identically (≥2 stops, numeric `t`, 3-number
+ * `color`; `t` clamped to [0,1] and colours to bytes).
+ */
+export function parseGradientStops(json: string): GradientStop[] | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed) || parsed.length < 2) return null;
+  const out: GradientStop[] = [];
+  for (const raw of parsed as unknown[]) {
+    const r = raw as { t?: unknown; color?: unknown };
+    if (typeof r.t !== "number" || !Array.isArray(r.color) || r.color.length !== 3) return null;
+    const c = r.color as unknown[];
+    out.push({
+      t: clamp01(r.t),
+      color: [clampByte(Number(c[0])), clampByte(Number(c[1])), clampByte(Number(c[2]))],
+    });
+  }
+  out.sort((a, b) => a.t - b.t);
+  return out;
+}
+
 /** Build the editor inside `container` and wire all interactions. */
 export function setupGradientEditor(
   container: HTMLElement,
@@ -206,29 +234,16 @@ export function setupGradientEditor(
     emit();
   });
   loadBtn.addEventListener("click", () => {
-    try {
-      const parsed: unknown = JSON.parse(jsonArea.value);
-      if (!Array.isArray(parsed) || parsed.length < 2) throw new Error("invalid");
-      const next = (parsed as unknown[]).map((raw): GradientStop => {
-        const r = raw as { t?: unknown; color?: unknown };
-        if (typeof r.t !== "number" || !Array.isArray(r.color) || r.color.length !== 3) {
-          throw new Error("invalid");
-        }
-        const c = r.color as unknown[];
-        return {
-          t: clamp01(r.t),
-          color: [clampByte(Number(c[0])), clampByte(Number(c[1])), clampByte(Number(c[2]))],
-        };
-      });
-      next.sort((a, b) => a.t - b.t);
-      stops = next;
-      selected = 0;
-      render();
-      emit();
-    } catch {
+    const next = parseGradientStops(jsonArea.value);
+    if (!next) {
       jsonArea.classList.add("invalid");
       window.setTimeout(() => jsonArea.classList.remove("invalid"), 1200);
+      return;
     }
+    stops = next;
+    selected = 0;
+    render();
+    emit();
   });
 
   render();

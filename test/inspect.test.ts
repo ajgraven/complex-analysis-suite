@@ -97,4 +97,11 @@ describe("inspect — non-holomorphic fallback", () => {
     expect(r.multiplier).toBeNull();
     expect(r.distance).toBeNull();
   });
+
+  it("conjugate map that escapes: fate escaped, distance null (no derivative)", () => {
+    const bar = parse("conjugate(z)^2+c");
+    const r = inspect(bar, ESC, "param", O, [2, 0]); // c=2 escapes
+    expect(r.fate).toBe("escaped");
+    expect(r.distance).toBeNull(); // non-holomorphic ⇒ no analytic DE
+  });
 });
