@@ -71,1027 +71,1051 @@
       <div id="webgl-error" class="banner" role="alert" hidden></div>
       <div id="input-errors" class="input-errors" role="alert" aria-live="assertive" hidden></div>
 
-      <main class="plots">
-        <!-- ============================ Parameter space ============== -->
-        <section class="plot" aria-labelledby="param-heading">
-          <h2 id="param-heading">Parameter Space</h2>
-          <div class="canvas-stack">
-            <canvas id="MCSCanvas" aria-hidden="true"></canvas>
-            <canvas
-              id="MCSOverlay"
-              class="overlay"
-              tabindex="0"
-              role="application"
-              aria-label="Parameter space — interactive fractal plot. Arrow keys pan; the + and − keys zoom; drag (or press Enter) to set the parameter point c to the view centre and inspect it."
-            ></canvas>
-            <canvas
-              id="orbit-preview"
-              class="orbit-preview"
-              width="132"
-              height="132"
-              aria-hidden="true"
-              hidden
-            ></canvas>
-          </div>
-          <p class="plot-caption">
-            drag the white point to set <em>c</em> = <span id="param-c-value">…</span> &rarr;
-          </p>
-          <p class="readout" id="MCSReadout" aria-live="off"></p>
-
-          <details class="plot-details">
-            <summary class="view-chip">
-              <span class="view-chip-text" id="param-view-chip">center · zoom · iterations</span>
-              <span class="view-chip-edit">edit ▾</span>
-            </summary>
-            <div class="controls">
-              <button
-                id="param-copy-coords"
-                type="button"
-                class="copy-coords"
-                title="Copy c, centre and zoom (full precision) to the clipboard"
-              >
-                Copy coordinates
-              </button>
-              <div class="field">
-                <label for="inpc">c (parameter)</label>
-                <input
-                  type="text"
-                  id="inpc"
-                  placeholder="a+b*i"
-                  value="-.7-.4*i"
-                  size="14"
-                  title="Parameter c as a complex number, e.g. -.7-.4*i"
-                />
+      <div class="workspace">
+        <div class="plots-pane">
+          <main class="plots">
+            <!-- ============================ Parameter space ============== -->
+            <section class="plot" aria-labelledby="param-heading">
+              <h2 id="param-heading">Parameter Space</h2>
+              <div class="canvas-stack">
+                <canvas id="MCSCanvas" aria-hidden="true"></canvas>
+                <canvas
+                  id="MCSOverlay"
+                  class="overlay"
+                  tabindex="0"
+                  role="application"
+                  aria-label="Parameter space — interactive fractal plot. Arrow keys pan; the + and − keys zoom; drag (or press Enter) to set the parameter point c to the view centre and inspect it."
+                ></canvas>
+                <canvas
+                  id="orbit-preview"
+                  class="orbit-preview"
+                  width="132"
+                  height="132"
+                  aria-hidden="true"
+                  hidden
+                ></canvas>
               </div>
-              <div class="field">
-                <label for="inpme">escape test</label>
-                <textarea
-                  id="inpme"
-                  rows="1"
-                  cols="14"
-                  title="Iteration stops when this is true, e.g. abs(z)>2"
-                >
+              <p class="plot-caption">
+                drag the white point to set <em>c</em> = <span id="param-c-value">…</span> &rarr;
+              </p>
+              <p class="readout" id="MCSReadout" aria-live="off"></p>
+
+              <details class="plot-details">
+                <summary class="view-chip">
+                  <span class="view-chip-text" id="param-view-chip"
+                    >center · zoom · iterations</span
+                  >
+                  <span class="view-chip-edit">edit ▾</span>
+                </summary>
+                <div class="controls">
+                  <button
+                    id="param-copy-coords"
+                    type="button"
+                    class="copy-coords"
+                    title="Copy c, centre and zoom (full precision) to the clipboard"
+                  >
+                    Copy coordinates
+                  </button>
+                  <div class="field">
+                    <label for="inpc">c (parameter)</label>
+                    <input
+                      type="text"
+                      id="inpc"
+                      placeholder="a+b*i"
+                      value="-.7-.4*i"
+                      size="14"
+                      title="Parameter c as a complex number, e.g. -.7-.4*i"
+                    />
+                  </div>
+                  <div class="field">
+                    <label for="inpme">escape test</label>
+                    <textarea
+                      id="inpme"
+                      rows="1"
+                      cols="14"
+                      title="Iteration stops when this is true, e.g. abs(z)>2"
+                    >
 abs(z)>2</textarea
-                >
-              </div>
-              <div class="field">
-                <label for="inpparamcenter">center</label>
-                <input
-                  type="text"
-                  id="inpparamcenter"
-                  placeholder="-.75,0"
-                  value="-.75,0"
-                  size="14"
-                  title="Plot centre as 'x,y', e.g. -.75,0"
-                />
-              </div>
-              <div class="field">
-                <label for="inpparamzoom">zoom</label>
-                <input
-                  type="text"
-                  id="inpparamzoom"
-                  placeholder=".75"
-                  value=".75"
-                  size="10"
-                  title="Zoom factor — larger is closer in"
-                />
-              </div>
-              <div class="field">
-                <label for="inpmn">max # iterations</label>
-                <input
-                  type="text"
-                  id="inpmn"
-                  value="100"
-                  size="10"
-                  title="Max iterations per pixel — higher is more detail but slower"
-                />
-              </div>
-              <div class="field">
-                <label for="inpParamRes">canvas size (px)</label>
-                <input
-                  type="text"
-                  id="inpParamRes"
-                  value="500"
-                  size="10"
-                  title="On-screen canvas size in pixels"
-                />
-              </div>
-            </div>
-          </details>
-        </section>
+                    >
+                  </div>
+                  <div class="field">
+                    <label for="inpparamcenter">center</label>
+                    <input
+                      type="text"
+                      id="inpparamcenter"
+                      placeholder="-.75,0"
+                      value="-.75,0"
+                      size="14"
+                      title="Plot centre as 'x,y', e.g. -.75,0"
+                    />
+                  </div>
+                  <div class="field">
+                    <label for="inpparamzoom">zoom</label>
+                    <input
+                      type="text"
+                      id="inpparamzoom"
+                      placeholder=".75"
+                      value=".75"
+                      size="10"
+                      title="Zoom factor — larger is closer in"
+                    />
+                  </div>
+                  <div class="field">
+                    <label for="inpmn">max # iterations</label>
+                    <input
+                      type="text"
+                      id="inpmn"
+                      value="100"
+                      size="10"
+                      title="Max iterations per pixel — higher is more detail but slower"
+                    />
+                  </div>
+                  <div class="field">
+                    <label for="inpParamRes">canvas size (px)</label>
+                    <input
+                      type="text"
+                      id="inpParamRes"
+                      value="500"
+                      size="10"
+                      title="On-screen canvas size in pixels"
+                    />
+                  </div>
+                </div>
+              </details>
+            </section>
 
-        <!-- ============================ Dynamical plane ============== -->
-        <section class="plot" aria-labelledby="dyn-heading">
-          <h2 id="dyn-heading">Dynamical Plane</h2>
-          <div class="canvas-stack">
-            <canvas id="JCSCanvas" aria-hidden="true"></canvas>
-            <canvas
-              id="JCSOverlay"
-              class="overlay"
-              tabindex="0"
-              role="application"
-              aria-label="Dynamical plane — interactive fractal plot. Arrow keys pan; the + and − keys zoom; drag (or press Enter) to set the orbit start z₀ to the view centre and inspect it."
-            ></canvas>
-          </div>
-          <p class="plot-caption">for <em>c</em> = <span id="dyn-c-value">…</span></p>
-          <p class="readout" id="JCSReadout" aria-live="off"></p>
+            <!-- ============================ Dynamical plane ============== -->
+            <section class="plot" aria-labelledby="dyn-heading">
+              <h2 id="dyn-heading">Dynamical Plane</h2>
+              <div class="canvas-stack">
+                <canvas id="JCSCanvas" aria-hidden="true"></canvas>
+                <canvas
+                  id="JCSOverlay"
+                  class="overlay"
+                  tabindex="0"
+                  role="application"
+                  aria-label="Dynamical plane — interactive fractal plot. Arrow keys pan; the + and − keys zoom; drag (or press Enter) to set the orbit start z₀ to the view centre and inspect it."
+                ></canvas>
+              </div>
+              <p class="plot-caption">for <em>c</em> = <span id="dyn-c-value">…</span></p>
+              <p class="readout" id="JCSReadout" aria-live="off"></p>
 
-          <details class="plot-details">
-            <summary class="view-chip">
-              <span class="view-chip-text" id="dyn-view-chip">center · zoom · iterations</span>
-              <span class="view-chip-edit">edit ▾</span>
-            </summary>
-            <div class="controls">
-              <button
-                id="dyn-copy-coords"
-                type="button"
-                class="copy-coords"
-                title="Copy c, centre and zoom (full precision) to the clipboard"
-              >
-                Copy coordinates
-              </button>
-              <div class="field">
-                <label for="inpje">escape test</label>
-                <textarea
-                  id="inpje"
-                  rows="1"
-                  cols="14"
-                  title="Iteration stops when this is true, e.g. abs(z)>2"
-                >
+              <details class="plot-details">
+                <summary class="view-chip">
+                  <span class="view-chip-text" id="dyn-view-chip">center · zoom · iterations</span>
+                  <span class="view-chip-edit">edit ▾</span>
+                </summary>
+                <div class="controls">
+                  <button
+                    id="dyn-copy-coords"
+                    type="button"
+                    class="copy-coords"
+                    title="Copy c, centre and zoom (full precision) to the clipboard"
+                  >
+                    Copy coordinates
+                  </button>
+                  <div class="field">
+                    <label for="inpje">escape test</label>
+                    <textarea
+                      id="inpje"
+                      rows="1"
+                      cols="14"
+                      title="Iteration stops when this is true, e.g. abs(z)>2"
+                    >
 abs(z)>2</textarea
-                >
-              </div>
-              <div class="field">
-                <label for="inpdyncenter">center</label>
-                <input
-                  type="text"
-                  id="inpdyncenter"
-                  placeholder="0,0"
-                  value="0,0"
-                  size="14"
-                  title="Plot centre as 'x,y', e.g. 0,0"
-                />
-              </div>
-              <div class="field">
-                <label for="inpdynzoom">zoom</label>
-                <input
-                  type="text"
-                  id="inpdynzoom"
-                  placeholder=".65"
-                  value=".65"
-                  size="10"
-                  title="Zoom factor — larger is closer in"
-                />
-              </div>
-              <div class="field">
-                <label for="inpjn">max # iterations</label>
-                <input
-                  type="text"
-                  id="inpjn"
-                  value="100"
-                  size="10"
-                  title="Max iterations per pixel — higher is more detail but slower"
-                />
-              </div>
-              <div class="field">
-                <label for="inpDynRes">canvas size (px)</label>
-                <input
-                  type="text"
-                  id="inpDynRes"
-                  value="500"
-                  size="10"
-                  title="On-screen canvas size in pixels"
-                />
-              </div>
-            </div>
-          </details>
-        </section>
-      </main>
-
-      <!-- Point inspector: click either plot to report its orbit's dynamics. -->
-      <aside id="inspector" class="inspector" aria-live="polite">
-        <div class="inspector-head">
-          <strong id="inspector-title">Point inspector</strong>
-          <button
-            id="inspector-close"
-            type="button"
-            title="Close the inspector"
-            aria-label="Close inspector"
-          >
-            ×
-          </button>
+                    >
+                  </div>
+                  <div class="field">
+                    <label for="inpdyncenter">center</label>
+                    <input
+                      type="text"
+                      id="inpdyncenter"
+                      placeholder="0,0"
+                      value="0,0"
+                      size="14"
+                      title="Plot centre as 'x,y', e.g. 0,0"
+                    />
+                  </div>
+                  <div class="field">
+                    <label for="inpdynzoom">zoom</label>
+                    <input
+                      type="text"
+                      id="inpdynzoom"
+                      placeholder=".65"
+                      value=".65"
+                      size="10"
+                      title="Zoom factor — larger is closer in"
+                    />
+                  </div>
+                  <div class="field">
+                    <label for="inpjn">max # iterations</label>
+                    <input
+                      type="text"
+                      id="inpjn"
+                      value="100"
+                      size="10"
+                      title="Max iterations per pixel — higher is more detail but slower"
+                    />
+                  </div>
+                  <div class="field">
+                    <label for="inpDynRes">canvas size (px)</label>
+                    <input
+                      type="text"
+                      id="inpDynRes"
+                      value="500"
+                      size="10"
+                      title="On-screen canvas size in pixels"
+                    />
+                  </div>
+                </div>
+              </details>
+            </section>
+          </main>
         </div>
-        <dl class="inspector-body" id="inspector-body"></dl>
-        <button
-          id="inspector-nucleus"
-          type="button"
-          title="Newton-snap c to the exact centre of this hyperbolic component (superattracting)"
-          hidden
-        >
-          Find nucleus
-        </button>
-        <button
-          id="inspector-rays"
-          type="button"
-          title="Show the external rays landing at this bulb (turns on the bulb ray-pairs overlay)"
-          hidden
-        >
-          Show bulb rays
-        </button>
-        <button
-          id="inspector-copy"
-          type="button"
-          title="Copy this point's report to the clipboard"
-          hidden
-        >
-          Copy report
-        </button>
-        <button
-          id="inspector-orbit"
-          type="button"
-          title="Download this point's orbit as a CSV file"
-          hidden
-        >
-          Export orbit
-        </button>
-        <p class="inspector-hint">
-          Click any point on a plot to inspect its orbit — period, multiplier, internal angle, and
-          distance to the set.
-        </p>
-      </aside>
-
-      <!-- ============================ Shared controls ================ -->
-      <section class="panel" aria-label="Function and presets">
-        <div class="panel-group">
-          <div class="field">
-            <label for="inpf">f(z,c)</label>
-            <textarea id="inpf" rows="2" cols="22" title="Iteration function f(z,c), e.g. z^2+c">
-z^2+c</textarea
-            >
-            <div id="formula-latex" class="formula-latex" aria-hidden="true"></div>
-          </div>
-          <div class="field" id="param-a-field" hidden>
-            <label for="param-a">a = <span id="param-a-value">1.00</span></label>
-            <input
-              type="range"
-              id="param-a"
-              min="-2"
-              max="4"
-              step="0.01"
-              value="1"
-              title="Live parameter a — sweep to morph f (appears when f uses the variable a)"
-            />
-          </div>
-          <div class="field">
-            <label for="fractal_presets">Presets</label>
-            <div class="inline-actions">
-              <select id="fractal_presets" title="Pick a named fractal, then apply">
-                <optgroup label="Polynomial">
-                  <option value="mandelbrot">Mandelbrot set</option>
-                  <option value="cubic">cubic (z³+c)</option>
-                </optgroup>
-                <optgroup label="Abs variants">
-                  <option value="tricorn">tricorn</option>
-                  <option value="burning ship">burning ship</option>
-                  <option value="butterfly">butterfly</option>
-                  <option value="celtic">celtic</option>
-                </optgroup>
-                <optgroup label="Rational / logistic">
-                  <option value="magnet">magnet</option>
-                  <option value="lambda">lambda (logistic)</option>
-                </optgroup>
-                <optgroup label="Transcendental">
-                  <option value="exponential map">exponential map</option>
-                  <option value="teardrop Schwarz">teardrop Schwarz</option>
-                  <option value="exp Schwarz">exp Schwarz</option>
-                </optgroup>
-                <optgroup label="Other">
-                  <option value="biomorph">biomorph</option>
-                </optgroup>
-              </select>
-              <button id="apply_preset" type="button" class="primary">apply</button>
+        <div class="controls-pane">
+          <!-- Point inspector: click either plot to report its orbit's dynamics. -->
+          <aside id="inspector" class="inspector" aria-live="polite">
+            <div class="inspector-head">
+              <strong id="inspector-title">Point inspector</strong>
+              <button
+                id="inspector-close"
+                type="button"
+                title="Close the inspector"
+                aria-label="Close inspector"
+              >
+                ×
+              </button>
             </div>
-          </div>
-          <div class="field">
-            <label for="mode">coloring</label>
-            <select id="mode" title="How escape time is turned into colour">
-              <option value="escape">Escape time</option>
-              <option value="smooth" selected>Smooth (continuous)</option>
-              <option value="histogram">Escape time (histogram)</option>
-              <option value="distance">Distance (edges, screen-space)</option>
-              <option value="distanceAnalytic" id="mode-distance-analytic">
-                Distance (analytic)
-              </option>
-              <option value="orbit">Orbit trap</option>
-              <option value="stripe">Stripe average</option>
-              <option value="triangle">Triangle average</option>
-              <option value="decomposition">Binary decomposition</option>
-              <option value="period">Period (interior)</option>
-              <option value="multiplier" id="mode-multiplier">Multiplier map (interior)</option>
-              <option value="domain">Domain coloring</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="palette">palette</label>
-            <select id="palette" title="Colour palette (ignored by domain coloring)">
-              <option value="classic">Classic</option>
-              <option value="viridis">Viridis (colourblind-safe)</option>
-              <option value="cividis">Cividis (colourblind-safe)</option>
-              <option value="magma">Magma</option>
-              <option value="grayscale">Grayscale</option>
-              <option value="custom">Custom gradient</option>
-            </select>
-          </div>
-          <div class="field" id="trap-field" hidden>
-            <label for="trap">trap shape</label>
-            <select
-              id="trap"
-              title="Orbit-trap shape — the orbit is coloured by its closest approach"
+            <dl class="inspector-body" id="inspector-body"></dl>
+            <button
+              id="inspector-nucleus"
+              type="button"
+              title="Newton-snap c to the exact centre of this hyperbolic component (superattracting)"
+              hidden
             >
-              <option value="cross">Cross (axes)</option>
-              <option value="point">Point (origin)</option>
-              <option value="line">Line (real axis)</option>
-              <option value="circle">Circle (|z|=1)</option>
-              <option value="lattice">Gaussian lattice</option>
-            </select>
-          </div>
-          <details class="control-group">
-            <summary>Appearance</summary>
-            <div class="control-grid">
+              Find nucleus
+            </button>
+            <button
+              id="inspector-rays"
+              type="button"
+              title="Show the external rays landing at this bulb (turns on the bulb ray-pairs overlay)"
+              hidden
+            >
+              Show bulb rays
+            </button>
+            <button
+              id="inspector-copy"
+              type="button"
+              title="Copy this point's report to the clipboard"
+              hidden
+            >
+              Copy report
+            </button>
+            <button
+              id="inspector-orbit"
+              type="button"
+              title="Download this point's orbit as a CSV file"
+              hidden
+            >
+              Export orbit
+            </button>
+            <p class="inspector-hint">
+              Click any point on a plot to inspect its orbit — period, multiplier, internal angle,
+              and distance to the set.
+            </p>
+          </aside>
+
+          <!-- ============================ Shared controls ================ -->
+          <section class="panel" aria-label="Function and presets">
+            <div class="panel-group">
               <div class="field">
-                <label for="aa">anti-aliasing</label>
-                <select id="aa" title="Supersampling — smoother edges, slower to render">
-                  <option value="1">Off</option>
-                  <option value="2">2&times;</option>
-                  <option value="3">3&times;</option>
+                <label for="inpf">f(z,c)</label>
+                <textarea
+                  id="inpf"
+                  rows="2"
+                  cols="22"
+                  title="Iteration function f(z,c), e.g. z^2+c"
+                >
+z^2+c</textarea
+                >
+                <div id="formula-latex" class="formula-latex" aria-hidden="true"></div>
+              </div>
+              <div class="field" id="param-a-field" hidden>
+                <label for="param-a">a = <span id="param-a-value">1.00</span></label>
+                <input
+                  type="range"
+                  id="param-a"
+                  min="-2"
+                  max="4"
+                  step="0.01"
+                  value="1"
+                  title="Live parameter a — sweep to morph f (appears when f uses the variable a)"
+                />
+              </div>
+              <div class="field">
+                <label for="fractal_presets">Presets</label>
+                <div class="inline-actions">
+                  <select id="fractal_presets" title="Pick a named fractal, then apply">
+                    <optgroup label="Polynomial">
+                      <option value="mandelbrot">Mandelbrot set</option>
+                      <option value="cubic">cubic (z³+c)</option>
+                    </optgroup>
+                    <optgroup label="Abs variants">
+                      <option value="tricorn">tricorn</option>
+                      <option value="burning ship">burning ship</option>
+                      <option value="butterfly">butterfly</option>
+                      <option value="celtic">celtic</option>
+                    </optgroup>
+                    <optgroup label="Rational / logistic">
+                      <option value="magnet">magnet</option>
+                      <option value="lambda">lambda (logistic)</option>
+                    </optgroup>
+                    <optgroup label="Transcendental">
+                      <option value="exponential map">exponential map</option>
+                      <option value="teardrop Schwarz">teardrop Schwarz</option>
+                      <option value="exp Schwarz">exp Schwarz</option>
+                    </optgroup>
+                    <optgroup label="Other">
+                      <option value="biomorph">biomorph</option>
+                    </optgroup>
+                  </select>
+                  <button id="apply_preset" type="button" class="primary">apply</button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="mode">coloring</label>
+                <select id="mode" title="How escape time is turned into colour">
+                  <option value="escape">Escape time</option>
+                  <option value="smooth" selected>Smooth (continuous)</option>
+                  <option value="histogram">Escape time (histogram)</option>
+                  <option value="distance">Distance (edges, screen-space)</option>
+                  <option value="distanceAnalytic" id="mode-distance-analytic">
+                    Distance (analytic)
+                  </option>
+                  <option value="orbit">Orbit trap</option>
+                  <option value="stripe">Stripe average</option>
+                  <option value="triangle">Triangle average</option>
+                  <option value="decomposition">Binary decomposition</option>
+                  <option value="period">Period (interior)</option>
+                  <option value="multiplier" id="mode-multiplier">Multiplier map (interior)</option>
+                  <option value="domain">Domain coloring</option>
                 </select>
               </div>
               <div class="field">
-                <label
-                  class="checkbox"
-                  for="accumulate"
-                  title="While the view sits still, average jittered sub-pixel samples for a cleaner, anti-aliased image"
-                >
-                  <input type="checkbox" id="accumulate" /> refine while idle
-                </label>
+                <label for="palette">palette</label>
+                <select id="palette" title="Colour palette (ignored by domain coloring)">
+                  <option value="classic">Classic</option>
+                  <option value="viridis">Viridis (colourblind-safe)</option>
+                  <option value="cividis">Cividis (colourblind-safe)</option>
+                  <option value="magma">Magma</option>
+                  <option value="grayscale">Grayscale</option>
+                  <option value="custom">Custom gradient</option>
+                </select>
               </div>
-              <div class="field">
-                <label for="paletteRotation">rotation</label>
+              <div class="field" id="trap-field" hidden>
+                <label for="trap">trap shape</label>
+                <select
+                  id="trap"
+                  title="Orbit-trap shape — the orbit is coloured by its closest approach"
+                >
+                  <option value="cross">Cross (axes)</option>
+                  <option value="point">Point (origin)</option>
+                  <option value="line">Line (real axis)</option>
+                  <option value="circle">Circle (|z|=1)</option>
+                  <option value="lattice">Gaussian lattice</option>
+                </select>
+              </div>
+              <details class="control-group">
+                <summary>Appearance</summary>
+                <div class="control-grid">
+                  <div class="field">
+                    <label for="aa">anti-aliasing</label>
+                    <select id="aa" title="Supersampling — smoother edges, slower to render">
+                      <option value="1">Off</option>
+                      <option value="2">2&times;</option>
+                      <option value="3">3&times;</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label
+                      class="checkbox"
+                      for="accumulate"
+                      title="While the view sits still, average jittered sub-pixel samples for a cleaner, anti-aliased image"
+                    >
+                      <input type="checkbox" id="accumulate" /> refine while idle
+                    </label>
+                  </div>
+                  <div class="field">
+                    <label for="paletteRotation">rotation</label>
+                    <input
+                      type="range"
+                      id="paletteRotation"
+                      min="0"
+                      max="100"
+                      value="0"
+                      title="Rotate the palette (colour cycling)"
+                    />
+                  </div>
+                  <div class="field">
+                    <label
+                      class="checkbox"
+                      for="light"
+                      title="Shade the fractal as a lit 3-D surface (relief lighting)"
+                    >
+                      <input type="checkbox" id="light" /> relief lighting
+                    </label>
+                    <div class="light-controls" title="Light direction and relief depth">
+                      <label
+                        >az
+                        <input
+                          type="range"
+                          id="lightAz"
+                          min="0"
+                          max="360"
+                          value="135"
+                          title="Light azimuth (direction, degrees)"
+                          disabled
+                      /></label>
+                      <label
+                        >el
+                        <input
+                          type="range"
+                          id="lightEl"
+                          min="0"
+                          max="90"
+                          value="45"
+                          title="Light elevation (height above the plane, degrees)"
+                          disabled
+                      /></label>
+                      <label
+                        >depth
+                        <input
+                          type="range"
+                          id="lightHeight"
+                          min="0"
+                          max="100"
+                          value="40"
+                          title="Relief depth — how strongly the surface is sculpted"
+                          disabled
+                      /></label>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label
+                      class="checkbox"
+                      for="post"
+                      title="Apply a final vignette + output-gamma grade (on-screen only)"
+                    >
+                      <input type="checkbox" id="post" /> post-processing
+                    </label>
+                    <div class="post-controls" title="Vignette and output gamma">
+                      <label
+                        >vignette
+                        <input
+                          type="range"
+                          id="postVignette"
+                          min="0"
+                          max="100"
+                          value="30"
+                          title="Vignette strength"
+                          disabled
+                      /></label>
+                      <label
+                        >gamma
+                        <input
+                          type="range"
+                          id="postGamma"
+                          min="0"
+                          max="100"
+                          value="50"
+                          title="Output gamma"
+                          disabled
+                      /></label>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label
+                      class="checkbox"
+                      for="outline"
+                      title="Darken the set boundary with an adjustable-width outline"
+                    >
+                      <input type="checkbox" id="outline" /> boundary outline
+                    </label>
+                    <div class="post-controls" title="Boundary outline width">
+                      <label
+                        >width
+                        <input type="range" id="outlineWidth" min="0" max="100" value="30" disabled
+                      /></label>
+                    </div>
+                  </div>
+                </div>
+              </details>
+              <details class="control-group" id="overlays-group" open>
+                <summary>Overlays</summary>
+                <div class="control-grid">
+                  <div class="field">
+                    <label
+                      class="checkbox"
+                      for="critorbit"
+                      title="Overlay the critical point's orbit — a Julia-set connectivity test"
+                    >
+                      <input type="checkbox" id="critorbit" /> critical orbit
+                    </label>
+                    <button
+                      class="gloss-link"
+                      type="button"
+                      data-term="critical-orbit"
+                      aria-label="What is the critical orbit?"
+                    >
+                      ?
+                    </button>
+                  </div>
+                  <div class="field">
+                    <label
+                      class="checkbox"
+                      for="farey"
+                      title="Label the main cardioid's bulbs by internal angle p/q (z²+c only)"
+                    >
+                      <input type="checkbox" id="farey" /> Farey bulb labels
+                    </label>
+                    <button
+                      class="gloss-link"
+                      type="button"
+                      data-term="farey-bulb"
+                      aria-label="What is a Farey bulb?"
+                    >
+                      ?
+                    </button>
+                  </div>
+                  <div class="field">
+                    <label
+                      class="checkbox"
+                      for="rays"
+                      title="Trace the external ray at the entered angle on both planes (z²+c only)"
+                    >
+                      <input type="checkbox" id="rays" /> external ray
+                    </label>
+                    <button
+                      class="gloss-link"
+                      type="button"
+                      data-term="external-ray"
+                      aria-label="What is an external ray?"
+                    >
+                      ?
+                    </button>
+                    <div class="post-controls">
+                      <label
+                        >angle
+                        <input
+                          type="text"
+                          id="ray-angle"
+                          value="1/3"
+                          size="6"
+                          title="External angle in turns — a fraction like 1/3 or 1/7, or a decimal"
+                      /></label>
+                    </div>
+                    <p id="rays-note" class="control-note" hidden>
+                      External rays use double precision — accurate at shallow to moderate zoom.
+                    </p>
+                  </div>
+                  <div class="field">
+                    <label
+                      class="checkbox"
+                      for="ray-pairs"
+                      title="Draw both external rays landing at each visible Farey bulb's root (z²+c only)"
+                    >
+                      <input type="checkbox" id="ray-pairs" /> bulb ray pairs
+                    </label>
+                  </div>
+                  <div class="field">
+                    <label
+                      class="checkbox"
+                      for="equipotential"
+                      title="Overlay escape-potential (equipotential) contours"
+                    >
+                      <input type="checkbox" id="equipotential" /> equipotential
+                    </label>
+                    <button
+                      class="gloss-link"
+                      type="button"
+                      data-term="equipotential"
+                      aria-label="What is an equipotential?"
+                    >
+                      ?
+                    </button>
+                    <div class="post-controls" title="Contour spacing">
+                      <label
+                        >density
+                        <input
+                          type="range"
+                          id="equiDensity"
+                          min="5"
+                          max="100"
+                          value="20"
+                          title="Equipotential contour spacing"
+                          disabled
+                      /></label>
+                    </div>
+                  </div>
+                </div>
+              </details>
+              <details class="control-group">
+                <summary>Iteration &amp; precision</summary>
+                <div class="control-grid">
+                  <div class="field">
+                    <label
+                      class="checkbox"
+                      for="newton"
+                      title="Iterate the Newton map z − f/f′ (root-finding); colours by which root each point reaches"
+                    >
+                      <input type="checkbox" id="newton" /> Newton's method
+                    </label>
+                  </div>
+                  <div class="field">
+                    <label
+                      class="checkbox"
+                      for="autoiter"
+                      title="Raise the iteration cap automatically with zoom depth, to keep detail when deep"
+                    >
+                      <input type="checkbox" id="autoiter" /> auto iterations
+                    </label>
+                  </div>
+                  <div class="field">
+                    <label
+                      class="checkbox"
+                      for="perturbation"
+                      title="Deep-zoom past the f64 limit for z²+c via a high-precision reference orbit (escape/smooth colouring only)"
+                    >
+                      <input type="checkbox" id="perturbation" /> perturbation (deep zoom)
+                    </label>
+                    <p id="perturbation-note" class="control-note" hidden>
+                      Perturbation renders escape / smooth colouring only — relief lighting,
+                      boundary outline, and equipotential overlays use the standard view.
+                    </p>
+                  </div>
+                </div>
+              </details>
+            </div>
+            <div class="inline-actions">
+              <button id="apply_all" type="button" class="primary">apply changes</button>
+              <span id="dirty-indicator" class="dirty-indicator" hidden
+                >● unapplied edits — press Enter or Apply</span
+              >
+              <button
+                id="reset_all"
+                type="button"
+                class="danger"
+                title="Revert all fields and the view to the selected preset"
+              >
+                reset
+              </button>
+              <button id="undo-btn" type="button" disabled title="Undo (Ctrl+Z)">↶ undo</button>
+              <button id="redo-btn" type="button" disabled title="Redo (Ctrl+Y / Ctrl+Shift+Z)">
+                ↷ redo
+              </button>
+            </div>
+          </section>
+
+          <section
+            id="gradient-editor"
+            class="panel gradient-editor"
+            aria-label="Custom gradient editor"
+            hidden
+          ></section>
+
+          <!-- Exterior map: Laurent coefficients of the uniformizing Böttcher map (z^d + c). -->
+          <details class="control-group" id="exterior-group">
+            <summary>Exterior map (uniformization)</summary>
+            <div class="controls">
+              <p class="exterior-status">
+                Laurent coefficients of the exterior Riemann map.
+                <button
+                  type="button"
+                  class="gloss-link"
+                  data-term="uniformization"
+                  aria-label="About the exterior map"
+                >
+                  ?
+                </button>
+              </p>
+              <p class="exterior-status" id="exterior-status">z² + c · ψ(w) = w + Σ bₖ·w⁻ᵏ.</p>
+              <label class="exterior-n-label">
+                Coefficients
                 <input
-                  type="range"
-                  id="paletteRotation"
-                  min="0"
-                  max="100"
-                  value="0"
-                  title="Rotate the palette (colour cycling)"
+                  type="number"
+                  id="exterior-n"
+                  min="1"
+                  max="64"
+                  step="1"
+                  value="12"
+                  title="How many Laurent coefficients to compute and list"
                 />
-              </div>
-              <div class="field">
-                <label
-                  class="checkbox"
-                  for="light"
-                  title="Shade the fractal as a lit 3-D surface (relief lighting)"
-                >
-                  <input type="checkbox" id="light" /> relief lighting
+              </label>
+              <fieldset class="exterior-overlay">
+                <legend>Boundary overlay</legend>
+                <label>
+                  <input type="checkbox" id="laurent" />
+                  Draw the reconstructed boundary on the plots
                 </label>
-                <div class="light-controls" title="Light direction and relief depth">
-                  <label
-                    >az
-                    <input
-                      type="range"
-                      id="lightAz"
-                      min="0"
-                      max="360"
-                      value="135"
-                      title="Light azimuth (direction, degrees)"
-                      disabled
-                  /></label>
-                  <label
-                    >el
-                    <input
-                      type="range"
-                      id="lightEl"
-                      min="0"
-                      max="90"
-                      value="45"
-                      title="Light elevation (height above the plane, degrees)"
-                      disabled
-                  /></label>
-                  <label
-                    >depth
-                    <input
-                      type="range"
-                      id="lightHeight"
-                      min="0"
-                      max="100"
-                      value="40"
-                      title="Relief depth — how strongly the surface is sculpted"
-                      disabled
-                  /></label>
-                </div>
-              </div>
-              <div class="field">
-                <label
-                  class="checkbox"
-                  for="post"
-                  title="Apply a final vignette + output-gamma grade (on-screen only)"
-                >
-                  <input type="checkbox" id="post" /> post-processing
+                <label class="exterior-n-label">
+                  Order
+                  <input
+                    type="number"
+                    id="laurent-n"
+                    min="2"
+                    max="128"
+                    step="1"
+                    value="48"
+                    title="How many coefficients the drawn boundary uses (more = tighter fit)"
+                  />
                 </label>
-                <div class="post-controls" title="Vignette and output gamma">
-                  <label
-                    >vignette
-                    <input
-                      type="range"
-                      id="postVignette"
-                      min="0"
-                      max="100"
-                      value="30"
-                      title="Vignette strength"
-                      disabled
-                  /></label>
-                  <label
-                    >gamma
-                    <input
-                      type="range"
-                      id="postGamma"
-                      min="0"
-                      max="100"
-                      value="50"
-                      title="Output gamma"
-                      disabled
-                  /></label>
-                </div>
-              </div>
-              <div class="field">
-                <label
-                  class="checkbox"
-                  for="outline"
-                  title="Darken the set boundary with an adjustable-width outline"
-                >
-                  <input type="checkbox" id="outline" /> boundary outline
-                </label>
-                <div class="post-controls" title="Boundary outline width">
-                  <label
-                    >width
-                    <input type="range" id="outlineWidth" min="0" max="100" value="30" disabled
-                  /></label>
-                </div>
-              </div>
-            </div>
-          </details>
-          <details class="control-group" id="overlays-group" open>
-            <summary>Overlays</summary>
-            <div class="control-grid">
-              <div class="field">
-                <label
-                  class="checkbox"
-                  for="critorbit"
-                  title="Overlay the critical point's orbit — a Julia-set connectivity test"
-                >
-                  <input type="checkbox" id="critorbit" /> critical orbit
-                </label>
-                <button
-                  class="gloss-link"
-                  type="button"
-                  data-term="critical-orbit"
-                  aria-label="What is the critical orbit?"
-                >
-                  ?
-                </button>
-              </div>
-              <div class="field">
-                <label
-                  class="checkbox"
-                  for="farey"
-                  title="Label the main cardioid's bulbs by internal angle p/q (z²+c only)"
-                >
-                  <input type="checkbox" id="farey" /> Farey bulb labels
-                </label>
-                <button
-                  class="gloss-link"
-                  type="button"
-                  data-term="farey-bulb"
-                  aria-label="What is a Farey bulb?"
-                >
-                  ?
-                </button>
-              </div>
-              <div class="field">
-                <label
-                  class="checkbox"
-                  for="rays"
-                  title="Trace the external ray at the entered angle on both planes (z²+c only)"
-                >
-                  <input type="checkbox" id="rays" /> external ray
-                </label>
-                <button
-                  class="gloss-link"
-                  type="button"
-                  data-term="external-ray"
-                  aria-label="What is an external ray?"
-                >
-                  ?
-                </button>
-                <div class="post-controls">
-                  <label
-                    >angle
-                    <input
-                      type="text"
-                      id="ray-angle"
-                      value="1/3"
-                      size="6"
-                      title="External angle in turns — a fraction like 1/3 or 1/7, or a decimal"
-                  /></label>
-                </div>
-                <p id="rays-note" class="control-note" hidden>
-                  External rays use double precision — accurate at shallow to moderate zoom.
-                </p>
-              </div>
-              <div class="field">
-                <label
-                  class="checkbox"
-                  for="ray-pairs"
-                  title="Draw both external rays landing at each visible Farey bulb's root (z²+c only)"
-                >
-                  <input type="checkbox" id="ray-pairs" /> bulb ray pairs
-                </label>
-              </div>
-              <div class="field">
-                <label
-                  class="checkbox"
-                  for="equipotential"
-                  title="Overlay escape-potential (equipotential) contours"
-                >
-                  <input type="checkbox" id="equipotential" /> equipotential
-                </label>
-                <button
-                  class="gloss-link"
-                  type="button"
-                  data-term="equipotential"
-                  aria-label="What is an equipotential?"
-                >
-                  ?
-                </button>
-                <div class="post-controls" title="Contour spacing">
-                  <label
-                    >density
-                    <input
-                      type="range"
-                      id="equiDensity"
-                      min="5"
-                      max="100"
-                      value="20"
-                      title="Equipotential contour spacing"
-                      disabled
-                  /></label>
-                </div>
-              </div>
-            </div>
-          </details>
-          <details class="control-group">
-            <summary>Iteration &amp; precision</summary>
-            <div class="control-grid">
-              <div class="field">
-                <label
-                  class="checkbox"
-                  for="newton"
-                  title="Iterate the Newton map z − f/f′ (root-finding); colours by which root each point reaches"
-                >
-                  <input type="checkbox" id="newton" /> Newton's method
-                </label>
-              </div>
-              <div class="field">
-                <label
-                  class="checkbox"
-                  for="autoiter"
-                  title="Raise the iteration cap automatically with zoom depth, to keep detail when deep"
-                >
-                  <input type="checkbox" id="autoiter" /> auto iterations
-                </label>
-              </div>
-              <div class="field">
-                <label
-                  class="checkbox"
-                  for="perturbation"
-                  title="Deep-zoom past the f64 limit for z²+c via a high-precision reference orbit (escape/smooth colouring only)"
-                >
-                  <input type="checkbox" id="perturbation" /> perturbation (deep zoom)
-                </label>
-                <p id="perturbation-note" class="control-note" hidden>
-                  Perturbation renders escape / smooth colouring only — relief lighting, boundary
-                  outline, and equipotential overlays use the standard view.
-                </p>
-              </div>
-            </div>
-          </details>
-        </div>
-        <div class="inline-actions">
-          <button id="apply_all" type="button" class="primary">apply changes</button>
-          <span id="dirty-indicator" class="dirty-indicator" hidden
-            >● unapplied edits — press Enter or Apply</span
-          >
-          <button
-            id="reset_all"
-            type="button"
-            class="danger"
-            title="Revert all fields and the view to the selected preset"
-          >
-            reset
-          </button>
-          <button id="undo-btn" type="button" disabled title="Undo (Ctrl+Z)">↶ undo</button>
-          <button id="redo-btn" type="button" disabled title="Redo (Ctrl+Y / Ctrl+Shift+Z)">
-            ↷ redo
-          </button>
-        </div>
-      </section>
-
-      <section
-        id="gradient-editor"
-        class="panel gradient-editor"
-        aria-label="Custom gradient editor"
-        hidden
-      ></section>
-
-      <!-- Exterior map: Laurent coefficients of the uniformizing Böttcher map (z^d + c). -->
-      <details class="control-group" id="exterior-group">
-        <summary>Exterior map (uniformization)</summary>
-        <div class="controls">
-          <p class="exterior-status">
-            Laurent coefficients of the exterior Riemann map.
-            <button
-              type="button"
-              class="gloss-link"
-              data-term="uniformization"
-              aria-label="About the exterior map"
-            >
-              ?
-            </button>
-          </p>
-          <p class="exterior-status" id="exterior-status">z² + c · ψ(w) = w + Σ bₖ·w⁻ᵏ.</p>
-          <label class="exterior-n-label">
-            Coefficients
-            <input
-              type="number"
-              id="exterior-n"
-              min="1"
-              max="64"
-              step="1"
-              value="12"
-              title="How many Laurent coefficients to compute and list"
-            />
-          </label>
-          <fieldset class="exterior-overlay">
-            <legend>Boundary overlay</legend>
-            <label>
-              <input type="checkbox" id="laurent" />
-              Draw the reconstructed boundary on the plots
-            </label>
-            <label class="exterior-n-label">
-              Order
-              <input
-                type="number"
-                id="laurent-n"
-                min="2"
-                max="128"
-                step="1"
-                value="48"
-                title="How many coefficients the drawn boundary uses (more = tighter fit)"
-              />
-            </label>
-            <label class="exterior-n-label">
-              Radius r
-              <input
-                type="range"
-                id="laurent-r"
-                min="100"
-                max="140"
-                step="1"
-                value="102"
-                title="Evaluate ψ on |w| = r. r = 1.00 is the boundary itself; just above is a smooth equipotential outside it (robust where the series ripples as r → 1)."
-              />
-              <span id="laurent-r-value">1.02</span>
-            </label>
-          </fieldset>
-          <div class="exterior-block">
-            <div class="exterior-block-head">
-              <strong>Parameter plane · ∂M<sub>d</sub></strong>
-              <span class="exterior-actions">
-                <button type="button" id="exterior-param-copy" title="Copy these coefficients">
-                  Copy
-                </button>
-                <button type="button" id="exterior-param-csv" title="Download as CSV">CSV</button>
-              </span>
-            </div>
-            <pre class="exterior-coeffs" id="exterior-param-list"></pre>
-          </div>
-          <div class="exterior-block">
-            <div class="exterior-block-head">
-              <strong>Dynamical plane · ∂K<sub>c</sub></strong>
-              <span class="exterior-actions">
-                <button type="button" id="exterior-dyn-copy" title="Copy these coefficients">
-                  Copy
-                </button>
-                <button type="button" id="exterior-dyn-csv" title="Download as CSV">CSV</button>
-              </span>
-            </div>
-            <pre class="exterior-coeffs" id="exterior-dyn-list"></pre>
-          </div>
-        </div>
-      </details>
-
-      <!-- ===== Save & animate: tucked behind a collapsed group so the dynamics
-                 instruments lead, not the export/animation studio. ===== -->
-      <details class="control-group" id="studio-group">
-        <summary>Save &amp; animate</summary>
-        <!-- ============================ Export image =================== -->
-        <section class="downloads" aria-labelledby="export-image-heading">
-          <h2 id="export-image-heading">Export image</h2>
-          <div class="panel">
-            <div class="panel-group">
-              <div class="field">
-                <label for="mImageName">Parameter space image</label>
-                <div class="inline-actions">
-                  <input type="text" id="mImageName" value="ParamSpace.png" size="14" />
-                  <select id="paramExportSize" aria-label="Parameter space export size (px)">
-                    <option value="500">screen (500)</option>
-                    <option value="1000">1000</option>
-                    <option value="2000" selected>2000</option>
-                    <option value="4000">4000</option>
-                    <option value="8000">8000</option>
-                  </select>
-                  <label class="checkbox">
-                    <input type="checkbox" id="paramExportOverlay" /> overlays
-                  </label>
-                  <label class="checkbox">
-                    <input type="checkbox" id="paramExportScaleBar" /> scale bar
-                  </label>
-                  <button
-                    id="print_param_space"
-                    type="button"
-                    class="primary"
-                    title="Save the parameter-space image as a PNG at the selected size"
-                  >
-                    Save
-                  </button>
-                  <button
-                    id="copy_param_space"
-                    type="button"
-                    title="Copy the image to the clipboard"
-                  >
-                    Copy
-                  </button>
-                </div>
-              </div>
-              <div class="field">
-                <label for="jImageName">Dynamical plane image</label>
-                <div class="inline-actions">
-                  <input type="text" id="jImageName" value="DynPlane.png" size="14" />
-                  <select id="dynExportSize" aria-label="Dynamical plane export size (px)">
-                    <option value="500">screen (500)</option>
-                    <option value="1000">1000</option>
-                    <option value="2000" selected>2000</option>
-                    <option value="4000">4000</option>
-                    <option value="8000">8000</option>
-                  </select>
-                  <label class="checkbox">
-                    <input type="checkbox" id="dynExportOverlay" /> overlays
-                  </label>
-                  <label class="checkbox">
-                    <input type="checkbox" id="dynExportScaleBar" /> scale bar
-                  </label>
-                  <button
-                    id="print_dyn_plane"
-                    type="button"
-                    class="primary"
-                    title="Save the dynamical-plane image as a PNG at the selected size"
-                  >
-                    Save
-                  </button>
-                  <button id="copy_dyn_plane" type="button" title="Copy the image to the clipboard">
-                    Copy
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ============================ Animate ========================= -->
-        <section class="downloads" aria-labelledby="animate-heading">
-          <h2 id="animate-heading">Animate</h2>
-          <div class="panel">
-            <div class="panel-group">
-              <div class="field">
-                <label for="record_morph">Animation</label>
-                <div class="inline-actions">
-                  <button
-                    id="record_morph"
-                    type="button"
-                    title="Record a looping Julia-set morph (sweeping the parameter c) as a WebM video"
-                  >
-                    Record Julia morph
-                  </button>
-                  <button
-                    id="record_zoom"
-                    type="button"
-                    title="Record a zoom-in into the parameter plane as a WebM video"
-                  >
-                    Record zoom-in
-                  </button>
-                  <button
-                    id="gif-morph"
-                    type="button"
-                    title="Record the Julia morph as an animated GIF"
-                  >
-                    Morph GIF
-                  </button>
-                </div>
-              </div>
-              <div class="field">
-                <label for="kf-add">Keyframe path <span id="kf-count">(0)</span></label>
-                <div class="inline-actions">
-                  <button
-                    id="kf-add"
-                    type="button"
-                    title="Capture the current parameter-plane view as a keyframe"
-                  >
-                    Add keyframe
-                  </button>
-                  <button id="kf-clear" type="button" title="Remove all keyframes">Clear</button>
+                <label class="exterior-n-label">
+                  Radius r
                   <input
                     type="range"
-                    id="kf-scrub"
-                    min="0"
-                    max="1"
-                    step="0.001"
-                    value="0"
-                    disabled
-                    title="Scrub along the keyframe path (needs 2+ keyframes)"
+                    id="laurent-r"
+                    min="100"
+                    max="140"
+                    step="1"
+                    value="102"
+                    title="Evaluate ψ on |w| = r. r = 1.00 is the boundary itself; just above is a smooth equipotential outside it (robust where the series ripples as r → 1)."
                   />
-                  <button
-                    id="kf-record"
-                    type="button"
-                    disabled
-                    title="Play the keyframe path and save it as a WebM video"
-                  >
-                    Record path
-                  </button>
-                  <button
-                    id="kf-gif"
-                    type="button"
-                    disabled
-                    title="Export the keyframe path as an animated GIF"
-                  >
-                    GIF
-                  </button>
+                  <span id="laurent-r-value">1.02</span>
+                </label>
+              </fieldset>
+              <div class="exterior-block">
+                <div class="exterior-block-head">
+                  <strong>Parameter plane · ∂M<sub>d</sub></strong>
+                  <span class="exterior-actions">
+                    <button type="button" id="exterior-param-copy" title="Copy these coefficients">
+                      Copy
+                    </button>
+                    <button type="button" id="exterior-param-csv" title="Download as CSV">
+                      CSV
+                    </button>
+                  </span>
                 </div>
+                <pre class="exterior-coeffs" id="exterior-param-list"></pre>
+              </div>
+              <div class="exterior-block">
+                <div class="exterior-block-head">
+                  <strong>Dynamical plane · ∂K<sub>c</sub></strong>
+                  <span class="exterior-actions">
+                    <button type="button" id="exterior-dyn-copy" title="Copy these coefficients">
+                      Copy
+                    </button>
+                    <button type="button" id="exterior-dyn-csv" title="Download as CSV">CSV</button>
+                  </span>
+                </div>
+                <pre class="exterior-coeffs" id="exterior-dyn-list"></pre>
               </div>
             </div>
-          </div>
-        </section>
-      </details>
+          </details>
 
-      <!-- ============================ Documentation ================== -->
-      <details class="docs-section">
-        <summary>Help &amp; reference</summary>
-        <div class="docs">
-          <div>
-            <h3>About</h3>
-            <ul>
-              <li>
-                Left is <strong>parameter space</strong> (each point a value of <em>c</em>); right
-                is the <strong>dynamical plane</strong> for that <em>c</em>. Drag either white point
-                — the <strong>Glossary</strong> button in the top bar defines the terms used here.
-              </li>
-              <li>
-                GPU acceleration limits accuracy beyond a certain zoom;
-                <strong>perturbation (deep zoom)</strong> extends it for z²+c.
-              </li>
-            </ul>
-          </div>
+          <!-- ===== Save & animate: tucked behind a collapsed group so the dynamics
+                 instruments lead, not the export/animation studio. ===== -->
+          <details class="control-group" id="studio-group">
+            <summary>Save &amp; animate</summary>
+            <!-- ============================ Export image =================== -->
+            <section class="downloads" aria-labelledby="export-image-heading">
+              <h2 id="export-image-heading">Export image</h2>
+              <div class="panel">
+                <div class="panel-group">
+                  <div class="field">
+                    <label for="mImageName">Parameter space image</label>
+                    <div class="inline-actions">
+                      <input type="text" id="mImageName" value="ParamSpace.png" size="14" />
+                      <select id="paramExportSize" aria-label="Parameter space export size (px)">
+                        <option value="500">screen (500)</option>
+                        <option value="1000">1000</option>
+                        <option value="2000" selected>2000</option>
+                        <option value="4000">4000</option>
+                        <option value="8000">8000</option>
+                      </select>
+                      <label class="checkbox">
+                        <input type="checkbox" id="paramExportOverlay" /> overlays
+                      </label>
+                      <label class="checkbox">
+                        <input type="checkbox" id="paramExportScaleBar" /> scale bar
+                      </label>
+                      <button
+                        id="print_param_space"
+                        type="button"
+                        class="primary"
+                        title="Save the parameter-space image as a PNG at the selected size"
+                      >
+                        Save
+                      </button>
+                      <button
+                        id="copy_param_space"
+                        type="button"
+                        title="Copy the image to the clipboard"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label for="jImageName">Dynamical plane image</label>
+                    <div class="inline-actions">
+                      <input type="text" id="jImageName" value="DynPlane.png" size="14" />
+                      <select id="dynExportSize" aria-label="Dynamical plane export size (px)">
+                        <option value="500">screen (500)</option>
+                        <option value="1000">1000</option>
+                        <option value="2000" selected>2000</option>
+                        <option value="4000">4000</option>
+                        <option value="8000">8000</option>
+                      </select>
+                      <label class="checkbox">
+                        <input type="checkbox" id="dynExportOverlay" /> overlays
+                      </label>
+                      <label class="checkbox">
+                        <input type="checkbox" id="dynExportScaleBar" /> scale bar
+                      </label>
+                      <button
+                        id="print_dyn_plane"
+                        type="button"
+                        class="primary"
+                        title="Save the dynamical-plane image as a PNG at the selected size"
+                      >
+                        Save
+                      </button>
+                      <button
+                        id="copy_dyn_plane"
+                        type="button"
+                        title="Copy the image to the clipboard"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
 
-          <div>
-            <h3>Controls</h3>
-            <ul>
-              <li>
-                Move the plot window with the arrow keys or by clicking and dragging the background.
-              </li>
-              <li>Zoom with the +/- keys or the mouse wheel (zooms toward the cursor).</li>
-              <li>
-                Drag the white point in each plot to change its value; the coordinate under the
-                cursor is shown beneath each plot.
-              </li>
-              <li>
-                Press "enter" or "apply changes" to apply edits; "reset" reverts every option to the
-                selected preset.
-              </li>
-              <li>
-                Pick a colouring mode, palette, and anti-aliasing level with the coloring controls
-                (smooth, histogram, distance/edges, orbit trap, stripe/triangle average, binary
-                decomposition, period, and domain colouring), design a
-                <strong>custom gradient</strong> or spin the rotation slider to cycle colours, and
-                toggle <strong>relief lighting</strong>,
-                <strong>post-processing</strong> (vignette/gamma), or a
-                <strong>boundary outline</strong>.
-              </li>
-              <li>
-                Toggle dynamics overlays: the white-point <strong>orbit</strong> is classified by
-                its fate (escapes / fixed point / cycle / bounded); add the
-                <strong>critical orbit</strong> (a Julia-connectivity test) or
-                <strong>equipotential</strong> contours.
-              </li>
-              <li>
-                Tick <strong>Newton's method</strong> to iterate the Newton map of
-                <code>f</code> (e.g. <code>z^3-1</code>) and colour the root basins by convergence.
-              </li>
-              <li>
-                Tick <strong>auto iterations</strong> to raise the iteration cap automatically as
-                you zoom in.
-              </li>
-              <li>
-                Tick <strong>refine while idle</strong> to accumulate extra anti-aliasing while the
-                view sits still — it converges to a cleaner image over a few seconds.
-              </li>
-              <li>
-                Tick <strong>perturbation (deep zoom)</strong> on the Mandelbrot set or its Julia
-                sets (z²+c) to zoom past the point where ordinary deep zoom turns to mush.
-              </li>
-              <li>
-                Use <strong>Record Julia morph</strong> or <strong>Record zoom-in</strong> in the
-                Animate section to save a WebM video — the dynamical plane morphing as the parameter
-                sweeps a circle, or a zoom into the parameter plane.
-              </li>
-              <li>
-                Put the variable <strong>a</strong> in <code>f</code> (e.g. <code>a*z*(1-z)</code>)
-                to get a live slider that sweeps it in real time.
-              </li>
-              <li>
-                Build a <strong>keyframe path</strong>: <strong>Add keyframe</strong> at a few
-                parameter-space views, then scrub or <strong>Record path</strong> to fly between
-                them.
-              </li>
-              <li>
-                Prefer a shareable GIF? Use <strong>Morph GIF</strong> or the keyframe
-                <strong>GIF</strong> button to export an animated GIF instead of WebM.
-              </li>
-              <li>
-                Click <strong>Share link</strong> to copy a URL that reopens the current view —
-                formula, zoom, colouring, and toggles.
-              </li>
-              <li>
-                <strong>Save view</strong> keeps the current view under a name in your browser;
-                reopen it from <strong>Saved views</strong> or remove it with
-                <strong>Delete</strong>.
-              </li>
-              <li>
-                <strong>↶ undo</strong> / <strong>↷ redo</strong> (or Ctrl+Z / Ctrl+Y) step back and
-                forth through your recent changes to the formula, view, colouring, and toggles.
-              </li>
-            </ul>
+            <!-- ============================ Animate ========================= -->
+            <section class="downloads" aria-labelledby="animate-heading">
+              <h2 id="animate-heading">Animate</h2>
+              <div class="panel">
+                <div class="panel-group">
+                  <div class="field">
+                    <label for="record_morph">Animation</label>
+                    <div class="inline-actions">
+                      <button
+                        id="record_morph"
+                        type="button"
+                        title="Record a looping Julia-set morph (sweeping the parameter c) as a WebM video"
+                      >
+                        Record Julia morph
+                      </button>
+                      <button
+                        id="record_zoom"
+                        type="button"
+                        title="Record a zoom-in into the parameter plane as a WebM video"
+                      >
+                        Record zoom-in
+                      </button>
+                      <button
+                        id="gif-morph"
+                        type="button"
+                        title="Record the Julia morph as an animated GIF"
+                      >
+                        Morph GIF
+                      </button>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label for="kf-add">Keyframe path <span id="kf-count">(0)</span></label>
+                    <div class="inline-actions">
+                      <button
+                        id="kf-add"
+                        type="button"
+                        title="Capture the current parameter-plane view as a keyframe"
+                      >
+                        Add keyframe
+                      </button>
+                      <button id="kf-clear" type="button" title="Remove all keyframes">
+                        Clear
+                      </button>
+                      <input
+                        type="range"
+                        id="kf-scrub"
+                        min="0"
+                        max="1"
+                        step="0.001"
+                        value="0"
+                        disabled
+                        title="Scrub along the keyframe path (needs 2+ keyframes)"
+                      />
+                      <button
+                        id="kf-record"
+                        type="button"
+                        disabled
+                        title="Play the keyframe path and save it as a WebM video"
+                      >
+                        Record path
+                      </button>
+                      <button
+                        id="kf-gif"
+                        type="button"
+                        disabled
+                        title="Export the keyframe path as an animated GIF"
+                      >
+                        GIF
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </details>
 
-            <h3>Predefined objects</h3>
-            <ul>
-              <li><b>Constants:</b> e, pi, i.</li>
-              <li>
-                <b>Operations:</b> z*w, z^w, z+w, z-w, z/w, |z|, sqrt, exp, log, sin, cos, tan,
-                arcsin, arccos, arctan, arctan2(x,y), lambertw, re, im, conjugate, arg, mod(x,y),
-                round, floor, ceil.
-              </li>
-            </ul>
-          </div>
+          <!-- ============================ Documentation ================== -->
+          <details class="docs-section">
+            <summary>Help &amp; reference</summary>
+            <div class="docs">
+              <div>
+                <h3>About</h3>
+                <ul>
+                  <li>
+                    Left is <strong>parameter space</strong> (each point a value of <em>c</em>);
+                    right is the <strong>dynamical plane</strong> for that <em>c</em>. Drag either
+                    white point — the <strong>Glossary</strong> button in the top bar defines the
+                    terms used here.
+                  </li>
+                  <li>
+                    GPU acceleration limits accuracy beyond a certain zoom;
+                    <strong>perturbation (deep zoom)</strong> extends it for z²+c.
+                  </li>
+                </ul>
+              </div>
 
-          <div>
-            <h3>Saving images</h3>
-            <ul>
-              <li>
-                Each plot can be saved to a file (Save) or copied to the clipboard (Copy) at a
-                chosen resolution using the size dropdown next to the buttons. The image is
-                re-rendered off-screen at that exact size, so it is sharp at any resolution (the
-                on-screen plots are unaffected).
-              </li>
-              <li>
-                Tick "overlays" to include the orbit polyline, white point, and coordinate label;
-                leave it unticked for a clean fractal-only image.
-              </li>
-              <li>
-                Very large sizes take a moment to render — a progress bar with a Cancel button
-                appears while they do. The plot is rendered at the exact size you choose (no
-                upscaling), up to your GPU's maximum texture size; larger sizes are disabled in the
-                dropdown.
-              </li>
-            </ul>
-          </div>
+              <div>
+                <h3>Controls</h3>
+                <ul>
+                  <li>
+                    Move the plot window with the arrow keys or by clicking and dragging the
+                    background.
+                  </li>
+                  <li>Zoom with the +/- keys or the mouse wheel (zooms toward the cursor).</li>
+                  <li>
+                    Drag the white point in each plot to change its value; the coordinate under the
+                    cursor is shown beneath each plot.
+                  </li>
+                  <li>
+                    Press "enter" or "apply changes" to apply edits; "reset" reverts every option to
+                    the selected preset.
+                  </li>
+                  <li>
+                    Pick a colouring mode, palette, and anti-aliasing level with the coloring
+                    controls (smooth, histogram, distance/edges, orbit trap, stripe/triangle
+                    average, binary decomposition, period, and domain colouring), design a
+                    <strong>custom gradient</strong> or spin the rotation slider to cycle colours,
+                    and toggle <strong>relief lighting</strong>,
+                    <strong>post-processing</strong> (vignette/gamma), or a
+                    <strong>boundary outline</strong>.
+                  </li>
+                  <li>
+                    Toggle dynamics overlays: the white-point <strong>orbit</strong> is classified
+                    by its fate (escapes / fixed point / cycle / bounded); add the
+                    <strong>critical orbit</strong> (a Julia-connectivity test) or
+                    <strong>equipotential</strong> contours.
+                  </li>
+                  <li>
+                    Tick <strong>Newton's method</strong> to iterate the Newton map of
+                    <code>f</code> (e.g. <code>z^3-1</code>) and colour the root basins by
+                    convergence.
+                  </li>
+                  <li>
+                    Tick <strong>auto iterations</strong> to raise the iteration cap automatically
+                    as you zoom in.
+                  </li>
+                  <li>
+                    Tick <strong>refine while idle</strong> to accumulate extra anti-aliasing while
+                    the view sits still — it converges to a cleaner image over a few seconds.
+                  </li>
+                  <li>
+                    Tick <strong>perturbation (deep zoom)</strong> on the Mandelbrot set or its
+                    Julia sets (z²+c) to zoom past the point where ordinary deep zoom turns to mush.
+                  </li>
+                  <li>
+                    Use <strong>Record Julia morph</strong> or <strong>Record zoom-in</strong> in
+                    the Animate section to save a WebM video — the dynamical plane morphing as the
+                    parameter sweeps a circle, or a zoom into the parameter plane.
+                  </li>
+                  <li>
+                    Put the variable <strong>a</strong> in <code>f</code> (e.g.
+                    <code>a*z*(1-z)</code>) to get a live slider that sweeps it in real time.
+                  </li>
+                  <li>
+                    Build a <strong>keyframe path</strong>: <strong>Add keyframe</strong> at a few
+                    parameter-space views, then scrub or <strong>Record path</strong> to fly between
+                    them.
+                  </li>
+                  <li>
+                    Prefer a shareable GIF? Use <strong>Morph GIF</strong> or the keyframe
+                    <strong>GIF</strong> button to export an animated GIF instead of WebM.
+                  </li>
+                  <li>
+                    Click <strong>Share link</strong> to copy a URL that reopens the current view —
+                    formula, zoom, colouring, and toggles.
+                  </li>
+                  <li>
+                    <strong>Save view</strong> keeps the current view under a name in your browser;
+                    reopen it from <strong>Saved views</strong> or remove it with
+                    <strong>Delete</strong>.
+                  </li>
+                  <li>
+                    <strong>↶ undo</strong> / <strong>↷ redo</strong> (or Ctrl+Z / Ctrl+Y) step back
+                    and forth through your recent changes to the formula, view, colouring, and
+                    toggles.
+                  </li>
+                </ul>
+
+                <h3>Predefined objects</h3>
+                <ul>
+                  <li><b>Constants:</b> e, pi, i.</li>
+                  <li>
+                    <b>Operations:</b> z*w, z^w, z+w, z-w, z/w, |z|, sqrt, exp, log, sin, cos, tan,
+                    arcsin, arccos, arctan, arctan2(x,y), lambertw, re, im, conjugate, arg,
+                    mod(x,y), round, floor, ceil.
+                  </li>
+                </ul>
+              </div>
+
+              <div>
+                <h3>Saving images</h3>
+                <ul>
+                  <li>
+                    Each plot can be saved to a file (Save) or copied to the clipboard (Copy) at a
+                    chosen resolution using the size dropdown next to the buttons. The image is
+                    re-rendered off-screen at that exact size, so it is sharp at any resolution (the
+                    on-screen plots are unaffected).
+                  </li>
+                  <li>
+                    Tick "overlays" to include the orbit polyline, white point, and coordinate
+                    label; leave it unticked for a clean fractal-only image.
+                  </li>
+                  <li>
+                    Very large sizes take a moment to render — a progress bar with a Cancel button
+                    appears while they do. The plot is rendered at the exact size you choose (no
+                    upscaling), up to your GPU's maximum texture size; larger sizes are disabled in
+                    the dropdown.
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </details>
+
+          <footer>
+            <p>
+              Questions, suggestions, or feature requests:
+              <a href="mailto:andrew@graven.com">andrew@graven.com</a>.
+            </p>
+            <p>Created by Andrew Graven.</p>
+          </footer>
         </div>
-      </details>
-
-      <footer>
-        <p>
-          Questions, suggestions, or feature requests:
-          <a href="mailto:andrew@graven.com">andrew@graven.com</a>.
-        </p>
-        <p>Created by Andrew Graven.</p>
-      </footer>
+      </div>
     </div>
 
     <div id="toasts" class="toasts" aria-live="polite"></div>

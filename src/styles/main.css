@@ -8,7 +8,7 @@
   --field-bg: #fafafa;
   --radius: 6px;
   --gap: 1rem;
-  --max-width: 1100px;
+  --max-width: 1500px;
   font-family:
     system-ui,
     -apple-system,
@@ -166,6 +166,51 @@ h2 {
   .plots {
     grid-template-columns: 1fr;
   }
+}
+
+/* --- Two-pane workspace: pinned plots beside an independently-scrolling control column.
+   Below 1200px the panes stack (the original single-column flow). From 720px up, the plots
+   pane is sticky, so the plots stay on screen while you scroll or drag any control — which is
+   the whole point: a slider like "radius r" is always next to a visible plot. */
+.plots-pane {
+  background: var(--bg); /* opaque so controls don't show through when it overlaps while sticky */
+}
+
+.controls-pane {
+  min-width: 0; /* let the narrow control column wrap its contents instead of overflowing */
+}
+
+@media (min-width: 720px) {
+  .plots-pane {
+    position: sticky;
+    top: 0.5rem;
+    align-self: start;
+    max-height: calc(100vh - 1rem);
+    overflow: auto;
+    z-index: 1;
+  }
+}
+
+@media (min-width: 1200px) {
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(280px, 24vw, 360px);
+    gap: var(--gap);
+    align-items: start;
+  }
+}
+
+/* The controls now live in a narrow column, but several rows (the export/animate buttons,
+   the coefficient blocks) were built for the old full-width layout. Let them shrink and wrap
+   to the column instead of overflowing it. Harmless at full width, where everything fits. */
+.controls-pane :where(.field, .panel, .panel-group, .downloads, .control-grid, .exterior-block) {
+  min-width: 0;
+}
+.controls-pane :where(.inline-actions, .exterior-block-head) {
+  flex-wrap: wrap;
+}
+.controls-pane :where(pre, textarea, input, select) {
+  max-width: 100%;
 }
 
 .plot {
