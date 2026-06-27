@@ -429,6 +429,8 @@ function init(): void {
   function setDirty(on: boolean): void {
     dirtyIndicator.hidden = !on;
     applyBtn.classList.toggle("attention", on);
+    // Clearing the dirty state also clears the per-field highlights (Apply / Enter / reset).
+    if (!on) for (const id of Object.values(INPUT_IDS)) byId(id).classList.remove("dirty");
   }
 
   const gradientEditor = setupGradientEditor(byId("gradient-editor"), DEFAULT_GRADIENT, (stops) => {
@@ -1335,7 +1337,11 @@ function init(): void {
   // (Programmatic updates via setValue, e.g. pan/zoom writing back the centre,
   // don't fire "input", so dragging the plot never shows the hint.)
   for (const id of Object.values(INPUT_IDS)) {
-    byId(id).addEventListener("input", () => setDirty(true));
+    const el = byId(id);
+    el.addEventListener("input", () => {
+      el.classList.add("dirty"); // highlight the specific changed field
+      setDirty(true);
+    });
   }
 
   for (const id of ["mode", "palette", "aa"]) {

@@ -413,12 +413,25 @@ button.danger:hover {
   align-items: center;
   align-self: center;
   font-size: 0.8rem;
+  font-weight: 600;
   color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius);
   white-space: nowrap;
 }
 
 button.primary.attention {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* A deferred field edited but not yet applied: ring + tint it so the pending
+   change is obvious. Cleared by setDirty(false) on Apply / Enter / reset. */
+input.dirty,
+textarea.dirty {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, var(--field-bg));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 /* --- Shared controls + downloads -------------------------------------- */
