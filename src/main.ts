@@ -1659,7 +1659,7 @@ function init(): void {
   });
   byId("reset_all").addEventListener("click", () => {
     // Reset every option, including coloring + lighting (which presets don't carry).
-    byId<HTMLSelectElement>("mode").value = "escape";
+    byId<HTMLSelectElement>("mode").value = "smooth";
     byId<HTMLSelectElement>("palette").value = "classic";
     byId<HTMLSelectElement>("trap").value = "cross";
     byId<HTMLSelectElement>("aa").value = "1";

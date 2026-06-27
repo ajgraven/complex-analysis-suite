@@ -376,7 +376,7 @@ z^2+c</textarea
             <label for="mode">coloring</label>
             <select id="mode" title="How escape time is turned into colour">
               <option value="escape">Escape time</option>
-              <option value="smooth">Smooth (continuous)</option>
+              <option value="smooth" selected>Smooth (continuous)</option>
               <option value="histogram">Escape time (histogram)</option>
               <option value="distance">Distance (edges, screen-space)</option>
               <option value="distanceAnalytic" id="mode-distance-analytic">
@@ -650,7 +650,7 @@ z^2+c</textarea
             </div>
           </details>
           <details class="control-group">
-            <summary>Iteration</summary>
+            <summary>Iteration &amp; precision</summary>
             <div class="control-grid">
               <div class="field">
                 <label
@@ -866,140 +866,137 @@ z^2+c</textarea
       </details>
 
       <!-- ============================ Documentation ================== -->
-      <section class="docs">
-        <div>
-          <h3>General information</h3>
-          <ul>
-            <li>
-              This applet plots the parameter space associated with the complex function
-              f(z,&nbsp;c), and renders the dynamical plane for the chosen value of the parameter
-              "c".
-            </li>
-            <li>
-              Points are coloured by escape time: the number of iterations of f(z,&nbsp;c) required
-              for escape(z,&nbsp;c) to return true.
-            </li>
-            <li>
-              The white point in the parameter space is the value of "c" for the dynamical plane. It
-              is draggable, and the dynamical plane updates in real time.
-            </li>
-            <li>
-              The white point in the dynamical plane is the starting point for a plot of the first
-              several iterates. It can also be dragged.
-            </li>
-            <li>GPU acceleration limits accuracy beyond a certain level of zoom.</li>
-          </ul>
-        </div>
+      <details class="docs-section">
+        <summary>Help &amp; reference</summary>
+        <div class="docs">
+          <div>
+            <h3>About</h3>
+            <ul>
+              <li>
+                Left is <strong>parameter space</strong> (each point a value of <em>c</em>); right
+                is the <strong>dynamical plane</strong> for that <em>c</em>. Drag either white point
+                — the <strong>Glossary</strong> button in the top bar defines the terms used here.
+              </li>
+              <li>
+                GPU acceleration limits accuracy beyond a certain zoom;
+                <strong>perturbation (deep zoom)</strong> extends it for z²+c.
+              </li>
+            </ul>
+          </div>
 
-        <div>
-          <h3>Controls</h3>
-          <ul>
-            <li>
-              Move the plot window with the arrow keys or by clicking and dragging the background.
-            </li>
-            <li>Zoom with the +/- keys or the mouse wheel (zooms toward the cursor).</li>
-            <li>
-              Drag the white point in each plot to change its value; the coordinate under the cursor
-              is shown beneath each plot.
-            </li>
-            <li>
-              Press "enter" or "apply changes" to apply edits; "reset" reverts every option to the
-              selected preset.
-            </li>
-            <li>
-              Pick a colouring mode, palette, and anti-aliasing level with the coloring controls
-              (smooth, histogram, distance/edges, orbit trap, stripe/triangle average, binary
-              decomposition, period, and domain colouring), design a
-              <strong>custom gradient</strong> or spin the rotation slider to cycle colours, and
-              toggle <strong>relief lighting</strong>,
-              <strong>post-processing</strong> (vignette/gamma), or a
-              <strong>boundary outline</strong>.
-            </li>
-            <li>
-              Toggle dynamics overlays: the white-point <strong>orbit</strong> is classified by its
-              fate (escapes / fixed point / cycle / bounded); add the
-              <strong>critical orbit</strong> (a Julia-connectivity test) or
-              <strong>equipotential</strong> contours.
-            </li>
-            <li>
-              Tick <strong>Newton's method</strong> to iterate the Newton map of
-              <code>f</code> (e.g. <code>z^3-1</code>) and colour the root basins by convergence.
-            </li>
-            <li>
-              Tick <strong>auto iterations</strong> to raise the iteration cap automatically as you
-              zoom in.
-            </li>
-            <li>
-              Tick <strong>refine while idle</strong> to accumulate extra anti-aliasing while the
-              view sits still — it converges to a cleaner image over a few seconds.
-            </li>
-            <li>
-              Tick <strong>perturbation (deep zoom)</strong> on the Mandelbrot set or its Julia sets
-              (z²+c) to zoom past the point where ordinary deep zoom turns to mush.
-            </li>
-            <li>
-              Use <strong>Record Julia morph</strong> or <strong>Record zoom-in</strong> in the
-              Animate section to save a WebM video — the dynamical plane morphing as the parameter
-              sweeps a circle, or a zoom into the parameter plane.
-            </li>
-            <li>
-              Put the variable <strong>a</strong> in <code>f</code> (e.g. <code>a*z*(1-z)</code>) to
-              get a live slider that sweeps it in real time.
-            </li>
-            <li>
-              Build a <strong>keyframe path</strong>: <strong>Add keyframe</strong> at a few
-              parameter-space views, then scrub or <strong>Record path</strong> to fly between them.
-            </li>
-            <li>
-              Prefer a shareable GIF? Use <strong>Morph GIF</strong> or the keyframe
-              <strong>GIF</strong> button to export an animated GIF instead of WebM.
-            </li>
-            <li>
-              Click <strong>Share link</strong> to copy a URL that reopens the current view —
-              formula, zoom, colouring, and toggles.
-            </li>
-            <li>
-              <strong>Save view</strong> keeps the current view under a name in your browser; reopen
-              it from <strong>Saved views</strong> or remove it with <strong>Delete</strong>.
-            </li>
-            <li>
-              <strong>↶ undo</strong> / <strong>↷ redo</strong> (or Ctrl+Z / Ctrl+Y) step back and
-              forth through your recent changes to the formula, view, colouring, and toggles.
-            </li>
-          </ul>
+          <div>
+            <h3>Controls</h3>
+            <ul>
+              <li>
+                Move the plot window with the arrow keys or by clicking and dragging the background.
+              </li>
+              <li>Zoom with the +/- keys or the mouse wheel (zooms toward the cursor).</li>
+              <li>
+                Drag the white point in each plot to change its value; the coordinate under the
+                cursor is shown beneath each plot.
+              </li>
+              <li>
+                Press "enter" or "apply changes" to apply edits; "reset" reverts every option to the
+                selected preset.
+              </li>
+              <li>
+                Pick a colouring mode, palette, and anti-aliasing level with the coloring controls
+                (smooth, histogram, distance/edges, orbit trap, stripe/triangle average, binary
+                decomposition, period, and domain colouring), design a
+                <strong>custom gradient</strong> or spin the rotation slider to cycle colours, and
+                toggle <strong>relief lighting</strong>,
+                <strong>post-processing</strong> (vignette/gamma), or a
+                <strong>boundary outline</strong>.
+              </li>
+              <li>
+                Toggle dynamics overlays: the white-point <strong>orbit</strong> is classified by
+                its fate (escapes / fixed point / cycle / bounded); add the
+                <strong>critical orbit</strong> (a Julia-connectivity test) or
+                <strong>equipotential</strong> contours.
+              </li>
+              <li>
+                Tick <strong>Newton's method</strong> to iterate the Newton map of
+                <code>f</code> (e.g. <code>z^3-1</code>) and colour the root basins by convergence.
+              </li>
+              <li>
+                Tick <strong>auto iterations</strong> to raise the iteration cap automatically as
+                you zoom in.
+              </li>
+              <li>
+                Tick <strong>refine while idle</strong> to accumulate extra anti-aliasing while the
+                view sits still — it converges to a cleaner image over a few seconds.
+              </li>
+              <li>
+                Tick <strong>perturbation (deep zoom)</strong> on the Mandelbrot set or its Julia
+                sets (z²+c) to zoom past the point where ordinary deep zoom turns to mush.
+              </li>
+              <li>
+                Use <strong>Record Julia morph</strong> or <strong>Record zoom-in</strong> in the
+                Animate section to save a WebM video — the dynamical plane morphing as the parameter
+                sweeps a circle, or a zoom into the parameter plane.
+              </li>
+              <li>
+                Put the variable <strong>a</strong> in <code>f</code> (e.g. <code>a*z*(1-z)</code>)
+                to get a live slider that sweeps it in real time.
+              </li>
+              <li>
+                Build a <strong>keyframe path</strong>: <strong>Add keyframe</strong> at a few
+                parameter-space views, then scrub or <strong>Record path</strong> to fly between
+                them.
+              </li>
+              <li>
+                Prefer a shareable GIF? Use <strong>Morph GIF</strong> or the keyframe
+                <strong>GIF</strong> button to export an animated GIF instead of WebM.
+              </li>
+              <li>
+                Click <strong>Share link</strong> to copy a URL that reopens the current view —
+                formula, zoom, colouring, and toggles.
+              </li>
+              <li>
+                <strong>Save view</strong> keeps the current view under a name in your browser;
+                reopen it from <strong>Saved views</strong> or remove it with
+                <strong>Delete</strong>.
+              </li>
+              <li>
+                <strong>↶ undo</strong> / <strong>↷ redo</strong> (or Ctrl+Z / Ctrl+Y) step back and
+                forth through your recent changes to the formula, view, colouring, and toggles.
+              </li>
+            </ul>
 
-          <h3>Predefined objects</h3>
-          <ul>
-            <li><b>Constants:</b> e, pi, i.</li>
-            <li>
-              <b>Operations:</b> z*w, z^w, z+w, z-w, z/w, |z|, sqrt, exp, log, sin, cos, tan,
-              arcsin, arccos, arctan, arctan2(x,y), lambertw, re, im, conjugate, arg, mod(x,y),
-              round, floor, ceil.
-            </li>
-          </ul>
-        </div>
+            <h3>Predefined objects</h3>
+            <ul>
+              <li><b>Constants:</b> e, pi, i.</li>
+              <li>
+                <b>Operations:</b> z*w, z^w, z+w, z-w, z/w, |z|, sqrt, exp, log, sin, cos, tan,
+                arcsin, arccos, arctan, arctan2(x,y), lambertw, re, im, conjugate, arg, mod(x,y),
+                round, floor, ceil.
+              </li>
+            </ul>
+          </div>
 
-        <div>
-          <h3>Saving images</h3>
-          <ul>
-            <li>
-              Each plot can be saved to a file (Save) or copied to the clipboard (Copy) at a chosen
-              resolution using the size dropdown next to the buttons. The image is re-rendered
-              off-screen at that exact size, so it is sharp at any resolution (the on-screen plots
-              are unaffected).
-            </li>
-            <li>
-              Tick "overlays" to include the orbit polyline, white point, and coordinate label;
-              leave it unticked for a clean fractal-only image.
-            </li>
-            <li>
-              Very large sizes take a moment to render — a progress bar with a Cancel button appears
-              while they do. The plot is rendered at the exact size you choose (no upscaling), up to
-              your GPU's maximum texture size; larger sizes are disabled in the dropdown.
-            </li>
-          </ul>
+          <div>
+            <h3>Saving images</h3>
+            <ul>
+              <li>
+                Each plot can be saved to a file (Save) or copied to the clipboard (Copy) at a
+                chosen resolution using the size dropdown next to the buttons. The image is
+                re-rendered off-screen at that exact size, so it is sharp at any resolution (the
+                on-screen plots are unaffected).
+              </li>
+              <li>
+                Tick "overlays" to include the orbit polyline, white point, and coordinate label;
+                leave it unticked for a clean fractal-only image.
+              </li>
+              <li>
+                Very large sizes take a moment to render — a progress bar with a Cancel button
+                appears while they do. The plot is rendered at the exact size you choose (no
+                upscaling), up to your GPU's maximum texture size; larger sizes are disabled in the
+                dropdown.
+              </li>
+            </ul>
+          </div>
         </div>
-      </section>
+      </details>
 
       <footer>
         <p>
