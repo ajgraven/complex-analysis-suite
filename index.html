@@ -374,7 +374,11 @@ z^2+c</textarea
                 </select>
               </div>
               <div class="field">
-                <label class="checkbox" for="accumulate">
+                <label
+                  class="checkbox"
+                  for="accumulate"
+                  title="While the view sits still, average jittered sub-pixel samples for a cleaner, anti-aliased image"
+                >
                   <input type="checkbox" id="accumulate" /> refine while idle
                 </label>
               </div>
@@ -390,38 +394,88 @@ z^2+c</textarea
                 />
               </div>
               <div class="field">
-                <label class="checkbox" for="light">
+                <label
+                  class="checkbox"
+                  for="light"
+                  title="Shade the fractal as a lit 3-D surface (relief lighting)"
+                >
                   <input type="checkbox" id="light" /> relief lighting
                 </label>
                 <div class="light-controls" title="Light direction and relief depth">
                   <label
-                    >az <input type="range" id="lightAz" min="0" max="360" value="135" disabled
+                    >az
+                    <input
+                      type="range"
+                      id="lightAz"
+                      min="0"
+                      max="360"
+                      value="135"
+                      title="Light azimuth (direction, degrees)"
+                      disabled
                   /></label>
                   <label
-                    >el <input type="range" id="lightEl" min="0" max="90" value="45" disabled
+                    >el
+                    <input
+                      type="range"
+                      id="lightEl"
+                      min="0"
+                      max="90"
+                      value="45"
+                      title="Light elevation (height above the plane, degrees)"
+                      disabled
                   /></label>
                   <label
                     >depth
-                    <input type="range" id="lightHeight" min="0" max="100" value="40" disabled
+                    <input
+                      type="range"
+                      id="lightHeight"
+                      min="0"
+                      max="100"
+                      value="40"
+                      title="Relief depth — how strongly the surface is sculpted"
+                      disabled
                   /></label>
                 </div>
               </div>
               <div class="field">
-                <label class="checkbox" for="post">
+                <label
+                  class="checkbox"
+                  for="post"
+                  title="Apply a final vignette + output-gamma grade (on-screen only)"
+                >
                   <input type="checkbox" id="post" /> post-processing
                 </label>
                 <div class="post-controls" title="Vignette and output gamma">
                   <label
                     >vignette
-                    <input type="range" id="postVignette" min="0" max="100" value="30" disabled
+                    <input
+                      type="range"
+                      id="postVignette"
+                      min="0"
+                      max="100"
+                      value="30"
+                      title="Vignette strength"
+                      disabled
                   /></label>
                   <label
-                    >gamma <input type="range" id="postGamma" min="0" max="100" value="50" disabled
+                    >gamma
+                    <input
+                      type="range"
+                      id="postGamma"
+                      min="0"
+                      max="100"
+                      value="50"
+                      title="Output gamma"
+                      disabled
                   /></label>
                 </div>
               </div>
               <div class="field">
-                <label class="checkbox" for="outline">
+                <label
+                  class="checkbox"
+                  for="outline"
+                  title="Darken the set boundary with an adjustable-width outline"
+                >
                   <input type="checkbox" id="outline" /> boundary outline
                 </label>
                 <div class="post-controls" title="Boundary outline width">
@@ -433,7 +487,7 @@ z^2+c</textarea
               </div>
             </div>
           </details>
-          <details class="control-group" id="overlays-group">
+          <details class="control-group" id="overlays-group" open>
             <summary>Overlays</summary>
             <div class="control-grid">
               <div class="field">
@@ -497,7 +551,14 @@ z^2+c</textarea
                 <div class="post-controls" title="Contour spacing">
                   <label
                     >density
-                    <input type="range" id="equiDensity" min="5" max="100" value="20" disabled
+                    <input
+                      type="range"
+                      id="equiDensity"
+                      min="5"
+                      max="100"
+                      value="20"
+                      title="Equipotential contour spacing"
+                      disabled
                   /></label>
                 </div>
               </div>
@@ -507,17 +568,29 @@ z^2+c</textarea
             <summary>Iteration</summary>
             <div class="control-grid">
               <div class="field">
-                <label class="checkbox" for="newton">
+                <label
+                  class="checkbox"
+                  for="newton"
+                  title="Iterate the Newton map z − f/f′ (root-finding); colours by which root each point reaches"
+                >
                   <input type="checkbox" id="newton" /> Newton's method
                 </label>
               </div>
               <div class="field">
-                <label class="checkbox" for="autoiter">
+                <label
+                  class="checkbox"
+                  for="autoiter"
+                  title="Raise the iteration cap automatically with zoom depth, to keep detail when deep"
+                >
                   <input type="checkbox" id="autoiter" /> auto iterations
                 </label>
               </div>
               <div class="field">
-                <label class="checkbox" for="perturbation">
+                <label
+                  class="checkbox"
+                  for="perturbation"
+                  title="Deep-zoom past the f64 limit for z²+c via a high-precision reference orbit (escape/smooth colouring only)"
+                >
                   <input type="checkbox" id="perturbation" /> perturbation (deep zoom)
                 </label>
                 <p id="perturbation-note" class="control-note" hidden>
@@ -555,134 +628,157 @@ z^2+c</textarea
         hidden
       ></section>
 
-      <!-- ============================ Export image =================== -->
-      <section class="downloads" aria-labelledby="export-image-heading">
-        <h2 id="export-image-heading">Export image</h2>
-        <div class="panel">
-          <div class="panel-group">
-            <div class="field">
-              <label for="mImageName">Parameter space image</label>
-              <div class="inline-actions">
-                <input type="text" id="mImageName" value="ParamSpace.png" size="14" />
-                <select id="paramExportSize" aria-label="Parameter space export size (px)">
-                  <option value="500">screen (500)</option>
-                  <option value="1000">1000</option>
-                  <option value="2000" selected>2000</option>
-                  <option value="4000">4000</option>
-                  <option value="8000">8000</option>
-                </select>
-                <label class="checkbox">
-                  <input type="checkbox" id="paramExportOverlay" /> overlays
-                </label>
-                <label class="checkbox">
-                  <input type="checkbox" id="paramExportScaleBar" /> scale bar
-                </label>
-                <button id="print_param_space" type="button" class="primary">Save</button>
-                <button id="copy_param_space" type="button" title="Copy the image to the clipboard">
-                  Copy
-                </button>
+      <!-- ===== Save & animate: tucked behind a collapsed group so the dynamics
+                 instruments lead, not the export/animation studio. ===== -->
+      <details class="control-group" id="studio-group">
+        <summary>Save &amp; animate</summary>
+        <!-- ============================ Export image =================== -->
+        <section class="downloads" aria-labelledby="export-image-heading">
+          <h2 id="export-image-heading">Export image</h2>
+          <div class="panel">
+            <div class="panel-group">
+              <div class="field">
+                <label for="mImageName">Parameter space image</label>
+                <div class="inline-actions">
+                  <input type="text" id="mImageName" value="ParamSpace.png" size="14" />
+                  <select id="paramExportSize" aria-label="Parameter space export size (px)">
+                    <option value="500">screen (500)</option>
+                    <option value="1000">1000</option>
+                    <option value="2000" selected>2000</option>
+                    <option value="4000">4000</option>
+                    <option value="8000">8000</option>
+                  </select>
+                  <label class="checkbox">
+                    <input type="checkbox" id="paramExportOverlay" /> overlays
+                  </label>
+                  <label class="checkbox">
+                    <input type="checkbox" id="paramExportScaleBar" /> scale bar
+                  </label>
+                  <button
+                    id="print_param_space"
+                    type="button"
+                    class="primary"
+                    title="Save the parameter-space image as a PNG at the selected size"
+                  >
+                    Save
+                  </button>
+                  <button
+                    id="copy_param_space"
+                    type="button"
+                    title="Copy the image to the clipboard"
+                  >
+                    Copy
+                  </button>
+                </div>
               </div>
-            </div>
-            <div class="field">
-              <label for="jImageName">Dynamical plane image</label>
-              <div class="inline-actions">
-                <input type="text" id="jImageName" value="DynPlane.png" size="14" />
-                <select id="dynExportSize" aria-label="Dynamical plane export size (px)">
-                  <option value="500">screen (500)</option>
-                  <option value="1000">1000</option>
-                  <option value="2000" selected>2000</option>
-                  <option value="4000">4000</option>
-                  <option value="8000">8000</option>
-                </select>
-                <label class="checkbox">
-                  <input type="checkbox" id="dynExportOverlay" /> overlays
-                </label>
-                <label class="checkbox">
-                  <input type="checkbox" id="dynExportScaleBar" /> scale bar
-                </label>
-                <button id="print_dyn_plane" type="button" class="primary">Save</button>
-                <button id="copy_dyn_plane" type="button" title="Copy the image to the clipboard">
-                  Copy
-                </button>
+              <div class="field">
+                <label for="jImageName">Dynamical plane image</label>
+                <div class="inline-actions">
+                  <input type="text" id="jImageName" value="DynPlane.png" size="14" />
+                  <select id="dynExportSize" aria-label="Dynamical plane export size (px)">
+                    <option value="500">screen (500)</option>
+                    <option value="1000">1000</option>
+                    <option value="2000" selected>2000</option>
+                    <option value="4000">4000</option>
+                    <option value="8000">8000</option>
+                  </select>
+                  <label class="checkbox">
+                    <input type="checkbox" id="dynExportOverlay" /> overlays
+                  </label>
+                  <label class="checkbox">
+                    <input type="checkbox" id="dynExportScaleBar" /> scale bar
+                  </label>
+                  <button
+                    id="print_dyn_plane"
+                    type="button"
+                    class="primary"
+                    title="Save the dynamical-plane image as a PNG at the selected size"
+                  >
+                    Save
+                  </button>
+                  <button id="copy_dyn_plane" type="button" title="Copy the image to the clipboard">
+                    Copy
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <!-- ============================ Animate ========================= -->
-      <section class="downloads" aria-labelledby="animate-heading">
-        <h2 id="animate-heading">Animate</h2>
-        <div class="panel">
-          <div class="panel-group">
-            <div class="field">
-              <label for="record_morph">Animation</label>
-              <div class="inline-actions">
-                <button
-                  id="record_morph"
-                  type="button"
-                  title="Record a looping Julia-set morph (sweeping the parameter c) as a WebM video"
-                >
-                  Record Julia morph
-                </button>
-                <button
-                  id="record_zoom"
-                  type="button"
-                  title="Record a zoom-in into the parameter plane as a WebM video"
-                >
-                  Record zoom-in
-                </button>
-                <button
-                  id="gif-morph"
-                  type="button"
-                  title="Record the Julia morph as an animated GIF"
-                >
-                  Morph GIF
-                </button>
+        <!-- ============================ Animate ========================= -->
+        <section class="downloads" aria-labelledby="animate-heading">
+          <h2 id="animate-heading">Animate</h2>
+          <div class="panel">
+            <div class="panel-group">
+              <div class="field">
+                <label for="record_morph">Animation</label>
+                <div class="inline-actions">
+                  <button
+                    id="record_morph"
+                    type="button"
+                    title="Record a looping Julia-set morph (sweeping the parameter c) as a WebM video"
+                  >
+                    Record Julia morph
+                  </button>
+                  <button
+                    id="record_zoom"
+                    type="button"
+                    title="Record a zoom-in into the parameter plane as a WebM video"
+                  >
+                    Record zoom-in
+                  </button>
+                  <button
+                    id="gif-morph"
+                    type="button"
+                    title="Record the Julia morph as an animated GIF"
+                  >
+                    Morph GIF
+                  </button>
+                </div>
               </div>
-            </div>
-            <div class="field">
-              <label for="kf-add">Keyframe path <span id="kf-count">(0)</span></label>
-              <div class="inline-actions">
-                <button
-                  id="kf-add"
-                  type="button"
-                  title="Capture the current parameter-plane view as a keyframe"
-                >
-                  Add keyframe
-                </button>
-                <button id="kf-clear" type="button" title="Remove all keyframes">Clear</button>
-                <input
-                  type="range"
-                  id="kf-scrub"
-                  min="0"
-                  max="1"
-                  step="0.001"
-                  value="0"
-                  disabled
-                  title="Scrub along the keyframe path (needs 2+ keyframes)"
-                />
-                <button
-                  id="kf-record"
-                  type="button"
-                  disabled
-                  title="Play the keyframe path and save it as a WebM video"
-                >
-                  Record path
-                </button>
-                <button
-                  id="kf-gif"
-                  type="button"
-                  disabled
-                  title="Export the keyframe path as an animated GIF"
-                >
-                  GIF
-                </button>
+              <div class="field">
+                <label for="kf-add">Keyframe path <span id="kf-count">(0)</span></label>
+                <div class="inline-actions">
+                  <button
+                    id="kf-add"
+                    type="button"
+                    title="Capture the current parameter-plane view as a keyframe"
+                  >
+                    Add keyframe
+                  </button>
+                  <button id="kf-clear" type="button" title="Remove all keyframes">Clear</button>
+                  <input
+                    type="range"
+                    id="kf-scrub"
+                    min="0"
+                    max="1"
+                    step="0.001"
+                    value="0"
+                    disabled
+                    title="Scrub along the keyframe path (needs 2+ keyframes)"
+                  />
+                  <button
+                    id="kf-record"
+                    type="button"
+                    disabled
+                    title="Play the keyframe path and save it as a WebM video"
+                  >
+                    Record path
+                  </button>
+                  <button
+                    id="kf-gif"
+                    type="button"
+                    disabled
+                    title="Export the keyframe path as an animated GIF"
+                  >
+                    GIF
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </details>
 
       <!-- ============================ Documentation ================== -->
       <section class="docs">
