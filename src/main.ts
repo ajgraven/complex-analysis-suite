@@ -13,7 +13,8 @@ import { getMaxTextureSize } from "./hiResExport";
 import { PlotView } from "./render/plotView";
 import type { GLPlot, FractType } from "./render/glPlot";
 import { inspect, findNucleus, type InspectResult } from "./render/inspect";
-import { computeOrbit, type OrbitFate } from "./render/overlay";
+import { classifyOrbit, computeOrbit, type OrbitFate } from "./render/overlay";
+import { drawOrbitPreview } from "./render/orbitPreview";
 import { parseAngle } from "./render/rays";
 import { dynPresets, paramPresets, type Preset, type PresetName } from "./presets";
 import { byId } from "./ui/dom";
@@ -462,6 +463,35 @@ function init(): void {
     },
   );
 
+  // Critical-orbit hover preview (parameter plane): a cheap CPU draw of the critical orbit
+  // at the hovered c — green if it stays bounded (connected Julia set), orange if it
+  // escapes (Cantor dust). No extra GL context; rAF-coalesced so a 60 Hz hover is cheap.
+  const orbitPreviewCanvas = byId<HTMLCanvasElement>("orbit-preview");
+  const orbitPreviewCtx = orbitPreviewCanvas.getContext("2d");
+  const paramReadout = hoverReadout("MCSReadout");
+  let paramPlot: GLPlot | null = null; // set just after the parameter view is built
+  let previewPending: Vec2 | null = null;
+  let previewScheduled = false;
+  function updateOrbitPreview(coord: Vec2 | null): void {
+    if (!coord || !orbitPreviewCtx || !paramPlot) {
+      orbitPreviewCanvas.hidden = true;
+      return;
+    }
+    previewPending = coord;
+    if (previewScheduled) return;
+    previewScheduled = true;
+    requestAnimationFrame(() => {
+      previewScheduled = false;
+      const c = previewPending;
+      if (!c || !orbitPreviewCtx || !paramPlot) return;
+      const { fAst, escAst, criticalPoint, paramA } = paramPlot;
+      const orbit = computeOrbit(fAst, escAst, criticalPoint, c, 48, paramA);
+      const info = classifyOrbit(fAst, escAst, criticalPoint, c, paramA);
+      drawOrbitPreview(orbitPreviewCtx, orbit, info.fate !== "escaped", orbitPreviewCanvas.width);
+      orbitPreviewCanvas.hidden = false;
+    });
+  }
+
   const parameterView = new PlotView(
     byId<HTMLCanvasElement>("MCSCanvas"),
     byId<HTMLCanvasElement>("MCSOverlay"),
@@ -485,10 +515,15 @@ function init(): void {
         announce(`Parameter space — ${paramChip.textContent}`);
         scheduleRecord();
       },
-      onHover: hoverReadout("MCSReadout"),
+      onHover: (coord) => {
+        paramReadout(coord);
+        updateOrbitPreview(coord);
+      },
       onInspect: handleInspect,
     },
   );
+
+  paramPlot = parameterView.plot;
 
   // --- Click-to-inspect → nucleus finder (parameter plane) ----------------
   let lastNucleusSeed: { point: Vec2; period: number } | null = null;
