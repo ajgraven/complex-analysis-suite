@@ -130,21 +130,24 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
   announces the view (centre/zoom) and the parameter `c` to screen readers as they
   change.
 - Press **Enter** (or **apply changes**) to apply edits to the input fields — while
-  edits are pending an "unapplied edits" hint shows and the Apply button is ringed;
-  **reset** reverts every option (including colouring) to the selected preset.
+  edits are pending the changed fields are highlighted, an "unapplied edits" hint shows,
+  and the Apply button is ringed; **reset** reverts every option (including colouring) to
+  the selected preset.
 - Each plot's precise fields (**c**, escape test, centre, zoom, max iterations, canvas
   size) are tucked behind a **view chip** below the plot showing `centre · zoom ·
-iterations`; click **edit ▾** to expand and type exact values. A caption under each plot
-  names the coupling — the parameter-space white point sets **c**, and the dynamical plane
-  shows that **c**.
+iterations`; click **edit ▾** to expand and type exact values, or use **Copy coordinates**
+  to put the full-precision `c` / centre / zoom on the clipboard. A caption under each plot
+  names the coupling and shows the live **c** shared by both planes.
 - **↶ undo / ↷ redo** (or **Ctrl+Z** / **Ctrl+Y**) step through your recent changes —
   formula, view, colouring, and toggles — as a single history.
 - Choose a colour scheme with the **coloring** control — see
   [Colouring](#colouring).
 - The entered **f(z, c)** is typeset live (KaTeX) beneath the formula input, and the
   **tour** button runs a short guided walkthrough of the interface.
-- The top **app bar** holds the global actions: **Theme**, **tour**, **Share link**, and
-  a **Views ▾** menu.
+- The top **app bar** holds the global actions: **Theme**, **tour**, **Glossary**, **Share
+  link**, and a **Views ▾** menu. **Glossary** opens an in-app reference of the
+  complex-dynamics terms and the app's non-textbook conventions; inline **?** links beside
+  the inspector readouts and overlay labels jump straight to the relevant entry.
 - The **Theme** button cycles auto / dark / light (auto follows your OS colour scheme);
   the choice is remembered across visits.
 - **Share link** copies a URL whose hash encodes the current view — formula, both planes'
@@ -305,7 +308,12 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   `z₀`. Multiplier and distance need a holomorphic `f` (period and angle hold for any `f`).
   On the **dynamical plane** the located attracting cycle is marked (ringed dots joined in
   orbit order). On the **parameter plane**, when a finite cycle is found, a **Find nucleus**
-  button Newton-snaps `c` to the exact superattracting centre of that hyperbolic component.
+  button Newton-snaps `c` to the exact superattracting centre, and **Show bulb rays** turns
+  on that bulb's landing rays. **Copy report** copies the readout and **Export orbit**
+  downloads the inspected orbit as a CSV — both at full precision.
+- **Critical-orbit hover preview** — hovering a point on the parameter plane shows a small
+  preview of its critical orbit (green if bounded → connected Julia set; orange if it
+  escapes → Cantor dust), pinned to the plot's corner.
 
 ## Newton's method
 
