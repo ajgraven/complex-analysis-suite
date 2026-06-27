@@ -303,6 +303,53 @@ function drawRays(
   ctx.restore();
 }
 
+interface OrbitCacheEntry {
+  fAst: Node;
+  escapeAst: Node;
+  key: string;
+  orbit: Complex[];
+  info: OrbitInfo;
+  critOrbit: Complex[] | null;
+  critInfo: OrbitInfo | null;
+}
+
+/**
+ * Per-plane cache of the orbit polyline + fate classification (and the critical orbit).
+ * These depend only on f / escape / z₀ / c / a / nplot — NOT on centre or zoom — so pan
+ * and zoom reuse them and `drawOverlay` only re-projects the points. ASTs are compared by
+ * identity (they're replaced wholesale on an f/escape edit). The CPU orbit walk uses the
+ * tree-walking evaluator, so skipping it on every pan/zoom frame is a real saving.
+ */
+const orbitCache = new Map<"dyn" | "param", OrbitCacheEntry>();
+
+function orbitData(p: OverlayParams, cc: Complex, a: Complex): OrbitCacheEntry {
+  const crit = p.criticalPoint ?? [0, 0];
+  const key = `${p.z0[0]},${p.z0[1]};${cc[0]},${cc[1]};${a[0]},${a[1]};${p.nplot};${p.critical ? 1 : 0};${crit[0]},${crit[1]}`;
+  const hit = orbitCache.get(p.fractType);
+  if (hit && hit.fAst === p.fAst && hit.escapeAst === p.escapeAst && hit.key === key) {
+    return hit;
+  }
+  const orbit = computeOrbit(p.fAst, p.escapeAst, p.z0, cc, p.nplot, a);
+  const info = classifyOrbit(p.fAst, p.escapeAst, p.z0, cc, a);
+  let critOrbit: Complex[] | null = null;
+  let critInfo: OrbitInfo | null = null;
+  if (p.critical) {
+    critOrbit = computeOrbit(p.fAst, p.escapeAst, crit, cc, p.nplot, a);
+    critInfo = classifyOrbit(p.fAst, p.escapeAst, crit, cc, a);
+  }
+  const entry: OrbitCacheEntry = {
+    fAst: p.fAst,
+    escapeAst: p.escapeAst,
+    key,
+    orbit,
+    info,
+    critOrbit,
+    critInfo,
+  };
+  orbitCache.set(p.fractType, entry);
+  return entry;
+}
+
 /** Render the orbit polyline, white point, and label onto `ctx`. */
 export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): void {
   const { size } = p;
@@ -310,8 +357,7 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
   const s = size / OVERLAY_BASE;
   const cc: Complex = p.fractType === "param" ? [p.z0[0], p.z0[1]] : p.c;
   const a = p.a ?? [0, 0];
-  const orbit = computeOrbit(p.fAst, p.escapeAst, p.z0, cc, p.nplot, a);
-  const info = classifyOrbit(p.fAst, p.escapeAst, p.z0, cc, a);
+  const { orbit, info, critOrbit, critInfo } = orbitData(p, cc, a);
   const fateColor = FATE_COLOR[info.fate];
 
   // Orbit polyline, coloured by the orbit's long-run fate.
@@ -336,10 +382,9 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
 
   // Optional critical orbit (from the critical point, default 0), drawn dashed so it
   // reads apart from the white-point orbit. Bounded → Julia set connected.
-  if (p.critical) {
+  if (p.critical && critOrbit && critInfo) {
     const crit = p.criticalPoint ?? [0, 0];
-    const critOrbit = computeOrbit(p.fAst, p.escapeAst, crit, cc, p.nplot, a);
-    const critColor = FATE_COLOR[classifyOrbit(p.fAst, p.escapeAst, crit, cc, a).fate];
+    const critColor = FATE_COLOR[critInfo.fate];
     ctx.strokeStyle = critColor;
     ctx.lineWidth = 1.4 * s;
     ctx.setLineDash([5 * s, 4 * s]);
