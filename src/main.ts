@@ -170,55 +170,85 @@ function renderFormula(): void {
   }
 }
 
-/** Wire the "tour" button to a short guided walkthrough (driver.js). */
+/**
+ * Run the guided walkthrough (driver.js). Shared by the app-bar "tour" button and the
+ * first-run onboarding card, and refreshed to cover the measurement/overlay instruments.
+ */
+function startTour(): void {
+  // Expand the Overlays group so its tour step shows the actual toggles, not just the header.
+  document.getElementById("overlays-group")?.setAttribute("open", "");
+  driver({
+    showProgress: true,
+    steps: [
+      {
+        element: "#MCSCanvas",
+        popover: {
+          title: "Parameter space",
+          description:
+            "Each point is a value of c. Drag the white point to choose c — the dynamical plane updates live.",
+        },
+      },
+      {
+        element: "#JCSCanvas",
+        popover: {
+          title: "Dynamical plane",
+          description:
+            "The Julia-style set for the chosen c. Drag its white point to move the orbit start.",
+        },
+      },
+      {
+        element: "#inspector",
+        popover: {
+          title: "Point inspector",
+          description:
+            "Click any point on either plot to read its orbit — period, multiplier λ, internal angle p/q, and distance to the set.",
+        },
+      },
+      {
+        element: "#inpf",
+        popover: {
+          title: "Function f(z, c)",
+          description: "Edit the iterated function — it is typeset live just below.",
+        },
+      },
+      {
+        element: "#fractal_presets",
+        popover: {
+          title: "Presets",
+          description: "Jump to a built-in family — Mandelbrot, burning ship, magnet, and more.",
+        },
+      },
+      {
+        element: "#mode",
+        popover: {
+          title: "Colouring",
+          description:
+            "Pick how escape time becomes colour — including the analytic distance and relief modes — plus a palette.",
+        },
+      },
+      {
+        element: "#overlays-group",
+        popover: {
+          title: "Overlays",
+          description:
+            "Annotate the dynamics: the critical orbit, Farey bulb labels, external rays, and equipotential contours.",
+        },
+      },
+      {
+        element: "#places",
+        popover: {
+          title: "Places",
+          description:
+            "Fly to famous locations — Seahorse Valley, the Feigenbaum point, a Misiurewicz point, and more.",
+        },
+      },
+    ],
+  }).drive();
+}
+
+/** Wire the app-bar "tour" button to the guided walkthrough. */
 function setupTour(): void {
-  const btn = document.getElementById("tour-btn");
-  if (!btn) return;
-  btn.addEventListener("click", () => {
-    driver({
-      showProgress: true,
-      steps: [
-        {
-          element: "#MCSCanvas",
-          popover: {
-            title: "Parameter space",
-            description:
-              "Each point is a value of c. Drag the white point to choose c — the dynamical plane updates live.",
-          },
-        },
-        {
-          element: "#JCSCanvas",
-          popover: {
-            title: "Dynamical plane",
-            description:
-              "The Julia-style set for the chosen c. Drag its white point to move the orbit start.",
-          },
-        },
-        {
-          element: "#inpf",
-          popover: {
-            title: "Function f(z, c)",
-            description: "Edit the iterated function — it is typeset live just below.",
-          },
-        },
-        {
-          element: "#fractal_presets",
-          popover: {
-            title: "Presets",
-            description: "Jump to a built-in family — Mandelbrot, burning ship, magnet, and more.",
-          },
-        },
-        {
-          element: "#mode",
-          popover: {
-            title: "Colouring & more",
-            description:
-              "Choose a colouring mode and palette, or enable lighting, overlays, or Newton's method.",
-          },
-        },
-      ],
-    }).drive();
-  });
+  document.getElementById("tour-btn")?.addEventListener("click", startTour);
 }
 
 /** Colour-theme toggle cycling auto → dark → light, persisted in localStorage. */
@@ -274,6 +304,10 @@ function setupOnboarding(): void {
     }
   };
   byId("onboarding_dismiss").addEventListener("click", dismiss);
+  byId("onboarding-tour").addEventListener("click", () => {
+    dismiss();
+    startTour();
+  });
   el.addEventListener("click", (e) => {
     if (e.target === el) dismiss(); // click the backdrop to dismiss
   });

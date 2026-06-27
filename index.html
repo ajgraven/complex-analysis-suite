@@ -240,13 +240,16 @@ abs(z)>2</textarea
       </main>
 
       <!-- Point inspector: click either plot to report its orbit's dynamics. -->
-      <aside id="inspector" class="inspector" hidden aria-live="polite">
+      <aside id="inspector" class="inspector" aria-live="polite">
         <div class="inspector-head">
           <strong id="inspector-title">Point inspector</strong>
           <button id="inspector-close" type="button" title="Close the inspector">×</button>
         </div>
         <dl class="inspector-body" id="inspector-body"></dl>
-        <p class="inspector-hint">Click a plot to inspect a point's orbit.</p>
+        <p class="inspector-hint">
+          Click any point on a plot to inspect its orbit — period, multiplier, internal angle, and
+          distance to the set.
+        </p>
       </aside>
 
       <!-- ============================ Shared controls ================ -->
@@ -414,21 +417,33 @@ z^2+c</textarea
               </div>
             </div>
           </details>
-          <details class="control-group">
+          <details class="control-group" id="overlays-group">
             <summary>Overlays</summary>
             <div class="control-grid">
               <div class="field">
-                <label class="checkbox" for="critorbit">
+                <label
+                  class="checkbox"
+                  for="critorbit"
+                  title="Overlay the critical point's orbit — a Julia-set connectivity test"
+                >
                   <input type="checkbox" id="critorbit" /> critical orbit
                 </label>
               </div>
               <div class="field">
-                <label class="checkbox" for="farey">
+                <label
+                  class="checkbox"
+                  for="farey"
+                  title="Label the main cardioid's bulbs by internal angle p/q (z²+c only)"
+                >
                   <input type="checkbox" id="farey" /> Farey bulb labels
                 </label>
               </div>
               <div class="field">
-                <label class="checkbox" for="rays">
+                <label
+                  class="checkbox"
+                  for="rays"
+                  title="Trace the external ray at the entered angle on both planes (z²+c only)"
+                >
                   <input type="checkbox" id="rays" /> external ray
                 </label>
                 <div class="post-controls">
@@ -447,7 +462,11 @@ z^2+c</textarea
                 </p>
               </div>
               <div class="field">
-                <label class="checkbox" for="equipotential">
+                <label
+                  class="checkbox"
+                  for="equipotential"
+                  title="Overlay escape-potential (equipotential) contours"
+                >
                   <input type="checkbox" id="equipotential" /> equipotential
                 </label>
                 <div class="post-controls" title="Contour spacing">
@@ -822,8 +841,16 @@ z^2+c</textarea
             <code>f(z, c)</code> or pick a preset below. On a touch screen, drag with one finger and
             pinch with two to zoom.
           </li>
+          <li>
+            <strong>Measure &amp; explore</strong>: click any point to inspect its orbit, toggle
+            <strong>Overlays</strong> (external rays, Farey labels, …), and use
+            <strong>Places</strong> to fly to famous spots.
+          </li>
         </ul>
-        <button id="onboarding_dismiss" type="button" class="primary">Got it</button>
+        <div class="onboarding-actions">
+          <button id="onboarding-tour" type="button">Take the tour</button>
+          <button id="onboarding_dismiss" type="button" class="primary">Got it</button>
+        </div>
       </div>
     </div>
   </body>
