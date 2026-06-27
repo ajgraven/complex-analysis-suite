@@ -14,7 +14,7 @@ import { formatComplex, truncateComplex, type Complex } from "../complex";
 import type { Node } from "../expr/ast";
 import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
 import { fareyLabels } from "./farey";
-import { dynamicRay, parameterRay } from "./rays";
+import { dynamicRay, parameterRay, rayDepthForZoom } from "./rays";
 
 const OVERLAY_BASE = 500;
 
@@ -257,6 +257,19 @@ function drawFareyLabels(
  * few view-widths are dropped so deep-zoom pixel coordinates stay finite — the dense
  * near-landing points are what is visible anyway.
  */
+// One cached ray polyline per plane. The traced points depend only on the angle (and c,
+// for dynamical rays) and the zoom-derived depth — not on pan or zoom within a depth step —
+// so this skips re-tracing on the frequent overlay redraws (e.g. while panning).
+const rayCache = new Map<"dyn" | "param", { key: string; pts: Vec2[] }>();
+function cachedRay(plane: "dyn" | "param", angle: number, c: Complex, depth: number): Vec2[] {
+  const key = `${angle}:${depth}:${plane === "dyn" ? `${c[0]},${c[1]}` : ""}`;
+  const slot = rayCache.get(plane);
+  if (slot && slot.key === key) return slot.pts;
+  const pts = plane === "param" ? parameterRay(angle, { depth }) : dynamicRay(angle, c, { depth });
+  rayCache.set(plane, { key, pts });
+  return pts;
+}
+
 function drawRays(
   ctx: CanvasRenderingContext2D,
   pts: Vec2[],
@@ -265,18 +278,21 @@ function drawRays(
   size: number,
 ): void {
   const s = size / OVERLAY_BASE;
-  const lim = size * 6;
+  // Clip in plot space, relative to the view, so the kept span scales with zoom: at deep
+  // zoom the near-landing points stay connected through the view (a fixed pixel clip would
+  // drop the segments before they reached it), while the far-field tail is still dropped.
+  const margin = 40 / zoom;
   ctx.save();
   ctx.strokeStyle = "rgba(120, 220, 255, 0.95)";
   ctx.lineWidth = 1.6 * s;
   ctx.beginPath();
   let started = false;
   for (const pt of pts) {
-    const [px, py] = plotToPx(pt, center, zoom, size);
-    if (Math.abs(px) > lim || Math.abs(py) > lim) {
-      started = false; // drop the far-field tail; resume when the ray re-enters the view
+    if (Math.abs(pt[0] - center[0]) > margin || Math.abs(pt[1] - center[1]) > margin) {
+      started = false; // far-field point — break the line; resume when the ray re-enters
       continue;
     }
+    const [px, py] = plotToPx(pt, center, zoom, size);
     if (started) ctx.lineTo(px, py);
     else {
       ctx.moveTo(px, py);
@@ -345,7 +361,7 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
 
   // External rays: parameter rays on the param plane, dynamic rays (for c = cc) on the dyn plane.
   if (typeof p.rayAngle === "number") {
-    const rayPts = p.fractType === "param" ? parameterRay(p.rayAngle) : dynamicRay(p.rayAngle, cc);
+    const rayPts = cachedRay(p.fractType, p.rayAngle, cc, rayDepthForZoom(p.zoom));
     drawRays(ctx, rayPts, p.center, p.zoom, size);
   }
 

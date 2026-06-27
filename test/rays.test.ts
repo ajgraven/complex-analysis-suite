@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parameterRay, dynamicRay, parseAngle } from "../src/render/rays";
+import { parameterRay, dynamicRay, parseAngle, rayDepthForZoom } from "../src/render/rays";
 import type { Vec2 } from "../src/arrays";
 
 const last = (pts: Vec2[]): Vec2 => pts[pts.length - 1];
@@ -34,6 +34,16 @@ describe("dynamicRay (filled Julia)", () => {
     expect(dist(last(dynamicRay(0.25, [0, 0])), [0, 1])).toBeLessThan(1e-6);
     const t = (2 * Math.PI) / 3;
     expect(dist(last(dynamicRay(1 / 3, [0, 0])), [Math.cos(t), Math.sin(t)])).toBeLessThan(1e-6);
+  });
+});
+
+describe("rayDepthForZoom", () => {
+  it("holds at the default view and grows ~1 per zoom-doubling, clamped to [28, 50]", () => {
+    expect(rayDepthForZoom(0.75)).toBe(28);
+    expect(rayDepthForZoom(1)).toBe(28);
+    expect(rayDepthForZoom(256)).toBe(36); // 28 + log2(256)=8
+    expect(rayDepthForZoom(1e12)).toBe(50); // clamped
+    expect(rayDepthForZoom(1e9)).toBeGreaterThan(rayDepthForZoom(1e3));
   });
 });
 

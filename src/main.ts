@@ -707,7 +707,8 @@ function init(): void {
     const on = byId<HTMLInputElement>("rays").checked;
     const angle = parseAngle(byId<HTMLInputElement>("ray-angle").value);
     byId<HTMLInputElement>("rays").disabled = !eligible;
-    byId<HTMLInputElement>("ray-angle").disabled = !eligible || !on;
+    // Angle stays editable whenever f is z²+c, so the angle can be entered before ticking.
+    byId<HTMLInputElement>("ray-angle").disabled = !eligible;
     const active = eligible && on && angle !== null;
     parameterView.setRays(active ? angle : null);
     dynamicalView.setRays(active ? angle : null);

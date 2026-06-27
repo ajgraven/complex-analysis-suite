@@ -113,6 +113,18 @@ export function dynamicRay(theta: number, c: Vec2, opts: RayOptions = {}): Vec2[
   return pts;
 }
 
+/**
+ * Ray depth (number of points marched toward the landing) scaled with zoom: each
+ * consecutive point roughly halves its distance to the boundary, so one extra point per
+ * zoom-doubling keeps the near-landing sampling sub-pixel as you zoom in. Clamped to the
+ * f64 angle-doubling budget (~50 bits) — beyond that `2^m·θ` is noise and deep-zoom rays
+ * would need extended precision (deferred).
+ */
+export function rayDepthForZoom(zoom: number): number {
+  const d = Math.round(28 + Math.log2(Math.max(1, zoom)));
+  return Math.max(28, Math.min(50, d));
+}
+
 /** Parse an external angle written as a fraction "p/q" or a decimal; null if unparseable. */
 export function parseAngle(input: string): number | null {
   const s = input.trim();
