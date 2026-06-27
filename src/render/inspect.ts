@@ -213,3 +213,47 @@ export function inspect(
   }
   return out;
 }
+
+/**
+ * Newton-snap a parameter `c` to a hyperbolic-component nucleus — the superattracting
+ * centre where the critical orbit is periodic with the given period. Solves
+ * g(c) = fᵖᵉʳⁱᵒᵈ(critPoint; c) − critPoint = 0, carrying the running derivative D = ∂z/∂c
+ * along the critical orbit (g′ = D, since the critical point is c-independent for the
+ * supported families, so ∂(critPoint)/∂c = 0). The recurrence is the same
+ * f_z·D + f_c that the distance estimate uses, generalised to any holomorphic `f`.
+ *
+ * Returns null for a non-holomorphic `f` (no analytic derivative) or if Newton fails to
+ * converge from `c0` (caller should leave `c` unchanged). Seed it with a point already
+ * inside the component (the clicked `c`) so it converges to that component's centre and
+ * not a lower-period root of g.
+ */
+export function findNucleus(
+  fAst: Node,
+  critPoint: Complex,
+  period: number,
+  c0: Complex,
+  a: Complex = [0, 0],
+): Complex | null {
+  if (period < 1) return null;
+  const deriv = derivatives(fAst, a);
+  if (!deriv) return null; // non-holomorphic ⇒ no analytic Newton step
+  const f = makeComplexFn(fAst, a);
+  let c: Complex = [c0[0], c0[1]];
+  for (let it = 0; it < 60; it++) {
+    let z: Complex = [critPoint[0], critPoint[1]];
+    let der: Complex = [0, 0]; // ∂(critPoint)/∂c = 0
+    for (let k = 0; k < period; k++) {
+      der = C.add(C.mul(deriv.fz(z, c), der), deriv.fc(z, c));
+      z = f(z, c);
+      if (!Number.isFinite(z[0]) || !Number.isFinite(z[1])) return null;
+    }
+    const g: Complex = [z[0] - critPoint[0], z[1] - critPoint[1]];
+    const ad = cabs(der);
+    if (ad === 0 || !Number.isFinite(ad)) return null; // flat — no Newton step
+    const delta = C.div(g, der);
+    c = [c[0] - delta[0], c[1] - delta[1]];
+    if (!Number.isFinite(c[0]) || !Number.isFinite(c[1])) return null;
+    if (cabs(delta) < 1e-13) return c;
+  }
+  return null; // did not converge within the iteration budget
+}

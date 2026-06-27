@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "../src/expr/parser";
-import { inspect, rotationNumber } from "../src/render/inspect";
+import { inspect, rotationNumber, findNucleus } from "../src/render/inspect";
 import type { Complex } from "../src/complex";
 
 const F = parse("z^2+c"); // Mandelbrot / Julia map
@@ -128,5 +128,31 @@ describe("inspect — located cycle points", () => {
     const r = inspect(F, ESC, "param", O, [2, 0]);
     expect(r.fate).toBe("escaped");
     expect(r.cyclePoints).toBeNull();
+  });
+});
+
+describe("findNucleus", () => {
+  it("snaps to the period-2 nucleus c = -1 from inside the bulb", () => {
+    const c = findNucleus(F, O, 2, [-0.9, 0.1]);
+    expect(c).not.toBeNull();
+    expect(c?.[0] ?? 9).toBeCloseTo(-1, 10);
+    expect(c?.[1] ?? 9).toBeCloseTo(0, 10);
+  });
+
+  it("snaps to the period-3 (rabbit) nucleus", () => {
+    const c = findNucleus(F, O, 3, [-0.12, 0.74]);
+    expect(c?.[0] ?? 9).toBeCloseTo(-0.1225611668, 8);
+    expect(c?.[1] ?? 9).toBeCloseTo(0.7448617666, 8);
+  });
+
+  it("lands on a superattracting centre (|λ| ≈ 0 there)", () => {
+    const c = findNucleus(F, O, 2, [-0.9, 0.1]);
+    const r = inspect(F, ESC, "param", O, c ?? [0, 0]);
+    expect(r.multiplierMag ?? 9).toBeLessThan(1e-3);
+  });
+
+  it("returns null for a non-holomorphic map (no analytic derivative)", () => {
+    const bar = parse("conjugate(z)^2+c");
+    expect(findNucleus(bar, O, 2, [-0.9, 0.1])).toBeNull();
   });
 });

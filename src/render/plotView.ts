@@ -123,6 +123,11 @@ export class PlotView {
     this.requestOverlay();
   }
 
+  /** Redraw the overlay from outside (e.g. after a programmatic white-point move). */
+  refreshOverlay(): void {
+    this.requestOverlay();
+  }
+
   /**
    * Render the plot (and optionally the overlay) to a fresh off-screen canvas at
    * `size`, clamped to the GPU's max texture size. Shared by {@link exportPng}

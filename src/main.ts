@@ -12,7 +12,7 @@ import { formatComplex, parseComplex, truncateComplex } from "./complex";
 import { getMaxTextureSize } from "./hiResExport";
 import { PlotView } from "./render/plotView";
 import type { GLPlot, FractType } from "./render/glPlot";
-import type { InspectResult } from "./render/inspect";
+import { inspect, findNucleus, type InspectResult } from "./render/inspect";
 import type { OrbitFate } from "./render/overlay";
 import { parseAngle } from "./render/rays";
 import { dynPresets, paramPresets, type Preset, type PresetName } from "./presets";
@@ -367,7 +367,7 @@ function init(): void {
         scheduleRecord();
       },
       onHover: hoverReadout("JCSReadout"),
-      onInspect: showInspect,
+      onInspect: handleInspect,
     },
   );
 
@@ -395,9 +395,26 @@ function init(): void {
         scheduleRecord();
       },
       onHover: hoverReadout("MCSReadout"),
-      onInspect: showInspect,
+      onInspect: handleInspect,
     },
   );
+
+  // --- Click-to-inspect → nucleus finder (parameter plane) ----------------
+  let lastNucleusSeed: { point: Vec2; period: number } | null = null;
+
+  /** Show the "Find nucleus" button only when a finite cycle was found on a holomorphic
+   *  parameter plane, and remember the seed (clicked c + detected period) for Newton. */
+  function updateNucleusButton(info: InspectResult, point: Vec2, plane: FractType): void {
+    const eligible = plane === "param" && info.period >= 1 && parameterView.plot.holomorphic;
+    byId("inspector-nucleus").hidden = !eligible;
+    lastNucleusSeed = eligible ? { point: [point[0], point[1]], period: info.period } : null;
+  }
+
+  /** Inspector callback for both planes: render the report, then gate the nucleus button. */
+  function handleInspect(info: InspectResult, point: Vec2, plane: FractType): void {
+    showInspect(info, point, plane);
+    updateNucleusButton(info, point, plane);
+  }
 
   const errorBox = byId<HTMLDivElement>("input-errors");
 
@@ -1315,6 +1332,40 @@ function init(): void {
   updateDerivativeGating();
   byId("inspector-close").addEventListener("click", () => {
     byId("inspector").hidden = true;
+  });
+  byId("inspector-nucleus").addEventListener("click", () => {
+    if (!lastNucleusSeed) return;
+    const { point, period } = lastNucleusSeed;
+    const nucleus = findNucleus(
+      parameterView.plot.fAst,
+      parameterView.plot.criticalPoint,
+      period,
+      point,
+      parameterView.plot.paramA,
+    );
+    if (!nucleus) {
+      showToast("No nucleus found near this point.", "warn");
+      return;
+    }
+    // Snap the parameter white point (c) to the exact component centre; keep the view.
+    parameterView.plot.moveZ0(nucleus);
+    parameterView.refreshOverlay();
+    // Mirror the parameter→dynamical coupling a normal point move performs.
+    dynamicalView.plot.c = formatComplex(nucleus);
+    setCInput(nucleus);
+    updateDynCaption();
+    announce(`Parameter c = ${dynCValue.textContent}`);
+    // Re-inspect at the centre so the panel updates (period unchanged, |λ| → 0).
+    const info = inspect(
+      parameterView.plot.fAst,
+      parameterView.plot.escAst,
+      "param",
+      parameterView.plot.criticalPoint,
+      nucleus,
+      parameterView.plot.paramA,
+    );
+    handleInspect(info, nucleus, "param");
+    scheduleRecord();
   });
 
   for (const id of ["light", "lightAz", "lightEl", "lightHeight"]) {
