@@ -82,7 +82,9 @@
               aria-label="Parameter space — interactive fractal plot. Arrow keys pan; the + and − keys zoom; drag (or press Enter) to set the parameter point c to the view centre and inspect it."
             ></canvas>
           </div>
-          <p class="plot-caption">drag the white point to set <em>c</em> &rarr;</p>
+          <p class="plot-caption">
+            drag the white point to set <em>c</em> = <span id="param-c-value">…</span> &rarr;
+          </p>
           <p class="readout" id="MCSReadout" aria-live="off"></p>
 
           <details class="plot-details">
@@ -260,6 +262,14 @@ abs(z)>2</textarea
           hidden
         >
           Find nucleus
+        </button>
+        <button
+          id="inspector-rays"
+          type="button"
+          title="Show the external rays landing at this bulb (turns on the bulb ray-pairs overlay)"
+          hidden
+        >
+          Show bulb rays
         </button>
         <p class="inspector-hint">
           Click any point on a plot to inspect its orbit — period, multiplier, internal angle, and

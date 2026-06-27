@@ -757,9 +757,15 @@ select.invalid {
   max-width: var(--max-width);
   margin: 0 auto var(--gap);
   border: 1px solid var(--border);
+  border-left: 3px solid var(--accent); /* reads as a measurement readout, not a control */
   border-radius: var(--radius);
   background: var(--field-bg);
   padding: 0.6rem 0.8rem;
+}
+
+#inspector-nucleus,
+#inspector-rays {
+  margin: 0.5rem 0.4rem 0 0;
 }
 
 .inspector-head {

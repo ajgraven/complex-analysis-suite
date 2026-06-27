@@ -411,10 +411,19 @@ function init(): void {
     lastNucleusSeed = eligible ? { point: [point[0], point[1]], period: info.period } : null;
   }
 
-  /** Inspector callback for both planes: render the report, then gate the nucleus button. */
+  /** Show "Show bulb rays" only on the parameter plane when the clicked c sits in a bulb
+   *  (a rotation p/q was found) and f is z²+c (where external rays are defined). */
+  function updateBulbRaysButton(info: InspectResult, plane: FractType): void {
+    const eligible =
+      plane === "param" && info.rotation !== null && parameterView.plot.perturbationEligible;
+    byId("inspector-rays").hidden = !eligible;
+  }
+
+  /** Inspector callback for both planes: render the report, then gate the action buttons. */
   function handleInspect(info: InspectResult, point: Vec2, plane: FractType): void {
     showInspect(info, point, plane);
     updateNucleusButton(info, point, plane);
+    updateBulbRaysButton(info, plane);
   }
 
   const errorBox = byId<HTMLDivElement>("input-errors");
@@ -478,6 +487,7 @@ function init(): void {
   }
 
   const dynCValue = byId("dyn-c-value");
+  const paramCValue = byId("param-c-value");
   /** Format a complex literal (`-0.7-i*0.4`) as a clean `a + bi` for display. */
   function prettyComplex(s: string): string {
     const f = (x: number): string => Number.parseFloat(x.toPrecision(4)).toString();
@@ -491,7 +501,11 @@ function init(): void {
   }
   /** Update the dynamical-plane caption to the current parameter c. */
   function updateDynCaption(): void {
-    dynCValue.textContent = prettyComplex(dynamicalView.plot.c);
+    const txt = prettyComplex(dynamicalView.plot.c);
+    dynCValue.textContent = txt;
+    // The parameter white point IS this c, so both captions show the same value — making
+    // the parameter↔dynamical link explicit.
+    paramCValue.textContent = txt;
   }
 
   const paramChip = byId("param-view-chip");
@@ -1387,6 +1401,15 @@ function init(): void {
     );
     handleInspect(info, nucleus, "param");
     scheduleRecord();
+  });
+  byId("inspector-rays").addEventListener("click", () => {
+    // Turn on the bulb ray-pairs overlay (draws this bulb's landing rays among the visible
+    // ones) and open the Overlays group so the result is visible.
+    const cb = byId<HTMLInputElement>("ray-pairs");
+    if (cb.disabled) return;
+    cb.checked = true;
+    applyRayPairs();
+    byId("overlays-group").setAttribute("open", "");
   });
 
   for (const id of ["light", "lightAz", "lightEl", "lightHeight"]) {
