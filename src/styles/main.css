@@ -322,7 +322,7 @@ select {
   color: var(--fg);
 }
 
-/* Collapsible advanced-control groups (Effects, Dynamics & overlays). */
+/* Collapsible advanced-control groups (Appearance, Overlays, Iteration). */
 .control-group {
   flex-basis: 100%;
   border: 1px solid var(--border);
