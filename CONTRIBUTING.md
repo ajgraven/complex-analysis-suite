@@ -111,15 +111,19 @@ checks the `f`/`escape` strings parse.
 ### Change the colouring
 
 Colouring is driven by shader uniforms set in
-[`src/render/shaderBuilder.ts`](src/render/shaderBuilder.ts): `uMode` (escape /
-smooth / histogram / distance / orbit-trap / stripe / triangle / decomposition /
-period / domain), `uPalette` (classic / viridis / magma / grayscale / custom), `uAA`
-(supersampling), and the gradient-rotation / lighting / post / outline uniforms. The
-per-pixel logic lives in `colorAt` (and `distanceColor` for the edge mode);
-`palette(t)` maps a scalar to RGB. To add a **mode**, add a branch in `colorAt`, an
-`<option>` to `#mode`, and an entry in `MODES` ([`src/main.ts`](src/main.ts)).
-Histogram is special: it needs the CPU CDF pre-pass in `GLPlot.updateCdf` (an
-escape-time render → readback → lookup texture).
+[`src/render/shaderBuilder.ts`](src/render/shaderBuilder.ts): `uMode` (escape / smooth /
+histogram / distance (screen-space) / distance-analytic / orbit-trap / stripe / triangle /
+decomposition / period / multiplier / domain), `uPalette` (classic / viridis / magma /
+grayscale / cividis / custom), `uAA` (supersampling), and the gradient-rotation / lighting /
+post / outline uniforms. The per-pixel logic lives in `colorAt` (and `distanceColor` for the
+screen-space edge mode); `palette(t)` maps a scalar to RGB. To add a simple **mode**, add a
+branch in `colorAt`, an `<option>` to `#mode`, and an entry in `MODES`
+([`src/main.ts`](src/main.ts)). Histogram is special (a CPU CDF pre-pass in
+`GLPlot.updateCdf`). **Modes that need the derivative f′** (distance-analytic = 11,
+multiplier = 12, and the analytic relief normal) are emitted as separate functions **inside a
+`hasDeriv`-gated template string** — the program must still link for non-holomorphic `f`, so
+never reference `fZFn`/`fCFn` from an un-gated path — and are disabled (with a fall-back) by
+`updateDerivativeGating` when `f` isn't holomorphic, Newton is on, or perturbation is active.
 
 Built-in **palettes** live in `palette()`; the **Custom gradient** (`uPalette == 4`)
 samples a 256×1 ramp texture built by [`src/palettes.ts`](src/palettes.ts)
@@ -133,6 +137,16 @@ The **dynamics overlays** live in [`src/render/overlay.ts`](src/render/overlay.t
 by fate; the critical-orbit toggle is held on `PlotView` (`setCriticalOrbit`). The
 **equipotential** overlay is instead a shader stage (`uEquipotential` in
 `shaderBuilder.ts`, driven by `GLPlot.setEquipotential`).
+
+The richer instruments are **pure, unit-tested modules** consumed by `overlay.ts`/`main.ts`:
+[`inspect.ts`](src/render/inspect.ts) (click-to-inspect period / multiplier λ / rotation /
+distance, plus `findNucleus`), [`farey.ts`](src/render/farey.ts) (bulb labels),
+[`rays.ts`](src/render/rays.ts) (external rays + `bulbRayAngles`),
+[`orbitPreview.ts`](src/render/orbitPreview.ts) (the hover preview), and
+[`src/state/places.ts`](src/state/places.ts) (curated locations). User-facing **jargon is
+defined once** in [`src/ui/glossary.ts`](src/ui/glossary.ts) (the Glossary modal + inline
+`?` links) — add an entry there when you introduce a new term. Many of these (rays, Farey,
+multiplier) are gated to `z²+c` via `perturbationEligible`.
 
 **Newton's method** (`GLPlot.setNewton`) swaps the iterated AST for the Newton map
 `z - f/f'` built by [`src/expr/derivative.ts`](src/expr/derivative.ts)
@@ -149,12 +163,19 @@ rendered scene texture (`GLPlot.drawPost`, driven by `setPost`).
 
 ### Add a control input
 
-1. Add the field markup in [`index.html`](index.html) with a unique `id` and a
-   matching `<label for="…">`.
-2. Register the id in `INPUT_IDS` in [`src/ui/controls.ts`](src/ui/controls.ts)
-   and add a getter/setter; if a preset should set it, handle it in `populateInputs`.
-3. Consume it in [`src/main.ts`](src/main.ts) — usually in `readPresetsFromInputs`
-   or the button wiring.
+1. Add the field markup in [`index.html`](index.html) with a unique `id`, a matching
+   `<label for="…">`, and a `title=` tooltip (every control should have one).
+2. For a **deferred text field** (formula / c / centre / zoom / iterations): register the id
+   in `INPUT_IDS` ([`src/ui/controls.ts`](src/ui/controls.ts)) with a getter/setter (and
+   handle it in `populateInputs` if a preset sets it), then consume it in
+   [`src/main.ts`](src/main.ts) (`readPresetsFromInputs` / `applyChanges`). It auto-joins the
+   "unapplied edits" dirty/apply flow.
+3. For a **live control** (toggle / select / slider): give it an `applyX()` wired on
+   `change`/`input` and called at init, and add its id to `SHARE_IDS`
+   ([`src/state/appState.ts`](src/state/appState.ts)) so permalinks / saved views / undo
+   round-trip it (a test asserts every `SHARE_ID` resolves to a real element). Re-run
+   `applyX()` in `applyChanges` / `applyPreset` / `reset_all` if a new `f` or preset can
+   change its eligibility.
 
 ### Coordinate transforms
 
