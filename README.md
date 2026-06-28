@@ -122,8 +122,11 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
   a grab affordance over it); the complex coordinate under the cursor is shown
   beneath each plot.
 - On a **touch screen**, one finger pans (or drags the white point) and a
-  **two-finger pinch** zooms toward the gesture midpoint — lift to one finger
-  mid-pinch and it continues as a pan.
+  **two-finger pinch** zooms toward the gesture midpoint (lift to one finger
+  mid-pinch and it continues as a pan); a **double-tap** zooms in toward the tap.
+  On a phone the layout becomes single-column with finger-sized controls, and the
+  settings open in a **bottom sheet** (the floating _Controls_ button) so the plot
+  stays visible while you adjust them. The desktop layout is unchanged.
 - **Accessibility:** each plot is keyboard-focusable (`Tab` to it, then arrow keys
   pan, +/− zoom, and **Enter** sets the point — `c` or `z₀` — to the view centre and
   opens the inspector) and exposes an ARIA label; a visually-hidden live region
@@ -347,25 +350,37 @@ glossary (Böttcher coordinate, uniformization, Laurent coefficients, capacity).
 ## Julia set properties
 
 The **Julia set properties** panel (collapsed by default) reports computed properties of the
-filled Julia set K_c at the live parameter `c`:
+filled Julia set K_c at the live parameter `c`. Where a value needs the monic `z^d + c` form it
+is exact; for a general `f` the same rows are filled numerically and labelled `≈` — an estimate
+never overrides an exact analytic/symbolic value.
 
-- **Connectivity** — connected (critical orbit bounded ⇒ `c` in the Mandelbrot/multibrot set)
-  or a totally-disconnected Cantor dust.
+- **Connectivity** — for a polynomial `f`, the rigorous Fatou–Julia verdict from _every_ critical
+  point (roots of `f′`, located by Durand–Kerner): connected (all critical orbits bounded), a
+  totally-disconnected Cantor dust (all escape), or disconnected with infinitely many components
+  (some escape, some bounded). For a non-polynomial `f` it is estimated from the image (the
+  connected components of the bounded set, bridging the thin pinches that join a connected set only
+  at single points).
 - **Parameter c** — outside the set, hyperbolic (with the attracting period, multiplier |λ| and
-  internal angle p/q), neutral, or bounded.
+  internal angle p/q), neutral, or bounded. For a non-holomorphic `f` the |λ| magnitude comes from
+  the real 2×2 Jacobian (shown `≈`).
 - **Fractal dimension** — the exact small-`c` value `1 + |c|²/(4 ln d)` inside the principal
   cardioid (Ruelle), plus a box-counting estimate of the boundary (labelled `≈`; box-counting is
   inherently ±0.05–0.2 and over-reads smooth curves).
-- **Area of K_c** — a pixel-count estimate alongside the rigorous coefficient upper bound
-  `π(1 − Σ k|bₖ|²)` from the exterior map (Gronwall's area theorem); 0 for a Cantor set.
-- **Lyapunov exponent** of the critical orbit, the **bounding disk** and **symmetry**, and the
-  **logarithmic capacity** (1 for monic `z^d + c`).
+- **Area of K_c** — a whole-set pixel-count estimate alongside, for monic `z^d + c`, the rigorous
+  coefficient upper bound `π(1 − Σ k|bₖ|²)` from the exterior map (Gronwall's area theorem); 0 for
+  a Cantor set.
+- **Lyapunov exponent** of the critical orbit (a real-Jacobian Benettin estimate for a
+  non-holomorphic `f`), the **bounding region** (the `z^d + c` escape disk, else the measured
+  bounding box), the measured **symmetry** (central / mirror axes / k-fold rotation), and the
+  **logarithmic capacity** — `|a_d|^{−1/(d−1)}` for any polynomial (1 for monic, 1/|λ| for the
+  logistic `λz(1−z)`), and "—" for rational / transcendental / non-holomorphic maps where it is
+  genuinely undefined.
 
-The cheap analytic/orbit rows update live with `c`; the two image-based estimates (box-counting
-dimension, pixel area) recompute, debounced, only while the panel is open. The capacity-based
-rows need a `z^d + c` map and read "—" for an arbitrary `f`, where the orbit-based rows still
-apply. **Copy properties** puts the whole report on the clipboard; the `?` links open the
-glossary (connectivity, fractal dimension, Lyapunov exponent, area, capacity).
+The cheap analytic/orbit rows update live with `c`; the image-based estimates (box-counting
+dimension, pixel area, extent, symmetry, image connectivity) recompute, debounced, only while the
+panel is open. **Copy properties** puts the whole report on the clipboard; the `?` links open the
+glossary (connectivity, fractal dimension, Lyapunov exponent, area, capacity, symmetry, bounding
+region).
 
 ## Newton's method
 
