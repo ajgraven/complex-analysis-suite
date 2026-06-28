@@ -344,6 +344,29 @@ it toward r = 1 for the boundary itself, where the series converges cleanly only
 locally-connected sets. The panel is available only for `z^d + c`; the `?` button opens the
 glossary (Böttcher coordinate, uniformization, Laurent coefficients, capacity).
 
+## Julia set properties
+
+The **Julia set properties** panel (collapsed by default) reports computed properties of the
+filled Julia set K_c at the live parameter `c`:
+
+- **Connectivity** — connected (critical orbit bounded ⇒ `c` in the Mandelbrot/multibrot set)
+  or a totally-disconnected Cantor dust.
+- **Parameter c** — outside the set, hyperbolic (with the attracting period, multiplier |λ| and
+  internal angle p/q), neutral, or bounded.
+- **Fractal dimension** — the exact small-`c` value `1 + |c|²/(4 ln d)` inside the principal
+  cardioid (Ruelle), plus a box-counting estimate of the boundary (labelled `≈`; box-counting is
+  inherently ±0.05–0.2 and over-reads smooth curves).
+- **Area of K_c** — a pixel-count estimate alongside the rigorous coefficient upper bound
+  `π(1 − Σ k|bₖ|²)` from the exterior map (Gronwall's area theorem); 0 for a Cantor set.
+- **Lyapunov exponent** of the critical orbit, the **bounding disk** and **symmetry**, and the
+  **logarithmic capacity** (1 for monic `z^d + c`).
+
+The cheap analytic/orbit rows update live with `c`; the two image-based estimates (box-counting
+dimension, pixel area) recompute, debounced, only while the panel is open. The capacity-based
+rows need a `z^d + c` map and read "—" for an arbitrary `f`, where the orbit-based rows still
+apply. **Copy properties** puts the whole report on the clipboard; the `?` links open the
+glossary (connectivity, fractal dimension, Lyapunov exponent, area, capacity).
+
 ## Newton's method
 
 Tick **Newton's method** to iterate the Newton map `z − f/f'` instead of `f` (the

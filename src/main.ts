@@ -882,11 +882,31 @@ function init(): void {
     jSet("jp-capacity", p.capacity !== null ? `${p.capacity} (exact)` : "—");
     jSet(
       "julia-props-note",
-      d === null ? "Area / dimension / capacity need a zᵈ+c map (current f is not)." : "",
+      d === null
+        ? "Exact area / dimension / capacity need a zᵈ+c map; the box-count dimension and pixel area still apply."
+        : "",
     );
 
     paintJuliaDimArea(); // Tier-1 dimension/area now; the debounced measure enriches them
     scheduleJuliaMeasure();
+  }
+
+  /** Copy the Julia-set properties (exactly as displayed) to the clipboard, computing the image
+   *  metrics first so the report is complete. */
+  function copyJuliaProperties(): void {
+    if (byId<HTMLDetailsElement>("julia-props-group").open) measureJuliaImage();
+    const lines = [`Julia set properties — c = ${formatComplex(dynamicalView.plot.cValue)}`];
+    for (const row of document.querySelectorAll<HTMLElement>("#julia-props-group .julia-prop")) {
+      const dt = row.querySelector("dt");
+      const dd = row.querySelector("dd");
+      if (!dt || !dd) continue;
+      const label = (dt.textContent ?? "").replace(/\s*\?\s*$/, "").trim();
+      lines.push(`${label}: ${dd.textContent ?? ""}`);
+    }
+    void navigator.clipboard
+      .writeText(lines.join("\n"))
+      .then(() => showToast("Julia properties copied to the clipboard.", "info"))
+      .catch(() => showToast("Couldn't access the clipboard.", "warn"));
   }
 
   const paramChip = byId("param-view-chip");
@@ -1870,6 +1890,7 @@ function init(): void {
   byId("exterior-group").addEventListener("toggle", updateExteriorMap);
   byId("exterior-n").addEventListener("input", updateExteriorMap);
   byId("julia-props-group").addEventListener("toggle", updateJuliaProperties);
+  byId("julia-props-copy").addEventListener("click", copyJuliaProperties);
   const copyCoeffs = (coeffs: Complex[] | null, title: string): void => {
     if (!coeffs) return;
     void navigator.clipboard
