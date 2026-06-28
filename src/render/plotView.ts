@@ -12,6 +12,7 @@
 import type { Vec2 } from "../arrays";
 import type { Preset } from "../presets";
 import { clampExportSize, downloadCanvas, ensurePngName, getMaxTextureSize } from "../hiResExport";
+import { panDelta } from "../transforms";
 import { showToast } from "../ui/toast";
 import { GLPlot, renderScale, type FractType } from "./glPlot";
 import { inspect, type InspectResult } from "./inspect";
@@ -414,9 +415,10 @@ export class PlotView {
         this.requestOverlay();
         this.hooks.coupling?.setC(plot);
       } else {
-        const pNew = this.uvToPlot(uv);
-        const pLast = this.uvToPlot(this.lastUv);
-        this.plot.shift([pLast[0] - pNew[0], pLast[1] - pNew[1]]);
+        // Centre-free pan delta so the drag stays exact at deep zoom — uvToPlot(last) −
+        // uvToPlot(uv) is (centre+Δ) − (centre+Δ′), whose Δ rounds away once zoom·|centre| ≳
+        // 1e13, freezing the drag. panDelta drops the centre; shift folds it into the dd centre.
+        this.plot.shift(panDelta(this.lastUv, uv, this.plot.zoom));
       }
       this.lastUv = uv;
     });
