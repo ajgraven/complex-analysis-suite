@@ -967,11 +967,14 @@ function init(): void {
       jSet("jp-symmetry", c[1] === 0 ? `${base} · real axis` : base);
     }
 
-    jSet("jp-capacity", p.capacity !== null ? `${p.capacity} (exact)` : "—");
+    jSet(
+      "jp-capacity",
+      p.capacity === null ? "—" : d === null ? `≈ ${jNum(p.capacity, 4)}` : `${p.capacity} (exact)`,
+    );
     jSet(
       "julia-props-note",
       d === null
-        ? "Exact area / capacity need a zᵈ+c map; connectivity, dimension, area, bounding region and symmetry are measured from the image."
+        ? "For a general f these are numerical estimates; capacity applies to any polynomial f; the exact area bound needs a zᵈ+c map."
         : "",
     );
 

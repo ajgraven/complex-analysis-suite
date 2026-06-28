@@ -20,6 +20,7 @@ import {
   estimateExtent,
   imageConnectivity,
   interiorMask,
+  polynomialCapacity,
 } from "../src/render/juliaProperties";
 
 const F2 = parse("z^2+c");
@@ -108,13 +109,13 @@ describe("computeJuliaProperties — z²+c known parameters", () => {
 });
 
 describe("computeJuliaProperties — non-monic gating", () => {
-  it("degree null (arbitrary f) hides the capacity-based rows but keeps orbit facts", () => {
+  it("degree null (arbitrary f) hides the monic-only rows but keeps orbit facts", () => {
     const p = props(null, [-0.1, 0]); // holomorphic z²+c but treated as arbitrary
     expect(p.degree).toBeNull();
-    expect(p.analyticArea).toBeNull();
-    expect(p.capacity).toBeNull();
+    expect(p.analyticArea).toBeNull(); // Gronwall bound needs the monic exterior coeffs
     expect(p.boundingRadius).toBeNull();
     expect(p.smallCDimension).toBeNull();
+    expect(p.capacity ?? 9).toBeCloseTo(1, 3); // PR δ: z²+c is a polynomial ⇒ capacity 1
     expect(p.connected).toBe(true); // orbit-based facts still computed
     expect(typeof p.lyapunov).toBe("number"); // holomorphic ⇒ Lyapunov available
   });
@@ -350,5 +351,37 @@ describe("imageConnectivity (pinch-bridged connectivity)", () => {
 
   it("empty interior → empty:true", () => {
     expect(imageConnectivity(new Uint8Array(64 * 64), 64).empty).toBe(true);
+  });
+});
+
+// --- PR δ: capacity for polynomials -------------------------------------------------------------
+
+describe("polynomialCapacity (cap = |a_d|^(−1/(d−1)))", () => {
+  it("monic z^d+c has capacity 1", () => {
+    expect(polynomialCapacity(F2, O, O) ?? 9).toBeCloseTo(1, 3);
+    expect(polynomialCapacity(F3, O, [0.2, 0]) ?? 9).toBeCloseTo(1, 3);
+  });
+
+  it("non-monic polynomials: cap = |a_d|^(−1/(d−1))", () => {
+    expect(polynomialCapacity(parse("2*z^2+c"), O, O) ?? 9).toBeCloseTo(0.5, 3); // |2|^(−1)
+    expect(polynomialCapacity(parse("2*z^3+c"), O, O) ?? 9).toBeCloseTo(Math.SQRT1_2, 3); // |2|^(−1/2)
+  });
+
+  it("uses the live parameters a and c in the leading coefficient", () => {
+    // logistic a·z(1−z) = a·z − a·z² ⇒ a_d = −a ⇒ cap = 1/|a|
+    expect(polynomialCapacity(parse("a*z*(1-z)"), [2, 0], O) ?? 9).toBeCloseTo(0.5, 3);
+    // c·z² ⇒ a_d = c ⇒ cap = 1/|c|
+    expect(polynomialCapacity(parse("c*z^2"), O, [3, 0]) ?? 9).toBeCloseTo(1 / 3, 3);
+  });
+
+  it("is null for non-polynomial / non-holomorphic maps (capacity undefined)", () => {
+    expect(polynomialCapacity(parse("exp(z)+c"), O, O)).toBeNull(); // transcendental
+    expect(polynomialCapacity(parse("1/z+c"), O, O)).toBeNull(); // rational (degree < 2)
+    expect(polynomialCapacity(parse("conjugate(z)^2+c"), O, O)).toBeNull(); // non-holomorphic
+  });
+
+  it("computeJuliaProperties exposes capacity for a non-monic polynomial f", () => {
+    expect(props(null, [-0.1, 0], parse("2*z^2+c")).capacity ?? 9).toBeCloseTo(0.5, 3);
+    expect(props(null, [0, 0], parse("exp(z)+c")).capacity).toBeNull();
   });
 });

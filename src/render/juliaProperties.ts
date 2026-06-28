@@ -50,7 +50,8 @@ export interface JuliaProperties {
   /** Exact small-c Hausdorff dimension 1 + |c|²/(4 ln d); null unless monic and in the principal
    *  (period-1) cardioid, where the perturbative formula applies. */
   smallCDimension: number | null;
-  /** Logarithmic capacity (exactly 1 for monic z^d + c); null otherwise. */
+  /** Logarithmic capacity: exactly 1 for monic z^d + c, |a_d|^{−1/(d−1)} for any polynomial f
+   *  (numerically detected), null for a non-polynomial map where it is undefined. */
   capacity: number | null;
 }
 
@@ -88,6 +89,66 @@ export function analyticAreaUpperBound(d: number, c: Complex, nCoeffs = AREA_COE
     s += k * m * m;
   }
   return Math.max(0, Math.PI * (1 - s));
+}
+
+/**
+ * Logarithmic capacity of the filled Julia set for a POLYNOMIAL f: cap = |a_d|^{−1/(d−1)} where a_d
+ * is the degree-d leading coefficient (Baker–Hsia) — exactly 1 for monic z^d + c, 1/|λ| for the
+ * logistic λz(1−z), etc. Detected from the far field: the degree from the growth rate of |f| and
+ * a_d = f(z)/z^d as |z| → ∞ (averaged over angles to cancel lower-order terms). Returns null for a
+ * non-polynomial map (rational / Newton / transcendental — |f| does not grow like a clean integer
+ * power) or a non-holomorphic one (abs-maps), where the capacity is genuinely undefined.
+ */
+export function polynomialCapacity(fAst: Node, a: Complex, c: Complex): number | null {
+  try {
+    differentiate(fAst, "z"); // non-holomorphic (abs/conjugate/…) ⇒ capacity undefined
+  } catch {
+    return null;
+  }
+  const f = makeComplexFn(fAst, a);
+  // log|f| averaged over a circle of radius R; NaN if any sample is non-finite (transcendental
+  // blow-up) so those are rejected rather than fit to a spurious degree.
+  const logMagOnCircle = (R: number): number => {
+    let s = 0;
+    for (let k = 0; k < 8; k++) {
+      const th = (Math.PI * k) / 4;
+      const w = f([R * Math.cos(th), R * Math.sin(th)], c);
+      const m = Math.hypot(w[0], w[1]);
+      if (!Number.isFinite(m) || m === 0) return NaN;
+      s += Math.log(m);
+    }
+    return s / 8;
+  };
+  const R1 = 1e3;
+  const R2 = 1e6;
+  const l1 = logMagOnCircle(R1);
+  const l2 = logMagOnCircle(R2);
+  if (!Number.isFinite(l1) || !Number.isFinite(l2)) return null;
+  const dEst = (l2 - l1) / Math.log(R2 / R1);
+  const d = Math.round(dEst);
+  if (d < 2 || Math.abs(dEst - d) > 0.01) return null; // not a clean polynomial of degree ≥ 2
+  // Leading coefficient a_d = f(z)/z^d as |z| → ∞, averaged over angles to cancel lower-order terms.
+  let ar = 0;
+  let ai = 0;
+  for (let k = 0; k < 8; k++) {
+    const th = (Math.PI * k) / 4;
+    const z: Complex = [R2 * Math.cos(th), R2 * Math.sin(th)];
+    const w = f(z, c);
+    let zr = 1;
+    let zi = 0;
+    for (let i = 0; i < d; i++) {
+      const nr = zr * z[0] - zi * z[1];
+      zi = zr * z[1] + zi * z[0];
+      zr = nr;
+    }
+    const den = zr * zr + zi * zi;
+    if (den === 0) return null;
+    ar += (w[0] * zr + w[1] * zi) / den;
+    ai += (w[1] * zr - w[0] * zi) / den;
+  }
+  const mag = Math.hypot(ar / 8, ai / 8);
+  if (!Number.isFinite(mag) || mag <= 0) return null;
+  return Math.pow(mag, -1 / (d - 1));
 }
 
 /**
@@ -178,7 +239,7 @@ export function computeJuliaProperties(opts: {
     analyticArea: monic ? (escapes ? 0 : analyticAreaUpperBound(degree, c)) : null,
     smallCDimension:
       monic && inPrincipalCardioid ? 1 + (cabs(c) * cabs(c)) / (4 * Math.log(degree)) : null,
-    capacity: monic ? 1 : null,
+    capacity: monic ? 1 : polynomialCapacity(fAst, a, c),
   };
 }
 
