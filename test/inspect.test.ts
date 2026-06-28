@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "../src/expr/parser";
+import { makeComplexFn } from "../src/expr/evaluate";
 import { inspect, rotationNumber, findNucleus } from "../src/render/inspect";
 import type { Complex } from "../src/complex";
 
@@ -128,6 +129,22 @@ describe("inspect — located cycle points", () => {
     const r = inspect(F, ESC, "param", O, [2, 0]);
     expect(r.fate).toBe("escaped");
     expect(r.cyclePoints).toBeNull();
+  });
+
+  it("Newton-refines the cycle so fᵖ(z*) = z* to high precision", () => {
+    const f = makeComplexFn(F);
+    // Attracting (not superattracting) fixed point at c = -0.5: f(z*) = z*.
+    const c1: Complex = [-0.5, 0];
+    const z1 = inspect(F, ESC, "param", O, c1).cyclePoints?.[0] ?? [9, 9];
+    const fz1 = f(z1, c1);
+    expect(Math.hypot(fz1[0] - z1[0], fz1[1] - z1[1])).toBeLessThan(1e-12);
+    // Period-3 (1/3 bulb centre): f³(z*) = z*.
+    const c3: Complex = [-0.1225611668, 0.7448617666];
+    const r3 = inspect(F, ESC, "param", O, c3);
+    let w = r3.cyclePoints?.[0] ?? [9, 9];
+    for (let k = 0; k < r3.period; k++) w = f(w, c3);
+    const z3 = r3.cyclePoints?.[0] ?? [0, 0];
+    expect(Math.hypot(w[0] - z3[0], w[1] - z3[1])).toBeLessThan(1e-9);
   });
 });
 

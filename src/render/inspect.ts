@@ -78,6 +78,51 @@ function locateCycle(
 }
 
 /**
+ * Newton-refine an attracting cycle to ~1e-13: polish one point on fᵖ(z) − z = 0 (Newton step
+ * z − (fᵖ(z) − z)/((fᵖ)′(z) − 1)), then regenerate the cycle by iterating f. Seeded with the
+ * approximate cycle classifyOrbit already located, so it converges in a few steps — far cheaper
+ * and more accurate than re-settling. Falls back to the seed-derived cycle if a step goes
+ * non-finite or (fᵖ)′ ≈ 1 (a parabolic/indifferent cycle, which Newton can't refine).
+ */
+function refineCycle(
+  f: (z: Complex, c: Complex) => Complex,
+  fz: (z: Complex, c: Complex) => Complex,
+  seed: Complex,
+  c: Complex,
+  period: number,
+): Complex[] {
+  let z: Complex = [seed[0], seed[1]];
+  for (let it = 0; it < 30; it++) {
+    let w: Complex = [z[0], z[1]];
+    let d: Complex = [1, 0]; // (fᵖ)′(z) = ∏ f′ along the orbit
+    let ok = true;
+    for (let k = 0; k < period; k++) {
+      d = C.mul(fz(w, c), d);
+      w = f(w, c);
+      if (!Number.isFinite(w[0]) || !Number.isFinite(w[1])) {
+        ok = false;
+        break;
+      }
+    }
+    if (!ok) break;
+    const gp: Complex = [d[0] - 1, d[1]]; // (fᵖ)′(z) − 1
+    if (cabs(gp) < 1e-12) break; // parabolic / flat — Newton can't refine
+    const delta = C.div([w[0] - z[0], w[1] - z[1]], gp);
+    const next: Complex = [z[0] - delta[0], z[1] - delta[1]];
+    if (!Number.isFinite(next[0]) || !Number.isFinite(next[1])) break;
+    z = next;
+    if (cabs(delta) < 1e-13) break;
+  }
+  const pts: Complex[] = [[z[0], z[1]]];
+  let w: Complex = [z[0], z[1]];
+  for (let k = 1; k < period; k++) {
+    w = f(w, c);
+    pts.push([w[0], w[1]]);
+  }
+  return pts;
+}
+
+/**
  * Combinatorial rotation number of a cycle: how many positions one dynamical step
  * advances around the cycle's centroid, as a reduced fraction p/q (q = period). This
  * is the bulb's internal angle (1/2 at the period-2 neck, 1/3 at the period-3 bulb …)
@@ -197,13 +242,25 @@ export function inspect(
 
   if ((info.fate === "converged" || info.fate === "periodic") && info.period >= 1) {
     const f = makeComplexFn(fAst, a);
-    const cycle = locateCycle(f, z0, c, info.period);
+    // Reuse the cycle classifyOrbit already found (no 1024-step re-settle); Newton-refine it
+    // to ~1e-13 when f is holomorphic, else fall back to settling from z0.
+    const seed =
+      info.cyclePoints && info.cyclePoints.length === info.period
+        ? info.cyclePoints
+        : locateCycle(f, z0, c, info.period);
+    const cycle =
+      deriv && seed.length === info.period
+        ? refineCycle(f, deriv.fz, seed[0], c, info.period)
+        : seed;
     if (cycle.length === info.period) {
       out.cyclePoints = cycle;
       out.rotation = rotationNumber(cycle);
       if (deriv) {
-        let lam: Complex = [1, 0];
-        for (const w of cycle) lam = C.mul(lam, deriv.fz(w, c));
+        // Stable cycle multiplier λ = exp(Σ log f′(z_k)) — avoids under/overflow for long or
+        // superattracting cycles (a zero factor → log −∞ → λ = 0, exactly as it should).
+        let s: Complex = [0, 0];
+        for (const w of cycle) s = C.add(s, C.log(deriv.fz(w, c)));
+        const lam = C.exp(s);
         out.multiplier = lam;
         out.multiplierMag = cabs(lam);
       }
