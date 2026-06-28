@@ -33,17 +33,11 @@ export function pxToPlot([px, py]: Vec2, center: Vec2, zoom: number, size: numbe
   return [center[0] + (ux * 2 - 1) / zoom, center[1] + (uy * 2 - 1) / zoom];
 }
 
-/** First `nplot` iterates of `f` from `z0` (stops on escape) — the drawn orbit. */
-export function computeOrbit(
-  fAst: Node,
-  escapeAst: Node,
-  z0: Vec2,
-  cc: Complex,
-  nplot: number,
-  a: Complex = [0, 0],
-): Complex[] {
-  const f = makeComplexFn(fAst, a);
-  const esc = makeEscapeFn(escapeAst, fAst, a);
+type ComplexFn = (z: Complex, c: Complex) => Complex;
+type EscapeFn = (z: Complex, c: Complex) => boolean;
+
+/** Walk the orbit polyline from compiled closures (stops on escape / non-finite). */
+function orbitWalk(f: ComplexFn, esc: EscapeFn, z0: Vec2, cc: Complex, nplot: number): Complex[] {
   const points: Complex[] = [[z0[0], z0[1]]];
   let z: Complex = [z0[0], z0[1]];
   for (let k = 0; k < nplot; k++) {
@@ -55,6 +49,18 @@ export function computeOrbit(
   return points;
 }
 
+/** First `nplot` iterates of `f` from `z0` (stops on escape) — the drawn orbit. */
+export function computeOrbit(
+  fAst: Node,
+  escapeAst: Node,
+  z0: Vec2,
+  cc: Complex,
+  nplot: number,
+  a: Complex = [0, 0],
+): Complex[] {
+  return orbitWalk(makeComplexFn(fAst, a), makeEscapeFn(escapeAst, fAst, a), z0, cc, nplot);
+}
+
 export type OrbitFate = "escaped" | "converged" | "periodic" | "bounded";
 
 export interface OrbitInfo {
@@ -63,37 +69,36 @@ export interface OrbitInfo {
   period: number;
   /** Iterations until escape for escaped orbits; 0 otherwise. */
   escapeIter: number;
+  /** The detected periodic points (period-many; one for a fixed point); null if escaped/bounded. */
+  cyclePoints: Complex[] | null;
 }
 
-/**
- * Classify the long-run fate of the orbit of `z0` under `f` (parameter `cc`):
- * escaped, converged to a fixed point, settled into a period-p cycle, or bounded
- * (none of those within `maxIter`). Cycles are detected by the orbit returning
- * within EPS of one of the last {@link MAX_PERIOD} points.
- */
-export function classifyOrbit(
-  fAst: Node,
-  escapeAst: Node,
+const CLASSIFY_EPS = 1e-6; // tolerance for "returned near an earlier point" (relative to |z|)
+const CLASSIFY_CONV_EPS = 1e-4; // window-collapse tolerance (fixed point vs cycle, relative to |z|)
+const CLASSIFY_MAX_PERIOD = 64;
+
+/** Classify the orbit's fate from compiled closures (shared by the public wrappers). */
+function classifyWalk(
+  f: ComplexFn,
+  esc: EscapeFn,
   z0: Vec2,
   cc: Complex,
-  a: Complex = [0, 0],
-  maxIter = 512,
+  maxIter: number,
 ): OrbitInfo {
-  const f = makeComplexFn(fAst, a);
-  const esc = makeEscapeFn(escapeAst, fAst, a);
-  const EPS = 1e-6; // tolerance for "returned near an earlier point"
-  const CONV_EPS = 1e-4; // window-collapse tolerance (fixed point vs genuine cycle)
-  const MAX_PERIOD = 64;
   const history: Complex[] = [];
   let z: Complex = [z0[0], z0[1]];
   for (let k = 0; k < maxIter; k++) {
-    if (esc(z, cc)) return { fate: "escaped", period: 0, escapeIter: k };
+    if (esc(z, cc)) return { fate: "escaped", period: 0, escapeIter: k, cyclePoints: null };
+    // Tolerances scale with |z|: cycles of large-modulus attractors (exp / lambertw, whose
+    // iterates sit far from the origin) never came within an absolute 1e-6 box, so they were
+    // mis-reported as "bounded". Euclidean distance, relative to the current scale.
+    const scale = Math.max(1, Math.hypot(z[0], z[1]));
     for (let pd = 1; pd <= history.length; pd++) {
       const prev = history[history.length - pd];
-      if (Math.abs(z[0] - prev[0]) < EPS && Math.abs(z[1] - prev[1]) < EPS) {
-        // Returned near z_{k-pd}. It's a genuine period-pd cycle only if those pd
-        // points are spread out; a collapsed window means the orbit converged to a
-        // fixed point (e.g. a negative multiplier makes it return at pd=2 first).
+      if (Math.hypot(z[0] - prev[0], z[1] - prev[1]) < CLASSIFY_EPS * scale) {
+        // Returned near z_{k-pd}. It's a genuine period-pd cycle only if those pd points are
+        // spread out; a collapsed window means the orbit converged to a fixed point (e.g. a
+        // negative multiplier makes it return at pd=2 first).
         let minRe = z[0],
           maxRe = z[0],
           minIm = z[1],
@@ -106,18 +111,59 @@ export function classifyOrbit(
           maxIm = Math.max(maxIm, q[1]);
         }
         const spread = Math.max(maxRe - minRe, maxIm - minIm);
-        if (spread < CONV_EPS) return { fate: "converged", period: 1, escapeIter: 0 };
-        return { fate: "periodic", period: pd, escapeIter: 0 };
+        if (spread < CLASSIFY_CONV_EPS * scale) {
+          return { fate: "converged", period: 1, escapeIter: 0, cyclePoints: [[z[0], z[1]]] };
+        }
+        const cyclePoints = history.slice(history.length - pd).map((q): Complex => [q[0], q[1]]);
+        return { fate: "periodic", period: pd, escapeIter: 0, cyclePoints };
       }
     }
     history.push(z);
-    if (history.length > MAX_PERIOD) history.shift();
+    if (history.length > CLASSIFY_MAX_PERIOD) history.shift();
     z = f(z, cc);
     if (!Number.isFinite(z[0]) || !Number.isFinite(z[1])) {
-      return { fate: "escaped", period: 0, escapeIter: k + 1 };
+      return { fate: "escaped", period: 0, escapeIter: k + 1, cyclePoints: null };
     }
   }
-  return { fate: "bounded", period: 0, escapeIter: 0 };
+  return { fate: "bounded", period: 0, escapeIter: 0, cyclePoints: null };
+}
+
+/**
+ * Classify the long-run fate of the orbit of `z0` under `f` (parameter `cc`):
+ * escaped, converged to a fixed point, settled into a period-p cycle, or bounded
+ * (none within `maxIter`). The detected cycle's points are returned in `cyclePoints`.
+ */
+export function classifyOrbit(
+  fAst: Node,
+  escapeAst: Node,
+  z0: Vec2,
+  cc: Complex,
+  a: Complex = [0, 0],
+  maxIter = 512,
+): OrbitInfo {
+  return classifyWalk(makeComplexFn(fAst, a), makeEscapeFn(escapeAst, fAst, a), z0, cc, maxIter);
+}
+
+/**
+ * Orbit polyline + fate classification together, compiling f / escape ONCE and reusing
+ * the closure pair for both walks (the common overlay + hover case). `orbit` matches
+ * {@link computeOrbit} and `info` matches {@link classifyOrbit}.
+ */
+export function orbitAndClassify(
+  fAst: Node,
+  escapeAst: Node,
+  z0: Vec2,
+  cc: Complex,
+  nplot: number,
+  a: Complex = [0, 0],
+  maxIter = 512,
+): { orbit: Complex[]; info: OrbitInfo } {
+  const f = makeComplexFn(fAst, a);
+  const esc = makeEscapeFn(escapeAst, fAst, a);
+  return {
+    orbit: orbitWalk(f, esc, z0, cc, nplot),
+    info: classifyWalk(f, esc, z0, cc, maxIter),
+  };
 }
 
 const FATE_COLOR: Record<OrbitFate, string> = {
@@ -428,13 +474,13 @@ function orbitData(p: OverlayParams, cc: Complex, a: Complex): OrbitCacheEntry {
   if (hit && hit.fAst === p.fAst && hit.escapeAst === p.escapeAst && hit.key === key) {
     return hit;
   }
-  const orbit = computeOrbit(p.fAst, p.escapeAst, p.z0, cc, p.nplot, a);
-  const info = classifyOrbit(p.fAst, p.escapeAst, p.z0, cc, a);
+  const { orbit, info } = orbitAndClassify(p.fAst, p.escapeAst, p.z0, cc, p.nplot, a);
   let critOrbit: Complex[] | null = null;
   let critInfo: OrbitInfo | null = null;
   if (p.critical) {
-    critOrbit = computeOrbit(p.fAst, p.escapeAst, crit, cc, p.nplot, a);
-    critInfo = classifyOrbit(p.fAst, p.escapeAst, crit, cc, a);
+    const cr = orbitAndClassify(p.fAst, p.escapeAst, crit, cc, p.nplot, a);
+    critOrbit = cr.orbit;
+    critInfo = cr.info;
   }
   const entry: OrbitCacheEntry = {
     fAst: p.fAst,

@@ -13,7 +13,7 @@ import { getMaxTextureSize } from "./hiResExport";
 import { PlotView } from "./render/plotView";
 import type { GLPlot, FractType } from "./render/glPlot";
 import { inspect, findNucleus, type InspectResult } from "./render/inspect";
-import { classifyOrbit, computeOrbit, type OrbitFate } from "./render/overlay";
+import { computeOrbit, orbitAndClassify, type OrbitFate } from "./render/overlay";
 import { juliaConnected, juliaExteriorCoeffs, mandelbrotExteriorCoeffs } from "./render/uniformize";
 import { drawOrbitPreview, renderJuliaPreview } from "./render/orbitPreview";
 import type { Node as ExprNode } from "./expr/ast";
@@ -492,8 +492,7 @@ function init(): void {
       const c = previewPending;
       if (!c || !orbitPreviewCtx || !paramPlot) return;
       const { fAst, escAst, criticalPoint, paramA } = paramPlot;
-      const orbit = computeOrbit(fAst, escAst, criticalPoint, c, 48, paramA);
-      const info = classifyOrbit(fAst, escAst, criticalPoint, c, paramA);
+      const { orbit, info } = orbitAndClassify(fAst, escAst, criticalPoint, c, 48, paramA);
       const size = orbitPreviewCanvas.width;
       // Recompute the Julia background when f changed or after a throttle interval; the cheap
       // orbit redraws every frame on top of the most recent background.
