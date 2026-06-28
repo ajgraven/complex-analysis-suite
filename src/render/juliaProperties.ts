@@ -8,7 +8,8 @@
  *
  * The analytic, capacity-based pieces (area, small-c dimension, capacity, bounding disk) assume the
  * monic family z^d + c — they are returned as null for an arbitrary f, where only the orbit-based
- * facts (connectivity, parameter class, Lyapunov exponent) still apply.
+ * facts (connectivity, parameter class, Lyapunov exponent) still apply. The Tier-2 image estimates
+ * (interior mask, pixel area, box-counting dimension, bounding extent, and symmetry) work for any f.
  */
 
 import type { Complex } from "../complex";
@@ -230,6 +231,138 @@ export function countInterior(mask: Uint8Array): number {
   let n = 0;
   for (let i = 0; i < mask.length; i++) n += mask[i];
   return n;
+}
+
+/** Numerically-estimated extent of the bounded set: a snug square mask window plus the tight
+ *  bounding box, found by a coarse interior-mask pass. Generalizes the monic bounding disk to any f.
+ *  `clipped` flags that the set reached the search-window edge (so the box under-covers the set). */
+export interface Extent {
+  cx: number;
+  cy: number;
+  halfWidth: number;
+  bbox: { xMin: number; xMax: number; yMin: number; yMax: number };
+  clipped: boolean;
+}
+
+/**
+ * Locate the bounded set numerically: rasterize a coarse interior mask over the search window
+ * [cx0±searchHalfWidth]×[cy0±searchHalfWidth], take the bounding box of the bounded cells, and
+ * return a snug square window (10% padded) centred on it. Returns null when no bounded cell is
+ * found (an empty interior / escaping parameter). Used to area-count and symmetry-test a general f,
+ * which has no closed-form bounding disk.
+ */
+export function estimateExtent(
+  fAst: Node,
+  escAst: Node,
+  c: Complex,
+  a: Complex,
+  cx0: number,
+  cy0: number,
+  searchHalfWidth: number,
+  size: number,
+  maxIter: number,
+): Extent | null {
+  const mask = interiorMask(fAst, escAst, c, a, cx0, cy0, searchHalfWidth, size, maxIter);
+  let minPx = size;
+  let maxPx = -1;
+  let minPy = size;
+  let maxPy = -1;
+  for (let py = 0; py < size; py++) {
+    for (let px = 0; px < size; px++) {
+      if (!mask[py * size + px]) continue;
+      if (px < minPx) minPx = px;
+      if (px > maxPx) maxPx = px;
+      if (py < minPy) minPy = py;
+      if (py > maxPy) maxPy = py;
+    }
+  }
+  if (maxPx < 0) return null; // no bounded cell ⇒ empty interior
+  const step = (2 * searchHalfWidth) / size;
+  const toX = (px: number): number => cx0 - searchHalfWidth + (px + 0.5) * step;
+  const toY = (py: number): number => cy0 - searchHalfWidth + (py + 0.5) * step;
+  const xMin = toX(minPx) - step / 2;
+  const xMax = toX(maxPx) + step / 2;
+  const yMin = toY(minPy) - step / 2;
+  const yMax = toY(maxPy) + step / 2;
+  const clipped = minPx === 0 || maxPx === size - 1 || minPy === 0 || maxPy === size - 1;
+  const cx = (xMin + xMax) / 2;
+  const cy = (yMin + yMax) / 2;
+  const halfWidth = Math.max((Math.max(xMax - xMin, yMax - yMin) / 2) * 1.1, step);
+  return { cx, cy, halfWidth, bbox: { xMin, xMax, yMin, yMax }, clipped };
+}
+
+/** Symmetries of an interior mask, measured by overlap (IoU) under candidate transforms. For a
+ *  mask centred on the set: `central` = z→−z, `realAxis` = z→z̄, `imagAxis` = z→−z̄, `rotation` =
+ *  the largest k∈[2,8] invariant under rotation by 2π/k (null if none). Generalizes the z^d+c
+ *  symmetry string to any f — a measured estimate. */
+export interface Symmetries {
+  central: boolean;
+  realAxis: boolean;
+  imagAxis: boolean;
+  rotation: number | null;
+}
+
+export function detectSymmetries(
+  mask: Uint8Array,
+  size: number,
+  flipThreshold = 0.9,
+  rotThreshold = 0.85,
+): Symmetries {
+  // Intersection-over-union of the mask with its image under an index remap (a discrete symmetry).
+  const ioU = (mapIndex: (px: number, py: number) => number): number => {
+    let inter = 0;
+    let uni = 0;
+    for (let py = 0; py < size; py++) {
+      for (let px = 0; px < size; px++) {
+        const dst = mask[py * size + px];
+        const src = mask[mapIndex(px, py)];
+        if (dst || src) uni++;
+        if (dst && src) inter++;
+      }
+    }
+    return uni > 0 ? inter / uni : 0;
+  };
+  const central = ioU((px, py) => (size - 1 - py) * size + (size - 1 - px));
+  const realAxis = ioU((px, py) => (size - 1 - py) * size + px);
+  const imagAxis = ioU((px, py) => py * size + (size - 1 - px));
+
+  // Rotational: resample the mask rotated by 2π/k about the grid centre (nearest-neighbour) and
+  // measure overlap. k=2 reuses the exact central flip (no resampling loss).
+  const rotatedIoU = (k: number): number => {
+    const cg = (size - 1) / 2;
+    const ang = (2 * Math.PI) / k;
+    const ca = Math.cos(ang);
+    const sa = Math.sin(ang);
+    let inter = 0;
+    let uni = 0;
+    for (let py = 0; py < size; py++) {
+      for (let px = 0; px < size; px++) {
+        const dx = px - cg;
+        const dy = py - cg;
+        const spx = Math.round(cg + ca * dx + sa * dy); // source pixel = rotate (px,py) by −ang
+        const spy = Math.round(cg - sa * dx + ca * dy);
+        const src = spx >= 0 && spx < size && spy >= 0 && spy < size ? mask[spy * size + spx] : 0;
+        const dst = mask[py * size + px];
+        if (dst || src) uni++;
+        if (dst && src) inter++;
+      }
+    }
+    return uni > 0 ? inter / uni : 0;
+  };
+  let rotation: number | null = null;
+  for (let k = 8; k >= 2; k--) {
+    const score = k === 2 ? central : rotatedIoU(k);
+    if (score >= (k === 2 ? flipThreshold : rotThreshold)) {
+      rotation = k;
+      break;
+    }
+  }
+  return {
+    central: central >= flipThreshold,
+    realAxis: realAxis >= flipThreshold,
+    imagAxis: imagAxis >= flipThreshold,
+    rotation,
+  };
 }
 
 /**

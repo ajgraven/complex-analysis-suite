@@ -13,10 +13,13 @@ import {
   boxCountDimension,
   computeJuliaProperties,
   countInterior,
+  detectSymmetries,
+  estimateExtent,
   interiorMask,
 } from "../src/render/juliaProperties";
 
 const F2 = parse("z^2+c");
+const F3 = parse("z^3+c");
 const ESC = parse("abs(z)>2");
 const O: Complex = [0, 0];
 const props = (degree: number | null, c: Complex, fAst = F2) =>
@@ -154,5 +157,110 @@ describe("Tier-2 image metrics (interior mask, pixel area, box-counting)", () =>
 
   it("box-counting dimension is null for an empty mask", () => {
     expect(boxCountDimension(new Uint8Array(64 * 64), 64)).toBeNull();
+  });
+});
+
+// --- PR α: bounding extent + measured symmetry (general f) ---------------------------------------
+
+/** Synthetic filled disk of radius r centred at (cxp, cyp) on a size×size grid. */
+const diskMask = (size: number, cxp: number, cyp: number, r: number): Uint8Array => {
+  const m = new Uint8Array(size * size);
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++)
+      if ((x - cxp) ** 2 + (y - cyp) ** 2 <= r * r) m[y * size + x] = 1;
+  return m;
+};
+
+/** `count` equal blobs of radius rb on a circle of radius R about the grid centre (n-fold by
+ *  construction), the first at `baseDeg` degrees. */
+const blobsMask = (
+  size: number,
+  R: number,
+  rb: number,
+  baseDeg: number,
+  count: number,
+): Uint8Array => {
+  const m = new Uint8Array(size * size);
+  const cg = (size - 1) / 2;
+  const centres: [number, number][] = [];
+  for (let i = 0; i < count; i++) {
+    const t = ((baseDeg + (360 / count) * i) * Math.PI) / 180;
+    centres.push([cg + R * Math.cos(t), cg + R * Math.sin(t)]);
+  }
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++)
+      for (const [bx, by] of centres)
+        if ((x - bx) ** 2 + (y - by) ** 2 <= rb * rb) {
+          m[y * size + x] = 1;
+          break;
+        }
+  return m;
+};
+
+describe("estimateExtent (numerical bounding box of K_c)", () => {
+  it("z²+c at c=0 bounds the unit disk: bbox ≈ [-1,1]², centred at 0, not clipped", () => {
+    const ext = estimateExtent(F2, ESC, [0, 0], [0, 0], 0, 0, 2, 64, 100);
+    expect(ext).not.toBeNull();
+    if (!ext) return;
+    expect(ext.bbox.xMin).toBeGreaterThan(-1.1);
+    expect(ext.bbox.xMin).toBeLessThan(-0.85);
+    expect(ext.bbox.xMax).toBeGreaterThan(0.85);
+    expect(ext.bbox.xMax).toBeLessThan(1.1);
+    expect(Math.abs(ext.cx)).toBeLessThan(0.08);
+    expect(Math.abs(ext.cy)).toBeLessThan(0.08);
+    expect(ext.clipped).toBe(false);
+    expect(ext.halfWidth).toBeGreaterThan(1); // 10%-padded half-span of the unit disk
+  });
+
+  it("returns null when there is no bounded interior (c=2 escapes → Cantor dust)", () => {
+    expect(estimateExtent(F2, ESC, [2, 0], [0, 0], 0, 0, 2, 64, 80)).toBeNull();
+  });
+
+  it("flags `clipped` when the set overruns the search window", () => {
+    // A tiny window inside the c=0 disk: every border cell is interior ⇒ the box under-covers.
+    const ext = estimateExtent(F2, ESC, [0, 0], [0, 0], 0, 0, 0.5, 32, 80);
+    expect(ext?.clipped).toBe(true);
+  });
+});
+
+describe("detectSymmetries (measured from a mask)", () => {
+  it("a centred disk is fully symmetric (central, both axes, high-fold rotation)", () => {
+    const s = detectSymmetries(diskMask(120, 60, 60, 40), 120);
+    expect(s.central).toBe(true);
+    expect(s.realAxis).toBe(true);
+    expect(s.imagAxis).toBe(true);
+    expect(s.rotation ?? 0).toBeGreaterThanOrEqual(4);
+  });
+
+  it("three blobs at 120° → 3-fold rotational, not central", () => {
+    const s = detectSymmetries(blobsMask(120, 34, 16, 90, 3), 120);
+    expect(s.rotation).toBe(3);
+    expect(s.central).toBe(false);
+  });
+
+  it("an off-centre blob has no symmetry", () => {
+    const s = detectSymmetries(diskMask(120, 84, 72, 12), 120);
+    expect(s.central).toBe(false);
+    expect(s.realAxis).toBe(false);
+    expect(s.imagAxis).toBe(false);
+    expect(s.rotation).toBeNull();
+  });
+
+  it("z²+c (c real) Julia set: central + both mirrors, exactly 2-fold", () => {
+    const mask = interiorMask(F2, ESC, [-0.5, 0], [0, 0], 0, 0, 1.5, 96, 120);
+    const s = detectSymmetries(mask, 96);
+    expect(s.central).toBe(true);
+    expect(s.realAxis).toBe(true);
+    expect(s.rotation).toBe(2);
+  });
+
+  it("z³+c (c real) Julia set: 3-fold + real-axis mirror, not central, no imag-axis mirror", () => {
+    // c=0.3 deforms the set into a clear rounded triangle (small c stays near-circular → high-fold).
+    const mask = interiorMask(F3, ESC, [0.3, 0], [0, 0], 0, 0, 1.5, 96, 160);
+    const s = detectSymmetries(mask, 96);
+    expect(s.rotation).toBe(3);
+    expect(s.realAxis).toBe(true);
+    expect(s.central).toBe(false);
+    expect(s.imagAxis).toBe(false);
   });
 });

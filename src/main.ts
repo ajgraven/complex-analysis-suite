@@ -19,6 +19,8 @@ import {
   boxCountDimension,
   computeJuliaProperties,
   countInterior,
+  detectSymmetries,
+  estimateExtent,
   interiorMask,
 } from "./render/juliaProperties";
 import { drawOrbitPreview, renderJuliaPreview } from "./render/orbitPreview";
@@ -753,6 +755,8 @@ function init(): void {
   let lastJuliaProps: ReturnType<typeof computeJuliaProperties> | null = null;
   let lastBoxDim: number | null = null; // Tier-2 box-counting dimension (image-based)
   let lastPixelArea: number | null = null; // Tier-2 pixel-count area (image-based)
+  let lastExtent: ReturnType<typeof estimateExtent> = null; // Tier-2 bounding extent (general f)
+  let lastSymmetry: string | null = null; // Tier-2 measured symmetry string (general f)
   let juliaMeasureTimer = 0;
   const jSet = (id: string, text: string): void => {
     byId(id).textContent = text;
@@ -781,34 +785,91 @@ function init(): void {
     }
   }
 
+  /** A measured-symmetry display string from `detectSymmetries` (general f, any map class). */
+  function describeSymmetry(s: ReturnType<typeof detectSymmetries>): string {
+    const parts: string[] = [];
+    if (s.rotation && s.rotation >= 3) parts.push(`${s.rotation}-fold rotational`);
+    else if (s.central) parts.push("central (z → −z)");
+    if (s.realAxis) parts.push("real-axis mirror");
+    if (s.imagAxis) parts.push("imag-axis mirror");
+    return parts.length ? `≈ ${parts.join(" · ")}` : "none detected";
+  }
+
+  /** Paint the bounding-region + symmetry rows for a general (non-monic) f from the Tier-2 measure.
+   *  The monic family keeps the instant analytic rows set in `updateJuliaProperties`. */
+  function paintJuliaExtentSymmetry(): void {
+    const p = lastJuliaProps;
+    if (!p || p.boundingRadius !== null) return; // monic ⇒ analytic rows stand
+    if (lastExtent) {
+      const b = lastExtent.bbox;
+      jSet(
+        "jp-bounding",
+        `≈ re ∈ [${jNum(b.xMin, 3)}, ${jNum(b.xMax, 3)}] · im ∈ [${jNum(b.yMin, 3)}, ${jNum(b.yMax, 3)}]` +
+          (lastExtent.clipped ? " (clipped)" : ""),
+      );
+    } else {
+      jSet("jp-bounding", "—");
+    }
+    jSet("jp-symmetry", lastSymmetry ?? "—");
+  }
+
   /**
-   * Tier-2 image metrics (box-counting dimension + pixel area), computed from a CPU interior mask
-   * — heavier, so debounced and run only while the panel is open. The window covers the whole set
-   * for z^d + c (its bounding disk) and the visible dynamical view otherwise.
+   * Tier-2 image metrics (pixel area, box-counting dimension, bounding extent, symmetry), computed
+   * from a CPU interior mask — heavier, so debounced and run only while the panel is open. The mask
+   * window is the exact bounding disk for monic z^d + c; for a general f it is a snug window located
+   * numerically (`estimateExtent`) around the whole set, so the area/symmetry cover the set rather
+   * than just the visible view. Symmetry is measured for a general f (monic keeps the analytic row).
    */
   function measureJuliaImage(): void {
     const p = lastJuliaProps;
     if (!p || !byId<HTMLDetailsElement>("julia-props-group").open) return;
     const dyn = dynamicalView.plot;
-    const halfWidth = p.boundingRadius !== null ? p.boundingRadius : 1 / dyn.zoom;
-    const cx = p.boundingRadius !== null ? 0 : dyn.center[0];
-    const cy = p.boundingRadius !== null ? 0 : dyn.center[1];
+    const fAst = parameterView.plot.fAst;
+    const escAst = parameterView.plot.escAst;
+    const a = parameterView.plot.paramA;
+    const c = dyn.cValue;
     const size = 128; // grid resolution — ~90 ms; finer over-reads the boundary and is slower
-    const mask = interiorMask(
-      parameterView.plot.fAst,
-      parameterView.plot.escAst,
-      dyn.cValue,
-      parameterView.plot.paramA,
-      cx,
-      cy,
-      halfWidth,
-      size,
-      150,
-    );
+
+    let cx: number;
+    let cy: number;
+    let halfWidth: number;
+    if (p.boundingRadius !== null) {
+      cx = 0; // monic: the bounding disk encloses the whole set exactly
+      cy = 0;
+      halfWidth = p.boundingRadius;
+    } else {
+      // Two-pass extent: a generous coarse sweep locates the set, then a snug pass refines the box
+      // (a small set in a big window is under-resolved, clipping thin tips/filaments).
+      const searchHalf = Math.max(4, 3 / dyn.zoom);
+      let ext = estimateExtent(fAst, escAst, c, a, dyn.center[0], dyn.center[1], searchHalf, 96, 120);
+      if (ext) {
+        const span = Math.max(ext.bbox.xMax - ext.bbox.xMin, ext.bbox.yMax - ext.bbox.yMin);
+        const refined = estimateExtent(fAst, escAst, c, a, ext.cx, ext.cy, span * 1.3, 96, 150);
+        if (refined) ext = refined;
+      }
+      lastExtent = ext;
+      if (!ext) {
+        // No bounded interior located (empty / escaping). Area is 0 if escaping, else unknown.
+        lastBoxDim = null;
+        lastPixelArea = p.escapes ? 0 : null;
+        lastSymmetry = "none detected";
+        paintJuliaDimArea();
+        paintJuliaExtentSymmetry();
+        return;
+      }
+      cx = ext.cx;
+      cy = ext.cy;
+      halfWidth = ext.halfWidth;
+    }
+
+    const mask = interiorMask(fAst, escAst, c, a, cx, cy, halfWidth, size, 150);
     lastBoxDim = boxCountDimension(mask, size);
     const interior = countInterior(mask);
     lastPixelArea = p.escapes ? 0 : interior * ((2 * halfWidth) / size) ** 2;
+    if (p.boundingRadius === null) lastSymmetry = describeSymmetry(detectSymmetries(mask, size));
+
     paintJuliaDimArea();
+    paintJuliaExtentSymmetry();
   }
 
   function scheduleJuliaMeasure(): void {
@@ -837,6 +898,8 @@ function init(): void {
     lastJuliaProps = p;
     lastBoxDim = null; // stale on a c / f change — the debounced measure refills them
     lastPixelArea = null;
+    lastExtent = null;
+    lastSymmetry = null;
 
     jSet(
       "jp-connectivity",
@@ -870,10 +933,13 @@ function init(): void {
             : `${jNum(p.lyapunov, 4)} nats/iter`,
     );
 
-    jSet("jp-bounding", p.boundingRadius !== null ? `|z| ≤ ${jNum(p.boundingRadius, 4)}` : "—");
+    jSet(
+      "jp-bounding",
+      p.boundingRadius !== null ? `|z| ≤ ${jNum(p.boundingRadius, 4)} (disk)` : "measuring…",
+    );
 
     if (d === null) {
-      jSet("jp-symmetry", "—");
+      jSet("jp-symmetry", "measuring…"); // measured from the image by the debounced Tier-2 pass
     } else {
       const base = d === 2 ? "central (z → −z)" : `${d}-fold rotational`;
       jSet("jp-symmetry", c[1] === 0 ? `${base} · real axis` : base);
@@ -883,7 +949,7 @@ function init(): void {
     jSet(
       "julia-props-note",
       d === null
-        ? "Exact area / dimension / capacity need a zᵈ+c map; the box-count dimension and pixel area still apply."
+        ? "Exact area / capacity need a zᵈ+c map; dimension, area, bounding region and symmetry are measured from the image."
         : "",
     );
 
