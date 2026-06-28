@@ -384,10 +384,13 @@ float trapDistance(cvec z) {
 }
 
 // Per-pixel colour for the AA-averaged modes (escape / smooth / orbit-trap / domain).
-vec3 colorAt(vec2 fragXY) {
+// outHeight returns this sample's smooth-iteration height (or -1 for interior) when relief/
+// outline/equipotential is on, so main() can reuse it instead of a second escape walk at uAA == 1.
+vec3 colorAt(vec2 fragXY, out float outHeight) {
   vec2 uv = fragXY / uResolution;
 ${coordinate}
   cvec cc = (uFractType == 1) ? z : vec_(uC.x, uC.y);
+  outHeight = -1.0;
 
   if (uMode == 4) {
     // Domain colouring: one application of f. hue = arg; brightness grows with |f|,
@@ -407,7 +410,7 @@ ${coordinate}
     cvec zp = z;
     z = fFn(z, cc);
     kmax = k + 1;
-    trap = min(trap, trapDistance(z)); // closest approach to the trap shape
+    if (uMode == 3) trap = min(trap, trapDistance(z)); // closest approach (orbit-trap only)
     if (uMode == 7 && k > 0) { // stripe average colouring
       float add = 0.5 + 0.5 * sin(5.0 * cre1(carg(z)));
       avgPrev = avgLast; avgLast = add; avgSum += add; avgCount += 1.0;
@@ -418,6 +421,12 @@ ${coordinate}
       float add = (hi > lo + 1e-12) ? clamp((cabsf(z) - lo) / (hi - lo), 0.0, 1.0) : 0.0;
       avgPrev = avgLast; avgLast = add; avgSum += add; avgCount += 1.0;
     }
+  }
+  if ((uLight == 1 || uOutline == 1 || uEquipotential == 1) && kmax < uN) {
+    // Centre-sample smooth height for relief/outline/equipotential — main() reuses this
+    // (uAA == 1) instead of re-walking the escape loop in reliefHeight(). Matches that formula.
+    float azh = cabsf(z);
+    outHeight = (azh > 1.0) ? float(kmax) + 1.0 - log(log(azh)) / log(2.0) : float(kmax);
   }
   if (uMode == 3) return palette(1.0 - clamp(sqrt(trap) * 1.3, 0.0, 1.0)); // orbit trap (axes)
 
@@ -560,15 +569,18 @@ void main() {
   }
 ${analyticDispatch}${multiplierDispatch}  int n = max(uAA, 1);
   vec3 acc = vec3(0.0);
+  float centreHeight = -1.0;
   for (int sy = 0; sy < n; sy++) {
     for (int sx = 0; sx < n; sx++) {
       vec2 sub = (vec2(float(sx), float(sy)) + 0.5) / float(n) - 0.5;
-      acc += colorAt(fc + sub);
+      float sampleHeight;
+      acc += colorAt(fc + sub, sampleHeight);
+      centreHeight = sampleHeight; // uAA == 1 ⇒ the lone sample sits at fc (sub == 0)
     }
   }
   vec3 col = acc / float(n * n);
   if ((uLight == 1 || uOutline == 1 || uEquipotential == 1) && uMode != 4) {
-    float h = reliefHeight(fc);
+    float h = (n == 1) ? centreHeight : reliefHeight(fc); // reuse the centre walk unless supersampling
     ${lightingStmt}
     if (uOutline == 1 && h >= 0.0) {
       // Screen-space boundary emphasis: darken where the escape field changes fastest.
