@@ -272,7 +272,15 @@ abs(z)>2</textarea
             </section>
           </main>
         </div>
-        <div class="controls-pane">
+        <div class="controls-pane" id="controls-pane">
+          <!-- Mobile-only bottom-sheet header (drag grip, title, close); hidden on desktop. -->
+          <div class="sheet-handle" aria-hidden="true">
+            <span class="sheet-grip"></span>
+            <span class="sheet-title">Controls</span>
+            <button type="button" id="controls-close" class="sheet-close" aria-label="Close controls">
+              ✕
+            </button>
+          </div>
           <!-- Point inspector: click either plot to report its orbit's dynamics. -->
           <aside id="inspector" class="inspector" aria-live="polite">
             <div class="inspector-head">
@@ -1248,6 +1256,17 @@ z^2+c</textarea
         </div>
       </div>
     </div>
+
+    <!-- Mobile-only floating button that opens the controls bottom sheet (CSS-hidden on desktop). -->
+    <button
+      type="button"
+      id="controls-fab"
+      class="controls-fab"
+      aria-controls="controls-pane"
+      aria-expanded="false"
+    >
+      Controls
+    </button>
 
     <div id="toasts" class="toasts" aria-live="polite"></div>
 

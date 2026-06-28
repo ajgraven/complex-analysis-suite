@@ -322,6 +322,31 @@ function setupTheme(): void {
   });
 }
 
+/**
+ * Mobile-only controls bottom sheet: a floating button toggles the `.controls-pane` sheet
+ * (the slide is CSS-driven via an `.is-open` class). Non-modal — the plots above stay
+ * interactive — so it closes via the FAB, the sheet header's ✕, or Escape. Entirely inert on
+ * desktop, where the FAB/handle are `display:none` and the pane renders in normal flow / the grid.
+ */
+function setupMobileSheet(): void {
+  const fab = byId<HTMLButtonElement>("controls-fab");
+  const pane = byId<HTMLElement>("controls-pane");
+  const closeBtn = byId<HTMLButtonElement>("controls-close");
+  const setOpen = (open: boolean): void => {
+    pane.classList.toggle("is-open", open);
+    fab.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+  fab.addEventListener("click", () => setOpen(!pane.classList.contains("is-open")));
+  closeBtn.addEventListener("click", () => setOpen(false));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && pane.classList.contains("is-open")) setOpen(false);
+  });
+  // Widening past the mobile breakpoint clears the sheet state so desktop never shows it half-open.
+  window.matchMedia("(max-width: 720px)").addEventListener("change", (e) => {
+    if (!e.matches) setOpen(false);
+  });
+}
+
 /** Show the first-run onboarding once (dismissal remembered in localStorage). */
 function setupOnboarding(): void {
   const el = byId("onboarding");
@@ -2211,6 +2236,7 @@ function init(): void {
   renderFormula();
   setupTour();
   setupTheme();
+  setupMobileSheet();
   setupPlaces();
   applyParamA();
   updateParamAVisibility();

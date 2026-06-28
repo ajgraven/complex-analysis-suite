@@ -1173,3 +1173,85 @@ select.invalid {
     max-width: min(92vw, 30rem);
   }
 }
+
+/* ===========================================================================
+   Mobile controls sheet + FAB (Phase B). On a phone the controls live in a
+   bottom sheet that slides up over the plots, opened by a floating button — so
+   the plot stays visible and draggable while you adjust a control. Desktop
+   (no max-width:720px match) shows neither: the FAB and handle are display:none
+   and .controls-pane stays in normal flow / the ≥1200px grid.
+   =========================================================================== */
+.controls-fab,
+.sheet-handle {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .controls-fab {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 95;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0.6rem 1.1rem;
+    font-weight: 600;
+    color: var(--accent-contrast);
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  /* The controls pane becomes a bottom sheet, parked below the viewport until
+     opened. Non-modal — no backdrop — so the plots above stay interactive. */
+  .controls-pane {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 96;
+    max-height: 85dvh;
+    overflow-y: auto;
+    padding: 0 1rem 1rem;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.35);
+    transform: translateY(100%);
+    transition: transform 0.25s ease;
+  }
+  .controls-pane.is-open {
+    transform: translateY(0);
+  }
+
+  /* Sticky sheet header: a drag grip, a title, and a close button. */
+  .sheet-handle {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 0.6rem 0 0.5rem;
+    margin-bottom: 0.5rem;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .sheet-grip {
+    width: 2.5rem;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+  }
+  .sheet-title {
+    flex: 1;
+    font-weight: 600;
+  }
+  .sheet-close {
+    min-width: 40px;
+    min-height: 40px;
+    line-height: 1;
+  }
+}
