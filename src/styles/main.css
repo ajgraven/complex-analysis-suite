@@ -1072,3 +1072,104 @@ select.invalid {
 .inspector-body:not(:empty) + .inspector-hint {
   display: none;
 }
+
+/* ===========================================================================
+   Mobile / responsive support (Phase A). Every rule below is SCOPED so the
+   desktop (≥1200px, fine pointer) experience renders exactly as before:
+     • layout / reflow → @media (max-width: 720px)  (the existing breakpoint)
+     • touch sizing    → @media (pointer: coarse)   (orthogonal to width)
+   These are additive — no desktop rule above is overridden outside its query.
+   =========================================================================== */
+
+/* Reduced motion (global a11y; collapses transitions/animations everywhere). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Sticky plots pane uses the dynamic viewport height on touch, so mobile
+   browser chrome doesn't clip it. Desktop keeps the 100vh rule as the
+   fallback (this query never matches a fine-pointer device). */
+@media (min-width: 720px) and (pointer: coarse) {
+  .plots-pane {
+    max-height: calc(100dvh - 1rem);
+  }
+}
+
+/* Finger-sized tap targets on touch devices only (mouse/desktop untouched). */
+@media (pointer: coarse) {
+  button,
+  select,
+  input[type="text"],
+  .views-menu > summary,
+  .control-group > summary,
+  .plot-details > summary {
+    min-height: 44px;
+  }
+
+  label.checkbox {
+    min-height: 44px;
+    padding-block: 0.5rem;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-width: 22px;
+    min-height: 22px;
+  }
+
+  /* The fixed 9rem slider overflows a narrow field — fill the column and give
+     the track/thumb a larger drag area. */
+  .field input[type="range"] {
+    width: 100%;
+    min-width: 0;
+    height: 44px;
+    accent-color: var(--accent);
+  }
+
+  /* Inline "?" links: enlarge the touch surface without growing the text row
+     (the negative margin absorbs the padding so layout barely shifts). */
+  .gloss-link {
+    padding: 0.5rem;
+    margin: -0.4rem;
+  }
+}
+
+/* Narrow-screen layout fixes (phones / very narrow desktop windows). */
+@media (max-width: 720px) {
+  /* The "Views" popover is right-anchored on desktop and would clip off the
+     right edge on a phone — let it span the available width instead. */
+  .views-panel {
+    left: 0;
+    right: 0;
+    min-width: 0;
+  }
+
+  /* Let the app-bar actions take the full row under the title, and stretch the
+     wide controls so they don't get squeezed. */
+  .app-bar-actions {
+    width: 100%;
+  }
+  .app-bar-actions #places {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .views-panel #view-name {
+    width: 100%;
+  }
+  .app-bar h1 {
+    font-size: 1.3rem;
+  }
+
+  /* Modal cards must not overflow a small viewport (desktop max-widths stay). */
+  .export-card,
+  .onboarding-card {
+    max-width: min(92vw, 30rem);
+  }
+}
