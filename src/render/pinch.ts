@@ -64,3 +64,27 @@ export function pinchShift(
   const zoomShift: Vec2 = [(cur.mid[0] * 2 - 1) * k, ((1 - cur.mid[1]) * 2 - 1) * k];
   return { newZoom, panShift, zoomShift };
 }
+
+/** A single tap: a timestamp (ms) and its uv position. */
+export interface Tap {
+  t: number;
+  uv: Vec2;
+}
+
+/**
+ * Whether `cur` forms a double-tap with the preceding tap `prev`: close enough in time and
+ * position. Pure (so it's unit-tested without a DOM) — the caller tracks the last tap and feeds the
+ * timestamps. `maxDistUv` is in uv units (fraction of the plot), since taps are measured there.
+ */
+export function isDoubleTap(
+  prev: Tap | null,
+  cur: Tap,
+  maxDelayMs = 300,
+  maxDistUv = 0.05,
+): boolean {
+  if (!prev) return false;
+  return (
+    cur.t - prev.t <= maxDelayMs &&
+    Math.hypot(cur.uv[0] - prev.uv[0], cur.uv[1] - prev.uv[1]) <= maxDistUv
+  );
+}

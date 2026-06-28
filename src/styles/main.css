@@ -1255,3 +1255,12 @@ select.invalid {
     line-height: 1;
   }
 }
+
+/* Mobile (Phase C): shrink the orbit-preview inset so it doesn't dominate a narrow plot.
+   (Matches the base `.canvas-stack > .orbit-preview` specificity so the override wins.) */
+@media (max-width: 720px) {
+  .canvas-stack > .orbit-preview {
+    width: 72px;
+    height: 72px;
+  }
+}

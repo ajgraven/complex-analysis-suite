@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Vec2 } from "../src/arrays";
-import { pinchShift, pinchStateOf, type PinchState } from "../src/render/pinch";
+import { isDoubleTap, pinchShift, pinchStateOf, type PinchState } from "../src/render/pinch";
 
 // Mirror of PlotView.uvToPlot: the visible rect is uv∈[0,1]², y-down.
 function uvToPlot(center: Vec2, zoom: number, [u, v]: Vec2): Vec2 {
@@ -98,5 +98,23 @@ describe("pinchShift", () => {
     expect(underNewMid[0]).toBeCloseTo(grabbed[0], 10);
     expect(underNewMid[1]).toBeCloseTo(grabbed[1], 10);
     expect(next.zoom).toBeCloseTo((zoom * cur.dist) / prev.dist, 10);
+  });
+});
+
+describe("isDoubleTap", () => {
+  it("is never a double-tap without a previous tap", () => {
+    expect(isDoubleTap(null, { t: 100, uv: [0.5, 0.5] })).toBe(false);
+  });
+
+  it("accepts a quick tap near the previous one", () => {
+    expect(isDoubleTap({ t: 0, uv: [0.5, 0.5] }, { t: 200, uv: [0.51, 0.49] })).toBe(true);
+  });
+
+  it("rejects a slow second tap (beyond the delay window)", () => {
+    expect(isDoubleTap({ t: 0, uv: [0.5, 0.5] }, { t: 400, uv: [0.5, 0.5] })).toBe(false);
+  });
+
+  it("rejects a far-away second tap (beyond the distance window)", () => {
+    expect(isDoubleTap({ t: 0, uv: [0.2, 0.2] }, { t: 100, uv: [0.8, 0.8] })).toBe(false);
   });
 });

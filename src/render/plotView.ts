@@ -17,7 +17,7 @@ import { showToast } from "../ui/toast";
 import { GLPlot, renderScale, type FractType } from "./glPlot";
 import { inspect, type InspectResult } from "./inspect";
 import { drawOverlay, drawScaleBar } from "./overlay";
-import { pinchShift, pinchStateOf, type PinchState } from "./pinch";
+import { isDoubleTap, pinchShift, pinchStateOf, type PinchState, type Tap } from "./pinch";
 
 /** Hooks linking a plot to the rest of the app (the parameter→dynamical coupling, input sync). */
 export interface PlotViewHooks {
@@ -31,11 +31,14 @@ export interface PlotViewHooks {
   onInspect?: (info: InspectResult, point: Vec2, plane: FractType) => void;
 }
 
-/** Pixel radius around the white point that counts as grabbing it. */
-const GRAB_RADIUS = 12;
+/** Pixel radius around the white point that counts as grabbing it (larger on coarse pointers). */
+const GRAB_RADIUS = globalThis.matchMedia?.("(pointer: coarse)")?.matches ? 22 : 12;
 
 /** A pointer that moves less than this (px) between down and up counts as a click, not a drag. */
 const CLICK_SLOP = 4;
+
+/** Zoom-in factor a double-tap (touch) applies, anchored on the tapped point. */
+const DOUBLE_TAP_FACTOR = 2;
 
 /** Optional progress reporting + cancellation for an export. */
 interface ExportProgress {
@@ -71,6 +74,7 @@ export class PlotView {
   private readonly pointers = new Map<number, Vec2>();
   /** The previous pinch snapshot, while a two-finger gesture is in progress. */
   private pinchPrev: PinchState | null = null;
+  private lastTap: Tap | null = null;
 
   constructor(
     glCanvas: HTMLCanvasElement,
@@ -457,6 +461,26 @@ export class PlotView {
         (upUv[1] - this.downUv[1]) * r.height,
       );
       const isClick = movedPx < CLICK_SLOP;
+      // Double-tap (touch only) zooms in toward the tapped point — anchored, same math as the
+      // wheel. The first tap already ran its normal action; this handles the second.
+      if (isClick && e.pointerType === "touch") {
+        const tap: Tap = { t: performance.now(), uv: upUv };
+        if (isDoubleTap(this.lastTap, tap)) {
+          this.lastTap = null;
+          this.plot.setDraft(false);
+          this.hooks.coupling?.setDraft(false);
+          const oldZoom = this.plot.zoom;
+          const newZoom = oldZoom * DOUBLE_TAP_FACTOR;
+          const k = 1 / oldZoom - 1 / newZoom;
+          this.plot.zoom = newZoom;
+          this.plot.shift([(upUv[0] * 2 - 1) * k, ((1 - upUv[1]) * 2 - 1) * k]);
+          this.hooks.onViewChanged?.(this.plot.center, this.plot.zoom);
+          this.dragMode = "none";
+          el.style.cursor = "crosshair";
+          return;
+        }
+        this.lastTap = tap;
+      }
       if (this.dragMode === "pan") {
         this.plot.setDraft(false);
         if (isClick) {

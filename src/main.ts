@@ -507,6 +507,8 @@ function init(): void {
   const orbitPreviewCtx = orbitPreviewCanvas.getContext("2d");
   const paramReadout = hoverReadout("MCSReadout");
   let paramPlot: GLPlot | null = null; // set just after the parameter view is built
+  // On a touch device there is no hover, so the inset is fed from the white-point set/drag instead.
+  const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
   let previewPending: Vec2 | null = null;
   let previewScheduled = false;
   // Cached Julia background for the inset — the escape-time render is throttled (it's the heavy
@@ -556,6 +558,7 @@ function init(): void {
           setCInput(z0);
           updateDynCaption();
           announce(`Parameter c = ${dynCValue.textContent}`);
+          if (isCoarsePointer) updateOrbitPreview(z0); // touch has no hover → drive the inset here
         },
         setDraft: (on) => dynamicalView.plot.setDraft(on),
       },
