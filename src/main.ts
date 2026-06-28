@@ -21,6 +21,7 @@ import {
   countInterior,
   detectSymmetries,
   estimateExtent,
+  imageConnectivity,
   interiorMask,
 } from "./render/juliaProperties";
 import { drawOrbitPreview, renderJuliaPreview } from "./render/orbitPreview";
@@ -757,6 +758,7 @@ function init(): void {
   let lastPixelArea: number | null = null; // Tier-2 pixel-count area (image-based)
   let lastExtent: ReturnType<typeof estimateExtent> = null; // Tier-2 bounding extent (general f)
   let lastSymmetry: string | null = null; // Tier-2 measured symmetry string (general f)
+  let lastConnectivity: string | null = null; // Tier-2 image connectivity string (general f)
   let juliaMeasureTimer = 0;
   const jSet = (id: string, text: string): void => {
     byId(id).textContent = text;
@@ -795,6 +797,15 @@ function init(): void {
     return parts.length ? `≈ ${parts.join(" · ")}` : "none detected";
   }
 
+  /** Image-based connectivity estimate for a general f (no critical point needed); the measure-zero
+   *  (dendrite vs Cantor dust) case is resolved by the critical-orbit fate. */
+  function describeConnectivity(mask: Uint8Array, size: number, escapes: boolean): string {
+    const r = imageConnectivity(mask, size);
+    if (r.empty)
+      return escapes ? "≈ Cantor dust (no interior)" : "≈ connected dendrite (no interior)";
+    return r.components <= 1 ? "≈ connected (one component)" : `≈ ${r.components} bounded components`;
+  }
+
   /** Paint the bounding-region + symmetry rows for a general (non-monic) f from the Tier-2 measure.
    *  The monic family keeps the instant analytic rows set in `updateJuliaProperties`. */
   function paintJuliaExtentSymmetry(): void {
@@ -811,6 +822,7 @@ function init(): void {
       jSet("jp-bounding", "—");
     }
     jSet("jp-symmetry", lastSymmetry ?? "—");
+    if (lastConnectivity) jSet("jp-connectivity", lastConnectivity);
   }
 
   /**
@@ -853,6 +865,9 @@ function init(): void {
         lastBoxDim = null;
         lastPixelArea = p.escapes ? 0 : null;
         lastSymmetry = "none detected";
+        lastConnectivity = p.escapes
+          ? "≈ Cantor dust (no interior)"
+          : "≈ connected dendrite (no interior)";
         paintJuliaDimArea();
         paintJuliaExtentSymmetry();
         return;
@@ -866,7 +881,10 @@ function init(): void {
     lastBoxDim = boxCountDimension(mask, size);
     const interior = countInterior(mask);
     lastPixelArea = p.escapes ? 0 : interior * ((2 * halfWidth) / size) ** 2;
-    if (p.boundingRadius === null) lastSymmetry = describeSymmetry(detectSymmetries(mask, size));
+    if (p.boundingRadius === null) {
+      lastSymmetry = describeSymmetry(detectSymmetries(mask, size));
+      lastConnectivity = describeConnectivity(mask, size, p.escapes);
+    }
 
     paintJuliaDimArea();
     paintJuliaExtentSymmetry();
@@ -901,15 +919,18 @@ function init(): void {
     lastPixelArea = null;
     lastExtent = null;
     lastSymmetry = null;
+    lastConnectivity = null;
 
-    jSet(
-      "jp-connectivity",
-      p.connected
-        ? d === null
-          ? "connected"
-          : `connected (c ∈ ${d === 2 ? "Mandelbrot set" : `multibrot M${d}`})`
-        : "totally disconnected — Cantor dust",
-    );
+    if (d === null) {
+      jSet("jp-connectivity", "measuring…"); // image-based estimate from the debounced Tier-2 pass
+    } else {
+      jSet(
+        "jp-connectivity",
+        p.connected
+          ? `connected (c ∈ ${d === 2 ? "Mandelbrot set" : `multibrot M${d}`})`
+          : "totally disconnected — Cantor dust",
+      );
+    }
 
     let ptype: string;
     if (p.paramClass === "outside") ptype = "outside the set (orbit escapes)";
@@ -950,7 +971,7 @@ function init(): void {
     jSet(
       "julia-props-note",
       d === null
-        ? "Exact area / capacity need a zᵈ+c map; dimension, area, bounding region and symmetry are measured from the image."
+        ? "Exact area / capacity need a zᵈ+c map; connectivity, dimension, area, bounding region and symmetry are measured from the image."
         : "",
     );
 

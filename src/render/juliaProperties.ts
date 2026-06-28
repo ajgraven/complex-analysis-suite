@@ -442,3 +442,143 @@ export function boxCountDimension(mask: Uint8Array, size: number): number | null
   const denom = n * sxx - sx * sx;
   return denom === 0 ? null : (n * sxy - sx * sy) / denom;
 }
+
+// --- PR γ: image-based connectivity (connected-component labelling) ------------------------------
+// Component structure of the bounded set straight from the interior mask — needs NO critical point,
+// so it works for an arbitrary custom f (the existing per-critical-point test is unreliable there).
+// The mask samples the filled set K (bounded-orbit points, boundary included). Caveat: a dendrite /
+// Cantor set has ~empty interior (measure zero), and from the mask alone the two are
+// indistinguishable — the caller resolves that case via the critical-orbit fate. An estimate.
+
+export interface Components {
+  /** Number of distinct 8-connected components. */
+  count: number;
+  /** Cells in the largest component. */
+  largest: number;
+  /** Total interior cells. */
+  total: number;
+  /** largest / total (→ 1 for a single blob). */
+  largestFraction: number;
+  /** Components with at least `minCells` cells (ignores single-pixel sampling specks). */
+  nontrivial: number;
+}
+
+/** 8-connected component statistics of an interior mask, via a two-pass union-find labelling. */
+export function connectedComponents(mask: Uint8Array, size: number, minCells = 4): Components {
+  const labels = new Int32Array(size * size);
+  const parent: number[] = [];
+  const find = (x: number): number => {
+    let r = x;
+    while (parent[r] !== r) r = parent[r];
+    while (parent[x] !== r) {
+      const nx = parent[x];
+      parent[x] = r;
+      x = nx;
+    }
+    return r;
+  };
+  const union = (a: number, b: number): void => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent[rb] = ra;
+  };
+
+  let next = 0;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      if (!mask[i]) continue;
+      // Merge with already-labelled 8-neighbours: left, up, up-left, up-right.
+      let lab = -1;
+      const consider = (j: number): void => {
+        if (!mask[j]) return;
+        if (lab === -1) lab = labels[j];
+        else union(lab, labels[j]);
+      };
+      if (x > 0) consider(i - 1);
+      if (y > 0) consider(i - size);
+      if (x > 0 && y > 0) consider(i - size - 1);
+      if (x < size - 1 && y > 0) consider(i - size + 1);
+      if (lab === -1) {
+        lab = next;
+        parent[next] = next;
+        next++;
+      }
+      labels[i] = lab;
+    }
+  }
+
+  const counts = new Map<number, number>();
+  let total = 0;
+  for (let i = 0; i < size * size; i++) {
+    if (!mask[i]) continue;
+    const r = find(labels[i]);
+    counts.set(r, (counts.get(r) ?? 0) + 1);
+    total++;
+  }
+  let largest = 0;
+  let nontrivial = 0;
+  for (const v of counts.values()) {
+    if (v > largest) largest = v;
+    if (v >= minCells) nontrivial++;
+  }
+  return {
+    count: counts.size,
+    largest,
+    total,
+    largestFraction: total > 0 ? largest / total : 0,
+    nontrivial,
+  };
+}
+
+export type Connectivity = "connected" | "disconnected" | "indeterminate" | "empty";
+
+/**
+ * Heuristic connectivity verdict from component statistics. "empty" = the bounded set has no
+ * substantial interior (a dendrite or a Cantor dust — both measure zero, indistinguishable from the
+ * mask, so the caller resolves them via the critical-orbit fate). Otherwise: one dominant component
+ * → connected; several substantial components → disconnected; in between → indeterminate.
+ */
+export function connectivityVerdict(comp: Components, size: number): Connectivity {
+  if (comp.total < Math.max(8, 0.003 * size * size) || comp.nontrivial === 0) return "empty";
+  if (comp.largestFraction >= 0.85 && comp.nontrivial <= 1) return "connected";
+  if (comp.nontrivial >= 2) return "disconnected";
+  return "indeterminate";
+}
+
+/** Morphological dilation by a Chebyshev radius (square structuring element). Used to bridge the
+ *  measure-zero pinches where a connected filled Julia set's Fatou components touch (the pixel grid
+ *  misses the single Julia point joining them, so the raw mask splits there). */
+export function dilateMask(mask: Uint8Array, size: number, radius: number): Uint8Array {
+  if (radius <= 0) return mask;
+  const out = new Uint8Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (!mask[y * size + x]) continue;
+      const y0 = Math.max(0, y - radius);
+      const y1 = Math.min(size - 1, y + radius);
+      const x0 = Math.max(0, x - radius);
+      const x1 = Math.min(size - 1, x + radius);
+      for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) out[yy * size + xx] = 1;
+    }
+  }
+  return out;
+}
+
+/**
+ * Image connectivity of the bounded set: `empty` when the interior is measure-zero (dendrite /
+ * Cantor dust — the caller disambiguates via the critical-orbit fate), else the number of
+ * components AFTER bridging the thin pinches that only join a connected K at Julia points (so a
+ * connected filled set reports 1, not its many Fatou components). `components` ≥ 1 when not empty.
+ */
+export function imageConnectivity(
+  mask: Uint8Array,
+  size: number,
+): { empty: boolean; components: number } {
+  const raw = connectedComponents(mask, size);
+  if (connectivityVerdict(raw, size) === "empty") return { empty: true, components: 0 };
+  if (raw.nontrivial <= 1) return { empty: false, components: 1 };
+  // Several raw pieces: bridge measure-zero pinches, then re-count.
+  const bridged = connectedComponents(dilateMask(mask, size, 2), size);
+  return { empty: false, components: Math.max(1, bridged.nontrivial) };
+}

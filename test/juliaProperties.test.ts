@@ -12,9 +12,13 @@ import {
   boundingRadius,
   boxCountDimension,
   computeJuliaProperties,
+  connectedComponents,
+  connectivityVerdict,
   countInterior,
   detectSymmetries,
+  dilateMask,
   estimateExtent,
+  imageConnectivity,
   interiorMask,
 } from "../src/render/juliaProperties";
 
@@ -266,5 +270,85 @@ describe("detectSymmetries (measured from a mask)", () => {
     expect(s.realAxis).toBe(true);
     expect(s.central).toBe(false);
     expect(s.imagAxis).toBe(false);
+  });
+});
+
+// --- PR γ: image connectivity (connected components) --------------------------------------------
+
+describe("connectedComponents + connectivityVerdict", () => {
+  it("a single disk is one component (connected)", () => {
+    const comp = connectedComponents(diskMask(120, 60, 60, 40), 120);
+    expect(comp.nontrivial).toBe(1);
+    expect(comp.largestFraction).toBeGreaterThan(0.99);
+    expect(connectivityVerdict(comp, 120)).toBe("connected");
+  });
+
+  it("two separated disks → two components (disconnected)", () => {
+    const m = diskMask(120, 32, 60, 16);
+    const m2 = diskMask(120, 88, 60, 16);
+    for (let i = 0; i < m.length; i++) if (m2[i]) m[i] = 1;
+    const comp = connectedComponents(m, 120);
+    expect(comp.nontrivial).toBe(2);
+    expect(connectivityVerdict(comp, 120)).toBe("disconnected");
+  });
+
+  it("8-connectivity bridges diagonal touches (checkerboard = one component)", () => {
+    const size = 16;
+    const m = new Uint8Array(size * size);
+    for (let y = 0; y < size; y++)
+      for (let x = 0; x < size; x++) if ((x + y) % 2 === 0) m[y * size + x] = 1;
+    expect(connectedComponents(m, size, 1).count).toBe(1);
+  });
+
+  it("empty / speck-only masks read as 'empty'", () => {
+    expect(connectivityVerdict(connectedComponents(new Uint8Array(64 * 64), 64), 64)).toBe("empty");
+    const specks = new Uint8Array(64 * 64);
+    specks[10] = 1;
+    specks[2000] = 1; // isolated single cells (< minCells) ⇒ no substantial component
+    expect(connectivityVerdict(connectedComponents(specks, 64), 64)).toBe("empty");
+  });
+
+  it("z²+c: filled disk (c=0) reads connected; Cantor dust (c=2) reads empty", () => {
+    const disk = interiorMask(F2, ESC, [0, 0], [0, 0], 0, 0, 1.1, 96, 120);
+    expect(connectivityVerdict(connectedComponents(disk, 96), 96)).toBe("connected");
+    const dust = interiorMask(F2, ESC, [2, 0], [0, 0], 0, 0, 2.5, 96, 120);
+    expect(connectivityVerdict(connectedComponents(dust, 96), 96)).toBe("empty");
+  });
+});
+
+describe("imageConnectivity (pinch-bridged connectivity)", () => {
+  const disk = (m: Uint8Array, size: number, cx: number, cy: number, r: number): void => {
+    for (let y = 0; y < size; y++)
+      for (let x = 0; x < size; x++) if ((x - cx) ** 2 + (y - cy) ** 2 <= r * r) m[y * size + x] = 1;
+  };
+
+  it("dilateMask grows a single cell to a (2r+1)² block", () => {
+    const m = new Uint8Array(11 * 11);
+    m[5 * 11 + 5] = 1;
+    expect(countInterior(dilateMask(m, 11, 1))).toBe(9);
+    expect(countInterior(dilateMask(m, 11, 2))).toBe(25);
+  });
+
+  it("bridges two pinch-close blobs into one, keeps far blobs apart", () => {
+    const size = 96;
+    const close = new Uint8Array(size * size);
+    disk(close, size, 40, 48, 12);
+    disk(close, size, 66, 48, 12); // ~2-cell gap (a pinch) ⇒ bridged
+    expect(imageConnectivity(close, size).components).toBe(1);
+    const far = new Uint8Array(size * size);
+    disk(far, size, 20, 48, 10);
+    disk(far, size, 76, 48, 10); // wide gap ⇒ genuinely separate
+    expect(imageConnectivity(far, size).components).toBe(2);
+  });
+
+  it("the half-basilica 2z²−0.5 reads as connected (raw CCL splits its Fatou components)", () => {
+    const mask = interiorMask(parse("2*z^2+c"), ESC, [-0.5, 0], [0, 0], 0, 0, 0.85, 128, 150);
+    const r = imageConnectivity(mask, 128);
+    expect(r.empty).toBe(false);
+    expect(r.components).toBe(1); // bridging the measure-zero pinches rejoins the bulbs
+  });
+
+  it("empty interior → empty:true", () => {
+    expect(imageConnectivity(new Uint8Array(64 * 64), 64).empty).toBe(true);
   });
 });
