@@ -12,6 +12,7 @@ import { formatComplex, parseComplex, truncateComplex, type Complex } from "./co
 import { getMaxTextureSize } from "./hiResExport";
 import { PlotView } from "./render/plotView";
 import type { GLPlot, FractType } from "./render/glPlot";
+import { initialRes } from "./render/glPlot";
 import { inspect, findNucleus, type InspectResult } from "./render/inspect";
 import { computeOrbit, orbitAndClassify, type OrbitFate } from "./render/overlay";
 import { juliaConnected, juliaExteriorCoeffs, mandelbrotExteriorCoeffs } from "./render/uniformize";
@@ -481,12 +482,17 @@ function beginExport(label: string): {
 
 /** Build both plots and wire all controls. Throws if WebGL2 is unavailable. */
 function init(): void {
+  // Smaller default render resolution on a phone (500 on desktop/tablet) — see initialRes(). Seed
+  // the canvas-size inputs to match so the serialized state agrees; a shared view still overrides.
+  const res0 = initialRes(window.innerWidth);
+  byId<HTMLInputElement>("inpParamRes").value = String(res0);
+  byId<HTMLInputElement>("inpDynRes").value = String(res0);
   const dynamicalView = new PlotView(
     byId<HTMLCanvasElement>("JCSCanvas"),
     byId<HTMLCanvasElement>("JCSOverlay"),
     dynPresets.mandelbrot,
     "dyn",
-    500,
+    res0,
     {
       onViewChanged: (center, zoom) => {
         setDynCenterInput(center);
@@ -550,7 +556,7 @@ function init(): void {
     byId<HTMLCanvasElement>("MCSOverlay"),
     paramPresets.mandelbrot,
     "param",
-    500,
+    res0,
     {
       coupling: {
         setC: (z0) => {

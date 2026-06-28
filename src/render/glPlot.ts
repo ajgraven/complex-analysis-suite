@@ -151,6 +151,19 @@ export function renderScale(): number {
 }
 
 /**
+ * Initial render resolution (logical px) for a freshly-built plot, chosen from the viewport width:
+ * the desktop default (500) on wide viewports, a smaller value on a phone so the GPU isn't asked for
+ * a 500² buffer behind a ~350px canvas. A one-time default only — the user's explicit canvas-size
+ * field (and any shared-view value) still overrides it, and desktop is unchanged so existing share
+ * links reproduce exactly.
+ */
+export function initialRes(viewportWidth: number): number {
+  const DEFAULT_RES = 500;
+  if (!Number.isFinite(viewportWidth) || viewportWidth >= 700) return DEFAULT_RES;
+  return Math.max(280, Math.min(DEFAULT_RES, Math.round(viewportWidth - 40)));
+}
+
+/**
  * Progressive quality ladder: fractions of the full (DPR-scaled) buffer, drawn
  * coarse → fine over successive frames so a slow render shows structure quickly
  * and sharpens in. Only used for renders the heuristic deems heavy (deep zoom,
