@@ -15,7 +15,8 @@ import type { GLPlot, FractType } from "./render/glPlot";
 import { inspect, findNucleus, type InspectResult } from "./render/inspect";
 import { classifyOrbit, computeOrbit, type OrbitFate } from "./render/overlay";
 import { juliaConnected, juliaExteriorCoeffs, mandelbrotExteriorCoeffs } from "./render/uniformize";
-import { drawOrbitPreview } from "./render/orbitPreview";
+import { drawOrbitPreview, renderJuliaPreview } from "./render/orbitPreview";
+import type { Node as ExprNode } from "./expr/ast";
 import { parseAngle } from "./render/rays";
 import { dynPresets, paramPresets, type Preset, type PresetName } from "./presets";
 import { byId } from "./ui/dom";
@@ -473,6 +474,11 @@ function init(): void {
   let paramPlot: GLPlot | null = null; // set just after the parameter view is built
   let previewPending: Vec2 | null = null;
   let previewScheduled = false;
+  // Cached Julia background for the inset — the escape-time render is throttled (it's the heavy
+  // part), so the orbit can track the cursor at 60 Hz over the most recent background (~10 Hz).
+  let previewJulia: ImageData | null = null;
+  let previewJuliaT = 0;
+  let previewJuliaAst: ExprNode | null = null;
   function updateOrbitPreview(coord: Vec2 | null): void {
     if (!coord || !orbitPreviewCtx || !paramPlot) {
       orbitPreviewCanvas.hidden = true;
@@ -488,7 +494,17 @@ function init(): void {
       const { fAst, escAst, criticalPoint, paramA } = paramPlot;
       const orbit = computeOrbit(fAst, escAst, criticalPoint, c, 48, paramA);
       const info = classifyOrbit(fAst, escAst, criticalPoint, c, paramA);
-      drawOrbitPreview(orbitPreviewCtx, orbit, info.fate !== "escaped", orbitPreviewCanvas.width);
+      const size = orbitPreviewCanvas.width;
+      // Recompute the Julia background when f changed or after a throttle interval; the cheap
+      // orbit redraws every frame on top of the most recent background.
+      const now = performance.now();
+      if (!previewJulia || fAst !== previewJuliaAst || now - previewJuliaT > 90) {
+        // Rendered small (64²) and scaled to the inset — keeps the CPU escape-time cheap.
+        previewJulia = renderJuliaPreview(fAst, escAst, c, paramA, 64, 40);
+        previewJuliaT = now;
+        previewJuliaAst = fAst;
+      }
+      drawOrbitPreview(orbitPreviewCtx, orbit, info.fate !== "escaped", size, previewJulia);
       orbitPreviewCanvas.hidden = false;
     });
   }
