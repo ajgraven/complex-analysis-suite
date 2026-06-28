@@ -445,7 +445,14 @@ export class GLPlot {
     const program = createProgram(
       this.gl,
       VERTEX_SHADER,
-      buildFragmentShader(this._iterAst, this._iterEscAst, precision, this._fZAst, this._fCAst),
+      buildFragmentShader(
+        this._iterAst,
+        this._iterEscAst,
+        precision,
+        this._fZAst,
+        this._fCAst,
+        this._monicDegree,
+      ),
     );
     return { program, uniforms: this.getUniforms(program) };
   }
@@ -542,7 +549,14 @@ export class GLPlot {
     let pending: PendingProgram;
     try {
       pending = this.linkProgramAsync(
-        buildFragmentShader(this._iterAst, this._iterEscAst, "df64", this._fZAst, this._fCAst),
+        buildFragmentShader(
+          this._iterAst,
+          this._iterEscAst,
+          "df64",
+          this._fZAst,
+          this._fCAst,
+          this._monicDegree,
+        ),
       );
     } catch (err) {
       this.df64Compiling = false;

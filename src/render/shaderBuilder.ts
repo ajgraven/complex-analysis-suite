@@ -184,14 +184,26 @@ void main() {
 }
 `;
 
+/** Format a JS number as a GLSL float literal (guaranteed to carry a decimal point). */
+function glslFloat(x: number): string {
+  const s = String(x);
+  return /[.eE]/.test(s) ? s : s + ".0";
+}
+
 export function buildFragmentShader(
   fAst: Node,
   escapeAst: Node,
   precision: Precision,
   fZAst: Node | null = null,
   fCAst: Node | null = null,
+  monicDegree: number | null = null,
 ): string {
   const isDf64 = precision === "df64";
+  // Smooth-iteration normalization divides by log(degree): for z^d+c that is log(d)
+  // (monicDegree), giving evenly-spaced bands/equipotentials/relief for d≠2. Arbitrary f
+  // (null) falls back to log(2) — smooth iteration is only approximate there anyway.
+  const degree = monicDegree && monicDegree >= 2 ? monicDegree : 2;
+  const logDegreeGl = glslFloat(Math.log(degree));
   const hasDeriv = fZAst !== null && fCAst !== null;
   // Symbolic derivatives ∂f/∂z and ∂f/∂c, emitted as fZFn/fCFn for the analytic
   // distance-estimate and normal-lighting paths. Empty when f is non-holomorphic.
@@ -232,7 +244,7 @@ ${coordinate}
   float px = 2.0 / (uZoom * uResolution.y);                 // plot units per pixel
   float de = clamp(d / px, 0.0, 1.0);                       // ~0 at the boundary → 1 away
   float s = float(kmax);
-  if (az > 1.0) s = float(kmax) + 1.0 - log(log(az)) / log(2.0);
+  if (az > 1.0) s = float(kmax) + 1.0 - log(log(az)) / LOG_DEGREE;
   return palette(clamp(s / float(uN), 0.0, 1.0)) * de;
 }
 `
@@ -295,7 +307,7 @@ ${coordinate}
     // Exterior: smooth escape-time palette so the boundary structure still reads.
     float az = cabsf(z);
     float s = float(kmax);
-    if (az > 1.0) s = float(kmax) + 1.0 - log(log(az)) / log(2.0);
+    if (az > 1.0) s = float(kmax) + 1.0 - log(log(az)) / LOG_DEGREE;
     return palette(clamp(s / float(uN), 0.0, 1.0));
   }
   // Interior: settle onto the attracting cycle, then detect its period.
@@ -330,6 +342,7 @@ ${coordinate}
   return `#version 300 es
 precision highp float;
 precision highp int;
+const float LOG_DEGREE = ${logDegreeGl}; // log(d) for z^d+c smooth-iteration normalization
 
 ${baseStdlib}
 ${COMPLEX_DERIVED_GLSL}
@@ -426,7 +439,7 @@ ${coordinate}
     // Centre-sample smooth height for relief/outline/equipotential — main() reuses this
     // (uAA == 1) instead of re-walking the escape loop in reliefHeight(). Matches that formula.
     float azh = cabsf(z);
-    outHeight = (azh > 1.0) ? float(kmax) + 1.0 - log(log(azh)) / log(2.0) : float(kmax);
+    outHeight = (azh > 1.0) ? float(kmax) + 1.0 - log(log(azh)) / LOG_DEGREE : float(kmax);
   }
   if (uMode == 3) return palette(1.0 - clamp(sqrt(trap) * 1.3, 0.0, 1.0)); // orbit trap (axes)
 
@@ -434,7 +447,7 @@ ${coordinate}
     // Stripe / triangle-inequality average, smoothed by the escape fraction.
     if (kmax == uN || avgCount < 1.0) return vec3(0.0);
     float az = cabsf(z);
-    float frac = (az > 1.0) ? fract(float(kmax) + 1.0 - log(log(az)) / log(2.0)) : 1.0;
+    float frac = (az > 1.0) ? fract(float(kmax) + 1.0 - log(log(az)) / LOG_DEGREE) : 1.0;
     float avg = avgSum / avgCount;
     float prev = (avgCount > 1.0) ? (avgSum - avgLast) / (avgCount - 1.0) : avg;
     return palette(mix(prev, avg, frac));
@@ -477,7 +490,7 @@ ${coordinate}
   if (uMode == 1) {
     // Smooth (continuous) escape time; needs a magnitude-divergence escape.
     float az = cabsf(z);
-    if (az > 1.0) iters = float(kmax) + 1.0 - log(log(az)) / log(2.0);
+    if (az > 1.0) iters = float(kmax) + 1.0 - log(log(az)) / LOG_DEGREE;
   }
   return palette(iters / float(uN));
 }
@@ -498,7 +511,7 @@ ${coordinate}
   if (kmax == uN) return vec3(0.0);
   float s = float(kmax);
   float az = cabsf(z);
-  if (az > 1.0) s = float(kmax) + 1.0 - log(log(az)) / log(2.0);
+  if (az > 1.0) s = float(kmax) + 1.0 - log(log(az)) / LOG_DEGREE;
   float grad = length(vec2(dFdx(s), dFdy(s)));
   float edge = 1.0 / (1.0 + grad * grad);
   return palette(clamp(s / float(uN), 0.0, 1.0)) * edge;
@@ -533,7 +546,7 @@ ${coordinate}
   if (kmax == uN) return -1.0; // never escaped → interior
   float s = float(kmax);
   float az = cabsf(z);
-  if (az > 1.0) s = float(kmax) + 1.0 - log(log(az)) / log(2.0);
+  if (az > 1.0) s = float(kmax) + 1.0 - log(log(az)) / LOG_DEGREE;
   return s;
 }
 
