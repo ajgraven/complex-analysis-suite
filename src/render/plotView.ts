@@ -286,8 +286,7 @@ export class PlotView {
 
   // --- interaction --------------------------------------------------------
 
-  private uvOf(e: PointerEvent | WheelEvent): Vec2 {
-    const r = this.overlay.getBoundingClientRect();
+  private uvOf(e: PointerEvent | WheelEvent, r = this.overlay.getBoundingClientRect()): Vec2 {
     return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
   }
 
@@ -386,7 +385,8 @@ export class PlotView {
     });
 
     el.addEventListener("pointermove", (e) => {
-      const uv = this.uvOf(e);
+      const r = el.getBoundingClientRect(); // one layout read per move; uvOf + hover dist share it
+      const uv = this.uvOf(e, r);
       if (this.pointers.has(e.pointerId)) this.pointers.set(e.pointerId, uv);
 
       if (this.dragMode === "pinch") {
@@ -402,7 +402,6 @@ export class PlotView {
 
       if (this.dragMode === "none") {
         // Hover: cursor affordance over the white point + live coordinate readout.
-        const r = el.getBoundingClientRect();
         const pUv = this.pointUv();
         const dist = Math.hypot((uv[0] - pUv[0]) * r.width, (uv[1] - pUv[1]) * r.height);
         el.style.cursor = dist <= GRAB_RADIUS ? "grab" : "crosshair";

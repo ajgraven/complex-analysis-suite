@@ -518,7 +518,7 @@ function init(): void {
     {
       coupling: {
         setC: (z0) => {
-          dynamicalView.plot.c = formatComplex(z0);
+          dynamicalView.plot.setCValue(z0);
           setCInput(z0);
           updateDynCaption();
           announce(`Parameter c = ${dynCValue.textContent}`);

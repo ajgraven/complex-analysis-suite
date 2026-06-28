@@ -8,7 +8,7 @@
  */
 
 import type { Vec2 } from "../arrays";
-import { parseComplex, type Complex } from "../complex";
+import { formatComplex, parseComplex, type Complex } from "../complex";
 import { canvToPlot, plotRange, plotToCanv } from "../transforms";
 import type { Preset } from "../presets";
 import { parse } from "../expr/parser";
@@ -1266,9 +1266,9 @@ export class GLPlot {
       const h = Math.min(STRIP, size - y0);
       gl.viewport(0, y0, size, h);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      const strip = new Uint8Array(size * h * 4);
-      gl.readPixels(0, y0, size, h, gl.RGBA, gl.UNSIGNED_BYTE, strip);
-      pixels.set(strip, y0 * rowBytes);
+      // Read straight into the destination rows (no per-strip scratch buffer + copy).
+      const stripView = new Uint8Array(pixels.buffer, y0 * rowBytes, size * h * 4);
+      gl.readPixels(0, y0, size, h, gl.RGBA, gl.UNSIGNED_BYTE, stripView);
       opts.onProgress?.((s + 1) / strips);
       if (s < strips - 1) await new Promise((resolve) => window.setTimeout(resolve, 0));
     }
@@ -1364,6 +1364,14 @@ export class GLPlot {
   set c(cval: string) {
     this._c = cval;
     this._cVal = parseComplex(cval);
+    this.scheduleRender();
+  }
+  /** Set c from a numeric tuple — the drag/coupling hot path, skipping the string
+   *  round-trip the `c` setter does (format in the caller, then parse back here).
+   *  `get c` stays correct: _c is the same formatComplex the string setter would store. */
+  setCValue(v: Complex): void {
+    this._cVal = [v[0], v[1]];
+    this._c = formatComplex(v);
     this.scheduleRender();
   }
   set f(fval: string) {
