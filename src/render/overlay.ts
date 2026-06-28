@@ -449,6 +449,9 @@ function orbitData(p: OverlayParams, cc: Complex, a: Complex): OrbitCacheEntry {
   return entry;
 }
 
+/** Dark casing drawn under the bright overlay strokes so they stay legible over any palette. */
+const HALO = "rgba(0, 0, 0, 0.6)";
+
 /** Render the orbit polyline, white point, and label onto `ctx`. */
 export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): void {
   const { size } = p;
@@ -459,23 +462,33 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
   const { orbit, info, critOrbit, critInfo } = orbitData(p, cc, a);
   const fateColor = FATE_COLOR[info.fate];
 
-  // Orbit polyline, coloured by the orbit's long-run fate.
-  ctx.strokeStyle = fateColor;
-  ctx.lineWidth = 1.8 * s;
+  // Orbit polyline, coloured by the orbit's long-run fate. A dark casing under the colour
+  // keeps it legible over any palette (the fate colours are all bright).
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
   ctx.beginPath();
   orbit.forEach((pt, k) => {
     const [px, py] = plotToPx(pt, p.center, p.zoom, size);
     if (k === 0) ctx.moveTo(px, py);
     else ctx.lineTo(px, py);
   });
+  ctx.strokeStyle = HALO;
+  ctx.lineWidth = 1.8 * s + 2.4 * s;
+  ctx.stroke();
+  ctx.strokeStyle = fateColor;
+  ctx.lineWidth = 1.8 * s;
   ctx.stroke();
 
-  // A dot at each iterate, same fate colour.
-  ctx.fillStyle = fateColor;
+  // A dot at each iterate: dark ring behind, then the fate colour.
   orbit.forEach((pt) => {
     const [dx, dy] = plotToPx(pt, p.center, p.zoom, size);
     ctx.beginPath();
+    ctx.arc(dx, dy, 3.1 * s, 0, 2 * Math.PI);
+    ctx.fillStyle = HALO;
+    ctx.fill();
+    ctx.beginPath();
     ctx.arc(dx, dy, 2 * s, 0, 2 * Math.PI);
+    ctx.fillStyle = fateColor;
     ctx.fill();
   });
 
@@ -484,8 +497,6 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
   if (p.critical && critOrbit && critInfo) {
     const crit = p.criticalPoint ?? [0, 0];
     const critColor = FATE_COLOR[critInfo.fate];
-    ctx.strokeStyle = critColor;
-    ctx.lineWidth = 1.4 * s;
     ctx.setLineDash([5 * s, 4 * s]);
     ctx.beginPath();
     critOrbit.forEach((pt, k) => {
@@ -493,9 +504,16 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
       if (k === 0) ctx.moveTo(qx, qy);
       else ctx.lineTo(qx, qy);
     });
+    ctx.strokeStyle = HALO;
+    ctx.lineWidth = 1.4 * s + 2.2 * s;
+    ctx.stroke();
+    ctx.strokeStyle = critColor;
+    ctx.lineWidth = 1.4 * s;
     ctx.stroke();
     ctx.setLineDash([]);
     const [cx, cy] = plotToPx(crit, p.center, p.zoom, size);
+    ctx.fillStyle = HALO;
+    ctx.fillRect(cx - 4 * s, cy - 4 * s, 8 * s, 8 * s);
     ctx.fillStyle = critColor;
     ctx.fillRect(cx - 3 * s, cy - 3 * s, 6 * s, 6 * s);
   }
@@ -552,19 +570,26 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
     drawLaurentBoundary(ctx, bpts, p.center, p.zoom, size);
   }
 
-  // White point + coordinate / fate label.
+  // White point (dark ring behind so it shows on light palettes) + coordinate / fate label.
   const [px, py] = plotToPx(p.z0, p.center, p.zoom, size);
-  ctx.fillStyle = "white";
+  ctx.beginPath();
+  ctx.arc(px, py, 4.2 * s, 0, 2 * Math.PI);
+  ctx.fillStyle = HALO;
+  ctx.fill();
   ctx.beginPath();
   ctx.arc(px, py, 3 * s, 0, 2 * Math.PI);
+  ctx.fillStyle = "white";
   ctx.fill();
 
   const label = p.fractType === "param" ? "c=" : "z0=";
+  const text = `${label}${formatComplex(truncateComplex([p.z0[0], p.z0[1]]))} · ${fateLabel(info)}`;
   ctx.font = `${15 * s}px sans-serif`;
   ctx.textBaseline = "bottom";
-  ctx.fillText(
-    `${label}${formatComplex(truncateComplex([p.z0[0], p.z0[1]]))} · ${fateLabel(info)}`,
-    px + 6 * s,
-    py - 6 * s,
-  );
+  // Dark casing under the white text so it reads over any palette.
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 3 * s;
+  ctx.strokeStyle = HALO;
+  ctx.strokeText(text, px + 6 * s, py - 6 * s);
+  ctx.fillStyle = "white";
+  ctx.fillText(text, px + 6 * s, py - 6 * s);
 }
