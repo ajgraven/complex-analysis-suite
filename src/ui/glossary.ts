@@ -43,7 +43,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: "multiplier",
     term: "Multiplier (λ)",
-    defn: "The derivative of f around the attracting cycle. |λ| < 1 is attracting, = 1 indifferent, > 1 repelling; |λ| = 0 at the component's centre (superattracting). arg λ is the internal angle.",
+    defn: "The derivative of f around the attracting cycle. |λ| < 1 is attracting, = 1 indifferent, > 1 repelling; |λ| = 0 at the component's centre (superattracting). arg λ is the internal angle. For a non-holomorphic f the magnitude |λ| is taken as the spectral radius of the product of the real 2×2 Jacobians around the cycle (arg λ then undefined).",
     latex: "\\lambda = \\prod_{k} f'(z_k)",
   },
   {
@@ -108,12 +108,13 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: "capacity",
     term: "Logarithmic capacity",
-    defn: "A conformal 'size' of a compact set, equal to the leading factor of its exterior map. A monic polynomial's filled Julia set and the multibrot set both have capacity 1, so the exterior map's leading term is exactly w.",
+    defn: "A conformal 'size' (transfinite diameter) of a compact set, the leading factor of its exterior map. For a polynomial filled Julia set it is |a_d|^(−1/(d−1)) from the degree-d leading coefficient a_d — exactly 1 for a monic zᵈ+c (and the multibrot set), and 1/|λ| for the logistic λz(1−z). It is undefined for rational, transcendental, and non-holomorphic maps, where the panel leaves it '—'.",
+    latex: "\\operatorname{cap}(K) = |a_d|^{-1/(d-1)}",
   },
   {
     id: "julia-connectivity",
     term: "Connectivity",
-    defn: "The filled Julia set Kᶜ is connected exactly when the critical orbit stays bounded (c in the Mandelbrot / multibrot set); otherwise it is totally disconnected — a Cantor dust of uncountably many points with no interior.",
+    defn: "The filled Julia set Kᶜ is connected exactly when the critical orbit stays bounded (c in the Mandelbrot / multibrot set); otherwise it is totally disconnected — a Cantor dust with no interior. For a general f the panel estimates it from the image instead: counting the components of the bounded set (bridging the thin pinches that join a connected set at single points), and reading an empty interior as a dendrite or dust by the critical-orbit fate.",
   },
   {
     id: "fractal-dimension",
@@ -124,7 +125,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: "lyapunov-exponent",
     term: "Lyapunov exponent",
-    defn: "The average exponential rate at which nearby orbits separate, measured along the critical orbit. Negative ⇒ an attracting cycle (−∞ at a superattracting centre); positive ⇒ chaotic; it diverges to +∞ when the orbit escapes.",
+    defn: "The average exponential rate at which nearby orbits separate, measured along the critical orbit. Negative ⇒ an attracting cycle (−∞ at a superattracting centre); positive ⇒ chaotic; it diverges to +∞ when the orbit escapes. For a non-holomorphic f (no f′) it is estimated from the real 2×2 Jacobian (renormalized-tangent / Benettin method).",
     latex: "\\lambda = \\lim_{n\\to\\infty}\\tfrac1n\\sum_{k=0}^{n-1}\\log|f'(z_k)|",
   },
   {
@@ -132,6 +133,17 @@ export const GLOSSARY: GlossaryEntry[] = [
     term: "Area of the filled Julia set",
     defn: "From the exterior-map coefficients, Gronwall's area theorem gives the area as π(1 − Σ k|bₖ|²) — a rigorous upper bound, tight for c well inside the set and loose near its boundary. It is 0 for a disconnected (Cantor) Julia set.",
     latex: "\\operatorname{Area}(K_c) = \\pi\\Bigl(1 - \\sum_{k\\ge 1} k\\,|b_k|^2\\Bigr)",
+  },
+  {
+    id: "julia-symmetry",
+    term: "Symmetry",
+    defn: "Symmetries of the filled Julia set, measured from the image: central (z → −z), mirror across the real or imaginary axis, and k-fold rotation. zᵈ+c is d-fold rotational (and real-axis symmetric when c is real); a general f is reported from whatever its image actually exhibits.",
+  },
+  {
+    id: "bounding-region",
+    term: "Bounding region",
+    defn: "A region containing the whole filled Julia set. For zᵈ+c it is the escape-radius disk |z| ≤ R (the real root of Rᵈ − R − |c| = 0, beyond which every orbit escapes); for a general f it is the measured bounding box of the set.",
+    latex: "R^d - R - |c| = 0",
   },
 ];
 

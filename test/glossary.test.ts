@@ -34,6 +34,22 @@ describe("glossary", () => {
     for (const id of linked) expect(ids.has(id)).toBe(true);
   });
 
+  it("defines every term the Julia-properties panel ? links point at", () => {
+    // data-term ids on the gloss-link buttons inside #julia-props-group in index.html.
+    const panel = [
+      "dynamical-plane",
+      "julia-connectivity",
+      "fractal-dimension",
+      "julia-area",
+      "lyapunov-exponent",
+      "bounding-region",
+      "julia-symmetry",
+      "capacity",
+    ];
+    const ids = new Set(GLOSSARY.map((e) => e.id));
+    for (const id of panel) expect(ids.has(id)).toBe(true);
+  });
+
   it("documents the non-textbook conventions", () => {
     expect(CONVENTIONS.length).toBeGreaterThanOrEqual(4);
     const ids = CONVENTIONS.map((e) => e.id);
