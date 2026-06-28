@@ -15,7 +15,12 @@ import type { GLPlot, FractType } from "./render/glPlot";
 import { inspect, findNucleus, type InspectResult } from "./render/inspect";
 import { computeOrbit, orbitAndClassify, type OrbitFate } from "./render/overlay";
 import { juliaConnected, juliaExteriorCoeffs, mandelbrotExteriorCoeffs } from "./render/uniformize";
-import { computeJuliaProperties } from "./render/juliaProperties";
+import {
+  boxCountDimension,
+  computeJuliaProperties,
+  countInterior,
+  interiorMask,
+} from "./render/juliaProperties";
 import { drawOrbitPreview, renderJuliaPreview } from "./render/orbitPreview";
 import type { Node as ExprNode } from "./expr/ast";
 import { parseAngle } from "./render/rays";
@@ -744,19 +749,81 @@ function init(): void {
     dynamicalView.setLaurentBoundary(juliaConnected(d, c) ? juliaExteriorCoeffs(d, c, n) : null, r);
   }
 
+  // --- Julia-set properties readout ----------------------------------------
+  let lastJuliaProps: ReturnType<typeof computeJuliaProperties> | null = null;
+  let lastBoxDim: number | null = null; // Tier-2 box-counting dimension (image-based)
+  let lastPixelArea: number | null = null; // Tier-2 pixel-count area (image-based)
+  let juliaMeasureTimer = 0;
+  const jSet = (id: string, text: string): void => {
+    byId(id).textContent = text;
+  };
+  const jNum = (x: number, n = 4): string =>
+    Number.isFinite(x) ? Number.parseFloat(x.toPrecision(n)).toString() : x < 0 ? "−∞" : "∞";
+
+  /** Paint the dimension + area rows from the Tier-1 props plus any Tier-2 image measurements. */
+  function paintJuliaDimArea(): void {
+    const p = lastJuliaProps;
+    if (!p) return;
+    const dim: string[] = [];
+    // Lead with the exact small-c value where it applies; box-counting is a rough estimate that
+    // over-reads smooth boundaries at coarse scales, so it follows as a cross-check.
+    if (p.smallCDimension !== null) dim.push(`${jNum(p.smallCDimension, 5)} exact (small-c)`);
+    if (lastBoxDim !== null) dim.push(`≈ ${jNum(lastBoxDim, 4)} (box-count)`);
+    jSet("jp-dimension", dim.length ? dim.join(" · ") : "—");
+
+    if (p.escapes) {
+      jSet("jp-area", "0 (disconnected)");
+    } else {
+      const area: string[] = [];
+      if (lastPixelArea !== null) area.push(`≈ ${jNum(lastPixelArea, 5)} (pixel)`);
+      if (p.analyticArea !== null) area.push(`≤ ${jNum(p.analyticArea, 5)} (bound)`);
+      jSet("jp-area", area.length ? area.join(" · ") : "—");
+    }
+  }
+
   /**
-   * Recompute the "Julia set properties" readout for the current c — the Tier-1 (cheap,
-   * analytic / orbit-based) metrics. View-level like {@link updateExteriorMap}; skipped while the
-   * panel is collapsed. The capacity-based rows (area, dimension, bounding disk, capacity) need a
-   * z^d + c map and show "—" for an arbitrary f; the orbit-based rows still apply.
+   * Tier-2 image metrics (box-counting dimension + pixel area), computed from a CPU interior mask
+   * — heavier, so debounced and run only while the panel is open. The window covers the whole set
+   * for z^d + c (its bounding disk) and the visible dynamical view otherwise.
+   */
+  function measureJuliaImage(): void {
+    const p = lastJuliaProps;
+    if (!p || !byId<HTMLDetailsElement>("julia-props-group").open) return;
+    const dyn = dynamicalView.plot;
+    const halfWidth = p.boundingRadius !== null ? p.boundingRadius : 1 / dyn.zoom;
+    const cx = p.boundingRadius !== null ? 0 : dyn.center[0];
+    const cy = p.boundingRadius !== null ? 0 : dyn.center[1];
+    const size = 128; // grid resolution — ~90 ms; finer over-reads the boundary and is slower
+    const mask = interiorMask(
+      parameterView.plot.fAst,
+      parameterView.plot.escAst,
+      dyn.cValue,
+      parameterView.plot.paramA,
+      cx,
+      cy,
+      halfWidth,
+      size,
+      150,
+    );
+    lastBoxDim = boxCountDimension(mask, size);
+    const interior = countInterior(mask);
+    lastPixelArea = p.escapes ? 0 : interior * ((2 * halfWidth) / size) ** 2;
+    paintJuliaDimArea();
+  }
+
+  function scheduleJuliaMeasure(): void {
+    window.clearTimeout(juliaMeasureTimer);
+    juliaMeasureTimer = window.setTimeout(measureJuliaImage, 350);
+  }
+
+  /**
+   * Recompute the "Julia set properties" readout for the current c. The Tier-1 (cheap, analytic /
+   * orbit-based) rows update immediately; the Tier-2 image rows (box-counting dimension, pixel
+   * area) are scheduled debounced. Skipped while the panel is collapsed. The capacity-based rows
+   * need a z^d + c map and show "—" for an arbitrary f; the orbit-based rows still apply.
    */
   function updateJuliaProperties(): void {
     if (!byId<HTMLDetailsElement>("julia-props-group").open) return; // collapsed → no work
-    const set = (id: string, text: string): void => {
-      byId(id).textContent = text;
-    };
-    const num = (x: number, n = 4): string =>
-      Number.isFinite(x) ? Number.parseFloat(x.toPrecision(n)).toString() : x < 0 ? "−∞" : "∞";
     const d = parameterView.plot.monicDegree;
     const c = dynamicalView.plot.cValue;
     const p = computeJuliaProperties({
@@ -767,8 +834,11 @@ function init(): void {
       criticalPoint: parameterView.plot.criticalPoint,
       a: parameterView.plot.paramA,
     });
+    lastJuliaProps = p;
+    lastBoxDim = null; // stale on a c / f change — the debounced measure refills them
+    lastPixelArea = null;
 
-    set(
+    jSet(
       "jp-connectivity",
       p.connected
         ? d === null
@@ -783,27 +853,13 @@ function init(): void {
       ptype =
         p.cycle.multiplierMag < 1e-6
           ? `superattracting · period ${p.cycle.period}`
-          : `attracting · period ${p.cycle.period} · |λ| = ${num(p.cycle.multiplierMag, 3)}`;
+          : `attracting · period ${p.cycle.period} · |λ| = ${jNum(p.cycle.multiplierMag, 3)}`;
     else if (p.paramClass === "neutral") ptype = "neutral (|λ| ≈ 1, on the boundary)";
     else ptype = "bounded — no attracting cycle found";
     if (p.cycle?.rotation) ptype += ` · ${p.cycle.rotation.p}/${p.cycle.rotation.q}`;
-    set("jp-paramtype", ptype);
+    jSet("jp-paramtype", ptype);
 
-    set(
-      "jp-dimension",
-      p.smallCDimension !== null ? `≈ ${num(p.smallCDimension, 5)} (small-c exact)` : "—",
-    );
-
-    set(
-      "jp-area",
-      p.analyticArea === null
-        ? "—"
-        : p.escapes
-          ? "0 (disconnected)"
-          : `≤ ${num(p.analyticArea, 5)} (coeff. upper bound)`,
-    );
-
-    set(
+    jSet(
       "jp-lyapunov",
       p.escapes
         ? "→ +∞ (escaping)"
@@ -811,23 +867,26 @@ function init(): void {
           ? "—"
           : p.lyapunov === -Infinity
             ? "−∞ (superattracting)"
-            : `${num(p.lyapunov, 4)} nats/iter`,
+            : `${jNum(p.lyapunov, 4)} nats/iter`,
     );
 
-    set("jp-bounding", p.boundingRadius !== null ? `|z| ≤ ${num(p.boundingRadius, 4)}` : "—");
+    jSet("jp-bounding", p.boundingRadius !== null ? `|z| ≤ ${jNum(p.boundingRadius, 4)}` : "—");
 
     if (d === null) {
-      set("jp-symmetry", "—");
+      jSet("jp-symmetry", "—");
     } else {
       const base = d === 2 ? "central (z → −z)" : `${d}-fold rotational`;
-      set("jp-symmetry", c[1] === 0 ? `${base} · real axis` : base);
+      jSet("jp-symmetry", c[1] === 0 ? `${base} · real axis` : base);
     }
 
-    set("jp-capacity", p.capacity !== null ? `${p.capacity} (exact)` : "—");
-    set(
+    jSet("jp-capacity", p.capacity !== null ? `${p.capacity} (exact)` : "—");
+    jSet(
       "julia-props-note",
       d === null ? "Area / dimension / capacity need a zᵈ+c map (current f is not)." : "",
     );
+
+    paintJuliaDimArea(); // Tier-1 dimension/area now; the debounced measure enriches them
+    scheduleJuliaMeasure();
   }
 
   const paramChip = byId("param-view-chip");

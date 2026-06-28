@@ -177,3 +177,132 @@ export function computeJuliaProperties(opts: {
     capacity: monic ? 1 : null,
   };
 }
+
+// --- Tier-2: image-based estimates (box-counting dimension + pixel area) ---------------------
+// These sample an interior mask on a CPU grid (reusing the compiled evaluator) rather than the
+// GPU, so they are deterministic, pure, and don't perturb the live render. They are heavier than
+// Tier-1, so the caller debounces them and only runs while the panel is open.
+
+/**
+ * Interior (bounded-orbit) mask of the set over the square window centred at (cx, cy) with the
+ * given half-width, row-major (1 = the orbit of that point stays bounded within `maxIter`).
+ */
+export function interiorMask(
+  fAst: Node,
+  escAst: Node,
+  c: Complex,
+  a: Complex,
+  cx: number,
+  cy: number,
+  halfWidth: number,
+  size: number,
+  maxIter: number,
+): Uint8Array {
+  const f = makeComplexFn(fAst, a);
+  const esc = makeEscapeFn(escAst, fAst, a);
+  const mask = new Uint8Array(size * size);
+  const step = (2 * halfWidth) / size;
+  for (let py = 0; py < size; py++) {
+    const y = cy - halfWidth + (py + 0.5) * step;
+    for (let px = 0; px < size; px++) {
+      const x = cx - halfWidth + (px + 0.5) * step;
+      let z: Complex = [x, y];
+      let bounded = true;
+      for (let k = 0; k < maxIter; k++) {
+        if (esc(z, c)) {
+          bounded = false;
+          break;
+        }
+        z = f(z, c);
+        if (!Number.isFinite(z[0]) || !Number.isFinite(z[1])) {
+          bounded = false;
+          break;
+        }
+      }
+      if (bounded) mask[py * size + px] = 1;
+    }
+  }
+  return mask;
+}
+
+/** Number of interior cells in a mask (× the per-cell area gives the pixel-area estimate). */
+export function countInterior(mask: Uint8Array): number {
+  let n = 0;
+  for (let i = 0; i < mask.length; i++) n += mask[i];
+  return n;
+}
+
+/**
+ * Box-counting (Minkowski) dimension of the interior/exterior boundary in `mask` (size×size):
+ * the slope of log(occupied boxes) vs log(1/δ) over a dyadic ladder of box sizes. Returns null
+ * when there is too little boundary to fit. An estimate (typically ±0.05–0.1), not exact.
+ */
+export function boxCountDimension(mask: Uint8Array, size: number): number | null {
+  // Boundary = an interior cell touching the exterior (or the window edge) in 4-connectivity.
+  const boundary = new Uint8Array(size * size);
+  let nb = 0;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      if (!mask[i]) continue;
+      const edge =
+        x === 0 ||
+        x === size - 1 ||
+        y === 0 ||
+        y === size - 1 ||
+        !mask[i - 1] ||
+        !mask[i + 1] ||
+        !mask[i - size] ||
+        !mask[i + size];
+      if (edge) {
+        boundary[i] = 1;
+        nb++;
+      }
+    }
+  }
+  if (nb < 16) return null; // too little structure for a meaningful fit
+
+  const logInvDelta: number[] = [];
+  const logCount: number[] = [];
+  for (let box = size >> 1; box >= 2; box >>= 1) {
+    let occupied = 0;
+    for (let by = 0; by < size; by += box) {
+      for (let bx = 0; bx < size; bx += box) {
+        let hit = false;
+        const yEnd = Math.min(by + box, size);
+        const xEnd = Math.min(bx + box, size);
+        for (let y = by; y < yEnd && !hit; y++) {
+          for (let x = bx; x < xEnd && !hit; x++) {
+            if (boundary[y * size + x]) hit = true;
+          }
+        }
+        if (hit) occupied++;
+      }
+    }
+    if (occupied > 0) {
+      logInvDelta.push(Math.log(size / box));
+      logCount.push(Math.log(occupied));
+    }
+  }
+  // Drop the 2 finest scales when we can: a ~1-pixel-thick boundary saturates there (the slope
+  // flattens toward 1), biasing the estimate low. The coarse scales carry the fractal signal.
+  const drop = logInvDelta.length >= 5 ? 2 : 0;
+  const xs = logInvDelta.slice(0, logInvDelta.length - drop);
+  const ys = logCount.slice(0, logCount.length - drop);
+  if (xs.length < 3) return null;
+
+  // Least-squares slope of logCount vs logInvDelta.
+  const n = xs.length;
+  let sx = 0;
+  let sy = 0;
+  let sxx = 0;
+  let sxy = 0;
+  for (let i = 0; i < n; i++) {
+    sx += xs[i];
+    sy += ys[i];
+    sxx += xs[i] * xs[i];
+    sxy += xs[i] * ys[i];
+  }
+  const denom = n * sxx - sx * sx;
+  return denom === 0 ? null : (n * sxy - sx * sy) / denom;
+}

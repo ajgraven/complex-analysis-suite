@@ -10,7 +10,10 @@ import { parse } from "../src/expr/parser";
 import {
   analyticAreaUpperBound,
   boundingRadius,
+  boxCountDimension,
   computeJuliaProperties,
+  countInterior,
+  interiorMask,
 } from "../src/render/juliaProperties";
 
 const F2 = parse("z^2+c");
@@ -116,5 +119,40 @@ describe("computeJuliaProperties — non-monic gating", () => {
     expect(p.cycle).toBeNull(); // no analytic multiplier
     expect(p.lyapunov).toBeNull(); // no analytic derivative
     expect(p.analyticArea).toBeNull();
+  });
+});
+
+describe("Tier-2 image metrics (interior mask, pixel area, box-counting)", () => {
+  it("pixel area: z²+c at c=0 fills the unit disk (area ≈ π)", () => {
+    const size = 160;
+    const H = 1; // window [-1,1]² bounds K_0 (the closed unit disk)
+    const mask = interiorMask(F2, ESC, [0, 0], [0, 0], 0, 0, H, size, 120);
+    const area = countInterior(mask) * ((2 * H) / size) ** 2;
+    expect(Math.abs(area - Math.PI)).toBeLessThan(0.1);
+  });
+
+  it("interior mask is empty when the set is a Cantor dust (c=2)", () => {
+    const mask = interiorMask(F2, ESC, [2, 0], [0, 0], 0, 0, 2, 64, 80);
+    expect(countInterior(mask)).toBe(0);
+  });
+
+  it("box-counting dimension of a filled disk ≈ 1 (its boundary is a circle)", () => {
+    const size = 256;
+    const r = 90;
+    const mid = size / 2;
+    const disk = new Uint8Array(size * size);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        if ((x - mid) ** 2 + (y - mid) ** 2 <= r * r) disk[y * size + x] = 1;
+      }
+    }
+    const dim = boxCountDimension(disk, size);
+    expect(dim).not.toBeNull();
+    expect(dim ?? 9).toBeGreaterThan(0.85);
+    expect(dim ?? 9).toBeLessThan(1.25);
+  });
+
+  it("box-counting dimension is null for an empty mask", () => {
+    expect(boxCountDimension(new Uint8Array(64 * 64), 64)).toBeNull();
   });
 });
