@@ -24,6 +24,7 @@ import {
   imageConnectivity,
   interiorMask,
 } from "./render/juliaProperties";
+import { polynomialConnectivity } from "./render/critical";
 import { drawOrbitPreview, renderJuliaPreview } from "./render/orbitPreview";
 import type { Node as ExprNode } from "./expr/ast";
 import { parseAngle } from "./render/rays";
@@ -759,6 +760,7 @@ function init(): void {
   let lastExtent: ReturnType<typeof estimateExtent> = null; // Tier-2 bounding extent (general f)
   let lastSymmetry: string | null = null; // Tier-2 measured symmetry string (general f)
   let lastConnectivity: string | null = null; // Tier-2 image connectivity string (general f)
+  let lastConnectivityRigorous = false; // Tier-1 polynomial verdict set ⇒ skip the image estimate
   let juliaMeasureTimer = 0;
   const jSet = (id: string, text: string): void => {
     byId(id).textContent = text;
@@ -865,9 +867,10 @@ function init(): void {
         lastBoxDim = null;
         lastPixelArea = p.escapes ? 0 : null;
         lastSymmetry = "none detected";
-        lastConnectivity = p.escapes
-          ? "≈ Cantor dust (no interior)"
-          : "≈ connected dendrite (no interior)";
+        if (!lastConnectivityRigorous)
+          lastConnectivity = p.escapes
+            ? "≈ Cantor dust (no interior)"
+            : "≈ connected dendrite (no interior)";
         paintJuliaDimArea();
         paintJuliaExtentSymmetry();
         return;
@@ -883,7 +886,7 @@ function init(): void {
     lastPixelArea = p.escapes ? 0 : interior * ((2 * halfWidth) / size) ** 2;
     if (p.boundingRadius === null) {
       lastSymmetry = describeSymmetry(detectSymmetries(mask, size));
-      lastConnectivity = describeConnectivity(mask, size, p.escapes);
+      if (!lastConnectivityRigorous) lastConnectivity = describeConnectivity(mask, size, p.escapes);
     }
 
     paintJuliaDimArea();
@@ -922,8 +925,27 @@ function init(): void {
     lastConnectivity = null;
 
     if (d === null) {
-      jSet("jp-connectivity", "measuring…"); // image-based estimate from the debounced Tier-2 pass
+      // Rigorous (Fatou–Julia) connectivity from all critical orbits when f is a polynomial;
+      // otherwise fall back to the debounced image estimate.
+      const pc = polynomialConnectivity(
+        parameterView.plot.fAst,
+        parameterView.plot.escAst,
+        parameterView.plot.paramA,
+        c,
+      );
+      lastConnectivityRigorous = pc !== null;
+      jSet(
+        "jp-connectivity",
+        pc === "connected"
+          ? "connected (all critical orbits bounded)"
+          : pc === "cantor"
+            ? "totally disconnected — Cantor dust"
+            : pc === "disconnected"
+              ? "disconnected (mixed critical orbits)"
+              : "measuring…", // non-polynomial ⇒ image estimate fills this from the Tier-2 pass
+      );
     } else {
+      lastConnectivityRigorous = false;
       jSet(
         "jp-connectivity",
         p.connected
