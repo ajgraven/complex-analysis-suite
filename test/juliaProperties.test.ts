@@ -115,13 +115,17 @@ describe("computeJuliaProperties — non-monic gating", () => {
     expect(typeof p.lyapunov).toBe("number"); // holomorphic ⇒ Lyapunov available
   });
 
-  it("non-holomorphic f: connectivity holds, but cycle/Lyapunov are null (no f′)", () => {
-    const bar = parse("conjugate(z)^2+c");
-    const p = props(null, [0, 0], bar);
-    expect(p.connected).toBe(true); // 0 is a bounded (fixed) orbit of conj(z)²
-    expect(p.cycle).toBeNull(); // no analytic multiplier
-    expect(p.lyapunov).toBeNull(); // no analytic derivative
-    expect(p.analyticArea).toBeNull();
+  it("non-holomorphic f: |λ| and Lyapunov come from the real 2×2 Jacobian (PR β)", () => {
+    // f = ½·conj(z): a linear non-holomorphic map, fixed point 0 with Jacobian [[.5,0],[0,−.5]].
+    const linConj = parse("0.5*conjugate(z)");
+    const p = props(null, [0, 0], linConj);
+    expect(p.connected).toBe(true); // 0 is a bounded (fixed) orbit
+    expect(p.cycle?.period).toBe(1); // cycle now found via the real-Jacobian multiplier
+    expect(p.cycle?.multiplierMag ?? 9).toBeCloseTo(0.5, 6); // ρ of the Jacobian
+    expect(p.paramClass).toBe("hyperbolic");
+    expect(p.lyapunov ?? 9).toBeCloseTo(Math.log(0.5), 4); // attracting ⇒ ≈ −0.693
+    expect(p.analyticArea).toBeNull(); // capacity-based rows still monic-gated
+    expect(p.capacity).toBeNull();
   });
 });
 

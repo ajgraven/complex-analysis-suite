@@ -887,6 +887,7 @@ function init(): void {
     if (!byId<HTMLDetailsElement>("julia-props-group").open) return; // collapsed → no work
     const d = parameterView.plot.monicDegree;
     const c = dynamicalView.plot.cValue;
+    const holo = parameterView.plot.holomorphic; // non-holomorphic ⇒ |λ| / Lyapunov are ≈ (finite-diff)
     const p = computeJuliaProperties({
       degree: d,
       c,
@@ -916,7 +917,7 @@ function init(): void {
       ptype =
         p.cycle.multiplierMag < 1e-6
           ? `superattracting · period ${p.cycle.period}`
-          : `attracting · period ${p.cycle.period} · |λ| = ${jNum(p.cycle.multiplierMag, 3)}`;
+          : `attracting · period ${p.cycle.period} · |λ| ${holo ? "=" : "≈"} ${jNum(p.cycle.multiplierMag, 3)}`;
     else if (p.paramClass === "neutral") ptype = "neutral (|λ| ≈ 1, on the boundary)";
     else ptype = "bounded — no attracting cycle found";
     if (p.cycle?.rotation) ptype += ` · ${p.cycle.rotation.p}/${p.cycle.rotation.q}`;
@@ -930,7 +931,7 @@ function init(): void {
           ? "—"
           : p.lyapunov === -Infinity
             ? "−∞ (superattracting)"
-            : `${jNum(p.lyapunov, 4)} nats/iter`,
+            : `${holo ? "" : "≈ "}${jNum(p.lyapunov, 4)} nats/iter`,
     );
 
     jSet(

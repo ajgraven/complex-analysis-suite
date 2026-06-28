@@ -13,9 +13,11 @@
  * cases; only the distance estimate differs (∂/∂c on the parameter plane,
  * ∂/∂z on the dynamical plane).
  *
- * The multiplier and distance need a holomorphic `f` (so f′ is well defined); for
- * non-holomorphic `f` (abs-maps, the assignment presets) they are reported as null,
- * while the period and rotation number — which are purely combinatorial — still hold.
+ * The complex multiplier λ and the exterior distance need a holomorphic `f` (so f′ is well
+ * defined). For a non-holomorphic `f` (abs-maps, the assignment presets) the multiplier
+ * MAGNITUDE |λ| is still reported — the spectral radius of the product of the real 2×2 Jacobians
+ * around the cycle (see ./jacobian) — while arg λ and the distance are null; the period and the
+ * rotation number, being purely combinatorial, always hold.
  */
 
 import type { Complex } from "../complex";
@@ -23,6 +25,7 @@ import type { Node } from "../expr/ast";
 import * as C from "../expr/complexJs";
 import { differentiate } from "../expr/derivative";
 import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
+import { cycleMultiplierMag } from "./jacobian";
 import { classifyOrbit, type OrbitFate } from "./overlay";
 
 /** One plane's worth of inspector output. */
@@ -263,6 +266,11 @@ export function inspect(
         const lam = C.exp(s);
         out.multiplier = lam;
         out.multiplierMag = cabs(lam);
+      } else {
+        // Non-holomorphic f: no scalar f′, so report |λ| (magnitude only) as the spectral radius
+        // of the product of real Jacobians around a freshly-settled cycle; arg λ stays null.
+        const settled = locateCycle(f, cycle[0], c, info.period);
+        if (settled.length === info.period) out.multiplierMag = cycleMultiplierMag(f, settled, c);
       }
     }
   } else if (info.fate === "escaped" && deriv) {

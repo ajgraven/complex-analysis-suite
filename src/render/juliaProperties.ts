@@ -16,6 +16,7 @@ import type { Complex } from "../complex";
 import type { Node } from "../expr/ast";
 import { differentiate } from "../expr/derivative";
 import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
+import { lyapunovJacobian } from "./jacobian";
 import { inspect } from "./inspect";
 import { juliaExteriorCoeffs } from "./uniformize";
 
@@ -91,9 +92,10 @@ export function analyticAreaUpperBound(d: number, c: Complex, nCoeffs = AREA_COE
 
 /**
  * Critical-orbit Lyapunov exponent (1/n)·Σ log|f′(z_k)|. Returns `escapes: true` (value null) if
- * the orbit leaves the set; `value: null` if f is non-holomorphic (no symbolic f′). A log|f′| = −∞
- * term (the orbit hits the critical point — a superattracting cycle) collapses the average to −∞,
- * which is the correct value there.
+ * the orbit leaves the set. For a non-holomorphic f (no symbolic f′) it falls back to the real
+ * 2×2-Jacobian (Benettin) Lyapunov, which reduces to the same value when f is holomorphic. A
+ * log|f′| = −∞ term (the orbit hits the critical point — a superattracting cycle) collapses the
+ * average to −∞, the correct value there.
  */
 function criticalLyapunov(
   fAst: Node,
@@ -107,7 +109,8 @@ function criticalLyapunov(
   try {
     fz = makeComplexFn(differentiate(fAst, "z"), a);
   } catch {
-    return { value: null, escapes: false }; // non-holomorphic ⇒ no analytic derivative
+    // non-holomorphic ⇒ no analytic f′; use the real-Jacobian (Benettin) Lyapunov instead.
+    return lyapunovJacobian(makeComplexFn(fAst, a), makeEscapeFn(escAst, fAst, a), crit, c, n);
   }
   const f = makeComplexFn(fAst, a);
   const esc = makeEscapeFn(escAst, fAst, a);
