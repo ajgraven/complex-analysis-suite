@@ -40,6 +40,14 @@ describe("findCriticalPoints", () => {
     for (const p of pts) expect(Math.abs(p[1])).toBeLessThan(1e-6); // real roots
   });
 
+  it("z⁴+c has critical point 0 (triple) — the residual guard accepts the multiple root", () => {
+    const pts = findCriticalPoints(parse("z^4+c"), O, O);
+    expect(pts).not.toBeNull();
+    if (!pts) return;
+    expect(pts.length).toBe(3);
+    for (const p of pts) expect(cabs(p)).toBeLessThan(1e-2);
+  });
+
   it("returns null for a non-polynomial map", () => {
     expect(findCriticalPoints(parse("exp(z)+c"), O, O)).toBeNull();
     expect(findCriticalPoints(parse("conjugate(z)^2+c"), O, O)).toBeNull(); // non-holomorphic
@@ -57,6 +65,12 @@ describe("polynomialConnectivity (all critical orbits)", () => {
     expect(polynomialConnectivity(F, ESC, O, [0, 0])).toBe("connected"); // ±1 → −2, 2 (both bounded)
     expect(polynomialConnectivity(F, ESC, O, [1, 0])).toBe("cantor"); // both critical orbits escape
     expect(polynomialConnectivity(F, ESC, O, [2.5, 0])).toBe("disconnected"); // one bounded, one escapes
+  });
+
+  it("z⁴+c (triple critical point): connected at c=0, Cantor when the critical orbit escapes", () => {
+    const F = parse("z^4+c");
+    expect(polynomialConnectivity(F, ESC, O, [0, 0])).toBe("connected");
+    expect(polynomialConnectivity(F, ESC, O, [2, 0])).toBe("cantor");
   });
 
   it("is null for a non-polynomial map (caller falls back to the image estimate)", () => {

@@ -17,6 +17,11 @@ import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
 
 const cabs = (z: Complex): number => Math.hypot(z[0], z[1]);
 
+// Largest |f′(root)/lead| accepted as "this estimate really is a critical point". It is tiny at any
+// converged root (including a multiple one) and stays O(1) for a non-converged Durand–Kerner run,
+// which we then reject so the caller falls back to the image-based connectivity estimate.
+const ROOT_RESIDUAL_TOL = 1e-6;
+
 /**
  * Degree and leading coefficient of a polynomial g, detected from the far field (the growth rate of
  * |g| over a large circle, then g(z)/z^deg). Returns null when g is not a clean polynomial — a
@@ -36,19 +41,24 @@ function farFieldDegreeLead(
     }
     return s / 8;
   };
-  const R1 = 1e3;
-  const R2 = 1e6;
-  const l1 = logMag(R1);
-  const l2 = logMag(R2);
-  if (!Number.isFinite(l1) || !Number.isFinite(l2)) return null;
-  const dEst = (l2 - l1) / Math.log(R2 / R1);
-  const degree = Math.round(dEst);
-  if (degree < 0 || Math.abs(dEst - degree) > 0.01) return null;
+  // Degree from the far-field growth rate, sampled at THREE radii. A clean polynomial gives the same
+  // integer exponent at every scale; an ill-conditioned one (a leading term that only dominates at a
+  // particular scale — e.g. wildly disparate coefficients) gives a scale-dependent estimate. Require
+  // the inner and outer estimates to agree and bail otherwise, so the caller uses the image estimate
+  // rather than a silently-wrong degree. (A leading coefficient tiny enough to surface only far past
+  // 1e6 can still fool any double-precision far-field probe — a fundamental limit of sampling.)
+  const Rlead = 1e6;
+  const ls = [1e2, 1e4, Rlead].map(logMag);
+  if (ls.some((l) => !Number.isFinite(l))) return null;
+  const dOuter = (ls[2] - ls[1]) / Math.log(Rlead / 1e4);
+  const dInner = (ls[1] - ls[0]) / Math.log(1e4 / 1e2);
+  const degree = Math.round(dOuter);
+  if (degree < 0 || Math.abs(dOuter - degree) > 0.01 || Math.abs(dInner - degree) > 0.05) return null;
   let lr = 0;
   let li = 0;
   for (let k = 0; k < 8; k++) {
     const th = (Math.PI * k) / 4;
-    const z: Complex = [R2 * Math.cos(th), R2 * Math.sin(th)];
+    const z: Complex = [Rlead * Math.cos(th), Rlead * Math.sin(th)];
     const w = g(z, c);
     let zr = 1;
     let zi = 0;
@@ -107,6 +117,19 @@ export function findCriticalPoints(fAst: Node, a: Complex, c: Complex): Complex[
     }
     if (maxDelta < 1e-12) break;
   }
+  // Convergence guard: Durand–Kerner returns its iterates whether or not it converged, so a clustered
+  // / high-multiplicity / high-degree f′ could otherwise hand back non-converged points as "critical
+  // points" and feed a confidently-wrong connectivity verdict. Certify each estimate by its residual
+  // |p(root)|: tiny at any converged root (including a multiple one, where DK converges only linearly
+  // yet the residual still vanishes) and O(1) for a non-converged run — in which case bail to null so
+  // the caller falls back to the image estimate instead of trusting bogus roots.
+  let maxResidual = 0;
+  for (const r of roots) {
+    const res = cabs(pMonic(r));
+    if (!Number.isFinite(res)) return null;
+    maxResidual = Math.max(maxResidual, res);
+  }
+  if (maxResidual > ROOT_RESIDUAL_TOL) return null;
   return roots;
 }
 
