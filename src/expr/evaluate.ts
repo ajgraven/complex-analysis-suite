@@ -160,13 +160,217 @@ export function evaluate(
   return new Evaluator(scope, fAst, 0).eval(ast);
 }
 
+// --- Compiled evaluator (closure tree) -----------------------------------------
+// `evaluate` above re-walks the AST and allocates a fresh scope Map on every call —
+// fine for tests, but it's the hot path for every CPU numeric (orbit, classifyOrbit,
+// inspect, rays, uniformize, the Julia hover inset). The functions below lower an AST
+// ONCE into a tree of closures that call the SAME complexJs ops in the SAME order, so
+// results are bitwise-identical to the interpreter (fuzz-tested), but without the
+// per-call Map allocation or the per-node switch dispatch.
+
+/** Per-evaluation scope. z/c/a are always present; locals (assign) are added as keys. */
+interface Scope {
+  z: Complex;
+  c: Complex;
+  a: Complex;
+  [name: string]: Complex;
+}
+type CFn = (s: Scope, depth: number) => Complex;
+type BFn = (s: Scope, depth: number) => boolean;
+
+/** Is this node boolean-valued (vs complex-valued)? Mirrors the GLSL backend's split. */
+function nodeIsBool(node: Node): boolean {
+  switch (node.kind) {
+    case "bool":
+    case "not":
+    case "compare":
+      return true;
+    case "if":
+      return nodeIsBool(node.then) || nodeIsBool(node.otherwise);
+    case "seq":
+      return nodeIsBool(node.stmts[node.stmts.length - 1]);
+    default:
+      return false;
+  }
+}
+
+/** Compile a non-final seq statement: evaluated for its side effect (assignment) and value. */
+function compileStmt(node: Node, fRef: () => CFn): (s: Scope, depth: number) => void {
+  if (node.kind === "assign") {
+    const value = compileComplex(node.value, fRef);
+    const name = node.name;
+    return (s, d) => {
+      s[name] = value(s, d);
+    };
+  }
+  if (nodeIsBool(node)) {
+    const b = compileBool(node, fRef);
+    return (s, d) => void b(s, d);
+  }
+  const c = compileComplex(node, fRef);
+  return (s, d) => void c(s, d);
+}
+
+/** Lower a complex-valued node to a closure. `fRef` resolves the `f(...)` builtin lazily. */
+function compileComplex(node: Node, fRef: () => CFn): CFn {
+  switch (node.kind) {
+    case "num": {
+      const v = node.value;
+      return () => [v, 0];
+    }
+    case "const": {
+      if (node.name === "i") return () => [0, 1];
+      if (node.name === "e") return () => [C.E, 0];
+      return () => [C.PI, 0];
+    }
+    case "var": {
+      const name = node.name;
+      if (name === "z") return (s) => s.z;
+      if (name === "c") return (s) => s.c;
+      if (name === "a") return (s) => s.a;
+      return (s) => {
+        const v = (s as Record<string, Complex | undefined>)[name];
+        if (v === undefined) throw new ExprError(`Unknown variable '${name}'`, 0);
+        return v;
+      };
+    }
+    case "neg": {
+      const x = compileComplex(node.operand, fRef);
+      return (s, d) => C.neg(x(s, d));
+    }
+    case "arith": {
+      const l = compileComplex(node.left, fRef);
+      const r = compileComplex(node.right, fRef);
+      switch (node.op) {
+        case "+":
+          return (s, d) => C.add(l(s, d), r(s, d));
+        case "-":
+          return (s, d) => C.sub(l(s, d), r(s, d));
+        case "*":
+          return (s, d) => C.mul(l(s, d), r(s, d));
+        case "/":
+          return (s, d) => C.div(l(s, d), r(s, d));
+        case "^":
+          return (s, d) => C.pow(l(s, d), r(s, d));
+      }
+      break;
+    }
+    case "if": {
+      const cond = compileBool(node.cond, fRef);
+      const t = compileComplex(node.then, fRef);
+      const e = compileComplex(node.otherwise, fRef);
+      return (s, d) => (cond(s, d) ? t(s, d) : e(s, d));
+    }
+    case "call":
+      return compileCall(node.name, node.args, fRef);
+    case "assign": {
+      const value = compileComplex(node.value, fRef);
+      const name = node.name;
+      return (s, d) => {
+        const v = value(s, d);
+        s[name] = v;
+        return v;
+      };
+    }
+    case "seq": {
+      const stmts = node.stmts;
+      const final = compileComplex(stmts[stmts.length - 1], fRef);
+      const execs = stmts.slice(0, -1).map((st) => compileStmt(st, fRef));
+      if (execs.length === 0) return final;
+      return (s, d) => {
+        for (let i = 0; i < execs.length; i++) execs[i](s, d);
+        return final(s, d);
+      };
+    }
+  }
+  throw new ExprError("Cannot use a boolean where a number is expected", 0);
+}
+
+/** Lower a boolean-valued node to a closure (a bare complex node coerces via re != 0). */
+function compileBool(node: Node, fRef: () => CFn): BFn {
+  switch (node.kind) {
+    case "bool": {
+      const v = node.value;
+      return () => v;
+    }
+    case "not": {
+      const b = compileBool(node.operand, fRef);
+      return (s, d) => !b(s, d);
+    }
+    case "compare": {
+      const l = compileComplex(node.left, fRef);
+      const r = compileComplex(node.right, fRef);
+      if (node.op === ">") return (s, d) => l(s, d)[0] > r(s, d)[0];
+      if (node.op === "<") return (s, d) => l(s, d)[0] < r(s, d)[0];
+      return (s, d) => {
+        const a = l(s, d);
+        const b = r(s, d);
+        return a[0] === b[0] && a[1] === b[1];
+      };
+    }
+    case "if": {
+      const cond = compileBool(node.cond, fRef);
+      const t = compileBool(node.then, fRef);
+      const e = compileBool(node.otherwise, fRef);
+      return (s, d) => (cond(s, d) ? t(s, d) : e(s, d));
+    }
+    case "seq": {
+      const stmts = node.stmts;
+      const final = compileBool(stmts[stmts.length - 1], fRef);
+      const execs = stmts.slice(0, -1).map((st) => compileStmt(st, fRef));
+      if (execs.length === 0) return final;
+      return (s, d) => {
+        for (let i = 0; i < execs.length; i++) execs[i](s, d);
+        return final(s, d);
+      };
+    }
+    default: {
+      // A complex expression used as a condition: true when its real part is non-zero
+      // (mirrors the interpreter's escape coercion and the GLSL backend's emitBool).
+      const c = compileComplex(node, fRef);
+      return (s, d) => c(s, d)[0] !== 0;
+    }
+  }
+}
+
+/** Lower a `call` (the `f(...)` builtin, or a unary/binary stdlib function). */
+function compileCall(name: string, args: Node[], fRef: () => CFn): CFn {
+  if (name === "f") {
+    const z = compileComplex(args[0], fRef);
+    const c = compileComplex(args[1], fRef);
+    return (s, d) => {
+      if (d >= MAX_DEPTH) throw new ExprError("f(...) recursion too deep", 0);
+      return fRef()({ z: z(s, d), c: c(s, d), a: s.a }, d + 1);
+    };
+  }
+  const unary = UNARY[name];
+  if (unary) {
+    const x = compileComplex(args[0], fRef);
+    return (s, d) => unary(x(s, d));
+  }
+  const binary = BINARY[name];
+  if (binary) {
+    const a0 = compileComplex(args[0], fRef);
+    const a1 = compileComplex(args[1], fRef);
+    return (s, d) => binary(a0(s, d), a1(s, d));
+  }
+  throw new ExprError(`Unknown function '${name}'`, 0);
+}
+
+/** Wrap a compile error so it surfaces when the function is called (as the interpreter did). */
+function deferError(err: unknown): never {
+  throw err instanceof Error ? err : new ExprError(String(err), 0);
+}
+
 /** Build a reusable `(z, c) → Complex` closure from an `f` AST, with the live `a`. */
 export function makeComplexFn(ast: Node, a: Complex = [0, 0]): (z: Complex, c: Complex) => Complex {
-  return (z, c) => {
-    const v = evaluate(ast, z, c, ast, a);
-    if (!isComplex(v)) throw new ExprError("f must return a number", 0);
-    return v;
-  };
+  let body: CFn;
+  try {
+    body = compileComplex(ast, () => body); // f(...) inside f refers to f itself
+  } catch (err) {
+    return () => deferError(err);
+  }
+  return (z, c) => body({ z, c, a }, 0);
 }
 
 /** Build a reusable `(z, c) → boolean` closure from an `escape` AST (may call `f`). */
@@ -175,8 +379,13 @@ export function makeEscapeFn(
   fAst: Node,
   a: Complex = [0, 0],
 ): (z: Complex, c: Complex) => boolean {
-  return (z, c) => {
-    const v = evaluate(escapeAst, z, c, fAst, a);
-    return isComplex(v) ? v[0] !== 0 : v;
-  };
+  let fBody: CFn;
+  let escBody: BFn;
+  try {
+    fBody = compileComplex(fAst, () => fBody);
+    escBody = compileBool(escapeAst, () => fBody);
+  } catch (err) {
+    return () => deferError(err);
+  }
+  return (z, c) => escBody({ z, c, a }, 0);
 }
