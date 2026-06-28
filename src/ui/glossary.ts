@@ -110,6 +110,29 @@ export const GLOSSARY: GlossaryEntry[] = [
     term: "Logarithmic capacity",
     defn: "A conformal 'size' of a compact set, equal to the leading factor of its exterior map. A monic polynomial's filled Julia set and the multibrot set both have capacity 1, so the exterior map's leading term is exactly w.",
   },
+  {
+    id: "julia-connectivity",
+    term: "Connectivity",
+    defn: "The filled Julia set Kᶜ is connected exactly when the critical orbit stays bounded (c in the Mandelbrot / multibrot set); otherwise it is totally disconnected — a Cantor dust of uncountably many points with no interior.",
+  },
+  {
+    id: "fractal-dimension",
+    term: "Fractal dimension",
+    defn: "How the detail of the Julia set fills space — between 1 (a smooth curve, e.g. c = 0) and 2. The 'small-c exact' value is Ruelle's formula, valid in the main cardioid; elsewhere a box-counting estimate of the boundary is used.",
+    latex: "\\dim_H J_c = 1 + \\frac{|c|^2}{4\\ln d} + O(|c|^3)",
+  },
+  {
+    id: "lyapunov-exponent",
+    term: "Lyapunov exponent",
+    defn: "The average exponential rate at which nearby orbits separate, measured along the critical orbit. Negative ⇒ an attracting cycle (−∞ at a superattracting centre); positive ⇒ chaotic; it diverges to +∞ when the orbit escapes.",
+    latex: "\\lambda = \\lim_{n\\to\\infty}\\tfrac1n\\sum_{k=0}^{n-1}\\log|f'(z_k)|",
+  },
+  {
+    id: "julia-area",
+    term: "Area of the filled Julia set",
+    defn: "From the exterior-map coefficients, Gronwall's area theorem gives the area as π(1 − Σ k|bₖ|²) — a rigorous upper bound, tight for c well inside the set and loose near its boundary. It is 0 for a disconnected (Cantor) Julia set.",
+    latex: "\\operatorname{Area}(K_c) = \\pi\\Bigl(1 - \\sum_{k\\ge 1} k\\,|b_k|^2\\Bigr)",
+  },
 ];
 
 /** The app's deliberate, non-textbook conventions — stated for honesty / research use. */

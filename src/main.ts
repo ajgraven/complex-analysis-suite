@@ -15,6 +15,7 @@ import type { GLPlot, FractType } from "./render/glPlot";
 import { inspect, findNucleus, type InspectResult } from "./render/inspect";
 import { computeOrbit, orbitAndClassify, type OrbitFate } from "./render/overlay";
 import { juliaConnected, juliaExteriorCoeffs, mandelbrotExteriorCoeffs } from "./render/uniformize";
+import { computeJuliaProperties } from "./render/juliaProperties";
 import { drawOrbitPreview, renderJuliaPreview } from "./render/orbitPreview";
 import type { Node as ExprNode } from "./expr/ast";
 import { parseAngle } from "./render/rays";
@@ -654,6 +655,7 @@ function init(): void {
     paramCValue.textContent = txt;
     updateExteriorMap(); // dyn coefficients depend on c (a no-op while the panel is collapsed)
     applyLaurent(); // …and so does the dynamical boundary (a no-op while the toggle is off)
+    updateJuliaProperties(); // …and the Julia-set properties readout (also gated on its panel)
   }
 
   // --- Exterior-map (uniformization) readout -------------------------------
@@ -742,6 +744,92 @@ function init(): void {
     dynamicalView.setLaurentBoundary(juliaConnected(d, c) ? juliaExteriorCoeffs(d, c, n) : null, r);
   }
 
+  /**
+   * Recompute the "Julia set properties" readout for the current c — the Tier-1 (cheap,
+   * analytic / orbit-based) metrics. View-level like {@link updateExteriorMap}; skipped while the
+   * panel is collapsed. The capacity-based rows (area, dimension, bounding disk, capacity) need a
+   * z^d + c map and show "—" for an arbitrary f; the orbit-based rows still apply.
+   */
+  function updateJuliaProperties(): void {
+    if (!byId<HTMLDetailsElement>("julia-props-group").open) return; // collapsed → no work
+    const set = (id: string, text: string): void => {
+      byId(id).textContent = text;
+    };
+    const num = (x: number, n = 4): string =>
+      Number.isFinite(x) ? Number.parseFloat(x.toPrecision(n)).toString() : x < 0 ? "−∞" : "∞";
+    const d = parameterView.plot.monicDegree;
+    const c = dynamicalView.plot.cValue;
+    const p = computeJuliaProperties({
+      degree: d,
+      c,
+      fAst: parameterView.plot.fAst,
+      escAst: parameterView.plot.escAst,
+      criticalPoint: parameterView.plot.criticalPoint,
+      a: parameterView.plot.paramA,
+    });
+
+    set(
+      "jp-connectivity",
+      p.connected
+        ? d === null
+          ? "connected"
+          : `connected (c ∈ ${d === 2 ? "Mandelbrot set" : `multibrot M${d}`})`
+        : "totally disconnected — Cantor dust",
+    );
+
+    let ptype: string;
+    if (p.paramClass === "outside") ptype = "outside the set (orbit escapes)";
+    else if (p.paramClass === "hyperbolic" && p.cycle)
+      ptype =
+        p.cycle.multiplierMag < 1e-6
+          ? `superattracting · period ${p.cycle.period}`
+          : `attracting · period ${p.cycle.period} · |λ| = ${num(p.cycle.multiplierMag, 3)}`;
+    else if (p.paramClass === "neutral") ptype = "neutral (|λ| ≈ 1, on the boundary)";
+    else ptype = "bounded — no attracting cycle found";
+    if (p.cycle?.rotation) ptype += ` · ${p.cycle.rotation.p}/${p.cycle.rotation.q}`;
+    set("jp-paramtype", ptype);
+
+    set(
+      "jp-dimension",
+      p.smallCDimension !== null ? `≈ ${num(p.smallCDimension, 5)} (small-c exact)` : "—",
+    );
+
+    set(
+      "jp-area",
+      p.analyticArea === null
+        ? "—"
+        : p.escapes
+          ? "0 (disconnected)"
+          : `≤ ${num(p.analyticArea, 5)} (coeff. upper bound)`,
+    );
+
+    set(
+      "jp-lyapunov",
+      p.escapes
+        ? "→ +∞ (escaping)"
+        : p.lyapunov === null
+          ? "—"
+          : p.lyapunov === -Infinity
+            ? "−∞ (superattracting)"
+            : `${num(p.lyapunov, 4)} nats/iter`,
+    );
+
+    set("jp-bounding", p.boundingRadius !== null ? `|z| ≤ ${num(p.boundingRadius, 4)}` : "—");
+
+    if (d === null) {
+      set("jp-symmetry", "—");
+    } else {
+      const base = d === 2 ? "central (z → −z)" : `${d}-fold rotational`;
+      set("jp-symmetry", c[1] === 0 ? `${base} · real axis` : base);
+    }
+
+    set("jp-capacity", p.capacity !== null ? `${p.capacity} (exact)` : "—");
+    set(
+      "julia-props-note",
+      d === null ? "Area / dimension / capacity need a zᵈ+c map (current f is not)." : "",
+    );
+  }
+
   const paramChip = byId("param-view-chip");
   const dynChip = byId("dyn-view-chip");
   /** Refresh the per-plot "view chip" summaries (centre · zoom · iterations). */
@@ -824,6 +912,7 @@ function init(): void {
     applyRayPairs(); // …and for bulb ray pairs
     updateExteriorMap(); // a new f may change the degree / coefficients
     applyLaurent();
+    updateJuliaProperties();
     setDirty(false);
     updateViewChips();
     announce(`Changes applied. Dynamical plane for c = ${dynCValue.textContent}.`);
@@ -847,6 +936,7 @@ function init(): void {
     applyRayPairs();
     updateExteriorMap();
     applyLaurent();
+    updateJuliaProperties();
     setDirty(false);
     updateViewChips();
     scheduleRecord();
@@ -1720,6 +1810,7 @@ function init(): void {
   // through updateDynCaption / applyChanges). Copy + CSV export at full precision.
   byId("exterior-group").addEventListener("toggle", updateExteriorMap);
   byId("exterior-n").addEventListener("input", updateExteriorMap);
+  byId("julia-props-group").addEventListener("toggle", updateJuliaProperties);
   const copyCoeffs = (coeffs: Complex[] | null, title: string): void => {
     if (!coeffs) return;
     void navigator.clipboard

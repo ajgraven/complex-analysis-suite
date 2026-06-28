@@ -812,6 +812,109 @@ z^2+c</textarea
             </div>
           </details>
 
+          <!-- Julia set properties: computed topology / metrics of K_c at the live c. -->
+          <details class="control-group" id="julia-props-group">
+            <summary>Julia set properties</summary>
+            <div class="controls">
+              <p class="exterior-status">
+                Computed properties of the filled Julia set K<sub>c</sub> at the current parameter.
+                <button
+                  type="button"
+                  class="gloss-link"
+                  data-term="dynamical-plane"
+                  aria-label="About the Julia set"
+                >
+                  ?
+                </button>
+              </p>
+              <dl class="julia-props">
+                <div class="julia-prop">
+                  <dt>
+                    Connectivity
+                    <button
+                      type="button"
+                      class="gloss-link"
+                      data-term="julia-connectivity"
+                      aria-label="About connectivity"
+                    >
+                      ?
+                    </button>
+                  </dt>
+                  <dd id="jp-connectivity">—</dd>
+                </div>
+                <div class="julia-prop">
+                  <dt>Parameter c</dt>
+                  <dd id="jp-paramtype">—</dd>
+                </div>
+                <div class="julia-prop">
+                  <dt>
+                    Fractal dimension
+                    <button
+                      type="button"
+                      class="gloss-link"
+                      data-term="fractal-dimension"
+                      aria-label="About fractal dimension"
+                    >
+                      ?
+                    </button>
+                  </dt>
+                  <dd id="jp-dimension">—</dd>
+                </div>
+                <div class="julia-prop">
+                  <dt>
+                    Area of K<sub>c</sub>
+                    <button
+                      type="button"
+                      class="gloss-link"
+                      data-term="julia-area"
+                      aria-label="About the area"
+                    >
+                      ?
+                    </button>
+                  </dt>
+                  <dd id="jp-area">—</dd>
+                </div>
+                <div class="julia-prop">
+                  <dt>
+                    Lyapunov exponent
+                    <button
+                      type="button"
+                      class="gloss-link"
+                      data-term="lyapunov-exponent"
+                      aria-label="About the Lyapunov exponent"
+                    >
+                      ?
+                    </button>
+                  </dt>
+                  <dd id="jp-lyapunov">—</dd>
+                </div>
+                <div class="julia-prop">
+                  <dt>Bounding disk</dt>
+                  <dd id="jp-bounding">—</dd>
+                </div>
+                <div class="julia-prop">
+                  <dt>Symmetry</dt>
+                  <dd id="jp-symmetry">—</dd>
+                </div>
+                <div class="julia-prop">
+                  <dt>
+                    Capacity
+                    <button
+                      type="button"
+                      class="gloss-link"
+                      data-term="capacity"
+                      aria-label="About logarithmic capacity"
+                    >
+                      ?
+                    </button>
+                  </dt>
+                  <dd id="jp-capacity">—</dd>
+                </div>
+              </dl>
+              <p class="exterior-status" id="julia-props-note"></p>
+            </div>
+          </details>
+
           <!-- ===== Save & animate: tucked behind a collapsed group so the dynamics
                  instruments lead, not the export/animation studio. ===== -->
           <details class="control-group" id="studio-group">
