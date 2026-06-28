@@ -118,20 +118,28 @@ function emitArith(op: string, left: Node, right: Node): string {
   return `${fn}(${emitComplex(left)}, ${emitComplex(right)})`;
 }
 
-/** Lower `^`: small integer exponents → repeated multiply; otherwise `cpow`. */
+/** Lower `^`: integer exponents (|n| ≤ 1024) → exact integer power; otherwise `cpow`. */
 function emitPow(base: Node, exp: Node): string {
-  if (exp.kind === "num" && Number.isInteger(exp.value) && Math.abs(exp.value) <= 64) {
+  if (exp.kind === "num" && Number.isInteger(exp.value) && Math.abs(exp.value) <= 1024) {
     return intPow(emitComplex(base), exp.value);
   }
   return `cpow(${emitComplex(base)}, ${emitComplex(exp)})`;
 }
 
+// Inline repeated multiply up to this exponent — keeps the z^2…z^8 hot path branch-free.
+// Larger integer powers route to the cintpow binary-exponentiation helper (see
+// COMPLEX_DERIVED_GLSL) so a high exponent doesn't unroll into a giant nested expression.
+const INTPOW_INLINE_MAX = 8;
+
 function intPow(baseExpr: string, n: number): string {
   if (n === 0) return "vec_(1.0, 0.0)";
   if (n < 0) return `cdiv(vec_(1.0, 0.0), ${intPow(baseExpr, -n)})`;
-  let acc = baseExpr;
-  for (let k = 1; k < n; k++) acc = `cmul(${acc}, ${baseExpr})`;
-  return acc;
+  if (n <= INTPOW_INLINE_MAX) {
+    let acc = baseExpr;
+    for (let k = 1; k < n; k++) acc = `cmul(${acc}, ${baseExpr})`;
+    return acc;
+  }
+  return `cintpow(${baseExpr}, ${n})`;
 }
 
 function emitCall(name: string, args: Node[]): string {

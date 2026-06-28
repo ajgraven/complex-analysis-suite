@@ -55,15 +55,17 @@ export const log = (z: Complex): Complex => [
 /** Principal square root. */
 export const sqrt = (z: Complex): Complex => {
   const r = Math.hypot(z[0], z[1]);
-  const re0 = Math.sqrt((r + z[0]) / 2);
-  const im0 = Math.sqrt((r - z[0]) / 2);
+  // Clamp to 0 before sqrt — for a (near-)negative real, (r ± Re z)/2 can round just
+  // below 0, giving NaN here while the GLSL csqrt returns 0 (it uses max(..., 0.0)).
+  const re0 = Math.sqrt(Math.max((r + z[0]) / 2, 0));
+  const im0 = Math.sqrt(Math.max((r - z[0]) / 2, 0));
   return [re0, z[1] < 0 ? -im0 : im0];
 };
 
 /** Principal power z^w = exp(w · log z). Integer real exponents use repeated multiply. */
 export const pow = (z: Complex, w: Complex): Complex => {
-  if (w[1] === 0 && Number.isInteger(w[0]) && Math.abs(w[0]) <= 64) {
-    return intPow(z, w[0]);
+  if (w[1] === 0 && Number.isInteger(w[0]) && Math.abs(w[0]) <= 1024) {
+    return intPow(z, w[0]); // exact binary exponentiation up to the GLSL fast-path cap
   }
   if (z[0] === 0 && z[1] === 0) return [0, 0];
   return exp(mul(w, log(z)));

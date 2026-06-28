@@ -10,6 +10,22 @@
  */
 
 export const COMPLEX_DERIVED_GLSL = /* glsl */ `
+// Integer power via binary exponentiation (square-and-multiply), matching the JS
+// intPow multiply tree exactly. The codegen routes integer exponents with |n| in
+// [9, 1024] here (small n is inlined as repeated cmul; |n| > 1024 falls to cpow).
+// n is non-negative; 11 squarings cover exponents up to 2^11 - 1 = 2047.
+cvec cintpow(cvec b, int n) {
+  cvec r = vec_(1.0, 0.0);
+  cvec base = b;
+  int k = n;
+  for (int i = 0; i < 11; i++) {
+    if (k <= 0) break;
+    if ((k & 1) == 1) r = cmul(r, base);
+    k = k >> 1;
+    if (k > 0) base = cmul(base, base);
+  }
+  return r;
+}
 cvec cpow(cvec a, cvec b) {
   if (cabsf(a) == 0.0) return vec_(0.0, 0.0);
   return cexp(cmul(b, clog(a)));

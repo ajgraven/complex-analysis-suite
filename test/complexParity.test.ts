@@ -82,6 +82,14 @@ describe("complex backend — exp / log / sqrt (principal branches)", () => {
     near(sqrt([-1, 0]), [0, 1]);
     near(sqrt([0, 1]), [Math.SQRT1_2, Math.SQRT1_2]);
   });
+  it("sqrt clamps the negative-real edge (matches the GLSL csqrt max(...,0))", () => {
+    near(sqrt([-4, 0]), [0, 2]); // principal √(−4) = 2i
+    // (|z| + Re z)/2 can round just below 0 for a tiny negative real → NaN without the
+    // clamp the GLSL side already applies; assert finiteness rather than a NaN result.
+    const r = sqrt([-1e-300, 0]);
+    expect(Number.isFinite(r[0])).toBe(true);
+    expect(Number.isFinite(r[1])).toBe(true);
+  });
 });
 
 describe("complex backend — pow", () => {
@@ -97,6 +105,15 @@ describe("complex backend — pow", () => {
   it("0^0 = 1 (intPow short-circuit), 0^positive = 0", () => {
     near(pow([0, 0], [0, 0]), [1, 0]);
     near(pow([0, 0], [3, 0]), [0, 0]);
+  });
+  it("integer powers above the old 64-exponent cap stay on the exact fast path", () => {
+    near(pow([2, 0], [70, 0]), [2 ** 70, 0], 2 ** 70 * 1e-12); // 2^70 is exact in a double
+    // unit-modulus bases return to 1, exercising the binary-exponentiation chain
+    const z70: Complex = [Math.cos(Math.PI / 35), Math.sin(Math.PI / 35)];
+    near(pow(z70, [70, 0]), [1, 0], 1e-9); // (e^{iπ/35})^70 = e^{2πi} = 1
+    const z128: Complex = [Math.cos(Math.PI / 64), Math.sin(Math.PI / 64)];
+    near(pow(z128, [128, 0]), [1, 0], 1e-9); // (e^{iπ/64})^128 = 1
+    near(intPow([0, 1], 128), [1, 0]); // i^128 = 1, exact
   });
 });
 
