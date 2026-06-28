@@ -237,8 +237,12 @@ export function computeJuliaProperties(opts: {
     escapes,
     boundingRadius: monic ? boundingRadius(degree, c) : null,
     analyticArea: monic ? (escapes ? 0 : analyticAreaUpperBound(degree, c)) : null,
+    // Ruelle / Bodart–Zinsmeister small-|c| asymptotic, dim_H J_c = 1 + |c|²/(4 ln 2) + O(|c|³).
+    // It is established for the QUADRATIC family z²+c and is exact only at c = 0; restricted to d = 2
+    // because the 1/(4 ln d) generalization to higher degree is not a citable result. Every other
+    // map (incl. d ≥ 3) leaves this null and shows the box-counting estimate instead.
     smallCDimension:
-      monic && inPrincipalCardioid ? 1 + (cabs(c) * cabs(c)) / (4 * Math.log(degree)) : null,
+      degree === 2 && inPrincipalCardioid ? 1 + (cabs(c) * cabs(c)) / (4 * Math.LN2) : null,
     capacity: monic ? 1 : polynomialCapacity(fAst, a, c),
   };
 }

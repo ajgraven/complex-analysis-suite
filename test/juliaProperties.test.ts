@@ -95,6 +95,15 @@ describe("computeJuliaProperties — z²+c known parameters", () => {
     expect(p.smallCDimension ?? 0).toBeCloseTo(1 + 0.25 / (4 * Math.log(2)), 6);
   });
 
+  it("z³+c: the small-c dimension is quadratic-only (null for d=3, even in its principal cardioid)", () => {
+    const p = props(3, [0, 0], F3);
+    expect(p.degree).toBe(3);
+    expect(p.connected).toBe(true);
+    expect(p.cycle?.period).toBe(1); // 0 is a superattracting fixed point of z³
+    expect(p.smallCDimension).toBeNull(); // Ruelle asymptotic restricted to z²+c
+    expect(p.capacity).toBe(1); // monic ⇒ capacity 1 (unaffected by the gate)
+  });
+
   it("c=2: escapes → disconnected Cantor set, area 0", () => {
     const p = props(2, [2, 0]);
     expect(p.connected).toBe(false);

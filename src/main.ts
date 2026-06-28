@@ -807,9 +807,9 @@ function init(): void {
     const p = lastJuliaProps;
     if (!p) return;
     const dim: string[] = [];
-    // Lead with the exact small-c value where it applies; box-counting is a rough estimate that
-    // over-reads smooth boundaries at coarse scales, so it follows as a cross-check.
-    if (p.smallCDimension !== null) dim.push(`${jNum(p.smallCDimension, 5)} exact (small-c)`);
+    // The small-c value is the quadratic-family asymptotic (exact only at c = 0); box-counting is a
+    // rough estimate that over-reads smooth boundaries at coarse scales. Both are marked "≈".
+    if (p.smallCDimension !== null) dim.push(`≈ ${jNum(p.smallCDimension, 5)} (small-c)`);
     if (lastBoxDim !== null) dim.push(`≈ ${jNum(lastBoxDim, 4)} (box-count)`);
     jSet("jp-dimension", dim.length ? dim.join(" · ") : "—");
 

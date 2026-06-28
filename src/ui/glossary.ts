@@ -119,8 +119,8 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: "fractal-dimension",
     term: "Fractal dimension",
-    defn: "How the detail of the Julia set fills space — between 1 (a smooth curve, e.g. c = 0) and 2. The 'small-c exact' value is Ruelle's formula, valid in the main cardioid; elsewhere a box-counting estimate of the boundary is used.",
-    latex: "\\dim_H J_c = 1 + \\frac{|c|^2}{4\\ln d} + O(|c|^3)",
+    defn: "How the detail of the Julia set fills space — between 1 (a smooth curve, e.g. c = 0) and 2. For z²+c the 'small-c' value is the Ruelle / Bodart–Zinsmeister asymptotic — accurate only for small |c|, and exact just at c = 0; elsewhere, and for every other map, a box-counting estimate of the boundary is used.",
+    latex: "\\dim_H J_c = 1 + \\frac{|c|^2}{4\\ln 2} + O(|c|^3) \\quad (z^2+c)",
   },
   {
     id: "lyapunov-exponent",
