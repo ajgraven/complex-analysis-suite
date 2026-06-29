@@ -187,6 +187,7 @@ h2 {
     align-self: start;
     max-height: calc(100vh - 1rem);
     overflow: auto;
+    scrollbar-gutter: stable; /* reserve the scrollbar's width so it appearing never reflows (jitters) the plots */
     z-index: 1;
   }
 }
@@ -408,7 +409,15 @@ h2 {
 /* Live coordinate readout under each plot (kept tall so the layout doesn't jump). */
 .readout {
   margin: 0.35rem 0 0;
-  min-height: 1.1em;
+  /* Reserve exactly one line, whatever the value. The live coordinate updates on every hover
+     move, so a readout that grew (empty→text) or wrapped (long value) would reflow the controls
+     below it — and when the plots pane is near its max-height that toggles its scrollbar and
+     makes the plots jitter. A fixed line-height + nowrap + clip keeps the height constant. */
+  min-height: 1.5em;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.8rem;
   color: var(--muted);
