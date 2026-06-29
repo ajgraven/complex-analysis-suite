@@ -167,11 +167,17 @@ The tool already has df64 + a CPU perturbation path for z²+c. The modern upgrad
   `drawFractal` (perturbation-aware). Verified by a CPU oracle (`test/rebasing.test.ts`: rebased ==
   direct iteration) + a live overlap test (rebased kernel ≈ df64 at 1e9: 99.1% pixel-identical,
   meanDiff 4/255, no glitch clusters). **[Effort M — done]**
-- **BLA (bivariate linear approximation)** — supersedes series approximation; "easier to implement,
-  easier to parallelize, better-understood stopping conditions." Build the O(n) merge tree on CPU,
-  look up per-pixel in the shader. Quoted 1.7×–36× over SA, location-dependent. Because only the one
-  z²+c path needs it, you avoid the "100+ formulas" cost that made Kalles Fraktaler decline it.
-  **[Effort M–H]**
+- **🟡 BLA (bivariate linear approximation) — D2a done (CPU table); D2b pending (GPU).** Where δz is
+  small enough that δz² is negligible, the step is linear (`δz_{m+l} = A·δz_m + B·δc`, valid
+  `|δz_m| < r`); a binary tree of merged BLAs lets the kernel skip many iterations at extreme zoom.
+  **D2a (done):** `src/render/bla.ts` builds + queries the tree (single step `A=2Z, B=1`; the Zhuoran
+  merge radius `r = min(rₓ, max(0,(r_y − |Bₓ|·maxC)/|Aₓ|))`; `lookupBLA` = largest valid skip), with a
+  self-validating test (`test/bla.test.ts`) proving a skip reproduces the true per-step iteration
+  within each radius — so the f32-precision-tied radius is provably safe (a conservative radius just
+  skips less). **D2b (remaining):** pack the table into texture(s), traverse it in the perturbation
+  kernel (skip when valid, else a single rebased step), and verify BLA-on == rebasing-only at extreme
+  zoom. Quoted 1.7×–36× over SA, activating only at ≳1e25; z²+c only (sidesteps the "100+ formulas"
+  cost that made Kalles Fraktaler decline it). **[Effort: D2a done; D2b M–H]**
 - **Generalize perturbation to multibrot z^d+c** (binomial) and **Burning Ship/tricorn** (`diffabs` +
   a 2×2 Jacobian). **[Effort M]**
 - **Hard limit:** there is **no known perturbation/BLA/series scheme for rational, transcendental, or
