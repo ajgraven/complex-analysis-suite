@@ -30,4 +30,7 @@ export const PLACES: Place[] = [
   { name: "Feigenbaum Point", state: M("-1.401155,0", "150", "500") },
   { name: "Misiurewicz Point", state: M("-0.77568377,0.13646737", "500", "600") },
   { name: "Scepter Valley", state: M("-1.25,0.02", "60", "400") },
+  { name: "Spiral at c = i (Misiurewicz)", state: M("0,1", "26", "450") },
+  { name: "Western tip (c = −2)", state: M("-1.99,0", "40", "500") },
+  { name: "Real mini-Mandelbrot", state: M("-1.7548,0", "180", "700") },
 ];

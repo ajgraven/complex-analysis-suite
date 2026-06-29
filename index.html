@@ -466,6 +466,40 @@ abs(z)>2</textarea
                 Go
               </button>
             </div>
+            <div class="inspector-misiur">
+              <label for="misiur-pre">Misiurewicz</label>
+              <input
+                type="number"
+                id="misiur-pre"
+                min="1"
+                max="64"
+                value="2"
+                title="Preperiod m (steps before the critical orbit lands on the cycle)"
+              />
+              <input
+                type="number"
+                id="misiur-per"
+                min="1"
+                max="64"
+                value="2"
+                title="Period k of the cycle the critical orbit lands on"
+              />
+              <button
+                id="misiur-go"
+                type="button"
+                title="Newton-find the Misiurewicz point fᵐ⁺ᵏ(0)=fᵐ(0) nearest the view centre"
+              >
+                Find
+              </button>
+              <button
+                type="button"
+                class="gloss-link"
+                data-term="misiurewicz"
+                aria-label="About Misiurewicz points"
+              >
+                ?
+              </button>
+            </div>
             <p class="inspector-hint">
               Click any point on a plot to inspect its orbit — period, multiplier, internal angle,
               and distance to the set.

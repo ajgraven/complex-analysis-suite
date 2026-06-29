@@ -1297,8 +1297,9 @@ select.invalid {
   display: none;
 }
 
-/* "Go to Siegel parameter" — a small persistent navigation row inside the inspector. */
-.inspector-siegel {
+/* Small persistent navigation rows inside the inspector (Siegel parameter, Misiurewicz finder). */
+.inspector-siegel,
+.inspector-misiur {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1311,6 +1312,10 @@ select.invalid {
 .inspector-siegel input {
   flex: 1;
   min-width: 5rem;
+}
+
+.inspector-misiur input {
+  width: 3rem;
 }
 
 /* ===========================================================================

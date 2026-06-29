@@ -47,6 +47,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     defn: "Glue two filled Julia sets along their boundaries (by the angle-doubling identification of external rays) to build a single rational map that combines both dynamics. Two post-critically-finite quadratics z²+c₁, z²+c₂ admit a (conformal) mating iff c₁ and c₂ are NOT in complex-conjugate limbs of the Mandelbrot set (Rees–Shishikura–Tan Lei). For main-cardioid bulbs, the p/q limb's conjugate is the (q−p)/q bulb, so the obstruction is p₁/q₁ + p₂/q₂ = 1; the 1/2 bulb is the only self-conjugate one, so every other bulb can be mated with itself.",
   },
   {
+    id: "misiurewicz",
+    term: "Misiurewicz point",
+    defn: "A parameter c where the critical orbit is strictly preperiodic: fᵐ⁺ᵏ(0) = fᵐ(0) with preperiod m ≥ 1, so after m steps the orbit lands exactly on a repelling k-cycle. These points sit on the Julia/Mandelbrot boundary, are dense there, and the set is asymptotically self-similar around them (Tan Lei). The finder Newton-solves fᵐ⁺ᵏ(0) − fᵐ(0) = 0 near the view centre. Examples: c = i (m=2, k=2); c = −2 (m=2, k=1).",
+  },
+  {
     id: "escape-time",
     term: "Escape time",
     defn: "How many iterations a point takes to cross the escape radius. Exterior points are coloured by it (smoothed, for continuous bands rather than steps).",

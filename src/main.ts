@@ -14,7 +14,13 @@ import { PlotView } from "./render/plotView";
 import type { GLPlot, FractType } from "./render/glPlot";
 import { initialRes } from "./render/glPlot";
 import { ddCenterToString, ddCenterFromString } from "./render/dd";
-import { inspect, findNucleus, fatouComponentType, type InspectResult } from "./render/inspect";
+import {
+  inspect,
+  findNucleus,
+  findMisiurewicz,
+  fatouComponentType,
+  type InspectResult,
+} from "./render/inspect";
 import { matingVerdict } from "./render/mating";
 import { computeOrbit, orbitAndClassify, type OrbitFate } from "./render/overlay";
 import {
@@ -2352,6 +2358,45 @@ function init(): void {
   });
   byId("mate-check").addEventListener("click", updateMatingVerdict);
   updateMatingVerdict(); // seed the verdict for the default bulbs
+  byId("misiur-go").addEventListener("click", () => {
+    const m = Number(byId<HTMLInputElement>("misiur-pre").value);
+    const k = Number(byId<HTMLInputElement>("misiur-per").value);
+    if (!Number.isInteger(m) || !Number.isInteger(k) || m < 1 || k < 1) {
+      showToast("Enter a preperiod and period ≥ 1.", "warn");
+      return;
+    }
+    // Newton-find the Misiurewicz point fᵐ⁺ᵏ(0)=fᵐ(0) nearest the parameter-plane view centre,
+    // then snap c there (keeping the view) — the same coupling mirror as the nucleus / Siegel jumps.
+    const seed = parameterView.plot.center;
+    const mis = findMisiurewicz(
+      parameterView.plot.fAst,
+      parameterView.plot.criticalPoint,
+      m,
+      k,
+      seed,
+      parameterView.plot.paramA,
+    );
+    if (!mis) {
+      showToast("No Misiurewicz point found near the view centre for those m, k.", "warn");
+      return;
+    }
+    parameterView.plot.moveZ0(mis);
+    parameterView.refreshOverlay();
+    dynamicalView.plot.c = formatComplex(mis);
+    setCInput(mis);
+    updateDynCaption();
+    announce(`Parameter c = ${dynCValue.textContent}`);
+    const info = inspect(
+      parameterView.plot.fAst,
+      parameterView.plot.escAst,
+      "param",
+      parameterView.plot.criticalPoint,
+      mis,
+      parameterView.plot.paramA,
+    );
+    handleInspect(info, mis, "param");
+    scheduleRecord();
+  });
   byId("inspector-rays").addEventListener("click", () => {
     // Turn on the bulb ray-pairs overlay (draws this bulb's landing rays among the visible
     // ones) and open the Overlays group so the result is visible.

@@ -376,3 +376,54 @@ export function findNucleus(
   }
   return null; // did not converge within the iteration budget
 }
+
+/**
+ * Newton-snap a parameter `c` to a Misiurewicz point — where the critical orbit is *strictly
+ * preperiodic*: fᵐ⁺ᵏ(crit) = fᵐ(crit) with preperiod m ≥ 1 and period k ≥ 1, so the orbit lands
+ * exactly on a repelling k-cycle after m steps. Solves g(c) = fᵐ⁺ᵏ(crit) − fᵐ(crit) = 0 by
+ * Newton, carrying the running derivative D = ∂z/∂c along the critical orbit (g′ = D_{m+k} − D_m),
+ * the same recurrence {@link findNucleus} uses. Like the nucleus finder, **seed it near the
+ * target** (the view centre / clicked c) so it converges to that Misiurewicz point and not
+ * another root of g — e.g. a low-period centre such as c=0 or c=−1 also satisfy fᵐ⁺ᵏ = fᵐ.
+ *
+ * Oracles: (m,k)=(2,2) near i → c=i; (m,k)=(2,1) near −2 → c=−2. Returns null for a
+ * non-holomorphic `f` or if Newton fails to converge from `c0`.
+ */
+export function findMisiurewicz(
+  fAst: Node,
+  critPoint: Complex,
+  preperiod: number,
+  period: number,
+  c0: Complex,
+  a: Complex = [0, 0],
+): Complex | null {
+  if (preperiod < 1 || period < 1) return null;
+  const deriv = derivatives(fAst, a);
+  if (!deriv) return null; // non-holomorphic ⇒ no analytic Newton step
+  const f = getComplexFn(fAst, a);
+  let c: Complex = [c0[0], c0[1]];
+  for (let it = 0; it < 80; it++) {
+    let z: Complex = [critPoint[0], critPoint[1]];
+    let der: Complex = [0, 0]; // ∂(critPoint)/∂c = 0
+    let zm: Complex = [0, 0];
+    let derm: Complex = [0, 0];
+    for (let n = 0; n < preperiod + period; n++) {
+      if (n === preperiod) {
+        zm = [z[0], z[1]]; // z_m
+        derm = [der[0], der[1]]; // ∂z_m/∂c
+      }
+      der = C.add(C.mul(deriv.fz(z, c), der), deriv.fc(z, c));
+      z = f(z, c);
+      if (!Number.isFinite(z[0]) || !Number.isFinite(z[1])) return null;
+    }
+    const g: Complex = [z[0] - zm[0], z[1] - zm[1]]; // f^{m+k} − f^m
+    const gp: Complex = [der[0] - derm[0], der[1] - derm[1]]; // its c-derivative
+    const ad = cabs(gp);
+    if (ad === 0 || !Number.isFinite(ad)) return null; // flat — no Newton step
+    const delta = C.div(g, gp);
+    c = [c[0] - delta[0], c[1] - delta[1]];
+    if (!Number.isFinite(c[0]) || !Number.isFinite(c[1])) return null;
+    if (cabs(delta) < 1e-13) return c;
+  }
+  return null; // did not converge within the iteration budget
+}
