@@ -57,6 +57,7 @@ import "katex/dist/katex.min.css";
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
 import {
+  CENTER_SUB_IDS,
   INPUT_IDS,
   clearAllInvalid,
   getCInput,
@@ -764,7 +765,10 @@ function init(): void {
     dirtyIndicator.hidden = !on;
     for (const b of applyButtons) b.classList.toggle("attention", on);
     // Clearing the dirty state also clears the per-field highlights (Apply / Enter / reset).
-    if (!on) for (const id of Object.values(INPUT_IDS)) byId(id).classList.remove("dirty");
+    if (!on) {
+      for (const id of Object.values(INPUT_IDS)) byId(id).classList.remove("dirty");
+      for (const id of Object.values(CENTER_SUB_IDS)) byId(id).classList.remove("dirty");
+    }
   }
 
   const gradientEditor = setupGradientEditor(byId("gradient-editor"), DEFAULT_GRADIENT, (stops) => {
@@ -1634,6 +1638,10 @@ function init(): void {
   /** Apply a full state: the DOM controls, the custom gradient, and the dynamical z₀. */
   function applyFullState(state: AppState): void {
     applyAppState(state);
+    // applyAppState wrote the hidden "x,y" centre fields by id; re-fill the visible
+    // real/imaginary boxes from them (the setters write both the hidden field and the boxes).
+    setParamCenterInput(getParamCenterInput());
+    setDynCenterInput(getDynCenterInput());
     if (typeof state._grad === "string") {
       // Validate the untrusted gradient the same way the manual loader does; ignore if bad.
       const stops = parseGradientStops(state._grad);
@@ -2063,6 +2071,24 @@ function init(): void {
       el.classList.add("dirty"); // highlight the specific changed field
       setDirty(true);
     });
+  }
+
+  // The visible centre boxes (real / imaginary) write their pair back into the hidden
+  // canonical "x,y" field, then mark the view dirty — mirroring the deferred fields above.
+  for (const [reId, imId, hiddenId] of [
+    [CENTER_SUB_IDS.paramRe, CENTER_SUB_IDS.paramIm, INPUT_IDS.paramCenter],
+    [CENTER_SUB_IDS.dynRe, CENTER_SUB_IDS.dynIm, INPUT_IDS.dynCenter],
+  ] as const) {
+    const re = byId<HTMLInputElement>(reId);
+    const im = byId<HTMLInputElement>(imId);
+    const hidden = byId<HTMLInputElement>(hiddenId);
+    const onEdit = (ev: Event): void => {
+      hidden.value = `${re.value.trim()},${im.value.trim()}`;
+      (ev.currentTarget as HTMLElement).classList.add("dirty");
+      setDirty(true);
+    };
+    re.addEventListener("input", onEdit);
+    im.addEventListener("input", onEdit);
   }
 
   for (const id of ["mode", "palette", "aa"]) {

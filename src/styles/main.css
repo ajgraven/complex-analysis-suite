@@ -463,6 +463,23 @@ h2 {
   width: 7rem;
 }
 
+/* Centre field: two boxes (real / imaginary) read as a complex number "x + y i". */
+.center-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.center-pair .center-sub {
+  width: 3.3rem;
+}
+
+.center-sep {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
 .plot-apply {
   align-self: flex-end;
   white-space: nowrap;

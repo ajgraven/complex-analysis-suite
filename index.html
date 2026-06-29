@@ -156,16 +156,32 @@
                       title="On-screen canvas size in pixels — larger is bigger and sharper but slower"
                     />
                   </label>
-                  <label class="param-field param-field-wide">
+                  <div class="param-field center-field">
                     <span class="param-label">center</span>
-                    <input
-                      type="text"
-                      id="inpparamcenter"
-                      placeholder="-.75,0"
-                      value="-.75,0"
-                      title="Plot centre as 'x,y', e.g. -.75,0"
-                    />
-                  </label>
+                    <span class="center-pair">
+                      <input
+                        type="text"
+                        id="param-center-re"
+                        class="center-sub"
+                        inputmode="decimal"
+                        value="-.75"
+                        aria-label="Centre, real part (parameter space)"
+                        title="Plot centre — real part"
+                      />
+                      <span class="center-sep" aria-hidden="true">+</span>
+                      <input
+                        type="text"
+                        id="param-center-im"
+                        class="center-sub"
+                        inputmode="decimal"
+                        value="0"
+                        aria-label="Centre, imaginary part (parameter space)"
+                        title="Plot centre — imaginary part"
+                      />
+                      <span class="center-sep" aria-hidden="true">i</span>
+                    </span>
+                    <input type="hidden" id="inpparamcenter" value="-.75,0" />
+                  </div>
                   <label class="param-field">
                     <span class="param-label">zoom</span>
                     <input
@@ -274,16 +290,32 @@ abs(z)>2</textarea
                       title="On-screen canvas size in pixels — larger is bigger and sharper but slower"
                     />
                   </label>
-                  <label class="param-field param-field-wide">
+                  <div class="param-field center-field">
                     <span class="param-label">center</span>
-                    <input
-                      type="text"
-                      id="inpdyncenter"
-                      placeholder="0,0"
-                      value="0,0"
-                      title="Plot centre as 'x,y', e.g. 0,0"
-                    />
-                  </label>
+                    <span class="center-pair">
+                      <input
+                        type="text"
+                        id="dyn-center-re"
+                        class="center-sub"
+                        inputmode="decimal"
+                        value="0"
+                        aria-label="Centre, real part (dynamical plane)"
+                        title="Plot centre — real part"
+                      />
+                      <span class="center-sep" aria-hidden="true">+</span>
+                      <input
+                        type="text"
+                        id="dyn-center-im"
+                        class="center-sub"
+                        inputmode="decimal"
+                        value="0"
+                        aria-label="Centre, imaginary part (dynamical plane)"
+                        title="Plot centre — imaginary part"
+                      />
+                      <span class="center-sep" aria-hidden="true">i</span>
+                    </span>
+                    <input type="hidden" id="inpdyncenter" value="0,0" />
+                  </div>
                   <label class="param-field">
                     <span class="param-label">zoom</span>
                     <input

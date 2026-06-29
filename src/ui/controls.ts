@@ -27,6 +27,19 @@ export const INPUT_IDS = {
   dynRes: "inpDynRes",
 } as const;
 
+/**
+ * The two visible sub-inputs (real / imaginary) facing each centre field. The
+ * canonical "x,y" value still lives in the hidden {@link INPUT_IDS.paramCenter} /
+ * {@link INPUT_IDS.dynCenter}, so serialization (SHARE_IDS) and presets are unchanged;
+ * these boxes are a friendlier facade over it.
+ */
+export const CENTER_SUB_IDS = {
+  paramRe: "param-center-re",
+  paramIm: "param-center-im",
+  dynRe: "dyn-center-re",
+  dynIm: "dyn-center-im",
+} as const;
+
 /** Round a 2-vector's components to 6 significant figures for display. */
 function round6([a, b]: Vec2): Vec2 {
   return [Number.parseFloat(a.toPrecision(6)), Number.parseFloat(b.toPrecision(6))];
@@ -70,12 +83,16 @@ export const setParamEscInput = (escval: string): void => setValue(INPUT_IDS.par
 
 export function setParamCenterInput(centerval: Vec2): void {
   const [x, y] = round6(centerval);
-  setValue(INPUT_IDS.paramCenter, `${x},${y}`);
+  setValue(INPUT_IDS.paramCenter, `${x},${y}`); // hidden canonical value
+  setValue(CENTER_SUB_IDS.paramRe, x);
+  setValue(CENTER_SUB_IDS.paramIm, y);
 }
 
 export function setDynCenterInput(centerval: Vec2): void {
   const [x, y] = round6(centerval);
-  setValue(INPUT_IDS.dynCenter, `${x},${y}`);
+  setValue(INPUT_IDS.dynCenter, `${x},${y}`); // hidden canonical value
+  setValue(CENTER_SUB_IDS.dynRe, x);
+  setValue(CENTER_SUB_IDS.dynIm, y);
 }
 
 export const setParamZoomInput = (zoomval: number): void => setValue(INPUT_IDS.paramZoom, zoomval);
@@ -83,20 +100,31 @@ export const setDynZoomInput = (zoomval: number): void => setValue(INPUT_IDS.dyn
 
 // --- validation state ----------------------------------------------------
 
-/** Flag an input as invalid (red border + `aria-invalid`). */
-export function markInvalid(id: string): void {
+/** Hidden centre field → the two visible boxes it backs, so a validation error
+ *  highlights the inputs the user actually sees, not the hidden canonical field. */
+const CENTER_FIELD_BOXES: Record<string, readonly string[]> = {
+  [INPUT_IDS.paramCenter]: [CENTER_SUB_IDS.paramRe, CENTER_SUB_IDS.paramIm],
+  [INPUT_IDS.dynCenter]: [CENTER_SUB_IDS.dynRe, CENTER_SUB_IDS.dynIm],
+};
+
+function flagInvalid(id: string, on: boolean): void {
   const el = byId(id);
-  el.classList.add("invalid");
-  el.setAttribute("aria-invalid", "true");
+  el.classList.toggle("invalid", on);
+  if (on) el.setAttribute("aria-invalid", "true");
+  else el.removeAttribute("aria-invalid");
 }
 
-/** Clear the invalid flag from every control input. */
+/** Flag an input as invalid (red border + `aria-invalid`); a centre field also
+ *  flags its two visible sub-inputs. */
+export function markInvalid(id: string): void {
+  flagInvalid(id, true);
+  for (const box of CENTER_FIELD_BOXES[id] ?? []) flagInvalid(box, true);
+}
+
+/** Clear the invalid flag from every control input (and the centre sub-inputs). */
 export function clearAllInvalid(): void {
-  for (const id of Object.values(INPUT_IDS)) {
-    const el = byId(id);
-    el.classList.remove("invalid");
-    el.removeAttribute("aria-invalid");
-  }
+  for (const id of Object.values(INPUT_IDS)) flagInvalid(id, false);
+  for (const id of Object.values(CENTER_SUB_IDS)) flagInvalid(id, false);
 }
 
 /** Fill every input from the named preset (parameter + dynamical dictionaries). */
