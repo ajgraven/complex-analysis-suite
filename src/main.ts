@@ -388,6 +388,52 @@ function setupOnboarding(): void {
   byId<HTMLButtonElement>("onboarding_dismiss").focus();
 }
 
+/** Desktop layout toggles (≥1200px workspace): stack the two plots and/or hide the controls
+ *  sidebar so the plots fill the freed width. State persists per-device in localStorage (a viewing
+ *  preference, not part of the shared view). No render change — the canvases fill via CSS at their
+ *  current resolution, so a much wider plot is softer until "canvas px" is raised. */
+function setupLayout(): void {
+  const workspace = document.querySelector(".workspace");
+  if (!(workspace instanceof HTMLElement)) return;
+  const layoutBtn = byId("layout-toggle");
+  const sidebarBtn = byId("sidebar-toggle");
+  const KEY_STACK = "cdjs.layout.stacked";
+  const KEY_COLLAPSE = "cdjs.layout.collapsed";
+  const read = (k: string): boolean => {
+    try {
+      return localStorage.getItem(k) === "1";
+    } catch {
+      return false;
+    }
+  };
+  const write = (k: string, on: boolean): void => {
+    try {
+      localStorage.setItem(k, on ? "1" : "0");
+    } catch {
+      /* storage unavailable (private mode / quota) — keep the in-memory toggle only */
+    }
+  };
+  const sync = (): void => {
+    const stacked = workspace.classList.contains("plots-stacked");
+    const collapsed = workspace.classList.contains("controls-collapsed");
+    layoutBtn.textContent = stacked ? "Side by side" : "Stack plots";
+    layoutBtn.setAttribute("aria-pressed", String(stacked));
+    sidebarBtn.textContent = collapsed ? "Show controls" : "Hide controls";
+    sidebarBtn.setAttribute("aria-pressed", String(collapsed));
+  };
+  if (read(KEY_STACK)) workspace.classList.add("plots-stacked");
+  if (read(KEY_COLLAPSE)) workspace.classList.add("controls-collapsed");
+  sync();
+  layoutBtn.addEventListener("click", () => {
+    write(KEY_STACK, workspace.classList.toggle("plots-stacked"));
+    sync();
+  });
+  sidebarBtn.addEventListener("click", () => {
+    write(KEY_COLLAPSE, workspace.classList.toggle("controls-collapsed"));
+    sync();
+  });
+}
+
 /** Populate + wire the glossary modal, and set the module-level {@link openGlossary} opener
  *  used by the app-bar button, the inspector "?" links, and the overlay "?" links. */
 function setupGlossary(): void {
@@ -2278,6 +2324,7 @@ function init(): void {
   setupTour();
   setupTheme();
   setupMobileSheet();
+  setupLayout();
   setupPlaces();
   applyParamA();
   updateParamAVisibility();

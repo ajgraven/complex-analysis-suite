@@ -200,6 +200,43 @@ h2 {
   }
 }
 
+/* --- Desktop layout toggles: stack the plots and/or hide the sidebar to enlarge them.
+   Only meaningful at the ≥1200px two-pane workspace; hidden below that (the plots already
+   stack and the controls sit in their own flow / bottom sheet). "Fill" lets each canvas grow
+   into the freed width — drawn at the current render resolution, so a much wider plot is softer
+   until "canvas px" is raised (by design: the rendered buffer stays reproducible). */
+.layout-btn {
+  display: none;
+}
+
+@media (min-width: 1200px) {
+  .layout-btn {
+    display: inline-block;
+  }
+
+  .workspace.controls-collapsed {
+    grid-template-columns: 1fr;
+  }
+  .workspace.controls-collapsed .controls-pane {
+    display: none;
+  }
+
+  .workspace.plots-stacked .plots {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace.controls-collapsed .canvas-stack,
+  .workspace.plots-stacked .canvas-stack {
+    display: block;
+    width: 100%;
+  }
+  .workspace.controls-collapsed .canvas-stack > canvas,
+  .workspace.plots-stacked .canvas-stack > canvas {
+    width: 100% !important;
+    height: auto;
+  }
+}
+
 /* The controls now live in a narrow column, but several rows (the export/animate buttons,
    the coefficient blocks) were built for the old full-width layout. Let them shrink and wrap
    to the column instead of overflowing it. Harmless at full width, where everything fits. */
