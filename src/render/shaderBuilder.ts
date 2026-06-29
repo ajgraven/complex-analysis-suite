@@ -197,6 +197,7 @@ export function buildFragmentShader(
   fZAst: Node | null = null,
   fCAst: Node | null = null,
   monicDegree: number | null = null,
+  interiorBailout = false,
 ): string {
   const isDf64 = precision === "df64";
   // Smooth-iteration normalization divides by log(degree): for z^d+c that is log(d)
@@ -339,6 +340,33 @@ ${coordinate}
     ? "  if (uMode == 12) { fragColor = vec4(multiplierColor(fc), 1.0); return; }\n"
     : "";
 
+  // Interior bailout for z²+c (single precision, parameter plane): a c in the main cardioid
+  // or the period-2 bulb is provably in the Mandelbrot set, so its critical orbit never
+  // escapes — skip the whole iteration loop for the flat-interior colouring modes. The
+  // interior-structure modes (orbit-trap 3, period 10, multiplier 12) need the real orbit, so
+  // they are excluded and fall through. df64 deep zoom never lands inside these regions, so it
+  // is emitted in single precision only.
+  const interiorCheck = !isDf64 && interiorBailout;
+  const cardioidGLSL = interiorCheck
+    ? `
+// True if c (x = Re, y = Im) lies in the main cardioid or the period-2 bulb of the
+// Mandelbrot set — i.e. provably interior. Sqrt-free (exact membership tests).
+bool inMainCardioidOrBulb(float x, float y) {
+  float bx = x + 1.0;
+  if (bx * bx + y * y <= 0.0625) return true; // period-2 bulb: disc of radius 1/4 around -1
+  float xm = x - 0.25;
+  float q = xm * xm + y * y;                   // main cardioid
+  return q * (q + xm) <= 0.25 * y * y;
+}
+`
+    : "";
+  const cardioidShortcut = interiorCheck
+    ? `  if (uFractType == 1 &&
+      (uMode == 0 || uMode == 1 || uMode == 5 || uMode == 7 || uMode == 8 || uMode == 9) &&
+      inMainCardioidOrBulb(cre1(cc), cre1(cim(cc)))) return vec3(0.0); // provably interior
+`
+    : "";
+
   return `#version 300 es
 precision highp float;
 precision highp int;
@@ -395,7 +423,7 @@ float trapDistance(cvec z) {
     return length(vec2(re, im) - vec2(floor(re + 0.5), floor(im + 0.5)));
   return min(abs(re), abs(im)); // 0 = cross (both axes), default
 }
-
+${cardioidGLSL}
 // Per-pixel colour for the AA-averaged modes (escape / smooth / orbit-trap / domain).
 // outHeight returns this sample's smooth-iteration height (or -1 for interior) when relief/
 // outline/equipotential is on, so main() can reuse it instead of a second escape walk at uAA == 1.
@@ -404,7 +432,7 @@ vec3 colorAt(vec2 fragXY, out float outHeight) {
 ${coordinate}
   cvec cc = (uFractType == 1) ? z : vec_(uC.x, uC.y);
   outHeight = -1.0;
-
+${cardioidShortcut}
   if (uMode == 4) {
     // Domain colouring: one application of f. hue = arg; brightness grows with |f|,
     // with subtle magnitude contour bands (a classic domain-colouring cue).

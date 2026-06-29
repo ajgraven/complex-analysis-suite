@@ -23,7 +23,7 @@ import {
 } from "./shaderBuilder";
 import { buildGradient, DEFAULT_GRADIENT, type GradientStop } from "../palettes";
 import { differentiate, newtonIteration } from "../expr/derivative";
-import { makeComplexFn } from "../expr/evaluate";
+import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
 import { computeReferenceOrbitDD, computeReferenceOrbitDDFrom } from "./perturbation";
 import { type DD, dd, ddAddNumber, ddToNumber } from "./dd";
 
@@ -240,6 +240,9 @@ export class GLPlot {
   private _perturbation = false; // perturbation deep-zoom toggle
   private _perturbEligible = false; // current f is z²+c (auto-detected)
   private _monicDegree: number | null = null; // degree d if f is z^d + c, else null
+  /** z²+c with a divergence escape → the main-cardioid / period-2-bulb interior shortcut is
+   *  exact (single precision, parameter plane). Set in {@link rebuild}. */
+  private _interiorBailout = false;
   /** View centre in double-double precision, accumulated across pan/zoom for deep zoom. */
   private _centerDD: [DD, DD] = [
     [0, 0],
@@ -480,6 +483,7 @@ export class GLPlot {
         this._fZAst,
         this._fCAst,
         this._monicDegree,
+        this._interiorBailout,
       ),
     );
     return { program, uniforms: this.getUniforms(program) };
@@ -546,6 +550,7 @@ export class GLPlot {
     const iterError = this.updateIteration();
     this._perturbEligible = this.probeMandelbrot();
     this._monicDegree = this.probeMonicDegree();
+    this._interiorBailout = this._monicDegree === 2 && this.probeDivergenceEscape();
     this.orbitDirty = true;
     try {
       const next = this.compile("single");
@@ -584,6 +589,7 @@ export class GLPlot {
           this._fZAst,
           this._fCAst,
           this._monicDegree,
+          this._interiorBailout,
         ),
       );
     } catch (err) {
@@ -669,8 +675,11 @@ export class GLPlot {
    */
   private wantsProgressive(): boolean {
     if (this.desiredPrecision() === "df64") return true; // deep zoom
-    if (Math.round(this._res * renderScale()) >= 900) return true; // large canvas
-    return Math.round(Number(this._n)) >= 150; // many iterations
+    // Gauge cost by LOGICAL resolution + effective iterations, not device pixels: a plain 500px
+    // view should draw in a single pass even on a 2× HiDPI display, where `_res · renderScale ≈
+    // 1000` used to trip this and force a needless coarse pass + soft→sharp flash.
+    if (Number(this._res) >= 900) return true; // large canvas
+    return this.targetIterations() >= 150; // many iterations (incl. auto-iterations)
   }
 
   /** Request a render, restarting the progressive ladder from the coarsest level. */
@@ -878,6 +887,45 @@ export class GLPlot {
       return d;
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * Whether the iterated map's escape predicate is a divergence test with radius ≳ 2 — the
+   * precondition for the cardioid / period-2-bulb interior shortcut to be exact: every bounded
+   * z²+c orbit (which stays within |z| ≤ 2) must read as non-escaping, and only a genuine
+   * blow-up escapes. Rejects convergence escapes (Newton-style) and too-tight radii.
+   */
+  private probeDivergenceEscape(): boolean {
+    try {
+      const esc = makeEscapeFn(this._iterEscAst, this._iterAst);
+      const bounded: [Complex, Complex][] = [
+        [
+          [0, 0],
+          [0, 0],
+        ],
+        [
+          [-1, 0],
+          [-1, 0],
+        ],
+        [
+          [1.99, 0],
+          [0, 0],
+        ],
+        [
+          [0, 1.99],
+          [0, 0],
+        ],
+        [
+          [0, 0],
+          [-0.75, 0.1],
+        ],
+      ];
+      // A bounded orbit point that "escapes" ⇒ not a pure divergence test ⇒ shortcut unsafe.
+      for (const [z, c] of bounded) if (esc(z, c)) return false;
+      return esc([1e6, 1e6], [0, 0]); // a clearly divergent iterate must escape
+    } catch {
+      return false;
     }
   }
 
