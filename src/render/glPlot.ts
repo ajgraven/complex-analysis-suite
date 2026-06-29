@@ -1590,6 +1590,21 @@ export class GLPlot {
     return [this._centerDD[0][1], this._centerDD[1][1]];
   }
 
+  /** The full double-double view centre [x, y] (hi+lo limbs) — for lossless deep-zoom
+   *  serialization (permalinks / saved views); restore with {@link setCenterDD}. */
+  get centerDD(): [DD, DD] {
+    return [this._centerDD[0], this._centerDD[1]];
+  }
+
+  /** Restore the view centre at full double-double precision: keeps the lo limb the plain
+   *  `center` setter discards, so a deep-zoom permalink reproduces exactly. Syncs the f64
+   *  `_center` and re-renders. */
+  setCenterDD(x: DD, y: DD): void {
+    this._centerDD = [x, y];
+    this._center = [ddToNumber(x), ddToNumber(y)];
+    this.scheduleRender();
+  }
+
   get c(): string {
     return this._c;
   }

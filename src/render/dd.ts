@@ -85,3 +85,23 @@ export function ddMul(a: DD, b: DD): DD {
   [p, e] = quickTwoSum(p, e);
   return [p, e];
 }
+
+/**
+ * Serialize a 2-D double-double view centre (x, y) to an exact, round-trippable string
+ * "hx,lx,hy,ly" — each limb via Number#toString, which round-trips through Number(). Used to
+ * persist a deep-zoom centre in permalinks / saved views: the f64 centre alone loses precision
+ * past ~1e6× zoom (rounded display inputs) and runs out entirely past ~1e13×.
+ */
+export function ddCenterToString(x: DD, y: DD): string {
+  return `${x[0]},${x[1]},${y[0]},${y[1]}`;
+}
+
+/** Parse "hx,lx,hy,ly" back to [x, y] double-doubles; null if malformed or non-finite. */
+export function ddCenterFromString(s: string): [DD, DD] | null {
+  const p = s.split(",").map(Number);
+  if (p.length !== 4 || p.some((v) => !Number.isFinite(v))) return null;
+  return [
+    [p[0], p[1]],
+    [p[2], p[3]],
+  ];
+}

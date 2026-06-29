@@ -13,6 +13,7 @@ import { getMaxTextureSize } from "./hiResExport";
 import { PlotView } from "./render/plotView";
 import type { GLPlot, FractType } from "./render/glPlot";
 import { initialRes } from "./render/glPlot";
+import { ddCenterToString, ddCenterFromString } from "./render/dd";
 import { inspect, findNucleus, type InspectResult } from "./render/inspect";
 import { computeOrbit, orbitAndClassify, type OrbitFate } from "./render/overlay";
 import { juliaConnected, juliaExteriorCoeffs, mandelbrotExteriorCoeffs } from "./render/uniformize";
@@ -1475,6 +1476,16 @@ function init(): void {
     const state = readAppState();
     state._grad = JSON.stringify(gradientEditor.getStops());
     state._z0 = formatComplex(dynamicalView.plot.z0);
+    // Deep-zoom reproducibility: the centre inputs are rounded for readability and lose precision
+    // past ~1e6× (and a plain f64 runs out past ~1e13×). Layer the exact double-double centre so a
+    // permalink / saved view reproduces a deep zoom. Only for non-shallow views, so shallow links
+    // stay compact and unchanged; on an old link without it, applyFullState falls back to the input.
+    const pc = parameterView.plot.centerDD;
+    if (parameterView.plot.zoom > 1e3 || pc[0][1] !== 0 || pc[1][1] !== 0)
+      state._pcdd = ddCenterToString(pc[0], pc[1]);
+    const dc = dynamicalView.plot.centerDD;
+    if (dynamicalView.plot.zoom > 1e3 || dc[0][1] !== 0 || dc[1][1] !== 0)
+      state._dcdd = ddCenterToString(dc[0], dc[1]);
     return state;
   }
 
@@ -1513,6 +1524,16 @@ function init(): void {
       if (Number.isFinite(z[0]) && Number.isFinite(z[1])) dynamicalView.plot.z0 = z;
     }
     applyAllControls();
+    // applyAllControls reset each centre from the rounded f64 input; if the state carries an exact
+    // double-double centre (a deep zoom), restore it now so the view reproduces to full precision.
+    if (typeof state._pcdd === "string") {
+      const c = ddCenterFromString(state._pcdd);
+      if (c) parameterView.plot.setCenterDD(c[0], c[1]);
+    }
+    if (typeof state._dcdd === "string") {
+      const c = ddCenterFromString(state._dcdd);
+      if (c) dynamicalView.plot.setCenterDD(c[0], c[1]);
+    }
   }
 
   /** Serialize the current view into the URL hash and copy a shareable link. */

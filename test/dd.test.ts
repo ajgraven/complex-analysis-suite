@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { dd, ddToNumber, ddAdd, ddAddNumber, ddSub, ddMul } from "../src/render/dd";
+import {
+  dd,
+  ddToNumber,
+  ddAdd,
+  ddAddNumber,
+  ddSub,
+  ddMul,
+  ddCenterToString,
+  ddCenterFromString,
+} from "../src/render/dd";
+import type { DD } from "../src/render/dd";
 import { computeReferenceOrbit, computeReferenceOrbitDD } from "../src/render/perturbation";
 
 describe("double-double arithmetic", () => {
@@ -66,5 +76,25 @@ describe("double-double reference orbit", () => {
     expect(cxA[1]).not.toBe(cxB[1]);
     expect(a.length).toBeGreaterThan(0);
     expect(b.length).toBeGreaterThan(0);
+  });
+});
+
+describe("ddCenterToString / ddCenterFromString (deep-zoom permalink centre)", () => {
+  it("round-trips a centre with non-zero lo limbs exactly", () => {
+    const x: DD = [-0.743643887037151, 3.21e-17];
+    const y: DD = [0.13182590420533, -8.4e-18];
+    const back = ddCenterFromString(ddCenterToString(x, y));
+    expect(back).not.toBeNull();
+    if (!back) return;
+    expect(back[0][0]).toBe(x[0]);
+    expect(back[0][1]).toBe(x[1]);
+    expect(back[1][0]).toBe(y[0]);
+    expect(back[1][1]).toBe(y[1]);
+  });
+
+  it("returns null for malformed or non-finite input", () => {
+    expect(ddCenterFromString("1,2,3")).toBeNull();
+    expect(ddCenterFromString("a,b,c,d")).toBeNull();
+    expect(ddCenterFromString("1,2,3,NaN")).toBeNull();
   });
 });

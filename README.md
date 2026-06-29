@@ -155,7 +155,9 @@ iterations`; click **edit ▾** to expand and type exact values, or use **Copy c
   the choice is remembered across visits.
 - **Share link** copies a URL whose hash encodes the current view — formula, both planes'
   centre/zoom/iterations, colouring mode/palette, every toggle, the dynamical orbit start
-  z₀, and the custom-gradient stops — so opening it reproduces the view.
+  z₀, and the custom-gradient stops — so opening it reproduces the view. Deep-zoom centres are
+  captured at full double-double precision, so even views past the float64 zoom limit reproduce
+  exactly.
 - Under the **Views ▾** menu: **Save view** stores the current view under a name (in the
   browser); pick it from the **Saved views** dropdown to restore it, or **Delete** to
   remove it. Saved views persist across visits (localStorage) and capture the same state
