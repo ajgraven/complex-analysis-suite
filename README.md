@@ -500,6 +500,61 @@ already relative.
   (esbuild/Vite dev server). `npm audit --omit=dev` reports zero — nothing ships
   to production.
 
+## Methods & references
+
+Each computed quantity is a standard construction from holomorphic dynamics / potential theory.
+The algorithm and its source are listed below so a result can be described and checked. In-app,
+each value is labelled exact (`=`), a rigorous bound (`≤`), or an estimate (`≈`); the **Glossary**
+gives the per-quantity definitions and conventions.
+
+**Rendering & colouring**
+
+- _Escape-time & smooth (continuous) iteration count_ — normalised escape `n + 1 − log_d log|z|`.
+  Peitgen & Saupe, _The Science of Fractal Images_ (Springer, 1988).
+- _Distance estimation (DEM)_ — `d ≈ |z|·log|z| / |z′|` from the running derivative. Milnor,
+  _Dynamics in One Complex Variable_ (3rd ed., Princeton, 2006); Peitgen & Saupe (1988).
+
+**Exterior map (uniformization)**
+
+- _Böttcher coordinate & external rays_ — φ conjugates `f` to `w ↦ wᵈ` near ∞; rays carry the
+  angle map `θ ↦ dθ`. Douady & Hubbard, _Étude dynamique des polynômes complexes_ (Orsay, 1984–85);
+  Milnor (2006).
+- _Exterior Laurent coefficients_ — a triangular recursion from the Böttcher functional equation
+  (filled Julia set), and a Böttcher-product reversion for the Mandelbrot/multibrot set: Jungreis,
+  "The uniformization of the complement of the Mandelbrot set", _Duke Math. J._ 52 (1985).
+- _Bulb rotation numbers (Farey)_ — cardioid attachment `c = μ/2 − μ²/4`, `μ = e^{2πip/q}`, with
+  Farey/mediant ordering. Douady & Hubbard (1984–85); Milnor (2006).
+
+**Dynamical invariants**
+
+- _Cycle multiplier & classification_ — `λ = ∏ f′(zₖ)`; attracting / indifferent / repelling /
+  parabolic. Milnor (2006); Carleson & Gamelin, _Complex Dynamics_ (Springer, 1993).
+- _Connectivity (Fatou–Julia)_ — `Kᶜ` is connected ⟺ every critical orbit is bounded, a Cantor set
+  ⟺ all escape. Critical points via Durand–Kerner (Weierstrass) simultaneous root-finding: Durand
+  (1960); Kerner, _Numer. Math._ 8 (1966). Theorem: Fatou (1919) & Julia (1918); Milnor (2006).
+- _Lyapunov exponent_ — orbit average of `log|f′|`, or the renormalised-tangent (Benettin) method
+  for non-holomorphic `f`: Benettin, Galgani, Giorgilli & Strelcyn, _Meccanica_ 15 (1980).
+
+**Geometry of the set**
+
+- _Logarithmic capacity (= transfinite diameter)_ — `|a_d|^{−1/(d−1)}` for a degree-d polynomial.
+  Ransford, _Potential Theory in the Complex Plane_ (Cambridge, 1995); Brolin, _Ark. Mat._ (1965).
+- _Area (Gronwall bound)_ — `Area(Kᶜ) ≤ π(1 − Σ k|bₖ|²)` from the exterior coefficients. Gronwall
+  (1914); Pommerenke, _Univalent Functions_ (1975); Duren, _Univalent Functions_ (1983).
+- _Hausdorff dimension (small |c|)_ — `dim_H Jᶜ = 1 + |c|²/(4 ln 2) + O(|c|³)` for z²+c. Ruelle,
+  "Repellers for real analytic maps", _Ergodic Theory Dynam. Systems_ 2 (1982); Bodart &
+  Zinsmeister (1996).
+- _Box-counting (Minkowski) dimension_ — a log–log fit of the boundary box count (coarse,
+  pixel-resolution dependent). Falconer, _Fractal Geometry_ (Wiley, 1990).
+
+**Numerics**
+
+- _Double-double arithmetic_ (deep-zoom centre) — Dekker, _Numer. Math._ 18 (1971); Knuth, _TAOCP_
+  vol. 2; Hida, Li & Bailey (2001).
+- _Perturbation deep zoom_ — one high-precision reference orbit + per-pixel delta iteration.
+  K. I. Martin, "SuperFractalThing" (2013). (Glitch rebasing is not yet implemented — see
+  [Known limitations](#known-limitations).)
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add a preset, add a function to
