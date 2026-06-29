@@ -51,9 +51,10 @@ the df64 one lazily and **asynchronously** (it can be huge), switching to df64 p
 a zoom threshold once it's ready — so the first deep zoom shows single precision and
 upgrades when the build finishes, never freezing the interaction.
 
-Rendering is progressive (coarse → fine), HiDPI-aware, and reduces resolution/
-iterations during drag; see the `render`/`applyRenderSize`/`setupDraw` flow in
-`GLPlot`.
+Rendering is progressive (coarse → fine) and HiDPI-aware. During drag it lowers
+*resolution* (not the iteration cap) so the escaping/interior classification stays
+stable and never flips mid-interaction; see the `render` / `applyRenderSize` /
+`draftFraction` flow in `GLPlot`.
 
 ## Three gotchas
 

@@ -173,11 +173,6 @@ export function initialRes(viewportWidth: number): number {
  */
 const PROGRESSIVE_LADDER = [0.5, 1.0];
 
-/** During interaction, heavy renders also drop the iteration cap (to this fraction,
- *  floored at {@link DRAFT_MIN_ITERS}) for responsiveness; full count on release. */
-const DRAFT_ITER_FACTOR = 0.5;
-const DRAFT_MIN_ITERS = 30;
-
 /** Max jittered samples accumulated for temporal anti-aliasing (idle only). */
 const MAX_ACCUM = 16;
 
@@ -695,6 +690,21 @@ export class GLPlot {
   }
 
   /**
+   * Spatial-resolution fraction for an interaction (draft) frame. Drafting keeps the FULL
+   * iteration cap (so the escaping/interior classification matches the settled image and
+   * never flips mid-drag) and trades *resolution* for responsiveness instead. At high
+   * iteration counts the draft goes coarser so dragging stays smooth — the frame is softer,
+   * never miscoloured, and sharpens in on the progressive refine once interaction stops.
+   */
+  private draftFraction(): number {
+    const base = PROGRESSIVE_LADDER[0]; // 0.5 — the coarse rung of the progressive ladder
+    const n = this.targetIterations();
+    if (n <= 300) return base;
+    if (n <= 1200) return 0.4;
+    return 0.3;
+  }
+
+  /**
    * Bind the active program and set all uniforms for a draw at the given size.
    * `modeOverride` forces a colouring mode (the histogram raw pre-pass uses 6).
    * Returns false if no program.
@@ -712,12 +722,10 @@ export class GLPlot {
     gl.useProgram(cp.program);
     gl.uniform2f(u.uResolution, width, height);
     gl.uniform1f(u.uZoom, this._zoom);
-    const fullN = this.targetIterations();
-    const iterN =
-      this._draft && this.wantsProgressive()
-        ? Math.max(DRAFT_MIN_ITERS, Math.round(fullN * DRAFT_ITER_FACTOR))
-        : fullN;
-    gl.uniform1i(u.uN, iterN);
+    // Full iteration cap even while drafting — only spatial resolution drops during
+    // interaction (see draftFraction). Halving iterations here used to flip near-boundary
+    // pixels to the interior colour mid-drag, then snap them back on release.
+    gl.uniform1i(u.uN, this.targetIterations());
     gl.uniform2f(u.uC, this._cVal[0], this._cVal[1]);
     gl.uniform2f(u.uA, this._paramA[0], this._paramA[1]);
     gl.uniform1i(u.uFractType, this.fractType === "param" ? 1 : 0);
@@ -902,15 +910,11 @@ export class GLPlot {
     const u = pp.uniforms;
     const fullN = this.targetIterations();
     this.ensureOrbit(fullN); // computed at the full cap so it's reused across draft/refine
-    const iterN =
-      this._draft && this.wantsProgressive()
-        ? Math.max(DRAFT_MIN_ITERS, Math.round(fullN * DRAFT_ITER_FACTOR))
-        : fullN;
     const mode = modeOverride ?? this.effectiveMode();
     gl.useProgram(pp.program);
     gl.uniform2f(u.uResolution, width, height);
     gl.uniform1f(u.uZoom, this._zoom);
-    gl.uniform1i(u.uN, iterN);
+    gl.uniform1i(u.uN, fullN); // full cap during interaction too — only resolution drops
     gl.uniform1i(u.uOrbitLen, this.orbitLen);
     gl.uniform1i(u.uJuliaMode, this.fractType === "dyn" ? 1 : 0);
     gl.uniform1i(u.uMode, mode === 1 ? 1 : 0); // escape / smooth; other modes fall back to escape
@@ -1162,7 +1166,7 @@ export class GLPlot {
     if (this._forceFull) {
       // full-resolution single pass — used while recording an animation
     } else if (this._draft) {
-      fraction = PROGRESSIVE_LADDER[0]; // coarse while interacting
+      fraction = this.draftFraction(); // coarse while interacting (full iterations, lower resolution)
     } else if (this.wantsProgressive()) {
       fraction = PROGRESSIVE_LADDER[this._level];
       refine = this._level < PROGRESSIVE_LADDER.length - 1;
