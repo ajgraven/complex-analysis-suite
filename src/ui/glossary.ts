@@ -31,6 +31,17 @@ export const GLOSSARY: GlossaryEntry[] = [
     defn: "For a fixed c, the plane of starting points z₀. The set of points whose orbit stays bounded is the filled Julia set of that map.",
   },
   {
+    id: "fatou-component",
+    term: "Fatou component",
+    defn: "A connected piece of the Fatou set (where nearby orbits behave alike). The inspector names the component a cycle bounds from its multiplier λ: attracting (|λ|<1), superattracting (λ=0, the cycle contains a critical point), parabolic (λ = e^(2πi·p/q)), or a rotation domain (|λ|=1, irrational rotation) — a Siegel disc.",
+  },
+  {
+    id: "siegel-disc",
+    term: "Siegel disc",
+    defn: "A rotation domain: on it the map is conformally conjugate to an irrational rotation z ↦ e^(2πiθ)·z. It surrounds an irrationally-indifferent fixed/periodic point (|λ|=1, θ irrational) exactly when θ is a Brjuno number (Yoccoz's theorem); a larger Brjuno sum B(θ) means a smaller disc (radius ≈ e^(−B)). A non-Brjuno θ gives a Cremer point, with no disc. The inspector reports θ, the Brjuno verdict, and the estimated radius.",
+    latex: "B(\\theta) = \\sum_{n\\ge 0} \\frac{\\log q_{n+1}}{q_n} < \\infty",
+  },
+  {
     id: "escape-time",
     term: "Escape time",
     defn: "How many iterations a point takes to cross the escape radius. Exterior points are coloured by it (smoothed, for continuous bands rather than steps).",

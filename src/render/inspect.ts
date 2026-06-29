@@ -25,6 +25,7 @@ import type { Node } from "../expr/ast";
 import * as C from "../expr/complexJs";
 import { differentiate } from "../expr/derivative";
 import { makeComplexFn, getComplexFn, getEscapeFn } from "../expr/evaluate";
+import { classifyRotationNumber, type RotationClass } from "./brjuno";
 import { cycleMultiplierMag } from "./jacobian";
 import { classifyOrbit, type OrbitFate } from "./overlay";
 
@@ -49,6 +50,59 @@ export interface InspectResult {
    * are meaningful to draw on the dynamical plot only — never on the parameter plane.
    */
   cyclePoints: Complex[] | null;
+}
+
+/** Type of the Fatou component a cycle bounds, from its multiplier λ. */
+export type FatouType =
+  | "superattracting"
+  | "attracting"
+  | "repelling"
+  | "parabolic"
+  | "siegel"
+  | "cremer"
+  | "neutral";
+
+/** Fatou-component classification of an inspected cycle (see {@link fatouComponentType}). */
+export interface FatouInfo {
+  type: FatouType;
+  /** Rotation number θ = arg(λ)/2π ∈ [0,1) for an indifferent cycle, else null. */
+  theta: number | null;
+  /** Brjuno classification of θ (indifferent + holomorphic only), else null. */
+  rotation: RotationClass | null;
+}
+
+/** ||λ|−1| below this ⇒ indifferent (matches showInspect + juliaProperties' neutral band). */
+const NEUTRAL_TOL = 1e-3;
+/** |λ| below this ⇒ superattracting (the cycle contains a critical point). */
+const SUPERATTRACTING_TOL = 1e-6;
+
+/**
+ * Classify the Fatou component a cycle bounds from its multiplier λ:
+ *   |λ| < 1 → attracting (|λ| ≈ 0 → superattracting), |λ| > 1 → repelling, |λ| = 1 → indifferent.
+ * For an indifferent cycle the rotation number θ = arg(λ)/2π splits it into **parabolic**
+ * (θ rational) vs a rotation domain — a **Siegel** disc (θ Brjuno) or a **Cremer** point
+ * (θ non-Brjuno) — via {@link classifyRotationNumber}.
+ *
+ * Returns null when there is no multiplier at all. A non-holomorphic f has only |λ| (no arg λ),
+ * so an indifferent cycle there can only be reported as "neutral".
+ */
+export function fatouComponentType(
+  multiplier: Complex | null,
+  mag: number | null,
+): FatouInfo | null {
+  if (mag === null) return null;
+  if (mag < 1 - NEUTRAL_TOL) {
+    const type = mag < SUPERATTRACTING_TOL ? "superattracting" : "attracting";
+    return { type, theta: null, rotation: null };
+  }
+  if (mag > 1 + NEUTRAL_TOL) return { type: "repelling", theta: null, rotation: null };
+  if (!multiplier) return { type: "neutral", theta: null, rotation: null }; // |λ|≈1, arg unknown
+  let theta = Math.atan2(multiplier[1], multiplier[0]) / (2 * Math.PI);
+  theta -= Math.floor(theta); // → [0, 1)
+  const rotation = classifyRotationNumber(theta);
+  const type: FatouType =
+    rotation.kind === "rational" ? "parabolic" : rotation.kind === "cremer" ? "cremer" : "siegel";
+  return { type, theta, rotation };
 }
 
 const MAX_DE_ITER = 1024; // cap for the CPU distance-estimate loop

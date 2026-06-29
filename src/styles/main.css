@@ -1297,6 +1297,22 @@ select.invalid {
   display: none;
 }
 
+/* "Go to Siegel parameter" — a small persistent navigation row inside the inspector. */
+.inspector-siegel {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.inspector-siegel input {
+  flex: 1;
+  min-width: 5rem;
+}
+
 /* ===========================================================================
    Mobile / responsive support (Phase A). Every rule below is SCOPED so the
    desktop (≥1200px, fine pointer) experience renders exactly as before:

@@ -449,6 +449,23 @@ abs(z)>2</textarea
             >
               Export orbit
             </button>
+            <div class="inspector-siegel">
+              <label for="siegel-theta">Siegel c for θ =</label>
+              <input
+                type="text"
+                id="siegel-theta"
+                size="9"
+                placeholder="0.618 / 1/5 / golden"
+                title="Jump c to the cardioid point λ/2 − λ²/4 (λ = e^(2πiθ)) for rotation number θ — a decimal, a fraction p/q, or 'golden'/'silver'. For the z²+c family."
+              />
+              <button
+                id="siegel-go"
+                type="button"
+                title="Go to the Siegel parameter for this rotation number (z²+c)"
+              >
+                Go
+              </button>
+            </div>
             <p class="inspector-hint">
               Click any point on a plot to inspect its orbit — period, multiplier, internal angle,
               and distance to the set.

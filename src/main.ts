@@ -14,7 +14,7 @@ import { PlotView } from "./render/plotView";
 import type { GLPlot, FractType } from "./render/glPlot";
 import { initialRes } from "./render/glPlot";
 import { ddCenterToString, ddCenterFromString } from "./render/dd";
-import { inspect, findNucleus, type InspectResult } from "./render/inspect";
+import { inspect, findNucleus, fatouComponentType, type InspectResult } from "./render/inspect";
 import { computeOrbit, orbitAndClassify, type OrbitFate } from "./render/overlay";
 import {
   juliaConnected,
@@ -151,9 +151,26 @@ const TERM_FOR_ROW: Record<string, string> = {
   Fate: "escape-time",
   Period: "period",
   "Multiplier λ": "multiplier",
+  "Fatou component": "fatou-component",
+  "Rotation number": "siegel-disc",
   "Internal angle": "internal-angle",
   "Distance to set": "distance-estimate",
 };
+
+/** Parse a rotation number θ from the Siegel input: a decimal, a fraction p/q, or the named
+ *  bounded-type constants 'golden'/'silver'. Returns null on unparseable input. */
+function parseRotationNumber(raw: string): number | null {
+  const s = raw.trim().toLowerCase();
+  if (s === "golden") return (Math.sqrt(5) - 1) / 2;
+  if (s === "silver") return Math.SQRT2 - 1;
+  const frac = /^(-?\d*\.?\d+)\s*\/\s*(-?\d*\.?\d+)$/.exec(s);
+  if (frac) {
+    const q = Number(frac[2]);
+    return q !== 0 ? Number(frac[1]) / q : null;
+  }
+  const v = Number(s);
+  return s !== "" && Number.isFinite(v) ? v : null;
+}
 
 /** Render a click-to-inspect orbit report into the inspector panel. */
 function showInspect(info: InspectResult, point: Vec2, plane: FractType): void {
@@ -178,6 +195,34 @@ function showInspect(info: InspectResult, point: Vec2, plane: FractType): void {
       "Multiplier λ",
       `${info.multiplierMag.toFixed(4)} ∠ ${deg.toFixed(0)}° (${kind})`,
     ]);
+  }
+  // Name the Fatou component from λ, and for an indifferent irrational rotation add the
+  // rotation number + Brjuno verdict (Siegel disc vs near-Cremer) with an estimated radius.
+  const fatou = fatouComponentType(info.multiplier, info.multiplierMag);
+  if (fatou) {
+    const FATOU_LABEL: Record<string, string> = {
+      superattracting: "superattracting (centre)",
+      attracting: "attracting basin",
+      repelling: "repelling (Julia set)",
+      parabolic: "parabolic",
+      siegel: "Siegel disc",
+      cremer: "Cremer point",
+      neutral: "neutral",
+    };
+    rows.push(["Fatou component", FATOU_LABEL[fatou.type]]);
+    if (
+      fatou.theta !== null &&
+      fatou.rotation &&
+      (fatou.type === "siegel" || fatou.type === "cremer")
+    ) {
+      const r = fatou.rotation;
+      rows.push([
+        "Rotation number",
+        fatou.type === "cremer"
+          ? `θ ≈ ${fatou.theta.toFixed(6)} (near-Cremer — disc ≈ 0)`
+          : `θ ≈ ${fatou.theta.toFixed(6)} (${r.kind}; disc radius ≈ ${r.conformalRadius.toExponential(1)})`,
+      ]);
+    }
   }
   if (info.rotation) rows.push(["Internal angle", `${info.rotation.p}/${info.rotation.q}`]);
   if (info.distance !== null) rows.push(["Distance to set", info.distance.toExponential(2)]);
@@ -2230,6 +2275,43 @@ function init(): void {
       parameterView.plot.paramA,
     );
     handleInspect(info, nucleus, "param");
+    scheduleRecord();
+  });
+  byId("siegel-go").addEventListener("click", () => {
+    const theta = parseRotationNumber(byId<HTMLInputElement>("siegel-theta").value);
+    if (theta === null) {
+      showToast("Enter a rotation number — a decimal, a fraction p/q, or 'golden'.", "warn");
+      return;
+    }
+    if (parameterView.plot.monicDegree !== 2) {
+      showToast(
+        "Siegel parameters use the z²+c cardioid — switch to the Mandelbrot preset.",
+        "warn",
+      );
+      return;
+    }
+    // The indifferent fixed point of z²+c with multiplier λ = e^(2πiθ) sits on the main cardioid
+    // at c = λ/2 − λ²/4. Snap c there (keeping the view) so the dynamical plane shows the Siegel
+    // Julia set; mirror the parameter→dynamical coupling and re-inspect, exactly like the nucleus.
+    const ang = 2 * Math.PI * theta;
+    const lx = Math.cos(ang);
+    const ly = Math.sin(ang);
+    const c: [number, number] = [lx / 2 - (lx * lx - ly * ly) / 4, ly / 2 - (2 * lx * ly) / 4];
+    parameterView.plot.moveZ0(c);
+    parameterView.refreshOverlay();
+    dynamicalView.plot.c = formatComplex(c);
+    setCInput(c);
+    updateDynCaption();
+    announce(`Parameter c = ${dynCValue.textContent}`);
+    const info = inspect(
+      parameterView.plot.fAst,
+      parameterView.plot.escAst,
+      "param",
+      parameterView.plot.criticalPoint,
+      c,
+      parameterView.plot.paramA,
+    );
+    handleInspect(info, c, "param");
     scheduleRecord();
   });
   byId("inspector-rays").addEventListener("click", () => {
