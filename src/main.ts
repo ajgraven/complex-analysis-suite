@@ -1216,7 +1216,7 @@ function init(): void {
     const show = (spanId: string, eff: number): void => {
       const span = byId(spanId);
       if (on) {
-        span.textContent = `→ ${eff}`;
+        span.textContent = `(${eff})`;
         span.title = `Auto iterations: ${eff} in use at this zoom`;
         span.hidden = false;
       } else {

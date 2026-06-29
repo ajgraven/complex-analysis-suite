@@ -489,12 +489,11 @@ h2 {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-/* Live effective iteration count beside the iterations box (shown only when auto-iterations
-   is on). It's a derived readout, not the editable base, so it's styled as an accent hint. */
+/* Live effective iteration count, shown in parentheses next to the "iterations" label (only
+   when auto-iterations is on). A derived readout, not the editable base → accent hint. Sits in
+   the label line so it never displaces the input; inherits size/nowrap from .param-label. */
 .iter-effective {
-  font-size: 0.7rem;
   color: var(--accent);
-  white-space: nowrap;
 }
 
 .plot-apply {
