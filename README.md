@@ -286,7 +286,7 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   A bounded critical orbit means the Julia set is connected; an escaping one means it is a
   Cantor dust.
 - **Equipotential** — an optional shader overlay of escape-potential contours (a
-  topographic "escape-velocity" map), with a density slider.
+  topographic potential map — the Green's function G = log|φ|), with a density slider.
 - **Farey bulb labels** — on the Mandelbrot parameter plane, label the hyperbolic
   components attached to the main cardioid by their internal angle _p_/_q_ (½ at the
   period-2 neck, ⅓ and ⅔ for the period-3 bulbs …), placed at the attachment point

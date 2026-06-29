@@ -75,7 +75,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: "equipotential",
     term: "Equipotential",
-    defn: "A level curve of the escape potential (the Böttcher 'altitude' outside the set). Equipotentials and external rays meet at right angles, forming a polar grid of the exterior.",
+    defn: "A level curve of the escape potential — the Green's function G(z) = log|φ(z)| of the exterior (the Böttcher 'altitude' outside the set). The bands are drawn at integer escape counts, so they thin geometrically in G toward the boundary. Equipotentials and external rays meet at right angles, forming a polar grid of the exterior.",
   },
   {
     id: "distance-estimate",
@@ -108,7 +108,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: "capacity",
     term: "Logarithmic capacity",
-    defn: "A conformal 'size' (transfinite diameter) of a compact set, the leading factor of its exterior map. For a polynomial filled Julia set it is |a_d|^(−1/(d−1)) from the degree-d leading coefficient a_d — exactly 1 for a monic zᵈ+c (and the multibrot set), and 1/|λ| for the logistic λz(1−z). It is undefined for rational, transcendental, and non-holomorphic maps, where the panel leaves it '—'.",
+    defn: "The logarithmic capacity (= transfinite diameter) of a compact set: the conformal radius at ∞ — the leading coefficient of the map w ↦ cap·w + O(1) uniformizing its exterior (cap = 1 for the normalised ψ(w) = w + O(1)). For a degree-d polynomial filled Julia set it is |a_d|^(−1/(d−1)) from the leading coefficient a_d — exactly 1 for a monic zᵈ+c (and the multibrot set), and 1/|λ| for the logistic λz(1−z). It is undefined for rational, transcendental, and non-holomorphic maps, where the panel leaves it '—'.",
     latex: "\\operatorname{cap}(K) = |a_d|^{-1/(d-1)}",
   },
   {
@@ -119,7 +119,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: "fractal-dimension",
     term: "Fractal dimension",
-    defn: "How the detail of the Julia set fills space — between 1 (a smooth curve, e.g. c = 0) and 2. For z²+c the 'small-c' value is the Ruelle / Bodart–Zinsmeister asymptotic — accurate only for small |c|, and exact just at c = 0; elsewhere, and for every other map, a box-counting estimate of the boundary is used.",
+    defn: "How the detail of the Julia set fills space — between 1 (a smooth curve, e.g. c = 0) and 2. For z²+c the 'small-c' value is the Ruelle / Bodart–Zinsmeister Hausdorff-dimension asymptotic — accurate only for small |c|, and exact just at c = 0. Otherwise, and for every other map, a coarse box-counting estimate of the boundary is used (pixel-resolution dependent, ±~0.1, biased high on nearly-smooth boundaries). For these hyperbolic Julia sets the Hausdorff and box-counting dimensions coincide, so the two readings are comparable.",
     latex: "\\dim_H J_c = 1 + \\frac{|c|^2}{4\\ln 2} + O(|c|^3) \\quad (z^2+c)",
   },
   {
@@ -131,8 +131,8 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: "julia-area",
     term: "Area of the filled Julia set",
-    defn: "From the exterior-map coefficients, Gronwall's area theorem gives the area as π(1 − Σ k|bₖ|²) — a rigorous upper bound, tight for c well inside the set and loose near its boundary. It is 0 for a disconnected (Cantor) Julia set.",
-    latex: "\\operatorname{Area}(K_c) = \\pi\\Bigl(1 - \\sum_{k\\ge 1} k\\,|b_k|^2\\Bigr)",
+    defn: "From the exterior-map coefficients, Gronwall's area theorem bounds the area by π(1 − Σ k|bₖ|²) — a rigorous upper bound, tight for c well inside the set and loose near its boundary. It is 0 for a disconnected (Cantor) Julia set.",
+    latex: "\\operatorname{Area}(K_c) \\le \\pi\\Bigl(1 - \\sum_{k\\ge 1} k\\,|b_k|^2\\Bigr)",
   },
   {
     id: "julia-symmetry",
@@ -142,7 +142,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: "bounding-region",
     term: "Bounding region",
-    defn: "A region containing the whole filled Julia set. For zᵈ+c it is the escape-radius disk |z| ≤ R (the real root of Rᵈ − R − |c| = 0, beyond which every orbit escapes); for a general f it is the measured bounding box of the set.",
+    defn: "A region containing the whole filled Julia set. For zᵈ+c it is the escape-radius disk |z| ≤ R (the real root of Rᵈ − R − |c| = 0; every orbit with |z| > R escapes); for a general f it is the measured bounding box of the set.",
     latex: "R^d - R - |c| = 0",
   },
 ];
