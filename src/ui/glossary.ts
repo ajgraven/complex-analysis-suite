@@ -42,6 +42,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     latex: "B(\\theta) = \\sum_{n\\ge 0} \\frac{\\log q_{n+1}}{q_n} < \\infty",
   },
   {
+    id: "mating",
+    term: "Mating",
+    defn: "Glue two filled Julia sets along their boundaries (by the angle-doubling identification of external rays) to build a single rational map that combines both dynamics. Two post-critically-finite quadratics z²+c₁, z²+c₂ admit a (conformal) mating iff c₁ and c₂ are NOT in complex-conjugate limbs of the Mandelbrot set (Rees–Shishikura–Tan Lei). For main-cardioid bulbs, the p/q limb's conjugate is the (q−p)/q bulb, so the obstruction is p₁/q₁ + p₂/q₂ = 1; the 1/2 bulb is the only self-conjugate one, so every other bulb can be mated with itself.",
+  },
+  {
     id: "escape-time",
     term: "Escape time",
     defn: "How many iterations a point takes to cross the escape radius. Exterior points are coloured by it (smoothed, for continuous bands rather than steps).",

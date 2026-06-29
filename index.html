@@ -983,6 +983,36 @@ z^2+c</textarea
             </div>
           </details>
 
+          <!-- Mating check: are two z²+c bulbs in complex-conjugate limbs? (Rees–Shishikura–Tan Lei) -->
+          <details class="control-group" id="mating-group">
+            <summary>Mating check (z²+c)</summary>
+            <div class="controls">
+              <p class="exterior-status">
+                Two quadratics z²+c can be mated (their filled Julia sets glued into one rational
+                map) iff they are not in complex-conjugate limbs of the Mandelbrot set. Enter two
+                main-cardioid bulbs by rotation number p/q.
+                <button
+                  type="button"
+                  class="gloss-link"
+                  data-term="mating"
+                  aria-label="About matings"
+                >
+                  ?
+                </button>
+              </p>
+              <label class="exterior-n-label">
+                Bulb A (p/q)
+                <input type="text" id="mate-a" value="1/3" size="6" title="Rotation number p/q" />
+              </label>
+              <label class="exterior-n-label">
+                Bulb B (p/q)
+                <input type="text" id="mate-b" value="2/5" size="6" title="Rotation number p/q" />
+              </label>
+              <button type="button" id="mate-check">Check mateability</button>
+              <p class="exterior-status" id="mate-verdict"></p>
+            </div>
+          </details>
+
           <!-- Julia set properties: computed topology / metrics of K_c at the live c. -->
           <details class="control-group" id="julia-props-group">
             <summary>Julia set properties</summary>

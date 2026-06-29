@@ -15,6 +15,7 @@ import type { GLPlot, FractType } from "./render/glPlot";
 import { initialRes } from "./render/glPlot";
 import { ddCenterToString, ddCenterFromString } from "./render/dd";
 import { inspect, findNucleus, fatouComponentType, type InspectResult } from "./render/inspect";
+import { matingVerdict } from "./render/mating";
 import { computeOrbit, orbitAndClassify, type OrbitFate } from "./render/overlay";
 import {
   juliaConnected,
@@ -154,6 +155,7 @@ const TERM_FOR_ROW: Record<string, string> = {
   "Fatou component": "fatou-component",
   "Rotation number": "siegel-disc",
   "Internal angle": "internal-angle",
+  Limb: "mating",
   "Distance to set": "distance-estimate",
 };
 
@@ -170,6 +172,29 @@ function parseRotationNumber(raw: string): number | null {
   }
   const v = Number(s);
   return s !== "" && Number.isFinite(v) ? v : null;
+}
+
+/** Parse a bulb rotation number "p/q" (integers) into [p, q], or null. */
+function parseFraction(raw: string): [number, number] | null {
+  const m = /^\s*(-?\d+)\s*\/\s*(-?\d+)\s*$/.exec(raw);
+  return m ? [Number(m[1]), Number(m[2])] : null;
+}
+
+/** Compute + render the conjugate-limb mateability verdict for the two #mate-* bulb inputs. */
+function updateMatingVerdict(): void {
+  const a = parseFraction(byId<HTMLInputElement>("mate-a").value);
+  const b = parseFraction(byId<HTMLInputElement>("mate-b").value);
+  const out = byId("mate-verdict");
+  const v = a && b ? matingVerdict(a[0], a[1], b[0], b[1]) : null;
+  if (!v || !v.valid || !v.a || !v.b) {
+    out.textContent = "Enter two bulbs as fractions p/q (e.g. 1/3).";
+    return;
+  }
+  const A = `${v.a[0]}/${v.a[1]}`;
+  const B = `${v.b[0]}/${v.b[1]}`;
+  out.textContent = v.mateable
+    ? `✓ ${A} ⊔ ${B} are mateable — their limbs are not conjugate.`
+    : `✗ ${A} ⊔ ${B} are NOT mateable — they lie in complex-conjugate limbs.`;
 }
 
 /** Render a click-to-inspect orbit report into the inspector panel. */
@@ -225,6 +250,17 @@ function showInspect(info: InspectResult, point: Vec2, plane: FractType): void {
     }
   }
   if (info.rotation) rows.push(["Internal angle", `${info.rotation.p}/${info.rotation.q}`]);
+  // On the parameter plane the rotation number p/q names the main-cardioid limb; show its
+  // complex-conjugate limb and whether it self-mates (every bulb but the 1/2 limb does).
+  if (plane === "param" && info.rotation) {
+    const limb = matingVerdict(info.rotation.p, info.rotation.q, info.rotation.p, info.rotation.q);
+    if (limb.conjugateOfA) {
+      rows.push([
+        "Limb",
+        `conjugate ${limb.conjugateOfA[0]}/${limb.conjugateOfA[1]} · self-mateable: ${limb.mateable ? "yes" : "no"}`,
+      ]);
+    }
+  }
   if (info.distance !== null) rows.push(["Distance to set", info.distance.toExponential(2)]);
 
   const body = byId("inspector-body");
@@ -2314,6 +2350,8 @@ function init(): void {
     handleInspect(info, c, "param");
     scheduleRecord();
   });
+  byId("mate-check").addEventListener("click", updateMatingVerdict);
+  updateMatingVerdict(); // seed the verdict for the default bulbs
   byId("inspector-rays").addEventListener("click", () => {
     // Turn on the bulb ray-pairs overlay (draws this bulb's landing rays among the visible
     // ones) and open the Overlays group so the result is visible.
