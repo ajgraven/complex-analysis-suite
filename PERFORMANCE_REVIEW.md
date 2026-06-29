@@ -6,7 +6,8 @@ tools. Compiled 2026-06-29.
 
 > **Status.** Tier 1 **#1 (cardioid/bulb interior bailout)**, **#2 (progressive-threshold fix)** and
 > **#4 (compiled-closure cache)** are implemented; **#3** is subsumed by #4 and **#5** is deferred (see
-> their entries). Everything else is open; this document is the standing roadmap. Speedup
+> their entries). Tier 2 **#6 (coupled-drag panel debounce)** and **#8 (content-gated orbit/CDF
+> invalidation)** are implemented too. Everything else is open; this document is the standing roadmap. Speedup
 > figures from the literature are attributed; figures that could not be pinned to a primary source are
 > marked **[UNVERIFIED]**.
 
@@ -81,13 +82,15 @@ iterations, not a perf win — intentionally not bundled here.)
 
 ## TIER 2 — targeted (medium effort, removes specific stalls / jank)
 
-### 6. Debounce/gate Julia-properties Tier-1 + the Laurent probe to drag-release
-**[Impact L when panel open / Effort M / Risk low]** — `src/main.ts` `updateDynCaption` →
-`updateJuliaProperties()` + `applyLaurent()` run on **every** coupled white-point move (only the
-Tier-2 *image* pass is debounced). A 512-iteration critical-orbit classify + cycle Newton-refine +
-(general f) Durand–Kerner runs per move. Keep the caption synchronous; defer the heavy recompute
-behind the existing drag/`setDraft` signal (or a ~100 ms debounce). Hoist the cheap `monicDegree`
-check before the `polynomialCoeffs` far-field probe in `applyLaurent`.
+### ✅ 6. Debounce the c-dependent dyn panels during a coupled drag — **DONE (PR-3)**
+**[Impact L when panel open / Effort M / Risk low]** — `updateDynCaption` ran `updateExteriorMap()`
++ `applyLaurent()` + `updateJuliaProperties()` on **every** coupled white-point move (a 512-iteration
+classify + cycle Newton-refine + (general f) Durand–Kerner each time, when the panels are open). Now
+the caption text updates live, but the three panels are deferred behind a ~110 ms debounce **while a
+coupled drag is in progress** (tracked via `coupling.setDraft`) and recomputed once on release; all
+non-drag callers (clicks, applied inputs, init) still refresh inline. (`applyLaurent` already
+short-circuits its `polynomialCoeffs` probe for z²+c via `dMonic !== null ||`, so no reorder was
+needed once the per-move cost was gone.)
 
 ### 7. Move Julia-properties Tier-2 image metrics off the main thread
 **[Impact L when panel open / Effort M–L / Risk med]** — `src/main.ts` `measureJuliaImage`
@@ -96,14 +99,16 @@ O(size²·maxIter)) synchronously ≈ 150–250 ms — a visible stall per debou
 Worker (the functions are pure; pass f/esc source + scalars), or cheaper: drop the 2nd extent pass,
 lower `maxIter`, and skip recompute when `(fAst, c, center, zoom)` is unchanged.
 
-### 8. Split orbit/CDF invalidation out of `scheduleRender()`
-**[Impact M for histogram/perturbation / Effort S / Risk low]** — `src/render/glPlot.ts:680-681`
-sets `orbitDirty`/`cdfDirty` unconditionally, and `scheduleRender` is called by *every* setter
-(palette, lighting…). Dirty them only from content-changing setters (zoom/shift/c/f/esc/n/a). For
-histogram mode this avoids a needless full **synchronous `gl.readPixels`** (`glPlot.ts:1011`, a GPU
-stall); for perturbation it avoids recomputing the reference orbit on palette tweaks. Also build the
-histogram CDF at the coarse buffer size (4× smaller readback) and prefer `texSubImage2D` over
-`texImage2D` for the orbit/histo/CDF textures.
+### ✅ 8. Content-gate the orbit/CDF invalidation in `scheduleRender()` — **DONE (PR-3)**
+**[Impact M for histogram/perturbation / Effort S / Risk low]** — `scheduleRender` set
+`orbitDirty`/`cdfDirty` unconditionally, yet it's called by *every* setter. Added a
+`scheduleRender(invalidateContent = true)` param; the 8 appearance-only setters (colouring, trap,
+lighting, post, gradient, gradient-rotation, outline, equipotential) now pass `false`. Content
+changes keep the default, so the reference orbit (perturbation) and the histogram CDF rebuild only
+when the view/c/f/n actually change — a palette tweak in histogram mode no longer triggers the
+**synchronous `gl.readPixels`** CDF rebuild. Verified live: mode→histogram builds the CDF, a palette
+change reuses it (identical structure), a view change rebuilds it. (Coarse-size CDF + `texSubImage2D`
+reuse remain as further niceties.)
 
 ### 9. General periodicity (cycle) detection for interior early-out
 **[Impact M–L / Effort M / Risk med]** — the map-agnostic complement to #1; works on the **Julia

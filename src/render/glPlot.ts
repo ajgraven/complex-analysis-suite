@@ -682,12 +682,21 @@ export class GLPlot {
     return this.targetIterations() >= 150; // many iterations (incl. auto-iterations)
   }
 
-  /** Request a render, restarting the progressive ladder from the coarsest level. */
-  scheduleRender(): void {
+  /**
+   * Request a render, restarting the progressive ladder + temporal-AA accumulation. Pass
+   * `invalidateContent = false` for appearance-only changes (palette, lighting, overlays) so the
+   * reference orbit (perturbation) and the histogram CDF — which depend only on the view, c, f and
+   * the iteration cap — are not needlessly recomputed (the CDF rebuild does a synchronous
+   * readPixels). Content changes keep the default so the orbit/CDF stay correct; the orbit/CDF are
+   * still rebuilt lazily (only when perturbation / histogram mode actually reads them).
+   */
+  scheduleRender(invalidateContent = true): void {
     this._level = 0;
     this.accumCount = 0;
-    this.orbitDirty = true;
-    this.cdfDirty = true; // the escape-count distribution may have changed → rebuild the CDF
+    if (invalidateContent) {
+      this.orbitDirty = true;
+      this.cdfDirty = true; // the escape-count distribution may have changed → rebuild the CDF
+    }
     this.requestFrame();
   }
 
@@ -1521,14 +1530,14 @@ export class GLPlot {
     this._mode = mode;
     this._palette = palette;
     this._aa = aa;
-    this.scheduleRender();
+    this.scheduleRender(false); // colouring is a shader uniform — orbit/CDF depend only on content
   }
 
   /** Set the orbit-trap shape (0 cross, 1 point, 2 line, 3 circle, 4 lattice). A
    *  shader-uniform set used only by the orbit-trap mode, so this only re-renders. */
   setTrap(type: number): void {
     this._trapType = type;
-    this.scheduleRender();
+    this.scheduleRender(false);
   }
 
   /**
@@ -1542,7 +1551,7 @@ export class GLPlot {
     this._lightAz = azimuth;
     this._lightEl = elevation;
     this._lightHeight = height;
-    this.scheduleRender();
+    this.scheduleRender(false);
   }
 
   /**
@@ -1554,34 +1563,34 @@ export class GLPlot {
     this._post = on;
     this._vignette = vignette;
     this._gamma = gamma;
-    this.scheduleRender();
+    this.scheduleRender(false);
   }
 
   /** Replace the custom-gradient colour stops (uPalette == 4) and re-upload. */
   setGradient(stops: GradientStop[]): void {
     this._gradientStops = stops;
     this.uploadGradient();
-    this.scheduleRender();
+    this.scheduleRender(false);
   }
 
   /** Set the palette rotation / colour-cycling offset (0..1). Render-only. */
   setGradientRotation(offset: number): void {
     this._gradientOffset = offset;
-    this.scheduleRender();
+    this.scheduleRender(false);
   }
 
   /** Toggle the screen-space boundary-outline overlay and its `width` strength. */
   setOutline(on: boolean, width: number): void {
     this._outline = on;
     this._outlineWidth = width;
-    this.scheduleRender();
+    this.scheduleRender(false);
   }
 
   /** Toggle the equipotential (level-curve) overlay and its contour `density`. */
   setEquipotential(on: boolean, density: number): void {
     this._equipotential = on;
     this._equiDensity = density;
-    this.scheduleRender();
+    this.scheduleRender(false);
   }
 
   /**

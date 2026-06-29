@@ -692,6 +692,10 @@ function init(): void {
     });
   }
 
+  // Coupled-drag state for deferring the c-dependent dyn-panel readouts (see updateDynCaption).
+  let coupledDrafting = false;
+  let dynPanelsTimer = 0;
+
   const parameterView = new PlotView(
     byId<HTMLCanvasElement>("MCSCanvas"),
     byId<HTMLCanvasElement>("MCSOverlay"),
@@ -707,7 +711,11 @@ function init(): void {
           announce(`Parameter c = ${dynCValue.textContent}`);
           if (isCoarsePointer) updateOrbitPreview(z0); // touch has no hover → drive the inset here
         },
-        setDraft: (on) => dynamicalView.plot.setDraft(on),
+        setDraft: (on) => {
+          dynamicalView.plot.setDraft(on);
+          coupledDrafting = on;
+          if (!on) refreshDynPanels(); // drag ended → recompute the dyn panels once for the final c
+        },
       },
       onViewChanged: (center, zoom) => {
         setParamCenterInput(center);
@@ -836,15 +844,26 @@ function init(): void {
     return `${r} ${sign} ${imStr}`;
   }
   /** Update the dynamical-plane caption to the current parameter c. */
+  function refreshDynPanels(): void {
+    window.clearTimeout(dynPanelsTimer);
+    updateExteriorMap(); // dyn coefficients depend on c (a no-op while the panel is collapsed)
+    applyLaurent(); // …and so does the dynamical boundary (a no-op while the toggle is off)
+    updateJuliaProperties(); // …and the Julia-set properties readout (also gated on its panel)
+  }
+  // During a coupled white-point drag the c-dependent panels are debounced (the cheap caption text
+  // still updates live); they recompute once on release via coupling.setDraft(false).
+  function scheduleDynPanels(): void {
+    window.clearTimeout(dynPanelsTimer);
+    dynPanelsTimer = window.setTimeout(refreshDynPanels, 110);
+  }
   function updateDynCaption(): void {
     const txt = prettyComplex(dynamicalView.plot.c);
     dynCValue.textContent = txt;
     // The parameter white point IS this c, so both captions show the same value — making
     // the parameter↔dynamical link explicit.
     paramCValue.textContent = txt;
-    updateExteriorMap(); // dyn coefficients depend on c (a no-op while the panel is collapsed)
-    applyLaurent(); // …and so does the dynamical boundary (a no-op while the toggle is off)
-    updateJuliaProperties(); // …and the Julia-set properties readout (also gated on its panel)
+    if (coupledDrafting) scheduleDynPanels();
+    else refreshDynPanels();
   }
 
   // --- Exterior-map (uniformization) readout -------------------------------
