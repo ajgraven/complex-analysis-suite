@@ -547,15 +547,6 @@ select {
   width: 9rem;
 }
 
-/* Live KaTeX rendering of the entered f(z, c), under the formula input. */
-.formula-latex {
-  margin-top: 0.3rem;
-  min-height: 1.3em;
-  max-width: 22rem;
-  overflow-x: auto;
-  color: var(--fg);
-}
-
 /* Collapsible advanced-control groups (Appearance, Overlays, Iteration). */
 .control-group {
   flex-basis: 100%;
@@ -687,8 +678,8 @@ textarea.dirty {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  /* Top-align so the f(z,c) field (which carries the taller live KaTeX render under its
-     textarea) doesn't bottom-shift its shorter neighbours (presets / coloring / palette). */
+  /* Top-align the wrapped groups so a taller field doesn't bottom-shift its shorter
+     neighbours (presets / coloring / palette). */
   align-items: flex-start;
 }
 

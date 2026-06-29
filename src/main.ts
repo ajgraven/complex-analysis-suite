@@ -52,8 +52,6 @@ import {
 import { PLACES } from "./state/places";
 import GIF from "gif.js";
 import gifWorkerUrl from "gif.js/dist/gif.worker.js?url";
-import { parse } from "./expr/parser";
-import { toLatex } from "./expr/latex";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { driver } from "driver.js";
@@ -203,17 +201,6 @@ function showInspect(info: InspectResult, point: Vec2, plane: FractType): void {
     body.append(dt, dd);
   }
   byId("inspector").hidden = false;
-}
-
-/** Typeset the current f(z,c) with KaTeX into the formula display (best-effort). */
-function renderFormula(): void {
-  const el = document.getElementById("formula-latex");
-  if (!el) return;
-  try {
-    katex.render(toLatex(parse(getFInput())), el, { throwOnError: false, displayMode: false });
-  } catch {
-    el.textContent = "";
-  }
 }
 
 /**
@@ -1277,7 +1264,6 @@ function init(): void {
     dynamicalView.setRes(getDynResInput());
     syncDynamicalC();
     reportCompileErrors();
-    renderFormula();
     updateParamAVisibility();
     updatePerturbationGating(); // a new f may change z²+c eligibility
     updateDerivativeGating(); // a new f may change holomorphicity
@@ -1301,7 +1287,6 @@ function init(): void {
     parameterView.applyPreset(paramPresets[name]);
     syncDynamicalC();
     reportCompileErrors();
-    renderFormula();
     updateParamAVisibility();
     updatePerturbationGating(); // a new preset may change z²+c eligibility (re-enables light/outline/equipotential)
     updateDerivativeGating();
@@ -2413,7 +2398,6 @@ function init(): void {
   disableUnsupportedSizes();
   setupOnboarding();
   setupGlossary();
-  renderFormula();
   setupTour();
   setupTheme();
   setupMobileSheet();
