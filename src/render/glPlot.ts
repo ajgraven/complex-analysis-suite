@@ -709,17 +709,22 @@ export class GLPlot {
 
   /**
    * Spatial-resolution fraction for an interaction (draft) frame. Drafting keeps the FULL
-   * iteration cap (so the escaping/interior classification matches the settled image and
-   * never flips mid-drag) and trades *resolution* for responsiveness instead. At high
-   * iteration counts the draft goes coarser so dragging stays smooth — the frame is softer,
-   * never miscoloured, and sharpens in on the progressive refine once interaction stops.
+   * iteration cap (so the escaping/interior classification matches the settled image and never
+   * flips mid-drag) and trades *resolution* for responsiveness instead. The draft goes coarser
+   * when a frame is costlier — at high iteration counts, and at deep (df64) zoom, where each
+   * iteration is several× the single-precision cost — so dragging stays smooth. The frame is
+   * softer while moving, never miscoloured, and sharpens in on the progressive refine on release.
    */
   private draftFraction(): number {
     const base = PROGRESSIVE_LADDER[0]; // 0.5 — the coarse rung of the progressive ladder
     const n = this.targetIterations();
-    if (n <= 300) return base;
-    if (n <= 1200) return 0.4;
-    return 0.3;
+    let frac = n <= 300 ? base : n <= 1200 ? 0.4 : 0.3;
+    // df64 is much costlier per iteration; since drafting now keeps the full cap (rather than
+    // halving it, which used to flip near-boundary colours), coarsen the draft resolution at deep
+    // zoom to roughly restore the pre-full-cap interaction speed. Still no miscolouring — softer
+    // while moving, sharp on release.
+    if (this.desiredPrecision() === "df64") frac = Math.min(frac, 0.35);
+    return frac;
   }
 
   /**
