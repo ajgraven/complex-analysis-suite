@@ -171,6 +171,17 @@ export const GLOSSARY: GlossaryEntry[] = [
     defn: "A region containing the whole filled Julia set. For zᵈ+c it is the escape-radius disk |z| ≤ R (the real root of Rᵈ − R − |c| = 0; every orbit with |z| > R escapes); for a general f it is the measured bounding box of the set.",
     latex: "R^d - R - |c| = 0",
   },
+  {
+    id: "marty",
+    term: "Marty / spherical derivative",
+    defn: "The Marty coloring highlights the Julia set using the normality test. The spherical derivative |（f^k)′(z₀)| / (1+|z_k|²) measures how fast the family {f^k} pulls nearby points apart on the Riemann sphere; it grows on the Julia set (where the family fails to be normal) and stays small in the Fatou set. Colouring by its running maximum lights up the Julia set — an alternative to distance estimation that works for any holomorphic map.",
+    latex: "f^{k\\#}(z) = \\frac{|(f^k)'(z)|}{1 + |f^k(z)|^2}",
+  },
+  {
+    id: "newton-basins",
+    term: "Newton basins",
+    defn: "Under Newton's method (iterating z − f/f′) almost every point converges to one of the roots of f. The Newton-basins coloring sets the hue to the argument of the value the orbit ends on — under Newton that is the root reached — so the basins of different roots take distinct hues (the classic multi-coloured Newton fractal), with brightness from the convergence speed. No root detection is needed: distinct roots simply have distinct arguments.",
+  },
 ];
 
 /** The app's deliberate, non-textbook conventions — stated for honesty / research use. */

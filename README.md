@@ -80,7 +80,7 @@ Presets live in [`src/presets.ts`](src/presets.ts) as two dictionaries
 | `z0`     | Orbit start point (dynamical-plane presets only)    |
 
 Included presets (grouped in the picker): Mandelbrot and cubic (`z³+c`);
-the abs-variants tricorn, burning ship, butterfly, and celtic; the rational/logistic
+the abs-variants tricorn, multicorn (`z̄³+c`), burning ship, butterfly, and celtic; the rational/logistic
 magnet and lambda; the transcendental exponential map, teardrop Schwarz, and exp
 Schwarz; and a biomorph.
 
@@ -260,6 +260,15 @@ all are shader uniforms, so switching never recompiles):
     white at the superattracting centre to dark toward the component boundary (|λ| → 1);
     escaping points keep the smooth escape-time palette (the classic "internal coordinates"
     look). Needs a holomorphic `f`.
+  - _Marty (Julia-set normality)_ — colours by the spherical derivative
+    `|（f^k)′(z₀)| / (1 + |z_k|²)`, which grows on the Julia set (where the family `{f^k}` fails
+    to be normal) and stays small in the Fatou set, so it lights up the Julia set. A useful
+    alternative to distance estimation where the Böttcher-based colourings are weak. Needs a
+    holomorphic `f`.
+  - _Newton basins (by root)_ — hue = arg of the value the orbit ends on; under **Newton's
+    method** that value is the root each pixel converges to, so the basins of different roots
+    take distinct hues (the classic multi-coloured Newton fractal). Brightness = convergence
+    speed.
   - _Domain colouring_ — hue = arg, brightness = magnitude of one application of
     `f(z, c)` (most meaningful on the dynamical plane; ignores the palette).
 - **Palette** — Classic, Viridis and Cividis (both colourblind-safe), Magma,
@@ -317,19 +326,29 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   set); parameter plane, `z²+c` only.
 - **Point inspector** — click either plot (or drag its white point) to open a small report
   on that point's orbit: its fate, the attracting-cycle **period**, the cycle **multiplier**
-  `λ = ∏ f′` (magnitude, argument, and attracting/repelling/indifferent), the **internal
-  angle** _p_/_q_ (the bulb's combinatorial rotation number — ½ at the period-2 neck, ⅓ at
-  the period-3 bulb …), and, for escaping points, the **distance to the set**. The parameter
+  `λ = ∏ f′` (magnitude, argument, and attracting/repelling/indifferent), the **Fatou-component
+  type** (attracting / superattracting / parabolic / **Siegel** disc / **Cremer** — an
+  indifferent cycle is split by its rotation number θ = arg λ/2π through the Brjuno test, with
+  an estimated disc radius), the **internal angle** _p_/_q_ (the bulb's combinatorial rotation
+  number — ½ at the period-2 neck, ⅓ at the period-3 bulb …), and, for escaping points, the
+  **distance to the set**. The parameter
   plane inspects the critical orbit at the clicked `c`; the dynamical plane the clicked
   `z₀`. Multiplier and distance need a holomorphic `f` (period and angle hold for any `f`).
   On the **dynamical plane** the located attracting cycle is marked (ringed dots joined in
   orbit order). On the **parameter plane**, when a finite cycle is found, a **Find nucleus**
   button Newton-snaps `c` to the exact superattracting centre, and **Show bulb rays** turns
-  on that bulb's landing rays. **Copy report** copies the readout and **Export orbit**
-  downloads the inspected orbit as a CSV — both at full precision.
+  on that bulb's landing rays; a **Misiurewicz** finder Newton-snaps to the exact preperiodic
+  point `fᵐ⁺ᵏ(0) = fᵐ(0)` nearest the view, and **Siegel c for θ** jumps to the cardioid point
+  `λ/2 − λ²/4` for a typed rotation number. **Copy report** copies the readout and **Export
+  orbit** downloads the inspected orbit as a CSV — both at full precision.
 - **Critical-orbit hover preview** — hovering a point on the parameter plane shows a small
   preview of its critical orbit (green if bounded → connected Julia set; orange if it
   escapes → Cantor dust), pinned to the plot's corner.
+- **Mating check** — enter two main-cardioid bulbs (rotation numbers _p_/_q_) and the panel
+  reports whether the two `z²+c` maps can be **mated** (their filled Julia sets glued into one
+  rational map): by Rees–Shishikura–Tan Lei they mate iff their limbs are not complex-conjugate,
+  i.e. _p₁_/_q₁_ + _p₂_/_q₂_ ≠ 1 (the ½ bulb is the only self-conjugate one). The inspector's
+  **Limb** row shows a bulb's conjugate limb and whether it self-mates.
 
 ## Exterior map (uniformization)
 
