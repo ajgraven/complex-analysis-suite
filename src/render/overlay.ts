@@ -190,6 +190,13 @@ export function fateLabel(info: OrbitInfo): string {
   }
 }
 
+/** A user annotation: a gold pin + text label at a plot-coordinate point. */
+export interface Annotation {
+  x: number;
+  y: number;
+  text: string;
+}
+
 export interface OverlayParams {
   fAst: Node;
   escapeAst: Node;
@@ -221,6 +228,8 @@ export interface OverlayParams {
   size: number;
   /** Live parameter `a`, bound in f / escape when used as a free variable. */
   a?: Complex;
+  /** User-pinned annotations (gold marker + label) at plot-coordinate points. */
+  annotations?: Annotation[];
 }
 
 /**
@@ -413,7 +422,13 @@ const boundaryCache = new Map<
 >();
 function cachedBoundary(plane: "dyn" | "param", coeffs: Vec2[], r: number, lead: Vec2): Vec2[] {
   const slot = boundaryCache.get(plane);
-  if (slot && slot.coeffs === coeffs && slot.r === r && slot.lead[0] === lead[0] && slot.lead[1] === lead[1])
+  if (
+    slot &&
+    slot.coeffs === coeffs &&
+    slot.r === r &&
+    slot.lead[0] === lead[0] &&
+    slot.lead[1] === lead[1]
+  )
     return slot.pts;
   const pts = reconstructBoundary(coeffs, r, BOUNDARY_SAMPLES, lead);
   boundaryCache.set(plane, { coeffs, r, lead, pts });
@@ -626,6 +641,31 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
       p.laurentBoundary.lead ?? [1, 0],
     );
     drawLaurentBoundary(ctx, bpts, p.center, p.zoom, size);
+  }
+
+  // User annotations: a gold pin + text label at each pinned point (HALO casing for contrast).
+  if (p.annotations && p.annotations.length > 0) {
+    ctx.font = `${13 * s}px sans-serif`;
+    ctx.textBaseline = "bottom";
+    ctx.lineJoin = "round";
+    for (const note of p.annotations) {
+      const [nx, ny] = plotToPx([note.x, note.y], p.center, p.zoom, size);
+      ctx.beginPath();
+      ctx.arc(nx, ny, 4.0 * s, 0, 2 * Math.PI);
+      ctx.fillStyle = HALO;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(nx, ny, 2.6 * s, 0, 2 * Math.PI);
+      ctx.fillStyle = "#ffd24a";
+      ctx.fill();
+      if (note.text) {
+        ctx.lineWidth = 3 * s;
+        ctx.strokeStyle = HALO;
+        ctx.strokeText(note.text, nx + 6 * s, ny - 6 * s);
+        ctx.fillStyle = "#ffd24a";
+        ctx.fillText(note.text, nx + 6 * s, ny - 6 * s);
+      }
+    }
   }
 
   // White point (dark ring behind so it shows on light palettes) + coordinate / fate label.

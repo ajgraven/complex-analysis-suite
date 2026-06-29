@@ -500,6 +500,24 @@ abs(z)>2</textarea
                 ?
               </button>
             </div>
+            <div class="inspector-note">
+              <input
+                type="text"
+                id="note-text"
+                placeholder="note label"
+                title="Optional label for a pinned annotation"
+              />
+              <button
+                id="note-pin"
+                type="button"
+                title="Pin a gold marker + label at the last-inspected point (kept in share links and saved views)"
+              >
+                Pin note
+              </button>
+              <button id="note-clear" type="button" title="Remove all pinned annotations">
+                Clear
+              </button>
+            </div>
             <p class="inspector-hint">
               Click any point on a plot to inspect its orbit — period, multiplier, internal angle,
               and distance to the set.

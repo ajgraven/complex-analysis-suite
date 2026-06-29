@@ -22,7 +22,7 @@ import {
   type InspectResult,
 } from "./render/inspect";
 import { matingVerdict } from "./render/mating";
-import { computeOrbit, orbitAndClassify, type OrbitFate } from "./render/overlay";
+import { computeOrbit, orbitAndClassify, type Annotation, type OrbitFate } from "./render/overlay";
 import {
   juliaConnected,
   juliaExteriorCoeffs,
@@ -864,6 +864,15 @@ function init(): void {
     lastInspect = { info, point: [point[0], point[1]], plane };
     byId("inspector-copy").hidden = false;
     byId("inspector-orbit").hidden = false;
+  }
+
+  /** User annotations (gold pins), tagged by plane; pushed to each plot's overlay. */
+  let notes: { plane: FractType; x: number; y: number; text: string }[] = [];
+  function refreshNotes(): void {
+    const pick = (pl: FractType): Annotation[] =>
+      notes.filter((n) => n.plane === pl).map(({ x, y, text }) => ({ x, y, text }));
+    parameterView.setAnnotations(pick("param"));
+    dynamicalView.setAnnotations(pick("dyn"));
   }
 
   const errorBox = byId<HTMLDivElement>("input-errors");
@@ -1803,6 +1812,7 @@ function init(): void {
     const dc = dynamicalView.plot.centerDD;
     if (dynamicalView.plot.zoom > 1e3 || dc[0][1] !== 0 || dc[1][1] !== 0)
       state._dcdd = ddCenterToString(dc[0], dc[1]);
+    if (notes.length > 0) state._notes = JSON.stringify(notes); // pinned annotations
     return state;
   }
 
@@ -1855,6 +1865,25 @@ function init(): void {
       const c = ddCenterFromString(state._dcdd);
       if (c) dynamicalView.plot.setCenterDD(c[0], c[1]);
     }
+    // Restore pinned annotations (validated; ignore a malformed list from a corrupt link).
+    notes = [];
+    if (typeof state._notes === "string") {
+      try {
+        const parsed: unknown = JSON.parse(state._notes);
+        if (Array.isArray(parsed))
+          notes = parsed.filter(
+            (n): n is { plane: FractType; x: number; y: number; text: string } =>
+              !!n &&
+              typeof n.x === "number" &&
+              typeof n.y === "number" &&
+              typeof n.text === "string" &&
+              (n.plane === "param" || n.plane === "dyn"),
+          );
+      } catch {
+        /* ignore malformed _notes */
+      }
+    }
+    refreshNotes();
   }
 
   /** Serialize the current view into the URL hash and copy a shareable link. */
@@ -2428,6 +2457,28 @@ function init(): void {
     const pts = computeOrbit(view.plot.fAst, view.plot.escAst, z0, cc, 512, view.plot.paramA);
     downloadBlob(new Blob([orbitToCsv(pts)], { type: "text/csv" }), "orbit.csv");
     showToast(`Exported ${pts.length} orbit points to orbit.csv.`, "info");
+  });
+  byId("note-pin").addEventListener("click", () => {
+    if (!lastInspect) {
+      showToast("Inspect a point first, then pin a note there.", "warn");
+      return;
+    }
+    const text = byId<HTMLInputElement>("note-text").value.trim();
+    notes.push({
+      plane: lastInspect.plane,
+      x: lastInspect.point[0],
+      y: lastInspect.point[1],
+      text,
+    });
+    byId<HTMLInputElement>("note-text").value = "";
+    refreshNotes();
+    scheduleRecord();
+  });
+  byId("note-clear").addEventListener("click", () => {
+    if (notes.length === 0) return;
+    notes = [];
+    refreshNotes();
+    scheduleRecord();
   });
 
   /** Copy the full-precision c / centre / zoom of a plot to the clipboard. */

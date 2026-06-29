@@ -1297,9 +1297,10 @@ select.invalid {
   display: none;
 }
 
-/* Small persistent navigation rows inside the inspector (Siegel parameter, Misiurewicz finder). */
+/* Small persistent tool rows inside the inspector (Siegel parameter, Misiurewicz finder, notes). */
 .inspector-siegel,
-.inspector-misiur {
+.inspector-misiur,
+.inspector-note {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1309,7 +1310,8 @@ select.invalid {
   color: var(--muted);
 }
 
-.inspector-siegel input {
+.inspector-siegel input,
+.inspector-note input {
   flex: 1;
   min-width: 5rem;
 }

@@ -16,7 +16,7 @@ import { panDelta } from "../transforms";
 import { showToast } from "../ui/toast";
 import { GLPlot, renderScale, type FractType } from "./glPlot";
 import { inspect, type InspectResult } from "./inspect";
-import { drawOverlay, drawScaleBar } from "./overlay";
+import { drawOverlay, drawScaleBar, type Annotation } from "./overlay";
 import { isDoubleTap, pinchShift, pinchStateOf, type PinchState, type Tap } from "./pinch";
 
 /** Hooks linking a plot to the rest of the app (the parameter→dynamical coupling, input sync). */
@@ -63,6 +63,7 @@ export class PlotView {
   private showRayPairs = false;
   private rayAngle: number | null = null;
   private laurentBoundary: { coeffs: Vec2[]; r: number; lead: Vec2 } | null = null;
+  private annotations: Annotation[] = [];
   /**
    * Attracting cycle from the last dynamical-plane inspection (z-plane points), and the
    * `c` it was found at. The cycle is a function of `c` only, so the markers survive
@@ -143,6 +144,17 @@ export class PlotView {
     this.requestOverlay();
   }
 
+  /** Replace this plot's user annotations (gold pins). Overlay-only. */
+  setAnnotations(notes: Annotation[]): void {
+    this.annotations = notes;
+    this.requestOverlay();
+  }
+
+  /** This plot's current annotations (for serialising into share links / saved views). */
+  getAnnotations(): Annotation[] {
+    return this.annotations;
+  }
+
   /** Redraw the overlay from outside (e.g. after a programmatic white-point move). */
   refreshOverlay(): void {
     this.requestOverlay();
@@ -194,6 +206,7 @@ export class PlotView {
           laurentBoundary: this.laurentBoundary ?? undefined,
           cyclePoints: this.currentCyclePoints(),
           a: this.plot.paramA,
+          annotations: this.annotations,
           size,
         });
         ctx.drawImage(ov, 0, 0);
@@ -275,6 +288,7 @@ export class PlotView {
       laurentBoundary: this.laurentBoundary ?? undefined,
       cyclePoints: this.currentCyclePoints(),
       a: this.plot.paramA,
+      annotations: this.annotations,
       size: this.overlay.width,
     });
   }
