@@ -145,12 +145,16 @@ distance, plus `findNucleus`), [`farey.ts`](src/render/farey.ts) (bulb labels),
 [`rays.ts`](src/render/rays.ts) (external rays + `bulbRayAngles`),
 [`orbitPreview.ts`](src/render/orbitPreview.ts) (the hover preview),
 [`uniformize.ts`](src/render/uniformize.ts) (exterior-map Laurent coefficients of the filled
-Julia set and the multibrot — exact recursions — plus `reconstructBoundary`), and
+Julia set — any polynomial or rational map — and the multibrot, by exact recurrences, plus
+`reconstructBoundary`; with [`expr/rational.ts`](src/expr/rational.ts) splitting f over ℂ(z)), and
 [`src/state/places.ts`](src/state/places.ts) (curated locations). User-facing **jargon is
 defined once** in [`src/ui/glossary.ts`](src/ui/glossary.ts) (the Glossary modal + inline
 `?` links) — add an entry there when you introduce a new term. Many of these (rays, Farey,
-multiplier) are gated to `z²+c` via `perturbationEligible`; the exterior-map panel is gated
-to `z^d+c` via `GLPlot.monicDegree`.
+multiplier) are gated to `z²+c` via `perturbationEligible`. The exterior-map panel's
+parameter-plane multibrot side is `z^d+c`-only (via `GLPlot.monicDegree`), but its dynamical
+(filled-Julia) side handles **any polynomial** (`critical.polynomialCoeffs`, DFT extraction) or a
+**rational map with a superattracting ∞** (`expr/rational.fToRational`) through the shared Böttcher
+recurrence in `uniformize.exteriorFromLaurent`.
 
 **Newton's method** (`GLPlot.setNewton`) swaps the iterated AST for the Newton map
 `z - f/f'` built by [`src/expr/derivative.ts`](src/expr/derivative.ts)
