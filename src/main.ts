@@ -102,6 +102,7 @@ const MODES: Record<string, number> = {
   decomposition: 9,
   period: 10,
   multiplier: 12,
+  marty: 13,
 };
 const PALETTES: Record<string, number> = {
   classic: 0,
@@ -1740,11 +1741,12 @@ function init(): void {
       !dynamicalView.plot.perturbationActive;
     byId<HTMLOptionElement>("mode-distance-analytic").disabled = !available;
     byId<HTMLOptionElement>("mode-multiplier").disabled = !available;
+    byId<HTMLOptionElement>("mode-marty").disabled = !available;
     const sel = byId<HTMLSelectElement>("mode");
     if (!available && sel.value === "distanceAnalytic") {
       sel.value = "distance";
       applyColoring();
-    } else if (!available && sel.value === "multiplier") {
+    } else if (!available && (sel.value === "multiplier" || sel.value === "marty")) {
       sel.value = "smooth";
       applyColoring();
     }

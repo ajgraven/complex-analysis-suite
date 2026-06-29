@@ -355,6 +355,35 @@ ${coordinate}
     ? "  if (uMode == 12) { fragColor = vec4(multiplierColor(fc), 1.0); return; }\n"
     : "";
 
+  // Marty / spherical-derivative coloring (uMode 13): a Julia-set visualiser via the normality
+  // test. The spherical derivative |（f^k)′(z₀)| / (1+|z_k|²) grows on the Julia set — where the
+  // family {f^k} fails to be normal — and stays small in the Fatou set. Uses the pure z-derivative
+  // ∏ f′ (not the parameter derivative), so it reads as "the Julia set of the map here". df64-safe
+  // (barrier ops only); must still link for non-holomorphic f (the runtime gate blocks selection).
+  const martyGLSL = hasDeriv
+    ? `
+vec3 martyColor(vec2 fragXY) {
+  vec2 uv = fragXY / uResolution;
+${coordinate}
+  cvec cc = (uFractType == 1) ? z : vec_(uC.x, uC.y);
+  cvec der = vec_(1.0, 0.0); // (f^0)′(z₀) = 1
+  float maxSph = 0.0;
+  for (int k = 0; k < uN; k++) {
+    float az = cabsf(z);
+    maxSph = max(maxSph, cabsf(der) / (1.0 + az * az)); // spherical derivative at z_k
+    if (escapeFn(z, cc)) break;
+    cvec zp = z;
+    der = cmul(fZFn(zp, cc), der); // → (f^{k+1})′(z₀)
+    z = fFn(z, cc);
+  }
+  return palette(clamp(log(1.0 + maxSph) / 16.0, 0.0, 1.0)); // bright on the Julia set
+}
+`
+    : "";
+  const martyDispatch = hasDeriv
+    ? "  if (uMode == 13) { fragColor = vec4(martyColor(fc), 1.0); return; }\n"
+    : "";
+
   // Interior bailout for z²+c (single precision, parameter plane): a c in the main cardioid
   // or the period-2 bulb is provably in the Mandelbrot set, so its critical orbit never
   // escapes — skip the whole iteration loop for the flat-interior colouring modes. The
@@ -628,7 +657,7 @@ vec3 applyLighting(vec3 col, float h) {
   if (h < 0.0) return col;
   return shadeWithGradient(col, vec2(dFdx(h), dFdy(h)) * uLightHeight);
 }
-${distanceAnalyticGLSL}${analyticNormalGLSL}${multiplierGLSL}
+${distanceAnalyticGLSL}${analyticNormalGLSL}${multiplierGLSL}${martyGLSL}
 void main() {
   vec2 fc = gl_FragCoord.xy + uJitter; // temporal-AA sub-pixel offset (0 when off)
   if (uMode == 6) {
@@ -641,7 +670,7 @@ void main() {
     fragColor = vec4(distanceColor(fc), 1.0); // edges: no supersampling
     return;
   }
-${analyticDispatch}${multiplierDispatch}  int n = max(uAA, 1);
+${analyticDispatch}${multiplierDispatch}${martyDispatch}  int n = max(uAA, 1);
   vec3 acc = vec3(0.0);
   float centreHeight = -1.0;
   for (int sy = 0; sy < n; sy++) {
