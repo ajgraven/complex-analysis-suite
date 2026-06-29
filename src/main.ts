@@ -581,6 +581,25 @@ function setupGlossary(): void {
   }
 }
 
+/** Wire the "Help & reference" modal: opened from the app-bar "Help" button, closed via the ×,
+ *  a backdrop click, or Escape — the same lightweight pattern as {@link setupGlossary}. */
+function setupHelpReference(): void {
+  const overlay = byId("help-ref");
+  const close = (): void => {
+    overlay.hidden = true;
+  };
+  byId("help-ref-btn").addEventListener("click", () => {
+    overlay.hidden = false;
+  });
+  byId("help-ref-close").addEventListener("click", close);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) close(); // backdrop click
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !overlay.hidden) close();
+  });
+}
+
 /** Show the export-progress overlay; returns progress + cancel hooks and a closer. */
 function beginExport(label: string): {
   onProgress: (fraction: number) => void;
@@ -2507,6 +2526,7 @@ function init(): void {
   disableUnsupportedSizes();
   setupOnboarding();
   setupGlossary();
+  setupHelpReference();
   setupTour();
   setupTheme();
   setupMobileSheet();

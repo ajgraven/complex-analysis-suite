@@ -533,6 +533,20 @@ h2 {
   display: none;
 }
 
+/* A caret after "more — …" signalling the row expands to reveal extra controls; it flips when
+   open (the native disclosure marker is hidden above, so we draw our own). */
+.plot-more > summary::after {
+  content: "▾";
+  display: inline-block;
+  margin-left: 0.3rem;
+  font-size: 0.85em;
+  transition: transform 0.15s ease;
+}
+
+.plot-more[open] > summary::after {
+  transform: rotate(180deg);
+}
+
 .plot-more[open] > summary {
   margin-bottom: 0.5rem;
 }
@@ -603,6 +617,26 @@ select {
      value label vs a plain select), so flex-start keeps the labels in a tidy row. */
   align-items: flex-start;
   margin-top: 0.6rem;
+}
+
+/* In the options panels, keep a checkbox option and its inline "?" help link on the SAME row
+   (the field is otherwise a vertical stack, which pushed the "?" below the label and wasted
+   space); any sub-controls (sliders) or notes drop to their own full-width line beneath. Plain
+   label-over-control fields (no `label.checkbox`) are untouched and keep the vertical stack. */
+.control-grid .field:has(> label.checkbox) {
+  flex-flow: row wrap;
+  align-items: center;
+  column-gap: 0.15rem;
+}
+
+.control-grid .field:has(> label.checkbox) > label.checkbox {
+  padding-bottom: 0; /* the flex row aligns the "?"; the stacked padding is no longer needed */
+}
+
+.control-grid
+  .field:has(> label.checkbox)
+  > :where(.post-controls, .light-controls, .control-note) {
+  flex-basis: 100%; /* break onto a new full-width line below the checkbox + "?" row */
 }
 
 textarea {
@@ -766,24 +800,14 @@ label.checkbox {
   min-width: 0;
 }
 
-/* --- Documentation ----------------------------------------------------- */
-.docs-section {
-  margin-top: 2rem;
-  border-top: 1px solid var(--border);
-}
-
-.docs-section > summary {
-  cursor: pointer;
-  padding: 0.6rem 0;
-  font-size: 0.95rem;
-  color: var(--muted);
-}
-
+/* --- Documentation (Help & reference modal body) ----------------------- */
+/* `.docs` is the grid of help sections inside the #help-ref modal; `.glossary-body` already
+   supplies the top margin below the modal heading, so the grid itself adds none. */
 .docs {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: var(--gap) 2rem;
-  margin-top: 0.75rem;
+  margin-top: 0;
 }
 
 .docs h3 {
@@ -970,7 +994,8 @@ select.invalid {
   margin: 0;
 }
 
-#glossary-close {
+#glossary-close,
+#help-ref-close {
   border: none;
   background: transparent;
   color: var(--muted);
