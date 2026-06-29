@@ -147,18 +147,32 @@ vec3 pColorAt(vec2 fragXY) {
   // Julia (dyn): perturb the initial z — δz_0 = δc, c is fixed (folded into the orbit).
   vec2 dz = uJuliaMode == 1 ? dc : vec2(0.0);
   vec2 cAdd = uJuliaMode == 1 ? vec2(0.0) : dc;
+  vec2 Z0 = texelFetch(uOrbit, ivec2(0, 0), 0).rg; // reference start (0 on the parameter plane)
+  vec2 Z = Z0;        // reference iterate Z_m at the current index m
+  int m = 0;          // reference index — decoupled from k, reset to 0 on rebase
+  int refMax = max(uOrbitLen - 1, 0);
   vec2 z = vec2(0.0);
   int kmax = 0;
   bool escaped = false;
-  int lim = min(uN, uOrbitLen);
-  for (int k = 0; k < lim; k++) {
-    vec2 Z = texelFetch(uOrbit, ivec2(k, 0), 0).rg;
-    z = Z + dz; // full iterate z_k
+  for (int k = 0; k < uN; k++) {
+    z = Z + dz; // full iterate z_k = Z_m + δz
     if (dot(z, z) > 4.0) { escaped = true; break; }
     // δz_{k+1} = 2·Z·δz + δz² + cAdd  (complex arithmetic)
     vec2 twoZdz = 2.0 * vec2(Z.x * dz.x - Z.y * dz.y, Z.x * dz.y + Z.y * dz.x);
     vec2 dz2 = vec2(dz.x * dz.x - dz.y * dz.y, 2.0 * dz.x * dz.y);
     dz = twoZdz + dz2 + cAdd;
+    m++;
+    Z = texelFetch(uOrbit, ivec2(min(m, refMax), 0), 0).rg; // reference at the new index
+    // Rebasing (Zhuoran): re-reference to Z_0 when that gives a smaller perturbation (the reference
+    // has drifted, so Z_m + δz would lose precision to cancellation) or when the stored orbit ends.
+    // An exact identity — δz ← (Z_m + δz) − Z_0 — so it is glitch-free and also removes the old
+    // fixed-length truncation. Sound on the parameter plane (Z_0 = 0); best-effort on the Julia plane.
+    vec2 full = Z + dz;
+    if (m >= refMax || dot(full - Z0, full - Z0) < dot(dz, dz)) {
+      dz = full - Z0;
+      Z = Z0;
+      m = 0;
+    }
     kmax = k + 1;
   }
   if (!escaped) return vec3(0.0); // interior (or ran past the reference orbit)

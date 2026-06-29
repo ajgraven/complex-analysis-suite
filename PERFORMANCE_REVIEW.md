@@ -159,9 +159,14 @@ port for FPS. *Sources:* [DiVA WebGPU paper](https://www.diva-portal.org/smash/g
 
 The tool already has df64 + a CPU perturbation path for z²+c. The modern upgrade:
 
-- **Rebasing (Zhuoran) — highest value, modest code.** Replaces the entire glitch-detection problem
-  class: pick the reference minimizing `|Z+z|` and reset the reference iteration when `|Z+z| < |z|`.
-  Glitches simply don't occur — no Pauldelbrot threshold to tune. **[Effort M]**
+- **✅ Rebasing (Zhuoran) — DONE (D1).** The perturbation kernel (`PERTURBATION_FRAGMENT_SHADER`) now
+  decouples the reference index `m` from the iteration count `k` and re-references to `Z_0` when
+  `|(Z_m+δz) − Z_0| < |δz|` (or the stored orbit ends): an exact identity, so it's glitch-free and
+  also removes the old fixed-length truncation — no Pauldelbrot threshold to tune. Also fixed a latent
+  bug: `renderToImageData` used the df64 program, so deep exports bypassed perturbation; it now uses
+  `drawFractal` (perturbation-aware). Verified by a CPU oracle (`test/rebasing.test.ts`: rebased ==
+  direct iteration) + a live overlap test (rebased kernel ≈ df64 at 1e9: 99.1% pixel-identical,
+  meanDiff 4/255, no glitch clusters). **[Effort M — done]**
 - **BLA (bivariate linear approximation)** — supersedes series approximation; "easier to implement,
   easier to parallelize, better-understood stopping conditions." Build the O(n) merge tree on CPU,
   look up per-pixel in the shader. Quoted 1.7×–36× over SA, location-dependent. Because only the one

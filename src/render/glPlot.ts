@@ -1355,7 +1355,11 @@ export class GLPlot {
         break;
       }
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-      if (!this.setupDraw(size, size)) {
+      // drawFractal (not setupDraw) so a deep-zoom export uses the perturbation kernel when it's
+      // driving the live view — otherwise exports beyond the df64 reach silently fall back to df64.
+      // With perturbation off it falls through to the standard/df64 program, so shallow exports are
+      // unchanged. The perturbation kernel keys off gl_FragCoord, so the per-strip viewport is fine.
+      if (!this.drawFractal(size, size)) {
         cancelled = true;
         break;
       }
