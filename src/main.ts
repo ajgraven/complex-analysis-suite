@@ -712,8 +712,8 @@ function init(): void {
   let lastDynCoeffs: Complex[] | null = null;
 
   /** Truncated display of a coefficient list (full precision is kept for copy / export). */
-  function coeffsPreview(coeffs: Complex[]): string {
-    return coeffs.map((b, k) => `b${k} = ${formatComplex(truncateComplex(b))}`).join("\n");
+  function coeffsPreview(coeffs: Complex[], symbol = "b"): string {
+    return coeffs.map((b, k) => `${symbol}${k} = ${formatComplex(truncateComplex(b))}`).join("\n");
   }
 
   function setExteriorButtons(paramOn: boolean, dynOn: boolean): void {
@@ -745,9 +745,9 @@ function init(): void {
     }
     const raw = Number(byId<HTMLInputElement>("exterior-n").value);
     const n = Math.max(1, Math.min(64, Math.round(Number.isFinite(raw) ? raw : 12)));
-    status.textContent = `z^${d} + c · ψ(w) = w + Σ bₖ·w⁻ᵏ (leading w, capacity 1).`;
+    status.textContent = `z^${d} + c — exterior map ψ(w) = w + Σ aₘ/bₖ·w⁻ᵏ (leading w, capacity 1).`;
     lastParamCoeffs = mandelbrotExteriorCoeffs(d, n);
-    paramList.textContent = coeffsPreview(lastParamCoeffs);
+    paramList.textContent = coeffsPreview(lastParamCoeffs, "a"); // multibrot coefficients aₘ (Douady–Hubbard)
     const c = dynamicalView.plot.cValue;
     if (juliaConnected(d, c)) {
       lastDynCoeffs = juliaExteriorCoeffs(d, c, n);
@@ -2044,10 +2044,10 @@ function init(): void {
   byId("exterior-n").addEventListener("input", updateExteriorMap);
   byId("julia-props-group").addEventListener("toggle", updateJuliaProperties);
   byId("julia-props-copy").addEventListener("click", copyJuliaProperties);
-  const copyCoeffs = (coeffs: Complex[] | null, title: string): void => {
+  const copyCoeffs = (coeffs: Complex[] | null, title: string, symbol = "b"): void => {
     if (!coeffs) return;
     void navigator.clipboard
-      .writeText(coeffsToText(coeffs, title))
+      .writeText(coeffsToText(coeffs, title, symbol))
       .then(() => showToast("Coefficients copied to the clipboard.", "info"))
       .catch(() => showToast("Couldn't access the clipboard.", "warn"));
   };
@@ -2057,7 +2057,7 @@ function init(): void {
     showToast(`Exported ${coeffs.length} coefficients to ${file}.`, "info");
   };
   byId("exterior-param-copy").addEventListener("click", () =>
-    copyCoeffs(lastParamCoeffs, "Multibrot/Mandelbrot exterior map"),
+    copyCoeffs(lastParamCoeffs, "Multibrot/Mandelbrot exterior map", "a"),
   );
   byId("exterior-param-csv").addEventListener("click", () =>
     exportCoeffs(lastParamCoeffs, "multibrot-exterior-map.csv"),

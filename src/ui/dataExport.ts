@@ -54,8 +54,8 @@ export function coeffsToCsv(coeffs: Complex[]): string {
 }
 
 /** Exterior-map Laurent coefficients as readable plain text (full precision). */
-export function coeffsToText(coeffs: Complex[], title: string): string {
-  const lines = [title, "psi(w) = w + sum_k b_k * w^-k"];
-  coeffs.forEach((b, k) => lines.push(`b_${k} = ${formatComplex(b)}`));
+export function coeffsToText(coeffs: Complex[], title: string, symbol = "b"): string {
+  const lines = [title, `psi(w) = w + sum_k ${symbol}_k * w^-k`];
+  coeffs.forEach((b, k) => lines.push(`${symbol}_${k} = ${formatComplex(b)}`));
   return lines.join("\n");
 }
