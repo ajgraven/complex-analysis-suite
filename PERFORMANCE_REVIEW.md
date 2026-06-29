@@ -114,7 +114,16 @@ when the view/c/f/n actually change — a palette tweak in histogram mode no lon
 change reuses it (identical structure), a view change rebuilds it. (Coarse-size CDF + `texSubImage2D`
 reuse remain as further niceties.)
 
-### 9. General periodicity (cycle) detection for interior early-out
+### 9. General periodicity (cycle) detection for interior early-out — ✅ DONE
+**✅ DONE (2026-06-29, this PR):** `shaderBuilder.colorAt` now carries a stored reference point +
+an every-20 refresh and jumps to `uN` (interior) when the orbit re-enters a cycle, using the
+relative tolerance `1e-6·max(1,|z|)`. Gated to single precision + the flat-interior modes
+(0/1/5/7/8/9 — orbit-trap/period/multiplier need the full orbit) + divergence-escape maps
+(`glPlot._periodicityBailout = probeDivergenceEscape()`), so it generalises #1 to **all** components
+and **any divergence-escape f / both planes**. Verified: smooth interior stays 21.78% (no false
+interiors — escaping orbits never trip it), z³+c works with the cardioid shortcut off, period/trap
+modes keep their interior structure. The histogram pass (`escapeCount`) is intentionally left full.
+
 **[Impact M–L / Effort M / Risk med]** — the map-agnostic complement to #1; works on the **Julia
 plane and any f**, where the cardioid test can't apply. Track a stored point + Brent-style geometric
 schedule; jump to `uN` when the orbit re-enters a cycle. *Tradeoff:* per-pixel state + a

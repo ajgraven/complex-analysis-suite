@@ -243,6 +243,10 @@ export class GLPlot {
   /** z²+c with a divergence escape → the main-cardioid / period-2-bulb interior shortcut is
    *  exact (single precision, parameter plane). Set in {@link rebuild}. */
   private _interiorBailout = false;
+  /** Any divergence-escape map → the in-loop periodicity bailout (detect an attracting cycle and
+   *  stop iterating early) is safe. Generalises {@link _interiorBailout} to ALL hyperbolic
+   *  components; single precision, set in {@link rebuild}. */
+  private _periodicityBailout = false;
   /** View centre in double-double precision, accumulated across pan/zoom for deep zoom. */
   private _centerDD: [DD, DD] = [
     [0, 0],
@@ -484,6 +488,7 @@ export class GLPlot {
         this._fCAst,
         this._monicDegree,
         this._interiorBailout,
+        this._periodicityBailout,
       ),
     );
     return { program, uniforms: this.getUniforms(program) };
@@ -550,7 +555,9 @@ export class GLPlot {
     const iterError = this.updateIteration();
     this._perturbEligible = this.probeMandelbrot();
     this._monicDegree = this.probeMonicDegree();
-    this._interiorBailout = this._monicDegree === 2 && this.probeDivergenceEscape();
+    const divergenceEscape = this.probeDivergenceEscape();
+    this._interiorBailout = this._monicDegree === 2 && divergenceEscape;
+    this._periodicityBailout = divergenceEscape;
     this.orbitDirty = true;
     try {
       const next = this.compile("single");
@@ -590,6 +597,7 @@ export class GLPlot {
           this._fCAst,
           this._monicDegree,
           this._interiorBailout,
+          this._periodicityBailout,
         ),
       );
     } catch (err) {

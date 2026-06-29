@@ -212,6 +212,7 @@ export function buildFragmentShader(
   fCAst: Node | null = null,
   monicDegree: number | null = null,
   interiorBailout = false,
+  periodicityBailout = false,
 ): string {
   const isDf64 = precision === "df64";
   // Smooth-iteration normalization divides by log(degree): for z^d+c that is log(d)
@@ -381,6 +382,24 @@ bool inMainCardioidOrBulb(float x, float y) {
 `
     : "";
 
+  // General periodicity bailout: detect when the orbit has fallen into an attracting cycle
+  // (so it can never escape) and stop early, marking the pixel interior. Generalises the
+  // cardioid/bulb-2 shortcut to ALL hyperbolic components (period-3+ bulbs, minibrots) and any
+  // divergence-escape map. Single precision only (df64 deep-zoom views are mostly boundary, and
+  // the per-iteration compare would double in cost). Restricted to the flat-interior modes — the
+  // orbit-trap / period / multiplier modes need the full orbit to colour the interior, so they
+  // are excluded (same set as the cardioid shortcut). The relative tolerance matches the CPU
+  // classifyOrbit; the every-20 reference refresh keeps it O(1) memory and avoids false hits on
+  // slow escapers. Escaping orbits move monotonically outward, so they never trip the test
+  // (verified: the exterior is byte-identical).
+  const periodicityCheck = !isDf64 && periodicityBailout;
+  const periodInit = periodicityCheck
+    ? "\n  bool pPeriod = (uMode == 0 || uMode == 1 || uMode == 5 || uMode == 7 || uMode == 8 || uMode == 9);\n  cvec pRef = z; int pCount = 0;"
+    : "";
+  const periodStep = periodicityCheck
+    ? "\n    if (pPeriod) {\n      if (cabsf(csub(z, pRef)) < 1e-6 * max(1.0, cabsf(z))) { kmax = uN; break; } // in a cycle ⇒ interior\n      pCount += 1; if (pCount > 20) { pCount = 0; pRef = z; } // refresh the reference point\n    }"
+    : "";
+
   return `#version 300 es
 precision highp float;
 precision highp int;
@@ -459,7 +478,7 @@ ${cardioidShortcut}
 
   float trap = 1e20;
   float avgSum = 0.0, avgLast = 0.0, avgPrev = 0.0, avgCount = 0.0; // stripe / triangle orbit averages
-  int kmax = 0;
+  int kmax = 0;${periodInit}
   for (int k = 0; k < uN; k++) {
     if (escapeFn(z, cc)) break;
     cvec zp = z;
@@ -475,7 +494,7 @@ ${cardioidShortcut}
       float lo = abs(zn2 - ca), hi = zn2 + ca;
       float add = (hi > lo + 1e-12) ? clamp((cabsf(z) - lo) / (hi - lo), 0.0, 1.0) : 0.0;
       avgPrev = avgLast; avgLast = add; avgSum += add; avgCount += 1.0;
-    }
+    }${periodStep}
   }
   if ((uLight == 1 || uOutline == 1 || uEquipotential == 1) && kmax < uN) {
     // Centre-sample smooth height for relief/outline/equipotential — main() reuses this
