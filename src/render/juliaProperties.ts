@@ -15,7 +15,7 @@
 import type { Complex } from "../complex";
 import type { Node } from "../expr/ast";
 import { differentiate } from "../expr/derivative";
-import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
+import { makeComplexFn, getComplexFn, getEscapeFn } from "../expr/evaluate";
 import { lyapunovJacobian } from "./jacobian";
 import { inspect } from "./inspect";
 import { juliaExteriorCoeffs } from "./uniformize";
@@ -105,7 +105,7 @@ export function polynomialCapacity(fAst: Node, a: Complex, c: Complex): number |
   } catch {
     return null;
   }
-  const f = makeComplexFn(fAst, a);
+  const f = getComplexFn(fAst, a);
   // log|f| averaged over a circle of radius R; NaN if any sample is non-finite (transcendental
   // blow-up) so those are rejected rather than fit to a spurious degree.
   const logMagOnCircle = (R: number): number => {
@@ -171,10 +171,10 @@ function criticalLyapunov(
     fz = makeComplexFn(differentiate(fAst, "z"), a);
   } catch {
     // non-holomorphic ⇒ no analytic f′; use the real-Jacobian (Benettin) Lyapunov instead.
-    return lyapunovJacobian(makeComplexFn(fAst, a), makeEscapeFn(escAst, fAst, a), crit, c, n);
+    return lyapunovJacobian(getComplexFn(fAst, a), getEscapeFn(escAst, fAst, a), crit, c, n);
   }
-  const f = makeComplexFn(fAst, a);
-  const esc = makeEscapeFn(escAst, fAst, a);
+  const f = getComplexFn(fAst, a);
+  const esc = getEscapeFn(escAst, fAst, a);
   let z: Complex = [crit[0], crit[1]];
   let sum = 0;
   let count = 0;
@@ -267,8 +267,8 @@ export function interiorMask(
   size: number,
   maxIter: number,
 ): Uint8Array {
-  const f = makeComplexFn(fAst, a);
-  const esc = makeEscapeFn(escAst, fAst, a);
+  const f = getComplexFn(fAst, a);
+  const esc = getEscapeFn(escAst, fAst, a);
   const mask = new Uint8Array(size * size);
   const step = (2 * halfWidth) / size;
   for (let py = 0; py < size; py++) {

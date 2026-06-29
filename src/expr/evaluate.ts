@@ -389,3 +389,45 @@ export function makeEscapeFn(
   }
   return (z, c) => escBody({ z, c, a }, 0);
 }
+
+// Compiling an AST into a closure tree is the dominant cost on the interactive CPU paths (the
+// hover orbit, coupled-drag inspection, the Julia-properties panel), which call the same
+// persistent `f`/`escape` ASTs every frame. The caches below memoise the compiled closure on AST
+// identity + the live `a`, turning those per-frame recompiles into lookups. The AST is the
+// WeakMap key, so a replaced expression (edit) is collected; the inner `a` map is size-bounded in
+// case `a` is ever swept. Callers that build a *fresh* AST each call (e.g. `differentiate(...)`)
+// or that compile once per rebuild should keep using the uncached `make*` primitives above.
+type ComplexClosure = (z: Complex, c: Complex) => Complex;
+type BoolClosure = (z: Complex, c: Complex) => boolean;
+const A_KEY_LIMIT = 16; // guard against unbounded growth if `a` is swept continuously
+const aKey = (a: Complex): string => `${a[0]},${a[1]}`;
+const complexFnCache = new WeakMap<Node, Map<string, ComplexClosure>>();
+const escapeFnCache = new WeakMap<Node, WeakMap<Node, Map<string, BoolClosure>>>();
+
+/** {@link makeComplexFn} memoised on (AST identity, `a`) — for the interactive hot paths. */
+export function getComplexFn(ast: Node, a: Complex = [0, 0]): ComplexClosure {
+  let byA = complexFnCache.get(ast);
+  if (!byA) complexFnCache.set(ast, (byA = new Map()));
+  const key = aKey(a);
+  let fn = byA.get(key);
+  if (!fn) {
+    if (byA.size >= A_KEY_LIMIT) byA.clear();
+    byA.set(key, (fn = makeComplexFn(ast, a)));
+  }
+  return fn;
+}
+
+/** {@link makeEscapeFn} memoised on (escape AST, `f` AST, `a`) — see {@link getComplexFn}. */
+export function getEscapeFn(escapeAst: Node, fAst: Node, a: Complex = [0, 0]): BoolClosure {
+  let byF = escapeFnCache.get(escapeAst);
+  if (!byF) escapeFnCache.set(escapeAst, (byF = new WeakMap()));
+  let byA = byF.get(fAst);
+  if (!byA) byF.set(fAst, (byA = new Map()));
+  const key = aKey(a);
+  let fn = byA.get(key);
+  if (!fn) {
+    if (byA.size >= A_KEY_LIMIT) byA.clear();
+    byA.set(key, (fn = makeEscapeFn(escapeAst, fAst, a)));
+  }
+  return fn;
+}

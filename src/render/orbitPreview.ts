@@ -8,7 +8,7 @@
 
 import type { Vec2 } from "../arrays";
 import type { Node } from "../expr/ast";
-import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
+import { getComplexFn, getEscapeFn } from "../expr/evaluate";
 
 /** Half-width of the z-window the preview frames (the z²+c critical orbit lives in |z| ≲ 2). */
 export const PREVIEW_HALF = 2.2;
@@ -35,8 +35,8 @@ export function juliaEscapeRgba(
   size: number,
   maxIter: number,
 ): Uint8ClampedArray {
-  const f = makeComplexFn(fAst, a);
-  const esc = makeEscapeFn(escapeAst, fAst, a);
+  const f = getComplexFn(fAst, a);
+  const esc = getEscapeFn(escapeAst, fAst, a);
   const d = new Uint8ClampedArray(size * size * 4);
   for (let py = 0; py < size; py++) {
     const zy = (1 - ((py + 0.5) / size) * 2) * PREVIEW_HALF; // canvas y is down, z im is up

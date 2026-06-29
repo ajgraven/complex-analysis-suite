@@ -4,8 +4,9 @@ A prioritized review of rendering performance, memory use, and optimization oppo
 ComplexDynamicsJS, grounded in a code audit and a survey of the academic literature and competing
 tools. Compiled 2026-06-29.
 
-> **Status.** Tier 1 items **#1 (cardioid/bulb interior bailout)** and **#2 (progressive-threshold
-> fix)** are implemented. Everything else is open; this document is the standing roadmap. Speedup
+> **Status.** Tier 1 **#1 (cardioid/bulb interior bailout)**, **#2 (progressive-threshold fix)** and
+> **#4 (compiled-closure cache)** are implemented; **#3** is subsumed by #4 and **#5** is deferred (see
+> their entries). Everything else is open; this document is the standing roadmap. Speedup
 > figures from the literature are attributed; figures that could not be pinned to a primary source are
 > marked **[UNVERIFIED]**.
 
@@ -53,24 +54,28 @@ multiplier) need the real orbit and correctly fall through.
 auto-iterations) instead of `_res · renderScale() >= 900`. A plain 500 px view now draws in a single
 pass even at DPR 2; deep zoom / high-iteration views still progressive via the other clauses.
 
-### 3. Stop the hover preview from running a 512-iteration classification every frame
-**[Impact M / Effort S / Risk low]** — `src/main.ts` `updateOrbitPreview` → `orbitAndClassify(…, 48,
-…)` with default `maxIter = 512` (`src/render/overlay.ts:162`). The inset draws 48 points but pays a
-512-iteration classify (+ a fresh closure compile) per rAF while hovering, to compute one
-"bounded?" bit. Call with `maxIter` 64–128 or derive bounded-ness from the 48-point walk.
+### 3. ~~Stop the hover preview from running a 512-iteration classification every frame~~ — subsumed by #4
+The real per-frame cost on hover was the *closure recompile*, which #4 now caches. The residual
+512-iteration walk is for a single point per frame (negligible), and lowering `maxIter` would degrade
+the green/orange bounded-hint near the boundary — so it was deliberately left unchanged.
 
-### 4. Cache compiled closures keyed on `(ast, a)` in `evaluate.ts`
-**[Impact M–L / Effort M / Risk low]** — `makeComplexFn`/`makeEscapeFn` (`src/expr/evaluate.ts:366`)
-rebuild the whole closure tree on *every* call; hot paths (`orbitAndClassify`, `interiorMask`,
-`inspect`, `computeJuliaProperties`, `critical`) never cache. A single coupled `c`-change with panels
-open recompiles the same `f` ~8×. Add a 1-deep or `WeakMap`-backed memo; keep the uncached primitive
-for tests. Multiplies every other CPU win.
+### ✅ 4. Cache compiled closures keyed on `(ast, a)` in `evaluate.ts` — **DONE (PR-2)**
+**[Impact M–L / Effort M / Risk low]** — added `getComplexFn(ast, a)` + `getEscapeFn(escapeAst, fAst,
+a)` to `src/expr/evaluate.ts` (a `WeakMap` on AST identity → a small `a`-keyed map), and routed the
+stable-AST hot paths (`overlay`, `orbitPreview`, `inspect`, `juliaProperties`, `critical`) through
+them. The uncached `make*` primitives stay for the cold probes (`glPlot`, `rational`) and the
+`differentiate(...)` callers (which build a fresh AST each call). Removes the per-frame recompile on
+hover and the ~8× recompiles per coupled-drag move with panels open. Unit-tested in
+`test/closureCache.test.ts` (cached result == uncached; memoised on a hit; fresh on a new key).
 
-### 5. `dot(z,z) > R²` escape + larger bailout radius
+### 5. `dot(z,z) > R²` escape + larger bailout radius — **deferred**
 **[Impact S / Effort S / Risk low]** — the `escapeFn` lowering emits a `length()` (`sqrt`) per
-iteration; R = 2 is small for smooth colouring. Detect the `abs(z) > R` AST pattern → `dot(z,z) >
-R*R`; raise the smooth-colouring bailout (R ≈ 256) to remove banding. End-to-end FPS delta is
-**[UNVERIFIED]** — treat as free polish, not a headline.
+iteration. Doing this precision-agnostically needs a new squared-magnitude op in *both* the single and
+df64 stdlibs plus AST pattern-matching in `emitBool` — a broad touch for the smallest-impact item,
+whose FPS delta is **[UNVERIFIED]** (modern GLSL compilers often fold `length(v) > c`). Deferred: the
+cardioid bailout (#1) already removes the per-iteration cost for the bulk of interior pixels, and
+exterior pixels escape in few iterations. (Raising R to 256 is a *quality* change that costs more
+iterations, not a perf win — intentionally not bundled here.)
 
 ---
 

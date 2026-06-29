@@ -12,7 +12,7 @@
 import type { Vec2 } from "../arrays";
 import { formatComplex, truncateComplex, type Complex } from "../complex";
 import type { Node } from "../expr/ast";
-import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
+import { getComplexFn, getEscapeFn } from "../expr/evaluate";
 import { fareyLabels } from "./farey";
 import { bulbRayAngles, dynamicRay, parameterRay, rayDepthForZoom } from "./rays";
 import { reconstructBoundary } from "./uniformize";
@@ -58,7 +58,7 @@ export function computeOrbit(
   nplot: number,
   a: Complex = [0, 0],
 ): Complex[] {
-  return orbitWalk(makeComplexFn(fAst, a), makeEscapeFn(escapeAst, fAst, a), z0, cc, nplot);
+  return orbitWalk(getComplexFn(fAst, a), getEscapeFn(escapeAst, fAst, a), z0, cc, nplot);
 }
 
 export type OrbitFate = "escaped" | "converged" | "periodic" | "undetermined";
@@ -144,7 +144,7 @@ export function classifyOrbit(
   a: Complex = [0, 0],
   maxIter = 512,
 ): OrbitInfo {
-  return classifyWalk(makeComplexFn(fAst, a), makeEscapeFn(escapeAst, fAst, a), z0, cc, maxIter);
+  return classifyWalk(getComplexFn(fAst, a), getEscapeFn(escapeAst, fAst, a), z0, cc, maxIter);
 }
 
 /**
@@ -161,8 +161,8 @@ export function orbitAndClassify(
   a: Complex = [0, 0],
   maxIter = 512,
 ): { orbit: Complex[]; info: OrbitInfo } {
-  const f = makeComplexFn(fAst, a);
-  const esc = makeEscapeFn(escapeAst, fAst, a);
+  const f = getComplexFn(fAst, a);
+  const esc = getEscapeFn(escapeAst, fAst, a);
   return {
     orbit: orbitWalk(f, esc, z0, cc, nplot),
     info: classifyWalk(f, esc, z0, cc, maxIter),

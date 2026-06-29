@@ -24,7 +24,7 @@ import type { Complex } from "../complex";
 import type { Node } from "../expr/ast";
 import * as C from "../expr/complexJs";
 import { differentiate } from "../expr/derivative";
-import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
+import { makeComplexFn, getComplexFn, getEscapeFn } from "../expr/evaluate";
 import { cycleMultiplierMag } from "./jacobian";
 import { classifyOrbit, type OrbitFate } from "./overlay";
 
@@ -203,8 +203,8 @@ function escapeDistance(
   a: Complex,
   deriv: { fz: (z: Complex, c: Complex) => Complex; fc: (z: Complex, c: Complex) => Complex },
 ): number | null {
-  const f = makeComplexFn(fAst, a);
-  const esc = makeEscapeFn(escapeAst, fAst, a);
+  const f = getComplexFn(fAst, a);
+  const esc = getEscapeFn(escapeAst, fAst, a);
   let z: Complex = [z0[0], z0[1]];
   let der: Complex = plane === "param" ? [0, 0] : [1, 0]; // D₀ = 0 (param), z′₀ = 1 (dyn)
   for (let k = 0; k < MAX_DE_ITER; k++) {
@@ -244,7 +244,7 @@ export function inspect(
   const deriv = derivatives(fAst, a);
 
   if ((info.fate === "converged" || info.fate === "periodic") && info.period >= 1) {
-    const f = makeComplexFn(fAst, a);
+    const f = getComplexFn(fAst, a);
     // Reuse the cycle classifyOrbit already found (no 1024-step re-settle); Newton-refine it
     // to ~1e-13 when f is holomorphic, else fall back to settling from z0.
     const seed =
@@ -302,7 +302,7 @@ export function findNucleus(
   if (period < 1) return null;
   const deriv = derivatives(fAst, a);
   if (!deriv) return null; // non-holomorphic ⇒ no analytic Newton step
-  const f = makeComplexFn(fAst, a);
+  const f = getComplexFn(fAst, a);
   let c: Complex = [c0[0], c0[1]];
   for (let it = 0; it < 60; it++) {
     let z: Complex = [critPoint[0], critPoint[1]];

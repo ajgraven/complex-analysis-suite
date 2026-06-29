@@ -13,7 +13,7 @@ import type { Complex } from "../complex";
 import type { Node } from "../expr/ast";
 import * as C from "../expr/complexJs";
 import { differentiate } from "../expr/derivative";
-import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
+import { makeComplexFn, getComplexFn, getEscapeFn } from "../expr/evaluate";
 
 const cabs = (z: Complex): number => Math.hypot(z[0], z[1]);
 
@@ -89,7 +89,7 @@ function farFieldDegreeLead(
 export function polynomialCoeffs(fAst: Node, a: Complex, c: Complex): Complex[] | null {
   let f: (z: Complex, c: Complex) => Complex;
   try {
-    f = makeComplexFn(fAst, a);
+    f = getComplexFn(fAst, a);
   } catch {
     return null;
   }
@@ -204,8 +204,8 @@ export function polynomialConnectivity(
 ): "connected" | "disconnected" | "cantor" | null {
   const crits = findCriticalPoints(fAst, a, c);
   if (!crits || crits.length === 0) return null;
-  const f = makeComplexFn(fAst, a);
-  const esc = makeEscapeFn(escAst, fAst, a);
+  const f = getComplexFn(fAst, a);
+  const esc = getEscapeFn(escAst, fAst, a);
   let bounded = 0;
   let escaped = 0;
   for (const cp of crits) {
