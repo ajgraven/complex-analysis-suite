@@ -157,6 +157,56 @@ export function juliaExteriorCoeffs(d: number, c: Complex, n: number): Complex[]
 }
 
 /**
+ * Laurent coefficients of the inverse Böttcher map ψ(w) = γ₁·w + Σ_{k≥0} b_k·w^{-k} of the filled
+ * Julia set of an ARBITRARY polynomial f(z) = Σ_{j=0}^d a_j z^j of degree d ≥ 2 (`coeffs[j]` = a_j),
+ * generalising {@link juliaExteriorCoeffs} (the monic z^d + c special case). The leading coefficient
+ * γ₁ = a_d^{-1/(d-1)} is the capacity; the d−1 roots are the rotational symmetry (the principal root
+ * is taken — the reconstructed boundary is the same for any choice). From the conjugacy
+ * f(ψ(w)) = ψ(w^d), substituting ψ(w) = γ₁·w·g(1/w) gives the power-series identity in u = 1/w
+ *
+ *     g(u^d) = g(u)^d + Σ_{j=0}^{d-1} β_j · u^{d-j} · g(u)^j,    β_j = a_j · γ₁^{j-1}
+ *
+ * (the j = d term is a_d·γ₁^{d-1}·g^d = g^d, since γ₁^{d-1} = 1/a_d). Matching u^m gives d·g_m + [known]
+ * on the right, so each g_m follows from the lower ones — a triangular recursion, no boundary
+ * sampling. Returned as { lead: γ₁, b: [γ₁·g_1, …, γ₁·g_{n+1}] }, ready for {@link evalExterior}(b, w,
+ * lead). For monic z^d + c it reproduces {@link juliaExteriorCoeffs} with lead = 1. Returns null on
+ * invalid input (need an integer n ≥ 0, degree d ≥ 2, and a non-zero leading coefficient).
+ */
+export function polynomialJuliaExteriorCoeffs(
+  coeffs: Complex[],
+  n: number,
+): { lead: Complex; b: Complex[] } | null {
+  const d = coeffs.length - 1;
+  if (!Number.isInteger(n) || n < 0 || d < 2) return null;
+  const ad = coeffs[d];
+  if (ad[0] === 0 && ad[1] === 0) return null;
+  const lead = C.pow(ad, [-1 / (d - 1), 0]); // γ₁ = a_d^{-1/(d-1)} (capacity), principal root
+  if (!Number.isFinite(lead[0]) || !Number.isFinite(lead[1])) return null;
+  const beta: Complex[] = []; // β_j = a_j · γ₁^{j-1}, j = 0 … d−1
+  for (let j = 0; j < d; j++) beta.push(C.mul(coeffs[j], C.intPow(lead, j - 1)));
+
+  const N = n + 1; // need g_1 … g_{n+1}; b_k = γ₁·g_{k+1}
+  const g: Series = Array.from({ length: N + 1 }, () => [0, 0] as Complex);
+  g[0] = [1, 0];
+  for (let m = 1; m <= N; m++) {
+    // g^0 … g^d truncated to order m, with g_m still 0 — so gp[d][m] = P_m, the part of [g^d]_m not
+    // multiplying g_m (g_0 = 1 ⇒ [g^d]_m = d·g_m + P_m).
+    const gp: Series[] = [unitSeries(m)];
+    for (let j = 1; j <= d; j++) gp.push(seriesMul(gp[j - 1], g, m));
+    const lhs: Complex = m % d === 0 ? g[m / d] : ZERO; // [g(u^d)]_m
+    let rhsKnown: Complex = gp[d][m]; // P_m
+    for (let j = 0; j < d; j++) {
+      const idx = m - d + j; // g^j enters u^m through the u^{d-j} factor
+      if (idx >= 0) rhsKnown = C.add(rhsKnown, C.mul(beta[j], gp[j][idx]));
+    }
+    const num = C.sub(lhs, rhsKnown); // d·g_m = lhs − P_m − Σ β_j·[g^j]_{m-d+j}
+    g[m] = [num[0] / d, num[1] / d];
+  }
+  const b = g.slice(1, N + 1).map((gk) => C.mul(lead, gk));
+  return { lead, b };
+}
+
+/**
  * Laurent coefficients [a_0, a_1, …, a_n] of the exterior map Ψ_{M_d}(w) = w + Σ a_m w^{-m} of
  * the multibrot connectedness locus M_d for z^d + c (M_2 = the Mandelbrot set). Built from the
  * Böttcher product Φ(c) = c·Π_k (1 + c·Z_k^{-d})^{1/d^{k+1}} along the critical-value orbit
@@ -189,12 +239,13 @@ export function mandelbrotExteriorCoeffs(d: number, n: number): Complex[] {
 }
 
 /**
- * Evaluate an exterior map ψ(w) = w + Σ_{k≥0} coeffs[k] · w^{-k} (leading coefficient 1, the
- * capacity-1 / monic normalization) at a point w. Shared by the Julia and multibrot maps and
- * by the boundary-reconstruction overlay.
+ * Evaluate an exterior map ψ(w) = lead·w + Σ_{k≥0} coeffs[k] · w^{-k} at a point w. `lead` is the
+ * leading coefficient — 1 (default) for the capacity-1 / monic normalization (the multibrot map and
+ * the monic z^d + c Julia map), or the capacity γ₁ for a general polynomial's Julia map (see
+ * {@link polynomialJuliaExteriorCoeffs}). Shared by the readouts and the boundary-reconstruction overlay.
  */
-export function evalExterior(coeffs: Complex[], w: Complex): Complex {
-  let sum: Complex = [w[0], w[1]];
+export function evalExterior(coeffs: Complex[], w: Complex, lead: Complex = [1, 0]): Complex {
+  let sum: Complex = C.mul(lead, w);
   const wInv = C.div([1, 0], w);
   let wPow: Complex = [1, 0]; // w^{-k}, starting at w^0
   for (let k = 0; k < coeffs.length; k++) {
@@ -228,11 +279,16 @@ export function juliaConnected(d: number, c: Complex, maxIter = 256): boolean {
  * above 1 is a smooth equipotential just outside it — used by the overlay to stay clear of the
  * r → 1 limit, where the series only reaches the boundary for locally-connected sets.
  */
-export function reconstructBoundary(coeffs: Complex[], r: number, samples: number): Complex[] {
+export function reconstructBoundary(
+  coeffs: Complex[],
+  r: number,
+  samples: number,
+  lead: Complex = [1, 0],
+): Complex[] {
   const pts: Complex[] = [];
   for (let k = 0; k < samples; k++) {
     const t = (2 * Math.PI * k) / samples;
-    pts.push(evalExterior(coeffs, [r * Math.cos(t), r * Math.sin(t)]));
+    pts.push(evalExterior(coeffs, [r * Math.cos(t), r * Math.sin(t)], lead));
   }
   return pts;
 }

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   juliaConnected,
   juliaExteriorCoeffs,
+  polynomialJuliaExteriorCoeffs,
   mandelbrotExteriorCoeffs,
   evalExterior,
   reconstructBoundary,
@@ -210,5 +211,83 @@ describe("juliaExteriorCoeffs — Ψ inverts the numerically-iterated Böttcher 
     }
     const w3 = numericBottcher(3, [0.2, 0], z0, 5);
     expect(cdist(evalExterior(juliaExteriorCoeffs(3, [0.2, 0], 40), w3), z0)).toBeLessThan(1e-5);
+  });
+});
+
+describe("polynomialJuliaExteriorCoeffs — arbitrary polynomials", () => {
+  it("reproduces the monic z²+c map (lead 1, b = juliaExteriorCoeffs)", () => {
+    const c: Complex = [-0.3, 0.4];
+    const res = polynomialJuliaExteriorCoeffs([c, [0, 0], [1, 0]], 12); // a0=c, a1=0, a2=1
+    expect(res).not.toBeNull();
+    if (!res) return;
+    expect(cdist(res.lead, [1, 0])).toBeLessThan(1e-12);
+    const ref = juliaExteriorCoeffs(2, c, 12);
+    for (let k = 0; k < ref.length; k++) expect(cdist(res.b[k], ref[k])).toBeLessThan(1e-12);
+  });
+
+  it("2z²+c has capacity ½ and b = ½·(z²+2c map)", () => {
+    const c: Complex = [0.1, -0.2];
+    const res = polynomialJuliaExteriorCoeffs([c, [0, 0], [2, 0]], 10); // 2z²+c
+    expect(res).not.toBeNull();
+    if (!res) return;
+    expect(cdist(res.lead, [0.5, 0])).toBeLessThan(1e-12);
+    const ref = juliaExteriorCoeffs(2, scale(c, 2), 10); // conjugate of z²+2c by w=2z
+    for (let k = 0; k < ref.length; k++)
+      expect(cdist(res.b[k], scale(ref[k], 0.5))).toBeLessThan(1e-12);
+  });
+
+  it("satisfies the conjugacy f(ψ(w)) = ψ(wᵈ) at large |w| (cubic, non-monic head)", () => {
+    const coeffs: Complex[] = [
+      [0.1, 0.05],
+      [-2, 0],
+      [0, 0],
+      [1, 0],
+    ]; // z³ − 2z + (0.1+0.05i)
+    const d = coeffs.length - 1;
+    const res = polynomialJuliaExteriorCoeffs(coeffs, 60);
+    expect(res).not.toBeNull();
+    if (!res) return;
+    const w: Complex = [3.5, 1.2];
+    const psi = evalExterior(res.b, w, res.lead);
+    let lhs: Complex = [0, 0]; // f(ψ(w))
+    let zp: Complex = [1, 0];
+    for (let k = 0; k <= d; k++) {
+      lhs = C.add(lhs, C.mul(coeffs[k], zp));
+      zp = C.mul(zp, psi);
+    }
+    const rhs = evalExterior(res.b, C.intPow(w, d), res.lead); // ψ(wᵈ)
+    expect(cdist(lhs, rhs)).toBeLessThan(1e-6);
+  });
+
+  it("rejects invalid input (degree < 2, negative order, zero leading coeff)", () => {
+    expect(
+      polynomialJuliaExteriorCoeffs(
+        [
+          [1, 0],
+          [1, 0],
+        ],
+        5,
+      ),
+    ).toBeNull(); // degree 1
+    expect(
+      polynomialJuliaExteriorCoeffs(
+        [
+          [0, 0],
+          [0, 0],
+          [1, 0],
+        ],
+        -1,
+      ),
+    ).toBeNull();
+    expect(
+      polynomialJuliaExteriorCoeffs(
+        [
+          [1, 0],
+          [0, 0],
+          [0, 0],
+        ],
+        5,
+      ),
+    ).toBeNull(); // a_d = 0
   });
 });

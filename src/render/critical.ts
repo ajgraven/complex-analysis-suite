@@ -78,6 +78,62 @@ function farFieldDegreeLead(
 }
 
 /**
+ * Coefficients [a₀, a₁, …, a_d] of f as a polynomial in z at the given parameters (a, c), or null
+ * when f is not a polynomial in z (rational, transcendental, or non-holomorphic like conjugate/abs).
+ * The degree d comes from the far field; the coefficients are then recovered EXACTLY (to floating
+ * error) by a DFT at the (d+1)-th roots of unity — a_m = (1/(d+1))·Σ_j f(ω^j)·ω^{-jm} — a unitary,
+ * perfectly-conditioned transform for a genuine polynomial. A residual check at points off the unit
+ * circle then rejects anything that merely shared the polynomial's far-field growth. Reuses the live
+ * evaluator, so it handles the whole expression language (local assignments, functions of constants).
+ */
+export function polynomialCoeffs(fAst: Node, a: Complex, c: Complex): Complex[] | null {
+  let f: (z: Complex, c: Complex) => Complex;
+  try {
+    f = makeComplexFn(fAst, a);
+  } catch {
+    return null;
+  }
+  const dl = farFieldDegreeLead(f, c);
+  if (!dl || dl.degree < 0) return null;
+  const d = dl.degree;
+  const N = d + 1;
+  const samples: Complex[] = [];
+  for (let j = 0; j < N; j++) {
+    const th = (2 * Math.PI * j) / N;
+    const v = f([Math.cos(th), Math.sin(th)], c);
+    if (!Number.isFinite(v[0]) || !Number.isFinite(v[1])) return null;
+    samples.push(v);
+  }
+  const coeffs: Complex[] = [];
+  for (let m = 0; m <= d; m++) {
+    let s: Complex = [0, 0];
+    for (let j = 0; j < N; j++) {
+      const ang = (-2 * Math.PI * j * m) / N;
+      s = C.add(s, C.mul(samples[j], [Math.cos(ang), Math.sin(ang)]));
+    }
+    coeffs.push([s[0] / N, s[1] / N]);
+  }
+  // Certify it really is this polynomial: a rational / transcendental / non-holomorphic f sharing the
+  // far-field exponent would still diverge from Σ a_k z^k away from the unit-circle sample points.
+  for (const z of [
+    [1.7, 0.9],
+    [-1.3, 0.6],
+    [0.4, -2.1],
+  ] as Complex[]) {
+    const fv = f(z, c);
+    if (!Number.isFinite(fv[0]) || !Number.isFinite(fv[1])) return null;
+    let pv: Complex = [0, 0];
+    let zp: Complex = [1, 0];
+    for (let k = 0; k <= d; k++) {
+      pv = C.add(pv, C.mul(coeffs[k], zp));
+      zp = C.mul(zp, z);
+    }
+    if (cabs(C.sub(fv, pv)) > 1e-6 * (1 + cabs(fv))) return null;
+  }
+  return coeffs;
+}
+
+/**
  * All critical points (roots of f′ = 0) when f is a polynomial of degree ≥ 2, via Durand–Kerner
  * (Weierstrass) simultaneous root finding on the monic f′/lead. Returns null for a non-polynomial
  * or non-holomorphic f. Roots may repeat for a higher-multiplicity critical point (e.g. 0 for

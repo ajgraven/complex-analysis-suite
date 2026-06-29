@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 import type { Complex } from "../src/complex";
 import { parse } from "../src/expr/parser";
-import { findCriticalPoints, polynomialConnectivity } from "../src/render/critical";
+import { findCriticalPoints, polynomialCoeffs, polynomialConnectivity } from "../src/render/critical";
 
 const ESC = parse("abs(z)>2");
 const O: Complex = [0, 0];
@@ -76,5 +76,56 @@ describe("polynomialConnectivity (all critical orbits)", () => {
   it("is null for a non-polynomial map (caller falls back to the image estimate)", () => {
     expect(polynomialConnectivity(parse("exp(z)+c"), ESC, O, O)).toBeNull();
     expect(polynomialConnectivity(parse("1/z+c"), ESC, O, O)).toBeNull();
+  });
+});
+
+describe("polynomialCoeffs", () => {
+  const C0: Complex = [0.3, -0.4];
+  const near = (z: Complex, x: number, y: number): boolean =>
+    Math.abs(z[0] - x) < 1e-6 && Math.abs(z[1] - y) < 1e-6;
+
+  it("extracts z²+c", () => {
+    const co = polynomialCoeffs(parse("z^2+c"), O, C0);
+    expect(co).not.toBeNull();
+    if (!co) return;
+    expect(co.length).toBe(3);
+    expect(near(co[0], C0[0], C0[1])).toBe(true); // a0 = c
+    expect(cabs(co[1])).toBeLessThan(1e-6); // a1 = 0
+    expect(near(co[2], 1, 0)).toBe(true); // a2 = 1
+  });
+
+  it("extracts the non-monic 2z²+c", () => {
+    const co = polynomialCoeffs(parse("2*z^2+c"), O, C0);
+    expect(co).not.toBeNull();
+    if (!co) return;
+    expect(near(co[2], 2, 0)).toBe(true);
+    expect(near(co[0], C0[0], C0[1])).toBe(true);
+  });
+
+  it("expands a product into a general cubic — (z²+1)(z−c) = z³ − c·z² + z − c", () => {
+    const co = polynomialCoeffs(parse("(z^2+1)*(z-c)"), O, C0);
+    expect(co).not.toBeNull();
+    if (!co) return;
+    expect(co.length).toBe(4);
+    expect(near(co[3], 1, 0)).toBe(true);
+    expect(near(co[2], -C0[0], -C0[1])).toBe(true); // −c
+    expect(near(co[1], 1, 0)).toBe(true);
+    expect(near(co[0], -C0[0], -C0[1])).toBe(true); // −c
+  });
+
+  it("treats a function of constants as a constant coefficient — z² + sqrt(c)", () => {
+    const co = polynomialCoeffs(parse("z^2+sqrt(c)"), O, C0);
+    expect(co).not.toBeNull();
+    if (!co) return;
+    const r = Math.sqrt(Math.hypot(C0[0], C0[1]));
+    const ang = Math.atan2(C0[1], C0[0]) / 2;
+    expect(near(co[0], r * Math.cos(ang), r * Math.sin(ang))).toBe(true);
+    expect(near(co[2], 1, 0)).toBe(true);
+  });
+
+  it("returns null for non-polynomial f (transcendental / rational / non-holomorphic)", () => {
+    expect(polynomialCoeffs(parse("sin(z)+c"), O, C0)).toBeNull();
+    expect(polynomialCoeffs(parse("1/(z-1)"), O, C0)).toBeNull();
+    expect(polynomialCoeffs(parse("conjugate(z)+c"), O, C0)).toBeNull();
   });
 });
