@@ -230,8 +230,10 @@ h2 {
     display: block;
     width: 100%;
   }
-  .workspace.controls-collapsed .canvas-stack > canvas,
-  .workspace.plots-stacked .canvas-stack > canvas {
+  /* Only the WebGL plot canvas fills — NOT the absolutely-positioned overlay (it tracks via
+     inset:0) or the fixed-size orbit-preview inset (which is also a <canvas> child). */
+  .workspace.controls-collapsed .canvas-stack > canvas:not(.overlay):not(.orbit-preview),
+  .workspace.plots-stacked .canvas-stack > canvas:not(.overlay):not(.orbit-preview) {
     width: 100% !important;
     height: auto;
   }
@@ -279,8 +281,9 @@ h2 {
     display: block;
     width: 100%;
   }
-  .workspace.expand-param .canvas-stack > canvas,
-  .workspace.expand-dyn .canvas-stack > canvas {
+  /* Only the WebGL plot canvas fills — not the overlay (inset:0) or the orbit-preview inset. */
+  .workspace.expand-param .canvas-stack > canvas:not(.overlay):not(.orbit-preview),
+  .workspace.expand-dyn .canvas-stack > canvas:not(.overlay):not(.orbit-preview) {
     width: 100% !important;
     height: auto;
   }
