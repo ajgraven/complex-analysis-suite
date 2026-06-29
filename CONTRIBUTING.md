@@ -169,6 +169,17 @@ branches: lighting is applied in `main()` after the per-pixel colour
 and post-processing is a second fullscreen pass (`POST_FRAGMENT_SHADER`) over the
 rendered scene texture (`GLPlot.drawPost`, driven by `setPost`).
 
+**Performance & deep zoom** are documented in [`PERFORMANCE_REVIEW.md`](PERFORMANCE_REVIEW.md). In
+brief: the compiled `f`/`escape` closures are memoised per `(ast, a)` (`getComplexFn`/`getEscapeFn`
+in [`evaluate.ts`](src/expr/evaluate.ts)); the heavy Julia-properties image metrics run in a **Web
+Worker** ([`juliaMetrics.worker.ts`](src/render/juliaMetrics.worker.ts) via
+[`juliaMetricsClient.ts`](src/render/juliaMetricsClient.ts)) wrapping the pure
+`juliaProperties.computeJuliaImageMetrics`, with a synchronous fallback when workers are unavailable;
+and deep zoom past df64 uses the **perturbation** kernel (`PERTURBATION_FRAGMENT_SHADER`) with a
+double-double reference orbit ([`perturbation.ts`](src/render/perturbation.ts)) and **rebasing** for
+glitch-free renders (a per-pixel BLA table, [`bla.ts`](src/render/bla.ts), is staged for future
+iteration-skipping but not yet wired to the kernel).
+
 ### Add a control input
 
 1. Add the field markup in [`index.html`](index.html) with a unique `id`, a matching

@@ -460,10 +460,13 @@ the **perturbation (deep zoom)** toggle goes deeper than df64. The CPU iterates 
 high-precision _reference orbit_ at the view centre; the GPU then renders every pixel
 as a small delta around it (`z = Z + δz`, `δz' = 2·Z·δz + δz² + δc`) in ordinary
 single-float arithmetic — fast, and limited by the reference precision rather than the
-GPU's. The view centre is carried in **double-double** precision (`src/render/dd.ts`,
-~31 digits) and the reference orbit is iterated at that centre, so views stay locatable
-to ~10²⁸×; both are unit-tested (`test/perturbation.test.ts`, `test/dd.test.ts`). Both
-planes are eligible for z²+c — the Mandelbrot set (parameter plane) and its Julia sets
+GPU's. Pixels **rebase** (Zhuoran): when the delta would outgrow its reference (or the
+stored orbit ends) the pixel re-references to Z₀ — an exact step that keeps the render
+glitch-free and lifts the old reference-length limit. The view centre is carried in
+**double-double** precision (`src/render/dd.ts`, ~31 digits) and the reference orbit is
+iterated at that centre, so views stay locatable to ~10²⁸×; all are unit-tested
+(`test/perturbation.test.ts`, `test/rebasing.test.ts`, `test/dd.test.ts`). Both planes
+are eligible for z²+c — the Mandelbrot set (parameter plane) and its Julia sets
 (dynamical plane); other maps fall back to df64.
 
 ## Deployment
@@ -503,11 +506,11 @@ already relative.
   gamma) is currently applied on-screen only.
 - **Deep zoom depth:** the df64 path extends usable zoom to ~10¹²× (vs ~10⁴× for
   single precision); beyond that, df64 precision runs out and the image pixelates.
-  For z²+c on the parameter plane, the **perturbation (deep zoom)** toggle goes
-  further still (structure resolves where df64 has flattened). Its centre is tracked
-  in double-double precision (≈10²⁸×); it has no glitch rebasing yet, so a view
-  centred on a short-orbit exterior point can under-render, and a bignum reference
-  (for 10¹⁰⁰⁺×) is planned next.
+  For z²+c (both planes), the **perturbation (deep zoom)** toggle goes further still
+  (structure resolves where df64 has flattened) — pixels rebase, so it is glitch-free —
+  and is limited to ≈10²⁸× by its double-double reference centre. A bignum reference (for
+  10¹⁰⁰⁺×) and per-pixel BLA iteration-skipping (the table is staged in `src/render/bla.ts`,
+  not yet wired to the GPU kernel) remain future work.
 - **Heavy df64 shaders:** the first deep zoom of a transcendental-heavy preset
   (the Schwarz maps) compiles a large df64 shader. This now happens in the
   background (the view shows single precision and upgrades when ready), so it no
@@ -568,8 +571,8 @@ gives the per-quantity definitions and conventions.
 - _Double-double arithmetic_ (deep-zoom centre) — Dekker, _Numer. Math._ 18 (1971); Knuth, _TAOCP_
   vol. 2; Hida, Li & Bailey (2001).
 - _Perturbation deep zoom_ — one high-precision reference orbit + per-pixel delta iteration.
-  K. I. Martin, "SuperFractalThing" (2013). (Glitch rebasing is not yet implemented — see
-  [Known limitations](#known-limitations).)
+  K. I. Martin, "SuperFractalThing" (2013); glitch-free **rebasing** — Zhuoran, via Heiland-Allen,
+  [_Deep zoom theory and practice (again)_](https://mathr.co.uk/blog/2022-02-21_deep_zoom_theory_and_practice_again.html).
 
 ## Contributing
 
