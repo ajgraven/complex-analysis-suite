@@ -177,8 +177,9 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
 - When `f` uses the free variable **`a`**, an `a` slider appears under the formula — drag
   it to sweep a live parameter and watch the fractal change.
 - **Auto iterations** raises the iteration cap automatically as you zoom in, so deep
-  views keep their detail; and the renderer recovers automatically if the WebGL
-  context is lost.
+  views keep their detail. The cap grows logarithmically with zoom — a roughly constant
+  number of extra iterations per decade of magnification — and a **strength** slider sets
+  how aggressively. The renderer also recovers automatically if the WebGL context is lost.
 
 ## Saving images
 

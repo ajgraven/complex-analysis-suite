@@ -50,6 +50,7 @@ export const SHARE_IDS = [
   "laurent-r",
   "newton",
   "autoiter",
+  "autoiter-strength",
   "accumulate",
   "perturbation",
   "param-a",

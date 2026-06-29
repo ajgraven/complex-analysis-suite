@@ -1503,11 +1503,16 @@ function init(): void {
     updateDerivativeGating(); // Newton iterates the Newton map, not f — analytic DE n/a
   }
 
-  /** Toggle auto-scaling of the iteration cap with zoom on both plots. */
+  /** Toggle auto-scaling of the iteration cap with zoom on both plots, and push the
+   *  strength (extra ×base iterations per decade of zoom) from its slider. */
   function applyAutoIter(): void {
     const on = byId<HTMLInputElement>("autoiter").checked;
-    parameterView.plot.setAutoIterations(on);
-    dynamicalView.plot.setAutoIterations(on);
+    const strength = Number(byId<HTMLInputElement>("autoiter-strength").value);
+    for (const v of [parameterView, dynamicalView]) {
+      v.plot.setAutoIterations(on);
+      v.plot.setAutoIterStrength(strength);
+    }
+    byId<HTMLInputElement>("autoiter-strength").disabled = !on; // only adjustable when active
   }
 
   /** Toggle temporal anti-aliasing (idle accumulation) on both plots. */
@@ -2261,6 +2266,7 @@ function init(): void {
 
   byId("newton").addEventListener("change", applyNewton);
   byId("autoiter").addEventListener("change", applyAutoIter);
+  byId("autoiter-strength").addEventListener("input", applyAutoIter);
   byId("accumulate").addEventListener("change", applyAccumulate);
   byId("perturbation").addEventListener("change", applyPerturbation);
   byId("param-a").addEventListener("input", applyParamA);
@@ -2354,6 +2360,7 @@ function init(): void {
     byId<HTMLInputElement>("newton").checked = false;
     applyNewton();
     byId<HTMLInputElement>("autoiter").checked = false;
+    byId<HTMLInputElement>("autoiter-strength").value = "1.5";
     applyAutoIter();
     byId<HTMLInputElement>("accumulate").checked = false;
     applyAccumulate();

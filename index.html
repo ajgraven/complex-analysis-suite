@@ -774,6 +774,28 @@ z^2+c</textarea
                     >
                       <input type="checkbox" id="autoiter" /> auto iterations
                     </label>
+                    <button
+                      class="gloss-link"
+                      type="button"
+                      data-term="auto-iterations"
+                      aria-label="What is auto iterations?"
+                    >
+                      ?
+                    </button>
+                    <div class="post-controls" title="How fast the iteration cap grows with zoom">
+                      <label
+                        >strength
+                        <input
+                          type="range"
+                          id="autoiter-strength"
+                          min="0.5"
+                          max="4"
+                          step="0.5"
+                          value="1.5"
+                          title="Extra iterations per 10× zoom, as a fraction of the base count"
+                          disabled
+                      /></label>
+                    </div>
                   </div>
                   <div class="field">
                     <label

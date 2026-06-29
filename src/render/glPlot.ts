@@ -189,6 +189,25 @@ export function halton(index: number, b: number): number {
   return result;
 }
 
+/** Hard ceiling on the auto-scaled iteration cap, so a deep zoom with auto-iterations on
+ *  can't drive the count (and GPU cost) arbitrarily high. */
+const AUTO_ITER_MAX = 20000;
+
+/**
+ * Auto-iteration cap: scale the base iteration count up logarithmically with zoom
+ * (magnification). Near the set boundary the escape-time bands pile up geometrically, so
+ * each *decade* of magnification needs a roughly constant number of extra iterations to
+ * keep the same band density per pixel — hence a law linear in log₁₀(zoom). `strength` is
+ * the extra fraction of `base` added per decade. Depends on zoom alone, not the centre's
+ * magnitude: magnification (not absolute position) sets how fine the detail is. Clamped to
+ * [base, {@link AUTO_ITER_MAX}].
+ */
+export function autoIterations(base: number, zoom: number, strength: number): number {
+  const decades = Math.log10(Math.max(1, zoom));
+  const scaled = Math.round(base * (1 + Math.max(0, strength) * decades));
+  return Math.min(AUTO_ITER_MAX, Math.max(base, scaled));
+}
+
 export class GLPlot {
   private readonly gl: WebGL2RenderingContext;
   private readonly canvas: HTMLCanvasElement;
@@ -267,6 +286,7 @@ export class GLPlot {
   private _n = "100";
   private _nplot = "7";
   private _autoIter = false; // scale the iteration cap with zoom depth
+  private _autoIterStrength = 1.5; // auto-iter: extra ×base iterations per decade of zoom
   private _accumulate = false; // temporal anti-aliasing (idle accumulation)
   private _forceFull = false; // render full-res every frame (while recording animation)
   private _paramA: [number, number] = [0, 0]; // live parameter a (real, imaginary)
@@ -684,9 +704,7 @@ export class GLPlot {
   private targetIterations(): number {
     const base = Math.max(1, Math.round(Number(this._n)));
     if (!this._autoIter) return base;
-    const depth = this._zoom * Math.max(1, Math.abs(this._center[0]), Math.abs(this._center[1]));
-    const scaled = Math.round(base * (1 + 0.5 * Math.log2(Math.max(1, depth))));
-    return Math.min(5000, Math.max(base, scaled));
+    return autoIterations(base, this._zoom, this._autoIterStrength);
   }
 
   /**
@@ -1528,6 +1546,13 @@ export class GLPlot {
   setAutoIterations(on: boolean): void {
     this._autoIter = on;
     this.scheduleRender();
+  }
+
+  /** Set how aggressively auto-iterations scale with zoom (extra ×base per decade of zoom).
+   *  Render-only; re-renders only when auto-iterations is on. */
+  setAutoIterStrength(strength: number): void {
+    if (Number.isFinite(strength)) this._autoIterStrength = Math.max(0, strength);
+    if (this._autoIter) this.scheduleRender();
   }
 
   /**

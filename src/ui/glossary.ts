@@ -36,6 +36,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     defn: "How many iterations a point takes to cross the escape radius. Exterior points are coloured by it (smoothed, for continuous bands rather than steps).",
   },
   {
+    id: "auto-iterations",
+    term: "Auto iterations",
+    defn: "Optionally raises the iteration cap as you zoom in, so deep views keep their detail without bumping the count by hand. Near the boundary the escape-time bands pile up geometrically, so each 10× of zoom needs a roughly constant number of extra iterations — the cap grows linearly in log₁₀(zoom). The 'strength' slider sets how many extra iterations are added per decade (as a fraction of the base count). It depends on zoom (magnification) alone, not on where the view is centred.",
+  },
+  {
     id: "period",
     term: "Period",
     defn: "The length of the attracting cycle an interior point settles onto (1 = a fixed point). Every hyperbolic component has a single period.",
