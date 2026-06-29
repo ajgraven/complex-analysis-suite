@@ -237,6 +237,55 @@ h2 {
   }
 }
 
+/* --- Per-plot expand/maximize: focus one plot, hiding the other plot and the sidebar.
+   Desktop only (≥1200px), transient (not persisted); the button or Esc restores. */
+.expand-btn {
+  display: none;
+}
+
+@media (min-width: 1200px) {
+  .plot {
+    position: relative;
+  }
+  .expand-btn {
+    display: inline-block;
+    position: absolute;
+    top: 0.4rem;
+    right: 0.4rem;
+    z-index: 4;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.78rem;
+    line-height: 1.3;
+  }
+
+  .workspace.expand-param,
+  .workspace.expand-dyn {
+    grid-template-columns: 1fr;
+  }
+  .workspace.expand-param .controls-pane,
+  .workspace.expand-dyn .controls-pane {
+    display: none;
+  }
+  .workspace.expand-param #dyn-plot,
+  .workspace.expand-dyn #param-plot {
+    display: none;
+  }
+  .workspace.expand-param .plots,
+  .workspace.expand-dyn .plots {
+    grid-template-columns: 1fr;
+  }
+  .workspace.expand-param .canvas-stack,
+  .workspace.expand-dyn .canvas-stack {
+    display: block;
+    width: 100%;
+  }
+  .workspace.expand-param .canvas-stack > canvas,
+  .workspace.expand-dyn .canvas-stack > canvas {
+    width: 100% !important;
+    height: auto;
+  }
+}
+
 /* The controls now live in a narrow column, but several rows (the export/animate buttons,
    the coefficient blocks) were built for the old full-width layout. Let them shrink and wrap
    to the column instead of overflowing it. Harmless at full width, where everything fits. */

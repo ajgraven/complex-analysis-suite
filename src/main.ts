@@ -397,6 +397,8 @@ function setupLayout(): void {
   if (!(workspace instanceof HTMLElement)) return;
   const layoutBtn = byId("layout-toggle");
   const sidebarBtn = byId("sidebar-toggle");
+  const expandParamBtn = byId("expand-param");
+  const expandDynBtn = byId("expand-dyn");
   const KEY_STACK = "cdjs.layout.stacked";
   const KEY_COLLAPSE = "cdjs.layout.collapsed";
   const read = (k: string): boolean => {
@@ -420,6 +422,12 @@ function setupLayout(): void {
     layoutBtn.setAttribute("aria-pressed", String(stacked));
     sidebarBtn.textContent = collapsed ? "Show controls" : "Hide controls";
     sidebarBtn.setAttribute("aria-pressed", String(collapsed));
+    const expParam = workspace.classList.contains("expand-param");
+    const expDyn = workspace.classList.contains("expand-dyn");
+    expandParamBtn.textContent = expParam ? "⤢ restore" : "⤢ expand";
+    expandParamBtn.setAttribute("aria-pressed", String(expParam));
+    expandDynBtn.textContent = expDyn ? "⤢ restore" : "⤢ expand";
+    expandDynBtn.setAttribute("aria-pressed", String(expDyn));
   };
   if (read(KEY_STACK)) workspace.classList.add("plots-stacked");
   if (read(KEY_COLLAPSE)) workspace.classList.add("controls-collapsed");
@@ -431,6 +439,26 @@ function setupLayout(): void {
   sidebarBtn.addEventListener("click", () => {
     write(KEY_COLLAPSE, workspace.classList.toggle("controls-collapsed"));
     sync();
+  });
+  // Per-plot expand (focus mode): transient, not persisted; restores to the stack/collapse state.
+  const setExpand = (which: "param" | "dyn" | null): void => {
+    workspace.classList.toggle("expand-param", which === "param");
+    workspace.classList.toggle("expand-dyn", which === "dyn");
+    sync();
+  };
+  expandParamBtn.addEventListener("click", () =>
+    setExpand(workspace.classList.contains("expand-param") ? null : "param"),
+  );
+  expandDynBtn.addEventListener("click", () =>
+    setExpand(workspace.classList.contains("expand-dyn") ? null : "dyn"),
+  );
+  document.addEventListener("keydown", (e) => {
+    if (
+      e.key === "Escape" &&
+      (workspace.classList.contains("expand-param") || workspace.classList.contains("expand-dyn"))
+    ) {
+      setExpand(null);
+    }
   });
 }
 

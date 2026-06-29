@@ -154,9 +154,10 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
 - The **Theme** button cycles auto / dark / light (auto follows your OS colour scheme);
   the choice is remembered across visits.
 - On a wide screen, **Stack plots** switches the two plots from side-by-side to a vertical stack
-  (each much larger), and **Hide controls** collapses the sidebar so the plots fill the width; both
-  remember your choice across visits. The plots fill the freed space at the current render resolution
-  — raise a plot's **canvas px** if a very large view looks soft.
+  (each much larger), **Hide controls** collapses the sidebar so the plots fill the width, and each
+  plot's **⤢ expand** button maximises just that plot (the other plot and the sidebar hide; **Esc**
+  or the button restores). Stack / Hide remember your choice across visits. The plots fill the freed
+  space at the current render resolution — raise a plot's **canvas px** if a very large view looks soft.
 - **Share link** copies a URL whose hash encodes the current view — formula, both planes'
   centre/zoom/iterations, colouring mode/palette, every toggle, the dynamical orbit start
   z₀, and the custom-gradient stops — so opening it reproduces the view. Deep-zoom centres are

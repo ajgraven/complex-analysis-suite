@@ -93,8 +93,17 @@
         <div class="plots-pane">
           <main class="plots">
             <!-- ============================ Parameter space ============== -->
-            <section class="plot" aria-labelledby="param-heading">
+            <section class="plot" id="param-plot" aria-labelledby="param-heading">
               <h2 id="param-heading">Parameter Space</h2>
+              <button
+                id="expand-param"
+                type="button"
+                class="expand-btn"
+                aria-pressed="false"
+                title="Expand this plot (hide the other plot and the controls sidebar); Esc restores"
+              >
+                ⤢ expand
+              </button>
               <div class="canvas-stack">
                 <canvas id="MCSCanvas" aria-hidden="true"></canvas>
                 <canvas
@@ -205,8 +214,17 @@ abs(z)>2</textarea
             </section>
 
             <!-- ============================ Dynamical plane ============== -->
-            <section class="plot" aria-labelledby="dyn-heading">
+            <section class="plot" id="dyn-plot" aria-labelledby="dyn-heading">
               <h2 id="dyn-heading">Dynamical Plane</h2>
+              <button
+                id="expand-dyn"
+                type="button"
+                class="expand-btn"
+                aria-pressed="false"
+                title="Expand this plot (hide the other plot and the controls sidebar); Esc restores"
+              >
+                ⤢ expand
+              </button>
               <div class="canvas-stack">
                 <canvas id="JCSCanvas" aria-hidden="true"></canvas>
                 <canvas
