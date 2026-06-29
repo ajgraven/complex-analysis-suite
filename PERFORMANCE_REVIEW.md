@@ -6,8 +6,9 @@ tools. Compiled 2026-06-29.
 
 > **Status.** Tier 1 **#1 (cardioid/bulb interior bailout)**, **#2 (progressive-threshold fix)** and
 > **#4 (compiled-closure cache)** are implemented; **#3** is subsumed by #4 and **#5** is deferred (see
-> their entries). Tier 2 **#6 (coupled-drag panel debounce)** and **#8 (content-gated orbit/CDF
-> invalidation)** are implemented too. Everything else is open; this document is the standing roadmap. Speedup
+> their entries). Tier 2 **#6 (coupled-drag panel debounce)**, **#7 (Julia metrics worker)** and
+> **#8 (content-gated orbit/CDF invalidation)** are implemented too. Everything else is open; this
+> document is the standing roadmap. Speedup
 > figures from the literature are attributed; figures that could not be pinned to a primary source are
 > marked **[UNVERIFIED]**.
 
@@ -92,12 +93,15 @@ non-drag callers (clicks, applied inputs, init) still refresh inline. (`applyLau
 short-circuits its `polynomialCoeffs` probe for z²+c via `dMonic !== null ||`, so no reorder was
 needed once the per-move cost was gone.)
 
-### 7. Move Julia-properties Tier-2 image metrics off the main thread
-**[Impact L when panel open / Effort M–L / Risk med]** — `src/main.ts` `measureJuliaImage`
-rasterizes up to three 96²–128² interior masks (`estimateExtent`×2 + `interiorMask`, each
-O(size²·maxIter)) synchronously ≈ 150–250 ms — a visible stall per debounce fire. Move to a Web
-Worker (the functions are pure; pass f/esc source + scalars), or cheaper: drop the 2nd extent pass,
-lower `maxIter`, and skip recompute when `(fAst, c, center, zoom)` is unchanged.
+### ✅ 7. Move Julia-properties Tier-2 image metrics off the main thread — **DONE (PR-4)**
+**[Impact L when panel open / Effort M–L / Risk med]** — `measureJuliaImage`'s ≈150–250 ms
+synchronous burst (two `estimateExtent` passes + a 128² `interiorMask` + box-count / symmetry /
+connectivity) now runs in a Web Worker. The compute is extracted into a pure `computeJuliaImageMetrics`
+(`juliaProperties.ts`) that the worker (`juliaMetrics.worker.ts`) and a **synchronous fallback** both
+call — so behaviour is identical where module workers are unavailable (headless / old browsers). The
+`JuliaMetricsClient` posts source strings + scalars and **drops stale responses** (only the latest
+request paints), which replaces the need for cancellation. Unit-tested via the pure core; verified
+live (the measured pixel area sits under the analytic Gronwall bound; box-count dimension sensible).
 
 ### ✅ 8. Content-gate the orbit/CDF invalidation in `scheduleRender()` — **DONE (PR-3)**
 **[Impact M for histogram/perturbation / Effort S / Risk low]** — `scheduleRender` set

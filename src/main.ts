@@ -24,15 +24,8 @@ import {
   mandelbrotExteriorCoeffs,
 } from "./render/uniformize";
 import { fToRational } from "./expr/rational";
-import {
-  boxCountDimension,
-  computeJuliaProperties,
-  countInterior,
-  detectSymmetries,
-  estimateExtent,
-  imageConnectivity,
-  interiorMask,
-} from "./render/juliaProperties";
+import { computeJuliaProperties, type Extent } from "./render/juliaProperties";
+import { JuliaMetricsClient } from "./render/juliaMetricsClient";
 import { polynomialCoeffs, polynomialConnectivity } from "./render/critical";
 import { drawOrbitPreview, renderJuliaPreview } from "./render/orbitPreview";
 import type { Node as ExprNode } from "./expr/ast";
@@ -1033,11 +1026,12 @@ function init(): void {
   let lastJuliaProps: ReturnType<typeof computeJuliaProperties> | null = null;
   let lastBoxDim: number | null = null; // Tier-2 box-counting dimension (image-based)
   let lastPixelArea: number | null = null; // Tier-2 pixel-count area (image-based)
-  let lastExtent: ReturnType<typeof estimateExtent> = null; // Tier-2 bounding extent (general f)
+  let lastExtent: Extent | null = null; // Tier-2 bounding extent (general f)
   let lastSymmetry: string | null = null; // Tier-2 measured symmetry string (general f)
   let lastConnectivity: string | null = null; // Tier-2 image connectivity string (general f)
   let lastConnectivityRigorous = false; // Tier-1 polynomial verdict set ⇒ skip the image estimate
   let juliaMeasureTimer = 0;
+  const juliaMetricsClient = new JuliaMetricsClient(); // Tier-2 masks off the main thread (sync fallback)
   const jSet = (id: string, text: string): void => {
     byId(id).textContent = text;
   };
@@ -1063,25 +1057,6 @@ function init(): void {
       if (p.analyticArea !== null) area.push(`≤ ${jNum(p.analyticArea, 5)} (bound)`);
       jSet("jp-area", area.length ? area.join(" · ") : "—");
     }
-  }
-
-  /** A measured-symmetry display string from `detectSymmetries` (general f, any map class). */
-  function describeSymmetry(s: ReturnType<typeof detectSymmetries>): string {
-    const parts: string[] = [];
-    if (s.rotation && s.rotation >= 3) parts.push(`${s.rotation}-fold rotational`);
-    else if (s.central) parts.push("central (z → −z)");
-    if (s.realAxis) parts.push("real-axis mirror");
-    if (s.imagAxis) parts.push("imag-axis mirror");
-    return parts.length ? `≈ ${parts.join(" · ")}` : "none detected";
-  }
-
-  /** Image-based connectivity estimate for a general f (no critical point needed); the measure-zero
-   *  (dendrite vs Cantor dust) case is resolved by the critical-orbit fate. */
-  function describeConnectivity(mask: Uint8Array, size: number, escapes: boolean): string {
-    const r = imageConnectivity(mask, size);
-    if (r.empty)
-      return escapes ? "≈ Cantor dust (no interior)" : "≈ connected dendrite (no interior)";
-    return r.components <= 1 ? "≈ connected (one component)" : `≈ ${r.components} bounded components`;
   }
 
   /** Paint the bounding-region + symmetry rows for a general (non-monic) f from the Tier-2 measure.
@@ -1114,59 +1089,34 @@ function init(): void {
     const p = lastJuliaProps;
     if (!p || !byId<HTMLDetailsElement>("julia-props-group").open) return;
     const dyn = dynamicalView.plot;
-    const fAst = parameterView.plot.fAst;
-    const escAst = parameterView.plot.escAst;
-    const a = parameterView.plot.paramA;
-    const c = dyn.cValue;
-    const size = 128; // grid resolution — ~90 ms; finer over-reads the boundary and is slower
-
-    let cx: number;
-    let cy: number;
-    let halfWidth: number;
-    if (p.boundingRadius !== null) {
-      cx = 0; // monic: the bounding disk encloses the whole set exactly
-      cy = 0;
-      halfWidth = p.boundingRadius;
-    } else {
-      // Two-pass extent: a generous coarse sweep locates the set, then a snug pass refines the box
-      // (a small set in a big window is under-resolved, clipping thin tips/filaments).
-      const searchHalf = Math.max(4, 3 / dyn.zoom);
-      let ext = estimateExtent(fAst, escAst, c, a, dyn.center[0], dyn.center[1], searchHalf, 96, 120);
-      if (ext) {
-        const span = Math.max(ext.bbox.xMax - ext.bbox.xMin, ext.bbox.yMax - ext.bbox.yMin);
-        const refined = estimateExtent(fAst, escAst, c, a, ext.cx, ext.cy, span * 1.3, 96, 150);
-        if (refined) ext = refined;
-      }
-      lastExtent = ext;
-      if (!ext) {
-        // No bounded interior located (empty / escaping). Area is 0 if escaping, else unknown.
-        lastBoxDim = null;
-        lastPixelArea = p.escapes ? 0 : null;
-        lastSymmetry = "none detected";
-        if (!lastConnectivityRigorous)
-          lastConnectivity = p.escapes
-            ? "≈ Cantor dust (no interior)"
-            : "≈ connected dendrite (no interior)";
+    // Hand the heavy interior-mask metrics to the worker (synchronous fallback when Web Workers are
+    // unavailable); the client drops stale responses, so only the latest request paints.
+    juliaMetricsClient.request(
+      {
+        fSource: parameterView.plot.f,
+        escSource: parameterView.plot.esc,
+        a: parameterView.plot.paramA,
+        c: dyn.cValue,
+        centerX: dyn.center[0],
+        centerY: dyn.center[1],
+        zoom: dyn.zoom,
+        boundingRadius: p.boundingRadius,
+        escapes: p.escapes,
+        rigorousConnectivity: lastConnectivityRigorous,
+        size: 128, // grid resolution — finer over-reads the boundary and is slower
+      },
+      (m) => {
+        lastBoxDim = m.boxDim;
+        lastPixelArea = m.pixelArea;
+        // Present keys are applied; absent ones (monic's analytic rows, or a rigorous Tier-1
+        // connectivity verdict) are deliberately left untouched.
+        if ("extent" in m) lastExtent = m.extent ?? null;
+        if ("symmetry" in m) lastSymmetry = m.symmetry ?? null;
+        if ("connectivity" in m) lastConnectivity = m.connectivity ?? null;
         paintJuliaDimArea();
         paintJuliaExtentSymmetry();
-        return;
-      }
-      cx = ext.cx;
-      cy = ext.cy;
-      halfWidth = ext.halfWidth;
-    }
-
-    const mask = interiorMask(fAst, escAst, c, a, cx, cy, halfWidth, size, 150);
-    lastBoxDim = boxCountDimension(mask, size);
-    const interior = countInterior(mask);
-    lastPixelArea = p.escapes ? 0 : interior * ((2 * halfWidth) / size) ** 2;
-    if (p.boundingRadius === null) {
-      lastSymmetry = describeSymmetry(detectSymmetries(mask, size));
-      if (!lastConnectivityRigorous) lastConnectivity = describeConnectivity(mask, size, p.escapes);
-    }
-
-    paintJuliaDimArea();
-    paintJuliaExtentSymmetry();
+      },
+    );
   }
 
   function scheduleJuliaMeasure(): void {

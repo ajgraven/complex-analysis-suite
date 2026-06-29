@@ -647,3 +647,105 @@ export function imageConnectivity(
   const bridged = connectedComponents(dilateMask(mask, size, 2), size);
   return { empty: false, components: Math.max(1, bridged.nontrivial) };
 }
+
+/**
+ * Display-ready Tier-2 image metrics — the result of {@link computeJuliaImageMetrics}. `boxDim` and
+ * `pixelArea` apply to any f. `extent`/`symmetry`/`connectivity` are present only for a general
+ * (non-monic) f — the monic family keeps its analytic rows, so they are omitted to leave those
+ * untouched — and `connectivity` is also omitted when a rigorous Tier-1 verdict already stands.
+ */
+export interface JuliaImageMetrics {
+  boxDim: number | null;
+  pixelArea: number | null;
+  extent?: Extent | null;
+  symmetry?: string | null;
+  connectivity?: string | null;
+}
+
+/** A measured-symmetry display string from {@link detectSymmetries} (general f, any map class). */
+function describeSymmetry(s: Symmetries): string {
+  const parts: string[] = [];
+  if (s.rotation && s.rotation >= 3) parts.push(`${s.rotation}-fold rotational`);
+  else if (s.central) parts.push("central (z → −z)");
+  if (s.realAxis) parts.push("real-axis mirror");
+  if (s.imagAxis) parts.push("imag-axis mirror");
+  return parts.length ? `≈ ${parts.join(" · ")}` : "none detected";
+}
+
+/** Image-based connectivity estimate for a general f (no critical point needed); the measure-zero
+ *  (dendrite vs Cantor dust) case is resolved by the critical-orbit fate. */
+function describeConnectivity(mask: Uint8Array, size: number, escapes: boolean): string {
+  const r = imageConnectivity(mask, size);
+  if (r.empty) return escapes ? "≈ Cantor dust (no interior)" : "≈ connected dendrite (no interior)";
+  return r.components <= 1 ? "≈ connected (one component)" : `≈ ${r.components} bounded components`;
+}
+
+/**
+ * The heavy Tier-2 image metrics (bounding extent, box-counting dimension, pixel area, symmetry,
+ * connectivity) from a CPU interior mask. Pure (no DOM), so it runs identically on the main thread
+ * or inside a Web Worker (see {@link ./juliaMetricsClient}). The mask window is the exact bounding
+ * disk for monic z^d + c, else a numerically-located snug window around the whole set. Monic returns
+ * only `boxDim`/`pixelArea` (its extent/symmetry/connectivity rows are analytic); a general f also
+ * returns the measured extent/symmetry, and the connectivity unless a rigorous Tier-1 verdict stands.
+ */
+export function computeJuliaImageMetrics(opts: {
+  fAst: Node;
+  escAst: Node;
+  a: Complex;
+  c: Complex;
+  centerX: number;
+  centerY: number;
+  zoom: number;
+  boundingRadius: number | null;
+  escapes: boolean;
+  rigorousConnectivity: boolean;
+  size: number;
+}): JuliaImageMetrics {
+  const { fAst, escAst, a, c, centerX, centerY, zoom, boundingRadius, escapes, size } = opts;
+
+  if (boundingRadius !== null) {
+    // Monic z^d + c: the bounding disk encloses the whole set exactly; the symmetry / connectivity /
+    // bounding rows stay analytic (omitted here so the caller leaves them untouched).
+    const mask = interiorMask(fAst, escAst, c, a, 0, 0, boundingRadius, size, 150);
+    const interior = countInterior(mask);
+    return {
+      boxDim: boxCountDimension(mask, size),
+      pixelArea: escapes ? 0 : interior * ((2 * boundingRadius) / size) ** 2,
+    };
+  }
+
+  // General f: locate the set numerically. A generous coarse sweep, then a snug refine pass (a small
+  // set in a big window is under-resolved, clipping thin tips / filaments).
+  const searchHalf = Math.max(4, 3 / zoom);
+  let ext = estimateExtent(fAst, escAst, c, a, centerX, centerY, searchHalf, 96, 120);
+  if (ext) {
+    const span = Math.max(ext.bbox.xMax - ext.bbox.xMin, ext.bbox.yMax - ext.bbox.yMin);
+    const refined = estimateExtent(fAst, escAst, c, a, ext.cx, ext.cy, span * 1.3, 96, 150);
+    if (refined) ext = refined;
+  }
+  if (!ext) {
+    // No bounded interior located (empty / escaping).
+    const out: JuliaImageMetrics = {
+      boxDim: null,
+      pixelArea: escapes ? 0 : null,
+      extent: null,
+      symmetry: "none detected",
+    };
+    if (!opts.rigorousConnectivity)
+      out.connectivity = escapes
+        ? "≈ Cantor dust (no interior)"
+        : "≈ connected dendrite (no interior)";
+    return out;
+  }
+
+  const mask = interiorMask(fAst, escAst, c, a, ext.cx, ext.cy, ext.halfWidth, size, 150);
+  const interior = countInterior(mask);
+  const out: JuliaImageMetrics = {
+    boxDim: boxCountDimension(mask, size),
+    pixelArea: escapes ? 0 : interior * ((2 * ext.halfWidth) / size) ** 2,
+    extent: ext,
+    symmetry: describeSymmetry(detectSymmetries(mask, size)),
+  };
+  if (!opts.rigorousConnectivity) out.connectivity = describeConnectivity(mask, size, escapes);
+  return out;
+}
