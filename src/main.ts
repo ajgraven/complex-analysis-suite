@@ -627,14 +627,16 @@ function init(): void {
 
   const dirtyIndicator = byId("dirty-indicator");
   const applyBtn = byId("apply_all");
+  // The sidebar Apply plus the two contextual Apply buttons below each plot — all highlight together.
+  const applyButtons = [applyBtn, ...document.querySelectorAll<HTMLButtonElement>(".plot-apply")];
   /**
-   * Toggle the "unapplied edits" hint and emphasise the Apply button. Only the
+   * Toggle the "unapplied edits" hint and emphasise every Apply button. Only the
    * deferred text fields ({@link INPUT_IDS}) feed this; the live controls
    * (dropdowns, sliders, checkboxes) apply on change and never go "dirty".
    */
   function setDirty(on: boolean): void {
     dirtyIndicator.hidden = !on;
-    applyBtn.classList.toggle("attention", on);
+    for (const b of applyButtons) b.classList.toggle("attention", on);
     // Clearing the dirty state also clears the per-field highlights (Apply / Enter / reset).
     if (!on) for (const id of Object.values(INPUT_IDS)) byId(id).classList.remove("dirty");
   }
@@ -2153,6 +2155,9 @@ function init(): void {
   });
 
   byId("apply_all").addEventListener("click", applyChanges);
+  // Contextual Apply buttons in each plot's params bar — same commit as the sidebar Apply.
+  byId("param-apply").addEventListener("click", applyChanges);
+  byId("dyn-apply").addEventListener("click", applyChanges);
   byId("apply_preset").addEventListener("click", () => {
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
   });

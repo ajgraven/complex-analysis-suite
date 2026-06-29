@@ -136,11 +136,11 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
   edits are pending the changed fields are highlighted, an "unapplied edits" hint shows,
   and the Apply button is ringed; **reset** reverts every option (including colouring) to
   the selected preset.
-- Each plot's precise fields (**c**, escape test, centre, zoom, max iterations, canvas
-  size) are tucked behind a **view chip** below the plot showing `centre · zoom ·
-iterations`; click **edit ▾** to expand and type exact values, or use **Copy coordinates**
-  to put the full-precision `c` / centre / zoom on the clipboard. A caption under each plot
-  names the coupling and shows the live **c** shared by both planes.
+- Below each plot a compact row shows its **iterations**, **canvas size (px)**, **centre**, and
+  **zoom** — edit any and press **Enter** or the plot's **apply** button (it lights up when there
+  are unapplied edits). The escape test, **c**, and **Copy coordinates** (full-precision `c` / centre
+  / zoom to the clipboard) sit under **more ▾**. A caption under each plot names the coupling and
+  shows the live **c** shared by both planes.
 - **↶ undo / ↷ redo** (or **Ctrl+Z** / **Ctrl+Y**) step through your recent changes —
   formula, view, colouring, and toggles — as a single history.
 - Choose a colour scheme with the **coloring** control — see
