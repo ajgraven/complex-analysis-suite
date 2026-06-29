@@ -61,7 +61,7 @@ export function computeOrbit(
   return orbitWalk(makeComplexFn(fAst, a), makeEscapeFn(escapeAst, fAst, a), z0, cc, nplot);
 }
 
-export type OrbitFate = "escaped" | "converged" | "periodic" | "bounded";
+export type OrbitFate = "escaped" | "converged" | "periodic" | "undetermined";
 
 export interface OrbitInfo {
   fate: OrbitFate;
@@ -69,7 +69,7 @@ export interface OrbitInfo {
   period: number;
   /** Iterations until escape for escaped orbits; 0 otherwise. */
   escapeIter: number;
-  /** The detected periodic points (period-many; one for a fixed point); null if escaped/bounded. */
+  /** The detected periodic points (period-many; one for a fixed point); null if escaped/undetermined. */
   cyclePoints: Complex[] | null;
 }
 
@@ -125,7 +125,10 @@ function classifyWalk(
       return { fate: "escaped", period: 0, escapeIter: k + 1, cyclePoints: null };
     }
   }
-  return { fate: "bounded", period: 0, escapeIter: 0, cyclePoints: null };
+  // Neither escaped nor settled onto a cycle within `maxIter`: "undetermined", NOT a claim of
+  // boundedness — it may be a slow escaper, an irrational/Siegel orbit, or a cycle longer than the
+  // CLASSIFY_MAX_PERIOD cap. Surfaced as iteration-limited rather than as a definitive class.
+  return { fate: "undetermined", period: 0, escapeIter: 0, cyclePoints: null };
 }
 
 /**
@@ -170,7 +173,7 @@ const FATE_COLOR: Record<OrbitFate, string> = {
   escaped: "#ff6b6b",
   converged: "#63e6a4",
   periodic: "#5cc8ff",
-  bounded: "#ffd166",
+  undetermined: "#ffd166",
 };
 
 /** Short human label for an orbit's fate (shown next to the white-point coordinate). */
@@ -182,8 +185,8 @@ export function fateLabel(info: OrbitInfo): string {
       return "fixed point";
     case "periodic":
       return `period ${info.period}`;
-    case "bounded":
-      return "bounded";
+    case "undetermined":
+      return "undetermined";
   }
 }
 

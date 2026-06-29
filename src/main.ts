@@ -140,7 +140,7 @@ const FATE_TEXT: Record<OrbitFate, string> = {
   escaped: "escapes to ∞",
   converged: "attracting fixed point",
   periodic: "attracting cycle",
-  bounded: "bounded (no cycle found)",
+  undetermined: "no escape or cycle within the iteration limit",
 };
 
 /** Opens the glossary modal at an optional term anchor; assigned by setupGlossary(). */
@@ -996,7 +996,7 @@ function init(): void {
           ? `superattracting · period ${p.cycle.period}`
           : `attracting · period ${p.cycle.period} · |λ| ${holo ? "=" : "≈"} ${jNum(p.cycle.multiplierMag, 3)}`;
     else if (p.paramClass === "neutral") ptype = "neutral (|λ| ≈ 1, on the boundary)";
-    else ptype = "bounded — no attracting cycle found";
+    else ptype = "no attracting cycle found (iteration-limited)";
     if (p.cycle?.rotation) ptype += ` · ${p.cycle.rotation.p}/${p.cycle.rotation.q}`;
     jSet("jp-paramtype", ptype);
 

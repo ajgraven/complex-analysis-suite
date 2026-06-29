@@ -14,7 +14,7 @@ const FATE_LABEL: Record<OrbitFate, string> = {
   escaped: "escapes to infinity",
   converged: "attracting fixed point",
   periodic: "attracting cycle",
-  bounded: "bounded (no cycle found)",
+  undetermined: "no escape or cycle within the iteration limit",
 };
 
 /** The inspected orbit's report as clipboard-friendly plain text (full precision). */

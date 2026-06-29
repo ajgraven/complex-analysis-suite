@@ -62,6 +62,16 @@ describe("classifyOrbit — relative tolerance for large-modulus attractors", ()
   });
 });
 
+describe("classifyOrbit — undetermined (no escape, no cycle within budget)", () => {
+  it("reports 'undetermined' for a bounded non-settling orbit (irrational rotation)", () => {
+    const rot = parse("z*(0.6+0.8*i)"); // |λ| = 1 irrational rotation ⇒ orbit circles, never closes
+    const info = classifyOrbit(rot, esc, [1, 0], [0, 0]);
+    expect(info.fate).toBe("undetermined");
+    expect(info.period).toBe(0);
+    expect(info.cyclePoints).toBeNull();
+  });
+});
+
 describe("orbitAndClassify matches computeOrbit + classifyOrbit", () => {
   const cases: Complex[] = [
     [0, 0],
