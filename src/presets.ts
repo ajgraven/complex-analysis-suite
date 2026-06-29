@@ -41,6 +41,7 @@ export type PresetName =
   | "mandelbrot"
   | "cubic"
   | "tricorn"
+  | "multicorn"
   | "burning ship"
   | "butterfly"
   | "celtic"
@@ -69,6 +70,15 @@ export const paramPresets: Record<PresetName, Preset> = {
     escape: "abs(z)>2",
     zoom: 0.55,
     center: [-0.25, 0],
+  },
+  multicorn: {
+    f: "conjugate(z^3)+c",
+    c: "0+i*0.6",
+    n: "60",
+    nplot: "6",
+    escape: "abs(z)>2",
+    zoom: 0.6,
+    center: [0, 0],
   },
   "burning ship": {
     f: "(abs(re(z))+i*abs(im(z)))^2-c",
@@ -182,6 +192,16 @@ export const dynPresets: Record<PresetName, Preset> = {
     nplot: "6",
     escape: "abs(z)>2",
     zoom: 0.65,
+    center: [0, 0],
+  },
+  multicorn: {
+    f: "conjugate(z^3)+c",
+    c: "0.3+i*0.3",
+    z0: "0.3+i*0.3",
+    n: "60",
+    nplot: "6",
+    escape: "abs(z)>2",
+    zoom: 0.7,
     center: [0, 0],
   },
   "burning ship": {
