@@ -157,53 +157,135 @@ export function juliaExteriorCoeffs(d: number, c: Complex, n: number): Complex[]
 }
 
 /**
- * Laurent coefficients of the inverse Böttcher map ψ(w) = γ₁·w + Σ_{k≥0} b_k·w^{-k} of the filled
- * Julia set of an ARBITRARY polynomial f(z) = Σ_{j=0}^d a_j z^j of degree d ≥ 2 (`coeffs[j]` = a_j),
- * generalising {@link juliaExteriorCoeffs} (the monic z^d + c special case). The leading coefficient
- * γ₁ = a_d^{-1/(d-1)} is the capacity; the d−1 roots are the rotational symmetry (the principal root
- * is taken — the reconstructed boundary is the same for any choice). From the conjugacy
- * f(ψ(w)) = ψ(w^d), substituting ψ(w) = γ₁·w·g(1/w) gives the power-series identity in u = 1/w
+ * Core inverse-Böttcher recurrence from a Laurent-at-∞ supply of f. `laurent[i]` = a_{D−i}, the
+ * coefficient of z^{D−i} in f's expansion near ∞ (i = 0, 1, 2, …; entries with i > D are the
+ * negative-power / rational tail). D ≥ 2 is the local degree at ∞ and a_D = laurent[0] ≠ 0. From the
+ * Böttcher conjugacy f(ψ(w)) = ψ(w^D), substituting ψ(w) = γ₁·w·g(1/w) gives the power-series identity
+ * in u = 1/w
  *
- *     g(u^d) = g(u)^d + Σ_{j=0}^{d-1} β_j · u^{d-j} · g(u)^j,    β_j = a_j · γ₁^{j-1}
+ *     g(u^D) = g(u)^D + Σ_{j<D} β_j · u^{D−j} · g(u)^j,    β_j = a_j · γ₁^{j-1},  γ₁ = a_D^{−1/(D−1)}
  *
- * (the j = d term is a_d·γ₁^{d-1}·g^d = g^d, since γ₁^{d-1} = 1/a_d). Matching u^m gives d·g_m + [known]
- * on the right, so each g_m follows from the lower ones — a triangular recursion, no boundary
- * sampling. Returned as { lead: γ₁, b: [γ₁·g_1, …, γ₁·g_{n+1}] }, ready for {@link evalExterior}(b, w,
- * lead). For monic z^d + c it reproduces {@link juliaExteriorCoeffs} with lead = 1. Returns null on
- * invalid input (need an integer n ≥ 0, degree d ≥ 2, and a non-zero leading coefficient).
+ * (the j = D term is a_D·γ₁^{D−1}·g^D = g^D). j ≥ 0 needs g^j; j < 0 needs g^{−|j|} = 1/g^{|j|}. Matching
+ * u^m gives D·g_m + [known] on the right, so each g_m follows from the lower ones — a triangular
+ * recursion (divisor D ≠ 0), no boundary sampling. Returns { lead: γ₁, b: [γ₁·g_1 … γ₁·g_{n+1}] } for
+ * {@link evalExterior}(b, w, lead), or null on invalid input.
  */
-export function polynomialJuliaExteriorCoeffs(
-  coeffs: Complex[],
+function exteriorFromLaurent(
+  laurent: Complex[],
+  D: number,
   n: number,
 ): { lead: Complex; b: Complex[] } | null {
-  const d = coeffs.length - 1;
-  if (!Number.isInteger(n) || n < 0 || d < 2) return null;
-  const ad = coeffs[d];
-  if (ad[0] === 0 && ad[1] === 0) return null;
-  const lead = C.pow(ad, [-1 / (d - 1), 0]); // γ₁ = a_d^{-1/(d-1)} (capacity), principal root
+  if (!Number.isInteger(n) || n < 0 || !Number.isInteger(D) || D < 2) return null;
+  if (laurent.length <= D) return null; // need a_D … a_0
+  const aD = laurent[0];
+  if (aD[0] === 0 && aD[1] === 0) return null;
+  const lead = C.pow(aD, [-1 / (D - 1), 0]); // γ₁ = a_D^{−1/(D−1)} (capacity), principal root
   if (!Number.isFinite(lead[0]) || !Number.isFinite(lead[1])) return null;
-  const beta: Complex[] = []; // β_j = a_j · γ₁^{j-1}, j = 0 … d−1
-  for (let j = 0; j < d; j++) beta.push(C.mul(coeffs[j], C.intPow(lead, j - 1)));
+  const betaPos: Complex[] = []; // β_j, j = 0 … D−1  (a_j = laurent[D−j])
+  for (let j = 0; j < D; j++) betaPos.push(C.mul(laurent[D - j], C.intPow(lead, j - 1)));
+  const betaNeg: Complex[] = []; // β_{−t}, t = 1, 2, …  (a_{−t} = laurent[D+t])
+  for (let t = 1; D + t < laurent.length; t++) {
+    betaNeg.push(C.mul(laurent[D + t], C.intPow(lead, -t - 1)));
+  }
 
   const N = n + 1; // need g_1 … g_{n+1}; b_k = γ₁·g_{k+1}
   const g: Series = Array.from({ length: N + 1 }, () => [0, 0] as Complex);
   g[0] = [1, 0];
   for (let m = 1; m <= N; m++) {
-    // g^0 … g^d truncated to order m, with g_m still 0 — so gp[d][m] = P_m, the part of [g^d]_m not
-    // multiplying g_m (g_0 = 1 ⇒ [g^d]_m = d·g_m + P_m).
+    // g^0 … g^D truncated to order m (g_m still 0 ⇒ gp[D][m] = P_m, the part of [g^D]_m not multiplying g_m).
     const gp: Series[] = [unitSeries(m)];
-    for (let j = 1; j <= d; j++) gp.push(seriesMul(gp[j - 1], g, m));
-    const lhs: Complex = m % d === 0 ? g[m / d] : ZERO; // [g(u^d)]_m
-    let rhsKnown: Complex = gp[d][m]; // P_m
-    for (let j = 0; j < d; j++) {
-      const idx = m - d + j; // g^j enters u^m through the u^{d-j} factor
-      if (idx >= 0) rhsKnown = C.add(rhsKnown, C.mul(beta[j], gp[j][idx]));
+    for (let j = 1; j <= D; j++) gp.push(seriesMul(gp[j - 1], g, m));
+    const lhs: Complex = m % D === 0 ? g[m / D] : ZERO; // [g(u^D)]_m
+    let rhs: Complex = gp[D][m]; // P_m
+    for (let j = 0; j < D; j++) {
+      const idx = m - D + j; // g^j enters u^m through the u^{D−j} factor
+      if (idx >= 0) rhs = C.add(rhs, C.mul(betaPos[j], gp[j][idx]));
     }
-    const num = C.sub(lhs, rhsKnown); // d·g_m = lhs − P_m − Σ β_j·[g^j]_{m-d+j}
-    g[m] = [num[0] / d, num[1] / d];
+    if (betaNeg.length > 0) {
+      const ginv = seriesInverse(g, m); // 1/g (g_m = 0 ⇒ only lower-order g's matter at the indices read)
+      let gpow = unitSeries(m); // accumulates g^{−t}
+      const tmax = Math.min(m - D, betaNeg.length);
+      for (let t = 1; t <= tmax; t++) {
+        gpow = seriesMul(gpow, ginv, m); // g^{−t}
+        const idx = m - D - t; // g^{−t} enters u^m through the u^{D+t} factor
+        if (idx >= 0) rhs = C.add(rhs, C.mul(betaNeg[t - 1], gpow[idx]));
+      }
+    }
+    const num = C.sub(lhs, rhs); // D·g_m = lhs − P_m − Σ β_j·[g^j]_{m−D+j}
+    g[m] = [num[0] / D, num[1] / D];
   }
   const b = g.slice(1, N + 1).map((gk) => C.mul(lead, gk));
   return { lead, b };
+}
+
+/**
+ * Inverse-Böttcher Laurent coefficients of the filled Julia set of an arbitrary POLYNOMIAL
+ * f(z) = Σ_{j=0}^d a_j z^j of degree d ≥ 2 (`coeffs[j]` = a_j), generalising {@link juliaExteriorCoeffs}
+ * (the monic z^d + c special case). γ₁ = a_d^{−1/(d−1)} is the capacity. Returns { lead: γ₁, b }, ready
+ * for {@link evalExterior}(b, w, lead); null on invalid input. A thin wrapper over the shared core (a
+ * polynomial has no negative-power tail).
+ */
+export function polynomialJuliaExteriorCoeffs(
+  coeffs: Complex[],
+  n: number,
+): { lead: Complex; b: Complex[] } | null {
+  if (coeffs.length < 1) return null;
+  return exteriorFromLaurent(coeffs.slice().reverse(), coeffs.length - 1, n);
+}
+
+/** Degree of a polynomial given as ascending coefficients (highest non-zero index), or −1 if zero. */
+function polyDegree(p: Complex[]): number {
+  for (let i = p.length - 1; i >= 0; i--) if (p[i][0] !== 0 || p[i][1] !== 0) return i;
+  return -1;
+}
+
+/** Reversed coefficients of a degree-`deg` polynomial as a series Σ_i p[deg−i]·uⁱ, truncated to `n`. */
+function reversedSeries(p: Complex[], deg: number, n: number): Series {
+  const s = zeros(n);
+  for (let i = 0; i <= Math.min(deg, n); i++) s[i] = p[deg - i];
+  return s;
+}
+
+/**
+ * Laurent expansion of a rational map f = num/den at ∞: { D, laurent } with D = deg num − deg den (the
+ * local degree at ∞) and laurent[i] = a_{D−i} (coefficient of z^{D−i}). From the reversed polynomials,
+ * f(1/u) = u^{−D}·P̃(u)/Q̃(u), so the a_{D−i} are the power-series coefficients of P̃/Q̃ — exact and
+ * well-conditioned (unlike a numeric DFT at ∞, where the a_D·R^D term swamps the small negative-power
+ * coefficients). A common factor of num/den cancels in P̃/Q̃ and in D, so no GCD reduction is needed.
+ * Returns null unless ∞ is a superattracting fixed point of local degree ≥ 2 (D ≥ 2).
+ */
+export function rationalLaurentAtInfinity(
+  num: Complex[],
+  den: Complex[],
+  order: number,
+): { D: number; laurent: Complex[] } | null {
+  const m = polyDegree(num);
+  const k = polyDegree(den);
+  if (m < 0 || k < 0) return null;
+  const D = m - k;
+  if (D < 2) return null;
+  const Pt = reversedSeries(num, m, order);
+  const Qt = reversedSeries(den, k, order); // Qt[0] = den[k] ≠ 0 ⇒ invertible
+  return { D, laurent: seriesMul(Pt, seriesInverse(Qt, order), order) };
+}
+
+/**
+ * Inverse-Böttcher Laurent coefficients of the filled Julia set of a RATIONAL map f = num/den that has
+ * a superattracting fixed point at ∞ (deg num − deg den ≥ 2) — e.g. z² + 1/z, z³/(z+a). The same
+ * Böttcher recurrence as {@link polynomialJuliaExteriorCoeffs}, fed f's Laurent expansion at ∞
+ * ({@link rationalLaurentAtInfinity}); polynomials are the special case den = const. Returns
+ * { lead: γ₁, b } for {@link evalExterior}(b, w, lead), or null (deg difference < 2, or invalid order).
+ */
+export function rationalExteriorCoeffs(
+  num: Complex[],
+  den: Complex[],
+  n: number,
+): { lead: Complex; b: Complex[] } | null {
+  if (!Number.isInteger(n) || n < 0) return null;
+  const D = polyDegree(num) - polyDegree(den);
+  if (!Number.isInteger(D) || D < 2) return null;
+  const lr = rationalLaurentAtInfinity(num, den, D + n); // a_D … a_{−n}
+  return lr ? exteriorFromLaurent(lr.laurent, lr.D, n) : null;
 }
 
 /**

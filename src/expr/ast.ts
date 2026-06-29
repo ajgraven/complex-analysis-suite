@@ -72,7 +72,7 @@ export function isFreeParameter(node: Node, name: string): boolean {
   return referencesVar(node, name) && !assignsVar(node, name);
 }
 
-function referencesVar(node: Node, name: string): boolean {
+export function referencesVar(node: Node, name: string): boolean {
   switch (node.kind) {
     case "var":
       return node.name === name;
