@@ -340,7 +340,9 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   on that bulb's landing rays; a **Misiurewicz** finder Newton-snaps to the exact preperiodic
   point `fᵐ⁺ᵏ(0) = fᵐ(0)` nearest the view, and **Siegel c for θ** jumps to the cardioid point
   `λ/2 − λ²/4` for a typed rotation number. **Copy report** copies the readout and **Export
-  orbit** downloads the inspected orbit as a CSV — both at full precision.
+  orbit** downloads the inspected orbit as a CSV — both at full precision. **Pin note** drops a
+  labelled gold marker at the inspected point — anchored in plot coordinates, so it tracks pans
+  and zooms — and pinned notes ride along in share links and saved views; **Clear** removes them.
 - **Critical-orbit hover preview** — hovering a point on the parameter plane shows a small
   preview of its critical orbit (green if bounded → connected Julia set; orange if it
   escapes → Cantor dust), pinned to the plot's corner.
