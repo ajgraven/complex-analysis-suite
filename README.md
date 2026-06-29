@@ -179,7 +179,9 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
 - **Auto iterations** raises the iteration cap automatically as you zoom in, so deep
   views keep their detail. The cap grows logarithmically with zoom — a roughly constant
   number of extra iterations per decade of magnification — and a **strength** slider sets
-  how aggressively. The renderer also recovers automatically if the WebGL context is lost.
+  how aggressively. While it's on, the effective count actually in use is shown next to each
+  plot's iterations box (it scales by that plane's own zoom). The renderer also recovers
+  automatically if the WebGL context is lost.
 
 ## Saving images
 

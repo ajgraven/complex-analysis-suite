@@ -1206,6 +1206,25 @@ function init(): void {
     };
     paramChip.textContent = fmt(parameterView, INPUT_IDS.paramN);
     dynChip.textContent = fmt(dynamicalView, INPUT_IDS.dynN);
+    updateEffectiveIterations();
+  }
+
+  /** With auto-iterations on, show each plot's live effective cap next to its iterations box
+   *  (each plane scales by its own zoom) so the base count isn't read as the count in use. */
+  function updateEffectiveIterations(): void {
+    const on = byId<HTMLInputElement>("autoiter").checked;
+    const show = (spanId: string, eff: number): void => {
+      const span = byId(spanId);
+      if (on) {
+        span.textContent = `→ ${eff}`;
+        span.title = `Auto iterations: ${eff} in use at this zoom`;
+        span.hidden = false;
+      } else {
+        span.hidden = true;
+      }
+    };
+    show("param-iter-effective", parameterView.plot.currentIterations);
+    show("dyn-iter-effective", dynamicalView.plot.currentIterations);
   }
 
   const srStatus = byId("sr-status");
@@ -1513,6 +1532,7 @@ function init(): void {
       v.plot.setAutoIterStrength(strength);
     }
     byId<HTMLInputElement>("autoiter-strength").disabled = !on; // only adjustable when active
+    updateEffectiveIterations();
   }
 
   /** Toggle temporal anti-aliasing (idle accumulation) on both plots. */
