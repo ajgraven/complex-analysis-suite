@@ -36,7 +36,7 @@ describe("inspectToText", () => {
   it("reports the parameter, fate, period, multiplier, and internal angle", () => {
     const txt = inspectToText(periodic, [-1, 0], "param");
     expect(txt).toContain("Parameter c = ");
-    expect(txt).toContain("Fate: attracting cycle");
+    expect(txt).toContain("Fate: settles into a cycle");
     expect(txt).toContain("Period: 2");
     expect(txt).toContain("Internal angle: 1/2");
     expect(txt).toMatch(/Multiplier: \|lambda\| =/);

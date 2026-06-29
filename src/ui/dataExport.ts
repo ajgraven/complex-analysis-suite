@@ -12,8 +12,8 @@ import type { OrbitFate } from "../render/overlay";
 
 const FATE_LABEL: Record<OrbitFate, string> = {
   escaped: "escapes to infinity",
-  converged: "attracting fixed point",
-  periodic: "attracting cycle",
+  converged: "settles to a fixed point",
+  periodic: "settles into a cycle",
   undetermined: "no escape or cycle within the iteration limit",
 };
 

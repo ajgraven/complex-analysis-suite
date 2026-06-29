@@ -138,8 +138,8 @@ function hoverReadout(elementId: string): (coord: Vec2 | null) => void {
 
 const FATE_TEXT: Record<OrbitFate, string> = {
   escaped: "escapes to ∞",
-  converged: "attracting fixed point",
-  periodic: "attracting cycle",
+  converged: "settles to a fixed point",
+  periodic: "settles into a cycle",
   undetermined: "no escape or cycle within the iteration limit",
 };
 
@@ -150,7 +150,7 @@ let openGlossary: (termId?: string) => void = () => {};
 const TERM_FOR_ROW: Record<string, string> = {
   Fate: "escape-time",
   Period: "period",
-  "Multiplier |λ|": "multiplier",
+  "Multiplier λ": "multiplier",
   "Internal angle": "internal-angle",
   "Distance to set": "distance-estimate",
 };
@@ -166,10 +166,16 @@ function showInspect(info: InspectResult, point: Vec2, plane: FractType): void {
   if (info.period > 0) rows.push(["Period", String(info.period)]);
   if (info.multiplier && info.multiplierMag !== null) {
     const deg = ((Math.atan2(info.multiplier[1], info.multiplier[0]) * 180) / Math.PI + 360) % 360;
+    // Classify with a tolerance so neutral / parabolic cycles (|λ| = 1) are not rounded into
+    // "attracting"/"repelling" — matches the Julia panel's neutral band (juliaProperties.ts).
     const kind =
-      info.multiplierMag < 1 ? "attracting" : info.multiplierMag > 1 ? "repelling" : "indifferent";
+      Math.abs(info.multiplierMag - 1) < 1e-3
+        ? "indifferent (neutral)"
+        : info.multiplierMag < 1
+          ? "attracting"
+          : "repelling";
     rows.push([
-      "Multiplier |λ|",
+      "Multiplier λ",
       `${info.multiplierMag.toFixed(4)} ∠ ${deg.toFixed(0)}° (${kind})`,
     ]);
   }
