@@ -156,8 +156,11 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
 - On a wide screen, **Stack plots** switches the two plots from side-by-side to a vertical stack
   (each much larger), **Hide controls** collapses the sidebar so the plots fill the width, and each
   plot's **⤢ expand** button maximises just that plot (the other plot and the sidebar hide; **Esc**
-  or the button restores). Stack / Hide remember your choice across visits. The plots fill the freed
-  space at the current render resolution — raise a plot's **canvas px** if a very large view looks soft.
+  or the button restores). Stack / Hide remember your choice across visits. In any of these enlarged
+  modes a **drag-grip in each plot's bottom-right corner** lets you resize that plot (drag, or focus
+  it and use the arrow keys) — handy for shrinking stacked plots so both fit on screen. The plots fill
+  the freed space at the current render resolution — raise a plot's **canvas px** if a very large view
+  looks soft.
 - **Share link** copies a URL whose hash encodes the current view — formula, both planes'
   centre/zoom/iterations, colouring mode/palette, every toggle, the dynamical orbit start
   z₀, and the custom-gradient stops — so opening it reproduces the view. Deep-zoom centres are

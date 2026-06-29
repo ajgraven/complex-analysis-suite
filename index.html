@@ -121,6 +121,13 @@
                   aria-hidden="true"
                   hidden
                 ></canvas>
+                <button
+                  id="resize-param"
+                  type="button"
+                  class="resize-handle"
+                  aria-label="Resize this plot — drag the corner, or focus and use the arrow keys"
+                  title="Drag to resize this plot"
+                ></button>
               </div>
               <p class="plot-caption">
                 drag the white point to set <em>c</em> = <span id="param-c-value">…</span> &rarr;
@@ -234,6 +241,13 @@ abs(z)>2</textarea
                   role="application"
                   aria-label="Dynamical plane — interactive fractal plot. Arrow keys pan; the + and − keys zoom; drag (or press Enter) to set the orbit start z₀ to the view centre and inspect it."
                 ></canvas>
+                <button
+                  id="resize-dyn"
+                  type="button"
+                  class="resize-handle"
+                  aria-label="Resize this plot — drag the corner, or focus and use the arrow keys"
+                  title="Drag to resize this plot"
+                ></button>
               </div>
               <p class="plot-caption">for <em>c</em> = <span id="dyn-c-value">…</span></p>
               <p class="readout" id="JCSReadout" aria-live="off"></p>

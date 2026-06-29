@@ -415,6 +415,12 @@ function setupLayout(): void {
       /* storage unavailable (private mode / quota) — keep the in-memory toggle only */
     }
   };
+  // Drop any manual drag-resize widths (back to fill) — called whenever the layout mode changes.
+  const clearPlotSizes = (): void => {
+    document.querySelectorAll<HTMLElement>(".canvas-stack").forEach((s) => {
+      s.style.width = "";
+    });
+  };
   const sync = (): void => {
     const stacked = workspace.classList.contains("plots-stacked");
     const collapsed = workspace.classList.contains("controls-collapsed");
@@ -434,16 +440,19 @@ function setupLayout(): void {
   sync();
   layoutBtn.addEventListener("click", () => {
     write(KEY_STACK, workspace.classList.toggle("plots-stacked"));
+    clearPlotSizes();
     sync();
   });
   sidebarBtn.addEventListener("click", () => {
     write(KEY_COLLAPSE, workspace.classList.toggle("controls-collapsed"));
+    clearPlotSizes();
     sync();
   });
   // Per-plot expand (focus mode): transient, not persisted; restores to the stack/collapse state.
   const setExpand = (which: "param" | "dyn" | null): void => {
     workspace.classList.toggle("expand-param", which === "param");
     workspace.classList.toggle("expand-dyn", which === "dyn");
+    clearPlotSizes();
     sync();
   };
   expandParamBtn.addEventListener("click", () =>
@@ -460,6 +469,62 @@ function setupLayout(): void {
       setExpand(null);
     }
   });
+
+  // Drag-to-resize: a corner grip on each plot sets its .canvas-stack width (the canvas fills it in
+  // the enlarged modes). Clamped to [240px, the plot's content width] so it never overflows the
+  // column; also arrow-key resizable for accessibility. Session-only (cleared on a layout toggle).
+  const MIN_PLOT = 240;
+  const wireResize = (handle: HTMLElement, stack: HTMLElement): void => {
+    const maxWidth = (): number => {
+      const plot = stack.closest(".plot");
+      if (!(plot instanceof HTMLElement)) return Number.POSITIVE_INFINITY;
+      const cs = getComputedStyle(plot);
+      return plot.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    };
+    const setWidth = (w: number): void => {
+      stack.style.width = `${Math.round(Math.max(MIN_PLOT, Math.min(maxWidth(), w)))}px`;
+    };
+    let startX = 0;
+    let startW = 0;
+    let dragging = false;
+    handle.addEventListener("pointerdown", (e) => {
+      dragging = true;
+      startX = e.clientX;
+      startW = stack.getBoundingClientRect().width;
+      handle.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    handle.addEventListener("pointermove", (e) => {
+      if (dragging) setWidth(startW + (e.clientX - startX));
+    });
+    const stop = (e: PointerEvent): void => {
+      if (!dragging) return;
+      dragging = false;
+      try {
+        handle.releasePointerCapture(e.pointerId);
+      } catch {
+        /* pointer already released */
+      }
+    };
+    handle.addEventListener("pointerup", stop);
+    handle.addEventListener("pointercancel", stop);
+    handle.addEventListener("keydown", (e) => {
+      const step = e.shiftKey ? 100 : 40;
+      const d =
+        e.key === "ArrowLeft" || e.key === "ArrowDown"
+          ? -step
+          : e.key === "ArrowRight" || e.key === "ArrowUp"
+            ? step
+            : 0;
+      if (d === 0) return;
+      e.preventDefault();
+      setWidth(stack.getBoundingClientRect().width + d);
+    });
+  };
+  const paramStack = document.querySelector("#param-plot .canvas-stack");
+  const dynStack = document.querySelector("#dyn-plot .canvas-stack");
+  if (paramStack instanceof HTMLElement) wireResize(byId("resize-param"), paramStack);
+  if (dynStack instanceof HTMLElement) wireResize(byId("resize-dyn"), dynStack);
 }
 
 /** Populate + wire the glossary modal, and set the module-level {@link openGlossary} opener
