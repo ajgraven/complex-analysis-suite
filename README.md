@@ -333,32 +333,35 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
 
 ## Exterior map (uniformization)
 
-For the **z^d + c** family, the **Exterior map** panel reconstructs the Laurent
-coefficients of the conformal map that uniformizes the _outside_ of the set — the inverse
-Böttcher map
+The **Exterior map** panel reconstructs the Laurent coefficients of the conformal map that
+uniformizes the _outside_ of a set — the inverse Böttcher map
 
-    ψ(w) = w + b₀ + b₁/w + b₂/w² + …   (leading term w; these sets have capacity 1)
+    ψ(w) = γ₁·w + b₀ + b₁/w + b₂/w² + …   (leading γ₁ = the capacity; 1 for a monic map)
 
-for two objects at once:
+for two objects:
 
+- **Dynamical plane — ∂K.** The exterior map of the filled Julia set at the live `c`, for
+  **any polynomial f** — not just `z^d + c`. The coefficients follow an **exact recurrence**
+  from the Böttcher functional equation `f(ψ(w)) = ψ(wᵈ)`: the leading γ₁ = `a_d^(−1/(d−1))`
+  is the capacity, then each `bₖ` from the lower ones — computed, not curve-fitted. Shown
+  only when `K` is connected (every critical orbit bounded; otherwise the set is disconnected
+  and the chart doesn't reach the boundary). f's polynomial coefficients are recovered exactly
+  by a DFT at roots of unity, so a non-polynomial `f` (rational, transcendental,
+  non-holomorphic) reports "—".
 - **Parameter plane — ∂M_d.** The exterior map of the multibrot connectedness locus (the
-  Mandelbrot set for d = 2). Its coefficients are _universal constants_ per degree; for
-  d = 2 they are the classical rationals −½, ⅛, −¼, 15/128, …
-- **Dynamical plane — ∂K_c.** The exterior map of the filled Julia set at the live `c`
-  (shown only when `c ∈ M_d`, so K_c is connected — otherwise the Julia set is a Cantor
-  dust with no single Böttcher chart).
+  Mandelbrot set for d = 2), for the **z^d + c** family only — its coefficients are _universal
+  constants_ per degree (for d = 2 the classical rationals −½, ⅛, −¼, 15/128, …), from a
+  Böttcher-product series reversion.
 
-The coefficients come from **exact recursions**, not curve-fitting: a triangular solve of
-the functional equation `ψ(wᵈ) = ψ(w)ᵈ + c` for K_c, and a Böttcher-product series
-reversion for M_d. Choose how many to show, then **Copy** them or download a **CSV** (full
+Choose how many coefficients to show, then **Copy** them or download a **CSV** (full
 precision).
 
 Tick **Draw the reconstructed boundary on the plots** to overlay the curve `ψ(r·e^{2πiθ})`
 on each fractal — raise the **order** and watch it tighten onto the true boundary. The
 **radius r** defaults to just above 1 (a smooth equipotential just outside the set); push
 it toward r = 1 for the boundary itself, where the series converges cleanly only for
-locally-connected sets. The panel is available only for `z^d + c`; the `?` button opens the
-glossary (Böttcher coordinate, uniformization, Laurent coefficients, capacity).
+locally-connected sets. The `?` button opens the glossary (Böttcher coordinate,
+uniformization, Laurent coefficients, capacity).
 
 ## Julia set properties
 

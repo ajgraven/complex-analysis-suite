@@ -96,19 +96,19 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: "bottcher",
     term: "Böttcher coordinate",
-    defn: "The conformal change of variable φ near ∞ that turns f(z) = zᵈ + c into the pure power map w ↦ wᵈ (with φ(z) ~ z). Its inverse ψ = φ⁻¹ uniformizes the outside of the filled Julia set; external rays and equipotentials are its straight rays and circles.",
+    defn: "The conformal change of variable φ near ∞ that turns a polynomial f into the pure power map w ↦ wᵈ (φ(z) ~ z/γ₁ near ∞, γ₁ the capacity; just z for a monic map). Its inverse ψ = φ⁻¹ uniformizes the outside of the filled Julia set; external rays and equipotentials are its straight rays and circles.",
     latex: "\\varphi(f(z)) = \\varphi(z)^d",
   },
   {
     id: "uniformization",
     term: "Exterior map / uniformization",
-    defn: "The conformal map ψ from the outside of the unit disk onto the outside of the set — the filled Julia set Kᶜ, or the multibrot Mᵈ in parameter space — normalised ψ(w) = w + O(1). The 'Exterior map' panel reconstructs its Laurent coefficients.",
-    latex: "\\psi(w) = w + \\sum_{k\\ge 0} b_k\\, w^{-k}",
+    defn: "The conformal map ψ from the outside of the unit disk onto the outside of the set — the filled Julia set Kᶜ (any polynomial f), or the multibrot Mᵈ of z^d + c in parameter space — normalised ψ(w) = γ₁·w + O(1), γ₁ the capacity (1 for a monic map). The 'Exterior map' panel reconstructs its Laurent coefficients.",
+    latex: "\\psi(w) = \\gamma_1 w + \\sum_{k\\ge 0} b_k\\, w^{-k}",
   },
   {
     id: "laurent-coefficients",
     term: "Laurent coefficients",
-    defn: "The numbers bₖ in ψ(w) = w + Σ bₖ·w⁻ᵏ. For zᵈ + c they follow exact recursions (a triangular solve for Kᶜ; a Böttcher-product reversion for Mᵈ), so they are computed, not curve-fitted. For the Mandelbrot set they are the classical rationals −½, ⅛, −¼, 15/128, …",
+    defn: "The numbers bₖ in ψ(w) = γ₁·w + Σ bₖ·w⁻ᵏ. For the filled Julia set of ANY polynomial they follow an exact recurrence from the Böttcher functional equation f(ψ(w)) = ψ(wᵈ) (a triangular solve, with γ₁ = a_d^{−1/(d−1)} the capacity); the multibrot Mᵈ uses a Böttcher-product reversion (z^d + c only). Computed, not curve-fitted — for the Mandelbrot set the classical rationals −½, ⅛, −¼, 15/128, …",
   },
   {
     id: "capacity",

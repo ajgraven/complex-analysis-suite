@@ -211,7 +211,7 @@ export interface OverlayParams {
   /** Draw both landing rays for every visible Farey bulb (parameter plane, z²+c). */
   rayPairs?: boolean;
   /** Reconstructed exterior-map boundary to draw (ψ on |w| = r); coeffs in plot space. */
-  laurentBoundary?: { coeffs: Vec2[]; r: number };
+  laurentBoundary?: { coeffs: Vec2[]; r: number; lead?: Vec2 };
   /**
    * Attracting-cycle points (z-plane) to highlight, from the click-to-inspect result.
    * Drawn on the dynamical plane only — they are z-values, meaningless on the c-plane.
@@ -407,12 +407,16 @@ function drawBulbRayPairs(
 // independent of centre/zoom — so pan/zoom reuse them and only re-project. Keyed by the coeffs
 // array identity (main replaces it only on a c / f / order / radius change) and r.
 const BOUNDARY_SAMPLES = 512;
-const boundaryCache = new Map<"dyn" | "param", { coeffs: Vec2[]; r: number; pts: Vec2[] }>();
-function cachedBoundary(plane: "dyn" | "param", coeffs: Vec2[], r: number): Vec2[] {
+const boundaryCache = new Map<
+  "dyn" | "param",
+  { coeffs: Vec2[]; r: number; lead: Vec2; pts: Vec2[] }
+>();
+function cachedBoundary(plane: "dyn" | "param", coeffs: Vec2[], r: number, lead: Vec2): Vec2[] {
   const slot = boundaryCache.get(plane);
-  if (slot && slot.coeffs === coeffs && slot.r === r) return slot.pts;
-  const pts = reconstructBoundary(coeffs, r, BOUNDARY_SAMPLES);
-  boundaryCache.set(plane, { coeffs, r, pts });
+  if (slot && slot.coeffs === coeffs && slot.r === r && slot.lead[0] === lead[0] && slot.lead[1] === lead[1])
+    return slot.pts;
+  const pts = reconstructBoundary(coeffs, r, BOUNDARY_SAMPLES, lead);
+  boundaryCache.set(plane, { coeffs, r, lead, pts });
   return pts;
 }
 
@@ -615,7 +619,12 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
 
   // Reconstructed exterior-map boundary (ψ on |w| = r) — both planes.
   if (p.laurentBoundary && p.laurentBoundary.coeffs.length > 0) {
-    const bpts = cachedBoundary(p.fractType, p.laurentBoundary.coeffs, p.laurentBoundary.r);
+    const bpts = cachedBoundary(
+      p.fractType,
+      p.laurentBoundary.coeffs,
+      p.laurentBoundary.r,
+      p.laurentBoundary.lead ?? [1, 0],
+    );
     drawLaurentBoundary(ctx, bpts, p.center, p.zoom, size);
   }
 

@@ -16,7 +16,12 @@ import { initialRes } from "./render/glPlot";
 import { ddCenterToString, ddCenterFromString } from "./render/dd";
 import { inspect, findNucleus, type InspectResult } from "./render/inspect";
 import { computeOrbit, orbitAndClassify, type OrbitFate } from "./render/overlay";
-import { juliaConnected, juliaExteriorCoeffs, mandelbrotExteriorCoeffs } from "./render/uniformize";
+import {
+  juliaConnected,
+  juliaExteriorCoeffs,
+  polynomialJuliaExteriorCoeffs,
+  mandelbrotExteriorCoeffs,
+} from "./render/uniformize";
 import {
   boxCountDimension,
   computeJuliaProperties,
@@ -26,7 +31,7 @@ import {
   imageConnectivity,
   interiorMask,
 } from "./render/juliaProperties";
-import { polynomialConnectivity } from "./render/critical";
+import { polynomialCoeffs, polynomialConnectivity } from "./render/critical";
 import { drawOrbitPreview, renderJuliaPreview } from "./render/orbitPreview";
 import type { Node as ExprNode } from "./expr/ast";
 import { parseAngle } from "./render/rays";
@@ -843,10 +848,21 @@ function init(): void {
   // --- Exterior-map (uniformization) readout -------------------------------
   let lastParamCoeffs: Complex[] | null = null;
   let lastDynCoeffs: Complex[] | null = null;
+  let lastDynLead: Complex = [1, 0]; // capacity γ₁ of the dynamical exterior map (1 for monic z^d+c)
+
+  /** Snap machine-epsilon components to 0 for a clean *display* only (copy / CSV keep full precision).
+   *  The DFT coefficient extraction for a general polynomial leaves ~1e-16 noise where a value is
+   *  truly 0 (or where a real coefficient has a spurious tiny imaginary part). */
+  const snapNearZero = (z: Complex): Complex => [
+    Math.abs(z[0]) < 1e-12 ? 0 : z[0],
+    Math.abs(z[1]) < 1e-12 ? 0 : z[1],
+  ];
 
   /** Truncated display of a coefficient list (full precision is kept for copy / export). */
   function coeffsPreview(coeffs: Complex[], symbol = "b"): string {
-    return coeffs.map((b, k) => `${symbol}${k} = ${formatComplex(truncateComplex(b))}`).join("\n");
+    return coeffs
+      .map((b, k) => `${symbol}${k} = ${formatComplex(truncateComplex(snapNearZero(b)))}`)
+      .join("\n");
   }
 
   function setExteriorButtons(paramOn: boolean, dynOn: boolean): void {
@@ -857,58 +873,100 @@ function init(): void {
   }
 
   /**
-   * Recompute the exterior-map coefficients for the current view — the multibrot Ψ_{M_d}
-   * (parameter plane, universal per degree) and the inverse Böttcher map ψ_c (dynamical plane,
-   * at the live c). View-level, not click-driven; skipped while the panel is collapsed.
+   * The filled-Julia inverse-Böttcher coefficients for the current dynamical-plane f at order n: the
+   * monic z^d + c fast path (exact, capacity 1) when f is z^d + c, else the general-polynomial
+   * recurrence ({@link polynomialJuliaExteriorCoeffs} on coefficients from {@link polynomialCoeffs}).
+   * "disconnected" ⇒ a valid polynomial whose K is disconnected (the map doesn't reach the
+   * boundary); "unavailable" ⇒ f isn't a polynomial of degree ≥ 2.
+   */
+  function dynExterior(
+    n: number,
+  ):
+    | { kind: "ok"; coeffs: Complex[]; lead: Complex }
+    | { kind: "disconnected" }
+    | { kind: "unavailable" } {
+    const plot = dynamicalView.plot;
+    const c = plot.cValue;
+    const dMonic = plot.monicDegree;
+    if (dMonic !== null) {
+      return juliaConnected(dMonic, c)
+        ? { kind: "ok", coeffs: juliaExteriorCoeffs(dMonic, c, n), lead: [1, 0] }
+        : { kind: "disconnected" };
+    }
+    const cf = polynomialCoeffs(plot.fAst, plot.paramA, c);
+    if (!cf || cf.length - 1 < 2) return { kind: "unavailable" };
+    // The boundary needs every critical orbit bounded (Fatou–Julia connectedness).
+    if (polynomialConnectivity(plot.fAst, plot.escAst, plot.paramA, c) !== "connected") {
+      return { kind: "disconnected" };
+    }
+    const res = polynomialJuliaExteriorCoeffs(cf, n);
+    return res ? { kind: "ok", coeffs: res.b, lead: res.lead } : { kind: "unavailable" };
+  }
+
+  /**
+   * Recompute the exterior-map readouts — the multibrot Ψ_{M_d} on the parameter plane (z^d + c
+   * only) and the inverse Böttcher map ψ on the dynamical plane (any polynomial f, via
+   * {@link dynExterior}). View-level, not click-driven; skipped while the panel is collapsed.
    */
   function updateExteriorMap(): void {
     if (!byId<HTMLDetailsElement>("exterior-group").open) return; // collapsed → no work
-    const d = parameterView.plot.monicDegree; // both planes share f
-    const status = byId("exterior-status");
-    const paramList = byId("exterior-param-list");
-    const dynList = byId("exterior-dyn-list");
-    if (d === null) {
-      status.textContent = "Available for zᵈ + c maps only (e.g. z²+c, z³+c) — not the current f.";
-      paramList.textContent = "";
-      dynList.textContent = "";
-      lastParamCoeffs = null;
-      lastDynCoeffs = null;
-      setExteriorButtons(false, false);
-      return;
-    }
     const raw = Number(byId<HTMLInputElement>("exterior-n").value);
     const n = Math.max(1, Math.min(64, Math.round(Number.isFinite(raw) ? raw : 12)));
-    status.textContent = `z^${d} + c — exterior map ψ(w) = w + Σ aₘ/bₖ·w⁻ᵏ (leading w, capacity 1).`;
-    lastParamCoeffs = mandelbrotExteriorCoeffs(d, n);
-    paramList.textContent = coeffsPreview(lastParamCoeffs, "a"); // multibrot coefficients aₘ (Douady–Hubbard)
-    const c = dynamicalView.plot.cValue;
-    if (juliaConnected(d, c)) {
-      lastDynCoeffs = juliaExteriorCoeffs(d, c, n);
-      dynList.textContent = coeffsPreview(lastDynCoeffs);
-      setExteriorButtons(true, true);
+    byId("exterior-status").textContent =
+      "Exterior map ψ(w) = γ₁·w + Σ·w⁻ᵏ — parameter plane: multibrot of zᵈ+c (aₘ); dynamical plane: filled Julia of any polynomial (bₖ).";
+    const paramList = byId("exterior-param-list");
+    const dynList = byId("exterior-dyn-list");
+
+    const dMonic = parameterView.plot.monicDegree; // multibrot Ψ — z^d + c only
+    if (dMonic !== null) {
+      lastParamCoeffs = mandelbrotExteriorCoeffs(dMonic, n);
+      paramList.textContent = coeffsPreview(lastParamCoeffs, "a"); // Douady–Hubbard aₘ
+    } else {
+      lastParamCoeffs = null;
+      paramList.textContent = "Defined for zᵈ + c families only (e.g. z²+c, z³+c).";
+    }
+
+    const dyn = dynExterior(n); // inverse Böttcher ψ — any polynomial f
+    if (dyn.kind === "ok") {
+      lastDynCoeffs = dyn.coeffs;
+      lastDynLead = dyn.lead;
+      dynList.textContent = `capacity γ₁ = ${formatComplex(truncateComplex(snapNearZero(dyn.lead)))}\n${coeffsPreview(dyn.coeffs)}`;
     } else {
       lastDynCoeffs = null;
-      dynList.textContent = "Julia set disconnected (c ∉ Mᵈ) — exterior map undefined here.";
-      setExteriorButtons(true, false);
+      lastDynLead = [1, 0];
+      dynList.textContent =
+        dyn.kind === "disconnected"
+          ? "Julia set disconnected — the exterior map doesn't reach the boundary here."
+          : "Available for polynomial f of degree ≥ 2.";
     }
+    setExteriorButtons(dMonic !== null, dyn.kind === "ok");
   }
 
   // Reconstructed-boundary overlay — the visual form of the same coefficients.
   let lastBoundaryKey = ""; // memo: rebuild the (c-independent) param coeffs only when d/order change
   let lastBoundaryParam: Complex[] = [];
   /**
-   * Push the reconstructed exterior-map boundary to both plots when the toggle is on and f is
-   * z^d + c: the multibrot ∂M_d on the parameter plane, ∂K_c (if connected) on the dynamical
-   * plane. Gated like the readout; recomputed on toggle / order / radius / c / f.
+   * Push the reconstructed exterior-map boundary to both plots when the toggle is on: the multibrot
+   * ∂M_d on the parameter plane (z^d + c only) and ∂K on the dynamical plane (any connected
+   * polynomial f, via {@link dynExterior} — carrying the capacity γ₁ as the boundary's leading
+   * coefficient). Gated like the readout; recomputed on toggle / order / radius / c / f.
    */
   function applyLaurent(): void {
-    const d = parameterView.plot.monicDegree;
-    const eligible = d !== null;
+    const dMonic = parameterView.plot.monicDegree;
     const cb = byId<HTMLInputElement>("laurent");
-    cb.disabled = !eligible;
-    byId<HTMLInputElement>("laurent-n").disabled = !eligible;
-    byId<HTMLInputElement>("laurent-r").disabled = !eligible;
-    if (!eligible || !cb.checked) {
+    // Eligible if either plane has a boundary: the multibrot (z^d+c) or any polynomial's Julia map.
+    // The polynomial probe is cheap (a far-field degree check + a small DFT).
+    const fIsPoly =
+      dMonic !== null ||
+      polynomialCoeffs(
+        dynamicalView.plot.fAst,
+        dynamicalView.plot.paramA,
+        dynamicalView.plot.cValue,
+      ) !== null;
+    cb.disabled = !fIsPoly;
+    byId<HTMLInputElement>("laurent-n").disabled = !fIsPoly;
+    byId<HTMLInputElement>("laurent-r").disabled = !fIsPoly;
+    if (!fIsPoly || !cb.checked) {
       parameterView.setLaurentBoundary(null, 1);
       dynamicalView.setLaurentBoundary(null, 1);
       return;
@@ -916,14 +974,21 @@ function init(): void {
     const rawN = Number(byId<HTMLInputElement>("laurent-n").value);
     const n = Math.max(2, Math.min(128, Math.round(Number.isFinite(rawN) ? rawN : 48)));
     const r = Math.max(1, Math.min(1.5, Number(byId<HTMLInputElement>("laurent-r").value) / 100));
-    const key = `${d}:${n}`;
-    if (key !== lastBoundaryKey) {
-      lastBoundaryParam = mandelbrotExteriorCoeffs(d, n); // c-independent — memoised across c-drags
-      lastBoundaryKey = key;
+    // Parameter plane (multibrot) — z^d + c only, c-independent ⇒ memoised across c-drags.
+    if (dMonic !== null) {
+      const key = `${dMonic}:${n}`;
+      if (key !== lastBoundaryKey) {
+        lastBoundaryParam = mandelbrotExteriorCoeffs(dMonic, n);
+        lastBoundaryKey = key;
+      }
+      parameterView.setLaurentBoundary(lastBoundaryParam, r);
+    } else {
+      parameterView.setLaurentBoundary(null, 1);
     }
-    parameterView.setLaurentBoundary(lastBoundaryParam, r);
-    const c = dynamicalView.plot.cValue;
-    dynamicalView.setLaurentBoundary(juliaConnected(d, c) ? juliaExteriorCoeffs(d, c, n) : null, r);
+    // Dynamical plane (filled Julia) — any connected polynomial; lead = capacity γ₁.
+    const dyn = dynExterior(n);
+    if (dyn.kind === "ok") dynamicalView.setLaurentBoundary(dyn.coeffs, r, dyn.lead);
+    else dynamicalView.setLaurentBoundary(null, 1);
   }
 
   // --- Julia-set properties readout ----------------------------------------
@@ -2261,7 +2326,10 @@ function init(): void {
     exportCoeffs(lastParamCoeffs, "multibrot-exterior-map.csv"),
   );
   byId("exterior-dyn-copy").addEventListener("click", () =>
-    copyCoeffs(lastDynCoeffs, "Filled Julia exterior map"),
+    copyCoeffs(
+      lastDynCoeffs,
+      `Filled Julia exterior map (capacity γ₁ = ${formatComplex(truncateComplex(lastDynLead))})`,
+    ),
   );
   byId("exterior-dyn-csv").addEventListener("click", () =>
     exportCoeffs(lastDynCoeffs, "julia-exterior-map.csv"),
