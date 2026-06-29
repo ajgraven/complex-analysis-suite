@@ -103,6 +103,7 @@ const MODES: Record<string, number> = {
   period: 10,
   multiplier: 12,
   marty: 13,
+  newtonBasins: 14,
 };
 const PALETTES: Record<string, number> = {
   classic: 0,

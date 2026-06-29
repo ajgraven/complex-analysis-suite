@@ -563,6 +563,17 @@ ${cardioidShortcut}
 
   if (kmax == uN) return vec3(0.0); // never escaped → interior
 
+  if (uMode == 14) {
+    // Root basins by final-value angle: hue = arg(z) of the value the orbit ended on. Under
+    // Newton's method that value is the root each pixel converged to, so distinct roots get
+    // distinct hues — the classic multi-coloured Newton fractal, with no need to detect the
+    // roots. Brightness comes from the convergence/escape speed. For ordinary escaping maps it
+    // reads as an escape-angle (field-line) colouring.
+    float hue = cre1(carg(z)) * 0.15915494 + 0.5; // arg(z)/2π + ½
+    float val = clamp(1.0 - float(kmax) / float(uN), 0.15, 1.0);
+    return hsv2rgb(vec3(hue, 0.85, val));
+  }
+
   if (uMode == 9) {
     // Binary decomposition: escape-time bands split by the escape half-plane.
     vec3 c = palette(float(kmax) / float(uN));
