@@ -102,13 +102,13 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: "uniformization",
     term: "Exterior map / uniformization",
-    defn: "The conformal map ψ from the outside of the unit disk onto the outside of the set — the filled Julia set Kᶜ (any polynomial f), or the multibrot Mᵈ of z^d + c in parameter space — normalised ψ(w) = γ₁·w + O(1), γ₁ the capacity (1 for a monic map). The 'Exterior map' panel reconstructs its Laurent coefficients.",
+    defn: "The conformal map ψ from the outside of the unit disk onto the outside of the set — the filled Julia set Kᶜ (any polynomial f, or a rational map with a superattracting ∞), or the multibrot Mᵈ of z^d + c in parameter space — normalised ψ(w) = γ₁·w + O(1), γ₁ the capacity (1 for a monic map). The 'Exterior map' panel reconstructs its Laurent coefficients.",
     latex: "\\psi(w) = \\gamma_1 w + \\sum_{k\\ge 0} b_k\\, w^{-k}",
   },
   {
     id: "laurent-coefficients",
     term: "Laurent coefficients",
-    defn: "The numbers bₖ in ψ(w) = γ₁·w + Σ bₖ·w⁻ᵏ. For the filled Julia set of ANY polynomial they follow an exact recurrence from the Böttcher functional equation f(ψ(w)) = ψ(wᵈ) (a triangular solve, with γ₁ = a_d^{−1/(d−1)} the capacity); the multibrot Mᵈ uses a Böttcher-product reversion (z^d + c only). Computed, not curve-fitted — for the Mandelbrot set the classical rationals −½, ⅛, −¼, 15/128, …",
+    defn: "The numbers bₖ in ψ(w) = γ₁·w + Σ bₖ·w⁻ᵏ. For the filled Julia set of ANY polynomial — or a rational map with a superattracting ∞ (deg p − deg q ≥ 2) — they follow an exact recurrence from the Böttcher functional equation f(ψ(w)) = ψ(wᴰ) (a triangular solve, γ₁ = a_D^{−1/(D−1)} the capacity); the multibrot Mᵈ uses a Böttcher-product reversion (z^d + c only). Computed, not curve-fitted — for the Mandelbrot set the classical rationals −½, ⅛, −¼, 15/128, …",
   },
   {
     id: "capacity",

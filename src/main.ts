@@ -20,8 +20,10 @@ import {
   juliaConnected,
   juliaExteriorCoeffs,
   polynomialJuliaExteriorCoeffs,
+  rationalExteriorCoeffs,
   mandelbrotExteriorCoeffs,
 } from "./render/uniformize";
+import { fToRational } from "./expr/rational";
 import {
   boxCountDimension,
   computeJuliaProperties,
@@ -873,34 +875,46 @@ function init(): void {
   }
 
   /**
-   * The filled-Julia inverse-Böttcher coefficients for the current dynamical-plane f at order n: the
-   * monic z^d + c fast path (exact, capacity 1) when f is z^d + c, else the general-polynomial
-   * recurrence ({@link polynomialJuliaExteriorCoeffs} on coefficients from {@link polynomialCoeffs}).
-   * "disconnected" ⇒ a valid polynomial whose K is disconnected (the map doesn't reach the
-   * boundary); "unavailable" ⇒ f isn't a polynomial of degree ≥ 2.
+   * The filled-Julia inverse-Böttcher coefficients for the current dynamical-plane f at order n. Picks
+   * the path: the exact monic z^d + c recurrence (capacity 1) → the general-polynomial recurrence
+   * ({@link polynomialJuliaExteriorCoeffs} on {@link polynomialCoeffs}) → the rational-map recurrence
+   * ({@link rationalExteriorCoeffs} on {@link fToRational}, for f with a superattracting ∞, deg p−deg q ≥ 2).
+   * `source` distinguishes polynomial (boundary overlay valid when connected) from rational (germ at ∞
+   * only — its boundary needs the ∞-basin connectivity, deferred). "disconnected" ⇒ a polynomial whose
+   * K is disconnected; "unavailable" ⇒ not such a map (incl. Newton mode, where ∞ isn't superattracting).
    */
   function dynExterior(
     n: number,
   ):
-    | { kind: "ok"; coeffs: Complex[]; lead: Complex }
+    | { kind: "ok"; coeffs: Complex[]; lead: Complex; source: "polynomial" | "rational" }
     | { kind: "disconnected" }
     | { kind: "unavailable" } {
+    // In Newton mode the iterated map is the Newton map (∞ not superattracting) — no exterior map at ∞.
+    if (byId<HTMLInputElement>("newton").checked) return { kind: "unavailable" };
     const plot = dynamicalView.plot;
     const c = plot.cValue;
     const dMonic = plot.monicDegree;
     if (dMonic !== null) {
       return juliaConnected(dMonic, c)
-        ? { kind: "ok", coeffs: juliaExteriorCoeffs(dMonic, c, n), lead: [1, 0] }
+        ? { kind: "ok", coeffs: juliaExteriorCoeffs(dMonic, c, n), lead: [1, 0], source: "polynomial" }
         : { kind: "disconnected" };
     }
     const cf = polynomialCoeffs(plot.fAst, plot.paramA, c);
-    if (!cf || cf.length - 1 < 2) return { kind: "unavailable" };
-    // The boundary needs every critical orbit bounded (Fatou–Julia connectedness).
-    if (polynomialConnectivity(plot.fAst, plot.escAst, plot.paramA, c) !== "connected") {
-      return { kind: "disconnected" };
+    if (cf && cf.length - 1 >= 2) {
+      // Polynomial: the boundary needs every critical orbit bounded (Fatou–Julia connectedness).
+      if (polynomialConnectivity(plot.fAst, plot.escAst, plot.paramA, c) !== "connected") {
+        return { kind: "disconnected" };
+      }
+      const res = polynomialJuliaExteriorCoeffs(cf, n);
+      if (res) return { kind: "ok", coeffs: res.b, lead: res.lead, source: "polynomial" };
     }
-    const res = polynomialJuliaExteriorCoeffs(cf, n);
-    return res ? { kind: "ok", coeffs: res.b, lead: res.lead } : { kind: "unavailable" };
+    // Rational map with a superattracting fixed point at ∞ (deg num − deg den ≥ 2) — germ at ∞.
+    const rat = fToRational(plot.fAst, c, plot.paramA);
+    if (rat) {
+      const res = rationalExteriorCoeffs(rat.num, rat.den, n);
+      if (res) return { kind: "ok", coeffs: res.b, lead: res.lead, source: "rational" };
+    }
+    return { kind: "unavailable" };
   }
 
   /**
@@ -913,7 +927,7 @@ function init(): void {
     const raw = Number(byId<HTMLInputElement>("exterior-n").value);
     const n = Math.max(1, Math.min(64, Math.round(Number.isFinite(raw) ? raw : 12)));
     byId("exterior-status").textContent =
-      "Exterior map ψ(w) = γ₁·w + Σ·w⁻ᵏ — parameter plane: multibrot of zᵈ+c (aₘ); dynamical plane: filled Julia of any polynomial (bₖ).";
+      "Exterior map ψ(w) = γ₁·w + Σ·w⁻ᵏ — parameter plane: multibrot of zᵈ+c (aₘ); dynamical plane: filled Julia of any polynomial or rational map (bₖ).";
     const paramList = byId("exterior-param-list");
     const dynList = byId("exterior-dyn-list");
 
@@ -926,18 +940,19 @@ function init(): void {
       paramList.textContent = "Defined for zᵈ + c families only (e.g. z²+c, z³+c).";
     }
 
-    const dyn = dynExterior(n); // inverse Böttcher ψ — any polynomial f
+    const dyn = dynExterior(n); // inverse Böttcher ψ — any polynomial or rational f
     if (dyn.kind === "ok") {
       lastDynCoeffs = dyn.coeffs;
       lastDynLead = dyn.lead;
-      dynList.textContent = `capacity γ₁ = ${formatComplex(truncateComplex(snapNearZero(dyn.lead)))}\n${coeffsPreview(dyn.coeffs)}`;
+      const note = dyn.source === "rational" ? "  (germ at ∞; boundary overlay n/a for rational maps)" : "";
+      dynList.textContent = `capacity γ₁ = ${formatComplex(truncateComplex(snapNearZero(dyn.lead)))}${note}\n${coeffsPreview(dyn.coeffs)}`;
     } else {
       lastDynCoeffs = null;
       lastDynLead = [1, 0];
       dynList.textContent =
         dyn.kind === "disconnected"
           ? "Julia set disconnected — the exterior map doesn't reach the boundary here."
-          : "Available for polynomial f of degree ≥ 2.";
+          : "Available for a polynomial f, or a rational map with a superattracting ∞ (deg p − deg q ≥ 2).";
     }
     setExteriorButtons(dMonic !== null, dyn.kind === "ok");
   }
@@ -985,10 +1000,14 @@ function init(): void {
     } else {
       parameterView.setLaurentBoundary(null, 1);
     }
-    // Dynamical plane (filled Julia) — any connected polynomial; lead = capacity γ₁.
+    // Dynamical plane (filled Julia) — any connected polynomial; lead = capacity γ₁. (The rational-map
+    // boundary is deferred — the germ coefficients exist, but ∂K needs the ∞-basin connectivity.)
     const dyn = dynExterior(n);
-    if (dyn.kind === "ok") dynamicalView.setLaurentBoundary(dyn.coeffs, r, dyn.lead);
-    else dynamicalView.setLaurentBoundary(null, 1);
+    if (dyn.kind === "ok" && dyn.source === "polynomial") {
+      dynamicalView.setLaurentBoundary(dyn.coeffs, r, dyn.lead);
+    } else {
+      dynamicalView.setLaurentBoundary(null, 1);
+    }
   }
 
   // --- Julia-set properties readout ----------------------------------------

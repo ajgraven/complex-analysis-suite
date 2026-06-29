@@ -346,8 +346,10 @@ for two objects:
   is the capacity, then each `bₖ` from the lower ones — computed, not curve-fitted. Shown
   only when `K` is connected (every critical orbit bounded; otherwise the set is disconnected
   and the chart doesn't reach the boundary). f's polynomial coefficients are recovered exactly
-  by a DFT at roots of unity, so a non-polynomial `f` (rational, transcendental,
-  non-holomorphic) reports "—".
+  by a DFT at roots of unity. A **rational map with a superattracting ∞** (deg p − deg q ≥ 2,
+  e.g. `z²+1/z`) also gets the coefficient readout — the germ at ∞ from its Laurent expansion —
+  though its boundary overlay is deferred (it needs the ∞-basin connectivity). Transcendental /
+  non-holomorphic / Newton f report "—".
 - **Parameter plane — ∂M_d.** The exterior map of the multibrot connectedness locus (the
   Mandelbrot set for d = 2), for the **z^d + c** family only — its coefficients are _universal
   constants_ per degree (for d = 2 the classical rationals −½, ⅛, −¼, 15/128, …), from a
