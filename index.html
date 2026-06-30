@@ -55,6 +55,29 @@
           >
             Share link
           </button>
+          <span class="profile-picker">
+            <label for="profile">Profile</label>
+            <select
+              id="profile"
+              title="Apply a bundle of settings tuned to a use case — remembered across sessions (leaves your formula and view untouched)"
+            >
+              <option value="explore">Explore</option>
+              <option value="artist">Artist</option>
+              <option value="researcher">Researcher</option>
+              <option value="educator">Educator</option>
+              <option value="performance">Performance</option>
+              <option value="deepzoom">Deep zoom</option>
+              <option value="custom" id="profile-custom" hidden>Custom…</option>
+            </select>
+            <button
+              class="gloss-link"
+              type="button"
+              data-term="profiles"
+              aria-label="What are profiles?"
+            >
+              ?
+            </button>
+          </span>
           <select id="places" title="Jump to a famous location in the Mandelbrot set">
             <option value="">Places…</option>
           </select>
@@ -1732,6 +1755,12 @@ z^2+c</textarea
                         mush.
                       </li>
                       <li>
+                        <strong>Profile</strong> (top bar) applies a bundle of settings tuned to a
+                        use case — Explore, Artist, Researcher, Educator, Performance, or Deep zoom —
+                        and remembers your choice. It re-skins the view without changing your formula
+                        or zoom; editing a setting afterwards shows <em>Custom</em>.
+                      </li>
+                      <li>
                         <strong>Suggestions</strong> (on by default) pop a small, dismissible tip
                         over a plot when a setting is degrading the view — e.g. too few iterations
                         for the zoom, deep zoom needing perturbation, or a flat escape-time image.
@@ -1875,6 +1904,16 @@ z^2+c</textarea
             <strong>Places</strong> to fly to famous spots.
           </li>
         </ul>
+        <p class="onboarding-prompt">
+          How will you use it? Pick a starting <strong>profile</strong> (a bundle of settings — change
+          it anytime from the top bar):
+        </p>
+        <div class="onboarding-profiles">
+          <button type="button" data-profile="explore">Exploring</button>
+          <button type="button" data-profile="artist">Making images</button>
+          <button type="button" data-profile="researcher">Research</button>
+          <button type="button" data-profile="educator">Teaching</button>
+        </div>
         <div class="onboarding-actions">
           <button id="onboarding-tour" type="button">Take the tour</button>
           <button id="onboarding_dismiss" type="button" class="primary">Got it</button>

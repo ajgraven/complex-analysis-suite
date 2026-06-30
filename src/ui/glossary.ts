@@ -67,6 +67,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     defn: "Occasional, non-obstructive tips shown over a plot when a setting is degrading or hiding the view — for example, too few iterations for the current zoom (boundary detail 'fattening'), deep zoom straining double-precision (offering perturbation), a rational map whose escape-time image is flat (offering period colouring), or a view sitting inside the set (offering the multiplier map). Each tip carries a one-click fix and a dismiss; nothing changes on its own. The 'suggestions' checkbox turns them off entirely.",
   },
   {
+    id: "profiles",
+    term: "Profiles",
+    defn: "Use-case bundles of display / quality / instrument settings, applied in one click from the app bar and remembered across sessions. Explore is a balanced default; Artist maxes out visual quality (lighting, post-processing, anti-aliasing); Researcher raises accuracy and opens the metrics panel; Educator turns on the structure-revealing overlays; Performance strips everything back for slow devices or fast panning; Deep zoom turns on perturbation and auto-iterations for z²+c. A profile re-skins the current view — it never changes your formula, parameter, or zoom — and editing any setting afterwards shows the picker as 'Custom'.",
+  },
+  {
     id: "period",
     term: "Period",
     defn: "The length of the attracting cycle an interior point settles onto (1 = a fixed point). Every hyperbolic component has a single period.",

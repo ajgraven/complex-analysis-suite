@@ -191,6 +191,14 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
   undoable like any other view change.
 - When `f` uses the free variable **`a`**, an `a` slider appears under the formula — drag
   it to sweep a live parameter and watch the fractal change.
+- **Profiles** (top bar) apply a one-click bundle of display / quality / instrument settings
+  tuned to a use case, remembered across sessions: **Explore** (balanced default), **Artist**
+  (lighting + post-processing + high anti-aliasing for stills), **Researcher** (high iterations,
+  a perceptual palette, the metrics panel open), **Educator** (the structure-revealing overlays),
+  **Performance** (stripped back for slow devices), and **Deep zoom** (perturbation + auto-iterations
+  for z²+c). A profile re-skins the current view — it never changes your formula, parameter, or zoom —
+  and editing any setting afterwards shows the picker as _Custom_. First-run onboarding offers a
+  starting pick.
 - **Auto iterations** raises the iteration cap automatically as you zoom in, so deep
   views keep their detail. The cap grows logarithmically with zoom — a roughly constant
   number of extra iterations per decade of magnification — and a **strength** slider sets

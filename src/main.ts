@@ -38,6 +38,15 @@ import { detectHermanRing } from "./render/hermanRing";
 import { detectUnderIteration } from "./render/underIteration";
 import { escapeIsMeaningless, precisionMetric } from "./render/viewAdvisories";
 import { SuggestionEngine, type Advisor } from "./ui/suggestions";
+import {
+  DEFAULT_PROFILE,
+  PROFILE_LABELS,
+  PROFILE_ORDER,
+  PROFILES,
+  sameSettings,
+  type ProfileName,
+  type ProfileSettings,
+} from "./state/profiles";
 import { getComplexFn } from "./expr/evaluate";
 import {
   juliaConnected,
@@ -473,6 +482,18 @@ function setupOnboarding(): void {
     dismiss();
     startTour();
   });
+  // First-run profile pick: set the app-bar profile select and let its change handler apply it.
+  for (const btn of document.querySelectorAll<HTMLButtonElement>(".onboarding-profiles button")) {
+    btn.addEventListener("click", () => {
+      const name = btn.dataset.profile;
+      const sel = byId<HTMLSelectElement>("profile");
+      if (name && sel.querySelector(`option[value="${name}"]`)) {
+        sel.value = name;
+        sel.dispatchEvent(new Event("change"));
+      }
+      dismiss();
+    });
+  }
   el.addEventListener("click", (e) => {
     if (e.target === el) dismiss(); // click the backdrop to dismiss
   });
@@ -747,6 +768,12 @@ function init(): void {
   // Auto-suggestion engine: re-evaluated (debounced) on every view / setting change. Assigned a real
   // implementation once both plots and the engine exist; the view hooks below call it via this ref.
   let scheduleSuggestions: () => void = () => {};
+  // Use-case profile picker: refreshes the "Custom…" label when the live controls diverge from the
+  // applied profile. Assigned by setupProfiles(); called from the control-change handlers.
+  let refreshProfileLabel: () => void = () => {};
+  // Adopt a profile NAME carried by a shared view / saved state, so the picker shows it (the settings
+  // themselves are reproduced by the rest of the state). Assigned by setupProfiles().
+  let adoptProfile: (name: string | undefined) => void = () => {};
   byId<HTMLInputElement>("inpParamRes").value = String(res0);
   byId<HTMLInputElement>("inpDynRes").value = String(res0);
   const dynamicalView = new PlotView(
@@ -1745,6 +1772,7 @@ function init(): void {
     announce(`Changes applied. Dynamical plane for c = ${dynCValue.textContent}.`);
     scheduleRecord();
     scheduleSuggestions(); // new f / c / iterations may change the under-iteration verdict
+    refreshProfileLabel(); // iterations / resolution edits may diverge from the active profile
   }
 
   /** Load a named preset into the inputs and both plots. */
@@ -1779,6 +1807,7 @@ function init(): void {
     updateViewChips();
     scheduleRecord();
     scheduleSuggestions(); // a new preset resets f / c / iterations / mode
+    refreshProfileLabel(); // a preset may change iterations / mode → diverge from the active profile
   }
 
   /** Render a plot at the chosen size and download it, with button feedback. */
@@ -2130,6 +2159,8 @@ function init(): void {
     if (dynamicalView.plot.zoom > 1e3 || dc[0][1] !== 0 || dc[1][1] !== 0)
       state._dcdd = ddCenterToString(dc[0], dc[1]);
     if (notes.length > 0) state._notes = JSON.stringify(notes); // pinned annotations
+    const pv = byId<HTMLSelectElement>("profile").value; // the active use-case profile (label hint)
+    if (pv && pv !== "custom") state._profile = pv;
     return state;
   }
 
@@ -2201,6 +2232,7 @@ function init(): void {
       }
     }
     refreshNotes();
+    if (typeof state._profile === "string") adoptProfile(state._profile); // show the carried profile label
   }
 
   /** Serialize the current view into the URL hash and copy a shareable link. */
@@ -3314,7 +3346,160 @@ function init(): void {
   updateParamAVisibility();
   updateKeyframeUI();
   populateViewSelect();
-  loadFromHash(); // apply a shared view if the URL carries one
+
+  // ---- Use-case profiles (app-bar picker): one-click bundles of display / quality / instrument
+  // settings, persisted across sessions. A profile re-skins the current view — it never touches
+  // f / c / the centre+zoom. Reuses the existing apply* functions (NOT applyChanges, which would
+  // re-apply the view). Suggestions and theme are independent prefs and are deliberately not governed.
+  function setupProfiles(): void {
+    const PROFILE_KEY = "cdjs.profile";
+    const profileSelect = byId<HTMLSelectElement>("profile");
+    const customOption = byId<HTMLOptionElement>("profile-custom");
+    let activeProfile: ProfileName | null = null;
+    let appliedSnapshot: ProfileSettings | null = null;
+
+    // Don't oversize a phone canvas — cap a profile's resolution to the viewport default there.
+    const cappedRes = (r: number): number =>
+      window.innerWidth < 700 ? Math.min(r, initialRes(window.innerWidth)) : r;
+
+    const readControls = (): ProfileSettings => ({
+      mode: byId<HTMLSelectElement>("mode").value,
+      palette: byId<HTMLSelectElement>("palette").value,
+      aa: byId<HTMLSelectElement>("aa").value,
+      light: byId<HTMLInputElement>("light").checked,
+      post: byId<HTMLInputElement>("post").checked,
+      accumulate: byId<HTMLInputElement>("accumulate").checked,
+      autoiter: byId<HTMLInputElement>("autoiter").checked,
+      autoiterStrength: byId<HTMLInputElement>("autoiter-strength").value,
+      perturbation: byId<HTMLInputElement>("perturbation").checked,
+      critorbit: byId<HTMLInputElement>("critorbit").checked,
+      farey: byId<HTMLInputElement>("farey").checked,
+      rays: byId<HTMLInputElement>("rays").checked,
+      iterations: Math.round(Number(byId<HTMLInputElement>(INPUT_IDS.paramN).value)) || 0,
+      resolution: Math.round(Number(byId<HTMLInputElement>("inpParamRes").value)) || 0,
+      juliaPanel: byId<HTMLDetailsElement>("julia-props-group").open,
+    });
+
+    const applyProfile = (name: ProfileName, persist: boolean): void => {
+      const p = PROFILES[name];
+      byId<HTMLSelectElement>("mode").value = p.mode;
+      byId<HTMLSelectElement>("palette").value = p.palette;
+      byId<HTMLSelectElement>("aa").value = p.aa;
+      applyColoring();
+      byId<HTMLInputElement>("light").checked = p.light;
+      applyLighting();
+      byId<HTMLInputElement>("post").checked = p.post;
+      applyPost();
+      byId<HTMLInputElement>("outline").checked = false;
+      applyOutline();
+      byId<HTMLInputElement>("critorbit").checked = p.critorbit;
+      applyCriticalOrbit();
+      byId<HTMLInputElement>("farey").checked = p.farey;
+      applyFarey();
+      byId<HTMLInputElement>("rays").checked = p.rays;
+      applyRays();
+      // The remaining overlays / Newton are forced off so a profile is a known baseline.
+      for (const id of [
+        "ray-pairs",
+        "inverse-julia",
+        "siegel-curves",
+        "equipotential",
+        "laurent",
+      ] as const) {
+        byId<HTMLInputElement>(id).checked = false;
+      }
+      applyRayPairs();
+      applyInverseJulia();
+      applySiegelCurves();
+      applyEquipotential();
+      applyLaurent();
+      byId<HTMLInputElement>("newton").checked = false;
+      applyNewton();
+      byId<HTMLInputElement>("autoiter").checked = p.autoiter;
+      byId<HTMLInputElement>("autoiter-strength").value = p.autoiterStrength;
+      applyAutoIter();
+      byId<HTMLInputElement>("accumulate").checked = p.accumulate;
+      applyAccumulate();
+      byId<HTMLInputElement>("perturbation").checked = p.perturbation;
+      applyPerturbation();
+      // Iterations + resolution set directly (NOT via applyChanges) so f / c / view are untouched.
+      const res = cappedRes(p.resolution);
+      parameterView.plot.n = String(p.iterations);
+      dynamicalView.plot.n = String(p.iterations);
+      parameterView.setRes(res);
+      dynamicalView.setRes(res);
+      byId<HTMLInputElement>(INPUT_IDS.paramN).value = String(p.iterations);
+      byId<HTMLInputElement>(INPUT_IDS.dynN).value = String(p.iterations);
+      byId<HTMLInputElement>("inpParamRes").value = String(res);
+      byId<HTMLInputElement>("inpDynRes").value = String(res);
+      updateEffectiveIterations();
+      const panel = byId<HTMLDetailsElement>("julia-props-group");
+      if (panel.open !== p.juliaPanel) {
+        panel.open = p.juliaPanel;
+        updateJuliaProperties();
+      }
+      activeProfile = name;
+      appliedSnapshot = readControls();
+      profileSelect.value = name;
+      customOption.hidden = true;
+      if (persist) {
+        try {
+          localStorage.setItem(PROFILE_KEY, name);
+        } catch {
+          /* localStorage unavailable — non-fatal */
+        }
+        showToast(`${PROFILE_LABELS[name]} profile applied.`, "info");
+      }
+    };
+
+    // Show "Custom…" once the live controls diverge from the applied profile (self-correcting:
+    // editing the settings back to the profile re-selects it).
+    refreshProfileLabel = (): void => {
+      if (!activeProfile || !appliedSnapshot) return;
+      if (sameSettings(readControls(), appliedSnapshot)) {
+        profileSelect.value = activeProfile;
+        customOption.hidden = true;
+      } else {
+        customOption.hidden = false;
+        profileSelect.value = "custom";
+      }
+    };
+
+    // A shared view / saved state carried a profile name → show it (its settings are already applied).
+    adoptProfile = (name: string | undefined): void => {
+      if (!name || !(PROFILE_ORDER as string[]).includes(name)) return;
+      activeProfile = name as ProfileName;
+      appliedSnapshot = readControls();
+      profileSelect.value = name;
+      customOption.hidden = true;
+    };
+
+    profileSelect.addEventListener("change", () => {
+      if (profileSelect.value !== "custom") applyProfile(profileSelect.value as ProfileName, true);
+    });
+    // A control edit anywhere in the sidebar (or opening the metrics panel) may diverge from the
+    // profile — recompute the label. Programmatic bulk changes (preset / share-link / reset) call
+    // refreshProfileLabel() via applyChanges / applyPreset.
+    const pane = document.querySelector(".controls-pane");
+    pane?.addEventListener("change", () => refreshProfileLabel());
+    pane?.addEventListener("input", () => refreshProfileLabel());
+    byId("julia-props-group").addEventListener("toggle", () => refreshProfileLabel());
+
+    // Phase-2: a one-time first-run pick wires into the onboarding card (setupOnboarding); apply the
+    // persisted profile now (a shared view in the URL hash overrides it just below).
+    let pref: ProfileName = DEFAULT_PROFILE;
+    try {
+      const stored = localStorage.getItem(PROFILE_KEY);
+      if (stored && (PROFILE_ORDER as string[]).includes(stored)) pref = stored as ProfileName;
+    } catch {
+      /* ignore */
+    }
+    applyProfile(pref, false);
+  }
+  setupProfiles(); // apply the persisted profile (default skin) before any shared view
+
+  loadFromHash(); // apply a shared view if the URL carries one (overrides the profile)
+  refreshProfileLabel(); // a shared view usually diverges from a named profile → "Custom…"
   lastSnapshot = readFullState(); // history baseline (after any shared view is applied)
   window.clearTimeout(recordTimer);
   updateHistoryButtons();

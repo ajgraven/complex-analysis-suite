@@ -113,6 +113,18 @@ h2 {
   gap: 0.5rem;
 }
 
+/* Use-case profile picker in the app bar (a labelled select + its "?" help). */
+.profile-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.profile-picker > label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 /* "Views" dropdown (save / load / delete named views) as a popover menu. */
 .views-menu {
   position: relative;
@@ -1047,10 +1059,27 @@ select.invalid {
   margin-top: 0.5rem;
 }
 
+.onboarding-prompt {
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.9rem;
+}
+
+.onboarding-profiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.onboarding-profiles button {
+  margin-top: 0;
+  flex: 1 1 auto;
+}
+
 .onboarding-actions {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
+  margin-top: 0.75rem;
 }
 
 /* --- Glossary modal --------------------------------------------------- */
