@@ -205,6 +205,12 @@ export const GLOSSARY: GlossaryEntry[] = [
     term: "Inverse-iteration Julia set",
     defn: "A way to paint the Julia set directly as the closure of backward orbits, rather than colouring by forward escape. For z²+c the preimages of a point are z ↦ ±√(z−c); iterating a random choice of branch from the repelling β fixed point converges onto the Julia set and samples it densely (the 'chaos game'). It draws the boundary crisply where forward escape-time struggles — thin dendrites and Cantor dusts. Overlay on the dynamical plane; z²+c only (a closed-form inverse). c=0 gives the unit circle, c=−1 the basilica.",
   },
+  {
+    id: "riemann-sphere",
+    term: "Riemann sphere",
+    defn: "The complex plane plus a point at infinity, modelled as a sphere by stereographic projection (z = (X+iY)/(1−Z)). Viewing a Julia set on it shows the whole dynamical plane at once, including the dynamics at ∞ (for z²+c, ∞ is a superattracting fixed point — the basin of ∞ is the exterior). The 'Riemann sphere' panel renders an orthographic snapshot: the screen centre is the south pole z=0, the rim is the equator |z|=1, and the back hemisphere (|z|>1, the basin of ∞) faces away.",
+    latex: "\\zeta = \\frac{X + iY}{1 - Z}",
+  },
 ];
 
 /** The app's deliberate, non-textbook conventions — stated for honesty / research use. */

@@ -373,6 +373,10 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   indifferent fixed point and draws the ones that stay bounded — the nested rotation curves filling
   the Siegel disc. Only shown for a genuine Brjuno rotation number (parabolic / Cremer have no
   disc). `z²+c`.
+- **Riemann sphere** — renders the current Julia set onto the Riemann sphere (orthographic
+  stereographic snapshot: the screen centre is the south pole _z_ = 0, the rim is the equator
+  |_z_| = 1), so you see the whole dynamical plane including the dynamics at ∞ in one view;
+  downloadable as a PNG. CPU snapshot, independent of the live render. `z²+c`.
 
 ## Exterior map (uniformization)
 

@@ -1096,6 +1096,18 @@ select.invalid {
   font-size: 0.75rem;
 }
 
+/* Riemann-sphere snapshot canvas — circular frame clips the off-sphere corners. */
+.sphere-canvas {
+  display: block;
+  width: 100%;
+  max-width: 280px;
+  aspect-ratio: 1 / 1;
+  margin: 0.4rem auto;
+  background: #101014;
+  border: 1px solid var(--border, #2a2a33);
+  border-radius: 50%;
+}
+
 .exterior-coeffs {
   max-height: 9rem;
   margin: 0;

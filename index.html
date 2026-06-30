@@ -1127,6 +1127,36 @@ z^2+c</textarea
             </div>
           </details>
 
+          <!-- Riemann sphere: render the current Julia set stereographically onto the sphere. -->
+          <details class="control-group" id="sphere-group">
+            <summary>Riemann sphere (z²+c)</summary>
+            <div class="controls">
+              <p class="exterior-status">
+                Render the current Julia set on the Riemann sphere (orthographic stereographic — the
+                screen centre is z = 0, the rim is |z| = 1).
+                <button
+                  type="button"
+                  class="gloss-link"
+                  data-term="riemann-sphere"
+                  aria-label="About the Riemann sphere"
+                >
+                  ?
+                </button>
+              </p>
+              <canvas
+                id="sphere-canvas"
+                width="280"
+                height="280"
+                class="sphere-canvas"
+                aria-label="Riemann sphere render of the Julia set"
+              ></canvas>
+              <div class="exterior-actions">
+                <button type="button" id="sphere-render">Render</button>
+                <button type="button" id="sphere-download" hidden>Download PNG</button>
+              </div>
+            </div>
+          </details>
+
           <!-- Julia set properties: computed topology / metrics of K_c at the live c. -->
           <details class="control-group" id="julia-props-group">
             <summary>Julia set properties</summary>

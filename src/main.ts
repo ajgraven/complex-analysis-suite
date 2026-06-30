@@ -27,6 +27,7 @@ import { toNumber as angleToNumber } from "./combinatorics/angles";
 import { coreEntropy } from "./combinatorics/coreEntropy";
 import { portraitSummary, rotationCycleAngles } from "./combinatorics/orbitPortrait";
 import { landingForAngle } from "./render/angleParameter";
+import { renderRiemannSphere } from "./render/riemannSphere";
 import {
   juliaConnected,
   juliaExteriorCoeffs,
@@ -2656,6 +2657,28 @@ function init(): void {
   applyInverseJulia();
   byId("siegel-curves").addEventListener("change", applySiegelCurves);
   applySiegelCurves();
+  byId("sphere-render").addEventListener("click", () => {
+    const plot = dynamicalView.plot;
+    if (!plot.perturbationEligible) {
+      showToast("Riemann-sphere render is for the z²+c family.", "warn");
+      return;
+    }
+    const canvas = byId<HTMLCanvasElement>("sphere-canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const size = canvas.width;
+    const buf = renderRiemannSphere(plot.fAst, plot.escAst, plot.cValue, size, 256, plot.paramA);
+    const img = ctx.createImageData(size, size);
+    img.data.set(buf);
+    ctx.putImageData(img, 0, 0);
+    byId("sphere-download").hidden = false;
+    showToast("Rendered the Julia set on the Riemann sphere.", "info");
+  });
+  byId("sphere-download").addEventListener("click", () => {
+    byId<HTMLCanvasElement>("sphere-canvas").toBlob((blob) => {
+      if (blob) downloadBlob(blob, "riemann-sphere.png");
+    });
+  });
 
   for (const id of ["equipotential", "equiDensity"]) {
     byId(id).addEventListener("input", applyEquipotential);
