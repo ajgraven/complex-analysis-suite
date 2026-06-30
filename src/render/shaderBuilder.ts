@@ -398,6 +398,24 @@ ${coordinate}
     ? "  if (uMode == 13) { fragColor = vec4(martyColor(fc), 1.0); return; }\n"
     : "";
 
+  // Projection off-domain guard (f32 only — uProjection is undeclared in the df64 build). The modes
+  // that bypass colorAt by dispatching their final colour directly in main() — distance (2), and,
+  // when f is holomorphic, analytic-DE (11) / multiplier (12) / marty (13) — must still drop off-disk
+  // Poincaré pixels to the neutral background; the supersampled colorAt path handles its own
+  // off-domain test per sample (so the disk rim keeps its anti-aliasing). The derivative modes are
+  // only referenced when emitted (hasDeriv), so a non-holomorphic build never mentions uMode 11–13.
+  // Only Poincaré (uProjection == 2) has an off-domain region.
+  const projBypassModes = hasDeriv
+    ? "uMode == 2 || uMode == 11 || uMode == 12 || uMode == 13"
+    : "uMode == 2";
+  const projGuard = isDf64
+    ? ""
+    : `  if (uProjection == 2 && (${projBypassModes})) {
+    vec2 pv = uCenter + (fc / uResolution * 2.0 - 1.0) / uZoom;
+    if (length(pv) >= 1.0) { fragColor = vec4(0.05, 0.05, 0.07, 1.0); return; }
+  }
+`;
+
   // Interior bailout for z²+c (single precision, parameter plane): a c in the main cardioid
   // or the period-2 bulb is provably in the Mandelbrot set, so its critical orbit never
   // escapes — skip the whole iteration loop for the flat-interior colouring modes. The
@@ -725,7 +743,7 @@ vec3 applyLighting(vec3 col, float h) {
 ${distanceAnalyticGLSL}${analyticNormalGLSL}${multiplierGLSL}${martyGLSL}
 void main() {
   vec2 fc = gl_FragCoord.xy + uJitter; // temporal-AA sub-pixel offset (0 when off)
-  if (uMode == 6) {
+${projGuard}  if (uMode == 6) {
     // Histogram pre-pass: output the escape count encoded in R,G (kmax = R + 256*G).
     int k = escapeCount(fc);
     fragColor = vec4(float(k % 256) / 255.0, float(k / 256) / 255.0, 0.0, 1.0);

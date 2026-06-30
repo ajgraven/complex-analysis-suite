@@ -151,6 +151,14 @@ export function externalAnglePairs(nu: KneadingSymbol[]): [Angle, Angle][] {
     if (ok && stars === 1) matches.push(m); // exactly one ⋆ ⇒ genuine period-n angle
   }
   matches.sort((a, b) => a - b);
+  // Invariant: kneading matches co-land in disjoint pairs (θ⁻, θ⁺ per wake), so the count is even.
+  // An odd count means a malformed ν reached enumeration — surface it rather than quietly dropping
+  // the unpaired tail match (the loop below stops one short of it).
+  if (matches.length % 2 !== 0) {
+    console.warn(
+      `externalAnglePairs: odd match count ${matches.length} for kneading ${nu.join("")} — dropping the unpaired tail.`,
+    );
+  }
   const wakes: [Angle, Angle][] = [];
   for (let i = 0; i + 1 < matches.length; i += 2) {
     wakes.push([angle(matches[i], D), angle(matches[i + 1], D)]);

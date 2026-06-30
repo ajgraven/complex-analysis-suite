@@ -66,12 +66,15 @@ export function coreEntropy(p: number, q: number, maxOrbit = 40): CoreEntropy | 
   const c2 = angle(theta.p + theta.q, 2 * theta.q); // (θ+1)/2
   const inArc = (x: Angle): boolean => compare(c1, x) < 0 && compare(x, c2) < 0;
 
-  // Index the unordered pairs (i < j) and build the (sparse, non-negative) transition matrix.
+  // Index the unordered pairs (i < j) and build the transition matrix in COLUMN-SPARSE form:
+  // cols[c] lists the (row, weight) targets of column c. Each column has at most two non-zeros, so
+  // the matvec below is O(count) rather than the O(count²) of a dense form — the dense version stalls
+  // for several seconds near the |Θ| cap (count = n(n−1)/2 ≈ 780 at n = 40).
   const pairId = new Map<string, number>();
   const key = (u: number, v: number): string => (u < v ? `${u},${v}` : `${v},${u}`);
   let count = 0;
   for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) pairId.set(key(i, j), count++);
-  const M: number[][] = Array.from({ length: count }, () => new Array<number>(count).fill(0));
+  const cols: { row: number; w: number }[][] = Array.from({ length: count }, () => []);
 
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
@@ -81,7 +84,10 @@ export function coreEntropy(p: number, q: number, maxOrbit = 40): CoreEntropy | 
       const addTarget = (u: number, v: number): void => {
         if (u === v) return; // degenerate {θ,θ}
         const row = pairId.get(key(u, v));
-        if (row !== undefined) M[row][col] += 1;
+        if (row === undefined) return;
+        const e = cols[col].find((t) => t.row === row); // ≤2 entries/col ⇒ trivial scan
+        if (e) e.w += 1; // both separated targets can coincide (preimage pair) ⇒ weight 2
+        else cols[col].push({ row, w: 1 });
       };
       if (inArc(orbit[i]) === inArc(orbit[j])) {
         addTarget(dai, dbi); // not separated
@@ -92,24 +98,27 @@ export function coreEntropy(p: number, q: number, maxOrbit = 40): CoreEntropy | 
     }
   }
 
-  // Power iteration for the spectral radius (Perron eigenvalue of the non-negative matrix).
+  // Power iteration for the spectral radius (Perron eigenvalue of the non-negative matrix), with a
+  // sparse matvec (w = M·v accumulated column-by-column) and an early-out once λ stabilises — the
+  // Perron value typically converges in far fewer than the 4000-iteration cap.
   let v = new Array<number>(count).fill(1);
   let lambda = 1;
   for (let it = 0; it < 4000; it++) {
     const w = new Array<number>(count).fill(0);
-    for (let r = 0; r < count; r++) {
-      const Mr = M[r];
-      let s = 0;
-      for (let c = 0; c < count; c++) s += Mr[c] * v[c];
-      w[r] = s;
+    for (let c = 0; c < count; c++) {
+      const vc = v[c];
+      if (vc === 0) continue;
+      for (const { row, w: weight } of cols[c]) w[row] += weight * vc;
     }
     const norm = Math.sqrt(w.reduce((s, x) => s + x * x, 0));
     if (norm === 0) {
       lambda = 1;
       break;
     }
-    lambda = norm; // v is unit-norm, so ‖Mv‖ → spectral radius
     v = w.map((x) => x / norm);
+    const converged = Math.abs(norm - lambda) <= 1e-12 * norm;
+    lambda = norm; // v is unit-norm, so ‖Mv‖ → spectral radius
+    if (converged) break;
   }
   return {
     lambda,

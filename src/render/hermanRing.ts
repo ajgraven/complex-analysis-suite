@@ -121,7 +121,9 @@ export function detectHermanRing(
       // A bounded orbit that didn't fall into the hole is a ring candidate iff it is quasiperiodic.
       if (meanR >= convergeR) quasi = estimateRotation(orbit, centre, 1, tol).quasiperiodic;
     }
-    lvls.push({ r, orbit, quasi });
+    // Only the quasiperiodic-band orbits are consumed below (the mid orbit's rotation/centroid and
+    // the ring `curves`); drop the rest so memory stays bounded to the band, not levels × iters.
+    lvls.push({ r, orbit: quasi ? orbit : null, quasi });
   }
 
   // Longest contiguous band of quasiperiodic radii.
