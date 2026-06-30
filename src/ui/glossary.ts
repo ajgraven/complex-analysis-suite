@@ -211,6 +211,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     defn: "An iteration f(z) = N(z)/D(z) of two polynomials, e.g. (z²+c)/(1+cz²). Unlike z²+c, ∞ is generally an ordinary point rather than a superattracting fixed point, so orbits converge to FINITE attracting cycles instead of escaping — escape-time colouring is blank, and the 'period' colouring (which detects the attracting cycle) reveals the Fatou structure. By Riemann–Hurwitz a degree-d rational map has 2d−2 critical points; the parameter plane tracks the orbit of a free critical point (0 for these even-symmetric families).",
   },
   {
+    id: "herman-ring",
+    term: "Herman ring",
+    defn: "A doubly-connected rotation domain: an invariant annulus on which f acts as an irrational rotation, conjugate to a rigid rotation of a round annulus. Unlike a Siegel disc (a rotation domain around a fixed point), a ring surrounds a HOLE — a separate Fatou component. They exist only for degree ≥ 3 rational maps (Shishikura). The standard example e^{2πiτ}·z²(z−4)/(1−4z) keeps the unit circle invariant; at τ = 0.6151732 the rotation number on it is the golden mean. Detection reports the rotation number and the conformal modulus (1/2π)·log(R_out/R_in).",
+  },
+  {
     id: "internal-address",
     term: "Internal address & stripping",
     defn: "A combinatorial 'street address' for a hyperbolic component: the strictly-increasing periods 1 → S₁ → … → S_k of the principal components crossed from the main cardioid (1-3 is the rabbit, 1-2-4-8 the period-doubling cascade). The stripping algorithm turns an address into its kneading sequence ν and the two characteristic external angles θ⁻, θ⁺ whose parameter rays bound the component's wake. Not every increasing address is realised — 1-2-4-5-6 is the smallest non-admissible one (Bruin–Schleicher).",

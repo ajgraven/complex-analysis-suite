@@ -586,6 +586,7 @@ z^2+c</textarea
                       <option value="lambda">lambda (logistic)</option>
                       <option value="rational symmetric">rational (z²+c)/(1+cz²)</option>
                       <option value="rational V2">rational (z²+c)/(1−z²)</option>
+                      <option value="herman ring">Herman ring (Blaschke)</option>
                     </optgroup>
                     <optgroup label="Transcendental">
                       <option value="exponential map">exponential map</option>
@@ -1169,6 +1170,28 @@ z^2+c</textarea
                 <button type="button" id="strip-goto" hidden>Go to component</button>
               </div>
               <p class="exterior-status" id="strip-readout"></p>
+            </div>
+          </details>
+
+          <!-- Herman ring: detect the annular rotation domain of a rational map (dynamical plane). -->
+          <details class="control-group" id="herman-group">
+            <summary>Herman ring (rational)</summary>
+            <div class="controls">
+              <p class="exterior-status">
+                Detect a <strong>Herman ring</strong> — an invariant annulus on which the map is a
+                rotation — on the dynamical plane around z = 0 (load the Herman-ring preset). Reports
+                the rotation number and modulus and draws the invariant circles in gold.
+                <button
+                  type="button"
+                  class="gloss-link"
+                  data-term="herman-ring"
+                  aria-label="About Herman rings"
+                >
+                  ?
+                </button>
+              </p>
+              <button type="button" id="herman-detect">Detect Herman ring</button>
+              <p class="exterior-status" id="herman-readout"></p>
             </div>
           </details>
 

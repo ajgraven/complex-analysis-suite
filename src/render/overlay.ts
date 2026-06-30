@@ -227,6 +227,8 @@ export interface OverlayParams {
   inverseJulia?: boolean;
   /** Draw the Siegel-disc invariant curves (dynamical plane, z²+c). */
   siegelCurves?: boolean;
+  /** Herman-ring invariant-circle orbits (z-plane point sets) to draw on the dynamical plane. */
+  hermanCurves?: Vec2[][] | null;
   /** Reconstructed exterior-map boundary to draw (ψ on |w| = r); coeffs in plot space. */
   laurentBoundary?: { coeffs: Vec2[]; r: number; lead?: Vec2 };
   /**
@@ -527,6 +529,28 @@ function drawSiegelCurves(
   ctx.restore();
 }
 
+/** Draw detected Herman-ring invariant circles (z-plane point sets) in gold, innermost first. */
+function drawHermanCurves(
+  ctx: CanvasRenderingContext2D,
+  curves: Vec2[][],
+  center: Vec2,
+  zoom: number,
+  size: number,
+): void {
+  const rdot = Math.max(0.5, 0.7 * (size / OVERLAY_BASE));
+  const d = 2 * rdot;
+  ctx.save();
+  ctx.fillStyle = "rgba(255, 200, 90, 0.7)";
+  for (const curve of curves) {
+    for (const pt of curve) {
+      const [px, py] = plotToPx(pt, center, zoom, size);
+      if (px < -d || py < -d || px > size + d || py > size + d) continue;
+      ctx.fillRect(px - rdot, py - rdot, d, d);
+    }
+  }
+  ctx.restore();
+}
+
 // Reconstructed-boundary cache (per plane). The points are ψ(r·e^{2πiθ}) in plot space —
 // independent of centre/zoom — so pan/zoom reuse them and only re-project. Keyed by the coeffs
 // array identity (main replaces it only on a c / f / order / radius change) and r.
@@ -650,6 +674,11 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
 
   // Siegel-disc invariant curves (dynamical plane, z²+c).
   if (p.siegelCurves && p.fractType === "dyn") drawSiegelCurves(ctx, p.c, p.center, p.zoom, size);
+
+  // Detected Herman-ring invariant circles (dynamical plane).
+  if (p.hermanCurves && p.hermanCurves.length > 0 && p.fractType === "dyn") {
+    drawHermanCurves(ctx, p.hermanCurves, p.center, p.zoom, size);
+  }
 
   // Orbit polyline, coloured by the orbit's long-run fate. A dark casing under the colour
   // keeps it legible over any palette (the fate colours are all bright).

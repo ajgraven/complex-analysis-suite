@@ -66,6 +66,7 @@ export class PlotView {
   private addressRays: number[] | null = null;
   private showInverseJulia = false;
   private showSiegelCurves = false;
+  private hermanCurves: Vec2[][] | null = null;
   private laurentBoundary: { coeffs: Vec2[]; r: number; lead: Vec2 } | null = null;
   private annotations: Annotation[] = [];
   /**
@@ -165,6 +166,12 @@ export class PlotView {
     this.requestOverlay();
   }
 
+  /** Set the detected Herman-ring invariant circles to draw (dynamical plane), or null to clear. */
+  setHermanCurves(curves: Vec2[][] | null): void {
+    this.hermanCurves = curves && curves.length ? curves : null;
+    this.requestOverlay();
+  }
+
   /** Set the reconstructed exterior-map boundary to draw (coeffs in plot space, radius r), or
    *  null to clear. Overlay-only. */
   setLaurentBoundary(coeffs: Vec2[] | null, r: number, lead: Vec2 = [1, 0]): void {
@@ -235,6 +242,7 @@ export class PlotView {
           addressRays: this.addressRays,
           inverseJulia: this.showInverseJulia,
           siegelCurves: this.showSiegelCurves,
+          hermanCurves: this.hermanCurves,
           laurentBoundary: this.laurentBoundary ?? undefined,
           cyclePoints: this.currentCyclePoints(),
           a: this.plot.paramA,
@@ -321,6 +329,7 @@ export class PlotView {
       addressRays: this.addressRays,
       inverseJulia: this.showInverseJulia,
       siegelCurves: this.showSiegelCurves,
+      hermanCurves: this.hermanCurves,
       laurentBoundary: this.laurentBoundary ?? undefined,
       cyclePoints: this.currentCyclePoints(),
       a: this.plot.paramA,

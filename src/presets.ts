@@ -58,7 +58,8 @@ export type PresetName =
   | "exp Schwarz"
   | "biomorph"
   | "rational symmetric"
-  | "rational V2";
+  | "rational V2"
+  | "herman ring";
 
 export const paramPresets: Record<PresetName, Preset> = {
   mandelbrot: {
@@ -202,6 +203,22 @@ export const paramPresets: Record<PresetName, Preset> = {
     mode: "period",
     zoom: 0.5,
     center: [0, 0],
+  },
+  // Herman ring: the Blaschke-product family e^{2πi·c}·z²(z−4)/(1−4z), parametrised by the rotation
+  // τ = c. It keeps the unit circle invariant; at c = 0.6151732 the rotation number on it is the
+  // golden mean and the invariant circle sits inside a Herman ring (an annular rotation domain
+  // between the basins of the superattracting fixed points 0 and ∞). The free critical point ≈0.547
+  // drives the parameter (τ) plane.
+  "herman ring": {
+    f: "e^(2*pi*i*c)*z^2*(z-4)/(1-4*z)",
+    c: "0.6151732+0*i",
+    n: "120",
+    nplot: "6",
+    escape: "abs(z)>1000",
+    mode: "period",
+    zoom: 1.1,
+    center: [0.5, 0],
+    criticalPoint: [0.5470656, 0],
   },
 };
 
@@ -359,6 +376,18 @@ export const dynPresets: Record<PresetName, Preset> = {
     mode: "period",
     zoom: 0.5,
     center: [0, 0],
+  },
+  "herman ring": {
+    f: "e^(2*pi*i*c)*z^2*(z-4)/(1-4*z)",
+    c: "0.6151732+0*i",
+    z0: "1",
+    n: "120",
+    nplot: "6",
+    escape: "abs(z)>1000",
+    mode: "period",
+    zoom: 0.32,
+    center: [0, 0],
+    criticalPoint: [0.5470656, 0],
   },
 };
 

@@ -34,6 +34,8 @@ import {
 } from "./combinatorics/stripping";
 import { landingForAngle } from "./render/angleParameter";
 import { renderRiemannSphere } from "./render/riemannSphere";
+import { detectHermanRing } from "./render/hermanRing";
+import { getComplexFn } from "./expr/evaluate";
 import {
   juliaConnected,
   juliaExteriorCoeffs,
@@ -1515,6 +1517,7 @@ function init(): void {
     applyInverseJulia(); // …and the inverse-iteration Julia cloud
     applySiegelCurves(); // …and the Siegel invariant curves
     parameterView.setAddressRays(null); // …and a stripped internal address's rays (z²+c-specific)
+    dynamicalView.setHermanCurves(null); // …and any detected Herman-ring curves
     updateExteriorMap(); // a new f may change the degree / coefficients
     applyLaurent();
     updateJuliaProperties();
@@ -1548,6 +1551,7 @@ function init(): void {
     applyInverseJulia();
     applySiegelCurves();
     parameterView.setAddressRays(null); // a new preset invalidates a stripped internal address's rays
+    dynamicalView.setHermanCurves(null); // …and any detected Herman-ring curves
     updateExteriorMap();
     applyLaurent();
     updateJuliaProperties();
@@ -2555,6 +2559,36 @@ function init(): void {
     const info = inspect(fAst, parameterView.plot.escAst, "param", crit, c, pa);
     handleInspect(info, c, "param");
     scheduleRecord();
+  });
+  byId("herman-detect").addEventListener("click", () => {
+    // Detect a Herman ring on the dynamical plane around z = 0 (the hole of the standard preset),
+    // using the pure detector. Reports rotation number + modulus and draws the invariant circles.
+    const dv = dynamicalView;
+    let f: (z: Complex, c: Complex) => Complex;
+    try {
+      f = getComplexFn(dv.plot.fAst, dv.plot.paramA);
+    } catch {
+      showToast("Could not compile f for Herman-ring detection.", "warn");
+      return;
+    }
+    const c = dv.plot.cValue;
+    const res = detectHermanRing((z) => f(z, c), [0, 0]);
+    const readout = byId("herman-readout");
+    if (res.isRing && res.rotationNumber !== null && res.modulus !== null) {
+      readout.textContent =
+        `Herman ring confirmed: rotation α = ${res.rotationNumber.toFixed(6)}, modulus ≈ ` +
+        `${res.modulus.toFixed(4)} (annulus radii ${(res.rInner as number).toFixed(3)}–` +
+        `${(res.rOuter as number).toFixed(3)} about z = 0).`;
+      dv.setHermanCurves(res.curves);
+      showToast(
+        `Herman ring: rotation ${res.rotationNumber.toFixed(4)}, modulus ${res.modulus.toFixed(3)}.`,
+        "info",
+      );
+    } else {
+      readout.textContent =
+        "No Herman ring detected about z = 0. (They need a degree ≥ 3 rational map — try the Herman-ring preset.)";
+      dv.setHermanCurves(null);
+    }
   });
   byId("siegel-go").addEventListener("click", () => {
     const theta = parseRotationNumber(byId<HTMLInputElement>("siegel-theta").value);

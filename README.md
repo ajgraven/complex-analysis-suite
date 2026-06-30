@@ -81,8 +81,9 @@ Presets live in [`src/presets.ts`](src/presets.ts) as two dictionaries
 
 Included presets (grouped in the picker): Mandelbrot and cubic (`z³+c`);
 the abs-variants tricorn, multicorn (`z̄³+c`), burning ship, butterfly, and celtic; the rational/logistic
-magnet, lambda, and two **rational families** ((`z²+c)/(1+cz²)` and `(z²+c)/(1−z²)`); the
-transcendental exponential map, teardrop Schwarz, and exp Schwarz; and a biomorph.
+magnet, lambda, two **rational families** ((`z²+c)/(1+cz²)` and `(z²+c)/(1−z²)`), and a **Herman ring**
+(the Blaschke product `e^{2πi·c}·z²(z−4)/(1−4z)`); the transcendental exponential map, teardrop Schwarz,
+and exp Schwarz; and a biomorph.
 
 The **rational families** illustrate maps whose ∞ is _not_ a superattracting fixed point: orbits
 converge to finite attracting cycles rather than escaping, so escape-time colouring is blank and they
@@ -91,6 +92,12 @@ Their free finite critical point is 0, so the parameter plane tracks the orbit o
 `z²+c`. Critical points of any rational `f` come from
 [`findRationalCriticalPoints`](src/render/critical.ts) (roots of the numerator of `f′`, via
 Durand–Kerner), and the inspector reports their attracting cycles and multipliers unchanged.
+
+The **Herman ring** preset is a degree-3 Blaschke product with an annular rotation domain (a
+doubly-connected Fatou component — possible only for degree ≥ 3). Its _Herman ring_ panel detects the
+ring on the dynamical plane via the weighted-Birkhoff quasiperiodicity test
+([`detectHermanRing`](src/render/hermanRing.ts)), reporting the rotation number (the golden mean,
+0.618…, at the default τ) and the conformal modulus, and drawing the invariant circles in gold.
 
 A few use non-textbook conventions, noted here for honesty: **tricorn** and **celtic**
 are faithful (`conj(z)²+c` and `|Re(z²)|+i·Im(z²)+c`); **burning ship** is parameterised
