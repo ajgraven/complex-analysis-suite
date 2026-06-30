@@ -883,6 +883,18 @@ function init(): void {
     byId("inspector-portrait").textContent = "Show orbit portrait";
   }
 
+  /** Show "Self-similar zoom" on the parameter plane at a Misiurewicz-type point — where the
+   *  critical orbit lands on a repelling cycle (|λ| > 1); Tan Lei's asymptotic self-similarity
+   *  scale is then ρ = the cycle multiplier λ. */
+  function updateRhoZoomButton(info: InspectResult, plane: FractType): void {
+    const eligible =
+      plane === "param" &&
+      info.multiplierMag !== null &&
+      info.multiplierMag > 1.0001 &&
+      parameterView.plot.holomorphic;
+    byId("inspector-rho-zoom").hidden = !eligible;
+  }
+
   /** Inspector callback for both planes: render the report, then gate the action buttons. */
   function handleInspect(info: InspectResult, point: Vec2, plane: FractType): void {
     showInspect(info, point, plane);
@@ -890,6 +902,7 @@ function init(): void {
     updateBulbRaysButton(info, plane);
     clearOrbitPortrait(); // a fresh inspect (possibly a new c) invalidates the drawn portrait
     updateOrbitPortraitButton(info, plane);
+    updateRhoZoomButton(info, plane);
     // Any inspected point can be copied as a report / exported as an orbit.
     lastInspect = { info, point: [point[0], point[1]], plane };
     byId("inspector-copy").hidden = false;
@@ -2569,6 +2582,22 @@ function init(): void {
     const arc = sum.characteristic;
     const arcTxt = arc ? `, char. arc ${arc.lo.p}/${arc.lo.q}–${arc.hi.p}/${arc.hi.q}` : "";
     showToast(`Orbit portrait at α: valence ${sum.valence}, rotation ${p}/${q}${arcTxt}.`, "info");
+  });
+  byId("inspector-rho-zoom").addEventListener("click", () => {
+    if (!lastInspect || lastInspect.plane !== "param") return;
+    const mag = lastInspect.info.multiplierMag;
+    if (mag === null || !(mag > 1.0001)) return;
+    const c0 = lastInspect.point;
+    // Tan Lei: the parameter plane is asymptotically self-similar about a Misiurewicz point with
+    // scale ρ = the repelling-cycle multiplier — magnify by |ρ| to reveal the next-scale copy.
+    const state = readFullState();
+    state.inpparamcenter = `${c0[0]},${c0[1]}`;
+    state.inpparamzoom = String(parameterView.plot.zoom * mag);
+    applyFullState(state);
+    showToast(
+      `Self-similar zoom ×${mag.toFixed(2)} about the Misiurewicz-type point (ρ = λ).`,
+      "info",
+    );
   });
   byId("inspector-copy").addEventListener("click", () => {
     if (!lastInspect) return;

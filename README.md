@@ -345,7 +345,10 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   button Newton-snaps `c` to the exact superattracting centre, and **Show bulb rays** turns
   on that bulb's landing rays; a **Misiurewicz** finder Newton-snaps to the exact preperiodic
   point `fᵐ⁺ᵏ(0) = fᵐ(0)` nearest the view, and **Siegel c for θ** jumps to the cardioid point
-  `λ/2 − λ²/4` for a typed rotation number. **Copy report** copies the readout and **Export
+  `λ/2 − λ²/4` for a typed rotation number. At a **Misiurewicz-type point** (where the critical
+  orbit lands on a repelling cycle, |λ| > 1) a **Self-similar zoom (×ρ)** button magnifies the
+  parameter view by |ρ| = |λ| about it — Tan Lei's asymptotic self-similarity (e.g. ×4 at
+  `c = −2`, ×4√2 at `c = i`). **Copy report** copies the readout and **Export
   orbit** downloads the inspected orbit as a CSV — both at full precision. **Pin note** drops a
   labelled gold marker at the inspected point — anchored in plot coordinates, so it tracks pans
   and zooms — and pinned notes ride along in share links and saved views; **Clear** removes them.
