@@ -1045,6 +1045,28 @@ function init(): void {
   suggestionEngine.register(escapeViewAdvisor(parameterView, "param"));
   suggestionEngine.register(escapeViewAdvisor(dynamicalView, "dyn"));
   scheduleSuggestions = () => suggestionEngine.schedule();
+  // The "suggestions" master toggle — persisted (default on); off hides every badge.
+  const SUGGEST_KEY = "cdjs.suggestions";
+  const suggestToggle = byId<HTMLInputElement>("suggestions");
+  const applySuggestEnabled = (on: boolean, persist: boolean): void => {
+    suggestToggle.checked = on;
+    suggestionEngine.setEnabled(on);
+    if (persist) {
+      try {
+        localStorage.setItem(SUGGEST_KEY, on ? "1" : "0");
+      } catch {
+        /* localStorage unavailable (private mode) — non-fatal */
+      }
+    }
+  };
+  let suggestPref = true;
+  try {
+    suggestPref = localStorage.getItem(SUGGEST_KEY) !== "0";
+  } catch {
+    /* ignore */
+  }
+  applySuggestEnabled(suggestPref, false);
+  suggestToggle.addEventListener("change", () => applySuggestEnabled(suggestToggle.checked, true));
 
   // --- Click-to-inspect → nucleus finder (parameter plane) ----------------
   let lastNucleusSeed: { point: Vec2; period: number } | null = null;

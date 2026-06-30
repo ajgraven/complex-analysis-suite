@@ -197,6 +197,13 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
   how aggressively. While it's on, the effective count actually in use is shown next to each
   plot's iterations box (it scales by that plane's own zoom). The renderer also recovers
   automatically if the WebGL context is lost.
+- **Suggestions** (on by default) watches the live view and, when a setting is degrading or
+  hiding what you're looking at, shows a small non-obstructive tip over the affected plot with
+  a one-click fix — for example _raise the iterations_ when the zoom outruns the cap (boundary
+  detail "fattening"), _enable perturbation_ when a deep z²+c zoom strains double precision, the
+  _period_ colouring for a rational map whose escape-time image is flat, or the _multiplier map_
+  when the view sits inside the set. Nothing changes on its own; dismiss a tip with ×, or untick
+  **suggestions** (under _Iteration &amp; precision_) to turn them off. The choice is remembered.
 
 ## Saving images
 

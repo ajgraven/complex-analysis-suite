@@ -62,6 +62,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     defn: "Optionally raises the iteration cap as you zoom in, so deep views keep their detail without bumping the count by hand. Near the boundary the escape-time bands pile up geometrically, so each 10× of zoom needs a roughly constant number of extra iterations — the cap grows linearly in log₁₀(zoom). The 'strength' slider sets how many extra iterations are added per decade (as a fraction of the base count). It depends on zoom (magnification) alone, not on where the view is centred.",
   },
   {
+    id: "auto-suggestions",
+    term: "Suggestions",
+    defn: "Occasional, non-obstructive tips shown over a plot when a setting is degrading or hiding the view — for example, too few iterations for the current zoom (boundary detail 'fattening'), deep zoom straining double-precision (offering perturbation), a rational map whose escape-time image is flat (offering period colouring), or a view sitting inside the set (offering the multiplier map). Each tip carries a one-click fix and a dismiss; nothing changes on its own. The 'suggestions' checkbox turns them off entirely.",
+  },
+  {
     id: "period",
     term: "Period",
     defn: "The length of the attracting cycle an interior point settles onto (1 = a fixed point). Every hyperbolic component has a single period.",

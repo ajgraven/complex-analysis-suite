@@ -992,6 +992,23 @@ z^2+c</textarea
                       boundary outline, and equipotential overlays use the standard view.
                     </p>
                   </div>
+                  <div class="field">
+                    <label
+                      class="checkbox"
+                      for="suggestions"
+                      title="Show occasional non-obstructive tips over a plot when a setting is degrading the view (e.g. too few iterations for the zoom)"
+                    >
+                      <input type="checkbox" id="suggestions" checked /> suggestions
+                    </label>
+                    <button
+                      class="gloss-link"
+                      type="button"
+                      data-term="auto-suggestions"
+                      aria-label="What are suggestions?"
+                    >
+                      ?
+                    </button>
+                  </div>
                 </div>
               </details>
             </div>
@@ -1713,6 +1730,13 @@ z^2+c</textarea
                         Tick <strong>perturbation (deep zoom)</strong> on the Mandelbrot set or its
                         Julia sets (z²+c) to zoom past the point where ordinary deep zoom turns to
                         mush.
+                      </li>
+                      <li>
+                        <strong>Suggestions</strong> (on by default) pop a small, dismissible tip
+                        over a plot when a setting is degrading the view — e.g. too few iterations
+                        for the zoom, deep zoom needing perturbation, or a flat escape-time image.
+                        Each tip has a one-click fix; untick <strong>suggestions</strong> to silence
+                        them.
                       </li>
                       <li>
                         Use <strong>Record Julia morph</strong> or
