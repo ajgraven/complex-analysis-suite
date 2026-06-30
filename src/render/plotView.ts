@@ -63,6 +63,7 @@ export class PlotView {
   private showRayPairs = false;
   private rayAngle: number | null = null;
   private orbitPortrait: number[] | null = null;
+  private showInverseJulia = false;
   private laurentBoundary: { coeffs: Vec2[]; r: number; lead: Vec2 } | null = null;
   private annotations: Annotation[] = [];
   /**
@@ -144,6 +145,12 @@ export class PlotView {
     this.requestOverlay();
   }
 
+  /** Toggle the inverse-iteration Julia point cloud (dynamical plane, z²+c). Overlay-only. */
+  setInverseJulia(on: boolean): void {
+    this.showInverseJulia = on;
+    this.requestOverlay();
+  }
+
   /** Set the reconstructed exterior-map boundary to draw (coeffs in plot space, radius r), or
    *  null to clear. Overlay-only. */
   setLaurentBoundary(coeffs: Vec2[] | null, r: number, lead: Vec2 = [1, 0]): void {
@@ -211,6 +218,7 @@ export class PlotView {
           rayAngle: this.rayAngle,
           rayPairs: this.showRayPairs,
           orbitPortrait: this.orbitPortrait,
+          inverseJulia: this.showInverseJulia,
           laurentBoundary: this.laurentBoundary ?? undefined,
           cyclePoints: this.currentCyclePoints(),
           a: this.plot.paramA,
@@ -294,6 +302,7 @@ export class PlotView {
       rayAngle: this.rayAngle,
       rayPairs: this.showRayPairs,
       orbitPortrait: this.orbitPortrait,
+      inverseJulia: this.showInverseJulia,
       laurentBoundary: this.laurentBoundary ?? undefined,
       cyclePoints: this.currentCyclePoints(),
       a: this.plot.paramA,

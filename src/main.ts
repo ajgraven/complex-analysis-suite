@@ -1492,6 +1492,7 @@ function init(): void {
     applyFarey(); // a new f may change z²+c eligibility for bulb labels
     applyRays(); // …and for external rays
     applyRayPairs(); // …and for bulb ray pairs
+    applyInverseJulia(); // …and the inverse-iteration Julia cloud
     updateExteriorMap(); // a new f may change the degree / coefficients
     applyLaurent();
     updateJuliaProperties();
@@ -1515,6 +1516,7 @@ function init(): void {
     applyFarey();
     applyRays();
     applyRayPairs();
+    applyInverseJulia();
     updateExteriorMap();
     applyLaurent();
     updateJuliaProperties();
@@ -1701,6 +1703,14 @@ function init(): void {
     const cb = byId<HTMLInputElement>("ray-pairs");
     cb.disabled = !eligible;
     parameterView.setRayPairs(eligible && cb.checked);
+  }
+
+  /** Draw the inverse-iteration Julia point cloud (dynamical plane); z²+c only. */
+  function applyInverseJulia(): void {
+    const eligible = dynamicalView.plot.perturbationEligible;
+    const cb = byId<HTMLInputElement>("inverse-julia");
+    cb.disabled = !eligible;
+    dynamicalView.setInverseJulia(eligible && cb.checked);
   }
 
   /** Apply the equipotential-overlay controls (checkbox + density) to both plots. */
@@ -2632,6 +2642,8 @@ function init(): void {
   applyRays();
   byId("ray-pairs").addEventListener("change", applyRayPairs);
   applyRayPairs();
+  byId("inverse-julia").addEventListener("change", applyInverseJulia);
+  applyInverseJulia();
 
   for (const id of ["equipotential", "equiDensity"]) {
     byId(id).addEventListener("input", applyEquipotential);
@@ -2774,6 +2786,8 @@ function init(): void {
     applyRays();
     byId<HTMLInputElement>("ray-pairs").checked = false;
     applyRayPairs();
+    byId<HTMLInputElement>("inverse-julia").checked = false;
+    applyInverseJulia();
     byId<HTMLInputElement>("equipotential").checked = false;
     byId<HTMLInputElement>("equiDensity").value = "20";
     applyEquipotential();

@@ -200,6 +200,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     defn: "The topological entropy h(θ) = log λ of the map on its Hubbard tree, a measure of how 'chaotic' the postcritically-finite parameter at external angle θ is. By Thurston, h = log 2 · B, where B = h/log 2 ∈ [0,1] is the biaccessibility dimension (the Hausdorff dimension of the angles whose rays land at the same point as another). λ ∈ [1,2] is the leading eigenvalue of a transition matrix on pairs of postcritical angles (separated / not by the critical diameter). Satellite components like the rabbit (1/7) have h = 0; primitive ones like the airplane (3/7) have h = log φ. The 'Go to external angle' tool reports it.",
     latex: "h(\\theta) = \\log\\lambda = \\log 2 \\cdot B_{\\mathrm{top}}(\\theta)",
   },
+  {
+    id: "inverse-iteration",
+    term: "Inverse-iteration Julia set",
+    defn: "A way to paint the Julia set directly as the closure of backward orbits, rather than colouring by forward escape. For z²+c the preimages of a point are z ↦ ±√(z−c); iterating a random choice of branch from the repelling β fixed point converges onto the Julia set and samples it densely (the 'chaos game'). It draws the boundary crisply where forward escape-time struggles — thin dendrites and Cantor dusts. Overlay on the dynamical plane; z²+c only (a closed-form inverse). c=0 gives the unit circle, c=−1 the basilica.",
+  },
 ];
 
 /** The app's deliberate, non-textbook conventions — stated for honesty / research use. */
