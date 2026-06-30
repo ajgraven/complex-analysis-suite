@@ -38,7 +38,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: "siegel-disc",
     term: "Siegel disc",
-    defn: "A rotation domain: on it the map is conformally conjugate to an irrational rotation z ↦ e^(2πiθ)·z. It surrounds an irrationally-indifferent fixed/periodic point (|λ|=1, θ irrational) exactly when θ is a Brjuno number (Yoccoz's theorem); a larger Brjuno sum B(θ) means a smaller disc (radius ≈ e^(−B)). A non-Brjuno θ gives a Cremer point, with no disc. The inspector reports θ, the Brjuno verdict, and the estimated radius.",
+    defn: "A rotation domain: on it the map is conformally conjugate to an irrational rotation z ↦ e^(2πiθ)·z. It surrounds an irrationally-indifferent fixed/periodic point (|λ|=1, θ irrational) exactly when θ is a Brjuno number (Yoccoz's theorem); a larger Brjuno sum B(θ) means a smaller disc (radius ≈ e^(−B)). A non-Brjuno θ gives a Cremer point, with no disc. The inspector reports θ, the Brjuno verdict, and the estimated radius; the 'Siegel invariant curves' overlay draws the nested rotation curves that fill the disc.",
     latex: "B(\\theta) = \\sum_{n\\ge 0} \\frac{\\log q_{n+1}}{q_n} < \\infty",
   },
   {

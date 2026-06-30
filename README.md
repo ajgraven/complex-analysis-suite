@@ -368,6 +368,11 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   closure of random backward orbits `z ↦ ±√(z−c)` from the repelling fixed point (the "chaos
   game"), drawing the boundary crisply where forward escape-time struggles (thin dendrites, Cantor
   dusts). `z²+c` (closed-form inverse); c = 0 → the unit circle, c = −1 → the basilica.
+- **Siegel invariant curves** (Overlays) — at an irrationally-indifferent **Siegel** parameter (use
+  _Go to external angle_ or _Siegel c for θ_ to reach one), samples orbits outward from the
+  indifferent fixed point and draws the ones that stay bounded — the nested rotation curves filling
+  the Siegel disc. Only shown for a genuine Brjuno rotation number (parabolic / Cremer have no
+  disc). `z²+c`.
 
 ## Exterior map (uniformization)
 

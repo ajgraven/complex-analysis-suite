@@ -1493,6 +1493,7 @@ function init(): void {
     applyRays(); // …and for external rays
     applyRayPairs(); // …and for bulb ray pairs
     applyInverseJulia(); // …and the inverse-iteration Julia cloud
+    applySiegelCurves(); // …and the Siegel invariant curves
     updateExteriorMap(); // a new f may change the degree / coefficients
     applyLaurent();
     updateJuliaProperties();
@@ -1517,6 +1518,7 @@ function init(): void {
     applyRays();
     applyRayPairs();
     applyInverseJulia();
+    applySiegelCurves();
     updateExteriorMap();
     applyLaurent();
     updateJuliaProperties();
@@ -1711,6 +1713,14 @@ function init(): void {
     const cb = byId<HTMLInputElement>("inverse-julia");
     cb.disabled = !eligible;
     dynamicalView.setInverseJulia(eligible && cb.checked);
+  }
+
+  /** Draw the Siegel-disc invariant curves (dynamical plane); z²+c only. */
+  function applySiegelCurves(): void {
+    const eligible = dynamicalView.plot.perturbationEligible;
+    const cb = byId<HTMLInputElement>("siegel-curves");
+    cb.disabled = !eligible;
+    dynamicalView.setSiegelCurves(eligible && cb.checked);
   }
 
   /** Apply the equipotential-overlay controls (checkbox + density) to both plots. */
@@ -2644,6 +2654,8 @@ function init(): void {
   applyRayPairs();
   byId("inverse-julia").addEventListener("change", applyInverseJulia);
   applyInverseJulia();
+  byId("siegel-curves").addEventListener("change", applySiegelCurves);
+  applySiegelCurves();
 
   for (const id of ["equipotential", "equiDensity"]) {
     byId(id).addEventListener("input", applyEquipotential);
@@ -2788,6 +2800,8 @@ function init(): void {
     applyRayPairs();
     byId<HTMLInputElement>("inverse-julia").checked = false;
     applyInverseJulia();
+    byId<HTMLInputElement>("siegel-curves").checked = false;
+    applySiegelCurves();
     byId<HTMLInputElement>("equipotential").checked = false;
     byId<HTMLInputElement>("equiDensity").value = "20";
     applyEquipotential();

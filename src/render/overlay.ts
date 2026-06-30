@@ -16,6 +16,7 @@ import { getComplexFn, getEscapeFn } from "../expr/evaluate";
 import { fareyLabels } from "./farey";
 import { inverseJuliaCloud } from "./inverseJulia";
 import { bulbRayAngles, dynamicRay, parameterRay, rayDepthForZoom } from "./rays";
+import { siegelInvariantCurves } from "./siegelCurves";
 import { reconstructBoundary } from "./uniformize";
 
 const OVERLAY_BASE = 500;
@@ -222,6 +223,8 @@ export interface OverlayParams {
   orbitPortrait?: number[] | null;
   /** Draw the inverse-iteration Julia point cloud (dynamical plane, z²+c). */
   inverseJulia?: boolean;
+  /** Draw the Siegel-disc invariant curves (dynamical plane, z²+c). */
+  siegelCurves?: boolean;
   /** Reconstructed exterior-map boundary to draw (ψ on |w| = r); coeffs in plot space. */
   laurentBoundary?: { coeffs: Vec2[]; r: number; lead?: Vec2 };
   /**
@@ -487,6 +490,41 @@ function drawInverseJulia(
   ctx.restore();
 }
 
+// Cache of the Siegel-disc invariant curves — view-independent (depends only on c).
+const siegelCache = { key: "", curves: [] as Vec2[][] };
+function cachedSiegelCurves(c: Complex): Vec2[][] {
+  const key = `${c[0]},${c[1]}`;
+  if (siegelCache.key !== key) {
+    siegelCache.key = key;
+    const r = siegelInvariantCurves(c);
+    siegelCache.curves = r ? r.curves : [];
+  }
+  return siegelCache.curves;
+}
+
+/** Draw the Siegel-disc invariant curves (dynamical plane, z²+c) as nested point sets. */
+function drawSiegelCurves(
+  ctx: CanvasRenderingContext2D,
+  c: Complex,
+  center: Vec2,
+  zoom: number,
+  size: number,
+): void {
+  const curves = cachedSiegelCurves(c);
+  const rdot = Math.max(0.5, 0.7 * (size / OVERLAY_BASE));
+  const d = 2 * rdot;
+  ctx.save();
+  ctx.fillStyle = "rgba(130, 200, 255, 0.6)";
+  for (const curve of curves) {
+    for (const pt of curve) {
+      const [px, py] = plotToPx(pt, center, zoom, size);
+      if (px < -d || py < -d || px > size + d || py > size + d) continue;
+      ctx.fillRect(px - rdot, py - rdot, d, d);
+    }
+  }
+  ctx.restore();
+}
+
 // Reconstructed-boundary cache (per plane). The points are ψ(r·e^{2πiθ}) in plot space —
 // independent of centre/zoom — so pan/zoom reuse them and only re-project. Keyed by the coeffs
 // array identity (main replaces it only on a c / f / order / radius change) and r.
@@ -607,6 +645,9 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
 
   // Inverse-iteration Julia cloud (dynamical plane, z²+c): the base layer, under the orbit/markers.
   if (p.inverseJulia && p.fractType === "dyn") drawInverseJulia(ctx, p.c, p.center, p.zoom, size);
+
+  // Siegel-disc invariant curves (dynamical plane, z²+c).
+  if (p.siegelCurves && p.fractType === "dyn") drawSiegelCurves(ctx, p.c, p.center, p.zoom, size);
 
   // Orbit polyline, coloured by the orbit's long-run fate. A dark casing under the colour
   // keeps it legible over any palette (the fate colours are all bright).
