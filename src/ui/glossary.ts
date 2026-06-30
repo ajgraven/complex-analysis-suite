@@ -206,6 +206,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     defn: "A way to paint the Julia set directly as the closure of backward orbits, rather than colouring by forward escape. For z²+c the preimages of a point are z ↦ ±√(z−c); iterating a random choice of branch from the repelling β fixed point converges onto the Julia set and samples it densely (the 'chaos game'). It draws the boundary crisply where forward escape-time struggles — thin dendrites and Cantor dusts. Overlay on the dynamical plane; z²+c only (a closed-form inverse). c=0 gives the unit circle, c=−1 the basilica.",
   },
   {
+    id: "internal-address",
+    term: "Internal address & stripping",
+    defn: "A combinatorial 'street address' for a hyperbolic component: the strictly-increasing periods 1 → S₁ → … → S_k of the principal components crossed from the main cardioid (1-3 is the rabbit, 1-2-4-8 the period-doubling cascade). The stripping algorithm turns an address into its kneading sequence ν and the two characteristic external angles θ⁻, θ⁺ whose parameter rays bound the component's wake. Not every increasing address is realised — 1-2-4-5-6 is the smallest non-admissible one (Bruin–Schleicher).",
+  },
+  {
     id: "riemann-sphere",
     term: "Riemann sphere",
     defn: "The complex plane plus a point at infinity, modelled as a sphere by stereographic projection (z = (X+iY)/(1−Z)). Viewing a Julia set on it shows the whole dynamical plane at once, including the dynamics at ∞ (for z²+c, ∞ is a superattracting fixed point — the basin of ∞ is the exterior). The 'Riemann sphere' panel renders an orthographic snapshot: the screen centre is the south pole z=0, the rim is the equator |z|=1, and the back hemisphere (|z|>1, the basin of ∞) faces away.",

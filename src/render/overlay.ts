@@ -221,6 +221,8 @@ export interface OverlayParams {
   rayPairs?: boolean;
   /** Orbit-portrait rays: external angles (turns) landing at the α fixed point (dynamical plane). */
   orbitPortrait?: number[] | null;
+  /** Characteristic parameter rays (turns) of a stripped internal address, drawn in gold (param plane). */
+  addressRays?: number[] | null;
   /** Draw the inverse-iteration Julia point cloud (dynamical plane, z²+c). */
   inverseJulia?: boolean;
   /** Draw the Siegel-disc invariant curves (dynamical plane, z²+c). */
@@ -720,6 +722,15 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
   // Orbit-portrait rays landing at the α fixed point (dynamical plane only).
   if (p.orbitPortrait && p.orbitPortrait.length > 0 && p.fractType === "dyn") {
     drawOrbitPortrait(ctx, p.orbitPortrait, cc, p.center, p.zoom, size);
+  }
+
+  // Characteristic parameter rays θ⁻, θ⁺ of a stripped internal address (parameter plane only),
+  // drawn in the same gold as orbit portraits — they bound the wake of the named component.
+  if (p.addressRays && p.addressRays.length > 0 && p.fractType === "param") {
+    const depth = rayDepthForZoom(p.zoom);
+    for (const ang of p.addressRays) {
+      drawRays(ctx, cachedRay("param", ang, cc, depth), p.center, p.zoom, size, "rgba(255, 200, 90, 0.95)");
+    }
   }
 
   // Attracting cycle located by the inspector, joined in orbit order and marked with

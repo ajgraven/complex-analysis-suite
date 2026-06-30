@@ -367,6 +367,12 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   point (1/6 → _c_ = _i_). The panel also reports θ's **core entropy** _h_ = log λ and
   **biaccessibility dimension** _B_ = _h_/log 2 (Thurston's angle-pair algorithm; satellite angles
   like 1/7 give _h_ = 0, primitive ones like 3/7 give _h_ = log φ). `z²+c`.
+- **Symbolic console** — type an **internal address** (the increasing periods from the main cardioid
+  to a component, e.g. `1-3` rabbit, `1-2-4-8` cascade, `1-3-6`) and the **stripping algorithm**
+  returns its **kneading sequence** ν and the two **characteristic external angles** θ⁻, θ⁺ that
+  bound the component's wake (`1-3-6 → 10/63, 17/63`), drawn as a pair of gold parameter rays;
+  **Go to component** then snaps to its centre. A non-admissible address (the smallest is `1-2-4-5-6`,
+  kneading ABAAB⋆) is reported as realised by no component, rather than guessed. `z²+c`.
 - **Inverse-iteration Julia** (Overlays) — paints the dynamical-plane Julia set directly as the
   closure of random backward orbits `z ↦ ±√(z−c)` from the repelling fixed point (the "chaos
   game"), drawing the boundary crisply where forward escape-time struggles (thin dendrites, Cantor

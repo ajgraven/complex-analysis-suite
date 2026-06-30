@@ -23,9 +23,15 @@ import {
 } from "./render/inspect";
 import { matingVerdict } from "./render/mating";
 import { computeOrbit, orbitAndClassify, type Annotation, type OrbitFate } from "./render/overlay";
-import { toNumber as angleToNumber } from "./combinatorics/angles";
+import { toNumber as angleToNumber, binaryItinerary } from "./combinatorics/angles";
 import { coreEntropy } from "./combinatorics/coreEntropy";
 import { portraitSummary, rotationCycleAngles } from "./combinatorics/orbitPortrait";
+import {
+  AddressError,
+  formatKneading,
+  parseInternalAddress,
+  stripExternalAngles,
+} from "./combinatorics/stripping";
 import { landingForAngle } from "./render/angleParameter";
 import { renderRiemannSphere } from "./render/riemannSphere";
 import {
@@ -1508,6 +1514,7 @@ function init(): void {
     applyRayPairs(); // …and for bulb ray pairs
     applyInverseJulia(); // …and the inverse-iteration Julia cloud
     applySiegelCurves(); // …and the Siegel invariant curves
+    parameterView.setAddressRays(null); // …and a stripped internal address's rays (z²+c-specific)
     updateExteriorMap(); // a new f may change the degree / coefficients
     applyLaurent();
     updateJuliaProperties();
@@ -1533,6 +1540,7 @@ function init(): void {
     applyRayPairs();
     applyInverseJulia();
     applySiegelCurves();
+    parameterView.setAddressRays(null); // a new preset invalidates a stripped internal address's rays
     updateExteriorMap();
     applyLaurent();
     updateJuliaProperties();
@@ -2472,6 +2480,71 @@ function init(): void {
     updateDynCaption();
     announce(`Parameter c = ${dynCValue.textContent}`);
     showToast(`External angle ${m[1]}/${m[2]} → ${label}.`, "info");
+    const info = inspect(fAst, parameterView.plot.escAst, "param", crit, c, pa);
+    handleInspect(info, c, "param");
+    scheduleRecord();
+  });
+  // Symbolic console: strip an internal address to its kneading sequence + characteristic angles.
+  const fmtAngleBits = (ang: { p: number; q: number }, period: number): string =>
+    `${ang.p}/${ang.q} = 0.[${binaryItinerary(ang, period).join("")}]`;
+  const runStrip = (draw: boolean): ReturnType<typeof stripExternalAngles> | null => {
+    if (parameterView.plot.monicDegree !== 2) {
+      showToast(
+        "The symbolic console describes the z²+c Mandelbrot set — switch to the Mandelbrot preset.",
+        "warn",
+      );
+      return null;
+    }
+    let address: number[];
+    try {
+      address = parseInternalAddress(byId<HTMLInputElement>("strip-address").value);
+    } catch (e) {
+      showToast(e instanceof AddressError ? e.message : "Invalid internal address.", "warn");
+      return null;
+    }
+    const res = stripExternalAngles(address);
+    const readout = byId("strip-readout");
+    const gotoBtn = byId<HTMLButtonElement>("strip-goto");
+    if (!res.realized || !res.lower || !res.upper) {
+      // A non-admissible internal address is realised by no component (Bruin–Schleicher) — say so.
+      readout.textContent = `Address ${address.join("-")} → kneading ν = ${formatKneading(res.kneading)} is not admissible: no hyperbolic component realises it.`;
+      parameterView.setAddressRays(null);
+      gotoBtn.hidden = true;
+      return res;
+    }
+    readout.textContent =
+      `Address ${address.join("-")} → period ${res.period}, kneading ν = ${formatKneading(res.kneading)}. ` +
+      `Characteristic angles θ⁻ = ${fmtAngleBits(res.lower, res.period)}, θ⁺ = ${fmtAngleBits(res.upper, res.period)}.`;
+    if (draw) parameterView.setAddressRays([angleToNumber(res.lower), angleToNumber(res.upper)]);
+    gotoBtn.hidden = false;
+    return res;
+  };
+  byId("strip-go").addEventListener("click", () => runStrip(true));
+  byId("strip-goto").addEventListener("click", () => {
+    const res = runStrip(false);
+    if (!res || !res.realized || !res.lower) return;
+    // The two characteristic rays co-land at the component's root; land θ⁻ (periodic of the
+    // component period) and Newton-snap to the centre — reusing the go-to-angle machinery.
+    const land = landingForAngle(res.lower.p, res.lower.q);
+    if (!land) {
+      showToast("Could not land the characteristic ray.", "warn");
+      return;
+    }
+    const fAst = parameterView.plot.fAst;
+    const crit = parameterView.plot.criticalPoint;
+    const pa = parameterView.plot.paramA;
+    let c: [number, number] = [land.seed[0], land.seed[1]];
+    if (land.kind === "center") {
+      const nuc = findNucleus(fAst, crit, land.period, land.seed, pa);
+      if (nuc) c = [nuc[0], nuc[1]];
+    }
+    parameterView.plot.moveZ0(c);
+    parameterView.refreshOverlay();
+    dynamicalView.plot.c = formatComplex(c);
+    setCInput(c);
+    updateDynCaption();
+    announce(`Parameter c = ${dynCValue.textContent}`);
+    showToast(`Internal address ${res.address.join("-")} → period-${res.period} centre.`, "info");
     const info = inspect(fAst, parameterView.plot.escAst, "param", crit, c, pa);
     handleInspect(info, c, "param");
     scheduleRecord();
