@@ -339,7 +339,9 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   plane inspects the critical orbit at the clicked `c`; the dynamical plane the clicked
   `z₀`. Multiplier and distance need a holomorphic `f` (period and angle hold for any `f`).
   On the **dynamical plane** the located attracting cycle is marked (ringed dots joined in
-  orbit order). On the **parameter plane**, when a finite cycle is found, a **Find nucleus**
+  orbit order), and when its cycle has a rotation number _p_/_q_ a **Show orbit portrait** button
+  draws the external rays landing at the α fixed point and reports the portrait's valence, rotation
+  number, and characteristic arc. On the **parameter plane**, when a finite cycle is found, a **Find nucleus**
   button Newton-snaps `c` to the exact superattracting centre, and **Show bulb rays** turns
   on that bulb's landing rays; a **Misiurewicz** finder Newton-snaps to the exact preperiodic
   point `fᵐ⁺ᵏ(0) = fᵐ(0)` nearest the view, and **Siegel c for θ** jumps to the cardioid point

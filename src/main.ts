@@ -23,6 +23,8 @@ import {
 } from "./render/inspect";
 import { matingVerdict } from "./render/mating";
 import { computeOrbit, orbitAndClassify, type Annotation, type OrbitFate } from "./render/overlay";
+import { toNumber as angleToNumber } from "./combinatorics/angles";
+import { portraitSummary, rotationCycleAngles } from "./combinatorics/orbitPortrait";
 import {
   juliaConnected,
   juliaExteriorCoeffs,
@@ -856,11 +858,35 @@ function init(): void {
     byId("inspector-rays").hidden = !eligible;
   }
 
+  // Orbit-portrait toggle state: the last eligible rotation p/q and whether the rays are drawn.
+  let lastPortraitRotation: { p: number; q: number } | null = null;
+  let portraitShown = false;
+
+  /** Show "Show orbit portrait" on the dynamical plane when the inspected cycle has a rotation
+   *  p/q with q ≥ 2 — the α fixed point then has q external rays landing (z²+c only). */
+  function updateOrbitPortraitButton(info: InspectResult, plane: FractType): void {
+    const rot = info.rotation;
+    const eligible =
+      plane === "dyn" && rot !== null && rot.q >= 2 && dynamicalView.plot.perturbationEligible;
+    byId("inspector-portrait").hidden = !eligible;
+    lastPortraitRotation = eligible && rot ? { p: rot.p, q: rot.q } : null;
+  }
+
+  /** Clear any drawn orbit portrait and reset its toggle button to "Show". */
+  function clearOrbitPortrait(): void {
+    if (!portraitShown) return;
+    dynamicalView.setOrbitPortrait(null);
+    portraitShown = false;
+    byId("inspector-portrait").textContent = "Show orbit portrait";
+  }
+
   /** Inspector callback for both planes: render the report, then gate the action buttons. */
   function handleInspect(info: InspectResult, point: Vec2, plane: FractType): void {
     showInspect(info, point, plane);
     updateNucleusButton(info, point, plane);
     updateBulbRaysButton(info, plane);
+    clearOrbitPortrait(); // a fresh inspect (possibly a new c) invalidates the drawn portrait
+    updateOrbitPortraitButton(info, plane);
     // Any inspected point can be copied as a report / exported as an orbit.
     lastInspect = { info, point: [point[0], point[1]], plane };
     byId("inspector-copy").hidden = false;
@@ -2449,6 +2475,26 @@ function init(): void {
     cb.checked = true;
     applyRayPairs();
     byId("overlays-group").setAttribute("open", "");
+  });
+  byId("inspector-portrait").addEventListener("click", () => {
+    if (portraitShown) {
+      clearOrbitPortrait();
+      return;
+    }
+    if (!lastPortraitRotation) return;
+    const { p, q } = lastPortraitRotation;
+    const rays = rotationCycleAngles(p, q);
+    if (!rays) {
+      showToast("No orbit portrait for this rotation number.", "warn");
+      return;
+    }
+    dynamicalView.setOrbitPortrait(rays.map(angleToNumber));
+    portraitShown = true;
+    byId("inspector-portrait").textContent = "Hide orbit portrait";
+    const sum = portraitSummary(rays, 1); // α is a fixed point (period 1)
+    const arc = sum.characteristic;
+    const arcTxt = arc ? `, char. arc ${arc.lo.p}/${arc.lo.q}–${arc.hi.p}/${arc.hi.q}` : "";
+    showToast(`Orbit portrait at α: valence ${sum.valence}, rotation ${p}/${q}${arcTxt}.`, "info");
   });
   byId("inspector-copy").addEventListener("click", () => {
     if (!lastInspect) return;

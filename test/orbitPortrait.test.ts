@@ -4,6 +4,7 @@ import {
   characteristicArc,
   portraitSummary,
   rayRotationNumber,
+  rotationCycleAngles,
 } from "../src/combinatorics/orbitPortrait";
 
 describe("orbit-portrait combinatorics", () => {
@@ -35,5 +36,27 @@ describe("orbit-portrait combinatorics", () => {
     expect(arc?.lo).toEqual({ p: 1, q: 7 });
     expect(arc?.hi).toEqual({ p: 2, q: 7 });
     expect(arc?.length).toBeCloseTo(1 / 7, 12);
+  });
+});
+
+describe("rotation-cycle angles (rays at the α fixed point of a p/q bulb)", () => {
+  it("1/3 bulb → {1/7, 2/7, 4/7} (rabbit)", () => {
+    expect(rotationCycleAngles(1, 3)).toEqual([angle(1, 7), angle(2, 7), angle(4, 7)]);
+  });
+
+  it("1/2 bulb → {1/3, 2/3} (basilica)", () => {
+    expect(rotationCycleAngles(1, 2)).toEqual([angle(1, 3), angle(2, 3)]);
+  });
+
+  it("2/3 bulb → {3/7, 5/7, 6/7} (rotation 2/3)", () => {
+    const rays = rotationCycleAngles(2, 3);
+    expect(rays).toEqual([angle(3, 7), angle(5, 7), angle(6, 7)]);
+    // self-consistent: these rays have rotation number 2/3 at the fixed point
+    expect(rays && rayRotationNumber(rays, 1)).toEqual({ p: 2, q: 3 });
+  });
+
+  it("rejects a non-reduced or trivial p/q", () => {
+    expect(rotationCycleAngles(2, 4)).toBeNull();
+    expect(rotationCycleAngles(0, 1)).toBeNull();
   });
 });

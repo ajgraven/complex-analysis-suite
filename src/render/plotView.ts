@@ -62,6 +62,7 @@ export class PlotView {
   private showFarey = false;
   private showRayPairs = false;
   private rayAngle: number | null = null;
+  private orbitPortrait: number[] | null = null;
   private laurentBoundary: { coeffs: Vec2[]; r: number; lead: Vec2 } | null = null;
   private annotations: Annotation[] = [];
   /**
@@ -137,6 +138,12 @@ export class PlotView {
     this.requestOverlay();
   }
 
+  /** Set the orbit-portrait rays (external angles landing at α; dynamical plane), or null. Overlay-only. */
+  setOrbitPortrait(angles: number[] | null): void {
+    this.orbitPortrait = angles;
+    this.requestOverlay();
+  }
+
   /** Set the reconstructed exterior-map boundary to draw (coeffs in plot space, radius r), or
    *  null to clear. Overlay-only. */
   setLaurentBoundary(coeffs: Vec2[] | null, r: number, lead: Vec2 = [1, 0]): void {
@@ -203,6 +210,7 @@ export class PlotView {
           farey: this.showFarey,
           rayAngle: this.rayAngle,
           rayPairs: this.showRayPairs,
+          orbitPortrait: this.orbitPortrait,
           laurentBoundary: this.laurentBoundary ?? undefined,
           cyclePoints: this.currentCyclePoints(),
           a: this.plot.paramA,
@@ -285,6 +293,7 @@ export class PlotView {
       farey: this.showFarey,
       rayAngle: this.rayAngle,
       rayPairs: this.showRayPairs,
+      orbitPortrait: this.orbitPortrait,
       laurentBoundary: this.laurentBoundary ?? undefined,
       cyclePoints: this.currentCyclePoints(),
       a: this.plot.paramA,

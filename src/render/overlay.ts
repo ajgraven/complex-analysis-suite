@@ -217,6 +217,8 @@ export interface OverlayParams {
   rayAngle?: number | null;
   /** Draw both landing rays for every visible Farey bulb (parameter plane, z²+c). */
   rayPairs?: boolean;
+  /** Orbit-portrait rays: external angles (turns) landing at the α fixed point (dynamical plane). */
+  orbitPortrait?: number[] | null;
   /** Reconstructed exterior-map boundary to draw (ψ on |w| = r); coeffs in plot space. */
   laurentBoundary?: { coeffs: Vec2[]; r: number; lead?: Vec2 };
   /**
@@ -344,6 +346,7 @@ function drawRays(
   center: Vec2,
   zoom: number,
   size: number,
+  color = "rgba(120, 220, 255, 0.95)",
 ): void {
   const s = size / OVERLAY_BASE;
   // Clip in plot space, relative to the view, so the kept span scales with zoom: at deep
@@ -351,7 +354,7 @@ function drawRays(
   // drop the segments before they reached it), while the far-field tail is still dropped.
   const margin = 40 / zoom;
   ctx.save();
-  ctx.strokeStyle = "rgba(120, 220, 255, 0.95)";
+  ctx.strokeStyle = color;
   ctx.lineWidth = 1.6 * s;
   ctx.beginPath();
   let started = false;
@@ -409,6 +412,42 @@ function drawBulbRayPairs(
     if (!angles) continue;
     drawRays(ctx, cachedPairRay(angles[0], depth), center, zoom, size);
     drawRays(ctx, cachedPairRay(angles[1], depth), center, zoom, size);
+  }
+}
+
+// Cache of dynamic rays for the orbit-portrait overlay (several rays per frame). Dynamic rays
+// depend on angle + c + depth, so the cache is cleared when c or the zoom-derived depth changes.
+const portraitRayCache = new Map<string, Vec2[]>();
+let portraitRayKey = "";
+function cachedPortraitRay(angle: number, c: Complex, depth: number): Vec2[] {
+  const ck = `${c[0]},${c[1]}:${depth}`;
+  if (ck !== portraitRayKey) {
+    portraitRayCache.clear();
+    portraitRayKey = ck;
+  }
+  let pts = portraitRayCache.get(String(angle));
+  if (!pts) {
+    pts = dynamicRay(angle, c, { depth });
+    portraitRayCache.set(String(angle), pts);
+  }
+  return pts;
+}
+
+/**
+ * Draw the orbit-portrait rays — the external rays landing at the α fixed point of K_c — on the
+ * dynamical plane, in a distinct gold so they read against the cyan single ray.
+ */
+function drawOrbitPortrait(
+  ctx: CanvasRenderingContext2D,
+  angles: number[],
+  c: Complex,
+  center: Vec2,
+  zoom: number,
+  size: number,
+): void {
+  const depth = rayDepthForZoom(zoom);
+  for (const a of angles) {
+    drawRays(ctx, cachedPortraitRay(a, c, depth), center, zoom, size, "rgba(255, 200, 90, 0.95)");
   }
 }
 
@@ -597,6 +636,11 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
 
   // Landing-ray pair for every visible Farey bulb (parameter plane only).
   if (p.rayPairs && p.fractType === "param") drawBulbRayPairs(ctx, p.center, p.zoom, size);
+
+  // Orbit-portrait rays landing at the α fixed point (dynamical plane only).
+  if (p.orbitPortrait && p.orbitPortrait.length > 0 && p.fractType === "dyn") {
+    drawOrbitPortrait(ctx, p.orbitPortrait, cc, p.center, p.zoom, size);
+  }
 
   // Attracting cycle located by the inspector, joined in orbit order and marked with
   // ringed dots (dark backing ring keeps them legible over any fill). Dynamical plane

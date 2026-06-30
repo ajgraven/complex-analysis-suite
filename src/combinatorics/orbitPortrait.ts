@@ -12,13 +12,52 @@
  * The *grouping* of angles to cycle points is dynamics-dependent (the overlay obtains it by tracing
  * dynamic rays); this module is the pure layer it feeds. See FEATURE_RESEARCH.md §3.4.
  */
-import { type Angle, compare, double } from "./angles";
+import { type Angle, angle, compare, double } from "./angles";
+
+function gcdInt(a: number, b: number): number {
+  while (b) [a, b] = [b, a % b];
+  return a;
+}
 
 /** Apply the doubling map `n` times. */
 function doubleN(a: Angle, n: number): Angle {
   let r = a;
   for (let i = 0; i < n; i++) r = double(r);
   return r;
+}
+
+/**
+ * The external angles of the rays landing at the repelling α fixed point of a z²+c map whose
+ * attracting cycle has internal angle p/q — i.e. the period-q cycle of the doubling map x ↦ 2x
+ * (mod 2^q−1) that is order-isomorphic to rigid rotation by p/q, returned as q angles m/(2^q−1)
+ * sorted in angular order. These are the rays of the α orbit portrait (p/q satellite bulb): 1/3 →
+ * {1/7, 2/7, 4/7} (the rabbit), 1/2 → {1/3, 2/3} (the basilica). Null for a non-reduced or trivial
+ * p/q. (Generalises rays.ts `bulbRayAngles`, which returns only the bounding pair.)
+ */
+export function rotationCycleAngles(p: number, q: number): Angle[] | null {
+  if (q < 2 || p < 1 || p >= q || gcdInt(p, q) !== 1) return null;
+  const denom = 2 ** q - 1;
+  const seen = new Set<number>();
+  for (let start = 1; start < denom; start++) {
+    if (seen.has(start)) continue;
+    const orbit: number[] = [];
+    let x = start;
+    do {
+      orbit.push(x);
+      seen.add(x);
+      x = (2 * x) % denom;
+    } while (x !== start);
+    if (orbit.length !== q) continue; // not period-q
+    const sorted = [...orbit].sort((a, b) => a - b);
+    const idx = new Map<number, number>();
+    sorted.forEach((v, i) => idx.set(v, i));
+    let isRotation = true; // sorted[i] doubles to sorted[(i+p) mod q] ⇒ rotation by p/q
+    for (let i = 0; i < q && isRotation; i++) {
+      if (idx.get((2 * sorted[i]) % denom) !== (i + p) % q) isRotation = false;
+    }
+    if (isRotation) return sorted.map((m) => angle(m, denom));
+  }
+  return null;
 }
 
 /**

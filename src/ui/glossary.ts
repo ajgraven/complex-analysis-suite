@@ -189,6 +189,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     latex:
       "d = \\frac{1 - |\\partial_z f^p|^2}{\\left| \\partial_z\\partial_c f^p + \\partial_z^2 f^p \\cdot \\dfrac{\\partial_c f^p}{1 - \\partial_z f^p} \\right|}",
   },
+  {
+    id: "orbit-portrait",
+    term: "Orbit portrait",
+    defn: "The combinatorial fingerprint of a repelling periodic cycle: the sets of external angles whose rays land at each cycle point. The doubling map D(θ)=2θ permutes these sets cyclically, so D^p rotates the rays at one point rigidly — by the rotation number p/q. The valence v is the number of rays per point and the characteristic arc (the narrowest gap) is a complete invariant. On the dynamical plane the inspector draws the portrait of the α fixed point: e.g. the rabbit's α has rays {1/7, 2/7, 4/7} (valence 3, rotation 1/3); the basilica's has {1/3, 2/3} (valence 2, rotation 1/2). z²+c only.",
+  },
 ];
 
 /** The app's deliberate, non-textbook conventions — stated for honesty / research use. */
