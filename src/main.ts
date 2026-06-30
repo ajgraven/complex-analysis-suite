@@ -2560,6 +2560,36 @@ function init(): void {
     handleInspect(info, c, "param");
     scheduleRecord();
   });
+  // Projection view modes: remap both planes (single precision). Save each plot's linear view on
+  // entry and restore it on exit; anchor the projection at the plot's current centre, then show the
+  // canonical projected frame (full unit disk for Poincaré, one angular period for log-polar).
+  const savedProjViews = new Map<PlotView, { center: Vec2; zoom: number }>();
+  byId("projection-mode").addEventListener("change", () => {
+    const val = byId<HTMLSelectElement>("projection-mode").value;
+    const mode = val === "logpolar" ? 1 : val === "poincare" ? 2 : 0;
+    for (const view of [parameterView, dynamicalView]) {
+      const plot = view.plot;
+      if (mode !== 0) {
+        if (plot.projection === 0) savedProjViews.set(view, { center: plot.center, zoom: plot.zoom });
+        plot.setProjection(mode, plot.projection === 0 ? plot.center : plot.projCentre);
+        plot.center = [0, 0];
+        plot.zoom = 1;
+      } else {
+        plot.setProjection(0, [0, 0]);
+        const s = savedProjViews.get(view);
+        if (s) {
+          plot.center = s.center;
+          plot.zoom = s.zoom;
+          savedProjViews.delete(view);
+        }
+      }
+      view.refreshOverlay();
+    }
+    byId("projection-note").textContent =
+      mode === 0
+        ? ""
+        : `${val === "poincare" ? "Poincaré disk" : "Log-polar"} view active — overlays are hidden; choose Linear to restore the view.`;
+  });
   byId("herman-detect").addEventListener("click", () => {
     // Detect a Herman ring on the dynamical plane around z = 0 (the hole of the standard preset),
     // using the pure detector. Reports rotation number + modulus and draws the invariant circles.

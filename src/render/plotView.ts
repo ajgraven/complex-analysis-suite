@@ -18,6 +18,7 @@ import { GLPlot, renderScale, type FractType } from "./glPlot";
 import { inspect, type InspectResult } from "./inspect";
 import { drawOverlay, drawScaleBar, type Annotation } from "./overlay";
 import { isDoubleTap, pinchShift, pinchStateOf, type PinchState, type Tap } from "./pinch";
+import { inverseProject } from "./projection";
 
 /** Hooks linking a plot to the rest of the app (the parameter→dynamical coupling, input sync). */
 export interface PlotViewHooks {
@@ -243,6 +244,7 @@ export class PlotView {
           inverseJulia: this.showInverseJulia,
           siegelCurves: this.showSiegelCurves,
           hermanCurves: this.hermanCurves,
+          projected: this.plot.projection !== 0,
           laurentBoundary: this.laurentBoundary ?? undefined,
           cyclePoints: this.currentCyclePoints(),
           a: this.plot.paramA,
@@ -330,6 +332,7 @@ export class PlotView {
       inverseJulia: this.showInverseJulia,
       siegelCurves: this.showSiegelCurves,
       hermanCurves: this.hermanCurves,
+      projected: this.plot.projection !== 0,
       laurentBoundary: this.laurentBoundary ?? undefined,
       cyclePoints: this.currentCyclePoints(),
       a: this.plot.paramA,
@@ -357,7 +360,12 @@ export class PlotView {
   private uvToPlot([ux, uy]: Vec2): Vec2 {
     const c = this.plot.center;
     const z = this.plot.zoom;
-    return [c[0] + (ux * 2 - 1) / z, c[1] + ((1 - uy) * 2 - 1) / z];
+    const view: Vec2 = [c[0] + (ux * 2 - 1) / z, c[1] + ((1 - uy) * 2 - 1) / z];
+    // Under a projection the view coordinate is in projected space; invert it to the plot point so
+    // hover / click-to-inspect land where the shader actually drew (mirrors the GLSL coordinate map).
+    const proj = this.plot.projection;
+    if (proj === 0) return view;
+    return inverseProject(view, this.plot.projCentre, proj === 2 ? "poincare" : "logpolar") ?? view;
   }
 
   /** Orbit start + parameter c to inspect: the critical orbit on the parameter plane, the

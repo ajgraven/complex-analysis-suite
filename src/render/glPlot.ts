@@ -70,6 +70,8 @@ interface Uniforms {
   uA: WebGLUniformLocation | null;
   uFractType: WebGLUniformLocation | null;
   uCenter: WebGLUniformLocation | null; // single precision
+  uProjection: WebGLUniformLocation | null; // 0 linear / 1 log-polar / 2 Poincaré (f32 only)
+  uProjCentre: WebGLUniformLocation | null; // plot-space anchor for the projection
   uCenterX: WebGLUniformLocation | null; // df64 hi/lo
   uCenterY: WebGLUniformLocation | null;
   uOne: WebGLUniformLocation | null; // df64 optimization barrier
@@ -278,6 +280,9 @@ export class GLPlot {
 
   private _center: Vec2 = [0, 0];
   private _zoom = 1;
+  /** Projection view mode (0 linear / 1 log-polar / 2 Poincaré) + its plot-space anchor (f32 only). */
+  private _projection = 0;
+  private _projCentre: Vec2 = [0, 0];
   private _c = "0";
   private _cVal: Complex = [0, 0];
   private _f = "z^2+c";
@@ -454,6 +459,8 @@ export class GLPlot {
       uA: gl.getUniformLocation(program, "uA"),
       uFractType: gl.getUniformLocation(program, "uFractType"),
       uCenter: gl.getUniformLocation(program, "uCenter"),
+      uProjection: gl.getUniformLocation(program, "uProjection"),
+      uProjCentre: gl.getUniformLocation(program, "uProjCentre"),
       uCenterX: gl.getUniformLocation(program, "uCenterX"),
       uCenterY: gl.getUniformLocation(program, "uCenterY"),
       uOne: gl.getUniformLocation(program, "uOne"),
@@ -824,6 +831,8 @@ export class GLPlot {
       gl.uniform1f(u.uOne, 1.0);
     } else {
       gl.uniform2f(u.uCenter, this._center[0], this._center[1]);
+      gl.uniform1i(u.uProjection, this._projection);
+      gl.uniform2f(u.uProjCentre, this._projCentre[0], this._projCentre[1]);
     }
     return true;
   }
@@ -1514,6 +1523,20 @@ export class GLPlot {
   set center(centerval: Vec2) {
     this._center = centerval;
     this._centerDD = [dd(centerval[0]), dd(centerval[1])];
+    this.scheduleRender();
+  }
+  /** The active projection view mode (0 linear / 1 log-polar / 2 Poincaré disk). */
+  get projection(): number {
+    return this._projection;
+  }
+  /** Plot-space anchor the active projection is taken around. */
+  get projCentre(): Vec2 {
+    return this._projCentre;
+  }
+  /** Set the projection view mode and its plot-space anchor (single precision only). */
+  setProjection(mode: number, centre: Vec2): void {
+    this._projection = mode;
+    this._projCentre = centre;
     this.scheduleRender();
   }
   set z0(z0Val: Vec2) {

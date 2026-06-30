@@ -1195,6 +1195,35 @@ z^2+c</textarea
             </div>
           </details>
 
+          <!-- Projection: live coordinate remaps of both planes (single precision). -->
+          <details class="control-group" id="projection-group">
+            <summary>Projection (view)</summary>
+            <div class="controls">
+              <p class="exterior-status">
+                Remap both planes into a live projection (single precision; resets the view). Log-polar
+                is the exponential map (angle × log-radius about the centre); the Poincaré disk
+                compresses the whole plane into the unit disk (rim = ∞) via w = tanh(|z|/2)·ẑ.
+                <button
+                  type="button"
+                  class="gloss-link"
+                  data-term="poincare-disk"
+                  aria-label="About projection views"
+                >
+                  ?
+                </button>
+              </p>
+              <label class="exterior-n-label">
+                Mode
+                <select id="projection-mode" title="Coordinate remap applied to both plots">
+                  <option value="linear">Linear (off)</option>
+                  <option value="logpolar">Log-polar (exp map)</option>
+                  <option value="poincare">Poincaré disk</option>
+                </select>
+              </label>
+              <p class="exterior-status" id="projection-note"></p>
+            </div>
+          </details>
+
           <!-- Riemann sphere: render the current Julia set stereographically onto the sphere. -->
           <details class="control-group" id="sphere-group">
             <summary>Riemann sphere (z²+c)</summary>

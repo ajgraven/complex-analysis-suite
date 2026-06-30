@@ -238,6 +238,8 @@ export interface OverlayParams {
   cyclePoints?: Vec2[];
   /** Overlay backing-store size in px. */
   size: number;
+  /** A projection view (log-polar / Poincaré) is active — suppress the linear-mapped overlays. */
+  projected?: boolean;
   /** Live parameter `a`, bound in f / escape when used as a free variable. */
   a?: Complex;
   /** User-pinned annotations (gold marker + label) at plot-coordinate points. */
@@ -663,6 +665,9 @@ const HALO = "rgba(0, 0, 0, 0.6)";
 export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): void {
   const { size } = p;
   ctx.clearRect(0, 0, size, size);
+  // Overlays (rays, markers, the white point, annotations) are placed with the linear plot↔pixel
+  // map, which a projection breaks — so draw nothing while a projection is active (MVP).
+  if (p.projected) return;
   const s = size / OVERLAY_BASE;
   const cc: Complex = p.fractType === "param" ? [p.z0[0], p.z0[1]] : p.c;
   const a = p.a ?? [0, 0];

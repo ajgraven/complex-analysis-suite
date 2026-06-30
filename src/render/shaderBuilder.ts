@@ -227,11 +227,25 @@ export function buildFragmentShader(
   const baseStdlib = isDf64 ? DF64_GLSL + COMPLEX_DF64_GLSL : COMPLEX_SINGLE_GLSL;
   const centerUniforms = isDf64
     ? "uniform vec2 uCenterX;\nuniform vec2 uCenterY;"
-    : "uniform vec2 uCenter;";
+    : "uniform vec2 uCenter;\nuniform int uProjection;\nuniform vec2 uProjCentre;\nconst float PROJ_PI = 3.141592653589793;";
+  // Single precision supports the projection view modes (log-polar / Poincaré disk): the linear
+  // view coordinate is reinterpreted in projected space and inverse-mapped to the plot point z
+  // (mirrors render/projection.ts). df64 / perturbation keep the plain linear map. uProjection == 0
+  // (linear) skips the branch entirely, so the default path is byte-identical to before.
   const coordinate = isDf64
-    ? `  vec2 off = (uv * 2.0 - 1.0) / uZoom;
+    ? `  float offDomain = 0.0;
+  vec2 off = (uv * 2.0 - 1.0) / uZoom;
   cvec z = vec4(df_add(uCenterX, vec2(off.x, 0.0)), df_add(uCenterY, vec2(off.y, 0.0)));`
-    : `  vec2 plot = uCenter + (uv * 2.0 - 1.0) / uZoom;
+    : `  float offDomain = 0.0;
+  vec2 view = uCenter + (uv * 2.0 - 1.0) / uZoom;
+  vec2 plot = view;
+  if (uProjection == 2) {
+    float pr = length(view);
+    if (pr >= 1.0) { offDomain = 1.0; plot = uProjCentre; }
+    else plot = uProjCentre + view * (pr > 0.0 ? 2.0 * atanh(pr) / pr : 0.0);
+  } else if (uProjection == 1) {
+    plot = uProjCentre + exp(view.y * PROJ_PI) * vec2(cos(view.x * PROJ_PI), sin(view.x * PROJ_PI));
+  }
   cvec z = vec_(plot.x, plot.y);`;
 
   // Analytic exterior distance estimate (mode 11): carry the running derivative
@@ -533,6 +547,7 @@ vec3 colorAt(vec2 fragXY, out float outHeight) {
 ${coordinate}
   cvec cc = (uFractType == 1) ? z : vec_(uC.x, uC.y);
   outHeight = -1.0;
+  if (offDomain > 0.5) return vec3(0.05, 0.05, 0.07); // outside the projected domain (Poincaré rim)
 ${cardioidShortcut}
   if (uMode == 4) {
     // Domain colouring: one application of f. hue = arg; brightness grows with |f|,

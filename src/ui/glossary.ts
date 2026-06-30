@@ -226,6 +226,18 @@ export const GLOSSARY: GlossaryEntry[] = [
     defn: "The complex plane plus a point at infinity, modelled as a sphere by stereographic projection (z = (X+iY)/(1−Z)). Viewing a Julia set on it shows the whole dynamical plane at once, including the dynamics at ∞ (for z²+c, ∞ is a superattracting fixed point — the basin of ∞ is the exterior). The 'Riemann sphere' panel renders an orthographic snapshot: the screen centre is the south pole z=0, the rim is the equator |z|=1, and the back hemisphere (|z|>1, the basin of ∞) faces away.",
     latex: "\\zeta = \\frac{X + iY}{1 - Z}",
   },
+  {
+    id: "poincare-disk",
+    term: "Poincaré disk projection",
+    defn: "A live view that compresses the whole plane into the open unit disk by treating the modulus as a hyperbolic distance: a plot point z maps to the disk point w = tanh(|z−c*|/2)·(z−c*)/|z−c*|, so the boundary circle is ∞. A flat counterpart to the Riemann-sphere snapshot — you see the entire plane at once, with detail near c* magnified and far-field structure crowded against the rim. Single precision; overlays are hidden while it is active.",
+    latex: "w = \\tanh\\!\\big(\\tfrac{|z-c^*|}{2}\\big)\\,\\frac{z-c^*}{|z-c^*|}",
+  },
+  {
+    id: "log-polar",
+    term: "Log-polar projection (exponential map)",
+    defn: "A live view in which the screen's horizontal axis is the angle φ about a centre c* and the vertical axis is the log-radius ρ, so a pixel shows the plot point z = c* + e^{ρ+iφ}. Self-similar structure (e.g. spiralling around a Misiurewicz point) becomes periodic and straight, and sliding the log-radius is a constant-rate zoom toward c* — the basis of the log-polar zoom-video. Single precision.",
+    latex: "z = c^* + e^{\\rho + i\\varphi}",
+  },
 ];
 
 /** The app's deliberate, non-textbook conventions — stated for honesty / research use. */

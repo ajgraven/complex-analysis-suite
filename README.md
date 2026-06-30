@@ -401,6 +401,12 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   stereographic snapshot: the screen centre is the south pole _z_ = 0, the rim is the equator
   |_z_| = 1), so you see the whole dynamical plane including the dynamics at ∞ in one view;
   downloadable as a PNG. CPU snapshot, independent of the live render. `z²+c`.
+- **Projection views** — live GPU coordinate remaps of both planes (single precision): **log-polar**
+  (the exponential map `z = c* + e^{ρ+iφ}` — self-similar structure becomes periodic and straight) and
+  the **Poincaré disk** (`w = tanh(|z|/2)·ẑ`, compressing the whole plane into the unit disk with the
+  rim at ∞). Implemented as a fragment-shader inverse map ([`render/projection.ts`](src/render/projection.ts)
+  mirrors the GLSL); overlays are hidden while a projection is active, and df64 / deep-zoom keep the
+  linear map. Works for any `f`.
 
 ## Exterior map (uniformization)
 
