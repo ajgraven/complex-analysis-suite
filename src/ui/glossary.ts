@@ -182,6 +182,13 @@ export const GLOSSARY: GlossaryEntry[] = [
     term: "Newton basins",
     defn: "Under Newton's method (iterating z − f/f′) almost every point converges to one of the roots of f. The Newton-basins coloring sets the hue to the argument of the value the orbit ends on — under Newton that is the root reached — so the basins of different roots take distinct hues (the classic multi-coloured Newton fractal), with brightness from the convergence speed. No root detection is needed: distinct roots simply have distinct arguments.",
   },
+  {
+    id: "interior-distance",
+    term: "Interior distance estimate",
+    defn: "The interior counterpart of exterior distance estimation. For a parameter c inside a hyperbolic component of the Mandelbrot set (z²+c), it estimates the distance from c to that component's boundary, carving the otherwise-flat interior into a smooth relief (brightest deep inside, fading to 0 at the edge). From the attracting cycle's period p and a cycle point it accumulates the partials of fᵖ and evaluates DE = (1−|λ|²)/|∂z∂c fᵖ + ∂²zz fᵖ · ∂c fᵖ/(1−λ)|, with λ the multiplier ∂z fᵖ. Parameter plane, z²+c only.",
+    latex:
+      "d = \\frac{1 - |\\partial_z f^p|^2}{\\left| \\partial_z\\partial_c f^p + \\partial_z^2 f^p \\cdot \\dfrac{\\partial_c f^p}{1 - \\partial_z f^p} \\right|}",
+  },
 ];
 
 /** The app's deliberate, non-textbook conventions — stated for honesty / research use. */

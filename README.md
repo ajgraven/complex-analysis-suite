@@ -260,6 +260,10 @@ all are shader uniforms, so switching never recompiles):
     white at the superattracting centre to dark toward the component boundary (|λ| → 1);
     escaping points keep the smooth escape-time palette (the classic "internal coordinates"
     look). Needs a holomorphic `f`.
+  - _Distance (interior)_ — the interior counterpart of exterior distance estimation: for `c`
+    inside a hyperbolic component (z²+c, parameter plane) it estimates the distance to that
+    component's boundary, carving the flat interior into a smooth relief (brightest deep inside,
+    fading to 0 at the edge). Pairs with relief / normal-map lighting; z²+c parameter plane only.
   - _Marty (Julia-set normality)_ — colours by the spherical derivative
     `|（f^k)′(z₀)| / (1 + |z_k|²)`, which grows on the Julia set (where the family `{f^k}` fails
     to be normal) and stays small in the Fatou set, so it lights up the Julia set. A useful

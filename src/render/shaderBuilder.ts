@@ -429,6 +429,45 @@ bool inMainCardioidOrBulb(float x, float y) {
     ? "\n    if (pPeriod) {\n      if (cabsf(csub(z, pRef)) < 1e-6 * max(1.0, cabsf(z))) { kmax = uN; break; } // in a cycle ⇒ interior\n      pCount += 1; if (pCount > 20) { pCount = 0; pRef = z; } // refresh the reference point\n    }"
     : "";
 
+  // Interior distance estimate (uMode 15), Mandelbrot/parameter plane, z²+c: carve the flat
+  // interior by the distance from c to its component boundary — brightest at the nucleus, → 0 at
+  // the edge (mirrors the exterior-DE darkening for a unified boundary). Settles onto the cycle,
+  // recovers the period by closest return, then accumulates the partials of fᵖ and applies
+  // DE = (1−|dz|²)/|dcdz + dzdz·dc/(1−dz)| (see render/interiorDE.ts; the 2·… factors are f′=2z).
+  // Single precision only — df64 deep zoom never sits inside a component — so plain vec2 math; the
+  // dynamical-plane (Julia) interior DE is a separate formula, left flat here (a later follow-up).
+  const interiorDEBlock = !isDf64
+    ? `
+  if (uMode == 15 && uFractType == 1 && kmax == uN) {
+    cvec zr = z;
+    for (int s = 0; s < 32; s++) zr = fFn(zr, cc); // settle firmly onto the attracting cycle
+    int p = 0;                                     // SMALLEST period: first return below tolerance
+    cvec w = zr;                                   // (closest-return argmin can pick 2p when slow to
+    for (int q = 1; q <= 64; q++) {                //  settle, inflating the denominator → black speckles)
+      w = fFn(w, cc);
+      if (cabsf(csub(w, zr)) < 1e-4 * max(1.0, cabsf(zr))) { p = q; break; }
+    }
+    if (p > 0) {
+      cvec zc = zr, dz = vec_(1.0, 0.0), dzdz = vec_(0.0, 0.0), dcv = vec_(0.0, 0.0), dcdz = vec_(0.0, 0.0);
+      for (int k = 0; k < 64; k++) {
+        if (k >= p) break; // partials of fᵖ at the cycle point (order matters)
+        dcdz = cadd(cmul(zc, dcdz), cmul(dz, dcv)) * 2.0;
+        dcv  = cadd(cmul(zc, dcv) * 2.0, vec_(1.0, 0.0));
+        dzdz = cadd(cmul(dz, dz), cmul(zc, dzdz)) * 2.0;
+        dz   = cmul(zc, dz) * 2.0;
+        zc   = cadd(cmul(zc, zc), cc);
+      }
+      float num = 1.0 - dot(dz, dz);                                  // 1 − |dz|²
+      cvec denomC = cadd(dcdz, cdiv(cmul(dzdz, dcv), vec_(1.0 - dz.x, -dz.y)));
+      float denom = cabsf(denomC);
+      float de = (denom > 0.0) ? num / denom : 0.0;
+      if (de > 0.0) return palette(clamp(de * uZoom * 2.2, 0.0, 1.0)); // view-relative carved gradient
+    }
+    return vec3(0.0); // parabolic / unresolved ⇒ boundary
+  }
+`
+    : "";
+
   return `#version 300 es
 precision highp float;
 precision highp int;
@@ -560,7 +599,7 @@ ${cardioidShortcut}
     if (period == 0) return vec3(0.12); // no small cycle found
     return palette(fract(float(period) * 0.618)); // distinct hue per period
   }
-
+${interiorDEBlock}
   if (kmax == uN) return vec3(0.0); // never escaped → interior
 
   if (uMode == 14) {

@@ -104,6 +104,7 @@ const MODES: Record<string, number> = {
   multiplier: 12,
   marty: 13,
   newtonBasins: 14,
+  interiorDE: 15,
 };
 const PALETTES: Record<string, number> = {
   classic: 0,
@@ -1752,11 +1753,22 @@ function init(): void {
     byId<HTMLOptionElement>("mode-distance-analytic").disabled = !available;
     byId<HTMLOptionElement>("mode-multiplier").disabled = !available;
     byId<HTMLOptionElement>("mode-marty").disabled = !available;
+    // Interior DE is the z²+c Mandelbrot-interior formula specifically (parameter plane); gate it
+    // on a quadratic map (its recurrence hard-codes f′ = 2z) and off under Newton / perturbation.
+    const interiorDEAvailable =
+      parameterView.plot.monicDegree === 2 &&
+      !byId<HTMLInputElement>("newton").checked &&
+      !parameterView.plot.perturbationActive &&
+      !dynamicalView.plot.perturbationActive;
+    byId<HTMLOptionElement>("mode-interior-de").disabled = !interiorDEAvailable;
     const sel = byId<HTMLSelectElement>("mode");
     if (!available && sel.value === "distanceAnalytic") {
       sel.value = "distance";
       applyColoring();
     } else if (!available && (sel.value === "multiplier" || sel.value === "marty")) {
+      sel.value = "smooth";
+      applyColoring();
+    } else if (!interiorDEAvailable && sel.value === "interiorDE") {
       sel.value = "smooth";
       applyColoring();
     }
