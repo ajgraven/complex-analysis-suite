@@ -361,7 +361,9 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   is traced to its landing (the globally-convergent inverse of ray drawing — no nearby click
   needed); a **periodic** θ then Newton-snaps to the exact component **centre** (1/7 → the rabbit,
   1/3 → the basilica, 2/5 → a period-4 centre) and a **preperiodic** θ lands at its **Misiurewicz**
-  point (1/6 → _c_ = _i_). `z²+c`.
+  point (1/6 → _c_ = _i_). The panel also reports θ's **core entropy** _h_ = log λ and
+  **biaccessibility dimension** _B_ = _h_/log 2 (Thurston's angle-pair algorithm; satellite angles
+  like 1/7 give _h_ = 0, primitive ones like 3/7 give _h_ = log φ). `z²+c`.
 
 ## Exterior map (uniformization)
 

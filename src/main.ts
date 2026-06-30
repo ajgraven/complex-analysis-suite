@@ -24,6 +24,7 @@ import {
 import { matingVerdict } from "./render/mating";
 import { computeOrbit, orbitAndClassify, type Annotation, type OrbitFate } from "./render/overlay";
 import { toNumber as angleToNumber } from "./combinatorics/angles";
+import { coreEntropy } from "./combinatorics/coreEntropy";
 import { portraitSummary, rotationCycleAngles } from "./combinatorics/orbitPortrait";
 import { landingForAngle } from "./render/angleParameter";
 import {
@@ -2398,6 +2399,11 @@ function init(): void {
       showToast("Enter an external angle as a fraction p/q (e.g. 1/7).", "warn");
       return;
     }
+    // Core entropy of θ (a combinatorial invariant of the angle, independent of the current map).
+    const ce = coreEntropy(Number(m[1]), Number(m[2]));
+    byId("angle-entropy").textContent = ce
+      ? `Core entropy h = ${ce.entropy.toFixed(4)} (λ = ${ce.lambda.toFixed(4)}); biaccessibility B = ${ce.biaccessibility.toFixed(4)}.`
+      : "Core entropy: not computed for this angle (its orbit reaches the β-fixed angle).";
     if (parameterView.plot.monicDegree !== 2) {
       showToast(
         "Go-to-angle lands on the z²+c Mandelbrot set — switch to the Mandelbrot preset.",
