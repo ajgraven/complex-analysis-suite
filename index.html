@@ -132,6 +132,25 @@
                   aria-hidden="true"
                   hidden
                 ></canvas>
+                <div
+                  id="param-suggestion"
+                  class="plot-suggestion"
+                  role="status"
+                  aria-live="polite"
+                  hidden
+                >
+                  <span class="suggestion-icon" aria-hidden="true">⚠</span>
+                  <span class="suggestion-text"></span>
+                  <span class="suggestion-actions"></span>
+                  <button
+                    type="button"
+                    class="suggestion-dismiss"
+                    aria-label="Dismiss this suggestion"
+                    title="Dismiss"
+                  >
+                    ×
+                  </button>
+                </div>
                 <button
                   id="resize-param"
                   type="button"
@@ -278,6 +297,25 @@ abs(z)>2</textarea
                   role="application"
                   aria-label="Dynamical plane — interactive fractal plot. Arrow keys pan; the + and − keys zoom; drag (or press Enter) to set the orbit start z₀ to the view centre and inspect it."
                 ></canvas>
+                <div
+                  id="dyn-suggestion"
+                  class="plot-suggestion"
+                  role="status"
+                  aria-live="polite"
+                  hidden
+                >
+                  <span class="suggestion-icon" aria-hidden="true">⚠</span>
+                  <span class="suggestion-text"></span>
+                  <span class="suggestion-actions"></span>
+                  <button
+                    type="button"
+                    class="suggestion-dismiss"
+                    aria-label="Dismiss this suggestion"
+                    title="Dismiss"
+                  >
+                    ×
+                  </button>
+                </div>
                 <button
                   id="resize-dyn"
                   type="button"

@@ -406,6 +406,82 @@ h2 {
   z-index: 3;
 }
 
+/* Auto-suggestion badge: a small, dismissible advisory pinned to the plot's top-left (clear of the
+   bottom-right orbit-preview inset and resize grip). Above the overlay, below the resize handle;
+   only the badge itself takes pointer events, so it never blocks fractal interaction elsewhere. */
+.canvas-stack > .plot-suggestion {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px; /* may wrap, but cap width to the canvas */
+  width: max-content;
+  max-width: calc(100% - 16px);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.45rem 0.35rem 0.55rem;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  border: 1px solid var(--accent);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(3px);
+}
+
+.plot-suggestion[data-severity="warn"] {
+  border-color: #d6a13a;
+}
+
+.plot-suggestion .suggestion-icon {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.plot-suggestion .suggestion-text {
+  font-weight: 500;
+}
+
+.plot-suggestion .suggestion-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.plot-suggestion .suggestion-action {
+  padding: 0.18rem 0.5rem;
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.plot-suggestion .suggestion-action.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.plot-suggestion .suggestion-dismiss {
+  padding: 0 0.3rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.plot-suggestion .suggestion-dismiss:hover {
+  color: var(--fg);
+  border: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plot-suggestion {
+    backdrop-filter: none;
+  }
+}
+
 /* Live coordinate readout under each plot (kept tall so the layout doesn't jump). */
 .readout {
   margin: 0.35rem 0 0;

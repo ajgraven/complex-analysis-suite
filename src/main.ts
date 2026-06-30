@@ -35,6 +35,8 @@ import {
 import { landingForAngle } from "./render/angleParameter";
 import { renderRiemannSphere } from "./render/riemannSphere";
 import { detectHermanRing } from "./render/hermanRing";
+import { detectUnderIteration } from "./render/underIteration";
+import { SuggestionEngine, type Advisor } from "./ui/suggestions";
 import { getComplexFn } from "./expr/evaluate";
 import {
   juliaConnected,
@@ -741,6 +743,9 @@ function init(): void {
   // Smaller default render resolution on a phone (500 on desktop/tablet) — see initialRes(). Seed
   // the canvas-size inputs to match so the serialized state agrees; a shared view still overrides.
   const res0 = initialRes(window.innerWidth);
+  // Auto-suggestion engine: re-evaluated (debounced) on every view / setting change. Assigned a real
+  // implementation once both plots and the engine exist; the view hooks below call it via this ref.
+  let scheduleSuggestions: () => void = () => {};
   byId<HTMLInputElement>("inpParamRes").value = String(res0);
   byId<HTMLInputElement>("inpDynRes").value = String(res0);
   const dynamicalView = new PlotView(
@@ -756,6 +761,7 @@ function init(): void {
         updateViewChips();
         announce(`Dynamical plane — ${dynChip.textContent}`);
         scheduleRecord();
+        scheduleSuggestions();
       },
       onHover: hoverReadout("JCSReadout"),
       onInspect: handleInspect,
@@ -838,6 +844,7 @@ function init(): void {
         updateViewChips();
         announce(`Parameter space — ${paramChip.textContent}`);
         scheduleRecord();
+        scheduleSuggestions();
       },
       onHover: (coord) => {
         paramReadout(coord);
@@ -848,6 +855,82 @@ function init(): void {
   );
 
   paramPlot = parameterView.plot;
+
+  // --- Auto-suggestions: watch the live view and offer one-click fixes when it degrades --------
+  const suggestionEngine = new SuggestionEngine("param-suggestion", "dyn-suggestion");
+  // Colouring modes whose picture is escape-time based — an under-iterated cap visibly degrades the
+  // boundary in these. Interior / derivative modes (period, multiplier, marty, Newton basins,
+  // interior-DE, domain) colour differently and are excluded.
+  const ESCAPE_MODES = new Set([
+    "escape",
+    "smooth",
+    "distance",
+    "distanceAnalytic",
+    "orbit",
+    "histogram",
+    "stripe",
+    "triangle",
+    "decomposition",
+  ]);
+  /** Advisor: flag a view whose iteration cap is too low for its zoom, with one-click fixes. */
+  function underIterationAdvisor(view: PlotView, scope: "param" | "dyn"): Advisor {
+    return () => {
+      // Gate: only escape-time colouring, a linear (un-projected) view, Newton off, and only when the
+      // user hasn't already opted into auto-scaling (which raises the cap with zoom on its own).
+      if (byId<HTMLInputElement>("autoiter").checked) return null;
+      if (view.plot.projection !== 0) return null;
+      if (byId<HTMLInputElement>("newton").checked) return null;
+      if (!ESCAPE_MODES.has(byId<HTMLSelectElement>("mode").value)) return null;
+      const plot = view.plot;
+      const res = detectUnderIteration({
+        fAst: plot.fAst,
+        escAst: plot.escAst,
+        plane: scope,
+        c: plot.cValue,
+        orbitStart: plot.criticalPoint,
+        a: plot.paramA,
+        center: plot.center,
+        zoom: plot.zoom,
+        iterations: plot.currentIterations,
+      });
+      if (!res.underIterated) return null;
+      const pct = Math.round(res.recoveredFraction * 100);
+      const planeWord = scope === "param" ? "parameter" : "dynamical";
+      const inputId = scope === "param" ? INPUT_IDS.paramN : INPUT_IDS.dynN;
+      return {
+        id: "under-iteration",
+        scope,
+        severity: "warn",
+        message: `Detail is degrading — ~${pct}% of this view needs more iterations.`,
+        actions: [
+          {
+            label: `Raise to ${res.suggestedIterations}`,
+            primary: true,
+            run: () => {
+              plot.n = String(res.suggestedIterations);
+              byId<HTMLInputElement>(inputId).value = String(res.suggestedIterations);
+              updateEffectiveIterations();
+              showToast(
+                `Iterations raised to ${res.suggestedIterations} (${planeWord} plane).`,
+                "info",
+              );
+            },
+          },
+          {
+            label: "Auto-scale",
+            run: () => {
+              byId<HTMLInputElement>("autoiter").checked = true;
+              applyAutoIter();
+              showToast("Auto-iterations enabled — the cap now grows with zoom.", "info");
+            },
+          },
+        ],
+      };
+    };
+  }
+  suggestionEngine.register(underIterationAdvisor(parameterView, "param"));
+  suggestionEngine.register(underIterationAdvisor(dynamicalView, "dyn"));
+  scheduleSuggestions = () => suggestionEngine.schedule();
 
   // --- Click-to-inspect → nucleus finder (parameter plane) ----------------
   let lastNucleusSeed: { point: Vec2; period: number } | null = null;
@@ -1525,6 +1608,7 @@ function init(): void {
     updateViewChips();
     announce(`Changes applied. Dynamical plane for c = ${dynCValue.textContent}.`);
     scheduleRecord();
+    scheduleSuggestions(); // new f / c / iterations may change the under-iteration verdict
   }
 
   /** Load a named preset into the inputs and both plots. */
@@ -1558,6 +1642,7 @@ function init(): void {
     setDirty(false);
     updateViewChips();
     scheduleRecord();
+    scheduleSuggestions(); // a new preset resets f / c / iterations / mode
   }
 
   /** Render a plot at the chosen size and download it, with button feedback. */
@@ -1658,6 +1743,7 @@ function init(): void {
     }
     gradientEditor.setVisible(byId<HTMLSelectElement>("palette").value === "custom");
     applyTrap();
+    scheduleSuggestions(); // the under-iteration nudge only applies to escape-time modes
   }
 
   /** Apply the orbit-trap shape to both plots; its control shows only in orbit-trap mode. */
@@ -1785,6 +1871,7 @@ function init(): void {
     }
     byId<HTMLInputElement>("autoiter-strength").disabled = !on; // only adjustable when active
     updateEffectiveIterations();
+    scheduleSuggestions(); // auto-scaling changes whether the under-iteration nudge applies
   }
 
   /** Toggle temporal anti-aliasing (idle accumulation) on both plots. */
