@@ -877,13 +877,17 @@ function init(): void {
   const UNDER_ITER_MAX_ZOOM = 1e11; // above this the f64 CPU grid probe loses reliability
   const PERTURB_NUDGE_METRIC = 1e11; // df64 precision getting thin → suggest perturbation (z²+c)
   const PRECISION_WALL_METRIC = 1e13; // GPU-df64 reliability wall → fine detail unreliable
-  /** Advisor: flag a view whose iteration cap is too low for its zoom, with one-click fixes. */
-  function underIterationAdvisor(view: PlotView, scope: "param" | "dyn"): Advisor {
+  const INTERIOR_DOMINATED = 0.96; // ≥ this fraction genuinely interior ⇒ escape-time is flat black
+  /**
+   * Advisor for the escape-time view: one CPU probe drives two suggestions — raise the iteration cap
+   * when the view is under-iterated, or switch to an interior-revealing colouring when the view sits
+   * almost entirely inside the set (where escape-time renders flat black). Under-iteration wins when
+   * both could apply (the genuinely-interior reading is only trusted once the cap is adequate).
+   */
+  function escapeViewAdvisor(view: PlotView, scope: "param" | "dyn"): Advisor {
     return () => {
-      // Gate: only escape-time colouring, a linear (un-projected) view, Newton off, only when the
-      // user hasn't opted into auto-scaling (which raises the cap with zoom on its own), and only at
-      // zooms where the f64 CPU probe is still reliable (deeper views are the precision advisor's job).
-      if (byId<HTMLInputElement>("autoiter").checked) return null;
+      // Gate: only escape-time colouring, a linear (un-projected) view, Newton off, and only at zooms
+      // where the f64 CPU probe is still reliable (deeper views are the precision advisor's job).
       if (view.plot.projection !== 0) return null;
       if (view.plot.zoom > UNDER_ITER_MAX_ZOOM) return null;
       if (byId<HTMLInputElement>("newton").checked) return null;
@@ -900,39 +904,67 @@ function init(): void {
         zoom: plot.zoom,
         iterations: plot.currentIterations,
       });
-      if (!res.underIterated) return null;
-      const pct = Math.round(res.recoveredFraction * 100);
-      const planeWord = scope === "param" ? "parameter" : "dynamical";
-      const inputId = scope === "param" ? INPUT_IDS.paramN : INPUT_IDS.dynN;
-      return {
-        id: "under-iteration",
-        scope,
-        severity: "warn",
-        message: `Detail is degrading — ~${pct}% of this view needs more iterations.`,
-        actions: [
-          {
-            label: `Raise to ${res.suggestedIterations}`,
-            primary: true,
-            run: () => {
-              plot.n = String(res.suggestedIterations);
-              byId<HTMLInputElement>(inputId).value = String(res.suggestedIterations);
-              updateEffectiveIterations();
-              showToast(
-                `Iterations raised to ${res.suggestedIterations} (${planeWord} plane).`,
-                "info",
-              );
+      // Under-iterated → offer to raise the cap (skipped when auto-scaling already handles it).
+      if (res.underIterated && !byId<HTMLInputElement>("autoiter").checked) {
+        const pct = Math.round(res.recoveredFraction * 100);
+        const planeWord = scope === "param" ? "parameter" : "dynamical";
+        const inputId = scope === "param" ? INPUT_IDS.paramN : INPUT_IDS.dynN;
+        return {
+          id: "under-iteration",
+          scope,
+          severity: "warn",
+          message: `Detail is degrading — ~${pct}% of this view needs more iterations.`,
+          actions: [
+            {
+              label: `Raise to ${res.suggestedIterations}`,
+              primary: true,
+              run: () => {
+                plot.n = String(res.suggestedIterations);
+                byId<HTMLInputElement>(inputId).value = String(res.suggestedIterations);
+                updateEffectiveIterations();
+                showToast(
+                  `Iterations raised to ${res.suggestedIterations} (${planeWord} plane).`,
+                  "info",
+                );
+              },
             },
-          },
-          {
-            label: "Auto-scale",
-            run: () => {
-              byId<HTMLInputElement>("autoiter").checked = true;
-              applyAutoIter();
-              showToast("Auto-iterations enabled — the cap now grows with zoom.", "info");
+            {
+              label: "Auto-scale",
+              run: () => {
+                byId<HTMLInputElement>("autoiter").checked = true;
+                applyAutoIter();
+                showToast("Auto-iterations enabled — the cap now grows with zoom.", "info");
+              },
             },
-          },
-        ],
-      };
+          ],
+        };
+      }
+      // Genuinely interior (not under-iterated) → escape-time is flat black here; the multiplier map
+      // reveals the internal structure. Only offered when that mode is actually selectable.
+      if (
+        !res.underIterated &&
+        res.interiorFraction >= INTERIOR_DOMINATED &&
+        !byId<HTMLOptionElement>("mode-multiplier").disabled
+      ) {
+        return {
+          id: "interior-dominated",
+          scope,
+          severity: "info",
+          message: "Inside the set — escape-time is flat here. The multiplier map reveals the internal structure.",
+          actions: [
+            {
+              label: "Multiplier map",
+              primary: true,
+              run: () => {
+                byId<HTMLSelectElement>("mode").value = "multiplier";
+                applyColoring();
+                showToast("Switched to the multiplier-map colouring.", "info");
+              },
+            },
+          ],
+        };
+      }
+      return null;
     };
   }
   /** Advisor: deep zoom is straining df64 precision — offer perturbation (z²+c) or warn (otherwise). */
@@ -1010,8 +1042,8 @@ function init(): void {
   suggestionEngine.register(precisionAdvisor(parameterView, "param"));
   suggestionEngine.register(precisionAdvisor(dynamicalView, "dyn"));
   suggestionEngine.register(modeMismatchAdvisor(parameterView, "param")); // one badge for a global map issue
-  suggestionEngine.register(underIterationAdvisor(parameterView, "param"));
-  suggestionEngine.register(underIterationAdvisor(dynamicalView, "dyn"));
+  suggestionEngine.register(escapeViewAdvisor(parameterView, "param"));
+  suggestionEngine.register(escapeViewAdvisor(dynamicalView, "dyn"));
   scheduleSuggestions = () => suggestionEngine.schedule();
 
   // --- Click-to-inspect → nucleus finder (parameter plane) ----------------

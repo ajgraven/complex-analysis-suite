@@ -40,15 +40,17 @@ describe("detectUnderIteration — parameter plane (z²+c)", () => {
     expect(r.underIterated).toBe(false);
   });
 
-  it("excludes genuinely-interior views (deep inside the set → not flagged)", () => {
+  it("excludes genuinely-interior views (deep inside the set → not flagged, interiorFraction ≈ 1)", () => {
     const r = detectUnderIteration(param([-0.5, 0], 5, 100));
     expect(r.underIterated).toBe(false);
     expect(r.recoveredFraction).toBe(0); // every cell stays bounded — nothing is 'recovered'
+    expect(r.interiorFraction).toBeGreaterThan(0.95); // the whole window sits inside the set
   });
 
-  it("does NOT flag a far-exterior view (everything escapes immediately)", () => {
+  it("does NOT flag a far-exterior view (everything escapes immediately, interiorFraction ≈ 0)", () => {
     const r = detectUnderIteration(param([3, 3], 1, 100));
     expect(r.underIterated).toBe(false);
+    expect(r.interiorFraction).toBe(0);
   });
 
   it("returns a clear verdict when the cap already exceeds the probe ceiling", () => {

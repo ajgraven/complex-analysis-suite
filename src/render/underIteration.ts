@@ -57,6 +57,12 @@ export interface UnderIterationResult {
   underIterated: boolean;
   /** Fraction of sampled cells that escape only beyond the current cap (in [n, probeIter)). */
   recoveredFraction: number;
+  /**
+   * Fraction of sampled cells that never escape within the (zoom-appropriate) probe cap — i.e.
+   * genuinely interior. ≈1 for a view sitting inside the set (where escape-time renders a flat
+   * black image and an interior/period colouring is wanted); 0 in the early-out cases.
+   */
+  interiorFraction: number;
   /** Iteration cap that restores the recovered detail — the value to bump to. */
   suggestedIterations: number;
   /** Cells sampled (diagnostic). */
@@ -93,6 +99,7 @@ export function detectUnderIteration(
   const clear: UnderIterationResult = {
     underIterated: false,
     recoveredFraction: 0,
+    interiorFraction: 0,
     suggestedIterations: probeIter,
     sampled: 0,
   };
@@ -107,6 +114,7 @@ export function detectUnderIteration(
   const step = (2 * halfWidth) / grid;
 
   let recovered = 0;
+  let interior = 0;
   let sampled = 0;
   for (let py = 0; py < grid; py++) {
     const y = center[1] - halfWidth + (py + 0.5) * step;
@@ -129,13 +137,15 @@ export function detectUnderIteration(
           break;
         }
       }
-      if (escapeStep >= n) recovered++; // escaped only beyond the current cap ⇒ recovered detail
+      if (escapeStep < 0) interior++; // never escaped within the probe cap ⇒ genuinely interior
+      else if (escapeStep >= n) recovered++; // escaped only beyond the current cap ⇒ recovered detail
     }
   }
   const recoveredFraction = sampled > 0 ? recovered / sampled : 0;
   return {
     underIterated: recoveredFraction > threshold,
     recoveredFraction,
+    interiorFraction: sampled > 0 ? interior / sampled : 0,
     suggestedIterations: probeIter, // the zoom-appropriate cap — one raise resolves the view
     sampled,
   };
