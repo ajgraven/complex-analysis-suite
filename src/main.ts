@@ -36,6 +36,7 @@ import { landingForAngle } from "./render/angleParameter";
 import { renderRiemannSphere } from "./render/riemannSphere";
 import { detectHermanRing } from "./render/hermanRing";
 import { detectUnderIteration } from "./render/underIteration";
+import { escapeIsMeaningless, precisionMetric } from "./render/viewAdvisories";
 import { SuggestionEngine, type Advisor } from "./ui/suggestions";
 import { getComplexFn } from "./expr/evaluate";
 import {
@@ -872,13 +873,19 @@ function init(): void {
     "triangle",
     "decomposition",
   ]);
+  // Depth thresholds (precision-pressure metric = zoom·max(1,|c|), matching glPlot.desiredPrecision).
+  const UNDER_ITER_MAX_ZOOM = 1e11; // above this the f64 CPU grid probe loses reliability
+  const PERTURB_NUDGE_METRIC = 1e11; // df64 precision getting thin → suggest perturbation (z²+c)
+  const PRECISION_WALL_METRIC = 1e13; // GPU-df64 reliability wall → fine detail unreliable
   /** Advisor: flag a view whose iteration cap is too low for its zoom, with one-click fixes. */
   function underIterationAdvisor(view: PlotView, scope: "param" | "dyn"): Advisor {
     return () => {
-      // Gate: only escape-time colouring, a linear (un-projected) view, Newton off, and only when the
-      // user hasn't already opted into auto-scaling (which raises the cap with zoom on its own).
+      // Gate: only escape-time colouring, a linear (un-projected) view, Newton off, only when the
+      // user hasn't opted into auto-scaling (which raises the cap with zoom on its own), and only at
+      // zooms where the f64 CPU probe is still reliable (deeper views are the precision advisor's job).
       if (byId<HTMLInputElement>("autoiter").checked) return null;
       if (view.plot.projection !== 0) return null;
+      if (view.plot.zoom > UNDER_ITER_MAX_ZOOM) return null;
       if (byId<HTMLInputElement>("newton").checked) return null;
       if (!ESCAPE_MODES.has(byId<HTMLSelectElement>("mode").value)) return null;
       const plot = view.plot;
@@ -928,6 +935,81 @@ function init(): void {
       };
     };
   }
+  /** Advisor: deep zoom is straining df64 precision — offer perturbation (z²+c) or warn (otherwise). */
+  function precisionAdvisor(view: PlotView, scope: "param" | "dyn"): Advisor {
+    return () => {
+      const plot = view.plot;
+      if (plot.perturbationActive) return null; // already on the glitch-free deep-zoom kernel
+      if (plot.projection !== 0) return null; // a projection forces its own single-precision regime
+      const metric = precisionMetric(plot.zoom, plot.center);
+      if (metric < PERTURB_NUDGE_METRIC) return null; // df64 is still comfortably accurate
+      // Perturbation deep zoom is the z²+c parameter-plane fix; offer it when eligible.
+      if (scope === "param" && plot.perturbationEligible) {
+        return {
+          id: "enable-perturbation",
+          scope,
+          severity: "warn",
+          message: "Deep zoom is straining df64 precision — perturbation renders it reliably (and faster).",
+          actions: [
+            {
+              label: "Enable perturbation",
+              primary: true,
+              run: () => {
+                byId<HTMLInputElement>("perturbation").checked = true;
+                applyPerturbation();
+                showToast("Perturbation deep zoom enabled.", "info");
+              },
+            },
+          ],
+        };
+      }
+      // No deeper-precision option for this map/plane: warn (dismissible) once past the df64 wall.
+      if (metric >= PRECISION_WALL_METRIC) {
+        return {
+          id: "precision-exhausted",
+          scope,
+          severity: "warn",
+          message: "Beyond df64's precision limit — fine detail at this depth may be unreliable.",
+          actions: [],
+        };
+      }
+      return null;
+    };
+  }
+  /** Advisor: a rational map whose escape-time image is flat — offer period colouring (param plane). */
+  function modeMismatchAdvisor(view: PlotView, scope: "param" | "dyn"): Advisor {
+    return () => {
+      if (byId<HTMLInputElement>("newton").checked) return null; // Newton transforms the dynamics
+      if (!ESCAPE_MODES.has(byId<HTMLSelectElement>("mode").value)) return null; // already non-escape
+      const plot = view.plot;
+      // Evaluate the map's degree structure at a generic, non-degenerate c (the property is a feature
+      // of the family, not of the selected parameter — and on the param plane the white-point c can be
+      // 0, where a rational family degenerates to a polynomial).
+      if (!escapeIsMeaningless(plot.fAst, [0.5, 0.3], plot.paramA)) return null;
+      return {
+        id: "escape-meaningless",
+        scope,
+        severity: "warn",
+        message: "This rational map's orbits stay bounded — escape-time colouring is flat here. Period colouring shows the dynamics.",
+        actions: [
+          {
+            label: "Switch to period",
+            primary: true,
+            run: () => {
+              byId<HTMLSelectElement>("mode").value = "period";
+              applyColoring();
+              showToast("Switched to period colouring.", "info");
+            },
+          },
+        ],
+      };
+    };
+  }
+  // Registration order = per-plot priority: precision (deep-zoom blocker) → mode mismatch (flat
+  // image) → under-iteration. The first non-dismissed advisor for a plot wins its badge.
+  suggestionEngine.register(precisionAdvisor(parameterView, "param"));
+  suggestionEngine.register(precisionAdvisor(dynamicalView, "dyn"));
+  suggestionEngine.register(modeMismatchAdvisor(parameterView, "param")); // one badge for a global map issue
   suggestionEngine.register(underIterationAdvisor(parameterView, "param"));
   suggestionEngine.register(underIterationAdvisor(dynamicalView, "dyn"));
   scheduleSuggestions = () => suggestionEngine.schedule();
@@ -1891,6 +1973,7 @@ function init(): void {
     }
     updatePerturbationGating();
     updateDerivativeGating();
+    scheduleSuggestions(); // perturbation on/off changes the deep-zoom precision nudge
   }
 
   /**
