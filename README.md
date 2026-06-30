@@ -81,8 +81,16 @@ Presets live in [`src/presets.ts`](src/presets.ts) as two dictionaries
 
 Included presets (grouped in the picker): Mandelbrot and cubic (`z³+c`);
 the abs-variants tricorn, multicorn (`z̄³+c`), burning ship, butterfly, and celtic; the rational/logistic
-magnet and lambda; the transcendental exponential map, teardrop Schwarz, and exp
-Schwarz; and a biomorph.
+magnet, lambda, and two **rational families** ((`z²+c)/(1+cz²)` and `(z²+c)/(1−z²)`); the
+transcendental exponential map, teardrop Schwarz, and exp Schwarz; and a biomorph.
+
+The **rational families** illustrate maps whose ∞ is _not_ a superattracting fixed point: orbits
+converge to finite attracting cycles rather than escaping, so escape-time colouring is blank and they
+open in the **period** colouring (which detects the attracting cycle and reveals the Fatou structure).
+Their free finite critical point is 0, so the parameter plane tracks the orbit of 0 exactly like
+`z²+c`. Critical points of any rational `f` come from
+[`findRationalCriticalPoints`](src/render/critical.ts) (roots of the numerator of `f′`, via
+Durand–Kerner), and the inspector reports their attracting cycles and multipliers unchanged.
 
 A few use non-textbook conventions, noted here for honesty: **tricorn** and **celtic**
 are faithful (`conj(z)²+c` and `|Re(z²)|+i·Im(z²)+c`); **burning ship** is parameterised

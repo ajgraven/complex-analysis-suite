@@ -206,6 +206,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     defn: "A way to paint the Julia set directly as the closure of backward orbits, rather than colouring by forward escape. For z²+c the preimages of a point are z ↦ ±√(z−c); iterating a random choice of branch from the repelling β fixed point converges onto the Julia set and samples it densely (the 'chaos game'). It draws the boundary crisply where forward escape-time struggles — thin dendrites and Cantor dusts. Overlay on the dynamical plane; z²+c only (a closed-form inverse). c=0 gives the unit circle, c=−1 the basilica.",
   },
   {
+    id: "rational-map",
+    term: "Rational map",
+    defn: "An iteration f(z) = N(z)/D(z) of two polynomials, e.g. (z²+c)/(1+cz²). Unlike z²+c, ∞ is generally an ordinary point rather than a superattracting fixed point, so orbits converge to FINITE attracting cycles instead of escaping — escape-time colouring is blank, and the 'period' colouring (which detects the attracting cycle) reveals the Fatou structure. By Riemann–Hurwitz a degree-d rational map has 2d−2 critical points; the parameter plane tracks the orbit of a free critical point (0 for these even-symmetric families).",
+  },
+  {
     id: "internal-address",
     term: "Internal address & stripping",
     defn: "A combinatorial 'street address' for a hyperbolic component: the strictly-increasing periods 1 → S₁ → … → S_k of the principal components crossed from the main cardioid (1-3 is the rabbit, 1-2-4-8 the period-doubling cascade). The stripping algorithm turns an address into its kneading sequence ν and the two characteristic external angles θ⁻, θ⁺ whose parameter rays bound the component's wake. Not every increasing address is realised — 1-2-4-5-6 is the smallest non-admissible one (Bruin–Schleicher).",

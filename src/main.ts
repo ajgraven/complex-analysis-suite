@@ -1535,6 +1535,13 @@ function init(): void {
     updateParamAVisibility();
     updatePerturbationGating(); // a new preset may change z²+c eligibility (re-enables light/outline/equipotential)
     updateDerivativeGating();
+    // Rational families (∞ not superattracting) carry a default colouring mode — escape-time is
+    // meaningless there (orbits converge to finite cycles), so honour it instead of opening flat black.
+    const presetMode = paramPresets[name].mode;
+    if (presetMode) {
+      byId<HTMLSelectElement>("mode").value = presetMode;
+      applyColoring();
+    }
     applyFarey();
     applyRays();
     applyRayPairs();

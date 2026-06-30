@@ -35,6 +35,12 @@ export interface Preset {
    * Multibrot family; set it where the critical point is known and non-zero.
    */
   criticalPoint?: Vec2;
+  /**
+   * Coloring mode to switch to when this preset is loaded (a key of `MODES`, e.g. "period").
+   * Used by rational families whose ∞ is not superattracting: escape-time colouring is meaningless
+   * there (orbits converge to finite cycles), so they open in "period" instead of the default smooth.
+   */
+  mode?: string;
 }
 
 export type PresetName =
@@ -50,7 +56,9 @@ export type PresetName =
   | "exponential map"
   | "teardrop Schwarz"
   | "exp Schwarz"
-  | "biomorph";
+  | "biomorph"
+  | "rational symmetric"
+  | "rational V2";
 
 export const paramPresets: Record<PresetName, Preset> = {
   mandelbrot: {
@@ -169,6 +177,30 @@ export const paramPresets: Record<PresetName, Preset> = {
     nplot: "6",
     escape: "if(abs(re(z))>10,true,abs(im(z))>10)",
     zoom: 0.6,
+    center: [0, 0],
+  },
+  // Rational families: ∞ is NOT superattracting (orbits converge to finite cycles), so the picture
+  // comes from the convergence/period colouring rather than escape-time. The free finite critical
+  // point of each of these even-symmetric maps is 0 (the other is ∞), so the parameter plane iterates
+  // the critical orbit of 0, exactly like z²+c. The escape test is only a divergence/NaN guard.
+  "rational symmetric": {
+    f: "(z^2+c)/(1+c*z^2)",
+    c: "0.5+0.3*i",
+    n: "120",
+    nplot: "6",
+    escape: "abs(z)>10000",
+    mode: "period",
+    zoom: 0.5,
+    center: [0, 0],
+  },
+  "rational V2": {
+    f: "(z^2+c)/(1-z^2)",
+    c: "0.1+0.15*i",
+    n: "120",
+    nplot: "6",
+    escape: "abs(z)>10000",
+    mode: "period",
+    zoom: 0.5,
     center: [0, 0],
   },
 };
@@ -303,6 +335,28 @@ export const dynPresets: Record<PresetName, Preset> = {
     n: "30",
     nplot: "6",
     escape: "if(abs(re(z))>10,true,abs(im(z))>10)",
+    zoom: 0.5,
+    center: [0, 0],
+  },
+  "rational symmetric": {
+    f: "(z^2+c)/(1+c*z^2)",
+    c: "0.31+0.04*i",
+    z0: "0",
+    n: "120",
+    nplot: "6",
+    escape: "abs(z)>10000",
+    mode: "period",
+    zoom: 0.5,
+    center: [0, 0],
+  },
+  "rational V2": {
+    f: "(z^2+c)/(1-z^2)",
+    c: "0.05+0.1*i",
+    z0: "0",
+    n: "120",
+    nplot: "6",
+    escape: "abs(z)>10000",
+    mode: "period",
     zoom: 0.5,
     center: [0, 0],
   },

@@ -19,7 +19,7 @@ describe("presets", () => {
 
   it("presetNames matches the dictionary keys", () => {
     expect([...presetNames].sort()).toEqual(Object.keys(paramPresets).sort());
-    expect(presetNames).toHaveLength(13);
+    expect(presetNames).toHaveLength(15);
   });
 
   it("every parameter preset is well-formed", () => {

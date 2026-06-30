@@ -14,6 +14,7 @@ import type { Node } from "../expr/ast";
 import * as C from "../expr/complexJs";
 import { differentiate } from "../expr/derivative";
 import { makeComplexFn, getComplexFn, getEscapeFn } from "../expr/evaluate";
+import { fToRational } from "../expr/rational";
 
 const cabs = (z: Complex): number => Math.hypot(z[0], z[1]);
 
@@ -133,25 +134,27 @@ export function polynomialCoeffs(fAst: Node, a: Complex, c: Complex): Complex[] 
   return coeffs;
 }
 
-/**
- * All critical points (roots of f′ = 0) when f is a polynomial of degree ≥ 2, via Durand–Kerner
- * (Weierstrass) simultaneous root finding on the monic f′/lead. Returns null for a non-polynomial
- * or non-holomorphic f. Roots may repeat for a higher-multiplicity critical point (e.g. 0 for
- * z^d + c) — harmless for the connectivity test, which only needs each orbit's fate.
- */
-export function findCriticalPoints(fAst: Node, a: Complex, c: Complex): Complex[] | null {
-  let fz: (z: Complex, c: Complex) => Complex;
-  try {
-    fz = makeComplexFn(differentiate(fAst, "z"), a);
-  } catch {
-    return null; // non-holomorphic ⇒ no analytic f′
-  }
-  const dl = farFieldDegreeLead(fz, c);
-  if (!dl) return null; // f′ not a clean polynomial ⇒ f not a polynomial
-  const m = dl.degree; // deg f′ = deg f − 1
-  if (m < 1) return null; // f linear/constant ⇒ no critical points
+/** Horner evaluation of an ascending-coefficient polynomial p (p[i] = coeff of zⁱ) at z. */
+function evalPoly(p: Complex[], z: Complex): Complex {
+  let acc: Complex = [0, 0];
+  for (let i = p.length - 1; i >= 0; i--) acc = C.add(C.mul(acc, z), p[i]);
+  return acc;
+}
 
-  const pMonic = (z: Complex): Complex => C.div(fz(z, c), dl.lead);
+/** Drop near-zero high-order coefficients so a polynomial reports its true degree. */
+function trimPoly(p: Complex[]): Complex[] {
+  let n = p.length;
+  while (n > 1 && cabs(p[n - 1]) < 1e-12) n--;
+  return p.slice(0, n);
+}
+
+/**
+ * Durand–Kerner (Weierstrass) simultaneous root finding for a degree-m monic polynomial, evaluated
+ * through the closure `pMonic`. Returns the m iterates (converged or not — the caller certifies them
+ * by residual) or null if an iterate blew up to a non-finite value. Shared by the polynomial and
+ * rational critical-point finders.
+ */
+function durandKerner(pMonic: (z: Complex) => Complex, m: number): Complex[] | null {
   const roots: Complex[] = [];
   let pw: Complex = [1, 0];
   const seed: Complex = [0.4, 0.9]; // classic off-axis spread of initial guesses
@@ -173,6 +176,30 @@ export function findCriticalPoints(fAst: Node, a: Complex, c: Complex): Complex[
     }
     if (maxDelta < 1e-12) break;
   }
+  return roots;
+}
+
+/**
+ * All critical points (roots of f′ = 0) when f is a polynomial of degree ≥ 2, via Durand–Kerner
+ * (Weierstrass) simultaneous root finding on the monic f′/lead. Returns null for a non-polynomial
+ * or non-holomorphic f. Roots may repeat for a higher-multiplicity critical point (e.g. 0 for
+ * z^d + c) — harmless for the connectivity test, which only needs each orbit's fate.
+ */
+export function findCriticalPoints(fAst: Node, a: Complex, c: Complex): Complex[] | null {
+  let fz: (z: Complex, c: Complex) => Complex;
+  try {
+    fz = makeComplexFn(differentiate(fAst, "z"), a);
+  } catch {
+    return null; // non-holomorphic ⇒ no analytic f′
+  }
+  const dl = farFieldDegreeLead(fz, c);
+  if (!dl) return null; // f′ not a clean polynomial ⇒ f not a polynomial
+  const m = dl.degree; // deg f′ = deg f − 1
+  if (m < 1) return null; // f linear/constant ⇒ no critical points
+
+  const pMonic = (z: Complex): Complex => C.div(fz(z, c), dl.lead);
+  const roots = durandKerner(pMonic, m);
+  if (!roots) return null;
   // Convergence guard: Durand–Kerner returns its iterates whether or not it converged, so a clustered
   // / high-multiplicity / high-degree f′ could otherwise hand back non-converged points as "critical
   // points" and feed a confidently-wrong connectivity verdict. Certify each estimate by its residual
@@ -187,6 +214,45 @@ export function findCriticalPoints(fAst: Node, a: Complex, c: Complex): Complex[
   }
   if (maxResidual > ROOT_RESIDUAL_TOL) return null;
   return roots;
+}
+
+/**
+ * Finite critical points of a RATIONAL map f = N/D (degree ≥ 2), i.e. the finite roots of f′ = 0.
+ * Since f′ = (N′D − ND′)/D², its finite zeros are exactly the roots of the numerator polynomial
+ * N′D − ND' — which `fToRational(differentiate(f))` returns directly (denominators are 1 for the
+ * polynomial N, D, so no inflation). We root-find that numerator with Durand–Kerner and keep only the
+ * roots where the actual f′ closure vanishes, which discards any removable cancellation (a common
+ * N, D factor) and the poles. Returns null for a non-rational / non-holomorphic f, or when no finite
+ * critical point survives. ∞ may also be critical (e.g. the symmetric family (z²+c)/(1+cz²) is
+ * critical at both 0 and ∞) — only the FINITE critical points are reported here.
+ */
+export function findRationalCriticalPoints(fAst: Node, a: Complex, c: Complex): Complex[] | null {
+  let diffAst: Node;
+  try {
+    diffAst = differentiate(fAst, "z");
+  } catch {
+    return null; // non-holomorphic ⇒ no analytic f′
+  }
+  const rat = fToRational(diffAst, c, a);
+  if (!rat) return null; // f′ not a rational function of z ⇒ f not rational
+  const num = trimPoly(rat.num);
+  const m = num.length - 1; // degree of the f′ numerator = number of finite critical points
+  if (m < 1) return null; // no finite critical points (e.g. a Möbius map, or all are at ∞)
+  const lead = num[m];
+  if (cabs(lead) === 0) return null;
+  const pMonic = (z: Complex): Complex => C.div(evalPoly(num, z), lead);
+  const roots = durandKerner(pMonic, m);
+  if (!roots) return null;
+  const fz = makeComplexFn(diffAst, a);
+  const out: Complex[] = [];
+  for (const r of roots) {
+    if (cabs(pMonic(r)) > ROOT_RESIDUAL_TOL) continue; // Durand–Kerner didn't converge this root
+    const d = fz(r, c);
+    // Keep only genuine critical points: f′(r) ≈ 0. A removable N, D cancellation gives f′ ≠ 0 there,
+    // and a pole gives a non-finite f′ — both rejected.
+    if (Number.isFinite(d[0]) && Number.isFinite(d[1]) && cabs(d) < 1e-5) out.push(r);
+  }
+  return out.length ? out : null;
 }
 
 const CONN_ITERS = 400; // orbit length to decide a critical point's fate
