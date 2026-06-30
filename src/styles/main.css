@@ -612,11 +612,14 @@ select {
 .control-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  /* Tighter row rhythm (0.4rem) than the column gap (0.75rem): toggle lists such as Overlays
+     wrap one-per-line in the narrow controls column, so a smaller vertical gap keeps a long
+     card compact while side-by-side fields keep their breathing room. */
+  gap: 0.4rem 0.75rem;
   /* Top-align: fields are label-over-control columns of unequal height (e.g. a slider with a
      value label vs a plain select), so flex-start keeps the labels in a tidy row. */
   align-items: flex-start;
-  margin-top: 0.6rem;
+  margin-top: 0.5rem;
 }
 
 /* In the options panels, keep a checkbox option and its inline "?" help link on the SAME row
@@ -1138,35 +1141,46 @@ select.invalid {
 }
 
 /* --- Julia set properties readout ------------------------------------- */
+/* Two-column "table" of computed properties: a label column sized to its widest entry and a
+   value column taking the rest, with hairline row dividers for scanning. Mirrors the inspector
+   readout grid. The .julia-prop wrappers collapse (display: contents) so their dt/dd land
+   directly in the grid and align across rows. */
 .julia-props {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 0.85rem;
   margin: 0.5rem 0 0;
-  padding: 0.45rem 0.55rem;
+  padding: 0.1rem 0.55rem;
   background: var(--panel-alt, rgba(127, 127, 127, 0.08));
   border: 1px solid var(--border);
   border-radius: var(--radius);
-}
-
-.julia-prop {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
   font-size: 0.82rem;
   line-height: 1.3;
 }
 
-.julia-prop dt {
+.julia-prop {
+  display: contents;
+}
+
+.julia-prop dt,
+.julia-prop dd {
   margin: 0;
+  padding: 0.26rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.julia-prop:last-child dt,
+.julia-prop:last-child dd {
+  border-bottom: 0;
+}
+
+.julia-prop dt {
   color: var(--muted, #666);
 }
 
 .julia-prop dd {
-  margin: 0;
-  text-align: right;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 /* --- Custom gradient editor ------------------------------------------- */
