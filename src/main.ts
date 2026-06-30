@@ -25,6 +25,7 @@ import { matingVerdict } from "./render/mating";
 import { computeOrbit, orbitAndClassify, type Annotation, type OrbitFate } from "./render/overlay";
 import { toNumber as angleToNumber } from "./combinatorics/angles";
 import { portraitSummary, rotationCycleAngles } from "./combinatorics/orbitPortrait";
+import { landingForAngle } from "./render/angleParameter";
 import {
   juliaConnected,
   juliaExteriorCoeffs,
@@ -2387,6 +2388,52 @@ function init(): void {
       parameterView.plot.paramA,
     );
     handleInspect(info, nucleus, "param");
+    scheduleRecord();
+  });
+  byId("spider-go").addEventListener("click", () => {
+    const m = byId<HTMLInputElement>("spider-angle")
+      .value.trim()
+      .match(/^(\d+)\s*\/\s*(\d+)$/);
+    if (!m) {
+      showToast("Enter an external angle as a fraction p/q (e.g. 1/7).", "warn");
+      return;
+    }
+    if (parameterView.plot.monicDegree !== 2) {
+      showToast(
+        "Go-to-angle lands on the z²+c Mandelbrot set — switch to the Mandelbrot preset.",
+        "warn",
+      );
+      return;
+    }
+    const land = landingForAngle(Number(m[1]), Number(m[2]));
+    if (!land) {
+      showToast("That angle has no usable landing.", "warn");
+      return;
+    }
+    const fAst = parameterView.plot.fAst;
+    const crit = parameterView.plot.criticalPoint;
+    const pa = parameterView.plot.paramA;
+    let c: [number, number] = [land.seed[0], land.seed[1]];
+    let label: string;
+    if (land.kind === "center") {
+      // The periodic angle's doubling period IS the component period — Newton-snap to the centre.
+      const nuc = findNucleus(fAst, crit, land.period, land.seed, pa);
+      if (nuc) c = [nuc[0], nuc[1]];
+      label = `period-${land.period} centre`;
+    } else {
+      // Preperiodic: the ray lands at the Misiurewicz point. (The angle's doubling preperiod isn't
+      // the critical-orbit preperiod, so we land at the ray seed rather than Newton-polish here.)
+      label = "Misiurewicz point (≈ ray landing)";
+    }
+    parameterView.plot.moveZ0(c);
+    parameterView.refreshOverlay();
+    dynamicalView.plot.c = formatComplex(c);
+    setCInput(c);
+    updateDynCaption();
+    announce(`Parameter c = ${dynCValue.textContent}`);
+    showToast(`External angle ${m[1]}/${m[2]} → ${label}.`, "info");
+    const info = inspect(fAst, parameterView.plot.escAst, "param", crit, c, pa);
+    handleInspect(info, c, "param");
     scheduleRecord();
   });
   byId("siegel-go").addEventListener("click", () => {

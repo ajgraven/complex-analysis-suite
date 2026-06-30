@@ -357,6 +357,11 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   rational map): by Rees–Shishikura–Tan Lei they mate iff their limbs are not complex-conjugate,
   i.e. _p₁_/_q₁_ + _p₂_/_q₂_ ≠ 1 (the ½ bulb is the only self-conjugate one). The inspector's
   **Limb** row shows a bulb's conjugate limb and whether it self-mates.
+- **Go to external angle** — type an external angle θ = _p_/_q_ (turns) and the parameter ray at θ
+  is traced to its landing (the globally-convergent inverse of ray drawing — no nearby click
+  needed); a **periodic** θ then Newton-snaps to the exact component **centre** (1/7 → the rabbit,
+  1/3 → the basilica, 2/5 → a period-4 centre) and a **preperiodic** θ lands at its **Misiurewicz**
+  point (1/6 → _c_ = _i_). `z²+c`.
 
 ## Exterior map (uniformization)
 

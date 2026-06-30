@@ -1077,6 +1077,37 @@ z^2+c</textarea
             </div>
           </details>
 
+          <!-- Go to external angle: land the parameter ray at θ, then snap to the centre/Misiurewicz. -->
+          <details class="control-group" id="angle-group">
+            <summary>Go to external angle (z²+c)</summary>
+            <div class="controls">
+              <p class="exterior-status">
+                Enter an external angle θ = p/q (turns). The parameter ray at θ is traced to its
+                landing, then a periodic θ snaps to the component centre and a preperiodic θ lands
+                at its Misiurewicz point — the inverse of ray drawing, no nearby click needed.
+                <button
+                  type="button"
+                  class="gloss-link"
+                  data-term="external-ray"
+                  aria-label="About external rays"
+                >
+                  ?
+                </button>
+              </p>
+              <label class="exterior-n-label">
+                Angle θ (p/q)
+                <input
+                  type="text"
+                  id="spider-angle"
+                  value="1/7"
+                  size="6"
+                  title="External angle as a fraction p/q in turns (e.g. 1/7 → rabbit, 1/6 → c=i)"
+                />
+              </label>
+              <button type="button" id="spider-go">Go to angle</button>
+            </div>
+          </details>
+
           <!-- Julia set properties: computed topology / metrics of K_c at the live c. -->
           <details class="control-group" id="julia-props-group">
             <summary>Julia set properties</summary>
