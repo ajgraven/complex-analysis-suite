@@ -671,9 +671,6 @@ gives the per-quantity definitions and conventions.
 ## Citation
 
 If you use this tool's results or images in your work or an academic publication, please cite it.
-Where a specific computed quantity is involved, please also cite the underlying algorithm — the
-[Methods & references](#methods--references) above and the in-app Glossary give the primary source
-for each.
 
 > Graven, A. (2026). _Complex Dynamics Visualization Tool_ (Version 1.0.0) [Computer software].
 > https://github.com/ajgraven/ComplexDynamicsJS
