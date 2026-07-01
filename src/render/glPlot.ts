@@ -224,6 +224,24 @@ export function autoIterations(base: number, zoom: number, strength: number): nu
   return Math.min(AUTO_ITER_MAX, Math.max(base, scaled));
 }
 
+/**
+ * Samples-per-axis to render this frame. `aa` is the requested spatial supersampling (1 = off), but
+ * three cases force a single sample:
+ *  - the histogram pre-pass (mode 6) writes a raw count, so it must not be averaged;
+ *  - a draft frame during interaction (kept cheap — resolution is what drops, not iterations);
+ *  - a temporal-accumulation frame: the jittered per-frame accumulation IS the anti-aliasing, so
+ *    spatial supersampling on top would multiply the per-frame cost (e.g. 9× at aa=3) for nothing —
+ *    the first visible frame would already pay the full 9-sample cost. One sample per frame keeps the
+ *    first paint fast and lets the image refine over frames to an even higher effective sample count.
+ */
+export function effectiveAA(
+  aa: number,
+  opts: { mode: number; draft: boolean; accumulating: boolean },
+): number {
+  if (opts.mode === 6 || opts.draft || opts.accumulating) return 1;
+  return Math.max(1, aa);
+}
+
 export class GLPlot {
   private readonly gl: WebGL2RenderingContext;
   private readonly canvas: HTMLCanvasElement;
@@ -278,6 +296,9 @@ export class GLPlot {
   private accumTex: WebGLTexture | null = null;
   private accumSize = 0;
   private accumCount = 0;
+  /** True while a temporal-accumulation frame is drawing, so setupDraw renders 1 sample/frame
+   *  (the jittered accumulation supplies the anti-aliasing — see {@link effectiveAA}). */
+  private _accumulating = false;
   private _jitter: [number, number] = [0, 0];
   private renderScheduled = false;
   private _draft = false;
@@ -824,7 +845,11 @@ export class GLPlot {
     gl.uniform1i(u.uMode, mode);
     gl.uniform1i(u.uPalette, this._palette);
     gl.uniform1i(u.uTrapType, this._trapType);
-    gl.uniform1i(u.uAA, mode === 6 || this._draft ? 1 : this._aa); // no AA while drafting / raw pass
+    // No spatial AA for the raw pre-pass, while drafting, or while accumulating (temporal AA does it).
+    gl.uniform1i(
+      u.uAA,
+      effectiveAA(this._aa, { mode, draft: this._draft, accumulating: this._accumulating }),
+    );
     if (mode === 5 && this.cdfTex) {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.cdfTex);
@@ -1364,7 +1389,9 @@ export class GLPlot {
     this._jitter = [halton(this.accumCount + 1, 2) - 0.5, halton(this.accumCount + 1, 3) - 0.5];
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE); // additive accumulation
+    this._accumulating = true; // 1 sample/frame — the jittered accumulation is the anti-aliasing
     const ok = this.drawFractal(size, size);
+    this._accumulating = false;
     if (ok) gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.disable(gl.BLEND);
     this._jitter = [0, 0];

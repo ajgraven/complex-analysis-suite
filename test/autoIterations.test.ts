@@ -4,7 +4,7 @@
  * view centre), never drops below the base, and is clamped to a hard ceiling.
  */
 import { describe, it, expect } from "vitest";
-import { autoIterations } from "../src/render/glPlot";
+import { autoIterations, effectiveAA } from "../src/render/glPlot";
 
 describe("autoIterations", () => {
   it("returns the base count when not zoomed in (zoom ≤ 1)", () => {
@@ -31,5 +31,30 @@ describe("autoIterations", () => {
 
   it("clamps to the 20000 hard ceiling at extreme zoom / high base", () => {
     expect(autoIterations(2000, 1e13, 4)).toBe(20000); // 2000·53 = 106000 → capped
+  });
+});
+
+describe("effectiveAA (samples per frame)", () => {
+  const idle = { mode: 0, draft: false, accumulating: false };
+
+  it("uses the requested spatial AA on an ordinary idle frame", () => {
+    expect(effectiveAA(3, idle)).toBe(3);
+    expect(effectiveAA(1, idle)).toBe(1);
+    expect(effectiveAA(4, idle)).toBe(4);
+  });
+
+  it("forces a single sample while accumulating — the jitter is the anti-aliasing", () => {
+    // The key fix: aa=3 + accumulate must NOT render 9 samples/frame (that was ~9× wasted work).
+    expect(effectiveAA(3, { ...idle, accumulating: true })).toBe(1);
+    expect(effectiveAA(4, { ...idle, accumulating: true })).toBe(1);
+  });
+
+  it("forces a single sample while drafting and for the histogram pre-pass (mode 6)", () => {
+    expect(effectiveAA(3, { ...idle, draft: true })).toBe(1);
+    expect(effectiveAA(3, { mode: 6, draft: false, accumulating: false })).toBe(1);
+  });
+
+  it("never returns less than one sample", () => {
+    expect(effectiveAA(0, idle)).toBe(1);
   });
 });
