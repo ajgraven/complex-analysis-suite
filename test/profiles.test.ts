@@ -27,13 +27,15 @@ describe("profiles data", () => {
   });
 
   it("encodes the load-bearing distinctions of each profile", () => {
-    // Artist: the only profile with lighting + post-processing, and the highest AA + largest canvas.
+    // Artist: the only profile with lighting + post-processing and the largest canvas; anti-aliased
+    // by temporal accumulation (idle refine), not costly per-frame spatial supersampling.
     expect(PROFILES.artist.light).toBe(true);
     expect(PROFILES.artist.post).toBe(true);
-    expect(PROFILES.artist.aa).toBe("3");
+    expect(PROFILES.artist.accumulate).toBe(true);
+    expect(PROFILES.artist.aa).toBe("1"); // temporal AA supplies the anti-aliasing
     expect(PROFILES.artist.resolution).toBeGreaterThan(PROFILES.explore.resolution);
 
-    // Explore: today + a touch cleaner (AA on, idle-refine on), no lighting/post.
+    // Explore: balanced default — temporal AA (idle refine) on, no lighting/post.
     expect(PROFILES.explore.light).toBe(false);
     expect(PROFILES.explore.post).toBe(false);
     expect(PROFILES.explore.accumulate).toBe(true);

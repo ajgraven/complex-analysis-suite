@@ -193,7 +193,7 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
   it to sweep a live parameter and watch the fractal change.
 - **Profiles** (top bar) apply a one-click bundle of display / quality / instrument settings
   tuned to a use case, remembered across sessions: **Explore** (balanced default), **Artist**
-  (lighting + post-processing + high anti-aliasing for stills), **Researcher** (high iterations,
+  (lighting + post-processing + smooth temporal anti-aliasing for stills), **Researcher** (high iterations,
   a perceptual palette, the metrics panel open), **Educator** (the structure-revealing overlays),
   **Performance** (stripped back for slow devices), and **Deep zoom** (perturbation + auto-iterations
   for z²+c). A profile re-skins the current view — it never changes your formula, parameter, or zoom —

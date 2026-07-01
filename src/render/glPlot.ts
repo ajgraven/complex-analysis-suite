@@ -155,15 +155,29 @@ function splitDouble(x: number): [number, number] {
   return [hi, Math.fround(x - hi)];
 }
 
+/** Cap on the DPR-scaled drawing buffer, in px per side. A large canvas (700–720) on a 2× HiDPI
+ *  display would otherwise be a ~1440² buffer (≈2M px) every frame; capping the *supersampling* to
+ *  this keeps big canvases affordable without ever rendering below the chosen resolution (1:1). */
+export const MAX_BUFFER = 1100;
+
 /**
- * Device-pixel ratio used to size the drawing buffer, so plots are crisp on
- * HiDPI/Retina displays. Capped at 2× because per-pixel fractal iteration cost
- * scales with the square of this — beyond 2× the sharpness rarely justifies the
- * GPU work, especially at deep zoom. Shared with the overlay canvas so the two
- * stay pixel-aligned.
+ * Buffer supersampling scale for a canvas of `res` logical px at device-pixel-ratio `dpr`: the HiDPI
+ * ratio (capped at 2×, since per-pixel cost grows with its square), further capped so the buffer stays
+ * ≤ {@link MAX_BUFFER} px/side — but never below 1:1 (`max(1, …)`), so we don't render blurrier than
+ * the chosen resolution. Pure (dpr passed in) so it is unit-testable.
  */
-export function renderScale(): number {
-  return Math.min(window.devicePixelRatio || 1, 2);
+export function bufferScale(dpr: number, res: number): number {
+  return Math.min(Math.min(dpr, 2), Math.max(1, MAX_BUFFER / res));
+}
+
+/**
+ * Device-pixel ratio used to size the drawing buffer, so plots are crisp on HiDPI/Retina displays,
+ * with the {@link MAX_BUFFER} budget applied for the given canvas `res`. Shared with the overlay
+ * canvas (same `res`) so the two stay pixel-aligned.
+ */
+export function renderScale(res = 0): number {
+  const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+  return bufferScale(dpr, res);
 }
 
 /**
@@ -466,7 +480,7 @@ export class GLPlot {
    *   keeps it square.
    */
   private applyRenderSize(fraction = 1): void {
-    const full = Math.round(this._res * renderScale());
+    const full = Math.round(this._res * renderScale(this._res));
     const size = Math.max(64, Math.round(full * fraction));
     if (this.canvas.width !== size) {
       this.canvas.width = size;

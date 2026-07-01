@@ -4,7 +4,7 @@
  * view centre), never drops below the base, and is clamped to a hard ceiling.
  */
 import { describe, it, expect } from "vitest";
-import { autoIterations, effectiveAA } from "../src/render/glPlot";
+import { MAX_BUFFER, autoIterations, bufferScale, effectiveAA } from "../src/render/glPlot";
 
 describe("autoIterations", () => {
   it("returns the base count when not zoomed in (zoom ≤ 1)", () => {
@@ -56,5 +56,34 @@ describe("effectiveAA (samples per frame)", () => {
 
   it("never returns less than one sample", () => {
     expect(effectiveAA(0, idle)).toBe(1);
+  });
+});
+
+describe("bufferScale (DPR buffer budget)", () => {
+  it("keeps the full 2× DPR for a small canvas (under the budget)", () => {
+    expect(bufferScale(2, 500)).toBe(2); // 500·2 = 1000 ≤ 1100
+    expect(bufferScale(2, 350)).toBe(2);
+  });
+
+  it("caps the supersampling so a large canvas stays within the budget", () => {
+    const s = bufferScale(2, 700); // would be 1400 at 2×
+    expect(s).toBeCloseTo(MAX_BUFFER / 700, 10); // 700·s = MAX_BUFFER
+    expect(700 * s).toBeCloseTo(MAX_BUFFER, 6);
+    expect(s).toBeLessThan(2);
+  });
+
+  it("never renders below 1:1 (a canvas larger than the budget stays crisp)", () => {
+    expect(bufferScale(2, 1500)).toBe(1); // capped to 1:1, not blurrier than the chosen res
+    expect(bufferScale(1, 1500)).toBe(1);
+  });
+
+  it("is a no-op on a non-HiDPI (dpr = 1) display", () => {
+    expect(bufferScale(1, 720)).toBe(1);
+    expect(bufferScale(1, 500)).toBe(1);
+  });
+
+  it("caps the DPR at 2× and preserves sub-1 device ratios", () => {
+    expect(bufferScale(3, 400)).toBe(2); // dpr capped at 2
+    expect(bufferScale(0.75, 400)).toBe(0.75); // low-density display kept 1:1 to device px
   });
 });

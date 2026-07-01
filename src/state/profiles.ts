@@ -83,11 +83,11 @@ export const PROFILE_BLURBS: Record<ProfileName, string> = {
 };
 
 export const PROFILES: Record<ProfileName, ProfileSettings> = {
-  // Balanced default — today's look, a touch cleaner (anti-aliasing + idle refine on).
+  // Balanced default — anti-aliased by idle refine (temporal AA), so it stays responsive.
   explore: {
     mode: "smooth",
     palette: "classic",
-    aa: "2",
+    aa: "1", // temporal accumulation supplies the anti-aliasing (spatial AA would just cost more)
     light: false,
     post: false,
     accumulate: true,
@@ -101,12 +101,12 @@ export const PROFILES: Record<ProfileName, ProfileSettings> = {
     resolution: 500,
     juliaPanel: false,
   },
-  // Beautiful stills: lighting + post-processing + max AA + a larger canvas. The slowest profile,
-  // but the draft-during-drag system keeps it usable.
+  // Beautiful stills: lighting + post-processing + a large canvas, anti-aliased by idle refine
+  // (temporal AA, which converges to high quality without the per-frame cost of spatial supersampling).
   artist: {
     mode: "smooth",
     palette: "magma",
-    aa: "3",
+    aa: "1", // temporal accumulation supplies the AA (idle refine)
     light: true,
     post: true,
     accumulate: true,
@@ -116,15 +116,16 @@ export const PROFILES: Record<ProfileName, ProfileSettings> = {
     critorbit: false,
     farey: false,
     rays: false,
-    iterations: 400,
-    resolution: 720,
+    iterations: 300,
+    resolution: 640,
     juliaPanel: false,
   },
-  // Rigour: high iterations + auto-scaling, a perceptually-uniform palette, the metrics panel open.
+  // Rigour: high iterations + auto-scaling, a perceptually-uniform palette, the metrics panel open;
+  // anti-aliased by idle refine (temporal AA).
   researcher: {
     mode: "smooth",
     palette: "viridis",
-    aa: "3",
+    aa: "1", // temporal accumulation supplies the AA (idle refine)
     light: false,
     post: false,
     accumulate: true,
@@ -134,8 +135,8 @@ export const PROFILES: Record<ProfileName, ProfileSettings> = {
     critorbit: false,
     farey: false,
     rays: false,
-    iterations: 500,
-    resolution: 700,
+    iterations: 400,
+    resolution: 600,
     juliaPanel: true,
   },
   // Teaching: structure-revealing overlays on, idle-refine off so live demos stay responsive.
@@ -178,7 +179,7 @@ export const PROFILES: Record<ProfileName, ProfileSettings> = {
   deepzoom: {
     mode: "smooth",
     palette: "magma",
-    aa: "2",
+    aa: "1", // temporal accumulation supplies the AA (idle refine)
     light: false,
     post: false,
     accumulate: true,

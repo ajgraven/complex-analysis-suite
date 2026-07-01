@@ -334,7 +334,7 @@ export class PlotView {
     // Match the WebGL buffer's HiDPI scaling so the overlay stays pixel-aligned
     // and crisp. The overlay's CSS size (100% of the stack) stays at the logical
     // resolution; pointer math uses getBoundingClientRect, so it's unaffected.
-    const size = Math.round(this.plot.res * renderScale());
+    const size = Math.round(this.plot.res * renderScale(this.plot.res));
     if (this.overlay.width !== size) {
       this.overlay.width = size;
       this.overlay.height = size;
