@@ -3199,6 +3199,26 @@ function init(): void {
   document.addEventListener("click", (e) => {
     if (viewsMenu.open && !viewsMenu.contains(e.target as Node)) closeViewsMenu();
   });
+  // Keep the Views popover on-screen. It is right-anchored to its small summary, so when the app bar
+  // wraps and the Views button lands near the left edge, the ~12rem panel would spill off the left of
+  // the page. Below 720px the CSS already makes it full-width; above that, clamp it to a small margin
+  // from the viewport's left edge on open and on resize (otherwise the pure-CSS right:0 is kept).
+  const viewsPanel = viewsMenu.querySelector<HTMLElement>(".views-panel");
+  const clampViewsPanel = (): void => {
+    if (!viewsPanel) return;
+    viewsPanel.style.left = ""; // reset to the CSS default (right:0) before measuring
+    viewsPanel.style.right = "";
+    if (!viewsMenu.open || window.innerWidth <= 720) return;
+    const margin = 8;
+    const menuLeft = viewsMenu.getBoundingClientRect().left;
+    if (viewsPanel.getBoundingClientRect().left < margin) {
+      // The right-anchored panel is clipping the left edge → left-anchor it to a safe margin instead.
+      viewsPanel.style.right = "auto";
+      viewsPanel.style.left = `${Math.round(margin - menuLeft)}px`;
+    }
+  };
+  viewsMenu.addEventListener("toggle", clampViewsPanel);
+  window.addEventListener("resize", clampViewsPanel);
   byId("undo-btn").addEventListener("click", undo);
   byId("redo-btn").addEventListener("click", redo);
   document.addEventListener("change", scheduleRecord);
