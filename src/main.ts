@@ -66,7 +66,9 @@ import { byId } from "./ui/dom";
 import { showToast } from "./ui/toast";
 import { GLOSSARY, CONVENTIONS, type GlossaryEntry } from "./ui/glossary";
 import { validateInputs, type FieldError } from "./ui/validate";
-import { DEFAULT_GRADIENT } from "./palettes";
+import { DEFAULT_GRADIENT, type PaletteName } from "./palettes";
+import { describeLegend } from "./render/legend";
+import { renderLegend } from "./ui/plotLegend";
 import { parseGradientStops, setupGradientEditor } from "./ui/gradient";
 import { canRecord, startRecording, downloadBlob } from "./ui/recorder";
 import { coeffsToCsv, coeffsToText, inspectToText, orbitToCsv } from "./ui/dataExport";
@@ -1220,6 +1222,7 @@ function init(): void {
   const gradientEditor = setupGradientEditor(byId("gradient-editor"), DEFAULT_GRADIENT, (stops) => {
     parameterView.plot.setGradient(stops);
     dynamicalView.plot.setGradient(stops);
+    updateLegends(); // the custom-gradient legend bar tracks the editor live
   });
 
   /** Show the given field errors (red-border the fields, list the reasons). */
@@ -1937,7 +1940,59 @@ function init(): void {
     gradientEditor.setVisible(byId<HTMLSelectElement>("palette").value === "custom");
     applyTrap();
     scheduleSuggestions(); // the under-iteration nudge only applies to escape-time modes
+    updateLegends(); // the corner colour key follows the mode / palette
   }
+
+  // --- Per-plot colour legend: a small corner chip keyed to the current colouring mode + palette,
+  //     on by default (persisted). Floats over the image, so it costs no layout space. ----------
+  const LEGEND_KEY = "cdjs.legend";
+  const paramLegendEl = byId("param-legend");
+  const dynLegendEl = byId("dyn-legend");
+  const legendToggle = byId<HTMLInputElement>("legend-toggle");
+  let legendEnabled = true;
+  try {
+    legendEnabled = localStorage.getItem(LEGEND_KEY) !== "0"; // on by default
+  } catch {
+    /* localStorage unavailable (private mode) — default on */
+  }
+
+  /** The interior's name on a plane: the Mandelbrot set (z²+c parameter plane), the filled Julia set
+   *  (dynamical plane), or a generic "set" for other parameter families. */
+  function legendSetName(view: PlotView, plane: "param" | "dyn"): string {
+    if (plane === "dyn") return "filled Julia set";
+    return view.plot.perturbationEligible ? "Mandelbrot set" : "the set";
+  }
+
+  /** Redraw both plot legends for the current colouring (or clear them when the toggle is off; an
+   *  empty chip is hidden by CSS `.plot-legend:empty`). */
+  function updateLegends(): void {
+    const modeStr = byId<HTMLSelectElement>("mode").value;
+    const palette = byId<HTMLSelectElement>("palette").value as PaletteName;
+    const rotation = Number(byId<HTMLInputElement>("paletteRotation").value) / 100;
+    const custom = gradientEditor.getStops();
+    for (const [view, el, plane] of [
+      [parameterView, paramLegendEl, "param"],
+      [dynamicalView, dynLegendEl, "dyn"],
+    ] as const) {
+      if (!legendEnabled) {
+        el.replaceChildren();
+        continue;
+      }
+      const model = describeLegend(modeStr, legendSetName(view, plane));
+      renderLegend(el, model, palette, custom, rotation);
+    }
+  }
+
+  legendToggle.checked = legendEnabled;
+  legendToggle.addEventListener("change", () => {
+    legendEnabled = legendToggle.checked;
+    try {
+      localStorage.setItem(LEGEND_KEY, legendEnabled ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+    updateLegends();
+  });
 
   /** Apply the orbit-trap shape to both plots; its control shows only in orbit-trap mode. */
   function applyTrap(): void {
@@ -2098,6 +2153,7 @@ function init(): void {
       byId<HTMLInputElement>(id).disabled = active;
     }
     byId("perturbation-note").hidden = !active;
+    updateLegends(); // a new f may flip z²+c eligibility → the interior's name ("Mandelbrot set")
   }
 
   /**

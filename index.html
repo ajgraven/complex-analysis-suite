@@ -155,6 +155,7 @@
                   aria-hidden="true"
                   hidden
                 ></canvas>
+                <div id="param-legend" class="plot-legend" aria-hidden="true"></div>
                 <div
                   id="param-suggestion"
                   class="plot-suggestion"
@@ -320,6 +321,7 @@ abs(z)>2</textarea
                   role="application"
                   aria-label="Dynamical plane — interactive fractal plot. Arrow keys pan; the + and − keys zoom; drag (or press Enter) to set the orbit start z₀ to the view centre and inspect it."
                 ></canvas>
+                <div id="dyn-legend" class="plot-legend" aria-hidden="true"></div>
                 <div
                   id="dyn-suggestion"
                   class="plot-suggestion"
@@ -1045,6 +1047,23 @@ z^2+c</textarea
                       type="button"
                       data-term="orbit-preview"
                       aria-label="What is the orbit preview?"
+                    >
+                      ?
+                    </button>
+                  </div>
+                  <div class="field">
+                    <label
+                      class="checkbox"
+                      for="legend-toggle"
+                      title="Show a small colour legend in each plot's corner explaining what the colours mean for the current mode — on by default"
+                    >
+                      <input type="checkbox" id="legend-toggle" checked /> colour legend
+                    </label>
+                    <button
+                      class="gloss-link"
+                      type="button"
+                      data-term="color-legend"
+                      aria-label="What is the colour legend?"
                     >
                       ?
                     </button>

@@ -390,6 +390,12 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   orbit** downloads the inspected orbit as a CSV — both at full precision. **Pin note** drops a
   labelled gold marker at the inspected point — anchored in plot coordinates, so it tracks pans
   and zooms — and pinned notes ride along in share links and saved views; **Clear** removes them.
+- **Colour legend** — a small key in each plot's bottom-left corner explaining what its colours
+  mean for the current colouring mode: the palette ramp (fast escape → the boundary) with a black
+  swatch for the interior on the escape-time modes, a hue wheel for domain / multiplier / Newton
+  colouring, and a note for period colouring. It updates live with the mode and palette, sits over
+  the image so it costs no layout space, and is **on by default** (toggle **colour legend** under
+  _Iteration &amp; precision_).
 - **Critical-orbit hover preview** — an optional miniature inset, pinned to the parameter plot's
   corner, that shows the hovered point's critical orbit over its filled Julia set (green if bounded
   → connected Julia set; orange if it escapes → Cantor dust). It's **off by default** — enable

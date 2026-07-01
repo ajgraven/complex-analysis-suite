@@ -98,6 +98,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     defn: "An optional miniature dynamical-plane picture pinned to the parameter plot's corner. While you hover a point c it shows that map's filled Julia set with the critical orbit drawn on top — green if the orbit stays bounded (the Julia set there is connected), orange if it escapes (a Cantor dust). It's a quick 'what does the dynamical plane look like here?' hint; off by default, toggle it under Iteration & precision.",
   },
   {
+    id: "color-legend",
+    term: "Colour legend",
+    defn: "The small key in each plot's corner explaining what its colours mean for the current colouring mode. Escape-time modes show the palette ramp (fast escape → the boundary) with a black swatch for the interior (the Mandelbrot / filled Julia set); domain, multiplier and Newton colouring show a hue wheel; period colouring keys the interior by cycle. It updates with the mode and palette, and is on by default (toggle under Iteration & precision).",
+  },
+  {
     id: "external-ray",
     term: "External ray",
     defn: "The image under the Böttcher map of a straight ray outside the set; as it approaches the boundary it lands at an 'external angle' θ measured in turns. Rays organise the boundary combinatorially.",

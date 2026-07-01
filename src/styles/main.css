@@ -418,6 +418,78 @@ h2 {
   z-index: 3;
 }
 
+/* Colour legend: a compact key pinned to each plot's bottom-left corner (clear of the top-left
+   suggestion badge and the bottom-right orbit-preview inset / resize grip). It floats over the
+   image so it never takes layout space; pointer-events:none keeps plot interaction unblocked. It
+   sits on its own dark panel with fixed light text — the backdrop is the fractal, not the theme, so
+   theme variables don't apply. `:empty` stays hidden so the box doesn't flash before the first
+   render fills it. */
+.canvas-stack > .plot-legend {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  z-index: 3;
+  width: max-content;
+  max-width: 150px;
+  padding: 0.3rem 0.4rem;
+  pointer-events: none;
+  font-size: 0.68rem;
+  line-height: 1.25;
+  color: #e7eaee;
+  background: rgba(14, 17, 23, 0.74);
+  border: 0.5px solid rgba(255, 255, 255, 0.16);
+  border-radius: 5px;
+}
+.canvas-stack > .plot-legend:empty {
+  display: none;
+}
+.legend-title {
+  font-weight: 500;
+  margin-bottom: 3px;
+}
+.legend-bar {
+  height: 8px;
+  border-radius: 3px;
+  border: 0.5px solid rgba(255, 255, 255, 0.2);
+}
+.legend-scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 2px;
+  color: #aeb6bf;
+}
+.legend-interior {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  color: #aeb6bf;
+}
+.legend-sw {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  background: #000;
+  border: 0.5px solid rgba(255, 255, 255, 0.4);
+  border-radius: 2px;
+}
+.legend-note {
+  margin-top: 3px;
+  color: #aeb6bf;
+}
+/* Hue disc for domain / multiplier / Newton colouring: conic hue + a dark centre (|value| → 0). */
+.legend-wheel {
+  width: 40px;
+  height: 40px;
+  margin: 1px auto 0;
+  border-radius: 50%;
+  border: 0.5px solid rgba(255, 255, 255, 0.2);
+  background:
+    radial-gradient(circle, rgba(0, 0, 0, 0.9) 8%, transparent 62%),
+    conic-gradient(from 90deg, #ff4d4d, #ffe24d, #4dff88, #4de1ff, #4d6bff, #e14dff, #ff4d4d);
+}
+
 /* Auto-suggestion badge: a small, dismissible advisory pinned to the plot's top-left (clear of the
    bottom-right orbit-preview inset and resize grip). Above the overlay, below the resize handle;
    only the badge itself takes pointer events, so it never blocks fractal interaction elsewhere. */
@@ -1676,5 +1748,10 @@ select.invalid {
   .canvas-stack > .orbit-preview {
     width: 72px;
     height: 72px;
+  }
+  .canvas-stack > .plot-legend {
+    max-width: 118px;
+    font-size: 0.6rem;
+    padding: 0.25rem 0.32rem;
   }
 }
