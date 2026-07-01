@@ -1428,6 +1428,23 @@ export class GLPlot {
   }
 
   /**
+   * Invalidate the interaction-preview caches (the last-frame snapshot + the async collar). They hold
+   * the CURRENT content at their captured view, so a change that repaints the picture WITHOUT moving
+   * the view — a new c during a coupled parameter drag, a new map / iteration cap — leaves them stale.
+   * Clearing them makes {@link canUsePreview} false, so {@link render} re-iterates the new content
+   * instead of warping a frame drawn for the old one. That warp is otherwise the *identity* (the view
+   * is unchanged), i.e. a frozen image — the bug this guards against: the dynamical plane not updating
+   * live while the parameter point is dragged. The next full render re-captures and re-schedules the
+   * collar for the new content (its key is center/zoom-only, so it wouldn't refresh on its own here).
+   */
+  private invalidateInteractionPreview(): void {
+    this.lastFrameValid = false;
+    this.collarValid = false;
+    this.collarViewKey = ""; // force maybeScheduleCollar to regenerate for the new content
+    this.collarGen++; // cancel any in-flight collar chain rendered for the old content
+  }
+
+  /**
    * Whether a draft frame should be drawn as the cheap "Google Maps" warp of the last frame rather
    * than a coarse re-render. Only for a linear, single-precision view (the affine warp is exact there):
    * the sphere / projection maps aren't affine, and at df64 depth the f64 centre difference loses
@@ -1868,6 +1885,7 @@ export class GLPlot {
   set c(cval: string) {
     this._c = cval;
     this._cVal = parseComplex(cval);
+    this.invalidateInteractionPreview(); // c repaints the picture — the warp source is now stale
     this.scheduleRender();
   }
   /** Set c from a numeric tuple — the drag/coupling hot path, skipping the string
@@ -1876,6 +1894,9 @@ export class GLPlot {
   setCValue(v: Complex): void {
     this._cVal = [v[0], v[1]];
     this._c = formatComplex(v);
+    // A coupled parameter drag changes c while the dynamical view stays put; without this the draft
+    // frames would warp the stale last frame (identity transform) and the plane would appear frozen.
+    this.invalidateInteractionPreview();
     this.scheduleRender();
   }
   set f(fval: string) {
