@@ -45,6 +45,17 @@ function round6([a, b]: Vec2): Vec2 {
   return [Number.parseFloat(a.toPrecision(6)), Number.parseFloat(b.toPrecision(6))];
 }
 
+/**
+ * Format a zoom magnification in scientific notation, rounded to `sig` significant figures with
+ * trailing zeros trimmed — e.g. 500000 → "5e+5", 0.6 → "6e-1", 1.2345678e15 → "1.23457e+15".
+ * Round-trips through `Number.parseFloat` ({@link getParamZoomInput} + the `Number(...)` validator),
+ * so the displayed value stays serialization-safe; a non-finite input falls back to its raw string.
+ */
+export function formatZoom(z: number, sig = 6): string {
+  if (!Number.isFinite(z)) return String(z);
+  return Number.parseFloat(z.toPrecision(sig)).toExponential();
+}
+
 function parseVec2(value: string): Vec2 {
   const parts = value.split(",").map((s) => Number.parseFloat(s));
   return [parts[0], parts[1]];
@@ -95,8 +106,10 @@ export function setDynCenterInput(centerval: Vec2): void {
   setValue(CENTER_SUB_IDS.dynIm, y);
 }
 
-export const setParamZoomInput = (zoomval: number): void => setValue(INPUT_IDS.paramZoom, zoomval);
-export const setDynZoomInput = (zoomval: number): void => setValue(INPUT_IDS.dynZoom, zoomval);
+export const setParamZoomInput = (zoomval: number): void =>
+  setValue(INPUT_IDS.paramZoom, formatZoom(zoomval));
+export const setDynZoomInput = (zoomval: number): void =>
+  setValue(INPUT_IDS.dynZoom, formatZoom(zoomval));
 
 // --- validation state ----------------------------------------------------
 

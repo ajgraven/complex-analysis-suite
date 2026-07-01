@@ -91,6 +91,7 @@ import {
   CENTER_SUB_IDS,
   INPUT_IDS,
   clearAllInvalid,
+  formatZoom,
   getCInput,
   getDynCenterInput,
   getDynEscInput,
@@ -1692,7 +1693,7 @@ function init(): void {
     const fmt = (v: PlotView, nId: string): string => {
       const p = (x: number, n: number): string => Number.parseFloat(x.toPrecision(n)).toString();
       const [cx, cy] = v.plot.center;
-      return `center ${p(cx, 4)}, ${p(cy, 4)} · zoom ${p(v.plot.zoom, 3)} · ${byId<HTMLInputElement>(nId).value} it`;
+      return `center ${p(cx, 4)}, ${p(cy, 4)} · zoom ${formatZoom(v.plot.zoom, 3)} · ${byId<HTMLInputElement>(nId).value} it`;
     };
     paramChip.textContent = fmt(parameterView, INPUT_IDS.paramN);
     dynChip.textContent = fmt(dynamicalView, INPUT_IDS.dynN);
@@ -1735,6 +1736,10 @@ function init(): void {
   }
   syncDynamicalC();
   updateViewChips();
+  // The zoom inputs carry HTML defaults on first load; run them through the scientific-notation
+  // formatter so they match the format used after any pan/zoom, preset, or shared view.
+  setParamZoomInput(parameterView.plot.zoom);
+  setDynZoomInput(dynamicalView.plot.zoom);
 
   /** Current control-input values as `[parameterPreset, dynamicalPreset]`. */
   function readPresetsFromInputs(): [Preset, Preset] {
@@ -2210,6 +2215,10 @@ function init(): void {
     // real/imaginary boxes from them (the setters write both the hidden field and the boxes).
     setParamCenterInput(getParamCenterInput());
     setDynCenterInput(getDynCenterInput());
+    // Re-format the just-loaded zoom fields into scientific notation (normalises an old link that
+    // stored a plain decimal; a value round-trips through parseFloat so nothing is lost).
+    setParamZoomInput(getParamZoomInput());
+    setDynZoomInput(getDynZoomInput());
     if (typeof state._grad === "string") {
       // Validate the untrusted gradient the same way the manual loader does; ignore if bad.
       const stops = parseGradientStops(state._grad);
