@@ -10,7 +10,7 @@
  *   • Poincaré disk (user's law): the screen shows the unit disk; a disk point w maps to the plot
  *     point z = projCentre + 2·atanh(|w|)·ŵ, i.e. forward w = tanh(|z−c*|/2)·(z−c*)/|z−c*|. Treats
  *     |z−c*| as a hyperbolic distance, so the whole plane compresses into the disk (boundary = ∞),
- *     a flat counterpart to the Riemann-sphere snapshot. Off-disk pixels (|w| ≥ 1) are background.
+ *     a flat counterpart to the live Riemann-sphere view. Off-disk pixels (|w| ≥ 1) are background.
  *   • Log-polar (exponential map): the screen's x ∈ [−1,1] is the angle φ ∈ [−π,π] about projCentre
  *     and y ∈ [−1,1] is the log-radius ρ ∈ [−π,π]; the plot point is z = projCentre + e^{ρ+iφ}.
  *     Panning y slides ρ → a constant-rate exponential zoom toward projCentre (the zoom-video).

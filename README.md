@@ -412,10 +412,12 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   indifferent fixed point and draws the ones that stay bounded — the nested rotation curves filling
   the Siegel disc. Only shown for a genuine Brjuno rotation number (parabolic / Cremer have no
   disc). `z²+c`.
-- **Riemann sphere** — renders the current Julia set onto the Riemann sphere (orthographic
-  stereographic snapshot: the screen centre is the south pole _z_ = 0, the rim is the equator
-  |_z_| = 1), so you see the whole dynamical plane including the dynamics at ∞ in one view;
-  downloadable as a PNG. CPU snapshot, independent of the live render. `z²+c`.
+- **Riemann sphere (3D)** — renders either plane on the Riemann sphere live in interactive 3D:
+  drag to rotate, scroll to zoom. The whole extended plane is shown at once (south pole _z_ = 0,
+  equator |_z_| = 1, north pole = ∞, so you see the dynamics at ∞ too), lit as a ball with the
+  fractal as its surface. Works for **any** _f_ (holomorphic, rational, transcendental, and
+  non-holomorphic); single precision. Click to inspect the point under the cursor; overlays are
+  hidden while it's active. Toggling it off restores the exact flat view.
 - **Projection views** — live GPU coordinate remaps of both planes (single precision): **log-polar**
   (the exponential map `z = c* + e^{ρ+iφ}` — self-similar structure becomes periodic and straight) and
   the **Poincaré disk** (`w = tanh(|z|/2)·ẑ`, compressing the whole plane into the unit disk with the

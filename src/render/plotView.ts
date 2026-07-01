@@ -19,6 +19,13 @@ import { inspect, type InspectResult } from "./inspect";
 import { drawOverlay, drawScaleBar, type Annotation } from "./overlay";
 import { isDoubleTap, pinchShift, pinchStateOf, type PinchState, type Tap } from "./pinch";
 import { inverseProject } from "./projection";
+import {
+  arcballDelta,
+  quatFromAxisAngle,
+  quatMultiply,
+  screenToPlane,
+  type Vec3,
+} from "./sphereView";
 
 /** Hooks linking a plot to the rest of the app (the parameter→dynamical coupling, input sync). */
 export interface PlotViewHooks {
@@ -54,7 +61,7 @@ export class PlotView {
   private readonly fractType: FractType;
   private readonly hooks: PlotViewHooks;
 
-  private dragMode: "none" | "pan" | "point" | "pinch" = "none";
+  private dragMode: "none" | "pan" | "point" | "pinch" | "sphere" = "none";
   private lastUv: Vec2 = [0, 0];
   private downUv: Vec2 = [0, 0]; // pointerdown position, to tell a click from a drag
   private overlayScheduled = false;
@@ -196,6 +203,28 @@ export class PlotView {
     this.requestOverlay();
   }
 
+  /** Enter/leave the Riemann-sphere render mode (drag to rotate, wheel to zoom). Overlays are
+   *  suppressed while active; the render hook clears/redraws the 2D overlay on the next frame. */
+  setSphere(on: boolean): void {
+    this.plot.setSphere(on);
+    this.requestOverlay();
+  }
+
+  /** Whether this plot is currently in sphere mode. */
+  get sphere(): boolean {
+    return this.plot.sphere;
+  }
+
+  /** Toggle the geometric ball shading on the sphere. */
+  setSphereLight(on: boolean): void {
+    this.plot.sphereLight = on;
+  }
+
+  /** Restore the default sphere orientation + zoom. */
+  resetSphereView(): void {
+    this.plot.resetSphereView();
+  }
+
   /**
    * Render the plot (and optionally the overlay) to a fresh off-screen canvas at
    * `size`, clamped to the GPU's max texture size. Shared by {@link exportPng}
@@ -313,6 +342,12 @@ export class PlotView {
   }
 
   private drawOverlay(): void {
+    if (this.plot.sphere) {
+      // Overlays (orbit / rays / cycle markers) assume the flat plane map, so they are suppressed on
+      // the sphere for the MVP — clear the 2D canvas so nothing stale shows over the 3D render.
+      this.octx.clearRect(0, 0, this.overlay.width, this.overlay.height);
+      return;
+    }
     drawOverlay(this.octx, {
       fAst: this.plot.fAst,
       escapeAst: this.plot.escAst,
@@ -429,6 +464,17 @@ export class PlotView {
       const uv = this.uvOf(e);
       this.pointers.set(e.pointerId, uv);
 
+      // Sphere mode: a single-finger drag orbits the camera (no pinch/point/pan). Extra fingers ignored.
+      if (this.plot.sphere) {
+        if (this.pointers.size > 1) return;
+        this.dragMode = "sphere";
+        this.lastUv = uv;
+        this.downUv = uv;
+        this.plot.setDraft(true);
+        el.style.cursor = "grabbing";
+        return;
+      }
+
       // A second finger begins a pinch (two-finger pan + zoom). Abandon any
       // single-finger drag that was in progress.
       if (this.pointers.size === 2) {
@@ -460,6 +506,22 @@ export class PlotView {
       const r = el.getBoundingClientRect(); // one layout read per move; uvOf + hover dist share it
       const uv = this.uvOf(e, r);
       if (this.pointers.has(e.pointerId)) this.pointers.set(e.pointerId, uv);
+
+      if (this.dragMode === "sphere") {
+        // Arcball: rotate the sphere by the incremental drag, accumulated onto its orientation.
+        this.plot.setSphereCamera(
+          quatMultiply(arcballDelta(this.lastUv, uv), this.plot.sphereRotation),
+          this.plot.sphereZoom,
+        );
+        this.lastUv = uv;
+        return;
+      }
+      if (this.dragMode === "none" && this.plot.sphere) {
+        // Hover on the sphere: crosshair-free grab affordance + the complex coordinate under the cursor.
+        el.style.cursor = "grab";
+        this.hooks.onHover?.(screenToPlane(uv, this.plot.sphereCamera()));
+        return;
+      }
 
       if (this.dragMode === "pinch") {
         const cur = pinchStateOf([...this.pointers.values()]);
@@ -497,6 +559,28 @@ export class PlotView {
     const endDrag = (e: PointerEvent): void => {
       capture(e.pointerId, false);
       this.pointers.delete(e.pointerId);
+
+      if (this.dragMode === "sphere") {
+        this.plot.setDraft(false);
+        const upUv = this.uvOf(e);
+        const r = el.getBoundingClientRect();
+        const movedPx = Math.hypot(
+          (upUv[0] - this.downUv[0]) * r.width,
+          (upUv[1] - this.downUv[1]) * r.height,
+        );
+        if (movedPx < CLICK_SLOP) {
+          // A click (not a rotate) inspects the z the sphere shows there — same as a flat-plane click.
+          const z = screenToPlane(upUv, this.plot.sphereCamera());
+          if (z) {
+            this.plot.moveZ0(z);
+            this.hooks.coupling?.setC(z);
+            this.fireInspect();
+          }
+        }
+        this.dragMode = "none";
+        el.style.cursor = "grab";
+        return;
+      }
 
       if (this.dragMode === "pinch") {
         // Two or more fingers still down (a third finger lifted): keep pinching,
@@ -582,6 +666,16 @@ export class PlotView {
       "wheel",
       (e) => {
         e.preventDefault();
+        if (this.plot.sphere) {
+          // Sphere zoom = FOV magnification (a telescope, not a dolly), so it reveals fractal detail
+          // per-fragment without ever entering the sphere.
+          const mag = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+          this.plot.setSphereCamera(this.plot.sphereRotation, this.plot.sphereZoom * mag);
+          this.plot.setDraft(true);
+          window.clearTimeout(this.wheelTimer);
+          this.wheelTimer = window.setTimeout(() => this.plot.setDraft(false), 200);
+          return;
+        }
         const uv = this.uvOf(e);
         const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
         const oldZoom = this.plot.zoom;
@@ -611,6 +705,33 @@ export class PlotView {
       "-": 189,
     };
     el.addEventListener("keydown", (e) => {
+      if (this.plot.sphere) {
+        // Sphere keyboard: arrows rotate about the screen axes, +/- zoom, Enter/i inspects the centre.
+        const step = 0.15;
+        const spin = (axis: Vec3, a: number): void =>
+          this.plot.setSphereCamera(
+            quatMultiply(quatFromAxisAngle(axis, a), this.plot.sphereRotation),
+            this.plot.sphereZoom,
+          );
+        if (e.key === "ArrowLeft") spin([0, 1, 0], -step);
+        else if (e.key === "ArrowRight") spin([0, 1, 0], step);
+        else if (e.key === "ArrowUp") spin([1, 0, 0], -step);
+        else if (e.key === "ArrowDown") spin([1, 0, 0], step);
+        else if (e.key === "+" || e.key === "=")
+          this.plot.setSphereCamera(this.plot.sphereRotation, this.plot.sphereZoom * 1.15);
+        else if (e.key === "-" || e.key === "_")
+          this.plot.setSphereCamera(this.plot.sphereRotation, this.plot.sphereZoom / 1.15);
+        else if (e.key === "Enter" || e.key === "i") {
+          const z = screenToPlane([0.5, 0.5], this.plot.sphereCamera());
+          if (z) {
+            this.plot.moveZ0(z);
+            this.hooks.coupling?.setC(z);
+            this.fireInspect();
+          }
+        } else return;
+        e.preventDefault();
+        return;
+      }
       if (e.key === "Enter" || e.key === "i") {
         // Keyboard equivalent of a click: place the point at the view centre and inspect it.
         e.preventDefault();

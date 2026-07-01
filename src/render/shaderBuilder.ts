@@ -227,7 +227,11 @@ export function buildFragmentShader(
   const baseStdlib = isDf64 ? DF64_GLSL + COMPLEX_DF64_GLSL : COMPLEX_SINGLE_GLSL;
   const centerUniforms = isDf64
     ? "uniform vec2 uCenterX;\nuniform vec2 uCenterY;"
-    : "uniform vec2 uCenter;\nuniform int uProjection;\nuniform vec2 uProjCentre;\nconst float PROJ_PI = 3.141592653589793;";
+    : "uniform vec2 uCenter;\nuniform int uProjection;\nuniform vec2 uProjCentre;\nconst float PROJ_PI = 3.141592653589793;\n" +
+      // Riemann-sphere render mode (f32 only): camera orientation (worldToModel mat3), dolly distance,
+      // FOV, aspect, and geometric-lighting flag. Mirrors render/sphereView.ts.
+      "uniform int uSphere;\nuniform mat3 uSphereRot;\nuniform float uSphereDist;\n" +
+      "uniform float uSphereTanFov;\nuniform float uSphereAspect;\nuniform int uSphereLight;";
   // Single precision supports the projection view modes (log-polar / Poincaré disk): the linear
   // view coordinate is reinterpreted in projected space and inverse-mapped to the plot point z
   // (mirrors render/projection.ts). df64 / perturbation keep the plain linear map. uProjection == 0
@@ -237,14 +241,22 @@ export function buildFragmentShader(
   vec2 off = (uv * 2.0 - 1.0) / uZoom;
   cvec z = vec4(df_add(uCenterX, vec2(off.x, 0.0)), df_add(uCenterY, vec2(off.y, 0.0)));`
     : `  float offDomain = 0.0;
-  vec2 view = uCenter + (uv * 2.0 - 1.0) / uZoom;
-  vec2 plot = view;
-  if (uProjection == 2) {
-    float pr = length(view);
-    if (pr >= 1.0) { offDomain = 1.0; plot = uProjCentre; }
-    else plot = uProjCentre + view * (pr > 0.0 ? 2.0 * atanh(pr) / pr : 0.0);
-  } else if (uProjection == 1) {
-    plot = uProjCentre + exp(view.y * PROJ_PI) * vec2(cos(view.x * PROJ_PI), sin(view.x * PROJ_PI));
+  vec2 plot;
+  if (uSphere == 1) {
+    // Riemann-sphere mode: ray-cast the analytic sphere → the complex coordinate the surface shows.
+    // A miss reuses the projection off-domain flag (the shared colorAt/… background path).
+    vec3 sNrm;
+    if (!sphereRayZ(uv, plot, sNrm)) { offDomain = 1.0; plot = uProjCentre; }
+  } else {
+    vec2 view = uCenter + (uv * 2.0 - 1.0) / uZoom;
+    plot = view;
+    if (uProjection == 2) {
+      float pr = length(view);
+      if (pr >= 1.0) { offDomain = 1.0; plot = uProjCentre; }
+      else plot = uProjCentre + view * (pr > 0.0 ? 2.0 * atanh(pr) / pr : 0.0);
+    } else if (uProjection == 1) {
+      plot = uProjCentre + exp(view.y * PROJ_PI) * vec2(cos(view.x * PROJ_PI), sin(view.x * PROJ_PI));
+    }
   }
   cvec z = vec_(plot.x, plot.y);`;
 
@@ -500,6 +512,60 @@ bool inMainCardioidOrBulb(float x, float y) {
 `
     : "";
 
+  // Riemann-sphere render mode (single precision only — uSphere is undeclared in the df64 build).
+  // sphereRayZ ray-casts the analytic unit sphere (mirrors render/sphereView.ts, single source of
+  // truth): uv ∈ [0,1]² is gl_FragCoord/res (y-UP), so the y-sign here is opposite the CPU pointer
+  // path (which is y-down). On a hit it returns the complex coordinate the surface point projects to
+  // (stereographic from the north pole) and the outward world normal (for the geometric ball shading).
+  const sphereGLSL = isDf64
+    ? ""
+    : `
+bool sphereRayZ(vec2 uv, out vec2 plotZ, out vec3 worldN) {
+  float nx = (uv.x * 2.0 - 1.0) * uSphereAspect * uSphereTanFov;
+  float ny = (uv.y * 2.0 - 1.0) * uSphereTanFov; // fragCoord is y-up; the CPU pointer path flips instead
+  vec3 dir = normalize(vec3(nx, ny, -1.0));      // fixed camera: forward −Z, right +X, up +Y
+  vec3 eye = vec3(0.0, 0.0, uSphereDist);
+  float b = 2.0 * dot(eye, dir);                 // a = dir·dir = 1
+  float c = dot(eye, eye) - 1.0;
+  float disc = b * b - 4.0 * c;
+  if (disc < 0.0) return false;
+  float t = (-b - sqrt(disc)) * 0.5;
+  if (t < 0.0) return false;
+  vec3 pw = eye + t * dir;      // world hit (on the unit sphere ⇒ also the outward normal)
+  worldN = pw;
+  vec3 pm = uSphereRot * pw;    // world → sphere frame (uSphereRot = worldToModel)
+  float d = max(1.0 - pm.z, 1e-15);
+  plotZ = vec2(pm.x, pm.y) / d; // stereographic: w = (x + iy) / (1 − Z)
+  float az = length(plotZ);
+  if (az > 1e8) plotZ *= 1e8 / az; // clamp |z| near the north pole for f32 safety
+  return true;
+}
+`;
+  // On a sphere-ray miss the whole fragment is background — one guard for every colour mode (the
+  // per-sample offDomain flag in colorAt still anti-aliases the inner rim for the averaged modes).
+  const sphereGuard = isDf64
+    ? ""
+    : `  if (uSphere == 1) {
+    vec2 sMz; vec3 sMn;
+    if (!sphereRayZ(fc / uResolution, sMz, sMn)) { fragColor = vec4(0.05, 0.05, 0.07, 1.0); return; }
+  }
+`;
+  // Geometric "3D ball" shading from the sphere's world normal — Lambert + a small specular, so the
+  // sphere reads as a lit ball with the fractal as its albedo. Independent of the escape-field relief
+  // (uLight); a high ambient keeps the dark side's fractal detail visible.
+  const sphereLightStmt = isDf64
+    ? ""
+    : `  if (uSphere == 1 && uSphereLight == 1) {
+    vec2 sLz; vec3 sLn;
+    if (sphereRayZ(fc / uResolution, sLz, sLn)) {
+      float diff = max(dot(sLn, uLightDir), 0.0);
+      vec3 H = normalize(uLightDir + vec3(0.0, 0.0, 1.0));
+      float spec = pow(max(dot(sLn, H), 0.0), 32.0) * 0.25;
+      col = col * (0.45 + 0.55 * diff) + spec;
+    }
+  }
+`;
+
   return `#version 300 es
 precision highp float;
 precision highp int;
@@ -556,7 +622,7 @@ float trapDistance(cvec z) {
     return length(vec2(re, im) - vec2(floor(re + 0.5), floor(im + 0.5)));
   return min(abs(re), abs(im)); // 0 = cross (both axes), default
 }
-${cardioidGLSL}
+${sphereGLSL}${cardioidGLSL}
 // Per-pixel colour for the AA-averaged modes (escape / smooth / orbit-trap / domain).
 // outHeight returns this sample's smooth-iteration height (or -1 for interior) when relief/
 // outline/equipotential is on, so main() can reuse it instead of a second escape walk at uAA == 1.
@@ -743,7 +809,7 @@ vec3 applyLighting(vec3 col, float h) {
 ${distanceAnalyticGLSL}${analyticNormalGLSL}${multiplierGLSL}${martyGLSL}
 void main() {
   vec2 fc = gl_FragCoord.xy + uJitter; // temporal-AA sub-pixel offset (0 when off)
-${projGuard}  if (uMode == 6) {
+${sphereGuard}${projGuard}  if (uMode == 6) {
     // Histogram pre-pass: output the escape count encoded in R,G (kmax = R + 256*G).
     int k = escapeCount(fc);
     fragColor = vec4(float(k % 256) / 255.0, float(k / 256) / 255.0, 0.0, 1.0);
@@ -780,7 +846,7 @@ ${analyticDispatch}${multiplierDispatch}${martyDispatch}  int n = max(uAA, 1);
       col *= 0.35 + 0.65 * line;
     }
   }
-  fragColor = vec4(col, 1.0);
+${sphereLightStmt}  fragColor = vec4(col, 1.0);
 }
 `;
 }

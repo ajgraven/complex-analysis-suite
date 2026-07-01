@@ -26,6 +26,14 @@ import { differentiate, newtonIteration } from "../expr/derivative";
 import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
 import { computeReferenceOrbitDD, computeReferenceOrbitDDFrom } from "./perturbation";
 import { type DD, dd, ddAddNumber, ddToNumber } from "./dd";
+import {
+  DEFAULT_DISTANCE,
+  DEFAULT_FOV,
+  DEFAULT_ROTATION,
+  makeSphereCamera,
+  type Quat,
+  type SphereCamera,
+} from "./sphereView";
 
 export type FractType = "dyn" | "param";
 
@@ -72,6 +80,12 @@ interface Uniforms {
   uCenter: WebGLUniformLocation | null; // single precision
   uProjection: WebGLUniformLocation | null; // 0 linear / 1 log-polar / 2 Poincaré (f32 only)
   uProjCentre: WebGLUniformLocation | null; // plot-space anchor for the projection
+  uSphere: WebGLUniformLocation | null; // Riemann-sphere render mode on/off (f32 only)
+  uSphereRot: WebGLUniformLocation | null; // camera orientation (worldToModel mat3)
+  uSphereDist: WebGLUniformLocation | null; // camera dolly distance
+  uSphereTanFov: WebGLUniformLocation | null; // tan(fov/2) — the zoom magnification
+  uSphereAspect: WebGLUniformLocation | null; // viewport aspect (1 for the square canvas)
+  uSphereLight: WebGLUniformLocation | null; // geometric ball shading on/off
   uCenterX: WebGLUniformLocation | null; // df64 hi/lo
   uCenterY: WebGLUniformLocation | null;
   uOne: WebGLUniformLocation | null; // df64 optimization barrier
@@ -283,6 +297,13 @@ export class GLPlot {
   /** Projection view mode (0 linear / 1 log-polar / 2 Poincaré) + its plot-space anchor (f32 only). */
   private _projection = 0;
   private _projCentre: Vec2 = [0, 0];
+  /** Riemann-sphere render mode: orientation quaternion + zoom magnification + geometric lighting. The
+   *  sphere is a whole-plane overview (single precision) with its own 3D camera — it leaves the flat
+   *  centre/zoom/projection untouched, so toggling back restores the exact previous view. */
+  private _sphere = false;
+  private _sphereRot: Quat = DEFAULT_ROTATION;
+  private _sphereZoom = 1; // magnification (narrows the FOV); unbounded telescope zoom
+  private _sphereLight = true;
   private _c = "0";
   private _cVal: Complex = [0, 0];
   private _f = "z^2+c";
@@ -461,6 +482,12 @@ export class GLPlot {
       uCenter: gl.getUniformLocation(program, "uCenter"),
       uProjection: gl.getUniformLocation(program, "uProjection"),
       uProjCentre: gl.getUniformLocation(program, "uProjCentre"),
+      uSphere: gl.getUniformLocation(program, "uSphere"),
+      uSphereRot: gl.getUniformLocation(program, "uSphereRot"),
+      uSphereDist: gl.getUniformLocation(program, "uSphereDist"),
+      uSphereTanFov: gl.getUniformLocation(program, "uSphereTanFov"),
+      uSphereAspect: gl.getUniformLocation(program, "uSphereAspect"),
+      uSphereLight: gl.getUniformLocation(program, "uSphereLight"),
       uCenterX: gl.getUniformLocation(program, "uCenterX"),
       uCenterY: gl.getUniformLocation(program, "uCenterY"),
       uOne: gl.getUniformLocation(program, "uOne"),
@@ -679,8 +706,16 @@ export class GLPlot {
 
   /** The precision a deep-enough zoom calls for (ignores whether df64 is compiled yet). */
   private desiredPrecision(): Precision {
+    if (this._sphere) return "single"; // the sphere view is a whole-plane overview (f32 only)
     const m = Math.max(1, Math.abs(this._center[0]), Math.abs(this._center[1]));
     return this._zoom * m > DF64_THRESHOLD ? "df64" : "single";
+  }
+
+  /** The resolved ray-cast camera for the current sphere orientation + zoom (square canvas ⇒ aspect 1).
+   *  The single source of the FOV↔magnification mapping, shared by setupDraw and the interaction layer. */
+  sphereCamera(): SphereCamera {
+    const fov = 2 * Math.atan(Math.tan(DEFAULT_FOV / 2) / this._sphereZoom);
+    return makeSphereCamera(this._sphereRot, DEFAULT_DISTANCE, fov, 1);
   }
 
   /**
@@ -831,8 +866,20 @@ export class GLPlot {
       gl.uniform1f(u.uOne, 1.0);
     } else {
       gl.uniform2f(u.uCenter, this._center[0], this._center[1]);
-      gl.uniform1i(u.uProjection, this._projection);
       gl.uniform2f(u.uProjCentre, this._projCentre[0], this._projCentre[1]);
+      if (this._sphere) {
+        const cam = this.sphereCamera();
+        gl.uniform1i(u.uSphere, 1);
+        gl.uniformMatrix3fv(u.uSphereRot, false, cam.worldToModel);
+        gl.uniform1f(u.uSphereDist, cam.eye[2]);
+        gl.uniform1f(u.uSphereTanFov, cam.tanHalfFov);
+        gl.uniform1f(u.uSphereAspect, cam.aspect);
+        gl.uniform1i(u.uSphereLight, this._sphereLight ? 1 : 0);
+        gl.uniform1i(u.uProjection, 0); // sphere and the flat projections are mutually exclusive
+      } else {
+        gl.uniform1i(u.uSphere, 0);
+        gl.uniform1i(u.uProjection, this._projection);
+      }
     }
     return true;
   }
@@ -957,6 +1004,7 @@ export class GLPlot {
 
   /** Whether the perturbation kernel should drive this frame. */
   private usePerturbation(): boolean {
+    if (this._sphere) return false; // the sphere is single-precision; the perturbation kernel has no sphere path
     // Eligible for both planes: parameter (Mandelbrot) and dynamical (Julia) for z²+c.
     return this._perturbation && this._perturbEligible && this.perturbProgram !== null;
   }
@@ -1537,6 +1585,45 @@ export class GLPlot {
   setProjection(mode: number, centre: Vec2): void {
     this._projection = mode;
     this._projCentre = centre;
+    this.scheduleRender();
+  }
+
+  /** Whether the Riemann-sphere render mode is active. */
+  get sphere(): boolean {
+    return this._sphere;
+  }
+  /** Current sphere-camera orientation (accumulated by drag). */
+  get sphereRotation(): Quat {
+    return this._sphereRot;
+  }
+  /** Current sphere-camera zoom magnification (narrows the FOV; > 1 is zoomed in). */
+  get sphereZoom(): number {
+    return this._sphereZoom;
+  }
+  get sphereLight(): boolean {
+    return this._sphereLight;
+  }
+  /** Enter/leave the sphere render mode (a content change — the per-pixel coordinate differs). */
+  setSphere(on: boolean): void {
+    if (this._sphere === on) return;
+    this._sphere = on;
+    this.scheduleRender();
+  }
+  /** Update the sphere camera (drag rotation + wheel magnification). Zoom is clamped to a sane range. */
+  setSphereCamera(rot: Quat, zoom: number): void {
+    this._sphereRot = rot;
+    this._sphereZoom = Math.min(1e6, Math.max(0.3, zoom));
+    this.scheduleRender();
+  }
+  /** Toggle the geometric ball shading — appearance only, so no content invalidation. */
+  set sphereLight(on: boolean) {
+    this._sphereLight = on;
+    this.scheduleRender(false);
+  }
+  /** Restore the default sphere orientation + zoom (the reset-view button). */
+  resetSphereView(): void {
+    this._sphereRot = DEFAULT_ROTATION;
+    this._sphereZoom = 1;
     this.scheduleRender();
   }
   set z0(z0Val: Vec2) {

@@ -233,13 +233,13 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: "riemann-sphere",
     term: "Riemann sphere",
-    defn: "The complex plane plus a point at infinity, modelled as a sphere by stereographic projection (z = (X+iY)/(1−Z)). Viewing a Julia set on it shows the whole dynamical plane at once, including the dynamics at ∞ (for z²+c, ∞ is a superattracting fixed point — the basin of ∞ is the exterior). The 'Riemann sphere' panel renders an orthographic snapshot: the screen centre is the south pole z=0, the rim is the equator |z|=1, and the back hemisphere (|z|>1, the basin of ∞) faces away.",
+    defn: "The complex plane plus a point at infinity, modelled as a sphere by stereographic projection (z = (X+iY)/(1−Z)). Viewing a set on it shows the whole plane at once, including the dynamics at ∞ (for z²+c, ∞ is a superattracting fixed point — the basin of ∞ is the exterior). The 'Riemann sphere (3D)' panel renders either plane live in interactive 3D: drag to rotate, scroll to zoom. The south pole is z=0, the equator is |z|=1, and the north pole is ∞; the sphere is lit as a ball with the fractal as its surface. Works for any f (single precision); overlays are hidden while it's active.",
     latex: "\\zeta = \\frac{X + iY}{1 - Z}",
   },
   {
     id: "poincare-disk",
     term: "Poincaré disk projection",
-    defn: "A live view that compresses the whole plane into the open unit disk by treating the modulus as a hyperbolic distance: a plot point z maps to the disk point w = tanh(|z−c*|/2)·(z−c*)/|z−c*|, so the boundary circle is ∞. A flat counterpart to the Riemann-sphere snapshot — you see the entire plane at once, with detail near c* magnified and far-field structure crowded against the rim. Single precision; overlays are hidden while it is active.",
+    defn: "A live view that compresses the whole plane into the open unit disk by treating the modulus as a hyperbolic distance: a plot point z maps to the disk point w = tanh(|z−c*|/2)·(z−c*)/|z−c*|, so the boundary circle is ∞. A flat counterpart to the Riemann-sphere view — you see the entire plane at once, with detail near c* magnified and far-field structure crowded against the rim. Single precision; overlays are hidden while it is active.",
     latex: "w = \\tanh\\!\\big(\\tfrac{|z-c^*|}{2}\\big)\\,\\frac{z-c^*}{|z-c^*|}",
   },
   {

@@ -33,7 +33,6 @@ import {
   stripExternalAngles,
 } from "./combinatorics/stripping";
 import { landingForAngle } from "./render/angleParameter";
-import { renderRiemannSphere } from "./render/riemannSphere";
 import { detectHermanRing } from "./render/hermanRing";
 import { detectUnderIteration } from "./render/underIteration";
 import { escapeIsMeaningless, precisionMetric } from "./render/viewAdvisories";
@@ -3086,27 +3085,23 @@ function init(): void {
   applyInverseJulia();
   byId("siegel-curves").addEventListener("change", applySiegelCurves);
   applySiegelCurves();
-  byId("sphere-render").addEventListener("click", () => {
-    const plot = dynamicalView.plot;
-    if (!plot.perturbationEligible) {
-      showToast("Riemann-sphere render is for the z²+c family.", "warn");
-      return;
-    }
-    const canvas = byId<HTMLCanvasElement>("sphere-canvas");
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const size = canvas.width;
-    const buf = renderRiemannSphere(plot.fAst, plot.escAst, plot.cValue, size, 256, plot.paramA);
-    const img = ctx.createImageData(size, size);
-    img.data.set(buf);
-    ctx.putImageData(img, 0, 0);
-    byId("sphere-download").hidden = false;
-    showToast("Rendered the Julia set on the Riemann sphere.", "info");
+  // Riemann sphere (3D): toggle either plane into the live sphere render mode. Each plot keeps its own
+  // flat centre/zoom untouched, so unchecking restores the exact view; drag/wheel are handled in
+  // PlotView. Works for any f (single precision). Not part of the serialized state for the MVP.
+  byId("sphere-param").addEventListener("change", () => {
+    parameterView.setSphere(byId<HTMLInputElement>("sphere-param").checked);
   });
-  byId("sphere-download").addEventListener("click", () => {
-    byId<HTMLCanvasElement>("sphere-canvas").toBlob((blob) => {
-      if (blob) downloadBlob(blob, "riemann-sphere.png");
-    });
+  byId("sphere-dyn").addEventListener("change", () => {
+    dynamicalView.setSphere(byId<HTMLInputElement>("sphere-dyn").checked);
+  });
+  byId("sphere-light").addEventListener("change", () => {
+    const on = byId<HTMLInputElement>("sphere-light").checked;
+    parameterView.setSphereLight(on);
+    dynamicalView.setSphereLight(on);
+  });
+  byId("sphere-reset").addEventListener("click", () => {
+    parameterView.resetSphereView();
+    dynamicalView.resetSphereView();
   });
 
   for (const id of ["equipotential", "equiDensity"]) {
