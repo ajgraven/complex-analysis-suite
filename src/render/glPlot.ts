@@ -323,6 +323,8 @@ export class GLPlot {
   private orbitTex: WebGLTexture | null = null;
   private orbitLen = 0;
   private orbitDirty = true;
+  /** GPU max texture width — caps the 1×N reference-orbit texture (set in the constructor). */
+  private maxTextureSize = 16384;
   /** Histogram CDF cache: rebuilt only when the distribution or render size changes. */
   private cdfDirty = true;
   private cdfSize = 0;
@@ -453,6 +455,7 @@ export class GLPlot {
     const gl = canvas.getContext("webgl2", { preserveDrawingBuffer: true });
     if (!gl) throw new Error("WebGL2 is not available in this browser");
     this.gl = gl;
+    this.maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
     this.parallelExt = gl.getExtension("KHR_parallel_shader_compile") as {
       COMPLETION_STATUS_KHR: number;
     } | null;
@@ -1140,31 +1143,41 @@ export class GLPlot {
   private ensureOrbit(maxIter: number): void {
     if (!this.orbitDirty && this.orbitLen > 0) return;
     const gl = this.gl;
+    // The reference orbit is uploaded as a 1×N RG32F texture, so N must not exceed the GPU's max
+    // texture width. Auto-iterations at extreme zoom (or a very high manual cap) can push the
+    // iteration count past it — for a bounded reference centre the orbit runs the full cap, so N
+    // would exceed MAX_TEXTURE_SIZE and texImage2D fails (GL_INVALID_VALUE), blanking the whole plot.
+    // Cap the STORED reference here: the shader's rebasing re-references to Z_0 once it runs past the
+    // stored orbit (an exact identity — the same path an early-escaping reference already takes), so
+    // the full `uN` iterations still render correctly; it just rebases more often past the cap.
+    const refIter = Math.min(maxIter, this.maxTextureSize);
     // Parameter plane: Z_0 = 0, add = centre. Dynamical (Julia) plane: Z_0 = centre,
     // add = the fixed parameter c (folded into the reference orbit).
     const orbit =
       this.fractType === "param"
-        ? computeReferenceOrbitDD(this._centerDD[0], this._centerDD[1], maxIter)
+        ? computeReferenceOrbitDD(this._centerDD[0], this._centerDD[1], refIter)
         : computeReferenceOrbitDDFrom(
             this._centerDD[0],
             this._centerDD[1],
             dd(this._cVal[0]),
             dd(this._cVal[1]),
-            maxIter,
+            refIter,
           );
-    this.orbitLen = orbit.length;
+    // Hard-cap the uploaded width at the max texture size (computeReferenceOrbitDD returns up to
+    // maxIter + 1 points, so a bare `min(maxIter, max)` would still be one over).
+    this.orbitLen = Math.min(orbit.length, this.maxTextureSize);
     if (!this.orbitTex) this.orbitTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.orbitTex);
     gl.texImage2D(
       gl.TEXTURE_2D,
       0,
       gl.RG32F,
-      orbit.length,
+      this.orbitLen,
       1,
       0,
       gl.RG,
       gl.FLOAT,
-      orbit.xy.subarray(0, orbit.length * 2),
+      orbit.xy.subarray(0, this.orbitLen * 2),
     );
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
