@@ -921,6 +921,36 @@ footer {
   font-size: 0.85rem;
 }
 
+/* "How to cite" block in the Help-modal footer. */
+.cite {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.cite h3 {
+  font-size: 1rem;
+  margin: 0 0 0.3rem;
+}
+.cite-ref {
+  color: var(--fg);
+}
+.cite-bibtex {
+  margin: 0.5rem 0;
+  padding: 0.6rem 0.75rem;
+  overflow-x: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--fg);
+  white-space: pre;
+}
+.cite-copy {
+  font-size: 0.8rem;
+}
+
 /* --- Status: error banners, invalid fields, toasts -------------------- */
 .banner,
 .input-errors {

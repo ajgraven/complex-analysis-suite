@@ -3103,6 +3103,16 @@ function init(): void {
     parameterView.resetSphereView();
     dynamicalView.resetSphereView();
   });
+  // Copy the BibTeX citation (Help modal footer) to the clipboard for academic reuse.
+  byId("cite-copy").addEventListener("click", async () => {
+    const bib = byId("cite-bibtex").textContent ?? "";
+    try {
+      await navigator.clipboard.writeText(bib);
+      showToast("Citation (BibTeX) copied to the clipboard.", "info");
+    } catch {
+      showToast("Couldn't copy — select the text to copy it manually.", "warn");
+    }
+  });
 
   for (const id of ["equipotential", "equiDensity"]) {
     byId(id).addEventListener("input", applyEquipotential);

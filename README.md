@@ -668,6 +668,26 @@ gives the per-quantity definitions and conventions.
   K. I. Martin, "SuperFractalThing" (2013); glitch-free **rebasing** — Zhuoran, via Heiland-Allen,
   [_Deep zoom theory and practice (again)_](https://mathr.co.uk/blog/2022-02-21_deep_zoom_theory_and_practice_again.html).
 
+## Citation
+
+If you use this tool's results or images in your work or an academic publication, please cite it.
+Where a specific computed quantity is involved, please also cite the underlying algorithm — the
+[Methods & references](#methods--references) above and the in-app Glossary give the primary source
+for each.
+
+> Graven, A. (2026). _Complex Dynamics Visualization Tool_ (Version 1.0.0) [Computer software].
+> https://github.com/ajgraven/ComplexDynamicsJS
+
+```bibtex
+@software{graven2026complexdynamics,
+  author  = {Graven, Andrew},
+  title   = {Complex Dynamics Visualization Tool},
+  year    = {2026},
+  version = {1.0.0},
+  url     = {https://github.com/ajgraven/ComplexDynamicsJS}
+}
+```
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add a preset, add a function to
