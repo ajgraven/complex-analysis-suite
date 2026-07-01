@@ -133,6 +133,11 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
 - Move the plot window with the **arrow keys** or by click-dragging the
   background.
 - Zoom with the **+/- keys** or the **mouse wheel** (zooms toward the cursor).
+- While you pan or zoom, the view stays instantly responsive: the last rendered image is
+  slid/scaled to follow the gesture (like a map), then the sharp fractal is recomputed once you
+  release. A margin around the view is pre-computed in the background while the view sits still, so
+  newly-revealed area is usually already there instead of blank. (Deep zoom and the sphere /
+  projection views fall back to a coarse live re-render instead.)
 - Drag the **white point** in either plot to change its value (the cursor shows
   a grab affordance over it); the complex coordinate under the cursor is shown
   beneath each plot.
@@ -310,8 +315,11 @@ all are shader uniforms, so switching never recompiles):
   stops on the preview bar, randomise, import/export JSON). Applies to the scalar modes.
 - **Rotation** — rotates the palette through the colours (colour cycling); applies
   to every palette.
-- **Anti-aliasing** — Off / 2× / 3× supersampling, on full-resolution renders only
-  (disabled during interaction for responsiveness).
+- **Anti-aliasing** — Off / 2× / 3× spatial supersampling, on full-resolution renders only
+  (disabled during interaction for responsiveness). When **Refine while idle** is on the
+  anti-aliasing instead comes from the temporal accumulation below (each idle frame is one jittered
+  sample), so the spatial setting isn't applied on top — this keeps the first frame fast and lets
+  quality build up over frames.
 - **Refine while idle** — while the view sits still, accumulates jittered sub-pixel
   samples into a float buffer and shows their running average, converging to a much
   cleaner image over a few frames at no interaction cost. Needs float render targets
