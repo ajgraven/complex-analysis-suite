@@ -1301,75 +1301,6 @@ z^2+c</textarea
             </div>
           </details>
 
-          <!-- View: live projection remaps + the interactive 3-D Riemann sphere (single precision). -->
-          <details class="control-group" id="view-group">
-            <summary>Projection &amp; Riemann sphere (view)</summary>
-            <div class="controls">
-              <p class="exterior-status">
-                Remap both plots into a live projection (single precision; resets the view). Log-polar
-                is the exponential map; the Poincaré disk compresses the plane into the unit disk
-                (rim = ∞) via w = tanh(|z|/2)·ẑ.
-                <button
-                  type="button"
-                  class="gloss-link"
-                  data-term="poincare-disk"
-                  aria-label="About projection views"
-                >
-                  ?
-                </button>
-              </p>
-              <label class="exterior-n-label">
-                Mode
-                <select id="projection-mode" title="Coordinate remap applied to both plots">
-                  <option value="linear">Linear (off)</option>
-                  <option value="logpolar">Log-polar (exp map)</option>
-                  <option value="poincare">Poincaré disk</option>
-                </select>
-              </label>
-              <p class="exterior-status" id="projection-note"></p>
-              <p class="exterior-status">
-                Or render a plane on the <strong>Riemann sphere</strong> in interactive 3-D — drag to
-                rotate, scroll to zoom (∞ at the north pole; any f).
-                <button
-                  type="button"
-                  class="gloss-link"
-                  data-term="riemann-sphere"
-                  aria-label="About the Riemann sphere"
-                >
-                  ?
-                </button>
-              </p>
-              <div class="control-grid">
-                <div class="field">
-                  <label
-                    class="checkbox"
-                    for="sphere-param"
-                    title="Show the parameter plane on the Riemann sphere"
-                  >
-                    <input type="checkbox" id="sphere-param" /> sphere: parameter plane
-                  </label>
-                </div>
-                <div class="field">
-                  <label
-                    class="checkbox"
-                    for="sphere-dyn"
-                    title="Show the dynamical (Julia) plane on the Riemann sphere"
-                  >
-                    <input type="checkbox" id="sphere-dyn" /> sphere: dynamical plane
-                  </label>
-                </div>
-                <div class="field">
-                  <label class="checkbox" for="sphere-light" title="Shade the sphere as a lit 3-D ball">
-                    <input type="checkbox" id="sphere-light" checked /> 3D lighting
-                  </label>
-                </div>
-              </div>
-              <div class="exterior-actions">
-                <button type="button" id="sphere-reset">Reset sphere view</button>
-              </div>
-            </div>
-          </details>
-
           <!-- Go to external angle: land the parameter ray at θ, then snap to the centre/Misiurewicz. -->
           <details class="control-group" id="angle-group">
             <summary>Go to external angle (z²+c)</summary>
@@ -1503,6 +1434,75 @@ z^2+c</textarea
                 </div>
               </dl>
               <p class="exterior-status" id="herman-note"></p>
+            </div>
+          </details>
+
+          <!-- View: live projection remaps + the interactive 3-D Riemann sphere (single precision). -->
+          <details class="control-group" id="view-group">
+            <summary>Projection &amp; Riemann sphere (view)</summary>
+            <div class="controls">
+              <p class="exterior-status">
+                Remap both plots into a live projection (single precision; resets the view). Log-polar
+                is the exponential map; the Poincaré disk compresses the plane into the unit disk
+                (rim = ∞) via w = tanh(|z|/2)·ẑ.
+                <button
+                  type="button"
+                  class="gloss-link"
+                  data-term="poincare-disk"
+                  aria-label="About projection views"
+                >
+                  ?
+                </button>
+              </p>
+              <label class="exterior-n-label">
+                Mode
+                <select id="projection-mode" title="Coordinate remap applied to both plots">
+                  <option value="linear">Linear (off)</option>
+                  <option value="logpolar">Log-polar (exp map)</option>
+                  <option value="poincare">Poincaré disk</option>
+                </select>
+              </label>
+              <p class="exterior-status" id="projection-note"></p>
+              <p class="exterior-status">
+                Or render a plane on the <strong>Riemann sphere</strong> in interactive 3-D — drag to
+                rotate, scroll to zoom (∞ at the north pole; any f).
+                <button
+                  type="button"
+                  class="gloss-link"
+                  data-term="riemann-sphere"
+                  aria-label="About the Riemann sphere"
+                >
+                  ?
+                </button>
+              </p>
+              <div class="control-grid">
+                <div class="field">
+                  <label
+                    class="checkbox"
+                    for="sphere-param"
+                    title="Show the parameter plane on the Riemann sphere"
+                  >
+                    <input type="checkbox" id="sphere-param" /> sphere: parameter plane
+                  </label>
+                </div>
+                <div class="field">
+                  <label
+                    class="checkbox"
+                    for="sphere-dyn"
+                    title="Show the dynamical (Julia) plane on the Riemann sphere"
+                  >
+                    <input type="checkbox" id="sphere-dyn" /> sphere: dynamical plane
+                  </label>
+                </div>
+                <div class="field">
+                  <label class="checkbox" for="sphere-light" title="Shade the sphere as a lit 3-D ball">
+                    <input type="checkbox" id="sphere-light" checked /> 3D lighting
+                  </label>
+                </div>
+              </div>
+              <div class="exterior-actions">
+                <button type="button" id="sphere-reset">Reset sphere view</button>
+              </div>
             </div>
           </details>
 
