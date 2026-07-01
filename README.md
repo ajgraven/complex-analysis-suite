@@ -390,9 +390,10 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   orbit** downloads the inspected orbit as a CSV — both at full precision. **Pin note** drops a
   labelled gold marker at the inspected point — anchored in plot coordinates, so it tracks pans
   and zooms — and pinned notes ride along in share links and saved views; **Clear** removes them.
-- **Critical-orbit hover preview** — hovering a point on the parameter plane shows a small
-  preview of its critical orbit (green if bounded → connected Julia set; orange if it
-  escapes → Cantor dust), pinned to the plot's corner.
+- **Critical-orbit hover preview** — an optional miniature inset, pinned to the parameter plot's
+  corner, that shows the hovered point's critical orbit over its filled Julia set (green if bounded
+  → connected Julia set; orange if it escapes → Cantor dust). It's **off by default** — enable
+  **orbit preview** under _Iteration &amp; precision_ (the choice is remembered across sessions).
 - **Mating check** — enter two main-cardioid bulbs (rotation numbers _p_/_q_) and the panel
   reports whether the two `z²+c` maps can be **mated** (their filled Julia sets glued into one
   rational map): by Rees–Shishikura–Tan Lei they mate iff their limbs are not complex-conjugate,

@@ -93,6 +93,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     defn: "The orbit of the point where f′ = 0. Its fate decides the Julia set: a bounded critical orbit ⇒ the Julia set is connected; an escaping one ⇒ it is a Cantor dust. The critical point is 0 for zⁿ+c and ½ for the logistic 'lambda'.",
   },
   {
+    id: "orbit-preview",
+    term: "Orbit preview inset",
+    defn: "An optional miniature dynamical-plane picture pinned to the parameter plot's corner. While you hover a point c it shows that map's filled Julia set with the critical orbit drawn on top — green if the orbit stays bounded (the Julia set there is connected), orange if it escapes (a Cantor dust). It's a quick 'what does the dynamical plane look like here?' hint; off by default, toggle it under Iteration & precision.",
+  },
+  {
     id: "external-ray",
     term: "External ray",
     defn: "The image under the Böttcher map of a straight ray outside the set; as it approaches the boundary it lands at an 'external angle' θ measured in turns. Rays organise the boundary combinatorially.",

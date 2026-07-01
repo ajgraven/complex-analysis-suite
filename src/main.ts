@@ -804,6 +804,16 @@ function init(): void {
   let paramPlot: GLPlot | null = null; // set just after the parameter view is built
   // On a touch device there is no hover, so the inset is fed from the white-point set/drag instead.
   const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
+  // Master enable for the inset — persisted, default OFF (the preview is opt-in). Read once here;
+  // the checkbox is wired just below updateOrbitPreview. When off, updateOrbitPreview is a no-op
+  // that keeps the canvas hidden.
+  const ORBIT_PREVIEW_KEY = "cdjs.orbitPreview";
+  let orbitPreviewEnabled = false;
+  try {
+    orbitPreviewEnabled = localStorage.getItem(ORBIT_PREVIEW_KEY) === "1";
+  } catch {
+    /* localStorage unavailable (private mode) — non-fatal, stays off */
+  }
   let previewPending: Vec2 | null = null;
   let previewScheduled = false;
   // Cached Julia background for the inset — the escape-time render is throttled (it's the heavy
@@ -812,7 +822,7 @@ function init(): void {
   let previewJuliaT = 0;
   let previewJuliaAst: ExprNode | null = null;
   function updateOrbitPreview(coord: Vec2 | null): void {
-    if (!coord || !orbitPreviewCtx || !paramPlot) {
+    if (!orbitPreviewEnabled || !coord || !orbitPreviewCtx || !paramPlot) {
       orbitPreviewCanvas.hidden = true;
       return;
     }
@@ -839,6 +849,20 @@ function init(): void {
       orbitPreviewCanvas.hidden = false;
     });
   }
+
+  // The "orbit preview" master toggle — persisted (default off). Reflect the stored state, and
+  // when turned off hide the inset immediately (it would otherwise linger until the next hover).
+  const orbitPreviewToggle = byId<HTMLInputElement>("orbit-preview-toggle");
+  orbitPreviewToggle.checked = orbitPreviewEnabled;
+  orbitPreviewToggle.addEventListener("change", () => {
+    orbitPreviewEnabled = orbitPreviewToggle.checked;
+    try {
+      localStorage.setItem(ORBIT_PREVIEW_KEY, orbitPreviewEnabled ? "1" : "0");
+    } catch {
+      /* localStorage unavailable (private mode) — non-fatal */
+    }
+    if (!orbitPreviewEnabled) orbitPreviewCanvas.hidden = true;
+  });
 
   // Coupled-drag state for deferring the c-dependent dyn-panel readouts (see updateDynCaption).
   let coupledDrafting = false;
