@@ -18,6 +18,7 @@ import {
   buildFragmentShader,
   POST_FRAGMENT_SHADER,
   PERTURBATION_FRAGMENT_SHADER,
+  PREVIEW_FRAGMENT_SHADER,
   VERTEX_SHADER,
   type Precision,
 } from "./shaderBuilder";
@@ -118,6 +119,14 @@ interface PostUniforms {
   uVignette: WebGLUniformLocation | null;
   uGamma: WebGLUniformLocation | null;
   uAccumScale: WebGLUniformLocation | null;
+}
+
+/** Uniforms for the "Google Maps" interaction-preview pass (warp the last frame). */
+interface PreviewUniforms {
+  uPreview: WebGLUniformLocation | null;
+  uResolution: WebGLUniformLocation | null;
+  uPreviewScale: WebGLUniformLocation | null;
+  uPreviewOffset: WebGLUniformLocation | null;
 }
 
 interface PerturbUniforms {
@@ -256,6 +265,29 @@ export function effectiveAA(
   return Math.max(1, aa);
 }
 
+/**
+ * Affine params to warp a previously-rendered frame (captured at `lastCenter`/`lastZoom`) into the
+ * current view (`center`/`zoom`) — the "Google Maps" interaction preview. The source texture UV for a
+ * screen UV `uv` (both y-up) is `scale·uv + offset`: derived from equating the plot point a screen
+ * pixel shows in each view (`center + (2uv−1)/zoom`), so it is exact for a pan (offset) + isotropic
+ * zoom (scale). Identity when the views match (scale 1, offset 0). Pure — single precision only
+ * (the caller keeps the precise draft re-render at df64 depth, where the f64 centre difference loses
+ * bits).
+ */
+export function previewTransform(
+  center: Vec2,
+  zoom: number,
+  lastCenter: Vec2,
+  lastZoom: number,
+): { scale: number; offset: Vec2 } {
+  const scale = lastZoom / zoom;
+  const offset: Vec2 = [
+    ((center[0] - lastCenter[0]) * lastZoom - scale + 1) / 2,
+    ((center[1] - lastCenter[1]) * lastZoom - scale + 1) / 2,
+  ];
+  return { scale, offset };
+}
+
 export class GLPlot {
   private readonly gl: WebGL2RenderingContext;
   private readonly canvas: HTMLCanvasElement;
@@ -303,6 +335,14 @@ export class GLPlot {
   private sceneFbo: WebGLFramebuffer | null = null;
   private sceneTex: WebGLTexture | null = null;
   private sceneSize = 0;
+  /** "Google Maps" interaction preview: the last fully-rendered frame + the view it was drawn at, so a
+   *  pan/zoom gesture can warp it instantly instead of re-iterating (see {@link previewTransform}). */
+  private previewProgram: { program: WebGLProgram; uniforms: PreviewUniforms } | null = null;
+  private lastFrameTex: WebGLTexture | null = null;
+  private lastFrameSize = 0;
+  private lastFrameZoom = 1;
+  private lastFrameCenter: Vec2 = [0, 0];
+  private lastFrameValid = false;
   /** Custom-gradient palette: a 256×1 ramp texture sampled when uPalette == 4. */
   private gradientTex: WebGLTexture | null = null;
   /** Temporal anti-aliasing: a float accumulator for jittered idle samples. */
@@ -393,6 +433,7 @@ export class GLPlot {
     this.attachContextHandlers();
     this.setupQuad();
     this.compilePostProgram();
+    this.compilePreviewProgram();
     this.compilePerturbProgram();
     this.uploadGradient();
     this.applyRenderSize();
@@ -437,6 +478,10 @@ export class GLPlot {
     this.sceneFbo = null;
     this.sceneTex = null;
     this.sceneSize = 0;
+    this.previewProgram = null;
+    this.lastFrameTex = null;
+    this.lastFrameSize = 0;
+    this.lastFrameValid = false;
     this.gradientTex = null;
     this.accumFbo = null;
     this.accumTex = null;
@@ -457,6 +502,7 @@ export class GLPlot {
     this.quadBuffer = null; // the old handle died with the context; setupQuad makes a fresh one
     this.setupQuad();
     this.compilePostProgram();
+    this.compilePreviewProgram();
     this.compilePerturbProgram();
     this.uploadGradient();
     this.rebuild();
@@ -1219,6 +1265,24 @@ export class GLPlot {
     }
   }
 
+  private compilePreviewProgram(): void {
+    const gl = this.gl;
+    try {
+      const program = createProgram(gl, VERTEX_SHADER, PREVIEW_FRAGMENT_SHADER);
+      this.previewProgram = {
+        program,
+        uniforms: {
+          uPreview: gl.getUniformLocation(program, "uPreview"),
+          uResolution: gl.getUniformLocation(program, "uResolution"),
+          uPreviewScale: gl.getUniformLocation(program, "uPreviewScale"),
+          uPreviewOffset: gl.getUniformLocation(program, "uPreviewOffset"),
+        },
+      };
+    } catch (err) {
+      console.warn(`[${this.fractType}] preview program failed (draft re-render used instead):`, err);
+    }
+  }
+
   private compilePerturbProgram(): void {
     const gl = this.gl;
     try {
@@ -1288,6 +1352,81 @@ export class GLPlot {
     gl.bindTexture(gl.TEXTURE_2D, null); // detach so it isn't a sampler feedback loop
   }
 
+  /** (Re)allocate the "last frame" texture at `size`² (RGBA8), for the interaction preview. */
+  private ensureLastFrameTex(size: number): void {
+    const gl = this.gl;
+    if (!this.lastFrameTex) this.lastFrameTex = gl.createTexture();
+    if (this.lastFrameSize !== size) {
+      gl.bindTexture(gl.TEXTURE_2D, this.lastFrameTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      this.lastFrameSize = size;
+    }
+  }
+
+  /**
+   * Snapshot the just-drawn visible frame into {@link lastFrameTex} (with the view it was drawn at),
+   * so a following pan/zoom gesture can warp it. Called after a full (non-draft) render; the copy is
+   * from the default framebuffer, so it captures the composited image (post-processing / accumulation
+   * average included).
+   */
+  private captureLastFrame(size: number): void {
+    const gl = this.gl;
+    this.ensureLastFrameTex(size);
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null); // read the visible drawing buffer
+    gl.bindTexture(gl.TEXTURE_2D, this.lastFrameTex);
+    gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 0, 0, size, size);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    this.lastFrameZoom = this._zoom;
+    this.lastFrameCenter = [this._center[0], this._center[1]];
+    this.lastFrameValid = true;
+  }
+
+  /**
+   * Whether a draft frame should be drawn as the cheap "Google Maps" warp of the last frame rather
+   * than a coarse re-render. Only for a linear, single-precision view (the affine warp is exact there):
+   * the sphere / projection maps aren't affine, and at df64 depth the f64 centre difference loses
+   * precision — those keep the precise draft re-render.
+   */
+  private canUsePreview(): boolean {
+    return (
+      this.lastFrameValid &&
+      this.previewProgram !== null &&
+      !this._sphere &&
+      this._projection === 0 &&
+      this.desiredPrecision() === "single"
+    );
+  }
+
+  /** Draw the interaction preview: warp {@link lastFrameTex} into the current view (no iteration). */
+  private renderPreview(): void {
+    const gl = this.gl;
+    const pp = this.previewProgram;
+    if (!pp || !this.lastFrameTex) return;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const { scale, offset } = previewTransform(
+      this._center,
+      this._zoom,
+      this.lastFrameCenter,
+      this.lastFrameZoom,
+    );
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, w, h);
+    gl.useProgram(pp.program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.lastFrameTex);
+    gl.uniform1i(pp.uniforms.uPreview, 0);
+    gl.uniform2f(pp.uniforms.uResolution, w, h);
+    gl.uniform1f(pp.uniforms.uPreviewScale, scale);
+    gl.uniform2f(pp.uniforms.uPreviewOffset, offset[0], offset[1]);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
   /** (Re)allocate the RGBA16F float accumulator (+ FBO) for temporal anti-aliasing. */
   private ensureAccumTarget(size: number): void {
     const gl = this.gl;
@@ -1334,6 +1473,14 @@ export class GLPlot {
    */
   render(): void {
     if (this.contextLost) return;
+    // "Google Maps" interaction preview: while dragging / zooming a linear single-precision view, warp
+    // the last frame instead of re-iterating (instant, zero iteration). Sphere / projection / deep-zoom
+    // fall through to the coarse draft re-render below.
+    if (this._draft && this.canUsePreview()) {
+      this.renderPreview();
+      this.afterRender?.();
+      return;
+    }
     if (
       this._accumulate &&
       !this._forceFull &&
@@ -1377,6 +1524,9 @@ export class GLPlot {
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
     this.afterRender?.();
+    // Snapshot the final full frame so the next pan/zoom gesture can warp it (skip coarse progressive
+    // passes and draft fallbacks — they aren't the sharp image).
+    if (!this._draft && !refine) this.captureLastFrame(size);
     if (refine) {
       this._level++;
       this.requestFrame();
@@ -1414,6 +1564,7 @@ export class GLPlot {
     if (!ok) return;
     this.accumCount++;
     this.drawPost(size, this.accumTex, 1 / this.accumCount); // display the running average
+    this.captureLastFrame(size); // keep the interaction-preview source at the current (freshest) view
     if (this.accumCount < MAX_ACCUM) this.requestFrame();
   }
 

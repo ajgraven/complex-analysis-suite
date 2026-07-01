@@ -49,6 +49,32 @@ void main() {
 }
 `;
 
+/**
+ * "Google Maps" interaction preview: while the user is panning / zooming, instead of recomputing the
+ * fractal, warp the last rendered frame (held as a texture) by an affine map — translate for a pan,
+ * scale for a zoom — so the view responds instantly with zero iteration. Newly-revealed area (pan
+ * trailing edge, or the border when zooming out) that maps outside the old frame shows a neutral
+ * "loading" fill. The real sharp image is computed once the gesture ends. `uPreviewScale`/`uPreviewOffset`
+ * are the affine params from render/glPlot `previewTransform` (source_uv = scale·uv + offset).
+ */
+export const PREVIEW_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+uniform sampler2D uPreview;
+uniform vec2 uResolution;
+uniform float uPreviewScale;
+uniform vec2 uPreviewOffset;
+out vec4 fragColor;
+void main() {
+  vec2 uv = gl_FragCoord.xy / uResolution;
+  vec2 src = uPreviewScale * uv + uPreviewOffset;
+  if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
+    fragColor = vec4(0.05, 0.05, 0.07, 1.0); // outside the last frame ⇒ neutral fill (sharpens in on release)
+    return;
+  }
+  fragColor = vec4(texture(uPreview, src).rgb, 1.0);
+}
+`;
+
 /** Build the fragment shader for a plot. `fractType`: 1 = parameter space, 0 = dynamical. */
 /**
  * Shared colormap + palette GLSL. Requires the caller to declare `uPalette`,

@@ -4,7 +4,14 @@
  * view centre), never drops below the base, and is clamped to a hard ceiling.
  */
 import { describe, it, expect } from "vitest";
-import { MAX_BUFFER, autoIterations, bufferScale, effectiveAA } from "../src/render/glPlot";
+import type { Vec2 } from "../src/arrays";
+import {
+  MAX_BUFFER,
+  autoIterations,
+  bufferScale,
+  effectiveAA,
+  previewTransform,
+} from "../src/render/glPlot";
 
 describe("autoIterations", () => {
   it("returns the base count when not zoomed in (zoom ≤ 1)", () => {
@@ -85,5 +92,42 @@ describe("bufferScale (DPR buffer budget)", () => {
   it("caps the DPR at 2× and preserves sub-1 device ratios", () => {
     expect(bufferScale(3, 400)).toBe(2); // dpr capped at 2
     expect(bufferScale(0.75, 400)).toBe(0.75); // low-density display kept 1:1 to device px
+  });
+});
+
+describe("previewTransform (Google-Maps interaction warp: src_uv = scale·uv + offset)", () => {
+  const C: Vec2 = [-0.5, 0.3];
+
+  it("is the identity when the view is unchanged", () => {
+    const t = previewTransform(C, 200, C, 200);
+    expect(t.scale).toBe(1);
+    expect(t.offset[0]).toBeCloseTo(0, 12);
+    expect(t.offset[1]).toBeCloseTo(0, 12);
+  });
+
+  it("zooming in 2× samples the centre half of the old frame (magnifies about centre)", () => {
+    const t = previewTransform(C, 400, C, 200); // zoom doubled
+    expect(t.scale).toBe(0.5);
+    expect(t.offset[0]).toBeCloseTo(0.25, 12); // src = 0.5·uv + 0.25 ⇒ uv∈[0,1] → src∈[0.25,0.75]
+    expect(t.offset[1]).toBeCloseTo(0.25, 12);
+    // the centre pixel stays fixed
+    expect(0.5 * 0.5 + t.offset[0]).toBeCloseTo(0.5, 12);
+  });
+
+  it("zooming out 2× shrinks the old frame (borders map outside → background)", () => {
+    const t = previewTransform(C, 100, C, 200); // zoom halved
+    expect(t.scale).toBe(2);
+    expect(t.offset[0]).toBeCloseTo(-0.5, 12); // src = 2·uv − 0.5 ⇒ uv=0 → −0.5 (outside)
+    expect(2 * 0.5 + t.offset[0]).toBeCloseTo(0.5, 12); // centre still fixed
+  });
+
+  it("panning shifts the sampling by centreΔ·zoom (no scale change)", () => {
+    const z = 200;
+    const d = 0.01; // pan the centre right by d
+    const moved: Vec2 = [C[0] + d, C[1]];
+    const t = previewTransform(moved, z, C, z);
+    expect(t.scale).toBe(1);
+    expect(t.offset[0]).toBeCloseTo((d * z) / 2, 12); // src_x = uv_x + d·z/2
+    expect(t.offset[1]).toBeCloseTo(0, 12);
   });
 });
