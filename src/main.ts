@@ -2882,20 +2882,32 @@ function init(): void {
     }
     const c = dv.plot.cValue;
     const res = detectHermanRing((z) => f(z, c), [0, 0]);
-    const readout = byId("herman-readout");
+    // Fill the report table (same two-column format as the Julia-properties card); the note line
+    // below carries the "load the preset" hint on a miss.
+    const set = (id: string, text: string): void => {
+      byId(id).textContent = text;
+    };
     if (res.isRing && res.rotationNumber !== null && res.modulus !== null) {
-      readout.textContent =
-        `Herman ring confirmed: rotation α = ${res.rotationNumber.toFixed(6)}, modulus ≈ ` +
-        `${res.modulus.toFixed(4)} (annulus radii ${(res.rInner as number).toFixed(3)}–` +
-        `${(res.rOuter as number).toFixed(3)} about z = 0).`;
+      set("herman-status", "Ring confirmed");
+      set("herman-rotation", res.rotationNumber.toFixed(6));
+      set("herman-modulus", `≈ ${res.modulus.toFixed(4)}`);
+      set(
+        "herman-annulus",
+        `${(res.rInner as number).toFixed(3)} – ${(res.rOuter as number).toFixed(3)}`,
+      );
+      byId("herman-note").textContent = "";
       dv.setHermanCurves(res.curves);
       showToast(
         `Herman ring: rotation ${res.rotationNumber.toFixed(4)}, modulus ${res.modulus.toFixed(3)}.`,
         "info",
       );
     } else {
-      readout.textContent =
-        "No Herman ring detected about z = 0. (They need a degree ≥ 3 rational map — try the Herman-ring preset.)";
+      set("herman-status", "No ring detected");
+      set("herman-rotation", "—");
+      set("herman-modulus", "—");
+      set("herman-annulus", "—");
+      byId("herman-note").textContent =
+        "Herman rings need a degree ≥ 3 rational map — try the Herman-ring preset.";
       dv.setHermanCurves(null);
     }
   });

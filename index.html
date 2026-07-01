@@ -1079,294 +1079,6 @@ z^2+c</textarea
             hidden
           ></section>
 
-          <!-- Exterior map: Laurent coefficients of the uniformizing Böttcher map — filled Julia
-               for any polynomial f; multibrot for z^d + c. -->
-          <details class="control-group" id="exterior-group">
-            <summary>Exterior map (uniformization)</summary>
-            <div class="controls">
-              <p class="exterior-status">
-                Laurent coefficients of the exterior Riemann map.
-                <button
-                  type="button"
-                  class="gloss-link"
-                  data-term="uniformization"
-                  aria-label="About the exterior map"
-                >
-                  ?
-                </button>
-              </p>
-              <p class="exterior-status" id="exterior-status">
-                Exterior map ψ(w) = γ₁·w + Σ aₘ/bₖ·w⁻ᵏ.
-              </p>
-              <label class="exterior-n-label">
-                Coefficients
-                <input
-                  type="number"
-                  id="exterior-n"
-                  min="1"
-                  max="64"
-                  step="1"
-                  value="12"
-                  title="How many Laurent coefficients to compute and list"
-                />
-              </label>
-              <fieldset class="exterior-overlay">
-                <legend>Boundary overlay</legend>
-                <label>
-                  <input type="checkbox" id="laurent" />
-                  Draw the reconstructed boundary on the plots
-                </label>
-                <label class="exterior-n-label">
-                  Order
-                  <input
-                    type="number"
-                    id="laurent-n"
-                    min="2"
-                    max="128"
-                    step="1"
-                    value="48"
-                    title="How many coefficients the drawn boundary uses (more = tighter fit)"
-                  />
-                </label>
-                <label class="exterior-n-label">
-                  Radius r
-                  <input
-                    type="range"
-                    id="laurent-r"
-                    min="100"
-                    max="140"
-                    step="1"
-                    value="102"
-                    title="Evaluate ψ on |w| = r. r = 1.00 is the boundary itself; just above is a smooth equipotential outside it (robust where the series ripples as r → 1)."
-                  />
-                  <span id="laurent-r-value">1.02</span>
-                </label>
-              </fieldset>
-              <div class="exterior-block">
-                <div class="exterior-block-head">
-                  <strong>Parameter plane · ∂M<sub>d</sub> — coefficients a<sub>m</sub></strong>
-                  <span class="exterior-actions">
-                    <button type="button" id="exterior-param-copy" title="Copy these coefficients">
-                      Copy
-                    </button>
-                    <button type="button" id="exterior-param-csv" title="Download as CSV">
-                      CSV
-                    </button>
-                  </span>
-                </div>
-                <pre class="exterior-coeffs" id="exterior-param-list"></pre>
-              </div>
-              <div class="exterior-block">
-                <div class="exterior-block-head">
-                  <strong>Dynamical plane · ∂K<sub>c</sub> — coefficients b<sub>k</sub></strong>
-                  <span class="exterior-actions">
-                    <button type="button" id="exterior-dyn-copy" title="Copy these coefficients">
-                      Copy
-                    </button>
-                    <button type="button" id="exterior-dyn-csv" title="Download as CSV">CSV</button>
-                  </span>
-                </div>
-                <pre class="exterior-coeffs" id="exterior-dyn-list"></pre>
-              </div>
-            </div>
-          </details>
-
-          <!-- Mating check: are two z²+c bulbs in complex-conjugate limbs? (Rees–Shishikura–Tan Lei) -->
-          <details class="control-group" id="mating-group">
-            <summary>Mating check (z²+c)</summary>
-            <div class="controls">
-              <p class="exterior-status">
-                Two quadratics z²+c can be mated (their filled Julia sets glued into one rational
-                map) iff they are not in complex-conjugate limbs of the Mandelbrot set. Enter two
-                main-cardioid bulbs by rotation number p/q.
-                <button
-                  type="button"
-                  class="gloss-link"
-                  data-term="mating"
-                  aria-label="About matings"
-                >
-                  ?
-                </button>
-              </p>
-              <label class="exterior-n-label">
-                Bulb A (p/q)
-                <input type="text" id="mate-a" value="1/3" size="6" title="Rotation number p/q" />
-              </label>
-              <label class="exterior-n-label">
-                Bulb B (p/q)
-                <input type="text" id="mate-b" value="2/5" size="6" title="Rotation number p/q" />
-              </label>
-              <button type="button" id="mate-check">Check mateability</button>
-              <p class="exterior-status" id="mate-verdict"></p>
-            </div>
-          </details>
-
-          <!-- Go to external angle: land the parameter ray at θ, then snap to the centre/Misiurewicz. -->
-          <details class="control-group" id="angle-group">
-            <summary>Go to external angle (z²+c)</summary>
-            <div class="controls">
-              <p class="exterior-status">
-                Enter an external angle θ = p/q (turns). The parameter ray at θ is traced to its
-                landing, then a periodic θ snaps to the component centre and a preperiodic θ lands
-                at its Misiurewicz point — the inverse of ray drawing, no nearby click needed.
-                <button
-                  type="button"
-                  class="gloss-link"
-                  data-term="external-ray"
-                  aria-label="About external rays"
-                >
-                  ?
-                </button>
-              </p>
-              <label class="exterior-n-label">
-                Angle θ (p/q)
-                <input
-                  type="text"
-                  id="spider-angle"
-                  value="1/7"
-                  size="6"
-                  title="External angle as a fraction p/q in turns (e.g. 1/7 → rabbit, 1/6 → c=i)"
-                />
-              </label>
-              <button type="button" id="spider-go">Go to angle</button>
-              <p class="exterior-status" id="angle-entropy"></p>
-            </div>
-          </details>
-
-          <!-- Symbolic console: internal address → kneading sequence → characteristic external angles. -->
-          <details class="control-group" id="address-group">
-            <summary>Symbolic console (z²+c)</summary>
-            <div class="controls">
-              <p class="exterior-status">
-                Enter an <strong>internal address</strong> (the increasing periods from the main
-                cardioid to a component, e.g. 1-3-6). The stripping algorithm returns its kneading
-                sequence and the two characteristic external angles θ⁻, θ⁺ that bound its wake.
-                <button
-                  type="button"
-                  class="gloss-link"
-                  data-term="internal-address"
-                  aria-label="About internal addresses and stripping"
-                >
-                  ?
-                </button>
-              </p>
-              <label class="exterior-n-label">
-                Internal address
-                <input
-                  type="text"
-                  id="strip-address"
-                  value="1-3-6"
-                  size="10"
-                  title="Strictly increasing periods starting at 1 (e.g. 1-2-4-8 cascade, 1-3 rabbit, 1-3-6)"
-                />
-              </label>
-              <div class="exterior-actions">
-                <button type="button" id="strip-go">Strip &amp; draw rays</button>
-                <button type="button" id="strip-goto" hidden>Go to component</button>
-              </div>
-              <p class="exterior-status" id="strip-readout"></p>
-            </div>
-          </details>
-
-          <!-- Herman ring: detect the annular rotation domain of a rational map (dynamical plane). -->
-          <details class="control-group" id="herman-group">
-            <summary>Herman ring (rational)</summary>
-            <div class="controls">
-              <p class="exterior-status">
-                Detect a <strong>Herman ring</strong> — an invariant annulus on which the map is a
-                rotation — on the dynamical plane around z = 0 (load the Herman-ring preset). Reports
-                the rotation number and modulus and draws the invariant circles in gold.
-                <button
-                  type="button"
-                  class="gloss-link"
-                  data-term="herman-ring"
-                  aria-label="About Herman rings"
-                >
-                  ?
-                </button>
-              </p>
-              <button type="button" id="herman-detect">Detect Herman ring</button>
-              <p class="exterior-status" id="herman-readout"></p>
-            </div>
-          </details>
-
-          <!-- Projection: live coordinate remaps of both planes (single precision). -->
-          <details class="control-group" id="projection-group">
-            <summary>Projection (view)</summary>
-            <div class="controls">
-              <p class="exterior-status">
-                Remap both planes into a live projection (single precision; resets the view). Log-polar
-                is the exponential map (angle × log-radius about the centre); the Poincaré disk
-                compresses the whole plane into the unit disk (rim = ∞) via w = tanh(|z|/2)·ẑ.
-                <button
-                  type="button"
-                  class="gloss-link"
-                  data-term="poincare-disk"
-                  aria-label="About projection views"
-                >
-                  ?
-                </button>
-              </p>
-              <label class="exterior-n-label">
-                Mode
-                <select id="projection-mode" title="Coordinate remap applied to both plots">
-                  <option value="linear">Linear (off)</option>
-                  <option value="logpolar">Log-polar (exp map)</option>
-                  <option value="poincare">Poincaré disk</option>
-                </select>
-              </label>
-              <p class="exterior-status" id="projection-note"></p>
-            </div>
-          </details>
-
-          <!-- Riemann sphere: live 3D render of either plane on the sphere (drag rotate, wheel zoom). -->
-          <details class="control-group" id="sphere-group">
-            <summary>Riemann sphere (3D)</summary>
-            <div class="controls">
-              <p class="exterior-status">
-                Render a plane on the Riemann sphere in interactive 3D — drag to rotate, scroll to
-                zoom. The whole extended plane (∞ at the north pole) shows at once, for any f; single
-                precision.
-                <button
-                  type="button"
-                  class="gloss-link"
-                  data-term="riemann-sphere"
-                  aria-label="About the Riemann sphere"
-                >
-                  ?
-                </button>
-              </p>
-              <div class="control-grid">
-                <div class="field">
-                  <label
-                    class="checkbox"
-                    for="sphere-param"
-                    title="Show the parameter plane on the Riemann sphere"
-                  >
-                    <input type="checkbox" id="sphere-param" /> parameter plane
-                  </label>
-                </div>
-                <div class="field">
-                  <label
-                    class="checkbox"
-                    for="sphere-dyn"
-                    title="Show the dynamical (Julia) plane on the Riemann sphere"
-                  >
-                    <input type="checkbox" id="sphere-dyn" /> dynamical plane
-                  </label>
-                </div>
-                <div class="field">
-                  <label class="checkbox" for="sphere-light" title="Shade the sphere as a lit 3-D ball">
-                    <input type="checkbox" id="sphere-light" checked /> 3D lighting
-                  </label>
-                </div>
-              </div>
-              <div class="exterior-actions">
-                <button type="button" id="sphere-reset">Reset view</button>
-              </div>
-            </div>
-          </details>
-
           <!-- Julia set properties: computed topology / metrics of K_c at the live c. -->
           <details class="control-group" id="julia-props-group">
             <summary>Julia set properties</summary>
@@ -1495,6 +1207,302 @@ z^2+c</textarea
               >
                 Copy properties
               </button>
+            </div>
+          </details>
+
+          <!-- Exterior map: Laurent coefficients of the uniformizing Böttcher map — filled Julia for any polynomial f; multibrot for z^d + c. -->
+          <details class="control-group" id="exterior-group">
+            <summary>Exterior map (uniformization)</summary>
+            <div class="controls">
+              <p class="exterior-status">
+                Laurent coefficients of the exterior Riemann map.
+                <button
+                  type="button"
+                  class="gloss-link"
+                  data-term="uniformization"
+                  aria-label="About the exterior map"
+                >
+                  ?
+                </button>
+              </p>
+              <p class="exterior-status" id="exterior-status">
+                Exterior map ψ(w) = γ₁·w + Σ aₘ/bₖ·w⁻ᵏ.
+              </p>
+              <label class="exterior-n-label">
+                Coefficients
+                <input
+                  type="number"
+                  id="exterior-n"
+                  min="1"
+                  max="64"
+                  step="1"
+                  value="12"
+                  title="How many Laurent coefficients to compute and list"
+                />
+              </label>
+              <fieldset class="exterior-overlay">
+                <legend>Boundary overlay</legend>
+                <label class="exterior-overlay-check">
+                  <input type="checkbox" id="laurent" />
+                  Draw the reconstructed boundary on the plots
+                </label>
+                <label class="exterior-n-label">
+                  Order
+                  <input
+                    type="number"
+                    id="laurent-n"
+                    min="2"
+                    max="128"
+                    step="1"
+                    value="48"
+                    title="How many coefficients the drawn boundary uses (more = tighter fit)"
+                  />
+                </label>
+                <label class="exterior-n-label">
+                  Radius r
+                  <input
+                    type="range"
+                    id="laurent-r"
+                    min="100"
+                    max="140"
+                    step="1"
+                    value="102"
+                    title="Evaluate ψ on |w| = r. r = 1.00 is the boundary itself; just above is a smooth equipotential outside it (robust where the series ripples as r → 1)."
+                  />
+                  <span id="laurent-r-value">1.02</span>
+                </label>
+              </fieldset>
+              <div class="exterior-block">
+                <div class="exterior-block-head">
+                  <strong>Parameter plane · ∂M<sub>d</sub> — coefficients a<sub>m</sub></strong>
+                  <span class="exterior-actions">
+                    <button type="button" id="exterior-param-copy" title="Copy these coefficients">
+                      Copy
+                    </button>
+                    <button type="button" id="exterior-param-csv" title="Download as CSV">
+                      CSV
+                    </button>
+                  </span>
+                </div>
+                <pre class="exterior-coeffs" id="exterior-param-list"></pre>
+              </div>
+              <div class="exterior-block">
+                <div class="exterior-block-head">
+                  <strong>Dynamical plane · ∂K<sub>c</sub> — coefficients b<sub>k</sub></strong>
+                  <span class="exterior-actions">
+                    <button type="button" id="exterior-dyn-copy" title="Copy these coefficients">
+                      Copy
+                    </button>
+                    <button type="button" id="exterior-dyn-csv" title="Download as CSV">CSV</button>
+                  </span>
+                </div>
+                <pre class="exterior-coeffs" id="exterior-dyn-list"></pre>
+              </div>
+            </div>
+          </details>
+
+          <!-- View: live projection remaps + the interactive 3-D Riemann sphere (single precision). -->
+          <details class="control-group" id="view-group">
+            <summary>Projection &amp; Riemann sphere (view)</summary>
+            <div class="controls">
+              <p class="exterior-status">
+                Remap both plots into a live projection (single precision; resets the view). Log-polar
+                is the exponential map; the Poincaré disk compresses the plane into the unit disk
+                (rim = ∞) via w = tanh(|z|/2)·ẑ.
+                <button
+                  type="button"
+                  class="gloss-link"
+                  data-term="poincare-disk"
+                  aria-label="About projection views"
+                >
+                  ?
+                </button>
+              </p>
+              <label class="exterior-n-label">
+                Mode
+                <select id="projection-mode" title="Coordinate remap applied to both plots">
+                  <option value="linear">Linear (off)</option>
+                  <option value="logpolar">Log-polar (exp map)</option>
+                  <option value="poincare">Poincaré disk</option>
+                </select>
+              </label>
+              <p class="exterior-status" id="projection-note"></p>
+              <p class="exterior-status">
+                Or render a plane on the <strong>Riemann sphere</strong> in interactive 3-D — drag to
+                rotate, scroll to zoom (∞ at the north pole; any f).
+                <button
+                  type="button"
+                  class="gloss-link"
+                  data-term="riemann-sphere"
+                  aria-label="About the Riemann sphere"
+                >
+                  ?
+                </button>
+              </p>
+              <div class="control-grid">
+                <div class="field">
+                  <label
+                    class="checkbox"
+                    for="sphere-param"
+                    title="Show the parameter plane on the Riemann sphere"
+                  >
+                    <input type="checkbox" id="sphere-param" /> sphere: parameter plane
+                  </label>
+                </div>
+                <div class="field">
+                  <label
+                    class="checkbox"
+                    for="sphere-dyn"
+                    title="Show the dynamical (Julia) plane on the Riemann sphere"
+                  >
+                    <input type="checkbox" id="sphere-dyn" /> sphere: dynamical plane
+                  </label>
+                </div>
+                <div class="field">
+                  <label class="checkbox" for="sphere-light" title="Shade the sphere as a lit 3-D ball">
+                    <input type="checkbox" id="sphere-light" checked /> 3D lighting
+                  </label>
+                </div>
+              </div>
+              <div class="exterior-actions">
+                <button type="button" id="sphere-reset">Reset sphere view</button>
+              </div>
+            </div>
+          </details>
+
+          <!-- Go to external angle: land the parameter ray at θ, then snap to the centre/Misiurewicz. -->
+          <details class="control-group" id="angle-group">
+            <summary>Go to external angle (z²+c)</summary>
+            <div class="controls">
+              <p class="exterior-status">
+                Enter an external angle θ = p/q (turns). The parameter ray at θ is traced to its
+                landing, then a periodic θ snaps to the component centre and a preperiodic θ lands
+                at its Misiurewicz point — the inverse of ray drawing, no nearby click needed.
+                <button
+                  type="button"
+                  class="gloss-link"
+                  data-term="external-ray"
+                  aria-label="About external rays"
+                >
+                  ?
+                </button>
+              </p>
+              <label class="exterior-n-label">
+                Angle θ (p/q)
+                <input
+                  type="text"
+                  id="spider-angle"
+                  value="1/7"
+                  size="6"
+                  title="External angle as a fraction p/q in turns (e.g. 1/7 → rabbit, 1/6 → c=i)"
+                />
+              </label>
+              <button type="button" id="spider-go">Go to angle</button>
+              <p class="exterior-status" id="angle-entropy"></p>
+            </div>
+          </details>
+
+          <!-- Symbolic console: internal address → kneading sequence → characteristic external angles. -->
+          <details class="control-group" id="address-group">
+            <summary>Symbolic console (z²+c)</summary>
+            <div class="controls">
+              <p class="exterior-status">
+                Enter an <strong>internal address</strong> (the increasing periods from the main
+                cardioid to a component, e.g. 1-3-6). The stripping algorithm returns its kneading
+                sequence and the two characteristic external angles θ⁻, θ⁺ that bound its wake.
+                <button
+                  type="button"
+                  class="gloss-link"
+                  data-term="internal-address"
+                  aria-label="About internal addresses and stripping"
+                >
+                  ?
+                </button>
+              </p>
+              <label class="exterior-n-label">
+                Internal address
+                <input
+                  type="text"
+                  id="strip-address"
+                  value="1-3-6"
+                  size="10"
+                  title="Strictly increasing periods starting at 1 (e.g. 1-2-4-8 cascade, 1-3 rabbit, 1-3-6)"
+                />
+              </label>
+              <div class="exterior-actions">
+                <button type="button" id="strip-go">Strip &amp; draw rays</button>
+                <button type="button" id="strip-goto" hidden>Go to component</button>
+              </div>
+              <p class="exterior-status" id="strip-readout"></p>
+            </div>
+          </details>
+
+          <!-- Mating check: are two z²+c bulbs in complex-conjugate limbs? (Rees–Shishikura–Tan Lei) -->
+          <details class="control-group" id="mating-group">
+            <summary>Mating check (z²+c)</summary>
+            <div class="controls">
+              <p class="exterior-status">
+                Two quadratics z²+c can be mated (their filled Julia sets glued into one rational
+                map) iff they are not in complex-conjugate limbs of the Mandelbrot set. Enter two
+                main-cardioid bulbs by rotation number p/q.
+                <button
+                  type="button"
+                  class="gloss-link"
+                  data-term="mating"
+                  aria-label="About matings"
+                >
+                  ?
+                </button>
+              </p>
+              <label class="exterior-n-label">
+                Bulb A (p/q)
+                <input type="text" id="mate-a" value="1/3" size="6" title="Rotation number p/q" />
+              </label>
+              <label class="exterior-n-label">
+                Bulb B (p/q)
+                <input type="text" id="mate-b" value="2/5" size="6" title="Rotation number p/q" />
+              </label>
+              <button type="button" id="mate-check">Check mateability</button>
+              <p class="exterior-status" id="mate-verdict"></p>
+            </div>
+          </details>
+
+          <!-- Herman ring: detect the annular rotation domain of a rational map (dynamical plane). -->
+          <details class="control-group" id="herman-group">
+            <summary>Herman ring (rational)</summary>
+            <div class="controls">
+              <p class="exterior-status">
+                Reports the rotation number and modulus and draws the invariant circles in gold. Load
+                the Herman-ring preset for an example.
+                <button
+                  type="button"
+                  class="gloss-link"
+                  data-term="herman-ring"
+                  aria-label="About Herman rings"
+                >
+                  ?
+                </button>
+              </p>
+              <button type="button" id="herman-detect">Detect Herman ring</button>
+              <dl class="julia-props" id="herman-report">
+                <div class="julia-prop">
+                  <dt>Status</dt>
+                  <dd id="herman-status">—</dd>
+                </div>
+                <div class="julia-prop">
+                  <dt>Rotation number α</dt>
+                  <dd id="herman-rotation">—</dd>
+                </div>
+                <div class="julia-prop">
+                  <dt>Modulus</dt>
+                  <dd id="herman-modulus">—</dd>
+                </div>
+                <div class="julia-prop">
+                  <dt>Annulus (about z = 0)</dt>
+                  <dd id="herman-annulus">—</dd>
+                </div>
+              </dl>
+              <p class="exterior-status" id="herman-note"></p>
             </div>
           </details>
 
