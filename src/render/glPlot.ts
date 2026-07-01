@@ -259,9 +259,9 @@ export function autoIterations(base: number, zoom: number, strength: number): nu
  */
 export function effectiveAA(
   aa: number,
-  opts: { mode: number; draft: boolean; accumulating: boolean },
+  opts: { mode: number; draft: boolean; accumulating: boolean; collar?: boolean },
 ): number {
-  if (opts.mode === 6 || opts.draft || opts.accumulating) return 1;
+  if (opts.mode === 6 || opts.draft || opts.accumulating || opts.collar) return 1;
   return Math.max(1, aa);
 }
 
@@ -286,6 +286,17 @@ export function previewTransform(
     ((center[1] - lastCenter[1]) * lastZoom - scale + 1) / 2,
   ];
   return { scale, offset };
+}
+
+/** Idle "collar" (overscan) margins for the interaction preview: after a view settles, the last frame
+ *  is asynchronously re-rendered at these growing margins (a collar at margin m covers centre ±
+ *  (1+m)/zoom), pushing the grey preview edge out as the view keeps sitting still. */
+export const COLLAR_MARGINS = [0.4, 1.0];
+
+/** Buffer size (px/side) for a collar at `margin` around a `viewport`-px view: equal pixel density
+ *  (`viewport·(1+margin)`), capped at `maxBuffer` so a big canvas on HiDPI can't allocate a huge one. */
+export function collarBufferSize(viewport: number, margin: number, maxBuffer = MAX_BUFFER): number {
+  return Math.min(Math.round(viewport * (1 + margin)), maxBuffer);
 }
 
 export class GLPlot {
@@ -343,6 +354,22 @@ export class GLPlot {
   private lastFrameZoom = 1;
   private lastFrameCenter: Vec2 = [0, 0];
   private lastFrameValid = false;
+  /** Async "collar": after a view settles, a wider overscan frame is rendered into its OWN texture at
+   *  growing margins so a following pan/zoom-out finds real fractal instead of grey. Kept separate from
+   *  lastFrameTex so the per-frame viewport capture (esp. the temporal-accumulation loop) can't clobber
+   *  it. `collarGen` cancels an in-flight chain when the view changes; `collarViewKey` de-dupes per
+   *  resting view; `collarValid` gates the preview onto it. */
+  private collarFbo: WebGLFramebuffer | null = null;
+  private collarTex: WebGLTexture | null = null;
+  private collarSize = 0;
+  private collarCenter: Vec2 = [0, 0];
+  private collarZoom = 1;
+  private collarValid = false;
+  private collarGen = 0;
+  private collarViewKey = "";
+  private collarWarned = false; // one-shot diagnostic guard if a collar render ever fails
+  private _collarRender = false; // true while a collar frame is drawing (setupDraw reads the overrides)
+  private _collarMargin = 0;
   /** Custom-gradient palette: a 256×1 ramp texture sampled when uPalette == 4. */
   private gradientTex: WebGLTexture | null = null;
   /** Temporal anti-aliasing: a float accumulator for jittered idle samples. */
@@ -482,6 +509,13 @@ export class GLPlot {
     this.lastFrameTex = null;
     this.lastFrameSize = 0;
     this.lastFrameValid = false;
+    this.collarFbo = null;
+    this.collarTex = null;
+    this.collarSize = 0;
+    this.collarValid = false;
+    this.collarGen++; // cancel any pending collar callbacks captured against the old context
+    this.collarViewKey = "";
+    this._collarRender = false;
     this.gradientTex = null;
     this.accumFbo = null;
     this.accumTex = null;
@@ -893,7 +927,9 @@ export class GLPlot {
     const u = cp.uniforms;
     gl.useProgram(cp.program);
     gl.uniform2f(u.uResolution, width, height);
-    gl.uniform1f(u.uZoom, this._zoom);
+    // A collar frame renders the same centre zoomed out by its margin, so it covers a border of extra
+    // plot area (centre ± (1+margin)/zoom) for the interaction preview to sample into.
+    gl.uniform1f(u.uZoom, this._collarRender ? this._zoom / (1 + this._collarMargin) : this._zoom);
     // Full iteration cap even while drafting — only spatial resolution drops during
     // interaction (see draftFraction). Halving iterations here used to flip near-boundary
     // pixels to the interior colour mid-drag, then snap them back on release.
@@ -905,10 +941,16 @@ export class GLPlot {
     gl.uniform1i(u.uMode, mode);
     gl.uniform1i(u.uPalette, this._palette);
     gl.uniform1i(u.uTrapType, this._trapType);
-    // No spatial AA for the raw pre-pass, while drafting, or while accumulating (temporal AA does it).
+    // No spatial AA for the raw pre-pass, while drafting, accumulating, or rendering a collar (all
+    // shown only transiently or averaged over frames, so one sample suffices).
     gl.uniform1i(
       u.uAA,
-      effectiveAA(this._aa, { mode, draft: this._draft, accumulating: this._accumulating }),
+      effectiveAA(this._aa, {
+        mode,
+        draft: this._draft,
+        accumulating: this._accumulating,
+        collar: this._collarRender,
+      }),
     );
     if (mode === 5 && this.cdfTex) {
       gl.activeTexture(gl.TEXTURE0);
@@ -1401,30 +1443,130 @@ export class GLPlot {
     );
   }
 
-  /** Draw the interaction preview: warp {@link lastFrameTex} into the current view (no iteration). */
+  /** Draw the interaction preview: warp the last frame into the current view (no iteration). Prefers
+   *  the wider async collar when it is ready for this resting view; else the viewport snapshot. */
   private renderPreview(): void {
     const gl = this.gl;
     const pp = this.previewProgram;
-    if (!pp || !this.lastFrameTex) return;
+    const useCollar = this.collarValid && this.collarTex !== null;
+    const tex = useCollar ? this.collarTex : this.lastFrameTex;
+    if (!pp || !tex) return;
+    const srcCenter = useCollar ? this.collarCenter : this.lastFrameCenter;
+    const srcZoom = useCollar ? this.collarZoom : this.lastFrameZoom;
     const w = this.canvas.width;
     const h = this.canvas.height;
-    const { scale, offset } = previewTransform(
-      this._center,
-      this._zoom,
-      this.lastFrameCenter,
-      this.lastFrameZoom,
-    );
+    const { scale, offset } = previewTransform(this._center, this._zoom, srcCenter, srcZoom);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, w, h);
     gl.useProgram(pp.program);
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.lastFrameTex);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.uniform1i(pp.uniforms.uPreview, 0);
     gl.uniform2f(pp.uniforms.uResolution, w, h);
     gl.uniform1f(pp.uniforms.uPreviewScale, scale);
     gl.uniform2f(pp.uniforms.uPreviewOffset, offset[0], offset[1]);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
+  /** Whether the async collar (and the preview it feeds) applies: a linear, single-precision view. */
+  private collarEligible(): boolean {
+    return (
+      this.previewProgram !== null &&
+      this.lastFrameValid &&
+      !this._sphere &&
+      this._projection === 0 &&
+      this.desiredPrecision() === "single"
+    );
+  }
+
+  /**
+   * After a view settles, kick off the async collar chain for it (once per resting view). A new view
+   * bumps {@link collarGen}, cancelling any in-flight chain from the previous view. Called after a full
+   * render's {@link captureLastFrame}; the `collarViewKey` guard de-dupes the repeated accumulate frames.
+   */
+  private maybeScheduleCollar(): void {
+    if (this._draft || !this.collarEligible()) return;
+    const key = `${this._center[0]},${this._center[1]},${this._zoom}`;
+    if (key === this.collarViewKey) return; // already scheduled/rendering for this exact view
+    this.collarViewKey = key;
+    this.collarValid = false; // the previous collar is for a different view — stop the preview using it
+    this.collarGen++;
+    this.scheduleCollar(0);
+  }
+
+  /** Schedule collar level `level` on a later frame (off the critical path); grow to the next margin
+   *  while the view stays idle. Guarded by {@link collarGen} so a view change cancels the chain. */
+  private scheduleCollar(level: number): void {
+    if (level >= COLLAR_MARGINS.length) return;
+    const gen = this.collarGen;
+    requestAnimationFrame(() => {
+      if (gen !== this.collarGen || this._draft || this.contextLost) return; // superseded / interacting
+      if (!this.collarEligible()) return;
+      this.renderCollar(COLLAR_MARGINS[level]);
+      this.scheduleCollar(level + 1); // enlarge further while still idle
+    });
+  }
+
+  /** (Re)allocate the collar texture at `size`² (RGBA8) — its own texture so the viewport capture and
+   *  accumulation loop can't overwrite it. */
+  private ensureCollarTex(size: number): void {
+    const gl = this.gl;
+    if (!this.collarTex) this.collarTex = gl.createTexture();
+    if (this.collarSize !== size) {
+      gl.bindTexture(gl.TEXTURE_2D, this.collarTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      this.collarSize = size;
+    }
+  }
+
+  /**
+   * Render the current view zoomed out by `margin` into {@link collarTex} (via a scratch FBO), so the
+   * interaction preview can warp a frame that covers a border of extra plot area — no grey until a
+   * pan/zoom-out exceeds the margin. Raw single-precision escape render (aa 1, full iterations); the
+   * preview transform reads the recorded `collarZoom = zoom/(1+margin)`.
+   */
+  private renderCollar(margin: number): void {
+    const gl = this.gl;
+    const size = collarBufferSize(this.canvas.width, margin);
+    // Invalidate up front: ensureCollarTex may re-allocate collarTex to a fresh (black) texture when the
+    // size grows between levels, so a mid-render failure must NOT leave collarValid pointing at it.
+    this.collarValid = false;
+    this.ensureCollarTex(size);
+    if (!this.collarFbo) this.collarFbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.collarFbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.collarTex, 0);
+    gl.viewport(0, 0, size, size);
+    gl.clearColor(0.05, 0.05, 0.07, 1.0); // neutral fill — a non-draw leaves grey, never pure black
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    const complete = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    this._collarRender = true;
+    this._collarMargin = margin;
+    const drew = complete && this.setupDraw(size, size); // reads the zoom + aa overrides above
+    if (drew) gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    this._collarRender = false;
+    const err = gl.getError();
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, null, 0); // detach
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    if (!drew || err !== gl.NO_ERROR) {
+      if (!this.collarWarned) {
+        console.warn(`[${this.fractType}] interaction collar disabled (render failed)`, {
+          complete,
+          drew,
+          err,
+          size,
+        });
+        this.collarWarned = true;
+      }
+      return; // collarValid stays false → the preview uses the viewport snapshot (never black)
+    }
+    this.collarCenter = [this._center[0], this._center[1]];
+    this.collarZoom = this._zoom / (1 + margin);
+    this.collarValid = true;
   }
 
   /** (Re)allocate the RGBA16F float accumulator (+ FBO) for temporal anti-aliasing. */
@@ -1525,8 +1667,11 @@ export class GLPlot {
     }
     this.afterRender?.();
     // Snapshot the final full frame so the next pan/zoom gesture can warp it (skip coarse progressive
-    // passes and draft fallbacks — they aren't the sharp image).
-    if (!this._draft && !refine) this.captureLastFrame(size);
+    // passes and draft fallbacks — they aren't the sharp image), then grow the async collar for it.
+    if (!this._draft && !refine) {
+      this.captureLastFrame(size);
+      this.maybeScheduleCollar();
+    }
     if (refine) {
       this._level++;
       this.requestFrame();
@@ -1565,6 +1710,7 @@ export class GLPlot {
     this.accumCount++;
     this.drawPost(size, this.accumTex, 1 / this.accumCount); // display the running average
     this.captureLastFrame(size); // keep the interaction-preview source at the current (freshest) view
+    this.maybeScheduleCollar(); // grow the async collar around the settled view (de-duped per view)
     if (this.accumCount < MAX_ACCUM) this.requestFrame();
   }
 

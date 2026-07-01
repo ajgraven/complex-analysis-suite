@@ -9,6 +9,7 @@ import {
   MAX_BUFFER,
   autoIterations,
   bufferScale,
+  collarBufferSize,
   effectiveAA,
   previewTransform,
 } from "../src/render/glPlot";
@@ -59,6 +60,10 @@ describe("effectiveAA (samples per frame)", () => {
   it("forces a single sample while drafting and for the histogram pre-pass (mode 6)", () => {
     expect(effectiveAA(3, { ...idle, draft: true })).toBe(1);
     expect(effectiveAA(3, { mode: 6, draft: false, accumulating: false })).toBe(1);
+  });
+
+  it("forces a single sample while rendering a collar (shown only in motion)", () => {
+    expect(effectiveAA(3, { ...idle, collar: true })).toBe(1);
   });
 
   it("never returns less than one sample", () => {
@@ -129,5 +134,30 @@ describe("previewTransform (Google-Maps interaction warp: src_uv = scale·uv + o
     expect(t.scale).toBe(1);
     expect(t.offset[0]).toBeCloseTo((d * z) / 2, 12); // src_x = uv_x + d·z/2
     expect(t.offset[1]).toBeCloseTo(0, 12);
+  });
+
+  it("a collar (rendered at zoom/(1+m)) warps back to the identity at its own view", () => {
+    // The collar frame for margin 0.4 is captured at lastZoom = zoom/1.4; viewing it at the same
+    // resting view samples the centre 1/1.4 of it, leaving a 0.4/1.4 border to pan into (no grey).
+    const z = 200;
+    const t = previewTransform(C, z, C, z / 1.4);
+    expect(t.scale).toBeCloseTo(1 / 1.4, 12);
+    // uv=0 samples src = (1 − 1/1.4)/2 ≈ 0.143 > 0 ⇒ there is real fractal to the left of the viewport
+    expect(t.offset[0]).toBeGreaterThan(0);
+    expect(t.scale * 0.5 + t.offset[0]).toBeCloseTo(0.5, 12); // centre still fixed
+  });
+});
+
+describe("collarBufferSize (overscan buffer, budget-capped)", () => {
+  it("is the viewport at margin 0, and grows with the margin (equal density)", () => {
+    expect(collarBufferSize(500, 0, 1100)).toBe(500);
+    expect(collarBufferSize(500, 0.4, 1100)).toBe(700);
+    expect(collarBufferSize(500, 1.0, 1100)).toBe(1000);
+  });
+
+  it("caps at the buffer budget for large canvases / margins", () => {
+    expect(collarBufferSize(800, 1.0, 1100)).toBe(1100); // 1600 → capped
+    expect(collarBufferSize(720, 1.0, 1100)).toBe(1100); // 1440 → capped
+    expect(collarBufferSize(720, 0.4, 1100)).toBe(1008); // 1008 ≤ 1100, uncapped
   });
 });
