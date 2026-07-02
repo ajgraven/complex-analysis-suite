@@ -13,7 +13,7 @@ import type { Vec2 } from "../arrays";
 import { formatComplex, truncateComplex, type Complex } from "../complex";
 import type { Node } from "../expr/ast";
 import { getComplexFn, getEscapeFn } from "../expr/evaluate";
-import { fareyLabels } from "./farey";
+import { fareyLabels, fareyMaxDenominator } from "./farey";
 import { inverseJuliaCloud } from "./inverseJulia";
 import { bulbRayAngles, dynamicRay, parameterRay, rayDepthForZoom } from "./rays";
 import { siegelInvariantCurves } from "./siegelCurves";
@@ -304,7 +304,9 @@ function drawFareyLabels(
   size: number,
 ): void {
   const s = size / OVERLAY_BASE;
-  const maxQ = Math.min(16, Math.max(4, Math.round(4 + Math.log2(Math.max(1, zoom)))));
+  // Grow the labelled denominator with the resolvable bulb size (∝ √zoom), so finer bulbs get
+  // named the deeper you go; the descent in fareyLabels keeps this cheap for large maxQ.
+  const maxQ = fareyMaxDenominator(zoom, size);
   const labels = fareyLabels(center, zoom, maxQ);
   const placed: Vec2[] = [];
   const minSep = 26 * s;
@@ -408,8 +410,9 @@ function cachedPairRay(angle: number, depth: number): Vec2[] {
 
 /**
  * Draw the two external parameter rays landing at the root of every visible Farey bulb
- * (parameter plane, z²+c). Uses the same visible-bulb set (and maxQ) as the Farey labels,
- * so the rays line up 1:1 with them.
+ * (parameter plane, z²+c). Deliberately uses a *smaller* denominator bound than the Farey labels:
+ * each ray pair needs `bulbRayAngles(p, q)`, which searches the doubling orbits mod 2^q − 1 and so
+ * costs O(2^q) — tractable only for small q. The labels (positions only, O(1) each) go far deeper.
  */
 function drawBulbRayPairs(
   ctx: CanvasRenderingContext2D,
