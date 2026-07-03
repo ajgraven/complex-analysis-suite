@@ -6,6 +6,8 @@
  * the scaled overlay before downloading.
  */
 
+import { injectPngText } from "./render/pngMetadata";
+
 /** Smallest export size we allow, in pixels. */
 const MIN_EXPORT_SIZE = 256;
 /** Fallback when no WebGL context is available to query the real limit. */
@@ -52,26 +54,34 @@ export function getMaxTextureSize(): number {
   return cachedMaxTextureSize;
 }
 
-/** Encode a canvas to a PNG and trigger a browser download (off the main thread). */
-export function downloadCanvas(canvas: HTMLCanvasElement, filename: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        reject(new Error("Failed to encode the PNG"));
-        return;
-      }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      window.setTimeout(() => {
-        a.remove();
-        URL.revokeObjectURL(url);
-      }, 1000);
-      resolve();
-    }, "image/png");
-  });
+/**
+ * Encode a canvas to a PNG and trigger a browser download. When `metadata` is given, its
+ * keyword → text pairs are embedded as PNG `tEXt` chunks (invisible reproducibility parameters —
+ * no image pixel changes).
+ */
+export async function downloadCanvas(
+  canvas: HTMLCanvasElement,
+  filename: string,
+  metadata?: Record<string, string>,
+): Promise<void> {
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+  if (!blob) throw new Error("Failed to encode the PNG");
+  let out = blob;
+  if (metadata && Object.keys(metadata).length > 0) {
+    const stamped = injectPngText(new Uint8Array(await blob.arrayBuffer()), metadata);
+    // Copy into a fresh ArrayBuffer-backed view so the Blob part types cleanly (TS 5.7 narrows
+    // ArrayBufferLike vs ArrayBuffer); the extra copy is negligible for a one-shot export.
+    out = new Blob([new Uint8Array(stamped)], { type: "image/png" });
+  }
+  const url = URL.createObjectURL(out);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  window.setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 1000);
 }

@@ -294,11 +294,13 @@ export class PlotView {
       overlays: boolean;
       scaleBar?: boolean;
       filename: string;
+      /** Reproducibility parameters embedded as invisible PNG tEXt metadata. */
+      metadata?: Record<string, string>;
     } & ExportProgress,
   ): Promise<void> {
     const result = await this.renderExportCanvas(opts);
     if (!result) return; // cancelled
-    await downloadCanvas(result.canvas, ensurePngName(opts.filename));
+    await downloadCanvas(result.canvas, ensurePngName(opts.filename), opts.metadata);
     if (result.clamped) {
       showToast(
         `Requested size exceeded this device's maximum of ${result.maxTex}px; ` +

@@ -1872,6 +1872,28 @@ function init(): void {
     refreshProfileLabel(); // a preset may change iterations / mode → diverge from the active profile
   }
 
+  /** Reproducibility metadata embedded (invisibly) in an exported PNG: a human-readable parameter
+   *  summary, the full shareable-state URL (paste to reproduce this exact view), and the software
+   *  name. The image pixels are unchanged. */
+  function buildStampMetadata(view: PlotView): Record<string, string> {
+    const plot = view.plot;
+    const round = (x: number): string => Number.parseFloat(x.toPrecision(6)).toString();
+    // ASCII signs only — PNG tEXt is Latin-1, so a Unicode minus (U+2212) would be mangled to '?'.
+    const cplx = (re: number, im: number): string =>
+      `${round(re)} ${im >= 0 ? "+" : "-"} ${round(Math.abs(im))}i`;
+    const [cx, cy] = plot.cValue;
+    const [ox, oy] = plot.center;
+    const plane = view === parameterView ? "parameter (Mandelbrot)" : "dynamical (Julia)";
+    const params =
+      `plane=${plane}; f(z,c)=${plot.f}; c=${cplx(cx, cy)}; center=${cplx(ox, oy)}; ` +
+      `zoom=${plot.zoom.toExponential(3)}; iterations=${plot.nplot}; mode=${byId<HTMLSelectElement>("mode").value}`;
+    return {
+      Software: "ComplexDynamicsJS",
+      "cdjs:params": params,
+      "cdjs:state": `${location.origin}${location.pathname}#s=${encodeState(readFullState())}`,
+    };
+  }
+
   /** Render a plot at the chosen size and download it, with button feedback. */
   async function runExport(
     view: PlotView,
@@ -1896,6 +1918,7 @@ function init(): void {
         overlays,
         scaleBar,
         filename,
+        metadata: buildStampMetadata(view),
         onProgress: progress.onProgress,
         isCancelled: progress.isCancelled,
       });
