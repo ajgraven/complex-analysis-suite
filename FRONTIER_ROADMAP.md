@@ -15,7 +15,10 @@
 
 ## Shipped from this roadmap so far (2026-07-03)
 - ✅ **Honesty bundle** — the top `[rigor]` win, complete: precision-exhaustion warning at the perturbation ceiling (**#217**); box-count-dimension standard error + pixel-area resolution uncertainty (**#218**); reproducibility metadata stamped into exported PNGs (**#219**). Covers §4 **C1–C5**.
-- ✅ **External-ray landing** `[math]`, PRs 1–2 — the precise landing-point primitive `parameterLanding` (the component **root**, not its centre; Misiurewicz Newton-refined) (**#220**) + dynamical-plane `dynamicalLanding` and the go-to-angle true-landing readout for both planes (**#221**). Covers §4 **B1**; the inverse *angles-of-a-point* (B2) and a general parabolic-root Newton for deeper non-cardioid roots remain.
+- ✅ **External-ray landing** `[math]` — the whole B1→B2 arc, now complete:
+  - **B1 (θ→point):** the precise landing-point primitive `parameterLanding` (the component **root**, not its centre; Misiurewicz Newton-refined) (**#220**) + dynamical-plane `dynamicalLanding` and the go-to-angle true-landing readout (**#221**), then the **general parabolic-root Newton** (2×2 complex Newton on {fⁿ=z, (fⁿ)′=1}) that lands the deeper **non-cardioid** roots the closed form couldn't — e.g. the period-4 cascade root −5/4 (**#223**). Covers §4 **B1**.
+  - **B2 (point→θ, the inverse):** `angleOfPoint.ts` — click a point → its external **angle(s)**, **valence**, and **biaccessibility**, by landing every low-period angle and clustering (**#224** pure finder; **#225** the "Angles of a point" console + snap-to-nearest + cyan overlay rays). Covers §4 **B2** and the first §2 downstream unlock.
+  - *Remaining tail (deferred):* a purpose-built quadratic solver for high-rotation satellites (the general Newton is only linear there); forward-mapping the drawn rays under an active projection.
 - ✅ **DE relief lighting** (§4 **D1**) — found already shipped (#159–169); roadmap corrected (**#216**). Remaining delta = interior lighting + material controls.
 - *(This roadmap document was first persisted in **#215**.)*
 
