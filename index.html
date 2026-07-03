@@ -1355,6 +1355,23 @@ z^2+c</textarea
             </div>
           </details>
 
+          <!-- Angles of a point: the inverse of ray landing — a clicked point's external angle(s). -->
+          <details class="control-group" id="angles-of-point-group">
+            <summary>Angles of a point (z²+c)</summary>
+            <div class="controls">
+              <p class="exterior-status">
+                The inverse of “Go to external angle”. Click a point on either plane — an α or β fixed
+                point, a component root, a Misiurewicz tip — then press <em>Find angles</em>. The
+                external rays landing there are drawn in cyan and their angles listed, with the point’s
+                <strong>valence</strong> and whether it is <strong>biaccessible</strong> (≥ 2 rays land).
+                <button type="button" class="gloss-link" data-term="biaccessible" aria-label="Define biaccessible">?</button>
+                The click snaps to the nearest low-period landing.
+              </p>
+              <button type="button" id="angles-find">Find angles of the clicked point</button>
+              <p class="exterior-status" id="angles-of-point"></p>
+            </div>
+          </details>
+
           <!-- Symbolic console: internal address → kneading sequence → characteristic external angles. -->
           <details class="control-group" id="address-group">
             <summary>Symbolic console (z²+c)</summary>

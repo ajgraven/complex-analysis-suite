@@ -51,9 +51,21 @@ export interface AngleSearchOpts {
   tol?: number;
 }
 
+/** {@link AngleSearchOpts} plus how far a query may sit from the nearest landing to still snap. */
+export interface NearestOpts extends AngleSearchOpts {
+  /** Max distance from the query to the nearest landing to accept the snap (plane units). */
+  snapRadius?: number;
+}
+
+/** {@link AnglesOfPoint} plus the landing the angles co-land at (the snapped point), or null. */
+export interface NearestAngles extends AnglesOfPoint {
+  point: Vec2 | null;
+}
+
 const DEFAULT_MAX_PERIOD = 8;
 const DEFAULT_MAX_PREPERIOD = 2;
 const DEFAULT_TOL = 5e-3;
+const DEFAULT_SNAP_RADIUS = 0.06;
 
 function gcd(a: number, b: number): number {
   return b === 0 ? a : gcd(b, a % b);
@@ -89,6 +101,54 @@ export function enumerateLandingAngles(maxPeriod: number, maxPreperiod: number):
 function collect(angles: Angle[]): AnglesOfPoint {
   angles.sort((a, b) => a.p / a.q - b.p / b.q);
   return { angles, valence: angles.length, biaccessible: angles.length >= 2 };
+}
+
+/** An enumerated angle together with where its ray lands. */
+interface Landed {
+  angle: Angle;
+  point: Vec2;
+}
+
+/** Land every enumerated angle through `land` (dropping the ones that fail to trace). */
+function landAll(
+  land: (p: number, q: number) => Vec2 | null,
+  maxPeriod: number,
+  maxPreperiod: number,
+): Landed[] {
+  const out: Landed[] = [];
+  for (const angle of enumerateLandingAngles(maxPeriod, maxPreperiod)) {
+    const point = land(angle.p, angle.q);
+    if (point) out.push({ angle, point });
+  }
+  return out;
+}
+
+/**
+ * Snap `query` to the nearest landing among `all`, then return every angle co-landing there. This is
+ * the interactive form — a hand-click never sits exactly on a low-period point, so we snap to the
+ * closest one (within `snapRadius`) and report its full valence, rather than requiring an exact hit.
+ */
+function nearestCluster(
+  all: Landed[],
+  query: Vec2,
+  snapRadius: number,
+  clusterTol: number,
+): NearestAngles {
+  let best: Vec2 | null = null;
+  let bestD = Infinity;
+  for (const { point } of all) {
+    const d = Math.hypot(point[0] - query[0], point[1] - query[1]);
+    if (d < bestD) {
+      bestD = d;
+      best = point;
+    }
+  }
+  if (!best || bestD > snapRadius) return { angles: [], valence: 0, biaccessible: false, point: null };
+  const snap = best;
+  const hits = all
+    .filter((l) => Math.hypot(l.point[0] - snap[0], l.point[1] - snap[1]) < clusterTol)
+    .map((l) => l.angle);
+  return { ...collect(hits), point: snap };
 }
 
 /**
@@ -131,4 +191,36 @@ export function parameterAnglesOfPoint(target: Vec2, opts: AngleSearchOpts = {})
     }
   }
   return collect(hits);
+}
+
+/**
+ * Interactive form of {@link dynamicalAnglesOfPoint}: snap `query` (an imprecise click) to the nearest
+ * landing on ∂K_c and report the angles co-landing there, plus the snapped point.
+ */
+export function nearestDynamicalAngles(query: Vec2, c: Vec2, opts: NearestOpts = {}): NearestAngles {
+  const all = landAll(
+    (p, q) => {
+      const l = dynamicalLanding(p, q, c);
+      return l ? [l.point[0], l.point[1]] : null;
+    },
+    opts.maxPeriod ?? DEFAULT_MAX_PERIOD,
+    opts.maxPreperiod ?? DEFAULT_MAX_PREPERIOD,
+  );
+  return nearestCluster(all, query, opts.snapRadius ?? DEFAULT_SNAP_RADIUS, opts.tol ?? DEFAULT_TOL);
+}
+
+/**
+ * Interactive form of {@link parameterAnglesOfPoint}: snap `query` (an imprecise click) to the nearest
+ * landing on ∂M and report the angles co-landing there, plus the snapped point.
+ */
+export function nearestParameterAngles(query: Vec2, opts: NearestOpts = {}): NearestAngles {
+  const all = landAll(
+    (p, q) => {
+      const l = parameterLanding(p, q);
+      return l ? [l.point[0], l.point[1]] : null;
+    },
+    opts.maxPeriod ?? DEFAULT_MAX_PERIOD,
+    opts.maxPreperiod ?? DEFAULT_MAX_PREPERIOD,
+  );
+  return nearestCluster(all, query, opts.snapRadius ?? DEFAULT_SNAP_RADIUS, opts.tol ?? DEFAULT_TOL);
 }

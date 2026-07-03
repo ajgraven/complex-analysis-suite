@@ -33,6 +33,7 @@ import {
   parseInternalAddress,
   stripExternalAngles,
 } from "./combinatorics/stripping";
+import { nearestDynamicalAngles, nearestParameterAngles } from "./render/angleOfPoint";
 import { dynamicalLanding, landingForAngle, parameterLanding } from "./render/angleParameter";
 import { detectHermanRing } from "./render/hermanRing";
 import { detectUnderIteration } from "./render/underIteration";
@@ -1826,6 +1827,8 @@ function init(): void {
     applyInverseJulia(); // …and the inverse-iteration Julia cloud
     applySiegelCurves(); // …and the Siegel invariant curves
     parameterView.setAddressRays(null); // …and a stripped internal address's rays (z²+c-specific)
+    parameterView.setPointRays(null); // …and any angles-of-a-point rays
+    dynamicalView.setPointRays(null);
     dynamicalView.setHermanCurves(null); // …and any detected Herman-ring curves
     updateExteriorMap(); // a new f may change the degree / coefficients
     applyLaurent();
@@ -1861,6 +1864,8 @@ function init(): void {
     applyInverseJulia();
     applySiegelCurves();
     parameterView.setAddressRays(null); // a new preset invalidates a stripped internal address's rays
+    parameterView.setPointRays(null); // …and any angles-of-a-point rays
+    dynamicalView.setPointRays(null);
     dynamicalView.setHermanCurves(null); // …and any detected Herman-ring curves
     updateExteriorMap();
     applyLaurent();
@@ -2916,6 +2921,53 @@ function init(): void {
     const info = inspect(fAst, parameterView.plot.escAst, "param", crit, target, pa);
     handleInspect(info, target, "param");
     scheduleRecord();
+  });
+
+  // Angles of a point (the inverse of ray landing): snap the last-clicked point to the nearest
+  // low-period landing, draw the co-landing rays in cyan, and report valence + biaccessibility.
+  byId("angles-find").addEventListener("click", () => {
+    if (!parameterView.plot.perturbationEligible) {
+      showToast("External rays (and their angles) are defined for z²+c only.", "warn");
+      return;
+    }
+    if (!lastInspect) {
+      showToast("Click a point on either plane first, then press Find angles.", "warn");
+      return;
+    }
+    const { point, plane } = lastInspect;
+    const readout = byId("angles-of-point");
+    const clean = (x: number): number => (Math.abs(x) < 1e-10 ? 0 : +x.toPrecision(5));
+    const fmtPt = (z: Vec2): string =>
+      `${clean(z[0])} ${z[1] >= 0 ? "+" : "−"} ${Math.abs(clean(z[1]))}i`;
+
+    // Parameter rays on ∂M; dynamical rays on ∂K_c at the current c. Bounded so a click stays snappy.
+    const res =
+      plane === "dyn"
+        ? nearestDynamicalAngles(point, parseComplex(dynamicalView.plot.c), { maxPeriod: 8 })
+        : nearestParameterAngles(point, { maxPeriod: 6 });
+
+    parameterView.setPointRays(null); // clear any previous find on both planes first
+    dynamicalView.setPointRays(null);
+
+    if (res.angles.length === 0 || !res.point) {
+      readout.textContent =
+        "No external ray lands near that point — it may be interior or exterior, or its rays have period above the search bound.";
+      showToast("No external ray found near that point.", "info");
+      return;
+    }
+    const turns = res.angles.map((a) => a.p / a.q);
+    if (plane === "dyn") dynamicalView.setPointRays(turns);
+    else parameterView.setPointRays(turns);
+
+    const list = res.angles.map((a) => `${a.p}/${a.q}`).join(", ");
+    const where = plane === "dyn" ? "ζ" : "c";
+    const bicc = res.biaccessible
+      ? `Biaccessible (valence ${res.valence}).`
+      : `Not biaccessible (valence ${res.valence}).`;
+    readout.textContent =
+      `${res.valence} ray${res.valence === 1 ? "" : "s"} land at ${where} = ${fmtPt(res.point)}: ` +
+      `θ ∈ {${list}}. ${bicc}`;
+    showToast(`${where} = ${fmtPt(res.point)} ← {${list}} (valence ${res.valence}).`, "info");
   });
   // Symbolic console: strip an internal address to its kneading sequence + characteristic angles.
   const fmtAngleBits = (ang: { p: number; q: number }, period: number): string =>

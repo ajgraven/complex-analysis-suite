@@ -72,6 +72,7 @@ export class PlotView {
   private rayAngle: number | null = null;
   private orbitPortrait: number[] | null = null;
   private addressRays: number[] | null = null;
+  private pointRays: number[] | null = null;
   private showInverseJulia = false;
   private showSiegelCurves = false;
   private hermanCurves: Vec2[][] | null = null;
@@ -159,6 +160,12 @@ export class PlotView {
   /** Set the characteristic parameter rays of a stripped internal address (parameter plane), or null. */
   setAddressRays(angles: number[] | null): void {
     this.addressRays = angles && angles.length ? angles : null;
+    this.requestOverlay();
+  }
+
+  /** Set the external rays landing at an inspected point (angles-of-a-point), or null. Either plane. */
+  setPointRays(angles: number[] | null): void {
+    this.pointRays = angles && angles.length ? angles : null;
     this.requestOverlay();
   }
 
@@ -270,6 +277,7 @@ export class PlotView {
           rayPairs: this.showRayPairs,
           orbitPortrait: this.orbitPortrait,
           addressRays: this.addressRays,
+          pointRays: this.pointRays,
           inverseJulia: this.showInverseJulia,
           siegelCurves: this.showSiegelCurves,
           hermanCurves: this.hermanCurves,
@@ -366,6 +374,7 @@ export class PlotView {
       rayPairs: this.showRayPairs,
       orbitPortrait: this.orbitPortrait,
       addressRays: this.addressRays,
+      pointRays: this.pointRays,
       inverseJulia: this.showInverseJulia,
       siegelCurves: this.showSiegelCurves,
       hermanCurves: this.hermanCurves,

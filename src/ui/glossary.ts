@@ -215,6 +215,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     defn: "The combinatorial fingerprint of a repelling periodic cycle: the sets of external angles whose rays land at each cycle point. The doubling map D(θ)=2θ permutes these sets cyclically, so D^p rotates the rays at one point rigidly — by the rotation number p/q. The valence v is the number of rays per point and the characteristic arc (the narrowest gap) is a complete invariant. On the dynamical plane the inspector draws the portrait of the α fixed point: e.g. the rabbit's α has rays {1/7, 2/7, 4/7} (valence 3, rotation 1/3); the basilica's has {1/3, 2/3} (valence 2, rotation 1/2). z²+c only.",
   },
   {
+    id: "biaccessible",
+    term: "Biaccessible point / angles of a point",
+    defn: "The inverse of ray landing: the external angles whose rays land at a given point. A point is biaccessible when two or more rays land on it (it is reachable from the exterior along ≥ 2 accesses) — its valence is the number of rays. On the Julia set the α fixed point is biaccessible (the basilica's α ← {1/3, 2/3}, valence 2; the rabbit's ← {1/7, 2/7, 4/7}, valence 3) while the β fixed point is not (← {0} only). On ∂M a component root carries the two rays bounding its wake (−3/4 ← {1/3, 2/3}) and a Misiurewicz point its preperiodic angles (−2 ← {1/2}). The 'Angles of a point' tool finds them by landing every low-period angle and clustering. The Hausdorff dimension of the biaccessible angles is the biaccessibility dimension of the core entropy.",
+  },
+  {
     id: "core-entropy",
     term: "Core entropy",
     defn: "The topological entropy h(θ) = log λ of the map on its Hubbard tree, a measure of how 'chaotic' the postcritically-finite parameter at external angle θ is. By Thurston, h = log 2 · B, where B = h/log 2 ∈ [0,1] is the biaccessibility dimension (the Hausdorff dimension of the angles whose rays land at the same point as another). λ ∈ [1,2] is the leading eigenvalue of a transition matrix on pairs of postcritical angles (separated / not by the critical diameter). Satellite components like the rabbit (1/7) have h = 0; primitive ones like the airplane (3/7) have h = log φ. The 'Go to external angle' tool reports it.",

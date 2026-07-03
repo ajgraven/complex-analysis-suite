@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { Complex } from "../src/complex";
 import { sqrt } from "../src/expr/complexJs";
 import { parse } from "../src/expr/parser";
-import { dynamicalAnglesOfPoint, parameterAnglesOfPoint } from "../src/render/angleOfPoint";
+import {
+  dynamicalAnglesOfPoint,
+  nearestDynamicalAngles,
+  nearestParameterAngles,
+  parameterAnglesOfPoint,
+} from "../src/render/angleOfPoint";
 import { findNucleus } from "../src/render/inspect";
 
 const Z2C = parse("z^2+c");
@@ -78,5 +83,36 @@ describe("parameterAnglesOfPoint (point on ∂M → its external angles)", () =>
   it("the Misiurewicz point c = i has 1/6 among its angles", () => {
     const res = parameterAnglesOfPoint([0, 1], OPTS);
     expect(res.angles).toContainEqual({ p: 1, q: 6 });
+  });
+});
+
+describe("nearest*Angles (snap an imprecise click to the co-landing cluster)", () => {
+  it("a click 0.03 off the basilica α still resolves {1/3, 2/3} and snaps to α", () => {
+    const alpha = alphaFixedPoint([-1, 0]);
+    const query: Complex = [alpha[0] + 0.03, alpha[1] - 0.02]; // imprecise click nearby
+    const res = nearestDynamicalAngles(query, [-1, 0], OPTS);
+    expect(res.angles).toEqual([
+      { p: 1, q: 3 },
+      { p: 2, q: 3 },
+    ]);
+    expect(res.biaccessible).toBe(true);
+    expect(res.point?.[0]).toBeCloseTo(alpha[0], 3);
+    expect(res.point?.[1]).toBeCloseTo(alpha[1], 3);
+  });
+
+  it("a click near the ∂M root −3/4 snaps to it and returns {1/3, 2/3}", () => {
+    const res = nearestParameterAngles([-0.76, 0.02], OPTS);
+    expect(res.angles).toEqual([
+      { p: 1, q: 3 },
+      { p: 2, q: 3 },
+    ]);
+    expect(res.point?.[0]).toBeCloseTo(-0.75, 3);
+    expect(res.point?.[1]).toBeCloseTo(0, 3);
+  });
+
+  it("a click in empty space (far from any landing) returns nothing", () => {
+    const res = nearestDynamicalAngles([5, 5], [-1, 0], OPTS);
+    expect(res.angles).toEqual([]);
+    expect(res.point).toBeNull();
   });
 });

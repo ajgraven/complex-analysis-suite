@@ -223,6 +223,8 @@ export interface OverlayParams {
   orbitPortrait?: number[] | null;
   /** Characteristic parameter rays (turns) of a stripped internal address, drawn in gold (param plane). */
   addressRays?: number[] | null;
+  /** External rays (turns) landing at an inspected point — angles-of-a-point, drawn in cyan; either plane. */
+  pointRays?: number[] | null;
   /** Draw the inverse-iteration Julia point cloud (dynamical plane, z²+c). */
   inverseJulia?: boolean;
   /** Draw the Siegel-disc invariant curves (dynamical plane, z²+c). */
@@ -767,6 +769,15 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
     const depth = rayDepthForZoom(p.zoom);
     for (const ang of p.addressRays) {
       drawRays(ctx, cachedRay("param", ang, cc, depth), p.center, p.zoom, size, "rgba(255, 200, 90, 0.95)");
+    }
+  }
+
+  // External rays landing at an inspected point (angles-of-a-point) — cyan, to stand apart from the
+  // gold address/portrait rays. Parameter rays on ∂M, dynamical rays (for c = cc) on ∂K_c.
+  if (p.pointRays && p.pointRays.length > 0) {
+    const depth = rayDepthForZoom(p.zoom);
+    for (const ang of p.pointRays) {
+      drawRays(ctx, cachedRay(p.fractType, ang, cc, depth), p.center, p.zoom, size, "rgba(90, 220, 210, 0.95)");
     }
   }
 

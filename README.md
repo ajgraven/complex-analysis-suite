@@ -420,6 +420,13 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   **core entropy** _h_ = log λ and
   **biaccessibility dimension** _B_ = _h_/log 2 (Thurston's angle-pair algorithm; satellite angles
   like 1/7 give _h_ = 0, primitive ones like 3/7 give _h_ = log φ). `z²+c`.
+- **Angles of a point** — the **inverse** of _Go to external angle_. Click a point on either plane (an
+  α or β fixed point, a component root, a Misiurewicz tip), then **Find angles of the clicked point**:
+  the external rays landing there are drawn in cyan and their angles listed, with the point's
+  **valence** and whether it is **biaccessible** (≥ 2 rays land). Found by landing every low-period
+  angle and clustering — the click snaps to the nearest low-period landing. On the Julia set the
+  basilica's α ← {1/3, 2/3} (valence 2, biaccessible), its β ← {0} (valence 1); on ∂M the root
+  −3/4 ← {1/3, 2/3} and the tip −2 ← {1/2}. `z²+c`.
 - **Symbolic console** — type an **internal address** (the increasing periods from the main cardioid
   to a component, e.g. `1-3` rabbit, `1-2-4-8` cascade, `1-3-6`) and the **stripping algorithm**
   returns its **kneading sequence** ν and the two **characteristic external angles** θ⁻, θ⁺ that
