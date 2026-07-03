@@ -13,6 +13,12 @@
 **Effort key:** **S** = days (a weekend) · **M** = 1–2 weeks · **L** = multi-week · **XL** = month+/research-grade.
 **Axis tags:** `[depth]` `[math]` `[rigor]` `[visual]` `[reach]`.
 
+## Shipped from this roadmap so far (2026-07-03)
+- ✅ **Honesty bundle** — the top `[rigor]` win, complete: precision-exhaustion warning at the perturbation ceiling (**#217**); box-count-dimension standard error + pixel-area resolution uncertainty (**#218**); reproducibility metadata stamped into exported PNGs (**#219**). Covers §4 **C1–C5**.
+- ✅ **External-ray landing** `[math]`, PRs 1–2 — the precise landing-point primitive `parameterLanding` (the component **root**, not its centre; Misiurewicz Newton-refined) (**#220**) + dynamical-plane `dynamicalLanding` and the go-to-angle true-landing readout for both planes (**#221**). Covers §4 **B1**; the inverse *angles-of-a-point* (B2) and a general parabolic-root Newton for deeper non-cardioid roots remain.
+- ✅ **DE relief lighting** (§4 **D1**) — found already shipped (#159–169); roadmap corrected (**#216**). Remaining delta = interior lighting + material controls.
+- *(This roadmap document was first persisted in **#215**.)*
+
 ---
 
 ## Five headline findings (the cross-axis convergences)

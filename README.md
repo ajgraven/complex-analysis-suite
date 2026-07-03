@@ -235,6 +235,11 @@ clipboard) buttons in the **Export image** section, with two adjacent controls:
   labelled with its width in plot coordinates, so a shared image carries its zoom
   scale. Independent of **overlays**, so you can add it to a clean image.
 
+Every downloaded PNG also embeds invisible **reproducibility metadata** (`tEXt` chunks — no image
+pixels change): the software name, a human-readable parameter summary (`f`, `c`, centre, zoom,
+iterations, mode), and the full **shareable-state URL** — paste it back to reproduce the exact view,
+double-double centre and all ([`pngMetadata.ts`](src/render/pngMetadata.ts)).
+
 The renderer draws into an off-screen RGBA8 framebuffer in horizontal strips
 ([`GLPlot.renderToImageData`](src/render/glPlot.ts)) — full detail at the requested
 size (no render-image cap), shown behind a progress bar with a **Cancel** button so
@@ -407,9 +412,12 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   **Limb** row shows a bulb's conjugate limb and whether it self-mates.
 - **Go to external angle** — type an external angle θ = _p_/_q_ (turns) and the parameter ray at θ
   is traced to its landing (the globally-convergent inverse of ray drawing — no nearby click
-  needed); a **periodic** θ then Newton-snaps to the exact component **centre** (1/7 → the rabbit,
-  1/3 → the basilica, 2/5 → a period-4 centre) and a **preperiodic** θ lands at its **Misiurewicz**
-  point (1/6 → _c_ = _i_). The panel also reports θ's **core entropy** _h_ = log λ and
+  needed). Navigation Newton-snaps a **periodic** θ to the exact component **centre** (1/7 → the
+  rabbit, 1/3 → the basilica, 2/5 → a period-4 centre) and a **preperiodic** θ to its **Misiurewicz**
+  point (1/6 → _c_ = _i_). A **Landing** line reports the ray's _true_ landing — the component
+  **root** (θ = 1/3 lands at the root _c_ = −¾, not the centre −1) or the Misiurewicz point — and
+  where the same angle's ray lands on the current Julia set (ζ). The panel also reports θ's
+  **core entropy** _h_ = log λ and
   **biaccessibility dimension** _B_ = _h_/log 2 (Thurston's angle-pair algorithm; satellite angles
   like 1/7 give _h_ = 0, primitive ones like 3/7 give _h_ = log φ). `z²+c`.
 - **Symbolic console** — type an **internal address** (the increasing periods from the main cardioid
@@ -491,11 +499,13 @@ never overrides an exact analytic/symbolic value.
   internal angle p/q), neutral, or bounded. For a non-holomorphic `f` the |λ| magnitude comes from
   the real 2×2 Jacobian (shown `≈`).
 - **Fractal dimension** — the exact small-`c` value `1 + |c|²/(4 ln d)` inside the principal
-  cardioid (Ruelle), plus a box-counting estimate of the boundary (labelled `≈`; box-counting is
-  inherently ±0.05–0.2 and over-reads smooth curves).
-- **Area of K_c** — a whole-set pixel-count estimate alongside, for monic `z^d + c`, the rigorous
-  coefficient upper bound `π(1 − Σ k|bₖ|²)` from the exterior map (Gronwall's area theorem); 0 for
-  a Cantor set.
+  cardioid (Ruelle), plus a box-counting estimate of the boundary (labelled `≈` with the log–log
+  fit's standard error `± s`; box-counting is inherently ±0.05–0.2 and over-reads smooth curves, so
+  the SE is a lower bound on the true error).
+- **Area of K_c** — a whole-set pixel-count estimate (with a resolution-limited `±` uncertainty from
+  the boundary layer, shrinking as the grid refines) alongside, for monic `z^d + c`, the rigorous
+  coefficient upper **bound** `≤ π(1 − Σ k|bₖ|²)` from the exterior map (Gronwall's area theorem);
+  0 for a Cantor set.
 - **Lyapunov exponent** of the critical orbit (a real-Jacobian Benettin estimate for a
   non-holomorphic `f`), the **bounding region** (the `z^d + c` escape disk, else the measured
   bounding box), the measured **symmetry** (central / mirror axes / k-fold rotation), and the
