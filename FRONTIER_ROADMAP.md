@@ -4,7 +4,9 @@
 >
 > **Method.** Compiled 2026-07-03 from a five-front parallel research effort (deep-zoom rendering algorithms · complex-dynamics mathematics · validated/rigorous numerics · visual/3D/animation/UX · an internal code-grounded audit), plus deep sub-investigations of the highest-value clusters (external-ray landing, the spider/Thurston algorithms, Yoccoz puzzles & renormalization, laminations & Hubbard trees, advanced coloring, 3D relief, export/palettes/WebGPU). ~50 primary sources, listed in §6.
 >
-> **One caveat.** The *ordering* depends on what this project is *for* — art tool vs. research instrument vs. teaching aid vs. deep-zoom flagship. §3 shows how the top of the list reshuffles per goal. Two items (DE normal shading, the honesty bundle) sit in the top tier under *every* goal.
+> **One caveat.** The *ordering* depends on what this project is *for* — art tool vs. research instrument vs. teaching aid vs. deep-zoom flagship. §3 shows how the top of the list reshuffles per goal. The **honesty bundle** sits in the top tier under *every* goal. *(An earlier draft also listed DE normal-map shading here — but that shading is **already shipped** (#159–169), so it's removed; see §4 D1.)*
+>
+> **Correction (post-merge):** the initial draft flagged **DE normal / slope lighting** as a top unbuilt "cheap win." A code check found it **already shipped** — the research agent was fed a wrong "app lacks it" assumption. Entries below are corrected; the lesson (verify "missing" claims against code) is recorded in memory.
 >
 > **Provenance note on citations.** The §6 list was assembled by research agents from public web sources. Canonical papers/books/sites (Milnor, Douady–Hubbard, McMullen, Hubbard–Schleicher, mathr.co.uk, MROB, iquilezles.org, Ultra Fractal, MDN) are reliable; individual URLs should be spot-checked before formal citation.
 
@@ -15,7 +17,7 @@
 
 ## Five headline findings (the cross-axis convergences)
 
-1. **Two cheap wins tower over everything on impact ÷ effort** — *DE normal-map shading* `[visual]` and the *honesty bundle* `[rigor]`. Both reuse machinery already in the codebase (`z'`, `lastConnectivityRigorous`), both are weekend-scale, both disproportionately valuable.
+1. **The standout cheap win is the honesty bundle** `[rigor]` — high research-credibility value, weekend-scale, reuses existing hooks (`lastConnectivityRigorous`, capacity-`—`, neutral-λ). *(The original draft paired it with DE normal-map shading, but that is **already shipped**: #159–169 give `reliefSlopeAnalytic` — the `z/der` normal — plus Blinn-Phong and azimuth/elevation/depth controls. Only **interior lighting + material controls** remain; see §4 D1.)*
 2. **One primitive unlocks a whole mathematics cluster** — *external-ray landing (θ→point)*. Angles-of-a-point, wakes/limbs, Yoccoz puzzles, and Hubbard-tree embedding all fall out of it, and it de-risks the spider algorithm and matings.
 3. **The depth flagship is already half-built** — `src/render/bla.ts` builds and unit-tests the BLA table (#155) but it is **not wired to the GPU**. The single highest-ROI depth item is finishing that traversal.
 4. **Depth and trust converge on one Low-effort item** — Pauldelbrot *glitch detection* + a *precision-exhaustion banner*: cheap, and it closes the correctness gap the academic-rigor review deferred.
@@ -29,7 +31,7 @@
 
 | Item | Axis | Effort | Why it's here / what it reuses |
 |---|---|---|---|
-| **DE normal / slope lighting** (directional + specular from the DE gradient) | visual | **S** | Biggest look-upgrade per line of code. `arg(z')` — already computed for analytic DE — *is* the surface gradient. Pure WebGL2 fragment shader. |
+| **Interior lighting + material controls** *(base DE relief lighting already shipped #159–169)* | visual | **S–M** | Light the set *interior* via interior-DE (the "fully-lit set"); expose ambient/specular/back-light (currently hardcoded). The exterior `z/der`-normal + Blinn-Phong lighting is done. Secondary (communication) goal. |
 | **Honesty bundle**: precision-exhaustion banner · "N/A / not-rigorous" gating for general-f metrics · MC-area error bars (σ/√N) + Gronwall labelled a one-sided *upper bound* · box-count dimension SE + scale/bias caveat · reproducibility stamps on exports | rigor | **S** each | Closes the two worst credibility holes (silent deep-zoom noise; authoritative `≈` off-hypothesis). Reuses `lastConnectivityRigorous`, capacity-`—`, the neutral-λ tolerance, the dd-permalink serializer. |
 | **Internal rays inside hyperbolic components** (+ internal-angle readout) | math | **S–M** | Reuses the multiplier map (uMode 12): solve λ_p(c)=r·e^{2πit}. Answers "where *inside* the bulb am I." |
 | **Palette studio** (iq cosine palette + viridis/magma/cividis/cubehelix + OKLab stops + Okabe-Ito discrete + Fractint `.MAP` import) | visual | **S–M** | Palette control is the #1 user knob; all closed-form. Plugs into `paletteRGB`/legend (#209). |
@@ -92,8 +94,8 @@ BLA base coeffs  A₁=f′(Z), B₁=∂f/∂c  ← write ONCE, shared by:
    ├─ GPU BLA traversal          [Tier 1, depth]  (table already built, #155)
    └─ general-f perturbation     [Tier 2, depth]
 
-DE gradient (z', already emitted) ─→ DE normal lighting ─→ AO + soft shadows ─→ 3D relief
-   [Tier 0 → Tier 0 → Tier 2, visual]
+DE gradient (z', already emitted) ─→ DE normal lighting ─→ AO + soft shadows ─→ interior lighting / 3D relief
+   [SHIPPED #159-169  →  Tier 0/2, visual]
 
 glitch detection + precision banner = the depth ∩ rigor correctness convergence  [Tier 1]
 
@@ -109,7 +111,7 @@ Two structural takeaways: **build the BLA base coefficients once** (they serve b
 
 ## §3 — How the top-5 reshuffles by north-star
 
-- **Art / visual tool** → DE lighting → palette studio → layer compositor → 3D relief → zoom-movie pipeline → gallery.
+- **Art / visual tool** → palette studio → interior lighting → layer compositor → 3D relief → zoom-movie pipeline → gallery. *(base DE relief lighting already shipped)*
 - **Research instrument** → external-ray landing → honesty bundle → spider algorithm → Yoccoz puzzles → matings → interval "Rigorous mode."
 - **Teaching tool** → internal rays → guided tours → honesty labeling → laminations/Hubbard trees → puzzles → wakes overlay.
 - **Deep-zoom flagship** → GPU BLA → general-f perturbation → glitch detection → floatexp/BigInt → reference reuse → zoom-movie pipeline.
@@ -161,7 +163,7 @@ Two structural takeaways: **build the BLA base coefficients once** (they serve b
 
 ### D. Visual, 3D, animation, UX
 
-- **D1 · DE normal / slope lighting (2D)** — `[visual]` **S**. `N=normalize(vec3(−∂h/∂x,−∂h/∂y,1/strength))` from `arg(z')` (already computed); Blinn-Phong `ambient+kd·max(0,N·L)+ks·pow(max(0,N·H),shininess)`. Cheapest high-wow win. Sources: iq distancefractals, Hvidtfeldt lighting.
+- **D1 · DE normal / slope lighting (2D)** — `[visual]` **✅ SHIPPED (#159–169)**. `reliefSlopeAnalytic` (shaderBuilder.ts) builds the normal from `u = z/der` (running derivative) scaled by depth; `shadeWithGradient` applies Blinn-Phong (Lambert + specular + hemisphere ambient); UI = `#light` + azimuth/elevation/depth; `dFdx/dFdy` screen-space fallback for non-holomorphic f. **Remaining delta (unbuilt, secondary/communication goal):** interior lighting (drive interior normals from interior-DE for a fully-lit set) + expose ambient/specular/back-light (hardcoded at `shaderBuilder.ts:826-829`). Sources: iq distancefractals, Hvidtfeldt lighting.
 - **D2 · Palette studio** — `[visual]` **S–M**. iq cosine palette `color(t)=a+b·cos(2π(c·t+d))` (12 sliders); bake OKLab-interpolated stops to a 256-LUT; ship viridis/magma/cividis/cubehelix presets + Okabe-Ito for discrete overlays (rays/cycles) + Fractint `.MAP` import. Sources: iq palettes, Ottosson OKLab, Green cubehelix, Moreland color-advice.
 - **D3 · DE ambient occlusion + soft shadows** — `[visual]` **S–M**. AO: march along the normal, `occ += (i·step − d(p+N·i·step))·falloff^i`. Soft shadow: `res=min(res,k·d/t)` toward the light. Same shader as D1. Sources: iq raymarchingdf.
 - **D4 · Multi-layer compositor** — `[visual]` **M**. Render N coloring passes → FBOs; composite back-to-front with Porter-Duff/photo blend modes + opacity + masks. Multiplies the value of all existing modes. Sources: Ultra Fractal layers.
@@ -182,9 +184,9 @@ Rational-map **exterior boundary overlay** (∞-basin connectivity); rational **
 
 ## §5 — Recommended first three moves + housekeeping
 
-1. **DE normal-map shading** (Tier 0, `[visual]`) — one weekend, transforms the whole look, zero new math.
-2. **The honesty bundle** (Tier 0, `[rigor]`) — a few days of labels/error-bars; removes the two failure modes that most undermine a research aid.
-3. **External-ray landing** (Tier 1, `[math]`) — the one foundational primitive; unlocks the largest downstream cluster.
+1. **The honesty bundle** (Tier 0, `[rigor]`) — a few days of labels/error-bars; removes the two failure modes that most undermine a *research* aid. Top pick for the research + teaching north-star.
+2. **External-ray landing** (Tier 1, `[math]`) — the one foundational primitive; unlocks the largest downstream cluster (puzzles, wakes, Hubbard trees) — serves research *and* teaching.
+3. **Internal rays inside hyperbolic components** (Tier 0, `[math]`) — cheap teaching win reusing the multiplier map. *(DE normal-map shading — the original #1 — is already shipped; interior lighting is the only remaining lighting delta, a secondary/communication item.)*
 
 **Pending-task mapping:** #75 → D8 (zoom-movie pipeline); #71 → multi-basin Fatou coloring; #73 → folds into B9 matings (it's a mating, not a preset).
 
