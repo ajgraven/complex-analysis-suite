@@ -1486,7 +1486,9 @@ function init(): void {
   // --- Julia-set properties readout ----------------------------------------
   let lastJuliaProps: ReturnType<typeof computeJuliaProperties> | null = null;
   let lastBoxDim: number | null = null; // Tier-2 box-counting dimension (image-based)
+  let lastBoxDimStderr: number | null = null; // its fit standard error (the honest ± band)
   let lastPixelArea: number | null = null; // Tier-2 pixel-count area (image-based)
+  let lastPixelAreaStderr: number | null = null; // resolution-limited area uncertainty (boundary layer)
   let lastExtent: Extent | null = null; // Tier-2 bounding extent (general f)
   let lastSymmetry: string | null = null; // Tier-2 measured symmetry string (general f)
   let lastConnectivity: string | null = null; // Tier-2 image connectivity string (general f)
@@ -1507,14 +1509,20 @@ function init(): void {
     // The small-c value is the quadratic-family asymptotic (exact only at c = 0); box-counting is a
     // rough estimate that over-reads smooth boundaries at coarse scales. Both are marked "≈".
     if (p.smallCDimension !== null) dim.push(`≈ ${jNum(p.smallCDimension, 5)} (small-c)`);
-    if (lastBoxDim !== null) dim.push(`≈ ${jNum(lastBoxDim, 4)} (box-count)`);
+    if (lastBoxDim !== null) {
+      const se = lastBoxDimStderr ? ` ± ${jNum(lastBoxDimStderr, 2)}` : "";
+      dim.push(`≈ ${jNum(lastBoxDim, 4)}${se} (box-count)`);
+    }
     jSet("jp-dimension", dim.length ? dim.join(" · ") : "—");
 
     if (p.escapes) {
       jSet("jp-area", "0 (disconnected)");
     } else {
       const area: string[] = [];
-      if (lastPixelArea !== null) area.push(`≈ ${jNum(lastPixelArea, 5)} (pixel)`);
+      if (lastPixelArea !== null) {
+        const se = lastPixelAreaStderr ? ` ± ${jNum(lastPixelAreaStderr, 2)}` : "";
+        area.push(`≈ ${jNum(lastPixelArea, 5)}${se} (pixel)`);
+      }
       if (p.analyticArea !== null) area.push(`≤ ${jNum(p.analyticArea, 5)} (bound)`);
       jSet("jp-area", area.length ? area.join(" · ") : "—");
     }
@@ -1568,7 +1576,9 @@ function init(): void {
       },
       (m) => {
         lastBoxDim = m.boxDim;
+        lastBoxDimStderr = m.boxDimStderr;
         lastPixelArea = m.pixelArea;
+        lastPixelAreaStderr = m.pixelAreaStderr;
         // Present keys are applied; absent ones (monic's analytic rows, or a rigorous Tier-1
         // connectivity verdict) are deliberately left untouched.
         if ("extent" in m) lastExtent = m.extent ?? null;
@@ -1606,7 +1616,9 @@ function init(): void {
     });
     lastJuliaProps = p;
     lastBoxDim = null; // stale on a c / f change — the debounced measure refills them
+    lastBoxDimStderr = null;
     lastPixelArea = null;
+    lastPixelAreaStderr = null;
     lastExtent = null;
     lastSymmetry = null;
     lastConnectivity = null;

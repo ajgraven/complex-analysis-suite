@@ -399,19 +399,17 @@ export function detectSymmetries(
 }
 
 /**
- * Box-counting (Minkowski) dimension of the interior/exterior boundary in `mask` (size×size):
- * the slope of log(occupied boxes) vs log(1/δ) over a dyadic ladder of box sizes. Returns null
- * when there is too little boundary to fit. An estimate (typically ±0.05–0.1), not exact.
+ * The boundary layer of an interior mask (size×size): interior cells that touch the exterior — or
+ * the window edge — in 4-connectivity. Shared by the box-count dimension and the pixel-area
+ * uncertainty (the boundary is exactly where a fully-in/fully-out pixel classification is ambiguous).
  */
-export function boxCountDimension(mask: Uint8Array, size: number): number | null {
-  // Boundary = an interior cell touching the exterior (or the window edge) in 4-connectivity.
+export function boundaryMask(mask: Uint8Array, size: number): Uint8Array {
   const boundary = new Uint8Array(size * size);
-  let nb = 0;
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const i = y * size + x;
       if (!mask[i]) continue;
-      const edge =
+      if (
         x === 0 ||
         x === size - 1 ||
         y === 0 ||
@@ -419,14 +417,29 @@ export function boxCountDimension(mask: Uint8Array, size: number): number | null
         !mask[i - 1] ||
         !mask[i + 1] ||
         !mask[i - size] ||
-        !mask[i + size];
-      if (edge) {
+        !mask[i + size]
+      ) {
         boundary[i] = 1;
-        nb++;
       }
     }
   }
-  if (nb < 16) return null; // too little structure for a meaningful fit
+  return boundary;
+}
+
+/**
+ * Box-counting (Minkowski) dimension of the interior/exterior boundary in `mask` (size×size): the
+ * least-squares slope of log(occupied boxes) vs log(1/δ) over a dyadic ladder of box sizes, together
+ * with the standard error of that slope — the honest uncertainty of the fit. (The SE is itself a
+ * lower bound on the true error: quantization makes the residuals correlated, violating the OLS
+ * independence assumption.) Returns null when there is too little boundary to fit. An estimate
+ * (typically ±0.05–0.1), not exact.
+ */
+export function boxCountDimension(
+  mask: Uint8Array,
+  size: number,
+): { dimension: number; stderr: number } | null {
+  const boundary = boundaryMask(mask, size);
+  if (countInterior(boundary) < 16) return null; // too little structure for a meaningful fit
 
   const logInvDelta: number[] = [];
   const logCount: number[] = [];
@@ -455,22 +468,30 @@ export function boxCountDimension(mask: Uint8Array, size: number): number | null
   const drop = logInvDelta.length >= 5 ? 2 : 0;
   const xs = logInvDelta.slice(0, logInvDelta.length - drop);
   const ys = logCount.slice(0, logCount.length - drop);
-  if (xs.length < 3) return null;
-
-  // Least-squares slope of logCount vs logInvDelta.
   const n = xs.length;
+  if (n < 3) return null;
+
+  // Least-squares slope of logCount vs logInvDelta, plus the slope's standard error.
   let sx = 0;
   let sy = 0;
   let sxx = 0;
   let sxy = 0;
+  let syy = 0;
   for (let i = 0; i < n; i++) {
     sx += xs[i];
     sy += ys[i];
     sxx += xs[i] * xs[i];
     sxy += xs[i] * ys[i];
+    syy += ys[i] * ys[i];
   }
-  const denom = n * sxx - sx * sx;
-  return denom === 0 ? null : (n * sxy - sx * sy) / denom;
+  const denom = n * sxx - sx * sx; // = n · Σ(x − x̄)²
+  if (denom === 0) return null;
+  const slope = (n * sxy - sx * sy) / denom;
+  const intercept = (sy - slope * sx) / n;
+  const sse = Math.max(0, syy - intercept * sy - slope * sxy); // residual sum of squares (≥ 0)
+  // Var(slope) = (SSE / (n − 2)) / Σ(x − x̄)² = n·SSE / ((n − 2)·denom); n ≥ 3 ⇒ n − 2 ≥ 1.
+  const stderr = Math.sqrt((n * sse) / ((n - 2) * denom));
+  return { dimension: slope, stderr };
 }
 
 // --- PR γ: image-based connectivity (connected-component labelling) ------------------------------
@@ -621,7 +642,12 @@ export function imageConnectivity(
  */
 export interface JuliaImageMetrics {
   boxDim: number | null;
+  /** Standard error of the box-count fit (the honest ± band); null when boxDim is null. */
+  boxDimStderr: number | null;
   pixelArea: number | null;
+  /** Resolution-limited area uncertainty = (boundary-layer cells)·(cell area); 0 if disconnected,
+   *  null when no interior was located. Shrinks with pixel size, so it → 0 as resolution rises. */
+  pixelAreaStderr: number | null;
   extent?: Extent | null;
   symmetry?: string | null;
   connectivity?: string | null;
@@ -673,9 +699,14 @@ export function computeJuliaImageMetrics(opts: {
     // bounding rows stay analytic (omitted here so the caller leaves them untouched).
     const mask = interiorMask(fAst, escAst, c, a, 0, 0, boundingRadius, size, 150);
     const interior = countInterior(mask);
+    const cell = (2 * boundingRadius) / size;
+    const bd = boxCountDimension(mask, size);
+    const boundaryCells = countInterior(boundaryMask(mask, size));
     return {
-      boxDim: boxCountDimension(mask, size),
-      pixelArea: escapes ? 0 : interior * ((2 * boundingRadius) / size) ** 2,
+      boxDim: bd?.dimension ?? null,
+      boxDimStderr: bd?.stderr ?? null,
+      pixelArea: escapes ? 0 : interior * cell ** 2,
+      pixelAreaStderr: escapes ? 0 : boundaryCells * cell ** 2,
     };
   }
 
@@ -692,7 +723,9 @@ export function computeJuliaImageMetrics(opts: {
     // No bounded interior located (empty / escaping).
     const out: JuliaImageMetrics = {
       boxDim: null,
+      boxDimStderr: null,
       pixelArea: escapes ? 0 : null,
+      pixelAreaStderr: escapes ? 0 : null,
       extent: null,
       symmetry: "none detected",
     };
@@ -705,9 +738,14 @@ export function computeJuliaImageMetrics(opts: {
 
   const mask = interiorMask(fAst, escAst, c, a, ext.cx, ext.cy, ext.halfWidth, size, 150);
   const interior = countInterior(mask);
+  const cell = (2 * ext.halfWidth) / size;
+  const bd = boxCountDimension(mask, size);
+  const boundaryCells = countInterior(boundaryMask(mask, size));
   const out: JuliaImageMetrics = {
-    boxDim: boxCountDimension(mask, size),
-    pixelArea: escapes ? 0 : interior * ((2 * ext.halfWidth) / size) ** 2,
+    boxDim: bd?.dimension ?? null,
+    boxDimStderr: bd?.stderr ?? null,
+    pixelArea: escapes ? 0 : interior * cell ** 2,
+    pixelAreaStderr: escapes ? 0 : boundaryCells * cell ** 2,
     extent: ext,
     symmetry: describeSymmetry(detectSymmetries(mask, size)),
   };

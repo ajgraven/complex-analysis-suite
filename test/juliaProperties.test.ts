@@ -9,6 +9,7 @@ import type { Complex } from "../src/complex";
 import { parse } from "../src/expr/parser";
 import {
   analyticAreaUpperBound,
+  boundaryMask,
   boundingRadius,
   boxCountDimension,
   computeJuliaProperties,
@@ -167,14 +168,26 @@ describe("Tier-2 image metrics (interior mask, pixel area, box-counting)", () =>
         if ((x - mid) ** 2 + (y - mid) ** 2 <= r * r) disk[y * size + x] = 1;
       }
     }
-    const dim = boxCountDimension(disk, size);
-    expect(dim).not.toBeNull();
-    expect(dim ?? 9).toBeGreaterThan(0.85);
-    expect(dim ?? 9).toBeLessThan(1.25);
+    const res = boxCountDimension(disk, size);
+    expect(res).not.toBeNull();
+    expect(res?.dimension ?? 9).toBeGreaterThan(0.85);
+    expect(res?.dimension ?? 9).toBeLessThan(1.25);
+    // The SE is reported, finite, and small (a smooth circle boundary fits the log–log line well).
+    expect(res?.stderr ?? 9).toBeGreaterThanOrEqual(0);
+    expect(res?.stderr ?? 9).toBeLessThan(0.5);
   });
 
   it("box-counting dimension is null for an empty mask", () => {
     expect(boxCountDimension(new Uint8Array(64 * 64), 64)).toBeNull();
+  });
+
+  it("boundaryMask marks interior cells touching the exterior or window edge", () => {
+    // A full 3×3 mask: every cell but the centre sits on the window edge → 8 boundary cells.
+    expect(countInterior(boundaryMask(new Uint8Array(9).fill(1), 3))).toBe(8);
+    // A lone interior cell is entirely boundary.
+    const one = new Uint8Array(9);
+    one[4] = 1;
+    expect(countInterior(boundaryMask(one, 3))).toBe(1);
   });
 });
 
