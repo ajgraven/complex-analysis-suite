@@ -62,7 +62,8 @@ import { JuliaMetricsClient } from "./render/juliaMetricsClient";
 import { polynomialCoeffs, polynomialConnectivity } from "./render/critical";
 import { drawOrbitPreview, renderJuliaPreview } from "./render/orbitPreview";
 import type { Node as ExprNode } from "./expr/ast";
-import { parseAngle } from "./render/rays";
+import { dynamicRay, parseAngle, rayDepthForZoom } from "./render/rays";
+import { yoccozPuzzle } from "./render/yoccozPuzzle";
 import { dynPresets, paramPresets, type Preset, type PresetName } from "./presets";
 import { byId } from "./ui/dom";
 import { showToast } from "./ui/toast";
@@ -1304,6 +1305,7 @@ function init(): void {
     updateExteriorMap(); // dyn coefficients depend on c (a no-op while the panel is collapsed)
     applyLaurent(); // …and so does the dynamical boundary (a no-op while the toggle is off)
     updateJuliaProperties(); // …and the Julia-set properties readout (also gated on its panel)
+    applyYoccozPuzzle(); // …and the Yoccoz puzzle graph (a no-op while its toggle is off)
   }
   // During a coupled white-point drag the c-dependent panels are debounced (the cheap caption text
   // still updates live); they recompute once on release via coupling.setDraft(false).
@@ -1320,6 +1322,45 @@ function init(): void {
     if (coupledDrafting) scheduleDynPanels();
     else refreshDynPanels();
   }
+
+  // --- Yoccoz puzzle overlay (dynamical plane) ------------------------------
+  /**
+   * Draw the depth-n Yoccoz-puzzle graph — the external rays landing at the α-preimages — on the
+   * dynamical plane, recomputed for the committed c (through refreshDynPanels, so it is debounced
+   * during a coupled drag). Gated to z²+c with a repelling α (c outside the main cardioid). Ray
+   * polylines are precomputed once here, so the overlay redraw stays cheap on pan/zoom.
+   */
+  function applyYoccozPuzzle(): void {
+    const toggle = byId<HTMLInputElement>("yoccoz-toggle");
+    const depthInput = byId<HTMLInputElement>("yoccoz-depth");
+    const note = byId("yoccoz-note");
+    byId("yoccoz-depth-value").textContent = depthInput.value; // keep the slider label in sync
+    const eligible = dynamicalView.plot.perturbationEligible; // z²+c only
+    toggle.disabled = !eligible;
+    depthInput.disabled = !eligible || !toggle.checked;
+    if (!eligible || !toggle.checked) {
+      dynamicalView.setPuzzleRays(null);
+      note.textContent = !eligible && toggle.checked ? "The Yoccoz puzzle is defined for z²+c." : "";
+      return;
+    }
+    const depth = Number(depthInput.value);
+    const c = parseComplex(dynamicalView.plot.c);
+    const puz = yoccozPuzzle(c, depth);
+    if (!puz) {
+      dynamicalView.setPuzzleRays(null);
+      note.textContent =
+        "No puzzle at this c — α is attracting (c is in the main cardioid). Pick a c outside it (e.g. −1).";
+      return;
+    }
+    const rd = rayDepthForZoom(dynamicalView.plot.zoom);
+    dynamicalView.setPuzzleRays(puz.rayAngles.map((theta) => dynamicRay(theta, c, { depth: rd })));
+    const list = puz.alphaAngles.map((a) => `${a.p}/${a.q}`).join(", ");
+    note.textContent =
+      `Depth ${depth}: ${puz.rayAngles.length} rays around α (valence ${puz.valence}; ` +
+      `α-angles {${list}}) — the pieces nest toward the Julia set.`;
+  }
+  byId("yoccoz-toggle").addEventListener("change", applyYoccozPuzzle);
+  byId("yoccoz-depth").addEventListener("input", applyYoccozPuzzle);
 
   // --- Exterior-map (uniformization) readout -------------------------------
   let lastParamCoeffs: Complex[] | null = null;

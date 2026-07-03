@@ -231,6 +231,8 @@ export interface OverlayParams {
   siegelCurves?: boolean;
   /** Herman-ring invariant-circle orbits (z-plane point sets) to draw on the dynamical plane. */
   hermanCurves?: Vec2[][] | null;
+  /** Yoccoz-puzzle ray polylines (precomputed z-plane) to draw on the dynamical plane, in violet. */
+  puzzleRays?: Vec2[][] | null;
   /** Reconstructed exterior-map boundary to draw (ψ on |w| = r); coeffs in plot space. */
   laurentBoundary?: { coeffs: Vec2[]; r: number; lead?: Vec2 };
   /**
@@ -688,6 +690,12 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
   // Detected Herman-ring invariant circles (dynamical plane).
   if (p.hermanCurves && p.hermanCurves.length > 0 && p.fractType === "dyn") {
     drawHermanCurves(ctx, p.hermanCurves, p.center, p.zoom, size);
+  }
+
+  // Yoccoz-puzzle graph: the depth-n external rays landing at the α-preimages (dynamical plane), in
+  // violet. Precomputed polylines, so they don't re-trace on pan/zoom.
+  if (p.puzzleRays && p.puzzleRays.length > 0 && p.fractType === "dyn") {
+    for (const pts of p.puzzleRays) drawRays(ctx, pts, p.center, p.zoom, size, "rgba(190, 150, 255, 0.9)");
   }
 
   // Orbit polyline, coloured by the orbit's long-run fate. A dark casing under the colour

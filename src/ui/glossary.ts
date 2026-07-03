@@ -226,6 +226,11 @@ export const GLOSSARY: GlossaryEntry[] = [
     latex: "h(\\theta) = \\log\\lambda = \\log 2 \\cdot B_{\\mathrm{top}}(\\theta)",
   },
   {
+    id: "yoccoz-puzzle",
+    term: "Yoccoz puzzle",
+    defn: "A nested sequence of partitions of the neighbourhood of the Julia set, the combinatorial tool behind Yoccoz's local-connectivity arguments. Depth 0 cuts the region between an equipotential and the set with the q external rays landing at the repelling α fixed point (its orbit portrait). Depth n is the pullback under fⁿ: the rays whose angle doubles n times onto an α-angle — Θₙ = {θ : 2ⁿθ mod 1 ∈ A} — so q·2ⁿ rays. The pieces between them nest, and the nest around the critical point controls local connectivity. Drawn in violet on the dynamical plane; z²+c, and only when α is repelling (c outside the main cardioid). Basilica α ← {1/3, 2/3}; the rabbit ← {1/7, 2/7, 4/7}.",
+  },
+  {
     id: "inverse-iteration",
     term: "Inverse-iteration Julia set",
     defn: "A way to paint the Julia set directly as the closure of backward orbits, rather than colouring by forward escape. For z²+c the preimages of a point are z ↦ ±√(z−c); iterating a random choice of branch from the repelling β fixed point converges onto the Julia set and samples it densely (the 'chaos game'). It draws the boundary crisply where forward escape-time struggles — thin dendrites and Cantor dusts. Overlay on the dynamical plane; z²+c only (a closed-form inverse). c=0 gives the unit circle, c=−1 the basilica.",

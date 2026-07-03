@@ -1372,6 +1372,29 @@ z^2+c</textarea
             </div>
           </details>
 
+          <!-- Yoccoz puzzle: the depth-n graph of rays landing at the α-preimages (dynamical plane). -->
+          <details class="control-group" id="yoccoz-group">
+            <summary>Yoccoz puzzle (z²+c)</summary>
+            <div class="controls">
+              <p class="exterior-status">
+                The
+                <button type="button" class="gloss-link" data-term="yoccoz-puzzle" aria-label="Define Yoccoz puzzle">?</button>
+                depth-n graph on the current Julia set: the external rays landing at the α fixed point,
+                pulled back n times (q·2ⁿ rays, in violet). The pieces between them nest and shrink
+                toward the Julia set. Needs a repelling α — a c outside the main cardioid (e.g. −1, or a
+                rabbit).
+              </p>
+              <label class="checkbox" for="yoccoz-toggle">
+                <input type="checkbox" id="yoccoz-toggle" /> show puzzle
+              </label>
+              <div class="field">
+                <label for="yoccoz-depth">depth = <span id="yoccoz-depth-value">2</span></label>
+                <input type="range" id="yoccoz-depth" min="0" max="6" step="1" value="2" />
+              </div>
+              <p class="exterior-status" id="yoccoz-note"></p>
+            </div>
+          </details>
+
           <!-- Symbolic console: internal address → kneading sequence → characteristic external angles. -->
           <details class="control-group" id="address-group">
             <summary>Symbolic console (z²+c)</summary>
