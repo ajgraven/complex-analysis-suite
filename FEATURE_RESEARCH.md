@@ -296,9 +296,11 @@ Holomorphic correspondences (Bullett–Penrose 𝓕_a mating z²+c with PSL(2,�
 
 ## 9. PRIORITIZED FEATURE ROADMAP
 
+> **Status (updated 2026-07-03): this roadmap is largely executed.** All of **Tier 1** and most of **Tier 2** shipped across PRs **#159–#193** (per-stage log in the `feature-research` memory). The tables below are kept for provenance, annotated **✅ shipped · ◧ partial · ◻ open/deferred**. For the *current* forward-looking roadmap (deep-zoom, rigor, new mathematics, visual/3D), see **`FRONTIER_ROADMAP.md`**.
+
 Ordered by value-weighted effort. "Reuses" notes the existing asset that makes it cheap. Build the **§1 shared infra** as you go (it's tiny and unlocks clusters).
 
-### Tier 1 — Quick wins (hours → ~1 day; high value, mostly reuse)
+### Tier 1 — Quick wins (hours → ~1 day; high value, mostly reuse) — ✅ all shipped (#159–#169)
 1. **`conj` operator → Tricorn / Mandelbar / antiholomorphic family** — one AST/GLSL/closure op; unlocks a whole family + the Schwarz-reflection/Kleinian door. *Highest leverage-per-line in the whole list.* (§1.1, §4.1)
 2. **Normal-map / directional-light coloring** (u=z/der lighting law + azimuth/height/ambient controls) — reuses the running derivative; iconic look. (§2.2)
 3. **General periodicity bailout** in the GPU escape loop — extends cardioid/bulb-2 to all components; perf + correctness; reuses the `1e-6·max(1,|z|)` tolerance. (§2.3)
@@ -311,21 +313,21 @@ Ordered by value-weighted effort. "Reuses" notes the existing asset that makes i
 10. **Housekeeping:** histogram-CDF + large-bailout verification; Sullivan-dictionary glossary entry. (§2.7, §6.5)
 
 ### Tier 2 — Moderate (a few days each; strong differentiation)
-11. **Interior distance estimation** coloring — the marquee new coloring; reuses inspector period+Newton; pairs with #2 for a fully-lit interior+exterior. (§2.1)
-12. **Spider algorithm: angle/kneading → c** (spider-lite first, then full + Misiurewicz finder + obstruction detection) — the inverse of our ray drawing; `spider.ts`. (§3.1)
-13. **Orbit-portrait overlay** (valence, rotation number, characteristic arc) — reuses ray renderer + inspector cycle. (§3.4)
-14. **Combinatorics console** (kneading ↔ internal address ↔ external angle, stripping algorithm) — the symbolic layer; draws the resulting component/rays. (§3.2)
-15. **Core entropy & biaccessibility readout** (angle-pair matrix + power iteration) + optional **Thurston entropy graph**. (§3.3)
-16. **Inverse-iteration (IIM/MIIM) Julia** renderer (scope z^d+c) — crisp boundary/dust; could power the hover inset. (§2.4)
-17. **Rational-map family presets** (symmetric/V2/V3) + critical-orbit-driven parameter plane + **Riemann-sphere view**. (§4.2, §4.6)
-18. **Siegel invariant-curve + critical-orbit boundary overlays**; **Herman-ring presets + detection + modulus**. (§5.1, §5.2)
-19. **Exponential-map projection** (still = quick) + **log-polar zoom-video export** (aligns with perturbation). (§2.6)
-20. **Parametric-curve (Bézier) parameter-animation studio**. (§8)
-21. **Schwarz-reflection / deltoid explorer** (needs #1; renders via escape-time) + **Apollonian gasket** limit set (CPU IFS). (§6.5)
-22. **Misiurewicz self-similar ρ-snap zoom** + Tan Lei two-pane local similarity. (§7)
-23. **Newton-on-parameter-space basins** (period-k nucleus basins as a picture); **tuning/cascade navigator**. (§8, §3.5)
+11. ✅ **Interior distance estimation** coloring — the marquee new coloring; reuses inspector period+Newton; pairs with #2 for a fully-lit interior+exterior. (§2.1) — shipped #170–171. *Julia-plane interior DE still open (`interiorDE.ts:21`).*
+12. ◧ **Spider algorithm: angle/kneading → c** (spider-lite first, then full + Misiurewicz finder + obstruction detection) — the inverse of our ray drawing; `spider.ts`. (§3.1) — *"go-to-angle" navigation shipped (#175); the full spider realization + external-ray landing are open (`FRONTIER_ROADMAP.md` B1, B4).*
+13. ✅ **Orbit-portrait overlay** (valence, rotation number, characteristic arc) — reuses ray renderer + inspector cycle. (§3.4) — shipped #172–174.
+14. ✅ **Combinatorics console** (kneading ↔ internal address ↔ external angle, stripping algorithm) — the symbolic layer; draws the resulting component/rays. (§3.2) — shipped #67, #181.
+15. ✅ **Core entropy & biaccessibility readout** (angle-pair matrix + power iteration) + optional **Thurston entropy graph**. (§3.3) — shipped #176.
+16. ✅ **Inverse-iteration (IIM/MIIM) Julia** renderer (scope z^d+c) — crisp boundary/dust; could power the hover inset. (§2.4) — shipped #177.
+17. ✅ **Rational-map family presets** (symmetric/V2/V3) + critical-orbit-driven parameter plane + **Riemann-sphere view**. (§4.2, §4.6) — shipped #182 (+ live sphere #192–193). *V3 window + multi-basin Fatou coloring open (task #71).*
+18. ✅ **Siegel invariant-curve + critical-orbit boundary overlays**; **Herman-ring presets + detection + modulus**. (§5.1, §5.2) — shipped #178, #183.
+19. ◧ **Exponential-map projection** (still = quick) + **log-polar zoom-video export** (aligns with perturbation). (§2.6) — projections shipped #184; *log-polar zoom-video export open (task #75).*
+20. ◻ **Parametric-curve (Bézier) parameter-animation studio**. (§8) — open.
+21. ◻ **Schwarz-reflection / deltoid explorer** (needs #1; renders via escape-time) + **Apollonian gasket** limit set (CPU IFS). (§6.5) — *research showed the deltoid/cardioid Schwarz map is a degree-2 antiholomorphic mating, not a `conj` preset (renders flat as escape-time); folded into the mating track (`FRONTIER_ROADMAP.md` B9). Apollonian still open.*
+22. ✅ **Misiurewicz self-similar ρ-snap zoom** + Tan Lei two-pane local similarity. (§7) — shipped #180.
+23. ◻ **Newton-on-parameter-space basins** (period-k nucleus basins as a picture); **tuning/cascade navigator**. (§8, §3.5) — open.
 
-### Tier 3 — Hard / research-grade (flagship or later)
+### Tier 3 — Hard / research-grade (flagship or later) — ◻ all open/deferred (updated scoping in `FRONTIER_ROADMAP.md` §4)
 24. **Mating mode** — curated (a,b) table MVP rendering classic matings' Julia sets on the sphere (Moderate-ish), then the **Thurston marked-point pullback** engine for arbitrary θ₁,θ₂ (Hard). (§6.2–§6.4)
 25. **Rotation-domain pixel layer** (per-pixel quasiperiodicity classification, Siegel/Herman vs basin). (§5.1)
 26. **Mariani–Silver tile-skip** render acceleration (DE-guarded), payoff at deep/high-iter scenes. (§2.5)
@@ -333,6 +335,8 @@ Ordered by value-weighted effort. "Reuses" notes the existing asset that makes i
 28. **Transcendental families** (λe^z, λsin z) with hairs; **Hénon real-2D slice** mode. (§4.4, §4.5)
 29. **Kleinian correspondence limit sets** (Bullett–Penrose backward-iteration IFS); **full Medusa** rectify/prune. (§6.5, §6.2)
 30. **Leau–Fatou petals**, **linearizing-coordinate grids**, non-locally-connected boundary handling. (§5.3, §3)
+
+*Shipped since this table was written:* the **live Riemann-sphere render mode** (#192–193, superseding the §6a snapshot). The mating (24), Yoccoz-puzzle / renormalization (27), and transcendental / Hénon (28) items are re-scoped with concrete algorithms + oracles in `FRONTIER_ROADMAP.md` §4 (B5–B12).
 
 ### Already have / deliberately deferred (no action)
 Smooth/histogram/exterior-DE/orbit-trap/domain/stripe/TIA/binary/period/multiplier coloring; relief + post-FX + equipotentials + boundary outline; external rays + Farey labels + bulb ray pairs (z²+c); Böttcher/exterior coefficients + boundary reconstruction; inspector (period/λ/rotation/exterior-DE); critical-orbit overlay; nucleus/center finder; rigorous all-critical connectivity; Julia-properties panel; Newton basins; perturbation + rebasing + glitch-free deep zoom; cardioid/bulb-2 bailout; auto-iterations; export studio; permalinks/saved-views/undo-redo; KaTeX/tour/glossary/mobile. **Perturbation series-approximation iteration-skipping** is the one classical sub-item not done — and it's the already-deferred **D2b** (GPU BLA traversal) in `performance-review` memory (narrow ≳1e25 payoff).
