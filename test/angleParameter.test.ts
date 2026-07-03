@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Complex } from "../src/complex";
 import { parse } from "../src/expr/parser";
-import { landingForAngle, parameterLanding } from "../src/render/angleParameter";
+import {
+  dynamicalLanding,
+  landingForAngle,
+  parameterLanding,
+} from "../src/render/angleParameter";
 import { findNucleus } from "../src/render/inspect";
 
 const Z2C = parse("z^2+c");
@@ -85,5 +89,28 @@ describe("parameterLanding (external angle → the ray's true landing on ∂M)",
     expect(l).toMatchObject({ kind: "misiurewicz", refined: true });
     expect(l?.point[0]).toBeCloseTo(0, 4);
     expect(l?.point[1]).toBeCloseTo(1, 4);
+  });
+});
+
+describe("dynamicalLanding (external angle → landing on the Julia set K_c)", () => {
+  it("ray 0 lands at the β fixed point (1 + √(1−4c))/2", () => {
+    const b0 = dynamicalLanding(0, 1, [0, 0]);
+    expect(b0).toMatchObject({ kind: "periodic", refined: true });
+    expect(b0?.point[0]).toBeCloseTo(1, 5); // c = 0 → β = 1
+    expect(b0?.point[1]).toBeCloseTo(0, 5);
+
+    const bm1 = dynamicalLanding(0, 1, [-1, 0]);
+    expect(bm1?.point[0]).toBeCloseTo((1 + Math.sqrt(5)) / 2, 5); // c = −1 → golden ratio ≈ 1.618
+    expect(bm1?.point[1]).toBeCloseTo(0, 5);
+  });
+
+  it("rays 1/3, 2/3 land at the α fixed point of the basilica (c = −1)", () => {
+    const alpha = (1 - Math.sqrt(5)) / 2; // ≈ −0.618
+    for (const p of [1, 2]) {
+      const l = dynamicalLanding(p, 3, [-1, 0]);
+      expect(l).toMatchObject({ kind: "periodic", period: 2 });
+      expect(l?.point[0]).toBeCloseTo(alpha, 4);
+      expect(l?.point[1]).toBeCloseTo(0, 4);
+    }
   });
 });

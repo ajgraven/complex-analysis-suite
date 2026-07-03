@@ -33,7 +33,7 @@ import {
   parseInternalAddress,
   stripExternalAngles,
 } from "./combinatorics/stripping";
-import { landingForAngle } from "./render/angleParameter";
+import { dynamicalLanding, landingForAngle, parameterLanding } from "./render/angleParameter";
 import { detectHermanRing } from "./render/hermanRing";
 import { detectUnderIteration } from "./render/underIteration";
 import { escapeIsMeaningless, precisionExhausted, precisionMetric } from "./render/viewAdvisories";
@@ -2850,8 +2850,10 @@ function init(): void {
       showToast("Enter an external angle as a fraction p/q (e.g. 1/7).", "warn");
       return;
     }
+    const pn = Number(m[1]);
+    const qn = Number(m[2]);
     // Core entropy of θ (a combinatorial invariant of the angle, independent of the current map).
-    const ce = coreEntropy(Number(m[1]), Number(m[2]));
+    const ce = coreEntropy(pn, qn);
     byId("angle-entropy").textContent = ce
       ? `Core entropy h = ${ce.entropy.toFixed(4)} (λ = ${ce.lambda.toFixed(4)}); biaccessibility B = ${ce.biaccessibility.toFixed(4)}.`
       : "Core entropy: not computed for this angle (its orbit reaches the β-fixed angle).";
@@ -2862,35 +2864,57 @@ function init(): void {
       );
       return;
     }
-    const land = landingForAngle(Number(m[1]), Number(m[2]));
-    if (!land) {
+    const landing = parameterLanding(pn, qn);
+    if (!landing) {
       showToast("That angle has no usable landing.", "warn");
       return;
     }
     const fAst = parameterView.plot.fAst;
     const crit = parameterView.plot.criticalPoint;
     const pa = parameterView.plot.paramA;
-    let c: [number, number] = [land.seed[0], land.seed[1]];
-    let label: string;
-    if (land.kind === "center") {
-      // The periodic angle's doubling period IS the component period — Newton-snap to the centre.
-      const nuc = findNucleus(fAst, crit, land.period, land.seed, pa);
-      if (nuc) c = [nuc[0], nuc[1]];
-      label = `period-${land.period} centre`;
+    const clean = (x: number): number => (Math.abs(x) < 1e-10 ? 0 : +x.toPrecision(5));
+    const fmtPt = (z: [number, number]): string => {
+      const re = clean(z[0]);
+      const im = clean(z[1]);
+      return `${re} ${im >= 0 ? "+" : "−"} ${Math.abs(im)}i`;
+    };
+
+    // The ray's true landing is the component root (periodic) / Misiurewicz point / cusp. Navigation
+    // snaps a periodic angle to the component *centre* (a nicer target than a boundary parabolic
+    // point); the cusp / a Misiurewicz point is its own target.
+    let target: [number, number] = [landing.point[0], landing.point[1]];
+    let landDesc: string;
+    if (landing.kind === "root") {
+      const nuc = findNucleus(fAst, crit, landing.period, landing.point, pa);
+      if (nuc) target = [nuc[0], nuc[1]];
+      landDesc = `the period-${landing.period} root c = ${fmtPt(landing.point)} (→ its centre)`;
+    } else if (landing.kind === "cusp") {
+      landDesc = "the cardioid cusp c = 1/4";
     } else {
-      // Preperiodic: the ray lands at the Misiurewicz point. (The angle's doubling preperiod isn't
-      // the critical-orbit preperiod, so we land at the ray seed rather than Newton-polish here.)
-      label = "Misiurewicz point (≈ ray landing)";
+      landDesc = `the Misiurewicz point c = ${fmtPt(landing.point)}`;
     }
-    parameterView.plot.moveZ0(c);
+
+    parameterView.plot.moveZ0(target);
     parameterView.refreshOverlay();
-    dynamicalView.plot.c = formatComplex(c);
-    setCInput(c);
+    dynamicalView.plot.c = formatComplex(target);
+    setCInput(target);
     updateDynCaption();
+
+    // Where does the same angle's ray land on the Julia set we've navigated to?
+    const dynLand = dynamicalLanding(pn, qn, target);
+    const dynText = dynLand
+      ? ` On this Julia set, the dynamical ray θ lands at ζ = ${fmtPt(dynLand.point)}${dynLand.refined ? "" : " (approx)"}.`
+      : "";
+    byId("angle-landing").textContent =
+      `Parameter ray θ = ${pn}/${qn} lands at ${landDesc}.${dynText}`;
+
     announce(`Parameter c = ${dynCValue.textContent}`);
-    showToast(`External angle ${m[1]}/${m[2]} → ${label}.`, "info");
-    const info = inspect(fAst, parameterView.plot.escAst, "param", crit, c, pa);
-    handleInspect(info, c, "param");
+    showToast(
+      `External angle ${pn}/${qn} → ${landing.kind === "root" ? "component root" : landDesc}.`,
+      "info",
+    );
+    const info = inspect(fAst, parameterView.plot.escAst, "param", crit, target, pa);
+    handleInspect(info, target, "param");
     scheduleRecord();
   });
   // Symbolic console: strip an internal address to its kneading sequence + characteristic angles.
