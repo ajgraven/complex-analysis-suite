@@ -57,7 +57,9 @@ function emit(node: Node): Tex {
     case "bool":
       return { tex: node.value ? "\\text{true}" : "\\text{false}", prec: P_ATOM };
     case "neg":
-      return { tex: `-${wrap(node.operand, P_ADD)}`, prec: P_ADD };
+      // Wrap the operand tighter than a sum so `-(a+b)` keeps its parens (renders `-(a+b)`, not the
+      // wrong `-a + b`); an atom / power / product / quotient still needs none (`-z`, `-z^2`, `-a·b`).
+      return { tex: `-${wrap(node.operand, P_MUL)}`, prec: P_ADD };
     case "not":
       return { tex: `\\neg\\left(${emit(node.operand).tex}\\right)`, prec: P_ATOM };
     case "arith":

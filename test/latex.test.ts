@@ -21,4 +21,8 @@ describe("toLatex", () => {
   it("renders constants and multiplication", () => {
     expect(tex("pi*i")).toBe("\\pi \\cdot i");
   });
+  it("parenthesises a negated sum but not a negated atom or power", () => {
+    expect(tex("-(z+c)")).toBe("-\\left(z + c\\right)"); // regression: was the wrong "-z + c"
+    expect(tex("-z^2")).toBe("-z^{2}");
+  });
 });

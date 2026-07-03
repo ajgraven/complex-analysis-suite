@@ -1826,11 +1826,10 @@ function init(): void {
     updateDerivativeGating();
     // Rational families (∞ not superattracting) carry a default colouring mode — escape-time is
     // meaningless there (orbits converge to finite cycles), so honour it instead of opening flat black.
-    const presetMode = paramPresets[name].mode;
-    if (presetMode) {
-      byId<HTMLSelectElement>("mode").value = presetMode;
-      applyColoring();
-    }
+    // A normal escape-time preset (no mode field) resets to "smooth", so a special mode a previous
+    // preset forced (e.g. "period" from a Herman / rational family) doesn't linger onto it.
+    byId<HTMLSelectElement>("mode").value = paramPresets[name].mode ?? "smooth";
+    applyColoring();
     applyFarey();
     applyRays();
     applyRayPairs();

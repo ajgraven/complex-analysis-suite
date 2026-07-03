@@ -392,15 +392,17 @@ export class PlotView {
     return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
   }
 
-  private uvToPlot([ux, uy]: Vec2): Vec2 {
+  private uvToPlot([ux, uy]: Vec2): Vec2 | null {
     const c = this.plot.center;
     const z = this.plot.zoom;
     const view: Vec2 = [c[0] + (ux * 2 - 1) / z, c[1] + ((1 - uy) * 2 - 1) / z];
     // Under a projection the view coordinate is in projected space; invert it to the plot point so
     // hover / click-to-inspect land where the shader actually drew (mirrors the GLSL coordinate map).
+    // Returns null off the projected domain (e.g. outside the Poincaré disk = background), so callers
+    // report/inspect nothing there rather than the meaningless raw view coordinate.
     const proj = this.plot.projection;
     if (proj === 0) return view;
-    return inverseProject(view, this.plot.projCentre, proj === 2 ? "poincare" : "logpolar") ?? view;
+    return inverseProject(view, this.plot.projCentre, proj === 2 ? "poincare" : "logpolar");
   }
 
   /** Orbit start + parameter c to inspect: the critical orbit on the parameter plane, the
@@ -544,9 +546,11 @@ export class PlotView {
       }
       if (this.dragMode === "point") {
         const plot = this.uvToPlot(uv);
-        this.plot.moveZ0(plot);
-        this.requestOverlay();
-        this.hooks.coupling?.setC(plot);
+        if (plot) {
+          this.plot.moveZ0(plot);
+          this.requestOverlay();
+          this.hooks.coupling?.setC(plot);
+        }
       } else {
         // Centre-free pan delta so the drag stays exact at deep zoom — uvToPlot(last) −
         // uvToPlot(uv) is (centre+Δ) − (centre+Δ′), whose Δ rounds away once zoom·|centre| ≳
@@ -590,11 +594,14 @@ export class PlotView {
           return;
         }
         this.pinchPrev = null;
-        // One finger remains → continue as a single-finger pan without a jump.
+        // One finger remains → continue as a single-finger pan without a jump. Re-anchor BOTH the
+        // pan baseline and the click-vs-drag origin (downUv) to the remaining finger, so lifting it
+        // without moving reads as a tap, not a drag inherited from the pinch's start position.
         const remaining = this.pointers.size === 1 ? [...this.pointers.values()][0] : undefined;
         if (remaining) {
           this.dragMode = "pan";
           this.lastUv = remaining;
+          this.downUv = remaining;
           return;
         }
         this.plot.setDraft(false);
@@ -635,12 +642,15 @@ export class PlotView {
       if (this.dragMode === "pan") {
         this.plot.setDraft(false);
         if (isClick) {
-          // A click in empty space moves the white point here, then inspects it.
+          // A click in empty space moves the white point here, then inspects it. Off a projected
+          // domain (null) there is no plot point, so do nothing rather than jump to a stray coordinate.
           const plot = this.uvToPlot(upUv);
-          this.plot.moveZ0(plot);
-          this.requestOverlay();
-          this.hooks.coupling?.setC(plot);
-          this.fireInspect();
+          if (plot) {
+            this.plot.moveZ0(plot);
+            this.requestOverlay();
+            this.hooks.coupling?.setC(plot);
+            this.fireInspect();
+          }
         } else {
           this.hooks.onViewChanged?.(this.plot.center, this.plot.zoom);
         }
