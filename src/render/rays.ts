@@ -16,6 +16,7 @@
  */
 
 import type { Vec2 } from "../arrays";
+import { MAX_DOUBLING_Q } from "../combinatorics/orbitPortrait";
 
 export interface RayOptions {
   /** Iteration depth = number of ray points toward the landing (capped for f64). */
@@ -138,7 +139,7 @@ function gcdInt(a: number, b: number): number {
  * non-reduced p/q.
  */
 export function bulbRayAngles(p: number, q: number): [number, number] | null {
-  if (q < 2 || p < 1 || p >= q || gcdInt(p, q) !== 1) return null;
+  if (q < 2 || q > MAX_DOUBLING_Q || p < 1 || p >= q || gcdInt(p, q) !== 1) return null;
   const denom = 2 ** q - 1;
   const seen = new Set<number>();
   for (let start = 1; start < denom; start++) {

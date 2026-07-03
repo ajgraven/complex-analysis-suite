@@ -48,6 +48,21 @@ describe("lexer", () => {
     const sci = tokenize("1e-3");
     expect(sci[0]).toMatchObject({ type: "number", value: "1e-3" });
   });
+  it("lexes an unsigned scientific literal followed by an operator (regression)", () => {
+    // The exponent guard used to check the wrong offset, splitting `1e5+2` into `1`,`e5`,`+`,`2`.
+    const toks = tokenize("1e5+2");
+    expect(toks.map((t) => t.type)).toEqual(["number", "op", "number", "eof"]);
+    expect(toks[0]).toMatchObject({ type: "number", value: "1e5" });
+    expect(tokenize("1e5*z")[0]).toMatchObject({ type: "number", value: "1e5" });
+    expect(tokenize("2e3)")[0]).toMatchObject({ type: "number", value: "2e3" });
+    expect(tokenize("1e-3")[0]).toMatchObject({ type: "number", value: "1e-3" }); // signed still ok
+    expect(tokenize("1e6")[0]).toMatchObject({ type: "number", value: "1e6" }); // end-of-input ok
+    expect(tokenize("1e").map((t) => t.type)).toEqual(["number", "ident", "eof"]); // bare e = const
+  });
+  it("evaluates a formula with an unsigned scientific literal end-to-end", () => {
+    close(evaluate(parse("z + 1e3"), [2, 0], [0, 0]) as Complex, [1002, 0]);
+    close(evaluate(parse("z*1e5 + c"), [2, 0], [7, 0]) as Complex, [200007, 0]);
+  });
   it("distinguishes == from =", () => {
     expect(tokenize("a==b").map((t) => t.type)).toEqual(["ident", "cmp", "ident", "eof"]);
     expect(tokenize("a=b").map((t) => t.type)).toEqual(["ident", "assign", "ident", "eof"]);

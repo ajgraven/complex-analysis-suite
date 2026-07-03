@@ -7,6 +7,7 @@ import {
   bulbRayAngles,
 } from "../src/render/rays";
 import { bulbRoot } from "../src/render/farey";
+import { MAX_DOUBLING_Q } from "../src/combinatorics/orbitPortrait";
 import type { Vec2 } from "../src/arrays";
 
 const last = (pts: Vec2[]): Vec2 => pts[pts.length - 1];
@@ -94,6 +95,12 @@ describe("bulbRayAngles", () => {
     expect(bulbRayAngles(0, 3)).toBeNull();
     expect(bulbRayAngles(3, 3)).toBeNull();
     expect(bulbRayAngles(1, 1)).toBeNull();
+  });
+
+  it("refuses denominators above MAX_DOUBLING_Q (the O(2^q) safety cap)", () => {
+    // Without the guard, q = 30 would iterate 2^30 ≈ 1e9 doubling residues and freeze the tab.
+    expect(bulbRayAngles(1, MAX_DOUBLING_Q + 1)).toBeNull();
+    expect(bulbRayAngles(1, 30)).toBeNull();
   });
 
   it("both rays land at the bulb root (cross-checked against bulbRoot)", () => {

@@ -53,8 +53,10 @@ export function tokenize(src: string): Token[] {
         i++;
         while (i < src.length && isDigit(src[i])) i++;
       }
-      // Scientific exponent: e/E followed by optional sign and at least one digit.
-      if ((src[i] === "e" || src[i] === "E") && /[0-9]/.test(src[i + 2] ?? src[i + 1] ?? "")) {
+      // Scientific exponent: e/E, an optional sign, then at least one digit. The digit that
+      // validates the exponent is at i+1 (unsigned) or i+2 (signed) — checking a fixed offset
+      // first would reject unsigned literals like `1e5+2` (the char after the digit is `+`).
+      if (src[i] === "e" || src[i] === "E") {
         const signed = src[i + 1] === "+" || src[i + 1] === "-";
         if (isDigit(src[i + 1] ?? "") || (signed && isDigit(src[i + 2] ?? ""))) {
           i += signed ? 2 : 1;

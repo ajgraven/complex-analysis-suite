@@ -25,7 +25,7 @@ import { matingVerdict } from "./render/mating";
 import { computeOrbit, orbitAndClassify, type Annotation, type OrbitFate } from "./render/overlay";
 import { toNumber as angleToNumber, binaryItinerary } from "./combinatorics/angles";
 import { coreEntropy } from "./combinatorics/coreEntropy";
-import { portraitSummary, rotationCycleAngles } from "./combinatorics/orbitPortrait";
+import { MAX_DOUBLING_Q, portraitSummary, rotationCycleAngles } from "./combinatorics/orbitPortrait";
 import {
   AddressError,
   formatKneading,
@@ -1146,11 +1146,17 @@ function init(): void {
   let portraitShown = false;
 
   /** Show "Show orbit portrait" on the dynamical plane when the inspected cycle has a rotation
-   *  p/q with q ≥ 2 — the α fixed point then has q external rays landing (z²+c only). */
+   *  p/q with 2 ≤ q ≤ MAX_DOUBLING_Q — the α fixed point then has q external rays landing (z²+c
+   *  only). The upper bound keeps the O(2^q) ray-angle search from freezing the tab on a very
+   *  high-period bulb. */
   function updateOrbitPortraitButton(info: InspectResult, plane: FractType): void {
     const rot = info.rotation;
     const eligible =
-      plane === "dyn" && rot !== null && rot.q >= 2 && dynamicalView.plot.perturbationEligible;
+      plane === "dyn" &&
+      rot !== null &&
+      rot.q >= 2 &&
+      rot.q <= MAX_DOUBLING_Q &&
+      dynamicalView.plot.perturbationEligible;
     byId("inspector-portrait").hidden = !eligible;
     lastPortraitRotation = eligible && rot ? { p: rot.p, q: rot.q } : null;
   }

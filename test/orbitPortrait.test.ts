@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { angle } from "../src/combinatorics/angles";
 import {
   characteristicArc,
+  MAX_DOUBLING_Q,
   portraitSummary,
   rayRotationNumber,
   rotationCycleAngles,
@@ -58,5 +59,12 @@ describe("rotation-cycle angles (rays at the α fixed point of a p/q bulb)", () 
   it("rejects a non-reduced or trivial p/q", () => {
     expect(rotationCycleAngles(2, 4)).toBeNull();
     expect(rotationCycleAngles(0, 1)).toBeNull();
+  });
+
+  it("refuses denominators above MAX_DOUBLING_Q so the O(2^q) search can't hang", () => {
+    // Without the guard, q = 25/30 would iterate 2^q ≈ 3e7 / 1e9 doubling residues.
+    expect(rotationCycleAngles(1, MAX_DOUBLING_Q + 1)).toBeNull();
+    expect(rotationCycleAngles(7, 25)).toBeNull();
+    expect(rotationCycleAngles(1, 30)).toBeNull();
   });
 });

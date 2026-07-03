@@ -26,6 +26,7 @@ import { buildGradient, DEFAULT_GRADIENT, type GradientStop } from "../palettes"
 import { differentiate, newtonIteration } from "../expr/derivative";
 import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
 import { computeReferenceOrbitDD, computeReferenceOrbitDDFrom } from "./perturbation";
+import { buildEqualizedCdf } from "./histogram";
 import { type DD, dd, ddAddNumber, ddToNumber } from "./dd";
 import {
   DEFAULT_DISTANCE,
@@ -1249,7 +1250,10 @@ export class GLPlot {
    */
   private updateCdf(w: number, h: number): void {
     const gl = this.gl;
-    const n = Math.max(1, Math.round(Number(this._n)));
+    // Build the CDF over the SAME iteration cap the pre-pass/main shader use (targetIterations(),
+    // i.e. uN) — not the raw base `_n` — so the histogram range and the shader's (kmax+0.5)/(uN+1)
+    // lookup coordinate line up even when auto-iterations scales the cap up.
+    const n = this.targetIterations();
 
     // (a) render the raw escape count (encoded in R,G) into an internal target.
     if (!this.histoTex) this.histoTex = gl.createTexture();
@@ -1268,32 +1272,19 @@ export class GLPlot {
     }
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-    // (b) read back and accumulate the distribution over escaped pixels (k < n).
+    // (b) read back and build the equalisation CDF over escaped pixels. Resampled to fit the GPU
+    // texture-size limit (n+1 can reach the auto-iter ceiling of 20000 > MAX_TEXTURE_SIZE).
     const px = new Uint8Array(w * h * 4);
     gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, w, h);
 
-    const hist = new Float64Array(n + 1);
-    let escaped = 0;
-    for (let i = 0; i < px.length; i += 4) {
-      const k = px[i] + px[i + 1] * 256;
-      if (k < n) {
-        hist[k]++;
-        escaped++;
-      }
-    }
-    const cdf = new Uint8Array((n + 1) * 4);
-    let cum = 0;
-    for (let k = 0; k <= n; k++) {
-      if (k < n) cum += hist[k];
-      cdf[k * 4] = Math.round((escaped > 0 ? cum / escaped : 0) * 255);
-    }
+    const { data: cdf, width: cdfWidth } = buildEqualizedCdf(px, n, this.maxTextureSize);
 
     // (c) upload the CDF as a 1-D lookup texture (escape time → equalised t in R).
     if (!this.cdfTex) this.cdfTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.cdfTex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, n + 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, cdf);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, cdfWidth, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, cdf);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);

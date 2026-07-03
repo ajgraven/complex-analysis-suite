@@ -14,6 +14,15 @@
  */
 import { type Angle, angle, compare, double } from "./angles";
 
+/**
+ * Largest internal-angle denominator q for which the doubling-orbit search (mod 2^q−1) is run.
+ * `rotationCycleAngles` / `bulbRayAngles` are O(2^q), so this caps a one-time call at ~2^20 ≈ 1M
+ * steps (tens of ms) and prevents a tab-freezing hang when a high-period bulb is inspected. Callers
+ * (the orbit-portrait button, the bulb-ray overlay) also gate on it so they don't offer a portrait
+ * that can't be computed. Period-≤20 covers every realistically inspectable cardioid bulb.
+ */
+export const MAX_DOUBLING_Q = 20;
+
 function gcdInt(a: number, b: number): number {
   while (b) [a, b] = [b, a % b];
   return a;
@@ -35,7 +44,7 @@ function doubleN(a: Angle, n: number): Angle {
  * p/q. (Generalises rays.ts `bulbRayAngles`, which returns only the bounding pair.)
  */
 export function rotationCycleAngles(p: number, q: number): Angle[] | null {
-  if (q < 2 || p < 1 || p >= q || gcdInt(p, q) !== 1) return null;
+  if (q < 2 || q > MAX_DOUBLING_Q || p < 1 || p >= q || gcdInt(p, q) !== 1) return null;
   const denom = 2 ** q - 1;
   const seen = new Set<number>();
   for (let start = 1; start < denom; start++) {
