@@ -4,13 +4,10 @@ import {
   DEFAULT_DISTANCE,
   DEFAULT_FOV,
   DEFAULT_ROTATION,
-  DOLLY_MAX,
-  DOLLY_MIN,
   QUAT_IDENTITY,
   type Quat,
   type Vec3,
   arcballDelta,
-  clampDistance,
   makeSphereCamera,
   quatConjugate,
   quatFromAxisAngle,
@@ -154,12 +151,6 @@ describe("orbit camera + ray-cast", () => {
     const z = screenToPlane([0.5, 0.5], rolled) as Complex;
     expect(z).not.toBeNull();
     expect(Math.hypot(z[0], z[1])).toBeGreaterThan(1e-3); // no longer the south pole
-  });
-
-  it("clampDistance keeps the camera outside the sphere and bounded", () => {
-    expect(clampDistance(0.2)).toBe(DOLLY_MIN);
-    expect(clampDistance(100)).toBe(DOLLY_MAX);
-    expect(clampDistance(3)).toBe(3);
   });
 });
 

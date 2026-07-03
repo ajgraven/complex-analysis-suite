@@ -172,15 +172,8 @@ export interface SphereCamera {
 
 export const DEFAULT_DISTANCE = 3;
 export const DEFAULT_FOV = (50 * Math.PI) / 180;
-export const DOLLY_MIN = 1.05; // stay outside the unit sphere
-export const DOLLY_MAX = 8;
 /** Default orientation: 180° about X so the south pole (z = 0, the filled set) faces the viewer. */
 export const DEFAULT_ROTATION: Quat = quatFromAxisAngle([1, 0, 0], Math.PI);
-
-/** Clamp a dolly distance to keep the camera outside the sphere and within a sensible range. */
-export function clampDistance(d: number): number {
-  return Math.min(DOLLY_MAX, Math.max(DOLLY_MIN, d));
-}
 
 /**
  * Build the ray-cast camera for a given orientation `rot`, dolly `distance`, vertical `fov` (radians)

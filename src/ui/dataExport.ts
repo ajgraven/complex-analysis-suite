@@ -6,7 +6,7 @@
  */
 
 import type { Complex } from "../complex";
-import { formatComplex } from "../complex";
+import { argDegrees, formatComplex } from "../complex";
 import type { InspectResult } from "../render/inspect";
 import type { OrbitFate } from "../render/overlay";
 
@@ -28,7 +28,7 @@ export function inspectToText(info: InspectResult, point: Complex, plane: "param
   if (info.fate === "escaped") lines.push(`Escape time: ${info.escapeIter} iterations`);
   if (info.period > 0) lines.push(`Period: ${info.period}`);
   if (info.multiplier && info.multiplierMag !== null) {
-    const deg = ((Math.atan2(info.multiplier[1], info.multiplier[0]) * 180) / Math.PI + 360) % 360;
+    const deg = argDegrees(info.multiplier);
     lines.push(`Multiplier: |lambda| = ${info.multiplierMag}, arg = ${deg.toFixed(2)} deg`);
   }
   if (info.rotation) lines.push(`Internal angle: ${info.rotation.p}/${info.rotation.q}`);

@@ -8,7 +8,8 @@
 
 import "./styles/main.css";
 import type { Vec2 } from "./arrays";
-import { formatComplex, parseComplex, truncateComplex, type Complex } from "./complex";
+import { argDegrees, formatComplex, parseComplex, truncateComplex, type Complex } from "./complex";
+import { PROJECTIONS, type ProjectionMode } from "./render/projection";
 import { getMaxTextureSize } from "./hiResExport";
 import { PlotView } from "./render/plotView";
 import type { GLPlot, FractType } from "./render/glPlot";
@@ -243,7 +244,7 @@ function showInspect(info: InspectResult, point: Vec2, plane: FractType): void {
   if (info.fate === "escaped") rows.push(["Escape time", `${info.escapeIter} iterations`]);
   if (info.period > 0) rows.push(["Period", String(info.period)]);
   if (info.multiplier && info.multiplierMag !== null) {
-    const deg = ((Math.atan2(info.multiplier[1], info.multiplier[0]) * 180) / Math.PI + 360) % 360;
+    const deg = argDegrees(info.multiplier);
     // Classify with a tolerance so neutral / parabolic cycles (|λ| = 1) are not rounded into
     // "attracting"/"repelling" — matches the Julia panel's neutral band (juliaProperties.ts).
     const kind =
@@ -2916,7 +2917,7 @@ function init(): void {
   const savedProjViews = new Map<PlotView, { center: Vec2; zoom: number }>();
   byId("projection-mode").addEventListener("change", () => {
     const val = byId<HTMLSelectElement>("projection-mode").value;
-    const mode = val === "logpolar" ? 1 : val === "poincare" ? 2 : 0;
+    const mode = PROJECTIONS[val as ProjectionMode] ?? 0; // string→uProjection int (shared with GLSL)
     for (const view of [parameterView, dynamicalView]) {
       const plot = view.plot;
       if (mode !== 0) {

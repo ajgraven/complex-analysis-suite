@@ -72,16 +72,6 @@ export const PROFILE_LABELS: Record<ProfileName, string> = {
   deepzoom: "Deep zoom",
 };
 
-/** One-line description for the picker tooltip / docs. */
-export const PROFILE_BLURBS: Record<ProfileName, string> = {
-  explore: "Balanced everyday browsing — good-looking and responsive.",
-  artist: "Maximum visual quality for stills: lighting, post-processing, high anti-aliasing.",
-  researcher: "Accuracy & figures: high iterations, a perceptual palette, and the metrics panel open.",
-  educator: "Reveals the structure that teaches the maths: critical orbit, Farey labels, an external ray.",
-  performance: "Minimal cost for slow devices or fast panning: low resolution, low cap, no extras.",
-  deepzoom: "Dives into z²+c: perturbation and auto-iterations on, tuned for depth.",
-};
-
 export const PROFILES: Record<ProfileName, ProfileSettings> = {
   // Balanced default — anti-aliased by idle refine (temporal AA), so it stays responsive.
   explore: {
@@ -214,12 +204,4 @@ export function sameSettings(a: ProfileSettings, b: ProfileSettings): boolean {
     a.resolution === b.resolution &&
     a.juliaPanel === b.juliaPanel
   );
-}
-
-/** Name of the profile the given settings exactly match, or null ("Custom"). */
-export function matchProfile(s: ProfileSettings): ProfileName | null {
-  for (const name of PROFILE_ORDER) {
-    if (sameSettings(PROFILES[name], s)) return name;
-  }
-  return null;
 }

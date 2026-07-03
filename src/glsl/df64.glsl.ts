@@ -85,8 +85,6 @@ vec2 df_sqrt(vec2 a) {
   float corr = d.x * x * 0.5;
   return df_add(vec2(y, 0.0), vec2(corr, 0.0));
 }
-bool df_gt(vec2 a, vec2 b) { return (a.x > b.x) || (a.x == b.x && a.y > b.y); }
-bool df_lt(vec2 a, vec2 b) { return (a.x < b.x) || (a.x == b.x && a.y < b.y); }
 
 vec2 df_exp(vec2 a) {
   if (a.x <= -88.0) return vec2(0.0, 0.0);

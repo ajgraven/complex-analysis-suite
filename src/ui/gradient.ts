@@ -5,7 +5,7 @@
  * actual rendering is done by GLPlot from the same stop model ({@link buildGradient}).
  */
 
-import type { GradientStop } from "../palettes";
+import { sampleGradient, type GradientStop } from "../palettes";
 
 export interface GradientEditor {
   getStops(): GradientStop[];
@@ -37,25 +37,10 @@ function cssGradient(stops: GradientStop[]): string {
   return `linear-gradient(to right, ${parts.join(", ")})`;
 }
 
-/** Colour at position `t` by linear interpolation between sorted stops (clamped). */
+/** Colour at position `t` by linear interpolation between stops (clamped), rounded to bytes. */
 function interpColor(stops: GradientStop[], t: number): [number, number, number] {
-  const s = [...stops].sort((a, b) => a.t - b.t);
-  if (t <= s[0].t) return [...s[0].color];
-  const last = s[s.length - 1];
-  if (t >= last.t) return [...last.color];
-  for (let k = 0; k < s.length - 1; k++) {
-    const lo = s[k];
-    const hi = s[k + 1];
-    if (t >= lo.t && t <= hi.t) {
-      const f = (t - lo.t) / (hi.t - lo.t || 1);
-      return [
-        Math.round(lo.color[0] + (hi.color[0] - lo.color[0]) * f),
-        Math.round(lo.color[1] + (hi.color[1] - lo.color[1]) * f),
-        Math.round(lo.color[2] + (hi.color[2] - lo.color[2]) * f),
-      ];
-    }
-  }
-  return [...last.color];
+  const [r, g, b] = sampleGradient(stops, t);
+  return [Math.round(r), Math.round(g), Math.round(b)];
 }
 
 function randomStops(): GradientStop[] {

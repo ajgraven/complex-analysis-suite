@@ -55,3 +55,8 @@ export function formatComplex([re, im]: Complex): string {
 export function truncateComplex([re, im]: Complex): Complex {
   return [Number.parseFloat(re.toPrecision(6)), Number.parseFloat(im.toPrecision(6))];
 }
+
+/** Argument of z in degrees, normalised to [0, 360) — e.g. the multiplier's rotation angle. */
+export function argDegrees([re, im]: Complex): number {
+  return ((Math.atan2(im, re) * 180) / Math.PI + 360) % 360;
+}

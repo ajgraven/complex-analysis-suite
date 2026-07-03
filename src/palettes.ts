@@ -18,52 +18,9 @@ export const DEFAULT_GRADIENT: GradientStop[] = [
   { t: 1.0, color: [120, 10, 40] },
 ];
 
-/**
- * Linear-interpolate colour stops into a `width`×1 RGBA8 ramp (opaque). Stops are
- * sorted by `t`; samples before the first / after the last stop clamp to its colour.
- */
-export function buildGradient(stops: GradientStop[], width = 256): Uint8Array {
-  const sorted = [...stops].sort((a, b) => a.t - b.t);
-  const first = sorted[0];
-  const last = sorted[sorted.length - 1];
-  const out = new Uint8Array(width * 4);
-  for (let i = 0; i < width; i++) {
-    const t = i / (width - 1);
-    let color: [number, number, number];
-    if (t <= first.t) {
-      color = first.color;
-    } else if (t >= last.t) {
-      color = last.color;
-    } else {
-      let lo = first;
-      let hi = last;
-      for (let k = 0; k < sorted.length - 1; k++) {
-        if (t >= sorted[k].t && t <= sorted[k + 1].t) {
-          lo = sorted[k];
-          hi = sorted[k + 1];
-          break;
-        }
-      }
-      const span = hi.t - lo.t;
-      const f = span > 1e-6 ? (t - lo.t) / span : 0;
-      color = [
-        lo.color[0] + (hi.color[0] - lo.color[0]) * f,
-        lo.color[1] + (hi.color[1] - lo.color[1]) * f,
-        lo.color[2] + (hi.color[2] - lo.color[2]) * f,
-      ];
-    }
-    out[i * 4] = Math.round(color[0]);
-    out[i * 4 + 1] = Math.round(color[1]);
-    out[i * 4 + 2] = Math.round(color[2]);
-    out[i * 4 + 3] = 255;
-  }
-  return out;
-}
-
-/** Sample custom colour stops at t∈[0,1] → an [r,g,b] triple (0..255); mirrors
- *  {@link buildGradient}'s clamp-and-lerp so the legend swatch matches the render. */
-export function sampleGradient(stops: GradientStop[], t: number): [number, number, number] {
-  const sorted = [...stops].sort((a, b) => a.t - b.t);
+/** Clamp-and-lerp already-sorted stops at t∈[0,1] → an unrounded [r,g,b]. The single source of
+ *  truth for the render ramp, the legend swatch, and the editor preview. */
+function lerpSortedStops(sorted: GradientStop[], t: number): [number, number, number] {
   const first = sorted[0];
   const last = sorted[sorted.length - 1];
   if (t <= first.t) return [first.color[0], first.color[1], first.color[2]];
@@ -84,6 +41,29 @@ export function sampleGradient(stops: GradientStop[], t: number): [number, numbe
     lo.color[1] + (hi.color[1] - lo.color[1]) * f,
     lo.color[2] + (hi.color[2] - lo.color[2]) * f,
   ];
+}
+
+/**
+ * Linear-interpolate colour stops into a `width`×1 RGBA8 ramp (opaque). Stops are
+ * sorted by `t`; samples before the first / after the last stop clamp to its colour.
+ */
+export function buildGradient(stops: GradientStop[], width = 256): Uint8Array {
+  const sorted = [...stops].sort((a, b) => a.t - b.t);
+  const out = new Uint8Array(width * 4);
+  for (let i = 0; i < width; i++) {
+    const c = lerpSortedStops(sorted, i / (width - 1));
+    out[i * 4] = Math.round(c[0]);
+    out[i * 4 + 1] = Math.round(c[1]);
+    out[i * 4 + 2] = Math.round(c[2]);
+    out[i * 4 + 3] = 255;
+  }
+  return out;
+}
+
+/** Sample custom colour stops at t∈[0,1] → an [r,g,b] triple (0..255); mirrors
+ *  {@link buildGradient}'s clamp-and-lerp so the legend swatch matches the render. */
+export function sampleGradient(stops: GradientStop[], t: number): [number, number, number] {
+  return lerpSortedStops([...stops].sort((a, b) => a.t - b.t), t);
 }
 
 /** The colour-palette select values (mirrors the `uPalette` ints the shader keys off). */

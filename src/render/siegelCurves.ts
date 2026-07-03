@@ -16,15 +16,8 @@
  */
 import type { Vec2 } from "../arrays";
 import type { Complex } from "../complex";
+import { sqrt } from "../expr/complexJs"; // principal complex √, matching the GLSL csqrt
 import { classifyRotationNumber } from "./brjuno";
-
-function csqrt(z: Complex): Complex {
-  const r = Math.hypot(z[0], z[1]);
-  return [
-    Math.sqrt(Math.max((r + z[0]) * 0.5, 0)),
-    (z[1] < 0 ? -1 : 1) * Math.sqrt(Math.max((r - z[0]) * 0.5, 0)),
-  ];
-}
 
 export interface SiegelCurves {
   /** The indifferent fixed point the disc surrounds. */
@@ -50,7 +43,7 @@ export function siegelInvariantCurves(
   iters = 900,
   escapeR = 4,
 ): SiegelCurves | null {
-  const s = csqrt([1 - 4 * c[0], -4 * c[1]]);
+  const s = sqrt([1 - 4 * c[0], -4 * c[1]]);
   const alpha: Complex = [(1 - s[0]) / 2, -s[1] / 2];
   const beta: Complex = [(1 + s[0]) / 2, s[1] / 2];
   const ma = 2 * Math.hypot(alpha[0], alpha[1]);

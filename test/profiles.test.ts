@@ -4,7 +4,6 @@ import {
   PROFILE_LABELS,
   PROFILE_ORDER,
   PROFILES,
-  matchProfile,
   sameSettings,
   type ProfileName,
 } from "../src/state/profiles";
@@ -74,12 +73,12 @@ describe("profiles data", () => {
     }
   });
 
-  it("matchProfile round-trips each profile and returns null for a tweaked one", () => {
+  it("sameSettings matches a profile against itself and rejects any tweak", () => {
     for (const name of PROFILE_ORDER) {
-      expect(matchProfile(PROFILES[name])).toBe(name);
+      expect(sameSettings(PROFILES[name], PROFILES[name])).toBe(true);
     }
     const tweaked = { ...PROFILES.explore, aa: "4" };
-    expect(matchProfile(tweaked)).toBeNull();
+    expect(sameSettings(PROFILES.explore, tweaked)).toBe(false);
     expect(sameSettings(PROFILES.explore, PROFILES.artist)).toBe(false);
   });
 

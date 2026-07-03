@@ -56,8 +56,10 @@ export function inverseProject(view: Vec2, projCentre: Vec2, mode: ProjectionMod
 }
 
 /**
- * Forward projection: a plot coordinate → its view-square coordinate, for pointer hit-testing and
- * overlay placement. The inverse of {@link inverseProject} on its domain.
+ * Forward projection: a plot coordinate → its view-square coordinate. The inverse of
+ * {@link inverseProject} on its domain. Currently exercised only by the round-trip test (which
+ * thereby also certifies inverseProject); it is reserved for forward-mapping overlays into projected
+ * space, which the MVP suppresses (see overlay.ts `p.projected`).
  */
 export function forwardProject(plot: Vec2, projCentre: Vec2, mode: ProjectionMode): Vec2 {
   const dx = plot[0] - projCentre[0];

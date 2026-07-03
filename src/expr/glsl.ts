@@ -37,19 +37,6 @@ const UNARY_GLSL: Record<string, string> = {
 
 const BINARY_GLSL: Record<string, string> = { arctan2: "carctan2", mod: "cmod" };
 
-/** Is this node a boolean-valued expression (vs. complex-valued)? */
-function isBool(node: Node): boolean {
-  switch (node.kind) {
-    case "bool":
-    case "not":
-    case "compare":
-      return true;
-    case "if":
-      return isBool(node.then) || isBool(node.otherwise);
-    default:
-      return false;
-  }
-}
 
 /** Format a JS number as a GLSL float literal (always with a decimal point or exponent). */
 export function glslFloat(n: number): string {
@@ -193,5 +180,3 @@ export function compileF(ast: Node, name = "fFn"): string {
 export function compileEscape(ast: Node): string {
   return `bool escapeFn(cvec z, cvec c) {\n${paramAlias(ast)}${emitBody(ast, emitBool)}\n}`;
 }
-
-export { isBool };

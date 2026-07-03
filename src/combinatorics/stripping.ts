@@ -33,7 +33,7 @@
  * module — no DOM / GL. See FEATURE_RESEARCH.md §3.2. Oracles: 1-2 → {1/3,2/3}; 1-3 → {1/7,2/7};
  * 1-2-4 → {2/5,3/5}; 1-3-6 → {10/63,17/63}.
  */
-import { type Angle, type KneadingSymbol, angle, compare } from "./angles";
+import { type Angle, type KneadingSymbol, angle } from "./angles";
 
 /**
  * Largest internal-address period we strip interactively. Phase 2 enumerates 2ⁿ−1 candidate angles
@@ -220,9 +220,4 @@ export function stripExternalAngles(address: number[]): StripResult {
 /** Format a kneading sequence as a compact string, e.g. ["A","A","*"] → "AA⋆". */
 export function formatKneading(nu: KneadingSymbol[]): string {
   return nu.map((s) => (s === "*" ? "⋆" : s)).join("");
-}
-
-/** Compare two angle pairs by their lower endpoint (for stable display ordering). */
-export function compareWakes(a: [Angle, Angle], b: [Angle, Angle]): number {
-  return compare(a[0], b[0]);
 }

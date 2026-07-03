@@ -103,15 +103,6 @@ export function dfSqrt(a: DF): DF {
   return dfAdd([y, 0], [corr, 0]);
 }
 
-/** Compare two df64s: -1, 0, or 1. */
-export function dfCmp(a: DF, b: DF): number {
-  if (a[0] < b[0]) return -1;
-  if (a[0] > b[0]) return 1;
-  if (a[1] < b[1]) return -1;
-  if (a[1] > b[1]) return 1;
-  return 0;
-}
-
 // --- df64 transcendentals (seed-in-float + df64 refinement / series) ----------
 //
 // These are the spec for the GLSL ports in `./df64.glsl`. Range reduction uses

@@ -13,18 +13,11 @@
  */
 import type { Vec2 } from "../arrays";
 import type { Complex } from "../complex";
-
-/** Principal complex square root (matches the GLSL csqrt). */
-function csqrt(z: Complex): Complex {
-  const r = Math.hypot(z[0], z[1]);
-  const re = Math.sqrt(Math.max((r + z[0]) * 0.5, 0));
-  const im = Math.sqrt(Math.max((r - z[0]) * 0.5, 0));
-  return [re, z[1] < 0 ? -im : im];
-}
+import { sqrt } from "../expr/complexJs"; // principal complex √, matching the GLSL csqrt
 
 /** The β fixed point (1+√(1−4c))/2 of z²+c — always repelling (on the Julia set). */
 export function betaFixedPoint(c: Complex): Complex {
-  const s = csqrt([1 - 4 * c[0], -4 * c[1]]);
+  const s = sqrt([1 - 4 * c[0], -4 * c[1]]);
   return [(1 + s[0]) / 2, s[1] / 2];
 }
 
@@ -45,7 +38,7 @@ export function inverseJuliaCloud(c: Complex, count = 12000, warmup = 30, seed =
   let z = betaFixedPoint(c);
   const out: Vec2[] = [];
   for (let i = 0; i < warmup + count; i++) {
-    const w = csqrt([z[0] - c[0], z[1] - c[1]]);
+    const w = sqrt([z[0] - c[0], z[1] - c[1]]);
     z = rand() < 0.5 ? w : [-w[0], -w[1]]; // pick a preimage branch at random
     if (!Number.isFinite(z[0]) || !Number.isFinite(z[1])) {
       z = betaFixedPoint(c); // numerical escape — restart on J
