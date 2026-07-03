@@ -36,7 +36,7 @@ import {
 import { landingForAngle } from "./render/angleParameter";
 import { detectHermanRing } from "./render/hermanRing";
 import { detectUnderIteration } from "./render/underIteration";
-import { escapeIsMeaningless, precisionMetric } from "./render/viewAdvisories";
+import { escapeIsMeaningless, precisionExhausted, precisionMetric } from "./render/viewAdvisories";
 import { SuggestionEngine, type Advisor } from "./ui/suggestions";
 import {
   DEFAULT_PROFILE,
@@ -930,7 +930,8 @@ function init(): void {
   // Depth thresholds (precision-pressure metric = zoom·max(1,|c|), matching glPlot.desiredPrecision).
   const UNDER_ITER_MAX_ZOOM = 1e11; // above this the f64 CPU grid probe loses reliability
   const PERTURB_NUDGE_METRIC = 1e11; // df64 precision getting thin → suggest perturbation (z²+c)
-  const PRECISION_WALL_METRIC = 1e13; // GPU-df64 reliability wall → fine detail unreliable
+  // The precision-exhaustion walls (df64 ~1e13, perturbation dd ~1e28) live in viewAdvisories.ts
+  // (precisionExhausted) so the thresholds have a single source; see precisionAdvisor below.
   const INTERIOR_DOMINATED = 0.96; // ≥ this fraction genuinely interior ⇒ escape-time is flat black
   /**
    * Advisor for the escape-time view: one CPU probe drives two suggestions — raise the iteration cap
@@ -1025,8 +1026,21 @@ function init(): void {
   function precisionAdvisor(view: PlotView, scope: "param" | "dyn"): Advisor {
     return () => {
       const plot = view.plot;
-      if (plot.perturbationActive) return null; // already on the glitch-free deep-zoom kernel
       if (plot.projection !== 0) return null; // a projection forces its own single-precision regime
+      // Perturbation deep zoom is glitch-free, but its double-double reference centre has its own
+      // ceiling (~1e28); past it the deepest detail degrades silently, so warn (dismissible) rather
+      // than leave the user trusting unreliable structure.
+      if (plot.perturbationActive) {
+        return precisionExhausted(plot.zoom, plot.center, true)
+          ? {
+              id: "precision-exhausted",
+              scope,
+              severity: "warn",
+              message: "Beyond perturbation's precision limit — the deepest detail may be unreliable.",
+              actions: [],
+            }
+          : null;
+      }
       const metric = precisionMetric(plot.zoom, plot.center);
       if (metric < PERTURB_NUDGE_METRIC) return null; // df64 is still comfortably accurate
       // Perturbation deep zoom is the z²+c parameter-plane fix; offer it when eligible.
@@ -1050,16 +1064,15 @@ function init(): void {
         };
       }
       // No deeper-precision option for this map/plane: warn (dismissible) once past the df64 wall.
-      if (metric >= PRECISION_WALL_METRIC) {
-        return {
-          id: "precision-exhausted",
-          scope,
-          severity: "warn",
-          message: "Beyond df64's precision limit — fine detail at this depth may be unreliable.",
-          actions: [],
-        };
-      }
-      return null;
+      return precisionExhausted(plot.zoom, plot.center, false)
+        ? {
+            id: "precision-exhausted",
+            scope,
+            severity: "warn",
+            message: "Beyond df64's precision limit — fine detail at this depth may be unreliable.",
+            actions: [],
+          }
+        : null;
     };
   }
   /** Advisor: a rational map whose escape-time image is flat — offer period colouring (param plane). */

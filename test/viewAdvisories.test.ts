@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { parse } from "../src/expr/parser";
-import { escapeIsMeaningless, precisionMetric } from "../src/render/viewAdvisories";
+import {
+  escapeIsMeaningless,
+  precisionExhausted,
+  precisionMetric,
+} from "../src/render/viewAdvisories";
 
 const O: [number, number] = [0, 0];
 const c: [number, number] = [0.5, 0.3]; // a generic non-zero parameter
@@ -11,6 +15,29 @@ describe("precisionMetric", () => {
   });
   it("scales by the centre magnitude when |c| > 1", () => {
     expect(precisionMetric(1e6, [2, 3])).toBeCloseTo(3e6, 0);
+  });
+});
+
+describe("precisionExhausted", () => {
+  it("flags the df64 wall (~1e13) when perturbation is off", () => {
+    expect(precisionExhausted(1e12, O, false)).toBe(false);
+    expect(precisionExhausted(1e14, O, false)).toBe(true);
+  });
+
+  it("does not flag a df64-wall zoom once perturbation is active (wall moves to ~1e28)", () => {
+    expect(precisionExhausted(1e14, O, true)).toBe(false);
+    expect(precisionExhausted(1e20, O, true)).toBe(false);
+  });
+
+  it("flags the perturbation double-double ceiling (~1e28) when perturbation is active", () => {
+    expect(precisionExhausted(1e27, O, true)).toBe(false);
+    expect(precisionExhausted(1e29, O, true)).toBe(true);
+  });
+
+  it("scales the wall by the centre magnitude (metric = zoom·max(1,|c|))", () => {
+    // |c| = 5 ⇒ metric = 5·zoom, so the df64 wall (1e13) is reached at zoom = 2e12.
+    expect(precisionExhausted(2e12, [5, 0], false)).toBe(true);
+    expect(precisionExhausted(1e12, [5, 0], false)).toBe(false);
   });
 });
 

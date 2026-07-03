@@ -19,6 +19,26 @@ export function precisionMetric(zoom: number, center: Vec2): number {
   return zoom * Math.max(1, Math.abs(center[0]), Math.abs(center[1]));
 }
 
+/**
+ * Precision-pressure walls (as `precisionMetric` values) past which the render's finest detail is
+ * unreliable in each regime. Normal GPU-df64 hits its reliability wall at ~1e13; perturbation deep
+ * zoom carries its reference centre in double-double (~31 digits, see render/perturbation.ts), which
+ * pushes the wall out to ~1e28. Beyond the active wall the image still renders — it does not go blank
+ * — but the deepest structure degrades.
+ */
+export const DF64_WALL_METRIC = 1e13;
+export const PERTURB_WALL_METRIC = 1e28;
+
+/**
+ * True when the view is past the reliable-precision wall for its *active* precision regime — the
+ * ~1e13 df64 wall normally, or the ~1e28 double-double reference-centre ceiling when perturbation
+ * deep zoom is on. The caller surfaces a (dismissible) warning; nothing here forces a re-render.
+ */
+export function precisionExhausted(zoom: number, center: Vec2, perturbationActive: boolean): boolean {
+  const wall = perturbationActive ? PERTURB_WALL_METRIC : DF64_WALL_METRIC;
+  return precisionMetric(zoom, center) >= wall;
+}
+
 /** Degree of an ascending-coefficient polynomial, ignoring near-zero trailing (high-order) terms. */
 function degree(p: Complex[]): number {
   let n = p.length;
