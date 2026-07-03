@@ -77,6 +77,18 @@ describe("parameterLanding (external angle → the ray's true landing on ∂M)",
     }
   });
 
+  it("{2/5, 3/5} co-land at the period-4 cascade ROOT c = −5/4 (Newton-refined, non-cardioid)", () => {
+    // The period-2→4 period-doubling bud on the basilica: multiplier of the period-2 cycle is
+    // 4(c+1) = −1 at c = −5/4, so this is a genuine root with no closed-form bulbRoot — it exercises
+    // the general parabolic-root Newton, not the cardioid fast-path.
+    for (const p of [2, 3]) {
+      const l = parameterLanding(p, 5);
+      expect(l).toMatchObject({ kind: "root", period: 4, preperiod: 0, refined: true });
+      expect(l?.point[0]).toBeCloseTo(-1.25, 5);
+      expect(l?.point[1]).toBeCloseTo(0, 5);
+    }
+  });
+
   it("1/2 → the Misiurewicz tip c = −2 (Newton-refined)", () => {
     const l = parameterLanding(1, 2);
     expect(l).toMatchObject({ kind: "misiurewicz", refined: true });

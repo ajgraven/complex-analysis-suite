@@ -18,6 +18,7 @@
  */
 import type { Vec2 } from "../arrays";
 import { angle, classifyDoubling } from "../combinatorics/angles";
+import { add, div, mul, sub } from "../expr/complexJs";
 import { parse } from "../expr/parser";
 import { bulbRoot } from "./farey";
 import { findMisiurewicz } from "./inspect";
@@ -124,7 +125,14 @@ export function parameterLanding(p: number, q: number): ParameterLanding | null 
         return { point: bulbRoot(pp, period).c, kind: "root", period, preperiod: 0, refined: true };
       }
     }
-    return { point: seed, kind: "root", period, preperiod: 0, refined: false };
+    // A deeper, non-cardioid root (e.g. the period-4 cascade root c = −5/4): no closed form, so
+    // Newton-refine the parabolic system, seeded from the ray landing and a period-n cycle point
+    // there (from the dynamical ray at the same angle). Falls back to the ray seed if it diverges.
+    const cyc = dynamicalLanding(a.p, a.q, seed);
+    const root = cyc ? refineParabolicRoot(cyc.point, seed, period) : null;
+    return root
+      ? { point: root, kind: "root", period, preperiod: 0, refined: true }
+      : { point: seed, kind: "root", period, preperiod: 0, refined: false };
   }
 
   // Preperiodic ⇒ a Misiurewicz point fᵐ⁺ᵏ(0) = fᵐ(0); critical-orbit preperiod = doubling + 1.
@@ -136,6 +144,76 @@ export function parameterLanding(p: number, q: number): ParameterLanding | null 
     preperiod,
     refined: mis !== null,
   };
+}
+
+/**
+ * Refine a deeper hyperbolic-component **root** — the parabolic parameter c where the period-n
+ * cycle has multiplier exactly 1 — by a 2×2 complex Newton in (z, c) on the system
+ *   P(z,c) = fⁿ(z) − z    = 0   (z is a period-n point) and
+ *   Q(z,c) = (fⁿ)′(z) − 1 = 0   (the cycle is parabolic, λ = 1),
+ * for f(z) = z² + c. Carries the four derivatives along the orbit (z₀ = z, p₀ = 1, q₀ = r₀ = s₀ = 0):
+ *   z ← z²+c · p ← 2zp (∂/∂z) · q ← 2zq+1 (∂/∂c) · r ← 2(p²+zr) (∂²/∂z²) · s ← 2(pq+zs) (∂²/∂z∂c),
+ * giving the Jacobian J = [[pₙ−1, qₙ], [rₙ, sₙ]] and the step [z;c] −= J⁻¹[P;Q]. This is the general
+ * counterpart of the closed-form {@link bulbRoot} (which only covers primary cardioid bulbs): it lands
+ * the non-cardioid roots (e.g. the period-4 cascade root c = −5/4) that {@link parameterLanding} would
+ * otherwise leave at the approximate ray seed.
+ *
+ * Seed `c` with the parameter-ray landing and `z` with a period-n cycle point there so Newton
+ * converges to *that* component's root, not another solution of the system (a period-m point with
+ * m | n also solves it — e.g. the period-2 root −¾ satisfies the period-4 system).
+ *
+ * Convergence is quadratic at a **primitive** root (z is a *double* root of fⁿ−z, non-singular
+ * Jacobian) but only **linear** at a **satellite** root born by period-doubling / p⁄k-bifurcation
+ * (there the period-n cycle collides with its lower-period parent, making z a triple-or-higher root
+ * of fⁿ−z and the Jacobian singular at the limit). So acceptance is on the **residual** |P|²+|Q|²
+ * rather than the step, and the budget is generous. Returns null if it does not converge (a very deep
+ * or high-rotation satellite may exhaust the budget → caller keeps the approximate ray seed) or if the
+ * result drifts implausibly far from the seed (a sign Newton wandered to a different root).
+ */
+function refineParabolicRoot(zSeed: Vec2, cSeed: Vec2, period: number): Vec2 | null {
+  let z: Vec2 = [zSeed[0], zSeed[1]];
+  let c: Vec2 = [cSeed[0], cSeed[1]];
+  for (let it = 0; it < 60; it++) {
+    let zk: Vec2 = [z[0], z[1]];
+    let p: Vec2 = [1, 0]; // ∂z_k/∂z
+    let q: Vec2 = [0, 0]; // ∂z_k/∂c
+    let r: Vec2 = [0, 0]; // ∂²z_k/∂z²
+    let s: Vec2 = [0, 0]; // ∂²z_k/∂z∂c
+    for (let k = 0; k < period; k++) {
+      // All new values are formed from the current (z_k, p, q, r, s) before any is overwritten.
+      const zp = mul(zk, p);
+      const zq = mul(zk, q);
+      const rr = add(mul(p, p), mul(zk, r));
+      const ss = add(mul(p, q), mul(zk, s));
+      const nz: Vec2 = [zk[0] * zk[0] - zk[1] * zk[1] + c[0], 2 * zk[0] * zk[1] + c[1]];
+      p = [2 * zp[0], 2 * zp[1]];
+      q = [2 * zq[0] + 1, 2 * zq[1]];
+      r = [2 * rr[0], 2 * rr[1]];
+      s = [2 * ss[0], 2 * ss[1]];
+      zk = nz;
+      if (!Number.isFinite(zk[0]) || !Number.isFinite(zk[1])) return null;
+    }
+    const P: Vec2 = [zk[0] - z[0], zk[1] - z[1]]; // fⁿ(z) − z
+    const Q: Vec2 = [p[0] - 1, p[1]]; // (fⁿ)′(z) − 1
+    if (P[0] ** 2 + P[1] ** 2 + Q[0] ** 2 + Q[1] ** 2 < 1e-24) {
+      // Residual ≈ 0: the current (z, c) is the root. Reject a jump to a different (lower-period) root
+      // — a real component root sits well within the traced ray's reach, so a far result means Newton
+      // wandered (e.g. to the period-2 root −¾ instead of the period-4 root −5⁄4).
+      return Math.hypot(c[0] - cSeed[0], c[1] - cSeed[1]) < 0.4 ? [c[0], c[1]] : null;
+    }
+    const a: Vec2 = [p[0] - 1, p[1]]; // ∂P/∂z = pₙ − 1
+    const b = q; // ∂P/∂c = qₙ
+    const d = r; // ∂Q/∂z = rₙ
+    const e = s; // ∂Q/∂c = sₙ
+    const det = sub(mul(a, e), mul(b, d)); // ae − bd
+    if (det[0] * det[0] + det[1] * det[1] < 1e-30 || !Number.isFinite(det[0])) return null;
+    const dz = div(sub(mul(e, P), mul(b, Q)), det); // ( eP − bQ) / det
+    const dc = div(sub(mul(a, Q), mul(d, P)), det); // (−dP + aQ) / det
+    z = [z[0] - dz[0], z[1] - dz[1]];
+    c = [c[0] - dc[0], c[1] - dc[1]];
+    if (!Number.isFinite(c[0]) || !Number.isFinite(c[1])) return null;
+  }
+  return null;
 }
 
 export interface DynamicalLanding {
