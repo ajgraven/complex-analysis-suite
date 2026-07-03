@@ -7,10 +7,11 @@ tools. Compiled 2026-06-29.
 > **Status.** Tier 1 **#1 (cardioid/bulb interior bailout)**, **#2 (progressive-threshold fix)** and
 > **#4 (compiled-closure cache)** are implemented; **#3** is subsumed by #4 and **#5** is deferred (see
 > their entries). Tier 2 **#6 (coupled-drag panel debounce)**, **#7 (Julia metrics worker)** and
-> **#8 (content-gated orbit/CDF invalidation)** are implemented too. Everything else is open; this
-> document is the standing roadmap. Speedup
-> figures from the literature are attributed; figures that could not be pinned to a primary source are
-> marked **[UNVERIFIED]**.
+> **#8 (content-gated orbit/CDF invalidation)** are implemented too. Since then **#9 (general cycle
+> detection)** and the deep-zoom **rebasing (D1)** + **BLA CPU foundation (D2a)** have landed (see their
+> entries); the remaining open items are the deep-zoom **GPU BLA traversal (D2b)** and **#5**. This
+> document is the standing roadmap. Speedup figures from the literature are attributed; figures that
+> could not be pinned to a primary source are marked **[UNVERIFIED]**.
 
 ## Diagnosis — why it feels slow at low/moderate zoom
 

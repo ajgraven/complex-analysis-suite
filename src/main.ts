@@ -3405,6 +3405,19 @@ function init(): void {
     applyPerturbation();
     byId<HTMLInputElement>("param-a").value = "1";
     applyParamA();
+    // Projection & Riemann-sphere view (wired via inline change handlers, no apply* fn) — restore the
+    // flat/linear defaults so a reset also clears an active projection or 3D sphere, not just coloring.
+    const projSel = byId<HTMLSelectElement>("projection-mode");
+    projSel.value = "linear";
+    projSel.dispatchEvent(new Event("change"));
+    for (const id of ["sphere-param", "sphere-dyn"]) {
+      const cb = byId<HTMLInputElement>(id);
+      cb.checked = false;
+      cb.dispatchEvent(new Event("change"));
+    }
+    const sphereLight = byId<HTMLInputElement>("sphere-light");
+    sphereLight.checked = true; // HTML default
+    sphereLight.dispatchEvent(new Event("change"));
     clearKeyframes();
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
   });

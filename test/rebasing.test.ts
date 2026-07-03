@@ -1,10 +1,13 @@
 /**
- * Oracle test for the rebasing perturbation algorithm used by the deep-zoom kernel
- * (`PERTURBATION_FRAGMENT_SHADER`). Rebasing (Zhuoran) is an *exact* reformulation of the orbit, so
- * in ordinary f64 the rebased perturbation of z²+c around a reference orbit must reproduce DIRECT
- * iteration `z ← z²+c` exactly (same escape time, same fate) — this pins the algorithm independently
- * of the GLSL translation. We exercise both rebase triggers: the drift condition and end-of-reference
- * (a short, escaping reference orbit). The live shader↔df64 agreement is checked separately in-browser.
+ * Reference-algorithm test for the rebasing perturbation scheme that the deep-zoom kernel
+ * (`PERTURBATION_FRAGMENT_SHADER`) implements. It exercises a **JS reimplementation of the algorithm,
+ * defined below in this file — NOT the shipped GLSL** — so it pins the *math* independently of the
+ * shader translation, and would not catch a regression in the GLSL itself. Rebasing (Zhuoran) is an
+ * *exact* reformulation of the orbit, so in ordinary f64 the rebased perturbation of z²+c around a
+ * reference orbit must reproduce DIRECT iteration `z ← z²+c` exactly (same escape time, same fate).
+ * We exercise both rebase triggers: the drift condition and end-of-reference (a short, escaping
+ * reference orbit). The shipped reference-orbit builders are covered by `test/perturbationKernel.test.ts`;
+ * live shader↔df64 agreement is verified separately in-browser.
  */
 import { describe, it, expect } from "vitest";
 import type { Complex } from "../src/complex";

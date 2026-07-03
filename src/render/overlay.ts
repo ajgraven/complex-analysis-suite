@@ -305,7 +305,7 @@ function drawFareyLabels(
 ): void {
   const s = size / OVERLAY_BASE;
   // Grow the labelled denominator with the resolvable bulb size (∝ √zoom), so finer bulbs get
-  // named the deeper you go; the descent in fareyLabels keeps this cheap for large maxQ.
+  // named the deeper you go; the visible-arc enumeration in fareyLabels keeps this cheap for large maxQ.
   const maxQ = fareyMaxDenominator(zoom, size);
   const labels = fareyLabels(center, zoom, maxQ);
   const placed: Vec2[] = [];

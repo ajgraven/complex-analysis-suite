@@ -18,6 +18,7 @@ import { differentiate } from "../expr/derivative";
 import { makeComplexFn, getComplexFn, getEscapeFn } from "../expr/evaluate";
 import { lyapunovJacobian } from "./jacobian";
 import { inspect } from "./inspect";
+import { polynomialCoeffs } from "./critical";
 import { juliaExteriorCoeffs } from "./uniformize";
 
 const cabs = (z: Complex): number => Math.hypot(z[0], z[1]);
@@ -94,10 +95,11 @@ export function analyticAreaUpperBound(d: number, c: Complex, nCoeffs = AREA_COE
 /**
  * Logarithmic capacity of the filled Julia set for a POLYNOMIAL f: cap = |a_d|^{−1/(d−1)} where a_d
  * is the degree-d leading coefficient (Baker–Hsia) — exactly 1 for monic z^d + c, 1/|λ| for the
- * logistic λz(1−z), etc. Detected from the far field: the degree from the growth rate of |f| and
- * a_d = f(z)/z^d as |z| → ∞ (averaged over angles to cancel lower-order terms). Returns null for a
- * non-polynomial map (rational / Newton / transcendental — |f| does not grow like a clean integer
- * power) or a non-holomorphic one (abs-maps), where the capacity is genuinely undefined.
+ * logistic λz(1−z), etc. The exact leading coefficient comes from the shared far-field/DFT extraction
+ * ({@link polynomialCoeffs} in critical.ts), which is more robust than a bespoke far-field fit (3-radius
+ * degree probe + a residual certification that rejects a rational/transcendental sharing the growth
+ * rate). Returns null for a non-polynomial map (rational / Newton / transcendental) or a
+ * non-holomorphic one (abs-maps), where the capacity is genuinely undefined.
  */
 export function polynomialCapacity(fAst: Node, a: Complex, c: Complex): number | null {
   try {
@@ -105,48 +107,11 @@ export function polynomialCapacity(fAst: Node, a: Complex, c: Complex): number |
   } catch {
     return null;
   }
-  const f = getComplexFn(fAst, a);
-  // log|f| averaged over a circle of radius R; NaN if any sample is non-finite (transcendental
-  // blow-up) so those are rejected rather than fit to a spurious degree.
-  const logMagOnCircle = (R: number): number => {
-    let s = 0;
-    for (let k = 0; k < 8; k++) {
-      const th = (Math.PI * k) / 4;
-      const w = f([R * Math.cos(th), R * Math.sin(th)], c);
-      const m = Math.hypot(w[0], w[1]);
-      if (!Number.isFinite(m) || m === 0) return NaN;
-      s += Math.log(m);
-    }
-    return s / 8;
-  };
-  const R1 = 1e3;
-  const R2 = 1e6;
-  const l1 = logMagOnCircle(R1);
-  const l2 = logMagOnCircle(R2);
-  if (!Number.isFinite(l1) || !Number.isFinite(l2)) return null;
-  const dEst = (l2 - l1) / Math.log(R2 / R1);
-  const d = Math.round(dEst);
-  if (d < 2 || Math.abs(dEst - d) > 0.01) return null; // not a clean polynomial of degree ≥ 2
-  // Leading coefficient a_d = f(z)/z^d as |z| → ∞, averaged over angles to cancel lower-order terms.
-  let ar = 0;
-  let ai = 0;
-  for (let k = 0; k < 8; k++) {
-    const th = (Math.PI * k) / 4;
-    const z: Complex = [R2 * Math.cos(th), R2 * Math.sin(th)];
-    const w = f(z, c);
-    let zr = 1;
-    let zi = 0;
-    for (let i = 0; i < d; i++) {
-      const nr = zr * z[0] - zi * z[1];
-      zi = zr * z[1] + zi * z[0];
-      zr = nr;
-    }
-    const den = zr * zr + zi * zi;
-    if (den === 0) return null;
-    ar += (w[0] * zr + w[1] * zi) / den;
-    ai += (w[1] * zr - w[0] * zi) / den;
-  }
-  const mag = Math.hypot(ar / 8, ai / 8);
+  const coeffs = polynomialCoeffs(fAst, a, c);
+  if (!coeffs) return null; // not a genuine polynomial in z
+  const d = coeffs.length - 1;
+  if (d < 2) return null; // degree < 2 (rational/constant) ⇒ no filled-Julia capacity
+  const mag = cabs(coeffs[d]); // exact leading coefficient a_d
   if (!Number.isFinite(mag) || mag <= 0) return null;
   return Math.pow(mag, -1 / (d - 1));
 }
