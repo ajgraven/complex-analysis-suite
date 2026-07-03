@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Complex } from "../src/complex";
 import { parse } from "../src/expr/parser";
-import { landingForAngle } from "../src/render/angleParameter";
+import { landingForAngle, parameterLanding } from "../src/render/angleParameter";
 import { findNucleus } from "../src/render/inspect";
 
 const Z2C = parse("z^2+c");
@@ -44,5 +44,46 @@ describe("landingForAngle (external angle → parameter)", () => {
     if (!l) return;
     expect(Math.abs(l.seed[0])).toBeLessThan(0.15);
     expect(l.seed[1]).toBeGreaterThan(0.7); // near i
+  });
+});
+
+describe("parameterLanding (external angle → the ray's true landing on ∂M)", () => {
+  it("θ = 0 lands at the cardioid cusp c = 1/4", () => {
+    const l = parameterLanding(0, 1);
+    expect(l).toMatchObject({ kind: "cusp", refined: true });
+    expect(l?.point[0]).toBeCloseTo(0.25, 6);
+    expect(l?.point[1]).toBeCloseTo(0, 6);
+  });
+
+  it("{1/3, 2/3} co-land at the period-2 ROOT c = −3/4 (not the centre −1)", () => {
+    for (const p of [1, 2]) {
+      const l = parameterLanding(p, 3);
+      expect(l).toMatchObject({ kind: "root", period: 2, preperiod: 0, refined: true });
+      expect(l?.point[0]).toBeCloseTo(-0.75, 6);
+      expect(l?.point[1]).toBeCloseTo(0, 6);
+    }
+  });
+
+  it("{1/7, 2/7} co-land at the period-3 ROOT ≈ −0.125 + 0.6495 i (not the rabbit centre)", () => {
+    for (const p of [1, 2]) {
+      const l = parameterLanding(p, 7);
+      expect(l).toMatchObject({ kind: "root", period: 3, refined: true });
+      expect(l?.point[0]).toBeCloseTo(-0.125, 5);
+      expect(l?.point[1]).toBeCloseTo(0.649519, 4);
+    }
+  });
+
+  it("1/2 → the Misiurewicz tip c = −2 (Newton-refined)", () => {
+    const l = parameterLanding(1, 2);
+    expect(l).toMatchObject({ kind: "misiurewicz", refined: true });
+    expect(l?.point[0]).toBeCloseTo(-2, 5);
+    expect(l?.point[1]).toBeCloseTo(0, 5);
+  });
+
+  it("1/6 → the Misiurewicz point c = i (Newton-refined)", () => {
+    const l = parameterLanding(1, 6);
+    expect(l).toMatchObject({ kind: "misiurewicz", refined: true });
+    expect(l?.point[0]).toBeCloseTo(0, 4);
+    expect(l?.point[1]).toBeCloseTo(1, 4);
   });
 });
