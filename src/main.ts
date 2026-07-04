@@ -62,7 +62,7 @@ import { JuliaMetricsClient } from "./render/juliaMetricsClient";
 import { polynomialCoeffs, polynomialConnectivity } from "./render/critical";
 import { drawOrbitPreview, renderJuliaPreview } from "./render/orbitPreview";
 import type { Node as ExprNode } from "./expr/ast";
-import { dynamicRay, parseAngle, rayDepthForZoom } from "./render/rays";
+import { dynamicRay, parameterRay, parseAngle, rayDepthForZoom } from "./render/rays";
 import { criticalPieceMask } from "./render/yoccozCritical";
 import { yoccozPuzzle } from "./render/yoccozPuzzle";
 import { dynPresets, paramPresets, type Preset, type PresetName } from "./presets";
@@ -1306,7 +1306,7 @@ function init(): void {
     updateExteriorMap(); // dyn coefficients depend on c (a no-op while the panel is collapsed)
     applyLaurent(); // …and so does the dynamical boundary (a no-op while the toggle is off)
     updateJuliaProperties(); // …and the Julia-set properties readout (also gated on its panel)
-    applyYoccozPuzzle(); // …and the Yoccoz puzzle graph (a no-op while its toggle is off)
+    updateYoccoz(); // …and the Yoccoz puzzle / parapuzzle overlays (a no-op while their toggles are off)
   }
   // During a coupled white-point drag the c-dependent panels are debounced (the cheap caption text
   // still updates live); they recompute once on release via coupling.setDraft(false).
@@ -1324,64 +1324,76 @@ function init(): void {
     else refreshDynPanels();
   }
 
-  // --- Yoccoz puzzle overlay (dynamical plane) ------------------------------
+  // --- Yoccoz puzzle + parapuzzle overlays ----------------------------------
   /**
-   * Draw the depth-n Yoccoz-puzzle graph — the external rays landing at the α-preimages — on the
-   * dynamical plane, recomputed for the committed c (through refreshDynPanels, so it is debounced
-   * during a coupled drag). Gated to z²+c with a repelling α (c outside the main cardioid). Ray
-   * polylines are precomputed once here, so the overlay redraw stays cheap on pan/zoom.
+   * Draw the depth-n Yoccoz graph — the rays landing at the α-preimages — on the dynamical plane (the
+   * puzzle, dynamic rays) and/or the parameter plane (the parapuzzle, parameter rays at the same
+   * angles), with an optional gold flood-fill of the critical piece / parapuzzle piece. Both share
+   * the depth slider and the α-angles A of the current c, and recompute for the committed c through
+   * refreshDynPanels (debounced during a coupled drag). Gated to z²+c with a repelling α.
    */
-  function applyYoccozPuzzle(): void {
-    const toggle = byId<HTMLInputElement>("yoccoz-toggle");
+  function updateYoccoz(): void {
+    const dynToggle = byId<HTMLInputElement>("yoccoz-toggle");
+    const paraToggle = byId<HTMLInputElement>("parapuzzle-toggle");
     const depthInput = byId<HTMLInputElement>("yoccoz-depth");
+    const critToggle = byId<HTMLInputElement>("yoccoz-critical");
     const note = byId("yoccoz-note");
     byId("yoccoz-depth-value").textContent = depthInput.value; // keep the slider label in sync
-    const eligible = dynamicalView.plot.perturbationEligible; // z²+c only
-    toggle.disabled = !eligible;
-    depthInput.disabled = !eligible || !toggle.checked;
-    const critToggle = byId<HTMLInputElement>("yoccoz-critical");
-    const clear = (): void => {
-      dynamicalView.setPuzzleRays(null);
-      dynamicalView.setCriticalPiece(null);
-    };
-    if (!eligible || !toggle.checked) {
-      clear();
-      critToggle.disabled = true;
-      note.textContent = !eligible && toggle.checked ? "The Yoccoz puzzle is defined for z²+c." : "";
+    const eligible = dynamicalView.plot.perturbationEligible; // z²+c (both planes share f)
+    dynToggle.disabled = !eligible;
+    paraToggle.disabled = !eligible;
+    const anyOn = eligible && (dynToggle.checked || paraToggle.checked);
+    depthInput.disabled = !anyOn;
+    critToggle.disabled = !anyOn;
+    // Clear both planes up front, then recompute whichever is on.
+    dynamicalView.setPuzzleRays(null);
+    dynamicalView.setCriticalPiece(null);
+    parameterView.setPuzzleRays(null);
+    parameterView.setCriticalPiece(null);
+    if (!anyOn) {
+      note.textContent =
+        !eligible && (dynToggle.checked || paraToggle.checked)
+          ? "The Yoccoz puzzle is defined for z²+c."
+          : "";
       return;
     }
-    critToggle.disabled = false;
     const depth = Number(depthInput.value);
-    const c = parseComplex(dynamicalView.plot.c);
+    const c: Vec2 = [parameterView.plot.z0[0], parameterView.plot.z0[1]]; // the current parameter
     const puz = yoccozPuzzle(c, depth);
     if (!puz) {
-      clear();
       note.textContent =
         "No puzzle at this c — α is attracting (c is in the main cardioid). Pick a c outside it (e.g. −1).";
       return;
     }
-    const rd = rayDepthForZoom(dynamicalView.plot.zoom);
-    const polylines = puz.rayAngles.map((theta) => dynamicRay(theta, c, { depth: rd }));
-    dynamicalView.setPuzzleRays(polylines);
-    // The critical piece — the flood-fill region of {G < level} minus the rays that contains 0 — when
-    // its box is ticked. Shrinks as the depth rises (more rays cut more pinches): the critical nest.
-    let critText = "";
-    if (critToggle.checked) {
-      const box: [number, number, number, number] = [-2.2, -2.2, 2.2, 2.2];
-      const mask = criticalPieceMask(c, 0.5 / 2 ** depth, polylines, [0, 0], box, 340);
-      dynamicalView.setCriticalPiece(mask ? criticalMaskCanvas(mask) : null, box);
-      critText = mask ? " Gold = the critical piece around 0." : "";
-    } else {
-      dynamicalView.setCriticalPiece(null);
+    const showCrit = critToggle.checked;
+    if (dynToggle.checked) {
+      const rd = rayDepthForZoom(dynamicalView.plot.zoom);
+      const polys = puz.rayAngles.map((t) => dynamicRay(t, c, { depth: rd }));
+      dynamicalView.setPuzzleRays(polys);
+      if (showCrit) {
+        const box: [number, number, number, number] = [-2.2, -2.2, 2.2, 2.2];
+        const mask = criticalPieceMask(c, 0.5 / 2 ** depth, polys, [0, 0], box, 340);
+        dynamicalView.setCriticalPiece(mask ? criticalMaskCanvas(mask) : null, box);
+      }
+    }
+    if (paraToggle.checked) {
+      // The parapuzzle graph: the same Θ_n angles as parameter rays on ∂M. (The parapuzzle critical
+      // piece is deferred — parameter rays land at the wake roots only parabolically-slowly, so they
+      // stop short of the pinch cells and the flood can't be sealed there.)
+      const rd = rayDepthForZoom(parameterView.plot.zoom);
+      parameterView.setPuzzleRays(puz.rayAngles.map((t) => parameterRay(t, { depth: rd })));
     }
     const list = puz.alphaAngles.map((a) => `${a.p}/${a.q}`).join(", ");
+    const on = [dynToggle.checked ? "Julia" : "", paraToggle.checked ? "parameter" : ""].filter(Boolean);
+    const goldNote = showCrit && dynToggle.checked ? " Gold = the critical piece (Julia set)." : "";
     note.textContent =
-      `Depth ${depth}: ${puz.rayAngles.length} rays around α (valence ${puz.valence}; ` +
-      `α-angles {${list}}) — the pieces nest toward the Julia set.${critText}`;
+      `Depth ${depth}: ${puz.rayAngles.length} rays around α (valence ${puz.valence}; α-angles ` +
+      `{${list}}) on the ${on.join(" + ")} plane${on.length > 1 ? "s" : ""}.${goldNote}`;
   }
-  byId("yoccoz-toggle").addEventListener("change", applyYoccozPuzzle);
-  byId("yoccoz-depth").addEventListener("input", applyYoccozPuzzle);
-  byId("yoccoz-critical").addEventListener("change", applyYoccozPuzzle);
+  for (const id of ["yoccoz-toggle", "parapuzzle-toggle", "yoccoz-critical"]) {
+    byId(id).addEventListener("change", updateYoccoz);
+  }
+  byId("yoccoz-depth").addEventListener("input", updateYoccoz);
 
   /** Build a translucent gold mask canvas from a critical-piece mask (flipped to image row order). */
   function criticalMaskCanvas(mask: { data: Uint8Array; n: number }): HTMLCanvasElement {

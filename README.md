@@ -430,11 +430,12 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
 - **Yoccoz puzzle** — the depth-_n_ puzzle graph on the current Julia set: the external rays landing
   at the repelling **α** fixed point (its orbit portrait), pulled back _n_ times — the angles
   Θₙ = {θ : 2ⁿθ mod 1 ∈ A}, so _q_·2ⁿ rays, drawn in violet. The pieces between them **nest** and
-  shrink toward the Julia set — the object behind Yoccoz's local-connectivity argument. A depth
-  slider (0–6) + a toggle; needs a repelling α (c outside the main cardioid). Basilica α ← {1/3, 2/3};
-  the rabbit ← {1/7, 2/7, 4/7}. Tick **shade the critical piece** to fill (by CPU flood-fill) the piece
-  containing the critical point 0 in gold — it shrinks as the depth rises, the **critical nest** at the
-  heart of Yoccoz's argument. `z²+c`.
+  shrink toward the Julia set — the object behind Yoccoz's local-connectivity argument. Show it on the
+  **Julia set** (the puzzle) and/or the **parameter plane** (the **parapuzzle** — the same angles drawn
+  as parameter rays on ∂M). A depth slider (0–6); needs a repelling α (c outside the main cardioid).
+  Basilica α ← {1/3, 2/3}; the rabbit ← {1/7, 2/7, 4/7}. Tick **shade the critical piece** to fill (by
+  CPU flood-fill) the piece containing the critical point 0 in gold — it shrinks as the depth rises,
+  the **critical nest** at the heart of Yoccoz's argument (Julia set). `z²+c`.
 - **Symbolic console** — type an **internal address** (the increasing periods from the main cardioid
   to a component, e.g. `1-3` rabbit, `1-2-4-8` cascade, `1-3-6`) and the **stripping algorithm**
   returns its **kneading sequence** ν and the two **characteristic external angles** θ⁻, θ⁺ that

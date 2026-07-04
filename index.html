@@ -1379,13 +1379,17 @@ z^2+c</textarea
               <p class="exterior-status">
                 The
                 <button type="button" class="gloss-link" data-term="yoccoz-puzzle" aria-label="Define Yoccoz puzzle">?</button>
-                depth-n graph on the current Julia set: the external rays landing at the α fixed point,
-                pulled back n times (q·2ⁿ rays, in violet). The pieces between them nest and shrink
-                toward the Julia set. Needs a repelling α — a c outside the main cardioid (e.g. −1, or a
-                rabbit).
+                depth-n graph: the external rays landing at the α fixed point, pulled back n times
+                (q·2ⁿ rays, in violet), the pieces between them nesting toward the set. Show it on the
+                current <strong>Julia set</strong> (the puzzle) and/or the <strong>parameter plane</strong>
+                (the parapuzzle — the same angles as parameter rays on ∂M). Needs a repelling α — a c
+                outside the main cardioid (e.g. −1, or a rabbit).
               </p>
               <label class="checkbox" for="yoccoz-toggle">
-                <input type="checkbox" id="yoccoz-toggle" /> show puzzle
+                <input type="checkbox" id="yoccoz-toggle" /> show puzzle (Julia set)
+              </label>
+              <label class="checkbox" for="parapuzzle-toggle">
+                <input type="checkbox" id="parapuzzle-toggle" /> show parapuzzle (parameter plane)
               </label>
               <div class="field">
                 <label for="yoccoz-depth">depth = <span id="yoccoz-depth-value">2</span></label>
