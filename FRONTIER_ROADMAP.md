@@ -19,10 +19,11 @@
   - **B1 (θ→point):** the precise landing-point primitive `parameterLanding` (the component **root**, not its centre; Misiurewicz Newton-refined) (**#220**) + dynamical-plane `dynamicalLanding` and the go-to-angle true-landing readout (**#221**), then the **general parabolic-root Newton** (2×2 complex Newton on {fⁿ=z, (fⁿ)′=1}) that lands the deeper **non-cardioid** roots the closed form couldn't — e.g. the period-4 cascade root −5/4 (**#223**). Covers §4 **B1**.
   - **B2 (point→θ, the inverse):** `angleOfPoint.ts` — click a point → its external **angle(s)**, **valence**, and **biaccessibility**, by landing every low-period angle and clustering (**#224** pure finder; **#225** the "Angles of a point" console + snap-to-nearest + cyan overlay rays). Covers §4 **B2** and the first §2 downstream unlock.
   - *Remaining tail (deferred):* a purpose-built quadratic solver for high-rotation satellites (the general Newton is only linear there); forward-mapping the drawn rays under an active projection.
-- ✅ **Yoccoz puzzles** (§4 **B5**) `[math]`, **Stages 1–2** — the first downstream unlock of external-ray landing:
+- ✅ **Yoccoz puzzles** (§4 **B5**) `[math]`, **Stages 1–3** — the first downstream unlock of external-ray landing:
   - **Stage 1:** the depth-_n_ puzzle graph on the dynamical plane (the α orbit-portrait rays pulled back n times, Θₙ = {θ : 2ⁿθ ∈ A}, q·2ⁿ rays in violet), a depth slider + a repelling-α gate (**#227**).
   - **Stage 2:** the **critical piece** — the puzzle piece containing the critical point 0, shaded in gold, that nests down toward 0 as the depth rises (**#229**). Inside K the pieces aren't angular sectors, so it's a CPU flood fill of {G < level} minus the rays, with the rays barriered to their landing cells (the pinch points of K) so the flood respects K's lobes.
-  - *Deferred:* Stage 3 (parapuzzle + tableau), itinerary/kneading labels, and the equipotential piece-caps.
+  - **Stage 3:** the **parapuzzle** graph — the same angles as parameter rays on ∂M, the parameter-space analogue, alongside the puzzle (**#231**).
+  - *Deferred:* the parapuzzle **critical piece** (the parameter rays land at the wake roots only parabolically-slowly, so they stop short of the pinch — sealing needs the exact root landing per ray), the **tableau** grid, itinerary/kneading labels, and the equipotential piece-caps.
 - ✅ **DE relief lighting** (§4 **D1**) — found already shipped (#159–169); roadmap corrected (**#216**). Remaining delta = interior lighting + material controls.
 - *(This roadmap document was first persisted in **#215**.)*
 
