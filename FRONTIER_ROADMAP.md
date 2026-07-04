@@ -25,6 +25,7 @@
   - **Stage 3:** the **parapuzzle** — the same angles as parameter rays on ∂M, alongside the puzzle (**#231**); plus its **critical piece**, the parapuzzle piece around the current c, by the same flood with each parameter ray **sealed to its exact wake-root landing** so the barrier reaches the pinch (**#233**).
   - *Deferred (diminishing returns — the puzzle is now complete on both planes, graph + critical piece):* the **tableau** grid (research-grade, niche), itinerary/kneading labels (the interior-sector subtlety again), and equipotential piece-caps (largely redundant — the flood already caps pieces at {G = level}).
 - ✅ **DE relief lighting** (§4 **D1**) — found already shipped (#159–169); roadmap corrected (**#216**). Remaining delta = interior lighting + material controls.
+- ✅ **GPU BLA traversal** (§4 **A1**) `[depth]` — the deep-zoom flagship, wired: the BLA table (#155) is now packed into a float texture and traversed in the perturbation kernel, skipping many iterations at once. **~20× faster deep zoom and pixel-identical** (63.6 → 3.2 ms at a deep minibrot, reference orbit 12 985 long; `uBLANumLevels = 0` keeps the exact single-step path, so shallow/non-BLA renders are unchanged). **#235** proved the render loop in plain JS (`traverseBLA` reproduces the naive per-step escape count exactly); **#236** wired it into the GLSL kernel. Its base coefficients also set up general-f perturbation. *Remaining (Stage 3):* a user toggle + a perf/skip readout + glossary/README.
 - *(This roadmap document was first persisted in **#215**.)*
 
 ---
@@ -33,8 +34,8 @@
 
 1. **The standout cheap win is the honesty bundle** `[rigor]` — high research-credibility value, weekend-scale, reuses existing hooks (`lastConnectivityRigorous`, capacity-`—`, neutral-λ). *(The original draft paired it with DE normal-map shading, but that is **already shipped**: #159–169 give `reliefSlopeAnalytic` — the `z/der` normal — plus Blinn-Phong and azimuth/elevation/depth controls. Only **interior lighting + material controls** remain; see §4 D1.)*
 2. **One primitive unlocks a whole mathematics cluster** — *external-ray landing (θ→point)*. Angles-of-a-point, wakes/limbs, Yoccoz puzzles, and Hubbard-tree embedding all fall out of it, and it de-risks the spider algorithm and matings.
-3. **The depth flagship is already half-built** — `src/render/bla.ts` builds and unit-tests the BLA table (#155) but it is **not wired to the GPU**. The single highest-ROI depth item is finishing that traversal.
-4. **Depth and trust converge on one Low-effort item** — Pauldelbrot *glitch detection* + a *precision-exhaustion banner*: cheap, and it closes the correctness gap the academic-rigor review deferred.
+3. **The depth flagship — GPU BLA — is now wired** ✅ — `src/render/bla.ts`'s BLA table (#155) is packed into a float texture and traversed in the perturbation kernel (#235 JS de-risk, #236 GPU), giving **~20× faster deep zoom, pixel-identical** (63.6 → 3.2 ms at a deep minibrot). Its base coefficients also set up general-f perturbation.
+4. **Depth and trust: the precision banner shipped (#217); glitch detection proved ~unnecessary here** — the perturbation δz recurrence is an *exact identity* (glitch-free by construction) plus rebasing, so the only residual is the dd-centre precision ceiling, already surfaced by the banner. (Verifying this against the code avoided re-proposing a solved problem.)
 5. **WebGPU is a throughput/enabler play, not a precision fix** — both the depth and visual fronts independently concluded it is *parity, not speed* for this ALU-bound workload, and WGSL still has **no f64** ([gpuweb#2805](https://github.com/gpuweb/gpuweb/issues/2805)). Defer it; it does not buy deep zoom.
 
 ---
