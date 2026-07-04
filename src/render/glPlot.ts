@@ -26,7 +26,8 @@ import { buildGradient, DEFAULT_GRADIENT, type GradientStop } from "../palettes"
 import { differentiate, newtonIteration } from "../expr/derivative";
 import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
 import { buildBLATable, packBLATable } from "./bla";
-import { computeReferenceOrbitDD, computeReferenceOrbitDDFrom } from "./perturbation";
+import { computeReferenceOrbitDDFrom } from "./perturbation";
+import { binomial, computeMultibrotOrbitDD } from "./perturbationPoly";
 import { buildEqualizedCdf } from "./histogram";
 import { type DD, dd, ddAddNumber, ddToNumber } from "./dd";
 import {
@@ -131,6 +132,10 @@ interface PreviewUniforms {
   uPreviewOffset: WebGLUniformLocation | null;
 }
 
+/** Highest degree the perturbation kernel handles for z^d + c (must match `MAX_DEGREE` in the
+ *  perturbation shader). Higher-degree monic maps fall back to the df64 renderer. */
+const MAX_PERTURB_DEGREE = 8;
+
 interface PerturbUniforms {
   uResolution: WebGLUniformLocation | null;
   uZoom: WebGLUniformLocation | null;
@@ -144,6 +149,8 @@ interface PerturbUniforms {
   uGradient: WebGLUniformLocation | null;
   uGradientOffset: WebGLUniformLocation | null;
   uJitter: WebGLUniformLocation | null;
+  uPerturbDegree: WebGLUniformLocation | null;
+  uBinom: WebGLUniformLocation | null;
   uBLA: WebGLUniformLocation | null;
   uBLANumLevels: WebGLUniformLocation | null;
   uBLAWidth: WebGLUniformLocation | null;
@@ -330,6 +337,8 @@ export class GLPlot {
   private orbitLen = 0;
   private orbitDirty = true;
   private orbitXY: Float32Array | null = null; // the uploaded reference orbit, kept to rebuild the BLA
+  // C(d, j) binomial coefficients for the perturbation kernel's z^d + c step, uploaded as `uBinom`.
+  private binomBuf = new Float32Array(MAX_PERTURB_DEGREE + 1);
   // GPU BLA (bivariate linear approximation) skip-table: skips many perturbation iterations at once
   // where the linearization is valid (deep zoom). Rebuilt when the orbit or the zoom (⇒ maxC) changes.
   private blaTex: WebGLTexture | null = null;
@@ -347,7 +356,7 @@ export class GLPlot {
   /** Fullscreen-quad vertex buffer — kept so it can be replaced on context-restore. */
   private quadBuffer: WebGLBuffer | null = null;
   private _perturbation = false; // perturbation deep-zoom toggle
-  private _perturbEligible = false; // current f is z²+c (auto-detected)
+  private _perturbEligible = false; // current f is a monic z^d+c the kernel handles (auto-detected)
   private _monicDegree: number | null = null; // degree d if f is z^d + c, else null
   /** z²+c with a divergence escape → the main-cardioid / period-2-bulb interior shortcut is
    *  exact (single precision, parameter plane). Set in {@link rebuild}. */
@@ -737,8 +746,9 @@ export class GLPlot {
   private rebuild(): void {
     const gl = this.gl;
     const iterError = this.updateIteration();
-    this._perturbEligible = this.probeMandelbrot();
     this._monicDegree = this.probeMonicDegree();
+    // z^d + c (any monic degree the kernel supports) is perturbation-eligible on both planes.
+    this._perturbEligible = this._monicDegree !== null && this._monicDegree <= MAX_PERTURB_DEGREE;
     const divergenceEscape = this.probeDivergenceEscape();
     this._interiorBailout = this._monicDegree === 2 && divergenceEscape;
     this._periodicityBailout = divergenceEscape;
@@ -1046,38 +1056,8 @@ export class GLPlot {
     return true;
   }
 
-  /** Numerically probe whether the current iterated map is z²+c (perturbation's domain). */
-  private probeMandelbrot(): boolean {
-    try {
-      const f = makeComplexFn(this._iterAst);
-      const pts: [Complex, Complex][] = [
-        [
-          [0.3, -0.2],
-          [0.1, 0.4],
-        ],
-        [
-          [-0.5, 0.7],
-          [0.2, -0.3],
-        ],
-        [
-          [1.1, 0.05],
-          [-0.6, 0.25],
-        ],
-      ];
-      for (const [z, c] of pts) {
-        const got = f(z, c);
-        const wantRe = z[0] * z[0] - z[1] * z[1] + c[0];
-        const wantIm = 2 * z[0] * z[1] + c[1];
-        if (Math.abs(got[0] - wantRe) > 1e-9 || Math.abs(got[1] - wantIm) > 1e-9) return false;
-      }
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
   /** The degree d if the iterated map is the monic family z^d + c (integer d ≥ 2), else null —
-   *  gates the exterior-map / Laurent-coefficient feature. Mirrors {@link probeMandelbrot}. */
+   *  gates perturbation deep zoom (d ≤ MAX_PERTURB_DEGREE) and the exterior-map / Laurent feature. */
   private probeMonicDegree(): number | null {
     try {
       const f = makeComplexFn(this._iterAst);
@@ -1167,8 +1147,14 @@ export class GLPlot {
   /** Whether the perturbation kernel should drive this frame. */
   private usePerturbation(): boolean {
     if (this._sphere) return false; // the sphere is single-precision; the perturbation kernel has no sphere path
-    // Eligible for both planes: parameter (Mandelbrot) and dynamical (Julia) for z²+c.
+    // Eligible for both planes: parameter (Mandelbrot) and dynamical (Julia) for z^d + c.
     return this._perturbation && this._perturbEligible && this.perturbProgram !== null;
+  }
+
+  /** The monic degree d (z^d + c) the perturbation kernel runs at — 2 (Mandelbrot) when the map is
+   *  not a detected monic family. Clamped to the kernel's supported range. */
+  private perturbDegree(): number {
+    return Math.min(Math.max(this._monicDegree ?? 2, 2), MAX_PERTURB_DEGREE);
   }
 
   /** Recompute + upload the reference orbit (RG32F texture) when the view changed. */
@@ -1185,16 +1171,18 @@ export class GLPlot {
     const refIter = Math.min(maxIter, this.maxTextureSize);
     // Parameter plane: Z_0 = 0, add = centre. Dynamical (Julia) plane: Z_0 = centre,
     // add = the fixed parameter c (folded into the reference orbit).
+    const param = this.fractType === "param";
+    const z0x = param ? dd(0) : this._centerDD[0];
+    const z0y = param ? dd(0) : this._centerDD[1];
+    const addX = param ? this._centerDD[0] : dd(this._cVal[0]);
+    const addY = param ? this._centerDD[1] : dd(this._cVal[1]);
+    const degree = this.perturbDegree();
+    // Degree 2 routes through the shipped z²+c orbit (byte-identical to the deployed Mandelbrot
+    // render); higher monic degrees use the general z^d + c reference orbit.
     const orbit =
-      this.fractType === "param"
-        ? computeReferenceOrbitDD(this._centerDD[0], this._centerDD[1], refIter)
-        : computeReferenceOrbitDDFrom(
-            this._centerDD[0],
-            this._centerDD[1],
-            dd(this._cVal[0]),
-            dd(this._cVal[1]),
-            refIter,
-          );
+      degree === 2
+        ? computeReferenceOrbitDDFrom(z0x, z0y, addX, addY, refIter)
+        : computeMultibrotOrbitDD(z0x, z0y, addX, addY, degree, refIter);
     // Hard-cap the uploaded width at the max texture size (computeReferenceOrbitDD returns up to
     // maxIter + 1 points, so a bare `min(maxIter, max)` would still be one over).
     this.orbitLen = Math.min(orbit.length, this.maxTextureSize);
@@ -1228,7 +1216,9 @@ export class GLPlot {
    * change. Disabled (or an empty table) ⇒ `blaNumLevels = 0` and the kernel single-steps everywhere.
    */
   private ensureBLA(): void {
-    if (!this.blaEnabled || !this.orbitXY || this.orbitLen < 2) {
+    // The BLA single-step A = 2Z is z²+c-specific; multibrots (d ≥ 3) single-step for now (still
+    // correct, just no skip acceleration — a follow-up generalizes the table to A = d·Z^{d−1}).
+    if (!this.blaEnabled || this.perturbDegree() !== 2 || !this.orbitXY || this.orbitLen < 2) {
       this.blaNumLevels = 0;
       return;
     }
@@ -1290,6 +1280,13 @@ export class GLPlot {
     gl.uniform1i(u.uAA, this._draft ? 1 : this._aa);
     gl.uniform1f(u.uGradientOffset, this._gradientOffset);
     gl.uniform2f(u.uJitter, this._jitter[0], this._jitter[1]);
+    // z^d + c degree + its binomial coefficients C(d, j) for the general kernel step (d = 2 is the
+    // classic Mandelbrot; the shader keeps a byte-identical hand-written step there).
+    const degree = this.perturbDegree();
+    gl.uniform1i(u.uPerturbDegree, degree);
+    this.binomBuf.fill(0);
+    for (let j = 0; j <= degree; j++) this.binomBuf[j] = binomial(degree, j);
+    gl.uniform1fv(u.uBinom, this.binomBuf);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.orbitTex);
     gl.uniform1i(u.uOrbit, 0);
@@ -1438,6 +1435,8 @@ export class GLPlot {
           uGradient: gl.getUniformLocation(program, "uGradient"),
           uGradientOffset: gl.getUniformLocation(program, "uGradientOffset"),
           uJitter: gl.getUniformLocation(program, "uJitter"),
+          uPerturbDegree: gl.getUniformLocation(program, "uPerturbDegree"),
+          uBinom: gl.getUniformLocation(program, "uBinom"),
           uBLA: gl.getUniformLocation(program, "uBLA"),
           uBLANumLevels: gl.getUniformLocation(program, "uBLANumLevels"),
           uBLAWidth: gl.getUniformLocation(program, "uBLAWidth"),

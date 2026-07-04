@@ -1907,7 +1907,7 @@ function init(): void {
       const maxSkip = 1 << (levels - 1); // level k skips 2ᵏ; deepest level is k = levels − 1
       blaNoteEl.textContent = `Active — BLA skip-table (${levels} levels, up to ${maxSkip.toLocaleString()} iterations/step), pixel-identical.`;
     } else {
-      blaNoteEl.textContent = "Active — BLA acceleration (pixel-identical to the exact kernel).";
+      blaNoteEl.textContent = "Active — perturbation deep zoom (pixel-identical to the exact kernel).";
     }
     blaNoteEl.hidden = false;
   }
@@ -2373,7 +2373,10 @@ function init(): void {
     parameterView.plot.setPerturbation(on);
     dynamicalView.plot.setPerturbation(on);
     if (on && !parameterView.plot.perturbationEligible) {
-      showToast("Perturbation deep zoom applies to z²+c (Mandelbrot and its Julia sets).", "info");
+      showToast(
+        "Perturbation deep zoom applies to z^d+c (Mandelbrot, multibrots, and their Julia sets).",
+        "info",
+      );
     }
     updatePerturbationGating();
     updateDerivativeGating();

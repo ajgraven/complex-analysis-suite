@@ -161,6 +161,8 @@ uniform int uAA;
 uniform sampler2D uGradient;
 uniform float uGradientOffset;
 uniform vec2 uJitter;
+uniform int uPerturbDegree;     // d for the monic family z^d + c (2 = the classic Mandelbrot)
+uniform float uBinom[9];        // C(d, j) for j = 0..d (MAX_DEGREE = 8 ⇒ 9 entries)
 uniform sampler2D uBLA;         // BLA table (RGBA32F): per BLA, texel 2i = (a.xy, b.xy), texel 2i+1 = (r, l)
 uniform int uBLANumLevels;      // BLA tree levels (0 ⇒ disabled: single-step everywhere)
 uniform int uBLAWidth;          // BLA texture width in texels
@@ -170,6 +172,29 @@ out vec4 fragColor;
 ${COLOR_GLSL}
 
 const int MAX_BLA_LEVELS = 20;
+const int MAX_DEGREE = 8; // perturbation supports z^d + c for d = 2…8
+
+vec2 cmul(vec2 p, vec2 q) { return vec2(p.x * q.x - p.y * q.y, p.x * q.y + p.y * q.x); }
+
+// One perturbation step for z^d + c: δz ↦ Σ_{j=1}^{d} C(d,j)·Z^{d−j}·δz^j + cAdd (the exact,
+// cancellation-free binomial expansion of (Z+δz)^d − Z^d). Degree 2 keeps the original hand-written
+// step verbatim so the Mandelbrot render is byte-identical; d ≥ 3 uses a Horner evaluation of the
+// same series (δz·Σ_{i=0}^{d−1} C(d,i+1)·Z^{d−1−i}·δz^i + cAdd).
+vec2 perturbStep(vec2 Z, vec2 dz, vec2 cAdd) {
+  if (uPerturbDegree == 2) {
+    vec2 twoZdz = 2.0 * vec2(Z.x * dz.x - Z.y * dz.y, Z.x * dz.y + Z.y * dz.x);
+    vec2 dz2 = vec2(dz.x * dz.x - dz.y * dz.y, 2.0 * dz.x * dz.y);
+    return twoZdz + dz2 + cAdd; // δz ← 2·Z·δz + δz² + δc
+  }
+  vec2 Q = vec2(0.0);
+  vec2 Zpow = vec2(1.0, 0.0); // Z^{d−1−i}, starting at Z^0
+  for (int t = 0; t < MAX_DEGREE; t++) {
+    if (t >= uPerturbDegree) break; // t = (d−1) − i, so i runs d−1 … 0
+    Q = cmul(Q, dz) + uBinom[uPerturbDegree - t] * Zpow; // C(d, i+1) = C(d, d−t)
+    Zpow = cmul(Zpow, Z);
+  }
+  return cmul(dz, Q) + cAdd;
+}
 
 // Fetch the BLA at overall table index idx (two RGBA32F texels): δz_{m+l} = a·δz + b·δc, valid while
 // |δz| < r, skipping l iterations. Mirrors the packBLATable layout in bla.ts.
@@ -228,9 +253,7 @@ vec3 pColorAt(vec2 fragXY) {
       k += l;
       m += l;
     } else {
-      vec2 twoZdz = 2.0 * vec2(Z.x * dz.x - Z.y * dz.y, Z.x * dz.y + Z.y * dz.x);
-      vec2 dz2 = vec2(dz.x * dz.x - dz.y * dz.y, 2.0 * dz.x * dz.y);
-      dz = twoZdz + dz2 + cAdd; // δz ← 2·Z·δz + δz² + δc
+      dz = perturbStep(Z, dz, cAdd); // δz ← Σ C(d,j)·Z^{d−j}·δz^j + δc (2·Z·δz + δz² + δc at d = 2)
       k += 1;
       m += 1;
     }
@@ -248,8 +271,8 @@ vec3 pColorAt(vec2 fragXY) {
   if (!escaped) return vec3(0.0); // interior (or ran past the reference orbit)
   float iters = float(k);
   if (uMode == 1) {
-    float az = length(z); // smooth (continuous) escape time
-    if (az > 1.0) iters = float(k) + 1.0 - log(log(az)) / log(2.0);
+    float az = length(z); // smooth (continuous) escape time (degree-d: divide by log d, log 2 at d = 2)
+    if (az > 1.0) iters = float(k) + 1.0 - log(log(az)) / log(float(uPerturbDegree));
   }
   return palette(iters / float(uN));
 }
