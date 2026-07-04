@@ -135,6 +135,12 @@ export const GLOSSARY: GlossaryEntry[] = [
     defn: "A deep-zoom method for z²+c: compute one high-precision reference orbit, then track every pixel as a small difference from it in ordinary precision — reaching far past the float64 zoom limit.",
   },
   {
+    id: "bla",
+    term: "Fast deep zoom (BLA)",
+    defn: "An accelerator for perturbation deep zoom. Where a pixel's difference δ from the reference orbit stays small, the exact update δ ↦ 2Z·δ + δ² + δc is well-approximated by its linear part δ ↦ A·δ + B·δc; composing consecutive linear steps into a binary tree (Zhuoran / 'mathr') lets the kernel skip many iterations at once — up to 2^(k−1) with a k-level table. Each merged step carries a validity radius, so it is taken only where the dropped δ² term is below the float32 rounding floor: the image is identical to the exact single-step kernel (0 pixels differ), while deep minibrots render roughly 20× faster. The exact speedup is view-dependent (it grows with the reference-orbit length). The 'fast deep zoom (BLA)' checkbox turns it off to compare against the exact kernel.",
+    latex: "\\delta_{m+\\ell} = A\\,\\delta_m + B\\,\\delta c \\quad (|\\delta_m| < r)",
+  },
+  {
     id: "bottcher",
     term: "Böttcher coordinate",
     defn: "The conformal change of variable φ near ∞ that turns a polynomial f into the pure power map w ↦ wᵈ (φ(z) ~ z/γ₁ near ∞, γ₁ the capacity; just z for a monic map). Its inverse ψ = φ⁻¹ uniformizes the outside of the filled Julia set; external rays and equipotentials are its straight rays and circles.",

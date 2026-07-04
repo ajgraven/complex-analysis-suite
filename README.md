@@ -605,6 +605,21 @@ iterated at that centre, so views stay locatable to ~10²⁸×; all are unit-tes
 are eligible for z²+c — the Mandelbrot set (parameter plane) and its Julia sets
 (dynamical plane); other maps fall back to df64.
 
+**Fast deep zoom (BLA).** The **fast deep zoom (BLA)** toggle (on by default)
+accelerates the perturbation kernel with a _bivariate linear approximation_ skip-table
+(Zhuoran / "mathr"). Where a pixel's delta stays small the exact update
+`δz' = 2·Z·δz + δz² + δc` is dominated by its linear part `δz ↦ A·δz + B·δc`; merging
+consecutive linear steps into a binary tree lets the kernel skip up to `2^(k−1)`
+iterations at once with a `k`-level table. Each merged step carries a validity radius, so
+a skip is taken only where the dropped `δz²` term sits below the float32 rounding floor —
+the image is **identical** to the exact single-step kernel (0 pixels differ), while deep
+minibrots render roughly **20× faster** (the exact speedup grows with the reference-orbit
+length, so it is view-dependent). The table is built on the CPU and packed into an RGBA32F
+texture the shader walks (`src/render/bla.ts`, `test/bla.test.ts` asserts the traversal
+reproduces the naive per-step iteration exactly). Untick the toggle to fall back to the
+exact single-step kernel and compare; a status line under the toggle reports the live
+skip-table depth.
+
 ## Deployment
 
 ```bash

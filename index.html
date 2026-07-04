@@ -1020,6 +1020,24 @@ z^2+c</textarea
                   <div class="field">
                     <label
                       class="checkbox"
+                      for="bla-toggle"
+                      title="Accelerate perturbation deep zoom with a BLA (bivariate linear approximation) skip-table — pixel-identical, ~20× faster at deep minibrots. On by default; untick to compare against the exact single-step kernel."
+                    >
+                      <input type="checkbox" id="bla-toggle" checked /> fast deep zoom (BLA)
+                    </label>
+                    <button
+                      class="gloss-link"
+                      type="button"
+                      data-term="bla"
+                      aria-label="What is the BLA skip-table?"
+                    >
+                      ?
+                    </button>
+                    <p id="bla-note" class="control-note" hidden></p>
+                  </div>
+                  <div class="field">
+                    <label
+                      class="checkbox"
                       for="suggestions"
                       title="Show occasional non-obstructive tips over a plot when a setting is degrading the view (e.g. too few iterations for the zoom)"
                     >
@@ -1864,7 +1882,9 @@ z^2+c</textarea
                       <li>
                         Tick <strong>perturbation (deep zoom)</strong> on the Mandelbrot set or its
                         Julia sets (z²+c) to zoom past the point where ordinary deep zoom turns to
-                        mush.
+                        mush. <strong>Fast deep zoom (BLA)</strong> — on by default — then accelerates
+                        it roughly 20× at deep minibrots with a pixel-identical skip-table; untick it
+                        to compare against the exact kernel.
                       </li>
                       <li>
                         <strong>Profile</strong> (top bar) applies a bundle of settings tuned to a

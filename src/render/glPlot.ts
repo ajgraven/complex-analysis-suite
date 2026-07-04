@@ -606,6 +606,19 @@ export class GLPlot {
     this.scheduleRender();
   }
 
+  /**
+   * Enable/disable the GPU BLA (bivariate-linear-approximation) skip-table for the perturbation
+   * kernel. On (the default) it skips many perturbation iterations per step (~20× faster at deep
+   * minibrots, pixel-identical); off falls back to the exact single-step kernel. Only affects the
+   * perturbation render path — a no-op for the standard / df64 shaders.
+   */
+  setBLA(on: boolean): void {
+    if (this.blaEnabled === on) return;
+    this.blaEnabled = on;
+    this.blaDirty = true; // rebuild (or drop) the table on the next perturbation draw
+    this.scheduleRender();
+  }
+
   /** All uniform locations for a linked program. */
   private getUniforms(program: WebGLProgram): Uniforms {
     const gl = this.gl;
@@ -2228,6 +2241,18 @@ export class GLPlot {
   /** Whether perturbation is actually driving the render right now. */
   get perturbationActive(): boolean {
     return this.usePerturbation();
+  }
+
+  /** Whether the GPU BLA skip-table is enabled (default true; see {@link setBLA}). */
+  get blaEnabledFlag(): boolean {
+    return this.blaEnabled;
+  }
+
+  /** Levels in the BLA skip-table as last built for the live perturbation draw — 0 when BLA is
+   *  off, perturbation is inactive, or the table is empty. Level k skips 2ᵏ iterations, so a
+   *  `k`-level table skips up to 2^(k−1) perturbation iterations in a single step. */
+  get blaLevelCount(): number {
+    return this.perturbationActive && this.blaEnabled ? this.blaNumLevels : 0;
   }
 
   /** Whether the current f is z²+c (so perturbation could apply on the param plane). */

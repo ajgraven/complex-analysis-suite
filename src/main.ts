@@ -871,6 +871,19 @@ function init(): void {
     if (!orbitPreviewEnabled) orbitPreviewCanvas.hidden = true;
   });
 
+  // --- Fast deep zoom (BLA): master toggle for the GPU BLA skip-table that accelerates the
+  //     perturbation kernel (~20× at deep minibrots, pixel-identical). Persisted, default on; the
+  //     toggle lets a user turn it off to compare against the exact single-step kernel. The BLA
+  //     applies only under perturbation, so its status note shows only while perturbation renders.
+  const BLA_KEY = "cdjs.bla";
+  let blaUiEnabled = true;
+  try {
+    blaUiEnabled = localStorage.getItem(BLA_KEY) !== "0"; // on by default
+  } catch {
+    /* localStorage unavailable (private mode) — default on */
+  }
+  const blaNoteEl = byId("bla-note");
+
   // Coupled-drag state for deferring the c-dependent dyn-panel readouts (see updateDynCaption).
   let coupledDrafting = false;
   let dynPanelsTimer = 0;
@@ -1868,6 +1881,35 @@ function init(): void {
     };
     show("param-iter-effective", parameterView.plot.currentIterations);
     show("dyn-iter-effective", dynamicalView.plot.currentIterations);
+    updateBlaNote();
+  }
+
+  /** Live status for the BLA deep-zoom accelerator, shown only while perturbation is rendering.
+   *  Reports the skip-table depth (levels k ⇒ up to 2^(k−1) iterations skipped per step) when on,
+   *  or that the exact single-step kernel is in use when the user has turned BLA off. */
+  function updateBlaNote(): void {
+    const active =
+      parameterView.plot.perturbationActive || dynamicalView.plot.perturbationActive;
+    if (!active) {
+      blaNoteEl.hidden = true; // BLA only applies under perturbation
+      return;
+    }
+    if (!blaUiEnabled) {
+      blaNoteEl.textContent = "Off — using the exact single-step kernel (slower deep zoom).";
+      blaNoteEl.hidden = false;
+      return;
+    }
+    // The deeper plot's table (both planes may perturb; the user is usually zoomed into one). The
+    // count is only known after a perturbation draw builds the table — until then show a generic
+    // message (the precise depth arrives on the next render/settle via requestAnimationFrame).
+    const levels = Math.max(parameterView.plot.blaLevelCount, dynamicalView.plot.blaLevelCount);
+    if (levels > 1) {
+      const maxSkip = 1 << (levels - 1); // level k skips 2ᵏ; deepest level is k = levels − 1
+      blaNoteEl.textContent = `Active — BLA skip-table (${levels} levels, up to ${maxSkip.toLocaleString()} iterations/step), pixel-identical.`;
+    } else {
+      blaNoteEl.textContent = "Active — BLA acceleration (pixel-identical to the exact kernel).";
+    }
+    blaNoteEl.hidden = false;
   }
 
   const srStatus = byId("sr-status");
@@ -2118,6 +2160,27 @@ function init(): void {
     updateLegends(); // the corner colour key follows the mode / palette
   }
 
+  // --- Fast deep zoom (BLA) toggle wiring: push the persisted state to both plots and keep it in
+  //     sync. setBLA is a no-op away from the perturbation path, so this is safe for any f / view.
+  const blaToggle = byId<HTMLInputElement>("bla-toggle");
+  blaToggle.checked = blaUiEnabled;
+  function applyBla(): void {
+    parameterView.plot.setBLA(blaUiEnabled);
+    dynamicalView.plot.setBLA(blaUiEnabled);
+    updateBlaNote(); // reflect on/off immediately…
+    requestAnimationFrame(() => updateBlaNote()); // …then upgrade to the precise depth after the draw
+  }
+  blaToggle.addEventListener("change", () => {
+    blaUiEnabled = blaToggle.checked;
+    try {
+      localStorage.setItem(BLA_KEY, blaUiEnabled ? "1" : "0");
+    } catch {
+      /* localStorage unavailable (private mode) — non-fatal */
+    }
+    applyBla();
+  });
+  applyBla(); // push the persisted state to both plots on load
+
   // --- Per-plot colour legend: a small corner chip keyed to the current colouring mode + palette,
   //     on by default (persisted). Floats over the image, so it costs no layout space. ----------
   const LEGEND_KEY = "cdjs.legend";
@@ -2315,6 +2378,8 @@ function init(): void {
     updatePerturbationGating();
     updateDerivativeGating();
     scheduleSuggestions(); // perturbation on/off changes the deep-zoom precision nudge
+    updateBlaNote(); // show/hide the BLA status for the new perturbation state…
+    requestAnimationFrame(() => updateBlaNote()); // …then upgrade to the precise depth after the draw
   }
 
   /**
