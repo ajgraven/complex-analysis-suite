@@ -7,7 +7,15 @@
  */
 import { describe, it, expect } from "vitest";
 import type { Complex } from "../src/complex";
-import { buildBLATable, mergeBLA, lookupBLA, type BLA } from "../src/render/bla";
+import {
+  buildBLATable,
+  lookupBLA,
+  mergeBLA,
+  packBLATable,
+  traverseBLA,
+  type BLA,
+  type TraverseResult,
+} from "../src/render/bla";
 
 const cmul = (p: Complex, q: Complex): Complex => [
   p[0] * q[0] - p[1] * q[1],
@@ -106,5 +114,112 @@ describe("BLA table", () => {
     expect((big as BLA).l).toBeGreaterThan(1);
     // A δz larger than any radius at that index ⇒ no BLA (fall back to a single perturbation step).
     expect(lookupBLA(levels, 8, 10)).toBeNull();
+  });
+});
+
+/** Ground truth: the perturbation render loop with single steps only (no BLA) — same escape semantics
+ *  and rebasing as {@link traverseBLA}, so the two must agree iteration-for-iteration. */
+function naivePerturb(orbit: Complex[], cAdd: Complex, dz0: Complex, maxIter: number): TraverseResult {
+  const refMax = orbit.length - 1;
+  const Z0 = orbit[0];
+  let Z = Z0;
+  let m = 0;
+  let dz: Complex = [dz0[0], dz0[1]];
+  let z: Complex = [Z[0] + dz[0], Z[1] + dz[1]];
+  for (let k = 0; k < maxIter; k++) {
+    z = [Z[0] + dz[0], Z[1] + dz[1]];
+    if (z[0] * z[0] + z[1] * z[1] > 4) return { iters: k, escaped: true, z };
+    dz = [
+      2 * (Z[0] * dz[0] - Z[1] * dz[1]) + (dz[0] * dz[0] - dz[1] * dz[1]) + cAdd[0],
+      2 * (Z[0] * dz[1] + Z[1] * dz[0]) + 2 * dz[0] * dz[1] + cAdd[1],
+    ];
+    m++;
+    Z = orbit[Math.min(m, refMax)];
+    const full: Complex = [Z[0] + dz[0], Z[1] + dz[1]];
+    const d0: Complex = [full[0] - Z0[0], full[1] - Z0[1]];
+    if (m >= refMax || d0[0] * d0[0] + d0[1] * d0[1] < dz[0] * dz[0] + dz[1] * dz[1]) {
+      dz = d0;
+      Z = Z0;
+      m = 0;
+    }
+  }
+  return { iters: maxIter, escaped: false, z };
+}
+
+describe("BLA full traversal (the GPU render loop)", () => {
+  it("reproduces the naive per-step escape count EXACTLY, over a deep block that both skips and escapes", () => {
+    // A point in the seahorse valley (near ∂M): a long reference orbit, and nearby pixels escape at a
+    // spread of high iteration counts — so the traversal exercises both multi-step skips and escape.
+    const centre: Complex = [-0.745, 0.113];
+    const N = 4000;
+    const block = 3e-4; // half-width of the pixel block ⇒ maxC
+    const orbit = referenceOrbit(centre, N);
+    const levels = buildBLATable(orbit, block);
+    let escapes = 0;
+    let checked = 0;
+    for (const mag of [0.25 * block, 0.6 * block, block]) {
+      for (const ang of [0, 1, 2, 3, 4, 5]) {
+        const dc: Complex = [mag * Math.cos(ang), mag * Math.sin(ang)];
+        const naive = naivePerturb(orbit, dc, [0, 0], N); // parameter plane: cAdd = δc, δz₀ = 0
+        const bla = traverseBLA(orbit, levels, dc, [0, 0], N);
+        expect(bla.iters).toBe(naive.iters);
+        expect(bla.escaped).toBe(naive.escaped);
+        if (naive.escaped) {
+          escapes++;
+          expect(naive.iters).toBeGreaterThan(30); // a long pre-escape orbit ⇒ multi-step skips were used
+        }
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(15);
+    expect(escapes).toBeGreaterThan(0);
+  });
+
+  it("matches over an interior block too (full maxIter, exercising rebasing to the orbit end)", () => {
+    const orbit = referenceOrbit([-0.122561, 0.744862], 2000); // the rabbit centre — bounded orbit
+    const levels = buildBLATable(orbit, 1e-3);
+    for (const ang of [0, 1.5, 3, 4.5]) {
+      const dc: Complex = [8e-4 * Math.cos(ang), 8e-4 * Math.sin(ang)];
+      const naive = naivePerturb(orbit, dc, [0, 0], 2000);
+      const bla = traverseBLA(orbit, levels, dc, [0, 0], 2000);
+      expect(bla.escaped).toBe(false); // interior: stays bounded for all 2000 iterations
+      expect(bla.iters).toBe(naive.iters);
+    }
+  });
+
+  it("also matches on the Julia plane (δz₀ = δc, cAdd = 0)", () => {
+    const orbit = referenceOrbit([-0.75, 0.05], 3000);
+    const levels = buildBLATable(orbit, 1e-4);
+    for (const ang of [0.5, 2.5, 4.5]) {
+      const dc: Complex = [1e-4 * Math.cos(ang), 1e-4 * Math.sin(ang)];
+      const naive = naivePerturb(orbit, [0, 0], dc, 3000);
+      const bla = traverseBLA(orbit, levels, [0, 0], dc, 3000);
+      expect(bla.iters).toBe(naive.iters);
+      expect(bla.escaped).toBe(naive.escaped);
+    }
+  });
+});
+
+describe("packBLATable (GPU texture layout)", () => {
+  it("round-trips every BLA at its (level, index) coordinates", () => {
+    const levels = buildBLATable(referenceOrbit([-0.5, 0], 256), 1e-15);
+    const width = 64;
+    const p = packBLATable(levels, width);
+    expect(p.numLevels).toBe(levels.length);
+    expect(p.width).toBe(width);
+    expect(p.data.length).toBe(width * p.height * 4);
+    for (let k = 0; k < levels.length; k++) {
+      for (let j = 0; j < levels[k].length; j++) {
+        const t0 = (p.levelOffsets[k] + j) * 2 * 4;
+        const b = levels[k][j];
+        // Packing stores single floats, so compare against the f32-rounded reference values.
+        expect(p.data[t0]).toBe(Math.fround(b.a[0]));
+        expect(p.data[t0 + 1]).toBe(Math.fround(b.a[1]));
+        expect(p.data[t0 + 2]).toBe(Math.fround(b.b[0]));
+        expect(p.data[t0 + 3]).toBe(Math.fround(b.b[1]));
+        expect(p.data[t0 + 4]).toBe(Math.fround(b.r));
+        expect(p.data[t0 + 5]).toBe(b.l);
+      }
+    }
   });
 });

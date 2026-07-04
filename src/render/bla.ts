@@ -92,3 +92,113 @@ export function lookupBLA(levels: BLA[][], m: number, dzMag: number): BLA | null
   }
   return null;
 }
+
+/** Outcome of a perturbed pixel: iterations survived, whether it escaped, and the final full iterate. */
+export interface TraverseResult {
+  iters: number;
+  escaped: boolean;
+  z: Complex;
+}
+
+/**
+ * The **canonical BLA render loop** for one perturbed pixel — the reference the GPU kernel (D2b)
+ * mirrors. Iterates δz about the reference orbit `ref` (Z₀…Z_refMax), skipping many steps at once with
+ * {@link lookupBLA} where the linear approximation is valid and falling back to a single perturbation
+ * step otherwise, with rebasing to Z₀ (the exact identity δz ← (Z_m+δz)−Z₀) when that shrinks δz.
+ *
+ * `cAdd` is the per-step additive constant — δc on the parameter plane, 0 on the Julia plane; `dz0` is
+ * the initial perturbation — 0 on the parameter plane, δc on the Julia plane. Because a BLA only
+ * applies while |δz| < its radius (≈ ε·|A|, far below the escape scale), the orbit cannot escape
+ * mid-skip; near the boundary δz grows, the lookup falls back to single steps, and the escape iterate
+ * is reproduced exactly — so this loop yields the *same* escape count as the naive per-step iteration,
+ * just faster. `test/bla.test.ts` pins that equivalence.
+ */
+export function traverseBLA(
+  ref: Complex[],
+  levels: BLA[][],
+  cAdd: Complex,
+  dz0: Complex,
+  maxIter: number,
+): TraverseResult {
+  const refMax = ref.length - 1;
+  const Z0 = ref[0];
+  let Z = Z0;
+  let m = 0;
+  let dz: Complex = [dz0[0], dz0[1]];
+  let k = 0;
+  let z: Complex = [Z[0] + dz[0], Z[1] + dz[1]];
+  while (k < maxIter) {
+    z = [Z[0] + dz[0], Z[1] + dz[1]];
+    if (z[0] * z[0] + z[1] * z[1] > 4) return { iters: k, escaped: true, z };
+    const bla = lookupBLA(levels, m, cabs(dz));
+    if (bla && bla.l > 1 && k + bla.l <= maxIter && m + bla.l <= refMax) {
+      // Skip l iterations: δz ← A·δz + B·δc.
+      dz = [
+        bla.a[0] * dz[0] - bla.a[1] * dz[1] + (bla.b[0] * cAdd[0] - bla.b[1] * cAdd[1]),
+        bla.a[0] * dz[1] + bla.a[1] * dz[0] + (bla.b[0] * cAdd[1] + bla.b[1] * cAdd[0]),
+      ];
+      k += bla.l;
+      m += bla.l;
+    } else {
+      // Single perturbation step: δz ← 2·Z·δz + δz² + cAdd.
+      dz = [
+        2 * (Z[0] * dz[0] - Z[1] * dz[1]) + (dz[0] * dz[0] - dz[1] * dz[1]) + cAdd[0],
+        2 * (Z[0] * dz[1] + Z[1] * dz[0]) + 2 * dz[0] * dz[1] + cAdd[1],
+      ];
+      k += 1;
+      m += 1;
+    }
+    Z = ref[Math.min(m, refMax)];
+    // Rebase to Z₀ when it shrinks δz (the reference has drifted) or the stored orbit ends.
+    const full: Complex = [Z[0] + dz[0], Z[1] + dz[1]];
+    const d0: Complex = [full[0] - Z0[0], full[1] - Z0[1]];
+    if (m >= refMax || d0[0] * d0[0] + d0[1] * d0[1] < dz[0] * dz[0] + dz[1] * dz[1]) {
+      dz = d0;
+      Z = Z0;
+      m = 0;
+    }
+  }
+  return { iters: maxIter, escaped: false, z };
+}
+
+/** A BLA binary tree packed for a GPU float texture: two RGBA32F texels per BLA, levels laid end-to-end. */
+export interface PackedBLA {
+  /** RGBA data, `width·height·4` floats. Per BLA: texel0 = (a.x, a.y, b.x, b.y), texel1 = (r, l, 0, 0). */
+  data: Float32Array;
+  width: number;
+  height: number;
+  /** BLA index at which each level begins (level k's j-th BLA is at overall index `levelOffsets[k]+j`). */
+  levelOffsets: number[];
+  numLevels: number;
+}
+
+/**
+ * Pack a BLA table into a `width`-wide RGBA32F texture image for the GPU. BLAs are laid out
+ * level-by-level (level 0 first), two texels each; the GPU maps (level k, index j) → BLA index
+ * `levelOffsets[k]+j` → texels 2·idx and 2·idx+1 (each `t → (t % width, ⌊t/width⌋)`). Mirrors the
+ * layout the kernel unpacks.
+ */
+export function packBLATable(levels: BLA[][], width: number): PackedBLA {
+  const levelOffsets: number[] = [];
+  let total = 0;
+  for (const lvl of levels) {
+    levelOffsets.push(total);
+    total += lvl.length;
+  }
+  const height = Math.max(1, Math.ceil((total * 2) / width));
+  const data = new Float32Array(width * height * 4);
+  let idx = 0;
+  for (const lvl of levels) {
+    for (const bla of lvl) {
+      const t0 = idx * 2 * 4;
+      data[t0] = bla.a[0];
+      data[t0 + 1] = bla.a[1];
+      data[t0 + 2] = bla.b[0];
+      data[t0 + 3] = bla.b[1];
+      data[t0 + 4] = bla.r;
+      data[t0 + 5] = bla.l;
+      idx++;
+    }
+  }
+  return { data, width, height, levelOffsets, numLevels: levels.length };
+}
