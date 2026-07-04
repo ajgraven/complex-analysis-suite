@@ -161,9 +161,40 @@ uniform int uAA;
 uniform sampler2D uGradient;
 uniform float uGradientOffset;
 uniform vec2 uJitter;
+uniform sampler2D uBLA;         // BLA table (RGBA32F): per BLA, texel 2i = (a.xy, b.xy), texel 2i+1 = (r, l)
+uniform int uBLANumLevels;      // BLA tree levels (0 ⇒ disabled: single-step everywhere)
+uniform int uBLAWidth;          // BLA texture width in texels
+uniform int uBLALevelOffsets[20]; // BLA index where each level begins
 out vec4 fragColor;
 
 ${COLOR_GLSL}
+
+const int MAX_BLA_LEVELS = 20;
+
+// Fetch the BLA at overall table index idx (two RGBA32F texels): δz_{m+l} = a·δz + b·δc, valid while
+// |δz| < r, skipping l iterations. Mirrors the packBLATable layout in bla.ts.
+void fetchBLA(int idx, out vec2 a, out vec2 b, out float r, out float l) {
+  int t0 = idx * 2;
+  int t1 = t0 + 1;
+  vec4 p0 = texelFetch(uBLA, ivec2(t0 % uBLAWidth, t0 / uBLAWidth), 0);
+  vec4 p1 = texelFetch(uBLA, ivec2(t1 % uBLAWidth, t1 / uBLAWidth), 0);
+  a = p0.xy; b = p0.zw; r = p1.x; l = p1.y;
+}
+
+// The largest valid skip at reference index m for perturbation magnitude dzMag (mirrors bla.ts
+// lookupBLA): the coarsest level whose BLA aligns at m and whose radius dzMag is within. Returns the
+// skip length (0 = none — do a single step) and outputs the linear coefficients a, b.
+int lookupBLA(int m, float dzMag, out vec2 a, out vec2 b) {
+  for (int k = MAX_BLA_LEVELS - 1; k >= 0; k--) {
+    if (k >= uBLANumLevels) continue;
+    int step = 1 << k;
+    if (m % step != 0) continue;
+    vec2 aa, bb; float r, l;
+    fetchBLA(uBLALevelOffsets[k] + m / step, aa, bb, r, l);
+    if (dzMag < r) { a = aa; b = bb; return int(l); }
+  }
+  return 0;
+}
 
 // One pixel's colour via perturbation about the reference orbit.
 vec3 pColorAt(vec2 fragXY) {
@@ -178,34 +209,47 @@ vec3 pColorAt(vec2 fragXY) {
   int m = 0;          // reference index — decoupled from k, reset to 0 on rebase
   int refMax = max(uOrbitLen - 1, 0);
   vec2 z = vec2(0.0);
-  int kmax = 0;
+  int k = 0;
   bool escaped = false;
-  for (int k = 0; k < uN; k++) {
+  // Bounded outer loop; each pass advances k by the BLA skip length (≥ 1), so ≤ uN passes.
+  for (int pass = 0; pass < uN; pass++) {
+    if (k >= uN) break;
     z = Z + dz; // full iterate z_k = Z_m + δz
     if (dot(z, z) > 4.0) { escaped = true; break; }
-    // δz_{k+1} = 2·Z·δz + δz² + cAdd  (complex arithmetic)
-    vec2 twoZdz = 2.0 * vec2(Z.x * dz.x - Z.y * dz.y, Z.x * dz.y + Z.y * dz.x);
-    vec2 dz2 = vec2(dz.x * dz.x - dz.y * dz.y, 2.0 * dz.x * dz.y);
-    dz = twoZdz + dz2 + cAdd;
-    m++;
+    // Take the largest valid BLA skip, else a single perturbation step. The BLA (δz_{m+l} = a·δz + b·δc)
+    // only applies while |δz| is within its radius (≈ ε·|a| ≪ escape scale), so no escape is missed
+    // mid-skip; near the boundary δz grows, the lookup falls back to single steps, and the escape
+    // iterate is reproduced exactly — the render is identical to the per-step kernel, just faster.
+    vec2 ba, bb;
+    int l = uBLANumLevels > 0 ? lookupBLA(m, length(dz), ba, bb) : 0;
+    if (l > 1 && k + l <= uN && m + l <= refMax) {
+      dz = vec2(ba.x * dz.x - ba.y * dz.y, ba.x * dz.y + ba.y * dz.x)
+         + vec2(bb.x * cAdd.x - bb.y * cAdd.y, bb.x * cAdd.y + bb.y * cAdd.x); // a·δz + b·δc
+      k += l;
+      m += l;
+    } else {
+      vec2 twoZdz = 2.0 * vec2(Z.x * dz.x - Z.y * dz.y, Z.x * dz.y + Z.y * dz.x);
+      vec2 dz2 = vec2(dz.x * dz.x - dz.y * dz.y, 2.0 * dz.x * dz.y);
+      dz = twoZdz + dz2 + cAdd; // δz ← 2·Z·δz + δz² + δc
+      k += 1;
+      m += 1;
+    }
     Z = texelFetch(uOrbit, ivec2(min(m, refMax), 0), 0).rg; // reference at the new index
-    // Rebasing (Zhuoran): re-reference to Z_0 when that gives a smaller perturbation (the reference
-    // has drifted, so Z_m + δz would lose precision to cancellation) or when the stored orbit ends.
-    // An exact identity — δz ← (Z_m + δz) − Z_0 — so it is glitch-free and also removes the old
-    // fixed-length truncation. Sound on the parameter plane (Z_0 = 0); best-effort on the Julia plane.
+    // Rebasing (Zhuoran): re-reference to Z_0 when that gives a smaller perturbation (the reference has
+    // drifted) or when the stored orbit ends. An exact identity δz ← (Z_m + δz) − Z_0, so it is
+    // glitch-free. Sound on the parameter plane (Z_0 = 0); best-effort on the Julia plane.
     vec2 full = Z + dz;
     if (m >= refMax || dot(full - Z0, full - Z0) < dot(dz, dz)) {
       dz = full - Z0;
       Z = Z0;
       m = 0;
     }
-    kmax = k + 1;
   }
   if (!escaped) return vec3(0.0); // interior (or ran past the reference orbit)
-  float iters = float(kmax);
+  float iters = float(k);
   if (uMode == 1) {
     float az = length(z); // smooth (continuous) escape time
-    if (az > 1.0) iters = float(kmax) + 1.0 - log(log(az)) / log(2.0);
+    if (az > 1.0) iters = float(k) + 1.0 - log(log(az)) / log(2.0);
   }
   return palette(iters / float(uN));
 }

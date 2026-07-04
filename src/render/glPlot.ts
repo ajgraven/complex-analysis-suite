@@ -25,6 +25,7 @@ import {
 import { buildGradient, DEFAULT_GRADIENT, type GradientStop } from "../palettes";
 import { differentiate, newtonIteration } from "../expr/derivative";
 import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
+import { buildBLATable, packBLATable } from "./bla";
 import { computeReferenceOrbitDD, computeReferenceOrbitDDFrom } from "./perturbation";
 import { buildEqualizedCdf } from "./histogram";
 import { type DD, dd, ddAddNumber, ddToNumber } from "./dd";
@@ -143,6 +144,10 @@ interface PerturbUniforms {
   uGradient: WebGLUniformLocation | null;
   uGradientOffset: WebGLUniformLocation | null;
   uJitter: WebGLUniformLocation | null;
+  uBLA: WebGLUniformLocation | null;
+  uBLANumLevels: WebGLUniformLocation | null;
+  uBLAWidth: WebGLUniformLocation | null;
+  uBLALevelOffsets: WebGLUniformLocation | null;
 }
 
 /** A program whose compile/link has been started but whose status hasn't been checked yet. */
@@ -324,6 +329,16 @@ export class GLPlot {
   private orbitTex: WebGLTexture | null = null;
   private orbitLen = 0;
   private orbitDirty = true;
+  private orbitXY: Float32Array | null = null; // the uploaded reference orbit, kept to rebuild the BLA
+  // GPU BLA (bivariate linear approximation) skip-table: skips many perturbation iterations at once
+  // where the linearization is valid (deep zoom). Rebuilt when the orbit or the zoom (⇒ maxC) changes.
+  private blaTex: WebGLTexture | null = null;
+  private blaLevelOffsets = new Int32Array(20); // per-level BLA-index offsets (padded to the shader array)
+  private blaNumLevels = 0; // 0 ⇒ the kernel single-steps (BLA disabled or table empty)
+  private blaWidth = 0;
+  private blaEnabled = true;
+  private blaBuiltZoom = 0;
+  private blaDirty = true;
   /** GPU max texture width — caps the 1×N reference-orbit texture (set in the constructor). */
   private maxTextureSize = 16384;
   /** Histogram CDF cache: rebuilt only when the distribution or render size changes. */
@@ -530,6 +545,9 @@ export class GLPlot {
     this.orbitTex = null;
     this.orbitLen = 0;
     this.orbitDirty = true;
+    this.orbitXY = null;
+    this.blaTex = null;
+    this.blaDirty = true;
     // Histogram pre-pass resources were lost with the context; drop the stale handles
     // and invalidate the CDF cache so it rebuilds against the restored context.
     this.histoTex = null;
@@ -1167,6 +1185,8 @@ export class GLPlot {
     // Hard-cap the uploaded width at the max texture size (computeReferenceOrbitDD returns up to
     // maxIter + 1 points, so a bare `min(maxIter, max)` would still be one over).
     this.orbitLen = Math.min(orbit.length, this.maxTextureSize);
+    this.orbitXY = orbit.xy.subarray(0, this.orbitLen * 2); // kept so the BLA can rebuild on zoom change
+    this.blaDirty = true; // the reference changed ⇒ rebuild the BLA table
     if (!this.orbitTex) this.orbitTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.orbitTex);
     gl.texImage2D(
@@ -1188,6 +1208,54 @@ export class GLPlot {
     this.orbitDirty = false;
   }
 
+  /**
+   * Build + upload the BLA skip-table (RGBA32F) for the current reference orbit and zoom, so the
+   * kernel can skip many perturbation iterations at once. The validity radii depend on maxC = the
+   * largest pixel offset (√2 / zoom), so the table rebuilds on a zoom change as well as an orbit
+   * change. Disabled (or an empty table) ⇒ `blaNumLevels = 0` and the kernel single-steps everywhere.
+   */
+  private ensureBLA(): void {
+    if (!this.blaEnabled || !this.orbitXY || this.orbitLen < 2) {
+      this.blaNumLevels = 0;
+      return;
+    }
+    if (!this.blaDirty && this._zoom === this.blaBuiltZoom && this.blaNumLevels > 0) return;
+    const gl = this.gl;
+    const ref: Complex[] = new Array(this.orbitLen);
+    for (let i = 0; i < this.orbitLen; i++) ref[i] = [this.orbitXY[2 * i], this.orbitXY[2 * i + 1]];
+    const maxC = Math.SQRT2 / this._zoom; // largest |δc| over the viewport (a corner pixel)
+    const levels = buildBLATable(ref, maxC);
+    if (levels.length === 0) {
+      this.blaNumLevels = 0;
+      return;
+    }
+    const packed = packBLATable(levels, Math.min(this.maxTextureSize, 2048));
+    if (!this.blaTex) this.blaTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.blaTex);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA32F,
+      packed.width,
+      packed.height,
+      0,
+      gl.RGBA,
+      gl.FLOAT,
+      packed.data,
+    );
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    this.blaWidth = packed.width;
+    this.blaNumLevels = Math.min(packed.numLevels, 20); // the shader's uBLALevelOffsets[] holds 20
+    this.blaLevelOffsets.fill(0);
+    for (let k = 0; k < this.blaNumLevels; k++) this.blaLevelOffsets[k] = packed.levelOffsets[k];
+    this.blaBuiltZoom = this._zoom;
+    this.blaDirty = false;
+  }
+
   /** Configure the perturbation program for a draw at (width, height). */
   private setupPerturbDraw(width: number, height: number, modeOverride?: number): boolean {
     const pp = this.perturbProgram;
@@ -1196,6 +1264,7 @@ export class GLPlot {
     const u = pp.uniforms;
     const fullN = this.targetIterations();
     this.ensureOrbit(fullN); // computed at the full cap so it's reused across draft/refine
+    this.ensureBLA(); // (re)build the BLA skip-table for the current orbit + zoom
     const mode = modeOverride ?? this.effectiveMode();
     gl.useProgram(pp.program);
     gl.uniform2f(u.uResolution, width, height);
@@ -1217,6 +1286,14 @@ export class GLPlot {
       gl.uniform1i(u.uGradient, 1);
       gl.activeTexture(gl.TEXTURE0);
     }
+    // BLA skip-table (texture unit 2) + its lookup metadata. uBLANumLevels = 0 ⇒ the kernel single-steps.
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.blaTex);
+    gl.uniform1i(u.uBLA, 2);
+    gl.uniform1i(u.uBLANumLevels, this.blaNumLevels);
+    gl.uniform1i(u.uBLAWidth, this.blaWidth);
+    gl.uniform1iv(u.uBLALevelOffsets, this.blaLevelOffsets);
+    gl.activeTexture(gl.TEXTURE0);
     return true;
   }
 
@@ -1348,6 +1425,10 @@ export class GLPlot {
           uGradient: gl.getUniformLocation(program, "uGradient"),
           uGradientOffset: gl.getUniformLocation(program, "uGradientOffset"),
           uJitter: gl.getUniformLocation(program, "uJitter"),
+          uBLA: gl.getUniformLocation(program, "uBLA"),
+          uBLANumLevels: gl.getUniformLocation(program, "uBLANumLevels"),
+          uBLAWidth: gl.getUniformLocation(program, "uBLAWidth"),
+          uBLALevelOffsets: gl.getUniformLocation(program, "uBLALevelOffsets"),
         },
       };
     } catch (err) {
