@@ -1216,9 +1216,7 @@ export class GLPlot {
    * change. Disabled (or an empty table) ⇒ `blaNumLevels = 0` and the kernel single-steps everywhere.
    */
   private ensureBLA(): void {
-    // The BLA single-step A = 2Z is z²+c-specific; multibrots (d ≥ 3) single-step for now (still
-    // correct, just no skip acceleration — a follow-up generalizes the table to A = d·Z^{d−1}).
-    if (!this.blaEnabled || this.perturbDegree() !== 2 || !this.orbitXY || this.orbitLen < 2) {
+    if (!this.blaEnabled || !this.orbitXY || this.orbitLen < 2) {
       this.blaNumLevels = 0;
       return;
     }
@@ -1227,7 +1225,7 @@ export class GLPlot {
     const ref: Complex[] = new Array(this.orbitLen);
     for (let i = 0; i < this.orbitLen; i++) ref[i] = [this.orbitXY[2 * i], this.orbitXY[2 * i + 1]];
     const maxC = Math.SQRT2 / this._zoom; // largest |δc| over the viewport (a corner pixel)
-    const levels = buildBLATable(ref, maxC);
+    const levels = buildBLATable(ref, maxC, this.perturbDegree()); // A = d·Z^{d−1} for z^d + c
     if (levels.length === 0) {
       this.blaNumLevels = 0;
       return;

@@ -16,6 +16,7 @@ import {
   type BLA,
   type TraverseResult,
 } from "../src/render/bla";
+import { multibrotStep } from "../src/render/perturbationPoly";
 
 const cmul = (p: Complex, q: Complex): Complex => [
   p[0] * q[0] - p[1] * q[1],
@@ -49,6 +50,33 @@ function truePerturb(ref: Complex[], m: number, dz0: Complex, dc: Complex, l: nu
 
 const applyBLA = (bla: BLA, dz0: Complex, dc: Complex): Complex =>
   cadd(cmul(bla.a, dz0), cmul(bla.b, dc));
+
+/** Reference orbit Z_0…Z_M for the multibrot z^d + c (Z_0 = 0). */
+function referenceOrbitPoly(c0: Complex, M: number, degree: number): Complex[] {
+  const ref: Complex[] = [[0, 0]];
+  let z: Complex = [0, 0];
+  for (let k = 0; k < M; k++) {
+    let p: Complex = [1, 0];
+    for (let e = 0; e < degree; e++) p = cmul(p, z); // z^d
+    z = [p[0] + c0[0], p[1] + c0[1]];
+    ref.push(z);
+  }
+  return ref;
+}
+
+/** True l-step perturbation for z^d + c (the exact binomial step, via {@link multibrotStep}). */
+function truePerturbMultibrot(
+  ref: Complex[],
+  m: number,
+  dz0: Complex,
+  dc: Complex,
+  l: number,
+  degree: number,
+): Complex {
+  let dz = dz0;
+  for (let k = 0; k < l; k++) dz = multibrotStep(ref[m + k], dz, degree, dc);
+  return dz;
+}
 
 const c0: Complex = [-0.5, 0]; // deep in the main cardioid ⇒ a long bounded reference
 const M = 256;
@@ -115,6 +143,64 @@ describe("BLA table", () => {
     // A δz larger than any radius at that index ⇒ no BLA (fall back to a single perturbation step).
     expect(lookupBLA(levels, 8, 10)).toBeNull();
   });
+});
+
+// The BLA single-step for z^d + c is A = d·Z^{d−1}, B = 1, with radius EPS·(2/(d−1))·|Z| — bounding
+// where the dropped C(d,2)·Z^{d−2}·δz² term stays negligible. These tests pin that generalized radius
+// exactly as the z²+c ones above: within it a skip reproduces the true multibrot step; outside it fails.
+describe("BLA table (multibrot z^d + c)", () => {
+  const polyMaxC = 1e-15;
+  for (const degree of [3, 4, 5]) {
+    const polyRef = referenceOrbitPoly([-0.2, 0], M, degree); // small |c| ⇒ a long bounded reference
+
+    it(`degree ${degree}: a skip reproduces the true per-step iteration WITHIN its radius`, () => {
+      const levels = buildBLATable(polyRef, polyMaxC, degree);
+      let checked = 0;
+      for (let k = 0; k < levels.length; k++) {
+        for (let i = 0; i < levels[k].length; i += Math.max(1, (levels[k].length / 8) | 0)) {
+          const bla = levels[k][i];
+          if (bla.r <= 0) continue;
+          const m = i * (1 << k);
+          if (m + bla.l > M) continue;
+          for (const az of angles) {
+            const dz: Complex = [0.5 * bla.r * Math.cos(az), 0.5 * bla.r * Math.sin(az)];
+            for (const mag of [0, 0.3 * polyMaxC, polyMaxC]) {
+              for (const ac of angles) {
+                const dc: Complex = [mag * Math.cos(ac), mag * Math.sin(ac)];
+                const approx = applyBLA(bla, dz, dc);
+                const truth = truePerturbMultibrot(polyRef, m, dz, dc, bla.l, degree);
+                const err = cabs([approx[0] - truth[0], approx[1] - truth[1]]);
+                expect(err).toBeLessThan(1e-5 * cabs(truth) + 1e-9);
+                checked++;
+              }
+            }
+          }
+        }
+      }
+      expect(checked).toBeGreaterThan(20);
+    });
+
+    it(`degree ${degree}: the approximation breaks down well OUTSIDE the radius`, () => {
+      const levels = buildBLATable(polyRef, polyMaxC, degree);
+      const bla = levels[0][6]; // a single-step BLA at a non-zero reference iterate
+      expect(bla.r).toBeGreaterThan(0);
+      const dz: Complex = [1e4 * bla.r, 0];
+      const approx = applyBLA(bla, dz, [0, 0]);
+      const truth = truePerturbMultibrot(polyRef, 6, dz, [0, 0], bla.l, degree);
+      const relErr = cabs([approx[0] - truth[0], approx[1] - truth[1]]) / cabs(truth);
+      expect(relErr).toBeGreaterThan(1e-4); // the dropped higher-order terms now matter
+    });
+
+    it(`degree ${degree}: the single-step A is f′(Z) = d·Z^{d−1}`, () => {
+      const levels = buildBLATable(polyRef, polyMaxC, degree);
+      const Z = polyRef[6];
+      let zp: Complex = [1, 0];
+      for (let e = 0; e < degree - 1; e++) zp = cmul(zp, Z); // Z^{d−1}
+      const want: Complex = [degree * zp[0], degree * zp[1]];
+      const a = levels[0][6].a;
+      expect(cabs([a[0] - want[0], a[1] - want[1]])).toBeLessThan(1e-12);
+    });
+  }
 });
 
 /** Ground truth: the perturbation render loop with single steps only (no BLA) — same escape semantics

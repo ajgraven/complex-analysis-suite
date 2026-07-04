@@ -1,11 +1,12 @@
 /**
- * Bivariate linear approximation (BLA) table for z²+c perturbation deep zoom (Zhuoran; see
+ * Bivariate linear approximation (BLA) table for z^d + c perturbation deep zoom (Zhuoran; see
  * mathr, "Deep zoom theory and practice (again)"). Where the perturbation δz is small enough that
- * the δz² term is negligible, one perturbation step δz → 2·Z·δz + δz² + δc is ~linear:
+ * the nonlinear-in-δz terms are negligible, one perturbation step is ~linear:
  *
  *     δz_{m+l} = A·δz_m + B·δc,   valid while |δz_m| < r.
  *
- * Single step (l = 1): A = 2·Z_m, B = 1. Neighbouring BLAs merge (x first, then y):
+ * Single step (l = 1): A = f′(Z_m) = d·Z_m^{d−1}, B = 1 (A = 2·Z_m at d = 2). Neighbouring BLAs
+ * merge (x first, then y):
  *
  *     l = lₓ + l_y,   A = A_y·Aₓ,   B = A_y·Bₓ + B_y,
  *     r = min(rₓ, max(0, (r_y − |Bₓ|·maxC) / |Aₓ|)),
@@ -38,12 +39,16 @@ const cmul = (p: Complex, q: Complex): Complex => [
 ];
 const cabs = (p: Complex): number => Math.hypot(p[0], p[1]);
 
-/** Single-step BLA at reference iterate Z_m for z²+c (A = 2Z, B = 1). The radius bounds where the
- *  dropped δz² term is below `EPS` relative to the linear term 2Z·δz. */
-function singleStep(Zm: Complex): BLA {
-  const a: Complex = [2 * Zm[0], 2 * Zm[1]];
-  // |δz²| ≤ EPS·|2Z·δz| ⟺ |δz| ≤ EPS·|2Z| = EPS·|A|. (Z_0 = 0 ⇒ r = 0: no skipping at the start.)
-  return { a, b: [1, 0], r: EPS * cabs(a), l: 1 };
+/** Single-step BLA at reference iterate Z_m for z^d + c: A = f′(Z) = d·Z^{d−1}, B = 1. The radius
+ *  bounds where the dropped nonlinear terms stay below `EPS` relative to the linear term A·δz. The
+ *  dominant dropped term is C(d,2)·Z^{d−2}·δz², so |δz| < EPS·(2/(d−1))·|Z| (which is exactly
+ *  EPS·|2Z| = EPS·|A| at d = 2). Z_0 = 0 ⇒ r = 0: no skipping at the start. */
+function singleStep(Zm: Complex, degree: number): BLA {
+  let zp: Complex = [1, 0];
+  for (let i = 0; i < degree - 1; i++) zp = cmul(zp, Zm); // Z^{d−1}
+  const a: Complex = [degree * zp[0], degree * zp[1]]; // A = d·Z^{d−1} (= 2Z at d = 2, bit-for-bit)
+  const r = degree === 2 ? EPS * cabs(a) : EPS * (2 / (degree - 1)) * cabs(Zm);
+  return { a, b: [1, 0], r, l: 1 };
 }
 
 /** Merge two consecutive BLAs — `x` first, then `y` — into one that skips `x.l + y.l` iterations. */
@@ -61,11 +66,11 @@ export function mergeBLA(x: BLA, y: BLA, maxC: number): BLA {
  * each higher level merges non-overlapping neighbour pairs (so level k holds BLAs that skip 2ᵏ
  * iterations, starting at multiples of 2ᵏ). An odd tail at any level is carried by the finer levels.
  */
-export function buildBLATable(ref: Complex[], maxC: number): BLA[][] {
+export function buildBLATable(ref: Complex[], maxC: number, degree = 2): BLA[][] {
   const M = ref.length - 1;
   if (M < 1) return [];
   const level0: BLA[] = [];
-  for (let m = 0; m < M; m++) level0.push(singleStep(ref[m]));
+  for (let m = 0; m < M; m++) level0.push(singleStep(ref[m], degree));
   const levels: BLA[][] = [level0];
   let cur = level0;
   while (cur.length > 1) {
