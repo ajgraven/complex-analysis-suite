@@ -22,8 +22,8 @@
 - ✅ **Yoccoz puzzles** (§4 **B5**) `[math]`, **Stages 1–3** — the first downstream unlock of external-ray landing:
   - **Stage 1:** the depth-_n_ puzzle graph on the dynamical plane (the α orbit-portrait rays pulled back n times, Θₙ = {θ : 2ⁿθ ∈ A}, q·2ⁿ rays in violet), a depth slider + a repelling-α gate (**#227**).
   - **Stage 2:** the **critical piece** — the puzzle piece containing the critical point 0, shaded in gold, that nests down toward 0 as the depth rises (**#229**). Inside K the pieces aren't angular sectors, so it's a CPU flood fill of {G < level} minus the rays, with the rays barriered to their landing cells (the pinch points of K) so the flood respects K's lobes.
-  - **Stage 3:** the **parapuzzle** graph — the same angles as parameter rays on ∂M, the parameter-space analogue, alongside the puzzle (**#231**).
-  - *Deferred:* the parapuzzle **critical piece** (the parameter rays land at the wake roots only parabolically-slowly, so they stop short of the pinch — sealing needs the exact root landing per ray), the **tableau** grid, itinerary/kneading labels, and the equipotential piece-caps.
+  - **Stage 3:** the **parapuzzle** — the same angles as parameter rays on ∂M, alongside the puzzle (**#231**); plus its **critical piece**, the parapuzzle piece around the current c, by the same flood with each parameter ray **sealed to its exact wake-root landing** so the barrier reaches the pinch (**#233**).
+  - *Deferred (diminishing returns — the puzzle is now complete on both planes, graph + critical piece):* the **tableau** grid (research-grade, niche), itinerary/kneading labels (the interior-sector subtlety again), and equipotential piece-caps (largely redundant — the flood already caps pieces at {G = level}).
 - ✅ **DE relief lighting** (§4 **D1**) — found already shipped (#159–169); roadmap corrected (**#216**). Remaining delta = interior lighting + material controls.
 - *(This roadmap document was first persisted in **#215**.)*
 
