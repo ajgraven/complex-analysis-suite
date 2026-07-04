@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { dynamicRay } from "../src/render/rays";
+import { parameterLanding } from "../src/render/angleParameter";
+import { dynamicRay, parameterRay } from "../src/render/rays";
 import { criticalPieceMask } from "../src/render/yoccozCritical";
 import { yoccozPuzzle } from "../src/render/yoccozPuzzle";
 
@@ -60,5 +61,38 @@ describe("criticalPieceMask (the Yoccoz critical piece, by flood fill)", () => {
     if (!puz) throw new Error("no puzzle");
     const rays = puz.rayAngles.map((a) => dynamicRay(a, C, { depth: 500 }));
     expect(criticalPieceMask(C, 0.25, rays, [5, 5], BOX, N)).toBeNull(); // 5+5i escapes → not in region
+  });
+});
+
+describe("parapuzzle critical piece (parameter plane, roots sealed)", () => {
+  const PBOX: [number, number, number, number] = [-2.2, -1.4, 0.7, 1.4];
+  /** Sealed parameter rays: each traced ray extended to its exact landing so the flood barrier reaches
+   *  the root pinch on ∂M (parameter rays land at the wake roots only parabolically-slowly). */
+  function pmask(depth: number) {
+    const puz = yoccozPuzzle(C, depth); // C = −1 is in the 1/2-wake
+    if (!puz) throw new Error("no puzzle");
+    const q = puz.alphaAngles[0].q * 2 ** depth;
+    const rays = puz.rayAngles.map((t) => {
+      const ray = parameterRay(t, { depth: 500 });
+      const land = parameterLanding(Math.round(t * q), q);
+      if (land) ray.push([land.point[0], land.point[1]]);
+      return ray;
+    });
+    const m = criticalPieceMask(C, G0 / 2 ** depth, rays, C, PBOX, N, true);
+    if (!m) throw new Error("no mask");
+    return m;
+  }
+
+  it("contains the parameter c = −1 but not the main cardioid (c = 0), sealed at the −3/4 root", () => {
+    for (const depth of [0, 1, 2]) {
+      const m = pmask(depth);
+      expect(at(m, -1, 0)).toBe(true); // the parameter itself is inside its parapuzzle piece
+      expect(at(m, 0, 0)).toBe(false); // c = 0 is outside the 1/2-wake — the seal stops the leak
+    }
+  });
+
+  it("nests: the parapuzzle piece shrinks with depth", () => {
+    expect(count(pmask(1))).toBeLessThan(count(pmask(0)));
+    expect(count(pmask(2))).toBeLessThan(count(pmask(1)));
   });
 });

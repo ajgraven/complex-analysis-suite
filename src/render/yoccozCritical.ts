@@ -24,8 +24,8 @@ export interface CriticalMask {
 const ESCAPE_R2 = 1e12; // (10^6)^2
 const MAX_ITER = 64; // ample: a cell at G ≈ level escapes in ~log2(log R / level) ≪ 64 steps
 
-/** Smooth escape potential G(z₀) = log|z_m| / 2^m at escape for z ↦ z²+c, or 0 if bounded (in K). */
-function potential(x0: number, y0: number, cx: number, cy: number): number {
+/** Smooth escape potential G = log|z_m|/2^m of the orbit z_{k+1} = z_k²+c from z₀, or 0 if bounded. */
+function orbitPotential(x0: number, y0: number, cx: number, cy: number): number {
   let x = x0;
   let y = y0;
   for (let k = 0; k < MAX_ITER; k++) {
@@ -37,6 +37,15 @@ function potential(x0: number, y0: number, cx: number, cy: number): number {
     if (r2 > ESCAPE_R2) return Math.log(r2) / 2 / 2 ** (k + 1);
   }
   return 0;
+}
+
+/**
+ * The potential at a grid point. On the **dynamical** plane it is the escape potential of z₀ = the
+ * point under the fixed map z²+c (the Julia potential); on the **parameter** plane it is the potential
+ * of the critical orbit z₀ = 0 under z²+(the point) (the Mandelbrot potential).
+ */
+function gridPotential(px: number, py: number, c: Vec2, paramPlane: boolean): number {
+  return paramPlane ? orbitPotential(0, 0, px, py) : orbitPotential(px, py, c[0], c[1]);
 }
 
 /**
@@ -52,6 +61,7 @@ export function criticalPieceMask(
   target: Vec2,
   box: [number, number, number, number],
   n: number,
+  paramPlane = false,
 ): CriticalMask | null {
   const [x0, y0, x1, y1] = box;
   const dx = (x1 - x0) / n;
@@ -63,7 +73,7 @@ export function criticalPieceMask(
     const py = y0 + (j + 0.5) * dy;
     const row = j * n;
     for (let i = 0; i < n; i++) {
-      if (potential(x0 + (i + 0.5) * dx, py, c[0], c[1]) >= level) wall[row + i] = 1;
+      if (gridPotential(x0 + (i + 0.5) * dx, py, c, paramPlane) >= level) wall[row + i] = 1;
     }
   }
 

@@ -434,8 +434,9 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   **Julia set** (the puzzle) and/or the **parameter plane** (the **parapuzzle** — the same angles drawn
   as parameter rays on ∂M). A depth slider (0–6); needs a repelling α (c outside the main cardioid).
   Basilica α ← {1/3, 2/3}; the rabbit ← {1/7, 2/7, 4/7}. Tick **shade the critical piece** to fill (by
-  CPU flood-fill) the piece containing the critical point 0 in gold — it shrinks as the depth rises,
-  the **critical nest** at the heart of Yoccoz's argument (Julia set). `z²+c`.
+  CPU flood-fill) the piece around the critical point 0 in gold — it shrinks as the depth rises, the
+  **critical nest** at the heart of Yoccoz's argument; on the parameter plane the same shades the
+  parapuzzle piece around the current c (its rays sealed to the wake roots). `z²+c`.
 - **Symbolic console** — type an **internal address** (the increasing periods from the main cardioid
   to a component, e.g. `1-3` rabbit, `1-2-4-8` cascade, `1-3-6`) and the **stripping algorithm**
   returns its **kneading sequence** ν and the two **characteristic external angles** θ⁻, θ⁺ that

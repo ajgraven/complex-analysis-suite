@@ -1377,15 +1377,31 @@ function init(): void {
       }
     }
     if (paraToggle.checked) {
-      // The parapuzzle graph: the same Θ_n angles as parameter rays on ∂M. (The parapuzzle critical
-      // piece is deferred — parameter rays land at the wake roots only parabolically-slowly, so they
-      // stop short of the pinch cells and the flood can't be sealed there.)
+      // The parapuzzle graph: the same Θ_n angles as parameter rays on ∂M. When the critical piece is
+      // shown, each ray is sealed to its exact landing (parameterLanding) so the flood barrier reaches
+      // the root pinch — parameter rays land at wake roots only parabolically-slowly and stop short.
       const rd = rayDepthForZoom(parameterView.plot.zoom);
-      parameterView.setPuzzleRays(puz.rayAngles.map((t) => parameterRay(t, { depth: rd })));
+      const q = puz.alphaAngles[0].q * 2 ** depth; // common denominator of the Θ_n angles
+      const polys = puz.rayAngles.map((t) => {
+        const ray = parameterRay(t, { depth: rd });
+        if (showCrit) {
+          const land = parameterLanding(Math.round(t * q), q);
+          if (land) ray.push([land.point[0], land.point[1]]);
+        }
+        return ray;
+      });
+      parameterView.setPuzzleRays(polys);
+      if (showCrit) {
+        // The parapuzzle piece containing the current parameter c (Mandelbrot-escape flood).
+        const box: [number, number, number, number] = [-2.2, -1.4, 0.7, 1.4];
+        const mask = criticalPieceMask(c, 0.5 / 2 ** depth, polys, c, box, 340, true);
+        parameterView.setCriticalPiece(mask ? criticalMaskCanvas(mask) : null, box);
+      }
     }
     const list = puz.alphaAngles.map((a) => `${a.p}/${a.q}`).join(", ");
     const on = [dynToggle.checked ? "Julia" : "", paraToggle.checked ? "parameter" : ""].filter(Boolean);
-    const goldNote = showCrit && dynToggle.checked ? " Gold = the critical piece (Julia set)." : "";
+    const goldNote =
+      showCrit && (dynToggle.checked || paraToggle.checked) ? " Gold = the critical piece." : "";
     note.textContent =
       `Depth ${depth}: ${puz.rayAngles.length} rays around α (valence ${puz.valence}; α-angles ` +
       `{${list}}) on the ${on.join(" + ")} plane${on.length > 1 ? "s" : ""}.${goldNote}`;
