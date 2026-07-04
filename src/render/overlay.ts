@@ -233,6 +233,8 @@ export interface OverlayParams {
   hermanCurves?: Vec2[][] | null;
   /** Yoccoz-puzzle ray polylines (precomputed z-plane) to draw on the dynamical plane, in violet. */
   puzzleRays?: Vec2[][] | null;
+  /** Yoccoz critical-piece shading: a prebuilt mask canvas over a plane box (dynamical plane). */
+  criticalPiece?: { image: CanvasImageSource; box: [number, number, number, number] } | null;
   /** Reconstructed exterior-map boundary to draw (ψ on |w| = r); coeffs in plot space. */
   laurentBoundary?: { coeffs: Vec2[]; r: number; lead?: Vec2 };
   /**
@@ -690,6 +692,15 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
   // Detected Herman-ring invariant circles (dynamical plane).
   if (p.hermanCurves && p.hermanCurves.length > 0 && p.fractType === "dyn") {
     drawHermanCurves(ctx, p.hermanCurves, p.center, p.zoom, size);
+  }
+
+  // Yoccoz critical-piece shading (dynamical plane): a prebuilt mask over a plane box, drawn UNDER the
+  // puzzle rays. Map the box corners to pixels and let drawImage scale, so it re-maps on pan/zoom.
+  if (p.criticalPiece && p.fractType === "dyn") {
+    const [bx0, by0, bx1, by1] = p.criticalPiece.box;
+    const tl = plotToPx([bx0, by1], p.center, p.zoom, size); // top-left  = (x0, y1)
+    const br = plotToPx([bx1, by0], p.center, p.zoom, size); // bottom-right = (x1, y0)
+    ctx.drawImage(p.criticalPiece.image, tl[0], tl[1], br[0] - tl[0], br[1] - tl[1]);
   }
 
   // Yoccoz-puzzle graph: the depth-n external rays landing at the α-preimages (dynamical plane), in

@@ -63,6 +63,7 @@ import { polynomialCoeffs, polynomialConnectivity } from "./render/critical";
 import { drawOrbitPreview, renderJuliaPreview } from "./render/orbitPreview";
 import type { Node as ExprNode } from "./expr/ast";
 import { dynamicRay, parseAngle, rayDepthForZoom } from "./render/rays";
+import { criticalPieceMask } from "./render/yoccozCritical";
 import { yoccozPuzzle } from "./render/yoccozPuzzle";
 import { dynPresets, paramPresets, type Preset, type PresetName } from "./presets";
 import { byId } from "./ui/dom";
@@ -1338,29 +1339,75 @@ function init(): void {
     const eligible = dynamicalView.plot.perturbationEligible; // z²+c only
     toggle.disabled = !eligible;
     depthInput.disabled = !eligible || !toggle.checked;
-    if (!eligible || !toggle.checked) {
+    const critToggle = byId<HTMLInputElement>("yoccoz-critical");
+    const clear = (): void => {
       dynamicalView.setPuzzleRays(null);
+      dynamicalView.setCriticalPiece(null);
+    };
+    if (!eligible || !toggle.checked) {
+      clear();
+      critToggle.disabled = true;
       note.textContent = !eligible && toggle.checked ? "The Yoccoz puzzle is defined for z²+c." : "";
       return;
     }
+    critToggle.disabled = false;
     const depth = Number(depthInput.value);
     const c = parseComplex(dynamicalView.plot.c);
     const puz = yoccozPuzzle(c, depth);
     if (!puz) {
-      dynamicalView.setPuzzleRays(null);
+      clear();
       note.textContent =
         "No puzzle at this c — α is attracting (c is in the main cardioid). Pick a c outside it (e.g. −1).";
       return;
     }
     const rd = rayDepthForZoom(dynamicalView.plot.zoom);
-    dynamicalView.setPuzzleRays(puz.rayAngles.map((theta) => dynamicRay(theta, c, { depth: rd })));
+    const polylines = puz.rayAngles.map((theta) => dynamicRay(theta, c, { depth: rd }));
+    dynamicalView.setPuzzleRays(polylines);
+    // The critical piece — the flood-fill region of {G < level} minus the rays that contains 0 — when
+    // its box is ticked. Shrinks as the depth rises (more rays cut more pinches): the critical nest.
+    let critText = "";
+    if (critToggle.checked) {
+      const box: [number, number, number, number] = [-2.2, -2.2, 2.2, 2.2];
+      const mask = criticalPieceMask(c, 0.5 / 2 ** depth, polylines, [0, 0], box, 340);
+      dynamicalView.setCriticalPiece(mask ? criticalMaskCanvas(mask) : null, box);
+      critText = mask ? " Gold = the critical piece around 0." : "";
+    } else {
+      dynamicalView.setCriticalPiece(null);
+    }
     const list = puz.alphaAngles.map((a) => `${a.p}/${a.q}`).join(", ");
     note.textContent =
       `Depth ${depth}: ${puz.rayAngles.length} rays around α (valence ${puz.valence}; ` +
-      `α-angles {${list}}) — the pieces nest toward the Julia set.`;
+      `α-angles {${list}}) — the pieces nest toward the Julia set.${critText}`;
   }
   byId("yoccoz-toggle").addEventListener("change", applyYoccozPuzzle);
   byId("yoccoz-depth").addEventListener("input", applyYoccozPuzzle);
+  byId("yoccoz-critical").addEventListener("change", applyYoccozPuzzle);
+
+  /** Build a translucent gold mask canvas from a critical-piece mask (flipped to image row order). */
+  function criticalMaskCanvas(mask: { data: Uint8Array; n: number }): HTMLCanvasElement {
+    const { data, n } = mask;
+    const cv = document.createElement("canvas");
+    cv.width = n;
+    cv.height = n;
+    const ctx = cv.getContext("2d");
+    if (!ctx) return cv;
+    const img = ctx.createImageData(n, n);
+    for (let j = 0; j < n; j++) {
+      const src = j * n;
+      const dst = (n - 1 - j) * n; // plane row j (bottom-up) → image row n−1−j (top-down)
+      for (let i = 0; i < n; i++) {
+        if (data[src + i]) {
+          const p = (dst + i) * 4;
+          img.data[p] = 255;
+          img.data[p + 1] = 224;
+          img.data[p + 2] = 120;
+          img.data[p + 3] = 92;
+        }
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return cv;
+  }
 
   // --- Exterior-map (uniformization) readout -------------------------------
   let lastParamCoeffs: Complex[] | null = null;

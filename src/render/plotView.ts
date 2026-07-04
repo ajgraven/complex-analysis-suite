@@ -77,6 +77,8 @@ export class PlotView {
   private showSiegelCurves = false;
   private hermanCurves: Vec2[][] | null = null;
   private puzzleRays: Vec2[][] | null = null;
+  private criticalPiece: { image: HTMLCanvasElement; box: [number, number, number, number] } | null =
+    null;
   private laurentBoundary: { coeffs: Vec2[]; r: number; lead: Vec2 } | null = null;
   private annotations: Annotation[] = [];
   /**
@@ -194,6 +196,12 @@ export class PlotView {
     this.requestOverlay();
   }
 
+  /** Set the Yoccoz critical-piece region (a prebuilt mask canvas over a plane box), or null to clear. */
+  setCriticalPiece(image: HTMLCanvasElement | null, box?: [number, number, number, number]): void {
+    this.criticalPiece = image && box ? { image, box } : null;
+    this.requestOverlay();
+  }
+
   /** Set the reconstructed exterior-map boundary to draw (coeffs in plot space, radius r), or
    *  null to clear. Overlay-only. */
   setLaurentBoundary(coeffs: Vec2[] | null, r: number, lead: Vec2 = [1, 0]): void {
@@ -289,6 +297,7 @@ export class PlotView {
           siegelCurves: this.showSiegelCurves,
           hermanCurves: this.hermanCurves,
           puzzleRays: this.puzzleRays,
+          criticalPiece: this.criticalPiece,
           projected: this.plot.projection !== 0,
           laurentBoundary: this.laurentBoundary ?? undefined,
           cyclePoints: this.currentCyclePoints(),
@@ -387,6 +396,7 @@ export class PlotView {
       siegelCurves: this.showSiegelCurves,
       hermanCurves: this.hermanCurves,
       puzzleRays: this.puzzleRays,
+      criticalPiece: this.criticalPiece,
       projected: this.plot.projection !== 0,
       laurentBoundary: this.laurentBoundary ?? undefined,
       cyclePoints: this.currentCyclePoints(),
