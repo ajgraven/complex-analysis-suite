@@ -1,0 +1,27 @@
+{
+  // Quadrature app tsconfig (ADR-0002, ADR-0003). Phase 1: the app is still 100% JS and
+  // stays gradually-typed. `allowJs` puts the JS in the program; `checkJs: false` means it
+  // is not type-checked by default. `strict: false` keeps the handful of files that already
+  // opt in via `// @ts-check` checked *loosely* (the app's original typecheck script never
+  // set `strict`, and its repo never actually had TypeScript installed, so those opt-ins had
+  // never been validated). Leaves get typed properly later (Phase 3+ → @cas/core), tightening
+  // this file as they do.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "strict": false,
+    "noEmit": true
+  },
+  "include": ["app/**/*.js", "app/**/*.mjs"],
+  "exclude": [
+    "**/node_modules",
+    "app/node_modules",
+    "app/disabled",
+    // primary-solution.js carries `// @ts-check` but its JSDoc uses characters tsc rejects
+    // (TS1127) and references app globals (QD, module) with no ambient decls — latent issues
+    // never caught because the QD repo shipped without TypeScript. Excluded until it is typed
+    // for real; remove this line when that happens.
+    "app/primary-solution.js"
+  ]
+}
