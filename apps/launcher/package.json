@@ -1,0 +1,17 @@
+{
+  "name": "launcher",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Suite launcher — a static landing page linking to each app (ARCHITECTURE.md §11: a unified menu, not a unified shell).",
+  "license": "MIT",
+  "author": "Andrew Graven <andrew@graven.com>",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.4.10"
+  }
+}

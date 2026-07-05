@@ -1,5 +1,5 @@
 {
-  "name": "complex-dynamics-js",
+  "name": "complex-dynamics",
   "version": "1.0.0",
   "description": "Interactive complex-dynamics visualizer (parameter space + dynamical plane) on a pure WebGL2 engine.",
   "type": "module",

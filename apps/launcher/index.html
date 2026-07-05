@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Complex Analysis Suite</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #0f1115;
+        --panel: #171a21;
+        --panel-border: #262b36;
+        --text: #e7e9ee;
+        --muted: #99a1b3;
+        --accent: #6ea8fe;
+        --accent-soft: rgba(110, 168, 254, 0.12);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: var(--text);
+        background: radial-gradient(1200px 600px at 50% -10%, #1b2130 0%, var(--bg) 60%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: clamp(1.5rem, 5vw, 4rem) 1.25rem;
+      }
+      header { max-width: 62rem; width: 100%; margin-bottom: 2rem; }
+      h1 { font-size: clamp(1.6rem, 4vw, 2.4rem); margin: 0 0 0.4rem; letter-spacing: -0.01em; }
+      .tagline { color: var(--muted); margin: 0; max-width: 46rem; }
+      main {
+        max-width: 62rem;
+        width: 100%;
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+      }
+      .card {
+        display: flex;
+        flex-direction: column;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 14px;
+        padding: 1.25rem 1.25rem 1.1rem;
+        text-decoration: none;
+        color: inherit;
+        transition: border-color 0.15s ease, transform 0.15s ease, background 0.15s ease;
+      }
+      a.card:hover {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+        transform: translateY(-2px);
+      }
+      .card h2 { margin: 0 0 0.35rem; font-size: 1.15rem; }
+      .card p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+      .badge {
+        align-self: flex-start;
+        margin-bottom: 0.7rem;
+        font-size: 0.72rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--accent);
+        background: var(--accent-soft);
+        border-radius: 999px;
+        padding: 0.15rem 0.6rem;
+      }
+      .card.soon { opacity: 0.62; }
+      .card.soon .badge { color: var(--muted); background: rgba(153, 161, 179, 0.12); }
+      footer { max-width: 62rem; width: 100%; margin-top: 2.25rem; color: var(--muted); font-size: 0.82rem; }
+      footer code { background: rgba(255, 255, 255, 0.06); padding: 0.1rem 0.35rem; border-radius: 5px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Complex Analysis Suite</h1>
+      <p class="tagline">
+        A suite of complex-analysis &amp; complex-dynamics visualization tools that share
+        common packages and hand data off to one another.
+      </p>
+    </header>
+
+    <main>
+      <a class="card" href="../complex-dynamics/">
+        <span class="badge">Dynamics</span>
+        <h2>Complex Dynamics</h2>
+        <p>
+          GPU escape-time visualizer for families f(z, c) — Mandelbrot/multibrot, Julia
+          sets, Tricorn/multicorn, Böttcher coordinates, external rays, matings, deep zoom.
+        </p>
+      </a>
+
+      <a class="card" href="../quadrature-domains/app/">
+        <span class="badge">Quadrature</span>
+        <h2>Quadrature Domains</h2>
+        <p>
+          Solver &amp; visualizer for (log-weighted) quadrature domains — inverse and direct
+          problems, single-valued Schwarz-reflection dynamics, limit sets, sphere view,
+          parameter-slice sweeps.
+        </p>
+      </a>
+
+      <div class="card soon" aria-disabled="true">
+        <span class="badge">Coming soon</span>
+        <h2>Correspondences</h2>
+        <p>
+          Anti-holomorphic correspondences / Schwarz-reflection mating tool. Lands in
+          Phase 6, built on the shared packages the first two apps extract.
+        </p>
+      </div>
+    </main>
+
+    <footer>
+      Phase 0 launcher stub. Links resolve on the deployed suite (launcher at the top-level
+      Pages URL, each app deployed independently underneath). In local development, run an
+      app directly, e.g. <code>pnpm --filter complex-dynamics dev</code>.
+    </footer>
+  </body>
+</html>

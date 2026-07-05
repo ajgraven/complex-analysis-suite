@@ -1,5 +1,5 @@
 {
-  "name": "quadrature-domain-solver",
+  "name": "quadrature-domains",
   "version": "0.1.0",
   "description": "Browser app for visualizing simply connected quadrature domains and log-weighted quadrature domains (Graven thesis, Caltech 2026).",
   "private": true,
