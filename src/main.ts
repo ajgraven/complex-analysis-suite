@@ -3214,6 +3214,15 @@ function init(): void {
     readout.textContent =
       `${res.valence} ray${res.valence === 1 ? "" : "s"} land at ${where} = ${fmtPt(res.point)}: ` +
       `θ ∈ {${list}}. ${bicc}`;
+    // On ∂M a component root's rays name a hyperbolic component — append its internal address (the
+    // combinatorial GPS: rabbit 1-3 vs airplane 1-2-3). Both co-landing angles share it, so read the
+    // first; a Misiurewicz point's rays are pre-periodic ⇒ no address (said honestly, not guessed).
+    if (plane === "param") {
+      const addr = internalAddressFromAngle(res.angles[0]);
+      readout.textContent += addr
+        ? ` Internal address ${addr.address.join("-")} (period ${addr.period}, ν = ${formatKneading(addr.kneading)}).`
+        : " These rays are pre-periodic (a Misiurewicz point) — no internal address.";
+    }
     showToast(`${where} = ${fmtPt(res.point)} ← {${list}} (valence ${res.valence}).`, "info");
   });
   // Symbolic console: strip an internal address to its kneading sequence + characteristic angles.
