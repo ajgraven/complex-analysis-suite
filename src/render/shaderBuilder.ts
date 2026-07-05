@@ -161,8 +161,11 @@ uniform int uAA;
 uniform sampler2D uGradient;
 uniform float uGradientOffset;
 uniform vec2 uJitter;
-uniform int uPerturbDegree;     // d for the monic family z^d + c (2 = the classic Mandelbrot)
+uniform int uPerturbDegree;     // d = polynomial degree (2 = the classic Mandelbrot z² + c)
 uniform float uBinom[9];        // C(d, j) for j = 0..d (MAX_DEGREE = 8 ⇒ 9 entries)
+uniform int uPolyMode;          // 1 = general polynomial f = P(z) + B·c; 0 = monic z^d + c
+uniform vec2 uPolyCoeffs[9];    // P's coefficients p_0..p_d (complex), general-polynomial mode
+uniform vec2 uDcCoeff;          // B = ∂f/∂c (complex), general-polynomial mode
 uniform sampler2D uBLA;         // BLA table (RGBA32F): per BLA, texel 2i = (a.xy, b.xy), texel 2i+1 = (r, l)
 uniform int uBLANumLevels;      // BLA tree levels (0 ⇒ disabled: single-step everywhere)
 uniform int uBLAWidth;          // BLA texture width in texels
@@ -181,6 +184,21 @@ vec2 cmul(vec2 p, vec2 q) { return vec2(p.x * q.x - p.y * q.y, p.x * q.y + p.y *
 // step verbatim so the Mandelbrot render is byte-identical; d ≥ 3 uses a Horner evaluation of the
 // same series (δz·Σ_{i=0}^{d−1} C(d,i+1)·Z^{d−1−i}·δz^i + cAdd).
 vec2 perturbStep(vec2 Z, vec2 dz, vec2 cAdd) {
+  if (uPolyMode == 1) {
+    // General polynomial f = P(z) + B·c: δz ← Σ_{j=1}^{d} p_j·[(Z+δz)^j − Z^j] + B·δc, via the
+    // cancellation-free recurrence S_j = (Z+δz)·S_{j−1} + δz·Z^{j−1} (S_1 = δz). Mirrors polyStep.
+    vec2 W = Z + dz;
+    vec2 S = dz;                 // S_1
+    vec2 Zpow = vec2(1.0, 0.0);  // Z^{j−1}, starting Z^0
+    vec2 acc = cmul(uPolyCoeffs[1], S); // p_1·S_1
+    for (int j = 2; j <= MAX_DEGREE; j++) {
+      if (j > uPerturbDegree) break;
+      Zpow = cmul(Zpow, Z);
+      S = cmul(W, S) + cmul(dz, Zpow);
+      acc += cmul(uPolyCoeffs[j], S);
+    }
+    return acc + cmul(uDcCoeff, cAdd); // + B·δc
+  }
   if (uPerturbDegree == 2) {
     vec2 twoZdz = 2.0 * vec2(Z.x * dz.x - Z.y * dz.y, Z.x * dz.y + Z.y * dz.x);
     vec2 dz2 = vec2(dz.x * dz.x - dz.y * dz.y, 2.0 * dz.x * dz.y);

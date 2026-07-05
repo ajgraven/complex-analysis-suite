@@ -29,7 +29,7 @@ const BAILOUT2 = 4; // |Z|² escape threshold (matches perturbation.ts)
 // --- double-double complex arithmetic (for the reference orbit) ---------------------------------
 
 /** Double-double complex multiply: (ax+i·ay)(bx+i·by), each limb carried in ~31-digit dd. */
-function ddCMul(ax: DD, ay: DD, bx: DD, by: DD): [DD, DD] {
+export function ddCMul(ax: DD, ay: DD, bx: DD, by: DD): [DD, DD] {
   const re = ddSub(ddMul(ax, bx), ddMul(ay, by));
   const im = ddAdd(ddMul(ax, by), ddMul(ay, bx));
   return [re, im];

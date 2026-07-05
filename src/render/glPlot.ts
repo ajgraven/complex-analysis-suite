@@ -26,8 +26,15 @@ import { buildGradient, DEFAULT_GRADIENT, type GradientStop } from "../palettes"
 import { differentiate, newtonIteration } from "../expr/derivative";
 import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
 import { buildBLATable, packBLATable } from "./bla";
-import { computeReferenceOrbitDDFrom } from "./perturbation";
-import { binomial, computeMultibrotOrbitDD } from "./perturbationPoly";
+import { computeReferenceOrbitDDFrom, type ReferenceOrbit } from "./perturbation";
+import {
+  binomial,
+  computeMultibrotOrbitDD,
+  computePolyOrbitDD,
+  ddCMul,
+  extractPolyPerturbation,
+  type PolyPerturbation,
+} from "./perturbationPoly";
 import { buildEqualizedCdf } from "./histogram";
 import { type DD, dd, ddAddNumber, ddToNumber } from "./dd";
 import {
@@ -151,6 +158,9 @@ interface PerturbUniforms {
   uJitter: WebGLUniformLocation | null;
   uPerturbDegree: WebGLUniformLocation | null;
   uBinom: WebGLUniformLocation | null;
+  uPolyMode: WebGLUniformLocation | null;
+  uPolyCoeffs: WebGLUniformLocation | null;
+  uDcCoeff: WebGLUniformLocation | null;
   uBLA: WebGLUniformLocation | null;
   uBLANumLevels: WebGLUniformLocation | null;
   uBLAWidth: WebGLUniformLocation | null;
@@ -358,6 +368,9 @@ export class GLPlot {
   private _perturbation = false; // perturbation deep-zoom toggle
   private _perturbEligible = false; // current f is a monic z^d+c the kernel handles (auto-detected)
   private _monicDegree: number | null = null; // degree d if f is z^d + c, else null
+  // General-polynomial perturbation data (f = P(z) + B·c), for non-monic polynomials; null otherwise.
+  private _polyPerturb: PolyPerturbation | null = null;
+  private polyCoeffBuf = new Float32Array((MAX_PERTURB_DEGREE + 1) * 2); // uPolyCoeffs (p_0..p_d, vec2)
   /** z²+c with a divergence escape → the main-cardioid / period-2-bulb interior shortcut is
    *  exact (single precision, parameter plane). Set in {@link rebuild}. */
   private _interiorBailout = false;
@@ -747,8 +760,17 @@ export class GLPlot {
     const gl = this.gl;
     const iterError = this.updateIteration();
     this._monicDegree = this.probeMonicDegree();
-    // z^d + c (any monic degree the kernel supports) is perturbation-eligible on both planes.
-    this._perturbEligible = this._monicDegree !== null && this._monicDegree <= MAX_PERTURB_DEGREE;
+    // General-polynomial perturbation (f = P(z) + B·c) for NON-monic polynomials; monic z^d + c keeps
+    // its own (byte-identical z²+c) path. Degree ≥ 2 (a linear map has no interesting deep zoom).
+    this._polyPerturb =
+      this._monicDegree === null
+        ? extractPolyPerturbation(this._iterAst, this._paramA, MAX_PERTURB_DEGREE)
+        : null;
+    if (this._polyPerturb && this._polyPerturb.degree < 2) this._polyPerturb = null;
+    // z^d + c (any monic degree) or a general additive-c polynomial ⇒ perturbation-eligible.
+    this._perturbEligible =
+      (this._monicDegree !== null && this._monicDegree <= MAX_PERTURB_DEGREE) ||
+      this._polyPerturb !== null;
     const divergenceEscape = this.probeDivergenceEscape();
     this._interiorBailout = this._monicDegree === 2 && divergenceEscape;
     this._periodicityBailout = divergenceEscape;
@@ -1154,6 +1176,7 @@ export class GLPlot {
   /** The monic degree d (z^d + c) the perturbation kernel runs at — 2 (Mandelbrot) when the map is
    *  not a detected monic family. Clamped to the kernel's supported range. */
   private perturbDegree(): number {
+    if (this._polyPerturb) return this._polyPerturb.degree;
     return Math.min(Math.max(this._monicDegree ?? 2, 2), MAX_PERTURB_DEGREE);
   }
 
@@ -1174,15 +1197,23 @@ export class GLPlot {
     const param = this.fractType === "param";
     const z0x = param ? dd(0) : this._centerDD[0];
     const z0y = param ? dd(0) : this._centerDD[1];
-    const addX = param ? this._centerDD[0] : dd(this._cVal[0]);
-    const addY = param ? this._centerDD[1] : dd(this._cVal[1]);
-    const degree = this.perturbDegree();
-    // Degree 2 routes through the shipped z²+c orbit (byte-identical to the deployed Mandelbrot
-    // render); higher monic degrees use the general z^d + c reference orbit.
-    const orbit =
-      degree === 2
-        ? computeReferenceOrbitDDFrom(z0x, z0y, addX, addY, refIter)
-        : computeMultibrotOrbitDD(z0x, z0y, addX, addY, degree, refIter);
+    // The iteration's additive constant is c for monic z^d+c, or B·c for a general P(z)+B·c.
+    const cx = param ? this._centerDD[0] : dd(this._cVal[0]);
+    const cy = param ? this._centerDD[1] : dd(this._cVal[1]);
+    let orbit: ReferenceOrbit;
+    if (this._polyPerturb) {
+      const B = this._polyPerturb.dcCoeff;
+      const [addX, addY] = ddCMul(dd(B[0]), dd(B[1]), cx, cy); // add = B·c in double-double
+      orbit = computePolyOrbitDD(z0x, z0y, this._polyPerturb.coeffs, addX, addY, refIter);
+    } else {
+      const degree = this.perturbDegree();
+      // Degree 2 routes through the shipped z²+c orbit (byte-identical to the deployed Mandelbrot
+      // render); higher monic degrees use the general z^d + c reference orbit.
+      orbit =
+        degree === 2
+          ? computeReferenceOrbitDDFrom(z0x, z0y, cx, cy, refIter)
+          : computeMultibrotOrbitDD(z0x, z0y, cx, cy, degree, refIter);
+    }
     // Hard-cap the uploaded width at the max texture size (computeReferenceOrbitDD returns up to
     // maxIter + 1 points, so a bare `min(maxIter, max)` would still be one over).
     this.orbitLen = Math.min(orbit.length, this.maxTextureSize);
@@ -1216,7 +1247,9 @@ export class GLPlot {
    * change. Disabled (or an empty table) ⇒ `blaNumLevels = 0` and the kernel single-steps everywhere.
    */
   private ensureBLA(): void {
-    if (!this.blaEnabled || !this.orbitXY || this.orbitLen < 2) {
+    // The BLA single-step A = d·Z^{d−1} is for monic z^d + c; a general polynomial's A = P′(Z) differs,
+    // so poly-mode single-steps for now (correct, no skip acceleration — Stage 3c generalizes the table).
+    if (!this.blaEnabled || this._polyPerturb !== null || !this.orbitXY || this.orbitLen < 2) {
       this.blaNumLevels = 0;
       return;
     }
@@ -1285,6 +1318,18 @@ export class GLPlot {
     this.binomBuf.fill(0);
     for (let j = 0; j <= degree; j++) this.binomBuf[j] = binomial(degree, j);
     gl.uniform1fv(u.uBinom, this.binomBuf);
+    // General-polynomial mode: P's coefficients p_j + B = ∂f/∂c (monic z^d+c keeps uPolyMode = 0).
+    const poly = this._polyPerturb;
+    gl.uniform1i(u.uPolyMode, poly ? 1 : 0);
+    if (poly) {
+      this.polyCoeffBuf.fill(0);
+      for (let j = 0; j <= degree; j++) {
+        this.polyCoeffBuf[2 * j] = poly.coeffs[j][0];
+        this.polyCoeffBuf[2 * j + 1] = poly.coeffs[j][1];
+      }
+      gl.uniform2fv(u.uPolyCoeffs, this.polyCoeffBuf);
+      gl.uniform2f(u.uDcCoeff, poly.dcCoeff[0], poly.dcCoeff[1]);
+    }
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.orbitTex);
     gl.uniform1i(u.uOrbit, 0);
@@ -1435,6 +1480,9 @@ export class GLPlot {
           uJitter: gl.getUniformLocation(program, "uJitter"),
           uPerturbDegree: gl.getUniformLocation(program, "uPerturbDegree"),
           uBinom: gl.getUniformLocation(program, "uBinom"),
+          uPolyMode: gl.getUniformLocation(program, "uPolyMode"),
+          uPolyCoeffs: gl.getUniformLocation(program, "uPolyCoeffs"),
+          uDcCoeff: gl.getUniformLocation(program, "uDcCoeff"),
           uBLA: gl.getUniformLocation(program, "uBLA"),
           uBLANumLevels: gl.getUniformLocation(program, "uBLANumLevels"),
           uBLAWidth: gl.getUniformLocation(program, "uBLAWidth"),
