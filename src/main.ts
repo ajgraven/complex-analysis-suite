@@ -31,6 +31,7 @@ import { MAX_DOUBLING_Q, portraitSummary, rotationCycleAngles } from "./combinat
 import {
   AddressError,
   formatKneading,
+  internalAddressFromAngle,
   parseInternalAddress,
   stripExternalAngles,
 } from "./combinatorics/stripping";
@@ -3251,6 +3252,27 @@ function init(): void {
     return res;
   };
   byId("strip-go").addEventListener("click", () => runStrip(true));
+
+  // The inverse direction: an external angle θ = p/q → the internal address of the component whose root
+  // ray it is (pure combinatorics via internalAddressFromAngle). Fills the address box so the user can
+  // then "Strip & draw rays" to round-trip. A pre-periodic (Misiurewicz) angle has no address — said so.
+  byId("addr-of-angle").addEventListener("click", () => {
+    const readout = byId("strip-readout");
+    const frac = parseFraction(byId<HTMLInputElement>("addr-angle").value);
+    if (!frac) {
+      readout.textContent = "Enter an external angle θ = p/q in turns (e.g. 1/7 or 3/7).";
+      return;
+    }
+    const [p, q] = frac;
+    const r = internalAddressFromAngle({ p, q });
+    if (!r) {
+      readout.textContent = `θ = ${p}/${q} is pre-periodic (a Misiurewicz angle): it lands at a Misiurewicz point, not a hyperbolic-component root, so it has no internal address.`;
+      return;
+    }
+    byId<HTMLInputElement>("strip-address").value = r.address.join("-");
+    readout.textContent = `θ = ${r.angle.p}/${r.angle.q} → internal address ${r.address.join("-")} (period ${r.period}), kneading ν = ${formatKneading(r.kneading)}.`;
+  });
+
   byId("strip-goto").addEventListener("click", () => {
     const res = runStrip(false);
     if (!res || !res.realized || !res.lower) return;

@@ -466,8 +466,12 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   to a component, e.g. `1-3` rabbit, `1-2-4-8` cascade, `1-3-6`) and the **stripping algorithm**
   returns its **kneading sequence** ν and the two **characteristic external angles** θ⁻, θ⁺ that
   bound the component's wake (`1-3-6 → 10/63, 17/63`), drawn as a pair of gold parameter rays;
-  **Go to component** then snaps to its centre. A non-admissible address (the smallest is `1-2-4-5-6`,
-  kneading ABAAB⋆) is reported as realised by no component, rather than guessed. `z²+c`.
+  **Go to component** then snaps to its centre. The console also runs the **inverse** — enter an
+  external angle θ = p/q and it reads off the internal address of the component whose root ray it is
+  (the Lau–Schleicher ρ-function), which is what tells the **rabbit `1/7 → 1-3` apart from the
+  airplane `3/7 → 1-2-3`** (same period 3, different address); a pre-periodic (Misiurewicz) angle has
+  no address. A non-admissible address (the smallest is `1-2-4-5-6`, kneading ABAAB⋆) is reported as
+  realised by no component, rather than guessed. `z²+c`.
 - **Inverse-iteration Julia** (Overlays) — paints the dynamical-plane Julia set directly as the
   closure of random backward orbits `z ↦ ±√(z−c)` from the repelling fixed point (the "chaos
   game"), drawing the boundary crisply where forward escape-time struggles (thin dendrites, Cantor

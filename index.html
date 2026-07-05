@@ -1479,6 +1479,22 @@ z^2+c</textarea
                 <button type="button" id="strip-go">Strip &amp; draw rays</button>
                 <button type="button" id="strip-goto" hidden>Go to component</button>
               </div>
+              <p class="exterior-status">
+                …or go the other way: enter an <strong>external angle</strong> θ = p/q and read off the
+                internal address of the component whose root ray it is (1/7 → 1-3 rabbit, 3/7 → 1-2-3
+                airplane — same period, different address).
+              </p>
+              <label class="exterior-n-label">
+                External angle θ
+                <input
+                  type="text"
+                  id="addr-angle"
+                  value="3/7"
+                  size="8"
+                  title="External angle p/q in turns (odd q = a component root; even q = Misiurewicz, no address)"
+                />
+              </label>
+              <button type="button" id="addr-of-angle">Address of angle</button>
               <p class="exterior-status" id="strip-readout"></p>
             </div>
           </details>

@@ -264,7 +264,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: "internal-address",
     term: "Internal address & stripping",
-    defn: "A combinatorial 'street address' for a hyperbolic component: the strictly-increasing periods 1 → S₁ → … → S_k of the principal components crossed from the main cardioid (1-3 is the rabbit, 1-2-4-8 the period-doubling cascade). The stripping algorithm turns an address into its kneading sequence ν and the two characteristic external angles θ⁻, θ⁺ whose parameter rays bound the component's wake. Not every increasing address is realised — 1-2-4-5-6 is the smallest non-admissible one (Bruin–Schleicher).",
+    defn: "A combinatorial 'street address' for a hyperbolic component: the strictly-increasing periods 1 → S₁ → … → S_k of the principal components crossed from the main cardioid (1-3 is the rabbit, 1-2-4-8 the period-doubling cascade). It is what distinguishes components of the SAME period — the rabbit (period 3, a satellite of the main cardioid) is 1-3, while the airplane (period 3, primitive) is 1-2-3 because its vein passes through a period-2 component first. The stripping algorithm turns an address into its kneading sequence ν and the two characteristic external angles θ⁻, θ⁺ whose parameter rays bound the component's wake; the console also runs the INVERSE — enter an external angle θ = p/q and it reads off the internal address of the component whose root ray it is (via the Lau–Schleicher ρ-function). A pre-periodic θ (even reduced denominator, a Misiurewicz angle) has no address. Not every increasing address is realised — 1-2-4-5-6 is the smallest non-admissible one (Bruin–Schleicher).",
   },
   {
     id: "riemann-sphere",
