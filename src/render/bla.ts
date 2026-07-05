@@ -37,7 +37,17 @@ const cmul = (p: Complex, q: Complex): Complex => [
   p[0] * q[0] - p[1] * q[1],
   p[0] * q[1] + p[1] * q[0],
 ];
+const cadd = (p: Complex, q: Complex): Complex => [p[0] + q[0], p[1] + q[1]];
+const cscale = (p: Complex, s: number): Complex => [p[0] * s, p[1] * s];
 const cabs = (p: Complex): number => Math.hypot(p[0], p[1]);
+
+/** Binomial coefficient C(n, k), exact for the small degrees used here. */
+function binom(n: number, k: number): number {
+  if (k < 0 || k > n) return 0;
+  let c = 1;
+  for (let j = 1; j <= k; j++) c = (c * (n - j + 1)) / j;
+  return Math.round(c);
+}
 
 /** Single-step BLA at reference iterate Z_m for z^d + c: A = f′(Z) = d·Z^{d−1}, B = 1. The radius
  *  bounds where the dropped nonlinear terms stay below `EPS` relative to the linear term A·δz. The
@@ -49,6 +59,34 @@ function singleStep(Zm: Complex, degree: number): BLA {
   const a: Complex = [degree * zp[0], degree * zp[1]]; // A = d·Z^{d−1} (= 2Z at d = 2, bit-for-bit)
   const r = degree === 2 ? EPS * cabs(a) : EPS * (2 / (degree - 1)) * cabs(Zm);
   return { a, b: [1, 0], r, l: 1 };
+}
+
+/**
+ * Single-step BLA at Z_m for a general polynomial f = P(z) + B·c (P = Σ coeffs[j]·z^j): A = P′(Z),
+ * B = dcCoeff. The dropped nonlinear part is Σ_{k≥2} c_k(Z)·δz^k with c_k = P^(k)(Z)/k! =
+ * Σ_{j≥k} C(j,k)·p_j·Z^{j−k}; the linearization holds while every dropped term is below EPS relative
+ * to A·δz, i.e. |δz| < min_{k≥2} (EPS·|A| / |c_k|)^{1/(k−1)}. Reduces to {@link singleStep} for the
+ * monomial z^d.
+ */
+function singleStepPoly(Zm: Complex, coeffs: Complex[], dcCoeff: Complex): BLA {
+  const d = coeffs.length - 1;
+  const zPow: Complex[] = [[1, 0]]; // Z^0 … Z^{d−1}
+  for (let i = 1; i < d; i++) zPow.push(cmul(zPow[i - 1], Zm));
+  // c_k(Z) = Σ_{j=k}^{d} C(j,k)·p_j·Z^{j−k}, for k = 1 … d (c_1 = P′(Z) = A).
+  const ck: Complex[] = [[0, 0]]; // ck[0] unused
+  for (let k = 1; k <= d; k++) {
+    let s: Complex = [0, 0];
+    for (let j = k; j <= d; j++) s = cadd(s, cscale(cmul(coeffs[j], zPow[j - k]), binom(j, k)));
+    ck.push(s);
+  }
+  const a = ck[1]; // A = P′(Z)
+  const absA = cabs(a);
+  let r = Infinity;
+  for (let k = 2; k <= d; k++) {
+    const absCk = cabs(ck[k]);
+    if (absCk > 0) r = Math.min(r, (EPS * absA) ** (1 / (k - 1)) / absCk ** (1 / (k - 1)));
+  }
+  return { a, b: [dcCoeff[0], dcCoeff[1]], r: Number.isFinite(r) ? r : 0, l: 1 };
 }
 
 /** Merge two consecutive BLAs — `x` first, then `y` — into one that skips `x.l + y.l` iterations. */
@@ -66,11 +104,7 @@ export function mergeBLA(x: BLA, y: BLA, maxC: number): BLA {
  * each higher level merges non-overlapping neighbour pairs (so level k holds BLAs that skip 2ᵏ
  * iterations, starting at multiples of 2ᵏ). An odd tail at any level is carried by the finer levels.
  */
-export function buildBLATable(ref: Complex[], maxC: number, degree = 2): BLA[][] {
-  const M = ref.length - 1;
-  if (M < 1) return [];
-  const level0: BLA[] = [];
-  for (let m = 0; m < M; m++) level0.push(singleStep(ref[m], degree));
+function buildTree(level0: BLA[], maxC: number): BLA[][] {
   const levels: BLA[][] = [level0];
   let cur = level0;
   while (cur.length > 1) {
@@ -81,6 +115,28 @@ export function buildBLATable(ref: Complex[], maxC: number, degree = 2): BLA[][]
     cur = next;
   }
   return levels;
+}
+
+export function buildBLATable(ref: Complex[], maxC: number, degree = 2): BLA[][] {
+  const M = ref.length - 1;
+  if (M < 1) return [];
+  const level0: BLA[] = [];
+  for (let m = 0; m < M; m++) level0.push(singleStep(ref[m], degree));
+  return buildTree(level0, maxC);
+}
+
+/** {@link buildBLATable} for a general polynomial f = P(z) + B·c (coefficients p_0…p_d, B = dcCoeff). */
+export function buildBLATablePoly(
+  ref: Complex[],
+  maxC: number,
+  coeffs: Complex[],
+  dcCoeff: Complex,
+): BLA[][] {
+  const M = ref.length - 1;
+  if (M < 1) return [];
+  const level0: BLA[] = [];
+  for (let m = 0; m < M; m++) level0.push(singleStepPoly(ref[m], coeffs, dcCoeff));
+  return buildTree(level0, maxC);
 }
 
 /**

@@ -25,7 +25,7 @@ import {
 import { buildGradient, DEFAULT_GRADIENT, type GradientStop } from "../palettes";
 import { differentiate, newtonIteration } from "../expr/derivative";
 import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
-import { buildBLATable, packBLATable } from "./bla";
+import { buildBLATable, buildBLATablePoly, packBLATable } from "./bla";
 import { computeReferenceOrbitDDFrom, type ReferenceOrbit } from "./perturbation";
 import {
   binomial,
@@ -1247,9 +1247,7 @@ export class GLPlot {
    * change. Disabled (or an empty table) ⇒ `blaNumLevels = 0` and the kernel single-steps everywhere.
    */
   private ensureBLA(): void {
-    // The BLA single-step A = d·Z^{d−1} is for monic z^d + c; a general polynomial's A = P′(Z) differs,
-    // so poly-mode single-steps for now (correct, no skip acceleration — Stage 3c generalizes the table).
-    if (!this.blaEnabled || this._polyPerturb !== null || !this.orbitXY || this.orbitLen < 2) {
+    if (!this.blaEnabled || !this.orbitXY || this.orbitLen < 2) {
       this.blaNumLevels = 0;
       return;
     }
@@ -1258,7 +1256,10 @@ export class GLPlot {
     const ref: Complex[] = new Array(this.orbitLen);
     for (let i = 0; i < this.orbitLen; i++) ref[i] = [this.orbitXY[2 * i], this.orbitXY[2 * i + 1]];
     const maxC = Math.SQRT2 / this._zoom; // largest |δc| over the viewport (a corner pixel)
-    const levels = buildBLATable(ref, maxC, this.perturbDegree()); // A = d·Z^{d−1} for z^d + c
+    // A = P′(Z) for a general polynomial (f = P(z)+B·c), or d·Z^{d−1} for monic z^d + c.
+    const levels = this._polyPerturb
+      ? buildBLATablePoly(ref, maxC, this._polyPerturb.coeffs, this._polyPerturb.dcCoeff)
+      : buildBLATable(ref, maxC, this.perturbDegree());
     if (levels.length === 0) {
       this.blaNumLevels = 0;
       return;
