@@ -16,6 +16,7 @@ import { panDelta } from "../transforms";
 import { showToast } from "../ui/toast";
 import { GLPlot, renderScale, type FractType } from "./glPlot";
 import { inspect, type InspectResult } from "./inspect";
+import type { Leaf } from "./lamination";
 import { drawOverlay, drawScaleBar, type Annotation } from "./overlay";
 import { isDoubleTap, pinchShift, pinchStateOf, type PinchState, type Tap } from "./pinch";
 import { inverseProject } from "./projection";
@@ -79,6 +80,7 @@ export class PlotView {
   private puzzleRays: Vec2[][] | null = null;
   private criticalPiece: { image: HTMLCanvasElement; box: [number, number, number, number] } | null =
     null;
+  private lamination: Leaf[] | null = null;
   private laurentBoundary: { coeffs: Vec2[]; r: number; lead: Vec2 } | null = null;
   private annotations: Annotation[] = [];
   /**
@@ -202,6 +204,12 @@ export class PlotView {
     this.requestOverlay();
   }
 
+  /** Set the pinched-disk lamination leaves to draw as the corner disk widget, or null to clear. */
+  setLamination(leaves: Leaf[] | null): void {
+    this.lamination = leaves && leaves.length ? leaves : null;
+    this.requestOverlay();
+  }
+
   /** Set the reconstructed exterior-map boundary to draw (coeffs in plot space, radius r), or
    *  null to clear. Overlay-only. */
   setLaurentBoundary(coeffs: Vec2[] | null, r: number, lead: Vec2 = [1, 0]): void {
@@ -298,6 +306,7 @@ export class PlotView {
           hermanCurves: this.hermanCurves,
           puzzleRays: this.puzzleRays,
           criticalPiece: this.criticalPiece,
+          lamination: this.lamination,
           projected: this.plot.projection !== 0,
           laurentBoundary: this.laurentBoundary ?? undefined,
           cyclePoints: this.currentCyclePoints(),
@@ -397,6 +406,7 @@ export class PlotView {
       hermanCurves: this.hermanCurves,
       puzzleRays: this.puzzleRays,
       criticalPiece: this.criticalPiece,
+      lamination: this.lamination,
       projected: this.plot.projection !== 0,
       laurentBoundary: this.laurentBoundary ?? undefined,
       cyclePoints: this.currentCyclePoints(),

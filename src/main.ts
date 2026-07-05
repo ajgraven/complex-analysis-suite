@@ -65,6 +65,7 @@ import type { Node as ExprNode } from "./expr/ast";
 import { dynamicRay, parameterRay, parseAngle, rayDepthForZoom } from "./render/rays";
 import { criticalPieceMask } from "./render/yoccozCritical";
 import { yoccozPuzzle } from "./render/yoccozPuzzle";
+import { dynamicalLamination } from "./render/lamination";
 import { dynPresets, paramPresets, type Preset, type PresetName } from "./presets";
 import { byId } from "./ui/dom";
 import { showToast } from "./ui/toast";
@@ -1320,6 +1321,7 @@ function init(): void {
     applyLaurent(); // …and so does the dynamical boundary (a no-op while the toggle is off)
     updateJuliaProperties(); // …and the Julia-set properties readout (also gated on its panel)
     updateYoccoz(); // …and the Yoccoz puzzle / parapuzzle overlays (a no-op while their toggles are off)
+    updateLamination(); // …and the pinched-disk lamination widget (a no-op while its toggle is off)
   }
   // During a coupled white-point drag the c-dependent panels are debounced (the cheap caption text
   // still updates live); they recompute once on release via coupling.setDraft(false).
@@ -1423,6 +1425,45 @@ function init(): void {
     byId(id).addEventListener("change", updateYoccoz);
   }
   byId("yoccoz-depth").addEventListener("input", updateYoccoz);
+
+  // --- Pinched-disk lamination overlay ---------------------------------------
+  /**
+   * Draw Thurston's pinched-disk lamination of ∂K_c as a corner disk widget on the dynamical plane:
+   * a chord for every pair of external rays that co-land. Measured by the shipped landing machinery, so
+   * gated to z²+c with a repelling α (c outside the main cardioid); recomputes for the committed c
+   * through refreshDynPanels (debounced during a coupled drag). Depends only on c, not on pan/zoom.
+   * A hoisted declaration, so refreshDynPanels can call it during the initial syncDynamicalC.
+   */
+  function updateLamination(): void {
+    const toggle = byId<HTMLInputElement>("lamination-toggle");
+    const detailInput = byId<HTMLInputElement>("lamination-detail");
+    const note = byId("lamination-note");
+    byId("lamination-detail-value").textContent = detailInput.value; // keep the slider label in sync
+    const eligible = dynamicalView.plot.perturbationEligible; // z²+c (both planes share f)
+    toggle.disabled = !eligible;
+    const on = eligible && toggle.checked;
+    detailInput.disabled = !on;
+    dynamicalView.setLamination(null);
+    if (!on) {
+      note.textContent = !eligible && toggle.checked ? "The lamination is defined for z²+c." : "";
+      return;
+    }
+    const c: Vec2 = [parameterView.plot.z0[0], parameterView.plot.z0[1]]; // the current parameter
+    const maxPeriod = Number(detailInput.value);
+    const lam = dynamicalLamination(c, { maxPeriod, maxPreperiod: 1 });
+    if (lam.leaves.length === 0) {
+      note.textContent =
+        "No lamination at this c — the Julia set is a Jordan curve (α attracting, c in the main cardioid). Pick a c outside it (e.g. −1).";
+      return;
+    }
+    dynamicalView.setLamination(lam.leaves);
+    const pinches = lam.gaps.length;
+    note.textContent =
+      `${lam.leaves.length} leaves from ${pinches} pinch point${pinches === 1 ? "" : "s"} ` +
+      `(period ≤ ${maxPeriod}); each chord joins external rays that land together on ∂K_c.`;
+  }
+  byId("lamination-toggle").addEventListener("change", updateLamination);
+  byId("lamination-detail").addEventListener("input", updateLamination);
 
   /** Build a translucent gold mask canvas from a critical-piece mask (flipped to image row order). */
   function criticalMaskCanvas(mask: { data: Uint8Array; n: number }): HTMLCanvasElement {

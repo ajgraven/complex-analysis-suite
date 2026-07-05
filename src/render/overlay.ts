@@ -15,6 +15,7 @@ import type { Node } from "../expr/ast";
 import { getComplexFn, getEscapeFn } from "../expr/evaluate";
 import { fareyLabels, fareyMaxDenominator } from "./farey";
 import { inverseJuliaCloud } from "./inverseJulia";
+import type { Leaf } from "./lamination";
 import { bulbRayAngles, dynamicRay, parameterRay, rayDepthForZoom } from "./rays";
 import { siegelInvariantCurves } from "./siegelCurves";
 import { reconstructBoundary } from "./uniformize";
@@ -235,6 +236,8 @@ export interface OverlayParams {
   puzzleRays?: Vec2[][] | null;
   /** Yoccoz critical-piece / parapuzzle shading: a prebuilt mask canvas over a plane box. */
   criticalPiece?: { image: CanvasImageSource; box: [number, number, number, number] } | null;
+  /** Pinched-disk lamination leaves (external-angle chords) drawn as a corner disk widget (dyn plane). */
+  lamination?: Leaf[] | null;
   /** Reconstructed exterior-map boundary to draw (ψ on |w| = r); coeffs in plot space. */
   laurentBoundary?: { coeffs: Vec2[]; r: number; lead?: Vec2 };
   /**
@@ -670,10 +673,72 @@ function orbitData(p: OverlayParams, cc: Complex, a: Complex): OrbitCacheEntry {
 /** Dark casing drawn under the bright overlay strokes so they stay legible over any palette. */
 const HALO = "rgba(0, 0, 0, 0.6)";
 
+/**
+ * Draw the pinched-disk lamination as a self-contained unit-disk widget in the bottom-right corner:
+ * a translucent disk, the boundary circle of external angles, and a chord (leaf) for each co-landing
+ * pair. Screen-space — not the plot↔pixel map — so it is independent of pan/zoom and of any projection,
+ * and reads alongside the Julia set as its combinatorial model.
+ */
+function drawLamination(ctx: CanvasRenderingContext2D, leaves: Leaf[], size: number): void {
+  const s = size / OVERLAY_BASE;
+  const R = Math.min(150, Math.max(46, size * 0.2));
+  const margin = 14 * s + 6;
+  const cx = size - R - margin;
+  const cy = size - R - margin;
+  const xy = (t: number): [number, number] => [
+    cx + R * Math.cos(2 * Math.PI * t),
+    cy - R * Math.sin(2 * Math.PI * t), // canvas y is down; negate so θ runs counter-clockwise
+  ];
+  ctx.save();
+  // Backdrop disk + the boundary circle (the circle of external angles).
+  ctx.beginPath();
+  ctx.arc(cx, cy, R + 7 * s, 0, 2 * Math.PI);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+  ctx.lineWidth = 1 * s;
+  ctx.stroke();
+  // Orientation ticks at θ = 0 (the β-ray direction) and θ = 1/2.
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+  for (const t of [0, 0.5]) {
+    const [x0, y0] = xy(t);
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(cx + (R - 5 * s) * Math.cos(2 * Math.PI * t), cy - (R - 5 * s) * Math.sin(2 * Math.PI * t));
+    ctx.stroke();
+  }
+  // Leaves: a chord between each pair of co-landing external angles.
+  ctx.strokeStyle = "rgba(240, 150, 210, 0.9)";
+  ctx.lineWidth = 1.1 * s;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  for (const { a, b } of leaves) {
+    const [ax, ay] = xy(a);
+    const [bx, by] = xy(b);
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
+  }
+  ctx.stroke();
+  // Caption above the disk.
+  ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+  ctx.font = `${Math.max(9, 11 * s)}px system-ui, -apple-system, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  ctx.fillText("lamination", cx, cy - R - 6 * s);
+  ctx.restore();
+}
+
 /** Render the orbit polyline, white point, and label onto `ctx`. */
 export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): void {
   const { size } = p;
   ctx.clearRect(0, 0, size, size);
+  // Pinched-disk lamination: a self-contained corner widget in screen space, so it is independent of
+  // the plot↔pixel map — drawn before the projection guard below so it survives a projection too.
+  if (p.lamination && p.lamination.length > 0 && p.fractType === "dyn") {
+    drawLamination(ctx, p.lamination, size);
+  }
   // Overlays (rays, markers, the white point, annotations) are placed with the linear plot↔pixel
   // map, which a projection breaks — so draw nothing while a projection is active (MVP).
   if (p.projected) return;

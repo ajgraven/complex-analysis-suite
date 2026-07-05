@@ -1420,6 +1420,29 @@ z^2+c</textarea
             </div>
           </details>
 
+          <!-- Pinched-disk lamination: chords joining co-landing external angles (a corner disk widget). -->
+          <details class="control-group" id="lamination-group">
+            <summary>Lamination (z²+c)</summary>
+            <div class="controls">
+              <p class="exterior-status">
+                Thurston's
+                <button type="button" class="gloss-link" data-term="lamination" aria-label="Define lamination">?</button>
+                pinched-disk model of the current <strong>Julia set</strong>: a disk widget (bottom-right of
+                the dynamical plane) where a <strong>chord</strong> joins every pair of external rays that land
+                at the same point. Collapsing the chords gives the Julia set's topology. Needs a repelling α —
+                a c outside the main cardioid (e.g. −1, or a rabbit).
+              </p>
+              <label class="checkbox" for="lamination-toggle">
+                <input type="checkbox" id="lamination-toggle" /> show lamination (Julia set)
+              </label>
+              <div class="field">
+                <label for="lamination-detail">detail = <span id="lamination-detail-value">6</span></label>
+                <input type="range" id="lamination-detail" min="3" max="8" step="1" value="6" />
+              </div>
+              <p class="exterior-status" id="lamination-note"></p>
+            </div>
+          </details>
+
           <!-- Symbolic console: internal address → kneading sequence → characteristic external angles. -->
           <details class="control-group" id="address-group">
             <summary>Symbolic console (z²+c)</summary>

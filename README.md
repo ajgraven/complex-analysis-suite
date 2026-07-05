@@ -437,6 +437,14 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   CPU flood-fill) the piece around the critical point 0 in gold — it shrinks as the depth rises, the
   **critical nest** at the heart of Yoccoz's argument; on the parameter plane the same shades the
   parapuzzle piece around the current c (its rays sealed to the wake roots). `z²+c`.
+- **Lamination** — Thurston's **pinched-disk model** of the current Julia set, drawn as a disk widget
+  in the corner of the dynamical plane. A **chord** (leaf) joins every pair of external rays that land
+  at the same point of ∂K_c; collapsing the chords recovers the Julia set's topology. The leaves are
+  **measured**, not assumed — the app lands the low-period rays with the same Newton tracer used
+  elsewhere and joins the ones that co-land, so it is a faithful finite-**detail** approximation (a
+  slider raises the period bound). Invariant under angle doubling and under z ↦ −z. Needs a repelling α
+  (c outside the main cardioid). Basilica (c = −1): the α leaf {1/3, 2/3} and the −α leaf {1/6, 5/6};
+  the rabbit's α is an ideal triangle {1/7, 2/7, 4/7}. `z²+c`.
 - **Symbolic console** — type an **internal address** (the increasing periods from the main cardioid
   to a component, e.g. `1-3` rabbit, `1-2-4-8` cascade, `1-3-6`) and the **stripping algorithm**
   returns its **kneading sequence** ν and the two **characteristic external angles** θ⁻, θ⁺ that
