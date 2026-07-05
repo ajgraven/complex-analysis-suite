@@ -1513,8 +1513,9 @@ z^2+c</textarea
               <p class="exterior-status">
                 Or <strong>render</strong> a mating: its mated rational map is computed by the Thurston
                 pullback and drawn as a Julia set on the dynamical plane / sphere. Pick a named example,
-                or mate any satellite bulb p/q with the basilica (the engine refuses a bulb it can't
-                compute trustworthily rather than draw it wrong).
+                mate any satellite bulb p/q with the basilica, or mate two satellite bulbs with each
+                other (the general second parent). The engine refuses a pair it can't compute
+                trustworthily — including obstructed conjugate limbs — rather than draw it wrong.
               </p>
               <label class="exterior-n-label">
                 Mating
@@ -1526,6 +1527,13 @@ z^2+c</textarea
                 <input type="text" id="mate-render-pq" value="1/5" size="6" title="Bulb rotation number p/q" />
               </label>
               <button type="button" id="mate-render-pq-btn">Render p/q ⊔ basilica</button>
+              <label class="exterior-n-label">
+                or two bulbs
+                <input type="text" id="mate-gen-a" value="1/3" size="6" title="First bulb p₁/q₁" />
+                ⊔
+                <input type="text" id="mate-gen-b" value="1/4" size="6" title="Second bulb p₂/q₂" />
+              </label>
+              <button type="button" id="mate-gen-btn">Render p₁/q₁ ⊔ p₂/q₂</button>
               <p class="exterior-status" id="mate-render-note"></p>
             </div>
           </details>

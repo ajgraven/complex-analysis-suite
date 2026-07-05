@@ -23,7 +23,7 @@ import {
   type InspectResult,
 } from "./render/inspect";
 import { matingVerdict } from "./render/mating";
-import { CANONICAL_MATINGS, mateBulbWithBasilica } from "./render/matingEngine";
+import { CANONICAL_MATINGS, mateBulbWithBasilica, mateBulbs, mateableLimbs } from "./render/matingEngine";
 import { computeOrbit, orbitAndClassify, type Annotation, type OrbitFate } from "./render/overlay";
 import { toNumber as angleToNumber, binaryItinerary } from "./combinatorics/angles";
 import { coreEntropy } from "./combinatorics/coreEntropy";
@@ -3449,6 +3449,34 @@ function init(): void {
       return;
     }
     renderMatedMap(m.fString, `${p}/${q} ⊔ basilica = ${m.fString} (period ${m.critPeriod}) — on the dynamical sphere.`);
+  });
+
+  // General second parent: mate two satellite bulbs p₁/q₁ ⊔ p₂/q₂ via the Boyd–Henriksen F_{u,v}
+  // pullback. Obstruction (conjugate limbs, Tan Lei) is refused up front with an honest message; a
+  // mateable pair that still can't be pinned down trustworthily is refused too, never drawn wrong.
+  byId("mate-gen-btn").addEventListener("click", () => {
+    const note = byId("mate-render-note");
+    const fa = parseFraction(byId<HTMLInputElement>("mate-gen-a").value);
+    const fb = parseFraction(byId<HTMLInputElement>("mate-gen-b").value);
+    if (!fa || !fb) {
+      note.textContent = "Enter two bulbs as fractions p/q (e.g. 1/3 ⊔ 1/4).";
+      return;
+    }
+    const [p1, q1] = fa;
+    const [p2, q2] = fb;
+    if (!mateableLimbs(p1, q1, p2, q2)) {
+      note.textContent = `${p1}/${q1} ⊔ ${p2}/${q2} is obstructed — the bulbs are in conjugate limbs (p₁/q₁ + p₂/q₂ = 1), so no rational mating exists (Tan Lei).`;
+      return;
+    }
+    const m = mateBulbs(p1, q1, p2, q2);
+    if (!m) {
+      note.textContent = `${p1}/${q1} ⊔ ${p2}/${q2} — couldn't compute a trustworthy mating. Try 1/3 ⊔ 1/4, 1/4 ⊔ 1/5, 1/5 ⊔ 2/5, or a diagonal like 1/4 ⊔ 1/4.`;
+      return;
+    }
+    renderMatedMap(
+      m.fString,
+      `${p1}/${q1} ⊔ ${p2}/${q2} = ${m.fString} (periods ${m.periodA}, ${m.periodB}) — on the dynamical sphere.`,
+    );
   });
   byId("misiur-go").addEventListener("click", () => {
     const m = Number(byId<HTMLInputElement>("misiur-pre").value);

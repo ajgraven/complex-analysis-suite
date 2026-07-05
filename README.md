@@ -414,12 +414,16 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   pullback** (Wolf Jung's algorithm: iterate the formal-mating pullback — the postcritical points
   collide but the rational maps converge to the mating), then draws its **Julia set on the dynamical
   plane / Riemann sphere**, where the two parent Julia sets appear on the two hemispheres. Pick a named
-  example (`z²+i ⊔ basilica = (z²+2)/(z²−1)`, Jung; `rabbit`/`corabbit ⊔ basilica = (z² − e^{±2πi/3})/(z²−1)`)
-  **or mate any satellite bulb p/q with the basilica** (1/4, 1/5, 2/5, 1/6, 1/7, 2/7, …). The general
-  path is made **trustworthy by a conjugation-symmetry gate**: a mating obeys `x₁(c̄) = conj(x₁(c))`, so
-  the engine pulls back both `c` and `c̄` and **refuses** a bulb whose result isn't self-consistent
-  (e.g. the airplane) rather than drawing a wrong map — never silently wrong. A general second parent and
-  the full slow-mating homotopy are still in progress. `z²+c → quadratic rational`.
+  example (`z²+i ⊔ basilica = (z²+2)/(z²−1)`, Jung; `rabbit`/`corabbit ⊔ basilica = (z² − e^{±2πi/3})/(z²−1)`),
+  **mate any satellite bulb p/q with the basilica** (1/4, 1/5, 2/5, 1/6, 1/7, 2/7, …) — made trustworthy by a
+  **conjugation-symmetry gate** (`x₁(c̄) = conj(x₁(c))`, which **refuses** e.g. the airplane rather than drawing
+  a wrong map) — **or mate two arbitrary hyperbolic bulbs `p₁/q₁ ⊔ p₂/q₂`** (the **general second parent**). For a
+  general parent both critical values are free, so the map is the **Boyd–Henriksen form** `F(z) = (v·z² − u·k)/(z² − k)`,
+  `k = (v−1)/(u−1)`, with `u, v` solved by the same pullback tracking **both** parents' postcritical orbits.
+  Obstructed pairs are **refused** (Tan Lei: conjugate limbs `p₁/q₁ + p₂/q₂ = 1`), and the correct basin is picked
+  by **swap-consistency** — the mating is order-independent up to `z↦1/z` (which sends `(u,v)↦(1/v,1/u)`), i.e. `u·v=1`
+  for a diagonal `A ⊔ A`. Never silently wrong. Hyperbolic parents are supported; a Misiurewicz second parent and the
+  full slow-mating homotopy are still in progress. `z²+c → quadratic rational`.
 - **Go to external angle** — type an external angle θ = _p_/_q_ (turns) and the parameter ray at θ
   is traced to its landing (the globally-convergent inverse of ray drawing — no nearby click
   needed). Navigation Newton-snaps a **periodic** θ to the exact component **centre** (1/7 → the
