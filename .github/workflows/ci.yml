@@ -1,0 +1,47 @@
+name: CI
+
+# One workflow for the whole workspace: install → lint → typecheck → test → build
+# (MIGRATION.md Phase 1 step 4). Mirrors the local gate `pnpm lint && pnpm typecheck &&
+# pnpm test && pnpm build`.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# Avoid piling up redundant runs on rapid pushes to the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Let corepack fetch the pinned pnpm without an interactive prompt.
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 22 LTS is the target (CLAUDE.md decision 10 / .nvmrc); corepack provides the
+      # pnpm version pinned in package.json's "packageManager" field.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
