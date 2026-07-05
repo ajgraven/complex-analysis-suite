@@ -260,8 +260,8 @@ x₁(t+1)=±√((x₁−x₂)/(1−x₂)),  x₂(t+1)=±√(2x₁/(1+x₁))   (e
 
 ### 6.4 Feasible features
 - **Conjugate-limb "mateable?" oracle** (**Quick win**, NEW, no engine): pick two c's/angles → "mateable?" via the limb test; highlight the conjugate limb (1/7–2/7 ⇒ shade 5/7–6/7); "self-mateable iff outside 1/3–2/3". Pure angle combinatorics on data we already compute (Farey/rays). High pedagogy, stepping-stone.
-- **Mating mode (curated)** (**Moderate** MVP): ship a small table of precomputed (a,b) for ~8 classic matings (rabbit⊨basilica, rabbit⊨airplane, 1/5⊨1/5, Lattès 1/6⊨5/14, c_{1/4} self-mate) and render their **rational-map Julia sets** via the existing AST→GLSL rational path + a **sphere view** (§4.6). No Teichmüller code.
-- **Full mating engine** (**Hard/Research**): §6.3 marked-point pullback for arbitrary θ₁,θ₂ → (a,b) → render; surface conjugate-limb/even-q/collision caveats.
+- **Mating mode (curated)** (**Moderate** MVP) — *superseded:* rather than transcribe a precomputed (a,b) table, we shipped the marked-point pullback **engine** (below) which *computes* the maps and renders a curated **verified** ⊔ basilica set on the sphere. (Original plan: a small table of ~8 classic matings rendered via the AST→GLSL rational path + the sphere view (§4.6), no Teichmüller code.)
+- **Full mating engine** (**Hard/Research**) — ✅ **Stages 1–2 SHIPPED** (#249 pullback core, #250 render): the §6.3 marked-point pullback (Jung arXiv:1706.04177 — iterate the *formal*-mating pullback; the marked points collide but the rational maps converge to R, so no ray-equivalence topology is encoded). `matingEngine.ts` mates any PCF quadratic ⊔ **basilica** → g(z)=(z²−x₁)/(z²−1); verified z²+i⊔basilica = (z²+2)/(z²−1), rabbit/corabbit → (z² − e^{±2πi/3})/(z²−1), basilica⊔basilica refused (obstructed); rendered on the live sphere in **Marty** (spherical-derivative) mode. **Remaining:** the slow-mating init (R_t=exp(2^{1−t})) for an *arbitrary* pair (avoids the sibling-basin capture) + a general 2nd parent; conjugate-limb/even-q/collision caveats surfaced.
 - **Inverse-iteration painted-sphere** (**Moderate**, NEW technique): Medusa's Julia picture = pull back a 2-tone painted sphere (black=J(f₂) upper, white=J(f₁) lower) under R⁻¹; clean basin boundaries; the only sane way to show space-filling matings. Usable for any rational map.
 - **Oracles:** rabbit⊨basilica (1/7⊨1/3); shared mating rabbit⊨airplane = 1/7⊨3/7=3/7⊨1/7; Lattès four-fold 1/6⊨5/14=3/14⊨3/14=3/14⊨1/2=5/6⊨1/2 (space-filling); z²+i⊨z²−1 → (z²+2)/(z²−1).
 
@@ -328,7 +328,7 @@ Ordered by value-weighted effort. "Reuses" notes the existing asset that makes i
 23. ◻ **Newton-on-parameter-space basins** (period-k nucleus basins as a picture); **tuning/cascade navigator**. (§8, §3.5) — open.
 
 ### Tier 3 — Hard / research-grade (flagship or later) — ◻ all open/deferred (updated scoping in `FRONTIER_ROADMAP.md` §4)
-24. **Mating mode** — curated (a,b) table MVP rendering classic matings' Julia sets on the sphere (Moderate-ish), then the **Thurston marked-point pullback** engine for arbitrary θ₁,θ₂ (Hard). (§6.2–§6.4)
+24. **Mating mode** ✅ **Stages 1–2 shipped** (#249–250) — went straight to the **Thurston marked-point pullback** *engine* (not a transcribed (a,b) table); it computes + renders a verified ⊔ basilica set on the sphere (Marty mode). Stage 3 = slow-mating init for arbitrary pairs. (§6.2–§6.4)
 25. **Rotation-domain pixel layer** (per-pixel quasiperiodicity classification, Siegel/Herman vs basin). (§5.1)
 26. **Mariani–Silver tile-skip** render acceleration (DE-guarded), payoff at deep/high-iter scenes. (§2.5)
 27. **Yoccoz puzzles**; **renormalization / embedded Julia-set marking**. (§3.6, §7)
