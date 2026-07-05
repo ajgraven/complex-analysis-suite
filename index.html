@@ -1511,15 +1511,21 @@ z^2+c</textarea
               <button type="button" id="mate-check">Check mateability</button>
               <p class="exterior-status" id="mate-verdict"></p>
               <p class="exterior-status">
-                Or <strong>render</strong> a verified mating: its mated rational map is computed by the
-                Thurston pullback and drawn as a Julia set on the dynamical plane (enable the sphere to
-                see it on Ĉ). Currently a curated ⊔ basilica set.
+                Or <strong>render</strong> a mating: its mated rational map is computed by the Thurston
+                pullback and drawn as a Julia set on the dynamical plane / sphere. Pick a named example,
+                or mate any satellite bulb p/q with the basilica (the engine refuses a bulb it can't
+                compute trustworthily rather than draw it wrong).
               </p>
               <label class="exterior-n-label">
                 Mating
                 <select id="mate-render"></select>
               </label>
               <button type="button" id="mate-render-btn">Render on the sphere</button>
+              <label class="exterior-n-label">
+                or a bulb p/q ⊔ basilica
+                <input type="text" id="mate-render-pq" value="1/5" size="6" title="Bulb rotation number p/q" />
+              </label>
+              <button type="button" id="mate-render-pq-btn">Render p/q ⊔ basilica</button>
               <p class="exterior-status" id="mate-render-note"></p>
             </div>
           </details>

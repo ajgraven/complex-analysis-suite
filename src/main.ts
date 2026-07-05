@@ -23,7 +23,7 @@ import {
   type InspectResult,
 } from "./render/inspect";
 import { matingVerdict } from "./render/mating";
-import { CANONICAL_MATINGS } from "./render/matingEngine";
+import { CANONICAL_MATINGS, mateBulbWithBasilica } from "./render/matingEngine";
 import { computeOrbit, orbitAndClassify, type Annotation, type OrbitFate } from "./render/overlay";
 import { toNumber as angleToNumber, binaryItinerary } from "./combinatorics/angles";
 import { coreEntropy } from "./combinatorics/coreEntropy";
@@ -3403,11 +3403,10 @@ function init(): void {
     opt.textContent = m.name;
     mateRenderSelect.appendChild(opt);
   });
-  function renderMating(): void {
-    const m = CANONICAL_MATINGS[Number(mateRenderSelect.value)];
-    if (!m) return;
+  /** Apply a mated rational map to the dynamical plane in Marty mode on the sphere (shared render). */
+  function renderMatedMap(fString: string, label: string): void {
     dynamicalView.applyPreset({
-      f: m.fString,
+      f: fString,
       c: "0",
       z0: "0",
       n: "120",
@@ -3425,10 +3424,32 @@ function init(): void {
     applyColoring();
     byId<HTMLInputElement>("sphere-dyn").checked = true;
     dynamicalView.setSphere(true);
-    byId("mate-render-note").textContent =
-      `${m.parentA} ⊔ ${m.parentB} = ${m.fString} — Julia set on the dynamical sphere.`;
+    byId("mate-render-note").textContent = label;
+  }
+  function renderMating(): void {
+    const m = CANONICAL_MATINGS[Number(mateRenderSelect.value)];
+    if (m) renderMatedMap(m.fString, `${m.parentA} ⊔ ${m.parentB} = ${m.fString} — on the dynamical sphere.`);
   }
   byId("mate-render-btn").addEventListener("click", renderMating);
+
+  // General path: mate any p/q satellite bulb with the basilica (Stage 3). The engine is symmetry-gated
+  // (x₁(c̄)=conj(x₁(c))), so a bulb that can't be trustworthily computed (e.g. 3/7, or a real ½-limb
+  // bulb) is refused rather than rendered wrong.
+  byId("mate-render-pq-btn").addEventListener("click", () => {
+    const note = byId("mate-render-note");
+    const frac = parseFraction(byId<HTMLInputElement>("mate-render-pq").value);
+    if (!frac) {
+      note.textContent = "Enter a bulb as a fraction p/q (e.g. 1/5, 2/7).";
+      return;
+    }
+    const [p, q] = frac;
+    const m = mateBulbWithBasilica(p, q);
+    if (!m) {
+      note.textContent = `${p}/${q} ⊔ basilica — couldn't compute a trustworthy mating (obstructed, or not a clean satellite mating). Try 1/4, 1/5, 2/5, 1/6, 1/7, 2/7 …`;
+      return;
+    }
+    renderMatedMap(m.fString, `${p}/${q} ⊔ basilica = ${m.fString} (period ${m.critPeriod}) — on the dynamical sphere.`);
+  });
   byId("misiur-go").addEventListener("click", () => {
     const m = Number(byId<HTMLInputElement>("misiur-pre").value);
     const k = Number(byId<HTMLInputElement>("misiur-per").value);

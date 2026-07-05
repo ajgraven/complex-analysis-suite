@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Complex } from "../src/complex";
 import {
   CANONICAL_MATINGS,
+  bulbCenter,
+  mateBulbWithBasilica,
   mateWithBasilica,
   postcriticalOrbit,
 } from "../src/render/matingEngine";
@@ -78,6 +80,41 @@ describe("mateWithBasilica — the Thurston pullback reproduces the canonical ma
 
   it("returns null for a non-PCF first parent", () => {
     expect(mateWithBasilica([2, 0])).toBeNull();
+  });
+});
+
+describe("mateWithBasilica — Stage 3: trustworthy for arbitrary hyperbolic p/q-bulbs", () => {
+  it("bulbCenter(1,3) is the rabbit centre; mating it reproduces e^{+2πi/3}", () => {
+    const c = bulbCenter(1, 3);
+    expect(near(c, [-0.12256116687665, 0.74486176661974], 1e-6)).toBe(true);
+    expect(near(must(mateWithBasilica(c)).x1, [-0.5, Math.sqrt(3) / 2], 1e-6)).toBe(true);
+  });
+
+  it("the 1/4-bulb ⊔ basilica is a period-4 mating (symmetry-gated, non-null)", () => {
+    const m = must(mateBulbWithBasilica(1, 4));
+    expect(m.critPeriod).toBe(4);
+  });
+
+  it("the 1/5 and 2/5 bulbs give distinct period-5 matings", () => {
+    const m15 = must(mateBulbWithBasilica(1, 5));
+    const m25 = must(mateBulbWithBasilica(2, 5));
+    expect(m15.critPeriod).toBe(5);
+    expect(m25.critPeriod).toBe(5);
+    expect(near(m15.x1, m25.x1, 1e-3)).toBe(false); // genuinely different matings, not the same basin
+  });
+
+  it("the conjugation-symmetry gate REFUSES the airplane (real c_A, non-self-conjugate pullback)", () => {
+    // The airplane (real, period-3) would spuriously land the rabbit's complex e^{2πi/3}; the gate
+    // rejects it because a real parameter must give a real (self-conjugate) map, and there is no real
+    // period-3 map in this family.
+    expect(mateWithBasilica([-1.7548776662466927, 0])).toBeNull();
+  });
+
+  it("a mateable hyperbolic bulb satisfies the mating symmetry it is gated on: x₁(c̄)=conj(x₁(c))", () => {
+    const c = bulbCenter(2, 5);
+    const m = must(mateWithBasilica(c));
+    const mc = must(mateWithBasilica([c[0], -c[1]]));
+    expect(near(mc.x1, [m.x1[0], -m.x1[1]], 1e-5)).toBe(true);
   });
 });
 

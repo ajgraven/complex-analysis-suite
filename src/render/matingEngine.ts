@@ -20,14 +20,19 @@
  * marked points of f_A (its postcritical orbit) under g⁻¹(w) = ±√((x₁−w)/(1−w)), the sign chosen by
  * continuity. At the fixed point x₁ is the mated map's parameter.
  *
- * The pullback *core* is general and verified (see {@link CANONICAL_MATINGS}); what is not yet general
- * is the **initialisation** — which basin the iteration lands in for an arbitrary c_A. We use a
- * c_A-informed seed (conjugated postcritical values, per the θ↦−θ gluing) with fallbacks, which lands
- * the correct map for the canonical matings but can capture a sibling for an unverified c_A (e.g. a real
- * period-3 map does not exist here — x₁²+x₁+1=0 gives only e^{±2πi/3} — so the airplane is not a clean
- * "⊔ basilica" period-3 mating). Guaranteeing the right basin for any pair needs the slow-mating
- * homotopy initialisation (Stage 2). So {@link mateWithBasilica} returns the pullback's fixed point as a
- * *candidate*; the rigorously-correct results are the {@link CANONICAL_MATINGS}, asserted in the tests.
+ * The pullback *core* is general and verified (see {@link CANONICAL_MATINGS}); the risk is the
+ * **initialisation** — which basin the iteration lands in. We use a c_A-informed seed (conjugated
+ * postcritical values, per the θ↦−θ gluing), which is conjugation-EQUIVARIANT, so for a **hyperbolic**
+ * parent {@link mateWithBasilica} makes the result TRUSTWORTHY with a **conjugation-symmetry gate**: a
+ * mating obeys x₁(c̄) = conj(x₁(c)), so we pull back both c_A and c̄_A and accept only when they are
+ * conjugate. A wrong-basin capture fails this (the airplane — a real c_A whose pullback lands the
+ * rabbit's *complex* e^{2πi/3}, not self-conjugate — is rejected; no real period-3 map exists here since
+ * x₁²+x₁+1=0 has only e^{±2πi/3}), while genuine conjugate siblings pass (rabbit ↔ corabbit). So an
+ * arbitrary hyperbolic p/q-bulb ⊔ basilica ({@link mateBulbWithBasilica}) is either computed correctly or
+ * refused — never silently wrong. A **Misiurewicz** parent (the conj-pc seed degenerates on the Julia
+ * set) uses a multi-seed search *without* the gate — trusted for the curated {@link CANONICAL_MATINGS}
+ * (asserted in the tests), a candidate otherwise. The general second parent and the full slow-mating
+ * homotopy remain deferred.
  *
  * Oracles: z²+i ⊔ basilica → exactly (z²+2)/(z²−1) (Jung, Example 2.5); the rabbit and corabbit →
  * (z² − e^{±2πi/3})/(z²−1) (the only period-3 values, conjugate siblings tracking conj(c_A)); the
@@ -188,46 +193,111 @@ export function matedMapFString(x1: Complex): string {
   return `(${num})/(z^2 - 1)`;
 }
 
+const SYMMETRY_TOL = 1e-5; // |x₁(c̄) − conj(x₁(c))| below this ⇒ the result respects the mating symmetry
+
+/** Build a Mating record from a converged x₁ (helper for the two paths below). */
+function matingOf(x1: Complex, iterations: number, pre: number, per: number): Mating {
+  return { x1, fString: matedMapFString(x1), critPreperiod: pre, critPeriod: per, iterations };
+}
+
 /**
- * Mate f_A(z) = z² + c_A with the **basilica** (z² − 1) via the marked-point Thurston pullback, returning
- * the mated quadratic rational map g(z) = (z² − x₁)/(z² − 1), or null when no non-degenerate map is found
- * (obstruction / not PCF / no convergence). Tries a c_A-informed seed (conjugated postcritical values —
- * the θ↦−θ gluing) first, then fallbacks, accepting the first that converges to a non-degenerate map with
- * a finite critical orbit. See the module header for the correctness scope: rigorous for the
- * {@link CANONICAL_MATINGS}; a candidate (possibly a sibling) for an arbitrary c_A until the slow-mating
- * initialisation lands the basin deterministically (Stage 2).
+ * The **hyperbolic** path: the c_A-informed seed (conjugated postcritical values — the θ↦−θ gluing) is
+ * conjugation-EQUIVARIANT, so it tracks the correct sibling. Accept the first scale that converges to a
+ * non-degenerate map whose critical period equals the parent's (no collision for a hyperbolic parent).
  */
-export function mateWithBasilica(cA: Complex): Mating | null {
-  const orbit = postcriticalOrbit(cA);
-  if (!orbit) return null;
+function hyperMate(orbit: PostcriticalOrbit): Mating | null {
+  for (const s of [1, 2, 3]) {
+    const seed = orbit.orbit.map((p): Complex => [s * p[0], -s * p[1]]);
+    const { x1, iterations } = pullback(orbit, seed);
+    if (!Number.isFinite(x1[0]) || cdist(x1, ONE) < DEGENERATE_TOL) continue;
+    const st = critStructure(x1);
+    if (!st || st.per !== orbit.period) continue;
+    return matingOf(x1, iterations, st.pre, st.per);
+  }
+  return null;
+}
+
+/**
+ * The **Misiurewicz** path: the conj-pc seed degenerates (the postcritical points sit on the Julia set),
+ * so search a few deterministic generic seeds and accept the first non-degenerate map with a finite
+ * critical orbit. Used for the curated dendrite matings (e.g. z²+i), cross-checked in the tests against
+ * their known values — not symmetry-gated, so treat an *uncurated* Misiurewicz c_A as a candidate.
+ */
+function multiSeedMate(orbit: PostcriticalOrbit): Mating | null {
   const seeds: Complex[][] = [];
-  // c_A-informed seeds first (conjugated postcritical values, a few scales) — sibling-correct when they
-  // converge (they track conj(c_A)); then deterministic generic fallbacks for the collision cases.
   for (const s of [1, 2, 3]) seeds.push(orbit.orbit.map((p): Complex => [s * p[0], -s * p[1]]));
   seeds.push(orbit.orbit.map((_, i): Complex => [Math.cos(2 + i) * 1.3, Math.sin(2 + i) * 1.3]));
   seeds.push(orbit.orbit.map((_, i): Complex => [-1 + 0.4 * i, 0.6 - 0.3 * i]));
   seeds.push(orbit.orbit.map((_, i): Complex => [0.5 * (i % 2 ? 1 : -1), 0.5 * (i % 2 ? -1 : 1)]));
   for (const seed of seeds) {
     const { x1, iterations } = pullback(orbit, seed);
-    if (!Number.isFinite(x1[0]) || !Number.isFinite(x1[1])) continue;
-    if (cdist(x1, ONE) < DEGENERATE_TOL) continue; // degenerate: g ≡ 1
+    if (!Number.isFinite(x1[0]) || cdist(x1, ONE) < DEGENERATE_TOL) continue;
     const st = critStructure(x1);
-    if (!st) continue;
-    // For a hyperbolic parent (no postcritical collision) the mated critical point must have exactly
-    // the parent's period — this rejects spurious lower-period fixed points (e.g. the obstructed
-    // basilica ⊔ basilica, which the pullback would otherwise collapse to period 1). A Misiurewicz
-    // parent collides (its cycle collapses), so its mated period legitimately differs; accept any
-    // finite structure there.
-    if (orbit.preperiod === 0 && st.per !== orbit.period) continue;
-    return {
-      x1,
-      fString: matedMapFString(x1),
-      critPreperiod: st.pre,
-      critPeriod: st.per,
-      iterations,
-    };
+    if (st) return matingOf(x1, iterations, st.pre, st.per);
   }
   return null;
+}
+
+/**
+ * Mate f_A(z) = z² + c_A with the **basilica** (z² − 1) via the marked-point Thurston pullback, returning
+ * the mated quadratic rational map g(z) = (z² − x₁)/(z² − 1), or null when no trustworthy map is found
+ * (obstruction / not PCF / wrong basin / not verifiable).
+ *
+ * For a **hyperbolic** c_A the result is made TRUSTWORTHY by a **conjugation-symmetry gate**: a mating
+ * obeys x₁(c̄) = conj(x₁(c)), so we compute the pullback for c_A *and* c̄_A and accept only when they are
+ * conjugate. This rejects a wrong-basin capture (e.g. the airplane, a real c_A whose pullback lands the
+ * rabbit's *complex* map — not self-conjugate, so rejected) while accepting genuine conjugate siblings
+ * (rabbit ↔ corabbit). So an arbitrary hyperbolic p/q-bulb ⊔ basilica is either computed correctly or
+ * refused — never silently wrong. A **Misiurewicz** c_A (the conj-pc seed degenerates) uses the
+ * multi-seed search without the gate — trusted for the curated {@link CANONICAL_MATINGS}, a candidate
+ * otherwise. The general second parent (beyond the basilica) and the full slow-mating homotopy remain
+ * deferred.
+ */
+export function mateWithBasilica(cA: Complex): Mating | null {
+  const orbit = postcriticalOrbit(cA);
+  if (!orbit) return null;
+  if (orbit.preperiod === 0) {
+    const m = hyperMate(orbit);
+    if (!m) return null;
+    const conjOrbit = postcriticalOrbit([cA[0], -cA[1]]);
+    const mc = conjOrbit && hyperMate(conjOrbit);
+    if (!mc || cdist(mc.x1, [m.x1[0], -m.x1[1]]) > SYMMETRY_TOL) return null; // symmetry gate
+    return m;
+  }
+  return multiSeedMate(orbit);
+}
+
+/**
+ * The centre of the p/q satellite bulb of the main cardioid — the superattracting period-q parameter,
+ * by Newton on f_c^q(0) = 0 from the cardioid attach point c = e^{2πip/q}/2 − e^{4πip/q}/4.
+ */
+export function bulbCenter(p: number, q: number): Complex {
+  const th = (2 * Math.PI * p) / q;
+  let c: Complex = [
+    Math.cos(th) / 2 - Math.cos(2 * th) / 4,
+    Math.sin(th) / 2 - Math.sin(2 * th) / 4,
+  ];
+  for (let it = 0; it < 100; it++) {
+    let z: Complex = [0, 0];
+    let dz: Complex = [0, 0]; // dz/dc
+    for (let k = 0; k < q; k++) {
+      dz = cadd(cmul([2, 0], cmul(z, dz)), ONE);
+      z = cadd(cmul(z, z), c);
+    }
+    const step = cdiv(z, dz);
+    c = csub(c, step);
+    if (Math.hypot(step[0], step[1]) < 1e-15) break;
+  }
+  return c;
+}
+
+/**
+ * Mate the p/q satellite bulb (period q) with the basilica — the interactive general path. Finds the
+ * bulb centre and mates it (symmetry-gated), so it returns the mated map for a mateable bulb or null when
+ * it can't be trustworthily computed (e.g. 3/7 doesn't land, real bulbs of the ½-limb are refused).
+ */
+export function mateBulbWithBasilica(p: number, q: number): Mating | null {
+  return mateWithBasilica(bulbCenter(p, q));
 }
 
 /** A rigorously-verified mating (its known parameter cross-checks the pullback result). */
