@@ -33,7 +33,7 @@
  * module — no DOM / GL. See FEATURE_RESEARCH.md §3.2. Oracles: 1-2 → {1/3,2/3}; 1-3 → {1/7,2/7};
  * 1-2-4 → {2/5,3/5}; 1-3-6 → {10/63,17/63}.
  */
-import { type Angle, type KneadingSymbol, angle } from "./angles";
+import { type Angle, type KneadingSymbol, angle, classifyDoubling, kneadingSequence } from "./angles";
 
 /**
  * Largest internal-address period we strip interactively. Phase 2 enumerates 2ⁿ−1 candidate angles
@@ -113,6 +113,36 @@ export function addressFromKneading(nu: KneadingSymbol[]): number[] {
     address.push(s);
   }
   return address;
+}
+
+/** The internal address of the hyperbolic component whose root ray has external angle θ, + its combinatorics. */
+export interface AngleAddress {
+  /** The internal address 1 = S₀ < … < S_k = period. */
+  address: number[];
+  /** The period of the component (= the last address entry). */
+  period: number;
+  /** The ⋆-periodic kneading sequence ν of θ (length = period). */
+  kneading: KneadingSymbol[];
+  /** The external angle in lowest terms. */
+  angle: Angle;
+}
+
+/**
+ * The **inverse** of {@link stripExternalAngles}: given the external angle θ of a parameter ray landing
+ * at a component's root, recover its **internal address** — by reading off θ's kneading sequence
+ * ({@link kneadingSequence}) and applying the ρ-function ({@link addressFromKneading}). Returns null when
+ * θ is not a hyperbolic-component root angle (pre-periodic / Misiurewicz — a strictly positive preperiod).
+ *
+ * This is what distinguishes components of the *same* period: rabbit 1/7 → 1-3 (a satellite of the main
+ * cardioid) vs airplane 3/7 → 1-2-3 (primitive — its vein passes through period 2). Both root angles of a
+ * component give the same address. Exact integer arithmetic throughout (a rigorous combinatorial fact).
+ */
+export function internalAddressFromAngle(a: Angle): AngleAddress | null {
+  const norm = angle(a.p, a.q); // reduce (5/15 → 1/3)
+  const { preperiod, period } = classifyDoubling(norm);
+  if (preperiod > 0 || period < 1) return null; // Misiurewicz / not periodic ⇒ not a component root
+  const kneading = kneadingSequence(norm, period);
+  return { address: addressFromKneading(kneading), period, kneading, angle: norm };
 }
 
 /**

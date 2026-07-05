@@ -5,6 +5,7 @@ import {
   addressFromKneading,
   externalAnglePairs,
   formatKneading,
+  internalAddressFromAngle,
   kneadingFromAddress,
   parseInternalAddress,
   stripExternalAngles,
@@ -131,5 +132,62 @@ describe("parseInternalAddress validation", () => {
     expect(() => parseInternalAddress("1-3-3")).toThrow(/strictly increase/);
     expect(() => parseInternalAddress("1-2-2")).toThrow(/strictly increase/);
     expect(() => parseInternalAddress("1-100")).toThrow(/interactive limit/);
+  });
+});
+
+describe("internalAddressFromAngle (the inverse: external angle → internal address)", () => {
+  const addr = (p: number, q: number): number[] | null => internalAddressFromAngle(a(p, q))?.address ?? null;
+
+  it("THE money oracle: rabbit (1→3) vs airplane (1→2→3) — same period 3, different address", () => {
+    expect(addr(1, 7)).toEqual([1, 3]); // rabbit — satellite of the main cardioid
+    expect(addr(2, 7)).toEqual([1, 3]); // its other root angle agrees
+    expect(addr(3, 7)).toEqual([1, 2, 3]); // airplane — primitive, passes through period 2
+    expect(addr(4, 7)).toEqual([1, 2, 3]);
+  });
+
+  it("basilica (1/3, 2/3) → 1→2; corabbit (5/7, 6/7) → 1→3", () => {
+    expect(addr(1, 3)).toEqual([1, 2]);
+    expect(addr(2, 3)).toEqual([1, 2]);
+    expect(addr(5, 7)).toEqual([1, 3]);
+    expect(addr(6, 7)).toEqual([1, 3]);
+  });
+
+  it("the full period-4 census (denominator 2⁴−1 = 15) has the right addresses", () => {
+    expect(addr(1, 15)).toEqual([1, 4]); // 1/4 satellite bulb
+    expect(addr(2, 5)).toEqual([1, 2, 4]); // 6/15 — period-doubling cascade
+    expect(addr(1, 5)).toEqual([1, 3, 4]); // 3/15 — satellite of the period-3 rabbit
+    expect(addr(7, 15)).toEqual([1, 2, 3, 4]); // primitive period-4
+  });
+
+  it("round-trips against the forward stripper: address → angle → address", () => {
+    for (const address of [[1, 2], [1, 3], [1, 2, 3], [1, 2, 4], [1, 3, 6]]) {
+      const strip = stripExternalAngles(address);
+      expect(strip.lower).not.toBeNull();
+      const back = internalAddressFromAngle(strip.lower as Angle);
+      expect(back?.address).toEqual(address);
+    }
+  });
+
+  it("reduces the angle and reports it in lowest terms (5/15 = 1/3 ⇒ 1→2)", () => {
+    const r = internalAddressFromAngle(a(5, 15));
+    expect(r?.address).toEqual([1, 2]);
+    expect(r?.angle).toEqual({ p: 1, q: 3 });
+    expect(r?.period).toBe(2);
+  });
+
+  it("refuses a pre-periodic (Misiurewicz) angle — strictly positive preperiod", () => {
+    expect(internalAddressFromAngle(a(1, 4))).toBeNull(); // 1/4 lands on a Misiurewicz point
+    expect(internalAddressFromAngle(a(1, 6))).toBeNull();
+  });
+
+  it("the address always starts at 1, ends at the period, and strictly increases", () => {
+    for (const [p, q] of [[1, 7], [3, 7], [7, 15], [11, 31], [1, 15]] as const) {
+      const r = internalAddressFromAngle(a(p, q));
+      expect(r).not.toBeNull();
+      const ad = (r as { address: number[] }).address;
+      expect(ad[0]).toBe(1);
+      expect(ad[ad.length - 1]).toBe(r?.period);
+      for (let i = 1; i < ad.length; i++) expect(ad[i]).toBeGreaterThan(ad[i - 1]);
+    }
   });
 });
