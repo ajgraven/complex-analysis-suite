@@ -35,10 +35,28 @@ const APP_DIR = path.join(__dirname, '..');   // app/
 const ESM_PORTED = new Map([
   ['complex.js', { file: 'complex.mjs', globals: ['Complex'] }],
   ['taylor.js', { file: 'taylor.mjs', globals: ['Taylor'] }],
-  // solver.mjs default-exports the mutable QD namespace; classic family files (still
-  // vm-loaded) read it as `module.exports` and register onto it.
+  // solver.mjs default-exports the mutable QD namespace. bootstrap sets ctx.module.exports +
+  // ctx.QD to it so the STILL-classic vm-loaded files (poly-helpers, analysis, subsystems)
+  // read/register onto it, and the ESM family modules below import it directly.
   ['solver.js', { file: 'solver.mjs', namespace: true }],
 ]);
+// Solver family/seed cluster: native-ESM twins, imported (side effect) in WORKER_BUNDLE_FILES
+// order — each IIFE registers onto the solver.mjs namespace exactly as its classic twin did.
+for (const rel of [
+  'solver-faber.js',
+  'solvers/seeds/seeds-qd.js', 'solver-qd.js',
+  'solvers/seeds/seeds-uqd.js', 'solver-uqd.js',
+  'solver-lqd-common.js', 'solvers/seeds/seeds-lqd.js', 'solver-lqd.js',
+  'solvers/seeds/seeds-lqd-singular.js', 'solver-lqd-singular.js',
+  'solvers/seeds/seeds-uqd-lqd.js', 'solver-uqd-lqd.js',
+  'solvers/seeds/seeds-uqd-lqd-singular.js', 'solver-uqd-lqd-singular.js',
+  'solver-pqd-common.js', 'solvers/seeds/seeds-pqd.js', 'solver-pqd.js',
+  'solvers/seeds/seeds-pqd-singular.js', 'solver-pqd-singular.js',
+  'solvers/seeds/seeds-uqd-pqd.js', 'solver-uqd-pqd.js',
+  'solvers/seeds/seeds-uqd-pqd-singular.js', 'solver-uqd-pqd-singular.js',
+]) {
+  ESM_PORTED.set(rel, { file: rel.replace(/\.js$/, '.mjs') });
+}
 
 let _initPromise = null;
 function init() {
@@ -109,6 +127,9 @@ async function _init() {
   // Capture the QD namespace BEFORE param-slice/sphere reassign module.exports.
   const QD_NS = ctx.module.exports;
   ctx.QD = QD_NS;   // param-slice-common reads global.QD (= ctx.QD)
+  // Re-expose all namespace members (incl. family-registered ones) as bare ctx globals, for
+  // the handful of tests that read them via vm.runInContext('<name>', ctx).
+  Object.assign(ctx, QD_NS);
 
   // --- subsystems (the 5 former mid-file loaders; each depends only on core QD) ---
   loadInCtx('direct/direct-common.js');               // augments module.exports.Direct
