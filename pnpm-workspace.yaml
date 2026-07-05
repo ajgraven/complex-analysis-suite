@@ -1,0 +1,6 @@
+# pnpm workspace definition (ADR-0004). Members are discovered under these globs.
+# `packages/*` is empty until the first demand-driven extraction (Phase 3 → @cas/core);
+# an empty glob is fine. Apps are pulled in during Phase 0 via git subtree.
+packages:
+  - "packages/*"
+  - "apps/*"

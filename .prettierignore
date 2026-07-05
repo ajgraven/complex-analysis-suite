@@ -1,0 +1,13 @@
+# Dependencies & build outputs
+**/node_modules/
+**/dist/
+**/build/
+**/.vite/
+**/coverage/
+pnpm-lock.yaml
+package-lock.json
+
+# Vendored apps (Phase 0): do not reformat existing app source. Each app keeps its own
+# formatting until the toolchain is unified in Phase 1 (MIGRATION.md Phase 1).
+apps/complex-dynamics/
+apps/quadrature-domains/

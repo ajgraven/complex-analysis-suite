@@ -1,0 +1,18 @@
+{
+  // Shared TypeScript base config (ADR-0002). Each package/app has its own tsconfig.json
+  // that `extends` this. Shared packages keep `strict`; apps may add `allowJs` (and,
+  // during transition, `checkJs: false`) so gradually-typed JS compiles untyped.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true
+  }
+}
