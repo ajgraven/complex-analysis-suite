@@ -13,7 +13,7 @@
 // =============================================================================
 'use strict';
 
-require('./test/bootstrap');                 // builds the vm ctx + installs shared globals (once)
+const bootstrap = require('./test/bootstrap'); // async init() imports ESM leaves + installs globals
 const { ok, report } = require('./test/harness');
 
 // Ordered for readable output. Order is not load-bearing: bootstrap eagerly
@@ -70,6 +70,7 @@ const FLOORS = {
 const DEFAULT_FLOOR = 3;
 
 (async () => {
+  await bootstrap.init();                     // async setup: imports the ESM-ported leaf modules
   let ran = 0;
   for (const name of TESTS) {
     const before = report();
