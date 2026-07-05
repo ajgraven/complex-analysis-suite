@@ -1,0 +1,1757 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #555;
+  --border: #d0d0d0;
+  --accent: #2b6cb0;
+  --accent-contrast: #ffffff;
+  --field-bg: #fafafa;
+  --radius: 6px;
+  --gap: 1rem;
+  --max-width: 1500px;
+  font-family:
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    Arial,
+    sans-serif;
+  color-scheme: light dark;
+}
+
+/* --- Dark theme -------------------------------------------------------- */
+/* Follow the OS by default; the theme toggle can force light or dark. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15171a;
+    --fg: #e6e6e6;
+    --muted: #9aa0a6;
+    --border: #3a3f44;
+    --accent: #4a90d9;
+    --field-bg: #1e2125;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #15171a;
+  --fg: #e6e6e6;
+  --muted: #9aa0a6;
+  --border: #3a3f44;
+  --accent: #4a90d9;
+  --field-bg: #1e2125;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* The `hidden` attribute must always win. Author rules that set `display`
+   (e.g. the modal overlays below, which are flex containers) otherwise defeat
+   the UA `[hidden] { display: none }` rule, leaving the element permanently
+   visible even when JS sets `el.hidden = true`. */
+[hidden] {
+  display: none !important;
+}
+
+/* Visually hidden but available to assistive tech (screen-reader live region). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+body {
+  margin: 0;
+  padding: 1.5rem clamp(0.75rem, 3vw, 2rem) 3rem;
+  color: var(--fg);
+  background: var(--bg);
+  line-height: 1.5;
+}
+
+h1 {
+  font-size: 1.6rem;
+  margin: 0 0 1rem;
+}
+
+h2 {
+  font-size: 1.15rem;
+  margin: 0 0 0.5rem;
+}
+
+.page {
+  max-width: var(--max-width);
+  margin: 0 auto;
+}
+
+/* --- Top app bar: title + global actions (theme, tour, share, views) --- */
+.app-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.app-bar h1 {
+  margin: 0;
+}
+
+.app-bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Use-case profile picker in the app bar (a labelled select + its "?" help). */
+.profile-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.profile-picker > label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* "Views" dropdown (save / load / delete named views) as a popover menu. */
+.views-menu {
+  position: relative;
+}
+
+.views-menu > summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--field-bg);
+  color: var(--fg);
+  user-select: none;
+}
+
+.views-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.views-menu > summary:hover {
+  border-color: var(--accent);
+}
+
+.views-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.3rem);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 12rem;
+  padding: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+}
+
+/* --- Plots: two columns that stack on narrow screens ------------------- */
+.plots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap);
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .plots {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- Two-pane workspace: pinned plots beside an independently-scrolling control column.
+   Below 1200px the panes stack (the original single-column flow). From 720px up, the plots
+   pane is sticky, so the plots stay on screen while you scroll or drag any control — which is
+   the whole point: a slider like "radius r" is always next to a visible plot. */
+.plots-pane {
+  background: var(--bg); /* opaque so controls don't show through when it overlaps while sticky */
+}
+
+.controls-pane {
+  min-width: 0; /* let the narrow control column wrap its contents instead of overflowing */
+}
+
+@media (min-width: 720px) {
+  .plots-pane {
+    position: sticky;
+    top: 0.5rem;
+    align-self: start;
+    max-height: calc(100vh - 1rem);
+    overflow: auto;
+    scrollbar-gutter: stable; /* reserve the scrollbar's width so it appearing never reflows (jitters) the plots */
+    z-index: 1;
+  }
+}
+
+@media (min-width: 1200px) {
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(280px, 24vw, 360px);
+    gap: var(--gap);
+    align-items: start;
+  }
+}
+
+/* --- Desktop layout toggles: stack the plots and/or hide the sidebar to enlarge them.
+   Only meaningful at the ≥1200px two-pane workspace; hidden below that (the plots already
+   stack and the controls sit in their own flow / bottom sheet). "Fill" lets each canvas grow
+   into the freed width — drawn at the current render resolution, so a much wider plot is softer
+   until "canvas px" is raised (by design: the rendered buffer stays reproducible). */
+.layout-btn {
+  display: none;
+}
+
+@media (min-width: 1200px) {
+  .layout-btn {
+    display: inline-block;
+  }
+
+  .workspace.controls-collapsed {
+    grid-template-columns: 1fr;
+  }
+  .workspace.controls-collapsed .controls-pane {
+    display: none;
+  }
+
+  .workspace.plots-stacked .plots {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace.controls-collapsed .canvas-stack,
+  .workspace.plots-stacked .canvas-stack {
+    display: block;
+    width: 100%;
+    min-width: 240px; /* drag-to-resize floor (the .canvas-stack inline width is the lever) */
+    max-width: 100%; /* a dragged width never exceeds the column */
+  }
+  /* Only the WebGL plot canvas fills — NOT the absolutely-positioned overlay (it tracks via
+     inset:0) or the fixed-size orbit-preview inset (which is also a <canvas> child). */
+  .workspace.controls-collapsed .canvas-stack > canvas:not(.overlay):not(.orbit-preview),
+  .workspace.plots-stacked .canvas-stack > canvas:not(.overlay):not(.orbit-preview) {
+    width: 100% !important;
+    height: auto;
+  }
+}
+
+/* --- Per-plot expand/maximize: focus one plot, hiding the other plot and the sidebar.
+   Desktop only (≥1200px), transient (not persisted); the button or Esc restores. */
+.expand-btn {
+  display: none;
+}
+
+@media (min-width: 1200px) {
+  .plot {
+    position: relative;
+  }
+  .expand-btn {
+    display: inline-block;
+    position: absolute;
+    top: 0.4rem;
+    right: 0.4rem;
+    z-index: 4;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.78rem;
+    line-height: 1.3;
+  }
+
+  .workspace.expand-param,
+  .workspace.expand-dyn {
+    grid-template-columns: 1fr;
+  }
+  .workspace.expand-param .controls-pane,
+  .workspace.expand-dyn .controls-pane {
+    display: none;
+  }
+  .workspace.expand-param #dyn-plot,
+  .workspace.expand-dyn #param-plot {
+    display: none;
+  }
+  .workspace.expand-param .plots,
+  .workspace.expand-dyn .plots {
+    grid-template-columns: 1fr;
+  }
+  .workspace.expand-param .canvas-stack,
+  .workspace.expand-dyn .canvas-stack {
+    display: block;
+    width: 100%;
+    min-width: 240px;
+    max-width: 100%;
+  }
+  /* Only the WebGL plot canvas fills — not the overlay (inset:0) or the orbit-preview inset. */
+  .workspace.expand-param .canvas-stack > canvas:not(.overlay):not(.orbit-preview),
+  .workspace.expand-dyn .canvas-stack > canvas:not(.overlay):not(.orbit-preview) {
+    width: 100% !important;
+    height: auto;
+  }
+}
+
+/* --- Drag-to-resize grip: shown only in the enlarged modes (where the canvas fills its stack, so
+   resizing the .canvas-stack resizes the plot). It sits ABOVE the interaction overlay so the corner
+   is grabbable — the overlay would otherwise eat the pointer. Drag it, or focus it + arrow keys. */
+.resize-handle {
+  display: none;
+}
+
+@media (min-width: 1200px) {
+  .workspace.controls-collapsed .resize-handle,
+  .workspace.plots-stacked .resize-handle,
+  .workspace.expand-param .resize-handle,
+  .workspace.expand-dyn .resize-handle {
+    display: block;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: nwse-resize;
+    z-index: 5;
+    touch-action: none;
+  }
+  .resize-handle::after {
+    content: "";
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 11px;
+    height: 11px;
+    border-right: 3px solid var(--muted);
+    border-bottom: 3px solid var(--muted);
+    border-bottom-right-radius: 3px;
+  }
+  .resize-handle:hover::after,
+  .resize-handle:focus-visible::after {
+    border-color: var(--accent);
+  }
+  .resize-handle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+/* The controls now live in a narrow column, but several rows (the export/animate buttons,
+   the coefficient blocks) were built for the old full-width layout. Let them shrink and wrap
+   to the column instead of overflowing it. Harmless at full width, where everything fits. */
+.controls-pane :where(.field, .panel, .panel-group, .downloads, .control-grid, .exterior-block) {
+  min-width: 0;
+}
+.controls-pane :where(.inline-actions, .exterior-block-head) {
+  flex-wrap: wrap;
+}
+.controls-pane :where(pre, textarea, input, select) {
+  max-width: 100%;
+}
+
+.plot {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--gap);
+  text-align: center;
+}
+
+.plot canvas {
+  max-width: 100%;
+  height: auto;
+  background: #000;
+  border-radius: var(--radius);
+}
+
+/* --- Stacked WebGL canvas + 2D interaction/overlay canvas -------------- */
+.canvas-stack {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.canvas-stack > canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.canvas-stack > .overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border-radius: var(--radius);
+  touch-action: none;
+  cursor: crosshair;
+}
+
+/* Critical-orbit hover preview, pinned to the parameter plot's corner. The selector is
+   more specific than `.canvas-stack > canvas` so its fixed size wins (not max-width:100%). */
+.canvas-stack > .orbit-preview {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 104px;
+  height: 104px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* Colour legend: a compact key pinned to each plot's bottom-left corner (clear of the top-left
+   suggestion badge and the bottom-right orbit-preview inset / resize grip). It floats over the
+   image so it never takes layout space; pointer-events:none keeps plot interaction unblocked. It
+   sits on its own dark panel with fixed light text — the backdrop is the fractal, not the theme, so
+   theme variables don't apply. `:empty` stays hidden so the box doesn't flash before the first
+   render fills it. */
+.canvas-stack > .plot-legend {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  z-index: 3;
+  width: max-content;
+  max-width: 150px;
+  padding: 0.3rem 0.4rem;
+  pointer-events: none;
+  font-size: 0.68rem;
+  line-height: 1.25;
+  color: #e7eaee;
+  background: rgba(14, 17, 23, 0.74);
+  border: 0.5px solid rgba(255, 255, 255, 0.16);
+  border-radius: 5px;
+}
+.canvas-stack > .plot-legend:empty {
+  display: none;
+}
+.legend-title {
+  font-weight: 500;
+  margin-bottom: 3px;
+}
+.legend-bar {
+  height: 8px;
+  border-radius: 3px;
+  border: 0.5px solid rgba(255, 255, 255, 0.2);
+}
+.legend-scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 2px;
+  color: #aeb6bf;
+}
+.legend-interior {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  color: #aeb6bf;
+}
+.legend-sw {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  background: #000;
+  border: 0.5px solid rgba(255, 255, 255, 0.4);
+  border-radius: 2px;
+}
+.legend-note {
+  margin-top: 3px;
+  color: #aeb6bf;
+}
+/* Hue disc for domain / multiplier / Newton colouring: conic hue + a dark centre (|value| → 0). */
+.legend-wheel {
+  width: 40px;
+  height: 40px;
+  margin: 1px auto 0;
+  border-radius: 50%;
+  border: 0.5px solid rgba(255, 255, 255, 0.2);
+  background:
+    radial-gradient(circle, rgba(0, 0, 0, 0.9) 8%, transparent 62%),
+    conic-gradient(from 90deg, #ff4d4d, #ffe24d, #4dff88, #4de1ff, #4d6bff, #e14dff, #ff4d4d);
+}
+
+/* Auto-suggestion badge: a small, dismissible advisory pinned to the plot's top-left (clear of the
+   bottom-right orbit-preview inset and resize grip). Above the overlay, below the resize handle;
+   only the badge itself takes pointer events, so it never blocks fractal interaction elsewhere. */
+.canvas-stack > .plot-suggestion {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px; /* may wrap, but cap width to the canvas */
+  width: max-content;
+  max-width: calc(100% - 16px);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.45rem 0.35rem 0.55rem;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  border: 1px solid var(--accent);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(3px);
+}
+
+.plot-suggestion[data-severity="warn"] {
+  border-color: #d6a13a;
+}
+
+.plot-suggestion .suggestion-icon {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.plot-suggestion .suggestion-text {
+  font-weight: 500;
+}
+
+.plot-suggestion .suggestion-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.plot-suggestion .suggestion-action {
+  padding: 0.18rem 0.5rem;
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.plot-suggestion .suggestion-action.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.plot-suggestion .suggestion-dismiss {
+  padding: 0 0.3rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.plot-suggestion .suggestion-dismiss:hover {
+  color: var(--fg);
+  border: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plot-suggestion {
+    backdrop-filter: none;
+  }
+}
+
+/* Live coordinate readout under each plot (kept tall so the layout doesn't jump). */
+.readout {
+  margin: 0.35rem 0 0;
+  /* Reserve exactly one line, whatever the value. The live coordinate updates on every hover
+     move, so a readout that grew (empty→text) or wrapped (long value) would reflow the controls
+     below it — and when the plots pane is near its max-height that toggles its scrollbar and
+     makes the plots jitter. A fixed line-height + nowrap + clip keeps the height constant. */
+  min-height: 1.5em;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* Persistent one-line caption under each plot, explaining its role and the
+   parameter→dynamical coupling (the dynamical caption tracks the live c). */
+.plot-caption {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* Per-plot view parameters: a compact, always-visible row of the numeric view fields
+   (iterations · canvas size · centre · zoom) plus a contextual Apply, then a small
+   "more" for the escape test / c / copy. Replaces the old collapsed "view chip" so the
+   everyday settings are discoverable without a click. */
+.plot-params {
+  margin-top: 0.5rem;
+  text-align: left;
+}
+
+.param-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.4rem 0.55rem;
+}
+
+.param-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0;
+}
+
+.param-label {
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.param-field input {
+  width: 5rem;
+  padding: 0.3rem 0.4rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+}
+
+.param-field-wide input {
+  width: 7rem;
+}
+
+/* Centre field: two boxes (real / imaginary) read as a complex number "x + y i". */
+.center-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.center-pair .center-sub {
+  width: 3.3rem;
+}
+
+.center-sep {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* Live effective iteration count, shown in parentheses next to the "iterations" label (only
+   when auto-iterations is on). A derived readout, not the editable base → accent hint. Sits in
+   the label line so it never displaces the input; inherits size/nowrap from .param-label. */
+.iter-effective {
+  color: var(--accent);
+}
+
+.plot-apply {
+  align-self: flex-end;
+  white-space: nowrap;
+}
+
+/* A muted one-line summary of the *applied* view (updated on pan/zoom and on Apply); it
+   also feeds the screen-reader announcement. Distinct from the editable fields above,
+   which may hold not-yet-applied edits. */
+.view-summary {
+  margin: 0.4rem 0 0;
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.view-chip-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.plot-more {
+  margin-top: 0.45rem;
+}
+
+.plot-more > summary {
+  cursor: pointer;
+  list-style: none;
+  width: fit-content;
+  margin-inline: auto;
+  font-size: 0.78rem;
+  color: var(--accent);
+  user-select: none;
+}
+
+.plot-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* A caret after "more — …" signalling the row expands to reveal extra controls; it flips when
+   open (the native disclosure marker is hidden above, so we draw our own). */
+.plot-more > summary::after {
+  content: "▾";
+  display: inline-block;
+  margin-left: 0.3rem;
+  font-size: 0.85em;
+  transition: transform 0.15s ease;
+}
+
+.plot-more[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.plot-more[open] > summary {
+  margin-bottom: 0.5rem;
+}
+
+/* A closed <details> normally hides its content, but `.controls { display: flex }` overrides the
+   UA rule; force the fields hidden while "more" is collapsed. */
+.plot-more:not([open]) > .controls {
+  display: none;
+}
+
+/* --- Control fields ---------------------------------------------------- */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: var(--gap);
+  text-align: left;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.field label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+input[type="text"],
+textarea,
+select {
+  font-size: 0.95rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--field-bg);
+  color: var(--fg);
+}
+
+.field input[type="range"] {
+  width: 9rem;
+}
+
+/* Collapsible advanced-control groups (Appearance, Overlays, Iteration). */
+.control-group {
+  flex-basis: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.3rem 0.6rem;
+}
+
+/* A touch of air between the stacked feature cards (direct children of the controls column) so
+   their borders don't fuse into one heavy rule, while keeping the column compact. Scoped with `>`
+   so the nested Appearance/Overlays/Iteration cards keep their own container's rhythm. */
+.controls-pane > .control-group + .control-group {
+  margin-top: 0.4rem;
+}
+
+.control-group > summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--muted);
+  user-select: none;
+}
+
+.control-grid {
+  display: flex;
+  flex-wrap: wrap;
+  /* Tighter row rhythm (0.4rem) than the column gap (0.75rem): toggle lists such as Overlays
+     wrap one-per-line in the narrow controls column, so a smaller vertical gap keeps a long
+     card compact while side-by-side fields keep their breathing room. */
+  gap: 0.4rem 0.75rem;
+  /* Top-align: fields are label-over-control columns of unequal height (e.g. a slider with a
+     value label vs a plain select), so flex-start keeps the labels in a tidy row. */
+  align-items: flex-start;
+  margin-top: 0.5rem;
+}
+
+/* In the options panels, keep a checkbox option and its inline "?" help link on the SAME row
+   (the field is otherwise a vertical stack, which pushed the "?" below the label and wasted
+   space); any sub-controls (sliders) or notes drop to their own full-width line beneath. Plain
+   label-over-control fields (no `label.checkbox`) are untouched and keep the vertical stack. */
+.control-grid .field:has(> label.checkbox) {
+  flex-flow: row wrap;
+  align-items: center;
+  column-gap: 0.15rem;
+}
+
+.control-grid .field:has(> label.checkbox) > label.checkbox {
+  padding-bottom: 0; /* the flex row aligns the "?"; the stacked padding is no longer needed */
+}
+
+.control-grid
+  .field:has(> label.checkbox)
+  > :where(.post-controls, .light-controls, .control-note) {
+  flex-basis: 100%; /* break onto a new full-width line below the checkbox + "?" row */
+}
+
+textarea {
+  resize: vertical;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Button hierarchy. The base style is a calm "secondary" (outline) so that
+   buttons no longer all shout in the same accent colour; `.primary` is the
+   filled call-to-action (one per functional group), and `.danger` marks
+   destructive actions (reset, delete a saved view). */
+button {
+  font-size: 0.95rem;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--field-bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button:disabled:hover {
+  border-color: var(--border);
+}
+
+button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+button.primary:hover {
+  filter: brightness(1.08);
+}
+
+button.danger {
+  color: #c0392b;
+}
+
+button.danger:hover {
+  border-color: #c0392b;
+  background: #c0392b;
+  color: #fff;
+}
+
+/* "Unapplied edits" hint: shown when a deferred text field (formula, c,
+   centre, zoom, iterations, canvas size) is edited but not yet applied. The
+   live controls (dropdowns, sliders, checkboxes) apply immediately, so this
+   only tracks the fields that need Enter / "apply changes". */
+.dirty-indicator {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+
+button.primary.attention {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* A deferred field edited but not yet applied: ring + tint it so the pending
+   change is obvious. Cleared by setDirty(false) on Apply / Enter / reset. */
+input.dirty,
+textarea.dirty {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, var(--field-bg));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+/* --- Shared controls + downloads -------------------------------------- */
+.panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-top: var(--gap);
+  padding: var(--gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.panel-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  /* Top-align the wrapped groups so a taller field doesn't bottom-shift its shorter
+     neighbours (presets / coloring / palette). */
+  align-items: flex-start;
+}
+
+.inline-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+/* Download area, split into "Export image" and "Animate" titled sections. */
+.downloads {
+  margin-top: var(--gap);
+}
+
+.downloads .panel {
+  margin-top: 0;
+}
+
+/* Inline checkbox + label (e.g. the export "overlays" toggle). */
+label.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+  color: var(--fg);
+  white-space: nowrap;
+  padding-bottom: 0.35rem;
+}
+
+/* Compact slider groups stacked under a checkbox (relief lighting, post-processing). */
+.light-controls,
+.post-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-top: 0.2rem;
+}
+
+.light-controls label,
+.post-controls label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.light-controls input[type="range"],
+.post-controls input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+
+/* --- Documentation (Help & reference modal body) ----------------------- */
+/* `.docs` is the grid of help sections inside the #help-ref modal; `.glossary-body` already
+   supplies the top margin below the modal heading, so the grid itself adds none. */
+.docs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--gap) 2rem;
+  margin-top: 0;
+}
+
+.docs h3 {
+  font-size: 1rem;
+  margin: 0 0 0.3rem;
+}
+
+.docs ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.docs li {
+  margin-bottom: 0.25rem;
+}
+
+footer {
+  margin-top: 2rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* "How to cite" block in the Help-modal footer. */
+.cite {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.cite h3 {
+  font-size: 1rem;
+  margin: 0 0 0.3rem;
+}
+.cite-ref {
+  color: var(--fg);
+}
+.cite-bibtex {
+  margin: 0.5rem 0;
+  padding: 0.6rem 0.75rem;
+  overflow-x: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--fg);
+  white-space: pre;
+}
+.cite-copy {
+  font-size: 0.8rem;
+}
+
+/* --- Status: error banners, invalid fields, toasts -------------------- */
+.banner,
+.input-errors {
+  margin: 0 0 var(--gap);
+  padding: 0.75rem 1rem;
+  border: 1px solid #c0392b;
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: #fdecea;
+  color: #8a1c12;
+  font-size: 0.9rem;
+}
+
+.input-errors ul {
+  margin: 0;
+  padding-left: 1.4rem;
+}
+
+.input-errors li {
+  margin: 0.15rem 0;
+}
+
+/* Placed after the base input rule so it wins on equal specificity. */
+input.invalid,
+textarea.invalid,
+select.invalid {
+  border-color: #c0392b;
+  background: #fdecea;
+}
+
+.toasts {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  max-width: min(90vw, 480px);
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius);
+  color: #fff;
+  font-size: 0.9rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+}
+
+.toast-info {
+  background: var(--accent);
+}
+
+.toast-warn {
+  background: #b7791f;
+}
+
+.toast-error {
+  background: #c0392b;
+}
+
+/* --- Export progress overlay ------------------------------------------ */
+.export-progress {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.export-card {
+  min-width: 16rem;
+  text-align: center;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+}
+
+.export-card p {
+  margin: 0 0 0.75rem;
+}
+
+.export-card progress {
+  width: 100%;
+}
+
+.export-card button {
+  margin-top: 0.75rem;
+}
+
+/* --- First-run onboarding --------------------------------------------- */
+.onboarding {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.onboarding-card {
+  max-width: 30rem;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+}
+
+.onboarding-card h2 {
+  margin-top: 0;
+}
+
+.onboarding-card ul {
+  padding-left: 1.1rem;
+}
+
+.onboarding-card li {
+  margin-bottom: 0.4rem;
+}
+
+.onboarding-card button {
+  margin-top: 0.5rem;
+}
+
+.onboarding-prompt {
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.9rem;
+}
+
+.onboarding-profiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.onboarding-profiles button {
+  margin-top: 0;
+  flex: 1 1 auto;
+}
+
+.onboarding-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+/* --- Glossary modal --------------------------------------------------- */
+.glossary-card {
+  max-width: 40rem;
+  width: 100%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.glossary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.glossary-head h2 {
+  margin: 0;
+}
+
+#glossary-close,
+#help-ref-close {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.glossary-body {
+  overflow-y: auto;
+  margin-top: 0.75rem;
+}
+
+.glossary-body h3 {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 1rem 0 0.5rem;
+}
+
+.glossary-item {
+  margin-bottom: 0.7rem;
+  padding: 0.2rem 0.35rem;
+  scroll-margin-top: 0.5rem;
+}
+
+.glossary-item p {
+  margin: 0.15rem 0 0;
+  font-size: 0.88rem;
+}
+
+.glossary-math {
+  margin-top: 0.25rem;
+}
+
+.glossary-flash {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-radius: var(--radius);
+}
+
+/* Inline "?" jump-to-glossary link (inspector rows + overlay labels). */
+.gloss-link {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: help;
+  padding: 0 0.15rem;
+  line-height: 1;
+}
+
+.copy-coords {
+  align-self: flex-start;
+  font-size: 0.8rem;
+}
+
+/* --- Exterior-map (uniformization) readout ---------------------------- */
+.exterior-status {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted, #666);
+}
+
+.exterior-n-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.exterior-n-label input {
+  width: 4rem;
+}
+
+.exterior-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.exterior-block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.exterior-actions {
+  display: inline-flex;
+  gap: 0.3rem;
+}
+
+.exterior-actions button {
+  padding: 0.1rem 0.45rem;
+  font-size: 0.75rem;
+}
+
+
+.exterior-coeffs {
+  max-height: 9rem;
+  margin: 0;
+  overflow: auto;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  white-space: pre;
+  background: var(--panel-alt, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.exterior-overlay {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.4rem 0.6rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.exterior-overlay legend {
+  padding: 0 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* The overlay's on/off checkbox is a bare <label>, so it would otherwise inherit the full body
+   font-size and read much larger than the surrounding controls; pin it to the card's text size
+   and let its long caption wrap under a top-aligned checkbox. */
+.exterior-overlay-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+}
+
+/* --- Julia set properties readout ------------------------------------- */
+/* Two-column "table" of computed properties: a label column sized to its widest entry and a
+   value column taking the rest, with hairline row dividers for scanning. Mirrors the inspector
+   readout grid. The .julia-prop wrappers collapse (display: contents) so their dt/dd land
+   directly in the grid and align across rows. */
+.julia-props {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 0.85rem;
+  margin: 0.35rem 0 0;
+  padding: 0.1rem 0.55rem;
+  background: var(--panel-alt, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+  line-height: 1.3;
+}
+
+.julia-prop {
+  display: contents;
+}
+
+.julia-prop dt,
+.julia-prop dd {
+  margin: 0;
+  padding: 0.22rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.julia-prop:last-child dt,
+.julia-prop:last-child dd {
+  border-bottom: 0;
+}
+
+.julia-prop dt {
+  color: var(--muted, #666);
+}
+
+.julia-prop dd {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* --- Custom gradient editor ------------------------------------------- */
+.gradient-editor {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0.6rem;
+}
+
+.gradient-bar {
+  position: relative;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: copy;
+  touch-action: none;
+}
+
+.gradient-handles {
+  position: absolute;
+  inset: 0;
+}
+
+.gradient-handle {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 12px;
+  transform: translateX(-50%);
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+  cursor: grab;
+}
+
+.gradient-handle.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.gradient-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gradient-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+/* Small explanatory note under a control (e.g. why some options are disabled). */
+.control-note {
+  margin: 0.3rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.gradient-io {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.gradient-io textarea {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.7rem;
+}
+
+.gradient-io textarea.invalid {
+  border-color: #c0392b;
+  background: #fdecea;
+}
+
+/* Point inspector — click-to-inspect orbit report. */
+.inspector {
+  max-width: var(--max-width);
+  margin: 0 auto var(--gap);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent); /* reads as a measurement readout, not a control */
+  border-radius: var(--radius);
+  background: var(--field-bg);
+  padding: 0.6rem 0.8rem;
+}
+
+#inspector-nucleus,
+#inspector-rays {
+  margin: 0.5rem 0.4rem 0 0;
+}
+
+.inspector-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.inspector-head strong {
+  font-size: 0.9rem;
+}
+
+#inspector-close {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+
+.inspector-body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 1rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+}
+
+.inspector-body dt {
+  color: var(--muted);
+}
+
+.inspector-body dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.inspector-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.inspector-body:not(:empty) + .inspector-hint {
+  display: none;
+}
+
+/* Small persistent tool rows inside the inspector (Siegel parameter, Misiurewicz finder, notes). */
+.inspector-siegel,
+.inspector-misiur,
+.inspector-note {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.inspector-siegel input,
+.inspector-note input {
+  flex: 1;
+  min-width: 5rem;
+}
+
+.inspector-misiur input {
+  width: 3rem;
+}
+
+/* ===========================================================================
+   Mobile / responsive support (Phase A). Every rule below is SCOPED so the
+   desktop (≥1200px, fine pointer) experience renders exactly as before:
+     • layout / reflow → @media (max-width: 720px)  (the existing breakpoint)
+     • touch sizing    → @media (pointer: coarse)   (orthogonal to width)
+   These are additive — no desktop rule above is overridden outside its query.
+   =========================================================================== */
+
+/* Reduced motion (global a11y; collapses transitions/animations everywhere). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Sticky plots pane uses the dynamic viewport height on touch, so mobile
+   browser chrome doesn't clip it. Desktop keeps the 100vh rule as the
+   fallback (this query never matches a fine-pointer device). */
+@media (min-width: 720px) and (pointer: coarse) {
+  .plots-pane {
+    max-height: calc(100dvh - 1rem);
+  }
+}
+
+/* Finger-sized tap targets on touch devices only (mouse/desktop untouched). */
+@media (pointer: coarse) {
+  button,
+  select,
+  input[type="text"],
+  .views-menu > summary,
+  .control-group > summary,
+  .plot-more > summary {
+    min-height: 44px;
+  }
+
+  label.checkbox {
+    min-height: 44px;
+    padding-block: 0.5rem;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-width: 22px;
+    min-height: 22px;
+  }
+
+  /* The fixed 9rem slider overflows a narrow field — fill the column and give
+     the track/thumb a larger drag area. */
+  .field input[type="range"] {
+    width: 100%;
+    min-width: 0;
+    height: 44px;
+    accent-color: var(--accent);
+  }
+
+  /* Inline "?" links: enlarge the touch surface without growing the text row
+     (the negative margin absorbs the padding so layout barely shifts). */
+  .gloss-link {
+    padding: 0.5rem;
+    margin: -0.4rem;
+  }
+}
+
+/* Narrow-screen layout fixes (phones / very narrow desktop windows). */
+@media (max-width: 720px) {
+  /* The "Views" popover is right-anchored on desktop and would clip off the
+     right edge on a phone — let it span the available width instead. */
+  .views-panel {
+    left: 0;
+    right: 0;
+    min-width: 0;
+  }
+
+  /* Let the app-bar actions take the full row under the title, and stretch the
+     wide controls so they don't get squeezed. */
+  .app-bar-actions {
+    width: 100%;
+  }
+  .app-bar-actions #places {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .views-panel #view-name {
+    width: 100%;
+  }
+  .app-bar h1 {
+    font-size: 1.3rem;
+  }
+
+  /* Modal cards must not overflow a small viewport (desktop max-widths stay). */
+  .export-card,
+  .onboarding-card {
+    max-width: min(92vw, 30rem);
+  }
+}
+
+/* ===========================================================================
+   Mobile controls sheet + FAB (Phase B). On a phone the controls live in a
+   bottom sheet that slides up over the plots, opened by a floating button — so
+   the plot stays visible and draggable while you adjust a control. Desktop
+   (no max-width:720px match) shows neither: the FAB and handle are display:none
+   and .controls-pane stays in normal flow / the ≥1200px grid.
+   =========================================================================== */
+.controls-fab,
+.sheet-handle {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .controls-fab {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 95;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0.6rem 1.1rem;
+    font-weight: 600;
+    color: var(--accent-contrast);
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  /* The controls pane becomes a bottom sheet, parked below the viewport until
+     opened. Non-modal — no backdrop — so the plots above stay interactive. */
+  .controls-pane {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 96;
+    max-height: 85dvh;
+    overflow-y: auto;
+    padding: 0 1rem 1rem;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.35);
+    transform: translateY(100%);
+    transition: transform 0.25s ease;
+  }
+  .controls-pane.is-open {
+    transform: translateY(0);
+  }
+
+  /* Sticky sheet header: a drag grip, a title, and a close button. */
+  .sheet-handle {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 0.6rem 0 0.5rem;
+    margin-bottom: 0.5rem;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .sheet-grip {
+    width: 2.5rem;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+  }
+  .sheet-title {
+    flex: 1;
+    font-weight: 600;
+  }
+  .sheet-close {
+    min-width: 40px;
+    min-height: 40px;
+    line-height: 1;
+  }
+}
+
+/* Mobile (Phase C): shrink the orbit-preview inset so it doesn't dominate a narrow plot.
+   (Matches the base `.canvas-stack > .orbit-preview` specificity so the override wins.) */
+@media (max-width: 720px) {
+  .canvas-stack > .orbit-preview {
+    width: 72px;
+    height: 72px;
+  }
+  .canvas-stack > .plot-legend {
+    max-width: 118px;
+    font-size: 0.6rem;
+    padding: 0.25rem 0.32rem;
+  }
+}

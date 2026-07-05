@@ -1,0 +1,87 @@
+/**
+ * Engine-agnostic helpers for high-resolution PNG export. The orchestration
+ * lives in {@link ./render/plotView}.exportPng, which renders the fractal to an
+ * RGBA8 framebuffer at the requested size (true detail — no render-image cap,
+ * since colour output is byte-backed rather than a float texture) and composites
+ * the scaled overlay before downloading.
+ */
+
+import { injectPngText } from "./render/pngMetadata";
+
+/** Smallest export size we allow, in pixels. */
+const MIN_EXPORT_SIZE = 256;
+/** Fallback when no WebGL context is available to query the real limit. */
+const DEFAULT_MAX_TEXTURE_SIZE = 4096;
+
+/**
+ * Clamp a requested export size to `[MIN_EXPORT_SIZE, maxTextureSize]` and to an
+ * integer. `clamped` is true when the integer request fell outside that range.
+ */
+export function clampExportSize(
+  requested: number,
+  maxTextureSize: number,
+): { size: number; clamped: boolean } {
+  const max = Math.max(MIN_EXPORT_SIZE, Math.floor(maxTextureSize));
+  const wanted = Math.floor(requested);
+  const size = Math.min(max, Math.max(MIN_EXPORT_SIZE, wanted));
+  return { size, clamped: size !== wanted };
+}
+
+/** Ensure a safe, `.png`-suffixed filename (falling back to `plot.png`). */
+export function ensurePngName(name: string): string {
+  const cleaned = name.trim().replace(/[\\/:*?"<>|]/g, "_");
+  const base = cleaned.length > 0 ? cleaned : "plot";
+  return /\.png$/i.test(base) ? base : `${base}.png`;
+}
+
+/** Memoized GPU max texture size — the value is fixed per device, and creating a
+ *  WebGL context per query leaks contexts (browsers cap live contexts at ~16, so
+ *  repeated exports/copies would eventually start failing). */
+let cachedMaxTextureSize: number | null = null;
+
+/** Query the GPU's maximum texture size via a throwaway WebGL context (cached). */
+export function getMaxTextureSize(): number {
+  if (cachedMaxTextureSize !== null) return cachedMaxTextureSize;
+  const canvas = document.createElement("canvas");
+  const gl =
+    (canvas.getContext("webgl2") as WebGL2RenderingContext | null) ??
+    (canvas.getContext("webgl") as WebGLRenderingContext | null);
+  if (!gl) return DEFAULT_MAX_TEXTURE_SIZE; // don't cache: a real context may appear later
+  const max = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
+  // Release the throwaway context immediately rather than waiting for GC.
+  gl.getExtension("WEBGL_lose_context")?.loseContext();
+  cachedMaxTextureSize = typeof max === "number" && max > 0 ? max : DEFAULT_MAX_TEXTURE_SIZE;
+  return cachedMaxTextureSize;
+}
+
+/**
+ * Encode a canvas to a PNG and trigger a browser download. When `metadata` is given, its
+ * keyword → text pairs are embedded as PNG `tEXt` chunks (invisible reproducibility parameters —
+ * no image pixel changes).
+ */
+export async function downloadCanvas(
+  canvas: HTMLCanvasElement,
+  filename: string,
+  metadata?: Record<string, string>,
+): Promise<void> {
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+  if (!blob) throw new Error("Failed to encode the PNG");
+  let out = blob;
+  if (metadata && Object.keys(metadata).length > 0) {
+    const stamped = injectPngText(new Uint8Array(await blob.arrayBuffer()), metadata);
+    // Copy into a fresh ArrayBuffer-backed view so the Blob part types cleanly (TS 5.7 narrows
+    // ArrayBufferLike vs ArrayBuffer); the extra copy is negligible for a one-shot export.
+    out = new Blob([new Uint8Array(stamped)], { type: "image/png" });
+  }
+  const url = URL.createObjectURL(out);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  window.setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 1000);
+}

@@ -1,0 +1,7 @@
+# Normalize line endings to LF in both the repo and the working tree, so the
+# checked-out files match Prettier's output (`endOfLine: lf`) and `npm run format`
+# doesn't show spurious whole-file changes regardless of core.autocrlf.
+* text=auto eol=lf
+
+# Binary assets — never apply line-ending conversion.
+*.ico binary
