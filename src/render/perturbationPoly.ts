@@ -17,7 +17,11 @@
  * d = 2 — so Stage 2's GPU kernel is a direct translation of a verified recurrence.
  */
 import type { Complex } from "../complex";
-import { type DD, ddAdd, ddMul, ddSub, ddToNumber } from "./dd";
+import { type Node, referencesVar } from "../expr/ast";
+import { differentiate } from "../expr/derivative";
+import { makeComplexFn } from "../expr/evaluate";
+import { fToRational } from "../expr/rational";
+import { type DD, dd, ddAdd, ddMul, ddSub, ddToNumber } from "./dd";
 import type { ReferenceOrbit } from "./perturbation";
 
 const BAILOUT2 = 4; // |Z|² escape threshold (matches perturbation.ts)
@@ -152,6 +156,181 @@ export function perturbMultibrot(
     const full: Complex = [Z[0] + dz[0], Z[1] + dz[1]];
     const d0: Complex = [full[0] - Z0[0], full[1] - Z0[1]];
     // Rebase to Z_0 when the delta outgrows its reference, or the stored orbit ends.
+    if (m >= refMax || d0[0] * d0[0] + d0[1] * d0[1] < dz[0] * dz[0] + dz[1] * dz[1]) {
+      dz = d0;
+      Z = Z0;
+      m = 0;
+    }
+  }
+  return { iters: maxIter, escaped: false, z };
+}
+
+// --- general polynomials f(z) = P(z) + B·c (Stage 3: past the monic z^d + c family) ---------------
+//
+// For a polynomial linear in c with c purely additive — f = P(z) + B·c, P(z) = Σ p_j z^j, B constant —
+// the perturbation step telescopes into a coefficient-weighted sum of per-degree binomial steps:
+//   δz' = f(Z+δz, c₀+δc) − f(Z, c₀) = Σ_{j=1}^{d} p_j·[(Z+δz)^j − Z^j] + B·δc.
+// Writing S_j = (Z+δz)^j − Z^j gives the recurrence S_j = (Z+δz)·S_{j−1} + δz·Z^{j−1} (S_1 = δz), so the
+// step needs only the coefficients p_j and B — no per-orbit derivative texture. It reduces to
+// {@link multibrotStep} when P is the monomial z^d.
+
+const cadd = (p: Complex, q: Complex): Complex => [p[0] + q[0], p[1] + q[1]];
+const cabsC = (p: Complex): number => Math.hypot(p[0], p[1]);
+const cdiv = (p: Complex, q: Complex): Complex => {
+  const d = q[0] * q[0] + q[1] * q[1];
+  return [(p[0] * q[0] + p[1] * q[1]) / d, (p[1] * q[0] - p[0] * q[1]) / d];
+};
+
+/** Drop trailing (high-order) coefficients that are numerically zero, keeping at least the constant. */
+function trimPoly(p: Complex[]): Complex[] {
+  let n = p.length;
+  while (n > 1 && cabsC(p[n - 1]) < 1e-13) n--;
+  return p.slice(0, n);
+}
+
+/** The perturbation data for a polynomial map f = P(z) + B·c: P's coefficients + B = ∂f/∂c. */
+export interface PolyPerturbation {
+  /** P's coefficients p_0 … p_d (ascending), the c-independent polynomial part of f. */
+  coeffs: Complex[];
+  /** B = ∂f/∂c, the (constant) δc coefficient. */
+  dcCoeff: Complex;
+  /** Degree d = deg P. */
+  degree: number;
+}
+
+/**
+ * Detect + extract the perturbation data for f = P(z) + B·c (c enters only additively), else null.
+ * `a` is the fixed free parameter (baked into P's numeric coefficients). Rejects rational maps
+ * (non-constant denominator), transcendentals (`fToRational` returns null), and any f where ∂f/∂c is
+ * not a nonzero constant (c multiplies a z-term, or appears nonlinearly).
+ */
+export function extractPolyPerturbation(
+  fAst: Node,
+  a: Complex,
+  maxDegree: number,
+): PolyPerturbation | null {
+  // At c = 0 the additive c-term vanishes, so fToRational's numerator is exactly P(z)'s coefficients.
+  const rat = fToRational(fAst, [0, 0], a);
+  if (!rat) return null;
+  const den = trimPoly(rat.den);
+  if (den.length !== 1 || cabsC(den[0]) < 1e-13) return null; // a genuine polynomial, not a rational map
+  const coeffs = trimPoly(rat.num).map((n) => cdiv(n, den[0]));
+  const degree = coeffs.length - 1;
+  if (degree < 1 || degree > maxDegree) return null;
+  // f must be linear in c with a constant, nonzero ∂f/∂c (⇒ f = P(z) + B·c).
+  let dcAst: Node;
+  try {
+    dcAst = differentiate(fAst, "c");
+  } catch {
+    return null;
+  }
+  if (referencesVar(dcAst, "z") || referencesVar(dcAst, "c")) return null;
+  const B = makeComplexFn(dcAst, a)([0, 0], [0, 0]);
+  if (!Number.isFinite(B[0]) || !Number.isFinite(B[1]) || cabsC(B) < 1e-13) return null;
+  return { coeffs, dcCoeff: B, degree };
+}
+
+/** Double-double Horner evaluation of P(z) = Σ coeffs[j]·z^j at z = (zx, zy). */
+function ddPolyEval(coeffs: Complex[], zx: DD, zy: DD): [DD, DD] {
+  const d = coeffs.length - 1;
+  let rx = dd(coeffs[d][0]);
+  let ry = dd(coeffs[d][1]);
+  for (let j = d - 1; j >= 0; j--) {
+    const [px, py] = ddCMul(rx, ry, zx, zy); // r·z
+    rx = ddAdd(px, dd(coeffs[j][0]));
+    ry = ddAdd(py, dd(coeffs[j][1]));
+  }
+  return [rx, ry];
+}
+
+/**
+ * Reference orbit Z_{n+1} = P(Z_n) + (addX + i·addY) in double-double, for a general polynomial P
+ * (the multibrot generalization of {@link computeMultibrotOrbitDD} to arbitrary coefficients). The
+ * additive constant is B·c (parameter plane: add = B·centre; Julia plane: add = B·(fixed c)).
+ */
+export function computePolyOrbitDD(
+  z0x: DD,
+  z0y: DD,
+  coeffs: Complex[],
+  addX: DD,
+  addY: DD,
+  maxIter: number,
+): ReferenceOrbit {
+  const cap = Math.max(1, Math.floor(maxIter));
+  const xy = new Float32Array((cap + 1) * 2);
+  let zx = z0x;
+  let zy = z0y;
+  let n = 0;
+  let escapedAt = -1;
+  for (; n <= cap; n++) {
+    const rx = ddToNumber(zx);
+    const ry = ddToNumber(zy);
+    xy[2 * n] = rx;
+    xy[2 * n + 1] = ry;
+    if (rx * rx + ry * ry > BAILOUT2) {
+      escapedAt = n;
+      break;
+    }
+    if (n === cap) break;
+    const [px, py] = ddPolyEval(coeffs, zx, zy);
+    zx = ddAdd(px, addX);
+    zy = ddAdd(py, addY);
+  }
+  const length = Math.min(n + 1, cap + 1);
+  return { length, xy, escaped: escapedAt < 0 ? length : escapedAt };
+}
+
+/**
+ * One perturbation step for f = P(z) + B·c: δz ↦ Σ_{j=1}^{d} p_j·[(Z+δz)^j − Z^j] + B·cAdd, via the
+ * cancellation-free S_j recurrence. The exact routine the GPU kernel will mirror; reduces to
+ * {@link multibrotStep} when coeffs is the monomial z^d.
+ */
+export function polyStep(
+  Z: Complex,
+  dz: Complex,
+  coeffs: Complex[],
+  dcCoeff: Complex,
+  cAdd: Complex,
+): Complex {
+  const d = coeffs.length - 1;
+  const W: Complex = [Z[0] + dz[0], Z[1] + dz[1]]; // Z + δz
+  let S: Complex = [dz[0], dz[1]]; // S_1 = (Z+δz)^1 − Z^1 = δz
+  let zPow: Complex = [1, 0]; // Z^{j−1}, starting Z^0
+  let acc = cmul(coeffs[1], S); // p_1·S_1
+  for (let j = 2; j <= d; j++) {
+    zPow = cmul(zPow, Z); // Z^{j−1}
+    S = cadd(cmul(W, S), cmul(dz, zPow)); // S_j = (Z+δz)·S_{j−1} + δz·Z^{j−1}
+    acc = cadd(acc, cmul(coeffs[j], S)); // p_j·S_j
+  }
+  return cadd(acc, cmul(dcCoeff, cAdd)); // + B·δc
+}
+
+/**
+ * Per-pixel perturbation traversal for a general polynomial (escape + Zhuoran rebasing), the exact
+ * loop Stage 3b's GPU path will mirror. Mirrors {@link perturbMultibrot} with {@link polyStep}.
+ */
+export function perturbPoly(
+  orbit: Complex[],
+  coeffs: Complex[],
+  dcCoeff: Complex,
+  cAdd: Complex,
+  dz0: Complex,
+  maxIter: number,
+): MultibrotResult {
+  const refMax = orbit.length - 1;
+  const Z0 = orbit[0];
+  let Z = Z0;
+  let m = 0;
+  let dz: Complex = [dz0[0], dz0[1]];
+  let z: Complex = [Z[0] + dz[0], Z[1] + dz[1]];
+  for (let k = 0; k < maxIter; k++) {
+    z = [Z[0] + dz[0], Z[1] + dz[1]];
+    if (z[0] * z[0] + z[1] * z[1] > BAILOUT2) return { iters: k, escaped: true, z };
+    dz = polyStep(Z, dz, coeffs, dcCoeff, cAdd);
+    m++;
+    Z = orbit[Math.min(m, refMax)];
+    const full: Complex = [Z[0] + dz[0], Z[1] + dz[1]];
+    const d0: Complex = [full[0] - Z0[0], full[1] - Z0[1]];
     if (m >= refMax || d0[0] * d0[0] + d0[1] * d0[1] < dz[0] * dz[0] + dz[1] * dz[1]) {
       dz = d0;
       Z = Z0;

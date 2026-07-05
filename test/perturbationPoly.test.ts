@@ -15,13 +15,19 @@
  */
 import { describe, it, expect } from "vitest";
 import type { Complex } from "../src/complex";
+import { parse } from "../src/expr/parser";
 import { type DD, dd, ddAdd, ddMul, ddSub, ddToNumber } from "../src/render/dd";
 import { computeReferenceOrbitDD, type ReferenceOrbit } from "../src/render/perturbation";
 import {
   binomial,
   computeMultibrotOrbitDD,
+  computePolyOrbitDD,
+  extractPolyPerturbation,
   multibrotStep,
   perturbMultibrot,
+  type PolyPerturbation,
+  perturbPoly,
+  polyStep,
 } from "../src/render/perturbationPoly";
 
 const cmul = (p: Complex, q: Complex): Complex => [
@@ -285,6 +291,175 @@ describe("perturbMultibrot — the GPU-mirrored traversal", () => {
       expect(escaped).toBeGreaterThan(0); // straddles ∂M
       expect(bounded).toBeGreaterThan(0);
       expect(counts.size).toBeGreaterThan(5); // a real fractal band, not a flat/garbage field
+    }
+  });
+});
+
+// --- general polynomials f = P(z) + B·c (Stage 3) ------------------------------------------------
+const cadd2 = (p: Complex, q: Complex): Complex => [p[0] + q[0], p[1] + q[1]];
+const hornerEval = (coeffs: Complex[], z: Complex): Complex => {
+  let r: Complex = [coeffs[coeffs.length - 1][0], coeffs[coeffs.length - 1][1]];
+  for (let j = coeffs.length - 2; j >= 0; j--) r = cadd2(cmul(r, z), coeffs[j]);
+  return r;
+};
+
+/** Naive per-pixel iteration of f = P(z) + B·c (Z_0 = 0). */
+function naivePoly(
+  coeffs: Complex[],
+  B: Complex,
+  c: Complex,
+  maxIter: number,
+): { iters: number; escaped: boolean } {
+  const Bc: Complex = [B[0] * c[0] - B[1] * c[1], B[0] * c[1] + B[1] * c[0]];
+  let z: Complex = [0, 0];
+  for (let k = 0; k < maxIter; k++) {
+    if (z[0] * z[0] + z[1] * z[1] > 4) return { iters: k, escaped: true };
+    z = cadd2(hornerEval(coeffs, z), Bc);
+  }
+  return { iters: maxIter, escaped: false };
+}
+
+const ddPolyEvalTest = (coeffs: Complex[], z: DDC): DDC => {
+  let r: DDC = [dd(coeffs[coeffs.length - 1][0]), dd(coeffs[coeffs.length - 1][1])];
+  for (let j = coeffs.length - 2; j >= 0; j--) {
+    r = ddcMul(r, z);
+    r = [ddAdd(r[0], dd(coeffs[j][0])), ddAdd(r[1], dd(coeffs[j][1]))];
+  }
+  return r;
+};
+/** Independent double-double reference for one general-polynomial step: (P(Z+δz) − P(Z)) + B·δc. */
+function ddDirectPolyStep(Z: Complex, dz: Complex, coeffs: Complex[], B: Complex, dc: Complex): Complex {
+  const Zdd: DDC = [dd(Z[0]), dd(Z[1])];
+  const ZpDz: DDC = [ddAdd(dd(Z[0]), dd(dz[0])), ddAdd(dd(Z[1]), dd(dz[1]))];
+  const hi = ddPolyEvalTest(coeffs, ZpDz);
+  const lo = ddPolyEvalTest(coeffs, Zdd);
+  const re = ddAdd(ddSub(hi[0], lo[0]), dd(B[0] * dc[0] - B[1] * dc[1]));
+  const im = ddAdd(ddSub(hi[1], lo[1]), dd(B[0] * dc[1] + B[1] * dc[0]));
+  return [ddToNumber(re), ddToNumber(im)];
+}
+
+describe("extractPolyPerturbation", () => {
+  const ext = (f: string, a: Complex = [0, 0]): PolyPerturbation => {
+    const r = extractPolyPerturbation(parse(f), a, 8);
+    if (!r) throw new Error(`expected "${f}" to extract as an additive-c polynomial`);
+    return r;
+  };
+  const near = (a: Complex[], b: number[][]) => {
+    expect(a.length).toBe(b.length);
+    for (let i = 0; i < a.length; i++) {
+      expect(a[i][0]).toBeCloseTo(b[i][0], 9);
+      expect(a[i][1]).toBeCloseTo(b[i][1], 9);
+    }
+  };
+  it("extracts P's coefficients and B = ∂f/∂c for additive-c polynomials", () => {
+    const z2 = ext("z^2+c");
+    near(z2.coeffs, [[0, 0], [0, 0], [1, 0]]);
+    expect(z2.dcCoeff).toEqual([1, 0]);
+    expect(z2.degree).toBe(2);
+
+    const cubic = ext("z^3-z+c");
+    near(cubic.coeffs, [[0, 0], [-1, 0], [0, 0], [1, 0]]);
+    expect(cubic.degree).toBe(3);
+
+    near(ext("z^2+2*z+c").coeffs, [[0, 0], [2, 0], [1, 0]]);
+
+    const nonMonic = ext("2*z^2+c");
+    near(nonMonic.coeffs, [[0, 0], [0, 0], [2, 0]]);
+    expect(nonMonic.dcCoeff).toEqual([1, 0]);
+  });
+
+  it("bakes the fixed parameter a into P's coefficients", () => {
+    const p = ext("z^2+a*z+c", [1.5, 0]);
+    near(p.coeffs, [[0, 0], [1.5, 0], [1, 0]]);
+    expect(p.degree).toBe(2);
+  });
+
+  it("rejects maps that aren't f = P(z) + B·c", () => {
+    expect(extractPolyPerturbation(parse("z/(1+z)+c"), [0, 0], 8)).toBeNull(); // rational (non-const den)
+    expect(extractPolyPerturbation(parse("sin(z)+c"), [0, 0], 8)).toBeNull(); // transcendental
+    expect(extractPolyPerturbation(parse("z^2+c*z+c"), [0, 0], 8)).toBeNull(); // c multiplies a z-term
+    expect(extractPolyPerturbation(parse("z^2+c^2"), [0, 0], 8)).toBeNull(); // nonlinear in c
+    expect(extractPolyPerturbation(parse("z^2"), [0, 0], 8)).toBeNull(); // no c ⇒ B = 0
+    expect(extractPolyPerturbation(parse("z^10+c"), [0, 0], 8)).toBeNull(); // degree over the cap
+  });
+});
+
+describe("polyStep + perturbPoly (general polynomial)", () => {
+  // coeffs (ascending) and B for a spread of additive-c polynomials, incl. non-monic + complex.
+  const cases: { name: string; coeffs: Complex[]; B: Complex }[] = [
+    { name: "z^2+c", coeffs: [[0, 0], [0, 0], [1, 0]], B: [1, 0] },
+    { name: "z^3-z+c", coeffs: [[0, 0], [-1, 0], [0, 0], [1, 0]], B: [1, 0] },
+    { name: "z^2+2z+c", coeffs: [[0, 0], [2, 0], [1, 0]], B: [1, 0] },
+    { name: "2z^3+z+c", coeffs: [[0, 0], [1, 0], [0, 0], [2, 0]], B: [1, 0] },
+    { name: "z^2+(1+0.5i)z+c", coeffs: [[0, 0], [1, 0.5], [1, 0]], B: [1, 0] },
+  ];
+  const Zs: Complex[] = [[0, 0], [0.5, 0.3], [-1.2, 0.1], [0.1, -0.8]];
+  const mags = [1e-2, 1e-4, 1e-6];
+  const angles = [0, 1.1, 2.7, 4.5];
+
+  it("polyStep reproduces the true step (P(Z+δz)−P(Z)) + B·δc (chaos-free, vs double-double)", () => {
+    let checked = 0;
+    for (const { coeffs, B } of cases) {
+      for (const Z of Zs) {
+        for (const mag of mags) {
+          for (const az of angles) {
+            const dz: Complex = [mag * Math.cos(az), mag * Math.sin(az)];
+            const dc: Complex = [1e-3, -2e-3];
+            const got = polyStep(Z, dz, coeffs, B, dc);
+            const want = ddDirectPolyStep(Z, dz, coeffs, B, dc);
+            expect(Math.abs(got[0] - want[0])).toBeLessThan(1e-9 * (Math.abs(want[0]) + 1));
+            expect(Math.abs(got[1] - want[1])).toBeLessThan(1e-9 * (Math.abs(want[1]) + 1));
+            checked++;
+          }
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(200);
+  });
+
+  it("reduces to multibrotStep for the monomial z^d", () => {
+    for (const degree of [2, 3, 4, 5]) {
+      const coeffs: Complex[] = Array.from({ length: degree + 1 }, () => [0, 0] as Complex);
+      coeffs[degree] = [1, 0]; // z^d
+      for (const Z of Zs) {
+        const dz: Complex = [3e-3, -1e-3];
+        const dc: Complex = [2e-4, 5e-4];
+        const a = polyStep(Z, dz, coeffs, [1, 0], dc);
+        const b = multibrotStep(Z, dz, degree, dc);
+        expect(a[0]).toBeCloseTo(b[0], 12);
+        expect(a[1]).toBeCloseTo(b[1], 12);
+      }
+    }
+  });
+
+  it("computePolyOrbitDD matches computeMultibrotOrbitDD for a monomial reference", () => {
+    const c: Complex = [-0.2, 0.1];
+    const N = 400;
+    const coeffs: Complex[] = [[0, 0], [0, 0], [0, 0], [1, 0]]; // z^3
+    const poly = computePolyOrbitDD(dd(0), dd(0), coeffs, dd(c[0]), dd(c[1]), N);
+    const mono = computeMultibrotOrbitDD(dd(0), dd(0), dd(c[0]), dd(c[1]), 3, N);
+    expect(poly.length).toBe(mono.length);
+    for (let i = 0; i < poly.length * 2; i++) expect(poly.xy[i]).toBeCloseTo(mono.xy[i], 5);
+  });
+
+  it("perturbPoly tracks naive iteration end-to-end (fast-escape + bounded blocks)", () => {
+    for (const { coeffs, B } of cases) {
+      const N = 800;
+      const outside: Complex = [1.3, 0.7]; // large |c| ⇒ escapes fast for these degrees
+      const oOrbit = orbitToComplex(
+        computePolyOrbitDD(dd(0), dd(0), coeffs, dd(B[0] * outside[0] - B[1] * outside[1]), dd(B[0] * outside[1] + B[1] * outside[0]), N),
+      );
+      let esc = 0;
+      for (let i = 0; i < 32; i++) {
+        const a = (i / 32) * 2 * Math.PI;
+        const dc: Complex = [1e-3 * Math.cos(a), 1e-3 * Math.sin(a)];
+        const p = perturbPoly(oOrbit, coeffs, B, dc, [0, 0], N);
+        const n = naivePoly(coeffs, B, [outside[0] + dc[0], outside[1] + dc[1]], N);
+        expect(p.escaped).toBe(true);
+        expect(Math.abs(p.iters - n.iters)).toBeLessThanOrEqual(1);
+        esc++;
+      }
+      expect(esc).toBeGreaterThan(20);
     }
   });
 });
