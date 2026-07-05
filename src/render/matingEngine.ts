@@ -344,3 +344,335 @@ export const CANONICAL_MATINGS: CanonicalMating[] = CANONICAL_RAW.map((m) => ({
   ...m,
   fString: matedMapFString(m.x1),
 }));
+
+// ===================================================================================================
+// GENERAL SECOND PARENT — mate two arbitrary **hyperbolic** PCF quadratics f_A = z²+c_A ⊔ f_B = z²+c_B
+// (the basilica path above hardcodes c_B = −1). The closed form g(z) = (z²−x₁)/(z²−1) bakes the basilica
+// in: it pins B's period-2 cycle to {∞,1}, so x₁ = cv_A is the single free parameter. For a general B,
+// BOTH critical values are free, so we use the **Boyd–Henriksen normal form** (arXiv:1102.5047):
+//
+//     F_{u,v}(z) = (v(u−1)z² − u(v−1)) / ((u−1)z² − (v−1)),
+//
+// which has critical points 0, ∞ and fixes 1, with F(0)=u, F(∞)=v the two free critical values (u = the
+// A-side critical value, v = the B-side). The pullback now tracks BOTH parents' postcritical marked
+// points — the A-orbit closes onto the critical point 0, the B-orbit onto ∞ — iterating each toward its
+// predecessor under F⁻¹ (two roots; sign by nearest-continuity), with the canonical **conjugated-A /
+// as-is-B** seed realising the θ↦−θ gluing.
+//
+// TRUSTWORTHINESS (never silently wrong — the north-star):
+//  • **Obstruction** is gated by the **Tan Lei criterion** ({@link mateableLimbs}): two bulbs of the
+//    main cardioid mate iff they are NOT in conjugate limbs (p₁/q₁ + p₂/q₂ ≠ 1). With the canonical
+//    seed the pullback additionally *diverges* for an obstructed pair, so obstruction is caught twice.
+//  • **Basin selection** is the fragile part (a single seed can land a spurious period-valid map). We
+//    resolve it by a **swap-consistency** gate: the true mating's frame is order-independent up to the
+//    Möbius swap z↦1/z, which sends (u,v)↦(1/v,1/u). So we gather period-validated candidates from both
+//    argument orders and accept only the map whose swapped partner appears in the opposite order — which
+//    for a **diagonal** mating A⊔A reduces to the exact structural identity **u·v = 1**. No consensus ⇒
+//    honest null.
+//
+// Oracles (see the tests): rabbit ⊔ basilica through this engine equals the shipped (z²−ω)/(z²−1) up to
+// Möbius (same multiplier invariant {@link mapInvariant}); every diagonal A⊔A satisfies u·v=1; the
+// argument orders are consistent under (u,v)↦(1/v,1/u); conjugate-limb bulbs are refused.
+// Scope: hyperbolic both parents. A Misiurewicz second parent and the full slow-mating homotopy remain
+// deferred (the existing {@link mateWithBasilica} still handles the curated Misiurewicz ⊔ basilica set).
+
+const cinv = (p: Complex): Complex => cdiv(ONE, p);
+
+/** A mating of two hyperbolic PCF quadratics (general second parent), as a Boyd–Henriksen F_{u,v}. */
+export interface GeneralMating {
+  /** The A-side critical value u = F(0) in the Boyd–Henriksen frame. */
+  u: Complex;
+  /** The B-side critical value v = F(∞) in the Boyd–Henriksen frame. */
+  v: Complex;
+  /** The mated quadratic rational map, render-ready: (v·z² − u·k)/(z² − k), k = (v−1)/(u−1). */
+  fString: string;
+  /** Critical period realising the first parent f_A (the critical point 0). */
+  periodA: number;
+  /** Critical period realising the second parent f_B (the critical point ∞). */
+  periodB: number;
+}
+
+/** F_{u,v}(z) = (v(u−1)z² − u(v−1)) / ((u−1)z² − (v−1)); crit pts 0,∞; F(0)=u, F(∞)=v, F(1)=1. */
+function fuvEval(u: Complex, v: Complex): (z: Complex) => Complex {
+  const um1 = csub(u, ONE);
+  const vm1 = csub(v, ONE);
+  return (z) => {
+    const z2 = cmul(z, z);
+    return cdiv(csub(cmul(cmul(v, um1), z2), cmul(u, vm1)), csub(cmul(um1, z2), vm1));
+  };
+}
+
+/**
+ * The principal (+) square-root preimage of `w` under F_{u,v}: z² = (v−1)(u−w) / [(u−1)(v−w)]. The
+ * symbol "inf" requests the preimage of ∞ (the pole), z² = (v−1)/(u−1). The caller picks the ± branch.
+ */
+function fuvInvRoot(w: Complex | "inf", u: Complex, v: Complex): Complex {
+  const um1 = csub(u, ONE);
+  const vm1 = csub(v, ONE);
+  const z2 = w === "inf" ? cdiv(vm1, um1) : cdiv(cmul(vm1, csub(u, w)), cmul(um1, csub(v, w)));
+  return csqrt(z2);
+}
+
+const GEN_MAX_ITERS = 3000;
+
+/**
+ * The marked-point pullback for two parents: iterate the A-orbit (closing onto the critical point 0) and
+ * the B-orbit (closing onto ∞) toward their predecessors under F⁻¹, sign by continuity. u = xa[0] and
+ * v = xb[0] (the two critical values) drive F each step. Returns the converged (u,v), or null on blow-up.
+ */
+function pullbackGeneral(
+  orbA: PostcriticalOrbit,
+  orbB: PostcriticalOrbit,
+  seedA: Complex[],
+  seedB: Complex[],
+): { u: Complex; v: Complex } | null {
+  const xa = seedA.map((p): Complex => [p[0], p[1]]);
+  const xb = seedB.map((p): Complex => [p[0], p[1]]);
+  for (let it = 0; it < GEN_MAX_ITERS; it++) {
+    const u = xa[0];
+    const v = xb[0];
+    const na = xa.map((_, i): Complex => {
+      const s = orbA.succ[i];
+      return branch(fuvInvRoot(s < 0 ? ZERO : xa[s], u, v), xa[i]); // A closes onto crit point 0
+    });
+    const nb = xb.map((_, i): Complex => {
+      const s = orbB.succ[i];
+      return branch(fuvInvRoot(s < 0 ? "inf" : xb[s], u, v), xb[i]); // B closes onto crit point ∞
+    });
+    let delta = 0;
+    for (let i = 0; i < xa.length; i++) delta += cdist(na[i], xa[i]);
+    for (let i = 0; i < xb.length; i++) delta += cdist(nb[i], xb[i]);
+    for (let i = 0; i < xa.length; i++) xa[i] = na[i];
+    for (let i = 0; i < xb.length; i++) xb[i] = nb[i];
+    if (!Number.isFinite(delta)) return null; // obstructed / degenerate seed
+    if (delta < CONVERGE_TOL) break;
+  }
+  return { u: xa[0], v: xb[0] };
+}
+
+/** The (pre)period of the critical point 0 under F_{u,v} (realising f_A); null if it blows up. */
+function fuvPeriod0(u: Complex, v: Complex): { pre: number; per: number } | null {
+  const F = fuvEval(u, v);
+  const seq: Complex[] = [ZERO];
+  let z: Complex = ZERO;
+  for (let i = 0; i < 80; i++) {
+    z = F(z);
+    if (!Number.isFinite(z[0]) || Math.hypot(z[0], z[1]) > 1e7) return null;
+    seq.push(z);
+  }
+  for (let per = 1; per <= 14; per++)
+    for (let pre = 0; pre + per < seq.length - 1; pre++)
+      if (cdist(seq[seq.length - 1], seq[seq.length - 1 - per]) < 1e-6 && cdist(seq[pre], seq[pre + per]) < 1e-5)
+        return { pre, per };
+  return null;
+}
+
+/**
+ * The (pre)period of the critical point ∞ under F_{u,v} (realising f_B). ∞ is tracked as a symbol: F(∞)=v
+ * starts the orbit, and a pole (den (u−1)z²−(v−1) ≈ 0) sends the orbit back to ∞. Null if it blows up.
+ */
+function fuvPeriodInf(u: Complex, v: Complex): { pre: number; per: number } | null {
+  const F = fuvEval(u, v);
+  const um1 = csub(u, ONE);
+  const vm1 = csub(v, ONE);
+  const seq: (Complex | "inf")[] = ["inf", [v[0], v[1]]];
+  let z: Complex = [v[0], v[1]];
+  for (let i = 0; i < 80; i++) {
+    const den = csub(cmul(um1, cmul(z, z)), vm1);
+    if (Math.hypot(den[0], den[1]) < 1e-7) {
+      seq.push("inf");
+      z = [v[0], v[1]];
+      seq.push([v[0], v[1]]); // ∞ → F(∞) = v
+    } else {
+      z = F(z);
+      seq.push([z[0], z[1]]);
+    }
+    if (Math.hypot(z[0], z[1]) > 1e8) return null;
+  }
+  const eq = (a: Complex | "inf", b: Complex | "inf"): boolean =>
+    a === "inf" || b === "inf" ? a === b : cdist(a, b) < 1e-5;
+  for (let per = 1; per <= 14; per++)
+    for (let pre = 0; pre + 2 * per < seq.length; pre++)
+      if (eq(seq[pre], seq[pre + per]) && eq(seq[pre + per], seq[pre + 2 * per])) return { pre, per };
+  return null;
+}
+
+/** Horner evaluation of a complex polynomial given low-to-high coefficients. */
+function polyEval(coeff: Complex[], z: Complex): Complex {
+  let s: Complex = ZERO;
+  for (let k = coeff.length - 1; k >= 0; k--) s = cadd(cmul(s, z), coeff[k]);
+  return s;
+}
+
+/** Durand–Kerner roots of a complex polynomial (low-to-high coefficients); used for fixed points. */
+function durandKerner(coeff: Complex[]): Complex[] {
+  const n = coeff.length - 1;
+  const lead = coeff[n];
+  const c = coeff.map((k) => cdiv(k, lead));
+  const roots: Complex[] = [];
+  for (let i = 0; i < n; i++)
+    roots.push([Math.cos(0.7 * i + 0.3) * (1 + 0.2 * i), Math.sin(0.7 * i + 0.3) * (1 + 0.2 * i)]);
+  for (let it = 0; it < 800; it++) {
+    let moved = 0;
+    for (let i = 0; i < n; i++) {
+      let denom: Complex = ONE;
+      for (let j = 0; j < n; j++) if (j !== i) denom = cmul(denom, csub(roots[i], roots[j]));
+      const q = cdiv(polyEval(c, roots[i]), denom);
+      roots[i] = csub(roots[i], q);
+      moved += Math.hypot(q[0], q[1]);
+    }
+    if (moved < 1e-15) break;
+  }
+  return roots;
+}
+
+/**
+ * The **multiplier invariant** (σ₁, σ₂) of a degree-2 rational map P(z)/Q(z) (low-to-high complex
+ * coefficient arrays): the elementary symmetric functions of the multipliers at its three fixed points.
+ * This is a complete conjugacy invariant for a generic quadratic rational map (Milnor), so two maps with
+ * equal (σ₁, σ₂) are Möbius-conjugate — the basis of the reduction oracle in the tests.
+ */
+export function rationalInvariant(P: Complex[], Q: Complex[]): { s1: Complex; s2: Complex } {
+  // fixed points solve P(z) − z·Q(z) = 0 (a cubic).
+  const cub: Complex[] = [P[0], csub(P[1], Q[0]), csub(P[2], Q[1]), csub(ZERO, Q[2])];
+  const fps = durandKerner(cub);
+  const Pd: Complex[] = [P[1], cmul([2, 0], P[2])];
+  const Qd: Complex[] = [Q[1], cmul([2, 0], Q[2])];
+  const lam = fps.map((z): Complex => {
+    const p = polyEval(P, z);
+    const q = polyEval(Q, z);
+    const pd = polyEval(Pd, z);
+    const qd = polyEval(Qd, z);
+    return cdiv(csub(cmul(pd, q), cmul(p, qd)), cmul(q, q)); // R'(z) = (P'Q − PQ')/Q²
+  });
+  return {
+    s1: cadd(cadd(lam[0], lam[1]), lam[2]),
+    s2: cadd(cadd(cmul(lam[0], lam[1]), cmul(lam[0], lam[2])), cmul(lam[1], lam[2])),
+  };
+}
+
+/** The multiplier invariant (σ₁, σ₂) of the Boyd–Henriksen map F_{u,v} (see {@link rationalInvariant}). */
+export function mapInvariant(u: Complex, v: Complex): { s1: Complex; s2: Complex } {
+  const um1 = csub(u, ONE);
+  const vm1 = csub(v, ONE);
+  const P: Complex[] = [csub(ZERO, cmul(u, vm1)), ZERO, cmul(v, um1)];
+  const Q: Complex[] = [csub(ZERO, vm1), ZERO, um1];
+  return rationalInvariant(P, Q);
+}
+
+const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
+
+/**
+ * The **Tan Lei mateability criterion** for two satellite bulbs p₁/q₁, p₂/q₂ of the main cardioid: they
+ * mate iff they are NOT in complex-conjugate limbs of M, i.e. p₁/q₁ + p₂/q₂ ≠ 1 (Rees–Shishikura–Tan).
+ */
+export function mateableLimbs(p1: number, q1: number, p2: number, q2: number): boolean {
+  const g1 = gcd(p1, q1);
+  const g2 = gcd(p2, q2);
+  const a1 = p1 / g1;
+  const b1 = q1 / g1;
+  const a2 = p2 / g2;
+  const b2 = q2 / g2;
+  return a1 * b2 + a2 * b1 !== b1 * b2; // p₁/q₁ + p₂/q₂ ≠ 1
+}
+
+// The seed sweep for the general pullback: scales × {conjugated-postcritical seed, generic seed}. Broad
+// enough that the true mating is reached from both argument orders for periods up to ~7 (see the de-risk).
+const GEN_SEED_SCALES = [0.5, 0.8, 1.1, 1.5, 2.0, 2.6];
+
+/** Period-validated candidate maps (u,v) from the seed sweep — crit 0 realises f_A, crit ∞ realises f_B. */
+function generalCandidates(
+  orbA: PostcriticalOrbit,
+  orbB: PostcriticalOrbit,
+  qA: number,
+  qB: number,
+): Complex[][] {
+  const out: Complex[][] = [];
+  for (const sa of GEN_SEED_SCALES)
+    for (const sb of GEN_SEED_SCALES)
+      for (const ph of [0, 1]) {
+        const seedA = orbA.orbit.map((p, i): Complex =>
+          ph ? [sa * Math.cos(1 + i), sa * Math.sin(1 + i)] : [sa * p[0], -sa * p[1]],
+        );
+        const seedB = orbB.orbit.map((p, i): Complex =>
+          ph ? [sb * Math.cos(2 + i), sb * Math.sin(2 + i)] : [sb * p[0], sb * p[1]],
+        );
+        const r = pullbackGeneral(orbA, orbB, seedA, seedB);
+        if (!r || !Number.isFinite(r.u[0])) continue;
+        if (cdist(r.u, ONE) < 1e-3 || cdist(r.v, ONE) < 1e-3) continue; // degenerate (u or v = 1)
+        const c0 = fuvPeriod0(r.u, r.v);
+        const cI = fuvPeriodInf(r.u, r.v);
+        if (!c0 || c0.pre !== 0 || c0.per !== qA || !cI || cI.pre !== 0 || cI.per !== qB) continue;
+        out.push([r.u, r.v]);
+      }
+  return out;
+}
+
+/**
+ * Mate two **hyperbolic** PCF quadratics f_A = z²+c_A ⊔ f_B = z²+c_B via the Boyd–Henriksen F_{u,v}
+ * pullback, returning the mated quadratic rational map — or null when no trustworthy map is found
+ * (non-PCF / Misiurewicz parent, obstruction, or no swap-consistent basin).
+ *
+ * Basin selection is by **swap consistency**: the true mating is order-independent up to z↦1/z (which
+ * sends (u,v)↦(1/v,1/u)), so a candidate is accepted only when its swapped partner appears among the
+ * opposite-order candidates — for a diagonal mating A⊔A this is exactly u·v=1. The most-agreed candidate
+ * wins; if none is swap-consistent the result is null (never a silently-wrong map).
+ */
+export function generalMate(cA: Complex, cB: Complex): GeneralMating | null {
+  const orbA = postcriticalOrbit(cA);
+  const orbB = postcriticalOrbit(cB);
+  if (!orbA || !orbB || orbA.preperiod !== 0 || orbB.preperiod !== 0) return null; // hyperbolic scope
+  const qA = orbA.period;
+  const qB = orbB.period;
+  const diagonal = cdist(cA, cB) < 1e-12;
+  const ab = generalCandidates(orbA, orbB, qA, qB);
+  const ba = diagonal ? ab : generalCandidates(orbB, orbA, qB, qA);
+  const tally: { u: Complex; v: Complex; n: number }[] = [];
+  for (const [u, v] of ab) {
+    const pu = cinv(v); // swap partner (1/v, 1/u)
+    const pv = cinv(u);
+    const consistent = diagonal
+      ? cdist(pu, u) < 3e-3 && cdist(pv, v) < 3e-3 // self-swap ⇒ u·v = 1
+      : ba.some(([ju, jv]) => cdist(ju, pu) < 3e-3 && cdist(jv, pv) < 3e-3);
+    if (!consistent) continue;
+    const t = tally.find((e) => cdist(e.u, u) < 3e-3 && cdist(e.v, v) < 3e-3);
+    if (t) t.n++;
+    else tally.push({ u, v, n: 1 });
+  }
+  tally.sort((a, b) => b.n - a.n);
+  const win = tally[0];
+  if (!win) return null;
+  return {
+    u: win.u,
+    v: win.v,
+    fString: generalMatedFString(win.u, win.v),
+    periodA: qA,
+    periodB: qB,
+  };
+}
+
+/**
+ * Mate the p₁/q₁ satellite bulb with the p₂/q₂ satellite bulb (both period-q centres). Refuses conjugate
+ * limbs up front (Tan Lei, {@link mateableLimbs}) and otherwise runs {@link generalMate} on the bulb
+ * centres — so it returns the mated map for a mateable pair or null when obstructed / not computable.
+ */
+export function mateBulbs(p1: number, q1: number, p2: number, q2: number): GeneralMating | null {
+  if (!mateableLimbs(p1, q1, p2, q2)) return null; // obstructed: conjugate limbs
+  return generalMate(bulbCenter(p1, q1), bulbCenter(p2, q2));
+}
+
+/** Render a complex number as an f-string coefficient literal, always parenthesised (e.g. "(0.5-0.3*i)"). */
+function coefStr(a: Complex): string {
+  if (Math.abs(a[1]) < 1e-12) return `(${fmt(a[0])})`;
+  return `(${fmt(a[0])}${a[1] >= 0 ? "+" : ""}${fmt(a[1])}*i)`;
+}
+
+/**
+ * The mated map of a general mating as a render-ready f-string in the reduced Boyd–Henriksen form
+ * F(z) = (v·z² − u·k) / (z² − k), with k = (v−1)/(u−1) (monic denominator).
+ */
+export function generalMatedFString(u: Complex, v: Complex): string {
+  const k = cdiv(csub(v, ONE), csub(u, ONE));
+  const uk = cmul(u, k);
+  return `(${coefStr(v)}*z^2 - ${coefStr(uk)})/(z^2 - ${coefStr(k)})`;
+}

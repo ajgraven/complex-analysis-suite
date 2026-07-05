@@ -1,14 +1,26 @@
 import { describe, expect, it } from "vitest";
 import type { Complex } from "../src/complex";
+import { getComplexFn } from "../src/expr/evaluate";
+import { parse } from "../src/expr/parser";
 import {
   CANONICAL_MATINGS,
   bulbCenter,
+  generalMate,
+  mapInvariant,
   mateBulbWithBasilica,
+  mateBulbs,
   mateWithBasilica,
+  mateableLimbs,
   postcriticalOrbit,
+  rationalInvariant,
 } from "../src/render/matingEngine";
 
 const near = (a: Complex, b: Complex, tol = 1e-6): boolean => Math.hypot(a[0] - b[0], a[1] - b[1]) < tol;
+const cmul = (p: Complex, q: Complex): Complex => [p[0] * q[0] - p[1] * q[1], p[0] * q[1] + p[1] * q[0]];
+const cinv = (p: Complex): Complex => {
+  const d = p[0] * p[0] + p[1] * p[1];
+  return [p[0] / d, -p[1] / d];
+};
 
 /** Assert non-null and return (keeps the tests free of `!` non-null assertions). */
 function must<T>(v: T | null): T {
@@ -125,4 +137,82 @@ describe("CANONICAL_MATINGS — every listed mating cross-checks the pullback", 
       expect(near(m.x1, cm.x1, 1e-5)).toBe(true);
     });
   }
+});
+
+describe("generalMate — the general second parent (Boyd–Henriksen F_{u,v})", () => {
+  const RABBIT: Complex = [-0.12256116687665, 0.74486176661974];
+  const BASILICA: Complex = [-1, 0];
+
+  it("reduction oracle: rabbit ⊔ basilica through the general engine equals the shipped (z²−ω)/(z²−1) up to Möbius", () => {
+    const m = must(generalMate(RABBIT, BASILICA));
+    const general = mapInvariant(m.u, m.v);
+    // shipped g(z) = (z² − ω)/(z² − 1), ω = e^{2πi/3}; numerator const = −ω, denominator const = −1.
+    const omega: Complex = [-0.5, Math.sqrt(3) / 2];
+    const shipped = rationalInvariant(
+      [[-omega[0], -omega[1]], [0, 0], [1, 0]],
+      [[-1, 0], [0, 0], [1, 0]],
+    );
+    expect(near(general.s1, shipped.s1, 1e-4)).toBe(true);
+    expect(near(general.s2, shipped.s2, 1e-4)).toBe(true);
+    expect(m.periodA).toBe(3); // crit 0 realises the rabbit
+    expect(m.periodB).toBe(2); // crit ∞ realises the basilica
+  });
+
+  it("diagonal A ⊔ A ⇒ u·v = 1 (the map is self-conjugate under the 0↔∞ swap z↦1/z)", () => {
+    for (const c of [RABBIT, bulbCenter(1, 4), bulbCenter(1, 5)]) {
+      const m = must(generalMate(c, c));
+      expect(near(cmul(m.u, m.v), [1, 0], 1e-5)).toBe(true);
+    }
+  });
+
+  it("mates distinct hyperbolic bulbs with the correct critical periods", () => {
+    const m = must(mateBulbs(1, 3, 1, 4));
+    expect(m.periodA).toBe(3);
+    expect(m.periodB).toBe(4);
+    const s = must(mateBulbs(1, 4, 1, 3)); // swapped arguments
+    expect(s.periodA).toBe(4);
+    expect(s.periodB).toBe(3);
+    const t = must(mateBulbs(1, 5, 2, 5));
+    expect(t.periodA).toBe(5);
+    expect(t.periodB).toBe(5);
+  });
+
+  it("Tan Lei gate: conjugate limbs (p₁/q₁ + p₂/q₂ = 1) are refused, mateable pairs accepted", () => {
+    expect(mateableLimbs(1, 3, 1, 3)).toBe(true);
+    expect(mateableLimbs(1, 3, 1, 4)).toBe(true);
+    expect(mateableLimbs(1, 3, 2, 3)).toBe(false); // 1/3 + 2/3 = 1
+    expect(mateableLimbs(1, 2, 1, 2)).toBe(false); // basilica ⊔ basilica
+    expect(mateableLimbs(1, 4, 3, 4)).toBe(false);
+    expect(mateBulbs(1, 3, 2, 3)).toBeNull();
+    expect(mateBulbs(1, 4, 3, 4)).toBeNull();
+  });
+
+  it("order-independence: mate(A,B) and mate(B,A) are the same map in the swapped frame (u,v)↦(1/v,1/u)", () => {
+    const ab = must(generalMate(bulbCenter(1, 4), bulbCenter(1, 5)));
+    const ba = must(generalMate(bulbCenter(1, 5), bulbCenter(1, 4)));
+    expect(near(ba.u, cinv(ab.v), 2e-3)).toBe(true);
+    expect(near(ba.v, cinv(ab.u), 2e-3)).toBe(true);
+  });
+
+  it("hyperbolic scope: refuses a Misiurewicz or non-PCF parent", () => {
+    expect(generalMate([0, 1], BASILICA)).toBeNull(); // z²+i is Misiurewicz (preperiod > 0)
+    expect(generalMate([2, 0], BASILICA)).toBeNull(); // 0 escapes — not PCF
+  });
+
+  it("produces a render-ready quadratic rational that parses and evaluates as a complex function", () => {
+    const m = must(generalMate(RABBIT, RABBIT));
+    expect(m.fString).toMatch(/z\^2.*\/.*z\^2/); // full quadratic rational (both num and den)
+    const f = getComplexFn(parse(m.fString));
+    const w = f([0.3, 0.2], [0, 0]);
+    expect(Number.isFinite(w[0]) && Number.isFinite(w[1])).toBe(true);
+  });
+
+  it("rationalInvariant is Möbius-invariant: g and a z↦2z conjugate of g share (σ₁,σ₂)", () => {
+    // g(z) = (z²+2)/(z²−1); conjugate by φ(z)=2z: h = φ∘g∘φ⁻¹ has the same multiplier invariant.
+    const g = rationalInvariant([[2, 0], [0, 0], [1, 0]], [[-1, 0], [0, 0], [1, 0]]);
+    // h(w) = 2·g(w/2) = 2(w²/4 + 2)/(w²/4 − 1) = (w²/2 + 4)·? → scale num & den by 4: (2w² + 16)/(w² − 4).
+    const h = rationalInvariant([[16, 0], [0, 0], [2, 0]], [[-4, 0], [0, 0], [1, 0]]);
+    expect(near(g.s1, h.s1, 1e-6)).toBe(true);
+    expect(near(g.s2, h.s2, 1e-6)).toBe(true);
+  });
 });
