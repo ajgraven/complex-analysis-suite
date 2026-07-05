@@ -35,6 +35,9 @@ const APP_DIR = path.join(__dirname, '..');   // app/
 const ESM_PORTED = new Map([
   ['complex.js', { file: 'complex.mjs', globals: ['Complex'] }],
   ['taylor.js', { file: 'taylor.mjs', globals: ['Taylor'] }],
+  // solver.mjs default-exports the mutable QD namespace; classic family files (still
+  // vm-loaded) read it as `module.exports` and register onto it.
+  ['solver.js', { file: 'solver.mjs', namespace: true }],
 ]);
 
 let _initPromise = null;
@@ -68,11 +71,22 @@ async function _init() {
 
   // Import every ESM-ported module and expose its exports on the ctx global, so
   // bare references in the still-classic vm-loaded files resolve to the ports.
-  for (const { file, globals } of ESM_PORTED.values()) {
-    const mod = await importApp(file);
-    for (const name of globals) {
-      if (!(name in mod)) throw new Error(`bootstrap: ${file} does not export ${name}`);
+  for (const spec of ESM_PORTED.values()) {
+    const mod = await importApp(spec.file);
+    for (const name of (spec.globals || [])) {
+      if (!(name in mod)) throw new Error(`bootstrap: ${spec.file} does not export ${name}`);
       ctx[name] = mod[name];
+    }
+    if (spec.namespace) {
+      const ns = mod.default;
+      if (!ns) throw new Error(`bootstrap: ${spec.file} has no default (namespace) export`);
+      ctx.module.exports = ns;   // classic family files read `module.exports` as the QD namespace
+      ctx.QD = ns;               // and some files read bare QD
+      // When solver.js was vm-loaded its top-level declarations were bare bindings in the
+      // context; some tests read them that way (e.g. vm.runInContext('evalPhi', ctx)). Mirror
+      // that by exposing the namespace members as bare ctx globals. Function refs are stable;
+      // the Family registry object is the same reference the family files mutate in place.
+      Object.assign(ctx, ns);
     }
   }
 
