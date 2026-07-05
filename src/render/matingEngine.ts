@@ -177,8 +177,8 @@ function critStructure(x1: Complex): { pre: number; per: number } | null {
 function fmt(v: number): string {
   return Math.abs(v) < 1e-9 ? "0" : Number(v.toFixed(10)).toString();
 }
-/** The rational map g(z) = (z² − x₁)/(z² − 1) as an f-string, with the numerator sign folded in. */
-function fStringOf(x1: Complex): string {
+/** The mated rational map g(z) = (z² − x₁)/(z² − 1) as an f-string, with the numerator sign folded in. */
+export function matedMapFString(x1: Complex): string {
   const num =
     Math.abs(x1[1]) < 1e-9
       ? x1[0] >= 0
@@ -221,7 +221,7 @@ export function mateWithBasilica(cA: Complex): Mating | null {
     if (orbit.preperiod === 0 && st.per !== orbit.period) continue;
     return {
       x1,
-      fString: fStringOf(x1),
+      fString: matedMapFString(x1),
       critPreperiod: st.pre,
       critPeriod: st.per,
       iterations,
@@ -240,6 +240,8 @@ export interface CanonicalMating {
   parentB: string;
   /** The known mated-map parameter x₁, so tests can assert the pullback reproduces it. */
   x1: Complex;
+  /** The mated rational map g(z) = (z²−x₁)/(z²−1) as a render-ready f-string. */
+  fString: string;
 }
 
 const RT3_2 = Math.sqrt(3) / 2;
@@ -248,7 +250,7 @@ const RT3_2 = Math.sqrt(3) / 2;
  * Matings the engine is verified against (the pullback reproduces `x1` to high precision — see the
  * tests). These are the honest, correct outputs of Stage 1; an arbitrary c_A is a candidate only.
  */
-export const CANONICAL_MATINGS: CanonicalMating[] = [
+const CANONICAL_RAW: Omit<CanonicalMating, "fString">[] = [
   // Jung, Example 2.5: z²+i (the 1/6 Misiurewicz dendrite) ⊔ basilica → (z²+2)/(z²−1).
   { name: "z²+i ⊔ basilica", cA: [0, 1], parentA: "z²+i", parentB: "basilica", x1: [-2, 0] },
   // Rabbit (centre of the 1/3-bulb) ⊔ basilica → (z² − e^{+2πi/3})/(z²−1); e^{±2πi/3} are the only
@@ -268,3 +270,7 @@ export const CANONICAL_MATINGS: CanonicalMating[] = [
     x1: [-0.5, -RT3_2],
   },
 ];
+export const CANONICAL_MATINGS: CanonicalMating[] = CANONICAL_RAW.map((m) => ({
+  ...m,
+  fString: matedMapFString(m.x1),
+}));

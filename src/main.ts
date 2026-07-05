@@ -23,6 +23,7 @@ import {
   type InspectResult,
 } from "./render/inspect";
 import { matingVerdict } from "./render/mating";
+import { CANONICAL_MATINGS } from "./render/matingEngine";
 import { computeOrbit, orbitAndClassify, type Annotation, type OrbitFate } from "./render/overlay";
 import { toNumber as angleToNumber, binaryItinerary } from "./combinatorics/angles";
 import { coreEntropy } from "./combinatorics/coreEntropy";
@@ -3390,6 +3391,44 @@ function init(): void {
   });
   byId("mate-check").addEventListener("click", updateMatingVerdict);
   updateMatingVerdict(); // seed the verdict for the default bulbs
+
+  // Render a verified mating: apply its mated rational map (computed by the Thurston pullback) to the
+  // dynamical plane in period mode and enable the sphere — the natural home of a rational map, with the
+  // two parent Julia sets on the two hemispheres. The parameter plane is left as the Mandelbrot for
+  // context. A curated ⊔ basilica set; arbitrary pairs need the slow-mating initialisation (Stage 3).
+  const mateRenderSelect = byId<HTMLSelectElement>("mate-render");
+  CANONICAL_MATINGS.forEach((m, i) => {
+    const opt = document.createElement("option");
+    opt.value = String(i);
+    opt.textContent = m.name;
+    mateRenderSelect.appendChild(opt);
+  });
+  function renderMating(): void {
+    const m = CANONICAL_MATINGS[Number(mateRenderSelect.value)];
+    if (!m) return;
+    dynamicalView.applyPreset({
+      f: m.fString,
+      c: "0",
+      z0: "0",
+      n: "120",
+      nplot: "6",
+      escape: "abs(z)>10000",
+      mode: "marty",
+      zoom: 0.6,
+      center: [0, 0],
+    });
+    updatePerturbationGating();
+    updateDerivativeGating(); // rational maps are holomorphic → derivative modes stay enabled
+    // The Marty (spherical-derivative) mode reveals the Julia set of a rational map on Ĉ — the natural
+    // picture for a mating. Period mode would flatten a single-attractor mating to one basin colour.
+    byId<HTMLSelectElement>("mode").value = "marty";
+    applyColoring();
+    byId<HTMLInputElement>("sphere-dyn").checked = true;
+    dynamicalView.setSphere(true);
+    byId("mate-render-note").textContent =
+      `${m.parentA} ⊔ ${m.parentB} = ${m.fString} — Julia set on the dynamical sphere.`;
+  }
+  byId("mate-render-btn").addEventListener("click", renderMating);
   byId("misiur-go").addEventListener("click", () => {
     const m = Number(byId<HTMLInputElement>("misiur-pre").value);
     const k = Number(byId<HTMLInputElement>("misiur-per").value);

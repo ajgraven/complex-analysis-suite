@@ -410,6 +410,13 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   rational map): by Rees–Shishikura–Tan Lei they mate iff their limbs are not complex-conjugate,
   i.e. _p₁_/_q₁_ + _p₂_/_q₂_ ≠ 1 (the ½ bulb is the only self-conjugate one). The inspector's
   **Limb** row shows a bulb's conjugate limb and whether it self-mates.
+- **Render a mating** — pick a verified mating and the panel **computes its mated rational map** by the
+  marked-point **Thurston pullback** (Wolf Jung's algorithm: iterate the formal-mating pullback — the
+  postcritical points collide but the rational maps converge to the mating), then draws its **Julia set
+  on the dynamical plane / Riemann sphere**, where the two parent Julia sets appear on the two
+  hemispheres. Verified against known maps: `z²+i ⊔ basilica = (z²+2)/(z²−1)` (Jung's example),
+  `rabbit`/`corabbit ⊔ basilica = (z² − e^{±2πi/3})/(z²−1)`. A curated `⊔ basilica` set for now; mating
+  an arbitrary pair needs the slow-mating initialisation (in progress). `z²+c → quadratic rational`.
 - **Go to external angle** — type an external angle θ = _p_/_q_ (turns) and the parameter ray at θ
   is traced to its landing (the globally-convergent inverse of ray drawing — no nearby click
   needed). Navigation Newton-snaps a **periodic** θ to the exact component **centre** (1/7 → the
