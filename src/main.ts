@@ -65,7 +65,7 @@ import type { Node as ExprNode } from "./expr/ast";
 import { dynamicRay, parameterRay, parseAngle, rayDepthForZoom } from "./render/rays";
 import { criticalPieceMask } from "./render/yoccozCritical";
 import { yoccozPuzzle } from "./render/yoccozPuzzle";
-import { dynamicalLamination } from "./render/lamination";
+import { dynamicalLamination, parameterLamination, type Leaf } from "./render/lamination";
 import { dynPresets, paramPresets, type Preset, type PresetName } from "./presets";
 import { byId } from "./ui/dom";
 import { showToast } from "./ui/toast";
@@ -1426,43 +1426,63 @@ function init(): void {
   }
   byId("yoccoz-depth").addEventListener("input", updateYoccoz);
 
-  // --- Pinched-disk lamination overlay ---------------------------------------
+  // --- Pinched-disk lamination overlays --------------------------------------
+  // The QML of ∂M is parameter-space and c-INDEPENDENT, so it is cached by detail and reused across the
+  // c-commit recomputes that refreshDynPanels triggers (parameter-ray landing is the costly part).
+  let qmlCache: { detail: number; leaves: Leaf[] } | null = null;
   /**
-   * Draw Thurston's pinched-disk lamination of ∂K_c as a corner disk widget on the dynamical plane:
-   * a chord for every pair of external rays that co-land. Measured by the shipped landing machinery, so
-   * gated to z²+c with a repelling α (c outside the main cardioid); recomputes for the committed c
-   * through refreshDynPanels (debounced during a coupled drag). Depends only on c, not on pan/zoom.
-   * A hoisted declaration, so refreshDynPanels can call it during the initial syncDynamicalC.
+   * Draw Thurston's pinched-disk laminations as corner disk widgets: the dynamical lamination of ∂K_c
+   * on the Julia plane (a chord per co-landing pair of dynamic rays) and/or the QML of ∂M on the
+   * parameter plane (the minor leaves — co-landing parameter rays at each component root). Measured by
+   * the shipped landing machinery, gated to z²+c; the dynamical lamination also needs a repelling α and
+   * recomputes for the committed c through refreshDynPanels, while the QML is cached by detail. A hoisted
+   * declaration, so refreshDynPanels can call it during the initial syncDynamicalC.
    */
   function updateLamination(): void {
-    const toggle = byId<HTMLInputElement>("lamination-toggle");
+    const dynToggle = byId<HTMLInputElement>("lamination-toggle");
+    const qmlToggle = byId<HTMLInputElement>("qml-toggle");
     const detailInput = byId<HTMLInputElement>("lamination-detail");
     const note = byId("lamination-note");
     byId("lamination-detail-value").textContent = detailInput.value; // keep the slider label in sync
     const eligible = dynamicalView.plot.perturbationEligible; // z²+c (both planes share f)
-    toggle.disabled = !eligible;
-    const on = eligible && toggle.checked;
-    detailInput.disabled = !on;
+    dynToggle.disabled = !eligible;
+    qmlToggle.disabled = !eligible;
+    const anyOn = eligible && (dynToggle.checked || qmlToggle.checked);
+    detailInput.disabled = !anyOn;
     dynamicalView.setLamination(null);
-    if (!on) {
-      note.textContent = !eligible && toggle.checked ? "The lamination is defined for z²+c." : "";
-      return;
-    }
-    const c: Vec2 = [parameterView.plot.z0[0], parameterView.plot.z0[1]]; // the current parameter
-    const maxPeriod = Number(detailInput.value);
-    const lam = dynamicalLamination(c, { maxPeriod, maxPreperiod: 1 });
-    if (lam.leaves.length === 0) {
+    parameterView.setLamination(null);
+    if (!anyOn) {
       note.textContent =
-        "No lamination at this c — the Julia set is a Jordan curve (α attracting, c in the main cardioid). Pick a c outside it (e.g. −1).";
+        !eligible && (dynToggle.checked || qmlToggle.checked)
+          ? "The lamination is defined for z²+c."
+          : "";
       return;
     }
-    dynamicalView.setLamination(lam.leaves);
-    const pinches = lam.gaps.length;
-    note.textContent =
-      `${lam.leaves.length} leaves from ${pinches} pinch point${pinches === 1 ? "" : "s"} ` +
-      `(period ≤ ${maxPeriod}); each chord joins external rays that land together on ∂K_c.`;
+    const maxPeriod = Number(detailInput.value);
+    const parts: string[] = [];
+    if (dynToggle.checked) {
+      const c: Vec2 = [parameterView.plot.z0[0], parameterView.plot.z0[1]]; // the current parameter
+      const lam = dynamicalLamination(c, { maxPeriod, maxPreperiod: 1 });
+      if (lam.leaves.length === 0) {
+        parts.push("Julia: no lamination (Jordan curve at this c — α attracting; try −1)");
+      } else {
+        dynamicalView.setLamination(lam.leaves);
+        parts.push(`Julia: ${lam.leaves.length} leaves from ${lam.gaps.length} pinches on ∂K_c`);
+      }
+    }
+    if (qmlToggle.checked) {
+      // QML minor leaves = co-landing PARAMETER rays at component roots (maxPreperiod 0); c-independent.
+      if (!qmlCache || qmlCache.detail !== maxPeriod) {
+        qmlCache = { detail: maxPeriod, leaves: parameterLamination({ maxPeriod, maxPreperiod: 0 }).leaves };
+      }
+      parameterView.setLamination(qmlCache.leaves);
+      parts.push(`QML: ${qmlCache.leaves.length} minor leaves on ∂M (period ≤ ${maxPeriod})`);
+    }
+    note.textContent = parts.join(" · ") + ".";
   }
-  byId("lamination-toggle").addEventListener("change", updateLamination);
+  for (const id of ["lamination-toggle", "qml-toggle"]) {
+    byId(id).addEventListener("change", updateLamination);
+  }
   byId("lamination-detail").addEventListener("input", updateLamination);
 
   /** Build a translucent gold mask canvas from a critical-piece mask (flipped to image row order). */

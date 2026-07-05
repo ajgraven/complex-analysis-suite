@@ -679,7 +679,12 @@ const HALO = "rgba(0, 0, 0, 0.6)";
  * pair. Screen-space — not the plot↔pixel map — so it is independent of pan/zoom and of any projection,
  * and reads alongside the Julia set as its combinatorial model.
  */
-function drawLamination(ctx: CanvasRenderingContext2D, leaves: Leaf[], size: number): void {
+function drawLamination(
+  ctx: CanvasRenderingContext2D,
+  leaves: Leaf[],
+  size: number,
+  label: string,
+): void {
   const s = size / OVERLAY_BASE;
   const R = Math.min(150, Math.max(46, size * 0.2));
   const margin = 14 * s + 6;
@@ -726,7 +731,7 @@ function drawLamination(ctx: CanvasRenderingContext2D, leaves: Leaf[], size: num
   ctx.font = `${Math.max(9, 11 * s)}px system-ui, -apple-system, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "bottom";
-  ctx.fillText("lamination", cx, cy - R - 6 * s);
+  ctx.fillText(label, cx, cy - R - 6 * s);
   ctx.restore();
 }
 
@@ -735,9 +740,10 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
   const { size } = p;
   ctx.clearRect(0, 0, size, size);
   // Pinched-disk lamination: a self-contained corner widget in screen space, so it is independent of
-  // the plot↔pixel map — drawn before the projection guard below so it survives a projection too.
-  if (p.lamination && p.lamination.length > 0 && p.fractType === "dyn") {
-    drawLamination(ctx, p.lamination, size);
+  // the plot↔pixel map — drawn before the projection guard below so it survives a projection too. Each
+  // view owns its own set: the dynamical lamination on the dyn plane, the QML on the parameter plane.
+  if (p.lamination && p.lamination.length > 0) {
+    drawLamination(ctx, p.lamination, size, p.fractType === "param" ? "QML" : "lamination");
   }
   // Overlays (rays, markers, the white point, annotations) are placed with the linear plot↔pixel
   // map, which a projection breaks — so draw nothing while a projection is active (MVP).

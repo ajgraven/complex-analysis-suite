@@ -444,7 +444,10 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   elsewhere and joins the ones that co-land, so it is a faithful finite-**detail** approximation (a
   slider raises the period bound). Invariant under angle doubling and under z ↦ −z. Needs a repelling α
   (c outside the main cardioid). Basilica (c = −1): the α leaf {1/3, 2/3} and the −α leaf {1/6, 5/6};
-  the rabbit's α is an ideal triangle {1/7, 2/7, 4/7}. `z²+c`.
+  the rabbit's α is an ideal triangle {1/7, 2/7, 4/7}. A second toggle draws the **QML** (quadratic
+  minor lamination) — the parameter-plane analogue on ∂M, whose **minor leaves** join the parameter
+  rays landing at each hyperbolic-component root. Every minor leaf spans a shorter arc ≤ 1/3 (Thurston):
+  the period-2 root −3/4 ← {1/3, 2/3}, the period-3 roots ← {1/7, 2/7} / {3/7, 4/7} / {5/7, 6/7}. `z²+c`.
 - **Symbolic console** — type an **internal address** (the increasing periods from the main cardioid
   to a component, e.g. `1-3` rabbit, `1-2-4-8` cascade, `1-3-6`) and the **stripping algorithm**
   returns its **kneading sequence** ν and the two **characteristic external angles** θ⁻, θ⁺ that

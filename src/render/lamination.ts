@@ -1,5 +1,7 @@
 /**
- * lamination.ts — Thurston's **pinched-disk lamination** of a quadratic Julia set (z² + c).
+ * lamination.ts — Thurston's **pinched-disk laminations** of the quadratic family (z² + c): the
+ * dynamical lamination of a Julia set ∂K_c ({@link dynamicalLamination}) and the **quadratic minor
+ * lamination** (QML) of the Mandelbrot boundary ∂M ({@link parameterLamination}).
  *
  * The Riemann map Φ_c of the exterior of the filled Julia set K_c conjugates f_c to z ↦ z², so
  * external rays are parametrised by an angle θ ∈ ℝ/ℤ and f_c acts on angles by **doubling**. When two
@@ -27,7 +29,7 @@
  */
 import type { Vec2 } from "../arrays";
 import { sqrt } from "../expr/complexJs";
-import { dynamicalLanding } from "./angleParameter";
+import { dynamicalLanding, parameterLanding } from "./angleParameter";
 import { enumerateLandingAngles } from "./angleOfPoint";
 
 /** A leaf of the lamination: a chord joining two co-landing external angles (turns in [0, 1)). */
@@ -111,25 +113,22 @@ function gapLeaves(sorted: number[]): Leaf[] {
  * external rays and joining the ones that co-land. Returns leaves + gaps; the leaf list is empty when
  * no two enumerated rays co-land (e.g. c in the main cardioid — a Jordan-curve Julia set).
  */
-export function dynamicalLamination(c: Vec2, opts: LaminationOpts = {}): Lamination {
-  const maxPeriod = opts.maxPeriod ?? DEFAULT_MAX_PERIOD;
-  const maxPreperiod = opts.maxPreperiod ?? DEFAULT_MAX_PREPERIOD;
-  const tol = opts.tol ?? DEFAULT_TOL;
-
-  // The lamination is nontrivial only when α = (1 − √(1−4c))/2 is repelling (|f′(α)| = 2|α| > 1),
-  // i.e. c outside the closed main cardioid. Inside it the Julia set is a Jordan curve — no rays are
-  // identified, so the lamination is empty — and the landing machinery clusters spuriously near the
-  // attracting fixed point, so we gate up front (matching the Yoccoz-puzzle repelling-α requirement).
-  const disc = sqrt([1 - 4 * c[0], -4 * c[1]]);
-  const alpha: Vec2 = [(1 - disc[0]) / 2, -disc[1] / 2];
-  if (2 * Math.hypot(alpha[0], alpha[1]) <= 1 + 1e-9) return { leaves: [], gaps: [] };
-
+/**
+ * Land every enumerated angle through `land`, cluster the ones that co-land, and assemble the gap
+ * chords into a deduplicated leaf set. Shared by the dynamical lamination (of ∂K_c) and the QML (of
+ * ∂M) — they differ only in which landing map they pass.
+ */
+function laminationFrom(
+  land: (p: number, q: number) => Vec2 | null,
+  maxPeriod: number,
+  maxPreperiod: number,
+  tol: number,
+): Lamination {
   const landed: { angle: number; point: Vec2 }[] = [];
   for (const { p, q } of enumerateLandingAngles(maxPeriod, maxPreperiod)) {
-    const land = dynamicalLanding(p, q, c);
-    if (land) landed.push({ angle: p / q, point: [land.point[0], land.point[1]] });
+    const pt = land(p, q);
+    if (pt) landed.push({ angle: p / q, point: pt });
   }
-
   const gaps = clusterByLanding(landed, tol);
   const seen = new Set<string>();
   const leaves: Leaf[] = [];
@@ -142,4 +141,44 @@ export function dynamicalLamination(c: Vec2, opts: LaminationOpts = {}): Laminat
     }
   }
   return { leaves, gaps };
+}
+
+export function dynamicalLamination(c: Vec2, opts: LaminationOpts = {}): Lamination {
+  // The lamination is nontrivial only when α = (1 − √(1−4c))/2 is repelling (|f′(α)| = 2|α| > 1),
+  // i.e. c outside the closed main cardioid. Inside it the Julia set is a Jordan curve — no rays are
+  // identified, so the lamination is empty — and the landing machinery clusters spuriously near the
+  // attracting fixed point, so we gate up front (matching the Yoccoz-puzzle repelling-α requirement).
+  const disc = sqrt([1 - 4 * c[0], -4 * c[1]]);
+  const alpha: Vec2 = [(1 - disc[0]) / 2, -disc[1] / 2];
+  if (2 * Math.hypot(alpha[0], alpha[1]) <= 1 + 1e-9) return { leaves: [], gaps: [] };
+  return laminationFrom(
+    (p, q) => {
+      const l = dynamicalLanding(p, q, c);
+      return l ? [l.point[0], l.point[1]] : null;
+    },
+    opts.maxPeriod ?? DEFAULT_MAX_PERIOD,
+    opts.maxPreperiod ?? DEFAULT_MAX_PREPERIOD,
+    opts.tol ?? DEFAULT_TOL,
+  );
+}
+
+/**
+ * The **quadratic minor lamination** (QML) of ∂M — the parameter-plane analogue. Thurston's model of
+ * the Mandelbrot set: the two parameter rays landing at a hyperbolic-component **root** bound its wake,
+ * and their chord is the component's **minor leaf**. Measured exactly like the dynamical lamination but
+ * with {@link parameterLanding} (which lands parameter rays at the exact root, via the parabolic-root
+ * Newton). No α-gate — parameter rays always land on the connected ∂M. Every minor leaf spans a shorter
+ * arc ≤ 1/3, the widest being the 1/2-bulb root −3/4 ← {1/3, 2/3}; e.g. the period-3 roots ← {1/7, 2/7},
+ * {3/7, 4/7}, {5/7, 6/7}.
+ */
+export function parameterLamination(opts: LaminationOpts = {}): Lamination {
+  return laminationFrom(
+    (p, q) => {
+      const l = parameterLanding(p, q);
+      return l ? [l.point[0], l.point[1]] : null;
+    },
+    opts.maxPeriod ?? DEFAULT_MAX_PERIOD,
+    opts.maxPreperiod ?? DEFAULT_MAX_PREPERIOD,
+    opts.tol ?? DEFAULT_TOL,
+  );
 }

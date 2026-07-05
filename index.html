@@ -1427,13 +1427,18 @@ z^2+c</textarea
               <p class="exterior-status">
                 Thurston's
                 <button type="button" class="gloss-link" data-term="lamination" aria-label="Define lamination">?</button>
-                pinched-disk model of the current <strong>Julia set</strong>: a disk widget (bottom-right of
-                the dynamical plane) where a <strong>chord</strong> joins every pair of external rays that land
-                at the same point. Collapsing the chords gives the Julia set's topology. Needs a repelling α —
-                a c outside the main cardioid (e.g. −1, or a rabbit).
+                pinched-disk model, drawn as a corner disk widget where a <strong>chord</strong> joins every
+                pair of external rays that land at the same point. On the <strong>Julia set</strong> it is the
+                dynamical lamination (needs a repelling α — a c outside the main cardioid, e.g. −1); on the
+                <strong>parameter plane</strong> it is the
+                <button type="button" class="gloss-link" data-term="qml" aria-label="Define QML">?</button>
+                <strong>QML</strong>, whose minor leaves join the parameter rays landing at each component root.
               </p>
               <label class="checkbox" for="lamination-toggle">
                 <input type="checkbox" id="lamination-toggle" /> show lamination (Julia set)
+              </label>
+              <label class="checkbox" for="qml-toggle">
+                <input type="checkbox" id="qml-toggle" /> show QML (parameter plane)
               </label>
               <div class="field">
                 <label for="lamination-detail">detail = <span id="lamination-detail-value">6</span></label>
