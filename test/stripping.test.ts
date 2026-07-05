@@ -159,6 +159,10 @@ describe("internalAddressFromAngle (the inverse: external angle → internal add
     expect(addr(7, 15)).toEqual([1, 2, 3, 4]); // primitive period-4
   });
 
+  it("matches the documented Schleicher oracle θ = 22/127 → 1-3-5-7 (FRONTIER_ROADMAP B7)", () => {
+    expect(addr(22, 127)).toEqual([1, 3, 5, 7]); // period 7 (127 = 2⁷−1)
+  });
+
   it("round-trips against the forward stripper: address → angle → address", () => {
     for (const address of [[1, 2], [1, 3], [1, 2, 3], [1, 2, 4], [1, 3, 6]]) {
       const strip = stripExternalAngles(address);
