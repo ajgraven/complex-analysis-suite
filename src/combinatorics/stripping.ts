@@ -145,6 +145,49 @@ export function internalAddressFromAngle(a: Angle): AngleAddress | null {
   return { address: addressFromKneading(kneading), period, kneading, angle: norm };
 }
 
+/** One step S_i → S_{i+1} of the renormalization ("tuning") tower encoded by an internal address. */
+export interface TowerStep {
+  /** The lower period S_i. */
+  from: number;
+  /** The higher period S_{i+1}. */
+  to: number;
+  /** True when S_i | S_{i+1}: a satellite bifurcation whose period multiplies by `q`. */
+  satellite: boolean;
+  /** The period-multiplier q = S_{i+1}/S_i for a satellite step; null for a primitive step. */
+  q: number | null;
+}
+
+/**
+ * The renormalization / **tuning tower** of an internal address. Each step S_i → S_{i+1} is either a
+ * **satellite** bifurcation — S_i | S_{i+1}, so the period multiplies by q = S_{i+1}/S_i (a period-q
+ * bulb, the child attached to its parent) — or a **primitive** renormalization — S_{i+1} not a multiple
+ * of S_i, a primitive small Mandelbrot copy (its root a cusp). This is the structure the address already
+ * encodes: the period-doubling cascade 1-2-4-8 is all ×2 satellite, while the airplane 1-2-3 is ×2
+ * satellite then primitive — which is exactly why the airplane is a primitive (cusped) small copy while
+ * the rabbit 1-3 is a satellite bulb. Pure integer arithmetic; the divisibility is unambiguous.
+ */
+export function renormalizationTower(address: number[]): TowerStep[] {
+  const steps: TowerStep[] = [];
+  for (let i = 0; i + 1 < address.length; i++) {
+    const from = address[i];
+    const to = address[i + 1];
+    const satellite = from > 0 && to % from === 0;
+    steps.push({ from, to, satellite, q: satellite ? to / from : null });
+  }
+  return steps;
+}
+
+/** A compact rendering of the tuning tower, e.g. "1 →×2 2 →×2 4 →×2 8 (all satellite)". */
+export function formatTower(address: number[]): string {
+  const steps = renormalizationTower(address);
+  if (steps.length === 0) return `${address[0] ?? 1} (the main cardioid)`;
+  let s = `${address[0]}`;
+  for (const st of steps) s += st.satellite ? ` →×${st.q} ${st.to}` : ` →primitive ${st.to}`;
+  const prim = steps.filter((st) => !st.satellite).length;
+  const tag = prim === 0 ? "all satellite" : prim === steps.length ? "all primitive" : `${prim} primitive`;
+  return `${s} (${tag})`;
+}
+
 /**
  * Phase 2 — kneading sequence ν (period n) → its characteristic external angle pairs.
  *

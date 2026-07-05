@@ -31,6 +31,7 @@ import { MAX_DOUBLING_Q, portraitSummary, rotationCycleAngles } from "./combinat
 import {
   AddressError,
   formatKneading,
+  formatTower,
   internalAddressFromAngle,
   parseInternalAddress,
   stripExternalAngles,
@@ -3220,7 +3221,7 @@ function init(): void {
     if (plane === "param") {
       const addr = internalAddressFromAngle(res.angles[0]);
       readout.textContent += addr
-        ? ` Internal address ${addr.address.join("-")} (period ${addr.period}, ν = ${formatKneading(addr.kneading)}).`
+        ? ` Internal address ${addr.address.join("-")} (period ${addr.period}, ν = ${formatKneading(addr.kneading)}). Tuning tower: ${formatTower(addr.address)}.`
         : " These rays are pre-periodic (a Misiurewicz point) — no internal address.";
     }
     showToast(`${where} = ${fmtPt(res.point)} ← {${list}} (valence ${res.valence}).`, "info");
@@ -3255,7 +3256,8 @@ function init(): void {
     }
     readout.textContent =
       `Address ${address.join("-")} → period ${res.period}, kneading ν = ${formatKneading(res.kneading)}. ` +
-      `Characteristic angles θ⁻ = ${fmtAngleBits(res.lower, res.period)}, θ⁺ = ${fmtAngleBits(res.upper, res.period)}.`;
+      `Characteristic angles θ⁻ = ${fmtAngleBits(res.lower, res.period)}, θ⁺ = ${fmtAngleBits(res.upper, res.period)}. ` +
+      `Tuning tower: ${formatTower(address)}.`;
     if (draw) parameterView.setAddressRays([angleToNumber(res.lower), angleToNumber(res.upper)]);
     gotoBtn.hidden = false;
     return res;
@@ -3279,7 +3281,7 @@ function init(): void {
       return;
     }
     byId<HTMLInputElement>("strip-address").value = r.address.join("-");
-    readout.textContent = `θ = ${r.angle.p}/${r.angle.q} → internal address ${r.address.join("-")} (period ${r.period}), kneading ν = ${formatKneading(r.kneading)}.`;
+    readout.textContent = `θ = ${r.angle.p}/${r.angle.q} → internal address ${r.address.join("-")} (period ${r.period}), kneading ν = ${formatKneading(r.kneading)}. Tuning tower: ${formatTower(r.address)}.`;
   });
 
   byId("strip-goto").addEventListener("click", () => {

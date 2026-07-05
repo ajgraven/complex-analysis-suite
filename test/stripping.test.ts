@@ -5,9 +5,11 @@ import {
   addressFromKneading,
   externalAnglePairs,
   formatKneading,
+  formatTower,
   internalAddressFromAngle,
   kneadingFromAddress,
   parseInternalAddress,
+  renormalizationTower,
   stripExternalAngles,
 } from "../src/combinatorics/stripping";
 
@@ -193,5 +195,32 @@ describe("internalAddressFromAngle (the inverse: external angle → internal add
       expect(ad[ad.length - 1]).toBe(r?.period);
       for (let i = 1; i < ad.length; i++) expect(ad[i]).toBeGreaterThan(ad[i - 1]);
     }
+  });
+});
+
+describe("renormalizationTower / formatTower (the tuning tower of an internal address)", () => {
+  const sat = (a: number[]): boolean[] => renormalizationTower(a).map((s) => s.satellite);
+
+  it("classifies each step satellite (Sᵢ | Sᵢ₊₁) vs primitive, matching known components", () => {
+    expect(sat([1, 3])).toEqual([true]); // rabbit — ×3 satellite bulb of the cardioid
+    expect(sat([1, 2, 3])).toEqual([true, false]); // airplane — ×2 satellite, then primitive (a cusped copy)
+    expect(sat([1, 2, 4, 8])).toEqual([true, true, true]); // period-doubling cascade
+    expect(sat([1, 3, 6])).toEqual([true, true]); // period-6 satellite on the rabbit
+    expect(sat([1, 2, 3, 4])).toEqual([true, false, false]); // primitive period-4
+    expect(sat([1, 3, 5, 7])).toEqual([true, false, false]); // 22/127
+  });
+
+  it("reports the period-multiplier q for satellite steps, null for primitive", () => {
+    expect(renormalizationTower([1, 4]).map((s) => s.q)).toEqual([4]); // 1/4 bulb
+    expect(renormalizationTower([1, 3, 6]).map((s) => s.q)).toEqual([3, 2]);
+    expect(renormalizationTower([1, 2, 3]).map((s) => s.q)).toEqual([2, null]);
+  });
+
+  it("formats the tower compactly", () => {
+    expect(formatTower([1, 2, 4, 8])).toBe("1 →×2 2 →×2 4 →×2 8 (all satellite)");
+    expect(formatTower([1, 2, 3])).toBe("1 →×2 2 →primitive 3 (1 primitive)");
+    expect(formatTower([1, 3])).toBe("1 →×3 3 (all satellite)");
+    expect(formatTower([1, 2, 3, 4])).toBe("1 →×2 2 →primitive 3 →primitive 4 (2 primitive)");
+    expect(formatTower([1])).toBe("1 (the main cardioid)");
   });
 });

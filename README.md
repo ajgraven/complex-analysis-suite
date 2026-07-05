@@ -470,8 +470,12 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   external angle θ = p/q and it reads off the internal address of the component whose root ray it is
   (the Lau–Schleicher ρ-function), which is what tells the **rabbit `1/7 → 1-3` apart from the
   airplane `3/7 → 1-2-3`** (same period 3, different address); a pre-periodic (Misiurewicz) angle has
-  no address. A non-admissible address (the smallest is `1-2-4-5-6`, kneading ABAAB⋆) is reported as
-  realised by no component, rather than guessed. `z²+c`.
+  no address. Every readout also shows the address's **tuning tower** — each step is a **satellite**
+  bifurcation (`Sᵢ | Sᵢ₊₁`, period ×q — a bulb) or a **primitive** renormalization (a small M-copy),
+  so `1-2-4-8` is all ×2 satellite while `1-2-3` is ×2 satellite then primitive (why the airplane is a
+  cusped copy). A non-admissible address (the smallest is `1-2-4-5-6`, kneading ABAAB⋆) is reported as
+  realised by no component, rather than guessed. Clicking a component in **Angles of a point** shows
+  the same address + tower. `z²+c`.
 - **Inverse-iteration Julia** (Overlays) — paints the dynamical-plane Julia set directly as the
   closure of random backward orbits `z ↦ ±√(z−c)` from the repelling fixed point (the "chaos
   game"), drawing the boundary crisply where forward escape-time struggles (thin dendrites, Cantor
