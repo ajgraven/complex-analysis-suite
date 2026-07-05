@@ -328,7 +328,7 @@ Ordered by value-weighted effort. "Reuses" notes the existing asset that makes i
 23. ◻ **Newton-on-parameter-space basins** (period-k nucleus basins as a picture); **tuning/cascade navigator**. (§8, §3.5) — open.
 
 ### Tier 3 — Hard / research-grade (flagship or later) — ◻ all open/deferred (updated scoping in `FRONTIER_ROADMAP.md` §4)
-24. **Mating mode** ✅ **Stages 1–2 shipped** (#249–250) — went straight to the **Thurston marked-point pullback** *engine* (not a transcribed (a,b) table); it computes + renders a verified ⊔ basilica set on the sphere (Marty mode). Stage 3 = slow-mating init for arbitrary pairs. (§6.2–§6.4)
+24. **Mating mode** ✅ **Stages 1–4 shipped** (#249–255) — went straight to the **Thurston marked-point pullback** *engine* (not a transcribed (a,b) table); it computes + renders verified matings on the sphere (Marty mode). Stage 3 (#252) made **any hyperbolic p/q-bulb ⊔ basilica** trustworthy via a conjugation-symmetry gate; **Stage 4 (#254–255) the general second parent** — mate **two arbitrary hyperbolic bulbs** via the **Boyd–Henriksen F_{u,v}** normal form (both critical values free), with obstruction gated by **Tan Lei** and basin selection by **swap-consistency** (diagonal A⊔A ⇒ u·v=1). Tail = Misiurewicz 2nd parent + slow-mating homotopy + full Medusa. (§6.2–§6.4)
 25. **Rotation-domain pixel layer** (per-pixel quasiperiodicity classification, Siegel/Herman vs basin). (§5.1)
 26. **Mariani–Silver tile-skip** render acceleration (DE-guarded), payoff at deep/high-iter scenes. (§2.5)
 27. **Yoccoz puzzles**; **renormalization / embedded Julia-set marking**. (§3.6, §7)
