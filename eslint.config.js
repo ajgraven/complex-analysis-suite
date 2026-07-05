@@ -1,24 +1,21 @@
-// Root ESLint flat config — Phase 0 skeleton.
+// Root ESLint flat config.
 //
-// The one rule that must exist from day one is the **dependency-boundary rule** that
-// encodes ARCHITECTURE.md §4: "packages import only downward; apps import packages; no
-// app imports another app; no cycles." This config enforces the load-bearing part that
-// a lint rule can express cheaply and without false positives on legacy code:
+// Scope: the root config's ONLY job is the **dependency-boundary rule** (ARCHITECTURE.md §4)
+// — "no app imports another app; no package imports an app." Each app lints its own source
+// with its own tuned config (apps/*/eslint.config.*), invoked via `pnpm -r … run lint`; the
+// root config deliberately does NOT restyle or re-judge that code. The remaining graph
+// invariants (strictly-downward imports between packages, cycle detection) are a natural fit
+// for dependency-cruiser and are planned as a follow-on check (MIGRATION.md "Ongoing").
 //
-//   * no app may import another app (by its workspace name), and
-//   * no package may import an app.
-//
-// The remaining invariants — strictly downward imports *between* packages, and cycle
-// detection — are added in Phase 1 as a dependency-cruiser check (per MIGRATION.md
-// Phase 1 and the ADR-0004 rationale), which is the right tool for graph-level rules.
-// Deliberately narrow: Phase 0 does not impose style rules on the two apps' existing
-// code (each app keeps its own eslint config); that unification is Phase 1.
+// The boundary rule is applied to ESM import surfaces (.ts/.mjs and package sources), which
+// is where a cross-workspace import can actually occur — QD's classic <script> files have no
+// ES imports, so they are left to QD's own config.
 
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
-// Workspace app names (present or planned). Importing any of these as a bare specifier
-// from inside another workspace member is a dependency-rule violation.
+// Workspace app names (present or planned). Importing any as a bare specifier from another
+// workspace member violates the dependency rule.
 const APP_NAMES = [
   "complex-dynamics",
   "quadrature-domains",
@@ -44,7 +41,10 @@ export default tseslint.config(
       "**/coverage/**",
     ],
   },
-  // Parse TypeScript sources with the TS parser (apps contain .ts).
+  {
+    // Inline eslint-disable directives belong to each file's owning config, not the root.
+    linterOptions: { reportUnusedDisableDirectives: "off" },
+  },
   {
     files: ["**/*.{ts,tsx,mts,cts}"],
     languageOptions: {
@@ -52,10 +52,10 @@ export default tseslint.config(
       globals: { ...globals.browser, ...globals.node },
     },
   },
-  // The boundary rule, scoped to workspace members only.
   {
+    // Boundary rule, on ESM import surfaces only.
     files: [
-      "apps/**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}",
+      "apps/**/*.{ts,tsx,mts,cts,mjs}",
       "packages/**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}",
     ],
     rules: {

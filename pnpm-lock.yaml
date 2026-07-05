@@ -26,6 +26,9 @@ importers:
       typescript-eslint:
         specifier: ^8.18.0
         version: 8.62.1(eslint@9.39.4)(typescript@5.9.3)
+      vitest:
+        specifier: ^2.1.4
+        version: 2.1.9(jsdom@26.1.0)
 
   apps/complex-dynamics:
     dependencies:
