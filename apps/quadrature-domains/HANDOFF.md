@@ -1,0 +1,5783 @@
+# Quadrature Domain Solver — Handoff
+
+This is the canonical pick-up-where-we-left-off reference after `/compact`.
+Captures architecture, math conventions, recent work, file layout, known
+limitations, and gotchas.
+
+The user is **Andrew Graven**, the thesis author. He's an expert on the
+math; lean on the codebase + this handoff for engineering context, but ask
+him for math judgment calls (which family to extend, what counts as a valid
+QD ansatz, etc.). His shorthand answers are usually correct; don't over-
+explain back to him.
+
+---
+
+## 0. Current state
+
+**Full suite green** (run `npm test` for the live count — it's the source of
+truth; prose counts drift, so they're intentionally not pinned here); **`npm run
+lint` clean; `npm run version:check` clean** (cache hash `49ecf9a946`). The app is
+**publication-ready** (MIT-licensed; deploy by copying the `app/` directory to any
+static host). `main` is at the most-recent merges, newest first (all on `main`, each
+its own merged PR), with one feature **in progress on a branch**:
+- **Symbolic Algebra workspace** (`feature/symbolic-qd-equations`, NOT yet merged; builds on the
+  generator below) — a dedicated **Algebra tab** with an interactive equation-derivation DAG.
+  `app/sym-core.js` gains an elimination layer (`resultant`/`discriminant` via a fraction-free
+  Bareiss `mpolyDet`, `coeffsIn`/`degreeIn`/`derivativeIn`/`mpolyExactDiv`); `app/qd-constraints.js`
+  (`QD.QDConstraints`) generates the four univalence-constraint forms (convex/star/spiral
+  inequalities, Schur–Cohn φ′≠0 + Rabinowitsch witness, geometric discriminant borders, global
+  boundary-injectivity divided difference); `app/algebra/` holds the DOM-free `QD.AlgebraStore`,
+  the SVG+KaTeX `QD.AlgebraCanvas`, and `QD_UI.installAlgebra`. The `#qd-equations-card` gained an
+  "Open in Algebra workspace" launcher. Now also includes a **pure-JS Gröbner / solving engine**
+  and an Algebra-tab UX pass: `QD.Sym` Buchberger over ℚ(i) with **Gebauer–Möller + sugar**, lex/
+  grlex/grevlex + **block elimination** orders, **FGLM** + shape-lemma **`solveZeroDim`** (zero-dim
+  toolkit), perf (memoized degree, in-place reduction, Rational gcd fast-path), and an off-main-thread
+  **Web Worker** (`QD.SymWorker`) with progress + Cancel; the tab has variable-**picker** dropdowns
+  (eliminate / **assume-real**), a **persistent error panel**, and worker-backed Gröbner/dimension/
+  solve. A **Gröbner performance roadmap** (plan in
+  `.claude/plans/please-conduct-a-comprehensive-whimsical-harp.md`) landed two bit-identical wins on
+  the EXACT path (the reduced GB is unique, so a correct packed kernel is provably bit-identical):
+  **Phase A — exponent-vector bit-packing** (packed Int32Array monomials drive `buchberger`'s main
+  loop) and **Phase D — packed `reduceGroebner` + content removal** (reduction stays packed;
+  per-generator Gaussian-integer content is divided out to bound coefficient size). Net **≈4.5×
+  end-to-end on cyclic-5** vs the original, all bit-identical. **Modular / multi-modular GB was
+  built, verified, and then reverted** — hard benchmarks showed it slower on these systems and the
+  full cardioid (14 vars, ~478 gens) is combinatorially intractable for any plain-Buchberger variant
+  (a single 𝔽_{p²} prime > 12 min; exact > 41 min); reality reduction remains the real lever. Phases A
+  and D both committed (Net ≈4.5× end-to-end on cyclic-5). The external-CAS / **RCTD bridge** (export +
+  import) shipped (#6 P1/P2); the tab also now does **variable-symmetry inference** (real / imaginary /
+  identify / linear / conjugate-pair, auto-suggested + one-click apply), per-equation **generate-conjugate**,
+  **constraint propagation** through the assumption columns (single + batch), and a worker-offloaded
+  **Certify** path — see the per-feature bullets lower in this section. A follow-on **"expand the solvable class" investigation**
+  (`GROEBNER_INVESTIGATION.md`, 4 research threads) is now being implemented in tiers: **Tier 1 —
+  linear-substitution preprocessing** (`Sym.linearReduce`: strip degree-1-with-constant-coeff
+  variables before solving, lift them back; integrated into `solveZeroDim`) is done (strips the QD
+  gauge + general linear vars — modest for the cleared-denominator conjugate model, but a correct,
+  portable, zero-risk solve-class win). **Tier 2 — eigenvalue/quotient-ring solving** is done
+  (`Sym.solveByEigenvalues` + `multiplicationMatrix`: Möller–Stetter multiplication matrices from the
+  standard monomials → generic combination → characteristic polynomial via Bareiss + the Durand–Kerner
+  finder → per-eigenvalue left eigenvector → Rayleigh read-off; `solveZeroDim` now **falls back to it
+  whenever the lex basis is not in shape position**, so it solves every radical zero-dim ideal — the
+  gap the shape-lemma rejected, e.g. ⟨x²−1, y²−1⟩→4 solutions). **Tier 3 — signature-based GVW
+  Buchberger** is done (`Sym.buchbergerSig`: GVW on the packed kernel with POT module order +
+  syzygy/Koszul + rewrite criteria; opt-in via `buchberger(…, {signature:true})`). Produces a
+  basis **bit-identical** to `buchberger` (the reduced GB is unique — the correctness oracle) while
+  pruning S-pairs: **cyclic-5 2.2× faster, cyclic-6 ~1.3× faster**. The headline item of each tier
+  (L1 / S1 / G1) shipped; the deeper levers (Tier-1 L2–L6, Tier-2 certified numerics, Tier-3 Gröbner
+  Walk / truncated GB) remain open. See `GROEBNER_INVESTIGATION.md`. **Selectable φ(0):** the
+  Riemann-map center w₀ = φ(0)
+  (Map parameters ▸ "Riemann map center φ(0)": **centroid of the poles by default**, or manual) now
+  also drives the SYMBOLIC system — `generateClassicalBounded(hData, {w0})` substitutes the exact
+  ℚ(i) rationalization (0.2 → 1/5) for w₀/w̄₀ and drops them from the params (`system.w0Fixed`);
+  the equations card regenerates on any φ(0) change (default-on "Fix φ(0)" checkbox + value/
+  provenance line), `reimSplit`/`systemToExport` carry it, and the Algebra store remembers it
+  (`store.w0Fixed`, snapshot/undo/exportDAG) so univalence constraints that rebuild φ with the w₀
+  SYMBOL (the star form's φ−w₀) get the same substitution (sidebar "fix φ(0)" checkbox, default on
+  — 2 fewer workspace variables). **Reduction audit-trail + existence/uniqueness + autonomy** (latest
+  engagement, 9 commits `15bad81…305ef3c`): every assumption is now an **append-column reduction**
+  (column 0 stays the original system; each later column is a labeled step with a header) — `store`
+  gains `substituteValue`/`substituteValues` (fix one or several variables to exact ℚ(i) values in one
+  column, auto-propagating the linear cascade so φ(0)=0 ⟹ w₀=0 can force z₁), `reducePropagate`,
+  `assumeReal`, `fixW0`. A one-click **"Auto"**
+  reality button uses `QDEquations.realAxisSymmetry(hData)` (all-real h ⇒ assume every base var real —
+  the 478→118 collapse). A new **alternative eliminator**, triangular decomposition (`Sym.pseudoRemainder`
+  + `Sym.triangularize`, Wu pseudo-elimination), exhibits free variables / no-solution and appends a
+  chain column. **Existence/uniqueness**: `Sym.realSolutionCount` (Hermite trace form — signature =
+  #real solutions = #actual QDs, rank = #distinct complex, exact via `_rationalInertia`) feeds a store
+  `classify` over `currentReimSystem` (substitutes each conjugate pair v→x±iy and splits real/imag,
+  pinning the known a_j/C_{j,s}); an **"Existence / uniqueness"** button reports "Unique QD" / "N real
+  QDs (of M complex)" / "No QD" / "positive-dimensional family". A **"★ Auto-reduce & solve"** button
+  chains auto-reality → propagation → classify → `solveReal` (explicit real solutions), each a visible
+  column. Plus an **φ / h reference panel** (symbolic forms + variable legend), a `solveZeroDim`
+  order-retry heuristic (reversed-order on a cap, order-independent ⇒ safe), and robustness (busy-lock
+  undo/redo/palette, stale-seed detection). A follow-on **UI rework** then replaced the free-form
+  pan/zoom canvas with **structured column lanes** ([algebra-canvas.js](app/algebra/algebra-canvas.js)
+  rewrite): each column is a sticky-headed flex container labeling the transformation relating it to
+  the previous column (`① Original system` → `↳ assume real · …`) with `store.columnStats` (eqn/var
+  counts + Δ), the last lane badged "current system", arrowed SVG edges, native scroll + a
+  transform-scale zoom (`.algebra-sizer` keeps scrollbars correct), an empty-state CTA, expand/
+  collapse-all, and the existence/uniqueness verdict as a floating result card. Full suite 1720/0.
+  See the plan file's MASTER PLAN PROGRESS + UI REWORK PLAN for the per-commit map. A further
+  **node-editor sidebar pass** then reorganized the controls into a pinned primary-action header
+  (★ Auto-reduce & solve + Generate), collapsible workflow sections (System & reference / Assumptions
+  / Reduce / Analyze / Constraints / Export), a floating canvas toolbar (zoom/fit/expand/undo/redo),
+  and a contextual node **inspector** on selection (1 node → equation + Duplicate/Copy/Delete; 2 →
+  the eliminate panel). "Set values" became a multi-row table over **base variables only** (the store
+  `substituteValues` also fixes each value's conjugate — z₁=1+i ⟹ z̄₁=1−i — in one column). Then a
+  **navigation/export/factoring pass**: a clickable **reduction breadcrumb** over the graph +
+  `canvas.scrollToColumn`/`fitWidth` ("Fit ↔") and a dismissible onboarding steps strip; **Mathematica
+  export** (`store.mathematicaColumn`/`mathematicaNode`/`mathematicaAll` → a paste-ready Wolfram list,
+  with an Export column picker + per-node "Copy Mathematica"); and **Attempt to factor** — `Sym.factor`
+  (RADICAL factorization: monomial + variable-separable via the mixed-partial test + univariate via
+  verified numeric roots, every factor checked by exact division) behind `store.factorOf`/`applyFactor`,
+  which split an equation `p = f·g` into candidate systems `V(p)=⋃V(fᵢ)` and pursue one factor as a
+  `case fₖ = 0` column (the others reachable via undo; branch existence counts ADD). Full suite 1749/0.
+  Then the **certified-univalence + Aharonov–Shapiro engagement** (6 commits `4a3bc30…f51baff`,
+  full suite **1801/0**), which made the genuine-QD test EXACT and used it to reproduce a published
+  uniqueness theorem:
+  - **`4a3bc30` exact local fold test** — `Sym.schurCohn(coeffs)` counts a ℚ(i) polynomial's roots
+    inside 𝔻 via the Hermitian Schur–Cohn matrix `C = A·Aᴴ − B·Bᴴ` and its EXACT inertia
+    (`_hermitianInertia`); returns `{inside, outside, onCircle, degenerate}` (degenerate = singular C
+    ⇒ on-circle OR self-inversive ⇒ caller must not certify). Wired into `doCertifyUnivalence`'s local
+    test (`schurCohnFold`: rationalize the candidate → substitute the barred pole vars into
+    `QC.phiPrimeNumerator` → count roots in 𝔻), with a numeric `findCriticalPoints` fallback on the
+    degenerate/cusp case. Exports `Sym.schurCohn`, `Sym.uniCoeffs`.
+  - **`f001dd1` exact boundary (global) injectivity** — `QC.phiDividedDifference(hData)` (factored out
+    of `injectivity`) + `QC.boundaryDoublePointCount(hData, poleSubst, opts)`: substitute the candidate's
+    ℚ(i) values, reim-split the divided difference over the two circle points, add the circle quadrics,
+    and count REAL circle double points via `Sym.realSolutionCount` (0 ⇔ boundary simple). Wired as the
+    BOUNDARY test (`boundarySimpleExact`) when the local test certified φ′≠0 on 𝔻̄ (so no diagonal/cusp
+    solutions); else numeric `isBoundaryUnivalent`.
+  - **`a8d9464` Aharonov–Shapiro cardioid uniqueness reproduction** — `QDEquations.pointFunctionalSystem(data)`
+    (the INTERIOR degree-2 system: `M₀=w₁²+2|w₂|²`, `M₁=w₁²w̄₂`; resolvent cubic `s³−M₀s²+2|M₁|²`, s=w₁²)
+    + `AHARONOV_SHAPIRO.md` + `app/test/cardioid-uniqueness.test.js`. Shows the engine (`realSolutionCount`
+    + `schurCohn` + Gröbner elimination) reproduces A&S's order-2 uniqueness theorem; the cusp is the
+    resolvent's double root. The app's exterior `h=1.5/w+0.5/w²` recovers the same φ=z+½z² once the forced
+    pole pre-image `z₁=0` is pinned (the positive-dim cause was the locator factoring through z₁ — NOT a
+    missing area equation). Full parametric uniqueness over all (M₀,M₁) is the deferred RCTD/CAS frontier.
+  - **`48253bb` unified gauge-aware verdict** — `solver.js` `sameDomain(a,b)` / `canonicalizeByRotation`
+    (rotation-aware "same quadrature domain": canonicalize each map so φ′(0)>0 real via `z_j→μz_j`,
+    `A_{j,k}→μᵏA_{j,k}`, then `phisEquivalent`). `doCertifyUnivalence` became the authoritative verdict:
+    regime front-matter (inconsistent / **positive-dimensional ⇒ "fix the gauge / pin a forced variable"**
+    / zero-dim) + the univalence filter + a **gauge quotient** collapsing the raw ±φ′(0) count to the
+    geometric QD count ("Unique quadrature domain ✓ — 1 genuine QD … (1 gauge copy merged)").
+  - **`462ae02` resolvent/discriminant (#3) + spurious-component detection (#2)** — `Sym.resolvent(input,
+    varName, vars, opts)` = the univariate eliminant `χ_v(x)=det(x·I − M_v)` (char poly of mult-by-v on
+    R/I via `multiplicationMatrix`+`mpolyDet`) with squareFree (distinct roots) + a cap-free `degenerate`
+    flag (repeated root ⇒ cusp/coincident); `store.resolventOf`/`reimVariables` + a "Resolvent /
+    discriminant" Analyze control. `store.spuriousFactors(ids, opts)` factors the param-pinned reim
+    equations; a degree-1 univariate factor ⇒ a one-click **[Pin v=0]** suggestion (else [Split into
+    cases]) surfaced in the positive-dim verdict (`canvas.setVerdict` gained an `actions` array).
+  - **`f51baff` numeric-oracle cross-check (#4)** — `crossCheckPhis(phis, hData)` validates each genuine
+    QD against two oracles (residual ≈0 against the freshly-regenerated original system via
+    `QE.residualAtSolution`; `sameDomain` to the numeric solver `activeEnv.primary.phi`) and annotates the
+    verdict (`· cross-check ✓ …` / `· ⚠ … reduction chain may be unsound`).
+  - **`08da88c` maintainability dedup + A4/A8** — single-sourced `isClassicalBounded`
+    (`QDEquations.isClassicalBounded`; the two byte-identical UI copies delegate) and the `renderKatex`
+    copies (delegate to `RiemannLatex.render`); `algebra-ui.js` gained `ensureSeed()` so every op refuses
+    to run on a STALE seed (graph seeded from a different solve's hData) with a re-seed prompt instead of
+    splicing new-domain constraints onto the old graph, and re-seed clears the canvas selection.
+  - **`#5` order-n point-functional** — `QDEquations.pointFunctionalSystem(data, {order:n})` generalizes the
+    A&S order-2 builder to a degree-n map ↔ order-n functional: `p!·M_p = Σ_{a=p}^{n-1} [zᵃ](φᵖφ′)·w̄_{a+1}`
+    (p=0 = the area law `M₀=Σ k|w_k|²`), 2n−1 real eqns in `[w1,u2,v2,…,un,vn]`. Order 2 is bit-identical to
+    the A&S system; n≥3 is delivered for per-instance solving (`realSolutionCount`/`solveZeroDim` + schurCohn
+    filter) — parametric uniqueness stays the RCTD frontier (#6). Regression in `qd-equations.test.js`
+    cross-checks the generated system against an independent 2-D disk-quadrature of the moments.
+  - **worker-offload of classify / auto-reduce-&-solve** — the heavy reim Gröbner + Hermite real-count no
+    longer run on the main thread: new `runJob` kind `'classify'` (the off-main-thread twin of
+    `_classifyImpl`) + store `classifyAsync` / `solveRealAsync` (reim-system Promises, fall back to sync when
+    no Worker). `doClassify` and `doAutoSolve` now run via `QD.SymWorker` with progress + a working Cancel
+    (autosolve gained an AbortController). The reim transform + paramValue pinning stays on the main thread
+    (cheap); only the Gröbner/solve cross the boundary. `_CAP_KEYS` already covered the forwarded caps.
+  - **math-completeness A/B/C** — (A) `sym-core` exact DEGENERATE Schur–Cohn: peel the self-inversive part
+    (gcd with the reciprocal-conjugate) and count its on-circle roots via the new exact `unitCircleRootCount`
+    (reim+circle → Hermite `realSolutionCount`), so `schurCohn` now returns trustworthy inside/on/outside even
+    for self-inversive/cusp inputs (`resolved:true`; `degenerate` now means onCircle>0). (B) certify path
+    treats a φ′ on-circle zero as an ALLOWED boundary CUSP: `boundarySimpleExact` subtracts the diagonal cusp
+    solutions (boundary simple ⟺ count===cusps), and a cusped map certifies "univalent ✓ — boundary cusp ×k".
+    (C) φ-RECONSTRUCTION after reduction: `store.knownValues()` recovers variables an earlier reduction pinned/
+    eliminated to a constant (substitute / constant linear-propagation / fix-w0); `phiFromAlgebraSolution` and
+    `poleSubst` fall back to it, so φ rebuilds (and the exact Schur–Cohn / boundary / cross-check fire) even
+    after e.g. z₁=0 is pinned. End-to-end: the **cardioid** now certifies "Unique quadrature domain ✓ … boundary
+    cusp ×1 (Schur–Cohn + real-count certified) · cross-check ✓ (residual 2.2e-16)".
+  - **#6 P1 — external-CAS / RCTD export bridge** — `QD.CASExport` (`app/algebra/cas-export.js`): a shared
+    polynomial printer over MPoly term lists with dialects `maple` (RegularChains: a PolynomialRing with the
+    PARAMETERS declared last + a ready `RealComprehensiveTriangularize(sys, np, R)` — the parametric real
+    triangular decomposition AHT used; `RealTriangularize` when np=0), `singular` (ℚ(i) ring `(0,i)` + minpoly
+    + equality ideal + `std`), `sage` (`NumberField(x²+1)` + ideal + `groebner_basis`), and `mathematica` (the
+    store's existing Mathematica export now DELEGATES here — one printer, no drift). Store `casColumn(c,
+    dialect, {params})` / `casNode`; Export panel gained a "CAS / RCTD" line (dialect select + comma-separated
+    params + Copy). Nothing executes in-browser — copy-out to the user's own Maple/Singular/Sage.
+  - **#6 P2 — RCTD IMPORT (the return trip)** — `QD.CASExport.parseRCTD(jsonText)` validates/normalizes a
+    `qd-rctd` term-list JSON we DEFINE (cells of `{constraints[{terms,rel}], chain[{terms}], realCount}`;
+    robust `{ok:false,reason}` on bad input; accepts Maple `<>`/`>=` spellings). `AlgebraStore.importRCTD(input)`
+    lands the cells as ONE undoable `op:'rctd'` column, each node tagged `meta.cell`/`realCount`/`role`
+    (polys rebuilt via `Sym.polyFromTermList`). UI: Export ▸ "Import RCTD" textarea + button → verdict-card
+    per-cell real-solution summary; `provText`/`columnLabel` `'rctd'` cases. The Maple post-script that emits
+    the JSON lives in `AHARONOV_SHAPIRO.md` ("The RCTD round trip"). (`6909abe`→`cea845e`.)
+  - **Variable-symmetry inference + apply** — `store.detectVariableRelations(ids)` (pure query) scans the
+    current equality nodes for an exact two-variable linear relation α·a+β·b=0 (each a lone var^1) and
+    classifies: **real** (v−v̄), **imaginary** (v+v̄), **identify** (x=±y, distinct primals, unit), **linear**
+    (x=c·y, non-unit), **conjugate-pair** (x=±z̄ⱼ, an opposite-barred-index pairing). The auto `#alg-suggest`
+    banner (rendered from `rerender`, session-dismissible) + a manual "Detect symmetry" button surface them
+    with a one-click APPLY for every kind: `assumeReal` / `assumeImaginary` (v̄≡−v subst, tracked in `imagVars`,
+    threaded through snapshot/seed + the `_applyAssumed` fold = w0∘reality∘imaginary) / `identifyVariables(keep,
+    drop, ratio)` (generalized from a ±1 sign to a Gaussian RATIO; `_gaussRecord`/`_gaussFromRecord` serialize
+    it to provenance) / `applyConjugatePair(var, other, ratio)`. The detector attaches the exact Gaussian ratio
+    to its linear/conjugate-pair hits. Restricted to certain forms so a symmetry is never falsely claimed.
+    (`70dd188` real+`generateConjugate`; `5fd30ea` imaginary+detect+propagate; `e93f291` linear/conj-pair flag;
+    `b11f20b` linear/conj-pair apply.)
+  - **per-equation `generateConjugate(id)`** — the undoable single-node form of the seed-time `maybeAddConjugate`
+    (companion p̄=0 folding in current reality/imaginary/w0); inspector action "Generate conjugate". Useful for
+    DERIVED equations that never got a seed-time companion. (`70dd188`.)
+  - **propagate a constraint through the columns** — `propagateNode(id)` carries a node (e.g. a univalence
+    constraint stranded at column 0 after reductions) into the CURRENT column with the cumulative pointwise
+    assumptions applied (reality + imaginary + fixed φ(0) + pinned constants via `knownValues`); it does NOT
+    replay system-level ELIMINATIONS (Gröbner/resultant/triangular — not pointwise). Inspector "Propagate to
+    current system"; batch `propagateAllConstraints()` (shared `_propagatePoly`) + Reduce-section "Propagate
+    constraints → current" button do every constraint at once, deduped, one undo. (`5fd30ea`, `b11f20b`.)
+  - **certify path worker-offloaded** — `doCertifyUnivalence` now runs the heavy regime+solve via
+    `classifyAsync(...).then(cl => solveRealAsync(...).then(r => …))` (AbortController signal + onProgress +
+    Cancel), mirroring `doClassify`/`doAutoSolve`; the per-solution univalence certificate (exact Schur–Cohn /
+    boundary count / cross-check) stays on the main thread (cheap, concrete candidates). (`cfbac03`.)
+  - **Schwarz-function alternate formulation** — `QDEquations.generateSchwarzBounded(hData, opts)`: a selectable
+    ALTERNATIVE bounded-QD inverse system over the same `{z_j, A_{j,k}}` variety. Reuses the (●) locator + gauge
+    blocks verbatim and REPLACES the forward (★) block with the Schwarz block (★_S), which matches each `C_{j,s}`
+    to the principal parts of the Schwarz function σ(w) at `a_j = φ(z_j)` — the symbolic dual of the verified
+    direct map (`direct/direct-common.js`; thesis §3.2), built with `Sym.seriesReversion` over `FRatFn` (bounded
+    denominators) + a local conjugation (`conjFR`). Same variety (residual ≈0 at the true φ for BOTH systems),
+    algebraically different polynomials. UI: a **Formulation** radio on `#qd-equations-card` (Classical/forward
+    default, Schwarz) orthogonal to the conjugate/reim representation; "Open in Algebra workspace" seeds the
+    chosen formulation (`system.formulation` threaded through `seedFromSystem`/snapshot/undo/`exportDAG` →
+    `store.formulation`; column-0 label reads "(Schwarz formulation)"). reim split + φ(0) fix compose unchanged.
+    Bounded simply-connected scope only. Doc: `SCHWARZ_FORMULATION.md`. Oracle tests in qd-equations/algebra-store.
+  - **Solve one equation for one variable IN RADICALS** — NEW engine `app/sym-radical.js` (`QD.SymRadical`):
+    `solveByRadicals(poly, varName)` returns the closed-form roots as a small RADICAL-expression AST (rational
+    ℚ(i) leaves + add/mul/neg/div/pow/n-th-root/root-of-unity; `radicalToLatex` + `evalComplex`). Degree-≤4 closed
+    forms (quadratic / **Cardano** / **Ferrari**, the last feeding its resolvent-cubic root + √(2y) back through
+    the same solvers) + the **x^g quasi-polynomial reduction** (e.g. x⁶+b x⁴+c x²+d as a cubic in x², via
+    `seriesReversion`-free index-gcd regrouping + g-th roots) + **factorization** (`Sym.factor` / numeric
+    `qiFactor`, solve each varName-factor) ; honest Abel–Ruffini `ok:false` for irreducible degree ≥5. Cardano
+    uses v=−p/(3u) so the principal-branch numeric eval lands on a true root (casus irreducibilis returns the real
+    roots via complex radicals). Store `solveForVariable(id, varName)` runs the numeric ORACLE (`verifyRoots`:
+    sample the remaining vars at random ℚ(i) points, check the residual ≈0) and is **display-only** (radicals are
+    not MPolys → no DAG node). UI: a **"Solve for a variable"** inspector action (any equality) + a variable picker;
+    roots render as KaTeX in the inspector + verdict with a "verified ✓ (N samples, residual ≤ …)" line +
+    copy-LaTeX. Engine added to `asset-manifest.js` after `sym-core.js`; no `sym-core.js`/worker change. Tests:
+    `app/test/sym-radical.test.js` (oracle-based — every root verifies at random samples; the x⁶ headline; casus
+    irreducibilis; factored quintic; Abel–Ruffini refusal) + an `algebra-store` `solveForVariable` block.
+  - **Branching workspace — A1 (branch-capable store model)** — the FIRST step of the Algebra-improvements
+    roadmap (the full 23-item roadmap lives in `.claude/plans/please-conduct-a-comprehensive-whimsical-harp.md`).
+    Generalizes the single linear column chain into parallel **tracks**: every node carries a `track` id; the
+    column index is depth WITHIN its track; one track is ACTIVE. The column queries (`maxColumn`/`orderedColumn`/
+    `columns`/`columnStats`/`lastColumnNodes`/`currentColumnIds`) became **track-relative (default = active track)**,
+    so every existing reduction/analysis op works unchanged on the active branch with no per-op edits. New store
+    ops: `forkTrack({fromTrack,fromColumn,label})` (deep-copy a column into a new active track, `op:'fork'` links),
+    `setActiveTrack(id)`, `deleteTrack(id)` (refuses `t0`/parents), `tracks()`, getter `activeTrack`; snapshot/
+    restore/exportDAG carry `tracks`+`activeTrack`+per-node `track`; `eliminate` refuses cross-branch pairs. The
+    canvas renders the **active track only** (filters `list()` by `activeTrack`; the edge drawer already skips
+    off-track endpoints) — visually identical to before when there's one track. **Store-only:** the fork button +
+    multi-track layout + switcher are **A2** (next); per-track ASSUMPTION isolation (realVars/imagVars/w0Fixed stay
+    global for now) is **C3**. Tests: an `algebra-store` "branching (tracks)" block (fork copies the source column,
+    reductions stay on the active branch, undo removes a fork, deleteTrack, cross-branch guard, no-fork regression).
+  - **Branching workspace — A2 (fork / parallel-tracks UI)** — makes A1 visible (UI-only; no store/engine change).
+    A **track switcher rail** floats over the graph (bottom-left, stacked just above the column breadcrumb —
+    branches are the outer context, columns the inner): one chip per `store.tracks()`, the ACTIVE branch
+    highlighted, clicking another switches (a view change — clears the selection + rerenders the now-active
+    branch's lanes), a non-main chip carries an `×` to delete it, and a trailing **`＋ Fork`** button forks the
+    active branch at its current/last column. The node **inspector** gains a **"Fork from here"** action (forks
+    from that node's column). All three wire `forkTrack`/`setActiveTrack`/`deleteTrack` through `busyGuard`; fork
+    is undoable. The reduction **breadcrumb** is now active-track-aware (filters nodes by `activeTrack` before
+    labelling). Files: `algebra-ui.js` (`buildTrackBar`/`switchTrack`/`doFork`/`deleteBranch` + the inspector
+    button + breadcrumb filter), `style.css` (`.algebra-trackbar`/chips/fork/`×`). Verified in-browser: fork→
+    "branch 1" active, switch back to main, delete, inspector fork — console clean.
+  - **Custom user-defined variable substitutions + auto-suggestions** (latest) — introduce a fresh symbol
+    `t := g(vars)` and substitute it in (an append-column reduction). NEW `app/algebra/expr-parser.js`
+    (`QD.ExprParser.parse(str, knownVars, S)`: a no-eval recursive-descent parser turning a typed expression
+    — `+ − * / ^ ( )`, `i`, exact rationals, longest-match variable names — into an exact ℚ(i) MPoly; it's the
+    INPUT counterpart to `cas-export.js`). `store.defineSubstitution(newVar, exprPoly, opts)` auto-dispatches
+    three regimes by the shape of `g`: **linear** (deg-1 in some var v with constant coeff ⇒ `v=(t−r)/c` pure
+    subst, pairing the conjugate v̄ when non-circular), **monomial** (`g=c·μ` ⇒ syntactic exponent rewrite — a
+    node is rewritable iff every term's exponents over μ are the same multiple; non-rewritable nodes are carried
+    + a defining node `t−μ=0` emitted only when μ's vars survive; the `s:=w₁²` cardioid-resolvent case),
+    **general** (ideal-theoretic: adjoin `t−g` (+ conjugate); `opts.dropVars=[]` default just ADDS the
+    definition, a non-empty `dropVars` block-Gröbner-ELIMINATES them, sync + `defineSubstitutionAsync` worker).
+    When `g` is NOT self-conjugate the new symbol's conjugate t̄ is REGISTERED in a store conjugate overlay
+    (`substConj`/`substBarred`, carried in snapshot/undo/exportDAG, consulted by a new overlay-aware `_conjName`/
+    `_conjMPoly` threaded through reality/imaginary/reim/maybeAddConjugate) so the conjugate model stays
+    consistent. The mutually-circular conjugate-sum case (`u:=z₁+z̄₁`, the chosen var's own conjugate appears in
+    `g`) is routed to the general add-definition regime (Andrew's call — it's one relation, can't eliminate the
+    pair). `store.detectSubstitutions()` auto-suggests four structural regularities — modulus `z·z̄=|z|²`,
+    even-power `v^g`, gcd common factor, conjugate-sum `v+v̄` — rendered in the `#alg-suggest` banner alongside
+    the symmetry hits (one-click Apply). UI: a **"Define substitution"** control in the Assumptions section
+    (name `:=` expression input + live KaTeX preview + Apply). New `provenance.op:'define-subst'` registered in
+    `provText`/`columnLabel`/`edgeLabel`/`_shortProv`/`derivationSteps`; labels use a plain-text MPoly formatter
+    (`_plainPoly`, no LaTeX — the canvas shows labels as textContent). Tests: `app/test/expr-parser.test.js`
+    (25) + `app/test/define-subst.test.js` (32, exact subst round-trip as the oracle: linear/monomial/modulus/
+    conjugate-pair/general-elim/collision/detector/undo/DAG round-trip). No `sym-core.js` math change.
+  - **Algebra-reach Phase 1 — iterated CSE (B2) + free-form equation (B3)** (latest) — two pure store+UI
+    follow-ons to the substitution work. **B2 `store.autoAbbreviate(opts)`**: an "Auto-abbreviate" button
+    (Assumptions section) loops `detectSubstitutions → defineSubstitution` on the top-ranked hit to a
+    FIXPOINT (dedup by the hit's expression, capped at `maxIters` 12), collapsing every repeated
+    expression / structural regularity into fresh symbols across one-or-more columns in a single click;
+    each application stays its own undo step. **B3 `store.addEquation(poly, rel, opts)`**: an "Add equation"
+    control (expression input + `= / ≠ / >` rel select + KaTeX preview + "add conjugate" checkbox, reusing
+    `QD.ExprParser`) adds a free-form typed equation/inequality node to the CURRENT column in place (like
+    `generateConjugate`), with `maybeAddConjugate` keeping the conjugate model closed; new
+    `provenance.op:'add-equation'` registered in `provText`/`_shortProv`. The roadmap's **A4 (Möbius
+    auto-saturate) was DEFERRED** (Andrew's call — `∏(1−z̄ⱼzⱼ)` saturation would delete a genuine `z_j=0`
+    QD component, the cardioid hazard; it stays manual-only when eventually built). Tests: `define-subst.test.js`
+    +12 (autoAbbreviate fixpoint/cap/no-op; addEquation column placement/conjugate/dedup/zero/inequality).
+    No `sym-core.js`/manifest change.
+  - **Algebra-branch review-fix batch** (latest) — an adversarial 4-agent review of the whole symbolic track
+    (~11.3k lines) found a handful of subtle, untested-path defects; all verified + fixed: **(parser)**
+    `QD.ExprParser` unary minus now binds LOOSER than `^` (`-z1^2 = −(z1²)`, was `+z1²`) and a trailing-dot
+    decimal parses exactly (`5.`→5, was 50); **(store conjugate overlay)** six value/assumption-pairing ops
+    (`substituteValues`, `assumeReal`, `assumeImaginary`, `identifyVariables`, `applyConjugatePair`,
+    `_propagatePoly`) now use the overlay-aware `_conjName` instead of raw `QC.conjVarName`, so a *defined
+    complex symbol*'s conjugate `t̄` is correctly pinned/folded (was a silent QD-overcount path); **(resolvent
+    UI)** the verdict now renders χ / square-free / discriminant as KaTeX via `solutionsLatex` + a `reimSafeLatex`
+    helper that makes the `x__re`/`x__im` reim names KaTeX-safe (was raw LaTeX in a `<pre>`), and `doResolvent`
+    sets `_abort` for a coherent busy state; **(labels)** `add-equation` registered in `columnLabel`/`edgeLabel`;
+    **(hygiene)** the store provenance-op contract header refreshed to all 20 ops / 6 switch sites, and four
+    exact-pinned test floors loosened (`sym-core 250`, `sym-radical 45`, `algebra-store 220`, `cas-export 33`).
+    Tests: expr-parser +6 (precedence/decimal), define-subst +4 (overlay reaches a defined symbol's conjugate).
+    Deferred (judgment calls, NOT in this batch): wire-or-drop the dead `defineSubstitutionAsync`; make
+    `autoAbbreviate` async on large systems; the `solve(ids)` active-vs-analyzed-track prune inconsistency.
+  - **Branching workspace — A6 (per-branch verdict chips)** — each track chip carries an existence/uniqueness
+    badge (`∅` no-QD · `∞` positive-dim family · `✓ 1 QD` unique · `N QD` · `?`/`fin`), color-coded, full phrasing
+    in the tooltip. A **"⟳ verdicts"** button (shown when >1 branch) classifies every branch sequentially via the
+    shipped `classifyAsync` (cancellable, busy-locked); the single-branch "Existence / uniqueness" action also
+    stamps the active chip. Badges are cached by a content signature of each branch's last column, so they blank
+    when that branch changes. UI-only (`algebra-ui.js` + `style.css`); reuses the reim-Gröbner + Hermite real-count.
+  - **Branching workspace — C3 (per-branch assumptions)** — reality / imaginary / fixed-φ(0) are now scoped PER
+    BRANCH (`trackAssume` map + `assumeOf(track)` in `algebra-store.js`; was global). A fork **inherits** the
+    parent's assumptions at fork time, then diverges — `assumeReal`/`assumeImaginary`/`fixW0` touch only the active
+    branch's record. `_reimTransform`/`currentReimSystem` resolve the analyzed branch from the node ids and use ITS
+    reality (so an off-screen branch — A6 — classifies under its own assumptions); `knownValues(track)` is
+    branch-scoped (a pinned value no longer leaks across branches). snapshot/restore + exportDAG carry per-track
+    assumptions; the getters `realVars`/`imagVars`/`w0Fixed` return the active branch's. Verified in-browser: on
+    the disk, assume-all-real on a fork → that branch reports **4 QD** while main stays **∞** (positive-dim) — the
+    assumption is isolated AND each branch classifies under its own. Tests: an `algebra-store` "per-track
+    assumptions (C3)" block (inherit-at-fork, isolate-after-fork, per-track w0Fixed, reim divergence, branch-scoped
+    knownValues); `algebra-store` now 203 (FLOOR 203).
+  - **Branching/legibility — Phase 2 (C1, C2, B3, B1, B2, D3)** — six legibility & reactivity items, each its
+    own commit (all UI/canvas-only; no store/engine change):
+    • **C1** active-hypotheses strip (`d64ba59`) — the active branch's real/imaginary/fixed-φ(0)/pinned chips.
+    • **C2** imaginary-variable inference — already shipped (the detector emits `kind:'imaginary'`; `renderSuggestions`
+      surfaces the "Assume … imaginary" apply button). No new work.
+    • **B3** inline edge op-labels (`3f77021`) — `handlers.edgeLabelOf` → a hover `<title>` on every derivation arrow
+      + a deduped visible op word on cross-column edges (white-halo text).
+    • **B2** DAG minimap (`fa997e3`) — a toggleable bird's-eye (▣ map) of the lanes with a draggable viewport box;
+      `canvas.setMinimap`.
+    • **D3** context-scoped node actions (`b4f4982`) — the inspector hides "Attempt to factor" on irreducible
+      equations (`store.factorOf().ok`) and "Solve for a variable" on constants (no variables).
+    • **B1** derivation-lineage highlighting (`821f1af`) — REFRAMED from the roadmap's "dirty-mark descendants /
+      recompute" (which assumes mutable nodes; this store is immutable/append-only). Selecting a node highlights its
+      transitive ancestors + descendants + the connecting edges (BFS over `store.edges`) — "propagation through the
+      DAG" as a visual lineage view.
+  - **Branching/persistence — Phase 3 (E1, E3, E4)** — persistence & reproducibility, each its own commit:
+    • **E1** session save/load (`7b0e6fb`) — `store.importDAG` rebuilds the whole workspace (nodes, branches,
+      per-branch assumptions, columns, order, edges) from a "Download DAG (JSON)" snapshot — the inverse of
+      exportDAG (now `version`-stamped with per-node `order`); a "Load DAG (JSON)" button + file input. Round-trip
+      is byte-identical (idempotent), undoable. `algebra-store` 211.
+    • **E3** literate-LaTeX derivation (`aaf0e61`) — "Copy derivation (LaTeX)": the active branch as one
+      `\begin{align}` block per column with `% Step k — <transition>` annotations + the hypotheses preamble.
+    • **E4** reproducible SymPy script (`af4032e`) — "Copy SymPy script": declares the symbols + col0
+      literals, then RECOMPUTES substitution steps (assume real/imaginary, set, fix φ(0), identify) via `.subs`
+      from the previous column, and gives engine reductions (Gröbner/resultant/…) as exact ℚ(i) literals.
+      `cas-export.js` gains `polyToSympy`/`sympyValue` (exact `Rational`/`I`); store `sympyDerivation()`.
+      `algebra-store` 216. **The roadmap's Workspace track (Phases 1–3) is complete.**
+  - **Engine track — Phase 4 (G5, G7, G8, G6)** — exact computer-algebra primitives in `sym-core.js`/
+    `sym-radical.js`, each its own commit, all oracle-tested (engine-only → no browser surface):
+    • **G5** real-root isolation (`a72ff5a`) — `Sym.realRootIsolate(p,v)`: certified isolating intervals
+      (exact rational endpoints) via Sturm sequences + bisection; exact rational roots reported precisely.
+      `Sym.realRootCount(p,v,lo,hi)`. (Named accurately: Sturm+bisection, *not* interval-Newton — the
+      enclosure is unconditionally exact.)
+    • **G7** multivariate GCD + zero-dim radical (`bf99953`) — `Sym.gcdMV`/`gcdList` (recursive primitive
+      PRS over ℚ(i)); `Sym.radicalZeroDim` (Seidenberg, via `resolvent`+`squareFreePart`). Partial fractions
+      (the 3rd G7 sub-item) DEFERRED — needs an exact ℚ(i) linear solve / square-free factorization.
+    • **G8** radical denesting (`2576a84`) — `QD.SymRadical.denest`: √(perfect-square)→rational and
+      √(a+b√c)→√x±√y (real rational case); `solveByRadicals` denests its roots (oracle-verified).
+    • **G6** Rational Univariate Representation (`69ce644`) — `Sym.rationalUnivariateRep`: separating
+      form t, min poly f(t), and EXACT coordinate maps xᵢ=gᵢ(t) via a power-basis ℚ(i) linear solve on the
+      radical. **⚠ MATH-REVIEW (Andrew):** from-scratch power-basis RUR (not Rouillier's trace formula) —
+      exact + oracle-checked against the eigenvalue solver, but warrants your eyes before paper use.
+    `sym-core` 233, `sym-radical` 50.
+  - **Engine track — Phase 5 (parametric), in progress:**
+    • **G2** Sturm–Habicht real-root counting (`<this commit>`) — `Sym.sturmHabicht(p,v)` returns the
+      principal Sturm–Habicht coefficients as POLYNOMIALS in the parameters (division-stable Sylvester-style
+      determinants — `psc_j` via `mpolyDet`, `ε_j` sign, `stha_p`=lc, `stha_{p−1}`=lc(p′)); `Sym.realRootCountSturm`
+      reads #distinct real roots off their signs (permanences−variations). Specializes everywhere; the
+      DISCRIMINANT appears among the conditions (the cardioid cusp locus = the 1↔3-real boundary of
+      s³−M₀s²+2|M₁|²). Degenerate strata (a vanishing principal coeff) defer to the exact G5 count.
+      **⚠ MATH-REVIEW (Andrew):** the ε/sign convention is pinned EMPIRICALLY (220 random polys + the
+      parametric cubic vs G5), not hand-proved in generality. `sym-core` 243.
+    • **G1** Comprehensive Gröbner System (`<this commit>`) — `Sym.comprehensiveGroebnerSystem(F, params)`:
+      the in-engine Suzuki–Sato algorithm. Returns a finite list of segments {eqs=0, neqs≠0, gb} that
+      disjointly cover parameter space, each `gb` specializing to a Gröbner basis of ⟨F⟩ at every parameter
+      point in the segment (a block order X̄≫Ā GB, recursive split on vanishing X̄-leading coefficients;
+      Rabinowitsch consistency tests; defective strata flagged). **Andrew's call: full in-engine** (not
+      lean-on-RCTD). Verified by SAMPLING (each segment's gb vs the freshly-computed GB at random in-segment
+      points). **⚠ MATH-REVIEW (Andrew):** full Suzuki–Sato is subtle; verified by oracle, not machine-proved.
+      `sym-core` 254.
+    • **C4** hard-filter assumption pruning of solver output (`<this commit>`) — `store.solve`/`solveAsync`
+      now DROP any conjugate-model solution that violates the active branch's assumptions (a variable asserted
+      REAL with a nonzero imaginary part, an IMAGINARY one with a nonzero real part, or a value disagreeing
+      with a pinned/φ(0) constant). Andrew's call: hard-filter (not annotate). The dropped count is reported
+      (`prunedByAssumptions`), originals kept as `allSolutions`, opt-out via `pruneByAssumptions:false`; the
+      "Solve" toast shows "(N dropped by active assumptions)". `algebra-store` 221. (solveReal already enforces
+      reality structurally via the reim transform.) **The roadmap's Phase 5 (parametric) is complete.**
+  - **Engine track — Phase 6, in progress:**
+    • **G10** SOS / Positivstellensatz certificate CHECKER (`<this commit>`) — `Sym.verifySOS(p, cert)`:
+      verifies a nonnegativity certificate EXACTLY (no floats; the SEARCH stays external). Three shapes —
+      explicit weighted squares `{squares:[…]}`, a Gram/PSD form `{monomials, gram}` (PSD checked via the
+      exact rational inertia reused from the Hermite-trace machinery), and Positivstellensatz
+      `{base, constraints:[{g, multiplier}]}` (p = σ₀ + Σ gⱼσⱼ, each σ an SOS). Reports `{ok, identity, psd}`.
+      `sym-core` 263.
+    • **G11** msolve `.ms` bridge (`<this commit>`) — `CASExport.systemToMsolve` emits an msolve `.ms`
+      input file (over ℚ; ℚ(i) coefficients map to a variable `i` + the relation i²+1, so the variety is
+      preserved); `CASExport.parseMsolveSolutions` parses msolve's real-root output (nested rational
+      intervals) back into solution boxes. Store `msolveColumn`/`msolveVarOrder`/`importMsolve`; a "Copy
+      msolve (.ms)" export button in the Algebra Export section. The user runs msolve offline (like the RCTD
+      bridge); nothing executes in-browser. `cas-export` 34, `algebra-store` 226.
+    • **D5** progressive show-steps (`<this commit>`) — `store.derivationSteps(id)` reconstructs how a derived
+      node was obtained from its input(s): for substitution / assume-real / assume-imaginary / fix-φ(0) it
+      REPLAYS the transformation one variable at a time (genuine intermediate polynomials, recomputed exactly
+      — the last step provably equals the node); engine reductions (resultant / Gröbner / triangular / …) get
+      an honest input(s) → method → output summary. A "Show steps" button in the node inspector renders the
+      steps as KaTeX (toggle). `algebra-store` 231. **The roadmap's Phase 6 — and the entire 23-item Algebra
+      roadmap — is now COMPLETE.**
+  - **Ultra-review fixes (`<this commit>`)** — a multi-agent adversarial review (19 agents) of the Phase-5/6
+    commits surfaced 6 confirmed findings (6 others adversarially dismissed as intended/unreachable); all 6
+    fixed + regression-tested: **G10** `verifySOS` now rejects COMPLEX coefficients in squares / Gram entries /
+    monomials (q²≥0 only for real q — closed a soundness hole that certified −x² as SOS); **G2**
+    `realRootCountSturm` on a degenerate stratum WITHOUT an exact oracle now returns `ok:false` instead of the
+    naive (wrong) count; **G11** `parseMsolveSolutions` no longer infinite-loops on a stray non-numeric char
+    (tolerant) and disambiguates a 2-var bare-integer box via the variable count; **D5** `derivationSteps`
+    substitution replay uses simultaneous accumulation so it reproduces the node exactly under a
+    variable/conjugate pin conflict. `sym-core` 268, `cas-export` 36, `algebra-store` 232.
+    **Remaining engine work:** none on the roadmap. Deferred (documented, not started): G7 partial-fractions
+    follow-on; the deeper RCTD/CAS-bridge automation; an in-browser SDP for SOS *search* (G10 is checker-only).
+  **Deferred (not started):** **#6 P3** — the worked PARAMETRIC cardioid example (run the interior
+  `pointFunctionalSystem` (M₀,M₁) system through Maple RCTD offline, capture the qd-rctd cell JSON as a
+  regression fixture + an AHARONOV_SHAPIRO.md section; needs an offline Maple run). Exotic/research-tier:
+  higher-multiplicity on-circle cusp (the boundary cusp count uses DISTINCT roots → numeric fallback, safe);
+  the **Schwarz GLOBAL rational-reflection identity** `S(φ(z))=φ*(1/z)` (Option B — rational-φ assembly; the
+  σ-principal-parts form above is shipped); the full parametric-RCTD uniqueness frontier. See the plan file.
+- **Symbolic QD equation generator** (`feature/symbolic-qd-equations`, NOT yet merged) — a new
+  symbolic-algebra track: `app/sym-core.js` (`QD.Sym`, exact Rational/Gaussian/MPoly/RatFn +
+  factored-denominator `FRatFn` + field-generic power series with Lagrange reversion) and
+  `app/qd-equations.js` (`QD.QDEquations`) generate the explicit algebraic system relating a
+  classical bounded QD's quadrature coefficients `{a_j, C_{j,s}, w₀}` to its Riemann-map
+  coefficients `{z_j, A_{j,k}}`, in BOTH a conjugate-variable model over ℚ(i) and a real/imaginary
+  split. `app/ui-qd-equations.js` renders + self-verifies + exports them (`#qd-equations-card`).
+  See the dedicated deep section below.
+- **Tech-debt Phase 2** (PR #48) — reliability pass from the tech-debt audit: a global
+  `window.onerror` / `unhandledrejection` handler that surfaces to a toast (`qol.js`); an SW
+  "new version available" refresh banner (`index.html` + the existing `sw.js`); a build/cache
+  version label in the sidebar footer; a CI step that FAILS (not skips) when a test devDep
+  (mathjs/jsdom/katex) is missing — and `mathjs` added as a devDep so `direct.test.js` runs in CI;
+  a CI guard blocking the experimental Growth/DLA paths (`app/growth/`) from reaching `main`;
+  worker-bundle network-error context (names the failing source file); named solver sample-count
+  constants (`UNIVALENCE_SAMPLES`, …); and `TODO.md` tracking of two open solver math-gaps.
+- **KaTeX security bump 0.16.11 → 0.16.47** (PR #46) — patches advisory
+  GHSA-cg87-wmx4-v546 (`\htmlData` does not validate attribute names; moderate, 0.16.0–0.16.20).
+  Bumped across all four surfaces that pin the version — `package.json` devDep (+ `package-lock.json`),
+  `asset-manifest.js` `CDN_ASSETS`, and the `index.html` `<link>`/`<script>` CDN tags with
+  **recomputed SRI hashes** (cross-checked: jsDelivr-served bytes == npm-published `dist/`) — plus the
+  ARCHITECTURE diagram label. `npm audit` is clean again; the node-test KaTeX parse-smoke (every
+  family) still passes on 0.16.47, and the math renders in-browser.
+- **Tech-debt Phase 1** (PR #45) — per-file test-assertion floors (`node-test.js`), a shared
+  `QD.Format.{subscript,superscript}` (`poly-helpers.js`) replacing 9 drifted digit-maps, deploy
+  `version:sync` docs, `engines>=20`, a non-blocking `npm audit` CI step, and removal of the parked
+  `app/disabled/aqd/` scaffolding. From the tech-debt audit's Phase 1 batch.
+- **Central UI strings** (PR #43) — every editable description/helptext/tooltip/blurb
+  moved into `app/ui-strings.js` (`QD.Strings`); a `data-str*` applier injects the static
+  HTML. **Edit UI prose THERE** (see `HELPTEXT.md` for the residual map).
+- **Keyboard-shortcuts popup overflow fix** (PR #42) — the "?" overlay now centers + scrolls
+  within the viewport instead of running off the bottom.
+- **Publish-readiness + UI text correctness** (PR #41) — MIT `LICENSE` (+`app/LICENSE.txt`),
+  corrected run/host docs, worker-crash-hang fix, h-text input caps, LQD-unbounded hint fix,
+  SW-precache fix; plus a typesetting/correctness pass (Faber superscripts, oracle/Faber card
+  colors, literal-underscore/LaTeX-brace leaks).
+- **Faber polynomials for UQD + exact-c\*** (PR #40) — `app/faber-analysis.js`
+  (`QD.FaberAnalysis`) + `app/ui-faber.js`; "Estimate max c" now jumps to exactly c\*.
+- Earlier: UX tiers 1–2 (#38), thesis examples + analytic oracles + annotated phenomena
+  (#37, #8/#9), near-cusp accuracy (#36, #11), Tier-0 observables (#35, #2).
+
+See the dated "(most recent)" entries below for each. The **Growth / DLA** feature
+(roadmap #1.4) is deliberately ISOLATED on `origin/experimental/advanced-features`
+(NOT on `main`) — don't merge it without an explicit ask. Open roadmap: UX **tier 3**
+(touch/mobile, unified export, preference persistence, a11y, more shortcuts) and `TODO.md`
+items.
+
+> **Editing UI text:** `app/ui-strings.js` (`QD.Strings`) is the single source for the app's
+> prose. `QD.Strings.apply()` (called inline in `index.html` right after the page-script loader)
+> fills `[data-str]` / `[data-str-html]` / `[data-str-title]` elements; JS prose reads
+> `QD.Strings.help.*` etc. directly. A few categories stay in their modules (control labels,
+> `ui-modes.js` errors/labels, value-interleaved status lines, on-canvas labels, `qol.js`) —
+> mapped in `HELPTEXT.md`. Run `version:sync` after any edit.
+
+> **Cache version** is `CACHE_LABEL-<contenthash>` (e.g.
+> `preimage-tree-overlay-61e7fb1c05`), GENERATED by
+> `scripts/gen-cache-version.js` — never hand-edit the hash. `npm run
+> version:sync` refreshes it after any `app/` asset change; CI's
+> `npm run version:check` fails if it's stale. NOTE: the service worker is
+> cache-first, so after pulling new `app/` assets a hard reload (Ctrl+Shift+R) or
+> SW unregister is needed to see them — a stale SW shows symptoms like a blank
+> Thesis-example dropdown (the module didn't load).
+
+## (most recent) Symbolic Algebra workspace — branch `feature/symbolic-qd-equations`
+
+**Phases 1–2** of the symbolic-reduction roadmap (plan: `.claude/plans/please-conduct-a-comprehensive-whimsical-harp.md`). Phase 1 adds univalence constraints + interactive resultant elimination on top of the generator below; Phase 2 adds a pure-JS Gröbner basis (Buchberger over ℚ(i)) and its workspace op. **Not yet merged**; full suite green on the branch.
+
+**Elimination layer (`app/sym-core.js`).** New `MPoly` methods `degreeIn`/`coeffsIn`/`derivativeIn` (the univariate-in-a-chosen-var view) and module functions `mpolyDet` (fraction-free **Bareiss** determinant — exact over the MPoly integral domain via `mpolyExactDiv`), `mpolyDetLaplace` (cofactor oracle for tests), `resultant(f,g,var)` (Sylvester), `discriminant`, plus `conjCoeffs`/`relabel` (the conjugate-variable bar). All exact over ℚ(i); a `≡0` resultant flags a shared component.
+
+**Constraint generators (`app/qd-constraints.js`, `QD.QDConstraints`).** φ, φ′, φ″ at a generic boundary point ζ are obtained by reusing the now-generalized `QD.QDEquations.phiSeriesAt` (expanded at a chosen point var). The four forms (all in the conjugate model; circle `ζζ̄=1` carried as a companion relation):
+- **(c) inequalities** — convex `Re(1+ζφ″/φ′)>0`, star `Re(ζφ′/(φ−w₀))>0`, spiral `Re(e^{iλ}·…)>0` (existential-λ via `cosλ,sinλ`). Built as the Hermitian numerator `N·D̄+N̄·D` (= 2|D|²·Re, same sign), real on the reality slice.
+- **(b) geometric borders** — `discriminant_ζ` of the on-circle polynomial (where convexity/star-likeness is lost).
+- **(a) local univalence** — φ′ numerator (≠0 in 𝔻) + Rabinowitsch saturation witness `1−ω·numφ′` (Schur–Cohn inequality reduction deferred to the CAS export).
+- **(d) global injectivity** — the divided difference `(φ(ζ₁)−φ(ζ₂))/(ζ₁−ζ₂)` (diagonal removed via `mpolyExactDiv`) + its conjugate + two circle relations: the TRUE-univalence boundary.
+Numeric oracle (`qd-constraints.test.js`): convex/star sign-match the float `univalence.js` criterion; the (d) numerator vanishes at the known φ=z+z² boundary self-crossing.
+
+**Workspace (`app/algebra/`).** `algebra-store.js` (`QD.AlgebraStore`, DOM-free): nodes/edges/op-log with `seedFromSystem`, `addConstraint`, `eliminate` (resultant → derived node one column deeper; refuses ≡0), `duplicate`, `deleteNode` (cascade), `undo/redo`, `exportDAG`. It also keeps a per-column **display order** (`order` Map, part of the undo snapshot): `moveNode(id,±1)` reorders a card within its column, `orderedColumn(c)`/`orderOf(id)` expose it, and conjugate companions are auto-placed directly under their primal (inserted at `primal+0.5`, then integerized by `normalizeColumn`). `nodeStats(id)` returns the per-card hovertext data — variable count, per-variable order (`degreeIn`), total degree, term count, the **real-equation contribution** (1 for self-conjugate / one-of-a-pair, 2 for a lone non-self-conjugate equality), conjugacy status, and provenance. `algebra-canvas.js` (`QD.AlgebraCanvas`): SVG edges + absolutely-positioned HTML KaTeX node cards in `#algebra-graph` over `#plot-area`, columns = elimination depth, pan/zoom, ≤2-node selection. Each card has a header toolbar — a **collapse chevron** (cards are **collapsed by default**, showing only a one-line clipped equation preview; expand for the full typeset form), **up/down reorder arrows** (→ `store.moveNode`), and a **copy-as-LaTeX** button (per-card). Cards are stacked by **measured height** so expanded ones don't overlap, and carry the `nodeStats` hovertext as a `title`. `algebra-ui.js` (`QD_UI.installAlgebra`): the **Algebra tab** — a terse hint with a `?` toggle for the full help, constraint palette (each button tooltipped), selection-driven variable picker + Sylvester cost preview, Eliminate, undo/redo/Fit, Download-DAG-JSON / Copy-LaTeX. Gated on classical bounded QD (`isClassicalBounded`); lazy-mount on `tab-changed` like param-slice/sphere. A **"Gröbner basis"** control (order selector grevlex/grlex/lex + a comma-separated eliminate-vars input) runs `store.groebner` over the whole equality set or, via a **Gröbner** button in the 2-node elimination panel, over just the selection.
+
+**Gröbner layer (Phase 2, `app/sym-core.js`).** Buchberger over the field ℚ(i): `monomialOrder(kind, varOrder)` builds a `{kind, varOrder, cmp}` order (`lex`/`grlex`/`grevlex`; listed variables rank highest, others alphabetically below) PLUS a **`'block'`** product order (varOrder = an array of blocks, each compared grevlex, unlisted vars trailing) and the convenience **`eliminationOrder(elimVars, keepVars)`** — a block order that exposes the elimination ideal far more cheaply than pure lex; `MPoly.leadingTerm/leadingCoeff/leadingMono(order)`; `mpolyDivMod(f, divisors, order)` (multivariate division → `{quotients, remainder}`) and `normalForm`; `sPoly(f,g,order)`; `buchberger(polys, order, opts)` — **Gebauer–Möller pair management (coprime + chain criteria)** with the **sugar selection strategy** (essential for the non-homogeneous QD systems), returning the canonical **reduced** basis via `reduceGroebner` unless `opts.reduced===false`, and calling `opts.onProgress({basis,pairs,steps})` per reduction (the seam the worker offload reports/cancels through); `saturate(polys, f, wName?, opts)` (Rabinowitsch `⟨polys⟩ : f^∞` — adjoin `1−w·f`, eliminate `w` via a block order, drop generators mentioning `w`; form (a)'s witness is exactly this relation). Hard **caps** (`GROEBNER_MAX_BASIS/STEPS/DEGREE/TERMS`, all overridable via opts; `0` honored) throw a clear "use CAS export" error instead of hanging, mirroring `RESULTANT_MATRIX_CAP`. **Zero-dimensional toolkit + solving (Phase 2.2):** `isZeroDimensional` / `standardMonomials` / `quotientDimension` (a `k[x]/I` basis + the solution count with multiplicity), `fglm(G1, order1, order2)` (the standard grevlex→lex conversion by linear algebra in the quotient ring — far cheaper than direct lex Buchberger; throws if not zero-dim), and `solveZeroDim(system|{G,order}, opts)` (shape-lemma numeric solving: grevlex GB → FGLM to lex with the solve-variable lowest → univariate Durand–Kerner via an injected `opts.rootFinder` → back-substitution; returns `{ok, solutions, dimension, …}` or `{ok:false, reason}` for not-zero-dim / not-shape-position / non-convergence). The root finder is dependency-injected (the app passes `QD.FaberAnalysis.polynomialRoots`) so `sym-core` stays decoupled. `AlgebraStore.groebner(ids, opts)` collects the selected **equality** nodes (inequalities skipped → CAS/RCTD path), runs Buchberger (an `opts.eliminate` list switches to a block elimination order + drops generators still containing those vars), and adds one derived node per generator in a new column with `provenance.op:'groebner'`, edges from every input, in a single undo step; a cap blow-up comes back as `{ok:false, reason}` (no throw). `AlgebraStore.dimension(ids)` and `AlgebraStore.solve(ids)` expose the toolkit (UI: "Dimension / count" and "Solve (numeric)" buttons; the disk conjugate-model system is positive-dimensional over ℂ, correctly reported). **Worker offload (Phase 2.3):** `MPoly.fromTermList` (the inverse of `termList` — BigInt-safe (de)serialization) and `Sym.runJob(op, payload, onProgress)` (a serialized-in/serialized-out dispatcher for `'groebner'`/`'solveZeroDim'`) let `app/algebra/sym-worker.js` (`QD.SymWorker`) run the heavy ops in a Blob-bundle Web Worker (complex+faber+sym-core, mirroring `primary-solver-worker.js`) with throttled progress and terminate-and-recreate cancellation, plus a main-thread fallback (file:// / Node) that runs the SAME `runJob`. `AlgebraStore.groebnerAsync` / `solveAsync` are the Promise variants (sync `groebner` was split into `_groebnerPlan`/`_groebnerFinish` so both paths share the order-building + node-insertion); the Algebra-tab "Gröbner basis (all eqns)" and "Solve (numeric)" buttons use them with a live status line + **Cancel** button. **Perf (Phase 2.4):** `monoTotalDeg` is WeakMap-memoized (hottest helper in graded-order comparisons), `mpolyDivMod` reduces the running dividend IN PLACE via `_subTermTimesPoly` (geobucket-style — no per-step full-Map rebuild), and `Rational` short-circuits the BigInt gcd for integer/zero/unit denominators — together ~30% faster on a cyclic-5 grevlex benchmark (81→57 ms), results bit-identical (a deeper exponent-vector bit-packing of monomials is the next lever, deferred as a higher-risk rewrite). Oracles (`sym-core.test.js`): ideal membership (normal form 0 ↔ in ideal), the division identity, S-poly cancellation, reduced-basis canonicity, ℚ(i) collapse `(x²+1, x−i)→{x−i}`, saturation `⟨xy⟩:x^∞=⟨y⟩`, the cross-check that **the lex-elimination GB contains the resultant**, Gebauer–Möller validity (all S-polys reduce to 0) + canonicity, block-order elimination, zero-dim dimension/standard-monomials, FGLM == direct lex, and shape-lemma `solveZeroDim` (real + complex roots); `algebra-store.test.js` adds the store ops (groebner, dimension, solve). **Algebra-tab UX + robustness pass (Phase 2.5):** (1) the eliminate-variable free-text box is replaced by a **dropdown checklist picker** of the current variables (friendly `latexPlain · raw` labels; `store.variables()` / `baseVariables()`); (2) op failures now surface in a **persistent, dismissible error panel** (`#alg-error` with a × close) — and a `withGuidance` helper appends "assume variables real / eliminate fewer / use CAS export" to cap-type errors; (3) the Gröbner caps were raised and **tuned** (`GROEBNER_MAX_BASIS=300`, steps 150000) so feasible systems complete while a genuinely intractable one errors with guidance rather than grinding — the FULL conjugate cardioid is 478 generators (~6.7 min, uncapped) whereas the **reality-reduced** cardioid is 118 generators (~9 s); `dimension` now also runs through the worker (`dimensionAsync`); (4) **assume-variable-real**: `seedFromSystem(system, {realVars})` substitutes each chosen variable's conjugate away (`v̄→v`, applied post-`conjMPoly` so companions collapse), simplifying the system — exposed via an "Assume real" picker + "Apply & re-seed"; `store.realVars` is part of the undo snapshot. This reality assumption is the single biggest robustness lever (10→6 vars on the disk; makes the cardioid Gröbner tractable).
+
+**Wiring.** `qd-constraints.js` → `SOLVER_PAGE_ONLY_FILES`; `algebra/algebra-{store,canvas,ui}.js` → `PAGE_UI_FILES` (before `ui.js`). New tab button/panel/`panels`-map entry in `index.html`; `installAlgebra` call + `TAB_SUBTITLES.algebra` in `ui.js`; `QD.Strings.algebra` + `hints.algebraCard` + the `openAlgebra` tooltip. CSS for `#algebra-graph`/`.algebra-*` (incl. the card header toolbar + collapsed-body clipping). `version:sync` → `e976d18425`. `QD.Sym.MPoly` gained `totalDegree()` (graded degree; used by `nodeStats` and forthcoming Gröbner cost bounds). `QD.Sym.resultant` has a hard `RESULTANT_MATRIX_CAP` (=10, overridable 4th arg) — Bareiss over many-variable MPolys explodes for large Sylvester dimensions (an order-2 geometric border is a 15×15 → minutes-to-never), so it throws a clear "use CAS export" error instead of hanging; interactive eliminations are N≤~6. Tests: `sym-core` (FLOOR 40), new `qd-constraints` (12) + `algebra-store` (10), registered in `node-test.js`. NOTE: in the conjugate model the store seeds each non-self-conjugate equation's **conjugate companion** too (gauge/Hermitian inequalities are self-conjugate → none), so the seeded node count = the real-equation count 2n+2d+1; `seedFromSystem(system,{withConjugates:false})` opts out. `store.eliminateWithGauge()` (UI: "Eliminate with gauge (all)") batch-eliminates the gauge against every other equality node (one shared variable each) in a single undo step — since the gauge is linear in the A_{j,1}, this applies the gauge normalization throughout.
+
+**Remaining phase (seams left in place):** Phase 3 external-CAS bridge for RCTD — export the `rel`-tagged semi-algebraic system (cleared equalities + the inequalities from form (c) + Schur–Cohn from form (a)) to Maple `RealComprehensiveTriangularize`/Sage/Singular; import cells/border curves back as `provenance.op:'rctd'` nodes at a new column. (Phase 2 pure-JS Buchberger Gröbner is now done — see the Gröbner-layer paragraph above; the Rabinowitsch witness from form (a) is its saturation input via `Sym.saturate`.)
+
+## (most recent) Symbolic QD equation generator — branch `feature/symbolic-qd-equations`
+
+A new **symbolic-algebra track** (foundation for a later Gröbner / triangular-decomposition
+reducer). It produces the explicit algebraic system tying a **classical BOUNDED QD**'s
+quadrature-function coefficients to its Riemann-map coefficients, exactly (no floating point in
+the equations). **Not yet merged**; full suite green on the branch.
+
+**The math (conjugate-variable model).** Ansatz `φ(z) = w₀ + Σ_j Σ_{k=1}^{m_j} Ā_{j,k}·z^k/(1−z̄_j z)^k`;
+unknowns `{z_j, A_{j,k}}`, parameters `{a_j, C_{j,s}, w₀}` from `h(w)=Σ C_{j,s}/(w−a_j)^s`. z̄_j, Ā_{j,k}, …
+are treated as INDEPENDENT indeterminates over ℚ(i) (the reality slice z̄=conj z is imposed only at
+numeric evaluation). Three blocks, each a cleared `MPoly = 0`:
+- **(●) locator** `φ(z_j) − a_j = 0`.
+- **(★) FORWARD form** `C_{j,s} = Σ_{k=s}^{m_j} (k/s)·A_{j,k}·[t^k] φ̃_j(t)^s`, where
+  `φ̃_j(t)=φ(z_j+t)−φ(z_j)`. This is the dual of the solver's inverse-Faber (expresses h-coeffs FROM
+  map-coeffs); it needs only `seriesPow`, **no compositional inverse**, so the (1−z̄z) denominators
+  stay bounded instead of blowing up.
+- **(gauge)** `Σ_j (A_{j,1} − Ā_{j,1}) = 0` (= 2i·Σ Im A_{j,1}; fixes the rotational freedom).
+
+**Engine — `app/sym-core.js` (`QD.Sym`).** `Rational`(BigInt n/d) → `Gaussian`(ℚ(i)) → `MPoly`
+(sparse multivariate; `evalComplex`, `toLatex`, `termList`, `subst`, `realPart`/`imagPart`, `size`)
+→ `RatFn` (naive num/den) and **`FRatFn` (FACTORED denominator `num/Π pᵉ`)** — the key to taming the
+Möbius denominators: `(1−z̄z)` is tracked as a power and never expanded; `clearDenominators()` returns
+the bare numerator. Field-generic truncated power series (`seriesMul/Pow/Add/Compose/Inverse/Recip`
+and **`seriesReversion`**, Lagrange `ψ̃ₙ=(1/n)[tⁿ⁻¹](t/φ̃)ⁿ`). Effect: order-3 went 6587 terms/3s
+(naive RatFn) → **55 terms/7ms** (FRatFn); orders 2–6 sub-second.
+
+**Generator — `app/qd-equations.js` (`QD.QDEquations`).**
+- `generateClassicalBounded(hData, {maxPoleOrder=6}) → {model:'conjugate', n, orders, d,
+  blocks:{locator,star,gauge}, vars, counts}`. Reads only hData's STRUCTURE (pole count + orders);
+  h-coeffs stay symbolic. Throws past the cap (size grows intrinsically with order).
+- `reimSplit(system)` → the **real/imaginary representation**: substitutes `z_j→x_j+i·y_j`,
+  `A_{j,k}→p_{j,k}+i·q_{j,k}`, `a_j→a_j^{re}+i·a_j^{im}`, … then splits each Gaussian-coeff equation
+  into its real and imaginary real-coefficient parts (identically-zero parts dropped — so the gauge's
+  vanishing Re part leaves exactly 2n+2d+1 real equations).
+- `residualAtSolution` / `residualReimAtSolution` — **the correctness oracle**: evaluate every
+  equation at the solver's numeric φ (+ numeric h); must be ≈0. Verified on disk / two-point /
+  imaginary-pair (vs the live solver) and on the family `φ(z)=z+zⁿ/n ⇒ h=((n+1)/n)/w+(1/n)/wⁿ`
+  (n=2..6, exact φ). A faithfulness test confirms `conjugate-eqn == Re + i·Im` of the split at
+  arbitrary points.
+- `systemToLatex` / `systemToExport` (CAS-agnostic term lists) / `latexOf` for the UI + future reducer.
+
+**UI — `app/ui-qd-equations.js` (`QD_UI.installQdEquations`).** `#qd-equations-card`, gated on a
+classical BOUNDED QD (the bounded analog of the Faber UQD gate: `!phi.unbounded`, no
+family/alpha/lqdBeta/z0/gamma/q markers, one branch per pole). Mirrors the Faber feature wiring.
+Controls: representation (conjugate / re-im), max-pole-order cap, Generate, Copy LaTeX, Download JSON.
+Renders each equation with a local KaTeX helper (ui-solve.js's is IIFE-private; large polys >120 terms
+are elided with an export pointer), shows the self-verify residual + determinacy counts, and an ansatz
+legend. Help/hint prose in `QD.Strings.qdEquations` / `hints.qdEquationsCard`.
+
+**Wiring.** `sym-core.js` + `qd-equations.js` → `SOLVER_PAGE_ONLY_FILES` (after `faber-analysis.js`,
+before `primary-solution.js`); `ui-qd-equations.js` → `PAGE_UI_FILES` (after `ui-faber.js`). Tests:
+`app/test/sym-core.test.js` (42) + `app/test/qd-equations.test.js` (38), registered in `node-test.js`
+with FLOORS `sym-core:25, qd-equations:25`. `#qd-equations-content` `.ok/.warn/.key` + `.qdeq-*` layout
+in `style.css`. Ran `version:sync` (cache hash `67068e8f2e`).
+
+**Next (later sessions):** Gröbner / Comprehensive-Triangular-Decomposition reduction consuming the
+JSON export (no in-browser CAS — small-system Buchberger over ℚ(i) and/or WASM); then the
+Schwarz-function alternate formulation.
+
+## (most recent) Central UI strings (QD.Strings) — PR #43
+
+All editable UI **prose** now lives in one file: **`app/ui-strings.js`** → `QD.Strings`.
+Edit descriptions / helptext / tooltips / example blurbs there; nothing else changes.
+
+- **`QD.Strings`** groups: `help` (the "?" popovers), `familyHints` (Domain-type card hint
+  blocks), `hints` (card hints + coachmark), `tooltips` (PLAIN-text `title=`), `notes` (overlay
+  legend notes), `faber.*`, `oracle.*`, `blurbs` (thesis examples), `guidance` (solve-failure
+  tips). Plus `get(path)` and `apply(root)`.
+- **`apply()`** injects static HTML into elements carrying `data-str` (→ `textContent`),
+  `data-str-html` (→ `innerHTML`), or `data-str-title` (→ `title`). It's called by a one-line
+  inline `<script>` in `index.html` right after the page-script loader (so text is set before
+  paint). `index.html` now has **36** `data-str*` elements (their literal text removed).
+- **Rewired** to read from `QD.Strings`: `ui.js` `mountQolHelp()` (help popovers),
+  `ui-faber.js` (card help + messages), `ui-thesis.js` (oracle help + statuses),
+  `thesis-examples.js` (blurbs via `blurbOf(id)`, dash→camel key), `ui-solve.js` `failureGuidance()`
+  (guarded with `typeof window` for the node-test vm).
+- **Load order:** `ui-strings.js` is **first** in `SOLVER_PAGE_ONLY_FILES` (before
+  `thesis-examples.js`, which reads `QD.Strings.blurbs` at module load). `thesis-examples.test.js`
+  does `loadInCtx('ui-strings.js')` first.
+- **NOT centralized** (intentional; mapped in `HELPTEXT.md`): control labels/options/tab names,
+  `ui-modes.js` external-field labels + validation errors, value-interleaved status/geometry/cusp
+  lines in `ui-solve.js`, oracle row names, on-canvas labels in `ui-domain-plot.js`, `qol.js` text.
+- Also reworded the QD-tab subtitle (`TAB_SUBTITLES.qd` in `ui.js`) to "Inverse problem: Recover
+  the domain Ω and associated conformal map φ from a given quadrature function h(w)". `HELPTEXT.md`
+  is now a short pointer at `ui-strings.js`.
+- **Verification:** suite **1365/0**, lint clean, `version:check` clean. Browser-verified: all 36
+  `data-str` elements resolve (0 missing / 0 blank), popovers/blurbs/family-hints render, no console
+  warnings. To add a new editable string: define a key in `QD.Strings` and reference it (JS) or tag
+  the element `data-str*="path"` (HTML).
+
+## (most recent) Keyboard-shortcuts popup overflow fix — PR #42
+
+The "?" shortcuts overlay (`qol.js` `openShortcutsOverlay`) could push its bottom off-screen.
+Cause: the inner `.help-popover` was `position:absolute`, collapsing the centered
+`.shortcuts-overlay` to 0×0 so `translate(-50%,-50%)` didn't center it. Fix (`qol.js` + `style.css`):
+drop the inline `max-width`, make `.shortcuts-overlay .help-popover` `position:static` with
+`max-width:min(92vw,460px); max-height:85vh; overflow-y:auto` so it centers and scrolls within the
+viewport. Browser-verified at 700×420 and (stress) 360×240.
+
+## (most recent) Publish-readiness + UI text correctness — PR #41
+
+Two groups of fixes from a pre-publication review.
+
+**Publish readiness:**
+- **`LICENSE`** (MIT) at repo root **+ `app/LICENSE.txt`** (so it travels when only `app/` is
+  deployed); `package.json` → `"license":"MIT"` + real repo URL; README **License & attribution**
+  (KaTeX MIT, math.js Apache-2.0).
+- **README run instructions** corrected: serve over HTTP (`npm run serve`); note the degraded
+  `file://` fallback; deploy by copying `app/`. Refreshed the "Recently shipped" changelog.
+- **Worker-crash hang:** `primary-solver-worker.js` — the primary/aux/live workers now **reject the
+  in-flight promise** on a worker `error`/`messageerror` (bundle load / crash) and respawn, instead
+  of spinning "Solving…" forever.
+- **h-text input caps:** `ui-h-text.js` clamps pasted/typed pole order ≤ 6 and poly degree ≤ 6
+  (matching the grid) with a truncation warning.
+- **LQD-unbounded help text:** `ui.js` hint show/hide loop was missing `lqd-unbounded-hint` /
+  `lqd-unbounded-singular-hint` — added.
+- **Service-worker precache:** `sw.js` `cacheFirst` now matches with `{ignoreSearch:true}` so the
+  bare-path precache serves the `?v=<hash>` requests (freshness still enforced by the versioned
+  cache *name*).
+
+**UI text correctness pass** (three parallel audits → confident fixes):
+- Faber coefficient-table exponents and leading coeff were rendered as **subscripts** (`ζ₂`,
+  `1/c₆`) → fixed to **superscripts** (`ζ²`, `1/c⁶`); `formatFaberPoly` emits real superscripts;
+  minus signs unified to U+2212.
+- Literal-underscore leaks in tooltips/notes (`D_n/Z_n`→`Dₙ/Zₙ`, `F_n`→`Fₙ`); LaTeX-brace leaks in
+  `textContent` labels (`|w|^{2(α−1)}`→`|w|^(2(α−1))`); `φ'(∞)`→`φ′(∞)`; `e^{iθ}`→`<sup>`.
+- **Oracle/Faber card colors:** `.ok/.warn/.err/.key` were status-panel-scoped, so ✓/⚠/✗ rendered
+  uncolored in those cards → added `#oracle-content`/`#faber-content`-scoped rules; gave the fail
+  icon its own red `.err`.
+- Updated the stale c-card help ("jumps to ≈0.99·c\*") to the exact-c\* behavior.
+- **Deferred to the author (math conventions, unchanged):** the unbounded-singular normalizations
+  (`c·|z₀|·…`, `r#(∞)=|cz₀|^α`) and `r#` vs `r♯` notation.
+
+## (most recent) Faber polynomials for a UQD + exact-c\* jump
+
+Two changes (one feature + one tweak). The feature is **classical unbounded QD only**.
+
+**Faber-polynomials card.** For a classical UQD the solved φ is the EXTERIOR conformal map of
+the bounded complement K = ℂ∖Ω, so the Faber polynomials of K read straight off φ's Laurent
+expansion at ∞ (`QD.phiLaurentAtInfinity`). New pieces:
+- **`app/faber-analysis.js`** (`QD.FaberAnalysis`, page-only): `faberPolynomials(phi,N)` builds
+  F₀..F_N via the recurrence `F₀=1`, `F₁=(ζ−c₀)/c`,
+  `c·F_{n+1}=(ζ−c₀)Fₙ − Σ_{k=1}^{n} c_k F_{n−k} − n·cₙ` (VERIFIED vs disk→ζⁿ and
+  Joukowski/interval→2Tₙ(ζ/2), Chebyshev). `polynomialRoots` is a NEW complex root-finder
+  (Durand–Kerner + Newton polish; monic + Cauchy-bound init; +0.4 phase offset breaks symmetry
+  for ζⁿ/Chebyshev). Plus `formatFaberPoly`, `faberConvergence`. Reuses `QD.Poly` + `Complex`.
+- **`app/ui-faber.js`** (`installFaber(uiCtx)`): `#faber-card` — order N (≤30, conditioning cap),
+  all-roots-up-to-N vs single Fₙ, formula list + expandable coefficient table, capacity / c₀ /
+  leading-coeff (= 1/cⁿ), and the **convergence-flag** property (the one explicitly-requested
+  list item). Subscribes to `QD.PrimarySolution`; **shows only for classical UQD**. Gate is by
+  EXCLUSION: `phi.unbounded && (!phi.family || 'unboundedQD') && alpha/lqdBeta/z0/gamma/q all
+  null` — because the classical UQD solver leaves `phi.family` **UNSET** (its keys are just
+  `unbounded,c,w0,polyA,branches`), while PQD/LQD tag themselves + carry a weight marker. Clears
+  on `qd-customized`.
+- **Roots overlay** on the main `DomainPlot` (roots live in the ζ = image plane and cluster
+  inside K, the hole): `state.showFaberRoots` / `state.faberRoots`, `DomainPlot.drawFaberRoots()`
+  (gated after `drawCriticalSet`; 'all' → teal hollow circles fading by order, 'single' → violet
+  `#7c3aed` diamonds — chosen distinct from critical-set/cusp/phenomena markers), the
+  `#faber-roots-toggle` row in `#overlays-card`, and `uiCtx.setFaberRoots` (decoupling hook:
+  ui-faber writes the payload + state, `ui.js` owns the `plot` instance).
+- Manifest: `faber-analysis.js` → `SOLVER_PAGE_ONLY_FILES`; `ui-faber.js` → `PAGE_UI_FILES`
+  (before `ui.js`). Tests: **`app/test/faber.test.js`** (19 assertions — both oracles, the
+  root-finder cases incl. ζ⁵−1 / repeated root / degenerate, and a compose check that the
+  interval's Faber roots land on [−2,2]).
+
+**"Estimate max c" → exact c\*.** `ui.js` (~L1246) now does `setC(cStar)` (was
+`Math.min(0.99·cStar, cStar)`) and sets the slider/text `max` to c\* at full precision; status
+text updated. NOTE: at *exactly* c\* the domain is the extremal **cusped** limit — geometrically
+correct and univalent (same φ as `res.phiAtMax`), but the identity verifier reads poorly at the
+cusp, so the on-plot panel honestly shows "⚠ identity not satisfied"; the status explains "nudge c
+down slightly for a clean interior." Reusing `res.phiAtMax` was considered but yields the identical
+φ (same 0.8535 identity), so the simpler re-solve path (which also keeps the cards' PrimarySolution
+subscriptions firing) is used.
+
+**Verification:** full suite **1364/0**, `npm run lint` clean, `npm run version:check` clean
+(cache hash `e711528773`). Browser-verified (Claude Preview): card shows for UQD / hides for
+bounded (roots cleared) / re-shows for UQD; 'all' overlay = teal circles (21 = Σ₁⁶ roots for N=6),
+'single' = violet diamonds (6 roots for F₆), clears when unticked; leading coeffs match 1/cⁿ;
+"Estimate max c" lands `state.c` exactly on c\* (1.4504357922817606 for the cardioid). Merged as
+**PR #40**. (NOTE: the Faber card's exact superscript/color rendering was finished in PR #41, and
+its prose later moved into `QD.Strings.faber.*` in PR #43 — see those entries above.)
+
+## (most recent) Usability / clarity overhaul (UX tiers 1–2)
+
+Eight grounded UX improvements (no solver-math changes); all UI in `index.html`,
+`style.css`, `ui.js`, `ui-domain-plot.js`, `ui-solve.js`.
+
+1. **Status panel no longer obscures the domain.** The on-plot `#status-panel` shrank
+   (`max-width min(34%,340px)`, more opaque) and gained a **dock** button (`#sp-dock`) that
+   moves the whole panel into the sidebar (`#status-dock-host`, a `.docked` class neutralizes
+   the absolute positioning) so the plot is fully clear. Collapse **and** dock state now
+   persist in `localStorage` (`qd-status-collapsed` / `qd-status-docked`).
+2. **Overlays "Layers" card.** The vector-field / critical-set / curvature / phenomena toggles
+   moved out of the collapsed *Advanced* `<details>` into an always-visible `#overlays-card`,
+   each with a small **color key** (`.ov-key` swatches) so the on-plot colors are
+   self-explaining. Input ids unchanged (handlers still bind). *Advanced solve behaviour*
+   `<details>` now holds just the auto-switch toggle.
+3. **Example-led first run.** A brand-new visitor (no `qd-seen` flag, no URL hash) is greeted
+   with the **cardioid** instead of the bare unit disk; returning visitors keep the default.
+   Plus an **empty-state CTA** drawn on the canvas (`DomainPlot.drawEmptyState`) when there's no
+   boundary and no poles.
+4. **First-run coachmark** (`#plot-coach`) over the plot — "drag poles · double-click to add ·
+   scroll to zoom · drag to pan" — shown once (`qd-coach-seen`), dismissible, auto-hides.
+5. **Plain-language Domain-type controls.** Tooltips on the QD/PQD/LQD buttons + a live
+   **"what you're solving"** summary (`#dm-summary`, set by `applyModeVisuals` / `modeSummary`,
+   seeded at init).
+6. **"What is a quadrature domain?" intro** — a "?" popover next to the title (via
+   `QD.QoL.attachHelp`) explaining QDs, the inverse problem, and how to start.
+7. **Tab subtitles** (`#tab-subtitle`, `updateTabSubtitle` on `tab-changed`) clarifying each
+   tab, with a **"using h(w) = …"** indicator on Schwarz / Param-slice so it's clear they share
+   the one solved domain.
+8. **Solve-phase feedback.** The busy row shows a phase label (`#solve-phase`, e.g. "escalating
+   to exhaustive search…"); a failed solve highlights the **Try harder** button
+   (`.attention`, reduced-motion-aware) that the failure guidance points at.
+
+Verification: full suite green; lint clean; `version:sync`. Browser-verified all eight (dock
+round-trip, overlays + legends, cardioid first-run, coachmark, summary, intro popover,
+subtitles, phase span); no console errors.
+
+## (most recent) Thesis-example pack (#8) + annotated-phenomena overlay (#9)
+
+Two complementary teaching/validation features, built almost entirely on existing
+machinery (the preset system + the detectors).
+
+**#8 — Thesis-example pack with analytic oracles.**
+- `app/thesis-examples.js` (page-only): `QD.ThesisExamples` — 7 curated canonical QDs
+  (unit disk; two-point D₂; equilateral D₃; four-fold D₄; unbounded cardioid c\*≈1.449
+  **cusp**; deltoid h=w² c\*≈0.5 **cusp**; single exterior pole) — each carrying an
+  `oracle` of closed-form expectations. Plus `QD.thesisExampleHData(ex)` (string poles →
+  Complex hData) and **`QD.checkOracle(phi, hData, oracle, opts)`** — a pure async engine
+  that routes each oracle field to the matching detector (`boundaryObservables`,
+  `classifyCusps`, `detectSymmetry`, `estimateAccuracy`, `estimateMaxConformalRadius`) and
+  grades pass/warn/fail. The example field shape extends `ui-presets.js` with `mode` +
+  `view` + `oracle`.
+- UI: a **#thesis-select** gallery in the h-card and a hidden **#oracle-card** (status
+  panel), wired by `app/ui-thesis.js` (`QD_UI.installThesis`). Selecting an example calls
+  `ui.js`'s new `loadThesisExample(ex)` (switch family via the factored-out `applyConfig`,
+  frame the view, enable the #9 overlay, solve); on each solve `checkOracle` runs the cheap
+  rows and renders computed-vs-expected. The heavy **c\* row is opt-in** behind a button
+  using the off-thread primary-solver worker (same path as "Estimate max c"). A manual edit
+  or family-preset load fires a `qd-customized` event that clears the card.
+- **Correction to the plan:** the deltoid (h=w²) c\* mechanism is a **cusp**, not a fold —
+  the estimator (ground truth) confirmed it; the plan's "fold" guess was wrong. The 7
+  oracles are locked by `app/test/thesis-examples.test.js` (every example solved + checked,
+  52 assertions incl. both c\* estimates).
+
+**#9 — Annotated-phenomena overlay.**
+- `app/symmetry.js` (page-only): **`QD.detectSymmetry(phi)`** → `{ rotationalOrder,
+  reflectionAxes, center, confidence, continuous }`. Uses the **Riemann-map intertwining**
+  (φ(e^{2πi/n}z) = c + e^{2πi/n}(φ(z)−c)) so the rotational/reflection tests are EXACT index
+  maps on M=2520 boundary samples (divisible by every order 2..12 except 11) — no
+  interpolation, robust for non-star-shaped boundaries (deltoid cusps included). Partially
+  delivers TODO #11. Tested by `app/test/symmetry.test.js` (disk continuous, deltoid D₃,
+  cubic D₂, cardioid D₁, asymmetric trivial; 15 assertions).
+- `app/ui-domain-plot.js`: new `drawPhenomenaAnnotations()` (gated by `state.showPhenomena`)
+  labels the phenomena the cusp/critical overlays DON'T: the harmonic-measure hot spot (tip,
+  at `minAbsPhiPrimeTheta`), the max-curvature point (`argMaxCurvatureTheta`), and dashed
+  symmetry axes + a D_n/Z_n badge. Reuses the already-cached observables sweep +
+  `state.current.symmetry` (computed off-idle by a new `scheduleSymmetry` in `ui-solve.js`),
+  so it adds no solve cost. Toggle `#phenomena-toggle` in the display-options block; cusps
+  and critical-set keep their own independent overlays (no duplication).
+
+**Two follow-up fixes (Andrew feedback).**
+- **Curvature heat-strip washed out at a cusp.** `drawCurvature` normalized |κ| by the TRUE
+  max; at a cusp κ→∞ (measured 5.8e9 vs a P90 of 4.8 — a 1.2e9 ratio), so every other segment
+  divided to ≈0 and the whole boundary read uniform blue. Fixed by normalizing to the **P90 of
+  |κ|**: the cusp clamps to red and the rest of ∂Ω gets a real green→red gradient.
+- **Cusp (p,q) label vs tip label overlap.** A real cusp is also the tip / max-κ point, so the
+  `drawCusps` `(p,q)` label (right of the marker) and the phenomena tip label collided. The
+  phenomena labels now drop **below** the marker with a short leader.
+
+**Verification.** New suites `thesis-examples` + `symmetry` registered in `node-test.js`;
+full suite green; lint clean; `version:sync` run. Page-only modules go in
+`SOLVER_PAGE_ONLY_FILES` (symmetry, thesis-examples); `ui-thesis.js` in `PAGE_UI_FILES`
+before `ui.js`. Browser-verified: gallery loads each example (view framed, overlay on,
+oracle card ✓), c\* verifies on click, symmetry axes draw for the symmetric examples.
+
+**Files:** new `app/{symmetry,thesis-examples,ui-thesis}.js` + `app/test/{symmetry,thesis-examples}.test.js`;
+`app/ui-domain-plot.js`, `app/ui-solve.js`, `app/ui-state.js`, `app/ui.js`, `app/index.html`,
+`app/asset-manifest.js`, `app/node-test.js`.
+
+## (most recent) Solver accuracy near cusps (#11)
+
+**Problem.** As a QD approaches a **cusp** (a φ′ zero migrating onto |z|=1, the
+Hele-Shaw / Polubarinova–Galin blow-up) the solver and its checks lose accuracy in
+distinct ways. An empirical pass (see `app/test/cusp-accuracy.test.js`) found which
+levers actually matter — and falsified one plausible-sounding idea:
+
+- **Identity-verifier under-resolution is the real failure, and the fix is MORE
+  uniform nodes — not graded nodes.** The identity integrand on ∂Ω
+  (`1/(w−b)^k·conj(w)·φ′·z` for unbounded families) stays smooth and periodic, so the
+  uniform-θ trapezoid is *spectrally* accurate; grading nodes toward the cusp angle
+  only **hurts** it (measured: graded 1.25e+0 vs uniform 2.25e-10 at c=1.3 for the
+  cardioid `h=1.5/w+0.5/w²`). What actually happens near c\* is the integrand
+  *sharpens*, so a fixed node count under-resolves and a genuine QD reads
+  identity-failing (e.g. 4.66e-2 at N=1500, c=1.4). **Fix:** `verifyQuadratureIdentity_UQD`
+  now **escalates** the uniform node count (doubling to a 16k cap) when — and only
+  when — the cheap near-cusp gate fires (min|φ′|/mean|φ′| < 0.08, computed from the
+  pass it already runs) and the error is still above 1e-9 and improving. c=1.4 now
+  verifies at 2.42e-11 (escalated to 6000 nodes). Away from a cusp the gate is a
+  no-op and the result is **byte-for-byte** the single-pass uniform sum
+  (`adaptiveSamples:false` forces the old path for A/B). Implemented for the canonical
+  unbounded family; the pattern is a clean drop-in for the other unbounded LQD/PQD
+  verifiers if a cusp case ever needs it.
+- **Newton conditioning (W2).** `newtonSolve` now auto-switches the numerical
+  Jacobian from forward to **central differences** once a step's QR `condEst`
+  exceeds `CENTRAL_DIFF_COND_TRIGGER=1e5` (or the line search stalls, alpha≤¼) — the
+  near-cusp signatures — and iterative refinement runs a **bounded loop**
+  (`MAX_REFINE_STEPS=3`) instead of one step (gated `condEst>1e6`). Well-conditioned
+  iterations keep forward differences and one-step refinement, so the common path is
+  unchanged in cost and result. `jacobianMode:'auto'|'central'|'forward'`,
+  `centralDiffEps`, `maxRefine` thread through `options`; `liveSolveStep` inherits the
+  auto-trigger. New `leastSquaresWithCond` returns condEst from the same factorization
+  used to solve (no extra QR).
+- **c\* confidence (W4).** `QD.estimateMaxConformalRadius` now returns a
+  `confidence ∈ [0,1]` blending mechanism cleanliness (a cusp whose g→1 is an
+  unambiguous geometric signal; a fold/existence boundary is softer, ≈0.5 floor) with
+  the final bracket tightness. Surfaced next to "c\* ≈ …" in the Inverse tab. The c\*
+  value itself was already accurate (cardioid c\*≈1.449, cusp) — the only addition is
+  the honesty signal. (No change to `critical-set.js`: `findCriticalPoints` already
+  locates the boundary φ′-zero to machine precision, |g−1|=0 for the cardioid/deltoid
+  oracles, so no sharpening was warranted.)
+- **Honest reporting (W5).** `QD.estimateAccuracy` gained `nearCusp` /
+  `cuspDistance` (closest φ′-zero radial gap to |z|=1, via `findCriticalPoints`) /
+  `trustedSignal` ('geometry' near a cusp, 'identity' otherwise). The "Geometry &
+  accuracy" card shows a **near-cusp** row when flagged, explaining that the identity
+  check is unreliable (thin hole) and validity is governed by the geometric criterion
+  — the same two-regime logic `solver-cmax.js` uses.
+
+**Verification.** New `app/test/cusp-accuracy.test.js` (registered after `cusps`):
+§1 the cardioid family stays a converged univalent identity-satisfying QD up to
+c=1.4 (residuals 1e-16…1e-13, identity ≤ 2.4e-11); §2 escalation fires near the cusp
+(error 2.42e-11 vs 4.66e-2 fixed) and is byte-for-byte away from it; §3 critical
+modulus |g−1|=0 for constructed oracles; §4 c\*≈1.449 cusp, confidence 0.99; §5
+near/safe reporting. Full suite green; lint clean; `version:sync` run.
+
+**Files:** `app/solver.js` (central-diff Jacobian, bounded refinement,
+`leastSquaresWithCond`), `app/solver-uqd.js` (escalating verifier), `app/solver-cmax.js`
+(confidence), `app/observables.js` (near-cusp fields), `app/ui-solve.js` (card row),
+`app/ui.js` (c\* confidence), `app/test/cusp-accuracy.test.js`, `app/node-test.js`.
+
+## (most recent) Tier-0 analysis primitives — `app/observables.js`
+
+**What shipped.** A new page-only module `app/observables.js` (loaded like
+`critical-set.js`/`cusps.js`; in `SOLVER_PAGE_ONLY_FILES`, NOT bundled into the
+Workers) with the foundational analysis primitives the Tier-1 dynamics features
+will build on. All are computed from an already-solved φ by one unit-circle sweep
+that reads φ, φ′, φ″ off `QD.phiTaylorAt(z, phi, 2)` (`a[1]=φ′`, `a[2]=φ″/2`) — no
+new solver math, family-agnostic.
+
+- **`QD.boundaryObservables(phi, {samples})`** — signed curvature κ(θ) of
+  γ(θ)=φ(e^{iθ}) (`κ = Im(conj γ′·γ″)/|γ′|³`; κ→∞ at a cusp), perimeter, enclosed
+  `area` (shoelace; `|signedArea|`, = the complement K's area for unbounded),
+  polygon `centroid`, complex area moments `M_k = ∬_Ω w^k dA` via Stokes
+  (k=0..4, `Re(M₀)≈signedArea` cross-check), the boundary points `w[]` (aligned
+  with `curvature[]`, for the overlay), and `minAbsPhiPrime{,Theta}`.
+- **`QD.harmonicMeasure(phi, {samples})`** — harmonic-measure density on ∂Ω
+  (from φ(0) bounded / ∞ unbounded), `ρ = 1/(2π|φ′|)`; returns `density[]`,
+  `integral` (`∮ρ ds ≈ 1` self-check), max/mean density + peak angle.
+- **`QD.estimateAccuracy(phi, hData, {samples})`** — multi-resolution identity
+  error (verifier `maxRelDiff` at N vs 2N → `underResolved` when relN≫rel2N),
+  `significantDigits ≈ −log10(rel2N ∨ residual)`, and a best-effort residual-
+  Jacobian `conditionEst` (`numericalJacobian`+`houseQR`, try/caught).
+- **`QD.minAbsPhiPrimeAngle(phi, samples)`** — standalone near-cusp angle scan.
+
+**UI.** A new "**Geometry & accuracy**" card (`#sp-observables-content` in the
+status panel) computed off the critical path via `scheduleObservables` in
+`ui-solve.js` (mirrors `scheduleGeomClassification`/`scheduleCuspClassification` —
+`requestIdleCallback` + stale-token guard, stashed on `state.current.observables`,
+published on the envelope). Shows area / perimeter / max curvature (+ cusp-angle
+tooltip) and an accuracy meter ("≈ N sig. digits", amber when under-resolved).
+Plus an opt-in **curvature heat-strip** overlay (`#curvature-toggle` →
+`state.showCurvature` → `DomainPlot.drawCurvature`), coloring ∂Ω by |κ| (cool→hot)
+from the same cached observables.
+
+**Live updates during drags.** All three status-panel cards (Geometric
+properties, Boundary singularities, Geometry & accuracy) now refresh in
+real-time as poles/sliders are dragged, not just on the drag-end full solve. The
+three analyses were unified behind `runStatusAnalyses(opts)` and given their own
+`_analysisToken` (separate from the solve token) so the cheap passes can supersede
+cleanly. The quick-solve (live) path calls `scheduleLiveAnalysis()` — a ~120 ms
+throttle that runs `runStatusAnalyses({ live: true })`: lighter boundary sweep and
+the heavy accuracy estimate (two identity verifies + Jacobian) is SKIPPED, with
+the accuracy line carrying its last value forward and refreshing on the drag-end
+full solve (`runStatusAnalyses()` with the full accuracy pass). Cusp markers + the
+curvature overlay therefore also track the drag.
+
+**Tests.** `app/test/observables.test.js` (registered in `node-test.js`): unit
+disk closed-form oracles (area=π, perimeter=2π, κ≡1, centroid=0, M₀=π, density
+≡1/2π, ∮ρ ds≈1, high significant digits, not under-resolved), and a cusp-forming
+cardioid (h=1.5/w+0.5/w², c=1.4) where κ spikes and `argMaxκ` matches the nearest
+φ′-zero angle from `findCriticalPoints`. Cache hash bumped (`version:sync`).
+
+## (most recent) Fix — "Estimate max c" (c\*) significant under-estimate
+
+**Symptom (user-reported).** `QD.estimateMaxConformalRadius` returned c\* far below
+the truth for many unbounded QDs. Canonical case: **h = 1.5/w + 0.5/w²** (order-2
+pole AT THE ORIGIN) reported c\* ≈ **0.52**; the true maximum is a CUSP at c\* ≈ **1.46**.
+
+**Root cause — the quadrature-identity verifier, not the estimator.** The
+unbounded verifiers checked the identity at interior test points `b` placed at
+`centroid + 0.18·maxDev` (geometry-blind). As the gauge c grows and the hole K
+distorts, a test point drifts onto a pole of h, where `RHS = Σ C/(a−b)^{k+s−1}`
+blows up and the contour-integral LHS is under-resolved — so a GENUINE QD reads as
+identity-failing (`maxRelDiff` → O(1)). Proof at c=1.0: test points at −0.65 and
+−0.92 give relDiff ≈ 1e-13 (identity holds), but the one at −0.38 (near the origin
+pole) gives ≈ 1.0 and sets `maxRelDiff`. The 500-node uniform sweep (shared with
+`univalenceSamples`) compounded it at moderate c. This also mis-flagged high-c
+domains in the MAIN tab (same verifier), not just the estimator.
+
+**Fix (two layers).**
+- **Verifier (`solver.js` `QD.chooseHoleTestPoints` + `solver-uqd.js`,
+  `solver-uqd-pqd.js`):** pick test points provably inside K (even-odd ray-cast)
+  ranked by **clearance = min(dist to ∂Ω, dist to nearest pole)** — the
+  generalisation of what the SINGULAR verifiers (`_UQDLS`/`_UPQDS`) already did.
+  Floor the contour integral at ≥1500 nodes and **decouple identity sampling from
+  `univalenceSamples`** via a new `identitySamples` option threaded through
+  `attachIdentity` (default = univalenceSamples, so bounded families / the
+  param-slice fast preset are unchanged; the unbounded verifiers floor internally;
+  the c\* estimator passes 3000). A degenerate (too-thin) hole now returns
+  `maxRelDiff = ∞` (indeterminate) rather than a false OK.
+- **Estimator (`solver-cmax.js`) — two-regime gate.** Away from the cusp it still
+  gates on *univalent + identityOK* (genuine QD). NEAR the cusp the hole thins so
+  the identity becomes unverifiable; there it gates on **univalence + the cusp
+  criterion g = max|z| over φ′ zeros (`QD.findCriticalPoints`), valid while g < 1**.
+  Smaller grow steps (1.2, → 1.06 once g ≥ 0.95) track the (possibly folding)
+  branch instead of leaping onto spurious roots. Returns `mechanism: 'cusp'|'fold'`
+  and `critAtMax`; UI note (`ui.js`) names the mechanism. Stub-driven tests still
+  pass: when φ′-zero info is absent, it falls back to the classic identity gate.
+
+**Result.** cardioid c\* ≈ **1.45 [cusp]** (browser worker path, 23 solves);
+deltoid 0.50; 1-pole h=1/(w−2) now ≈ 2.94 [fold] (was 2.44, also sampling-limited);
+1pt-neg 0.75. New regression: `cmax.test.js` §7. Full suite green; cardioid c=1.0
+main-tab solve now identityOK (maxRelDiff ≈ 5e-15).
+
+## Phase 3 — UI modularization (param-slice-ui.js split, item E / PR-E4 — COMPLETES item E)
+
+The 1396-line `param-slice/param-slice-ui.js` (IIFE) was carved to **1096 lines
+(−21%)** by lifting its one heavy compute cluster into a sibling factory module —
+the final piece of item E (all four UI monoliths now split: ui.js, schwarz-ui.js,
+direct-ui.js, param-slice-ui.js).
+- **New module:** `param-slice-render.js` — `QD_UI.installParamSliceRender(psCtx)`
+  exposing **`runAdaptive2D`**: the progressive quadtree sweep (coarse stride →
+  stride/2 refinement of corner-disagreeing cells → nearest-neighbour coverage
+  fill) plus the warm-hint **spatial index** (bucketed `insertPhi`/`nearestPhi`,
+  published on `sliceState` for the hover preview). All those helpers are nested
+  inside `runAdaptive2D`, so they moved as one verbatim block.
+- **Wiring (`psCtx`):** the cleanest extraction of the four — every per-run input
+  (worker `pool`, `paintCellBlock`/`paintImage`/`onProgress` callbacks,
+  `cancelToken`, axes/grid dims) already arrived via `runAdaptive2D`'s single
+  options arg, so the only cross-seam deps are `sliceState` + the
+  `cancelLiveSolve` host hook. `param-slice-ui.js` captures `runAdaptive2D` into a
+  forward-`let` and calls it from `startRun` unchanged; `REFINE_ITER_DELTA` moved
+  with it (`MINI_BOUNDARY_SAMPLES` stayed — used by the mini-preview).
+- **Verify:** node-test 1120/0 (baseline 1119 + 1 parse-check); lint clean;
+  `version:check` clean. The 2-D render is DOM+worker+canvas-driven (and the
+  headless preview leaves the shared `#canvas` backing-store at width 0), so
+  beyond the browser load check (module + factory present, zero console errors)
+  the engine was **driven end-to-end via the exposed factory with stub
+  callbacks**: grid built (16×16, `gridDims` + `classGrid` published), warm-hint
+  `nearestPhi` returns a cached φ, coarse+refine+coverage passes all fire
+  (`paintCellBlock`/`paintImage`/`onProgress` invoked), `cancelLiveSolve` hook
+  called — no throw.
+
+## (prior) Phase 3 — UI modularization (direct-ui.js split, item E / PR-E3)
+
+The 1662-line `direct/direct-ui.js` Direct-tab monolith was carved down to
+**1063 lines (−36%)** by extracting its two heaviest clusters into sibling
+factory modules — the same IIFE-host `QD_UI.installX` pattern as the schwarz
+split.
+- **New modules** (each `QD_UI.installDirectX(dCtx)`; `direct-ui.js` captures the
+  returns into forward-`let` bindings so the card handlers + `_activate` call
+  them unchanged):
+  `direct-recompute.js` (the recompute→render pipeline — `recomputeAndRender` +
+  `recomputeBounded`/`recomputeUnbounded`/`recomputeNumerical` + `displayH` +
+  `sampleBoundedPhi` + `pushBoundaryToPlot`) and
+  `direct-verify.js` (the **Verify** button — `runVerify` + `sampleAnalyticPhi`).
+- **Wiring (`dCtx`):** one shared `{ directState, parseComplex, isMounted }`;
+  both modules install at the tail. They're independent (neither calls the
+  other), so install order is free. What STAYS: `directState`, the mount/activate
+  API, the Domain-type + φ-input + output card builders, the coeff-field +
+  paste/expression-parse wiring, and the shared `parseComplex`/`coeffToString`/
+  `section` helpers.
+- **Gotcha it encodes:** the host's `mounted` flag (a primitive) can't be shared
+  by value, so the moved `recomputeAndRender`'s guard reads `dCtx.isMounted()` —
+  the only non-verbatim line in the move. `complexToString`/`complexToKatex`
+  moved with their sole user `displayH`; `coeffToString` stayed (host card
+  builders use it).
+- **Verify:** `node app/node-test.js` → 1119 passed / 0 failed (baseline 1117 + 2
+  new parse-checks); lint clean; `version:check` clean. The Direct UI functions
+  aren't exercised by node-test (DOM-driven), so **browser smoke is the primary
+  guard**: bounded polynomial (h = 1/(w−0)), Verify (Fourier neg-mass 2e-17),
+  unbounded, numerical (Taylor poles), weighted PQD (graceful R# guard error) —
+  zero console errors.
+- **Follow-up:** PR-E4 (param-slice-ui.js) per the same pattern remains open.
+
+## (prior) Phase 3 — UI modularization (schwarz-ui.js split, item E / PR-E2)
+
+The 2477-line `schwarz/schwarz-ui.js` Schwarz-tab monolith was carved down to
+**1215 lines (−51%)** by extracting four cohesive clusters into sibling factory
+modules — the same `QD_UI.installX` pattern as the ui.js split, adapted to an
+**IIFE host**. Landed in two PRs: **PR #11** merged part 1 (`schwarz-paint.js`)
+only; a **follow-up completion PR** lands parts 2–4 (`schwarz-render` /
+`schwarz-features` / `schwarz-interaction`) + these docs on top of it (parts 2–4
+had been pushed to the original branch *after* #11 was squash-merged, so they
+were re-landed cleanly onto current `main`).
+- **New modules** (each `QD_UI.installSchwarzX(sCtx)`; the IIFE captures the
+  returns into forward-`let` bindings so all call sites are unchanged):
+  `schwarz-paint.js` (2D-canvas output layer: field/boundary/orbit/tree/limit-set
+  painters + colormaps), `schwarz-render.js` (debounced `requestRecompute` +
+  GPU-one-frame + CPU pyramid), `schwarz-features.js` (per-feature compute:
+  domain-coloring, preimage-tree rebuild + stats, limit-set chaos game, σ level
+  curves, critical orbits, cycle finder, orbit sweep, z-panel pullback, PNG
+  export), and `schwarz-interaction.js` (canvas hover/wheel/click/dblclick/pin +
+  `attachCanvasHandlers`).
+- **Wiring (`sCtx`):** one shared context (`sState` + geometry/GPU helpers + the
+  `KIND_*` constants). Installed in **dependency order at the IIFE tail —
+  paint → render → features → interaction** — because render destructures the
+  paint fns and interaction destructures the feature recompute hooks
+  (`_recomputeLevelCurves`/`_recomputeDomainColoring`/`_recomputeZPanelOrbit`/
+  `_refreshPreimageTreeStats`). What STAYS in `schwarz-ui.js`: `sState` +
+  constants, the lazy sidebar mount + card builders, `setMode`/view-toggle, the
+  φ-capture + GPU-init plumbing, and the coord transforms / `renderImmediate`
+  that several modules share via `sCtx`.
+- **Gotchas it encodes:** (1) shared mutable state stays in ONE module — the
+  single-click `CLICK_DELAY` pin timer moved into `schwarz-interaction` with
+  `get/setClickDelay` accessors for the `window.__schwarzUiTest` hook (rather than
+  living on `sCtx` where two modules would race it). (2) The jsdom
+  `schwarz-ui.test.js` must `eval` each extracted module **before** `schwarz-ui.js`
+  (the IIFE calls the factories at load) — its load list was updated to add
+  paint/render/features/interaction in order.
+- **Verify:** `node app/node-test.js` → 1117 passed / 0 failed (baseline 1116 + 1
+  new parse-check); lint clean; `version:check` clean; browser smoke (φ capture,
+  fractal render, limit set 5000 pts + dim, cycle finder, sweep, σ-form, PNG
+  export, the four checkbox recompute hooks, domain-coloring↔fractal toggle —
+  zero console errors).
+- **Follow-ups:** PR-E3/E4 (direct-ui.js, param-slice-ui.js) per the same pattern
+  remain open.
+
+## (prior) Phase 3 — UI modularization (ui.js split, item E)
+
+The 3024-line `ui.js` Inverse-tab monolith was carved down to **1581 lines
+(−48%)** by extracting cohesive clusters into five sibling factory modules, all
+on the established `ui-domain-plot.js` pattern. PR #10 (open as of writing).
+- **New modules** (each `QD_UI.installX(uiCtx)`; ui.js captures the returns into
+  the original local names so all call sites are unchanged):
+  `ui-modes.js` (MODE descriptors + aggressiveness PRESETS),
+  `ui-pole-grid.js` (`renderPolesList`/`renderPolyCoefList`),
+  `ui-h-text.js` (the `#h-text` ⇄ grid mirror),
+  `ui-solve.js` (the **solve→render→analyze pipeline** — `solveAndRender`,
+  `showSolution`, geom/cusp/realizability analysis, alternates, background
+  search), and `ui-url-state.js` (B1 hash serialize+restore).
+- **The plan listed 7 modules; it shipped as 5.** solve+output+analysis are one
+  mutually-recursive pipeline sharing `_solveAndRenderToken`, so they were
+  combined into `ui-solve.js` (the user's call) — keeping every intra-pipeline
+  call bare same-scope and the token fully module-internal (no cross-module seam,
+  no shared mutable token on `uiCtx`).
+- **Wiring (`uiCtx`):** ui.js builds one shared context object; modules
+  destructure their deps at the factory top (bodies verbatim) and are installed
+  where those deps already exist on `uiCtx` (modes early, after `buildW0`; the
+  rest at the tail). The one cross-module-at-runtime call is
+  `ui-solve`'s `solveAndRender → ui.writeUrlState()`. Small shared helpers
+  (`escapeHTML`/`formatExp`/`setStatus`), the hData/option builders, and
+  `publishPrimarySolution` deliberately STAY in ui.js (retained Try-harder /
+  cross-tab handlers use them). **Gotcha it encodes:** functions that ran at LOAD
+  time before the tail install (`renderPolesList`/`renderPolyCoefList`/
+  `modeAllowsPoly`, formerly hoisted) were relocated to after the install.
+- **Verify:** `node app/node-test.js` → 1113 passed / 0 failed (baseline 1108 +
+  5 new manifest-derived parse-checks); lint clean; `version:check` clean;
+  browser smoke (solve, mode switch, h-text round-trip, Try-harder, live
+  quick-solve, URL round-trip — zero console errors). Also fixed a stale
+  `asset-manifest.js` header comment (the obsolete "node-test.js loader is the
+  only hand-synced copy" note).
+- **Follow-ups:** PR-E2/E3/E4 (schwarz-ui.js, direct-ui.js, param-slice-ui.js)
+  per the same pattern remain open.
+
+## (prior) Phase 2 — async test harness + node-test.js split
+
+The 6400-line synchronous `node-test.js` monolith was split into a thin async
+runner + per-subsystem files under `app/test/`, on a custom minimal harness
+(zero assertion churn). PR #8 (open as of writing).
+- **`app/test/harness.js`** — shared `ok`/`approxEq`/`pointInside`/`report`;
+  pass/fail counters shared across files via Node's module cache. The
+  `ok(name, cond, detail)` API is preserved verbatim.
+- **`app/test/bootstrap.js`** — builds the Node `vm` context ONCE and installs
+  the shared kernels + helpers on `global` (`ok`, `C`, `T`, `QD`,
+  `solveInverseQD`, `Schwarz`, `PS`, `SC`, `PSW`, `SCW`, `mathjs`,
+  `runFamilyBattery`, …), so the split files reference them as the old single
+  scope did. The 5 former mid-file loaders are hoisted here; the core load order
+  is DERIVED from `WORKER_BUNDLE_FILES`. **Gotcha it encodes:** param-slice-common
+  and sphere-common REASSIGN `module.exports`, so `QD_NS`/`PS`/`SC` are captured
+  at the right moments and `ctx.module.exports` is restored to `QD_NS` at the end
+  (some bodies `vm.runInContext('module.exports', ctx)` expecting the QD
+  namespace).
+- **`app/node-test.js`** — now a ~47-line async runner that `await`s each
+  subsystem's `run()` from the `TESTS` array. Entry name, `npm test`, and CI are
+  unchanged. To add a subsystem: drop `app/test/<name>.test.js` exporting
+  `async function run()` and add `<name>` to `TESTS`.
+- **12 subsystem files**: solvers, direct, schwarz, param-slice, sphere, cusps,
+  riemann, parse-check, worker, ui-domain-plot, schwarz-ui, manifest.
+- **Loader dedup** (kills the old HAND-SYNC HAZARD): the execution loader, the
+  parse-check list, and the manifest were three hand-synced copies. Now
+  `bootstrap.js` + `parse-check.test.js` derive from `WORKER_BUNDLE_FILES` /
+  `PAGE_SCRIPTS` — adding a file means editing `asset-manifest.js` only.
+- **Async payoff**: `schwarz-ui.test.js` drops the `CLICK_DELAY=0` hack and
+  AWAITS the real deferred single-click pin (verifies it commits after the
+  delay, and that a double-click within the window prevents it ever committing).
+- `eslint.config.mjs` gains an `app/test/**` block (node globals;
+  no-undef/no-unused/no-redeclare off — the shared API is injected at runtime).
+- Verify: `node app/node-test.js` → 1108 passed / 0 failed (baseline 1107 + the
+  new async assertion; pure-refactor invariant ≥1107/0).
+
+## (prior) Phase 1 — release-version automation + cache-busting + dedup
+
+Build/release + dev-loop hardening, zero-build + CI-guarded. PR #7 (merged).
+- **Content-hash cache version** (see the callout above): split into
+  `CACHE_LABEL` (cosmetic, hand-edited) + `CACHE_HASH` (generated). No more
+  hand-authored, mis-bumped version string.
+- **Page-script cache-busting**: `index.html` no longer hand-lists module
+  `<script>` tags — an inline loader injects every `PAGE_SCRIPTS` entry with
+  `?v=<CACHE_VERSION>` via `document.write` (preserves strict sync order). Kills
+  the stale-page-script staleness in dev + prod.
+- **Manifest = single source of truth**: new ordered `PAGE_SCRIPTS` (the page
+  load order); `ALL_ASSETS` fixed to include `asset-manifest.js` + every page
+  script — this fixed a latent PWA bug (`ui-state.js` and `asset-manifest.js`
+  were never SW-precached). Guarded by the anti-drift battery in
+  `app/test/manifest.test.js`.
+- **`bench.js`** reads `WORKER_BUNDLE_FILES` from the manifest (was a hardcoded
+  copy). **`.gitattributes`** (`* text=auto eol=lf`) ended the CRLF churn.
+
+## (prior) Schwarz preimage tree → fractal-mode overlay
+
+**Schwarz "preimage tree" is now a fractal-mode overlay, seedable anywhere in
+the tiling set** (was: its own mode, seedable only in Ω^c). All in
+`app/schwarz/schwarz-ui.js`; `schwarz-common.js`/`schwarz-inverse.js` unchanged
+(reuse `escapeTime`, `makeOrbit`, `isInOmega`, `buildPreimageTree`).
+- **Modes collapsed** `fractal | preimage-tree | domain-coloring` →
+  `fractal | domain-coloring`. The tree is drawn over the GL fractal via the
+  existing `paintBoundaryOnTop()` overlay chain; its depth/budget controls moved
+  into the fractal-mode options block (`#schwarz-mode-options-fractal`).
+- **Double-click → seed a preimage tree** at the clicked point, **gated to the
+  tiling set**: accept iff `escapeTime(w).kind === 'fundamental'` (Ω^c at n=0, or
+  a finite-escape interior point) using a generous `gateMaxIter()` = max(256,
+  maxIter·4); reject `interior`/`escaped`/`invalid`. Seeds exactly at the click
+  (no fold-back). Replaces the old `isInOmega` gate that only allowed Ω^c.
+- **Forward-orbit interaction redesigned** (the user's call): orbit no longer on
+  double-click. Now **live on hover** (rAF-coalesced `makeOrbit`, inside Ω only,
+  toggle `#schwarz-hover-orbit` default ON) drawn light/dashed; **pinned by a
+  single click** (deferred `CLICK_DELAY=250ms` so a double-click cancels the pin
+  via the dblclick handler's leading `clearTimeout`). `sState.orbit` stays the
+  authoritative *pinned* orbit (mirrors `pinnedOrbit`) so z-panel/sphere/sweep/
+  PNG consumers are unaffected; transient `hoverOrbit` is separate.
+- **New `sState`:** `pinnedOrbit`, `hoverOrbit`, `hoverOrbitEnabled`, `_hoverRaf`,
+  `_pendingHoverW`, `_clickTimer`. Handlers: `onCanvasClick`/`onCanvasDblClick`
+  (replace `onDoubleClickOrbit`), `_interactionPoint` guard (fractal+plane,
+  !dragMoved, !shiftKey), `pinOrbitAt`, `runHoverOrbit`. Timers/rAF cancelled on
+  tab-leave + `mouseleave`.
+- **Tests** (`node-test.js`): tiling-set gate battery (verdict→accept/reject
+  logic + real Ω^c and near-∂Ω interior points classify as `fundamental`);
+  jsdom interaction test via a window-sentinel-gated test hook
+  (`window.__schwarzUiTest`) — single-click schedules a pin, dblclick cancels it
+  and seeds the tree only when the gate passes, shift-gesture ignored, hover
+  computes only when enabled+inside Ω. Defensive null-ctx guards added to
+  `paintPreimageTree`/`drawOrbitPolyline` (jsdom has no 2D context).
+
+## (prior) continuationSolve for the 3 PQD families
+
+**continuationSolve for powerQD_singular / unboundedPQD / unboundedPQD_singular.**
+These three PQD families previously stubbed their continuation phase
+(`return {success:false, error:"…not implemented…"}`), so `solveInverseQD`
+relied on direct + multistart + diverse + deflation. Implemented a real one:
+- **Homotopy: continuation in α from the classical limit** — NOT the residue-
+  strength / continuation-in-c idioms the plan first proposed; those DEGENERATE
+  here (shrinking residues pushes 0 out of Ω for the SINGULAR families; a small
+  conformal radius blows the unbounded seed up, z_j = a_j/c → ∞). Instead
+  `QD.PqdCommon.continuationInAlpha(hData, norm, options)`: solve the near-
+  classical α≈1 problem with the standard pipeline (reliably in-basin there —
+  same premise as `diagnosePQDRealizability`), then warm-start-march α to the
+  target. One shared helper; the three families are thin wrappers. All reach the
+  target in ~4 steps at machine-precision residual.
+- **Recursion guard:** the α≈1 seed solve runs with `usePhases.continuation:false`
+  so it can never re-enter `continuationInAlpha`.
+- **Fold guard (important):** the α-march can cross a fold onto a branch that
+  satisfies the algebraic residual but is NOT univalent (a spurious QD). The
+  helper VERIFIES the endpoint is a univalent, identity-OK QD (at the pipeline's
+  N=500) before reporting success; else returns `{success:false}` and the
+  pipeline falls through to multistart — today's behavior. Without this guard a
+  spurious continuation result preempted multistart and broke the §DF UPQD
+  forward round-trip tests. Net: continuation strictly helps or no-ops.
+- **Files:** `solver-pqd-common.js` (new `continuationInAlpha` on `QD.PqdCommon`),
+  `solver-pqd-singular.js` / `solver-uqd-pqd.js` / `solver-uqd-pqd-singular.js`
+  (stub → wrapper). `node-test.js` §CONT battery (each family solves via
+  `method:'continuation-in-alpha'`; a continuation-ONLY pipeline solve is valid +
+  univalent and matches the multistart solution; degenerate-but-safe no-throw
+  check).
+- **Deviation from the approved plan** (which specified residue-strength +
+  continuation-in-c): testing proved both degenerate for these families; α-homotopy
+  is the correct, working idiom and is what the realizability diagnostic uses.
+
+## (prior) Double-click to add a pole
+
+**Full suite passing, 0 failed; `npm run lint` clean** (run `npm test` for the
+live count). Cache version `v51-dblclick-add-pole`.
+
+> Branch note: `feat/dblclick-add-pole` now has `main` merged in, so it carries
+> the param-slice PQD work (PR #1, below) AND the double-click feature. An
+> earlier GitHub merge of main resolved the HANDOFF/cache conflict toward main
+> and dropped this entry + the v51 bump; both are restored here so PR #2
+> documents the feature and bumps the cache on merge.
+
+**Double-click to add a pole (most recent).** In the QD tab's **Inverse Problem**
+view, double-clicking an empty point on the domain plot now drops a new simple
+pole there (order 1, coefficient 1) and re-solves — the inverse of the existing
+click-drag-to-move gesture. Implementation reuses the established hooks:
+- `ui-domain-plot.js`: `DomainPlot` gains an `onAddPole` callback (beside
+  `onPoleDrag`/`onPoleDragEnd`) and a `dblclick` listener in `attachEvents()`.
+  It gates on `_qdTabActive()`, ignores double-clicks that land on an existing
+  pole dot (`_hitTestPole >= 0`) so it never stacks a duplicate, and otherwise
+  fires `onAddPole(this.toWorld(x, y))` (w-plane coordinate).
+- `ui.js`: new `addPoleAt(w)` mirrors `addPole()` but stamps the clicked position
+  (`QD.Complex.toString(w, 4)`) + `markAsCustom()`. Wired as
+  `plot.onAddPole = (w) => { if (state.viewMode !== 'inverse') return; addPoleAt(w); }`
+  — inverse view only (the direct view hides `#qd-inverse-content`). Family-
+  agnostic: a simple pole is valid input for classical QD / PQD / LQD / unbounded.
+- `README.md`: documents the domain-plot pole gestures (drag-to-move,
+  double-click-to-add, pan/zoom).
+- `node-test.js`: a **jsdom** test loads the real `ui-domain-plot.js` (via the
+  `QD_UI.installDomainPlot` factory), dispatches `dblclick` events, and asserts
+  (a) empty-space fires `onAddPole` with `w === toWorld(click)`, (b) a click on an
+  existing pole dot is ignored. (jsdom is a devDep; the test skips gracefully if
+  absent — this also activates the long-deferred P1.3 jsdom UI harness slot.)
+- **Verify:** full suite green incl. the 4 new jsdom assertions; lint clean.
+  Browser-cache caveat: the page's query-less `<script>`s (ui.js / ui-domain-plot.js)
+  can stay HTTP-cached stale in dev until the SW version-bump (v51) drops old
+  caches; a hard refresh forces it. The handler itself is jsdom-verified.
+
+## (prior) Param-slice PQD univalence speed-up
+
+**Param-slice PQD speed-up.** PQD slices were extremely slow even
+for one-point bounded. Profiled per valid PQD pixel at default Standard quality
+(N=128): the dominant cost was **`isBoundaryUnivalent` (~4.2 ms)**, NOT the Newton
+solve (warm refine 0.03 ms; cold 5.6 ms) or the identity verify (0.58 ms);
+invalid/non-realizable pixels reject in ~0.01 ms (so the empty plane is cheap).
+Two reducible parts: (a) **boundary sampling** — `isBoundaryUnivalent` used the
+naive per-point `sampleBoundary`, and for PQD each `evalPhi_PQD` re-runs a K=24
+arg-continuation walk *per point* (`phiAnchored`→`argContAt`), ~3200 `evalRHash`
+for one N=128 check; (b) **O(N²) `boundarySelfIntersects`** (~1.6 ms @128, ~25 ms
+@512). Four fixes (user picked Full scope):
+- **A — `solver.js isBoundaryUnivalent`**: when `_resolveFamily(phi)` has a
+  `sampleBoundary` override (the PQD families), sample via the family's
+  incremental-arg sweep (`sampleBoundaryAdaptive(phi, N, 0)`, WeakMap-cached) and
+  map `[{theta,w}]`→points; classical keeps the per-point path. ~20× less sampling.
+- **B — `solver.js boundarySelfIntersects`**: replaced the all-pairs loop with
+  **uniform spatial-grid bucketing** (only same-cell edge pairs tested via the
+  exact `segmentsCross`; identical verdict). Kept the O(N²) as
+  `boundarySelfIntersectsBruteForce` (small-N fast path, degenerate fallback, test
+  oracle). Both now exported.
+- **C — `param-slice-common.js _solveScenarioBody`**: cap the per-pixel
+  self-intersection N at `UNIVALENCE_SAMPLES_CAP = 64`, decoupled from the
+  identity verifier's N (which keeps the full quality-preset count for
+  `identityTol` accuracy). Cold path (rare) unchanged.
+- **D — `param-slice-ui.js runAdaptive2D`**: precompute ONE valid seed φ
+  (`PS.solveOnePoint(baseScenario, [], null, familyTag)`) and use it as the
+  warm-hint fallback in `dispatchPoints` when `nearestPhi` is null — so the
+  ~200+ coarse-pass points (and each worker chunk's first point) warm-refine
+  (0.03 ms) instead of cold-solving (5.6 ms). Wrong-basin seed is safe (cold
+  fallback in `_solveScenarioBody`).
+- **Measured (node, same source as workers):** univalence N=128 4.2 ms→0.41 ms
+  (~10×), N=512 33.7 ms→1.6 ms (~21×); warm PQD pixel ~5 ms→~0.86 ms (~6×).
+- **Tests** (`node-test.js`): `boundarySelfIntersects` == brute-force oracle on a
+  battery (square, bowtie, pentagram, circle N=33/300, ellipse, limaçon); PQD
+  `isBoundaryUnivalent` verdict unchanged old-vs-new sampler across the pole-angle
+  battery. `bench.js` gains a `powerQD: 1-pt α=2` scenario (and its module loader
+  was fixed to the canonical worker-bundle order — it was missing seeds-*.js, so
+  `npm run bench` had been throwing at `solver-uqd.js`).
+- **Verify:** full suite green (+5 assertions); lint clean; `node app/bench.js`
+  runs all 8 scenarios. Browser: the worker bundler fetches each source as
+  `?v=<CACHE_VERSION>` (`param-slice-pool.js:118`), so the grid render's workers
+  load the v50 fast code (confirmed the `solver.js?v=v50` URL serves it). NB the
+  query-less main-thread `<script>` copy can stay HTTP-cached stale until the SW
+  update cycle — affects only the hover live-solve / seed, not the grid render.
+
+## (prior) Param-slice PQD α-routing fix
+
+**Param-slice PQD α-routing fix.** The Parameter-slice tab rendered
+PQDs as **classical** QDs — the grid classification AND the **Hovered-QD** preview
+both showed a plain `boundedQD` domain for what should be a power-weighted one
+(the user's report: "Hovered QD renders don't look right for one-point bounded
+non-singular PQDs"). Root cause, in `param-slice/param-slice-common.js`
+`_solveScenarioBody`: it rebuilt the solver `opts` from `s.norm` (w0/c/q/lqd/
+unbounded/singular) but **never copied `s.norm.alpha`**. The cold-solve
+`solveInverseQD(hData, opts)` then saw no `alpha`, so `selectFamily` couldn't match
+`Family.powerQD`/`powerQD_singular` and silently fell back to classical `boundedQD`.
+The first (cold) pixel produced a classical φ whose `family` ≠ the PQD tag, which
+**poisoned the warm-start chain** (no subsequent pixel could warm-start), so EVERY
+pixel went cold→classical. LQD was unaffected (its `lqd`/`q`/`c` flags *were*
+copied) — which is exactly why only PQDs looked wrong. Fixes:
+- **`opts.alpha = s.norm.alpha`** (the one-line root fix) + a defensive
+  `init.alpha = s.norm.alpha` sync in the warm-start branch (mirrors the existing
+  w0/c/q sync; α is never a sweepable axis so it's already constant, but kept in
+  lock-step for robustness).
+- **Hover live-solve** (`param-slice-ui.js` `runLiveSolve`) now passes
+  `PS.MODE_FAMILY_TAG[scenario.mode]` instead of `undefined` as `expectedFamilyTag`,
+  so a PQD/LQD hover can actually warm-start (the grid path already did this via
+  `_attachFamilyTag`; with `undefined`, only classical hints — also `family===undefined`
+  — ever matched).
+- **Regression test** (`node-test.js`, after the cardioid-sweep block): a bounded
+  non-singular PQD (α=2, `h=3/(w−3)`) solved via `PS.solveOnePoint` must land in
+  `family==='powerQD'` with `alpha===2` (cold), and a same-family warm hint must
+  engage (`warmUsed`) and stay `powerQD`. These assertions FAIL on the pre-fix code.
+- **Verify:** full suite green incl. the 4 new assertions; lint clean; browser-confirmed
+  in the live bundle — the param-slice cold path `solveInverseQD(hData,{alpha:2,w0,
+  bootstrapW0:false})` routes to `powerQD` (vs classical with α omitted), and a fresh
+  `ParamSlice.solveOnePoint` cold+warm both land `powerQD` with a proper α=2 boundary
+  (bbox ~1.18×1.16 around the pole, vs the classical fallback's ~3.46×3.46). NB: the
+  page `<script>` for `param-slice-common.js` has no `?v=` query, so the browser HTTP
+  disk-cache can serve the old file until the SW update cycle refreshes it (known
+  dev verify friction — bust via SW unregister + `cache:'no-store'` fetch).
+
+## (prior) Direct Domain-type unification + send-hook fix + param-slice PQD
+
+**Direct Domain-type unification + cross-tab send fix + param-slice PQD (most recent).**
+Three fixes in one slice:
+- **Direct tab Domain-type control** (`direct/direct-ui.js`) now mirrors the inverse
+  tab's compact segmented control: a `#dir-dm-weight` (QD/PQD/LQD) × `#dir-dm-domain`
+  (Bounded/Unbounded/**Numerical**) × `#dir-dm-singular` block in the Domain-type
+  card (shared `.segmented`/`.seg-btn` CSS). The per-φ-card Weight `<select>`s are
+  gone; the weight axis is UNIFIED (`directState.weight`/`singular`, replacing the
+  old `weight`/`unsWeight` + `singular`/`unsSingular`). The α/w₀/z₀/c/kernel
+  PARAMETER inputs stay in the φ cards (shown by weight) — matching how the inverse
+  tab keeps α/w₀/c in their own cards. Numerical is classical free-form only (it
+  disables Weight + singular). A single canonical **`applyDirectMode()`** (replacing
+  `applyModeVisibility` + the two per-card `apply*WeightVisibility` closures) is the
+  one entry that refreshes φ-card + param-row visibility + the segmented control.
+- **Cross-tab send fix** (`ui.js` `_sendHToInverseTab`). TWO bugs in that path: (a)
+  it set `state.mode` + only `syncDomainModeControl`, never `applyModeVisuals()`, so
+  the conformal-radius (c) card stayed hidden until a refresh; (b) it ignored
+  `opts.alpha`/`lqd`/`singular`/`q`, so an unbounded **PQD/LQD** landed in
+  **classical** mode. Rewritten to `composeMode(weight,domain,singular)` from opts +
+  set α/c/q + **call `applyModeVisuals()`** (the canonical refresh) + populate inputs.
+  The Direct Send handler now tags the family for BOTH bounded & unbounded.
+- **Mode-refresh INVARIANT (systematic prevention).** `applyModeVisuals()` is the
+  single source of truth for mode-dependent card visibility + control sync; a doc
+  comment at its definition states that any programmatic `state.mode` write MUST be
+  followed by it (or go through `setMode`). The send hook was the lone violator;
+  the Direct tab's `applyDirectMode()` is the analogous single entry there.
+- **Param-slice PQD routing (Q4)** (`param-slice/param-slice-common.js`): added the 4
+  `pqd-*` modes to `MODE_FAMILY_TAG` (powerQD / powerQD_singular / unboundedPQD /
+  unboundedPQD_singular) and extended `modeHasC`/`modeHasW0Manual`/`modeAllowsPoly`
+  (PQD-singular has NO q, so `modeHasQ` is unchanged). Worker bundle already ships
+  the PQD solver files. §param-slice node-tests now cover all 4 PQD modes
+  (param-listing invariants + family-tag routing). **Q4 done.**
+- **Verify:** full suite (incl. new §param-slice PQD assertions) green; lint clean;
+  Direct Domain-type segmented control browser-verified live (PQD→α/hint/singular;
+  singular→z₀; Numerical→Weight/singular disabled). The send-hook c-slider live
+  check is code-+node-verified (routes through `applyModeVisuals`); confirm on a
+  hard refresh (browser HTTP-caches the page `<script>`s — known verify friction).
+
+## (prior) Direct-tab UNBOUNDED weighted forward via Thm 4.3.7
+
+**Full suite passing, 0 failed; `npm run lint` clean** (run `npm test` for the
+live count — counts are intentionally not pinned in prose, which drifts). Cache
+version `v46-direct-unbounded-weighted` (`app/asset-manifest.js`).
+
+**Direct-tab UNBOUNDED weighted forward (∞∈Ω) — SHIPPED (kernels + §DF tests +
+UI, browser-verified).** Added the four unbounded weighted forward kernels in
+`direct/direct-common.js`, completing the weighted Direct matrix:
+`unboundedPowerQD(r#, α)`, `unboundedPowerQDSingular(r#, α, {z0?})`,
+`unboundedLogQD(r#, c)`, `unboundedLogQDSingular(r#, c, z0)`. Input is the rational
+KERNEL r# analytic on the closed EXTERIOR |z|≥1 (poles strictly INSIDE 𝔻); a pole of
+r# at z=0 is the Laurent-at-∞ block ⇒ h gains a polynomial-at-∞ part (degree inferred
+from r#); other in-disk poles ζ_p are the finite-node branches (z_j = 1/conj(ζ_p),
+exterior). Returns `{ hData:{poles, polyPart}, poleData, c, [z0], [q], phi, univalent }`.
+- **Authoritative math: Theorem 4.3.7 (Eq UPQDDirectProblemSol, author-confirmed)**
+  `h(w) = (1/(α·w))·Φ_φ(AnalyticIn_𝔻[r·r#])(w) − t/w`, `t = ∫_{Ω^c}|w|^{2(α−1)}dA`
+  (over the bounded complement K). The unbounded mirror of bounded Eq 4.13 with the
+  analytic projection on the disk INTERIOR (principal parts at the EXTERIOR z_j) and a
+  sign flip. **Key fact (verified to ~1e-16):** the (1/(α·w))·Φ_φ(…) term has a pole at
+  w=0 of residue exactly +t, so the −t/w CANCELS it ⇒ the realized h has **NO origin
+  pole** (net residue ≡ 0) for the non-singular PQD. So there is no separate t/w term
+  in the {poles, polyPart} representation.
+- **IMPLEMENTATION = invert the inverse solver's own tested (★) chain** (the exact
+  codification of Thm 4.3.7), not the closed Φ_φ form (its w=0 cancellation and
+  ∞-growth are delicate): finite poles via `solveResiduesViaProbe` over
+  `Family.unbounded{PQD,PQD_singular,LQD,LQD_singular}.computeTargets.A`; the
+  polynomial-at-∞ part via inverting `(★)_F` — `forwardPolyPartAtInfinity` for PQD
+  (computeTargets.F is the residual, linear in polyPart) and `forwardBetaToPolyPart`
+  for LQD (computeTargets.F is the target β, coupled to Σ C_{j,1}; dense solve). This
+  round-trips against the inverse solver by construction.
+- **CRITICAL detail (the constant `r0Const`):** the family's branch basis
+  u^k = z^k/(1−conj(z_j)z)^k has a nonzero value at ∞, so the hardwired r#-constant is
+  **r0Const = r#(∞) − Σ_j Σ_k conj(A_{j,k})·(−1/conj z_j)^k**, NOT r#(∞). For PQD
+  c = r0Const^{1/α} (must be real positive — a genuine realizability condition);
+  `unboundedR0Const`. LQD is immune (its r#−r#(∞) gauge cancels any constant).
+- **Singular cases differ between families (authoritative code, not the user's generic
+  "no origin" quick-answer):** unbounded **PQD-singular** has **NO** origin term — z₀ is
+  PINNED by the closure r(z₀)=0 ⟺ z₀=1/conj(ρ), ρ a ZERO of r# (so z₀ is DERIVED from
+  r#'s numerator root; an optional `z0` hint picks among multiple). Unbounded
+  **LQD-singular** DOES carry an origin pole **q/w** (the full Andrew-Graven q-formula
+  `q = ln(c²|z₀|²) + R(z₀) + conj(R(1/conj z₀))`, R = r̃# + B(1/z)); z₀ is a free input.
+- **Realizability ⟺ univalence** (Thm 4.3.3) + (non-singular only) **0∉Ω**
+  (`QD.originInsideOmega`): a kernel giving 0∈Ω is reported as singular ("use the
+  singular kernel"); a non-univalent kernel is reported not-realizable.
+- **§DF unbounded-weighted battery** (`node-test.js`): identity verifier < 1e-6
+  (machine precision in practice) + round-trip for all four families; poly-at-∞ degree
+  inference; z₀/q recovery; α=1 and c≤0 guards. Validated by RECONSTRUCTING r# from a
+  solved phi and feeding it back (the φ-matches-input-r# property — which neither the
+  verifier nor round-trip alone catch — is what surfaced the r0Const bug above).
+- **Direct UI — SHIPPED + browser-verified.** The unbounded card gained a Weight
+  selector (classical / power / log) + a rational-kernel paste input + α / singular /
+  z₀ controls (`direct-ui.js`: `unsWeight`/`unsAlpha`/`unsSingular`/`unsZ0`/
+  `unsKernelNum`/`unsKernelDen`, `applyUnsWeightVisibility`, the `recomputeUnbounded`
+  weighted branch, the `runVerify` unbounded-weighted branch, and the Send-to-inverse
+  family tagging). c is a user input for log / derived from r# for power; the singular
+  PQD z₀ field is an optional hint (z₀ derived), the singular LQD z₀ is free. Verify
+  uses the family identity verifier (singular gets a looser 1e-5 strong-pass threshold
+  since the Blaschke boundary floors near ~1e-6). Browser-verified fresh-load (SW v46):
+  power 3.06e-15, log 9.37e-16, power-singular 6.25e-13 (z₀/c derived), log-singular
+  1.37e-6 with q computed — all ✓.
+
+**Direct-tab bounded SINGULAR PQD forward — SHIPPED via Theorem 4.3.5 (prior
+slice; corrects an earlier wrong "obstructed" conclusion).** The prior slice
+gated `boundedPowerQDSingular`, claiming a free rational R# + z₀ is not realizable
+(a "mass fails by ~12" experiment). **That was wrong** — it used a `(★)`-inversion
+shortcut that omitted h's origin term. The thesis settles it: **Theorem 4.3.3**
+(Ω ∈ QD(α) ⟺ the αth power of φ's outer factor is rational) ⇒ φ = b_{z₀}·(R#)^{1/α}
+**is** a PQD for any rational R# + z₀ with φ univalent. So realizability ⟺
+**univalence** (no codim-1 R# condition).
+- `boundedPowerQDSingular(R#, α, z₀)` (`direct/direct-common.js`) now implements the
+  authoritative forward map **Theorem 4.3.5**:
+  `h(w) = (1/(α·w))·Φ_φ(AnalyticIn_{𝔻∁}[r·r#])(w) + t/w` — r = Schwarz reflection of
+  R# (so r·r# rational, in-𝔻 poles at the node-preimages z_j); `AnalyticIn_{𝔻∁}`
+  = principal parts at z_j (reuse `localPrincipalResidues`); Φ_φ = the forward Faber
+  transform `forwardLocalPrincipal` with the anchored singular φ̃ (= b_{z₀}·(R#)^{1/α},
+  via `blaschkeTaylor`); ÷α gives the w·h modified residues, unwrapped to h residues
+  by `C_k = (D̃_k − C_{k+1})/a_j`. h = finite poles a_j = φ(z_j) **+ an origin term
+  r₀/w** with **r₀ = ∫_Ω|w|^{2(α−1)}dA − Σ C_{j,1}** (the t/w term; reported
+  separately like the LQD-singular q — r₀ = 0 exactly on the mass-constrained
+  "no-origin-charge" class the INVERSE solver targets). z₀ is FREE; guards reject
+  |z₀|≥1 and z₀ on a node-preimage (a_j=0). z₀-coincidence and a non-univalent φ
+  are reported as not-realizable.
+- **Verify (UI + §DF)** uses the **family identity verifier** on the FULL h
+  (finite + r₀/w for PQD; phi.q-aware for LQD) — the trusted oracle, which the old
+  shortcut failed at ~0.59. The UI re-enables the `singular (0∈Ω)` checkbox + z₀
+  for the Power weight; displays the r₀/w origin term. §DF: identity (full h) < 1e-6
+  for several z₀ incl. complex (id ~1e-11), mass closure t = ΣC_{j,1}+r₀, multi-pole,
+  and the two guards.
+
+**Direct-tab bounded SINGULAR forward — LQD shipped, PQD obstructed (most recent).**
+Extended the Direct (φ→h) tab to the bounded **singular** (0 ∈ Ω) families.
+- **`QD.Direct.boundedLogQDSingular(r#, w₀, z₀)` — SHIPPED.** φ = γ·b_{z₀}·exp(r#),
+  γ = w₀/|z₀|; z₀ (origin preimage, |z₀|<1) is a genuine FREE input — the free
+  origin-residue **q = ln|γ|² + r#(z₀) + conj(r#(1/conj z₀))** (derived & returned)
+  absorbs the DOF. Verified with the family identity verifier (the trusted oracle)
+  to ~1e-13–1e-14 for every z₀ tried. UI: a `singular (0 ∈ Ω)` checkbox + z₀ input
+  appear on the **Log** weight only; Verify uses the family verifier on the built φ
+  (NOT round-trip — the inverse singular-LQD solver is flaky for an arbitrary
+  prescribed q, a solver limitation, not a forward issue); displayH shows the
+  origin term q/w.
+- **PQD-singular forward — this "OBSTRUCTED" claim was WRONG; now SHIPPED (see the
+  most-recent §0 entry).** The mass mismatch was an artifact of the (★)-inversion
+  shortcut **omitting h's origin term r₀/w**; the domain IS a PQD (Thm 4.3.3) for
+  any univalent φ. The correct h (Thm 4.3.5) = finite poles + r₀/w with
+  r₀ = ∫|w|^{2(α−1)}dA − ΣC_{j,1}; including it, the family verifier passes at
+  ~1e-11 for every z₀. Asymmetry (corrected): non-singular PQD takes any R#
+  (origin term absent); singular LQD adds q/w; singular PQD adds r₀/w — all three
+  realizable for any univalent φ, no codim-1 constraint.
+
+**Direct-tab forward kernels for the weighted families (LQD + PQD) — bounded
+non-singular (most recent).** The Direct (φ→h) tab previously handled only the
+two CLASSICAL families. New `QD.Direct.boundedPowerQD(R#, α)` and
+`QD.Direct.boundedLogQD(r#, w₀)` (`direct/direct-common.js`) add the bounded
+non-singular power- and log-weighted forward problems. **Input model:** classically
+rational φ ⟺ QD, but for the weighted families the rational class is the KERNEL
+— φ=(R#)^{1/α} (PQD) / φ=w₀·exp(r#) (LQD) — so the kernels take the rational
+R#/r# (the UI exposes a Weight selector + α/w₀ inputs on the bounded mode,
+reusing the rational-φ input as the kernel). **Method:** read h off by INVERTING
+the inverse solver's (★) chain — find the kernel's poles ζ_p (⇒ node preimages
+z_j = 1/conj(ζ_p)), recover the Möbius-branch coeffs A_j from R#'s principal part
+at ζ_p (triangular solve), a_j = φ(z_j) on the anchored αth-root branch, then C_j
+by inverting the per-pole C→A map (built by PROBING the tested forward functions
+`modifiedResidues_PQD`/`LqdCommon.modifiedResidues` + `Faber.inverseFaberAtPole`,
+then back-substituting — no hand-derived inverse). NB: `forwardLocalPrincipal` is
+NOT the inverse of `inverseFaberAtPole` (different maps) — the probe+solve avoids
+that trap. **Verify** for weighted modes is a ROUND-TRIP (feed h back to
+`solveInverseQD`, assert univalent + identity < 1e-6) since the classical Fourier
+check doesn't apply to the weighted identity. Verified: §DF battery (PQD/LQD
+round-trip id ~1e-15; multi-pole; higher-order m=2 id ~4e-11; analytic/zero
+guards; α→1 bridges to classical). **Staged follow-ups:** singular bounded
+(Blaschke b_{z₀} + z₀/q), unbounded (Laurent-at-∞ polyPart), AQD-direct.
+
+**Bounded-PQD realizability diagnostic — α-homotopy fold tracer (most recent).**
+A code-review investigation of the long-standing "multi-pole bounded PQD
+convergence" limitation **disproved it as a convergence bug**: an exhaustive
+hunt (75 verified-realizable multi-pole configs across 2-pole sweeps, pole/
+residue warm-walks, and 3-pole clusters — each univalent with identity < 1e-6)
+found the cold solver solves **every** realizable bounded PQD. The "failures"
+are genuine **non-realizability**: with fixed quadrature data the univalent
+solution branch **folds** as α grows (the `|w|^{2(α−1)}` weight shrinks the
+realizable region), so "classically (α=1) solvable" does NOT imply the target-α
+PQD exists — and the solution is unique given the data (gauge fixed by
+`canonicalizePhi`), so realizable ⟺ reachable by α-continuation from α≈1 up to
+the fold. Andrew confirmed the folds are true non-existence.
+- New `QD.diagnosePQDRealizability(hData, {alpha, w0?, singular?})` (defined in
+  `solver-pqd-common.js`, exported on `QD.PqdCommon` + as top-level `QD.*` via a
+  thin pass-through in `solver.js`). Seeds at α=1+ε via `solveInverseQD` (reliably
+  in-basin), warm-start-marches α→target with `clonePhi`+`newtonSolve` (adaptive
+  step), and reports `{realizable, alphaMax, phi, reason}` with reason ∈
+  `realizable` / `fold-below-target` (αMax≈fold, bisection-refined) /
+  `invalid-even-classical` (α≈1 seed fails ⇒ not a QD at all) / `non-univalent`.
+- **DIAGNOSTIC ONLY** (tens of nested Newton solves) — never on the hot path.
+  `ui.js` `scheduleRealizabilityDiagnostic` runs it ONLY on a failed
+  `pqd-bounded*` solve, in an idle pass (token-guarded, mirrors
+  `scheduleGeomClassification`), then REPLACES the generic "No quadrature domain
+  found" with the realizable-α verdict ("…folds at α≈1.05 — realizable only for
+  α ≲ 1.05…"). Tests: §PR battery in `node-test.js` (fold case αMax≈1.05;
+  realizable 2±0.3i C=1 reaches α=2 univalent+identity; 3-pole fold αMax≈1.83;
+  invalid-even-classical; independent cold below/above-fold corroboration;
+  α=1 short-circuit). No new files; no loader-list changes.
+
+**§23 singular⇄non-singular auto-switch now fires MID-DRAG (most recent).** The
+live pole-drag path (`onPoleDrag` → `scheduleQuickSolve` → `quickSolveAndRender`)
+warm-starts within the CURRENT family via `newtonSolve` and never re-dispatched
+regimes; the auto-switching full solve only ran via `scheduleSolve`, a TRAILING
+60 ms debounce that doesn't fire until the drag pauses — so a regime switch was
+delayed until release. Fix: in `quickSolveAndRender`, after the warm-start solve,
+for the four `pqd-*` modes (toggle-gated) compare `QD.originInsideOmega(phi)` to
+`state.mode.endsWith('-singular')`; on disagreement (boundary crossed the origin)
+run the auto-switching `QD.solveInverseQD(built, {…autoSwitchSingular:true})`
+inline (main thread — a one-off at the crossing; later frames warm-start cheaply
+in the new regime), then `reflectFamilyMode(...)` + commit, mirroring the
+drag-end path. Settles geometrically (can't ping-pong, per §23).
+
+**Bounded-PQD auto w₀ = LIVE centroid, updated continuously on drag (most recent).**
+`pqd-bounded` `buildNorm` in 'auto' mode previously OMITTED w₀ and let the solver
+bootstrap it internally — but the live-drag warm-start path (`quickSolveAndRender`
+→ `warmStartUpdate`, which is `if (norm.w0) initPhi.w0 = …`) then kept the STALE w₀
+from before the drag, so dragging a pole far could leave the Riemann-map center
+outside Ω. Now 'auto' `buildNorm` returns the live centroid of the poles
+(`buildW0`, recomputed every solve), matching the classical bounded mode, so the
+warm-start updates w₀ each frame and it tracks the poles. Cheap dominant-|residue|
+pole fallback if the centroid lands ~0 (a bounded PQD needs w₀ ≠ 0; same candidate
+order as `bootstrapW0_PQD` but without the per-frame nested classical solve). The
+solver's `bootstrapW0_PQD` is unchanged (still used by headless/direct callers and
+when w₀ is omitted). `pqd-bounded-singular` stays manual.
+
+**Bounded-PQD "Riemann map center" defaults to Centroid of poles.**
+`applyPreset` previously forced `w0Mode='manual'` for `pqd-bounded` (legacy
+"PQDs require a manual w₀" comment), so the `#w0-card` showed Manual selected. Now
+that the off-axis branch fix made the centroid bootstrap (`bootstrapW0_PQD`)
+robust, the non-singular bounded PQD defaults to **'auto' (Centroid of poles)** —
+matching the classical bounded mode; the manual field is still pre-filled from the
+preset for one-click switching. `pqd-bounded-singular` stays manual
+(`requireManualW0: true`; w₀ ≠ 0 since 0 ∈ Ω). One-line split in `ui.js`
+`applyPreset`.
+
+**PQD off-axis / far-pole fix — anchored αth-root branch (most recent).** Bounded
+PQDs failed to solve (or returned non-univalent garbage) when the pole `a` of `h`
+sat off the positive real axis — specifically for `|arg a| > π/α` (α=2 ⇒ the whole
+left half-plane; α=3 ⇒ |arg|>60°; α=1.5 ⇒ |arg|>120°). Real-axis poles solved out
+to |a|=500, so it was anisotropy, not distance.
+- **Root cause:** φ=(R#)^{1/α} was reconstructed with the PRINCIPAL αth-root
+  (`Complex.cpow(·,1/α)` and the principal `Taylor.log` in `phiTaylorAt_*`). The
+  locator `R#(z_j)=a_jᵅ` is branch-free/correct, but `cprincipalRoot(a_jᵅ)` lands
+  on a wrong αth-root sheet once `α·arg(a_j)` leaves (−π,π], so evalPhi / the (★)
+  Taylor target / the sweep / the verifier all computed φ on the wrong sheet.
+- **Fix (single continuous branch):** R# is analytic + non-vanishing on 𝔻̄ (the
+  Q1.4 guard ensures winding 0), so a single-valued `(R#)^{1/α}` exists on the
+  whole disk with NO `2π/α` span limit. New `QD.PqdCommon.argContAt` /
+  `phiAnchored` continue `arg(R#)` by unwrapping along the segment from the
+  anchor (z=0, `argCont(R#(0))=α·arg(w0)`, so φ(0)=w0 exactly) to z. Wired into
+  `evalPhi_PQD/_PQDS`, `phiTaylorAt_PQD/_PQDS` (an optional `anchorArg` overrides
+  ONLY the `Taylor.log` constant term — essential, since `Taylor.exp` scales the
+  whole series, including the slope `inverseFaberAtPole` consumes), the
+  `computeTargetA_*` (★) builders, and the boundary sweep (`sweepUnitCircle` gained
+  an optional `anchorSpec`; ⇒ verifier + sampler + mass residual all anchored).
+  The algebraic locator is unchanged. Real-axis poles are bit-identical (the 0→z=1
+  walk reproduces the principal value when arg(R#)=0). Verified: every pole angle
+  for α∈{1.5,2,3}, far off-axis (|a|=500∠135°), machine-precision identity, and a
+  rotation-covariance round-trip (e^{−iθ}·∂Ω(θ)=∂Ω(0) to ~5e-15). Tests: §PB battery
+  in `node-test.js`.
+- **Scope (empirically refined from the approved plan):**
+  - Only the two BOUNDED families (powerQD, powerQD_singular) have the bug and are
+    fixed. The two UNBOUNDED families (φ=z·(r#)^{1/α}) do NOT exhibit it — the z
+    factor carries the winding while r# stays near c^α (arg≈0, in-sector) for all
+    pole angles; verified univalent at every angle. Left unchanged (the ∞-anchor
+    would add risk for zero benefit).
+  - Schwarz σ tab: the DOMAIN BOUNDARY is correct off-axis (built from the anchored
+    `sampleBoundaryAdaptive`). The σ-dynamics (fractal escape-time, σ⁻¹ preimage
+    tree/limit set) still use the PRINCIPAL-root adapter (the per-pixel hot loop
+    must stay cheap; sheet flips are tolerated there). Making those sheet-correct
+    off-axis needs an anchored, perf-cached adapter `evalPhi`/`evalF` — a documented
+    FOLLOW-UP (see the `adaptPowerQD` comment in `schwarz/schwarz-common.js`).
+- **"Multi-pole bounded PQD convergence" — RESOLVED as a misdiagnosis (NOT a
+  bug).** This was previously listed as a separate limitation. A dedicated hunt
+  (see §0 "realizability diagnostic") showed the cold solver solves every
+  *realizable* multi-pole bounded PQD (75/75); the apparent failures (e.g. two
+  poles 3±0.6i, residue 0.4, α=2) are genuine **non-realizability** — the
+  univalent branch folds as α grows (that one at α≈1.05). "Classical α=1 solves"
+  does not imply the target-α PQD exists. So there is no convergence fix to make;
+  instead `QD.diagnosePQDRealizability` now reports the fold so the user learns
+  *why* (realizable only up to α≈X), not just "no domain found".
+
+**Small UI follow-ups + doc cleanup (most recent).** v34: `<hr class="dm-sep">`
+separator between the singular checkbox and the φ(z) display in the Domain-type
+tile. v35: the conformal-radius descriptive `.hint` was folded into that card's
+`?` help popover (card body is now just the control). v36: the conformal-radius
+row is compact — a short fixed-width (120px) slider + the number input as the
+editable readout; the redundant `#c-val` value span was removed (its writes in
+the slider handler / `setC` / `loadScenarioIntoQdTab` deleted, the rest were
+already guarded). Doc-review pass: removed now-dead CSS (`#geom-props-content`,
+`.rm-section`, `table.rm-params`/`.rm-name`/`.rm-value` — all for the removed
+sidebar cards / dropped params table; `.rm-sym`/`.rm-numer` are still used) and
+fixed stale comments that referenced the old `domain-mode` radios, the
+on-plot Riemann section, and `#c-val`.
+
+**Riemann map → Domain-type tile + singular-disable fix (most recent).**
+(1) The `#dm-singular` checkbox now starts `disabled` (markup) AND
+`syncDomainModeControl(state.mode)` is called at init, so classical QD shows it
+disabled immediately (was toggleable until the first mode change). (2) The
+Riemann map moved OFF the on-plot status panel INTO the bottom of the
+Domain-type tile (`#dm-riemann`, below the singular checkbox): the explicit
+NUMERICAL closed form renders inline (`#dm-riemann-numer`); the SYMBOLIC identity
+renders into `#dm-riemann-sym` (hidden) and is revealed by a `?` toggle
+(`#dm-riemann-sym-toggle`) rather than always shown. `renderRiemannMap` retargets
+to these; the `#sp-riemann` panel section was removed (panel keeps badge + geom +
+cusps). (3) `#c-card` (conformal radius) is relocated via init DOM-move to sit
+directly below `#dm-riemann` inside the Domain-type tile (its mode-driven
+`.hidden` visibility is id-based, unaffected); nested-card chrome stripped in CSS.
+Failed solves call `renderRiemannMap(null)` to hide the formula.
+
+**UI tweaks (most recent).** (1) Each pole in the Quadrature-function tile is now
+a collapsible `<details class="pole">` (collapsed by default; the `<summary>`
+shows `Pole N · a = …`; event delegation still targets `.pole` via closest()).
+(2) The advanced "Search options" card is moved to the BOTTOM of the inverse
+sidebar via a one-line DOM `appendChild` at init (kept out of markup order for
+readability). (3) Domain-type weight buttons relabeled Classical/Power α/Log →
+**QD / PQD / LQD** (`data-weight` values unchanged); the `?` help text shortened
+to briefly define QD/PQD/LQD + bounded/unbounded + singular/non-singular.
+(4) Status panel made more transparent (`rgba(255,255,255,0.58)`, blur 3px), and
+the geometric-criteria margins (`min Re …`) / spiral angle moved OFF the inline
+rows INTO a hover `title` tooltip (`.geom-row { cursor: help }`) — each row now
+reads just "property: ✓/✗".
+
+**Transparent status panel + compact Domain-type control (most recent).** Two
+QD-tab layout changes (no solver/kernel changes; 996-test suite unaffected):
+- **Status panel.** The Riemann map, valid/invalid verdict, geometric
+  properties, and boundary cusps moved OUT of the left-rail cards into a single
+  transparent, collapsible panel overlaid bottom-right of the plot
+  (`#status-panel` in `index.html`, styled like `#plot-overlay`). The three
+  sidebar cards (`#riemann-map-card`/`#geom-props-card`/`#cusps-card`) were
+  removed; `renderRiemannMap`/`renderGeomProps`/`renderCusps` now target the
+  panel's `#sp-*-content` divs (params table dropped from the Riemann section to
+  stay compact). A `qdValidityBadge(sol)` helper feeds the `#sp-badge` verdict;
+  `#status` keeps only operational messaging (Solving…/Cancel/failure
+  guidance/⇄ auto-switch). `updateStatusPanelVisibility()` shows it only on the
+  QD inverse view (hidden on Schwarz/param-slice/direct + failed solves), wired
+  from `tab-changed`, `setViewMode`, and the solve paths. Per-section
+  `<details>` + a panel collapse (`#sp-collapse`, `state.statusPanelCollapsed`)
+  that drops to just the badge bar. Help moved to the section summaries.
+- **Compact Domain type.** The 10 radios collapsed to a **3-axis control**:
+  Weight segmented `[Classical | Power α | Log]` + Domain segmented
+  `[Bounded | Unbounded]` + a `singular (0∈Ω)` checkbox (disabled for
+  Classical). `composeMode`/`decomposeMode` map ⇄ the MODES keys;
+  `applyDomainModeControl` → `setMode`; `syncDomainModeControl(mode)` is called
+  at the end of `applyModeVisuals` so every mode change (interactive, §23
+  auto-switch, preset, URL restore, Direct→Inverse h-send) reflects into the
+  control. All `input[name="domain-mode"]` selectors removed. The per-mode hint
+  divs were kept (still toggled by `applyModeVisuals`).
+Browser-verified (preview): panel badge/sections render on the cardioid,
+collapse works, hides on Schwarz; the control composes all 10 modes correctly
+(right cards flip; singular gated to non-classical).
+
+**Boundary cusp detection + (p,q)-type classification (most recent).** New pure
+module `app/cusps.js` (`QD.classifyCusps`, mirroring `univalence.js`) detects
+cusps of ∂Ω and classifies their type. A cusp sits where φ′(e^{iθ₀}) = 0; the
+order m of that zero fixes the local boundary shape γ(s)−γ(0) = b_p s^p + b_q s^q
+with **(p,q) = (m+1, m+2)** generically (m=1 → the ordinary (2,3) 3⁄2-cusp).
+Pipeline: reuse `QD.findCriticalPoints` for the boundary-adjacent φ′-zeros
+(severity `near`); read the order m **exactly** from φ's Taylor coefficients at
+the zero (`phiTaylorAt`), then the (p,q) exponents from the boundary series
+t(s)=ẑ(e^{is}−1) composed into Σ_{k≥m+1} a_k t^k (summing from m+1 isolates the
+cusp shape, so a near-cusp reports its incipient type); a **numerical** log–log
+slope of ‖γ(θ₀+δ)−γ(θ₀)‖ cross-checks the leading exponent (→p for a real cusp,
+→1 for a smooth near-cusp). Exact boundary cusps are non-generic (φ′=0 lands on
+∂𝔻 only at the realizability boundary), so each result reports proximity
+`dist=‖z‖−1` and an `isCusp` flag; near-but-not-on-boundary zeros are flagged
+"incipient". Multiple roots (which Newton resolves to a cluster) are
+angle-deduped. Two robustness notes baked in: the order test uses a RELATIVE-gap
+tolerance (a coeff is "zero" when ≪ the coeff scale) because a multiple root is
+located only to ≈√tol; and only the numerical LEADING exponent is used (the
+perpendicular-component slope for q is float-noise-dominated, so q is
+Taylor-only). UI: async post-solve hook `scheduleCuspClassification` (idle pass +
+`_solveAndRenderToken` guard, stashes `state.current.cuspProps` + publishes) →
+`renderCusps` into the new `#cusps-card` ("Boundary singularities"), plus
+`DomainPlot.drawCusps` markers (filled magenta triangle = actual cusp, hollow =
+incipient, labelled with (p,q); primary solution only). Wired into
+asset-manifest `SOLVER_PAGE_ONLY_FILES`, index.html, primary-solution typedef
+(`cuspProps`), both node-test loader lists + parse-check; 20-assertion battery
+on constructed oracles (disk→none; cardioid→(2,3); z+z⁴/4→three (2,3);
+z+z²+z³/3→(3,4) m=2; near-cusp→incipient/isCusp=false). **Deferred follow-up:**
+interior-angle/corner (turning-angle) estimator — for these analytic φ a φ′-zero
+gives interior angle 0/2π, so genuine corners don't arise.
+
+**Performance + user-friendliness pass (most recent).** A review-driven set of
+four bundles landed (all DOM/UX/worker plumbing — no solver-math changes):
+- **Quick UX wins.** Viewport meta tag (mobile no longer renders at the 980px
+  fallback); `#status` is now an `aria-live` region and the generated complex
+  inputs (residues, poles, w₀, q, c, α) carry `aria-label`s; `button:focus-visible`
+  ring + `prefers-reduced-motion` spinner guard; the boot screen now selects the
+  matching **unit-disk** preset and shows a one-line "start here / drag poles /
+  press ?" hint; the primary solve shows a spinner + **Cancel** button (aborts
+  the warm worker, bumps the solve token); failed solves lead with plain-language,
+  mode-aware guidance (`failureGuidance`) before the raw `reason:` dump.
+- **Responsiveness.** Background alternate-search now runs on a **dedicated aux
+  worker** (`PrimarySolverWorker.searchAlternates` / `cancelAux`) instead of
+  synchronous `setTimeout` chunks that janked the 2D plot — a second Worker
+  instance from the same bundle, so it never queues behind / preempts the primary
+  solve. `DomainPlot.render()` is now an rAF-coalescing scheduler over
+  `_renderNow()`; the window resize handler is rAF-coalesced too.
+- **Worker/memory.** Param-slice pool sends the base scenario **once per worker**
+  (scenarioId cache) instead of re-cloning it on every tile (A5; result-path
+  transferables were evaluated and **skipped** — results are heterogeneous objects
+  carrying `phiSerialized` needed for warm-start, so a flat typed array doesn't
+  fit). Sphere renderer gained `suspend()` (frees the texSize² fractal FBO — up to
+  2048² — when the sphere view is hidden; rebuilt lazily on the next paint), wired
+  into the view adapter's `deactivate()`. The Schwarz CPU help text was corrected
+  (it claimed "uses a Worker"; the in-process path is a progressive 4×4→2×2→1×1
+  pyramid time-sliced across rAF at ~14 ms/slice).
+
+**Off-main-thread CPU Schwarz renderer (follow-up — DONE).** New
+`app/schwarz/schwarz-cpu-worker.js` (`QD.SchwarzCpuWorker`) builds a worker
+bundle (the shared `WORKER_BUNDLE_FILES` + `schwarz-common.js`, same blob/
+`var window = self` pattern as `primary-solver-worker.js`), rebuilds the Schwarz
+handle inside the worker from the **serializable** φ + boundary samples
+(`buildSchwarzFromPhi` takes plain data — no closures cross the wire), and
+computes the whole 4×4→2×2→1×1 pyramid off-thread, streaming one **transferable**
+`{field:Int16Array, fieldKind:Uint8Array}` snapshot per pass (same `KIND+1`
+offset as the in-page path). `schwarz-ui.js`'s `doRecompute` now prefers it
+(`SchwarzCpuWorker.isUsable()`), adopting each snapshot → `fillFromCoarseSamples`
+→ `paintAll`; it falls back to the in-process `_renderCpuPyramid` on file:// /
+no-Worker / clone failure. `renderToken` is bumped at the top of `doRecompute`
+(so a stale worker pass can't paint over a GPU frame) and the worker is
+cancelled there; a new `renderField` preempts the prior render via
+terminate-and-recreate (bundle URL cached → cheap). The main thread keeps its
+own `sState.schwarz` for hover/orbit/preimage/etc. interactivity. Wired into
+`asset-manifest.js` UI_FILES, `index.html`, and the node-test parse-check +
+export-surface block; cache `v29-schwarz-cpu-worker`.
+- **Shareability.** `writeUrlState` / `applyUrlState` serialize
+  `{mode, h, w0(mode), c, α, q, aggressiveness, tab}` to `location.hash`
+  (`history.replaceState`, rAF-coalesced); the h-text round-trips poles AND the
+  polynomial part, so it alone reproduces the quadrature data. On load, a hash is
+  restored (mode + gauges first, then the h-text is parsed → solve); absent a
+  hash, the default config solves as before. Links are now bookmarkable/shareable
+  and reload-restorable.
+
+Regression coverage: the worker-surface test now also asserts the aux-search
+exports. New code is plumbing only; the family batteries are untouched.
+
+**Doc/maintainability review pass (most recent):** a documentation-focused code
+review actioned four cheap, low-risk items: (1) fixed a live typo bug —
+`ui.js` wrote `state.polyCoefs` (one `f`) so poly-part coefficients were
+silently dropped on the Direct→QD cross-load; now `state.polyCoeffs`, guarded
+by a source-level regression test in the parse-check block. (2) Killed the
+recurring test-count / "six families" doc drift — current-status counts now
+point at `npm test` instead of a hard-coded number, and README + schwarz/README
+say "ten families" (with PQDs flagged CPU-only). (3) Fixed actively-wrong
+comments: the PQD `α ∈ Z₊` header (now "any real α > 0, α ≠ 1"), the
+contradictory z≈0 sigma-guard rationale (CPU `schwarz-common.js` vs GPU
+`schwarz-webgl.js` now agree: only the unbounded F has a pole at z=0),
+`ui-state.js`'s wrong `mode` key list + α-visibility note, and the
+`applyModeVisuals` "three modes" block. (4) Refreshed the `ui.js` top-of-file
+section index, added a step-by-step `solveAndRender` header, corrected the
+misleading `/*autoFit=*/` call-site comments (the param is `isPrimary`), and
+documented the `node-test.js` two-loader-list hand-sync hazard (+ a test-block
+map).
+
+**PQD de-duplication (follow-up to the review):** created `solver-pqd-common.js`
+(`QD.PqdCommon`, mirroring `solver-lqd-common.js`) and migrated all four PQD
+families onto it. The continuous-arg unit-circle sweep, the deviation-refined
+boundary sampler, the R#-vanishing guard, and the identity-verifier's
+per-sample weighted-LHS accumulator + RHS residue sums (bounded-monomial /
+unbounded-test-point) were copy-pasted 4× each; they now live once. Each family
+keeps only its divergent bits as small closures: a `combine` (prefactor +
+chain-rule for φ′ — `1` / `b_{z₀}` / `z` / `z·b_{z₀}`) and a sampler prefactor.
+The rational kernels (`evalRHash_*`/`rHashTaylorAt_*`) stay per-family (their
+const/Laurent/Blaschke terms genuinely diverge — NOT shared). Migration was
+strictly bit-identical (each family's batteries assert machine-precision
+identity; full suite stayed green family-by-family). `QD._rHashVanishingGuard`
+moved to PqdCommon (alias preserved for `node-test.js` + the PQDS verifier).
+The perf-critical Newton inner loop (`residual_*`) was untouched — only
+once-per-solve helpers changed. Cache `v22-pqd-common`.
+
+**Hygiene pass (doc-review #6):** stripped three stream-of-consciousness comment
+blocks (`solver-lqd-singular.js` "Wait — let me re-derive" + the stale
+"(1/N) convention" note; `schwarz-webgl.js` "conj(z_j)? no."; the `sphere-webgl.js`
+overlay-geometry + `setPolePts` narration); deleted confirmed-dead symbols
+(`state.solveTimer`; the unused `_STAR_SIZE` const; the unreachable `binom`
+fallback in `solver-lqd.js` — `QD.binomialCoeff` always loads first); and named
+the magic tolerances `ILL_COND_REFINE_THRESHOLD` (1e6, QR iterative-refinement
+gate) and `SEG_PARALLEL_EPS`/`SEG_ENDPOINT_EPS` (segment self-intersection test)
+in `solver.js`. All bit-identical (945/0). NB: `Direct.version` is NOT dead — a
+review agent flagged it but `node-test.js` asserts it's truthy; left as-is.
+`powRat`'s k=0 base case is defensive and correct; left as-is. Cache `v23-hygiene`.
+
+Still deferred (out of scope): param-slice/sphere README signature+caps drift;
+taylor.js's four distinct zero-tolerances (1e-20 vs 1e-30 — unifying would
+change values, so left documented-as-is).
+
+**Math-typesetting pass (cache `v24-math-typesetting`):** a review of the KaTeX
+display surfaces found and fixed a real rendering bug plus structural issues.
+ROOT CAUSE: the Riemann-card numeric expansion joined `aligned` rows with
+`\\[2pt]`, which the **pinned KaTeX 0.16.11 does not support** ("Undefined
+control sequence: \["). With `throwOnError:false`, KaTeX rendered a red error
+node showing the raw LaTeX source — that was the "awkward, space-inefficient
+wrapping". Fixes: (1) all `aligned` row separators changed `\\[2pt]` → plain
+`\\`; (2) the closed-form expansion for the 8 non-classical families is now
+built INSIDE a single auto-growing `\left( … \right)` (LQD exp, PQD root) via a
+new `wrap` fragment contract (prefix / suffix / bodyLeader / bodyTrailer) in
+`RIEMANN_FRAGMENTS` + `renderRiemannMap` — previously `\Bigl(`/`\Bigr)` sat on
+separate rows and never enclosed the term column; (3) display math left-aligned
++ font bumped to 0.95em (style.css `.rm-sym`/`.rm-numer .katex-display`);
+(4) the Schwarz σ(w) "Show form" panel now KaTeX-renders the `phiLatex`/`fLatex`/
+`sigmaLatex` (already produced by `explicitSigmaForm`) into a div instead of
+ASCII in a `<pre>`, with per-row text fallback; (5) the singular-LQD Blaschke
+definition moved to its own `aligned` line (was forcing horizontal scroll); and
+Direct-tab `h(w)` now renders in display mode (was tiny inline/script style).
+VERIFICATION: since KaTeX isn't a Node dep, the emitted LaTeX for every family
+was smoke-tested by transiently `npm install --no-save katex@0.16.11` and
+`renderToString(..., {throwOnError:true})` on all 9 structural patterns (all
+parsed); katex then uninstalled. NB: a permanent KaTeX parse-smoke test in
+node-test.js would guard this class of bug (the original `\\[2pt]` breakage went
+unnoticed for lack of one) — deferred as it adds a dev dependency.
+
+FOLLOW-UP (cache `v25-riemann-flat-align`): a browser screenshot showed the
+classical (flat, non-wrapped) families still had two issues the first pass
+didn't cover. (a) The flat `aligned` had row 0 with no `&` and continuation rows
+with one `&`, so the +terms hung far to the right of the alignment point.
+(b) For a pole at the origin (z_j = 0) the term denominator `(1 − conj(z_j) z)^k`
+was printed as the literal "1 − 0·z"; it now collapses to just `conj(A_j) z^k`.
+
+FOLLOW-UP 2 (cache `v26-riemann-single-line`): per user request, the closed-form
+expansion now renders on a SINGLE line (no `\begin{aligned}` row-stacking at all
+— that was forcing breaks even when the formula fit). Flat families concatenate
+`leader + terms + trailer` inline; wrapped families join the body inline inside
+one auto-sizing `\left( … \right)`. Overflow scrolls horizontally via
+`.rm-numer { overflow-x: auto }` + `text-align:left`. Verified to parse on
+KaTeX 0.16.11 (flat h=1/w, flat multi-pole, powerQD, boundedLQD, unboundedLQD,
+empty-sum) via the transient-katex render-smoke.
+
+FOLLOW-UP 3 — PERMANENT KATEX GUARD (cache `v27-riemann-latex-module`): the
+"renders as a red error / raw source" bug class was invisible because nothing
+tested the generated LaTeX. Fixed structurally: extracted the pure Riemann-map
+LaTeX generation out of ui.js into `app/riemann-latex.js` (`QD.RiemannLatex.build(phi)`
+→ `{ symbolic, numeric, params }`, no DOM); `renderRiemannMap` in ui.js is now
+DOM-only and calls it. `katex` is now a pinned devDependency (EXACTLY `0.16.11`,
+matching the CDN tag — not `^`, to avoid version drift between test and browser).
+node-test.js renders every family's `build()` output (symbolic + numeric + every
+param name) with `throwOnError:true` and asserts it parses — 20 new tests (10
+build + 10 parse), one per family, +1 parse-check. 966 tests, lint clean. The
+guard would now catch any `\\[2pt]`-class regression automatically. (σ-panel and
+Direct h(w) LaTeX are NOT yet covered — they live in schwarz-analysis.js /
+direct-ui.js which the vm harness doesn't load; a similar extraction would let
+them be guarded too. Lower priority — their LaTeX is simple `\frac`/`\overline`,
+not the aligned/delimiter constructs that broke.) Wiring: riemann-latex.js added
+to index.html (before ui.js), asset-manifest UI_FILES, and both node-test loader
+lists.
+
+The headline recent work is the **power-weighted quadrature domain (PQD)**
+arc — weight `|w|^{2(α−1)}`, any real α > 0 (α ≠ 1). All **four** PQD families
+are shipped end-to-end (solver kernel + Schwarz CPU adapter + UI mode tile +
+presets + machine-precision tests + browser-verified):
+
+- `powerQD` (bounded, 0∉Ω) — `solver-pqd.js`
+- `powerQD_singular` (bounded, 0∈Ω) — `solver-pqd-singular.js`
+- `unboundedPQD` (unbounded, 0∉Ω) — `solver-uqd-pqd.js`
+- `unboundedPQD_singular` (unbounded, 0∈Ω) — `solver-uqd-pqd-singular.js`
+
+Each supports finite poles + (unbounded ones) a polynomial part of h. See
+**§3** for the family table + PQD invariants, and **§15 entry #45** for the
+full math/derivation/validation history. The UI exposes them as a top-level
+"Power-weighted QD (PQD)" Domain-type radio group on the QD tab
+(Bounded / Bounded singular / Unbounded / Unbounded singular).
+
+**Open PQD items (none blocking):**
+- **Q4** — param-slice verification for PQDs (should "just work" via family
+  hooks; needs a confirmation pass).
+- **Q5** — Direct-tab PQD kernel (forward problem φ→h, Theorem 4.3.5/4.3.7).
+- **Q1.4** — explicit `winding(R#|∂𝔻)=0` guard (spurious roots currently
+  rejected indirectly via the identity check).
+- **PQD GPU shaders** — all 4 refuse WebGL → CPU; an αth-root shader pass is
+  a future perf item.
+- **Singular PQD, h with a pole AT 0** (order m₀): r has an m₀-related
+  root/pole at z₀ (Prop 4.6.3 general case); only the `r(z₀)=0` simple-root
+  case (h analytic at 0) is implemented. Rare.
+
+**Thesis ground-truth anchors used** (for resuming validation): Example 4.3.1
+(unbounded monomial `φ=cz(1−γ/z)^{1/α}`, γ=−αα_res/c^{2α−1}); Thm 4.5.2
+(singular monomial → z₀=γ^{1/(2α−1)}, e.g. h=1,α=2,c=1 ⇒ z₀=(−2)^{1/3}); Prop
+4.6.3 (r(z₀)=0 closure); Thm 4.5.3 (Z_k-symmetric monomial). Thesis PDF in
+project root; `thesis.txt` for grepping.
+
+The just-completed post-UB code review found **no correctness bugs** (the
+test suite + clonePhi are sound); it cleaned up stale comments, a dead
+`*0` expression in `solver-pqd.js`'s `sampleBoundary_PQD`, and added
+empty-`hData` guards to the unbounded PQD `normalizeOpts`.
+
+---
+
+## 1. What this is
+
+Browser app implementing both the **inverse** and **direct** problems for
+simply connected (weighted) quadrature domains, based on Andrew Graven's
+Caltech PhD thesis *Weighted Quadrature Domains and the Faber Transform*
+(`Andrew_Graven_Thesis.pdf` in the project root; text-extracted to
+`thesis.txt` for grepping).
+
+* **Inverse tab (QD / LQD)** — six families. User supplies the quadrature
+  data; solver reconstructs Ω via its Riemann map φ.
+* **Direct tab** — user supplies φ (polynomial / rational / unbounded
+  Laurent / arbitrary expression); kernel computes the explicit h.
+
+Runs entirely client-side. Inner solver loop is pure JS for performance.
+math.js (CDN) parses user expressions in the Direct tab. KaTeX (CDN)
+renders math.
+
+**Project root**: `C:/Users/Andrew Graven/Documents/Claude/Quadrature Domains/`
+**App directory**: `app/`
+
+---
+
+## 2. File layout (current)
+
+```
+app/
+├── complex.js                       # Complex arithmetic + Complex.format
+├── taylor.js                        # Truncated Taylor: mul, invert, exp, log,
+│                                    #   reciprocal, compose
+├── solver.js                        # Family registry, dispatchers, Newton driver,
+│                                    #   deflation, boundary sampler, univalence,
+│                                    #   schema runtime, top-level solveInverseQD
+├── solver-faber.js                  # QD.Faber.{inverseFaberAtPole, inverseFaberAtInfinity}
+├── solver-qd.js                     # Family.boundedQD
+├── solver-uqd.js                    # Family.unboundedQD
+├── solver-lqd-common.js             # QD.LqdCommon: Blaschke, modified residues, r#,
+│                                    #   sampleBoundaryWithDerivative, ID-verifier skeleton
+├── solver-lqd.js                    # Family.boundedLQD            (non-singular)
+├── solver-lqd-singular.js           # Family.boundedLQD_singular
+├── solver-uqd-lqd.js                # Family.unboundedLQD          (non-singular)
+├── solver-uqd-lqd-singular.js       # Family.unboundedLQD_singular
+├── solver-pqd.js                    # Family.powerQD  (bounded PQD, 0∉Ω, any α>0)
+│                                    #   + Complex.cpow helpers, exported R# evaluators
+├── solver-pqd-singular.js           # Family.powerQD_singular (bounded PQD, 0∈Ω)
+│                                    #   — mass/area constraint closes |z₀|
+├── solver-uqd-pqd.js                # Family.unboundedPQD (unbounded PQD, 0∉Ω)
+│                                    #   — Laurent-at-∞ block for polynomial h
+├── solver-uqd-pqd-singular.js       # Family.unboundedPQD_singular (unbounded, 0∈Ω)
+│                                    #   — r(z₀)=0 closure (Prop 4.6.3)
+├── parse-h.js                       # QD.parseH / QD.formatH: custom-text h(w)
+│                                    #   parser for Inverse tab (strict PFD walker
+│                                    #   + general-rational fallback)
+├── critical-set.js                  # QD.findCriticalPoints: complex Newton on
+│                                    #   φ'(z) = 0 from a polar seed grid; returns
+│                                    #   roots + their w-images with severity
+│                                    #   (critical / near / safe) — used by the
+│                                    #   Inverse-tab critical-set overlay
+│
+├── ui.js                            # QD/LQD-tab UI: state, presets, MODES table,
+│                                    #   sliders, canvas (DomainPlot), tab plumbing,
+│                                    #   custom h(w) text input wiring
+│
+├── direct/
+│   ├── direct-common.js             # Direct kernels (boundedQD, boundedQDRational,
+│   │                                #   unboundedQD, numericalBoundedQD),
+│   │                                #   parseRationalInZ, polynomialRoots,
+│   │                                #   verifyBoundaryIdentity, evalH
+│   └── direct-ui.js                 # Direct-tab UI: mode toggle, paste+structured input,
+│                                    #   h display, Verify button
+│
+├── schwarz/
+│   ├── schwarz-common.js            # QD.Schwarz math kernel:
+│   │                                #   buildSchwarzFromPhi (bounded/unbounded),
+│   │                                #   buildSchwarzFromRational, escapeTime, makeOrbit,
+│   │                                #   pointInPolygon, polygonBounds
+│   ├── schwarz-webgl.js             # QD.Schwarz.createGPURenderer:
+│   │                                #   WebGL 2 fragment shader (full-screen triangle,
+│   │                                #   complex vec2 ops, branch sums, Newton, σ-iter),
+│   │                                #   off-screen polygon mask texture for in-Ω test,
+│   │                                #   colormap texture, ~100-300× faster than CPU
+│   └── schwarz-ui.js                # Schwarz-tab UI: source-φ capture, render controls,
+│                                    #   GPU↔CPU dispatcher (GPU default, CPU fallback),
+│                                    #   sibling #schwarz-gl-canvas under #canvas (2D
+│                                    #   overlay for boundary + orbit), pan/zoom,
+│                                    #   click-to-orbit, hover readout
+│
+├── param-slice/                     # Parameter-space cartography tab (TODO #1)
+│   ├── param-slice-common.js        # ParamRef descriptors, listAvailableParams,
+│   │                                #   applyParam, classifyResult, color LUT
+│   ├── param-slice-pool.js          # Web Worker pool — runtime Blob-bundles
+│   │                                #   the solver source into a Worker script
+│   └── param-slice-ui.js            # Parameter-slice tab UI (lazy mount,
+│                                    #   axis pickers, click-to-load)
+│
+├── sphere/                          # Riemann-sphere tab (TODO #14)
+│   ├── sphere-common.js             # Pure math kernel (no DOM/WebGL):
+│   │                                #   projectToSphere / unprojectFromSphere
+│   │                                #   (north-pole convention: ∞↔(0,0,1)),
+│   │                                #   buildSphereMesh (UV-sphere, Uint16Array),
+│   │                                #   mat4identity/multiply/lookAt/perspective/
+│   │                                #   invertRigid (Float64Array, column-major)
+│   ├── sphere-webgl.js              # WebGL 2 three-pass renderer:
+│   │                                #   Pass 1: fractal→FBO (reuses Schwarz shader
+│   │                                #     source via QD.Schwarz._shaders/_glHelpers,
+│   │                                #     cached across camera moves),
+│   │                                #   Pass 2: textured sphere (inverse-stereo
+│   │                                #     in GLSL, rim shading),
+│   │                                #   Pass 3: overlay (boundary polyline,
+│   │                                #     pole markers, ✸ north-pole marker).
+│   │                                #   Factory: QD.Sphere.createRenderer(canvas)
+│   └── sphere-ui.js                 # Sphere tab UI: source-φ capture (same
+│                                    #   capture pattern as Schwarz tab),
+│                                    #   fractal/display/camera controls,
+│                                    #   orbit drag + wheel zoom, hover readout
+│                                    #   with inverse-stereo w-coordinate
+│
+├── disabled/                        # Parked code, not loaded by index.html
+│   ├── README.md                    # Re-enable instructions
+│   └── aqd/                         # AQD (algebraic-weighted) scaffolding
+│
+├── index.html                       # Tab bar, sidebars, canvas, script tags
+├── style.css
+├── test.html                        # In-browser test harness
+├── node-test.js                     # Headless test harness (503 tests)
+├── package.json                     # mathjs for node parser tests (optional)
+└── node_modules/                    # mathjs install (only used by node-test.js)
+```
+
+**Script-loading order in `index.html`** (matters for QD-namespace registration):
+1. complex.js, taylor.js
+2. solver.js (creates `window.QD`)
+3. solver-faber.js (depends on QD; registers `QD.Faber.*`)
+4. solver-qd.js → solver-uqd.js → solver-lqd-common.js → solver-lqd.js →
+   solver-lqd-singular.js → solver-uqd-lqd.js → solver-uqd-lqd-singular.js
+   (each registers `QD.Family.X` and calls `QD.registerFamily('X')`)
+5. direct/direct-common.js (depends on QD + Faber)
+6. parse-h.js (depends on QD.Complex + QD.Direct.polynomialRoots)
+7. critical-set.js (depends on QD.phiTaylorAt + QD.evalPhi; registers
+   `QD.findCriticalPoints` and `QD.CriticalSet`)
+8. schwarz/schwarz-common.js (depends on QD.Complex + QD.phiTaylorAt)
+8. schwarz/schwarz-webgl.js (exposes `QD.Schwarz._shaders` + `QD.Schwarz._glHelpers`
+   as internal API for sphere renderer reuse)
+9. ui.js (depends on QD and all families, plus QD.parseH / QD.formatH)
+10. param-slice/param-slice-common.js + param-slice/param-slice-pool.js
+    (registers `window.ParamSlice` and `window.ParamSlicePool`)
+11. sphere/sphere-common.js, sphere/sphere-webgl.js, sphere/sphere-ui.js
+    (registers `window.SphereCommon` and `window.QD.Sphere`; lazy-mount on
+    tab activation)
+12. direct/direct-ui.js + schwarz/schwarz-ui.js +
+    param-slice/param-slice-ui.js + sphere/sphere-ui.js
+    (all lazy-mount on tab activation)
+13. Inline tab-switching JS at the bottom
+
+**Node-test loader** (`node-test.js` lines ~12–22) loads the same files in
+the same order via `vm.runInContext` after string-replacing
+`typeof window !== 'undefined'` → `false` to force the node code paths.
+
+---
+
+## 3. The ten inverse families
+
+**Six classical/LQD families:**
+
+| File | Family | Setting | Parametric φ |
+| --- | --- | --- | --- |
+| solver-qd.js | `boundedQD` | bounded Ω | Σ_j Σ_k conj(A_{j,k})·z^k/(1−conj(z_j)z)^k |
+| solver-uqd.js | `unboundedQD` | unbounded Ω | c·z + Σ_l F_l/z^l + (branches part) |
+| solver-lqd.js | `boundedLQD` | bounded, 0 ∉ Ω̄ | w₀·exp(r#(z)) |
+| solver-lqd-singular.js | `boundedLQD_singular` | bounded, 0 ∈ Ω | γ·b_{z₀}(z)·exp(r̃#(z)) |
+| solver-uqd-lqd.js | `unboundedLQD` | unbounded, 0 ∉ Ω̄, ∞ ∈ Ω | c·z·exp(r#(z) − r#(∞)) |
+| solver-uqd-lqd-singular.js | `unboundedLQD_singular` | 0 ∈ Ω AND ∞ ∈ Ω | c·\|z₀\|·z·b_{z₀}(z)·exp(r#(z)−r#(∞)) |
+
+**Four power-weighted (PQD) families** — quadrature weight |w|^{2(α−1)}, any
+real α > 0 with α ≠ 1 (α = 1 routes to the classical families). The αth-root
+`(R#)^{1/α}` for the two BOUNDED families uses the branch ANCHORED at φ(0)=w0
+(`QD.PqdCommon.phiAnchored`; the principal branch fails for off-axis poles
+|arg a| > π/α — see §0). The two UNBOUNDED families keep the principal
+`Complex.cpow`/`cprincipalRoot` (their z·(r#)^{1/α} form stays in-sector). See
+§15 entry #45 + §0 for the full math + validation; the `r#` rational has the
+SAME Möbius branch form as boundedQD (constant + Σ conj(A)·u^k):
+
+| File | Family | Setting | Parametric φ | z₀-closure |
+| --- | --- | --- | --- | --- |
+| solver-pqd.js | `powerQD` | bounded, 0 ∉ Ω | (R#(z))^{1/α}, R#(0)=w₀^α | — (w₀ given) |
+| solver-pqd-singular.js | `powerQD_singular` | bounded, 0 ∈ Ω | b_{z₀}(z)·(R#)^{1/α}, R#(0)=w₀^α/\|z₀\|^α | **MASS** (f=1 identity ∫\|w\|^{2(α−1)}dA=Σres) pins \|z₀\| |
+| solver-uqd-pqd.js | `unboundedPQD` | unbounded, 0 ∉ Ω | z·(r#)^{1/α}, r#(∞)=c^α | — (c given) |
+| solver-uqd-pqd-singular.js | `unboundedPQD_singular` | unbounded, 0 ∈ Ω | z·b_{z₀}(z)·(r#)^{1/α}, r#(∞)=\|cz₀\|^α | **r(z₀)=0** (Prop 4.6.3) pins z₀ |
+
+All ten are exercised by the test suite. Each registers via
+`QD.registerFamily(name)` (which `unshift`s onto `familyDispatchOrder`, so the
+most-specific family is checked first; `boundedQD` is the catch-all). **PQD
+dispatch**: `powerQD*` match `α≠1 && !unbounded`, `unboundedPQD*` match
+`α≠1 && unbounded`; the `*_singular` variants additionally require
+`opts.singular`. They are registered AFTER the classical families so they're
+checked first (α=1 falls through to classical).
+
+**PQD invariants / conventions** (so a fresh session doesn't re-derive):
+- **(★)_A** (finite-pole Faber match): non-singular bounded `powerQD` uses the
+  modified-residue `D_{j,n}` (generalized-binomial) path; the other three use
+  the **branch-cut-free 1/r# convolution** (`Taylor.reciprocal ∘
+  Taylor.compose`) because their `(φ_in∘ψ/w)^α` factor is the rational `1/r#`.
+- **(★)_F** (pole-at-∞, unbounded only): the **Laurent-at-∞ matching residual**
+  `laurentMatchAtInfinity_*` — the s⁰…sⁿ coeffs of `M·sⁿ` vanish, where
+  `M=(r·r#)/(αφ)−h_poly(φ)`, s=1/z, n=deg(h's polyPart). No closed-form Faber.
+- **G_l** = the Laurent coeffs of r# at ∞ (unbounded families), `phi.polyA`;
+  for complex h the closure gives `G_{l} = α·conj(h_*)·c^{…}` (CONJUGATE form,
+  confirmed empirically by the identity verifier — the no-conj form is wrong
+  for complex coefficients).
+- **Identity verifier** is the correctness oracle for all PQD families (no
+  closed-form ground truth needed beyond the thesis monomial/Example 4.3.1).
+  Near the corner-forming limit (|γ|→1) the default sweep under-resolves the
+  near-cusp boundary; `unboundedPQD_singular` enforces ≥2000 samples.
+- **GPU/Sphere**: all 4 PQD families refuse the WebGL shader (no αth-root
+  arithmetic yet) → CPU fallback. Schwarz works on CPU for all 4.
+- **clonePhi** (solver.js) copies `alpha`, `c`, `z0`, `polyA` — required for
+  all PQD families (a missed field is the HANDOFF #26 bug class; verified
+  complete in the post-UB review).
+
+---
+
+## 4. Family interface (the contract)
+
+Every family declares a single object `QD.Family.X` with these methods (see
+`solver.js` lines ~28–87 for the dispatchers, and any family file for a
+filled-in example):
+
+```
+QD.Family.boundedQD = {
+  name: 'boundedQD',
+  enforceInDisk:  true,    // Newton clamps |z_j| ≤ 0.9999 if true
+  enforceOutDisk: false,   //                |z_j| ≥ 1.0001 if true
+
+  // Dispatch: walks familyDispatchOrder; first true match wins.
+  matches(opts) { return ...; },
+
+  // Translate user opts → normalized norm bundle (w0, c, R, etc.).
+  normalizeOpts(opts, hData) { return { ... }; },
+
+  // Core math
+  evalPhi(z, phi),
+  phiTaylorAt(z0, phi, L),
+  residual(phi, hData, options),
+  computeTargets(phi, hData),         // optional helper for inspection
+
+  // Pack/unpack φ ↔ flat real vector
+  packPhi(phi),
+  unpackPhi(v, template),
+  canonicalizePhi(phi),               // resolve gauge ambiguities
+
+  // Seeds + continuation
+  initialGuess(hData, norm),
+  perturbedInitialGuess(hData, norm, rng, r),
+  diverseInitialGuess(hData, norm, rng, r),
+  continuationSolve(hData, norm, opts),
+
+  // Identity check (Family-specific test class)
+  verifyQuadratureIdentity(phi, hData, options),
+};
+QD.registerFamily('boundedQD');
+```
+
+Some families (LQD-singular, UQD-LQD, UQD-LQD-singular) use the **schema
+runtime** instead of hand-written `packPhi`/`unpackPhi`. The schema lives in
+the family file as `SCHEMA_X = [...]`. The schema runtime
+(`packPhiBySchema` / `unpackPhiBySchema` / `applySchemaClamps` in solver.js)
+synthesizes pack/unpack/clamp from declarative entries. Entry kinds:
+`complex`, `complexList`, `branchesZ`, `branchesA`. Clamp options:
+`{side, cap, minR, maxR}`. **Convention**: `branchesZ` must appear before
+`branchesA` in the schema list.
+
+Migrating QD / UQD / LQD-nonsingular to the schema runtime is **Tier 4** of
+the deferred refactor plan (see §10).
+
+---
+
+## 5. Direct tab (`app/direct/`)
+
+Four kernels in `direct-common.js`, all returning `hData = {poles, polyPart}`
+in the same shape consumed by the inverse-tab solver:
+
+| Kernel | Input | Notes |
+| --- | --- | --- |
+| `boundedQD(coeffs)` | Polynomial coeffs [c_0..c_n] | Single h-pole of order n at w₀=c_0. Throws on c_1=0. |
+| `boundedQDRational(P, Q)` | Rational P/Q | Validates Q ≠ 0 on 𝔻̄ via Durand–Kerner; one h-pole per root inversion of Q (+ z=0 if deg P > deg Q). Uses `forwardLocalPrincipal` (shared with boundedQD). |
+| `unboundedQD(c, F)` | c real positive, F=[F_0..F_{m-1}] | Triangular back-sub for polyPart; finite poles only for the trivial `c·z + F_0` case. Warns when m≥2 with nonzero F_l (l≥1). |
+| `numericalBoundedQD(phiFn, opts)` | Function φ(z)→w | Samples φ at N=256 on \|z\|=1; DFT extracts Taylor coeffs; truncates; delegates to boundedQD. Returns analyticity diagnostic. |
+
+**Verify button** uses `verifyBoundaryIdentity(hData, boundaryPts)` which
+returns `{negMass, zeroMass, posMass, scale, N, maxFreq}`. The diagnostic
+is the **Fourier negative-frequency mass** of `h(φ(z)) − conj(φ(z))` on
+\|z\|=1:
+
+> For any valid classical QD, σ − h is analytic in Ω, so (σ − h)∘φ is
+> analytic in 𝔻 — its boundary-value Fourier expansion has only
+> non-negative-frequency terms. negMass ≈ 0 confirms h represents σ
+> correctly modulo the analytic part.
+
+**Important**: do NOT use `max|h(φ(z)) − conj(φ(z))|` as a pointwise check.
+For bounded QDs h doesn't include the analytic-in-Ω part of σ (it's the
+principal-part representative), so `h ≠ conj(w)` pointwise in general.
+The Fourier check is the mathematically correct version. See the
+explanatory comment in `direct-common.js` at `verifyBoundaryIdentity`.
+
+**Parser**: `parseRationalInZ(astOrString, math)` is the canonical parser.
+Returns `Array<Complex>` for polynomial inputs or `{num, den}` for rational
+inputs (after normalizing the denominator's leading coefficient to 1).
+`parsePolynomialInZ` is a thin wrapper that rejects rational results and
+enforces c_1 ≠ 0.
+
+---
+
+## 6. Math conventions
+
+* **Contour integral suppresses 1/(2πi)**. In this codebase `∮_∂Ω F dw`
+  denotes `(1/(2πi)) · (literal contour integral)`. So the unit disk under
+  the classical-bounded QD identity has `h = 1/w`, **not** the textbook
+  `2/w`. All identity-checks and Cauchy projections in the code use this
+  convention.
+* `dA = dx dy / π`. Unit disk has area 1.
+* **Schwarz reflection** `f#(z) := conj(f(1/conj(z)))`. On \|z\|=1,
+  `f#(z) = conj(f(z))`. For polynomial f, expanding `f#` symbolically uses
+  the **conjugate-reverse polynomial** `X̃(z) = Σ_k conj(X_{deg X − k}) z^k`.
+  This is the workhorse of `boundedQDRational`.
+* **Modified residues** for LQDs: `D_{j,s} = a_j · C_{j,s} + C_{j,s+1}`
+  (with `C_{j, m_j+1} := 0`). Replaces the raw `C_{j,s}` in the per-pole
+  inverse Faber call. See `solver-lqd-common.js` modifiedResidues().
+* **∞-gauge absorption** (unbounded LQDs): the parametrization uses
+  `exp(r#(z) − r#(∞))` so that φ'(∞) = c exactly (otherwise r#(∞) leaks
+  into the leading coefficient at ∞). `rHashAtInfinity` in
+  solver-lqd-common.js computes the closed-form sum.
+* **Orientation flip** (unbounded): for unbounded Ω, ∂Ω traversed CCW
+  around the bounded complement K corresponds to CW around Ω. Several
+  RHS terms pick up a sign flip (−2πi vs +2πi) accordingly. Already
+  baked into the unbounded families.
+* **Blaschke factor** (thesis form, used by singular LQDs):
+  `b_{z₀}(z) = −(conj(z₀)/|z₀|) · (z − z₀) / (1 − conj(z₀) z)`.
+  Identity: `b · b# ≡ 1` (holds for both z₀ ∈ 𝔻 and z₀ ∈ 𝔻*).
+
+---
+
+## 7. Recent work (this session)
+
+In rough chronological order across recent sessions (newest first):
+
+64. **QOL pass — design tokens, responsive layout, copy-link, feedback (SHIPPED).**
+    A focused, practitioner-first UI quality pass after a 3-agent review of the
+    whole app. (The full prioritized review report lives in the plan file
+    `please-conduct-a-comprehensive-whimsical-harp.md`.)
+    * **CSS design tokens (`style.css`).** New `:root` block defines the core
+      palette (`--c-primary` … `--c-err`) + a spacing scale; the ~20 duplicated
+      hard-coded hexes were migrated to `var(...)` (mechanical, visual-identical).
+      Single source of truth; sets up future theming. Verified: `.card h2`
+      computes to `rgb(86,119,168)` = `--c-primary`.
+    * **Responsive layout (`style.css`).** Sidebar is now fluid
+      (`grid-template-columns: clamp(360px,28vw,460px) 1fr`); a
+      `@media (max-width: 860px)` block stacks controls (capped 45vh, scroll)
+      above the plot and caps fixed-width inputs to the column. Verified in
+      Preview: 1280→360px sidebar; 760px→stacked (rows 405/495); 375px mobile→no
+      horizontal scroll.
+    * **Copy-link affordance (`index.html` header + `ui.js mountCopyLink`).** A
+      "🔗 Copy link" button reusing `QD.QoL.copyButton(() => location.href)` —
+      surfaces the already-maintained URL-hash state (`ui-url-state.js`) as a
+      shareable link (whole config incl. active tab). Reuses previously-unused
+      infra.
+    * **Solve elapsed-timer (`index.html` + `ui-solve.js`).** `#solve-elapsed`
+      span ticks `N.Ns` next to the "solving…" spinner (interval started in
+      `showSolveBusy`, cleared in `hideSolveBusy`), so slow solves read as
+      in-progress not frozen.
+    * **Direct output empty-state (`direct/direct-recompute.js`).** When no `h`
+      is produced and no error is shown, `.dir-h-display` shows a one-line hint
+      instead of a blank box.
+    * **DEVIATIONS from the approved plan (transparent):** (a) **Dark mode
+      deferred** — coherent dark mode needs the JS plot renderer themed too (the
+      plot bg is a JS `#fafafa` fill at `ui-domain-plot.js:316` and the data
+      palette is light-tuned); chrome-only dark would look half-broken, so it's a
+      follow-up the tokens now enable. (b) **Dropped as already-handled / N/A:**
+      preset `<optgroup>` (the dropdown is already mode-scoped to one family),
+      alternates "none found" (the card already hides gracefully when empty),
+      Direct Verify color salience (`.dir-verify-result` is already
+      red/green/gold), Schwarz/Param-slice pre-render empty states (those tabs
+      already have intro/help cards). Several raw agent findings were stale
+      (e.g. "c-slider max doesn't update" — fixed in #63; "Direct has no toggle"
+      — `mountViewToggle()` provides one) and excluded.
+    * **Known wrinkle (pre-existing, noted):** `<link href="style.css">` isn't
+      `?v=`-busted like the page scripts, so CSS edits only reflect after the SW's
+      versioned cache refreshes (CACHE_VERSION bump) or a hard reload.
+    * **Verify:** node-test **1203/0**; lint clean; `version:check` clean
+      (`f1abad5f1d`). UI/CSS files are largely untested by node-test (no
+      regressions expected/observed); validated end-to-end in the browser.
+    * **Docs sweep (compaction prep).** Canonical reference docs updated to cover
+      #63 + #64: `ARCHITECTURE.md` (public-`QD.*` surface row for
+      `estimateMaxConformalRadius`; `solver-cmax.js`/`univalence.js`/`cusps.js`
+      added to the module graph's Utility layer), `THEORY_MAP.md` (critical
+      conformal-radius cross-ref + numerical-primitives row), `CONTRIBUTING.md`
+      (new "Styling (CSS design tokens)" section), and the `README.md` notes for
+      both features. Inline code comments verified on all new/changed files.
+
+63. **Estimate max conformal radius c\* for unbounded QDs (SHIPPED).** For an
+    unbounded family `c = φ′(∞)` is a free gauge; as `c` grows the domain grows
+    and at a critical scale c\* the boundary cusps then self-overlaps. New
+    feature finds c\* automatically and snaps the UI to the largest clean domain.
+    * **New `app/solver-cmax.js` — `QD.estimateMaxConformalRadius(hData, baseOpts,
+      solveFn, ctl)`.** Dependency-injected, async: `solveFn` is the off-thread
+      `PrimarySolverWorker.solve` in the browser and the sync `QD.solveInverseQD`
+      in Node tests (both await-safe). Does **bracket → bisection** on the
+      validity gate: confirm/establish a valid lower `cLo` (shrink ×0.5 if the
+      start is invalid) → grow ×1.6 (warm-started) to an invalid `cHi` (or the
+      ceiling) → bisect to `relTol` (1e-3). Returns `{ found, cMax, cLowValid,
+      phiAtMax, trace, reason, solves }`. Page-only (drives a worker; not in the
+      worker bundle) — registered in `asset-manifest.js` `SOLVER_PAGE_ONLY_FILES`.
+    * **Validity gate = the user-chosen criterion: univalent AND quadrature
+      identity.** CRITICAL: `solveInverseQD` returns `success:true` even for a
+      converged-but-non-univalent *fallback* root (it picks the best candidate),
+      so `success` alone is NOT the gate — the estimator checks
+      `primary.univalent && primary.identityOK` explicitly and forces
+      `identityCheck:true`.
+    * **Warm-start gauge injection (the entry-#61 c-bug lesson).** The solver
+      trusts the warm seed's gauge, so each warm probe does
+      `seed = clonePhi(lastValidφ); seed.c = c` before solving — never passes a
+      stale-`c` seed. **Confirm-invalid guard:** a *warm* failure is retried once
+      **fresh** (no seed) before being believed, so a bad seed can't shrink c\*.
+    * **UI (`#c-card`).** New **Estimate max c** button + busy spinner + result
+      line. On success: writes `c* ≈ …` (+ an optional `classifyCusps` θ note),
+      **caps `#c-slider`/`#c-manual` max at c\***, then `setC(0.99·c*)` +
+      `scheduleSolve()` to render the largest clean domain. Reuses the
+      `#try-harder-btn` async pattern + `buildHData`/`buildNormalization`/
+      `buildSolverOptions`(thorough)/`applyNormToOpts`. Guards on `norm.unbounded`
+      (the card is unbounded-only anyway). `mountQolHelp` `#c-card` text updated.
+    * **New `app/test/cmax.test.js` (27 assertions, Node-VM, no jsdom).** §1
+      bracket+bisection converges to a stubbed threshold; §2 always-valid →
+      `no-invalid-below-ceiling`; §3 always-invalid → `no-valid-at-start`; §4
+      **gauge injection** — every warm seed carries `c == queried c` (the c-bug
+      class); §5 **confirm-invalid guard** — a warm-only failure doesn't
+      underestimate c\*; §6 **real solver** — deltoid `h=w²` brackets c\*≈0.5,
+      0.99·c\* valid / 1.05·c\* invalid. Registered `'cmax'` in `node-test.js`;
+      raised the `manifest.test.js` suite floor 1150 → 1175.
+    * **Browser-verified** (Claude Preview): deltoid → c\*≈0.5000, "incipient cusp
+      near θ≈0°", slider capped at 0.5 + jumped to 0.495; α=2 one-pole PQD
+      (c=2) → c\*≈2.6703, slider capped + jumped to 2.6436, re-solve valid.
+    * **Verify:** node-test **1203/0**; lint clean; `version:check` clean
+      (`93e911f8b4`). Family-agnostic (drives the solver) → all 5 unbounded
+      families supported.
+
+62. **UI-input test coverage (the c-slider bug class) (SHIPPED).** The
+    conformal-radius `c` slider regression (entry #61 follow-up) slipped through
+    because the suite had **no test that drives a behavior-bearing UI control and
+    asserts the solve changes** — only two UI tests existed (`ui-domain-plot`
+    dblclick, `schwarz-ui` click/pin), both event-emission, not control→solve.
+    * **New `app/test/ui-inputs.test.js` (40 assertions, Node-VM seam — no
+      jsdom).** Loads `ui-modes.js` into the shared vm (`loadInCtx`; window masked
+      → factory registers on `ctx.QD_UI`) and installs the descriptors with a
+      minimal mock `uiCtx` (`state` + a `buildW0` mock — the only ui.js closure
+      the descriptors call). Four sections: **§1** every mode's
+      `warmStartUpdate` injects its gauge (c/α/w₀/q) into a clone — the exact fix
+      linchpin, all 10 modes; **§2** `buildNorm` reads the live `state` gauge;
+      **§3** changing the gauge re-solves to a *different* φ through the real
+      `solveInverseQD` (c via classical-unbounded, α via unbounded-PQD — φ.c /
+      φ.alpha track and the boundary scale moves); **§4** the exact c-bug
+      contract: a **stale** warm seed pins the OLD c, a **gauge-injected** seed
+      yields the new c. Verified the test discriminates the regression: stubbing
+      `warmStartUpdate` to a no-op makes §4 return c=0.5 → FAIL.
+    * Registered `'ui-inputs'` in `node-test.js` TESTS.
+    * **Coverage boundary (documented):** pole/order/residue/poly + family
+      routing are already covered by the solver/direct family batteries; the new
+      file closes the UI-gauge + warm-start gap. `composeMode`/`buildHData`/
+      `solveAndRender` live in DOM-coupled `ui.js`/`ui-solve.js` closures — per
+      the seam-not-jsdom choice they're guarded indirectly (descriptor hooks +
+      solver contract), not via a flaky full-page harness.
+    * **Suite-size floor guard** added at the end of `manifest.test.js` (last
+      TESTS entry): `report().pass >= 1150` — catches a mass regression (a whole
+      subsystem failing to load / a `run()` early-return) that would otherwise
+      pass quietly with `fail=0`.
+    * **Redundancy review (conservative):** swept all `app/test/*.test.js` —
+      **no dead or truly duplicate tests** to remove. All `skip` lines are
+      legitimate graceful fallbacks (mathjs/katex/jsdom absent, or solver-failed),
+      and the repeated per-family σ-boundary-closure blocks in `schwarz.test.js`
+      are **distinct** regression guards (per-family setup + tolerance) = coverage,
+      not redundancy — deliberately kept (consolidating 18 green assertions for
+      cosmetic line-savings was judged not worth the risk under "preserve all
+      coverage").
+    * Verify: node-test **1175 passed, 0 failed** (1134 + 40 + 1 floor); lint
+      clean; `version:check` clean (test files aren't page assets → cache hash
+      unchanged). Branch `test/ui-input-coverage`.
+
+61. **QD-tab UI streamline (SHIPPED).** Moderate production-polish pass on the QD
+    tab (inverse + direct), mirroring the Schwarz streamline conventions
+    (`.card`/`.seg-btn`, `<details>Advanced</details>`, help-by-id). **No element
+    ids renamed** — achieved by relocating DOM nodes + retitling, so handlers /
+    `buildHData` / URL-state / jsdom tests are unaffected.
+    * **Merged 3 tiny mode-cards → one `#map-params-card`** ("Map parameters").
+      The former `#w0-card` (φ(0)), `#alpha-card` (PQD α), and `#q-card`
+      (singular-LQD residue q) are now row groups `#map-w0-rows` / `#map-alpha-rows`
+      / `#map-q-rows` inside one card, each with a small group sub-label; all
+      inner ids (`#alpha-input`, `.alpha-quick`, `#w0-manual`, `name=w0mode`,
+      `#q-manual`, `#q-*-slider`, …) preserved verbatim. `applyModeVisuals()`
+      (ui.js) now toggles the three row groups + the parent card (shown iff any
+      group is) from the unchanged `desc.cards.{w0,alpha,q}` flags; the α-reset
+      side-effect block is unchanged; `ui-modes.js` untouched. `mountQolHelp()`
+      dropped the stale `#w0-card`/`#q-card` help bindings and added one combined
+      `#map-params-card` help. **`#c-card` (conformal radius) stays nested under
+      the φ(z) display in `#domain-mode-card`** (lower-risk — its relocation logic
+      ~ui.js 982, help, and toggle are untouched).
+    * **Solver card split:** boundary samples / aggressiveness / auto-fit stay
+      visible; the viz/power-user toggles (`#vector-field-mode`,
+      `#critical-set-toggle`, `#auto-switch-singular`) moved into a
+      `<details>Visualization &amp; advanced</details>` inside the same card. Ids
+      preserved → `applyModeVisuals` still finds `#vf-external-opt`.
+    * **Relabels:** stripped the "(A1)…(A5)" phase codes in Search options and
+      spelled out the terse budget/Newton labels (`numRestarts`→`Newton restarts`,
+      `Cont. tStart`→`Continuation t-start`, …). `#so-*` ids unchanged.
+    * **Condensed hints:** the 8 per-mode formula hints in `#domain-mode-card`
+      each got a one-line bold summary + a `<details>Details</details>` wrapping
+      the formula prose. Outer `id`s kept, so the `applyModeVisuals` display toggle
+      is untouched.
+    * **Direct sub-mode (light pass):** already `.card`/`.seg-btn`-consistent;
+      wrapped the numerical-mode "Truncation degree (DFT cap)" knob in a
+      `<details>Advanced</details>`. Card titles already match inverse; no merges.
+    * **Follow-up fix (warm-start gauge — pre-existing bug, not from the UI
+      change):** the conformal-radius **c** slider (and α / manual w₀) appeared
+      inert for unbounded domains. Root cause in the **1D drag-end warm-start**
+      (`ui-solve.js solveAndRender`): it passed `opts.warmPhi = state.current.
+      primary.phi` (the previous φ) **without** injecting the current gauges. The
+      solver's warm-start trusts the seed's own gauge, so a stale warmPhi pinned
+      the OLD c/α/w₀ and converged in 0 iterations — the result kept the old c
+      regardless of the slider. (Confirmed at the solver level: `solveInverseQD`
+      with a c=0.5 warmPhi but `opts.c=2.0` returns c=0.5; injecting c into the
+      seed first returns c=2.0.) Fix: in `solveAndRender`, only pass the warm seed
+      when it is **family/structure-compatible** with the target (same test the
+      live `quickSolveAndRender` uses), and run the mode's `warmStartUpdate(warm,
+      norm)` to inject c/α/w₀ first. The compatibility guard also prevents
+      corrupting an incompatible seed after a mode/preset switch (an over-eager
+      first fix did exactly that → trivial φ≈z on the first solve). Browser-
+      verified: c slider now scales the unbounded domain (c=0.5→0.3→1.0→1.8 all
+      track); bounded still solves; no console errors.
+    * Verify: node-test **1134/0**, lint clean, `version:check` clean. Browser:
+      all six mode configs (classical bounded/unbounded, PQD bounded/unbounded,
+      LQD bounded-singular, reset) show exactly the right `#map-*` groups + `#c-card`
+      + poly section; a solve completes; Solver Advanced + Search-options +
+      condensed-hint disclosures work; direct view mounts with aligned titles; no
+      console errors. Branch `feat/qd-ui-streamline`.
+
+60. **Schwarz z-disk view: GPU support (SHIPPED).** The z-disk view (#59) was
+    CPU-only because "there was no GPU shader for φ(z)". That premise was wrong —
+    the WebGL fragment shader (`schwarz-webgl.js`) already contains `evalPhi(z)`
+    (it calls it inside the Newton inverse) and the full σ escape-time loop for
+    6 families (bounded/unbounded classical QD + the 4 LQDs). So z-disk GPU is
+    not a φ port; it's a one-uniform branch.
+    * **Shader (`schwarz-webgl.js`):** new `uniform int u_viewMode` (0 = plane,
+      1 = z-disk). `main()` computes `vec2 p` from the fragment via the existing
+      view-transform uniforms (which carry the **zView** frame in z-mode). When
+      `u_viewMode==1`: disk-clamp (`u_unbounded ? r2<=1 : r2>=1` → off-disk gray
+      `[224,226,232]`, **hard-coded to match** the CPU `paintField` z gray, NOT
+      `kindToColor(4)`'s plane gray `[245,245,248]`), else `w = evalPhi(p)`. Plane
+      path (`w = p`) unchanged. `render(view, opts)` sets the uniform from
+      `opts.viewMode === 'z'` (default 0 ⇒ plane is byte-for-byte identical).
+    * **Dispatch (`schwarz-render.js`):** `doRecompute` GPU guard dropped its
+      `viewMode!=='z'` clause; in z it passes `sState.zView` + `viewMode:'z'` to
+      `render()` and paints overlays via `paintZView(true)` (overlay-only). PQDs
+      have no GPU shader → `setPhi` sets `capacityError` → `activeRenderer()`
+      returns `'cpu'` (auto), so they keep the CPU z-path with **no new fallback
+      logic**.
+    * **Overlay-only paint (`schwarz-paint.js`):** `paintZView(overlayOnly)` —
+      when true (GPU drew the field on the GL layer), skips the backdrop fill +
+      `paintField` and leaves the 2D canvas transparent so the GL field shows
+      through, drawing only ∂𝔻 + axes + `paintZOverlays`. `paintZView` is now
+      **exported** from the paint module and threaded ui.js → render.js (and used
+      by `renderImmediate`).
+    * **Interactive parity (`schwarz-ui.js` `renderImmediate`, `schwarz-
+      interaction.js` pan/wheel):** `renderImmediate` generalized to z (zView +
+      `viewMode:'z'` + `paintZView(true)`); drag/zoom in z now use it when GPU is
+      active (was always CPU-debounce). The `recolor()` helper and `setViewMode`/
+      tab-handler `showGLLayer` gates were generalized from `plane` to `plane||z`.
+      Renderer `<select>` reclassified `view-plane-only` → `view-2d` (now applies
+      in z too).
+    * **PQD caveat preserved:** explicit `renderer:'gpu'` + a PQD returns `'gpu'`
+      from `activeRenderer()` even on capacityError (pre-existing plane quirk);
+      z inherits it unchanged — auto (the default) is unaffected. Not fixed here.
+    * **Follow-up fix (repaint):** the GPU z field lives on the GL layer and the
+      2D canvas must stay transparent for it to show. `paintZView` originally took
+      a caller-passed `overlayOnly` flag, but stray full repaints — hover-orbit,
+      resize, `paintAll`, clear-overlays — called `paintZView()` with no flag and
+      filled the opaque `#f3f4f7` backdrop over the GL field, so the GPU render
+      only showed *while dragging* (where `renderImmediate` kept re-running the
+      overlay-only paint). Fixed by deriving the field source inside `paintZView`
+      from `activeRenderer()` (threaded into the paint module) instead of the
+      flag: when z + GPU, it always skips the backdrop/`paintField` and leaves the
+      canvas transparent; CPU still blits the field. `overlayOnly` kept as an
+      explicit override. Browser-verified: 2D center stays alpha 0 (GL shows
+      through) after hover/resize/clear in GPU; opaque field in CPU.
+    * Verify: node-test 1134/0, lint clean, `version:check` clean. Branches
+      `feat/schwarz-zview-gpu` (#25) + `fix/schwarz-zview-gpu-repaint`.
+
+59. **Schwarz z-plane VIEW + UI streamline (SHIPPED).** The decorative 180px
+    z-panel inset was promoted to a first-class **view mode** alongside plane and
+    sphere: the segmented View toggle is now **plane │ z-disk │ sphere**, and the
+    z-disk renders the Schwarz tiling **uniformized onto 𝔻** as the main plot (CPU:
+    sample z, lift w = φ(z), run the existing σ escape-time). Full interaction
+    parity (pan/zoom/click-pin/hover/double-click tree) maps through φ; every
+    overlay mirrors ψ-pulled-back into the disk.
+    * **State/transforms (schwarz-ui.js):** added `sState.zView` (independent
+      pan/zoom) + `pixelToZ`/`zToPixel` + `frameDisk()`/`fitToDisk()`. `viewMode`
+      is now `'plane'|'z'|'sphere'`. `setViewMode`/`_applyViewModeVisibility`
+      generalized to 4 CSS classes — `.view-plane-only` (fractal/domain seg +
+      Renderer select), `.view-z-only` (reserved), **`.view-2d`** (plane AND z:
+      overlays/analysis/dynamics/limit-set/info/render rows), `.view-sphere-only`.
+      Fixed a latent bug: the view highlight now scopes to `#schwarz-view-card`
+      (was `#controls-schwarz .seg-btn`, which deactivated the Mode card's
+      seg-btns). `_applyModeOptionsVisibility()` keeps the hover/tree controls
+      visible in z even if plane was left in domain-coloring.
+    * **CPU render (schwarz-render.js + schwarz-cpu-worker.js):** `doRecompute`
+      originally forced the CPU path in z (**superseded by #60**, which added the
+      GPU z-path; the CPU path below is now the *fallback* for PQDs / no-WebGL /
+      GPU failure); a `domain:'z'` flag rides
+      the worker payload; both `chainPass` and the worker per-pixel loop add the
+      z-branch — disk-mask (`unbounded ? r²>1 : r²<1`) → off-disk = KIND_OUTSIDE,
+      else `wpt = sw.evalPhi(z)` then the unchanged escape-time. φ needs **zero**
+      extra serialization (the worker already rebuilds the handle; `evalPhi` is on
+      it).
+    * **Paint (schwarz-paint.js):** `paintZPanel` (inset) → `paintZView()`
+      (full-canvas: backdrop + field blit + ∂𝔻 circle + axes) plus the extracted
+      `paintZOverlays(ctx, zToPx)` (the PR-#58 ψ-pullback machinery, now
+      transform-parametrized). `paintAll`/`paintBoundaryOnTop` early-return to
+      `paintZView()` in z — the single chokepoint that keeps every w-side painter
+      out of z-mode. `paintField` paints off-disk pixels a neutral gray in z.
+    * **Interaction (schwarz-interaction.js):** `view2D()`, `activeView()`
+      (zView in z), `pixelToView`, and `eventToW(e)` (z→disk-gate→φ(z), null
+      off-disk). Pan/zoom mutate the active view; wheel zoom-to-cursor via
+      `pixelToView`; hover readout shows z + w=φ(z); `_interactionPoint` returns
+      `eventToW`; `pinOrbitAt` always refreshes the pullback. Shift-drag curve
+      draw stays plane-only.
+    * **UI streamline:** removed the old `Show z-panel` checkbox + `showZPanel`;
+      stripped the `(S4)/(S5+6)/(H7)/(E10)/(E11)/(H8)/(F4)/(F8)` parentheticals;
+      "Forward dynamics" → **Dynamics** with curve/sweep/export tucked under a
+      native `<details>` **Advanced**; added a **View** card `<h2>` + help; Fit
+      button dispatches Fit-to-Ω / Fit-to-𝔻 by view.
+    * Verified: node-test **1134/0**, lint clean, `node --check` clean,
+      `version:check` clean (hash `8da5964302`). **Browser-verified** (served, not
+      headless-blind): 3-way toggle, capture, z renders the uniformized tiling
+      (disk + off-disk backdrop + ∂𝔻 + 26-colour escape ramp), z/w hover readout,
+      Fit-to-𝔻, click-pin, and double-click preimage-tree mirrored into 𝔻 — zero
+      console errors. Branch `feat/schwarz-zview`. NOTE: a fresh capture frames the
+      z-view from the live canvas size; if the canvas was 0-wide at capture
+      (headless), click **Fit** to reframe.
+    * **Fix (z-view overlay drawing).** Three handlers called a bare w-plane
+      painter right after `paintBoundaryOnTop()` —
+      `onCanvasDblClick`/`_rebuildPreimageTreeIfActive` did `paintPreimageTree()`,
+      `_computeLimitSet` did `paintLimitSet()`. Those draw via `worldToPixel`, so
+      in the z-view they splattered the w-plane overlay across the disk, then
+      vanished on the next clean `paintZView` repaint — surfaced on the **unbounded
+      deltoid** (large/offset Ω) but latent for every family (near-invisible on a
+      near-disk bounded Ω where φ≈id). `paintBoundaryOnTop` already draws these for
+      the active view, so the bare calls were removed (redundant in plane, wrong in
+      z); the now-unused `paintPreimageTree`/`paintLimitSet` sCtx bindings were
+      dropped from schwarz-interaction.js + schwarz-features.js. Re-verified
+      node-test **1134/0**, lint clean, hash `7835270aea`.
+    * **Fix 2 (z-overlay transform signature — the real deltoid bug).** With the
+      stray w-painters gone, z-overlays STILL didn't draw: `paintZView` passed the
+      schwarz-ui **`zToPixel(re, im)`** (two scalar args) as the overlay transform,
+      but `paintZOverlays` (extracted from the inset) calls it as **`zToPanel(z)`**
+      — one **{re,im} object** (the inset's original contract). So every overlay
+      point became `zToPixel(zObject, undefined)` → `(zObject − cx)*scale` →
+      **(NaN, NaN)**, drawn off-canvas/invisible. The field (drawn by paintField,
+      not this transform) and the unit circle (`zToPixel(0,0)`, two args) were
+      unaffected, so ONLY the overlays vanished — and the near-disk bounded case
+      had masked it because the *stray* w-painter (worldToPixel, correct arity)
+      happened to land overlays in ≈ the right spot. Fix: `paintZView` passes an
+      adapter `(z) => zToPixel(z.re, z.im)`. **Browser-verified on the unbounded
+      deltoid**: double-click in z → the plasma-ramp preimage tree renders in 𝔻*
+      clustered toward |z|=1 (its limit set); orbit pin + overlays mirror; zero
+      console errors. node-test **1134/0**, lint clean, hash `de027b1edc`. Shipped
+      as PR #23 (squash-merged to main).
+    * **Doc cleanup follow-up** (post-merge, PR #24): scrubbed stale comments left
+      by the inset→view refactor (referenced the removed `z-panel inset` /
+      `paintZPanel` / `showZPanel`) across schwarz-paint/features/ui.js — comments
+      only, no behavior change. node-test 1134/0, lint clean.
+
+58. **Schwarz z-panel mirrors ALL overlays (ψ-pullback) (SHIPPED).** The z-panel
+    inset (S6 / F4) previously pulled only the forward orbit back into 𝔻/𝔻*. It
+    now mirrors **every active w-plane overlay** — preimage tree, limit set,
+    cycles, sweep, curve forward-image, critical orbits, σ-singularities, and
+    |σ|/arg(σ) level curves — each ψ-pulled-back and drawn in its w-side palette.
+    All work is in **`app/schwarz/schwarz-paint.js`** (`paintZPanel` + new
+    helpers); no UI/state changes, no new toggles — the inset auto-mirrors
+    whatever is shown in the w-plane (same as the orbit always did).
+    * **Pullback = ψ (`sState.schwarz.psi`), a per-point Newton solve.** Every
+      overlay is stored in the w-plane (all paint fns use `worldToPixel`); ψ maps
+      each w-point into the disk. ψ is **view-independent**, so pullbacks are
+      cached by `(φ handle, source-array reference)` in a module-level `_zc` +
+      `_zMemo(slot, src, compute)`: the inset repaints every frame during a GPU
+      pan but reuses the cache, and a pullback re-runs ONLY when its overlay is
+      recomputed/cleared (new array reference) or φ changes
+      (`_zInvalidateIfPhiChanged`). This identity-cache-in-paint design means NO
+      new wiring at the many overlay-mutation sites — it can't go stale. Safe
+      because level curves / domain-coloring recompute on **mouseup only**
+      (confirmed in schwarz-interaction.js), so references are stable across pan
+      frames.
+    * **Bounds:** points with no preimage in 𝔻/𝔻* (`psi → null`) become gaps
+      (same as the orbit). The limit set is **subsampled to ≤2000 pts**
+      (`LIMITSET_Z_CAP`) for the 180px inset; level curves are capped at 800
+      pulled-back segments per contour set (`LEVELCURVE_Z_SEG_CAP`), drawing a
+      segment only when **both** endpoints invert. A **clip rect** on the inset
+      box was added (pulled-back points can land far outside the disk, esp.
+      unbounded 𝔻* — without the clip they'd paint over the whole main canvas).
+    * **Cleanup:** extracted the preimage-tree generation ramp to a module-level
+      `preimageGenColor(g, N)` shared by `paintPreimageTree` (w-plane) and the
+      z-panel mirror.
+    * Drawing helpers `_zDrawPolyline` / `_zDrawDots` take the inset's local
+      `zToPanel` transform; overlays drawn bottom-to-top (level curves → sweep →
+      curve → critical → tree → limit set → cycles → orbit → singularities),
+      each gated by the SAME condition that shows it in the w-plane.
+    * Verified: node-test **1134/0**, lint clean, `node --check` clean,
+      `version:check` clean (hash `83fd54f050`). Branch
+      `feat/schwarz-zpanel-overlays`. NOTE: headless preview pauses rAF, so a
+      real-browser check is recommended — open the z-panel, then turn on the
+      limit set / preimage tree / cycles / singularities and confirm each appears
+      pulled-back inside the disk and that pan/zoom stays smooth.
+
+57. **Schwarz "Overlays" card — Clear orbit + Clear all overlays (SHIPPED).**
+    The Schwarz tab could accumulate ~9 overlays but several had **no user-facing
+    clear**: the click-pinned / hover forward orbit and the double-click preimage
+    (inverse) tree cleared only *implicitly* (mode switch, new-φ capture, click
+    outside Ω). The limit set / cycles / sweep / curve cards each had their own
+    inline "Clear", but there was no master reset. Added a new `makeOverlaysCard()`
+    (id `schwarz-overlays-card`, `view-plane-only`) mounted **right after the Mode
+    card** for accessibility, with two buttons:
+    * **Clear orbit** → `clearOrbit()`: cancels the hover rAF, empties
+      `orbit`/`pinnedOrbit`/`hoverOrbit`, and refreshes the z-panel pullback
+      (`_recomputeZPanelOrbit()` if the panel is open, else null), then
+      `paintBoundaryOnTop()`.
+    * **Clear all overlays** → `clearAllOverlays()`: calls `clearOrbit()` then nulls
+      every **computed/drawn** overlay — `preimageTree`, `limitSet`(+`limitSetDim`),
+      `cycles`, `sweepOrbits`, `curveImage`(+`curveImageDraft`) — and blanks the
+      per-card status/count labels (`schwarz-ls-status`, `schwarz-ls-dim`,
+      `schwarz-cycle-count`, `schwarz-preimage-count`).
+    Scope decision (per user): clears only computed/drawn overlays and **leaves the
+    checkbox DISPLAY TOGGLES as set** — `showSingularities` / `showLevelCurves` /
+    `showCriticalOrbits` / `showZPanel` and their cached data are untouched (those
+    hide via their own checkboxes; wiping data while the box stays checked would
+    desync). `clearOrbit`/`clearAllOverlays` are function declarations (hoisted) but
+    reference the `let`-bound `paintBoundaryOnTop` / `_recomputeZPanelOrbit`
+    installed at the file tail — fine since they only run on click, after the
+    installs. Repaint via `paintBoundaryOnTop()` matches every existing per-feature
+    clear button. Verified: node-test **1134/0**, lint clean, `node --check` clean,
+    `version:check` clean (hash `be665cd0b9`). Branch
+    `feat/schwarz-clear-overlays`. (Headless preview pauses rAF, so a quick manual
+    real-browser check — pin an orbit + compute a limit set, click each clear — is
+    recommended.)
+
+56. **Schwarz "Source φ" tile to top + compact; vector-field drag perf
+    (SHIPPED).** Two UX/perf asks.
+    * **Source φ tile (schwarz-ui.js).** It's the first tile a user touches
+      (capture a φ) but sat 6th with a bulky description. `mountSchwarzSidebar`
+      now appends `makeSourceCard()` **first**; `makeSourceCard` is compacted to
+      title + status + `Use this φ` button (the σ-reflection / six-families
+      description moved into the "?" hover help). `attachSchwarzHelp` was
+      rewritten to attach by **card id** (`#schwarz-source-card` /
+      `#schwarz-render-card` / `#schwarz-info-card`) instead of header **index** —
+      the index form was already mis-aligned (7 `<h2>` cards, so the "Source φ"
+      help landed on the Mode card) and the reorder would have scrambled it
+      further; by-id fixes that and carries the moved Source description. Added
+      ids to the Render + Info cards. Browser-verified: Source first + compact,
+      "?" buttons now on the correct 3 cards, Source popover shows the
+      description.
+    * **Vector-field drag perf (ui-domain-plot.js).** `drawVectorField()`
+      re-sampled h(w) over the whole visible grid every `_renderNow()` with no
+      cache — the dominant cost while dragging/panning/zooming (worst case 2
+      full recomputes per pole-drag frame). Fix (chosen "recommended" option):
+      defer the field during an active gesture and recompute once on settle.
+      New `_vfInteracting` flag + `_markVfInteracting()` (sets it + arms a ~150 ms
+      settle timer that redraws) / `_settleVectorField()` (immediate settle on
+      mouseup, no-op for plain clicks); hooked into the pan / pole-drag / wheel
+      handlers; `_renderNow` gates `drawVectorField()` on `!this._vfInteracting`.
+      Behaviour-preserving at rest (gate false → identical). Micro-opt: hoist the
+      pole **screen** positions once per `drawVectorField` and use squared-
+      distance (was O(poles) `toScreen()`+`hypot()` per grid sample). Verified:
+      node-test **1134/0**, lint clean, `version:check` clean (hash `177717c568`),
+      no exceptions through a field-on drag/wheel/mode-switch, zero console
+      errors. NOTE: the headless preview pauses rAF (so `render()` jams and the
+      actual repaint suppression can't be exercised there) — a quick manual check
+      in a real browser (drag a pole with the field on → smooth, field reappears
+      on release) is recommended. Branch
+      `feat/schwarz-source-tile-and-vectorfield-perf`.
+
+55. **Schwarz domain-coloring ghosting fix + graphics hardening (SHIPPED).**
+    User report: dragging the view in the Schwarz tab's **domain-coloring** mode
+    left offset "ghost" copies of the σ-coloring. Root cause: `paintAll()`
+    (`schwarz-paint.js`) never cleared the 2D overlay canvas — it relied on
+    `paintField()`, which returns early when there's no escape field. Domain-
+    coloring is fieldless, so each pan re-blitted the cached 256×256 buffer at a
+    shifted transform (`drawImage` + `worldToPixel`) over the un-cleared previous
+    frame. (`paintBoundaryOnTop` already cleared; that's why GPU/CPU fractal
+    modes didn't ghost.) Fixes, plus an app-wide graphics/statefulness review:
+    * **P1 (the fix):** `paintAll()` now `clearRect`s up front — self-clearing
+      like `paintBoundaryOnTop`. Fixes ghosting for every fieldless overlay mode.
+    * **P2:** the Schwarz pan/wheel handlers (`schwarz-interaction.js`) special-
+      case domain-coloring: a new debounced `liveDomainColoringRepaint()` re-blits
+      the cached buffer live via `paintAll()` and re-sharpens after the gesture,
+      instead of kicking the fractal CPU pyramid (wrong mode + a flash; wheel had
+      never recomputed the coloring at all).
+    * **P3A:** active-tab guard in `doRecompute` (`schwarz-render.js`) and
+      `renderImmediate` (`schwarz-ui.js`) — the 80 ms debounced recompute could
+      fire after a tab switch (it re-bumps `renderToken`, so the token check
+      couldn't catch it) and re-show the GL layer / blit over the active tab.
+    * **P3B:** WebGL **context-loss** handling (none existed). `preventDefault`
+      on `webglcontextlost` + an `isContextLost()` render guard in both
+      `schwarz-webgl.js` and `sphere-webgl.js`; recreate-on-`webglcontextrestored`
+      wired in `schwarz-ui.js` ensureGPU (drop→CPU on loss, recreate on restore)
+      and `sphere-ui.js` mount (recreate renderer + re-apply captured φ/params).
+    * **P3C:** a window-resize repaint for the Schwarz tab (`schwarz-ui.js`) —
+      the shared `#canvas` backing store is resized/cleared by the QD plot's
+      global resize handler, leaving the Schwarz view blank until interaction.
+    * **Review — NOT bugs (verified):** async geom/cusp/realizability/alt-search
+      callbacks already token-guard stale results (`ui-solve.js`); live-drag
+      warm-start clones φ so the identity caches don't go stale. **Flagged, by
+      design (left as-is):** Schwarz/param-slice use an explicitly-captured φ
+      ("Use this φ") and don't auto-refresh on QD re-solve; the deeper
+      shared-`#canvas`-across-tabs dpr/ownership-on-resize cleanup (a separate
+      follow-up). Verified: node-test **1134/0**, lint clean, `version:check`
+      clean (hash `ae203a3290`). Browser-smoke: domain-coloring pan painted-pixel
+      fraction stayed flat (0.186→0.185, no accumulation) with `clearRect` firing
+      every frame; fractal/mode-switch no regression; zero console errors. (Real
+      GPU context loss can't be forced headless — P3B is defensive.) Branch
+      `fix/schwarz-domain-coloring-ghost`.
+
+54. **PQD pole-drag responsiveness — live solve off the main thread + warm
+    starts (SHIPPED).** Fixed the "slow / gets stuck when dragging poles fast"
+    report, worst on PQD families. Root causes: (1) the live drag path
+    `quickSolveAndRender` (ui-solve.js) ran a *synchronous* `QD.solveInverseQD`
+    inline on every frame at an origin/identity-inconsistent warm-start (the old
+    `tryRegimeSwitch`), freezing the UI thread; (2) the dragged marker was only
+    repainted *after* a solve, so it appeared frozen; (3) every live frame ran
+    univalence + identity at full `state.samples`; (4) the drag-end full solve
+    started cold. Fixes, Tiers 1–2 of the perf plan:
+    * **1A — marker decoupled.** New `DomainPlot.setLivePole(idx, w)`
+      (ui-domain-plot.js) writes `data.poles[idx]` and rAF-repaints; `onPoleDrag`
+      (ui.js) calls it *before* scheduling any solve, so the dot tracks the
+      cursor 1:1 regardless of solve latency.
+    * **1B — no inline full solve.** `tryRegimeSwitch`'s synchronous
+      `solveInverseQD` is gone. On warm-start failure / regime inconsistency the
+      live path now only kicks the debounced worker `scheduleSolve()` (which
+      carries `autoSwitchSingular`) and still paints the live result.
+    * **1C — cheaper live checks.** Live univalence/identity use
+      `LIVE_SAMPLES = 96` (min with `state.samples`); the full solve keeps the
+      full count.
+    * **1D — warm-started drag-end.** `solveAndRender` passes the last good φ as
+      `opts.warmPhi`; `_solveOnce` (solver.js) tries it as the first Newton seed
+      (family-tag-gated via a `freshInit().family` probe; falls through to the
+      full pipeline on any miss — byte-identical when absent). Verified live:
+      drag-end reports `method: warm-start`, 0 Newton iterations.
+    * **2A/2B — live solve off-thread.** New `QD.liveSolveStep(hData, initPhi,
+      {newton, numSamples, wantOriginInside})` (solver.js) = one warm Newton +
+      reduced-sample checks, returning a plain clone-safe result. New dedicated
+      **live worker** channel in primary-solver-worker.js (`liveSolveAsync` /
+      `cancelLive` / `isLiveBusy`, `kind:'liveSolve'` handler), modelled on the
+      aux worker; cancel-and-replace by dropping the listener (no terminate —
+      each job is ~ms). `quickSolveAndRender` is now async: it seeds on the main
+      thread, posts to `PSW.liveSolve`, and commits under a `_liveSolveToken`
+      stale-guard. φ is plain data (`clonePhi` shape) → structured-clone-safe.
+    * **2C/2D — fallback.** `liveSolveAsync` falls back to a main-thread
+      `QD.liveSolveStep` (file:// / no-Worker / unit tests), same shape as
+      `solve()`.
+    Tier 3 (analytic Jacobian, multistart trimming, singular mass-sample cuts)
+    documented in the plan but **deferred**. Tests: `liveSolveStep` warm-start +
+    guards (solvers.test.js), live-worker surface + fallback resolve
+    (worker.test.js), `setLivePole` move/no-op (ui-domain-plot.test.js) — **1134
+    passed, 0 failed**, lint clean, `version:check` clean (hash `4bbfa0e19e`).
+    Browser-verified: 10 live frames all resolved via the worker (0 rejected),
+    marker tracked, drag-end warm-start, ✓ Valid QD, zero console errors. (The
+    headless preview pauses rAF in the hidden tab, so the live path was driven
+    with an rAF shim.) Branch `perf/pqd-pole-drag`.
+
+53. **Geometric univalence criteria — async checks + "Geometric properties"
+    card (§25; SHIPPED).** Beyond plain univalence, the QD/Inverse tab now
+    classifies the solved Ω as **convex / star-like / spiral-like**. New
+    page-only module `app/univalence.js` → `QD.classifyUnivalence(phi, opts)`
+    (mirrors `critical-set.js`; not in the worker bundle). Family-agnostic: it
+    samples z=e^{iθ} and reuses `QD.phiTaylorAt(z,φ,2)` (φ=a₀, φ′=a₁, φ″=2·a₂)
+    to evaluate, on the boundary (⇔ interior by the min principle for univalent
+    φ):
+    * star-function `g = z·φ′/(φ−w₀)` (bounded) or `z·φ′/φ` (unbounded ⇒
+      star-like **w.r.t. ∞**, per the author); star-like ⇔ min Re g > 0.
+    * spiral-like ⇔ {arg g} fit in an arc < π (covering-arc via largest gap);
+      reports the optimal spiral angle λ.
+    * convex ⇔ min Re(1 + z·φ″/φ′) > 0 (bounded only; N/A for unbounded Ω;
+      "indeterminate" when φ′ vanishes on ∂𝔻).
+    Hierarchy convex ⟹ star ⟹ spiral. **Async, non-blocking**:
+    `scheduleGeomClassification` (ui.js) runs in a `requestIdleCallback`
+    (setTimeout fallback) after `showSolution`, guarded by `_solveAndRenderToken`,
+    writing to the new `#geom-props-card` (`renderGeomProps`) and onto the
+    `QD.PrimarySolution` envelope (`geomProps`). New card in index.html under the
+    Riemann-map card + a "?" help popover; `.ok/.warn/.key` CSS extended to
+    `#geom-props-content`. Wired: `univalence.js` in `asset-manifest.js`
+    (SOLVER_PAGE_ONLY_FILES), index.html script tag, both node-test loaders.
+    Tests (§25): disk (one-point QD) ⇒ convex/star/spiral + hierarchy; bounded
+    LQD ⇒ star-like-not-convex; unbounded ⇒ star-w.r.t-∞ + convex N/A; an
+    unbounded non-star case; a PQD sanity; the non-univalent caveat note. 943
+    tests, lint clean. Browser-verified the card renders/updates a beat after
+    the boundary, no console errors. Cache `v21-geom-univalence-criteria`.
+
+52. **Help-text refresh — "?" popovers brought up to the current app
+    (SHIPPED).** The QD-tab `QD.QoL.attachHelp` popovers (`ui.js mountQolHelp`)
+    predated the PQD families and recent UI. Updated, kept concise:
+    * **Domain type** — now covers Classical / PQD (power weight
+      |w|^{2(α−1)}, α on the α card) / LQD (log weight), correctly defines a
+      *singular* variant as 0 ∈ Ω (Blaschke factor; q only for singular LQDs),
+      and notes the PQD auto singular⇄non-singular switch. (Previously omitted
+      PQDs entirely and misdescribed "singular" as a higher-order origin pole.)
+    * **Solver settings** — fixed the stale preset names (Quick / Standard /
+      Thorough, not "Fast / Default / Thorough") and added the boundary-sample
+      count, vector-field overlay (Pólya / family-specific external field),
+      critical-set overlay, and the Auto-switch toggle.
+    * **w₀** — notes bounded PQDs bootstrap a realizable interior w₀ on Auto.
+    * **Riemann map φ(z)** — lists the per-family closed forms incl.
+      (R#)^{1/α} (PQD) and the Blaschke factor for singular variants.
+    * **q** — clarified it is the singular-LQD origin residue; singular PQDs
+      need no q. The index.html PQD/α inline hints were already current; the
+      keyboard-shortcuts overlay (`qol.js`) and the Schwarz/Direct/Param-slice
+      popovers were verified accurate and left as-is. Browser-verified the
+      popovers render with the new text, no console errors. Lint clean. Cache
+      `v20-help-text-refresh`.
+
+51. **Code-review fixes — worker cache-busting, doc drift, Q1.4 R# guard
+    (§24; SHIPPED).** Three top items from the §24 review report.
+    * **Worker source cache-busting (was a real, user-facing bug).** Both
+      runtime worker bundlers (`primary-solver-worker.js`, `param-slice-pool.js`)
+      fetched solver source with a plain relative URL → after a deploy a Worker
+      could run **stale** code from the browser HTTP cache (the §23 browser
+      check hit exactly this). Fix: `CACHE_VERSION` is now the single canonical
+      constant in `asset-manifest.js` (exported on `QD_ASSET_MANIFEST`); `sw.js`
+      reads it from the manifest (and because sw.js `importScripts` the manifest,
+      bumping it still triggers the SW byte-update); both bundlers fetch
+      `f + '?v=' + CACHE_VERSION`, busting the HTTP cache. **Release convention:
+      bump `CACHE_VERSION` in `asset-manifest.js` only.** Now `v19-worker-cache-bust`.
+    * **Doc drift.** `README.md` test count 566→920 + added the 4 PQD inverse
+      families to the Supported-families table; `ARCHITECTURE.md` 626→920.
+    * **Q1.4 — explicit R# non-vanishing guard (task #46, done).** New shared
+      `QD._rHashVanishingGuard(samples)` (`solver-pqd.js`) computes the winding
+      number of R#(e^{iθ}) about 0 (= #zeros of R# inside 𝔻) and flags a
+      boundary near-zero; `verifyQuadratureIdentity_PQD` and `_PQDS` force
+      `maxRelDiff = ∞` when it trips, so a spurious Newton root with R# vanishing
+      in 𝔻̄ is rejected **directly** (previously only indirectly via the phase
+      unwrap). `sweepUnitCircle_PQDS` now also stores `rH`. Tests: guard unit
+      (winding 0/1/−2, boundary touch) + valid-PQD-not-flagged regressions.
+      926 tests, lint clean.
+
+50. **PQD-specific external (vector) field (SHIPPED).** The "External field"
+    vector-field option was using the classical `w − h̄(w)`. For PQDs the
+    `|w|^{2(α−1)}` weight changes the external potential's gradient to
+    `(1/α)·w·|w|^{2(α−1)} − h̄(w)` (analogous to the LQD `ln|w|²/w̄ − h̄(w)`
+    variant, and reducing to the classical form at α=1). Added a `'pqd'` branch
+    to the external-field switch in `ui-domain-plot.js` (math-plane
+    `V=(s·Re w − Re h, s·Im w + Im h)`, `s=(1/α)|w|^{2(α−1)}`; α from
+    `phi.alpha`/`state.alpha`; origin floor via `vectorFieldOriginAbs2Floor`);
+    the four PQD MODES descriptors (`ui.js`) now set `externalFieldKind:'pqd'`
+    and an updated `externalFieldLabel` (shown in the `#vf-external-opt`
+    dropdown, refreshed by `applyModeVisuals`). Browser-verified: label updates
+    per mode, external field renders without errors. 920 tests / lint clean
+    (vector field is canvas-only, no node test). Cache `v18-pqd-external-field`.
+
+49. **Automatic singular ↔ non-singular PQD regime switching (§23; SHIPPED).**
+    A bounded non-singular PQD (`powerQD`, 0 ∉ Ω) and its singular counterpart
+    (`powerQD_singular`, 0 ∈ Ω) are the same domain on opposite sides of a
+    transition: grow the residues and ∂Ω sweeps through the origin. Past the
+    transition the requested family silently fails. Now the solver auto-detects
+    the regime mismatch and re-dispatches once to the correct family, for BOTH
+    the bounded and the unbounded PQD pairs (`unboundedPQD ↔
+    unboundedPQD_singular`). **Solver layer** (`solver.js`): new exported
+    `originInsideOmega(phi, N)` (self-contained even-odd ray-cast of 0 against
+    the sampled ∂Ω, with a `phi.unbounded` inversion since Ω is the unbounded
+    exterior there); the old `solveInverseQD` body is renamed `_solveOnce`, and
+    `solveInverseQD` now gates on `opts.autoSwitchSingular && isPQDOpts` →
+    `solvePQDWithAutoSwitch`. That solves the requested regime and — only if it
+    is wrong (invalid result, or `originInsideOmega !== !!opts.singular`) —
+    solves the conjugate regime once (`g.singular = !opts.singular`, drop `w0`
+    when going non-singular so it bootstraps) and returns it tagged
+    `regimeSwitched/switchedTo`. The decision is purely geometric (0 ∈ Ω ⟺
+    singular) so it settles and cannot ping-pong; the common (already-correct)
+    case is exactly one solve. No recursion: `bootstrapW0_PQD`'s internal solve
+    and the conjugate solve call `_solveOnce` directly. **UI** (`ui.js`):
+    `solveAndRender` sets `opts.autoSwitchSingular = state.autoSwitchSingular &&
+    /^pqd-/.test(state.mode)`; `setMode`'s visual body is factored into
+    `applyModeVisuals()` so `reflectFamilyMode(phi.family)` can flip the
+    domain-mode radio + cards to the solver-chosen family WITHOUT re-solving;
+    the background alt-search uses `QD.normFromPhi(switched phi)`; `showSolution`
+    leads the Status panel with a `⇄ Auto-switched to the {singular|non-singular}
+    regime` note. **Toggle** (default on): `#auto-switch-singular` checkbox
+    (`index.html`), `state.autoSwitchSingular` (`ui-state.js`), listener
+    (`ui.js`). Tests (§23 in `node-test.js`): `originInsideOmega` units (incl.
+    the unbounded inversion), bounded + unbounded switch-up/down, toggle-off (no
+    switch), no-op-when-correct. Empirical note: for `h=C/(w−3), α=2` the
+    bounded transition sits between C=16 (non-singular) and C=25 (singular). 920
+    passing, lint clean. Cache `v17-pqd-auto-regime-switch`.
+
+48. **Curvature-aware adaptive boundary sampling (§22; SHIPPED).** The plotted
+    boundary looked faceted where the curve bends sharply (e.g. a PQD swinging
+    in toward the origin, where `|φ′|` spikes). Root cause: every sampler
+    refined the *longest* edge until `maxLen < 3·meanLen` (length-only,
+    relative) — and 3 of the 4 PQD samplers (`_PQDS/_UPQD/_UPQDS`) did NO
+    refinement at all (uniform sweep). Fix: a shared
+    `QD.refineBoundaryByDeviation(initialPts, evalMid, opts)` (`solver.js`) that
+    recursively bisects while the true-curve midpoint bows farther than
+    `relTol·diam` (≈1.5e-3) from the chord (sagitta), with `minChordFrac` floor,
+    `maxDepth`, and `maxPoints = base+extra` budget. The generic
+    `_sampleBoundaryAdaptiveImpl` and all 4 PQD `sampleBoundary_*` now route
+    through it; each PQD family supplies a continuous-arg midpoint evaluator
+    (`evalBoundaryMid_*`, prefactor `1 / b / z / z·b`) so the αth-root branch
+    tracking is preserved (each `sweepUnitCircle_*` now also stores `contArg`).
+    Collapses the 5 near-identical refine loops to one (closes part of §19
+    dedup). Concentrates points where the curve bends, for ALL 10 families; the
+    plot is still sampled once per solve (cached by phi). Tests: synthetic
+    localized-feature curve (concentration + worst-gap bound), refiner unit
+    (smooth-circle densifies, straight curve untouched, budget), per-family
+    integration (refines a coarse base, ordered ring, no dups, budget). 908
+    passing, lint clean. Cache `v16-curvature-aware-boundary`. NOTE: gap-vs-
+    uniform is NOT asserted for smooth near-circular domains (uniform is already
+    near-optimal there); the curvature win is proven on the synthetic feature.
+
+47. **Bounded PQD robustness & speed (§20 of the plan; SHIPPED).** Reference
+    failure: `h=3/(w−3), α=2`. Three fixes:
+    * **Residue-strength homotopy.** New `QD.scaleHDataResidues(hData, s)`
+      (`solver.js`) scales residues `s:0→1`. `continuationSolve_PQD`
+      (`solver-pqd.js`) now ramps `s` (near-disk → full strength) instead of
+      the old `scaleHDataPoles` location homotopy, which was VACUOUS for a
+      single pole sitting at w₀. The s→0 limit IS the "linearized precompute"
+      seed idea — near-exact at small residue.
+    * **Classical-QD bootstrap for w₀.** `bootstrapW0_PQD` (`solver-pqd.js`):
+      when w₀ is omitted, try candidate interior points (pole centroid, then
+      nodes by descending |residue| — a node always satisfies the
+      realizability bound, =0) and return the first for which the classical
+      (α=1) QD solve is univalent. Gated by `opts.bootstrapW0` (default on;
+      param-slice passes `false` so the nested solve never runs per pixel —
+      `param-slice-common.js`). The nested classical solve routes to
+      `boundedQD` (no α) so no recursion.
+    * **Realizability error + UI auto-w₀.** `normalizeOpts` throws a clear
+      message when a user-supplied w₀ violates `C > (|a^α−w₀^α|/α)²` (single
+      simple pole). The `pqd-bounded` UI mode dropped `requireManualW0`; in
+      'auto' w₀-mode it now OMITS w₀ so the solver bootstraps (ui.js). `w0Used`
+      falls back to the solved `phi.w0` so reseed/display stay concrete.
+    * Tests: far-pole battery (`h=3/(w−3)`, `5/(w−4)`, non-integer α; w₀ auto)
+      + `scaleHDataResidues` unit + direct continuation residual check + the
+      unrealizable-w₀ error. 880 passing, lint clean. Cache
+      `v14-pqd-residue-homotopy-bootstrap-w0`.
+    * **Reseed family-misrouting (FIXED — §21).** The `#so-reseed` /
+      background alt-search norm reconstruction (`ui.js:~2340`) dropped `alpha`
+      (and lqd/singular/q), so reseed misrouted every non-classical family to
+      `boundedQD`. Fix: `QD.normFromPhi(phi)` (`solver.js`) rebuilds the
+      dispatch-complete `norm` from the solved phi (family tag → lqd/singular,
+      values off phi); reseed now uses it. Tested via a 10-family
+      `normFromPhi → selectFamily` round-trip + an end-to-end powerQD reseed
+      routing check. Cache `v15-reseed-normFromPhi`.
+
+45. **PQD support — power-weighted quadrature domains (SHIPPED, ongoing).**
+    New 7th family `Family.powerQD` (`app/solver-pqd.js` +
+    `app/solvers/seeds/seeds-pqd.js`) for bounded power-weighted QDs:
+    `∫_Ω f·|w|^{2(α-1)} dA = ∮ f·h dw`, Riemann map `φ(z) = (R#(z))^{1/α}`.
+    Math from the thesis §4.3 + the author-supplied "Analysis of LQDs"
+    derivation PDF (Theorem 1.1/1.2, Corollary 1.1, §1.1.1). Arc:
+
+    * **Q1 / Q1.2** — solver kernel + (★) Faber target. The closed form
+      `β_{j,k} = α·inverseFaberAtPole(D_{j,·}, phiTilde)[k]` with modified
+      residues `D_{j,n} = Σ_m C(1−α, m)·p_j^{1−α−m}·C_{j,n+m}` (reuses
+      the existing `QD.Faber.inverseFaberAtPole`; no Bell-poly code).
+      Handles arbitrary pole order. Identity verifier to machine precision.
+    * **Q1.3** — continuous-arg boundary sampler `sweepUnitCircle_PQD` +
+      `Family.X.sampleBoundary` hook (solver.js dispatches to it). Unwraps
+      `arg(R#)` along ∂𝔻 so the αth-root doesn't flip sheets at the atan2
+      cut. Discovered: spurious Newton roots have `winding(R#)≠0` (R# zero
+      inside 𝔻) and are auto-rejected by the identity gate.
+    * **Q2 / Q3** — Schwarz adapter `adaptPowerQD` (σ = conj(F(ψ(w))),
+      `F=(R(z))^{1/α}`), σ⁻¹ polynomial fast-path (integer α) +
+      `explicitSigmaForm` + canonical seeds + "bounded PQD (α=…)" capture
+      label. GPU Schwarz/Sphere shaders refuse `powerQD` (capacityError /
+      setPhi=false) → CPU fallback; the αth-root GPU arithmetic is a
+      future pass.
+    * **UI** — "Power-weighted QD (PQD)" is a top-level Domain-type radio
+      group with its own preset list (`QD_PRESETS_BOUNDED_PQD`) + a
+      dedicated α card (`#alpha-card`).
+    * **QA (arbitrary α > 0)** — generalized from integer α≥2 to any real
+      α>0, α≠1 (incl. the (0,1) LQD-limit regime). Added
+      `Complex.cpow(c, p)` (complex base, real exponent, principal branch)
+      and routed every `c^α`/`c^{1−α}`/`w^{α−1}` op through it; rewrote the
+      verifier integrand to the single-valued `(|w|²)^{α-1}·conj(w)` form;
+      gated the σ⁻¹ polynomial path on `Number.isInteger(α)` with Newton
+      fallback for non-integer α; widened `matches()`/`buildNorm` + the α
+      number input + quick-picks (½, 2, 3). α=2 stays bit-identical; new
+      α∈{0.5,1.5} batteries pass identity < 1e-6. **Tests: 756 passing,
+      lint clean.**
+
+    * **QB — singular bounded PQDs (0 ∈ Ω) — SHIPPED.** New family
+      `Family.powerQD_singular` (`app/solver-pqd-singular.js`):
+      `φ(z)=b_{z₀}(z)·(R#(z))^{1/α}`, prefactor Blaschke (`b(0)=|z₀|`),
+      hardwired constant `R#(0)=w₀^α/|z₀|^α`. **No point charge q.**
+      **The |z₀|-closing constraint is the MASS / AREA equation** — the
+      `f=1` case of the quadrature identity, `∫_Ω|w|^{2(α-1)}dA = ∮ h dw =
+      Σ residues`. The hardwired constant makes `φ(0)=w₀` vacuous (holds for
+      all z₀), so the (●)+(★)+gauge system was rank-deficient by exactly 1
+      (confirmed by a Jacobian SV diagnostic: smallest σ ~5e-9 vs next ~0.5,
+      10⁸ gap, null direction in z₀+A); (M) closes it (full rank, cond ~23).
+      Identity then holds to machine precision (canonical example
+      `h=(63/32)/(w−1)`, α=2, w₀=1 → z₀=2/3, identity 6.7e-13). Schwarz
+      adapter `adaptPowerQD_singular` (σ=identity on ∂Ω, σ⁻¹ via generic
+      Newton F-inverter, σ∘σ⁻¹ ~1e-13); `explicitSigmaForm` + canonical
+      seeds (φ(0), φ(z₀)=0) + "bounded singular PQD (α=…)" capture label;
+      GPU/Sphere refuse → CPU. UI: `pqd-bounded-singular` top-level radio +
+      3 presets (`QD_PRESETS_BOUNDED_PQD_SINGULAR`). `clonePhi` now copies
+      `alpha` (was a latent drop affecting both PQD families). Tests: family
+      battery (origin ∈ Ω, univalent, identity <1e-8) + Schwarz + clonePhi
+      guards. 789 tests, lint clean.
+    * **UA — unbounded PQDs (0 ∉ Ω) — SHIPPED.** New family
+      `Family.unboundedPQD` (`app/solver-uqd-pqd.js`): `φ(z)=z·(r#(z))^{1/α}`
+      on 𝔻*, `r#(∞)=c^α` HARDWIRED (user-confirmed — no mass integral; the
+      complement-mass identity `t=c^{2α}/α` then holds automatically at
+      convergence). Test class A₀(Ω) (decaying) ⇒ weighted integral converges
+      for all α>0. `c` is a user input (as `unboundedQD`). Finite-pole (★) is a
+      verbatim port of `computeTargetA_PQDS` (the factor `(φ_in∘ψ/w)^α=(ψ/w)^α
+      =1/r#` is branch-cut-free since φ_in=z). Constant-h (∞-pole) closed form
+      `G₁=α·h₀·c^{1−α}` matches thesis Example 4.3.1 (`φ=c·z·(1−γ/z)^{1/α}`,
+      `γ=−α·h₀/c^{2α−1}`) to machine precision. **Polynomial h of degree ≥ 1
+      (genuine pole at ∞ order ≥ 1) throws "not yet supported"** — the modified
+      inverse-Faber-at-∞ with the 1/r# factor is the one deferred piece.
+      Schwarz `adaptUnboundedPQD` (σ=identity on ∂Ω exact, ψ∘φ ~1e-13, σ⁻¹
+      Newton side='out'); `explicitSigmaForm` + canonical seeds + "unbounded
+      PQD (α=…)" label; GPU/Sphere refuse → CPU. UI: `pqd-unbounded` top-level
+      radio (c-card + α-card) + 3 presets (`QD_PRESETS_UNBOUNDED_PQD`).
+      `clonePhi` copies `c` + `alpha`. Tests: Example 4.3.1 (G₁=0.6 exact) +
+      finite-pole α∈{2,1.5} (identity <1e-8, univalent) + dispatch + Schwarz.
+      Browser-verified (preset → identity 5e-16, univalent). **804→809 tests,
+      lint clean.**
+    * **UA degree-≥1 polynomial-h (∞-pole) — SHIPPED.** The deferred piece:
+      h with a polynomial part of degree n ≥ 1 (genuine pole at ∞). Replaced
+      the `throw` in `solver-uqd-pqd.js` with a **Laurent-at-∞ matching
+      residual** (`laurentMatchAtInfinity_UPQD`): from S_α=(r·r#)∘ψ/(αw)=h+G,
+      h's polynomial part = the polynomial-at-∞ part of S_α, i.e. with s=1/z
+      the s⁰..sⁿ coeffs of `M·sⁿ` (`M=(r·r#)/(αφ)−h_poly(φ)`) vanish — n+1
+      complex eqns for the n+1 `G_l` (built via the Taylor API in s; no
+      closed-form Faber needed). The conjugation is forced by r being the
+      reflection of r# and **confirmed empirically**: complex const
+      h=0.2+0.15i → G₁=0.4−0.3i = α·conj(h₀)·c^{1−α} (the old constant-h
+      fast-path's no-conj form was wrong for complex h — now fixed for all n).
+      Validated against thesis monomial PQDs (Thm 4.5.3): h=w (a=2,c=2)→G₂=2
+      exact; h=0.9w² (a=2,c=4)→G₃=7.2 exact; plus poly+finite-pole. Identity
+      verifier is the oracle (all <1e-8, univalent). Near the corner-forming
+      limit (|γ_k|→1) the default 600-sample verifier under-resolves the
+      near-cusp boundary (cosmetic; the solution/G_l are exact) — preset/test
+      params stay clear of it. 3 new presets (monomial + poly+pole); hint
+      updated. **809→822 tests, lint clean**, browser-verified (h=w → G=[0,2],
+      identity 1.2e-15). `Family.unboundedPQD` now complete for finite poles +
+      arbitrary polynomial h.
+    * **UB — unbounded SINGULAR PQDs (0 ∈ Ω) — SHIPPED.** New family
+      `Family.unboundedPQD_singular` (`app/solver-uqd-pqd-singular.js`):
+      `φ(z)=z·b_{z₀}(z)·(r#(z))^{1/α}` on 𝔻*, z₀∈𝔻* the origin-preimage
+      (φ(z₀)=0 via the Blaschke), `r#(∞)=|cz₀|^α` hardwired (φ'(∞)=c auto), no
+      q. **z₀-CLOSURE = r(z₀)=0** (thesis **Prop 4.6.3**, author-supplied): when
+      h is analytic at 0, the reflection r of r# must have a root at z₀ — the 2
+      real equations that pin z₀. A rank diagnostic confirmed the necessity:
+      without it the (●)+(★)_A+(★)_F system is rank-deficient by 2 (two zero
+      singular values on the singular monomial — hardwiring r#(∞)=|cz₀|^α makes
+      the leading match z₀-independent, same vacuousness as QB's φ(0)=w₀). With
+      r(z₀)=0 it's full rank and recovers the thesis monomial ground truth
+      **z₀=γ^{1/(2α−1)}=(−2)^{1/3}** (Thm 4.5.2) to machine precision (z₀ exact,
+      identity 4.6e-14). Validated: singular monomial, one-pole α=2 & α=1.5
+      (identity <1e-8, univalent). The singular boundary's near-origin
+      curvature needs a denser verifier sweep (min 2000 samples, enforced in
+      `verifyQuadratureIdentity_UPQDS`; spectral convergence 600→4e-4,
+      1200→1e-10, 2400→4e-14). Schwarz `adaptUnboundedPQD_singular` (σ=identity
+      on ∂Ω exact, ψ∘φ ~1e-13, σ⁻¹ Newton side='out'); explicitSigmaForm +
+      canonical seeds (φ(0)/φ(z₀)=0) + "unbounded singular PQD (α=…)" label;
+      GPU/Sphere refuse → CPU. UI: `pqd-unbounded-singular` top-level radio +
+      3 presets (`QD_PRESETS_UNBOUNDED_PQD_SINGULAR`). Browser-verified
+      (monomial preset → z₀=(−2)^{1/3} exact, identity 2.7e-15, univalent).
+      **822→842 tests, lint clean.** The full PQD family set (bounded ±singular,
+      unbounded ±singular, all α>0, finite poles + polynomial h) is now complete.
+      Remaining nicety: h with a pole at 0 (order m₀) → r has an m₀-related
+      root/pole at z₀ (Prop 4.6.3 general case) — TODO, rare. Plan §17/§18.
+    * **Q1.4** — explicit `winding(R#|∂𝔻 around 0)=0` guard to reject
+      spurious roots with a clear message (currently rejected indirectly
+      via the identity check).
+    * **Q4 / Q5** — Param-slice verification + Direct PQD kernel
+      (Theorem 4.3.5).
+
+    Full roadmap: §15 (Q1–Q5) and §16 (arbitrary-α + singular) of
+    `C:\Users\Andrew Graven\.claude\plans\please-conduct-a-comprehensive-whimsical-harp.md`.
+
+44. **Post-S6 code review + 5-phase remediation roadmap (PLAN ONLY,
+    READY FOR EXECUTION).** End-of-session audit covered S1-S6 plus
+    the broader codebase. Findings recorded as §14 of the running plan
+    file at
+    `C:\Users\Andrew Graven\.claude\plans\please-conduct-a-comprehensive-whimsical-harp.md`.
+
+    Four confirmed bugs (must-fix):
+    * **E1** `boxCountingDimension` allows `nValid >= 2` regression
+      (R² ≡ 1 for two points → meaningless slope). Fix: change to
+      `>= 3` (`app/schwarz/schwarz-inverse.js:520`).
+    * **E2** `sampleLimitSet` unbounded-family restart path is
+      untested; for thin K the rejection sampler may exit after 100
+      restarts. Fix: add explicit `{re: 1e4, im: 0}` fallback +
+      add a deltoid-family test.
+    * **E3** `sState.isDrawingCurve` leaks across tab switches. The
+      tab-changed handler at `schwarz-ui.js:135` does not reset the
+      shift-drag flag; if user shift-drags + tab-switches + returns,
+      next click misbehaves. Fix: add reset to the leaving-tab branch.
+    * **E4** `setMode` → `_recomputeDomainColoring()` works via
+      function-declaration hoisting but is brittle. Fix: reorder or
+      add clarifying comment.
+
+    Verified false positive: the `c0` sign in `_boundedQDInvertF`
+    at `schwarz-inverse.js:151` is **correct** (traced through:
+    `conj(w₀) − target = (w0.re − target.re, −w0.im − target.im)` ✓).
+    Documented explicitly so future reviewers don't re-derive.
+
+    Two real duplications (R1, R2):
+    * **R1** Polynomial helpers (`polyZero`, `polyOne`, `polyAdd`,
+      `polyMul`) duplicated between `parse-h.js:63-105` and
+      `schwarz-inverse.js:50-94`. Consolidate to new
+      `app/poly-helpers.js`.
+    * **R2** `clonePhi` drift between `solver.js:104` (canonical) and
+      `schwarz-ui.js:1233` (UI copy with different defaults +
+      `phi.F` field). HANDOFF #26 bug class. Make schwarz-ui's a
+      thin wrapper over the solver's.
+
+    Stale + dead code (R3, R4):
+    * **R3** Inline `SOLVER_SRC_FILES` fallback arrays in
+      `primary-solver-worker.js:42-55` and
+      `param-slice/param-slice-pool.js:30-46` predate the A6
+      seed-split and don't include `solvers/seeds/seeds-qd.js`.
+      Delete; throw if `QD_ASSET_MANIFEST` unavailable.
+    * **R4** `_fmtCLatex` in `schwarz-analysis.js:55` and
+      `_STAR_SIZE`/`_STAR_N_POL`/`_STAR_N_POL_SIZE` in
+      `sphere-webgl.js:637, 680-682` are `_`-prefixed dead code
+      placeholders. Either complete the features or delete.
+
+    Uncompleted migrations (U1, documented):
+    * **U1** A6 seed-split applied to only 1 of 6 families (boundedQD
+      template). Other 5 families still have seeds inline in their
+      respective `solver-*.js` files. CONTRIBUTING.md documents the
+      recipe; Phase R3 of the remediation plan executes it.
+
+    Integration / robustness (I1-I4):
+    * PNG export blank-canvas on quick mode-toggle → click.
+    * Sphere renderer lifecycle: hidden but not suspended on plane
+      mode → holds GL context.
+    * No GPU capacity gate before mode-specific renders.
+    * mode × viewMode invariant undocumented (works in practice).
+
+    Test coverage gaps (T1-T6): per-family `buildPreimageTree`,
+    `findCycles` closure validation, `sampleLimitSet` restart path,
+    `boxCountingDimension` pathological inputs, GPU/CPU parity matrix,
+    jsdom UI smoke (D1 — jsdom@26 already installed, smoke test not
+    yet written).
+
+    Five-phase remediation plan in §14.7:
+    * **R1** Critical fixes (~30 min): E1-E4.
+    * **R2** Redundancy consolidation (1-2 sessions): R1-R4.
+    * **R3** Complete A6 across 6 families (1 session).
+    * **R4** Robustness improvements (1-2 sessions): I1-I4.
+    * **R5** Test coverage (1-2 sessions): T1-T6.
+    Suggested order: R1 → R2 → R5 → R4 → R3. Each phase exits with
+    `npm test` + `npm run lint` clean and the listed test count.
+
+43. **S6 — z↔w split view (F4) + high-res PNG export (F8) (SHIPPED).**
+    Final phase of the Schwarz arc. Both UI-only; no new kernel files.
+
+    **F4 z-panel inset.** Inset model (180×180 corner panel) rather
+    than full horizontal split — preserves the existing pan/zoom/click
+    handlers untouched. State: `sState.showZPanel`, `sState.zPanelOrbit`.
+    Toggleable via the Forward card checkbox. Renders the unit circle
+    (with `𝔻` or `𝔻*` tint label depending on family), the ψ-pullback
+    of the current orbit via `sw.psi(w)` for each orbit point, and a
+    seed marker. Click-to-orbit hooks into `_recomputeZPanelOrbit()`
+    which refreshes z-history.
+
+    **F8 PNG export.** `_exportPng()` in the Forward card. Composites
+    the GPU canvas (`#schwarz-gl-canvas`) + 2D overlay (`#canvas`)
+    into an off-screen composite canvas; calls
+    `toBlob('image/png')`; triggers download with filename
+    `qd-schwarz-<ISO-timestamp>-<W>x<H>.png`. Multiplier selector
+    1× / 2× / 4×. For multiplier > 1 in GPU mode, briefly re-renders
+    at higher resolution by passing a temporary view with larger
+    `cssW`/`cssH` (`schwarz-webgl.js:1014-1018` reads those for the
+    drawing-buffer size), then restores. CPU / preimage-tree /
+    domain-coloring paths skip the GPU re-render and just upscale the
+    2D canvas via `drawImage` with `imageSmoothingEnabled = false`.
+
+    Known limitation (per audit): the CPU/domain-coloring/preimage-tree
+    fallback path assumes a populated 2D canvas — if the user toggles
+    to those modes and immediately clicks Export before rendering, the
+    output is blank. Documented as Phase R4 / I1 in the remediation
+    plan.
+
+    Tests: 698 passing (unchanged from S5 — F4 + F8 are UI-only).
+    Files: only `schwarz/schwarz-ui.js` modified.
+
+42. **S5 — Forward dynamics (5 sub-items) (SHIPPED).** Big phase: H7
+    critical-orbit tracker, E11 curve forward-image, F6 domain
+    coloring, E10 cycle finder, H8 orbit-family sweep. One new
+    kernel file (`app/schwarz/schwarz-forward.js`, 330 LOC); 5 new
+    painters + Forward-dynamics card in `schwarz-ui.js`; new
+    `Mode: domain-coloring` entry in the mode segmented control.
+
+    Public API on `QD.Schwarz`:
+    * `canonicalSeeds(schwarz)` → per-family canonical orbit-tracker
+      points. boundedQD/boundedLQD use `φ(0) = w₀`; singular LQDs use
+      Blaschke center `φ(z₀)`; unbounded families use centroid of
+      `φ(1/conj(z_j))`; always include `w=0` if in Ω.
+    * `iterateCurveForward(pts, schwarz, k)` → array of (k+1) polylines
+      of σ-images. Filters out vertices leaving Ω.
+    * `findCycles(schwarz, n, opts)` → period-n cycle list via Newton
+      on `G(w) = σⁿ(w) − w` from an 18×18 grid in Ω. Dedup at 1e-4 in
+      w-space + sub-period filter (skip cycles whose points coincide
+      with a shorter cycle).
+    * `sampleSweepSeeds('line'|'circle', params)` → evenly-spaced seeds
+      on a line/circle.
+    * `domainColoringField(schwarz, viewport, {W, H})` →
+      `Uint8ClampedArray(4·W·H)` of HSL-coloured σ field. Hue =
+      `arg(σ)/2π`, lightness = `0.5 + 0.35·tanh(0.5·log|σ|)`. CPU
+      implementation; ~150-500 ms at 256² depending on family.
+
+    UI integration:
+    * Mode segmented control gains `domain color` option.
+    * Forward-dynamics card with H7 toggle, E11 instructions
+      ("shift-drag in Ω"), E10 period selector + Find button, H8
+      "Sweep horizontal" button. F4 z-panel toggle and F8 export
+      controls added in S6.
+    * Shift-drag handler in `attachCanvasHandlers` initiates curve
+      drawing. Vertices added only if ≥ 3px from previous (to avoid
+      flooding). On mouseup, finalize + iterate via
+      `iterateCurveForward(draft, sw, depth)`.
+    * `setMode('domain-coloring')` hides GL, calls
+      `_recomputeDomainColoring()` (256² CPU compute) then `paintAll`.
+      Re-computed on pan/zoom mouseup.
+    * Pan/zoom mouseup also re-computes for `showLevelCurves` (S4)
+      and `domain-coloring` modes — both expensive O(grid) computes.
+
+    Tests: 698 (+15 from S4). 14 new functional tests for the kernels;
+    1 export-check.
+
+    Known issues (audit-discovered): H8 sweep only does horizontal
+    line through Ω centroid (vertical / circle sweeps possible via the
+    `sampleSweepSeeds` kernel but not wired into the UI). E10's
+    Jacobian assumes σⁿ is holomorphic and uses forward-difference
+    `∂/∂x` (Cauchy-Riemann); valid but tests don't validate cycle
+    closure (Phase R5 / T2). `findSigmaSingularities` for LQDs uses
+    the pole-reflection formula `φ(1/conj(z_j))` for essential
+    singularities — mathematically correct but worth a clarifying
+    comment.
+
+41. **S4 — σ analysis: explicit form + singularities + level curves
+    (SHIPPED).** Three independent kernels in a new
+    `app/schwarz/schwarz-analysis.js` (390 LOC).
+
+    Public API on `QD.Schwarz`:
+    * `explicitSigmaForm(schwarz)` →
+      `{ family, phiText, phiLatex, fText, fLatex, sigmaText, sigmaLatex }`.
+      Per-family closed-form expressions for φ, F, and σ with current
+      numerical values plugged in for classical QDs; symbolic for LQDs.
+    * `findSigmaSingularities(schwarz)` →
+      `{ poles, branchPoints }`. σ-poles from F-pole pullback through
+      φ at `φ(1/conj(z_j))`; for LQDs reported with `kind: 'essential'`.
+      σ-branch points = w-images of zeros of φ', reused from
+      `QD.findCriticalPoints`.
+    * `computeSigmaLevelCurves(schwarz, opts)` → `{ abs, arg }`
+      contour-polyline lists. Marching squares on `|σ|` and `arg(σ)`
+      over a `gridSize × gridSize` viewport. NaN handling skips cells
+      outside Ω; arg-seam straddling cells (arg range > π) skipped.
+
+    UI integration:
+    * Analysis card with "Show σ(w) form" button + 2 checkboxes
+      ("Show σ-poles + branch points", "Show |σ| / arg(σ) level
+      curves").
+    * `paintSigmaSingularities`: red dots for poles, blue triangles
+      for branch points.
+    * `paintSigmaLevelCurves`: solid teal for |σ|, dashed magenta
+      for arg(σ).
+    * Both overlays re-compute on pan/zoom mouseup (96² for level
+      curves).
+
+    Tests: 683 (+12 from S3). One ≥0 bug fixed during testing:
+    `findSigmaSingularities` initially filtered to `p.inDomain`
+    only; for cardioid the critical point at `z=−1` is `severity:
+    'near'` (boundary, `inDomain: false`), so the test failed.
+    Relaxed filter to skip only `severity === 'safe'`.
+
+    Known issues (audit-discovered): `_fmtCLatex` helper at
+    `schwarz-analysis.js:55` is `_`-prefixed dead code (reserved for
+    future numerical-substitution panel). Marching-squares uses fixed
+    diagonal pairing for ambiguous codes 5 and 10 (saddle points);
+    visually acceptable for the level-curve overlay but not the
+    canonical center-value disambiguation.
+
+40. **S1-S3 — σ⁻¹ kernel + preimage tree + limit-set chaos game
+    (SHIPPED).** The headline TODO #16 picture (preimage / tile-tree
+    mode) plus its companion visualisations. New kernel file
+    `app/schwarz/schwarz-inverse.js` (~480 LOC after S3 additions).
+
+    **Math foundation (family-agnostic).** Every family already
+    factors σ as `σ(w) = conj(F(ψ(w)))` (schwarz-common.js:771-923).
+    σ⁻¹ has the matching family-agnostic shape:
+    **σ⁻¹(w′) = φ(F⁻¹(conj(w′)))**. F⁻¹ is per-family.
+
+    **S1 — boundedQD closed form.** F has only rational pieces.
+    Clearing denominators by `L(z) = Πⱼ (z − z_j)^{m_j}` gives a
+    polynomial equation of degree `d_L = Σ m_j` in z. Roots via
+    `QD.Direct.polynomialRoots` (Durand–Kerner, already shipped);
+    filter to `|z| < 1 − 1e-6`; map through `evalPhi`; validate by
+    σ ∘ σ⁻¹ round-trip. Round-trip on cardioid: machine precision
+    (3.33e-16).
+
+    **S2 — Newton fallback for 5 other families.** `_sigmaInverseViaNewton`
+    runs Newton on F(z) = target from 24-64 seeds distributed across
+    the relevant disk (𝔻 for bounded, 𝔻* for unbounded). Holomorphic-
+    aware: F' ≈ ∂F/∂x by Cauchy-Riemann. Filters, dedupes (z-space +
+    w-space), validates by round-trip. Round-trip worst error per
+    family:
+    * unboundedQD (deltoid): 3.8e-13 (3 preimages found — 3-fold
+      symmetry).
+    * boundedLQD: 7.0e-12.
+    * boundedLQD_singular: 2.8e-12.
+    * unboundedLQD: 9.6e-11.
+    * unboundedLQD_singular: 1.2e-13.
+
+    **S3 — Limit-set chaos game + Hausdorff dimension.**
+    `sampleLimitSet(schwarz, {n, burnIn, seed, rng})` does a random
+    walk through σ⁻¹ preimages, restarting from random Ω^c seeds
+    when stuck. Returns `Float64Array(2n)` interleaved coords.
+    `boxCountingDimension(points, {boxSizes})` does standard
+    log-log regression over geometric `2^{-3..-12}` box-size grid.
+
+    **UI integration.**
+    * **Mode segmented control** in schwarz-ui.js: `fractal |
+      preimage tree`. (S5 adds `domain coloring`.) Plane-view only;
+      sphere-view ignores. Click in Ω^c seeds the tree (user-confirmed
+      gate per TODO #16: "fundamental tile" framing).
+    * **Depth slider** 1-8, **visual budget** 1k/4k/16k. Tree node
+      count + truncation status shown in sidebar.
+    * **Plasma-ramp coloring** by generation; gen-0 (seed) drawn with
+      white halo.
+    * **Limit-set card** with Compute button + 1k/5k/20k/100k sample
+      size + clear + status readout + `dim ≈ X.XXX` panel.
+
+    **Handle augmentation.** schwarz-inverse.js monkey-patches
+    `QD.Schwarz.buildSchwarzFromPhi` and `buildSchwarzFromRational` to
+    attach `_phi` + `_boundaryPts` on the returned handle (so
+    `sigmaInverse` can re-read φ and `sampleLimitSet` can compute the
+    restart bbox). Idempotent (gated on `_sigmaInversePatched` flag).
+
+    Tests: 671 (+45 from before S1). Per-family round-trip + tree
+    multiplicity + budget + limit-set sampling + dim regression.
+
+    Known issues (audit-discovered): `nValid >= 2` regression
+    threshold in `boxCountingDimension` is degenerate (E1).
+    `randomOmegaCSeed` restart path untested for unbounded families
+    (E2). Audit fixes are Phase R1.
+
+39. **Code-health follow-up round: A1, A6 boundedQD-template, A7,
+    B4, B6, B10, C1, C4, C5, D5, D6, D8 (SHIPPED).** Twelve items
+    landed after P0+P1+P3, before the Schwarz arc. Tests grew 566 →
+    637 (+71).
+
+    **A1 ui-state extraction.** `state` const moved from `ui.js` to
+    new `app/ui-state.js` (87 LOC). Cross-script-realm `const` makes
+    every existing read work unchanged. Also exposed via
+    `window.QD_UI.state` for explicit-namespace callers. Loaded
+    BEFORE `ui.js` in index.html.
+
+    **A6 boundedQD seed split (template only).** Seeds extracted
+    from `solver-qd.js` to new `app/solvers/seeds/seeds-qd.js`
+    attached to `QD.Seeds.boundedQD = { initialGuess,
+    perturbedInitialGuess }`. solver-qd.js dereferences at top via
+    `const diskInitialGuess_QD = QD.Seeds.boundedQD.initialGuess`.
+    Documented in CONTRIBUTING.md as the template for the other 5
+    families. **Other 5 families still inline** — that fan-out is
+    Phase R3 of the code-review remediation plan.
+
+    **A7 SOLVER_SRC_FILES consolidation.** Both
+    `primary-solver-worker.js` and `param-slice/param-slice-pool.js`
+    now read from `QD_ASSET_MANIFEST.WORKER_BUNDLE_FILES`. Inline
+    fallback arrays preserved as a safety net but **bit-rotted**: they
+    pre-date the seed-split and don't include
+    `solvers/seeds/seeds-qd.js`. Phase R2 / R3 deletes them.
+    `asset-manifest.js` exposes `WORKER_BUNDLE_FILES`,
+    `SOLVER_PAGE_ONLY_FILES`, `SOLVER_FILES`, `UI_FILES`,
+    `STATIC_ASSETS`, `ALL_ASSETS`, `CDN_ASSETS`.
+
+    **B4 sampleBoundaryAdaptive cache.** WeakMap keyed by
+    `(phi, baseSamples, maxExtra)`. Pan/zoom on the QD plot no
+    longer re-samples ~500 φ-evals per render.
+
+    **B6 debounce 250 → 60 ms.** With P0.2's worker absorbing the
+    solve cost, debounce only needs to coalesce keystroke bursts.
+
+    **B10 WeakMap-cached family dispatch.** `_resolveFamily(phi)` in
+    `solver.js` was hot (called by every `evalPhi` / `phiTaylorAt`).
+    Now O(1) via WeakMap.
+
+    **C1 quantitative singular-Jacobian recovery.** Replaced
+    hardcoded `noiseScale = 1e-9` in `newtonSolve` with
+    `Fnorm × √(condEst / 1e8)` floored at 1e-12, ceilinged at 1e-4.
+    `recoveryEvents` telemetry array propagates on the solve result.
+
+    **C4 disk-clamp invariant docs + regression test.** Replaced
+    hardcoded `0.9999` with `DISK_CLAMP_IN` constant; added a
+    two-point-symmetric solve test asserting `maxR=0.618 <
+    DISK_CLAMP_IN`. Documented the load-bearing nature of the clamp
+    in `newtonSolve` comments.
+
+    **C5 QR iterative refinement.** One residual-correction step
+    gated on `condEst > 1e6`. Hilbert-6 accuracy: **7.6e-11 with
+    refinement vs. typical 1e-8 without**.
+
+    **D5 benchmark suite.** New `app/bench.js` (~200 LOC) + 3 npm
+    scripts (`bench`, `bench:baseline`, `bench:check`). 7
+    representative scenarios (1 per family + cardioid). Baseline
+    captured at 20 runs/scenario. Non-blocking CI step added.
+    Median times this machine: 0.5-1.9 s/scenario.
+
+    **D6 CI workflow.** `.github/workflows/ci.yml`: `npm ci` +
+    `npm test` + `npm run lint` on push + PR. Bench:check as
+    advisory step (`continue-on-error: true`).
+
+    **D8 lint warnings 43 → 0.** Tuned ESLint config:
+    `args: 'none'` + `caughtErrors: 'none'` to acknowledge
+    "documenting" args. Deleted 7 genuinely-dead declarations
+    (`denom`, `n`, `rmBtn`, `C`, `polyConst`, `I`,
+    `readPolesFromDOM`, `markInvalid`). `_`-prefixed STAR_SIZE etc.
+    in sphere-webgl as TODO markers. `npm run lint` now exits 0/0.
+
+    **Other:** `jsdom@26` installed (29 had a Node-21 CJS interop
+    bug). Root `.gitignore` added. `bench-baseline.json` committed.
+
+    Deferred / partial: A2-A5 (ESM stages 2-5), A8 (branch move —
+    declined), B1/B2/B3/B5/B7/B8/B9, C2/C3/C6/C7/C8, D1/D2/D3/D4/D7.
+    All have rationale + remain in §12 of the running plan.
+
+38. **P0 + P1 + P3 milestone batch (SHIPPED).** The structural,
+    numerical, and hygiene baseline that the rest of the session
+    built on. Tests 566 → 626 (+60).
+
+    **P0.1a QD.PrimarySolution envelope.** New
+    `app/primary-solution.js` (132 LOC). Typed envelope with
+    `subscribe`/`publish`/`get`/`hasSolution`/`update`/`clear`.
+    ui.js publishes on every state.current mutation (4 call sites);
+    schwarz-ui.js migrated to read from envelope (with legacy
+    `state.current` fallback). 15 envelope tests.
+
+    **P0.1b ui.js split.** ui.js shrank 3209 → 2371 lines (−26%).
+    New `app/ui-presets.js` (191 LOC) + `app/ui-domain-plot.js`
+    (711 LOC, factory-injected via
+    `window.QD_UI.installDomainPlot({state, modeDescriptor, formatTick, sub})`).
+    Class body untouched; classic-script lexical-scope constraint
+    handled by closure injection.
+
+    **P0.2 Primary solve to worker.** New
+    `app/primary-solver-worker.js` (228 LOC). Reuses the
+    param-slice bundle pattern. `QD.PrimarySolverWorker.solve(hData,
+    opts)` returns a Promise. Token-gating in `solveAndRender` (and
+    Try-Harder button) discards stale results. Cancel = terminate +
+    recreate. Fallback to main-thread if Worker / fetch unavailable.
+
+    **P1.1 qd.mjs façade.** New `app/qd.mjs` (105 LOC). Re-exports
+    the public `window.QD` surface as named ES-module exports.
+    Stage 1 of the migration; stages 2-5 deferred (§12 A2-A5).
+
+    **P1.2 Householder QR replaces Gauss-Jordan.** `houseQR(A)` in
+    `solver.js:195` returns `{R, betas, diag, rank, condEst,
+    applyQt, backSolve}`. `solveLinearSystem` + `solveLeastSquares`
+    route through it. Backward-stable; surfaces `condEst`. Hilbert-4
+    cond ≈ 6.35e3 detected correctly. 9 QR tests.
+
+    **P1.3 Parse-check test layer.** Every browser-loaded JS file
+    gets a `new vm.Script(...)` parse-check; `qd.mjs` via shell-out
+    to `node --check`. 30 new parse-check tests + 5
+    `PrimarySolverWorker` shape tests. Full jsdom UI test deferred
+    to §12 D1 (jsdom now installed; just needs an async runner).
+    GPU/CPU parity test deferred to §12 D2.
+
+    **P1.4 @ts-check + JSDoc on public API.** `// @ts-check` on
+    `primary-solution.js`, `primary-solver-worker.js`. JSDoc
+    typedefs for `ComplexC`, `HData`, `Pole`, `Phi`, `Branch`,
+    `SolveResult` in `solver.js`. `houseQR` + QR primitives
+    annotated.
+
+    **P3.1 Documentation.** New top-level `ARCHITECTURE.md` (with
+    Mermaid script-load-order diagram), `THEORY_MAP.md` (thesis →
+    file:line), `CONTRIBUTING.md` (recipe for adding a family,
+    schema runtime, HANDOFF cadence). Per-module READMEs in
+    `app/{direct, schwarz, sphere, param-slice}/`. `README.md` gets
+    a nav banner at the top.
+
+    **P3.2 Lint / formatter / package.json.** New root
+    `package.json` with `test` / `lint` / `lint:fix` / `typecheck`
+    / `serve` scripts (`bench`, `bench:baseline`, `bench:check`
+    added later in D5). `eslint.config.mjs` flat config (ESLint 9+),
+    calibrated permissive (no quote enforcement; correctness rules
+    strict). `.editorconfig`. **SRI hash on the math.js CDN tag**
+    (KaTeX was already pinned). Prettier intentionally skipped —
+    applying would have caused wall-of-diff against existing mixed
+    quote styles.
+
+    **P3.3 PWA / offline.** `app/manifest.webmanifest`,
+    `app/icon.svg` (cardioid + 3 quadrature-node dots, accent
+    palette), `app/sw.js` (~120 LOC: cache-first for same-origin,
+    network-first with cache fallback for CDN, `CACHE_VERSION` for
+    rolling), `app/asset-manifest.js` (shared source-of-truth for
+    file lists). Registration gated on `'serviceWorker' in
+    navigator` + non-`file://` origin.
+
+    Verification skipped that the harness can't run: PWA install
+    flow, manifest validation in Chrome DevTools, GPU/CPU parity
+    in headless-gl. Listed in §12 as follow-ups.
+
+37. **Adaptive-mesh coverage-fill (the REAL fix for the black-pixel
+    bug) (SHIPPED).** HANDOFF #36 mis-diagnosed the user's "black
+    dots" report as a CAPABILITY classifier issue. After shipping
+    #36 the user reported the black pixels remained AND no
+    `_logCapabilityErrorOnce` warn ever fired in the console.
+    Browser-side diagnosis pinned down the real cause:
+
+    * **Pixel colour is `rgb(24, 24, 24)`** — the image-buffer
+      init colour (line 779-780 of param-slice-ui.js, "Fill with
+      dark background so unsampled regions are visible while
+      rendering"). NOT the CAPABILITY slate `rgb(60,70,90)`.
+    * **Hovering shows "(no sample)"** — `cellSummary` returns
+      `null` because `classGrid[idx] === PS.UNKNOWN_CLASS` for
+      those pixels. They were never sampled.
+    * **Console error log shows "No algebraic root..." only** —
+      worker is throwing the standard NO_ROOT, which classifies
+      correctly to gray. No misclassification anywhere.
+
+    So the issue is **adaptive-mesh paint coverage**, not the
+    classifier. Tracing the algorithm (with n0=n1=128, startStride
+    = 32):
+
+    * Coarse pass samples positions where `c, r` are multiples
+      of 32, plus right/bottom edges `(127, multiples_of_32)`
+      and `(multiples_of_32, 127)` plus `(127, 127)`.
+    * Refinement at each stride S only adds **midpoints** of cells
+      whose corners disagree — never the cells' corners themselves.
+      Midpoints of a stride-S cell at (c, r) live at
+      `(c+S/2, r), (c, r+S/2), (c+S/2, r+S/2), (c+S, r+S/2), (c+S/2, r+S)`.
+    * The refinement loop is `for c=0; c+stride<n0; c+=stride`,
+      excluding cells whose top-left is in the rightmost / bottom
+      stride-band.
+
+    The combination means **specific corner positions are never
+    sampled by anything**: e.g. for n0=128, the pixel (120, 0)
+    is a corner of cell (120, 0)@stride=4 (which is iterated, but
+    only adds midpoints (122, 0), (120, 2), (122, 2), (124, 2),
+    (122, 4)) and of cell (112, 0)@stride=8 (which is iterated
+    but adds (116, 0), (112, 4), (116, 4), (120, 4), (116, 8) —
+    no (120, 0)). It's not on the coarse grid (120 ≢ 0 mod 32)
+    and not on the edge-include set. It stays `UNKNOWN_CLASS`,
+    `paintAtStride(1)` skips it (`if (k === UNKNOWN_CLASS) continue`),
+    and the image-init colour shows through.
+
+    The "regular grid" pattern matches exactly: the orphan
+    positions form a lattice determined by the stride hierarchy.
+
+    *Fix*: a final **coverage-fill pass** at the end of
+    `runAdaptive2D`. For each pixel still `UNKNOWN_CLASS`, look at
+    its 8 neighbours and paint the cell with the first known
+    neighbour's colour (and iter count, for VALID iter-modulated
+    brightness). Doesn't touch `classGrid` — hover still honestly
+    says "(no sample)" for these pixels — purely a visual fill.
+    Logs the count to console so we have visibility:
+    `[param-slice] coverage-fill: N orphan pixels painted from
+    nearest neighbour.`
+
+    One pass over the grid is sufficient because the orphan
+    pixels are isolated (typically 1-pixel-wide gaps in a sea of
+    painted pixels). For pathological all-orphan regions (which
+    shouldn't occur with the current mesh design) a 2nd pass
+    could be added.
+
+    **Why this is a fill and not an algorithmic mesh fix**: the
+    cleaner architectural fix would be to make the refinement
+    also sample cell *corners* whose positions aren't already
+    sampled (currently it only adds midpoints). That's a bigger
+    change to the mesh's invariants and would change the
+    sampling-cost model. The fill-from-neighbour is a small,
+    isolated, visually-correct patch that doesn't disturb the
+    mesh structure or its perf characteristics. The deeper fix
+    is noted as a possible follow-up.
+
+    **Reconciliation with HANDOFF #36**: the #36 classifier
+    tightening and re-phrasing remain useful — they make the
+    CAPABILITY bucket strict about what classifies as a feature
+    gate. The instrumentation (`_logCapabilityErrorOnce`) also
+    remains useful for future diagnostics. None of #36 was wrong;
+    it just wasn't the issue the user was hitting.
+
+    *Verification*: 566 tests still pass (visual-only fix). The
+    user reproduces the same slice — the regular black-dot grid
+    should now be filled with smooth boundary-band colours.
+    Console should show `coverage-fill: ~N pixels painted` where
+    N depends on slice resolution and class-boundary geometry
+    (typically ~10–100 for a 128² slice).
+
+    *Files touched*: `app/param-slice/param-slice-ui.js`
+    (~50 LOC: `fillUnpaintedFromNeighbor` helper inside
+    `runAdaptive2D`, called once at end of cascade). `HANDOFF.md`
+    (this entry — supersedes the #36 "Part 1" diagnosis without
+    invalidating its surrounding work).
+
+    *Test count*: **566 passing, 0 failing** (unchanged).
+
+36. **Capability-refused mis-classification + live-solve hover previews
+    (SHIPPED).** Two independent asks bundled into one ship.
+
+    **Part 1 — capability mis-classification.** User reported a
+    regular grid of slate-coloured "capability refused" pixels along
+    the parabolic boundary of an unbounded UQD slice (h = C_{1,1}/(w-2),
+    Re/Im(C_{1,1}) sweep). The classifier at
+    `param-slice-common.js:245` used the regex
+    `/not yet implemented|deferred|higher-order pole/i` — overly
+    broad. The only active throw matching it was in
+    `Family.unboundedLQD_singular.normalizeOpts` (line 962), a
+    *math* rejection ("no QD exists for h = q/w") whose wording
+    contained "higher-order pole" purely descriptively.
+
+    Three coordinated fixes:
+
+    (a) **Re-phrased the math-rejection throw** to use "no algebraic
+        QD exists" wording. Maps to NO_ROOT (gray) via the existing
+        `/no algebraic/i` regex arm — the semantically correct
+        bucket, since it's a math rejection, not a feature gate.
+
+    (b) **Tightened the capability regex** to
+        `/\bnot yet implemented\b|\bdeferred to\b/i` — only matches
+        intentional gate phrasing. The bare word "deferred" and
+        "higher-order pole" no longer trigger it. Updated the
+        classifier's `no algebraic root` arm to `no algebraic` to
+        match the new throw wording.
+
+    (c) **Added classifier instrumentation**:
+        `_logCapabilityErrorOnce(err)` deduplicates and console.warns
+        the first occurrence of each unique CAPABILITY-bucket error
+        per session. If a black pixel still appears for any user
+        after this ship, the browser console will identify the
+        responsible error string.
+
+    A Node reproduction of the user's exact scenario produced zero
+    CAPABILITY pixels both before and after these fixes; the issue
+    only manifested in the browser. Hypotheses (stale-cache, mode
+    bleed-over, or another error path with "deferred" in its
+    wording) are now all defensively addressed.
+
+    **Part 2 — live-solve hover previews.** User asked: can we
+    compute the Hovered-QD card's mini-canvas via a fresh inverse
+    solve at the exact hovered parameters, instead of just the
+    nearest-cached φ? Yes — and the cache makes a great warm start.
+
+    Design is a two-stage hybrid:
+
+    1. **Instant cached preview** (status quo): `sliceState.nearestPhi(col, row)`
+       returns the closest cached φ; mini-canvas draws its boundary
+       immediately via the memoised `sampleBoundary` cache.
+    2. **Background live solve**: after 150 ms of cursor stability,
+       run `PS.solveOnePoint` at the exact hovered parameters,
+       warm-started from the cached φ. On success, swap the
+       mini-canvas to the freshly-solved φ.
+
+    Cancellation is token-based: `sliceState.liveSolve.token`
+    increments on every hover; the deferred solve captures
+    `myToken` before kicking off and re-checks
+    `sliceState.liveSolve.token === myToken` before any DOM mutation,
+    so superseded solves are silently discarded. The timer slot is
+    re-used per hover (`clearTimeout`), so even fast cursor motion
+    creates at most one scheduled solve at a time.
+
+    Performance budget: warm-started UQD ≈ 1–3 ms per solve;
+    LQD ≈ 10–30 ms. With a 150 ms settle-debounce, the user pays
+    at most one live solve per cursor stop — well within the
+    main-thread budget. No Web Worker needed.
+
+    Status indicator next to the mini-canvas tells the user which
+    preview they're looking at:
+    - `≈ cached` while only the cached φ is showing
+    - `(solving…)` briefly during the live solve
+    - `✓ live solve · N iters` after success
+    - `live: <class>` if the live solve failed (e.g. "live:
+      Identity fails") — useful for understanding why the cached
+      preview is what they see.
+
+    The live-solved φ is also memoised on `sliceState.liveSolve.lastPhi`
+    keyed by `cellKey = "col,row"`, so re-hovering the same cell
+    skips the solve and the mini-canvas re-uses the previous live
+    result.
+
+    *Verification*: 566 tests pass (no math changes). New classifier
+    regression-guard tests added: one that asserts the new
+    "γ slot deferred to a later pass" phrasing still classifies as
+    CAPABILITY; one that asserts a `higher-order pole`-mentioning
+    error string is NOT classified as CAPABILITY any more.
+
+    **Browser manual smoke**:
+    - Render the user's exact slice (unbounded UQD, h = 1/(w-2),
+      128×128 Rigorous). The slate-grid black-pixel pattern should
+      be gone; previously-black pixels render as red/gray/yellow/
+      orange instead. If any do remain, console.warn will identify
+      the error.
+    - Hover slowly over a green VALID region: card shows "≈ cached",
+      ~150 ms later upgrades to "✓ live solve · N iters", boundary
+      subtly refines.
+    - Hover into an orange/yellow region: card shows
+      "live: Identity fails" or similar; cached preview persists.
+    - Hover fast across the slice: status stays "≈ cached" / "(solving…)";
+      no flicker, no excessive solves.
+    - Click "Send to inverse" from any cell: inverse tab opens and
+      solves the exact scenario.
+
+    *Files touched*: `app/solver-uqd-lqd-singular.js` (~10 LOC:
+    re-phrased throw + explanatory comment); `app/param-slice/
+    param-slice-common.js` (~20 LOC: tightened regex, instrumentation
+    helper); `app/param-slice/param-slice-ui.js` (~120 LOC:
+    `sliceState.liveSolve` state, `cancelLiveSolve` helper,
+    `scheduleLiveSolve` / `runLiveSolve` functions, status-indicator
+    span in the Hovered-QD card); `app/node-test.js` (~5 LOC:
+    updated CAPABILITY mock + new regression guard; updated
+    two tests that asserted on the old "no unbounded singular LQD"
+    wording); `HANDOFF.md` (this entry).
+
+    *Test count*: **566 passing, 0 failing** (unchanged).
+
+35. **Code-review cleanup CR4 — after #31–#34 (SHIPPED).** A
+    three-agent code review pass (recent-ships focus, Param-slice
+    deep dive, cross-cutting hygiene) surfaced a small punch list,
+    batched here as one cleanup ship.
+
+    **Real lifecycle race in Param-slice φ cache.** `runAdaptive2D`
+    published the new `sliceState.{classGrid,iterGrid,gridDims}` at
+    the top of the function (~line 897) but only reassigned
+    `sliceState.nearestPhi` ~90 lines later (after the closure was
+    defined). During that window, the hover handler could read new
+    grid dims while the *old* `nearestPhi` closure still returned φ
+    values from the previous render — visible as a brief stale-φ
+    flash in the Hovered-QD preview. Fixed by setting
+    `sliceState.nearestPhi = () => null` alongside the
+    classGrid/iterGrid/gridDims publication, and again inside
+    `cancelRun` so cancellation drops the cache eagerly.
+
+    **Mini-canvas memoisation.** Hovering across adjacent pixels
+    that share the same nearest-cached φ caused
+    `QD.sampleBoundary(phi, 128)` to be called every rAF frame —
+    redundant since the same 128 points come out. Added a
+    single-slot identity-keyed cache (`sliceState.miniCache =
+    { phi, pts }`); on hover, `_drawMiniBoundary` checks if the
+    incoming φ is `===` the last one and reuses the cached samples
+    if so. Cleared in `cancelRun` and at the top of `runAdaptive2D`.
+    Drops the boundary-sample work from 30 calls/sec during scrubbing
+    to ~1 per VALID-class boundary crossing.
+
+    **`escapeHTML` consolidation.** Two copies existed (ui.js
+    escaped `&<>`; param-slice-ui.js escaped `&<>"'`). Moved the
+    thorough version to `QD.QoL.escapeHTML` (in `qol.js`); both
+    consumers now delegate via `(QD.QoL && QD.QoL.escapeHTML)?…:
+    fallback` with a local fallback in case qol.js didn't load.
+
+    **Help-button selectors brittle.** `attachHelpButtons` in
+    param-slice mixed ID-based selectors (for the new HANDOFF #33
+    cards) with `:nth-child(N)` selectors (for older cards), the
+    latter silently breaking if anyone reorders the mount sequence.
+    Added stable IDs (`ps-intro-card`, `ps-scenario-card`,
+    `ps-axis-card`, `ps-run-card`, `ps-legend-card`) and rewrote all
+    seven help-button anchors to use a tiny `hOf(cardId)` helper.
+
+    **Dead `refreshAllStatus` removed.** Defined in HANDOFF #33 but
+    never called — the two call sites it would replace already
+    do the inline pair (`refreshScenarioStatus();
+    refreshQuadratureDataCard();`). Deleted the dead definition.
+
+    **Unused `QoL._closeActivePopover` / `_hideTooltip` exports.**
+    Header comment called them "test hooks (private)" but the node
+    test only checks the public API surface. Dropped the two exports;
+    the functions remain internal to qol.js.
+
+    **Magic numbers → named constants.**
+    `MINI_BOUNDARY_SAMPLES = 128` in param-slice-ui.js (paired with
+    the existing `REFINE_ITER_DELTA`); `POLE_HOVER_HIT_RADIUS_PX = 12`
+    in ui.js (just above the `DomainPlot` class).
+
+    **Stale "QD / LQD tab" string and comments.** The tab was
+    renamed to just "QD" in HANDOFF #30 but a user-visible
+    placeholder and three internal comments still said "QD / LQD" /
+    "QD/LQD". Updated in `param-slice-ui.js`, `ui.js`,
+    `direct-ui.js`, `README.md`, and `HANDOFF.md` line 1561. The
+    `app/disabled/` archive was intentionally left as-is. Grep
+    audit (`grep -rn "QD / LQD tab\|QD/LQD tab" app/ README.md
+    HANDOFF.md | grep -v disabled`) now returns zero matches.
+
+    **Stale README test count.** README said `currently 542 tests`;
+    actual is 566 (after the QoL bundle). Updated.
+
+    **Dangling "see TODO." pointer.** A comment in
+    `solver-uqd-lqd-singular.js:902` ended `"see TODO."` with no
+    qualifier. Replaced with the specific reference:
+    `"see TODO.md → LQD-identity-polyPart and HANDOFF.md §10"`.
+
+    *Out-of-scope nits explicitly NOT fixed* (acknowledged in the
+    plan, deferred): `setTimeout(...,0)` card-wiring pattern;
+    double-pass bbox loop in `_drawMiniBoundary` (memoisation makes
+    this irrelevant in practice); `readQualityPreset` DOM-lookup
+    per-render; `iterGrid` cap-at-255 doc comment; param-slice
+    perf-log console output.
+
+    *Verification*: 566 tests still pass (no logic changes). Browser
+    manual smoke covers the race fix (rapid re-render then hover →
+    no stale φ flash), the cancel fix (cancel mid-render then hover →
+    empty preview, not aborted-grid φ), the cache (mini-canvas
+    re-renders only on φ change), and the help-button rewiring
+    (every Param-slice card's "?" still works).
+
+    *Files touched*: `app/param-slice/param-slice-ui.js` (~70 LOC:
+    race fix, card IDs, ID-based help selectors, escapeHTML
+    delegate, mini-canvas memoisation, `MINI_BOUNDARY_SAMPLES`,
+    stale-string fix, `refreshAllStatus` removal); `app/qol.js`
+    (~10 LOC: `escapeHTML` export, removed test hooks); `app/ui.js`
+    (~10 LOC: `POLE_HOVER_HIT_RADIUS_PX`, `escapeHTML` delegate,
+    stale-comment fix); `app/direct/direct-ui.js` (1 LOC);
+    `app/solver-uqd-lqd-singular.js` (2 LOC); `README.md` (3 LOC);
+    `HANDOFF.md` (this entry + 1 LOC string fix).
+
+    *Test count*: **566 passing, 0 failing** (unchanged).
+
+34. **Tab-switch graphics-persistence bug fix (SHIPPED).** User report:
+    when switching from the Schwarz dynamics tab back to the QD tab, the
+    QD axes didn't show and the Schwarz iterate trajectories persisted
+    on the canvas until something forced a re-render (pan, zoom, or
+    re-solve).
+
+    *Root cause* — two halves of a shared-canvas lifecycle bug, both
+    in code I'd previously written:
+
+    1. **QD had no `tab-changed` listener at all.** `app/ui.js` never
+       registered a handler for `tab-changed`, so re-entering the QD
+       tab from any other tab left the 2D `<canvas id="canvas">` in
+       whatever state the previous tab had left it. `DomainPlot.render`
+       is event-driven (solve, drag, resize, pan, zoom) — there was no
+       hook tying it to tab-activation.
+
+    2. **Schwarz cleaned up its GL layer on exit but not its 2D
+       pixels.** `schwarz-ui.js:85–91` correctly incremented
+       `sState.renderToken` and called `showGLLayer(false)` when
+       leaving the tab, but the CPU pyramid renderer and orbit-polyline
+       overlay drew directly into the *shared* 2D canvas. Those pixels
+       persisted on exit; combined with the missing QD entry hook,
+       they showed through whenever the user returned to QD.
+
+    Param-slice avoided the same trap *for itself* because its own
+    `tab-changed` listener (`param-slice-ui.js:49–62`) re-paints its
+    cached `lastImageData` on entry — but that didn't help the QD-side
+    asymmetry.
+
+    *Fix* — two coordinated edits, plus a critical ordering subtlety:
+
+    - `app/ui.js`: add a `tab-changed` listener right after the
+      `DomainPlot` instance is created (~line 2228) that calls
+      `plot.resize()` whenever the QD tab becomes active. `resize()`
+      re-syncs the DPR-aware backing store (handles the rare case of a
+      viewport resize while a different tab was active) and ends by
+      calling `render()`, which does the full clear → background fill
+      → grid → axes → vector field → boundary cycle.
+
+    - `app/schwarz/schwarz-ui.js`: in the existing exit branch, add a
+      `ctx.clearRect(0, 0, sState.view.cssW, sState.view.cssH)` after
+      `showGLLayer(false)`. Defensive cleanup for tabs that don't have
+      their own re-render-on-entry.
+
+    **CRITICAL — listener ordering**: my first attempt at this fix
+    rendered synchronously inside the QD-entry listener. Result: the
+    canvas appeared blank after Schwarz → QD. Cause: ui.js's listener
+    is registered *before* schwarz-ui.js's listener (script load
+    order), so on dispatch:
+
+      1. ui.js's QD-entry listener fires first → render.
+      2. schwarz-ui.js's exit branch fires second → `clearRect` →
+         wipes the freshly-rendered canvas.
+
+    Fix: defer the QD render to a `queueMicrotask` callback. Microtasks
+    drain after all synchronous handlers for the event but **before**
+    the browser paints — so the user never sees a flicker. The
+    callback also includes a stale-tab guard (re-query `.tab-btn.active`)
+    to handle rapid double-click tab-switching without painting QD
+    when the user is already on Schwarz.
+
+    Net listener choreography on Schwarz → QD now:
+
+      1. ui.js's QD-entry listener fires → schedules microtask.
+      2. schwarz-ui.js's exit listener fires → `clearRect` (canvas
+         blank).
+      3. Sync handlers done.
+      4. Microtask drain → `plot.resize()` → render.
+      5. Browser paints → user sees rendered canvas.
+
+    *Verification*: 566 tests still pass (no logic changes; pure
+    UI-lifecycle wiring). Browser manual smoke covers:
+    QD → Schwarz (CPU) → QD; QD → Schwarz (GPU) → QD;
+    Param-slice → QD; QD → Schwarz → Param-slice → QD round-trip;
+    resize-during-other-tab → switch back to QD; rapid
+    QD ⇄ Schwarz toggling.
+
+    *Files touched*: `app/ui.js` (~25 LOC including the microtask
+    deferral + stale-tab guard + comment explaining the listener-
+    ordering trap); `app/schwarz/schwarz-ui.js` (~5 LOC); `HANDOFF.md`
+    (this entry); `TODO.md` (none).
+
+    *Test count*: **566 passing, 0 failing** (unchanged).
+
+33. **Quality-of-life feature bundle (SHIPPED).** A polish pass adding
+    interactive feedback across the three plot tabs plus a help-popover
+    system on every card.
+
+    *New shared infrastructure* — `app/qol.js` (~280 LOC, no deps) exposes
+    `QD.QoL.{attachHelp, attachHoverTooltip, copyButton,
+    openShortcutsOverlay, wireGlobalKeyboardShortcuts}`. Three small DOM
+    primitives, used everywhere. `attachHelp` adds a "?" button to a card's
+    h2; click toggles a popover (click-outside / Esc to close, single
+    popover at a time across the page). `attachHoverTooltip` registers an
+    rAF-throttled mousemove on a canvas; the supplied `formatter(cssX,
+    cssY)` returns HTML or null. A single page-level tooltip div is reused
+    across canvases. `copyButton(getText)` builds a small icon button that
+    writes to the clipboard and shows a brief "Copied" toast. CSS lives
+    in `style.css` (~100 LOC of `.help-btn`, `.help-popover`,
+    `.hover-tooltip`, `.copy-btn`, `.copy-toast`, `.shortcuts-overlay`).
+
+    *Param-slice tab — biggest UX win*:
+    - **Hover tooltip** showing X / Y axis parameter values, classification
+      label, and iter count (for VALID class). Updates smoothly at the
+      cursor via the shared `attachHoverTooltip` primitive.
+    - **Hovered-QD card** with a 160×160 mini-canvas re-rendering the QD
+      at the hovered pixel's φ on every hover frame. Uses
+      `QD.sampleBoundary(phi, 128)` and a bounding-box fit; renders the
+      boundary as a filled polygon with the φ's poles marked as small dots.
+      A "Send to inverse" button mirrors the existing click-to-load.
+    - **Quadrature data card** showing the h(w) form being plotted
+      (using existing `QD.formatH`) and which parameter each axis varies
+      (using existing `QD.formatParamLabel`). Includes a copy button.
+    - Refactor: hoisted `phiBuckets`, `nearestPhi`, `classGrid`, `iterGrid`
+      from `runAdaptive2D`'s closure onto `sliceState` so the hover handler
+      can read them after the render completes. Extracted `pixelToCell`
+      so click and hover share the decode logic. No regression in render
+      behaviour — same code, different owner.
+
+    *Inverse tab*: the existing readout (`w = re+im·i`) now appends
+    `· near pole a_j = …` when the cursor is within 12 px of a pole.
+    Uses the existing `_hitTestPole` helper. ~10 LOC change in
+    `DomainPlot.attachEvents`.
+
+    *Schwarz tab GPU-mode parity*: `onMouseMove` previously bailed in GPU
+    mode because `sState.field` isn't populated. Now falls back to an
+    ad-hoc `QD.Schwarz.escapeTime(w, schwarz, {maxIter})` per-cursor call
+    — cheap (microseconds) — so GPU users get the same kind + iter readout
+    as CPU users. Maps the verifier's string `kind` back to the UI's
+    `KIND_*` enum used by the existing `describeKind`.
+
+    *Help buttons on cards*: every card across the QD tab (10 cards),
+    Direct view (5 cards), Schwarz dynamics (3 cards), and Param-slice
+    (7 cards including the 2 new ones) gets a "?" button with 1–3
+    sentence help text. Static index.html cards get IDs
+    (`#domain-mode-card`, `#h-card`, `#solver-settings-card`) for stable
+    targeting; dynamic cards are wired by their mount functions
+    (`attachQolHelp` / `attachDirectHelp` / `attachSchwarzHelp` /
+    `attachHelpButtons`).
+
+    *Bonus QoL*:
+    - **Copy-to-clipboard** next to the h(w) text input (QD tab) and on
+      the new Quadrature-data card (Param-slice).
+    - **Keyboard shortcuts** (global, non-conflicting):
+      - `Esc` closes any open help popover, hover tooltip, or shortcuts
+        overlay.
+      - `?` toggles a "Keyboard shortcuts" cheatsheet overlay (uses the
+        same popover machinery, anchored to the page centre).
+      - `Enter` in any Param-slice axis-range input triggers
+        `Render slice` (avoids reaching for the button when iterating
+        parameters).
+
+    *Verification*: 9 new tests in `app/node-test.js` (qol.js loads in
+    a minimal DOM stub; full API surface present; safe no-op behaviour
+    on null inputs). Total test count rises 557 → **566 passing, 0
+    failing**. Visual / interactive behaviour requires browser manual
+    smoke (the plan documents the scripted steps).
+
+    *Files touched*: `app/qol.js` (new, ~280 LOC); `app/style.css`
+    (~100 LOC of new styles); `app/index.html` (added `<script>` tag,
+    3 new card IDs); `app/ui.js` (~10 LOC pole-proximity hover, ~70 LOC
+    mountQolHelp + h-text copy button); `app/direct/direct-ui.js`
+    (~30 LOC help wiring); `app/schwarz/schwarz-ui.js` (~30 LOC help
+    wiring + GPU-hover parity); `app/param-slice/param-slice-ui.js`
+    (~350 LOC: hoist + tooltip + cards + help wiring + Enter shortcut);
+    `app/node-test.js` (~50 LOC of QoL tests); `HANDOFF.md` (this entry);
+    `TODO.md` (check off items absorbed: glossary popovers, keyboard
+    shortcuts minimal subset, partial "show the math").
+
+    *Test count*: **566 passing, 0 failing** (was 557).
+
+32. **Param-slice identity-rigor knob — false-positive fix
+    (SHIPPED).** Users reported the Parameter-slice tab marking
+    pixels yellow (`identity-fail`) for cases that were obviously
+    valid QDs. Diagnosis: `baseScenario.opts` in
+    `app/param-slice/param-slice-ui.js` hardcoded
+    `univalenceSamples: 32, identityTol: 1e-5` — 16× coarser
+    sampling and 10× looser tolerance than the inverse tab's
+    `?? 500` / `?? 1e-6` defaults (`solver.js:652, 656`). The
+    PS-OPT7 tuning rationale ("slice classification doesn't need
+    certification-grade fidelity") optimized for render speed but
+    under-weighted the cost of false positives — a wrongly-yellow
+    pixel misleads the user about exactly the question the tab
+    exists to answer.
+
+    *Fix*: (a) raise the default `univalenceSamples` to 128 and
+    `identityTol` to 1e-6 (the new "Standard" preset, matching the
+    inverse tab's tolerance and using a midpoint sample count for
+    cartography speed); (b) expose a 3-preset `Quality` dropdown in
+    the Run card (Fast / Standard / Rigorous) that the user can
+    pick from before clicking "Render slice". `readQualityPreset()`
+    reads from `#ps-quality` at run-time and stitches the chosen
+    `univalenceSamples` / `identityTol` into `baseScenario.opts`.
+
+    *Preset values*:
+
+    | Label    | `univalenceSamples` | `identityTol` |
+    |----------|--------------------:|--------------:|
+    | Fast     | 32                  | 1e-5          |
+    | Standard | 128                 | 1e-6          |
+    | Rigorous | 512                 | 1e-7          |
+
+    *Why discrete presets, not numeric sliders*: `numSamples` and
+    `identityTol` are inherently coupled (dense sampling at a loose
+    tolerance is wasted; sparse sampling at a tight tolerance is
+    just noise). Three named presets communicate intent
+    ("preview" vs "default" vs "publication-grade") more clearly
+    than two abstract numbers. Discrete also makes the dropdown a
+    one-line UI primitive instead of a debounce-and-validate
+    slider pair.
+
+    *Both warm and cold paths honour the opts*: `_solveScenarioBody`
+    (`param-slice-common.js:326`) passes `opts.univalenceSamples`
+    into the warm path's `family.verifyQuadratureIdentity` call
+    (line 374) and tests `opts.identityTol` on `id.maxRelDiff`
+    (line 378); the cold path delegates to
+    `QD.solveInverseQD(s.hData, opts)` whose internal reader is
+    `options.univalenceSamples ?? 500` and
+    `options.identityTol ?? 1e-6`. So raising the opts tightens
+    both paths uniformly — no changes needed inside
+    `_solveScenarioBody`, the pool, or the worker handler.
+
+    *Future decoupling (not done)*: today both univalence and
+    identity samplers read the same `opts.univalenceSamples` knob.
+    The univalence O(N²) self-intersection check is forgiving and
+    rarely needs N>64; the identity check is the strict one. A
+    follow-up could split into `opts.identitySamples` separately
+    and let the Quality preset scale only that; modest perf win,
+    low priority.
+
+    *Verification*: 4 new wiring tests in `app/node-test.js`
+    (cold-path solver echoes `numSamples=32` and `numSamples=512`;
+    cardioid scenario stays VALID at both Fast and Rigorous
+    presets). Total test count rises 553 → **557 passing, 0
+    failing**. Manual browser smoke required: user reproduces a
+    previously-yellow case and verifies it goes green at Standard
+    and Rigorous; Fast preset reproduces the old behaviour
+    (byte-identical classification — same opts values).
+
+    *Files touched*: `app/param-slice/param-slice-ui.js` (~25
+    LOC: `QUALITY_PRESETS` + `readQualityPreset` helpers, Quality
+    dropdown row in `makeRunCard`, refactored `startRun`
+    baseScenario opts to source from `readQualityPreset()`);
+    `app/node-test.js` (~50 LOC of wiring tests);
+    `HANDOFF.md` (this entry); `TODO.md` (sub-bullet under shipped
+    parameter-slice block).
+
+    *Test count*: **557 passing, 0 failing** (was 553).
+
+31. **Adaptive-mesh enhancement bundle for the Parameter-slice tab
+    (TODO #A2, SHIPPED).** The core quadtree adaptive mesh
+    (`runAdaptive2D` in `app/param-slice/param-slice-ui.js`, lines
+    ~510–740) shipped under in-conversation task `PS-OPT1` but was
+    never written up in HANDOFF, and a `#A2` entry in TODO.md sat
+    open as a stale duplicate. This session both documents the
+    existing design and closes two real gaps in it.
+
+    *Existing design (now documented)*: coarse pass at stride
+    `= max(1, 2^⌊log₂(min(n0,n1)/4)⌋)` (~16×16 samples for a
+    256² slice); refinement loop halves stride each pass until 1;
+    a 16×16 spatial bucket index (`BUCKETS_PER_AXIS = 16`) over the
+    grid lets `nearestPhi(c, r)` look up the closest cached φ in
+    O(144) distance comparisons rather than O(N); on cache overflow
+    (`PHI_CACHE_CAP = 4096`) each bucket evicts its older half — keeps
+    spatial distribution roughly intact. The original predicate
+    (`cornersAgree`, `param-slice-common.js:407`) refined a cell iff
+    its 4 corners' classifications disagreed.
+
+    *Gap 1 — classification-only trigger under-fits the VALID class.*
+    `colorFor` modulates VALID-class brightness by iteration count
+    (`brightness ∝ 1/(1 + iter/20)`), so a uniformly-VALID region
+    with a large iter-count gradient (e.g. the "near-singular" border
+    of a QD family) showed visible coarse-stride brightness blocks —
+    the refinement loop never reached those cells because all four
+    corners shared the same class. *Fix*: new helper
+    `cellIsHomogeneous(classGrid, iterGrid, n0, n1, c, r, stride, opts)`
+    in `param-slice-common.js` returns `true` iff classes agree AND,
+    for VALID cells, the iter-count spread ≤ `opts.iterDelta` (default
+    8 — the ~10–15 % perceived-brightness threshold). Non-VALID
+    classes ignore iter (iter is colour-irrelevant for them).
+    `runAdaptive2D`'s refinement-loop predicate and `paintAtStride`'s
+    paint-deferral check both switch to `cellIsHomogeneous`, gated by
+    a single `REFINE_ITER_DELTA = 8` constant at the top of the
+    function. The `paintAtStride` change matters because painting
+    used to commit a 32×32 block to the *top-left corner's* iter
+    count even when the block's iters spread widely — deferring
+    such blocks to the finer pass eliminates the artifact.
+
+    *Gap 2 — refined sub-pixels don't exploit the coarse iter
+    count.* `nearestPhi` returned only the φ payload; every refined
+    Newton call ran with `maxIter = 40` regardless of how easily its
+    neighbour converged. *Fix*: bucket entries grow from
+    `{c, r, phi}` to `{c, r, phi, iterCount}`; `nearestPhi` returns
+    `{phi, iterCount}`; `dispatchPoints` wraps each hint as
+    `{...phi, _coarseIter: iterCount}`. `_solveScenarioBody` reads
+    `warmHint._coarseIter` and runs Newton with
+    `maxIter = min(baseMax, max(12, 2·hintIter))`. If the
+    speculative cap is hit (`!ns.success` && `maxIter < baseMax`),
+    a **one-shot retry** runs with the full budget — guarantees we
+    never misclassify a slow-convergent point as `newton-diverged`
+    purely because the cap was wrong. The `_coarseIter` field rides
+    through pool/worker as a pass-through addition to the hint
+    object; **no worker-protocol change**, no churn outside
+    `param-slice-common.js` and `param-slice-ui.js`.
+
+    *Unexpected efficiency win*: on synthetic test grids the iter
+    trigger sometimes *reduces* total cell count, not increases it.
+    More-aggressive coarse-stride refinement populates more grid
+    cells early, which eliminates spurious "UNKNOWN-corner"
+    subdivisions at finer strides (where `cornersAgree` returns
+    false because some corners haven't been sampled yet). So
+    iter-gradient refinement is a strict superset of cornersAgree's
+    refinement *intent* but the cumulative work bound is not
+    monotone in the predicate strength.
+
+    *Verification*: 11 new tests in `app/node-test.js` (the
+    `cellIsHomogeneous` unit tests + the synthetic-grid adaptive-walk
+    test exercising both class-only and iter-only truths). Total
+    test count rises from 542 → **553 passing, 0 failing**. Manual
+    browser smoke test required (gradient artifact in VALID regions
+    should be gone; click-through to inverse tab should still work).
+
+    *Files touched*: `app/param-slice/param-slice-common.js` (~50
+    LOC: `cellIsHomogeneous` helper, `_solveScenarioBody`
+    speculative-cap-with-retry block, export); `app/param-slice/
+    param-slice-ui.js` (~30 LOC: `REFINE_ITER_DELTA` constant,
+    bucket-entry shape, `nearestPhi` return shape, `dispatchPoints`
+    hint wrapper, refinement-loop + paint predicate);
+    `app/node-test.js` (~110 LOC: unit + walk tests);
+    `HANDOFF.md` (this entry); `TODO.md` (check off #A2).
+
+    *Test count*: **553 passing, 0 failing** (was 542).
+
+30. **Fold the Direct-problem tab into a view-toggle in the QD tab
+    (SHIPPED).** Direct analog of HANDOFF #29 (sphere → Schwarz):
+    the standalone Direct tab is now an `inverse | direct` segmented
+    control inside the renamed `QD` tab (formerly `QD / LQD`). The
+    two workflows are inverses of each other (inverse: h → Ω; direct:
+    φ → h) and have always shared the main `#canvas` — Direct pushed
+    boundary samples via `QD.Direct._setPlotBoundary`, ui.js owned
+    the `DomainPlot`. Keeping two separate tabs added friction and
+    duplicated the source-status / canvas-lifecycle logic.
+
+    *Architecture*: the QD tab hosts a segmented `inverse | direct`
+    control as its first card. Inverse mode is the existing QD/LQD
+    UI, wrapped in a `<div id="qd-inverse-content">` for visibility
+    toggling. Direct mode is the relocated `<div id="controls-direct">`
+    (no longer a tab-panel), mounted lazily by `QD.Direct._mountUI`
+    on first switch to direct view. Visibility is mutually exclusive
+    via `display:none`. The shared `#canvas` is unchanged — both
+    modes push to it via the existing `DomainPlot` plumbing.
+
+    *Refactor of `direct-ui.js`*: removed the `tab-changed` event
+    listener (lazy mount was triggered by tab activation). Added
+    `QD.Direct._mountUI()` (idempotent — runs `mountDirectSidebar()`
+    once) and `QD.Direct._activate()` (calls `recomputeAndRender()`
+    to push the current φ boundary to the canvas). All `directState`,
+    card builders, and recompute paths stay unchanged. Net change:
+    ≈ +15 / −10 LOC.
+
+    *Changes in `ui.js`*:
+
+    - Added `viewMode` (`'inverse' | 'direct'`) and `directMounted`
+      to `state`.
+    - New `mountViewToggle()` builder injects the segmented-control
+      card as the first child of `#controls-qd` at page load.
+    - New `setViewMode(mode)` orchestrator: updates segmented-control
+      highlight, toggles `display:none` on `#qd-inverse-content` and
+      `#controls-direct`, lazy-mounts `QD.Direct._mountUI` on first
+      switch to direct, calls `QD.Direct._activate()` to re-push the
+      φ boundary.
+    - Updated `_sendHToInverseTab` hook: replaced the
+      `document.querySelector('.tab-btn[data-tab="qd"]').click()`
+      call with `setViewMode('inverse')`. The post-send
+      `solveAndRender()` call stays as-is. One-click round-trip from
+      `direct` mode preserved.
+
+    *Changes in `index.html`*:
+
+    - Removed the `Direct problem` tab button.
+    - Renamed `QD / LQD` tab to `QD`.
+    - Wrapped existing `#controls-qd` content in
+      `<div id="qd-inverse-content">`.
+    - Relocated `<div id="controls-direct">` from being a tab-panel
+      sibling to being a child of `#controls-qd` (stripped of
+      `class="tab-panel"` and `hidden`; default `display:none`).
+    - Removed `direct` entry from the tab dispatcher's panel
+      registry.
+
+    *Verification*: 542 tests still passing (UI consolidation only —
+    no math / solver / kernel changes). Manual smoke required: QD tab
+    opens with `inverse` selected; toggle to `direct` and back works
+    correctly; `Send to inverse` from direct mode flips the toggle
+    and auto-solves; other tabs (Schwarz, Parameter slice) unaffected.
+
+    *Files touched*: `app/direct/direct-ui.js` (~25 LOC: replaced
+    tab-changed listener with mount/activate hooks);
+    `app/ui.js` (~50 LOC: viewMode state, mountViewToggle,
+    setViewMode, updated _sendHToInverseTab); `app/index.html`
+    (~20 LOC: tab rename, button removal, wrapper insertion,
+    #controls-direct relocation, dispatcher cleanup); `README.md`
+    (refresh UI section with inverse/direct sub-modes); `HANDOFF.md`
+    (this entry); `TODO.md` (new entry).
+
+    *Test count*: **542 passing** (unchanged — pure UI consolidation).
+
+29. **Fold the Riemann-sphere tab into a view-toggle in the Schwarz
+    dynamics tab (SHIPPED).** The sphere tab and the Schwarz tab were
+    two views of the same σ-iteration, sharing most of their state
+    (phiSnapshot, hData, boundary polygon). The sphere's GPU renderer
+    already reuses the Schwarz fractal shader via
+    `QD.Schwarz._shaders.frag`. Keeping two separate tabs added friction
+    (capture twice, switch tabs to compare views) and duplicated
+    ~150 LOC of capture / source-status / GL-lifecycle code.
+
+    *Architecture*: the Schwarz tab now hosts a `plane | sphere`
+    segmented control at the top of its sidebar. Plane mode uses the
+    Schwarz GL canvas (z=0, pointer:none, behind the 2D overlay).
+    Sphere mode uses the sphere GL canvas (z=2, pointer:auto, on top).
+    Both canvases coexist in the DOM; visibility is mutually exclusive
+    via `display:none`. The sphere renderer is **lazy-mounted** the
+    first time the user toggles to sphere view — Schwarz tab users who
+    never visit sphere mode don't pay the GL-context cost.
+
+    *Refactor of `sphere-ui.js`*: rebuilt as a `QD.SphereView.mount(opts)
+    → handle` factory. Removed the tab-changed listener, source-card
+    builder, capture-from-inverse-tab flow, refreshSourceStatus, and
+    duplicate clonePhi. Kept all sphere-specific view logic: event
+    handlers (orbit camera, raycast hover, wheel zoom), camera/display
+    state, RAF render loop, GL canvas management, ResizeObserver, hover
+    tooltip. The handle exposes
+    `activate/deactivate/setPhi/setRenderParams/setDisplayParams/resetCamera/requestRender/destroy`.
+    Size: ~730 LOC → ~440 LOC (~40% reduction).
+
+    *Changes in `schwarz-ui.js`*:
+
+    - Added `viewMode` (`'plane' | 'sphere'`) and `sphereView` (handle)
+      fields to `sState`.
+    - New `makeViewToggleCard()` + `setViewMode()` orchestrator.
+    - New `_activateSphereView()` lazy-mounts the SphereView, pushes the
+      latest render params and (if any) captured φ.
+    - `mountSchwarzSidebar()` adds a `<div id="schwarz-sphere-slot">`
+      placeholder where the sphere's display / camera cards will be
+      appended on first activation.
+    - Render-card subsections gated by `.view-plane-only` (resolution,
+      renderer-selector, recompute/fit buttons, progress bar) and
+      `.view-sphere-only` (added by the sphere adapter's cards).
+    - Info card gated `.view-plane-only`.
+    - Source card gained a `#schwarz-bounded-warning` element shown
+      only in sphere mode when φ is bounded.
+    - Shared controls (maxIter / colormap / scaleMode / modK) now
+      broadcast to both renderers via `sphereView.setRenderParams(...)`
+      after updating local state — switching views never loses settings.
+    - `captureFromInverseTab` boundary-sample count bumped from 384 to
+      512 (the larger of the two views' defaults); the same snapshot is
+      pushed to both renderers.
+    - `tab-changed` listener now deactivates the sphere view when
+      leaving the Schwarz tab.
+
+    *DOM changes (`index.html`)*: removed the `Riemann sphere` tab
+    button from the tab bar and the `#controls-sphere` panel.
+    Sphere-ui.js script tag stays — it exports `QD.SphereView` for the
+    Schwarz tab to consume.
+
+    *CSS (`style.css`)*: added `.segmented` / `.seg-btn` styles (~25
+    lines) for the view-mode toggle.
+
+    *Verification*: 542 tests still passing (UI-only consolidation —
+    no solver/math/renderer changes). Manual smoke required in the
+    browser: capture an unbounded LQD with `h(w)=1, c=1` (the HANDOFF
+    #28 motivating case); confirm both plane and sphere render
+    correctly with the same captured φ, toggle preserves colormap /
+    maxIter / scale changes, bounded-warning appears only in sphere
+    mode + bounded φ.
+
+    *Files touched*: `app/sphere/sphere-ui.js` (rewrite into adapter,
+    ~290 LOC removed); `app/schwarz/schwarz-ui.js` (~120 LOC added:
+    view-toggle card, setViewMode, lazy mount, bounded-warning,
+    plane/sphere-only gating, broadcast-to-both-renderers, capture
+    fan-out); `app/index.html` (~20 LOC removed: tab button + panel);
+    `app/style.css` (~25 LOC added: segmented control); `README.md`
+    (refresh Schwarz section with view-mode bullet, fold sphere
+    section in); `HANDOFF.md` (this entry); `TODO.md` (new entry).
+
+    *Test count*: **542 passing** (unchanged — UI consolidation only).
+
+28. **Riemann-sphere tab: polynomial-h + higher-order-pole support for
+    unbounded LQDs (SHIPPED).** Direct analog of the HANDOFF #26
+    Schwarz-tab fix, applied to the sphere module. The user reported
+    that `h(w)=1, c=1` (unbounded non-singular LQD) rendered as two
+    hemispheres on the sphere even though the Schwarz tab handled it
+    correctly post-#26.
+
+    *Diagnosis*: the sphere's Pass-1 fractal shader is reused from
+    `QD.Schwarz._shaders.frag`, so the GLSL-level `evalBOverZ`,
+    `evalBOverZDeriv`, `evalBConjOfZ` helpers and the `u_lqdBeta`
+    uniforms were already compiled into the sphere's fractal program.
+    BUT the sphere has its own `setPhi` (in `sphere-webgl.js`) that
+    handles its own uniform packing — it doesn't go through
+    `schwarz-webgl.js`'s setPhi. Three layers needed patching:
+
+    a. **`sphere-ui.js` `_clonePhi`** (lines 700–715): silently
+       dropped `lqdBeta` and `lqdGamma` (and `phi.q`). Same bug
+       `schwarz-ui.js` had before HANDOFF #26.
+
+    b. **`sphere-webgl.js` `setPhi`** (~line 282): never declared
+       `u_lqdBeta` / `u_lqdBetaLen` uniform locations, never uploaded
+       β, never merged γ into the uploaded branches list. Without
+       the β uniforms, the shader treats `u_lqdBetaLen = 0` and falls
+       back to `φ = c·z` — for `h(w)=1, c=1` that's the unit disk;
+       stereographic projection sends `|w|=1` to the equator → sphere
+       splits into two hemispheres (exactly the symptom).
+
+    c. **`schwarz-webgl.js` `_gpuCaps` export**: only exposed
+       `MAX_BRANCHES`, `MAX_K`, `MAX_LAURENT`. Added `MAX_BETA` so
+       the sphere module can size its β-uniform Float32Array
+       correctly.
+
+    *Fixes*:
+
+    - `sphere-ui.js` `_clonePhi`: added `lqdBeta`, `lqdGamma`, `q`
+      pass-through (with a docstring pointer to HANDOFF #28).
+
+    - `sphere-webgl.js`:
+      * Destructure `MAX_BETA` from `_gpuCaps`.
+      * Add `lqdBeta` / `lqdBetaLen` to the UF uniform-location list.
+      * Add `lqdBeta` / `lqdBetaLen` to phiState.
+      * In `setPhi`: compute `effBranches` (γ-merged for family 5),
+        capacity-check `beta.length` against `MAX_BETA`, use
+        `effBranches` for the branch upload + nb count + per-branch
+        capacity check, pack β into `phiState.lqdBeta`, recompute
+        `rInfConj` on the merged-branch list.
+      * In `renderFractalPass`: upload `u_lqdBeta` / `u_lqdBetaLen`
+        alongside the existing branch uniforms.
+
+    - `schwarz-webgl.js` `_gpuCaps` export: include `MAX_BETA`.
+
+    *Verification*: 542 tests still passing (the sphere module isn't
+    exercised by node-test — no WebGL in node — so the gate is
+    behavior-preservation for the existing solver / Schwarz coverage).
+    Manual smoke is required in the browser: solve `h(w)=1, c=1` on
+    the Inverse tab, capture to the Riemann-sphere tab, confirm the
+    fractal renders the cusp-shaped boundary on the sphere instead of
+    a clean equator.
+
+    *Files touched*: `app/sphere/sphere-ui.js` (~5 lines:
+    `_clonePhi` patch); `app/sphere/sphere-webgl.js` (~25 lines: UF
+    list + phiState slot + γ-merge / capacity check / β-pack /
+    rInfConj-on-merged in setPhi + render uniform upload);
+    `app/schwarz/schwarz-webgl.js` (1 line: export `MAX_BETA` in
+    `_gpuCaps`); `HANDOFF.md` (this entry); `TODO.md` (new entry).
+
+27. **Code review cleanup + README refresh (SHIPPED).** Targeted
+    maintenance pass after the four-entry HANDOFF #22–#26 ship cadence.
+    Categorized findings from a three-agent parallel review covering
+    the solver layer, the Schwarz/UI/peripheral layer, and the docs/
+    tests layer. High + medium-priority items landed; low-priority
+    items documented in HANDOFF.md §10 for future work.
+
+    *High-priority fixes shipped*:
+
+    - **README full refresh**. Test count `298` → `542`; "Known
+      limitations" rewritten to reflect HANDOFF #21–#22 ship of
+      polyPart for unbounded LQDs (was still flagged as "not yet
+      matched"); added a new "Recently shipped (HANDOFF #21–#27)"
+      section pointing to the recent ship cadence; added a Riemann-
+      sphere tab section + sphere kernel API table (was missing
+      entirely); added a Critical-set kernel API table; updated the
+      Schwarz-tab section to mention HANDOFF #22/#24 polyPart+γ
+      support that landed in #26; updated the families parametric-φ
+      table to reflect β-correction and γ synth-branch.
+
+    - **Dead code removed**. `checkLqdPolynomialGap` (no-op stub in
+      `ui.js`) and its two call sites removed. The gate had been
+      obsolete since HANDOFF #22 shipped polyPart for both unbounded
+      LQD families.
+
+    - **Stale comments fixed**. `solver-uqd-lqd.js` (TODO.md → L-poly-h
+      reference), `solver-uqd-lqd-singular.js` (archaeology comment
+      about removed computeS0LaurentAt0), `solver-lqd-common.js`
+      (defensive "NOT a C(1/z)" comment).
+
+    - **`phi.q` in Schwarz `clonePhi`**. Added for consistency — the
+      simple-pole residue is set by the solver and read elsewhere;
+      Schwarz dynamics doesn't currently use it but carrying it through
+      avoids future surprises.
+
+    *Medium-priority fixes shipped*:
+
+    - **Centralized `evalB_OverZ` + `bOverZTaylorAt`** into
+      `QD.LqdCommon`. The two unbounded-LQD solvers and the Schwarz
+      CPU adapter previously duplicated the same B(1/z) = Σ β_l/z^l
+      helper. Centralized; ~40 lines net removed; one canonical
+      definition.
+
+    - **Named-constant extraction**. `ZERO_THRESHOLD = 1e-20`,
+      `DISK_CLAMP_OUT = 1.0001`, `DISK_CLAMP_IN = 0.9999`,
+      `Z0_MAX_RADIUS = 1000`, `DEFAULT_FD_EPS = 1e-7` defined in
+      `solver.js` and exposed on the `QD` namespace. Replaces ~12
+      literal sites across the solver layer.
+
+    - **`_phiWithSyntheticBranch` memoization**. The UQDLS singular
+      adapter calls this helper from `evalPhi_UQDLS` and
+      `phiTaylorAt_UQDLS` on every Newton residual evaluation. Now
+      memoized via a `_cachedSyntheticMerge` property stashed on the
+      input phi; cache is naturally invalidated when Newton rebuilds
+      phi from a new packed vector each iteration.
+
+    *Out of scope (deferred to future work)*: CPU vs GPU helper
+    duplication (necessarily across JS/GLSL); `polyA` vs `F`
+    dual-carry in `clonePhi`; `phi.family` vs `phi.unbounded` dispatch
+    dual-path; numerical-Jacobian centered differences; per-column
+    `v.slice()` allocation; `computeTargets` shape standardization
+    across all 6 families; shader-caps shared constants map. See plan
+    file for the full categorized list.
+
+    *Files touched*: `README.md` (~60 lines refresh + new sections);
+    `app/ui.js` (~15 lines net removed); `app/solver.js` (named
+    constants definition + exports + 4 literal sites);
+    `app/solver-uqd-lqd.js` (consume centralized helpers + comment
+    cleanup); `app/solver-uqd-lqd-singular.js` (consume centralized
+    helpers + named-constant migration + memoization + comment
+    cleanup); `app/solver-lqd-common.js` (add centralized helpers +
+    comment cleanup); `app/solver-lqd.js` (named-constant migration);
+    `app/schwarz/schwarz-common.js` (consume centralized helper +
+    named-constant migration); `app/schwarz/schwarz-ui.js`
+    (`phi.q` in `clonePhi`); `HANDOFF.md` (this entry);
+    `TODO.md` (check-off + new Schwarz-black-circle item).
+
+    *Test count*: **542 passing** (unchanged — this PR is purely
+    behavior-preserving cleanup).
+
+26. **Schwarz dynamics tab: polynomial-h + higher-order-pole support for
+    unbounded LQDs (SHIPPED).** The user reported that importing an
+    unbounded non-singular LQD with `h(w) = 1, c = 1` into the Schwarz
+    dynamics tab silently rendered a wrong picture. Root cause was a
+    three-layer gap in `app/schwarz/` where the polynomial-h extension
+    (`phi.lqdBeta`, HANDOFF #22) and the higher-order-pole-at-origin
+    synthetic branch (`phi.lqdGamma`, HANDOFF #24) had never been wired
+    into the Schwarz module.
+
+    *Fixes*:
+
+    a. **`clonePhi` in `schwarz-ui.js`** was silently dropping
+       `lqdBeta` and `lqdGamma` when copying the solved φ from the
+       Inverse tab. Now both fields are copied through.
+
+    b. **CPU adapters in `schwarz-common.js`** (`adaptUnboundedLQD`,
+       `adaptUnboundedLQD_singular`) gained three new helpers —
+       `evalBOverZ` (B(1/z) = Σ_l β_l/z^l), `evalBOverZDeriv`
+       (-Σ_l l·β_l/z^{l+1}), and `evalBConjOfZ` (conj(B(z)) = Σ_l
+       conj(β_l)·z^l, the Schwarz reflection of B(1/z)) — wired into
+       evalPhi / derivPhi / evalF for both unbounded-LQD adapters. The
+       singular adapter additionally calls a new `withSyntheticBranch`
+       helper that merges γ into `phi.branches` up front, so the
+       existing `branchPhiContribution` / `branchPhiDeriv` /
+       `branchSchwarzContribution` loops automatically pick up the
+       γ-branch's r̃#_syn contribution.
+
+    c. **GPU shader `schwarz-webgl.js`** gained matching GLSL helpers
+       (`evalBOverZ` / `evalBOverZDeriv` / `evalBConjOfZ`), a new
+       `MAX_BETA = 16` constant, `u_lqdBeta` / `u_lqdBetaLen`
+       uniforms, and the wiring into evalPhi / evalPhiDeriv /
+       evalSchwarz for families 4 and 5. The γ-merge happens at upload
+       time (in `setPhi`): when family-5 + γ is present, the synthetic
+       branch `{z: phi.z0, A: phi.lqdGamma}` is appended to the
+       branches uploaded to the shader, mirroring the CPU
+       `withSyntheticBranch` idiom. The conj(r#(∞)) baseline is also
+       recomputed on the merged-branch list. Branch-count capacity
+       check applies to the merged total.
+
+    *Verification*: 5 new Schwarz round-trip tests in `node-test.js`
+    (mirroring the existing `σ(w) ≈ w on ∂Ω` pattern):
+
+    - `Schwarz/unboundedLQD-polyPart h=1 c=1`: the user's failing case.
+      `phi.lqdBeta` now carried through; σ on ∂Ω matches to 3e-13.
+    - `Schwarz/unboundedLQD-polyPart+1pole`: polyPart + finite pole;
+      matches to 0.00e+0 (machine precision).
+    - `Schwarz/unboundedLQD_singular+γ`: HANDOFF #24 higher-order pole
+      at origin; `phi.lqdGamma` carried through; σ on ∂Ω matches to
+      0.00e+0.
+
+    *Files touched*: `app/schwarz/schwarz-ui.js` (~5 lines:
+    `clonePhi` patch); `app/schwarz/schwarz-common.js` (~75 lines: 3
+    new helpers + `withSyntheticBranch` + wire into 2 adapters);
+    `app/schwarz/schwarz-webgl.js` (~75 lines: shader uniforms +
+    GLSL helpers + family-4/5 wiring + setPhi γ-merge + β upload);
+    `app/node-test.js` (~75 lines: 3 new round-trip test blocks).
+
+    *Test count*: **542 passing** (up from 534 → +8 new Schwarz checks).
+
+    *Out of scope*: bounded LQDs don't have a `lqdBeta` slot today
+    (HANDOFF #22 only shipped polyPart for unbounded LQDs); if/when
+    bounded-LQD polyPart ships, the Schwarz module will need analogous
+    bounded-side helpers. The CPU and GPU paths are otherwise feature-
+    matched.
+
+25. **polyPart contribution to UQDLS identity-verifier RHS (closes the
+    HANDOFF #22 gap, SHIPPED in the same session as #24).** The
+    identity verifier `verifyQuadratureIdentity_UQDLS.buildTestFunctions`
+    was missing the `Res_∞(f · h_polyPart)` term in its RHS sum, a
+    pre-existing gap inherited from HANDOFF #22. Case (a) tests and the
+    β-γ interaction case (b) test had been skipping identity-checking
+    when polyPart was nonempty because of this.
+
+    The closed-form formula (derived from the Laurent expansion of
+    `f(w) = w/(w−b)^k` against `polyPart[i] · w^i` at w = ∞):
+    ```
+    Res_∞(f · polyPart[i] · w^i) = -polyPart[i] · binom(i+1, i+2−k) · b^{i+2−k}
+    ```
+    when `i + 2 − k ≥ 0`, else zero. The contribution adds to `rhsSum`
+    with the negative sign already baked in (matches sphere-residue
+    balance `Σ_j Res_{a_j} + Res_0 + Res_∞ = 0` once the existing
+    finite-pole and γ-Res_0 contributions are in place).
+
+    *Verified empirically* via a probe (see git history): when at least
+    one finite pole is present, the formula closes the identity-verifier
+    gap to ~1e-12 (machine precision). Confirmed on (a) all four HANDOFF
+    #22 UQDLS poly-h tests (now check identity at 1e-7, passing at
+    1e-10 to 1e-14); (b) the β-γ interaction case (b) test from #24
+    (now passes identity at 1e-7, was previously skipped). The
+    polyPart-only-no-finite-poles edge case (Case B in the probe) still
+    fails — that's a separate numerical-conditioning issue (boundary
+    polygon extends to |b| ~ 215 with degenerate Ω geometry) and not
+    addressed here; the case (a) HANDOFF #23 tests still only check
+    residual for polyPart-only setups.
+
+    *Files touched*: `app/solver-uqd-lqd-singular.js` (~25 lines: new
+    polyPart loop in `verifyQuadratureIdentity_UQDLS.buildTestFunctions`);
+    `app/node-test.js` (~10 lines: added identity check to existing
+    UQDLS poly-h test loop, restored identity check on β-γ case (b)
+    test).
+
+    *Test count*: **534 passing** (up from 529 → +5 identity checks).
+
+24. **Higher-order pole at the origin for `Family.unboundedLQD_singular`
+    (TODO `LQD-sing-higher-order`, case (b) — SHIPPED).**
+
+    Attempt 2 of HANDOFF #23 case (b), wired per the §10 plan that was
+    laid out at the end of #23. The wrong-form `C(1/z) = Σ c_l/z^l`
+    plumbing from attempt 1 was ripped out and replaced with the
+    correct **synthetic-branch** form anchored at z = z₀ (the Blaschke
+    zero):
+
+    ```
+    r̃#_syn(z) = Σ_{l=1..m₀} conj(c_l) · z^l / (1 − conj(z₀) · z)^l
+    ```
+
+    Same Möbius form as existing finite-pole branches at z_j ∈ 𝔻*, just
+    anchored at z₀. The new `_phiWithSyntheticBranch(phi)` helper merges
+    `phi.lqdGamma = [c_1, …, c_{m₀}]` into `phi.branches` as a
+    `{ z: phi.z0, A: phi.lqdGamma }` entry on the fly for r̃#
+    evaluations, so all existing `LqdCommon` r̃#-machinery
+    (`evalRHash`, `rHashTaylorAt`, `rHashAtInfinity`,
+    `rHashLaurentAtInfinity`) picks up the synthetic-branch contribution
+    transparently.
+
+    Residual block (`(★)_Γ`) matches `phi.lqdGamma` to the user's
+    `principal = [q_2, …, q_{m₀+1}]` via
+    `inverseFaberAtPole(principal, phiTilde_at_z0)` directly (Option A
+    from Andrew). The (●₀) q-equation gains two closed-form
+    γ-correction sums:
+
+    ```
+    q_1 = ln(c²|z₀|²)
+        + r̃#_base(z₀) + conj(r̃#_base(1/conj(z₀)))               existing
+        + B(1/z₀) + conj(B(conj(z₀)))                              β (HANDOFF #22)
+        + Σ_l conj(c_l) · z₀^l / (1 − |z₀|²)^l                     γ #1 (synth at z₀)
+        + Σ_l c_l · (−1)^l / z₀^l                                  γ #2 (regularized at 1/conj(z₀))
+    ```
+
+    Both correction sums are O(m₀) closed form per residual call. The
+    second is the analytic part of `conj(r̃#_syn(1/conj(z₀)))` after the
+    principal part is subtracted (synth's pole at 1/conj(z₀) of order m₀
+    is exactly what makes the literal `conj(r̃#(1/conj(z₀)))` term
+    diverge).
+
+    `SCHEMA_UQDLS` gained `{ kind: 'complexList', name: 'lqdGamma' }`;
+    all three initial-guess routines seed `lqdGamma` from the a=0
+    entry's principal via direct copy (rough first-order seed; Newton
+    refines). Branches are now seeded from FINITE poles only — the a=0
+    entry's γ-coefficients live in `phi.lqdGamma`, not `phi.branches[j]`.
+
+    Identity verifier: the previously-derived binomial closed-form
+    contribution `q_l · (-1)^k · binom(k+l-3, l-2) / b^{k+l-2}` (per
+    test point b ∈ K) was added to the RHS sum for higher-order pole
+    contributions at w = 0.
+
+    *Math verification*: γ-only cases (m₀ = 1 with `[q_2]` real; m₀ = 2
+    with `[q_2, q_3]` real; m₀ = 1 with complex `[q_2]`) satisfy the LQD
+    identity at `maxRelDiff < 3e-12` (machine precision). γ-with-polyPart
+    cases satisfy `(★)_Γ`-target self-consistency at `1e-12` but skip
+    the identity check (the polyPart contribution to the identity-verifier
+    RHS via `Res_∞(f · h_polyPart)` is a known pre-existing gap inherited
+    from HANDOFF #22; case (a) tests there also only check residual, not
+    identity).
+
+    *Files touched*: `app/solver-uqd-lqd-singular.js` (~120 lines net:
+    rip-out of wrong-form helpers + add `_phiWithSyntheticBranch`,
+    β-only/γ-only (●₀) helpers, `(★)_Γ` block, `computeTargetGamma_UQDLS`,
+    `_finitePolesView`/`_findA0Pole`, SCHEMA + initial-guess seeding +
+    identity-verifier RHS update); `app/solver-lqd-common.js` (~10 lines
+    net: revert `phiLaurentAtInfinity_UQDLS` to β-only, add merged-phi
+    note); `app/node-test.js` (~80 lines: 1 old rejection test replaced +
+    case (b) battery with 4 cases × ~7 checks each).
+
+    *Test count*: **529 passing** (up from 503 → 502 baseline after
+    obsolete rejection-test removal → 529 after case (b) battery).
+    Residuals at convergence: 2.4e-13 to 5.4e-13 across the four cases.
+
+23. **UQDLS with no finite poles + polyPart (case (a) shipped); higher-
+    order pole at the origin (case (b) — plumbing in tree from an
+    incorrect first attempt, rejected upstream; CORRECT path forward
+    fully specified in §10 below + the solver-uqd-lqd-singular.js
+    docstring).**
+
+    *Case (a) — shipped.* The check in `normalizeOpts_UQDLS` that
+    rejected `h = q/w` with no finite poles was widened: it now applies
+    only when polyPart is ALSO empty. With polynomial-h support (HANDOFF
+    #22) the polyPart provides enough structure to pin φ even without
+    finite-pole landmarks. Newton converges at machine precision (residual
+    ≤ 5e-17) on the new tests. 10 new tests added covering 3 positive
+    cases (linear polyPart with/without q; complex polyPart with q) and
+    the still-rejected `h = q/w only` negative case.
+
+    *Case (b) — deferred, but the path forward is now known.* Two
+    successive attempts and clarifications happened:
+
+    **Attempt 1 (in tree, gated as no-op).** The thesis-style
+    prescription "add c_l/z^l terms to r#" was implemented literally as
+    a parametrization extension `exp(r̃#(z) + B(1/z) + C(1/z))` with a
+    new `phi.lqdGamma` Newton-vector slot encoding C(t) = Σ c_l·t^l.
+    A `(●_k)` matching equation was wired and Newton converged at
+    machine precision, but a direct numerical experiment showed
+    `|w|·|S₀(w)| → q_1` as w → 0 (simple-pole behavior — no higher-
+    order pole in S₀ at all), and the converged φ's did NOT satisfy
+    the LQD identity. The matching equation was reverted; the
+    parametrization plumbing was LEFT IN PLACE as no-ops for forward
+    compatibility:
+
+    - `evalC_OverZ`, `cOverZTaylorAt`, `_evalLaurentInOverZ`,
+      `_laurentOverZTaylorAt` helpers in `solver-uqd-lqd-singular.js`.
+    - `lqdGamma` references in `evalPhi_UQDLS`, `phiTaylorAt_UQDLS`,
+      `phiLaurentAtInfinity_UQDLS`.
+    - `_evalCombinedOverZ0` / `_evalConjCombinedConjZ0` (β + γ
+      combined for the (●₀) γ-correction).
+    - `lqdGamma` cloning in `solver.js` `clonePhi`.
+
+    **CRITICAL: this plumbing encodes the WRONG functional form** —
+    `Σ c_l/z^l` (poles at z=0) instead of the correct
+    `Σ conj(c_l)·z^l/(1−conj(z₀)·z)^l` (poles at 1/conj(z₀)). It
+    must be RIPPED OUT in attempt 2 before the correct machinery is
+    wired in. The header docstring of `solver-uqd-lqd-singular.js`
+    flags this — see "LIMITATIONS / TODO" there.
+
+    **Attempt 2 (PLANNED, not yet implemented).** Andrew clarified that
+    for an order-N pole at w=0 in h (N = m₀+1, where m₀ = number of
+    higher-order residues beyond q_1), the exponent should have a
+    pole at z = 1/conj(z₀) of order m₀. This is the Schwarz reflection
+    of z₀ (since z₀ ∈ 𝔻* is the preimage of w=0 under φ — the zero
+    of the Blaschke factor b_{z₀}). Under R#(z) := conj(R(1/conj(z))),
+    a pole of R at 1/conj(z₀) becomes a pole of R# at z₀. And since
+    ψ(0) = z₀, this pole propagates to a higher-order pole of
+    `R#(ψ(w))` at w=0, giving S₀(w) a GENUINE higher-order pole at
+    w=0. The literal "q_k = coefficient of 1/w^k in S₀" formula then
+    works as written.
+
+    Andrew confirmed two structural design choices:
+
+    a. The new γ parametrization is a **synthetic branch** added to
+       r̃# at z = z₀: r̃#_syn(z) = Σ conj(c_l)·z^l / (1 − conj(z₀)·z)^l
+       (the same Möbius form as existing branches at finite z_j ∈ 𝔻*).
+       `phi.lqdGamma = [c_1, …, c_{m₀}]` (length m₀ = principal length
+       of the a=0 entry). This means the existing inverse-Faber-at-pole
+       machinery handles the matching with z = z₀ ALREADY DETERMINED
+       (no (●) locator needed for this branch — z₀ is pinned by the
+       (●₀) q-equation).
+
+    b. The (★)_A matching at this synthetic branch uses
+       `inverseFaberAtPole(D=principal, phiTilde)` **DIRECTLY**
+       (Option A confirmed by Andrew) — D is the user's
+       `principal = [q_2, …, q_{m₀+1}]` length m₀ without applying
+       `modifiedResidues` (which would shift to a degenerate
+       D=[q_3,…,q_{m₀+1},0] at a=0). This pins each `lqdGamma[l-1]`
+       against the inverse-Faber target derived from q_{l+1}, giving
+       m₀ matching equations.
+
+    The (●₀) q-equation for q_1 needs a closed-form γ-correction
+    because the existing formula's `conj(r̃#(1/conj(z₀)))` term blows
+    up when the synthetic branch is present (its pole is exactly at
+    1/conj(z₀) of order m₀). The regularized formula (derivation
+    worked out in the next-session chat — see §10):
+
+    ```
+    q_1 = ln(c²|z₀|²)
+        + r̃#_base(z₀) + conj(r̃#_base(1/conj(z₀)))                     existing
+        + Σ_l conj(c_l) · z₀^l / (1 − |z₀|²)^l                          synth at z₀
+        + Σ_l c_l · (−1)^l / z₀^l                                       synth at 1/conj(z₀), regularized
+    ```
+
+    Both correction sums are closed-form O(m₀) per residual call.
+
+    *Status*: case (a) shipped, case (b) infrastructure in tree but in
+    the wrong functional form and not wired into the residual. The a=0
+    entry is rejected at `normalizeOpts` with a clear deferral message.
+    Implementation plan, file-by-file delta, and verification strategy
+    for case (b) are in §10 ("Open work / future directions") of this
+    HANDOFF and in the `solver-uqd-lqd-singular.js` header.
+
+    *Files touched in case (a) ship + case (b) attempt-1 plumbing*:
+    `app/solver-uqd-lqd-singular.js` (~+90 lines net), `app/solver-lqd-
+    common.js` (~+8 lines: γ contribution in `phiLaurentAtInfinity_
+    UQDLS` — also in wrong functional form), `app/solver.js` (+3 lines:
+    clone lqdGamma), `app/node-test.js` (~+50 lines: 10 new case (a)
+    tests).
+
+    *Tests*: 10 new in `node-test.js`, total **503 passing**. Newton
+    residuals: 5.55e-17 to 3.11e-15 across all case (a) cases.
+    Existing 493 tests unaffected.
+
+22. **Polynomial-h support for unbounded SINGULAR LQDs (TODO
+    L-poly-h-singular, shipped).** Completes the polynomial-h story for
+    all six families. The non-singular UQDL case (#21) couldn't be
+    directly extended to UQDLS because the UQDLS identity verifier uses
+    test class `f(w) = w/(w-b)^k` for k ≥ 2, which vanishes at ∞ and
+    therefore cannot detect any (★)_F formula via the boundary integral.
+    Andrew Graven supplied the missing piece: the residue at w = 0 of
+    the **logarithmic generalized Schwarz function**
+
+    ```
+    S₀(w) = ln(φ ∘ ψ(w) · φ# ∘ ψ(w)) / w
+    ```
+
+    where ψ = φ⁻¹ and φ#(z) = conj(φ(1/conj(z))) is the Schwarz
+    reflection. Even though `ln(φ ∘ ψ(w)) = ln(w)` has a branch
+    singularity at w=0 and `φ#(z₀)` has a true pole (since `b#(z₀) =
+    1/b(z₀) = ∞` because z₀ is the zero of the Blaschke factor), the
+    product `φ · φ#` is finite thanks to the Blaschke identity
+    `b · b# ≡ 1`:
+
+    ```
+    φ(z) · φ#(z)  =  c²|z₀|²  ·  exp( R(z) + R#(z) )
+    ```
+
+    where `R(z) := r̃#(z) + B(1/z)` is the FULL exponent in φ (including
+    the polynomial-h β-correction), and `R#(z) := conj(R(1/conj(z)))`.
+    So the numerator of S₀ at z = ψ(w) is `ln(c²|z₀|²) + R(ψ(w)) +
+    R#(ψ(w))`, finite at w=0, and the residue is just the value at z =
+    z₀:
+
+    ```
+    q = ln(c²|z₀|²)
+      + r̃#(z₀)      + conj(r̃#(1/conj(z₀)))     ← existing (●₀), β = 0 case
+      + B(1/z₀)      + conj(B(conj(z₀)))         ← NEW β-correction
+    ```
+
+    where `B(1/z₀) = Σ_l β_l/z₀^l` and `conj(B(conj(z₀))) = Σ_l
+    conj(β_l)·z₀^l`. The **existing `(●₀)` residual equation** in
+    `solver-uqd-lqd-singular.js` was the **β = 0 special case** of the
+    true q-formula; it was correct under the prior assumption B ≡ 0 but
+    incomplete with polynomial-h. The fix is to add the two new B-
+    correction terms to the LHS of the q-equation in `residual_UQDLS`.
+
+    With that fix, the same `β = F̃_l` (★)_F equations work for UQDLS
+    as for UQDL — just using the Blaschke-aware
+    `QD.LqdCommon.phiLaurentAtInfinity_UQDLS` helper (already present
+    from #21). System remains square: 2n (locator) + 2M (Faber A) + 2
+    (q-equation) + 2N (Faber β) = 2(n + M + 1 + N), matching the
+    unknown count {z_j, A_{j,k}, z₀, β_l}.
+
+    *Verification strategy*: the boundary identity verifier still
+    can't see β (test class vanishes at ∞), so tests verify directly
+    that the full residual function — including (●), (★)_A, the
+    β-corrected (●₀), and (★)_F — is at machine precision after
+    Newton convergence. A wrong (★)_F formula would either prevent
+    convergence or leave the residual nonzero; a correct one gives a
+    consistent square system whose convergence to ~1e-11 residual is
+    strong evidence the math is right. Andrew confirmed the
+    derivation directly.
+
+    *Files touched*:
+    - `app/solver-uqd-lqd-singular.js` (~+80 lines): added
+      `computeTargetF_UQDLS`, `_evalB_OverZ0`, `_evalConjBConjZ0`,
+      extended `(●₀)` with B-correction in `residual_UQDLS`, added
+      `(★)_F` block, added `lqdBeta` to `SCHEMA_UQDLS`, β seeding in
+      all three initial-guess routines, updated header docstring.
+    - `app/ui.js` (~−10 lines): collapsed `checkLqdPolynomialGap` to
+      a no-op stub (both UQDL and UQDLS now support polyPart).
+    - `app/node-test.js` (~+90 lines): 19 new tests covering UQDLS
+      polyPart (4 cases × `solves`/`univalent`/`residual<1e-8`/`β
+      nonzero`), self-consistency, no-polyPart regression.
+
+    *Tests*: 19 new in `node-test.js`, total 493 passing. Newton
+    residuals: 8.6e-11 to 1.3e-13 across all UQDLS polyPart cases. β
+    self-consistency: 3.5e-21. Existing 6-family batteries
+    unaffected.
+
+21. **Polynomial-h support for unbounded LQDs — non-singular family
+    (TODO L-poly-h, shipped).** The non-singular `Family.unboundedLQD`
+    now handles `h` with a nonzero polynomial-at-∞ part. The math closes
+    Andrew Graven's derivation that the previous attempt (HANDOFF #14)
+    couldn't: apply `Φ_φ⁻¹` to `w·h(w)` rather than `h(w)`. The
+    decomposition
+
+    ```
+    w·h(w) = Σⱼ Σₛ C_{j,s} (1/(w-aⱼ)^{s-1} + aⱼ/(w-aⱼ)^s)
+           + Σ_{i=1..m∞+1} C_{∞,i-1} w^i
+    ```
+
+    collapses the finite-pole part of `w·h` to exactly the modified
+    residues `D_{j,s} = aⱼ·C_{j,s} + C_{j,s+1}` already used by the
+    (★)_A loop — so the existing `computeFaberTargetA` is unchanged.
+    The augmented polynomial-at-∞ `P̃ = [Σⱼ C_{j,1}, C_∞,0, …, C_∞,m∞]`
+    (the s=1 constants from each pole accumulate alongside `h`'s
+    original polyPart, shifted by one degree by the `w` factor) is fed
+    to the *existing* `QD.Faber.inverseFaberAtInfinity(P̃, f̃, c)`
+    primitive — which the old investigation thought was wrong but is
+    actually correct *for this augmented input*. The output `F̃` of
+    length `m∞+2`: the l=0 entry is the gauge-absorbed constant of `r`
+    at ∞ (handled by the `−r#(∞)` normalization in `evalPhi_UQDL`) and
+    is discarded; entries l = 1, …, m∞+1 give the (★)_F targets
+    `β_l = F̃_l` directly. Empirically there is NO additional
+    `(Laurent of r#)_l` subtraction — a β-sweep at fixed (z_j, A) on a
+    converged no-poly solve confirmed the no-subtraction form (the
+    "natural-looking" subtracted formula is wrong for the LQD kernel).
+
+    *Helpers added* in `app/solver-lqd-common.js`:
+    - `rHashLaurentAtInfinity(phi, L)` — Laurent of `r#(z)` at z = ∞
+      (same closed-form Möbius reindexing as `phiLaurentAtInfinity_UQD`
+      in classical UQD, extracted as a shared helper).
+    - `phiLaurentAtInfinity_UQDL(phi, L)` — Laurent of `φ(z) = c·z·
+      exp(r#-r#(∞)+B(1/z))` at z = ∞. Builds the exp argument with
+      `Taylor.exp` after summing `a_l + β_l`.
+    - `blaschkeLaurentAtInfinity(z₀, L)` and
+      `phiLaurentAtInfinity_UQDLS` — the singular-family analogs
+      (folding in `b_{z₀}(z)`). Available for future use; the singular
+      family doesn't yet wire them up (see note below).
+
+    *UQDL changes* in `app/solver-uqd-lqd.js`:
+    - New `computeTargetF_UQDL(phi, hData)` returns targets of length
+      `N = polyPart.length`.
+    - `residual_UQDL` gains a (★)_F block guarded by
+      `phi.lqdBeta.length > 0`. System remains square (2N new
+      equations match 2N new β unknowns).
+    - `SCHEMA_UQDL` gains `{ kind: 'complexList', name: 'lqdBeta' }`.
+    - All three initial-guess functions seed `lqdBeta` from polyPart
+      via one call to `computeTargetF_UQDL` at `β = 0` (gives β_l ≈
+      `c^l · conj(polyPart[l-1])` in the trivial limit, plus a
+      first-iteration correction from the existing z_j).
+    - `computeTargets` exports `F = computeTargetF_UQDL(...)` so the
+      introspection panel can display β targets.
+
+    *Singular family deferred*: `Family.unboundedLQD_singular`'s
+    identity verifier uses test class `w/(w-b)^k` for k ≥ 2, which
+    vanishes at ∞ and therefore cannot detect polyPart contributions on
+    the RHS. Any (★)_F formula would be unverifiable. The UI gate
+    (`checkLqdPolynomialGap` in `app/ui.js`) rejects polynomial-h
+    attempts in the singular mode with a message pointing users to the
+    non-singular mode when applicable. The helpers
+    `blaschkeLaurentAtInfinity` and `phiLaurentAtInfinity_UQDLS` are in
+    place so a future singular-derivation can wire them up quickly. See
+    TODO entry `L-poly-h-singular`.
+
+    *Tests* (41 new in `node-test.js`, total 474 passing):
+    - `rHashLaurentAtInfinity` closed-form check (single branch, k=1)
+      and consistency with `rHashAtInfinity`.
+    - `blaschkeLaurentAtInfinity` closed-form check.
+    - `phiLaurentAtInfinity_UQDL` trivial and β-only cases.
+    - End-to-end UQDL polyPart battery (`runFamilyBattery` pattern):
+      one-pole + small real polyPart, larger polyPart, complex polyPart,
+      two poles + polyPart. Identity maxRelDiff < 1e-6 (achieves
+      ~1e-13 in practice).
+    - Self-consistency cross-check: solved `β` matches `(★)_F` target
+      to machine precision.
+    - Finite-pole-only regression check: no-polyPart path produces
+      `phi.lqdBeta = []` and solves with maxRelDiff < 1e-7 (unchanged).
+
+    *Files touched*: `app/solver-lqd-common.js` (+115 lines for the four
+    helpers + export bag), `app/solver-uqd-lqd.js` (~+55 lines:
+    `computeTargetF_UQDL`, residual extension, schema entry, initial-
+    guess seeding), `app/solver-uqd-lqd-singular.js` (+15 lines: just
+    the documentation clarifying why polyPart is deferred), `app/ui.js`
+    (~10 lines: narrowed `checkLqdPolynomialGap` to UQDLS only with an
+    improved error message), `app/node-test.js` (+~110 lines).
+
+20. **Critical-set image overlay (TODO #5, shipped).** New `app/critical-set.js`
+    pure-math kernel + opt-in overlay on the Inverse-tab canvas plotting the
+    w-plane images of `{z : φ'(z) = 0}`. The critical set is the canonical
+    diagnostic for *imminent* univalence loss: a Riemann map φ is univalent
+    on the relevant disk iff `φ'` has no zeros inside it; zeros at `|z| < 1`
+    (bounded) or `|z| > 1` (unbounded) mark the failure, and zeros near
+    `|z| = 1` predict it as parameters vary.
+
+    *Kernel* (`QD.findCriticalPoints(phi, opts)` → `{ points, stats }`):
+    complex Newton on `f(z) = φ'(z)` using `QD.phiTaylorAt(z, phi, 2)`
+    (cheap two-coefficient call: `a₁ = φ'(z)`, `2·a₂ = φ''(z)`). Seeds
+    are a polar grid of ~150 points covering `|z| ∈ [0.1, 2.4]` so both
+    bounded and unbounded relevant disks are sampled. Roots are snapped
+    to a 1e-5 grid for dedup, then classified:
+      - `critical`: zero strictly inside the relevant disk (badge `!`).
+      - `near`:      `|1 − |z|| ≤ 0.05` (badge `~`).
+      - `safe`:      strictly outside (small gray hollow circle, no badge).
+    Each kept root is mapped through `QD.evalPhi` to its w-image.
+
+    *UI*: checkbox `#critical-set-toggle` in the QD-tab display-options
+    card; `state.showCriticalSet` flag; `DomainPlot.drawCriticalSet()` is
+    called last in the render pipeline so markers sit on top of the
+    boundary and pole annotations. Results are cached on
+    `state.current.criticalSet` keyed by `phi` reference identity, so
+    pan/zoom doesn't re-pay the Newton cost.
+
+    *Tests* (24 new in `node-test.js`, total 433 passing):
+    `_classify` cases for both bounded and unbounded; `_snapKey` dedup
+    invariants; closed-form fixtures (`φ(z) = R·z + c` → 0 critical
+    points; cardioid `R·(z + z²/2)` → 1 root at z=-1 with severity
+    `near`; `z + z²/3` → 1 root at z=-3/2 with severity `safe`; the
+    Joukowski-like `z + 1/z` → 2 roots at z=±1 with severity `near`);
+    null-phi robustness; dedup keeps unique count ≤5 from ~150 seeds.
+
+    *Files touched*: `app/critical-set.js` (new, ~220 lines),
+    `app/ui.js` (+3 state lines, +1 event handler, +1 render call, +85
+    lines for `drawCriticalSet`), `app/index.html` (+1 `<script>` tag,
+    +1 checkbox row), `app/node-test.js` (+24 tests + 1 loader entry).
+    No changes to solver core or any other tab.
+
+19. **Riemann-sphere visualization tab (TODO #14, shipped).** New fourth
+    visualization tab "Riemann sphere". Stereographic projection puts ∞ at
+    the north pole (0,0,1) of S², so unbounded Ω's escaping set appears as
+    a compact cluster around the pole instead of trailing off the canvas edge.
+
+    *Architecture*: three-pass WebGL 2 renderer, all in its own GL context
+    (WebGL doesn't share resources between contexts):
+
+    - **Pass 1** (cached): render Schwarz fractal to an off-screen FBO using
+      the **exact same GLSL shader source** as the Schwarz tab. The shader
+      source is exposed as `QD.Schwarz._shaders = {vert, frag}` and the
+      compile/link helpers as `QD.Schwarz._glHelpers`. The sphere renderer
+      compiles these in its own GL context, sets uniforms via the same
+      `pxPerUnit`/`shift` convention, and renders to a 1024² RGBA8 texture
+      covering w-plane square `[cx−R, cx+R]²`. Result cached across orbit
+      moves; re-rendered only when φ/max-iter/colormap changes.
+    - **Pass 2**: textured UV-sphere. Fragment shader does inverse
+      stereographic (`u=x/(1−z), v=y/(1−z)`, numerically stabilised to
+      `x*(1+z)/(x²+y²)` when z>0) to find w, maps to FBO texture coords,
+      samples the fractal texture. Optional rim shading gives a 3D depth cue.
+    - **Pass 3** (overlay): boundary polyline (`gl.LINE_STRIP` triangle strip
+      at 1.003× radius to avoid z-fighting), finite pole billboard markers,
+      ✸ north-pole (∞) marker via `_buildStar` tangent-plane arms.
+
+    *Camera*: orbit (azimuth + elevation), zoom (distance to sphere center).
+    Hover raycast (unit-sphere analytic intersection from mouse NDC) reads
+    back the inverse-stereographic w-coordinate in the sidebar.
+
+    *Soft gate*: if captured φ is bounded, a warning banner is shown ("view
+    is informative only for unbounded Ω") but the render still proceeds —
+    math is valid, just less visually striking (K as a small spherical cap).
+
+    *Files*: `app/sphere/sphere-common.js` (pure math: projection, mesh,
+    Float64Array matrix helpers), `app/sphere/sphere-webgl.js` (~480 lines,
+    factory `QD.Sphere.createRenderer`), `app/sphere/sphere-ui.js`
+    (~380 lines, lazy-mount on `tab-changed`).
+
+    *Minor modifications*: `schwarz-webgl.js` +2 lines (exposes `_shaders`
+    + `_glHelpers`); `index.html` +1 tab button, +1 panel div, +3 `<script>`
+    tags, panels-map entry; `style.css` +10 lines (`#sphere-gl-canvas`
+    positioning, `#sp-hover` white-space).
+
+    *Tests*: 26 new unit tests in `node-test.js` for `SphereCommon`:
+    projection roundtrip (including large-|w| stability), specific values
+    (south pole, equator, z=3/5), unit-sphere constraint, north-pole null,
+    50-point random roundtrip (<1e-15), mesh vertex/triangle counts, mesh
+    on unit sphere, north pole at vertex 0, index range, `mat4lookAt`
+    orthonormal frame (6 checks to 1e-12), `mat4perspective` structure,
+    `mat4invertRigid` correctness (maxErr=2.22e-16). **409 tests passing.**
+
+    *Key numerical fixes*: (a) `unprojectFromSphere` uses the alternate form
+    `x*(1+z)/(x²+y²)` when z>0 to avoid catastrophic cancellation in `1−z`
+    for large |w|; (b) all matrix functions use `Float64Array` (not
+    Float32Array) so orthonormality tests pass at 1e-12 rather than float32
+    precision (~1e-7). WebGL accepts `Float64Array` in `uniformMatrix4fv`
+    and converts internally.
+
+1. **Direct tab built up in stages** (D0 scaffolding → D1 paste-expr parser
+   → D2 boundedQD kernel → D3 h display + Send-to-inverse → D4 Verify
+   button → D5 numerical fallback → D6 rational direct kernel +
+   auto-detecting paste parser). All shipped and tested.
+2. **AQD tab parked** to `app/disabled/aqd/` pending future refinement.
+   See `app/disabled/README.md` for re-enable instructions.
+3. **Tier 1 refactor — doc cleanup.** Stale "Stage Dx" / "(future) ..." /
+   "upcoming variants" markers stripped; duplicated schema-doc block in
+   solver.js consolidated.
+4. **Tier 2 refactor — parser dedupe.** ~140-line `parsePolynomialInZ` +
+   `accumulateImpl` collapsed to an 18-line wrapper around
+   `parseRationalInZ`. ~130 lines saved, all 23 parser tests still pass.
+5. **Tier 3 refactor — formatter unification.** Added `Complex.format(a, opts)`
+   with integer-snap, ±i / ±1±i short forms, tolerance-based component
+   cleanup. Replaced four near-identical formatters
+   (`coeffToString`/`complexToString`/`complexToKatex`/`formatComplex`)
+   with one-line wrappers around `Complex.format`. Legacy
+   `Complex.toString(a, digits)` left intact for ui.js callers.
+6. **README rewrite** to reflect the actual current surface (both tabs,
+   six families, four direct modes, current test count).
+7. **Preset library trimmed** — bounded down to 4 entries (unit disk,
+   cardioid, two-pt symmetric, equilateral triangle); unbounded down to
+   5 (one-point ±/i charges, deltoid w², two-pt non-uniqueness).
+18. **Second round of cross-cutting optimizations.** Driven by a wider audit
+    of the whole app:
+    a. **Schwarz polygon spatial index** (`schwarz/schwarz-common.js`): the
+    per-pixel point-in-polygon test now walks a y-binned edge list built
+    once per Schwarz handle via `buildPolygonIndex` / `pointInPolygonIndexed`.
+    For ~200-vertex boundaries with ~32 bins, ~6–10× faster than the
+    naïve O(N) scan. Used by both `escapeTime` (CPU pyramid) and the
+    direct test functions.
+    b. **CPU pyramid per-pixel seed chain** (`schwarz/schwarz-ui.js`):
+    `escapeTime` now accepts `initialSeedHint` (the ψ-seed in 𝔻 from a
+    neighboring pixel) and returns `firstZ`. The pyramid loop chains the
+    left neighbor's converged seed → typical Newton inverse converges in
+    1–3 iters instead of 5–10 from a cold seed.
+    c. **`Complex.mulInto / addInto / subInto / scaleInto / addMulInto`**
+    in `complex.js`: in-place arithmetic primitives (write to a
+    caller-supplied `out` object, no allocation). Available for future
+    hot-loop refactors; functional API unchanged.
+    d. **Scratch-scenario reuse in param-slice workers**: workers and the
+    main-thread pool now clone the base scenario ONCE per tile, then
+    mutate it in place between pixels via the new
+    `PS.solveOnePointWithScratch`. Measured 1.18× on a fast cardioid
+    sweep (where solver cost dominates); higher relative gain on
+    heavier slices.
+    e. **GPU mask texture audit**: verified — already optimal (R8
+    internal format, NEAREST filter so no auto-mipmaps, CLAMP_TO_EDGE).
+    No change needed.
+    Tests: **383 passing** (previously 375).
+
+17. **Parameter-slice optimizations + cross-cutting solver speedup.** Three
+    rounds:
+    a. **Tighter per-pixel opts**: `numRestarts=1`, `usePhases.continuation=
+    false` (warm-start IS the continuation), `univalenceSamples=32` (was
+    200). ~3–4× per-pixel speedup with no fidelity loss for the
+    classification use-case.
+    b. **Adaptive quadtree mesh** (TODO #A2, shipped): coarse pass at
+    stride 8–16 → refine only cells whose 4 corners disagree → recurse.
+    Implemented in `runAdaptive2D` in `app/param-slice/param-slice-ui.js`.
+    5–20× speedup on typical slices.
+    c. **Cross-cutting**: `numericalJacobian` now reuses the baseline
+    `F0` from `newtonSolve` instead of re-evaluating it (saves 1 of
+    n+1 residual calls per Newton iter, ~1 / (n+1) speedup app-wide).
+    `nearestPhi` now uses a 16×16-bucket spatial index for O(1)
+    amortized lookup instead of O(N) linear scan.
+
+16. **Parameter-slice "Mandelbrot view" tab (TODO #1 + #A1, shipped).**
+    New 4th tab in the app. Sweeps any parameter of `h(w)` over a 1-D or 2-D
+    range; at each sample, attempts an inverse solve and classifies the pixel
+    categorically (valid QD / identity-fails / univalence-fails / Newton-
+    diverged / no-root / capability-refused). Click any pixel → re-solves at
+    that parameter value and pushes φ into the QD tab.
+    *Files*: `app/param-slice/param-slice-common.js` (pure math kernel:
+    ParamRef descriptors, `listAvailableParams`, `applyParam`,
+    `classifyResult`, color LUT), `app/param-slice/param-slice-pool.js`
+    (Web Worker pool — runtime Blob-bundles the existing solver source so
+    no build step is required), `app/param-slice/param-slice-ui.js`
+    (lazy-mounted tab sidebar + canvas overlay).
+    *Wiring*: 3 new `<script>` tags + 1 new tab button + 1 new panel in
+    `app/index.html`. Two helpers added at the bottom of `app/ui.js`:
+    `window.QD_UI.snapshotScenario()` reads out the current scenario;
+    `window.QD_UI.loadScenarioIntoQdTab(s, mode)` is the click-to-load
+    target.
+    *Worker bundling gotcha*: the solver files gate global registration on
+    `typeof window !== 'undefined'`; in a Worker the bundle stub does
+    `var window = self;` so `window.QD = _exports` attaches to the worker's
+    global object, and family files find `window.QD` correctly. Verified
+    end-to-end via a node-vm simulation of the worker scope.
+    *Tests*: 8 new unit tests in `node-test.js` — `applyParam` round-trip
+    + non-mutation for every `ParamRef` kind, `formatParamLabel`
+    completeness, per-mode `listAvailableParams` invariants,
+    `classifyResult` for every class, `colorFor` brightness scaling.
+    All **366 tests passing**.
+
+15. **Post-investigation cleanup of dormant LQD poly-h helpers**
+    (review-driven). After the polynomial-h investigation (entry #14)
+    revealed that the (★)_F machinery couldn't reuse the classical-QD
+    primitive, I deleted the dormant helpers that encoded the wrong
+    assumption (`phiLaurentAtInfinity_UQDL/_UQDLS`,
+    `computeGTaylorAtInfinity`, `blaschkeTaylorAtInfinity`,
+    `seriesDivide`, `betaTargetFromF`, `computeTargetBeta_UQDL/_UQDLS`)
+    plus the speculative Section 4b/2b docblocks. The φ
+    *parameterization* extension stays (B(1/z) inside the exp argument
+    in both `evalPhi` and `phiTaylorAt`) — that's correct math and
+    zero-cost when β=[]. Section headers in the two solver files were
+    also de-duplicated and reworded to be honest about the polynomial-h
+    status without overpromising.
+
+14. **Polynomial-h LQDs — partial scaffolding, math gap discovered**.
+    Attempted to extend unbounded LQDs (both non-singular and singular) to
+    support polynomial-h via the parameterization
+    `φ(z) = c·z·exp(r#(z)−r#(∞)+B(1/z))` with `B(t) = Σ_{l=1..N} β_l·t^l`
+    (and the analogous singular form with the existing Blaschke factor
+    multiplied in). What remains in the tree after the cleanup (entry
+    #15):
+    * `phi.lqdBeta = [β_1, ..., β_N]` field convention, carried through
+      `clonePhi` in `solver.js`.
+    * `evalPhi_UQDL` / `evalPhi_UQDLS` extended with the B(1/z) exp term
+      (cheap branch + early return when β is empty).
+    * `phiTaylorAt_UQDL` / `phiTaylorAt_UQDLS` extended with the
+      corresponding bTilde Taylor (additive to the existing rTilde inside
+      the exp).
+    * Helpers `evalB_OverZ` and `bOverZTaylorAt` in both files (the
+      duplication is intentional — keeps each solver file self-contained).
+    All of these are zero-cost when `phi.lqdBeta = []`, which is the
+    current always-empty state (the initial-guess routines hard-code
+    `lqdBeta: []`).
+
+    **Math gap (deferred)**: the (★)_F residual equations that would
+    match β to polynomial-h coefficients can NOT directly reuse
+    `QD.Faber.inverseFaberAtInfinity` — that primitive embeds the
+    *classical-QD* boundary identity, but LQDs have a different boundary
+    kernel (`ln|w|²/w`), so the relation between polynomial-h and the
+    Laurent of φ at ∞ is different. Empirically: forcing the classical
+    formula even with `polyPart = [0, 0]` (zero polynomial-h) drives the
+    Newton system away from the correct φ. The (★)_F residual additions
+    and the schema/initial-guess seeding were therefore reverted; the
+    UI capability gate (`checkLqdPolynomialGap` in `app/ui.js`) still
+    refuses solves with a clear error message. Re-derivation of the
+    LQD-specific (★)_F formula is the open work — see TODO.md → "L-poly-h".
+
+13. **Cleanup pass post-LQD shipping** (review-driven). Findings + fixes:
+    * **Dead code removed** in `schwarz-common.js`: `bestSeedBounded`,
+      `extractPolyCoeffs`, `phiTaylorAtFallback` (~30 lines). All became
+      unused when `adaptBounded` was rewritten to use the closed-form
+      `branchPhiContribution` / `branchSchwarzContribution` directly
+      (commit history: post-deltoid-bug-fix when the Taylor-extraction
+      path was retired).
+    * **Stale headers refreshed** in all three Schwarz modules.
+      `schwarz-common.js` header now enumerates all six families' φ/F
+      closed forms. `schwarz-webgl.js` header removed a fictitious
+      `readPixelAt` API and updated the 1024² → 2048² mask size.
+      `schwarz-ui.js` removed the "v1 supports classical only" stale
+      hint and documented the GPU/CPU dispatcher split.
+    * **Incorrect inline comment** in `sigma()` claimed "F has a pole at
+      z=0 in bounded modes" — actually F has poles at the z_j (inside
+      𝔻), not at z=0. Reworded as a generic ψ-near-origin safety net
+      (the next `!isFinite` guard catches anything that slips through).
+    * **Dead `sState.hoverInfo` field** removed.
+    * **CPU paintField** was allocating a fresh `<canvas>` + `ImageData`
+      every paint — measurable cost during the progressive pyramid at
+      high resolution. Now cached via `ensureOffscreen(W, H)`; rebuilt
+      only when dimensions change.
+    * **GPU mask texture** switched from RGBA to R8 internal format
+      (WebGL 2 sized internal format). 4× memory saving — the 2048²
+      mask uses 4 MB instead of 16 MB. Shader unchanged (still samples
+      `.r`).
+    * No behavioral changes; 358/0 tests still pass.
+
+12. **Schwarz LQD support** — all four LQD families now work end-to-end
+   (CPU + GPU). The math: every LQD φ shares the same inverse-Faber
+   rational kernel `r#(z)` as classical bounded-QD with `w₀ = 0`; the
+   families wrap it differently
+   (`w₀·exp(r#)`, `γ·b·exp(r#)`, `c·z·exp(r#−r#∞)`,
+   `c·|z₀|·z·b·exp(r#−r#∞)`). The Schwarz extension F follows from the
+   identity `conj(u_j(z))|_{|z|=1} = 1/(z−z_j)` plus `conj(z)=1/z` and
+   the Blaschke identity `b·b# = 1`, giving closed-form `F = wrapper′ ·
+   exp(R##)` where `R##(z) = Σ A/(z−z_j)^k` is the existing
+   `branchSchwarzContribution`. Derivatives use the log-derivative
+   trick: `φ' = φ · (1/z + b'/b + r#')` (terms included as the family
+   structure dictates). Four new CPU adapters
+   (`adaptBoundedLQD`/`adaptBoundedLQD_singular`/`adaptUnboundedLQD`/
+   `adaptUnboundedLQD_singular`) plus `cexp`, `blaschkeEval`,
+   `blaschkeSchwarz` (`b#`), `blaschkeLogDeriv`, and `rHashAtInfinity`
+   helpers (~220 lines in `schwarz-common.js`). `buildSchwarzFromPhi`
+   replaces the binary unbounded/bounded test with family-driven
+   dispatch. UI allowlist relaxed; source-status display reports the
+   family + z₀/c/branch info correctly. GPU shader (`schwarz-webgl.js`)
+   gains `cexp`, `blaschke`, `blaschkeSchwarz`, `blaschkeLogDeriv`
+   primitives and a `u_family` switch in `evalPhi`/`evalPhiDeriv`/
+   `evalSchwarz` (~150 lines GLSL). New uniforms `u_gamma`, `u_z0`,
+   `u_absZ0`, `u_rInfConj`. The JS-side `setPhi` pre-computes
+   `r#(∞)` and stores its conjugate. Uniform caps unchanged
+   (MAX_BRANCHES=12, MAX_K=8, MAX_LAURENT=12). 10 new node tests
+   verify σ ≈ id on ∂Ω at machine precision for every LQD family
+   (358 total tests passing).
+
+11. **Schwarz GPU robustness pass** (post-shipping speckle fix). The first
+   GPU build showed scattered single-pixel noise even in clearly-uniform
+   tiles. Root cause was twofold: (a) Newton convergence and final-validation
+   tolerances in the fragment shader were copied from the CPU (float64)
+   path — values like `1e-22` and `1e-28` are unreachable at float32, so
+   Newton would "fail" by exhausting iterations then fall through to a
+   much looser check, producing intermittent accept/reject decisions on
+   borderline pixels. (b) The GPU has no spatial-coherence warm-start
+   between pixels (each fragment runs Newton independently from a fresh
+   heuristic seed); pixels whose seed landed in the wrong root's basin
+   produced lone bad pixels surrounded by good ones. Fixes in
+   `schwarz-webgl.js`: realistic float32 tolerances
+   (`CONVERGE_SQ=1e-14`, `FINAL_SQ=1e-10`, `DIVERGE_SQ=1e8`,
+   wrong-branch acceptance loosened from `1e-7` to `1e-4`, F-pole guard
+   at `|z|<1e-4`); strict residual validation after Newton's main loop
+   so junk z values are never silently accepted; and a 4-seed retry
+   ladder in `sigma` (warm seed → fresh linearization → ±90° rotations
+   and scale variants) so a single bad initial basin doesn't ruin a
+   pixel. NEWTON_MAX bumped from 24 → 40. No emulated-double yet
+   (deferred; the issue was convergence, not precision). The CPU path
+   was untouched.
+
+10. **Schwarz GPU renderer** (WebGL 2 fragment shader). New
+   `app/schwarz/schwarz-webgl.js` exports `QD.Schwarz.createGPURenderer(canvas)`.
+   Builds a full-screen-triangle WebGL 2 program; the fragment shader does
+   per-pixel σ-iteration: complex-as-vec2 ops, branch sums for φ and the
+   Schwarz extension, Newton-in-z with break-on-convergence, σ-iter loop with
+   break-on-leave-Ω / break-on-escape. In-Ω test via an off-screen polygon
+   **mask texture** (1024² off-screen 2D canvas filled with the inverse-tab's
+   ∂Ω polygon, uploaded with `UNPACK_FLIP_Y_WEBGL=true`; mask covers polygon
+   bbox × 2.4 padding for bounded, ×5 for unbounded; CLAMP_TO_EDGE means
+   out-of-mask reads return 0, which we interpret as "outside Ω" for bounded
+   or "outside K = inside Ω" for unbounded via the `u_unbounded` uniform).
+   Float32 precision throughout; sufficient for iteration depths ≤ ~200 at
+   moderate zoom. Uniform caps: `MAX_BRANCHES=12, MAX_K=8, MAX_LAURENT=12`.
+   `setPhi` returns `false` and stores a capacity-error message when the user's
+   φ exceeds any cap (the UI then drops to CPU mode for that φ). `schwarz-ui.js`
+   inserts a sibling `#schwarz-gl-canvas` into `#plot-area` (positioned absolute,
+   z-index 0; main `#canvas` is z-index 1 with `background: transparent` while
+   the Schwarz tab is active) so 2D overlays (boundary, orbit) draw cleanly
+   on top of GPU pixels. Renderer toggle in the sidebar: `auto` (GPU when
+   available) / `gpu` / `cpu`. The CPU progressive-pyramid renderer is kept
+   intact as the fallback and works exactly as before.
+
+9. **Schwarz reflection dynamics tab** (new, v1). New
+   `app/schwarz/schwarz-common.js` exposes `QD.Schwarz` with two builders
+   (`buildSchwarzFromPhi` for inverse-solver φs, `buildSchwarzFromRational`
+   for direct-tab P/Q), plus `escapeTime` and `makeOrbit`. Per-family
+   adapters live inside the common module: bounded extracts polynomial
+   coefficients via `QD.phiTaylorAt(0, phi, d)` then builds
+   `F(z) = Σ conj(c_k) z^{−k}`; unbounded uses `c` and `F[]` directly to
+   build `G(z) = conj(c)/z + Σ conj(F_l) z^l`; bounded-rational uses
+   the same reverse-conjugate trick the Direct rational kernel does
+   (`φ#(z) = z^{q−p} · P̃(z) / Q̃(z)`). ψ is computed by Newton-in-z on
+   `φ(z) − w = 0` with warm-seed reuse from the previous pixel; on
+   failure we re-seed from a fresh linearization at z=0 / z=∞. σ(w) =
+   conj(F(ψ(w))); when ψ lands within 1e-14 of the F-pole we treat
+   σ(w) as ∞ and let the escape-time loop classify the pixel. In-Ω
+   testing uses even-odd point-in-polygon against the inverse solver's
+   sampled ∂Ω. New `app/schwarz/schwarz-ui.js` lazy-mounts on tab
+   activation: source-φ capture button, render controls (resolution,
+   maxIter, colormap), progressive 4×4→2×2→1×1 renderer chunked across
+   RAF ticks (no Web Worker — kept on the main thread for v1; the
+   chunking holds chunks to ~14ms so the UI stays responsive), pan/zoom
+   handlers, click-to-orbit overlay, hover readout. The fundamental
+   tile is shown near-white, the escaping set gray, the tiling-set
+   interior black, and escape-time pixels colored via the selected
+   colormap. **v1 scope explicitly excludes LQDs** (the exp gauge in φ
+   makes Newton fragile near the boundary); they're a follow-on.
+   17 new tests in node-test.js cover unit-disk closed form
+   (σ(w) = 1/conj(w)), σ ≈ id on ∂Ω for cardioid / unbounded one-point /
+   rational Möbius, invPhi round-trip, and orbit-bookkeeping smoke
+   tests.
+8. **Custom h(w) text input** (Inverse tab). New `app/parse-h.js`
+   module exporting `QD.parseH(expr, math, {mode})` and `QD.formatH(h)`.
+   Two-pass parser: a **strict per-summand PFD walker** that produces
+   exact `(a, residues)` whenever each ± atom matches the shapes
+   `C·w^k` or `C/(w-a)^k`, and a **general-rational fallback** that
+   cross-multiplies via the existing AST walker (variable `w`),
+   long-divides for the polynomial part, runs Durand–Kerner on the
+   denominator, clusters roots at relative tolerance 1e-6, and reads
+   off principal-part coefficients via shift-and-series-divide. The
+   UI text box (`#h-text` + `#h-parse`) is two-way coupled to the
+   structured pole grid: grid edits / preset loads / mode switches call
+   `refreshHText()` (hooked into `renderPolesList` and
+   `renderPolyCoefList`), and Parse calls `parseAndApplyHText()` which
+   rewrites `state.poles` / `state.polyCoeffs` then triggers a solve.
+   Polynomial part is rejected in bounded modes (classical bounded +
+   bounded LQDs, with or without singular charge) — see
+   `modeAllowsPoly()` in `ui.js`. 30 new tests cover Phase 1 atoms,
+   Phase 2 fallback, mode enforcement, error cases, and full format /
+   parse round-trips for every current preset shape.
+
+Tiers 4 (schema-runtime migration for QD/UQD/LQD-nonsingular) and 5
+(taylor.js Poly.add / Poly.mul extraction) are **NOT** done; see §10.
+
+---
+
+## 8. Test infrastructure
+
+**`node-test.js`** is the canonical runner. ~345 tests across:
+
+* Per-family batteries via `runFamilyBattery` (see ~line 720 in node-test.js)
+  — each family has 3–5 preset cases, each yielding ~6 assertions (solve
+  succeeds, identity OK, univalent, sampler clean, polygon containment for
+  the unbounded variants).
+* Direct-tab tests: parser polynomial cases, polynomial-φ closed-form
+  fixtures, unbounded-Laurent cases, numerical-mode polynomial round-trip
+  + non-analytic-φ soft diagnostic, rational kernel fixtures, parser
+  rational tests, end-to-end parse-then-verify pipeline.
+* Per-family tests live in dedicated blocks; the AQD blocks were removed
+  when the AQD tab was parked.
+
+**Running**: `cd app && node node-test.js`. Optionally
+`npm install mathjs` in `app/` once to enable the parser tests
+(they skip cleanly if mathjs isn't installed).
+
+**Conventions used in node-test.js**:
+* `ok(label, condition, detail)` — pass/fail helper at the top.
+* `complexNear(a, b, tol)` — complex-equality with tolerance.
+* Test loaders: solver files via `vm.runInContext`; Direct via
+  `vm.runInContext('module.exports.Direct', ctx)` (NOT `'QD.Direct'`
+  — see Gotcha #1 below).
+
+---
+
+## 9. Gotchas
+
+**G1. QD-namespace resolution in node vs browser**
+Each solver file picks the QD namespace via:
+```
+const QD = (typeof window !== 'undefined' && window.QD)
+  ? window.QD
+  : (typeof module !== 'undefined' ? module.exports : null);
+```
+In Node-test (where `typeof window` was replaced with `false`), QD ends
+up being `module.exports`. So `vm.runInContext('module.exports.Direct', ctx)`
+is correct; `vm.runInContext('QD.Direct', ctx)` would fail — `QD` is just
+a local binding inside each IIFE, not a context global.
+
+**G2. `phi.family` vs `phi.unbounded` legacy fallback**
+`solver-qd.js` and `solver-uqd.js` set `phi.unbounded = false/true` instead
+of `phi.family = 'boundedQD'`. `_resolveFamily` in solver.js handles this
+via `phi.family || (phi.unbounded ? 'unboundedQD' : 'boundedQD')`.
+**Don't read `phi.family` directly** — always go through `_resolveFamily`
+(or the dispatcher functions `evalPhi`, `phiTaylorAt`, etc.). This was the
+proximate cause of an earlier Verify bug ("Inverse returned unknown family:
+undefined").
+
+**G3. Boundary identity for bounded QD is NOT `h(φ(z)) = conj(φ(z))` pointwise**
+h is the principal-part representative of σ. σ − h is analytic in Ω
+(generically non-zero). On the boundary, h ≠ conj(w) pointwise; their
+difference is the boundary value of an analytic-in-Ω function. The
+right check is the **Fourier negative-frequency mass** of the difference
+(implemented in `verifyBoundaryIdentity`). See §5 + the comment block on
+the function. This bit me once during D4.
+
+**G4. Rational φ ≠ valid Riemann map in general**
+`boundedQDRational(P, Q)` doesn't check that φ is univalent on 𝔻 — only
+that Q has no zeros in 𝔻̄ (so φ is analytic). For φ = (z²+z+0.5)/(z+2)
+for instance, φ(0) = 0.25 and φ(−1) = 0.5 ≠ 0.25 (univalent) — but
+`z/2 + 1/(z+2)` reduces to a φ where φ(0) = φ(−1) (NOT univalent). The
+kernel will silently produce meaningless h for non-univalent φ. UI-level
+univalence pre-check is a TODO.
+
+**G5. Newton clamp limits**
+`enforceInDisk` clamps `|z_j| ≤ 0.9999` per branch in `newtonSolve`.
+`enforceOutDisk` clamps `|z_j| ≥ 1.0001`. The schema-runtime clamp
+additionally supports `minR` and `maxR` for the degenerate-limit cases
+(singular LQDs). Hand-written pack/unpack families (boundedQD,
+unboundedQD, boundedLQD) miss the minR/maxR feature — Tier 4 migration
+would unify this.
+
+**G6. Unbounded inverse solver basin issues**
+Some seemingly-simple unbounded shapes (exterior of unit disk with
+h = 1/w, c = 1) hit a small basin-of-attraction in Newton and fail to
+converge. Documented as a known limitation. This is what made the
+inverse-solver-based Verify in the Direct tab unreliable; switching to
+the direct Fourier diagnostic sidesteps it entirely.
+
+**G7. `_setPlotOverlay` is currently dormant**
+The Direct tab's Verify button used to overlay a "recovered φ" boundary
+in dashed gold via `_setPlotOverlay`. The new Fourier-based Verify
+doesn't need this. The hook + canvas rendering code (`drawOverlayBoundary`
+in ui.js) remain — left in place for any future feature that needs an
+overlay, but `runVerify` always calls `_setPlotOverlay(null)` at the
+start to clear any stale overlay.
+
+---
+
+## 10. Open work / future directions
+
+**Deferred UI panels (dead-code removed in the code-review pass, intent
+preserved here):**
+- *σ LaTeX with current numerical values* — `explicitSigmaForm`
+  (`schwarz/schwarz-analysis.js`) currently emits abstract-symbol LaTeX
+  (`w_0`, `A_{j,k}`). A numeric-substitution formatter was written then
+  removed as dead code; revive it (a `fmtCLatex` helper + per-family
+  substitution) if a "show σ with numbers" panel is wanted.
+- *Sphere pole-marker pass* — `sphere/sphere-webgl.js` `setPolePts` /
+  `_rebuildMarkVerts` draw quadrature-pole star glyphs on the sphere. The
+  geometry constants/flow are wired but the pass is not fully finished
+  (boundary/pole geometry rebuild was stubbed). Finish `_rebuildMarkVerts`
+  if pole markers on the sphere view are wanted.
+
+**Higher-order pole at the origin for `Family.unboundedLQD_singular`
+(TODO `LQD-sing-higher-order`) — SHIPPED in HANDOFF #24.** See §7 entry
+#24 for the full retrospective. The historical attempt-1 plumbing
+(wrong-form `C(1/z)` at z=0) was ripped out; the correct synthetic-branch
+form anchored at z=z₀ is now in place; case (b) tests pass at machine
+precision (residuals 2e-13 to 5e-13; identity to 3e-12 for non-polyPart
+cases).
+
+**polyPart contribution to UQDLS identity verifier** — shipped in
+HANDOFF #25 (same session as #24). The closed-form `Res_∞` contribution
+was added; all HANDOFF #22 UQDLS poly-h tests now check identity at
+1e-7 and pass at 1e-10 to 1e-14. β-γ interaction case (b) test now
+checks identity and passes at 1e-15. See §7 entry #25.
+
+**Remaining edge case: polyPart-only with no finite poles AND identity
+checking.** Case (a) HANDOFF #23 tests (`tryNoFinitePoles` setups) still
+only check residual, not identity. The polyPart-Res_∞ formula added in
+#25 does NOT close the gap for these setups — the converged Ω has very
+large K geometry (boundary samples extend to |b| ~ 215 when
+polyPart=0.05, c=0.5) and the trapezoidal-rule LHS loses precision
+against the closed-form RHS. Likely needs (i) refining the test-point
+selection in `verifyQuadratureIdentity_UQDLS` to handle huge-K
+geometries (e.g. cap |b| or scale-aware sampling), or (ii) an analytic
+investigation of whether the LQD-singular identity has additional terms
+for polyPart-only h that vanish when finite poles are present. Low
+priority — polyPart-only-no-finite is an unusual configuration.
+
+**OLD §10 content — retained below for the historical record of the
+attempt-1 → attempt-2 transition (now superseded by #24's ship).**
+
+The math was settled; the implementation was well-specified; the
+attempt-1 in-tree plumbing was in the WRONG functional form and was
+ripped out before the correct machinery was wired in. This was the
+cleanest open item picked up in the session that produced #24.
+
+### The math (from Andrew's clarification at end of HANDOFF #23 thread)
+
+For an order-(m₀+1) pole at w = 0 in h (residues q_1 = `opts.q` plus
+`hData.poles[a=0].principal = [q_2, …, q_{m₀+1}]`, length m₀), the
+exponent of φ gains a synthetic "branch" anchored at z = z₀ (NOT at z = 0):
+
+```
+r̃#_syn(z)  =  Σ_{l=1..m₀}  conj(c_l) · z^l / (1 − conj(z₀) · z)^l
+```
+
+This is the same Möbius form as existing finite-pole branches at z_j ∈ 𝔻*
+— anchored at z₀ instead of a generic z_j. It has a pole at z = 1/conj(z₀)
+of order m₀ (NOT at z = 0). Under the Schwarz reflection
+`R#(z) := conj(R(1/conj(z)))` the pole reflects to z = z₀, and since
+ψ(0) = z₀ this propagates to a genuine order-m₀ pole of `R#(ψ(w))` at
+w = 0 — giving S₀(w) a genuine order-(m₀+1) pole at w = 0. The literal
+`q_k = coefficient of 1/w^k in S₀(w)` formula then works as written.
+
+`phi.lqdGamma = [c_1, …, c_{m₀}]` is the new Newton-vector slot
+(length m₀, NOT m₀+1 — see "Option A" below).
+
+### The 5-piece algorithm
+
+1. **Synthetic-branch evaluation merge.** Add a helper
+   `_phiWithSyntheticBranch(phi)` in `solver-uqd-lqd-singular.js`:
+   ```js
+   function _phiWithSyntheticBranch(phi) {
+     const gamma = phi.lqdGamma || [];
+     if (gamma.length === 0) return phi;
+     return Object.assign({}, phi, {
+       branches: phi.branches.concat([{ z: phi.z0, A: gamma }]),
+     });
+   }
+   ```
+   Pass the merged phi to `evalRHash`, `rHashTaylorAt`,
+   `rHashAtInfinity`, `rHashLaurentAtInfinity` calls inside
+   `evalPhi_UQDLS` and `phiTaylorAt_UQDLS`. Because the synthetic
+   branch obeys the same Möbius form as existing branches, all
+   `LqdCommon` r̃#-evaluation machinery automatically picks up the new
+   contribution with no further changes. **Crucially this means the
+   existing `evalC_OverZ` / `cOverZTaylorAt` / `_evalLaurentInOverZ`
+   etc. helpers must be REMOVED** — they encode the wrong
+   `Σ c_l/z^l` form (poles at z=0) instead of the correct synthetic-
+   branch form (poles at 1/conj(z₀)).
+
+2. **(★)_A at the synthetic branch (Option A confirmed).** In
+   `residual_UQDLS`, after the existing (●) and (★)_A loops over finite
+   poles, add:
+   ```js
+   const a0Pole = hData.poles.find(p => Complex.abs2(p.a) < 1e-20);
+   if (a0Pole && phi.lqdGamma.length > 0) {
+     const m0 = phi.lqdGamma.length;
+     // phi-Taylor at z₀; phi(z₀) = 0 by Blaschke (coerce defensively).
+     const phiTilde = phiTaylorAt_UQDLS(phi.z0, phi, m0 + 1);
+     phiTilde[0] = { re: 0, im: 0 };
+     // D = principal directly (NO modified-residue shift at a=0 — see
+     // Option A discussion in HANDOFF #23).
+     const targets = QD.Faber.inverseFaberAtPole(a0Pole.principal, phiTilde);
+     for (let l = 0; l < m0; l++) {
+       const diff = Complex.sub(phi.lqdGamma[l], targets[l]);
+       out.push(diff.re, diff.im);
+     }
+   }
+   ```
+   This contributes 2m₀ matching equations pinning all m₀ c_l's.
+
+3. **(●₀) q-equation γ-correction (Option ii, closed-form).** The
+   existing q-equation's `conj(r̃#(1/conj(z₀)))` term blows up when the
+   synthetic branch is present (synth's pole is exactly at 1/conj(z₀)).
+   The regularized formula adds two closed-form correction sums:
+   ```
+   q_1 = ln(c²|z₀|²)
+       + r̃#_base(z₀) + conj(r̃#_base(1/conj(z₀)))        existing (β-correction already there)
+       + Σ_l conj(c_l) · z₀^l / (1 − |z₀|²)^l             NEW: synthetic at z₀ (finite)
+       + Σ_l c_l · (−1)^l / z₀^l                           NEW: analytic part of conj(r̃#_syn(1/conj(z₀)))
+   ```
+   The second sum is the "regularized" Schwarz-reflected value of
+   r̃#_syn at 1/conj(z₀) — the principal part is subtracted off; only
+   the analytic constant survives. Derivation: at z = 1/conj(z₀) + u
+   for small u, the l-th term of r̃#_syn expands to give
+   `(-1)^l / conj(z₀)^l · conj(c_l)` as its constant term (in u),
+   and conj of this is `c_l · (-1)^l / z₀^l`.
+
+   Implementation: replace the existing `_evalCombinedOverZ0` /
+   `_evalConjCombinedConjZ0` helpers (which mistakenly fold γ into the
+   β formula) with **β-only** helpers `_evalB_OverZ0` /
+   `_evalConjBConjZ0` plus TWO NEW γ-specific helpers
+   `_evalSyntheticAtZ0(phi)` and `_evalRegularizedSyntheticAt1OverConjZ0(phi)`
+   that compute the two new sums above. Call all four in the (●₀)
+   block. (Importantly: the existing β block stays unchanged — β still
+   couples to r̃# evaluation, and the merged-phi-includes-γ behavior in
+   evalPhi/phiTaylorAt does NOT propagate into _evalB_OverZ0 because
+   that helper operates on β only.)
+
+4. **SCHEMA + initial-guess seeding.** Add
+   `{ kind: 'complexList', name: 'lqdGamma' }` to `SCHEMA_UQDLS` after
+   `lqdBeta`. In all three initial-guess routines (`initialGuess_UQDLS`,
+   `perturbedInitialGuess_UQDLS`, `diverseInitialGuess_UQDLS`), seed
+   `lqdGamma` from the a=0 entry's principal. The simplest seed
+   (mathematically motivated by inverseFaberAtPole linearity at the
+   leading order) is direct copy:
+   ```js
+   const a0Pole = (hData.poles || []).find(p => Complex.abs2(p.a) < 1e-20);
+   phiInit.lqdGamma = a0Pole
+     ? a0Pole.principal.map(p => ({ re: p.re, im: p.im }))
+     : [];
+   ```
+   Newton refines from there.
+
+5. **Identity verifier RHS update.** In
+   `verifyQuadratureIdentity_UQDLS.buildTestFunctions`, after the
+   finite-pole loop, add the residue-at-w=0 contribution from the
+   higher-order pole:
+   ```js
+   const a0Pole = hData.poles.find(p => Complex.abs2(p.a) < 1e-20);
+   if (a0Pole) {
+     const signK = (k % 2 === 0) ? 1 : -1;
+     for (let lIdx = 0; lIdx < a0Pole.principal.length; lIdx++) {
+       const l = lIdx + 2;                          // q_l = principal[lIdx]
+       const ql = a0Pole.principal[lIdx];
+       const coef = QD.binomialCoeff(k + l - 3, l - 2);
+       if (coef === 0) continue;
+       const denom = Complex.pow(b, k + l - 2);
+       const term = Complex.div(ql, denom);
+       rhsSum = Complex.add(rhsSum, Complex.scale(term, signK * coef));
+     }
+   }
+   ```
+   This is the residue at w=0 of f(w)·q_l/w^l for f = w/(w-b)^k —
+   derivation already worked out and tested in the attempt-1 code
+   (see git history; same formula).
+
+### Rip-out checklist (before adding new code)
+
+Remove from `solver-uqd-lqd-singular.js`:
+- `evalC_OverZ` function (line ~123).
+- `cOverZTaylorAt` function (line ~187).
+- The `cPart` and `cT_OverZ` calls in `evalPhi_UQDLS` and
+  `phiTaylorAt_UQDLS` (lines ~105, ~152).
+- `_evalLaurentInOverZ` and `_laurentOverZTaylorAt` helpers if they
+  have no other callers (they were generic factor-outs of
+  evalB+evalC; if evalB still uses them, keep).
+- `_evalCombinedOverZ0` / `_evalConjCombinedConjZ0` — replace with
+  β-only `_evalB_OverZ0` / `_evalConjBConjZ0` plus new γ-specific
+  helpers (see step 3).
+- Update `evalPhi_UQDLS` / `phiTaylorAt_UQDLS` to use the merged-phi
+  approach (step 1) instead of the `cPart`/`cT_OverZ` additions.
+- The "Higher-order pole at a = 0 in hData" rejection in
+  `normalizeOpts`.
+
+Remove from `solver-lqd-common.js`:
+- The γ contribution in `phiLaurentAtInfinity_UQDLS` (lines ~243–250).
+  Replace with merged-phi approach: take phi with synthetic branch
+  pre-merged from the caller, so `rHashLaurentAtInfinity` automatically
+  picks up the synthetic-branch contribution from the merged branches.
+
+Update `app/ui.js`: if a UI gate still rejects a=0 entries (check
+  `checkLqdPolynomialGap` or its successor — current state should be a
+  no-op stub), ensure it allows a=0 entries through.
+
+### Verification
+
+1. Smoke test with q + q_2 + finite pole: should converge and
+   `result.primary.identity.maxRelDiff < 1e-7`.
+2. Add a `runFamilyBattery('unboundedLQD_singular (higher-order)', […])`
+   with cases:
+   - q + q_2 + one finite pole, no polyPart.
+   - q + q_2 + q_3 + finite pole (m₀ = 2).
+   - q + q_2 + finite + polyPart (interaction with β-mechanism).
+3. Per-case: solves, univalent, identityOK at 1e-7, residual < 1e-8.
+4. Regression: all 503 existing tests still pass — the merged-phi
+   approach is a no-op when `lqdGamma = []`, and the (●₀)
+   γ-correction terms vanish when γ = [].
+
+### Why the rip-out matters
+
+The attempt-1 plumbing encodes a literally wrong function in φ. If we
+just "add the new (★)_A equations on top," Newton will find a φ whose
+exp argument has `Σ c_l/z^l` instead of the correct synthetic-branch
+Möbius form — different φ shape, wrong LQD identity. The plumbing must
+be replaced atomically (rip the old form out, wire the new form in)
+before the residual extensions are added.
+
+The two functional forms are mathematically DIFFERENT (the attempt-1
+form has its pole at z=0 ∈ 𝔻 which is "harmlessly far" from ψ(0)=z₀,
+giving simple-pole S₀; the correct form has its pole at 1/conj(z₀)
+which Schwarz-reflects to z₀ where ψ lands, giving the higher-order
+pole in S₀). No way to fix attempt-1 by tweaking equations.
+
+---
+
+**Deferred refactor tiers** (see code-review notes from this session):
+
+* **Tier 4 — schema-runtime migration** for `boundedQD`, `unboundedQD`,
+  `boundedLQD`. Each currently has hand-written `packPhi`/`unpackPhi` of
+  ~20–30 lines that could be one-line wrappers around `packPhiBySchema`/
+  `unpackPhiBySchema`. Net reduction ~80 lines. **Moderate risk** —
+  needs careful schema construction per family. Reference implementations
+  exist in `solver-lqd-singular.js`, `solver-uqd-lqd.js`,
+  `solver-uqd-lqd-singular.js`.
+* **Tier 5 — taylor.js Poly extraction.** `addPolys`, `mulPolys`,
+  `trimPolyInPlace` in `direct-common.js` could move to `taylor.js` as
+  `Poly.add`, `Poly.mul`, `Poly.trim` (full-length, no truncation).
+  Low value (~30 lines saved); skip unless taylor.js is being touched
+  for other reasons.
+
+**Family-extension work not started**:
+
+* **Algebraic QDs (AQDs)** parked in `app/disabled/aqd/`. Stage-0/1/2
+  scaffolding present (Family.boundedAQD math kernel + tests). Re-enable
+  per instructions in `app/disabled/README.md`. Will need design work
+  on univalence handling and Newton-basin sensitivity before re-shipping.
+* **Direct mode for LQDs, AQDs**: only classical (un)bounded QDs are
+  shipped on the Direct tab. LQD direct would follow the same
+  parametric-φ + forward-Faber template; AQD direct would compose with R.
+* **Unbounded rational direct mode**: `unboundedQD` computes h's
+  polynomial-at-∞ part for any Laurent-at-∞ φ but only handles the
+  finite-pole part for the trivial `c·z + F_0` case. Higher Laurent
+  terms typically don't correspond to classical QDs at all (σ acquires
+  branch cuts) — for non-trivial unbounded direct, a true rational-φ
+  ansatz with explicit z_j-poles is needed (analog of
+  `boundedQDRational`).
+
+**UX / polish**:
+
+* Click-and-drag of quadrature nodes directly on the main canvas (rather
+  than only via the 2-D slider pads).
+* UI-level univalence pre-check for rational-φ Direct mode (so the
+  user sees an explicit warning when their P/Q produces a
+  self-overlapping φ rather than discovering it via a bad h).
+
+**Other latent items**:
+
+* Numerical Jacobian uses forward differences (O(ε)). Centered differences
+  (O(ε²)) would help higher-degree cases. `newtonSolve` exposes a
+  `jacobianFn` hook for plug-in analytic Jacobians; an analytic Jacobian
+  for any family would be a notable performance / robustness win.
+* `boundarySelfIntersects` is O(N²). Sweep-line could make it
+  O(N log N), but N=500 is fine in practice.
+
+---
+
+## 11. Quick code-location index
+
+When you need to find X, look at:
+
+| Need | Where |
+| --- | --- |
+| Inverse-problem Newton driver | `solver.js` `newtonSolve` (~line 159) |
+| Top-level inverse solver | `solver.js` `solveInverseQD` (~line 597) |
+| Family registry | `solver.js` `Family` + `registerFamily` (~line 581) |
+| Schema runtime | `solver.js` `packPhiBySchema` / `unpackPhiBySchema` / `applySchemaClamps` (~line 460) |
+| Inverse Faber primitives | `solver-faber.js` `QD.Faber.inverseFaberAt{Pole,Infinity}` |
+| Boundary sampler + univalence | `solver.js` `sampleBoundary` / `isBoundaryUnivalent` / `sampleBoundaryAdaptive` (~line 290) |
+| Direct kernels | `direct/direct-common.js` `boundedQD` / `boundedQDRational` / `unboundedQD` / `numericalBoundedQD` |
+| Forward Faber primitive (Direct) | `direct/direct-common.js` `forwardLocalPrincipal` (used by both boundedQD and boundedQDRational) |
+| Direct boundary-identity check | `direct/direct-common.js` `verifyBoundaryIdentity` |
+| Direct parser | `direct/direct-common.js` `parseRationalInZ` |
+| Complex formatter (canonical) | `complex.js` `Complex.format(a, opts)` |
+| Complex formatter (legacy fixed-decimal) | `complex.js` `Complex.toString(a, digits)` — used by ui.js |
+| LQD shared helpers | `solver-lqd-common.js` `QD.LqdCommon.*` |
+| Tab-switching | `index.html` inline `<script>` at the bottom |
+| Canvas / `DomainPlot` class | `ui.js` (~line 1700) |
+| Direct UI mode dispatch | `direct/direct-ui.js` `recomputeAndRender` → `recomputeBounded` / `recomputeUnbounded` / `recomputeNumerical` |
+
+---
+
+## 12. Status as of this handoff
+
+* **503 tests** passing (0 failures).
+* **No outstanding bugs** known.
+* **AQD parked** in `app/disabled/aqd/`.
+* **Direct tab shipping** with bounded polynomial + bounded rational +
+  unbounded Laurent + numerical modes; Verify uses Fourier diagnostic.
+* **Riemann-sphere tab shipped** (TODO #14). Pending manual smoke tests
+  (see PLAN-SPHERE.md §"Verification plan" for the full checklist). The
+  pure-math kernel (`sphere-common.js`) is fully unit-tested; the WebGL
+  renderer and UI require a browser for visual verification.
+* **Critical-set image shipped** (TODO #5). Opt-in checkbox in the
+  QD display-options card. Kernel fully unit-tested; visual marker
+  rendering requires a browser for verification.
+* **README** up-to-date for the older surface; the Riemann-sphere and
+  critical-set features are not yet mentioned there (low-priority doc
+  TODO).
+* **No staged in-progress refactors** — Tiers 1, 2, 3 of the code-review
+  plan are all done; Tier 4 (schema migration) and Tier 5 (Poly extraction)
+  are documented but not started.
+
+If you (Claude, post-`/compact`) need detail beyond this handoff, the
+existing per-file headers and inline comments are well-maintained as of
+the most recent refactor pass. Look at:
+* `solver.js` lines 1–25 for the inverse architecture overview.
+* `solver-faber.js` lines 1–25 for the shared Faber primitive contract.
+* `direct/direct-common.js` lines 1–40 for the Direct-tab math overview.
+* `app/disabled/README.md` for the AQD re-enable checklist.
+
+The thesis PDF and the extracted `thesis.txt` (alongside) are the
+ground-truth math reference — grep `thesis.txt` for chapter/theorem
+numbers when you need to look something up. Andrew can also be asked
+directly for math judgment calls.

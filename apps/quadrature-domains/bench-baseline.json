@@ -1,0 +1,98 @@
+{
+  "scenarios": [
+    {
+      "name": "boundedQD: 3-pole equilateral",
+      "n": 20,
+      "nSuccess": 20,
+      "medianMs": 842.4037000000001,
+      "p10Ms": 742.5008,
+      "p90Ms": 961.1764,
+      "meanMs": 852.3006350000002,
+      "medianNewtonIter": 4,
+      "meanCondEst": null,
+      "condEstMax": 0,
+      "lastError": null
+    },
+    {
+      "name": "boundedQD: cardioid",
+      "n": 20,
+      "nSuccess": 20,
+      "medianMs": 787.7759,
+      "p10Ms": 717.9927,
+      "p90Ms": 860.869,
+      "meanMs": 796.500685,
+      "medianNewtonIter": 15,
+      "meanCondEst": null,
+      "condEstMax": 0,
+      "lastError": null
+    },
+    {
+      "name": "unboundedQD: 2-pole non-uniqueness",
+      "n": 20,
+      "nSuccess": 20,
+      "medianMs": 596.64785,
+      "p10Ms": 551.8016,
+      "p90Ms": 709.9208,
+      "meanMs": 622.55106,
+      "medianNewtonIter": 6,
+      "meanCondEst": null,
+      "condEstMax": 0,
+      "lastError": null
+    },
+    {
+      "name": "boundedLQD: 1-pt α=2",
+      "n": 20,
+      "nSuccess": 20,
+      "medianMs": 621.7027499999999,
+      "p10Ms": 585.3607,
+      "p90Ms": 668.2334,
+      "meanMs": 623.24137,
+      "medianNewtonIter": 6,
+      "meanCondEst": null,
+      "condEstMax": 0,
+      "lastError": null
+    },
+    {
+      "name": "boundedLQD_singular: Thm 5.6.2",
+      "n": 20,
+      "nSuccess": 20,
+      "medianMs": 1157.1876,
+      "p10Ms": 1097.2478,
+      "p90Ms": 1285.2918,
+      "meanMs": 1179.074745,
+      "medianNewtonIter": 28,
+      "meanCondEst": null,
+      "condEstMax": 0,
+      "lastError": null
+    },
+    {
+      "name": "unboundedLQD: 1-pt c=0.6",
+      "n": 20,
+      "nSuccess": 20,
+      "medianMs": 855.1088,
+      "p10Ms": 806.924,
+      "p90Ms": 913.5888,
+      "meanMs": 860.286075,
+      "medianNewtonIter": 3,
+      "meanCondEst": null,
+      "condEstMax": 0,
+      "lastError": null
+    },
+    {
+      "name": "unboundedLQD_singular: q=0.1",
+      "n": 20,
+      "nSuccess": 20,
+      "medianMs": 1881.40015,
+      "p10Ms": 1794.5351,
+      "p90Ms": 2124.7709,
+      "meanMs": 1941.7219749999997,
+      "medianNewtonIter": 5,
+      "meanCondEst": null,
+      "condEstMax": 0,
+      "lastError": null
+    }
+  ],
+  "totalMs": 145718.2845,
+  "runs": 20,
+  "ts": "2026-05-28T06:44:02.363Z"
+}
