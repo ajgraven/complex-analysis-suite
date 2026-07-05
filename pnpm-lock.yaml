@@ -90,6 +90,9 @@ importers:
       mathjs:
         specifier: ^12.4.1
         version: 12.4.3
+      vite:
+        specifier: ^5.4.10
+        version: 5.4.21
 
 packages:
 
