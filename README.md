@@ -201,7 +201,7 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
   (lighting + post-processing + smooth temporal anti-aliasing for stills), **Researcher** (high iterations,
   a perceptual palette, the metrics panel open), **Educator** (the structure-revealing overlays),
   **Performance** (stripped back for slow devices), and **Deep zoom** (perturbation + auto-iterations
-  for z²+c). A profile re-skins the current view — it never changes your formula, parameter, or zoom —
+  for polynomial maps). A profile re-skins the current view — it never changes your formula, parameter, or zoom —
   and editing any setting afterwards shows the picker as _Custom_. First-run onboarding offers a
   starting pick.
 - **Auto iterations** raises the iteration cap automatically as you zoom in, so deep
@@ -213,7 +213,7 @@ the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
 - **Suggestions** (on by default) watches the live view and, when a setting is degrading or
   hiding what you're looking at, shows a small non-obstructive tip over the affected plot with
   a one-click fix — for example _raise the iterations_ when the zoom outruns the cap (boundary
-  detail "fattening"), _enable perturbation_ when a deep z²+c zoom strains double precision, the
+  detail "fattening"), _enable perturbation_ when a deep polynomial zoom strains double precision, the
   _period_ colouring for a rational map whose escape-time image is flat, or the _multiplier map_
   when the view sits inside the set. Nothing changes on its own; dismiss a tip with ×, or untick
   **suggestions** (under _Iteration &amp; precision_) to turn them off. The choice is remembered.
@@ -591,26 +591,29 @@ error-free transforms; a `* uOne` uniform barrier stops the shader compiler from
 reassociating those transforms away. The algorithms are validated against a JS
 `Math.fround` reference (`test/df64.test.ts`).
 
-**Perturbation (deep zoom, z²+c).** For the Mandelbrot map on the parameter plane,
-the **perturbation (deep zoom)** toggle goes deeper than df64. The CPU iterates one
-high-precision _reference orbit_ at the view centre; the GPU then renders every pixel
-as a small delta around it (`z = Z + δz`, `δz' = 2·Z·δz + δz² + δc`) in ordinary
+**Perturbation (deep zoom, polynomials).** The **perturbation (deep zoom)** toggle goes
+deeper than df64. The CPU iterates one high-precision _reference orbit_ at the view centre;
+the GPU then renders every pixel as a small delta around it (`z = Z + δz`) in ordinary
 single-float arithmetic — fast, and limited by the reference precision rather than the
-GPU's. Pixels **rebase** (Zhuoran): when the delta would outgrow its reference (or the
-stored orbit ends) the pixel re-references to Z₀ — an exact step that keeps the render
-glitch-free and lifts the old reference-length limit. The view centre is carried in
-**double-double** precision (`src/render/dd.ts`, ~31 digits) and the reference orbit is
-iterated at that centre, so views stay locatable to ~10²⁸×; all are unit-tested
-(`test/perturbation.test.ts`, `test/rebasing.test.ts`, `test/dd.test.ts`). Both planes
-are eligible for z²+c — the Mandelbrot set (parameter plane) and its Julia sets
-(dynamical plane); other maps fall back to df64.
+GPU's. For the classic Mandelbrot the step is `δz' = 2·Z·δz + δz² + δc`; the kernel
+generalises this to **any additive-c polynomial** `f = P(z) + B·c` via the cancellation-free
+`δz' = Σⱼ pⱼ·[(Z+δz)ʲ − Zʲ] + B·δc`, so **z²+c, the multibrots z^d+c, and general polynomials
+like z³−z+c or z²+a·z+c all deep-zoom** (`src/render/perturbationPoly.ts`,
+`test/perturbationPoly.test.ts`; z²+c stays byte-identical to the original kernel). Pixels
+**rebase** (Zhuoran): when the delta would outgrow its reference (or the stored orbit ends)
+the pixel re-references to Z₀ — an exact step that keeps the render glitch-free and lifts the
+old reference-length limit. The view centre is carried in **double-double** precision
+(`src/render/dd.ts`, ~31 digits) and the reference orbit is iterated at that centre, so views
+stay locatable to ~10²⁸×; all are unit-tested (`test/perturbation.test.ts`,
+`test/rebasing.test.ts`, `test/dd.test.ts`). Eligible on both planes (parameter and Julia);
+other maps (rational, transcendental) fall back to df64.
 
 **Fast deep zoom (BLA).** The **fast deep zoom (BLA)** toggle (on by default)
 accelerates the perturbation kernel with a _bivariate linear approximation_ skip-table
-(Zhuoran / "mathr"). Where a pixel's delta stays small the exact update
-`δz' = 2·Z·δz + δz² + δc` is dominated by its linear part `δz ↦ A·δz + B·δc`; merging
-consecutive linear steps into a binary tree lets the kernel skip up to `2^(k−1)`
-iterations at once with a `k`-level table. Each merged step carries a validity radius, so
+(Zhuoran / "mathr"), for z²+c, multibrots, and general polynomials alike. Where a pixel's
+delta stays small the exact step is dominated by its linear part `δz ↦ A·δz + B·δc`
+(`A = f′(Z)`, `B = ∂f/∂c`); merging consecutive linear steps into a binary tree lets the
+kernel skip up to `2^(k−1)` iterations at once with a `k`-level table. Each merged step carries a validity radius, so
 a skip is taken only where the dropped `δz²` term sits below the float32 rounding floor —
 the image is **identical** to the exact single-step kernel (0 pixels differ), while deep
 minibrots render roughly **20× faster** (the exact speedup grows with the reference-orbit
@@ -657,7 +660,7 @@ already relative.
   gamma) is currently applied on-screen only.
 - **Deep zoom depth:** the df64 path extends usable zoom to ~10¹²× (vs ~10⁴× for
   single precision); beyond that, df64 precision runs out and the image pixelates.
-  For z²+c (both planes), the **perturbation (deep zoom)** toggle goes further still
+  For polynomial maps (both planes), the **perturbation (deep zoom)** toggle goes further still
   (structure resolves where df64 has flattened) — pixels rebase, so it is glitch-free —
   and is limited to ≈10²⁸× by its double-double reference centre. A bignum reference (for
   10¹⁰⁰⁺×) and per-pixel BLA iteration-skipping (the table is staged in `src/render/bla.ts`,

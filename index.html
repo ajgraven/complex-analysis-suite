@@ -1008,7 +1008,7 @@ z^2+c</textarea
                     <label
                       class="checkbox"
                       for="perturbation"
-                      title="Deep-zoom past the f64 limit for z²+c via a high-precision reference orbit (escape/smooth colouring only)"
+                      title="Deep-zoom past the f64 limit for polynomial maps (z²+c, multibrots z^d+c, and general additive-c polynomials) via a high-precision reference orbit (escape/smooth colouring only)"
                     >
                       <input type="checkbox" id="perturbation" /> perturbation (deep zoom)
                     </label>
@@ -1779,7 +1779,7 @@ z^2+c</textarea
                       </li>
                       <li>
                         GPU acceleration limits accuracy beyond a certain zoom;
-                        <strong>perturbation (deep zoom)</strong> extends it for z²+c.
+                        <strong>perturbation (deep zoom)</strong> extends it for polynomial maps.
                       </li>
                     </ul>
                   </div>
@@ -1880,11 +1880,12 @@ z^2+c</textarea
                         seconds.
                       </li>
                       <li>
-                        Tick <strong>perturbation (deep zoom)</strong> on the Mandelbrot set or its
-                        Julia sets (z²+c) to zoom past the point where ordinary deep zoom turns to
-                        mush. <strong>Fast deep zoom (BLA)</strong> — on by default — then accelerates
-                        it roughly 20× at deep minibrots with a pixel-identical skip-table; untick it
-                        to compare against the exact kernel.
+                        Tick <strong>perturbation (deep zoom)</strong> on a polynomial map — z²+c, a
+                        multibrot z^d+c, or a general additive-c polynomial like z³−z+c — and its Julia
+                        sets to zoom past the point where ordinary deep zoom turns to mush.
+                        <strong>Fast deep zoom (BLA)</strong> — on by default — then accelerates it
+                        roughly 20× at deep minibrots with a pixel-identical skip-table; untick it to
+                        compare against the exact kernel.
                       </li>
                       <li>
                         <strong>Profile</strong> (top bar) applies a bundle of settings tuned to a

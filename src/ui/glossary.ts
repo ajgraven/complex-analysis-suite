@@ -132,12 +132,12 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: "perturbation",
     term: "Perturbation (deep zoom)",
-    defn: "A deep-zoom method for z²+c: compute one high-precision reference orbit, then track every pixel as a small difference from it in ordinary precision — reaching far past the float64 zoom limit.",
+    defn: "A deep-zoom method for polynomial maps: compute one high-precision reference orbit, then track every pixel as a small difference δ from it in ordinary precision — reaching far past the float64 zoom limit. The per-step update is the cancellation-free δ ↦ Σⱼ pⱼ·[(Z+δ)ʲ − Zʲ] + B·δc, so it covers z²+c, the multibrots z^d+c, and general additive-c polynomials (z³−z+c, z²+a·z+c, …); rational and transcendental maps fall back to df64.",
   },
   {
     id: "bla",
     term: "Fast deep zoom (BLA)",
-    defn: "An accelerator for perturbation deep zoom. Where a pixel's difference δ from the reference orbit stays small, the exact update δ ↦ 2Z·δ + δ² + δc is well-approximated by its linear part δ ↦ A·δ + B·δc; composing consecutive linear steps into a binary tree (Zhuoran / 'mathr') lets the kernel skip many iterations at once — up to 2^(k−1) with a k-level table. Each merged step carries a validity radius, so it is taken only where the dropped δ² term is below the float32 rounding floor: the image is identical to the exact single-step kernel (0 pixels differ), while deep minibrots render roughly 20× faster. The exact speedup is view-dependent (it grows with the reference-orbit length). The 'fast deep zoom (BLA)' checkbox turns it off to compare against the exact kernel.",
+    defn: "An accelerator for perturbation deep zoom (z²+c, multibrots, and general polynomials alike). Where a pixel's difference δ from the reference orbit stays small, the exact perturbation step is well-approximated by its linear part δ ↦ A·δ + B·δc (A = f′(Z), B = ∂f/∂c; 2Z and 1 for z²+c); composing consecutive linear steps into a binary tree (Zhuoran / 'mathr') lets the kernel skip many iterations at once — up to 2^(k−1) with a k-level table. Each merged step carries a validity radius, so it is taken only where the dropped δ² term is below the float32 rounding floor: the image is identical to the exact single-step kernel (0 pixels differ), while deep minibrots render roughly 20× faster. The exact speedup is view-dependent (it grows with the reference-orbit length). The 'fast deep zoom (BLA)' checkbox turns it off to compare against the exact kernel.",
     latex: "\\delta_{m+\\ell} = A\\,\\delta_m + B\\,\\delta c \\quad (|\\delta_m| < r)",
   },
   {
