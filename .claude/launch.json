@@ -20,6 +20,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "5188", "--directory", "apps/complex-dynamics/dist"],
       "port": 5188
+    },
+    {
+      "name": "corr",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5176", "--directory", "apps/correspondences/dist"],
+      "port": 5176
     }
   ]
 }

@@ -1,0 +1,33 @@
+{
+  "name": "correspondences",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Anti-holomorphic correspondence / Schwarz-reflection mating tool (Phase 6). Built on the shared @cas/* packages the first two apps extracted; quadratic-first (deltoid + circle-and-cardioid), with the deltoid as the first ground-truth milestone.",
+  "license": "MIT",
+  "author": "Andrew Graven <andrew@graven.com>",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cas/core": "workspace:*",
+    "@cas/expr": "workspace:*",
+    "@cas/gpu": "workspace:*",
+    "@cas/interchange": "workspace:*"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  }
+}
