@@ -2,6 +2,7 @@
 import { Complex } from '../complex.mjs';
 import { Taylor } from '../taylor.mjs';
 import _QD from '../solver.mjs';
+import { makeDurandKerner, objAlgebra } from '@cas/core';
 // =============================================================================
 // direct-common.js -- Direct problem: given a Riemann map φ, compute the
 // quadrature function h such that φ(𝔻) ∈ QD(h).
@@ -66,6 +67,10 @@ import _QD from '../solver.mjs';
 
   const C = (typeof Complex !== 'undefined') ? Complex
           : (typeof global.Complex !== 'undefined' ? global.Complex : null);
+
+  // Durand–Kerner root-finding delegates to @cas/core's shared kernel over the {re,im} algebra
+  // (the same kernel the Complex Dynamics app and QD's faber-analysis use).
+  const durandKernerKernel = makeDurandKerner(objAlgebra);
   const T = (typeof Taylor !== 'undefined') ? Taylor
           : (typeof global.Taylor !== 'undefined' ? global.Taylor : null);
   if (!C || !T) {
@@ -933,33 +938,16 @@ import _QD from '../solver.mjs';
       };
     }
 
-    // Durand-Kerner iteration.
-    for (let it = 0; it < iterCap; it++) {
-      let maxDelta = 0;
-      const next = new Array(n);
-      for (let i = 0; i < n; i++) {
-        const pi = evalPolyAscending(a, roots[i]);
-        // ∏_{j ≠ i} (r_i − r_j)
-        let denom = { re: 1, im: 0 };
-        for (let j = 0; j < n; j++) {
-          if (j === i) continue;
-          denom = C.mul(denom, C.sub(roots[i], roots[j]));
-        }
-        if (C.abs(denom) < 1e-300) {
-          // Coincident estimates: nudge slightly.
-          next[i] = { re: roots[i].re + 1e-7, im: roots[i].im + 1e-7 };
-          maxDelta = Math.max(maxDelta, 1e-7);
-          continue;
-        }
-        const delta = C.div(pi, denom);
-        next[i] = C.sub(roots[i], delta);
-        const dm = C.abs(delta);
-        if (dm > maxDelta) maxDelta = dm;
-      }
-      for (let i = 0; i < n; i++) roots[i] = next[i];
-      if (maxDelta < tol) break;
-    }
-    return roots;
+    // Durand–Kerner iteration via @cas/core's shared kernel (jacobi update, nudge-on-coincident,
+    // tol 1e-13 — identical to this file's former inline loop). The degree-1 and degree-2 closed
+    // forms above, monic normalization, and centroid seeding stay app-side.
+    const res = durandKernerKernel((z) => evalPolyAscending(a, z), roots, {
+      tol,
+      maxIter: iterCap,
+      mode: 'jacobi',
+      onCoincident: 'nudge',
+    });
+    return res.roots;
   }
 
   // Square root for complex numbers (principal branch).
