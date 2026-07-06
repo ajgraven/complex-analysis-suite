@@ -1764,5 +1764,12 @@ const _exports = {
 // ESM (Phase 2 port). Classic solver.js stays frozen for the legacy browser loader + blob
 // workers; this .mjs is the native-module twin the test harness (and later the Vite graph)
 // consume. `_exports` is the mutable QD namespace; family modules import and register onto it.
+//
+// Mirror the classic solver.js's `window.QD = _exports`: expose the namespace as the bare
+// `window.QD` global in the browser, so any straggler that still reaches for it (e.g. ui.js's
+// create-if-absent `window.QD = window.QD || {}`) sees the real namespace, not an empty object.
+// No-op in module workers (self, no window) and in Node (the test harness), so both are untouched.
+if (typeof window !== 'undefined') window.QD = _exports;
+
 export default _exports;
 export { _exports as QD };

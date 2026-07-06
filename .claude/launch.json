@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "qd-esm",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "apps/quadrature-domains/node_modules/vite/bin/vite.js",
+        "--config",
+        "apps/quadrature-domains/vite.dev.config.mjs"
+      ],
+      "port": 5199
+    }
+  ]
+}
