@@ -36,6 +36,7 @@ context so the *still-classic* files see the ported values exactly as before:
 | **family/seed** (23 files) | keep the IIFE; `import _QD from './solver.mjs'`; `const QD = _QD` | side-effect `import()` in `WORKER_BUNDLE_FILES` order (registers onto the namespace) |
 | **analysis/subsystem** (side-effect) | keep the IIFE; `const QD = _QD` (+ `import {Complex[,Taylor]}` where used); attach `QD.X = …` | `import()` in `PORTED_ANALYSIS` dep order; `loadInCtx()` skips the frozen `.js` |
 | **capture** (`param-slice-common`, `sphere-common`) | drop the IIFE `global` arg; `return` the API from an arg-less IIFE → `export default`/named | `import()` then grab `.default` / `.SphereCommon` (→ `PS` / `SC`) |
+| **worker** (`*-worker-entry` + the `-worker`/`-pool` twins) | entry: `import` the `solver-graph` barrel + `self`-guarded `onmessage`; twin: `new Worker(new URL('./workers/*-entry.mjs', import.meta.url), {type:'module'})` + `typeof Worker` fallback | twins imported via `PORTED_ANALYSIS` (Node hits the main-thread fallback); entries + graph validated by `vitest/worker-entry.test.ts` and `vite build` |
 
 Because `import()` is async, harness setup moved into an idempotent async `bootstrap.init()`
 that `app/node-test.js` awaits before the run loop.
@@ -61,19 +62,31 @@ that `app/node-test.js` awaits before the run loop.
   any `PORTED_ANALYSIS` file, so the on-demand `loadInCtx('sym-core.js')` calls are no-ops (without
   the skip, vm-loading the frozen `.js` would clobber the `.mjs` attach and void the parity check).
   Batch transforms were `scratchpad/port-analysis.mjs` + `port-reassign.mjs` (throwaway).
+- **Workers (native module workers):** the three main-thread twins `primary-solver-worker`,
+  `schwarz/schwarz-cpu-worker`, `param-slice/param-slice-pool` + the worker-thread side in
+  `app/workers/`: `solver-graph.mjs` (side-effect barrel = the WORKER_BUNDLE_FILES solver cluster
+  as ESM, minus parse-h) and `{solver,schwarz,param-slice}-worker-entry.mjs`. The twins drop the
+  runtime-Blob bundle for `new Worker(new URL('./workers/*-entry.mjs', import.meta.url),
+  {type:'module'})`, guarded by `typeof Worker` so Node/file:// use the imported main-thread
+  fallback. The native round-trip is browser-only, so it is validated in three headless layers:
+  the fallback surface + a functional `liveSolve` in `worker.test.js`; `vitest/worker-entry.test.ts`
+  (each entry's whole import graph loads in real Node ESM + wires QD/the pool factory); and
+  `vite build` via `workers-build-check.html` (Rollup bundles all three module workers + the solver
+  graph into their own chunks). The live in-browser worker round-trip is a **flip** spot-check. QD
+  gained a `build` script (ADR-0003; `pnpm build` now covers both apps). Batch transform:
+  `scratchpad/port-workers.mjs`.
 - Also standalone: `vite.config.mjs` + `esm-proof.{html,js}` + `app/workers/leaf.worker.mjs`
   prove `vite build` bundles a native module worker (replaces runtime-Blob bundling). These are
   transitional scaffolding — the final flip repoints Vite at `index.html`.
 
 ## Remaining
 
-1. **Workers → native module workers.** `primary-solver-worker`, `param-slice/param-slice-pool`,
-   `schwarz/schwarz-cpu-worker`: replace runtime-Blob bundling with
-   `new Worker(new URL('./w.mjs', import.meta.url), { type: 'module' })` importing the ESM graph
-   (proven by the `esm-proof` slice). These three are the last classic `.js` still vm-loaded in
-   `bootstrap.js` (via `loadInCtx(..., { replaceSelf: true })`); `parse-h` (deferred) rides along
-   at this stage.
-2. **UI layer + flip.** ESM-port the `QD_UI.installX(uiCtx)` factory modules, `ui.js`, the
+The **UI layer + the flip** are all that's left. Everything the headless suite loads is now ESM
+(the only classic `.js` still `loadInCtx`-loaded in `bootstrap.js` is `asset-manifest.js`, which is
+plain data and can stay classic through the flip; the on-demand `algebra/*` + `ui-modes` test loads
+resolve as frozen `.js` until then; `parse-h` is deferred).
+
+1. **UI layer + flip.** ESM-port the `QD_UI.installX(uiCtx)` factory modules, `ui.js`, the
    `algebra/*` tab modules, and `ui-modes` (all still classic — the on-demand test files that pull
    `algebra/algebra-store`, `algebra/cas-export`, `algebra/expr-parser`, `algebra/sym-worker`, and
    `ui-modes` via `loadInCtx` keep resolving them as frozen `.js` for now); replace the
