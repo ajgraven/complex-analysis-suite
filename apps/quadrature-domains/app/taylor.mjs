@@ -6,6 +6,11 @@
 // =============================================================================
 
 import { Complex } from './complex.mjs';
+import { makeSeries, objAlgebra } from '@cas/core';
+
+// The truncated-series multiply is @cas/core's shared kernel (also used by the Complex Dynamics
+// app's Böttcher recurrences). The other Taylor ops keep their own recurrences, built on it.
+const series = makeSeries(objAlgebra);
 
 const Taylor = {
   // Zero series of length n
@@ -38,16 +43,11 @@ const Taylor = {
     return Taylor.add(p, q.map(Complex.neg));
   },
 
-  // Multiply, truncated to length L+1 (default: full product)
+  // Multiply, truncated to length L+1 (default: full product). The convolution is @cas/core's
+  // shared series multiply — bit-identical to the former inline loop.
   mul(p, q, L) {
     if (L === undefined) L = (p.length - 1) + (q.length - 1);
-    const r = Taylor.zero(L + 1);
-    for (let i = 0; i <= L && i < p.length; i++) {
-      for (let j = 0; j <= L - i && j < q.length; j++) {
-        r[i + j] = Complex.add(r[i + j], Complex.mul(p[i], q[j]));
-      }
-    }
-    return r;
+    return series.mul(p, q, L);
   },
 
   // Multiply each coefficient by a Complex scalar

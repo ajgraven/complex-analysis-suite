@@ -31,6 +31,7 @@
  * of that limit.
  */
 
+import { makeSeries, tupleAlgebra } from "@cas/core";
 import type { Complex } from "../complex";
 import * as C from "../expr/complexJs";
 
@@ -39,6 +40,10 @@ type Series = Complex[];
 
 const ZERO: Complex = [0, 0];
 
+// The truncated-series multiply is @cas/core's shared kernel (shared with QD's Taylor). Bound
+// once over the tuple algebra; bit-identical to the former inline convolution.
+const series = makeSeries(tupleAlgebra);
+
 /** The unit series 1 + 0·u + … truncated to order `n`. */
 function unitSeries(n: number): Series {
   const s: Series = Array.from({ length: n + 1 }, () => [0, 0] as Complex);
@@ -46,18 +51,9 @@ function unitSeries(n: number): Series {
   return s;
 }
 
-/** Product a·b of two power series, truncated to order `n`. */
+/** Product a·b of two power series, truncated to order `n`. @cas/core's shared multiply. */
 function seriesMul(a: Series, b: Series, n: number): Series {
-  const out: Series = Array.from({ length: n + 1 }, () => [0, 0] as Complex);
-  for (let i = 0; i <= n; i++) {
-    if (a[i][0] === 0 && a[i][1] === 0) continue;
-    for (let j = 0; i + j <= n; j++) {
-      if (b[j][0] === 0 && b[j][1] === 0) continue;
-      const k = i + j;
-      out[k] = C.add(out[k], C.mul(a[i], b[j]));
-    }
-  }
-  return out;
+  return series.mul(a, b, n);
 }
 
 /** Integer power a^d, truncated to order `n`, via binary exponentiation. */
