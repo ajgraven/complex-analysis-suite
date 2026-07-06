@@ -58,6 +58,32 @@ for (const rel of [
   ESM_PORTED.set(rel, { file: rel.replace(/\.js$/, '.mjs') });
 }
 
+// Analysis + subsystem layer ported to native ESM. Imported (not vm-loaded) in
+// dependency order after the core namespace exists. Most are SIDE-EFFECT modules
+// that register onto the QD namespace exactly as their classic twins did (poly-
+// helpers → QD.Poly/QD.Format, critical-set → QD.CriticalSet, direct-common →
+// QD.Direct, the four schwarz files → QD.Schwarz, …). The two `capture` modules
+// instead expose their OWN API object (they used to reassign module.exports):
+// param-slice-common's default export is the ParamSlice API (bootstrap → PS);
+// sphere-common's named `SphereCommon` export (bootstrap → SC). Keyed by the
+// classic filename so loadInCtx() and the CORE filter can skip the frozen .js.
+const PORTED_ANALYSIS = [
+  { file: 'poly-helpers.js' },
+  { file: 'critical-set.js' },
+  { file: 'univalence.js' },
+  { file: 'cusps.js' },
+  { file: 'riemann-latex.js' },
+  { file: 'primary-solution.js' },
+  { file: 'direct/direct-common.js' },
+  { file: 'schwarz/schwarz-common.js' },     // creates QD.Schwarz; must precede the three below
+  { file: 'schwarz/schwarz-inverse.js' },
+  { file: 'schwarz/schwarz-analysis.js' },
+  { file: 'schwarz/schwarz-forward.js' },
+  { file: 'param-slice/param-slice-common.js', capture: 'default' },      // → PS
+  { file: 'sphere/sphere-common.js', capture: 'SphereCommon' },           // → SC
+];
+const PORTED_ANALYSIS_SET = new Set(PORTED_ANALYSIS.map((s) => s.file));
+
 let _initPromise = null;
 function init() {
   if (!_initPromise) _initPromise = _init();
@@ -114,49 +140,48 @@ async function _init() {
   loadInCtx('asset-manifest.js');
   const MANIFEST = ctx.QD_ASSET_MANIFEST;
 
-  // --- core kernels: WORKER_BUNDLE_FILES (minus parse-h, which the old execution
-  //     loader omitted; minus the ESM-ported leaves, which were imported above) +
-  //     the page-only analysis modules it appended. Order is significant (seeds
-  //     before each solver); WORKER_BUNDLE_FILES already encodes it. ---
+  // Capture the QD namespace (populated by the solver + families imported above;
+  // ctx.module.exports was pointed at it in the ESM_PORTED namespace step).
+  const QD_NS = ctx.module.exports;
+  ctx.QD = QD_NS;
+
+  // --- still-classic core kernels: WORKER_BUNDLE_FILES + the page-only analysis
+  //     modules the old suite appended, MINUS parse-h (the execution loader omitted
+  //     it), the ESM-ported leaves/solver/families, and the ESM-ported analysis
+  //     layer. Order is significant (seeds before each solver); WORKER_BUNDLE_FILES
+  //     already encodes it. This list shrinks toward empty as the port proceeds. ---
   const ANALYSIS_FILES = ['critical-set.js', 'univalence.js', 'cusps.js', 'riemann-latex.js', 'primary-solution.js'];
   const CORE = MANIFEST.WORKER_BUNDLE_FILES
-    .filter(f => f !== 'parse-h.js' && !ESM_PORTED.has(f))
-    .concat(ANALYSIS_FILES);
+    .concat(ANALYSIS_FILES)
+    .filter(f => f !== 'parse-h.js' && !ESM_PORTED.has(f) && !PORTED_ANALYSIS_SET.has(f));
   for (const f of CORE) loadInCtx(f);
 
-  // Capture the QD namespace BEFORE param-slice/sphere reassign module.exports.
-  const QD_NS = ctx.module.exports;
-  ctx.QD = QD_NS;   // param-slice-common reads global.QD (= ctx.QD)
-  // Re-expose all namespace members (incl. family-registered ones) as bare ctx globals, for
-  // the handful of tests that read them via vm.runInContext('<name>', ctx).
+  // --- ESM-ported analysis + subsystem layer: imported (not vm-loaded), in the
+  //     dependency order declared in PORTED_ANALYSIS. Side-effect modules register
+  //     onto the QD namespace (same object as QD_NS); `capture` modules expose their
+  //     own API, grabbed here. Sequential await guarantees the order (e.g. poly-
+  //     helpers before schwarz-inverse, schwarz-common before its augmenters). ---
+  const captured = {};
+  for (const spec of PORTED_ANALYSIS) {
+    const mod = await importApp(spec.file.replace(/\.js$/, '.mjs'));
+    if (spec.capture) captured[spec.file] = spec.capture === 'default' ? mod.default : mod[spec.capture];
+  }
+
+  // Re-expose all namespace members (solver + families + the ported analysis that
+  // attached to QD) as bare ctx globals, for the handful of tests that read them
+  // via vm.runInContext('<name>', ctx).
   Object.assign(ctx, QD_NS);
 
-  // --- subsystems (the 5 former mid-file loaders; each depends only on core QD) ---
-  loadInCtx('direct/direct-common.js');               // augments module.exports.Direct
-  const Direct = ctx.module.exports.Direct;
+  const Direct  = QD_NS.Direct;                              // direct-common.mjs attached it
+  const Schwarz = QD_NS.Schwarz;                             // schwarz-*.mjs attached it
+  const PS = captured['param-slice/param-slice-common.js'];  // ParamSlice API (default export)
+  const SC = captured['sphere/sphere-common.js'];            // SphereCommon (named export)
 
-  loadInCtx('schwarz/schwarz-common.js');
-  loadInCtx('schwarz/schwarz-inverse.js');
-  loadInCtx('schwarz/schwarz-analysis.js');
-  loadInCtx('schwarz/schwarz-forward.js');            // augments module.exports.Schwarz
-  const Schwarz = ctx.module.exports.Schwarz;
-
-  loadInCtx('param-slice/param-slice-common.js');     // REASSIGNS module.exports → its API
-  const PS = ctx.module.exports;
-
-  loadInCtx('sphere/sphere-common.js');               // REASSIGNS module.exports → { SphereCommon }
-  const SC = ctx.module.exports.SphereCommon;
-
+  // --- workers (still classic; native module workers land in the next port step) ---
   loadInCtx('primary-solver-worker.js', { replaceSelf: true });   // attaches QD_NS.PrimarySolverWorker
   const PSW = QD_NS.PrimarySolverWorker;
   loadInCtx('schwarz/schwarz-cpu-worker.js', { replaceSelf: true }); // attaches QD_NS.SchwarzCpuWorker
   const SCW = QD_NS.SchwarzCpuWorker;
-
-  // param-slice-common and sphere-common REASSIGNED ctx.module.exports to their
-  // own APIs (PS/SC were captured above). Restore it to the QD namespace, since
-  // the old single-file suite ran most sections BEFORE those loaders and some
-  // bodies still do `vm.runInContext('module.exports', ctx)` expecting QD.
-  ctx.module.exports = QD_NS;
 
   // --- per-family standard battery (migrated from node-test.js) ---
   function runFamilyBattery(label, presets) {
