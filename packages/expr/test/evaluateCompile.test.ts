@@ -6,9 +6,9 @@
  * parameter a) against random z, c, a and asserts exact equality (NaN-aware).
  */
 import { describe, expect, it } from "vitest";
-import type { Complex } from "../src/complex";
-import { parse } from "@cas/expr/parser";
-import { evaluate, makeComplexFn, makeEscapeFn } from "@cas/expr/evaluate";
+import type { Complex } from "../src/complex.js";
+import { parse } from "../src/parser.js";
+import { evaluate, makeComplexFn, makeEscapeFn } from "../src/evaluate.js";
 
 /** Deterministic LCG so any mismatch is reproducible. */
 function rng(seed: number): () => number {

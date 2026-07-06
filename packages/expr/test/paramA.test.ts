@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { parse } from "@cas/expr/parser";
-import { isFreeParameter } from "@cas/expr/ast";
-import { makeComplexFn } from "@cas/expr/evaluate";
+import { parse } from "../src/parser.js";
+import { isFreeParameter } from "../src/ast.js";
+import { makeComplexFn } from "../src/evaluate.js";
 
 describe("live parameter `a`", () => {
   it("detects `a` as a free variable", () => {

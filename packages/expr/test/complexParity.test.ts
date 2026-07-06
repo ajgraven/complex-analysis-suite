@@ -9,7 +9,7 @@
  * the GLSL↔JS guarantee rests on the formulas being kept identical, which this pins.
  */
 import { describe, expect, it } from "vitest";
-import type { Complex } from "../src/complex";
+import type { Complex } from "../src/complex.js";
 import {
   E,
   PI,
@@ -37,7 +37,7 @@ import {
   sin,
   sqrt,
   tan,
-} from "@cas/expr/complexJs";
+} from "../src/complexJs.js";
 
 function near(actual: Complex, expected: Complex, tol = 1e-9): void {
   expect(Math.hypot(actual[0] - expected[0], actual[1] - expected[1])).toBeLessThan(tol);

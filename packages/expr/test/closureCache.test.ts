@@ -5,9 +5,9 @@
  * primitives) and the memoisation contract (same instance on a hit; fresh on a different key).
  */
 import { describe, it, expect } from "vitest";
-import type { Complex } from "../src/complex";
-import { parse } from "@cas/expr/parser";
-import { makeComplexFn, makeEscapeFn, getComplexFn, getEscapeFn } from "@cas/expr/evaluate";
+import type { Complex } from "../src/complex.js";
+import { parse } from "../src/parser.js";
+import { makeComplexFn, makeEscapeFn, getComplexFn, getEscapeFn } from "../src/evaluate.js";
 
 describe("getComplexFn (cached makeComplexFn)", () => {
   it("matches makeComplexFn and memoises on (ast, a)", () => {
