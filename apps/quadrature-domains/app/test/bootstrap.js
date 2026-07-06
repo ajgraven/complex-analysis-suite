@@ -99,6 +99,13 @@ const PORTED_ANALYSIS = [
   { file: 'faber-analysis.js' },
   { file: 'ui-strings.js' },
   { file: 'thesis-examples.js' },
+  // Workers — main-thread API modules (ESM). In the browser they spawn native module
+  // workers (new Worker(new URL('./workers/*-entry.mjs', import.meta.url), {type:'module'}));
+  // imported here in Node they attach QD.PrimarySolverWorker / QD.SchwarzCpuWorker and, with
+  // no Worker available, resolve to the main-thread fallback (which worker.test.js drives via
+  // the API surface + a functional liveSolve). Replaces the former Blob-masking vm-load.
+  { file: 'primary-solver-worker.js' },
+  { file: 'schwarz/schwarz-cpu-worker.js' },
 ];
 const PORTED_ANALYSIS_SET = new Set(PORTED_ANALYSIS.map((s) => s.file));
 
@@ -200,10 +207,9 @@ async function _init() {
   const PS = captured['param-slice/param-slice-common.js'];  // ParamSlice API (default export)
   const SC = captured['sphere/sphere-common.js'];            // SphereCommon (named export)
 
-  // --- workers (still classic; native module workers land in the next port step) ---
-  loadInCtx('primary-solver-worker.js', { replaceSelf: true });   // attaches QD_NS.PrimarySolverWorker
+  // --- workers: now ESM, imported via PORTED_ANALYSIS above. Grab the attached main-thread
+  //     APIs (with no Worker in Node, their methods resolve on the main-thread fallback). ---
   const PSW = QD_NS.PrimarySolverWorker;
-  loadInCtx('schwarz/schwarz-cpu-worker.js', { replaceSelf: true }); // attaches QD_NS.SchwarzCpuWorker
   const SCW = QD_NS.SchwarzCpuWorker;
 
   // --- per-family standard battery (migrated from node-test.js) ---
