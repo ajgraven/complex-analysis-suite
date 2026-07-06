@@ -34,6 +34,8 @@ context so the *still-classic* files see the ported values exactly as before:
 | **leaf** (`complex`, `taylor`) | `export { X }` | `ctx.X = mod.X` (bare global for vm files) |
 | **namespace** (`solver`) | `export default _exports` (the mutable `QD`) | `ctx.module.exports = ctx.QD = mod.default`, then `Object.assign(ctx, ns)` |
 | **family/seed** (23 files) | keep the IIFE; `import _QD from './solver.mjs'`; `const QD = _QD` | side-effect `import()` in `WORKER_BUNDLE_FILES` order (registers onto the namespace) |
+| **analysis/subsystem** (side-effect) | keep the IIFE; `const QD = _QD` (+ `import {Complex[,Taylor]}` where used); attach `QD.X = …` | `import()` in `PORTED_ANALYSIS` dep order; `loadInCtx()` skips the frozen `.js` |
+| **capture** (`param-slice-common`, `sphere-common`) | drop the IIFE `global` arg; `return` the API from an arg-less IIFE → `export default`/named | `import()` then grab `.default` / `.SphereCommon` (→ `PS` / `SC`) |
 
 Because `import()` is async, harness setup moved into an idempotent async `bootstrap.init()`
 that `app/node-test.js` awaits before the run loop.
@@ -47,41 +49,50 @@ that `app/node-test.js` awaits before the run loop.
 - **Solver families/seeds (23):** `solver-faber`, `solvers/seeds/*`,
   `solver-{qd,uqd,lqd,lqd-singular,uqd-lqd,uqd-lqd-singular,pqd,pqd-singular,uqd-pqd,uqd-pqd-singular}`,
   `solver-{lqd,pqd}-common`. Batch transform was `scratchpad/port-families.mjs` (throwaway).
+- **Analysis CORE + subsystems:** `poly-helpers`, `critical-set`, `univalence`, `cusps`,
+  `riemann-latex`, `primary-solution`; `direct/direct-common`, `schwarz/{common,inverse,analysis,
+  forward}`, `param-slice/param-slice-common` (→ `PS`), `sphere/sphere-common` (→ `SC`). Imported
+  in init via the new `PORTED_ANALYSIS` registry (side-effect + capture kinds above). The
+  `module.exports.Direct`/`Schwarz` tails and `if (!QD) return` guards survive untouched — they
+  are inert in ESM (`typeof module` → `'undefined'`; `_QD` is always truthy).
+- **Page-only analysis:** `sym-core`, `sym-radical`, `qd-equations`, `qd-constraints`,
+  `observables`, `symmetry`, `solver-cmax`, `faber-analysis`, `ui-strings`, `thesis-examples` —
+  the modules the test files pull in on demand. Pre-imported in dep order; `loadInCtx()` now skips
+  any `PORTED_ANALYSIS` file, so the on-demand `loadInCtx('sym-core.js')` calls are no-ops (without
+  the skip, vm-loading the frozen `.js` would clobber the `.mjs` attach and void the parity check).
+  Batch transforms were `scratchpad/port-analysis.mjs` + `port-reassign.mjs` (throwaway).
 - Also standalone: `vite.config.mjs` + `esm-proof.{html,js}` + `app/workers/leaf.worker.mjs`
   prove `vite build` bundles a native module worker (replaces runtime-Blob bundling). These are
   transitional scaffolding — the final flip repoints Vite at `index.html`.
 
 ## Remaining
 
-1. **Analysis / subsystem layer** (still `vm`-loaded in bootstrap `CORE` + the subsystem block):
-   `poly-helpers`, `critical-set`, `univalence`, `cusps`, `riemann-latex`, `primary-solution`,
-   `observables`, `symmetry`, `solver-cmax`, `thesis-examples`, `faber-analysis`, `sym-core`,
-   `sym-radical`, `qd-equations`, `qd-constraints`; then `direct/direct-common`, `schwarz/schwarz-*`,
-   `param-slice/param-slice-common`, `sphere/sphere-common`.
-   - ⚠ **Gotcha:** `param-slice-common.js` and `sphere-common.js` **reassign `module.exports`** to
-     their own API (bootstrap captures `PS`/`SC`, then restores `module.exports = QD_NS`). As ESM
-     they must `export` their API and get bootstrap wiring (globals/namespace-style), *not* the
-     uniform family transform.
-2. **Workers → native module workers.** `primary-solver-worker`, `param-slice/param-slice-pool`,
+1. **Workers → native module workers.** `primary-solver-worker`, `param-slice/param-slice-pool`,
    `schwarz/schwarz-cpu-worker`: replace runtime-Blob bundling with
    `new Worker(new URL('./w.mjs', import.meta.url), { type: 'module' })` importing the ESM graph
-   (proven by the `esm-proof` slice).
-3. **UI layer + flip.** ESM-port the `QD_UI.installX(uiCtx)` factory modules and `ui.js`; replace
-   the `document.write` loader in `index.html` with a Vite ESM entry; replace the hand-rolled
-   `sw.js` + `version:sync` with `vite-plugin-pwa`; delete the frozen `.js` graph. Then the
-   **byte-for-byte parity gate**: `pnpm --filter quadrature-domains dev` + `build`, spot-check the
-   thesis-example oracle panel, the Schwarz dynamics tab, the param-slice sweep, and a live Worker
-   solve.
+   (proven by the `esm-proof` slice). These three are the last classic `.js` still vm-loaded in
+   `bootstrap.js` (via `loadInCtx(..., { replaceSelf: true })`); `parse-h` (deferred) rides along
+   at this stage.
+2. **UI layer + flip.** ESM-port the `QD_UI.installX(uiCtx)` factory modules, `ui.js`, the
+   `algebra/*` tab modules, and `ui-modes` (all still classic — the on-demand test files that pull
+   `algebra/algebra-store`, `algebra/cas-export`, `algebra/expr-parser`, `algebra/sym-worker`, and
+   `ui-modes` via `loadInCtx` keep resolving them as frozen `.js` for now); replace the
+   `document.write` loader in `index.html` with a Vite ESM entry; replace the hand-rolled `sw.js` +
+   `version:sync` with `vite-plugin-pwa`; delete the frozen `.js` graph. Then the **byte-for-byte
+   parity gate**: `pnpm --filter quadrature-domains dev` + `build`, spot-check the thesis-example
+   oracle panel, the Schwarz dynamics tab, the param-slice sweep, and a live Worker solve.
 
 ## How to resume / verify
 
 ```bash
 # from apps/quadrature-domains:
 node app/node-test.js          # the parity check — must stay "2200 passed, 0 failed"
-# recipe per file: cp x.js x.mjs → add imports for the bare globals it uses (load order bounds
-# these to earlier files) → for families swap the `const QD = (typeof window…)` block for
-# `const QD = _QD` → add the .js key to ESM_PORTED in bootstrap.js (in WORKER_BUNDLE_FILES order)
-# → rerun the suite. See bootstrap.js's ESM_PORTED comments for the three wiring kinds.
+# recipe per QD-attach file: cp x.js x.mjs → prepend imports for the bare leaf globals it uses
+# (Complex/Taylor) + `import _QD from '<rel>solver.mjs'` → swap the `const QD = (typeof window…)`
+# block for `const QD = _QD` → register the .js in bootstrap.js (ESM_PORTED for leaves/solver/
+# families; PORTED_ANALYSIS for the analysis/subsystem layer, which loadInCtx() then auto-skips)
+# → rerun the suite. See bootstrap.js's ESM_PORTED / PORTED_ANALYSIS comments for the wiring kinds.
+# The batch transforms scratchpad/port-{families,analysis,reassign}.mjs encode exactly this.
 ```
 
 Root gate (`pnpm` on PATH — see the pnpm-local-invocation memory): `pnpm lint && pnpm typecheck && pnpm test`.
@@ -91,6 +102,10 @@ Root gate (`pnpm` on PATH — see the pnpm-local-invocation memory): `pnpm lint 
 - **Never edit a classic `.js` twin** while its `.mjs` exists — they would drift. The `.js` is
   frozen until the flip deletes it; all changes go in the `.mjs`.
 - **The suite must stay green (2200/0)** after each file's conversion — it is the parity guard.
+- **A ported page-only file MUST be added to `PORTED_ANALYSIS`** (so `loadInCtx()` skips its frozen
+  `.js`). Porting the `.mjs` without the skip leaves the test files vm-loading the classic `.js`,
+  which re-runs the IIFE and clobbers the `.mjs`'s namespace attach — the suite still passes but
+  silently tests the `.js`, not the `.mjs`. The skip is what makes the parity check real.
 - Adding `.mjs` files is inert to the manifest machinery: `QD_ASSET_MANIFEST`, the `gen-cache-version`
   `CACHE_HASH` (hashes only manifest-listed `.js` + `sw.js`), and `parse-check` all key off the
   frozen `.js`, so the `manifest` test stays green without a `version:sync`.
