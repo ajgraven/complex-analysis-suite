@@ -1,6 +1,7 @@
 // ESM (Phase 2 port) — twin of faber-analysis.js (classic stays frozen). Registers onto the QD namespace.
 import { Complex } from './complex.mjs';
 import _QD from './solver.mjs';
+import { makeDurandKerner, objAlgebra } from '@cas/core';
 // =============================================================================
 // faber-analysis.js  —  Faber polynomials of the complement of a UQD.
 //
@@ -50,6 +51,10 @@ import _QD from './solver.mjs';
   // Complex is a global in the browser/worker; in the node-test vm it is also
   // installed on the shared context. Fall back to QD.Complex if needed.
   const C = (typeof Complex !== 'undefined') ? Complex : QD.Complex;
+
+  // Durand–Kerner root-finding delegates to @cas/core's shared kernel over the {re,im} algebra
+  // (the same kernel the Complex Dynamics app and QD's other root-finders use).
+  const durandKernerKernel = makeDurandKerner(objAlgebra);
 
   // ---------------------------------------------------------------------------
   // Faber polynomial coefficient lists F₀..F_N (ascending-power Complex[]).
@@ -144,36 +149,21 @@ import _QD from './solver.mjs';
       return der;
     };
 
-    // Initialize on a circle of radius R, angle 2πj/d + 0.4. The phase offset
-    // breaks symmetry so no iterate lands exactly on a real root of a highly
-    // symmetric polynomial (ζ^n, Chebyshev), which would stall the iteration.
-    let z = new Array(d);
+    // Initial guesses on a circle of radius R, angle 2πj/d + 0.4. The phase offset breaks
+    // symmetry so no iterate lands exactly on a real root of a highly symmetric polynomial
+    // (ζ^n, Chebyshev), which would stall the iteration.
+    const seeds = new Array(d);
     for (let j = 0; j < d; j++) {
       const ang = 2 * Math.PI * j / d + 0.4;
-      z[j] = { re: R * Math.cos(ang), im: R * Math.sin(ang) };
+      seeds[j] = { re: R * Math.cos(ang), im: R * Math.sin(ang) };
     }
 
-    let iter = 0, converged = false;
-    for (; iter < maxIter; iter++) {
-      let maxDelta = 0;
-      const zNew = new Array(d);
-      for (let j = 0; j < d; j++) {
-        const pj = evalP(z[j]);
-        let denom = { re: 1, im: 0 };
-        for (let k = 0; k < d; k++) {
-          if (k === j) continue;
-          denom = C.mul(denom, C.sub(z[j], z[k]));
-        }
-        let delta;
-        if (C.abs2(denom) < 1e-300) delta = { re: 0, im: 0 };
-        else delta = C.div(pj, denom);
-        zNew[j] = C.sub(z[j], delta);
-        const dm = Math.hypot(delta.re, delta.im);
-        if (dm > maxDelta) maxDelta = dm;
-      }
-      z = zNew;
-      if (maxDelta < tol) { converged = true; iter++; break; }
-    }
+    // Durand–Kerner iteration via @cas/core's shared kernel (jacobi update, skip-on-coincident
+    // — identical to this file's former inline loop). Newton polish below stays app-side.
+    const dk = durandKernerKernel(evalP, seeds, { tol, maxIter });
+    const z = dk.roots;
+    const converged = dk.converged;
+    const iter = dk.iterations;
 
     if (polish) {
       for (let j = 0; j < d; j++) {

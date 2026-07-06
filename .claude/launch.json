@@ -14,6 +14,12 @@
         "--strictPort"
       ],
       "port": 5199
+    },
+    {
+      "name": "cd-esm",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5188", "--directory", "apps/complex-dynamics/dist"],
+      "port": 5188
     }
   ]
 }

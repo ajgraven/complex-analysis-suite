@@ -9,6 +9,7 @@
  * to the image-based estimate. All CPU, using the expression evaluator + Durand–Kerner root finding.
  */
 
+import { makeDurandKerner, tupleAlgebra } from "@cas/core";
 import type { Complex } from "../complex";
 import type { Node } from "../expr/ast";
 import * as C from "../expr/complexJs";
@@ -154,29 +155,22 @@ function trimPoly(p: Complex[]): Complex[] {
  * by residual) or null if an iterate blew up to a non-finite value. Shared by the polynomial and
  * rational critical-point finders.
  */
+// The Durand-Kerner iteration is @cas/core's generic kernel, shared with the Quadrature app.
+// Behavior here is unchanged: the same geometric-spiral seed (0.4 + 0.9i)^i, in-place
+// (Gauss-Seidel) updates, tol 1e-12 over 200 iterations, and a null return the moment an
+// iterate diverges. Only the seeding stays app-side; the iteration is the shared skeleton.
+const durandKernerKernel = makeDurandKerner(tupleAlgebra);
+
 function durandKerner(pMonic: (z: Complex) => Complex, m: number): Complex[] | null {
-  const roots: Complex[] = [];
+  const seeds: Complex[] = [];
   let pw: Complex = [1, 0];
   const seed: Complex = [0.4, 0.9]; // classic off-axis spread of initial guesses
   for (let i = 0; i < m; i++) {
-    roots.push([pw[0], pw[1]]);
+    seeds.push([pw[0], pw[1]]);
     pw = C.mul(pw, seed);
   }
-  for (let iter = 0; iter < 200; iter++) {
-    let maxDelta = 0;
-    for (let i = 0; i < m; i++) {
-      let den: Complex = [1, 0];
-      for (let j = 0; j < m; j++) if (j !== i) den = C.mul(den, C.sub(roots[i], roots[j]));
-      if (cabs(den) === 0) continue;
-      const delta = C.div(pMonic(roots[i]), den);
-      const next = C.sub(roots[i], delta);
-      if (!Number.isFinite(next[0]) || !Number.isFinite(next[1])) return null;
-      roots[i] = next;
-      maxDelta = Math.max(maxDelta, cabs(delta));
-    }
-    if (maxDelta < 1e-12) break;
-  }
-  return roots;
+  const res = durandKernerKernel(pMonic, seeds, { mode: "seidel", bailOnNonFinite: true });
+  return res ? res.roots : null;
 }
 
 /**
