@@ -11,7 +11,7 @@ import {
   dfSqrt,
   dfSub,
   toNumber,
-} from "../src/glsl/df64Ref";
+} from "../src/glsl/df64Ref.js";
 
 const f = Math.fround;
 

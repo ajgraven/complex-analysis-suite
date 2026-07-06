@@ -12,10 +12,12 @@
 
 import type { Node } from "@cas/expr/ast";
 import { compileEscape, compileF } from "@cas/expr/glsl";
-import { COMPLEX_SINGLE_GLSL } from "../glsl/complexSingle.glsl";
-import { COMPLEX_DF64_GLSL } from "../glsl/complexDf64.glsl";
-import { COMPLEX_DERIVED_GLSL } from "../glsl/complexDerived.glsl";
-import { DF64_GLSL } from "../glsl/df64.glsl";
+import {
+  COMPLEX_SINGLE_GLSL,
+  COMPLEX_DF64_GLSL,
+  COMPLEX_DERIVED_GLSL,
+  DF64_GLSL,
+} from "@cas/gpu/glsl";
 
 export type Precision = "single" | "df64";
 
