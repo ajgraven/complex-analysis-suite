@@ -90,6 +90,8 @@ import {
   saveSavedViews,
   type AppState,
 } from "./state/appState";
+import { decodeLink, validateEnvelope, type Envelope } from "@cas/interchange";
+import { envelopeToMapSpec, mapSpecToExpr } from "./interchange/importMap";
 import { PLACES } from "./state/places";
 import GIF from "gif.js";
 import gifWorkerUrl from "gif.js/dist/gif.worker.js?url";
@@ -2642,8 +2644,49 @@ function init(): void {
     }
   }
 
+  /**
+   * Import a map handed off via @cas/interchange (a deep link OR pasted JSON, from e.g. the
+   * Quadrature Domains app's "Export map"). Returns whether the input WAS an interchange payload —
+   * so callers can fall through to another format when it is not. On success, sets f to the
+   * imported map and re-renders (an imported φ becomes a live dynamical plane like any other map).
+   */
+  function importInterchange(input: string): boolean {
+    let env: Envelope;
+    try {
+      const t = input.trim();
+      env = t.startsWith("{") ? validateEnvelope(JSON.parse(t)) : decodeLink(t);
+    } catch {
+      return false; // not an interchange payload — let the caller try its own format
+    }
+    const spec = envelopeToMapSpec(env);
+    if (!spec) {
+      showToast("Imported interchange payload has no map to render.", "info");
+      return true;
+    }
+    const st = readFullState();
+    st.inpf = mapSpecToExpr(spec);
+    applyFullState(st);
+    showToast(`Imported a ${env.kind} map from ${env.provenance.app}.`, "info");
+    return true;
+  }
+
+  /** Prompt the user to paste an interchange link / JSON, then import it. */
+  function promptImportInterchange(): void {
+    const input = window.prompt(
+      "Paste an interchange deep link or JSON (e.g. from the Quadrature Domains app's Export map):",
+    );
+    if (input && !importInterchange(input)) {
+      showToast("That is not a valid @cas/interchange link or JSON.", "info");
+    }
+  }
+
   /** If the URL hash holds a shared view, apply it. Returns whether it did. */
   function loadFromHash(): boolean {
+    if (!/^#s=/.test(location.hash)) return false;
+    // Try @cas/interchange first: its strict schema check throws on CD's own encodeState payload,
+    // so a genuine CD share-link falls through to decodeState (backward-compat preserved) while an
+    // interchange link (which also rides #s=) is imported instead.
+    if (importInterchange(location.hash)) return true;
     const match = /^#s=(.+)$/.exec(location.hash);
     if (!match) return false;
     const state = decodeState(match[1]);
@@ -3734,6 +3777,7 @@ function init(): void {
     downloadBlob(new Blob([coeffsToCsv(coeffs)], { type: "text/csv" }), file);
     showToast(`Exported ${coeffs.length} coefficients to ${file}.`, "info");
   };
+  byId("import-map").addEventListener("click", promptImportInterchange);
   byId("exterior-param-copy").addEventListener("click", () =>
     copyCoeffs(lastParamCoeffs, "Multibrot/Mandelbrot exterior map", "a"),
   );

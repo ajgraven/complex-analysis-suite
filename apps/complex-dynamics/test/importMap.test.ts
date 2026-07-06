@@ -11,7 +11,7 @@ import {
 import type { Complex } from "../src/complex";
 import { makeComplexFn } from "../src/expr/evaluate";
 import { parse } from "../src/expr/parser";
-import { mapSpecToExpr } from "../src/interchange/importMap";
+import { envelopeToMapSpec, mapSpecToExpr } from "../src/interchange/importMap";
 
 // Phase 4 (C3, CD consume): the QD -> CD path, end to end and headless. An interchange link (as
 // QD's "Export map" button produces) is decoded, its MapSpec turned into a CD expr string, compiled
@@ -49,11 +49,13 @@ describe("CD consume interchange map (Phase 4 C3)", () => {
     expect(v[1]).toBeCloseTo(1, 12);
   });
 
-  it("full round-trip: QD-style deep link -> decode -> expr -> compile -> evaluate", () => {
+  it("full round-trip: QD-style deep link -> decode -> extract map -> expr -> compile -> evaluate", () => {
     const env = decodeLink(qdStyleLink());
     expect(env.kind).toBe("quadrature-domain");
-    const phi = (env.payload as QuadratureDomain).phi;
-    const v: Complex = makeComplexFn(parse(mapSpecToExpr(phi)))([2, 0], [0, 0]);
+    const spec = envelopeToMapSpec(env); // a quadrature-domain hands off its φ
+    expect(spec).toEqual(deltoidPhi);
+    if (!spec) throw new Error("expected a map spec");
+    const v: Complex = makeComplexFn(parse(mapSpecToExpr(spec)))([2, 0], [0, 0]);
     expect(v[0]).toBeCloseTo(2.125, 12);
     expect(v[1]).toBeCloseTo(0, 12);
   });

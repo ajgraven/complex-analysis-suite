@@ -10,7 +10,14 @@
  * holomorphic. A σ import would additionally thread `conjugate` through the expression.)
  */
 
-import type { Complex, MapSpec } from "@cas/interchange";
+import type {
+  Complex,
+  Envelope,
+  MapSpec,
+  QuadratureDomain,
+  SchwarzReflection,
+  View,
+} from "@cas/interchange";
 
 const isZero = (z: Complex): boolean => z.re === 0 && z.im === 0;
 
@@ -59,5 +66,25 @@ export function mapSpecToExpr(m: MapSpec): string {
       return laurentExpr(m.c, m.F);
     case "expr":
       return m.expr;
+  }
+}
+
+/**
+ * The renderable map inside an interchange envelope, by kind: a quadrature-domain hands off its
+ * uniformizing map φ; a schwarz-reflection its σ; a saved view / bare map their map directly.
+ * Returns null for a payload that carries no single map to iterate.
+ */
+export function envelopeToMapSpec(env: Envelope): MapSpec | null {
+  switch (env.kind) {
+    case "quadrature-domain":
+      return (env.payload as QuadratureDomain).phi;
+    case "schwarz-reflection":
+      return (env.payload as SchwarzReflection).sigma;
+    case "view":
+      return (env.payload as View).map;
+    case "map":
+      return env.payload as MapSpec;
+    default:
+      return null;
   }
 }
