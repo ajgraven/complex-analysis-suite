@@ -1,0 +1,16 @@
+{
+  // Emit config: compile src/ -> dist/ as ESM + declarations (the built-dist model, same as
+  // @cas/core). Consumers import the built dist via package.json `exports`. Internal imports in
+  // src/ carry a `.js` extension so the emitted ESM resolves under Node. Tests are excluded.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"],
+  "exclude": ["test", "dist", "node_modules"]
+}

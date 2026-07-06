@@ -1,0 +1,15 @@
+{
+  // @cas/interchange is strict TypeScript (ADR-0002). Unlike @cas/core (pure numeric, ES2022
+  // only), interchange keeps the base's DOM lib: the deep-link codec uses the universal web
+  // globals TextEncoder / btoa / atob (present in browsers AND Node >= 18). This config is the
+  // typecheck + editor + Vitest program (src + test); emit is tsconfig.build.json.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": ["src", "test"]
+}

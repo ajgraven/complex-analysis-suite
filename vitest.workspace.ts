@@ -12,6 +12,7 @@ import { defineWorkspace } from "vitest/config";
 // Further packages add themselves here as they are extracted (Phase 3+).
 export default defineWorkspace([
   "./packages/core/vitest.config.ts",
+  "./packages/interchange/vitest.config.ts",
   "./apps/complex-dynamics/vite.config.ts",
   "./apps/quadrature-domains/vitest.config.ts",
 ]);
