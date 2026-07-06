@@ -40,6 +40,7 @@
 import { state } from '../ui-state.mjs';
 import { QD_UI } from '../ui-registry.mjs';
 import _QD from '../solver.mjs';
+import { exportPhiLink } from './schwarz-export.mjs';
 const QD = _QD;
 
 (function () {
@@ -472,12 +473,43 @@ const QD = _QD;
       <button type="button" id="schwarz-clear-orbit" class="small">Clear orbit</button>
       <button type="button" id="schwarz-clear-overlays" class="small"
               style="margin-left:6px;">Clear all overlays</button>
+      <div style="margin-top:10px; border-top:1px solid #eee; padding-top:8px; font-size:12px; color:#555;">
+        Hand this φ off to the Complex Dynamics app as an <b>interchange</b> deep link.
+      </div>
+      <button type="button" id="schwarz-export-map" class="small">Export map → copy link</button>
+      <span id="schwarz-export-status" style="margin-left:8px; font-size:12px;"></span>
     `;
     setTimeout(() => {
       card.querySelector('#schwarz-clear-orbit').addEventListener('click', clearOrbit);
       card.querySelector('#schwarz-clear-overlays').addEventListener('click', clearAllOverlays);
+      card.querySelector('#schwarz-export-map').addEventListener('click', _exportMap);
     }, 0);
     return card;
+  }
+
+  // Export the current φ as an @cas/interchange deep link (Phase 4 hand-off). φ is the closed-form
+  // map QD solved for; the Complex Dynamics app compiles + renders it. (The Schwarz reflection σ is
+  // conj(F∘φ⁻¹) with a NUMERICAL inverse — its faithful hand-off waits for the shared σ-builder.)
+  function _exportMap() {
+    const status = document.getElementById('schwarz-export-status');
+    const setStatus = (msg, ok) => {
+      if (status) { status.textContent = msg; status.style.color = ok ? '#2a7' : '#c33'; }
+    };
+    const link = exportPhiLink(sState.phiSnapshot, { note: 'phi exported from the Quadrature Domains app' });
+    if (!link) {
+      setStatus('No exportable φ yet — solve one first (some families are not closed-form maps).', false);
+      return;
+    }
+    const url = location.origin + location.pathname + link;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(
+        () => setStatus('Copied interchange deep link to clipboard.', true),
+        () => { console.log('[interchange] deep link:', url); setStatus('Copy blocked — link logged to console.', false); },
+      );
+    } else {
+      console.log('[interchange] deep link:', url);
+      setStatus('Clipboard unavailable — link logged to console.', false);
+    }
   }
 
   // Clear the forward σ-orbit (both the pinned polyline and any live hover
