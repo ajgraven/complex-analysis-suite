@@ -4,6 +4,13 @@ High-level map of how the Quadrature Domain Solver app fits together.
 For mathematical content, see [THEORY_MAP.md](THEORY_MAP.md). For how
 to extend the app, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+> **⚠ ESM migration in progress (suite Phase 2, `phase-2` branch).** The classic-script module
+> system described below is being ported to native ES modules. Many `app/x.js` files now have a
+> **frozen** classic copy plus an `x.mjs` twin the test suite exercises. **Do not edit a `.js`
+> that has a `.mjs` twin** (they would drift) — make changes in the `.mjs`. Status, recipe, and
+> what remains: [ESM-MIGRATION.md](ESM-MIGRATION.md). The map below still reflects the live
+> (classic) browser app, which is unchanged until the final flip.
+
 ## At a glance
 
 - **Vanilla HTML + JS** — no build step. Open `app/index.html` in any
