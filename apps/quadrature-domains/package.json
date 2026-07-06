@@ -13,7 +13,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@cas/core": "workspace:*"
+    "@cas/core": "workspace:*",
+    "@cas/interchange": "workspace:*"
   },
   "devDependencies": {
     "eslint": "^9.39.4",

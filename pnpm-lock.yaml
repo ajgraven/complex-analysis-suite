@@ -81,6 +81,9 @@ importers:
       '@cas/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@cas/interchange':
+        specifier: workspace:*
+        version: link:../../packages/interchange
     devDependencies:
       eslint:
         specifier: ^9.39.4
