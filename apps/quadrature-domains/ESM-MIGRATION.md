@@ -1,10 +1,11 @@
 # Quadrature app — ESM migration (Phase 2)
 
-> **Status doc for the in-progress port of the Quadrature app from classic `<script>` globals
-> onto native ES modules (the prerequisite for consuming shared `@cas/*` packages).** This is
-> [MIGRATION.md Phase 2](../../docs/MIGRATION.md#phase-2--quadrature-domains-onto-vite-still-all-javascript)
-> of the suite runbook. Work happens on the **`phase-2`** branch. The live app is unaffected
-> until the final flip (see [Invariants](#invariants)).
+> **✅ DONE — this now documents the COMPLETED port** of the Quadrature app from classic `<script>`
+> globals to native ES modules ([MIGRATION.md Phase 2](../../docs/MIGRATION.md#phase-2--quadrature-domains-onto-vite-still-all-javascript)).
+> The app is **ESM-only**: `index.html` → `main.mjs`, native module workers, vite-plugin-pwa, and the
+> classic `.js` graph is **deleted** (git history keeps it as provenance). Full root gate green
+> (lint/typecheck 0, `vite build` ok, 77 test files / 712 tests). Retained as the record of *how* the
+> parallel-graph flip was done. **Next: Phase 3 — extract `@cas/core`.**
 
 ## Why this is not a mechanical swap
 
@@ -90,7 +91,17 @@ that `app/node-test.js` awaits before the run loop.
   prove `vite build` bundles a native module worker (replaces runtime-Blob bundling). These are
   transitional scaffolding — the final flip repoints Vite at `index.html`.
 
-## Remaining — the browser-dependent endgame (8 orchestrator twins + the flip)
+## The flip — ✅ DONE (retained as the record of how it was completed)
+
+> All of the below is finished. `main.mjs` is the page entry; `index.html` loads it; the 8
+> orchestrator twins are ported; the classic `.js` graph + `asset-manifest`/`sw`/`bench`/
+> `gen-cache-version` are deleted; vite-plugin-pwa is in. The headless harness was migrated off the
+> classic files (bootstrap drops the manifest; `manifest.test` retired; `parse-check` now `node
+> --check`s the `.mjs`; `ui-domain-plot`/`schwarz-ui` moved to Vitest jsdom importing the `.mjs`).
+> The `katex`/`math` "gotcha" below was a **false alarm** — those resolve fine as bare identifiers in
+> a module (browser-verified). The one real coupling was `ui-state`'s `const state` → `export`.
+
+### (historical) the browser-dependent endgame (8 orchestrator twins + the flip)
 
 Everything the **headless suite** loads is ESM (the only classic `.js` still `loadInCtx`'d in
 `bootstrap.js` is `asset-manifest.js` — plain data, can stay through the flip). What's left is
