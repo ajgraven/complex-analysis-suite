@@ -1,0 +1,17 @@
+{
+  // @cas/core is a STRICT TypeScript package (ADR-0002: shared packages keep `strict`).
+  // This config is the typecheck + editor + Vitest program (src + test, `noEmit` from the
+  // base). The emit is a separate `tsconfig.build.json` that compiles src -> dist. The extra
+  // `noUnused*` / `noImplicitOverride` flags match the Complex Dynamics app's rigor, since
+  // this is the highest-trust code in the repo (both apps depend on it).
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": ["src", "test"]
+}

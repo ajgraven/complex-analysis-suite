@@ -1,0 +1,18 @@
+{
+  // Emit config: compile src/ -> dist/ as ESM JavaScript + declarations. Consumers import the
+  // built `dist/` (package.json `exports`), which every consumer can load uniformly: the CD
+  // and QD Vite builds, the root Vitest run, AND the QD headless suite that runs under bare
+  // `node app/node-test.js` (which cannot import `.ts`). Internal imports in src/ carry a
+  // `.js` extension so the emitted ESM resolves under Node. Tests are excluded from the emit.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"],
+  "exclude": ["test", "dist", "node_modules"]
+}
