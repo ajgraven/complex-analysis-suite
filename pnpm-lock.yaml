@@ -156,6 +156,10 @@ importers:
         version: 2.1.9(jsdom@26.1.0)(terser@5.48.0)
 
   packages/gpu:
+    dependencies:
+      '@cas/expr':
+        specifier: workspace:*
+        version: link:../expr
     devDependencies:
       '@eslint/js':
         specifier: ^9.17.0

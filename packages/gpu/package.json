@@ -10,7 +10,11 @@
     ".": "./src/index.ts",
     "./df64": "./src/glsl/df64Ref.ts",
     "./glsl": "./src/glsl/index.ts",
-    "./shader": "./src/shader.ts"
+    "./shader": "./src/shader.ts",
+    "./dual-backend": "./src/dualBackend.ts"
+  },
+  "dependencies": {
+    "@cas/expr": "workspace:*"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
