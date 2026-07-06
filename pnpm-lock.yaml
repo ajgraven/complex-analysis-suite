@@ -35,6 +35,9 @@ importers:
       '@cas/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@cas/interchange':
+        specifier: workspace:*
+        version: link:../../packages/interchange
       driver.js:
         specifier: ^1.5.0
         version: 1.6.0
