@@ -75,25 +75,57 @@ that `app/node-test.js` awaits before the run loop.
   graph into their own chunks). The live in-browser worker round-trip is a **flip** spot-check. QD
   gained a `build` script (ADR-0003; `pnpm build` now covers both apps). Batch transform:
   `scratchpad/port-workers.mjs`.
+- **UI layer (the mechanical + headless-tested files):** QD-attach twins (`parse-h`, `qol`,
+  `schwarz/schwarz-webgl`, `sphere/sphere-webgl`); the algebra kernels (`expr-parser`, `cas-export`,
+  `algebra-store`) + `algebra/sym-worker` (a **4th** native module worker); and the `QD_UI` factory
+  graph — `ui-registry.mjs` (the `QD_UI` namespace, UI-side counterpart to `QD`), `ui-presets.mjs`
+  (exports the 10 preset arrays), and 16 `installX` factory modules (`ui-modes`, `ui-pole-grid`,
+  `ui-h-text`, `ui-solve`, `ui-url-state`, `ui-domain-plot`, `ui-thesis`, `ui-faber`,
+  `ui-qd-equations`, `direct/{recompute,verify}`, `schwarz/{paint,render,features,interaction}`,
+  `param-slice/param-slice-render`). `ui-modes` + the 4 algebra kernels are headless-tested (join
+  `PORTED_ANALYSIS`; bootstrap exposes `ctx.QD_UI`); the rest are dormant twins. Factory transform
+  KEEPS each IIFE (ADR-0002) and only rewrites the module boundary. Batch transforms:
+  `scratchpad/port-ui-{phase1,factories}.mjs`.
 - Also standalone: `vite.config.mjs` + `esm-proof.{html,js}` + `app/workers/leaf.worker.mjs`
   prove `vite build` bundles a native module worker (replaces runtime-Blob bundling). These are
   transitional scaffolding — the final flip repoints Vite at `index.html`.
 
-## Remaining
+## Remaining — the browser-dependent endgame (8 orchestrator twins + the flip)
 
-The **UI layer + the flip** are all that's left. Everything the headless suite loads is now ESM
-(the only classic `.js` still `loadInCtx`-loaded in `bootstrap.js` is `asset-manifest.js`, which is
-plain data and can stay classic through the flip; the on-demand `algebra/*` + `ui-modes` test loads
-resolve as frozen `.js` until then; `parse-h` is deferred).
+Everything the **headless suite** loads is ESM (the only classic `.js` still `loadInCtx`'d in
+`bootstrap.js` is `asset-manifest.js` — plain data, can stay through the flip). What's left is
+browser-only and can't be validated headlessly (lint/typecheck are blind here: `QD`, `QD_UI`,
+`Complex`, `state`, … are declared eslint **globals**, so a missing import does NOT error). The
+**browser flip is their validation** — run the preview server and fix console errors iteratively.
 
-1. **UI layer + flip.** ESM-port the `QD_UI.installX(uiCtx)` factory modules, `ui.js`, the
-   `algebra/*` tab modules, and `ui-modes` (all still classic — the on-demand test files that pull
-   `algebra/algebra-store`, `algebra/cas-export`, `algebra/expr-parser`, `algebra/sym-worker`, and
-   `ui-modes` via `loadInCtx` keep resolving them as frozen `.js` for now); replace the
-   `document.write` loader in `index.html` with a Vite ESM entry; replace the hand-rolled `sw.js` +
-   `version:sync` with `vite-plugin-pwa`; delete the frozen `.js` graph. Then the **byte-for-byte
-   parity gate**: `pnpm --filter quadrature-domains dev` + `build`, spot-check the thesis-example
-   oracle panel, the Schwarz dynamics tab, the param-slice sweep, and a live Worker solve.
+**1. The 8 bare-top-level orchestrator twins** (dormant; tests `readFileSync` the frozen `.js`):
+- `ui-state.js` — defines `const state = {...}` at script scope. In ESM it must **`export const
+  state`** (+ `QD_UI.state = state`); it's the cross-script `state` global read by `ui.js`,
+  `schwarz/schwarz-ui`, `direct/direct-ui`, `param-slice/param-slice-ui`, `algebra/algebra-ui`,
+  `algebra/algebra-canvas` — each must **`import { state }`** from it. (`sphere/sphere-ui` has its
+  OWN local `state` — no import.)
+- `ui.js` (1855 lines, no IIFE) — import `state`, `_QD`(→`const QD`), `Complex`, `QD_UI`; rewrite
+  `window.QD_UI` → `QD_UI`; it attaches `QD_UI.snapshotScenario`/`.loadScenarioIntoQdTab`/`.state`.
+- The `*-ui` consumers (`schwarz-ui`, `direct-ui`, `param-slice-ui` [+ `ParamSlice`], `sphere-ui`
+  [+ `SphereCommon`], `algebra-ui`, `algebra-canvas`): import `state`/`QD`/`QD_UI` as the recon
+  shows (see `scratchpad/recon-ui.mjs` output), rewrite `window.QD`/`window.QD_UI` → `QD`/`QD_UI`,
+  keep the IIFE. `algebra-ui` is the `const QD = window.QD` (win) case.
+- ⚠ **CDN-globals-in-modules gotcha:** bare `katex` / `math` do NOT resolve to `window.*` inside an
+  ES module (a free identifier → `typeof katex` is `'undefined'` even though the CDN set
+  `window.katex`). Rewrite bare `katex`→`window.katex`, `math`→`window.math` in every ported file
+  that uses them — **including the already-committed `riemann-latex.mjs`** (it guards on
+  `typeof katex` and would silently never render KaTeX). Audit with a bare-`katex`/`math` grep.
+
+**2. The flip.** Page ESM entry `main.mjs` importing the whole graph in `PAGE_SCRIPTS` order +
+`QD.Strings.apply()` (moved from index.html's inline script); rewrite index.html's
+`asset-manifest.js` + `document.write` loader → `<script type="module" src="./main.mjs">` (keep the
+CDN math/katex `<script>`/`<link>` tags — modules are deferred, so they run first); add
+**vite-plugin-pwa** (`registerType:'autoUpdate'`, precache the build, runtimeCache the CDN)
+replacing `sw.js` + `gen-cache-version` + the hand-rolled SW registration; repoint `vite.config`
+`rollupOptions.input` at `app/index.html` and delete `esm-proof.*` + `workers-build-check.*`. Then
+**BROWSER-VALIDATE via the preview server** (tabs, a live Worker solve, Schwarz/param-slice/algebra)
+with the classic `.js` still on disk; only once green, **delete the frozen `.js` graph** (and update
+`bench.js`, which vm-loads the classic solver source). Final parity gate: `pnpm build` + spot-checks.
 
 ## How to resume / verify
 
