@@ -14,14 +14,5 @@
     "noEmit": true
   },
   "include": ["app/**/*.js", "app/**/*.mjs"],
-  "exclude": [
-    "**/node_modules",
-    "app/node_modules",
-    "app/disabled",
-    // primary-solution.js carries `// @ts-check` but its JSDoc uses characters tsc rejects
-    // (TS1127) and references app globals (QD, module) with no ambient decls — latent issues
-    // never caught because the QD repo shipped without TypeScript. Excluded until it is typed
-    // for real; remove this line when that happens.
-    "app/primary-solution.js"
-  ]
+  "exclude": ["**/node_modules", "app/node_modules", "app/disabled"]
 }
