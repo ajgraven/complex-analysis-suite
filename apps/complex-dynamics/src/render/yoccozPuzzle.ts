@@ -19,7 +19,7 @@
  * {1/3, 2/3}, depth 1 {1/6, 1/3, 2/3, 5/6}; the rabbit A = {1/7, 2/7, 4/7} → 3·2ⁿ rays.
  */
 import type { Vec2 } from "../arrays";
-import { sqrt } from "../expr/complexJs";
+import { sqrt } from "@cas/expr/complexJs";
 import { type Angle, dynamicalAnglesOfPoint } from "./angleOfPoint";
 
 /** Largest puzzle depth offered — q·2ⁿ rays, so depth 6 is already a few hundred rays. */

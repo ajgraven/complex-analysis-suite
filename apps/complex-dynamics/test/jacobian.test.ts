@@ -6,8 +6,8 @@
  */
 import { describe, it, expect } from "vitest";
 import type { Complex } from "../src/complex";
-import { parse } from "../src/expr/parser";
-import { makeComplexFn, makeEscapeFn } from "../src/expr/evaluate";
+import { parse } from "@cas/expr/parser";
+import { makeComplexFn, makeEscapeFn } from "@cas/expr/evaluate";
 import {
   cycleMultiplierMag,
   lyapunovJacobian,

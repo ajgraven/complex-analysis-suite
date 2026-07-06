@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Complex } from "../src/complex";
-import { sqrt } from "../src/expr/complexJs";
-import { parse } from "../src/expr/parser";
+import { sqrt } from "@cas/expr/complexJs";
+import { parse } from "@cas/expr/parser";
 import {
   dynamicalAnglesOfPoint,
   nearestDynamicalAngles,

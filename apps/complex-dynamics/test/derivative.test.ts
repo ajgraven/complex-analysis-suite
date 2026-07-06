@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { parse } from "../src/expr/parser";
-import { makeComplexFn } from "../src/expr/evaluate";
-import { differentiate } from "../src/expr/derivative";
+import { parse } from "@cas/expr/parser";
+import { makeComplexFn } from "@cas/expr/evaluate";
+import { differentiate } from "@cas/expr/derivative";
 import type { Complex } from "../src/complex";
 
 const ZERO: Complex = [0, 0];

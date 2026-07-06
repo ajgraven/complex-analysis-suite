@@ -17,10 +17,10 @@
  * d = 2 — so Stage 2's GPU kernel is a direct translation of a verified recurrence.
  */
 import type { Complex } from "../complex";
-import { type Node, referencesVar } from "../expr/ast";
-import { differentiate } from "../expr/derivative";
-import { makeComplexFn } from "../expr/evaluate";
-import { fToRational } from "../expr/rational";
+import { type Node, referencesVar } from "@cas/expr/ast";
+import { differentiate } from "@cas/expr/derivative";
+import { makeComplexFn } from "@cas/expr/evaluate";
+import { fToRational } from "@cas/expr/rational";
 import { type DD, dd, ddAdd, ddMul, ddSub, ddToNumber } from "./dd";
 import type { ReferenceOrbit } from "./perturbation";
 

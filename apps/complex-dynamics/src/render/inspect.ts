@@ -21,10 +21,10 @@
  */
 
 import type { Complex } from "../complex";
-import type { Node } from "../expr/ast";
-import * as C from "../expr/complexJs";
-import { differentiate } from "../expr/derivative";
-import { makeComplexFn, getComplexFn, getEscapeFn } from "../expr/evaluate";
+import type { Node } from "@cas/expr/ast";
+import * as C from "@cas/expr/complexJs";
+import { differentiate } from "@cas/expr/derivative";
+import { makeComplexFn, getComplexFn, getEscapeFn } from "@cas/expr/evaluate";
 import { classifyRotationNumber, type RotationClass } from "./brjuno";
 import { cycleMultiplierMag } from "./jacobian";
 import { classifyOrbit, type OrbitFate } from "./overlay";

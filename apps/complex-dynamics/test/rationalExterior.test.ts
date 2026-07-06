@@ -6,9 +6,9 @@
  */
 import { describe, it, expect } from "vitest";
 import type { Complex } from "../src/complex";
-import { parse } from "../src/expr/parser";
-import * as C from "../src/expr/complexJs";
-import { fToRational } from "../src/expr/rational";
+import { parse } from "@cas/expr/parser";
+import * as C from "@cas/expr/complexJs";
+import { fToRational } from "@cas/expr/rational";
 import {
   rationalLaurentAtInfinity,
   rationalExteriorCoeffs,

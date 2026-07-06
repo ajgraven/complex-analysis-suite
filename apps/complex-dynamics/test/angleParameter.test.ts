@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Complex } from "../src/complex";
-import { parse } from "../src/expr/parser";
+import { parse } from "@cas/expr/parser";
 import {
   dynamicalLanding,
   landingForAngle,

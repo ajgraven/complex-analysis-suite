@@ -6,7 +6,7 @@
  * Newton must be seeded near the target (other roots of fᵐ⁺ᵏ−fᵐ include centres like c=0,−1).
  */
 import { describe, it, expect } from "vitest";
-import { parse } from "../src/expr/parser";
+import { parse } from "@cas/expr/parser";
 import { findMisiurewicz } from "../src/render/inspect";
 import type { Complex } from "../src/complex";
 

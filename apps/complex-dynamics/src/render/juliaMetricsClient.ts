@@ -5,7 +5,7 @@
  * main-thread compute, so the metrics are always produced (just without the off-thread win). This is
  * what keeps behaviour identical in headless/test environments where module workers may not run.
  */
-import { parse } from "../expr/parser";
+import { parse } from "@cas/expr/parser";
 import { computeJuliaImageMetrics, type JuliaImageMetrics } from "./juliaProperties";
 import type { JuliaMetricsMessage, JuliaMetricsResponse } from "./juliaMetrics.worker";
 

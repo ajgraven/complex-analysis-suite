@@ -16,7 +16,7 @@
  */
 import type { Vec2 } from "../arrays";
 import type { Complex } from "../complex";
-import { sqrt } from "../expr/complexJs"; // principal complex √, matching the GLSL csqrt
+import { sqrt } from "@cas/expr/complexJs"; // principal complex √, matching the GLSL csqrt
 import { classifyRotationNumber } from "./brjuno";
 
 export interface SiegelCurves {

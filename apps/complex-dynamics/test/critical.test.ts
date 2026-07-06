@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from "vitest";
 import type { Complex } from "../src/complex";
-import { parse } from "../src/expr/parser";
+import { parse } from "@cas/expr/parser";
 import { findCriticalPoints, polynomialCoeffs, polynomialConnectivity } from "../src/render/critical";
 
 const ESC = parse("abs(z)>2");

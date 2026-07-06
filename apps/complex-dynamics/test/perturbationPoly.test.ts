@@ -15,7 +15,7 @@
  */
 import { describe, it, expect } from "vitest";
 import type { Complex } from "../src/complex";
-import { parse } from "../src/expr/parser";
+import { parse } from "@cas/expr/parser";
 import { type DD, dd, ddAdd, ddMul, ddSub, ddToNumber } from "../src/render/dd";
 import { computeReferenceOrbitDD, type ReferenceOrbit } from "../src/render/perturbation";
 import {

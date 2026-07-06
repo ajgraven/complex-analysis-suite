@@ -33,7 +33,7 @@
 
 import { makeSeries, tupleAlgebra } from "@cas/core";
 import type { Complex } from "../complex";
-import * as C from "../expr/complexJs";
+import * as C from "@cas/expr/complexJs";
 
 /** A truncated power series in u: `s[k]` is the coefficient of u^k (length = order + 1). */
 type Series = Complex[];

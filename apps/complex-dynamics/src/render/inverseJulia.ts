@@ -13,7 +13,7 @@
  */
 import type { Vec2 } from "../arrays";
 import type { Complex } from "../complex";
-import { sqrt } from "../expr/complexJs"; // principal complex √, matching the GLSL csqrt
+import { sqrt } from "@cas/expr/complexJs"; // principal complex √, matching the GLSL csqrt
 
 /** The β fixed point (1+√(1−4c))/2 of z²+c — always repelling (on the Julia set). */
 export function betaFixedPoint(c: Complex): Complex {

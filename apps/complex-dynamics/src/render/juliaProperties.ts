@@ -13,9 +13,9 @@
  */
 
 import type { Complex } from "../complex";
-import type { Node } from "../expr/ast";
-import { differentiate } from "../expr/derivative";
-import { makeComplexFn, getComplexFn, getEscapeFn } from "../expr/evaluate";
+import type { Node } from "@cas/expr/ast";
+import { differentiate } from "@cas/expr/derivative";
+import { makeComplexFn, getComplexFn, getEscapeFn } from "@cas/expr/evaluate";
 import { lyapunovJacobian } from "./jacobian";
 import { inspect } from "./inspect";
 import { polynomialCoeffs } from "./critical";

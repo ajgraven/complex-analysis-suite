@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { parse } from "../src/expr/parser";
-import { toLatex } from "../src/expr/latex";
+import { parse } from "@cas/expr/parser";
+import { toLatex } from "@cas/expr/latex";
 
 const tex = (s: string): string => toLatex(parse(s));
 

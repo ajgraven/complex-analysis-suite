@@ -8,7 +8,7 @@
  * would clash with the project's DOM lib (both declare `self`, and `Window.postMessage` has a
  * different signature than a worker's).
  */
-import { parse } from "../expr/parser";
+import { parse } from "@cas/expr/parser";
 import { computeJuliaImageMetrics, type JuliaImageMetrics } from "./juliaProperties";
 
 /** Request payload posted by the client. */

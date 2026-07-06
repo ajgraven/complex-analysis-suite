@@ -9,8 +9,8 @@ import {
   type QuadratureDomain,
 } from "@cas/interchange";
 import type { Complex } from "../src/complex";
-import { makeComplexFn } from "../src/expr/evaluate";
-import { parse } from "../src/expr/parser";
+import { makeComplexFn } from "@cas/expr/evaluate";
+import { parse } from "@cas/expr/parser";
 import { envelopeToMapSpec, mapSpecToExpr } from "../src/interchange/importMap";
 
 // Phase 4 (C3, CD consume): the QD -> CD path, end to end and headless. An interchange link (as

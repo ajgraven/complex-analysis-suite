@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Complex } from "../src/complex";
-import { parse } from "../src/expr/parser";
+import { parse } from "@cas/expr/parser";
 import { classifyOrbit, computeOrbit, orbitAndClassify } from "../src/render/overlay";
 
 const f = parse("z^2+c");

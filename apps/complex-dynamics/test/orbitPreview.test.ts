@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { previewToPx, PREVIEW_HALF, juliaEscapeRgba } from "../src/render/orbitPreview";
-import { parse } from "../src/expr/parser";
+import { parse } from "@cas/expr/parser";
 
 describe("previewToPx", () => {
   const S = 140;

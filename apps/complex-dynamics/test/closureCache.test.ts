@@ -6,8 +6,8 @@
  */
 import { describe, it, expect } from "vitest";
 import type { Complex } from "../src/complex";
-import { parse } from "../src/expr/parser";
-import { makeComplexFn, makeEscapeFn, getComplexFn, getEscapeFn } from "../src/expr/evaluate";
+import { parse } from "@cas/expr/parser";
+import { makeComplexFn, makeEscapeFn, getComplexFn, getEscapeFn } from "@cas/expr/evaluate";
 
 describe("getComplexFn (cached makeComplexFn)", () => {
   it("matches makeComplexFn and memoises on (ast, a)", () => {

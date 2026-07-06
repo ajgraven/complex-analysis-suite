@@ -7,8 +7,8 @@
  */
 
 import type { Vec2 } from "../arrays";
-import type { Node } from "../expr/ast";
-import { getComplexFn, getEscapeFn } from "../expr/evaluate";
+import type { Node } from "@cas/expr/ast";
+import { getComplexFn, getEscapeFn } from "@cas/expr/evaluate";
 
 /** Half-width of the z-window the preview frames (the z²+c critical orbit lives in |z| ≲ 2). */
 export const PREVIEW_HALF = 2.2;

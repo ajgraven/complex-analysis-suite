@@ -11,9 +11,9 @@ import type { Vec2 } from "../arrays";
 import { formatComplex, parseComplex, type Complex } from "../complex";
 import { canvToPlot, plotRange, plotToCanv } from "../transforms";
 import type { Preset } from "../presets";
-import { parse } from "../expr/parser";
-import type { Node } from "../expr/ast";
-import { isFreeParameter } from "../expr/ast";
+import { parse } from "@cas/expr/parser";
+import type { Node } from "@cas/expr/ast";
+import { isFreeParameter } from "@cas/expr/ast";
 import {
   buildFragmentShader,
   POST_FRAGMENT_SHADER,
@@ -23,8 +23,8 @@ import {
   type Precision,
 } from "./shaderBuilder";
 import { buildGradient, DEFAULT_GRADIENT, type GradientStop } from "../palettes";
-import { differentiate, newtonIteration } from "../expr/derivative";
-import { makeComplexFn, makeEscapeFn } from "../expr/evaluate";
+import { differentiate, newtonIteration } from "@cas/expr/derivative";
+import { makeComplexFn, makeEscapeFn } from "@cas/expr/evaluate";
 import { buildBLATable, buildBLATablePoly, packBLATable } from "./bla";
 import { computeReferenceOrbitDDFrom, type ReferenceOrbit } from "./perturbation";
 import {

@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@cas/core": "workspace:*",
+    "@cas/expr": "workspace:*",
     "@cas/interchange": "workspace:*",
     "driver.js": "^1.5.0",
     "gif.js": "^0.2.0",

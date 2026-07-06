@@ -7,8 +7,8 @@
  */
 import type { Vec2 } from "../arrays";
 import type { Complex } from "../complex";
-import type { Node } from "../expr/ast";
-import { fToRational } from "../expr/rational";
+import type { Node } from "@cas/expr/ast";
+import { fToRational } from "@cas/expr/rational";
 
 /**
  * Precision-pressure metric, matching glPlot's `desiredPrecision`: zoom · max(1, |Re c|, |Im c|).

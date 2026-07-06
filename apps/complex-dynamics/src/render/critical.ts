@@ -11,11 +11,11 @@
 
 import { makeDurandKerner, tupleAlgebra } from "@cas/core";
 import type { Complex } from "../complex";
-import type { Node } from "../expr/ast";
-import * as C from "../expr/complexJs";
-import { differentiate } from "../expr/derivative";
-import { makeComplexFn, getComplexFn, getEscapeFn } from "../expr/evaluate";
-import { fToRational } from "../expr/rational";
+import type { Node } from "@cas/expr/ast";
+import * as C from "@cas/expr/complexJs";
+import { differentiate } from "@cas/expr/derivative";
+import { makeComplexFn, getComplexFn, getEscapeFn } from "@cas/expr/evaluate";
+import { fToRational } from "@cas/expr/rational";
 
 const cabs = (z: Complex): number => Math.hypot(z[0], z[1]);
 

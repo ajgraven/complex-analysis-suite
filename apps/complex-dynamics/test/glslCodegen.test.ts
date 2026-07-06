@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parse } from "../src/expr/parser";
-import { compileF, compileEscape } from "../src/expr/glsl";
+import { parse } from "@cas/expr/parser";
+import { compileF, compileEscape } from "@cas/expr/glsl";
 import { buildFragmentShader } from "../src/render/shaderBuilder";
-import { differentiate } from "../src/expr/derivative";
+import { differentiate } from "@cas/expr/derivative";
 
 // These guard the two df64-correctness fixes in the GLSL backend. The emitted code is
 // shared verbatim by the single (cvec=vec2) and df64 (cvec=vec4) builds, so any construct

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Complex } from "../src/complex";
-import * as C from "../src/expr/complexJs";
-import { tokenize } from "../src/expr/lexer";
-import { parse } from "../src/expr/parser";
-import { ExprError } from "../src/expr/ast";
-import { evaluate, makeComplexFn, makeEscapeFn } from "../src/expr/evaluate";
+import * as C from "@cas/expr/complexJs";
+import { tokenize } from "@cas/expr/lexer";
+import { parse } from "@cas/expr/parser";
+import { ExprError } from "@cas/expr/ast";
+import { evaluate, makeComplexFn, makeEscapeFn } from "@cas/expr/evaluate";
 import { dynPresets, paramPresets, presetNames } from "../src/presets";
 
 const close = (a: Complex, b: Complex, p = 9): void => {

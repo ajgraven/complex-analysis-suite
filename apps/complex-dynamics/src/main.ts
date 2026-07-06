@@ -51,7 +51,7 @@ import {
   type ProfileName,
   type ProfileSettings,
 } from "./state/profiles";
-import { getComplexFn } from "./expr/evaluate";
+import { getComplexFn } from "@cas/expr/evaluate";
 import {
   juliaConnected,
   juliaExteriorCoeffs,
@@ -59,12 +59,12 @@ import {
   rationalExteriorCoeffs,
   mandelbrotExteriorCoeffs,
 } from "./render/uniformize";
-import { fToRational } from "./expr/rational";
+import { fToRational } from "@cas/expr/rational";
 import { computeJuliaProperties, type Extent } from "./render/juliaProperties";
 import { JuliaMetricsClient } from "./render/juliaMetricsClient";
 import { polynomialCoeffs, polynomialConnectivity } from "./render/critical";
 import { drawOrbitPreview, renderJuliaPreview } from "./render/orbitPreview";
-import type { Node as ExprNode } from "./expr/ast";
+import type { Node as ExprNode } from "@cas/expr/ast";
 import { dynamicRay, parameterRay, parseAngle, rayDepthForZoom } from "./render/rays";
 import { criticalPieceMask } from "./render/yoccozCritical";
 import { yoccozPuzzle } from "./render/yoccozPuzzle";

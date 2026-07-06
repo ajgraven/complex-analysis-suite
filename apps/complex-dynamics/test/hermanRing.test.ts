@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Complex } from "../src/complex";
-import { getComplexFn } from "../src/expr/evaluate";
-import { parse } from "../src/expr/parser";
+import { getComplexFn } from "@cas/expr/evaluate";
+import { parse } from "@cas/expr/parser";
 import { detectHermanRing } from "../src/render/hermanRing";
 
 /** Bind an expression string to a single-argument map f(z) (parameters c, a = 0). */

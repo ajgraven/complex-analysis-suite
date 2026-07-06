@@ -18,8 +18,8 @@
  */
 import type { Vec2 } from "../arrays";
 import { angle, classifyDoubling } from "../combinatorics/angles";
-import { add, div, mul, sub } from "../expr/complexJs";
-import { parse } from "../expr/parser";
+import { add, div, mul, sub } from "@cas/expr/complexJs";
+import { parse } from "@cas/expr/parser";
 import { bulbRoot } from "./farey";
 import { findMisiurewicz } from "./inspect";
 import { bulbRayAngles, dynamicRay, parameterRay } from "./rays";

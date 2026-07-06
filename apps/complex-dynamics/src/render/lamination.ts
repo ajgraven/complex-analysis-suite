@@ -28,7 +28,7 @@
  * an ideal triangle {1/7, 2/7, 4/7}; c = 0 (Jordan curve) yields no leaves.
  */
 import type { Vec2 } from "../arrays";
-import { sqrt } from "../expr/complexJs";
+import { sqrt } from "@cas/expr/complexJs";
 import { dynamicalLanding, parameterLanding } from "./angleParameter";
 import { enumerateLandingAngles } from "./angleOfPoint";
 

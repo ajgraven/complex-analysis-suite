@@ -7,8 +7,8 @@
  */
 import { describe, expect, it } from "vitest";
 import type { Complex } from "../src/complex";
-import { parse } from "../src/expr/parser";
-import { evaluate, makeComplexFn, makeEscapeFn } from "../src/expr/evaluate";
+import { parse } from "@cas/expr/parser";
+import { evaluate, makeComplexFn, makeEscapeFn } from "@cas/expr/evaluate";
 
 /** Deterministic LCG so any mismatch is reproducible. */
 function rng(seed: number): () => number {

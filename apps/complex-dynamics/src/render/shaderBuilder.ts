@@ -10,8 +10,8 @@
  * ~double precision at deep zoom.
  */
 
-import type { Node } from "../expr/ast";
-import { compileEscape, compileF } from "../expr/glsl";
+import type { Node } from "@cas/expr/ast";
+import { compileEscape, compileF } from "@cas/expr/glsl";
 import { COMPLEX_SINGLE_GLSL } from "../glsl/complexSingle.glsl";
 import { COMPLEX_DF64_GLSL } from "../glsl/complexDf64.glsl";
 import { COMPLEX_DERIVED_GLSL } from "../glsl/complexDerived.glsl";

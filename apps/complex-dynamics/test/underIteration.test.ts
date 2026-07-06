@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parse } from "../src/expr/parser";
+import { parse } from "@cas/expr/parser";
 import { detectUnderIteration, type UnderIterationInput } from "../src/render/underIteration";
 
 const fAst = parse("z^2+c");

@@ -8,7 +8,7 @@ import {
   reconstructBoundary,
 } from "../src/render/uniformize";
 import type { Complex } from "../src/complex";
-import * as C from "../src/expr/complexJs";
+import * as C from "@cas/expr/complexJs";
 
 const mag = (z: Complex): number => Math.hypot(z[0], z[1]);
 const cdist = (a: Complex, b: Complex): number => Math.hypot(a[0] - b[0], a[1] - b[1]);

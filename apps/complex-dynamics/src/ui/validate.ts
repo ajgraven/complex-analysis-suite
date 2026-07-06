@@ -9,8 +9,8 @@
  */
 
 import { parseComplex } from "../complex";
-import { ExprError } from "../expr/ast";
-import { parse } from "../expr/parser";
+import { ExprError } from "@cas/expr/ast";
+import { parse } from "@cas/expr/parser";
 import { INPUT_IDS } from "./controls";
 import { valueOf } from "./dom";
 

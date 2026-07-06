@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { parse } from "../src/expr/parser";
-import { makeComplexFn } from "../src/expr/evaluate";
+import { parse } from "@cas/expr/parser";
+import { makeComplexFn } from "@cas/expr/evaluate";
 import { inspect, rotationNumber, findNucleus } from "../src/render/inspect";
 import type { Complex } from "../src/complex";
 

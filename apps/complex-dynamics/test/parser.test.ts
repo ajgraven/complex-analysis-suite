@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { parse } from "../src/expr/parser";
-import { ExprError } from "../src/expr/ast";
+import { parse } from "@cas/expr/parser";
+import { ExprError } from "@cas/expr/ast";
 
 describe("statement-separator enforcement", () => {
   it("rejects adjacent expressions with no ';' between them", () => {

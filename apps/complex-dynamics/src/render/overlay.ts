@@ -11,8 +11,8 @@
 
 import type { Vec2 } from "../arrays";
 import { formatComplex, truncateComplex, type Complex } from "../complex";
-import type { Node } from "../expr/ast";
-import { getComplexFn, getEscapeFn } from "../expr/evaluate";
+import type { Node } from "@cas/expr/ast";
+import { getComplexFn, getEscapeFn } from "@cas/expr/evaluate";
 import { fareyLabels, fareyMaxDenominator } from "./farey";
 import { inverseJuliaCloud } from "./inverseJulia";
 import type { Leaf } from "./lamination";
