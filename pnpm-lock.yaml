@@ -74,6 +74,10 @@ importers:
         version: 5.4.21(terser@5.48.0)
 
   apps/quadrature-domains:
+    dependencies:
+      '@cas/core':
+        specifier: workspace:*
+        version: link:../../packages/core
     devDependencies:
       eslint:
         specifier: ^9.39.4

@@ -12,6 +12,9 @@
     "dev": "vite",
     "preview": "vite preview"
   },
+  "dependencies": {
+    "@cas/core": "workspace:*"
+  },
   "devDependencies": {
     "eslint": "^9.39.4",
     "globals": "^15.15.0",
