@@ -25,6 +25,7 @@ import {
 import { buildGradient, DEFAULT_GRADIENT, type GradientStop } from "../palettes";
 import { differentiate, newtonIteration } from "@cas/expr/derivative";
 import { makeComplexFn, makeEscapeFn } from "@cas/expr/evaluate";
+import { createProgram } from "@cas/gpu/shader";
 import { buildBLATable, buildBLATablePoly, packBLATable } from "./bla";
 import { computeReferenceOrbitDDFrom, type ReferenceOrbit } from "./perturbation";
 import {
@@ -50,36 +51,9 @@ export type FractType = "dyn" | "param";
 
 const KEY = { PLUS: 187, MINUS: 189, UP: 38, DOWN: 40, RIGHT: 39, LEFT: 37 } as const;
 
-function compileShader(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
-  const shader = gl.createShader(type);
-  if (!shader) throw new Error("Failed to create shader");
-  gl.shaderSource(shader, src);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    const log = gl.getShaderInfoLog(shader);
-    gl.deleteShader(shader);
-    throw new Error(`Shader compile error: ${log}`);
-  }
-  return shader;
-}
-
-function createProgram(gl: WebGL2RenderingContext, vs: string, fs: string): WebGLProgram {
-  const vertex = compileShader(gl, gl.VERTEX_SHADER, vs);
-  const fragment = compileShader(gl, gl.FRAGMENT_SHADER, fs);
-  const program = gl.createProgram();
-  if (!program) throw new Error("Failed to create program");
-  gl.attachShader(program, vertex);
-  gl.attachShader(program, fragment);
-  gl.linkProgram(program);
-  gl.deleteShader(vertex);
-  gl.deleteShader(fragment);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    const log = gl.getProgramInfoLog(program);
-    gl.deleteProgram(program);
-    throw new Error(`Program link error: ${log}`);
-  }
-  return program;
-}
+// compileShader / createProgram are shared plumbing — imported from @cas/gpu/shader (above).
+// The async df64 compile path (linkProgramAsync / finalizeProgram) stays here: it uses native
+// KHR_parallel_shader_compile via direct gl calls, not these helpers.
 
 interface Uniforms {
   uResolution: WebGLUniformLocation | null;

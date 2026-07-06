@@ -8,3 +8,4 @@
 // (`@cas/gpu`), the df64 reference (`@cas/gpu/df64`), or the GLSL strings (`@cas/gpu/glsl`).
 export * from "./glsl/df64Ref.js";
 export * from "./glsl/index.js";
+export * from "./shader.js";

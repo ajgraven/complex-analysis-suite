@@ -90,6 +90,9 @@ importers:
       '@cas/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@cas/gpu':
+        specifier: workspace:*
+        version: link:../../packages/gpu
       '@cas/interchange':
         specifier: workspace:*
         version: link:../../packages/interchange

@@ -1,5 +1,6 @@
 // ESM (Phase 2 port) — twin of schwarz/schwarz-webgl.js (classic stays frozen). Registers onto the QD namespace.
 import _QD from '../solver.mjs';
+import { compileShader, linkProgram } from '@cas/gpu/shader';
 // =============================================================================
 // schwarz-webgl.js -- GPU renderer for Schwarz-reflection dynamics.
 //
@@ -608,28 +609,8 @@ void main() {
   // ===========================================================================
   // GL helpers.
   // ===========================================================================
-  function compile(gl, type, src) {
-    const sh = gl.createShader(type);
-    gl.shaderSource(sh, src);
-    gl.compileShader(sh);
-    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
-      const log = gl.getShaderInfoLog(sh);
-      gl.deleteShader(sh);
-      throw new Error('shader compile error:\n' + log);
-    }
-    return sh;
-  }
-  function link(gl, vs, fs) {
-    const prog = gl.createProgram();
-    gl.attachShader(prog, vs); gl.attachShader(prog, fs);
-    gl.linkProgram(prog);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-      const log = gl.getProgramInfoLog(prog);
-      gl.deleteProgram(prog);
-      throw new Error('program link error:\n' + log);
-    }
-    return prog;
-  }
+  // compile / link are shared plumbing now — imported from @cas/gpu/shader as compileShader /
+  // linkProgram (top of file), and re-exposed via _glHelpers below so sphere-webgl reuses them.
 
   function buildColormapTexture(gl, stops) {
     const N = 256;
@@ -850,9 +831,9 @@ void main() {
 
     let prog, vs, fs, vbo;
     try {
-      vs = compile(gl, gl.VERTEX_SHADER,   VERT_SRC);
-      fs = compile(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
-      prog = link(gl, vs, fs);
+      vs = compileShader(gl, gl.VERTEX_SHADER,   VERT_SRC);
+      fs = compileShader(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
+      prog = linkProgram(gl, vs, fs);
     } catch (e) {
       console.error('schwarz-webgl: shader build failed:', e);
       if (vs) gl.deleteShader(vs);
@@ -1145,8 +1126,8 @@ void main() {
   // Treat these as package-private — not part of the public surface.
   Schwarz._shaders    = { vert: VERT_SRC, frag: FRAG_SRC };
   Schwarz._glHelpers  = {
-    compile,
-    link,
+    compile: compileShader,
+    link: linkProgram,
     buildColormapTexture,
     buildMaskTexture,
     pickColormap,
