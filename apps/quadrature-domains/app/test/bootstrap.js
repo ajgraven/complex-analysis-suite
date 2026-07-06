@@ -114,6 +114,9 @@ const PORTED_ANALYSIS = [
   { file: 'algebra/cas-export.js' },
   { file: 'algebra/expr-parser.js' },
   { file: 'algebra/algebra-store.js' },
+  // UI factory — headless-tested via ui-inputs.test.js (the mode-descriptor gauge/warm-start
+  // path). Attaches QD_UI.installModes onto the ui-registry; imports ui-presets (its dep).
+  { file: 'ui-modes.js' },
 ];
 const PORTED_ANALYSIS_SET = new Set(PORTED_ANALYSIS.map((s) => s.file));
 
@@ -214,6 +217,10 @@ async function _init() {
   const Schwarz = QD_NS.Schwarz;                             // schwarz-*.mjs attached it
   const PS = captured['param-slice/param-slice-common.js'];  // ParamSlice API (default export)
   const SC = captured['sphere/sphere-common.js'];            // SphereCommon (named export)
+
+  // QD_UI registry (UI-side namespace). ui-modes.mjs (imported above) attaches installModes
+  // onto it; expose it as ctx.QD_UI so ui-inputs.test reads ctx.QD_UI.installModes(uiCtx).
+  ctx.QD_UI = (await importApp('ui-registry.mjs')).QD_UI;
 
   // --- workers: now ESM, imported via PORTED_ANALYSIS above. Grab the attached main-thread
   //     APIs (with no Worker in Node, their methods resolve on the main-thread fallback). ---
