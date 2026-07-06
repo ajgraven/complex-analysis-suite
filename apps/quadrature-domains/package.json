@@ -10,7 +10,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "typecheck:strict": "tsc --allowJs --checkJs --noEmit --target es2022 --module esnext --moduleResolution bundler --skipLibCheck app/primary-solution.js app/primary-solver-worker.js app/qd.mjs",
     "build": "vite build",
-    "dev": "vite --config vite.dev.config.mjs",
+    "dev": "vite",
     "bench": "node app/bench.js",
     "bench:baseline": "node app/bench.js --runs 20 --baseline-out bench-baseline.json",
     "bench:check": "node app/bench.js --runs 20 --baseline bench-baseline.json",

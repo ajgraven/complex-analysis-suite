@@ -608,35 +608,11 @@
 
 </div>
 
-<!-- Shared asset manifest — single source of truth for the file list
-     consumed by primary-solver-worker.js, param-slice-pool.js, and sw.js.
-     Must load before anything that references QD_ASSET_MANIFEST. -->
-<script src="asset-manifest.js"></script>
-
-<!-- Page-script loader. Every module <script> is injected from
-     QD_ASSET_MANIFEST.PAGE_SCRIPTS (the single source of truth for load order)
-     with a ?v=<CACHE_VERSION> query, so the browser HTTP cache can never serve
-     a stale page script after a deploy. document.write is used deliberately:
-     during initial parse it injects the scripts inline, preserving the strict
-     synchronous load order (each runs before the parser reaches the inline
-     tab/SW scripts below) — exactly the behaviour of the static tags it
-     replaces. To add/remove/reorder a module, edit asset-manifest.js, not here. -->
-<script>
-(function () {
-  'use strict';
-  var m = window.QD_ASSET_MANIFEST;
-  if (!m || !m.PAGE_SCRIPTS) throw new Error('asset-manifest.js must load before the page-script loader');
-  var v = encodeURIComponent(m.CACHE_VERSION);
-  for (var i = 0; i < m.PAGE_SCRIPTS.length; i++) {
-    document.write('<script src="' + m.PAGE_SCRIPTS[i] + '?v=' + v + '"><\/script>');
-  }
-})();
-</script>
-
-<!-- Populate the static helptext / tooltips / hints from the central strings
-     file (app/ui-strings.js → QD.Strings). Runs synchronously after the page
-     scripts above have loaded, so it fills [data-str*] elements before paint. -->
-<script>window.QD && window.QD.Strings && window.QD.Strings.apply();</script>
+<!-- Page ESM entry (Phase 2 flip). Vite bundles main.mjs + its whole import graph,
+     replacing the classic asset-manifest.js + document.write loader and folding in the
+     QD.Strings.apply() that used to run inline after the loader. The CDN math/katex tags
+     in <head> are parser-blocking, so they run before this deferred module. -->
+<script type="module" src="./main.mjs"></script>
 
 <!-- Tab switching: minimal, no framework. Each .tab-btn toggles which
      .tab-panel is visible. The plot canvas is shared; ui.js owns it for
@@ -683,47 +659,9 @@
   <button type="button" id="sw-update-dismiss" aria-label="Dismiss">×</button>
 </div>
 
-<!-- PWA: register the service worker for offline support (P3.3). Skipped on
-     file:// origins (service workers require http/https) — opening the app
-     locally without a server is still fully functional, just not cached. -->
-<script>
-(function () {
-  'use strict';
-  if (!('serviceWorker' in navigator)) return;
-  if (location.protocol === 'file:') return;
+<!-- PWA service-worker registration is added by vite-plugin-pwa in a follow-up step;
+     the hand-rolled sw.js registration was removed for the ESM flip validation. -->
 
-  // Show the "new version available" banner and wire its buttons (I2). The SW is
-  // skipWaiting + clients.claim, so the new version activates on its own; the
-  // banner just prompts a reload to swap the already-loaded (old) page assets.
-  function showUpdateBanner() {
-    var banner = document.getElementById('sw-update-banner');
-    if (!banner) return;
-    banner.hidden = false;
-    var refresh = document.getElementById('sw-update-refresh');
-    var dismiss = document.getElementById('sw-update-dismiss');
-    if (refresh) refresh.addEventListener('click', function () { location.reload(); });
-    if (dismiss) dismiss.addEventListener('click', function () { banner.hidden = true; });
-  }
-
-  window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js').then(function (reg) {
-      reg.addEventListener('updatefound', function () {
-        var nw = reg.installing;
-        if (!nw) return;
-        nw.addEventListener('statechange', function () {
-          // 'installed' + an existing controller ⇒ this is an UPDATE (not the
-          // first install) and the fresh assets are cached and ready.
-          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-            showUpdateBanner();
-          }
-        });
-      });
-    }).catch(function (err) {
-      console.warn('[pwa] service worker registration failed:', err);
-    });
-  });
-})();
-</script>
 
 <!-- Populate the build/cache version label (I5). asset-manifest.js is the first
      static <script>, so QD_ASSET_MANIFEST is already available here. -->

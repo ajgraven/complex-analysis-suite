@@ -1,23 +1,25 @@
 import { defineConfig } from "vite";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 
-// Phase 2 — Vite for the Quadrature app (pre-flip build checks).
-//
-// Two throwaway entries, both `base: "./"` (static, Pages-friendly):
-//   • esm-proof.html         — a page + a trivial native module worker importing the ESM leaf,
-//                              the original proof that Vite bundles `new Worker(new URL(...,
-//                              import.meta.url), { type: "module" })`.
-//   • workers-build-check.html — imports the three REAL worker main-thread modules so Rollup
-//                              statically bundles the solver / schwarz / param-slice module
-//                              workers (+ the whole solver-graph import chain). This is the
-//                              compile-time half of the task-#18 worker validation.
-// The final Phase-2 flip repoints `rollupOptions.input` at app/index.html and deletes both
-// checks once the classic-script graph is fully ESM-ified.
+// Phase 2 — Vite config for the Quadrature app (the flip). `root` is app/ (the ESM graph); the
+// entry is app/index.html, which loads main.mjs (the whole PAGE_SCRIPTS graph as native ES
+// modules — the replacement for the classic asset-manifest.js + document.write loader).
+//   • base: "./"          — relative asset paths, so the static dist/ works from a GitHub-Pages
+//                           sub-path (matches CD).
+//   • worker.format: "es" — the app spawns NATIVE module workers
+//                           (new Worker(new URL("./workers/*.mjs", import.meta.url), {type:"module"})),
+//                           replacing the old runtime-Blob worker bundling.
+// One config serves both `vite` (dev, HMR) and `vite build` (static dist/).
+const here = dirname(fileURLToPath(import.meta.url));
+
 export default defineConfig({
+  root: resolve(here, "app"),
   base: "./",
   worker: { format: "es" },
+  server: { port: 5199 },
   build: {
-    outDir: "dist",
+    outDir: resolve(here, "dist"),
     emptyOutDir: true,
-    rollupOptions: { input: ["esm-proof.html", "workers-build-check.html"] },
   },
 });
