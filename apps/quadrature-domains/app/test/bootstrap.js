@@ -106,6 +106,14 @@ const PORTED_ANALYSIS = [
   // the API surface + a functional liveSolve). Replaces the former Blob-masking vm-load.
   { file: 'primary-solver-worker.js' },
   { file: 'schwarz/schwarz-cpu-worker.js' },
+  // Algebra-tab kernels — headless-tested via the algebra-store / cas-export / expr-parser /
+  // define-subst suites (loaded on demand there; skipped + pre-imported here). sym-worker is a
+  // native module worker (main-thread fallback in Node). algebra-store consumes cas-export +
+  // sym-worker + the sym/qd kernels, so it loads last.
+  { file: 'algebra/sym-worker.js' },
+  { file: 'algebra/cas-export.js' },
+  { file: 'algebra/expr-parser.js' },
+  { file: 'algebra/algebra-store.js' },
 ];
 const PORTED_ANALYSIS_SET = new Set(PORTED_ANALYSIS.map((s) => s.file));
 

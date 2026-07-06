@@ -47,4 +47,16 @@ describe("native module-worker graphs load headlessly", () => {
     expect(typeof pool.create).toBe("function");
     expect(typeof pool.MainThreadPool).toBe("function");
   });
+
+  it("sym worker entry wires QD.Sym.runJob", async () => {
+    await import("../app/workers/sym-worker-entry.mjs");
+    const { default: QD } = await import("../app/workers/solver-graph.mjs");
+    expect(typeof QD.Sym.runJob).toBe("function");
+  });
+
+  it("sym-worker main-thread module loads + exposes run()", async () => {
+    const { default: QD } = await import("../app/workers/solver-graph.mjs");
+    await import("../app/algebra/sym-worker.mjs"); // attaches QD.SymWorker
+    expect(typeof QD.SymWorker.run).toBe("function");
+  });
 });

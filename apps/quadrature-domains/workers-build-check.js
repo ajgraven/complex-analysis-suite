@@ -8,6 +8,7 @@
 import "./app/primary-solver-worker.mjs";
 import "./app/schwarz/schwarz-cpu-worker.mjs";
 import "./app/param-slice/param-slice-pool.mjs";
+import "./app/algebra/sym-worker.mjs";
 
 if (typeof document !== "undefined") {
   const el = document.getElementById("out");
