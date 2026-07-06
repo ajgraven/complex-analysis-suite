@@ -1,48 +1,48 @@
 'use strict';
-// parse-check tests — every browser-loaded JS file parses cleanly under Node.
-// Split from the former monolithic node-test.js (Phase 2). The file list is now
-// DERIVED from the manifest (PAGE_SCRIPTS + asset-manifest.js + sw.js) instead
-// of a hand-synced copy — closing the old drift hazard.
+// Parse-check battery (rewritten at the Phase-2 flip). The classic PAGE_SCRIPTS /
+// asset-manifest.js / sw.js graph it used to `new vm.Script`-check is retired; the page is
+// now the ESM `main.mjs` graph. So this syntax-validates every app **.mjs** via `node --check`
+// — which catches a broken file even when no test imports it (the browser-only UI twins:
+// ui.mjs, the *-ui.mjs, schwarz-paint/render/…). Import RESOLUTION is covered separately by
+// `vite build` + the suite's imports; this is the fast syntax gate. Plus a targeted ui.mjs
+// regression guard. `ok` is a bootstrap global.
 const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
+const { execFileSync } = require('child_process');
 const APP_DIR = path.join(__dirname, '..');
 require('./bootstrap');
 
+function listMjs(dir, out = []) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) { if (!/node_modules|disabled/.test(e.name)) listMjs(p, out); }
+    else if (e.name.endsWith('.mjs')) out.push(p);
+  }
+  return out;
+}
+
 module.exports = async function run() {
-  // (2) PARSE-CHECK list — derived from the single source of truth. PAGE_SCRIPTS
-  // already covers every page module (solvers, seeds, UI, schwarz, sphere,
-  // param-slice, workers); add the two files the page loads outside the module
-  // list (the manifest itself + the service worker).
-  const sourceFiles = [...MANIFEST.PAGE_SCRIPTS, 'asset-manifest.js', 'sw.js'];
-  for (const rel of sourceFiles) {
-    const abs = path.join(APP_DIR, rel);
-    if (!fs.existsSync(abs)) { ok('parse-check ' + rel + ' (missing file)', false); continue; }
-    const src = fs.readFileSync(abs, 'utf8');
-    let parsed = true, err = '';
-    try { new vm.Script(src, { filename: rel }); }
-    catch (e) { parsed = false; err = e.message; }
-    ok('parse-check ' + rel, parsed, parsed ? '' : err.split('\n')[0]);
+  const files = listMjs(APP_DIR);
+  ok('parse-check: found the app .mjs graph', files.length > 50, 'found ' + files.length);
+
+  let bad = 0;
+  for (const abs of files) {
+    try {
+      execFileSync(process.execPath, ['--check', abs], { stdio: 'pipe' });
+    } catch (e) {
+      bad++;
+      ok('parse-check ' + path.relative(APP_DIR, abs).replace(/\\/g, '/'), false,
+         String((e && e.stderr) || e).split('\n').slice(0, 2).join(' '));
+    }
   }
+  ok('parse-check: all ' + files.length + ' app .mjs parse under `node --check`', bad === 0, bad + ' failed');
+
   // Regression guard (review item 1): the canonical poly-part state field is
-  // `state.polyCoeffs` (two f's). A `state.polyCoefs` (one f) write is a silent
-  // no-op — renderPolyCoefList() reads `polyCoeffs`, so loaded coefficients are
-  // dropped. This bit the Direct→QD cross-load path (_sendHToInverseTab).
-  {
-    const uiSrc = fs.readFileSync(path.join(APP_DIR, 'ui.js'), 'utf8');
-    const hasTypo = /\bstate\.polyCoefs\b/.test(uiSrc);       // one 'f' — the bug
-    const hasCanonical = /\bstate\.polyCoeffs\b/.test(uiSrc); // two 'f' — correct
-    ok('ui.js uses state.polyCoeffs (no single-f typo)', !hasTypo && hasCanonical,
-      hasTypo ? 'found state.polyCoefs (one f) — silent drop of poly coeffs' : '');
-  }
-  // P1.1 — ES module file. vm.Script doesn't understand ESM `export`; shell
-  // out to `node --check` (which uses --input-type=module for .mjs).
-  {
-    const cp = require('child_process');
-    const rel = 'qd.mjs';
-    let parsed = true, err = '';
-    try { cp.execSync('node --check ' + JSON.stringify(path.join(APP_DIR, rel)), { stdio: 'pipe' }); }
-    catch (e) { parsed = false; err = String((e.stderr && e.stderr.toString()) || e.message || e); }
-    ok('parse-check ' + rel + ' (ESM)', parsed, parsed ? '' : err.split('\n')[0]);
-  }
+  // `state.polyCoeffs` (two f's). A `state.polyCoefs` (one f) write is a silent no-op —
+  // renderPolyCoefList() reads `polyCoeffs`, so loaded coefficients are dropped.
+  const uiSrc = fs.readFileSync(path.join(APP_DIR, 'ui.mjs'), 'utf8');
+  const hasTypo = /\bstate\.polyCoefs\b/.test(uiSrc);       // one 'f' — the bug
+  const hasCanonical = /\bstate\.polyCoeffs\b/.test(uiSrc); // two 'f' — correct
+  ok('ui.mjs uses state.polyCoeffs (no single-f typo)', !hasTypo && hasCanonical,
+    hasTypo ? 'found state.polyCoefs (one f) — silent drop of poly coeffs' : '');
 };

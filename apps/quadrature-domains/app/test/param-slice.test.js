@@ -683,27 +683,9 @@ ok('ParamSlice: namespace exports core symbols',
 // by browser manual smoke. This catches API regressions and crashes during
 // auto-wire on load.
 {
-  const qolCtx = vm.createContext({
-    document: {
-      readyState: 'complete',
-      addEventListener: function () {},
-    },
-    window: undefined,
-    module: { exports: {} },
-    console: console,
-  });
-  qolCtx.window = qolCtx;        // qol.js uses `typeof window !== 'undefined'`
-  qolCtx.globalThis = qolCtx;
-  const qolSrc = fs.readFileSync(path.join(APP_DIR, 'qol.js'), 'utf8');
-  let loaded = false;
-  try {
-    vm.runInContext(qolSrc, qolCtx, { filename: 'qol.js' });
-    loaded = true;
-  } catch (e) {
-    loaded = false;
-  }
-  ok('QoL: qol.js loads without throwing', loaded);
-  const QoL = qolCtx.QD && qolCtx.QD.QoL;
+  // qol is now ESM — imported via bootstrap's PORTED_ANALYSIS, so QD.QoL is on the namespace.
+  const QoL = QD_NS.QoL;
+  ok('QoL: qol module loaded (QD.QoL attached)', !!QoL);
   ok('QoL: QD.QoL namespace exists', !!QoL);
   if (QoL) {
     ok('QoL: attachHelp is a function', typeof QoL.attachHelp === 'function');

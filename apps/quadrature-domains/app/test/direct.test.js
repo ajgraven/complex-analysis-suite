@@ -866,11 +866,8 @@ if (mathjs) {
 // ===========================================================================
 // parse-h.js: custom-text h(w) input for the Inverse tab.
 // ===========================================================================
-{
-  const src = fs.readFileSync(path.join(APP_DIR, 'parse-h.js'), 'utf8')
-    .replace(/typeof window !== 'undefined'/g, 'false');
-  vm.runInContext(src, ctx, { filename: 'parse-h.js' });
-}
+// parse-h is now ESM — imported via bootstrap's PORTED_ANALYSIS, so QD.parseH / QD.formatH
+// are already on the namespace (= ctx.module.exports); no classic vm-load needed.
 const parseH  = vm.runInContext('module.exports.parseH',  ctx);
 const formatH = vm.runInContext('module.exports.formatH', ctx);
 

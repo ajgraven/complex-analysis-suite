@@ -32,8 +32,6 @@ const TESTS = [
   'riemann',
   'parse-check',
   'worker',
-  'ui-domain-plot',
-  'schwarz-ui',
   'ui-inputs',
   'cmax',
   'observables',
@@ -46,8 +44,10 @@ const TESTS = [
   'expr-parser',
   'define-subst',
   'cardioid-uniqueness',
-  'manifest',
 ];
+// Note: manifest.test (retired with asset-manifest at the flip) and the jsdom DOM tests
+// (ui-domain-plot, schwarz-ui) moved to Vitest — the latter import the .mjs in a jsdom env
+// (vitest/ui-domain-plot.test.ts, vitest/schwarz-ui.test.ts).
 
 // Per-file assertion floors — a LOCALIZED companion to the aggregate suite-size
 // floor in manifest.test.js. The aggregate floor catches a large overall shrink
@@ -63,9 +63,9 @@ const TESTS = [
 const FLOORS = {
   solvers: 30, direct: 1, schwarz: 20, 'param-slice': 15, sphere: 5,
   cusps: 5, 'cusp-accuracy': 5, symmetry: 2, 'thesis-examples': 8, faber: 8,
-  riemann: 1, 'parse-check': 3, worker: 3, 'ui-domain-plot': 1, 'schwarz-ui': 1,
+  riemann: 1, 'parse-check': 3, worker: 3,
   'ui-inputs': 1, cmax: 3, observables: 5, 'sym-core': 250, 'sym-radical': 45, 'qd-equations': 60, 'qd-constraints': 16,
-  'algebra-store': 220, 'cas-export': 33, 'expr-parser': 18, 'define-subst': 36, 'cardioid-uniqueness': 19, manifest: 3,
+  'algebra-store': 220, 'cas-export': 33, 'expr-parser': 18, 'define-subst': 36, 'cardioid-uniqueness': 19,
 };
 const DEFAULT_FLOOR = 3;
 

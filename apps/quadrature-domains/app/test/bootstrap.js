@@ -117,6 +117,10 @@ const PORTED_ANALYSIS = [
   // UI factory — headless-tested via ui-inputs.test.js (the mode-descriptor gauge/warm-start
   // path). Attaches QD_UI.installModes onto the ui-registry; imports ui-presets (its dep).
   { file: 'ui-modes.js' },
+  // parse-h (QD.parseH/formatH — direct.test) + qol (QD.QoL — param-slice.test): the last two
+  // page modules the headless suite exercises directly, now imported as ESM instead of vm-loaded.
+  { file: 'parse-h.js' },
+  { file: 'qol.js' },
 ];
 const PORTED_ANALYSIS_SET = new Set(PORTED_ANALYSIS.map((s) => s.file));
 
@@ -175,27 +179,14 @@ async function _init() {
     }
   }
 
-  // --- asset manifest first: its IIFE resolves the global to ctx (no self/window
-  //     in the vm), so QD_ASSET_MANIFEST lands on ctx; primary-solver-worker.js
-  //     reads it. Also the source of the core load order below. ---
-  loadInCtx('asset-manifest.js');
-  const MANIFEST = ctx.QD_ASSET_MANIFEST;
-
   // Capture the QD namespace (populated by the solver + families imported above;
   // ctx.module.exports was pointed at it in the ESM_PORTED namespace step).
   const QD_NS = ctx.module.exports;
   ctx.QD = QD_NS;
 
-  // --- still-classic core kernels: WORKER_BUNDLE_FILES + the page-only analysis
-  //     modules the old suite appended, MINUS parse-h (the execution loader omitted
-  //     it), the ESM-ported leaves/solver/families, and the ESM-ported analysis
-  //     layer. Order is significant (seeds before each solver); WORKER_BUNDLE_FILES
-  //     already encodes it. This list shrinks toward empty as the port proceeds. ---
-  const ANALYSIS_FILES = ['critical-set.js', 'univalence.js', 'cusps.js', 'riemann-latex.js', 'primary-solution.js'];
-  const CORE = MANIFEST.WORKER_BUNDLE_FILES
-    .concat(ANALYSIS_FILES)
-    .filter(f => f !== 'parse-h.js' && !ESM_PORTED.has(f) && !PORTED_ANALYSIS_SET.has(f));
-  for (const f of CORE) loadInCtx(f);
+  // The whole page graph is now ESM: the former classic-vm CORE list (WORKER_BUNDLE_FILES
+  // + the page-only analysis files, derived from asset-manifest.js) is empty, so the manifest
+  // vm-load + the CORE loop are gone. Everything loads below via PORTED_ANALYSIS imports.
 
   // --- ESM-ported analysis + subsystem layer: imported (not vm-loaded), in the
   //     dependency order declared in PORTED_ANALYSIS. Side-effect modules register
@@ -265,7 +256,7 @@ async function _init() {
 
   // --- install the shared API on `global` so split test files use it unchanged ---
   const shared = {
-    ctx, loadInCtx, MANIFEST,
+    ctx, loadInCtx,
     QD_NS, QD: QD_NS,                 // some test bodies reference the namespace as bare `QD`
     Complex: ctx.Complex, Taylor: ctx.Taylor,   // the ESM ports (injected above)
     C: ctx.Complex, T: ctx.Taylor,
