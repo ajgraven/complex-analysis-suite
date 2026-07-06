@@ -110,11 +110,15 @@ browser-only and can't be validated headlessly (lint/typecheck are blind here: `
   [+ `SphereCommon`], `algebra-ui`, `algebra-canvas`): import `state`/`QD`/`QD_UI` as the recon
   shows (see `scratchpad/recon-ui.mjs` output), rewrite `window.QD`/`window.QD_UI` → `QD`/`QD_UI`,
   keep the IIFE. `algebra-ui` is the `const QD = window.QD` (win) case.
-- ⚠ **CDN-globals-in-modules gotcha:** bare `katex` / `math` do NOT resolve to `window.*` inside an
-  ES module (a free identifier → `typeof katex` is `'undefined'` even though the CDN set
-  `window.katex`). Rewrite bare `katex`→`window.katex`, `math`→`window.math` in every ported file
-  that uses them — **including the already-committed `riemann-latex.mjs`** (it guards on
-  `typeof katex` and would silently never render KaTeX). Audit with a bare-`katex`/`math` grep.
+- **Cross-module-global binding audit (`scratchpad/recon-globals.mjs`):** across all 77 committed
+  `.mjs`, only **3** use a cross-module global without a local binding — all `katex`
+  (`riemann-latex`, `ui-qd-equations`, `ui-solve`). This is very likely a **non-issue**: `katex` /
+  `math` are CDN-set **global-object properties** (`window.katex`), which DO resolve as bare
+  identifiers inside an ES module (the module scope chain reaches the global object), and the CDN
+  `<script>`s are parser-blocking so they run before the deferred module. (Contrast `ui-state`'s
+  `const state`, a global *lexical* binding — that does NOT cross the module boundary, hence the
+  `export`/`import` above.) Confirm at the browser gate; no preemptive rewrite planned. Everything
+  else (`Schwarz`/`Direct`/`LqdCommon`/… ) is already bound via `const X = QD.X` aliases or imports.
 
 **2. The flip.** Page ESM entry `main.mjs` importing the whole graph in `PAGE_SCRIPTS` order +
 `QD.Strings.apply()` (moved from index.html's inline script); rewrite index.html's
