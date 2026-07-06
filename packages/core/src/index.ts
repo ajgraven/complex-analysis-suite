@@ -2,11 +2,15 @@
 // Convention-neutral (ADR-0006): no pi / 2pi-i normalization constants live here; those stay
 // at each app's domain edge.
 //
-// First extraction (this commit): the object-representation complex arithmetic ({re,im}),
-// TS-ported from the Quadrature app's complex.mjs. Still to come in later commits:
-//   - the tuple representation ([re,im], from Complex Dynamics),
-//   - the generic `ComplexAlgebra<C>` contract both representations satisfy, and
-//   - the generic algorithms over it (Durand-Kerner root-finding, formal series, Newton) —
-//     which are the genuine cross-app "fix a bug once" surface.
+// Contents:
+//   - complex.ts     : object-representation complex arithmetic ({re,im}), TS-ported from QD.
+//   - algebra.ts     : the ComplexAlgebra<C> contract + its two reference instances
+//                      (objAlgebra {re,im}, tupleAlgebra [re,im]) — representation-genericity.
+//   - durand-kerner  : generic Durand-Kerner root-finding over any ComplexAlgebra.
+// Still to come: formal series, Newton + deflation, mat4/camera.
 export { Complex, default } from "./complex.js";
 export type { Cx } from "./complex.js";
+export { objAlgebra, tupleAlgebra } from "./algebra.js";
+export type { ComplexAlgebra, ComplexTuple } from "./algebra.js";
+export { makeDurandKerner } from "./durand-kerner.js";
+export type { DurandKernerOptions, DurandKernerResult } from "./durand-kerner.js";
