@@ -81,6 +81,24 @@ const PORTED_ANALYSIS = [
   { file: 'schwarz/schwarz-forward.js' },
   { file: 'param-slice/param-slice-common.js', capture: 'default' },      // → PS
   { file: 'sphere/sphere-common.js', capture: 'SphereCommon' },           // → SC
+  // Page-only analysis modules. The old suite vm-loaded these ON DEMAND (each
+  // relevant test file called loadInCtx('sym-core.js') etc.); now they are
+  // pre-imported here in dependency order and loadInCtx() skips the frozen .js
+  // for any file in this set, so those test-file calls are no-ops. Dependency
+  // order: sym-core (the exact-algebra base) before the three that build on
+  // QD.Sym; observables/symmetry/solver-cmax before thesis-examples (checkOracle
+  // calls them via QD.*). solver-cmax reads QD.findCriticalPoints (critical-set,
+  // above).
+  { file: 'sym-core.js' },
+  { file: 'sym-radical.js' },
+  { file: 'qd-equations.js' },
+  { file: 'qd-constraints.js' },
+  { file: 'observables.js' },
+  { file: 'symmetry.js' },
+  { file: 'solver-cmax.js' },
+  { file: 'faber-analysis.js' },
+  { file: 'ui-strings.js' },
+  { file: 'thesis-examples.js' },
 ];
 const PORTED_ANALYSIS_SET = new Set(PORTED_ANALYSIS.map((s) => s.file));
 
@@ -102,6 +120,11 @@ async function _init() {
   // branch runs), and execute it in the shared context. `replaceSelf` is needed
   // by the worker modules (primary-solver-worker.js, schwarz-cpu-worker.js).
   function loadInCtx(rel, opts = {}) {
+    // Ported to native ESM + imported in init(): the classic .js is frozen, so
+    // skip it. Guards the on-demand loadInCtx('sym-core.js') etc. calls that the
+    // page-only test files still make — otherwise vm-loading the .js would clobber
+    // the .mjs's namespace attach and silently drop the parity check.
+    if (PORTED_ANALYSIS_SET.has(rel)) return;
     let src = fs.readFileSync(path.join(APP_DIR, rel), 'utf8')
       .replace(/typeof window !== 'undefined'/g, 'false');
     if (opts.replaceSelf) src = src.replace(/typeof self !== 'undefined'/g, 'false');
