@@ -5,6 +5,26 @@ day one — see the [migration runbook](MIGRATION.md) for the order in which the
 into being, and [ADR-0007](DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)
 for why extraction is demand-driven rather than up-front.
 
+> **✅ As built.** The suite is now built, and the diagrams below are the *target*, not an
+> inventory. What actually exists:
+>
+> - **Four packages** were extracted: **`@cas/core`, `@cas/gpu`, `@cas/expr`,
+>   `@cas/interchange`**. The **`ui`, `quadrature`, and `dynamics`** packages sketched in the
+>   layer diagram and §3 were **never extracted** — no second consumer needed them, so that
+>   mathematics stayed in the apps (the Correspondences app keeps its own σ-construction and
+>   parabolic-Tricorn model). That is the [ADR-0007](DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)
+>   demand-driven rule working as intended, not an unfinished migration.
+> - **`@cas/core` shipped leaner** than §3 describes: it holds complex arithmetic, the
+>   `ComplexAlgebra` contract, Durand–Kerner, and truncated series-multiply — **not**
+>   Newton/deflation, mat4/camera helpers, or the full series library (all likewise left in the
+>   apps for want of a second consumer).
+> - **`@cas/gpu` shipped as a substrate**, not a turnkey renderer: df64 + the complex-GLSL
+>   stdlib + shader compile/link + the dual-backend GLSL≈JS harness. The escape-time program
+>   scaffold, colormaps, and sphere/projection remaps stayed in the apps.
+>
+> Read the package-specific claims below against this note, and see each package's own `README`
+> for its real API surface.
+
 ## 1. The shape: layered packages + thin apps
 
 ```

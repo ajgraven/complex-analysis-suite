@@ -1,127 +1,151 @@
 # complex-analysis-suite
 
-> **Name.** The repository is **`complex-analysis-suite`**. Its packages use the
-> internal workspace scope **`@cas/*`** (short for complex-analysis-suite; not published
-> to npm — `workspace:*` only). The scope is an ergonomic alias and is trivially
-> renameable to `@complex-analysis-suite/*` if you prefer the full form.
+> **Name.** The repository is **`complex-analysis-suite`**. Its packages use the internal
+> workspace scope **`@cas/*`** (short for complex-analysis-suite; not published to npm —
+> `workspace:*` only). The scope is an ergonomic alias, trivially renameable to
+> `@complex-analysis-suite/*` if you prefer the full form.
 
 A monorepo housing a growing **suite of complex-analysis and complex-dynamics
-visualization tools** that share common underlying packages and can hand data off
-to one another. The organizing goal: **each new tool added to the suite should
-require building fewer primitives from scratch than the last.**
+visualization tools** that share common underlying packages and can hand data off to one
+another. The organizing goal — the **north star** — is that **each new tool added to the
+suite requires building fewer primitives from scratch than the last**.
 
-The suite currently unifies two mature, independently-developed applications:
+It currently hosts **three** applications riding **four** shared `@cas/*` packages:
 
-| App | What it does | Current stack |
-|---|---|---|
-| **Complex Dynamics** (`apps/complex-dynamics`) | GPU escape-time visualizer for parametrized families `f(z,c)` — Mandelbrot/multibrot, Julia sets, Tricorn/multicorn, rational & transcendental maps, Böttcher coordinates, external rays, holomorphic matings, deep zoom | Vite + TypeScript |
-| **Quadrature Domains** (`apps/quadrature-domains`) | Solver + visualizer for (log-weighted) quadrature domains in both the inverse and direct directions, plus **single-valued Schwarz-reflection dynamics**, limit sets, Riemann-sphere view, and a parameter-slice sweep engine | Vanilla JS (no build) |
+| App                                                | What it does                                                                                                                                                                                                                                                                                                  | Stack                   |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| **Complex Dynamics** (`apps/complex-dynamics`)     | GPU escape-time visualizer for parametrized families `f(z,c)` — Mandelbrot/multibrot, Julia sets, Tricorn/multicorn, rational & transcendental maps, Herman rings, Böttcher coordinates, external rays, df64 deep zoom                                                                                        | Vite + TypeScript       |
+| **Quadrature Domains** (`apps/quadrature-domains`) | Solver + visualizer for (log-weighted) quadrature domains in the inverse and direct directions, plus **single-valued Schwarz-reflection dynamics**, limit sets, a Riemann-sphere view, a symbolic-elimination Algebra workspace, and a parameter-slice sweep engine                                           | Vite + JavaScript (ESM) |
+| **Correspondences** (`apps/correspondences`)       | The new tool: **anti-holomorphic correspondences / Schwarz-reflection matings**. The deltoid Schwarz reflection σ (CPU + GPU), its deleted correspondence (branch engine + orbit trees + density render), a family parameter plane, a parabolic-Tricorn model space, and an interactive **mating visualizer** | Vite + TypeScript       |
 
-The near-term forcing function for the suite is a **third** application — an
-**anti-holomorphic correspondences / Schwarz-reflection mating** tool — whose
-requirements deliberately drive which shared packages get extracted first. See
-[docs/VISION.md](docs/VISION.md) for why this ordering is intentional rather than incidental.
+The Correspondences tool was the **forcing function** for the whole suite: its
+requirements deliberately drove which shared packages got extracted, and in what order.
+See [docs/VISION.md](docs/VISION.md) for why that ordering was intentional rather than
+incidental.
 
 ---
 
 ## Status
 
-**Planning.** This repository currently contains the *plan*: an architecture and a
-phased migration runbook. No code has been merged yet. The plan is written to be
-executed incrementally, with a working suite at the end of **every** phase — there
-is no "big-bang rewrite" step, by design.
+**Built.** The phased migration ([docs/MIGRATION.md](docs/MIGRATION.md), Phases 0–6) is
+**fully executed and merged.** The workspace skeleton, unified tooling, the
+Quadrature-app-onto-Vite ESM-ification, and the four shared-package extractions
+(`@cas/core` → `@cas/interchange` → `@cas/expr` + `@cas/gpu`) are all done; the
+Correspondences app exists through its parameter-space milestone plus a complete
+interactive mating visualizer. The whole workspace is green (**800+ Vitest tests**, lint,
+typecheck, and per-app builds).
 
-Start here → [docs/MIGRATION.md](docs/MIGRATION.md), Phase 0.
+What's **deferred / exploratory** (by design, not omission):
+
+- **Branch continuation through cusps** in the correspondence engine is uncertified and
+  labeled `≈` — the analytic tools behind it (straightening, David surgery) are not
+  automatable to proof level ([RISKS §3](docs/RISKS.md#3-the-three-genuinely-hard-parts)).
+- **Further correspondence families** (circle-and-cardioid → cubic Chebyshev → general
+  `d:d`) beyond the deltoid.
+- **QD Schwarz df64 deep-zoom** (the df64 substrate exists in `@cas/gpu`; wiring it into
+  the Quadrature app's Schwarz renderer is not yet done).
+- The **`ui` / `quadrature` / `dynamics`** packages sketched in
+  [ARCHITECTURE.md](docs/ARCHITECTURE.md) were **never extracted** — no second consumer
+  ever needed them, which is exactly what [ADR-0007](docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)
+  prescribes. The Correspondences app kept its σ-construction and Tricorn model local.
+
+---
+
+## Quick start
+
+Prerequisites: **Node 22** (see [`.nvmrc`](.nvmrc)) and **pnpm 9** via Corepack.
+
+```bash
+corepack enable                          # provides pnpm at the pinned version (9.15.9)
+pnpm install                             # install the whole workspace
+
+pnpm --filter complex-dynamics dev       # start an app's Vite dev server…
+pnpm --filter quadrature-domains dev
+pnpm --filter correspondences dev        # (serves two pages: the dynamical views + /mating.html)
+pnpm --filter launcher dev               # the suite landing page
+
+pnpm test                                # build packages, then run every Vitest suite
+pnpm lint                                # ESLint across the workspace
+pnpm typecheck                           # build packages, then tsc --noEmit everywhere
+pnpm build                               # production build of every package + app
+pnpm format                              # Prettier --write .
+```
+
+> The `test`, `typecheck`, and `build` scripts build the `@cas/*` packages first — apps
+> and tests consume the packages' **built `dist/`**, so a package change is picked up only
+> after its build runs (the root scripts handle this for you).
+
+Each app is an independent static Vite build (`base: "./"`), deployable to GitHub Pages on
+its own; the launcher sits at the top-level Pages URL. See
+[ARCHITECTURE §8](docs/ARCHITECTURE.md#8-build--deployment-model).
+
+---
+
+## Repository layout
+
+```
+complex-analysis-suite/
+├── README.md                 ← you are here
+├── docs/                     ← the architecture + the executed migration plan (see the map below)
+├── packages/                 ← shared libraries (the reuse surface); dependencies point downward only
+│   ├── core/                 ← @cas/core        complex arithmetic, the ComplexAlgebra contract, Durand–Kerner, series-multiply
+│   ├── gpu/                  ← @cas/gpu         WebGL2 substrate: shader compile/link, df64 deep-zoom, complex-GLSL
+│   ├── expr/                 ← @cas/expr        one AST → GLSL shader body + JS evaluator (dual-backend)
+│   └── interchange/          ← @cas/interchange typed hand-off schema (envelope + MapSpec/SchwarzReflection) + deep-link codec
+└── apps/                     ← thin applications; each a Vite build that consumes packages
+    ├── launcher/             ← the unified menu: a static landing page linking to each app
+    ├── complex-dynamics/
+    ├── quadrature-domains/
+    └── correspondences/      ← the Phase-6 tool (dynamical views + the mating explorer)
+```
+
+> **The four packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`, and
+> `@cas/interchange`. Packages were extracted **only as a second consumer proved it needed
+> them** ([ADR-0007](docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)) —
+> which is why the `ui`, `quadrature`, and `dynamics` packages that
+> [ARCHITECTURE.md](docs/ARCHITECTURE.md) sketches as a target never materialized.
+
+> **Unified menu, not a unified shell.** The suite ships **separate apps that hand off to
+> each other**, fronted by a lightweight **launcher** (`apps/launcher`) — deliberately
+> _not_ a single-page shell with a tab per tool. See
+> [ARCHITECTURE §11](docs/ARCHITECTURE.md#11-the-launcher-unified-menu-without-a-unified-shell).
+
+Each package and each app carries its own `README.md` with its API surface / feature list.
 
 ---
 
 ## Documentation map
 
-Read in roughly this order:
+The `docs/` set is the durable design record. `docs/MIGRATION.md` is the executed runbook;
+the rest capture the _why_ (and remain the authoritative reasoning). Read in this order:
 
-1. **[docs/VISION.md](docs/VISION.md)** — The long-term goal, guiding principles,
-   non-goals, and the strategic reasoning (why a monorepo, why the correspondence
-   tool drives the extraction order, what "done" looks like). Start here for the *why*.
-2. **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — The target architecture: the
-   `packages/` + `apps/` layout, the dependency-layering rule, what each package
-   owns, the convention-neutrality principle, and the `expr` + `interchange`
-   keystone. The *where we're going*.
-3. **[docs/DECISIONS.md](docs/DECISIONS.md)** — The Architecture Decision Records
-   (ADR-0001…0007). Each captures one decision with its context, the alternatives
-   considered, the trade-offs, and the consequences. The *why each choice*.
-4. **[docs/MIGRATION.md](docs/MIGRATION.md)** — The step-by-step runbook: Phases 0–6
-   with concrete commands, verification gates, and rollback notes. The *how, exactly*.
-5. **[docs/INTERCHANGE.md](docs/INTERCHANGE.md)** — The hand-off data contract: the
-   TypeScript schema the apps use to pass objects (e.g. a Schwarz reflection) to each
-   other, the deep-link codec, and schema versioning. The keystone spec.
-6. **[docs/RISKS.md](docs/RISKS.md)** — The risk register, the three genuinely hard
-   parts, solo-developer guardrails, the **open questions I need you to decide**, and
-   **"what you might be missing."** Read the last two sections before you start.
+1. **[docs/VISION.md](docs/VISION.md)** — the long-term goal, guiding principles, non-goals,
+   and the strategic reasoning (why a monorepo, why the correspondence tool drove the
+   extraction order, what "done" looks like). Start here for the _why_.
+2. **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — the layered `packages/` + `apps/`
+   design, the one-directional dependency rule, what each package owns, convention
+   neutrality, and the `expr` + `interchange` keystone. The _where things live_.
+3. **[docs/DECISIONS.md](docs/DECISIONS.md)** — the Architecture Decision Records
+   (ADR-0001…0007): one decision each, with context, alternatives, trade-offs, and
+   consequences. The _why each choice_.
+4. **[docs/MIGRATION.md](docs/MIGRATION.md)** — the phase-by-phase runbook (Phases 0–6),
+   now annotated with what actually shipped at each gate. The _how it was built_.
+5. **[docs/INTERCHANGE.md](docs/INTERCHANGE.md)** — the hand-off data contract: the schema
+   the apps use to pass objects (e.g. a Schwarz reflection) to each other, the deep-link
+   codec, and versioning. The keystone spec.
+6. **[docs/RISKS.md](docs/RISKS.md)** — the risk register, the three genuinely hard parts,
+   solo-developer guardrails, and the (now-resolved) open questions.
 
-> **Convention:** documents *link* rather than duplicate. If a fact lives in one doc,
-> the others reference it. When a decision changes, update the owning doc (and, for
-> architectural decisions, add or supersede an ADR — never silently rewrite history).
-
----
-
-## Quick start (once Phase 0 lands)
-
-```bash
-# prerequisites: Node 20+ (see .nvmrc) and pnpm 9+ (see ADR-0004)
-corepack enable            # provides pnpm at the pinned version
-pnpm install               # installs the whole workspace
-
-pnpm --filter complex-dynamics dev      # start the CD dev server
-pnpm --filter quadrature-domains dev    # start the QD dev server
-
-pnpm test                  # run every package's + app's test suite (Vitest)
-pnpm lint                  # ESLint across the workspace
-pnpm typecheck             # tsc --noEmit across the workspace
-pnpm build                 # production build of every app into its dist/
-```
-
-During the transition (Phase 0–2), the Quadrature Domains app may still run through
-its own legacy static-server path in parallel; see
-[docs/MIGRATION.md](docs/MIGRATION.md#phase-2--quadrature-domains-onto-vite-still-all-javascript).
-
----
-
-## Repository layout (target)
-
-```
-complex-analysis-suite/
-├── README.md                 ← you are here
-├── docs/                     ← the plan (this set of documents)
-├── packages/                 ← shared, versioned libraries (the reuse surface)
-│   ├── core/                 ← complex numbers, formal series, polynomials, root-finding
-│   ├── gpu/                  ← WebGL2 escape-time substrate, df64 deep zoom, sphere/projection
-│   ├── expr/                 ← expression compiler: one AST → GLSL + JS evaluator
-│   ├── interchange/          ← typed hand-off schemas + deep-link codec
-│   ├── ui/                   ← shared UI kit (KaTeX helpers, inspector cards, share-links…)
-│   ├── quadrature/           ← (domain) Faber transform, QD/LQD solvers, Schwarz reflection
-│   └── dynamics/             ← (domain) escape-time / Böttcher / external rays / classification
-└── apps/                     ← thin applications; each is a Vite build that consumes packages
-    ├── launcher/             ← the unified menu: a small landing page linking to each app
-    ├── complex-dynamics/
-    ├── quadrature-domains/
-    └── correspondences/      ← the new tool (Phase 6)
-```
-
-> **Unified menu.** The suite ships **separate apps that hand off to each other**, with a
-> lightweight **launcher** (`apps/launcher`) that lets you pick which app to open, plus
-> (later) a shared navigation header so each app can jump to the others. This is
-> deliberately *not* a single unified single-page shell — see
-> [ARCHITECTURE §Launcher](docs/ARCHITECTURE.md#11-the-launcher-unified-menu-without-a-unified-shell).
-
-Not every package on this list exists from day one. Packages are extracted **as the
-apps prove they are needed** — see [ADR-0007](docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)
-and the [migration runbook](docs/MIGRATION.md).
+> **Convention:** documents _link_ rather than duplicate. When a decision changes, update
+> the owning doc — and for architectural decisions, add or supersede an ADR rather than
+> silently rewriting history.
 
 ---
 
 ## License & provenance
 
-Both source applications are MIT-licensed (Andrew Graven). The suite is MIT.
-The two apps are being brought in **with their git history preserved** (see
-[docs/MIGRATION.md, Phase 0](docs/MIGRATION.md#phase-0--genesis-the-workspace-skeleton))
-so authorship and provenance survive the merge.
+The suite is **MIT** (Andrew Graven); both source applications were MIT as well. Complex
+Dynamics and Quadrature Domains were brought in **with their git history preserved** (via
+`git subtree`, [MIGRATION Phase 0](docs/MIGRATION.md#phase-0--genesis-the-workspace-skeleton)),
+so authorship and provenance survive the merge. Each app's own `README` and math
+references are retained under `apps/*`.

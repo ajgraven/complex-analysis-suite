@@ -1,5 +1,12 @@
 # Risks, Guardrails & Open Questions
 
+> **✅ Post-build note.** The suite is built. The phase-gated risks below were navigated, and
+> the [Open questions](#open-questions-decisions-needed-from-you) are all **resolved** (that
+> section now records the decisions). This stays the standing register: the honest-labeling
+> discipline and the convention-collision guard are permanent, and the correspondence tool's
+> genuinely hard math ([§3–4](#3-the-three-genuinely-hard-parts)) is exactly what the suite did
+> *not* make easier — branch continuation through cusps remains exploratory and uncertified.
+
 The last two sections — [Open questions](#open-questions-decisions-needed-from-you) and
 [What you might be missing](#what-you-might-be-missing) — are the ones to read before
 you start. The rest is the standing risk register and the hard-parts detail referenced

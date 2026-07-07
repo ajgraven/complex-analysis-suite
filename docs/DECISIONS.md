@@ -21,6 +21,16 @@ Format follows Michael Nygard's ADR convention.
 > All seven are **Accepted** as of this session's decisions (recorded in
 > [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you)).
 > Supersede rather than rewrite if any change later.
+>
+> **✅ Executed.** All seven decisions were carried out — the [migration runbook](MIGRATION.md)
+> ran to completion — with two conscious deviations recorded inline in the Action Items below:
+> (1) **ADR-0005's *multivalued* `expr` / `interchange` extension was not built** — the
+> Correspondences app enumerates correspondence branches with its own engine, so no second
+> consumer ever forced a shared branch-aware representation (which is precisely the
+> [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) rule at work); the keystone
+> shipped through the single-valued case. (2) **ADR-0006's convention-neutrality is enforced by
+> construction** (the kernel simply carries no normalization constants) rather than by a
+> dedicated CI guard test.
 
 ---
 
@@ -85,8 +95,8 @@ Monorepo wins decisively in this context.
   from the monorepo — additive, not a reversal).
 
 ### Action Items
-1. [ ] Stand up the workspace skeleton ([MIGRATION Phase 0](MIGRATION.md#phase-0--genesis-the-workspace-skeleton)).
-2. [ ] Bring both apps in with **history preserved** (`git subtree`).
+1. [x] Stand up the workspace skeleton ([MIGRATION Phase 0](MIGRATION.md#phase-0--genesis-the-workspace-skeleton)).
+2. [x] Bring both apps in with **history preserved** (`git subtree`).
 
 ---
 
@@ -142,9 +152,9 @@ other app — and that cost is bounded because full typing of app-internal UI gl
   `// @ts-nocheck` permanently, which is fine.
 
 ### Action Items
-1. [ ] Shared `tsconfig.base.json` with `strict: true`.
-2. [ ] Package tsconfigs extend base with `strict`; app tsconfigs allow `allowJs` during transition.
-3. [ ] CI runs `tsc --noEmit` across the workspace.
+1. [x] Shared `tsconfig.base.json` with `strict: true`.
+2. [x] Package tsconfigs extend base with `strict`; app tsconfigs allow `allowJs` during transition.
+3. [x] CI runs `tsc --noEmit` across the workspace.
 
 ---
 
@@ -207,9 +217,9 @@ hand-rolled versions.
 - **Revisit:** never expected; this is a prerequisite for everything downstream.
 
 ### Action Items
-1. [ ] Wrap QD in a Vite app with `allowJs`, keep it running ([MIGRATION Phase 2](MIGRATION.md#phase-2--quadrature-domains-onto-vite-still-all-javascript)).
-2. [ ] Replace runtime worker-bundling with Vite module workers.
-3. [ ] Replace `version:sync` with `vite-plugin-pwa`.
+1. [x] Wrap QD in a Vite app with `allowJs`, keep it running ([MIGRATION Phase 2](MIGRATION.md#phase-2--quadrature-domains-onto-vite-still-all-javascript)).
+2. [x] Replace runtime worker-bundling with Vite module workers.
+3. [x] Replace `version:sync` with `vite-plugin-pwa`.
 
 ---
 
@@ -264,8 +274,8 @@ is small and one-time.
   workspaces are a drop-in fallback.
 
 ### Action Items
-1. [ ] `corepack enable`; pin pnpm in `package.json` `packageManager`.
-2. [ ] Root `pnpm-workspace.yaml` listing `packages/*` and `apps/*`.
+1. [x] `corepack enable`; pin pnpm in `package.json` `packageManager`.
+2. [x] Root `pnpm-workspace.yaml` listing `packages/*` and `apps/*`.
 
 ---
 
@@ -319,9 +329,9 @@ what makes the delicacy manageable.
 - **Revisit:** the multivalued design once the correspondence math is concrete.
 
 ### Action Items
-1. [ ] Define the minimal `interchange` `MapSpec` + `SchwarzReflection` schema ([INTERCHANGE.md](INTERCHANGE.md)).
-2. [ ] Ship the single-valued `σ` hand-off as the first interop milestone.
-3. [ ] Design the branch-aware `expr` extension when the correspondence engine begins.
+1. [x] Define the minimal `interchange` `MapSpec` + `SchwarzReflection` schema ([INTERCHANGE.md](INTERCHANGE.md)).
+2. [x] Ship the single-valued `σ` hand-off as the first interop milestone.
+3. [ ] Design the branch-aware `expr` extension when the correspondence engine begins. — **not built**: the Correspondences app enumerates branches internally, so no shared multivalued extension was forced (see the Executed note above).
 
 ---
 
@@ -374,9 +384,9 @@ is loud.
   the principle holds.
 
 ### Action Items
-1. [ ] Document the canonical interchange convention in [INTERCHANGE.md](INTERCHANGE.md).
-2. [ ] Add a test asserting `core` contains no `π`/`2πi` normalization constants.
-3. [ ] Implement per-app conversion shims at the interchange boundary.
+1. [x] Document the canonical interchange convention in [INTERCHANGE.md](INTERCHANGE.md).
+2. [ ] Add a test asserting `core` contains no `π`/`2πi` normalization constants. — enforced **by construction** (the kernel carries no normalization constants) rather than by a dedicated guard test.
+3. [x] Implement per-app conversion shims at the interchange boundary.
 
 ---
 
@@ -430,5 +440,5 @@ need-driven rule also directly serves principle #2 (extract on evidence).
   follow-on ADRs.
 
 ### Action Items
-1. [ ] Sequence per the [migration runbook](MIGRATION.md) (Phases 0–6, overlapping 5–6).
-2. [ ] Gate each package extraction on a concrete second consumer.
+1. [x] Sequence per the [migration runbook](MIGRATION.md) (Phases 0–6, overlapping 5–6).
+2. [x] Gate each package extraction on a concrete second consumer.

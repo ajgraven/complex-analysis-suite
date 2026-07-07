@@ -7,6 +7,17 @@ Riemann map, find the quadrature data) directions. Implements the
 Faber-transform approach to both problems from Andrew Graven's PhD thesis,
 *Weighted Quadrature Domains and the Faber Transform* (Caltech, 2026).
 
+> **In the monorepo.** This app is `apps/quadrature-domains` in
+> [complex-analysis-suite](../../README.md). It was **ESM-ified onto Vite** in
+> [MIGRATION Phase 2](../../docs/MIGRATION.md#phase-2--quadrature-domains-onto-vite-still-all-javascript)
+> and now consumes the shared [`@cas/core`](../../packages/core) kernel. Run it from the repo
+> root with `pnpm --filter quadrature-domains dev` (and `… build` / `… test`). **Several
+> operational sections below — "Running the app" (no-build / `npm run serve`), the
+> `version:sync` cache-buster, and the `app/` file layout — describe the original *standalone*
+> app and are retained for provenance; in the monorepo, Vite + `vite-plugin-pwa` handle the
+> dev server, offline caching, and cache-busting.** The mathematics, families, UI, and API
+> sections remain current.
+
 > **Navigation:** [ARCHITECTURE.md](ARCHITECTURE.md) — script load
 > order, namespace map, cross-tab contracts.
 > [THEORY_MAP.md](THEORY_MAP.md) — thesis equations → file:line.
@@ -45,15 +56,28 @@ unbounded-Laurent, or arbitrary expression) and computes the corresponding
 
 ## Running the app
 
-No build step — everything is vanilla HTML / JS. **Run it from a local web
-server** (not the `file://` protocol):
+**In the monorepo (current):** from the repo root,
+
+```
+pnpm --filter quadrature-domains dev       # Vite dev server (HMR)
+pnpm --filter quadrature-domains build     # static build into dist/
+```
+
+Vite serves and bundles the app (ES modules, native module Web Workers, `vite-plugin-pwa`
+for the service worker + cache-busting), and it imports the shared `@cas/core` kernel.
+
+<details><summary><b>Historical: the pre-monorepo standalone app</b> (retained for provenance)</summary>
+
+Before Phase 2 the app was **no-build** — vanilla HTML / JS run from a local web server (not
+`file://`):
 
 ```
 npm run serve        # python3 -m http.server --directory app 8000
 ```
 
-then open <http://localhost:8000/>. Any static file server works
-(`npx serve app`, VS Code Live Server, etc.) — just serve the `app/` directory.
+then open <http://localhost:8000/>. Any static file server worked (`npx serve app`, VS Code
+Live Server, etc.) — just serve the `app/` directory.
+</details>
 
 > **Why a server?** The app registers a service worker and runs the solver in
 > Web Workers built from the source files. Opening `index.html` directly via

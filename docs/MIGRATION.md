@@ -6,6 +6,27 @@ sequential; **Phase 6 (build the correspondence tool) is expected to run in para
 with the tail of Phase 5 and the ongoing TypeScript-ification**, per
 [ADR-0007](DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need).
 
+> ## ✅ Status: executed
+>
+> **All phases (0–6) are complete and merged**, plus a follow-on interactive mating
+> visualizer in the Correspondences app. The runbook below is retained as the record of *how*
+> the suite was built; read it as history, not a to-do list. What shipped:
+>
+> | Phase | Outcome |
+> |---|---|
+> | **0 Genesis** | Workspace skeleton; both apps pulled in via `git subtree` (history preserved); launcher stub. |
+> | **1 Tooling** | Shared `tsconfig.base` + ESLint/Prettier + dependency-boundary lint; unified on **Vitest**; CI. |
+> | **2 QD→Vite** | Quadrature app ESM-ified onto Vite (native module workers, `vite-plugin-pwa`); still all-JS. |
+> | **3 `@cas/core`** | Extracted the numeric kernel (complex, the `ComplexAlgebra` contract, Durand–Kerner, series-multiply); both apps consume it. *(Newton/deflation and mat4/camera were **not** extracted — no second consumer forced them; ADR-0007.)* |
+> | **4 `@cas/interchange`** | Schema + validator + deep-link codec; the QD → CD Schwarz-reflection hand-off round-trips. |
+> | **5 `@cas/expr` + `@cas/gpu`** | Promoted the expression compiler and extracted the df64/complex-GLSL + shader substrate; dual-backend GLSL≈JS proven; both apps adopt them. |
+> | **6 `apps/correspondences`** | Deltoid σ (CPU+GPU), the deleted-correspondence engine (orbit trees + density), the family parameter plane, the parabolic-Tricorn model, and the mating explorer. |
+>
+> **Deferred / exploratory** (as the plan intended): branch continuation through cusps
+> (uncertified, `≈`); further correspondence families beyond the deltoid; QD Schwarz df64
+> deep-zoom; and the `ui` / `quadrature` / `dynamics` packages (never needed a second consumer).
+> The three `⚠ verify` grounding caveats below were resolved during execution.
+
 > **Grounding caveat.** This runbook is written from the two apps' READMEs and stated
 > architecture, not from their live source. Commands and file paths are concrete so you
 > can execute, but **verify against the actual repos** at the points flagged

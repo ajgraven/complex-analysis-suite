@@ -17,6 +17,14 @@ Built on a hand-written **WebGL2** engine with no rendering dependencies: a smal
 compiler turns the editable `f(z, c)` / `escape(z, c)` expressions into GLSL
 fragment shaders, with an emulated double-float (df64) path for deep zoom.
 
+> **In the monorepo.** This app is `apps/complex-dynamics` in
+> [complex-analysis-suite](../../README.md). The expression compiler and the WebGL2/df64
+> substrate it was built on now live in the shared [`@cas/expr`](../../packages/expr) and
+> [`@cas/gpu`](../../packages/gpu) packages, which this app consumes. From the repo root, run
+> any script below as `pnpm --filter complex-dynamics <script>` (e.g. `pnpm --filter
+> complex-dynamics dev`); `pnpm install` once at the root sets up the whole workspace. The
+> `npm run …` forms still work from inside this directory.
+
 ## Running
 
 ```bash
@@ -54,7 +62,7 @@ time to an RGB ramp.
   selected `c`.
 
 The heavy per-pixel iteration runs on the GPU in a WebGL2 fragment shader,
-generated per expression by the compiler in [`src/expr/`](src/expr/). The orbit
+generated per expression by the compiler in [`@cas/expr`](../../packages/expr). The orbit
 polyline is computed on the CPU by the same expression evaluator and drawn on a
 2D overlay canvas stacked over the WebGL one.
 
@@ -126,7 +134,7 @@ The `f` / `escape` expression language (a CindyScript-compatible subset) support
 `lambertw` is a custom complex implementation (a seeded approximation refined by
 Halley steps); the principal `log`/`sqrt`/`pow` branches match the original
 CindyScript. The compiler emits both GLSL (for rendering) and a JS evaluator (for
-the orbit and tests) from one AST — see [`src/expr/`](src/expr/).
+the orbit and tests) from one AST — see [`@cas/expr`](../../packages/expr).
 
 ## Controls
 
@@ -577,7 +585,7 @@ convergence — e.g. `f = z^3 - 1` gives the classic root-basin fractal. It is a
 root-finder, so it's most meaningful for an `f` with several roots; on the escape-time
 families (e.g. `z² + c`) it is mathematically degenerate. The derivative is computed
 symbolically
-([`src/expr/derivative.ts`](src/expr/derivative.ts)); it's available for holomorphic
+([`@cas/expr`'s `derivative` pass](../../packages/expr)); it's available for holomorphic
 `f` and reports a clear error for non-holomorphic builtins (`abs`, `re`, `im`, …).
 
 ## Architecture

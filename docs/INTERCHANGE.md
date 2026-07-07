@@ -4,6 +4,16 @@
 to one another. It is one half of the [map-representation keystone](ARCHITECTURE.md#5-the-keystone-map-representation)
 (the other half is `expr`, the executable form). This document specifies the schema.
 
+> **✅ As implemented.** The schema shipped as **`@cas/interchange` v1.0.0** and matches this
+> spec — the `Envelope`, `Conventions` / `CANONICAL`, the `MapSpec` union (`rational` /
+> `laurent` / `expr`), the `schwarz-reflection` / `quadrature-domain` / `view` payloads,
+> `validateEnvelope` + `InterchangeError`, and the `encodeLink` / `decodeLink` codec. Two
+> deviations from the sketch below: the **`correspondence` and `parameter-slice` kinds (§5)
+> remain unimplemented** (no hand-off has needed them yet — `PayloadKind` is `"map" |
+> "quadrature-domain" | "schwarz-reflection" | "view"`), and the deep-link codec encodes
+> **uncompressed** URL-safe base64 JSON (see §6). Exact exports:
+> [`@cas/interchange` README](../packages/interchange/README.md).
+
 **Design stance.** Start **minimal** — only what the first hand-off (a single-valued
 Schwarz reflection, QD → CD) needs — then **grow the schema with explicit versioning**.
 Do *not* try to specify every future object up front; that is how interchange formats
@@ -194,8 +204,9 @@ export function decodeLink(hash: string): Envelope;  // throws on bad/incompatib
 
 Implementation notes:
 
-- The payload is JSON, then compressed (e.g. gzip/deflate) and URL-safe-base64-encoded,
-  keeping links short even for deep-zoom centers and boundary-sample arrays.
+- The payload is JSON, URL-safe-base64-encoded into a `#s=…` fragment. *(As implemented in
+  v1.0.0 the JSON is **not** compressed — links stay short enough without it; gzip/deflate
+  remains an option if boundary-sample arrays ever make links unwieldy.)*
 - **Preserve backward compatibility** of each app's *existing* share-link format, or
   ship a migration: you (and possibly a paper or notebook) may already have saved links
   in the old format. ⚠ Verify the current formats in each repo before unifying.
