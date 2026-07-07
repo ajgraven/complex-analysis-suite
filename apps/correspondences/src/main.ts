@@ -7,11 +7,13 @@ import { DEFAULT_VIEW, renderBand } from "./render.js";
 import { createDeltoidRenderer } from "./gpu.js";
 import { accumulateBand, densityToImage, DEFAULT_DENSITY } from "./correspondenceRender.js";
 import { DEFAULT_PARAM_OPTIONS, DEFAULT_PARAM_VIEW, renderParamBand } from "./paramPlane.js";
+import { createParamRenderer } from "./paramGpu.js";
 
 const SIGMA_GPU = 560;
 const SIGMA_CPU = 240;
 const CORR = 380;
-const PARAM = 300;
+const PARAM_GPU = 560;
+const PARAM_CPU = 300;
 
 function setCap(id: string, text: string): void {
   const el = document.getElementById(id);
@@ -131,28 +133,46 @@ function renderCorrespondence(canvas: HTMLCanvasElement): void {
 }
 
 function renderParamPlane(canvas: HTMLCanvasElement): void {
-  canvas.width = PARAM;
-  canvas.height = PARAM;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-  const image = ctx.createImageData(PARAM, PARAM);
   const opts = DEFAULT_PARAM_OPTIONS;
+  canvas.width = PARAM_GPU;
+  canvas.height = PARAM_GPU;
+  const gpu = createParamRenderer(canvas);
+  if (gpu) {
+    const t0 = performance.now();
+    gpu.render(DEFAULT_PARAM_VIEW, opts.maxIter, opts.escapeR);
+    setCap(
+      "capP",
+      `Family parameter plane φ_a = z + a/(2z²) — GPU render (${PARAM_GPU}², ${Math.round(performance.now() - t0)} ms). ` +
+        `Dark body ≈ critical/cusp orbits bounded (a=1 deltoid, a=0 disk); exterior by escape speed. ` +
+        `≈ exploratory — not a certified connectedness locus.`,
+    );
+    return;
+  }
+  // Fresh 2D canvas for the CPU fallback (the GPU attempt bound the canvas to WebGL2).
+  const fresh = document.createElement("canvas");
+  fresh.id = "param";
+  fresh.width = PARAM_CPU;
+  fresh.height = PARAM_CPU;
+  fresh.style.cssText = canvas.style.cssText;
+  canvas.replaceWith(fresh);
+  const ctx = fresh.getContext("2d");
+  if (!ctx) return;
+  const image = ctx.createImageData(PARAM_CPU, PARAM_CPU);
   const t0 = performance.now();
   let y = 0;
   chunk((next) => {
-    const y1 = Math.min(PARAM, y + 4);
+    const y1 = Math.min(PARAM_CPU, y + 4);
     renderParamBand(image, DEFAULT_PARAM_VIEW, opts, y, y1);
     ctx.putImageData(image, 0, 0);
     y = y1;
-    if (y < PARAM) {
-      setCap("capP", `Parameter plane — critical-orbit escape… ${Math.round((100 * y) / PARAM)}%`);
+    if (y < PARAM_CPU) {
+      setCap("capP", `Parameter plane — critical-orbit escape (CPU)… ${Math.round((100 * y) / PARAM_CPU)}%`);
       next();
     } else {
       setCap(
         "capP",
-        `Family parameter plane φ_a = z + a/(2z²) (${PARAM}², ${Math.round(performance.now() - t0)} ms). ` +
-          `Dark body ≈ critical/cusp orbits bounded (a=1 deltoid, a=0 disk); exterior by escape speed. ` +
-          `≈ exploratory — not a certified connectedness locus.`,
+        `Family parameter plane φ_a = z + a/(2z²) — CPU fallback (${PARAM_CPU}², ${Math.round(performance.now() - t0)} ms). ` +
+          `Dark body ≈ critical/cusp orbits bounded (a=1 deltoid, a=0 disk). ≈ exploratory — not certified.`,
       );
     }
   });
