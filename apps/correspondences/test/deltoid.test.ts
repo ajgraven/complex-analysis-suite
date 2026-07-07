@@ -89,4 +89,49 @@ describe("deltoid boundary + escape-time classification", () => {
     const r = escapeTime(DELTOID, isInOmega, [100, 0], { maxIter: 64, escapeR: 50 });
     expect(r.kind).toBe("escaped");
   });
+
+  // Branch-correctness of φ⁻¹: σ needs the |z|>1 preimage. A warm-seeded Newton can drift onto an
+  // interior preimage of the degree-3 inverse, corrupting the orbit into a fake bounded set — which
+  // showed up as spurious non-escaping "wings" filling ~20% of the σ dynamical plane. These pin the fix.
+  it("invertPhi always returns the exterior branch |z|>1 for w ∈ Ω", () => {
+    const probes: Complex[] = [
+      [1.2, 1.2],
+      [-1.4, 0.6],
+      [0.9, -1.5],
+      [-1.7, -0.9],
+      [2.0, 0.3],
+    ];
+    const poly = deltoidBoundary(512);
+    for (const w of probes) {
+      expect(pointInPolygon(w, poly)).toBe(false); // w is in Ω
+      const z = DELTOID.invertPhi(w);
+      expect(z).not.toBeNull();
+      if (z) {
+        expect(Math.hypot(z[0], z[1])).toBeGreaterThan(1); // exterior branch
+        near(DELTOID.evalPhi(z), w, 7); // and a genuine preimage
+      }
+    }
+  });
+
+  it("the σ dynamical plane has no bulk non-escaping region (branch-correct φ⁻¹)", () => {
+    const poly = deltoidBoundary(200);
+    const isInOmega = (w: Complex): boolean => !pointInPolygon(w, poly);
+    const N = 60;
+    const halfSpan = 2.1;
+    let inOmega = 0;
+    let interior = 0;
+    for (let py = 0; py < N; py++) {
+      const wy = (0.5 - py / N) * 2 * halfSpan;
+      for (let px = 0; px < N; px++) {
+        const wx = (px / N - 0.5) * 2 * halfSpan;
+        const w: Complex = [wx, wy];
+        if (!isInOmega(w)) continue;
+        inOmega++;
+        const r = escapeTime(DELTOID, isInOmega, w, { maxIter: 80, escapeR: 40 });
+        if (r.kind === "interior" || r.kind === "invalid") interior++;
+      }
+    }
+    // The true non-escaping set is a measure-zero fractal; well under 1% of sampled Ω should linger.
+    expect(interior / inOmega).toBeLessThan(0.01);
+  });
 });

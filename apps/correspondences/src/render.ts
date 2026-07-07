@@ -22,10 +22,20 @@ export const DEFAULT_VIEW: View = { centerX: 0, centerY: 0, halfSpan: 2.1 };
 const BOUNDARY = deltoidBoundary(96); // enough vertices to resolve the 3 cusps for the in-Ω test
 const isInOmega = (w: Complex): boolean => !pointInPolygon(w, BOUNDARY);
 const ESCAPE_R = 40; // a few times the deltoid radius — comfortably beyond K
-// The in-Ω test (point-in-polygon) + Newton inverse run once per σ-step, so the limit-set pixels are
-// the costly ones; a modest cap keeps the CPU preview render to a few seconds. A GPU pass (next slice)
-// lifts this. Enough to show K, the tiling, and the limit set.
-const MAX_ITER = 32;
+// With the branch-correct φ⁻¹ the exterior tessellates cleanly (the true non-escaping set is a thin
+// fractal), so a modest cap resolves the tiling; the GPU pass affords more. This is the CPU fallback.
+const MAX_ITER = 64;
+
+// Cyclic tessellation palette (Inigo Quilez cosine form) — matches gpu.ts pal(); successive tile
+// generations get well-separated hues so the triangular tiles read clearly.
+function pal(t: number): [number, number, number] {
+  const T = 2 * Math.PI;
+  return [
+    (0.5 + 0.5 * Math.cos(T * (t + 0.0))) * 0.92 * 255,
+    (0.5 + 0.5 * Math.cos(T * (t + 0.33))) * 0.92 * 255,
+    (0.5 + 0.5 * Math.cos(T * (t + 0.67))) * 0.92 * 255,
+  ];
+}
 
 function paint(kind: string, n: number, data: Uint8ClampedArray, o: number): void {
   let r: number;
@@ -33,26 +43,17 @@ function paint(kind: string, n: number, data: Uint8ClampedArray, o: number): voi
   let b: number;
   if (kind === "fundamental" && n === 0) {
     // K itself (inside the deltoid): the central hole.
-    r = 30;
-    g = 33;
-    b = 44;
-  } else if (kind === "escaped") {
-    // Basin of infinity — a cool ramp, faster escape brighter.
-    const t = Math.min(1, n / 22);
-    r = 210 - 130 * t;
-    g = 226 - 96 * t;
-    b = 246 - 40 * t;
-  } else if (kind === "fundamental") {
-    // The tiling set: orbits that land in K after n steps. Warm ramp banded by n so tiles show.
-    const t = (n % 18) / 18;
-    r = 40 + 205 * t;
-    g = 100 + 110 * (1 - t);
-    b = 150 - 90 * t;
+    r = 26;
+    g = 28;
+    b = 41;
+  } else if (kind === "escaped" || kind === "fundamental") {
+    // A tile: the orbit left Ω after n steps (into K or toward ∞). Colour by tile generation.
+    [r, g, b] = pal(0.11 * n);
   } else {
-    // interior / invalid — the (Julia-like) limit set.
-    r = 6;
-    g = 6;
-    b = 10;
+    // interior / invalid — the (thin) non-escaping limit set.
+    r = 5;
+    g = 5;
+    b = 6;
   }
   data[o] = r;
   data[o + 1] = g;

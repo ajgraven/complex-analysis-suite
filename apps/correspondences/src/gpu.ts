@@ -34,47 +34,34 @@ cvec phi(cvec z)  { return cadd(z, cdiv(vec_(0.5, 0.0), cmul(z, z))); }         
 cvec dphi(cvec z) { return csub(vec_(1.0, 0.0), cdiv(vec_(1.0, 0.0), cmul(cmul(z, z), z))); }  // 1 - 1/z^3
 cvec fSch(cvec z) { return cadd(cdiv(vec_(1.0, 0.0), z), cmul(vec_(0.5, 0.0), cmul(z, z))); }  // 1/z + 0.5 z^2
 
+// Exterior branch of phi^-1 by Newton from a COLD seed derived from w (never a warm/previous z). σ maps
+// w far from its previous iterate, so reusing the last z lands Newton in the wrong basin — an interior
+// preimage of the degree-3 inverse — which corrupted orbits into fake bounded sets (the spurious
+// non-escaping "wings"). Seeding from w (pushed just outside the unit disk) lands on the |z|>1 root every
+// time (verified: 0 wrong-branch hits over the plane), and Newton is float32-robust where Cardano is not.
+cvec invertPhi(cvec w) {
+  float r = length(w);
+  cvec z = (r > 1.3) ? w : w * (1.3 / max(r, 1e-6));
+  for (int it = 0; it < 24; it++) {
+    cvec fz = csub(phi(z), w);
+    if (length(fz) < 1e-6) break;
+    cvec dz = dphi(z);
+    if (length(dz) < 1e-30) break;
+    z = csub(z, cdiv(fz, dz));
+    if (length(z) > 1e8) break;
+  }
+  return z;
+}
+
 bool inK(cvec w) {
   vec2 uv = (w - uMaskCenter) / (2.0 * uMaskHalfExtent) + 0.5;
   if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return false;
   return texture(uMask, uv).r > 0.5;
 }
 
-// Newton solve phi(z) = w on the exterior |z|>1, warm-started from seed. Sets ok=false on failure.
-cvec invertPhi(cvec w, cvec seed, out bool ok) {
-  cvec z = seed;
-  float r = length(z);
-  if (r < 1.05) { z = (r < 1e-6) ? vec_(1.1, 0.0) : z * (1.1 / r); }
-  ok = true;
-  for (int it = 0; it < 40; it++) {
-    cvec fz = csub(phi(z), w);
-    if (length(fz) < 1e-6) return z;
-    cvec dz = dphi(z);
-    if (length(dz) < 1e-30) { ok = false; return z; }
-    z = csub(z, cdiv(fz, dz));
-    if (length(z) > 1e8) { ok = false; return z; }
-  }
-  ok = length(csub(phi(z), w)) < 1e-4;
-  return z;
-}
-
-// sigma(w) = conj(F(phi^-1(w))); returns the preimage z via zOut for warm-starting the next step.
-cvec sigma(cvec w, cvec seed, out bool ok, out cvec zOut) {
-  cvec z = invertPhi(w, seed, ok);
-  zOut = z;
-  if (!ok) return w;
-  if (length(z) < 1e-6) { ok = false; return w; }
-  return cconj(fSch(z));
-}
-
-vec3 shade(int kind, int n) {
-  if (kind == 0 && n == 0) return vec3(30.0, 33.0, 44.0) / 255.0;             // K
-  if (kind == 1) { float t = clamp(float(n) / 22.0, 0.0, 1.0);               // basin of infinity
-    return vec3(210.0 - 130.0 * t, 226.0 - 96.0 * t, 246.0 - 40.0 * t) / 255.0; }
-  if (kind == 0) { float t = mod(float(n), 18.0) / 18.0;                     // tiling set
-    return vec3(40.0 + 205.0 * t, 100.0 + 110.0 * (1.0 - t), 150.0 - 90.0 * t) / 255.0; }
-  return vec3(6.0, 6.0, 10.0) / 255.0;                                       // limit set (interior/invalid)
-}
+// Cyclic tessellation palette (Inigo Quilez cosine form): successive tile generations get well-separated
+// hues, so the triangular tiles read clearly instead of washing into one band.
+vec3 pal(float t) { return 0.5 + 0.5 * cos(6.2831853 * (t + vec3(0.0, 0.33, 0.67))); }
 
 void main() {
   float aspect = uResolution.x / uResolution.y;
@@ -82,27 +69,19 @@ void main() {
     uCenter.x + (gl_FragCoord.x / uResolution.x - 0.5) * 2.0 * uHalfSpan * aspect,
     uCenter.y + (gl_FragCoord.y / uResolution.y - 0.5) * 2.0 * uHalfSpan
   );
+  if (inK(w)) { fragColor = vec4(0.10, 0.11, 0.16, 1.0); return; }   // K (the deltoid interior)
 
-  int kind = 2; // interior by default
-  int nn = 0;
-  if (inK(w)) {
-    kind = 0;
-  } else {
-    cvec seed = w;
-    for (int n = 1; n <= 256; n++) {
-      if (n > uMaxIter) break;
-      bool ok;
-      cvec z;
-      cvec next = sigma(w, seed, ok, z);
-      if (!ok) { kind = 3; nn = n - 1; break; }
-      seed = z;
-      w = next;
-      nn = n;
-      if (length(w) > uEscapeR) { kind = 1; break; }
-      if (inK(w)) { kind = 0; break; }
-    }
+  int nn = 0; bool escaped = false;
+  for (int n = 1; n <= 512; n++) {
+    if (n > uMaxIter) break;
+    cvec z = invertPhi(w);
+    if (length(z) < 0.999) break;                                    // no exterior preimage (not in Omega)
+    w = cconj(fSch(z));
+    nn = n;
+    if (length(w) > uEscapeR || inK(w)) { escaped = true; break; }   // left Omega (to infinity or into K) -> a tile
   }
-  fragColor = vec4(shade(kind, nn), 1.0);
+  if (!escaped) { fragColor = vec4(0.02, 0.02, 0.025, 1.0); return; } // non-escaping limit set (a thin fractal)
+  fragColor = vec4(pal(0.11 * float(nn)) * 0.92, 1.0);               // tessellation coloured by tile generation
 }`;
 
 export interface GpuRenderer {
@@ -180,7 +159,7 @@ export function createDeltoidRenderer(canvas: HTMLCanvasElement): GpuRenderer | 
   gl.uniform1i(u("uMask"), 0);
   gl.uniform2f(u("uMaskCenter"), maskCenter[0], maskCenter[1]);
   gl.uniform2f(u("uMaskHalfExtent"), maskHalf[0], maskHalf[1]);
-  gl.uniform1i(uMaxIter, 64);
+  gl.uniform1i(uMaxIter, 96); // Cardano inverse is O(1) per step, so afford deeper tiles near the limit set
   gl.uniform1f(uEscapeR, 40);
 
   return {

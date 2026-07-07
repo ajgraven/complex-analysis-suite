@@ -11,7 +11,7 @@
 //
 // Arithmetic uses @cas/core's convention-neutral tupleAlgebra ([re,im]); conj / inv are the two ops
 // the algebra contract omits (both trivial), defined locally.
-import { tupleAlgebra, type ComplexTuple } from "@cas/core";
+import { makeDurandKerner, tupleAlgebra, type ComplexTuple } from "@cas/core";
 
 export type Complex = ComplexTuple;
 
@@ -42,6 +42,7 @@ export function makeUnboundedLaurentSchwarz(
   F: readonly Complex[],
 ): UnboundedLaurentSchwarz {
   const m = F.length;
+  const dk = makeDurandKerner(A);
 
   const evalPhi = (z: Complex): Complex => {
     let acc = A.scale(z, c);
@@ -87,17 +88,63 @@ export function makeUnboundedLaurentSchwarz(
     return [(cand[0] * 1.1) / r, (cand[1] * 1.1) / r];
   };
 
+  // The EXACT exterior branch of φ⁻¹. φ(z)=w, times z^{m-1}, is the degree-m polynomial
+  //   c·zᵐ + (F[0]−w)·z^{m-1} + F[1]·z^{m-2} + … + F[m-1] = 0;
+  // φ is univalent on {|z|>1}, so for w ∈ Ω exactly one root lies there — the branch σ needs. Solving
+  // for all roots (Durand–Kerner) and taking |z|>1 is immune to the branch drift that a warm-seeded
+  // Newton suffers when σ maps w far from its previous iterate (that drift onto an interior preimage is
+  // what produced the spurious "non-escaping" wings in the σ dynamical plane).
+  const exteriorRoot = (w: Complex): Complex | null => {
+    const a: Complex[] = new Array(m + 1);
+    a[m] = [1, 0];
+    a[m - 1] = A.scale(A.sub(F[0], w), 1 / c);
+    for (let l = 1; l < m; l++) a[m - 1 - l] = A.scale(F[l], 1 / c);
+    const evalMonic = (z: Complex): Complex => {
+      let acc = a[m];
+      for (let k = m - 1; k >= 0; k--) acc = A.add(A.mul(acc, z), a[k]);
+      return acc;
+    };
+    const r = Math.max(1.2, A.abs(w) / Math.abs(c));
+    const seeds: Complex[] = [];
+    for (let k = 0; k < m; k++) {
+      const t = (2 * Math.PI * (k + 0.5)) / m;
+      seeds.push([r * Math.cos(t), r * Math.sin(t)]);
+    }
+    const res = dk(evalMonic, seeds, { tol: 1e-13, maxIter: 200 });
+    if (!res) return null;
+    // The outermost root: |z|>1 for w ∈ Ω, |z|=1 for w on ∂Ω (the other roots are interior). A small
+    // tolerance keeps boundary points valid; a genuinely interior w (never iterated here) yields null.
+    let best: Complex | null = null;
+    let bestAbs = -1;
+    for (const z of res.roots) {
+      const az = A.abs(z);
+      if (az > bestAbs) {
+        bestAbs = az;
+        best = z;
+      }
+    }
+    return bestAbs >= 1 - 1e-6 ? best : null;
+  };
+
   const invertPhi = (w: Complex, seed?: Complex | null): Complex | null => {
     let z = seedFor(w, seed);
+    let ok = false;
     for (let it = 0; it < NEWTON_MAX; it++) {
       const fz = A.sub(evalPhi(z), w);
-      if (A.abs(fz) < NEWTON_TOL) return z;
+      if (A.abs(fz) < NEWTON_TOL) {
+        ok = true;
+        break;
+      }
       const dfz = evalPhiDeriv(z);
-      if (A.abs(dfz) < 1e-300) return null;
+      if (A.abs(dfz) < 1e-300) break;
       z = A.sub(z, A.div(fz, dfz));
-      if (!A.isFinite(z) || A.abs(z) > 1e8) return null;
+      if (!A.isFinite(z) || A.abs(z) > 1e8) break;
     }
-    return A.abs(A.sub(evalPhi(z), w)) < NEWTON_TOL * 100 ? z : null;
+    if (!ok) ok = A.isFinite(z) && A.abs(A.sub(evalPhi(z), w)) < NEWTON_TOL * 100;
+    // Accept Newton only when it converged onto the exterior branch |z|>1 (unique there); otherwise it
+    // drifted onto an interior preimage — recover the correct branch exactly.
+    if (ok && A.abs(z) > 1) return z;
+    return exteriorRoot(w);
   };
 
   const sigma = (w: Complex, seed?: Complex | null): { value: Complex; z: Complex } | null => {
