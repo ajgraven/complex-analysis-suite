@@ -95,9 +95,11 @@ export function renderParamBand(
   opts: Required<ParamEscapeOptions>,
   y0: number,
   y1: number,
+  scratch?: Float32Array,
 ): void {
   const { width, height } = image;
-  const field = new Float32Array(width * height);
+  // Reuse a caller-owned scratch field across bands to avoid a full-frame allocation per chunk.
+  const field = scratch ?? new Float32Array(width * height);
   classifyParamBand(field, width, height, view, opts, y0, y1);
   // colour just the band we filled (leave other rows untouched for chunked rendering)
   const sub = field.subarray(y0 * width, y1 * width);

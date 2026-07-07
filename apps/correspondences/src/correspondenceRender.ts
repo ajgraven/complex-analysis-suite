@@ -109,11 +109,13 @@ export function blurDensity(src: Float32Array, W: number, H: number, passes = 2)
   return cur;
 }
 
-/** Colorize a density buffer (blurred, then log-normalized) into `image`, with K as a dark base. */
-export function densityToImage(density: Float32Array, image: ImageData, view: View): void {
+/** Colorize a density buffer (optionally blurred, then log-normalized) into `image`, with K as a dark
+ *  base. Progressive chunk redraws pass blur=false (the intermediate frames are transient); the final
+ *  frame blurs once — avoiding a full blur (and its allocations) on every tick. */
+export function densityToImage(density: Float32Array, image: ImageData, view: View, blur = true): void {
   const { width: W, height: H, data } = image;
   const aspect = W / H;
-  const dens = blurDensity(density, W, H);
+  const dens = blur ? blurDensity(density, W, H) : density;
   let max = 0;
   for (let i = 0; i < dens.length; i++) if (dens[i] > max) max = dens[i];
   const norm = max > 0 ? 1 / Math.log(1 + max) : 0;

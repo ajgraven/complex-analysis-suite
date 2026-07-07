@@ -152,10 +152,11 @@ function renderCorrespondence(canvas: HTMLCanvasElement): void {
   chunk((next) => {
     const sy1 = Math.min(opts.seedGrid, sy + 3);
     accumulateBand(density, CORR, CORR, DEFAULT_VIEW, opts, sy, sy1);
-    densityToImage(density, image, DEFAULT_VIEW);
-    ctx.putImageData(image, 0, 0);
     sy = sy1;
-    if (sy < opts.seedGrid) {
+    const isFinal = sy >= opts.seedGrid;
+    densityToImage(density, image, DEFAULT_VIEW, isFinal); // blur only the final frame
+    ctx.putImageData(image, 0, 0);
+    if (!isFinal) {
       setCap("capC", `Deleted-correspondence orbit-tree density… ${Math.round((100 * sy) / opts.seedGrid)}%`);
       next();
     } else {
@@ -186,11 +187,12 @@ function renderParamPlane(canvas: HTMLCanvasElement): void {
   }
   const ctx = freshCanvas(canvas, "param", PARAM_CPU);
   if (!ctx) return;
+  const field = new Float32Array(PARAM_CPU * PARAM_CPU);
   chunkImageBands(
     ctx,
     PARAM_CPU,
     4,
-    (image, y0, y1) => renderParamBand(image, DEFAULT_PARAM_VIEW, opts, y0, y1),
+    (image, y0, y1) => renderParamBand(image, DEFAULT_PARAM_VIEW, opts, y0, y1, field),
     "capP",
     (pct) => `Parameter plane — critical-orbit escape (CPU)… ${pct}%`,
     (ms) =>
@@ -204,11 +206,12 @@ function renderTricorn(canvas: HTMLCanvasElement): void {
   canvas.height = TRICORN;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
+  const field = new Float32Array(TRICORN * TRICORN);
   chunkImageBands(
     ctx,
     TRICORN,
     12,
-    (image, y0, y1) => renderTricornBand(image, DEFAULT_TRICORN_VIEW, DEFAULT_TRICORN_OPTIONS, y0, y1),
+    (image, y0, y1) => renderTricornBand(image, DEFAULT_TRICORN_VIEW, DEFAULT_TRICORN_OPTIONS, y0, y1, field),
     "capT",
     (pct) => `Model space — the Tricorn z̄² + c… ${pct}%`,
     (ms) =>

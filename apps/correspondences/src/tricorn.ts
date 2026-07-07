@@ -82,9 +82,11 @@ export function renderTricornBand(
   opts: { maxIter: number; escapeR: number },
   y0: number,
   y1: number,
+  scratch?: Float32Array,
 ): void {
   const { width, height } = image;
-  const field = new Float32Array(width * height);
+  // Reuse a caller-owned scratch field across bands to avoid a full-frame allocation per chunk.
+  const field = scratch ?? new Float32Array(width * height);
   classifyTricornBand(field, width, height, view, opts, y0, y1);
   const sub = field.subarray(y0 * width, y1 * width);
   tricornFieldToImage(sub, image.data.subarray(y0 * width * 4, y1 * width * 4), opts.maxIter);
