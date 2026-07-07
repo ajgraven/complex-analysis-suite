@@ -1,88 +1,127 @@
 // apps/correspondences — the anti-holomorphic correspondence / Schwarz-reflection mating tool
-// (Phase 6, MIGRATION.md). Milestone A: render the deltoid Schwarz reflection's dynamical plane. The σ
-// engine is the verified src/deltoid.ts; rendering prefers the GPU fragment-shader path (src/gpu.ts,
-// interactive) and falls back to the CPU escape-time pass (src/render.ts) where WebGL2 is unavailable.
+// (Phase 6, MIGRATION.md). Two views side by side: the deltoid Schwarz reflection σ (Milestone A —
+// GPU fragment shader, CPU fallback) and its deleted correspondence's orbit-tree density (Milestone B —
+// CPU, chunked). Both rest on the verified src/deltoid.ts / src/correspondence.ts math.
 import { DEFAULT_VIEW, renderBand } from "./render.js";
 import { createDeltoidRenderer } from "./gpu.js";
+import { accumulateBand, densityToImage, DEFAULT_DENSITY } from "./correspondenceRender.js";
 
-const GPU_SIZE = 640;
-const CPU_SIZE = 240;
-const BAND = 6; // CPU-fallback rows per tick
+const SIGMA_GPU = 560;
+const SIGMA_CPU = 240;
+const CORR = 380;
 
-function shell(): HTMLCanvasElement | null {
+function setCap(id: string, text: string): void {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+function shell(): { sigma: HTMLCanvasElement; corr: HTMLCanvasElement } | null {
   const app = document.getElementById("app");
   if (!app) return null;
+  const cs = "width:100%;max-width:420px;display:block;border-radius:10px;border:1px solid #262b36";
   app.innerHTML = `
     <main>
       <h1>Correspondences</h1>
       <p class="tag">
-        Deltoid Schwarz reflection &sigma;(w) = conj(F(&phi;&#8315;&sup1;(w))), &phi;(&zeta;) =
-        &zeta; + 1/(2&zeta;&sup2;) — Milestone&nbsp;A.
+        The deltoid Schwarz reflection &sigma;(w) = conj(F(&phi;&#8315;&sup1;(w))) and its deleted
+        correspondence, &phi;(&zeta;) = &zeta; + 1/(2&zeta;&sup2;) — Milestone&nbsp;A + B.
       </p>
-      <canvas id="plane"
-        style="width:500px;max-width:100%;display:block;border-radius:10px;border:1px solid #262b36"></canvas>
-      <p class="status" id="cap">Rendering the dynamical plane…</p>
+      <div style="display:grid;gap:1.25rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))">
+        <figure style="margin:0">
+          <canvas id="sigma" style="${cs}"></canvas>
+          <figcaption id="capS" class="status">Rendering &sigma;…</figcaption>
+        </figure>
+        <figure style="margin:0">
+          <canvas id="corr" style="${cs}"></canvas>
+          <figcaption id="capC" class="status">Rendering the correspondence…</figcaption>
+        </figure>
+      </div>
     </main>`;
-  return document.getElementById("plane") as HTMLCanvasElement | null;
+  const sigma = document.getElementById("sigma") as HTMLCanvasElement | null;
+  const corr = document.getElementById("corr") as HTMLCanvasElement | null;
+  return sigma && corr ? { sigma, corr } : null;
 }
 
-function caption(text: string): void {
-  const cap = document.getElementById("cap");
-  if (cap) cap.textContent = text;
+// setTimeout (not requestAnimationFrame — suspended in hidden tabs) chunked loop.
+function chunk(step: (done: () => void) => void): void {
+  const tick = (): void => step(() => setTimeout(tick, 0));
+  setTimeout(tick, 0);
 }
 
-// CPU fallback: the GPU attempt bound `oldCanvas` to WebGL2, so render into a fresh 2D canvas. Chunked
-// across setTimeout ticks (rAF is suspended in hidden tabs) so the page stays responsive.
-function cpuFallback(oldCanvas: HTMLCanvasElement): void {
-  const canvas = document.createElement("canvas");
-  canvas.id = "plane";
-  canvas.width = CPU_SIZE;
-  canvas.height = CPU_SIZE;
-  canvas.style.cssText = oldCanvas.style.cssText;
-  oldCanvas.replaceWith(canvas);
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-  const image = ctx.createImageData(CPU_SIZE, CPU_SIZE);
-  const t0 = performance.now();
-  let y = 0;
-  const step = (): void => {
-    const y1 = Math.min(CPU_SIZE, y + BAND);
-    renderBand(image, DEFAULT_VIEW, y, y1);
-    ctx.putImageData(image, 0, 0);
-    y = y1;
-    if (y < CPU_SIZE) {
-      caption(`Rendering the dynamical plane (CPU fallback)… ${Math.round((100 * y) / CPU_SIZE)}%`);
-      setTimeout(step, 0);
-    } else {
-      caption(
-        `Deltoid dynamical plane — CPU escape-time fallback (${CPU_SIZE}×${CPU_SIZE}, ` +
-          `${Math.round(performance.now() - t0)} ms). WebGL2 unavailable in this browser.`,
-      );
-    }
-  };
-  setTimeout(step, 0);
-}
-
-function mount(): void {
-  const canvas = shell();
-  if (!canvas) return;
-
-  // Prefer the GPU fragment-shader render (interactive, high-res); fall back to the CPU pass.
-  canvas.width = GPU_SIZE;
-  canvas.height = GPU_SIZE;
+function renderSigma(canvas: HTMLCanvasElement): void {
+  canvas.width = SIGMA_GPU;
+  canvas.height = SIGMA_GPU;
   const gpu = createDeltoidRenderer(canvas);
   if (gpu) {
     const t0 = performance.now();
     gpu.render(DEFAULT_VIEW);
-    caption(
-      `Deltoid dynamical plane — GPU (WebGL2) escape-time render (${GPU_SIZE}×${GPU_SIZE}, ` +
-        `${Math.round(performance.now() - t0)} ms). φ⁻¹ is inverted per pixel by Newton in a fragment ` +
-        `shader (@cas/gpu). Central region is K; the tiling set is coloured by escape time, fading into ` +
-        `the limit set.`,
+    setCap(
+      "capS",
+      `σ dynamical plane — GPU render (${SIGMA_GPU}², ${Math.round(performance.now() - t0)} ms). ` +
+        `K at the centre; tiling set coloured by escape time; limit set in black.`,
     );
     return;
   }
-  cpuFallback(canvas);
+  // Fresh 2D canvas for the CPU fallback (the GPU attempt bound the canvas to WebGL2).
+  const fresh = document.createElement("canvas");
+  fresh.id = "sigma";
+  fresh.width = SIGMA_CPU;
+  fresh.height = SIGMA_CPU;
+  fresh.style.cssText = canvas.style.cssText;
+  canvas.replaceWith(fresh);
+  const ctx = fresh.getContext("2d");
+  if (!ctx) return;
+  const image = ctx.createImageData(SIGMA_CPU, SIGMA_CPU);
+  const t0 = performance.now();
+  let y = 0;
+  chunk((next) => {
+    const y1 = Math.min(SIGMA_CPU, y + 6);
+    renderBand(image, DEFAULT_VIEW, y, y1);
+    ctx.putImageData(image, 0, 0);
+    y = y1;
+    if (y < SIGMA_CPU) {
+      setCap("capS", `σ dynamical plane (CPU fallback)… ${Math.round((100 * y) / SIGMA_CPU)}%`);
+      next();
+    } else {
+      setCap("capS", `σ dynamical plane — CPU fallback (${SIGMA_CPU}², ${Math.round(performance.now() - t0)} ms).`);
+    }
+  });
+}
+
+function renderCorrespondence(canvas: HTMLCanvasElement): void {
+  canvas.width = CORR;
+  canvas.height = CORR;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const image = ctx.createImageData(CORR, CORR);
+  const density = new Float32Array(CORR * CORR);
+  const opts = DEFAULT_DENSITY;
+  const t0 = performance.now();
+  let sy = 0;
+  chunk((next) => {
+    const sy1 = Math.min(opts.seedGrid, sy + 3);
+    accumulateBand(density, CORR, CORR, DEFAULT_VIEW, opts, sy, sy1);
+    densityToImage(density, image, DEFAULT_VIEW);
+    ctx.putImageData(image, 0, 0);
+    sy = sy1;
+    if (sy < opts.seedGrid) {
+      setCap("capC", `Deleted-correspondence orbit-tree density… ${Math.round((100 * sy) / opts.seedGrid)}%`);
+      next();
+    } else {
+      setCap(
+        "capC",
+        `Deleted correspondence — orbit-tree density (${CORR}², ${Math.round(performance.now() - t0)} ms). ` +
+          `Forward dynamics of the 2:2 correspondence, log-scaled; K shaded.`,
+      );
+    }
+  });
+}
+
+function mount(): void {
+  const s = shell();
+  if (!s) return;
+  renderSigma(s.sigma);
+  renderCorrespondence(s.corr);
 }
 
 mount();
