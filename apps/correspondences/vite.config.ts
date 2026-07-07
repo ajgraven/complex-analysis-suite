@@ -5,6 +5,13 @@ import { defineConfig } from "vite";
 // project site), matching the other apps (CLAUDE.md decision 11).
 export default defineConfig({
   base: "./",
+  build: {
+    rollupOptions: {
+      // Multi-page: the four dynamical views (index.html) and the mating explorer (mating.html). Vite
+      // resolves these HTML inputs relative to the project root.
+      input: { main: "index.html", mating: "mating.html" },
+    },
+  },
   server: { port: 5175, strictPort: true },
   test: {
     environment: "node",

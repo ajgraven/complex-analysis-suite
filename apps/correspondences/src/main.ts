@@ -39,6 +39,7 @@ function shell(): {
         The deltoid Schwarz reflection &sigma;(w) = conj(F(&phi;&#8315;&sup1;(w))), its deleted
         correspondence, the family parameter plane &phi;<sub>a</sub>(z) = z + a/(2z&sup2;), and the
         model space (the Tricorn z&#772;&sup2; + c) — Milestone&nbsp;A + B + C.
+        <a href="./mating.html" style="color:var(--accent)">&rarr; Mating explorer</a>
       </p>
       <div style="display:grid;gap:1.25rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))">
         <figure style="margin:0">
