@@ -1,21 +1,28 @@
 // apps/correspondences — the anti-holomorphic correspondence / Schwarz-reflection mating tool
-// (Phase 6, MIGRATION.md). Two views side by side: the deltoid Schwarz reflection σ (Milestone A —
-// GPU fragment shader, CPU fallback) and its deleted correspondence's orbit-tree density (Milestone B —
-// CPU, chunked). Both rest on the verified src/deltoid.ts / src/correspondence.ts math.
+// (Phase 6, MIGRATION.md). Three views: the deltoid Schwarz reflection σ (Milestone A — GPU fragment
+// shader, CPU fallback), its deleted correspondence's orbit-tree density (Milestone B — CPU, chunked),
+// and the family PARAMETER plane φ_a = z + a/(2z²) coloured by critical-orbit escape (Milestone C —
+// CPU, chunked). All rest on the verified src/deltoid.ts / src/correspondence.ts / src/family.ts math.
 import { DEFAULT_VIEW, renderBand } from "./render.js";
 import { createDeltoidRenderer } from "./gpu.js";
 import { accumulateBand, densityToImage, DEFAULT_DENSITY } from "./correspondenceRender.js";
+import { DEFAULT_PARAM_OPTIONS, DEFAULT_PARAM_VIEW, renderParamBand } from "./paramPlane.js";
 
 const SIGMA_GPU = 560;
 const SIGMA_CPU = 240;
 const CORR = 380;
+const PARAM = 300;
 
 function setCap(id: string, text: string): void {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
 }
 
-function shell(): { sigma: HTMLCanvasElement; corr: HTMLCanvasElement } | null {
+function shell(): {
+  sigma: HTMLCanvasElement;
+  corr: HTMLCanvasElement;
+  param: HTMLCanvasElement;
+} | null {
   const app = document.getElementById("app");
   if (!app) return null;
   const cs = "width:100%;max-width:420px;display:block;border-radius:10px;border:1px solid #262b36";
@@ -23,8 +30,9 @@ function shell(): { sigma: HTMLCanvasElement; corr: HTMLCanvasElement } | null {
     <main>
       <h1>Correspondences</h1>
       <p class="tag">
-        The deltoid Schwarz reflection &sigma;(w) = conj(F(&phi;&#8315;&sup1;(w))) and its deleted
-        correspondence, &phi;(&zeta;) = &zeta; + 1/(2&zeta;&sup2;) — Milestone&nbsp;A + B.
+        The deltoid Schwarz reflection &sigma;(w) = conj(F(&phi;&#8315;&sup1;(w))), its deleted
+        correspondence, and the family parameter plane &phi;<sub>a</sub>(z) = z + a/(2z&sup2;) —
+        Milestone&nbsp;A + B + C.
       </p>
       <div style="display:grid;gap:1.25rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))">
         <figure style="margin:0">
@@ -35,11 +43,16 @@ function shell(): { sigma: HTMLCanvasElement; corr: HTMLCanvasElement } | null {
           <canvas id="corr" style="${cs}"></canvas>
           <figcaption id="capC" class="status">Rendering the correspondence…</figcaption>
         </figure>
+        <figure style="margin:0">
+          <canvas id="param" style="${cs}"></canvas>
+          <figcaption id="capP" class="status">Rendering the parameter plane…</figcaption>
+        </figure>
       </div>
     </main>`;
   const sigma = document.getElementById("sigma") as HTMLCanvasElement | null;
   const corr = document.getElementById("corr") as HTMLCanvasElement | null;
-  return sigma && corr ? { sigma, corr } : null;
+  const param = document.getElementById("param") as HTMLCanvasElement | null;
+  return sigma && corr && param ? { sigma, corr, param } : null;
 }
 
 // setTimeout (not requestAnimationFrame — suspended in hidden tabs) chunked loop.
@@ -117,11 +130,40 @@ function renderCorrespondence(canvas: HTMLCanvasElement): void {
   });
 }
 
+function renderParamPlane(canvas: HTMLCanvasElement): void {
+  canvas.width = PARAM;
+  canvas.height = PARAM;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const image = ctx.createImageData(PARAM, PARAM);
+  const opts = DEFAULT_PARAM_OPTIONS;
+  const t0 = performance.now();
+  let y = 0;
+  chunk((next) => {
+    const y1 = Math.min(PARAM, y + 4);
+    renderParamBand(image, DEFAULT_PARAM_VIEW, opts, y, y1);
+    ctx.putImageData(image, 0, 0);
+    y = y1;
+    if (y < PARAM) {
+      setCap("capP", `Parameter plane — critical-orbit escape… ${Math.round((100 * y) / PARAM)}%`);
+      next();
+    } else {
+      setCap(
+        "capP",
+        `Family parameter plane φ_a = z + a/(2z²) (${PARAM}², ${Math.round(performance.now() - t0)} ms). ` +
+          `Dark body ≈ critical/cusp orbits bounded (a=1 deltoid, a=0 disk); exterior by escape speed. ` +
+          `≈ exploratory — not a certified connectedness locus.`,
+      );
+    }
+  });
+}
+
 function mount(): void {
   const s = shell();
   if (!s) return;
   renderSigma(s.sigma);
   renderCorrespondence(s.corr);
+  renderParamPlane(s.param);
 }
 
 mount();
