@@ -10,6 +10,7 @@
 import { DELTOID, deltoidBoundary, type Complex } from "../deltoid.js";
 import { fundamentalEdges, IDEAL_VERTICES, tessellate } from "../models/idealTriangleGroup.js";
 import { glueTilePolylines } from "./glue.js";
+import { greenSigma } from "./mapSide.js";
 
 export type Space = "map" | "group" | "sigma";
 interface View {
@@ -80,14 +81,47 @@ function circle(ctx: CanvasRenderingContext2D, r: number, v: View, size: number,
 
 function drawMap(ctx: CanvasRenderingContext2D, size: number): void {
   const v = PANELS.map;
-  for (const rr of [0.4, 0.7]) circle(ctx, rr, v, size, MUTED, 1);
+  for (const rr of [0.4, 0.7, 1.12]) circle(ctx, rr, v, size, MUTED, 1); // equipotentials (Böttcher = id)
   for (let a = 0; a < 12; a++) {
     const th = (a * Math.PI) / 6;
-    stroke(ctx, [[0, 0], [Math.cos(th), Math.sin(th)]], v, size, MUTED, 0.8);
+    const root = a % 4 === 0; // a = 0, 4, 8 → the cube-root fixed rays θ = 0, 2π/3, 4π/3
+    const rr = root ? 1.15 : 1;
+    stroke(ctx, [[0, 0], [rr * Math.cos(th), rr * Math.sin(th)]], v, size, root ? MARK[a / 4] : MUTED, root ? 1.4 : 0.8);
   }
   circle(ctx, 1, v, size, EQUATOR, 2.4);
   dot(ctx, [0, 0], v, size, "#7b8aa0", 2.5);
   for (let k = 0; k < 3; k++) dot(ctx, IDEAL_VERTICES[k], v, size, MARK[k], 5);
+}
+
+// σ's ∞-basin equipotentials (the Böttcher modulus): a faint low-res raster of the Green's function,
+// banded by G, drawn behind the tessellation. Off-basin (G = 0, inside the tiling toward K) stays clear.
+function drawSigmaEquipotentials(ctx: CanvasRenderingContext2D, size: number): void {
+  const v = PANELS.sigma;
+  const LOW = 132;
+  const off = document.createElement("canvas");
+  off.width = LOW;
+  off.height = LOW;
+  const octx = off.getContext("2d");
+  if (!octx) return;
+  const img = octx.createImageData(LOW, LOW);
+  for (let py = 0; py < LOW; py++) {
+    for (let px = 0; px < LOW; px++) {
+      const g = greenSigma(
+        [v.cx + (px / LOW - 0.5) * 2 * v.half, v.cy + (0.5 - py / LOW) * 2 * v.half],
+        { maxIter: 40, escapeR: 1e4 },
+      );
+      const o = (py * LOW + px) * 4;
+      if (g > 0) {
+        const band = 0.5 + 0.5 * Math.cos(2 * Math.PI * g * 1.4);
+        img.data[o] = 70;
+        img.data[o + 1] = 110;
+        img.data[o + 2] = 165;
+        img.data[o + 3] = 20 + 46 * band;
+      }
+    }
+  }
+  octx.putImageData(img, 0, 0);
+  ctx.drawImage(off, 0, 0, size, size);
 }
 
 function drawGroup(ctx: CanvasRenderingContext2D, size: number): void {
@@ -107,6 +141,7 @@ function drawGroup(ctx: CanvasRenderingContext2D, size: number): void {
 
 function drawSigma(ctx: CanvasRenderingContext2D, size: number): void {
   const v = PANELS.sigma;
+  drawSigmaEquipotentials(ctx, size); // the map-side Böttcher modulus, behind the group tessellation
   const edges = fundamentalEdges(20);
   const tiles = tessellate(3);
   for (let d = 3; d >= 1; d--) {
