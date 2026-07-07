@@ -57,15 +57,15 @@ describe("deltoid Newton inverse + Schwarz reflection σ = conj ∘ F ∘ φ⁻�
       const expected: Complex = [Fz0[0], -Fz0[1]];
       const got = DELTOID.sigma(DELTOID.evalPhi(z0));
       expect(got).not.toBeNull();
-      if (got) near(got.value, expected, 8);
+      if (got) near(got, expected, 8);
     }
   });
 
-  it("σ carries a warm seed and maps boundary points to finite values", () => {
+  it("σ maps boundary points to finite values", () => {
     const z: Complex = [Math.cos(0.7), Math.sin(0.7)];
     const got = DELTOID.sigma(DELTOID.evalPhi(z));
     expect(got).not.toBeNull();
-    if (got) expect(Number.isFinite(got.value[0]) && Number.isFinite(got.value[1])).toBe(true);
+    if (got) expect(Number.isFinite(got[0]) && Number.isFinite(got[1])).toBe(true);
   });
 });
 

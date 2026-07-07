@@ -52,8 +52,8 @@ describe("GPU deltoid shader σ algorithm ↔ CPU engine agreement", () => {
       expect(ref).not.toBeNull();
       if (ref) {
         const got = shaderSigma(w);
-        expect(got[0]).toBeCloseTo(ref.value[0], 5);
-        expect(got[1]).toBeCloseTo(ref.value[1], 5);
+        expect(got[0]).toBeCloseTo(ref[0], 5);
+        expect(got[1]).toBeCloseTo(ref[1], 5);
       }
     }
   });
@@ -73,7 +73,7 @@ describe("GPU deltoid shader σ algorithm ↔ CPU engine agreement", () => {
         const ref = DELTOID.sigma(w);
         if (!ref) continue;
         const got = shaderSigma(w);
-        worst = Math.max(worst, Math.hypot(got[0] - ref.value[0], got[1] - ref.value[1]));
+        worst = Math.max(worst, Math.hypot(got[0] - ref[0], got[1] - ref[1]));
         checked++;
       }
     }

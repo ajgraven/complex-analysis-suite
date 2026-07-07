@@ -93,12 +93,10 @@ function escapeToInfinity(
   escapeR: number,
 ): number {
   let w = w0;
-  let seed: Complex | null = null;
   for (let n = 1; n <= maxIter; n++) {
-    const next = schwarz.sigma(w, seed);
+    const next = schwarz.sigma(w);
     if (!next) return maxIter;
-    seed = next.z;
-    w = next.value;
+    w = next;
     if (!A.isFinite(w) || A.abs(w) > escapeR) return n;
   }
   return maxIter;

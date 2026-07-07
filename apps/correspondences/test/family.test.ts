@@ -26,7 +26,7 @@ describe("correspondence family φ_a(z) = z + a/(2 z²)", () => {
     expect(got).not.toBeNull();
     expect(ref).not.toBeNull();
     if (!got || !ref) return; // narrows for TS; the asserts above already failed the test if null
-    near(got.value, ref.value, 10);
+    near(got, ref, 10);
     // the correspondence golden 1 ± √2 at z = [2,0] (Milestone B) still holds through the family builder
     const bs = m.correspondence.branches([2, 0]).sort((p, q) => p[0] - q[0]);
     expect(bs.length).toBe(2);

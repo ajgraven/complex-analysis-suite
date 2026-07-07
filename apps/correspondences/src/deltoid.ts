@@ -26,11 +26,10 @@ export interface UnboundedLaurentSchwarz {
   evalPhiDeriv(z: Complex): Complex;
   /** The Schwarz extension F(z) = c/z + Σₗ conj(F[l])·zˡ. */
   evalF(z: Complex): Complex;
-  /** φ⁻¹(w): the exterior branch |z|>1 (warm-seeded Newton, exact Durand–Kerner fallback); null if none (w ∉ Ω). */
-  invertPhi(w: Complex, seed?: Complex | null): Complex | null;
-  /** The Schwarz reflection σ(w) = conj(F(φ⁻¹(w))). Returns the value and the preimage z (a warm
-   *  seed for the next iterate), or null if the inverse fails. */
-  sigma(w: Complex, seed?: Complex | null): { value: Complex; z: Complex } | null;
+  /** φ⁻¹(w): the exterior branch |z|>1 (cold-seeded Newton, exact Durand–Kerner fallback); null if none (w ∉ Ω). */
+  invertPhi(w: Complex): Complex | null;
+  /** The Schwarz reflection σ(w) = conj(F(φ⁻¹(w))); null if the inverse fails (w ∉ Ω). */
+  sigma(w: Complex): Complex | null;
 }
 
 const NEWTON_MAX = 40;
@@ -76,11 +75,11 @@ export function makeUnboundedLaurentSchwarz(
     return acc;
   };
 
-  // Newton seed: for |w| large, z ≈ w/c dominates (φ(z) ≈ c·z at ∞); otherwise push just outside the
-  // unit disk along the same ray so the inverse lands in φ's domain {|z|>1}. A warm seed already
-  // outside the disk is reused.
-  const seedFor = (w: Complex, last: Complex | null | undefined): Complex => {
-    if (last && A.abs(last) > 1) return last;
+  // Newton seed — COLD, derived from w (never a warm/previous z): for |w| large, z ≈ w/c dominates
+  // (φ(z) ≈ c·z at ∞); otherwise push just outside the unit disk along the same ray so the inverse lands
+  // in φ's domain {|z|>1}. A warm seed reused after σ jumps far drifts onto an interior preimage (the
+  // "wings" bug); cold-seeding lands on the exterior branch directly, and the DK fallback covers any miss.
+  const seedFor = (w: Complex): Complex => {
     const cand: Complex = [w[0] / c, w[1] / c];
     const r = A.abs(cand);
     if (r > 1.05) return cand;
@@ -126,8 +125,8 @@ export function makeUnboundedLaurentSchwarz(
     return bestAbs >= 1 - 1e-6 ? best : null;
   };
 
-  const invertPhi = (w: Complex, seed?: Complex | null): Complex | null => {
-    let z = seedFor(w, seed);
+  const invertPhi = (w: Complex): Complex | null => {
+    let z = seedFor(w);
     let ok = false;
     for (let it = 0; it < NEWTON_MAX; it++) {
       const fz = A.sub(evalPhi(z), w);
@@ -147,12 +146,12 @@ export function makeUnboundedLaurentSchwarz(
     return exteriorRoot(w);
   };
 
-  const sigma = (w: Complex, seed?: Complex | null): { value: Complex; z: Complex } | null => {
-    const z = invertPhi(w, seed);
+  const sigma = (w: Complex): Complex | null => {
+    const z = invertPhi(w);
     if (!z) return null; // invertPhi guarantees the exterior branch |z|>1, so F(z)'s c/z pole is never hit
     const Sv = evalF(z);
     if (!A.isFinite(Sv)) return null;
-    return { value: conj(Sv), z };
+    return conj(Sv);
   };
 
   return { evalPhi, evalPhiDeriv, evalF, invertPhi, sigma };
@@ -227,12 +226,10 @@ export function escapeTime(
   const escapeR = opts.escapeR ?? Infinity;
   let w = w0;
   if (!isInOmega(w)) return { kind: "fundamental", n: 0 };
-  let seed: Complex | null = null;
   for (let n = 1; n <= maxIter; n++) {
-    const next = schwarz.sigma(w, seed);
+    const next = schwarz.sigma(w);
     if (!next) return { kind: "invalid", n: n - 1 };
-    seed = next.z;
-    w = next.value;
+    w = next;
     if (!A.isFinite(w) || A.abs(w) > escapeR) return { kind: "escaped", n };
     if (!isInOmega(w)) return { kind: "fundamental", n };
   }

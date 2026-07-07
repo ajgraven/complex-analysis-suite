@@ -19,7 +19,7 @@ export interface View {
 // The deltoid's cusps sit at |w| = 1.5; this frames K plus the surrounding tiling / limit set.
 export const DEFAULT_VIEW: View = { centerX: 0, centerY: 0, halfSpan: 2.1 };
 
-const BOUNDARY = deltoidBoundary(96); // enough vertices to resolve the 3 cusps for the in-Ω test
+const BOUNDARY = deltoidBoundary(256); // fine enough to resolve the 3 cusps for the in-Ω test
 const isInOmega = (w: Complex): boolean => !pointInPolygon(w, BOUNDARY);
 const ESCAPE_R = 40; // a few times the deltoid radius — comfortably beyond K
 // With the branch-correct φ⁻¹ the exterior tessellates cleanly (the true non-escaping set is a thin
