@@ -8,7 +8,7 @@
 // Mother-Body bipartite root-matching + high-precision local charts) is genuinely hard, real-analytic
 // (not holomorphic), and exploratory — never certified (RISKS.md §3). So the point CLOUD (all nodes) is
 // trustworthy — every node is a genuine correspondence branch of its parent — but the per-branch LABELS
-// are provisional. A render (next slice) scatters the cloud; the labels/edges are for structure.
+// are provisional. The density render (correspondenceRender.ts) scatters the cloud; edges are for structure.
 import type { Complex } from "./deltoid.js";
 import type { Correspondence } from "./correspondence.js";
 

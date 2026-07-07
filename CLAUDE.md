@@ -71,35 +71,19 @@ QD_SRC=<path-or-URL to QuadratureDomains>      # currently vanilla JS, no build
 ```
 `scripts/bootstrap-subtrees.sh` uses these to pull both apps in with history preserved.
 
-## Immediate task (this session)
+## Status (Phases 0–6 complete)
 
-Execute the runbook up to the first shared package:
+The runbook is fully executed. Phases 0–2 (workspace skeleton, unified tooling/tests, QD→Vite
+ESM-ification) and the shared-package extractions — **`@cas/core`** (Phase 3), **`@cas/interchange`**
+(Phase 4), **`@cas/expr` + `@cas/gpu`** (Phase 5) — are done and merged. **Phase 6**
+(`apps/correspondences`) is complete through Milestone C: the deltoid Schwarz reflection σ (CPU + GPU),
+its deleted correspondence (branch engine + orbit trees + density render), the family parameter plane,
+and the parabolic-Tricorn model coordinate. Three apps ride the five shared `@cas/*` packages.
 
-1. **Phase 0 — Genesis** ([MIGRATION Phase 0](docs/MIGRATION.md#phase-0--genesis-the-workspace-skeleton)):
-   workspace skeleton (`pnpm-workspace.yaml`, root `package.json` with
-   `packageManager`/`engines`, `.nvmrc`=22, `tsconfig.base.json`, ESLint flat config +
-   boundary rule, Prettier, `.gitignore`); pull in both apps via
-   `scripts/bootstrap-subtrees.sh` (history preserved); give each app a workspace
-   `package.json` (the QD app likely needs one created); stub `apps/launcher` listing the
-   two apps. **Do not modify app source in Phase 0.** Gate: both apps launch as before;
-   git history present.
-2. **Phase 1 — Tooling & tests** ([MIGRATION Phase 1](docs/MIGRATION.md#phase-1--unify-tooling-and-the-test-harness)):
-   shared tsconfig/eslint/prettier; **one Vitest runner** (port/adapt the Quadrature
-   app's `node-test.js` + `test/*.test.js`); a CI workflow running
-   install→lint→typecheck→test→build. Gate: `pnpm lint && pnpm typecheck && pnpm test &&
-   pnpm build` green from the root; both apps' original tests pass.
-3. **Phase 3 (first extraction) — `@cas/core`** ([MIGRATION Phase 3](docs/MIGRATION.md#phase-3--extract-cascore)):
-   start with **complex arithmetic**, then formal series, then polynomial/Durand–Kerner —
-   unifying the duplicated copies across both apps. Consolidate their unit tests into a
-   `@cas/core` golden corpus. Point both apps at the package and delete the dead copies.
-   **Benchmark the CPU orbit path before/after** (watch for regression). Gate: both apps
-   import `@cas/core`; duplicates gone; corpus + both suites green; no meaningful perf
-   regression.
+Deferred / exploratory (not started): further correspondence families (circle-and-cardioid → cubic
+Chebyshev → general d:d), analytic branch continuation through cusps (uncertified — RISKS §3), and QD
+Schwarz df64 deep-zoom. See [MIGRATION](docs/MIGRATION.md) for the phase specs and gates.
 
-> Phase 2 (QD→Vite ESM-ification) sits between 1 and 3 and is the largest mechanical
-> chunk; do it as its own reviewed step. Phases 4–6 (interchange + σ hand-off; gpu/expr;
-> `apps/correspondences`) come after and are specified in [MIGRATION](docs/MIGRATION.md).
-
-Work in small, reviewable commits. Pause at each phase gate for review before proceeding.
+Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo
 contents rather than assuming.

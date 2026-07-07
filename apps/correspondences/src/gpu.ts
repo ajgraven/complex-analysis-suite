@@ -159,7 +159,7 @@ export function createDeltoidRenderer(canvas: HTMLCanvasElement): GpuRenderer | 
   gl.uniform1i(u("uMask"), 0);
   gl.uniform2f(u("uMaskCenter"), maskCenter[0], maskCenter[1]);
   gl.uniform2f(u("uMaskHalfExtent"), maskHalf[0], maskHalf[1]);
-  gl.uniform1i(uMaxIter, 96); // Cardano inverse is O(1) per step, so afford deeper tiles near the limit set
+  gl.uniform1i(uMaxIter, 96); // cold-seed Newton inverse is cheap per step, so afford deeper tiles near the limit set
   gl.uniform1f(uEscapeR, 40);
 
   return {

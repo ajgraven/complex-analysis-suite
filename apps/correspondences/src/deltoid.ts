@@ -1,7 +1,7 @@
 // The deltoid Schwarz reflection — Milestone A (MIGRATION.md Phase 6). The deltoid is a classical
 // UNBOUNDED quadrature domain: Ω = ℂ \ K where K is the 3-cusped hypocycloid, and the conformal map
 // φ: {|z|>1} → Ω is the Laurent polynomial φ(z) = z + 1/(2 z²). Its Schwarz reflection is
-// σ(w) = conj(F(φ⁻¹(w))), with F the Schwarz extension and φ⁻¹ computed numerically (Newton).
+// σ(w) = conj(F(φ⁻¹(w))), with F the Schwarz extension and φ⁻¹ the exterior branch (Newton + DK fallback).
 //
 // This is a focused TypeScript reimplementation of the Quadrature Domains app's canonical
 // unbounded-Laurent σ (schwarz-common.mjs adaptUnbounded + sigma): correspondences may not import
@@ -26,7 +26,7 @@ export interface UnboundedLaurentSchwarz {
   evalPhiDeriv(z: Complex): Complex;
   /** The Schwarz extension F(z) = c/z + Σₗ conj(F[l])·zˡ. */
   evalF(z: Complex): Complex;
-  /** φ⁻¹(w) via Newton from a seed; null if it fails to converge to a point in |z|>1. */
+  /** φ⁻¹(w): the exterior branch |z|>1 (warm-seeded Newton, exact Durand–Kerner fallback); null if none (w ∉ Ω). */
   invertPhi(w: Complex, seed?: Complex | null): Complex | null;
   /** The Schwarz reflection σ(w) = conj(F(φ⁻¹(w))). Returns the value and the preimage z (a warm
    *  seed for the next iterate), or null if the inverse fails. */

@@ -1,12 +1,12 @@
 // CPU escape-time render of the deltoid Schwarz-reflection dynamical plane — Milestone A. Each pixel
 // maps to a point w; escapeTime classifies its σ-orbit and the colour encodes the outcome + iteration
 // count. Reuses the verified src/deltoid.ts σ directly (no GLSL reimplementation), so the picture is
-// trustworthy for checking against the literature deltoid. A GPU port (per-pixel Newton in a fragment
-// shader, à la QD's schwarz-webgl) is a later slice for interactivity.
+// trustworthy for checking against the literature deltoid. The GPU port in src/gpu.ts lifts this for
+// interactivity; this pass is the CPU reference / fallback.
 //
-// The pass is heavy (per σ-step it Newton-inverts φ and does a point-in-polygon in-Ω test), so it is
-// exposed as `renderBand` for row-chunked rendering — the caller yields between bands (setTimeout) to
-// keep the page responsive rather than freezing on one multi-second synchronous pass.
+// The pass is heavy (per σ-step it inverts φ — branch-correct Newton with a Durand–Kerner fallback —
+// and does a point-in-polygon in-Ω test), so it is exposed as `renderBand` for row-chunked rendering:
+// the caller yields between bands (setTimeout) to keep the page responsive rather than a long sync pass.
 import { DELTOID, deltoidBoundary, escapeTime, pointInPolygon, type Complex } from "./deltoid.js";
 
 export interface View {
