@@ -42,13 +42,15 @@ cvec ccbrt(cvec a) {
   return vec_(rr * cos(th), rr * sin(th));
 }
 
-// Newton solve φ_a(z)=w on |z|>1, warm-started from seed; ok=false on failure.
-cvec invertPhi(cvec w, cvec seed, cvec a, out bool ok) {
-  cvec z = seed;
-  float r = length(z);
-  if (r < 1.05) { z = (r < 1e-6) ? vec_(1.1, 0.0) : z * (1.05 / r); }
+// Exterior branch of φ_a^{-1} by Newton from a COLD seed derived from w (never a warm/previous z). σ_a
+// maps w far from its previous iterate, so a warm seed drifts onto an interior preimage of the degree-3
+// inverse and corrupts the orbit — the same branch bug fixed in the deltoid shader. Seeding from w lands
+// on the |z|>1 root, and Newton is float32-robust (unlike the Cardano closed form).
+cvec invertPhi(cvec w, cvec a, out bool ok) {
+  float r = length(w);
+  cvec z = (r > 1.3) ? w : w * (1.3 / max(r, 1e-6));
   ok = true;
-  for (int it = 0; it < 40; it++) {
+  for (int it = 0; it < 24; it++) {
     cvec fz = csub(phi_a(z, a), w);
     if (length(fz) < 1e-6) return z;
     cvec dz = dphi_a(z, a);
@@ -60,10 +62,9 @@ cvec invertPhi(cvec w, cvec seed, cvec a, out bool ok) {
   return z;
 }
 
-// σ_a(w) = conj(F_a(φ_a^{-1}(w))); zOut warm-starts the next step.
-cvec sigma_a(cvec w, cvec seed, cvec a, out bool ok, out cvec zOut) {
-  cvec z = invertPhi(w, seed, a, ok);
-  zOut = z;
+// σ_a(w) = conj(F_a(φ_a^{-1}(w))).
+cvec sigma_a(cvec w, cvec a, out bool ok) {
+  cvec z = invertPhi(w, a, ok);
   if (!ok) return w;
   if (length(z) < 1e-6) { ok = false; return w; }
   return cconj(fSch_a(z, a));
@@ -88,15 +89,12 @@ void main() {
 
   for (int k = 0; k < 3; k++) {
     cvec w = cmul(vec_(1.5, 0.0), root);         // critical value m_k = 1.5·ζ_k
-    cvec seed = w;
     int esc = uMaxIter;
     for (int n = 1; n <= 256; n++) {
       if (n > uMaxIter) break;
       bool ok;
-      cvec z;
-      cvec next = sigma_a(w, seed, a, ok, z);
+      cvec next = sigma_a(w, a, ok);
       if (!ok) { esc = uMaxIter; break; }        // left Ω inward — not an escape to ∞
-      seed = z;
       w = next;
       if (length(w) > uEscapeR) { esc = n; break; }
     }
