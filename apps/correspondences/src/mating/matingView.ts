@@ -2,7 +2,9 @@
 // deltoid mating (LLMM 1811.04979):
 //   A  z̄²            — the MAP side: 0-basin rays/equipotentials, the Julia circle (equator), cube-root fixed pts
 //   B  ideal △ group — the GROUP side: Γ tessellating 𝔻, the fundamental triangle, the equator circle
-//   C  σ  (deltoid)  — the MATING: the deltoid curve (equator) + the group tessellation via Ψ = φ∘η (glue.ts)
+//   C  σ  (deltoid)  — the MATING: the deltoid curve (equator), the group tessellation via Ψ = φ∘η (glue.ts),
+//                       AND the map-side Böttcher grid — equipotentials {G=const} + external rays {arg B=const}
+//                       transported in (mapSide). Both structures coexist in the exterior Ω: that IS the mating.
 // The equator is the same object in three coordinates (unit circle ↔ unit circle ↔ deltoid curve). M4 makes
 // it live: the shared angle θ. Hover any panel → the corresponding equator point lights up in all three; the
 // degree-2 equator map θ ↦ −2θ (which BOTH z̄² and the group's Nielsen map realise on the circle) is traced
@@ -10,7 +12,7 @@
 import { DELTOID, deltoidBoundary, type Complex } from "../deltoid.js";
 import { fundamentalEdges, IDEAL_VERTICES, tessellate } from "../models/idealTriangleGroup.js";
 import { glueTilePolylines } from "./glue.js";
-import { greenSigma } from "./mapSide.js";
+import { greenSigma, sigmaExternalRay } from "./mapSide.js";
 
 export type Space = "map" | "group" | "sigma";
 interface View {
@@ -29,6 +31,26 @@ const MARK = ["#ff6b63", "#57c76a", "#6a9bff"]; // cusp k = ideal vertex k = z̄
 const TEAL = ["#4a8078", "#6fb7ad", "#a6e6d9"];
 const FUND = "#cdeee6";
 const MUTED = "#3a4457";
+const RAY = "rgba(120,150,205,0.5)"; // σ external rays (map-side Böttcher grid), same blue as the equipotentials
+const RAY_HILITE = "#bcd0ff";
+
+// The σ external-ray fan (mapSide.sigmaExternalRay), traced once and cached: the map-side external angles
+// {arg B = 2πk/N} carried into the σ-plane. N is a multiple of 3 so the three cusp rays sit at k = 0, N/3, 2N/3.
+const RAY_COUNT = 24;
+const rayFanCache = new Map<number, Complex[][]>();
+function sigmaRayFan(count = RAY_COUNT): Complex[][] {
+  let fan = rayFanCache.get(count);
+  if (!fan) {
+    fan = [];
+    for (let k = 0; k < count; k++) fan.push(sigmaExternalRay((2 * Math.PI * k) / count, { gFloor: 0.01, step: 0.04 }));
+    rayFanCache.set(count, fan);
+  }
+  return fan;
+}
+function nearestRayIndex(theta: number): number {
+  const t = ((theta % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  return Math.round((t / (2 * Math.PI)) * RAY_COUNT) % RAY_COUNT;
+}
 
 function w2p(p: Complex, v: View, size: number): [number, number] {
   return [size / 2 + ((p[0] - v.cx) / (2 * v.half)) * size, size / 2 - ((p[1] - v.cy) / (2 * v.half)) * size];
@@ -139,9 +161,24 @@ function drawGroup(ctx: CanvasRenderingContext2D, size: number): void {
   for (let k = 0; k < 3; k++) dot(ctx, IDEAL_VERTICES[k], v, size, MARK[k], 5);
 }
 
+// The σ external rays: the map-side external angles {arg B = 2πk/N} transported into the σ-plane by the
+// Böttcher structure (gradient lines of G, traced in mapSide). Faint blue for the fan, the three cusp rays
+// in the cusp colours — they land at the three cusps, exactly where the equipotentials pinch to G = 0.
+function drawSigmaRays(ctx: CanvasRenderingContext2D, size: number): void {
+  const v = PANELS.sigma;
+  const fan = sigmaRayFan();
+  const per = RAY_COUNT / 3;
+  for (let k = 0; k < fan.length; k++) {
+    if (k % per === 0) continue; // cusp rays drawn on top, below
+    stroke(ctx, fan[k], v, size, RAY, 0.7);
+  }
+  for (let k = 0; k < 3; k++) stroke(ctx, fan[k * per], v, size, MARK[k], 1.3);
+}
+
 function drawSigma(ctx: CanvasRenderingContext2D, size: number): void {
   const v = PANELS.sigma;
   drawSigmaEquipotentials(ctx, size); // the map-side Böttcher modulus, behind the group tessellation
+  drawSigmaRays(ctx, size); // the map-side external angles, transported in
   const edges = fundamentalEdges(20);
   const tiles = tessellate(3);
   for (let d = 3; d >= 1; d--) {
@@ -195,6 +232,12 @@ export interface MatingState {
 /** Draw the interactive overlay for a panel: the hover marker and/or the shared doubling orbit. */
 export function overlay(ctx: CanvasRenderingContext2D, size: number, space: Space, state: MatingState): void {
   const v = PANELS[space];
+  // In σ, light up the transported external ray(s) under the marker/orbit — the map-side angle made visible.
+  if (space === "sigma") {
+    const fan = sigmaRayFan();
+    if (state.orbit) for (const a of state.orbit) stroke(ctx, fan[nearestRayIndex(a)], v, size, "rgba(255,214,130,0.6)", 1.4);
+    if (state.theta !== null) stroke(ctx, fan[nearestRayIndex(state.theta)], v, size, RAY_HILITE, 1.6);
+  }
   if (state.orbit && state.orbit.length) {
     const n = state.orbit.length;
     for (let i = 0; i < n; i++) {
