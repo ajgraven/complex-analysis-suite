@@ -112,12 +112,15 @@ export function makeUnboundedLaurentSchwarz(
   return { evalPhi, evalPhiDeriv, evalF, invertPhi, sigma };
 }
 
-/** The deltoid: c = 1, φ(z) = z + 1/(2 z²) (F₂ = ½, the only nonzero Laurent coefficient). */
-export const DELTOID = makeUnboundedLaurentSchwarz(1, [
+/** The deltoid: c = 1, φ(z) = z + 1/(2 z²) (F₂ = ½, the only nonzero Laurent coefficient). The (c, F)
+ *  are exported so the correspondence engine can build φ(w) = V from the same coefficients. */
+export const DELTOID_C = 1;
+export const DELTOID_F: readonly Complex[] = [
   [0, 0],
   [0, 0],
   [0.5, 0],
-]);
+];
+export const DELTOID = makeUnboundedLaurentSchwarz(DELTOID_C, DELTOID_F);
 
 /** Sample the deltoid boundary ∂Ω = φ(|z|=1): the 3-cusped hypocycloid (cusps at the cube roots of
  *  unity — φ(1) = 1.5). Used as the polygon for the in-Ω test. */
