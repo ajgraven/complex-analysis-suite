@@ -3,6 +3,7 @@
 // θ ↦ −2θ (the degree-2 equator map that both z̄² and the group's Nielsen map realise on the circle).
 // Each panel's static base is drawn once to an offscreen canvas; pointer events only blit + overlay.
 import {
+  drawFold,
   drawPanel,
   type MatingState,
   overlay,
@@ -12,6 +13,7 @@ import {
 } from "./matingView.js";
 
 const SIZE = 380;
+const FOLD_SIZE = 460;
 const SPACES: Space[] = ["map", "group", "sigma"];
 const LABELS: Record<Space, [string, string]> = {
   map: ["z̄²", "map side"],
@@ -30,6 +32,16 @@ const state: MatingState = { theta: null, orbit: null };
 let panels: PanelUI[] = [];
 let readout: HTMLElement | null = null;
 let orbitToken = 0; // bumping this cancels any in-flight orbit animation
+
+// M5 — the unmating/folding viewer (a 4th, independent canvas with a scrub slider + play/pause)
+let foldT = 0;
+let foldDir = 1;
+let foldToken = 0; // bumping this cancels the fold animation (pause / scrub)
+let foldPlaying = false;
+let foldCtx: CanvasRenderingContext2D | null = null;
+let foldSlider: HTMLInputElement | null = null;
+let foldBtn: HTMLButtonElement | null = null;
+let foldLabel: HTMLElement | null = null;
 
 function render(): void {
   for (const p of panels) {
@@ -71,6 +83,38 @@ function startOrbit(theta0: number): void {
   setTimeout(step, 380);
 }
 
+function renderFold(): void {
+  if (!foldCtx) return;
+  foldCtx.clearRect(0, 0, FOLD_SIZE, FOLD_SIZE);
+  drawFold(foldCtx, FOLD_SIZE, foldT);
+  if (foldLabel) {
+    foldLabel.textContent =
+      foldT < 0.04 ? "unmated · two disks" : foldT > 0.96 ? "mated · σ (deltoid)" : `welding · ${Math.round(foldT * 100)}%`;
+  }
+}
+
+function stopFold(): void {
+  foldPlaying = false;
+  foldToken++;
+  if (foldBtn) foldBtn.textContent = "▶ Play";
+}
+
+function startFold(): void {
+  foldPlaying = true;
+  if (foldBtn) foldBtn.textContent = "❚❚ Pause";
+  const token = ++foldToken;
+  const tick = (): void => {
+    if (token !== foldToken) return;
+    foldT += foldDir * 0.012;
+    if (foldT >= 1) { foldT = 1; foldDir = -1; } // ping-pong: fold, then unfold
+    else if (foldT <= 0) { foldT = 0; foldDir = 1; }
+    if (foldSlider) foldSlider.value = String(Math.round(foldT * 1000));
+    renderFold();
+    setTimeout(tick, 40); // setTimeout, not rAF (hidden-tab safe)
+  };
+  setTimeout(tick, 40);
+}
+
 function build(): void {
   const app = document.getElementById("app");
   if (!app) return;
@@ -91,6 +135,21 @@ function build(): void {
       </p>
       <div id="readout" class="status" style="min-height:1.25em;margin:0 0 0.9rem;color:#e8c07a"></div>
       <div style="display:grid;gap:1.25rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))">${figs}</div>
+      <section style="margin-top:1.8rem;border-top:1px solid #1c212b;padding-top:1.2rem">
+        <h2 style="font-size:1.05rem;margin:0 0 0.35rem">Unmating &mdash; fold the two disks into &sigma;</h2>
+        <p class="tag" style="margin:0 0 0.8rem">
+          A schematic (&asymp; illustrative) homotopy of the mating: the map disk's external <b style="color:#8ea6d8">rays</b>
+          and the group disk's <b style="color:#6fb7ad">tessellation</b>, sharing one <b style="color:#e8c07a">equator</b>,
+          fold into the single &sigma;-plane. Watch the equator circle grow three cusps and the group interior turn
+          inside-out to tile the exterior.
+        </p>
+        <div style="display:flex;gap:0.8rem;align-items:center;flex-wrap:wrap;margin-bottom:0.7rem">
+          <button id="fold-play" style="background:#1a1f29;color:#e8c07a;border:1px solid #2a3140;border-radius:6px;padding:0.35rem 0.85rem;cursor:pointer;font:inherit">&#9654; Play</button>
+          <input id="fold-slider" type="range" min="0" max="1000" value="0" style="flex:1;min-width:180px;accent-color:#e8c07a">
+          <span id="fold-label" class="status" style="color:#e8c07a;min-width:13ch"></span>
+        </div>
+        <canvas id="mate-fold" width="${FOLD_SIZE}" height="${FOLD_SIZE}" style="width:100%;max-width:${FOLD_SIZE}px;height:auto;display:block;border-radius:10px;border:1px solid #262b36;background:#0c0e12;margin:0 auto"></canvas>
+      </section>
     </main>`;
   readout = document.getElementById("readout");
   panels = SPACES.map((space): PanelUI | null => {
@@ -125,6 +184,25 @@ function build(): void {
     });
   }
   render();
+
+  // M5 fold viewer
+  const foldCanvas = document.getElementById("mate-fold");
+  if (foldCanvas instanceof HTMLCanvasElement) foldCtx = foldCanvas.getContext("2d");
+  const slider = document.getElementById("fold-slider");
+  foldSlider = slider instanceof HTMLInputElement ? slider : null;
+  const btn = document.getElementById("fold-play");
+  foldBtn = btn instanceof HTMLButtonElement ? btn : null;
+  foldLabel = document.getElementById("fold-label");
+  foldSlider?.addEventListener("input", () => {
+    stopFold(); // scrubbing pauses the animation
+    foldT = Number(foldSlider?.value ?? 0) / 1000;
+    renderFold();
+  });
+  foldBtn?.addEventListener("click", () => {
+    if (foldPlaying) stopFold();
+    else startFold();
+  });
+  renderFold();
 }
 
 build();

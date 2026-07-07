@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Complex } from "../src/deltoid.js";
-import { equatorPoint, pixelToWorld, pointerToTheta } from "../src/mating/matingView.js";
+import { equatorPoint, pixelToWorld, pointerToTheta, resample } from "../src/mating/matingView.js";
 
 const near = (a: Complex, b: Complex, p = 6): void => {
   expect(a[0]).toBeCloseTo(b[0], p);
@@ -29,5 +29,24 @@ describe("mating view — interactive equator coordinates", () => {
     const c = pixelToWorld(190, 190, "sigma", 380);
     expect(c[0]).toBeCloseTo(0.2, 6); // σ view is centred at cx = 0.2
     expect(c[1]).toBeCloseTo(0, 6);
+  });
+});
+
+describe("mating fold (M5) — polyline resampling", () => {
+  it("resample preserves endpoints and returns exactly n points", () => {
+    const poly: Complex[] = [[0, 0], [1, 0], [2, 0], [3, 0]];
+    const r = resample(poly, 7);
+    expect(r.length).toBe(7);
+    near(r[0], [0, 0]); // first endpoint kept
+    near(r[6], [3, 0]); // last endpoint kept
+    near(r[3], [1.5, 0]); // fractional index 3 → f = (3/6)*3 = 1.5 → midpoint of an evenly-spaced polyline
+  });
+
+  it("resample follows a bent polyline by fractional arc index", () => {
+    const bent: Complex[] = [[0, 0], [0, 2]]; // a single segment straight up
+    const r = resample(bent, 5);
+    expect(r.length).toBe(5);
+    near(r[2], [0, 1]); // halfway up
+    for (let i = 1; i < r.length; i++) expect(r[i][1]).toBeGreaterThan(r[i - 1][1]); // monotone along the segment
   });
 });

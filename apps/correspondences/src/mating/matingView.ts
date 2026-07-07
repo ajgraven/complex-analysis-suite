@@ -11,7 +11,7 @@
 // as an orbit on all three at once. All geometry comes from the tested M0/M1 modules; this file only draws.
 import { DELTOID, deltoidBoundary, type Complex } from "../deltoid.js";
 import { fundamentalEdges, IDEAL_VERTICES, tessellate } from "../models/idealTriangleGroup.js";
-import { glueTilePolylines } from "./glue.js";
+import { glue, glueTilePolylines } from "./glue.js";
 import { greenSigma, sigmaExternalRay } from "./mapSide.js";
 
 export type Space = "map" | "group" | "sigma";
@@ -257,5 +257,91 @@ export function overlay(ctx: CanvasRenderingContext2D, size: number, space: Spac
     ctx.lineWidth = 2;
     ctx.stroke();
     dot(ctx, p, v, size, "#ffffff", 3);
+  }
+}
+
+// ── M5: the unmating / folding animation ────────────────────────────────────────────────────────────
+// A homotopy from the two flat dynamical disks (t=0, "unmated") to the σ mating (t=1). Both ENDPOINTS use
+// the exact maps: the unit-circle equator ↦ the deltoid curve (equatorPoint); the group interior 𝔻 ↦ Ω
+// (glue = φ∘η — the η = 1/z̄ inversion everts the disk through the equator); the radial z̄² external rays ↦
+// σ's external rays (sigmaExternalRay). The straight-line path BETWEEN the endpoints is a schematic — an
+// ≈ illustration of the welding, not a conformal map. Watch the equator circle grow three cusps as it
+// welds (the θ↦−2θ fixed points) and the group tessellation turn inside-out to tile the exterior.
+
+const lerpC = (a: Complex, b: Complex, t: number): Complex => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+
+/** Resample a polyline to exactly n points by fractional index (endpoints preserved). */
+export function resample(poly: readonly Complex[], n: number): Complex[] {
+  const out: Complex[] = [];
+  const last = poly.length - 1;
+  for (let i = 0; i < n; i++) {
+    const f = (i / (n - 1)) * last;
+    const j = Math.min(Math.floor(f), last - 1);
+    const g = f - j;
+    out.push([poly[j][0] + (poly[j + 1][0] - poly[j][0]) * g, poly[j][1] + (poly[j + 1][1] - poly[j][1]) * g]);
+  }
+  return out;
+}
+
+const FOLD_RAY_N = 40;
+// Precomputed fold endpoints (the expensive parts: the traced ray fan and the glued tessellation), built once.
+let foldRibbons: { flat: Complex[]; curved: Complex[]; k: number }[] | null = null;
+let foldTessels: { flat: Complex[]; curved: Complex[]; depth: number }[] | null = null;
+
+function getFoldRibbons(): { flat: Complex[]; curved: Complex[]; k: number }[] {
+  if (foldRibbons) return foldRibbons;
+  foldRibbons = sigmaRayFan().map((ray, k) => {
+    const curved = resample(ray, FOLD_RAY_N); // σ external ray, ∞ → ∂K
+    const rOuter = Math.hypot(ray[0][0], ray[0][1]); // ≈ the tracer's start radius
+    const th = (2 * Math.PI * k) / RAY_COUNT;
+    const flat: Complex[] = []; // the flat z̄² external ray: radial, rOuter → the equator (r = 1)
+    for (let i = 0; i < FOLD_RAY_N; i++) {
+      const r = rOuter + (1 - rOuter) * (i / (FOLD_RAY_N - 1));
+      flat.push([r * Math.cos(th), r * Math.sin(th)]);
+    }
+    return { flat, curved, k };
+  });
+  return foldRibbons;
+}
+
+function getFoldTessels(): { flat: Complex[]; curved: Complex[]; depth: number }[] {
+  if (foldTessels) return foldTessels;
+  const edges = fundamentalEdges(18);
+  const out: { flat: Complex[]; curved: Complex[]; depth: number }[] = [];
+  for (const tile of tessellate(3)) {
+    for (const e of edges) {
+      const flat = e.map(tile.apply); // the flat tessellation edge in 𝔻
+      out.push({ flat, curved: flat.map(glue), depth: tile.depth }); // its image Ψ(edge) in Ω
+    }
+  }
+  out.sort((a, b) => b.depth - a.depth); // deep tiles first, so shallow draw on top
+  foldTessels = out;
+  return foldTessels;
+}
+
+/** Draw the unmating/folding homotopy at t ∈ [0,1]: the two flat disks (0) weld into the σ mating (1). */
+export function drawFold(ctx: CanvasRenderingContext2D, size: number, t: number): void {
+  const v: View = { cx: 0.2 * t, cy: 0, half: 1.6 + 1.1 * t }; // zoom out from the disk to the σ view as it folds
+  const per = RAY_COUNT / 3;
+  // group side: the interior tessellation everting through the equator to tile Ω
+  for (const ts of getFoldTessels()) {
+    stroke(ctx, ts.flat.map((p, i) => lerpC(p, ts.curved[i], t)), v, size, TEAL[Math.min(ts.depth, 2)], 1);
+  }
+  // map side: the radial z̄² rays bending into σ's external rays (cusp rays coloured)
+  for (const rb of getFoldRibbons()) {
+    const isCusp = rb.k % per === 0;
+    stroke(ctx, rb.flat.map((p, i) => lerpC(p, rb.curved[i], t)), v, size, isCusp ? MARK[rb.k / per] : RAY, isCusp ? 1.3 : 0.7);
+  }
+  // the equator: unit circle welding into the deltoid curve
+  const eq: Complex[] = [];
+  for (let i = 0; i <= 180; i++) {
+    const th = (i / 180) * 2 * Math.PI;
+    eq.push(lerpC([Math.cos(th), Math.sin(th)], equatorPoint("sigma", th), t));
+  }
+  stroke(ctx, eq, v, size, EQUATOR, 2.4, true);
+  // the three pinch points: cube roots on the circle → the three cusps 1.5·root
+  for (let k = 0; k < 3; k++) {
+    const root = IDEAL_VERTICES[k];
+    dot(ctx, lerpC(root, [1.5 * root[0], 1.5 * root[1]], t), v, size, MARK[k], 5);
   }
 }
