@@ -1545,10 +1545,13 @@ import _QD from '../solver.mjs';
       return polys.map((p) => p.subst(sub)).filter((p) => !p.isZero());
     }
 
-    // Core reim transform on a given poly list (see currentReimSystem).
-    function _reimTransform(polys, realVars) {
+    // Core reim transform on a given poly list (see currentReimSystem). realVars are
+    // held real (v = x, no y); imagVars are held purely imaginary (v = i·y, Re v ≡ 0, no x)
+    // so an "assume imaginary" verdict does not carry a spurious real degree of freedom.
+    function _reimTransform(polys, realVars, imagVars) {
       const S = getSym();
       const realSet = new Set(realVars || assumeOf().realVars);
+      const imagSet = new Set(imagVars || assumeOf().imagVars);
       const I = S.mpolyConst(S.gaussInt(0, 1));
       const allVars = new Set();
       for (const p of polys) for (const v of p.vars()) allVars.add(v);
@@ -1556,7 +1559,8 @@ import _QD from '../solver.mjs';
       for (const v of allVars) {
         const prim = _primalName(v);
         const xn = prim + '__re', yn = prim + '__im';
-        if (realSet.has(prim)) { sub[v] = S.mpolyVar(xn); }       // assumed real ⇒ x only
+        if (realSet.has(prim)) { sub[v] = S.mpolyVar(xn); }                 // assumed real ⇒ x only
+        else if (imagSet.has(prim)) { const iy = I.mul(S.mpolyVar(yn)); sub[v] = (prim !== v) ? iy.neg() : iy; }  // assumed imaginary ⇒ ±i·y (Re ≡ 0)
         else { const x = S.mpolyVar(xn), y = S.mpolyVar(yn); sub[v] = (prim !== v) ? x.sub(I.mul(y)) : x.add(I.mul(y)); }
       }
       const out = [];
@@ -1581,7 +1585,7 @@ import _QD from '../solver.mjs';
       // branch's — so classifying an off-screen branch (A6) reads its own assumptions (C3).
       const track = (ids && ids.length) ? trackOf(ids[0]) : activeTrackId;
       const polys = _applyParamValues(inputs.map((n) => n.poly), opts.paramValues);
-      return _reimTransform(polys, assumeOf(track).realVars);
+      return _reimTransform(polys, assumeOf(track).realVars, assumeOf(track).imagVars);
     }
 
     // Existence / uniqueness verdict for the current system, computed on the REAL (reim)

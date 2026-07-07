@@ -362,13 +362,21 @@ import _QD from './solver.mjs';
       const c1Pow = [FRatFn.fromInt(1)];
       for (let l = 1; l <= mj; l++) c1Pow.push(c1Pow[l - 1].mul(phiS[1]));
 
-      // C_{j,k} = Σ_{l≥k} conj(c_l)·c_1^l·[ζ^{l−k}] u^{−l}.
+      // C_{j,k} = Σ_{l≥k} A_{j,l}·c_1^l·[ζ^{l−k}] u^{−l}.
+      // Derivation: the Schwarz function pulls back through the uniformization as
+      // S(φ(z)) = φ*(1/z) = Σ_l A_{j,l}/(z−z_j)^l — the z↦1/z̄ disk reflection turns the
+      // parametric map's Blaschke factors into simple poles at z_j with the MAP coefficients
+      // A_{j,l} as numerators. Re-expanding that principal part in w−a_j via the local
+      // reversion (u, c_1) gives the sum below. NOTE the numerator is the map coefficient
+      // A_{j,l} (= rfVar(V.A(j,l))), NOT conj(c_l): the latter drops the Blaschke–Jacobian
+      // factor and is correct only when z_j = 0 (e.g. C_{1,1} must be |φ′(z_1)|²·(1−|z_1|²)²,
+      // not |φ′(z_1)|²).
       for (let k = 1; k <= mj; k++) {
         let acc = FRatFn.fromInt(0);
         for (let l = k; l <= mj; l++) {
           const idx = l - k;
           if (idx >= uPowNeg[l].length) continue;
-          acc = acc.add(conjFR(S, phiS[l]).mul(c1Pow[l]).mul(uPowNeg[l][idx]));
+          acc = acc.add(rfVar(V.A(j, l)).mul(c1Pow[l]).mul(uPowNeg[l][idx]));
         }
         const eq = rfVar(V.C(j, k)).sub(acc);
         star.push({ label: '(★_S)_{' + j + ',' + k + '}', eq: eq.clearDenominators() });

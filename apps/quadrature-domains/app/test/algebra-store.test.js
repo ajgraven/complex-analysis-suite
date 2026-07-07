@@ -614,6 +614,27 @@ module.exports = async function run() {
        typeof sra.ok === 'boolean' && sra.ok === sr.ok);
   }
 
+  // ---- assume-imaginary must drop the real part in the verdict system ----
+  // Regression: _reimTransform consulted realVars but not imagVars, so after assumeImaginary
+  // (v̄→−v, leaving primal v) the surviving v got the full x+iy split, reintroducing a spurious
+  // v__re degree of freedom (Re v should be ≡ 0) and inflating the existence/uniqueness count.
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(QE.generateClassicalBounded(hData));
+    const plain = st.currentReimSystem().vars;
+    const target = st.baseVariables().find((v) => plain.includes(v + '__re') && plain.includes(v + '__im'));
+    ok('assumeImaginary regression: found a genuinely-complex base variable to test', !!target);
+    if (target) {
+      const r = st.assumeImaginary([target]);
+      ok('assumeImaginary: appends a column', r.ok);
+      const reimI = st.currentReimSystem();
+      ok('assumeImaginary: keeps ' + target + '__im (an imaginary variable’s one real DOF)',
+         reimI.vars.includes(target + '__im'));
+      ok('assumeImaginary: DROPS ' + target + '__re (Re ≡ 0 — no spurious real DOF)',
+         !reimI.vars.includes(target + '__re'));
+    }
+  }
+
   // ---- per-column stats (UI lane headers) ----
   {
     const st = QD.AlgebraStore.create();

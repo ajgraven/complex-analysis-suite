@@ -439,6 +439,34 @@ module.exports = async function run() {
       ok('schwarz: residual ≈0 at the SOLVER solution (cardioid)',
          QE.residualAtSolution(swFixed, sol.primary.phi, hData).max < 1e-6);
     }
+
+    // z_j ≠ 0 ORACLE — the case the other Schwarz tests miss (all use z_j=0). A genuine
+    // 2-pole QD has nonzero pole preimages; the (★_S) block must carry the disk-reflection
+    // Blaschke factor (C_{j,1} = A_{j,1}·φ′(z_j) = |φ′(z_j)|²·(1−|z_j|²)² for a simple pole),
+    // NOT the local |φ′(z_j)|². Build the EXACT h from a chosen φ, then check the residual.
+    {
+      const cmul = (a, b) => ({ re: a.re * b.re - a.im * b.im, im: a.re * b.im + a.im * b.re });
+      const cadd = (a, b) => ({ re: a.re + b.re, im: a.im + b.im });
+      const csub = (a, b) => ({ re: a.re - b.re, im: a.im - b.im });
+      const cdiv = (a, b) => { const d = b.re * b.re + b.im * b.im; return { re: (a.re * b.re + a.im * b.im) / d, im: (a.im * b.re - a.re * b.im) / d }; };
+      const cconj = (a) => ({ re: a.re, im: -a.im });
+      const ONE = { re: 1, im: 0 };
+      const w0z = { re: 0.1, im: 0 };
+      // A_{j,1} real ⇒ the gauge Σ Im(A_{j,1}) = 0 holds; z_j complex & ≠ 0 exercises the reflection.
+      const branchesZ = [
+        { z: { re: 0.3, im: 0 }, A: [{ re: 0.5, im: 0 }] },
+        { z: { re: -0.2, im: 0.1 }, A: [{ re: 0.4, im: 0 }] },
+      ];
+      // φ(z) = w₀ + Σ Ā_j·z/(1−z̄_j z);  φ′(z) = Σ Ā_j/(1−z̄_j z)².
+      const evalPhiZ = (z) => { let r = { ...w0z }; for (const br of branchesZ) r = cadd(r, cmul(cconj(br.A[0]), cdiv(z, csub(ONE, cmul(cconj(br.z), z))))); return r; };
+      const evalPhiPZ = (z) => { let r = { re: 0, im: 0 }; for (const br of branchesZ) { const d = csub(ONE, cmul(cconj(br.z), z)); r = cadd(r, cmul(cconj(br.A[0]), cdiv(ONE, cmul(d, d)))); } return r; };
+      const hDataZ = { poles: branchesZ.map((br) => ({ a: evalPhiZ(br.z), principal: [cmul(br.A[0], evalPhiPZ(br.z))] })) };
+      const phiZ = { unbounded: false, w0: w0z, branches: branchesZ };
+      ok('schwarz z_j≠0: ORACLE — residual ≈0 at the exact 2-pole φ (catches the missing Blaschke factor)',
+         QE.residualAtSolution(QE.generateSchwarzBounded(hDataZ), phiZ, hDataZ).max < 1e-8);
+      ok('schwarz z_j≠0: classical (★) residual also ≈0 (same variety)',
+         QE.residualAtSolution(QE.generateClassicalBounded(hDataZ), phiZ, hDataZ).max < 1e-8);
+    }
   }
 };
 
