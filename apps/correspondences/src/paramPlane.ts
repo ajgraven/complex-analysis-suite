@@ -64,8 +64,7 @@ export function classifyParamBand(
 
 /** Colour a classified field into `image`: in-locus (n ≥ maxIter) is the dark body; escaped parameters
  *  ramp warm→cool by escape speed (fast escape bright, slow escape toward the body). */
-export function paramFieldToImage(field: Float32Array, image: ImageData, maxIter: number): void {
-  const { data } = image;
+export function paramFieldToImage(field: Float32Array, data: Uint8ClampedArray, maxIter: number): void {
   for (let i = 0; i < field.length; i++) {
     const n = field[i];
     const o = i * 4;
@@ -102,6 +101,5 @@ export function renderParamBand(
   classifyParamBand(field, width, height, view, opts, y0, y1);
   // colour just the band we filled (leave other rows untouched for chunked rendering)
   const sub = field.subarray(y0 * width, y1 * width);
-  const bandImage = { data: image.data.subarray(y0 * width * 4, y1 * width * 4) } as ImageData;
-  paramFieldToImage(sub, bandImage, opts.maxIter);
+  paramFieldToImage(sub, image.data.subarray(y0 * width * 4, y1 * width * 4), opts.maxIter);
 }

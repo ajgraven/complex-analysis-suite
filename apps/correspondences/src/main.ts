@@ -1,8 +1,9 @@
 // apps/correspondences — the anti-holomorphic correspondence / Schwarz-reflection mating tool
-// (Phase 6, MIGRATION.md). Three views: the deltoid Schwarz reflection σ (Milestone A — GPU fragment
+// (Phase 6, MIGRATION.md). Four views: the deltoid Schwarz reflection σ (Milestone A — GPU fragment
 // shader, CPU fallback), its deleted correspondence's orbit-tree density (Milestone B — CPU, chunked),
-// and the family PARAMETER plane φ_a = z + a/(2z²) coloured by critical-orbit escape (Milestone C —
-// CPU, chunked). All rest on the verified src/deltoid.ts / src/correspondence.ts / src/family.ts math.
+// the family PARAMETER plane φ_a = z + a/(2z²) coloured by critical-orbit escape (Milestone C — GPU, CPU
+// fallback), and the model space (the Tricorn z̄² + c, via @cas/expr). All rest on the verified
+// src/deltoid.ts / src/correspondence.ts / src/family.ts / src/tricorn.ts math.
 import { DEFAULT_VIEW, renderBand } from "./render.js";
 import { createDeltoidRenderer } from "./gpu.js";
 import { accumulateBand, densityToImage, DEFAULT_DENSITY } from "./correspondenceRender.js";
@@ -71,6 +72,46 @@ function chunk(step: (done: () => void) => void): void {
   setTimeout(tick, 0);
 }
 
+// Shared chunked CPU renderer: fills the canvas in row-bands of `rowsPerTick`, yielding between bands
+// (setTimeout) so the page stays responsive, updating `capId` with progress then the final caption. Used
+// by the σ / parameter CPU fallbacks and the Tricorn — all pure image-band renders.
+function chunkImageBands(
+  ctx: CanvasRenderingContext2D,
+  size: number,
+  rowsPerTick: number,
+  renderRows: (image: ImageData, y0: number, y1: number) => void,
+  capId: string,
+  progress: (pct: number) => string,
+  done: (ms: number) => string,
+): void {
+  const image = ctx.createImageData(size, size);
+  const t0 = performance.now();
+  let y = 0;
+  chunk((next) => {
+    const y1 = Math.min(size, y + rowsPerTick);
+    renderRows(image, y, y1);
+    ctx.putImageData(image, 0, 0);
+    y = y1;
+    if (y < size) {
+      setCap(capId, progress(Math.round((100 * y) / size)));
+      next();
+    } else {
+      setCap(capId, done(Math.round(performance.now() - t0)));
+    }
+  });
+}
+
+// Swap the WebGL-bound canvas for a fresh 2D one (a canvas can't change context type) for a CPU fallback.
+function freshCanvas(old: HTMLCanvasElement, id: string, size: number): CanvasRenderingContext2D | null {
+  const fresh = document.createElement("canvas");
+  fresh.id = id;
+  fresh.width = size;
+  fresh.height = size;
+  fresh.style.cssText = old.style.cssText;
+  old.replaceWith(fresh);
+  return fresh.getContext("2d");
+}
+
 function renderSigma(canvas: HTMLCanvasElement): void {
   canvas.width = SIGMA_GPU;
   canvas.height = SIGMA_GPU;
@@ -85,30 +126,17 @@ function renderSigma(canvas: HTMLCanvasElement): void {
     );
     return;
   }
-  // Fresh 2D canvas for the CPU fallback (the GPU attempt bound the canvas to WebGL2).
-  const fresh = document.createElement("canvas");
-  fresh.id = "sigma";
-  fresh.width = SIGMA_CPU;
-  fresh.height = SIGMA_CPU;
-  fresh.style.cssText = canvas.style.cssText;
-  canvas.replaceWith(fresh);
-  const ctx = fresh.getContext("2d");
+  const ctx = freshCanvas(canvas, "sigma", SIGMA_CPU);
   if (!ctx) return;
-  const image = ctx.createImageData(SIGMA_CPU, SIGMA_CPU);
-  const t0 = performance.now();
-  let y = 0;
-  chunk((next) => {
-    const y1 = Math.min(SIGMA_CPU, y + 6);
-    renderBand(image, DEFAULT_VIEW, y, y1);
-    ctx.putImageData(image, 0, 0);
-    y = y1;
-    if (y < SIGMA_CPU) {
-      setCap("capS", `σ dynamical plane (CPU fallback)… ${Math.round((100 * y) / SIGMA_CPU)}%`);
-      next();
-    } else {
-      setCap("capS", `σ dynamical plane — CPU fallback (${SIGMA_CPU}², ${Math.round(performance.now() - t0)} ms).`);
-    }
-  });
+  chunkImageBands(
+    ctx,
+    SIGMA_CPU,
+    6,
+    (image, y0, y1) => renderBand(image, DEFAULT_VIEW, y0, y1),
+    "capS",
+    (pct) => `σ dynamical plane (CPU fallback)… ${pct}%`,
+    (ms) => `σ dynamical plane — CPU fallback (${SIGMA_CPU}², ${ms} ms).`,
+  );
 }
 
 function renderCorrespondence(canvas: HTMLCanvasElement): void {
@@ -156,34 +184,19 @@ function renderParamPlane(canvas: HTMLCanvasElement): void {
     );
     return;
   }
-  // Fresh 2D canvas for the CPU fallback (the GPU attempt bound the canvas to WebGL2).
-  const fresh = document.createElement("canvas");
-  fresh.id = "param";
-  fresh.width = PARAM_CPU;
-  fresh.height = PARAM_CPU;
-  fresh.style.cssText = canvas.style.cssText;
-  canvas.replaceWith(fresh);
-  const ctx = fresh.getContext("2d");
+  const ctx = freshCanvas(canvas, "param", PARAM_CPU);
   if (!ctx) return;
-  const image = ctx.createImageData(PARAM_CPU, PARAM_CPU);
-  const t0 = performance.now();
-  let y = 0;
-  chunk((next) => {
-    const y1 = Math.min(PARAM_CPU, y + 4);
-    renderParamBand(image, DEFAULT_PARAM_VIEW, opts, y, y1);
-    ctx.putImageData(image, 0, 0);
-    y = y1;
-    if (y < PARAM_CPU) {
-      setCap("capP", `Parameter plane — critical-orbit escape (CPU)… ${Math.round((100 * y) / PARAM_CPU)}%`);
-      next();
-    } else {
-      setCap(
-        "capP",
-        `Family parameter plane φ_a = z + a/(2z²) — CPU fallback (${PARAM_CPU}², ${Math.round(performance.now() - t0)} ms). ` +
-          `Dark body ≈ critical/cusp orbits bounded (a=1 deltoid, a=0 disk). ≈ exploratory — not certified.`,
-      );
-    }
-  });
+  chunkImageBands(
+    ctx,
+    PARAM_CPU,
+    4,
+    (image, y0, y1) => renderParamBand(image, DEFAULT_PARAM_VIEW, opts, y0, y1),
+    "capP",
+    (pct) => `Parameter plane — critical-orbit escape (CPU)… ${pct}%`,
+    (ms) =>
+      `Family parameter plane φ_a = z + a/(2z²) — CPU fallback (${PARAM_CPU}², ${ms} ms). ` +
+      `Dark body ≈ critical/cusp orbits bounded (a=1 deltoid, a=0 disk). ≈ exploratory — not certified.`,
+  );
 }
 
 function renderTricorn(canvas: HTMLCanvasElement): void {
@@ -191,27 +204,18 @@ function renderTricorn(canvas: HTMLCanvasElement): void {
   canvas.height = TRICORN;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-  const image = ctx.createImageData(TRICORN, TRICORN);
-  const opts = DEFAULT_TRICORN_OPTIONS;
-  const t0 = performance.now();
-  let y = 0;
-  chunk((next) => {
-    const y1 = Math.min(TRICORN, y + 12);
-    renderTricornBand(image, DEFAULT_TRICORN_VIEW, opts, y, y1);
-    ctx.putImageData(image, 0, 0);
-    y = y1;
-    if (y < TRICORN) {
-      setCap("capT", `Model space — the Tricorn z̄² + c… ${Math.round((100 * y) / TRICORN)}%`);
-      next();
-    } else {
-      setCap(
-        "capT",
-        `Model space — the Tricorn z̄² + c (${TRICORN}², ${Math.round(performance.now() - t0)} ms), via @cas/expr ` +
-          `(= CD's tricorn preset). The family is conjectured to straighten INTO the parabolic Tricorn; ` +
-          `the straightening map a→c is ≈ exploratory and not computed here.`,
-      );
-    }
-  });
+  chunkImageBands(
+    ctx,
+    TRICORN,
+    12,
+    (image, y0, y1) => renderTricornBand(image, DEFAULT_TRICORN_VIEW, DEFAULT_TRICORN_OPTIONS, y0, y1),
+    "capT",
+    (pct) => `Model space — the Tricorn z̄² + c… ${pct}%`,
+    (ms) =>
+      `Model space — the Tricorn z̄² + c (${TRICORN}², ${ms} ms), via @cas/expr (= CD's tricorn preset). ` +
+      `The family is conjectured to straighten INTO the parabolic Tricorn; ` +
+      `the straightening map a→c is ≈ exploratory and not computed here.`,
+  );
 }
 
 function mount(): void {

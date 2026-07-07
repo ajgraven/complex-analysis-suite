@@ -149,8 +149,7 @@ export function makeUnboundedLaurentSchwarz(
 
   const sigma = (w: Complex, seed?: Complex | null): { value: Complex; z: Complex } | null => {
     const z = invertPhi(w, seed);
-    if (!z) return null;
-    if (A.abs(z) < 1e-14) return null; // the c/z pole of F at z=0 (safety; the exterior inverse avoids it)
+    if (!z) return null; // invertPhi guarantees the exterior branch |z|>1, so F(z)'s c/z pole is never hit
     const Sv = evalF(z);
     if (!A.isFinite(Sv)) return null;
     return { value: conj(Sv), z };
@@ -203,8 +202,6 @@ export interface EscapeResult {
   kind: EscapeKind;
   /** Iterations taken. */
   n: number;
-  /** Last iterate. */
-  lastW: Complex;
 }
 
 export interface EscapeOptions {
@@ -229,15 +226,15 @@ export function escapeTime(
   const maxIter = opts.maxIter ?? 64;
   const escapeR = opts.escapeR ?? Infinity;
   let w = w0;
-  if (!isInOmega(w)) return { kind: "fundamental", n: 0, lastW: w };
+  if (!isInOmega(w)) return { kind: "fundamental", n: 0 };
   let seed: Complex | null = null;
   for (let n = 1; n <= maxIter; n++) {
     const next = schwarz.sigma(w, seed);
-    if (!next) return { kind: "invalid", n: n - 1, lastW: w };
+    if (!next) return { kind: "invalid", n: n - 1 };
     seed = next.z;
     w = next.value;
-    if (!A.isFinite(w) || A.abs(w) > escapeR) return { kind: "escaped", n, lastW: w };
-    if (!isInOmega(w)) return { kind: "fundamental", n, lastW: w };
+    if (!A.isFinite(w) || A.abs(w) > escapeR) return { kind: "escaped", n };
+    if (!isInOmega(w)) return { kind: "fundamental", n };
   }
-  return { kind: "interior", n: maxIter, lastW: w };
+  return { kind: "interior", n: maxIter };
 }

@@ -27,11 +27,6 @@ const tricornMap = makeComplexFn(parse("conjugate(z^2)+c"));
 export const DEFAULT_TRICORN_VIEW: ParamView = { centerX: 0, centerY: 0, halfSpan: 1.65 };
 export const DEFAULT_TRICORN_OPTIONS = { maxIter: 64, escapeR: 2 };
 
-// The deltoid a=1 is the family's parabolic centre (its cusp is a parabolic fixed point). Its ANALOGUE
-// in the model is the parabolic root of the Tricorn's principal component on the positive real axis,
-// c = 1/4 (z̄²+c has a parabolic fixed point there) — marked for orientation, NOT a computed straightening.
-export const TRICORN_PARABOLIC_ROOT: Complex = [0.25, 0];
-
 /** Escape time of the critical orbit (from z=0) of z ↦ z̄² + c. maxIter ⟹ c is in the Tricorn. */
 export function tricornEscape(c: Complex, maxIter = DEFAULT_TRICORN_OPTIONS.maxIter, escapeR = DEFAULT_TRICORN_OPTIONS.escapeR): number {
   let z: Complex = [0, 0];
@@ -62,8 +57,7 @@ export function classifyTricornBand(
 
 /** Colour a classified Tricorn field: in-set (n ≥ maxIter) a dark teal body (distinct from the amber
  *  parameter plane, to read as the *model* space); escaped ramps teal→gold by escape speed. */
-export function tricornFieldToImage(field: Float32Array, image: ImageData, maxIter: number): void {
-  const { data } = image;
+export function tricornFieldToImage(field: Float32Array, data: Uint8ClampedArray, maxIter: number): void {
   for (let i = 0; i < field.length; i++) {
     const n = field[i];
     const o = i * 4;
@@ -93,6 +87,5 @@ export function renderTricornBand(
   const field = new Float32Array(width * height);
   classifyTricornBand(field, width, height, view, opts, y0, y1);
   const sub = field.subarray(y0 * width, y1 * width);
-  const bandImage = { data: image.data.subarray(y0 * width * 4, y1 * width * 4) } as ImageData;
-  tricornFieldToImage(sub, bandImage, opts.maxIter);
+  tricornFieldToImage(sub, image.data.subarray(y0 * width * 4, y1 * width * 4), opts.maxIter);
 }
