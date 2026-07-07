@@ -8,7 +8,12 @@
 //   φ(w) = V := φ(η(z))         — for φ = c·w + Σ F_l/w^l this is a degree-m polynomial (m = F.length)
 //   branches                    — its roots, minus the trivial w = η(z); d = m−1 of them (a d:d correspondence)
 //
-// Branch enumeration is @cas/core's Durand–Kerner over tupleAlgebra — the runbook's explicit reuse.
+// "Deleted" = the trivial root is divided out ALGEBRAICALLY (synthetic division by (w − η), which is
+// exact since η is a known root) — more robust than finding all roots and dropping one, and it never
+// mislabels the trivial branch when it collides with another near a cusp. The degree-d deflated
+// polynomial is then solved in closed form for d ≤ 2 (exact, and graceful when the two branches coincide
+// at a cusp: the discriminant → 0 gives a double root) and by @cas/core's Durand–Kerner for the
+// higher-degree families (the runbook's reuse).
 import { makeDurandKerner, tupleAlgebra } from "@cas/core";
 import { DELTOID, DELTOID_C, DELTOID_F, type Complex } from "./deltoid.js";
 
@@ -20,10 +25,18 @@ export function eta(z: Complex): Complex {
   return [z[0] / r2, z[1] / r2];
 }
 
+/** Principal complex square root. */
+function csqrt(z: Complex): Complex {
+  const r = Math.hypot(z[0], z[1]);
+  const re = Math.sqrt(Math.max((r + z[0]) / 2, 0));
+  const im = Math.sqrt(Math.max((r - z[0]) / 2, 0));
+  return [re, z[1] < 0 ? -im : im];
+}
+
 export interface Correspondence {
   /** The unit-circle reflection η. */
   eta(z: Complex): Complex;
-  /** The d = deg(φ) − 1 non-trivial branches: roots of φ(w) = φ(η(z)) with w = η(z) removed. */
+  /** The d = deg(φ) − 1 non-trivial branches: roots of φ(w) = φ(η(z)) with w = η(z) divided out. */
   branches(z: Complex): Complex[];
   /** d — the correspondence is d:d. */
   degree: number;
@@ -31,9 +44,9 @@ export interface Correspondence {
 
 /**
  * Build the deleted correspondence of an unbounded-Laurent map φ(w) = c·w + Σ_{l=0}^{m-1} F[l]/wˡ.
- * Multiplying φ(w) = V through by w^{m-1} gives the polynomial
- *   c·wᵐ + (F[0] − V)·w^{m-1} + F[1]·w^{m-2} + … + F[m-1] = 0,
- * whose m roots include the trivial w = η(z); Durand–Kerner finds them all, and the trivial one is dropped.
+ * φ(w) = V, multiplied through by w^{m-1}, is the monic (÷c) polynomial
+ *   wᵐ + (F[0]−V)/c · w^{m-1} + F[1]/c · w^{m-2} + … + F[m-1]/c;
+ * deflating out the known trivial root w = η(z) leaves the degree-d = (m−1) branch polynomial.
  */
 export function makeUnboundedLaurentCorrespondence(
   c: number,
@@ -41,48 +54,47 @@ export function makeUnboundedLaurentCorrespondence(
   evalPhi: (z: Complex) => Complex,
 ): Correspondence {
   const m = F.length;
+  const d = m - 1;
   const dk = makeDurandKerner(A);
+
+  // Roots of the monic degree-d deflated polynomial b[0..d] (b[d] = 1).
+  const solveDeflated = (b: Complex[]): Complex[] => {
+    if (d === 1) return [A.neg(A.div(b[0], b[1]))]; // linear
+    if (d === 2) {
+      const disc = A.sub(A.mul(b[1], b[1]), A.scale(b[0], 4)); // b1² − 4 b0  (b2 = 1)
+      const s = csqrt(disc);
+      return [A.scale(A.sub(A.neg(b[1]), s), 0.5), A.scale(A.add(A.neg(b[1]), s), 0.5)];
+    }
+    const evalMonic = (w: Complex): Complex => {
+      let acc = b[d];
+      for (let k = d - 1; k >= 0; k--) acc = A.add(A.mul(acc, w), b[k]);
+      return acc;
+    };
+    const seeds: Complex[] = [];
+    for (let k = 0; k < d; k++) {
+      const t = (2 * Math.PI * (k + 0.5)) / d;
+      seeds.push([Math.cos(t) * 1.1, Math.sin(t) * 1.1]);
+    }
+    const res = dk(evalMonic, seeds, { tol: 1e-12, maxIter: 200 });
+    return res ? res.roots : [];
+  };
 
   const branches = (z: Complex): Complex[] => {
     const e = eta(z);
     const V = evalPhi(e);
-
-    // Monic coefficients a[0..m] (a[m] = 1) of the degree-m polynomial above, divided through by c.
+    // full monic polynomial a[0..m] (a[m] = 1) of φ(w) = V
     const a: Complex[] = new Array(m + 1);
     a[m] = [1, 0];
     a[m - 1] = A.scale(A.sub(F[0], V), 1 / c);
     for (let l = 1; l < m; l++) a[m - 1 - l] = A.scale(F[l], 1 / c);
-    const evalMonic = (w: Complex): Complex => {
-      let acc = a[m];
-      for (let k = m - 1; k >= 0; k--) acc = A.add(A.mul(acc, w), a[k]);
-      return acc;
-    };
-
-    // m distinct seeds on a circle sized to the roots — generic, so Durand–Kerner converges.
-    const R = Math.max(1, A.abs(V)) * 0.9;
-    const seeds: Complex[] = [];
-    for (let k = 0; k < m; k++) {
-      const t = (2 * Math.PI * (k + 0.5)) / m;
-      seeds.push([R * Math.cos(t), R * Math.sin(t)]);
-    }
-
-    const res = dk(evalMonic, seeds, { tol: 1e-12, maxIter: 200 });
-    if (!res) return [];
-
-    // Delete the trivial root (the one nearest η(z)).
-    let trivial = 0;
-    let best = Infinity;
-    for (let i = 0; i < res.roots.length; i++) {
-      const d = A.abs(A.sub(res.roots[i], e));
-      if (d < best) {
-        best = d;
-        trivial = i;
-      }
-    }
-    return res.roots.filter((_, i) => i !== trivial);
+    // deflate by (w − η): synthetic division removes the trivial branch exactly → b[0..d], b[d] = 1
+    const b: Complex[] = new Array(m);
+    b[m - 1] = a[m];
+    for (let k = m - 1; k >= 1; k--) b[k - 1] = A.add(a[k], A.mul(e, b[k]));
+    return solveDeflated(b);
   };
 
-  return { eta, branches, degree: m - 1 };
+  return { eta, branches, degree: d };
 }
 
 /** The deltoid's deleted correspondence — a 2:2 correspondence (φ has degree 3). */
