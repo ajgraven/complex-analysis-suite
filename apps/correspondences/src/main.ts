@@ -8,12 +8,14 @@ import { createDeltoidRenderer } from "./gpu.js";
 import { accumulateBand, densityToImage, DEFAULT_DENSITY } from "./correspondenceRender.js";
 import { DEFAULT_PARAM_OPTIONS, DEFAULT_PARAM_VIEW, renderParamBand } from "./paramPlane.js";
 import { createParamRenderer } from "./paramGpu.js";
+import { DEFAULT_TRICORN_OPTIONS, DEFAULT_TRICORN_VIEW, renderTricornBand } from "./tricorn.js";
 
 const SIGMA_GPU = 560;
 const SIGMA_CPU = 240;
 const CORR = 380;
 const PARAM_GPU = 560;
 const PARAM_CPU = 300;
+const TRICORN = 320;
 
 function setCap(id: string, text: string): void {
   const el = document.getElementById(id);
@@ -24,6 +26,7 @@ function shell(): {
   sigma: HTMLCanvasElement;
   corr: HTMLCanvasElement;
   param: HTMLCanvasElement;
+  tric: HTMLCanvasElement;
 } | null {
   const app = document.getElementById("app");
   if (!app) return null;
@@ -33,8 +36,8 @@ function shell(): {
       <h1>Correspondences</h1>
       <p class="tag">
         The deltoid Schwarz reflection &sigma;(w) = conj(F(&phi;&#8315;&sup1;(w))), its deleted
-        correspondence, and the family parameter plane &phi;<sub>a</sub>(z) = z + a/(2z&sup2;) —
-        Milestone&nbsp;A + B + C.
+        correspondence, the family parameter plane &phi;<sub>a</sub>(z) = z + a/(2z&sup2;), and the
+        model space (the Tricorn z&#772;&sup2; + c) — Milestone&nbsp;A + B + C.
       </p>
       <div style="display:grid;gap:1.25rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))">
         <figure style="margin:0">
@@ -49,12 +52,17 @@ function shell(): {
           <canvas id="param" style="${cs}"></canvas>
           <figcaption id="capP" class="status">Rendering the parameter plane…</figcaption>
         </figure>
+        <figure style="margin:0">
+          <canvas id="tric" style="${cs}"></canvas>
+          <figcaption id="capT" class="status">Rendering the model space…</figcaption>
+        </figure>
       </div>
     </main>`;
   const sigma = document.getElementById("sigma") as HTMLCanvasElement | null;
   const corr = document.getElementById("corr") as HTMLCanvasElement | null;
   const param = document.getElementById("param") as HTMLCanvasElement | null;
-  return sigma && corr && param ? { sigma, corr, param } : null;
+  const tric = document.getElementById("tric") as HTMLCanvasElement | null;
+  return sigma && corr && param && tric ? { sigma, corr, param, tric } : null;
 }
 
 // setTimeout (not requestAnimationFrame — suspended in hidden tabs) chunked loop.
@@ -178,12 +186,41 @@ function renderParamPlane(canvas: HTMLCanvasElement): void {
   });
 }
 
+function renderTricorn(canvas: HTMLCanvasElement): void {
+  canvas.width = TRICORN;
+  canvas.height = TRICORN;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const image = ctx.createImageData(TRICORN, TRICORN);
+  const opts = DEFAULT_TRICORN_OPTIONS;
+  const t0 = performance.now();
+  let y = 0;
+  chunk((next) => {
+    const y1 = Math.min(TRICORN, y + 12);
+    renderTricornBand(image, DEFAULT_TRICORN_VIEW, opts, y, y1);
+    ctx.putImageData(image, 0, 0);
+    y = y1;
+    if (y < TRICORN) {
+      setCap("capT", `Model space — the Tricorn z̄² + c… ${Math.round((100 * y) / TRICORN)}%`);
+      next();
+    } else {
+      setCap(
+        "capT",
+        `Model space — the Tricorn z̄² + c (${TRICORN}², ${Math.round(performance.now() - t0)} ms), via @cas/expr ` +
+          `(= CD's tricorn preset). The family is conjectured to straighten INTO the parabolic Tricorn; ` +
+          `the straightening map a→c is ≈ exploratory and not computed here.`,
+      );
+    }
+  });
+}
+
 function mount(): void {
   const s = shell();
   if (!s) return;
   renderSigma(s.sigma);
   renderCorrespondence(s.corr);
   renderParamPlane(s.param);
+  renderTricorn(s.tric);
 }
 
 mount();
