@@ -22,14 +22,27 @@ export interface DensityOptions {
   escapeR: number;
 }
 
-export const DEFAULT_DENSITY: DensityOptions = { seedGrid: 48, maxDepth: 16, maxNodes: 200, escapeR: 12 };
+// Denser sampling + a tighter escape radius (the view only shows |w| ≲ 3, so nodes past ~6 are
+// off-screen waste) concentrate the point cloud where it is seen — fewer holes, less speckle.
+export const DEFAULT_DENSITY: DensityOptions = { seedGrid: 64, maxDepth: 18, maxNodes: 220, escapeR: 6 };
 
-function worldToPixel(w: Complex, view: View, W: number, H: number): number {
-  const aspect = W / H;
-  const px = Math.round(((w[0] - view.centerX) / (2 * view.halfSpan * aspect) + 0.5) * W);
-  const py = Math.round((0.5 - (w[1] - view.centerY) / (2 * view.halfSpan)) * H);
-  if (px < 0 || px >= W || py < 0 || py >= H) return -1;
-  return py * W + px;
+// Bilinear splat: each point deposits its unit weight across the four surrounding pixels by fractional
+// position, instead of rounding to one pixel. This antialiases the cloud — the single biggest cure for
+// the salt-and-pepper look of a hard nearest-pixel splat.
+function splat(density: Float32Array, W: number, H: number, w: Complex, view: View, aspect: number): void {
+  const fx = ((w[0] - view.centerX) / (2 * view.halfSpan * aspect) + 0.5) * W - 0.5;
+  const fy = (0.5 - (w[1] - view.centerY) / (2 * view.halfSpan)) * H - 0.5;
+  const x0 = Math.floor(fx);
+  const y0 = Math.floor(fy);
+  const tx = fx - x0;
+  const ty = fy - y0;
+  const add = (x: number, y: number, wt: number): void => {
+    if (x >= 0 && x < W && y >= 0 && y < H) density[y * W + x] += wt;
+  };
+  add(x0, y0, (1 - tx) * (1 - ty));
+  add(x0 + 1, y0, tx * (1 - ty));
+  add(x0, y0 + 1, (1 - tx) * ty);
+  add(x0 + 1, y0 + 1, tx * ty);
 }
 
 /** Accumulate the orbit-tree point cloud from seed-rows [sy0, sy1) of the N×N seed grid into `density`
@@ -54,10 +67,7 @@ export function accumulateBand(
         maxNodes: opts.maxNodes,
         escapeR: opts.escapeR,
       });
-      for (const p of pts) {
-        const idx = worldToPixel(p, view, W, H);
-        if (idx >= 0) density[idx] += 1;
-      }
+      for (const p of pts) splat(density, W, H, p, view, aspect);
     }
   }
 }
@@ -71,12 +81,41 @@ function heat(t: number): [number, number, number] {
   ];
 }
 
-/** Colorize a density buffer (log-normalized) into `image`, with K drawn as a dark base for context. */
+/** Separable 3-tap [1,2,1] blur, applied `passes` times — smooths the accumulated cloud (approaching a
+ *  small Gaussian) so isolated single-hit pixels stop reading as speckle. Pure; returns a new buffer. */
+export function blurDensity(src: Float32Array, W: number, H: number, passes = 2): Float32Array {
+  let cur = src;
+  for (let p = 0; p < passes; p++) {
+    const tmp = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
+        const l = x > 0 ? cur[i - 1] : cur[i];
+        const r = x < W - 1 ? cur[i + 1] : cur[i];
+        tmp[i] = (l + 2 * cur[i] + r) * 0.25;
+      }
+    }
+    const out = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
+        const u = y > 0 ? tmp[i - W] : tmp[i];
+        const d = y < H - 1 ? tmp[i + W] : tmp[i];
+        out[i] = (u + 2 * tmp[i] + d) * 0.25;
+      }
+    }
+    cur = out;
+  }
+  return cur;
+}
+
+/** Colorize a density buffer (blurred, then log-normalized) into `image`, with K as a dark base. */
 export function densityToImage(density: Float32Array, image: ImageData, view: View): void {
   const { width: W, height: H, data } = image;
   const aspect = W / H;
+  const dens = blurDensity(density, W, H);
   let max = 0;
-  for (let i = 0; i < density.length; i++) if (density[i] > max) max = density[i];
+  for (let i = 0; i < dens.length; i++) if (dens[i] > max) max = dens[i];
   const norm = max > 0 ? 1 / Math.log(1 + max) : 0;
 
   for (let py = 0; py < H; py++) {
