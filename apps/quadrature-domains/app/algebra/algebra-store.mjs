@@ -1601,8 +1601,21 @@ import _QD from '../solver.mjs';
       const f = ns.find((n) => n.provenance && n.provenance.op === 'factor' && !n.provenance.carried);
       return f ? { partialBranch: true, caseIndex: f.provenance.caseIndex, caseCount: f.provenance.caseCount } : {};
     }
+    // The SPECIALIZATION under which a column is analyzed: assumeReal (z̄≡z) and assumeImaginary
+    // (z̄≡−z) restrict the system to a SLICE — they can drop quadrature domains lying OFF that
+    // slice, so the resulting existence/uniqueness count is only a LOWER BOUND on the general one
+    // (and an empty/inconsistent verdict rules out only on-slice solutions). Resolve the vars from
+    // the analyzed ids — that branch's assumptions, matching currentReimSystem's trackOf(ids[0]) —
+    // so an off-screen branch (A6) reports its OWN slice, not the active branch's. Merged onto the
+    // classify result (like _factorBranchInfo) so every verdict site can label the specialization.
+    // Returns { realVars, imagVars } (both [] ⇒ the general, unspecialized system).
+    function _assumptionInfo(ids) {
+      const track = (ids && ids.length) ? trackOf(ids[0]) : activeTrackId;
+      const a = assumeOf(track);
+      return { realVars: a.realVars.slice(), imagVars: a.imagVars.slice() };
+    }
     function classify(ids, opts) {
-      return Object.assign(_classifyImpl(ids, opts), _factorBranchInfo(ids));
+      return Object.assign(_classifyImpl(ids, opts), _factorBranchInfo(ids), _assumptionInfo(ids));
     }
     function _classifyImpl(ids, opts) {
       const S = getSym();
@@ -1630,15 +1643,16 @@ import _QD from '../solver.mjs';
     function classifyAsync(ids, opts, runOpts) {
       opts = opts || {};
       const branch = _factorBranchInfo(ids);
+      const assume = _assumptionInfo(ids);
       const reim = currentReimSystem(ids, opts);
-      if (!reim.polys.length) return Promise.resolve(Object.assign({ ok: false, reason: 'no equality nodes to analyze' }, branch));
+      if (!reim.polys.length) return Promise.resolve(Object.assign({ ok: false, reason: 'no equality nodes to analyze' }, branch, assume));
       const SW = symWorker();
       if (!SW) return Promise.resolve(classify(ids, opts));
       const payload = { polys: reim.polys.map((p) => p.termList()), vars: reim.vars, opts: _capOpts(opts) };
       return SW.run('classify', payload, runOpts || {}).then(
-        (res) => Object.assign(res, branch),
+        (res) => Object.assign(res, branch, assume),
         (err) => Object.assign((err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
-          : { ok: false, reason: (err && err.message) || String(err) }, branch));
+          : { ok: false, reason: (err && err.message) || String(err) }, branch, assume));
     }
 
     // Numeric values of variables an earlier reduction PINNED or ELIMINATED to a CONSTANT

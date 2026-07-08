@@ -635,6 +635,47 @@ module.exports = async function run() {
     }
   }
 
+  // ---- honest labeling: a reality/imaginary verdict is a SPECIALIZATION (a slice), not general ----
+  // assumeReal (z̄≡z) / assumeImaginary (z̄≡−z) restrict the system to a SLICE and can drop quadrature
+  // domains lying off it, so the existence/uniqueness count is only a LOWER BOUND on the general one.
+  // The store must thread the active slice vars onto the classify result (r.realVars / r.imagVars) —
+  // that is the DATA the UI keys its "on the real/imaginary slice … lower bound" caveat + the verdict-
+  // card ledger + the '*' chip marker off of. (Mirrors the partialBranch factor-case tag below.)
+  {
+    // General (no assumption): the verdict must NOT be tagged as a slice, so nothing labels it a lower
+    // bound — a false caveat would be as dishonest as a missing one.
+    const gen = QD.AlgebraStore.create();
+    gen.seedFromSystem(QE.generateClassicalBounded(hData));
+    const cg = gen.classify();
+    ok('honest-labeling: an unspecialized verdict carries empty realVars/imagVars (no false slice tag)',
+       Array.isArray(cg.realVars) && cg.realVars.length === 0 && Array.isArray(cg.imagVars) && cg.imagVars.length === 0);
+
+    // Real slice: assumeReal must tag the verdict with the assumed real vars (sync + async paths).
+    const sr = QD.AlgebraStore.create();
+    sr.seedFromSystem(QE.generateClassicalBounded(hData));
+    ok('honest-labeling: assumeReal setup appended a column', sr.assumeReal(sr.baseVariables()).ok);
+    const cr = sr.classify();
+    // Defensive (x || []): without the store fix these fields are undefined — this degrades to a
+    // clean FAIL (the count would silently read as general) rather than a crash.
+    ok('honest-labeling: after assumeReal the verdict is tagged real-slice (z₁ ∈ realVars, no imagVars)',
+       (cr.realVars || []).includes('z1') && (cr.imagVars || ['x']).length === 0);
+    const cra = await sr.classifyAsync(null, {});
+    ok('honest-labeling: classifyAsync carries the same real-slice tag (the UI verdict path)',
+       (cra.realVars || []).includes('z1') && (cra.imagVars || ['x']).length === 0);
+
+    // Imaginary slice: assumeImaginary must tag the verdict with the assumed imaginary vars, not real.
+    const si = QD.AlgebraStore.create();
+    si.seedFromSystem(QE.generateClassicalBounded(hData));
+    const plainV = si.currentReimSystem().vars;
+    const tgt = si.baseVariables().find((v) => plainV.includes(v + '__re') && plainV.includes(v + '__im'));
+    if (tgt) {
+      ok('honest-labeling: assumeImaginary setup appended a column', si.assumeImaginary([tgt]).ok);
+      const ci = si.classify();
+      ok('honest-labeling: after assumeImaginary the verdict is tagged imaginary-slice (' + tgt + ' ∈ imagVars, no realVars)',
+         (ci.imagVars || []).includes(tgt) && (ci.realVars || ['x']).length === 0);
+    }
+  }
+
   // ---- per-column stats (UI lane headers) ----
   {
     const st = QD.AlgebraStore.create();

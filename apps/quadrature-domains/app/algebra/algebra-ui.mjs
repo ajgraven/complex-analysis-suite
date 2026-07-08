@@ -1318,6 +1318,38 @@ const QD = _QD;
       toast('Propagated ' + r.count + ' constraint' + (r.count === 1 ? '' : 's') + ' → column ' + r.column);
     }
 
+    // --- Honest labeling of SPECIALIZED verdicts (CLAUDE.md guardrail) -------------------------
+    // assumeReal (z̄≡z) and assumeImaginary (z̄≡−z) restrict the system to a SLICE and can silently
+    // drop quadrature domains lying off it; the ★ Auto-reduce path auto-applies assumeReal, so its
+    // count is a slice count too. A classify result carries the analyzed branch's slice vars
+    // (r.realVars / r.imagVars, threaded by the store). Build the human labels of the active slices.
+    function sliceLabels(r) {
+      const out = [];
+      if (r && r.realVars && r.realVars.length) out.push('real slice (z̄≡z: ' + r.realVars.map(latexPlain).join(', ') + ')');
+      if (r && r.imagVars && r.imagVars.length) out.push('imaginary slice (z̄≡−z: ' + r.imagVars.map(latexPlain).join(', ') + ')');
+      return out;
+    }
+    // The inline caveat appended to a verdict string when it was computed on a slice — so a count
+    // never reads as the general quadrature-domain count. Mirrors the factor-branch annotation. '' ⇒
+    // no slice (the general system). Covers both the count ("lower bound") and existence ("rules out
+    // only on-slice") readings, since an inconsistent/empty slice verdict does NOT rule out the rest.
+    function sliceCaveat(r) {
+      const s = sliceLabels(r);
+      if (!s.length) return '';
+      return '  [on the ' + s.join(' + ') + ' only — a specialization that can omit off-slice quadrature'
+        + ' domains: a count here is a LOWER BOUND on the general one, and an empty/inconsistent verdict'
+        + ' rules out only on-slice solutions.]';
+    }
+    // The persistent "assumptions ledger" for the verdict card — every active specialization that
+    // narrows the verdict, one short label each (slices, φ(0) gauge fix, factor case). Shown as a
+    // banner so no slice/branch count on the card reads as the certified general count. [] ⇒ general.
+    function specializationLedger(r) {
+      const out = sliceLabels(r).map((s) => s.charAt(0).toUpperCase() + s.slice(1));
+      if (store.w0Fixed) out.push('φ(0) fixed (rotation gauge)');
+      if (r && r.partialBranch) out.push('Factor case ' + ((r.caseIndex || 0) + 1) + ' of ' + r.caseCount + ' (branches add up)');
+      return out;
+    }
+
     // Semi-autonomous "Auto-reduce & solve": chain the reductions (auto-reality →
     // linear propagation), each appended as a labeled column, then determine existence/
     // uniqueness and the explicit real solutions. The reduction history stays visible.
@@ -1358,6 +1390,8 @@ const QD = _QD;
               : cl.realCount === 1 ? 'Unique quadrature domain (1 real solution)'
                 : cl.realCount + ' real quadrature domains')
             + (cl.complexCount != null ? ' of ' + cl.complexCount + ' distinct complex' : '')) + '.';
+          // ★ Auto-reduce auto-applies assumeReal ⇒ this count is on the real slice (a lower bound).
+          verdict += sliceCaveat(cl);
           // 4. explicit real solutions when zero-dimensional — off the main thread
           let coords = '', solutionsText = '';
           if (cl.zeroDim && !cl.inconsistent) {
@@ -1375,7 +1409,7 @@ const QD = _QD;
           }
           _abort = null; setBusy(false); refreshPickers();
           setStatus(verdict + coords);
-          if (canvas) canvas.setVerdict({ text: verdict, solutionsText });
+          if (canvas) canvas.setVerdict({ text: verdict, solutionsText, assumptions: specializationLedger(cl) });
           toast(verdict, cl.inconsistent || cl.realCount === 0 ? { kind: 'error' } : {});
         } catch (e) { _abort = null; setBusy(false); showError('Auto-reduce & solve: ' + ((e && e.message) || String(e))); }
       })();
@@ -1429,8 +1463,10 @@ const QD = _QD;
         }
         // A factor "case" column counts ONE branch of V(p)=⋃V(fᵢ) — the branches add up.
         if (r.partialBranch) verdict += '  [case ' + ((r.caseIndex || 0) + 1) + ' of ' + r.caseCount + ' of a factor split — this counts THIS branch only; the branches add up to the original.]';
+        // A reality/imaginary assumption slices the system — the count is a lower bound (honest labeling).
+        verdict += sliceCaveat(r);
         setStatus(verdict);
-        if (canvas) canvas.setVerdict({ text: verdict });
+        if (canvas) canvas.setVerdict({ text: verdict, assumptions: specializationLedger(r) });
         if (!sel) cacheActiveVerdict(r);   // A6: stamp the active branch's chip (whole last column analyzed)
         toast(verdict, r.inconsistent || r.realCount === 0 ? { kind: 'error' } : {});
       });
@@ -1569,7 +1605,7 @@ const QD = _QD;
       const ctrl = _newAbort(); _abort = ctrl;
       setBusy(true, 'Certifying univalence (genuine QDs)…');
       const params = hDataParamValues();
-      const finalVerdict = (text, bad) => { _abort = null; setBusy(false); setStatus(text); if (canvas) canvas.setVerdict({ text: text }); toast(text, bad ? { kind: 'error' } : {}); };
+      const finalVerdict = (text, bad, ledger) => { _abort = null; setBusy(false); setStatus(text); if (canvas) canvas.setVerdict({ text: text, assumptions: ledger || [] }); toast(text, bad ? { kind: 'error' } : {}); };
       // 1) REGIME (dimension + consistency): the heavy reim Gröbner + Hermite real-count run in the
       // WORKER (classifyAsync) so the UI stays responsive and the op is cancellable; the per-solution
       // univalence certificate (below) is cheap and stays on the main thread.
@@ -1579,12 +1615,12 @@ const QD = _QD;
       }).then((cl) => {
         if (cl.aborted) { _abort = null; setBusy(false); setStatus(''); toast('Cancelled'); return; }
         if (!cl.ok) { _abort = null; setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + withGuidance(cl.reason || 'classify failed')); return; }
-        if (cl.inconsistent) { finalVerdict('No quadrature domain: the system is inconsistent (1 ∈ I).', true); return; }
+        if (cl.inconsistent) { finalVerdict('No quadrature domain: the system is inconsistent (1 ∈ I).' + sliceCaveat(cl), true, specializationLedger(cl)); return; }
         if (!cl.zeroDim) {
           // Positive-dimensional ⇒ underdetermined. Detect FACTORABLE causes (a locator/gauge
           // equation that splits the variety) and offer one-click pin/split actions (#2).
           _abort = null; setBusy(false); setStatus('');
-          const text = 'Underdetermined: a positive-dimensional family (' + cl.numVars + ' real variables). Fix the rotation gauge (φ′(0) real-positive) or pin a forced variable — see the suggestions below, or use “Set values”.';
+          const text = 'Underdetermined: a positive-dimensional family (' + cl.numVars + ' real variables). Fix the rotation gauge (φ′(0) real-positive) or pin a forced variable — see the suggestions below, or use “Set values”.' + sliceCaveat(cl);
           const actions = []; const seen = {};
           let hits = []; try { hits = store.spuriousFactors(null, { paramValues: hDataParamValues() }) || []; } catch (e) { hits = []; }
           hits.forEach((h) => h.factors.forEach((f) => {
@@ -1600,7 +1636,7 @@ const QD = _QD;
                 onClick: () => { const r = store.applyFactor(h.nodeId, f.factorIndex); if (r && r.ok) { rerender(); refreshPickers(); doCertifyUnivalence(); } } });
             }
           }));
-          if (canvas) canvas.setVerdict({ text, actions: actions.slice(0, 6) });
+          if (canvas) canvas.setVerdict({ text, actions: actions.slice(0, 6), assumptions: specializationLedger(cl) });
           setStatus(text); toast('Positive-dimensional — fix the gauge / pin a forced variable.', { kind: 'error' });
           return;
         }
@@ -1620,10 +1656,10 @@ const QD = _QD;
           // (cl.realCount, an INDEPENDENT method) says there ARE some, the numeric solve
           // missed them all (a clustered/non-radical cluster it couldn't separate) — that is
           // a PARTIAL result, NOT a "no real QD" verdict. Only claim no QD when both agree.
-          const v = (cl.realCount != null && cl.realCount > 0)
+          const v = ((cl.realCount != null && cl.realCount > 0)
             ? '⚠ PARTIAL: ' + cl.realCount + ' certified real solution' + (cl.realCount === 1 ? '' : 's') + ', but the numeric solver separated none (clustered / non-radical) — use the CAS bridge for coordinates.'
-            : 'No real quadrature domain' + (cl.complexCount != null ? ' (of ' + cl.complexCount + ' distinct complex)' : '') + '.';
-          setStatus(v); if (canvas) canvas.setVerdict({ text: v }); toast(v, { kind: 'error' }); return;
+            : 'No real quadrature domain' + (cl.complexCount != null ? ' (of ' + cl.complexCount + ' distinct complex)' : '') + '.') + sliceCaveat(cl);
+          setStatus(v); if (canvas) canvas.setVerdict({ text: v, assumptions: specializationLedger(cl) }); toast(v, { kind: 'error' }); return;
         }
         const hData = activeEnv.hData;
         let folded = 0, selfInt = 0, unrec = 0; const rows = []; const genuinePhis = [];
@@ -1704,8 +1740,10 @@ const QD = _QD;
           else { bad = true; const why = cc.maxResidual >= 1e-4 ? ('residual ' + cc.maxResidual.toExponential(1) + ' ≫ 0 — the reduction chain may be unsound') : 'no match to the numeric solver'; verdict += ' · ⚠ cross-check: ' + why; }
         }
         if (partialNote) verdict += partialNote;
+        // Honest labeling: even a certified count is only the count ON the active slice (if any).
+        verdict += sliceCaveat(cl);
         setStatus(verdict);
-        if (canvas) canvas.setVerdict({ text: verdict, solutionsText: rows.join('\n') });
+        if (canvas) canvas.setVerdict({ text: verdict, solutionsText: rows.join('\n'), assumptions: specializationLedger(cl) });
         toast(verdict, bad ? { kind: 'error' } : {});
         });   // solveRealAsync.then
       });     // classifyAsync.then
@@ -2186,13 +2224,21 @@ const QD = _QD;
     function _verdictBadge(r) {
       if (!r || r.aborted) return null;
       if (!r.ok) return { badge: '?', state: 'unknown', title: r.reason || 'classify unavailable' };
-      if (r.inconsistent) return { badge: '∅', state: 'none', title: 'no QD — system inconsistent (1 ∈ I)' };
-      if (!r.zeroDim) return { badge: '∞', state: 'open', title: 'positive-dimensional family (' + r.numVars + ' real variables)' };
-      const tail = r.partialBranch ? ' [case ' + ((r.caseIndex || 0) + 1) + '/' + r.caseCount + ' of a factor split]' : '';
-      if (r.realCount == null) return { badge: 'fin', state: 'unknown', title: r.multiplicity + ' complex solution(s); real count over the cap' + tail };
-      if (r.realCount === 0) return { badge: '0 QD', state: 'none', title: 'no real quadrature domain' + tail };
-      if (r.realCount === 1) return { badge: '✓ 1 QD', state: 'unique', title: 'unique real quadrature domain' + tail };
-      return { badge: r.realCount + ' QD', state: 'multi', title: r.realCount + ' real algebraic solutions' + tail };
+      // Specialization suffix: a factor CASE and/or a reality/imaginary SLICE (both resolved for THIS
+      // branch by the store) narrow the count. Fold both into the tooltip and mark the badge with '*'
+      // so a slice/branch count on a chip never reads as the general QD count (honest labeling).
+      const notes = [];
+      if (r.partialBranch) notes.push('case ' + ((r.caseIndex || 0) + 1) + '/' + r.caseCount + ' of a factor split');
+      const sl = sliceLabels(r);
+      if (sl.length) notes.push('on the ' + sl.join(' + ') + ' only — a LOWER BOUND; off-slice QDs not counted');
+      const tail = notes.length ? ' [' + notes.join('; ') + ']' : '';
+      const star = sl.length ? '*' : '';
+      if (r.inconsistent) return { badge: '∅' + star, state: 'none', title: 'no QD — system inconsistent (1 ∈ I)' + tail };
+      if (!r.zeroDim) return { badge: '∞' + star, state: 'open', title: 'positive-dimensional family (' + r.numVars + ' real variables)' + tail };
+      if (r.realCount == null) return { badge: 'fin' + star, state: 'unknown', title: r.multiplicity + ' complex solution(s); real count over the cap' + tail };
+      if (r.realCount === 0) return { badge: '0 QD' + star, state: 'none', title: 'no real quadrature domain' + tail };
+      if (r.realCount === 1) return { badge: '✓ 1 QD' + star, state: 'unique', title: 'unique real quadrature domain' + tail };
+      return { badge: r.realCount + ' QD' + star, state: 'multi', title: r.realCount + ' real algebraic solutions' + tail };
     }
     // Cache the active branch's verdict from a single-branch classify (doClassify) so its chip
     // updates too — only when the whole last column was analyzed (no node sub-selection).

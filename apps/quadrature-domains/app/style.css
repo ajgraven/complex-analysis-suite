@@ -796,6 +796,13 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   font-weight: 700; color: var(--c-muted, #667); font-size: 11px; margin-bottom: 4px;
 }
 #algebra-graph .algebra-verdict-body { color: var(--c-text, #222); }
+/* Assumptions ledger — the specializations a verdict was computed under (real/imaginary slice,
+   φ(0) gauge fix, factor case). An amber caveat strip so a slice count never reads as certified. */
+#algebra-graph .algebra-verdict-assume {
+  margin: 0 0 5px; padding: 4px 6px; border-radius: 4px; font-size: 11px; line-height: 1.35;
+  color: #7a4a08; background: rgba(181,71,8,0.10); border: 1px solid rgba(181,71,8,0.30);
+}
+#algebra-graph .algebra-verdict-assume strong { color: #b54708; font-weight: 700; }
 #algebra-graph .algebra-verdict-sols {
   margin: 6px 0 0; padding: 6px; background: var(--c-border-soft, #f4f4f6); border-radius: 4px;
   font-size: 11px; max-height: 140px; overflow: auto; white-space: pre;
