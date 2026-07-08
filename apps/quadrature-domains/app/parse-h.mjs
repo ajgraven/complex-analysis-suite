@@ -149,6 +149,10 @@ import _QD from './solver.mjs';
   // General-rational walker (port of direct/parseRationalInZ to variable `w`).
   // Returns { num, den } as polynomials in w.
   // ===========================================================================
+  // Degree cap for the '^' handler below: a valid h(w) is a low-order rational function, but powR is
+  // O(deg²) per step, so an unbounded exponent (e.g. a crafted "1/w^50000" from a shared link) would
+  // freeze the main thread. Reject any '^' whose result degree would exceed this (well above real use).
+  const MAX_PARSE_DEGREE = 64;
   function accRat(node, math) {
     if (!node) throw new Error("null AST node");
     if (node.isConstantNode) return { num: [mjxToComplex(node.value)], den: polyOne() };
@@ -197,6 +201,12 @@ import _QD from './solver.mjs';
         if (!Number.isInteger(k)) throw new Error("exponent must be an integer (got " + en.value + ")");
         const base = accRat(node.args[0], math);
         if (k === 0) return { num: polyOne(), den: polyOne() };
+        // Bound the polynomial degree so a crafted exponent (or nested powers like (w^60)^60) can't
+        // freeze the main thread in powR's O(deg²) loop. A valid h(w) is far below this cap.
+        const baseDeg = Math.max(base.num.length, base.den.length) - 1;
+        if (Math.abs(k) > MAX_PARSE_DEGREE || baseDeg * Math.abs(k) > MAX_PARSE_DEGREE) {
+          throw new Error("exponent too large ('^" + k + "'): h(w) must be a low-degree rational function (degree ≤ " + MAX_PARSE_DEGREE + ")");
+        }
         if (k > 0)  return powR(base, k);
         const pos = powR(base, -k);
         if (pos.num.length === 0 || (pos.num.length === 1 && Math.hypot(pos.num[0].re, pos.num[0].im) < 1e-300)) {

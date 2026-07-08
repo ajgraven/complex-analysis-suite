@@ -1654,7 +1654,10 @@ document.addEventListener('tab-changed', () => updateStatusPanelVisibility());
 // URL, no prior visit) is greeted with a more compelling default than the bare
 // unit disk — the cardioid (one pole, but it shows a cusp), so the first screen
 // demonstrates what the app does. Returning visitors keep the plain default.
-if (applyUrlState()) {
+let restoredFromUrl = false;
+try { restoredFromUrl = applyUrlState(); }
+catch (e) { console.warn('[qd] ignoring a malformed share link:', (e && e.message) || e); }
+if (restoredFromUrl) {
   scheduleSolve();             // ensure a solve even if no h param was present
 } else {
   let firstVisit = false;

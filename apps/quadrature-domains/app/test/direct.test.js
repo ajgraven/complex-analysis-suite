@@ -902,6 +902,20 @@ if (mathjs && parseH && formatH) {
        r.poles[0].order === 2 &&
        residuesEq(r.poles[0], [{re:1.5,im:0},{re:0.5,im:0}]));
   }
+  // Degree-cap guard (code-review HIGH #1): a crafted exponent must be REJECTED, not spun on for tens
+  // of seconds in powR's O(deg²) loop. Reachable from a shared #vs= link's decoded h-text (or a paste).
+  {
+    const rejects = (expr) => {
+      try { parseH(expr, mathjs); return false; }
+      catch (e) { return /too large|degree/i.test(e.message || ''); }
+    };
+    ok('parseH: a huge exponent ("1/w^50000") is rejected, not spun on (freeze guard)',
+       rejects('1/w^50000'));
+    ok('parseH: a nested degree bomb ("(w^60)^60") is rejected', rejects('(w^60)^60'));
+    let ctrlOK = false;
+    try { ctrlOK = !!parseH('1/w^6', mathjs); } catch (e) { ctrlOK = false; }
+    ok('parseH: a legitimate order-6 pole ("1/w^6") still parses (cap is generous)', ctrlOK);
+  }
   {
     const r = parseH('1/(w-2)', mathjs);
     ok('parseH "1/(w-2)" → pole at 2, residue 1',

@@ -76,11 +76,16 @@ const QD = _QD;
       el.style.color = (kind === 'warn') ? '#9a6a00' : '#b53030';
     }
 
+    // Reject an over-long expression before parsing — a valid h(w) is a short low-order rational
+    // function; a multi-KB string (e.g. from a crafted share link, or a w*w*...*w degree bomb) is
+    // only a main-thread DoS vector.
+    const MAX_H_TEXT_LEN = 2000;
     function parseAndApplyHText() {
       const inp = document.getElementById('h-text');
       if (!inp) return;
       const expr = inp.value.trim();
       if (!expr) { setHTextMsg('Enter an expression in w.'); return; }
+      if (expr.length > MAX_H_TEXT_LEN) { setHTextMsg('Expression too long (max ' + MAX_H_TEXT_LEN + ' chars).'); return; }
       let parsed;
       try {
         parsed = QD.parseH(expr, math, { mode: state.mode });

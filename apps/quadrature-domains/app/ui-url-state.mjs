@@ -48,6 +48,10 @@ import { encodeViewState, decodeViewState } from '@cas/interchange';
     // history.replaceState (not assignment to location.hash) so writing the URL
     // never pushes a back-button entry or re-navigates.
     // -----------------------------------------------------------------------
+    // The QD tab ids a share link may switch to (index.html tab-bar); 'qd' is the default and needs
+    // no switch. Whitelisted because applyUrlState interpolates the id into a querySelector — an
+    // untrusted value would otherwise throw a SyntaxError and abort init.
+    const SWITCHABLE_TABS = new Set(['schwarz', 'param-slice', 'algebra']);
     function _activeTabId() {
       const el = document.querySelector('.tab-btn.active');
       return (el && el.dataset.tab) || 'qd';
@@ -134,9 +138,10 @@ import { encodeViewState, decodeViewState } from '@cas/interchange';
         const inp = $('#h-text');
         if (inp) { inp.value = String(s.h); parseAndApplyHText(); }
       }
-      // 4. Active tab (deferred a tick so the QD solve kicks off first).
+      // 4. Active tab (deferred a tick so the QD solve kicks off first). Only whitelisted ids reach
+      //    the querySelector below (SWITCHABLE_TABS) — a crafted value can't inject a bad selector.
       const tab = s.tab;
-      if (tab && tab !== 'qd') {
+      if (tab && SWITCHABLE_TABS.has(String(tab))) {
         const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
         if (btn) setTimeout(() => btn.click(), 0);
       }
