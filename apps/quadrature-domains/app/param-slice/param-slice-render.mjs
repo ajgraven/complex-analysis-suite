@@ -13,7 +13,7 @@
 // so refined pixels warm-start from a cached neighbour phi. All callbacks (pool,
 // paintCellBlock, paintImage, logErrorSamples, cancelToken, onProgress) arrive
 // via its single options argument; the body is a VERBATIM move. Deps via psCtx:
-// sliceState + cancelLiveSolve. `PS` (= global.ParamSlice) + performance /
+// sliceState + cancelLiveSolve. `PS` is the imported ParamSlice kernel; performance /
 // console are read as globals.
 // =============================================================================
 
@@ -27,7 +27,7 @@ import ParamSlice from '../param-slice/param-slice-common.mjs';
   QD_UI.installParamSliceRender = function installParamSliceRender(s) {
     const sliceState     = s.sliceState;
     const cancelLiveSolve = s.cancelLiveSolve;
-    const PS             = global.ParamSlice;
+    const PS             = ParamSlice;
 
   const REFINE_ITER_DELTA = 8;
 

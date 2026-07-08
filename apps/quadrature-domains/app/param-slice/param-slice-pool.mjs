@@ -121,6 +121,12 @@ const _pool = (function () {
       return out;
     }
 
+    // Re-arm a reused pool for a fresh run (clears a prior cancel's latch). The UI calls this
+    // at the start of each render; a mid-run cancel() re-latches it, so an in-flight render still
+    // stops. Mirrors runSweep's own top-of-sweep reset — without it a pool reused after one
+    // Cancel never dispatches again (submitTile's promises never resolve → the render hangs).
+    arm() { this._cancelled = false; }
+
     cancel() {
       this._cancelled = true;
       // Resolve outstanding pending jobs with empty results so the
@@ -230,6 +236,7 @@ const _pool = (function () {
       this._cancelled = false;
       this.kind = 'main-thread';
     }
+    arm()       { this._cancelled = false; }
     cancel()    { this._cancelled = true; }
     terminate() { this.cancel(); }
 
