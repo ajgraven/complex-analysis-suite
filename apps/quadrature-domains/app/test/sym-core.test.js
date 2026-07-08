@@ -847,6 +847,69 @@ module.exports = async function run() {
          S.realSolutionCount(grid, null, ['x', 'y'], { maxHermiteDim: 2 }).ok === false);
     }
 
+    // reconcileRealCount — the SELF-CHECKING ORACLE pairing the certified Hermite real
+    // count with the explicit numeric solver so a clustered-eigen UNDERCOUNT can't pass as
+    // a clean verdict. The crux: solveByEigenvalues returns complete:false on ANY non-radical
+    // ideal (D counts multiplicity, bestSols is de-duplicated), so a naive "flag on
+    // complete:false" OVER-warns — the fix cross-checks the DISTINCT counts instead.
+    // Regression for the certify-univalence undercount (algebra-ui doCertifyUnivalence).
+    {
+      const mv = (n) => S.mpolyVar(n), mi = (k) => S.mpolyInt(k);
+      const R = S.reconcileRealCount;
+      ok('reconcileRealCount is exported', typeof R === 'function');
+
+      // (1) CLUSTERED NON-RADICAL ⟨x²−1, y²⟩: x=±1, y=0 (double) ⇒ 2 DISTINCT real, D=4. The
+      // certified count is 2; the eigen solver returns complete:false (D>distinct) but STILL
+      // recovers both distinct reals — so this is multiplicity, NOT a miss.
+      const clus = [mv('x').pow(2).sub(mi(1)), mv('y').pow(2)];
+      const rcC = S.realSolutionCount(clus, null, ['x', 'y']);
+      ok('reconcile setup: ⟨x²−1,y²⟩ → 2 distinct real, multiplicity 4 (non-radical)',
+         rcC.ok && rcC.realCount === 2 && rcC.multiplicityCount === 4);
+      const eigC = S.solveByEigenvalues(clus, {});
+      const foundC = (eigC.solutions || []).filter((s) => ['x', 'y'].every((v) => Math.abs(s[v].im) < 1e-4));
+      ok('reconcile setup: eigen solver flags complete:false on the non-radical ideal, yet finds both distinct reals',
+         eigC.ok && eigC.complete === false && foundC.length === 2);
+      const recNoMiss = R(rcC.realCount, foundC, eigC.complete);
+      ok('reconcileRealCount: complete:false with every distinct real found ⇒ NOT partial (no false alarm)',
+         recNoMiss.partial === false && recNoMiss.reason === '' && recNoMiss.nReal === 2 && recNoMiss.foundDistinct === 2);
+
+      // (2) GENUINE UNDERCOUNT: model the eigen solver dropping one of the two distinct reals.
+      // The certified count (2) is preferred as the denominator and PARTIAL is flagged.
+      const recMiss = R(rcC.realCount, foundC.slice(0, 1), false);
+      ok('reconcileRealCount: fewer distinct reals than certified ⇒ PARTIAL undercount, certified denominator',
+         recMiss.partial === true && recMiss.disagree === false && recMiss.reason === 'undercount' &&
+         recMiss.nReal === 2 && recMiss.foundDistinct === 1);
+
+      // (3) RADICAL AGREEMENT ⟨x²−1, y²−1⟩: 4 distinct reals, complete:true, counts agree.
+      const grid2 = [mv('x').pow(2).sub(mi(1)), mv('y').pow(2).sub(mi(1))];
+      const rcG = S.realSolutionCount(grid2, null, ['x', 'y']);
+      const eigG = S.solveByEigenvalues(grid2, {});
+      const recAgree = R(rcG.realCount, eigG.solutions, eigG.complete);
+      ok('reconcileRealCount: radical system, all found ⇒ agreement (not partial), nReal = 4',
+         eigG.complete === true && recAgree.partial === false && recAgree.reason === '' && recAgree.nReal === 4 && recAgree.foundDistinct === 4);
+
+      // (4) NO CERTIFIED COUNT (over the Hermite cap): fall back to the raw complete flag.
+      const twoSols = [{ x: { re: 1, im: 0 } }, { x: { re: 2, im: 0 } }];
+      const recFallback = R(null, twoSols, false);
+      ok('reconcileRealCount: no certified count + complete:false ⇒ PARTIAL (incomplete), explicit denominator',
+         recFallback.certReal === null && recFallback.partial === true && recFallback.reason === 'incomplete' && recFallback.nReal === 2);
+      const recShape = R(null, twoSols, undefined);
+      ok('reconcileRealCount: no certified count + shape path (complete undefined) ⇒ NOT partial',
+         recShape.partial === false && recShape.reason === '' && recShape.nReal === 2);
+
+      // (5) OVERCOUNT: the explicit solver returned MORE distinct reals than certified — a
+      // disagreement; the certified count stays authoritative and is flagged approximate.
+      const recOver = R(1, twoSols, true);
+      ok('reconcileRealCount: more distinct reals than certified ⇒ disagreement flag, certified denominator',
+         recOver.partial === true && recOver.disagree === true && recOver.reason === 'overcount' && recOver.nReal === 1 && recOver.foundDistinct === 2);
+
+      // (6) DEDUP: a shape-lemma double root returned WITH multiplicity (two ~equal points)
+      // collapses to one distinct point, so it does NOT spuriously read as an overcount.
+      const recDup = R(1, [{ x: { re: 0, im: 0 } }, { x: { re: 1e-9, im: 0 } }], undefined);
+      ok('reconcileRealCount: near-duplicate solutions de-duplicated at 1e-6 (no false overcount)',
+         recDup.foundDistinct === 1 && recDup.partial === false && recDup.nReal === 1);
+    }
+
     // G5 — real-root isolation via Sturm sequences (exact, certified intervals).
     {
       const mv = (n) => S.mpolyVar(n), mi = (k) => S.mpolyInt(k);

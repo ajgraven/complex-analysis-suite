@@ -1615,7 +1615,16 @@ const QD = _QD;
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Univalence: ' + withGuidance(r.reason || 'solve failed')); return; }
         const real = (r.solutions || []).filter((s) => Object.keys(s).every((k) => Math.abs(s[k].im) < 1e-4));
-        if (!real.length) { const v = 'No real quadrature domain' + (cl.complexCount != null ? ' (of ' + cl.complexCount + ' distinct complex)' : '') + '.'; setStatus(v); if (canvas) canvas.setVerdict({ text: v }); toast(v, { kind: 'error' }); return; }
+        if (!real.length) {
+          // The explicit solver returned no real solutions. If the CERTIFIED Hermite count
+          // (cl.realCount, an INDEPENDENT method) says there ARE some, the numeric solve
+          // missed them all (a clustered/non-radical cluster it couldn't separate) — that is
+          // a PARTIAL result, NOT a "no real QD" verdict. Only claim no QD when both agree.
+          const v = (cl.realCount != null && cl.realCount > 0)
+            ? '⚠ PARTIAL: ' + cl.realCount + ' certified real solution' + (cl.realCount === 1 ? '' : 's') + ', but the numeric solver separated none (clustered / non-radical) — use the CAS bridge for coordinates.'
+            : 'No real quadrature domain' + (cl.complexCount != null ? ' (of ' + cl.complexCount + ' distinct complex)' : '') + '.';
+          setStatus(v); if (canvas) canvas.setVerdict({ text: v }); toast(v, { kind: 'error' }); return;
+        }
         const hData = activeEnv.hData;
         let folded = 0, selfInt = 0, unrec = 0; const rows = []; const genuinePhis = [];
         real.forEach((sol, idx) => {
@@ -1657,19 +1666,44 @@ const QD = _QD;
         const rej = [folded ? folded + ' fold' : '', selfInt ? selfInt + ' self-intersecting' : '', unrec ? unrec + ' unreconstructable' : ''].filter(Boolean).join(', ');
         if (rej) bits.push(rej + ' rejected');
         const tail = bits.length ? ' (' + bits.join('; ') + ')' : '';
-        const nReal = real.length, plur = nReal === 1 ? '' : 's';
+        // REAL-COUNT SELF-CHECKING ORACLE. Reconcile the explicit numeric solver (real,
+        // from solveRealAsync — whose eigenvalue fallback silently DROPS a coincident-
+        // projection cluster it can't separate) against the CERTIFIED Hermite distinct-real
+        // count (cl.realCount, from classifyAsync — an independent trace-form method). Prefer
+        // the certified count as the authoritative denominator, and flag PARTIAL when the
+        // explicit solver UNDERCOUNTED so a MISSED quadrature domain never reads as a clean
+        // verdict. (complete:false alone is NOT enough — it also fires on any non-radical
+        // ideal whose every distinct solution WAS found, which is not a miss.)
+        const Sym = QD && QD.Sym;
+        const rec = (Sym && typeof Sym.reconcileRealCount === 'function')
+          ? Sym.reconcileRealCount(cl.realCount, real, r.complete)
+          : { nReal: real.length, foundDistinct: real.length, certReal: (cl.realCount != null ? cl.realCount : null), partial: false, disagree: false, reason: '' };
+        const nReal = rec.nReal, plur = nReal === 1 ? '' : 's';
+        const undercount = rec.reason === 'undercount';
         let verdict;
-        if (D === 0) verdict = 'No genuine quadrature domain: ' + nReal + ' real algebraic solution' + plur + ', none univalent' + tail + '.';
-        else if (D === 1) verdict = 'Unique quadrature domain ✓ — 1 genuine QD of ' + nReal + ' real solution' + plur + tail + '.';
-        else verdict = D + ' distinct quadrature domains of ' + nReal + ' real solution' + plur + tail + '.';
+        if (D === 0) verdict = (undercount
+          ? 'No genuine quadrature domain among the ' + rec.foundDistinct + ' separable of ' + nReal + ' real solution' + plur + ' (none univalent)'
+          : 'No genuine quadrature domain: ' + nReal + ' real algebraic solution' + plur + ', none univalent') + tail + '.';
+        else if (D === 1) verdict = (undercount
+          ? 'At least 1 genuine quadrature domain — 1 of ' + rec.foundDistinct + ' separable of ' + nReal + ' real solution' + plur
+          : 'Unique quadrature domain ✓ — 1 genuine QD of ' + nReal + ' real solution' + plur) + tail + '.';
+        else verdict = (undercount
+          ? 'At least ' + D + ' distinct quadrature domains of ' + nReal + ' real solution' + plur
+          : D + ' distinct quadrature domains of ' + nReal + ' real solution' + plur) + tail + '.';
+        // PARTIAL / disagreement note — the clustered-eigen undercount the raw solver hides.
+        let partialNote = '';
+        if (undercount) partialNote = ' · ⚠ PARTIAL: the numeric solver separated only ' + rec.foundDistinct + ' of ' + rec.certReal + ' certified real solution' + (rec.certReal === 1 ? '' : 's') + ' (clustered / non-radical) — the genuine-QD count is a LOWER BOUND';
+        else if (rec.disagree) partialNote = ' · ⚠ cross-check: the numeric solver returned ' + rec.foundDistinct + ' distinct real solutions vs the certified ' + rec.certReal + ' — treat the count as approximate';
+        else if (rec.partial) partialNote = ' · ⚠ PARTIAL: clustered / near-multiple roots — some real solutions may be missing';
         // 5) NUMERIC CROSS-CHECK (#4): the reconstructed QDs must satisfy the ORIGINAL generated
         // system (reduction integrity) and agree with the independent numeric solver (oracle).
         const cc = crossCheckPhis(distinct, hData);
-        let bad = !D;
+        let bad = !D || !!rec.partial;
         if (cc.checked) {
           if (cc.maxResidual < 1e-4 && cc.oracleMatch) verdict += ' · cross-check ✓ (residual ' + cc.maxResidual.toExponential(1) + '; matches the numeric solver)';
           else { bad = true; const why = cc.maxResidual >= 1e-4 ? ('residual ' + cc.maxResidual.toExponential(1) + ' ≫ 0 — the reduction chain may be unsound') : 'no match to the numeric solver'; verdict += ' · ⚠ cross-check: ' + why; }
         }
+        if (partialNote) verdict += partialNote;
         setStatus(verdict);
         if (canvas) canvas.setVerdict({ text: verdict, solutionsText: rows.join('\n') });
         toast(verdict, bad ? { kind: 'error' } : {});

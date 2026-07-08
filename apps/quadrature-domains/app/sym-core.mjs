@@ -2958,6 +2958,56 @@ import _QD from './solver.mjs';
     return { ok: true, realCount: inertia.pos - inertia.neg, complexCount: inertia.pos + inertia.neg, multiplicityCount: D };
   }
 
+  // ---------------------------------------------------------------------------
+  // reconcileRealCount — a SELF-CHECKING ORACLE pairing the two INDEPENDENT
+  // real-solution counters so a silent undercount can't pass as a clean verdict.
+  //   • the CERTIFIED count: realSolutionCount(...).realCount — the Hermite trace-form
+  //     signature, the exact number of DISTINCT real solutions (no root-finding);
+  //   • the EXPLICIT solver: solveZeroDim / solveByEigenvalues — returns the actual
+  //     coordinates, but its eigenvalue fallback DELIBERATELY drops a coincident-
+  //     projection cluster it can't separate (returns complete:false, keeps only one
+  //     null vector per repeated eigenvalue), so its distinct count can UNDERCOUNT.
+  // Cross-check the two: prefer the certified count as the authoritative denominator and
+  // flag PARTIAL only on a GENUINE miss (found strictly fewer distinct reals than
+  // certified). NB `complete:false` alone is NOT a miss — it also fires on any
+  // non-radical / multiple ideal whose every distinct solution WAS recovered (D counts
+  // with multiplicity, `bestSols` is deduplicated). When no certified count is available
+  // (over the Hermite cap), fall back to the raw `complete` flag.
+  //   certifiedRealCount : number | null    — realSolutionCount(...).realCount (null ⇒ unknown)
+  //   foundSolutions     : [{ var:{re,im} }] — the explicitly-found REAL solutions
+  //   complete           : boolean|undefined — solveByEigenvalues completeness (undefined on the shape path)
+  // → { certReal, foundDistinct, nReal, partial, disagree, reason }
+  //     nReal    — the authoritative distinct-real denominator (certified if available)
+  //     partial  — the explicit set is INCOMPLETE (an undercount, or complete:false with
+  //                no certified count to check against): the genuine count is a LOWER BOUND
+  //     disagree — the explicit set has MORE distinct reals than certified (numeric noise
+  //                / a reduction inconsistency): the certified count is authoritative
+  //     reason   — 'undercount' | 'incomplete' | 'overcount' | ''
+  // ---------------------------------------------------------------------------
+  function reconcileRealCount(certifiedRealCount, foundSolutions, complete) {
+    const sols = Array.isArray(foundSolutions) ? foundSolutions : [];
+    // De-duplicate at 1e-6 so a shape-lemma multiple root (legitimately returned WITH
+    // multiplicity by the univariate finder) collapses to one point — the comparison
+    // against the certified DISTINCT count is then apples-to-apples. Matches
+    // solveByEigenvalues' own dedup granularity (toFixed(6), ±0 normalized).
+    const nz = (x) => { const r = +(Number(x)).toFixed(6); return r === 0 ? '0' : String(r); };
+    const dkey = (s) => Object.keys(s || {}).sort().map((k) => {
+      const z = s[k] || { re: 0, im: 0 };
+      return nz(z.re) + ',' + nz(z.im);
+    }).join('|');
+    const foundDistinct = new Set(sols.map(dkey)).size;
+    const certReal = (certifiedRealCount != null && isFinite(certifiedRealCount)) ? certifiedRealCount : null;
+    if (certReal == null) {
+      // No independent oracle — trust the explicit count, but surface the solver's own
+      // incompleteness flag (clustered/near-multiple roots) as PARTIAL.
+      const partial = complete === false;
+      return { certReal: null, foundDistinct, nReal: foundDistinct, partial, disagree: false, reason: partial ? 'incomplete' : '' };
+    }
+    if (foundDistinct < certReal) return { certReal, foundDistinct, nReal: certReal, partial: true, disagree: false, reason: 'undercount' };
+    if (foundDistinct > certReal) return { certReal, foundDistinct, nReal: certReal, partial: true, disagree: true, reason: 'overcount' };
+    return { certReal, foundDistinct, nReal: certReal, partial: false, disagree: false, reason: '' };
+  }
+
   // ===========================================================================
   // G10 — SOS / POSITIVSTELLENSATZ certificate CHECKER (exact over ℚ).
   //
@@ -3853,7 +3903,7 @@ import _QD from './solver.mjs';
     mpolyDet, mpolyDetLaplace, resultant, discriminant, reducedDiscriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, comprehensiveGroebnerSystem, verifySOS, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
-    multiplicationMatrix, solveByEigenvalues, realSolutionCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
+    multiplicationMatrix, solveByEigenvalues, realSolutionCount, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
   };
