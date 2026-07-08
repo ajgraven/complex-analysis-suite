@@ -5,6 +5,7 @@
  * palettes (classic/viridis/magma/grayscale) stay in the shader; this powers the
  * user-editable gradient and recolours without recompiling.
  */
+import { buildGradientLUT, sampleStops } from "@cas/gpu/colormap";
 
 /** A colour stop: position `t` in [0,1] and an RGB colour with channels in 0..255. */
 export type GradientStop = { t: number; color: [number, number, number] };
@@ -18,52 +19,19 @@ export const DEFAULT_GRADIENT: GradientStop[] = [
   { t: 1.0, color: [120, 10, 40] },
 ];
 
-/** Clamp-and-lerp already-sorted stops at t∈[0,1] → an unrounded [r,g,b]. The single source of
- *  truth for the render ramp, the legend swatch, and the editor preview. */
-function lerpSortedStops(sorted: GradientStop[], t: number): [number, number, number] {
-  const first = sorted[0];
-  const last = sorted[sorted.length - 1];
-  if (t <= first.t) return [first.color[0], first.color[1], first.color[2]];
-  if (t >= last.t) return [last.color[0], last.color[1], last.color[2]];
-  let lo = first;
-  let hi = last;
-  for (let k = 0; k < sorted.length - 1; k++) {
-    if (t >= sorted[k].t && t <= sorted[k + 1].t) {
-      lo = sorted[k];
-      hi = sorted[k + 1];
-      break;
-    }
-  }
-  const span = hi.t - lo.t;
-  const f = span > 1e-6 ? (t - lo.t) / span : 0;
-  return [
-    lo.color[0] + (hi.color[0] - lo.color[0]) * f,
-    lo.color[1] + (hi.color[1] - lo.color[1]) * f,
-    lo.color[2] + (hi.color[2] - lo.color[2]) * f,
-  ];
-}
-
 /**
- * Linear-interpolate colour stops into a `width`×1 RGBA8 ramp (opaque). Stops are
- * sorted by `t`; samples before the first / after the last stop clamp to its colour.
+ * Linear-interpolate colour stops into a `width`×1 RGBA8 ramp (opaque) — the render ramp for the
+ * custom gradient. Delegates to @cas/gpu's shared, golden-tested positioned-stop builder; the ramp
+ * machinery is shared across the suite, while the palette DATA stays app-local.
  */
 export function buildGradient(stops: GradientStop[], width = 256): Uint8Array {
-  const sorted = [...stops].sort((a, b) => a.t - b.t);
-  const out = new Uint8Array(width * 4);
-  for (let i = 0; i < width; i++) {
-    const c = lerpSortedStops(sorted, i / (width - 1));
-    out[i * 4] = Math.round(c[0]);
-    out[i * 4 + 1] = Math.round(c[1]);
-    out[i * 4 + 2] = Math.round(c[2]);
-    out[i * 4 + 3] = 255;
-  }
-  return out;
+  return buildGradientLUT(stops, width);
 }
 
-/** Sample custom colour stops at t∈[0,1] → an [r,g,b] triple (0..255); mirrors
- *  {@link buildGradient}'s clamp-and-lerp so the legend swatch matches the render. */
+/** Sample custom colour stops at t∈[0,1] → an [r,g,b] triple (0..255); the @cas/gpu twin of
+ *  {@link buildGradient}'s clamp-and-lerp, so the legend swatch matches the render. */
 export function sampleGradient(stops: GradientStop[], t: number): [number, number, number] {
-  return lerpSortedStops([...stops].sort((a, b) => a.t - b.t), t);
+  return sampleStops(stops, t);
 }
 
 /** The colour-palette select values (mirrors the `uPalette` ints the shader keys off). */

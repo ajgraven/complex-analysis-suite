@@ -11,6 +11,7 @@
     "./df64": "./src/glsl/df64Ref.ts",
     "./glsl": "./src/glsl/index.ts",
     "./shader": "./src/shader.ts",
+    "./colormap": "./src/colormap.ts",
     "./dual-backend": "./src/dualBackend.ts"
   },
   "dependencies": {

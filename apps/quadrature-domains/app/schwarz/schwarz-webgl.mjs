@@ -1,6 +1,7 @@
 // ESM (Phase 2 port) — twin of schwarz/schwarz-webgl.js (classic stays frozen). Registers onto the QD namespace.
 import _QD from '../solver.mjs';
 import { compileShader, linkProgram } from '@cas/gpu/shader';
+import { makeColormapTexture } from '@cas/gpu/colormap';
 // =============================================================================
 // schwarz-webgl.js -- GPU renderer for Schwarz-reflection dynamics.
 //
@@ -619,29 +620,11 @@ void main() {
   // compile / link are shared plumbing now — imported from @cas/gpu/shader as compileShader /
   // linkProgram (top of file), and re-exposed via _glHelpers below so sphere-webgl reuses them.
 
+  // Delegates to @cas/gpu's shared, golden-tested colormap builder (even-spaced RGB stops -> a
+  // 256x1 RGBA8 LINEAR/CLAMP texture). Kept as a named wrapper because sphere-webgl reuses it via
+  // _glHelpers; bit-identical to the previous inline version.
   function buildColormapTexture(gl, stops) {
-    const N = 256;
-    const data = new Uint8Array(N * 4);
-    for (let i = 0; i < N; i++) {
-      const t = i / (N - 1);
-      const n = stops.length - 1;
-      const f = t * n;
-      const k = Math.min(n - 1, Math.floor(f));
-      const u = f - k;
-      const a = stops[k], b = stops[k + 1];
-      data[i*4]   = Math.round(a[0] + (b[0] - a[0]) * u);
-      data[i*4+1] = Math.round(a[1] + (b[1] - a[1]) * u);
-      data[i*4+2] = Math.round(a[2] + (b[2] - a[2]) * u);
-      data[i*4+3] = 255;
-    }
-    const tex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, N, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    return tex;
+    return makeColormapTexture(gl, stops, 256);
   }
   // Colormap stops (each row = RGB in 0–255). All ~8–10 stops per palette;
   // linear interpolation gives a smooth gradient. Sources: matplotlib
