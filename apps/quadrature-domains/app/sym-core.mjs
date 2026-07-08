@@ -3550,9 +3550,23 @@ import _QD from './solver.mjs';
     return G.filter((g) => !g.vars().has(wName));
   }
 
+  // The exact ℚ(i) value of a variable-free MPoly (its constant term), or null if
+  // the polynomial actually involves a variable. Drives the evalComplex overflow
+  // fallback in RatFn/FRatFn below.
+  function _constGaussian(p) {
+    if (p.terms.size === 0) return Gaussian.fromInt(0);
+    if (p.terms.size !== 1) return null;
+    const t = p.terms.values().next().value;
+    return t.mono.size === 0 ? t.coeff : null;
+  }
+
   // ---------------------------------------------------------------------------
   // RatFn — MPoly/MPoly. No multivariate-gcd reduction (kept simple; denominators
   // are products of (1 − z̄·z) and φ′ factors, nonzero on the relevant domain).
+  // Because nothing reduces common factors, a division-heavy recurrence (e.g.
+  // seriesInverse with a non-unit linear coefficient) can inflate num/den into
+  // astronomically large but exactly-cancelling fractions — so evalComplex carries
+  // an exact-ℚ(i) fallback for the case where the float division overflows to NaN.
   // ---------------------------------------------------------------------------
   class RatFn {
     constructor(num, den) {
@@ -3582,7 +3596,15 @@ import _QD from './solver.mjs';
     evalComplex(varMap) {
       const n = this.num.evalComplex(varMap);
       const d = this.den.evalComplex(varMap);
-      return cdiv(n, d);
+      const q = cdiv(n, d);
+      if (Number.isFinite(q.re) && Number.isFinite(q.im)) return q;
+      // The float path overflowed (num/den can each be finite, yet cdiv squares the
+      // denominator → ∞ → NaN) even though the exact ℚ(i) ratio is small. When num
+      // and den are variable-free, divide exactly in ℚ(i) and round only at the end,
+      // so a blown-up-but-exact coefficient never silently reads as NaN.
+      const gn = _constGaussian(this.num), gd = _constGaussian(this.den);
+      if (gn && gd && !gd.isZero()) return gn.div(gd).toComplex();
+      return q;
     }
   }
 
@@ -3664,7 +3686,22 @@ import _QD from './solver.mjs';
       const n = this.num.evalComplex(varMap);
       let d = { re: 1, im: 0 };
       for (const f of this.den) d = cmul(d, cpowInt(f.p.evalComplex(varMap), f.e));
-      return cdiv(n, d);
+      const q = cdiv(n, d);
+      if (Number.isFinite(q.re) && Number.isFinite(q.im)) return q;
+      // Exact ℚ(i) fallback (see RatFn.evalComplex): when num and every den factor
+      // are variable-free, recover num / Π factorᵉ exactly so an overflowed-but-
+      // exact coefficient never silently reads as NaN.
+      const gn = _constGaussian(this.num);
+      if (gn) {
+        let gd = Gaussian.fromInt(1);
+        for (const f of this.den) {
+          const gf = _constGaussian(f.p);
+          if (!gf) { gd = null; break; }
+          for (let i = 0; i < f.e; i++) gd = gd.mul(gf);
+        }
+        if (gd && !gd.isZero()) return gn.div(gd).toComplex();
+      }
+      return q;
     }
   }
 

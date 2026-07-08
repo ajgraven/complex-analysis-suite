@@ -86,6 +86,33 @@ module.exports = async function run() {
        approxEqC(prod.evalComplex({ x: { re: 0.3, im: 0.2 } }), { re: 1, im: 0 }));
   }
 
+  // ---- RatFn / FRatFn evalComplex: exact-ℚ(i) fallback on float overflow -------
+  // RatFn carries no gcd reduction, so a division-heavy recurrence can build a
+  // coefficient whose num & den are individually enormous but exactly cancel. cdiv
+  // SQUARES the denominator, so it overflows to ∞ and the quotient reads as NaN even
+  // though the exact value is a small rational. evalComplex must detect the
+  // non-finite result and recover the exact ℚ(i) quotient — never a silent NaN.
+  {
+    const FR = S.FRatFn;
+    const e200 = 10n ** 200n;
+    const num = MPoly.constant(Gaussian.fromRational(new Rational(7n * e200)));   // 7e200
+    const den = MPoly.constant(Gaussian.fromRational(new Rational(2n * e200)));   // 2e200
+    // precondition: the naive float division really does overflow to non-finite
+    ok('RatFn fallback: naive cdiv path is non-finite (overflow precondition)',
+       !Number.isFinite((7e200 * 2e200) / (2e200 * 2e200)));
+    const rv = new RatFn(num, den).evalComplex({});                              // 7e200/2e200 = 7/2
+    ok('RatFn.evalComplex: 7e200/2e200 = 3.5 exactly (overflow fallback, no NaN)',
+       Number.isFinite(rv.re) && approxEqC(rv, { re: 3.5, im: 0 }), 're=' + rv.re);
+    const fv = new FR(num, [{ p: den, e: 1 }]).evalComplex({});                  // 7e200/(2e200)^1
+    ok('FRatFn.evalComplex: 7e200/(2e200) = 3.5 exactly (overflow fallback, no NaN)',
+       Number.isFinite(fv.re) && approxEqC(fv, { re: 3.5, im: 0 }), 're=' + fv.re);
+    // the fallback is variable-free-only: a genuine 1/0 pole (a VARIABLE denominator
+    // hitting zero) must still read as non-finite — the fallback must mask nothing.
+    const pole = new RatFn(MPoly.fromInt(1), MPoly.variable('x')).evalComplex({ x: { re: 0, im: 0 } });
+    ok('RatFn.evalComplex: genuine 1/0 pole stays non-finite (fallback masks nothing)',
+       !Number.isFinite(pole.re) || !Number.isFinite(pole.im));
+  }
+
   // ---- Power series: mul / pow ----
   {
     const L = 4;
@@ -126,6 +153,32 @@ module.exports = async function run() {
        checkAt(2, 1, 1 / 2, -1 / 8));
     ok('seriesInverse symbolic: same at (3,2)',
        checkAt(3, 2, 1 / 3, -2 / 27));
+  }
+
+  // ---- Compositional inverse: NUMERIC non-unit linear coefficient --------------
+  // s[1] != ±1 makes the order-by-order recurrence divide by s[1] every step, and
+  // (no gcd reduction) the RatFn coefficients blow up: from order 4, T[4] is stored
+  // as a ~1e183/~1e183 fraction whose exact value is -105/128. Regression for the
+  // seriesInverse footgun — the reversion<->inverse cross-check below only exercises
+  // SYMBOLIC coeffs (2^k stays small), so it never triggered the overflow.
+  {
+    const L = 4;
+    // s(t) = 2t + 3t^2 + t^3  ->  T = [0, 1/2, -3/8, 1/2, -105/128]
+    const s = [RatFn.fromInt(0), RatFn.fromInt(2), RatFn.fromInt(3), RatFn.fromInt(1), RatFn.fromInt(0)];
+    const T = S.seriesInverse(s, L);
+    const val = (rf) => rf.evalComplex({});
+    ok('seriesInverse non-unit s1=2: T = [0,1/2,-3/8,1/2,-105/128] (no NaN at order 4)',
+       approxEqC(val(T[0]), { re: 0, im: 0 }) &&
+       approxEqC(val(T[1]), { re: 1 / 2, im: 0 }) &&
+       approxEqC(val(T[2]), { re: -3 / 8, im: 0 }) &&
+       approxEqC(val(T[3]), { re: 1 / 2, im: 0 }) &&
+       Number.isFinite(val(T[4]).re) && approxEqC(val(T[4]), { re: -105 / 128, im: 0 }),
+       'T[4].re=' + val(T[4]).re);
+    // and it agrees value-for-value with the independent Lagrange reversion
+    const Tr = S.seriesReversion(s, L);
+    let agree = true;
+    for (let i = 1; i <= L; i++) agree = agree && approxEqC(val(T[i]), val(Tr[i]));
+    ok('seriesInverse non-unit: agrees with seriesReversion (Lagrange)', agree);
   }
 
   // ---- Multiplicative reciprocal 1/a(t) (Möbius-denominator expansions) ----
