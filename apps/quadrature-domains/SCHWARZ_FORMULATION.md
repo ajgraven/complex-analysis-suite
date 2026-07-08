@@ -39,30 +39,33 @@ The locator block `(●_j): φ(z_j) = a_j` and the gauge block `Σ_j Im A_{j,1} 
   ψ̃_j[1]·ζ·u_j(ζ)` with `u_j(0)=1`:
 
   ```
-  (★_S)_{j,k}:  C_{j,k} − Σ_{l=k}^{m_j} conj(c_{j,l}) · c_{j,1}^{l} · [ζ^{l−k}] u_j(ζ)^{−l}  =  0.
+  (★_S)_{j,k}:  C_{j,k} − Σ_{l=k}^{m_j} A_{j,l} · c_{j,1}^{l} · [ζ^{l−k}] u_j(ζ)^{−l}  =  0.
   ```
 
-  This is the symbolic transcription of the verified numeric direct map
-  ([`direct/direct-common.js`](app/direct/direct-common.js) `boundedQD` /
-  `forwardLocalPrincipal`). The compositional inverse is `Sym.seriesReversion`, which
-  runs over the factored-rational `FRatFn` field with **bounded denominators** (no
-  expression blow-up); `conj(c_l)` is the conjugate-model conjugation (bar coefficients,
-  swap each variable with its partner).
+  The numerator is the **map coefficient `A_{j,l}`**, not `conj(c_{j,l})`. Reason: the
+  Schwarz function pulls back through the uniformization as `S(φ(z)) = φ*(1/z) =
+  Σ_l A_{j,l}/(z−z_j)^l` — the disk reflection `z ↦ 1/z̄` turns the parametric map's
+  Blaschke factors into simple poles at `z_j` carrying the map coefficients `A_{j,l}`.
+  Re-expanding that principal part in `w − a_j` via the local reversion (`u_j`, `c_{j,1}`)
+  gives the sum above. The compositional inverse is `Sym.seriesReversion` over the
+  factored-rational `FRatFn` field with **bounded denominators** (no blow-up). *(A
+  `conj(c_{j,l})` numerator — the local `conj(φ)` shortcut, valid only when `z_j = 0` — was
+  a bug: it dropped the disk-reflection Blaschke factor. See the `z_j ≠ 0` oracle test.)*
 
 ### Same variety, different polynomials
 
-At the true `φ` the residual of **both** systems is `0` (exactly, in rational
-arithmetic — see the oracle tests). But the `(★_S)` polynomials are *not* termwise equal
-to `(★)`: e.g. for a simple pole the Schwarz residue reads `C_{1,1} = conj(φ′(z_j))·φ′(z_j)
-= |φ′(z_j)|²`, whereas the forward block writes `C_{1,1} = A_{1,1}·φ′(z_j)` — equal on the
-reality slice, distinct as polynomials in the independent conjugate-model indeterminates.
+At the true `φ` the residual of **both** systems is `0` (exactly, in rational arithmetic —
+see the oracle tests, now including a `z_j ≠ 0` two-pole case). The `(★_S)` polynomials are
+*not* termwise equal to `(★)` at higher pole orders — per-pole reversion and the forward
+`[t^k] φ̃^s` recurrence give different combinatorial forms — but they cut out the **same
+variety**. For a simple pole both give the same residue, `C_{1,1} = A_{1,1}·φ′(z_j)`, which
+on the reality slice is `|φ′(z_j)|²·(1−|z_j|²)²` — the Blaschke–Jacobian of the disk
+reflection, **not** `|φ′(z_j)|²` (that holds only at `z_j = 0`).
 
 The cleared `(★_S)` equations carry `(1−z̄z)` / `φ′(z_j)` denominator factors that are
 nonzero on the QD regime (`|z_j| < 1`, `φ′ ≠ 0` in `𝔻`) — the same "clear the
-Möbius/critical denominator" philosophy as the forward block. So the alternate
-presentation agrees with the classical one on the physical domain; any extra algebraic
-components live on the excluded boundary / critical locus and are removed by the disk /
-univalence constraints applied downstream.
+Möbius/critical denominator" philosophy as the forward block — so both presentations agree
+on the physical domain.
 
 ### Why use it
 
