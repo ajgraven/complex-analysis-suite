@@ -163,6 +163,23 @@ import _QD from './solver.mjs';
   // resolvent-cubic root y and √(2y) back into the quadratic solver.)
   function ratiInt(S, n) { return Rx.rat(S.RatFn.fromInt(n)); }
 
+  // Fold a RADICAL-FREE node (rat/add/neg/mul/div/pow only — no root/rou) back to a
+  // single RatFn, so a built coefficient (e.g. the depressed quartic's linear term q)
+  // can be tested for EXACT symbolic vanishing. Returns null if the node contains a
+  // genuine radical or a zero divisor ⇒ callers keep the general path.
+  function _foldRatFn(node) {
+    if (!node) return null;
+    switch (node.k) {
+      case 'rat': return node.v;
+      case 'neg': { const a = _foldRatFn(node.a); return a ? a.neg() : null; }
+      case 'add': { const a = _foldRatFn(node.a), b = _foldRatFn(node.b); return (a && b) ? a.add(b) : null; }
+      case 'mul': { const a = _foldRatFn(node.a), b = _foldRatFn(node.b); return (a && b) ? a.mul(b) : null; }
+      case 'div': { const a = _foldRatFn(node.a), b = _foldRatFn(node.b); return (a && b && !b.isZero()) ? a.div(b) : null; }
+      case 'pow': { const a = _foldRatFn(node.a); return a ? a.pow(node.n) : null; }
+      default: return null;   // root / rou ⇒ a real radical ⇒ not a rational function
+    }
+  }
+
   function solveLinear(a, b) {            // a·x + b = 0
     return [Rx.div(Rx.neg(b), a)];
   }
@@ -201,6 +218,24 @@ import _QD from './solver.mjs';
     const q = Rx.add(Rx.sub(D, Rx.div(Rx.mul(B, C), i2)), Rx.div(Rx.pow(B, 3), i8));
     const r = Rx.add(Rx.sub(Rx.add(E, Rx.div(Rx.mul(Rx.pow(B, 2), C), i16)), Rx.div(Rx.mul(B, D), i4)),
       Rx.neg(Rx.div(Rx.mul(i3, Rx.pow(B, 4)), i256)));
+    const shift = Rx.div(B, i4);
+    // q ≡ 0 ⇒ DEPRESSED BIQUADRATIC t⁴ + p t² + r (a symmetric quartic). Ferrari's
+    // resolvent 8y³+8py²+(2p²−8r)y − q² then has constant term −q²=0, so y=0 is a root;
+    // if solveCubic returns it as rc[0], A=√(2y)=0 makes q/(2A)=0/0=NaN and poisons all
+    // four roots. Solve the biquadratic DIRECTLY: u=t², u²+p u+r=0, t=±√u, x=t−B/4. The
+    // guard folds q to a rational function and asks for EXACT vanishing — a mere numeric
+    // specialization q(sample)=0 stays on the (correct) Ferrari path, off its thin locus.
+    const qRat = _foldRatFn(q);
+    if (qRat && qRat.isZero()) {
+      const us = solveQuadratic(S, ratiInt(S, 1), p, r);   // u = t² :  u² + p u + r = 0
+      const roots = [];
+      for (const u of us) {
+        const su = Rx.root(u, 2);                          // √u
+        roots.push(Rx.sub(su, shift));                     // t = +√u  ⇒  x = √u − B/4
+        roots.push(Rx.sub(Rx.neg(su), shift));             // t = −√u  ⇒  x = −√u − B/4
+      }
+      return roots;
+    }
     // resolvent cubic in y:  8 y³ + 8 p y² + (2 p² − 8 r) y − q² = 0
     const rc = solveCubic(S, ratiInt(S, 8), Rx.mul(i8, p),
       Rx.sub(Rx.mul(i2, Rx.pow(p, 2)), Rx.mul(i8, r)), Rx.neg(Rx.pow(q, 2)));
@@ -211,7 +246,6 @@ import _QD from './solver.mjs';
     // (t² − A t + (p/2+y+q/(2A))) · (t² + A t + (p/2+y−q/(2A))) = depressed quartic
     const t1 = solveQuadratic(S, ratiInt(S, 1), Rx.neg(A), Rx.add(base, qOver2A));
     const t2 = solveQuadratic(S, ratiInt(S, 1), A, Rx.sub(base, qOver2A));
-    const shift = Rx.div(B, i4);
     return t1.concat(t2).map((t) => Rx.sub(t, shift));
   }
 
@@ -426,7 +460,14 @@ import _QD from './solver.mjs';
       if (!good) continue;
       checked++; if (worst > maxResidual) maxResidual = worst;
     }
-    return { checked: checked, samples: want, maxResidual: maxResidual };
+    // Explicit verdict so a caller CANNOT read the maxResidual:0 default as "verified":
+    //   ok           ⇔ ≥1 sample evaluated every root to a finite value and was measured;
+    //                  when false, maxResidual carries no information (nothing was checked).
+    //   allNonFinite ⇔ roots were supplied but no sample ever came back all-finite (e.g. a
+    //                  degenerate closed form yielding NaN/∞) — the footgun, now surfaced.
+    const ok = checked > 0;
+    const allNonFinite = roots.length > 0 && checked === 0;
+    return { ok: ok, checked: checked, samples: want, maxResidual: maxResidual, allNonFinite: allNonFinite };
   }
 
   const ns = { solveByRadicals, denest, verifyRoots, evalRadical, radicalToLatex, builders: Rx };

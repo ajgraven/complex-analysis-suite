@@ -47,6 +47,46 @@ module.exports = async function run() {
   solveOK('biquadratic x⁴+p·x²+q (quadratic in x²)',
     x.pow(4).add(V('p').mul(x.pow(2))).add(V('q')), 'x', 4, 4);
 
+  // ---- q=0 depressed-biquadratic quartic that REACHES Ferrari (regression) -----
+  // x⁴+2x³+3x²+2x−10 is irreducible over ℚ(i) (factor path can't rescue) and has
+  // ALL exponents present (gcd 1 ⇒ not the quasi-polynomial reduction), so it hits
+  // solveQuartic; depression gives Ferrari's linear term q=0, whose resolvent has a
+  // y=0 root. The old code took it (A=√(2y)=0 ⇒ q/(2A)=0/0), poisoning all 4 roots
+  // with NaN while still reporting {ok:true, "quartic (Ferrari)"}. Now: 4 finite roots.
+  {
+    const p = x.pow(4).add(I(2).mul(x.pow(3))).add(I(3).mul(x.pow(2))).add(I(2).mul(x)).add(I(-10));
+    const r = SR.solveByRadicals(p, 'x');
+    ok('q=0 quartic: solvable (ok)', r.ok, r.reason);
+    ok('q=0 quartic: 4 roots', (r.roots || []).length === 4, 'got ' + (r.roots || []).length);
+    const vals = (r.roots || []).map((rt) => SR.evalRadical(rt, {}));
+    ok('q=0 quartic: every root is FINITE (no 0/0 NaN)',
+       vals.length === 4 && vals.every((z) => Number.isFinite(z.re) && Number.isFinite(z.im)),
+       JSON.stringify(vals));
+    const ver = SR.verifyRoots(p, 'x', r.roots, { samples: 6 });
+    ok('q=0 quartic: roots verify at random samples (residual ≈ 0)',
+       ver.checked > 0 && ver.maxResidual < 1e-6, 'checked=' + ver.checked + ' maxRel=' + ver.maxResidual.toExponential(2));
+    // library contract: a successful solve with roots must have MEASURED ≥1 sample —
+    // never the silent {checked:0, maxResidual:0} that reads as a false "verified".
+    ok('q=0 quartic: verify.checked>0 whenever ok && roots.length>0',
+       !(r.ok && r.roots.length > 0) || ver.checked > 0, 'ok=' + r.ok + ' n=' + r.roots.length + ' checked=' + ver.checked);
+  }
+
+  // ---- verifyRoots hardening: all-non-finite roots ⇒ EXPLICIT refusal ----------
+  {
+    const q = V('a').mul(x.pow(2)).add(V('b').mul(x)).add(V('c'));
+    // a deliberately poisoned root: 0/0 = NaN at every sample.
+    const nan = SR.builders.div(SR.builders.rat(S.RatFn.fromInt(0)), SR.builders.rat(S.RatFn.fromInt(0)));
+    const ver = SR.verifyRoots(q, 'x', [nan], { samples: 6 });
+    ok('verifyRoots: all-non-finite roots ⇒ checked:0', ver.checked === 0, 'checked=' + ver.checked);
+    ok('verifyRoots: all-non-finite roots ⇒ ok:false (not a silent maxResidual:0 pass)',
+       ver.ok === false, JSON.stringify(ver));
+    ok('verifyRoots: all-non-finite roots ⇒ allNonFinite:true', ver.allNonFinite === true, JSON.stringify(ver));
+    // no false negatives: a healthy solve still verifies ok:true with checked>0.
+    const good = SR.solveByRadicals(q, 'x');
+    const vok = SR.verifyRoots(q, 'x', good.roots, { samples: 4 });
+    ok('verifyRoots: healthy roots ⇒ ok:true, checked>0', vok.ok === true && vok.checked > 0, JSON.stringify(vok));
+  }
+
   // ---- casus irreducibilis: irreducible/ℚ cubic with three REAL roots --------
   {
     const p = x.pow(3).sub(I(3).mul(x)).add(I(1));   // x³−3x+1, roots ≈ 1.532, 0.347, −1.879
