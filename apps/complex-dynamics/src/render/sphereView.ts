@@ -16,6 +16,7 @@
  * fractal texture spins under fixed illumination. Pure module — no DOM / GL; single precision only
  * (the sphere is a whole-plane overview, never a deep-zoom surface). See the riemann-sphere-live plan.
  */
+import { planeToSphere } from "@cas/core";
 import type { Complex } from "../complex";
 import type { Vec2 } from "../arrays";
 
@@ -43,19 +44,23 @@ const norm3 = (a: Vec3): Vec3 => {
 /**
  * A complex number w ↦ the unit-sphere point it corresponds to under stereographic projection from
  * the north pole. w = 0 → south pole (0,0,−1); |w| = 1 → the equator (Z = 0); |w| → ∞ → the north
- * pole (0,0,1). The result is always a unit vector.
+ * pole (0,0,1). The result is always a unit vector. Delegates to @cas/core's shared stereographic
+ * kernel — the forward map is identical across both apps' sphere views.
  */
 export function stereographicInverse(w: Complex): Vec3 {
-  const [u, v] = w;
-  const r2 = u * u + v * v;
-  const d = 1 + r2;
-  return [(2 * u) / d, (2 * v) / d, (r2 - 1) / d];
+  return planeToSphere(w[0], w[1]);
 }
 
 /**
  * A unit-sphere point P = (x,y,Z) ↦ the complex number w = (x + iy)/(1 − Z) it projects to. Near the
  * north pole (Z → 1) the denominator → 0, so |w| → ∞; the denominator is floored to a tiny positive
  * value so the result stays finite (the caller clamps huge |z| before iterating).
+ *
+ * NB: deliberately kept LOCAL rather than delegating to @cas/core's cancellation-safe `sphereToPlane`.
+ * This naive form is bit-mirrored by the GLSL in shaderBuilder (`plotZ = pm/d`) so the rendered
+ * picture and the click-to-inspect cursor agree; on this whole-plane overview ∞ is clamped, so the
+ * robust form's extra precision near N is moot. Adopt core's `sphereToPlane` here only in lockstep
+ * with the GLSL mirror.
  */
 export function stereographic(p: Vec3): Complex {
   const d = Math.max(1 - p[2], 1e-15);

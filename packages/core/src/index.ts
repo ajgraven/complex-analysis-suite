@@ -8,6 +8,8 @@
 //                      (objAlgebra {re,im}, tupleAlgebra [re,im]) — representation-genericity.
 //   - durand-kerner  : generic Durand-Kerner root-finding over any ComplexAlgebra.
 //   - series         : truncated formal power-series multiply (the shared workhorse).
+//   - sphere         : stereographic projection C∪{∞} ↔ the Riemann sphere (cancellation-safe
+//                      inverse), shared by both apps' sphere views.
 // Still to come (Phase 5/6): the rest of formal series, Newton + deflation, mat4/camera.
 export { Complex, default } from "./complex.js";
 export type { Cx } from "./complex.js";
@@ -17,3 +19,4 @@ export { makeDurandKerner } from "./durand-kerner.js";
 export type { DurandKernerOptions, DurandKernerResult } from "./durand-kerner.js";
 export { makeSeries } from "./series.js";
 export type { Series } from "./series.js";
+export { planeToSphere, sphereToPlane } from "./sphere.js";

@@ -1,5 +1,6 @@
-// ESM (Phase 2 port) — twin of sphere/sphere-common.js (classic stays frozen). Self-contained (no QD/Complex dep);
-// exposes SphereCommon as a named export (bootstrap captures it as SC).
+// ESM (Phase 2 port) — twin of sphere/sphere-common.js (classic stays frozen). Depends only on
+// @cas/core (shared stereographic kernel); no QD/Complex/DOM dep. Exposes SphereCommon as a named
+// export (bootstrap captures it as SC).
 // =============================================================================
 // sphere-common.js  — Pure math kernel for the Riemann-sphere visualization.
 //
@@ -28,6 +29,8 @@
 //
 // =============================================================================
 
+import { planeToSphere, sphereToPlane } from '@cas/core';
+
 const _mod = (function () {
   'use strict';
 
@@ -48,28 +51,18 @@ const _mod = (function () {
   //   u = x/(1−z),   v = y/(1−z)
   //   Singular when z = 1 (north pole). Returns null for |1−z| < eps.
 
+  // Projection delegates to @cas/core's shared, golden-tested stereographic kernel (planeToSphere /
+  // sphereToPlane — the cancellation-safe inverse originated here and is now the canonical one).
+  // These thin wrappers adapt QD's {re,im}/{x,y,z} object reps to the kernel's number-args/tuples;
+  // the formulas are bit-identical to the previous inline versions.
   function projectToSphere(w) {
-    const u = w.re, v = w.im;
-    const r2 = u * u + v * v;
-    const d  = 1.0 + r2;
-    return { x: 2 * u / d, y: 2 * v / d, z: (r2 - 1) / (r2 + 1) };
+    const s = planeToSphere(w.re, w.im);
+    return { x: s[0], y: s[1], z: s[2] };
   }
 
   function unprojectFromSphere(p, eps) {
-    if (eps == null) eps = 1e-9;
-    const denom = 1.0 - p.z;
-    if (Math.abs(denom) < eps) return null;
-    if (p.z > 0) {
-      // When z is close to 1 (large |w|), computing x/(1-z) suffers catastrophic
-      // cancellation.  Use the algebraically equivalent form
-      //   u = x*(1+z) / (x²+y²)  (since x²+y² = 1−z² = (1−z)(1+z))
-      // which avoids subtracting two nearly-equal numbers.
-      const r2sq = p.x * p.x + p.y * p.y;   // = 1 − z²  on the unit sphere
-      if (r2sq === 0) return { re: 0, im: 0 };
-      const fac = (1.0 + p.z) / r2sq;
-      return { re: p.x * fac, im: p.y * fac };
-    }
-    return { re: p.x / denom, im: p.y / denom };
+    const w = sphereToPlane(p.x, p.y, p.z, eps == null ? 1e-9 : eps);
+    return w === null ? null : { re: w[0], im: w[1] };
   }
 
   // ===========================================================================
