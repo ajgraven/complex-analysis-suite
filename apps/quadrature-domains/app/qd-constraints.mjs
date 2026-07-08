@@ -183,12 +183,18 @@ import _QD from './solver.mjs';
         meta: { form: 'spiral', role: 'circle' } },
     ];
   }
-  // Geometric border (b): discriminant in ζ of the on-circle polynomial of (c).
+  // Geometric border (b): discriminant in ζ of the on-circle polynomial of (c). Uses the
+  // REDUCED discriminant (S.reducedDiscriminant), not the raw Res(p,∂p): the on-circle
+  // polynomial's leading coefficient in ζ is parameter-dependent (a poly in the barred
+  // pole vars), so the raw resultant Res = ±lc_ζ(pCircle)·disc would drag in the spurious
+  // degree-drop branch lc_ζ(pCircle)=0 (where pCircle loses ζ-degree, NOT a genuine loss of
+  // convexity/star-likeness). reducedDiscriminant divides that lc factor out, leaving only
+  // the true double-root border.
   function geometricBorder(hData, which) {
     const S = getSym(); const d = phiData(hData);
     const P = hermitianReNum(S, which === 'star' ? qStar(S, d) : qConvex(S, d));
     const pCircle = foldCircle(S, P);
-    const border = S.discriminant(pCircle, Z);
+    const border = S.reducedDiscriminant(pCircle, Z);
     return [{ label: (which === 'star' ? 'star' : 'convex') + ' border: disc_ζ = 0',
       poly: border, rel: '=', meta: { form: which + 'Border', role: 'border' } }];
   }

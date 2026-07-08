@@ -630,9 +630,28 @@ import _QD from './solver.mjs';
     return mpolyDet(M);
   }
   // Discriminant (up to the leading-coefficient/sign factor): Res(p, ∂p/∂var).
-  // Its zero set contains the double-root locus — the geometric border loci.
+  // By the standard identity Res(p, ∂p/∂v) = ±lc_v(p)·disc_v(p), so its zero set is
+  // V(disc) ∪ V(lc_v(p)) — the genuine double-root locus PLUS the spurious degree-drop
+  // stratum lc_v(p)=0 (where p loses degree in v; not a real border). That extra branch
+  // is invisible when lc_v(p) is a constant (a monic p — e.g. disc(x²+bx+c)=−b²+4c) but a
+  // real spurious component when the leading coefficient is parameter-dependent. Callers
+  // that use the result AS A BORDER EQUATION — a variety whose points must be genuine
+  // double roots — MUST use reducedDiscriminant() (below), NOT this raw form.
   function discriminant(p, varName) {
     return resultant(p, p.derivativeIn(varName), varName);
+  }
+  // Reduced discriminant — the GENUINE double-root locus with the spurious degree-drop
+  // stratum removed. Since lc_v(p) divides Res(p, ∂p/∂v) EXACTLY (the identity above is a
+  // polynomial identity in the coefficients), one exact division yields ±disc_v(p), whose
+  // vanishing IS precisely V(disc) — no lc_v(p)=0 branch. NOTE we divide by lc exactly ONCE:
+  // stripping gcd(Res, lc^k) instead would over-remove any factor genuinely shared between
+  // disc and lc (a real border coincidence), so single division is the correct reduction.
+  // Returns 0 unchanged when p is constant/zero in v or shares a repeated factor with ∂p/∂v
+  // (Res≡0); returns the constant 1 for degree-1 p (a line never has a double root).
+  function reducedDiscriminant(p, varName) {
+    const disc = discriminant(p, varName);
+    if (disc.isZero()) return disc;                     // constant/zero in v, or repeated factor
+    return mpolyExactDiv(disc, _lcInV(p, varName));     // lc_v(p) | Res exactly ⇒ ±disc_v(p)
   }
 
   // ---------------------------------------------------------------------------
@@ -3831,7 +3850,7 @@ import _QD from './solver.mjs';
     rat, gauss, gaussInt, mpolyVar, mpolyConst, mpolyInt,
     polyFromTermList: (list) => MPoly.fromTermList(list),
     monoKey, monoCmp,
-    mpolyDet, mpolyDetLaplace, resultant, discriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, comprehensiveGroebnerSystem, verifySOS, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep,
+    mpolyDet, mpolyDetLaplace, resultant, discriminant, reducedDiscriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, comprehensiveGroebnerSystem, verifySOS, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, solveByEigenvalues, realSolutionCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,

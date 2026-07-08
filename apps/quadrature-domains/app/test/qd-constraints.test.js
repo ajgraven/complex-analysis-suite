@@ -135,6 +135,38 @@ module.exports = async function run() {
     ok('convex border (discriminant) computes (or hits the cap cleanly)', okBorder);
   }
 
+  // ---- (b) border uses the REDUCED discriminant — no spurious lc=0 branch ----
+  // The on-circle polynomial's leading coefficient in ζ is PARAMETER-DEPENDENT (a poly in
+  // the pole vars), so the raw resultant Res=±lc_ζ·disc would carry the spurious degree-drop
+  // branch lc_ζ=0 (where pCircle loses ζ-degree, NOT a genuine loss of star-likeness).
+  // geometricBorder must divide that single lc factor out. The disk/star border keeps
+  // deg_ζ=4 (under the resultant cap; the richer quad borders exceed it), and its lc_ζ is a
+  // genuine non-constant — exactly the case the bug bit and lc=1 would have hidden.
+  {
+    const S = QD.Sym;
+    // Rebuild the on-circle polynomial exactly as geometricBorder does internally
+    // (phiData → qStar → hermitianReNum → foldCircle), to compare the returned border
+    // against the RAW vs REDUCED discriminant of the SAME pCircle.
+    const d = QC.phiData(hDisk);
+    const Zf = S.FRatFn.fromPoly(S.mpolyVar('Z'));
+    const w0 = S.FRatFn.fromPoly(S.mpolyVar('w0'));
+    const qStar = Zf.mul(d.phiP).div(d.phi0.sub(w0));               // ζ φ′/(φ−w₀)
+    const pCircle = QC.foldCircle(S, QC.hermitianReNum(S, qStar));
+    const degZ = pCircle.degreeIn('Z');
+    const lc = pCircle.coeffsIn('Z')[degZ];                         // leading coeff of pCircle in ζ
+    const border = QC.geometricBorder(hDisk, 'star')[0].poly;
+    const raw = S.discriminant(pCircle, 'Z');                       // ±lc·disc (carries the lc factor)
+    const reduced = S.reducedDiscriminant(pCircle, 'Z');           // disc (lc factor stripped)
+    ok('border(disk/star): on-circle lc_ζ is parameter-dependent (the spurious-branch setup)',
+       degZ >= 2 && lc.totalDegree() >= 1, 'deg_ζ=' + degZ + ', lc totalDeg=' + lc.totalDegree());
+    ok('border(disk/star): geometricBorder returns the REDUCED discriminant (lc=0 branch stripped)',
+       border.equals(reduced));
+    ok('border(disk/star): reduced border ≠ raw Res(pCircle,∂) — the fix changed the polynomial',
+       !border.equals(raw));
+    ok('border(disk/star): lc_ζ·border = raw Res exactly (a single extraneous lc factor removed)',
+       lc.mul(border).equals(raw));
+  }
+
   // ---- dispatcher ----
   ok('generateConstraint dispatches all forms',
      QC.FORMS.length === 7 &&

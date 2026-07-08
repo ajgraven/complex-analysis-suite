@@ -307,6 +307,42 @@ module.exports = async function run() {
     ok('disc_x(x²+bx+c) nonzero at b=0,c=−1',
        Math.abs(disc.evalComplex({ b: { re: 0, im: 0 }, c: { re: -1, im: 0 } }).re) > 1e-9);
 
+    // reducedDiscriminant: the border variety WITHOUT the spurious degree-drop branch.
+    // discriminant() = Res(p,∂p) = ±lc_v(p)·disc(p), so its zero set carries an EXTRANEOUS
+    // component lc_v(p)=0 whenever the leading coefficient is PARAMETER-DEPENDENT. The bug
+    // is invisible for a monic p (lc=1, e.g. x²+bx+c above) but real when lc varies.
+    {
+      const p = mv('t').mul(mv('x').pow(2)).add(mv('b').mul(mv('x'))).add(mv('c'));  // t·x²+b·x+c
+      const raw = S.discriminant(p, 'x');           // = ±t·(b²−4tc)  (lc_x = t)
+      const red = S.reducedDiscriminant(p, 'x');    // = ∓(b²−4tc)    (spurious t=0 removed)
+      const lcx = p.coeffsIn('x')[p.degreeIn('x')]; // leading coefficient in x = t
+      const ev = (q, m) => Math.hypot(q.evalComplex(m).re, q.evalComplex(m).im);
+      ok('reducedDisc: lc_x(t·x²+bx+c) = t is parameter-dependent (not a constant)',
+         lcx.equals(mv('t')) && lcx.totalDegree() === 1);
+      // t=0 is a DEGREE DROP (p → b·x+c), NOT a double root — the raw disc wrongly vanishes there.
+      const spur = { t: { re: 0, im: 0 }, b: { re: 1, im: 0 }, c: { re: 5, im: 0 } };
+      ok('reducedDisc: raw discriminant SPURIOUSLY vanishes on the lc=0 (t=0) stratum',
+         ev(raw, spur) < 1e-12);
+      ok('reducedDisc: reduced discriminant does NOT vanish at t=0 (spurious lc=0 branch gone)',
+         ev(red, spur) > 1e-9, '|red|=' + ev(red, spur).toExponential(2));
+      // t=1,b=2,c=1 → b²−4tc = 0: a GENUINE double root (x=−1) — reduced must keep it.
+      ok('reducedDisc: still vanishes at a genuine double root (t=1,b=2,c=1)',
+         ev(red, { t: { re: 1, im: 0 }, b: { re: 2, im: 0 }, c: { re: 1, im: 0 } }) < 1e-12);
+      ok('reducedDisc: nonzero off the border (t=1,b=0,c=−1 → b²−4tc=4)',
+         ev(red, { t: { re: 1, im: 0 }, b: { re: 0, im: 0 }, c: { re: -1, im: 0 } }) > 1e-9);
+      // The single-factor reduction, exactly: Res(p,∂p) = lc_x(p)·reducedDisc.
+      ok('reducedDisc: lc_x(p)·reducedDisc = discriminant exactly (Res = lc·disc)',
+         lcx.mul(red).equals(raw));
+      // Monic p (lc=1): nothing to strip, reduced == raw — the bug hides here.
+      const pm = mv('x').pow(2).add(mv('b').mul(mv('x'))).add(mv('c'));
+      ok('reducedDisc: equals the raw discriminant when lc=1 (monic — nothing to strip)',
+         S.reducedDiscriminant(pm, 'x').equals(S.discriminant(pm, 'x')));
+      // Degree-1 p: a line has no double root ⇒ reduced disc is the nonzero constant 1
+      // (raw disc = lc = a, whose a=0 zero set is a pure degree-drop, not a border).
+      ok('reducedDisc: reducedDisc(a·x+b) = 1 (a line has no double-root border)',
+         S.reducedDiscriminant(mv('a').mul(mv('x')).add(mv('b')), 'x').equals(mi(1)));
+    }
+
     // matrix-size cap: a resultant whose Sylvester dimension exceeds the cap throws
     // (rather than hanging on a huge Bareiss determinant) — the guard that keeps the
     // heavy geometric-border discriminant from blowing up interactively.
