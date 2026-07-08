@@ -9,6 +9,7 @@
  * the state object as `_z0`/`_grad` (see readFullState/applyFullState) before encoding —
  * a shared link / saved view / undo step reproduces those too.
  */
+import { encodeViewState, decodeViewState } from "@cas/interchange";
 
 /** Control element ids whose values define a shareable view. */
 export const SHARE_IDS = [
@@ -86,35 +87,20 @@ export function applyAppState(state: AppState): void {
   }
 }
 
-// --- URL-hash codec (unicode-safe base64, no deprecated escape/unescape) -------
+// --- URL-hash codec: CD's view-state permalink, on @cas/interchange's shared versioned codec ------
+// encodeState returns the full "#vs=..." fragment (app-namespaced "cd"); decodeState accepts a hash
+// or full URL and yields CD's state only for a "cd" link (a foreign or malformed link → null). The
+// URL-safe base64 transport, envelope versioning, and forward-compat contract live in @cas/interchange.
 
-function toBase64(s: string): string {
-  const bytes = new TextEncoder().encode(s);
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin);
-}
-
-function fromBase64(b64: string): string {
-  const bin = atob(b64);
-  return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
-}
-
-/** Encode state to a compact, URL-hash-safe string. */
+/** Encode CD's state to a URL hash fragment ("#vs=..."). */
 export function encodeState(state: AppState): string {
-  return toBase64(JSON.stringify(state));
+  return encodeViewState("cd", state);
 }
 
-/** Decode a hash string back to state, or null if it's missing/corrupt. */
-export function decodeState(encoded: string): AppState | null {
-  try {
-    const obj: unknown = JSON.parse(fromBase64(encoded));
-    // Reject non-objects AND arrays (typeof [] === "object") — only a plain
-    // key→value map is a valid AppState; a crafted permalink could be anything.
-    return obj && typeof obj === "object" && !Array.isArray(obj) ? (obj as AppState) : null;
-  } catch {
-    return null;
-  }
+/** Decode a hash / URL back to CD's state, or null if absent, corrupt, or not a "cd" link. */
+export function decodeState(hashOrLink: string): AppState | null {
+  const env = decodeViewState<AppState>(hashOrLink);
+  return env && env.app === "cd" ? env.state : null;
 }
 
 // --- saved named views (localStorage-backed) ----------------------------------

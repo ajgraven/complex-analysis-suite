@@ -2119,7 +2119,7 @@ function init(): void {
     return {
       Software: "ComplexDynamicsJS",
       "cdjs:params": params,
-      "cdjs:state": `${location.origin}${location.pathname}#s=${encodeState(readFullState())}`,
+      "cdjs:state": `${location.origin}${location.pathname}${encodeState(readFullState())}`,
     };
   }
 
@@ -2634,7 +2634,7 @@ function init(): void {
 
   /** Serialize the current view into the URL hash and copy a shareable link. */
   async function shareLink(): Promise<void> {
-    const url = `${location.origin}${location.pathname}#s=${encodeState(readFullState())}`;
+    const url = `${location.origin}${location.pathname}${encodeState(readFullState())}`;
     history.replaceState(null, "", url);
     try {
       await navigator.clipboard.writeText(url);
@@ -2682,14 +2682,11 @@ function init(): void {
 
   /** If the URL hash holds a shared view, apply it. Returns whether it did. */
   function loadFromHash(): boolean {
-    if (!/^#s=/.test(location.hash)) return false;
-    // Try @cas/interchange first: its strict schema check throws on CD's own encodeState payload,
-    // so a genuine CD share-link falls through to decodeState (backward-compat preserved) while an
-    // interchange link (which also rides #s=) is imported instead.
-    if (importInterchange(location.hash)) return true;
-    const match = /^#s=(.+)$/.exec(location.hash);
-    if (!match) return false;
-    const state = decodeState(match[1]);
+    // A map deep-link (interchange) rides #s=; CD's own view-state permalink rides #vs= (its own key,
+    // so the two never collide and neither has to sniff the other's payload). Try the map import
+    // first, then CD's view-state.
+    if (/^#s=/.test(location.hash) && importInterchange(location.hash)) return true;
+    const state = decodeState(location.hash);
     if (!state) return false;
     applyFullState(state);
     return true;

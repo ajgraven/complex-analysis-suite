@@ -18,6 +18,7 @@
 
 // ESM (Phase 2 port) — twin of ui-url-state.js (classic stays frozen). QD_UI factory module.
 import { QD_UI } from './ui-registry.mjs';
+import { encodeViewState, decodeViewState } from '@cas/interchange';
 
 (function (global) {
   'use strict';
@@ -39,8 +40,9 @@ import { QD_UI } from './ui-registry.mjs';
     // URL/hash state (B1) — shareable, bookmarkable, reload-restorable config.
     //
     // We serialize the user-meaningful inputs (mode, the h(w) text, the
-    // normalization gauges w₀/c/α/q, aggressiveness, and the active tab) into
-    // location.hash. The h-text round-trips both poles AND the polynomial part
+    // normalization gauges w₀/c/α/q, aggressiveness, and the active tab) into a
+    // versioned view-state envelope (@cas/interchange, app-namespaced "qd"), carried
+    // in location.hash as "#vs=...". The h-text round-trips both poles AND the polynomial part
     // (refreshHText → formatH), so it alone captures the full quadrature data;
     // parseAndApplyHText rebuilds the structured grid from it on restore. We use
     // history.replaceState (not assignment to location.hash) so writing the URL
@@ -63,19 +65,20 @@ import { QD_UI } from './ui-registry.mjs';
       raf(() => {
         _writeUrlScheduled = false;
         try {
-          const p = new URLSearchParams();
-          p.set('mode', state.mode);
+          // Collect the user-meaningful inputs into a plain state object, then encode via
+          // @cas/interchange's shared versioned view-state codec (app-namespaced "qd").
+          const s = { mode: state.mode };
           const hText = ($('#h-text') && $('#h-text').value || '').trim();
-          if (hText) p.set('h', hText);
-          if (state.w0Mode) p.set('w0m', state.w0Mode);
-          if (state.w0Manual) p.set('w0', state.w0Manual);
-          if (state.c != null) p.set('c', String(state.c));
-          if (state.alpha != null && state.alpha !== 1) p.set('a', String(state.alpha));
-          if (state.q && state.q !== '0') p.set('q', state.q);
-          if (state.aggressiveness) p.set('agg', state.aggressiveness);
+          if (hText) s.h = hText;
+          if (state.w0Mode) s.w0m = state.w0Mode;
+          if (state.w0Manual) s.w0 = state.w0Manual;
+          if (state.c != null) s.c = state.c;
+          if (state.alpha != null && state.alpha !== 1) s.a = state.alpha;
+          if (state.q && state.q !== '0') s.q = state.q;
+          if (state.aggressiveness) s.agg = state.aggressiveness;
           const tab = _activeTabId();
-          if (tab && tab !== 'qd') p.set('tab', tab);
-          const hash = '#' + p.toString();
+          if (tab && tab !== 'qd') s.tab = tab;
+          const hash = encodeViewState('qd', s);   // "#vs=..."
           // Avoid redundant history churn when nothing changed.
           if (hash !== location.hash) {
             history.replaceState(null, '', location.pathname + location.search + hash);
@@ -88,27 +91,25 @@ import { QD_UI } from './ui-registry.mjs';
     // (so the caller can skip the default-config solve). Sets mode + gauges FIRST,
     // then the h-text, then parses it (which schedules the solve), then the tab.
     function applyUrlState() {
-      let hash = (location.hash || '').replace(/^#/, '');
-      if (!hash) return false;
-      let p;
-      try { p = new URLSearchParams(hash); } catch (e) { return false; }
-      if (![...p.keys()].length) return false;
+      const env = decodeViewState(location.hash || '');
+      if (!env || env.app !== 'qd') return false;
+      const s = env.state;
 
       // 1. Mode (drives card visibility + which gauges matter). applyModeVisuals
       //    forces α back to 1 for non-PQD modes, so it must run BEFORE we set α.
-      const mode = p.get('mode');
+      const mode = s.mode;
       if (mode && MODES[mode]) {
         state.mode = mode;
         applyModeVisuals();   // also syncs the compact domain-type control
       }
-      // 2. Gauges.
-      if (p.has('a')) {
-        const a = +p.get('a');
+      // 2. Gauges. Values are coerced/validated defensively — a hand-crafted link is untrusted.
+      if (s.a != null) {
+        const a = +s.a;
         if (a > 0 && a !== 1) { state.alpha = a; const inp = $('#alpha-input'); if (inp) inp.value = String(a); }
       }
-      if (p.has('c')) { const c = +p.get('c'); if (c > 0) setC(c); }
-      if (p.has('w0m')) {
-        const m = p.get('w0m');
+      if (s.c != null) { const c = +s.c; if (c > 0) setC(c); }
+      if (s.w0m != null) {
+        const m = String(s.w0m);
         if (m === 'auto' || m === 'manual') {
           state.w0Mode = m;
           const r = document.querySelector(`input[name="w0mode"][value="${m}"]`);
@@ -117,24 +118,24 @@ import { QD_UI } from './ui-registry.mjs';
           if (wManual) wManual.disabled = (m !== 'manual');
         }
       }
-      if (p.has('w0')) {
-        state.w0Manual = p.get('w0');
+      if (s.w0 != null) {
+        state.w0Manual = String(s.w0);
         const wManual = $('#w0-manual');
         if (wManual) wManual.value = state.w0Manual;
       }
-      if (p.has('q')) setQ(p.get('q'));
-      if (p.has('agg') && PRESETS[p.get('agg')]) {
-        state.aggressiveness = p.get('agg');
+      if (s.q != null) setQ(String(s.q));
+      if (s.agg != null && PRESETS[String(s.agg)]) {
+        state.aggressiveness = String(s.agg);
         const aggSel = $('#aggressiveness');
         if (aggSel) aggSel.value = state.aggressiveness;
       }
       // 3. h(w): set the text and parse it (rebuilds the pole grid + poly + solves).
-      if (p.has('h')) {
+      if (s.h != null) {
         const inp = $('#h-text');
-        if (inp) { inp.value = p.get('h'); parseAndApplyHText(); }
+        if (inp) { inp.value = String(s.h); parseAndApplyHText(); }
       }
       // 4. Active tab (deferred a tick so the QD solve kicks off first).
-      const tab = p.get('tab');
+      const tab = s.tab;
       if (tab && tab !== 'qd') {
         const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
         if (btn) setTimeout(() => btn.click(), 0);

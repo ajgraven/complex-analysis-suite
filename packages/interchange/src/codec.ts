@@ -7,31 +7,14 @@
 //
 // v1 links are uncompressed URL-safe-base64 JSON. Compression (CompressionStream / pako) and
 // reconciliation with each app's EXISTING share-link format land in the codec-unification step
-// (Phase 4, step 4) — kept out of the initial contract on purpose. The base64 helpers use only
-// the universal web globals TextEncoder / btoa / atob (browsers AND Node >= 18), so the one codec
-// serves both apps and the headless tests.
+// (Phase 4, step 4) — kept out of the initial contract on purpose. The URL-safe base64 transport
+// lives in base64url.ts (shared with the view-state codec); it uses only the universal web globals
+// TextEncoder / btoa / atob (browsers AND Node >= 18), so one codec serves both apps + the headless tests.
 // =============================================================================
 
 import type { Envelope } from "./schema.js";
+import { toBase64Url, fromBase64Url } from "./base64url.js";
 import { InterchangeError, validateEnvelope } from "./validate.js";
-
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
-
-function toBase64Url(json: string): string {
-  const bytes = encoder.encode(json);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function fromBase64Url(s: string): string {
-  const b64 = s.replace(/-/g, "+").replace(/_/g, "/");
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return decoder.decode(bytes);
-}
 
 /** Encode an envelope into a URL-safe hash fragment: "#s=<url-safe-base64-json>". */
 export function encodeLink(env: Envelope): string {
