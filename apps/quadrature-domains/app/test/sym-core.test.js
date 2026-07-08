@@ -1243,10 +1243,32 @@ module.exports = async function run() {
         ok(label + ': f(t)=0 at every solution & gᵢ(t) reproduce each coordinate', good);
         const tset = new Set(eig.solutions.map((sol) => { const t = tval(sol); return t.re.toFixed(4) + ',' + t.im.toFixed(4); }));
         ok(label + ': the separating form yields ' + expDeg + ' distinct t-values', tset.size === expDeg);
+        // EXACT symbolic certification (no root finder, no floats): the RUR represents the
+        // variety iff f(t) ≡ 0 and g_v(t) ≡ x_v MODULO the radical ideal — i.e. the ℚ(i)
+        // normal form of each is EXACTLY 0. This is the paper-grade correctness witness.
+        let tPoly = mi(0);
+        vrs.forEach((v, i) => { tPoly = tPoly.add(mi(rur.separating[i]).mul(mv(v))); });
+        const fNF = S.normalForm(rur.minPoly.subst({ [rur.tName]: tPoly }), rur.radicalBasis, rur.order);
+        ok(label + ': EXACT — f(t) ≡ 0 mod √I', fNF.isZero());
+        let coordsExact = true;
+        for (const v of vrs) { if (!S.normalForm(rur.coords[v].subst({ [rur.tName]: tPoly }).sub(mv(v)), rur.radicalBasis, rur.order).isZero()) coordsExact = false; }
+        ok(label + ': EXACT — g_v(t) ≡ x_v mod √I (every coordinate)', coordsExact);
+        if (rur.verified !== undefined) ok(label + ': the RUR self-certifies (verified:true)', rur.verified === true);
       }
       checkRUR('RUR ⟨x²−2, y−x⟩', [x.pow(2).sub(mi(2)), y.sub(x)], ['x', 'y'], 2);
       checkRUR('RUR ⟨x²−1, y²−1⟩ (4 points)', [x.pow(2).sub(mi(1)), y.pow(2).sub(mi(1))], ['x', 'y'], 4);
       checkRUR('RUR ⟨x²⟩ (radical ⟨x⟩, single point)', [x.pow(2)], ['x'], 1);
+      // adversarial: unit vectors x,y are NOT separating (both project 4→2), so RUR must find a
+      // COMBINATION t = x + j·y; complex roots; higher degree; a genuine ℚ(i) coefficient; and a
+      // non-radical input (radicalZeroDim reduces it). Each runs the EXACT self-certification.
+      checkRUR('RUR ⟨x²−2, y²−3⟩ (4 pts — neither x nor y separates)', [x.pow(2).sub(mi(2)), y.pow(2).sub(mi(3))], ['x', 'y'], 4);
+      checkRUR('RUR ⟨x²+1, y−x⟩ (complex roots ±i)', [x.pow(2).add(mi(1)), y.sub(x)], ['x', 'y'], 2);
+      checkRUR('RUR ⟨x³−2, y−x⟩ (cube roots of 2)', [x.pow(3).sub(mi(2)), y.sub(x)], ['x', 'y'], 3);
+      checkRUR('RUR ⟨x³−x²⟩ (non-radical → radical ⟨x(x−1)⟩, 2 pts)', [x.pow(3).sub(x.pow(2))], ['x'], 2);
+      checkRUR('RUR ⟨x²−i⟩ over ℚ(i) (Gaussian coefficient)', [x.pow(2).sub(S.mpolyConst(S.gaussInt(0, 1)))], ['x'], 2);
+      // opt-out: verify:false still returns ok, with verified:false (no self-certification run).
+      const rNoV = S.rationalUnivariateRep([x.pow(2).sub(mi(2)), y.sub(x)], { vars: ['x', 'y'], verify: false });
+      ok('RUR: opts.verify=false ⇒ ok with verified:false', rNoV.ok && rNoV.verified === false);
       ok('RUR: positive-dimensional ⇒ ok:false', !S.rationalUnivariateRep([x.pow(2).sub(mi(1))], { vars: ['x', 'y'] }).ok);
     }
 
