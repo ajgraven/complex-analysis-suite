@@ -1207,7 +1207,7 @@ import _QD from './solver.mjs';
   function _sepCandidates(n, max) {
     const list = [];
     for (let i = 0; i < n; i++) { const v = new Array(n).fill(0); v[i] = 1; list.push(v); }
-    for (let j = 1; list.length < max; j++) { const v = []; for (let i = 0; i < n; i++) v.push(Math.pow(j, i)); list.push(v); if (j > max) break; }
+    for (let j = 1; list.length < max; j++) { const v = []; for (let i = 0; i < n; i++) v.push(BigInt(j) ** BigInt(i)); list.push(v); if (j > max) break; }   // exact integer powers (no float-2^53 loss for large n)
     return list;
   }
   function rationalUnivariateRep(input, opts) {
@@ -1245,7 +1245,7 @@ import _QD from './solver.mjs';
         coords[v] = _uniFromArr(g, tName);                                  // xᵥ = Σ g[j]·tʲ  (mod f)
       }
       if (!solved) continue;
-      return { ok: true, separating: cs.slice(), tName, minPoly: f, degree: D, coords, order, radicalBasis: G };
+      return { ok: true, separating: cs.map(Number), tName, minPoly: f, degree: D, coords, order, radicalBasis: G };   // BigInt cands stay exact in Gaussian.fromInt; expose Numbers
     }
     return { ok: false, reason: 'no separating linear form found in ' + (opts.maxTries || 48) + ' tries' };
   }
@@ -1604,6 +1604,12 @@ import _QD from './solver.mjs';
   // Resolve an `order` argument to a monomial-comparison function. Accepts an
   // order object (with `.cmp`) from monomialOrder(), a bare cmp function, or
   // null/undefined → the default graded-lex (monoCmp).
+  // Resolve a monomial-order spec to a cmp function. ⚠ An omitted/falsy order falls back to
+  // monoCmp (GRLEX), but buchberger() defaults to GREVLEX — so calling BOTH without an explicit
+  // order (`G = buchberger(gens); normalForm(f, G)`) reduces against a basis that is NOT a
+  // Gröbner basis under the reduction's order, giving a wrong normal form. Pass the SAME explicit
+  // order to both. (Every in-module call site already threads a matching order; this only bites
+  // external Sym.normalForm / leadingTerm / sPoly callers who omit it.)
   function _orderCmp(order) {
     if (!order) return monoCmp;
     if (typeof order === 'function') return order;
@@ -2703,7 +2709,12 @@ import _QD from './solver.mjs';
     // so report the solutions with an unknown dimension rather than throwing.
     let qdim = null;
     try { qdim = quotientDimension(G1, o1, vars); } catch (e) { qdim = null; }
-    return { ok: true, solutions, basis: Glex, dimension: qdim, univariateDegree: f.degreeIn(solveVar) };
+    const uniDeg = f.degreeIn(solveVar);
+    // complete:false when the injected root finder returned FEWER roots than the univariate
+    // degree (a missed clustered / multiple root) — mirrors the eigenvalue path's `complete`
+    // flag so a consumer (e.g. reconcileRealCount) can honestly flag an under-count instead of
+    // trusting a strict subset that reads as the full solution set.
+    return { ok: true, solutions, basis: Glex, dimension: qdim, univariateDegree: uniDeg, complete: solutions.length >= uniDeg };
   }
   function _defaultRootFinder() {
     const G = (typeof window !== 'undefined' && window.QD) || (typeof global !== 'undefined' && global.QD)
@@ -3475,8 +3486,12 @@ import _QD from './solver.mjs';
   // triangularize(polys, varOrder, opts) → { ok, chain:[MPoly] (low variable LAST → solve
   // bottom-up: chain is ordered with the lowest-ranked main variable FIRST), initials,
   // mainVars, freeVars, contradiction, reason }. varOrder ranks variables highest→lowest
-  // (varOrder[0] is eliminated first); defaults to the ambient variables. Caps mirror the
-  // engine idiom (rounds / degree / terms) and throw "use CAS export"; the boundary
+  // (varOrder[0] is eliminated first); defaults to the ambient variables. ⚠ The chain is
+  // TRIANGULAR, NOT a regular chain: it is not saturated by the pivots' initials, so where an
+  // initial vanishes the chain may describe a SUPERSET (spurious branches) or MISS components.
+  // The returned `initials` / `mainVars` are provided so the caller can check them — the chain
+  // is UNCERTIFIED without that check (it is not on the primary solveZeroDim path). Caps mirror
+  // the engine idiom (rounds / degree / terms) and throw "use CAS export"; the boundary
   // catches them into { ok:false, reason }.
   function triangularize(polys, varOrder, opts) {
     opts = opts || {};
@@ -3857,6 +3872,8 @@ import _QD from './solver.mjs';
   function seriesReversion(s, L) {
     if (!s[0].isZero()) throw new Error('seriesReversion: s[0] must be 0');
     const K = fieldOf(s);
+    if (L <= 0) return seriesZero(L, K);            // trivial: the reversion to order 0 is [0]
+    if (s.length < 2 || s[1].isZero()) throw new Error('seriesReversion: needs a nonzero linear coefficient s[1]');
     const shifted = seriesZero(L, K);               // s(t)/t = [s1, s2, …]
     for (let i = 0; i <= L; i++) shifted[i] = (i + 1 <= L) ? s[i + 1] : K.fromInt(0);
     const g = seriesRecip(shifted, L);              // t/s(t)

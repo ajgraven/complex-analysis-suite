@@ -351,7 +351,7 @@ import _QD from './solver.mjs';
     coeffsM = coeffsM.slice(0, d + 1);
     if (d < 0 || (d === 0)) {
       // constant in varName: c0 = 0 is an identity (every x), c0 ≠ 0 has no root.
-      const c0 = coeffsM[0] || S.MPoly.zero ? coeffsM[0] : null;
+      const c0 = coeffsM[0] || S.MPoly.zero();   // the constant coeff, or the zero polynomial if absent
       if (c0 && c0.isZero()) return { ok: false, reason: 'equation does not constrain ' + varName + ' (identically satisfied)' };
       return { ok: true, roots: [], degree: 0, method: 'no solution (nonzero constant in ' + varName + ')' };
     }

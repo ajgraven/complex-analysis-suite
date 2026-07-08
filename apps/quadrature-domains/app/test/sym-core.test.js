@@ -245,6 +245,13 @@ module.exports = async function run() {
     const sNum = [RatFn.fromInt(0), RatFn.fromInt(1), RatFn.fromInt(1), RatFn.fromInt(0)];
     const Tr = S.seriesReversion(sNum, 3);
     ok('seriesReversion(t+t^2) = [0,1,-1,2]', ceq(Tr[1], 1) && ceq(Tr[2], -1) && ceq(Tr[3], 2));
+    // boundary: reversion to order 0 is the trivial [0] (was a misleading seriesRecip throw).
+    const Tr0 = S.seriesReversion(sNum, 0);
+    ok('seriesReversion at L=0 returns [0] (no throw)', Array.isArray(Tr0) && Tr0.length === 1 && ceq(Tr0[0], 0));
+    // a zero linear coefficient is rejected with a CLEAR message (not the seriesRecip one).
+    let revMsg = '';
+    try { S.seriesReversion([RatFn.fromInt(0), RatFn.fromInt(0), RatFn.fromInt(1)], 2); } catch (e) { revMsg = (e && e.message) || ''; }
+    ok('seriesReversion with s[1]=0 gives a clear "linear coefficient" error', /linear coefficient/.test(revMsg));
   }
 
   // ---- Elimination layer: univariate view, determinant, resultant ----
@@ -728,6 +735,14 @@ module.exports = async function run() {
          sc.solutions.every((s) => Math.abs(Math.hypot(s.x.re, s.x.im) - 1) < 1e-7 && Math.abs(s.x.re) < 1e-7));
       const bad = S.solveZeroDim([mv('x').pow(2).sub(mv('y'))], { vars: ['x', 'y'] });
       ok('solveZeroDim: a positive-dimensional system returns {ok:false}', bad.ok === false && /zero-dimensional/i.test(bad.reason));
+      // complete flag (honest labeling): the full solve is complete; a truncating root finder
+      // that returns fewer roots than the univariate degree is flagged incomplete (feeds
+      // reconcileRealCount so a missed clustered root can't read as the whole solution set).
+      ok('solveZeroDim: complete=true when the finder returns all roots', sol.complete === true);
+      const short = S.solveZeroDim(sys, { vars: ['x', 'y'], solveVar: 'y',
+        rootFinder: () => ({ roots: [{ re: 0.7, im: 0 }], converged: true }) });   // drops a root of the degree-2 univariate
+      ok('solveZeroDim: complete=false when the finder returns fewer roots than the degree',
+         short.ok === true && short.univariateDegree === 2 && short.solutions.length === 1 && short.complete === false);
     }
 
     // Tier-1 linear-substitution preprocessing: linearReduce strips linear variables
