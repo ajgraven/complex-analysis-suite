@@ -143,6 +143,13 @@ in  vec2 v_uv;
 out vec4 outColor;
 
 // -- Complex arithmetic (vec2 representation, x=re, y=im) ---------------------
+// NB: deliberately NOT @cas/gpu's COMPLEX_SINGLE_GLSL. The Schwarz reflection is
+// pole-heavy, so cinv/cdiv are EPS_DIV-guarded (max(d, EPS_DIV)); @cas/gpu's cdiv
+// divides by dot(b,b) unguarded and provides no cinv. Importing the shared stdlib
+// would strip the guard and reintroduce NaN/Inf at poles (and break the CPU<->GPU
+// sigma agreement guard). Keep this local variant UNLESS the EPS guard is first
+// upstreamed into @cas/gpu and re-validated across all three consumers + the
+// dual-backend GLSL~JS invariant.
 vec2 cmul(vec2 a, vec2 b)  { return vec2(a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x); }
 vec2 cinv(vec2 a)          { float d = dot(a, a); return vec2(a.x, -a.y) / max(d, EPS_DIV); }
 vec2 cdiv(vec2 a, vec2 b)  { return cmul(a, cinv(b)); }
