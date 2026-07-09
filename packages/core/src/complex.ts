@@ -21,6 +21,14 @@ export interface Cx {
   im: number;
 }
 
+// A signed decimal / scientific-notation real. Anchored (^…$) so a token with trailing junk —
+// "2i3", "1.2.3", "3x", a dangling "1e" — is REJECTED (→ NaN) rather than silently truncated by
+// parseFloat, preserving Complex.parse's documented `| null` contract for malformed input.
+const REAL_TOKEN = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
+function parseReal(tok: string): number {
+  return REAL_TOKEN.test(tok) ? parseFloat(tok) : NaN;
+}
+
 export const Complex = {
   ZERO: (): Cx => ({ re: 0, im: 0 }),
   ONE: (): Cx => ({ re: 1, im: 0 }),
@@ -188,12 +196,12 @@ export const Complex = {
         if (numPart === "" || numPart === "+") v = 1;
         else if (numPart === "-") v = -1;
         else {
-          v = parseFloat(numPart);
+          v = parseReal(numPart);
           if (isNaN(v)) return null;
         }
         im += v;
       } else {
-        const v = parseFloat(t);
+        const v = parseReal(t);
         if (isNaN(v)) return null;
         re += v;
       }

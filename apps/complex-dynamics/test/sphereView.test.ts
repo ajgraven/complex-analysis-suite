@@ -61,6 +61,14 @@ describe("stereographic projection (N-pole; south = 0, equator = |w|=1, north = 
     const nearNorth = stereographicInverse([1e6, 0]); // a genuine sphere point close to N
     expect(Math.hypot(...stereographic(nearNorth))).toBeGreaterThan(1e5);
   });
+
+  it("clamps |z| to 1e8 at the north pole, matching the GLSL mirror (shaderBuilder)", () => {
+    // A sphere point pressed against N (1 − Z floored to 1e-15) projects to |z| ≈ 1e12; the CPU path
+    // clamps it to 1e8 exactly as sphereRayZ does, so click-inspect ↔ render stay in agreement.
+    const mag = Math.hypot(...stereographic([1e-3, 0, 1]));
+    expect(mag).toBeGreaterThan(9e7);
+    expect(mag).toBeLessThan(1.1e8); // clamped to ~1e8, not the raw ~1e12
+  });
 });
 
 describe("quaternions", () => {

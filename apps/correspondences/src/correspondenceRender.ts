@@ -127,8 +127,10 @@ export function densityToImage(density: Float32Array, image: ImageData, view: Vi
       let r: number;
       let g: number;
       let b: number;
-      if (density[i] > 0) {
-        [r, g, b] = heat(Math.log(1 + density[i]) * norm);
+      // Colorize from the SAME (optionally blurred) buffer `max`/`norm` were computed from — reading
+      // the raw `density` here would make the de-speckle blur a silent no-op.
+      if (dens[i] > 0) {
+        [r, g, b] = heat(Math.log(1 + dens[i]) * norm);
       } else {
         const wx = view.centerX + ((px + 0.5) / W - 0.5) * 2 * view.halfSpan * aspect;
         if (pointInPolygon([wx, wy], BOUNDARY)) {

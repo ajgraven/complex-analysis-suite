@@ -46,6 +46,22 @@ describe("@cas/gpu colormap — even-spaced (buildColormapLUT)", () => {
       expect([lut[i * 4], lut[i * 4 + 1], lut[i * 4 + 2]]).toEqual([12, 34, 56]);
     }
   });
+
+  it("empty palette → a solid black ramp (defensive, no crash)", () => {
+    const lut = buildColormapLUT([], 4);
+    for (let i = 0; i < 4; i++) {
+      expect([lut[i * 4], lut[i * 4 + 1], lut[i * 4 + 2], lut[i * 4 + 3]]).toEqual([0, 0, 0, 255]);
+    }
+  });
+
+  it("width ≤ 1 → a single sample at t = 0 (no 0/0 NaN)", () => {
+    const one = buildColormapLUT([[0, 0, 0], [255, 255, 255]], 1);
+    expect(one.length).toBe(4);
+    expect([one[0], one[1], one[2], one[3]]).toEqual([0, 0, 0, 255]); // first colour (t = 0)
+    const zero = buildColormapLUT([[10, 20, 30], [40, 50, 60]], 0);
+    expect(zero.length).toBe(4); // clamped to one sample rather than an empty buffer
+    expect([zero[0], zero[1], zero[2]]).toEqual([10, 20, 30]);
+  });
 });
 
 describe("@cas/gpu colormap — positioned (buildGradientLUT / sampleStops)", () => {
@@ -76,5 +92,19 @@ describe("@cas/gpu colormap — positioned (buildGradientLUT / sampleStops)", ()
     expect(sampleStops(stops, -1)).toEqual([8, 12, 80]);
     expect(sampleStops(stops, 2)).toEqual([120, 10, 40]);
     expect(sampleStops(stops, 0.375)[0]).toBeCloseTo(136, 0); // halfway 32 → 240
+  });
+
+  it("empty stops → a solid black ramp; sampleStops([]) is black (defensive, no crash)", () => {
+    const lut = buildGradientLUT([], 4);
+    for (let i = 0; i < 4; i++) {
+      expect([lut[i * 4], lut[i * 4 + 1], lut[i * 4 + 2], lut[i * 4 + 3]]).toEqual([0, 0, 0, 255]);
+    }
+    expect(sampleStops([], 0.5)).toEqual([0, 0, 0]);
+  });
+
+  it("width ≤ 1 → a single sample at the first stop (t = 0, no 0/0 NaN)", () => {
+    const lut = buildGradientLUT(stops, 1);
+    expect(lut.length).toBe(4);
+    expect([lut[0], lut[1], lut[2], lut[3]]).toEqual([8, 12, 80, 255]); // first stop
   });
 });

@@ -54,17 +54,25 @@ export function stereographicInverse(w: Complex): Vec3 {
 /**
  * A unit-sphere point P = (x,y,Z) ↦ the complex number w = (x + iy)/(1 − Z) it projects to. Near the
  * north pole (Z → 1) the denominator → 0, so |w| → ∞; the denominator is floored to a tiny positive
- * value so the result stays finite (the caller clamps huge |z| before iterating).
+ * value and |w| is then clamped to 1e8, so the result stays finite in single precision.
  *
  * NB: deliberately kept LOCAL rather than delegating to @cas/core's cancellation-safe `sphereToPlane`.
- * This naive form is bit-mirrored by the GLSL in shaderBuilder (`plotZ = pm/d`) so the rendered
- * picture and the click-to-inspect cursor agree; on this whole-plane overview ∞ is clamped, so the
- * robust form's extra precision near N is moot. Adopt core's `sphereToPlane` here only in lockstep
- * with the GLSL mirror.
+ * This naive form — floor the denominator, then clamp huge |z| — is bit-mirrored by the GLSL in
+ * shaderBuilder (`plotZ = pm/d`, then the same `|z| > 1e8` clamp), so the rendered picture and the
+ * click-to-inspect cursor agree; on this whole-plane overview ∞ is clamped, so the robust form's extra
+ * precision near N is moot. Adopt core's `sphereToPlane` here only in lockstep with the GLSL mirror.
  */
 export function stereographic(p: Vec3): Complex {
   const d = Math.max(1 - p[2], 1e-15);
-  return [p[0] / d, p[1] / d];
+  const z: Complex = [p[0] / d, p[1] / d];
+  // Match the GLSL mirror (shaderBuilder `sphereRayZ`): clamp |z| near the north pole so the CPU
+  // click-inspect coordinate and the rendered pixel agree in single precision (f32 overflows first).
+  const az = Math.hypot(z[0], z[1]);
+  if (az > 1e8) {
+    z[0] *= 1e8 / az;
+    z[1] *= 1e8 / az;
+  }
+  return z;
 }
 
 // --- quaternions ------------------------------------------------------------

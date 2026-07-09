@@ -13,7 +13,9 @@
  *     stops. See buildGradientLUT / sampleStops.
  *
  * Channels are 0..255. The LUT builders are pure and golden-tested; the GL upload
- * (makeColormapTexture) is browser-only.
+ * (makeColormapTexture) is browser-only. All builders degrade gracefully on degenerate input (an empty
+ * palette / stop list → a solid black ramp; a width ≤ 1 → a single sample at t = 0) rather than
+ * producing NaNs or throwing, so a caller that hands over an empty custom gradient can't crash a render.
  */
 
 /** An RGB colour, channels in 0..255. */
@@ -22,10 +24,14 @@ export type RGB = readonly [number, number, number];
 /** A positioned colour stop: position `t` in [0,1] and an RGB colour. */
 export type ColorStop = { readonly t: number; readonly color: RGB };
 
+/** Fallback colour for a degenerate (empty) palette / stop list — a solid black ramp. */
+const BLACK: RGB = [0, 0, 0];
+
 // --- positioned stops (arbitrary t; CD's custom gradient + legend) ----------------------------
 
 /** Clamp-and-lerp already-sorted positioned stops at t → an unrounded [r,g,b]. */
 function lerpSorted(sorted: readonly ColorStop[], t: number): [number, number, number] {
+  if (sorted.length === 0) return [BLACK[0], BLACK[1], BLACK[2]]; // no stops → black (defensive)
   const first = sorted[0];
   const last = sorted[sorted.length - 1];
   if (t <= first.t) return [first.color[0], first.color[1], first.color[2]];
@@ -55,13 +61,15 @@ export function sampleStops(stops: readonly ColorStop[], t: number): [number, nu
 
 /**
  * Interpolate positioned stops into a `width`×1 RGBA8 ramp (opaque). Stops are sorted by `t`; samples
- * before the first / after the last stop clamp to its colour.
+ * before the first / after the last stop clamp to its colour. Empty stops → a solid black ramp; a
+ * width ≤ 1 collapses to a single sample at t = 0 (never the 0/0 that a naive i/(width−1) would give).
  */
 export function buildGradientLUT(stops: readonly ColorStop[], width = 256): Uint8Array {
   const sorted = [...stops].sort((a, b) => a.t - b.t);
-  const out = new Uint8Array(width * 4);
-  for (let i = 0; i < width; i++) {
-    const c = lerpSorted(sorted, i / (width - 1));
+  const w = width > 1 ? width : 1; // width ≤ 1 → one sample at t = 0 (avoid 0/0 = NaN)
+  const out = new Uint8Array(w * 4);
+  for (let i = 0; i < w; i++) {
+    const c = lerpSorted(sorted, w > 1 ? i / (w - 1) : 0);
     out[i * 4] = Math.round(c[0]);
     out[i * 4 + 1] = Math.round(c[1]);
     out[i * 4 + 2] = Math.round(c[2]);
@@ -74,22 +82,24 @@ export function buildGradientLUT(stops: readonly ColorStop[], width = 256): Uint
 
 /**
  * Interpolate an EVEN-spaced colour list into a `width`×1 RGBA8 ramp (opaque): colour k sits at
- * k/(n−1), and the last segment is clamped so t = 1 lands exactly on the final colour.
+ * k/(n−1), and the last segment is clamped so t = 1 lands exactly on the final colour. An empty list
+ * → a solid black ramp; a width ≤ 1 collapses to a single sample at t = 0.
  */
 export function buildColormapLUT(colors: readonly RGB[], width = 256): Uint8Array {
-  const out = new Uint8Array(width * 4);
+  const w = width > 1 ? width : 1; // width ≤ 1 → one sample at t = 0 (avoid 0/0 = NaN)
+  const out = new Uint8Array(w * 4);
   const n = colors.length - 1;
-  for (let i = 0; i < width; i++) {
+  for (let i = 0; i < w; i++) {
     if (n <= 0) {
-      // Degenerate single-colour palette → a solid ramp (QD's tables always have ≥ 4 colours).
-      const c = colors[0];
+      // Degenerate single-colour (or empty) palette → a solid ramp (QD's tables always have ≥ 4 colours).
+      const c = colors[0] ?? BLACK;
       out[i * 4] = Math.round(c[0]);
       out[i * 4 + 1] = Math.round(c[1]);
       out[i * 4 + 2] = Math.round(c[2]);
       out[i * 4 + 3] = 255;
       continue;
     }
-    const t = i / (width - 1);
+    const t = w > 1 ? i / (w - 1) : 0;
     const f = t * n;
     const k = Math.min(n - 1, Math.floor(f));
     const u = f - k;
@@ -113,10 +123,12 @@ export function makeColormapTexture(
   colors: readonly RGB[],
   width = 256,
 ): WebGLTexture | null {
-  const data = buildColormapLUT(colors, width);
+  const w = width > 1 ? width : 1; // match buildColormapLUT's single-sample clamp so texImage2D size agrees
+  const data = buildColormapLUT(colors, w);
   const tex = gl.createTexture();
+  if (!tex) return null; // allocation failure / context loss — callers already tolerate a null texture
   gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);

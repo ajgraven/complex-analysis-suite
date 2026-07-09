@@ -75,6 +75,17 @@ describe("@cas/core Complex (object representation)", () => {
     expect(Complex.parse("garbage")).toBeNull();
   });
 
+  it("parse rejects malformed tokens instead of silently truncating (strict | null contract)", () => {
+    expect(Complex.parse("2i3")).toBeNull(); // was {re:2} (parseFloat stopped at 'i')
+    expect(Complex.parse("1.2.3")).toBeNull(); // was {re:1.2}
+    expect(Complex.parse("3x")).toBeNull(); // was {re:3}
+    expect(Complex.parse("1e")).toBeNull(); // dangling exponent, was {re:1}
+    // ...but well-formed values (bare/short imaginary, leading-dot, sci-notation) still parse:
+    expect(cNear(Complex.parse("2.5i") as Cx, 0, 2.5)).toBe(true);
+    expect(cNear(Complex.parse(".5-1.5e1i") as Cx, 0.5, -15)).toBe(true);
+    expect(cNear(Complex.parse("+i") as Cx, 0, 1)).toBe(true);
+  });
+
   it("format", () => {
     expect(Complex.format({ re: 1, im: 0 })).toBe("1");
     expect(Complex.format({ re: 0, im: 1 })).toBe("i");

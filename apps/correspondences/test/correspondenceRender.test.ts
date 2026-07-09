@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { accumulateBand, blurDensity, DEFAULT_DENSITY, type DensityOptions } from "../src/correspondenceRender.js";
+import {
+  accumulateBand,
+  blurDensity,
+  densityToImage,
+  DEFAULT_DENSITY,
+  type DensityOptions,
+} from "../src/correspondenceRender.js";
 import { DEFAULT_VIEW } from "../src/render.js";
 
 // `accumulateBand` is the pure, heavy core of the density render (colorizing needs a browser ImageData).
@@ -60,5 +66,35 @@ describe("blurDensity", () => {
     d[5 * W2 + 6] = 7;
     d[3 * W2 + 2] = 4;
     expect(Array.from(blurDensity(d, W2, H2))).toEqual(Array.from(blurDensity(d, W2, H2)));
+  });
+});
+
+describe("densityToImage — the blur actually reaches the pixels (not a silent no-op)", () => {
+  // ImageData is browser-only; densityToImage touches only {width,height,data}, so a duck-typed stand-in
+  // with a Uint8ClampedArray is enough to exercise the colorizer headlessly.
+  const mkImage = (w: number, h: number): ImageData =>
+    ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }) as unknown as ImageData;
+
+  it("blur=true smooths an isolated spike into its neighbours; blur=false leaves them as background", () => {
+    const W2 = 32;
+    const H2 = 32;
+    const cx = 16;
+    const cy = 16;
+    const density = new Float32Array(W2 * H2);
+    density[cy * W2 + cx] = 50; // one isolated hit
+
+    const sharp = mkImage(W2, H2);
+    const smooth = mkImage(W2, H2);
+    densityToImage(density, sharp, DEFAULT_VIEW, false);
+    densityToImage(density, smooth, DEFAULT_VIEW, true);
+
+    // A 4-neighbour of the spike has raw density 0, so the sharp render paints it as background; the
+    // blur deposits real weight there, so the smooth render lights it. Pre-fix (the loop read the raw
+    // `density`) these two renders were byte-identical — a silent no-op.
+    const nb = (cy * W2 + (cx + 1)) * 4;
+    const sharpRGB = [sharp.data[nb], sharp.data[nb + 1], sharp.data[nb + 2]];
+    const smoothRGB = [smooth.data[nb], smooth.data[nb + 1], smooth.data[nb + 2]];
+    expect(smoothRGB).not.toEqual(sharpRGB);
+    expect(smooth.data[nb]).toBeGreaterThan(0); // heat()'s red channel — the neighbour is genuinely lit
   });
 });
