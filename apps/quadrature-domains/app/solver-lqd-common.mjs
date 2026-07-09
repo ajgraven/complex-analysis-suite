@@ -548,7 +548,7 @@ import _QD from './solver.mjs';
 
       const rhs = test.residueRhs;
       const { absDiff, relDiff } = compareLhsRhs(lhs, rhs, scaleRef);
-      if (relDiff > maxRelDiff) maxRelDiff = relDiff;
+      maxRelDiff = Number.isFinite(relDiff) ? Math.max(maxRelDiff, relDiff) : Infinity; // fail-closed: a non-finite (NaN/∞) term ⇒ reject, never silently drop it
       if (absDiff > maxAbsDiff) maxAbsDiff = absDiff;
       checks.push({ label: test.label, lhs, rhs, absDiff, relDiff, ...(test.tag || {}) });
     }

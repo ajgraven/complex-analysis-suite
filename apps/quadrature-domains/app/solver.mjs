@@ -700,6 +700,11 @@ function isBoundaryUnivalent(phi, samples = UNIVALENCE_SAMPLES) {
   } else {
     pts = sampleBoundary(phi, samples);
   }
+  // Fail closed on a non-finite boundary sample: φ is degenerate/undefined there so it is NOT univalent,
+  // and the segment tests are false-on-NaN (which would otherwise mislabel a NaN/∞ boundary "univalent").
+  for (let i = 0; i < pts.length; i++) {
+    if (!Number.isFinite(pts[i].re) || !Number.isFinite(pts[i].im)) return false;
+  }
   return !boundarySelfIntersects(pts);
 }
 

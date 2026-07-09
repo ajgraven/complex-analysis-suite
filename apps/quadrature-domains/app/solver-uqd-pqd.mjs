@@ -465,7 +465,7 @@ import _QD from './solver.mjs';
         const absDiff = Complex.abs(dd);
         const scale = Math.max(Complex.abs(lhs), Complex.abs(rhs), areaScale);
         const relDiff = absDiff / scale;
-        if (relDiff > maxRelDiff) maxRelDiff = relDiff;
+        maxRelDiff = Number.isFinite(relDiff) ? Math.max(maxRelDiff, relDiff) : Infinity; // fail-closed: a non-finite (NaN/∞) term ⇒ reject, never silently drop it
         if (absDiff > maxAbsDiff) maxAbsDiff = absDiff;
         checks.push({ bIdx: pIdx, k, lhs, rhs, absDiff, relDiff });
       }
