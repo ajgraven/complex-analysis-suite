@@ -29,6 +29,19 @@ describe("coreEntropy (Thurston angle-pair algorithm)", () => {
     expect(r?.entropy).toBeCloseTo(0, 6);
   });
 
+  it("2/5 (defective λ=1) → h = 0 EXACTLY (power iteration alone stalls near 1.0006)", () => {
+    // The transition matrix is defective at λ=1 (Jordan block), so power iteration crawls sublinearly and
+    // its early-out reported a spurious λ ≈ 1.0006. The exact SCC test snaps it to the true zero entropy.
+    const r = coreEntropy(2, 5);
+    expect(r).not.toBeNull();
+    expect(r?.lambda).toBe(1);
+    expect(r?.entropy).toBe(0);
+    expect(r?.biaccessibility).toBe(0);
+    // Sanity: the two other zero-entropy small cases also come back exact, and a λ>1 case is unaffected.
+    expect(coreEntropy(3, 5)?.entropy).toBe(0); // π-rotation of 2/5
+    expect(coreEntropy(1, 5)?.lambda).toBeCloseTo(1.395337, 5); // λ > 1 still power-iterated
+  });
+
   it("λ stays within [1, 2]", () => {
     for (const [p, q] of [
       [1, 5],

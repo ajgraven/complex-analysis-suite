@@ -3159,7 +3159,7 @@ function init(): void {
     // Core entropy of θ (a combinatorial invariant of the angle, independent of the current map).
     const ce = coreEntropy(pn, qn);
     byId("angle-entropy").textContent = ce
-      ? `Core entropy h = ${ce.entropy.toFixed(4)} (λ = ${ce.lambda.toFixed(4)}); biaccessibility B = ${ce.biaccessibility.toFixed(4)}.`
+      ? `Core entropy h ≈ ${ce.entropy.toFixed(4)} (λ ≈ ${ce.lambda.toFixed(4)}); biaccessibility B ≈ ${ce.biaccessibility.toFixed(4)}.`
       : "Core entropy: not computed for this angle (its orbit reaches the β-fixed angle).";
     if (parameterView.plot.monicDegree !== 2) {
       showToast(

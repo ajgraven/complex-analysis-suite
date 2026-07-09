@@ -43,6 +43,58 @@ function forwardOrbit(theta: Angle): Angle[] {
 }
 
 /**
+ * Whether the non-negative transition graph (node c → t.row for each t in cols[c]) has spectral radius
+ * strictly greater than 1. EXACT (no tolerance): the Perron root is 1 iff every non-trivial strongly-
+ * connected component is a simple directed cycle with unit weights — i.e. its total intra-SCC edge weight
+ * equals its node count. Any SCC with more (a branch, a merge, or a weight-2 edge) grows exponentially, so
+ * its radius exceeds 1. Used to detect the zero-entropy case rigorously, since power iteration converges
+ * only SUBLINEARLY at a defective λ=1 (Jordan block) and its early-out would accept a spurious λ ≈ 1.0006.
+ */
+function spectralRadiusExceedsOne(cols: { row: number; w: number }[][]): boolean {
+  const N = cols.length;
+  const index = new Array<number>(N).fill(-1);
+  const low = new Array<number>(N).fill(0);
+  const onStack = new Array<boolean>(N).fill(false);
+  const comp = new Array<number>(N).fill(-1);
+  const stack: number[] = [];
+  let idx = 0;
+  let nComp = 0;
+  // Recursive Tarjan SCC (depth ≤ N ≤ ~780 pairs — safely within the JS stack).
+  const strongConnect = (v: number): void => {
+    index[v] = low[v] = idx++;
+    stack.push(v);
+    onStack[v] = true;
+    for (const { row: to } of cols[v]) {
+      if (index[to] === -1) {
+        strongConnect(to);
+        low[v] = Math.min(low[v], low[to]);
+      } else if (onStack[to]) {
+        low[v] = Math.min(low[v], index[to]);
+      }
+    }
+    if (low[v] === index[v]) {
+      for (;;) {
+        const u = stack.pop() as number;
+        onStack[u] = false;
+        comp[u] = nComp;
+        if (u === v) break;
+      }
+      nComp++;
+    }
+  };
+  for (let s = 0; s < N; s++) if (index[s] === -1) strongConnect(s);
+
+  const nodeCount = new Array<number>(nComp).fill(0);
+  const intraWeight = new Array<number>(nComp).fill(0);
+  for (let v = 0; v < N; v++) nodeCount[comp[v]] += 1;
+  for (let v = 0; v < N; v++) {
+    for (const { row, w } of cols[v]) if (comp[row] === comp[v]) intraWeight[comp[v]] += w;
+  }
+  for (let k = 0; k < nComp; k++) if (intraWeight[k] > nodeCount[k]) return true;
+  return false;
+}
+
+/**
  * Core entropy of the external angle p/q. Returns null for θ = 0, a degenerate orbit (reaching the
  * β-fixed angle 0), or an orbit too large to power-iterate (|Θ| capped for the UI).
  */
@@ -98,9 +150,17 @@ export function coreEntropy(p: number, q: number, maxOrbit = 40): CoreEntropy | 
     }
   }
 
+  // Exact zero-entropy case FIRST: spectral radius = 1 (⇒ h = 0) iff every non-trivial SCC is a simple
+  // unit cycle. Power iteration converges only SUBLINEARLY at a defective λ=1 (e.g. θ = 2/5, true h = 0),
+  // so its early-out below would otherwise stall near λ ≈ 1.0006 and report a spurious positive entropy.
+  if (!spectralRadiusExceedsOne(cols)) {
+    return { lambda: 1, entropy: 0, biaccessibility: 0, orbitSize: n };
+  }
+
   // Power iteration for the spectral radius (Perron eigenvalue of the non-negative matrix), with a
   // sparse matvec (w = M·v accumulated column-by-column) and an early-out once λ stabilises — the
-  // Perron value typically converges in far fewer than the 4000-iteration cap.
+  // Perron value typically converges in far fewer than the 4000-iteration cap. (Only reached when the
+  // radius genuinely exceeds 1, so the iterate converges to λ > 1, not the sublinear crawl toward 1.)
   let v = new Array<number>(count).fill(1);
   let lambda = 1;
   for (let it = 0; it < 4000; it++) {
