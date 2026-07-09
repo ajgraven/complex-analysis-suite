@@ -1120,10 +1120,13 @@ import { makeDurandKerner, objAlgebra } from '@cas/core';
       const Dtilde = new Array(kj);
       for (let i = 0; i < kj; i++) Dtilde[i] = Dtayl[kj + i] || { re: 0, im: 0 };
       if (C.abs(Dtilde[0]) < 1e-12) {
-        warnings.push("Numerical issue: D's Taylor coefficient at t^" + kj +
-                      " is near zero at pole z=" + complexFmt(zj) +
-                      "; root multiplicity may be wrong.");
-        continue;
+        // D's leading Taylor coefficient at the pole vanishing means the multiplicity k_j is wrong
+        // (typically two distinct poles merged by the root grouper). Silently `continue`-ing here would
+        // DROP the pole and return a mathematically wrong h; fail loudly instead — matching the
+        // Q-root-in-𝔻̄ throw above and the caller's try/catch (direct-recompute).
+        throw new Error("Direct.boundedQDRational: D's Taylor coefficient at t^" + kj +
+                        " is near zero at pole z=" + complexFmt(zj) +
+                        "; the pole multiplicity is ill-conditioned and h cannot be built reliably.");
       }
 
       // 3. F(t) = N_T(t) / D̃(t), Taylor up to order k_j − 1.
@@ -1138,9 +1141,11 @@ import { makeDurandKerner, objAlgebra } from '@cas/core';
       const Pzj = evalPolyAscending(P, zj);
       const Qzj = evalPolyAscending(Q, zj);
       if (C.abs(Qzj) < 1e-14) {
-        warnings.push("Numerical issue: Q is near zero at the pole z=" + complexFmt(zj) +
-                      "; image is ill-defined.");
-        continue;
+        // φ(z_j) = P/Q with Q(z_j) ≈ 0 sends this interior pole to ∞, so it cannot be a finite pole of a
+        // bounded-QD h. Dropping it would silently omit a pole; fail honestly instead. (Should be
+        // unreachable given the "Q has no zeros in 𝔻̄" check above, but never return a wrong h.)
+        throw new Error("Direct.boundedQDRational: Q is near zero at the interior pole z=" +
+                        complexFmt(zj) + "; its image φ(z) → ∞, so no bounded-QD h exists there.");
       }
       const wj = C.div(Pzj, Qzj);
 

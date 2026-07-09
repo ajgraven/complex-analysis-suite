@@ -117,6 +117,49 @@ interface PreviewUniforms {
  *  perturbation shader). Higher-degree monic maps fall back to the df64 renderer. */
 const MAX_PERTURB_DEGREE = 8;
 
+/**
+ * Given an escape predicate `esc(z, c)`, the squared radius R² if it is a clean radial bailout |z| > R
+ * — the SAME threshold in every direction and independent of c (e.g. "abs(z)>2", ">4", ">10000") — else
+ * null. The perturbation deep-zoom kernel hard-codes |z| > 2; feeding it this radius instead lines its
+ * smooth-colour bands up with the standard `escapeFn` on eligible presets whose bailout isn't 2 (the
+ * abs(z)>10⁴ divergence-guard families). A z²+c "abs(z)>2" probes to exactly 4.0, so it stays identical.
+ * Pure + exported for unit testing (the GPU path itself can't run headlessly).
+ */
+export function radialEscapeSq(esc: (z: Complex, c: Complex) => boolean): number | null {
+  const c0: Complex = [0, 0];
+  if (esc([0, 0], c0) || !esc([1e12, 0], c0)) return null; // must be bounded near 0, escaped far out
+  // Bisect the +real-axis threshold R, then confirm it is the SAME radial threshold in other directions
+  // and for other c — otherwise it isn't a pure |z| > R test and we fall back to the default.
+  let lo = 0;
+  let hi = 1e12;
+  for (let i = 0; i < 100; i++) {
+    const mid = 0.5 * (lo + hi);
+    if (esc([mid, 0], c0)) hi = mid;
+    else lo = mid;
+  }
+  const R = 0.5 * (lo + hi);
+  if (!Number.isFinite(R) || R <= 0) return null;
+  const dirs: Complex[] = [
+    [0, 1],
+    [0, -1],
+    [-1, 0],
+    [Math.SQRT1_2, Math.SQRT1_2],
+    [-0.6, -0.8],
+  ];
+  const cs: Complex[] = [
+    [0, 0],
+    [0.5, -0.3],
+    [-1.1, 0.2],
+  ];
+  for (const c of cs) {
+    for (const u of dirs) {
+      if (esc([u[0] * R * 0.9, u[1] * R * 0.9], c)) return null; // just inside must NOT escape
+      if (!esc([u[0] * R * 1.1, u[1] * R * 1.1], c)) return null; // just outside MUST escape
+    }
+  }
+  return R * R;
+}
+
 interface PerturbUniforms {
   uResolution: WebGLUniformLocation | null;
   uZoom: WebGLUniformLocation | null;
@@ -131,6 +174,7 @@ interface PerturbUniforms {
   uGradientOffset: WebGLUniformLocation | null;
   uJitter: WebGLUniformLocation | null;
   uPerturbDegree: WebGLUniformLocation | null;
+  uPerturbEscape2: WebGLUniformLocation | null;
   uBinom: WebGLUniformLocation | null;
   uPolyMode: WebGLUniformLocation | null;
   uPolyCoeffs: WebGLUniformLocation | null;
@@ -342,6 +386,9 @@ export class GLPlot {
   private _perturbation = false; // perturbation deep-zoom toggle
   private _perturbEligible = false; // current f is a monic z^d+c the kernel handles (auto-detected)
   private _monicDegree: number | null = null; // degree d if f is z^d + c, else null
+  // Squared escape radius R² the perturbation kernel bails at — probed from the map's escapeFn so its
+  // smooth-colour bands match the standard render; 4.0 (|z| > 2) is the default / z²+c value.
+  private _perturbEscape2 = 4.0;
   // General-polynomial perturbation data (f = P(z) + B·c), for non-monic polynomials; null otherwise.
   private _polyPerturb: PolyPerturbation | null = null;
   private polyCoeffBuf = new Float32Array((MAX_PERTURB_DEGREE + 1) * 2); // uPolyCoeffs (p_0..p_d, vec2)
@@ -748,6 +795,8 @@ export class GLPlot {
     const divergenceEscape = this.probeDivergenceEscape();
     this._interiorBailout = this._monicDegree === 2 && divergenceEscape;
     this._periodicityBailout = divergenceEscape;
+    // Match the perturbation kernel's bailout to the map's actual escape radius (default |z| > 2).
+    this._perturbEscape2 = this.probeEscapeRadius2() ?? 4.0;
     this.orbitDirty = true;
     try {
       const next = this.compile("single");
@@ -1140,6 +1189,19 @@ export class GLPlot {
     }
   }
 
+  /**
+   * The squared escape radius R² when the map's escape predicate is a clean radial bailout |z| > R,
+   * else null so the caller falls back to 4.0 (|z| > 2, the historical value). Wraps the pure
+   * {@link radialEscapeSq} around the compiled escape function.
+   */
+  private probeEscapeRadius2(): number | null {
+    try {
+      return radialEscapeSq(makeEscapeFn(this._iterEscAst, this._iterAst));
+    } catch {
+      return null;
+    }
+  }
+
   /** Whether the perturbation kernel should drive this frame. */
   private usePerturbation(): boolean {
     if (this._sphere) return false; // the sphere is single-precision; the perturbation kernel has no sphere path
@@ -1290,6 +1352,7 @@ export class GLPlot {
     // classic Mandelbrot; the shader keeps a byte-identical hand-written step there).
     const degree = this.perturbDegree();
     gl.uniform1i(u.uPerturbDegree, degree);
+    gl.uniform1f(u.uPerturbEscape2, this._perturbEscape2); // bailout R² (matches the standard escapeFn)
     this.binomBuf.fill(0);
     for (let j = 0; j <= degree; j++) this.binomBuf[j] = binomial(degree, j);
     gl.uniform1fv(u.uBinom, this.binomBuf);
@@ -1454,6 +1517,7 @@ export class GLPlot {
           uGradientOffset: gl.getUniformLocation(program, "uGradientOffset"),
           uJitter: gl.getUniformLocation(program, "uJitter"),
           uPerturbDegree: gl.getUniformLocation(program, "uPerturbDegree"),
+          uPerturbEscape2: gl.getUniformLocation(program, "uPerturbEscape2"),
           uBinom: gl.getUniformLocation(program, "uBinom"),
           uPolyMode: gl.getUniformLocation(program, "uPolyMode"),
           uPolyCoeffs: gl.getUniformLocation(program, "uPolyCoeffs"),

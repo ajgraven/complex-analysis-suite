@@ -164,6 +164,7 @@ uniform sampler2D uGradient;
 uniform float uGradientOffset;
 uniform vec2 uJitter;
 uniform int uPerturbDegree;     // d = polynomial degree (2 = the classic Mandelbrot z² + c)
+uniform float uPerturbEscape2;  // squared escape radius R² (matches the map's escapeFn; 4.0 ⇒ |z| > 2)
 uniform float uBinom[9];        // C(d, j) for j = 0..d (MAX_DEGREE = 8 ⇒ 9 entries)
 uniform int uPolyMode;          // 1 = general polynomial f = P(z) + B·c; 0 = monic z^d + c
 uniform vec2 uPolyCoeffs[9];    // P's coefficients p_0..p_d (complex), general-polynomial mode
@@ -260,7 +261,7 @@ vec3 pColorAt(vec2 fragXY) {
   for (int pass = 0; pass < uN; pass++) {
     if (k >= uN) break;
     z = Z + dz; // full iterate z_k = Z_m + δz
-    if (dot(z, z) > 4.0) { escaped = true; break; }
+    if (dot(z, z) > uPerturbEscape2) { escaped = true; break; } // R² from the map's escapeFn (4.0 = |z|>2)
     // Take the largest valid BLA skip, else a single perturbation step. The BLA (δz_{m+l} = a·δz + b·δc)
     // only applies while |δz| is within its radius (≈ ε·|a| ≪ escape scale), so no escape is missed
     // mid-skip; near the boundary δz grows, the lookup falls back to single steps, and the escape

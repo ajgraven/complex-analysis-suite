@@ -2778,9 +2778,13 @@ function init(): void {
 
   /** Apply a snapshot to the controls + plots (event-free, so it doesn't self-record). */
   function restoreSnapshot(state: AppState): void {
-    window.clearTimeout(recordTimer); // drop any pending commit
     lastSnapshot = state;
     applyFullState(state);
+    // Repopulating the controls fires input/change events, which scheduleRecord() turns into a pending
+    // history commit — drop it AFTER applying (mirrors the init baseline near the end of setup). Clearing
+    // only BEFORE applyFullState leaves that commit armed to fire in 350 ms and, if the state reads back
+    // even slightly changed, push a spurious undo entry and zero the redo stack on the next undo/redo.
+    window.clearTimeout(recordTimer);
     updateHistoryButtons();
   }
 

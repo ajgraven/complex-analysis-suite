@@ -319,6 +319,22 @@ function complexNear(a, b, tol) {
     const da = Complex.abs(Complex.sub(cl.hData.poles[0].a, pw.hData.poles[0].a));
     ok('§DF PQD α→1 bridges to classical (node a_j agrees)', da < 1e-2, '|Δa|=' + da.toExponential(2));
   }
+  // (7) Branch-point guard: a quadrature node at w ≈ 0 (the branch point of the w^{1−α} weight) makes
+  //     the modified-residue formula singular, so modifiedResidues_PQD must throw rather than return
+  //     huge, meaningless residues that read as a valid PQD; an ordinary node still computes.
+  {
+    const mr = QD_NS.modifiedResidues_PQD;
+    let threwZero = false;
+    try { mr({ a: { re: 1e-12, im: 0 }, principal: [{ re: 1, im: 0 }] }, 0.5); }
+    catch (e) { threwZero = /branch point|ill-defined/.test(e.message); }
+    ok('§DF PQD guard: node at the branch point w≈0 throws', threwZero);
+    let okAway = false;
+    try {
+      const D = mr({ a: { re: 0.5, im: 0 }, principal: [{ re: 1, im: 0 }] }, 0.5);
+      okAway = Array.isArray(D) && D.length === 1;
+    } catch (e) { okAway = false; }
+    ok('§DF PQD guard: an ordinary node (a=0.5) still computes', okAway);
+  }
 
   // ---- SINGULAR (0 ∈ Ω) forward kernels ----------------------------------
   // boundedLogQDSingular: φ = γ·b_{z₀}·exp(r#), γ = w₀/|z₀|. z₀ is FREE (the

@@ -36,7 +36,13 @@ export function startRecording(canvas: HTMLCanvasElement, fps = 30): CanvasRecor
   return {
     stop: () =>
       new Promise<Blob>((resolve) => {
-        rec.onstop = () => resolve(new Blob(chunks, { type: "video/webm" }));
+        rec.onstop = () => {
+          // Stop the capture tracks too: MediaRecorder.stop() ends the recording but leaves the
+          // captureStream's video track live, so each recording would leak an active track (and keep
+          // the canvas-capture pipeline running). Releasing them here bounds it to one live stream.
+          stream.getTracks().forEach((t) => t.stop());
+          resolve(new Blob(chunks, { type: "video/webm" }));
+        };
         rec.stop();
       }),
   };

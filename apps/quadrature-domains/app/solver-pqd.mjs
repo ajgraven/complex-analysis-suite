@@ -287,6 +287,14 @@ import _QD from './solver.mjs';
     const C = pole.principal;
     const mj = C.length;
     const p = pole.a;
+    // A quadrature node p at the branch point w = 0 makes the w^{1−α} weight — and hence the modified
+    // residue factor p^{1−α−m} together with p^{−1} below — singular, so the power-weighted QD is
+    // ill-defined there. Complex.inv throws only for p EXACTLY 0; guard the near-zero case explicitly
+    // so a node at ≈0 fails honestly instead of yielding huge, meaningless D_j that read as a solution.
+    if (Complex.abs(p) < 1e-9) {
+      throw new Error("Family.powerQD: h has a pole (quadrature node) at w ≈ 0, the branch point of the " +
+                      "w^{1−α} weight; the power-weighted QD is ill-defined there.");
+    }
     const D = new Array(mj);
     // Pre-compute p^{1−α−m} for m = 0..(mj−1); start at the real-power
     // p^{1−α} (valid for arbitrary α via Complex.cpow) and multiply by
