@@ -66,4 +66,15 @@ describe("@cas/interchange view-state codec", () => {
     const env = decodeViewState(encodeViewState("cd", { a: 1 }, VIEWSTATE_VERSION + 1));
     expect(env!.v).toBe(VIEWSTATE_VERSION + 1);
   });
+
+  it("SECURITY: rejects prototype-pollution keys and oversized payloads", () => {
+    // __proto__ / constructor as OWN keys (JSON.parse defines them, does not walk the setter) ⇒ null,
+    // so the codec never forwards a pollution vector to a consumer that might spread env.state.
+    const proto = '{"v":1,"app":"cd","state":{"__proto__":{"polluted":1}}}';
+    expect(decodeViewState("#vs=" + toBase64Url(proto))).toBeNull();
+    const ctor = '{"v":1,"app":"cd","state":{"nested":{"constructor":{"prototype":{"x":1}}}}}';
+    expect(decodeViewState("#vs=" + toBase64Url(ctor))).toBeNull();
+    // An oversized payload is rejected by the length cap BEFORE any decode work.
+    expect(decodeViewState("#vs=" + "A".repeat(70 * 1024))).toBeNull();
+  });
 });

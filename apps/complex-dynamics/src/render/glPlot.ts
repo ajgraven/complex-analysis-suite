@@ -975,7 +975,9 @@ export class GLPlot {
    * depth (auto-iterations) so deep zooms keep their detail. Capped to bound cost.
    */
   private targetIterations(): number {
-    const base = Math.max(1, Math.round(Number(this._n)));
+    // Clamp the base to AUTO_ITER_MAX unconditionally (not only on the auto-iter path): an uncapped
+    // count from a share link would loop ~1e9×/pixel and trip the GPU watchdog → context loss.
+    const base = Math.min(AUTO_ITER_MAX, Math.max(1, Math.round(Number(this._n))));
     if (!this._autoIter) return base;
     return autoIterations(base, this._zoom, this._autoIterStrength);
   }
@@ -2179,7 +2181,10 @@ export class GLPlot {
     this._z0 = z0Val;
   }
   set res(resVal: number | string) {
-    this._res = Number(resVal);
+    const r = Math.round(Number(resVal));
+    // Clamp to [64, GPU max texture size]: an uncapped value from a share link would allocate a
+    // multi-GB backing store and crash the tab on open (the export path clamps; the live path must too).
+    this._res = Number.isFinite(r) ? Math.min(this.maxTextureSize || 4096, Math.max(64, r)) : 64;
     this.scheduleRender();
   }
 

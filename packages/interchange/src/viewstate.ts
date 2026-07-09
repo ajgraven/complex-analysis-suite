@@ -18,6 +18,7 @@
 // =============================================================================
 
 import { toBase64Url, fromBase64Url } from "./base64url.js";
+import { hasForbiddenKey } from "./validate.js";
 
 /** The current view-state envelope format version. Bump ONLY on a breaking envelope-shape change. */
 export const VIEWSTATE_VERSION = 1;
@@ -69,5 +70,6 @@ export function decodeViewState<S = Record<string, unknown>>(
   const state = env.state;
   if (typeof v !== "number" || typeof app !== "string") return null;
   if (state === null || typeof state !== "object" || Array.isArray(state)) return null;
+  if (hasForbiddenKey(env)) return null; // reject prototype-pollution keys anywhere in the tree
   return { v, app, state: state as S };
 }

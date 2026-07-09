@@ -41,6 +41,13 @@ describe("@cas/interchange schema + constants", () => {
     expect(isMapSpec({ form: "bogus" })).toBe(false);
     expect(isMapSpec(null)).toBe(false);
   });
+  it("SECURITY: bounds coefficient-array length, expr length, and vars entries", () => {
+    const big = Array.from({ length: 5000 }, () => ({ re: 0, im: 0 }));
+    expect(isMapSpec({ form: "rational", num: big, den: [{ re: 1, im: 0 }] })).toBe(false); // > MAX_COEFF_LEN
+    expect(isMapSpec({ form: "expr", expr: "z", vars: ["z", "drop table"] })).toBe(false); // bad var name
+    expect(isMapSpec({ form: "expr", expr: "z", vars: ["z", "c", "a"] })).toBe(true);
+    expect(isMapSpec({ form: "expr", expr: "z".repeat(9000), vars: [] })).toBe(false); // > MAX_EXPR_LEN
+  });
 });
 
 describe("validateEnvelope", () => {
@@ -79,6 +86,17 @@ describe("validateEnvelope", () => {
   it("rejects a non-object and bad provenance", () => {
     expect(() => validateEnvelope(null)).toThrow(/must be an object/);
     expect(() => validateEnvelope({ ...schwarzEnvelope(), provenance: { app: "x" } })).toThrow(/provenance/);
+  });
+
+  it("SECURITY: rejects a prototype-pollution key anywhere in the tree", () => {
+    // __proto__ as an OWN key from JSON.parse (not the setter) ⇒ throw at the boundary, so the package
+    // owns the guarantee instead of relying on every consumer to read named fields defensively.
+    const proto = JSON.parse(
+      '{"schema":"' + SCHEMA_ID + '","version":"' + VERSION +
+        '","kind":"map","payload":{"form":"expr","expr":"z","vars":[],"__proto__":{"x":1}},' +
+        '"provenance":{"app":"x","appVersion":"1","createdAt":"t"}}',
+    );
+    expect(() => validateEnvelope(proto)).toThrow(/forbidden key/);
   });
 });
 

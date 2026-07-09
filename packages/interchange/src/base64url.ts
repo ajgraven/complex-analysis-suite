@@ -13,8 +13,14 @@ export function toBase64Url(json: string): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-/** URL-safe base64 → UTF-8 string. Throws (via atob) on malformed input; callers catch. */
+/** Max URL-safe-base64 payload accepted for decode. A legitimate map / view-state link is a few KB;
+ *  this bounds a crafted mega-payload BEFORE atob / JSON.parse do O(n) work on it (~48 KB decoded). */
+export const MAX_BASE64URL_LEN = 64 * 1024;
+
+/** URL-safe base64 → UTF-8 string. Throws (via the size guard or atob) on oversized / malformed input;
+ *  callers catch. */
 export function fromBase64Url(s: string): string {
+  if (s.length > MAX_BASE64URL_LEN) throw new RangeError("base64url: payload too large to decode");
   const b64 = s.replace(/-/g, "+").replace(/_/g, "/");
   const binary = atob(b64);
   const bytes = new Uint8Array(binary.length);

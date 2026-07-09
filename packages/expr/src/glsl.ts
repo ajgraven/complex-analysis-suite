@@ -117,11 +117,17 @@ function emitPow(base: Node, exp: Node): string {
 // Larger integer powers route to the cintpow binary-exponentiation helper (see
 // COMPLEX_DERIVED_GLSL) so a high exponent doesn't unroll into a giant nested expression.
 const INTPOW_INLINE_MAX = 8;
+// A base longer than this routes to cintpow instead of textual repeat-multiply (see intPow) — the guard
+// against exponential codegen blow-up on nested small-integer powers (`((z^8)^8)^8…`) from untrusted input.
+const INTPOW_INLINE_MAX_BASE_LEN = 256;
 
 function intPow(baseExpr: string, n: number): string {
   if (n === 0) return "vec_(1.0, 0.0)";
   if (n < 0) return `cdiv(vec_(1.0, 0.0), ${intPow(baseExpr, -n)})`;
-  if (n <= INTPOW_INLINE_MAX) {
+  // Inline repeated-multiply ONLY for a short base. Duplicating the base string n times is what makes
+  // nested powers blow up exponentially (each `^k` layer multiplies the emitted length by up to k); once
+  // the base is long, route to cintpow, which references it ONCE — identical result, not textually unrolled.
+  if (n <= INTPOW_INLINE_MAX && baseExpr.length <= INTPOW_INLINE_MAX_BASE_LEN) {
     let acc = baseExpr;
     for (let k = 1; k < n; k++) acc = `cmul(${acc}, ${baseExpr})`;
     return acc;

@@ -27,11 +27,37 @@ function isFiniteNum(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
 }
 
+// --- untrusted-input bounds (a share link / hand-edited JSON is adversarial) -------------------
+/** Max length of a coefficient array (rational num/den, laurent F): bounds a crafted mega-array that
+ *  would validate and then build a multi-MB expression string in a consumer (main-thread DoS). */
+const MAX_COEFF_LEN = 4096;
+/** Max length of an `expr`-form source string. */
+const MAX_EXPR_LEN = 8192;
+/** Max number of declared variables in an `expr` map. */
+const MAX_VARS_LEN = 16;
+/** Keys that, as OWN properties from JSON.parse, enable prototype pollution the moment a consumer spreads
+ *  or Object.assign-s the object. Rejected anywhere in the decoded tree so the boundary owns the guarantee. */
+const FORBIDDEN_KEYS: readonly string[] = ["__proto__", "constructor", "prototype"];
+
+function isVarName(v: unknown): v is "z" | "c" | "a" {
+  return v === "z" || v === "c" || v === "a";
+}
+
+/** True if any object in the tree (depth-bounded) carries an own key that could pollute Object.prototype. */
+export function hasForbiddenKey(value: unknown, depth = 0): boolean {
+  if (depth > 8 || value === null || typeof value !== "object") return false;
+  for (const k of Object.keys(value)) {
+    if (FORBIDDEN_KEYS.includes(k)) return true; // reject BEFORE reading value[k] (never touch __proto__)
+    if (hasForbiddenKey((value as Record<string, unknown>)[k], depth + 1)) return true;
+  }
+  return false;
+}
+
 export function isComplex(v: unknown): v is Complex {
   return isObject(v) && isFiniteNum(v.re) && isFiniteNum(v.im);
 }
 function isComplexArray(v: unknown): v is Complex[] {
-  return Array.isArray(v) && v.every(isComplex);
+  return Array.isArray(v) && v.length <= MAX_COEFF_LEN && v.every(isComplex);
 }
 
 export function isConventions(v: unknown): v is Conventions {
@@ -50,7 +76,8 @@ export function isMapSpec(v: unknown): v is MapSpec {
     case "laurent":
       return isComplex(v.c) && isComplexArray(v.F);
     case "expr":
-      return typeof v.expr === "string" && Array.isArray(v.vars);
+      return typeof v.expr === "string" && v.expr.length <= MAX_EXPR_LEN &&
+        Array.isArray(v.vars) && v.vars.length <= MAX_VARS_LEN && v.vars.every(isVarName);
     default:
       return false;
   }
@@ -94,6 +121,9 @@ function validatePayload(kind: PayloadKind, payload: unknown): void {
  */
 export function validateEnvelope(value: unknown): Envelope {
   if (!isObject(value)) throw new InterchangeError("interchange: envelope must be an object");
+  if (hasForbiddenKey(value)) {
+    throw new InterchangeError("interchange: payload has a forbidden key (__proto__/constructor/prototype)");
+  }
   if (value.schema !== SCHEMA_ID) {
     throw new InterchangeError(`interchange: wrong schema "${String(value.schema)}" (expected "${SCHEMA_ID}")`);
   }
