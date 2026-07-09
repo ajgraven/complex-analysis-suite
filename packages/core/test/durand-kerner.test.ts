@@ -133,4 +133,20 @@ describe("makeDurandKerner (generic, both representations)", () => {
     expect(res?.converged).toBe(true);
     expect(res?.iterations).toBe(1);
   });
+
+  it("tupleAlgebra.div throws on an exact-zero denominator, matching objAlgebra (genericity contract)", () => {
+    expect(() => tupleAlgebra.div([1, 0], [0, 0])).toThrow();
+    expect(() => objAlgebra.div({ re: 1, im: 0 }, { re: 0, im: 0 })).toThrow();
+  });
+
+  it("does not report converged when coincident seeds leave roots unrefined (honest skip)", () => {
+    // Two identical seeds ⇒ the product-of-differences is 0 ⇒ both roots are skipped (unrefined). Without
+    // the guard, maxDelta stays 0 < tol and the solve would falsely report converged with non-root estimates.
+    const dk = makeDurandKerner(objAlgebra);
+    const monic = evalMonicFromRoots(objAlgebra, [[2, 0], [-3, 0]]);
+    const seed = objAlgebra.make(0.5, 0.5);
+    const res = dk(monic, [seed, seed], { tol: 1e-12, maxIter: 50 });
+    expect(res).not.toBeNull();
+    expect(res?.converged).toBe(false); // a skipped root can no longer count as converged (was `true` pre-fix)
+  });
 });

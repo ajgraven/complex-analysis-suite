@@ -90,6 +90,7 @@ export function makeDurandKerner<C>(alg: ComplexAlgebra<C>) {
 
     for (; iterations < maxIter; iterations++) {
       let maxDelta = 0;
+      let skipped = false; // set when a coincident root is left unrefined this sweep (can't be "converged")
       // Jacobi writes into a fresh array (all reads see the previous sweep); Seidel writes in
       // place, so `next === z` and later i's read the just-updated earlier ones.
       const next: C[] = seidel ? z : new Array<C>(n);
@@ -110,6 +111,7 @@ export function makeDurandKerner<C>(alg: ComplexAlgebra<C>) {
             if (nudgeEps > maxDelta) maxDelta = nudgeEps;
           } else {
             ziNext = zi; // leave unchanged this sweep
+            skipped = true; // unresolved coincidence ⇒ this root wasn't refined ⇒ block false convergence
           }
         } else {
           const delta = alg.div(evalMonic(zi), denom);
@@ -122,7 +124,7 @@ export function makeDurandKerner<C>(alg: ComplexAlgebra<C>) {
         next[i] = ziNext;
       }
       if (!seidel) z = next;
-      if (maxDelta < tol) {
+      if (maxDelta < tol && !skipped) { // a skipped (unresolved-coincident) root can't count as converged
         converged = true;
         iterations++; // count this converging sweep — `break` skips the for-loop's own i++, so this is
         break; //        NOT an off-by-one: converge-on-first-sweep correctly reports iterations === 1.

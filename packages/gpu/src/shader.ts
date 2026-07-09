@@ -53,7 +53,13 @@ export function createProgram(
   fsSource: string,
 ): WebGLProgram {
   const vertex = compileShader(gl, gl.VERTEX_SHADER, vsSource);
-  const fragment = compileShader(gl, gl.FRAGMENT_SHADER, fsSource);
+  let fragment: WebGLShader;
+  try {
+    fragment = compileShader(gl, gl.FRAGMENT_SHADER, fsSource);
+  } catch (e) {
+    gl.deleteShader(vertex); // fragment compile failed ⇒ the already-compiled vertex would otherwise leak
+    throw e;
+  }
   try {
     return linkProgram(gl, vertex, fragment);
   } finally {

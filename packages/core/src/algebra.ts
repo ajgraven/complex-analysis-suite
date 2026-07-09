@@ -75,6 +75,7 @@ export const tupleAlgebra: ComplexAlgebra<ComplexTuple> = {
   mul: (a, b) => [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]],
   div: (a, b) => {
     const d = b[0] * b[0] + b[1] * b[1];
+    if (d === 0) throw new Error("tupleAlgebra.div: division by zero"); // match objAlgebra / Complex.div
     return [(a[0] * b[0] + a[1] * b[1]) / d, (a[1] * b[0] - a[0] * b[1]) / d];
   },
   scale: (a, s) => [a[0] * s, a[1] * s],
