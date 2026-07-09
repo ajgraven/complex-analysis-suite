@@ -70,4 +70,24 @@ describe("param-slice pool + UI wiring (ESM-port regression guards)", () => {
     expect(/global\.ParamSlice\b/.test(renderSrc)).toBe(false);
     expect(/import\s+ParamSlice\s+from/.test(renderSrc)).toBe(true);
   });
+
+  it("a crashed worker settles its in-flight tile and drops from the pool (QDW-1: no hang, no leak)", async () => {
+    interface PoolLike {
+      activeJobs: Map<number, unknown>;
+      workers: unknown[];
+      submitTile: (s: unknown, id: number, pts: unknown, hints: unknown) => Promise<unknown>;
+      _onWorkerError: (w: unknown, msg: string) => void;
+    }
+    const PoolClass = (ParamSlicePool as unknown as { Pool: new (workers: unknown[], url: unknown) => PoolLike })
+      .Pool;
+    // A minimal worker stub — the pool only calls addEventListener/postMessage/terminate on it.
+    const w = { addEventListener() {}, removeEventListener() {}, postMessage() {}, terminate() {} };
+    const pool = new PoolClass([w], null);
+    const p = pool.submitTile({}, 1, POINTS, null); // dispatched to w ⇒ now in-flight
+    expect(pool.activeJobs.size).toBe(1);
+    pool._onWorkerError(w, "boom"); // the worker dies mid-tile
+    expect(pool.workers.length).toBe(0); // dead worker removed ⇒ no thread leak
+    expect(pool.activeJobs.size).toBe(0); // its job settled ⇒ no hang
+    await expect(p).resolves.toBeNull(); // the awaiting sweep unwinds instead of hanging forever (pre-fix)
+  });
 });

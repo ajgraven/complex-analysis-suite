@@ -135,6 +135,32 @@ const _pool = (function () {
       this.pending.length = 0;
     }
 
+    // A worker died (script-parse error, an uncaught throw in the message handler, or a structured-clone
+    // failure). Settle its in-flight tile so the sweep's Promise.all can't hang, then drop the dead
+    // worker. Pre-fix the handler only console.error'd, so submitTile's promise never resolved → the
+    // whole render wedged forever at "row k/n" AND the thread leaked. (Mirrors primary-solver-worker's
+    // crash handling.) The tile's pixels are left unclassified rather than re-queued — best-effort, but
+    // the pipeline unwinds cleanly.
+    _onWorkerError(w, msg) {
+      console.error('[param-slice worker] died — dropping it:', msg);
+      for (const [jobId, job] of this.activeJobs) {
+        if (job.worker === w) {
+          this.activeJobs.delete(jobId);
+          try { job.resolve(null); } catch (e) { /* ignore */ }
+        }
+      }
+      const wi = this.workers.indexOf(w); if (wi >= 0) this.workers.splice(wi, 1);
+      const ii = this.idle.indexOf(w);    if (ii >= 0) this.idle.splice(ii, 1);
+      try { w.terminate(); } catch (e) { /* ignore */ }
+      if (this.workers.length === 0) {
+        // No workers left ⇒ drain the queue so the render fails cleanly (unclassified) instead of hanging.
+        for (const job of this.pending) { try { job.resolve(null); } catch (e) { /* ignore */ } }
+        this.pending.length = 0;
+      } else {
+        this._dispatch(); // hand any queued work to the survivors
+      }
+    }
+
     terminate() {
       this.cancel();
       for (const w of this.workers) {
@@ -207,20 +233,18 @@ const _pool = (function () {
     const n = Math.max(1, Math.min(opts.maxWorkers || (navigator.hardwareConcurrency || 4), 16));
     const workers = [];
     for (let i = 0; i < n; i++) {
-      const w = new Worker(new URL('../workers/param-slice-worker-entry.mjs', import.meta.url), { type: 'module' });
-      // Surface worker-level errors (script-parse, uncaught throw inside
-      // the message handler) to the console so misconfigurations don't get
-      // silently absorbed and mis-classified as solver capability refusals.
-      w.addEventListener('error', (e) => {
-        console.error('[param-slice worker] error: '
-          + (e.message || e) + ' @ ' + (e.filename || 'bundle') + ':' + (e.lineno || '?'));
-      });
-      w.addEventListener('messageerror', (e) => {
-        console.error('[param-slice worker] messageerror (postMessage clone failed):', e);
-      });
-      workers.push(w);
+      workers.push(new Worker(new URL('../workers/param-slice-worker-entry.mjs', import.meta.url), { type: 'module' }));
     }
-    return new Pool(workers, null);
+    const pool = new Pool(workers, null);
+    // A worker-level error (script-parse, an uncaught throw in the message handler, or a structured-clone
+    // failure) must not just log — it leaves an in-flight tile promise unsettled, hanging the whole sweep
+    // forever and leaking the dead thread. Route both to the pool's crash handler.
+    for (const w of workers) {
+      w.addEventListener('error', (e) =>
+        pool._onWorkerError(w, ((e && e.message) || e) + ' @ ' + ((e && e.filename) || 'bundle') + ':' + ((e && e.lineno) || '?')));
+      w.addEventListener('messageerror', () => pool._onWorkerError(w, 'postMessage clone failed'));
+    }
+    return pool;
   }
 
   // ---------------------------------------------------------------------------
@@ -318,6 +342,7 @@ const _pool = (function () {
     create: createPoolWithFallback,
     createWorkerOnly: createPool,        // explicit opt-out of the main-thread fallback
     MainThreadPool,                       // exposed so tests can drive it directly
+    Pool,                                 // exposed so tests can drive the worker-pool crash path directly
   };
 })();
 
