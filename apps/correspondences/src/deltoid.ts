@@ -122,6 +122,10 @@ export function makeUnboundedLaurentSchwarz(
         best = z;
       }
     }
+    // If DK didn't reach tol (a pathological w), only trust the outermost estimate when it is genuinely a
+    // root — an unconverged solve can otherwise surface a spurious "outer" point. |p(z)| scales like
+    // |z|^m for a monic degree-m polynomial, so scale the residual gate accordingly.
+    if (!res.converged && best && A.abs(evalMonic(best)) > 1e-6 * Math.max(1, bestAbs) ** m) return null;
     return bestAbs >= 1 - 1e-6 ? best : null;
   };
 

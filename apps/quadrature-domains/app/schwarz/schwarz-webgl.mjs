@@ -508,7 +508,8 @@ vec2 sigma(vec2 w, inout vec2 zSeed, out bool ok) {
   // term); bounded F = conj(w_0) + Σ A/(z−z_j)^k is regular there (poles sit
   // at the z_j ∈ 𝔻). So this mainly protects the unbounded path and catches a
   // ψ that converged to a spurious tiny z. Threshold |z| < 1e-4 (1e-8 squared)
-  // is float32-realistic. (Mirrors the CPU sentinel in schwarz-common.js sigma.)
+  // is float32-realistic — the CPU twin (schwarz-common.js sigma) guards the same case at a TIGHTER
+  // |z| < 1e-14 (float64); precision-appropriate, NOT identical thresholds.
   if (dot(z, z) < 1e-8) { ok = false; return vec2(0.0); }
   zSeed = z;
   vec2 Sv = evalSchwarz(z);

@@ -76,7 +76,12 @@ export function makeUnboundedLaurentCorrespondence(
       seeds.push([Math.cos(t) * 1.1, Math.sin(t) * 1.1]);
     }
     const res = dk(evalMonic, seeds, { tol: 1e-12, maxIter: 200 });
-    return res ? res.roots : [];
+    if (!res) return [];
+    // On a non-converged solve, drop any estimate that isn't actually a root so spurious branches don't
+    // enter the orbit tree. (The active deltoid is d=2 → the closed forms above; this DK path is d ≥ 3.)
+    return res.converged
+      ? res.roots
+      : res.roots.filter((z) => A.abs(evalMonic(z)) <= 1e-9 * Math.max(1, A.abs(z)) ** d);
   };
 
   const branches = (z: Complex): Complex[] => {

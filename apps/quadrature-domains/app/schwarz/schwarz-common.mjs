@@ -1103,7 +1103,8 @@ import _QD from '../solver.mjs';
       // unbounded families ψ never lands near 0 in practice, so this mostly
       // survives as safety: if ψ converges to a tiny z by accident, evalF
       // likely returns a non-finite value the next guard catches anyway.
-      // (Mirrors the GPU sentinel in schwarz-webgl.js sigmaStep.)
+      // (The GPU twin in schwarz-webgl.js sigmaStep guards the same z≈0 case at a LOOSER, float32-realistic
+      //  |z| < 1e-4; this float64 path affords 1e-14. Precision-appropriate, NOT identical thresholds.)
       if (Math.hypot(z.re, z.im) < 1e-14) return null;
       let Sv;
       try { Sv = adapter.evalF(z); }

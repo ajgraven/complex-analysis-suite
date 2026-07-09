@@ -14,7 +14,7 @@ import { getMaxTextureSize } from "./hiResExport";
 import { PlotView } from "./render/plotView";
 import type { GLPlot, FractType } from "./render/glPlot";
 import { initialRes } from "./render/glPlot";
-import { ddCenterToString, ddCenterFromString } from "./render/dd";
+import { ddCenterToString, ddCenterFromString, ddToNumber } from "./render/dd";
 import {
   inspect,
   findNucleus,
@@ -223,7 +223,9 @@ function parseRotationNumber(raw: string): number | null {
 /** Parse a bulb rotation number "p/q" (integers) into [p, q], or null. */
 function parseFraction(raw: string): [number, number] | null {
   const m = /^\s*(-?\d+)\s*\/\s*(-?\d+)\s*$/.exec(raw);
-  return m ? [Number(m[1]), Number(m[2])] : null;
+  if (!m) return null;
+  const q = Number(m[2]);
+  return q !== 0 ? [Number(m[1]), q] : null; // reject p/0 — a zero denominator divides to NaN/∞ downstream
 }
 
 /** Compute + render the conjugate-limb mateability verdict for the two #mate-* bulb inputs. */
@@ -2604,11 +2606,16 @@ function init(): void {
     // double-double centre (a deep zoom), restore it now so the view reproduces to full precision.
     if (typeof state._pcdd === "string") {
       const c = ddCenterFromString(state._pcdd);
-      if (c) parameterView.plot.setCenterDD(c[0], c[1]);
+      // Reject a non-finite centre from a corrupt link before it reaches the GL uniform (→ a blank plot).
+      if (c && Number.isFinite(ddToNumber(c[0])) && Number.isFinite(ddToNumber(c[1]))) {
+        parameterView.plot.setCenterDD(c[0], c[1]);
+      }
     }
     if (typeof state._dcdd === "string") {
       const c = ddCenterFromString(state._dcdd);
-      if (c) dynamicalView.plot.setCenterDD(c[0], c[1]);
+      if (c && Number.isFinite(ddToNumber(c[0])) && Number.isFinite(ddToNumber(c[1]))) {
+        dynamicalView.plot.setCenterDD(c[0], c[1]);
+      }
     }
     // Restore pinned annotations (validated; ignore a malformed list from a corrupt link).
     notes = [];

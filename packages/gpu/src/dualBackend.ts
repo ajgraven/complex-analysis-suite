@@ -78,37 +78,46 @@ export function runGLSL(gl: WebGL2RenderingContext, source: string, samples: Sam
     throw new Error("EXT_color_buffer_float unavailable — cannot read back float results");
   }
   const program = createProgram(gl, PROBE_VERTEX, buildProbeGLSL(source));
-
   const vao = gl.createVertexArray();
-  gl.bindVertexArray(vao);
   const buf = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-  const aPos = gl.getAttribLocation(program, "aPos");
-  gl.enableVertexAttribArray(aPos);
-  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
-
   const tex = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 1, 1, 0, gl.RGBA, gl.FLOAT, null);
   const fbo = gl.createFramebuffer();
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-  gl.viewport(0, 0, 1, 1);
+  try {
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const aPos = gl.getAttribLocation(program, "aPos");
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
-  gl.useProgram(program);
-  const uZ = gl.getUniformLocation(program, "uZ");
-  const uC = gl.getUniformLocation(program, "uC");
-  const px = new Float32Array(4);
-  const out: Complex[] = [];
-  for (const s of samples) {
-    gl.uniform2f(uZ, s.z[0], s.z[1]);
-    gl.uniform2f(uC, s.c[0], s.c[1]);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, px);
-    out.push([px[0], px[1]]);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 1, 1, 0, gl.RGBA, gl.FLOAT, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.viewport(0, 0, 1, 1);
+
+    gl.useProgram(program);
+    const uZ = gl.getUniformLocation(program, "uZ");
+    const uC = gl.getUniformLocation(program, "uC");
+    const px = new Float32Array(4);
+    const out: Complex[] = [];
+    for (const s of samples) {
+      gl.uniform2f(uZ, s.z[0], s.z[1]);
+      gl.uniform2f(uC, s.c[0], s.c[1]);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, px);
+      out.push([px[0], px[1]]);
+    }
+    return out;
+  } finally {
+    // Release the probe's GL objects — runGLSL is called once per dual-backend case, so leaking these
+    // would accumulate programs / textures / buffers across a test run.
+    gl.deleteProgram(program);
+    gl.deleteVertexArray(vao);
+    gl.deleteBuffer(buf);
+    gl.deleteTexture(tex);
+    gl.deleteFramebuffer(fbo);
   }
-  return out;
 }
 
 export interface DualResult {

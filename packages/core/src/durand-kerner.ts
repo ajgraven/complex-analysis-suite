@@ -124,8 +124,8 @@ export function makeDurandKerner<C>(alg: ComplexAlgebra<C>) {
       if (!seidel) z = next;
       if (maxDelta < tol) {
         converged = true;
-        iterations++;
-        break;
+        iterations++; // count this converging sweep — `break` skips the for-loop's own i++, so this is
+        break; //        NOT an off-by-one: converge-on-first-sweep correctly reports iterations === 1.
       }
     }
 

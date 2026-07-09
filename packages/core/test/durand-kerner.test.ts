@@ -120,4 +120,17 @@ describe("makeDurandKerner (generic, both representations)", () => {
     });
     expect(res).toBeNull();
   });
+
+  it("iteration count is not off-by-one: exact-root seeds converge in exactly one sweep", () => {
+    // Seeding with the EXACT roots makes the first sweep's max update ~0 < tol, so DK converges
+    // immediately. The manual `iterations++` (which compensates for `break` skipping the for-loop's own
+    // i++) must report 1 — the number of sweeps actually run — not 0 or 2.
+    const roots: RI[] = [[2, 0], [-3, 0], [0, 1]];
+    const dk = makeDurandKerner(objAlgebra);
+    const seeds = roots.map(([re, im]) => objAlgebra.make(re, im));
+    const res = dk(evalMonicFromRoots(objAlgebra, roots), seeds, { tol: 1e-9 });
+    expect(res).not.toBeNull();
+    expect(res?.converged).toBe(true);
+    expect(res?.iterations).toBe(1);
+  });
 });

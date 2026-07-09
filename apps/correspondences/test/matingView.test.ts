@@ -49,4 +49,13 @@ describe("mating fold (M5) — polyline resampling", () => {
     near(r[2], [0, 1]); // halfway up
     for (let i = 1; i < r.length; i++) expect(r[i][1]).toBeGreaterThan(r[i - 1][1]); // monotone along the segment
   });
+
+  it("handles degenerate inputs without crashing (n = 1, single-point, empty)", () => {
+    expect(resample([[0, 0], [1, 0], [2, 0]], 1)).toEqual([[0, 0]]); // n=1 → first point (no 0/0)
+    const single = resample([[5, 7]], 4); // single source point → repeated (no poly[-1])
+    expect(single.length).toBe(4);
+    for (const p of single) near(p, [5, 7]);
+    expect(resample([], 3)).toEqual([]); // empty source → empty
+    expect(resample([[1, 1]], 0)).toEqual([]); // no samples requested → empty
+  });
 });

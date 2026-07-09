@@ -272,6 +272,12 @@ const lerpC = (a: Complex, b: Complex, t: number): Complex => [a[0] + (b[0] - a[
 
 /** Resample a polyline to exactly n points by fractional index (endpoints preserved). */
 export function resample(poly: readonly Complex[], n: number): Complex[] {
+  if (poly.length === 0 || n <= 0) return [];
+  if (poly.length === 1 || n === 1) {
+    // Degenerate: a single source point, or a single requested sample — repeat the first point. This
+    // avoids the 0/0 from i/(n-1) when n===1 and the poly[-1] from `last - 1` when poly.length===1.
+    return Array.from({ length: n }, () => [poly[0][0], poly[0][1]] as Complex);
+  }
   const out: Complex[] = [];
   const last = poly.length - 1;
   for (let i = 0; i < n; i++) {
