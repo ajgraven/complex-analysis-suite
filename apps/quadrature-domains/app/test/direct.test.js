@@ -162,6 +162,46 @@ function complexNear(a, b, tol) {
   ok('Direct H6: a polynomial-part kernel (deg num > deg den) is REJECTED, not silently mis-solved', threw);
 }
 
+// A-03 (P1): verifyBoundaryIdentity must FAIL CLOSED on non-finite boundary data — it used to silently
+// ZERO a NaN sample, so an all-NaN boundary (e.g. from a NaN c, cf. A-02) gave negMass≈0 = a false green ✓.
+{
+  const N = 64;
+  const circle = [];
+  for (let n = 0; n < N; n++) { const t = 2 * Math.PI * n / N; circle.push({ re: Math.cos(t), im: Math.sin(t) }); }
+  const hUnit = { poles: [{ a: { re: 0, im: 0 }, principal: [{ re: 1, im: 0 }] }] }; // unit disk φ=z ⇒ h=1/w
+  const vGood = Direct.verifyBoundaryIdentity(hUnit, circle);
+  ok('A-03: a finite (valid) boundary → nonFinite=0 and a finite negMass', vGood.nonFinite === 0 && Number.isFinite(vGood.negMass));
+  const oneBad = circle.slice(); oneBad[10] = { re: NaN, im: 0 };
+  const vOne = Direct.verifyBoundaryIdentity(hUnit, oneBad);
+  ok('A-03: a single non-finite sample forces fail-closed (nonFinite=1, negMass=∞)', vOne.nonFinite === 1 && vOne.negMass === Infinity);
+  const allNaN = circle.map(() => ({ re: NaN, im: NaN }));
+  const vNaN = Direct.verifyBoundaryIdentity(hUnit, allNaN);
+  ok('A-03: an ALL-non-finite boundary does NOT read as a clean pass', vNaN.negMass === Infinity && vNaN.nonFinite === N);
+}
+
+// P1 audit: boundedPowerQDSingular is the PQD sibling of the H6 log-singular bug. It is SOUND (it captures
+// R#(0) via w0 = |z0|·R#(0)^{1/α} and rejects a non-proper R#) — this guards against a future refactor
+// re-introducing the H6 "drop the constant" defect here. Two kernels differing by a constant (Rb = Ra + 1,
+// same pole/principal part) must give DIFFERENT h.
+{
+  const cx = (re, im = 0) => ({ re, im });
+  const z0 = cx(0.25, 0), alpha = 2;
+  const Ra = { num: [cx(1,0), cx(0.4,0)], den: [cx(1,0), cx(-0.3,0)] };   // R#(0)=1
+  const Rb = { num: [cx(2,0), cx(0.1,0)], den: [cx(1,0), cx(-0.3,0)] };   // R#(0)=2 = Ra + 1
+  const oa = Direct.boundedPowerQDSingular(Ra, alpha, z0);
+  const ob = Direct.boundedPowerQDSingular(Rb, alpha, z0);
+  const dw0 = Math.hypot(oa.w0.re - ob.w0.re, oa.w0.im - ob.w0.im);
+  ok('Direct PQD audit: R#(0) is CAPTURED (constant-shifted kernel ⇒ different h, unlike the H6 log bug)',
+     dw0 > 1e-6, '|Δw0|=' + dw0.toExponential(2));
+  const ratio = Math.hypot(ob.w0.re, ob.w0.im) / Math.hypot(oa.w0.re, oa.w0.im);
+  ok('Direct PQD audit: |w0| ratio = (R#b(0)/R#a(0))^{1/α} = √2', Math.abs(ratio - Math.SQRT2) < 1e-9,
+     'ratio=' + ratio.toFixed(6));
+  const Rnp = { num: [cx(2,0), cx(1,0), cx(0.1,0)], den: [cx(1,0), cx(-0.3,0)] }; // deg num 2 > den 1, non-vanishing on 𝔻̄
+  let rej = false;
+  try { Direct.boundedPowerQDSingular(Rnp, alpha, z0); } catch (e) { rej = /proper rational/.test(e.message); }
+  ok('Direct PQD audit: a non-proper R# (deg num > deg den) is rejected', rej);
+}
+
 // Cubic: φ = z + 0.1·z² − 0.05·z³  — hand-computed reference.
 //   c_1=1, c_2=0.1, c_3=-0.05.  C_3 = conj(c_3)·c_1^3 = -0.05.
 //   Hand-derive via Taylor for higher orders (smoke-test against itself).

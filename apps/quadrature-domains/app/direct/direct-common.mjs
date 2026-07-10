@@ -833,11 +833,15 @@ import { makeDurandKerner, objAlgebra } from '@cas/core';
 
     // Δ(θ_n) = h(φ(e^{iθ_n})) − conj(φ(e^{iθ_n})).
     const delta = new Array(N);
-    let scale = 0;
+    let scale = 0, nonFinite = 0;
     for (let n = 0; n < N; n++) {
       const w = boundaryPts[n];
       if (!isFinite(w.re) || !isFinite(w.im)) {
+        // (A-03) A non-finite boundary sample (e.g. a NaN c or a pole-hitting φ) used to be silently
+        // ZEROED, so an all-NaN boundary gave negMass = 0 ⇒ a false green "✓". Zero it for the DFT but
+        // count it; a non-empty count forces the diagnostic to fail closed below (negMass = ∞).
         delta[n] = { re: 0, im: 0 };
+        nonFinite++;
         continue;
       }
       const hv = evalH(hData, w);
@@ -863,11 +867,14 @@ import { makeDurandKerner, objAlgebra } from '@cas/core';
       else            zeroMass = mag2;
     }
     return {
-      negMass:  Math.sqrt(negMass),
+      // (A-03) Fail closed: any non-finite boundary sample makes the diagnostic meaningless, so report
+      // negMass = ∞ (the caller's relNeg → ∞ ⇒ red) rather than a spurious ≈0 that reads as a clean pass.
+      negMass:  nonFinite > 0 ? Infinity : Math.sqrt(negMass),
       posMass:  Math.sqrt(posMass),
       zeroMass: Math.sqrt(zeroMass),
       scale,
       N,
+      nonFinite,
       maxFreq: K,
     };
   }
