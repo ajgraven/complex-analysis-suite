@@ -105,10 +105,51 @@ function emitArith(op: string, left: Node, right: Node): string {
   return `${fn}(${emitComplex(left)}, ${emitComplex(right)})`;
 }
 
-/** Lower `^`: integer exponents (|n| ≤ 1024) → exact integer power; otherwise `cpow`. */
+/**
+ * Evaluate a VARIABLE-FREE real-valued constant node (or null). Lets emitPow fold a constant integer
+ * exponent that isn't a bare numeric literal — `z^(1+1)`, `z^(4/2)`, `z^(pi/pi+1)` — to the exact
+ * repeated-multiply path, MATCHING the JS backend (which lowers on the runtime `im===0 &&
+ * Number.isInteger` test). Otherwise GLSL routes it through cpow's principal branch and silently
+ * disagrees with the CPU reference across the negative-real axis.
+ */
+function constReal(node: Node): number | null {
+  switch (node.kind) {
+    case "num":
+      return node.value;
+    case "const":
+      return node.name === "e" ? Math.E : node.name === "pi" ? Math.PI : null; // 'i' is imaginary ⇒ not real
+    case "neg": {
+      const v = constReal(node.operand);
+      return v === null ? null : -v;
+    }
+    case "arith": {
+      const l = constReal(node.left);
+      const r = constReal(node.right);
+      if (l === null || r === null) return null;
+      switch (node.op) {
+        case "+":
+          return l + r;
+        case "-":
+          return l - r;
+        case "*":
+          return l * r;
+        case "/":
+          return r === 0 ? null : l / r;
+        case "^":
+          return Math.pow(l, r);
+      }
+      return null;
+    }
+    default:
+      return null; // var / call / compare / if / bool / not ⇒ not a compile-time real constant
+  }
+}
+
+/** Lower `^`: a CONSTANT integer exponent (|n| ≤ 1024) → exact integer power; otherwise `cpow`. */
 function emitPow(base: Node, exp: Node): string {
-  if (exp.kind === "num" && Number.isInteger(exp.value) && Math.abs(exp.value) <= 1024) {
-    return intPow(emitComplex(base), exp.value);
+  const k = constReal(exp);
+  if (k !== null && Number.isInteger(k) && Math.abs(k) <= 1024) {
+    return intPow(emitComplex(base), k);
   }
   return `cpow(${emitComplex(base)}, ${emitComplex(exp)})`;
 }
@@ -144,6 +185,24 @@ function emitCall(name: string, args: Node[]): string {
   throw new ExprError(`Unknown function '${name}'`, 0);
 }
 
+/** Whether a node is boolean-valued (vs complex). Mirrors evaluate.ts's nodeIsBool so both backends
+ *  agree on which statements are boolean (a bool middle-statement must go through emitBool, not
+ *  emitComplex, which throws on it). */
+function nodeIsBool(node: Node): boolean {
+  switch (node.kind) {
+    case "bool":
+    case "not":
+    case "compare":
+      return true;
+    case "if":
+      return nodeIsBool(node.then) || nodeIsBool(node.otherwise);
+    case "seq":
+      return nodeIsBool(node.stmts[node.stmts.length - 1]);
+    default:
+      return false;
+  }
+}
+
 /** Emit the body (local declarations + `return`) shared by `f` and `escape`. */
 function emitBody(ast: Node, emitFinal: (n: Node) => string): string {
   const stmts = ast.kind === "seq" ? ast.stmts : [ast];
@@ -160,7 +219,10 @@ function emitBody(ast: Node, emitFinal: (n: Node) => string): string {
     } else if (isLast) {
       lines.push(`  return ${emitFinal(stmt)};`);
     } else {
-      lines.push(`  ${emitComplex(stmt)};`);
+      // A boolean middle-statement (e.g. `abs(z)>2; z^2+c`) is legal on the JS backend, which evaluates
+      // and discards it; emitComplex would THROW ("boolean where a number is expected"). Emit it via
+      // emitBool as a discarded expression statement so the GPU backend accepts the same input.
+      lines.push(`  ${nodeIsBool(stmt) ? emitBool(stmt) : emitComplex(stmt)};`);
     }
   }
   return lines.join("\n");
