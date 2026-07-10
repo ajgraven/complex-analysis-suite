@@ -23,6 +23,19 @@ describe("@cas/core stereographic projection", () => {
     }
   });
 
+  it("|w| → ∞ (non-finite input) maps to the north pole, not NaN", () => {
+    // Without the finiteness guard, r² = ∞ makes every component ∞/∞ = NaN, breaking the documented
+    // "|w| → ∞ → north pole" invariant. Unreachable via current callers, but kept total.
+    for (const p of [
+      planeToSphere(Infinity, 0),
+      planeToSphere(0, -Infinity),
+      planeToSphere(Infinity, Infinity),
+      planeToSphere(1e200, 1e200), // r² overflows to Infinity even from finite inputs
+    ]) {
+      expect(p).toEqual([0, 0, 1]);
+    }
+  });
+
   it("round-trips w → sphere → w across magnitudes (both hemisphere branches)", () => {
     let maxErr = 0;
     for (const u of [-100, -3, -1, -0.4, 0, 0.25, 1, 5, 250]) {

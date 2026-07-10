@@ -18,6 +18,10 @@
 export function planeToSphere(re: number, im: number): [number, number, number] {
   const r2 = re * re + im * im;
   const d = 1 + r2;
+  // |w| → ∞ (a non-finite input, or r² overflowing to Infinity) maps to the north pole, per the
+  // projection's definition; without this the ratios below are ∞/∞ = NaN. Unreachable via current
+  // callers (all pass finite plane coordinates), but keeps the documented invariant total.
+  if (!Number.isFinite(d)) return [0, 0, 1];
   return [(2 * re) / d, (2 * im) / d, (r2 - 1) / d];
 }
 
@@ -26,6 +30,11 @@ export function planeToSphere(re: number, im: number): [number, number, number] 
  * the north pole (|1 − z| < `eps` ⇒ w = ∞). Cancellation-safe: for z > 0 the naive x/(1 − z) subtracts
  * two nearly-equal numbers, so it uses the algebraically-equivalent u = x·(1 + z)/(x² + y²) (valid
  * because x² + y² = 1 − z² = (1 − z)(1 + z) on the unit sphere), which avoids the precision loss.
+ *
+ * PRECONDITION: (x, y, z) lies ON the unit sphere (x² + y² + z² = 1). The z > 0 branch's identity
+ * x² + y² = 1 − z² holds only there, so the two branches meet continuously at the z = 0 seam ONLY for
+ * on-sphere input; feeding an off-sphere point makes them disagree. All current callers pass unit
+ * vectors (ray–sphere hits / normalized mesh vertices), so this is a documented contract, not a guard.
  */
 export function sphereToPlane(
   x: number,

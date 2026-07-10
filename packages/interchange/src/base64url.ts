@@ -3,7 +3,9 @@
 // serves both apps and the headless tests. Unicode-safe: encodes to UTF-8 bytes first.
 
 const encoder = new TextEncoder();
-const decoder = new TextDecoder();
+// `fatal: true`: a corrupt payload whose bytes aren't valid UTF-8 throws here instead of silently
+// decoding to U+FFFD replacement chars that would then trip JSON.parse with a misleading message.
+const decoder = new TextDecoder("utf-8", { fatal: true });
 
 /** UTF-8 string → URL-safe base64 (no padding; `+`/`/` → `-`/`_`). */
 export function toBase64Url(json: string): string {
@@ -17,8 +19,8 @@ export function toBase64Url(json: string): string {
  *  this bounds a crafted mega-payload BEFORE atob / JSON.parse do O(n) work on it (~48 KB decoded). */
 export const MAX_BASE64URL_LEN = 64 * 1024;
 
-/** URL-safe base64 → UTF-8 string. Throws (via the size guard or atob) on oversized / malformed input;
- *  callers catch. */
+/** URL-safe base64 → UTF-8 string. Throws (via the size guard, atob, or the fatal UTF-8 decoder) on
+ *  oversized / malformed / non-UTF-8 input; callers catch. */
 export function fromBase64Url(s: string): string {
   if (s.length > MAX_BASE64URL_LEN) throw new RangeError("base64url: payload too large to decode");
   const b64 = s.replace(/-/g, "+").replace(/_/g, "/");

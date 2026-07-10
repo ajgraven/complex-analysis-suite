@@ -2212,12 +2212,20 @@ function init(): void {
     }
   }
 
+  /** Read a range/number input as a finite number, falling back to `fallback` when the field is
+   *  missing or non-numeric — a NaN would otherwise flow straight into a GLSL `uniform1f` and blank
+   *  the render (SHELL-6). Fallbacks mirror each slider's HTML default value. */
+  function numInput(id: string, fallback: number): number {
+    const v = Number(byId<HTMLInputElement>(id).value);
+    return Number.isFinite(v) ? v : fallback;
+  }
+
   /** Apply the selected coloring mode, palette, and anti-aliasing to both plots. */
   function applyColoring(): void {
     const mode = MODES[byId<HTMLSelectElement>("mode").value] ?? 0;
     const palette = PALETTES[byId<HTMLSelectElement>("palette").value] ?? 0;
     const aa = Math.max(1, Number(byId<HTMLSelectElement>("aa").value) || 1);
-    const rotation = Number(byId<HTMLInputElement>("paletteRotation").value) / 100; // 0..1
+    const rotation = numInput("paletteRotation", 0) / 100; // 0..1
     for (const v of [parameterView, dynamicalView]) {
       v.plot.setColoring(mode, palette, aa);
       v.plot.setGradientRotation(rotation);
@@ -2311,9 +2319,9 @@ function init(): void {
   /** Apply the relief-lighting controls (checkbox + azimuth/elevation/depth) to both plots. */
   function applyLighting(): void {
     const on = byId<HTMLInputElement>("light").checked;
-    const az = Number(byId<HTMLInputElement>("lightAz").value);
-    const el = Number(byId<HTMLInputElement>("lightEl").value);
-    const height = Number(byId<HTMLInputElement>("lightHeight").value) / 20; // slider 0–100 → depth 0–5
+    const az = numInput("lightAz", 135);
+    const el = numInput("lightEl", 45);
+    const height = numInput("lightHeight", 40) / 20; // slider 0–100 → depth 0–5
     parameterView.plot.setLighting(on, az, el, height);
     dynamicalView.plot.setLighting(on, az, el, height);
     // The sliders only matter when lighting is on — disable them otherwise.
@@ -2325,8 +2333,8 @@ function init(): void {
   /** Apply the post-processing controls (checkbox + vignette/gamma) to both plots. */
   function applyPost(): void {
     const on = byId<HTMLInputElement>("post").checked;
-    const vignette = Number(byId<HTMLInputElement>("postVignette").value) / 100; // 0..1
-    const gamma = Math.pow(2, (Number(byId<HTMLInputElement>("postGamma").value) - 50) / 50); // 0.5..2 (1 at 50)
+    const vignette = numInput("postVignette", 30) / 100; // 0..1
+    const gamma = Math.pow(2, (numInput("postGamma", 50) - 50) / 50); // 0.5..2 (1 at 50)
     parameterView.plot.setPost(on, vignette, gamma);
     dynamicalView.plot.setPost(on, vignette, gamma);
     for (const id of ["postVignette", "postGamma"]) {
@@ -2337,7 +2345,7 @@ function init(): void {
   /** Apply the boundary-outline controls (checkbox + width) to both plots. */
   function applyOutline(): void {
     const on = byId<HTMLInputElement>("outline").checked;
-    const width = Number(byId<HTMLInputElement>("outlineWidth").value) / 20; // slider 0–100 → 0–5
+    const width = numInput("outlineWidth", 30) / 20; // slider 0–100 → 0–5
     parameterView.plot.setOutline(on, width);
     dynamicalView.plot.setOutline(on, width);
     byId<HTMLInputElement>("outlineWidth").disabled = !on;
@@ -2505,7 +2513,7 @@ function init(): void {
 
   /** Apply the live parameter `a` slider value to both plots and update its readout. */
   function applyParamA(): void {
-    const value = Number(byId<HTMLInputElement>("param-a").value);
+    const value = numInput("param-a", 1);
     byId("param-a-value").textContent = value.toFixed(2);
     parameterView.plot.setParamA(value);
     dynamicalView.plot.setParamA(value);
@@ -2617,20 +2625,27 @@ function init(): void {
         dynamicalView.plot.setCenterDD(c[0], c[1]);
       }
     }
-    // Restore pinned annotations (validated; ignore a malformed list from a corrupt link).
+    // Restore pinned annotations (validated; ignore a malformed list from a corrupt link). Caps bound a
+    // hostile link: reject non-finite coordinates (`typeof NaN === "number"` would otherwise admit them
+    // straight into the label geometry) and cap both the note count and per-note text length.
     notes = [];
+    const MAX_NOTES = 256;
+    const MAX_NOTE_TEXT = 2000;
     if (typeof state._notes === "string") {
       try {
         const parsed: unknown = JSON.parse(state._notes);
         if (Array.isArray(parsed))
-          notes = parsed.filter(
-            (n): n is { plane: FractType; x: number; y: number; text: string } =>
-              !!n &&
-              typeof n.x === "number" &&
-              typeof n.y === "number" &&
-              typeof n.text === "string" &&
-              (n.plane === "param" || n.plane === "dyn"),
-          );
+          notes = parsed
+            .filter(
+              (n): n is { plane: FractType; x: number; y: number; text: string } =>
+                !!n &&
+                Number.isFinite(n.x) &&
+                Number.isFinite(n.y) &&
+                typeof n.text === "string" &&
+                n.text.length <= MAX_NOTE_TEXT &&
+                (n.plane === "param" || n.plane === "dyn"),
+            )
+            .slice(0, MAX_NOTES);
       } catch {
         /* ignore malformed _notes */
       }
@@ -3432,7 +3447,7 @@ function init(): void {
     };
     if (res.isRing && res.rotationNumber !== null && res.modulus !== null) {
       set("herman-status", "Ring confirmed");
-      set("herman-rotation", res.rotationNumber.toFixed(6));
+      set("herman-rotation", `≈ ${res.rotationNumber.toFixed(6)}`); // numerically estimated, not exact
       set("herman-modulus", `≈ ${res.modulus.toFixed(4)}`);
       set(
         "herman-annulus",

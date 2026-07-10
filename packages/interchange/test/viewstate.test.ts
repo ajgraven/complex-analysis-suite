@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { encodeViewState, decodeViewState, VIEWSTATE_VERSION } from "../src/index.js";
-import { toBase64Url } from "../src/base64url.js";
+import { toBase64Url, fromBase64Url } from "../src/base64url.js";
 
 // The shareable UI view-state codec: transport + versioning shared across the suite, each app owning
 // its own state schema. These goldens PIN the forward-compat contract that every future version must
@@ -76,5 +76,25 @@ describe("@cas/interchange view-state codec", () => {
     expect(decodeViewState("#vs=" + toBase64Url(ctor))).toBeNull();
     // An oversized payload is rejected by the length cap BEFORE any decode work.
     expect(decodeViewState("#vs=" + "A".repeat(70 * 1024))).toBeNull();
+  });
+});
+
+describe("@cas/interchange base64url transport", () => {
+  it("throws on bytes that are not valid UTF-8 (fatal decoder), instead of substituting U+FFFD", () => {
+    // base64url "gA" → the single byte 0x80, a lone UTF-8 continuation byte; "_w" → 0xFF, never a
+    // valid UTF-8 byte. The fatal decoder must reject both rather than return a garbage replacement
+    // string that would then trip JSON.parse with a misleading error.
+    expect(() => fromBase64Url("gA")).toThrow();
+    expect(() => fromBase64Url("_w")).toThrow();
+  });
+
+  it("round-trips valid UTF-8, including multi-byte code points", () => {
+    for (const s of ["", "z^2+c", "café ∞ 𝔻", '{"v":1}']) {
+      expect(fromBase64Url(toBase64Url(s))).toBe(s);
+    }
+  });
+
+  it("rejects an oversized payload before decoding", () => {
+    expect(() => fromBase64Url("A".repeat(70 * 1024))).toThrow(/too large/);
   });
 });

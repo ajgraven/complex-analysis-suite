@@ -97,4 +97,13 @@ describe("ddCenterToString / ddCenterFromString (deep-zoom permalink centre)", (
     expect(ddCenterFromString("a,b,c,d")).toBeNull();
     expect(ddCenterFromString("1,2,3,NaN")).toBeNull();
   });
+
+  it("rejects a blank field instead of coercing it to a zero limb", () => {
+    // Number("") and Number("  ") are 0 (not NaN), so an empty field would silently drop a low word
+    // and pass the finiteness check — corrupting a deep-zoom centre. It must return null.
+    expect(ddCenterFromString("1,,2,3")).toBeNull();
+    expect(ddCenterFromString("1,2, ,3")).toBeNull();
+    expect(ddCenterFromString(",,,")).toBeNull();
+    expect(ddCenterFromString("1,2,3,")).toBeNull();
+  });
 });

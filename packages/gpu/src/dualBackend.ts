@@ -12,8 +12,10 @@
 //
 // Proven (2026-07, a preview-browser run of `runGLSL` over DUAL_BACKEND_CORPUS × defaultSamples in a
 // real WebGL2 context): the single-precision GLSL backend agrees with the JS float64 backend to within
-// float32 epsilon — max RELATIVE error ~1.5e-7 across the holomorphic, anti-holomorphic (conjugate),
-// rational, and transcendental (exp) maps. Wiring this as an ongoing CI check needs Vitest browser mode
+// float32 epsilon — max ABSOLUTE error ~1.5e-7 (the complex-plane distance |f_js − f_glsl| that
+// `compareResults` reports as `maxAbsError`; sample |f| is O(1) on the corpus grid, so it doubles as a
+// relative bound) across the holomorphic, anti-holomorphic (conjugate), rational, and transcendental
+// (exp) maps. Wiring this as an ongoing CI check needs Vitest browser mode
 // (@vitest/browser + a browser channel); until then the node suite (test/dualBackend.test.ts) guards the
 // pure core (buildProbeGLSL / jsReference / compareResults) and the numeric run is reproducible by hand.
 

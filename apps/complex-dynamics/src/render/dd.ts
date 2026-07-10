@@ -98,8 +98,14 @@ export function ddCenterToString(x: DD, y: DD): string {
 
 /** Parse "hx,lx,hy,ly" back to [x, y] double-doubles; null if malformed or non-finite. */
 export function ddCenterFromString(s: string): [DD, DD] | null {
-  const p = s.split(",").map(Number);
-  if (p.length !== 4 || p.some((v) => !Number.isFinite(v))) return null;
+  const fields = s.split(",");
+  if (fields.length !== 4) return null;
+  // Number("") and Number("  ") are 0 (not NaN), so a blank field would silently substitute a zero
+  // limb — dropping a low word and corrupting a deep-zoom centre while slipping past the finiteness
+  // check below. Reject any empty/whitespace field before coercing.
+  if (fields.some((f) => f.trim() === "")) return null;
+  const p = fields.map(Number);
+  if (p.some((v) => !Number.isFinite(v))) return null;
   return [
     [p[0], p[1]],
     [p[2], p[3]],
