@@ -1595,7 +1595,18 @@ import { makeDurandKerner, objAlgebra } from '@cas/core';
     if (den.length <= 1) return { hData: { poles: [] }, poleData: [], w0, z0, q: { re: 0, im: 0 }, warnings: ['r# is a polynomial (no finite poles) — degenerate.'] };
 
     const absZ0 = C.abs(z0);
-    const gamma = C.scale(w0, 1 / absZ0);                  // γ = w₀/|z₀|
+    // (H6) The branch basis Σ conj(A_{j,k})·z^k/(1−conj(z_j) z)^k VANISHES at z=0, so localPrincipalResidues
+    // captures only r#'s pole principal parts — the constant r#(0)=κ (and any entire/polynomial part) is
+    // silently DROPPED, substituting a different domain (φ scaled by exp(−κ)) that the family Verify —
+    // driven by the same branch-only φ — then falsely passes. Fold κ into the gauge: φ = γ·b·exp(r#) =
+    // (γ·exp κ)·b·exp(r#−κ), where (r#−κ)(0)=0 as the family requires, so the built φ EQUALS the user's map
+    // and q comes out correct (ln|γ·exp κ|² = ln|γ|² + κ + conj κ, matching the r#(z₀)+conj r#(1/conj z₀)
+    // constant). Then self-check that κ + r#_branch actually reproduces r#, rejecting an entire/polynomial
+    // part (deg num > deg den) the branch basis cannot carry — instead of returning a wrong domain silently.
+    const evalRat = (z) => C.div(evalPolyAscending(num, z), evalPolyAscending(den, z));
+    const cexp = (z) => { const e = Math.exp(z.re); return { re: e * Math.cos(z.im), im: e * Math.sin(z.im) }; };
+    const kappa = evalRat({ re: 0, im: 0 });                       // r#(0)
+    const gamma = C.mul(C.scale(w0, 1 / absZ0), cexp(kappa));      // γ = (w₀/|z₀|)·exp(κ)
     const branches = [], geom = [];
     for (const g of groups) {
       const zeta = g.root, m = g.multiplicity;
@@ -1605,6 +1616,16 @@ import { makeDurandKerner, objAlgebra } from '@cas/core';
       branches.push({ z: zj, A }); geom.push({ zj, m, A });
     }
     const phi = { family: 'boundedLQD_singular', unbounded: false, w0, z0: C.clone(z0), gamma, branches };
+    // Honest self-check: r#(z) must equal κ + r#_branch(z) at interior samples. If not, r# carries an
+    // entire/polynomial part the branch basis cannot represent — reject rather than substitute a domain.
+    const selfTol = options.validateTol || 1e-6;
+    for (const zt of [{ re: 0.13, im: 0.09 }, { re: -0.21, im: 0.17 }, { re: 0.07, im: -0.29 }]) {
+      const rTrue = evalRat(zt);
+      const rRecon = C.add(kappa, QD.LqdCommon.evalRHash(zt, phi));
+      if (C.abs(C.sub(rTrue, rRecon)) > selfTol * (1 + C.abs(rTrue)))
+        throw new Error(label + ': r# has an entire/polynomial part the bounded singular-LQD branch basis '
+          + 'cannot represent (only a proper rational is valid). Reduce r# so that deg(num) < deg(den).');
+    }
     const poles = geom.map(g => ({ a: QD.evalPhi(g.zj, phi), m: g.m, A: g.A }));
     const Cs = solveResiduesViaProbe(QD.Family.boundedLQD_singular, phi, poles);
 
