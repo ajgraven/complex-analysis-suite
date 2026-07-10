@@ -66,7 +66,13 @@ cvec invertPhi(cvec w, cvec a, out bool ok) {
 cvec sigma_a(cvec w, cvec a, out bool ok) {
   cvec z = invertPhi(w, a, ok);
   if (!ok) return w;
-  if (length(z) < 1e-6) { ok = false; return w; }
+  // Exterior branch only: φ_a is univalent on {|z|>1} for the entire family window (area theorem,
+  // |a| ≤ √2), so a preimage inside the closed unit disk is the WRONG branch. Treat it as "no exterior
+  // preimage" (the orbit left Ω inward — bounded, not an escape), matching the CPU UnboundedLaurent-
+  // Schwarz and the deltoid shader's length(z) < 0.999 call-site guard; 1e-4 slack mirrors acceptZ
+  // elsewhere. Previously only z ~ 0 was rejected, so an accepted interior root corrupted the escape
+  // count on the ~0.04% of pixels where the cold seed converged inward. (CORR-2)
+  if (length(z) < 1.0 - 1e-4) { ok = false; return w; }
   return cconj(fSch_a(z, a));
 }
 
@@ -111,6 +117,10 @@ export interface ParamGpuRenderer {
 /** Build a WebGL2 parameter-plane renderer on `canvas`, or null if WebGL2 / shader setup fails (the
  *  caller then falls back to the chunked CPU classify). */
 export function createParamRenderer(canvas: HTMLCanvasElement): ParamGpuRenderer | null {
+  // preserveDrawingBuffer keeps the one static render readable/screenshottable. As in gpu.ts, this
+  // context is deliberately page-lifetime (CORR-3) — a live context is required to keep the image on
+  // screen, and the one-shot page creates one renderer per canvas (no churn toward the context cap).
+  // The failure path releases an orphan; a live context is reclaimed on navigation.
   const gl = canvas.getContext("webgl2", { antialias: false, preserveDrawingBuffer: true });
   if (!gl) return null;
 

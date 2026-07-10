@@ -115,7 +115,11 @@ function makeMask(boundary: readonly Complex[], center: Complex, half: Complex, 
  *  falls back to the CPU render). */
 export function createDeltoidRenderer(canvas: HTMLCanvasElement): GpuRenderer | null {
   // preserveDrawingBuffer: the render is static (one draw per view), so keep the buffer readable —
-  // the image persists across compositing and can be read back / screenshotted.
+  // the image persists across compositing and can be read back / screenshotted. This context is
+  // deliberately page-lifetime (CORR-3): a live context is REQUIRED to keep that image on screen, and
+  // this is a one-shot page (one renderer per canvas, no mount/unmount churn), so nothing accumulates
+  // toward the browser's context cap. The failure path below releases an orphaned context; a live one
+  // is reclaimed by the browser on navigation, so there is no teardown hook to add.
   const gl = canvas.getContext("webgl2", { antialias: false, preserveDrawingBuffer: true });
   if (!gl) return null;
 

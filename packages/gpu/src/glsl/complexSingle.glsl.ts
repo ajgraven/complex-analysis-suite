@@ -22,7 +22,11 @@ cvec csub(cvec a, cvec b) { return a - b; }
 cvec cneg(cvec a) { return -a; }
 cvec cmul(cvec a, cvec b) { return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x); }
 cvec cdiv(cvec a, cvec b) {
-  float d = dot(b, b);
+  // Floor |b|² so a point at/near a pole yields a huge FINITE value (which escapes) rather than an
+  // Inf/NaN that can poison the orbit into a spurious in-set speck. Classification-invariant: a bounded
+  // pixel has |b|² far above this floor (|f| < escapeR ⇒ |b|² > |num|/escapeR), so only near-pole
+  // pixels — which escape regardless — are affected. (GPU-2; mirrored in complexDf64 cdiv.)
+  float d = max(dot(b, b), 1e-30);
   return vec2(a.x * b.x + a.y * b.y, a.y * b.x - a.x * b.y) / d;
 }
 cvec cconj(cvec a) { return vec2(a.x, -a.y); }

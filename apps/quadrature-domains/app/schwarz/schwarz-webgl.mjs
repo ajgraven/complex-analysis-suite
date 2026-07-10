@@ -451,7 +451,10 @@ vec2 newtonSeedFresh(vec2 w) {
     if (r < 1e-12) return vec2(1.1, 0.0);
     return cand * (1.1 / r);
   }
-  // bounded: linearize at z=0. φ(0) = w_0; φ'(0) = Σ conj(A_{j,1}).
+  // bounded: linearize at z=0. φ(0) = w_0; φ'(0) = w_0 · Σ conj(A_{j,1}) (since φ = w_0·exp(r#),
+  // r#(0)=0 ⇒ φ'(0) = w_0·r#'(0)). The w_0 factor was previously dropped here, giving a wrong Newton
+  // seed → sparse red speckle in the bounded-LQD render where the CPU (seedBoundedLQD, schwarz-
+  // common.mjs) converges. (QDSch-1)
   vec2 dphi0 = vec2(0.0);
   for (int j = 0; j < MAX_BRANCHES; ++j) {
     if (j >= u_nBranches) break;
@@ -459,6 +462,7 @@ vec2 newtonSeedFresh(vec2 w) {
       dphi0 = dphi0 + cconj(u_branchA[j * MAX_K]);
     }
   }
+  dphi0 = cmul(u_w0, dphi0);
   if (dot(dphi0, dphi0) < EPS_DIV) return vec2(0.0);
   vec2 cand = cdiv(w - u_w0, dphi0);
   float r = length(cand);

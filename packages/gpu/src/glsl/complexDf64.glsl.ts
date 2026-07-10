@@ -30,6 +30,10 @@ cvec cmul(cvec a, cvec b) {
 }
 cvec cdiv(cvec a, cvec b) {
   vec2 d = df_add(df_mul(b.xy, b.xy), df_mul(b.zw, b.zw));
+  // A tiny |b|² can UNDERFLOW d.x to 0 (df64 limbs are float32); df_div then propagates 0·(1/0) = NaN —
+  // a spurious in-set speck where single precision's num/0 = Inf simply escapes. Floor d.x so near-pole
+  // points yield a huge finite value that escapes. Classification-invariant (see complexSingle cdiv). (GPU-2)
+  if (d.x < 1e-30) d = vec2(1e-30, 0.0);
   vec2 re = df_div(df_add(df_mul(a.xy, b.xy), df_mul(a.zw, b.zw)), d);
   vec2 im = df_div(df_sub(df_mul(a.zw, b.xy), df_mul(a.xy, b.zw)), d);
   return vec4(re, im);
