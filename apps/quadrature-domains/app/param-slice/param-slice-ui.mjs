@@ -836,6 +836,11 @@ const QD = _QD;
   // Render orchestration
   // ---------------------------------------------------------------------------
   async function startRun() {
+    // Re-entrancy guard: a second Render (double-click, or Enter while the button isn't yet disabled)
+    // during the async ensurePool() await below would start a SECOND sweep sharing the same pool + image
+    // buffer and orphan the first run's cancel token. activeJob covers a committed run; _starting covers
+    // the pre-commit ensurePool window (before activeJob is set).
+    if (sliceState.activeJob || sliceState._starting) return;
     const snap = snapshotScenario();
     if (!snap) { setProgress('No scenario.'); return; }
     const xSel = document.getElementById('ps-axis-x');
@@ -902,8 +907,9 @@ const QD = _QD;
     // Ensure pool ready. createPool falls back to a main-thread pool when
     // the Worker bundle can't be built (e.g. fetch blocked on file://).
     let pool;
+    sliceState._starting = true; // hold the re-entrancy guard across the ensurePool() await
     try { pool = await ensurePool(); }
-    catch (e) { setProgress('Pool init failed: ' + e.message); return; }
+    catch (e) { sliceState._starting = false; setProgress('Pool init failed: ' + e.message); return; }
     if (pool.kind === 'main-thread') {
       setProgress('Note: running on main thread (Worker bundle unavailable — see console).');
     }
@@ -955,6 +961,7 @@ const QD = _QD;
 
     // Cancellation handle the run loop checks between dispatches.
     const cancelToken = { cancelled: false };
+    sliceState._starting = false; // activeJob (set next) now owns the re-entrancy guard
     sliceState.activeJob = {
       cancel: () => { cancelToken.cancelled = true; if (sliceState.pool && sliceState.pool.cancel) sliceState.pool.cancel(); },
     };

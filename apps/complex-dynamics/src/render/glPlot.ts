@@ -1355,7 +1355,10 @@ export class GLPlot {
     gl.uniform1i(u.uJuliaMode, this.fractType === "dyn" ? 1 : 0);
     gl.uniform1i(u.uMode, mode === 1 ? 1 : 0); // escape / smooth; other modes fall back to escape
     gl.uniform1i(u.uPalette, this._palette);
-    gl.uniform1i(u.uAA, this._draft ? 1 : this._aa);
+    // Route through effectiveAA like the standard path (setupDraw): during temporal accumulation the
+    // jittered per-frame sample IS the anti-aliasing, so spatial supersampling would pay aa²× cost per
+    // accumulation frame for nothing — the exact fast-first-paint optimization the standard path uses.
+    gl.uniform1i(u.uAA, effectiveAA(this._aa, { mode, draft: this._draft, accumulating: this._accumulating }));
     gl.uniform1f(u.uGradientOffset, this._gradientOffset);
     gl.uniform2f(u.uJitter, this._jitter[0], this._jitter[1]);
     // z^d + c degree + its binomial coefficients C(d, j) for the general kernel step (d = 2 is the
