@@ -91,7 +91,13 @@ function diffArith(op: string, left: Node, right: Node, v: string): Node {
 function diffPow(base: Node, exp: Node, v: string): Node {
   const db = differentiate(base, v);
   if (exp.kind === "num") {
-    // d(u^k) = k·u^(k-1)·u'
+    // d(u^k) = k·u^(k-1)·u'. Valid for a CONSTANT k of ANY value, integer or fractional: on the
+    // principal branch u^k = exp(k·Log u), so d/dz = k·exp(k·Log u)/u·u' = k·u^(k-1)·u' with u^(k-1)
+    // read principal (exp((k-1)·Log u) = exp(k·Log u)/u exactly), i.e. this equals the general rule
+    // below with w'=0 — NOT a wrong branch for fractional k (verified vs finite differences to ~1e-10;
+    // it is only undefined ON the negative-real cut, where the principal power itself is). The integer
+    // case additionally lowers u^(k-1) to repeated multiply downstream, making it entire (correct across
+    // the cut too), which is why keeping this branch for integer k matters.
     return mul(mul(num(exp.value), pow(base, num(exp.value - 1))), db);
   }
   // General d(u^w) = u^w·(w'·log(u) + w·u'/u)

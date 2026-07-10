@@ -55,4 +55,13 @@ describe("parser error cases", () => {
     expect(() => parse("exp(z) + c")).not.toThrow();
     expect(() => parse("if(abs(z) > 2, z, c)")).not.toThrow();
   });
+
+  it("rejects pathologically nested input with a clean error (not a stack overflow)", () => {
+    // Deep parens re-enter parseExpr per level; without the depth cap this overflows the stack with a
+    // RangeError. It must throw a clean ExprError instead. (EXPR-5)
+    const deep = "(".repeat(5000) + "z" + ")".repeat(5000);
+    expect(() => parse(deep)).toThrow(/nested too deeply/);
+    // Moderate nesting (well under the cap) still parses.
+    expect(() => parse("(".repeat(100) + "z + c" + ")".repeat(100))).not.toThrow();
+  });
 });

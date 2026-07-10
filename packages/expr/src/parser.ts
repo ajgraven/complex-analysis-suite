@@ -22,6 +22,11 @@ const CONSTS = new Set<ConstName>(["i", "e", "pi"]);
 
 class Parser {
   private pos = 0;
+  private depth = 0;
+  // Cap nesting recursion so a pathologically nested input can't overflow the stack. 256 levels is far
+  // beyond any real map expression yet well under the engine's stack limit (~7 frames per level). See
+  // parseExpr. (EXPR-5, defense-in-depth — call sites already catch, this just makes it a clean error.)
+  private static readonly MAX_DEPTH = 256;
   constructor(private readonly tokens: Token[]) {}
 
   private peek(): Token {
@@ -70,7 +75,16 @@ class Parser {
   }
 
   private parseExpr(): Node {
-    return this.parseComparison();
+    // Guard the primary recursion path (parens + call args re-enter here) against unbounded nesting.
+    if (this.depth >= Parser.MAX_DEPTH) {
+      throw new ExprError("Expression nested too deeply", this.peek().pos);
+    }
+    this.depth++;
+    try {
+      return this.parseComparison();
+    } finally {
+      this.depth--;
+    }
   }
 
   private parseComparison(): Node {
