@@ -96,3 +96,25 @@ describe("df64 transcendentals match Math to ~13 digits", () => {
     }
   });
 });
+
+describe("df64 split is overflow-safe for large magnitudes (review H3 / PKG-gpu-A-01)", () => {
+  it("dfMul stays FINITE past the 4097·a fp32-overflow point (|a| > 8.3e34)", () => {
+    // The plain Dekker split f(4097·a) rounds to Infinity for |a| > ~8.3e34 (= fp32 max / 4097),
+    // NaN-ing the product. The overflow-safe split keeps it finite and correct.
+    const r = toNumber(dfMul(df(1e35), df(2)));
+    expect(Number.isFinite(r)).toBe(true);
+    expect(Math.abs(r - 2e35) / 2e35).toBeLessThan(1e-5);
+  });
+  it("dfExp is FINITE for arguments in [80, 88] whose true value is still representable in fp32", () => {
+    // e^85 ≈ 8.2e36 < fp32 max (3.4e38), but the pre-fix split of the 2^k ≈ e^arg factor overflowed,
+    // NaN-ing df_exp at arg ≈ 80 — the exp-map deep-zoom "spurious black interior" bug.
+    for (const arg of [80, 82, 85, 87.9]) {
+      const r = toNumber(dfExp(df(arg)));
+      expect(Number.isFinite(r)).toBe(true);
+      expect(Math.abs(r - Math.exp(arg)) / Math.exp(arg)).toBeLessThan(1e-3);
+    }
+  });
+  it("stays bit-exact for in-range values (the fix is a no-op below the threshold)", () => {
+    expect(Math.abs(toNumber(dfMul(df(1.5), df(1e30))) - 1.5e30) / 1.5e30).toBeLessThan(1e-6);
+  });
+});
