@@ -158,6 +158,7 @@ void main() { fragColor = u_color; }`;
       overlayProg = H.link(gl, ovVS, ovFS);
     } catch (e) {
       console.error('sphere-webgl: shader compile failed:', e);
+      gl.getExtension('WEBGL_lose_context')?.loseContext(); // release the orphaned context + its shaders/programs
       return null;
     }
 

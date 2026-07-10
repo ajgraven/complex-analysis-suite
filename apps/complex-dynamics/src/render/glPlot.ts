@@ -860,6 +860,14 @@ export class GLPlot {
       }
     };
     const poll = (): void => {
+      if (gen !== this.df64Gen) {
+        // Context lost (restoreContext bumps df64Gen) or expression changed mid-build: on a lost context
+        // the completion query never flips true, so this reschedule loop would run forever (an orphaned
+        // 16 ms wakeup + a pinned program). Drop the stale build and stop. (Don't touch df64Compiling — a
+        // fresh build may already own it.)
+        this.disposePending(pending);
+        return;
+      }
       if (ext && !this.gl.getProgramParameter(pending.program, ext.COMPLETION_STATUS_KHR)) {
         window.setTimeout(poll, 16);
       } else {

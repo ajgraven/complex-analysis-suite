@@ -124,6 +124,7 @@ export function createDeltoidRenderer(canvas: HTMLCanvasElement): GpuRenderer | 
     program = createProgram(gl, VERT, FRAG);
   } catch (e) {
     console.error("correspondences GPU: shader build failed —", e);
+    gl.getExtension("WEBGL_lose_context")?.loseContext(); // release the orphaned WebGL2 context
     return null;
   }
 

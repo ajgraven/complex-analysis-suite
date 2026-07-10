@@ -2833,26 +2833,44 @@ function init(): void {
     btn.textContent = "recording…";
     const canvas = plot.glContext.canvas as HTMLCanvasElement;
     plot.setForceFullRender(true);
+    let rec: ReturnType<typeof startRecording> | null = null;
     try {
-      const rec = startRecording(canvas, 30);
+      rec = startRecording(canvas, 30);
       const start = performance.now();
-      await new Promise<void>((resolve) => {
+      await new Promise<void>((resolve, reject) => {
         const frame = (): void => {
-          const t = (performance.now() - start) / durationMs;
-          if (t >= 1) {
-            resolve();
-            return;
+          try {
+            const t = (performance.now() - start) / durationMs;
+            if (t >= 1) {
+              resolve();
+              return;
+            }
+            apply(t);
+            requestAnimationFrame(frame);
+          } catch (e) {
+            // A throw inside a bare rAF callback would NOT reject the awaited promise, so `await` would
+            // hang forever (recording stuck true, the button disabled, the capture tracks live). Reject
+            // so the finally can tear everything down.
+            reject(e instanceof Error ? e : new Error(String(e)));
           }
-          apply(t);
-          requestAnimationFrame(frame);
         };
         frame();
       });
       downloadBlob(await rec.stop(), filename);
+      rec = null; // stopped cleanly ⇒ don't double-stop in finally
       showToast(`Saved ${filename}`, "info");
     } catch (err) {
       showToast(`Recording failed: ${err instanceof Error ? err.message : String(err)}`, "error");
     } finally {
+      // Stop the capture (releasing the MediaStream tracks) even on a failed / aborted run — the track
+      // teardown lives inside rec.stop(), which the success path may never have reached (frame-0 throw).
+      if (rec) {
+        try {
+          await rec.stop();
+        } catch {
+          /* ignore */
+        }
+      }
       plot.setForceFullRender(false);
       restore();
       btn.disabled = false;
