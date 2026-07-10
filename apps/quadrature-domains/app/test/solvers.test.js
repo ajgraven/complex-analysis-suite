@@ -1834,4 +1834,48 @@ runFamilyBattery('unboundedLQD', [
   ok('poleCentroid: single pole → that pole', approxEq(QD.poleCentroid({ poles: [{ a: { re: -0.5, im: 0.25 } }] }), { re: -0.5, im: 0.25 }, 1e-12));
 }
 
+// QDS-5: the singular-LQD honesty gate INDEPENDENTLY checks the origin log-pole residue q. The identity
+// test functions are residue-free at 0 (w^k·q/w and w/(w−b)^k·q/w have no residue there), so a wrong q
+// used to read "✓ Valid"; verifyQuadratureIdentity now folds the (●₀) q-equation residual into maxRelDiff
+// (fail-closed). Synthetic φ (structure only — no solve needed) with q set to its (●₀)-consistent value
+// vs a perturbed q.
+{
+  const hData = { poles: [{ a: { re: 0.5, im: 0 }, principal: [{ re: 1.0, im: 0 }] }] };
+
+  // Bounded: (●₀) q = ln|γ|² + r#(z0) + conj(r#(1/conj z0)) — the clean 3-term formula (matches the solve).
+  {
+    const famB = QD_NS.Family.boundedLQD_singular;
+    const evalRHash = QD_NS.LqdCommon.evalRHash;
+    const pB = { family: 'boundedLQD_singular', singular: true, lqd: true, w0: { re: 1, im: 0 },
+      gamma: { re: 1.1, im: 0.15 }, z0: { re: 0.25, im: 0.1 }, q: { re: 0, im: 0 },
+      branches: [{ z: { re: 0.2, im: -0.15 }, A: [{ re: 0.3, im: 0.05 }, { re: 0.02, im: -0.01 }] }] };
+    const a2 = C.abs2(pB.z0);
+    const rz = evalRHash(pB.z0, pB);
+    const ri = C.conj(evalRHash(C.scale(pB.z0, 1 / a2), pB));
+    const qOK = { re: rz.re + ri.re + Math.log(C.abs2(pB.gamma)), im: rz.im + ri.im };
+    const vGood = famB.verifyQuadratureIdentity(Object.assign({}, pB, { q: qOK }), hData, { maxDegree: 3 });
+    const vBad = famB.verifyQuadratureIdentity(Object.assign({}, pB, { q: { re: qOK.re + 0.1, im: qOK.im } }), hData, { maxDegree: 3 });
+    ok('QDS-5 bounded: (●₀) q-check present in the honesty gate', vGood.checks.some((c) => c.q0 === true));
+    ok('QDS-5 bounded: a (●₀)-consistent q passes the q-check', vGood.qRelDiff < 1e-9, 'qRelDiff=' + vGood.qRelDiff.toExponential(2));
+    ok('QDS-5 bounded: a wrong q is caught (folded into maxRelDiff, fail-closed)',
+       vBad.qRelDiff > 1e-2 && vBad.maxRelDiff >= vBad.qRelDiff, 'qRelDiff=' + vBad.qRelDiff.toExponential(2));
+  }
+
+  // Unbounded: (●₀) reused from residual_UQDLS (β/γ-corrected) at offset 2·nFinite + 2·ΣA.
+  {
+    const famU = QD_NS.Family.unboundedLQD_singular;
+    const pU = { family: 'unboundedLQD_singular', unbounded: true, singular: true, lqd: true, c: 1.2,
+      z0: { re: 1.5, im: 0.3 }, q: { re: 0, im: 0 }, lqdBeta: [],
+      branches: [{ z: { re: 1.8, im: -0.2 }, A: [{ re: 0.3, im: 0.05 }] }] };
+    const r0 = famU.residual(pU, hData, {});   // (●₀) at index 2·1 + 2·1 = 4
+    const qOK = { re: pU.q.re - r0[4], im: pU.q.im - r0[5] };
+    const vGood = famU.verifyQuadratureIdentity(Object.assign({}, pU, { q: qOK }), hData, { maxDegree: 4 });
+    const vBad = famU.verifyQuadratureIdentity(Object.assign({}, pU, { q: { re: qOK.re + 0.1, im: qOK.im } }), hData, { maxDegree: 4 });
+    ok('QDS-5 unbounded: (●₀) q-check present in the honesty gate', vGood.checks.some((c) => c.q0 === true));
+    ok('QDS-5 unbounded: a (●₀)-consistent q passes the q-check', vGood.qRelDiff < 1e-9, 'qRelDiff=' + vGood.qRelDiff.toExponential(2));
+    ok('QDS-5 unbounded: a wrong q is caught (folded into maxRelDiff, fail-closed)',
+       vBad.qRelDiff > 1e-2 && vBad.maxRelDiff >= vBad.qRelDiff, 'qRelDiff=' + vBad.qRelDiff.toExponential(2));
+  }
+}
+
 };

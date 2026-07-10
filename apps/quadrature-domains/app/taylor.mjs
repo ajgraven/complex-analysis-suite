@@ -91,6 +91,14 @@ const Taylor = {
     if (p.length < 2) throw new Error("Taylor.invert: input has no t^1 term");
     if (Complex.abs2(p[0]) > 1e-20) throw new Error("Taylor.invert: nonzero constant term");
     const c1 = p[1];
+    // KNOWN CONDITIONING LIMITATION (QDS-3, documented — deferred): this guard rejects only an ABSOLUTE
+    // near-zero c_1 (|c_1|² < 1e-30). But the reversion below divides by c_1 at every order
+    // (q[n] = −known / c_1), so a c_1 that is small RELATIVE to the higher c_k (a near-critical φ'(z_j),
+    // where the local map is nearly degenerate) silently amplifies rounding error through q — no throw,
+    // no honest ≈/≤ flag. The correct guard is a RELATIVE condition, e.g. |c_1| vs max_k |c_k|^{1/k}, that
+    // either rejects or downgrades the result when the effective amplification is large. Left as a
+    // documented limitation, not patched here: Taylor.invert backs Faber reversion across MANY solvers,
+    // so tightening it needs a careful dedicated pass to avoid regressing the broad call surface.
     if (Complex.abs2(c1) < 1e-30) throw new Error("Taylor.invert: c_1 is zero");
 
     const q = Taylor.zero(L + 1);

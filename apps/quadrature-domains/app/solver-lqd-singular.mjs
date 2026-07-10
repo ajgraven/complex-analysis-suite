@@ -355,7 +355,7 @@ import _QD from './solver.mjs';
     const maxOrder = options.maxDegree ?? 3;
     const twoPiI = { re: 0, im: 2 * Math.PI };
 
-    return QD.LqdCommon.verifyIdentityGeneric(phi, hData, options, {
+    const result = QD.LqdCommon.verifyIdentityGeneric(phi, hData, options, {
       phiTaylorFn: phiTaylorAt_LQDS,
       boundaryKernel(w) {
         const absW2 = Complex.abs2(w);
@@ -391,6 +391,35 @@ import _QD from './solver.mjs';
       },
       resultFlags: { lqdSingular: true, maxDeg: maxOrder },
     });
+
+    // (●₀) INDEPENDENT origin-residue check (QDS-5). The monomial identity tests above are residue-free
+    // at the origin — w^k · q/w = q·w^{k−1} has no residue at 0 for k ≥ 1 — so they NEVER exercise the
+    // log-pole residue q, and a wrong q would still read "✓ Valid". Re-verify the q-equation (●₀) that
+    // the SOLVE enforces (residual_LQDS), independently, inside the honesty gate: by the Blaschke
+    // identity (Thm 5.6.2) the residue of h at 0 must satisfy
+    //     q = ln|γ|² + r#(z_0) + conj(r#(1/conj z_0)).
+    // Fold its RELATIVE error into maxRelDiff so a bad origin residue fails the identityTol gate
+    // fail-closed instead of silently passing. Mirrors the (●₀) residual in residual_LQDS.
+    if (phi && phi.z0 && phi.gamma && phi.q) {
+      const z0 = phi.z0;
+      const absZ02 = Complex.abs2(z0);
+      const rAtZ0 = evalRHash(z0, phi);
+      const rConjInv = Complex.conj(evalRHash(Complex.scale(z0, 1 / absZ02), phi)); // r#(1/conj z_0)
+      const qExpected = {
+        re: rAtZ0.re + rConjInv.re + Math.log(Complex.abs2(phi.gamma)),
+        im: rAtZ0.im + rConjInv.im,
+      };
+      const qAbsDiff = Complex.abs(Complex.sub(phi.q, qExpected));
+      const qScale = Math.max(Complex.abs(phi.q), Complex.abs(qExpected), 1); // floor 1 → q≈0 stays absolute
+      const qRelDiff = Number.isFinite(qAbsDiff) ? qAbsDiff / qScale : Infinity; // fail-closed on NaN/∞
+      result.checks.push({ label: 'q(●₀)', lhs: Complex.clone(phi.q), rhs: qExpected, absDiff: qAbsDiff, relDiff: qRelDiff, q0: true });
+      result.qRelDiff = qRelDiff;
+      result.qAbsDiff = qAbsDiff;
+      result.maxRelDiff = Math.max(result.maxRelDiff, qRelDiff);
+      if (qAbsDiff > result.maxAbsDiff) result.maxAbsDiff = qAbsDiff;
+    }
+
+    return result;
   }
 
   // ===========================================================================

@@ -406,6 +406,14 @@ import _QD from './solver.mjs';
     for (let i = 0; i < N; i++) {
       const s = samples[i];
       const w2 = s.w.re * s.w.re + s.w.im * s.w.im;
+      // KNOWN CONDITIONING LIMITATION (QDS-2, documented — deferred): this near-origin skip floor is a
+      // FIXED absolute constant, but the weight |w|^{2(α-1)} below blows up faster the smaller α is
+      // (exponent 2(α-1) < −1 for α < ½). So for small α a boundary sample that nearly touches 0 carries
+      // a genuinely large contribution, and a fixed 1e-30 floor can either DROP real mass (→ a wrong φ
+      // could pass this constraint) or let one sample DOMINATE the sum (ill-conditioned but silent). A
+      // robust fix is an α-aware / relative floor, or a dominance-rejection that fails closed when one
+      // near-origin sample would dominate — but it needs a careful dedicated pass (regression risk in the
+      // 2100+-check solver), so it is documented rather than patched. See also the 1e-30 arg below.
       if (w2 < 1e-30) continue;
       const weight = Math.pow(w2, alpha - 1);              // |w|^{2(α-1)}
       let term = Complex.scale(Complex.conj(s.w), weight); // conj(w)·|w|^{2(α-1)}  (w^0)
@@ -470,6 +478,9 @@ import _QD from './solver.mjs';
       // LHS via PqdCommon (same single-valued weighted sum as powerQD), test
       // monomial f = w^k. skipNearZeroW2 = 1e-30: 0 ∈ Ω here, so drop samples
       // where the boundary nearly touches the origin. Scale +1/(αN).
+      // (QDS-2: same fixed-absolute-floor conditioning caveat as massResidual_PQDS above — for α < ½
+      //  the |w|^{2(α-1)} weight makes this α-agnostic 1e-30 floor drop mass / over-weight one sample.
+      //  Documented, deferred to a careful pass.)
       let lhs = QD.PqdCommon.accumulateWeightedLHS(samples, alpha, (w) => Complex.pow(w, k), 1e-30);
       lhs = Complex.scale(lhs, 1 / (alpha * N));
 

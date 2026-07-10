@@ -700,7 +700,7 @@ import _QD from './solver.mjs';
       };
     }
 
-    return verifyIdentityGeneric(phi, hData, options, {
+    const result = verifyIdentityGeneric(phi, hData, options, {
       phiTaylorFn: phiTaylorAt_UQDLS,
       boundaryKernel(w) {
         const absW2 = Complex.abs2(w);
@@ -815,6 +815,35 @@ import _QD from './solver.mjs';
         testPoints, maxDeg: maxOrder,
       },
     });
+
+    // (●₀) INDEPENDENT origin-residue check (QDS-5). As in the bounded singular case, the identity test
+    // functions f(w)=w/(w−b)^k are residue-free at 0 (q/w · f is analytic there since b ≠ 0), so they
+    // NEVER exercise the simple-pole residue q — a wrong q would still read "✓ Valid". Rather than
+    // duplicate the intricate (●₀) formula (β + γ corrections, HANDOFF #22/#24), REUSE residual_UQDLS:
+    // its output is [ (●) 2·nFinite | (★)_A 2·ΣA | (●₀) 2 | (★)_F… | (★)_Γ… ], so the (●₀) q-residual
+    // sits at the deterministic offset 2·nFinite + 2·ΣA — the exact q-equation the SOLVE drives to zero.
+    // Fold its relative error into maxRelDiff so a bad origin residue fails the identityTol gate.
+    if (phi && phi.q && phi.branches) {
+      const nFinite = _finitePolesView(hData).poles.length;
+      let sumA = 0;
+      for (let j = 0; j < nFinite; j++) sumA += (phi.branches[j] && phi.branches[j].A ? phi.branches[j].A.length : 0);
+      const qOffset = 2 * nFinite + 2 * sumA;
+      const res = residual_UQDLS(phi, hData, {});
+      if (res && res.length >= qOffset + 2) {
+        const dq1 = { re: res[qOffset], im: res[qOffset + 1] };   // (●₀): phi.q − q_expected
+        const qAbsDiff = Complex.abs(dq1);
+        const qExpected = Complex.sub(phi.q, dq1);
+        const qScale = Math.max(Complex.abs(phi.q), Complex.abs(qExpected), 1);
+        const qRelDiff = Number.isFinite(qAbsDiff) ? qAbsDiff / qScale : Infinity; // fail-closed on NaN/∞
+        result.checks.push({ label: 'q(●₀)', lhs: Complex.clone(phi.q), rhs: qExpected, absDiff: qAbsDiff, relDiff: qRelDiff, q0: true });
+        result.qRelDiff = qRelDiff;
+        result.qAbsDiff = qAbsDiff;
+        result.maxRelDiff = Math.max(result.maxRelDiff, qRelDiff);
+        if (qAbsDiff > result.maxAbsDiff) result.maxAbsDiff = qAbsDiff;
+      }
+    }
+
+    return result;
   }
 
   // ===========================================================================
