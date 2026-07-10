@@ -82,6 +82,10 @@ const QD = _QD;
     if (sliceState.lastImageData) repaint();
   });
 
+  // Release the worker pool on page teardown (QDW-3). pagehide fires on both real unloads and
+  // bfcache eviction, so the ≤16 workers never outlive the page.
+  if (global.addEventListener) global.addEventListener('pagehide', terminatePool);
+
   // ---------------------------------------------------------------------------
   // Sidebar construction
   // ---------------------------------------------------------------------------
@@ -1105,6 +1109,19 @@ const QD = _QD;
     }
     sliceState.pool = await sliceState.poolPromise;
     return sliceState.pool;
+  }
+
+  // Release the worker pool (≤16 workers) on page teardown so they don't outlive the page — the pool is
+  // otherwise long-lived by design (kept warm across tab switches, since idle workers are cheap and
+  // re-spawning on return would add fetch + init churn). Idempotent; a later render lazily recreates it
+  // via ensurePool(). (QDW-3) — both Pool and MainThreadPool expose terminate().
+  function terminatePool() {
+    if (sliceState.activeJob) { try { sliceState.activeJob.cancel(); } catch (e) { /* ignore */ } }
+    sliceState.activeJob = null;
+    const pool = sliceState.pool;
+    sliceState.pool = null;
+    sliceState.poolPromise = null;
+    if (pool) { try { pool.terminate(); } catch (e) { /* ignore */ } }
   }
   // Install the Phase-3 adaptive render engine (param-slice-render.js). psCtx
   // carries the shared sliceState + the cancelLiveSolve host hook; runAdaptive2D

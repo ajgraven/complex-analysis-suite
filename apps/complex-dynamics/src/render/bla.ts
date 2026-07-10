@@ -94,6 +94,11 @@ export function mergeBLA(x: BLA, y: BLA, maxC: number): BLA {
   const a = cmul(y.a, x.a);
   const b: Complex = [y.a[0] * x.b[0] - y.a[1] * x.b[1] + y.b[0], y.a[0] * x.b[1] + y.a[1] * x.b[0] + y.b[1]];
   const ax = cabs(x.a);
+  // `maxC` is the largest |δc| over the block's pixel CENTRES. AA jitter offsets each sample by up to
+  // ~1 pixel, so a jittered sample's true |δc| can exceed maxC by ~1/res, using the outermost BLA a
+  // hair (~0.1%) outside its validated radius. This is absorbed by the EPS margin baked into the
+  // level-0 radius (see `EPS * absA` above) and is far too small to flip an escape classification, so
+  // it is an accepted, bounded approximation rather than a budgeted term. (DZ-1)
   const r = Math.min(x.r, ax > 0 ? Math.max(0, (y.r - cabs(x.b) * maxC) / ax) : x.r);
   return { a, b, r, l: x.l + y.l };
 }

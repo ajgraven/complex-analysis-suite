@@ -1037,7 +1037,12 @@ export class GLPlot {
     gl.uniform2f(u.uC, this._cVal[0], this._cVal[1]);
     gl.uniform2f(u.uA, this._paramA[0], this._paramA[1]);
     gl.uniform1i(u.uFractType, this.fractType === "param" ? 1 : 0);
-    const mode = modeOverride ?? this.effectiveMode();
+    let mode = modeOverride ?? this.effectiveMode();
+    // Histogram mode (5) samples uCdf unconditionally in the shader, but the CDF texture is only bound
+    // below when non-null — and updateCdf can early-return (a precision program that failed to compile)
+    // before creating it. Fall back to smooth (1) when it is missing so we never sample a stale/unbound
+    // texture unit 0 and emit a garbled frame. (REND-4)
+    if (mode === 5 && !this.cdfTex) mode = 1;
     gl.uniform1i(u.uMode, mode);
     gl.uniform1i(u.uPalette, this._palette);
     gl.uniform1i(u.uTrapType, this._trapType);
