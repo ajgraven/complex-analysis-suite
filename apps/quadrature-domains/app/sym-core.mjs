@@ -2487,25 +2487,57 @@ import _QD from './solver.mjs';
   // ---------------------------------------------------------------------------
   function _vecZero(n) { const a = new Array(n); for (let i = 0; i < n; i++) a[i] = Gaussian.fromInt(0); return a; }
 
+  // Packed-kernel normal-form → coordinate-vector helper, shared by fglm + multiplicationMatrix.
+  // Both repeatedly reduce a monomial modulo a Gröbner basis G and read off its coordinates in the
+  // standard-monomial basis B. The map-based normalForm pays monoKey's per-term sort-join + monoCmp's
+  // per-comparison Set allocation — exactly the churn the packed Int32Array kernel already removed for
+  // Buchberger, but left on this zero-dim SOLVE path. Precompute the packed context, the packed
+  // divisors (each with its leading exponent/coeff), and a packed-key → basis-column map ONCE, then
+  // _ppNormalForm reduces each monomial on packed lanes. NF modulo a Gröbner basis is UNIQUE, so the
+  // coordinate vector is bit-identical to the map path (guarded by the fglm/multMatrix differential
+  // tests + realSolutionCount's realCount corpus).
+  function _packedNFCoords(G, o, ambientVars, B) {
+    const ctx = _packedContext(o, ambientVars);
+    const divs = G.map((g) => { const terms = _ppFromMPoly(ctx, g); const lead = _ppLeading(ctx, terms); return { terms, le: lead.e, lc: lead.coeff }; });
+    const packMono = (monoMap) => {
+      const e = new Int32Array(ctx.n);
+      for (const [nm, ex] of monoMap) {
+        if (ex > _P_EXP_MAX) throw new Error('packed NF: exponent ' + ex + ' exceeds the 16-bit key bound; use CAS export.');
+        e[ctx.index.get(nm)] = ex;
+      }
+      return e;
+    };
+    const D = B.length;
+    const colOf = new Map();
+    B.forEach((m, i) => colOf.set(_pKey(packMono(m)), i));
+    return {
+      // coordinate vector (length D, Gaussian entries) of NF(the given monomial) in B
+      coordsOfMono(monoMap) {
+        const e = packMono(monoMap);
+        const f = new Map(); f.set(_pKey(e), { e, coeff: Gaussian.fromInt(1) });
+        const r = _ppNormalForm(ctx, f, divs);
+        const v = _vecZero(D);
+        for (const t of r.values()) {
+          const c = colOf.get(_pKey(t.e));
+          if (c == null) throw new Error('packed NF: normal form left the standard-monomial span (not a Gröbner basis?)');
+          v[c] = t.coeff;
+        }
+        return v;
+      },
+    };
+  }
+
   function fglm(G1, order1, order2, vars) {
     const o1 = _ord(order1), o2 = _ord(order2);
     const B = standardMonomials(G1, o1, vars);
     if (B === null) throw new Error('fglm: the ideal is not zero-dimensional');
     const D = B.length;
-    const colOf = new Map(); B.forEach((m, i) => colOf.set(monoKey(m), i));
     const V = _ambientVars(G1, vars);
-    // coordinate vector of NF(monomial) in the standard-monomial basis B
-    function nfVec(monoMap) {
-      const t = new MPoly(); t._addTerm(new Map(monoMap), Gaussian.fromInt(1));
-      const r = normalForm(t, G1, o1);
-      const v = _vecZero(D);
-      for (const term of r.terms.values()) {
-        const c = colOf.get(monoKey(term.mono));
-        if (c == null) throw new Error('fglm: normal form left the standard-monomial span (G1 is not a Gröbner basis?)');
-        v[c] = term.coeff;
-      }
-      return v;
-    }
+    // coordinate vector of NF(monomial) in the standard-monomial basis B, via the PACKED kernel
+    // (see _packedNFCoords). NF modulo the Gröbner basis G1 is unique, so this is bit-identical to
+    // the old map-based normalForm path — without its per-term monoKey/monoCmp churn.
+    const nfc = _packedNFCoords(G1, o1, V, B);
+    const nfVec = (monoMap) => nfc.coordsOfMono(monoMap);
     const rows = [];        // echelon { vec, pivot, comb:Map(acceptedIndex→Gaussian) }; invariant vec = comb·accepted
     const accepted = [];    // standard monomials under order2, in increasing-order2 acceptance order
     function reduce(v) {
@@ -2765,18 +2797,15 @@ import _QD from './solver.mjs';
     const B = standardMonomials(G, o, vars);
     if (B === null) throw new Error('multiplicationMatrix: positive-dimensional ideal');
     const D = B.length;
-    const idx = new Map(); B.forEach((m, j) => idx.set(monoKey(m), j));
-    const xv = MPoly.variable(varName);
     const M = [];
     for (let i = 0; i < D; i++) { const row = new Array(D); for (let j = 0; j < D; j++) row[j] = Gaussian.fromInt(0); M.push(row); }
+    // Column j = coordinates of NF(varName · B[j]) in the standard basis, via the packed kernel
+    // (see _packedNFCoords / fglm). NF modulo a GB is unique ⇒ M is bit-identical to the map path.
+    const nfc = _packedNFCoords(G, o, _ambientVars(G, vars), B);
     for (let j = 0; j < D; j++) {
-      const bj = new MPoly(); bj._addTerm(new Map(B[j]), Gaussian.fromInt(1));
-      const nf = normalForm(xv.mul(bj), G, o);
-      for (const t of nf.terms.values()) {
-        const k = idx.get(monoKey(t.mono));
-        if (k === undefined) throw new Error('multiplicationMatrix: normal form escaped the standard-monomial basis (not a Gröbner basis?)');
-        M[k][j] = t.coeff;
-      }
+      const m = new Map(B[j]); m.set(varName, (m.get(varName) || 0) + 1);       // the monomial varName · B[j]
+      const col = nfc.coordsOfMono(m);
+      for (let k = 0; k < D; k++) if (!col[k].isZero()) M[k][j] = col[k];
     }
     return { M, B, D };
   }

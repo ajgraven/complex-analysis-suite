@@ -791,6 +791,41 @@ module.exports = async function run() {
       ok('solveByEigenvalues: every solution satisfies the system',
          eig.solutions.every((s) => grid.every((g) => { const z = g.evalComplex(s); return near(z.re, 0) && near(z.im, 0); })));
 
+      // Differential guard for the packed-NF port: multiplicationMatrix (packed Int32Array
+      // kernel) must equal a map-based reference (normalForm + monoKey) ENTRY-BY-ENTRY —
+      // incl. a dense mixed cubic. fglm's nfVec shares the same _packedNFCoords path, so this
+      // also guards it; a silent packed divergence would corrupt every eigenvalue solve +
+      // realCount. Mirrors the packed==naive Buchberger guard above.
+      {
+        const mkey = (m) => { if (m.size === 0) return ''; const p = []; for (const [n, e] of m) p.push(n + '^' + e); p.sort(); return p.join('*'); };
+        const mapMultMat = (G, o, vs, v) => {
+          const B = S.standardMonomials(G, o, vs), D = B.length;
+          const idx = new Map(); B.forEach((m, j) => idx.set(mkey(m), j));
+          const M = []; for (let i = 0; i < D; i++) { const r = new Array(D); for (let j = 0; j < D; j++) r[j] = S.Gaussian.fromInt(0); M.push(r); }
+          for (let j = 0; j < D; j++) {
+            const bj = new S.MPoly(); bj._addTerm(new Map(B[j]), S.Gaussian.fromInt(1));
+            for (const t of S.normalForm(S.MPoly.variable(v).mul(bj), G, o).terms.values()) M[idx.get(mkey(t.mono))][j] = t.coeff;
+          }
+          return M;
+        };
+        const sameG = (x, y) => x.re.n === y.re.n && x.re.d === y.re.d && x.im.n === y.im.n && x.im.d === y.im.d;
+        const cases = [
+          { sys: grid, vs: ['x', 'y'] },
+          { sys: [mv('x').pow(3).add(mv('y')).add(mv('z')).sub(mi(1)), mv('y').pow(3).add(mv('x')).add(mv('z')).sub(mi(1)), mv('z').pow(3).add(mv('x')).add(mv('y')).sub(mi(1))], vs: ['x', 'y', 'z'] },
+        ];
+        let allEq = true, detail = '';
+        for (const c of cases) {
+          const o = S.monomialOrder('grevlex', c.vs);
+          const G = S.buchberger(c.sys, o, {});
+          const D = S.standardMonomials(G, o, c.vs).length;
+          for (const v of c.vs) {
+            const A = S.multiplicationMatrix(G, o, c.vs, v).M, Bm = mapMultMat(G, o, c.vs, v);
+            for (let i = 0; i < D && allEq; i++) for (let j = 0; j < D; j++) if (!sameG(A[i][j], Bm[i][j])) { allEq = false; detail = v + '[' + i + '][' + j + ']'; break; }
+          }
+        }
+        ok('multiplicationMatrix: packed-NF kernel == map-based normalForm entry-by-entry (grid + dense cubic)' + (allEq ? '' : ' — MISMATCH ' + detail), allEq);
+      }
+
       // solveZeroDim now FALLS BACK to eigenvalue solving on this non-shape system
       const sz = S.solveZeroDim(grid, {});
       ok('solveZeroDim: falls back to the eigenvalue method on a non-shape-position ideal',
