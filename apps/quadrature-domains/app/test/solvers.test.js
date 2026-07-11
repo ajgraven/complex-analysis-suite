@@ -1614,6 +1614,38 @@ runFamilyBattery('powerQD_singular', [
   }
 }
 
+// QD-solver-families-B-01: unbounded singular PQD identity verifier self-converges.
+// h with BOTH a finite pole AND a polynomial part steepens the near-origin boundary; the old fixed
+// 2000-sample floor read ~4e-3 there and FALSE-rejected a genuinely univalent QD (identityOK=false).
+// The verifier now escalates the sample count while the residual keeps converging (capped at 16000).
+{
+  const famS = QD_NS.Family.unboundedPQD_singular;
+  // (A) pole + polyPart together — the false-negative case.
+  const hPP = { poles: [{ a: { re: 2, im: 0 }, principal: [{ re: 0.5, im: 0 }] }], polyPart: [{ re: 0.4, im: 0 }] };
+  const rPP = solveInverseQD(hPP, { unbounded: true, singular: true, alpha: 2, c: 1 });
+  ok('B-01: pole+polyPart UPQD_singular solves + univalent',
+     rPP.success && rPP.primary && rPP.primary.univalent, rPP.success ? '' : rPP.error);
+  if (rPP.success) {
+    ok('B-01: pole+polyPart now CERTIFIED valid (identityOK — was a false negative at N=2000)',
+       rPP.primary.identityOK === true, 'maxRelDiff=' + rPP.primary.identity.maxRelDiff.toExponential(2));
+    const vPP = famS.verifyQuadratureIdentity(rPP.primary.phi, hPP, {});
+    ok('B-01: verifier escalated the sample count past the 2000 floor for pole+polyPart',
+       vPP.numSamples > 2000, 'numSamples=' + vPP.numSamples);
+    ok('B-01: escalated identity residual is well below identityTol (1e-6)',
+       vPP.maxRelDiff < 1e-6, 'maxRelDiff=' + vPP.maxRelDiff.toExponential(2));
+  }
+  // (B) pole-only baseline — resolves at 2000, must NOT escalate (no perf regression).
+  const hPole = { poles: [{ a: { re: 2, im: 0 }, principal: [{ re: 0.5, im: 0 }] }], polyPart: [] };
+  const rPole = solveInverseQD(hPole, { unbounded: true, singular: true, alpha: 2, c: 1 });
+  if (rPole.success) {
+    const vP = famS.verifyQuadratureIdentity(rPole.primary.phi, hPole, {});
+    ok('B-01: pole-only verify does NOT escalate (single 2000-sweep, common case unchanged)',
+       vP.numSamples === 2000, 'numSamples=' + vP.numSamples);
+    ok('B-01: pole-only still certified valid', rPole.primary.identityOK === true,
+       'maxRelDiff=' + rPole.primary.identity.maxRelDiff.toExponential(2));
+  }
+}
+
 // QA: non-integer-α dispatch. α=1.5 must route to powerQD; α=1 to boundedQD.
 {
   const r15 = solveInverseQD(
