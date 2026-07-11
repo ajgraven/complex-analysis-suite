@@ -539,32 +539,21 @@ import _QD from './solver.mjs';
     }
     return q;
   }
-  // Determinant via fraction-free Bareiss elimination with row-pivoting.
+  // Determinant via fraction-free Bareiss elimination with row-pivoting. Runs on the PACKED
+  // kernel (Int32Array lanes, grlex — the order _leadTerm/mpolyExactDiv use) so the resultant/
+  // discriminant hot path drops the map path's per-term monoKey + per-comparison monoCmp churn.
+  // Bit-identical: mul/sub are exact ring ops and exact division has a UNIQUE quotient, so the
+  // determinant is representation- and order-independent (cross-checked vs the division-free
+  // mpolyDetLaplace oracle).
   function mpolyDet(matrix) {
     const n = matrix.length;
     if (n === 0) return MPoly.fromInt(1);
-    const M = matrix.map((row) => row.map((e) => e.clone()));
-    let sign = 1;
-    let prev = MPoly.fromInt(1);
-    for (let k = 0; k < n - 1; k++) {
-      if (M[k][k].isZero()) {
-        let r = k + 1;
-        while (r < n && M[r][k].isZero()) r++;
-        if (r === n) return MPoly.zero();               // singular column
-        const tmp = M[k]; M[k] = M[r]; M[r] = tmp; sign = -sign;
-      }
-      const pivot = M[k][k];
-      for (let i = k + 1; i < n; i++) {
-        for (let j = k + 1; j < n; j++) {
-          const num = pivot.mul(M[i][j]).sub(M[i][k].mul(M[k][j]));
-          M[i][j] = mpolyExactDiv(num, prev);
-        }
-        M[i][k] = MPoly.zero();
-      }
-      prev = pivot;
-    }
-    const det = M[n - 1][n - 1];
-    return sign === 1 ? det : det.neg();
+    if (n === 1) return matrix[0][0].clone();
+    const vset = new Set();
+    for (const row of matrix) for (const e of row) for (const t of e.terms.values()) for (const nm of t.mono.keys()) vset.add(nm);
+    const ctx = _packedContext({ kind: 'grlex' }, [...vset]);
+    const packed = matrix.map((row) => row.map((e) => _ppFromMPoly(ctx, e)));
+    return _ppToMPoly(ctx, _bareissPacked(ctx, packed));
   }
   // Division-free Laplace cofactor expansion — O(n!), used as the test oracle for
   // Bareiss on small matrices (and a safe path for tiny ones).
@@ -2015,6 +2004,72 @@ import _QD from './solver.mjs';
       else if (!sub.isZero()) out.set(key, { e, coeff: sub.neg() });
     }
     return out;
+  }
+
+  // Packed general-polynomial ops for the Bareiss determinant (mpolyDet). Buchberger needs only
+  // S-poly + reduction; Bareiss additionally multiplies and subtracts two arbitrary packed polys
+  // and exact-divides — so add those three on packed lanes so mpolyDet drops the map path's
+  // per-term monoKey / per-comparison monoCmp churn. All are exact ring ops (mul/sub) or a UNIQUE
+  // exact quotient (exactDiv), hence representation- and order-independent.
+  function _ppAddInto(dst, key, e, coeff) {
+    const cur = dst.get(key);
+    if (cur) { const c = cur.coeff.add(coeff); if (c.isZero()) dst.delete(key); else cur.coeff = c; }
+    else if (!coeff.isZero()) dst.set(key, { e, coeff });
+  }
+  function _ppMulPoly(a, b) {
+    const out = new Map();
+    for (const ta of a.values()) for (const tb of b.values()) { const e = _pMul(ta.e, tb.e); _ppAddInto(out, _pKey(e), e, ta.coeff.mul(tb.coeff)); }
+    return out;
+  }
+  function _ppSubPoly(a, b) {
+    const out = new Map(); for (const [k, t] of a) out.set(k, { e: t.e, coeff: t.coeff });
+    for (const t of b.values()) _ppAddInto(out, _pKey(t.e), t.e, t.coeff.neg());
+    return out;
+  }
+  // q with f = q·g exactly (assumes g | f); mirrors mpolyExactDiv on packed lanes.
+  function _ppExactDiv(ctx, f, g) {
+    const gLead = _ppLeading(ctx, g);
+    const rem = new Map(); for (const [k, t] of f) rem.set(k, { e: t.e, coeff: t.coeff });
+    const q = new Map();
+    let guard = 0;
+    while (rem.size) {
+      const rLead = _ppLeading(ctx, rem);
+      const qe = _pDivV(rLead.e, gLead.e);
+      if (qe === null) throw new Error('packed exactDiv: not divisible (invariant violated)');
+      const qc = rLead.coeff.div(gLead.coeff);
+      _ppAddInto(q, _pKey(qe), qe, qc);
+      _ppSubTermTimesPoly(rem, qe, qc, g);                // rem -= (qc·x^qe)·g, cancels LT(rem)
+      if (++guard > 1e6) throw new Error('packed exactDiv: non-terminating');
+    }
+    return q;
+  }
+  // Fraction-free Bareiss elimination on a matrix of packed polys (mirrors mpolyDet). Entries are
+  // read-only (replaced wholesale, never mutated in place), so cloning the row arrays suffices.
+  function _bareissPacked(ctx, matrix) {
+    const n = matrix.length;
+    const M = matrix.map((row) => row.slice());
+    let prev = new Map(); { const e = new Int32Array(ctx.n); prev.set(_pKey(e), { e, coeff: Gaussian.fromInt(1) }); }
+    let sign = 1;
+    for (let k = 0; k < n - 1; k++) {
+      if (M[k][k].size === 0) {
+        let r = k + 1; while (r < n && M[r][k].size === 0) r++;
+        if (r === n) return new Map();                    // singular column ⇒ det 0
+        const tmp = M[k]; M[k] = M[r]; M[r] = tmp; sign = -sign;
+      }
+      const pivot = M[k][k];
+      for (let i = k + 1; i < n; i++) {
+        for (let j = k + 1; j < n; j++) {
+          const num = _ppSubPoly(_ppMulPoly(pivot, M[i][j]), _ppMulPoly(M[i][k], M[k][j]));
+          M[i][j] = _ppExactDiv(ctx, num, prev);
+        }
+        M[i][k] = new Map();
+      }
+      prev = pivot;
+    }
+    const det = M[n - 1][n - 1];
+    if (sign === 1) return det;
+    const neg = new Map(); for (const [key, t] of det) neg.set(key, { e: t.e, coeff: t.coeff.neg() });
+    return neg;
   }
 
   // The packed Buchberger main loop (Gebauer–Möller + sugar, identical control
