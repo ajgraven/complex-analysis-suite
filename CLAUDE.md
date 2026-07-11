@@ -78,7 +78,8 @@ ESM-ification) and the shared-package extractions — **`@cas/core`** (Phase 3),
 (Phase 4), **`@cas/expr` + `@cas/gpu`** (Phase 5) — are done and merged. **Phase 6**
 (`apps/correspondences`) is complete through Milestone C: the deltoid Schwarz reflection σ (CPU + GPU),
 its deleted correspondence (branch engine + orbit trees + density render), the family parameter plane,
-and the parabolic-Tricorn model coordinate. Three apps ride the five shared `@cas/*` packages.
+and the parabolic-Tricorn model coordinate. Three apps ride the four shared `@cas/*` packages
+(`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`).
 
 Deferred / exploratory (not started): further correspondence families (circle-and-cardioid → cubic
 Chebyshev → general d:d), analytic branch continuation through cusps (uncertified — RISKS §3), and QD
