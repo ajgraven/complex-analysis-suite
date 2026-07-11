@@ -121,3 +121,26 @@ describe("deep-link codec", () => {
     expect(() => decodeLink("#s=!!!not-base64-json")).toThrow();
   });
 });
+
+describe("validatePayload — the non-MapSpec structural fields (review P2 / interchange A-02/A-03)", () => {
+  const prov = { app: "cd", appVersion: "0.1.0", createdAt: "2026-07-06T00:00:00Z" };
+  it("rejects a view envelope with a missing or invalid viewport (was silently trusted)", () => {
+    const viewEnv = (viewport: unknown) => ({ schema: SCHEMA_ID, version: VERSION, kind: "view", payload: { map: deltoidSigma, viewport }, provenance: prov });
+    expect(() => validateEnvelope(viewEnv(undefined))).toThrow(/viewport/);
+    expect(() => validateEnvelope(viewEnv({ center: { re: 0 } }))).toThrow(/viewport/); // center.im missing
+    expect(() => validateEnvelope(viewEnv({ center: { re: 0, im: 0 }, zoom: "5" }))).toThrow(/viewport/); // zoom not a number
+    expect(validateEnvelope(viewEnv({ center: { re: -0.5, im: 0 }, zoom: 3 })).kind).toBe("view"); // a valid viewport passes
+  });
+  it("rejects a schwarz-reflection with a malformed escape spec; absent escape is fine", () => {
+    const withEscape = (escape: unknown) => ({ ...schwarzEnvelope(), payload: { ...schwarzEnvelope().payload, escape } });
+    expect(() => validateEnvelope(withEscape({ predicate: "abs-gt", R: NaN }))).toThrow(/escape/); // non-finite R
+    expect(() => validateEnvelope(withEscape({ predicate: "bogus" }))).toThrow(/escape/); // predicate not in the union
+    expect(validateEnvelope(withEscape({ predicate: "abs-gt", R: 100 })).kind).toBe("schwarz-reflection"); // valid
+    expect(validateEnvelope(withEscape(undefined)).kind).toBe("schwarz-reflection"); // optional — absent is fine
+  });
+  it("rejects a quadrature-domain with an over-cap boundarySamples array", () => {
+    const big = Array.from({ length: 5000 }, () => ({ re: 0, im: 0 })); // > MAX_COEFF_LEN
+    const env = { schema: SCHEMA_ID, version: VERSION, kind: "quadrature-domain", payload: { phi: deltoidSigma, conventions: CANONICAL, boundarySamples: big }, provenance: prov };
+    expect(() => validateEnvelope(env)).toThrow(/boundarySamples/);
+  });
+});
