@@ -20,8 +20,8 @@
 // pure core (buildProbeGLSL / jsReference / compareResults) and the numeric run is reproducible by hand.
 
 import { parse } from "@cas/expr/parser";
-import { compileF } from "@cas/expr/glsl";
-import { makeComplexFn } from "@cas/expr/evaluate";
+import { compileF, compileEscape } from "@cas/expr/glsl";
+import { makeComplexFn, makeEscapeFn } from "@cas/expr/evaluate";
 import type { Complex } from "@cas/expr/complex";
 import { COMPLEX_SINGLE_GLSL } from "./glsl/complexSingle.glsl.js";
 import { COMPLEX_DERIVED_GLSL } from "./glsl/complexDerived.glsl.js";
@@ -175,4 +175,48 @@ export function defaultSamples(): Sample[] {
     }
   }
   return samples;
+}
+
+// ── Regression corpus for the two emitBody codegen bugs the whole-app review found (H1/H2). These are
+// alternate SPELLINGS of ordinary maps that stress the parameter-reassignment / trailing-assignment paths.
+// The JS backend always accepted them; the emitted GLSL must too, or it fails to COMPILE while the CPU
+// overlay works. packages/expr/test/emitBodyHighs.test.ts pins the emitted STRING; running these through
+// runGLSL (H2) / compiling buildEscapeProbeGLSL (H1) in a real WebGL2 context is the stronger check that the
+// GLSL actually compiles + runs on a GPU — the class of regression only the browser harness can catch.
+
+/** H2 (PKG-expr-B-02): assigning to a shader PARAMETER must NOT redeclare it (`cvec z =` → GLSL error).
+ *  `z = z^2 + c; z` ≡ z²+c and `c = c^2; z + c` ≡ z+c² — same maps, exercised through the reassign path. */
+export const F_REGRESSION_CORPUS: DualCase[] = [
+  { name: "H2: z = z^2 + c; z (reassign param z)", source: "z = z^2 + c; z" },
+  { name: "H2: c = c^2; z + c (reassign param c)", source: "c = c^2; z + c" },
+];
+
+/** H1 (PKG-expr-B-01): an escape predicate ENDING in an assignment must coerce to bool (real-part ≠ 0), not
+ *  `return <cvec>;` from a `bool escapeFn` (a GLSL type error). `fSource` is the map makeEscapeFn needs. */
+export const ESCAPE_REGRESSION_CORPUS: { name: string; source: string; fSource: string }[] = [
+  { name: "H1: x = z^2 (assignment-ending escape predicate)", source: "x = z^2", fSource: "z^2 + c" },
+];
+
+/** Assemble a self-contained WebGL2 fragment shader for a `bool escapeFn(z,c)` (compileEscape), writing
+ *  1.0/0.0 to the render target — the escape-predicate counterpart of buildProbeGLSL. */
+export function buildEscapeProbeGLSL(source: string): string {
+  const escFn = compileEscape(parse(source));
+  return `#version 300 es
+precision highp float;
+${COMPLEX_SINGLE_GLSL}
+${COMPLEX_DERIVED_GLSL}
+${escFn}
+uniform vec2 uZ;
+uniform vec2 uC;
+out vec4 fragColor;
+void main() {
+  bool e = escapeFn(vec_(uZ.x, uZ.y), vec_(uC.x, uC.y));
+  fragColor = vec4(e ? 1.0 : 0.0, 0.0, 0.0, 1.0);
+}`;
+}
+
+/** JS-backend reference for an escape predicate (one boolean per sample). */
+export function jsEscapeReference(source: string, fSource: string, samples: Sample[]): boolean[] {
+  const f = makeEscapeFn(parse(source), parse(fSource));
+  return samples.map((s) => f(s.z, s.c));
 }

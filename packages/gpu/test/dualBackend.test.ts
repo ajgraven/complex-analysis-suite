@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { Complex } from "@cas/expr/complex";
 import {
   buildProbeGLSL,
+  buildEscapeProbeGLSL,
   compareResults,
   defaultSamples,
   DUAL_BACKEND_CORPUS,
+  ESCAPE_REGRESSION_CORPUS,
+  F_REGRESSION_CORPUS,
+  jsEscapeReference,
   jsReference,
   type Sample,
 } from "../src/dualBackend.js";
@@ -63,5 +67,41 @@ describe("@cas/gpu dual-backend harness (node-testable core)", () => {
     const s2 = defaultSamples();
     expect(s1.length).toBeGreaterThan(0);
     expect(s1).toEqual(s2);
+  });
+});
+
+// The emitBody codegen bugs the whole-app review found (H1/H2). These node checks pin the emitted STRING;
+// the browser harness (dualBackend.browser.test.ts) additionally compiles + runs them on real WebGL2 — the
+// stronger check the review's core concern demands (the emitted GLSL, not a mirror, must actually compile).
+describe("@cas/gpu dual-backend — emitBody codegen regression corpus (H1/H2)", () => {
+  it("H2: buildProbeGLSL does NOT redeclare a reassigned shader parameter (`cvec z =` → GLSL error)", () => {
+    const gz = buildProbeGLSL(F_REGRESSION_CORPUS[0].source); // z = z^2 + c; z
+    expect(gz).toContain("cvec fFn(cvec z, cvec c)"); // the signature has `cvec z,` …
+    expect(gz).not.toContain("cvec z ="); // … but the BODY must reuse z, not redefine it
+    expect(buildProbeGLSL(F_REGRESSION_CORPUS[1].source)).not.toContain("cvec c ="); // c = c^2; z + c
+  });
+
+  it("H2: the reassigned-param spellings are the same maps as z²+c and z+c²", () => {
+    const a = jsReference(F_REGRESSION_CORPUS[0].source, [{ z: [1, 1], c: [0.5, 0] }] as Sample[])[0];
+    expect(a[0]).toBeCloseTo(0.5, 12); // (1+i)² + 0.5 = 0.5 + 2i
+    expect(a[1]).toBeCloseTo(2, 12);
+    const b = jsReference(F_REGRESSION_CORPUS[1].source, [{ z: [2, 0], c: [3, 0] }] as Sample[])[0];
+    expect(b[0]).toBeCloseTo(11, 12); // 2 + 3² = 11
+    expect(b[1]).toBeCloseTo(0, 12);
+  });
+
+  it("H1: buildEscapeProbeGLSL emits a bool escapeFn coercing a trailing assignment (no cvec return)", () => {
+    const g = buildEscapeProbeGLSL(ESCAPE_REGRESSION_CORPUS[0].source); // x = z^2
+    expect(g).toContain("bool escapeFn(cvec z, cvec c)");
+    expect(g).toContain("!= 0.0"); // real-part bool coercion of the trailing assignment
+    expect(g).not.toMatch(/return\s+x\s*;/); // must NOT return the cvec x from a bool fn
+    expect(g).toContain("void main()");
+    expect(g).toContain("escapeFn(");
+  });
+
+  it("H1: jsEscapeReference — `x = z^2` escapes iff re(z²) ≠ 0 (true for z ≠ 0)", () => {
+    const { source, fSource } = ESCAPE_REGRESSION_CORPUS[0];
+    expect(jsEscapeReference(source, fSource, [{ z: [3, 0], c: [0, 0] }] as Sample[])[0]).toBe(true);
+    expect(jsEscapeReference(source, fSource, [{ z: [0, 0], c: [0, 0] }] as Sample[])[0]).toBe(false);
   });
 });
