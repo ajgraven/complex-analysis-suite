@@ -477,7 +477,17 @@ import _QD from './solver.mjs';
     // resolved common case (pole-only / polyPart-only reach <1e-9 at 2000) and is capped
     // at 16000 so a genuinely non-realizable domain (residual plateaus large) still
     // fails closed rather than looping. `numSamples` remains a floor, not a ceiling.
-    let N = Math.max(options.numSamples || 0, 2000);
+    //
+    // Perf: when h has BOTH a finite pole AND a polynomial part the N=2000 sweep is
+    // ALWAYS insufficient here (~4e-3 — it invariably escalates), so start that class at
+    // the 4000 floor and skip the known-wasted first sweep. This cuts the verify cost by
+    // ~⅓ on exactly the auto-switch-to-singular path (the slow regime transition). Pole-
+    // only / polyPart-only keep the 2000 floor (they already resolve there, so a 4000
+    // start would only waste work). B-01's `numSamples > 2000` / `=== 2000` still hold.
+    const hasFinitePole = !!(hData.poles && hData.poles.some(p => p.principal && p.principal.length > 0));
+    const hasPolyPart   = (hData.polyPart || []).some(cc => Complex.abs(cc) > 0);
+    const startFloor = (hasFinitePole && hasPolyPart) ? 4000 : 2000;
+    let N = Math.max(options.numSamples || 0, startFloor);
     let res = residualAt(N);
     while (N < 16000 && Number.isFinite(res.maxRelDiff) && res.maxRelDiff > 1e-9) {
       const finer = residualAt(N * 2);
