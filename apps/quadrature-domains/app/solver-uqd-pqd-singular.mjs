@@ -401,69 +401,92 @@ import _QD from './solver.mjs';
       3);
   }
   function verifyQuadratureIdentity_UPQDS(phi, hData, options = {}) {
-    // The singular boundary (Blaschke × αth-root, with 0 ∈ Ω) needs a denser
-    // trapezoidal sweep than the non-singular families to resolve the
-    // higher-curvature region near the origin (spectral convergence: 600→4e-4,
-    // 1200→1e-10, 2400→4e-14 on the one-pole α=2 case). Enforce a MINIMUM of
-    // 2000 even when the solve pipeline passes a smaller univalenceSamples,
-    // so the reported identity reflects the true (machine-precision) accuracy.
-    const N = Math.max(options.numSamples || 0, 2000);
     const maxOrder = options.maxDegree ?? 3;
     const numTestPoints = options.numTestPoints ?? 3;
     const alpha = phi.alpha;
-    const samples = sweepUnitCircle_UPQDS(phi, N);
-    let cx = 0, cy = 0;
-    for (const s of samples) { cx += s.w.re; cy += s.w.im; }
-    cx /= N; cy /= N;
-    let maxDev = 0;
-    for (const s of samples) { const d = Math.hypot(s.w.re - cx, s.w.im - cy); if (d > maxDev) maxDev = d; }
-    // Test points in K (the bounded complement), avoiding the origin (∈ Ω).
-    const polygonPts = samples.map(s => s.w);
-    const inside = (x, y) => {
-      let cr = 0;
-      for (let i = 0; i < polygonPts.length; i++) {
-        const j = (i + 1) % polygonPts.length;
-        const yi = polygonPts[i].im, yj = polygonPts[j].im;
-        if ((yi > y) !== (yj > y)) { const t = (y - yi) / (yj - yi); if (polygonPts[i].re + t * (polygonPts[j].re - polygonPts[i].re) > x) cr++; }
-      }
-      return (cr % 2) === 1;
-    };
-    const cand = [{ re: cx, im: cy }];
-    for (const frac of [0.15, 0.3, 0.45]) for (let i = 0; i < 8; i++) {
-      const a = 2 * Math.PI * i / 8, r = frac * maxDev;
-      cand.push({ re: cx + r * Math.cos(a), im: cy + r * Math.sin(a) });
-    }
-    const testPoints = [];
-    for (const b of cand) {
-      if (Math.hypot(b.re, b.im) < 1e-2) continue;
-      if (inside(b.re, b.im)) testPoints.push(b);
-      if (testPoints.length >= numTestPoints) break;
-    }
     let areaScale = 0;
     for (const pole of hData.poles) if (pole.principal.length > 0) areaScale += Complex.abs(pole.principal[0]);
     for (const cc of (hData.polyPart || [])) areaScale += Complex.abs(cc);
     if (areaScale === 0) areaScale = 1;
-    const checks = [];
-    let maxRelDiff = 0, maxAbsDiff = 0;
-    for (let pIdx = 0; pIdx < testPoints.length; pIdx++) {
-      const b = testPoints[pIdx];
-      for (let k = 1; k <= maxOrder; k++) {
-        // LHS via PqdCommon, f = 1/(w−b)^k. skipNearZeroW2 = 1e-30 (0 ∈ Ω here).
-        // Scale −1/(αN). RHS = shared unbounded finite-pole + polyPart residues.
-        let lhs = QD.PqdCommon.accumulateWeightedLHS(
-          samples, alpha, (w) => Complex.inv(Complex.pow(Complex.sub(w, b), k)), 1e-30);
-        lhs = Complex.scale(lhs, -1 / (alpha * N));
-        const rhs = QD.PqdCommon.unboundedTestPointRHS(hData, k, b);
-        const dd = Complex.sub(lhs, rhs);
-        const absDiff = Complex.abs(dd);
-        const scale = Math.max(Complex.abs(lhs), Complex.abs(rhs), areaScale);
-        const relDiff = absDiff / scale;
-        maxRelDiff = Number.isFinite(relDiff) ? Math.max(maxRelDiff, relDiff) : Infinity; // fail-closed: a non-finite (NaN/∞) term ⇒ reject, never silently drop it
-        if (absDiff > maxAbsDiff) maxAbsDiff = absDiff;
-        checks.push({ bIdx: pIdx, k, lhs, rhs, absDiff, relDiff });
+
+    // The identity residual at a given trapezoidal sample count N. The singular
+    // boundary (Blaschke × αth-root, with 0 ∈ Ω) needs a dense sweep to resolve the
+    // higher-curvature region near the origin (spectral convergence: 600→4e-4,
+    // 1200→1e-10, 2400→4e-14 on the one-pole α=2 case).
+    function residualAt(N) {
+      const samples = sweepUnitCircle_UPQDS(phi, N);
+      let cx = 0, cy = 0;
+      for (const s of samples) { cx += s.w.re; cy += s.w.im; }
+      cx /= N; cy /= N;
+      let maxDev = 0;
+      for (const s of samples) { const d = Math.hypot(s.w.re - cx, s.w.im - cy); if (d > maxDev) maxDev = d; }
+      // Test points in K (the bounded complement), avoiding the origin (∈ Ω).
+      const polygonPts = samples.map(s => s.w);
+      const inside = (x, y) => {
+        let cr = 0;
+        for (let i = 0; i < polygonPts.length; i++) {
+          const j = (i + 1) % polygonPts.length;
+          const yi = polygonPts[i].im, yj = polygonPts[j].im;
+          if ((yi > y) !== (yj > y)) { const t = (y - yi) / (yj - yi); if (polygonPts[i].re + t * (polygonPts[j].re - polygonPts[i].re) > x) cr++; }
+        }
+        return (cr % 2) === 1;
+      };
+      const cand = [{ re: cx, im: cy }];
+      for (const frac of [0.15, 0.3, 0.45]) for (let i = 0; i < 8; i++) {
+        const a = 2 * Math.PI * i / 8, r = frac * maxDev;
+        cand.push({ re: cx + r * Math.cos(a), im: cy + r * Math.sin(a) });
       }
+      const testPoints = [];
+      for (const b of cand) {
+        if (Math.hypot(b.re, b.im) < 1e-2) continue;
+        if (inside(b.re, b.im)) testPoints.push(b);
+        if (testPoints.length >= numTestPoints) break;
+      }
+      const checks = [];
+      let maxRelDiff = 0, maxAbsDiff = 0;
+      for (let pIdx = 0; pIdx < testPoints.length; pIdx++) {
+        const b = testPoints[pIdx];
+        for (let k = 1; k <= maxOrder; k++) {
+          // LHS via PqdCommon, f = 1/(w−b)^k. skipNearZeroW2 = 1e-30 (0 ∈ Ω here).
+          // Scale −1/(αN). RHS = shared unbounded finite-pole + polyPart residues.
+          let lhs = QD.PqdCommon.accumulateWeightedLHS(
+            samples, alpha, (w) => Complex.inv(Complex.pow(Complex.sub(w, b), k)), 1e-30);
+          lhs = Complex.scale(lhs, -1 / (alpha * N));
+          const rhs = QD.PqdCommon.unboundedTestPointRHS(hData, k, b);
+          const dd = Complex.sub(lhs, rhs);
+          const absDiff = Complex.abs(dd);
+          const scale = Math.max(Complex.abs(lhs), Complex.abs(rhs), areaScale);
+          const relDiff = absDiff / scale;
+          maxRelDiff = Number.isFinite(relDiff) ? Math.max(maxRelDiff, relDiff) : Infinity; // fail-closed: a non-finite (NaN/∞) term ⇒ reject, never silently drop it
+          if (absDiff > maxAbsDiff) maxAbsDiff = absDiff;
+          checks.push({ bIdx: pIdx, k, lhs, rhs, absDiff, relDiff });
+        }
+      }
+      return { checks, maxRelDiff, maxAbsDiff, areaScale, testPoints, maxDeg: maxOrder, numSamples: N, alpha, unbounded: true, singular: true };
     }
-    return { checks, maxRelDiff, maxAbsDiff, areaScale, testPoints, maxDeg: maxOrder, numSamples: N, alpha, unbounded: true, singular: true };
+
+    // A fixed 2000-sample floor is too coarse when h has BOTH a finite pole AND a
+    // polynomial part: those two together steepen the near-origin Blaschke × αth-root
+    // boundary, so at N=2000 the residual reads ~4e-3 and a genuinely-univalent
+    // quadrature domain is FALSE-rejected (identityOK=false), even though the identity
+    // converges to ~1e-12 by N≈8000 (QD-solver-families-B-01; the old "2400→4e-14"
+    // benchmark was measured on the pole-only case and does NOT hold here). Adaptively
+    // self-converge: start at the 2000 floor and, while doubling the sample count keeps
+    // cutting the residual by ≳3× (still converging, not yet at the machine-precision
+    // plateau), adopt the finer estimate. This returns immediately for the already-
+    // resolved common case (pole-only / polyPart-only reach <1e-9 at 2000) and is capped
+    // at 16000 so a genuinely non-realizable domain (residual plateaus large) still
+    // fails closed rather than looping. `numSamples` remains a floor, not a ceiling.
+    let N = Math.max(options.numSamples || 0, 2000);
+    let res = residualAt(N);
+    while (N < 16000 && Number.isFinite(res.maxRelDiff) && res.maxRelDiff > 1e-9) {
+      const finer = residualAt(N * 2);
+      const stillConverging = finer.maxRelDiff < res.maxRelDiff * 0.3;
+      N = N * 2;
+      res = finer;
+      if (!stillConverging) break;
+    }
+    return res;
   }
 
   // ===========================================================================

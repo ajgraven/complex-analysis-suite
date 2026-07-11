@@ -451,10 +451,14 @@ vec2 newtonSeedFresh(vec2 w) {
     if (r < 1e-12) return vec2(1.1, 0.0);
     return cand * (1.1 / r);
   }
-  // bounded: linearize at z=0. φ(0) = w_0; φ'(0) = w_0 · Σ conj(A_{j,1}) (since φ = w_0·exp(r#),
-  // r#(0)=0 ⇒ φ'(0) = w_0·r#'(0)). The w_0 factor was previously dropped here, giving a wrong Newton
-  // seed → sparse red speckle in the bounded-LQD render where the CPU (seedBoundedLQD, schwarz-
-  // common.mjs) converges. (QDSch-1)
+  // bounded: linearize at z=0. Seed = (w − φ(0))/φ'(0), with φ(0) = w_0 for both forms below.
+  //   • boundedQD (family 0): φ(z) = w_0 + Σ branches ⇒ φ'(0) = Σ conj(A_{j,1}) — NO w_0 factor.
+  //   • boundedLQD / _singular (family 2/3): φ = w_0·exp(r#), r#(0)=0 ⇒ φ'(0) = w_0·r#'(0) = w_0·Σ conj(A_{j,1}).
+  // QDSch-1 added the w_0 factor to cure the bounded-LQD speckle but applied it UNCONDITIONALLY, which
+  // regressed family 0: its GPU seed came out a factor of w_0 off from the CPU twin (adaptBounded.seedFor,
+  // schwarz-common.mjs), pulling the seed toward z=0 for |w_0|≠1 and mis-classifying pixels whose Newton
+  // basin is narrow. Gate the factor on the exp-form (LQD) families so family 0 matches its CPU seed.
+  // (Review QD-schwarz-a-B-01)
   vec2 dphi0 = vec2(0.0);
   for (int j = 0; j < MAX_BRANCHES; ++j) {
     if (j >= u_nBranches) break;
@@ -462,7 +466,7 @@ vec2 newtonSeedFresh(vec2 w) {
       dphi0 = dphi0 + cconj(u_branchA[j * MAX_K]);
     }
   }
-  dphi0 = cmul(u_w0, dphi0);
+  if (u_family == 2 || u_family == 3) dphi0 = cmul(u_w0, dphi0);
   if (dot(dphi0, dphi0) < EPS_DIV) return vec2(0.0);
   vec2 cand = cdiv(w - u_w0, dphi0);
   float r = length(cand);
