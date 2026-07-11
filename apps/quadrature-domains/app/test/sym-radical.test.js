@@ -71,6 +71,25 @@ module.exports = async function run() {
        !(r.ok && r.roots.length > 0) || ver.checked > 0, 'ok=' + r.ok + ' n=' + r.roots.length + ' checked=' + ver.checked);
   }
 
+  // ---- p=0 depressed-pure-cubic that REACHES Cardano (regression, review H4) ----
+  // x³+3x²+3x+3 = (x+1)³+2 is irreducible over ℚ(i) and depresses to t³+2 (p=0, q=2>0), so it hits
+  // solveCubic's Cardano path. The old code computed u = ∛(−q/2+√((q/2)²)) = ∛0 = 0, then
+  // t_k = ω^k·0 − p/(3·0) = 0/0 = NaN, poisoning all 3 roots while still reporting {ok:true}. Now: 3
+  // FINITE roots (x = −1 + ∛(−2)·ω^k) — the p=0 guard mirrors solveQuartic's existing q=0 guard.
+  {
+    const p = x.pow(3).add(I(3).mul(x.pow(2))).add(I(3).mul(x)).add(I(3));
+    const r = SR.solveByRadicals(p, 'x');
+    ok('p=0 cubic: solvable (ok)', r.ok, r.reason);
+    ok('p=0 cubic: 3 roots', (r.roots || []).length === 3, 'got ' + (r.roots || []).length);
+    const vals = (r.roots || []).map((rt) => SR.evalRadical(rt, {}));
+    ok('p=0 cubic: every root is FINITE (no 0/0 NaN)',
+       vals.length === 3 && vals.every((z) => Number.isFinite(z.re) && Number.isFinite(z.im)),
+       JSON.stringify(vals));
+    const ver = SR.verifyRoots(p, 'x', r.roots, { samples: 6 });
+    ok('p=0 cubic: roots verify at random samples (residual ≈ 0)',
+       ver.checked > 0 && ver.maxResidual < 1e-6, 'checked=' + ver.checked + ' maxRel=' + ver.maxResidual.toExponential(2));
+  }
+
   // ---- verifyRoots hardening: all-non-finite roots ⇒ EXPLICIT refusal ----------
   {
     const q = V('a').mul(x.pow(2)).add(V('b').mul(x)).add(V('c'));

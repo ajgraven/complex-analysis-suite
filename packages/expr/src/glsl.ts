@@ -207,7 +207,12 @@ function nodeIsBool(node: Node): boolean {
 function emitBody(ast: Node, emitFinal: (n: Node) => string): string {
   const stmts = ast.kind === "seq" ? ast.stmts : [ast];
   const lines: string[] = [];
-  const declared = new Set<string>();
+  // Seed with the function parameters so `z = z^2 + c; z` (a natural iteration form) emits an ASSIGNMENT to
+  // the existing parameter `z`, not `cvec z = …` which would REDECLARE the parameter → GLSL redefinition
+  // error (the JS backend has no such notion, so the GPU shader used to die where the CPU overlay worked).
+  // `a` is deliberately NOT seeded: when used it is a read-only alias (see paramAlias); when assigned it is
+  // a genuine new local that must be declared.
+  const declared = new Set<string>(["z", "c"]);
   for (let i = 0; i < stmts.length; i++) {
     const stmt = stmts[i];
     const isLast = i === stmts.length - 1;
@@ -215,7 +220,11 @@ function emitBody(ast: Node, emitFinal: (n: Node) => string): string {
       const decl = declared.has(stmt.name) ? stmt.name : `cvec ${stmt.name}`;
       declared.add(stmt.name);
       lines.push(`  ${decl} = ${emitComplex(stmt.value)};`);
-      if (isLast) lines.push(`  return ${stmt.name};`);
+      // A trailing assignment's value IS the assigned variable. Route the return through emitFinal so an
+      // ESCAPE predicate ending in an assignment (`x = z^2`) coerces to bool via emitBool
+      // (`cre1(x) != 0.0`) instead of returning a `cvec` from a `bool escapeFn` — a GLSL type error, while
+      // the JS backend returns the coerced bool. For `f` (emitFinal = emitComplex) this stays `return x;`.
+      if (isLast) lines.push(`  return ${emitFinal({ kind: "var", name: stmt.name })};`);
     } else if (isLast) {
       lines.push(`  return ${emitFinal(stmt)};`);
     } else {

@@ -196,10 +196,23 @@ import _QD from './solver.mjs';
     // depress x = t − B/3 :  t³ + p t + q
     const p = Rx.sub(C, Rx.div(Rx.pow(B, 2), i3));
     const q = Rx.add(Rx.sub(Rx.div(Rx.mul(i2, Rx.pow(B, 3)), i27), Rx.div(Rx.mul(B, C), i3)), D);
+    const shift = Rx.div(B, i3);
+    // p ≡ 0 ⇒ DEPRESSED PURE CUBIC t³ + q = 0 ⇒ roots t_k = ω^k · ∛(−q) DIRECTLY. Cardano's
+    // t_k = ω^k u − p/(3·ω^k u) is 0/0 here: with p=0, u = ∛(−q/2 + √((q/2)²)) collapses to ∛0 = 0 when the
+    // √ branch resolves to +q/2 (e.g. x³+3x²+3x+3 → p=0, q=2 → u = ∛(−1+1) = 0 → t_k = 0 − 0/0 = NaN),
+    // poisoning ALL three roots while still returning ok:true. Exact-vanishing guard (asks p to fold to the
+    // zero rational function — a numeric specialization p(sample)=0 stays on the Cardano path), mirroring the
+    // q≡0 biquadratic guard in solveQuartic below. Agrees with Cardano on the p=0, q<0 branch where u≠0.
+    const pRat = _foldRatFn(p);
+    if (pRat && pRat.isZero()) {
+      const cbrtNegQ = Rx.root(Rx.neg(q), 3);                       // ∛(−q)
+      const roots = [];
+      for (let k = 0; k < 3; k++) roots.push(Rx.sub(Rx.mul(Rx.rou(3, k), cbrtNegQ), shift));
+      return roots;
+    }
     // Cardano: D3 = (q/2)² + (p/3)³;  u = ∛(−q/2 + √D3);  v = −p/(3u);  t_k = ω^k u + ω^{2k} v.
     const D3 = Rx.add(Rx.pow(Rx.div(q, i2), 2), Rx.pow(Rx.div(p, i3), 3));
     const u = Rx.root(Rx.add(Rx.neg(Rx.div(q, i2)), Rx.root(D3, 2)), 3);
-    const shift = Rx.div(B, i3);
     const roots = [];
     for (let k = 0; k < 3; k++) {
       const wk = Rx.mul(Rx.rou(3, k), u);                          // ω^k · u

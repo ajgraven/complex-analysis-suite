@@ -43,8 +43,16 @@ function quickTwoSum(a: number, b: number): DF {
   return [s, f(b - f(s - a))];
 }
 
-/** Dekker split of a float32 into two ~12-bit halves (split factor 2^12 + 1). */
+/** Dekker split of a float32 into two ~12-bit halves (split factor 2^12 + 1). Overflow-safe: the plain
+ *  `f(4097·a)` rounds to Infinity for |a| > ~8.3e34 (fp32 max / 4097), NaN-ing df_mul/df_exp/df_atan2 —
+ *  scale a huge |a| down by 2^13 (exact), split, scale the limbs back. Mirrors GLSL `splitf`. (Review H3.) */
 function split(a: number): DF {
+  if (Math.abs(a) > 4.15e34) {              // 2^115, below the 8.3e34 overflow point
+    const as = f(a * 1.220703125e-4);       // a · 2^-13 (exact)
+    const c = f(4097 * as);
+    const hi = f(c - f(c - as));
+    return [f(hi * 8192), f(f(as - hi) * 8192)]; // · 2^13 (exact)
+  }
   const c = f(4097 * a);
   const hi = f(c - f(c - a));
   return [hi, f(a - hi)];

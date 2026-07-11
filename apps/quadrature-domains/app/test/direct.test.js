@@ -139,6 +139,29 @@ function complexNear(a, b, tol) {
      complexNear(pp[1], {re:0.1,im:0}, 1e-14));
 }
 
+// H6 (QD-direct-A-01): boundedLogQDSingular must NOT silently drop the kernel constant r#(0). The branch
+// basis vanishes at z=0, so r#(0)=κ used to be lost, substituting a different domain that Verify falsely
+// passed. Now κ is folded into γ (φ = γ·exp(κ)·b·exp(r#−κ) = the user's map), so two kernels differing by a
+// constant (K1 = 1 + K0) give DIFFERENT h; a genuine polynomial part (deg num > deg den) is REJECTED.
+{
+  const cx = (re, im = 0) => ({ re, im });
+  const w0 = cx(2, 0), z0 = cx(0.25, 0);
+  const K0 = { num: [cx(0,0), cx(0.4,0)], den: [cx(1,0), cx(-0.3,0)] };   // 0.4z/(1−0.3z):  r#(0)=0
+  const K1 = { num: [cx(1,0), cx(0.1,0)], den: [cx(1,0), cx(-0.3,0)] };   // (1+0.1z)/(1−0.3z): r#(0)=1 = 1+K0
+  const o0 = Direct.boundedLogQDSingular(K0, w0, z0);
+  const o1 = Direct.boundedLogQDSingular(K1, w0, z0);
+  const qDiff = Math.hypot(o1.q.re - o0.q.re, o1.q.im - o0.q.im);
+  ok('Direct H6: r#(0)=1 vs r#(0)=0 give DIFFERENT q (constant folded, not dropped)',
+     qDiff > 1e-6, 'qDiff=' + qDiff.toExponential(2));
+  const g0 = Math.hypot(o0.gamma.re, o0.gamma.im), g1 = Math.hypot(o1.gamma.re, o1.gamma.im);
+  ok('Direct H6: |γ| folds by exp(r#(0)) — |γ₁|/|γ₀| ≈ e', Math.abs(g1 / g0 - Math.E) < 1e-9,
+     'ratio=' + (g1 / g0).toFixed(6));
+  const Kpoly = { num: [cx(0,0), cx(0,0), cx(1,0)], den: [cx(1,0), cx(-0.3,0)] }; // z²/(1−0.3z): deg num 2 > den 1
+  let threw = false;
+  try { Direct.boundedLogQDSingular(Kpoly, w0, z0); } catch (e) { threw = /entire\/polynomial|proper rational/.test(e.message); }
+  ok('Direct H6: a polynomial-part kernel (deg num > deg den) is REJECTED, not silently mis-solved', threw);
+}
+
 // Cubic: φ = z + 0.1·z² − 0.05·z³  — hand-computed reference.
 //   c_1=1, c_2=0.1, c_3=-0.05.  C_3 = conj(c_3)·c_1^3 = -0.05.
 //   Hand-derive via Taylor for higher orders (smoke-test against itself).

@@ -41,6 +41,17 @@ vec2 quickTwoSum(float a, float b) {
   return vec2(s, b - (s - a));
 }
 vec2 splitf(float a) {
+  // Overflow-safe Dekker split. The plain 4097*a OVERFLOWS fp32 at |a| > ~8.3e34 (= fp32 max / 4097),
+  // producing Inf → NaN limbs that poison every df_mul / df_exp / df_atan2 (df_exp NaNs at arg ≈ 80,
+  // far inside its finite range → spurious black interior on the exp-map deep-zoom). Scale a huge |a|
+  // down by 2^13 (exact), split, scale the two limbs back up by 2^13 — bit-identical to the plain split
+  // for in-range a, but finite for large a. (Review H3 / PKG-gpu-A-01.)
+  if (abs(a) > 4.15e34) {                  // 2^115, safely below the 8.3e34 overflow point
+    float as = a * 1.220703125e-4;         // a · 2^-13 (exact)
+    float c = (4097.0 * as) * uOne;
+    float hi = c - (c - as);
+    return vec2(hi, as - hi) * 8192.0;     // · 2^13 (exact)
+  }
   float c = (4097.0 * a) * uOne;
   float hi = c - (c - a);
   return vec2(hi, a - hi);
