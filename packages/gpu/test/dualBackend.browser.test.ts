@@ -5,7 +5,12 @@ import {
   compareResults,
   defaultSamples,
   DUAL_BACKEND_CORPUS,
+  F_REGRESSION_CORPUS,
+  ESCAPE_REGRESSION_CORPUS,
+  buildEscapeProbeGLSL,
+  PROBE_VERTEX,
 } from "../src/dualBackend.js";
+import { createProgram } from "../src/shader.js";
 
 // BROWSER-MODE numeric harness (Review P4: GLSL-in-CI). Runs ONLY under `pnpm test:browser`
 // (vitest.browser.config.ts) — a real headless-Chromium WebGL2 context — never in the default node gate.
@@ -49,5 +54,28 @@ describe("@cas/gpu dual-backend: real GLSL ≈ JS across the corpus (browser Web
     const tol = isTranscendental(c.source) ? 5e-3 : 2e-6;
     const where = worst ? `worst @ z=${worst.sample.z} c=${worst.sample.c} (tol ${tol})` : "";
     expect(maxAbsError, where).toBeLessThan(tol);
+  });
+});
+
+// The emitBody codegen bugs the whole-app review found (H1/H2) — here verified where only a real GPU can:
+// the emitted GLSL must actually COMPILE and RUN. (The node dualBackend core pins the emitted string; this
+// catches the class of bug where the mirror looks right but the GLSL fails to compile / mis-runs on-device.)
+describe("@cas/gpu dual-backend: emitBody codegen regressions compile + run on real WebGL2 (H1/H2)", () => {
+  it.each(F_REGRESSION_CORPUS)("$name: the reassigned-param GLSL compiles + matches JS", (c) => {
+    const samples = defaultSamples();
+    const js = jsReference(c.source, samples);
+    // runGLSL calls createProgram, which THROWS on a compile error — so a `cvec z =` param redeclaration
+    // (the H2 bug) would fail here rather than silently pass a mirror. Pure arithmetic ⇒ float32-exact.
+    const glsl = runGLSL(gl, c.source, samples);
+    const { maxAbsError, worst } = compareResults(c.name, samples, js, glsl);
+    expect(maxAbsError, worst ? `worst @ z=${worst.sample.z} c=${worst.sample.c}` : "").toBeLessThan(2e-6);
+  });
+
+  it.each(ESCAPE_REGRESSION_CORPUS)("$name: the escape-predicate GLSL compiles (bool fn, no cvec return)", (c) => {
+    // The H1 bug returned a cvec from a `bool escapeFn` — a GLSL TYPE ERROR. createProgram throws on a
+    // compile/link failure, so a successful compile of the ACTUAL emitted shader IS the regression guard.
+    const program = createProgram(gl, PROBE_VERTEX, buildEscapeProbeGLSL(c.source));
+    expect(program).toBeTruthy();
+    gl.deleteProgram(program);
   });
 });
