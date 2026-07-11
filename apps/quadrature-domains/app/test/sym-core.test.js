@@ -300,6 +300,15 @@ module.exports = async function run() {
     ok('mpolyDet (Bareiss) == Laplace, 4×4', S.mpolyDet(M4).equals(S.mpolyDetLaplace(M4)));
     const Msw = [[mi(0), mi(1)], [mi(1), mi(0)]];   // forces a pivot row-swap → det −1
     ok('mpolyDet handles zero pivot (row swap), det[[0,1],[1,0]]=−1', S.mpolyDet(Msw).equals(mi(-1)));
+    // (4b) Packed Bareiss vs the division-free Laplace oracle on a LARGER, dense multivariate
+    // matrix (degree-2 in x,y) — exercises the packed exact-division fill-in, not just tiny cases.
+    {
+      const ent = (i, j) => mi(1 + ((i * 7 + j * 3) % 5))
+        .add(mv('x').mul(mi(1 + ((i + 2 * j) % 4)))).add(mv('y').mul(mi(1 + ((3 * i + j) % 3))))
+        .add(mv('x').pow(2).mul(mi((i * j) % 3))).add(mv('x').mul(mv('y')).mul(mi((i + j) % 2)));
+      const M6 = []; for (let i = 0; i < 6; i++) { const r = []; for (let j = 0; j < 6; j++) r.push(ent(i, j)); M6.push(r); }
+      ok('mpolyDet (packed Bareiss) == Laplace, 6×6 dense multivariate', S.mpolyDet(M6).equals(S.mpolyDetLaplace(M6)));
+    }
 
     // (5) edge cases
     ok('Res(f, const c, x) = c^{deg f}: Res(x²−y, 3, x)=9',
