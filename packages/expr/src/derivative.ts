@@ -88,19 +88,53 @@ function diffArith(op: string, left: Node, right: Node, v: string): Node {
   }
 }
 
+/** Fold a variable-free exponent node to a constant real (or null). Lets diffPow apply the power rule
+ *  k·u^(k-1)·u' for a constant exponent written as `neg(num)` (`z^(-2)`), `4/2`, `pi/pi`, etc. — not just
+ *  a bare literal — avoiding the general rule's spurious `w'·log(u)` = 0·log(u) = NaN at the pole. `i` is
+ *  imaginary ⇒ not a real constant. Mirrors glsl.ts's constReal. */
+function constExp(node: Node): number | null {
+  switch (node.kind) {
+    case "num":
+      return node.value;
+    case "const":
+      return node.name === "e" ? Math.E : node.name === "pi" ? Math.PI : null;
+    case "neg": {
+      const x = constExp(node.operand);
+      return x === null ? null : -x;
+    }
+    case "arith": {
+      const l = constExp(node.left);
+      const r = constExp(node.right);
+      if (l === null || r === null) return null;
+      switch (node.op) {
+        case "+": return l + r;
+        case "-": return l - r;
+        case "*": return l * r;
+        case "/": return r === 0 ? null : l / r;
+        case "^": return Math.pow(l, r);
+      }
+      return null;
+    }
+    default:
+      return null; // var / call / compare / if / bool / not ⇒ not a compile-time real constant
+  }
+}
+
 function diffPow(base: Node, exp: Node, v: string): Node {
   const db = differentiate(base, v);
-  if (exp.kind === "num") {
-    // d(u^k) = k·u^(k-1)·u'. Valid for a CONSTANT k of ANY value, integer or fractional: on the
-    // principal branch u^k = exp(k·Log u), so d/dz = k·exp(k·Log u)/u·u' = k·u^(k-1)·u' with u^(k-1)
-    // read principal (exp((k-1)·Log u) = exp(k·Log u)/u exactly), i.e. this equals the general rule
-    // below with w'=0 — NOT a wrong branch for fractional k (verified vs finite differences to ~1e-10;
-    // it is only undefined ON the negative-real cut, where the principal power itself is). The integer
-    // case additionally lowers u^(k-1) to repeated multiply downstream, making it entire (correct across
-    // the cut too), which is why keeping this branch for integer k matters.
-    return mul(mul(num(exp.value), pow(base, num(exp.value - 1))), db);
+  const k = constExp(exp);
+  if (k !== null) {
+    // d(u^k) = k·u^(k-1)·u' for a CONSTANT k. We FOLD the exponent (constExp) instead of only matching a
+    // bare `num`, so a NEGATIVE or arithmetic constant exponent — `z^(-2)` parses as neg(num 2), `z^(4/2)`,
+    // etc. — takes this branch too. The general rule below would otherwise emit w'·log(u) = 0·log(u),
+    // which is NaN at the pole u=0 (0·(−∞)); the power rule gives the correct pole (∞) and drops the log.
+    // Valid for ANY constant k on the principal branch (u^k = exp(k·Log u) ⇒ d/dz = k·u^(k-1)·u', verified
+    // vs finite differences to ~1e-10; undefined only ON the negative-real cut, where the principal power
+    // itself is). An INTEGER k additionally lowers u^(k-1) to repeated multiply downstream, making it
+    // entire (correct across the cut too). (B-03 — the negative-integer case the earlier EXPR-4 note missed.)
+    return mul(mul(num(k), pow(base, num(k - 1))), db);
   }
-  // General d(u^w) = u^w·(w'·log(u) + w·u'/u)
+  // General d(u^w) = u^w·(w'·log(u) + w·u'/u) — only when the exponent genuinely depends on z.
   const dw = differentiate(exp, v);
   return mul(pow(base, exp), add(mul(dw, call("log", base)), div(mul(exp, db), base)));
 }

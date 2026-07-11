@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { parse } from "../src/parser.js";
 import { makeComplexFn } from "../src/evaluate.js";
 import { differentiate } from "../src/derivative.js";
+import { compileF } from "../src/glsl.js";
 import type { Complex } from "../src/complex.js";
 
 const ZERO: Complex = [0, 0];
@@ -64,5 +65,26 @@ describe("differentiate", () => {
     expect(() => differentiate(parse("conjugate(z)"))).toThrow();
     expect(() => differentiate(parse("arg(z)"))).toThrow();
     expect(() => differentiate(parse("mod(z, c)"))).toThrow(); // binary builtin
+  });
+
+  // B-03 (review P2): a CONSTANT exponent written as neg(num) / arithmetic — `z^(-2)`, `z^(4/2)` — must
+  // take the power rule k·u^(k-1)·u', NOT the general u^w rule (which emits w'·log(u) = 0·log(u), a
+  // needless clog with a NaN at the pole). The derivative of a rational power should be rational.
+  describe("diffPow folds constant (incl. negative) exponents (B-03)", () => {
+    const df = (src: string) => differentiate(parse(src), "z");
+    it("z^(-2), z^(-3), z^(4/2) derivatives contain NO clog in the emitted GLSL", () => {
+      expect(compileF(df("z^(-2)"))).not.toContain("clog");
+      expect(compileF(df("z^(-3)"))).not.toContain("clog");
+      expect(compileF(df("z^(4/2)"))).not.toContain("clog");
+      expect(compileF(df("z^z"))).toContain("clog"); // a z-DEPENDENT exponent still uses the general rule
+    });
+    it("d(z^(-2)) = -2 z^(-3) matches finite differences (away from the pole)", () => {
+      for (const z of [[0.6, 0.4], [1.3, -0.5]] as Complex[]) {
+        const a = analytic("z^(-2)", z);
+        const b = numeric("z^(-2)", z);
+        expect(Math.abs(a[0] - b[0])).toBeLessThan(1e-2);
+        expect(Math.abs(a[1] - b[1])).toBeLessThan(1e-2);
+      }
+    });
   });
 });
