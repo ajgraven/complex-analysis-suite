@@ -197,7 +197,7 @@ opener understands).
 
 ```ts
 /** Encode an envelope into a URL-safe hash fragment. */
-export function encodeLink(env: Envelope): string;   // → "#s=<url-safe-compressed-json>"
+export function encodeLink(env: Envelope): string;   // → "#s=<url-safe base64url JSON>" (not compressed)
 /** Decode a hash fragment back into an envelope (validates schema/version). */
 export function decodeLink(hash: string): Envelope;  // throws on bad/incompatible payloads
 ```

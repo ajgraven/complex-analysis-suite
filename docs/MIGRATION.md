@@ -57,7 +57,8 @@ side by side, with git history preserved. No sharing yet.
    pnpm init                           # root package.json (private, no version)
    ```
    Root `package.json`: set `"private": true`, `"packageManager": "pnpm@9.x"`,
-   and `"engines": { "node": ">=20" }`. Add `.nvmrc` with `20`.
+   and `"engines": { "node": ">=22" }`. Add `.nvmrc` with `22`. *(Shipped as Node 22 LTS —
+   [ADR/decision #10](../CLAUDE.md) supersedes the "20" this runbook originally planned.)*
 
 2. **Declare the workspace.** Create `pnpm-workspace.yaml`:
    ```yaml

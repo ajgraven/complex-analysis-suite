@@ -152,6 +152,9 @@ untouched, so the app + suite stay green. Still TODO to finish the flip:
 
 ## How to resume / verify
 
+> **(Historical — the classic `.js` graph is now deleted; the parallel-graph port is complete.)**
+> The recipe below is retained only as the record of how each file was ported during the flip.
+
 ```bash
 # from apps/quadrature-domains:
 node app/node-test.js          # the parity check — must stay "2200 passed, 0 failed"
@@ -166,6 +169,9 @@ node app/node-test.js          # the parity check — must stay "2200 passed, 0 
 Root gate (`pnpm` on PATH — see the pnpm-local-invocation memory): `pnpm lint && pnpm typecheck && pnpm test`.
 
 ## Invariants
+
+> **(Historical — the classic graph is now deleted, so these parallel-graph invariants no longer
+> apply; kept as the record of what kept the port honest while both graphs coexisted.)**
 
 - **Never edit a classic `.js` twin** while its `.mjs` exists — they would drift. The `.js` is
   frozen until the flip deletes it; all changes go in the `.mjs`.

@@ -10,10 +10,10 @@ pixel to load that φ back into the QD tab.
 
 | File | Role |
 | --- | --- |
-| `param-slice-common.js` | Pure math kernel: `ParamRef` descriptors, `listAvailableParams`, `applyParam`, `classifyResult`, colour LUT. |
-| `param-slice-pool.js` | Web Worker pool — runtime Blob bundle of the solver source (no build step). |
-| `param-slice-render.js` | `QD_UI.installParamSliceRender(psCtx)` — the adaptive 2-D render engine `runAdaptive2D` (progressive quadtree sweep + warm-hint spatial index + coverage fill). Phase-3 (item E) split out of `param-slice-ui.js`. |
-| `param-slice-ui.js` | Tab UI hub (lazy mount). Axes pickers, range fields, run orchestration (`startRun`), click-to-load, mini-preview card; captures `runAdaptive2D` from the render module via a forward-`let`. |
+| `param-slice-common.mjs` | Pure math kernel: `ParamRef` descriptors, `listAvailableParams`, `applyParam`, `classifyResult`, colour LUT. |
+| `param-slice-pool.mjs` | Web Worker pool — native ES-module workers (`app/workers/param-slice-worker-entry.mjs`). |
+| `param-slice-render.mjs` | `QD_UI.installParamSliceRender(psCtx)` — the adaptive 2-D render engine `runAdaptive2D` (progressive quadtree sweep + warm-hint spatial index + coverage fill). Phase-3 (item E) split out of `param-slice-ui.mjs`. |
+| `param-slice-ui.mjs` | Tab UI hub (lazy mount). Axes pickers, range fields, run orchestration (`startRun`), click-to-load, mini-preview card; captures `runAdaptive2D` from the render module via a forward-`let`. |
 
 ## Public surface
 
@@ -48,7 +48,7 @@ pixel to load that φ back into the QD tab.
 
 ## Cross-tab contract (with the QD tab)
 
-`window.QD_UI` is a small named-export bag set up by `ui.js` for
+`window.QD_UI` is a small named-export bag set up by `ui.mjs` for
 subsystems to read/write the QD tab state:
 
 | Hook | Direction | Use |
@@ -75,7 +75,7 @@ Each pixel falls into exactly one class:
 
 ## Adaptive mesh
 
-`runAdaptive2D` (in `param-slice-render.js`) implements a quadtree
+`runAdaptive2D` (in `param-slice-render.mjs`) implements a quadtree
 refinement. Coarse pass solves a sparse grid; cells whose 4 corners
 disagree on classification OR have iter-spread > `REFINE_ITER_DELTA = 8`
 are split. Cross-cell warm-start hints come from a 16×16 spatial
@@ -83,20 +83,19 @@ index, so refined sub-pixels typically converge in 1-5 Newton iters
 after a cold seed. See HANDOFF #31 / #37 for the design and the
 coverage-fill fix.
 
-## Worker bundle
+## Worker pool
 
-`param-slice-pool.js` builds the worker bundle at runtime:
+`param-slice-pool.mjs` spawns N **native ES-module workers**:
 
-1. `fetch` each file in `SOLVER_SRC_FILES`.
-2. Prepend `var window = self;` so the `(typeof window !==
-   'undefined' && window.QD)` namespace idiom resolves inside the
-   worker scope.
-3. Append a worker-side message handler (`WORKER_HANDLER`).
-4. Wrap as a Blob and create N workers from the resulting URL.
+1. `new Worker(new URL('../workers/param-slice-worker-entry.mjs',
+   import.meta.url), { type: 'module' })` — one per pool slot.
+2. The entry module `import`s the shared solver barrel
+   (`app/workers/solver-graph.mjs`), so the whole solver graph loads in the
+   worker via normal ES-module resolution; Vite bundles it into its own chunk.
+3. Each worker runs a `self`-guarded `onmessage` handler for the per-tile jobs.
 
-Falls back to `MainThreadPool` if the bundle fetch fails (typically
-when the page is loaded via `file://`). The fallback maintains the
-same async API so callers don't special-case.
+Falls back to `MainThreadPool` when `Worker` is unavailable (e.g. Node). The
+fallback maintains the same async API so callers don't special-case.
 
 ## Tests
 
@@ -110,5 +109,5 @@ same async API so callers don't special-case.
 
 | Caller | What it uses |
 | --- | --- |
-| `param-slice-ui.js` (tab activation) | the full module |
+| `param-slice-ui.mjs` (tab activation) | the full module |
 | `node-test.js` | `ParamSlice.*` kernels (no Worker in Node — exercises `MainThreadPool` path) |

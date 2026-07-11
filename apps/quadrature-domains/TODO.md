@@ -21,6 +21,8 @@ would most expand the app's research utility and audience reach.
   Implementation: `app/param-slice/{param-slice-common,param-slice-pool,
   param-slice-ui}.js`. The Worker pool (#A1 prerequisite, also resolved)
   inline-bundles the solver source as a Blob URL — no build step.
+  *(Worker mechanism superseded by the ESM flip — now native module workers;
+  see ESM-MIGRATION.md.)*
 
 - [x] **#14 — Riemann-sphere view (unbounded Ω)**  ✅ shipped
   New "Riemann sphere" tab applies stereographic projection so ∞ becomes
@@ -325,6 +327,8 @@ support.
   `navigator.hardwareConcurrency` workers, and dispatches row-tiled jobs
   with per-row warm-start chaining. Currently used only by the
   parameter-slice tab; trivially reusable by future features.
+  *(Blob/no-build mechanism superseded by the ESM flip — now native module
+  workers via `app/workers/param-slice-worker-entry.mjs`; see ESM-MIGRATION.md.)*
 
 - [x] **#A2 — Adaptive mesh refinement on parameter slices**  ✅ shipped
   Core quadtree refinement landed under in-conversation task `PS-OPT1`

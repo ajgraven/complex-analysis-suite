@@ -29,6 +29,9 @@ import {
   validateEnvelope,
   encodeLink,
   decodeLink,
+  encodeViewState,
+  decodeViewState,
+  VIEWSTATE_VERSION,
   InterchangeError,
   isComplex,
   isConventions,
@@ -47,6 +50,7 @@ import type {
   View,
   Viewport,
   Conventions,
+  ViewStateEnvelope,
 } from "@cas/interchange";
 ```
 
@@ -77,8 +81,14 @@ convert **to** canonical; consumers convert **from** it, each at its own edge.
 **Validation & codec.** `validateEnvelope(value)` strictly checks an untrusted object and
 throws `InterchangeError` with a clear message (payloads can arrive from an old link or
 hand-edited JSON); the `is*` type guards are the building blocks. `encodeLink(env)` produces
-a URL-safe `#s=…` hash fragment (base64-encoded JSON) and `decodeLink(hash)` parses **and
+a URL-safe `#s=…` hash fragment (**base64url**-encoded JSON) and `decodeLink(hash)` parses **and
 validates** it.
+
+**View-state codec.** A second, lighter codec for shareable UI view-state (each app owns its own
+`state` schema): `encodeViewState(app, state)` → a `#vs=…` fragment (a **distinct** hash key from
+the map codec's `#s=`, so the two never collide), `decodeViewState(hash)` → a validated
+`ViewStateEnvelope` `{ v, app, state }` or `null`, versioned by `VIEWSTATE_VERSION`. Both apps
+adopted it (it retired Complex-Dynamics' old `#s=` map/view-state disambiguation hack).
 
 ## Growing the schema
 

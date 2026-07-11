@@ -75,8 +75,10 @@ pnpm format                              # Prettier --write .
 > and tests consume the packages' **built `dist/`**, so a package change is picked up only
 > after its build runs (the root scripts handle this for you).
 
-Each app is an independent static Vite build (`base: "./"`), deployable to GitHub Pages on
-its own; the launcher sits at the top-level Pages URL. See
+Each app is an independent static Vite build (`base: "./"`), designed to deploy to GitHub Pages
+on its own, with the launcher at the top-level Pages URL. *(No automated Pages workflow is
+configured yet — deploys are manual; the only CI workflow is lint/typecheck/test/build plus a
+`browser` job for the WebGL2 GLSL harness.)* See
 [ARCHITECTURE §8](docs/ARCHITECTURE.md#8-build--deployment-model).
 
 ---

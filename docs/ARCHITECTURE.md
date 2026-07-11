@@ -126,42 +126,46 @@ in [INTERCHANGE.md](INTERCHANGE.md). This is what makes "pass off a Schwarz refl
 from the Quadrature tool to the Dynamics tool" a one-line, type-checked operation
 instead of an ad-hoc JSON blob.
 
-### `@cas/ui` — the shared UI kit
-KaTeX typesetting helpers; the inspector/readout card framework; complex-number slider
-pads; the glossary framework; **URL-state / share-link serialization** and the
-**reproducibility-metadata PNG embedding** (both apps already have versions of these —
-unifying them is what makes deep-link hand-off work); theming (auto/dark/light).
-Depends on `interchange` for the share-link payload types.
+> The three packages below were part of the original design but were **NEVER EXTRACTED** — the
+> demand-driven rule (extract only when a second consumer needs it, ADR-0007) never fired for them.
+> The suite ships **four** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`. The
+> sections are kept as design intent; each notes where the functionality actually lives today.
 
-### `@cas/quadrature` — domain package
-The Faber-transform machinery; the inverse solvers (classical/log-weighted/power,
-bounded/unbounded, singular variants) and the direct-problem kernels; the
-**Schwarz-reflection construction** (`σ = f∘η∘f⁻¹` from a uniformizing `φ`); boundary
-observables. Extracted from the Quadrature app once a second consumer (the
-correspondence app) needs the Schwarz-reflection construction.
+### `@cas/ui` — the shared UI kit *(planned — not built)*
+Would hold KaTeX typesetting helpers; the inspector/readout card framework; complex-number slider
+pads; the glossary framework; share-link serialization and reproducibility-metadata PNG embedding;
+theming. **Status: never built.** The UI helpers and PNG-metadata remain app-local; only the
+versioned `#vs=` **view-state codec** was shared — into `@cas/interchange`, not a UI package.
 
-### `@cas/dynamics` — domain package
-Escape-time and smooth iteration count; Böttcher coordinate and external/parameter ray
-tracing; cycle detection, multiplier, and Fatou classification; connectivity and the
-potential-theoretic estimates. Houses the **(parabolic) Tricorn model space** the
-correspondence tool straightens against.
+### `@cas/quadrature` — domain package *(planned — not built)*
+Would hold the Faber-transform machinery; the inverse solvers (classical/log-weighted/power,
+bounded/unbounded, singular variants) and the direct-problem kernels; the Schwarz-reflection
+construction (`σ = f∘η∘f⁻¹`); boundary observables. **Status: never built** — the correspondence app
+builds its own σ (deltoid) rather than consuming the QD solver, so this stayed inside
+`apps/quadrature-domains`.
+
+### `@cas/dynamics` — domain package *(planned — not built)*
+Would hold escape-time / smooth iteration count; Böttcher coordinate and external/parameter ray
+tracing; cycle detection, multiplier, Fatou classification; connectivity estimates; the
+**(parabolic) Tricorn model space**. **Status: never built** — the Tricorn model space stayed
+app-local (the correspondence tool reuses Complex-Dynamics' tricorn preset via `@cas/expr`).
 
 ## 4. The dependency rule
 
 > **Packages import only from packages below them. Apps import packages. No app
 > imports another app. No cycles.**
 
-This is enforceable and should be enforced (ESLint boundary rules and/or
-`dependency-cruiser`; see [MIGRATION Phase 1](MIGRATION.md#phase-1--unify-tooling-and-the-test-harness)).
-It is what guarantees the north-star property: because a new app sits *on top of* the
-package stack and pulls only downward, each new app builds fewer primitives than the
-last — the primitives are already there, and the rule forbids the tangle that would
-otherwise erode that benefit.
+This is enforced today by ESLint's `no-restricted-imports` boundary rules (see
+[`eslint.config.js`](../eslint.config.js)); a `dependency-cruiser` check remains a planned
+follow-on, not yet wired. It is what guarantees the north-star property: because a new app sits
+*on top of* the package stack and pulls only downward, each new app builds fewer primitives than the
+last — the primitives are already there, and the rule forbids the tangle that would otherwise erode
+that benefit.
 
-Concretely, the layering is: `core` → { `gpu`, `expr`, `interchange` } → { `ui`,
-`quadrature`, `dynamics` } → `apps`. (`ui` depends on `interchange`; `quadrature` and
-`dynamics` depend on `core` and may depend on `expr`/`gpu`; apps depend on whatever
-they need, downward.)
+Concretely, the shipped layering is: `core` → { `gpu`, `expr`, `interchange` } → `apps`. (The
+`@cas/ui` / `@cas/quadrature` / `@cas/dynamics` domain layer above `apps` was planned but never
+extracted — see §3 — so apps depend directly on the four shipped packages. `@cas/gpu` depends on
+`@cas/expr`; `@cas/interchange` is standalone.)
 
 ## 5. The keystone: map representation
 
@@ -239,14 +243,17 @@ tools:
   multivalued maps, so expect df64 but not necessarily perturbation on the Schwarz side.
 - The Dynamics app can **gain a quadrature-domain mode** or draw Böttcher external rays
   on the Quadrature app's limit sets, by depending on the `quadrature` package.
-- Every tool inherits `ui`'s share-links and reproducibility metadata, so any image or
-  view from any tool is reproducible and linkable in the same way.
+- Every tool shares the versioned `#vs=` **view-state codec** (`@cas/interchange`) for linkable
+  views; reproducibility-metadata PNG embedding remains app-local (the `@cas/ui` package that would
+  have unified it was never extracted — §3).
 
 ## 8. Build & deployment model
 
 - Each **app** is an independent Vite build producing static files with relative asset
-  paths (`base: "./"`), deployable to GitHub Pages (which the Dynamics app already
-  does). Apps deploy **independently**; there is no single suite-wide version.
+  paths (`base: "./"`), **designed to** deploy to GitHub Pages independently; there is no
+  single suite-wide version. **NOTE:** no deploy workflow is configured in-repo yet — the only
+  GitHub Actions workflow is CI (`.github/workflows/ci.yml`, jobs `build` + `browser`); Pages
+  deploys are manual for now.
 - Packages are **not** separately built or published: apps consume package *source*
   through the workspace, and each app's Vite build transpiles and bundles everything it
   imports. There is exactly **one build per app**. (This is the payoff of accepting a
@@ -264,20 +271,23 @@ tools:
 - **Golden-value corpora** live with the shared packages (especially `core`), so a
   change to a shared primitive is caught by tests representing *both* apps' needs — the
   mechanism that makes "fix a bug once" safe.
-- **Dual-backend property tests for `expr`:** for random inputs, the GLSL output and
-  the JS evaluator must agree within tolerance. The Dynamics app already flags
-  "keeping the GLSL/JS backends in sync" as a gotcha; as `expr` becomes shared across
-  three tools — and grows multivalued branch selection — this invariant must be tested,
-  not assumed. See [RISKS §3](RISKS.md#hard-part-2-the-dualbackend-glsljs-sync-invariant-at-suite-scale).
+- **Dual-backend property tests for `expr`:** for a fixed corpus, the GLSL output and the JS
+  evaluator must agree within tolerance. This is now **wired**: the node core (`@cas/gpu`
+  `dualBackend.test.ts`) checks probe-shader assembly + the JS reference, and the CI **`browser`
+  job** runs the ACTUAL WebGL2 GLSL (`pnpm test:browser`, headless Chromium/SwiftShader) against
+  the JS backend — the automated backstop for GLSL/JS drift (and it guards the H1/H2 emitBody
+  regressions). See [RISKS §3](RISKS.md#hard-part-2-the-dualbackend-glsljs-sync-invariant-at-suite-scale).
 - **Visual-regression harness (later):** both apps render images; a pixel-diff harness
   over a fixed set of views guards the renderers against regressions. Deferred, but
   named here so it has a home.
 
 ## 10. How the correspondence tool fits (forward reference)
 
-The correspondence tool is `apps/correspondences`. It depends on `core`, `gpu`,
-`expr`, `interchange`, `ui`, `quadrature` (for `σ`-construction), and `dynamics` (for
-the Tricorn model). Its only genuinely new code is the **branch-aware correspondence
+The correspondence tool is `apps/correspondences`. It depends on the four shipped packages
+(`@cas/core`, `@cas/gpu`, `@cas/expr`, `@cas/interchange`) and — because `@cas/quadrature` and
+`@cas/dynamics` were never extracted (§3) — builds its own **σ-construction** (the deltoid
+Schwarz reflection) and reuses Complex-Dynamics' **Tricorn** model space via a shared `@cas/expr`
+preset, both app-local. Its only genuinely new code is the **branch-aware correspondence
 engine** — enumerating the `d` branches of `f(w) = f(η(z))`, iterating an orbit *tree*
 (the Quadrature app's Schwarz module already has "tree" painters to reuse), and
 **branch continuation** (templated on the Mother Body Constructor's exclusive
@@ -297,10 +307,11 @@ This is realized in two cheap, additive pieces:
 
 1. **A launcher app (`apps/launcher`).** A small static landing page — its own trivial
    Vite app (or just an `index.html`) — that lists the tools with a one-line description
-   and a link to each. Deployed at the suite's top-level GitHub Pages URL; each app keeps
-   its own independent deploy underneath. This is the "menu to select between apps."
-2. **A shared navigation header (later).** A small component promoted into
-   `@cas/ui` and rendered by each app, offering a dropdown/menu to jump to the sibling
+   and a link to each. Intended to sit at the suite's top-level GitHub Pages URL with each app
+   deployed independently underneath (no Pages workflow is configured yet — see §8). This is the
+   "menu to select between apps."
+2. **A shared navigation header (later, not built).** A small component that would be promoted into
+   a shared `@cas/ui` package (never extracted — §3) and rendered by each app, offering a dropdown to jump to the sibling
    apps (and, where a hand-off is meaningful, a "send this to <app>" action that uses the
    [interchange](INTERCHANGE.md) deep-link codec). This makes cross-navigation available
    *inside* each app without merging them.
@@ -314,6 +325,6 @@ entry point, easy movement between tools, hand-off between them) at a fraction o
 cost and coupling. If a unified shell is ever wanted, it can be added later as *another*
 app that embeds the others — but it is explicitly out of scope now.
 
-The launcher is scaffolded as a stub in Phase 0 (it can list the two existing apps
-immediately) and grows as apps are added; the shared-nav header lands once
-`@cas/ui` exists. See [MIGRATION](MIGRATION.md).
+The launcher is a static stub (`apps/launcher`) listing all three apps; the shared-nav header
+remains **unbuilt** — it awaited a `@cas/ui` package that was never extracted (§3). See
+[MIGRATION](MIGRATION.md).

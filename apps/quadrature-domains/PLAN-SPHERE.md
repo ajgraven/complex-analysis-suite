@@ -36,7 +36,7 @@ This plan adds a new **"Riemann sphere"** tab that:
   well-defined for bounded Ω but produces an uninformative spherical cap;
   the render is still allowed, just flagged).
 
-Built with raw WebGL 2 — no library dependencies, no build step. Mirrors
+Built with raw WebGL 2 — no rendering-library dependencies (the app itself is Vite-built). Mirrors
 the lazy-mounted tab pattern already in use for Schwarz and Param-slice.
 
 ---

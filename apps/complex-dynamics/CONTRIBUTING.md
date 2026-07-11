@@ -21,14 +21,15 @@ npm run build     # production build succeeds
 npm run format    # Prettier (run it; commit the result)
 ```
 
-CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the same checks on
-every push and PR.
+CI (the workspace [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)) runs the same
+checks on every push and PR, plus a `browser` job for the real-WebGL2 GLSL harness.
 
 Pure logic — the expression compiler (lexer/parser/evaluator), the df64
-primitives, transforms, presets — is unit-tested. The WebGL render itself can't
-be unit-tested (no GPU in the test env), so **verify rendering by hand** in
-`npm run dev`: both plots draw, dragging the `c` point updates the dynamical
-plane, panning/zoom/presets work, a deep zoom stays sharp, and export works.
+primitives, transforms, presets — is unit-tested, and the shared GLSL is now checked in CI
+(the `@cas/gpu` dual-backend `browser` job runs the actual WebGL2 shaders against the JS
+backend). The app-level *composited* render still has no automated test, so **verify it by
+hand** in `pnpm dev`: both plots draw, dragging the `c` point updates the dynamical plane,
+panning/zoom/presets work, a deep zoom stays sharp, and export works.
 
 ## How the renderer fits together
 

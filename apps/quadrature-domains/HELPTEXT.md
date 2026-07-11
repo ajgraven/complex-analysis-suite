@@ -18,8 +18,9 @@ How the text reaches the screen:
 - Static HTML text is injected by `QD.Strings.apply()` into elements that carry a
   `data-str` / `data-str-html` / `data-str-title` attribute in `index.html`.
 
-**After editing** any file under `app/`, run `npm run version:sync` (then
-`npm run lint` and `npm test`) before deploying, so the cache version refreshes.
+**After editing** any file under `app/`, run `pnpm lint` and `pnpm test` (from the repo root);
+`vite build` regenerates the static `dist/` for deployment. *(The old `version:sync` cache-versioning
+step was retired at the ESM flip.)*
 
 ---
 

@@ -124,7 +124,8 @@ These are *mathematical* subtleties the reused code will encounter:
 - **Extract on evidence.** A primitive becomes a package when a *second* consumer needs
   it — not before.
 - **One dependency direction.** Packages import downward only; apps import packages; no
-  app imports an app; no cycles. Enforce with lint/`dependency-cruiser`.
+  app imports an app; no cycles. Enforced with ESLint `no-restricted-imports` (a
+  `dependency-cruiser` check is a planned follow-on, not yet wired).
 - **Test-guard everything.** Consolidate on Vitest early; module never moves without its
   tests green before and after; shared packages ship with golden corpora.
 - **Don't migrate all five tools at once.** Fold in the argument-principle applet, Arnold

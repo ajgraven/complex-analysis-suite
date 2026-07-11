@@ -42,8 +42,9 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
    milestone.
 10. **Node 22 LTS** (`.nvmrc` = `22`, `engines.node >= 22`). *(This supersedes the "20"
     mentioned in some docs.)*
-11. **Deployment:** each app builds static (`base: "./"`) and deploys to GitHub Pages
-    independently; the launcher sits at the top-level Pages URL.
+11. **Deployment:** each app builds static (`base: "./"`) and is *designed to* deploy to GitHub
+    Pages independently, with the launcher at the top-level Pages URL. *(No deploy workflow is
+    configured in-repo yet — the only GitHub Actions workflow is CI; Pages deploys are manual.)*
 
 ## Non-negotiable guardrails
 
@@ -53,7 +54,8 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
   without its tests green *before and after*; shared packages ship *with* a golden-value
   corpus representing both apps' needs.
 - **One dependency direction:** packages import downward only; apps import packages; no
-  app imports another app; no cycles. Enforce with lint / dependency-cruiser.
+  app imports another app; no cycles. Enforced with ESLint `no-restricted-imports`
+  (`eslint.config.js`); a `dependency-cruiser` check is a planned follow-on, not yet wired.
 - **Honest labeling** of computed results (`=` exact, `≤` rigorous bound, `≈` estimate) —
   especially anything from the correspondence tool's straightening/surgery, which is
   exploratory and must never read as certified.
