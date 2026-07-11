@@ -89,6 +89,65 @@ function solveAndSample(hData, opts) {
   }
 }
 
+// ---- QD-schwarz-a-B-01: GPU bounded Newton-seed w₀ factor is gated on family ----
+// The GPU seed source `newtonSeedFresh` (schwarz-webgl.mjs) linearizes ψ at z=0. For the
+// exp-form LQD families φ = w₀·exp(r#) ⇒ φ'(0) = w₀·Σconj(A_{j,1}); for boundedQD
+// φ = w₀+Σbranches ⇒ φ'(0) = Σconj(A_{j,1}) with NO w₀ factor. QDSch-1 applied the w₀
+// factor unconditionally, regressing boundedQD (family 0). The shader now gates it on
+// family 2/3. GLSL is not executed in CI (Phase-0 P0-2), so this validates the seed
+// FORMULA by transliterating the shader branch and comparing to the REAL CPU adapter
+// (`sw.adapter.seedFor`, the canonical reference the shader must match).
+{
+  // JS transliteration of newtonSeedFresh's bounded branch (schwarz-webgl.mjs:454-470).
+  // gated=true → the fixed shader (w₀ factor only for family 2/3); gated=false → the old
+  // unconditional multiply (the regression), kept to prove the divergence it caused.
+  function gpuBoundedSeed(phi, w, familyId, gated) {
+    const w0 = phi.w0 || { re: 0, im: 0 };
+    let dphi0 = { re: 0, im: 0 };
+    for (const br of phi.branches || []) {
+      if (br.A && br.A.length >= 1) dphi0 = C.add(dphi0, C.conj(br.A[0]));
+    }
+    const doW0 = gated ? (familyId === 2 || familyId === 3) : true;
+    if (doW0) dphi0 = C.mul(w0, dphi0);
+    if (dphi0.re * dphi0.re + dphi0.im * dphi0.im < 1e-30) return { re: 0, im: 0 }; // EPS_DIV
+    const cand = C.div(C.sub(w, w0), dphi0);
+    const r = Math.hypot(cand.re, cand.im);
+    if (r < 0.95) return cand;
+    return { re: cand.re * 0.9 / r, im: cand.im * 0.9 / r };
+  }
+  const dist = (a, b) => Math.hypot(a.re - b.re, a.im - b.im);
+  // w₀ with |w₀| ≠ 1 so the (mis)applied factor materially moves the seed.
+  const branches = [{ z: { re: 0, im: 0 }, A: [{ re: 1.5, im: -0.3 }] }];
+  const w0 = { re: 2, im: 0.5 };
+  const wTest = { re: 1.2, im: 0.4 };
+
+  // boundedQD (family 0): the fixed shader must match the CPU seed (no w₀ factor).
+  const phiQD = { family: 'boundedQD', unbounded: false, w0, branches };
+  const swQD = Schwarz.buildSchwarzFromPhi(phiQD, { poles: [] }, []);
+  const cpuQD = swQD.adapter.seedFor(wTest, null);
+  const fixedQD = gpuBoundedSeed(phiQD, wTest, 0, true);
+  const oldQD = gpuBoundedSeed(phiQD, wTest, 0, false);
+  ok('QD-schwarz-a-B-01: fixed GPU boundedQD seed matches CPU adaptBounded.seedFor',
+     dist(fixedQD, cpuQD) < 1e-12,
+     'Δ=' + dist(fixedQD, cpuQD).toExponential(2));
+  ok('QD-schwarz-a-B-01: OLD unconditional-w₀ GPU seed diverged from CPU (the regression)',
+     dist(oldQD, cpuQD) > 0.05,
+     'Δ=' + dist(oldQD, cpuQD).toExponential(2));
+
+  // boundedLQD (family 2): the fixed shader must STILL carry the w₀ factor (QDSch-1 intact).
+  const phiLQD = { family: 'boundedLQD', unbounded: false, w0, branches };
+  const swLQD = Schwarz.buildSchwarzFromPhi(phiLQD, { poles: [] }, []);
+  const cpuLQD = swLQD.adapter.seedFor(wTest, null);
+  const fixedLQD = gpuBoundedSeed(phiLQD, wTest, 2, true);
+  ok('QD-schwarz-a-B-01: fixed GPU boundedLQD seed matches CPU seedBoundedLQD (w₀ retained)',
+     dist(fixedLQD, cpuLQD) < 1e-12,
+     'Δ=' + dist(fixedLQD, cpuLQD).toExponential(2));
+  // And the CPU boundedQD vs boundedLQD seeds genuinely differ (so the gate is load-bearing).
+  ok('QD-schwarz-a-B-01: CPU boundedQD and boundedLQD seeds differ by the w₀ factor',
+     dist(cpuQD, cpuLQD) > 0.05,
+     'Δ=' + dist(cpuQD, cpuLQD).toExponential(2));
+}
+
 // ---- Bounded cardioid: h = 1.5/w + 0.5/w² ----
 {
   const hData = { poles: [{ a: { re: 0, im: 0 }, principal: [{ re: 1.5, im: 0 }, { re: 0.5, im: 0 }] }] };
