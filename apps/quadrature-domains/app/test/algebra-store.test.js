@@ -374,6 +374,44 @@ module.exports = async function run() {
        JSON.stringify({ n: solI.solutions && solI.solutions.length, pruned: solI.prunedByAssumptions, reason: solI.reason }));
   }
 
+  // ---- P0#1 (A6-solve): solve() prunes by the ANALYZED branch's assumptions ----
+  // Same class as the classify/currentReimSystem A6 fix: _pruneSolutionsByAssumptions
+  // must read the SOLVED ids' track (assumeOf(track)/knownValues(track)), not the active
+  // track, so solving an off-screen branch reads its own reality assumptions (C3/C4).
+  //
+  // Handcrafted z₁·z̄₁ − 1 = 0 (star A1_1 − z1). Under z₁ REAL (z̄₁→z₁): z₁²−1=0 ⟹ z₁=±1
+  // (real, KEPT under real). Under z₁ IMAGINARY (z̄₁→−z₁): −z₁²−1=0 ⟹ z₁=±i (imag, KEPT under
+  // imaginary). The two branches share the ±-count but their solutions land on DIFFERENT
+  // slices — so pruning t0's real ±1 by the fork's IMAGINARY assumption (the bug) drops both.
+  {
+    const S = QD.Sym; const mv = (n) => S.mpolyVar(n), mi = (k) => S.mpolyInt(k);
+    const sys = {
+      model: 'conjugate', formulation: 'classical', w0Fixed: null,
+      blocks: { locator: [{ eq: mv('z1').mul(mv('zb1')).sub(mi(1)), label: 'loc' }],
+                star: [{ eq: mv('A1_1').sub(mv('z1')), label: 'star' }], gauge: [] },
+    };
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(sys, { withConjugates: false });
+    const fk = st.forkTrack();                 // B active; both tracks at the column-0 seed, no assumptions
+    st.setActiveTrack('t0');
+    st.assumeReal(['z1']);                      // t0: z₁ real → z₁=±1
+    const t0ids = st.orderedColumn(st.maxColumn('t0'), 't0').map((n) => n.id);
+    st.setActiveTrack(fk.track);
+    st.assumeImaginary(['z1']);                 // B: z₁ imaginary → z₁=±i
+    const bids = st.orderedColumn(st.maxColumn(fk.track), fk.track).map((n) => n.id);
+    // Active is B (z₁ imaginary), but solve the t0 branch (z₁=±1 real): it must prune by
+    // t0's OWN real assumption (keeps ±1), not B's imaginary one (which would drop ±1).
+    const solT0 = st.solve(t0ids);
+    ok('P0#1 A6-solve: an off-active-track solve prunes by ITS OWN branch (t0 z1-real → ±1 kept, not dropped by active B\'s z1-imag)',
+       solT0.ok && solT0.solutions.length === 2 && !solT0.prunedByAssumptions,
+       JSON.stringify({ n: solT0.solutions && solT0.solutions.length, pruned: solT0.prunedByAssumptions, reason: solT0.reason }));
+    // Control: solving B's own branch (z₁=±i, imaginary) keeps both under B's imaginary slice.
+    const solB = st.solve(bids);
+    ok('P0#1 A6-solve: control — B\'s own branch (z1 imaginary → ±i) keeps both',
+       solB.ok && solB.solutions.length === 2 && !solB.prunedByAssumptions,
+       JSON.stringify({ n: solB.solutions && solB.solutions.length, pruned: solB.prunedByAssumptions, reason: solB.reason }));
+  }
+
   // ---- D5: progressive "show steps" derivation of a node ----
   {
     // a seeded node has no inputs ⇒ a single "original" step
@@ -1285,6 +1323,24 @@ module.exports = async function run() {
     ok('E1: importDAG is undoable (back to empty)', b.size === 0);
     // garbage input is rejected, not thrown
     ok('E1: importDAG rejects non-DAG input', !QD.AlgebraStore.create().importDAG({ foo: 1 }).ok);
+  }
+
+  // ---- P0#2: importDAG re-homes orphan-track nodes (fail-closed on untrusted import) ----
+  {
+    const a = QD.AlgebraStore.create();
+    a.seedFromSystem(system);
+    const dump = a.exportDAG();
+    dump.nodes[0].track = 't999';              // a track NOT in the export's tracks list
+    dump.nodes[0].column = 'not-a-number';     // and a non-numeric column
+    const b = QD.AlgebraStore.create();
+    const r = b.importDAG(dump);
+    ok('P0#2: importDAG accepts a dump containing an orphan-track node', r.ok);
+    const homed = b.get(dump.nodes[0].id);
+    ok('P0#2: an orphan-track node is re-homed to t0 with a numeric column (no ghost)',
+       !!homed && (homed.track || 't0') === 't0' && homed.column === 0,
+       JSON.stringify({ track: homed && homed.track, column: homed && homed.column }));
+    const visible = b.list().some((n) => n.id === dump.nodes[0].id && (n.track || 't0') === 't0');
+    ok('P0#2: the re-homed node is visible in the t0 track view (not counted-but-hidden)', visible);
   }
 
   // ---- reproducible SymPy derivation script (E4) ----

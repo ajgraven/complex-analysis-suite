@@ -1773,12 +1773,15 @@ import _QD from '../solver.mjs';
     // nothing is silently lost. Opt out with opts.pruneByAssumptions === false. (solveReal
     // already enforces reality structurally via the reim transform, so this is the lever for
     // the conjugate-model `solve`.)
-    function _pruneSolutionsByAssumptions(result, opts) {
+    function _pruneSolutionsByAssumptions(result, opts, track) {
       if (!result || !result.ok || !Array.isArray(result.solutions)) return result;
       if (opts && opts.pruneByAssumptions === false) return result;
-      const a = assumeOf();
+      // Prune by the ANALYZED branch's assumptions (resolved from the solved ids' track by
+      // the caller), NOT the active branch's — matching classify/currentReimSystem (A6). An
+      // undefined `track` falls back to the active track inside assumeOf/knownValues.
+      const a = assumeOf(track);
       const reals = new Set(a.realVars || []), imags = new Set(a.imagVars || []);
-      const kv = knownValues();
+      const kv = knownValues(track);
       const tol = (opts && opts.assumeTol != null) ? opts.assumeTol : 1e-6;
       if (!reals.size && !imags.size && !Object.keys(kv).length) return result;
       const consistent = (sol) => {
@@ -1810,7 +1813,8 @@ import _QD from '../solver.mjs';
       if (polys.length < 1) return { ok: false, reason: 'no equality nodes to solve' };
       const vars = opts.vars || _varsOf(polys);
       const rootFinder = opts.rootFinder || defaultRootFinder();
-      try { return _pruneSolutionsByAssumptions(S.solveZeroDim(polys, Object.assign({}, opts, { vars, rootFinder })), opts); }
+      const track = (ids && ids.length) ? trackOf(ids[0]) : activeTrackId;
+      try { return _pruneSolutionsByAssumptions(S.solveZeroDim(polys, Object.assign({}, opts, { vars, rootFinder })), opts, track); }
       catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
     }
     // Off-main-thread numeric solve via QD.SymWorker (Promise). runOpts: { onProgress,
@@ -1823,9 +1827,10 @@ import _QD from '../solver.mjs';
       const SW = symWorker();
       if (!SW) return Promise.resolve(solve(ids, opts));
       const vars = opts.vars || _varsOf(polys);
+      const track = (ids && ids.length) ? trackOf(ids[0]) : activeTrackId;
       const payload = { polys: polys.map((p) => p.termList()), vars, solveVar: opts.solveVar, opts: _capOpts(opts) };
       return SW.run('solveZeroDim', payload, runOpts || {}).then(
-        (res) => _pruneSolutionsByAssumptions(res, opts),
+        (res) => _pruneSolutionsByAssumptions(res, opts, track),
         (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
           : { ok: false, reason: (err && err.message) || String(err) });
     }
@@ -2114,9 +2119,15 @@ import _QD from '../solver.mjs';
       // nodes (+ id counter past the highest 'n<n>')
       let maxSeq = 0;
       for (const { nd, poly } of built) {
+        // Fail-closed on untrusted import: re-home a node whose track isn't among the
+        // reconstructed tracks to 't0' (an orphan-track node is a "ghost" — counted by
+        // size()/variables()/exportDAG but invisible to every track-scoped view, so it never
+        // renders yet re-exports), and coerce a non-numeric column to 0.
+        const nodeTrack  = hasTrack(nd.track) ? nd.track : 't0';
+        const nodeColumn = (typeof nd.column === 'number' && Number.isFinite(nd.column)) ? nd.column : 0;
         nodes.set(nd.id, {
           id: nd.id, kind: nd.kind || 'derived', poly, rel: nd.rel || '=', label: nd.label || nd.id,
-          model, provenance: nd.provenance, column: nd.column || 0, track: nd.track || 't0', meta: nd.meta,
+          model, provenance: nd.provenance, column: nodeColumn, track: nodeTrack, meta: nd.meta,
         });
         if (nd.order != null) order.set(nd.id, nd.order);
         const m = /^n(\d+)$/.exec(nd.id); if (m) maxSeq = Math.max(maxSeq, +m[1]);
