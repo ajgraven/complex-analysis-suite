@@ -148,6 +148,99 @@ function solveAndSample(hData, opts) {
      'Δ=' + dist(cpuQD, cpuLQD).toExponential(2));
 }
 
+// ---- QD σ-AGREEMENT: the schwarz-webgl.mjs σ pipeline (JS mirror) ↔ the CPU engine ----
+// A node-runnable GLSL↔CPU agreement guard for the QD Schwarz shader (Review QD-schwarz-a-A-06 — the only
+// prior shader test lived in apps/correspondences). Modeled on correspondences/gpuAgreement.test.ts: it
+// transliterates the shader's σ STRATEGY — the family-gated fresh seed (newtonSeedFresh, the schwarz-a-B-01
+// fix), the cold-start Newton invert (invertPhi), the 4-seed retry ladder, and σ = conj(F(ψ(w))) — reusing
+// the CPU adapter's shared φ/φ'/F, and asserts it reproduces the CPU engine's sigma() across a grid of Ω.
+// The float32 GLSL numerics themselves ride the browser dual-backend harness (P4); this pins the STRATEGY
+// (incl. the family-gated seed) so a divergence from the CPU σ fails in CI without a GPU. KEEP IN SYNC with
+// schwarz-webgl.mjs sigma()/invertPhi/newtonSeedFresh if that inverse strategy ever changes.
+{
+  const hData = { poles: [{ a: { re: 0, im: 0 }, principal: [{ re: 1.5, im: 0 }, { re: 0.5, im: 0 }] }] };
+  const { phi, boundaryPts } = solveAndSample(hData, {}); // a boundedQD (family 0) cardioid
+  const sw = Schwarz.buildSchwarzFromPhi(phi, hData, boundaryPts);
+  const abs2 = (z) => z.re * z.re + z.im * z.im;
+  const scl = (z, s) => ({ re: z.re * s, im: z.im * s });
+
+  // newtonSeedFresh (schwarz-webgl.mjs bounded branch), family-gated per schwarz-a-B-01. buggy=true replays
+  // the pre-fix unconditional-w₀ multiply, to show the fix improves DIRECT (no-ladder) convergence.
+  function seedFresh(w, buggy) {
+    const w0 = phi.w0 || { re: 0, im: 0 };
+    let dphi0 = { re: 0, im: 0 };
+    for (const br of phi.branches || []) if (br.A && br.A.length >= 1) dphi0 = C.add(dphi0, C.conj(br.A[0]));
+    if (buggy) dphi0 = C.mul(w0, dphi0); // family 0: the FIX omits this; the bug applied it unconditionally
+    if (abs2(dphi0) < 1e-30) return { re: 0, im: 0 };
+    const cand = C.div(C.sub(w, w0), dphi0);
+    const r = Math.hypot(cand.re, cand.im);
+    return r < 0.95 ? cand : scl(cand, 0.9 / r);
+  }
+  // invertPhi (schwarz-webgl.mjs): NEWTON_MAX=40, CONVERGE |fz|<1e-7, FINAL |fz|<1e-5, diverge |z|>1e4.
+  function invert(w, zSeed) {
+    let z = zSeed;
+    for (let it = 0; it < 40; it++) {
+      const fz = C.sub(sw.adapter.evalPhi(z), w);
+      if (abs2(fz) < 1e-14) return { z, ok: true };
+      const dfz = sw.adapter.derivPhi(z);
+      if (abs2(dfz) < 1e-30) return { z, ok: false };
+      z = C.sub(z, C.div(fz, dfz));
+      if (!isFinite(z.re) || !isFinite(z.im) || abs2(z) > 1e8) return { z, ok: false };
+    }
+    const fz = C.sub(sw.adapter.evalPhi(z), w);
+    return { z, ok: abs2(fz) < 1e-10 };
+  }
+  const acceptZ = (z) => Math.hypot(z.re, z.im) < 1 - 1e-4; // bounded → z ∈ 𝔻
+  // sigma() (schwarz-webgl.mjs): fresh + 4-seed retry ladder, z≈0 guard, σ = conj(F(z)).
+  function shaderSigma(w, buggy) {
+    const fresh = seedFresh(w, buggy);
+    const fr = Math.max(Math.hypot(fresh.re, fresh.im), 1e-20);
+    const fhat = { re: fresh.re / fr, im: fresh.im / fr };
+    const ladder = [fresh, scl(fresh, 0.6),
+                    { re: -fhat.im * fr, im: fhat.re * fr }, { re: fhat.im * fr, im: -fhat.re * fr }];
+    let z = null, direct = false;
+    for (let i = 0; i < ladder.length; i++) {
+      const r = invert(w, ladder[i]);
+      if (r.ok && acceptZ(r.z)) { z = r.z; direct = i === 0; break; }
+    }
+    if (!z || abs2(z) < 1e-8) return { sigma: null, direct: false };
+    const Sv = sw.adapter.evalF(z);
+    if (!Sv || !isFinite(Sv.re) || !isFinite(Sv.im)) return { sigma: null, direct: false };
+    return { sigma: { re: Sv.re, im: -Sv.im }, direct };
+  }
+
+  // Grid of Ω: w = φ(z) for z on a lattice in 𝔻 (interior points map into Ω).
+  let both = 0, worst = 0, nullMismatch = 0, directGated = 0, directBuggy = 0;
+  for (let ri = 1; ri <= 6; ri++) {
+    const rr = (ri / 7) * 0.9;
+    for (let ti = 0; ti < 12; ti++) {
+      const th = (2 * Math.PI * ti) / 12;
+      const w = sw.evalPhi({ re: rr * Math.cos(th), im: rr * Math.sin(th) });
+      if (!isFinite(w.re) || !isFinite(w.im) || !sw.isInOmega(w)) continue;
+      const ref = sw.sigma(w); // CPU engine
+      const g = shaderSigma(w, false); // shader-strategy mirror (family-gated seed)
+      if ((ref === null) !== (g.sigma === null)) { nullMismatch++; continue; }
+      if (ref && g.sigma) {
+        both++;
+        worst = Math.max(worst, Math.hypot(g.sigma.re - ref.re, g.sigma.im - ref.im));
+        if (g.direct) directGated++;
+        if (shaderSigma(w, true).direct) directBuggy++;
+      }
+    }
+  }
+  // Bound is ~5e-6 because the mirror faithfully uses the shader's FLOAT32-sized Newton tol (|fz|<1e-7)
+  // vs the CPU engine's 1e-12 — a ~5-significant-figure σ agreement, the honest strategy-level bound.
+  ok('QD σ-agreement/boundedQD: shader-strategy mirror σ matches the CPU engine across Ω',
+     both > 40 && worst < 1e-5 && nullMismatch === 0,
+     'matched=' + both + ' worst=' + worst.toExponential(2) + ' nullMismatch=' + nullMismatch);
+  // The family-gated seed (schwarz-a-B-01) is a good DIRECT seed and never worse than the pre-fix buggy w₀
+  // seed. (For the cardioid |w₀| is benign so both converge directly — the regression is latent here; the
+  // direct seed↔CPU-adapter equality is pinned separately by the QD-schwarz-a-B-01 block above.)
+  ok('QD σ-agreement/boundedQD: the family-gated seed converges DIRECTLY (no ladder) ≥ as often as the buggy w₀ seed',
+     directGated >= directBuggy && directGated > 0,
+     'directGated=' + directGated + ' directBuggy=' + directBuggy + ' of ' + both);
+}
+
 // ---- Bounded cardioid: h = 1.5/w + 0.5/w² ----
 {
   const hData = { poles: [{ a: { re: 0, im: 0 }, principal: [{ re: 1.5, im: 0 }, { re: 0.5, im: 0 }] }] };
