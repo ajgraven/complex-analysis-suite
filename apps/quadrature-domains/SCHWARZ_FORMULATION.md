@@ -2,7 +2,7 @@
 
 A second, algebraically-distinct way to write the same bounded quadrature-domain
 inverse equations the Algebra tab solves. The default **classical (forward)** system
-([`qd-equations.js`](app/qd-equations.js) `generateClassicalBounded`) and this
+([`qd-equations.mjs`](app/qd-equations.mjs) `generateClassicalBounded`) and this
 **Schwarz** system (`generateSchwarzBounded`) cut out the **same solution variety**
 over the same `{z_j, A_{j,k}}` unknowns — they differ only in *which* polynomial
 identities express the principal-part matching. Pick it from **Quadrature ↔ map
@@ -22,7 +22,7 @@ part: *h is the sum of σ's principal parts at its finite poles* (THEORY_MAP §3
 ```
 
 i.e. `F` is the rational "Schwarz extension" already built numerically in
-[`schwarz/schwarz-common.js`](app/schwarz/schwarz-common.js).
+[`schwarz/schwarz-common.mjs`](app/schwarz/schwarz-common.mjs).
 
 ## The (★_S) block — what `generateSchwarzBounded` builds
 

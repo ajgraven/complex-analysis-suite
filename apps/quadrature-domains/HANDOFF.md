@@ -14,6 +14,12 @@ explain back to him.
 
 ## 0. Current state
 
+> **(Superseded by the ESM flip — see ESM-MIGRATION.md.)** The operational specifics
+> in this section predate the monorepo/Vite port: `npm test`/`npm run lint`/`version:check`
+> are now `pnpm test` / `pnpm lint` (there is no `version:check` — Vite handles cache-busting),
+> and the app deploys as `vite build`'s `dist/`, not by copying `app/`. The status narrative
+> below is kept as the historical journal head.
+
 **Full suite green** (run `npm test` for the live count — it's the source of
 truth; prose counts drift, so they're intentionally not pinned here); **`npm run
 lint` clean; `npm run version:check` clean** (cache hash `49ecf9a946`). The app is

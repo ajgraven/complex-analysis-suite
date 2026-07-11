@@ -6,8 +6,9 @@ each. This is the "menu to select between apps" half of the topology decision �
 shell that owns every tool's state
 ([ARCHITECTURE §11](../../docs/ARCHITECTURE.md#11-the-launcher-unified-menu-without-a-unified-shell)).
 
-Deployed at the suite's **top-level GitHub Pages URL**; each app keeps its own independent
-deploy underneath.
+Intended to sit at the suite's **top-level GitHub Pages URL** with each app deployed independently
+underneath. *(No automated Pages workflow is configured yet — deploys are manual; see
+[ARCHITECTURE §8](../../docs/ARCHITECTURE.md#8-build--deployment-model).)*
 
 ## Running
 

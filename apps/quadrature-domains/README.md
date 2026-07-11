@@ -11,15 +11,14 @@ Faber-transform approach to both problems from Andrew Graven's PhD thesis,
 > [complex-analysis-suite](../../README.md). It was **ESM-ified onto Vite** in
 > [MIGRATION Phase 2](../../docs/MIGRATION.md#phase-2--quadrature-domains-onto-vite-still-all-javascript)
 > and now consumes the shared [`@cas/core`](../../packages/core) kernel. Run it from the repo
-> root with `pnpm --filter quadrature-domains dev` (and `… build` / `… test`). **Several
-> operational sections below — "Running the app" (no-build / `npm run serve`), the
-> `version:sync` cache-buster, and the `app/` file layout — describe the original *standalone*
-> app and are retained for provenance; in the monorepo, Vite + `vite-plugin-pwa` handle the
-> dev server, offline caching, and cache-busting.** The mathematics, families, UI, and API
-> sections remain current.
+> root with `pnpm --filter quadrature-domains dev` (and `… build` / `… test`). Vite +
+> `vite-plugin-pwa` handle the dev server, offline caching, and cache-busting; the app is
+> **ES-module-only** (`index.html` → `main.mjs`, native module workers). The only remaining
+> account of the pre-monorepo *standalone* (no-build) app is the collapsed **Historical** note
+> under "Running the app".
 
-> **Navigation:** [ARCHITECTURE.md](ARCHITECTURE.md) — script load
-> order, namespace map, cross-tab contracts.
+> **Navigation:** [ARCHITECTURE.md](ARCHITECTURE.md) — module import
+> graph, namespace map, cross-tab contracts.
 > [THEORY_MAP.md](THEORY_MAP.md) — thesis equations → file:line.
 > [AHARONOV_SHAPIRO.md](AHARONOV_SHAPIRO.md) — reproducing the A&S cardioid
 > uniqueness theorem with the Algebra engine.
@@ -77,14 +76,12 @@ npm run serve        # python3 -m http.server --directory app 8000
 
 then open <http://localhost:8000/>. Any static file server worked (`npx serve app`, VS Code
 Live Server, etc.) — just serve the `app/` directory.
-</details>
 
-> **Why a server?** The app registers a service worker and runs the solver in
-> Web Workers built from the source files. Opening `index.html` directly via
-> `file://` still works, but the service worker won't register and the workers
-> can't load — the app silently falls back to solving on the main thread (slower,
-> no offline cache, and some `file://` console warnings). Serving over HTTP avoids
-> all of that.
+**Why a server (then)?** The standalone app registered a service worker and ran the solver in
+Web Workers bundled from the source files, so opening `index.html` via `file://` silently fell
+back to main-thread solving with no offline cache. Under Vite this is moot — `pnpm … dev` serves
+over HTTP and the workers are native ES-module workers.
+</details>
 
 Modern browser recommended (WebGL 2 is used for the Schwarz/sphere views, with a
 CPU fallback). [math.js](https://mathjs.org) and [KaTeX](https://katex.org) are
@@ -92,19 +89,16 @@ loaded from a CDN (pinned + SRI) for expression parsing and math display.
 
 ### Deploying / hosting
 
-> **Before publishing, run `npm run version:sync`** (then `npm test` + `npm run
-> lint`). This recomputes the content-hash cache version so the service worker
-> and the `?v=` page-script URLs invalidate on update — skip it and returning
-> visitors keep getting the *old* code from the cache-first service worker until a
-> hard reload. CI's `npm run version:check` fails the build if the hash is stale,
-> so a forgotten sync is caught before merge; running it locally just means the
-> copy you publish is already current.
+```
+pnpm --filter quadrature-domains build     # emits app/dist/
+```
 
-To publish, copy the **`app/` directory** to any static host (GitHub Pages, a
-personal website, Netlify, …) and point at its `index.html`. Paths are relative,
-so it works under a sub-path too. Nothing outside `app/` is needed at runtime; you
-can omit the dev-only `app/node_modules/`, `app/test/`, `app/node-test.js`, and
-`app/bench.js` when copying (none are loaded by the page).
+`vite build` (root `app/`, `base: "./"`) fingerprints assets and lets
+`vite-plugin-pwa` generate the service worker + precache, so cache-busting is
+automatic — there's no manual version step. Deploy the emitted **`dist/`**
+directory to any static host (GitHub Pages, Netlify, …); paths are relative, so
+it works under a sub-path too. In the monorepo the launcher's Pages workflow
+builds and publishes each app's `dist/`.
 
 ### Headless tests
 
@@ -134,128 +128,140 @@ visualizations, complementary to the headless runner.
     ├── index.html                     entry point (tab bar, sidebars, canvas)
     ├── style.css
     │
-    ├── complex.js                     {re, im} complex arithmetic + string format/parse
-    ├── taylor.js                      truncated Taylor-series arithmetic
+    ├── main.mjs                       page entry: side-effect-imports the whole module
+    │                                  graph, then runs QD.Strings.apply()
+    │
+    ├── complex.mjs                    {re, im} complex arithmetic + string format/parse
+    ├── taylor.mjs                     truncated Taylor-series arithmetic
     │                                  (mul, invert, exp, log, reciprocal, compose)
     │
-    ├── solver.js                      Family registry; dispatchers; schema runtime;
+    ├── solver.mjs                     Family registry; dispatchers; schema runtime;
     │                                  Newton driver; deflation; boundary sampler /
     │                                  univalence check; top-level solveInverseQD
-    ├── solver-faber.js                shared inverse Faber transform primitives
-    ├── solver-qd.js                   Family.boundedQD            (classical bounded)
-    ├── solver-uqd.js                  Family.unboundedQD          (classical unbounded)
-    ├── solver-lqd-common.js           shared LQD machinery (Blaschke, modified residues)
-    ├── solver-lqd.js                  Family.boundedLQD           (non-singular)
-    ├── solver-lqd-singular.js         Family.boundedLQD_singular
-    ├── solver-uqd-lqd.js              Family.unboundedLQD         (non-singular)
-    ├── solver-uqd-lqd-singular.js     Family.unboundedLQD_singular
+    ├── solver-faber.mjs               shared inverse Faber transform primitives
+    ├── solver-qd.mjs                  Family.boundedQD            (classical bounded)
+    ├── solver-uqd.mjs                 Family.unboundedQD          (classical unbounded)
+    ├── solver-lqd-common.mjs          shared LQD machinery (Blaschke, modified residues)
+    ├── solver-lqd.mjs                 Family.boundedLQD           (non-singular)
+    ├── solver-lqd-singular.mjs        Family.boundedLQD_singular
+    ├── solver-uqd-lqd.mjs             Family.unboundedLQD         (non-singular)
+    ├── solver-uqd-lqd-singular.mjs    Family.unboundedLQD_singular
+    │                                  (+ solver-pqd*.mjs / solver-uqd-pqd*.mjs power families)
     │
-    ├── parse-h.js                     custom-text h(w) parser (strict PFD walker,
+    ├── parse-h.mjs                    custom-text h(w) parser (strict PFD walker,
     │                                  general-rational fallback via Durand–Kerner)
-    ├── critical-set.js                complex Newton on φ'(z) = 0 from a polar
+    ├── critical-set.mjs               complex Newton on φ'(z) = 0 from a polar
     │                                  seed grid; powers the inverse-tab critical-
     │                                  set overlay
-    ├── observables.js                 boundary observables (area / perimeter /
+    ├── observables.mjs                boundary observables (area / perimeter /
     │                                  curvature / harmonic measure / accuracy)
-    ├── symmetry.js                    QD.detectSymmetry (D_n / Z_n via φ intertwining)
-    ├── thesis-examples.js             curated examples + analytic-oracle engine
-    ├── faber-analysis.js              QD.FaberAnalysis: Faber polynomials of a UQD
+    ├── symmetry.mjs                   QD.detectSymmetry (D_n / Z_n via φ intertwining)
+    ├── thesis-examples.mjs            curated examples + analytic-oracle engine
+    ├── faber-analysis.mjs             QD.FaberAnalysis: Faber polynomials of a UQD
     │                                  complement + a Durand–Kerner complex root-finder
-    ├── sym-core.js                    QD.Sym: exact symbolic algebra (Rational/Gaussian/
+    ├── sym-core.mjs                   QD.Sym: exact symbolic algebra (Rational/Gaussian/
     │                                  MPoly/RatFn/FRatFn + power series, Lagrange reversion;
     │                                  resultant/discriminant + Gröbner basis over ℚ(i):
     │                                  Buchberger (+ signature/GVW), FGLM, linearReduce,
     │                                  solveZeroDim + Möller–Stetter eigenvalue solving;
     │                                  realSolutionCount, schurCohn (exact disk-root count),
     │                                  resolvent (char-poly eliminant + discriminant))
-    ├── qd-equations.js                QD.QDEquations: symbolic coefficient system for a
+    ├── qd-equations.mjs               QD.QDEquations: symbolic coefficient system for a
     │                                  classical bounded QD (conjugate + real/imag reps;
     │                                  pointFunctionalSystem = the interior A&S form)
-    ├── qd-constraints.js              QD.QDConstraints: univalence/geometric constraints
+    ├── qd-constraints.mjs             QD.QDConstraints: univalence/geometric constraints
     │                                  (convex/star/spiral, φ′≠0, global injectivity, borders;
     │                                  boundaryDoublePointCount = exact boundary injectivity)
-    ├── ui-strings.js                  QD.Strings: editable UI prose (SINGLE SOURCE) +
+    ├── ui-strings.mjs                 QD.Strings: editable UI prose (SINGLE SOURCE) +
     │                                  the data-str applier (see HELPTEXT.md)
     │
-    ├── ui.js                          QD/LQD-tab UI hub: DOM wiring, shared helpers,
+    ├── ui.mjs                         QD/LQD-tab UI hub: DOM wiring, shared helpers,
     │                                  uiCtx injection + the module installs below
-    ├── ui-modes.js                    MODE descriptors + aggressiveness presets
-    ├── ui-pole-grid.js                pole / poly-coef control renderers
-    ├── ui-h-text.js                   h(w) text ⇄ structured-grid mirror
-    ├── ui-solve.js                    solve → render → analyze pipeline
+    ├── ui-modes.mjs                   MODE descriptors + aggressiveness presets
+    ├── ui-pole-grid.mjs               pole / poly-coef control renderers
+    ├── ui-h-text.mjs                  h(w) text ⇄ structured-grid mirror
+    ├── ui-solve.mjs                   solve → render → analyze pipeline
     │                                  (+ alternates + background search)
-    ├── ui-url-state.js                URL/hash serialize + restore (B1)
-    ├── ui-thesis.js                   thesis-example gallery + analytic-oracle card
-    ├── ui-faber.js                    Faber-polynomials card + roots overlay (UQD)
-    ├── ui-qd-equations.js             Quadrature↔map equation-system card (classical
+    ├── ui-url-state.mjs               URL/hash serialize + restore (B1)
+    ├── ui-thesis.mjs                  thesis-example gallery + analytic-oracle card
+    ├── ui-faber.mjs                   Faber-polynomials card + roots overlay (UQD)
+    ├── ui-qd-equations.mjs            Quadrature↔map equation-system card (classical
     │                                  bounded QD): LaTeX display + self-verify + export
     │                                  (all: QD_UI.installX(uiCtx) factories,
-    │                                   Phase-3 item E split of ui.js)
+    │                                   Phase-3 item E split of ui.mjs)
     ├── algebra/                       Algebra tab — symbolic elimination workspace:
-    │   ├── sym-worker.js              QD.SymWorker: off-main-thread Gröbner/solve
-    │   │                              (Blob Web Worker; progress + cancel)
-    │   ├── algebra-store.js           QD.AlgebraStore: equation-DAG model (DOM-free)
-    │   ├── algebra-canvas.js          QD.AlgebraCanvas: SVG + KaTeX DAG renderer
+    │   ├── sym-worker.mjs             QD.SymWorker: off-main-thread Gröbner/solve
+    │   │                              (native module worker; progress + cancel)
+    │   ├── algebra-store.mjs          QD.AlgebraStore: equation-DAG model (DOM-free)
+    │   ├── algebra-canvas.mjs         QD.AlgebraCanvas: SVG + KaTeX DAG renderer
     │                                   (collapsible cards, reorder, copy-LaTeX, hovertext)
-    │   └── algebra-ui.js              QD_UI.installAlgebra: tab, palette, eliminate,
+    │   └── algebra-ui.mjs             QD_UI.installAlgebra: tab, palette, eliminate,
     │                                   Gröbner basis, dimension/solve, export
     │
     ├── direct/
-    │   ├── direct-common.js           Direct-problem kernels (polynomial / rational /
+    │   ├── direct-common.mjs          Direct-problem kernels (polynomial / rational /
     │   │                              numerical / unbounded), polynomial root finder,
     │   │                              parser, Fourier verifier, boundary samplers
-    │   ├── direct-ui.js               Direct-tab UI hub: Domain-type + φ-input +
+    │   ├── direct-ui.mjs              Direct-tab UI hub: Domain-type + φ-input +
     │   │                              output cards, mode toggle, dCtx injection +
     │   │                              the two module installs below
-    │   ├── direct-recompute.js        recompute → render pipeline (bounded /
+    │   ├── direct-recompute.mjs       recompute → render pipeline (bounded /
     │   │                              unbounded / numerical + h display + ∂Ω plot)
-    │   └── direct-verify.js           Verify button (family verifier / round-trip /
+    │   └── direct-verify.mjs          Verify button (family verifier / round-trip /
     │                                  Fourier diagnostic) — both QD_UI.installDirectX
-    │                                  (dCtx) factories, Phase-3 item E split of direct-ui.js
+    │                                  (dCtx) factories, Phase-3 item E split of direct-ui.mjs
     │
     ├── schwarz/
-    │   ├── schwarz-common.js          Schwarz-reflection dynamics math kernel +
+    │   ├── schwarz-common.mjs         Schwarz-reflection dynamics math kernel +
     │   │                              per-family CPU adapters; orbit / escape-time
-    │   ├── schwarz-ui.js              Schwarz-tab UI hub: capture φ from Inverse tab,
+    │   ├── schwarz-cpu-worker.mjs     off-thread CPU escape-time field (native module worker)
+    │   ├── schwarz-ui.mjs             Schwarz-tab UI hub: capture φ from Inverse tab,
     │   │                              card builders, setMode / view-toggle, sCtx
     │   │                              injection + the four module installs below
-    │   ├── schwarz-paint.js           2D-canvas output layer (field / boundary /
+    │   ├── schwarz-paint.mjs          2D-canvas output layer (field / boundary /
     │   │                              orbit / tree / limit-set painters + colormaps)
-    │   ├── schwarz-render.js          progressive escape-time renderer (debounced
+    │   ├── schwarz-render.mjs         progressive escape-time renderer (debounced
     │   │                              recompute + GPU path + CPU pyramid)
-    │   ├── schwarz-features.js        per-feature compute (domain-coloring, limit
+    │   ├── schwarz-features.mjs       per-feature compute (domain-coloring, limit
     │   │                              set, level curves, orbits, cycles, sweep,
     │   │                              z-panel, PNG export)
-    │   ├── schwarz-interaction.js     canvas hover / wheel / click / dblclick / pin
+    │   ├── schwarz-interaction.mjs    canvas hover / wheel / click / dblclick / pin
     │   │                              handlers (all four: QD_UI.installSchwarzX(sCtx)
-    │   │                              factories, Phase-3 item E split of schwarz-ui.js)
-    │   └── schwarz-webgl.js           WebGL 2 fragment-shader renderer (escape-time
+    │   │                              factories, Phase-3 item E split of schwarz-ui.mjs)
+    │   └── schwarz-webgl.mjs          WebGL 2 fragment-shader renderer (escape-time
     │                                  in a single GPU pass)
     │
     ├── sphere/                        Sphere-view adapter for the Schwarz tab.
-    │   ├── sphere-common.js           Stereographic projection + sphere-mesh
+    │   ├── sphere-common.mjs          Stereographic projection + sphere-mesh
     │   │                              builder + mat4 helpers (Float64)
-    │   ├── sphere-ui.js               QD.SphereView.mount(opts) → handle:
+    │   ├── sphere-ui.mjs              QD.SphereView.mount(opts) → handle:
     │   │                              orbit camera, drag / wheel zoom,
     │   │                              ResizeObserver, hover tooltip. The
     │   │                              Schwarz tab calls mount() on first
     │   │                              switch to sphere view. (HANDOFF #29)
-    │   └── sphere-webgl.js            Three-pass WebGL 2 renderer: opaque sphere
+    │   └── sphere-webgl.mjs           Three-pass WebGL 2 renderer: opaque sphere
     │                                  base, fractal Mandelbrot-like pass, glow
     │
     ├── param-slice/
-    │   ├── param-slice-common.js      Pure math kernel: ParamRef descriptors,
+    │   ├── param-slice-common.mjs     Pure math kernel: ParamRef descriptors,
     │   │                              listAvailableParams, applyParam,
     │   │                              classifyResult, color LUT
-    │   ├── param-slice-pool.js        Web Worker pool — runtime Blob bundle of
-    │   │                              the solver source (no build step)
-    │   ├── param-slice-render.js      adaptive 2-D render engine (runAdaptive2D:
+    │   ├── param-slice-pool.mjs       Web Worker pool — native ES-module workers
+    │   │                              (workers/param-slice-worker-entry.mjs)
+    │   ├── param-slice-render.mjs     adaptive 2-D render engine (runAdaptive2D:
     │   │                              progressive quadtree sweep + warm-hint
     │   │                              spatial index + coverage fill) —
     │   │                              QD_UI.installParamSliceRender(psCtx),
-    │   │                              Phase-3 item E split of param-slice-ui.js
-    │   └── param-slice-ui.js          Parameter-slice tab UI hub (lazy mount,
+    │   │                              Phase-3 item E split of param-slice-ui.mjs
+    │   └── param-slice-ui.mjs         Parameter-slice tab UI hub (lazy mount,
     │                                  cards, canvas interaction, run orchestration)
+    │
+    ├── workers/                       native ES-module worker entries + shared solver barrel
+    │   ├── solver-graph.mjs           side-effect barrel: the solver cluster as ESM
+    │   ├── solver-worker-entry.mjs    Inverse-tab primary-solve worker thread
+    │   ├── param-slice-worker-entry.mjs   param-sweep pool worker thread
+    │   ├── schwarz-worker-entry.mjs   Schwarz CPU-field worker thread
+    │   └── sym-worker-entry.mjs       Algebra Gröbner/solve worker thread
     │
     ├── disabled/                      Parked work-in-progress
     │   ├── README.md                  How to re-enable
@@ -265,7 +271,7 @@ visualizations, complementary to the headless runner.
     ├── node-test.js                   headless test entry (async runner)
     └── test/                          split test suite + shared harness/bootstrap
         ├── harness.js                 ok/approxEq/report (shared counters)
-        ├── bootstrap.js               builds the vm ctx once; installs globals
+        ├── bootstrap.js               imports the .mjs graph once; installs globals
         └── *.test.js                  one file per subsystem (solvers, schwarz, …)
 ```
 
@@ -328,7 +334,7 @@ parametric forms for φ and family-specific residue preprocessing:
 
 All families share `QD.Faber.inverseFaberAtPole` (the per-pole inverse
 Faber primitive) and the residual / Newton / multistart / deflation
-infrastructure in `solver.js`.
+infrastructure in `solver.mjs`.
 
 ## Mathematical approach (direct problem)
 
@@ -341,7 +347,7 @@ principal parts at its finite poles in Ω. For the various φ shapes:
   Taylor coefficients of φ via the forward Faber formula.
 * **Rational φ = P(z)/Q(z)**: σ extends with one pole at φ(0) (if deg P
   > deg Q) plus one pole per root r_i of Q at φ(1/conj(r_i)). The
-  polynomial root finder (Durand–Kerner, in `direct-common.js`) locates
+  polynomial root finder (Durand–Kerner, in `direct-common.mjs`) locates
   the r_i; per-pole principal parts are computed by the same forward
   Faber primitive.
 * **Unbounded Laurent φ = c·z + F_0 + F_1/z + …**: the polynomial part
@@ -446,7 +452,7 @@ view is active.
   so genuine near-cusp domains are no longer mis-rejected. An optional **curvature
   heat-strip** toggle colors ∂Ω by |κ| (cool → hot) so the sharpest bends — and
   forming cusps — stand out.
-  These come from `app/observables.js` (`QD.boundaryObservables`,
+  These come from `app/observables.mjs` (`QD.boundaryObservables`,
   `QD.harmonicMeasure`, `QD.estimateAccuracy`), computed from the solved map φ.
 * **Thesis examples + analytic oracles** — a **Thesis example** gallery loads
   curated canonical quadrature domains (unit disk, symmetric multi-pole D₂/D₃/D₄
@@ -455,12 +461,12 @@ view is active.
   reproduce (area, symmetry group, cusp count/type, `c*` + mechanism, achievable
   significant digits) — and an **Analytic oracle** card shows computed vs expected
   with ✓ / ⚠ / ✗ (the heavy `c*` check verifies on demand). From
-  `app/thesis-examples.js` (`QD.ThesisExamples`, `QD.checkOracle`).
+  `app/thesis-examples.mjs` (`QD.ThesisExamples`, `QD.checkOracle`).
 * **Annotated phenomena** — an optional overlay labels the features the
   critical-set / cusp overlays don't: the **harmonic-measure hot spot** (the tip,
   where `ρ = 1/(2π|φ′|)` peaks), the **maximum-curvature point** on ∂Ω, and the
   domain's **symmetry axes** (dashed) with its `D_n` / `Z_n` group. Symmetry comes
-  from `app/symmetry.js` (`QD.detectSymmetry`), which reads the domain's symmetry
+  from `app/symmetry.mjs` (`QD.detectSymmetry`), which reads the domain's symmetry
   straight off φ via the conformal-map intertwining.
 * **Faber polynomials** *(classical unbounded QD only)* — a **Faber polynomials**
   card computes the Faber polynomials `F_n(ζ)` of the bounded complement `K = ℂ∖Ω`
@@ -469,7 +475,7 @@ view is active.
   degree and leading coefficient, and per-order root-finder **convergence flags**, and
   optionally **plots their roots** on the domain canvas — the union of all roots up to
   order N (teal circles) or the roots of a single `F_n` (violet diamonds). Roots cluster
-  inside K, the "hole" of the unbounded domain. From `app/faber-analysis.js`
+  inside K, the "hole" of the unbounded domain. From `app/faber-analysis.mjs`
   (`QD.FaberAnalysis`: `faberPolynomials`, `polynomialRoots` (Durand–Kerner)).
 * **Quadrature ↔ map equations** *(classical bounded QD only)* — a **Quadrature ↔ map
   equations** card generates the explicit *algebraic* system relating the quadrature data
@@ -480,7 +486,7 @@ view is active.
   ≈0), and exportable as LaTeX or a CAS-agnostic JSON term list. A default-on **"Fix φ(0) = w₀"**
   checkbox bakes the solve's selected Riemann-map center (centroid of the poles by default) into
   the equations as an *exact rational*, dropping w₀/w̄₀ from the variables. Exact arithmetic
-  throughout (`app/sym-core.js` `QD.Sym`; `app/qd-equations.js` `QD.QDEquations`); the
+  throughout (`app/sym-core.mjs` `QD.Sym`; `app/qd-equations.mjs` `QD.QDEquations`); the
   "Open in Algebra workspace ↗" button feeds the in-browser elimination/Gröbner reducer below.
 * **Algebra tab** *(classical bounded QD only)* — an interactive **equation-derivation
   workspace**. The generated (●)/(★)/gauge system appears as KaTeX nodes in a graph;
@@ -496,7 +502,7 @@ view is active.
   to Möller–Stetter **eigenvalue solving** when the lex basis is not in shape position (so it
   handles any radical zero-dimensional system). The
   Gröbner and Solve actions run **off the main thread** in a Web Worker with live
-  progress and a **Cancel** button (a main-thread fallback covers `file://`). Variables
+  progress and a **Cancel** button (a main-thread fallback covers no-Worker environments). Variables
   to eliminate are chosen from a **dropdown checklist**; you can **assume chosen
   variables are real** (z̄ⱼ ≡ zⱼ) to regenerate a simplified system — often the
   difference between an intractable and a feasible Gröbner basis. Op failures show in a
@@ -535,7 +541,7 @@ view is active.
   Analyze / Constraints / Export), a floating canvas toolbar (zoom · fit · expand /
   collapse · undo / redo), and a contextual **inspector** when you select a node (its
   equation + Duplicate / Copy / Delete, or the eliminate panel for two). From
-  `app/qd-constraints.js` (`QD.QDConstraints`) + `app/algebra/`; an external-CAS / RCTD
+  `app/qd-constraints.mjs` (`QD.QDConstraints`) + `app/algebra/`; an external-CAS / RCTD
   bridge is the remaining future step.
 * **φ(0)** — the Riemann-map center w₀ = φ(0) defaults to the centroid of the poles
   (manually overridable in bounded mode), and now also drives the **symbolic** equation
@@ -608,7 +614,7 @@ view is active.
     Three-pass WebGL 2 renderer with orbit camera (drag rotates, wheel
     zooms, double-click resets). Hover tooltip shows `(x,y,z)` on the
     sphere and the corresponding `w ∈ ℂ`. Math kernel
-    `app/sphere/sphere-common.js` is Float64 throughout (round-trip
+    `app/sphere/sphere-common.mjs` is Float64 throughout (round-trip
     test passes at < 1e-12). The sphere view is particularly useful
     for unbounded Ω, where iterates wander to infinity and the
     spherical wrapping bounds the picture.
@@ -762,7 +768,7 @@ Highlights from the recent ship cadence — full retrospectives in `HANDOFF.md`:
   QD from φ's Laurent expansion at ∞, shows them (formula + coefficient table) with
   capacity / leading-coeff / convergence flags, and optionally plots their roots on
   the domain canvas (roots cluster inside `K`). "Estimate max c" now jumps the slider
-  to *exactly* c\*. (`app/faber-analysis.js`, `app/ui-faber.js`.)
+  to *exactly* c\*. (`app/faber-analysis.mjs`, `app/ui-faber.mjs`.)
 * **Usability / clarity overhaul.** The on-plot status panel no longer obscures the
   domain (shrunk + dockable, persisted), overlay toggles unified into an **Overlays /
   Layers** card with color keys, an example-led first run + dismissible coachmark, a
@@ -770,16 +776,16 @@ Highlights from the recent ship cadence — full retrospectives in `HANDOFF.md`:
   and live solve-phase feedback.
 * **Thesis-example pack + analytic oracles.** A **Thesis example** gallery loads
   curated canonical domains, each with a closed-form *analytic oracle*; an **Analytic
-  oracle** card shows computed-vs-expected with ✓ / ⚠ / ✗. (`app/thesis-examples.js`.)
+  oracle** card shows computed-vs-expected with ✓ / ⚠ / ✗. (`app/thesis-examples.mjs`.)
 * **Annotated-phenomena overlay.** Labels the harmonic-measure hot spot (tip),
   maximum-curvature point, and symmetry axes / group, with an exact symmetry detector
-  read off φ via the conformal-map intertwining (`app/symmetry.js`).
+  read off φ via the conformal-map intertwining (`app/symmetry.mjs`).
 * **Solver accuracy near cusps.** Adaptive quadrature-identity sample escalation,
   Newton conditioning (central-difference Jacobian when ill-conditioned), a c\*
   confidence estimate, and honest near-cusp accuracy reporting.
 * **Boundary observables.** Curvature heat-strip, area / perimeter / centroid /
   moments, harmonic-measure density, and an accuracy estimate, surfaced in a
-  **Geometry & accuracy** card (`app/observables.js`).
+  **Geometry & accuracy** card (`app/observables.mjs`).
 
 Earlier LQD/PQD ship cadence (polynomial-h for unbounded LQDs, the singular-LQD
 q-formula, Schwarz-tab polyPart/γ support, etc.) is retrospected in `HANDOFF.md`.

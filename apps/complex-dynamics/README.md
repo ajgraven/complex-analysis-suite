@@ -45,9 +45,10 @@ Other scripts:
 
 The rendering engine has no dependencies (hand-written WebGL2); a few small libraries
 power peripheral features (KaTeX for formula typesetting, driver.js for the tour, gif.js
-for GIF export), all bundled by Vite. CI (GitHub Actions,
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lint, typecheck, tests, and
-build on every push and pull request.
+for GIF export), all bundled by Vite. CI (the workspace-wide GitHub Actions workflow,
+[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)) runs lint, typecheck, tests, and
+build on every push and pull request, plus a `browser` job that executes the real WebGL2 GLSL
+dual-backend harness in headless Chromium.
 
 ## How it works
 
@@ -666,20 +667,19 @@ skip-table depth.
 
 ## Deployment
 
+From the monorepo root (this app lives at `apps/complex-dynamics`):
+
 ```bash
-npm run build      # outputs static files to dist/
-npm run preview    # sanity-check the build locally
+pnpm --filter complex-dynamics build      # static files → apps/complex-dynamics/dist/
+pnpm --filter complex-dynamics preview    # sanity-check the build locally
 ```
 
-The Vite config sets `base: "./"`, so all asset URLs in the build are
-**relative** — `dist/` works whether it's served from a domain root or a
-sub-path (e.g. a GitHub Pages project site at `/ComplexDynamicsJS/`). The favicon
-is copied from `public/` into `dist/` automatically.
+The Vite config sets `base: "./"`, so all asset URLs are **relative** — `dist/` works served
+from a domain root or a sub-path. The favicon is copied from `public/` into `dist/` automatically.
 
-To publish on **GitHub Pages**, serve the contents of `dist/` (for example via a
-`gh-pages` branch or a Pages GitHub Action that runs `npm ci && npm run build`
-and uploads `dist/`). No extra path configuration is needed because the base is
-already relative.
+Publishing is **manual**: no automated GitHub-Pages workflow is configured in-repo (the only
+GitHub Actions workflow is CI). To publish, serve the contents of `dist/` yourself (e.g. upload it
+to a Pages site); no extra path configuration is needed because the base is already relative.
 
 ## Troubleshooting
 
@@ -774,7 +774,8 @@ gives the per-quantity definitions and conventions.
 If you use this tool's results or images in your work or an academic publication, please cite it.
 
 > Graven, A. (2026). _Complex Dynamics Visualization Tool_ (Version 1.0.0) [Computer software].
-> https://github.com/ajgraven/ComplexDynamicsJS
+> https://github.com/ajgraven/complex-analysis-suite (in `apps/complex-dynamics`; originally the
+> standalone `ComplexDynamicsJS` repo)
 
 ```bibtex
 @software{graven2026complexdynamics,
@@ -782,7 +783,7 @@ If you use this tool's results or images in your work or an academic publication
   title   = {Complex Dynamics Visualization Tool},
   year    = {2026},
   version = {1.0.0},
-  url     = {https://github.com/ajgraven/ComplexDynamicsJS}
+  url     = {https://github.com/ajgraven/complex-analysis-suite}
 }
 ```
 

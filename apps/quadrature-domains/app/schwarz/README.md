@@ -10,17 +10,17 @@ escape-time fractal.
 
 | File | Role |
 | --- | --- |
-| `schwarz-common.js` | Pure math kernel + per-family CPU adapters (`adaptBounded`, `adaptUnbounded`, `adaptBoundedLQD`, …). |
-| `schwarz-webgl.js` | WebGL 2 fragment-shader renderer; same σ-iteration on the GPU. |
-| `schwarz-cpu-worker.js` | `QD.SchwarzCpuWorker` — dedicated Web Worker that computes the CPU escape-time field off the main thread (rebuilds the Schwarz handle from the serializable φ + boundary samples, streams a transferable field snapshot per pyramid pass). Falls back to the in-page renderer on file:// / no-Worker. |
-| `schwarz-ui.js` | Schwarz-tab UI hub: source-φ capture, card builders, `setMode` / view-toggle to Sphere mode, coordinate transforms, and the `sCtx` injection + the four module installs below. |
-| `schwarz-paint.js` | 2D-canvas output layer: field / boundary / orbit / preimage-tree / limit-set painters + colormaps. `QD_UI.installSchwarzPaint(sCtx)`. |
-| `schwarz-render.js` | Progressive escape-time renderer: debounced `requestRecompute` + GPU one-frame path + CPU 4×4→2×2→1×1 pyramid. `QD_UI.installSchwarzRender(sCtx)`. |
-| `schwarz-features.js` | Per-feature compute routines for the analysis / limit-set / forward-dynamics cards: domain-coloring, preimage-tree rebuild, limit-set chaos game, σ level curves, critical orbits, cycle finder, orbit sweep, z-panel pullback, PNG export. `QD_UI.installSchwarzFeatures(sCtx)`. |
-| `schwarz-interaction.js` | Canvas hover / wheel / click / dblclick / pin handlers + `attachCanvasHandlers`. `QD_UI.installSchwarzInteraction(sCtx)`. |
+| `schwarz-common.mjs` | Pure math kernel + per-family CPU adapters (`adaptBounded`, `adaptUnbounded`, `adaptBoundedLQD`, …). |
+| `schwarz-webgl.mjs` | WebGL 2 fragment-shader renderer; same σ-iteration on the GPU. |
+| `schwarz-cpu-worker.mjs` | `QD.SchwarzCpuWorker` — dedicated Web Worker that computes the CPU escape-time field off the main thread (rebuilds the Schwarz handle from the serializable φ + boundary samples, streams a transferable field snapshot per pyramid pass). Falls back to the in-page renderer when Web Workers are unavailable. |
+| `schwarz-ui.mjs` | Schwarz-tab UI hub: source-φ capture, card builders, `setMode` / view-toggle to Sphere mode, coordinate transforms, and the `sCtx` injection + the four module installs below. |
+| `schwarz-paint.mjs` | 2D-canvas output layer: field / boundary / orbit / preimage-tree / limit-set painters + colormaps. `QD_UI.installSchwarzPaint(sCtx)`. |
+| `schwarz-render.mjs` | Progressive escape-time renderer: debounced `requestRecompute` + GPU one-frame path + CPU 4×4→2×2→1×1 pyramid. `QD_UI.installSchwarzRender(sCtx)`. |
+| `schwarz-features.mjs` | Per-feature compute routines for the analysis / limit-set / forward-dynamics cards: domain-coloring, preimage-tree rebuild, limit-set chaos game, σ level curves, critical orbits, cycle finder, orbit sweep, z-panel pullback, PNG export. `QD_UI.installSchwarzFeatures(sCtx)`. |
+| `schwarz-interaction.mjs` | Canvas hover / wheel / click / dblclick / pin handlers + `attachCanvasHandlers`. `QD_UI.installSchwarzInteraction(sCtx)`. |
 
 The last four are the Phase-3 (item E) factory-module split of the former
-2477-line `schwarz-ui.js`; see [ARCHITECTURE.md](../../ARCHITECTURE.md) for the
+2477-line `schwarz-ui.mjs`; see [ARCHITECTURE.md](../../ARCHITECTURE.md) for the
 `installSchwarzX(sCtx)` pattern and install order.
 
 ## Public surface (`QD.Schwarz.*`)
@@ -62,7 +62,7 @@ if (envelope && envelope.success) {
 }
 ```
 
-See [`schwarz-ui.js`](schwarz-ui.js) `captureFromInverseTab` for the
+See [`schwarz-ui.mjs`](schwarz-ui.mjs) `captureFromInverseTab` for the
 canonical reader. The legacy `state.current` path is kept as a
 fallback for the rare case where `QD.PrimarySolution` is unavailable.
 
@@ -108,6 +108,6 @@ all three views, so toggling never re-captures.
 
 | Caller | What it uses |
 | --- | --- |
-| `schwarz-ui.js` (tab activation) | the full module (capture, render, controls) |
-| `sphere/sphere-ui.js` | `_gpuCaps`, the shared GPU shader source via `_shaders` / `_glHelpers` |
+| `schwarz-ui.mjs` (tab activation) | the full module (capture, render, controls) |
+| `sphere/sphere-ui.mjs` | `_gpuCaps`, the shared GPU shader source via `_shaders` / `_glHelpers` |
 | `node-test.js` | `buildSchwarzFromPhi`, `escapeTime`, `makeOrbit` (CPU round-trip tests) |

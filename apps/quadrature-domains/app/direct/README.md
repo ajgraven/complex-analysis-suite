@@ -15,10 +15,10 @@ non-singular / singular (0 ∈ Ω, Blaschke factor).
 
 | File | Role |
 | --- | --- |
-| `direct-common.js` | Math kernel: classical (polynomial / rational / Laurent / numerical) **and** weighted (bounded + unbounded, power + log, non-singular + singular) φ → h. Durand–Kerner polynomial root finder. Fourier boundary verifier. Sample-the-boundary primitives. |
-| `direct-ui.js` | Direct-mode UI hub inside the QD tab (HANDOFF #30 merged the standalone Direct tab into a `inverse \| direct` view-toggle). A compact segmented **Domain-type** control (`#dir-dm-weight` QD/PQD/LQD × `#dir-dm-domain` Bounded/Unbounded/Numerical × `#dir-dm-singular`, inverse-tab style) selects the family; the weight PARAMETER inputs (α/w₀/z₀/c/kernel) live in the φ-input cards. `applyDirectMode()` is the single canonical mode-refresh. Owns `directState`, the card builders, and the `dCtx` injection + the two module installs below. |
-| `direct-recompute.js` | `QD_UI.installDirectRecompute(dCtx)` — the recompute→render pipeline: `recomputeAndRender` dispatches on `directState.mode` to `recomputeBounded`/`recomputeUnbounded`/`recomputeNumerical` (each builds h via the `QD.Direct.*` kernels), renders it (`displayH`), and pushes the weight-honoring boundary to the shared plot (`sampleBoundedPhi`/`pushBoundaryToPlot`). Phase-3 (item E) split. |
-| `direct-verify.js` | `QD_UI.installDirectVerify(dCtx)` — the **Verify** button: `runVerify` dispatches per family (unbounded/bounded weighted → family identity verifier or inverse round-trip; classical → Fourier boundary-identity diagnostic on `sampleAnalyticPhi` samples). Phase-3 (item E) split. |
+| `direct-common.mjs` | Math kernel: classical (polynomial / rational / Laurent / numerical) **and** weighted (bounded + unbounded, power + log, non-singular + singular) φ → h. Durand–Kerner polynomial root finder. Fourier boundary verifier. Sample-the-boundary primitives. |
+| `direct-ui.mjs` | Direct-mode UI hub inside the QD tab (HANDOFF #30 merged the standalone Direct tab into a `inverse \| direct` view-toggle). A compact segmented **Domain-type** control (`#dir-dm-weight` QD/PQD/LQD × `#dir-dm-domain` Bounded/Unbounded/Numerical × `#dir-dm-singular`, inverse-tab style) selects the family; the weight PARAMETER inputs (α/w₀/z₀/c/kernel) live in the φ-input cards. `applyDirectMode()` is the single canonical mode-refresh. Owns `directState`, the card builders, and the `dCtx` injection + the two module installs below. |
+| `direct-recompute.mjs` | `QD_UI.installDirectRecompute(dCtx)` — the recompute→render pipeline: `recomputeAndRender` dispatches on `directState.mode` to `recomputeBounded`/`recomputeUnbounded`/`recomputeNumerical` (each builds h via the `QD.Direct.*` kernels), renders it (`displayH`), and pushes the weight-honoring boundary to the shared plot (`sampleBoundedPhi`/`pushBoundaryToPlot`). Phase-3 (item E) split. |
+| `direct-verify.mjs` | `QD_UI.installDirectVerify(dCtx)` — the **Verify** button: `runVerify` dispatches per family (unbounded/bounded weighted → family identity verifier or inverse round-trip; classical → Fourier boundary-identity diagnostic on `sampleAnalyticPhi` samples). Phase-3 (item E) split. |
 
 ## Public surface (`QD.Direct.*`)
 
@@ -69,7 +69,7 @@ rather than bad data; a non-singular kernel that yields 0 ∈ Ω is flagged
 `{ originInside:true }` ("use the singular kernel"). Origin terms are
 returned **separately** from the finite nodes: bounded-PQD r₀, bounded- /
 unbounded-LQD q; unbounded-PQD-singular has none (Thm 4.3.7's −t/w cancels
-the Φ_φ pole at 0). See the section banners in `direct-common.js`
+the Φ_φ pole at 0). See the section banners in `direct-common.mjs`
 ("SINGULAR weighted forward kernels", "UNBOUNDED weighted forward kernels
 (Theorem 4.3.7)") for the full math + conventions.
 
@@ -115,6 +115,6 @@ direct-mode ∂Ω; mismatches indicate a numerical issue.
 
 | Caller | What it uses |
 | --- | --- |
-| `direct-ui.js` | the entire kernel |
-| `ui.js` (Direct mode toggle) | `QD.Direct._mountUI`, `QD.Direct._activate` (HANDOFF #30) |
+| `direct-ui.mjs` | the entire kernel |
+| `ui.mjs` (Direct mode toggle) | `QD.Direct._mountUI`, `QD.Direct._activate` (HANDOFF #30) |
 | `node-test.js` | All classical + weighted kernels (§DF battery) + the polynomial root finder + parser tests |

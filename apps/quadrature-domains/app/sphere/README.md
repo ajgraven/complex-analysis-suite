@@ -8,9 +8,9 @@ sphere view (HANDOFF #29).
 
 | File | Role |
 | --- | --- |
-| `sphere-common.js` | Pure math kernel: stereographic projection + sphere-mesh builder + Float64 mat4 helpers. |
-| `sphere-webgl.js` | Three-pass WebGL 2 renderer: opaque sphere base, fractal-textured pass, glow overlay. |
-| `sphere-ui.js` | `QD.SphereView.mount(opts) → handle`: orbit camera, drag / wheel zoom, ResizeObserver, hover tooltip. |
+| `sphere-common.mjs` | Pure math kernel: stereographic projection + sphere-mesh builder + Float64 mat4 helpers. |
+| `sphere-webgl.mjs` | Three-pass WebGL 2 renderer: opaque sphere base, fractal-textured pass, glow overlay. |
+| `sphere-ui.mjs` | `QD.SphereView.mount(opts) → handle`: orbit camera, drag / wheel zoom, ResizeObserver, hover tooltip. |
 
 ## Public surface (`QD.Sphere.*`)
 
@@ -46,9 +46,9 @@ re-capture.
 
 ## Float-precision boundary
 
-- `sphere-common.js` is Float64 throughout — round-trip
+- `sphere-common.mjs` is Float64 throughout — round-trip
   `projectToSphere` ∘ `unprojectFromSphere` test passes at < 1e-12.
-- `sphere-webgl.js` is Float32 (GPU constraint) — the small precision
+- `sphere-webgl.mjs` is Float32 (GPU constraint) — the small precision
   loss in the texture lookup is invisible at typical zoom.
 
 ## When this view is most useful
@@ -66,7 +66,7 @@ the sphere sidebar in that case.
 ## P0/P1 integration
 
 - **P0.1a (PrimarySolution).** Sphere snapshots φ + hData via the
-  same envelope path as Schwarz; see `sphere-ui.js _clonePhi` which
+  same envelope path as Schwarz; see `sphere-ui.mjs _clonePhi` which
   carries `lqdBeta` / `lqdGamma` / `q` through (HANDOFF #28).
 - **P0.2 (worker).** No direct interaction; the sphere reads the
   already-solved φ.
@@ -75,5 +75,5 @@ the sphere sidebar in that case.
 
 | Caller | What it uses |
 | --- | --- |
-| `schwarz/schwarz-ui.js` | `QD.SphereView.mount` on first toggle to sphere view |
+| `schwarz/schwarz-ui.mjs` | `QD.SphereView.mount` on first toggle to sphere view |
 | `node-test.js` | `projectToSphere`, `unprojectFromSphere`, mat4 helpers (round-trip tests; no WebGL in Node) |
