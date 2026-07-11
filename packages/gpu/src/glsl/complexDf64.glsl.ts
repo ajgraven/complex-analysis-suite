@@ -41,8 +41,19 @@ cvec cdiv(cvec a, cvec b) {
 cvec cconj(cvec a) { return vec4(a.xy, -a.zw); }
 cvec cre(cvec a) { return vec4(a.xy, 0.0, 0.0); }
 cvec cim(cvec a) { return vec4(a.zw, 0.0, 0.0); }
+// |z| in df64 via HYPOT-style scaling. The direct df_sqrt(re²+im²) squares the fp32 hi limbs, which
+// UNDERFLOW to a subnormal / zero for |z| ≲ 1e-19 (losing the mantissa — and df_log then seeds
+// log(0) = −inf). Scale by the larger hi limb first so the summands stay in [0, 2]. Mirrors the JS
+// reference's Math.hypot (complexJs.ts). (Review PKG-gpu-B-02.)
+vec2 df_cmag(vec2 re, vec2 im) {
+  float m = max(abs(re.x), abs(im.x));
+  if (m == 0.0) return vec2(0.0, 0.0);
+  vec2 rs = df_div(re, vec2(m, 0.0));
+  vec2 is = df_div(im, vec2(m, 0.0));
+  return df_mul(vec2(m, 0.0), df_sqrt(df_add(df_mul(rs, rs), df_mul(is, is))));
+}
 cvec cabs(cvec a) {
-  return vec4(df_sqrt(df_add(df_mul(a.xy, a.xy), df_mul(a.zw, a.zw))), 0.0, 0.0);
+  return vec4(df_cmag(a.xy, a.zw), 0.0, 0.0);
 }
 
 // --- transcendentals: true df64 (built on df_exp/df_log/df_sincos/df_atan2) ---
@@ -53,12 +64,11 @@ cvec cexp(cvec a) {
   return vec4(df_mul(e, sc.zw), df_mul(e, sc.xy));
 }
 cvec clog(cvec a) {
-  vec2 mag2 = df_add(df_mul(a.xy, a.xy), df_mul(a.zw, a.zw));
-  vec2 logr = df_mul(df_log(mag2), vec2(0.5, 0.0)); // log|z| = 0.5·log(re²+im²)
+  vec2 logr = df_log(df_cmag(a.xy, a.zw)); // log|z| directly — hypot-safe (avoids the re²+im² underflow)
   return vec4(logr, df_atan2(a.zw, a.xy));
 }
 cvec csqrt(cvec a) {
-  vec2 rr = df_sqrt(df_add(df_mul(a.xy, a.xy), df_mul(a.zw, a.zw)));
+  vec2 rr = df_cmag(a.xy, a.zw);            // |z| (hypot-safe)
   vec2 sr = df_sqrt(df_mul(df_add(rr, a.xy), vec2(0.5, 0.0)));
   vec2 si = df_sqrt(df_mul(df_sub(rr, a.xy), vec2(0.5, 0.0)));
   return vec4(sr, a.z < 0.0 ? df_neg(si) : si);
