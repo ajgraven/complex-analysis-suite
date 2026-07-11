@@ -268,7 +268,14 @@ const QD = _QD;
       if (gx >= 0 && gx < sState.fieldW && gy >= 0 && gy < sState.fieldH) {
         const idx = gy * sState.fieldW + gx;
         const n = sState.field[idx];
-        const kind = sState.fieldKind ? sState.fieldKind[idx] : KIND_OUTSIDE;
+        // fieldKind stores KIND+1 (0 = unresolved; classes = KIND_*+1) — the same
+        // offset the writers emit (schwarz-render.mjs:232/237, schwarz-worker-entry.mjs)
+        // and the painter reads (schwarz-paint.mjs:126-130). describeKind() switches on
+        // the RAW KIND_* enum, so undo the +1 before labeling; otherwise every class is
+        // reported one off (a fundamental/escape-time pixel reads "in escaping set", an
+        // interior pixel "Newton diverged", etc.). An unresolved cell (0) maps to −1 →
+        // describeKind default → no class shown. (Review QD-schwarz-b-A-02)
+        const kind = sState.fieldKind ? sState.fieldKind[idx] - 1 : KIND_OUTSIDE;
         info += '  ' + describeKind(kind, n);
       }
     } else if (!inZ && w && activeRenderer() === 'gpu' && QD.Schwarz && QD.Schwarz.escapeTime) {

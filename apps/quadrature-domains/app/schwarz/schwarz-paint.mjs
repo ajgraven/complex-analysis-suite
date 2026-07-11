@@ -841,8 +841,14 @@ import { QD_UI } from '../ui-registry.mjs';
   function colormap(name, t) {
     t = Math.max(0, Math.min(1, t));
     if (name === 'cyclic') {
-      const tt = (t * 6) % 1;
-      return interpStops(tt, CMAP.magma);
+      // Match the GPU: ONE magma forward→reverse→forward ramp sampled linearly at t
+      // (schwarz-webgl.js pickColormap('cyclic') = MAGMA++reverse++MAGMA), NOT six
+      // sawtooth repeats of a single forward magma. The old (t*6)%1 fold made the CPU
+      // render a visibly different image (6 hard-edged bands) from the GPU's single
+      // folded ramp for the same escape-time field — breaking the header's CPU↔GPU
+      // parity invariant. Now cyclic sits in the same interpStops(t, stops) relationship
+      // to the GPU LUT as every other palette. (Review QD-schwarz-b-A-01)
+      return interpStops(t, CMAP_CYCLIC);
     }
     return interpStops(t, CMAP[name] || CMAP.magma);
   }
@@ -870,11 +876,17 @@ import { QD_UI } from '../ui-registry.mjs';
     iceandfire: [[10,40,100],[60,120,200],[160,210,240],[245,245,245],[250,210,90],[235,120,40],[170,30,30]],
     twotone:    [[245,245,248],[120,130,200],[40,50,110],[20,30,70]],
   };
+  // cyclic = magma forward → reversed → forward (27 stops), matching schwarz-webgl.js
+  // pickColormap('cyclic'). Precomputed once so the per-pixel colormap() never rebuilds it.
+  const CMAP_CYCLIC = CMAP.magma.concat(CMAP.magma.slice().reverse(), CMAP.magma);
 
 
     return {
       clearCanvas, paintAll, repaintField, paintBoundaryOnTop, paintOrbit,
       paintPreimageTree, paintLimitSet, paintZView, setProgress,
+      // Pure escape-time→RGB helpers (no DOM/canvas). Exposed per this module's
+      // header contract; used by the CPU↔GPU colormap-parity test. (Review QD-schwarz-b-A-01)
+      colormap, cpuComputeT,
     };
   };
 })(typeof window !== 'undefined' ? window : globalThis);
