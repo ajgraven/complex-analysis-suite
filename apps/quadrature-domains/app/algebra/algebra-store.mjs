@@ -1894,8 +1894,13 @@ import _QD from '../solver.mjs';
         : _applyAssumed(_conjMPoly(node.poly));
       if (node.poly.sub(conj).isZero() || node.poly.add(conj).isZero())
         return { ok: false, reason: 'this equation is self-conjugate — its conjugate is the same equation' };
-      for (const m of nodes.values()) if (m.column === node.column && m.poly.equals(conj))
-        return { ok: false, reason: 'the conjugate equation is already present in this column' };
+      // Scope the "already present" dedup to THIS node's own track (as the seed-time twin
+      // maybeAddConjugate does, l.301). Column indices are per-track depths, so after a forkTrack
+      // an equal poly at the SAME index in ANOTHER branch would otherwise wrongly block the
+      // companion this branch needs — leaving its system conjugation-incomplete. (Review QD-algebra-store-B-01)
+      for (const m of nodes.values())
+        if (m.column === node.column && (m.track || 't0') === (node.track || 't0') && m.poly.equals(conj))
+          return { ok: false, reason: 'the conjugate equation is already present in this column' };
       checkpoint();
       const comp = addNode({
         id: nid(), kind: node.kind, poly: conj, rel: node.rel,
@@ -2039,7 +2044,13 @@ import _QD from '../solver.mjs';
         // real-equation count in the hovertext.
         const conj = _applyReality(_applyW0(_conjMPoly(n.poly)));
         selfConj = n.poly.sub(conj).isZero() || n.poly.add(conj).isZero();
-        if (!selfConj) for (const m of nodes.values()) if (m.id !== n.id && m.poly.equals(conj)) { hasCompanion = true; break; }
+        // The companion is seeded in THIS node's own track and column (maybeAddConjugate /
+        // generateConjugate use column: node.column, same track), so scope the scan there.
+        // Without the track+column filter, an equal conjugate poly in another branch (or an
+        // earlier reduction column) is mis-counted as this node's companion, under-reporting
+        // realEquations (1 instead of 2) in the card hovertext / Inspect. (Review QD-algebra-store-B-03)
+        if (!selfConj) for (const m of nodes.values())
+          if (m.id !== n.id && (m.track || 't0') === (n.track || 't0') && m.column === n.column && m.poly.equals(conj)) { hasCompanion = true; break; }
       }
       let realEquations;
       if (n.rel === '=') realEquations = selfConj ? 1 : (hasCompanion ? 1 : 2);
@@ -2486,14 +2497,27 @@ import _QD from '../solver.mjs';
         if (!fr.ok || !fr.factors || fr.factors.length < 2) return;
         const factors = fr.factors.map((f, k) => {
           const vs = [...f.vars()];
-          if (vs.length === 1 && f.degreeIn(vs[0]) === 1) {        // c·v + d ⇒ pin v = −d/c
+          if (vs.length === 1 && f.degreeIn(vs[0]) === 1) {        // c·v + d ⇒ candidate pin v = −d/c
             try {
               const cs = S.uniCoeffs(f, vs[0]);                    // [c0, c1] as Gaussians
               const root = cs[0].mul(S.gaussInt(-1)).div(cs[1]);
               const reimVar = vs[0], m = /^(.*)__(re|im)$/.exec(reimVar), base = m ? m[1] : reimVar;
-              const rr = root.re.toNumber();                       // the reim var is real-valued on the slice
-              const pinValue = (m && m[2] === 'im') ? { re: 0, im: rr } : { re: rr, im: 0 };
-              return { factorIndex: k, kind: 'variable', text: f.toLatex(), reimVar, pinVar: base, pinValue };
+              // A-06: the reim coordinate ranges over ℝ, so a factor with a NON-real root — e.g. the
+              // ℚ(i) split of a real-irreducible v__re²+c into (v__re ∓ i) — has NO real solution and is
+              // not a real pin (the old code dropped root.im, emitting a spurious v = 0 pin).
+              // B-02: pinning the BASE complex variable forces BOTH of its real coordinates. That is
+              // faithful to a single-coordinate factor ONLY when the OTHER coordinate is not an
+              // independent unknown on this slice (i.e. base is real/imaginary here, so its other reim
+              // coordinate is absent from the system). Otherwise a full-complex pin silently forces that
+              // coordinate to 0 and can DROP quadrature domains — so demote to a general case-split
+              // instead of surfacing an over-constraining pin. (Review QD-algebra-store-A-06 / B-02)
+              const otherReim = m ? (base + '__' + (m[2] === 're' ? 'im' : 're')) : null;
+              const overConstrains = otherReim ? reim.vars.indexOf(otherReim) !== -1 : false;
+              if (root.im.isZero() && !overConstrains) {
+                const rr = root.re.toNumber();                     // the reim var is real-valued on the slice
+                const pinValue = (m && m[2] === 'im') ? { re: 0, im: rr } : { re: rr, im: 0 };
+                return { factorIndex: k, kind: 'variable', text: f.toLatex(), reimVar, pinVar: base, pinValue };
+              }
             } catch (e) { /* fall through to general */ }
           }
           return { factorIndex: k, kind: 'general', text: f.toLatex() };

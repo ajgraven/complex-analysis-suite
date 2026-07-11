@@ -188,6 +188,98 @@ module.exports = async function run() {
        !s2.hasCompanion && !s2.selfConj && s2.realEquations === 2);
   }
 
+  // ---- QD-algebra-store-B-01 / B-03: conjugate dedup + companion count are TRACK-scoped ----
+  // After a forkTrack, column indices are per-branch depths, so identical polys sit at the same index
+  // in different tracks. generateConjugate's "already present" dedup and nodeStats' companion scan must
+  // look only within the node's OWN track (as the seed-time maybeAddConjugate does). Otherwise a
+  // conjugate poly living in ANOTHER branch wrongly blocks a companion branch B still needs (B-01), or
+  // is mis-counted as B's companion, under-reporting realEquations (B-03).
+  {
+    const QC = QD.QDConstraints;
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system, { withConjugates: false });      // primals only — NO companions anywhere
+    const loc0 = st.list().find((n) => n.meta && n.meta.block === 'locator');
+    // Fork before any companion exists → branch B has the same primals, still no companions.
+    const fork = st.forkTrack();
+    ok('B-01 setup: forkTrack ok', fork.ok, fork.ok ? '' : fork.reason);
+    const B = fork.track;
+    const loc_b = st.list().find((n) => (n.track || 't0') === B && n.meta && n.meta.block === 'locator');
+    ok('B-01 setup: branch B has its own locator copy', !!loc_b && loc_b.id !== loc0.id);
+    // Add the locator companion ONLY on the parent track t0, leaving B without it.
+    st.setActiveTrack('t0');
+    const gc0 = st.generateConjugate(loc0.id);
+    ok('B-01 setup: t0 gains its locator companion', gc0.ok, gc0.ok ? '' : gc0.reason);
+    const locConjPoly = QC.conjMPoly(loc0.poly);
+    ok('B-01 setup: an equal conj poly now sits in t0 col 0 (would trip the old cross-track guard)',
+       st.list().some((n) => (n.track || 't0') === 't0' && n.column === 0 && n.poly.equals(locConjPoly)));
+
+    // (B-03) nodeStats on B's locator must count TWO real equations — B has no own-branch companion,
+    //         even though t0 holds an equal conjugate poly at the same column index.
+    st.setActiveTrack(B);
+    const sB = st.nodeStats(loc_b.id);
+    ok('B-03: nodeStats(B.locator).hasCompanion === false (companion is in t0, not B)',
+       sB.hasCompanion === false);
+    ok('B-03: nodeStats(B.locator).realEquations === 2 (stands for both real conditions)',
+       sB.realEquations === 2);
+
+    // (B-01) generateConjugate on B's locator must SUCCEED — the equal conj poly in t0 must not block it.
+    const gcB = st.generateConjugate(loc_b.id);
+    ok('B-01: generateConjugate(B.locator) succeeds despite an equal conj poly in track t0',
+       gcB.ok, gcB.ok ? '' : gcB.reason);
+    ok('B-01: the added companion is stamped on branch B', gcB.ok && (gcB.node.track || 't0') === B);
+
+    // Same-track dedup still works: a second call is now correctly refused, and nodeStats sees the pair.
+    const gcB2 = st.generateConjugate(loc_b.id);
+    ok('B-01: second generateConjugate(B.locator) refused (own-branch companion now present)', !gcB2.ok);
+    const sB2 = st.nodeStats(loc_b.id);
+    ok('B-03: with B companion present, nodeStats.realEquations === 1',
+       sB2.realEquations === 1 && sB2.hasCompanion === true);
+  }
+
+  // ---- QD-algebra-store-A-06 / B-02: spuriousFactors emits HONEST pin suggestions ----
+  // A degree-1 univariate factor of a REIM equation is a single-real-coordinate condition. Pinning the
+  // BASE complex variable at the root is faithful ONLY when the root is real (A-06: the ℚ(i) split of a
+  // real-irreducible v__re²+c gives non-real roots ∓i, whose imaginary part the old code silently
+  // dropped → a spurious v=0 pin) AND the base variable's OTHER real coordinate is not an independent
+  // unknown on the slice (B-02: otherwise a full-complex pin forces it to 0, over-constraining and
+  // dropping QDs). Both bad cases must demote to a 'general' case-split; the genuinely-correct case
+  // (real/imaginary base variable) must still surface a 'variable' pin.
+  {
+    const S = QD.Sym, mv = (n) => S.mpolyVar(n), mi = (k) => S.mpolyInt(k);
+    const kinds = (hits) => hits.flatMap((h) => h.factors.map((f) => f.kind));
+    const pins = (hits) => hits.flatMap((h) => h.factors.filter((f) => f.kind === 'variable'));
+
+    // (A-06) z1 real, z1² + 1: reim poly z1__re² + 1 splits over ℚ(i) into (z1__re ∓ i) — non-real roots.
+    // Add the equation first, THEN assumeReal so z1 is genuinely on the real slice (z1 → z1__re, no z1__im).
+    const stA = QD.AlgebraStore.create();
+    stA.addEquation(mv('z1').mul(mv('z1')).add(mi(1)), '=', { withConjugate: false });
+    stA.assumeReal(['z1']);
+    const hitsA = stA.spuriousFactors(null, {}) || [];
+    ok('A-06: real-irreducible v__re²+1 (non-real ℚ(i) roots) is NOT a spurious real pin',
+       hitsA.length > 0 && kinds(hitsA).every((k) => k === 'general') && pins(hitsA).length === 0,
+       'kinds=' + JSON.stringify(kinds(hitsA)));
+
+    // (B-02) z1 COMPLEX, z1²: imag part 2·z1__re·z1__im factors into single-coordinate z1__re, z1__im —
+    // but z1__im (resp. z1__re) is an independent unknown, so a full-complex pin over-constrains → general.
+    const stB = QD.AlgebraStore.create();
+    stB.addEquation(mv('z1').mul(mv('z1')), '=', { withConjugate: false });
+    const hitsB = stB.spuriousFactors(null, {}) || [];
+    const pinsB = pins(hitsB);
+    ok('B-02: single-coordinate factors of a COMPLEX variable are not over-constraining full pins',
+       hitsB.length > 0 && !pinsB.some((f) => f.pinVar === 'z1'),
+       'z1 pins=' + JSON.stringify(pinsB.map((f) => f.pinValue)));
+
+    // (positive) z1 REAL, z1² − z1 = z1__re·(z1__re − 1): real roots 0,1; z1__im absent → correct pins kept.
+    const stC = QD.AlgebraStore.create();
+    stC.addEquation(mv('z1').mul(mv('z1')).sub(mv('z1')), '=', { withConjugate: false });
+    stC.assumeReal(['z1']);
+    const hitsC = stC.spuriousFactors(null, {}) || [];
+    const pinsC = pins(hitsC);
+    ok('A-06/B-02 positive: a REAL base variable still yields correct real pins (feature preserved)',
+       pinsC.length >= 1 && pinsC.every((f) => f.pinVar === 'z1' && Math.abs(f.pinValue.im) < 1e-12),
+       'pins=' + JSON.stringify(pinsC.map((f) => f.pinValue)));
+  }
+
   // ---- Gröbner basis op (multivariate elimination over the selected nodes) ----
   {
     const st = QD.AlgebraStore.create();
