@@ -43,12 +43,23 @@ function isVarName(v: unknown): v is "z" | "c" | "a" {
   return v === "z" || v === "c" || v === "a";
 }
 
-/** True if any object in the tree (depth-bounded) carries an own key that could pollute Object.prototype. */
-export function hasForbiddenKey(value: unknown, depth = 0): boolean {
-  if (depth > 8 || value === null || typeof value !== "object") return false;
-  for (const k of Object.keys(value)) {
-    if (FORBIDDEN_KEYS.includes(k)) return true; // reject BEFORE reading value[k] (never touch __proto__)
-    if (hasForbiddenKey((value as Record<string, unknown>)[k], depth + 1)) return true;
+/** True if any object anywhere in the tree carries an own key that could pollute Object.prototype.
+ *  ITERATIVE (explicit stack): the previous recursive `depth > 8` cutoff silently returned false for a
+ *  `__proto__` nested ≥ 9 levels deep, voiding the "rejected ANYWHERE" contract this boundary advertises.
+ *  A node-count budget fails CLOSED (returns true) rather than skipping — the payload is size-capped
+ *  upstream (MAX_BASE64URL_LEN ⇒ ~48 KB decoded), so a legitimate tree never approaches the budget. */
+export function hasForbiddenKey(value: unknown): boolean {
+  const MAX_NODES = 1_000_000; // far above any real ~48 KB payload's node count; a runaway tree fails closed
+  const stack: unknown[] = [value];
+  let visited = 0;
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (node === null || typeof node !== "object") continue;
+    if (++visited > MAX_NODES) return true; // fail closed: an implausibly huge tree is rejected, not skipped
+    for (const k of Object.keys(node)) {
+      if (FORBIDDEN_KEYS.includes(k)) return true; // reject BEFORE reading node[k] (never touch __proto__)
+      stack.push((node as Record<string, unknown>)[k]);
+    }
   }
   return false;
 }
@@ -95,22 +106,48 @@ function validateProvenance(p: unknown): void {
   }
 }
 
+/** A Viewport (schema.ts): center is Complex, zoom a finite number; centerHiPrec optional (not checked). */
+function isViewport(v: unknown): boolean {
+  return isObject(v) && isComplex(v.center) && isFiniteNum(v.zoom);
+}
+/** A SchwarzReflection.escape spec: predicate ∈ the union; R (when present) a finite number. */
+function isEscapeSpec(v: unknown): boolean {
+  return (
+    isObject(v) &&
+    (v.predicate === "in-omega-complement" || v.predicate === "abs-gt") &&
+    (v.R === undefined || isFiniteNum(v.R))
+  );
+}
+
 function validatePayload(kind: PayloadKind, payload: unknown): void {
   if (!isObject(payload)) throw new InterchangeError(`interchange: payload for kind "${kind}" must be an object`);
   switch (kind) {
     case "schwarz-reflection":
       if (!isMapSpec(payload.sigma)) throw new InterchangeError("interchange: schwarz-reflection.sigma is not a valid MapSpec");
       if (!isConventions(payload.conventions)) throw new InterchangeError("interchange: schwarz-reflection.conventions is missing or invalid");
+      // escape is optional, but a present-yet-malformed escape (bad predicate / non-finite R) used to be
+      // trusted — a consumer reading escape.R got NaN as its escape radius. Validate it when present.
+      if (payload.escape !== undefined && !isEscapeSpec(payload.escape))
+        throw new InterchangeError("interchange: schwarz-reflection.escape is invalid (predicate ∈ {in-omega-complement, abs-gt}; R finite)");
       break;
     case "quadrature-domain":
       if (!isMapSpec(payload.phi)) throw new InterchangeError("interchange: quadrature-domain.phi is not a valid MapSpec");
       if (!isConventions(payload.conventions)) throw new InterchangeError("interchange: quadrature-domain.conventions is missing or invalid");
+      // boundarySamples is optional, but when present must be a bounded Complex[] (the MAX_COEFF_LEN cap the
+      // other Complex[] fields carry — a crafted mega-array otherwise validated and slipped past the cap).
+      if (payload.boundarySamples !== undefined && !isComplexArray(payload.boundarySamples))
+        throw new InterchangeError("interchange: quadrature-domain.boundarySamples is not a bounded Complex[]");
       break;
     case "map":
       if (!isMapSpec(payload)) throw new InterchangeError("interchange: map payload is not a valid MapSpec");
       break;
     case "view":
       if (!isMapSpec(payload.map)) throw new InterchangeError("interchange: view.map is not a valid MapSpec");
+      // viewport is NON-optional (schema.ts View.viewport: Viewport) but was never checked — a "validated"
+      // view envelope could carry a missing/garbage viewport and a consumer read env.payload.viewport.center
+      // as undefined/NaN. Enforce the structural contract the docs promise.
+      if (!isViewport(payload.viewport))
+        throw new InterchangeError("interchange: view.viewport is missing or invalid (needs center:Complex, zoom:number)");
       break;
   }
 }

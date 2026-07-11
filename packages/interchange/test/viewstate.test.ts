@@ -74,6 +74,10 @@ describe("@cas/interchange view-state codec", () => {
     expect(decodeViewState("#vs=" + toBase64Url(proto))).toBeNull();
     const ctor = '{"v":1,"app":"cd","state":{"nested":{"constructor":{"prototype":{"x":1}}}}}';
     expect(decodeViewState("#vs=" + toBase64Url(ctor))).toBeNull();
+    // A __proto__ nested ≥ 9 levels deep: the OLD recursive guard capped at depth 8 and returned false,
+    // letting it escape the "rejected anywhere" contract. The iterative walk now catches it. (P2)
+    const deep = '{"v":1,"app":"cd","state":' + '{"n":'.repeat(10) + '{"__proto__":1}' + "}".repeat(10) + "}";
+    expect(decodeViewState("#vs=" + toBase64Url(deep))).toBeNull();
     // An oversized payload is rejected by the length cap BEFORE any decode work.
     expect(decodeViewState("#vs=" + "A".repeat(70 * 1024))).toBeNull();
   });
