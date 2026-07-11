@@ -1618,6 +1618,8 @@ runFamilyBattery('powerQD_singular', [
 // h with BOTH a finite pole AND a polynomial part steepens the near-origin boundary; the old fixed
 // 2000-sample floor read ~4e-3 there and FALSE-rejected a genuinely univalent QD (identityOK=false).
 // The verifier now escalates the sample count while the residual keeps converging (capped at 16000).
+// Perf: because 2000 is ALWAYS insufficient for that pole+polyPart class, the verifier starts it at
+// the 4000 floor (skipping the known-wasted first sweep); pole-only / polyPart-only keep 2000.
 {
   const famS = QD_NS.Family.unboundedPQD_singular;
   // (A) pole + polyPart together — the false-negative case.
@@ -1629,8 +1631,8 @@ runFamilyBattery('powerQD_singular', [
     ok('B-01: pole+polyPart now CERTIFIED valid (identityOK — was a false negative at N=2000)',
        rPP.primary.identityOK === true, 'maxRelDiff=' + rPP.primary.identity.maxRelDiff.toExponential(2));
     const vPP = famS.verifyQuadratureIdentity(rPP.primary.phi, hPP, {});
-    ok('B-01: verifier escalated the sample count past the 2000 floor for pole+polyPart',
-       vPP.numSamples > 2000, 'numSamples=' + vPP.numSamples);
+    ok('B-01: pole+polyPart verify starts above the 2000 floor (≥4000; skips the wasted first sweep)',
+       vPP.numSamples >= 4000, 'numSamples=' + vPP.numSamples);
     ok('B-01: escalated identity residual is well below identityTol (1e-6)',
        vPP.maxRelDiff < 1e-6, 'maxRelDiff=' + vPP.maxRelDiff.toExponential(2));
   }

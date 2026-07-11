@@ -1312,15 +1312,66 @@ function _solveResultValid(res) {
   return !!(res && res.success && res.primary &&
             res.primary.univalent && res.primary.identityOK);
 }
-function solvePQDWithAutoSwitch(hData, options) {
-  const resF = _solveOnce(hData, options);
-  const wantSingular = !!options.singular;
-  // Requested regime is self-consistent → done in one solve (the common case).
-  if (_solveResultValid(resF) &&
-      originInsideOmega(resF.primary.phi) === wantSingular) {
-    return resF;
+// Univalence WITHOUT the identity check — the probe-solve validity signal used by
+// the auto-switch (a switch decision is geometric, so the probe needs only a
+// univalent φ). NOTE: `_solveOnce` returns success:true whenever ANY primary
+// candidate exists (even a non-univalent best-of-the-bad), so `.univalent` is the
+// load-bearing guard here, not `.success`.
+function _solveResultUnivalent(res) {
+  return !!(res && res.success && res.primary && res.primary.univalent);
+}
+// The identity verify, factored out of `_solveOnce.attachIdentity` so the
+// auto-switch can verify a probe's φ IN PLACE (no re-solve) once geometry has
+// picked the regime. Resolves numSamples/tol exactly as `_solveOnce` does, so an
+// in-place verify is byte-identical to the inline one.
+function _computeIdentity(family, phi, hData, options) {
+  const univalenceSamples = options.univalenceSamples ?? UNIVALENCE_SAMPLES;
+  const identitySamples   = options.identitySamples   ?? univalenceSamples;
+  const identityTol       = options.identityTol       ?? 1e-6;
+  const identity = family.verifyQuadratureIdentity(phi, hData,
+    { numSamples: identitySamples, adaptiveSamples: options.adaptiveSamples });
+  return { identity, identityOK: identity.maxRelDiff < identityTol };
+}
+function _attachIdentityInPlace(family, res, hData, options) {
+  // Idempotent: skip if this φ was already verified (so the "neither regime valid"
+  // fallback below never re-runs a — possibly escalating — verify already done).
+  if (res && res.primary && !res.primary.identity) {
+    const v = _computeIdentity(family, res.primary.phi, hData, options);
+    res.primary.identity = v.identity;
+    res.primary.identityOK = v.identityOK;
   }
-  // Otherwise try the conjugate regime exactly once.
+  return res;
+}
+function solvePQDWithAutoSwitch(hData, options) {
+  const family = selectFamily(options);
+  // Probe the requested regime GEOMETRY-FIRST. identityCheck:false gives a
+  // univalent φ WITHOUT running the (for the singular family, escalating)
+  // quadrature-identity verify. The requested regime is kept only if geometry
+  // matches AND — confirmed by an in-place verify — φ is a genuine QD; otherwise
+  // we switch to the conjugate regime.
+  //
+  // The saving is geometry-first: when the requested regime's geometry already
+  // DISAGREES (0's Ω-membership ≠ the requested singular flag) we switch WITHOUT
+  // ever paying its verify — e.g. a singular request on a non-singular domain skips
+  // the expensive escalating singular verify entirely (switch-down). The common
+  // no-switch case is cost-unchanged: one Newton to the first univalent φ + one
+  // verify. Geometry ALONE is NOT sufficient, though: a wrong-regime φ can be
+  // univalent with a MISLEADING Ω (bounded switch-up — a non-singular φ on a
+  // singular domain reads 0 ∉ Ω), so a geometry MATCH is always confirmed by the
+  // in-place verify, and a match that fails verification falls through to the
+  // switch (it does NOT stay in / re-solve the requested regime).
+  const resF = _solveOnce(hData, Object.assign({}, options, { identityCheck: false }));
+  const wantSingular = !!options.singular;
+  if (_solveResultUnivalent(resF) &&
+      originInsideOmega(resF.primary.phi) === wantSingular) {
+    _attachIdentityInPlace(family, resF, hData, options);   // confirm the matched regime
+    if (_solveResultValid(resF)) return resF;               // genuine QD → done (common case)
+    // Geometry matched but φ is NOT a valid QD ⇒ the requested regime is wrong; fall
+    // through to the conjugate switch (do NOT return / re-solve the requested regime).
+  }
+  // Switch to the conjugate regime exactly once, WITH a full verify (it is the
+  // answer). Reached on geometry mismatch, a non-univalent probe, or a
+  // matched-but-invalid probe. Purely geometric ⇒ it settles, cannot ping-pong.
   const g = Object.assign({}, options);
   delete g.autoSwitchSingular;
   g.singular = !wantSingular;
@@ -1332,9 +1383,11 @@ function solvePQDWithAutoSwitch(hData, options) {
     resG.switchedTo = g.singular ? 'singular' : 'nonsingular';
     return resG;
   }
-  // Neither regime is cleanly valid (a measure-zero tangency) → preserve the
-  // requested regime's result so the user sees the original failure.
-  return resF;
+  // Neither regime is cleanly valid (a measure-zero tangency, or the probe failed)
+  // → return the requested regime's genuine result (verified in place; the guard in
+  // _attachIdentityInPlace avoids re-running a verify already done above), matching
+  // the pre-optimization behavior of returning the requested regime's result.
+  return _attachIdentityInPlace(family, resF, hData, options);
 }
 
 function solveInverseQD(hData, options = {}) {
@@ -1359,7 +1412,6 @@ function _solveOnce(hData, options = {}) {
   const findAlternates    = options.findAlternates !== false;
   const newtonOpts        = options.newton ?? {};
   const contOpts          = options.continuation ?? {};
-  const identityTol       = options.identityTol ?? 1e-6;
   const identityCheck     = options.identityCheck !== false;
 
   const usePhases   = options.usePhases ?? {};
@@ -1381,16 +1433,17 @@ function _solveOnce(hData, options = {}) {
   // estimator does); otherwise it tracks univalenceSamples and the UNBOUNDED-family
   // verifiers apply their own ≥1500 floor internally — so bounded families and the
   // param-slice fast preset keep their cheap, low-N identity check unchanged.
-  const identitySamples = options.identitySamples ?? univalenceSamples;
   const freshInit = () => family.initialGuess(hData, norm);
   const attachIdentity = (sol) => {
     if (!identityCheck) return sol;
     // adaptiveSamples (#11) flows through so callers can opt out of the near-cusp
     // node escalation (the c* estimator does — it gates on geometry near the
-    // cusp). Undefined ⇒ default-on in the verifier.
-    sol.identity = family.verifyQuadratureIdentity(sol.phi, hData,
-      { numSamples: identitySamples, adaptiveSamples: options.adaptiveSamples });
-    sol.identityOK = sol.identity.maxRelDiff < identityTol;
+    // cusp). Undefined ⇒ default-on in the verifier. Delegates to _computeIdentity,
+    // shared with the auto-switch's in-place verify (single source of truth for the
+    // identitySamples / identityTol resolution documented just above).
+    const v = _computeIdentity(family, sol.phi, hData, options);
+    sol.identity = v.identity;
+    sol.identityOK = v.identityOK;
     return sol;
   };
   const isValidQD = (sol) => sol.univalent && (identityCheck ? sol.identityOK : true);

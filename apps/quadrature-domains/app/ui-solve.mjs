@@ -82,6 +82,13 @@ const IDLE_ANALYSIS_TIMEOUT_MS = 250;
 // can't clobber newer state. Mirrors _solveAndRenderToken for the full solve.
 let _liveSolveToken = 0;
 
+// §23 transition cue: the target regime ('singular' | 'non-singular') when the
+// live drag has detected a genuine origin crossing (0's Ω-membership disagrees
+// with the current mode) and the debounced full solve is about to auto-switch —
+// else null. Set each live frame (self-clearing), read by showSolveBusy so the
+// busy indicator explains WHY the (cold, from a new family) recompute is running.
+let _transitionPending = null;
+
 function quickSolveAndRender() {
   const built = buildHData();
   if (!built || built.error) return;
@@ -162,8 +169,16 @@ function quickSolveAndRender() {
     // switch regime when the drag pauses; we still paint the result below so
     // nothing appears stuck.
     if (isPqdAuto) {
-      const consistent = result.univalent && result.identityOK &&
-                         result.originInside === isSingularMode;
+      // A genuine origin crossing = 0's Ω-membership disagrees with the current
+      // singular/non-singular mode ⇒ the debounced full solve will auto-switch the
+      // regime. Flag the target regime so showSolveBusy can label the (slower, cold-
+      // from-a-new-family) recompute as a detected transition — distinct from a
+      // transient identity wobble mid-drag, which we do NOT advertise as a switch.
+      const originCrossed = result.originInside !== isSingularMode;
+      _transitionPending = originCrossed
+        ? (result.originInside ? 'singular' : 'non-singular')
+        : null;
+      const consistent = result.univalent && result.identityOK && !originCrossed;
       if (!consistent) scheduleSolve();
     }
 
@@ -442,9 +457,13 @@ function showSolveBusy() {
   const row = $('#solve-busy-row');
   if (row) row.classList.remove('hidden');
   // Item 8: reset the phase label and clear any prior failure cue on the
-  // "Try harder" button at the start of a fresh solve.
+  // "Try harder" button at the start of a fresh solve. §23: when the live drag has
+  // detected an origin crossing, say so — the recompute is a regime switch (cold
+  // solve of a new family), so this explains the pause rather than looking frozen.
   const phaseEl = $('#solve-phase');
-  if (phaseEl) phaseEl.textContent = 'solving…';
+  if (phaseEl) phaseEl.textContent = _transitionPending
+    ? ('⇄ transition detected — recomputing the ' + _transitionPending + ' case…')
+    : 'solving…';
   const th = $('#try-harder-btn');
   if (th) th.classList.remove('attention');
   const elapsedEl = $('#solve-elapsed');
@@ -461,6 +480,7 @@ function hideSolveBusy() {
   const row = $('#solve-busy-row');
   if (row) row.classList.add('hidden');
   if (_solveElapsedTimer) { clearInterval(_solveElapsedTimer); _solveElapsedTimer = null; }
+  _transitionPending = null;   // consume the §23 transition cue once the solve lands
 }
 function cancelSolve() {
   const PSW = QD.PrimarySolverWorker;
