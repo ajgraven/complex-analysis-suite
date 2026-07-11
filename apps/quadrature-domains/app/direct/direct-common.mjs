@@ -961,8 +961,11 @@ import { makeDurandKerner, objAlgebra } from '@cas/core';
   function csqrt(z) {
     const r = Math.hypot(z.re, z.im);
     if (r < 1e-300) return { re: 0, im: 0 };
-    const u = Math.sqrt((r + z.re) / 2);
-    const v = Math.sqrt((r - z.re) / 2) * Math.sign(z.im || 1);
+    // Clamp each radicand to ≥ 0: for a (near-)negative real, (r ± Re z)/2 can round a hair below 0 in
+    // float64 (hypot's r landing just under |Re z|) → Math.sqrt(NaN). The suite's canonical principal-√
+    // copies (@cas/expr complexJs, correspondence.ts, the GLSL csqrt) clamp for exactly this. (Review XCUT-numeric-02)
+    const u = Math.sqrt(Math.max((r + z.re) / 2, 0));
+    const v = Math.sqrt(Math.max((r - z.re) / 2, 0)) * Math.sign(z.im || 1);
     return { re: u, im: v };
   }
 

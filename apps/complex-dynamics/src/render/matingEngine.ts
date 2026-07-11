@@ -38,6 +38,7 @@
  * (z² − e^{±2πi/3})/(z²−1) (the only period-3 values, conjugate siblings tracking conj(c_A)); the
  * basilica ⊔ basilica is obstructed (self-conjugate ½-limb) and yields no map.
  */
+import { makeDurandKerner, tupleAlgebra } from "@cas/core";
 import type { Complex } from "../complex";
 
 // Self-contained complex arithmetic (this module is pure numerics; ∞ is handled combinatorially).
@@ -55,8 +56,11 @@ const cdiv = (p: Complex, q: Complex): Complex => {
 const csqrt = (p: Complex): Complex => {
   const r = Math.hypot(p[0], p[1]);
   if (r === 0) return [0, 0];
-  const re = Math.sqrt((r + p[0]) / 2);
-  const im = Math.sqrt((r - p[0]) / 2);
+  // Clamp each radicand to ≥ 0: for a (near-)negative real, (r ± Re z)/2 can round a hair below 0 in
+  // float64 (hypot's r landing just under |Re z|) → Math.sqrt(NaN). The suite's canonical principal-√
+  // copies (@cas/expr complexJs, correspondence.ts, the GLSL csqrt) clamp for exactly this. (Review XCUT-numeric-02)
+  const re = Math.sqrt(Math.max((r + p[0]) / 2, 0));
+  const im = Math.sqrt(Math.max((r - p[0]) / 2, 0));
   return [re, p[1] < 0 ? -im : im];
 };
 const cdist = (p: Complex, q: Complex): number => Math.hypot(p[0] - q[0], p[1] - q[1]);
@@ -504,26 +508,35 @@ function polyEval(coeff: Complex[], z: Complex): Complex {
   return s;
 }
 
-/** Durand–Kerner roots of a complex polynomial (low-to-high coefficients); used for fixed points. */
+// @cas/core's generic Weierstrass kernel — the FIFTH copy of this iteration, consolidated here (the other
+// four already import it: CD critical.ts, QD faber-analysis / direct-common, correspondences deltoid).
+const durandKernerKernel = makeDurandKerner(tupleAlgebra);
+
+/**
+ * Durand–Kerner roots of a complex polynomial (low-to-high coefficients); used for fixed points.
+ * Delegates to the shared kernel with `onCoincident:"skip"` — the collision guard this hand-rolled copy
+ * LACKED: for a rational map with (near-)coincident fixed points (a parabolic / degenerate cubic — exactly
+ * the parabolic centres this mating code targets), the old ∏_{j≠i}(z_i−z_j)→0 divided into a NaN and
+ * silently corrupted the multiplier invariant. The kernel skips the collided update instead. Generic
+ * well-separated cubics are unchanged (same monic normalization, same lattice seed, same in-place Seidel
+ * update, well-converged tol). (Review XCUT-numeric-01)
+ */
 function durandKerner(coeff: Complex[]): Complex[] {
   const n = coeff.length - 1;
   const lead = coeff[n];
-  const c = coeff.map((k) => cdiv(k, lead));
-  const roots: Complex[] = [];
+  const c = coeff.map((k) => cdiv(k, lead)); // monic
+  const seeds: Complex[] = [];
   for (let i = 0; i < n; i++)
-    roots.push([Math.cos(0.7 * i + 0.3) * (1 + 0.2 * i), Math.sin(0.7 * i + 0.3) * (1 + 0.2 * i)]);
-  for (let it = 0; it < 800; it++) {
-    let moved = 0;
-    for (let i = 0; i < n; i++) {
-      let denom: Complex = ONE;
-      for (let j = 0; j < n; j++) if (j !== i) denom = cmul(denom, csub(roots[i], roots[j]));
-      const q = cdiv(polyEval(c, roots[i]), denom);
-      roots[i] = csub(roots[i], q);
-      moved += Math.hypot(q[0], q[1]);
-    }
-    if (moved < 1e-15) break;
-  }
-  return roots;
+    seeds.push([Math.cos(0.7 * i + 0.3) * (1 + 0.2 * i), Math.sin(0.7 * i + 0.3) * (1 + 0.2 * i)]);
+  const res = durandKernerKernel((z) => polyEval(c, z), seeds, {
+    mode: "seidel",
+    onCoincident: "skip",
+    tol: 1e-14,
+    maxIter: 800,
+  });
+  // onCoincident:"skip" keeps every iterate finite (no bailOnNonFinite), so the kernel always returns a
+  // result; `seeds` is an unreachable, finite fallback that satisfies the return type.
+  return res ? res.roots : seeds;
 }
 
 /**

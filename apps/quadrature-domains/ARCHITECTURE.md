@@ -4,17 +4,19 @@ High-level map of how the Quadrature Domain Solver app fits together.
 For mathematical content, see [THEORY_MAP.md](THEORY_MAP.md). For how
 to extend the app, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-> **⚠ ESM migration in progress (suite Phase 2, `phase-2` branch).** The classic-script module
-> system described below is being ported to native ES modules. Many `app/x.js` files now have a
-> **frozen** classic copy plus an `x.mjs` twin the test suite exercises. **Do not edit a `.js`
-> that has a `.mjs` twin** (they would drift) — make changes in the `.mjs`. Status, recipe, and
-> what remains: [ESM-MIGRATION.md](ESM-MIGRATION.md). The map below still reflects the live
-> (classic) browser app, which is unchanged until the final flip.
+> **✅ ESM migration COMPLETE (suite Phase 2).** This app is now **ES-module-only** and Vite-built:
+> `app/index.html` loads `main.mjs` (a native module + native-module-worker graph), and `vite build`
+> emits a static `dist/`. The classic frozen-`.js` copies and the no-build, `window.QD`-only load
+> model described **below are HISTORICAL** — the subsystem *map* is still an accurate conceptual guide,
+> but the *mechanism* details (vanilla `.js`, "no build step", a global `window.QD` as the only entry)
+> are superseded by the `.mjs` graph. Current build + what changed: [ESM-MIGRATION.md](ESM-MIGRATION.md)
+> and the suite root `CLAUDE.md` status. (Review XCUT-hygiene-01)
 
 ## At a glance
 
-- **Vanilla HTML + JS** — no build step. Open `app/index.html` in any
-  modern browser.
+- **ES modules, Vite-built** — `app/index.html` loads `main.mjs`; `vite build` (root `app/`)
+  emits a static `dist/`. In dev, `vite` serves `app/` with HMR. _(Historically vanilla HTML+JS
+  with no build step — see the banner above; the detailed classic map below is likewise historical.)_
 - **Single namespace** — `window.QD` holds every public function, type,
   and subsystem. ES-module consumers can use the [`app/qd.mjs`](app/qd.mjs)
   façade instead.

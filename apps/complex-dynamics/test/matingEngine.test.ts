@@ -215,4 +215,18 @@ describe("generalMate — the general second parent (Boyd–Henriksen F_{u,v})",
     expect(near(g.s1, h.s1, 1e-6)).toBe(true);
     expect(near(g.s2, h.s2, 1e-6)).toBe(true);
   });
+
+  it("rationalInvariant stays finite + conjugacy-consistent on a DOUBLE fixed point (DK collision guard, XCUT-numeric-01)", () => {
+    // P/Q with a REPEATED fixed point: P(z) − z·Q(z) = (z−1)²(z−3) = z³ − 5z² + 7z − 3. P = −3+8z−4z²,
+    // Q = 1+z−z² (no common factor ⇒ genuinely degree 2; the fixed points are 1, 1, 3). Two of the three
+    // Durand–Kerner estimates collide at z=1, driving ∏_{j≠i}(z_i−z_j)→0; the OLD hand-rolled copy divided
+    // into a NaN and silently corrupted (σ₁,σ₂). The shared kernel's onCoincident:"skip" keeps it finite —
+    // and CORRECT, verified here by Möbius-invariance under z↦2z (P↦[8P0,4P1,2P2], Q↦[4Q0,2Q1,Q2]).
+    const g = rationalInvariant([[-3, 0], [8, 0], [-4, 0]], [[1, 0], [1, 0], [-1, 0]]);
+    expect(Number.isFinite(g.s1[0]) && Number.isFinite(g.s1[1])).toBe(true);
+    expect(Number.isFinite(g.s2[0]) && Number.isFinite(g.s2[1])).toBe(true);
+    const h = rationalInvariant([[-24, 0], [32, 0], [-8, 0]], [[4, 0], [2, 0], [-1, 0]]);
+    expect(near(g.s1, h.s1, 1e-6)).toBe(true);
+    expect(near(g.s2, h.s2, 1e-6)).toBe(true);
+  });
 });
