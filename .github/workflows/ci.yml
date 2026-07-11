@@ -1,8 +1,10 @@
 name: CI
 
-# One workflow for the whole workspace: install → lint → typecheck → test → build
-# (MIGRATION.md Phase 1 step 4). Mirrors the local gate `pnpm lint && pnpm typecheck &&
-# pnpm test && pnpm build`.
+# One workflow for the whole workspace. The `build` job is the main gate:
+# install → lint → typecheck → test → build (MIGRATION.md Phase 1 step 4; mirrors the local
+# gate `pnpm lint && pnpm typecheck && pnpm test && pnpm build`). The parallel `browser` job
+# executes the ACTUAL WebGL2 GLSL (the @cas/gpu dual-backend harness) in headless Chromium —
+# the backstop for float32 GPU-only drift the CPU mirrors can't catch (Review P4).
 
 on:
   push:
@@ -45,3 +47,33 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  # Runs the real WebGL2 GLSL (runGLSL over DUAL_BACKEND_CORPUS) in headless Chromium — the
+  # numeric backstop the node/jsdom gate structurally can't be (Review P4). Kept SEPARATE from
+  # `build` so it never slows the main gate; SwiftShader (software WebGL2) renders it, so the
+  # test uses renderer-appropriate tolerances (arithmetic float32-exact, transcendentals ~1e-3).
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # Cache the browser binary across runs (keyed on the lockfile, which pins the playwright version).
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      # Installs Chromium + its OS libraries (headless SwiftShader needs no display).
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser dual-backend harness (real WebGL2 GLSL)
+        run: pnpm test:browser

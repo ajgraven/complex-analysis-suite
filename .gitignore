@@ -30,3 +30,6 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+# Vitest browser-mode failure screenshots
+**/__screenshots__/
