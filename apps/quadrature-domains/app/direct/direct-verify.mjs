@@ -126,6 +126,15 @@ const QD = _QD;
     // mass — this should be ≈ 0 for any valid classical QD.
     const v = QD.Direct.verifyBoundaryIdentity(directState.lastH, phiPts);
 
+    // (A-03) Non-finite boundary data ⇒ the diagnostic is meaningless. Report an honest failure rather
+    // than the old silent green pass (which zeroed the bad samples to negMass ≈ 0).
+    if (v.nonFinite > 0) {
+      resBox.style.color = '#b53030';
+      resBox.textContent = 'Cannot verify: ' + v.nonFinite + ' of ' + v.N + ' boundary samples are non-finite'
+        + ' (check c and the φ coefficients) — no pass reported on degenerate data.';
+      return;
+    }
+
     // Relative score: negMass normalised by the boundary-data scale.
     const relNeg = v.scale > 0 ? v.negMass / v.scale : v.negMass;
     let color;
@@ -162,7 +171,13 @@ const QD = _QD;
       const cs = directState.coeffs.map(parseComplex);
       return QD.Direct.sampleBoundaryPolynomial(cs, N);
     } else if (directState.mode === 'unbounded') {
-      const c = Number(directState.cValue);
+      // Parse c EXACTLY as recompute does (direct-recompute.mjs:334): a positive real via parseComplex.
+      // `Number(cValue)` returned NaN for a complex-form / fraction entry ("1+0i", "1/2"), which then
+      // flowed into sampleBoundaryLaurent → a non-finite boundary that verifyBoundaryIdentity used to zero
+      // and PASS. Reject a non-positive-real c loudly (caught by sampleAnalyticPhi's caller). (A-02)
+      const pc = parseComplex(directState.cValue);
+      if (!(pc.re > 0) || Math.abs(pc.im) > 1e-12) throw new Error('c must be a positive real');
+      const c = pc.re;
       const F = directState.Fcoeffs.map(parseComplex);
       return QD.Direct.sampleBoundaryLaurent(c, F, N);
     } else {
