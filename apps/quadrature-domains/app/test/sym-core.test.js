@@ -847,6 +847,13 @@ module.exports = async function run() {
       const q4 = S.realSolutionCount([mv('x').pow(4).sub(mi(1))], null, ['x']);
       ok('realSolutionCount: ⟨x⁴−1⟩ → 2 real, 4 complex (zero-diagonal inertia pivot)',
          q4.ok && q4.realCount === 2 && q4.complexCount === 4 && q4.multiplicityCount === 4);
+      // Poset Mb build (divisor chain): D=5 basis {1,x,x²,x³,x⁴}, each M_{x^k}=M_{x^{k-1}}·M_x
+      // built bottom-up — guards the predecessor ORDERING (a monomial's divisor must be built
+      // first). x⁵−x = x(x²−1)(x²+1): 3 real {0,±1}, 5 distinct.
+      const q5 = S.realSolutionCount([mv('x').pow(5).sub(mv('x'))], null, ['x']);
+      ok('realSolutionCount: ⟨x⁵−x⟩ → 3 real, 5 distinct (poset Mb divisor chain, D=5)',
+         q5.ok && q5.realCount === 3 && q5.complexCount === 5 && q5.multiplicityCount === 5,
+         JSON.stringify({ real: q5.realCount, complex: q5.complexCount, mult: q5.multiplicityCount }));
       // cross-check vs the eigenvalue solver: #real = eigen solutions with vanishing imag part
       const eigSols = S.solveByEigenvalues(grid, {}).solutions;
       const eigReal = eigSols.filter((s) => ['x', 'y'].every((v) => Math.abs(s[v].im) < 1e-6)).length;

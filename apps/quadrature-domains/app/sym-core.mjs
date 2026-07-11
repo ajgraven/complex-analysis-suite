@@ -2972,7 +2972,22 @@ import _QD from './solver.mjs';
     const Mv = {}; for (const v of vrs) Mv[v] = multiplicationMatrix(G, o, vrs, v).M;
     const matMul = (X, Y) => { const C = []; for (let i = 0; i < D; i++) { const r = new Array(D); for (let j = 0; j < D; j++) { let s = Gaussian.fromInt(0); for (let t = 0; t < D; t++) s = s.add(X[i][t].mul(Y[t][j])); r[j] = s; } C.push(r); } return C; };
     const ident = () => { const I = []; for (let i = 0; i < D; i++) { const r = new Array(D); for (let j = 0; j < D; j++) r[j] = Gaussian.fromInt(i === j ? 1 : 0); I.push(r); } return I; };
-    const Mb = B.map((mono) => { let Mm = ident(); for (const [vn, e] of mono) { for (let p = 0; p < e; p++) Mm = matMul(Mm, Mv[vn]); } return Mm; });
+    // M_{b_k} built bottom-up over the divisibility POSET: the standard monomials are
+    // divisor-closed, so every b_k ≠ 1 factors as b_k = b_j·v with b_j ALSO standard (hence
+    // already built) — ONE matMul per basis monomial (O(D·D³)) instead of Σ_k deg(b_k) of them
+    // (the old per-monomial re-multiply was up to ~O(D⁵)). The M_v commute and matMul is
+    // exact-associative over ℚ(i), so these matrices are BIT-IDENTICAL to the old build.
+    const idxOf = new Map(); B.forEach((m, k) => idxOf.set(monoKey(m), k));
+    const byDeg = B.map((_, k) => k).sort((p, q) => monoTotalDeg(B[p]) - monoTotalDeg(B[q]));
+    const Mb = new Array(D);
+    for (const k of byDeg) {
+      const mono = B[k];
+      if (mono.size === 0) { Mb[k] = ident(); continue; }      // b_k = 1 ⇒ identity
+      const vn = mono.keys().next().value;                     // any variable dividing b_k
+      const pred = new Map(mono); const e = pred.get(vn);
+      if (e > 1) pred.set(vn, e - 1); else pred.delete(vn);     // b_k / v — still a standard monomial
+      Mb[k] = matMul(Mb[idxOf.get(monoKey(pred))], Mv[vn]);
+    }
 
     // Hermite form H[i][j] = trace(M_{b_i}·M_{b_j}) = Σ_{a,b} M_{b_i}[a][b]·M_{b_j}[b][a].
     const H = []; let hasImag = false;
