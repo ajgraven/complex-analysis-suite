@@ -1312,6 +1312,24 @@ import _QD from './solver.mjs';
     return { ok: true, certified: true, count: iso.count, degree: rur.degree, verified: rur.verified, tName, solutions };
   }
 
+  // Serialize a solveRealCertified result to a JSON-safe shape (for postMessage / storage): each
+  // coordinate becomes { re, im, exact, reLo, reHi, imLo, imHi } where re/im are the numeric box
+  // MIDPOINTS (so it drops in wherever a {var:{re,im}} solution is consumed) and reLo…imHi are the
+  // numeric rational-box endpoints (the rigorous ≤ envelope). allExact ⇒ every coordinate is a point.
+  function certifiedRealToJSON(res) {
+    if (!res || !res.ok) return res;
+    const solutions = res.solutions.map((s) => {
+      const o = {};
+      for (const v of Object.keys(s)) {
+        const c = s[v];
+        o[v] = { re: c.mid.re, im: c.mid.im, exact: !!c.exact, reLo: c.re.lo.toNumber(), reHi: c.re.hi.toNumber(), imLo: c.im.lo.toNumber(), imHi: c.im.hi.toNumber() };
+      }
+      return o;
+    });
+    return { ok: true, certified: true, count: res.count, degree: res.degree, verified: res.verified,
+      allExact: solutions.every((s) => Object.keys(s).every((v) => s[v].exact)), solutions };
+  }
+
   // ===========================================================================
   // EXACT univariate factorization over ℚ(i) — the shifted norm trick (Trager's
   // algorithm specialized to k = ℚ(i)), built on Berlekamp–Zassenhaus over ℚ.
@@ -3855,6 +3873,13 @@ import _QD from './solver.mjs';
       if (res.ok) out.solutions = res.solutions;       // {var:{re,im}} — JSON-safe
       return out;
     }
+    if (kind === 'solveRealCertified') {
+      // CERTIFIED real solve (RUR + exact Sturm boxes): the count matches the Hermite real count by
+      // construction (no clustered-root merging), so the caller's verdict can be certified. Serialized
+      // JSON-safe: solutions carry numeric box midpoints (re/im) + endpoints (reLo…imHi) + exact flags.
+      const opts = Object.assign({}, payload.opts, { vars: payload.vars });
+      return certifiedRealToJSON(solveRealCertified(polys, opts));
+    }
     if (kind === 'dimension') {
       const vars = payload.vars || _ambientVars(polys);
       const order = monomialOrder('grevlex', vars);
@@ -4372,7 +4397,7 @@ import _QD from './solver.mjs';
     rat, gauss, gaussInt, mpolyVar, mpolyConst, mpolyInt,
     polyFromTermList: (list) => MPoly.fromTermList(list),
     monoKey, monoCmp,
-    mpolyDet, mpolyDetLaplace, resultant, discriminant, reducedDiscriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, comprehensiveGroebnerSystem, verifySOS, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep, solveRealCertified,
+    mpolyDet, mpolyDetLaplace, resultant, discriminant, reducedDiscriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, comprehensiveGroebnerSystem, verifySOS, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep, solveRealCertified, certifiedRealToJSON,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     inIdeal, eliminationIdeal, idealIntersect, idealQuotient,   // ideal ops: membership, projection, ∩, colon
 
