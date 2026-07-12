@@ -2901,6 +2901,73 @@ import _QD from './solver.mjs';
     return { M, B, D };
   }
 
+  // --- Power sums / coordinate moments over a zero-dim variety (Stickelberger, exact ℚ(i)) ---
+  function _matTrace(M) { let s = Gaussian.fromInt(0); for (let i = 0; i < M.length; i++) s = s.add(M[i][i]); return s; }
+  function _matMul(A, B) {
+    const n = A.length, p = B.length, m = B[0].length, C = [];
+    for (let i = 0; i < n; i++) {
+      const row = new Array(m);
+      for (let j = 0; j < m; j++) { let s = Gaussian.fromInt(0); for (let k = 0; k < p; k++) s = s.add(A[i][k].mul(B[k][j])); row[j] = s; }
+      C.push(row);
+    }
+    return C;
+  }
+
+  // Power sums p_0..p_K of the eigenvalues of a D×D Gaussian matrix M: p_k = trace(M^k), exact.
+  // For M = the multiplication-by-v operator on the quotient R/I of a zero-dim ideal, Stickelberger
+  // makes the eigenvalues the v-coordinates of V(I) (with multiplicity), so p_k = Σ_{p∈V(I)} v(p)^k
+  // — the k-th power-sum "moment" of that coordinate over the solution set. p_0 = D = #solutions.
+  function powerSums(M, K) {
+    const out = [Gaussian.fromInt(M.length)];
+    let Mk = M;
+    for (let k = 1; k <= K; k++) { out.push(_matTrace(Mk)); if (k < K) Mk = _matMul(Mk, M); }
+    return out;
+  }
+
+  // Elementary symmetric functions e_0..e_n from the power sums via Newton's identities
+  // k·e_k = Σ_{i=1}^{k} (−1)^{i−1} e_{k−i} p_i. p is the p_0..p_n array (p_0 unused). Exact ℚ(i).
+  function newtonToElementary(p, n) {
+    const e = [Gaussian.fromInt(1)];
+    for (let k = 1; k <= n; k++) {
+      let acc = Gaussian.fromInt(0);
+      for (let i = 1; i <= k; i++) { const t = e[k - i].mul(p[i]); acc = (i % 2 === 0) ? acc.sub(t) : acc.add(t); }
+      e.push(acc.div(Gaussian.fromInt(k)));
+    }
+    return e;
+  }
+
+  // Characteristic polynomial of the multiplication matrix M — i.e. the (monic) univariate
+  // polynomial the coordinate satisfies over V(I), with multiplicity: Π(λ−λ_i) = Σ_k (−1)^k e_k
+  // λ^{D−k}. Returned as an ASCENDING Gaussian coeff array [c_0..c_D] (c_D = 1). Trace-based
+  // (Leverrier / Newton) — no symbolic λ-determinant; complements the Bareiss det path.
+  function charPolyByTraces(M) {
+    const D = M.length;
+    const e = newtonToElementary(powerSums(M, D), D);
+    const c = new Array(D + 1);
+    for (let k = 0; k <= D; k++) c[D - k] = (k % 2 === 0) ? e[k] : e[k].neg();
+    return c;
+  }
+
+  // QD-facing: the power-sum moments of coordinate `varName` over the (zero-dim) solution set of
+  // `input` — an MPoly[] system or a precomputed { G, order }. Returns { ok, D, moments } with
+  // moments[k] = Σ_{p∈V(I)} varName(p)^k as {re,im} (k = 0..K, moments[0] = D), or { ok:false,
+  // reason }. K defaults to D. Exact ℚ(i) internally; toComplex only at the boundary.
+  function coordinateMoments(input, varName, K, opts) {
+    opts = opts || {};
+    let G, o, vars;
+    if (Array.isArray(input)) {
+      vars = opts.vars || _ambientVars(input);
+      o = _ord(opts.order || monomialOrder('grevlex', vars));
+      try { G = buchberger(input, o, opts); } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    } else { G = input.G; o = _ord(input.order); vars = opts.vars || _ambientVars(G); }
+    if (vars.indexOf(varName) === -1) return { ok: false, reason: 'coordinate "' + varName + '" is not an ambient variable' };
+    if (!isZeroDimensional(G, o, vars)) return { ok: false, reason: 'the system is not zero-dimensional' };
+    let mm;
+    try { mm = multiplicationMatrix(G, o, vars, varName); } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    const ps = powerSums(mm.M, K == null ? mm.D : K);
+    return { ok: true, D: mm.D, moments: ps.map((g) => g.toComplex()) };
+  }
+
   // A unit-free null vector of a complex n×n matrix A ({re,im} entries), i.e. w≠0 with
   // A·w = 0 (Gaussian elimination with partial pivoting; returns null if A has full rank).
   function _complexNullVector(A, n) {
@@ -4195,7 +4262,8 @@ import _QD from './solver.mjs';
     inIdeal, eliminationIdeal, idealIntersect, idealQuotient,   // ideal ops: membership, projection, ∩, colon
 
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, krullDimension, dimensionDegree, fglm, linearReduce, solveZeroDim,
-    multiplicationMatrix, solveByEigenvalues, realSolutionCount, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
+    multiplicationMatrix, powerSums, newtonToElementary, charPolyByTraces, coordinateMoments,
+    solveByEigenvalues, realSolutionCount, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
     seriesDeriv, seriesIntegral, seriesLog, seriesExp,   // series calculus (Taylor)
