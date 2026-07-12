@@ -1,5 +1,6 @@
 // ESM (Phase 2 port) — twin of qd-constraints.js (classic stays frozen). Registers onto the QD namespace.
 import _QD from './solver.mjs';
+import { conjVar } from './qd-varscheme.mjs';   // the shared conjugate-model var scheme (A/C/z/a/w0)
 // =============================================================================
 // qd-constraints.js -- Univalence / geometric constraint generators for the
 // classical BOUNDED QD symbolic system (QD.QDConstraints).
@@ -57,21 +58,10 @@ import _QD from './solver.mjs';
 
   // Conjugate-partner of a variable name (the reality-slice bar). Self-inverse.
   function conjVarName(name) {
-    if (name === Z) return ZB; if (name === ZB) return Z;
-    if (name === Z1) return ZB1; if (name === ZB1) return Z1;
+    if (name === Z) return ZB; if (name === ZB) return Z;             // constraint-specific
+    if (name === Z1) return ZB1; if (name === ZB1) return Z1;         // boundary points ζ
     if (name === Z2) return ZB2; if (name === ZB2) return Z2;
-    if (name === 'w0') return 'wb0'; if (name === 'wb0') return 'w0';
-    if (name === COSL || name === SINL || name === WSAT) return name;   // real / aux
-    let m;
-    if ((m = /^Ab(\d+)_(\d+)$/.exec(name))) return 'A' + m[1] + '_' + m[2];
-    if ((m = /^A(\d+)_(\d+)$/.exec(name))) return 'Ab' + m[1] + '_' + m[2];
-    if ((m = /^Cb(\d+)_(\d+)$/.exec(name))) return 'C' + m[1] + '_' + m[2];
-    if ((m = /^C(\d+)_(\d+)$/.exec(name))) return 'Cb' + m[1] + '_' + m[2];
-    if ((m = /^zb(\d+)$/.exec(name))) return 'z' + m[1];
-    if ((m = /^z(\d+)$/.exec(name))) return 'zb' + m[1];
-    if ((m = /^ab(\d+)$/.exec(name))) return 'a' + m[1];
-    if ((m = /^a(\d+)$/.exec(name))) return 'ab' + m[1];
-    return name;
+    return conjVar(name);   // w0/wb0 + A/C/z/a bar-toggle (shared scheme); cosL/sinL/Wsat/unknown → unchanged
   }
   // Complex conjugate of an MPoly in the conjugate-variable model: bar the
   // coefficients (i→−i) AND swap every variable with its partner.
