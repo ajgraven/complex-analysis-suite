@@ -47,9 +47,10 @@ import _QD from '../solver.mjs';
 // Provenance-op contract: every node writes provenance.op ∈ { generate, fork, conjugate,
 // resultant, groebner, constraint, duplicate, substitute, linear-reduce, assume-real,
 // assume-imaginary, identify, identify-conj, fix-w0, define-subst, add-equation, triangular,
-// factor, rctd, propagate }. ADDING A NEW OP means registering it in SIX switch statements or
-// it renders as a bare label: provText + columnLabel + edgeLabel (algebra-ui.js) and _shortProv
-// + derivationSteps (+ _subsForRepro if it maps to a SymPy .subs) here in the store.
+// factor, rctd, propagate }. ADDING A NEW OP means adding ONE record to the PROV_STORE registry
+// (below: its short/method/subs labels) AND one to algebra-ui's PROV_UI (text/column/edge); a
+// coverage test on each fails loudly if an op is missing. (Historically this fanned out across
+// six hand-synced switch statements — that fan-out is what the two registries replaced.)
 // =============================================================================
 
 (function (global) {

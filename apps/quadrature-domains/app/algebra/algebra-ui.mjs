@@ -26,8 +26,9 @@
 // View/history live in a FLOATING TOOLBAR over the graph (buildToolbar: zoom/fit/fit-width/
 // expand/collapse/undo/redo); a REDUCTION BREADCRUMB (buildBreadcrumb) jumps to any lane via
 // canvas.scrollToColumn. Export covers DAG-JSON, LaTeX, and MATHEMATICA (a column, all
-// columns, or one node). provText/columnLabel render provenance.op (see the store's
-// provenance-op contract; keep them in sync).
+// columns, or one node). provText/columnLabel/edgeLabel render provenance.op from the PROV_UI
+// registry (below) — the UI companion to the store's PROV_STORE; add a node type as one record
+// in each (both coverage-tested).
 //
 // CAS-UX (Stoutemyer): preview-before-commit (cost), navigable derivation tree +
 // backtracking (DAG + undo), equation selection, accumulate alternatives (branch/
@@ -56,6 +57,118 @@ const QD = _QD;
     { form: 'convexBorder', label: 'Convex border', tip: 'Discriminant locus where convexity is lost (export-only for order ≥ 2).' },
     { form: 'starBorder', label: 'Star border', tip: 'Discriminant locus where star-likeness is lost (export-only for order ≥ 2).' },
   ];
+
+  // Provenance-op registry (UI side) — companion to the store's PROV_STORE. ONE table keyed by
+  // provenance.op collapses the three UI label switches (provText/columnLabel/edgeLabel), so a
+  // new node type is ONE record here (+ one in PROV_STORE), not three UI edits. Each field is a
+  // function of (prov, ctx) where ctx = { latexPlain, substList, ratioStrRec, valStr, ns, c } —
+  // the UI helpers injected so the table is PURE + unit-testable (exposed as QD_UI.PROV_UI).
+  // Fields (all optional): text(p,ctx) → node provenance text (absent ⇒ p.op); column(p,ctx) →
+  // per-column transition label, ctx.ns = the column's nodes / ctx.c = its index (absent ⇒
+  // '↳ column ' + c); edge(p,ctx) → terse edge label (absent ⇒ p.op || null). Expressions are
+  // copied VERBATIM from the old switches; a coverage test asserts the contract is complete.
+  const PROV_UI = {
+    generate:  { text: (p) => 'generated (' + (p.block || '?') + ' block)' },
+    fork: {
+      text: (p) => 'forked from ' + (p.fromTrack || '?') + ' · column ' + (p.fromColumn != null ? p.fromColumn : '?'),
+      edge: () => 'fork',
+    },
+    conjugate: {
+      text: (p) => 'conjugate companion of ' + (p.inputs || []).join(', '),
+      edge: () => 'conj',
+    },
+    constraint: { text: (p) => 'univalence constraint (' + (p.form || '?') + ')' },
+    duplicate: {
+      text: (p) => 'copy of ' + (p.inputs || []).join(', '),
+      edge: () => 'copy',
+    },
+    resultant: {
+      text:   (p, { latexPlain }) => 'eliminated ' + latexPlain(p.variable) + ' from ' + (p.inputs || []).join(', '),
+      column: (p, { latexPlain }) => '↳ eliminate ' + latexPlain(p.variable),
+      edge:   (p, { latexPlain }) => 'elim ' + latexPlain(p.variable),
+    },
+    groebner: {
+      text:   (p, { latexPlain }) => 'Gröbner basis (' + (p.eliminate && p.eliminate.length
+        ? 'elim ' + p.eliminate.map(latexPlain).join(', ') : (p.order || 'grevlex'))
+        + ') of ' + (p.inputs || []).join(', '),
+      column: (p, { latexPlain }) => '↳ Gröbner · ' + (p.eliminate && p.eliminate.length ? 'elim ' + p.eliminate.map(latexPlain).join(',') : (p.order || 'grevlex')),
+      edge:   (p, { latexPlain }) => p.eliminate && p.eliminate.length ? 'Gröbner · elim ' + p.eliminate.map(latexPlain).join(',') : 'Gröbner',
+    },
+    substitute: {
+      text:   (p, { substList }) => 'set ' + substList(p),
+      column: (p, { substList }) => '↳ set ' + substList(p),
+      edge:   (p, { latexPlain }) => 'set ' + (((p.variables || []).map((r) => latexPlain(r.name))).join(', ') || (p.variable ? latexPlain(p.variable) : 'value')),
+    },
+    'linear-reduce': {
+      text:   (p, { latexPlain }) => 'linear propagation (eliminated ' + (p.eliminated || []).map(latexPlain).join(', ') + ')',
+      column: (p, { latexPlain }) => '↳ propagate · eliminate ' + (p.eliminated || []).map(latexPlain).join(', '),
+      edge:   () => 'propagate',
+    },
+    'assume-real': {
+      text:   (p, { latexPlain }) => 'assumed ' + (p.vars || []).map(latexPlain).join(', ') + ' real',
+      column: (p, { latexPlain }) => '↳ assume real · ' + (p.vars || []).map(latexPlain).join(', '),
+      edge:   () => 'assume real',
+    },
+    'assume-imaginary': {
+      text:   (p, { latexPlain }) => 'assumed ' + (p.vars || []).map(latexPlain).join(', ') + ' imaginary',
+      column: (p, { latexPlain }) => '↳ assume imaginary · ' + (p.vars || []).map(latexPlain).join(', '),
+      edge:   () => 'assume imag',
+    },
+    identify: {
+      text:   (p, { latexPlain, ratioStrRec }) => 'identified ' + latexPlain(p.drop) + ' = ' + ratioStrRec(p.ratio, p.sign) + latexPlain(p.keep),
+      column: (p, { latexPlain, ratioStrRec }) => '↳ identify ' + latexPlain(p.drop) + ' = ' + ratioStrRec(p.ratio, p.sign) + latexPlain(p.keep),
+      edge:   (p, { latexPlain }) => 'identify ' + latexPlain(p.drop),
+    },
+    'identify-conj': {
+      text:   (p, { latexPlain, ratioStrRec }) => 'identified ' + latexPlain(p.var) + ' = ' + ratioStrRec(p.ratio) + 'conj(' + latexPlain(p.other) + ')',
+      column: (p, { latexPlain, ratioStrRec }) => '↳ identify ' + latexPlain(p.var) + ' = ' + ratioStrRec(p.ratio) + 'conj(' + latexPlain(p.other) + ')',
+      edge:   (p, { latexPlain }) => 'identify ' + latexPlain(p.var),
+    },
+    'fix-w0': {
+      text:   (p, { valStr }) => 'fixed φ(0) = ' + valStr(p.value),
+      column: (p, { valStr }) => '↳ fix φ(0) = ' + valStr(p.value),
+      edge:   () => 'fix φ(0)',
+    },
+    'define-subst': {
+      text:   (p, { latexPlain }) => (p.definition ? 'defining equation for ' : 'define ') + latexPlain(p.newVar)
+        + (p.dropVars && p.dropVars.length ? ' · eliminate ' + p.dropVars.map(latexPlain).join(', ') : '')
+        + (p.carried ? ' (carried through)' : ''),
+      column: (p, { latexPlain }) => '↳ define ' + latexPlain(p.newVar)
+        + (p.dropVars && p.dropVars.length ? ' · elim ' + p.dropVars.map(latexPlain).join(',') : ''),
+      edge:   (p, { latexPlain }) => p.carried ? 'carry' : 'define ' + latexPlain(p.newVar),
+    },
+    'add-equation': {
+      text:   () => 'custom equation (added by hand)',
+      column: () => '↳ custom equation',
+      edge:   () => 'custom eqn',
+    },
+    triangular: {
+      text:   (p) => p.contradiction ? 'triangular decomposition (inconsistent)' : 'triangular decomposition (Wu) of ' + (p.inputs || []).join(', '),
+      column: (p) => p.contradiction ? '↳ triangular · inconsistent' : '↳ triangular decomposition',
+      edge:   () => 'triangular',
+    },
+    factor: {
+      text:   (p) => p.carried ? 'carried through a factor split' : 'factor: case ' + ((p.caseIndex || 0) + 1) + ' of ' + (p.caseCount || '?') + ' (V(p)=⋃V(fᵢ))',
+      column: (p, { ns }) => {
+        const cn = (ns || []).find((n) => n.provenance && n.provenance.op === 'factor' && !n.provenance.carried);
+        const cp = (cn && cn.provenance) || p;
+        return '↳ factor · case ' + ((cp.caseIndex || 0) + 1) + '/' + (cp.caseCount || '?');
+      },
+      edge:   (p) => p.carried ? 'carry' : 'factor case',
+    },
+    rctd: {
+      text:   (p) => 'RCTD cell ' + (p.cell != null ? p.cell : '?') + ' · ' + (p.role || 'chain') + (p.realCount != null ? ' (' + p.realCount + ' real soln' + (p.realCount === 1 ? '' : 's') + ')' : ''),
+      column: (p, { ns }) => {
+        const cells = new Set((ns || []).map((n) => n.provenance && n.provenance.cell).filter((v) => v != null));
+        return '↳ RCTD · ' + cells.size + ' parameter cell' + (cells.size === 1 ? '' : 's');
+      },
+      edge:   () => 'RCTD',
+    },
+    propagate: {
+      text: (p) => 'propagated from column ' + (p.from != null ? p.from : '?') + (p.applied && p.applied.length ? ' (applied ' + p.applied.join(', ') + ')' : ''),
+      edge: () => 'propagate',
+    },
+  };
 
   function installAlgebra(ctx) {
     const $ = ctx.$;
@@ -1978,33 +2091,8 @@ const QD = _QD;
     }
     function provText(prov) {
       if (!prov) return '';
-      switch (prov.op) {
-        case 'generate': return 'generated (' + (prov.block || '?') + ' block)';
-        case 'fork': return 'forked from ' + (prov.fromTrack || '?') + ' · column ' + (prov.fromColumn != null ? prov.fromColumn : '?');
-        case 'conjugate': return 'conjugate companion of ' + (prov.inputs || []).join(', ');
-        case 'resultant': return 'eliminated ' + latexPlain(prov.variable) + ' from ' + (prov.inputs || []).join(', ');
-        case 'groebner': return 'Gröbner basis (' + (prov.eliminate && prov.eliminate.length
-          ? 'elim ' + prov.eliminate.map(latexPlain).join(', ') : (prov.order || 'grevlex'))
-          + ') of ' + (prov.inputs || []).join(', ');
-        case 'constraint': return 'univalence constraint (' + (prov.form || '?') + ')';
-        case 'duplicate': return 'copy of ' + (prov.inputs || []).join(', ');
-        case 'substitute': return 'set ' + substList(prov);
-        case 'linear-reduce': return 'linear propagation (eliminated ' + (prov.eliminated || []).map(latexPlain).join(', ') + ')';
-        case 'assume-real': return 'assumed ' + (prov.vars || []).map(latexPlain).join(', ') + ' real';
-        case 'assume-imaginary': return 'assumed ' + (prov.vars || []).map(latexPlain).join(', ') + ' imaginary';
-        case 'identify': return 'identified ' + latexPlain(prov.drop) + ' = ' + ratioStrRec(prov.ratio, prov.sign) + latexPlain(prov.keep);
-        case 'identify-conj': return 'identified ' + latexPlain(prov.var) + ' = ' + ratioStrRec(prov.ratio) + 'conj(' + latexPlain(prov.other) + ')';
-        case 'fix-w0': return 'fixed φ(0) = ' + valStr(prov.value);
-        case 'define-subst': return (prov.definition ? 'defining equation for ' : 'define ') + latexPlain(prov.newVar)
-          + (prov.dropVars && prov.dropVars.length ? ' · eliminate ' + prov.dropVars.map(latexPlain).join(', ') : '')
-          + (prov.carried ? ' (carried through)' : '');
-        case 'add-equation': return 'custom equation (added by hand)';
-        case 'triangular': return prov.contradiction ? 'triangular decomposition (inconsistent)' : 'triangular decomposition (Wu) of ' + (prov.inputs || []).join(', ');
-        case 'factor': return prov.carried ? 'carried through a factor split' : 'factor: case ' + ((prov.caseIndex || 0) + 1) + ' of ' + (prov.caseCount || '?') + ' (V(p)=⋃V(fᵢ))';
-        case 'rctd': return 'RCTD cell ' + (prov.cell != null ? prov.cell : '?') + ' · ' + (prov.role || 'chain') + (prov.realCount != null ? ' (' + prov.realCount + ' real soln' + (prov.realCount === 1 ? '' : 's') + ')' : '');
-        case 'propagate': return 'propagated from column ' + (prov.from != null ? prov.from : '?') + (prov.applied && prov.applied.length ? ' (applied ' + prov.applied.join(', ') + ')' : '');
-        default: return prov.op || '';
-      }
+      const d = PROV_UI[prov.op];                                  // op → its .text (registry, near installAlgebra)
+      return (d && d.text) ? d.text(prov, { latexPlain, substList, ratioStrRec, valStr }) : (prov.op || '');
     }
     // The per-column LABEL (the relationship to the previous column): column 0 is the
     // original system; each later column is phrased as the transformation that derived it.
@@ -2013,31 +2101,8 @@ const QD = _QD;
         (store.w0Fixed ? ' · φ(0) fixed' : '');
       const rep = (ns || []).find((n) => n.provenance && n.provenance.op !== 'conjugate' && n.provenance.op !== 'propagate') || (ns || [])[0];
       const p = (rep && rep.provenance) || {};
-      switch (p.op) {
-        case 'substitute': return '↳ set ' + substList(p);
-        case 'linear-reduce': return '↳ propagate · eliminate ' + (p.eliminated || []).map(latexPlain).join(', ');
-        case 'assume-real': return '↳ assume real · ' + (p.vars || []).map(latexPlain).join(', ');
-        case 'assume-imaginary': return '↳ assume imaginary · ' + (p.vars || []).map(latexPlain).join(', ');
-        case 'identify': return '↳ identify ' + latexPlain(p.drop) + ' = ' + ratioStrRec(p.ratio, p.sign) + latexPlain(p.keep);
-        case 'identify-conj': return '↳ identify ' + latexPlain(p.var) + ' = ' + ratioStrRec(p.ratio) + 'conj(' + latexPlain(p.other) + ')';
-        case 'fix-w0': return '↳ fix φ(0) = ' + valStr(p.value);
-        case 'define-subst': return '↳ define ' + latexPlain(p.newVar)
-          + (p.dropVars && p.dropVars.length ? ' · elim ' + p.dropVars.map(latexPlain).join(',') : '');
-        case 'add-equation': return '↳ custom equation';
-        case 'resultant': return '↳ eliminate ' + latexPlain(p.variable);
-        case 'groebner': return '↳ Gröbner · ' + (p.eliminate && p.eliminate.length ? 'elim ' + p.eliminate.map(latexPlain).join(',') : (p.order || 'grevlex'));
-        case 'triangular': return p.contradiction ? '↳ triangular · inconsistent' : '↳ triangular decomposition';
-        case 'factor': {
-          const cn = (ns || []).find((n) => n.provenance && n.provenance.op === 'factor' && !n.provenance.carried);
-          const cp = (cn && cn.provenance) || p;
-          return '↳ factor · case ' + ((cp.caseIndex || 0) + 1) + '/' + (cp.caseCount || '?');
-        }
-        case 'rctd': {
-          const cells = new Set((ns || []).map((n) => n.provenance && n.provenance.cell).filter((v) => v != null));
-          return '↳ RCTD · ' + cells.size + ' parameter cell' + (cells.size === 1 ? '' : 's');
-        }
-        default: return '↳ column ' + c;
-      }
+      const d = PROV_UI[p.op];                                     // op → its .column label (registry)
+      return (d && d.column) ? d.column(p, { latexPlain, substList, ratioStrRec, valStr, ns, c }) : ('↳ column ' + c);
     }
     // Structured column-header data for the canvas lane headers: step badge, the
     // transition label (relationship to the previous column), a stats line with the Δ in
@@ -2058,27 +2123,8 @@ const QD = _QD;
     function edgeLabel(edge) {
       const to = store.get(edge.to); if (!to) return null;
       const p = to.provenance; if (!p) return null;
-      switch (p.op) {
-        case 'conjugate': return 'conj';
-        case 'fork': return 'fork';
-        case 'resultant': return 'elim ' + latexPlain(p.variable);
-        case 'groebner': return p.eliminate && p.eliminate.length ? 'Gröbner · elim ' + p.eliminate.map(latexPlain).join(',') : 'Gröbner';
-        case 'triangular': return 'triangular';
-        case 'assume-real': return 'assume real';
-        case 'assume-imaginary': return 'assume imag';
-        case 'identify': return 'identify ' + latexPlain(p.drop);
-        case 'identify-conj': return 'identify ' + latexPlain(p.var);
-        case 'substitute': return 'set ' + (((p.variables || []).map((r) => latexPlain(r.name))).join(', ') || (p.variable ? latexPlain(p.variable) : 'value'));
-        case 'linear-reduce': return 'propagate';
-        case 'fix-w0': return 'fix φ(0)';
-        case 'define-subst': return p.carried ? 'carry' : 'define ' + latexPlain(p.newVar);
-        case 'add-equation': return 'custom eqn';
-        case 'factor': return p.carried ? 'carry' : 'factor case';
-        case 'propagate': return 'propagate';
-        case 'rctd': return 'RCTD';
-        case 'duplicate': return 'copy';
-        default: return p.op || null;
-      }
+      const d = PROV_UI[p.op];                                     // op → its .edge label (registry)
+      return (d && d.edge) ? d.edge(p, { latexPlain }) : (p.op || null);
     }
     function nodeTitle(id) {
       const s = store.nodeStats(id); if (!s) return '';
@@ -2376,4 +2422,5 @@ const QD = _QD;
   }
 
   QD_UI.installAlgebra = installAlgebra;
+  QD_UI.PROV_UI = PROV_UI;   // the UI-side provenance-op registry (testable + companion to the store's PROV_OPS)
 })();
