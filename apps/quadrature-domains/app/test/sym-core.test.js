@@ -1487,6 +1487,15 @@ module.exports = async function run() {
       ok('runJob classify: inconsistent system (1 ∈ I) flagged', rincon.ok && rincon.inconsistent === true && rincon.realCount === 0);
       const rpos = S.runJob('classify', { polys: [mv('x')].map((q) => q.termList()), vars: ['x', 'y'] });
       ok('runJob classify: ⟨x⟩ in (x,y) is positive-dimensional', rpos.ok && rpos.zeroDim === false && rpos.realCount === null);
+      // runJob dimension — the fourth op + its Infinity→null JSON-safety branch (a zero-dim
+      // ideal reports a finite quotient dimension; a positive-dim ideal reports dimension:null
+      // because Infinity isn't structured-clone/JSON-safe across the worker boundary).
+      const rdim0 = S.runJob('dimension', { polys: [mv('x').pow(2).sub(mi(1)), mv('y').pow(2).sub(mi(1))].map((q) => q.termList()), vars: ['x', 'y'] });
+      ok('runJob dimension: zero-dim ⟨x²−1,y²−1⟩ → zeroDim, quotient dimension 4',
+         rdim0.zeroDim === true && rdim0.dimension === 4 && rdim0.numVars === 2);
+      const rdimP = S.runJob('dimension', { polys: [mv('x')].map((q) => q.termList()), vars: ['x', 'y'] });
+      ok('runJob dimension: positive-dim ⟨x⟩ in (x,y) → dimension null (∞→null JSON-safe), zeroDim false',
+         rdimP.zeroDim === false && rdimP.dimension === null && rdimP.numVars === 2);
       ok('runJob: unknown op throws', (() => { try { S.runJob('nope', {}); return false; } catch (e) { return /unknown/i.test(String(e.message || e)); } })());
     }
   }
