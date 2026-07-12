@@ -1609,6 +1609,31 @@ if (QD_UI && QD_UI.installFaber) QD_UI.installFaber(uiCtx);
 // Quadrature↔map equation-system card (classical bounded QD) — ui-qd-equations.js.
 if (QD_UI && QD_UI.installQdEquations) QD_UI.installQdEquations(uiCtx);
 
+// Render an EXTERNALLY-supplied bounded-QD solution (e.g. the Algebra tab's reconstructed φ
+// from a symbolic solve) in the QD plot, then switch to the QD tab — the reverse of
+// ctx.openAlgebra, closing the algebra→geometry loop (roadmap #3b). Reuses the solver's OWN
+// render path (state.current → publishPrimarySolution → showSolution) so the canvas, the
+// mirror, and the Riemann display stay consistent; the algebra tab has already certified the
+// φ univalent, so it is passed as such. Defensive: never throws into the caller.
+uiCtx.showQDSolution = function (phi, hData) {
+  try {
+    if (!phi || !hData || typeof showSolution !== 'function') return false;
+    state.current = { success: true, primary: { phi, univalent: true, identityOK: true, identity: null, method: 'algebra' }, alternates: [], hData };
+    state.current.w0Used = phi.w0;
+    state.current.cUsed = null;
+    state.current.unbounded = !!phi.unbounded;
+    state.selectedSolutionIdx = 0;
+    publishPrimarySolution();
+    showSolution(state.current.primary, hData, /*isPrimary=*/false);
+    const btn = document.querySelector('.tab-btn[data-tab="qd"]');
+    if (btn) btn.click();
+    return true;
+  } catch (e) {
+    if (typeof console !== 'undefined') console.error('showQDSolution:', e);
+    return false;
+  }
+};
+
 // Algebra tab: symbolic elimination workspace (classical bounded QD) — algebra/algebra-ui.js.
 if (QD_UI && QD_UI.installAlgebra) QD_UI.installAlgebra(uiCtx);
 

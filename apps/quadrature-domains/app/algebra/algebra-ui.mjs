@@ -1913,6 +1913,16 @@ const QD = _QD;
             },
           });
         }
+        // #3b (roadmap): hand the reconstructed genuine QD off to the geometric QD tab — the
+        // reverse of ctx.openAlgebra, closing the algebra→geometry loop. ui.mjs's showQDSolution
+        // renders φ via the solver's own render path + switches to the QD tab.
+        if (D >= 1 && ctx && typeof ctx.showQDSolution === 'function' && activeEnv && activeEnv.hData && distinct[0]) {
+          vActions.push({
+            label: 'View in the QD plot',
+            title: 'Render the reconstructed quadrature domain in the geometric QD tab (boundary, cusps, critical set) and switch to it.',
+            onClick: () => { if (!ctx.showQDSolution(distinct[0], activeEnv.hData)) toast('Could not open in the QD plot', { kind: 'error' }); },
+          });
+        }
         if (canvas) canvas.setVerdict({ text: verdict, solutionsText: rows.join('\n'), assumptions: specializationLedger(cl), actions: vActions });
         toast(verdict, bad ? { kind: 'error' } : {});
         });   // solveRealAsync.then
