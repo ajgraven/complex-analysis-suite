@@ -1857,7 +1857,26 @@ const QD = _QD;
         // Honest labeling: even a certified count is only the count ON the active slice (if any).
         verdict += sliceCaveat(cl);
         setStatus(verdict);
-        if (canvas) canvas.setVerdict({ text: verdict, solutionsText: rows.join('\n'), assumptions: specializationLedger(cl) });
+        // #1 (roadmap ALGEBRA_EXTENSIONS): a one-click EXACT boundary curve for a genuine QD.
+        // QE.boundaryCurveFromPhi eliminates the disk parameter to give Q(w,w̄)=0 + the Schwarz
+        // function S(w) — exact over ℚ(i) for the rationalized solution (the honest "=" boundary
+        // polynomial the geometry tab only shows numerically).
+        const vActions = [];
+        if (D >= 1 && QE && typeof QE.boundaryCurveFromPhi === 'function') {
+          vActions.push({
+            label: 'Show exact boundary curve',
+            title: 'Eliminate the disk parameter to get the exact algebraic boundary curve Q(w,w̄)=0 and, when single-valued, the Schwarz function S(w) of the reconstructed quadrature domain (exact over ℚ(i) for the rationalized solution).',
+            onClick: () => {
+              let bc; try { bc = QE.boundaryCurveFromPhi(distinct[0]); }
+              catch (e) { toast('Boundary curve: ' + ((e && e.message) || e), { kind: 'error' }); return; }
+              const latex = [bc.latexQ]; if (bc.latexS) latex.push(bc.latexS);
+              const note = ' · exact boundary curve Q(w,w̄)=0 (over ℚ(i), rationalized solution; order ' + bc.order +
+                (bc.schwarz ? ', Schwarz function S(w) single-valued' : '; Schwarz function algebraic of degree ' + bc.degWb) + ')';
+              if (canvas) canvas.setVerdict({ text: verdict + note, solutionsLatex: latex, solutionsText: rows.join('\n'), assumptions: specializationLedger(cl), actions: vActions });
+            },
+          });
+        }
+        if (canvas) canvas.setVerdict({ text: verdict, solutionsText: rows.join('\n'), assumptions: specializationLedger(cl), actions: vActions });
         toast(verdict, bad ? { kind: 'error' } : {});
         });   // solveRealAsync.then
       });     // classifyAsync.then

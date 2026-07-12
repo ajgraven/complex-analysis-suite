@@ -87,3 +87,29 @@ describe("QDEquations.boundaryCurve — exact Schwarz curve + rational Schwarz f
     expect(() => QE.boundaryCurve(big)).toThrow(/exceeds the resultant cap/);
   });
 });
+
+describe("QDEquations.boundaryCurveFromPhi — numeric φ (a solved solution) → exact curve + LaTeX", () => {
+  it("numeric disk φ rationalizes to the exact curve + single-valued Schwarz + LaTeX", () => {
+    const phi = { w0: { re: 1, im: 0 }, branches: [{ z: { re: 0, im: 0 }, A: [{ re: 2, im: 0 }] }] };
+    const bc = QE.boundaryCurveFromPhi(phi);
+    expect(bc.Q.equals(mpolyInt(3).add(w).add(wb).sub(w.mul(wb)))).toBe(true);   // exact, from float coords
+    expect(bc.schwarz).not.toBeNull();
+    expect(bc.latexQ).toMatch(/= 0$/);
+    expect(bc.latexQ).toContain("\\bar{w}");
+    expect(bc.latexS).toContain("\\bar{w} =");
+  });
+
+  it("numeric cardioid φ = t + 0.5·t² → exact order-2 curve, algebraic Schwarz (latexS null)", () => {
+    const phi = { w0: { re: 0, im: 0 }, branches: [{ z: { re: 0, im: 0 }, A: [{ re: 1, im: 0 }, { re: 0.5, im: 0 }] }] };
+    const bc = QE.boundaryCurveFromPhi(phi);
+    expect([bc.degW, bc.degWb, bc.order]).toEqual([2, 2, 2]);
+    expect(bc.schwarz).toBeNull();
+    expect(bc.latexS).toBeNull();
+    expect(bc.latexQ).toContain("= 0");
+  });
+
+  it("rejects a non-bounded-QD map", () => {
+    expect(() => QE.boundaryCurveFromPhi({ w0: { re: 0, im: 0 }, branches: [] })).toThrow(/not a bounded/);
+    expect(() => QE.boundaryCurveFromPhi(null)).toThrow(/not a bounded/);
+  });
+});

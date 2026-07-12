@@ -848,12 +848,33 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
       const c = Q.coeffsIn('wb');   // ascending degree in wb: [Q0, Q1]
       if (c.length === 2 && !c[1].isZero()) schwarz = new RatFn(c[0].neg(), c[1]);
     }
-    return { Q, degW, degWb, order: N, schwarz };
+    const wtex = (n) => (n === 'wb' ? '\\bar{w}' : n);          // render the 'wb' variable as w̄
+    const latexQ = Q.toLatex(wtex) + ' = 0';
+    const latexS = schwarz ? '\\bar{w} = \\frac{' + schwarz.num.toLatex(wtex) + '}{' + schwarz.den.toLatex(wtex) + '}' : null;
+    return { Q, degW, degWb, order: N, schwarz, latexQ, latexS };
+  }
+
+  // boundaryCurveFromPhi(phi) — boundaryCurve for a NUMERIC bounded-QD map, i.e. the shape
+  // algebra-ui's phiFromAlgebraSolution returns: { w0:{re,im}, branches:[{ z:{re,im},
+  // A:[{re,im}, …] }, …] }. Continued-fraction-rationalizes each coordinate to ℚ(i) (via
+  // ratApprox — the SAME exactification the exact Schur–Cohn univalence path already uses),
+  // then calls boundaryCurve. The curve is EXACT for the rationalized φ (exact outright when
+  // the solution is rational, e.g. the cardioid a=½). Throws if φ is not a bounded QD.
+  function boundaryCurveFromPhi(phi) {
+    const S = getSym();
+    if (!S) throw new Error('boundaryCurveFromPhi: QD.Sym unavailable');
+    const { gauss, rat } = S;
+    const gc = (c) => { const [rn, rd] = _ratApprox((c && c.re) || 0); const [ino, ide] = _ratApprox((c && c.im) || 0); return gauss(rat(rn, rd), rat(ino, ide)); };
+    if (!phi || !Array.isArray(phi.branches) || !phi.branches.length) throw new Error('boundaryCurveFromPhi: not a bounded quadrature-domain map');
+    return boundaryCurve({
+      w0: gc(phi.w0),
+      branches: phi.branches.map((b) => ({ z: gc(b.z), A: (b.A || []).map(gc) })),
+    });
   }
 
   const QDEquations = {
     generateClassicalBounded, generateSchwarzBounded, pointFunctionalSystem, reimSplit, realAxisSymmetry,
-    isClassicalBounded, boundaryCurve,   // boundaryCurve: exact Schwarz curve Q(w,w̄)=0 + rational S(w) from a solved QD
+    isClassicalBounded, boundaryCurve, boundaryCurveFromPhi,   // exact Schwarz curve Q(w,w̄)=0 + rational S(w) from a (solved) QD
     residualAtSolution, residualReimAtSolution,
     buildVarMap, buildRealVarMap,
     systemToLatex, systemToExport, latexOf: latexOfFor,
