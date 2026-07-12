@@ -1259,6 +1259,59 @@ import _QD from './solver.mjs';
     }
     return { ok: false, reason: 'no separating linear form found in ' + (opts.maxTries || 48) + ' tries' };
   }
+
+  // Rigorous rational-interval enclosure of a REAL-coefficient univariate a[0..d] (Rational[],
+  // ascending) over t ∈ [lo,hi], by interval Horner. The returned { lo, hi } provably contains
+  // EVERY value of the polynomial on the bracket; when lo == hi (an exact rational root) it
+  // collapses to the EXACT value a(lo). The enclosure tightens with the bracket width, so the
+  // Sturm refinement (width < tol) makes the coordinate box as sharp as wanted.
+  function _intervalPolyEval(a, lo, hi) {
+    if (!a.length) return { lo: RZERO, hi: RZERO };
+    let AL = a[a.length - 1], AH = a[a.length - 1];         // acc = [a_d, a_d]
+    for (let i = a.length - 2; i >= 0; i--) {
+      const p = [AL.mul(lo), AL.mul(hi), AH.mul(lo), AH.mul(hi)];   // acc·[lo,hi] — min/max of the 4 endpoint products
+      let mn = p[0], mx = p[0];
+      for (let k = 1; k < 4; k++) { if (p[k].sub(mn).sign() < 0) mn = p[k]; if (p[k].sub(mx).sign() > 0) mx = p[k]; }
+      AL = mn.add(a[i]); AH = mx.add(a[i]);                 // + a_i (a point)
+    }
+    return { lo: AL, hi: AH };
+  }
+
+  // Certified real solving of a zero-dimensional system: the RUR (rationalUnivariateRep — an EXACT,
+  // self-certifying univariate representation) + EXACT Sturm real-root isolation of its minimal
+  // polynomial + rigorous interval evaluation of the coordinate maps. Returns, for EVERY real
+  // solution, a rational isolating BOX per coordinate — no floating-point eigenvalue step, so it
+  // never drops a clustered / coincident-projection real root that the numeric eigenvalue solver
+  // would silently merge. Intended for a REAL-coefficient (reim) system: then minPoly(t) is real, its
+  // real roots ARE the real solutions, and every coordinate box has im = [0,0]. A genuinely complex
+  // system whose minPoly carries imaginary coefficients is rejected honestly by the isolation step.
+  //
+  // Result: { ok, certified:true, count, degree, verified, tName, solutions } where each solution is
+  // { [v]: { re:{lo,hi}, im:{lo,hi}, exact, mid:{re,im} } } — Rational box endpoints are the
+  // CERTIFICATE (the true coordinate lies in re + i·im); `mid` is the numeric box midpoint for
+  // convenience; `exact` marks a point box (an exact rational root). Honestly labeled ≤ (a rigorous
+  // bound), = only where a box is a point.
+  function solveRealCertified(input, opts) {
+    opts = opts || {};
+    const rur = rationalUnivariateRep(input, opts);
+    if (!rur.ok) return { ok: false, reason: 'RUR step failed: ' + rur.reason };
+    const tName = rur.tName;
+    const iso = realRootIsolate(rur.minPoly, tName, { tol: opts.tol != null ? opts.tol : 1e-12 });
+    if (!iso.ok) return { ok: false, reason: 'real-root isolation failed: ' + iso.reason };
+    const vars = Object.keys(rur.coords).sort();
+    const reC = {}, imC = {};                               // split each g_v(t) into real + imag Rational coeff arrays once
+    for (const v of vars) { const arr = _uniToArr(rur.coords[v], tName); reC[v] = arr.map((g) => g.re); imC[v] = arr.map((g) => g.im); }
+    const solutions = iso.roots.map((rt) => {
+      const sol = {};
+      for (const v of vars) {
+        const re = _intervalPolyEval(reC[v], rt.lo, rt.hi), im = _intervalPolyEval(imC[v], rt.lo, rt.hi);
+        sol[v] = { re, im, exact: !!rt.exact, mid: { re: (re.lo.toNumber() + re.hi.toNumber()) / 2, im: (im.lo.toNumber() + im.hi.toNumber()) / 2 } };
+      }
+      return sol;
+    });
+    return { ok: true, certified: true, count: iso.count, degree: rur.degree, verified: rur.verified, tName, solutions };
+  }
+
   // ===========================================================================
   // EXACT univariate factorization over ℚ(i) — the shifted norm trick (Trager's
   // algorithm specialized to k = ℚ(i)), built on Berlekamp–Zassenhaus over ℚ.
@@ -4319,7 +4372,7 @@ import _QD from './solver.mjs';
     rat, gauss, gaussInt, mpolyVar, mpolyConst, mpolyInt,
     polyFromTermList: (list) => MPoly.fromTermList(list),
     monoKey, monoCmp,
-    mpolyDet, mpolyDetLaplace, resultant, discriminant, reducedDiscriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, comprehensiveGroebnerSystem, verifySOS, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep,
+    mpolyDet, mpolyDetLaplace, resultant, discriminant, reducedDiscriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, comprehensiveGroebnerSystem, verifySOS, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep, solveRealCertified,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     inIdeal, eliminationIdeal, idealIntersect, idealQuotient,   // ideal ops: membership, projection, ∩, colon
 
