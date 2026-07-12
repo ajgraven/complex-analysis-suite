@@ -1363,6 +1363,53 @@ module.exports = async function run() {
     } else { ok('E4: (Gröbner step skipped — reduction unavailable)', true); }
   }
 
+  // ---- provenance-op registry (PROV_OPS): coverage + golden labels ----
+  // The store's three op-keyed sites (_shortProv, derivationSteps' method line, _subsForRepro)
+  // are now driven by one PROV_STORE table. This guards it two ways: (1) COVERAGE — every op in
+  // the provenance contract has a record, so adding an op that renders bare is a LOUD failure,
+  // not a silent UI gap; (2) GOLDEN — the label strings are the pre-refactor ones (behavior-
+  // preserving). (The derivationSteps/sympyDerivation tests above additionally exercise the
+  // rewired consumers end-to-end.)
+  {
+    const PO = QD.AlgebraStore.PROV_OPS;
+    ok('PROV_OPS: exposed on the store factory', !!PO && typeof PO === 'object');
+    const CONTRACT = ['generate', 'fork', 'conjugate', 'resultant', 'groebner', 'constraint',
+      'duplicate', 'substitute', 'linear-reduce', 'assume-real', 'assume-imaginary', 'identify',
+      'identify-conj', 'fix-w0', 'define-subst', 'add-equation', 'triangular', 'factor', 'rctd',
+      'propagate', 'resolvent'];
+    const missing = CONTRACT.filter((op) => !(op in PO));
+    ok('PROV_OPS: every contract op has a record (no bare-label fallthrough)', missing.length === 0, 'missing: ' + missing.join(', '));
+
+    const shortOf = (op, p) => { const d = PO[op]; return (d && d.short) ? d.short(Object.assign({ op }, p)) : (op || 'reduction'); };
+    ok('PROV_OPS short: generate', shortOf('generate', {}) === 'original system');
+    ok('PROV_OPS short: resultant', shortOf('resultant', { variable: 'z1' }) === 'eliminate z1');
+    ok('PROV_OPS short: groebner (+ default order)', shortOf('groebner', { order: 'lex' }) === 'Groebner (lex)' && shortOf('groebner', {}) === 'Groebner (grevlex)');
+    ok('PROV_OPS short: assume-real', shortOf('assume-real', { vars: ['z1', 'a1'] }) === 'assume real: z1, a1');
+    ok('PROV_OPS short: assume-imaginary', shortOf('assume-imaginary', { vars: ['z1'] }) === 'assume imaginary: z1');
+    ok('PROV_OPS short: substitute', shortOf('substitute', { variables: [{ name: 'A1_1' }, { name: 'A1_2' }] }) === 'set A1_1, A1_2');
+    ok('PROV_OPS short: identify / identify-conj', shortOf('identify', { drop: 'A1_2', keep: 'A1_1' }) === 'identify A1_2 = A1_1' && shortOf('identify-conj', { var: 'A1_2', other: 'A1_1' }) === 'identify A1_2 = conj(A1_1)');
+    ok('PROV_OPS short: define-subst (elim)', shortOf('define-subst', { newVar: 't', dropVars: ['z1'] }) === 'define t (elim z1)');
+    ok('PROV_OPS short: an op with no .short falls back to op', shortOf('fork', {}) === 'fork');
+
+    const methOf = (op, p, n) => { const d = PO[op]; return (d && d.method) ? d.method(Object.assign({ op }, p), n) : op; };
+    ok('PROV_OPS method: resultant', methOf('resultant', { variable: 'z1' }) === 'eliminate via the resultant Res_z1(P, Q)');
+    ok('PROV_OPS method: groebner (elim)', methOf('groebner', { order: 'lex', eliminate: ['z1', 'zb1'] }) === 'Gröbner basis (lex, eliminating z1, zb1)');
+    ok('PROV_OPS method: triangular (mainVar from node.meta)', methOf('triangular', {}, { meta: { mainVar: 'z1' } }) === 'triangular (Wu) decomposition, main variable z1');
+    ok('PROV_OPS method: conjugate', methOf('conjugate', {}) === 'conjugate companion (p̄ = 0)');
+    ok('PROV_OPS method: an op with no .method falls back to op', methOf('add-equation', {}) === 'add-equation');
+
+    // subs(): assume-* are CAS-free (deterministic); the CAS-valued ones assert structure only.
+    const cjStub = (v) => (v === 'z1' ? 'zb1' : v === 'w0' ? 'wb0' : 'x' + v);
+    const CASStub = { sympyValue: () => 'V' };
+    const subsOf = (op, p) => { const d = PO[op]; return (d && d.subs) ? d.subs(Object.assign({ op }, p), { cj: cjStub, CAS: CASStub, conjRec: (r) => r }) : null; };
+    ok('PROV_OPS subs: assume-real → {conj: primal}', JSON.stringify(subsOf('assume-real', { vars: ['z1'] })) === JSON.stringify({ zb1: 'z1' }));
+    ok('PROV_OPS subs: assume-imaginary → {conj: −primal}', JSON.stringify(subsOf('assume-imaginary', { vars: ['z1'] })) === JSON.stringify({ zb1: '-z1' }));
+    ok('PROV_OPS subs: substitute with an incomplete record → null', subsOf('substitute', { variables: [{ name: 'A1_1' }] }) === null);
+    ok('PROV_OPS subs: an engine op (resultant) has no subs → null', subsOf('resultant', { variable: 'z1' }) === null);
+    const fw = subsOf('fix-w0', { value: { re: ['1', '2'] } });
+    ok('PROV_OPS subs: fix-w0 → { w0, wb0 } keys', !!fw && 'w0' in fw && 'wb0' in fw);
+  }
+
   // ---- factoring: factorOf (query) + applyFactor (case-split column) ----
   {
     const st = QD.AlgebraStore.create();

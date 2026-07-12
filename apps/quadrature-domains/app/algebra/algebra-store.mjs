@@ -72,6 +72,105 @@ import _QD from '../solver.mjs';
       || (typeof global !== 'undefined' && global.QD && global.QD.SymRadical) || (typeof QD !== 'undefined' && QD.SymRadical);
   }
 
+  // ===========================================================================
+  // Provenance-op registry (STORE side). ONE table keyed by provenance.op collapses the three
+  // op-keyed store sites so adding a node type means adding ONE record here instead of editing
+  // _shortProv + the derivationSteps method-map + _subsForRepro separately. Fields (all optional):
+  //   short(p)      → terse ASCII transition label. Absent ⇒ the consumer falls back to p.op.
+  //   method(p, n)  → engine-reduction step line for derivationSteps. Absent ⇒ the op name; the
+  //                   substitution-FAMILY ops (substitute/fix-w0/assume-*) omit it on purpose —
+  //                   derivationSteps replays those progressively, not via the method line.
+  //   subs(p, ctx)  → a SymPy .subs map reproducing a substitution-family step (ctx = { cj, CAS,
+  //                   conjRec }); returns null on an incomplete record. Absent ⇒ the consumer
+  //                   returns null. (The UI keeps its own provText/columnLabel/edgeLabel — a
+  //                   companion PROV_UI is the planned follow-on.) A coverage test asserts every
+  //                   op in the provenance contract has a record here.
+  const PROV_STORE = {
+    generate:        { short: () => 'original system' },
+    fork:            {},
+    conjugate:       { method: () => 'conjugate companion (p̄ = 0)' },
+    constraint:      {},
+    duplicate:       { method: () => 'duplicate' },
+    resultant: {
+      short:  (p) => 'eliminate ' + p.variable,
+      method: (p) => 'eliminate via the resultant Res_' + (p.variable || '?') + '(P, Q)',
+    },
+    groebner: {
+      short:  (p) => 'Groebner (' + (p.order || 'grevlex') + ')',
+      method: (p) => 'Gröbner basis (' + (p.order || 'grevlex') + ((p.eliminate && p.eliminate.length) ? ', eliminating ' + p.eliminate.join(', ') : '') + ')',
+    },
+    triangular: {
+      short:  () => 'triangular decomposition',
+      method: (p, n) => 'triangular (Wu) decomposition' + ((n && n.meta && n.meta.mainVar) ? ', main variable ' + n.meta.mainVar : ''),
+    },
+    'linear-reduce': {
+      short:  () => 'linear propagation',
+      method: (p) => 'linear propagation' + ((p.eliminated && p.eliminated.length) ? ' (eliminate ' + p.eliminated.join(', ') + ')' : ''),
+    },
+    propagate: {
+      short:  () => 'propagate constraint',
+      method: () => 'propagate the constraint into the current system',
+    },
+    factor:          { short: () => 'factor case', method: () => 'factor case' },
+    rctd:            { short: () => 'RCTD cell', method: () => 'imported RCTD cell' },
+    resolvent:       { method: () => 'resolvent (characteristic polynomial of multiplication-by-v)' },
+    'add-equation':  { short: () => 'custom equation' },
+    'define-subst': {
+      short:  (p) => 'define ' + p.newVar + (p.dropVars && p.dropVars.length ? ' (elim ' + p.dropVars.join(', ') + ')' : ''),
+      method: (p) => 'define ' + (p.newVar || 't') + ' := g (' + (p.regime || '') + ')' + (p.dropVars && p.dropVars.length ? ', eliminate ' + p.dropVars.join(', ') : ''),
+    },
+    identify: {
+      short:  (p) => 'identify ' + p.drop + ' = ' + p.keep,
+      method: (p) => 'identify ' + (p.drop || '') + ' = ' + (p.keep || ''),
+      subs:   (p, { cj, CAS, conjRec }) => {
+        if (!p.ratio || !p.ratio.re || !p.drop || !p.keep) return null;
+        const map = {}; map[p.drop] = '(' + CAS.sympyValue(p.ratio) + ')*' + p.keep;
+        const cd = cj(p.drop), ck = cj(p.keep);
+        if (cd !== p.drop) map[cd] = '(' + CAS.sympyValue(conjRec(p.ratio)) + ')*' + ck;
+        return map;
+      },
+    },
+    'identify-conj': {
+      short:  (p) => 'identify ' + p.var + ' = conj(' + p.other + ')',
+      method: (p) => 'identify ' + (p.var || '') + ' via conj(' + (p.other || '') + ')',
+      subs:   (p, { cj, CAS, conjRec }) => {
+        if (!p.ratio || !p.ratio.re || !p.var || !p.other) return null;
+        const map = {}; map[p.var] = '(' + CAS.sympyValue(p.ratio) + ')*' + cj(p.other);
+        const cv = cj(p.var);
+        if (cv !== p.var) map[cv] = '(' + CAS.sympyValue(conjRec(p.ratio)) + ')*' + p.other;
+        return map;
+      },
+    },
+    substitute: {
+      short: (p) => 'set ' + (p.variables || []).map((r) => r.name).join(', '),
+      subs:  (p, { cj, CAS, conjRec }) => {
+        const map = {};
+        for (const rec of (p.variables || [])) {
+          if (!rec || !rec.name || !rec.value || !rec.value.re) return null;
+          map[rec.name] = CAS.sympyValue(rec.value);
+          const c = rec.conjugate || (cj(rec.name) !== rec.name ? cj(rec.name) : null);
+          if (c) map[c] = CAS.sympyValue(conjRec(rec.value));
+        }
+        return map;
+      },
+    },
+    'fix-w0': {
+      short: () => 'fix phi(0)',
+      subs:  (p, { CAS, conjRec }) => {
+        if (!p.value || !p.value.re) return null;
+        return { w0: CAS.sympyValue(p.value), wb0: CAS.sympyValue(conjRec(p.value)) };
+      },
+    },
+    'assume-real': {
+      short: (p) => 'assume real: ' + (p.vars || []).join(', '),
+      subs:  (p, { cj }) => { const map = {}; for (const v of (p.vars || [])) { const c = cj(v); if (c !== v) map[c] = v; } return map; },
+    },
+    'assume-imaginary': {
+      short: (p) => 'assume imaginary: ' + (p.vars || []).join(', '),
+      subs:  (p, { cj }) => { const map = {}; for (const v of (p.vars || [])) { const c = cj(v); if (c !== v) map[c] = '-' + v; } return map; },
+    },
+  };
+
   function create() {
     let seq = 0;
     const nodes = new Map();      // id -> node
@@ -2245,22 +2344,10 @@ import _QD from '../solver.mjs';
         }
         return { ok: true, op, progressive: true, steps };
       }
-      // engine reductions: input(s) → method → output summary (no fine-grained internal trace)
-      const method = {
-        resultant: 'eliminate via the resultant Res_' + (prov.variable || '?') + '(P, Q)',
-        groebner: 'Gröbner basis (' + (prov.order || 'grevlex') + ((prov.eliminate && prov.eliminate.length) ? ', eliminating ' + prov.eliminate.join(', ') : '') + ')',
-        triangular: 'triangular (Wu) decomposition' + ((n.meta && n.meta.mainVar) ? ', main variable ' + n.meta.mainVar : ''),
-        'linear-reduce': 'linear propagation' + ((prov.eliminated && prov.eliminated.length) ? ' (eliminate ' + prov.eliminated.join(', ') + ')' : ''),
-        propagate: 'propagate the constraint into the current system',
-        conjugate: 'conjugate companion (p̄ = 0)',
-        duplicate: 'duplicate',
-        factor: 'factor case',
-        identify: 'identify ' + (prov.drop || '') + ' = ' + (prov.keep || ''),
-        'identify-conj': 'identify ' + (prov.var || '') + ' via conj(' + (prov.other || '') + ')',
-        'define-subst': 'define ' + (prov.newVar || 't') + ' := g (' + (prov.regime || '') + ')' + (prov.dropVars && prov.dropVars.length ? ', eliminate ' + prov.dropVars.join(', ') : ''),
-        resolvent: 'resolvent (characteristic polynomial of multiplication-by-v)',
-        rctd: 'imported RCTD cell',
-      }[op] || op;
+      // engine reductions: input(s) → method → output summary (no fine-grained internal trace).
+      // The per-op method line now lives in the PROV_STORE registry (defined near create()).
+      const dm = PROV_STORE[op];
+      const method = (dm && dm.method) ? dm.method(prov, n) : op;
       inputs.forEach((inp, k) => push('input ' + (k + 1) + (inputs.length > 1 ? '/' + inputs.length : '') + ' — column ' + inp.column, inp.poly));
       push(method + ' →', n.poly);
       return { ok: true, op, progressive: false, steps };
@@ -2276,68 +2363,16 @@ import _QD from '../solver.mjs';
     // reduction from the previous column (null for engine reductions that don't map to a subs).
     function _subsForRepro(prov) {
       const QC = getQC(), CAS = _getCAS(); if (!prov || !QC || !QC.conjVarName || !CAS) return null;
-      const cj = (v) => QC.conjVarName(v);
-      const map = {};
-      switch (prov.op) {
-        case 'assume-real':
-          for (const v of (prov.vars || [])) { const c = cj(v); if (c !== v) map[c] = v; }
-          break;
-        case 'assume-imaginary':
-          for (const v of (prov.vars || [])) { const c = cj(v); if (c !== v) map[c] = '-' + v; }
-          break;
-        case 'substitute':
-          for (const rec of (prov.variables || [])) {
-            if (!rec || !rec.name || !rec.value || !rec.value.re) return null;
-            map[rec.name] = CAS.sympyValue(rec.value);
-            const c = rec.conjugate || (cj(rec.name) !== rec.name ? cj(rec.name) : null);
-            if (c) map[c] = CAS.sympyValue(_conjRec(rec.value));
-          }
-          break;
-        case 'fix-w0':
-          if (!prov.value || !prov.value.re) return null;
-          map.w0 = CAS.sympyValue(prov.value); map.wb0 = CAS.sympyValue(_conjRec(prov.value));
-          break;
-        case 'identify': {
-          if (!prov.ratio || !prov.ratio.re || !prov.drop || !prov.keep) return null;
-          map[prov.drop] = '(' + CAS.sympyValue(prov.ratio) + ')*' + prov.keep;
-          const cd = cj(prov.drop), ck = cj(prov.keep);
-          if (cd !== prov.drop) map[cd] = '(' + CAS.sympyValue(_conjRec(prov.ratio)) + ')*' + ck;
-          break;
-        }
-        case 'identify-conj': {
-          if (!prov.ratio || !prov.ratio.re || !prov.var || !prov.other) return null;
-          map[prov.var] = '(' + CAS.sympyValue(prov.ratio) + ')*' + cj(prov.other);
-          const cv = cj(prov.var);
-          if (cv !== prov.var) map[cv] = '(' + CAS.sympyValue(_conjRec(prov.ratio)) + ')*' + prov.other;
-          break;
-        }
-        default: return null;
-      }
-      return Object.keys(map).length ? map : null;
+      const d = PROV_STORE[prov.op]; if (!d || !d.subs) return null;   // op → its .subs builder (registry)
+      const map = d.subs(prov, { cj: (v) => QC.conjVarName(v), CAS, conjRec: _conjRec });
+      return (map && Object.keys(map).length) ? map : null;
     }
     // A terse, ASCII transition label for a column's representative provenance (store-side; the
     // UI's provText isn't available here).
     function _shortProv(p) {
       if (!p) return 'reduction';
-      switch (p.op) {
-        case 'generate': return 'original system';
-        case 'assume-real': return 'assume real: ' + (p.vars || []).join(', ');
-        case 'assume-imaginary': return 'assume imaginary: ' + (p.vars || []).join(', ');
-        case 'substitute': return 'set ' + (p.variables || []).map((r) => r.name).join(', ');
-        case 'fix-w0': return 'fix phi(0)';
-        case 'identify': return 'identify ' + p.drop + ' = ' + p.keep;
-        case 'identify-conj': return 'identify ' + p.var + ' = conj(' + p.other + ')';
-        case 'define-subst': return 'define ' + p.newVar + (p.dropVars && p.dropVars.length ? ' (elim ' + p.dropVars.join(', ') + ')' : '');
-        case 'add-equation': return 'custom equation';
-        case 'linear-reduce': return 'linear propagation';
-        case 'resultant': return 'eliminate ' + p.variable;
-        case 'groebner': return 'Groebner (' + (p.order || 'grevlex') + ')';
-        case 'triangular': return 'triangular decomposition';
-        case 'factor': return 'factor case';
-        case 'rctd': return 'RCTD cell';
-        case 'propagate': return 'propagate constraint';
-        default: return p.op || 'reduction';
-      }
+      const d = PROV_STORE[p.op];                                   // op → its .short label (registry)
+      return (d && d.short) ? d.short(p) : (p.op || 'reduction');
     }
     // Build a runnable SymPy script that reproduces the ACTIVE branch's derivation: declare the
     // symbols, define col0 as the original system (exact ℚ(i) literals), then for each later
@@ -2569,7 +2604,7 @@ import _QD from '../solver.mjs';
     };
   }
 
-  const AlgebraStore = { create };
+  const AlgebraStore = { create, PROV_OPS: PROV_STORE };   // PROV_OPS: the store-side provenance-op registry (testable + shared)
 
   const QD = _QD;
   QD.AlgebraStore = AlgebraStore;
