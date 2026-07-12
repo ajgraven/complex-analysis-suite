@@ -1,5 +1,6 @@
 // ESM (Phase 2 port) — twin of qd-equations.js (classic stays frozen). Registers onto the QD namespace.
 import _QD from './solver.mjs';
+import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conjugate-model var scheme
 // =============================================================================
 // qd-equations.js -- Symbolic generator for the classical BOUNDED QD inverse
 // system (QD.QDEquations). Produces the explicit algebraic equations relating
@@ -154,19 +155,10 @@ import _QD from './solver.mjs';
   // AFTER this file, so we keep self-contained local copies covering exactly the
   // bounded-model names {z_j, A_{j,k}, a_j, C_{j,s}, w₀}. (Future dedup: a shared
   // conj util in sym-core — deliberately not pulled in here.)
-  function conjVarName(name) {
-    if (name === V.w0) return V.wb0; if (name === V.wb0) return V.w0;
-    let m;
-    if ((m = /^Ab(\d+)_(\d+)$/.exec(name))) return 'A' + m[1] + '_' + m[2];
-    if ((m = /^A(\d+)_(\d+)$/.exec(name))) return 'Ab' + m[1] + '_' + m[2];
-    if ((m = /^Cb(\d+)_(\d+)$/.exec(name))) return 'C' + m[1] + '_' + m[2];
-    if ((m = /^C(\d+)_(\d+)$/.exec(name))) return 'Cb' + m[1] + '_' + m[2];
-    if ((m = /^zb(\d+)$/.exec(name))) return 'z' + m[1];
-    if ((m = /^z(\d+)$/.exec(name))) return 'zb' + m[1];
-    if ((m = /^ab(\d+)$/.exec(name))) return 'a' + m[1];
-    if ((m = /^a(\d+)$/.exec(name))) return 'ab' + m[1];
-    return name;
-  }
+  // Conjugate-partner of a variable name (reality-slice bar) via the shared conjugate-model
+  // scheme; non-scheme names (incl. reim vars) pass through unchanged. (V.w0/V.wb0 === 'w0'/'wb0',
+  // which conjVar handles.)
+  function conjVarName(name) { return conjVar(name); }
   // Complex conjugate of an MPoly in the conjugate model: bar the coefficients
   // (i→−i) AND swap every variable with its partner.
   function conjMPoly(p) { return p.conjCoeffs().relabel(conjVarName); }
@@ -563,16 +555,9 @@ import _QD from './solver.mjs';
   // ---- LaTeX rendering ---------------------------------------------------------
   // Variable → LaTeX maps for each model. The generated names (V / VR) follow a
   // regular scheme, so a few anchored regexes cover every variable that appears.
-  function latexOfConjugate(name) {
-    if (name === 'w0') return 'w_0';
-    if (name === 'wb0') return '\\bar{w}_0';
-    let m;
-    if ((m = /^A(b?)(\d+)_(\d+)$/.exec(name))) return (m[1] ? '\\bar{A}' : 'A') + '_{' + m[2] + ',' + m[3] + '}';
-    if ((m = /^C(b?)(\d+)_(\d+)$/.exec(name))) return (m[1] ? '\\bar{C}' : 'C') + '_{' + m[2] + ',' + m[3] + '}';
-    if ((m = /^z(b?)(\d+)$/.exec(name))) return (m[1] ? '\\bar{z}' : 'z') + '_{' + m[2] + '}';
-    if ((m = /^a(b?)(\d+)$/.exec(name))) return (m[1] ? '\\bar{a}' : 'a') + '_{' + m[2] + '}';
-    return name;
-  }
+  // Conjugate-model variable → LaTeX (bar → \bar{·}), via the shared scheme. The reim model's
+  // names are irregular (below) and keep their own map.
+  function latexOfConjugate(name) { return latexVar(name); }
   function latexOfReim(name) {
     if (name === 'wx0') return 'w_0^{\\mathrm{re}}';
     if (name === 'wy0') return 'w_0^{\\mathrm{im}}';
