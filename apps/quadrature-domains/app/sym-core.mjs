@@ -4074,6 +4074,56 @@ import _QD from './solver.mjs';
   }
 
   // ---------------------------------------------------------------------------
+  // Series calculus (Taylor): termwise derivative / integral, and log / exp via the
+  // standard ODE recurrences. Same truncated-array representation over the generic
+  // field (RatFn/FRatFn), each an O(L) or O(L²) loop. (Laurent / negative-order series
+  // are a separate representation — a start-index offset — and are NOT added here.)
+  // ---------------------------------------------------------------------------
+
+  // d/dt of a series: a'[n] = (n+1)·a[n+1]; a'[L]=0 (a[L+1] is beyond the truncation).
+  function seriesDeriv(a, L) {
+    const K = fieldOf(a);
+    if (L == null) L = a.length - 1;
+    const o = seriesZero(L, K);
+    for (let n = 0; n < L; n++) if (a[n + 1] != null) o[n] = a[n + 1].mul(K.fromInt(n + 1));
+    return o;
+  }
+
+  // ∫ of a series with zero constant of integration: I[0]=0, I[n]=a[n−1]/n.
+  function seriesIntegral(a, L) {
+    const K = fieldOf(a);
+    if (L == null) L = a.length - 1;
+    const o = seriesZero(L, K);
+    for (let n = 1; n <= L; n++) if (a[n - 1] != null) o[n] = a[n - 1].div(K.fromInt(n));
+    return o;
+  }
+
+  // log(a(t)) = ∫ a'/a. Requires a[0]=1 (so log(a)[0]=0 — a nonunit / a≠1 constant term
+  // has no symbolic log in the field).
+  function seriesLog(a, L) {
+    const K = fieldOf(a);
+    if (L == null) L = a.length - 1;
+    if (!a[0].sub(K.fromInt(1)).isZero()) throw new Error('seriesLog: constant term a[0] must be 1');
+    return seriesIntegral(seriesMul(seriesDeriv(a, L), seriesRecip(a, L), L), L);
+  }
+
+  // exp(a(t)) via E'=a'·E: E[0]=1, E[n]=(1/n)·Σ_{k=1}^{n} k·a[k]·E[n−k]. Requires a[0]=0
+  // (so exp(a)[0]=1; a nonzero constant term needs the unrepresentable scalar exp(a[0])).
+  function seriesExp(a, L) {
+    const K = fieldOf(a);
+    if (L == null) L = a.length - 1;
+    if (!a[0].isZero()) throw new Error('seriesExp: constant term a[0] must be 0');
+    const E = seriesZero(L, K);
+    E[0] = K.fromInt(1);
+    for (let n = 1; n <= L; n++) {
+      let acc = K.fromInt(0);
+      for (let k = 1; k <= n; k++) if (a[k] != null) acc = acc.add(a[k].mul(K.fromInt(k)).mul(E[n - k]));
+      E[n] = acc.div(K.fromInt(n));
+    }
+    return E;
+  }
+
+  // ---------------------------------------------------------------------------
   // Minimal complex arithmetic for evalComplex (self-contained; QD.Complex is
   // not assumed loaded). {re,im} plain objects.
   // ---------------------------------------------------------------------------
@@ -4112,6 +4162,7 @@ import _QD from './solver.mjs';
     multiplicationMatrix, solveByEigenvalues, realSolutionCount, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
+    seriesDeriv, seriesIntegral, seriesLog, seriesExp,   // series calculus (Taylor)
   };
 
   const QD = _QD;
