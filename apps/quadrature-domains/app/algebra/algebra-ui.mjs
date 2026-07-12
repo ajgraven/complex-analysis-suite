@@ -41,6 +41,7 @@ import { state } from '../ui-state.mjs';
 import { QD_UI } from '../ui-registry.mjs';
 import _QD from '../solver.mjs';
 import { plainVar } from '../qd-varscheme.mjs';   // conjugate-model var scheme (plain-text labels)
+import { domainPlotData } from './domain-mini-plot.mjs';   // #3: reconstructed-domain thumbnail geometry
 const QD = _QD;
 
 (function () {
@@ -1870,9 +1871,11 @@ const QD = _QD;
               let bc; try { bc = QE.boundaryCurveFromPhi(distinct[0]); }
               catch (e) { toast('Boundary curve: ' + ((e && e.message) || e), { kind: 'error' }); return; }
               const latex = [bc.latexQ]; if (bc.latexS) latex.push(bc.latexS);
+              // #3: a thumbnail of the reconstructed domain φ(∂𝔻) alongside the exact curve.
+              let plot = null; try { plot = (QD && typeof QD.evalPhi === 'function') ? domainPlotData(distinct[0], QD.evalPhi) : null; } catch (e) { plot = null; }
               const note = ' · exact boundary curve Q(w,w̄)=0 (over ℚ(i), rationalized solution; order ' + bc.order +
                 (bc.schwarz ? ', Schwarz function S(w) single-valued' : '; Schwarz function algebraic of degree ' + bc.degWb) + ')';
-              if (canvas) canvas.setVerdict({ text: verdict + note, solutionsLatex: latex, solutionsText: rows.join('\n'), assumptions: specializationLedger(cl), actions: vActions });
+              if (canvas) canvas.setVerdict({ text: verdict + note, solutionsLatex: latex, plot, solutionsText: rows.join('\n'), assumptions: specializationLedger(cl), actions: vActions });
             },
           });
         }

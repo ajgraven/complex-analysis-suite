@@ -425,7 +425,7 @@ const QD = _QD;
       el.addEventListener('animationend', () => el.classList.remove('algebra-column-flash'), { once: true });
     }
 
-    // The verdict result card. data: { text, title?, solutionsLatex?:[…], solutionsText?, assumptions?:[…] }.
+    // The verdict result card. data: { text, title?, solutionsLatex?:[…], solutionsText?, assumptions?:[…], plot?, actions?:[…] }.
     // solutionsLatex entries are TYPESET (KaTeX); solutionsText is shown verbatim in a
     // <pre> (for already-formatted / non-math detail). assumptions is a persistent "computed under"
     // ledger of the active specializations (real/imaginary slice, φ(0) gauge fix, factor case) — so a
@@ -450,6 +450,33 @@ const QD = _QD;
         verdict.appendChild(box);
       }
       if (data.solutionsText) { const pre = document.createElement('pre'); pre.className = 'algebra-verdict-sols'; pre.textContent = data.solutionsText; verdict.appendChild(pre); }
+      // Optional reconstructed-domain thumbnail (roadmap #3): data.plot = { boundary:[[x,y]…],
+      // nodes:[[x,y]…], view:[x,y,w,h] } in SVG coordinates (numeric only — built via DOM, never
+      // untrusted markup). Draws the solved domain φ(∂𝔻) + its quadrature nodes beside the exact curve.
+      if (data.plot && data.plot.boundary && data.plot.boundary.length > 2 && data.plot.view) {
+        const P = data.plot, NS = 'http://www.w3.org/2000/svg';
+        const wrap = div('algebra-verdict-plotwrap'); wrap.style.marginTop = '8px';
+        const svg = document.createElementNS(NS, 'svg');
+        svg.setAttribute('viewBox', P.view.join(' '));
+        svg.setAttribute('width', '176'); svg.setAttribute('height', '176');
+        svg.setAttribute('class', 'algebra-verdict-plot'); svg.style.display = 'block'; svg.style.maxWidth = '100%';
+        const path = document.createElementNS(NS, 'path');
+        path.setAttribute('d', 'M' + P.boundary.map((p) => p[0] + ',' + p[1]).join('L') + 'Z');
+        path.setAttribute('fill', 'rgba(91,140,255,0.16)'); path.setAttribute('stroke', '#5b8cff');
+        path.setAttribute('stroke-width', '1.6'); path.setAttribute('vector-effect', 'non-scaling-stroke');
+        svg.appendChild(path);
+        const nr = Math.max(P.view[2], P.view[3]) * 0.028;
+        (P.nodes || []).forEach((n) => {
+          const c = document.createElementNS(NS, 'circle');
+          c.setAttribute('cx', n[0]); c.setAttribute('cy', n[1]); c.setAttribute('r', nr); c.setAttribute('fill', '#e0603a');
+          svg.appendChild(c);
+        });
+        wrap.appendChild(svg);
+        const cap = div('algebra-verdict-plotcap'); cap.textContent = 'reconstructed domain φ(∂𝔻) · quadrature node(s) φ(zⱼ)';
+        cap.style.fontSize = '11px'; cap.style.opacity = '0.7'; cap.style.marginTop = '2px';
+        wrap.appendChild(cap);
+        verdict.appendChild(wrap);
+      }
       // Optional one-click actions (e.g. spurious-component pin/split suggestions).
       if (data.actions && data.actions.length) {
         const bar = div('algebra-verdict-actions');
