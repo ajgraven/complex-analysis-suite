@@ -1410,6 +1410,45 @@ module.exports = async function run() {
     ok('PROV_OPS subs: fix-w0 → { w0, wb0 } keys', !!fw && 'w0' in fw && 'wb0' in fw);
   }
 
+  // ---- worker cap forwarding (CAP_KEYS / capOpts): coverage + filtering + honored ----
+  // _capOpts strips the opts to the structured-clone-safe numeric caps before postMessage.
+  // Guards the whitelist three ways: (1) COVERAGE — every cap the sym-core ops actually read
+  // is forwarded (a missing one is silently dropped for the worker while the sync fallback
+  // still honors it — an uncaught divergence); (2) FILTER — non-serializable/unknown opts
+  // dropped; (3) HONORED — a forwarded cap actually aborts runJob (ties the list to enforcement).
+  {
+    const CK = QD.AlgebraStore.CAP_KEYS, capOpts = QD.AlgebraStore.capOpts, Sx = QD.Sym;
+    const mkv = (n) => Sx.MPoly.variable(n), mki = (k) => Sx.MPoly.fromInt(k);
+    ok('CAP_KEYS/capOpts: exposed on the store factory', Array.isArray(CK) && typeof capOpts === 'function');
+
+    // (1) coverage: every numeric cap the sym-core ops read must be in the whitelist.
+    const OP_CAPS = ['maxBasis', 'maxSteps', 'maxDegree', 'maxTerms', 'maxEigenDim', 'maxHermiteDim', 'maxRounds'];
+    const uncovered = OP_CAPS.filter((k) => !CK.includes(k));
+    ok('CAP_KEYS: covers every numeric cap the sym-core ops read', uncovered.length === 0, 'missing: ' + uncovered.join(', '));
+
+    // (2) filter: preserves every whitelisted cap; drops non-serializable + unknown + null.
+    const full = {}; for (const k of CK) full[k] = 7;
+    const kept = capOpts(full);
+    ok('capOpts: preserves every CAP_KEYS entry (nothing else)', CK.every((k) => kept[k] === 7) && Object.keys(kept).length === CK.length);
+    const filtered = capOpts({ maxSteps: 3, onProgress: () => 0, rootFinder: () => 0, order1: {}, paramValues: {}, bogusKey: 9 });
+    ok('capOpts: keeps a numeric cap, drops non-serializable + unknown opts',
+       filtered.maxSteps === 3 && !('onProgress' in filtered) && !('rootFinder' in filtered)
+       && !('order1' in filtered) && !('paramValues' in filtered) && !('bogusKey' in filtered));
+    ok('capOpts: drops null/undefined-valued caps', Object.keys(capOpts({ maxSteps: null, maxBasis: undefined })).length === 0);
+
+    // (3) honored: a forwarded cap actually aborts runJob. maxBasis:1 rejects a 2-generator
+    // system during basis construction — had capOpts dropped it, runJob would use the large
+    // default and NOT throw.
+    const capped = capOpts({ maxBasis: 1, onProgress: () => 0 });
+    ok('capOpts: maxBasis survives filtering (onProgress dropped)', capped.maxBasis === 1 && !('onProgress' in capped));
+    let threw = false, msg = '';
+    try {
+      Sx.runJob('groebner', { polys: [mkv('x').pow(2).sub(mkv('y')), mkv('x').mul(mkv('y')).sub(mki(1))].map((p) => p.termList()),
+        orderSpec: { kind: 'grevlex', varOrder: ['x', 'y'] }, opts: capped });
+    } catch (e) { threw = true; msg = String(e.message || e); }
+    ok('capOpts→runJob: a forwarded maxBasis cap is honored (aborts the Gröbner)', threw && /basis exceeded/.test(msg), msg);
+  }
+
   // ---- factoring: factorOf (query) + applyFactor (case-split column) ----
   {
     const st = QD.AlgebraStore.create();

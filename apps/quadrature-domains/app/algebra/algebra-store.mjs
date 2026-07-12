@@ -172,6 +172,21 @@ import _QD from '../solver.mjs';
     },
   };
 
+  // The structured-clone-safe numeric caps forwarded to the SymWorker payload (_capOpts).
+  // A9: keep _CAP_KEYS in sync with the numeric opts the sym-core ops actually read
+  // (buchberger maxBasis/maxSteps/maxDegree/maxTerms; solveZeroDim/classify maxEigenDim/
+  // maxHermiteDim/maxRounds; plus the reduced/keepEliminated flags). NON-serializable opts
+  // (rootFinder, onProgress, order1, paramValues) are intentionally dropped — they can't be
+  // postMessage'd, so the worker uses its own defaults. A cap the ops honor but MISSING here
+  // would be silently dropped for the worker while the sync fallback still honored it (an
+  // uncaught divergence), so algebra-store.test.js asserts coverage against that op-cap list.
+  const _CAP_KEYS = ['maxBasis', 'maxSteps', 'maxDegree', 'maxTerms', 'maxEigenDim', 'maxHermiteDim', 'maxRounds', 'reduced', 'keepEliminated'];
+  function _capOpts(opts) {
+    const out = {};
+    for (const k of _CAP_KEYS) if (opts && opts[k] != null) out[k] = opts[k];
+    return out;
+  }
+
   function create() {
     let seq = 0;
     const nodes = new Map();      // id -> node
@@ -1569,18 +1584,9 @@ import _QD from '../solver.mjs';
       const Q = (typeof window !== 'undefined' && window.QD) || (typeof global !== 'undefined' && global.QD) || (typeof QD !== 'undefined' && QD);
       return (Q && Q.SymWorker) || null;
     }
-    // Keep only the structured-clone-safe numeric caps for the worker payload
-    // (drop functions like rootFinder/onProgress, which can't be postMessage'd).
-    // The structured-clone-safe numeric caps forwarded to the worker. A9: keep this in
-    // sync with the numeric opts the sym-core ops accept (NON-serializable opts like
-    // rootFinder/onProgress/order1/paramValues are intentionally dropped — they can't be
-    // postMessage'd; the worker uses its own defaults). The unit test asserts coverage.
-    const _CAP_KEYS = ['maxBasis', 'maxSteps', 'maxDegree', 'maxTerms', 'maxEigenDim', 'maxHermiteDim', 'maxRounds', 'reduced', 'keepEliminated'];
-    function _capOpts(opts) {
-      const out = {};
-      for (const k of _CAP_KEYS) if (opts && opts[k] != null) out[k] = opts[k];
-      return out;
-    }
+    // (structured-clone-safe cap forwarding lives in module-level _capOpts / _CAP_KEYS,
+    // just above create() beside the PROV_STORE registry — hoisted there so the unit
+    // test can reach them via QD.AlgebraStore.capOpts / .CAP_KEYS.)
 
     // The numeric root finder for solve() — the app's Durand–Kerner (faber-analysis).
     function defaultRootFinder() {
@@ -2605,7 +2611,9 @@ import _QD from '../solver.mjs';
     };
   }
 
-  const AlgebraStore = { create, PROV_OPS: PROV_STORE };   // PROV_OPS: the store-side provenance-op registry (testable + shared)
+  // PROV_OPS: the store-side provenance-op registry; CAP_KEYS/capOpts: the worker cap
+  // whitelist + filter (all exposed static — testable + shared, no create() instance needed).
+  const AlgebraStore = { create, PROV_OPS: PROV_STORE, CAP_KEYS: _CAP_KEYS, capOpts: _capOpts };
 
   const QD = _QD;
   QD.AlgebraStore = AlgebraStore;
