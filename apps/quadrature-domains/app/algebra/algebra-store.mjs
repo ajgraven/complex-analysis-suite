@@ -1907,6 +1907,30 @@ import _QD from '../solver.mjs';
         (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
           : { ok: false, reason: (err && err.message) || String(err) });
     }
+    // CERTIFIED explicit real solve (RUR + exact Sturm isolating boxes): counts ALL real solutions
+    // by construction (no clustered / coincident-projection undercount), so a downstream verdict can
+    // certify the count. Serialized JSON-safe (certifiedRealToJSON) — solutions carry numeric box
+    // midpoints { re, im } (a drop-in for the numeric solver) + endpoints + `exact`. Sync twin below.
+    function solveRealCertifiedSync(ids, opts) {
+      opts = opts || {};
+      const S = getSym();
+      const reim = currentReimSystem(ids, opts);
+      if (!reim.polys.length) return { ok: false, reason: 'no equality nodes to solve' };
+      try { return S.certifiedRealToJSON(S.solveRealCertified(reim.polys, Object.assign({}, opts, { vars: reim.vars }))); }
+      catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    }
+    function solveRealCertifiedAsync(ids, opts, runOpts) {
+      opts = opts || {};
+      const reim = currentReimSystem(ids, opts);
+      if (!reim.polys.length) return Promise.resolve({ ok: false, reason: 'no equality nodes to solve' });
+      const SW = symWorker();
+      if (!SW) return Promise.resolve(solveRealCertifiedSync(ids, opts));
+      const payload = { polys: reim.polys.map((p) => p.termList()), vars: reim.vars, opts: _capOpts(opts) };
+      return SW.run('solveRealCertified', payload, runOpts || {}).then(
+        (res) => res,
+        (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
+          : { ok: false, reason: (err && err.message) || String(err) });
+    }
 
     // C4 — HARD-FILTER the solver output by the ACTIVE branch's assumptions. A complex
     // solution of the conjugate-model system that violates an active assumption — a variable
@@ -2631,7 +2655,7 @@ import _QD from '../solver.mjs';
       seedFromSystem, seedFromPolys, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, autoAbbreviate, addEquation, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
-      currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
+      currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, solveRealCertifiedSync, solveRealCertifiedAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, msolveColumn, msolveVarOrder, importMsolve, derivationSteps, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       forkTrack, setActiveTrack, deleteTrack, tracks: tracksList,

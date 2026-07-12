@@ -1799,9 +1799,15 @@ const QD = _QD;
         // 2) ZERO-DIMENSIONAL: solve for the real solutions (= the algebraic quadrature domains),
         // again in the WORKER (solveRealAsync). The per-solution univalence work below stays on the
         // main thread (it operates on concrete substituted candidates — cheap).
-        store.solveRealAsync(null, { paramValues: params }, {
-          signal: ctrl && ctrl.signal,
-          onProgress: (info) => setStatus('Solving the real system… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
+        // CERTIFIED-FIRST real solve (#2a): RUR + exact Sturm isolating boxes count EVERY real
+        // solution (no clustered / coincident-projection merging), so the verdict below can certify
+        // the count. Fall back to the numeric eigenvalue solve — with its PARTIAL machinery — when
+        // the certified path can't apply (radical/separating-form/cap failure, or a complex minPoly).
+        const _solveOpts = { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Solving the real system… ' + info.basis + ' generators, ' + info.pairs + ' pairs left') };
+        store.solveRealCertifiedAsync(null, { paramValues: params }, _solveOpts).then((rc) => {
+          if (rc && rc.aborted) return rc;
+          if (rc && rc.ok) return Object.assign(rc, { complete: true, certified: true });
+          return store.solveRealAsync(null, { paramValues: params }, _solveOpts);
         }).then((r) => {
         _abort = null; setBusy(false); setStatus('');
         if (r.aborted) { toast('Cancelled'); return; }
@@ -1896,6 +1902,10 @@ const QD = _QD;
           else { bad = true; const why = cc.maxResidual >= 1e-4 ? ('residual ' + cc.maxResidual.toExponential(1) + ' ≫ 0 — the reduction chain may be unsound') : 'no match to the numeric solver'; verdict += ' · ⚠ cross-check: ' + why; }
         }
         if (partialNote) verdict += partialNote;
+        // #2a: when the certified real solve (RUR + exact Sturm) supplied the solutions and nothing
+        // was flagged partial, the real-solution COUNT + LOCATIONS are rigorous (no floating-point
+        // eigenvalue step that could silently merge a clustered root) — say so.
+        if (r.certified && D > 0 && !undercount && !rec.disagree && !rec.partial) verdict += ' · real-solution count + locations certified (RUR + exact Sturm)';
         // Honest labeling: even a certified count is only the count ON the active slice (if any).
         verdict += sliceCaveat(cl);
         setStatus(verdict);
