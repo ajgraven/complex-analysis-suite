@@ -467,6 +467,43 @@ import _QD from '../solver.mjs';
       return list();
     }
 
+    // Seed the graph from a FLAT polynomial system that is ALREADY real (not the
+    // conjugate-model (●)/(★)/(gauge) blocks) — e.g. the Aharonov–Shapiro moment system
+    // from QE.pointFunctionalSystem, whose equations are the Re/Im parts of the moment
+    // identities in real variables (w1, u_k, v_k, M0, m_p, n_p). Each poly becomes one
+    // generated node at column 0; NO conjugate companions are added. Crucially the seed
+    // marks every variable REAL (spec.realVars ?? spec.vars) so the reim transform
+    // (currentReimSystem → _reimTransform) holds them real (v→v__re) instead of splitting
+    // each into v__re + i·v__im — which would double the unknowns and corrupt classify/solve.
+    // spec = { polys:[MPoly], vars:[string], realVars?, model?, formulation?, labels?, labelPrefix? }.
+    function seedFromPolys(spec) {
+      spec = spec || {};
+      const polys = (spec.polys || []).filter((p) => p && typeof p.isZero === 'function' && !p.isZero());
+      if (!polys.length) return { ok: false, reason: 'no equations to seed', created: [] };
+      checkpoint();
+      clearGraph();
+      model = spec.model || 'reim';                       // not 'conjugate' ⇒ no conjugate companions
+      formulation = spec.formulation || 'flat';
+      const a0 = assumeOf('t0');
+      // Hold EVERY variable of the (already-real) system real. Default to all vars appearing in the
+      // polys — the moment system's coefficient unknowns AND its moment params are all real components.
+      let realVars = spec.realVars;
+      if (!realVars) { const s = new Set(); for (const p of polys) for (const v of p.vars()) s.add(v); realVars = [...s]; }
+      a0.realVars = realVars.map(_primalName);
+      a0.imagVars = [];
+      a0.w0Fixed = null;
+      const prefix = spec.labelPrefix || 'eqn';
+      polys.forEach((p, i) => {
+        addNode({
+          id: nid(), kind: 'generated', poly: p, rel: '=',
+          label: (spec.labels && spec.labels[i]) || (prefix + ' ' + (i + 1)), model,
+          provenance: { op: 'generate', inputs: [] }, column: 0, meta: {},
+        });
+      });
+      normalizeColumn(0);
+      return { ok: true, created: list() };
+    }
+
     // Add the node(s) for one univalence-constraint form (column 0), plus the
     // conjugate companion of any non-self-conjugate equality (dedup-aware, so a
     // form that already ships its own conjugate — e.g. injectivity — isn't doubled).
@@ -2590,7 +2627,7 @@ import _QD from '../solver.mjs';
     }
 
     return {
-      seedFromSystem, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
+      seedFromSystem, seedFromPolys, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, autoAbbreviate, addEquation, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
       currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,

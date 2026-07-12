@@ -476,6 +476,38 @@ const QD = _QD;
       }
     }
 
+    // Seed the Aharonov–Shapiro MOMENT system (roadmap #5): enumerate order-2 quadrature
+    // domains from their harmonic moments. QE.pointFunctionalSystem builds the (symbolic-
+    // moment) A&S system as a FLAT real system; store.seedFromPolys seeds it (all vars held
+    // real). Unlike seedFromCurrent this needs NO geometric solve — it is a self-contained
+    // system; pin the moments (Set values on M0/m1/n1) to determine a specific QD, then solve.
+    function seedMomentSystem() {
+      if (!QE || typeof QE.pointFunctionalSystem !== 'function' || typeof store.seedFromPolys !== 'function') {
+        setStatus('Moment-system generator unavailable.'); return false;
+      }
+      try {
+        clearError();
+        const sys = QE.pointFunctionalSystem(null, { order: 2 });
+        const r = store.seedFromPolys({ polys: sys.polys, vars: sys.vars, model: 'reim', formulation: 'moment', labelPrefix: 'A–S moment eqn' });
+        if (!r || r.ok === false) { setStatus('Seed moments: ' + ((r && r.reason) || 'failed')); return false; }
+        _seededHData = null;                          // NOT seeded from the geometric hData
+        realSel.clear(); elimSel.clear(); refreshPickers();
+        if (canvas) canvas.clearSelection();
+        setStatusHTML(
+          '<table class="algebra-seed-table"><tbody>' +
+          '<tr><th>System</th><td><b>Aharonov–Shapiro moments</b> · order 2</td></tr>' +
+          '<tr><th>Equations</th><td><b>' + store.size + '</b> real</td></tr>' +
+          '<tr><th>Moments</th><td>M₀, M₁ symbolic (m₁, n₁ = Re/Im M₁)</td></tr>' +
+          '</tbody></table>' +
+          '<div class="hint">Underdetermined until the moments are pinned — “Set values” on M0, m1, n1 to determine a QD, then Solve / Dimension.</div>');
+        rerender();
+        return true;
+      } catch (e) {
+        setStatus('Moment system: ' + ((e && e.message) || e));
+        return false;
+      }
+    }
+
     // (A4) Gate every mutating/analysis op so it never runs against a missing or STALE
     // seed. An empty store seeds from the current solve. A store seeded from a DIFFERENT
     // hData than the active solve is stale — proceeding would either splice new-domain
@@ -793,6 +825,7 @@ const QD = _QD;
         '  <div class="row algebra-primary">' +
         '    <button id="alg-autosolve" class="small heavy-op" type="button" title="Semi-autonomous: auto-assume reality (if h is symmetric), propagate linear consequences, then determine existence/uniqueness and the explicit real solutions — each step a new labeled column">★ Auto-reduce &amp; solve</button>' +
         '    <button id="alg-seed" class="small" type="button" title="Generate the original (●)/(★)/gauge system from the current bounded solve at column 0 (replaces the graph; assumptions are then added as columns)">Generate / re-seed</button>' +
+        '    <button id="alg-seed-moment" class="small" type="button" title="Seed the Aharonov–Shapiro moment system: order-2 quadrature domains from their harmonic moments M₀, M₁ (symbolic — needs no solve; pin the moments via “Set values” to determine a specific QD)">Seed A–S moments</button>' +
         '    <button id="alg-cancel" class="small hidden" type="button" title="Cancel the running computation">Cancel</button>' +
         '  </div>' +
         '  <div id="alg-status" class="hint" style="margin:4px 0;"></div>' +
@@ -937,6 +970,7 @@ const QD = _QD;
       const refVals = $('#alg-ref-values');
       if (refVals) refVals.addEventListener('change', buildReference);
       $('#alg-seed').addEventListener('click', seedFromCurrent);
+      { const mb = $('#alg-seed-moment'); if (mb) mb.addEventListener('click', seedMomentSystem); }
       const w0FixCb = $('#alg-w0-fix');
       if (w0FixCb) w0FixCb.addEventListener('change', () => { if (store.size) seedFromCurrent(); });
       $('#alg-groebner').addEventListener('click', () => doGroebner(null));
