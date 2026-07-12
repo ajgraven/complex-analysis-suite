@@ -3754,6 +3754,73 @@ import _QD from './solver.mjs';
     return G.filter((g) => !g.vars().has(wName));
   }
 
+  // ---------------------------------------------------------------------------
+  // Ideal operations — round out the toolkit begun by saturate: membership,
+  // projection (elimination ideal), intersection, and quotient/colon. All exact
+  // over ℚ(i), Gröbner-elimination compositions on the existing kernel.
+  // ---------------------------------------------------------------------------
+
+  // Ideal membership: f ∈ ⟨gens⟩ ⟺ f reduces to 0 modulo a Gröbner basis of ⟨gens⟩.
+  function inIdeal(f, gens, order) {
+    if (!f || f.isZero()) return true;                          // 0 ∈ every ideal
+    gens = (gens || []).filter((p) => p && !p.isZero());
+    if (!gens.length) return false;                             // f ≠ 0 ∉ (0)
+    let ord = order;
+    if (!ord || !ord.cmp) {
+      const vs = new Set(); for (const p of gens.concat([f])) for (const v of p.vars()) vs.add(v);
+      ord = monomialOrder('grevlex', [...vs].sort());
+    }
+    return normalForm(f, buchberger(gens, ord), ord).isZero();
+  }
+
+  // The ELIMINATION IDEAL ⟨polys⟩ ∩ k[keepVars]: a Gröbner basis under an elimination
+  // order, keeping the generators whose support avoids elimVars. keepVars defaults to
+  // all remaining variables. Multivariate/multi-equation elimination with no 10×10
+  // Sylvester cap — e.g. eliminate every z̄_j across the (★) block to get the border.
+  function eliminationIdeal(polys, elimVars, keepVars, opts) {
+    polys = (polys || []).filter((p) => p && !p.isZero());
+    const elim = (elimVars || []).slice();
+    if (!polys.length || !elim.length) return polys;
+    let keep = keepVars;
+    if (!keep) {
+      const vs = new Set(); for (const p of polys) for (const v of p.vars()) vs.add(v);
+      keep = [...vs].filter((v) => elim.indexOf(v) < 0).sort();
+    }
+    const G = buchberger(polys, eliminationOrder(elim, keep), opts);
+    return G.filter((g) => elim.every((v) => !g.vars().has(v)));
+  }
+
+  // ⟨A⟩ ∩ ⟨B⟩ via the elimination trick: ⟨A⟩ ∩ ⟨B⟩ = (t·⟨A⟩ + (1−t)·⟨B⟩) ∩ k[x].
+  function idealIntersect(A, B, opts) {
+    A = (A || []).filter((p) => p && !p.isZero());
+    B = (B || []).filter((p) => p && !p.isZero());
+    if (!A.length || !B.length) return [];                      // (0) ∩ J = (0)
+    const tName = '_t';
+    const vs = new Set(); for (const p of A.concat(B)) for (const v of p.vars()) vs.add(v);
+    if (vs.has(tName)) throw new Error('idealIntersect: auxiliary variable "_t" already appears in the input.');
+    const t = MPoly.variable(tName), oneMt = MPoly.fromInt(1).sub(t);
+    const gens = A.map((a) => t.mul(a)).concat(B.map((b) => oneMt.mul(b)));
+    const G = buchberger(gens, eliminationOrder([tName], [...vs].sort()), opts);
+    return G.filter((g) => !g.vars().has(tName));
+  }
+
+  // Ideal quotient (colon) ⟨I⟩ : J. J is a single MPoly (⟨I⟩:f) or an array (⟨I⟩:⟨J⟩ =
+  // ∩_j ⟨I⟩:g_j). ⟨I⟩ : f = (1/f)(⟨I⟩ ∩ ⟨f⟩) — each generator of the intersection lies in
+  // ⟨f⟩ so the exact division is clean. The FINITE sibling of saturate's ⟨I⟩:f^∞: it removes
+  // exactly the ⟨f⟩ component (one embedded/degenerate piece) rather than the whole saturation.
+  function idealQuotient(gensI, J, opts) {
+    gensI = (gensI || []).filter((p) => p && !p.isZero());
+    const Jg = (Array.isArray(J) ? J : [J]).filter((p) => p && !p.isZero());
+    if (!Jg.length) return [MPoly.fromInt(1)];                  // ⟨I⟩ : (0) = the whole ring
+    if (!gensI.length) return [];                               // (0) : J = (0)
+    let result = null;
+    for (const f of Jg) {
+      const q = idealIntersect(gensI, [f], opts).map((g) => mpolyExactDiv(g, f));
+      result = (result === null) ? q : idealIntersect(result, q, opts);
+    }
+    return result || [];
+  }
+
   // The exact ℚ(i) value of a variable-free MPoly (its constant term), or null if
   // the polynomial actually involves a variable. Drives the evalComplex overflow
   // fallback in RatFn/FRatFn below.
@@ -4039,6 +4106,8 @@ import _QD from './solver.mjs';
     monoKey, monoCmp,
     mpolyDet, mpolyDetLaplace, resultant, discriminant, reducedDiscriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, comprehensiveGroebnerSystem, verifySOS, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
+    inIdeal, eliminationIdeal, idealIntersect, idealQuotient,   // ideal ops: membership, projection, ∩, colon
+
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, solveByEigenvalues, realSolutionCount, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
