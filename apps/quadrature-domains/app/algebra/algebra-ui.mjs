@@ -1489,6 +1489,13 @@ const QD = _QD;
         + ' domains: a count here is a LOWER BOUND on the general one, and an empty/inconsistent verdict'
         + ' rules out only on-slice solutions.]';
     }
+    // Honest one-line size of a positive-dimensional verdict: the true Krull DIMENSION (the number
+    // of free parameters, read off the leading-term staircase — roadmap #8) when the result carries
+    // it, alongside the ambient real-variable count. Degrades to the variable count alone otherwise.
+    function posDimDesc(r) {
+      const nv = (r && r.numVars != null ? r.numVars : '?') + ' real variables';
+      return (r && r.krullDim != null && r.krullDim >= 1) ? ('dimension ' + r.krullDim + ', ' + nv) : nv;
+    }
     // The persistent "assumptions ledger" for the verdict card — every active specialization that
     // narrows the verdict, one short label each (slices, φ(0) gauge fix, factor case). Shown as a
     // banner so no slice/branch count on the card reads as the certified general count. [] ⇒ general.
@@ -1533,7 +1540,7 @@ const QD = _QD;
           if (!cl.ok) { _abort = null; setBusy(false); showError('Auto-reduce & solve: ' + withGuidance(cl.reason || 'failed')); return; }
           let verdict;
           if (cl.inconsistent) verdict = 'No quadrature domain: the reduced system is inconsistent.';
-          else if (!cl.zeroDim) verdict = 'A positive-dimensional family of solutions (' + cl.numVars + ' real variables) — add a constraint or fix a value to pin it.';
+          else if (!cl.zeroDim) verdict = 'A positive-dimensional family of solutions (' + posDimDesc(cl) + ') — add a constraint or fix a value to pin it.';
           else verdict = (cl.realCount == null ? cl.multiplicity + ' solution(s) with multiplicity'
             : (cl.realCount === 0 ? 'No real quadrature domain'
               : cl.realCount === 1 ? 'Unique quadrature domain (1 real solution)'
@@ -1601,7 +1608,7 @@ const QD = _QD;
         if (!r.ok) { showError('Existence / uniqueness: ' + withGuidance(r.reason || 'unavailable')); return; }
         let verdict;
         if (r.inconsistent) verdict = 'No quadrature domain: the system is inconsistent (1 ∈ I).';
-        else if (!r.zeroDim) verdict = 'Infinitely many: a positive-dimensional family (' + r.numVars + ' real variables).';
+        else if (!r.zeroDim) verdict = 'Infinitely many: a positive-dimensional family (' + posDimDesc(r) + ').';
         else if (r.realCount == null) verdict = 'Zero-dimensional: ' + r.multiplicity + ' complex solution(s) with multiplicity (real count unavailable: ' + (r.reason || '') + ').';
         else {
           const cx = r.complexCount, mult = r.multiplicity;
@@ -1769,7 +1776,7 @@ const QD = _QD;
           // Positive-dimensional ⇒ underdetermined. Detect FACTORABLE causes (a locator/gauge
           // equation that splits the variety) and offer one-click pin/split actions (#2).
           _abort = null; setBusy(false); setStatus('');
-          const text = 'Underdetermined: a positive-dimensional family (' + cl.numVars + ' real variables). Fix the rotation gauge (φ′(0) real-positive) or pin a forced variable — see the suggestions below, or use “Set values”.' + sliceCaveat(cl);
+          const text = 'Underdetermined: a positive-dimensional family (' + posDimDesc(cl) + '). Fix the rotation gauge (φ′(0) real-positive) or pin a forced variable — see the suggestions below, or use “Set values”.' + sliceCaveat(cl);
           const actions = []; const seen = {};
           let hits = []; try { hits = store.spuriousFactors(null, { paramValues: hDataParamValues() }) || []; } catch (e) { hits = []; }
           hits.forEach((h) => h.factors.forEach((f) => {
@@ -2020,7 +2027,7 @@ const QD = _QD;
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Dimension: ' + withGuidance(r.reason || 'unavailable')); return; }
         if (r.zeroDim) toast('Zero-dimensional: ' + r.dimension + ' solution(s) (with multiplicity), ' + r.numVars + ' variables.');
-        else toast('Positive-dimensional: infinitely many solutions (' + r.numVars + ' variables) — assume more variables real or add constraints.');
+        else toast('Positive-dimensional: infinitely many solutions (' + posDimDesc(r) + ') — assume more variables real or add constraints.');
       });
     }
     // Solve the current equality system numerically (shape-lemma path), off the main
@@ -2348,7 +2355,7 @@ const QD = _QD;
       const tail = notes.length ? ' [' + notes.join('; ') + ']' : '';
       const star = sl.length ? '*' : '';
       if (r.inconsistent) return { badge: '∅' + star, state: 'none', title: 'no QD — system inconsistent (1 ∈ I)' + tail };
-      if (!r.zeroDim) return { badge: '∞' + star, state: 'open', title: 'positive-dimensional family (' + r.numVars + ' real variables)' + tail };
+      if (!r.zeroDim) return { badge: '∞' + star, state: 'open', title: 'positive-dimensional family (' + posDimDesc(r) + ')' + tail };
       if (r.realCount == null) return { badge: 'fin' + star, state: 'unknown', title: r.multiplicity + ' complex solution(s); real count over the cap' + tail };
       if (r.realCount === 0) return { badge: '0 QD' + star, state: 'none', title: 'no real quadrature domain' + tail };
       if (r.realCount === 1) return { badge: '✓ 1 QD' + star, state: 'unique', title: 'unique real quadrature domain' + tail };
