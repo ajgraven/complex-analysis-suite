@@ -33,9 +33,9 @@ every recommendation:
 | # | Extension | Value | Effort | Builds on (already present) |
 |---|-----------|-------|--------|------------------------------|
 | **1 ✅** | **Exact Schwarz function + boundary curve Q(z,z̄) from a solved QD** | ★★★ | Moderate | resultant/elimination Gröbner, `saturate`, series inverse |
-| **2** | **Certify QD existence/uniqueness (real-root count / real triangular decomp.)** | ★★★ | Moderate | `realSolutionCount` (Hermite), `triangularize`, Schur–Cohn |
+| **2 ◐** | **Certify QD existence/uniqueness** — #2a certified-first verdict ✅ · #2b parametric (comprehensive) ◻ | ★★★ | Moderate | `realSolutionCount` (Hermite), `triangularize`, Schur–Cohn |
 | **3 ✅** | **Close the algebra→geometry loop (plot ℂ solutions, show domain, interchange export)** | ★★★ | Easy–Mod | `phiFromAlgebraSolution`, verdict `actions[]`, `@cas/interchange` |
-| **4** | **Certified real solving via RUR + exact Sturm isolation (rigorous locations)** | ★★★ | Moderate | `rationalUnivariateRep` (self-certifying), `realRootIsolate` |
+| **4 ✅** | **Certified real solving via RUR + exact Sturm isolation (rigorous locations)** | ★★★ | Moderate | `rationalUnivariateRep` (self-certifying), `realRootIsolate` |
 | **5 ✅** | **Wire the built-but-unexposed Aharonov–Shapiro moment system to a seed** | ★★★ | Easy | `pointFunctionalSystem` (tested, no UI), `seedFromSystem` |
 | 6 ✅ | Ideal toolkit: colon `I:f`, intersection, 1-call elimination, membership | ★★ | Easy | `saturate` pattern, `mpolyExactDiv`, `normalForm` |
 | 7 ✅ | Series calculus (log/exp/deriv/∫) + Laurent orders | ★★ | Easy | `seriesMul/Recip/ScaleByCoeff` |
@@ -54,14 +54,18 @@ every recommendation:
 | 20 | **Certified numerics + positive-dim solving via tooling** (see Tier 5) | ★★★ | Varies | Arb/PARI WASM (client) · msolve/HC.jl (server) |
 
 > **Build status (updated 2026-07-12) — ✅ done · ◐ core shipped, extensions deferred.** The **keystone
-> trio** (#1, #3, #5) and the **cheap-infra sprint** (#6–#11) are merged to `master`:
+> trio** (#1, #3, #5), the **cheap-infra sprint** (#6–#11), and **"certified answers"** (#4 + #2a) are
+> merged to `master`:
 > #1 exact Schwarz curve + boundary `Q(z,z̄)` (PRs #25/#27) · #3 algebra→geometry loop, both slices
 > (#28/#30) · #5 Aharonov–Shapiro moment seed (#29) · #6 ideal toolkit — colon/intersection/elimination/
 > membership (#31) · #7 series calculus — log/exp/deriv/∫ (#32) · #8 Krull dimension + degree (#33) ·
 > #9 power sums / moments via `trace(Mᵥᵏ)` (#34) · **◐ #10** rational/Padé reconstruction (#35) —
 > CRT-modular Gröbner still deferred · **◐ #11** the true Krull dimension is now surfaced in positive-
 > dimensional verdicts (#36); rigor badges already existed; staircase diagram, session save/load, and
-> `.ipynb` export deferred. **Not started:** #2, #4, #12–#20.
+> `.ipynb` export deferred · **#4** certified real solving — `solveRealCertified` = RUR + exact Sturm
+> isolating boxes (#38) · **◐ #2** existence/uniqueness — #2a the verdict now solves certified-first
+> (RUR + Sturm), so the count is exact instead of a "≥ k" hedge (PRs #39/#40); #2b the parametric
+> (comprehensive-Gröbner) layer still deferred. **Not started:** #12–#20.
 
 ---
 
@@ -180,7 +184,9 @@ from "hard" to "moderate."
 1. ✅ **Prove the keystone (highest value, mostly existing primitives):** #1 exact Schwarz-curve/boundary
    extraction → #3 the algebra→geometry loop → #5 expose the moment system. This trio turns the tool's
    central theory into visible, exact, shareable results. **DONE (PRs #25–#30).**
-2. **Certified answers:** #2 existence/uniqueness certification + #4 RUR-based certified real solving.
+2. ✅ **Certified answers:** #4 RUR-based certified real solving + #2a a certified-first existence/uniqueness
+   verdict. **DONE (PRs #38–#40);** #2b, the parametric (comprehensive-Gröbner / real triangular-decomposition)
+   "k QDs for data in region R" layer, is deferred to its own scoping.
 3. ✅ **Cheap infrastructure sprint (compounding):** #6 ideal toolkit + #7 series calculus + #8 Hilbert/
    dimension + #9 power sums + #10 Padé/CRT + the Tier-2 workflow wins. **DONE (PRs #31–#36);** CRT-modular
    Gröbner and the staircase/save-load/`.ipynb` workflow items deferred (rigor badges already present).
