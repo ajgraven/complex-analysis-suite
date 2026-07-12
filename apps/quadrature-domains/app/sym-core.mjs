@@ -3808,8 +3808,9 @@ import _QD from './solver.mjs';
       const opts = Object.assign({}, payload.opts, onProgress ? { onProgress } : {});
       const G = buchberger(polys, order, opts);
       const zeroDim = isZeroDimensional(G, order, vars);
-      // Infinity isn't JSON-cloneable → report zeroDim + a finite count (null if ∞)
-      return { zeroDim, dimension: zeroDim ? quotientDimension(G, order, vars) : null, numVars: vars.length };
+      // Infinity isn't JSON-cloneable → report zeroDim + a finite count (null if ∞). krullDim is
+      // the true number of free parameters (0 when zero-dim), a better honesty label than numVars.
+      return { zeroDim, dimension: zeroDim ? quotientDimension(G, order, vars) : null, krullDim: zeroDim ? 0 : krullDimension(G, order, vars), numVars: vars.length };
     }
     if (kind === 'classify') {
       // Existence/uniqueness verdict over a REAL (reim) system (the off-main-thread twin of
@@ -3826,7 +3827,7 @@ import _QD from './solver.mjs';
         return { ok: true, inconsistent: true, zeroDim: true, realCount: 0, complexCount: 0, multiplicity: 0, numVars: vars.length };
       }
       const zeroDim = isZeroDimensional(G, order, vars);
-      if (!zeroDim) return { ok: true, inconsistent: false, zeroDim: false, realCount: null, complexCount: null, multiplicity: null, numVars: vars.length };
+      if (!zeroDim) return { ok: true, inconsistent: false, zeroDim: false, realCount: null, complexCount: null, multiplicity: null, numVars: vars.length, krullDim: krullDimension(G, order, vars) };
       const multiplicity = quotientDimension(G, order, vars);
       const rc = realSolutionCount({ G, order }, null, vars, opts);
       if (!rc.ok) return { ok: true, inconsistent: false, zeroDim: true, realCount: null, complexCount: null, multiplicity, reason: rc.reason, numVars: vars.length };

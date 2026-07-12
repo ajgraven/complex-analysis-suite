@@ -1656,7 +1656,8 @@ import _QD from '../solver.mjs';
         const G = S.buchberger(polys, ord, opts || {});
         const zeroDim = S.isZeroDimensional(G, ord, vars);
         const dim = zeroDim ? S.quotientDimension(G, ord, vars) : Infinity;
-        return { ok: true, zeroDim, dimension: dim, numVars: vars.length, vars };
+        const krullDim = zeroDim ? 0 : S.krullDimension(G, ord, vars);
+        return { ok: true, zeroDim, dimension: dim, krullDim, numVars: vars.length, vars };
       } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
     }
     // Off-main-thread dimension via QD.SymWorker (Promise). Falls back to sync.
@@ -1668,7 +1669,7 @@ import _QD from '../solver.mjs';
       const vars = _varsOf(polys);
       const payload = { polys: polys.map((p) => p.termList()), vars, opts: _capOpts(opts || {}) };
       return SW.run('dimension', payload, runOpts || {}).then(
-        (res) => ({ ok: true, zeroDim: res.zeroDim, dimension: res.zeroDim ? res.dimension : Infinity, numVars: res.numVars, vars }),
+        (res) => ({ ok: true, zeroDim: res.zeroDim, dimension: res.zeroDim ? res.dimension : Infinity, krullDim: res.krullDim, numVars: res.numVars, vars }),
         (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
           : { ok: false, reason: (err && err.message) || String(err) });
     }
@@ -1771,7 +1772,7 @@ import _QD from '../solver.mjs';
           return { ok: true, inconsistent: true, zeroDim: true, realCount: 0, complexCount: 0, multiplicity: 0, numVars: reim.vars.length };
         }
         const zeroDim = S.isZeroDimensional(G, ord, reim.vars);
-        if (!zeroDim) return { ok: true, inconsistent: false, zeroDim: false, realCount: null, complexCount: null, multiplicity: null, numVars: reim.vars.length };
+        if (!zeroDim) return { ok: true, inconsistent: false, zeroDim: false, realCount: null, complexCount: null, multiplicity: null, numVars: reim.vars.length, krullDim: S.krullDimension(G, ord, reim.vars) };
         const multiplicity = S.quotientDimension(G, ord, reim.vars);
         const rc = S.realSolutionCount({ G, order: ord }, null, reim.vars);
         if (!rc.ok) return { ok: true, inconsistent: false, zeroDim: true, realCount: null, complexCount: null, multiplicity, reason: rc.reason, numVars: reim.vars.length };
