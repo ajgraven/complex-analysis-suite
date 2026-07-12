@@ -32,17 +32,17 @@ every recommendation:
 
 | # | Extension | Value | Effort | Builds on (already present) |
 |---|-----------|-------|--------|------------------------------|
-| **1** | **Exact Schwarz function + boundary curve Q(z,z̄) from a solved QD** | ★★★ | Moderate | resultant/elimination Gröbner, `saturate`, series inverse |
+| **1 ✅** | **Exact Schwarz function + boundary curve Q(z,z̄) from a solved QD** | ★★★ | Moderate | resultant/elimination Gröbner, `saturate`, series inverse |
 | **2** | **Certify QD existence/uniqueness (real-root count / real triangular decomp.)** | ★★★ | Moderate | `realSolutionCount` (Hermite), `triangularize`, Schur–Cohn |
-| **3** | **Close the algebra→geometry loop (plot ℂ solutions, show domain, interchange export)** | ★★★ | Easy–Mod | `phiFromAlgebraSolution`, verdict `actions[]`, `@cas/interchange` |
+| **3 ✅** | **Close the algebra→geometry loop (plot ℂ solutions, show domain, interchange export)** | ★★★ | Easy–Mod | `phiFromAlgebraSolution`, verdict `actions[]`, `@cas/interchange` |
 | **4** | **Certified real solving via RUR + exact Sturm isolation (rigorous locations)** | ★★★ | Moderate | `rationalUnivariateRep` (self-certifying), `realRootIsolate` |
-| **5** | **Wire the built-but-unexposed Aharonov–Shapiro moment system to a seed** | ★★★ | Easy | `pointFunctionalSystem` (tested, no UI), `seedFromSystem` |
-| 6 | Ideal toolkit: colon `I:f`, intersection, 1-call elimination, membership | ★★ | Easy | `saturate` pattern, `mpolyExactDiv`, `normalForm` |
-| 7 | Series calculus (log/exp/deriv/∫) + Laurent orders | ★★ | Easy | `seriesMul/Recip/ScaleByCoeff` |
-| 8 | Hilbert series → dimension + degree (answer for positive-dim families) | ★★ | Easy–Mod | `standardMonomials`, `leadingMonomials` |
-| 9 | Power sums / QD moments of the solution set via `trace(Mᵥᵏ)` | ★★ | Easy | `multiplicationMatrix` |
-| 10 | Rational/Padé reconstruction + CRT-modular Gröbner (scaling cure) | ★★ | Easy | GCD/EEA, series |
-| 11 | Staircase diagram, session save/load + share-link, `.ipynb` export, rigor badges | ★★ | Easy–Mod | `standardMonomials`, `exportDAG`, `sympyDerivation` |
+| **5 ✅** | **Wire the built-but-unexposed Aharonov–Shapiro moment system to a seed** | ★★★ | Easy | `pointFunctionalSystem` (tested, no UI), `seedFromSystem` |
+| 6 ✅ | Ideal toolkit: colon `I:f`, intersection, 1-call elimination, membership | ★★ | Easy | `saturate` pattern, `mpolyExactDiv`, `normalForm` |
+| 7 ✅ | Series calculus (log/exp/deriv/∫) + Laurent orders | ★★ | Easy | `seriesMul/Recip/ScaleByCoeff` |
+| 8 ✅ | Hilbert series → dimension + degree (answer for positive-dim families) | ★★ | Easy–Mod | `standardMonomials`, `leadingMonomials` |
+| 9 ✅ | Power sums / QD moments of the solution set via `trace(Mᵥᵏ)` | ★★ | Easy | `multiplicationMatrix` |
+| 10 ◐ | Rational/Padé reconstruction ✅ + CRT-modular Gröbner (scaling cure) ◻ | ★★ | Easy | GCD/EEA, series |
+| 11 ◐ | Dimension-in-verdict ✅ · staircase diagram ◻, session save/load ◻, `.ipynb` export ◻, rigor badges (already present) | ★★ | Easy–Mod | `standardMonomials`, `exportDAG`, `sympyDerivation` |
 | 12 | Primary decomposition + minimal primes (decompose boundary variety) | ★★ | Moderate | factorization (present!), zero-dim radical, saturation |
 | 13 | Triangular decomposition / regular chains (positive-dim solving) | ★★ | Moderate | subresultants, GCD, squarefree, FGLM |
 | 14 | Discriminant variety + parametric real-root classification (family bifurcation set) | ★★ | Moderate | subresultants, elimination, real-root isolation |
@@ -52,6 +52,16 @@ every recommendation:
 | 18 | Shape-from-moments (Prony–Hankel) reconstruction + QD-order rank test | ★★ | Moderate | zero-dim root-find, exact null-space/Vandermonde |
 | 19 | Positive-dim / real radical; multivariate factorization; Hele-Shaw; mother bodies | ★–★★ | Mod–Hard | various above |
 | 20 | **Certified numerics + positive-dim solving via tooling** (see Tier 5) | ★★★ | Varies | Arb/PARI WASM (client) · msolve/HC.jl (server) |
+
+> **Build status (updated 2026-07-12) — ✅ done · ◐ core shipped, extensions deferred.** The **keystone
+> trio** (#1, #3, #5) and the **cheap-infra sprint** (#6–#11) are merged to `master`:
+> #1 exact Schwarz curve + boundary `Q(z,z̄)` (PRs #25/#27) · #3 algebra→geometry loop, both slices
+> (#28/#30) · #5 Aharonov–Shapiro moment seed (#29) · #6 ideal toolkit — colon/intersection/elimination/
+> membership (#31) · #7 series calculus — log/exp/deriv/∫ (#32) · #8 Krull dimension + degree (#33) ·
+> #9 power sums / moments via `trace(Mᵥᵏ)` (#34) · **◐ #10** rational/Padé reconstruction (#35) —
+> CRT-modular Gröbner still deferred · **◐ #11** the true Krull dimension is now surfaced in positive-
+> dimensional verdicts (#36); rigor badges already existed; staircase diagram, session save/load, and
+> `.ipynb` export deferred. **Not started:** #2, #4, #12–#20.
 
 ---
 
@@ -167,12 +177,13 @@ from "hard" to "moderate."
 
 ## Recommended build order
 
-1. **Prove the keystone (highest value, mostly existing primitives):** #1 exact Schwarz-curve/boundary
+1. ✅ **Prove the keystone (highest value, mostly existing primitives):** #1 exact Schwarz-curve/boundary
    extraction → #3 the algebra→geometry loop → #5 expose the moment system. This trio turns the tool's
-   central theory into visible, exact, shareable results.
+   central theory into visible, exact, shareable results. **DONE (PRs #25–#30).**
 2. **Certified answers:** #2 existence/uniqueness certification + #4 RUR-based certified real solving.
-3. **Cheap infrastructure sprint (compounding):** #6 ideal toolkit + #7 series calculus + #8 Hilbert/
-   dimension + #9 power sums + #10 Padé/CRT + the Tier-2 workflow wins.
+3. ✅ **Cheap infrastructure sprint (compounding):** #6 ideal toolkit + #7 series calculus + #8 Hilbert/
+   dimension + #9 power sums + #10 Padé/CRT + the Tier-2 workflow wins. **DONE (PRs #31–#36);** CRT-modular
+   Gröbner and the staircase/save-load/`.ipynb` workflow items deferred (rigor badges already present).
 4. **Decomposition tier:** multivariate factorization (if missing) → primary decomposition → triangular
    decomposition → discriminant variety.
 5. **Cross-app exact upgrades:** #16 exact correspondence curves + #17 dynatomic/Gleason/multiplier.
