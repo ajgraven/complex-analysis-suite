@@ -40,6 +40,7 @@
 import { state } from '../ui-state.mjs';
 import { QD_UI } from '../ui-registry.mjs';
 import _QD from '../solver.mjs';
+import { plainVar } from '../qd-varscheme.mjs';   // conjugate-model var scheme (plain-text labels)
 const QD = _QD;
 
 (function () {
@@ -1988,9 +1989,10 @@ const QD = _QD;
 
     // crude plain-text rendering of a variable name for <option>/toasts
     function latexPlain(name) {
-      return name.replace(/^Ab/, 'Ā').replace(/^A/, 'A').replace(/^Cb/, 'C̄').replace(/^zb/, 'z̄')
-        .replace(/^ab/, 'ā').replace(/^wb0/, 'w̄₀').replace(/^Zb/, 'ζ̄').replace(/^Z/, 'ζ')
-        .replace('_', ',');
+      const p = plainVar(name);                        // A/C/z/a/w0 conjugate-model families (shared scheme)
+      if (p != null) return p;
+      // non-scheme: the constraint ζ (Z / Zb / Z1 / …) + a first-underscore → comma for the rest
+      return name.replace(/^Zb/, 'ζ̄').replace(/^Z/, 'ζ').replace('_', ',');
     }
 
     // ---- export --------------------------------------------------------------

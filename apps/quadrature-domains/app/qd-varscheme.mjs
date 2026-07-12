@@ -51,3 +51,16 @@ export function latexVar(name) {
   const sub = d.j != null ? '{' + d.i + ',' + d.j + '}' : '{' + d.i + '}';
   return (d.bar ? '\\bar{' + d.family + '}' : d.family) + '_' + sub;
 }
+
+// PLAIN-Unicode render of a conjugate-model variable for terse UI labels (bar → the combining-
+// macron form; indices joined by ','). Returns null for a non-scheme name so the caller can add
+// its own cases (e.g. the constraint ζ vars) + fallback. Kept in sync with latexVar by sharing
+// the one parse. E.g. A1_2 → 'A1,2', Ab1_2 → 'Ā1,2', zb1 → 'z̄1', wb0 → 'w̄₀'.
+const _PLAIN_BAR = { A: 'Ā', C: 'C̄', z: 'z̄', a: 'ā' };
+export function plainVar(name) {
+  const d = parseVar(name);
+  if (!d) return null;
+  if (d.family === 'w') return d.bar ? 'w̄₀' : 'w0';
+  const base = d.bar ? _PLAIN_BAR[d.family] : d.family;
+  return base + d.i + (d.j != null ? ',' + d.j : '');
+}

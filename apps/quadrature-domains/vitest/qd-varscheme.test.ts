@@ -4,7 +4,7 @@
 // single source of truth: parse round-trip, the conjugate bar-toggle (self-inverse), non-scheme
 // passthrough, and the exact LaTeX.
 import { describe, it, expect } from "vitest";
-import { parseVar, encodeVar, conjVar, latexVar } from "../app/qd-varscheme.mjs";
+import { parseVar, encodeVar, conjVar, latexVar, plainVar } from "../app/qd-varscheme.mjs";
 
 describe("qd-varscheme (conjugate-model variable scheme)", () => {
   const SCHEME = ["A1_2", "Ab1_2", "C3_1", "Cb3_1", "z1", "zb1", "a2", "ab2", "w0", "wb0"];
@@ -43,5 +43,19 @@ describe("qd-varscheme (conjugate-model variable scheme)", () => {
     expect(latexVar("w0")).toBe("w_0");
     expect(latexVar("wb0")).toBe("\\bar{w}_0");
     expect(latexVar("cosL")).toBe("cosL"); // non-scheme passthrough
+  });
+
+  it("plainVar renders conjugate-model families to plain Unicode (golden); null for non-scheme", () => {
+    expect(plainVar("A1_2")).toBe("A1,2");
+    expect(plainVar("Ab1_2")).toBe("Ā1,2");
+    expect(plainVar("C3_1")).toBe("C3,1");
+    expect(plainVar("Cb3_1")).toBe("C̄3,1");
+    expect(plainVar("z1")).toBe("z1");
+    expect(plainVar("zb1")).toBe("z̄1");
+    expect(plainVar("a2")).toBe("a2");
+    expect(plainVar("ab2")).toBe("ā2");
+    expect(plainVar("w0")).toBe("w0");
+    expect(plainVar("wb0")).toBe("w̄₀");
+    for (const n of ["p1_2", "x1", "Cx1_2", "Z", "Zb", "cosL"]) expect(plainVar(n)).toBeNull();
   });
 });
