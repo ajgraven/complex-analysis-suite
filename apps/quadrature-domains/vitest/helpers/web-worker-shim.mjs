@@ -20,11 +20,18 @@ import { fileURLToPath } from 'node:url';
 const ADAPTER_PATH = fileURLToPath(new URL('./sym-worker-thread-adapter.mjs', import.meta.url));
 const _live = new Set(); // spawned NodeWorkers, so uninstall() can terminate stragglers
 
+// Observable lifecycle counters (module-level; vitest isolates files, so they reset per
+// test file). Lets a test prove terminate-on-supersede deterministically -- superseding an
+// in-flight job must bump `terminated` -- instead of a flaky wall-clock "was it prompt?".
+export const workerStats = { spawned: 0, terminated: 0 };
+
 // A Web-Worker-API facade over one node:worker_threads Worker. The app calls
 // `new Worker(entryUrl, {type:'module'})`; we instead spawn the ADAPTER and hand it the
 // entry via workerData, since the entry speaks `self` and worker_threads speaks parentPort.
 class WebWorkerThreadShim {
   constructor(url) {
+    workerStats.spawned++;
+    this._terminated = false;
     this._nw = new NodeWorker(ADAPTER_PATH, {
       workerData: { entry: url instanceof URL ? url.href : String(url) },
     });
@@ -37,7 +44,12 @@ class WebWorkerThreadShim {
   addEventListener(type, fn) { (this._listeners[type] || (this._listeners[type] = new Set())).add(fn); }
   removeEventListener(type, fn) { const s = this._listeners[type]; if (s) s.delete(fn); }
   postMessage(msg) { this._nw.postMessage(msg); }
-  terminate() { try { this._nw.terminate(); } catch (_) { /* ignore */ } }
+  terminate() {
+    if (this._terminated) return; // count each worker's termination once
+    this._terminated = true;
+    workerStats.terminated++;
+    try { this._nw.terminate(); } catch (_) { /* ignore */ }
+  }
   _emit(type, ev) { const s = this._listeners[type]; if (s) for (const fn of [...s]) { try { fn(ev); } catch (_) { /* ignore */ } } }
 }
 

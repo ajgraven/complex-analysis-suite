@@ -4,7 +4,8 @@
 // hundreds of ms to seconds; on the main thread that freezes the Algebra tab.
 // This wraps QD.Sym.runJob in a Web Worker built from a Blob bundle of the
 // exact-symbolic core (mirrors primary-solver-worker.js), with progress
-// callbacks and cooperative cancellation (terminate-and-recreate).
+// callbacks and terminate-and-recreate on BOTH cancel and supersede (the entry
+// runs runJob synchronously, so a stale job is only stopped by killing the thread).
 //
 // API (QD.SymWorker):
 //   ensureReady() -> Promise<void>                       lazy-create the worker
@@ -34,9 +35,17 @@ import _QD from '../solver.mjs';
   let _inflight = null;       // { jobId, resolve, reject, onMessage }
   let _fallback = false;      // true once the worker can't be built (file://, Node, …)
 
-  function _dispose() {
+  // Hard-stop the worker: terminate the thread (killing any in-flight computation) and
+  // drop it so the next ensureReady() rebuilds a fresh one. Does NOT settle _inflight —
+  // the caller decides how the pending promise resolves (cancel → aborted; supersede →
+  // superseded), then clears it.
+  function _teardownWorker() {
     if (_worker) { try { _worker.terminate(); } catch (_) { /* ignore */ } _worker = null; }
     _readyPromise = null;
+  }
+
+  function _dispose() {
+    _teardownWorker();
     if (_inflight) { _inflight.reject({ aborted: true }); _inflight = null; }
   }
 
@@ -69,40 +78,48 @@ import _QD from '../solver.mjs';
     await _readyPromise;
   }
 
-  function run(op, payload, runOpts) {
+  async function run(op, payload, runOpts) {
     runOpts = runOpts || {};
-    return ensureReady().then(() => {
-      // Main-thread fallback — run the exact-same dispatcher synchronously.
-      if (_fallback || !_worker) {
-        return Promise.resolve().then(() => _QD.Sym.runJob(op, payload, runOpts.onProgress));
-      }
-      // Supersede any prior job.
-      if (_inflight) {
-        _inflight.reject({ aborted: true, superseded: true });
-        try { _worker.removeEventListener('message', _inflight.onMessage); } catch (_) { /* ignore */ }
-        _inflight = null;
-      }
-      const jobId = _nextJobId++;
-      return new Promise((resolve, reject) => {
-        const onMessage = (e) => {
-          const m = e.data;
-          if (!m || m.jobId !== jobId) return;
-          if (m.kind === 'progress') { if (runOpts.onProgress) { try { runOpts.onProgress(m.info); } catch (_) { /* ignore */ } } return; }
-          if (m.kind === 'done') {
-            try { _worker.removeEventListener('message', onMessage); } catch (_) { /* ignore */ }
-            _inflight = null;
-            if (m.error) reject(new Error(m.error)); else resolve(m.result);
-          }
-        };
-        _inflight = { jobId, resolve, reject, onMessage };
-        _worker.addEventListener('message', onMessage);
-        const signal = runOpts.signal;
-        if (signal) {
-          if (signal.aborted) { cancel(); return; }
-          signal.addEventListener('abort', () => cancel(), { once: true });
+    await ensureReady();
+    // Main-thread fallback — run the exact-same dispatcher synchronously. The fallback
+    // never sets _inflight, so there is nothing to supersede on this path.
+    if (_fallback || !_worker) return _QD.Sym.runJob(op, payload, runOpts.onProgress);
+    // Supersede any prior in-flight job — checked AFTER ensureReady() so we observe a job
+    // posted by a run() call that resolved just ahead of us (e.g. two runs issued before
+    // the first worker finished building). The entry runs runJob synchronously in its
+    // onmessage, so a busy worker can't start a newly-posted job until the old one
+    // finishes; merely rejecting the old promise (the pre-fix behavior) left the discarded
+    // Gröbner/solve burning a core and delayed the new op by the old one's full remaining
+    // runtime. So TERMINATE the worker (matching cancel()) and rebuild a fresh thread.
+    if (_inflight) {
+      const stale = _inflight;
+      _inflight = null;
+      try { _worker.removeEventListener('message', stale.onMessage); } catch (_) { /* ignore */ }
+      _teardownWorker();
+      stale.reject({ aborted: true, superseded: true });
+      await ensureReady();                                                        // rebuild
+      if (_fallback || !_worker) return _QD.Sym.runJob(op, payload, runOpts.onProgress);
+    }
+    const jobId = _nextJobId++;
+    return new Promise((resolve, reject) => {
+      const onMessage = (e) => {
+        const m = e.data;
+        if (!m || m.jobId !== jobId) return;
+        if (m.kind === 'progress') { if (runOpts.onProgress) { try { runOpts.onProgress(m.info); } catch (_) { /* ignore */ } } return; }
+        if (m.kind === 'done') {
+          try { _worker.removeEventListener('message', onMessage); } catch (_) { /* ignore */ }
+          _inflight = null;
+          if (m.error) reject(new Error(m.error)); else resolve(m.result);
         }
-        _worker.postMessage({ jobId, op, payload });
-      });
+      };
+      _inflight = { jobId, resolve, reject, onMessage };
+      _worker.addEventListener('message', onMessage);
+      const signal = runOpts.signal;
+      if (signal) {
+        if (signal.aborted) { cancel(); return; }
+        signal.addEventListener('abort', () => cancel(), { once: true });
+      }
+      _worker.postMessage({ jobId, op, payload });
     });
   }
 
