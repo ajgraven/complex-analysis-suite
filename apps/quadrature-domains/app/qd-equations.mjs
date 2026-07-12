@@ -784,9 +784,76 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
       && Array.isArray(phi.branches) && phi.branches.length === hData.poles.length);
   }
 
+  // ---------------------------------------------------------------------------
+  // boundaryCurve(spec) — the EXACT algebraic boundary curve Q(w, w̄) = 0 of a solved
+  // bounded quadrature domain, plus (when single-valued) its Schwarz function w̄ = S(w).
+  //
+  // For a bounded QD the Riemann map is RATIONAL,
+  //     φ(t) = w₀ + Σ_j Σ_{k=1}^{m_j} Ā_{j,k} · t^k / (1 − z̄_j t)^k        (φ: 𝔻 → Ω),
+  // and on the unit circle |t|=1, w = φ(t) while w̄ = φ*(1/t), where φ* conjugates the
+  // coefficients:  φ*(1/t) = w̄₀ + Σ_j Σ_k A_{j,k} / (t − z_j)^k. Clearing denominators,
+  //     f = w·q(t) − p(t),   h = w̄·q̃(t) − p̃(t),   q = Π_j (1 − z̄_j t)^{m_j},  q̃ = Π_j (t − z_j)^{m_j},
+  // and ELIMINATING the disk parameter t is the Schwarz-function algebraicity theorem
+  // (Aharonov–Shapiro 1976; Gustafsson 1983): Q(w,w̄) = Res_t(f, h) vanishes on ∂Ω, the
+  // Schwarz function S (S(z)=z̄ on ∂Ω) is its branch meromorphic in Ω, and deg Q ≤ 2N
+  // with N = Σ_j m_j = deg φ. Exact over ℚ(i) — the honest "=" boundary polynomial that
+  // replaces the numerically traced curve.
+  //
+  //   spec = { w0: Gaussian, branches: [{ z: Gaussian, A: [Gaussian, …] }, …] }
+  //          (exact ℚ(i) coefficients; AlgebraStore builds this from a solved solution
+  //           by continued-fraction rationalizing the numeric coordinates — see ratApprox).
+  //   → { Q, degW, degWb, order, schwarz }
+  //     Q       : MPoly in the variables 'w','wb' (= w̄) over ℚ(i) — the boundary curve.
+  //     order   : N (= Σ m_j); degW/degWb : degrees of Q in w / w̄ (each ≤ N).
+  //     schwarz : S.RatFn s.t. w̄ = S(w), returned ONLY when Q is linear in w̄ (deg_{w̄}Q=1,
+  //               i.e. S is single-valued/rational); null when S is algebraic of higher
+  //               degree (the physical meromorphic branch selection is left to the caller).
+  //   Throws if N > BOUNDARY_MAX_ORDER (the resultant Sylvester matrix is 2N×2N; a Gröbner-
+  //   elimination path for higher orders is a planned follow-on).
+  const BOUNDARY_MAX_ORDER = 10;
+  function boundaryCurve(spec) {
+    const S = getSym();
+    if (!S) throw new Error('boundaryCurve: QD.Sym unavailable');
+    const { mpolyConst, mpolyVar, mpolyInt, resultant, RatFn } = S;
+    const brs = (spec && spec.branches) || [];
+    const N = brs.reduce((n, b) => n + ((b.A && b.A.length) || 0), 0);
+    if (N < 1) throw new Error('boundaryCurve: empty domain (no pole coefficients)');
+    if (N > BOUNDARY_MAX_ORDER) {
+      throw new Error('boundaryCurve: order ' + N + ' exceeds the resultant cap (' +
+        BOUNDARY_MAX_ORDER + '); a Gröbner-elimination path is a planned follow-on.');
+    }
+    const t = mpolyVar('t'), w = mpolyVar('w'), wb = mpolyVar('wb');
+    const K = (gau) => mpolyConst(gau);
+    // q(t) = Π (1 − z̄_j t)^{m_j};  q̃(t) = Π (t − z_j)^{m_j}
+    const qFac = brs.map((b) => t.scale(b.z.conj().neg()).add(mpolyInt(1)));   // 1 − z̄_j t
+    const qtFac = brs.map((b) => t.add(K(b.z.neg())));                          // t − z_j
+    let q = mpolyInt(1), qt = mpolyInt(1);
+    brs.forEach((b, j) => { const m = b.A.length; q = q.mul(qFac[j].pow(m)); qt = qt.mul(qtFac[j].pow(m)); });
+    // p(t) = w₀·q + Σ_j Σ_k Ā_{j,k}·t^k·[q/(1−z̄_j t)^k];  p̃(t) = w̄₀·q̃ + Σ_j Σ_k A_{j,k}·[q̃/(t−z_j)^k]
+    let p = K(spec.w0).mul(q), pt = K(spec.w0.conj()).mul(qt);
+    brs.forEach((b, j) => {
+      const m = b.A.length;
+      for (let k = 1; k <= m; k++) {
+        let cof = qFac[j].pow(m - k), cofT = qtFac[j].pow(m - k);   // the co-factor Π_{i≠j}(…)^{m_i} × (this)^{m−k}
+        brs.forEach((b2, i) => { if (i !== j) { const mi = b2.A.length; cof = cof.mul(qFac[i].pow(mi)); cofT = cofT.mul(qtFac[i].pow(mi)); } });
+        p = p.add(K(b.A[k - 1].conj()).mul(t.pow(k)).mul(cof));
+        pt = pt.add(K(b.A[k - 1]).mul(cofT));
+      }
+    });
+    const Q = resultant(w.mul(q).sub(p), wb.mul(qt).sub(pt), 't', 2 * BOUNDARY_MAX_ORDER);
+    const degW = Q.degreeIn('w'), degWb = Q.degreeIn('wb');
+    // Rational Schwarz function when Q is linear in w̄:  Q = Q1(w)·w̄ + Q0(w) ⇒ w̄ = −Q0/Q1.
+    let schwarz = null;
+    if (degWb === 1) {
+      const c = Q.coeffsIn('wb');   // ascending degree in wb: [Q0, Q1]
+      if (c.length === 2 && !c[1].isZero()) schwarz = new RatFn(c[0].neg(), c[1]);
+    }
+    return { Q, degW, degWb, order: N, schwarz };
+  }
+
   const QDEquations = {
     generateClassicalBounded, generateSchwarzBounded, pointFunctionalSystem, reimSplit, realAxisSymmetry,
-    isClassicalBounded,
+    isClassicalBounded, boundaryCurve,   // boundaryCurve: exact Schwarz curve Q(w,w̄)=0 + rational S(w) from a solved QD
     residualAtSolution, residualReimAtSolution,
     buildVarMap, buildRealVarMap,
     systemToLatex, systemToExport, latexOf: latexOfFor,
