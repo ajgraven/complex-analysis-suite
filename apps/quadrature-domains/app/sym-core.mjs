@@ -4226,6 +4226,67 @@ import _QD from './solver.mjs';
     return E;
   }
 
+  // --- Rational (Padé) reconstruction from a truncated power series (EEA over K[t]) ---
+  // Coefficient arrays are ASCENDING (p[i] = coeff of tⁱ) over K = fieldOf(a), like the series
+  // primitives. Local field-generic polynomial helpers — a Padé run is short, so this needs no
+  // MPoly machinery. _plDeg = true degree (−1 for the zero polynomial; ignores trailing zeros).
+  function _plDeg(p) { let d = -1; for (let i = 0; i < p.length; i++) if (p[i] != null && !p[i].isZero()) d = i; return d; }
+  function _plMul(a, b, K) {
+    const da = _plDeg(a), db = _plDeg(b);
+    if (da < 0 || db < 0) return [K.fromInt(0)];
+    const out = []; for (let i = 0; i <= da + db; i++) out.push(K.fromInt(0));
+    for (let i = 0; i <= da; i++) { if (a[i] == null || a[i].isZero()) continue; for (let j = 0; j <= db; j++) { if (b[j] == null || b[j].isZero()) continue; out[i + j] = out[i + j].add(a[i].mul(b[j])); } }
+    return out;
+  }
+  function _plSub(a, b, K) {
+    const n = Math.max(a.length, b.length), out = [];
+    for (let i = 0; i < n; i++) out.push((a[i] || K.fromInt(0)).sub(b[i] || K.fromInt(0)));
+    return out;
+  }
+  // Long division a = q·b + r over the field K (deg r < deg b); b ≠ 0. Degrees read via _plDeg,
+  // so trailing zeros in either operand are harmless.
+  function _plDivMod(a, b, K) {
+    const db = _plDeg(b), lcb = b[db], r = a.slice();
+    const q = []; for (let i = 0, N = Math.max(1, a.length - db); i < N; i++) q.push(K.fromInt(0));
+    for (let dr = _plDeg(r); dr >= db; dr = _plDeg(r)) {
+      const c = r[dr].div(lcb), shift = dr - db;
+      q[shift] = c;
+      for (let j = 0; j <= db; j++) if (b[j] != null && !b[j].isZero()) r[shift + j] = r[shift + j].sub(c.mul(b[j]));
+      if (_plDeg(r) >= dr) break;                               // numerical guard (degree must drop)
+    }
+    return { q, r };
+  }
+
+  // Padé [m/n] approximant of a power series a[0..]: the rational p(t)/q(t) with deg p ≤ m,
+  // deg q ≤ n and p/q ≡ Σ aₖtᵏ (mod t^{m+n+1}), i.e. p ≡ q·a. Extended Euclid on t^{m+n+1} and
+  // the truncated series — the FIRST remainder of degree ≤ m is p, and its running A-cofactor is
+  // q (the classical Padé↔EEA degree theorem gives deg q ≤ n). Needs a known to order m+n
+  // (a.length ≥ m+n+1). Returns { ok, num, den } (ascending coeff arrays over K, den normalized
+  // so den[0] = 1), or { ok:false, reason } when the [m/n] entry is degenerate (den(0) = 0) or
+  // the series is too short.
+  function padeApproximant(a, m, n) {
+    const K = fieldOf(a), L = m + n;
+    if (a.length < L + 1) return { ok: false, reason: 'series too short: need ' + (L + 1) + ' coefficients for Padé [' + m + '/' + n + ']' };
+    const mod = []; for (let i = 0; i <= L + 1; i++) mod.push(K.fromInt(i === L + 1 ? 1 : 0));  // t^{L+1}
+    let r0 = mod, r1 = a.slice(0, L + 1), t0 = [K.fromInt(0)], t1 = [K.fromInt(1)];             // r = s·t^{L+1} + tcof·a
+    while (_plDeg(r1) > m) {
+      const { q } = _plDivMod(r0, r1, K);
+      const r2 = _plSub(r0, _plMul(q, r1, K), K), t2 = _plSub(t0, _plMul(q, t1, K), K);
+      r0 = r1; r1 = r2; t0 = t1; t1 = t2;
+    }
+    const d0 = t1[0];
+    if (d0 == null || d0.isZero()) return { ok: false, reason: 'degenerate Padé [' + m + '/' + n + ']: denominator vanishes at 0' };
+    const trim = (u) => u.slice(0, Math.max(0, _plDeg(u)) + 1);
+    return { ok: true, num: trim(r1.map((c) => (c || K.fromInt(0)).div(d0))), den: trim(t1.map((c) => c.div(d0))) };
+  }
+
+  // Balanced rational reconstruction: the Padé [⌊L/2⌋ / ⌈L/2⌉] entry of a length-(L+1) series —
+  // the lowest-degree rational function matching every known coefficient.
+  function rationalReconstruct(a) {
+    const L = a.length - 1;
+    return padeApproximant(a, Math.floor(L / 2), Math.ceil(L / 2));
+  }
+
   // ---------------------------------------------------------------------------
   // Minimal complex arithmetic for evalComplex (self-contained; QD.Complex is
   // not assumed loaded). {re,im} plain objects.
@@ -4267,6 +4328,7 @@ import _QD from './solver.mjs';
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
     seriesDeriv, seriesIntegral, seriesLog, seriesExp,   // series calculus (Taylor)
+    padeApproximant, rationalReconstruct,                // rational (Padé) reconstruction
   };
 
   const QD = _QD;
