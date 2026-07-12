@@ -2533,6 +2533,42 @@ import _QD from './solver.mjs';
     return s === null ? Infinity : s.length;
   }
 
+  // Minimum hitting set of a family of variable-support Sets — the height of the leading-
+  // monomial ideal. Branch-and-bound: each still-uncovered support must be hit by one of its
+  // members, so branch on its elements. Exact; fine for the modest variable counts of QD systems.
+  function _minHittingSet(supports) {
+    let best = Infinity;
+    (function rec(rem, count) {
+      if (count >= best) return;
+      if (!rem.length) { best = count; return; }
+      for (const v of rem[0]) rec(rem.filter((t) => !t.has(v)), count + 1);
+    })(supports, 0);
+    return best === Infinity ? 0 : best;
+  }
+
+  // Krull dimension of R/I from the leading-monomial (initial) ideal: dim(R/I) = dim(R/in I),
+  // and for a MONOMIAL ideal dim = n − height, where height = the minimum number of variables
+  // whose vanishing contains V(in I) = the min set hitting every generator's support. Returns
+  // 0 (a finite solution set), ≥1 (a positive-dimensional family of that many free parameters),
+  // or −1 for I = (1) (the empty variety). Unlike quotientDimension — which returns ∞ and stops
+  // for positive-dim ideals — this reports the actual moduli dimension.
+  function krullDimension(G, order, vars) {
+    const lms = leadingMonomials(G, order);
+    if (lms.some((lm) => lm.size === 0)) return -1;              // I = (1)
+    const V = _ambientVars(G, vars);
+    const supports = lms.filter((lm) => lm.size > 0).map((lm) => new Set(lm.keys()));
+    if (!supports.length) return V.length;                       // I = (0)
+    return V.length - _minHittingSet(supports);
+  }
+
+  // { dimension, degree } for R/I. degree is the exact solution count with multiplicity
+  // (= #standard monomials) when zero-dimensional; for a positive-dimensional ideal the degree
+  // needs the full Hilbert-series numerator (a follow-on) so it is reported as null.
+  function dimensionDegree(G, order, vars) {
+    const dimension = krullDimension(G, order, vars);
+    return { dimension, degree: dimension === 0 ? quotientDimension(G, order, vars) : null };
+  }
+
   // ---------------------------------------------------------------------------
   // FGLM — convert a Gröbner basis G1 (order1, typically the fast grevlex) into the
   // Gröbner basis under order2 (typically lex, for elimination / solving) of the
@@ -4158,7 +4194,7 @@ import _QD from './solver.mjs';
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     inIdeal, eliminationIdeal, idealIntersect, idealQuotient,   // ideal ops: membership, projection, ∩, colon
 
-    leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, fglm, linearReduce, solveZeroDim,
+    leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, krullDimension, dimensionDegree, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, solveByEigenvalues, realSolutionCount, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
