@@ -1118,15 +1118,27 @@ const QD = _QD;
       if (!res.ok) { showError('RCTD import: ' + (res.reason || 'failed')); return; }
       if (canvas) canvas.clearSelection();
       rerender(); refreshPickers();
-      // Verdict summary: the per-cell real-solution counts (the parametric uniqueness picture).
+      // Verdict summary: per cell, the real-solution count AND the parameter REGION it holds in
+      // (the constraints) — the legible parametric picture "n real solutions where [g ⋈ 0]".
       const counted = res.cells.filter((c) => c.realCount != null);
       const total = counted.reduce((s, c) => s + c.realCount, 0);
       const text2 = 'Imported ' + res.cellCount + ' RCTD parameter cell' + (res.cellCount === 1 ? '' : 's')
         + ' (column ' + res.column + '), ' + res.created.length + ' node(s).'
         + (counted.length ? '  Real solutions per cell: ' + counted.map((c) => 'cell ' + c.index + ' → ' + c.realCount).join(', ') + '.' : '');
-      const rows = res.cells.map((c) => 'cell ' + c.index + ': ' + (c.realCount != null ? c.realCount + ' real solution' + (c.realCount === 1 ? '' : 's') : 'real count not reported'));
+      // KaTeX rows: the count + the parameter constraints defining the cell (rendered from the
+      // parsed term lists, so no dependence on the imported node ordering).
+      const RSym = QD && QD.Sym;
+      const relTex = (r) => (r === '>' ? '> 0' : (r === '≠' ? '\\ne 0' : '= 0'));
+      const cellLatex = (parsed.cells || []).map((cell, ci) => {
+        const idx = (cell && cell.index != null) ? cell.index : ci + 1;
+        const rc = (cell && cell.realCount != null) ? cell.realCount : null;
+        const head = '\\text{cell ' + idx + ': }' + (rc != null ? rc + '\\text{ real solution' + (rc === 1 ? '' : 's') + '}' : '\\text{(count not reported)}');
+        let cons = [];
+        try { cons = (cell.constraints || []).map((c) => reimSafeLatex(RSym.polyFromTermList(c.terms || []).toLatex(latexOf)) + ' ' + relTex(c.rel)); } catch (e) { cons = []; }
+        return head + (cons.length ? '\\ \\text{where}\\ ' + cons.join(',\\ ') : '\\ \\text{(all parameters)}');
+      });
       setStatus(text2);
-      if (canvas) canvas.setVerdict({ text: 'RCTD: ' + res.cellCount + ' parameter cell' + (res.cellCount === 1 ? '' : 's') + (counted.length ? ' · ' + total + ' real solution(s) total' : ''), solutionsText: rows.join('\n') });
+      if (canvas) canvas.setVerdict({ text: 'RCTD: ' + res.cellCount + ' parameter cell' + (res.cellCount === 1 ? '' : 's') + (counted.length ? ' · ' + total + ' real solution(s) total' : ''), solutionsLatex: cellLatex });
       toast(text2);
     }
 
