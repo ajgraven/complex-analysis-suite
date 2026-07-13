@@ -1,5 +1,6 @@
 // String rendering for exact values — shared coefficient formatting so every consumer's polynomial output
 // (the correspondence curve C(w, z̄), a Gleason polynomial G_n(c), a dynatomic Φ_n) reads consistently.
+import type { BiPoly } from "./biPoly.js";
 import type { Frac, Gauss } from "./gaussian.js";
 import type { QiPoly } from "./qiPoly.js";
 
@@ -47,6 +48,45 @@ export function renderQiPolyText(p: QiPoly, varSym: string): string {
     const body = !showMag ? vs : vs.length === 0 ? mag : `${mag} ${vs}`;
     if (idx === 0) out += sign < 0 ? `- ${body}` : body;
     else out += sign < 0 ? ` - ${body}` : ` + ${body}`;
+  }
+  return out;
+}
+
+/**
+ * Render a bivariate polynomial Σ cₖ(inner)·outerᵏ as ASCII, e.g. the dynatomic Φ_n(z, c) →
+ * "z^2 - z + c" or "z^2 + z + c + 1". A coefficient that is ±1 drops (as usual); a multi-term inner
+ * coefficient in front of an outer power is parenthesized: "(3 c + 1) z^4".
+ */
+export function renderBiPolyText(p: BiPoly, outerSym: string, innerSym: string): string {
+  const pow = (k: number): string => (k === 0 ? "" : k === 1 ? outerSym : `${outerSym}^${k}`);
+  const terms: { sign: 1 | -1; body: string }[] = [];
+  for (let k = p.degree(); k >= 0; k--) {
+    const c = p.coeff(k);
+    if (c.isZero()) continue;
+    const outer = pow(k);
+    const inner = renderQiPolyText(c, innerSym);
+    const nz = c.coeffs.filter((g) => !g.isZero()).length;
+    if (outer === "") {
+      // constant-in-outer term: emit the whole inner polynomial, peeling its overall leading sign.
+      if (inner.startsWith("- ")) terms.push({ sign: -1, body: inner.slice(2) });
+      else terms.push({ sign: 1, body: inner });
+    } else if (c.degree() === 0) {
+      const { sign, mag, isUnit } = renderGaussMag(c.coeff(0));
+      terms.push({ sign, body: isUnit ? outer : `${mag} ${outer}` });
+    } else if (nz === 1) {
+      // single inner monomial coefficient (e.g. "c", "-c^2") — no parentheses.
+      if (inner.startsWith("- ")) terms.push({ sign: -1, body: `${inner.slice(2)} ${outer}` });
+      else terms.push({ sign: 1, body: `${inner} ${outer}` });
+    } else {
+      terms.push({ sign: 1, body: `(${inner}) ${outer}` });
+    }
+  }
+  if (terms.length === 0) return "0";
+  let out = "";
+  for (let i = 0; i < terms.length; i++) {
+    const t = terms[i];
+    if (i === 0) out += t.sign < 0 ? `- ${t.body}` : t.body;
+    else out += t.sign < 0 ? ` - ${t.body}` : ` + ${t.body}`;
   }
   return out;
 }

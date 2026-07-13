@@ -6,9 +6,12 @@
 //   - gaussian.ts : Frac (ℚ over BigInt) + Gauss (ℚ(i)); a field, so division is exact.
 //   - qiPoly.ts   : exact univariate polynomials over ℚ(i) (divmod, exact division, Horner) — the variable
 //                   is abstract (z̄ for a correspondence curve, c for a Gleason polynomial).
+//   - biPoly.ts   : exact bivariate polynomials — a polynomial in an outer variable over QiPoly (inner)
+//                   coefficients, with monic division; the layer CD's dynatomic Φ_n(z,c) needs.
 //   - render.ts   : shared coefficient/polynomial string formatting.
 // Consumers: apps/correspondences (deleted-correspondence curve + cusp locus, #16) and — from #17 —
 // apps/complex-dynamics (dynatomic / Gleason / multiplier component data).
 export { bigGcd, Frac, Gauss } from "./gaussian.js";
 export { QiPoly } from "./qiPoly.js";
-export { renderGaussMag, renderQiPolyText } from "./render.js";
+export { BiPoly } from "./biPoly.js";
+export { renderBiPolyText, renderGaussMag, renderQiPolyText } from "./render.js";
