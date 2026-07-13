@@ -1,10 +1,9 @@
-// Exact univariate polynomials over ℚ(i) — the coefficient ring for the correspondence curve, where the
-// single variable is z̄ (the conjugate coordinate; the correspondence is anti-holomorphic, so its curve is
-// polynomial in w with coefficients that are polynomials in z̄). Because ℚ(i) is a field, division-with-
-// remainder is exact, which the deflation (dividing out the trivial branch) and the fraction-free Bareiss
-// determinant (the discriminant → cusp locus) both rely on.
+// Exact univariate polynomials over ℚ(i) — @cas/exact's workhorse. The single variable is abstract (its
+// consumers name it: z̄ for the correspondence curve, c for a Gleason polynomial). Because ℚ(i) is a field,
+// division-with-remainder is exact, which the correspondence-curve deflation, the fraction-free Bareiss
+// resultant, and the dynatomic/Gleason Möbius division (which needs only the monic-divisor case) all rely on.
 //
-// Coefficients are little-endian: coeffs[k] multiplies zbarᵏ. The array is always trimmed so the top
+// Coefficients are little-endian: coeffs[k] multiplies varᵏ. The array is always trimmed so the top
 // coefficient is nonzero; the zero polynomial is the empty array.
 import { Gauss } from "./gaussian.js";
 
@@ -37,9 +36,17 @@ export class QiPoly {
     return QiPoly.constant(Gauss.int(n));
   }
 
-  /** The variable itself, zbar (degree 1). */
+  /** The variable itself (degree 1). */
   static variable(): QiPoly {
     return new QiPoly([ZERO, Gauss.ONE]);
+  }
+
+  /** The monomial coeff·varᵏ. */
+  static monomial(k: number, coeff: Gauss = Gauss.ONE): QiPoly {
+    if (k < 0 || coeff.isZero()) return QiPoly.zero();
+    const cs: Gauss[] = new Array<Gauss>(k + 1).fill(ZERO);
+    cs[k] = coeff;
+    return new QiPoly(cs);
   }
 
   /** Degree, with the zero polynomial reported as −1. */
@@ -103,6 +110,18 @@ export class QiPoly {
       }
     }
     return QiPoly.fromCoeffs(out);
+  }
+
+  /** Non-negative integer power (exponentiation by squaring). */
+  pow(n: number): QiPoly {
+    if (n < 0) throw new Error("QiPoly.pow: negative exponent");
+    let result = QiPoly.constant(Gauss.ONE);
+    let base = QiPoly.fromCoeffs(this.coeffs); // a copy, so `this` is not aliased
+    for (let e = n; e > 0; e >>= 1) {
+      if (e & 1) result = result.mul(base);
+      if (e > 1) base = base.mul(base);
+    }
+    return result;
   }
 
   /**
