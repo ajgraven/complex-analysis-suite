@@ -1,6 +1,6 @@
 # General n-variate polynomial factorization over ℚ(i) — design plan
 
-> **Status: IN PROGRESS — P0 ✅; P1 (infra) ✅; P2 (Hensel-lift engine) ✅; P3 (`factorMultivariate`) ✅ — all merged.** This is the one deferred extension of roadmap item #19,
+> **Status: IN PROGRESS — P0 ✅; P1 (infra) ✅; P2 (Hensel-lift engine) ✅; P3 (`factorMultivariate`) ✅; P4 (integrate + certify) ✅ — all merged; only the P5 oracle remains.** This is the one deferred extension of roadmap item #19,
 > whose **bivariate** core (Phases 0–5) is complete and merged (see
 > [`MULTIVARIATE_FACTORING.md`](MULTIVARIATE_FACTORING.md)). Decisions recorded (2026-07-13): **(a)** reduce
 > n-variate → **univariate** and Hensel-lift, **generalizing the trusted `henselFactorBivariate`** (its
@@ -156,10 +156,13 @@ trusted Phase-5 lift machinery**. Keep multivariate-Gao in reserve as a possible
   bivariate-consistency check is a genuine two-algorithm differential. Goldens `vitest/qd-nvar-factor.test.ts`
   — bivariate consistency, trivariate/4-variate recovery, over-splitting, content, round-trip, `complete`.
   (The external Sympy corpus + second-reduction differential are consolidated into the P5 oracle phase.)
-- **P4 — integrate.** A fifth method in `_factorRec` (after the bivariate branch): a ≥3-variable *entangled*
-  remainder → `factorMultivariate`. Extend `minimalPrimes` / `triangularDecomposition` `isCertPrime` to
-  n-variate hypersurfaces (flips more `complete` flags); `spuriousFactors` / `discriminantVariety` /
-  `sym-radical` benefit automatically since they call `factor`.
+- **P4 — integrate ✅ (merged).** A fifth method in `_factorRec` (after the bivariate branch): a
+  ≥3-variable remainder (degree/variable-count-capped) → `factorMultivariate`, splicing its factors when it
+  splits ≥2-ways and is complete. `minimalPrimes` `isCertPrime` now certifies an n-variate hypersurface
+  component ⟨g⟩ prime (⟨g⟩ prime ⟺ g irreducible, via `factorMultivariate`) — so `⟨x²−yz⟩` is certified and
+  `⟨(x+y+z)(x−y+z)⟩` genuinely splits; `triangularDecomposition` inherits it. `spuriousFactors` /
+  `discriminantVariety` / `sym-radical` benefit automatically (they call `factor`). Goldens: `factor()`
+  routing in `qd-nvar-factor.test.ts` + the n-variate cases in `qd-minimal-primes.test.ts`.
 - **P5 — the independent oracle.** The second-reduction differential + the n-variate Sympy corpus.
 
 Deferred within this extension: **Wang LC distribution** (non-monic main variable); a **multivariate
