@@ -3039,6 +3039,116 @@ import _QD from './solver.mjs';
     return { ok: true, D: mm.D, moments: ps.map((g) => g.toComplex()) };
   }
 
+  // --- Shape-from-moments (Prony–Hankel) — roadmap #18 ---
+  // Given a complex moment sequence m_k = Σ_j a_j z_j^k (an exponential sum: the k-th power-sum moment
+  // of a discrete measure Σ a_j δ_{z_j} — for a quadrature domain, exactly the quadrature data), recover
+  // the "shape": the ORDER N = #nodes (the QD-order), and the exact PRONY polynomial P(z) = Π(z − z_j)
+  // the nodes satisfy. The order is the rank of the Hankel moment matrix H_{ij} = m_{i+j}; computed
+  // EXACTLY over ℚ(i) it is an integer with a genuine rank DROP at N, where floating-point Prony is
+  // notoriously ill-conditioned. (Nodes/weights = the numeric roots of P + a Vandermonde solve — a later
+  // step; the exact contribution here is the order and the exact Prony polynomial.)
+
+  // Rationalize a finite JS number to an exact Rational (continued-fraction convergents, denominator
+  // capped): integers are exact, and a float that is really a simple rational is recovered exactly — the
+  // regime #18 targets (exact input ⇒ exact rank). A genuinely irrational float rounds to a close rational.
+  function _ratFromNumber(x, maxDen) {
+    if (typeof x !== 'number' || !isFinite(x)) throw new Error('shape-from-moments: non-finite moment');
+    if (Number.isInteger(x)) return new Rational(BigInt(x), 1n);
+    maxDen = maxDen || 1000000000000n; // 1e12
+    const neg = x < 0; let y = Math.abs(x);
+    let h0 = 0n, h1 = 1n, k0 = 1n, k1 = 0n; // convergent numerators/denominators
+    for (let it = 0; it < 64; it++) {
+      const a = Math.floor(y), ai = BigInt(a);
+      const h2 = ai * h1 + h0, k2 = ai * k1 + k0;
+      if (k2 > maxDen) break;
+      h0 = h1; h1 = h2; k0 = k1; k1 = k2;
+      const frac = y - a;
+      if (frac < 1e-15) break;
+      y = 1 / frac;
+    }
+    return new Rational(neg ? -h1 : h1, k1);
+  }
+
+  // Coerce a moment (Gaussian | {re,im} numbers/Rationals | real number) to an exact Gaussian.
+  function _momentToGaussian(m) {
+    if (m instanceof Gaussian) return m;
+    if (typeof m === 'number') return new Gaussian(_ratFromNumber(m), RZERO);
+    if (m && typeof m === 'object' && ('re' in m || 'im' in m)) {
+      const re = m.re instanceof Rational ? m.re : _ratFromNumber(m.re == null ? 0 : m.re);
+      const im = m.im instanceof Rational ? m.im : _ratFromNumber(m.im == null ? 0 : m.im);
+      return new Gaussian(re, im);
+    }
+    throw new Error('shape-from-moments: unrecognized moment value');
+  }
+
+  // Exact rank of a Gaussian matrix by row reduction over ℚ(i) (ℚ(i) is a field ⇒ ordinary elimination
+  // is exact); counts pivots.
+  function _gaussianMatrixRank(A) {
+    const rows = A.length;
+    if (rows === 0) return 0;
+    const cols = A[0].length;
+    const M = A.map((r) => r.slice());
+    let rank = 0;
+    for (let col = 0; col < cols && rank < rows; col++) {
+      let piv = -1;
+      for (let r = rank; r < rows; r++) if (!M[r][col].isZero()) { piv = r; break; }
+      if (piv < 0) continue;
+      if (piv !== rank) { const t = M[piv]; M[piv] = M[rank]; M[rank] = t; }
+      const pv = M[rank][col];
+      for (let c = col; c < cols; c++) M[rank][c] = M[rank][c].div(pv);
+      for (let r = 0; r < rows; r++) {
+        if (r === rank) continue;
+        const f = M[r][col];
+        if (f.isZero()) continue;
+        for (let c = col; c < cols; c++) M[r][c] = M[r][c].sub(f.mul(M[rank][c]));
+      }
+      rank++;
+    }
+    return rank;
+  }
+
+  // The QD-order N = rank of the maximal square Hankel of the moment sequence, EXACT over ℚ(i). With L
+  // moments a size-s Hankel (using m_0..m_{2s-2}) is available for s ≤ ⌊(L+1)/2⌋; `saturated` flags
+  // rank == s — the order could be higher, so supply more moments. Returns { ok, order, hankelSize,
+  // saturated } or { ok:false, reason }.
+  function hankelRank(moments) {
+    if (!Array.isArray(moments) || moments.length < 1) return { ok: false, reason: 'need a nonempty moment sequence' };
+    let g;
+    try { g = moments.map(_momentToGaussian); } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    const L = g.length, s = Math.floor((L + 1) / 2), H = [];
+    for (let i = 0; i < s; i++) { const row = []; for (let j = 0; j < s; j++) row.push(g[i + j]); H.push(row); }
+    const rank = _gaussianMatrixRank(H);
+    return { ok: true, order: rank, hankelSize: s, saturated: rank === s };
+  }
+
+  // The exact Prony polynomial P(z) = Π(z − z_j) = z^N − Σ_{i<N} c_i z^i, whose roots are the nodes,
+  // from the Hankel system H·c = rhs (H_{ij} = m_{i+j}, rhs_i = m_{i+N}) solved exactly over ℚ(i). `order`
+  // defaults to hankelRank; needs ≥ 2·order moments. Returns { ok, order, poly (monic MPoly in opts.varName,
+  // default 'z'), coeffs (ascending Gaussian array, coeffs[N] = 1) } or { ok:false, reason }.
+  function pronyPolynomial(moments, opts) {
+    opts = opts || {};
+    const hr = hankelRank(moments);
+    if (!hr.ok) return hr;
+    const N = opts.order != null ? opts.order : hr.order;
+    const varName = opts.varName || 'z';
+    if (N < 0 || !Number.isInteger(N)) return { ok: false, reason: 'invalid order' };
+    let g;
+    try { g = moments.map(_momentToGaussian); } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    const zv = MPoly.variable(varName);
+    if (N === 0) return { ok: true, order: 0, poly: MPoly.fromInt(1), coeffs: [Gaussian.fromInt(1)] };
+    if (g.length < 2 * N) return { ok: false, reason: 'need at least 2·order = ' + 2 * N + ' moments' };
+    const H = [], rhs = [];
+    for (let i = 0; i < N; i++) { const row = []; for (let j = 0; j < N; j++) row.push(g[i + j]); H.push(row); rhs.push(g[i + N]); }
+    const c = _gaussSolveG(H, rhs, N);
+    if (!c) return { ok: false, reason: 'Hankel system singular at order ' + N + ' — the order estimate is too high for these moments' };
+    // P(z) = z^N − Σ c_i z^i  ⇒ ascending coeffs [−c_0, …, −c_{N−1}, 1]; build the MPoly.
+    const coeffs = c.map((ci) => ci.neg());
+    coeffs.push(Gaussian.fromInt(1));
+    let poly = MPoly.fromInt(0), zp = MPoly.fromInt(1);
+    for (let k = 0; k <= N; k++) { poly = poly.add(zp.mul(MPoly.constant(coeffs[k]))); if (k < N) zp = zp.mul(zv); }
+    return { ok: true, order: N, poly, coeffs };
+  }
+
   // A unit-free null vector of a complex n×n matrix A ({re,im} entries), i.e. w≠0 with
   // A·w = 0 (Gaussian elimination with partial pivoting; returns null if A has full rank).
   function _complexNullVector(A, n) {
@@ -4737,6 +4847,7 @@ import _QD from './solver.mjs';
 
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, krullDimension, dimensionDegree, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, powerSums, newtonToElementary, charPolyByTraces, coordinateMoments,
+    hankelRank, pronyPolynomial, // #18 shape-from-moments (Prony–Hankel): exact QD-order + Prony polynomial
     solveByEigenvalues, realSolutionCount, parametricRealCount1D, discriminantVariety, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
