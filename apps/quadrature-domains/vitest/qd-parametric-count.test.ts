@@ -50,6 +50,16 @@ describe("QD.Sym.parametricRealCount1D", () => {
     expect(r.crosschecked).toBe(true);
   });
 
+  it("circle ∩ moving line {x²+y²−1, x−y−t}: 2 real for |t|<√2, 0 outside (tangent at ±√2, irrational)", () => {
+    const r = parametricRealCount1D([V("x").pow(2).add(V("y").pow(2)).sub(I(1)), V("x").sub(V("y")).sub(V("t"))], "t");
+    expect(r.ok).toBe(true);
+    expect(counts(r)).toEqual([0, 2, 0]);
+    expect(r.criticalValues.length).toBe(2);
+    expect(r.criticalValues[0].approx).toBeCloseTo(-Math.SQRT2, 6);   // −√2
+    expect(r.criticalValues[1].approx).toBeCloseTo(Math.SQRT2, 6);    // +√2
+    expect(r.criticalValues.every((c: any) => c.exact === false)).toBe(true); // irrational ⇒ boxes
+  });
+
   it("no bifurcation (x − t): exactly 1 real solution everywhere, no critical values", () => {
     const r = parametricRealCount1D([V("x").sub(V("t"))], "t");
     expect(r.ok).toBe(true);
