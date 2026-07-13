@@ -1,0 +1,331 @@
+// The EXACT deleted correspondence curve of an unbounded-Laurent map (roadmap #16). The Correspondences
+// app's numeric branch engine (correspondence.ts) solves, per point and in floating point, the polynomial
+// φ(w) = φ(η(z)) and deflates the trivial root w = η(z) by NUMERIC synthetic division — the step that can
+// mislabel the trivial branch when two branches collide near a cusp. Here we do that deflation ONCE,
+// EXACTLY, in ℚ(i), yielding the correspondence as a genuine bivariate polynomial C(w, z̄) = 0 with exact
+// coefficients, plus the exact cusp locus (its discriminant in w). Per-point solving stays numeric (a hot
+// render path — exact BigInt per pixel is a non-starter); what this buys is an exact, once-computed
+// scaffold to seed and validate against, and certified cusp locations.
+//
+//   φ(w) = c·w + Σ_{l=0}^{m-1} F[l] / wˡ,   η(z) = 1/z̄,   z̄ =: the conjugate coordinate.
+//
+// φ(w) = φ(η(z)), cleared of the w- and z̄-denominators, is the degree-m (in w) polynomial
+//   P(w, z̄) = (c·z̄)·wᵐ + (−c − Σ_{l≥1} F[l]·z̄^{l+1})·w^{m-1} + Σ_{k=1}^{m-1} (F[k]·z̄)·w^{m-1-k},
+// whose trivial root w = η = 1/z̄ is the factor (z̄·w − 1). Dividing it out (exactly) leaves the
+// degree-d = (m−1) deleted correspondence curve C(w, z̄); a d:d correspondence. See INTERCHANGE.md §5.
+//
+// Honest labelling (RISKS.md §3): the curve and its cusp locus are EXACT (=). The dynamics built on the
+// correspondence — orbit trees, straightening, branch continuation through cusps — remain exploratory (≈).
+import { bigGcd, Frac, Gauss } from "./gaussian.js";
+import { QiPoly } from "./qiPoly.js";
+
+/** A single monomial g · wʲ · z̄ᵏ of the bivariate curve, used for rendering and numeric evaluation. */
+interface CurveTerm {
+  g: Gauss;
+  j: number; // power of w
+  k: number; // power of z̄
+}
+
+export interface ExactCorrespondenceCurve {
+  /** d = m − 1: the degree in w, so the correspondence is d:d. */
+  readonly wDegree: number;
+  /** The content-cleared curve C(w, z̄): wCoeffs[j] is the coefficient of wʲ, a polynomial in z̄. */
+  readonly wCoeffs: readonly QiPoly[];
+  /** LaTeX of "C(w, z̄) = 0" (z̄ rendered as \bar{z}). */
+  readonly latex: string;
+  /** Plain-text of "C(w, z̄) = 0" (z̄ rendered as z̄). */
+  readonly text: string;
+  /** Numeric value of C(w, z̄) at complex w and z̄ (float [re, im]) — for on-curve cross-checks. */
+  evalNumeric(w: readonly [number, number], zbar: readonly [number, number]): [number, number];
+}
+
+/** LCM of two non-negative BigInts (lcm(_, 0) = 0). */
+function bigLcm(a: bigint, b: bigint): bigint {
+  if (a === 0n || b === 0n) return 0n;
+  return (a / bigGcd(a, b)) * b;
+}
+
+/** z̄ᵏ as a QiPoly. */
+function varPow(k: number): QiPoly {
+  const coeffs: Gauss[] = new Array<Gauss>(k + 1).fill(Gauss.ZERO);
+  coeffs[k] = Gauss.ONE;
+  return QiPoly.fromCoeffs(coeffs);
+}
+
+/**
+ * Content-clear a list of z̄-polynomials JOINTLY: scale every coefficient by one common rational so that
+ * (a) all become Gaussian integers and (b) their overall integer content is 1, then fix the sign from the
+ * leading coefficient of the last (highest-w) polynomial. Turns w² − (z̄²/2)w − z̄/2 into 2w² − z̄²w − z̄.
+ */
+function integerPrimitive(polys: readonly QiPoly[]): QiPoly[] {
+  const all: Gauss[] = [];
+  for (const p of polys) for (const g of p.coeffs) if (!g.isZero()) all.push(g);
+  if (all.length === 0) return polys.map((p) => p);
+
+  // Common denominator L so that L·g is a Gaussian integer for every coefficient g.
+  let L = 1n;
+  for (const g of all) {
+    L = bigLcm(L, g.re.d);
+    L = bigLcm(L, g.im.d);
+  }
+  // Integer content G = gcd of all (scaled) real and imaginary parts.
+  let G = 0n;
+  for (const g of all) {
+    G = bigGcd(G, g.re.n * (L / g.re.d));
+    G = bigGcd(G, g.im.n * (L / g.im.d));
+  }
+  if (G === 0n) G = 1n;
+
+  // Sign: make the leading z̄-coefficient of the highest-w polynomial "positive" (re > 0, or im > 0 if real
+  // part is zero) so the canonical form is deterministic.
+  let sign = 1n;
+  for (let j = polys.length - 1; j >= 0; j--) {
+    const lead = polys[j]?.leadingCoeff() ?? Gauss.ZERO;
+    if (!lead.isZero()) {
+      const s = lead.re.isZero() ? lead.im.n : lead.re.n;
+      if (s < 0n) sign = -1n;
+      break;
+    }
+  }
+
+  const scale = (g: Gauss): Gauss =>
+    new Gauss(
+      Frac.of((sign * g.re.n * (L / g.re.d)) / G),
+      Frac.of((sign * g.im.n * (L / g.im.d)) / G),
+    );
+  return polys.map((p) => QiPoly.fromCoeffs(p.coeffs.map(scale)));
+}
+
+/**
+ * Build P(w, z̄) as an array indexed by the power of w (P[j] = coefficient of wʲ, a z̄-polynomial), for
+ * φ(w) = c·w + Σ_{l=0}^{m-1} F[l]/wˡ. Requires m ≥ 2 (a genuine multi-valued correspondence) and c ≠ 0.
+ */
+function buildFullPolynomial(c: Gauss, F: readonly Gauss[]): QiPoly[] {
+  const m = F.length;
+  if (m < 2) throw new Error("correspondenceCurve: need at least F[0], F[1] (m ≥ 2)");
+  if (c.isZero()) throw new Error("correspondenceCurve: leading coefficient c must be nonzero");
+  const zbar = QiPoly.variable();
+  const P: QiPoly[] = new Array<QiPoly>(m + 1).fill(QiPoly.zero());
+  // wᵐ : c·z̄
+  P[m] = QiPoly.constant(c).mul(zbar);
+  // w^{m-1} : −c − Σ_{l=1}^{m-1} F[l]·z̄^{l+1}
+  let pm1 = QiPoly.constant(c.neg());
+  for (let l = 1; l <= m - 1; l++) {
+    const Fl = F[l] ?? Gauss.ZERO;
+    if (!Fl.isZero()) pm1 = pm1.sub(QiPoly.constant(Fl).mul(varPow(l + 1)));
+  }
+  P[m - 1] = pm1;
+  // w^{m-1-k} : F[k]·z̄, for k = 1..m-1
+  for (let k = 1; k <= m - 1; k++) {
+    const Fk = F[k] ?? Gauss.ZERO;
+    P[m - 1 - k] = QiPoly.constant(Fk).mul(zbar);
+  }
+  return P;
+}
+
+/**
+ * Divide the full polynomial P(w, z̄) by the trivial factor (z̄·w − 1) exactly, as polynomial long
+ * division in w over the ring ℚ(i)[z̄]. The divisor's leading (in-w) coefficient is z̄, so each step
+ * divides the current leading remainder by z̄ — which is exact precisely because w = 1/z̄ is a genuine
+ * root (the reason the branch is called "deleted"). Returns the degree-(m−1) quotient's w-coefficients.
+ */
+function deflateTrivial(P: readonly QiPoly[]): QiPoly[] {
+  const m = P.length - 1;
+  const rem: QiPoly[] = P.map((p) => p);
+  const q: QiPoly[] = new Array<QiPoly>(m).fill(QiPoly.zero());
+  for (let j = m; j >= 1; j--) {
+    let qc: QiPoly;
+    try {
+      qc = (rem[j] ?? QiPoly.zero()).divideByVar(); // rem[j] / z̄
+    } catch {
+      throw new Error("correspondenceCurve: (z̄·w − 1) is not an exact factor (not a Laurent correspondence?)");
+    }
+    q[j - 1] = qc;
+    // subtract qc·w^{j-1}·(z̄·w − 1): the wʲ term cancels rem[j] exactly; the w^{j-1} term adds qc.
+    rem[j - 1] = (rem[j - 1] ?? QiPoly.zero()).add(qc);
+  }
+  if (!(rem[0] ?? QiPoly.zero()).isZero()) {
+    throw new Error("correspondenceCurve: nonzero remainder after deflation (internal invariant violated)");
+  }
+  return q;
+}
+
+/** Fraction-free (Bareiss) determinant of a square matrix over ℚ(i)[z̄]; every intermediate division is
+ *  exact in the integral domain, so it stays in QiPoly without denominators. */
+function qiBareissDet(matrix: readonly (readonly QiPoly[])[]): QiPoly {
+  const n = matrix.length;
+  if (n === 0) return QiPoly.int(1);
+  const a: QiPoly[][] = matrix.map((row) => row.slice());
+  let prev = QiPoly.int(1);
+  let sign = 1;
+  for (let k = 0; k < n - 1; k++) {
+    if ((a[k]?.[k] ?? QiPoly.zero()).isZero()) {
+      let r = k + 1;
+      while (r < n && (a[r]?.[k] ?? QiPoly.zero()).isZero()) r++;
+      if (r === n) return QiPoly.zero();
+      const tmp = a[k] ?? [];
+      a[k] = a[r] ?? [];
+      a[r] = tmp;
+      sign = -sign;
+    }
+    const akk = a[k]?.[k] ?? QiPoly.zero();
+    for (let i = k + 1; i < n; i++) {
+      const ai = a[i] ?? [];
+      const ak = a[k] ?? [];
+      for (let j = k + 1; j < n; j++) {
+        const num = (ai[j] ?? QiPoly.zero()).mul(akk).sub((ai[k] ?? QiPoly.zero()).mul(ak[j] ?? QiPoly.zero()));
+        ai[j] = num.divExact(prev);
+      }
+      ai[k] = QiPoly.zero();
+    }
+    prev = akk;
+  }
+  const det = a[n - 1]?.[n - 1] ?? QiPoly.zero();
+  return sign === 1 ? det : det.neg();
+}
+
+/** Sylvester resultant Res_w(A, B) of A (degree p) and B (degree q), as a z̄-polynomial. A/B are given as
+ *  little-endian w-coefficient lists. */
+function sylvesterResultant(A: readonly QiPoly[], B: readonly QiPoly[]): QiPoly {
+  const p = A.length - 1;
+  const q = B.length - 1;
+  const N = p + q;
+  if (N === 0) return QiPoly.int(1);
+  const M: QiPoly[][] = Array.from({ length: N }, () => new Array<QiPoly>(N).fill(QiPoly.zero()));
+  for (let i = 0; i < q; i++) {
+    for (let kk = 0; kk <= p; kk++) M[i][i + kk] = A[p - kk] ?? QiPoly.zero(); // high-to-low
+  }
+  for (let i = 0; i < p; i++) {
+    for (let kk = 0; kk <= q; kk++) M[q + i][i + kk] = B[q - kk] ?? QiPoly.zero();
+  }
+  return qiBareissDet(M);
+}
+
+/** Content-clear a single z̄-polynomial to its canonical integer-primitive form (leading coeff positive). */
+function primitivePoly(p: QiPoly): QiPoly {
+  return integerPrimitive([p])[0] ?? QiPoly.zero();
+}
+
+/** Flatten the curve into nonzero monomials g·wʲ·z̄ᵏ, sorted by (j desc, k desc) for stable rendering. */
+function curveTerms(wCoeffs: readonly QiPoly[]): CurveTerm[] {
+  const terms: CurveTerm[] = [];
+  for (let j = 0; j < wCoeffs.length; j++) {
+    const cj = wCoeffs[j];
+    if (!cj) continue;
+    for (let k = 0; k < cj.coeffs.length; k++) {
+      const g = cj.coeff(k);
+      if (!g.isZero()) terms.push({ g, j, k });
+    }
+  }
+  terms.sort((s, t) => (t.j - s.j) || (t.k - s.k));
+  return terms;
+}
+
+/** Render a Gaussian rational as a bare magnitude string (no leading sign) and its sign, for term output. */
+function renderGaussMag(g: Gauss): { sign: 1 | -1; mag: string; isUnit: boolean } {
+  const fracStr = (f: Frac): string => (f.d === 1n ? `${f.n < 0n ? -f.n : f.n}` : `${f.n < 0n ? -f.n : f.n}/${f.d}`);
+  if (g.im.isZero()) {
+    const sign = g.re.n < 0n ? -1 : 1;
+    return { sign, mag: fracStr(g.re), isUnit: g.re.n === 1n || g.re.n === -1n ? g.re.d === 1n : false };
+  }
+  if (g.re.isZero()) {
+    const sign = g.im.n < 0n ? -1 : 1;
+    const m = fracStr(g.im);
+    return { sign, mag: m === "1" ? "i" : `${m}i`, isUnit: false };
+  }
+  // Genuinely complex a+bi: emit as a parenthesized group with a leading '+'.
+  const reS = g.re.d === 1n ? `${g.re.n}` : `${g.re.n}/${g.re.d}`;
+  const imMag = g.im.n < 0n ? -g.im.n : g.im.n;
+  const imS = `${g.im.n < 0n ? "-" : "+"} ${g.im.d === 1n ? `${imMag}` : `${imMag}/${g.im.d}`}i`;
+  return { sign: 1, mag: `(${reS} ${imS})`, isUnit: false };
+}
+
+/** Render the whole curve "C(w, z̄) = 0". */
+function renderCurve(wCoeffs: readonly QiPoly[], latex: boolean): string {
+  const wSym = "w";
+  const zSym = latex ? "\\bar{z}" : "z̄"; // z with a combining macron in plain text
+  const pow = (base: string, e: number): string => {
+    if (e === 0) return "";
+    if (e === 1) return base;
+    return latex ? `${base}^{${e}}` : `${base}^${e}`;
+  };
+  const terms = curveTerms(wCoeffs);
+  if (terms.length === 0) return latex ? "0 = 0" : "0 = 0";
+  let out = "";
+  for (let idx = 0; idx < terms.length; idx++) {
+    const { g, j, k } = terms[idx];
+    const { sign, mag, isUnit } = renderGaussMag(g);
+    // z̄ factor before w (matching the canonical form 2w² − z̄²w − z̄).
+    const vars = [pow(zSym, k), pow(wSym, j)].filter((s) => s.length > 0);
+    const varStr = latex ? vars.join("\\,") : vars.join(" ");
+    // A coefficient of ±1 in front of at least one variable prints as just the sign (drop the "1").
+    const showMag = !(isUnit && vars.length > 0);
+    let body: string;
+    if (!showMag) body = varStr;
+    else if (vars.length === 0) body = mag;
+    else body = latex ? `${mag}${varStr}` : `${mag} ${varStr}`;
+    if (idx === 0) {
+      out += sign < 0 ? `-${latex ? "" : " "}${body}` : body;
+    } else {
+      out += sign < 0 ? ` - ${body}` : ` + ${body}`;
+    }
+  }
+  return `${out} = 0`;
+}
+
+/** Float [re,im] complex helpers for numeric evaluation. */
+function cAdd(a: [number, number], b: [number, number]): [number, number] {
+  return [a[0] + b[0], a[1] + b[1]];
+}
+function cMul(a: readonly [number, number], b: readonly [number, number]): [number, number] {
+  return [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]];
+}
+function cPow(a: readonly [number, number], e: number): [number, number] {
+  let acc: [number, number] = [1, 0];
+  for (let i = 0; i < e; i++) acc = cMul(acc, a);
+  return acc;
+}
+
+/**
+ * Build the exact deleted correspondence curve of φ(w) = c·w + Σ F[l]/wˡ (c, F Gaussian-rational). The
+ * deltoid φ(z) = z + 1/(2z²) is (c, F) = (1, [0, 0, ½]); its curve is 2w² − z̄²·w − z̄.
+ */
+export function correspondenceCurve(c: Gauss, F: readonly Gauss[]): ExactCorrespondenceCurve {
+  const P = buildFullPolynomial(c, F);
+  const deflated = deflateTrivial(P);
+  const wCoeffs = integerPrimitive(deflated);
+  const wDegree = wCoeffs.length - 1;
+  const terms = curveTerms(wCoeffs);
+  return {
+    wDegree,
+    wCoeffs,
+    latex: renderCurve(wCoeffs, true),
+    text: renderCurve(wCoeffs, false),
+    evalNumeric(w, zbar) {
+      let acc: [number, number] = [0, 0];
+      for (const { g, j, k } of terms) {
+        const coef = g.toTuple();
+        acc = cAdd(acc, cMul(cMul(coef, cPow(w, j)), cPow(zbar, k)));
+      }
+      return acc;
+    },
+  };
+}
+
+/**
+ * The exact CUSP LOCUS of the correspondence: disc_w C(w, z̄) as a content-cleared polynomial in z̄, whose
+ * roots are the z̄-values where two w-branches collide (the branch points / cusps). For the deltoid this is
+ * z̄⁴ + 8z̄. A d < 2 correspondence has no branch collisions, so the locus is the constant 1 (empty).
+ */
+export function cuspLocus(curve: ExactCorrespondenceCurve): QiPoly {
+  const A = curve.wCoeffs; // little-endian w-coefficients, degree d
+  const d = A.length - 1;
+  if (d < 2) return QiPoly.int(1);
+  const B: QiPoly[] = []; // dC/dw
+  for (let j = 1; j <= d; j++) B.push((A[j] ?? QiPoly.zero()).scale(Gauss.int(j)));
+  const res = sylvesterResultant(A, B);
+  const lead = A[d] ?? QiPoly.zero();
+  let disc = res.divExact(lead);
+  if (Math.floor((d * (d - 1)) / 2) % 2 === 1) disc = disc.neg();
+  return primitivePoly(disc);
+}
