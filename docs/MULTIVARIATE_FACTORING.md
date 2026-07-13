@@ -1,6 +1,6 @@
 # Multivariate (bivariate-first) polynomial factorization over ℚ(i) — design plan
 
-> **Status: IN PROGRESS.** Phase 0 (spike) ✅ validated; Phase 1 (infra) ✅ merged; Phase 2 (absolute factor *count* + irreducibility) ✅ merged; Phase 3 (ℚ(i)-rational factor *extraction*, `factorBivariate`) ✅ merged; Phase 4 (integrate into `factor()` + certify bivariate components in `minimalPrimes` / `triangularDecomposition` / `curveGenus`) ✅ merged. Roadmap item #19 (the "genuine multivariate factorizer" that
+> **Status: COMPLETE (bivariate core).** Phase 0 (spike) ✅; Phase 1 (infra) ✅; Phase 2 (absolute factor *count* + irreducibility) ✅; Phase 3 (ℚ(i)-rational factor *extraction*, `factorBivariate`) ✅; Phase 4 (integrate into `factor()` + certify bivariate components in `minimalPrimes` / `triangularDecomposition` / `curveGenus`) ✅; Phase 5 (independent Hensel cross-check oracle + Sympy golden corpus) ✅ — all merged. General n-variate remains the one deferred extension. Roadmap item #19 (the "genuine multivariate factorizer" that
 > several done tiers were capped by). Decisions recorded (2026-07-13): **(a) Gao's PDE / linear-algebra
 > method first** (it plays to this engine's linear-algebra strength and deletes the two most bug-prone
 > subsystems); **(b) the classical Zassenhaus–Hensel path ships as a Phase-5 independent cross-check
@@ -207,8 +207,15 @@ Kept as an independent cross-check. Write `f ∈ ℚ(i)[y][x]`, primitive and sq
   previously could not certify; `triangularDecomposition` inherits it. `curveGenus` reports an
   `irreducible` field (via `bivariateAbsFactorCount`) and returns `genus:null` for an absolutely-reducible
   input. Tests: `factor()` integration cases + updated `qd-minimal-primes` / `qd-curve-genus` goldens.
-- **Phase 5 — the Hensel cross-check oracle** (§6): implement Option A and add a differential test that
-  factors a fuzz corpus with both engines and asserts identical factor sets.
+- **Phase 5 — the Hensel cross-check oracle ✅ (merged).** `henselFactorBivariate` implements the
+  classical route (evaluate `y → y₀`, factor univariately over ℚ(i) via `_qiFactor`, multifactor Hensel
+  lift in the `(y − y₀)`-adic direction, recombine by exact trial division) — a genuinely different
+  algorithm from `factorBivariate`, restricted to monic-in-`x` squarefree inputs (the oracle's scope). A
+  **differential test** (`qd-factor-hensel.test.ts`) factors a monic-in-`x` corpus with BOTH engines and
+  asserts identical factor sets; plus the **Sympy golden corpus** (`factor(…, gaussian=True)` in
+  `fixtures/gen-cas-corpus.py` → `cas-corpus.json`, consumed by `sym-core-cas-corpus.test.ts`; CI runs no
+  Python) cross-checks against a mature external CAS — catching any wrong field of definition (`x²−2y²`
+  must NOT split; `x²+y²` must).
 - **Later / separate:** general n-variate.
 
 ## 8. Test / verification strategy
