@@ -1,10 +1,16 @@
 # QD Algebra Module — Implementation Plan (value-ordered)
 
-> **Status: DRAFT** (finalize after tracks B + E land). Slices ordered strictly by value:
-> correctness first, then proof-workflow honesty, then the orchestrator + UI, then engineering
-> hardening. Each slice is independently completable, testable, committable; tests green at every
-> code commit; the gate (`lint && typecheck && test && build`) runs before each PR. Every slice
-> keeps the exact kernel DOM-free and the append-only DAG intact, and preserves honest labeling.
+> **Status: FINAL** (all 7 tracks integrated). Slices ordered strictly by value: correctness first,
+> then proof-workflow honesty, then the orchestrator + UI, then engineering hardening. Each slice is
+> independently completable, testable, committable; tests green at every code commit; the gate
+> (`lint && typecheck && test && build`) runs before each PR. Every slice keeps the exact kernel
+> DOM-free and the append-only DAG intact, and preserves honest labeling.
+>
+> **The over-count has two disjoint spurious strata**, so two complementary correctness fixes:
+> `{|z_j|=1}` (pole on the circle — the unit-disk "4 vs 2" case) removed by **S2 saturation** in the
+> COUNT path; `{|z_j|>1}` (pole strictly inside 𝔻) + `{|z_j|=1}` removed by **S1's strict `|z_j|<1`
+> gate** in the CERTIFY path. S1 (small/exact) fixes the authoritative verdict first; S2 (larger)
+> then fixes the raw count on the canonical example.
 
 ## Guiding principle from the audit
 
@@ -32,29 +38,40 @@ boundary case. Gate BEFORE the fold/boundary tests and BEFORE `genuinePhis.push`
 **Acceptance:** the D-1 repro solution is no longer counted; existing cardioid/disk cases still certify;
 gate green.
 
-### Slice 2 — Honest count labeling: "algebraic solutions" ≠ "quadrature domains" (HIGH) — [C-1, A-1]
-**Goal:** `doClassify` (count==1) and `doAutoSolve` currently print "Unique/N real **quadrature
-domains**" from the certified *algebraic* count, with no univalence filter — an over-claim (`realCount`
-is a certified **upper bound** on #QD). The app's own `doClassify` count>1 branch is already honest.
-**Footprint:** `algebra/algebra-ui.mjs` (`doAutoSolve` verdict strings :1574-1578; `doClassify` ==1
-branch :1647). Reword to "real algebraic solution(s) — an upper bound on the number of quadrature
-domains; run **Certify univalence** for the genuine-QD count" and keep the count. No math change.
-**Tests:** assert the verdict strings for a known case include "algebraic" + the pointer, not a bare
-"quadrature domain(s)".
-**Acceptance:** no surface prints a certified-QD claim from an unfiltered count; gate green.
+### Slice 2 — Saturate the count path by the Möbius denominators (HIGH correctness) — [B-1, A-1]
+**Goal:** the existence/uniqueness COUNT analyzes `V(cleared)=V(QD)∪{|z_j|=1}` directly, so the unit disk
+`h=1/w` reports **"4 real quadrature domains"** (true 2; extra two = `z_j=±1`). `saturate` exists
+(`sym-core.mjs:5228`) but is never invoked. Saturate the reim system by the Möbius factors
+`∏_{j,j'}(1−z̄_{j'} z_j)` (in reim: `1−(x_j²+y_j²)` cross-terms) before the Hermite count so the boundary
+component `{|z_j|=1}` is removed and the raw count is exact.
+**Footprint:** record the dropped denominator factors on the `system` object at generation
+(`qd-equations.mjs` `clearDenominators`, closing A-1) so the store can saturate them; invoke `saturate`
+in the count path (`algebra-store.mjs` `currentReimSystem`/`_classifyImpl`), as its own labeled provenance
+step (`saturate` op — PROV_STORE/UI already cover it) or folded into classify with an honest note.
+Guard: saturation must not drop genuine solutions (the excluded locus is disjoint from `{all |z_j|<1}`).
+**Tests:** vitest — the disk classify returns realCount 2 (not 4) after saturation; a 2-pole case's boundary
+component is removed; a genuine interior solution is retained. Golden the disk.
+**Acceptance:** the canonical disk input counts correctly; positive-dim false-reading resolved; gate green.
+**Risk:** MED — must saturate by the *right* factors and prove no genuine solution is removed (test-guarded).
+If recording-at-generation proves large, fall back to reconstructing the factors from the pole structure in
+the store (same math), keeping the slice self-contained.
 
-### Slice 3 — Gauge-pin honesty: w₀ restriction + correct gauge label (HIGH soundness) — [A-2]
-**Goal:** pinning `φ(0)=w₀` (default = pole centroid, ON by default) restricts to domains **containing
-w₀**; a non-convex admissible Ω excluding the centroid is dropped → possible **false "unique."** Also the
-ledger mislabels it "(rotation gauge)" — it is the **center/translation** gauge.
-**Footprint:** `algebra/algebra-ui.mjs` (`specializationLedger`/`sliceCaveat` and the ledger tag :1534).
-When w₀ is pinned, the verdict/ledger must state "among domains centered at w₀ = … (a restriction: a
-domain not containing w₀ is not counted)"; fix the gauge-name label. Optionally: a note that clearing the
-w₀ pin explores other centers.
-**Tests:** ledger/verdict for a w₀-pinned run contains the restriction wording + correct gauge name.
-**Acceptance:** a "unique" verdict under a w₀ pin is legibly conditional; gate green.
+### Slice 3 — Honest count labeling + gauge-pin honesty (HIGH) — [C-1, A-2, B-4]
+**Goal (a):** `doClassify(==1)` (`:1647`) + `doAutoSolve` (`:1574-1578`) print the certified *algebraic*
+count as "**quadrature domains**" with no univalence filter (over-claim; the app's own `count>1` branch
+`:1648` is already honest). Reword to "real algebraic solution(s) — an upper bound on the number of
+quadrature domains; run **Certify univalence** for the genuine-QD count." (After S2 the count is exact, but
+the univalence/gauge quotient still separates algebraic solutions from genuine QDs, so the pointer stays.)
+**Goal (b):** pinning `φ(0)=w₀` (default pole centroid, ON by default) restricts to domains *containing* w₀
+(A-2) ⇒ possible false "unique"; the ledger mislabels it "(rotation gauge)" (`:1534`) — it is the
+center/translation gauge. State the restriction in the verdict/ledger and fix the gauge name.
+**Footprint:** `algebra/algebra-ui.mjs` verdict strings + `specializationLedger`/ledger tag. No math change.
+**Tests:** verdict strings include "algebraic … upper bound … Certify univalence"; a w₀-pinned run's ledger
+states the containment restriction + correct gauge name.
+**Acceptance:** no surface prints a certified-QD claim from an unfiltered count; a w₀-pinned "unique" is
+legibly conditional; gate green.
 
-### Slice 4 — Structured `rigor` verdict field + colored `=`/`≤`/`≈`/`⚠` badge (HIGH UX/rigor) — [G-1, G-2]
+### Slice 4 — Structured `rigor` verdict field + colored `=`/`≤`/`≈`/`⚠` badge (HIGH UX/rigor) — [G-1, G-2, D-2]
 **Goal:** the verdict card is one flat text node (`algebra-canvas.mjs:438`), so a certified `=` and an
 `≈`/lower-bound verdict look identical. Give the verdict a structured `{ rigor, headline, class,
 equivalence, caveats[] }` and render a prominent colored badge + a class/equivalence headline
@@ -92,17 +109,18 @@ when a term has `coeff.im[0]!=='0'` or a barred variable.
   not `ratApprox(numeric)`. Harder; the current path is exact-arithmetic-on-approximate-point. Until then,
   Slice 4's per-solution badge should read `≈` when the filter used the numeric fallback (partial credit
   from Slice 1/4). **Highest-value remaining rigor item after the slices above.**
-- **A-1 saturation with a recorded excluded locus** — have `clearDenominators` record the dropped
-  Möbius/φ′ factors on the `system` object so `classify` can `saturate` them out and report a clean count
-  (not just an upper bound). Structural; larger.
-- **C-MED-2** discriminantVariety separating-form certificate; **F1** cap-forwarding; **F6** differential
-  test gap; **D-3/D-4** crossCheck `.some()` masking + constraint-ledger omission; **G** misc (console
-  dump, cap-export button). Low individually; batch if budget remains.
+- **B-2** interactive "Eliminate" → default to `eliminationIdeal` (Gröbner) instead of raw Sylvester
+  `resultant` (or warn on extraneous factors); **B-3** surface triangular-chain initials + caveat;
+  **C-MED-2** discriminantVariety separating-form certificate; **F1** cap-forwarding; **F6** differential
+  test gap; **E4** remove a cross-check-failed φ from the count; **D-3/D-4** crossCheck `.some()` masking +
+  constraint-ledger omission; **E1** exact symbolic verify of the reconstructed map; **G** misc (console
+  dump, cap-export button). Low/med individually; batch (S6) if budget remains.
 
 ## Sequencing rationale
 
-1 (correctness — stop over-counting) → 2,3 (stop over-claiming in words) → 4 (make rigor legible) →
-5 (unify into one workflow) → 6 (export safety). 1–4 are small, self-contained, and each independently
-raises trustworthiness; 5 is the Phase-3 capstone that depends on 1 (the gate) + 4 (the rigor field).
-At every commit the tool is strictly more honest than before. **Finalize ordering after B + E** (B may
-add a saturation/decomposition slice; E may add a reconstruction/dedup slice).
+S1 (fix the authoritative verdict — stop over-counting, exact+small) → S2 (fix the raw count on the
+canonical disk — saturation) → S3 (stop over-claiming in words) → S4 (make rigor legible) → S5 (unify into
+one workflow) → S6 (export safety + batch). S1, S3, S4 are small and self-contained; S2 is medium
+(test-guarded by the disk golden); S5 is the Phase-3 capstone depending on S1 (gate) + S4 (rigor field). At
+every commit the tool is strictly more honest than before. Deliver as one PR per slice (branch-first),
+gate-green, auto-mergeable — matching the repo's established flow.

@@ -36,8 +36,9 @@ modulo stated equivalences** — never "unique among solutions found".
 - [x] **Phase 0 — Ground truth.** Baseline gate + read core docs/source structure. Baseline ALL GREEN:
       lint ✓(0) typecheck ✓(0) test ✓(0) build ✓(0). vitest 147 files / **1280 tests passed** (102s);
       QD headless `node-suite.test.ts` 93s. jsdom `getContext` messages are render-test noise (tests pass).
-- [ ] **Phase 1 — Audit** (7 parallel read-only tracks → `audit/<track>.md`). Dispatched: see log below.
-- [ ] **Phase 2 — Consolidated `AUDIT.md` + `PLAN.md`.**
+- [x] **Phase 1 — Audit** (7 parallel read-only tracks → `audit/<track>.md`). ALL 7 DONE + integrated.
+- [x] **Phase 2 — Consolidated `AUDIT.md` + `PLAN.md`.** DONE — AUDIT.md (workflow + claim-vs-impl matrix +
+      findings table + taxonomy) + PLAN.md (final S1–S6, value-ordered) committed.
 - [ ] **Phase 3 — Semi-autonomous "Prove existence/uniqueness" orchestrator** (design + implement slices).
 - [ ] **Phase 4 — UI clarity / guided front-end.**
 - [ ] **Testing & validation** (woven through Phase 3–4 slices).
@@ -97,7 +98,21 @@ admissible domain excluding it is DROPPED → possible FALSE "unique". Mislabele
 center/translation gauge; rotation gauge = the separate Σ Im A_{j,1}=0). LOW **A-3** — realAxisSymmetry comment
 over-claims. Confirmed sound: (★) forward form (Jabotinsky-dual M·N=I), reimSplit, Schwarz Blaschke (★_S),
 pointFunctionalSystem (A&S cardioid), qd-varscheme (no v/v̄ desync).
-| B elimination-decomposition | audit/B-elimination-decomposition.md | sym-core Gröbner/resultant/saturate/elim/minimalPrimes/triangular/radical; denom clearing, excluded loci, positive-dim | RUNNING |
+| B elimination-decomposition | audit/B-elimination-decomposition.md | sym-core Gröbner/resultant/saturate/elim/minimalPrimes/triangular/radical; denom clearing, excluded loci, positive-dim | ✅ DONE |
+
+**B done (headline):** **HIGH B-1** (FLAGSHIP) — unsaturated Möbius denominators counted as QDs. The count
+pipeline (`currentReimSystem`→`_classifyImpl`) analyzes `V(cleared)=V(QD)∪{|z_j|=1}` directly; `saturate`
+(`sym-core.mjs:5228`, correct) is NEVER called. PROVEN LIVE: the unit DISK (h=1/w) under assumeReal (★ Auto-reduce
+auto-applies) returns realCount=**4** = "4 real quadrature domains", vs true **2** after saturating by (1−z1²)
+(the extra 2 = z1=±1, pole on |z|=1, unbounded); without the slice the disk even reads false "positive-dim". This
+is the count-side of A-1 ⇒ saturation is now a TOP slice, not deferred. MED **B-2** interactive "Eliminate" uses
+raw Sylvester `resultant` (injects extraneous factors; `Res_x(yx+1,yx²−x)=2y` vs true ⟨1⟩) — `eliminationIdeal`
+(Gröbner) exists but isn't the default. MED **B-3** `triangularize` initials dropped (chain shown without its
+over/under-decompose caveat). LOW **B-4** labeling. Sound: zero-dim gating before every finite count; Hermite
+counts distinct radical-free; reducedDiscriminant strips lc; parametric paths use Gröbner elim (clean);
+boundaryCurve resultant provably clean; minimalPrimes honest. Defect = saturate not INVOKED, not wrong.
+
+**═══ PHASE 1 COMPLETE (all 7 tracks integrated). ═══**
 | C certified-solving-counting | audit/C-certified-solving-counting.md | solveZeroDim/RUR/realSolutionCount/solveRealCertified/parametricRealCount1D/discriminantVariety/Schur-Cohn | ✅ DONE |
 | D univalence-admissibility | audit/D-univalence-admissibility.md | univalence, qd-constraints univalence forms, doCertifyUnivalence chain, pole/node location, boundary collisions | ✅ DONE |
 
@@ -158,7 +173,19 @@ file BEFORE returning. Orchestrator alone integrates + adjudicates + commits.
 
 ## Next action
 
-Phase 1 audit subagents are RUNNING (all 7 dispatched). As each completes, READ its `audit/<track>.md`
-(NOT the transcript .output file) and integrate into `AUDIT.md`. When all 7 are in, adjudicate severity,
-write `AUDIT.md` (workflow + claim-vs-impl matrix + findings taxonomy) and `PLAN.md` (value-ordered slices),
-commit both, then begin Phase 3 implementation with the highest-value self-contained slice.
+Phase 1 COMPLETE. **Now:** finalize `AUDIT.md` (§3 claim-vs-impl matrix, §4 findings table, §5 taxonomy) +
+`PLAN.md` (insert the B-1 saturation slice, re-order), commit as Phase 2, then implement **Slice 1** (the exact
+`|z_j|<1` admissibility gate in `doCertifyUnivalence`, `algebra/algebra-ui.mjs`) — CRITICAL, exact, small.
+
+### Confirmed top findings → slice map (the plan in one glance)
+- **S1** exact `|z_j|<1` admissibility gate in the CERTIFY path [D-1] — CRITICAL, small, exact. Rejects both
+  |z_j|=1 (disk spurious) and |z_j|>1 (interior pole) ⇒ authoritative verdict correct. **FIRST.**
+- **S2** saturate the COUNT path by the Möbius denominators [B-1/A-1] — HIGH, flagship (disk 4→2). Record the
+  excluded locus at generation + `saturate` in classify. Larger; test with the disk golden.
+- **S3** honest count labeling [C-1/B-4] + w₀-pin restriction & gauge-name fix [A-2] — HIGH labeling, small.
+- **S4** structured `rigor` verdict field → colored `=`/`≤`/`≈`/`⚠` badge + class/equivalence headline [G-1/G-2].
+- **S5** unified "Prove existence/uniqueness" orchestrator [G-1/PF-2] — Phase-3 capstone (depends on S1+S4).
+- **S6** CAS-export fidelity guard [F5]; then batch the LOW/MED tail (B-2 eliminate→eliminationIdeal, B-3
+  initials, F1 caps, E4 cross-check-removal, D-3/D-4, G misc).
+- **Deferred (hard/large):** PF-1/E2/D-2 exact-at-the-algebraic-point univalence cert (use the isolating box at
+  `sym-core.mjs:1968`, not the ratApprox midpoint) — highest-value remaining rigor item after the slices.
