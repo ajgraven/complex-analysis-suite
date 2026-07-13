@@ -39,7 +39,17 @@ modulo stated equivalences** — never "unique among solutions found".
 - [x] **Phase 1 — Audit** (7 parallel read-only tracks → `audit/<track>.md`). ALL 7 DONE + integrated.
 - [x] **Phase 2 — Consolidated `AUDIT.md` + `PLAN.md`.** DONE — AUDIT.md (workflow + claim-vs-impl matrix +
       findings table + taxonomy) + PLAN.md (final S1–S6, value-ordered) committed.
-- [ ] **Phase 3 — Semi-autonomous "Prove existence/uniqueness" orchestrator** (design + implement slices).
+- [~] **Phase 3 — Semi-autonomous orchestrator + correctness/rigor slices** (implementing S1–S6).
+  - [x] **S1 — exact `|z_j|<1` admissibility gate** [D-1, CRITICAL]. DONE + committed. Pure exact predicate
+        `QDEquations.nodeInsideDisk(re,im)` (`qd-equations.mjs`, ℚ/BigInt |z|²-vs-1, reuses `_ratApprox`) +
+        UI gate in `doCertifyUnivalence` (`algebra-ui.mjs`: `nodeInsideDisk(sol,hData)` closure + per-solution
+        reject-before-filters + `poleOut` counter + rej-summary). Test `vitest/qd-node-location.test.ts` (15).
+        **Gate GREEN: lint/typecheck/test/build all 0; 1295 tests (was 1280, +15), 148 files, no regressions.**
+
+**Branch strategy:** ALL review work (docs + code slices) accumulates on `algebra-maturity-review` (the branch
+the prompt directed me to create; the re-entrant STATE lives here). Each code slice is gate-green before commit.
+NO mid-review merges to master — the branch is the deliverable; a single PR (or the user's call) closes it out.
+This is a fresh multi-part review, NOT a standing-authorization roadmap item, so I do not auto-merge to master.
 - [ ] **Phase 4 — UI clarity / guided front-end.**
 - [ ] **Testing & validation** (woven through Phase 3–4 slices).
 - [ ] **Final — STATE=COMPLETE + `FINAL_REPORT.md`.**

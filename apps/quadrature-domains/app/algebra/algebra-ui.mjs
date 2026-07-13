@@ -1746,6 +1746,32 @@ const QD = _QD;
       }
       return sub;
     }
+    // EXACT node-location admissibility gate for one candidate: does EVERY quadrature-node preimage
+    // z_j = φ⁻¹(a_j) lie STRICTLY inside 𝔻 (|z_j| < 1)? A node on/outside 𝔻 means the reconstructed
+    // φ has a pole at 1/conj(z_j) ON/INSIDE the closed disk (φ not analytic on 𝔻̄) — NOT a bounded QD.
+    // The cleared polynomial system dropped the (1 − z̄_j z) factors, so the Schur–Cohn fold / boundary
+    // double-point filters are blind to this; gate BEFORE them. EXACT: reuse QE.nodeInsideDisk (ℚ/BigInt
+    // compare of |z_j|² to 1 on the rationalized coordinate — same convention as schurCohnFold/poleSubst).
+    // Returns { insideAll, offenders:[{ j, onCircle }] }, or null if a z_j / QE is unavailable (⇒ the
+    // caller does not gate — the other filters still run, exactly as before).
+    function nodeInsideDisk(sol, hData) {
+      if (!QE || typeof QE.nodeInsideDisk !== 'function') return null;
+      const known = (store.knownValues && store.knownValues()) || {};
+      const num = (name) => {
+        const re = sol[name + '__re'];
+        if (re) { const im = sol[name + '__im']; return { re: re.re, im: im ? im.re : 0 }; }
+        if (known[name]) return { re: known[name].re || 0, im: known[name].im || 0 };
+        return undefined;
+      };
+      const poles = (hData && hData.poles) || [];
+      const offenders = [];
+      for (let j = 0; j < poles.length; j++) {
+        const z = num('z' + (j + 1)); if (!z) return null;
+        let t; try { t = QE.nodeInsideDisk(z.re, z.im); } catch (e) { return null; }
+        if (!t.inside) offenders.push({ j: j + 1, onCircle: !!t.onCircle });
+      }
+      return { insideAll: offenders.length === 0, offenders };
+    }
     // EXACT boundary-injectivity test for one candidate: is φ(∂𝔻) a SIMPLE closed curve (a Jordan
     // boundary, possibly WITH cusps)? QC.boundaryDoublePointCount returns the count of real circle
     // solutions of the divided difference = 2·(genuine self-crossings) + (#diagonal cusp points),
@@ -1854,10 +1880,20 @@ const QD = _QD;
           setStatus(v); if (canvas) canvas.setVerdict({ text: v, assumptions: specializationLedger(cl) }); toast(v, { kind: 'error' }); return;
         }
         const hData = activeEnv.hData;
-        let folded = 0, selfInt = 0, unrec = 0; const rows = []; const genuinePhis = [];
+        let folded = 0, selfInt = 0, unrec = 0, poleOut = 0; const rows = []; const genuinePhis = [];
         real.forEach((sol, idx) => {
           const phi = phiFromAlgebraSolution(sol, hData);
           if (!phi) { unrec++; rows.push('#' + (idx + 1) + ': φ not reconstructable (map variables eliminated — run on the seeded system)'); return; }
+          // ADMISSIBILITY GATE (exact): a node preimage on/outside 𝔻 (|z_j| ≥ 1) makes φ have a pole in
+          // the closed disk — not a bounded QD. The cleared system dropped the (1 − z̄_j z) factors, so the
+          // fold / boundary filters below cannot see this; reject HERE before they wrongly certify it.
+          const nd = nodeInsideDisk(sol, hData);
+          if (nd && !nd.insideAll) {
+            poleOut++;
+            const off = nd.offenders.map((o) => 'z' + o.j + (o.onCircle ? ' on ∂𝔻' : ' outside 𝔻')).join(', ');
+            rows.push('#' + (idx + 1) + ': node preimage ' + off + ' (|z_j| ≥ 1) — φ has a pole in 𝔻, not a bounded quadrature domain');
+            return;
+          }
           // Local fold test: EXACT Schur–Cohn on num(φ′) when non-degenerate; honest numeric
           // fallback (findCriticalPoints) on a singular/self-inversive matrix or when unavailable.
           let fold = false, exact = false, cusps = 0;
@@ -1891,7 +1927,7 @@ const QD = _QD;
         // 4) UNIFIED VERDICT.
         const bits = [];
         if (gaugeMerged > 0) bits.push(gaugeMerged + ' gauge/rotation ' + (gaugeMerged === 1 ? 'copy' : 'copies') + ' merged');
-        const rej = [folded ? folded + ' fold' : '', selfInt ? selfInt + ' self-intersecting' : '', unrec ? unrec + ' unreconstructable' : ''].filter(Boolean).join(', ');
+        const rej = [folded ? folded + ' fold' : '', selfInt ? selfInt + ' self-intersecting' : '', poleOut ? poleOut + ' pole-in-𝔻' : '', unrec ? unrec + ' unreconstructable' : ''].filter(Boolean).join(', ');
         if (rej) bits.push(rej + ' rejected');
         const tail = bits.length ? ' (' + bits.join('; ') + ')' : '';
         // REAL-COUNT SELF-CHECKING ORACLE. Reconcile the explicit numeric solver (real,

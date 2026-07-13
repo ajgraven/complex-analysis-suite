@@ -104,6 +104,26 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
     return [sign * n, d];
   }
 
+  // EXACT node-location admissibility test for a quadrature-node preimage z_j = φ⁻¹(a_j): is
+  // |z_j| < 1 (STRICTLY inside 𝔻)?  Rationalize (re, im) with _ratApprox (the SAME exactification
+  // the exact Schur–Cohn univalence path already uses) and compare |z|² to 1 as an exact ℚ (BigInt)
+  // inequality — NO float threshold.  Returns { inside, onCircle }: `inside` ⟺ |z|² < 1, `onCircle`
+  // ⟺ |z|² = 1 exactly (on the rationalized value).
+  //
+  //   WHY IT MATTERS.  The reconstructed bounded-QD ansatz is φ(ζ) = w₀ + Σ conj(A_{j,k})·ζᵏ/(1 −
+  //   conj(z_j)ζ)ᵏ, which has a pole at ζ = 1/conj(z_j) of modulus 1/|z_j|.  So |z_j| ≥ 1 puts a pole
+  //   ON or INSIDE the closed unit disk — φ is then NOT analytic on 𝔻̄ and Ω is NOT a bounded
+  //   quadrature domain.  `clearDenominators` drops the (1 − z̄_j z) Möbius factors (numerator-only),
+  //   so the polynomial fold / boundary tests downstream are BLIND to this stratum; this predicate is
+  //   the missing admissibility gate (the numeric direct solver enforces the analogous 0 < |z₀| < 1).
+  function nodeInsideDisk(re, im) {
+    const [p, q] = _ratApprox(re || 0);        // z_re = p/q  (q > 0)
+    const [r, s] = _ratApprox(im || 0);        // z_im = r/s  (s > 0)
+    const ps = p * s, rq = r * q, qs = q * s;  // |z|² = ((ps)² + (rq)²) / (qs)²
+    const lhs = ps * ps + rq * rq, rhs = qs * qs;
+    return { inside: lhs < rhs, onCircle: lhs === rhs };
+  }
+
   // Exact integer binomial coefficient C(n, i) as a BigInt.
   function binomBig(n, i) {
     if (i < 0 || i > n) return 0n;
@@ -880,6 +900,7 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
     systemToLatex, systemToExport, latexOf: latexOfFor,
     phiSeriesAt,                       // φ(p+t) series; reused by QD.QDConstraints
     ratApprox: _ratApprox,             // exact-rational of a float; reused by AlgebraStore (specify-value / fix-φ(0))
+    nodeInsideDisk,                    // EXACT |z_j|<1 admissibility gate for a reconstructed candidate (algebra-ui certify path)
     VARS: V, VARS_REAL: VR,
   };
 
