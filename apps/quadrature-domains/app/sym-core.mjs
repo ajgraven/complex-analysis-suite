@@ -1209,6 +1209,95 @@ import _QD from './solver.mjs';
     return gcdMV(f, d).degreeIn(xVar) === 0;
   }
 
+  // ── n-variate factorizer infrastructure (roadmap #19 n-variate, P1; docs/NVARIATE_FACTORING.md) ──────
+  // The content / primitive-part / squarefree-in-x helpers above are ALREADY general in the number of
+  // variables — each treats xVar as the main variable and reduces over ℚ(i)[the remaining variables] via
+  // gcdMV — so we expose them under multivariate names for the n-variate factorizer rather than duplicate.
+  const multivariateContent = bivariateContent;              // gcd (over ℚ(i)[other vars]) of the mainVar-coeffs
+  const multivariatePrimitivePart = bivariatePrimitivePart;  // f / content_mainVar(f)
+  const multivariateSquarefreeInX = bivariateSquarefreeInX;  // gcd(f, ∂f/∂mainVar) has mainVar-degree 0
+
+  // The squarefree PART (radical) in a main variable: f / gcd(f, ∂f/∂mainVar). In char 0 this is the
+  // product of the distinct factors of f that involve mainVar (any pure-other-variable content is divided
+  // out, so call it on — or as a way to reach — the primitive part). Returns f unchanged if already
+  // squarefree in mainVar or free of it.
+  function multivariateSquarefreePart(f, mainVar) {
+    if (!(f instanceof MPoly) || f.isZero()) return f;
+    const d = f.derivativeIn(mainVar);
+    if (d.isZero()) return f;                                 // free of mainVar
+    const g = gcdMV(f, d);
+    return g.degreeIn(mainVar) <= 0 ? f : mpolyExactDiv(f, g);
+  }
+
+  // Choose a MAIN variable for the reduction-to-univariate: a variable in which f has positive degree,
+  // preferring one where f is MONIC (constant leading coefficient — the monic-in-main-var scope the
+  // n-variate factorizer starts with), then the smallest such degree (a cheaper lift). Returns the
+  // variable name, or null if f has no variable of positive degree.
+  function nvarMainVariable(f) {
+    if (!(f instanceof MPoly) || f.isZero()) return null;
+    let best = null;
+    for (const v of [...f.vars()].sort()) {
+      const d = f.degreeIn(v);
+      if (d < 1) continue;
+      const monic = f.coeffsIn(v)[d].vars().size === 0;      // leading mainVar-coeff is a constant
+      const cand = { v, d, monic };
+      if (!best) best = cand;
+      else if (monic && !best.monic) best = cand;
+      else if (monic === best.monic && d < best.d) best = cand;
+    }
+    return best ? best.v : null;
+  }
+
+  // A deterministic sequence of small Gaussian integers, smallest-first (0 last — it most often drops the
+  // degree or squarefreeness); the alphabet the evaluation-point search draws each coordinate from.
+  function _gaussianIntSeq() {
+    const R = (k) => new Rational(BigInt(k), 1n);
+    return [
+      Gaussian.fromInt(1), Gaussian.fromInt(-1), Gaussian.fromInt(2), Gaussian.fromInt(-2),
+      new Gaussian(RZERO, R(1)), new Gaussian(RZERO, R(-1)),                 // ±i
+      Gaussian.fromInt(3), Gaussian.fromInt(-3),
+      new Gaussian(R(1), R(1)), new Gaussian(R(1), R(-1)),                   // 1±i
+      new Gaussian(RZERO, R(2)), Gaussian.fromInt(0),
+    ];
+  }
+  // Odometer over `base`^k (position 0 varies fastest), the first `cap` tuples — the evaluation grid.
+  function _evalVectors(k, base, cap) {
+    const out = [], idx = new Array(k).fill(0);
+    for (let n = 0; n < cap; n++) {
+      out.push(idx.map((i) => base[i]));
+      let p = 0;
+      while (p < k) { idx[p]++; if (idx[p] < base.length) break; idx[p] = 0; p++; }
+      if (p === k) break;                                     // exhausted base^k
+    }
+    return out;
+  }
+  // Pick a UNIVARIATE evaluation point for the n-variate factorizer: values a_j ∈ ℚ(i) for every variable
+  // OTHER than mainVar such that f(mainVar, a…) keeps its mainVar-degree (no leading-coefficient wipeout)
+  // AND is squarefree in mainVar (distinct roots ⇒ the univariate base factors are pairwise coprime, the
+  // P0 requirement for the Hensel Bézout). Deterministic bounded search over small Gaussian integers.
+  // Returns { ok:true, point:[{var, value:Gaussian}], f0:MPoly (univariate in mainVar) } or { ok:false, reason }.
+  function nvarEvaluationPoint(f, mainVar, opts) {
+    opts = opts || {};
+    if (!(f instanceof MPoly) || f.isZero()) return { ok: false, reason: 'zero or non-MPoly' };
+    const m = f.degreeIn(mainVar);
+    if (m < 1) return { ok: false, reason: 'no positive degree in ' + mainVar };
+    const sqfree = (g) => { const d = g.derivativeIn(mainVar); return !d.isZero() && univariateGCD(g, d, mainVar).degreeIn(mainVar) === 0; };
+    const others = [...f.vars()].filter((v) => v !== mainVar).sort();
+    if (!others.length) {                                     // already univariate in mainVar
+      return sqfree(f) ? { ok: true, point: [], f0: f } : { ok: false, reason: 'univariate but not squarefree in ' + mainVar };
+    }
+    const cap = opts.maxTries != null ? opts.maxTries : 300;
+    for (const vec of _evalVectors(others.length, _gaussianIntSeq(), cap)) {
+      const sub = {};
+      for (let i = 0; i < others.length; i++) sub[others[i]] = MPoly.constant(vec[i]);
+      const f0 = f.subst(sub);
+      if (f0.degreeIn(mainVar) !== m) continue;               // leading coeff vanished at this point
+      if (!sqfree(f0)) continue;                              // specialization merges factors ⇒ reject
+      return { ok: true, point: others.map((v, i) => ({ var: v, value: vec[i] })), f0 };
+    }
+    return { ok: false, reason: 'no squarefree degree-preserving point within ' + cap + ' tries' };
+  }
+
   // A single monomial coeff·xVar^a·yVar^b as an MPoly (zero if a<0 or b<0, so callers can pass the
   // "shifted" exponents a−1 / b−1 from a derivative without guarding). Small, allocation-light helper
   // for assembling the Ruppert linear system column by column.
@@ -5426,6 +5515,7 @@ import _QD from './solver.mjs';
     bivariateAbsFactorCount, isAbsolutelyIrreducible, // #19 factorizer Phase-2: Gao Ruppert-nullspace absolute (over-ℂ) factor count + absolute-irreducibility test
     factorBivariate, // #19 factorizer Phase-3: ℚ(i)-rational bivariate factorization (resultant-eigenvalue extraction)
     henselFactorBivariate, // #19 factorizer Phase-5: INDEPENDENT Zassenhaus–Hensel oracle (differential cross-check of factorBivariate)
+    multivariateContent, multivariatePrimitivePart, multivariateSquarefreeInX, multivariateSquarefreePart, nvarMainVariable, nvarEvaluationPoint, // #19 n-variate P1: content/primitive/squarefree(+part) in a main var + main-var choice + univariate evaluation-point search
     solveByEigenvalues, realSolutionCount, parametricRealCount1D, discriminantVariety, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
