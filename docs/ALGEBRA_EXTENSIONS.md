@@ -6,6 +6,9 @@
 > geometry / external-tool landscape, and the quadrature-domain mathematics. This file
 > is the synthesis. It is a **roadmap of possible NEW functionality** — correctness,
 > performance, and structure were already reviewed separately and are out of scope here.
+>
+> For a summary of what the module can do **today** (rather than this roadmap of what it *could* do), see
+> [`ALGEBRA_MODULE.md`](ALGEBRA_MODULE.md).
 
 ## The core finding
 
