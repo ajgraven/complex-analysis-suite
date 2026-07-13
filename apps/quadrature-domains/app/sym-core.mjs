@@ -3371,6 +3371,66 @@ import _QD from './solver.mjs';
     } catch (e) { return fail((e && e.message) || String(e)); }   // never throw (would crash the worker)
   }
 
+  // The DISCRIMINANT VARIETY (bifurcation set) of a family polys(x…, p₁…p_m) = 0 in PARAMETER space
+  // (roadmap #2b-2a / #14): the locus in ℝ^m where the number of real solutions changes. Generalizes the
+  // 1-parameter border of parametricRealCount1D to any number of parameters — a separating univariate
+  // eliminant f(u, p) of the fiber, then the parameter-space polynomials where f gains a real double root
+  // (reducedDisc_u f) or a root escapes to ±∞ (lc_u f). Their union V(disc·lc) is the boundary; off it the
+  // real count is locally constant. Returns { ok, paramVars, degree, boundary, components, strata } — the
+  // boundary as one MPoly (= 1 when the count never changes), its irreducible factors (the distinct
+  // curves/surfaces, via exact factorization), and the two labeled strata — or { ok:false, reason }.
+  // Counting per region for m ≥ 2 needs a cell decomposition (CAD / real comprehensive triangular
+  // decomposition — the Maple RCTD export); this gives only the exact boundary EQUATION.
+  function discriminantVariety(polys, paramVars, opts) {
+    opts = opts || {};
+    polys = (polys || []).filter((p) => p && !p.isZero());
+    const fail = (reason) => ({ ok: false, reason });
+    if (!polys.length) return fail('empty system');
+    const amb = _ambientVars(polys);
+    paramVars = (paramVars || []).slice();
+    if (!paramVars.length) return fail('no parameters given');
+    for (const p of paramVars) if (amb.indexOf(p) < 0) return fail('parameter "' + p + '" does not appear in the system');
+    const solveVars = amb.filter((v) => paramVars.indexOf(v) < 0);
+    if (!solveVars.length) return fail('no solve variables besides the parameters');
+    const uName = opts.uName || '_u';
+    if (amb.indexOf(uName) >= 0) return fail('reserved eliminant variable "' + uName + '" clashes; pass opts.uName');
+    try {
+      const u = MPoly.variable(uName), keep = [uName].concat(paramVars);
+      // separating univariate eliminant f(u, p): take the MAX u-degree over a few candidate forms — the
+      // separating form achieves the full fiber size, so max degree ⇒ generically separating (no invisible
+      // collision, so no boundary component is missed).
+      let f = null, fdeg = -1;
+      const cands = [..._sepCandidates(solveVars.length, opts.maxTries || 24)].slice(0, opts.formTries || 6);
+      for (const cs of cands) {
+        let lin = u;
+        solveVars.forEach((v, i) => { if (cs[i]) lin = lin.sub(MPoly.constant(Gaussian.fromInt(cs[i])).mul(MPoly.variable(v))); });
+        let gens; try { gens = eliminationIdeal(polys.concat([lin]), solveVars, keep, opts); } catch (e) { continue; }
+        const uGens = gens.filter((g) => g.vars().has(uName));
+        if (!uGens.length) continue;
+        let prod = uGens[0]; for (let i = 1; i < uGens.length; i++) prod = prod.mul(uGens[i]);
+        prod = squareFreePart(prod, uName);
+        const d = prod.degreeIn(uName);
+        if (d > fdeg) { f = prod; fdeg = d; }
+      }
+      if (!f || fdeg < 1) return fail('could not build a univariate eliminant (fiber not zero-dimensional over the parameters)');
+
+      const disc = reducedDiscriminant(f, uName), lc = _lcInV(f, uName);
+      const nonConst = (p) => p && !p.isZero() && p.vars().size > 0 && !p.vars().has(uName);
+      const strata = { doubleRoot: nonConst(disc) ? disc : null, escapeToInfinity: nonConst(lc) ? lc : null };
+      let boundary = MPoly.fromInt(1);
+      if (strata.doubleRoot) boundary = boundary.mul(strata.doubleRoot);
+      if (strata.escapeToInfinity) boundary = boundary.mul(strata.escapeToInfinity);
+      // irreducible components (distinct boundary curves/surfaces) via exact factorization (the radical).
+      const components = [];
+      if (boundary.vars().size > 0) {
+        let facs = [boundary];
+        try { const fr = factor(boundary, opts); if (fr.ok && fr.factors && fr.factors.length) facs = fr.factors; } catch (e) { /* keep unfactored */ }
+        for (const g of facs) if (g && g.vars().size > 0) components.push(g);
+      }
+      return { ok: true, paramVars, degree: fdeg, boundary, components, strata };
+    } catch (e) { return fail((e && e.message) || String(e)); }
+  }
+
   // ---------------------------------------------------------------------------
   // reconcileRealCount — a SELF-CHECKING ORACLE pairing the two INDEPENDENT
   // real-solution counters so a silent undercount can't pass as a clean verdict.
@@ -4520,7 +4580,7 @@ import _QD from './solver.mjs';
 
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, krullDimension, dimensionDegree, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, powerSums, newtonToElementary, charPolyByTraces, coordinateMoments,
-    solveByEigenvalues, realSolutionCount, parametricRealCount1D, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
+    solveByEigenvalues, realSolutionCount, parametricRealCount1D, discriminantVariety, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
     seriesDeriv, seriesIntegral, seriesLog, seriesExp,   // series calculus (Taylor)
