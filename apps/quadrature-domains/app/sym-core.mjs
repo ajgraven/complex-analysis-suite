@@ -3978,6 +3978,15 @@ import _QD from './solver.mjs';
       const opts = Object.assign({}, payload.opts, { vars: payload.vars });
       return certifiedRealToJSON(solveRealCertified(polys, opts));
     }
+    if (kind === 'parametricRealCount1D') {
+      // 1-parameter real bifurcation. The result is already plain numbers/strings; only the
+      // unbounded cell ends are ±Infinity → map to null (JSON-safe, and unambiguous by position:
+      // the first cell's lo and the last cell's hi are the unbounded ones).
+      const res = parametricRealCount1D(polys, payload.paramVar, Object.assign({}, payload.opts, { vars: payload.vars }));
+      if (!res.ok) return { ok: false, reason: res.reason };
+      const cells = res.cells.map((c) => Object.assign({}, c, { lo: Number.isFinite(c.lo) ? c.lo : null, hi: Number.isFinite(c.hi) ? c.hi : null }));
+      return Object.assign({}, res, { cells });
+    }
     if (kind === 'dimension') {
       const vars = payload.vars || _ambientVars(polys);
       const order = monomialOrder('grevlex', vars);
