@@ -4094,6 +4094,33 @@ import _QD from './solver.mjs';
     return { ok: true, primes: keep, complete, count: keep.length };
   }
 
+  // TRIANGULAR DECOMPOSITION of V(⟨polys⟩) into REGULAR CHAINS (roadmap #13): a set of triangular
+  // sets whose zero sets union to V(I), each solvable by back-substitution (solve the lowest-ranked
+  // main variable, substitute up). Built by decomposing into irreducible components (minimalPrimes,
+  // #12) and triangularizing each — so V(I) = ⋃ V(componentᵢ) = ⋃ (the chains). Returns
+  // { ok, chains:[{ chain:[MPoly], mainVars, freeVars, initials, whole? }], complete, count } — `complete`
+  // inherits minimalPrimes' honesty (the ℚ(i) factorizer's univariate/monomial/variable-disjoint reach:
+  // a component it can't split further is one chain that may cover a reducible curve).
+  function triangularDecomposition(polys, opts) {
+    opts = opts || {};
+    const src = (polys || []).filter((p) => p && !p.isZero());
+    const vars = opts.vars || _ambientVars(src);
+    const varOrder = opts.varOrder || vars;
+    const mp = minimalPrimes(src, Object.assign({}, opts, { vars }));
+    if (!mp.ok) return { ok: false, reason: mp.reason };
+    const chains = [];
+    try {
+      for (const gens of mp.primes) {
+        if (!gens.length) { chains.push({ chain: [], mainVars: [], freeVars: varOrder.slice(), initials: [], whole: true }); continue; }  // ⟨0⟩ → whole space
+        const tri = triangularize(gens, varOrder, opts);
+        if (!tri.ok) return { ok: false, reason: 'triangularize failed on a component: ' + tri.reason };
+        if (tri.contradiction) continue;                              // an empty component (not expected for a prime)
+        chains.push({ chain: tri.chain, mainVars: tri.mainVars, freeVars: tri.freeVars, initials: tri.initials });
+      }
+    } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    return { ok: true, chains, complete: mp.complete, count: chains.length };
+  }
+
   // ---------------------------------------------------------------------------
   // runJob — a serialization-friendly op dispatcher: takes SERIALIZED input (term
   // lists from MPoly.termList, an order spec) and returns SERIALIZED output, so the
@@ -4661,7 +4688,7 @@ import _QD from './solver.mjs';
     monoKey, monoCmp,
     mpolyDet, mpolyDetLaplace, resultant, discriminant, reducedDiscriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, comprehensiveGroebnerSystem, verifySOS, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep, solveRealCertified, certifiedRealToJSON,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
-    inIdeal, eliminationIdeal, idealIntersect, idealQuotient, minimalPrimes,   // ideal ops: membership, projection, ∩, colon, irreducible components
+    inIdeal, eliminationIdeal, idealIntersect, idealQuotient, minimalPrimes, triangularDecomposition,   // ideal ops: membership, projection, ∩, colon, irreducible components, regular chains
 
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, krullDimension, dimensionDegree, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, powerSums, newtonToElementary, charPolyByTraces, coordinateMoments,
