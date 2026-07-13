@@ -1,6 +1,6 @@
 # General n-variate polynomial factorization over ℚ(i) — design plan
 
-> **Status: PLANNED — P0 (spike) ✅ validated.** This is the one deferred extension of roadmap item #19,
+> **Status: IN PROGRESS — P0 (spike) ✅ validated; P1 (infra) ✅ merged.** This is the one deferred extension of roadmap item #19,
 > whose **bivariate** core (Phases 0–5) is complete and merged (see
 > [`MULTIVARIATE_FACTORING.md`](MULTIVARIATE_FACTORING.md)). Decisions recorded (2026-07-13): **(a)** reduce
 > n-variate → **univariate** and Hensel-lift, **generalizing the trusted `henselFactorBivariate`** (its
@@ -132,9 +132,12 @@ trusted Phase-5 lift machinery**. Keep multivariate-Gao in reserve as a possible
 - **P0 — spike ✅ (validated).** Established (on a trivariate ℚ(i) battery, `scratchpad/nvar-spike.mjs`):
   the base case must be **univariate** (bivariate is Bézout-obstructed); genericity holds with bad points
   cheaply detected; and recombination-by-partition recovers the true set. Corrected §3.
-- **P1 — infra.** Multivariate content / primitive / squarefree in a chosen main variable (mostly wrapping
-  `gcdMV`) + **univariate** evaluation-point selection (degree-preserving + squarefree, bounded Gaussian
-  search). Goldens.
+- **P1 — infra ✅ (merged).** `multivariateContent` / `multivariatePrimitivePart` / `multivariateSquarefreeInX`
+  in a chosen main variable (the bivariate helpers are already arity-general — surfaced under multivariate
+  names) + `multivariateSquarefreePart` (radical in the main variable) + `nvarMainVariable` (prefers a monic
+  variable, then least degree) + `nvarEvaluationPoint` (**univariate** evaluation-point search:
+  degree-preserving + squarefree, deterministic bounded Gaussian-integer grid). Goldens
+  `vitest/qd-nvar-factor-infra.test.ts`.
 - **P2 — the multivariate Hensel-lift engine.** Generalize `henselFactorBivariate`'s single-variable lift
   to iterate over `x₂, …, xₙ` (the multivariate ideal-adic Hensel; the per-step diophantine reduces to the
   univariate Bézout). *The concentration of risk — de-risked by P0.*
