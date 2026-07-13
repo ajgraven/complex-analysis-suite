@@ -44,6 +44,9 @@ importers:
       '@cas/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@cas/exact':
+        specifier: workspace:*
+        version: link:../../packages/exact
       '@cas/expr':
         specifier: workspace:*
         version: link:../../packages/expr
