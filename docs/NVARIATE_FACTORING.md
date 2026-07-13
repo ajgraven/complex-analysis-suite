@@ -1,12 +1,14 @@
 # General n-variate polynomial factorization over ℚ(i) — design plan
 
-> **Status: PLANNED (not started).** This is the one deferred extension of roadmap item #19, whose
-> **bivariate** core (Phases 0–5) is complete and merged (see [`MULTIVARIATE_FACTORING.md`](MULTIVARIATE_FACTORING.md)).
-> Decisions recorded (2026-07-13): **(a)** reduce n-variate → bivariate and lift, reusing the trusted
-> `factorBivariate` as the base case (not a from-scratch multivariate Gao); **(b)** initial scope is
-> **monic in the main variable** — Wang leading-coefficient distribution is a later refinement. This
-> document is the implementable brief; it is grounded in a code survey (see §1) and follows the same
-> gated-PR, independent-oracle discipline the bivariate core used.
+> **Status: PLANNED — P0 (spike) ✅ validated.** This is the one deferred extension of roadmap item #19,
+> whose **bivariate** core (Phases 0–5) is complete and merged (see
+> [`MULTIVARIATE_FACTORING.md`](MULTIVARIATE_FACTORING.md)). Decisions recorded (2026-07-13): **(a)** reduce
+> n-variate → **univariate** and Hensel-lift, **generalizing the trusted `henselFactorBivariate`** (its
+> univariate-base + iterated-lift + recombine structure) — *not* reducing to bivariate, and not a
+> from-scratch multivariate Gao; **(b)** initial scope is **monic in the main variable** (Wang
+> leading-coefficient distribution deferred). The **P0 spike corrected the base case** from bivariate to
+> univariate — see §3. This document is the implementable brief; it is grounded in a code survey (§1) and a
+> validation spike (§3), and follows the same gated-PR, independent-oracle discipline the bivariate core used.
 
 Honest-labeling (CLAUDE.md) carries over: a factorization is exact (`=`); the `complete`/`ok` flags stay
 truthful; anything past the scope (non-monic main variable, degree caps, a non-generic evaluation the
@@ -42,19 +44,20 @@ hot-path one. The genuine ≥3-variable consumers, from a code survey:
 
 ## 2. What already exists to build on
 
-The pleasant structural fact: **the two ingredients are exactly Phases 3 and 5 of the bivariate core.**
+The pleasant structural fact: **the n-variate factorizer is `henselFactorBivariate` with its lift
+generalized from one extra variable to n−1** (the P0 spike confirmed this is the right ancestor — §3).
 
 | Primitive | What it already gives us |
 |---|---|
-| **`factorBivariate`** (Phase 3) | The trusted, doubly-cross-checked bivariate factorizer = the **base case** of the reduction. |
-| **`henselFactorBivariate`** (Phase 5) | Single-variable Hensel-lift machinery — `_gaModInv`, the multifactor Bézout `σ_i`, `_truncInVar`, `_subsetsOfSize`, the recombination loop = the **lift to generalize** to more variables. |
+| **`henselFactorBivariate`** (Phase 5) | **The direct ancestor.** Univariate base (`_qiFactor`) + single-variable Hensel lift (`_gaModInv`, the multifactor Bézout `σ_i`, `_truncInVar`, `_subsetsOfSize`) + recombination. The n-variate factorizer = **iterate its lift over `x₃, …, xₙ`.** |
+| **`factorBivariate`** (Phase 3) | The trusted, doubly-cross-checked bivariate factorizer = the **2-variable cross-check oracle** (§5) — a genuinely different (Gao / resultant-eigenvalue) algorithm from the univariate-base Hensel path, so restricting the n-variate factorizer to 2 variables and comparing is a strong differential check. (*Not* the base case — see the P0 obstruction in §3.) |
 | **`gcdMV` / `gcdList`** | A **true n-variate GCD** over ℚ(i) (recursive primitive PRS on the smallest-sorted variable; content recurses on one-fewer variables). Multivariate content-stripping is done. |
 | **`bivariateContent` / `bivariatePrimitivePart`** | Content / primitive part in a **chosen explicit main variable** — the exact form a recursive n-variate reducer needs. |
 | **`_separableSplit`** | Already splits **variable-disjoint** products in **2–8 variables** (union-find on co-occurring variables, verified by exact product). ⟹ the genuine gap is only the **entangled** (non-disjoint) multivariate case; the disjoint case is handled. |
 | **`bivariateAbsFactorCount`** (Phase 2) | A factor-count **consistency check** for evaluation-point genericity. |
 | **`_qiFactor`**, `resultant`, `mpolyExactDiv`, `pseudoRemainder`, `_ambientVars` | Shared base machinery both bivariate algorithms already recurse to. |
 
-## 3. The algorithm — reduce to bivariate, then iterated multivariate Hensel lift (Wang "EEZ")
+## 3. The algorithm — reduce to univariate, then iterated multivariate Hensel lift (Wang "EEZ")
 
 For `f ∈ ℚ(i)[x₁, …, xₙ]`, `n ≥ 3`, primitive and squarefree in a chosen main variable `x₁`, **monic in
 `x₁`** (initial scope):
@@ -62,26 +65,39 @@ For `f ∈ ℚ(i)[x₁, …, xₙ]`, `n ≥ 3`, primitive and squarefree in a ch
 0. **Content in `x₁`** (an (n−1)-variate polynomial) — strip via `gcdMV`, recurse `factorMultivariate`
    on it. Require monic-in-`x₁` (a non-constant leading `x₁`-coefficient ⇒ fail closed; Wang LC
    distribution deferred).
-1. **Evaluate** `x₃, …, xₙ → a₃, …, aₙ` (Gaussian integers), reducing to a **bivariate** `f₀(x₁, x₂) =
-   f(x₁, x₂, a₃, …, aₙ)`. Require: `deg_{x₁}` preserved (leading coeff nonzero at the point), `f₀`
-   squarefree, and the **Hilbert-genericity** condition — the number of bivariate factors of `f₀` equals
-   the number of true factors of `f`. Detect and retry on a bad point (bounded search over small Gaussian
-   integers); the factor-count check reuses `bivariateAbsFactorCount`-style counting.
-2. **Base factor** `factorBivariate(f₀)` → monic-in-`x₁` factors `u₁(x₁,x₂), …, u_s(x₁,x₂)`
-   (`s = 1 ⇒ f` irreducible, early exit — a generic univariate/bivariate specialization of an irreducible
-   is irreducible).
-3. **Multivariate Hensel lift** — lift `{u_i}` from `ℚ(i)[x₁, x₂]` back to `ℚ(i)[x₁, …, xₙ]`, reintroducing
-   `x₃, …, xₙ` **one variable at a time** in the `(x_j − a_j)`-adic direction. This is the *same* `σ_i` /
-   Bézout diophantine machinery as the Phase-5 oracle, iterated per variable; the multivariate diophantine
-   solve at each step bottoms out on the bivariate gcd / `factorBivariate` already trusted.
+1. **Evaluate** `x₂, …, xₙ → a₂, …, aₙ` (Gaussian integers), reducing to a **univariate** `f₀(x₁) =
+   f(x₁, a₂, …, aₙ)`. Require: `deg_{x₁}` preserved (leading coeff nonzero at the point) and `f₀`
+   **squarefree** (distinct roots). Retry on a bad point — a degree drop or a non-squarefree `f₀` — over a
+   bounded search of small Gaussian integers (the P0 spike confirmed bad points are rare and cheaply
+   detected this way).
+2. **Base factor** `_qiFactor(f₀)` → univariate ℚ(i) factors `u₁(x₁), …, u_s(x₁)`. Distinct roots ⇒ the
+   `u_i` are **pairwise coprime in the PID `ℚ(i)[x₁]`**, so the multifactor Hensel Bézout
+   `Σ σ_i ∏_{j≠i} u_j = 1` is always solvable. `s = 1 ⇒ f` irreducible (early exit). Note `s` can *exceed*
+   the true factor count: a generic univariate specialization can over-split a genuinely-multivariate
+   irreducible factor (e.g. `x²+y²−1` at `y=0` → `(x−1)(x+1)`); recombination (step 4) merges these.
+3. **Multivariate Hensel lift** — lift `{u_i}` from `ℚ(i)[x₁]` back to `ℚ(i)[x₁, …, xₙ]`, reintroducing
+   `x₂, …, xₙ` **one variable at a time** in the `(x_j − a_j)`-adic direction. This is exactly
+   `henselFactorBivariate`'s single-variable lift, **iterated**; the multivariate diophantine at each step
+   reduces (by evaluating the not-yet-lifted variables) to the univariate Bézout `σ_i` of step 2.
 4. **Recombine** by exact trial division — the smallest subset whose lifted product divides `f` exactly is
-   an irreducible factor (smallest-first ⇒ irreducibility), exactly as in the bivariate oracle.
+   an irreducible factor (smallest-first ⇒ irreducibility), merging any over-split univariate factors into
+   their true multivariate factor, exactly as in the bivariate oracle.
 5. **Un-normalize** (reattach content, undo the monic scaling) and canonicalize each factor.
+
+**⚠ P0 finding — why UNIVARIATE, not bivariate.** An earlier draft reduced to *bivariate* and used
+`factorBivariate` as the base case. The P0 spike (`scratchpad/nvar-spike.mjs`, transient) showed this is
+**Bézout-obstructed**: bivariate base factors can share a common zero — `x−y` and `x+y` both vanish at the
+origin, so `1 ∉ ⟨x−y, x+y⟩` and the multifactor Hensel Bézout has **no polynomial solution**. A *univariate*
+base has no such obstruction (distinct roots ⇒ pairwise coprime in the PID). The spike also validated, over
+ℚ(i) on a trivariate battery: (A) genericity (5–6 of 6 evaluation points good; the bad ones are degree-drop
+/ non-squarefree, cheaply detected), and (B) recombination soundness (each true factor specializes to a
+*subset-product* of the `u_i`, and those subsets *partition* the `u_i` — so recombine-by-division recovers
+the true set). `factorBivariate` therefore serves as the **2-variable cross-check oracle** (§5), not the base.
 
 **Alternative considered — a from-scratch multivariate Gao** (the Ruppert / logarithmic-derivative space
 generalized to n variables). *Not* the primary: its linear system is `O(d^{2n})` and its extraction is
 heavier, whereas reduction+lift is the standard (Maple / Magma) route, is incremental, and **reuses the
-trusted bivariate core**. Keep multivariate-Gao in reserve as a possible independent oracle (§5).
+trusted Phase-5 lift machinery**. Keep multivariate-Gao in reserve as a possible independent oracle (§5).
 
 ## 4. The hard parts (honest)
 
@@ -101,8 +117,10 @@ trusted bivariate core**. Keep multivariate-Gao in reserve as a possible indepen
 
 ## 5. Verification — the established independent-oracle culture
 
-- **Bivariate consistency (free):** `factorMultivariate` restricted to 2 variables must equal
-  `factorBivariate`.
+- **Bivariate consistency (the primary cross-check):** `factorMultivariate` restricted to 2 variables must
+  equal `factorBivariate`. Since `factorBivariate` is a *genuinely different* algorithm (Gao /
+  resultant-eigenvalue) from the univariate-base Hensel path, this is a strong differential oracle — the
+  n-variate analog of the Phase-5 Hensel-vs-Gao check.
 - **Round-trip fuzz:** multiply random n-variate ℚ(i) irreducibles → recover the exact set.
 - **Sympy golden corpus:** extend `fixtures/gen-cas-corpus.py` with n-variate `factor(…, gaussian=True)`
   cases (trivariate + reim-style 4-variable), consumed by `sym-core-cas-corpus.test.ts` (CI runs no Python).
@@ -111,14 +129,15 @@ trusted bivariate core**. Keep multivariate-Gao in reserve as a possible indepen
 
 ## 6. Build phases (gated PRs, auto-merge on green — the established cadence)
 
-- **P0 — spike (scratch, before touching `sym-core`).** Validate reduce-to-bivariate + the iterated lift +
-  recombination on trivariate cases, exact over ℚ(i); confirm the genericity / factor-count check and the
-  lift precision. The same "spike the math first" discipline the bivariate phases used.
+- **P0 — spike ✅ (validated).** Established (on a trivariate ℚ(i) battery, `scratchpad/nvar-spike.mjs`):
+  the base case must be **univariate** (bivariate is Bézout-obstructed); genericity holds with bad points
+  cheaply detected; and recombination-by-partition recovers the true set. Corrected §3.
 - **P1 — infra.** Multivariate content / primitive / squarefree in a chosen main variable (mostly wrapping
-  `gcdMV`) + evaluation-point selection with the Hilbert-genericity / factor-count check. Goldens.
-- **P2 — the multivariate Hensel-lift engine.** Generalize `henselFactorBivariate`'s lift to iterate over
-  `x₃, …, xₙ` (the multivariate ideal-adic Hensel + diophantine). *The concentration of risk — de-risked by
-  P0.*
+  `gcdMV`) + **univariate** evaluation-point selection (degree-preserving + squarefree, bounded Gaussian
+  search). Goldens.
+- **P2 — the multivariate Hensel-lift engine.** Generalize `henselFactorBivariate`'s single-variable lift
+  to iterate over `x₂, …, xₙ` (the multivariate ideal-adic Hensel; the per-step diophantine reduces to the
+  univariate Bézout). *The concentration of risk — de-risked by P0.*
 - **P3 — `factorMultivariate`.** reduce → `factorBivariate` → multi-lift → recombine (monic-in-main-var
   scope); round-trip + Sympy + bivariate-consistency goldens.
 - **P4 — integrate.** A fifth method in `_factorRec` (after the bivariate branch): a ≥3-variable *entangled*
