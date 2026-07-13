@@ -88,11 +88,29 @@ domains, or only among solutions found?
 |---|---|---|---|
 | A system-generation | audit/A-system-generation.md | qd-equations, qd-constraints, qd-varscheme, reim/conjugate models, gauge, point-functional | RUNNING |
 | B elimination-decomposition | audit/B-elimination-decomposition.md | sym-core Gröbner/resultant/saturate/elim/minimalPrimes/triangular/radical; denom clearing, excluded loci, positive-dim | RUNNING |
-| C certified-solving-counting | audit/C-certified-solving-counting.md | solveZeroDim/RUR/realSolutionCount/solveRealCertified/parametricRealCount1D/discriminantVariety/Schur-Cohn | RUNNING |
-| D univalence-admissibility | audit/D-univalence-admissibility.md | univalence, qd-constraints univalence forms, doCertifyUnivalence chain, pole/node location, boundary collisions | RUNNING |
+| C certified-solving-counting | audit/C-certified-solving-counting.md | solveZeroDim/RUR/realSolutionCount/solveRealCertified/parametricRealCount1D/discriminantVariety/Schur-Cohn | ✅ DONE |
+| D univalence-admissibility | audit/D-univalence-admissibility.md | univalence, qd-constraints univalence forms, doCertifyUnivalence chain, pole/node location, boundary collisions | ✅ DONE |
+
+**D done (headline):** **CRITICAL** — the genuine-QD certificate has NO `|z_j|<1` / `a_j∈Ω` gate. The
+ansatz φ=w₀+Σ conj(A_{j,k})zᵏ/(1−conj(z_j)z)ᵏ has poles at 1/conj(z_j); a solution with |z_j|≥1 puts a pole
+INSIDE 𝔻 (not a QD) yet is COUNTED as one — all four filters (exact Schur–Cohn fold, exact double-point,
+numeric findCriticalPoints, numeric isBoundaryUnivalent) are blind to it (repro `scratchpad/repro-nodeloc.js`:
+z₁=2 ⇒ num(φ′)=const, filters pass, evalPhi(0.5) throws at the interior pole). Direct solver enforces
+0<|z₀|<1 (`direct-common.mjs:1475`); only algebra certification omits it. Fix EXACT (rationalized z_j on hand),
+a_j∈Ω follows. Confirms PF-3. MEDIUM — "certified" headline not downgraded when a domain's univalence came from
+the NUMERIC fallback (relates PF-1). LOW — crossCheck `.some()` masks a spurious solution; user constraints not
+in specializationLedger. Confirmed sound: {φ′≠0}∧{Jordan}⇒injective GIVEN |z_j|<1; cusp/double-point exactness.
 | E reconstruction-verification | audit/E-reconstruction-verification.md | phiFromAlgebraSolution, exact Schwarz curve, exact data verification, sameDomain dedup | RUNNING |
 | F store-worker-export | audit/F-store-worker-export.md | algebra-store DAG, sym-worker cancel/parity/determinism, cas-export round-trip, PROV_STORE/UI | RUNNING |
-| G ui-workflow | audit/G-ui-workflow.md | algebra-ui/canvas, verdict card, rigor badges, terminology, first-time-user walk (feeds Phase 4) | RUNNING |
+| G ui-workflow | audit/G-ui-workflow.md | algebra-ui/canvas, verdict card, rigor badges, terminology, first-time-user walk (feeds Phase 4) | ✅ DONE |
+
+**G done (headline):** CRITICAL — (1) no single "prove existence/uniqueness" orchestrator; 3 overlapping buttons
+of differing rigor; the authoritative `Certify univalence` (1785) is collapsed + doesn't auto-reduce ⇒ dead-ends
+positive-dim on a fresh seed. (2) rigor legibility broken — verdict card is one flat text node
+(`algebra-canvas.mjs:438` `body.textContent=data.text`), NO `=`/`≤`/`≈` badge; PARTIAL/cross-check/slice caveats
+are prose ⇒ certified and estimate look identical. HIGH — `doAutoSolve` over-claims "Unique QD" from a raw
+algebraic real count. Fix: one orchestrated action + a structured `rigor` field → colored badge + class/equivalence
+headline. Corroborates PF-2/PF-4.
 
 All 7 dispatched 2026-07-13 as background general-purpose subagents (read-only; each persists to its
 audit/<track>.md before returning). Orchestrator integrates on completion.
