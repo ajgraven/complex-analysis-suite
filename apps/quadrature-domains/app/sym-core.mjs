@@ -1150,6 +1150,120 @@ import _QD from './solver.mjs';
     return gcdMV(f, d).degreeIn(xVar) === 0;
   }
 
+  // A single monomial coeff·xVar^a·yVar^b as an MPoly (zero if a<0 or b<0, so callers can pass the
+  // "shifted" exponents a−1 / b−1 from a derivative without guarding). Small, allocation-light helper
+  // for assembling the Ruppert linear system column by column.
+  function _bivMono(xVar, yVar, a, b, coeff) {
+    if (a < 0 || b < 0) return MPoly.zero();
+    const g = coeff || Gaussian.fromInt(1);
+    if (g.isZero()) return MPoly.zero();
+    const mono = new Map();
+    if (a > 0) mono.set(xVar, a);
+    if (b > 0) mono.set(yVar, b);
+    const p = new MPoly();
+    p.terms.set(monoKey(mono), { mono, coeff: g });
+    return p;
+  }
+  // (xVar-exp, yVar-exp) → Gaussian coeff, for a poly whose variables ⊆ {xVar, yVar}. Terms are already
+  // merged (one per monomial key), so each (i,j) appears once. Used to lay a Ruppert contribution
+  // polynomial down as a matrix COLUMN keyed by its monomials.
+  function _bivTermMap(poly, xVar, yVar) {
+    const map = new Map();
+    for (const t of poly.terms.values()) {
+      const i = t.mono.get(xVar) || 0;
+      const j = t.mono.get(yVar) || 0;
+      map.set(i + ',' + j, t.coeff);
+    }
+    return map;
+  }
+
+  // ── Gao's ABSOLUTE bivariate factor count (roadmap #19 Phase 2; docs/MULTIVARIATE_FACTORING.md §5) ──
+  // The number of ABSOLUTELY irreducible factors (i.e. over ℂ, not over ℚ(i)) of a squarefree plane
+  // curve f ∈ ℚ(i)[xVar, yVar], via the dimension of the Ruppert closedness-PDE solution space:
+  //
+  //     f·(g_y − h_x) + h·f_x − g·f_y = 0,   deg_x g ≤ m−1, deg_y g ≤ n ;  deg_x h ≤ m, deg_y h ≤ n−1,
+  //
+  // where m = deg_x f, n = deg_y f. Gao (2003), Thm 2.3: for f squarefree with gcd(f, f_x) = 1, the
+  // dimension of the space G = { g : ∃ h solving the PDE } equals the number of absolutely irreducible
+  // factors. The whole computation is exact over ℚ(i) — the nullspace DIMENSION is integer-valued, so a
+  // floating rank could miscount; an exact ℚ(i) kernel cannot. Each candidate unknown monomial (g_{ab}
+  // and h_{ab}) contributes one matrix COLUMN — the coefficients of its image under the PDE operator —
+  // and the rows are the union of the monomials those images touch. We then read off the kernel with the
+  // Phase-1 `_gaussianNullspace` and project onto the g-coordinates.
+  //
+  // HONEST LABELLING: the returned count is the ABSOLUTE (over-ℂ) factor count. It is an upper bound on
+  // the number of factors over ℚ(i): factors can be conjugate-paired or share a larger field of
+  // definition. E.g. x²+y² → 2 (splits as (x−iy)(x+iy) over ℚ(i) too), but x²−2y² → 2 while remaining
+  // IRREDUCIBLE over ℚ(i) (its factors live over ℚ(√2), not ℚ(i)). The ℚ(i)-rational factorization is
+  // Phase 3 (`factorBivariate`). Preconditions (thrown, not silently coerced): f nonzero, bivariate in
+  // exactly (xVar, yVar), positive degree in both after stripping pure-yVar content, and squarefree in
+  // xVar. Validated exactly by the Phase-0 spike (scratchpad, transient) on the golden battery.
+  function bivariateAbsFactorCount(f, xVar, yVar) {
+    if (!(f instanceof MPoly)) throw new Error('bivariateAbsFactorCount: MPoly expected');
+    if (f.isZero()) throw new Error('bivariateAbsFactorCount: the zero polynomial has no factorization');
+    if (xVar === yVar) throw new Error('bivariateAbsFactorCount: xVar and yVar must differ');
+    for (const v of f.vars()) {
+      if (v !== xVar && v !== yVar) {
+        throw new Error('bivariateAbsFactorCount: not bivariate in (' + xVar + ', ' + yVar + '); found variable ' + v);
+      }
+    }
+    // Strip the pure-yVar content (its factors are a separate univariate-in-y problem) and require the
+    // squarefree, genuinely-bivariate curve Gao's dimension theorem is stated for.
+    const fp = bivariatePrimitivePart(f, xVar);
+    const m = fp.degreeIn(xVar), n = fp.degreeIn(yVar);
+    if (m < 1 || n < 1) {
+      throw new Error('bivariateAbsFactorCount: needs positive degree in both ' + xVar + ' and ' + yVar +
+        ' after stripping content (a single-variable input factors via the univariate path)');
+    }
+    if (!bivariateSquarefreeInX(fp, xVar)) {
+      throw new Error('bivariateAbsFactorCount: f must be squarefree in ' + xVar +
+        ' (Gao\'s dimension theorem needs a reduced curve; strip repeated factors first)');
+    }
+    const fx = fp.derivativeIn(xVar), fy = fp.derivativeIn(yVar);
+    // Column per unknown: g-unknowns (a ≤ m−1, b ≤ n) first, then h-unknowns (a ≤ m, b ≤ n−1). The
+    // g-block must come first so we can project the kernel onto it below.
+    const contribs = [];
+    for (let a = 0; a <= m - 1; a++) {
+      for (let b = 0; b <= n; b++) {
+        // image of g = x^a y^b : f·g_y − f_y·g = b·f·x^a y^{b−1} − f_y·x^a y^b
+        const img = fp.mul(_bivMono(xVar, yVar, a, b - 1, Gaussian.fromInt(b)))
+          .sub(fy.mul(_bivMono(xVar, yVar, a, b)));
+        contribs.push(img);
+      }
+    }
+    const ngU = contribs.length; // size of the g-block (its columns precede every h column)
+    for (let a = 0; a <= m; a++) {
+      for (let b = 0; b <= n - 1; b++) {
+        // image of h = x^a y^b : −f·h_x + f_x·h = −a·f·x^{a−1} y^b + f_x·x^a y^b
+        const img = fx.mul(_bivMono(xVar, yVar, a, b))
+          .sub(fp.mul(_bivMono(xVar, yVar, a - 1, b, Gaussian.fromInt(a))));
+        contribs.push(img);
+      }
+    }
+    // Rows = the union of every monomial any image touches; matrix M[row][col] = that Gaussian coeff.
+    const rowIdx = new Map();
+    const colMaps = contribs.map((c) => _bivTermMap(c, xVar, yVar));
+    for (const cm of colMaps) for (const k of cm.keys()) if (!rowIdx.has(k)) rowIdx.set(k, rowIdx.size);
+    const R = rowIdx.size, C = contribs.length;
+    const M = [];
+    for (let r = 0; r < R; r++) M.push(new Array(C).fill(Gaussian.fromInt(0)));
+    for (let col = 0; col < C; col++) for (const [k, g] of colMaps[col]) M[rowIdx.get(k)][col] = g;
+    // Kernel over ℚ(i), then project each null vector onto the g-block. dim(G) = #absolutely-irreducible
+    // factors (Gao Thm 2.3). The g-projection is injective on the kernel when deg_y f = n (no (0, h)
+    // solution can exist), so this equals the plain nullity for a genuine bivariate curve; taking the
+    // g-projected rank is the faithful statement of the theorem regardless.
+    const basis = _gaussianNullspace(M);
+    const gProj = basis.map((v) => v.slice(0, ngU));
+    return _gaussianMatrixRank(gProj);
+  }
+  // f absolutely irreducible ⟺ exactly one factor over ℂ. NOTE this is ABSOLUTE irreducibility, which is
+  // STRICTLY STRONGER than irreducibility over ℚ(i): `true` guarantees irreducible over ℚ(i) as well,
+  // but `false` does NOT imply ℚ(i)-reducible (x²−2y² splits over ℂ yet is ℚ(i)-irreducible). Same
+  // preconditions as bivariateAbsFactorCount (thrown on violation).
+  function isAbsolutelyIrreducible(f, xVar, yVar) {
+    return bivariateAbsFactorCount(f, xVar, yVar) === 1;
+  }
+
   // RADICAL of a ZERO-DIMENSIONAL ideal (Seidenberg): √I = I + (squarefree(χ_v) : v ∈ vars),
   // where χ_v is the characteristic polynomial of multiplication-by-v on ℚ(i)[x]/I (Sym.resolvent).
   // Its square-free part has the same v-coordinates with multiplicity 1, so adding them strips all
@@ -5012,6 +5126,7 @@ import _QD from './solver.mjs';
     multiplicationMatrix, powerSums, newtonToElementary, charPolyByTraces, coordinateMoments,
     hankelRank, pronyPolynomial, shapeFromMoments, shapeFromMomentsJSON, // #18 shape-from-moments (Prony–Hankel): exact QD-order + Prony polynomial + numeric nodes/weights (+JSON serializer)
     nullspaceRational, bivariateContent, bivariatePrimitivePart, bivariateSquarefreeInX, // #19 factorizer Phase-1 infra (exact ℚ(i) kernel basis + content/primitive/squarefree-in-x)
+    bivariateAbsFactorCount, isAbsolutelyIrreducible, // #19 factorizer Phase-2: Gao Ruppert-nullspace absolute (over-ℂ) factor count + absolute-irreducibility test
     solveByEigenvalues, realSolutionCount, parametricRealCount1D, discriminantVariety, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,

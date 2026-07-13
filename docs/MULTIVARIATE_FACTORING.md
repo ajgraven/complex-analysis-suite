@@ -1,6 +1,6 @@
 # Multivariate (bivariate-first) polynomial factorization over ℚ(i) — design plan
 
-> **Status: IN PROGRESS.** Phase 0 (spike) ✅ validated; Phase 1 (infra) ✅ merged. Roadmap item #19 (the "genuine multivariate factorizer" that
+> **Status: IN PROGRESS.** Phase 0 (spike) ✅ validated; Phase 1 (infra) ✅ merged; Phase 2 (absolute factor *count* + irreducibility) ✅ merged. Roadmap item #19 (the "genuine multivariate factorizer" that
 > several done tiers were capped by). Decisions recorded (2026-07-13): **(a) Gao's PDE / linear-algebra
 > method first** (it plays to this engine's linear-algebra strength and deletes the two most bug-prone
 > subsystems); **(b) the classical Zassenhaus–Hensel path ships as a Phase-5 independent cross-check
@@ -178,9 +178,11 @@ Kept as an independent cross-check. Write `f ∈ ℚ(i)[y][x]`, primitive and sq
   same "spike the math first" discipline #16/#17/#18 used.
 - **Phase 1 — infra.** Content-in-`x` / primitive-part, the `gcd(f, f_x)` strip, and the exact ℚ(i)
   **nullspace-basis** routine (extend `_gaussianMatrixRank` to emit a kernel basis). Goldens.
-- **Phase 2 — factor *count* + irreducibility.** `bivariateFactorCount` / `isIrreducibleBivariate` from the
-  nullspace dimension alone (Gao Thm 2.3). Cheap, high-value, standalone-testable — and the honest oracle
-  `minimalPrimes` wants.
+- **Phase 2 — factor *count* + irreducibility ✅ (merged).** `bivariateAbsFactorCount` / `isAbsolutelyIrreducible`
+  from the Ruppert-nullspace dimension alone (Gao Thm 2.3). Named for **absolute** (over-ℂ) counting — honest,
+  since the count is an upper bound on the ℚ(i)-rational factor count (`x²−2y² → 2` absolute, but
+  ℚ(i)-irreducible; the rational split is Phase 3). Cheap, high-value, standalone-testable — and the honest
+  oracle `minimalPrimes` wants. Goldens `vitest/qd-factor-count.test.ts` (the Phase-0 battery + preconditions).
 - **Phase 3 — factor *extraction*.** The `r×r` matrix → `E_g` → `_qiFactor` → GCD extraction ⇒
   `factorBivariate`. Round-trip + field-sensitivity goldens + Sympy cross-check.
 - **Phase 4 — integrate.** Route genuine bivariate through the new path inside `factor` (keep the
