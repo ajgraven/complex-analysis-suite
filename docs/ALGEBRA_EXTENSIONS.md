@@ -46,7 +46,7 @@ every recommendation:
 | 12 ◐ | Primary decomposition + minimal primes (decompose boundary variety) — `minimalPrimes` (factorizing Buchberger) ✅; full GTZ / embedded primes ◻ | ★★ | Moderate | factorization (present!), zero-dim radical, saturation |
 | 13 ✅ | Triangular decomposition / regular chains (positive-dim solving) — `triangularDecomposition` (minimalPrimes + triangularize) | ★★ | Moderate | subresultants, GCD, squarefree, FGLM |
 | 14 ✅ | Discriminant variety + parametric real-root classification (family bifurcation set) — `discriminantVariety` (any #params) + the 1-param count via #2b-1 | ★★ | Moderate | subresultants, elimination, real-root isolation |
-| 15 | Curve parametrization + genus + Puiseux (rational boundary maps, cusps) | ★★ | Moderate | series/reversion, resultants, factorization |
+| 15 ◐ | Curve parametrization + genus + Puiseux (rational boundary maps, cusps) — `curveGenus` (genus + rationality, exact projective smoothness) ✅; Puiseux / singular genus / parametrization ◻ | ★★ | Moderate | series/reversion, resultants, factorization |
 | 16 | **Exact correspondence curves + σ (retire Correspondences' numeric branch engine)** | ★★ | Moderate | conjugate-var scheme, exact poly division (deflation), resultants |
 | 17 | Dynatomic / Gleason / multiplier polynomials (exact CD/Tricorn component data) | ★★ | Moderate | resultants, exact division, zero-dim solve |
 | 18 | Shape-from-moments (Prony–Hankel) reconstruction + QD-order rank test | ★★ | Moderate | zero-dim root-find, exact null-space/Vandermonde |
@@ -73,7 +73,9 @@ every recommendation:
 > deliberately not built) · **◐ #12** `minimalPrimes` — irreducible components by factorizing Buchberger
 > (PR #49; `complete` honest about the ℚ(i) factorizer's univariate/monomial/variable-disjoint reach; full GTZ
 > deferred) · **#13** `triangularDecomposition` — regular chains per component (minimalPrimes + triangularize,
-> PR #51). **Not started:** #15–#20.
+> PR #51) · **◐ #15** `curveGenus` — plane-curve geometric genus + rationality via exact projective smoothness
+> (PR #53; Puiseux / singular genus / rational parametrization deferred). **The decomposition tier (#12–#15) is
+> done in its feasible form. Not started:** #16–#20.
 
 ---
 
@@ -200,10 +202,11 @@ from "hard" to "moderate."
 3. ✅ **Cheap infrastructure sprint (compounding):** #6 ideal toolkit + #7 series calculus + #8 Hilbert/
    dimension + #9 power sums + #10 Padé/CRT + the Tier-2 workflow wins. **DONE (PRs #31–#36);** CRT-modular
    Gröbner and the staircase/save-load/`.ipynb` workflow items deferred (rigor badges already present).
-4. **Decomposition tier (mostly done):** ✅ #12 minimal primes (`minimalPrimes`, factorizing Buchberger) + ✅ #13
-   regular chains (`triangularDecomposition`) + ✅ #14 discriminant variety (`discriminantVariety`); still open —
-   #15 curve parametrization / genus / Puiseux, and genuine multivariate factorization (would deepen #12/#13 past
-   the current univariate/monomial/variable-disjoint reach).
+4. **Decomposition tier (done, feasible form):** ✅ #12 minimal primes (`minimalPrimes`, factorizing Buchberger) +
+   ✅ #13 regular chains (`triangularDecomposition`) + ✅ #14 discriminant variety (`discriminantVariety`) + ◐ #15
+   curve genus + rationality (`curveGenus`, exact projective smoothness). The shared "hard" follow-on for the whole
+   tier — a genuine multivariate factorizer + Puiseux — would deepen the singular cases (exact singular genus,
+   rational parametrization, deeper prime splits).
 5. **Cross-app exact upgrades:** #16 exact correspondence curves + #17 dynatomic/Gleason/multiplier.
 6. **Tooling axes, as demand appears:** client-side Arb/PARI for certified `≤`; an opt-in msolve →
    HomotopyContinuation.jl service for positive-dimensional / large / all-solution work.
