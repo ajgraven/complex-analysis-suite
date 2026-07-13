@@ -4121,6 +4121,51 @@ import _QD from './solver.mjs';
     return { ok: true, chains, complete: mp.complete, count: chains.length };
   }
 
+  // Degree-d homogenization of f(x,y) with a fresh variable Z: each term of (affine) degree e gains Z^{d−e}.
+  function _homogenize(f, d, zVar) {
+    let out = MPoly.zero();
+    for (const t of f.termList()) {
+      const e = Object.values(t.mono).reduce((s, x) => s + x, 0);
+      const mono = Object.assign({}, t.mono);
+      if (d - e > 0) mono[zVar] = (mono[zVar] || 0) + (d - e);
+      out = out.add(MPoly.fromTermList([{ coeff: t.coeff, mono }]));
+    }
+    return out;
+  }
+
+  // Geometric GENUS + rationality of a plane algebraic curve f(x,y) = 0 (roadmap #15). Assumes a
+  // REDUCED/irreducible curve. For a SMOOTH curve of degree d the geometric genus is EXACTLY the
+  // arithmetic genus (d−1)(d−2)/2; a line or conic (d ≤ 2) is always rational (genus 0); a smooth
+  // curve of degree ≥ 3 has positive genus, so it is NOT rational. Smoothness is tested EXACTLY and
+  // PROJECTIVELY: homogenize F(x,y,Z), and the projective curve is smooth ⟺ the Jacobian ideal
+  // ⟨Fₓ, F_y, F_Z⟩ vanishes only at the origin ⟺ it is zero-dimensional (else the cone over a
+  // projective singular point makes it positive-dimensional). A SINGULAR curve''s geometric genus is
+  // (d−1)(d−2)/2 − Σδ_P < the arithmetic genus; computing Σδ (⇒ the exact genus and any rational
+  // parametrization) needs Puiseux singularity resolution — deferred — so the singular case returns
+  // genus:null with arithmeticGenus as an upper bound and singular:true (its cusps/nodes).
+  // Returns { ok, degree, arithmeticGenus, smooth, singular, genus, rational, note } or { ok:false }.
+  function curveGenus(f, xVar, yVar, opts) {
+    opts = opts || {};
+    if (!(f instanceof MPoly) || f.isZero()) return { ok: false, reason: 'expected a nonzero curve polynomial' };
+    for (const v of f.vars()) if (v !== xVar && v !== yVar) return { ok: false, reason: 'not a plane curve in (' + xVar + ',' + yVar + '): extra variable "' + v + '"' };
+    const d = f.totalDegree();
+    if (d < 1) return { ok: false, reason: 'the curve is constant' };
+    const zVar = opts.zVar || '_Z';
+    if (zVar === xVar || zVar === yVar) return { ok: false, reason: 'homogenizing variable "' + zVar + '" clashes; pass opts.zVar' };
+    const pa = Math.max(0, (d - 1) * (d - 2) / 2);   // (also normalizes the d=1 line's −0 to +0)
+    try {
+      const F = _homogenize(f, d, zVar);
+      const jac = [F.derivativeIn(xVar), F.derivativeIn(yVar), F.derivativeIn(zVar)].filter((g) => g && !g.isZero());
+      const order = _ord(monomialOrder('grevlex', [xVar, yVar, zVar]));
+      const smooth = jac.length ? isZeroDimensional(buchberger(jac, order, opts), order, [xVar, yVar, zVar]) : false;
+      let genus, rational, note;
+      if (pa === 0) { genus = 0; rational = true; note = (d === 1 ? 'a line' : 'a conic') + ' — rational (genus 0)'; }
+      else if (smooth) { genus = pa; rational = false; note = 'smooth degree-' + d + ' curve — genus ' + pa + ' > 0, not rational'; }
+      else { genus = null; rational = null; note = 'singular — geometric genus = ' + pa + ' − Σδ_P (< ' + pa + '); the exact genus and any rational parametrization need Puiseux singularity resolution (deferred)'; }
+      return { ok: true, degree: d, arithmeticGenus: pa, smooth, singular: !smooth, genus, rational, note };
+    } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+  }
+
   // ---------------------------------------------------------------------------
   // runJob — a serialization-friendly op dispatcher: takes SERIALIZED input (term
   // lists from MPoly.termList, an order spec) and returns SERIALIZED output, so the
@@ -4688,7 +4733,7 @@ import _QD from './solver.mjs';
     monoKey, monoCmp,
     mpolyDet, mpolyDetLaplace, resultant, discriminant, reducedDiscriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, comprehensiveGroebnerSystem, verifySOS, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep, solveRealCertified, certifiedRealToJSON,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
-    inIdeal, eliminationIdeal, idealIntersect, idealQuotient, minimalPrimes, triangularDecomposition,   // ideal ops: membership, projection, ∩, colon, irreducible components, regular chains
+    inIdeal, eliminationIdeal, idealIntersect, idealQuotient, minimalPrimes, triangularDecomposition, curveGenus,   // ideal ops: membership, projection, ∩, colon, irreducible components, regular chains, plane-curve genus
 
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, krullDimension, dimensionDegree, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, powerSums, newtonToElementary, charPolyByTraces, coordinateMoments,
