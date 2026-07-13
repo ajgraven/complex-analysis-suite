@@ -273,6 +273,29 @@ function renderCurve(wCoeffs: readonly QiPoly[], latex: boolean): string {
   return `${out} = 0`;
 }
 
+/** Render a single-variable polynomial Σ gₖ·varᵏ as ASCII (e.g. the cusp locus disc_w C in z̄ →
+ *  "z̄^4 + 8 z̄"). Shares the coefficient formatting with the curve renderer. */
+export function renderQiPolyText(p: QiPoly, varSym: string): string {
+  const terms: { g: Gauss; k: number }[] = [];
+  for (let k = 0; k < p.coeffs.length; k++) {
+    const g = p.coeff(k);
+    if (!g.isZero()) terms.push({ g, k });
+  }
+  terms.sort((s, t) => t.k - s.k);
+  if (terms.length === 0) return "0";
+  let out = "";
+  for (let idx = 0; idx < terms.length; idx++) {
+    const { g, k } = terms[idx];
+    const { sign, mag, isUnit } = renderGaussMag(g);
+    const vs = k === 0 ? "" : k === 1 ? varSym : `${varSym}^${k}`;
+    const showMag = !(isUnit && vs.length > 0);
+    const body = !showMag ? vs : vs.length === 0 ? mag : `${mag} ${vs}`;
+    if (idx === 0) out += sign < 0 ? `- ${body}` : body;
+    else out += sign < 0 ? ` - ${body}` : ` + ${body}`;
+  }
+  return out;
+}
+
 /** Float [re,im] complex helpers for numeric evaluation. */
 function cAdd(a: [number, number], b: [number, number]): [number, number] {
   return [a[0] + b[0], a[1] + b[1]];

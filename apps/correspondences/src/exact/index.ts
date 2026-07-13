@@ -4,5 +4,5 @@
 // verbatim if a third consumer (CD dynatomic/Gleason, #17) ever needs the same exact primitives.
 export { bigGcd, Frac, Gauss } from "./gaussian.js";
 export { QiPoly } from "./qiPoly.js";
-export { correspondenceCurve, cuspLocus } from "./correspondenceCurve.js";
+export { correspondenceCurve, cuspLocus, renderQiPolyText } from "./correspondenceCurve.js";
 export type { ExactCorrespondenceCurve } from "./correspondenceCurve.js";
