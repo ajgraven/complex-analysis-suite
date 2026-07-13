@@ -1,6 +1,10 @@
 # General n-variate polynomial factorization over ℚ(i) — design plan
 
-> **Status: IN PROGRESS — P0 ✅; P1 (infra) ✅; P2 (Hensel-lift engine) ✅; P3 (`factorMultivariate`) ✅; P4 (integrate + certify) ✅ — all merged; only the P5 oracle remains.** This is the one deferred extension of roadmap item #19,
+> **Status: COMPLETE — P0–P5 all merged.** The general n-variate factorizer is done: reduce to univariate,
+> multivariate Hensel-lift, recombine (`mvHenselLift`); assembled as `factorMultivariate`; wired into
+> `factor()` and the ideal-decomposition certification; cross-checked by an external Sympy corpus and a
+> second-reduction differential. Monic-in-main-variable is the standing scope (Wang leading-coefficient
+> distribution remains the one deferred refinement). This was the one deferred extension of roadmap item #19,
 > whose **bivariate** core (Phases 0–5) is complete and merged (see
 > [`MULTIVARIATE_FACTORING.md`](MULTIVARIATE_FACTORING.md)). Decisions recorded (2026-07-13): **(a)** reduce
 > n-variate → **univariate** and Hensel-lift, **generalizing the trusted `henselFactorBivariate`** (its
@@ -163,7 +167,12 @@ trusted Phase-5 lift machinery**. Keep multivariate-Gao in reserve as a possible
   `⟨(x+y+z)(x−y+z)⟩` genuinely splits; `triangularDecomposition` inherits it. `spuriousFactors` /
   `discriminantVariety` / `sym-radical` benefit automatically (they call `factor`). Goldens: `factor()`
   routing in `qd-nvar-factor.test.ts` + the n-variate cases in `qd-minimal-primes.test.ts`.
-- **P5 — the independent oracle.** The second-reduction differential + the n-variate Sympy corpus.
+- **P5 — the independent oracle ✅ (merged).** The **Sympy n-variate golden corpus** (`gen-cas-corpus.py`
+  gains a `multivariateFactorizations` section — `factor(…, gaussian=True)` on trivariate/4-variate cases —
+  consumed by `sym-core-cas-corpus.test.ts` up to associates; CI runs no Python) **and** the
+  **second-reduction differential** (`qd-nvar-hensel.test.ts`: factoring the same polynomial with a
+  different main variable — a different univariate base, evaluation point, and lift order — must give the
+  same factor set). Together they close the n-variate factorizer.
 
 Deferred within this extension: **Wang LC distribution** (non-monic main variable); a **multivariate
 absolute-factor count**; and the adjacent (separate) **trivariate-elimination** engine the CD `δ_n(λ, c)`

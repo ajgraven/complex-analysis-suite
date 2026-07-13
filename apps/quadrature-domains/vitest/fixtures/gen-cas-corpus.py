@@ -85,6 +85,22 @@ FACTOR_CASES = [
     (x**2 - 2*y**2)*(x - y),                # ℚ(i)-irreducible quadratic × a linear factor
 ]
 
+# ---- n-variate (≥3-var) factorization over ℚ(i) (roadmap #19 n-variate): the external oracle for
+# QD.Sym.factorMultivariate. Each case is (poly, gens). Factors are compared up to ℚ(i) units in the
+# consumer test (factorMultivariate canonicalizes monic in its internally-chosen main variable), so no
+# per-factor normalization is applied here.
+w = sp.symbols('w')
+MULTIVAR_FACTOR_CASES = [
+    ((x + y + z) * (x - y + z), [x, y, z]),
+    ((x - y) * (x + y) * (x + z), [x, y, z]),
+    (x**2 - y*z, [x, y, z]),                                          # irreducible
+    ((x**2 - y*z) * (x - y), [x, y, z]),                             # over-splitting component × a line
+    (x**2 + y**2 - z**2, [x, y, z]),                                 # irreducible quadric
+    ((x - y + 2*z) * (x + sp.I*y - z) * (x + y + z - 1), [x, y, z]), # ℚ(i) round-trip, 3 factors
+    ((y + 1) * (x**2 - y*z), [x, y, z]),                             # a pure-lower-arity content factor
+    ((x + y + z + w) * (x - y + z - w), [x, y, z, w]),               # 4-variate
+]
+
 
 def gauss_termlist(expr, gens):
     """Serialize a ℚ(i) expr to the engine's MPoly.fromTermList format:
@@ -112,7 +128,8 @@ def monic_in_x(fac):
 def build():
     corpus = {"_generatedBy": "gen-cas-corpus.py (sympy %s)" % sp.__version__,
               "_note": "external-CAS golden values; CI consumes this JSON, does not run the generator",
-              "resultants": [], "realRootCounts": [], "groebner": [], "bivariateFactorizations": []}
+              "resultants": [], "realRootCounts": [], "groebner": [], "bivariateFactorizations": [],
+              "multivariateFactorizations": []}
 
     for f, g, var, gens in RES_CASES:
         res = sp.expand(sp.resultant(f, g, var))
@@ -151,6 +168,15 @@ def build():
             "factors": [gauss_termlist(ff, [x, y]) for ff in facs],
         })
 
+    for f, gens in MULTIVAR_FACTOR_CASES:
+        fac = sp.factor(f, gaussian=True)
+        facs = fac.args if isinstance(fac, sp.Mul) else [fac]
+        facs = [ff for ff in facs if ff.free_symbols]               # drop constant units (compared up to units)
+        corpus["multivariateFactorizations"].append({
+            "poly": gauss_termlist(f, gens), "vars": [str(g) for g in gens],
+            "factors": [gauss_termlist(sp.expand(ff), gens) for ff in facs],
+        })
+
     return corpus
 
 
@@ -176,6 +202,6 @@ if __name__ == "__main__":
         json.dump(corpus, fh, indent=1, sort_keys=True)
         fh.write("\n")
     print("wrote", out_path,
-          "(%d resultants, %d root-counts, %d groebner, %d factorizations)" %
+          "(%d resultants, %d root-counts, %d groebner, %d bivariate-factorizations, %d multivariate-factorizations)" %
           (len(corpus["resultants"]), len(corpus["realRootCounts"]), len(corpus["groebner"]),
-           len(corpus["bivariateFactorizations"])))
+           len(corpus["bivariateFactorizations"]), len(corpus["multivariateFactorizations"])))
