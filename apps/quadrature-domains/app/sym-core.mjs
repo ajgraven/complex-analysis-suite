@@ -4009,6 +4009,91 @@ import _QD from './solver.mjs';
     } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
   }
 
+  // MINIMAL PRIMES (irreducible components) of V(⟨polys⟩) by FACTORIZING BUCHBERGER (facstd-style):
+  // compute a Gröbner basis; whenever a basis element factors g = ∏fᵢ into ≥2 distinct irreducible
+  // factors (the exact ℚ(i) factorizer), the variety splits V(I) = ⋃ V(I + ⟨fᵢ⟩), so recurse on each
+  // I + ⟨fᵢ⟩. A basis with no reducibly-factoring element is a LEAF component; principal leaves ⟨g⟩ are
+  // radicalized to ⟨squarefree g⟩, and the redundant leaves (whose variety is contained in another's,
+  // by ideal containment) are pruned. Returns { ok, primes:[[MPoly]], complete, count } — each prime is
+  // a reduced Gröbner basis. `complete` is false if a cost cap was hit; it finds the MINIMAL primes
+  // (the irreducible components) — NOT embedded primes or multiplicities (full primary decomposition /
+  // GTZ), which don't change V(I) and need the CAS route. A non-principal, non-radical leaf is returned
+  // verbatim (a primary-not-prime piece) — flagged by complete only when a cap forced it.
+  function minimalPrimes(polys, opts) {
+    opts = opts || {};
+    const src = (polys || []).filter((p) => p && !p.isZero());
+    const vars = opts.vars || _ambientVars(src);
+    const order = _ord(opts.order || monomialOrder('grevlex', vars));
+    const maxComps = opts.maxComponents != null ? opts.maxComponents : 64;
+    const maxSteps = opts.maxSteps != null ? opts.maxSteps : 500;
+    const polyCanon = (g) => g.termList()
+      .map((t) => Object.entries(t.mono).sort().map((e) => e[0] + '^' + e[1]).join('*') + ':' + t.coeff.re.join('/') + ',' + t.coeff.im.join('/'))
+      .sort().join(' ');
+    const gbKey = (G) => G.map(polyCanon).sort().join('|');
+    const isUnit = (G) => G.length === 1 && G[0].vars().size === 0 && !G[0].isZero();
+    const reduce = (gens) => reduceGroebner(buchberger(gens.filter((g) => g && !g.isZero()), order, opts), order);
+    const factorsOf = (g) => { let fr; try { fr = factor(g, opts); } catch (e) { fr = null; } return (fr && fr.ok && fr.factors ? fr.factors : []).filter((f) => f && f.vars().size > 0); };
+
+    if (!src.length) return { ok: true, primes: [[]], complete: true, count: 1, note: 'the zero ideal — V(I) is the whole space' };
+    const G0 = reduce(src);
+    if (isUnit(G0)) return { ok: true, primes: [], complete: true, count: 0, note: 'inconsistent (1 ∈ I) — the variety is empty' };
+
+    let complete = true;
+    const work = [G0], seen = new Set([gbKey(G0)]), leaves = [];
+    let steps = 0;
+    try {
+      while (work.length) {
+        if (++steps > maxSteps || leaves.length + work.length > maxComps) { complete = false; while (work.length) leaves.push(work.pop()); break; }
+        const G = work.pop();
+        let split = null;
+        for (const g of G) { const facs = factorsOf(g); if (facs.length >= 2) { split = facs; break; } }
+        if (!split) { leaves.push(G); continue; }                        // no factoring generator ⇒ a component
+        for (const f of split) {                                          // V(I) = ⋃ V(I + ⟨fᵢ⟩)
+          const H = reduce(G.concat([f]));
+          if (isUnit(H)) continue;
+          const k = gbKey(H);
+          if (!seen.has(k)) { seen.add(k); work.push(H); }
+        }
+      }
+    } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+
+    // radicalize principal leaves ⟨g⟩ → ⟨∏ distinct factors⟩; then dedupe (exact + containment: drop a
+    // component I when another J ⊆ I, i.e. V(I) ⊆ V(J), so I adds nothing).
+    const norm = [];
+    for (let G of leaves) {
+      if (G.length === 1) {
+        const g0 = G[0], facs = factorsOf(g0);
+        let rad = null;
+        if (facs.length >= 1) { rad = facs[0]; for (let i = 1; i < facs.length; i++) rad = rad.mul(facs[i]); }       // ∏ distinct factors
+        else { const vs = [...g0.vars()]; if (vs.length === 1) rad = squareFreePart(g0, vs[0]); }                    // pure power the factorizer won't split
+        if (rad) G = reduce([rad]);
+      }
+      if (!isUnit(G) && G.length) norm.push(G);
+    }
+    const uniq = [], keys = new Set();
+    for (const G of norm) { const k = gbKey(G); if (!keys.has(k)) { keys.add(k); uniq.push(G); } }
+    const keep = [];
+    for (let i = 0; i < uniq.length; i++) {
+      let redundant = false;
+      for (let j = 0; j < uniq.length && !redundant; j++) {
+        if (i === j) continue;
+        if (uniq[j].every((g) => { try { return inIdeal(g, uniq[i], order); } catch (e) { return false; } })) redundant = true;
+      }
+      if (!redundant) keep.push(uniq[i]);
+    }
+    // Honest completeness: the exact ℚ(i) factorizer is univariate + monomial + variable-disjoint only,
+    // so a MULTIVARIATE nonlinear leaf (e.g. x²+y² = (x−iy)(x+iy)) can't be certified irreducible/prime.
+    // complete is true only when it terminated AND every component is provably prime: a linear ideal, or
+    // a squarefree irreducible univariate hypersurface. Otherwise a leaf may split further ⇒ complete:false.
+    const isCertPrime = (G) => {
+      if (G.every((g) => g.totalDegree() <= 1)) return true;                    // a linear ideal is prime
+      if (G.length === 1) { const g = G[0], vs = [...g.vars()]; if (vs.length === 1) { const sf = squareFreePart(g, vs[0]); return sf.degreeIn(vs[0]) === g.degreeIn(vs[0]) && factorsOf(g).length <= 1; } }
+      return false;
+    };
+    if (complete) complete = keep.every(isCertPrime);
+    return { ok: true, primes: keep, complete, count: keep.length };
+  }
+
   // ---------------------------------------------------------------------------
   // runJob — a serialization-friendly op dispatcher: takes SERIALIZED input (term
   // lists from MPoly.termList, an order spec) and returns SERIALIZED output, so the
@@ -4576,7 +4661,7 @@ import _QD from './solver.mjs';
     monoKey, monoCmp,
     mpolyDet, mpolyDetLaplace, resultant, discriminant, reducedDiscriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, comprehensiveGroebnerSystem, verifySOS, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep, solveRealCertified, certifiedRealToJSON,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
-    inIdeal, eliminationIdeal, idealIntersect, idealQuotient,   // ideal ops: membership, projection, ∩, colon
+    inIdeal, eliminationIdeal, idealIntersect, idealQuotient, minimalPrimes,   // ideal ops: membership, projection, ∩, colon, irreducible components
 
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, krullDimension, dimensionDegree, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, powerSums, newtonToElementary, charPolyByTraces, coordinateMoments,
