@@ -52,8 +52,25 @@ modulo stated equivalences** — never "unique among solutions found".
         state for the raw count. The w₀-pin ledger label fixed: "rotation gauge"→"center/translation gauge —
         restricts to domains containing w₀". `algebra-ui.mjs` strings + ledger only (no logic). **Gate GREEN:
         all 0; 1295 tests, no regression.** Browser-verify verdict wording batched into S4.
-  - [ ] **S3 — Möbius saturation as a first-class admissibility DAG op** [B-1, A-1]. RE-SCOPED (see decision).
-  - [ ] **S4** rigor field + badge · **S5** orchestrator · **S6** export guard + LOW/MED batch.
+  - [x] **S4 — structured `rigor` field + colored `=`/`≤`/`≈`/`⚠`/`?` badge** [G-2 CRITICAL]. DONE + committed.
+        Pure exported `QD.AlgebraCanvas.rigorMeta(level)` (level→{symbol,label,color}, hoisted, unit-tested) + a
+        prominent colored pill in `setVerdict`. Retrofit: doCertifyUnivalence → `certRigor` (exact only when the
+        count is certified AND every candidate's univalence filter was EXACT [new `allExactFilter` — closes D-2]
+        AND reconcile+cross-check clean; else partial/estimate); doClassify/doAutoSolve → `classifyRigor` (bound);
+        inconsistent → exact; positive-dim → unknown; no-real → partial/exact. Test `vitest/algebra-rigor-badge.test.ts`
+        (6, jsdom). **Gate GREEN: all 0; 1301 tests (+6), 149 files.** Browser-verified LIVE: rigorMeta +
+        nodeInsideDisk exposed and correct in the running app (after clearing the PWA SW cache).
+  - [ ] **S5 — unified "Prove existence/uniqueness" orchestrator** [G-1, PF-2] — #1 mission deliverable.
+  - [ ] **S3 — Möbius saturation DAG op** [B-1] — correctness ENHANCEMENT (exact count), after the headlines.
+  - [ ] **S6** CAS-export guard [F5] + LOW/MED batch.
+
+**EXECUTION-ORDER decision (final):** S1+S2 already fixed every WRONG result — the authoritative Certify verdict
+is correct (S1) and the raw count is honestly labeled as an upper bound (S2), so the disk user gets the right
+answer. The remaining saturation (S3) only TIGHTENS an already-honest bound (4→2), an enhancement not a bug fix.
+The mission's headline asks are rigor-legible UI (Phase 4 = the badge) and the orchestrator (Phase 3). So order:
+**badge (S4) → orchestrator (S5) → saturation (S3) → export/batch (S6).** If budget ends after S4/S5, the
+committed state (gate + honest labels + legible rigor + one-click orchestrator) is a far better outcome than
+gate+labels+exact-count with no orchestrator/badge.
 
 **Decision (post-S1 reorder):** S1's strict `|z_j|<1` gate already makes the AUTHORITATIVE verdict (Certify
 univalence) correct on the disk (rejects z=±1 + gauge-quotients to "unique ✓"). So B-1's residual harm is the

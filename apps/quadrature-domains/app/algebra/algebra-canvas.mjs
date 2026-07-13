@@ -434,7 +434,17 @@ const QD = _QD;
       if (!data || !data.text) { verdict.classList.add('hidden'); return; }
       verdict.innerHTML = '';
       const close = iconBtn('algebra-verdict-close', '×', 'Dismiss', () => verdict.classList.add('hidden'));
-      const head = div('algebra-verdict-head'); head.textContent = data.title || 'Existence / uniqueness'; head.appendChild(close);
+      const head = div('algebra-verdict-head');
+      // Rigor badge (G-2): a prominent, color-coded =/≤/≈/⚠/? pill leads the card so a certified '=' and an
+      // estimate/bound/partial are never confusable at a glance. data.rigor ∈ {exact,bound,estimate,partial,unknown}.
+      if (data.rigor) {
+        const rm = rigorMeta(data.rigor);
+        const pill = div('algebra-verdict-rigor'); pill.textContent = rm.symbol; pill.title = 'Rigor: ' + rm.label;
+        pill.style.cssText = 'display:inline-block;min-width:1.4em;text-align:center;font-weight:700;border-radius:5px;padding:1px 6px;margin-right:7px;color:#fff;background:' + rm.color + ';';
+        head.appendChild(pill);
+        const tspan = document.createElement('span'); tspan.textContent = data.title || 'Existence / uniqueness'; head.appendChild(tspan);
+      } else { head.appendChild(document.createTextNode(data.title || 'Existence / uniqueness')); }
+      head.appendChild(close);
       const body = div('algebra-verdict-body'); body.textContent = data.text;
       verdict.appendChild(head);
       if (data.assumptions && data.assumptions.length) {
@@ -507,5 +517,23 @@ const QD = _QD;
   }
 
   window.QD = window.QD || {};
-  QD.AlgebraCanvas = { create };
+  // Rigor badge metadata (finding G-2: make =/≤/≈ legible so an estimate never reads as certified at a
+  // glance). level → { symbol, label, color }. PURE + hoisted to module scope so setVerdict can call it and
+  // a unit test can reach it (QD.AlgebraCanvas.rigorMeta). The project's binding honest-labeling vocabulary:
+  //   'exact' '='  — a CERTIFIED exact conclusion (RUR+Sturm count + exact Schur–Cohn/boundary; also a
+  //                  certified "no quadrature domain"). Everything below is strictly weaker and must look it.
+  //   'bound' '≤'  — a rigorous bound (the algebraic count is an UPPER bound on #QD; a slice count a LOWER one).
+  //   'estimate' '≈' — numerical evidence only (a verdict that leaned on a numeric fold/boundary fallback).
+  //   'partial' '⚠' — incomplete (e.g. the numeric solver undercounted; some solutions may be missing).
+  //   'unknown' '?' — undetermined (positive-dimensional, or the real count over the cap).
+  function rigorMeta(level) {
+    switch (level) {
+      case 'exact':    return { symbol: '=', label: 'exact — certified', color: '#2e9e5b' };
+      case 'bound':    return { symbol: '≤', label: 'rigorous bound', color: '#3b82c4' };
+      case 'estimate': return { symbol: '≈', label: 'numerical estimate', color: '#c98a2e' };
+      case 'partial':  return { symbol: '⚠', label: 'partial — may be incomplete', color: '#d1791f' };
+      default:         return { symbol: '?', label: 'undetermined', color: '#8a8a8a' };
+    }
+  }
+  QD.AlgebraCanvas = { create, rigorMeta };
 })();

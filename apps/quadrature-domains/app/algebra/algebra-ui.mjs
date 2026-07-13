@@ -1536,6 +1536,15 @@ const QD = _QD;
       return out;
     }
 
+    // Rigor level (finding G-2 badge) for a classify/count RESULT: the reim real-solution count is a
+    // rigorous UPPER BOUND on #QD (⇒ 'bound'); an inconsistent system certifies "no QD" ('exact'); a
+    // positive-dimensional system or an over-cap real count is undetermined ('unknown').
+    function classifyRigor(r) {
+      if (!r || !r.ok) return 'unknown';
+      if (r.inconsistent) return 'exact';
+      if (!r.zeroDim || r.realCount == null) return 'unknown';
+      return 'bound';
+    }
     // Semi-autonomous "Auto-reduce & solve": chain the reductions (auto-reality →
     // linear propagation), each appended as a labeled column, then determine existence/
     // uniqueness and the explicit real solutions. The reduction history stays visible.
@@ -1600,7 +1609,7 @@ const QD = _QD;
           }
           _abort = null; setBusy(false); refreshPickers();
           setStatus(verdict + coords);
-          if (canvas) canvas.setVerdict({ text: verdict, solutionsText, assumptions: specializationLedger(cl) });
+          if (canvas) canvas.setVerdict({ text: verdict, solutionsText, assumptions: specializationLedger(cl), rigor: classifyRigor(cl) });
           toast(verdict, cl.inconsistent || cl.realCount === 0 ? { kind: 'error' } : {});
         } catch (e) { _abort = null; setBusy(false); showError('Auto-reduce & solve: ' + ((e && e.message) || String(e))); }
       })();
@@ -1660,7 +1669,7 @@ const QD = _QD;
         // A reality/imaginary assumption slices the system — the count is a lower bound (honest labeling).
         verdict += sliceCaveat(r);
         setStatus(verdict);
-        if (canvas) canvas.setVerdict({ text: verdict, assumptions: specializationLedger(r) });
+        if (canvas) canvas.setVerdict({ text: verdict, assumptions: specializationLedger(r), rigor: classifyRigor(r) });
         if (!sel) cacheActiveVerdict(r);   // A6: stamp the active branch's chip (whole last column analyzed)
         toast(verdict, r.inconsistent || r.realCount === 0 ? { kind: 'error' } : {});
       });
@@ -1825,7 +1834,7 @@ const QD = _QD;
       const ctrl = _newAbort(); _abort = ctrl;
       setBusy(true, 'Certifying univalence (genuine QDs)…');
       const params = hDataParamValues();
-      const finalVerdict = (text, bad, ledger) => { _abort = null; setBusy(false); setStatus(text); if (canvas) canvas.setVerdict({ text: text, assumptions: ledger || [] }); toast(text, bad ? { kind: 'error' } : {}); };
+      const finalVerdict = (text, bad, ledger, rigor) => { _abort = null; setBusy(false); setStatus(text); if (canvas) canvas.setVerdict({ text: text, assumptions: ledger || [], rigor: rigor || (bad ? 'estimate' : 'exact') }); toast(text, bad ? { kind: 'error' } : {}); };
       // 1) REGIME (dimension + consistency): the heavy reim Gröbner + Hermite real-count run in the
       // WORKER (classifyAsync) so the UI stays responsive and the op is cancellable; the per-solution
       // univalence certificate (below) is cheap and stays on the main thread.
@@ -1835,7 +1844,7 @@ const QD = _QD;
       }).then((cl) => {
         if (cl.aborted) { _abort = null; setBusy(false); setStatus(''); toast('Cancelled'); return; }
         if (!cl.ok) { _abort = null; setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + withGuidance(cl.reason || 'classify failed')); return; }
-        if (cl.inconsistent) { finalVerdict('No quadrature domain: the system is inconsistent (1 ∈ I).' + sliceCaveat(cl), true, specializationLedger(cl)); return; }
+        if (cl.inconsistent) { finalVerdict('No quadrature domain: the system is inconsistent (1 ∈ I).' + sliceCaveat(cl), true, specializationLedger(cl), 'exact'); return; }
         if (!cl.zeroDim) {
           // Positive-dimensional ⇒ underdetermined. Detect FACTORABLE causes (a locator/gauge
           // equation that splits the variety) and offer one-click pin/split actions (#2).
@@ -1856,7 +1865,7 @@ const QD = _QD;
                 onClick: () => { const r = store.applyFactor(h.nodeId, f.factorIndex); if (r && r.ok) { rerender(); refreshPickers(); doCertifyUnivalence(); } } });
             }
           }));
-          if (canvas) canvas.setVerdict({ text, actions: actions.slice(0, 6), assumptions: specializationLedger(cl) });
+          if (canvas) canvas.setVerdict({ text, actions: actions.slice(0, 6), assumptions: specializationLedger(cl), rigor: 'unknown' });
           setStatus(text); toast('Positive-dimensional — fix the gauge / pin a forced variable.', { kind: 'error' });
           return;
         }
@@ -1885,10 +1894,10 @@ const QD = _QD;
           const v = ((cl.realCount != null && cl.realCount > 0)
             ? '⚠ PARTIAL: ' + cl.realCount + ' certified real solution' + (cl.realCount === 1 ? '' : 's') + ', but the numeric solver separated none (clustered / non-radical) — use the CAS bridge for coordinates.'
             : 'No real quadrature domain' + (cl.complexCount != null ? ' (of ' + cl.complexCount + ' distinct complex)' : '') + '.') + sliceCaveat(cl);
-          setStatus(v); if (canvas) canvas.setVerdict({ text: v, assumptions: specializationLedger(cl) }); toast(v, { kind: 'error' }); return;
+          setStatus(v); if (canvas) canvas.setVerdict({ text: v, assumptions: specializationLedger(cl), rigor: (cl.realCount != null && cl.realCount > 0) ? 'partial' : 'exact' }); toast(v, { kind: 'error' }); return;
         }
         const hData = activeEnv.hData;
-        let folded = 0, selfInt = 0, unrec = 0, poleOut = 0; const rows = []; const genuinePhis = [];
+        let folded = 0, selfInt = 0, unrec = 0, poleOut = 0, allExactFilter = true; const rows = []; const genuinePhis = [];
         real.forEach((sol, idx) => {
           const phi = phiFromAlgebraSolution(sol, hData);
           if (!phi) { unrec++; rows.push('#' + (idx + 1) + ': φ not reconstructable (map variables eliminated — run on the seeded system)'); return; }
@@ -1911,6 +1920,7 @@ const QD = _QD;
           // onCircle = the boundary cusp count (an ALLOWED degeneracy — see the boundary test).
           if (scf && (!scf.degenerate || scf.resolved)) { fold = scf.inside > 0; cusps = scf.onCircle || 0; exact = true; }
           else { try { const crit = (typeof QD.findCriticalPoints === 'function') ? QD.findCriticalPoints(phi, {}) : null; fold = !!(crit && crit.points && crit.points.some((p) => p.inDomain)); } catch (e) { /* treat as no fold */ } }
+          if (!exact) allExactFilter = false;   // numeric fold fallback ⇒ the genuine-QD verdict is not fully certified (D-2)
           const tag = exact ? 'Schur–Cohn' : 'numeric';
           // Boundary test: EXACT real circle double-point count when φ′≠0 strictly INSIDE 𝔻
           // (exact && !fold); the diagonal cusp solutions are subtracted (simple ⟺ count===cusps),
@@ -1918,6 +1928,7 @@ const QD = _QD;
           let simple = true, simpleExact = false;
           if (exact && !fold) { const bs = boundarySimpleExact(sol, hData, cusps); if (bs) { simple = bs.simple; simpleExact = true; } }
           if (!simpleExact) { try { simple = QD.isBoundaryUnivalent(phi, 360); } catch (e) { simple = true; } }
+          if (exact && !fold && !simpleExact) allExactFilter = false;   // numeric boundary fallback ⇒ not fully certified (D-2)
           const bTag = simpleExact ? 'real-count' : 'numeric';
           if (fold) { folded++; rows.push('#' + (idx + 1) + ': φ′ = 0 inside 𝔻 (fold, ' + tag + ') — not univalent'); }
           else if (!simple) { selfInt++; rows.push('#' + (idx + 1) + ': boundary φ(∂𝔻) self-intersects (' + bTag + ') — not univalent'); }
@@ -1980,6 +1991,16 @@ const QD = _QD;
         // was flagged partial, the real-solution COUNT + LOCATIONS are rigorous (no floating-point
         // eigenvalue step that could silently merge a clustered root) — say so.
         if (r.certified && D > 0 && !undercount && !rec.disagree && !rec.partial) verdict += ' · real-solution count + locations certified (RUR + exact Sturm)';
+        // RIGOR LEVEL for the genuine-QD verdict badge (G-2), honest per D-2: 'exact' ONLY when the count was
+        // certified (RUR+Sturm), the univalence filter was EXACT for EVERY candidate (allExactFilter — no
+        // numeric fold/boundary fallback), the reconcile oracle agreed, and the numeric cross-check (if run)
+        // matched; 'partial' when a solution may be missing (undercount/partial); else 'estimate' (a numeric
+        // fallback informed the verdict). NB the exact filters run on the ratApprox'd coordinate (PF-1), so
+        // 'exact' = certified-count + exact-arithmetic filters; the rationalization-fidelity refinement is
+        // deferred (PLAN.md). A certified "no genuine QD" (D=0, certified, no numeric fallback) is 'exact'.
+        const ccOk = !cc.checked || (cc.maxResidual < 1e-4 && cc.oracleMatch);
+        const certRigor = (undercount || rec.partial) ? 'partial'
+          : (r.certified && allExactFilter && !rec.disagree && ccOk) ? 'exact' : 'estimate';
         // Honest labeling: even a certified count is only the count ON the active slice (if any).
         verdict += sliceCaveat(cl);
         setStatus(verdict);
@@ -2000,7 +2021,7 @@ const QD = _QD;
               let plot = null; try { plot = (QD && typeof QD.evalPhi === 'function') ? domainPlotData(distinct[0], QD.evalPhi) : null; } catch (e) { plot = null; }
               const note = ' · exact boundary curve Q(w,w̄)=0 (over ℚ(i), rationalized solution; order ' + bc.order +
                 (bc.schwarz ? ', Schwarz function S(w) single-valued' : '; Schwarz function algebraic of degree ' + bc.degWb) + ')';
-              if (canvas) canvas.setVerdict({ text: verdict + note, solutionsLatex: latex, plot, solutionsText: rows.join('\n'), assumptions: specializationLedger(cl), actions: vActions });
+              if (canvas) canvas.setVerdict({ text: verdict + note, solutionsLatex: latex, plot, solutionsText: rows.join('\n'), assumptions: specializationLedger(cl), actions: vActions, rigor: certRigor });
             },
           });
         }
@@ -2014,7 +2035,7 @@ const QD = _QD;
             onClick: () => { if (!ctx.showQDSolution(distinct[0], activeEnv.hData)) toast('Could not open in the QD plot', { kind: 'error' }); },
           });
         }
-        if (canvas) canvas.setVerdict({ text: verdict, solutionsText: rows.join('\n'), assumptions: specializationLedger(cl), actions: vActions });
+        if (canvas) canvas.setVerdict({ text: verdict, solutionsText: rows.join('\n'), assumptions: specializationLedger(cl), actions: vActions, rigor: certRigor });
         toast(verdict, bad ? { kind: 'error' } : {});
         });   // solveRealAsync.then
       });     // classifyAsync.then
