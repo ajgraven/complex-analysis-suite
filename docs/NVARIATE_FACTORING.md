@@ -1,6 +1,6 @@
 # General n-variate polynomial factorization over ℚ(i) — design plan
 
-> **Status: IN PROGRESS — P0 (spike) ✅ validated; P1 (infra) ✅ merged.** This is the one deferred extension of roadmap item #19,
+> **Status: IN PROGRESS — P0 (spike) ✅ validated; P1 (infra) ✅ merged; P2 (Hensel-lift engine) ✅ merged.** This is the one deferred extension of roadmap item #19,
 > whose **bivariate** core (Phases 0–5) is complete and merged (see
 > [`MULTIVARIATE_FACTORING.md`](MULTIVARIATE_FACTORING.md)). Decisions recorded (2026-07-13): **(a)** reduce
 > n-variate → **univariate** and Hensel-lift, **generalizing the trusted `henselFactorBivariate`** (its
@@ -138,9 +138,15 @@ trusted Phase-5 lift machinery**. Keep multivariate-Gao in reserve as a possible
   variable, then least degree) + `nvarEvaluationPoint` (**univariate** evaluation-point search:
   degree-preserving + squarefree, deterministic bounded Gaussian-integer grid). Goldens
   `vitest/qd-nvar-factor-infra.test.ts`.
-- **P2 — the multivariate Hensel-lift engine.** Generalize `henselFactorBivariate`'s single-variable lift
-  to iterate over `x₂, …, xₙ` (the multivariate ideal-adic Hensel; the per-step diophantine reduces to the
-  univariate Bézout). *The concentration of risk — de-risked by P0.*
+- **P2 — the multivariate Hensel-lift engine ✅ (merged).** `mvHenselLift(f, mainVar)`: reduce to univariate
+  (via P1's `nvarEvaluationPoint`), `_qiFactor`, lift each extra variable one at a time, recombine. The
+  per-step **recursive multivariate diophantine** `_mvDioph` peels one variable at a time down to the
+  univariate Bézout `σ_i` (no linear-algebra solver). Recombination **truncates** each subset product in
+  every extra variable (the local factors are truncated power series — a genuinely-multivariate irreducible
+  factor over-splits at the point, e.g. `x²−yz` at `y=z=1 → (x−1)(x+1)`, and recombination merges its
+  branches). Scope: monic-in-`mainVar`. Restricted to two variables it reproduces `henselFactorBivariate`
+  (a free cross-check). Goldens `vitest/qd-nvar-hensel.test.ts` — bivariate consistency, trivariate
+  recovery, the over-splitting cases, `∏ factors = f`. *The concentration of risk — de-risked by P0.*
 - **P3 — `factorMultivariate`.** reduce → `factorBivariate` → multi-lift → recombine (monic-in-main-var
   scope); round-trip + Sympy + bivariate-consistency goldens.
 - **P4 — integrate.** A fifth method in `_factorRec` (after the bivariate branch): a ≥3-variable *entangled*
