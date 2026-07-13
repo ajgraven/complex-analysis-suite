@@ -110,7 +110,18 @@ z₁=2 ⇒ num(φ′)=const, filters pass, evalPhi(0.5) throws at the interior p
 a_j∈Ω follows. Confirms PF-3. MEDIUM — "certified" headline not downgraded when a domain's univalence came from
 the NUMERIC fallback (relates PF-1). LOW — crossCheck `.some()` masks a spurious solution; user constraints not
 in specializationLedger. Confirmed sound: {φ′≠0}∧{Jordan}⇒injective GIVEN |z_j|<1; cusp/double-point exactness.
-| E reconstruction-verification | audit/E-reconstruction-verification.md | phiFromAlgebraSolution, exact Schwarz curve, exact data verification, sameDomain dedup | RUNNING |
+| E reconstruction-verification | audit/E-reconstruction-verification.md | phiFromAlgebraSolution, exact Schwarz curve, exact data verification, sameDomain dedup | ✅ DONE |
+
+**E done (headline):** Reconstruction SOUND — `phiFromAlgebraSolution` (`algebra-ui.mjs:1667`) is a faithful
+read-off, NO φ⁻¹ inversion / branch / sqrt selection ⇒ "wrong branch" impossible; `Res_t` boundary curve
+empirically clean (11 configs irreducible, vanish on ∂Ω ≤3e-13, Hermitian-symmetric); `canonicalizeByRotation`
+correct, reflection correctly NOT quotiented. MED **E1** — the only check a RECONSTRUCTED φ reproduces h is
+NUMERIC (`residualAtSolution`, 1e-4); no exact symbolic verify of the displayed map. MED **E2** — "Schur–Cohn
+certified"/"exact curve" run on the `ratApprox` midpoint (denom cap 1e6, no box-containment); the certified solve
+computes an isolating-BOX witness at `sym-core.mjs:1968` but reconstruction DISCARDS it (reads only midpoint);
+univalence row doesn't disclose "rationalized". Sharpens PF-1 with the fix pointer. LOW **E3** numeric dedup
+(sameDomain tol 1e-4) under "certified" framing (could merge near-coincident distinct); **E4** a φ failing the
+cross-check isn't removed from the count (warning only); **E5** boundaryCurve no factor-strip / S not gcd-reduced.
 | F store-worker-export | audit/F-store-worker-export.md | algebra-store DAG, sym-worker cancel/parity/determinism, cas-export round-trip, PROV_STORE/UI | ✅ DONE |
 
 **F done (headline):** Engineering SOUND — no critical/high. Confirmed: single `runJob` both paths, bit-identical
