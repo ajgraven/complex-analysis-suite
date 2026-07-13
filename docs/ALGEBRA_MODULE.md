@@ -77,11 +77,14 @@ Grouped by area — every item is exact over ℚ(i):
 
 **Factorization**
 - Univariate over ℚ(i) (`qiFactor`, Trager norm) and over ℚ (`factorOverQ`, Berlekamp–Zassenhaus).
-- **Bivariate over ℚ(i)** (roadmap #19, complete): `factorBivariate` (Gao resultant-eigenvalue), an
-  independent `henselFactorBivariate` cross-check oracle, and `bivariateAbsFactorCount` /
-  `isAbsolutelyIrreducible` (Gao Ruppert-nullspace). The public `factor()` routes monomial /
-  variable-disjoint / univariate / bivariate cases and is honest about what it can't yet split
-  (≥3 entangled variables — the n-variate extension is planned).
+- **Bivariate over ℚ(i)** (roadmap #19): `factorBivariate` (Gao resultant-eigenvalue), an independent
+  `henselFactorBivariate` cross-check oracle, and `bivariateAbsFactorCount` / `isAbsolutelyIrreducible`
+  (Gao Ruppert-nullspace absolute factor count / irreducibility).
+- **General n-variate over ℚ(i)** (roadmap #19, complete): `factorMultivariate` — reduce to univariate,
+  multivariate Hensel-lift back one variable at a time (`mvHenselLift`), recombine. The public `factor()`
+  routes monomial / variable-disjoint / univariate / bivariate / n-variate cases uniformly; the one honest
+  limit is a polynomial non-monic in *every* variable (Wang leading-coefficient distribution — returned
+  whole, `complete:false`).
 
 **Gröbner bases & ideal theory**
 - Buchberger (Gebauer–Möller + sugar) and a signature-based GVW variant; reduced bases, normal form,
@@ -210,9 +213,10 @@ resultants) but not code — a future consolidation is conceivable but has not b
 ## 9. Status
 
 The Algebra engine is mature: the extensions roadmap ([`ALGEBRA_EXTENSIONS.md`](ALGEBRA_EXTENSIONS.md)) items
-**#1–#18 are complete** in feasible form, and **#19's bivariate factorizer is complete (Phases 0–5)** and
-doubly cross-checked (an independent Hensel oracle + a Sympy golden corpus). **In progress:** general
-**n-variate factorization** — its plan is persisted ([`NVARIATE_FACTORING.md`](NVARIATE_FACTORING.md)) and
-Phase 0 (the spike) is validated (it corrected the design to a univariate base). Deferred / exploratory
-items remain (Puiseux singular genus & rational parametrization; Hele-Shaw / mother bodies; certified
-numerics and positive-dimensional solving via client-WASM or opt-in backends — roadmap #20).
+**#1–#18 are complete** in feasible form, and **#19's factorizer is complete** — univariate → bivariate →
+**general n-variate** ([`NVARIATE_FACTORING.md`](NVARIATE_FACTORING.md)) — all routed through the public
+`factor()` and the ideal-decomposition certification, and triply cross-checked (Hensel-vs-Gao bivariate
+consistency, a second-reduction differential, and an external Sympy corpus). Deferred / exploratory items
+remain: Wang leading-coefficient distribution (a polynomial non-monic in every variable is returned whole);
+Puiseux singular genus & rational parametrization; Hele-Shaw / mother bodies; and certified numerics /
+positive-dimensional solving via client-WASM or opt-in backends (roadmap #20).

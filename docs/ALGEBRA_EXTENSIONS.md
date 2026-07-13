@@ -53,7 +53,7 @@ every recommendation:
 | 16 ◐ | **Exact correspondence curves + σ (retire Correspondences' numeric branch engine)** — in-app strict-TS exact engine `correspondenceCurve` / `cuspLocus` (ℚ(i) deflation + Bareiss resultant) ✅ (PR-A); app wiring (curve readout + cusp overlay, seed the numeric path) ◻ (PR-B) | ★★ | Moderate | conjugate-var scheme, exact poly division (deflation), resultants |
 | 17 ✅ | Dynatomic / Gleason / multiplier polynomials (exact CD component data) — Gleason G_n, dynatomic Φ_n, multiplier-specialization (root/period-doubling points) on the new **@cas/exact** package + a CD "Component data" panel. Full δ_n(λ,c) surface + Tricorn anti-holo multiplier deferred (noted) | ★★ | Moderate | resultants, exact division, zero-dim solve |
 | 18 ✅ | Shape-from-moments (Prony–Hankel) reconstruction + QD-order rank test — `hankelRank` (QD-order = exact ℚ(i) Hankel rank drop) + `pronyPolynomial` (exact Prony poly Π(z−z_j)) + `shapeFromMoments` (numeric nodes via Durand–Kerner on the exact Prony poly + Vandermonde weights + reconstruction residual), a worker `runJob` handler + serializer, and a QD Algebra-module "Shape from moments" input panel (moments → order + KaTeX Prony poly + nodes/weights) | ★★ | Moderate | zero-dim root-find, exact null-space/Vandermonde |
-| 19 ◐ | Positive-dim / real radical; **multivariate factorization** (◆ PLANNED — bivariate-first, Gao-2003 PDE/linear-algebra method + a classical Zassenhaus–Hensel cross-check oracle; see [`MULTIVARIATE_FACTORING.md`](MULTIVARIATE_FACTORING.md)); Hele-Shaw; mother bodies | ★–★★ | Mod–Hard | various above |
+| 19 ◐ | **Multivariate factorization ✅** — univariate → **bivariate** (Gao-2003 PDE/nullspace `factorBivariate` + a Zassenhaus–Hensel cross-check oracle; [`MULTIVARIATE_FACTORING.md`](MULTIVARIATE_FACTORING.md)) → **general n-variate** (reduce-to-univariate + multivariate Hensel `factorMultivariate`; [`NVARIATE_FACTORING.md`](NVARIATE_FACTORING.md)), all wired into `factor()` + the ideal-decomposition certification, triply cross-checked; only Wang LC-distribution deferred. Still open: positive-dim / real radical; Hele-Shaw; mother bodies | ★–★★ | Mod–Hard | various above |
 | 20 | **Certified numerics + positive-dim solving via tooling** (see Tier 5) | ★★★ | Varies | Arb/PARI WASM (client) · msolve/HC.jl (server) |
 
 > **Build status (updated 2026-07-12) — ✅ done · ◐ core shipped, extensions deferred.** The **keystone
@@ -87,7 +87,11 @@ every recommendation:
 > then CD's `combinatorics/dynatomic.ts`: Gleason `G_n(c)` (period-n centres, PR #58), dynatomic `Φ_n(z,c)` (period-n
 > points, PR #59), multiplier-specialization `Res_z(Φ_n,(fⁿ)′−λ₀)` → root points (c=1/4 cardioid cusp) / period-
 > doubling (c=−3/4) (PR #60), and a CD "Component data" KaTeX panel (PR-5). Full δ_n(λ,c) surface + Tricorn
-> anti-holomorphic multiplier deferred (noted). **Not started:** #18–#20.
+> anti-holomorphic multiplier deferred (noted). **Since then:** **#18** (shape-from-moments) ✅ and **#19's
+> multivariate factorization** ✅ — univariate → bivariate → general n-variate, all in `factor()` (see the
+> #19 row + [`MULTIVARIATE_FACTORING.md`](MULTIVARIATE_FACTORING.md) / [`NVARIATE_FACTORING.md`](NVARIATE_FACTORING.md);
+> only Wang LC-distribution deferred). Still open: the rest of #19 (positive-dim / real radical, Hele-Shaw,
+> mother bodies) and #20 (certified-numerics + positive-dim tooling).
 
 ---
 

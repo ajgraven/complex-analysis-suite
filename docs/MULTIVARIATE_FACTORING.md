@@ -1,6 +1,6 @@
 # Multivariate (bivariate-first) polynomial factorization over ℚ(i) — design plan
 
-> **Status: COMPLETE (bivariate core).** Phase 0 (spike) ✅; Phase 1 (infra) ✅; Phase 2 (absolute factor *count* + irreducibility) ✅; Phase 3 (ℚ(i)-rational factor *extraction*, `factorBivariate`) ✅; Phase 4 (integrate into `factor()` + certify bivariate components in `minimalPrimes` / `triangularDecomposition` / `curveGenus`) ✅; Phase 5 (independent Hensel cross-check oracle + Sympy golden corpus) ✅ — all merged. General n-variate remains the one deferred extension. Roadmap item #19 (the "genuine multivariate factorizer" that
+> **Status: COMPLETE (bivariate core).** Phase 0 (spike) ✅; Phase 1 (infra) ✅; Phase 2 (absolute factor *count* + irreducibility) ✅; Phase 3 (ℚ(i)-rational factor *extraction*, `factorBivariate`) ✅; Phase 4 (integrate into `factor()` + certify bivariate components in `minimalPrimes` / `triangularDecomposition` / `curveGenus`) ✅; Phase 5 (independent Hensel cross-check oracle + Sympy golden corpus) ✅ — all merged. General n-variate is now also ✅ done ([`NVARIATE_FACTORING.md`](NVARIATE_FACTORING.md)); only Wang leading-coefficient distribution remains deferred. Roadmap item #19 (the "genuine multivariate factorizer" that
 > several done tiers were capped by). Decisions recorded (2026-07-13): **(a) Gao's PDE / linear-algebra
 > method first** (it plays to this engine's linear-algebra strength and deletes the two most bug-prone
 > subsystems); **(b) the classical Zassenhaus–Hensel path ships as a Phase-5 independent cross-check
@@ -216,8 +216,9 @@ Kept as an independent cross-check. Write `f ∈ ℚ(i)[y][x]`, primitive and sq
   `fixtures/gen-cas-corpus.py` → `cas-corpus.json`, consumed by `sym-core-cas-corpus.test.ts`; CI runs no
   Python) cross-checks against a mature external CAS — catching any wrong field of definition (`x²−2y²`
   must NOT split; `x²+y²` must).
-- **Later / separate:** general n-variate — now planned in [`NVARIATE_FACTORING.md`](NVARIATE_FACTORING.md)
-  (reduce to bivariate + iterated Hensel lift, reusing this bivariate core as the base case).
+- **Later / separate:** general n-variate — ✅ **done** in [`NVARIATE_FACTORING.md`](NVARIATE_FACTORING.md)
+  (`factorMultivariate` = reduce to univariate + iterated multivariate Hensel lift; the P0 spike corrected
+  the base case from bivariate to univariate — a bivariate base is Bézout-obstructed).
 
 ## 8. Test / verification strategy
 
