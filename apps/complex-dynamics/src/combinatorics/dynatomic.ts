@@ -219,7 +219,12 @@ export function periodDoublingPoly(n: number): QiPoly {
   return multiplierSpecializationPoly(n, Gauss.int(-1));
 }
 
-/** Numeric c-values where a period-n cycle has multiplier λ₀ (roots of M_{n,λ₀}). */
+/**
+ * Numeric c-values where a period-n cycle has multiplier λ₀ — the DISTINCT parabolic parameters. The
+ * specialization polynomial is Res_z(Φ_n, (f_cⁿ)′ − λ₀) = ∏_cycles(λ_cyc − λ₀)ⁿ, a perfect n-th power, so
+ * we take its squarefree part first (otherwise each parameter appears n-fold and Durand–Kerner scatters
+ * the repeated roots).
+ */
 export function multiplierSpecializationRoots(n: number, lambda0: Gauss): ComplexTuple[] {
-  return rootsOfQiPoly(multiplierSpecializationPoly(n, lambda0));
+  return rootsOfQiPoly(multiplierSpecializationPoly(n, lambda0).squarefreePart());
 }

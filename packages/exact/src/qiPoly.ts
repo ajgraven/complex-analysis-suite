@@ -169,4 +169,37 @@ export class QiPoly {
     for (let i = this.coeffs.length - 1; i >= 0; i--) acc = acc.mul(x).add(this.coeff(i));
     return acc;
   }
+
+  /** Formal derivative d/dvar. */
+  derivative(): QiPoly {
+    if (this.coeffs.length <= 1) return QiPoly.zero();
+    const out: Gauss[] = [];
+    for (let k = 1; k < this.coeffs.length; k++) out.push(this.coeff(k).mul(Gauss.int(k)));
+    return QiPoly.fromCoeffs(out);
+  }
+
+  /** This polynomial divided by its leading coefficient (monic; the zero polynomial is unchanged). */
+  monic(): QiPoly {
+    if (this.isZero()) return this;
+    return this.scale(this.leadingCoeff().inv());
+  }
+
+  /** The monic GCD over ℚ(i) (Euclidean algorithm); gcd(0,0) = 0. */
+  gcd(o: QiPoly): QiPoly {
+    let a = QiPoly.fromCoeffs(this.coeffs); // a copy, so `this` is not aliased
+    let b: QiPoly = o;
+    while (!b.isZero()) {
+      const r = a.divmod(b).r;
+      a = b;
+      b = r;
+    }
+    return a.isZero() ? a : a.monic();
+  }
+
+  /** The squarefree part p / gcd(p, p′) — same roots as p, each with multiplicity one. */
+  squarefreePart(): QiPoly {
+    if (this.degree() < 1) return this;
+    const g = this.gcd(this.derivative());
+    return g.degree() < 1 ? this : this.divExact(g);
+  }
 }

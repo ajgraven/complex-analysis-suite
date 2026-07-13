@@ -29,6 +29,16 @@ import { toNumber as angleToNumber, binaryItinerary } from "./combinatorics/angl
 import { coreEntropy } from "./combinatorics/coreEntropy";
 import { MAX_DOUBLING_Q, portraitSummary, rotationCycleAngles } from "./combinatorics/orbitPortrait";
 import {
+  dynatomicDegreeInZ,
+  dynatomicText,
+  gleasonDegree,
+  gleasonText,
+  mandelbrotCenters,
+  multiplierSpecializationRoots,
+} from "./combinatorics/dynatomic";
+import type { ComplexTuple } from "@cas/core";
+import { Gauss } from "@cas/exact";
+import {
   AddressError,
   formatKneading,
   formatTower,
@@ -720,6 +730,71 @@ function setupGlossary(): void {
       if (term) openGlossary(term);
     });
   }
+}
+
+/**
+ * Wire the "Component data" panel (roadmap #17): for a selected period n, render the EXACT Gleason
+ * polynomial G_n(c) (period-n centres), the dynatomic Φ_n(z,c) (period-n points), and the special c where
+ * a period-n cycle is parabolic — root points (multiplier 1) and period-doubling points (multiplier −1).
+ * All computed in exact ℚ(i) by @cas/exact (apps/complex-dynamics/src/combinatorics/dynatomic.ts); the
+ * numeric values are the roots of those exact polynomials. KaTeX renders the polynomials.
+ */
+function setupComponentData(): void {
+  const input = byId<HTMLInputElement>("component-period");
+  const mathEl = byId("component-data-math");
+  const centersEl = byId("component-data-centers");
+  // @cas/exact's ASCII renderers emit bare carets ("c^15"); brace multi-digit exponents for KaTeX.
+  const braceExp = (s: string): string => s.replace(/\^(\d+)/g, "^{$1}");
+  const fmtC = (t: ComplexTuple): string => {
+    const re = Math.abs(t[0]) < 1e-9 ? 0 : t[0];
+    const im = t[1];
+    if (Math.abs(im) < 1e-6) return re.toFixed(3);
+    return `${re.toFixed(3)} ${im < 0 ? "−" : "+"} ${Math.abs(im).toFixed(3)}i`;
+  };
+  const addLine = (label: string, latex: string): void => {
+    const wrap = document.createElement("div");
+    wrap.style.margin = "0.5rem 0";
+    const lab = document.createElement("div");
+    lab.className = "exterior-status";
+    lab.style.marginBottom = "0.15rem";
+    lab.textContent = label;
+    const math = document.createElement("div");
+    math.style.overflowX = "auto";
+    try {
+      katex.render(braceExp(latex), math, { throwOnError: false, displayMode: true });
+    } catch {
+      math.textContent = latex;
+    }
+    wrap.append(lab, math);
+    mathEl.append(wrap);
+  };
+  const list = (rs: ComplexTuple[]): string => (rs.length <= 6 ? rs.map(fmtC).join(", ") : `${rs.length} values`);
+  const render = (): void => {
+    const n = Math.max(1, Math.min(6, Math.round(Number(input.value) || 1)));
+    mathEl.replaceChildren();
+    if (n <= 4) {
+      addLine(`Gleason G_${n}(c) — roots are the period-${n} centres:`, `G_{${n}}(c) = ${gleasonText(n)}`);
+      addLine(`Dynatomic Φ_${n}(z,c) — roots in z are the period-${n} points:`, `\\Phi_{${n}}(z,c) = ${dynatomicText(n)}`);
+    } else {
+      const p = document.createElement("p");
+      p.className = "exterior-status";
+      p.textContent = `G_${n}: degree ${gleasonDegree(n)} · Φ_${n}: degree ${dynatomicDegreeInZ(n)} in z (polynomials omitted — large).`;
+      mathEl.append(p);
+    }
+    const centers = mandelbrotCenters(n);
+    // The multiplier polynomials eliminate z by a resultant whose Sylvester matrix is ~2^{n+1} wide, so the
+    // exact fraction-free determinant grows fast — restrict the parabolic-point read-out to small n. The
+    // Gleason centres stay cheap (a Durand–Kerner solve of G_n) for the whole range.
+    const MAX_MULT_N = 3;
+    const bif =
+      n <= MAX_MULT_N
+        ? ` Root points (multiplier 1): c = ${list(multiplierSpecializationRoots(n, Gauss.ONE))}. ` +
+          `Period-doubling (multiplier −1): c = ${list(multiplierSpecializationRoots(n, Gauss.int(-1)))}.`
+        : ` Root / period-doubling points: computed for n ≤ ${MAX_MULT_N} (the exact z-elimination grows fast).`;
+    centersEl.textContent = `${centers.length} centre${centers.length === 1 ? "" : "s"} (= exact).${bif}`;
+  };
+  input.addEventListener("input", render);
+  render();
 }
 
 /** Wire the "Help & reference" modal: opened from the app-bar "Help" button, closed via the ×,
@@ -4056,6 +4131,7 @@ function init(): void {
   disableUnsupportedSizes();
   setupOnboarding();
   setupGlossary();
+  setupComponentData();
   setupHelpReference();
   setupTour();
   setupTheme();
