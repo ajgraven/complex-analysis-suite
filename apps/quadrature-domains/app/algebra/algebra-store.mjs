@@ -1961,6 +1961,24 @@ import _QD from '../solver.mjs';
         (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
           : { ok: false, reason: (err && err.message) || String(err) });
     }
+    // SHAPE-FROM-MOMENTS (roadmap #18): a NEW input modality — reconstruct a discrete measure Σ a_j δ_{z_j}
+    // (for a QD, its quadrature data) from a raw complex moment sequence m_k = Σ_j a_j z_j^k, independent of
+    // the current column system. Returns { ok, order (= exact QD-order, the Hankel rank drop), saturated,
+    // coeffs (ascending {re,im} of the exact Prony polynomial), nodes, weights, maxResidual } — the order +
+    // Prony polynomial are exact, the nodes/weights numeric (QD.Sym.shapeFromMomentsJSON).
+    function shapeFromMoments(moments, opts) {
+      const S = getSym();
+      try { return S.shapeFromMomentsJSON(moments || [], opts || {}); }
+      catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    }
+    function shapeFromMomentsAsync(moments, opts, runOpts) {
+      const SW = symWorker();
+      if (!SW) return Promise.resolve(shapeFromMoments(moments, opts));
+      return SW.run('shapeFromMoments', { moments: moments || [], opts: opts || {} }, runOpts || {}).then(
+        (res) => res,
+        (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
+          : { ok: false, reason: (err && err.message) || String(err) });
+    }
 
     // C4 — HARD-FILTER the solver output by the ACTIVE branch's assumptions. A complex
     // solution of the conjugate-model system that violates an active assumption — a variable
@@ -2685,7 +2703,7 @@ import _QD from '../solver.mjs';
       seedFromSystem, seedFromPolys, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, autoAbbreviate, addEquation, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
-      currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, solveRealCertifiedSync, solveRealCertifiedAsync, parametricBifurcation, parametricBifurcationAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
+      currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, solveRealCertifiedSync, solveRealCertifiedAsync, parametricBifurcation, parametricBifurcationAsync, shapeFromMoments, shapeFromMomentsAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, msolveColumn, msolveVarOrder, importMsolve, derivationSteps, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       forkTrack, setActiveTrack, deleteTrack, tracks: tracksList,

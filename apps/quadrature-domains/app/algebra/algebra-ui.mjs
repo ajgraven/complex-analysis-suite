@@ -915,6 +915,17 @@ const QD = _QD;
         '      <label class="small">Bifurcation over <select id="alg-bifurc-var" title="The real parameter to vary. Reports how the number of real solutions (= quadrature domains) changes as this variable ranges over ℝ: the critical values where the count jumps, and the count on each interval. Needs a 1-parameter family — a system that becomes zero-dimensional once this variable is fixed."></select></label>' +
         '      <button id="alg-bifurc" class="small heavy-op" type="button" title="1-parameter bifurcation: the EXACT critical parameter values (eliminant border polynomial + Sturm isolation) and the CERTIFIED real-solution count (Hermite trace form) on each interval between them.">Bifurcation (real count)</button></div></div>' +
         '  </details>' +
+        // 4b. Shape from moments (a NEW input modality — reconstruct a QD from its moments, not the columns)
+        '  <details class="algebra-section">' +
+        '    <summary>Shape from moments</summary>' +
+        '    <div class="algebra-section-body">' +
+        '      <div class="hint" style="margin-bottom:4px;">Reconstruct a discrete measure Σ aⱼ·δ(zⱼ) — a quadrature domain’s data — from its complex moments mₖ = Σ aⱼ·zⱼᵏ, by exact Prony–Hankel. The <strong>order</strong> (= #nodes = the QD-order) is the EXACT Hankel rank drop; the Prony polynomial Π(z−zⱼ) is exact; nodes/weights are numeric (well-conditioned, from the exact polynomial).</div>' +
+        '      <div class="algebra-define-row">' +
+        '        <input id="alg-moments" class="alg-def-expr" type="text" placeholder="m0, m1, m2, …   e.g.  3, 6, 14, 36, 98, 276   or  2, 0, -2, 0" autocomplete="off" spellcheck="false" title="Comma-separated complex moments m_0, m_1, …. Each: a (real), a+bi, a-bi, bi, i, -i; rationals 3/2 and decimals allowed." />' +
+        '        <button id="alg-moments-go" class="small heavy-op" type="button" title="Exact Prony–Hankel reconstruction: the QD-order (Hankel rank drop), the exact Prony polynomial, and the numeric nodes/weights + a reconstruction residual.">Reconstruct</button></div>' +
+        '      <div id="alg-moments-out" class="alg-def-preview hint"></div>' +
+        '    </div>' +
+        '  </details>' +
         // 5. Univalence constraints (2-column grid palette)
         '  <details class="algebra-section">' +
         '    <summary>Univalence constraints</summary>' +
@@ -988,6 +999,8 @@ const QD = _QD;
       $('#alg-resolvent-var').addEventListener('mousedown', refreshResolventVars);
       { const bb = $('#alg-bifurc'); if (bb) bb.addEventListener('click', doBifurcation); }
       { const bv = $('#alg-bifurc-var'); if (bv) bv.addEventListener('mousedown', refreshBifurcVars); }
+      { const mg = $('#alg-moments-go'); if (mg) mg.addEventListener('click', doShapeFromMoments); }
+      { const mi = $('#alg-moments'); if (mi) mi.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') doShapeFromMoments(); }); }
       $('#alg-cancel').addEventListener('click', cancelOp);
       $('#alg-gauge-elim').addEventListener('click', () => {
         if (!ensureSeed()) return;
@@ -1404,7 +1417,7 @@ const QD = _QD;
     // Cancel, and routes progress to the status line.
     let _abort = null;
     function setBusy(on, label) {
-      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-classify', 'alg-univalence', 'alg-resolvent', 'alg-bifurc', 'alg-autosolve',
+      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-classify', 'alg-univalence', 'alg-resolvent', 'alg-bifurc', 'alg-moments-go', 'alg-autosolve',
         'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-real-detect', 'alg-propagate-all', 'alg-val-apply', 'alg-def-apply', 'alg-abbrev', 'alg-eq-apply']
         .forEach((id) => { const b = $('#' + id); if (b) b.disabled = on; });
       const pal = $('#alg-palette'); if (pal) pal.querySelectorAll('button').forEach((b) => { b.disabled = on; });
@@ -2079,6 +2092,93 @@ const QD = _QD;
         if (canvas) canvas.setVerdict({ text });
         toast('Bifurcation computed (' + r.cells.length + ' interval' + (r.cells.length === 1 ? '' : 's') + ').');
       }, (e) => { _abort = null; setBusy(false); setStatus(''); showError('Bifurcation: ' + ((e && e.message) || String(e))); });
+    }
+
+    // ---- Shape from moments (roadmap #18): reconstruct a QD's data from its complex moments ----
+    // A real number "a", exact rational "n/d", or decimal.
+    function _parseMomentNum(s) {
+      s = s.trim();
+      if (s === '' || s === '+') return 1;
+      if (s === '-') return -1;
+      if (s.indexOf('/') >= 0) { const p = s.split('/'); const n = Number(p[0]), d = Number(p[1]); if (!isFinite(n) || !isFinite(d) || d === 0) throw new Error('bad rational "' + s + '"'); return n / d; }
+      const v = Number(s);
+      if (!isFinite(v)) throw new Error('bad number "' + s + '"');
+      return v;
+    }
+    // One complex moment token: a, a+bi, a-bi, bi, i, -i (a,b real / rational / decimal).
+    function _parseMomentToken(t) {
+      t = t.replace(/\s+/g, '');
+      if (t === '') throw new Error('empty moment');
+      if (t.indexOf('i') < 0) return { re: _parseMomentNum(t), im: 0 };
+      if (t[t.length - 1] !== 'i') throw new Error('malformed complex "' + t + '" (i must be last)');
+      const noI = t.slice(0, -1); // drop the trailing 'i'
+      let splitAt = -1;
+      for (let k = noI.length - 1; k > 0; k--) { if (noI[k] === '+' || noI[k] === '-') { splitAt = k; break; } }
+      const reStr = splitAt < 0 ? '0' : noI.slice(0, splitAt);
+      const imStr = splitAt < 0 ? noI : noI.slice(splitAt);
+      return { re: reStr === '' ? 0 : _parseMomentNum(reStr), im: _parseMomentNum(imStr === '' ? '1' : imStr) };
+    }
+    function _fmtComplex(c) {
+      const re = Math.abs(c.re) < 1e-10 ? 0 : Math.round(c.re * 1e6) / 1e6;
+      const im = Math.round(c.im * 1e6) / 1e6;
+      if (Math.abs(im) < 1e-8) return String(re);
+      return re + (im < 0 ? ' − ' : ' + ') + Math.abs(im) + 'i';
+    }
+    // LaTeX of the (ascending {re,im}) Prony polynomial P(z) = Σ c_k z^k = 0.
+    function _pronyLatex(coeffs) {
+      let out = '';
+      for (let k = coeffs.length - 1; k >= 0; k--) {
+        const c = coeffs[k];
+        const re = Math.round(c.re * 1e6) / 1e6, im = Math.round(c.im * 1e6) / 1e6;
+        if (Math.abs(re) < 1e-9 && Math.abs(im) < 1e-9) continue;
+        const zp = k === 0 ? '' : (k === 1 ? 'z' : 'z^{' + k + '}');
+        let sign, mag;
+        if (Math.abs(im) < 1e-8) {
+          sign = re < 0 ? '-' : '+';
+          const a = Math.abs(re);
+          mag = (Math.abs(a - 1) < 1e-8 && zp) ? '' : String(a);
+        } else {
+          sign = '+';
+          mag = '(' + re + (im < 0 ? '-' : '+') + Math.abs(im) + 'i)';
+        }
+        const term = (mag + zp) || '0';
+        out += out === '' ? (sign === '-' ? '-' + term : term) : ' ' + sign + ' ' + term;
+      }
+      return (out || '0') + ' = 0';
+    }
+    function _renderShapeResult(out, r) {
+      if (!out) return;
+      out.innerHTML = '';
+      const add = (html) => { const d = document.createElement('div'); d.innerHTML = html; out.appendChild(d); };
+      add('<strong>Order ' + r.order + '</strong>' + (r.saturated ? ' <span class="hint">(≥ — the Hankel is saturated; supply more moments to confirm)</span>' : '') + ' <span class="hint">— #nodes = the exact QD-order (Hankel rank)</span>');
+      const wrap = document.createElement('div'); wrap.style.margin = '3px 0';
+      wrap.innerHTML = '<span class="hint">Prony polynomial (exact):</span> ';
+      const pd = document.createElement('span'); const tex = _pronyLatex(r.coeffs);
+      if (typeof katex !== 'undefined') { try { katex.render(tex, pd, { throwOnError: false }); } catch (e) { pd.textContent = tex; } } else pd.textContent = tex;
+      wrap.appendChild(pd); out.appendChild(wrap);
+      add('<span class="hint">Nodes zⱼ (≈):</span> ' + r.nodes.map(_fmtComplex).join(', &nbsp;'));
+      add('<span class="hint">Weights aⱼ (≈):</span> ' + r.weights.map(_fmtComplex).join(', &nbsp;'));
+      add('<span class="hint">reconstruction residual maxₖ |mₖ − Σⱼ aⱼzⱼᵏ| = ' + (r.maxResidual != null ? r.maxResidual.toExponential(2) : '—') + '</span>');
+    }
+    function doShapeFromMoments() {
+      if (_abort) return;
+      clearError();
+      const inp = $('#alg-moments'), out = $('#alg-moments-out');
+      const raw = inp && inp.value ? inp.value.trim() : '';
+      if (!raw) { if (out) out.innerHTML = ''; return; }
+      let moments;
+      try { moments = raw.split(',').map((s) => s.trim()).filter((s) => s.length).map(_parseMomentToken); }
+      catch (e) { showError('Shape from moments: ' + ((e && e.message) || 'parse error')); return; }
+      if (moments.length < 2) { showError('Shape from moments: give at least 2 moments (m₀, m₁, …).'); return; }
+      const ctrl = _newAbort(); _abort = ctrl;
+      setBusy(true, 'Reconstructing from moments…');
+      store.shapeFromMomentsAsync(moments, {}, { signal: ctrl && ctrl.signal }).then((r) => {
+        _abort = null; setBusy(false); setStatus('');
+        if (r.aborted) { toast('Cancelled'); return; }
+        if (!r.ok) { showError('Shape from moments: ' + withGuidance(r.reason || 'unavailable')); return; }
+        _renderShapeResult(out, r);
+        toast('Reconstructed: order ' + r.order + (r.saturated ? ' (≥ — supply more moments)' : '') + '.');
+      }, (e) => { _abort = null; setBusy(false); setStatus(''); showError('Shape from moments: ' + ((e && e.message) || String(e))); });
     }
 
     // Report the dimension / solution count of the current equality system, off the

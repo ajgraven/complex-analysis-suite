@@ -3219,6 +3219,23 @@ import _QD from './solver.mjs';
     return { ok: true, order: N, coeffs: pr.coeffs, poly: pr.poly, nodes, weights, maxResidual };
   }
 
+  // JSON-safe serialization of shapeFromMoments (drops the MPoly; the exact Prony coefficients become
+  // {re,im} floats). Used by the worker runJob handler and the store's sync fallback so both return the
+  // identical plain-object shape. `coeffs` are ascending (coeffs[N] = 1); `saturated` warns the order may
+  // be an underestimate (supply more moments).
+  function shapeFromMomentsJSON(moments, opts) {
+    const res = shapeFromMoments(moments, opts || {});
+    if (!res.ok) return { ok: false, reason: res.reason };
+    const hr = hankelRank(moments);
+    return {
+      ok: true, order: res.order,
+      saturated: hr.ok ? hr.saturated : false,
+      hankelSize: hr.ok ? hr.hankelSize : res.order,
+      coeffs: res.coeffs.map((g) => g.toComplex()),
+      nodes: res.nodes, weights: res.weights, maxResidual: res.maxResidual,
+    };
+  }
+
   // A unit-free null vector of a complex n×n matrix A ({re,im} entries), i.e. w≠0 with
   // A·w = 0 (Gaussian elimination with partial pivoting; returns null if A has full rank).
   function _complexNullVector(A, n) {
@@ -4385,6 +4402,11 @@ import _QD from './solver.mjs';
       const opts = Object.assign({}, payload.opts, { vars: payload.vars });
       return certifiedRealToJSON(solveRealCertified(polys, opts));
     }
+    if (kind === 'shapeFromMoments') {
+      // #18 shape-from-moments: the input is a raw moment sequence (not the column system). moments are
+      // {re,im} | number (JSON-safe as sent); the result is already JSON-safe (coeffs → {re,im}).
+      return shapeFromMomentsJSON(payload.moments || [], payload.opts || {});
+    }
     if (kind === 'parametricRealCount1D') {
       // 1-parameter real bifurcation. The result is already plain numbers/strings; only the
       // unbounded cell ends are ±Infinity → map to null (JSON-safe, and unambiguous by position:
@@ -4917,7 +4939,7 @@ import _QD from './solver.mjs';
 
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, krullDimension, dimensionDegree, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, powerSums, newtonToElementary, charPolyByTraces, coordinateMoments,
-    hankelRank, pronyPolynomial, shapeFromMoments, // #18 shape-from-moments (Prony–Hankel): exact QD-order + Prony polynomial + numeric nodes/weights
+    hankelRank, pronyPolynomial, shapeFromMoments, shapeFromMomentsJSON, // #18 shape-from-moments (Prony–Hankel): exact QD-order + Prony polynomial + numeric nodes/weights (+JSON serializer)
     solveByEigenvalues, realSolutionCount, parametricRealCount1D, discriminantVariety, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
