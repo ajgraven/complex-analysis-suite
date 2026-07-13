@@ -94,7 +94,9 @@ import _QD from '../solver.mjs';
     duplicate:       { method: () => 'duplicate' },
     resultant: {
       short:  (p) => 'eliminate ' + p.variable,
-      method: (p) => 'eliminate via the resultant Res_' + (p.variable || '?') + '(P, Q)',
+      method: (p) => (p.method === 'resultant')
+        ? 'eliminate ' + (p.variable || '?') + ' via the Sylvester resultant Res_' + (p.variable || '?') + '(P, Q) — may carry extraneous factors (elimination-ideal fallback)'
+        : 'eliminate ' + (p.variable || '?') + ' via the elimination ideal ⟨P, Q⟩ ∩ k[rest] (exact — no extraneous factors)',
     },
     groebner: {
       short:  (p) => 'Groebner (' + (p.order || 'grevlex') + ')',
@@ -1470,18 +1472,42 @@ import _QD from '../solver.mjs';
       if (!a.poly.vars().has(varName) || !b.poly.vars().has(varName)) {
         return { ok: false, reason: 'variable ' + varName + ' is not shared by both equations' };
       }
-      let res;
-      try { res = S.resultant(a.poly, b.poly, varName); }
-      catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
-      if (res.isZero()) return { ok: false, reason: 'resultant ≡ 0 (the equations share a component); pick a different pair or variable' };
-      const node = addNode({
-        id: nid(), kind: 'derived', poly: res, rel: '=',
-        label: 'elim ' + varName + ' (' + a.id + ',' + b.id + ')', model,
-        provenance: { op: 'resultant', inputs: [idA, idB], variable: varName },
-        column: Math.max(a.column, b.column) + 1, track: a.track || 't0', meta: {},
+      // B-2: prefer the EXACT elimination ideal ⟨A, B⟩ ∩ k[rest] (Gröbner) — the raw Sylvester resultant
+      // can carry extraneous leading-coefficient factors (e.g. Res_x(yx+1, yx²−x) = 2y, but the true
+      // elimination ideal is ⟨1⟩ — the system is inconsistent, so y=0 is spurious). Fall back to the
+      // resultant (flagged `method:'resultant'`) only if the ideal computation is unavailable / throws.
+      const keep = new Set();
+      for (const v of a.poly.vars()) keep.add(v);
+      for (const v of b.poly.vars()) keep.add(v);
+      keep.delete(varName);
+      let gens = null, method = 'ideal';
+      try {
+        if (typeof S.eliminationIdeal === 'function') {
+          const g = S.eliminationIdeal([a.poly, b.poly], [varName], [...keep].sort());
+          gens = (g || []).filter((p) => !p.isZero());
+        }
+      } catch (e) { gens = null; }
+      if (gens === null) {                              // fallback: the Sylvester resultant (may carry extraneous factors)
+        let res;
+        try { res = S.resultant(a.poly, b.poly, varName); }
+        catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+        if (res.isZero()) return { ok: false, reason: 'resultant ≡ 0 (the equations share a component); pick a different pair or variable' };
+        gens = [res]; method = 'resultant';
+      }
+      if (!gens.length) return { ok: false, reason: 'the elimination ideal in the remaining variables is trivial (no relation free of ' + varName + ')' };
+      const col = Math.max(a.column, b.column) + 1;
+      const created = [];
+      gens.forEach((poly, i) => {
+        const node = addNode({
+          id: nid(), kind: 'derived', poly, rel: '=',
+          label: 'elim ' + varName + (gens.length > 1 ? ' ' + (i + 1) + '/' + gens.length : '') + (method === 'ideal' ? ' (ideal)' : ' (resultant)'), model,
+          provenance: { op: 'resultant', inputs: [idA, idB], variable: varName, method: method },
+          column: col, track: a.track || 't0', meta: {},
+        });
+        edges.push({ from: idA, to: node.id }, { from: idB, to: node.id });
+        created.push(node);
       });
-      edges.push({ from: idA, to: node.id }, { from: idB, to: node.id });
-      return { ok: true, node };
+      return { ok: true, node: created[0], created: created, method: method };
     }
     // Eliminate `varName` from nodes A,B via the Sylvester resultant → derived node.
     function eliminate(idA, idB, varName) {

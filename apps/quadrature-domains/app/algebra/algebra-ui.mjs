@@ -1418,7 +1418,10 @@ const QD = _QD;
       if (!r.ok) { toast(r.reason || 'elimination failed', { kind: 'error' }); return; }
       canvas.clearSelection();
       rerender();
-      toast('Eliminated ' + latexPlain(v) + ' → ' + r.node.poly.size() + '-term equation');
+      const created = r.created || (r.node ? [r.node] : []);
+      const exact = (r.method || (r.node && r.node.provenance && r.node.provenance.method)) === 'ideal';
+      toast('Eliminated ' + latexPlain(v) + ' → ' + created.length + ' exact ' + (created.length === 1 ? 'relation' : 'relations')
+        + (exact ? ' (elimination ideal — no extraneous factors)' : ' (Sylvester resultant fallback — may carry extraneous factors)'));
     }
     // Busy-state manager for the off-main-thread (worker) ops — disables the heavy
     // controls AND the graph-mutating controls (undo/redo, reductions, palette) so a
