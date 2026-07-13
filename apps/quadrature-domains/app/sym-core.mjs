@@ -1298,6 +1298,129 @@ import _QD from './solver.mjs';
     return { ok: false, reason: 'no squarefree degree-preserving point within ' + cap + ' tries' };
   }
 
+  // The MULTIVARIATE Hensel diophantine (roadmap #19 n-variate, P2): given monic pairwise-coprime
+  // univariate factors u_i(mainVar) with precomputed univariate Bézout inverses σ_i = (∏_{l≠i} u_l)^{-1}
+  // mod u_i, the current w=0 cofactors cofac0_i (= ∏_{l≠i} g_l|_{lifted=0…}, polys in mainVar + `vars`),
+  // and a target e (poly in mainVar + `vars`), return δ_i (deg_mainVar < deg u_i) with Σ δ_i·cofac0_i ≡ e.
+  // Solved by recursion on `vars`: the base case (all extra vars evaluated) is the univariate Bézout
+  // δ_i = σ_i·e mod u_i; each extra variable w is peeled by a w-adic Hensel of the diophantine itself
+  // (solve at w=0, then correct one w-power at a time). No linear-algebra solver — only σ_i + polynomial
+  // arithmetic — so it inherits the P0 guarantee that the univariate base factors are coprime.
+  function _mvDioph(uArr, sigma, cofac0, e, mainVar, vars) {
+    if (vars.length === 0) {
+      const eArr = _uniToArr(e, mainVar);
+      return sigma.map((s, i) => _uniFromArr(_gaDivRem(_gaMul(s, eArr), uArr[i]).r, mainVar));
+    }
+    const w = vars[vars.length - 1], rest = vars.slice(0, -1);
+    const at0 = (p) => p.subst({ [w]: MPoly.zero() });
+    const cof0 = cofac0.map(at0);                              // cofactors with w → 0 (for the sub-solves)
+    const delta = _mvDioph(uArr, sigma, cof0, at0(e), mainVar, rest); // solve the w=0 slice
+    const Nw = e.degreeIn(w) + 1;
+    for (let k = 1; k < Nw; k++) {
+      let sum = MPoly.zero();
+      for (let i = 0; i < delta.length; i++) sum = sum.add(delta[i].mul(cofac0[i]));
+      const rc = e.sub(sum).coeffsIn(w);
+      const rk = k < rc.length ? rc[k] : MPoly.zero();        // [w^k] residual, a poly in mainVar + rest
+      if (rk.isZero()) continue;
+      const dk = _mvDioph(uArr, sigma, cof0, rk, mainVar, rest);
+      const wk = MPoly.variable(w).pow(k);
+      for (let i = 0; i < delta.length; i++) if (!dk[i].isZero()) delta[i] = delta[i].add(dk[i].mul(wk));
+    }
+    return delta;
+  }
+
+  // ── The MULTIVARIATE HENSEL LIFT (roadmap #19 n-variate, P2; docs/NVARIATE_FACTORING.md §3) ──────────
+  // Factor a squarefree, monic-in-mainVar polynomial f ∈ ℚ(i)[mainVar, others…] by generalizing
+  // henselFactorBivariate from one extra variable to all of them: evaluate the other variables at a good
+  // point → a UNIVARIATE f₀(mainVar), factor it with _qiFactor (distinct roots ⇒ pairwise coprime), then
+  // Hensel-LIFT the factorization one variable at a time (each per-step diophantine is the recursive
+  // `_mvDioph`), and RECOMBINE by exact trial division. Scope: MONIC in mainVar (a non-constant leading
+  // coefficient ⇒ { ok:false } — Wang leading-coefficient distribution is out of scope) and squarefree in
+  // mainVar. Restricted to two variables it reproduces henselFactorBivariate's result, so the bivariate
+  // cross-check (§5 of the plan) is free. Returns { ok:true, factors:[monic-in-mainVar MPoly] } | { ok:false, reason }.
+  function mvHenselLift(f, mainVar, opts) {
+    opts = opts || {};
+    if (!(f instanceof MPoly) || f.isZero()) return { ok: false, reason: 'zero or non-MPoly' };
+    const m = f.degreeIn(mainVar);
+    if (m < 1) return { ok: false, reason: 'no positive degree in ' + mainVar };
+    const lc = f.coeffsIn(mainVar)[m];
+    if (lc.vars().size !== 0) return { ok: false, reason: 'non-monic in ' + mainVar + ' (leading coeff depends on the other variables)' };
+    let fp = f;
+    { const lg = lc.terms.get('') ? lc.terms.get('').coeff : Gaussian.fromInt(1);
+      if (!lg.sub(Gaussian.fromInt(1)).isZero()) fp = f.scale(Gaussian.fromInt(1).div(lg)); } // make monic in mainVar
+    if (!multivariateSquarefreeInX(fp, mainVar)) return { ok: false, reason: 'not squarefree in ' + mainVar };
+    const extra = [...fp.vars()].filter((v) => v !== mainVar).sort();
+    if (!extra.length) return { ok: true, factors: _qiFactor(fp, mainVar).map((p) => _canonicalFactor(p, mainVar)) };
+    const ep = nvarEvaluationPoint(fp, mainVar, opts);
+    if (!ep.ok) return { ok: false, reason: ep.reason };
+    // Shift the extra variables so the evaluation point sits at the origin (lift around 0), then un-shift.
+    const shiftIn = {}, shiftOut = {};
+    for (const p of ep.point) {
+      shiftIn[p.var] = MPoly.variable(p.var).add(MPoly.constant(p.value));
+      shiftOut[p.var] = MPoly.variable(p.var).sub(MPoly.constant(p.value));
+    }
+    const F = fp.subst(shiftIn);
+    const zeroAll = (vars) => Object.fromEntries(vars.map((v) => [v, MPoly.zero()]));
+    const f0 = F.subst(zeroAll(extra));                       // univariate in mainVar
+    const u = _qiFactor(f0, mainVar);
+    if (u.length <= 1) return { ok: true, factors: [_canonicalFactor(fp, mainVar)] }; // irreducible
+    const uArr = u.map((ui) => _uniToArr(ui, mainVar));
+    const sigma = [];
+    for (let i = 0; i < u.length; i++) {
+      let prod = [Gaussian.fromInt(1)];
+      for (let j = 0; j < u.length; j++) if (j !== i) prod = _gaMul(prod, uArr[j]);
+      const inv = _gaModInv(prod, uArr[i]);
+      if (!inv) return { ok: false, reason: 'specialization not coprime (bad evaluation point)' };
+      sigma.push(inv);
+    }
+    // Lift the extra variables one at a time (the not-yet-lifted ones stay at 0).
+    const g = u.map((ui) => ui.clone());
+    const lifted = [];
+    for (const w of extra) {
+      const notYet = extra.filter((v) => v !== w && lifted.indexOf(v) < 0);
+      const Fw = F.subst(zeroAll(notYet));                    // target: mainVar + lifted + w
+      const Nw = Fw.degreeIn(w) + 1;
+      const gw0 = g.map((gi) => gi.clone());                  // the w=0 factors (no w) entering this lift
+      const cofac0 = g.map((_, i) => { let c = MPoly.fromInt(1); for (let j = 0; j < g.length; j++) if (j !== i) c = c.mul(gw0[j]); return c; });
+      for (let k = 1; k < Nw; k++) {
+        let prod = MPoly.fromInt(1);
+        for (const gi of g) prod = _truncInVar(prod.mul(gi), w, k + 1);
+        const ec = Fw.sub(prod).coeffsIn(w);
+        const ek = k < ec.length ? ec[k] : MPoly.zero();      // [w^k](F − ∏ g), a poly in mainVar + lifted
+        if (ek.isZero()) continue;
+        const delta = _mvDioph(uArr, sigma, cofac0, ek, mainVar, lifted);
+        const wk = MPoly.variable(w).pow(k);
+        for (let i = 0; i < g.length; i++) if (!delta[i].isZero()) g[i] = g[i].add(delta[i].mul(wk));
+      }
+      lifted.push(w);
+    }
+    // Recombine: the smallest subset of local factors whose product divides F is an irreducible factor.
+    // The local factors are truncated power series (a genuinely-multivariate irreducible factor's univariate
+    // specialization can over-split — e.g. x²−yz at y=z=1 → (x−1)(x+1) — so its "branches" g_i are not
+    // ℚ(i)-polynomials on their own), so each subset product is truncated in every extra variable to the
+    // true factor's degree bound (deg_w F): the difference from the true factor lies in ⟨w^{deg_w F+1}⟩, so
+    // dropping those monomials recovers it exactly, then exact division confirms it.
+    const Ntr = {}; for (const w of extra) Ntr[w] = F.degreeIn(w) + 1;
+    const truncAll = (p) => { let q = p; for (const w of extra) q = _truncInVar(q, w, Ntr[w]); return q; };
+    const used = new Array(g.length).fill(false), found = [];
+    let remaining = F, d = 1;
+    while (true) {
+      const avail = g.map((_, i) => i).filter((i) => !used[i]);
+      if (!avail.length || d > avail.length) break;
+      let hit = false;
+      for (const Ssub of _subsetsOfSize(avail, d)) {
+        let cand = MPoly.fromInt(1);
+        for (const i of Ssub) cand = truncAll(cand.mul(g[i]));
+        let q;
+        try { q = mpolyExactDiv(remaining, cand); } catch (e) { continue; }
+        found.push(cand); Ssub.forEach((i) => { used[i] = true; }); remaining = q; hit = true; break;
+      }
+      if (!hit) d++;
+    }
+    if (!found.length) return { ok: true, factors: [_canonicalFactor(fp, mainVar)] };
+    return { ok: true, factors: found.map((Fs) => _canonicalFactor(Fs.subst(shiftOut), mainVar)) };
+  }
+
   // A single monomial coeff·xVar^a·yVar^b as an MPoly (zero if a<0 or b<0, so callers can pass the
   // "shifted" exponents a−1 / b−1 from a derivative without guarding). Small, allocation-light helper
   // for assembling the Ruppert linear system column by column.
@@ -5516,6 +5639,7 @@ import _QD from './solver.mjs';
     factorBivariate, // #19 factorizer Phase-3: ℚ(i)-rational bivariate factorization (resultant-eigenvalue extraction)
     henselFactorBivariate, // #19 factorizer Phase-5: INDEPENDENT Zassenhaus–Hensel oracle (differential cross-check of factorBivariate)
     multivariateContent, multivariatePrimitivePart, multivariateSquarefreeInX, multivariateSquarefreePart, nvarMainVariable, nvarEvaluationPoint, // #19 n-variate P1: content/primitive/squarefree(+part) in a main var + main-var choice + univariate evaluation-point search
+    mvHenselLift, // #19 n-variate P2: multivariate Hensel lift (univariate base → lift each variable → recombine), monic-in-main-var
     solveByEigenvalues, realSolutionCount, parametricRealCount1D, discriminantVariety, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
