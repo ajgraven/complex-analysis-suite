@@ -1867,12 +1867,14 @@ import _QD from './solver.mjs';
     return [work];                                                        // irreducible (or no clean shift found)
   }
   // Recursive driver that accumulates the distinct (radical) factors of `p` into `out`
-  // (a dedup'd list, via _factorPush), applying the three methods in order of cost:
+  // (a dedup'd list, via _factorPush), applying the methods in order of cost:
   //   (1) peel monomial factors (a variable dividing every term → the case v=0),
   //   (2) split a variable-separable product and recurse on each factor,
-  //   (3) factor a truly-univariate remainder fully over ℚ(i) (the norm trick).
+  //   (3) factor a truly-univariate remainder fully over ℚ(i) (the norm trick),
+  //   (4) factor a genuine BIVARIATE remainder over ℚ(i) (Gao's method, roadmap #19).
   // A remainder none of these split is pushed whole (irreducible). Every step
-  // strictly shrinks `cur`, so the recursion terminates; constants are dropped.
+  // strictly shrinks `cur` (or, in (4), only splices STRICTLY smaller factors and
+  // recurses on the pure-content), so the recursion terminates; constants are dropped.
   function _factorRec(p, out) {
     if (p.vars().size === 0) return;
     let cur = p;
@@ -1886,6 +1888,25 @@ import _QD from './solver.mjs';
     if (cur.vars().size === 1) {                               // (3) univariate over ℚ(i)
       const v = [...cur.vars()][0];
       if (cur.degreeIn(v) >= 2) { _qiFactor(cur, v).forEach((f) => _factorPush(out, f)); return; }
+    }
+    if (cur.vars().size === 2 && cur.terms.size <= 300) {      // (4) genuine bivariate over ℚ(i) — Gao (roadmap #19)
+      const vs = [...cur.vars()];
+      // Gao needs a squarefree main variable; try either ordering. Degree caps keep the Ruppert
+      // nullspace bounded — a curve past them falls through and is pushed whole (honest: not certified).
+      let xv = null, yv = null;
+      if (bivariateSquarefreeInX(cur, vs[0])) { xv = vs[0]; yv = vs[1]; }
+      else if (bivariateSquarefreeInX(cur, vs[1])) { xv = vs[1]; yv = vs[0]; }
+      if (xv && cur.degreeIn(xv) >= 1 && cur.degreeIn(yv) >= 1 && cur.degreeIn(xv) <= 12 && cur.degreeIn(yv) <= 12) {
+        let res = null;
+        try { res = factorBivariate(cur, xv, yv); } catch (e) { res = null; }
+        // Only act on a VERIFIED-complete split (≥2 factors, or a non-unit pure-yVar content to peel);
+        // an irreducible curve (r = 1, unit content) falls through to the whole-push below.
+        if (res && res.ok && res.complete && (res.factors.length >= 2 || res.content.vars().size > 0)) {
+          res.factors.forEach((Fk) => _factorPush(out, Fk));  // ℚ(i)-irreducible factors (already irreducible — do not recurse)
+          if (res.content.vars().size > 0) _factorRec(res.content, out); // pure-yVar content: univariate, terminates
+          return;
+        }
+      }
     }
     _factorPush(out, cur);                                     // irreducible by our methods
   }
@@ -4563,13 +4584,26 @@ import _QD from './solver.mjs';
       }
       if (!redundant) keep.push(uniq[i]);
     }
-    // Honest completeness: the exact ℚ(i) factorizer is univariate + monomial + variable-disjoint only,
-    // so a MULTIVARIATE nonlinear leaf (e.g. x²+y² = (x−iy)(x+iy)) can't be certified irreducible/prime.
-    // complete is true only when it terminated AND every component is provably prime: a linear ideal, or
-    // a squarefree irreducible univariate hypersurface. Otherwise a leaf may split further ⇒ complete:false.
+    // Honest completeness: complete is true only when it terminated AND every component is provably
+    // prime. A principal ideal ⟨g⟩ is prime ⟺ g is irreducible over ℚ(i) (ℚ(i)[x…] is a UFD). The
+    // factorizer now reaches monomial + variable-disjoint + univariate AND genuine BIVARIATE (Gao,
+    // roadmap #19), so a squarefree irreducible univariate OR bivariate hypersurface is certified prime;
+    // a linear ideal is prime; anything else (a leaf that may split further) leaves complete:false.
     const isCertPrime = (G) => {
       if (G.every((g) => g.totalDegree() <= 1)) return true;                    // a linear ideal is prime
-      if (G.length === 1) { const g = G[0], vs = [...g.vars()]; if (vs.length === 1) { const sf = squareFreePart(g, vs[0]); return sf.degreeIn(vs[0]) === g.degreeIn(vs[0]) && factorsOf(g).length <= 1; } }
+      if (G.length === 1) {
+        const g = G[0], vs = [...g.vars()];
+        if (vs.length === 1) { const sf = squareFreePart(g, vs[0]); return sf.degreeIn(vs[0]) === g.degreeIn(vs[0]) && factorsOf(g).length <= 1; }
+        if (vs.length === 2) {                                                  // ⟨g⟩ prime ⟺ g irreducible over ℚ(i)
+          try {
+            let xv = vs[0], yv = vs[1];
+            if (!bivariateSquarefreeInX(g, xv)) { if (bivariateSquarefreeInX(g, yv)) { xv = vs[1]; yv = vs[0]; } else return false; }
+            if (g.degreeIn(xv) < 1 || g.degreeIn(yv) < 1) return false;
+            const fr = factorBivariate(g, xv, yv);                              // squarefree + ONE ℚ(i) factor + unit content ⇒ irreducible
+            return fr.ok && fr.complete && fr.factors.length === 1 && fr.content.vars().size === 0;
+          } catch (e) { return false; }
+        }
+      }
       return false;
     };
     if (complete) complete = keep.every(isCertPrime);
@@ -4581,8 +4615,9 @@ import _QD from './solver.mjs';
   // main variable, substitute up). Built by decomposing into irreducible components (minimalPrimes,
   // #12) and triangularizing each — so V(I) = ⋃ V(componentᵢ) = ⋃ (the chains). Returns
   // { ok, chains:[{ chain:[MPoly], mainVars, freeVars, initials, whole? }], complete, count } — `complete`
-  // inherits minimalPrimes' honesty (the ℚ(i) factorizer's univariate/monomial/variable-disjoint reach:
-  // a component it can't split further is one chain that may cover a reducible curve).
+  // inherits minimalPrimes' honesty. With the genuine bivariate factorizer (Gao, roadmap #19) a plane-curve
+  // component is now split into its irreducible pieces and each certified prime, so `complete:true` covers
+  // the univariate + bivariate hypersurface cases; only higher-codimension nonlinear leaves may keep it false.
   function triangularDecomposition(polys, opts) {
     opts = opts || {};
     const src = (polys || []).filter((p) => p && !p.isZero());
@@ -4615,8 +4650,11 @@ import _QD from './solver.mjs';
     return out;
   }
 
-  // Geometric GENUS + rationality of a plane algebraic curve f(x,y) = 0 (roadmap #15). Assumes a
-  // REDUCED/irreducible curve. For a SMOOTH curve of degree d the geometric genus is EXACTLY the
+  // Geometric GENUS + rationality of a plane algebraic curve f(x,y) = 0 (roadmap #15). The genus formula
+  // needs an (absolutely) irreducible curve; the smoothness test already enforces this for the genus VALUE
+  // (a reducible projective plane curve self-intersects by Bézout ⇒ singular ⇒ genus:null), and the exact
+  // absolute-irreducibility is now REPORTED as `irreducible` via the bivariate factorizer (roadmap #19).
+  // For a SMOOTH curve of degree d the geometric genus is EXACTLY the
   // arithmetic genus (d−1)(d−2)/2; a line or conic (d ≤ 2) is always rational (genus 0); a smooth
   // curve of degree ≥ 3 has positive genus, so it is NOT rational. Smoothness is tested EXACTLY and
   // PROJECTIVELY: homogenize F(x,y,Z), and the projective curve is smooth ⟺ the Jacobian ideal
@@ -4635,16 +4673,28 @@ import _QD from './solver.mjs';
     const zVar = opts.zVar || '_Z';
     if (zVar === xVar || zVar === yVar) return { ok: false, reason: 'homogenizing variable "' + zVar + '" clashes; pass opts.zVar' };
     const pa = Math.max(0, (d - 1) * (d - 2) / 2);   // (also normalizes the d=1 line's −0 to +0)
+    // Absolute irreducibility (roadmap #19), reported alongside the genus: true / false / null (undetermined,
+    // e.g. a curve missing a variable, or not squarefree so the count's precondition fails). A line (d=1) is
+    // irreducible by inspection. This is the precondition the smooth-genus formula assumes made explicit.
+    let irreducible = (d === 1) ? true : null;
+    if (irreducible === null && f.degreeIn(xVar) >= 1 && f.degreeIn(yVar) >= 1) {
+      try {
+        let xv = xVar, yv = yVar;
+        if (!bivariateSquarefreeInX(f, xv)) { if (bivariateSquarefreeInX(f, yv)) { xv = yVar; yv = xVar; } else xv = null; }
+        if (xv) irreducible = bivariateAbsFactorCount(f, xv, yv) === 1;
+      } catch (e) { irreducible = null; }
+    }
     try {
       const F = _homogenize(f, d, zVar);
       const jac = [F.derivativeIn(xVar), F.derivativeIn(yVar), F.derivativeIn(zVar)].filter((g) => g && !g.isZero());
       const order = _ord(monomialOrder('grevlex', [xVar, yVar, zVar]));
       const smooth = jac.length ? isZeroDimensional(buchberger(jac, order, opts), order, [xVar, yVar, zVar]) : false;
       let genus, rational, note;
-      if (pa === 0) { genus = 0; rational = true; note = (d === 1 ? 'a line' : 'a conic') + ' — rational (genus 0)'; }
+      if (irreducible === false) { genus = null; rational = null; note = 'absolutely REDUCIBLE (' + d + ' components over ℂ) — the geometric genus is per irreducible component; factor the curve first'; }
+      else if (pa === 0) { genus = 0; rational = true; note = (d === 1 ? 'a line' : 'a conic') + ' — rational (genus 0)'; }
       else if (smooth) { genus = pa; rational = false; note = 'smooth degree-' + d + ' curve — genus ' + pa + ' > 0, not rational'; }
       else { genus = null; rational = null; note = 'singular — geometric genus = ' + pa + ' − Σδ_P (< ' + pa + '); the exact genus and any rational parametrization need Puiseux singularity resolution (deferred)'; }
-      return { ok: true, degree: d, arithmeticGenus: pa, smooth, singular: !smooth, genus, rational, note };
+      return { ok: true, degree: d, arithmeticGenus: pa, smooth, singular: !smooth, irreducible, genus, rational, note };
     } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
   }
 
