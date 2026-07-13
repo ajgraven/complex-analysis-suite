@@ -10,6 +10,12 @@ import { accumulateBand, densityToImage, DEFAULT_DENSITY } from "./correspondenc
 import { DEFAULT_PARAM_OPTIONS, DEFAULT_PARAM_VIEW, renderParamBand } from "./paramPlane.js";
 import { createParamRenderer } from "./paramGpu.js";
 import { DEFAULT_TRICORN_OPTIONS, DEFAULT_TRICORN_VIEW, renderTricornBand } from "./tricorn.js";
+import {
+  DELTOID_CUSP_LOCUS_TEXT,
+  DELTOID_EXACT_CURVE,
+  deltoidBranchPoints,
+  prettyCurve,
+} from "./exact/deltoidExact.js";
 
 const SIGMA_GPU = 560;
 const SIGMA_CPU = 240;
@@ -49,6 +55,7 @@ function shell(): {
         <figure style="margin:0">
           <canvas id="corr" style="${cs}"></canvas>
           <figcaption id="capC" class="status">Rendering the correspondence…</figcaption>
+          <figcaption id="capCExact" class="status" style="margin-top:.35rem;opacity:.85"></figcaption>
         </figure>
         <figure style="margin:0">
           <canvas id="param" style="${cs}"></canvas>
@@ -223,6 +230,19 @@ function renderTricorn(canvas: HTMLCanvasElement): void {
   );
 }
 
+// The EXACT algebraic scaffold of the deltoid's deleted correspondence (roadmap #16), shown beneath the
+// (numeric) correspondence render: the once-computed exact curve C(w, z̄) and its cusp locus, whose roots
+// are the branch points where the two w-branches collide. Exact (=) — unlike the ≈ dynamics above it.
+function setExactScaffold(): void {
+  const el = document.getElementById("capCExact");
+  if (!el) return;
+  const finite = deltoidBranchPoints().filter((b) => !b.degenerate);
+  el.textContent =
+    `Exact 2:2 correspondence curve  ${prettyCurve(DELTOID_EXACT_CURVE.text)}  (= in ℚ(i)). ` +
+    `Cusp locus disc_w = ${DELTOID_CUSP_LOCUS_TEXT} ⇒ ${finite.length} branch points on |z| = 2 ` +
+    `(where the two branches collide), computed exactly and solved.`;
+}
+
 function mount(): void {
   const s = shell();
   if (!s) return;
@@ -230,6 +250,7 @@ function mount(): void {
   renderCorrespondence(s.corr);
   renderParamPlane(s.param);
   renderTricorn(s.tric);
+  setExactScaffold();
 }
 
 mount();

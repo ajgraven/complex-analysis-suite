@@ -47,7 +47,7 @@ every recommendation:
 | 13 ✅ | Triangular decomposition / regular chains (positive-dim solving) — `triangularDecomposition` (minimalPrimes + triangularize) | ★★ | Moderate | subresultants, GCD, squarefree, FGLM |
 | 14 ✅ | Discriminant variety + parametric real-root classification (family bifurcation set) — `discriminantVariety` (any #params) + the 1-param count via #2b-1 | ★★ | Moderate | subresultants, elimination, real-root isolation |
 | 15 ◐ | Curve parametrization + genus + Puiseux (rational boundary maps, cusps) — `curveGenus` (genus + rationality, exact projective smoothness) ✅; Puiseux / singular genus / parametrization ◻ | ★★ | Moderate | series/reversion, resultants, factorization |
-| 16 | **Exact correspondence curves + σ (retire Correspondences' numeric branch engine)** | ★★ | Moderate | conjugate-var scheme, exact poly division (deflation), resultants |
+| 16 ◐ | **Exact correspondence curves + σ (retire Correspondences' numeric branch engine)** — in-app strict-TS exact engine `correspondenceCurve` / `cuspLocus` (ℚ(i) deflation + Bareiss resultant) ✅ (PR-A); app wiring (curve readout + cusp overlay, seed the numeric path) ◻ (PR-B) | ★★ | Moderate | conjugate-var scheme, exact poly division (deflation), resultants |
 | 17 | Dynatomic / Gleason / multiplier polynomials (exact CD/Tricorn component data) | ★★ | Moderate | resultants, exact division, zero-dim solve |
 | 18 | Shape-from-moments (Prony–Hankel) reconstruction + QD-order rank test | ★★ | Moderate | zero-dim root-find, exact null-space/Vandermonde |
 | 19 | Positive-dim / real radical; multivariate factorization; Hele-Shaw; mother bodies | ★–★★ | Mod–Hard | various above |
@@ -75,7 +75,11 @@ every recommendation:
 > deferred) · **#13** `triangularDecomposition` — regular chains per component (minimalPrimes + triangularize,
 > PR #51) · **◐ #15** `curveGenus` — plane-curve geometric genus + rationality via exact projective smoothness
 > (PR #53; Puiseux / singular genus / rational parametrization deferred). **The decomposition tier (#12–#15) is
-> done in its feasible form. Not started:** #16–#20.
+> done in its feasible form.** · **◐ #16** (cross-app) — the EXACT deleted-correspondence curve `C(w, z̄)` + cusp
+> locus, an in-app strict-TS ℚ(i) engine in `apps/correspondences/src/exact/` (`correspondenceCurve` deflates the
+> trivial branch exactly; `cuspLocus` = `disc_w C` via Sylvester + fraction-free Bareiss; deltoid → `2w² − z̄²w − z̄`,
+> cusps `z̄⁴+8z̄`; PR #55, PR-A). App wiring (curve readout + cusp overlay; seed the numeric branch path) is PR-B.
+> **Not started:** #17–#20.
 
 ---
 
