@@ -44,7 +44,7 @@ every recommendation:
 | 10 ◐ | Rational/Padé reconstruction ✅ + CRT-modular Gröbner (scaling cure) ◻ | ★★ | Easy | GCD/EEA, series |
 | 11 ◐ | Dimension-in-verdict ✅ · staircase diagram ◻, session save/load ◻, `.ipynb` export ◻, rigor badges (already present) | ★★ | Easy–Mod | `standardMonomials`, `exportDAG`, `sympyDerivation` |
 | 12 ◐ | Primary decomposition + minimal primes (decompose boundary variety) — `minimalPrimes` (factorizing Buchberger) ✅; full GTZ / embedded primes ◻ | ★★ | Moderate | factorization (present!), zero-dim radical, saturation |
-| 13 | Triangular decomposition / regular chains (positive-dim solving) | ★★ | Moderate | subresultants, GCD, squarefree, FGLM |
+| 13 ✅ | Triangular decomposition / regular chains (positive-dim solving) — `triangularDecomposition` (minimalPrimes + triangularize) | ★★ | Moderate | subresultants, GCD, squarefree, FGLM |
 | 14 ✅ | Discriminant variety + parametric real-root classification (family bifurcation set) — `discriminantVariety` (any #params) + the 1-param count via #2b-1 | ★★ | Moderate | subresultants, elimination, real-root isolation |
 | 15 | Curve parametrization + genus + Puiseux (rational boundary maps, cusps) | ★★ | Moderate | series/reversion, resultants, factorization |
 | 16 | **Exact correspondence curves + σ (retire Correspondences' numeric branch engine)** | ★★ | Moderate | conjugate-var scheme, exact poly division (deflation), resultants |
@@ -72,7 +72,8 @@ every recommendation:
 > ("n real solutions where [constraints]", PR #48), closing the count-per-region round-trip (in-house CAD
 > deliberately not built) · **◐ #12** `minimalPrimes` — irreducible components by factorizing Buchberger
 > (PR #49; `complete` honest about the ℚ(i) factorizer's univariate/monomial/variable-disjoint reach; full GTZ
-> deferred). **Not started:** #13, #15–#20.
+> deferred) · **#13** `triangularDecomposition` — regular chains per component (minimalPrimes + triangularize,
+> PR #51). **Not started:** #15–#20.
 
 ---
 
@@ -199,10 +200,10 @@ from "hard" to "moderate."
 3. ✅ **Cheap infrastructure sprint (compounding):** #6 ideal toolkit + #7 series calculus + #8 Hilbert/
    dimension + #9 power sums + #10 Padé/CRT + the Tier-2 workflow wins. **DONE (PRs #31–#36);** CRT-modular
    Gröbner and the staircase/save-load/`.ipynb` workflow items deferred (rigor badges already present).
-4. **Decomposition tier (started):** ✅ #12 minimal primes (`minimalPrimes`, factorizing Buchberger) + ✅ #14
-   discriminant variety (`discriminantVariety`); still open — #13 triangular decomposition / regular chains
-   (a full split; `triangularize` gives one chain), #15 curve parametrization / genus / Puiseux, and genuine
-   multivariate factorization (would deepen #12 past the current univariate/monomial/variable-disjoint reach).
+4. **Decomposition tier (mostly done):** ✅ #12 minimal primes (`minimalPrimes`, factorizing Buchberger) + ✅ #13
+   regular chains (`triangularDecomposition`) + ✅ #14 discriminant variety (`discriminantVariety`); still open —
+   #15 curve parametrization / genus / Puiseux, and genuine multivariate factorization (would deepen #12/#13 past
+   the current univariate/monomial/variable-disjoint reach).
 5. **Cross-app exact upgrades:** #16 exact correspondence curves + #17 dynatomic/Gleason/multiplier.
 6. **Tooling axes, as demand appears:** client-side Arb/PARI for certified `≤`; an opt-in msolve →
    HomotopyContinuation.jl service for positive-dimensional / large / all-solution work.
