@@ -33,7 +33,7 @@ every recommendation:
 | # | Extension | Value | Effort | Builds on (already present) |
 |---|-----------|-------|--------|------------------------------|
 | **1 ✅** | **Exact Schwarz function + boundary curve Q(z,z̄) from a solved QD** | ★★★ | Moderate | resultant/elimination Gröbner, `saturate`, series inverse |
-| **2 ◐** | **Certify QD existence/uniqueness** — #2a certified-first verdict ✅ · #2b parametric (comprehensive) ◻ | ★★★ | Moderate | `realSolutionCount` (Hermite), `triangularize`, Schur–Cohn |
+| **2 ◐** | **Certify QD existence/uniqueness** — #2a certified-first verdict ✅ · #2b-1 1-param bifurcation ✅ · #2b-2 ≥2-param (CAD) ◻ | ★★★ | Moderate | `realSolutionCount` (Hermite), `triangularize`, Schur–Cohn |
 | **3 ✅** | **Close the algebra→geometry loop (plot ℂ solutions, show domain, interchange export)** | ★★★ | Easy–Mod | `phiFromAlgebraSolution`, verdict `actions[]`, `@cas/interchange` |
 | **4 ✅** | **Certified real solving via RUR + exact Sturm isolation (rigorous locations)** | ★★★ | Moderate | `rationalUnivariateRep` (self-certifying), `realRootIsolate` |
 | **5 ✅** | **Wire the built-but-unexposed Aharonov–Shapiro moment system to a seed** | ★★★ | Easy | `pointFunctionalSystem` (tested, no UI), `seedFromSystem` |
@@ -45,7 +45,7 @@ every recommendation:
 | 11 ◐ | Dimension-in-verdict ✅ · staircase diagram ◻, session save/load ◻, `.ipynb` export ◻, rigor badges (already present) | ★★ | Easy–Mod | `standardMonomials`, `exportDAG`, `sympyDerivation` |
 | 12 | Primary decomposition + minimal primes (decompose boundary variety) | ★★ | Moderate | factorization (present!), zero-dim radical, saturation |
 | 13 | Triangular decomposition / regular chains (positive-dim solving) | ★★ | Moderate | subresultants, GCD, squarefree, FGLM |
-| 14 | Discriminant variety + parametric real-root classification (family bifurcation set) | ★★ | Moderate | subresultants, elimination, real-root isolation |
+| 14 ◐ | Discriminant variety + parametric real-root classification (family bifurcation set) — 1-param case ✅ via #2b-1 | ★★ | Moderate | subresultants, elimination, real-root isolation |
 | 15 | Curve parametrization + genus + Puiseux (rational boundary maps, cusps) | ★★ | Moderate | series/reversion, resultants, factorization |
 | 16 | **Exact correspondence curves + σ (retire Correspondences' numeric branch engine)** | ★★ | Moderate | conjugate-var scheme, exact poly division (deflation), resultants |
 | 17 | Dynatomic / Gleason / multiplier polynomials (exact CD/Tricorn component data) | ★★ | Moderate | resultants, exact division, zero-dim solve |
@@ -64,8 +64,10 @@ every recommendation:
 > dimensional verdicts (#36); rigor badges already existed; staircase diagram, session save/load, and
 > `.ipynb` export deferred · **#4** certified real solving — `solveRealCertified` = RUR + exact Sturm
 > isolating boxes (#38) · **◐ #2** existence/uniqueness — #2a the verdict now solves certified-first
-> (RUR + Sturm), so the count is exact instead of a "≥ k" hedge (PRs #39/#40); #2b the parametric
-> (comprehensive-Gröbner) layer still deferred. **Not started:** #12–#20.
+> (RUR + Sturm), so the count is exact instead of a "≥ k" hedge (PRs #39/#40); **#2b-1** the 1-parameter
+> **bifurcation** — `parametricRealCount1D` (eliminant border + Sturm criticals + Hermite count per cell)
+> + an Algebra "Bifurcation over [param]" panel (PRs #42/#43/#44), which also delivers **#14** for one
+> parameter; #2b-2 (≥2 params, CAD) deferred. **Not started:** #12–#13, #15–#20.
 
 ---
 
@@ -185,8 +187,9 @@ from "hard" to "moderate."
    extraction → #3 the algebra→geometry loop → #5 expose the moment system. This trio turns the tool's
    central theory into visible, exact, shareable results. **DONE (PRs #25–#30).**
 2. ✅ **Certified answers:** #4 RUR-based certified real solving + #2a a certified-first existence/uniqueness
-   verdict. **DONE (PRs #38–#40);** #2b, the parametric (comprehensive-Gröbner / real triangular-decomposition)
-   "k QDs for data in region R" layer, is deferred to its own scoping.
+   verdict + #2b-1 the exact 1-parameter bifurcation (`parametricRealCount1D` + an Algebra panel; also delivers
+   #14 for one parameter). **DONE (PRs #38–#44).** #2b-2, the ≥2-parameter (CAD / real comprehensive triangular
+   decomposition) "k QDs for data in region R" layer, is deferred to an opt-in external backend + its own scoping.
 3. ✅ **Cheap infrastructure sprint (compounding):** #6 ideal toolkit + #7 series calculus + #8 Hilbert/
    dimension + #9 power sums + #10 Padé/CRT + the Tier-2 workflow wins. **DONE (PRs #31–#36);** CRT-modular
    Gröbner and the staircase/save-load/`.ipynb` workflow items deferred (rigor badges already present).
