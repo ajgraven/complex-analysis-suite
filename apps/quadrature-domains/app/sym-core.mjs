@@ -3263,6 +3263,104 @@ import _QD from './solver.mjs';
     return { ok: true, realCount: inertia.pos - inertia.neg, complexCount: inertia.pos + inertia.neg, multiplicityCount: D };
   }
 
+  // Parametric real-solution count over ONE real parameter (roadmap #2b-1): the bifurcation of the
+  // #real solutions of a family polys(x…, t) = 0 as the parameter t ranges over ℝ. Builds a univariate
+  // eliminant f(u,t) of the fiber (a SEPARATING linear form u = Σcᵢxᵢ, eliminated by Gröbner projection —
+  // no extraneous factors), takes the real roots of its border polynomial reducedDisc_u(f)·lc_u(f) as the
+  // transition CANDIDATES (the real u-root count changes only at a real double root or a root escaping to
+  // ±∞; over-inclusion is harmless — a spurious boundary just splits a cell into equal-count halves), then
+  // reports the CERTIFIED real count on each open interval by substituting a rational sample and using the
+  // Hermite trace form (realSolutionCount) — the ground truth, independent of the eliminant. Returns
+  // { ok, paramVar, degree, criticalValues, cells, crosschecked } or { ok:false, reason }. crosschecked =
+  // f's own real-u-root count matched Hermite at EVERY sample (⇒ the separating form is valid and the
+  // candidate set is trustworthy). Honest labeling: cell counts are = (exact); criticalValues are ≤
+  // (isolating rational boxes). One real parameter only; ≥2 is CAD territory (deferred).
+  function parametricRealCount1D(polys, paramVar, opts) {
+    opts = opts || {};
+    polys = (polys || []).filter((p) => p && !p.isZero());
+    const fail = (reason) => ({ ok: false, reason });
+    if (!polys.length) return fail('empty system');
+    const amb = _ambientVars(polys);
+    if (amb.indexOf(paramVar) < 0) return fail('parameter "' + paramVar + '" does not appear in the system');
+    const solveVars = amb.filter((v) => v !== paramVar);
+    if (!solveVars.length) return fail('no solve variables besides the parameter');
+    const uName = opts.uName || '_u';
+    if (amb.indexOf(uName) >= 0) return fail('reserved eliminant variable "' + uName + '" clashes; pass opts.uName');
+    const tol = opts.tol != null ? opts.tol : 1e-9;
+    const u = MPoly.variable(uName);
+    const genericTs = [1, -1, 2, -2, 3, 5, 7].map((k) => Rational.fromInt(k));
+    const subT = (p, t0) => p.subst({ [paramVar]: MPoly.constant(new Gaussian(t0, RZERO)) });
+    // distinct real solutions of the fiber at a rational t0 via the Hermite form (authoritative).
+    const hermiteAt = (t0) => {
+      const sys = polys.map((p) => subT(p, t0)).filter((p) => !p.isZero());
+      try { return realSolutionCount(sys, null, solveVars, opts); } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    };
+
+    // 1) separating univariate eliminant f(u,t): eliminate the solve variables from polys ∪ {u − Σcᵢxᵢ};
+    //    accept the first candidate whose squarefree eliminant has deg_u = the generic distinct-solution
+    //    count (⇒ u separates the fiber, so no collision is invisible to f).
+    let f = null;
+    for (const cs of _sepCandidates(solveVars.length, opts.maxTries || 24)) {
+      let lin = u;
+      solveVars.forEach((v, i) => { if (cs[i]) lin = lin.sub(MPoly.constant(Gaussian.fromInt(cs[i])).mul(MPoly.variable(v))); });
+      let gens;
+      try { gens = eliminationIdeal(polys.concat([lin]), solveVars, [uName, paramVar], opts); } catch (e) { continue; }
+      const uGens = gens.filter((g) => g.vars().has(uName));
+      if (!uGens.length) continue;
+      let prod = uGens[0]; for (let i = 1; i < uGens.length; i++) prod = prod.mul(uGens[i]);
+      prod = squareFreePart(prod, uName);
+      const du = prod.degreeIn(uName);
+      if (du < 1) continue;
+      let sep = false;
+      for (const t0 of genericTs) { const h = hermiteAt(t0); if (h.ok && du === h.complexCount) { sep = true; break; } }
+      if (sep) { f = prod; break; }
+    }
+    if (!f) return fail('could not build a separating univariate eliminant (fiber not zero-dimensional over the parameter, or no separating form found)');
+
+    // 2) border polynomial in the parameter: real double root (reducedDisc_u f = 0) ∪ escape to ∞ (lc_u f = 0).
+    const disc = reducedDiscriminant(f, uName), lc = _lcInV(f, uName);
+    let border = MPoly.fromInt(1);
+    if (!disc.isZero() && disc.degreeIn(paramVar) >= 1) border = border.mul(disc);
+    if (!lc.isZero() && lc.degreeIn(paramVar) >= 1) border = border.mul(lc);
+    if (border.vars().has(uName)) return fail('internal: the border polynomial retained the eliminant variable');
+    border = squareFreePart(border, paramVar);
+    for (const g of _uniToArr(border, paramVar)) if (!g.im.isZero()) return fail('the family has non-real coefficients — a real-parameter bifurcation is undefined');
+
+    // 3) isolate the critical parameter values (candidates), left-to-right.
+    let critical = [];
+    if (border.degreeIn(paramVar) >= 1) {
+      const iso = realRootIsolate(border, paramVar, { tol });
+      if (!iso.ok) return fail('isolation of the border polynomial failed: ' + iso.reason);
+      critical = iso.roots.slice().sort((a, b) => a.lo.sub(b.lo).sign());
+    }
+
+    // 4) certified count on each open cell via a rational sample strictly inside it; cross-check f's own
+    //    real-u-root count against Hermite at every sample.
+    const HALF = new Rational(1n, 2n), ONE = RONE;
+    const fRealRootsAt = (t0) => { const iso = realRootIsolate(subT(f, t0), uName, { tol }); return iso.ok ? iso.count : null; };
+    const cells = []; let crosschecked = true;
+    for (let i = 0; i <= critical.length; i++) {
+      let t0;
+      if (!critical.length) t0 = RZERO;
+      else if (i === 0) t0 = critical[0].lo.sub(ONE);
+      else if (i === critical.length) t0 = critical[i - 1].hi.add(ONE);
+      else t0 = critical[i - 1].hi.add(critical[i].lo).mul(HALF);
+      const h = hermiteAt(t0), fc = fRealRootsAt(t0);
+      if (h.ok && fc != null && fc !== h.realCount) crosschecked = false;
+      cells.push({
+        lo: i === 0 ? -Infinity : critical[i - 1].approx,
+        hi: i === critical.length ? Infinity : critical[i].approx,
+        sample: t0.toNumber(), realCount: h.ok ? h.realCount : null,
+        complexCount: h.ok ? h.complexCount : null, ok: !!h.ok, reason: h.ok ? undefined : h.reason,
+      });
+    }
+    return {
+      ok: true, paramVar, degree: f.degreeIn(uName),
+      criticalValues: critical.map((r) => ({ lo: r.lo.toNumber(), hi: r.hi.toNumber(), exact: !!r.exact, approx: r.approx })),
+      cells, crosschecked,
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // reconcileRealCount — a SELF-CHECKING ORACLE pairing the two INDEPENDENT
   // real-solution counters so a silent undercount can't pass as a clean verdict.
@@ -4403,7 +4501,7 @@ import _QD from './solver.mjs';
 
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, krullDimension, dimensionDegree, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, powerSums, newtonToElementary, charPolyByTraces, coordinateMoments,
-    solveByEigenvalues, realSolutionCount, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
+    solveByEigenvalues, realSolutionCount, parametricRealCount1D, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
     seriesDeriv, seriesIntegral, seriesLog, seriesExp,   // series calculus (Taylor)
