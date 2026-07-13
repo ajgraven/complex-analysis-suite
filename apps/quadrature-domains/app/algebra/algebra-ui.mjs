@@ -1531,7 +1531,7 @@ const QD = _QD;
     // banner so no slice/branch count on the card reads as the certified general count. [] ⇒ general.
     function specializationLedger(r) {
       const out = sliceLabels(r).map((s) => s.charAt(0).toUpperCase() + s.slice(1));
-      if (store.w0Fixed) out.push('φ(0) fixed (rotation gauge)');
+      if (store.w0Fixed) out.push('φ(0) = w₀ fixed (center/translation gauge — restricts to domains whose interior contains w₀; a domain not containing w₀ is not counted)');
       if (r && r.partialBranch) out.push('Factor case ' + ((r.caseIndex || 0) + 1) + ' of ' + r.caseCount + ' (branches add up)');
       return out;
     }
@@ -1571,11 +1571,16 @@ const QD = _QD;
           let verdict;
           if (cl.inconsistent) verdict = 'No quadrature domain: the reduced system is inconsistent.';
           else if (!cl.zeroDim) verdict = 'A positive-dimensional family of solutions (' + posDimDesc(cl) + ') — add a constraint or fix a value to pin it.';
-          else verdict = (cl.realCount == null ? cl.multiplicity + ' solution(s) with multiplicity'
-            : (cl.realCount === 0 ? 'No real quadrature domain'
-              : cl.realCount === 1 ? 'Unique quadrature domain (1 real solution)'
-                : cl.realCount + ' real quadrature domains')
-            + (cl.complexCount != null ? ' of ' + cl.complexCount + ' distinct complex' : '')) + '.';
+          // HONEST LABELING (finding C-1/B-1): the reim real-solution count is the count of ALGEBRAIC
+          // solutions of the cleared system — an UPPER BOUND on the number of quadrature domains (it can
+          // include non-univalent maps, gauge copies, and the {|z_j|=1} boundary stratum the cleared
+          // denominators carry). It is NOT the QD count; only "Certify univalence" (which filters non-QDs
+          // + quotients the gauge) yields that. Count 0 IS sound (0 algebraic ⇒ 0 QD).
+          else if (cl.realCount == null) verdict = cl.multiplicity + ' solution(s) with multiplicity.';
+          else if (cl.realCount === 0) verdict = 'No real quadrature domain' + (cl.complexCount != null ? ' (of ' + cl.complexCount + ' distinct complex)' : '') + '.';
+          else verdict = cl.realCount + ' real algebraic solution' + (cl.realCount === 1 ? '' : 's')
+            + (cl.complexCount != null ? ' (of ' + cl.complexCount + ' distinct complex)' : '')
+            + ' — an upper bound on the number of quadrature domains; run Certify univalence for the genuine-QD count.';
           // ★ Auto-reduce auto-applies assumeReal ⇒ this count is on the real slice (a lower bound).
           verdict += sliceCaveat(cl);
           // 4. explicit real solutions when zero-dimensional — off the main thread
@@ -1644,7 +1649,10 @@ const QD = _QD;
           const cx = r.complexCount, mult = r.multiplicity;
           const tail = (cx != null ? ' (of ' + cx + ' distinct complex' + (mult != null && mult > cx ? '; ' + mult + ' with multiplicity' : '') + ')' : '');
           if (r.realCount === 0) verdict = 'No real quadrature domain' + tail + '.';
-          else if (r.realCount === 1) verdict = 'Unique quadrature domain — exactly 1 real solution' + tail + '.';
+          // HONEST LABELING (C-1): 1 real ALGEBRAIC solution is an upper bound on #QD, not "the unique QD"
+          // — it may be non-univalent, a gauge copy, or on the {|z_j|=1} boundary stratum. Only Certify
+          // univalence yields the genuine count. (The count>1 branch was already honest; align the ==1 one.)
+          else if (r.realCount === 1) verdict = 'A unique real algebraic solution' + tail + ' — an upper bound on the quadrature-domain count; run Certify univalence for the genuine-QD count (gauge copies merged, non-univalent ones filtered).';
           else verdict = r.realCount + ' real algebraic solutions' + tail + ' — run Certify univalence for the genuine-QD count (gauge copies merged, non-univalent ones filtered).';
         }
         // A factor "case" column counts ONE branch of V(p)=⋃V(fᵢ) — the branches add up.
@@ -2564,8 +2572,11 @@ const QD = _QD;
       if (!r.zeroDim) return { badge: '∞' + star, state: 'open', title: 'positive-dimensional family (' + posDimDesc(r) + ')' + tail };
       if (r.realCount == null) return { badge: 'fin' + star, state: 'unknown', title: r.multiplicity + ' complex solution(s); real count over the cap' + tail };
       if (r.realCount === 0) return { badge: '0 QD' + star, state: 'none', title: 'no real quadrature domain' + tail };
-      if (r.realCount === 1) return { badge: '✓ 1 QD' + star, state: 'unique', title: 'unique real quadrature domain' + tail };
-      return { badge: r.realCount + ' QD' + star, state: 'multi', title: r.realCount + ' real algebraic solutions' + tail };
+      // HONEST LABELING (C-1): the chip shows the ALGEBRAIC real-solution count — an upper bound on #QD,
+      // NOT a certified QD count — so no green 'unique' from an unfiltered count; Certify univalence
+      // (which filters non-univalent maps + quotients the gauge) produces the genuine-QD verdict.
+      if (r.realCount === 1) return { badge: '1 alg' + star, state: 'multi', title: '1 real algebraic solution — an upper bound on #QD; run Certify univalence for the genuine-QD count' + tail };
+      return { badge: r.realCount + ' alg' + star, state: 'multi', title: r.realCount + ' real algebraic solutions — an upper bound on #QD; run Certify univalence for the genuine-QD count' + tail };
     }
     // Cache the active branch's verdict from a single-branch classify (doClassify) so its chip
     // updates too — only when the whole last column was analyzed (no node sub-selection).

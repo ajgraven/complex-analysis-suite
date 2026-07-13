@@ -38,25 +38,15 @@ boundary case. Gate BEFORE the fold/boundary tests and BEFORE `genuinePhis.push`
 **Acceptance:** the D-1 repro solution is no longer counted; existing cardioid/disk cases still certify;
 gate green.
 
-### Slice 2 — Saturate the count path by the Möbius denominators (HIGH correctness) — [B-1, A-1]
-**Goal:** the existence/uniqueness COUNT analyzes `V(cleared)=V(QD)∪{|z_j|=1}` directly, so the unit disk
-`h=1/w` reports **"4 real quadrature domains"** (true 2; extra two = `z_j=±1`). `saturate` exists
-(`sym-core.mjs:5228`) but is never invoked. Saturate the reim system by the Möbius factors
-`∏_{j,j'}(1−z̄_{j'} z_j)` (in reim: `1−(x_j²+y_j²)` cross-terms) before the Hermite count so the boundary
-component `{|z_j|=1}` is removed and the raw count is exact.
-**Footprint:** record the dropped denominator factors on the `system` object at generation
-(`qd-equations.mjs` `clearDenominators`, closing A-1) so the store can saturate them; invoke `saturate`
-in the count path (`algebra-store.mjs` `currentReimSystem`/`_classifyImpl`), as its own labeled provenance
-step (`saturate` op — PROV_STORE/UI already cover it) or folded into classify with an honest note.
-Guard: saturation must not drop genuine solutions (the excluded locus is disjoint from `{all |z_j|<1}`).
-**Tests:** vitest — the disk classify returns realCount 2 (not 4) after saturation; a 2-pole case's boundary
-component is removed; a genuine interior solution is retained. Golden the disk.
-**Acceptance:** the canonical disk input counts correctly; positive-dim false-reading resolved; gate green.
-**Risk:** MED — must saturate by the *right* factors and prove no genuine solution is removed (test-guarded).
-If recording-at-generation proves large, fall back to reconstructing the factors from the pole structure in
-the store (same math), keeping the slice self-contained.
+> **Re-order note (post-S1):** S1 made the AUTHORITATIVE verdict (Certify univalence) correct — its strict
+> `|z_j|<1` gate rejects both `{|z_j|=1}` (the disk's spurious `z=±1`) and `{|z_j|>1}`, and the gauge quotient
+> collapses the disk to "unique ✓". So B-1's remaining harm is the **wrong label** on the *raw* count ("4
+> quadrature domains"), not the number — fixed cheaply by the labeling slice. Baking saturation into the default
+> `currentReimSystem` would also silently change `solveReal`/`resolvent`/`spuriousFactors` and cross the
+> worker-parity boundary. **Therefore: do the labeling slice next (S2), and deliver saturation as a first-class
+> DAG reduction op (S3) the orchestrator auto-applies — not a hidden default.**
 
-### Slice 3 — Honest count labeling + gauge-pin honesty (HIGH) — [C-1, A-2, B-4]
+### Slice 2 — Honest count labeling + gauge-pin honesty (HIGH) — [C-1, B-1, A-2, B-4]
 **Goal (a):** `doClassify(==1)` (`:1647`) + `doAutoSolve` (`:1574-1578`) print the certified *algebraic*
 count as "**quadrature domains**" with no univalence filter (over-claim; the app's own `count>1` branch
 `:1648` is already honest). Reword to "real algebraic solution(s) — an upper bound on the number of
@@ -70,6 +60,25 @@ center/translation gauge. State the restriction in the verdict/ledger and fix th
 states the containment restriction + correct gauge name.
 **Acceptance:** no surface prints a certified-QD claim from an unfiltered count; a w₀-pinned "unique" is
 legibly conditional; gate green.
+
+### Slice 3 — Möbius saturation as a first-class admissibility DAG op (HIGH correctness) — [B-1, A-1]
+**Goal:** make the raw algebraic count EXACT (disk `h=1/w`: `realCount` 4 → 2) by removing the boundary
+stratum `{|z_j|=1}` the cleared system carries. Deliver it as an explicit, provenance-tracked reduction —
+`store.saturateMobius(ids)` appends a labeled "saturate (admissibility)" column whose system is the current
+system with `⟨I⟩ : (∏_j (1 − z̄_j z_j))^∞` (in the conjugate model the factor is simply `1 − zb_j·z_j`;
+`saturate` already exists at `sym-core.mjs:5228`). NOT baked into the default `currentReimSystem` (that would
+silently change `solveReal`/`resolvent`/`spuriousFactors` + cross the worker boundary). The orchestrator (S5)
+auto-applies it before counting; a toolbar button exposes it manually.
+**Why safe (does not drop genuine QDs):** a genuine bounded QD has `|z_j|<1` ⇒ `1 − z̄_j z_j ≠ 0`, so the
+saturated locus is disjoint from the QD set — unlike saturating by `z_j` (which the store already, correctly,
+refuses to auto-suggest — `algebra-store.mjs:2652` — because it would delete the `z_j=0` disk).
+**Footprint:** `algebra-store.mjs` (new `saturateMobius` op + provenance `saturate`; append-column); optionally
+record the dropped factors at generation (`qd-equations.mjs`, closing A-1) or reconstruct them from the pole
+structure. Worker-offload like other heavy ops (or keep sync — saturation of these small systems is cheap).
+**Tests:** vitest — the disk column, after `saturateMobius`, classifies realCount 2 (not 4); a genuine
+interior solution is retained; `z_j=0` disk NOT deleted. Golden the disk.
+**Acceptance:** the canonical disk counts exactly after the op; no genuine solution dropped; gate green.
+**Risk:** MED — saturate by the *right* factors only; test-guarded by the disk golden + a retain-genuine test.
 
 ### Slice 4 — Structured `rigor` verdict field + colored `=`/`≤`/`≈`/`⚠` badge (HIGH UX/rigor) — [G-1, G-2, D-2]
 **Goal:** the verdict card is one flat text node (`algebra-canvas.mjs:438`), so a certified `=` and an

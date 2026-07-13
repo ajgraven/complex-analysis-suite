@@ -46,6 +46,22 @@ modulo stated equivalences** — never "unique among solutions found".
         reject-before-filters + `poleOut` counter + rej-summary). Test `vitest/qd-node-location.test.ts` (15).
         **Gate GREEN: lint/typecheck/test/build all 0; 1295 tests (was 1280, +15), 148 files, no regressions.**
 
+  - [x] **S2 — honest count labeling + gauge-pin honesty** [C-1, B-1, A-2]. DONE + committed. `doClassify(==1)`
+        + `doAutoSolve` + the track badge (`_verdictBadge`) now say "real algebraic solution(s) — an upper bound
+        on #QD; run Certify univalence", not "quadrature domains"; the badge drops the green "✓ 1 QD"/'unique'
+        state for the raw count. The w₀-pin ledger label fixed: "rotation gauge"→"center/translation gauge —
+        restricts to domains containing w₀". `algebra-ui.mjs` strings + ledger only (no logic). **Gate GREEN:
+        all 0; 1295 tests, no regression.** Browser-verify verdict wording batched into S4.
+  - [ ] **S3 — Möbius saturation as a first-class admissibility DAG op** [B-1, A-1]. RE-SCOPED (see decision).
+  - [ ] **S4** rigor field + badge · **S5** orchestrator · **S6** export guard + LOW/MED batch.
+
+**Decision (post-S1 reorder):** S1's strict `|z_j|<1` gate already makes the AUTHORITATIVE verdict (Certify
+univalence) correct on the disk (rejects z=±1 + gauge-quotients to "unique ✓"). So B-1's residual harm is the
+WRONG LABEL on the raw count, not the number ⇒ do labeling (S2) before saturation. And saturation is delivered
+as an explicit DAG op (S3), NOT baked into `currentReimSystem` (which would silently change solveReal/resolvent/
+spuriousFactors + cross the worker-parity boundary). `saturate` by the Möbius factors is safe (disjoint from the
+genuine `|z_j|<1` locus) — distinct from the store's correct refusal to saturate by `z_j` (`algebra-store.mjs:2652`).
+
 **Branch strategy:** ALL review work (docs + code slices) accumulates on `algebra-maturity-review` (the branch
 the prompt directed me to create; the re-entrant STATE lives here). Each code slice is gate-green before commit.
 NO mid-review merges to master — the branch is the deliverable; a single PR (or the user's call) closes it out.
