@@ -110,3 +110,39 @@ describe("mvHenselLift — irreducible + preconditions", () => {
     expect(r.reason).toMatch(/non-monic/);
   });
 });
+
+// The second-reduction differential (roadmap #19 n-variate P5): factoring the SAME polynomial with a
+// DIFFERENT main variable takes a different univariate base, a different evaluation point, and a different
+// lift order — so a reduction-dependent bug in the lift or recombination would make the two disagree. The
+// factor set must match up to ℚ(i) units. Uses polynomials monic in several variables.
+describe("mvHenselLift — second-reduction differential (different main variable ⇒ same factor set)", () => {
+  const iC2 = MPoly.constant(new Gaussian(Rational.fromInt(0), Rational.fromInt(1)));
+  const w = MPoly.variable("w");
+  const assoc = (p: any, q: any): boolean => {
+    try { const r = S.mpolyExactDiv(q, p); return r.vars().size === 0 && !r.isZero(); } catch (e) { return false; }
+  };
+  const sameSetAssoc = (a: any[], b: any[]): boolean => {
+    if (a.length !== b.length) return false;
+    const used = new Array(a.length).fill(false);
+    for (const e of b) {
+      let hit = -1;
+      for (let i = 0; i < a.length; i++) if (!used[i] && assoc(a[i], e)) { hit = i; break; }
+      if (hit < 0) return false;
+      used[hit] = true;
+    }
+    return true;
+  };
+  const cases: Array<[any, string, string]> = [
+    [x.add(y).add(z).mul(x.sub(y).add(z)), "x", "z"],                                   // (x+y+z)(x−y+z)
+    [x.sub(y).add(I(2).mul(z)).mul(x.add(iC2.mul(y)).sub(z)).mul(x.add(y).add(z).sub(I(1))), "x", "y"], // 3-factor ℚ(i)
+    [x.add(y).add(z).add(w).mul(x.sub(y).add(z).sub(w)), "x", "w"],                     // 4-variate
+  ];
+  for (const [f, v1, v2] of cases) {
+    it(`same set factoring in ${v1} vs ${v2}`, () => {
+      const a = mvHenselLift(f, v1), b = mvHenselLift(f, v2);
+      expect(a.ok).toBe(true);
+      expect(b.ok).toBe(true);
+      expect(sameSetAssoc(a.factors, b.factors)).toBe(true);
+    });
+  }
+});

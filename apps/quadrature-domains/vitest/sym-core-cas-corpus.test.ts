@@ -16,7 +16,7 @@ import _QD from "../app/solver.mjs";
 import "../app/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
-const { MPoly, monomialOrder, buchberger, reduceGroebner, resultant, realRootCount, factorBivariate } = S;
+const { MPoly, monomialOrder, buchberger, reduceGroebner, resultant, realRootCount, factorBivariate, factorMultivariate, mpolyExactDiv } = S;
 
 const corpus: any = JSON.parse(readFileSync(fileURLToPath(new URL("./fixtures/cas-corpus.json", import.meta.url)), "utf8"));
 
@@ -96,6 +96,35 @@ describe(`external-CAS golden corpus (${corpus._generatedBy})`, () => {
         const res = factorBivariate(f, "x", "y");
         expect(res.ok).toBe(true);
         expect(res.factors.map(canonMPoly).sort()).toEqual(golden);
+      });
+    }
+  });
+
+  // Multivariate (≥3-variable) ℚ(i) factorization (roadmap #19 n-variate): factorMultivariate's factor
+  // SET must match Sympy's factor(..., gaussian=True). factorMultivariate canonicalizes each factor monic
+  // in its internally-chosen main variable, so compare up to ℚ(i) units (p | q and q | p).
+  const assoc = (p: any, q: any): boolean => {
+    try { const r = mpolyExactDiv(q, p); return r.vars().size === 0 && !r.isZero(); } catch (e) { return false; }
+  };
+  const sameSetAssoc = (a: any[], b: any[]): boolean => {
+    if (a.length !== b.length) return false;
+    const used = new Array(a.length).fill(false);
+    for (const e of b) {
+      let hit = -1;
+      for (let i = 0; i < a.length; i++) if (!used[i] && assoc(a[i], e)) { hit = i; break; }
+      if (hit < 0) return false;
+      used[hit] = true;
+    }
+    return true;
+  };
+  describe("multivariate (≥3-var) factorization over ℚ(i) matches Sympy factor(gaussian=True)", () => {
+    for (const fc of corpus.multivariateFactorizations || []) {
+      it(`factor( [${fc.vars}] , ${JSON.stringify(fc.poly)} )`, () => {
+        const f = MPoly.fromTermList(fc.poly);
+        const golden = fc.factors.map((t: any) => MPoly.fromTermList(t));
+        const res = factorMultivariate(f);
+        expect(res.ok).toBe(true);
+        expect(sameSetAssoc(res.factors, golden)).toBe(true);
       });
     }
   });
