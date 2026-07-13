@@ -60,6 +60,20 @@ describe("QD.Sym.curveGenus", () => {
     expect(r.genus).toBe(null);
   });
 
+  it("reports absolute irreducibility (roadmap #19): smooth curves are irreducible", () => {
+    expect(curveGenus(x.pow(2).add(y.pow(2)).sub(I(1)), "x", "y").irreducible).toBe(true);   // conic
+    expect(curveGenus(y.pow(2).sub(x.pow(3)).add(x), "x", "y").irreducible).toBe(true);       // elliptic cubic
+    expect(curveGenus(x, "x", "y").irreducible).toBe(true);                                    // a line
+  });
+
+  it("an absolutely REDUCIBLE curve x²−y² (two lines) → irreducible:false, genus null", () => {
+    const r = curveGenus(x.pow(2).sub(y.pow(2)), "x", "y");
+    expect(r.ok).toBe(true);
+    expect(r.irreducible).toBe(false);
+    expect(r.genus).toBe(null);
+    expect(r.rational).toBe(null);
+  });
+
   it("honest failures: an extra variable, and a constant", () => {
     expect(curveGenus(x.add(y).add(V("z")), "x", "y").ok).toBe(false);
     expect(curveGenus(I(3), "x", "y").ok).toBe(false);

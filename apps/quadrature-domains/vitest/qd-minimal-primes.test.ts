@@ -58,12 +58,28 @@ describe("QD.Sym.minimalPrimes", () => {
     expect(primeKeys(r, ["x"])).toEqual(expectKeys([[V("x").pow(2).sub(I(2))]], ["x"]));
   });
 
-  it("⟨x²+y²⟩: the ℚ(i) factorizer is univariate/monomial only, so it can't split a bivariate — honest 1 uncertified component", () => {
+  it("⟨x²+y²⟩ → ⟨x−iy⟩ ∩ ⟨x+iy⟩ (genuine bivariate factoring, roadmap #19 P4)", () => {
     const r = minimalPrimes([V("x").pow(2).add(V("y").pow(2))], { vars: ["x", "y"] });
     expect(r.ok).toBe(true);
-    expect(r.count).toBe(1);                                    // (x−iy)(x+iy) is invisible to the factorizer
-    expect(r.complete).toBe(false);                            // ⇒ honestly NOT certified prime (it is reducible over ℂ)
-    expect(primeKeys(r, ["x", "y"])).toEqual(expectKeys([[V("x").pow(2).add(V("y").pow(2))]], ["x", "y"]));
+    expect(r.count).toBe(2);                                    // now split — (x−iy)(x+iy)
+    expect(r.complete).toBe(true);                             // both components linear ⇒ certified prime
+    const xmiy = V("x").sub(iU.mul(V("y"))), xpiy = V("x").add(iU.mul(V("y")));
+    expect(primeKeys(r, ["x", "y"])).toEqual(expectKeys([[xmiy], [xpiy]], ["x", "y"]));
+  });
+
+  it("⟨x²+y²−1⟩ (irreducible conic) → a single component, now CERTIFIED prime (bivariate irreducibility, #19 P4)", () => {
+    const r = minimalPrimes([V("x").pow(2).add(V("y").pow(2)).sub(I(1))], { vars: ["x", "y"] });
+    expect(r.ok).toBe(true);
+    expect(r.count).toBe(1);
+    expect(r.complete).toBe(true);                             // ⟨irreducible g⟩ is prime — now provable
+    expect(primeKeys(r, ["x", "y"])).toEqual(expectKeys([[V("x").pow(2).add(V("y").pow(2)).sub(I(1))]], ["x", "y"]));
+  });
+
+  it("⟨x²−2y²⟩ (ℚ(i)-irreducible, absolutely reducible) → one certified-prime component", () => {
+    const r = minimalPrimes([V("x").pow(2).sub(I(2).mul(V("y").pow(2)))], { vars: ["x", "y"] });
+    expect(r.ok).toBe(true);
+    expect(r.count).toBe(1);                                    // ℚ(i)-irreducible ⇒ ⟨g⟩ is prime over ℚ(i)
+    expect(r.complete).toBe(true);
   });
 
   it("inconsistent ⟨x, x−1⟩ → no components (empty variety)", () => {

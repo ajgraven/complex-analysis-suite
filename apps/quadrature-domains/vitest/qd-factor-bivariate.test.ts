@@ -8,7 +8,7 @@ import _QD from "../app/solver.mjs";
 import "../app/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
-const { MPoly, Gaussian, Rational, factorBivariate } = S;
+const { MPoly, Gaussian, Rational, factorBivariate, factor } = S;
 
 const x = MPoly.variable("x");
 const y = MPoly.variable("y");
@@ -136,5 +136,34 @@ describe("factorBivariate — content, and preconditions", () => {
     expect(() => factorBivariate(x.sub(y).pow(2), "x", "y")).toThrow(/squarefree/);
     expect(() => factorBivariate(x.pow(2).sub(I(1)), "x", "y")).toThrow(/positive degree/);
     expect(() => factorBivariate(x.pow(2).sub(y.pow(2)), "x", "x")).toThrow(/must differ/);
+  });
+});
+
+// Phase 4: the public factor() now routes genuine bivariate polynomials through factorBivariate (keeping
+// the monomial / separable / univariate fast-paths). factor() returns the DISTINCT (radical) factors.
+describe("factor() integration — genuine bivariate routing (roadmap #19 P4)", () => {
+  it("factor(x²−y²) → { x−y, x+y }", () => {
+    const r = factor(x.pow(2).sub(y.pow(2)));
+    expect(r.ok).toBe(true);
+    expect(sameSet(r.factors, [x.sub(y), x.add(y)])).toBe(true);
+  });
+  it("factor(x²+y²) → { x−iy, x+iy } (over ℚ(i))", () => {
+    const r = factor(x.pow(2).add(y.pow(2)));
+    expect(r.ok).toBe(true);
+    expect(sameSet(r.factors, [x.sub(iy), x.add(iy)])).toBe(true);
+  });
+  it("factor(x⁴−y⁴) → 4 factors", () => {
+    const r = factor(x.pow(4).sub(y.pow(4)));
+    expect(r.ok).toBe(true);
+    expect(sameSet(r.factors, [x.sub(y), x.add(y), x.sub(iy), x.add(iy)])).toBe(true);
+  });
+  it("factor(y·(x²−y²)) → { y, x−y, x+y } (monomial peel THEN bivariate split)", () => {
+    const r = factor(y.mul(x.pow(2).sub(y.pow(2))));
+    expect(r.ok).toBe(true);
+    expect(sameSet(r.factors, [y, x.sub(y), x.add(y)])).toBe(true);
+  });
+  it("an irreducible bivariate stays whole (ok:false): x²+y²−1, and ℚ(i)-irreducible x²−2y²", () => {
+    expect(factor(x.pow(2).add(y.pow(2)).sub(I(1))).ok).toBe(false);
+    expect(factor(x.pow(2).sub(I(2).mul(y.pow(2)))).ok).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 # Multivariate (bivariate-first) polynomial factorization over ℚ(i) — design plan
 
-> **Status: IN PROGRESS.** Phase 0 (spike) ✅ validated; Phase 1 (infra) ✅ merged; Phase 2 (absolute factor *count* + irreducibility) ✅ merged; Phase 3 (ℚ(i)-rational factor *extraction*, `factorBivariate`) ✅ merged. Roadmap item #19 (the "genuine multivariate factorizer" that
+> **Status: IN PROGRESS.** Phase 0 (spike) ✅ validated; Phase 1 (infra) ✅ merged; Phase 2 (absolute factor *count* + irreducibility) ✅ merged; Phase 3 (ℚ(i)-rational factor *extraction*, `factorBivariate`) ✅ merged; Phase 4 (integrate into `factor()` + certify bivariate components in `minimalPrimes` / `triangularDecomposition` / `curveGenus`) ✅ merged. Roadmap item #19 (the "genuine multivariate factorizer" that
 > several done tiers were capped by). Decisions recorded (2026-07-13): **(a) Gao's PDE / linear-algebra
 > method first** (it plays to this engine's linear-algebra strength and deletes the two most bug-prone
 > subsystems); **(b) the classical Zassenhaus–Hensel path ships as a Phase-5 independent cross-check
@@ -198,9 +198,15 @@ Kept as an independent cross-check. Write `f ∈ ℚ(i)[y][x]`, primitive and sq
   to a unit). Goldens `vitest/qd-factor-bivariate.test.ts` (battery + real & ℚ(i) round-trips +
   field-sensitivity: `x²+y²`→`(x∓iy)`, `x²−2y²` stays one ℚ(i)-irreducible factor + content + preconditions).
   Sympy cross-check deferred to the P5 oracle. Multiplicities (non-squarefree input) deferred.
-- **Phase 4 — integrate.** Route genuine bivariate through the new path inside `factor` (keep the
-  monomial / separable / univariate fast-paths and the exact-division verify); flip the honest `complete`
-  flags in `minimalPrimes` / `curveGenus` / `triangularDecomposition` now that factoring is genuine.
+- **Phase 4 — integrate ✅ (merged).** `_factorRec` gained a bivariate branch (method 4): a genuine
+  2-variable remainder is routed through `factorBivariate` and its factors spliced (the monomial /
+  separable / univariate fast-paths and the final exact-division verify are untouched; degree ≤ 12 and
+  ≤ 300-term guards keep the Ruppert nullspace bounded — a curve past them falls through and is pushed
+  whole, honestly uncertified). `minimalPrimes` now certifies a principal bivariate hypersurface component
+  as prime (⟨g⟩ prime ⟺ g irreducible over ℚ(i)), so `complete` flips true on the `x²+y²`-type ideals it
+  previously could not certify; `triangularDecomposition` inherits it. `curveGenus` reports an
+  `irreducible` field (via `bivariateAbsFactorCount`) and returns `genus:null` for an absolutely-reducible
+  input. Tests: `factor()` integration cases + updated `qd-minimal-primes` / `qd-curve-genus` goldens.
 - **Phase 5 — the Hensel cross-check oracle** (§6): implement Option A and add a differential test that
   factors a fuzz corpus with both engines and asserts identical factor sets.
 - **Later / separate:** general n-variate.

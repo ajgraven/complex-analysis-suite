@@ -1534,9 +1534,10 @@ module.exports = async function run() {
     ok('factor: (x−1)²(x−2) → distinct radical factors {x−1, x−2}, each dividing',
        f6.ok && f6.factors.length === 2 && f6.factors.every((f) => divides(f, p6)));
 
-    // irreducible: xy+1 (separable test keeps it whole; no monomial/univariate split)
+    // irreducible: xy+1 — the bivariate factorizer (roadmap #19) confirms it is irreducible over ℚ(i),
+    // so it comes back whole (r = 1, unit content ⇒ no split).
     const f5 = S.factor(x.mul(y).add(k(1)), opts);
-    ok('factor: xy+1 is irreducible by our methods → ok:false', !f5.ok && f5.factors.length === 1);
+    ok('factor: xy+1 is irreducible over ℚ(i) → ok:false', !f5.ok && f5.factors.length === 1);
 
     // a nonzero constant has no nontrivial factorization
     ok('factor: a constant → ok:false', !S.factor(k(3), opts).ok);
