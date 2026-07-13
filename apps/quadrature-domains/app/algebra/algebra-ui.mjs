@@ -910,7 +910,10 @@ const QD = _QD;
         '      <button id="alg-univalence" class="small heavy-op" type="button" title="Certify univalence: solve for the real solutions, reconstruct each candidate Riemann map φ, and test whether it is univalent (schlicht) on 𝔻 — reports how many real solutions are GENUINE quadrature domains (the rest are algebraic solutions whose φ folds or self-intersects)">Certify univalence</button></div>' +
         '    <div class="row" style="flex-wrap:wrap; gap:4px; margin-top:4px;">' +
         '      <label class="small">Resolvent in <select id="alg-resolvent-var" title="The real variable to eliminate to. The resolvent χ_v is the characteristic polynomial of multiplication-by-v on the quotient ring; its roots are v’s values across the solutions."></select></label>' +
-        '      <button id="alg-resolvent" class="small heavy-op" type="button" title="Resolvent / discriminant: the univariate eliminant χ_v(x)=det(x·I − M_v) of the current system in the chosen variable. squareFreePart = distinct v-values; a repeated root (discriminant 0) ⇒ coincident solutions / a degeneracy (e.g. a cusp). NB a repeat can also be fibre multiplicity if v does not separate the solutions.">Resolvent / discriminant</button></div></div>' +
+        '      <button id="alg-resolvent" class="small heavy-op" type="button" title="Resolvent / discriminant: the univariate eliminant χ_v(x)=det(x·I − M_v) of the current system in the chosen variable. squareFreePart = distinct v-values; a repeated root (discriminant 0) ⇒ coincident solutions / a degeneracy (e.g. a cusp). NB a repeat can also be fibre multiplicity if v does not separate the solutions.">Resolvent / discriminant</button></div>' +
+        '    <div class="row" style="flex-wrap:wrap; gap:4px; margin-top:4px;">' +
+        '      <label class="small">Bifurcation over <select id="alg-bifurc-var" title="The real parameter to vary. Reports how the number of real solutions (= quadrature domains) changes as this variable ranges over ℝ: the critical values where the count jumps, and the count on each interval. Needs a 1-parameter family — a system that becomes zero-dimensional once this variable is fixed."></select></label>' +
+        '      <button id="alg-bifurc" class="small heavy-op" type="button" title="1-parameter bifurcation: the EXACT critical parameter values (eliminant border polynomial + Sturm isolation) and the CERTIFIED real-solution count (Hermite trace form) on each interval between them.">Bifurcation (real count)</button></div></div>' +
         '  </details>' +
         // 5. Univalence constraints (2-column grid palette)
         '  <details class="algebra-section">' +
@@ -983,6 +986,8 @@ const QD = _QD;
       $('#alg-univalence').addEventListener('click', doCertifyUnivalence);
       $('#alg-resolvent').addEventListener('click', doResolvent);
       $('#alg-resolvent-var').addEventListener('mousedown', refreshResolventVars);
+      { const bb = $('#alg-bifurc'); if (bb) bb.addEventListener('click', doBifurcation); }
+      { const bv = $('#alg-bifurc-var'); if (bv) bv.addEventListener('mousedown', refreshBifurcVars); }
       $('#alg-cancel').addEventListener('click', cancelOp);
       $('#alg-gauge-elim').addEventListener('click', () => {
         if (!ensureSeed()) return;
@@ -1387,7 +1392,7 @@ const QD = _QD;
     // Cancel, and routes progress to the status line.
     let _abort = null;
     function setBusy(on, label) {
-      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-classify', 'alg-univalence', 'alg-resolvent', 'alg-autosolve',
+      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-classify', 'alg-univalence', 'alg-resolvent', 'alg-bifurc', 'alg-autosolve',
         'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-real-detect', 'alg-propagate-all', 'alg-val-apply', 'alg-def-apply', 'alg-abbrev', 'alg-eq-apply']
         .forEach((id) => { const b = $('#' + id); if (b) b.disabled = on; });
       const pal = $('#alg-palette'); if (pal) pal.querySelectorAll('button').forEach((b) => { b.disabled = on; });
@@ -2019,6 +2024,49 @@ const QD = _QD;
         if (canvas) canvas.setVerdict({ text, solutionsLatex: mathLatex });
         toast(text, r.degenerate ? { kind: 'error' } : {});
       }, 20);
+    }
+
+    // Repopulate the bifurcation parameter picker from the current column's reim variables.
+    function refreshBifurcVars() {
+      const sel = $('#alg-bifurc-var'); if (!sel) return;
+      let vars = []; try { vars = store.reimVariables(null, { paramValues: hDataParamValues() }) || []; } catch (e) { /* none */ }
+      const prev = sel.value;
+      sel.innerHTML = vars.map((v) => '<option value="' + v + '">' + friendlyReim(v) + '</option>').join('');
+      if (vars.indexOf(prev) !== -1) sel.value = prev;
+    }
+    // 1-parameter BIFURCATION over a chosen real variable: how the number of real solutions (=
+    // quadrature domains) changes as that parameter ranges over ℝ (store.parametricBifurcation →
+    // Sym.parametricRealCount1D: eliminant border polynomial + Sturm critical values + a Hermite
+    // count per interval). Off the main thread (heavy Gröbner / elimination), cancellable. Counts
+    // are EXACT (=); critical values are isolating boxes (≤, shown ≈ when not an exact rational).
+    function doBifurcation() {
+      if (_abort) return;
+      if (!ensureSeed()) return;
+      clearError();
+      refreshBifurcVars();
+      const sel = $('#alg-bifurc-var'); const v = sel && sel.value;
+      if (!v) { showError('Bifurcation: no real variable available — reduce to a finite (reality-assumed) system first.'); return; }
+      const ctrl = _newAbort(); _abort = ctrl;
+      setBusy(true, 'Computing the bifurcation…');
+      store.parametricBifurcationAsync(null, v, { paramValues: hDataParamValues() }, { signal: ctrl && ctrl.signal }).then((r) => {
+        _abort = null; setBusy(false); setStatus('');
+        if (r.aborted) { toast('Cancelled'); return; }
+        if (!r.ok) { showError('Bifurcation: ' + withGuidance(r.reason || 'unavailable')); return; }
+        const fv = friendlyReim(v);
+        const fmt = (x) => (x == null ? '' : Math.round(x * 1e6) / 1e6);
+        const parts = r.cells.map((c) => {
+          const lo = c.lo == null ? '−∞' : fmt(c.lo), hi = c.hi == null ? '+∞' : fmt(c.hi);
+          return (c.ok ? c.realCount : '?') + ' on (' + lo + ', ' + hi + ')';
+        });
+        const critStr = r.criticalValues.length
+          ? r.criticalValues.map((c) => (c.exact ? '' : '≈') + fmt(c.approx)).join(', ')
+          : '(none — the count is constant)';
+        let text = 'Bifurcation in ' + fv + ': real-solution count = ' + parts.join('; ') + '. Critical ' + fv + ' = ' + critStr + '.';
+        if (r.crosschecked === false) text += ' ⚠ the eliminant did not fully cross-check (a separating form was not confirmed) — the critical set may be incomplete, though each interval’s count is still exact at its sample.';
+        setStatus(text);
+        if (canvas) canvas.setVerdict({ text });
+        toast('Bifurcation computed (' + r.cells.length + ' interval' + (r.cells.length === 1 ? '' : 's') + ').');
+      }, (e) => { _abort = null; setBusy(false); setStatus(''); showError('Bifurcation: ' + ((e && e.message) || String(e))); });
     }
 
     // Report the dimension / solution count of the current equality system, off the

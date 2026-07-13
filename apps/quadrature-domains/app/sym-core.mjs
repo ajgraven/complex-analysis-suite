@@ -3295,6 +3295,7 @@ import _QD from './solver.mjs';
       const sys = polys.map((p) => subT(p, t0)).filter((p) => !p.isZero());
       try { return realSolutionCount(sys, null, solveVars, opts); } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
     };
+    try {
 
     // 1) separating univariate eliminant f(u,t): eliminate the solve variables from polys ∪ {u − Σcᵢxᵢ};
     //    accept the first candidate whose squarefree eliminant has deg_u = the generic distinct-solution
@@ -3334,23 +3335,31 @@ import _QD from './solver.mjs';
       critical = iso.roots.slice().sort((a, b) => a.lo.sub(b.lo).sign());
     }
 
-    // 4) certified count on each open cell via a rational sample strictly inside it; cross-check f's own
-    //    real-u-root count against Hermite at every sample.
-    const HALF = new Rational(1n, 2n), ONE = RONE;
+    // 4) certified count on each open cell. The count is constant on the open interval, so ANY interior
+    //    point gives it — EXCEPT a measure-zero degeneracy the border polynomial didn't capture (e.g. a
+    //    parameter value where the fiber jumps to positive-dimensional, which realSolutionCount rejects).
+    //    So try several interior samples and take the first that yields a zero-dimensional fiber; only if
+    //    they all fail is the cell honestly ok:false. Cross-check f's own real-u-root count at that sample.
+    const frac = (a, b, num, den) => a.add(b.sub(a).mul(new Rational(BigInt(num), BigInt(den))));
     const fRealRootsAt = (t0) => { const iso = realRootIsolate(subT(f, t0), uName, { tol }); return iso.ok ? iso.count : null; };
+    // interior sample candidates for cell i (left→right); the first that gives a zero-dim fiber wins.
+    const cellSamples = (i) => {
+      if (!critical.length) return genericTs.concat([RZERO]);
+      if (i === 0) return [1, 2, 3, 5].map((d) => critical[0].lo.sub(Rational.fromInt(d)));
+      if (i === critical.length) return [1, 2, 3, 5].map((d) => critical[i - 1].hi.add(Rational.fromInt(d)));
+      const a = critical[i - 1].hi, b = critical[i].lo;
+      return [[1, 2], [1, 3], [2, 3], [1, 4], [3, 4], [2, 5]].map(([n, d]) => frac(a, b, n, d));
+    };
     const cells = []; let crosschecked = true;
     for (let i = 0; i <= critical.length; i++) {
-      let t0;
-      if (!critical.length) t0 = RZERO;
-      else if (i === 0) t0 = critical[0].lo.sub(ONE);
-      else if (i === critical.length) t0 = critical[i - 1].hi.add(ONE);
-      else t0 = critical[i - 1].hi.add(critical[i].lo).mul(HALF);
-      const h = hermiteAt(t0), fc = fRealRootsAt(t0);
+      let h = { ok: false, reason: 'no interior sample gave a zero-dimensional fiber' }, used = null;
+      for (const cand of cellSamples(i)) { if (used === null) used = cand; const hh = hermiteAt(cand); if (hh.ok) { h = hh; used = cand; break; } }
+      const fc = h.ok ? fRealRootsAt(used) : null;
       if (h.ok && fc != null && fc !== h.realCount) crosschecked = false;
       cells.push({
         lo: i === 0 ? -Infinity : critical[i - 1].approx,
         hi: i === critical.length ? Infinity : critical[i].approx,
-        sample: t0.toNumber(), realCount: h.ok ? h.realCount : null,
+        sample: used != null ? used.toNumber() : null, realCount: h.ok ? h.realCount : null,
         complexCount: h.ok ? h.complexCount : null, ok: !!h.ok, reason: h.ok ? undefined : h.reason,
       });
     }
@@ -3359,6 +3368,7 @@ import _QD from './solver.mjs';
       criticalValues: critical.map((r) => ({ lo: r.lo.toNumber(), hi: r.hi.toNumber(), exact: !!r.exact, approx: r.approx })),
       cells, crosschecked,
     };
+    } catch (e) { return fail((e && e.message) || String(e)); }   // never throw (would crash the worker)
   }
 
   // ---------------------------------------------------------------------------
