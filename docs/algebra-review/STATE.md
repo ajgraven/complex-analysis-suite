@@ -86,13 +86,16 @@ domains, or only among solutions found?
 
 | Track | File | Scope | Status |
 |---|---|---|---|
-| A system-generation | audit/A-system-generation.md | qd-equations, qd-constraints, qd-varscheme, reim/conjugate models, gauge, point-functional | dispatched |
-| B elimination-decomposition | audit/B-elimination-decomposition.md | sym-core Gröbner/resultant/saturate/elim/minimalPrimes/triangular/radical; denom clearing, excluded loci, positive-dim | dispatched |
-| C certified-solving-counting | audit/C-certified-solving-counting.md | solveZeroDim/RUR/realSolutionCount/solveRealCertified/parametricRealCount1D/discriminantVariety/Schur-Cohn | dispatched |
-| D univalence-admissibility | audit/D-univalence-admissibility.md | univalence, qd-constraints univalence forms, doCertifyUnivalence chain, pole/node location, boundary collisions | dispatched |
-| E reconstruction-verification | audit/E-reconstruction-verification.md | phiFromAlgebraSolution, exact Schwarz curve, exact data verification, sameDomain dedup | dispatched |
-| F store-worker-export | audit/F-store-worker-export.md | algebra-store DAG, sym-worker cancel/parity/determinism, cas-export round-trip, PROV_STORE/UI | dispatched |
-| G ui-workflow | audit/G-ui-workflow.md | algebra-ui/canvas, verdict card, rigor badges, terminology, first-time-user walk (feeds Phase 4) | dispatched |
+| A system-generation | audit/A-system-generation.md | qd-equations, qd-constraints, qd-varscheme, reim/conjugate models, gauge, point-functional | RUNNING |
+| B elimination-decomposition | audit/B-elimination-decomposition.md | sym-core Gröbner/resultant/saturate/elim/minimalPrimes/triangular/radical; denom clearing, excluded loci, positive-dim | RUNNING |
+| C certified-solving-counting | audit/C-certified-solving-counting.md | solveZeroDim/RUR/realSolutionCount/solveRealCertified/parametricRealCount1D/discriminantVariety/Schur-Cohn | RUNNING |
+| D univalence-admissibility | audit/D-univalence-admissibility.md | univalence, qd-constraints univalence forms, doCertifyUnivalence chain, pole/node location, boundary collisions | RUNNING |
+| E reconstruction-verification | audit/E-reconstruction-verification.md | phiFromAlgebraSolution, exact Schwarz curve, exact data verification, sameDomain dedup | RUNNING |
+| F store-worker-export | audit/F-store-worker-export.md | algebra-store DAG, sym-worker cancel/parity/determinism, cas-export round-trip, PROV_STORE/UI | RUNNING |
+| G ui-workflow | audit/G-ui-workflow.md | algebra-ui/canvas, verdict card, rigor badges, terminology, first-time-user walk (feeds Phase 4) | RUNNING |
+
+All 7 dispatched 2026-07-13 as background general-purpose subagents (read-only; each persists to its
+audit/<track>.md before returning). Orchestrator integrates on completion.
 
 Each subagent persists its full findings (severity + evidence: file:line / failing input / repro test) to its
 file BEFORE returning. Orchestrator alone integrates + adjudicates + commits.
@@ -105,5 +108,7 @@ file BEFORE returning. Orchestrator alone integrates + adjudicates + commits.
 
 ## Next action
 
-Dispatch the 7 Phase-1 audit subagents (parallel, read-only). On completion, integrate into `AUDIT.md`
-(Phase 2). Record final baseline test/build exit codes here first.
+Phase 1 audit subagents are RUNNING (all 7 dispatched). As each completes, READ its `audit/<track>.md`
+(NOT the transcript .output file) and integrate into `AUDIT.md`. When all 7 are in, adjudicate severity,
+write `AUDIT.md` (workflow + claim-vs-impl matrix + findings taxonomy) and `PLAN.md` (value-ordered slices),
+commit both, then begin Phase 3 implementation with the highest-value self-contained slice.
