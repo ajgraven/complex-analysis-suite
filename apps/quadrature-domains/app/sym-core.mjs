@@ -761,6 +761,65 @@ import _QD from './solver.mjs';
   }
   // Monic univariate GCD of two polynomials in the single variable v over ℚ(i).
   function univariateGCD(p, q, v) { return _uniFromArr(_uniGCDArr(_uniToArr(p, v), _uniToArr(q, v)), v); }
+  // ── ascending Gaussian-coefficient array arithmetic over ℚ(i)[x] (for the Hensel oracle, roadmap #19 P5) ──
+  // (These mirror the real-ℚ Sturm arrays, but over ℚ(i). Arrays are ascending [c₀,c₁,…]; [] is zero.)
+  function _gaTrim(a) { a = a.slice(); while (a.length && a[a.length - 1].isZero()) a.pop(); return a; }
+  function _gaMul(a, b) {
+    if (!a.length || !b.length) return [];
+    const out = new Array(a.length + b.length - 1).fill(Gaussian.fromInt(0));
+    for (let i = 0; i < a.length; i++) for (let j = 0; j < b.length; j++) out[i + j] = out[i + j].add(a[i].mul(b[j]));
+    return _gaTrim(out);
+  }
+  function _gaSub(a, b) {
+    const n = Math.max(a.length, b.length), out = [];
+    for (let i = 0; i < n; i++) out.push((i < a.length ? a[i] : Gaussian.fromInt(0)).sub(i < b.length ? b[i] : Gaussian.fromInt(0)));
+    return _gaTrim(out);
+  }
+  // a = q·b + r with deg r < deg b, over the field ℚ(i). b must be nonzero.
+  function _gaDivRem(a, b) {
+    let r = _gaTrim(a.slice()); const bb = _gaTrim(b.slice());
+    if (!bb.length) throw new Error('_gaDivRem: division by zero');
+    const lcb = bb[bb.length - 1];
+    const q = new Array(Math.max(0, r.length - bb.length + 1)).fill(Gaussian.fromInt(0));
+    while (r.length >= bb.length && r.length) {
+      const co = r[r.length - 1].div(lcb), shift = r.length - bb.length;
+      q[shift] = co;
+      for (let i = 0; i < bb.length; i++) r[shift + i] = r[shift + i].sub(co.mul(bb[i]));
+      r = _gaTrim(r);
+    }
+    return { q: _gaTrim(q), r };
+  }
+  // Inverse of `a` modulo `m` over ℚ(i)[x] (extended Euclid), reduced to deg < deg m; null if gcd(a,m) ≠ unit.
+  function _gaModInv(a, m) {
+    let R0 = _gaTrim(a.slice()), R1 = _gaTrim(m.slice());
+    let S0 = [Gaussian.fromInt(1)], S1 = [];
+    while (R1.length) {
+      const { q, r } = _gaDivRem(R0, R1);
+      R0 = R1; R1 = r;
+      const ns = _gaSub(S0, _gaMul(q, S1));
+      S0 = S1; S1 = ns;
+    }
+    if (R0.length !== 1) return null;                          // gcd non-constant ⇒ not coprime
+    const g = R0[0];                                           // S0·a ≡ g (mod m) ⇒ (S0/g)·a ≡ 1
+    return _gaDivRem(S0.map((c) => c.div(g)), m).r;
+  }
+  // Drop every term of an MPoly whose exponent of `v` is ≥ N (truncate mod v^N).
+  function _truncInVar(p, v, N) {
+    const out = new MPoly();
+    for (const [key, t] of p.terms) if ((t.mono.get(v) || 0) < N) out.terms.set(key, { mono: new Map(t.mono), coeff: t.coeff });
+    return out;
+  }
+  // All size-k index subsets of `arr` (k small; used by Hensel recombination).
+  function _subsetsOfSize(arr, k) {
+    const out = [];
+    const rec = (start, acc) => {
+      if (acc.length === k) { out.push(acc.slice()); return; }
+      for (let i = start; i < arr.length; i++) { acc.push(arr[i]); rec(i + 1, acc); acc.pop(); }
+    };
+    rec(0, []);
+    return out;
+  }
+
   // Square-free part (radical) of a univariate p in v: p / gcd(p, p′). Same zero set as
   // p but every root simple. p must be univariate in v (else returns p unchanged).
   function squareFreePart(p, v) {
@@ -1362,6 +1421,94 @@ import _QD from './solver.mjs';
       try { complete = mpolyExactDiv(fp, prod).vars().size === 0; } catch (e) { complete = false; }
     }
     return { ok: factors.length > 0, factors, complete, absoluteCount: r, content };
+  }
+
+  // ── INDEPENDENT bivariate factorization ORACLE via Zassenhaus–Hensel (roadmap #19 Phase 5;
+  // docs/MULTIVARIATE_FACTORING.md §6). This is a deliberately DIFFERENT algorithm from factorBivariate
+  // (which uses the Ruppert PDE + a resultant eigenvalue) so a shared algorithm-level bug is unlikely to
+  // survive a differential comparison of the two: evaluate y at a good point, factor UNIVARIATELY over
+  // ℚ(i), Hensel-LIFT that coprime factorization in the y-adic (y − y₀) direction, then RECOMBINE by exact
+  // trial division. It reuses only the low-level primitives (Gaussian arithmetic, `_qiFactor`).
+  //
+  // SCOPE (an oracle, not the primary factorizer): requires f MONIC in xVar (a non-constant leading
+  // xVar-coefficient ⇒ { ok:false } — the classical leading-coefficient distribution is out of scope) and
+  // squarefree in xVar. Returns { ok:true, factors:[monic-in-x MPoly] } or { ok:false, reason }. The
+  // factors match factorBivariate's set on every supported input (the differential test asserts this).
+  function henselFactorBivariate(f, xVar, yVar) {
+    if (!(f instanceof MPoly) || f.isZero()) return { ok: false, reason: 'zero or non-MPoly' };
+    for (const v of f.vars()) if (v !== xVar && v !== yVar) return { ok: false, reason: 'not bivariate in (' + xVar + ', ' + yVar + ')' };
+    let fp = bivariatePrimitivePart(f, xVar);
+    const m = fp.degreeIn(xVar);
+    if (m < 1) return { ok: false, reason: 'not positive-degree in ' + xVar };
+    const lcx = fp.coeffsIn(xVar)[m];
+    if (lcx.vars().size !== 0) return { ok: false, reason: 'non-monic in ' + xVar + ' (leading coeff depends on ' + yVar + ')' };
+    const lcg = lcx.terms.get('') ? lcx.terms.get('').coeff : Gaussian.fromInt(1);
+    fp = fp.scale(Gaussian.fromInt(1).div(lcg));               // monic in xVar
+    if (fp.degreeIn(yVar) === 0) {                             // genuinely univariate in xVar
+      return { ok: true, factors: _qiFactor(fp, xVar).map((p) => _canonicalFactor(p, xVar)) };
+    }
+    if (!bivariateSquarefreeInX(fp, xVar)) return { ok: false, reason: 'not squarefree in ' + xVar };
+    // Choose y₀ so f(x, y₀) stays degree m and squarefree in x (avoids disc_x / lc_x zeros).
+    const cands = [0, 1, -1, 2, -2, 3, -3].map((k) => Gaussian.fromInt(k))
+      .concat([new Gaussian(RZERO, Rational.fromInt(1)), new Gaussian(RZERO, Rational.fromInt(-1))]); // ±i
+    let y0 = null, F0 = null, Fw = null;
+    for (const c of cands) {
+      const f0 = fp.subst({ [yVar]: MPoly.constant(c) });
+      if (f0.degreeIn(xVar) !== m) continue;
+      if (univariateGCD(f0, f0.derivativeIn(xVar), xVar).degreeIn(xVar) !== 0) continue; // not squarefree ⇒ skip
+      y0 = c; F0 = f0;
+      Fw = fp.subst({ [yVar]: MPoly.variable(yVar).add(MPoly.constant(c)) });            // lift around Y = y − y₀ = 0
+      break;
+    }
+    if (y0 === null) return { ok: false, reason: 'no squarefree evaluation point found' };
+    const u = _qiFactor(F0, xVar);                             // monic, distinct ⇒ pairwise coprime
+    if (u.length <= 1) return { ok: true, factors: [_canonicalFactor(fp, xVar)] }; // univariate-irreducible ⇒ f irreducible
+    const n = Fw.degreeIn(yVar), N = n + 1;                    // true factors have deg_y ≤ n ⇒ lift to precision N
+    const uArr = u.map((ui) => _uniToArr(ui, xVar));
+    // Bézout: σ_i = (∏_{j≠i} u_j)^{-1} mod u_i, so Σ σ_i ∏_{j≠i} u_j ≡ 1 (the multifactor lift's diophantine solver).
+    const sigma = [];
+    for (let i = 0; i < u.length; i++) {
+      let prod = [Gaussian.fromInt(1)];
+      for (let j = 0; j < u.length; j++) if (j !== i) prod = _gaMul(prod, uArr[j]);
+      const inv = _gaModInv(prod, uArr[i]);
+      if (!inv) return { ok: false, reason: 'specialization not coprime (bad y₀)' };
+      sigma.push(inv);
+    }
+    // Linear Hensel lift: maintain g_i ≡ u_i (mod Y), monic in x, with ∏ g_i ≡ Fw (mod Y^{k+1}).
+    const g = u.map((ui) => ui.clone());
+    for (let k = 1; k < N; k++) {
+      let prod = MPoly.fromInt(1);
+      for (const gi of g) prod = _truncInVar(prod.mul(gi), yVar, k + 1);
+      const eco = Fw.sub(prod).coeffsIn(yVar);                 // ascending in Y
+      const e = (k < eco.length) ? eco[k] : MPoly.zero();      // [Y^k](Fw − ∏ g_i), a univariate-in-x poly
+      if (e.isZero()) continue;
+      const eArr = _uniToArr(e, xVar);
+      for (let i = 0; i < u.length; i++) {
+        const delta = _gaDivRem(_gaMul(sigma[i], eArr), uArr[i]).r; // δ_i = σ_i·e mod u_i
+        const dP = _uniFromArr(delta, xVar);
+        if (!dP.isZero()) g[i] = g[i].add(dP.mul(MPoly.variable(yVar).pow(k)));
+      }
+    }
+    // Recombine: the smallest subset whose truncated product divides the remainder is an irreducible factor.
+    const used = new Array(g.length).fill(false), foundShifted = [];
+    let remaining = Fw, d = 1;
+    while (true) {
+      const avail = g.map((_, i) => i).filter((i) => !used[i]);
+      if (!avail.length || d > avail.length) break;
+      let hit = false;
+      for (const S of _subsetsOfSize(avail, d)) {
+        let cand = MPoly.fromInt(1);
+        for (const i of S) cand = _truncInVar(cand.mul(g[i]), yVar, N);
+        let q;
+        try { q = mpolyExactDiv(remaining, cand); } catch (e) { continue; }
+        foundShifted.push(cand); S.forEach((i) => { used[i] = true; }); remaining = q; hit = true; break;
+      }
+      if (!hit) d++;
+    }
+    if (!foundShifted.length) return { ok: true, factors: [_canonicalFactor(fp, xVar)] }; // safety: irreducible
+    // Undo the y-shift (Y → y − y₀) and canonicalize monic-in-x.
+    const factors = foundShifted.map((Fs) => _canonicalFactor(Fs.subst({ [yVar]: MPoly.variable(yVar).sub(MPoly.constant(y0)) }), xVar));
+    return { ok: true, factors };
   }
 
   // RADICAL of a ZERO-DIMENSIONAL ideal (Seidenberg): √I = I + (squarefree(χ_v) : v ∈ vars),
@@ -5278,6 +5425,7 @@ import _QD from './solver.mjs';
     nullspaceRational, bivariateContent, bivariatePrimitivePart, bivariateSquarefreeInX, // #19 factorizer Phase-1 infra (exact ℚ(i) kernel basis + content/primitive/squarefree-in-x)
     bivariateAbsFactorCount, isAbsolutelyIrreducible, // #19 factorizer Phase-2: Gao Ruppert-nullspace absolute (over-ℂ) factor count + absolute-irreducibility test
     factorBivariate, // #19 factorizer Phase-3: ℚ(i)-rational bivariate factorization (resultant-eigenvalue extraction)
+    henselFactorBivariate, // #19 factorizer Phase-5: INDEPENDENT Zassenhaus–Hensel oracle (differential cross-check of factorBivariate)
     solveByEigenvalues, realSolutionCount, parametricRealCount1D, discriminantVariety, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,

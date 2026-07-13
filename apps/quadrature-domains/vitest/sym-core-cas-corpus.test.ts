@@ -16,7 +16,7 @@ import _QD from "../app/solver.mjs";
 import "../app/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
-const { MPoly, monomialOrder, buchberger, reduceGroebner, resultant, realRootCount } = S;
+const { MPoly, monomialOrder, buchberger, reduceGroebner, resultant, realRootCount, factorBivariate } = S;
 
 const corpus: any = JSON.parse(readFileSync(fileURLToPath(new URL("./fixtures/cas-corpus.json", import.meta.url)), "utf8"));
 
@@ -81,6 +81,21 @@ describe(`external-CAS golden corpus (${corpus._generatedBy})`, () => {
         const qdBasis = G.map(canonMPoly).sort();
         const goldBasis = gb.monicBasis.map(canonGolden).sort();
         expect(qdBasis).toEqual(goldBasis);
+      });
+    }
+  });
+
+  // Bivariate ℚ(i) factorization (roadmap #19): factorBivariate's factor SET must match Sympy's
+  // factor(..., gaussian=True). Both sides are monic-in-x, so canonMPoly strings compare directly — a
+  // wrong field of definition (e.g. splitting x²−2y², or NOT splitting x²+y²) shows up as a set mismatch.
+  describe("bivariate factorization over ℚ(i) matches Sympy factor(gaussian=True)", () => {
+    for (const fc of corpus.bivariateFactorizations) {
+      it(`factor( ${JSON.stringify(fc.poly)} )`, () => {
+        const f = MPoly.fromTermList(fc.poly);
+        const golden = fc.factors.map((t: any) => canonMPoly(MPoly.fromTermList(t))).sort();
+        const res = factorBivariate(f, "x", "y");
+        expect(res.ok).toBe(true);
+        expect(res.factors.map(canonMPoly).sort()).toEqual(golden);
       });
     }
   });
