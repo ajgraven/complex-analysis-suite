@@ -57,6 +57,14 @@ live + correct in-browser. (Screenshot timed out on a busy renderer; DOM reads s
 all 0; 1280→1305 tests). Branch NOT merged — it is the deliverable; a single PR (or the user's call) closes it.
 See `FINAL_REPORT.md`. Highest-value remaining item = PF-1 (exact-at-the-isolating-box univalence cert).
 
+**END-TO-END BROWSER PROOF (live, one click of ✦ Prove existence/uniqueness on the default QD):**
+"Unique quadrature domain ✓ — 1 genuine QD of 4 real solutions (1 gauge/rotation copy merged; **2 pole-in-𝔻
+rejected**) · cross-check ✓ (residual 0.0e+0)" with a **green `=` "exact — certified"** rigor pill. All five
+slices firing together: S1 rejected the 2 real solutions whose φ has a pole in 𝔻 (they'd have inflated the count
+pre-review), S5 ran the whole chain from one click (2 reduction columns appended), S4 rendered the certified `=`
+badge (genuine: certified count + all filters exact + cross-check residual 0). The default system had a real
+D-1 over-count — now fixed.
+
 ### Slice detail (S1–S5 SHIPPED gate-green; S6 = deferred batch)
   - [x] **S1 — exact `|z_j|<1` admissibility gate** [D-1, CRITICAL]. DONE + committed. Pure exact predicate
         `QDEquations.nodeInsideDisk(re,im)` (`qd-equations.mjs`, ℚ/BigInt |z|²-vs-1, reuses `_ratApprox`) +
