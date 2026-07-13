@@ -216,7 +216,8 @@ Kept as an independent cross-check. Write `f ∈ ℚ(i)[y][x]`, primitive and sq
   `fixtures/gen-cas-corpus.py` → `cas-corpus.json`, consumed by `sym-core-cas-corpus.test.ts`; CI runs no
   Python) cross-checks against a mature external CAS — catching any wrong field of definition (`x²−2y²`
   must NOT split; `x²+y²` must).
-- **Later / separate:** general n-variate.
+- **Later / separate:** general n-variate — now planned in [`NVARIATE_FACTORING.md`](NVARIATE_FACTORING.md)
+  (reduce to bivariate + iterated Hensel lift, reusing this bivariate core as the base case).
 
 ## 8. Test / verification strategy
 
