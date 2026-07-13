@@ -12,6 +12,7 @@ import { defineWorkspace } from "vitest/config";
 // Further packages add themselves here as they are extracted (Phase 3+).
 export default defineWorkspace([
   "./packages/core/vitest.config.ts",
+  "./packages/exact/vitest.config.ts",
   "./packages/interchange/vitest.config.ts",
   "./packages/expr/vitest.config.ts",
   "./packages/gpu/vitest.config.ts",

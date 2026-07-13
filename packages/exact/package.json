@@ -1,0 +1,37 @@
+{
+  "name": "@cas/exact",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Exact-arithmetic kernel shared across the suite: ℚ and ℚ(i) over BigInt, and exact univariate polynomials over ℚ(i) (division, evaluation, rendering). The exact analogue of @cas/core's numeric kernel — the shared home for the exact-poly primitives the sibling apps need (correspondences' curves, CD's dynatomic/Gleason/multiplier). Convention-neutral (ADR-0006).",
+  "license": "MIT",
+  "author": "Andrew Graven <andrew@graven.com>",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
+    "vitest": "^2.1.4"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,13 +1,13 @@
-// Exact Gaussian rationals ℚ(i) over BigInt — the coefficient field for the exact correspondence-curve
-// engine (roadmap #16). Small, self-contained, and dependency-free so it can be lifted verbatim into a
-// shared @cas/* package IF a third consumer appears (CD dynatomic/Gleason, #17); until then it lives in
-// the app that needs it (the deltoid family's coefficients c=1, F₂=½ are Gaussian-rational, so the whole
-// deleted-correspondence curve is exactly representable here). See ARCHITECTURE.md / RISKS.md §3: the
-// algebraic scaffold is exact (=); the dynamics on top of it stay ≈.
+// Exact Gaussian rationals ℚ(i) over BigInt — the base field of @cas/exact. This package was extracted
+// (roadmap #17, ADR-0007 demand-driven) once a third consumer appeared: the exact-poly primitives are now
+// shared by correspondences (the deleted-correspondence curve + cusp locus, #16) and CD (dynatomic /
+// Gleason / multiplier component data, #17), joining QD's app-internal ℚ(i) tower in sym-core.mjs. A field,
+// so every nonzero element is invertible — which is what makes exact polynomial division and the
+// fraction-free (Bareiss) determinant/resultant exact.
 //
-// This is deliberately a fresh, strict-TS reimplementation of the ℚ(i) tower QD keeps in
-// apps/quadrature-domains/app/sym-core.mjs (untyped, app-internal, and physically tangled into the
-// Gröbner section) — an app may not import another app, and #16 needs only this contained slice.
+// Strict-TS and dependency-free (like @cas/core), the exact analogue of that numeric kernel. Convention-
+// neutral (ADR-0006): no π / 2πi constants. See ARCHITECTURE.md / RISKS.md §3 — the algebraic scaffold the
+// apps build on this is exact (=); the dynamics on top of it stay ≈.
 
 /** Euclidean gcd on non-negative magnitudes of BigInts (bigGcd(0,0) = 0). */
 export function bigGcd(a: bigint, b: bigint): bigint {

@@ -1,8 +1,8 @@
-// Exact correspondence-curve engine (roadmap #16) — a self-contained ℚ(i) polynomial layer that computes
-// the deleted anti-holomorphic correspondence as an exact bivariate curve C(w, z̄) = 0, plus its cusp
-// locus. Kept deliberately dependency-free (no @cas/* import) so it can be promoted to a shared package
-// verbatim if a third consumer (CD dynatomic/Gleason, #17) ever needs the same exact primitives.
-export { bigGcd, Frac, Gauss } from "./gaussian.js";
-export { QiPoly } from "./qiPoly.js";
-export { correspondenceCurve, cuspLocus, renderQiPolyText } from "./correspondenceCurve.js";
+// The app's exact correspondence-curve layer. The generic exact-poly primitives (ℚ(i), univariate
+// polynomials, rendering) were extracted to the shared @cas/exact package (roadmap #17, ADR-0007); this
+// folder keeps the correspondence-SPECIFIC domain logic (the deleted-correspondence deflation + cusp
+// locus) built on top of it. Re-export the shared primitives here too so app code and tests have one
+// import point.
+export { bigGcd, Frac, Gauss, QiPoly, renderQiPolyText } from "@cas/exact";
+export { correspondenceCurve, cuspLocus } from "./correspondenceCurve.js";
 export type { ExactCorrespondenceCurve } from "./correspondenceCurve.js";
