@@ -1,6 +1,6 @@
 # Multivariate (bivariate-first) polynomial factorization over ℚ(i) — design plan
 
-> **Status: PLANNED — not yet implemented.** Roadmap item #19 (the "genuine multivariate factorizer" that
+> **Status: IN PROGRESS.** Phase 0 (spike) ✅ validated; Phase 1 (infra) ✅ merged. Roadmap item #19 (the "genuine multivariate factorizer" that
 > several done tiers were capped by). Decisions recorded (2026-07-13): **(a) Gao's PDE / linear-algebra
 > method first** (it plays to this engine's linear-algebra strength and deletes the two most bug-prone
 > subsystems); **(b) the classical Zassenhaus–Hensel path ships as a Phase-5 independent cross-check

@@ -1126,6 +1126,30 @@ import _QD from './solver.mjs';
     return _gcdNormalize(g);
   }
 
+  // --- Bivariate factorization infrastructure (roadmap #19, Gao's method — see docs/MULTIVARIATE_FACTORING.md) ---
+  // Content of f in a CHOSEN main variable xVar: the gcd (over ℚ(i)[other vars]) of f's xVar-coefficients —
+  // an MPoly free of xVar. (gcdMV's own content uses the smallest-sorted variable; the factorizer must pick
+  // the main variable, so it needs this explicit-variable form.)
+  function bivariateContent(f, xVar) {
+    if (!(f instanceof MPoly)) throw new Error('bivariateContent: MPoly expected');
+    if (f.isZero()) return MPoly.zero();
+    const cs = f.coeffsIn(xVar).filter((c) => !c.isZero());
+    return cs.length ? gcdList(cs) : MPoly.constant(Gaussian.fromInt(1));
+  }
+  // Primitive part in xVar: f / content_{xVar}(f). A unit content ⇒ f is already primitive.
+  function bivariatePrimitivePart(f, xVar) {
+    const c = bivariateContent(f, xVar);
+    return c.vars().size === 0 ? f : mpolyExactDiv(f, c);
+  }
+  // f squarefree in xVar ⟺ gcd(f, ∂f/∂xVar) has xVar-degree 0. On the PRIMITIVE part (pure-other-variable
+  // content already stripped) this is Gao's gcd(f, f_x) = 1 precondition.
+  function bivariateSquarefreeInX(f, xVar) {
+    if (!(f instanceof MPoly) || f.isZero()) return false;
+    const d = f.derivativeIn(xVar);
+    if (d.isZero()) return f.degreeIn(xVar) <= 0; // f free of xVar ⇒ trivially "squarefree in x"
+    return gcdMV(f, d).degreeIn(xVar) === 0;
+  }
+
   // RADICAL of a ZERO-DIMENSIONAL ideal (Seidenberg): √I = I + (squarefree(χ_v) : v ∈ vars),
   // where χ_v is the characteristic polynomial of multiplication-by-v on ℚ(i)[x]/I (Sym.resolvent).
   // Its square-free part has the same v-coordinates with multiplicity 1, so adding them strips all
@@ -3107,6 +3131,53 @@ import _QD from './solver.mjs';
     return rank;
   }
 
+  // Exact kernel (null-space) BASIS of a Gaussian matrix over ℚ(i): reduced row echelon, then one basis
+  // vector per free column (free var = 1, the pivot entries read off the RREF). Returns an array of
+  // Gaussian[] (each length = #columns), empty when the matrix has full column rank. The load-bearing
+  // linear-algebra primitive the bivariate factorizer's Ruppert-nullspace step needs (roadmap #19).
+  function _gaussianNullspace(A) {
+    const rows = A.length;
+    const cols = rows ? A[0].length : 0;
+    if (cols === 0) return [];
+    const M = A.map((r) => r.slice());
+    const pivots = []; // pivots[k] = column of the k-th pivot
+    let rank = 0;
+    for (let col = 0; col < cols && rank < rows; col++) {
+      let piv = -1;
+      for (let r = rank; r < rows; r++) if (!M[r][col].isZero()) { piv = r; break; }
+      if (piv < 0) continue;
+      if (piv !== rank) { const t = M[piv]; M[piv] = M[rank]; M[rank] = t; }
+      const pv = M[rank][col];
+      for (let c = col; c < cols; c++) M[rank][c] = M[rank][c].div(pv);
+      for (let r = 0; r < rows; r++) {
+        if (r === rank) continue;
+        const f = M[r][col];
+        if (f.isZero()) continue;
+        for (let c = col; c < cols; c++) M[r][c] = M[r][c].sub(f.mul(M[rank][c]));
+      }
+      pivots.push(col);
+      rank++;
+    }
+    const pivotSet = new Set(pivots);
+    const basis = [];
+    for (let free = 0; free < cols; free++) {
+      if (pivotSet.has(free)) continue;
+      const v = new Array(cols).fill(Gaussian.fromInt(0));
+      v[free] = Gaussian.fromInt(1);
+      for (let k = 0; k < rank; k++) v[pivots[k]] = M[k][free].neg(); // pivot var = −(RREF at row k, free col)
+      basis.push(v);
+    }
+    return basis;
+  }
+
+  // Public exact-ℚ(i) kernel basis: rows given as numbers | {re,im} (coerced exactly, as for moments);
+  // returns the basis as an array of {re,im}[] vectors (empty ⇒ full column rank).
+  function nullspaceRational(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return [];
+    const A = rows.map((r) => (r || []).map(_momentToGaussian));
+    return _gaussianNullspace(A).map((v) => v.map((g) => g.toComplex()));
+  }
+
   // The QD-order N = rank of the maximal square Hankel of the moment sequence, EXACT over ℚ(i). With L
   // moments a size-s Hankel (using m_0..m_{2s-2}) is available for s ≤ ⌊(L+1)/2⌋; `saturated` flags
   // rank == s — the order could be higher, so supply more moments. Returns { ok, order, hankelSize,
@@ -4940,6 +5011,7 @@ import _QD from './solver.mjs';
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, krullDimension, dimensionDegree, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, powerSums, newtonToElementary, charPolyByTraces, coordinateMoments,
     hankelRank, pronyPolynomial, shapeFromMoments, shapeFromMomentsJSON, // #18 shape-from-moments (Prony–Hankel): exact QD-order + Prony polynomial + numeric nodes/weights (+JSON serializer)
+    nullspaceRational, bivariateContent, bivariatePrimitivePart, bivariateSquarefreeInX, // #19 factorizer Phase-1 infra (exact ℚ(i) kernel basis + content/primitive/squarefree-in-x)
     solveByEigenvalues, realSolutionCount, parametricRealCount1D, discriminantVariety, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
