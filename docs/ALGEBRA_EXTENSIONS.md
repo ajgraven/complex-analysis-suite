@@ -33,7 +33,7 @@ every recommendation:
 | # | Extension | Value | Effort | Builds on (already present) |
 |---|-----------|-------|--------|------------------------------|
 | **1 ✅** | **Exact Schwarz function + boundary curve Q(z,z̄) from a solved QD** | ★★★ | Moderate | resultant/elimination Gröbner, `saturate`, series inverse |
-| **2 ◐** | **Certify QD existence/uniqueness** — #2a certified verdict ✅ · #2b-1 1-param bifurcation ✅ · #2b-2a ≥2-param boundary equation ✅ · #2b-2 count-per-region = Maple RCTD (already wired) ◻ | ★★★ | Moderate | `realSolutionCount` (Hermite), `triangularize`, Schur–Cohn |
+| **2 ✅** | **Certify QD existence/uniqueness** — #2a certified verdict · #2b-1 1-param bifurcation · #2b-2a ≥2-param boundary equation · #2b-2b legible Maple-RCTD round-trip (count-per-region) | ★★★ | Moderate | `realSolutionCount` (Hermite), `triangularize`, Schur–Cohn |
 | **3 ✅** | **Close the algebra→geometry loop (plot ℂ solutions, show domain, interchange export)** | ★★★ | Easy–Mod | `phiFromAlgebraSolution`, verdict `actions[]`, `@cas/interchange` |
 | **4 ✅** | **Certified real solving via RUR + exact Sturm isolation (rigorous locations)** | ★★★ | Moderate | `rationalUnivariateRep` (self-certifying), `realRootIsolate` |
 | **5 ✅** | **Wire the built-but-unexposed Aharonov–Shapiro moment system to a seed** | ★★★ | Easy | `pointFunctionalSystem` (tested, no UI), `seedFromSystem` |
@@ -43,7 +43,7 @@ every recommendation:
 | 9 ✅ | Power sums / QD moments of the solution set via `trace(Mᵥᵏ)` | ★★ | Easy | `multiplicationMatrix` |
 | 10 ◐ | Rational/Padé reconstruction ✅ + CRT-modular Gröbner (scaling cure) ◻ | ★★ | Easy | GCD/EEA, series |
 | 11 ◐ | Dimension-in-verdict ✅ · staircase diagram ◻, session save/load ◻, `.ipynb` export ◻, rigor badges (already present) | ★★ | Easy–Mod | `standardMonomials`, `exportDAG`, `sympyDerivation` |
-| 12 | Primary decomposition + minimal primes (decompose boundary variety) | ★★ | Moderate | factorization (present!), zero-dim radical, saturation |
+| 12 ◐ | Primary decomposition + minimal primes (decompose boundary variety) — `minimalPrimes` (factorizing Buchberger) ✅; full GTZ / embedded primes ◻ | ★★ | Moderate | factorization (present!), zero-dim radical, saturation |
 | 13 | Triangular decomposition / regular chains (positive-dim solving) | ★★ | Moderate | subresultants, GCD, squarefree, FGLM |
 | 14 ✅ | Discriminant variety + parametric real-root classification (family bifurcation set) — `discriminantVariety` (any #params) + the 1-param count via #2b-1 | ★★ | Moderate | subresultants, elimination, real-root isolation |
 | 15 | Curve parametrization + genus + Puiseux (rational boundary maps, cusps) | ★★ | Moderate | series/reversion, resultants, factorization |
@@ -68,8 +68,11 @@ every recommendation:
 > **bifurcation** — `parametricRealCount1D` (eliminant border + Sturm criticals + Hermite count per cell)
 > + an Algebra "Bifurcation over [param]" panel (PRs #42/#43/#44); **#2b-2a** the ≥2-parameter bifurcation-set
 > **equation** — `discriminantVariety` (any #params: eliminant → reducedDisc·lc strata → factored boundary,
-> PR #46) — together completing **#14**; the count-per-region for ≥2 params uses the already-wired Maple RCTD
-> export (`cas-export.mjs`), so in-house CAD is deliberately not built. **Not started:** #12–#13, #15–#20.
+> PR #46) — together completing **#14**; **#2b-2b** the imported Maple-RCTD result now renders legibly per cell
+> ("n real solutions where [constraints]", PR #48), closing the count-per-region round-trip (in-house CAD
+> deliberately not built) · **◐ #12** `minimalPrimes` — irreducible components by factorizing Buchberger
+> (PR #49; `complete` honest about the ℚ(i) factorizer's univariate/monomial/variable-disjoint reach; full GTZ
+> deferred). **Not started:** #13, #15–#20.
 
 ---
 
@@ -196,8 +199,10 @@ from "hard" to "moderate."
 3. ✅ **Cheap infrastructure sprint (compounding):** #6 ideal toolkit + #7 series calculus + #8 Hilbert/
    dimension + #9 power sums + #10 Padé/CRT + the Tier-2 workflow wins. **DONE (PRs #31–#36);** CRT-modular
    Gröbner and the staircase/save-load/`.ipynb` workflow items deferred (rigor badges already present).
-4. **Decomposition tier:** multivariate factorization (if missing) → primary decomposition → triangular
-   decomposition → discriminant variety.
+4. **Decomposition tier (started):** ✅ #12 minimal primes (`minimalPrimes`, factorizing Buchberger) + ✅ #14
+   discriminant variety (`discriminantVariety`); still open — #13 triangular decomposition / regular chains
+   (a full split; `triangularize` gives one chain), #15 curve parametrization / genus / Puiseux, and genuine
+   multivariate factorization (would deepen #12 past the current univariate/monomial/variable-disjoint reach).
 5. **Cross-app exact upgrades:** #16 exact correspondence curves + #17 dynatomic/Gleason/multiplier.
 6. **Tooling axes, as demand appears:** client-side Arb/PARI for certified `≤`; an opt-in msolve →
    HomotopyContinuation.jl service for positive-dimensional / large / all-solution work.
