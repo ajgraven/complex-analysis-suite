@@ -7,7 +7,7 @@ import _QD from "../app/solver.mjs";
 import "../app/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
-const { MPoly, Gaussian, Rational, factorBivariate, factorMultivariate } = S;
+const { MPoly, Gaussian, Rational, factorBivariate, factorMultivariate, factor } = S;
 
 const x = MPoly.variable("x");
 const y = MPoly.variable("y");
@@ -117,5 +117,29 @@ describe("factorMultivariate — honest `complete` flag (non-monic scope)", () =
     expect(r.complete).toBe(false);              // Wang leading-coefficient distribution out of scope
     expect(r.factors).toHaveLength(1);
     expect(assoc(r.factors[0], f)).toBe(true);
+  });
+});
+
+// P4: the public factor() now routes a genuine ≥3-variable (entangled) remainder through
+// factorMultivariate, keeping the monomial / separable / univariate / bivariate methods before it.
+describe("factor() integration — ≥3-variable routing (roadmap #19 n-variate P4)", () => {
+  it("factor((x+y+z)(x−y+z)) → the two planes", () => {
+    const r = factor(x.add(y).add(z).mul(x.sub(y).add(z)));
+    expect(r.ok).toBe(true);
+    expect(sameSet(r.factors, [x.add(y).add(z), x.sub(y).add(z)])).toBe(true);
+  });
+  it("factor((x²−yz)(x−y)) → { x²−yz, x−y }", () => {
+    const r = factor(x.pow(2).sub(y.mul(z)).mul(x.sub(y)));
+    expect(r.ok).toBe(true);
+    expect(sameSet(r.factors, [x.pow(2).sub(y.mul(z)), x.sub(y)])).toBe(true);
+  });
+  it("factor(y·(x²−yz)) → { y, x²−yz } (monomial peel THEN a whole ≥3 irreducible)", () => {
+    const r = factor(y.mul(x.pow(2).sub(y.mul(z))));
+    expect(r.ok).toBe(true);
+    expect(sameSet(r.factors, [y, x.pow(2).sub(y.mul(z))])).toBe(true);
+  });
+  it("an irreducible ≥3-variable poly stays whole (ok:false): x²−yz, x²+y²−z²", () => {
+    expect(factor(x.pow(2).sub(y.mul(z))).ok).toBe(false);
+    expect(factor(x.pow(2).add(y.pow(2)).sub(z.pow(2))).ok).toBe(false);
   });
 });

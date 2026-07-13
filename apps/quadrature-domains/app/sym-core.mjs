@@ -2282,10 +2282,11 @@ import _QD from './solver.mjs';
   //   (1) peel monomial factors (a variable dividing every term → the case v=0),
   //   (2) split a variable-separable product and recurse on each factor,
   //   (3) factor a truly-univariate remainder fully over ℚ(i) (the norm trick),
-  //   (4) factor a genuine BIVARIATE remainder over ℚ(i) (Gao's method, roadmap #19).
+  //   (4) factor a genuine BIVARIATE remainder over ℚ(i) (Gao's method, roadmap #19),
+  //   (5) factor a genuine ≥3-VARIABLE remainder over ℚ(i) (the multivariate Hensel lift, #19 n-variate).
   // A remainder none of these split is pushed whole (irreducible). Every step
-  // strictly shrinks `cur` (or, in (4), only splices STRICTLY smaller factors and
-  // recurses on the pure-content), so the recursion terminates; constants are dropped.
+  // strictly shrinks `cur` (or, in (4)/(5), only splices STRICTLY smaller distinct factors), so the
+  // recursion terminates; constants are dropped.
   function _factorRec(p, out) {
     if (p.vars().size === 0) return;
     let cur = p;
@@ -2315,6 +2316,19 @@ import _QD from './solver.mjs';
         if (res && res.ok && res.complete && (res.factors.length >= 2 || res.content.vars().size > 0)) {
           res.factors.forEach((Fk) => _factorPush(out, Fk));  // ℚ(i)-irreducible factors (already irreducible — do not recurse)
           if (res.content.vars().size > 0) _factorRec(res.content, out); // pure-yVar content: univariate, terminates
+          return;
+        }
+      }
+    }
+    if (cur.vars().size >= 3 && cur.vars().size <= 6 && cur.terms.size <= 200) { // (5) genuine ≥3-variable over ℚ(i) — Hensel lift (roadmap #19 n-variate)
+      let maxDeg = 0; for (const v of cur.vars()) maxDeg = Math.max(maxDeg, cur.degreeIn(v));
+      // Degree / variable-count caps keep the evaluation search + Hensel lift bounded; a polynomial past
+      // them (or non-monic in every variable) falls through and is pushed whole (honest: not certified).
+      if (maxDeg <= 8) {
+        let res = null;
+        try { res = factorMultivariate(cur); } catch (e) { res = null; }
+        if (res && res.ok && res.complete && res.factors.length >= 2) {
+          res.factors.forEach((fk) => _factorPush(out, fk)); // distinct ℚ(i)-irreducibles of cur (content already folded in)
           return;
         }
       }
@@ -4997,9 +5011,10 @@ import _QD from './solver.mjs';
     }
     // Honest completeness: complete is true only when it terminated AND every component is provably
     // prime. A principal ideal ⟨g⟩ is prime ⟺ g is irreducible over ℚ(i) (ℚ(i)[x…] is a UFD). The
-    // factorizer now reaches monomial + variable-disjoint + univariate AND genuine BIVARIATE (Gao,
-    // roadmap #19), so a squarefree irreducible univariate OR bivariate hypersurface is certified prime;
-    // a linear ideal is prime; anything else (a leaf that may split further) leaves complete:false.
+    // factorizer now reaches monomial + variable-disjoint + univariate + genuine BIVARIATE (Gao) AND
+    // genuine ≥3-VARIABLE (the multivariate Hensel lift, roadmap #19 n-variate), so a squarefree
+    // irreducible hypersurface of any arity is certified prime; a linear ideal is prime; anything else
+    // (a leaf that may split further, or a non-monic-in-every-variable one) leaves complete:false.
     const isCertPrime = (G) => {
       if (G.every((g) => g.totalDegree() <= 1)) return true;                    // a linear ideal is prime
       if (G.length === 1) {
@@ -5014,6 +5029,12 @@ import _QD from './solver.mjs';
             return fr.ok && fr.complete && fr.factors.length === 1 && fr.content.vars().size === 0;
           } catch (e) { return false; }
         }
+        if (vs.length >= 3) {                                                   // ⟨g⟩ prime ⟺ g irreducible over ℚ(i)
+          try {
+            const fr = factorMultivariate(g);                                  // complete + ONE factor ⇒ irreducible
+            return fr.ok && fr.complete && fr.factors.length === 1;
+          } catch (e) { return false; }
+        }
       }
       return false;
     };
@@ -5026,9 +5047,10 @@ import _QD from './solver.mjs';
   // main variable, substitute up). Built by decomposing into irreducible components (minimalPrimes,
   // #12) and triangularizing each — so V(I) = ⋃ V(componentᵢ) = ⋃ (the chains). Returns
   // { ok, chains:[{ chain:[MPoly], mainVars, freeVars, initials, whole? }], complete, count } — `complete`
-  // inherits minimalPrimes' honesty. With the genuine bivariate factorizer (Gao, roadmap #19) a plane-curve
-  // component is now split into its irreducible pieces and each certified prime, so `complete:true` covers
-  // the univariate + bivariate hypersurface cases; only higher-codimension nonlinear leaves may keep it false.
+  // inherits minimalPrimes' honesty. With the genuine multivariate factorizer (Gao bivariate + the
+  // n-variate Hensel lift, roadmap #19) a hypersurface component of any arity is now split into its
+  // irreducible pieces and each certified prime, so `complete:true` covers the univariate + bivariate +
+  // ≥3-variable hypersurface cases; only higher-codimension nonlinear leaves may keep it false.
   function triangularDecomposition(polys, opts) {
     opts = opts || {};
     const src = (polys || []).filter((p) => p && !p.isZero());

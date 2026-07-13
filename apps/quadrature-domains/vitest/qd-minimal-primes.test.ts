@@ -82,6 +82,21 @@ describe("QD.Sym.minimalPrimes", () => {
     expect(r.complete).toBe(true);
   });
 
+  it("⟨x²−yz⟩ (irreducible trivariate hypersurface) → 1 component, now CERTIFIED prime (#19 n-variate P4)", () => {
+    const r = minimalPrimes([V("x").pow(2).sub(V("y").mul(V("z")))], { vars: ["x", "y", "z"] });
+    expect(r.ok).toBe(true);
+    expect(r.count).toBe(1);
+    expect(r.complete).toBe(true);                             // ⟨irreducible g⟩ prime — now provable in ≥3 variables
+  });
+
+  it("⟨(x+y+z)(x−y+z)⟩ → two hyperplane components (trivariate factoring, #19 n-variate P4)", () => {
+    const f = V("x").add(V("y")).add(V("z")).mul(V("x").sub(V("y")).add(V("z")));
+    const r = minimalPrimes([f], { vars: ["x", "y", "z"] });
+    expect(r.ok).toBe(true);
+    expect(r.count).toBe(2);
+    expect(r.complete).toBe(true);                             // both components linear ⇒ certified prime
+  });
+
   it("inconsistent ⟨x, x−1⟩ → no components (empty variety)", () => {
     const r = minimalPrimes([V("x"), V("x").sub(I(1))], { vars: ["x"] });
     expect(r.ok).toBe(true);
