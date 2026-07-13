@@ -1,6 +1,6 @@
 # Multivariate (bivariate-first) polynomial factorization over ℚ(i) — design plan
 
-> **Status: IN PROGRESS.** Phase 0 (spike) ✅ validated; Phase 1 (infra) ✅ merged; Phase 2 (absolute factor *count* + irreducibility) ✅ merged. Roadmap item #19 (the "genuine multivariate factorizer" that
+> **Status: IN PROGRESS.** Phase 0 (spike) ✅ validated; Phase 1 (infra) ✅ merged; Phase 2 (absolute factor *count* + irreducibility) ✅ merged; Phase 3 (ℚ(i)-rational factor *extraction*, `factorBivariate`) ✅ merged. Roadmap item #19 (the "genuine multivariate factorizer" that
 > several done tiers were capped by). Decisions recorded (2026-07-13): **(a) Gao's PDE / linear-algebra
 > method first** (it plays to this engine's linear-algebra strength and deletes the two most bug-prone
 > subsystems); **(b) the classical Zassenhaus–Hensel path ships as a Phase-5 independent cross-check
@@ -124,6 +124,12 @@ Reference: S. Gao, "Factoring multivariate polynomials via partial differential 
    splitting values as roots. A random `g` gives a squarefree `E_g` with high probability; the test (is
    `E_g` squarefree?) is self-checking — retry (~2 expected) otherwise.
 
+   *(Implementation note — Phase 3.)* `factorBivariate` obtains `E_g` directly as `Res_x(f, g − λ·f_x)`
+   with the `y`-content stripped (Phase-1 `bivariatePrimitivePart` in `λ`), then its square-free part —
+   the same resultant device step 4 already uses for extraction. This skips building the `r×r` matrix `A`
+   and therefore the ℚ(i)(y) rational-function linear algebra the mod-`f` reductions would need (`f` is not
+   monic in `x` in general), at no loss: `E_g` is identical and the whole path stays in ℚ(i)[x,y].
+
 4. **Factor extraction — rational factorization over ℚ(i).** Factor `E_g` over ℚ(i) (`_qiFactor`). For each
    irreducible `φ` of `E_g` (degree `t`), the corresponding ℚ(i)-rational factor of `f` is
 
@@ -183,8 +189,15 @@ Kept as an independent cross-check. Write `f ∈ ℚ(i)[y][x]`, primitive and sq
   since the count is an upper bound on the ℚ(i)-rational factor count (`x²−2y² → 2` absolute, but
   ℚ(i)-irreducible; the rational split is Phase 3). Cheap, high-value, standalone-testable — and the honest
   oracle `minimalPrimes` wants. Goldens `vitest/qd-factor-count.test.ts` (the Phase-0 battery + preconditions).
-- **Phase 3 — factor *extraction*.** The `r×r` matrix → `E_g` → `_qiFactor` → GCD extraction ⇒
-  `factorBivariate`. Round-trip + field-sensitivity goldens + Sympy cross-check.
+- **Phase 3 — factor *extraction* ✅ (merged).** `factorBivariate` via the **resultant-eigenvalue**
+  extraction (a cleaner equivalent of the `r×r`-matrix route that stays in ℚ(i)[x,y] and reuses
+  `resultant` / `_qiFactor` / `gcdMV`, avoiding ℚ(i)(y) rational-function linear algebra): a generic
+  `g ∈ G` gives `Res_x(f, g − λ·f_x) = c(y)·∏_j (λ − λ_j)^{deg_x f_j}`; strip the y-content (Phase-1
+  `bivariatePrimitivePart` in λ) → the constant `P(λ)`; `_qiFactor` its square-free part → one `p_k(λ)`
+  per ℚ(i)-rational factor; `F_k = gcd(f, Res_λ(p_k, g − λ·f_x))`. `complete` is a checked claim (∏ = fp up
+  to a unit). Goldens `vitest/qd-factor-bivariate.test.ts` (battery + real & ℚ(i) round-trips +
+  field-sensitivity: `x²+y²`→`(x∓iy)`, `x²−2y²` stays one ℚ(i)-irreducible factor + content + preconditions).
+  Sympy cross-check deferred to the P5 oracle. Multiplicities (non-squarefree input) deferred.
 - **Phase 4 — integrate.** Route genuine bivariate through the new path inside `factor` (keep the
   monomial / separable / univariate fast-paths and the exact-division verify); flip the honest `complete`
   flags in `minimalPrimes` / `curveGenus` / `triangularDecomposition` now that factoring is genuine.
