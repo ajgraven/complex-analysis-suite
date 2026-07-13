@@ -1421,6 +1421,58 @@ import _QD from './solver.mjs';
     return { ok: true, factors: found.map((Fs) => _canonicalFactor(Fs.subst(shiftOut), mainVar)) };
   }
 
+  // ── factorMultivariate (roadmap #19 n-variate, P3) — the assembled ℚ(i) multivariate factorizer ──────
+  // The DISTINCT (radical) irreducible factors of f ∈ ℚ(i)[x₁,…,xₙ], for any arity. It (a) picks a main
+  // variable (`nvarMainVariable`, preferring a monic one — the monic-in-main-var scope), (b) strips the
+  // content in it and factors that recursively (the content has strictly fewer variables, so this
+  // terminates), (c) reduces the primitive part to its squarefree part, and (d) factors it: univariate via
+  // `_qiFactor`, else via the multivariate Hensel lift `mvHenselLift`. Two variables therefore go through
+  // the Hensel lift — NOT `factorBivariate` — so the bivariate-consistency test (`factorMultivariate` vs
+  // `factorBivariate`) is a genuine differential check of two independent algorithms.
+  //
+  // HONEST: `factors` are distinct ℚ(i)-irreducibles; `complete` is true only when every piece was fully
+  // factored — it is false when a primitive part is non-monic in every variable (Wang leading-coefficient
+  // distribution is out of scope), in which case that part is returned whole. Returns { ok, factors, complete }.
+  function factorMultivariate(f, opts) {
+    opts = opts || {};
+    if (!(f instanceof MPoly)) throw new Error('factorMultivariate: MPoly expected');
+    if (f.isZero()) throw new Error('factorMultivariate: the zero polynomial has no factorization');
+    if (f.vars().size === 0) return { ok: true, factors: [], complete: true };          // a nonzero constant
+    if (f.vars().size === 1) {
+      const v = [...f.vars()][0];
+      return { ok: true, factors: _qiFactor(f, v).map((p) => _canonicalFactor(p, v)), complete: true };
+    }
+    const mainVar = nvarMainVariable(f);
+    if (!mainVar) return { ok: true, factors: [f], complete: false };                    // no positive-degree variable
+    const content = multivariateContent(f, mainVar);
+    const hasContent = content.vars().size > 0;
+    const prim = hasContent ? mpolyExactDiv(f, content) : f;
+    // (a) factor the (strictly lower-arity) content recursively
+    let contentFactors = [], contentComplete = true;
+    if (hasContent) {
+      const cr = factorMultivariate(content, opts);
+      contentFactors = cr.factors || []; contentComplete = !!cr.complete;
+    }
+    // (b) factor the primitive part. When content was stripped, RE-CHOOSE the main variable by recursing
+    // on `prim`: stripping a pure-lower-arity factor can expose a monic main variable that `f` lacked
+    // (e.g. (y+1)(x²−yz) is non-monic in every variable, but its primitive part x²−yz is monic in x). The
+    // recursion terminates because a non-unit content makes `prim` strictly simpler.
+    let primFactors, primComplete;
+    if (hasContent) {
+      const pr = factorMultivariate(prim, opts);
+      primFactors = pr.factors || []; primComplete = !!pr.complete;
+    } else {
+      const sq = multivariateSquarefreePart(prim, mainVar);
+      const lr = mvHenselLift(sq, mainVar, opts);
+      if (lr.ok) { primFactors = lr.factors; primComplete = true; }
+      else { primFactors = [_canonicalFactor(prim, mainVar)]; primComplete = false; }    // non-monic in every variable ⇒ whole (honest)
+    }
+    const factors = [];
+    for (const p of contentFactors) _factorPush(factors, p);
+    for (const p of primFactors) _factorPush(factors, p);
+    return { ok: true, factors, complete: contentComplete && primComplete };
+  }
+
   // A single monomial coeff·xVar^a·yVar^b as an MPoly (zero if a<0 or b<0, so callers can pass the
   // "shifted" exponents a−1 / b−1 from a derivative without guarding). Small, allocation-light helper
   // for assembling the Ruppert linear system column by column.
@@ -5640,6 +5692,7 @@ import _QD from './solver.mjs';
     henselFactorBivariate, // #19 factorizer Phase-5: INDEPENDENT Zassenhaus–Hensel oracle (differential cross-check of factorBivariate)
     multivariateContent, multivariatePrimitivePart, multivariateSquarefreeInX, multivariateSquarefreePart, nvarMainVariable, nvarEvaluationPoint, // #19 n-variate P1: content/primitive/squarefree(+part) in a main var + main-var choice + univariate evaluation-point search
     mvHenselLift, // #19 n-variate P2: multivariate Hensel lift (univariate base → lift each variable → recombine), monic-in-main-var
+    factorMultivariate, // #19 n-variate P3: assembled ℚ(i) multivariate factorizer (content-strip + squarefree + main-var choice + mvHenselLift)
     solveByEigenvalues, realSolutionCount, parametricRealCount1D, discriminantVariety, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,

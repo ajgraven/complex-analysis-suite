@@ -1,6 +1,6 @@
 # General n-variate polynomial factorization over ℚ(i) — design plan
 
-> **Status: IN PROGRESS — P0 (spike) ✅ validated; P1 (infra) ✅ merged; P2 (Hensel-lift engine) ✅ merged.** This is the one deferred extension of roadmap item #19,
+> **Status: IN PROGRESS — P0 ✅; P1 (infra) ✅; P2 (Hensel-lift engine) ✅; P3 (`factorMultivariate`) ✅ — all merged.** This is the one deferred extension of roadmap item #19,
 > whose **bivariate** core (Phases 0–5) is complete and merged (see
 > [`MULTIVARIATE_FACTORING.md`](MULTIVARIATE_FACTORING.md)). Decisions recorded (2026-07-13): **(a)** reduce
 > n-variate → **univariate** and Hensel-lift, **generalizing the trusted `henselFactorBivariate`** (its
@@ -147,8 +147,15 @@ trusted Phase-5 lift machinery**. Keep multivariate-Gao in reserve as a possible
   branches). Scope: monic-in-`mainVar`. Restricted to two variables it reproduces `henselFactorBivariate`
   (a free cross-check). Goldens `vitest/qd-nvar-hensel.test.ts` — bivariate consistency, trivariate
   recovery, the over-splitting cases, `∏ factors = f`. *The concentration of risk — de-risked by P0.*
-- **P3 — `factorMultivariate`.** reduce → `factorBivariate` → multi-lift → recombine (monic-in-main-var
-  scope); round-trip + Sympy + bivariate-consistency goldens.
+- **P3 — `factorMultivariate` ✅ (merged).** The assembled factorizer for any arity: pick a main variable
+  (`nvarMainVariable`, monic-preferring) → strip content and factor it recursively (a pure-lower-arity
+  factor can *expose* a monic main variable the whole polynomial lacked, so the primitive part re-chooses
+  by recursion) → squarefree part → `mvHenselLift`. Distinct (radical) factors, up to ℚ(i) units; honest
+  `complete` (false when a primitive part is non-monic in every variable — Wang LC out of scope — and is
+  returned whole). Two variables go through the Hensel lift (not `factorBivariate`), so the
+  bivariate-consistency check is a genuine two-algorithm differential. Goldens `vitest/qd-nvar-factor.test.ts`
+  — bivariate consistency, trivariate/4-variate recovery, over-splitting, content, round-trip, `complete`.
+  (The external Sympy corpus + second-reduction differential are consolidated into the P5 oracle phase.)
 - **P4 — integrate.** A fifth method in `_factorRec` (after the bivariate branch): a ≥3-variable *entangled*
   remainder → `factorMultivariate`. Extend `minimalPrimes` / `triangularDecomposition` `isCertPrime` to
   n-variate hypersurfaces (flips more `complete` flags); `spuriousFactors` / `discriminantVariety` /
