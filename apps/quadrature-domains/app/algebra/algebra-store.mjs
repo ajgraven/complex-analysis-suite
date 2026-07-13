@@ -1931,6 +1931,36 @@ import _QD from '../solver.mjs';
         (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
           : { ok: false, reason: (err && err.message) || String(err) });
     }
+    // 1-parameter BIFURCATION of the current (reim) system over a chosen real variable: how the
+    // #real solutions changes as `paramVar` ranges over ℝ (QD.Sym.parametricRealCount1D — exact:
+    // eliminant border polynomial + Sturm critical values + Hermite count per cell). Returns
+    // { ok, paramVar, degree, criticalValues, cells, crosschecked } (unbounded cell ends as null).
+    function _bifMapInf(res) {
+      if (!res || !res.ok || !Array.isArray(res.cells)) return res;
+      return Object.assign({}, res, { cells: res.cells.map((c) => Object.assign({}, c, { lo: Number.isFinite(c.lo) ? c.lo : null, hi: Number.isFinite(c.hi) ? c.hi : null })) });
+    }
+    function parametricBifurcation(ids, paramVar, opts) {
+      opts = opts || {};
+      const S = getSym();
+      const reim = currentReimSystem(ids, opts);
+      if (!reim.polys.length) return { ok: false, reason: 'no equality nodes to analyze' };
+      if (reim.vars.indexOf(paramVar) < 0) return { ok: false, reason: 'parameter "' + paramVar + '" is not a variable of the current system' };
+      try { return _bifMapInf(S.parametricRealCount1D(reim.polys, paramVar, Object.assign({}, opts, { vars: reim.vars }))); }
+      catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    }
+    function parametricBifurcationAsync(ids, paramVar, opts, runOpts) {
+      opts = opts || {};
+      const reim = currentReimSystem(ids, opts);
+      if (!reim.polys.length) return Promise.resolve({ ok: false, reason: 'no equality nodes to analyze' });
+      if (reim.vars.indexOf(paramVar) < 0) return Promise.resolve({ ok: false, reason: 'parameter "' + paramVar + '" is not a variable of the current system' });
+      const SW = symWorker();
+      if (!SW) return Promise.resolve(parametricBifurcation(ids, paramVar, opts));
+      const payload = { polys: reim.polys.map((p) => p.termList()), vars: reim.vars, paramVar, opts: _capOpts(opts) };
+      return SW.run('parametricRealCount1D', payload, runOpts || {}).then(
+        (res) => _bifMapInf(res),
+        (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
+          : { ok: false, reason: (err && err.message) || String(err) });
+    }
 
     // C4 — HARD-FILTER the solver output by the ACTIVE branch's assumptions. A complex
     // solution of the conjugate-model system that violates an active assumption — a variable
@@ -2655,7 +2685,7 @@ import _QD from '../solver.mjs';
       seedFromSystem, seedFromPolys, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, autoAbbreviate, addEquation, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
-      currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, solveRealCertifiedSync, solveRealCertifiedAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
+      currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, solveRealCertifiedSync, solveRealCertifiedAsync, parametricBifurcation, parametricBifurcationAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, msolveColumn, msolveVarOrder, importMsolve, derivationSteps, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       forkTrack, setActiveTrack, deleteTrack, tracks: tracksList,
