@@ -147,6 +147,32 @@ function renderSigma(canvas: HTMLCanvasElement): void {
   );
 }
 
+// World (complex) → canvas pixel — the inverse of render.ts's renderBand mapping (DEFAULT_VIEW = centre +
+// halfSpan, x scaled by the pixel aspect ratio).
+function worldToPixel(w: number, h: number, z: readonly [number, number]): [number, number] {
+  const v = DEFAULT_VIEW;
+  const aspect = w / h;
+  return [w * (0.5 + (z[0] - v.centerX) / (2 * v.halfSpan * aspect)), h * (0.5 - (z[1] - v.centerY) / (2 * v.halfSpan))];
+}
+
+// Overlay the EXACT correspondence branch points (roadmap #16): the z where disc_w C = 0, i.e. the two
+// w-branches collide (the "cusps" of the correspondence dynamics). Computed exactly in ℚ(i) via @cas/exact
+// (deltoidBranchPoints); a point p of the dynamical plane is a branch point ⟺ conj(p) is a cusp-locus root.
+function drawCuspMarkers(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  ctx.save();
+  ctx.lineWidth = 1.5;
+  for (const b of deltoidBranchPoints().filter((p) => !p.degenerate)) {
+    const [px, py] = worldToPixel(w, h, b.z);
+    ctx.beginPath();
+    ctx.arc(px, py, 5, 0, 2 * Math.PI);
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(10,12,20,0.9)";
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function renderCorrespondence(canvas: HTMLCanvasElement): void {
   canvas.width = CORR;
   canvas.height = CORR;
@@ -171,8 +197,10 @@ function renderCorrespondence(canvas: HTMLCanvasElement): void {
       setCap(
         "capC",
         `Deleted correspondence — orbit-tree density (${CORR}², ${Math.round(performance.now() - t0)} ms). ` +
-          `Forward dynamics of the 2:2 correspondence, log-scaled; K shaded.`,
+          `Forward dynamics of the 2:2 correspondence, log-scaled; K shaded. ` +
+          `○ = the 3 exact branch points (cusps, |z| = 2) where the two branches collide.`,
       );
+      drawCuspMarkers(ctx, CORR, CORR); // draw on top of the final density frame (roadmap #16)
     }
   });
 }
