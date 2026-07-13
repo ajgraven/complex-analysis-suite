@@ -104,6 +104,10 @@ import _QD from '../solver.mjs';
       short:  () => 'triangular decomposition',
       method: (p, n) => 'triangular (Wu) decomposition' + ((n && n.meta && n.meta.mainVar) ? ', main variable ' + n.meta.mainVar : ''),
     },
+    saturate: {
+      short:  () => 'saturate (admissibility)',
+      method: (p) => 'saturate ⟨I⟩ : ' + (p.factor || '(1−z̄z)') + '^∞ — remove the |z_j|=1 boundary stratum the cleared Möbius denominators carry',
+    },
     'linear-reduce': {
       short:  () => 'linear propagation',
       method: (p) => 'linear propagation' + ((p.eliminated && p.eliminated.length) ? ' (eliminate ' + p.eliminated.join(', ') + ')' : ''),
@@ -1616,6 +1620,53 @@ import _QD from '../solver.mjs';
           : { ok: false, reason: (err && err.message) || String(err), created: [], skipped: plan.skipped });
     }
 
+    // Saturate the current column by the Möbius denominators ∏_j (1 − z_j·z̄_j), removing the {|z_j|=1}
+    // boundary stratum the cleared (●)/(★) denominators carry (finding B-1). On the reim slice z̄_j = z_j, so
+    // 1 − z_j z̄_j = 1 − |z_j|², and V(cleared) = V(QD) ∪ {|z_j|=1}; saturating drops that component, so the
+    // Hermite count of the appended column is the EXACT algebraic count (unit disk h=1/w: realCount 4 → 2, the
+    // two dropped being z_j = ±1, poles on |z|=1). SAFE — a genuine bounded QD has |z_j| < 1 ⇒ 1 − z_j z̄_j ≠ 0,
+    // so the saturated locus is disjoint from the QD set (UNLIKE saturating by z_j, which would delete the
+    // z_j=0 disk — see spuriousFactors' note). Appends ONE labeled 'saturate' column (append-only DAG; column 0
+    // stays pristine). Pure/DOM-free; sync (these systems are small). Returns { ok, created, poles } / reason.
+    function saturateMobius(ids, opts) {
+      const S = getSym();
+      opts = opts || {};
+      const inputs = ((ids && ids.length) ? ids.map(get) : lastColumnNodes()).filter(Boolean).filter((n) => n.rel === '=');
+      if (!inputs.length) return { ok: false, reason: 'no equality nodes to saturate', created: [] };
+      const polys = inputs.map((n) => n.poly), inputIds = inputs.map((n) => n.id);
+      const vars = new Set();
+      for (const p of polys) for (const v of p.vars()) vars.add(v);
+      // ∏_j (1 − z_j·z̄_j) over poles whose BOTH z_j and z̄_j (zb_j) variables are still present (a pinned/
+      // eliminated z_j already has a definite modulus — nothing to saturate for it).
+      const one = S.mpolyConst(S.gaussInt(1));
+      let f = null; const poles = [];
+      for (const v of [...vars].sort()) {
+        const m = /^z(\d+)$/.exec(v); if (!m) continue;
+        const zb = 'zb' + m[1]; if (!vars.has(zb)) continue;
+        const fac = one.sub(S.mpolyVar(v).mul(S.mpolyVar(zb)));   // 1 − z_j·z̄_j
+        f = f ? f.mul(fac) : fac; poles.push(m[1]);
+      }
+      if (!f) return { ok: false, reason: 'no Möbius denominator (z_j, z̄_j) present to saturate — the map variables may be pinned/eliminated', created: [] };
+      let gens;
+      try { gens = S.saturate(polys, f, '_wsat', opts); } catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [] }; }
+      gens = (gens || []).filter((g) => !g.isZero());
+      if (!gens.length) return { ok: false, reason: 'saturation removed every generator (the system lies entirely on |z_j|=1)', created: [] };
+      checkpoint();
+      const col = Math.max.apply(null, inputs.map((n) => n.column)) + 1;
+      const created = [];
+      gens.forEach((poly, i) => {
+        const node = addNode({
+          id: nid(), kind: 'derived', poly, rel: '=',
+          label: 'saturate ' + (i + 1) + '/' + gens.length + ' (∏(1−z̄z))', model,
+          provenance: { op: 'saturate', inputs: inputIds.slice(), factor: '(1−z̄z)', poles: poles.slice() },
+          column: col, meta: {},
+        });
+        for (const src of inputIds) edges.push({ from: src, to: node.id });
+        created.push(node);
+      });
+      return { ok: true, created, poles: poles.slice() };
+    }
+
     // QD.SymWorker handle (off-main-thread runner), or null if unavailable.
     function symWorker() {
       const Q = (typeof window !== 'undefined' && window.QD) || (typeof global !== 'undefined' && global.QD) || (typeof QD !== 'undefined' && QD);
@@ -2702,7 +2753,7 @@ import _QD from '../solver.mjs';
     return {
       seedFromSystem, seedFromPolys, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
-      substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, autoAbbreviate, addEquation, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
+      substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, autoAbbreviate, addEquation, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes, saturateMobius,
       currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, solveRealCertifiedSync, solveRealCertifiedAsync, parametricBifurcation, parametricBifurcationAsync, shapeFromMoments, shapeFromMomentsAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, msolveColumn, msolveVarOrder, importMsolve, derivationSteps, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,

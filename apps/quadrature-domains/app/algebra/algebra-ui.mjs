@@ -96,6 +96,11 @@ const QD = _QD;
       column: (p, { latexPlain }) => '↳ Gröbner · ' + (p.eliminate && p.eliminate.length ? 'elim ' + p.eliminate.map(latexPlain).join(',') : (p.order || 'grevlex')),
       edge:   (p, { latexPlain }) => p.eliminate && p.eliminate.length ? 'Gröbner · elim ' + p.eliminate.map(latexPlain).join(',') : 'Gröbner',
     },
+    saturate: {
+      text:   (p) => 'saturate ⟨I⟩ : ' + (p.factor || '(1−z̄z)') + '^∞ — dropped the |z_j|=1 boundary stratum, of ' + (p.inputs || []).join(', '),
+      column: (p) => '↳ saturate · ' + (p.factor || '(1−z̄z)'),
+      edge:   () => 'saturate',
+    },
     substitute: {
       text:   (p, { substList }) => 'set ' + substList(p),
       column: (p, { substList }) => '↳ set ' + substList(p),
@@ -892,6 +897,7 @@ const QD = _QD;
         '        <button id="alg-gauge-elim" class="small" type="button" data-str-title="tooltips.gaugeElim">Eliminate with gauge (all)</button>' +
         '        <button id="alg-groebner" class="small heavy-op" type="button" data-str-title="tooltips.groebner">Gröbner basis (all eqns)</button>' +
         '        <button id="alg-triangular" class="small" type="button" title="Triangular decomposition (Wu pseudo-elimination) of the current system — an alternative to Gröbner that exhibits the solution structure (free variables, no-solution)">Triangular decomp.</button>' +
+        '        <button id="alg-saturate" class="small" type="button" title="Saturate the current system by the Möbius denominators ∏(1−z̄_j z_j) — removes the |z_j|=1 boundary stratum the cleared (●)/(★) denominators carry, so the existence count becomes the EXACT number of algebraic quadrature-domain solutions (e.g. the unit disk 4 → 2). Safe: a genuine QD has |z_j|<1, so nothing genuine is dropped.">Saturate (admissibility)</button>' +
         '        <button id="alg-propagate-all" class="small" type="button" title="Carry EVERY univalence constraint into the current system in one step, with all assumptions (reality, imaginary, fixed φ(0), pinned values) applied to each">Propagate constraints → current</button></div>' +
         '      <details class="algebra-advanced"><summary>Advanced</summary>' +
         '        <div class="algebra-line"><span class="algebra-line-label" title="Monomial order. lex = elimination order; grevlex = fastest general.">order</span>' +
@@ -990,6 +996,7 @@ const QD = _QD;
       $('#alg-groebner').addEventListener('click', () => doGroebner(null));
       $('#alg-autosolve').addEventListener('click', doAutoSolve);
       $('#alg-triangular').addEventListener('click', doTriangular);
+      $('#alg-saturate').addEventListener('click', doSaturate);
       $('#alg-propagate-all').addEventListener('click', doPropagateAll);
       $('#alg-classify').addEventListener('click', doClassify);
       $('#alg-dimension').addEventListener('click', doDimension);
@@ -1417,7 +1424,7 @@ const QD = _QD;
     // Cancel, and routes progress to the status line.
     let _abort = null;
     function setBusy(on, label) {
-      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-classify', 'alg-univalence', 'alg-resolvent', 'alg-bifurc', 'alg-moments-go', 'alg-autosolve',
+      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-saturate', 'alg-classify', 'alg-univalence', 'alg-resolvent', 'alg-bifurc', 'alg-moments-go', 'alg-autosolve',
         'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-real-detect', 'alg-propagate-all', 'alg-val-apply', 'alg-def-apply', 'alg-abbrev', 'alg-eq-apply']
         .forEach((id) => { const b = $('#' + id); if (b) b.disabled = on; });
       const pal = $('#alg-palette'); if (pal) pal.querySelectorAll('button').forEach((b) => { b.disabled = on; });
@@ -1472,6 +1479,20 @@ const QD = _QD;
       });
     }
 
+    // Saturate the current system by the Möbius denominators ∏(1−z̄z) → a labeled 'saturate' column that
+    // drops the {|z_j|=1} boundary stratum the cleared (●)/(★) denominators carry, so the existence count is
+    // the EXACT number of algebraic quadrature-domain solutions (finding B-1; e.g. the unit disk 4 → 2).
+    function doSaturate() {
+      if (_abort) return;
+      if (!ensureSeed()) return;
+      clearError();
+      const sel = canvas ? canvas.getSelection() : [];
+      let r; try { r = store.saturateMobius(sel.length ? sel : null); } catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
+      if (!r.ok) { showError('Saturate (admissibility): ' + withGuidance(r.reason || 'nothing to saturate')); return; }
+      if (canvas) canvas.clearSelection();
+      rerender(); refreshPickers();
+      toast('Saturated by ∏(1−z̄z): the |z_j| = 1 boundary stratum removed (' + r.created.length + ' generator' + (r.created.length === 1 ? '' : 's') + ') — the existence count is now the exact algebraic QD-solution count.');
+    }
     // Triangular decomposition of the current system → a triangular chain column.
     function doTriangular() {
       if (_abort) return;

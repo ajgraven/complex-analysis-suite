@@ -61,7 +61,11 @@ modulo stated equivalences** — never "unique among solutions found".
         (6, jsdom). **Gate GREEN: all 0; 1301 tests (+6), 149 files.** Browser-verified LIVE: rigorMeta +
         nodeInsideDisk exposed and correct in the running app (after clearing the PWA SW cache).
   - [ ] **S5 — unified "Prove existence/uniqueness" orchestrator** [G-1, PF-2] — #1 mission deliverable.
-  - [ ] **S3 — Möbius saturation DAG op** [B-1] — correctness ENHANCEMENT (exact count), after the headlines.
+  - [x] **S3 — Möbius saturation DAG op** [B-1] — DONE + committed. `store.saturateMobius(ids)` appends a
+        labeled 'saturate' column = ⟨I⟩:∏(1−z_j·z̄_j)^∞ (drops the {|z_j|=1} stratum; disk 4→2, genuine |z|<1
+        retained; safe — disjoint from the QD set). PROV_STORE + PROV_UI 'saturate' entries; toolbar button
+        "Saturate (admissibility)" + wire + busy-list. Test `vitest/qd-saturate-mobius.test.ts` (4). **Gate
+        GREEN: all 0; 1305 tests (+4), 150 files; PROV sync test passed.** Closes B-1 at the COUNT level.
   - [ ] **S6** CAS-export guard [F5] + LOW/MED batch.
 
 **EXECUTION-ORDER decision (final):** S1+S2 already fixed every WRONG result — the authoritative Certify verdict
