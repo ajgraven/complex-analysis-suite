@@ -73,6 +73,28 @@ describe("QiPoly (exact univariate over ℚ(i))", () => {
   });
 });
 
+describe("QiPoly derivative / gcd / squarefree", () => {
+  const x = QiPoly.variable();
+  const c = (n: number) => QiPoly.int(n);
+
+  it("derivative: d/dx(x³ + 2x) = 3x² + 2", () => {
+    expect(x.pow(3).add(x.scale(Gauss.int(2))).derivative().equals(x.pow(2).scale(Gauss.int(3)).add(c(2)))).toBe(true);
+  });
+
+  it("monic GCD: gcd((x−1)(x−2), (x−1)(x−3)) = x−1", () => {
+    const a = x.sub(c(1)).mul(x.sub(c(2)));
+    const b = x.sub(c(1)).mul(x.sub(c(3)));
+    expect(a.gcd(b).equals(x.sub(c(1)))).toBe(true);
+  });
+
+  it("squarefreePart collapses (x−1)²(x−2) to (x−1)(x−2)", () => {
+    const p = x.sub(c(1)).pow(2).mul(x.sub(c(2)));
+    expect(p.squarefreePart().equals(x.sub(c(1)).mul(x.sub(c(2))))).toBe(true);
+    // an already-squarefree polynomial is returned unchanged (up to being monic here).
+    expect(x.sub(c(1)).mul(x.sub(c(2))).squarefreePart().equals(x.sub(c(1)).mul(x.sub(c(2))))).toBe(true);
+  });
+});
+
 describe("rendering", () => {
   it("renderQiPolyText formats a polynomial in a named variable", () => {
     const c = QiPoly.variable();

@@ -1401,6 +1401,28 @@ z^2+c</textarea
             </div>
           </details>
 
+          <!-- Component data: exact Gleason / dynatomic / multiplier polynomials for period-n components. -->
+          <details class="control-group" id="component-data-group">
+            <summary>Component data (z²+c)</summary>
+            <div class="controls">
+              <p class="exterior-status">
+                Exact algebraic data for the period-n hyperbolic components of the Mandelbrot set,
+                computed in exact ℚ(i): the <strong>Gleason</strong> polynomial G<sub>n</sub>(c) (roots =
+                period-n centres), the <strong>dynatomic</strong> polynomial Φ<sub>n</sub>(z,c) (roots in
+                z = period-n points), and the special c where a period-n cycle is parabolic —
+                <strong>root points</strong> (multiplier 1) and <strong>period-doubling</strong> points
+                (multiplier −1). Everything is <em>= exact</em>; the numeric values are the roots of the
+                exact polynomials.
+              </p>
+              <label class="exterior-n-label">
+                Period n
+                <input type="number" id="component-period" min="1" max="6" value="3" size="4" />
+              </label>
+              <div id="component-data-math"></div>
+              <p class="exterior-status" id="component-data-centers"></p>
+            </div>
+          </details>
+
           <!-- Yoccoz puzzle: the depth-n graph of rays landing at the α-preimages (dynamical plane). -->
           <details class="control-group" id="yoccoz-group">
             <summary>Yoccoz puzzle (z²+c)</summary>

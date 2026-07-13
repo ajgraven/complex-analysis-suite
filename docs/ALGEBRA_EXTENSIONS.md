@@ -48,7 +48,7 @@ every recommendation:
 | 14 ✅ | Discriminant variety + parametric real-root classification (family bifurcation set) — `discriminantVariety` (any #params) + the 1-param count via #2b-1 | ★★ | Moderate | subresultants, elimination, real-root isolation |
 | 15 ◐ | Curve parametrization + genus + Puiseux (rational boundary maps, cusps) — `curveGenus` (genus + rationality, exact projective smoothness) ✅; Puiseux / singular genus / parametrization ◻ | ★★ | Moderate | series/reversion, resultants, factorization |
 | 16 ◐ | **Exact correspondence curves + σ (retire Correspondences' numeric branch engine)** — in-app strict-TS exact engine `correspondenceCurve` / `cuspLocus` (ℚ(i) deflation + Bareiss resultant) ✅ (PR-A); app wiring (curve readout + cusp overlay, seed the numeric path) ◻ (PR-B) | ★★ | Moderate | conjugate-var scheme, exact poly division (deflation), resultants |
-| 17 | Dynatomic / Gleason / multiplier polynomials (exact CD/Tricorn component data) | ★★ | Moderate | resultants, exact division, zero-dim solve |
+| 17 ✅ | Dynatomic / Gleason / multiplier polynomials (exact CD component data) — Gleason G_n, dynatomic Φ_n, multiplier-specialization (root/period-doubling points) on the new **@cas/exact** package + a CD "Component data" panel. Full δ_n(λ,c) surface + Tricorn anti-holo multiplier deferred (noted) | ★★ | Moderate | resultants, exact division, zero-dim solve |
 | 18 | Shape-from-moments (Prony–Hankel) reconstruction + QD-order rank test | ★★ | Moderate | zero-dim root-find, exact null-space/Vandermonde |
 | 19 | Positive-dim / real radical; multivariate factorization; Hele-Shaw; mother bodies | ★–★★ | Mod–Hard | various above |
 | 20 | **Certified numerics + positive-dim solving via tooling** (see Tier 5) | ★★★ | Varies | Arb/PARI WASM (client) · msolve/HC.jl (server) |
@@ -78,8 +78,13 @@ every recommendation:
 > done in its feasible form.** · **◐ #16** (cross-app) — the EXACT deleted-correspondence curve `C(w, z̄)` + cusp
 > locus, an in-app strict-TS ℚ(i) engine in `apps/correspondences/src/exact/` (`correspondenceCurve` deflates the
 > trivial branch exactly; `cuspLocus` = `disc_w C` via Sylvester + fraction-free Bareiss; deltoid → `2w² − z̄²w − z̄`,
-> cusps `z̄⁴+8z̄`; PR #55, PR-A). App wiring (curve readout + cusp overlay; seed the numeric branch path) is PR-B.
-> **Not started:** #17–#20.
+> cusps `z̄⁴+8z̄`; PR #55, PR-A + PR #56 app readout). · **✅ #17** (cross-app) — dynatomic/Gleason/multiplier
+> exact CD component data. This was the ADR-0007 THIRD consumer, so the exact-poly engine was **extracted to a new
+> shared package `@cas/exact`** (Frac/Gauss ℚ(i), QiPoly + BiPoly, resultant/discriminant, gcd/squarefree; PR #57);
+> then CD's `combinatorics/dynatomic.ts`: Gleason `G_n(c)` (period-n centres, PR #58), dynatomic `Φ_n(z,c)` (period-n
+> points, PR #59), multiplier-specialization `Res_z(Φ_n,(fⁿ)′−λ₀)` → root points (c=1/4 cardioid cusp) / period-
+> doubling (c=−3/4) (PR #60), and a CD "Component data" KaTeX panel (PR-5). Full δ_n(λ,c) surface + Tricorn
+> anti-holomorphic multiplier deferred (noted). **Not started:** #18–#20.
 
 ---
 

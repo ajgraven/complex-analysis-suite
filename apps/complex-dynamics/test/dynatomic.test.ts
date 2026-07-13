@@ -146,8 +146,20 @@ describe("Multiplier-specialization polynomials", () => {
     expect(hasRoot(multiplierSpecializationRoots(1, Gauss.int(-1)), -0.75)).toBe(true); // period-1→2 bifurcation
   });
 
-  it("period-2: root point c = −3/4 (bulb meets the cardioid), doubling c = −5/4", () => {
-    expect(hasRoot(multiplierSpecializationRoots(2, Gauss.ONE), -0.75)).toBe(true);
-    expect(hasRoot(multiplierSpecializationRoots(2, Gauss.int(-1)), -1.25)).toBe(true);
+  it("period-2: a single root point c = −3/4 (bulb meets the cardioid), doubling c = −5/4", () => {
+    // squarefree ⇒ each distinct parabolic parameter appears once (not the n-fold resultant multiplicity).
+    const rp = multiplierSpecializationRoots(2, Gauss.ONE);
+    expect(rp).toHaveLength(1);
+    expect(hasRoot(rp, -0.75)).toBe(true);
+    const pd = multiplierSpecializationRoots(2, Gauss.int(-1));
+    expect(pd).toHaveLength(1);
+    expect(hasRoot(pd, -1.25)).toBe(true);
+  });
+
+  it("period-3 has 3 distinct root points (one per period-3 component: airplane + rabbit pair)", () => {
+    const rp = multiplierSpecializationRoots(3, Gauss.ONE);
+    expect(rp).toHaveLength(3);
+    // one real (the airplane) and a complex-conjugate pair (rabbit / corabbit).
+    expect(rp.filter((r) => Math.abs(r[1]) < 1e-6)).toHaveLength(1);
   });
 });
