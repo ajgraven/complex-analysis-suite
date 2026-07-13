@@ -828,6 +828,7 @@ const QD = _QD;
         '    <button id="alg-steps-x" class="algebra-steps-x" type="button" title="Hide this hint">×</button>' +
         '  </div>' +
         '  <div class="row algebra-primary">' +
+        '    <button id="alg-prove" class="small heavy-op" type="button" title="One click, seed → certified verdict: auto-assume reality (if h is real-axis symmetric), propagate linear consequences, then run the FULL Certify-univalence pipeline — regime (inconsistent / positive-dim / zero-dim) → certified real solve (RUR + exact Sturm) → EXACT |z_j|<1 admissibility gate → Schur–Cohn fold + boundary-simple filter → gauge quotient → numeric cross-check — and label the verdict with a =/≤/≈ rigor badge. Every step is a new labeled column; if still underdetermined it offers one-click pin/split, never failing ambiguously.">✦ Prove existence / uniqueness</button>' +
         '    <button id="alg-autosolve" class="small heavy-op" type="button" title="Semi-autonomous: auto-assume reality (if h is symmetric), propagate linear consequences, then determine existence/uniqueness and the explicit real solutions — each step a new labeled column">★ Auto-reduce &amp; solve</button>' +
         '    <button id="alg-seed" class="small" type="button" title="Generate the original (●)/(★)/gauge system from the current bounded solve at column 0 (replaces the graph; assumptions are then added as columns)">Generate / re-seed</button>' +
         '    <button id="alg-seed-moment" class="small" type="button" title="Seed the Aharonov–Shapiro moment system: order-2 quadrature domains from their harmonic moments M₀, M₁ (symbolic — needs no solve; pin the moments via “Set values” to determine a specific QD)">Seed A–S moments</button>' +
@@ -1002,6 +1003,7 @@ const QD = _QD;
       $('#alg-dimension').addEventListener('click', doDimension);
       $('#alg-solve').addEventListener('click', doSolve);
       $('#alg-univalence').addEventListener('click', doCertifyUnivalence);
+      $('#alg-prove').addEventListener('click', doProveExistenceUniqueness);
       $('#alg-resolvent').addEventListener('click', doResolvent);
       $('#alg-resolvent-var').addEventListener('mousedown', refreshResolventVars);
       { const bb = $('#alg-bifurc'); if (bb) bb.addEventListener('click', doBifurcation); }
@@ -1424,7 +1426,7 @@ const QD = _QD;
     // Cancel, and routes progress to the status line.
     let _abort = null;
     function setBusy(on, label) {
-      ['alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-saturate', 'alg-classify', 'alg-univalence', 'alg-resolvent', 'alg-bifurc', 'alg-moments-go', 'alg-autosolve',
+      ['alg-prove', 'alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-saturate', 'alg-classify', 'alg-univalence', 'alg-resolvent', 'alg-bifurc', 'alg-moments-go', 'alg-autosolve',
         'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-real-detect', 'alg-propagate-all', 'alg-val-apply', 'alg-def-apply', 'alg-abbrev', 'alg-eq-apply']
         .forEach((id) => { const b = $('#' + id); if (b) b.disabled = on; });
       const pal = $('#alg-palette'); if (pal) pal.querySelectorAll('button').forEach((b) => { b.disabled = on; });
@@ -1636,6 +1638,28 @@ const QD = _QD;
       })();
     }
 
+    // THE one-click orchestrator (finding G-1): from the seeded system to the AUTHORITATIVE genuine-QD
+    // verdict, with no manual op-chaining. Runs the cheap reductions (auto-reality if h is real-axis
+    // symmetric, then linear propagation to a fixpoint — each a labeled column) and then the FULL
+    // Certify-univalence pipeline (regime → certified real solve → EXACT |z_j|<1 admissibility gate →
+    // Schur–Cohn fold + boundary-simple filter → gauge quotient → numeric cross-check → rigor-badged
+    // verdict). If the reduced system is still underdetermined, doCertifyUnivalence shows the
+    // positive-dimensional verdict + one-click pin/split actions — it never fails ambiguously. Reuses
+    // doAutoSolve's reduction prelude + doCertifyUnivalence (no new math; the sound pieces, orchestrated).
+    function doProveExistenceUniqueness() {
+      if (_abort) return;
+      if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
+      if (!ensureSeed()) return;
+      clearError();
+      // Cheap reductions first (best-effort — Certify still runs on the current system on any error).
+      try {
+        const sym = QE.realAxisSymmetry(activeEnv.hData);
+        if (sym && sym.allReal && !store.realVars.length) { const r = store.assumeReal(store.baseVariables()); if (r && r.ok) rerender(); }
+        for (let i = 0; i < 4; i++) { const pr = store.reducePropagate(); if (!pr || !pr.ok) break; rerender(); if (pr.inconsistent) break; }
+        refreshPickers();
+      } catch (e) { /* the prelude is best-effort; the certify pipeline still runs */ }
+      doCertifyUnivalence();
+    }
     // The known quadrature-data values (a_j, C_{j,s} and their conjugates) keyed by the
     // conjugate-model variable names — to PIN the parameters for the existence verdict
     // (they are given data, not unknowns).

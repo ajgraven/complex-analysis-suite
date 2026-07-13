@@ -138,7 +138,15 @@ The keystone capabilities that turn the engine on the app's mission:
   `S(z)` — turning a numerically-traced boundary into an exact curve (honest `=`).
 - **Certified existence/uniqueness** (#2): build the coefficient↔data system and certify "these data yield
   exactly *k* QDs" via certified real counting + triangular decomposition + Schur–Cohn — including
-  1-parameter bifurcation and the multi-parameter bifurcation-set equation.
+  1-parameter bifurcation and the multi-parameter bifurcation-set equation. The **genuine-QD certificate**
+  (`Certify univalence`) filters the algebraic solutions to bounded QDs: an **exact `|z_j|<1` node-location
+  gate** (`QDEquations.nodeInsideDisk` — a solution whose reconstructed φ has a pole in 𝔻 is rejected), then
+  the exact Schur–Cohn fold + exact boundary double-point tests, the rotation-gauge quotient, and a numeric
+  cross-check. The raw real-solution *count* is a rigorous **upper bound** on #QD; **`saturateMobius`** (a
+  labeled `saturate` DAG column, `⟨I⟩:∏(1−z_j·z̄_j)^∞`) removes the `{|z_j|=1}` boundary stratum the cleared
+  denominators carry to make it exact (e.g. the unit disk `h=1/w`: 4→2). A single **"✦ Prove
+  existence/uniqueness"** action orchestrates the whole path (auto-reality → propagate → the certificate),
+  falling back to a positive-dimensional "pin/split" verdict rather than failing ambiguously.
 - **The algebra→geometry loop** (#3): plot the ℂ solutions and reconstruct the quadrature domain from an
   algebraic solution (`phiFromAlgebraSolution`) — the certify-univalence verdict even draws a thumbnail of
   the reconstructed boundary `φ(∂𝔻)` with its quadrature nodes `φ(zⱼ)` — closing the exact result back to
@@ -162,9 +170,14 @@ The keystone capabilities that turn the engine on the app's mission:
   variables asserted real (`v̄ ≡ v`) or imaginary (`v̄ ≡ −v`), and a fixable Riemann-map gauge `φ(0)=w₀`.
   Verdicts computed under an assumption are honestly labeled with a **"Computed under:"** ledger, and a
   slice restriction is flagged as a *lower bound* (it can drop off-slice domains).
+- **The one-click proof action.** A pinned **"✦ Prove existence/uniqueness"** button runs the whole pipeline
+  from the seeded system to the authoritative genuine-QD verdict (auto-reality → linear propagation → the
+  certificate), with no manual op-chaining — the single entry point for the semi-autonomous proof workflow.
 - **Panels & readouts.** A KaTeX-typeset node canvas with arrowed derivation edges, a lineage-highlighting
-  minimap, and collapsible cards; a certify-univalence **verdict card** (with the assumptions ledger,
-  solution rows, one-click remediation actions, and the reconstructed-domain thumbnail); a palette of
+  minimap, and collapsible cards; a certify-univalence **verdict card** led by a prominent color-coded
+  **rigor badge** (`=` exact/certified · `≤` bound · `≈` estimate · `⚠` partial · `?` undetermined, so an
+  estimate can never be misread as certified) and carrying the "Computed under:" assumptions ledger, solution
+  rows, one-click remediation actions, and the reconstructed-domain thumbnail; a palette of
   **univalence-constraint forms** (convex, star-like, spiral-like, local `φ′≠0`, global injectivity, and
   export-only convex/star border loci); the **Bifurcation over [param]** panel; the **Shape from moments**
   panel; a **resolvent / discriminant** readout; and **rigor badges** on every result.
@@ -220,3 +233,11 @@ consistency, a second-reduction differential, and an external Sympy corpus). Def
 remain: Wang leading-coefficient distribution (a polynomial non-monic in every variable is returned whole);
 Puiseux singular genus & rational parametrization; Hele-Shaw / mother bodies; and certified numerics /
 positive-dimensional solving via client-WASM or opt-in backends (roadmap #20).
+
+A **maturity review of the existence/uniqueness proof workflow** ([`docs/algebra-review/`](algebra-review/))
+hardened the genuine-QD certificate: an exact `|z_j|<1` node-location admissibility gate (a solution whose φ
+has a pole in 𝔻 is no longer counted), Möbius `saturateMobius` to make the raw count exact (the unit disk
+now reads 2, not 4), honest labeling of the algebraic count as an upper bound, a color-coded `=`/`≤`/`≈`
+rigor badge on every verdict, and the one-click "✦ Prove existence/uniqueness" orchestrator. The one
+documented residual is that the per-solution univalence certificate is exact arithmetic on a *rationalized*
+point (the certified isolating box is not yet substituted); see `docs/algebra-review/FINAL_REPORT.md` §7.

@@ -1,0 +1,109 @@
+# QD Algebra Module — Maturity Review: Final Report
+
+> Branch `algebra-maturity-review` (off `master` @ `355ed9c`). Full evidence: `AUDIT.md` (findings),
+> `PLAN.md` (slices), `audit/A`…`audit/G` (per-track), `orchestrator-notes.md` (verdict-chain model),
+> `STATE.md` (re-entrant log). This report is the closeout.
+
+## 1. The most important findings
+
+The exact ℚ(i) kernel and the store/worker/export engineering are **sound** (7-track audit + prior
+reviews). Every material gap sat at the **workflow / labeling edge** — the certificate chain did not
+fully imply the displayed "# genuine quadrature domains", and rigor was not legible. Ranked:
+
+1. **CRITICAL — no `|z_j|<1` admissibility gate (D-1).** `doCertifyUnivalence` counted an algebraic
+   solution whose reconstructed `φ = w₀ + Σ conj(A_{j,k})ζᵏ/(1−conj(z_j)ζ)ᵏ` has a pole at `1/conj(z_j)`
+   *inside* 𝔻 (when `|z_j|≥1`) as a genuine bounded QD. `clearDenominators` drops the `(1−z̄_j z)` factors,
+   so all four univalence filters were blind to it (repro `z₁=2`: filters pass, `evalPhi(0.5)` throws at
+   the interior pole). The numeric direct solver already enforced `0<|z₀|<1`; only the algebra omitted it.
+2. **HIGH (flagship) — unsaturated count over-counts (B-1).** The existence count analyzed
+   `V(cleared)=V(QD)∪{|z_j|=1}` directly, so the *unit disk* `h=1/w` reported **"4 real quadrature
+   domains"** (true 2; the extra two are `z=±1`). `saturate` existed but was never invoked.
+3. **HIGH — the raw count was mislabeled a QD count (C-1) and the default gauge pin could drop domains
+   (A-2).** `doClassify(==1)`/`doAutoSolve`/the track chip printed the certified *algebraic* count as
+   "Unique/N real **quadrature domains**"; and pinning `φ(0)=w₀` (default = pole centroid, on by default)
+   silently restricts to domains *containing* w₀ — a possible false "unique" — mislabeled "rotation gauge".
+4. **CRITICAL (UX) — no rigor legibility + no single entry point (G-2, G-1).** The verdict card was one
+   flat text node with **no `=`/`≤`/`≈` badge**, so a certified result and an estimate looked identical;
+   and the authoritative `Certify univalence` was buried and didn't auto-reduce (dead-ended positive-dim).
+5. **HIGH (rigor) — the per-solution "certified" cert ran on a rationalized point (PF-1/D-2/E2).** The
+   Schur–Cohn fold + boundary tests are exact *arithmetic* but on `ratApprox(numeric coord)`, not the exact
+   algebraic root (the certified isolating box at `sym-core.mjs:1968` is discarded); "certified" was not
+   downgraded when a candidate's filter fell back to numeric.
+
+## 2. What was implemented, and why (all gate-green, value-ordered)
+
+| Slice | Finding | What | Why |
+|---|---|---|---|
+| **S1** | D-1 | Exact `|z_j|<1` admissibility gate: pure `QDEquations.nodeInsideDisk(re,im)` (ℚ/BigInt `|z|²` vs 1) + a gate in `doCertifyUnivalence` that rejects any candidate with a node on/outside 𝔻 **before** the fold/boundary filters. | Stops the authoritative verdict counting non-QDs (pole inside 𝔻). Exact. |
+| **S2** | C-1, A-2 | Honest labeling: `doClassify`/`doAutoSolve`/the chip say "real algebraic solution(s) — an upper bound on #QD; run Certify univalence", not "quadrature domains"; the w₀ ledger states the containment restriction + the correct **center/translation** gauge name. | The count is a certified *upper bound*, not #QD; a w₀-pinned "unique" is legibly conditional. |
+| **S3** | B-1 | Möbius saturation as a first-class DAG op: `store.saturateMobius` appends a labeled `saturate` column `⟨I⟩:∏(1−z_j·z̄_j)^∞` + a toolbar button + PROV_STORE/UI entries. | Makes the raw count **exact** (disk 4→2) by dropping the `{|z_j|=1}` stratum — safe (disjoint from the genuine `|z_j|<1` set). |
+| **S4** | G-2, D-2 | Structured `rigor` field + colored `=`/`≤`/`≈`/`⚠`/`?` pill: pure `QD.AlgebraCanvas.rigorMeta` + a pill in `setVerdict`; every verdict gets a rigor level. `certRigor` is `'exact'` **only** when the count is certified AND every candidate's filter was exact (`allExactFilter`) AND cross-check clean — closing D-2. | Rigor is unmissable; an estimate can never read as certified at a glance. |
+| **S5** | G-1 | The one-click **"✦ Prove existence/uniqueness"** orchestrator: chains the reduce prelude (auto-reality → propagate) into the full S1-gated, S4-badged Certify pipeline; falls back to the positive-dim pin/split verdict — never ambiguous. | A single legibly-rigorous entry point from seed → authoritative verdict; reuses the sound pieces (no new math). |
+
+## 3. Files changed
+
+- `apps/quadrature-domains/app/qd-equations.mjs` — `nodeInsideDisk` predicate (S1).
+- `apps/quadrature-domains/app/algebra/algebra-ui.mjs` — S1 gate + `allExactFilter`; S2 wording + gauge ledger;
+  S3 button/handler; S4 `certRigor`/`classifyRigor` + rigor on every verdict; S5 orchestrator + button + PROV_UI `saturate`.
+- `apps/quadrature-domains/app/algebra/algebra-canvas.mjs` — `rigorMeta` + the verdict pill (S4).
+- `apps/quadrature-domains/app/algebra/algebra-store.mjs` — `saturateMobius` + PROV_STORE `saturate` (S3).
+- Tests: `vitest/qd-node-location.test.ts` (15), `algebra-rigor-badge.test.ts` (6), `qd-saturate-mobius.test.ts` (4).
+- Docs: `docs/algebra-review/*` (this review). ALGEBRA_MODULE.md updated to match shipped code.
+
+## 4. Tests & results
+
+- Baseline (pre-change): lint/typecheck/test/build all exit 0; vitest 147 files / **1280 tests**.
+- After S1–S5: lint/typecheck/test/build all exit 0; vitest **150 files / 1305 tests** (+25 new). QD headless
+  `node-suite` ~90s. No regressions at any commit; PROV_STORE/UI sync test passes with the new `saturate` op.
+- **Browser-verified live** (after busting the PWA service-worker cache): `nodeInsideDisk`, `rigorMeta`,
+  `saturateMobius` exposed + correct in the running app; the verdict card renders the rigor pill (gray `?` for
+  a positive-dim verdict), the honest center-gauge ledger, and the "Saturate (admissibility)" + "✦ Prove
+  existence/uniqueness" buttons.
+
+## 5. What is now genuinely certified
+
+For a **classical bounded QD** given exact quadrature data, "**✦ Prove existence/uniqueness**" now yields a
+verdict whose rigor is legibly badged and honestly bounded:
+
+- **`=` (exact/certified)** — when the system is zero-dimensional, the real-solution count is certified
+  (RUR + exact Sturm / Hermite), **every** counted candidate passes the **exact** `|z_j|<1` gate + exact
+  Schur–Cohn fold + exact boundary double-point test, the gauge quotient is applied, and the numeric
+  cross-check matches. This is a genuine "exactly *k* bounded QDs (up to rotation, among domains containing
+  w₀ if pinned)". An **inconsistent** system certifies `=` "no QD".
+- **`≤` (bound)** — the raw algebraic count is a certified upper bound on #QD; `saturateMobius` tightens it
+  to the exact algebraic count by removing the `{|z_j|=1}` stratum.
+- **`≈` (estimate)** — when a candidate's fold/boundary filter fell back to numeric, or the coordinates were
+  approximate; **`⚠` (partial)** when the numeric solver under-separated a cluster; **`?`** for
+  positive-dimensional / over-cap. None of these can be misread as certified.
+
+## 6. Remaining gaps
+
+- **Mathematical (the deep rigor item — PF-1/E2/D-2):** the per-solution univalence certificate is exact
+  arithmetic on the `ratApprox`'d *midpoint*, not the exact algebraic root. To make `=` unconditional,
+  evaluate the Schur–Cohn fold + boundary tests at the exact algebraic point using the certified isolating
+  box already computed at `sym-core.mjs:1968` (interval Schur–Cohn, or substitute the RUR coordinates).
+- **A-1 (generation):** `clearDenominators` records no excluded locus; S3 reconstructs the Möbius factors in
+  the store. Recording them at generation would let `classify` saturate automatically + generalize to Schwarz.
+- **Engineering (all LOW, from track F):** `_CAP_KEYS` omits some worker-read caps (F1); the differential
+  worker/main test omits solveRealCertified/shapeFromMoments/parametricRealCount1D (F6); CAS export of a
+  complex-coeff column can mean a different quantity than the verdict (F5 — a warn/guard).
+- **Decomposition (B-2/B-3):** interactive "Eliminate" uses the raw Sylvester resultant (extraneous factors);
+  `triangularize` doesn't surface regular-chain initials.
+
+## 7. Next three highest-value milestones
+
+1. **Exact-at-the-box univalence certificate (PF-1).** Turn the `=` badge from "certified-count +
+   exact-arithmetic-on-rationalized-point" into a genuine exact-at-the-algebraic-root certificate. This is
+   the single highest-value remaining rigor item; the isolating box is already in hand.
+2. **Orchestrator depth (extend S5).** Add the explicit strategy plan + live per-stage progress + a
+   branch/case tree as first-class objects, auto-apply `saturateMobius` before counting, and one-click export
+   of the derivation DAG (JSON / LaTeX / Maple RCTD) — the fuller Phase-3 vision on the S5 foundation.
+3. **Generation-side saturation + export fidelity (A-1 + F5).** Record the dropped denominators at
+   generation so `classify` reports the exact count by default (not just via the manual op), and guard the
+   CAS export against the conjugate-model semantic mismatch.
+
+**Bottom line:** the module was already a sound exact CAS; this review made its **proof workflow honest and
+its rigor legible** — closing the two critical correctness gaps (the missing admissibility gate and the
+unsaturated over-count), the over-claiming labels, and the rigor-legibility gap, and adding the one-click
+orchestrated path. A certified `=` now means what it says, modulo one clearly-documented, well-scoped
+rationalization refinement (PF-1).

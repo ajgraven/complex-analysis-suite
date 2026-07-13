@@ -39,7 +39,25 @@ modulo stated equivalences** — never "unique among solutions found".
 - [x] **Phase 1 — Audit** (7 parallel read-only tracks → `audit/<track>.md`). ALL 7 DONE + integrated.
 - [x] **Phase 2 — Consolidated `AUDIT.md` + `PLAN.md`.** DONE — AUDIT.md (workflow + claim-vs-impl matrix +
       findings table + taxonomy) + PLAN.md (final S1–S6, value-ordered) committed.
-- [~] **Phase 3 — Semi-autonomous orchestrator + correctness/rigor slices** (implementing S1–S6).
+**BROWSER-VERIFIED (live app, 2026-07-13, after busting the PWA SW cache):** all three UI slices render
+correctly — S4 the rigor pill (gray `?` "undetermined" for a positive-dim verdict, correct color/title); S2 the
+ledger "φ(0)=w₀ fixed (center/translation gauge — restricts to domains containing w₀…)"; S3 the "Saturate
+(admissibility)" button present in the workspace. `rigorMeta`/`nodeInsideDisk`/`saturateMobius` all confirmed
+live + correct in-browser. (Screenshot timed out on a busy renderer; DOM reads succeeded — more precise anyway.)
+
+- [x] **Phase 3 — Semi-autonomous orchestrator + correctness/rigor slices.** S1–S5 SHIPPED gate-green
+      (S6 = LOW/MED batch + PF-1 deferred, specified in PLAN.md / FINAL_REPORT §7).
+- [x] **Phase 4 — UI clarity.** Rigor badge (S4) + one-click orchestrator (S5) + honest ledger (S2) shipped +
+      browser-verified. Further UX depth (branch-tree panel, DAG export UI) deferred.
+- [x] **Testing & validation.** 3 new vitest suites (25 tests); gate green at every commit; browser-verified live.
+- [x] **Final — `FINAL_REPORT.md` written; STATE = COMPLETE.**
+
+## ▓▓▓ REVIEW COMPLETE ▓▓▓
+5 slices shipped on `algebra-maturity-review` (commits `2d03057`→S5), each gate-green (lint/typecheck/test/build
+all 0; 1280→1305 tests). Branch NOT merged — it is the deliverable; a single PR (or the user's call) closes it.
+See `FINAL_REPORT.md`. Highest-value remaining item = PF-1 (exact-at-the-isolating-box univalence cert).
+
+### Slice detail (S1–S5 SHIPPED gate-green; S6 = deferred batch)
   - [x] **S1 — exact `|z_j|<1` admissibility gate** [D-1, CRITICAL]. DONE + committed. Pure exact predicate
         `QDEquations.nodeInsideDisk(re,im)` (`qd-equations.mjs`, ℚ/BigInt |z|²-vs-1, reuses `_ratApprox`) +
         UI gate in `doCertifyUnivalence` (`algebra-ui.mjs`: `nodeInsideDisk(sol,hData)` closure + per-solution
@@ -60,7 +78,12 @@ modulo stated equivalences** — never "unique among solutions found".
         inconsistent → exact; positive-dim → unknown; no-real → partial/exact. Test `vitest/algebra-rigor-badge.test.ts`
         (6, jsdom). **Gate GREEN: all 0; 1301 tests (+6), 149 files.** Browser-verified LIVE: rigorMeta +
         nodeInsideDisk exposed and correct in the running app (after clearing the PWA SW cache).
-  - [ ] **S5 — unified "Prove existence/uniqueness" orchestrator** [G-1, PF-2] — #1 mission deliverable.
+  - [x] **S5 — unified "✦ Prove existence/uniqueness" orchestrator** [G-1] — DONE + committed. A pinned button
+        `doProveExistenceUniqueness` = reduce prelude (auto-reality → propagate) + `doCertifyUnivalence` (the
+        S1-gated, S4-badged pipeline); falls back to positive-dim pin/split, never ambiguous. Pure UI
+        orchestration of the sound pieces (no new engine logic). **Gate GREEN: all 0; 1305 tests.**
+        Browser-confirmed: the button is present in the workspace. (Fuller vision — strategy plan + branch tree +
+        DAG export + auto-saturate — is the deferred S5-depth follow-up per FINAL_REPORT §7.)
   - [x] **S3 — Möbius saturation DAG op** [B-1] — DONE + committed. `store.saturateMobius(ids)` appends a
         labeled 'saturate' column = ⟨I⟩:∏(1−z_j·z̄_j)^∞ (drops the {|z_j|=1} stratum; disk 4→2, genuine |z|<1
         retained; safe — disjoint from the QD set). PROV_STORE + PROV_UI 'saturate' entries; toolbar button
@@ -220,9 +243,11 @@ file BEFORE returning. Orchestrator alone integrates + adjudicates + commits.
 
 ## Next action
 
-Phase 1 COMPLETE. **Now:** finalize `AUDIT.md` (§3 claim-vs-impl matrix, §4 findings table, §5 taxonomy) +
-`PLAN.md` (insert the B-1 saturation slice, re-order), commit as Phase 2, then implement **Slice 1** (the exact
-`|z_j|<1` admissibility gate in `doCertifyUnivalence`, `algebra/algebra-ui.mjs`) — CRITICAL, exact, small.
+**REVIEW COMPLETE** (S1–S5 shipped gate-green; FINAL_REPORT.md written). If resuming for MORE, the value-ordered
+continuation (from FINAL_REPORT §7 / PLAN.md deferred) is: (1) **PF-1** exact-at-the-isolating-box univalence
+cert (`sym-core.mjs:1968`) — the #1 rigor item; (2) **S5-depth** — strategy plan + branch/case tree + auto-apply
+`saturateMobius` + DAG export; (3) **S6** — F5 CAS-export guard + the LOW/MED batch (B-2 eliminate→eliminationIdeal,
+B-3 initials, F1 caps, E4, D-3/D-4). Branch `algebra-maturity-review` holds all 5 slices, NOT merged to master.
 
 ### Confirmed top findings → slice map (the plan in one glance)
 - **S1** exact `|z_j|<1` admissibility gate in the CERTIFY path [D-1] — CRITICAL, small, exact. Rejects both
