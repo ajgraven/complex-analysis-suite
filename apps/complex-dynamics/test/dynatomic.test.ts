@@ -14,7 +14,16 @@ import {
   iteratedMap,
   mandelbrotCenters,
   mobius,
+  multiplierMap,
+  multiplierSpecializationPoly,
+  multiplierSpecializationRoots,
+  periodDoublingPoly,
+  rootPointPoly,
 } from "../src/combinatorics/dynatomic";
+
+// Is a target complex value among the numeric roots?
+const hasRoot = (roots: [number, number][], re: number, im = 0): boolean =>
+  roots.some((r) => Math.hypot(r[0] - re, r[1] - im) < 1e-8);
 
 const c = QiPoly.variable();
 const int = (n: number) => QiPoly.int(n);
@@ -117,5 +126,28 @@ describe("Dynatomic polynomials Φ_n(z,c) — exact period-n points", () => {
     // Φ_1 · Φ_3 = f³(z) − z  (the period-3 points are those of exact period 1 or 3)
     const prod = dynatomicPolynomial(1).mul(dynatomicPolynomial(3));
     expect(prod.equals(f3MinusZ)).toBe(true);
+  });
+});
+
+describe("Multiplier-specialization polynomials", () => {
+  const z = BiPoly.variable();
+
+  it("multiplier maps: (f)′ = 2z, (f²)′ = 4z³ + 4c·z", () => {
+    expect(multiplierMap(1).equals(z.scaleInner(QiPoly.int(2)))).toBe(true);
+    const m2 = z.pow(3).scaleInner(QiPoly.int(4)).add(z.scaleInner(c.scale(Gauss.int(4))));
+    expect(multiplierMap(2).equals(m2)).toBe(true);
+  });
+
+  it("period-1: centers ∝ G_1, root point 4c−1 (c = 1/4 cardioid cusp), doubling 4c+3 (c = −3/4)", () => {
+    expect(multiplierSpecializationPoly(1, Gauss.ZERO).equals(c)).toBe(true); // λ=0 → c (= G_1)
+    expect(rootPointPoly(1).equals(c.scale(Gauss.int(4)).sub(QiPoly.int(1)))).toBe(true); // 4c − 1
+    expect(periodDoublingPoly(1).equals(c.scale(Gauss.int(4)).add(QiPoly.int(3)))).toBe(true); // 4c + 3
+    expect(hasRoot(multiplierSpecializationRoots(1, Gauss.ONE), 0.25)).toBe(true); // cardioid cusp
+    expect(hasRoot(multiplierSpecializationRoots(1, Gauss.int(-1)), -0.75)).toBe(true); // period-1→2 bifurcation
+  });
+
+  it("period-2: root point c = −3/4 (bulb meets the cardioid), doubling c = −5/4", () => {
+    expect(hasRoot(multiplierSpecializationRoots(2, Gauss.ONE), -0.75)).toBe(true);
+    expect(hasRoot(multiplierSpecializationRoots(2, Gauss.int(-1)), -1.25)).toBe(true);
   });
 });

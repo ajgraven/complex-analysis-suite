@@ -24,7 +24,7 @@
  * The multiplier polynomials follow (they eliminate z by a resultant). Pure module — no DOM / GL.
  */
 import { makeDurandKerner, tupleAlgebra, type ComplexTuple } from "@cas/core";
-import { BiPoly, Gauss, QiPoly, renderBiPolyText, renderQiPolyText } from "@cas/exact";
+import { BiPoly, Gauss, primitivePoly, QiPoly, renderBiPolyText, renderQiPolyText, resultant } from "@cas/exact";
 
 const A = tupleAlgebra;
 
@@ -98,28 +98,22 @@ export function gleasonText(n: number): string {
 }
 
 /**
- * The numeric period-n centers — roots of the exact Gleason polynomial G_n, via @cas/core's Durand–Kerner
- * (G_n is monic, so it is solved directly). Returns [] for the degenerate empty case.
+ * Numeric roots of an exact ℚ(i)[c] polynomial, via @cas/core's Durand–Kerner (seeded on a Cauchy-bound
+ * circle; the linear case is closed-form). Bridges the exact engine to the numeric plane — the c where an
+ * exact component-data polynomial vanishes (centers, root points, period-doubling points).
  */
-export function mandelbrotCenters(n: number): ComplexTuple[] {
-  const g = gleasonPolynomial(n);
-  const deg = g.degree();
+function rootsOfQiPoly(p: QiPoly): ComplexTuple[] {
+  const deg = p.degree();
   if (deg < 1) return [];
-  const coeffs = g.coeffs.map((c) => c.toTuple());
+  const coeffs = p.coeffs.map((c) => c.toTuple());
   const lead = coeffs[deg] ?? [1, 0];
-  if (deg === 1) {
-    // −coeffs[0]/coeffs[1]
-    const c0 = coeffs[0] ?? [0, 0];
-    return [A.neg(A.div(c0, lead))];
-  }
-  // Make monic for a clean DK eval (G_n is already monic, but normalize defensively).
+  if (deg === 1) return [A.neg(A.div(coeffs[0] ?? [0, 0], lead))];
   const monic = coeffs.map((c) => A.div(c, lead));
   const evalMonic = (z: ComplexTuple): ComplexTuple => {
     let acc: ComplexTuple = monic[deg] ?? [1, 0];
     for (let k = deg - 1; k >= 0; k--) acc = A.add(A.mul(acc, z), monic[k] ?? [0, 0]);
     return acc;
   };
-  // Cauchy bound → seed circle (all Mandelbrot centers lie in |c| ≤ 2, but bound defensively).
   let bound = 1;
   for (let k = 0; k < deg; k++) bound = Math.max(bound, 1 + A.abs(monic[k] ?? [0, 0]));
   const seeds: ComplexTuple[] = [];
@@ -129,6 +123,11 @@ export function mandelbrotCenters(n: number): ComplexTuple[] {
   }
   const res = makeDurandKerner(A)(evalMonic, seeds, { tol: 1e-13, maxIter: 400 });
   return res ? res.roots : [];
+}
+
+/** The numeric period-n centers — roots of the exact Gleason polynomial G_n. */
+export function mandelbrotCenters(n: number): ComplexTuple[] {
+  return rootsOfQiPoly(gleasonPolynomial(n));
 }
 
 // ── Dynatomic polynomials Φ_n(z,c) — exact period-n points ──────────────────────────────────────────
@@ -169,4 +168,58 @@ export function dynatomicDegreeInZ(n: number): number {
 /** Φ_n(z,c) as a readable string, e.g. "z^2 - z + c". */
 export function dynatomicText(n: number): string {
   return renderBiPolyText(dynatomicPolynomial(n), "z", "c");
+}
+
+// ── Multiplier polynomials (by specialization) ──────────────────────────────────────────────────────
+//
+// The multiplier of a period-n cycle is λ = (f_cⁿ)′ evaluated at any cycle point. The full multiplier
+// surface δ_n(λ, c) needs elimination over ℚ[c, λ] (two parameters) — beyond this single-parameter engine —
+// but its SPECIALIZATIONS to a fixed rational λ₀ are exactly computable by eliminating z between the
+// dynatomic Φ_n(z,c) and (f_cⁿ)′(z) − λ₀, a resultant over ℚ[c] alone:
+//
+//   M_{n,λ₀}(c) = Res_z( Φ_n(z,c),  (f_cⁿ)′(z) − λ₀ ).
+//
+// Its roots in c are the parameters where a period-n cycle has multiplier exactly λ₀:
+//   λ₀ = 0  → the CENTERS      (∝ the Gleason polynomial G_n — a cross-check);
+//   λ₀ = 1  → the ROOT POINTS  (parabolic; the cusp where a period-n component meets its parent —
+//             period 1 gives 4c − 1 ⇒ c = 1/4, the cusp of the main cardioid);
+//   λ₀ = −1 → the PERIOD-DOUBLING points (period 1 gives 4c + 3 ⇒ c = −3/4, the cardioid→period-2 bifurcation).
+//
+// ⚠ Honest scope: the full δ_n(λ, c) surface is NOT built here, and the TRICORN's multiplier is
+// anti-holomorphic — its odd-period components are governed by the critical-VALUE map, not this holomorphic
+// multiplier (docs/ALGEBRA_EXTENSIONS.md; RISKS.md). These specializations are for the holomorphic z²+c.
+
+/** (f_cⁿ)′(z) = ∏_{k=0}^{n-1} 2·f_cᵏ(z), as an exact BiPoly (z over ℚ[c]). */
+export function multiplierMap(n: number): BiPoly {
+  if (n < 1 || !Number.isInteger(n)) throw new Error("multiplierMap: n must be a positive integer");
+  let prod = BiPoly.constant(QiPoly.constant(Gauss.ONE));
+  const two = QiPoly.int(2);
+  for (let k = 0; k < n; k++) prod = prod.mul(iteratedMap(k).scaleInner(two)); // 2·f_cᵏ(z)
+  return prod;
+}
+
+/**
+ * The multiplier-specialization polynomial M_{n,λ₀}(c) = Res_z(Φ_n, (f_cⁿ)′ − λ₀), content-cleared. Its
+ * roots in c are the parameters where a period-n cycle has multiplier λ₀ (Gaussian-rational).
+ */
+export function multiplierSpecializationPoly(n: number, lambda0: Gauss): QiPoly {
+  const phi = dynatomicPolynomial(n);
+  const mMinus = multiplierMap(n).sub(BiPoly.constant(QiPoly.constant(lambda0)));
+  return primitivePoly(resultant(phi.coeffs, mMinus.coeffs));
+}
+
+/** The exact root-point polynomial (period-n cycles with multiplier 1 — the parabolic cusps of the
+ *  period-n components). */
+export function rootPointPoly(n: number): QiPoly {
+  return multiplierSpecializationPoly(n, Gauss.ONE);
+}
+
+/** The exact period-doubling polynomial (period-n cycles with multiplier −1). */
+export function periodDoublingPoly(n: number): QiPoly {
+  return multiplierSpecializationPoly(n, Gauss.int(-1));
+}
+
+/** Numeric c-values where a period-n cycle has multiplier λ₀ (roots of M_{n,λ₀}). */
+export function multiplierSpecializationRoots(n: number, lambda0: Gauss): ComplexTuple[] {
+  return rootsOfQiPoly(multiplierSpecializationPoly(n, lambda0));
 }
