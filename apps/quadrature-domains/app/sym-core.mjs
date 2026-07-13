@@ -3149,6 +3149,76 @@ import _QD from './solver.mjs';
     return { ok: true, order: N, poly, coeffs };
   }
 
+  // Numeric roots of an ascending complex-float coefficient array (Durand–Kerner). Turns the EXACT Prony
+  // polynomial into the numeric nodes; because the polynomial is exact its roots are well-conditioned —
+  // the point of #18 vs solving the ill-conditioned float Prony system directly. Returns [] on failure.
+  function _numRootsDK(coeffs) {
+    let n = coeffs.length - 1;
+    while (n > 0 && Math.hypot(coeffs[n].re, coeffs[n].im) < 1e-14) n--;
+    if (n < 1) return [];
+    const lead = coeffs[n];
+    const a = coeffs.slice(0, n + 1).map((c) => cdiv(c, lead)); // monic ascending, a[n] = 1
+    const evalP = (z) => { let acc = a[n]; for (let k = n - 1; k >= 0; k--) acc = cadd(cmul(acc, z), a[k]); return acc; };
+    let bound = 1;
+    for (let k = 0; k < n; k++) bound = Math.max(bound, 1 + Math.hypot(a[k].re, a[k].im));
+    let z = [];
+    for (let k = 0; k < n; k++) { const t = (2 * Math.PI * (k + 0.5)) / n + 0.1; z.push({ re: bound * Math.cos(t), im: bound * Math.sin(t) }); }
+    for (let it = 0; it < 500; it++) {
+      let maxd = 0;
+      z = z.map((zi, i) => {
+        let denom = { re: 1, im: 0 };
+        for (let j = 0; j < n; j++) if (j !== i) denom = cmul(denom, { re: zi.re - z[j].re, im: zi.im - z[j].im });
+        const step = cdiv(evalP(zi), denom);
+        maxd = Math.max(maxd, Math.hypot(step.re, step.im));
+        return { re: zi.re - step.re, im: zi.im - step.im };
+      });
+      if (maxd < 1e-14) break;
+    }
+    return z;
+  }
+
+  // Solve the numeric Vandermonde system V·a = b (V_{kj} = nodes[j]^k) for the weights a, by complex
+  // Gaussian elimination with partial pivoting. Returns null if singular (repeated nodes).
+  function _numVandermondeSolve(nodes, b) {
+    const n = nodes.length, A = [];
+    for (let k = 0; k < n; k++) { const row = []; for (let j = 0; j < n; j++) row.push(cpowInt(nodes[j], k)); row.push(b[k]); A.push(row); }
+    for (let col = 0; col < n; col++) {
+      let piv = col, best = Math.hypot(A[col][col].re, A[col][col].im);
+      for (let r = col + 1; r < n; r++) { const m = Math.hypot(A[r][col].re, A[r][col].im); if (m > best) { best = m; piv = r; } }
+      if (best < 1e-300) return null;
+      if (piv !== col) { const t = A[piv]; A[piv] = A[col]; A[col] = t; }
+      const pv = A[col][col];
+      for (let c = col; c <= n; c++) A[col][c] = cdiv(A[col][c], pv);
+      for (let r = 0; r < n; r++) { if (r === col) continue; const f = A[r][col]; for (let c = col; c <= n; c++) A[r][c] = { re: A[r][c].re - cmul(f, A[col][c]).re, im: A[r][c].im - cmul(f, A[col][c]).im }; }
+    }
+    return A.map((r) => r[n]);
+  }
+
+  // Full shape-from-moments reconstruction: the exact ORDER N and Prony polynomial (see pronyPolynomial),
+  // plus the numeric NODES (its roots) and WEIGHTS (a Vandermonde solve), and a reconstruction RESIDUAL
+  // maxₖ |m_k − Σ_j a_j z_j^k| over the supplied moments — an honest self-check. The order and Prony
+  // polynomial are exact (=); the nodes/weights are numeric (≈, the nodes being generally algebraic).
+  function shapeFromMoments(moments, opts) {
+    opts = opts || {};
+    const pr = pronyPolynomial(moments, opts);
+    if (!pr.ok) return pr;
+    const N = pr.order;
+    let mm;
+    try { mm = moments.map(_momentToGaussian).map((g) => g.toComplex()); } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+    if (N === 0) return { ok: true, order: 0, coeffs: pr.coeffs, poly: pr.poly, nodes: [], weights: [], maxResidual: 0 };
+    const nodes = _numRootsDK(pr.coeffs.map((g) => g.toComplex()));
+    if (nodes.length !== N) return { ok: false, reason: 'root-finding failed to return ' + N + ' nodes' };
+    const weights = _numVandermondeSolve(nodes, mm.slice(0, N));
+    if (!weights) return { ok: false, reason: 'Vandermonde system singular (repeated nodes?)' };
+    let maxResidual = 0;
+    for (let k = 0; k < mm.length; k++) {
+      let s = { re: 0, im: 0 };
+      for (let j = 0; j < N; j++) s = cadd(s, cmul(weights[j], cpowInt(nodes[j], k)));
+      maxResidual = Math.max(maxResidual, Math.hypot(s.re - mm[k].re, s.im - mm[k].im));
+    }
+    return { ok: true, order: N, coeffs: pr.coeffs, poly: pr.poly, nodes, weights, maxResidual };
+  }
+
   // A unit-free null vector of a complex n×n matrix A ({re,im} entries), i.e. w≠0 with
   // A·w = 0 (Gaussian elimination with partial pivoting; returns null if A has full rank).
   function _complexNullVector(A, n) {
@@ -4847,7 +4917,7 @@ import _QD from './solver.mjs';
 
     leadingMonomials, isZeroDimensional, standardMonomials, quotientDimension, krullDimension, dimensionDegree, fglm, linearReduce, solveZeroDim,
     multiplicationMatrix, powerSums, newtonToElementary, charPolyByTraces, coordinateMoments,
-    hankelRank, pronyPolynomial, // #18 shape-from-moments (Prony–Hankel): exact QD-order + Prony polynomial
+    hankelRank, pronyPolynomial, shapeFromMoments, // #18 shape-from-moments (Prony–Hankel): exact QD-order + Prony polynomial + numeric nodes/weights
     solveByEigenvalues, realSolutionCount, parametricRealCount1D, discriminantVariety, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,

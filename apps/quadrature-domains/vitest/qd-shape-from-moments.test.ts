@@ -7,7 +7,11 @@ import _QD from "../app/solver.mjs";
 import "../app/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
-const { hankelRank, pronyPolynomial } = S;
+const { hankelRank, pronyPolynomial, shapeFromMoments } = S;
+
+const near = (a: any, b: { re: number; im: number }, tol = 1e-6): boolean => Math.hypot(a.re - b.re, a.im - b.im) < tol;
+const matchSet = (got: any[], want: { re: number; im: number }[], tol = 1e-6): boolean =>
+  got.length === want.length && want.every((w) => got.some((gg) => near(gg, w, tol)));
 
 // ascending real coefficients of the (real-coefficient) Prony polynomial, for comparison.
 const reCoeffs = (r: any): number[] => r.coeffs.map((g: any) => g.toComplex().re);
@@ -68,6 +72,38 @@ describe("QD.Sym shape-from-moments (Prony–Hankel)", () => {
     const r = pronyPolynomial(M, { order: 1 });
     // P = z − 1/2 ⇒ ascending [−1/2, 1]
     expect(reCoeffs(r)).toEqual([-0.5, 1]);
+  });
+
+  it("full reconstruction: nodes {1,2,3}, weights {1,1,1}, tiny residual", () => {
+    const r = shapeFromMoments(M6);
+    expect(r.ok).toBe(true);
+    expect(r.order).toBe(3);
+    expect(matchSet(r.nodes, [{ re: 1, im: 0 }, { re: 2, im: 0 }, { re: 3, im: 0 }])).toBe(true);
+    expect(r.weights.every((w: any) => near(w, { re: 1, im: 0 }))).toBe(true);
+    // the residual max_k |m_k − Σ a_j z_j^k| certifies nodes AND weights jointly.
+    expect(r.maxResidual).toBeLessThan(1e-6);
+  });
+
+  it("full reconstruction of complex nodes 1±i (weights 1)", () => {
+    const M = [{ re: 2, im: 0 }, { re: 2, im: 0 }, { re: 0, im: 0 }, { re: -4, im: 0 }];
+    const r = shapeFromMoments(M);
+    expect(r.order).toBe(2);
+    expect(matchSet(r.nodes, [{ re: 1, im: 1 }, { re: 1, im: -1 }])).toBe(true);
+    expect(r.weights.every((w: any) => near(w, { re: 1, im: 0 }))).toBe(true);
+    expect(r.maxResidual).toBeLessThan(1e-6);
+  });
+
+  it("full reconstruction with unequal weights (nodes {0,2}, weights {1,3})", () => {
+    // m_k = 1·0^k + 3·2^k: m_0 = 4, m_1 = 6, m_2 = 12, m_3 = 24.
+    const r = shapeFromMoments([4, 6, 12, 24]);
+    expect(r.order).toBe(2);
+    expect(matchSet(r.nodes, [{ re: 0, im: 0 }, { re: 2, im: 0 }])).toBe(true);
+    // weight at node 0 is 1, at node 2 is 3.
+    const w0 = r.weights[r.nodes.findIndex((z: any) => near(z, { re: 0, im: 0 }))];
+    const w2 = r.weights[r.nodes.findIndex((z: any) => near(z, { re: 2, im: 0 }))];
+    expect(near(w0, { re: 1, im: 0 })).toBe(true);
+    expect(near(w2, { re: 3, im: 0 })).toBe(true);
+    expect(r.maxResidual).toBeLessThan(1e-6);
   });
 
   it("honest failures: empty sequence, and an over-stated order (singular Hankel)", () => {
