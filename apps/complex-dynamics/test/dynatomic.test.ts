@@ -1,13 +1,17 @@
 // Roadmap #17 — exact Gleason polynomials G_n(c) (Mandelbrot period-n centers) on @cas/exact. Locks the
 // Möbius-inversion build against primary-source goldens, and checks the numeric centers are genuine roots.
 import { describe, expect, it } from "vitest";
-import { Gauss, QiPoly } from "@cas/exact";
+import { BiPoly, Gauss, QiPoly } from "@cas/exact";
 import {
   criticalOrbit,
   divisors,
+  dynatomicDegreeInZ,
+  dynatomicPolynomial,
+  dynatomicText,
   gleasonDegree,
   gleasonPolynomial,
   gleasonText,
+  iteratedMap,
   mandelbrotCenters,
   mobius,
 } from "../src/combinatorics/dynatomic";
@@ -82,5 +86,36 @@ describe("Gleason polynomials G_n(c) — Mandelbrot period-n centers", () => {
       expect(centers).toHaveLength(g.degree());
       for (const ctr of centers) expect(evalAbs(coeffs, ctr)).toBeLessThan(1e-7);
     }
+  });
+});
+
+describe("Dynatomic polynomials Φ_n(z,c) — exact period-n points", () => {
+  const z = BiPoly.variable();
+  const cc = BiPoly.constant(QiPoly.variable()); // c, constant in z
+
+  it("iterates f_c: f²(z) = z⁴ + 2c·z² + (c²+c)", () => {
+    const f2 = iteratedMap(2);
+    expect(f2.degree()).toBe(4);
+    expect(f2.coeff(4).equals(QiPoly.constant(Gauss.ONE))).toBe(true);
+    expect(f2.coeff(2).equals(c.scale(Gauss.int(2)))).toBe(true); // 2c
+    expect(f2.coeff(0).equals(c.pow(2).add(c))).toBe(true); // c²+c
+  });
+
+  it("matches the goldens Φ_1 = z²−z+c and Φ_2 = z²+z+c+1", () => {
+    expect(dynatomicPolynomial(1).equals(z.pow(2).sub(z).add(cc))).toBe(true);
+    expect(dynatomicPolynomial(2).equals(z.pow(2).add(z).add(BiPoly.constant(QiPoly.variable().add(QiPoly.int(1)))))).toBe(true);
+    expect(dynatomicText(1)).toBe("z^2 - z + c");
+    expect(dynatomicText(2)).toBe("z^2 + z + c + 1");
+  });
+
+  it("has the known period-point counts deg_z Φ_n = 2,2,6,12 for n = 1..4", () => {
+    expect([1, 2, 3, 4].map(dynatomicDegreeInZ)).toEqual([2, 2, 6, 12]);
+  });
+
+  it("Φ_3 divides f³(z) − z exactly (its roots are period-3 points)", () => {
+    const f3MinusZ = iteratedMap(3).sub(z);
+    // Φ_1 · Φ_3 = f³(z) − z  (the period-3 points are those of exact period 1 or 3)
+    const prod = dynatomicPolynomial(1).mul(dynatomicPolynomial(3));
+    expect(prod.equals(f3MinusZ)).toBe(true);
   });
 });

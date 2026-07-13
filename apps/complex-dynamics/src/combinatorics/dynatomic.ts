@@ -15,11 +15,16 @@
  * @cas/core's Durand–Kerner. Oracles (primary-source Gleason polynomials): G_1 = c, G_2 = c+1,
  * G_3 = c³+2c²+c+1, G_4 = c⁶+3c⁵+3c⁴+3c³+2c²+1 (degrees 1,1,3,6,15,27 for n = 1..6).
  *
- * Dynatomic Φ_n(z,c) (exact period-n POINTS) and the multiplier polynomials follow in later steps; they
- * need the bivariate (z over ℚ[c]) layer. Pure module — no DOM / GL.
+ * The DYNATOMIC polynomials Φ_n(z,c) — whose roots (in z, for fixed c) are the points of *exact* period n
+ * of f_c — are also here, on @cas/exact's bivariate BiPoly (z over ℚ[c]):
+ *
+ *   Φ_n(z,c) = ∏_{d|n} (f_cᵈ(z) − z)^{μ(n/d)}     (again exact monic division: f_cᵈ(z) − z is monic in z)
+ *
+ * with deg_z Φ_n = Σ_{d|n} μ(n/d)·2ᵈ (2,2,6,12,… for n = 1,2,3,4). Oracles: Φ_1 = z²−z+c, Φ_2 = z²+z+c+1.
+ * The multiplier polynomials follow (they eliminate z by a resultant). Pure module — no DOM / GL.
  */
 import { makeDurandKerner, tupleAlgebra, type ComplexTuple } from "@cas/core";
-import { Gauss, QiPoly, renderQiPolyText } from "@cas/exact";
+import { BiPoly, Gauss, QiPoly, renderBiPolyText, renderQiPolyText } from "@cas/exact";
 
 const A = tupleAlgebra;
 
@@ -124,4 +129,44 @@ export function mandelbrotCenters(n: number): ComplexTuple[] {
   }
   const res = makeDurandKerner(A)(evalMonic, seeds, { tol: 1e-13, maxIter: 400 });
   return res ? res.roots : [];
+}
+
+// ── Dynatomic polynomials Φ_n(z,c) — exact period-n points ──────────────────────────────────────────
+
+/** f_cⁿ(z) as an exact BiPoly (outer variable z, inner variable c): the n-fold composition of z ↦ z²+c. */
+export function iteratedMap(n: number): BiPoly {
+  if (n < 0 || !Number.isInteger(n)) throw new Error("iteratedMap: n must be a non-negative integer");
+  const cAsConst = BiPoly.constant(QiPoly.variable()); // c, constant in z
+  let z = BiPoly.variable(); // z⁰-orbit starts at z
+  for (let k = 0; k < n; k++) z = z.mul(z).add(cAsConst); // z ↦ z² + c
+  return z;
+}
+
+/**
+ * The dynatomic polynomial Φ_n(z,c) — its roots in z (for a fixed c) are the points of *exact* period n of
+ * f_c(z) = z²+c. Φ_n = ∏_{d|n} (f_cᵈ(z) − z)^{μ(n/d)}, by exact monic division (each f_cᵈ(z) − z is monic
+ * in z). Returned as a BiPoly in z over ℚ[c]. Requires n ≥ 1.
+ */
+export function dynatomicPolynomial(n: number): BiPoly {
+  if (n < 1 || !Number.isInteger(n)) throw new Error("dynatomicPolynomial: n must be a positive integer");
+  const zVar = BiPoly.variable();
+  let num = BiPoly.constant(QiPoly.constant(Gauss.ONE));
+  let den = BiPoly.constant(QiPoly.constant(Gauss.ONE));
+  for (const d of divisors(n)) {
+    const mu = mobius(n / d);
+    const g = iteratedMap(d).sub(zVar); // f_cᵈ(z) − z, monic in z
+    if (mu === 1) num = num.mul(g);
+    else if (mu === -1) den = den.mul(g);
+  }
+  return num.divExactMonic(den);
+}
+
+/** deg_z Φ_n — the number of points of exact period n (2, 2, 6, 12, … for n = 1, 2, 3, 4). */
+export function dynatomicDegreeInZ(n: number): number {
+  return dynatomicPolynomial(n).degree();
+}
+
+/** Φ_n(z,c) as a readable string, e.g. "z^2 - z + c". */
+export function dynatomicText(n: number): string {
+  return renderBiPolyText(dynatomicPolynomial(n), "z", "c");
 }
