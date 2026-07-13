@@ -86,7 +86,17 @@ domains, or only among solutions found?
 
 | Track | File | Scope | Status |
 |---|---|---|---|
-| A system-generation | audit/A-system-generation.md | qd-equations, qd-constraints, qd-varscheme, reim/conjugate models, gauge, point-functional | RUNNING |
+| A system-generation | audit/A-system-generation.md | qd-equations, qd-constraints, qd-varscheme, reim/conjugate models, gauge, point-functional | ✅ DONE |
+
+**A done (headline):** MED **A-1** — `clearDenominators()` (`sym-core.mjs:5440`) returns only the numerator,
+dropping the Möbius factors `(1−z̄_{j'}z_j)` and Schwarz `φ′(z_j)`; the cleared variety STRICTLY CONTAINS the QD
+set (spurious {|z_j|≥1}/{φ′=0}); no excluded locus recorded ⇒ can't saturate. Generation-side root of C-1/D-1;
+`realCount` is an UPPER BOUND on #QD. MED **A-2** (uniqueness threat) — pinning φ(0)=w₀ (default = pole centroid,
+ON by default) restricts to domains CONTAINING w₀; centroid ∈ conv(Ω) not necessarily a non-convex Ω ⇒ a 2nd
+admissible domain excluding it is DROPPED → possible FALSE "unique". Mislabeled "rotation gauge" (really the
+center/translation gauge; rotation gauge = the separate Σ Im A_{j,1}=0). LOW **A-3** — realAxisSymmetry comment
+over-claims. Confirmed sound: (★) forward form (Jabotinsky-dual M·N=I), reimSplit, Schwarz Blaschke (★_S),
+pointFunctionalSystem (A&S cardioid), qd-varscheme (no v/v̄ desync).
 | B elimination-decomposition | audit/B-elimination-decomposition.md | sym-core Gröbner/resultant/saturate/elim/minimalPrimes/triangular/radical; denom clearing, excluded loci, positive-dim | RUNNING |
 | C certified-solving-counting | audit/C-certified-solving-counting.md | solveZeroDim/RUR/realSolutionCount/solveRealCertified/parametricRealCount1D/discriminantVariety/Schur-Cohn | ✅ DONE |
 | D univalence-admissibility | audit/D-univalence-admissibility.md | univalence, qd-constraints univalence forms, doCertifyUnivalence chain, pole/node location, boundary collisions | ✅ DONE |
@@ -101,7 +111,18 @@ a_j∈Ω follows. Confirms PF-3. MEDIUM — "certified" headline not downgraded 
 the NUMERIC fallback (relates PF-1). LOW — crossCheck `.some()` masks a spurious solution; user constraints not
 in specializationLedger. Confirmed sound: {φ′≠0}∧{Jordan}⇒injective GIVEN |z_j|<1; cusp/double-point exactness.
 | E reconstruction-verification | audit/E-reconstruction-verification.md | phiFromAlgebraSolution, exact Schwarz curve, exact data verification, sameDomain dedup | RUNNING |
-| F store-worker-export | audit/F-store-worker-export.md | algebra-store DAG, sym-worker cancel/parity/determinism, cas-export round-trip, PROV_STORE/UI | RUNNING |
+| F store-worker-export | audit/F-store-worker-export.md | algebra-store DAG, sym-worker cancel/parity/determinism, cas-export round-trip, PROV_STORE/UI | ✅ DONE |
+
+**F done (headline):** Engineering SOUND — no critical/high. Confirmed: single `runJob` both paths, bit-identical
+over real worker_threads; ℚ(i) BigInt → decimal strings (exact round-trip); cancel/supersede genuinely terminate;
+no Date/random (reproducible DAG); immutable nodes + pristine col 0 + isolated tracks; lossless backward-compat
+`exportDAG↔importDAG`; both prov registries cover all 20 ops; DOM-free. MED **F5** (SUSPECTED) — `casColumn`/
+`_columnItems` (`algebra-store.mjs:2372/2366`) export a column verbatim, no reim-split/complex-coeff guard ⇒ a
+conjugate-model export makes Maple/msolve "real solutions" a DIFFERENT quantity than the verdict (fix: warn/refuse
+or auto-reim-split on complex coeff / barred var). LOW→MED **F1** — `_CAP_KEYS` (`:183`) omits caps worker ops read
+(RUR maxDim/maxTries; parametricRealCount1D maxTries/maxCalls/…) + the coverage test shares the omission (false
+assurance); latent. LOW F2/F3/F4 (sync classify opts; superseded abort-listener; worker load-error rejects forever)
++ F6 (differential test gap: solveRealCertified/shapeFromMoments/parametricRealCount1D).
 | G ui-workflow | audit/G-ui-workflow.md | algebra-ui/canvas, verdict card, rigor badges, terminology, first-time-user walk (feeds Phase 4) | ✅ DONE |
 
 **G done (headline):** CRITICAL — (1) no single "prove existence/uniqueness" orchestrator; 3 overlapping buttons
