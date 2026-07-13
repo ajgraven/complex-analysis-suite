@@ -16,7 +16,7 @@
 //
 // Honest labelling (RISKS.md §3): the curve and its cusp locus are EXACT (=). The dynamics built on the
 // correspondence — orbit trees, straightening, branch continuation through cusps — remain exploratory (≈).
-import { bigGcd, Frac, Gauss, QiPoly, renderGaussMag } from "@cas/exact";
+import { discriminant, Gauss, integerPrimitive, QiPoly, renderGaussMag } from "@cas/exact";
 
 /** A single monomial g · wʲ · z̄ᵏ of the bivariate curve, used for rendering and numeric evaluation. */
 interface CurveTerm {
@@ -38,61 +38,11 @@ export interface ExactCorrespondenceCurve {
   evalNumeric(w: readonly [number, number], zbar: readonly [number, number]): [number, number];
 }
 
-/** LCM of two non-negative BigInts (lcm(_, 0) = 0). */
-function bigLcm(a: bigint, b: bigint): bigint {
-  if (a === 0n || b === 0n) return 0n;
-  return (a / bigGcd(a, b)) * b;
-}
-
 /** z̄ᵏ as a QiPoly. */
 function varPow(k: number): QiPoly {
   const coeffs: Gauss[] = new Array<Gauss>(k + 1).fill(Gauss.ZERO);
   coeffs[k] = Gauss.ONE;
   return QiPoly.fromCoeffs(coeffs);
-}
-
-/**
- * Content-clear a list of z̄-polynomials JOINTLY: scale every coefficient by one common rational so that
- * (a) all become Gaussian integers and (b) their overall integer content is 1, then fix the sign from the
- * leading coefficient of the last (highest-w) polynomial. Turns w² − (z̄²/2)w − z̄/2 into 2w² − z̄²w − z̄.
- */
-function integerPrimitive(polys: readonly QiPoly[]): QiPoly[] {
-  const all: Gauss[] = [];
-  for (const p of polys) for (const g of p.coeffs) if (!g.isZero()) all.push(g);
-  if (all.length === 0) return polys.map((p) => p);
-
-  // Common denominator L so that L·g is a Gaussian integer for every coefficient g.
-  let L = 1n;
-  for (const g of all) {
-    L = bigLcm(L, g.re.d);
-    L = bigLcm(L, g.im.d);
-  }
-  // Integer content G = gcd of all (scaled) real and imaginary parts.
-  let G = 0n;
-  for (const g of all) {
-    G = bigGcd(G, g.re.n * (L / g.re.d));
-    G = bigGcd(G, g.im.n * (L / g.im.d));
-  }
-  if (G === 0n) G = 1n;
-
-  // Sign: make the leading z̄-coefficient of the highest-w polynomial "positive" (re > 0, or im > 0 if real
-  // part is zero) so the canonical form is deterministic.
-  let sign = 1n;
-  for (let j = polys.length - 1; j >= 0; j--) {
-    const lead = polys[j]?.leadingCoeff() ?? Gauss.ZERO;
-    if (!lead.isZero()) {
-      const s = lead.re.isZero() ? lead.im.n : lead.re.n;
-      if (s < 0n) sign = -1n;
-      break;
-    }
-  }
-
-  const scale = (g: Gauss): Gauss =>
-    new Gauss(
-      Frac.of((sign * g.re.n * (L / g.re.d)) / G),
-      Frac.of((sign * g.im.n * (L / g.im.d)) / G),
-    );
-  return polys.map((p) => QiPoly.fromCoeffs(p.coeffs.map(scale)));
 }
 
 /**
@@ -147,62 +97,6 @@ function deflateTrivial(P: readonly QiPoly[]): QiPoly[] {
     throw new Error("correspondenceCurve: nonzero remainder after deflation (internal invariant violated)");
   }
   return q;
-}
-
-/** Fraction-free (Bareiss) determinant of a square matrix over ℚ(i)[z̄]; every intermediate division is
- *  exact in the integral domain, so it stays in QiPoly without denominators. */
-function qiBareissDet(matrix: readonly (readonly QiPoly[])[]): QiPoly {
-  const n = matrix.length;
-  if (n === 0) return QiPoly.int(1);
-  const a: QiPoly[][] = matrix.map((row) => row.slice());
-  let prev = QiPoly.int(1);
-  let sign = 1;
-  for (let k = 0; k < n - 1; k++) {
-    if ((a[k]?.[k] ?? QiPoly.zero()).isZero()) {
-      let r = k + 1;
-      while (r < n && (a[r]?.[k] ?? QiPoly.zero()).isZero()) r++;
-      if (r === n) return QiPoly.zero();
-      const tmp = a[k] ?? [];
-      a[k] = a[r] ?? [];
-      a[r] = tmp;
-      sign = -sign;
-    }
-    const akk = a[k]?.[k] ?? QiPoly.zero();
-    for (let i = k + 1; i < n; i++) {
-      const ai = a[i] ?? [];
-      const ak = a[k] ?? [];
-      for (let j = k + 1; j < n; j++) {
-        const num = (ai[j] ?? QiPoly.zero()).mul(akk).sub((ai[k] ?? QiPoly.zero()).mul(ak[j] ?? QiPoly.zero()));
-        ai[j] = num.divExact(prev);
-      }
-      ai[k] = QiPoly.zero();
-    }
-    prev = akk;
-  }
-  const det = a[n - 1]?.[n - 1] ?? QiPoly.zero();
-  return sign === 1 ? det : det.neg();
-}
-
-/** Sylvester resultant Res_w(A, B) of A (degree p) and B (degree q), as a z̄-polynomial. A/B are given as
- *  little-endian w-coefficient lists. */
-function sylvesterResultant(A: readonly QiPoly[], B: readonly QiPoly[]): QiPoly {
-  const p = A.length - 1;
-  const q = B.length - 1;
-  const N = p + q;
-  if (N === 0) return QiPoly.int(1);
-  const M: QiPoly[][] = Array.from({ length: N }, () => new Array<QiPoly>(N).fill(QiPoly.zero()));
-  for (let i = 0; i < q; i++) {
-    for (let kk = 0; kk <= p; kk++) M[i][i + kk] = A[p - kk] ?? QiPoly.zero(); // high-to-low
-  }
-  for (let i = 0; i < p; i++) {
-    for (let kk = 0; kk <= q; kk++) M[q + i][i + kk] = B[q - kk] ?? QiPoly.zero();
-  }
-  return qiBareissDet(M);
-}
-
-/** Content-clear a single z̄-polynomial to its canonical integer-primitive form (leading coeff positive). */
-function primitivePoly(p: QiPoly): QiPoly {
-  return integerPrimitive([p])[0] ?? QiPoly.zero();
 }
 
 /** Flatten the curve into nonzero monomials g·wʲ·z̄ᵏ, sorted by (j desc, k desc) for stable rendering. */
@@ -298,14 +192,6 @@ export function correspondenceCurve(c: Gauss, F: readonly Gauss[]): ExactCorresp
  * z̄⁴ + 8z̄. A d < 2 correspondence has no branch collisions, so the locus is the constant 1 (empty).
  */
 export function cuspLocus(curve: ExactCorrespondenceCurve): QiPoly {
-  const A = curve.wCoeffs; // little-endian w-coefficients, degree d
-  const d = A.length - 1;
-  if (d < 2) return QiPoly.int(1);
-  const B: QiPoly[] = []; // dC/dw
-  for (let j = 1; j <= d; j++) B.push((A[j] ?? QiPoly.zero()).scale(Gauss.int(j)));
-  const res = sylvesterResultant(A, B);
-  const lead = A[d] ?? QiPoly.zero();
-  let disc = res.divExact(lead);
-  if (Math.floor((d * (d - 1)) / 2) % 2 === 1) disc = disc.neg();
-  return primitivePoly(disc);
+  // disc_w C(w, z̄): the shared @cas/exact discriminant eliminates w (Sylvester + fraction-free Bareiss).
+  return discriminant(curve.wCoeffs);
 }
