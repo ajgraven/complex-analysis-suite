@@ -251,6 +251,22 @@ file BEFORE returning. Orchestrator alone integrates + adjudicates + commits.
 
 ## Next action
 
+**P3 ENGINEERING-HARDENING BATCH IN PROGRESS** (user: "Take P3", 2026-07-13). Gate running.
+- [x] **F5** — CAS-export complex-coefficient guard: `store.casColumn` prepends a WARNING header for a Maple
+      (real) export of a conjugate-model (ℚ(i)) column, and `casColumnComplex` lets `copyCAS` warn — a Maple
+      RCTD "real count" of the complex system is NOT the QD count. `qd-cas-export-guard.test.ts` (3).
+- [x] **F1** — `_CAP_KEYS` completed (+maxDim/maxTries/maxCalls/maxSegments/maxDepth/formTries the RUR /
+      parametric ops read) + the coverage test's `OP_CAPS` ground-truth de-omitted (was false assurance).
+- [x] **F2** — sync `_classifyImpl` now threads `_capOpts(opts)` to `buchberger`/`realSolutionCount` (== worker).
+- [x] **F3** — `sym-worker` abort listener is removable + detached on every settle (done/supersede/dispose/error)
+      so a late abort on a completed signal can't cancel a successor job.
+- [x] **F4** — a worker LOAD/idle error (no job in flight) now sets `_fallback` (main-thread) instead of
+      rebuilding + re-erroring forever (also stops the dev-server `[object Event]` spam).
+- [x] **F6** — differential worker↔main test extended to solveRealCertified / shapeFromMoments /
+      parametricRealCount1D (14 tests, bit-identical across the boundary).
+
+**P2 DONE.** Older markers below.
+
 **P2 HONESTY-GAP BATCH IN PROGRESS** (user: "Take the P2 honesty-gap batch next", 2026-07-13). Gate running.
 - [x] **C-MED-2** — `discriminantVariety` now CERTIFIES the separating form: computes the generic fiber size N
       (max distinct-complex count over generic rational parameter points) and prefers a form whose eliminant

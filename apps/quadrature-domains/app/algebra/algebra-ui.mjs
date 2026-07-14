@@ -1111,6 +1111,11 @@ const QD = _QD;
       if (!code) { toast('Column ' + c + ' has no equations.', { kind: 'error' }); return; }
       const label = dialect === 'maple' ? 'Maple RCTD' : dialect.charAt(0).toUpperCase() + dialect.slice(1);
       writeClipboard(code, label + ' (column ' + c + ')');
+      // F5: Maple RCTD is a REAL decomposition; a conjugate-model (complex-coefficient) column's "real count"
+      // is NOT the quadrature-domain count — warn the user (the copied script also carries a header warning).
+      if (dialect === 'maple' && typeof store.casColumnComplex === 'function' && store.casColumnComplex(c)) {
+        toast('⚠ Column ' + c + ' has complex ℚ(i) coefficients (conjugate model). Maple RCTD is a REAL decomposition — its "real solutions" are NOT the quadrature-domain count. Reim-split (assume the base variables real) first for the QD count. The copied script includes this warning.', { kind: 'error' });
+      }
     }
     // G11: copy the chosen column as msolve `.ms` input (over ℚ; complex coefficients map to a
     // variable i with i²+1). The user runs msolve offline; nothing executes in-browser.

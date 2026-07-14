@@ -77,6 +77,22 @@ const CASES: { label: string; op: string; payload: any }[] = [
     op: "classify",
     payload: { polys: tl([V("x")]), vars: ["x", "y"] },
   },
+  // F6: extend the differential to the remaining runJob branches (were untested across the boundary).
+  {
+    label: "solveRealCertified: shape ⟨x²−2, y−x⟩ → certified real solutions (RUR + Sturm boxes, JSON-safe)",
+    op: "solveRealCertified",
+    payload: { polys: tl([V("x").pow(2).sub(I(2)), V("y").sub(V("x"))]), vars: ["x", "y"] },
+  },
+  {
+    label: "shapeFromMoments: geometric moments [1,2,4,8] → order-1 Prony (single node), JSON-safe",
+    op: "shapeFromMoments",
+    payload: { moments: [1, 2, 4, 8] },
+  },
+  {
+    label: "parametricRealCount1D: ⟨x²−t⟩ over t → border at t=0 (cell counts + criticalValues, Infinity→null)",
+    op: "parametricRealCount1D",
+    payload: { polys: tl([V("x").pow(2).sub(V("t"))]), paramVar: "t", vars: ["x"] },
+  },
 ];
 
 describe("sym-worker live round-trip via node:worker_threads (worker path === main-thread runJob)", () => {

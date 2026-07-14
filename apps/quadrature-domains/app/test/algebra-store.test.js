@@ -1425,8 +1425,12 @@ module.exports = async function run() {
     const mkv = (n) => Sx.MPoly.variable(n), mki = (k) => Sx.MPoly.fromInt(k);
     ok('CAP_KEYS/capOpts: exposed on the store factory', Array.isArray(CK) && typeof capOpts === 'function');
 
-    // (1) coverage: every numeric cap the sym-core ops read must be in the whitelist.
-    const OP_CAPS = ['maxBasis', 'maxSteps', 'maxDegree', 'maxTerms', 'maxEigenDim', 'maxHermiteDim', 'maxRounds'];
+    // (1) coverage: every numeric cap the sym-core ops read must be in the whitelist. GROUND TRUTH — includes
+    // the RUR/solveRealCertified caps (maxDim, maxTries) and the parametricRealCount1D/discriminantVariety caps
+    // (maxCalls, maxSegments, formTries) that F1 restored; if a new op reads a new cap, add it here so this
+    // check catches a _CAP_KEYS omission (previously OP_CAPS shared the omission ⇒ false assurance).
+    const OP_CAPS = ['maxBasis', 'maxSteps', 'maxDegree', 'maxTerms', 'maxEigenDim', 'maxHermiteDim', 'maxRounds',
+      'maxDim', 'maxTries', 'maxCalls', 'maxSegments', 'formTries'];
     const uncovered = OP_CAPS.filter((k) => !CK.includes(k));
     ok('CAP_KEYS: covers every numeric cap the sym-core ops read', uncovered.length === 0, 'missing: ' + uncovered.join(', '));
 

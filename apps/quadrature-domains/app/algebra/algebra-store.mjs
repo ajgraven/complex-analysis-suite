@@ -186,7 +186,12 @@ import _QD from '../solver.mjs';
   // postMessage'd, so the worker uses its own defaults. A cap the ops honor but MISSING here
   // would be silently dropped for the worker while the sync fallback still honored it (an
   // uncaught divergence), so algebra-store.test.js asserts coverage against that op-cap list.
-  const _CAP_KEYS = ['maxBasis', 'maxSteps', 'maxDegree', 'maxTerms', 'maxEigenDim', 'maxHermiteDim', 'maxRounds', 'reduced', 'keepEliminated'];
+  // F1: complete the whitelist — RUR/solveRealCertified read maxDim/maxTries (sym-core ~1877/1881), and
+  // parametricRealCount1D/discriminantVariety read maxTries/maxCalls/maxSegments/formTries/maxDepth (~4232/
+  // 4344/4799/4800). Omitting them meant the WORKER path silently ran with the defaults while a sync fallback
+  // honoured the caps — a latent worker≠main divergence. (Harmless extra keys just forward nothing if unset.)
+  const _CAP_KEYS = ['maxBasis', 'maxSteps', 'maxDegree', 'maxTerms', 'maxEigenDim', 'maxHermiteDim', 'maxRounds', 'reduced', 'keepEliminated',
+    'maxDim', 'maxTries', 'maxCalls', 'maxSegments', 'maxDepth', 'formTries'];
   function _capOpts(opts) {
     const out = {};
     for (const k of _CAP_KEYS) if (opts && opts[k] != null) out[k] = opts[k];
@@ -1848,15 +1853,16 @@ import _QD from '../solver.mjs';
       const reim = currentReimSystem(ids, opts);
       if (!reim.polys.length) return { ok: false, reason: 'no equality nodes to analyze' };
       try {
+        const co = _capOpts(opts);   // F2: thread the same caps the worker runJob('classify') honours, so the sync fallback == the worker path
         const ord = S.monomialOrder('grevlex', reim.vars);
-        const G = S.buchberger(reim.polys, ord);
+        const G = S.buchberger(reim.polys, ord, co);
         if (G.length === 1 && G[0].vars().size === 0 && !G[0].isZero()) {
           return { ok: true, inconsistent: true, zeroDim: true, realCount: 0, complexCount: 0, multiplicity: 0, numVars: reim.vars.length };
         }
         const zeroDim = S.isZeroDimensional(G, ord, reim.vars);
         if (!zeroDim) return { ok: true, inconsistent: false, zeroDim: false, realCount: null, complexCount: null, multiplicity: null, numVars: reim.vars.length, krullDim: S.krullDimension(G, ord, reim.vars) };
         const multiplicity = S.quotientDimension(G, ord, reim.vars);
-        const rc = S.realSolutionCount({ G, order: ord }, null, reim.vars);
+        const rc = S.realSolutionCount({ G, order: ord }, null, reim.vars, co);
         if (!rc.ok) return { ok: true, inconsistent: false, zeroDim: true, realCount: null, complexCount: null, multiplicity, reason: rc.reason, numVars: reim.vars.length };
         return { ok: true, inconsistent: false, zeroDim: true, realCount: rc.realCount, complexCount: rc.complexCount, multiplicity, numVars: reim.vars.length };
       } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
@@ -2460,7 +2466,30 @@ import _QD from '../solver.mjs';
       const CAS = _getCAS(); if (!CAS) return '';
       const items = _columnItems(c);
       if (!items.length) return '';
-      return CAS.systemToCAS(items, dialect || 'maple', opts || {});
+      const script = CAS.systemToCAS(items, dialect || 'maple', opts || {});
+      // F5: Maple RealComprehensive/RealTriangularize decompose over ℝ. A conjugate-model column carries
+      // COMPLEX ℚ(i) coefficients (independent z_j, z̄_j), so its "real solutions" are a DIFFERENT quantity than
+      // the in-browser reim verdict (a complex triangularization, not the QD real count). Prepend a warning so a
+      // pasted script can't be silently misread; the honest route is to reim-split (assume the base variables
+      // real ⇒ real coefficients) BEFORE exporting for a real count. (Singular/Sage/Mathematica are complex
+      // Gröbner cross-checks, so the warning is Maple-only.)
+      if ((dialect || 'maple') === 'maple' && _columnHasComplexCoeffs(items)) {
+        return '# WARNING: this system has COMPLEX (Q(i)) coefficients (the conjugate model). RealComprehensive-\n'
+          + '# Triangularize decomposes over the REALS, so its "real solutions" are NOT the quadrature-domain\n'
+          + '# count the app reports (that count is over the reim / assume-real system). Reim-split (assume the\n'
+          + '# base variables real) BEFORE exporting for a real count, or read this as a complex triangularization.\n'
+          + script;
+      }
+      return script;
+    }
+    // F5: does a column carry complex ℚ(i) coefficients (⇒ a conjugate-model system whose Maple RCTD "real
+    // count" differs from the reim QD count)? Exposed so the UI can warn before a real-decomposition export.
+    function _columnHasComplexCoeffs(items) {
+      return (items || []).some((it) => (it.terms || []).some((t) => t.coeff && t.coeff.im && t.coeff.im[0] !== '0'));
+    }
+    function casColumnComplex(c) {
+      const items = _columnItems(c == null ? maxColumn() : c);
+      return _columnHasComplexCoeffs(items);
     }
     // External-CAS export of a single node → one (in)equation in `dialect`.
     function casNode(id, dialect) {
@@ -2791,7 +2820,7 @@ import _QD from '../solver.mjs';
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, autoAbbreviate, addEquation, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes, saturateMobius,
       currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, solveRealCertifiedSync, solveRealCertifiedAsync, parametricBifurcation, parametricBifurcationAsync, shapeFromMoments, shapeFromMomentsAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
-      sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, msolveColumn, msolveVarOrder, importMsolve, derivationSteps, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
+      sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casColumnComplex, casNode, msolveColumn, msolveVarOrder, importMsolve, derivationSteps, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       forkTrack, setActiveTrack, deleteTrack, tracks: tracksList,
       undo, redo, reset,

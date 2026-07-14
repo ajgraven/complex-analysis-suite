@@ -46,7 +46,7 @@ import _QD from '../solver.mjs';
 
   function _dispose() {
     _teardownWorker();
-    if (_inflight) { _inflight.reject({ aborted: true }); _inflight = null; }
+    if (_inflight) { if (_inflight.detachAbort) _inflight.detachAbort(); _inflight.reject({ aborted: true }); _inflight = null; }
   }
 
   async function ensureReady() {
@@ -59,12 +59,17 @@ import _QD from '../solver.mjs';
       w.addEventListener('error', (ev) => {
         const detail = (ev.message || ev) + ' @ ' + (ev.filename || 'bundle') + ':' + (ev.lineno || '?');
         if (typeof console !== 'undefined') console.error('[sym-worker] error: ' + detail);
+        const hadJob = !!_inflight;
         if (_inflight) {
           const job = _inflight; _inflight = null;
           try { w.removeEventListener('message', job.onMessage); } catch (_) { /* ignore */ }
+          if (job.detachAbort) job.detachAbort();                    // F3: drop this job's signal listener too
           job.reject(new Error('sym-worker crashed: ' + detail));
         }
-        _dispose();
+        _teardownWorker();
+        // F4: an error with NO job in flight is a LOAD/idle failure — the worker module can't be built, so fall
+        // back to the main thread PERMANENTLY instead of rebuilding + re-erroring on every subsequent run().
+        if (!hadJob) _fallback = true;
       });
       _worker = w;
     })().catch((err) => {
@@ -95,6 +100,7 @@ import _QD from '../solver.mjs';
       const stale = _inflight;
       _inflight = null;
       try { _worker.removeEventListener('message', stale.onMessage); } catch (_) { /* ignore */ }
+      if (stale.detachAbort) stale.detachAbort();                                  // F3: drop the stale signal listener
       _teardownWorker();
       stale.reject({ aborted: true, superseded: true });
       await ensureReady();                                                        // rebuild
@@ -102,22 +108,27 @@ import _QD from '../solver.mjs';
     }
     const jobId = _nextJobId++;
     return new Promise((resolve, reject) => {
+      const signal = runOpts.signal;
+      const onAbort = () => cancel();
+      // F3: a removable abort listener — detach it whenever the job settles, so a LATE abort on THIS
+      // (already-finished) signal can't fire cancel() and tear down a SUCCESSOR job.
+      const detachAbort = () => { if (signal) { try { signal.removeEventListener('abort', onAbort); } catch (_) { /* ignore */ } } };
       const onMessage = (e) => {
         const m = e.data;
         if (!m || m.jobId !== jobId) return;
         if (m.kind === 'progress') { if (runOpts.onProgress) { try { runOpts.onProgress(m.info); } catch (_) { /* ignore */ } } return; }
         if (m.kind === 'done') {
           try { _worker.removeEventListener('message', onMessage); } catch (_) { /* ignore */ }
+          detachAbort();
           _inflight = null;
           if (m.error) reject(new Error(m.error)); else resolve(m.result);
         }
       };
-      _inflight = { jobId, resolve, reject, onMessage };
+      _inflight = { jobId, resolve, reject, onMessage, detachAbort };
       _worker.addEventListener('message', onMessage);
-      const signal = runOpts.signal;
       if (signal) {
-        if (signal.aborted) { cancel(); return; }
-        signal.addEventListener('abort', () => cancel(), { once: true });
+        if (signal.aborted) { detachAbort(); cancel(); return; }
+        signal.addEventListener('abort', onAbort, { once: true });
       }
       _worker.postMessage({ jobId, op, payload });
     });
