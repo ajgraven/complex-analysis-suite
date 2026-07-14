@@ -265,3 +265,16 @@ are additive and low-risk. Order-of-magnitude: 5 PRs, comparable in aggregate to
   splits** (`applyFactor`, needs a node id) are not; enter the pins, and honestly flag any un-enterable case
   as `truncated` (LOWER BOUND). Then browser-verify NO regression on the disk + find a genuinely positive-dim
   factorable case that auto-aggregates, and open the Phase B PR.
+- **2026-07-14** — **Phase B part 2 (UI wiring) DONE + browser-verified.** `buildPlanCtx(ctrl)` extracted
+  (shared by Certify + Prove); `buildProveFork(params)` (the real store fork: `spuriousFactors` → enterable
+  variable-PINs via `substituteValues`, general splits returned non-enterable, `leave` undoes to the
+  `maxColumn` fence). `doProveExistenceUniqueness` now ESCALATES: prelude → `runCertifyPlan` → on
+  `positive-dim`, `runProofTree` (mutate-then-revert, so the DAG is untouched) → aggregate verdict; if the
+  walk closed NO branch (every case an un-enterable general split), it FALLS BACK to the manual pin/split
+  card (no UX regression). `renderProofVerdict` accepts the `'tree'` kind. **Browser-verified on the fresh
+  `dist/` build:** (a) disk = "Unique quadrature domain ✓" unchanged (zero-dim never escalates); (b) a
+  φ(0)-free disk (positive-dim) escalates — the tree walks + honestly truncates ("LOWER BOUND"); (c) the
+  fully-truncated tree falls back to the manual card; no console errors throughout. **⚠ browser gotcha:
+  the `qd-esm` preview serves a production `dist/` BUILD, not a Vite dev server — a source edit is invisible
+  until `pnpm -C apps/quadrature-domains build` + SW-clear + reload (paths like `/app/algebra/*.mjs` hit the
+  SPA fallback = index.html, which misled the freshness check).** Phase B COMPLETE. Next: Phase C.
