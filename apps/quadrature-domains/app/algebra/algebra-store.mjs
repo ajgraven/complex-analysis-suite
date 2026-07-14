@@ -1665,12 +1665,17 @@ import _QD from '../solver.mjs';
       // ∏_j (1 − z_j·z̄_j) over poles whose BOTH z_j and z̄_j (zb_j) variables are still present (a pinned/
       // eliminated z_j already has a definite modulus — nothing to saturate for it).
       const one = S.mpolyConst(S.gaussInt(1));
-      let f = null; const poles = [];
-      for (const v of [...vars].sort()) {
-        const m = /^z(\d+)$/.exec(v); if (!m) continue;
-        const zb = 'zb' + m[1]; if (!vars.has(zb)) continue;
-        const fac = one.sub(S.mpolyVar(v).mul(S.mpolyVar(zb)));   // 1 − z_j·z̄_j
-        f = f ? f.mul(fac) : fac; poles.push(m[1]);
+      // Pole indices whose BOTH z_j and z̄_j (zb_j) variables are still present.
+      const poleIdx = [];
+      for (const v of [...vars].sort()) { const m = /^z(\d+)$/.exec(v); if (m && vars.has('zb' + m[1])) poleIdx.push(m[1]); }
+      // ∏ over ALL ordered pairs (a, b): (1 − z̄_a·z_b) — the FULL set of cleared Möbius denominators (A-1:
+      // pole a's branch factor (1 − z̄_a z) evaluated at node z_b). Self a=b drops {|z_j|=1}; cross a≠b drops
+      // the {z̄_a z_b = 1} stratum a MULTI-pole (●) equation clears. All disjoint from the genuine |z_j|<1 set
+      // (there |z̄_a z_b| = |z_a||z_b| < 1 ⇒ ≠ 1), so no genuine QD is removed.
+      let f = null; const poles = poleIdx.slice();
+      for (const a of poleIdx) for (const b of poleIdx) {
+        const fac = one.sub(S.mpolyVar('zb' + a).mul(S.mpolyVar('z' + b)));   // 1 − z̄_a·z_b
+        f = f ? f.mul(fac) : fac;
       }
       if (!f) return { ok: false, reason: 'no Möbius denominator (z_j, z̄_j) present to saturate — the map variables may be pinned/eliminated', created: [] };
       let gens;

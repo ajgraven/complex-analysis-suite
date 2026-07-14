@@ -66,4 +66,26 @@ describe("store.saturateMobius — Möbius admissibility saturation (B-1)", () =
     expect(sat.ok).toBe(false);
     expect(sat.reason).toMatch(/no Möbius|pinned|eliminated/i);
   });
+
+  // A-1: a multi-pole (●) equation clears CROSS Möbius factors (1 − z̄_{j'} z_j), j'≠j, too — so the
+  // all-ordered-pairs saturation must remove a spurious solution on {z̄_a z_b = 1} that no self-term catches.
+  it("drops a CROSS-term spurious solution (multi-pole): 2 poles ⇒ realCount 2 → 1", () => {
+    const z1 = S.mpolyVar("z1"), zb1 = S.mpolyVar("zb1"), z2 = S.mpolyVar("z2"), zb2 = S.mpolyVar("zb2");
+    const one = S.mpolyConst(S.gaussInt(1, 0)), two = S.mpolyConst(S.gaussInt(2, 0)), four = S.mpolyConst(S.gaussInt(4, 0));
+    // real solutions (z1,z2) = (0,0) genuine and (1/2, 2) spurious — the latter on the CROSS factor
+    // z̄1·z2 = 1 (½·2), NOT on any self |z_j|=1 (|z1|=½, |z2|=2). Self-terms-only would keep it.
+    const polys = [
+      z2.sub(four.mul(z1)),               // z2 = 4·z1
+      two.mul(z1.mul(z1)).sub(z1),        // 2·z1² − z1  ⇒ z1 ∈ {0, 1/2}
+      zb1.sub(z1),                        // z̄1 = z1 (reality)
+      zb2.sub(z2),                        // z̄2 = z2 (reality)
+    ];
+    const store = AS.create();
+    store.seedFromPolys({ polys, vars: ["z1", "zb1", "z2", "zb2"] });
+    expect(store.classify().realCount).toBe(2);
+    const sat = store.saturateMobius();
+    expect(sat.ok).toBe(true);
+    expect(sat.poles).toEqual(expect.arrayContaining(["1", "2"]));
+    expect(store.classify().realCount).toBe(1);   // the cross-term (1/2, 2) point removed; (0,0) retained
+  });
 });
