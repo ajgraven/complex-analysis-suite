@@ -1679,31 +1679,59 @@ const QD = _QD;
       })();
     }
 
-    // THE one-click orchestrator (finding G-1): from the seeded system to the AUTHORITATIVE genuine-QD
-    // verdict, with no manual op-chaining. Runs the cheap reductions (auto-reality if h is real-axis
-    // symmetric, then linear propagation to a fixpoint — each a labeled column) and then the FULL
-    // Certify-univalence pipeline (regime → certified real solve → EXACT |z_j|<1 admissibility gate →
-    // Schur–Cohn fold + boundary-simple filter → gauge quotient → numeric cross-check → rigor-badged
-    // verdict). If the reduced system is still underdetermined, doCertifyUnivalence shows the
-    // positive-dimensional verdict + one-click pin/split actions — it never fails ambiguously. Reuses
-    // doAutoSolve's reduction prelude + doCertifyUnivalence (no new math; the sound pieces, orchestrated).
+    // THE one-click orchestrator (finding G-1 + Phase B): from the seeded system to the AUTHORITATIVE
+    // genuine-QD verdict, with no manual op-chaining. Runs the cheap reductions (auto-reality if h is
+    // real-axis symmetric, then linear propagation to a fixpoint, then Möbius saturation — each a labeled
+    // column) and then the FULL pipeline (PROVE.runCertifyPlan: regime → certified real solve → EXACT
+    // |z_j|<1 gate → Schur–Cohn fold + boundary-simple filter → gauge quotient → cross-check → rigor
+    // verdict). If the reduced system is still POSITIVE-DIMENSIONAL, it ESCALATES to the branch tree
+    // (PROVE.runProofTree): auto-walk the factor / forced-pin cases, POOL the genuine φ's across the whole
+    // tree, and gauge-quotient ONCE (pool-then-quotient) — turning today's manual pin/split dead-end into
+    // an aggregated verdict (an honest LOWER BOUND when a case can't be auto-closed). Escalation is
+    // exclusive to this ✦ button; the standalone Certify keeps the manual pin/split card.
     function doProveExistenceUniqueness() {
       if (_abort) return;
       if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
+      if (typeof QD.isBoundaryUnivalent !== 'function') { showError('Univalence: the numeric univalence machinery (solver.js) is not loaded.'); return; }
       if (!ensureSeed()) return;
       clearError();
-      // Cheap reductions first (best-effort — Certify still runs on the current system on any error).
+      // Cheap reductions first (best-effort — the pipeline still runs on the current system on any error).
       try {
         const sym = QE.realAxisSymmetry(activeEnv.hData);
         if (sym && sym.allReal && !store.realVars.length) { const r = store.assumeReal(store.baseVariables()); if (r && r.ok) rerender(); }
         for (let i = 0; i < 4; i++) { const pr = store.reducePropagate(); if (!pr || !pr.ok) break; rerender(); if (pr.inconsistent) break; }
-        // A-1 / S5-depth: saturate away the {|z_j|=1} + cross Möbius denominator strata so the certify
-        // pipeline runs on the EXACT admissible system (a genuine QD has |z_j|<1, so nothing genuine is
-        // dropped). Best-effort — a no-op once the map variables are pinned/eliminated.
+        // A-1 / S5-depth: saturate away the {|z_j|=1} + cross Möbius denominator strata (a genuine QD has
+        // |z_j|<1, so nothing genuine is dropped). Best-effort — a no-op once the map vars are pinned.
         try { const sr = store.saturateMobius(); if (sr && sr.ok) rerender(); } catch (e) { /* best-effort */ }
         refreshPickers();
-      } catch (e) { /* the prelude is best-effort; the certify pipeline still runs */ }
-      doCertifyUnivalence();
+      } catch (e) { /* the prelude is best-effort; the pipeline still runs */ }
+      const ctrl = _newAbort(); _abort = ctrl;
+      setBusy(true, 'Proving existence / uniqueness…');
+      const planCtx = buildPlanCtx(ctrl);
+      PROVE.runCertifyPlan(planCtx).then((pr) => {
+        if (pr.kind === 'positive-dim') {
+          // ESCALATE (Phase B): the prelude left it underdetermined with a factorable cause — auto-walk
+          // the factor / forced-pin cases and aggregate (pool-then-quotient), not a manual dead-end. The
+          // fork mutates + reverts the store per case, so the derivation DAG is unchanged by the walk.
+          setStatus('Underdetermined — auto-walking the factor / pin cases…');
+          return PROVE.runProofTree(Object.assign({}, planCtx, { fork: buildProveFork(planCtx.params) })).then((tr) => {
+            _abort = null; setBusy(false); setStatus('');
+            if (tr.kind === 'aborted') { toast('Cancelled'); return; }
+            // If the walk CLOSED at least one branch (analyzed a determined sub-case), render the
+            // aggregate (pool-then-quotient) verdict. If it made NO progress — every case was an
+            // un-enterable general split, so the system is still just underdetermined — fall back to
+            // the manual pin/split card (as the standalone Certify shows) rather than a bare "no QD
+            // (lower bound)", so the user isn't left without a next action.
+            const closedAny = (tr.leaves || []).some((l) => l && (l.kind === 'zero-dim' || l.kind === 'inconsistent' || l.kind === 'no-real'));
+            if (tr.count >= 1 || closedAny) renderProofVerdict(tr);
+            else renderPositiveDimVerdict(pr);
+          });
+        }
+        _abort = null; setBusy(false); setStatus('');
+        if (pr.kind === 'aborted') { toast('Cancelled'); return; }
+        if (pr.kind === 'error') { const rn = pr.reason || 'failed'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
+        renderProofVerdict(pr);   // inconsistent / no-real / zero-dim
+      }).catch((e) => { _abort = null; setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
     }
     // The known quadrature-data values (a_j, C_{j,s} and their conjugates) keyed by the
     // conjugate-model variable names — to PIN the parameters for the existence verdict
@@ -1776,6 +1804,66 @@ const QD = _QD;
     function proveDeps() {
       return { QE, QC, QD, known: (store.knownValues && store.knownValues()) || {}, w0Fixed: store.w0Fixed, caps: { maxPoleOrder: lastCap } };
     }
+    // Build the pure-engine ctx (deps + oracle + the worker-backed classify/solve bindings) for the
+    // current seeded system, bound to the abort controller. Shared by doCertifyUnivalence and the
+    // ✦ Prove orchestrator (which ESCALATES to the branch tree on a positive-dimensional result). The
+    // pinned quadrature data `params` is stashed on the ctx so the tree's fork re-runs spuriousFactors
+    // with the same pinning.
+    function buildPlanCtx(ctrl) {
+      const params = hDataParamValues();
+      const w0cb = $('#alg-w0-fix'), fixW0 = !w0cb || w0cb.checked;
+      const w0Sel = fixW0 ? (activeEnv && (activeEnv.w0Used || (activeEnv.primary && activeEnv.primary.phi && activeEnv.primary.phi.w0))) : undefined;
+      const _solveOpts = { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Solving the real system… ' + info.basis + ' generators, ' + info.pairs + ' pairs left') };
+      return {
+        hData: activeEnv.hData, deps: proveDeps(), params,
+        oracle: { numPhi: (activeEnv && activeEnv.primary && activeEnv.primary.phi) || null, fixW0, w0Sel },
+        signal: ctrl && ctrl.signal, sliceCaveat, posDimDesc,
+        // REGIME: the heavy reim Gröbner + Hermite real-count in the WORKER (cancellable).
+        classify: () => store.classifyAsync(null, { paramValues: params }, {
+          signal: ctrl && ctrl.signal,
+          onProgress: (info) => setStatus('Certifying univalence… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
+        }),
+        // CERTIFIED-FIRST real solve (#2a): RUR + exact Sturm boxes count EVERY real solution (no
+        // clustered-root merging) so the count can be certified; fall back to the numeric eigenvalue solve.
+        solveCertified: () => store.solveRealCertifiedAsync(null, { paramValues: params }, _solveOpts),
+        solveNumeric: () => store.solveRealAsync(null, { paramValues: params }, _solveOpts),
+      };
+    }
+    // The store-mutation FORK the branch walk drives (Phase B): detect the enterable factor / pin cases
+    // of a positive-dimensional system, enter one (checkpointed), and revert. spuriousFactors returns a
+    // reim-poly index (not a store node id), so only the variable-PIN factors are directly enterable
+    // (substituteValues); a general split (needs applyFactor + a node id) is returned NON-enterable, so
+    // the walk honestly flags it as an unexplored case (a LOWER BOUND). leave() undoes down to the
+    // recorded maxColumn fence — substituteValues+propagate can add several columns, and
+    // _appendReduction self-checkpoints, so a single undo() would not fully revert.
+    function buildProveFork(params) {
+      const forkStack = [];
+      return {
+        detectSplits: () => {
+          let hits = []; try { hits = store.spuriousFactors(null, { paramValues: params }) || []; } catch (e) { hits = []; }
+          for (const h of hits) {
+            const cases = (h.factors || []).map((f) => (f.kind === 'variable' && f.pinVar)
+              ? { enterable: true, pinVar: f.pinVar, pinValue: f.pinValue || { re: 0, im: 0 } }
+              : { enterable: false });
+            if (cases.length) return cases;   // one factorable equation's factors partition V(p)=⋃V(fᵢ)
+          }
+          return [];
+        },
+        enter: (c) => {
+          if (!c.enterable) return false;    // a general split — not auto-enterable ⇒ the walk marks it truncated
+          const preMax = store.maxColumn();
+          let r; try { r = store.substituteValues([{ varName: c.pinVar, value: c.pinValue }], { propagate: true }); } catch (e) { r = { ok: false }; }
+          if (!r || r.ok === false) return false;
+          forkStack.push(preMax); return true;
+        },
+        leave: () => {
+          const preMax = forkStack.pop();
+          if (preMax == null) return;
+          let guard = 0;
+          while (store.maxColumn() > preMax && guard++ < 100) { if (!store.undo()) break; }
+        },
+      };
+    }
 
     // UNIFIED EXISTENCE/UNIQUENESS VERDICT — the authoritative genuine-QD verdict, now a THIN
     // binding over the pure engine PROVE.runCertifyPlan: regime (classify: inconsistent ⇒ no QD;
@@ -1792,28 +1880,7 @@ const QD = _QD;
       clearError();
       const ctrl = _newAbort(); _abort = ctrl;
       setBusy(true, 'Certifying univalence (genuine QDs)…');
-      const params = hDataParamValues();
-      const hData = activeEnv.hData;
-      const w0cb = $('#alg-w0-fix'), fixW0 = !w0cb || w0cb.checked;
-      const w0Sel = fixW0 ? (activeEnv && (activeEnv.w0Used || (activeEnv.primary && activeEnv.primary.phi && activeEnv.primary.phi.w0))) : undefined;
-      const _solveOpts = { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Solving the real system… ' + info.basis + ' generators, ' + info.pairs + ' pairs left') };
-      const planCtx = {
-        hData, deps: proveDeps(),
-        oracle: { numPhi: (activeEnv && activeEnv.primary && activeEnv.primary.phi) || null, fixW0, w0Sel },
-        signal: ctrl && ctrl.signal,
-        sliceCaveat, posDimDesc,
-        // 1) REGIME: the heavy reim Gröbner + Hermite real-count in the WORKER (cancellable).
-        classify: () => store.classifyAsync(null, { paramValues: params }, {
-          signal: ctrl && ctrl.signal,
-          onProgress: (info) => setStatus('Certifying univalence… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
-        }),
-        // 2) CERTIFIED-FIRST real solve (#2a): RUR + exact Sturm boxes count EVERY real solution (no
-        // clustered-root merging), so the count can be certified; fall back to the numeric eigenvalue
-        // solve — with its PARTIAL machinery — when the certified path can't apply.
-        solveCertified: () => store.solveRealCertifiedAsync(null, { paramValues: params }, _solveOpts),
-        solveNumeric: () => store.solveRealAsync(null, { paramValues: params }, _solveOpts),
-      };
-      PROVE.runCertifyPlan(planCtx).then((pr) => {
+      PROVE.runCertifyPlan(buildPlanCtx(ctrl)).then((pr) => {
         _abort = null; setBusy(false); setStatus('');
         if (pr.kind === 'aborted') { toast('Cancelled'); return; }
         if (pr.kind === 'error') { const rn = pr.reason || 'failed'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
@@ -1845,9 +1912,10 @@ const QD = _QD;
       if (canvas) canvas.setVerdict({ text, actions: actions.slice(0, 6), assumptions: specializationLedger(cl), rigor: 'unknown' });
       setStatus(text); toast('Positive-dimensional — fix the gauge / pin a forced variable.', { kind: 'error' });
     }
-    // Render a terminal verdict card (inconsistent / no-real / zero-dim). For a zero-dimensional
-    // result it adds the one-click derivation actions: the exact boundary curve Q(w,w̄)=0 (+ Schwarz
-    // S(w)) and "View in the QD plot" for a genuine QD, and always the reproducible derivation-DAG export.
+    // Render a terminal verdict card (inconsistent / no-real / zero-dim, or an aggregated 'tree' result
+    // from the Phase-B branch walk). For a zero-dim OR tree result with genuine QDs it adds the one-click
+    // derivation actions: the exact boundary curve Q(w,w̄)=0 (+ Schwarz S(w)) and "View in the QD plot"
+    // for the first genuine QD, and always the reproducible derivation-DAG export.
     function renderProofVerdict(pr) {
       const cl = pr.cl, verdict = pr.verdict;
       const distinct = pr.distinctPhis || [];
@@ -1855,7 +1923,7 @@ const QD = _QD;
       const rows = pr.rows || [];
       setStatus(verdict);
       const vActions = [];
-      if (pr.kind === 'zero-dim') {
+      if (pr.kind === 'zero-dim' || pr.kind === 'tree') {
         // #1 (roadmap ALGEBRA_EXTENSIONS): a one-click EXACT boundary curve for a genuine QD.
         if (D >= 1 && QE && typeof QE.boundaryCurveFromPhi === 'function') {
           vActions.push({

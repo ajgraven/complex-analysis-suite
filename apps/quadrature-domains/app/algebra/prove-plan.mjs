@@ -277,10 +277,16 @@ export function assembleVerdict(a) {
 // with params/signal/onProgress; `deps`, `oracle`, `sliceCaveat`, `posDimDesc` come from ctx.
 //
 // ProofResult.kind ∈ 'aborted' | 'error' | 'inconsistent' | 'positive-dim' | 'no-real' | 'zero-dim'.
-export async function runCertifyPlan(ctx) {
+// Analyze ONE system (a single leaf of the proof tree): regime → certified-first real solve →
+// univalence filter. Returns a leaf descriptor. For a terminal regime (aborted/error/inconsistent/
+// positive-dim/no-real) the descriptor already carries a rendered verdict/rigor; a determined
+// zero-dimensional leaf returns { kind:'zero-dim', cl, real, r, leaf } with leaf.genuinePhis — its
+// GAUGE QUOTIENT is deferred to the caller so runProofTree can pool the raw genuine φ's across the
+// whole branch tree and quotient ONCE (pool-then-quotient; §3.2). The injected classify/solve ops
+// are current-column-relative, so this follows whatever branch the store's current column is on.
+export async function analyzeLeaf(ctx) {
   const { deps, hData } = ctx;
   const stage = (id) => { if (ctx.onStage) ctx.onStage(id); };
-  // 1) REGIME (dimension + consistency).
   stage('regime');
   const cl = await ctx.classify();
   if (cl && cl.aborted) return { kind: 'aborted', cl };
@@ -291,7 +297,6 @@ export async function runCertifyPlan(ctx) {
     verdict: 'Underdetermined: a positive-dimensional family (' + ctx.posDimDesc(cl) + '). Fix the rotation gauge (φ′(0) real-positive) or pin a forced variable — see the suggestions below, or use “Set values”.' + ctx.sliceCaveat(cl),
     rigor: 'unknown', bad: true, cl,
   };
-  // 2) ZERO-DIMENSIONAL: certified-first real solve, fall back to the numeric eigenvalue solve.
   stage('solve-real');
   let r = await ctx.solveCertified();
   if (r && r.aborted) return { kind: 'aborted', cl };
@@ -306,17 +311,108 @@ export async function runCertifyPlan(ctx) {
       : 'No real quadrature domain' + (cl.complexCount != null ? ' (of ' + cl.complexCount + ' distinct complex)' : '') + '.') + ctx.sliceCaveat(cl);
     return { kind: 'no-real', verdict: v, rigor: (cl.realCount != null && cl.realCount > 0) ? 'partial' : 'exact', bad: true, cl, real };
   }
-  // 3) UNIVALENCE FILTER (per candidate) → the genuine-QD pool.
   stage('filter');
   const leaf = certifyLeaf(real, hData, deps);
-  // 4) GAUGE QUOTIENT.
-  stage('gauge');
-  const { distinct, gaugeMerged } = gaugeQuotient(leaf.genuinePhis, deps);
-  // 5) UNIFIED VERDICT.
-  stage('assemble');
-  const asm = assembleVerdict({ distinct, gaugeMerged, leaf, cl, real, r, deps, hData, sliceCaveat: ctx.sliceCaveat, oracle: ctx.oracle });
+  return { kind: 'zero-dim', cl, real, r, leaf };
+}
+
+// The top-level SINGLE-SYSTEM plan (Phase A): analyze one system, gauge-quotient its genuine pool,
+// and assemble the verdict. Byte-identical to the pre-tree behavior; runProofTree is the branch-aware
+// superset. ProofResult.kind ∈ 'aborted' | 'error' | 'inconsistent' | 'positive-dim' | 'no-real' | 'zero-dim'.
+export async function runCertifyPlan(ctx) {
+  const a = await analyzeLeaf(ctx);
+  if (a.kind !== 'zero-dim') return a;   // terminal regimes carry their own verdict/rigor
+  if (ctx.onStage) ctx.onStage('gauge');
+  const { distinct, gaugeMerged } = gaugeQuotient(a.leaf.genuinePhis, ctx.deps);
+  if (ctx.onStage) ctx.onStage('assemble');
+  const asm = assembleVerdict({ distinct, gaugeMerged, leaf: a.leaf, cl: a.cl, real: a.real, r: a.r, deps: ctx.deps, hData: ctx.hData, sliceCaveat: ctx.sliceCaveat, oracle: ctx.oracle });
   return {
     kind: 'zero-dim', verdict: asm.verdict, rigor: asm.rigor, bad: asm.bad,
-    cl, real, certified: !!r.certified, distinctPhis: distinct, rows: leaf.rows, count: asm.count, cc: asm.cc,
+    cl: a.cl, real: a.real, certified: !!a.r.certified, distinctPhis: distinct, rows: a.leaf.rows, count: asm.count, cc: asm.cc,
+  };
+}
+
+// Assemble the AGGREGATE verdict for a proof tree from the pooled, once-gauge-quotiented genuine set.
+// Honest bound: '=' only when every branch closed (not truncated), every filter was exact, every
+// solve certified, and the cross-check (on the whole distinct pool) is clean; else '≥' (a LOWER
+// BOUND), naming the gap. Rejection/merge counts are summed across the tree's determined leaves.
+export function assembleTreeVerdict(a) {
+  const { distinct, leaves, truncated, deps, hData, sliceCaveat, oracle, cl } = a;
+  const D = distinct.length;
+  const zero = leaves.filter((l) => l.kind === 'zero-dim');
+  const branchCount = zero.length;
+  const allExact = zero.every((l) => l.leaf.allExactFilter && l.leaf.allExactVerified);
+  const allCertified = zero.every((l) => l.r && l.r.certified);
+  let folded = 0, selfInt = 0, poleOut = 0, unrec = 0, rawGenuine = 0;
+  zero.forEach((l) => { folded += l.leaf.folded; selfInt += l.leaf.selfInt; poleOut += l.leaf.poleOut; unrec += l.leaf.unrec; rawGenuine += l.leaf.genuinePhis.length; });
+  const cc = crossCheckPhis(distinct, hData, deps, oracle);
+  const ccOk = !cc.checked || (cc.maxResidual < 1e-4 && cc.oracleMatch);
+  const exactAggregate = !truncated && allExact && allCertified && ccOk;
+  const across = branchCount > 1 ? ' across ' + branchCount + ' branches' : '';
+  let head;
+  if (D === 0) head = 'No genuine quadrature domain' + across;
+  else if (D === 1) head = (exactAggregate ? 'Unique quadrature domain ✓' : 'At least 1 genuine quadrature domain') + across;
+  else head = (exactAggregate ? '' : 'At least ') + D + ' distinct quadrature domains' + across;
+  const bits = [];
+  const gm = rawGenuine - D;   // merges across the WHOLE pool (within + between branches)
+  if (gm > 0) bits.push(gm + ' gauge/rotation ' + (gm === 1 ? 'copy' : 'copies') + ' merged');
+  const rej = [folded ? folded + ' fold' : '', selfInt ? selfInt + ' self-intersecting' : '', poleOut ? poleOut + ' pole-in-𝔻' : '', unrec ? unrec + ' unreconstructable' : ''].filter(Boolean).join(', ');
+  if (rej) bits.push(rej + ' rejected');
+  let verdict = head + (bits.length ? ' (' + bits.join('; ') + ')' : '') + '.';
+  if (cc.checked) verdict += ccOk ? ' · cross-check ✓ (residual ' + cc.maxResidual.toExponential(1) + '; matches the numeric solver)'
+    : ' · ⚠ cross-check: ' + (cc.maxResidual >= 1e-4 ? 'residual ' + cc.maxResidual.toExponential(1) + ' ≫ 0' : 'no match to the numeric solver');
+  if (truncated) verdict += ' · ⚠ not all branches closed (a case hit the depth / branch cap, or a positive-dimensional case had no factorable cause) — the count is a LOWER BOUND';
+  else if (exactAggregate && branchCount > 1) verdict += ' · aggregated over all ' + branchCount + ' branches (pool-then-quotient) — a domain reachable via two cases is counted once';
+  if (D >= 1) verdict += ' · class: classical bounded quadrature domains, up to the rotation gauge' + (deps.w0Fixed ? ' (among domains whose interior contains the fixed w₀)' : '');
+  if (cl) verdict += sliceCaveat(cl);
+  const rigor = truncated ? 'bound' : (exactAggregate ? 'exact' : 'estimate');
+  const bad = D === 0 || truncated || !ccOk;
+  return { verdict, rigor, bad, count: D, bound: exactAggregate ? '=' : '≥', cc };
+}
+
+// The BRANCH-AWARE plan (Phase B): walk the proof tree, auto-forking a positive-dimensional system
+// into its factor cases / forced pins (via the injected ctx.fork), pool the genuine φ's across the
+// WHOLE tree, gauge-quotient the pool ONCE, and assemble an aggregate verdict. Bounded by maxDepth /
+// maxBranches (honest LOWER BOUND when a cap truncates). A zero-dimensional root needs no forking
+// and yields the same result as runCertifyPlan. ctx.fork = { detectSplits(), enter(case), leave() }:
+// detectSplits returns the sibling cases partitioning V(p)=⋃V(fᵢ) (or the forced-pin candidates);
+// enter mutates the store to that case (checkpoint + applyFactor / substituteValues) and returns a
+// truthy handle; leave reverts (undo). Without ctx.fork, a positive-dim root just truncates.
+export async function runProofTree(ctx, opts) {
+  opts = opts || {};
+  const maxDepth = opts.maxDepth != null ? opts.maxDepth : 3;
+  const maxBranches = opts.maxBranches != null ? opts.maxBranches : 8;
+  const pool = [], leaves = [], rows = [];
+  let truncated = false, aborted = false, rootCl = null;
+  async function walk(depth) {
+    if (aborted) return;
+    const a = await analyzeLeaf(ctx);
+    leaves.push(a);
+    if (a.cl && !rootCl) rootCl = a.cl;
+    if (a.kind === 'aborted') { aborted = true; return; }
+    if (a.kind === 'error') { truncated = true; return; }
+    if (a.kind === 'inconsistent' || a.kind === 'no-real') return;   // a determined-empty branch adds nothing to the union
+    if (a.kind === 'zero-dim') { pool.push(...a.leaf.genuinePhis); if (a.leaf.rows) rows.push(...a.leaf.rows); return; }
+    // positive-dimensional ⇒ try to fork into determined sub-cases.
+    if (depth >= maxDepth) { truncated = true; return; }
+    let splits = [];
+    try { splits = (ctx.fork && ctx.fork.detectSplits()) || []; } catch (e) { splits = []; }
+    if (!splits.length) { truncated = true; return; }   // underdetermined with no factorable cause — can't auto-close
+    if (splits.length > maxBranches) { splits = splits.slice(0, maxBranches); truncated = true; }
+    for (const c of splits) {
+      if (aborted) break;
+      let entered = false;
+      try { entered = !!(ctx.fork && ctx.fork.enter(c)); } catch (e) { entered = false; }
+      if (!entered) { truncated = true; continue; }
+      try { await walk(depth + 1); } finally { try { ctx.fork.leave(); } catch (e) { /* best-effort revert */ } }
+    }
+  }
+  await walk(0);
+  if (aborted) return { kind: 'aborted' };
+  const { distinct } = gaugeQuotient(pool, ctx.deps);
+  const asm = assembleTreeVerdict({ distinct, leaves, truncated, deps: ctx.deps, hData: ctx.hData, sliceCaveat: ctx.sliceCaveat, oracle: ctx.oracle, cl: rootCl });
+  return {
+    kind: 'tree', verdict: asm.verdict, rigor: asm.rigor, bad: asm.bad, count: asm.count, bound: asm.bound,
+    distinctPhis: distinct, rows, leaves, truncated, cl: rootCl, cc: asm.cc,
   };
 }

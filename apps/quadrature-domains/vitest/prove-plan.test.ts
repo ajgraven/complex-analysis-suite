@@ -247,3 +247,73 @@ describe("prove-plan (4) real-seed end-to-end: the unit disk certifies over the 
     expect(pr.verdict).toContain("real-solution count + locations certified");
   });
 });
+
+describe("prove-plan (5) runProofTree — branch walk + pool-then-quotient (Phase B)", () => {
+  // A scripted store: the fake classify/solve read the currently-entered case; fork.enter/leave
+  // push/pop cases. deps use a numeric-fallback filter (no Sym/QC), so every real solution becomes a
+  // genuine φ, and sameDomain compares the reconstructed A_{1,1} (two cases yielding the same A = the
+  // same domain). This exercises the tree walk + aggregation deterministically, no real engine.
+  const P = (A: number) => sol({ w0: 0, z1: 0, A1_1: A });
+  const treeCtx = (root: any, cases: any, opts: any = {}) => {
+    const stack: string[] = [];
+    const cur = () => (stack.length ? cases[stack[stack.length - 1]] : root);
+    return {
+      hData: diskH,
+      deps: { QD: { sameDomain: (x: any, y: any) => x.branches[0].A[0].re === y.branches[0].A[0].re }, QE: {}, w0Fixed: false, caps: { maxPoleOrder: 6 } },
+      oracle: null, sliceCaveat: () => "", posDimDesc: () => "1 variable",
+      classify: async () => cur().classify,
+      solveCertified: async () => cur().solve || { ok: false },
+      solveNumeric: async () => cur().solve || { ok: true, solutions: [] },
+      fork: {
+        detectSplits: () => (cur().splits || []).map((id: string) => ({ id })),
+        enter: (c: any) => { stack.push(c.id); return true; },
+        leave: () => { stack.pop(); },
+      },
+      ...opts,
+    };
+  };
+  const posDim = (splits: string[]) => ({ classify: { ok: true, zeroDim: false }, splits });
+  const zero = (A: number) => ({ classify: { ok: true, zeroDim: true, realCount: 1 }, solve: { ok: true, solutions: [P(A)] } });
+
+  it("a zero-dim root needs no forking (single leaf)", async () => {
+    const pr = await PROVE.runProofTree(treeCtx(zero(1), {}));
+    expect(pr.kind).toBe("tree");
+    expect(pr.count).toBe(1);
+    expect(pr.truncated).toBe(false);
+  });
+
+  it("SEAM DEDUP: two factor cases reaching the SAME domain are counted ONCE (pool-then-quotient)", async () => {
+    const pr = await PROVE.runProofTree(treeCtx(posDim(["a", "b"]), { a: zero(1), b: zero(1) }));
+    expect(pr.kind).toBe("tree");
+    expect(pr.count).toBe(1);                       // NOT 2 — the shared domain is deduped across the seam
+    expect(pr.verdict).toContain("across 2 branches");
+  });
+
+  it("two cases reaching DISTINCT domains sum to 2", async () => {
+    const pr = await PROVE.runProofTree(treeCtx(posDim(["a", "b"]), { a: zero(1), b: zero(2) }));
+    expect(pr.count).toBe(2);
+  });
+
+  it("an inconsistent case contributes NOTHING to the union (0 + 1 = 1)", async () => {
+    const pr = await PROVE.runProofTree(treeCtx(posDim(["a", "b"]), { a: { classify: { ok: true, inconsistent: true } }, b: zero(7) }));
+    expect(pr.count).toBe(1);
+  });
+
+  it("maxBranches cap truncates ⇒ a LOWER BOUND (rigor 'bound')", async () => {
+    const pr = await PROVE.runProofTree(treeCtx(posDim(["a", "b", "c"]), { a: zero(1), b: zero(2), c: zero(3) }), { maxBranches: 2 });
+    expect(pr.truncated).toBe(true);
+    expect(pr.rigor).toBe("bound");
+    expect(pr.verdict).toContain("LOWER BOUND");
+  });
+
+  it("a positive-dim root with no factorable cause ⇒ truncated (can't auto-close)", async () => {
+    const pr = await PROVE.runProofTree(treeCtx(posDim([]), {}));
+    expect(pr.truncated).toBe(true);
+    expect(pr.count).toBe(0);
+  });
+
+  it("an abort mid-walk surfaces as kind 'aborted'", async () => {
+    const pr = await PROVE.runProofTree(treeCtx({ classify: { aborted: true } }, {}));
+    expect(pr.kind).toBe("aborted");
+  });
+});
