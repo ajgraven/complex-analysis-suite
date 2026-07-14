@@ -23,6 +23,18 @@ describe("QD.Sym.discriminantVariety", () => {
     expect(on(r.boundary, { p: 5 })).toBe(false);
     expect(r.components.length).toBe(1);
     expect(varsOf(r.components[0])).toEqual(["p"]);
+    // C-MED-2: the separating form is now CERTIFIED — the generic fiber has 2 solutions (±√p) and the
+    // eliminant degree reaches it, so no boundary component can be silently missed.
+    expect(r.genericFiberCount).toBe(2);
+    expect(r.separated).toBe(true);
+  });
+
+  it("C-MED-2: certifies separation on a 2-solve-var fiber ({x²=p, y²=q} ⇒ N=4, separated)", () => {
+    const r = discriminantVariety([V("x").pow(2).sub(V("p")), V("y").pow(2).sub(V("q"))], ["p", "q"]);
+    expect(r.ok).toBe(true);
+    expect(r.genericFiberCount).toBe(4);   // 4 distinct solutions (±√p, ±√q) generically
+    expect(r.separated).toBe(true);        // a linear form u = x − c·y reaches deg_u = 4
+    expect(r.degree).toBe(4);
   });
 
   it("m=2: x² − p·q → boundary = the two axes {p=0} ∪ {q=0}", () => {

@@ -4327,7 +4327,20 @@ import _QD from './solver.mjs';
       // separating univariate eliminant f(u, p): take the MAX u-degree over a few candidate forms — the
       // separating form achieves the full fiber size, so max degree ⇒ generically separating (no invisible
       // collision, so no boundary component is missed).
-      let f = null, fdeg = -1;
+      // C-MED-2: CERTIFY the separating form. The generic fiber size N = the max distinct-complex-solution
+      // count of the system over a few GENERIC rational parameter points (achieved generically; degenerate
+      // points give fewer). A separating linear form's squarefree eliminant has deg_u = N — so accept the
+      // first candidate that reaches N (⇒ certified separating: no invisible collision, no missed boundary
+      // component, exactly as parametricRealCount1D does); otherwise keep the max-degree form and flag
+      // `separated:false` so the boundary is honestly labeled a possible UNDER-count.
+      let N = 0;
+      for (const pt of [[1, -1, 2, -2, 3], [2, 3, -1, 5, -2], [-1, 2, -3, 1, 7]]) {
+        const sub = {}; paramVars.forEach((pv, k) => { sub[pv] = MPoly.constant(new Gaussian(Rational.fromInt(pt[k % pt.length]), RZERO)); });
+        let sys; try { sys = polys.map((p) => p.subst(sub)).filter((p) => !p.isZero()); } catch (e) { continue; }
+        let rc; try { rc = realSolutionCount(sys, null, solveVars, opts); } catch (e) { rc = null; }
+        if (rc && rc.ok && rc.complexCount > N) N = rc.complexCount;
+      }
+      let f = null, fdeg = -1, separated = false;
       const cands = [..._sepCandidates(solveVars.length, opts.maxTries || 24)].slice(0, opts.formTries || 6);
       for (const cs of cands) {
         let lin = u;
@@ -4339,6 +4352,7 @@ import _QD from './solver.mjs';
         prod = squareFreePart(prod, uName);
         const d = prod.degreeIn(uName);
         if (d > fdeg) { f = prod; fdeg = d; }
+        if (N > 0 && d === N) { f = prod; fdeg = d; separated = true; break; }   // certified separating ⇒ stop
       }
       if (!f || fdeg < 1) return fail('could not build a univariate eliminant (fiber not zero-dimensional over the parameters)');
 
@@ -4355,7 +4369,7 @@ import _QD from './solver.mjs';
         try { const fr = factor(boundary, opts); if (fr.ok && fr.factors && fr.factors.length) facs = fr.factors; } catch (e) { /* keep unfactored */ }
         for (const g of facs) if (g && g.vars().size > 0) components.push(g);
       }
-      return { ok: true, paramVars, degree: fdeg, boundary, components, strata };
+      return { ok: true, paramVars, degree: fdeg, boundary, components, strata, separated, genericFiberCount: N || null };
     } catch (e) { return fail((e && e.message) || String(e)); }
   }
 

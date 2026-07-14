@@ -2162,7 +2162,12 @@ import _QD from '../solver.mjs';
         res.chain.forEach((g, i) => emit(g, 'triangular ' + (i + 1) + '/' + res.chain.length + ' (main ' + res.mainVars[i] + ')', { mainVar: res.mainVars[i] }));
       }
       normalizeColumn(col);
-      return { ok: true, created, column: col, contradiction: !!res.contradiction, mainVars: res.mainVars || [], freeVars: res.freeVars || [] };
+      // B-3: surface the regular-chain INITIALS (the pivots' leading coefficients). A Wu chain is triangular
+      // but NOT saturated by them, so where a NON-CONSTANT initial vanishes the chain may add spurious branches
+      // or miss components — the caller must show this caveat (a genuine regular-chain decomposition would
+      // case-split on the initials). initialCount = the number of non-constant initials (the real conditions).
+      const nonTrivialInit = (res.initials || []).filter((p) => p && p.vars && p.vars().size > 0 && !p.isZero());
+      return { ok: true, created, column: col, contradiction: !!res.contradiction, mainVars: res.mainVars || [], freeVars: res.freeVars || [], initialCount: nonTrivialInit.length, hasRegularityConditions: nonTrivialInit.length > 0 };
     }
 
     // Duplicate a node to start an alternative derivation line (accumulate alternatives).

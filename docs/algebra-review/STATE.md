@@ -251,6 +251,22 @@ file BEFORE returning. Orchestrator alone integrates + adjudicates + commits.
 
 ## Next action
 
+**P2 HONESTY-GAP BATCH IN PROGRESS** (user: "Take the P2 honesty-gap batch next", 2026-07-13). Gate running.
+- [x] **C-MED-2** — `discriminantVariety` now CERTIFIES the separating form: computes the generic fiber size N
+      (max distinct-complex count over generic rational parameter points) and prefers a form whose eliminant
+      deg_u = N (like parametricRealCount1D); returns `separated` + `genericFiberCount`. `qd-discriminant-variety`
+      (+2 assertions). PASS.
+- [x] **B-3** — `store.triangularize` now surfaces the regular-chain INITIALS: returns `{ initialCount,
+      hasRegularityConditions }` (non-constant pivots), and `doTriangular` shows the "a Wu chain is NOT saturated
+      by its pivots — spurious branches / missed components off the initials" caveat. `qd-triangular-initials` (2). PASS.
+- [x] **D-4** — active univalence constraints (convex/star/spiral/injectivity) now appear in the
+      `specializationLedger` ("restricts to domains meeting it") so a restricted count never reads as full.
+- **E4/D-3/E3/E5 — substantially closed already / low:** a cross-check failure already forces `certRigor≠'exact'`
+      via `ccOk` (S4), and S1+PF-1 filter the spurious solutions E4/D-3 worried about; E3 (numeric gauge dedup)
+      + E5 (boundaryCurve empirically clean) documented as known limits. (Full per-φ removal + interval dedup deferred.)
+
+**PF-1 DONE.** Older markers below.
+
 **PF-1 IN PROGRESS** (user: "Take PF-1 next", 2026-07-13) — the exact-at-the-algebraic-point univalence cert.
 Approach: `QDEquations.verifySolutionExact(phi, hData, {maxPoleOrder})` snaps each coordinate to a nearby simple
 ℚ(i) rational (looser `_ratApprox` tol) and checks the snapped point solves the (●) locator + (★) star blocks

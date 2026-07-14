@@ -1510,7 +1510,8 @@ const QD = _QD;
       rerender();
       if (r.contradiction) { toast('Triangular decomposition: system is INCONSISTENT — no solution.'); return; }
       toast('Triangular decomposition: ' + r.created.length + ' element(s)' +
-        (r.freeVars.length ? '; free variable(s) ' + r.freeVars.map(latexPlain).join(', ') + ' ⇒ a positive-dimensional family' : ' ⇒ zero-dimensional (finitely many solutions)'));
+        (r.freeVars.length ? '; free variable(s) ' + r.freeVars.map(latexPlain).join(', ') + ' ⇒ a positive-dimensional family' : ' ⇒ zero-dimensional (finitely many solutions)') +
+        (r.hasRegularityConditions ? ' · ⚠ ' + r.initialCount + ' non-constant initial(s) — a Wu chain is NOT saturated by its pivots, so where an initial vanishes it may add spurious branches or miss components (a full regular-chain decomposition would case-split on the initials)' : ''));
     }
     // Carry every univalence constraint into the current system, assumptions applied (batch).
     function doPropagateAll() {
@@ -1559,6 +1560,15 @@ const QD = _QD;
       const out = sliceLabels(r).map((s) => s.charAt(0).toUpperCase() + s.slice(1));
       if (store.w0Fixed) out.push('φ(0) = w₀ fixed (center/translation gauge — restricts to domains whose interior contains w₀; a domain not containing w₀ is not counted)');
       if (r && r.partialBranch) out.push('Factor case ' + ((r.caseIndex || 0) + 1) + ' of ' + r.caseCount + ' (branches add up)');
+      // D-4: a user-added univalence constraint (convex / star / spiral / injectivity) restricts the count to
+      // the domains meeting it — record it in the ledger so a restricted count never reads as the full one.
+      try {
+        const at = store.activeTrack;
+        const forms = [...new Set((store.list ? store.list() : [])
+          .filter((n) => n && (n.track || 't0') === at && n.provenance && n.provenance.op === 'constraint')
+          .map((n) => (n.provenance && n.provenance.form) || (n.meta && n.meta.form)).filter(Boolean))];
+        if (forms.length) out.push('Univalence constraint' + (forms.length > 1 ? 's' : '') + ' active (' + forms.join(', ') + ') — restricts to domains meeting ' + (forms.length > 1 ? 'them' : 'it') + '; a domain that does not is not counted');
+      } catch (e) { /* ignore */ }
       return out;
     }
 
