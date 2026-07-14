@@ -119,6 +119,20 @@ Three further gate-green slices closed the P1 tier of the prioritized backlog (�
 | **P1.3** | S5-depth | The orchestrator **auto-applies `saturateMobius`** before certify; the verdict states the **class + equivalence** ("classical bounded QDs, up to the rotation gauge [+ containing w₀ if pinned]"); a one-click **"Export derivation (JSON)"** verdict action (`exportDAG` → download). Browser-verified. |
 
 Tests: `qd-eliminate-ideal.test.ts` (2) + a cross-term case in `qd-saturate-mobius.test.ts`; **1308 tests**,
-all gate-green. **Remaining after P1:** PF-1 (§7-1, still #1); the literal record-at-generation for the
-Schwarz `φ′` denominator (A-1's tail); and the fuller orchestrator redesign (strategy plan + branch-tree as
-first-class objects). The P2–P4 tiers (§ the prioritized list) are untouched.
+all gate-green.
+
+## 9. Addendum — PF-1 shipped (the #1 rigor item)
+
+`QDEquations.verifySolutionExact` snaps each reconstructed coordinate to a nearby simple ℚ(i) rational and
+checks the snapped point solves the (●)/(★) blocks **exactly over ℚ(i)**. If it does, the solution *is* that
+exact rational point (proven by the exact-zero residual), so `schurCohnFold`/`boundarySimpleExact` now run at
+that **exact-verified substitution** — certified at the **true algebraic root**, not a `ratApprox`'d float.
+`certRigor='exact'` now also requires this (`allExactVerified`), with the honest note *"· exact ℚ(i) root —
+univalence certified at the true root"* vs *"· ⚠ univalence certified at RATIONALIZED coordinates"* for an
+irrational (only-≈) solution. This closes PF-1 **and E1** (an exact verification of the reconstructed map).
+Test `qd-verify-exact.test.ts` (5); **1313 tests**; browser-verified (the default QD certifies at the exact
+root). **A certified `=` now means what it says unconditionally for rational solutions.**
+
+**Remaining:** interval / number-field Schur–Cohn to *keep* `=` for genuinely-irrational solutions (they now
+honestly read `≈`); A-1's literal record-at-generation for the Schwarz `φ′` denominator; the fuller
+orchestrator redesign; and the untouched **P2–P4** tiers.

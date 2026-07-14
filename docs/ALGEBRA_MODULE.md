@@ -238,6 +238,8 @@ A **maturity review of the existence/uniqueness proof workflow** ([`docs/algebra
 hardened the genuine-QD certificate: an exact `|z_j|<1` node-location admissibility gate (a solution whose φ
 has a pole in 𝔻 is no longer counted), Möbius `saturateMobius` to make the raw count exact (the unit disk
 now reads 2, not 4), honest labeling of the algebraic count as an upper bound, a color-coded `=`/`≤`/`≈`
-rigor badge on every verdict, and the one-click "✦ Prove existence/uniqueness" orchestrator. The one
-documented residual is that the per-solution univalence certificate is exact arithmetic on a *rationalized*
-point (the certified isolating box is not yet substituted); see `docs/algebra-review/FINAL_REPORT.md` §7.
+rigor badge on every verdict, and the one-click "✦ Prove existence/uniqueness" orchestrator. The per-solution
+univalence certificate is verified at the **exact algebraic root** when the solution is rational
+(`verifySolutionExact` — a snap-to-ℚ(i) + exact-zero residual check, so a `=` badge is then unconditional);
+a genuinely-irrational solution honestly reads `≈`. Keeping `=` for irrational solutions (interval /
+number-field Schur–Cohn) is the remaining refinement. See `docs/algebra-review/FINAL_REPORT.md`.
