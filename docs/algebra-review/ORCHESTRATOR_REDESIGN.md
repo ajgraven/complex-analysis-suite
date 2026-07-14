@@ -237,3 +237,14 @@ are additive and low-risk. Order-of-magnitude: 5 PRs, comparable in aggregate to
 
 - **2026-07-14** — Design approved; pool-then-quotient chosen (§3.2 ADR). Doc persisted. Phase A started
   on branch `refactor/prove-plan-engine`.
+- **2026-07-14** — **Phase A DONE (gate-green).** New pure engine `apps/quadrature-domains/app/algebra/prove-plan.mjs`
+  (`CERTIFY_STAGES` + `runCertifyPlan` + the moved per-solution helpers `reconstructPhi`/`poleSubst`/
+  `nodeInsideDisk`/`schurCohnFold`/`boundarySimpleExact`/`crossCheckPhis` + `certifyLeaf`/`gaugeQuotient`/
+  `assembleVerdict`), all deps injected. `doCertifyUnivalence` reduced to a thin DOM binding (build
+  deps/oracle + async op bindings → `runCertifyPlan` → `renderProofVerdict`/`renderPositiveDimVerdict`);
+  verdict strings byte-identical. New `vitest/prove-plan.test.ts` (18): pure-fn units, a full
+  `assembleVerdict` characterization (locks every verdict shape), `runCertifyPlan` control-flow, and a
+  real-seed disk end-to-end proving the S1 admissibility gate fires + genuine certified + cross-check ✓.
+  Gate: 155 vitest files + node-suite + 4 app builds green. NB node's `QD.sameDomain` doesn't merge ±ζ
+  (so the node disk reads "2 distinct", not "unique") — a pre-existing behavior, unchanged by the refactor;
+  the browser merges them. Next: Phase B (branch tree + pool-then-quotient).
