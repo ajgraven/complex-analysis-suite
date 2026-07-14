@@ -168,6 +168,22 @@ Track-F hardening (all LOW except F5 MEDIUM), no behavior change to a correct re
 
 **1322 tests**, gate-green.
 
-**Remaining:** interval / number-field Schur–Cohn to *keep* `=` for genuinely-irrational solutions (they now
-honestly read `≈`); A-1's literal record-at-generation for the Schwarz `φ′` denominator; the fuller
-orchestrator redesign; and the **P4** polish tier (console-dump, cap-export-as-button).
+## 12. Addendum — P4 polish; the prioritized backlog is CLOSED
+
+- **A-3** — the `realAxisSymmetry` comment no longer over-claims: `allReal` ⇒ conjugation-*invariance* (a
+  valid symmetric slice), not "a real solution exists" (comment-only; the downstream slice caveat was already honest).
+- **G-misc-1** — the numeric `Solve` surfaces its coordinates in the **verdict card** (with an `estimate`/`partial`
+  rigor badge), not only a `console.table` dump behind DevTools.
+- **G-misc-2** — a cap / too-large failure is now **actionable**: it renders in the verdict card with a one-click
+  **"Copy Maple RCTD export"** button (at `doSolve`/`doGroebner`/`doClassify`/`doCertifyUnivalence`), so the
+  documented external-CAS escape is one click away instead of only named in prose.
+
+**Status: the entire prioritized backlog (P0/PF-1, P1, P2, P3, P4) is complete.** The only work not done is what
+was *explicitly deferred by design*: (i) interval / number-field Schur–Cohn to keep `=` for genuinely
+**irrational** solutions (they honestly read `≈` today); (ii) A-1's literal record-at-generation for the Schwarz
+`φ′` denominator; (iii) the larger "fuller orchestrator" redesign (a first-class strategy plan + branch-case
+tree). All three are noted here and in `PLAN.md` for a future session; none blocks the shipped result.
+
+**Final tally:** 20 commits on `algebra-maturity-review`, **1280 → 1322 tests**, gate-green at every commit;
+a 7-track audit + 5 core slices + PF-1 + the full P1–P4 backlog. The QD Algebra module is now a legibly-rigorous,
+one-click existence/uniqueness prover whose `=` badge is trustworthy and whose engineering is hardened.
