@@ -251,6 +251,20 @@ file BEFORE returning. Orchestrator alone integrates + adjudicates + commits.
 
 ## Next action
 
+**PF-1 IN PROGRESS** (user: "Take PF-1 next", 2026-07-13) — the exact-at-the-algebraic-point univalence cert.
+Approach: `QDEquations.verifySolutionExact(phi, hData, {maxPoleOrder})` snaps each coordinate to a nearby simple
+ℚ(i) rational (looser `_ratApprox` tol) and checks the snapped point solves the (●) locator + (★) star blocks
+EXACTLY over ℚ(i) (gauge excluded — a rotation normalization). If exact ⇒ the solution IS that rational root
+(proven by the exact-zero residual) ⇒ run schurCohnFold/boundarySimpleExact at the exact-verified `barSub`
+(subOverride) ⇒ certified at the TRUE root, not a float. Loop tracks `allExactVerified`; `certRigor='exact'`
+now also requires it (D≥1). Honest note: "· exact ℚ(i) root — certified at the true root" vs "· ⚠ univalence at
+RATIONALIZED coordinates (irrational solution)". Closes PF-1 + E1. Test `qd-verify-exact.test.ts` (5) PASS.
+Irrational-coordinate solutions honestly downgrade to `≈`; interval/number-field Schur–Cohn to KEEP `=` for
+irrational cases remains the further refinement. **DONE — gate GREEN (1313 tests, +5); BROWSER-VERIFIED LIVE:**
+the default QD verdict now reads "· exact ℚ(i) root — univalence certified at the true root" + per-solution
+`[exact ℚ(i) root]`, rigor still `= exact — certified` (its genuine solution is rational, so `=` is now
+UNCONDITIONAL). PF-1 = the #1 rigor item — CLOSED (for rational solutions; irrational honestly ≈).
+
 **▓▓ P1 COMPLETE ▓▓** (user requested "take all of P1", 2026-07-13). Three gated slices shipped on the branch:
 - [x] **P1.1 (B-2)** — `store.eliminate` uses the exact `eliminationIdeal` (Gröbner) — no extraneous Sylvester
       factors (`{yx+1,yx²−x}`→⟨1⟩, the 2y discarded); flagged resultant fallback; `provenance.method`.

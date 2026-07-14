@@ -1771,11 +1771,11 @@ const QD = _QD;
     // & onCircle even when `degenerate` (which now means onCircle>0, a boundary zero). Only an
     // over-cap result (degenerate:true & !resolved) is ambiguous ⇒ numeric fallback. null ⇒ φ′ /
     // the map vars are unavailable (e.g. eliminated) ⇒ caller uses the numeric test.
-    function schurCohnFold(sol, hData) {
+    function schurCohnFold(sol, hData, subOverride) {
       const Sym = QD && QD.Sym;
       if (!Sym || !QC || typeof Sym.schurCohn !== 'function' || typeof Sym.uniCoeffs !== 'function' ||
           typeof QC.phiPrimeNumerator !== 'function') return null;
-      const sub = poleSubst(sol, hData);
+      const sub = subOverride || poleSubst(sol, hData);   // PF-1: the EXACT-verified barred sub when available, else ratApprox
       if (!sub) return null;
       let numP; try { numP = QC.phiPrimeNumerator(hData); } catch (e) { return null; }
       try {
@@ -1850,9 +1850,9 @@ const QD = _QD;
     // { simple } when it certifies, null otherwise (no Sym / positive-dim / over the Hermite cap) ⇒
     // numeric fallback. PRECONDITION: φ′≠0 strictly INSIDE 𝔻 (the caller's no-fold gate); on-circle
     // zeros (cusps) are allowed and subtracted here.
-    function boundarySimpleExact(sol, hData, cusps) {
+    function boundarySimpleExact(sol, hData, cusps, subOverride) {
       if (!QC || typeof QC.boundaryDoublePointCount !== 'function') return null;
-      const sub = poleSubst(sol, hData);
+      const sub = subOverride || poleSubst(sol, hData);   // PF-1: the EXACT-verified barred sub when available
       if (!sub) return null;
       let r; try { r = QC.boundaryDoublePointCount(hData, sub); } catch (e) { return null; }
       if (!r || !r.ok) return null;
@@ -1949,7 +1949,7 @@ const QD = _QD;
           setStatus(v); if (canvas) canvas.setVerdict({ text: v, assumptions: specializationLedger(cl), rigor: (cl.realCount != null && cl.realCount > 0) ? 'partial' : 'exact' }); toast(v, { kind: 'error' }); return;
         }
         const hData = activeEnv.hData;
-        let folded = 0, selfInt = 0, unrec = 0, poleOut = 0, allExactFilter = true; const rows = []; const genuinePhis = [];
+        let folded = 0, selfInt = 0, unrec = 0, poleOut = 0, allExactFilter = true, allExactVerified = true; const rows = []; const genuinePhis = [];
         real.forEach((sol, idx) => {
           const phi = phiFromAlgebraSolution(sol, hData);
           if (!phi) { unrec++; rows.push('#' + (idx + 1) + ': φ not reconstructable (map variables eliminated — run on the seeded system)'); return; }
@@ -1963,10 +1963,17 @@ const QD = _QD;
             rows.push('#' + (idx + 1) + ': node preimage ' + off + ' (|z_j| ≥ 1) — φ has a pole in 𝔻, not a bounded quadrature domain');
             return;
           }
+          // PF-1 / E1: EXACT ℚ(i) verification. Snap the coordinates to a nearby simple rational and check the
+          // point solves EVERY generated equation exactly over ℚ(i). If so, this IS the true (rational) root —
+          // so run the fold / boundary tests at that EXACT-verified substitution (`exactSub`), certifying at the
+          // true root rather than a float approximation. If not (an irrational solution), fall back to the
+          // ratApprox point (only ≈) and mark the verdict accordingly.
+          let exactSub = null, exactPoint = false;
+          try { const ver = QE && typeof QE.verifySolutionExact === 'function' ? QE.verifySolutionExact(phi, hData, { maxPoleOrder: lastCap }) : null; if (ver && ver.exact && ver.barSub) { exactSub = ver.barSub; exactPoint = true; } } catch (e) { /* fall back to ratApprox */ }
           // Local fold test: EXACT Schur–Cohn on num(φ′) when non-degenerate; honest numeric
           // fallback (findCriticalPoints) on a singular/self-inversive matrix or when unavailable.
           let fold = false, exact = false, cusps = 0;
-          const scf = schurCohnFold(sol, hData);
+          const scf = schurCohnFold(sol, hData, exactSub);
           // Exact-usable when the (post-A) count is trustworthy: non-degenerate, the clean
           // self-inversive case, OR a resolved cusp (degenerate but resolved). inside>0 ⇒ fold;
           // onCircle = the boundary cusp count (an ALLOWED degeneracy — see the boundary test).
@@ -1978,7 +1985,7 @@ const QD = _QD;
           // (exact && !fold); the diagonal cusp solutions are subtracted (simple ⟺ count===cusps),
           // so a cusped boundary (the cardioid) still certifies SIMPLE. Else numeric fallback.
           let simple = true, simpleExact = false;
-          if (exact && !fold) { const bs = boundarySimpleExact(sol, hData, cusps); if (bs) { simple = bs.simple; simpleExact = true; } }
+          if (exact && !fold) { const bs = boundarySimpleExact(sol, hData, cusps, exactSub); if (bs) { simple = bs.simple; simpleExact = true; } }
           if (!simpleExact) { try { simple = QD.isBoundaryUnivalent(phi, 360); } catch (e) { simple = true; } }
           if (exact && !fold && !simpleExact) allExactFilter = false;   // numeric boundary fallback ⇒ not fully certified (D-2)
           const bTag = simpleExact ? 'real-count' : 'numeric';
@@ -1986,9 +1993,11 @@ const QD = _QD;
           else if (!simple) { selfInt++; rows.push('#' + (idx + 1) + ': boundary φ(∂𝔻) self-intersects (' + bTag + ') — not univalent'); }
           else {
             genuinePhis.push(phi);
+            if (!exactPoint) allExactVerified = false;   // PF-1: an unverified (irrational) genuine solution ⇒ univalence at the ratApprox point, not the true root
             const cuspNote = (cusps > 0) ? ' — boundary cusp ×' + cusps : '';
+            const ptNote = exactPoint ? ' [exact ℚ(i) root]' : ' [rationalized ≈]';
             rows.push('#' + (idx + 1) + ': univalent ✓ — genuine quadrature domain' + cuspNote +
-              (exact && simpleExact ? ' (Schur–Cohn + real-count certified)' : (exact ? ' (φ′≠0 in 𝔻 certified)' : '')));
+              (exact && simpleExact ? ' (Schur–Cohn + real-count certified' + ptNote + ')' : (exact ? ' (φ′≠0 in 𝔻 certified' + ptNote + ')' : '')));
           }
         });
         // 3) GAUGE QUOTIENT: genuine solutions related by a disk rotation are the SAME domain.
@@ -2051,8 +2060,15 @@ const QD = _QD;
         // 'exact' = certified-count + exact-arithmetic filters; the rationalization-fidelity refinement is
         // deferred (PLAN.md). A certified "no genuine QD" (D=0, certified, no numeric fallback) is 'exact'.
         const ccOk = !cc.checked || (cc.maxResidual < 1e-4 && cc.oracleMatch);
+        // PF-1: 'exact' ALSO requires every genuine solution to be an EXACT-verified ℚ(i) root
+        // (allExactVerified) — so the fold / boundary tests ran at the TRUE root, not a float approximation.
+        // An irrational (only ratApprox-verifiable) genuine solution downgrades to 'estimate' with a note.
         const certRigor = (undercount || rec.partial) ? 'partial'
-          : (r.certified && allExactFilter && !rec.disagree && ccOk) ? 'exact' : 'estimate';
+          : (r.certified && allExactFilter && allExactVerified && !rec.disagree && ccOk) ? 'exact' : 'estimate';
+        if (D >= 1 && r.certified && allExactFilter && !undercount && !rec.disagree && ccOk && !allExactVerified)
+          verdict += ' · ⚠ univalence certified at RATIONALIZED coordinates — a genuine solution is not exactly rational, so the fold / boundary test ran at an approximation of the true root (the real-solution COUNT is still certified)';
+        else if (D >= 1 && certRigor === 'exact')
+          verdict += ' · exact ℚ(i) root — univalence certified at the true algebraic root';
         // CLASS + EQUIVALENCE (S5-depth / finding G): state explicitly what the count is modulo, so a
         // "unique" verdict is never read as unqualified — classical bounded quadrature domains, counted up
         // to the rotation gauge (+ restricted to domains containing the fixed w₀ when φ(0) is pinned).
