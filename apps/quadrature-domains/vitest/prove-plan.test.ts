@@ -360,3 +360,35 @@ describe("prove-plan (6) from-data: the numeric cross-check oracle is OPTIONAL (
     expect(cc.oracleMatch).toBe(false);
   });
 });
+
+describe("prove-plan (7) rigorProvenance — the audit trail behind the badge (Phase E)", () => {
+  it("an exact verdict ⇒ every binding condition is met (all ✓)", () => {
+    const asm = PROVE.assembleVerdict({
+      distinct: [{ k: 1 }], gaugeMerged: 0, leaf: leafClean(),
+      cl: { realCount: 1 }, real: [{}], r: { certified: true, complete: true },
+      deps: fakeDeps(), hData: diskH, sliceCaveat: noSlice, oracle: null,
+    });
+    expect(asm.rigor).toBe("exact");
+    expect(asm.rigorProvenance.length).toBeGreaterThanOrEqual(3);
+    expect(asm.rigorProvenance.every((s: string) => s.startsWith("✓ "))).toBe(true);
+    expect(asm.rigorProvenance.join(" ")).toContain("certified real count (RUR + exact Sturm)");
+  });
+
+  it("a numeric-fold fallback ⇒ the exact-filters line is marked ✗", () => {
+    const asm = PROVE.assembleVerdict({
+      distinct: [{ k: 1 }], gaugeMerged: 0, leaf: leafClean({ allExactFilter: false, allExactVerified: false }),
+      cl: { realCount: 1 }, real: [{}], r: { certified: true, complete: true },
+      deps: fakeDeps(), hData: diskH, sliceCaveat: noSlice, oracle: null,
+    });
+    expect(asm.rigor).toBe("estimate");
+    expect(asm.rigorProvenance.some((s: string) => s.startsWith("✗ ") && /univalence filters/.test(s))).toBe(true);
+  });
+
+  it("rigorProvenance(flags) marks each condition and notes a truncated tree + residual-only cross-check", () => {
+    const p = PROVE.rigorProvenance({ certified: true, allExactFilter: false, allExactVerified: true, ccChecked: true, ccOk: true, ccAvailable: false, truncated: true });
+    expect(p.find((s: string) => /certified real count/.test(s))).toMatch(/^✓/);
+    expect(p.find((s: string) => /univalence filters/.test(s))).toMatch(/^✗/);
+    expect(p.find((s: string) => /cross-check/.test(s))).toMatch(/residual integrity/);
+    expect(p.some((s: string) => /every branch of the case tree closed/.test(s))).toBe(true);
+  });
+});

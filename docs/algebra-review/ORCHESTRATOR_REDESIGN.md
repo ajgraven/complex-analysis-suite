@@ -308,3 +308,16 @@ are additive and low-risk. Order-of-magnitude: 5 PRs, comparable in aggregate to
   all solve), so the from-data verdict path is covered by the engine unit tests + no-regression (the
   activeEnv path is unchanged by construction: `buildPlanCtx(ctrl)` with no opts == the old behavior).**
   Phase D COMPLETE. Remaining: Phase E (transcript UI + export); Phase C deferred.
+- **2026-07-14 — Phase E (proof transcript + reproducible export) DONE.** The rigor badge is now
+  AUDITABLE + the proof is EXPORTABLE. **Engine:** `rigorProvenance(flags)` (pure, exported) — the audit
+  trail behind the badge: each binding condition marked ✓ (met) / ✗ (not met) — certified real count,
+  exact ℚ(i) filters, exact-verified roots, cross-check (matches / residual-only), branch-tree closed,
+  complete. `assembleVerdict` + `assembleTreeVerdict` compute it; `runCertifyPlan` + `runProofTree` surface
+  it on the ProofResult. **UI:** `setVerdict` renders `data.rigorProvenance` as an expandable **"Why this
+  rigor"** `<details>` (so a `=`/`≥` is justified, not merely asserted); the derivation export became a
+  full **"Export proof (JSON)"** — `{format:'qd-proof', version:1, proof:{kind, verdict, rigor, bound,
+  count, rigorProvenance, perSolution, assumptions, stages:CERTIFY_STAGES}, derivation:store.exportDAG()}`
+  (reproducible + re-importable). +3 tests (32 total): exact ⇒ all ✓; numeric-fold ⇒ filters ✗; the
+  `rigorProvenance` helper marks conditions + notes a truncated tree / residual-only cross-check. Gate +
+  browser-verify pending. **▓▓ Phase E is the LAST phase — the fuller-orchestrator redesign is COMPLETE
+  (A engine → B tree → [C deferred] → D from-data → E transcript). ▓▓**
