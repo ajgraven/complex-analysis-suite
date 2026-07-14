@@ -247,4 +247,21 @@ are additive and low-risk. Order-of-magnitude: 5 PRs, comparable in aggregate to
   real-seed disk end-to-end proving the S1 admissibility gate fires + genuine certified + cross-check ✓.
   Gate: 155 vitest files + node-suite + 4 app builds green. NB node's `QD.sameDomain` doesn't merge ±ζ
   (so the node disk reads "2 distinct", not "unique") — a pre-existing behavior, unchanged by the refactor;
-  the browser merges them. Next: Phase B (branch tree + pool-then-quotient).
+  the browser merges them. **MERGED to master via PR #82 (`6a40617`).**
+- **2026-07-14** — **Phase B part 1 (engine core) DONE (gate-green), on branch `feat/prove-tree` (not yet a PR).**
+  `analyzeLeaf(ctx)` extracted (regime → solve → filter → the UNquotiented genuine pool); `runCertifyPlan`
+  = `analyzeLeaf` + gauge + assemble (byte-identical, Phase-A tests unchanged). New `runProofTree(ctx,
+  {maxDepth,maxBranches})` walks the tree via an injected `ctx.fork = {detectSplits, enter, leave}`, pools
+  genuine φ's across the whole tree, and gauge-quotients ONCE (`assembleTreeVerdict`, honest `=`/`≥`). +7
+  tests (25 total) incl. the **seam-dedup** correctness case. Gate: 155 files / 1347 tests + 4 builds.
+  **Remaining (Phase B part 2 — UI wiring):** build the real `ctx.fork` over the store and invoke
+  `runProofTree` from `doProveExistenceUniqueness`. Design decisions found while mapping the store:
+  (a) **escalation-only** — keep the prelude + `runCertifyPlan`, and escalate to `runProofTree` ONLY when
+  the result is `positive-dim`; this makes the tree a pure improvement over today's manual pin/split
+  dead-end with zero regression risk to the disk "Unique ✓" path. (b) `_appendReduction` self-checkpoints,
+  so `fork.leave` should `undo()` down to a recorded `maxColumn()` fence (robust to multi-column
+  `substituteValues` propagation), not a single `undo()`. (c) `spuriousFactors` returns a reim-poly `index`,
+  NOT a store node id — so **variable PINs** (`substituteValues`) are directly enterable, but **general
+  splits** (`applyFactor`, needs a node id) are not; enter the pins, and honestly flag any un-enterable case
+  as `truncated` (LOWER BOUND). Then browser-verify NO regression on the disk + find a genuinely positive-dim
+  factorable case that auto-aggregates, and open the Phase B PR.
