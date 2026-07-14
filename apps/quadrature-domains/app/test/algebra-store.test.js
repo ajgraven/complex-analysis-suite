@@ -80,7 +80,9 @@ module.exports = async function run() {
     const loc = st.list()[0];
     const v = loc.poly.vars().values().next().value;
     const r = st.eliminate(loc.id, loc.id, v);
-    ok('eliminate refuses a ≡0 resultant (shared component)', r.ok === false && /≡ 0|component/.test(r.reason));
+    // B-2: eliminate now uses the exact elimination ideal; eliminating a node against itself leaves no
+    // relation free of the variable (⟨f⟩∩k[rest] is trivial) — still refused, message updated.
+    ok('eliminate refuses when no relation is free of the variable (self/shared component)', r.ok === false && /≡ 0|component|trivial|no relation/.test(r.reason));
   }
 
   // ---- delete cascade ----
@@ -1392,7 +1394,9 @@ module.exports = async function run() {
     ok('PROV_OPS short: an op with no .short falls back to op', shortOf('fork', {}) === 'fork');
 
     const methOf = (op, p, n) => { const d = PO[op]; return (d && d.method) ? d.method(Object.assign({ op }, p), n) : op; };
-    ok('PROV_OPS method: resultant', methOf('resultant', { variable: 'z1' }) === 'eliminate via the resultant Res_z1(P, Q)');
+    // B-2: 'resultant' op now defaults to the exact elimination ideal; the Sylvester resultant is a flagged fallback.
+    ok('PROV_OPS method: resultant (elimination ideal)', methOf('resultant', { variable: 'z1' }) === 'eliminate z1 via the elimination ideal ⟨P, Q⟩ ∩ k[rest] (exact — no extraneous factors)');
+    ok('PROV_OPS method: resultant (Sylvester fallback)', /Sylvester resultant/.test(methOf('resultant', { variable: 'z1', method: 'resultant' })));
     ok('PROV_OPS method: groebner (elim)', methOf('groebner', { order: 'lex', eliminate: ['z1', 'zb1'] }) === 'Gröbner basis (lex, eliminating z1, zb1)');
     ok('PROV_OPS method: triangular (mainVar from node.meta)', methOf('triangular', {}, { meta: { mainVar: 'z1' } }) === 'triangular (Wu) decomposition, main variable z1');
     ok('PROV_OPS method: conjugate', methOf('conjugate', {}) === 'conjugate companion (p̄ = 0)');
@@ -1421,8 +1425,12 @@ module.exports = async function run() {
     const mkv = (n) => Sx.MPoly.variable(n), mki = (k) => Sx.MPoly.fromInt(k);
     ok('CAP_KEYS/capOpts: exposed on the store factory', Array.isArray(CK) && typeof capOpts === 'function');
 
-    // (1) coverage: every numeric cap the sym-core ops read must be in the whitelist.
-    const OP_CAPS = ['maxBasis', 'maxSteps', 'maxDegree', 'maxTerms', 'maxEigenDim', 'maxHermiteDim', 'maxRounds'];
+    // (1) coverage: every numeric cap the sym-core ops read must be in the whitelist. GROUND TRUTH — includes
+    // the RUR/solveRealCertified caps (maxDim, maxTries) and the parametricRealCount1D/discriminantVariety caps
+    // (maxCalls, maxSegments, formTries) that F1 restored; if a new op reads a new cap, add it here so this
+    // check catches a _CAP_KEYS omission (previously OP_CAPS shared the omission ⇒ false assurance).
+    const OP_CAPS = ['maxBasis', 'maxSteps', 'maxDegree', 'maxTerms', 'maxEigenDim', 'maxHermiteDim', 'maxRounds',
+      'maxDim', 'maxTries', 'maxCalls', 'maxSegments', 'formTries'];
     const uncovered = OP_CAPS.filter((k) => !CK.includes(k));
     ok('CAP_KEYS: covers every numeric cap the sym-core ops read', uncovered.length === 0, 'missing: ' + uncovered.join(', '));
 

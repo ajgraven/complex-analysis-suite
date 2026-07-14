@@ -94,7 +94,9 @@ import _QD from '../solver.mjs';
     duplicate:       { method: () => 'duplicate' },
     resultant: {
       short:  (p) => 'eliminate ' + p.variable,
-      method: (p) => 'eliminate via the resultant Res_' + (p.variable || '?') + '(P, Q)',
+      method: (p) => (p.method === 'resultant')
+        ? 'eliminate ' + (p.variable || '?') + ' via the Sylvester resultant Res_' + (p.variable || '?') + '(P, Q) — may carry extraneous factors (elimination-ideal fallback)'
+        : 'eliminate ' + (p.variable || '?') + ' via the elimination ideal ⟨P, Q⟩ ∩ k[rest] (exact — no extraneous factors)',
     },
     groebner: {
       short:  (p) => 'Groebner (' + (p.order || 'grevlex') + ')',
@@ -103,6 +105,10 @@ import _QD from '../solver.mjs';
     triangular: {
       short:  () => 'triangular decomposition',
       method: (p, n) => 'triangular (Wu) decomposition' + ((n && n.meta && n.meta.mainVar) ? ', main variable ' + n.meta.mainVar : ''),
+    },
+    saturate: {
+      short:  () => 'saturate (admissibility)',
+      method: (p) => 'saturate ⟨I⟩ : ' + (p.factor || '(1−z̄z)') + '^∞ — remove the |z_j|=1 boundary stratum the cleared Möbius denominators carry',
     },
     'linear-reduce': {
       short:  () => 'linear propagation',
@@ -180,7 +186,12 @@ import _QD from '../solver.mjs';
   // postMessage'd, so the worker uses its own defaults. A cap the ops honor but MISSING here
   // would be silently dropped for the worker while the sync fallback still honored it (an
   // uncaught divergence), so algebra-store.test.js asserts coverage against that op-cap list.
-  const _CAP_KEYS = ['maxBasis', 'maxSteps', 'maxDegree', 'maxTerms', 'maxEigenDim', 'maxHermiteDim', 'maxRounds', 'reduced', 'keepEliminated'];
+  // F1: complete the whitelist — RUR/solveRealCertified read maxDim/maxTries (sym-core ~1877/1881), and
+  // parametricRealCount1D/discriminantVariety read maxTries/maxCalls/maxSegments/formTries/maxDepth (~4232/
+  // 4344/4799/4800). Omitting them meant the WORKER path silently ran with the defaults while a sync fallback
+  // honoured the caps — a latent worker≠main divergence. (Harmless extra keys just forward nothing if unset.)
+  const _CAP_KEYS = ['maxBasis', 'maxSteps', 'maxDegree', 'maxTerms', 'maxEigenDim', 'maxHermiteDim', 'maxRounds', 'reduced', 'keepEliminated',
+    'maxDim', 'maxTries', 'maxCalls', 'maxSegments', 'maxDepth', 'formTries'];
   function _capOpts(opts) {
     const out = {};
     for (const k of _CAP_KEYS) if (opts && opts[k] != null) out[k] = opts[k];
@@ -1466,18 +1477,42 @@ import _QD from '../solver.mjs';
       if (!a.poly.vars().has(varName) || !b.poly.vars().has(varName)) {
         return { ok: false, reason: 'variable ' + varName + ' is not shared by both equations' };
       }
-      let res;
-      try { res = S.resultant(a.poly, b.poly, varName); }
-      catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
-      if (res.isZero()) return { ok: false, reason: 'resultant ≡ 0 (the equations share a component); pick a different pair or variable' };
-      const node = addNode({
-        id: nid(), kind: 'derived', poly: res, rel: '=',
-        label: 'elim ' + varName + ' (' + a.id + ',' + b.id + ')', model,
-        provenance: { op: 'resultant', inputs: [idA, idB], variable: varName },
-        column: Math.max(a.column, b.column) + 1, track: a.track || 't0', meta: {},
+      // B-2: prefer the EXACT elimination ideal ⟨A, B⟩ ∩ k[rest] (Gröbner) — the raw Sylvester resultant
+      // can carry extraneous leading-coefficient factors (e.g. Res_x(yx+1, yx²−x) = 2y, but the true
+      // elimination ideal is ⟨1⟩ — the system is inconsistent, so y=0 is spurious). Fall back to the
+      // resultant (flagged `method:'resultant'`) only if the ideal computation is unavailable / throws.
+      const keep = new Set();
+      for (const v of a.poly.vars()) keep.add(v);
+      for (const v of b.poly.vars()) keep.add(v);
+      keep.delete(varName);
+      let gens = null, method = 'ideal';
+      try {
+        if (typeof S.eliminationIdeal === 'function') {
+          const g = S.eliminationIdeal([a.poly, b.poly], [varName], [...keep].sort());
+          gens = (g || []).filter((p) => !p.isZero());
+        }
+      } catch (e) { gens = null; }
+      if (gens === null) {                              // fallback: the Sylvester resultant (may carry extraneous factors)
+        let res;
+        try { res = S.resultant(a.poly, b.poly, varName); }
+        catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+        if (res.isZero()) return { ok: false, reason: 'resultant ≡ 0 (the equations share a component); pick a different pair or variable' };
+        gens = [res]; method = 'resultant';
+      }
+      if (!gens.length) return { ok: false, reason: 'the elimination ideal in the remaining variables is trivial (no relation free of ' + varName + ')' };
+      const col = Math.max(a.column, b.column) + 1;
+      const created = [];
+      gens.forEach((poly, i) => {
+        const node = addNode({
+          id: nid(), kind: 'derived', poly, rel: '=',
+          label: 'elim ' + varName + (gens.length > 1 ? ' ' + (i + 1) + '/' + gens.length : '') + (method === 'ideal' ? ' (ideal)' : ' (resultant)'), model,
+          provenance: { op: 'resultant', inputs: [idA, idB], variable: varName, method: method },
+          column: col, track: a.track || 't0', meta: {},
+        });
+        edges.push({ from: idA, to: node.id }, { from: idB, to: node.id });
+        created.push(node);
       });
-      edges.push({ from: idA, to: node.id }, { from: idB, to: node.id });
-      return { ok: true, node };
+      return { ok: true, node: created[0], created: created, method: method };
     }
     // Eliminate `varName` from nodes A,B via the Sylvester resultant → derived node.
     function eliminate(idA, idB, varName) {
@@ -1614,6 +1649,58 @@ import _QD from '../solver.mjs';
         (res) => _groebnerFinish(plan, (res.generators || []).map((tl) => S.polyFromTermList(tl)), opts),
         (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled', created: [], skipped: plan.skipped }
           : { ok: false, reason: (err && err.message) || String(err), created: [], skipped: plan.skipped });
+    }
+
+    // Saturate the current column by the Möbius denominators ∏_j (1 − z_j·z̄_j), removing the {|z_j|=1}
+    // boundary stratum the cleared (●)/(★) denominators carry (finding B-1). On the reim slice z̄_j = z_j, so
+    // 1 − z_j z̄_j = 1 − |z_j|², and V(cleared) = V(QD) ∪ {|z_j|=1}; saturating drops that component, so the
+    // Hermite count of the appended column is the EXACT algebraic count (unit disk h=1/w: realCount 4 → 2, the
+    // two dropped being z_j = ±1, poles on |z|=1). SAFE — a genuine bounded QD has |z_j| < 1 ⇒ 1 − z_j z̄_j ≠ 0,
+    // so the saturated locus is disjoint from the QD set (UNLIKE saturating by z_j, which would delete the
+    // z_j=0 disk — see spuriousFactors' note). Appends ONE labeled 'saturate' column (append-only DAG; column 0
+    // stays pristine). Pure/DOM-free; sync (these systems are small). Returns { ok, created, poles } / reason.
+    function saturateMobius(ids, opts) {
+      const S = getSym();
+      opts = opts || {};
+      const inputs = ((ids && ids.length) ? ids.map(get) : lastColumnNodes()).filter(Boolean).filter((n) => n.rel === '=');
+      if (!inputs.length) return { ok: false, reason: 'no equality nodes to saturate', created: [] };
+      const polys = inputs.map((n) => n.poly), inputIds = inputs.map((n) => n.id);
+      const vars = new Set();
+      for (const p of polys) for (const v of p.vars()) vars.add(v);
+      // ∏_j (1 − z_j·z̄_j) over poles whose BOTH z_j and z̄_j (zb_j) variables are still present (a pinned/
+      // eliminated z_j already has a definite modulus — nothing to saturate for it).
+      const one = S.mpolyConst(S.gaussInt(1));
+      // Pole indices whose BOTH z_j and z̄_j (zb_j) variables are still present.
+      const poleIdx = [];
+      for (const v of [...vars].sort()) { const m = /^z(\d+)$/.exec(v); if (m && vars.has('zb' + m[1])) poleIdx.push(m[1]); }
+      // ∏ over ALL ordered pairs (a, b): (1 − z̄_a·z_b) — the FULL set of cleared Möbius denominators (A-1:
+      // pole a's branch factor (1 − z̄_a z) evaluated at node z_b). Self a=b drops {|z_j|=1}; cross a≠b drops
+      // the {z̄_a z_b = 1} stratum a MULTI-pole (●) equation clears. All disjoint from the genuine |z_j|<1 set
+      // (there |z̄_a z_b| = |z_a||z_b| < 1 ⇒ ≠ 1), so no genuine QD is removed.
+      let f = null; const poles = poleIdx.slice();
+      for (const a of poleIdx) for (const b of poleIdx) {
+        const fac = one.sub(S.mpolyVar('zb' + a).mul(S.mpolyVar('z' + b)));   // 1 − z̄_a·z_b
+        f = f ? f.mul(fac) : fac;
+      }
+      if (!f) return { ok: false, reason: 'no Möbius denominator (z_j, z̄_j) present to saturate — the map variables may be pinned/eliminated', created: [] };
+      let gens;
+      try { gens = S.saturate(polys, f, '_wsat', opts); } catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [] }; }
+      gens = (gens || []).filter((g) => !g.isZero());
+      if (!gens.length) return { ok: false, reason: 'saturation removed every generator (the system lies entirely on |z_j|=1)', created: [] };
+      checkpoint();
+      const col = Math.max.apply(null, inputs.map((n) => n.column)) + 1;
+      const created = [];
+      gens.forEach((poly, i) => {
+        const node = addNode({
+          id: nid(), kind: 'derived', poly, rel: '=',
+          label: 'saturate ' + (i + 1) + '/' + gens.length + ' (∏(1−z̄z))', model,
+          provenance: { op: 'saturate', inputs: inputIds.slice(), factor: '(1−z̄z)', poles: poles.slice() },
+          column: col, meta: {},
+        });
+        for (const src of inputIds) edges.push({ from: src, to: node.id });
+        created.push(node);
+      });
+      return { ok: true, created, poles: poles.slice() };
     }
 
     // QD.SymWorker handle (off-main-thread runner), or null if unavailable.
@@ -1766,15 +1853,16 @@ import _QD from '../solver.mjs';
       const reim = currentReimSystem(ids, opts);
       if (!reim.polys.length) return { ok: false, reason: 'no equality nodes to analyze' };
       try {
+        const co = _capOpts(opts);   // F2: thread the same caps the worker runJob('classify') honours, so the sync fallback == the worker path
         const ord = S.monomialOrder('grevlex', reim.vars);
-        const G = S.buchberger(reim.polys, ord);
+        const G = S.buchberger(reim.polys, ord, co);
         if (G.length === 1 && G[0].vars().size === 0 && !G[0].isZero()) {
           return { ok: true, inconsistent: true, zeroDim: true, realCount: 0, complexCount: 0, multiplicity: 0, numVars: reim.vars.length };
         }
         const zeroDim = S.isZeroDimensional(G, ord, reim.vars);
         if (!zeroDim) return { ok: true, inconsistent: false, zeroDim: false, realCount: null, complexCount: null, multiplicity: null, numVars: reim.vars.length, krullDim: S.krullDimension(G, ord, reim.vars) };
         const multiplicity = S.quotientDimension(G, ord, reim.vars);
-        const rc = S.realSolutionCount({ G, order: ord }, null, reim.vars);
+        const rc = S.realSolutionCount({ G, order: ord }, null, reim.vars, co);
         if (!rc.ok) return { ok: true, inconsistent: false, zeroDim: true, realCount: null, complexCount: null, multiplicity, reason: rc.reason, numVars: reim.vars.length };
         return { ok: true, inconsistent: false, zeroDim: true, realCount: rc.realCount, complexCount: rc.complexCount, multiplicity, numVars: reim.vars.length };
       } catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
@@ -2080,7 +2168,12 @@ import _QD from '../solver.mjs';
         res.chain.forEach((g, i) => emit(g, 'triangular ' + (i + 1) + '/' + res.chain.length + ' (main ' + res.mainVars[i] + ')', { mainVar: res.mainVars[i] }));
       }
       normalizeColumn(col);
-      return { ok: true, created, column: col, contradiction: !!res.contradiction, mainVars: res.mainVars || [], freeVars: res.freeVars || [] };
+      // B-3: surface the regular-chain INITIALS (the pivots' leading coefficients). A Wu chain is triangular
+      // but NOT saturated by them, so where a NON-CONSTANT initial vanishes the chain may add spurious branches
+      // or miss components — the caller must show this caveat (a genuine regular-chain decomposition would
+      // case-split on the initials). initialCount = the number of non-constant initials (the real conditions).
+      const nonTrivialInit = (res.initials || []).filter((p) => p && p.vars && p.vars().size > 0 && !p.isZero());
+      return { ok: true, created, column: col, contradiction: !!res.contradiction, mainVars: res.mainVars || [], freeVars: res.freeVars || [], initialCount: nonTrivialInit.length, hasRegularityConditions: nonTrivialInit.length > 0 };
     }
 
     // Duplicate a node to start an alternative derivation line (accumulate alternatives).
@@ -2373,7 +2466,30 @@ import _QD from '../solver.mjs';
       const CAS = _getCAS(); if (!CAS) return '';
       const items = _columnItems(c);
       if (!items.length) return '';
-      return CAS.systemToCAS(items, dialect || 'maple', opts || {});
+      const script = CAS.systemToCAS(items, dialect || 'maple', opts || {});
+      // F5: Maple RealComprehensive/RealTriangularize decompose over ℝ. A conjugate-model column carries
+      // COMPLEX ℚ(i) coefficients (independent z_j, z̄_j), so its "real solutions" are a DIFFERENT quantity than
+      // the in-browser reim verdict (a complex triangularization, not the QD real count). Prepend a warning so a
+      // pasted script can't be silently misread; the honest route is to reim-split (assume the base variables
+      // real ⇒ real coefficients) BEFORE exporting for a real count. (Singular/Sage/Mathematica are complex
+      // Gröbner cross-checks, so the warning is Maple-only.)
+      if ((dialect || 'maple') === 'maple' && _columnHasComplexCoeffs(items)) {
+        return '# WARNING: this system has COMPLEX (Q(i)) coefficients (the conjugate model). RealComprehensive-\n'
+          + '# Triangularize decomposes over the REALS, so its "real solutions" are NOT the quadrature-domain\n'
+          + '# count the app reports (that count is over the reim / assume-real system). Reim-split (assume the\n'
+          + '# base variables real) BEFORE exporting for a real count, or read this as a complex triangularization.\n'
+          + script;
+      }
+      return script;
+    }
+    // F5: does a column carry complex ℚ(i) coefficients (⇒ a conjugate-model system whose Maple RCTD "real
+    // count" differs from the reim QD count)? Exposed so the UI can warn before a real-decomposition export.
+    function _columnHasComplexCoeffs(items) {
+      return (items || []).some((it) => (it.terms || []).some((t) => t.coeff && t.coeff.im && t.coeff.im[0] !== '0'));
+    }
+    function casColumnComplex(c) {
+      const items = _columnItems(c == null ? maxColumn() : c);
+      return _columnHasComplexCoeffs(items);
     }
     // External-CAS export of a single node → one (in)equation in `dialect`.
     function casNode(id, dialect) {
@@ -2702,9 +2818,9 @@ import _QD from '../solver.mjs';
     return {
       seedFromSystem, seedFromPolys, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
-      substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, autoAbbreviate, addEquation, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes,
+      substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, autoAbbreviate, addEquation, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes, saturateMobius,
       currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, solveRealCertifiedSync, solveRealCertifiedAsync, parametricBifurcation, parametricBifurcationAsync, shapeFromMoments, shapeFromMomentsAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
-      sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casNode, msolveColumn, msolveVarOrder, importMsolve, derivationSteps, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
+      sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casColumnComplex, casNode, msolveColumn, msolveVarOrder, importMsolve, derivationSteps, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       forkTrack, setActiveTrack, deleteTrack, tracks: tracksList,
       undo, redo, reset,

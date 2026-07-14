@@ -75,10 +75,12 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
   // fractions, q ≤ 10⁶) within 1e-12·max(1,|x|) — so user-style decimals come back
   // exact (0.25 → 1/4, 1/3-as-float → 1/3) — else the 15-significant-digit decimal
   // p/10^k (exactly the value the user sees printed). Returns [pBigInt, qBigInt].
-  function _ratApprox(x) {
+  function _ratApprox(x, relTol) {
     if (!isFinite(x)) throw new Error('QDEquations: non-finite φ(0) component');
     if (x === 0) return [0n, 1n];
-    const tol = 1e-12 * Math.max(1, Math.abs(x));
+    // relTol loosens the continued-fraction stop so a float within relTol of a SIMPLE rational snaps to it
+    // (used by verifySolutionExact's rational-reconstruction — PF-1). Default 1e-12 = the exact-value path.
+    const tol = (relTol || 1e-12) * Math.max(1, Math.abs(x));
     const sign = x < 0 ? -1n : 1n;
     let a = Math.abs(x);
     // continued-fraction convergents p/q with q capped
@@ -102,6 +104,26 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
     let n = BigInt(digits), d = 1n;
     if (exp >= 0) n *= 10n ** BigInt(exp); else d = 10n ** BigInt(-exp);
     return [sign * n, d];
+  }
+
+  // EXACT node-location admissibility test for a quadrature-node preimage z_j = φ⁻¹(a_j): is
+  // |z_j| < 1 (STRICTLY inside 𝔻)?  Rationalize (re, im) with _ratApprox (the SAME exactification
+  // the exact Schur–Cohn univalence path already uses) and compare |z|² to 1 as an exact ℚ (BigInt)
+  // inequality — NO float threshold.  Returns { inside, onCircle }: `inside` ⟺ |z|² < 1, `onCircle`
+  // ⟺ |z|² = 1 exactly (on the rationalized value).
+  //
+  //   WHY IT MATTERS.  The reconstructed bounded-QD ansatz is φ(ζ) = w₀ + Σ conj(A_{j,k})·ζᵏ/(1 −
+  //   conj(z_j)ζ)ᵏ, which has a pole at ζ = 1/conj(z_j) of modulus 1/|z_j|.  So |z_j| ≥ 1 puts a pole
+  //   ON or INSIDE the closed unit disk — φ is then NOT analytic on 𝔻̄ and Ω is NOT a bounded
+  //   quadrature domain.  `clearDenominators` drops the (1 − z̄_j z) Möbius factors (numerator-only),
+  //   so the polynomial fold / boundary tests downstream are BLIND to this stratum; this predicate is
+  //   the missing admissibility gate (the numeric direct solver enforces the analogous 0 < |z₀| < 1).
+  function nodeInsideDisk(re, im) {
+    const [p, q] = _ratApprox(re || 0);        // z_re = p/q  (q > 0)
+    const [r, s] = _ratApprox(im || 0);        // z_im = r/s  (s > 0)
+    const ps = p * s, rq = r * q, qs = q * s;  // |z|² = ((ps)² + (rq)²) / (qs)²
+    const lhs = ps * ps + rq * rq, rhs = qs * qs;
+    return { inside: lhs < rhs, onCircle: lhs === rhs };
   }
 
   // Exact integer binomial coefficient C(n, i) as a BigInt.
@@ -552,6 +574,60 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
     return residualWith(reimSystem, buildRealVarMap(phi, hData));
   }
 
+  // EXACT ℚ(i) verification of a reconstructed solution (finding PF-1 / E1). Snap each coordinate of φ to a
+  // nearby SIMPLE ℚ(i) rational (a looser continued-fraction tolerance) and test whether the snapped point
+  // satisfies EVERY generated equation EXACTLY over ℚ(i). If it does, the solution IS that exact rational
+  // point — PROVEN by the exact-zero residual, independent of how the candidate was found — so the exact
+  // Schur–Cohn / boundary-injectivity univalence tests evaluated at it are UNCONDITIONAL (not at a float
+  // approximation). If not, the solution is (almost surely) irrational and the per-solution univalence
+  // certificate is only ≈. Returns { exact, barSub }, where barSub is the exact barred-variable substitution
+  // (z̄_j, Ā_{j,k} → the snapped conjugate values), byte-compatible with poleSubst, so the caller can run the
+  // fold / boundary tests at the SAME verified point. opts.w0 fixes φ(0); opts.snapTol (default 1e-6) is the
+  // snap window — wider than the numeric solver's residual (~1e-8) so a rational root snaps, tight enough that
+  // the exact-zero check (not the snap) is what certifies. NB the exactness is only as exact as the DATA:
+  // irrational a_j / C_{j,s} are themselves snapped, so `exact` means "exact given rationalized data".
+  function verifySolutionExact(phi, hData, opts) {
+    opts = opts || {};
+    const S = getSym();
+    if (!S || !phi || !Array.isArray(phi.branches) || !hData || !hData.poles) return { exact: false, barSub: null };
+    const snap = opts.snapTol || 1e-6;
+    const genOpts = {};
+    if (opts.w0 != null) genOpts.w0 = opts.w0;
+    if (opts.maxPoleOrder) genOpts.maxPoleOrder = opts.maxPoleOrder;   // match the certify path's cap so the system agrees
+    let system;
+    try { system = generateClassicalBounded(hData, genOpts); } catch (e) { return { exact: false, barSub: null }; }
+    const gv = (c) => { const a = _ratApprox((c && c.re) || 0, snap), b = _ratApprox((c && c.im) || 0, snap); return S.gauss(S.rat(a[0], a[1]), S.rat(b[0], b[1])); };
+    const map = {}, barSub = {};
+    const put = (name, g) => { map[name] = S.mpolyConst(g); };
+    put(V.w0, gv(phi.w0)); put(V.wb0, gv(phi.w0).conj());
+    for (let i = 0; i < hData.poles.length; i++) {
+      const j = i + 1, gz = gv(phi.branches[i].z);
+      put(V.a(j), gv(hData.poles[i].a)); put(V.ab(j), gv(hData.poles[i].a).conj());
+      put(V.z(j), gz); put(V.zb(j), gz.conj()); barSub[V.zb(j)] = S.mpolyConst(gz.conj());
+      const principal = hData.poles[i].principal || [], A = phi.branches[i].A || [];
+      for (let s = 0; s < principal.length; s++) {
+        const gA = gv(A[s]);
+        put(V.C(j, s + 1), gv(principal[s])); put(V.Cb(j, s + 1), gv(principal[s]).conj());
+        put(V.A(j, s + 1), gA); put(V.Ab(j, s + 1), gA.conj()); barSub[V.Ab(j, s + 1)] = S.mpolyConst(gA.conj());
+      }
+    }
+    // The snapped point is EXACT iff every genuine QD equation — the (●) locator φ(z_j)=a_j and the (★)
+    // coefficient relations — reduces to 0 over ℚ(i) at it. The `gauge` block (Σ Im A_{j,1}=0) is a rotation
+    // NORMALIZATION, not a QD constraint, and the solver's solution need not be gauge-normalized, so it is
+    // deliberately excluded (else a genuine exact solution in a non-canonical rotation would falsely fail).
+    let exact = true;
+    for (const name of ['locator', 'star']) {
+      const blk = (system.blocks && system.blocks[name]) || [];
+      for (const item of blk) {
+        if (!item || !item.eq) continue;
+        let r; try { r = item.eq.subst(map); } catch (e) { exact = false; break; }
+        if (!r || r.vars().size > 0 || !r.isZero()) { exact = false; break; }
+      }
+      if (!exact) break;
+    }
+    return { exact, barSub };
+  }
+
   // ---- LaTeX rendering ---------------------------------------------------------
   // Variable → LaTeX maps for each model. The generated names (V / VR) follow a
   // regular scheme, so a few anchored regexes cover every variable that appears.
@@ -618,9 +694,12 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
   // there is a conjugation-symmetric solution (φ(z̄)=conj φ(z)), so the conjugate
   // model collapses under a reality assumption — the biggest practical lever for
   // making the Gröbner/triangular reduction tractable. Returns:
-  //   allReal          — every pole a_j AND every principal coeff C_{j,s} is real ⇒ a
-  //                      fully real solution exists ⇒ EVERY base variable may be taken
-  //                      real (the per-variable reality the workspace's assumeReal needs).
+  //   allReal          — every pole a_j AND every principal coeff C_{j,s} is real ⇒ the system is
+  //                      INVARIANT under conjugation (its complex solution set is closed under z↦z̄),
+  //                      so assuming every base variable real is a valid conjugation-symmetric SLICE
+  //                      (the workspace's assumeReal). NB this is a restriction, not an existence claim:
+  //                      the real slice is a LOWER bound on the general count and can be empty — a real
+  //                      solution need not exist (hence the honest slice caveat downstream).
   //   conjugationClosed — the pole multiset is closed under a_j ↦ conj(a_j) with
   //                      CONJUGATE principal parts (h is real-axis symmetric, possibly
   //                      via conjugate POLE PAIRS). allReal ⇒ conjugationClosed.
@@ -875,11 +954,12 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
   const QDEquations = {
     generateClassicalBounded, generateSchwarzBounded, pointFunctionalSystem, reimSplit, realAxisSymmetry,
     isClassicalBounded, boundaryCurve, boundaryCurveFromPhi,   // exact Schwarz curve Q(w,w̄)=0 + rational S(w) from a (solved) QD
-    residualAtSolution, residualReimAtSolution,
+    residualAtSolution, residualReimAtSolution, verifySolutionExact,   // exact ℚ(i) solution verification (PF-1/E1)
     buildVarMap, buildRealVarMap,
     systemToLatex, systemToExport, latexOf: latexOfFor,
     phiSeriesAt,                       // φ(p+t) series; reused by QD.QDConstraints
     ratApprox: _ratApprox,             // exact-rational of a float; reused by AlgebraStore (specify-value / fix-φ(0))
+    nodeInsideDisk,                    // EXACT |z_j|<1 admissibility gate for a reconstructed candidate (algebra-ui certify path)
     VARS: V, VARS_REAL: VR,
   };
 
