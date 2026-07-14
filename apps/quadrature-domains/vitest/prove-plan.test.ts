@@ -317,3 +317,46 @@ describe("prove-plan (5) runProofTree — branch walk + pool-then-quotient (Phas
     expect(pr.kind).toBe("aborted");
   });
 });
+
+describe("prove-plan (6) from-data: the numeric cross-check oracle is OPTIONAL (Phase D)", () => {
+  // A deps bag whose QE supports the cross-check (residual + system regen) but with NO numeric solver.
+  const dataDeps = () => ({
+    QD: { sameDomain: (x: any, y: any) => x === y },
+    QE: { residualAtSolution: () => ({ max: 0 }), generateClassicalBounded: () => ({}) },
+    w0Fixed: false, caps: { maxPoleOrder: 6 },
+  });
+  const args = (over: any) => Object.assign({
+    distinct: [{ k: 1 }], gaugeMerged: 0, leaf: leafClean(),
+    cl: { realCount: 1 }, real: [{}], r: { certified: true, complete: true },
+    deps: dataDeps(), hData: diskH, sliceCaveat: noSlice, oracle: null,
+  }, over);
+
+  it("no numeric oracle ⇒ the residual alone certifies (cross-check ✓, rigor stays exact)", () => {
+    const asm = PROVE.assembleVerdict(args({ oracle: null }));   // from-data: numPhi absent
+    expect(asm.verdict).toContain("reduction integrity — no numeric solve to corroborate");
+    expect(asm.verdict).not.toContain("matches the numeric solver");
+    expect(asm.rigor).toBe("exact");   // NOT penalized for the absent oracle
+    expect(asm.bad).toBe(false);
+  });
+
+  it("a numeric oracle that DOESN'T match still fails the cross-check (unchanged)", () => {
+    const asm = PROVE.assembleVerdict(args({ oracle: { numPhi: { k: 99 }, w0Sel: undefined } }));
+    expect(asm.verdict).toContain("⚠ cross-check: no match to the numeric solver");
+    expect(asm.bad).toBe(true);
+    expect(asm.rigor).not.toBe("exact");
+  });
+
+  it("a numeric oracle that matches reads 'matches the numeric solver' (unchanged)", () => {
+    const phi = { k: 1 };
+    const asm = PROVE.assembleVerdict(args({ distinct: [phi], oracle: { numPhi: phi, w0Sel: undefined } }));
+    expect(asm.verdict).toContain("matches the numeric solver");
+    expect(asm.rigor).toBe("exact");
+  });
+
+  it("crossCheckPhis reports oracleAvailable=false when no numPhi is supplied", () => {
+    const cc = PROVE.crossCheckPhis([{ k: 1 }], diskH, dataDeps(), null);
+    expect(cc.checked).toBe(true);
+    expect(cc.oracleAvailable).toBe(false);
+    expect(cc.oracleMatch).toBe(false);
+  });
+});
