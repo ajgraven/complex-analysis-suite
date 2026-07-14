@@ -1453,10 +1453,32 @@ const QD = _QD;
     }
 
     // Append a CAS-route hint to cap/too-large failures (the recurring case).
+    function _isCapFailure(reason) { return /export|cap|exceed|too large|step|basis|degree|terms/i.test(reason || ''); }
     function withGuidance(reason) {
-      return /export|cap|exceed|too large|step|basis|degree|terms/i.test(reason || '')
+      return _isCapFailure(reason)
         ? (reason + '  Try: assume variables real (simplifies the system), eliminate fewer variables, or use the CAS export.')
         : reason;
+    }
+    // G-misc-2: a cap/too-large failure names the CAS export in PROSE — also make it a one-click ACTION.
+    // Renders the failure in the verdict card with a "Copy Maple RCTD export" button, so the failure state is
+    // actionable (the documented external-CAS route), not just advisory. Returns true when it handled a cap
+    // failure (there is a system to export); else false ⇒ the caller falls back to showError.
+    function capFailVerdict(prefix, reason) {
+      if (!_isCapFailure(reason) || !canvas || !store.size) return false;
+      const c = store.maxColumn();
+      const text = prefix + ': ' + withGuidance(reason);
+      canvas.setVerdict({ text, rigor: 'unknown', actions: [{
+        label: 'Copy Maple RCTD export',
+        title: 'Copy the current system as a Maple RealComprehensiveTriangularize script — run the certified parametric decomposition in your own Maple, then import the result (Import RCTD).',
+        onClick: () => {
+          let code = ''; try { code = store.casColumn(c, 'maple', {}); } catch (e) { code = ''; }
+          if (!code) { toast('Nothing to export from column ' + c + '.', { kind: 'error' }); return; }
+          writeClipboard(code, 'Maple RCTD (column ' + c + ')');
+          if (typeof store.casColumnComplex === 'function' && store.casColumnComplex(c)) toast('⚠ complex-coefficient system — reim-split (assume the base variables real) first for a real count.', { kind: 'error' });
+        },
+      }] });
+      setStatus(text); toast(prefix + ' — over a cap; use the CAS export (button on the verdict card).', { kind: 'error' });
+      return true;
     }
 
     // Gröbner basis of a node selection (null/empty ⇒ every equality node), run
@@ -1480,7 +1502,7 @@ const QD = _QD;
       }).then((r) => {
         _abort = null; setBusy(false);
         if (r.aborted) { setStatus('Cancelled.'); toast('Cancelled'); return; }
-        if (!r.ok) { showError('Gröbner basis: ' + withGuidance(r.reason || 'failed')); setStatus(''); return; }
+        if (!r.ok) { const rn = r.reason || 'failed'; if (!capFailVerdict('Gröbner basis', rn)) showError('Gröbner basis: ' + withGuidance(rn)); setStatus(''); return; }
         if (canvas) canvas.clearSelection();
         rerender(); setStatus('');
         toast('Gröbner basis: ' + r.created.length + ' generator(s)' +
@@ -1716,7 +1738,7 @@ const QD = _QD;
       }).then((r) => {
         _abort = null; setBusy(false); setStatus('');
         if (r.aborted) { toast('Cancelled'); return; }
-        if (!r.ok) { showError('Existence / uniqueness: ' + withGuidance(r.reason || 'unavailable')); return; }
+        if (!r.ok) { const rn = r.reason || 'unavailable'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
         let verdict;
         if (r.inconsistent) verdict = 'No quadrature domain: the system is inconsistent (1 ∈ I).';
         else if (!r.zeroDim) verdict = 'Infinitely many: a positive-dimensional family (' + posDimDesc(r) + ').';
@@ -1910,7 +1932,7 @@ const QD = _QD;
         onProgress: (info) => setStatus('Certifying univalence… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
       }).then((cl) => {
         if (cl.aborted) { _abort = null; setBusy(false); setStatus(''); toast('Cancelled'); return; }
-        if (!cl.ok) { _abort = null; setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + withGuidance(cl.reason || 'classify failed')); return; }
+        if (!cl.ok) { _abort = null; setBusy(false); setStatus(''); const rn = cl.reason || 'classify failed'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
         if (cl.inconsistent) { finalVerdict('No quadrature domain: the system is inconsistent (1 ∈ I).' + sliceCaveat(cl), true, specializationLedger(cl), 'exact'); return; }
         if (!cl.zeroDim) {
           // Positive-dimensional ⇒ underdetermined. Detect FACTORABLE causes (a locator/gauge
@@ -2384,13 +2406,21 @@ const QD = _QD;
       }).then((r) => {
         _abort = null; setBusy(false); setStatus('');
         if (r.aborted) { toast('Cancelled'); return; }
-        if (!r.ok) { showError('Numeric solve: ' + withGuidance(r.reason || 'unavailable')); return; }
+        if (!r.ok) { const rn = r.reason || 'unavailable'; if (!capFailVerdict('Numeric solve', rn)) showError('Numeric solve: ' + withGuidance(rn)); return; }
         // The eigenvalue fallback can return a PARTIAL set on clustered/near-multiple roots.
         const partial = r.complete === false ? ' — PARTIAL: clustered roots, some solutions may be missing' : '';
         // C4: report how many complex solutions the active assumptions filtered out.
         const pruned = r.prunedByAssumptions ? ' (' + r.prunedByAssumptions + ' dropped by active assumptions)' : '';
-        toast('Solved: ' + r.solutions.length + ' solution(s)' + pruned + ' (dimension ' + r.dimension + ')' + partial + '. See console for coordinates.',
-          partial ? { kind: 'error' } : {});
+        const text = 'Solved: ' + r.solutions.length + ' solution(s)' + pruned + ' (dimension ' + r.dimension + ')' + partial + '.';
+        // G-misc-1: surface the coordinates in the VERDICT CARD (not only the browser console) — badged 'estimate'
+        // (numeric solve), or 'partial' when the eigenvalue fallback under-separated a cluster.
+        const fmt = (x) => (Math.round(x * 1e6) / 1e6);
+        const rows = (r.solutions || []).slice(0, 8).map((s, i) =>
+          '#' + (i + 1) + '  ' + Object.keys(s).sort().map((k) =>
+            latexPlain(k) + '=' + fmt(s[k].re) + (Math.abs(s[k].im) < 1e-6 ? '' : (s[k].im >= 0 ? '+' : '−') + fmt(Math.abs(s[k].im)) + 'i')).join('  ')).join('\n')
+          + (r.solutions.length > 8 ? '\n… ' + (r.solutions.length - 8) + ' more (full set in the console)' : '');
+        if (canvas) canvas.setVerdict({ title: 'Numeric solve', text, solutionsText: rows, rigor: (r.complete === false) ? 'partial' : 'estimate' });
+        toast(text, partial ? { kind: 'error' } : {});
         try {
           console.table(r.solutions.map((s) => {
             const row = {}; Object.keys(s).forEach((k) => { row[k] = s[k].re.toFixed(6) + (s[k].im >= 0 ? '+' : '−') + Math.abs(s[k].im).toFixed(6) + 'i'; });

@@ -251,6 +251,23 @@ file BEFORE returning. Orchestrator alone integrates + adjudicates + commits.
 
 ## Next action
 
+**P4 POLISH BATCH IN PROGRESS** (user: "Proceed with P4", 2026-07-14) — closes the ENTIRE prioritized list.
+Gate running.
+- [x] **A-3** — `realAxisSymmetry` comment fixed: allReal ⇒ conjugation-INVARIANCE (a valid slice), NOT
+      "a fully real solution exists" (comment-only, honest).
+- [x] **G-misc-1** — numeric `Solve` now surfaces the coordinates in the VERDICT CARD (`solutionsText` + an
+      'estimate'/'partial' rigor badge), not only a browser `console.table` dump.
+- [x] **G-misc-2** — a cap/too-large failure is now ACTIONABLE: `capFailVerdict` renders the failure in the
+      verdict card with a one-click "Copy Maple RCTD export" button (wired at doSolve / doGroebner / doClassify
+      / doCertifyUnivalence), instead of only naming the CAS export in prose.
+
+**══ AFTER P4: the ENTIRE prioritized list (P0/PF-1, P1, P2, P3, P4) is COMPLETE. ══**
+Only the two explicitly-deferred refinements remain: (i) interval/number-field Schur–Cohn to keep `=` for
+genuinely-irrational solutions (they honestly read `≈` today); (ii) A-1's literal record-at-generation for the
+Schwarz `φ′` denominator. Plus the larger "fuller orchestrator redesign" (strategy plan + branch-tree objects).
+
+**P3 DONE.** Older markers below.
+
 **P3 ENGINEERING-HARDENING BATCH IN PROGRESS** (user: "Take P3", 2026-07-13). Gate running.
 - [x] **F5** — CAS-export complex-coefficient guard: `store.casColumn` prepends a WARNING header for a Maple
       (real) export of a conjugate-model (ℚ(i)) column, and `casColumnComplex` lets `copyCAS` warn — a Maple

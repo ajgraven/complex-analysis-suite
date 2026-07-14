@@ -694,9 +694,12 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
   // there is a conjugation-symmetric solution (φ(z̄)=conj φ(z)), so the conjugate
   // model collapses under a reality assumption — the biggest practical lever for
   // making the Gröbner/triangular reduction tractable. Returns:
-  //   allReal          — every pole a_j AND every principal coeff C_{j,s} is real ⇒ a
-  //                      fully real solution exists ⇒ EVERY base variable may be taken
-  //                      real (the per-variable reality the workspace's assumeReal needs).
+  //   allReal          — every pole a_j AND every principal coeff C_{j,s} is real ⇒ the system is
+  //                      INVARIANT under conjugation (its complex solution set is closed under z↦z̄),
+  //                      so assuming every base variable real is a valid conjugation-symmetric SLICE
+  //                      (the workspace's assumeReal). NB this is a restriction, not an existence claim:
+  //                      the real slice is a LOWER bound on the general count and can be empty — a real
+  //                      solution need not exist (hence the honest slice caveat downstream).
   //   conjugationClosed — the pole multiset is closed under a_j ↦ conj(a_j) with
   //                      CONJUGATE principal parts (h is real-axis symmetric, possibly
   //                      via conjugate POLE PAIRS). allReal ⇒ conjugationClosed.
