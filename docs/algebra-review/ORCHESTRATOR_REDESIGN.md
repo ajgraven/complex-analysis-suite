@@ -277,4 +277,34 @@ are additive and low-risk. Order-of-magnitude: 5 PRs, comparable in aggregate to
   fully-truncated tree falls back to the manual card; no console errors throughout. **⚠ browser gotcha:
   the `qd-esm` preview serves a production `dist/` BUILD, not a Vite dev server — a source edit is invisible
   until `pnpm -C apps/quadrature-domains build` + SW-clear + reload (paths like `/app/algebra/*.mjs` hit the
-  SPA fallback = index.html, which misled the freshness check).** Phase B COMPLETE. Next: Phase C.
+  SPA fallback = index.html, which misled the freshness check).** Phase B COMPLETE + MERGED (PR #83, `718b165`).
+- **2026-07-14 — Phase C GROUNDING FINDING (⚠ revises the Phase-C plan).** Investigating `assumeReal` /
+  `assumeImaginary` + `realAxisSymmetry` (qd-equations.mjs:697): `allReal` ⇒ the complex solution set is
+  **closed under conjugation** (z↦z̄). The real slice (`z̄≡z`) captures the self-conjugate (real) solutions;
+  off-slice solutions come in **conjugate pairs**, and a QD's conjugate is a DISTINCT domain (conjugation ≠
+  the rotation gauge), so the real-slice count genuinely undercounts. **To promote a slice lower bound to `=`
+  you must close the GENERAL (un-sliced) conjugate-model system — but that is POSITIVE-DIMENSIONAL** (z̄, Ā
+  are independent; only the reality assumption ties them down enough to be zero-dimensional — even with the
+  rotation-gauge node + φ(0) fixed, confirmed by Phase A's real-seed DIAG). So the Phase-B tree on the general
+  system usually truncates → no `=`. **Consequence: Phase C's headline "promote lower bounds to `=`" is
+  MATH-LIMITED for the conjugate model.** Honest achievable Phase C = run the complementary imaginary slice +
+  the general system as tree branches, pool-then-quotient to *improve* the lower bound (surface off-slice
+  conjugate-pair QDs when the general tree closes) + label the outstanding gap precisely — rarely `=`. A true
+  `=`-closure needs a CERTIFIED symmetry argument ("real-symmetric data ⇒ every QD is real-symmetric"), proven
+  not asserted. **Decision pending: honest-but-limited Phase C now, vs. reprioritize to Phase D (from-data,
+  a clean mechanical win) / E (transcript UI).**
+- **2026-07-14 — Phase C DEFERRED (user's call); Phase D (from-data / PF-2) DONE.** *(engine core `ae8f238`,
+  UI entry this commit)*. **Engine (part 1):** `crossCheckPhis` now reports `oracleAvailable`;
+  `assembleVerdict` + `assembleTreeVerdict` pass the cross-check when `residual<1e-4 && (oracleMatch ||
+  !oracleAvailable)` — a from-data proof (no numeric φ) certifies on the residual alone (the oracle was
+  always a bonus, not the basis of exactness). +4 tests (29 total). **UI (part 2):** `hDataParamValues(hData)`
+  + `buildPlanCtx(ctrl, opts)` generalized to take an explicit hData/oracle; `lastHData` captured from the
+  solve subscription (present even on a FAILED solve); `seedFromDataDirect(hData)` + `poleCentroid(hData)`;
+  `doProveExistenceUniqueness` routes to from-data when `!activeEnv && state.mode==='bounded' && lastHData`
+  — seeds directly from hData, runs with `numPhi=null`. **The clean signal is `state.mode==='bounded'`** (=
+  classical bounded; not `lqd-*`/`pqd-*`/`unbounded`) from the shared `ui-state` — no QD-tab DOM coupling.
+  This answers "does a QD exist?" even when the numeric solver failed. **NB the live positive trigger (a
+  classical-bounded config whose numeric solve FAILS) is hard to reproduce with the built-in presets (they
+  all solve), so the from-data verdict path is covered by the engine unit tests + no-regression (the
+  activeEnv path is unchanged by construction: `buildPlanCtx(ctrl)` with no opts == the old behavior).**
+  Phase D COMPLETE. Remaining: Phase E (transcript UI + export); Phase C deferred.

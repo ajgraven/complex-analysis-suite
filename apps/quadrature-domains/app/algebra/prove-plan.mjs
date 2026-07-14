@@ -134,18 +134,22 @@ export function boundarySimpleExact(sol, hData, deps, cusps, subOverride) {
 }
 
 // Numeric cross-check (was crossCheckPhis): each reconstructed φ must satisfy the freshly
-// regenerated original system (residual ≈ 0) AND match the numeric solver's map (oracle) up
-// to the rotation gauge. oracle = { numPhi, w0Sel }. Returns { checked, maxResidual, oracleMatch }.
+// regenerated original system (residual ≈ 0 — reduction integrity) AND, WHEN a numeric solve is
+// available, match the numeric solver's map (oracle) up to the rotation gauge. oracle = { numPhi,
+// w0Sel }. For a FROM-DATA proof (Phase D) there is no numeric φ — `oracleAvailable` is then false and
+// the caller must not penalize the absent oracle: the residual check alone still certifies the
+// reduce/solve/reconstruct chain is sound. Returns { checked, maxResidual, oracleMatch, oracleAvailable }.
 export function crossCheckPhis(phis, hData, deps, oracle) {
   const QE = deps && deps.QE, QD = deps && deps.QD;
-  if (!phis || !phis.length || !QE || typeof QE.residualAtSolution !== 'function') return { checked: false, maxResidual: 0, oracleMatch: false };
+  if (!phis || !phis.length || !QE || typeof QE.residualAtSolution !== 'function') return { checked: false, maxResidual: 0, oracleMatch: false, oracleAvailable: false };
   const w0Sel = oracle ? oracle.w0Sel : undefined;
-  let system; try { system = QE.generateClassicalBounded(hData, { maxPoleOrder: deps.caps.maxPoleOrder, w0: w0Sel }); } catch (e) { return { checked: false, maxResidual: 0, oracleMatch: false }; }
+  let system; try { system = QE.generateClassicalBounded(hData, { maxPoleOrder: deps.caps.maxPoleOrder, w0: w0Sel }); } catch (e) { return { checked: false, maxResidual: 0, oracleMatch: false, oracleAvailable: false }; }
   let maxResidual = 0;
   for (const phi of phis) { try { const r = QE.residualAtSolution(system, phi, hData); if (r && r.max > maxResidual) maxResidual = r.max; } catch (e) { /* skip */ } }
   const numPhi = oracle ? oracle.numPhi : null;
+  const oracleAvailable = !!numPhi;
   const oracleMatch = !!(numPhi && QD && typeof QD.sameDomain === 'function' && phis.some((p) => { try { return QD.sameDomain(p, numPhi); } catch (e) { return false; } }));
-  return { checked: true, maxResidual, oracleMatch };
+  return { checked: true, maxResidual, oracleMatch, oracleAvailable };
 }
 
 // The per-system UNIVALENCE FILTER: reconstruct each real candidate's φ, apply the exact
@@ -249,16 +253,19 @@ export function assembleVerdict(a) {
   if (undercount) partialNote = ' · ⚠ PARTIAL: the numeric solver separated only ' + rec.foundDistinct + ' of ' + rec.certReal + ' certified real solution' + (rec.certReal === 1 ? '' : 's') + ' (clustered / non-radical) — the genuine-QD count is a LOWER BOUND';
   else if (rec.disagree) partialNote = ' · ⚠ cross-check: the numeric solver returned ' + rec.foundDistinct + ' distinct real solutions vs the certified ' + rec.certReal + ' — treat the count as approximate';
   else if (rec.partial) partialNote = ' · ⚠ PARTIAL: clustered / near-multiple roots — some real solutions may be missing';
-  // NUMERIC CROSS-CHECK: reduction integrity (residual ≈ 0) + independent-solver agreement.
+  // NUMERIC CROSS-CHECK: reduction integrity (residual ≈ 0) + independent-solver agreement WHEN a
+  // numeric solve is available. A FROM-DATA proof (Phase D) has no oracle — the residual alone certifies
+  // the reduce/solve/reconstruct chain is sound, so an absent oracle must NOT fail the cross-check.
   const cc = crossCheckPhis(distinct, hData, deps, oracle);
+  const ccPass = cc.maxResidual < 1e-4 && (cc.oracleMatch || !cc.oracleAvailable);
   let bad = !D || !!rec.partial;
   if (cc.checked) {
-    if (cc.maxResidual < 1e-4 && cc.oracleMatch) verdict += ' · cross-check ✓ (residual ' + cc.maxResidual.toExponential(1) + '; matches the numeric solver)';
+    if (ccPass) verdict += ' · cross-check ✓ (residual ' + cc.maxResidual.toExponential(1) + (cc.oracleAvailable ? '; matches the numeric solver' : '; reduction integrity — no numeric solve to corroborate') + ')';
     else { bad = true; const why = cc.maxResidual >= 1e-4 ? ('residual ' + cc.maxResidual.toExponential(1) + ' ≫ 0 — the reduction chain may be unsound') : 'no match to the numeric solver'; verdict += ' · ⚠ cross-check: ' + why; }
   }
   if (partialNote) verdict += partialNote;
   if (r.certified && D > 0 && !undercount && !rec.disagree && !rec.partial) verdict += ' · real-solution count + locations certified (RUR + exact Sturm)';
-  const ccOk = !cc.checked || (cc.maxResidual < 1e-4 && cc.oracleMatch);
+  const ccOk = !cc.checked || ccPass;
   const certRigor = (undercount || rec.partial) ? 'partial'
     : (r.certified && allExactFilter && allExactVerified && !rec.disagree && ccOk) ? 'exact' : 'estimate';
   if (D >= 1 && r.certified && allExactFilter && !undercount && !rec.disagree && ccOk && !allExactVerified)
@@ -346,7 +353,7 @@ export function assembleTreeVerdict(a) {
   let folded = 0, selfInt = 0, poleOut = 0, unrec = 0, rawGenuine = 0;
   zero.forEach((l) => { folded += l.leaf.folded; selfInt += l.leaf.selfInt; poleOut += l.leaf.poleOut; unrec += l.leaf.unrec; rawGenuine += l.leaf.genuinePhis.length; });
   const cc = crossCheckPhis(distinct, hData, deps, oracle);
-  const ccOk = !cc.checked || (cc.maxResidual < 1e-4 && cc.oracleMatch);
+  const ccOk = !cc.checked || (cc.maxResidual < 1e-4 && (cc.oracleMatch || !cc.oracleAvailable));
   const exactAggregate = !truncated && allExact && allCertified && ccOk;
   const across = branchCount > 1 ? ' across ' + branchCount + ' branches' : '';
   let head;
@@ -359,7 +366,7 @@ export function assembleTreeVerdict(a) {
   const rej = [folded ? folded + ' fold' : '', selfInt ? selfInt + ' self-intersecting' : '', poleOut ? poleOut + ' pole-in-𝔻' : '', unrec ? unrec + ' unreconstructable' : ''].filter(Boolean).join(', ');
   if (rej) bits.push(rej + ' rejected');
   let verdict = head + (bits.length ? ' (' + bits.join('; ') + ')' : '') + '.';
-  if (cc.checked) verdict += ccOk ? ' · cross-check ✓ (residual ' + cc.maxResidual.toExponential(1) + '; matches the numeric solver)'
+  if (cc.checked) verdict += ccOk ? ' · cross-check ✓ (residual ' + cc.maxResidual.toExponential(1) + (cc.oracleAvailable ? '; matches the numeric solver' : '; reduction integrity — no numeric solve to corroborate') + ')'
     : ' · ⚠ cross-check: ' + (cc.maxResidual >= 1e-4 ? 'residual ' + cc.maxResidual.toExponential(1) + ' ≫ 0' : 'no match to the numeric solver');
   if (truncated) verdict += ' · ⚠ not all branches closed (a case hit the depth / branch cap, or a positive-dimensional case had no factorable cause) — the count is a LOWER BOUND';
   else if (exactAggregate && branchCount > 1) verdict += ' · aggregated over all ' + branchCount + ' branches (pool-then-quotient) — a domain reachable via two cases is counted once';
