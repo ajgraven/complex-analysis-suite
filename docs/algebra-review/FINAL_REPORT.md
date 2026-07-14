@@ -107,3 +107,18 @@ its rigor legible** — closing the two critical correctness gaps (the missing a
 unsaturated over-count), the over-claiming labels, and the rigor-legibility gap, and adding the one-click
 orchestrated path. A certified `=` now means what it says, modulo one clearly-documented, well-scoped
 rationalization refinement (PF-1).
+
+## 8. Addendum — P1 backlog shipped (post-review continuation)
+
+Three further gate-green slices closed the P1 tier of the prioritized backlog (§7):
+
+| Slice | Finding | What |
+|---|---|---|
+| **P1.1** | B-2 | `store.eliminate` now computes the exact **elimination ideal** `⟨A,B⟩∩k[rest]` (Gröbner), not the raw Sylvester resultant — no extraneous factors (`{yx+1,yx²−x}`→`⟨1⟩`, the spurious `2y` discarded); flagged resultant fallback. |
+| **P1.2** | A-1 | `saturateMobius` extended to **all ordered Möbius pairs** (self `{|z_j|=1}` + cross `{z̄_a z_b=1}`), so the exact count also drops the cross stratum a multi-pole `(●)` clears (2-pole test: count 2→1). Safe — all disjoint from the genuine `|z_j|<1` set. |
+| **P1.3** | S5-depth | The orchestrator **auto-applies `saturateMobius`** before certify; the verdict states the **class + equivalence** ("classical bounded QDs, up to the rotation gauge [+ containing w₀ if pinned]"); a one-click **"Export derivation (JSON)"** verdict action (`exportDAG` → download). Browser-verified. |
+
+Tests: `qd-eliminate-ideal.test.ts` (2) + a cross-term case in `qd-saturate-mobius.test.ts`; **1308 tests**,
+all gate-green. **Remaining after P1:** PF-1 (§7-1, still #1); the literal record-at-generation for the
+Schwarz `φ′` denominator (A-1's tail); and the fuller orchestrator redesign (strategy plan + branch-tree as
+first-class objects). The P2–P4 tiers (§ the prioritized list) are untouched.
