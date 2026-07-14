@@ -1986,21 +1986,28 @@ const QD = _QD;
         // S5-depth: one-click export of the full derivation DAG — a reproducible, re-importable proof object.
         if (typeof store.exportDAG === 'function') {
           vActions.push({
-            label: 'Export derivation (JSON)',
-            title: 'Download the whole derivation DAG — every column, assumption, and provenance op — as JSON. Reproducible and re-importable (Load workspace).',
+            label: 'Export proof (JSON)',
+            title: 'Download the full PROOF: the existence/uniqueness verdict + the rigor badge with its audit trail (why =/≥/≈), the per-solution rows and assumption ledger, the strategy stages, AND the whole derivation DAG (every column, assumption, provenance op). Reproducible + re-importable (Load workspace).',
             onClick: () => {
               try {
-                const blob = new Blob([JSON.stringify(store.exportDAG(), null, 2)], { type: 'application/json' });
+                const proof = {
+                  kind: pr.kind, verdict: pr.verdict, rigor: pr.rigor, bound: pr.bound || null, count: (pr.count != null ? pr.count : null),
+                  rigorProvenance: pr.rigorProvenance || [], perSolution: rows, assumptions: specializationLedger(cl),
+                  stages: (PROVE.CERTIFY_STAGES || []).map((s) => ({ id: s.id, title: s.title, why: s.why })),
+                };
+                const out = { format: 'qd-proof', version: 1, proof, derivation: store.exportDAG() };
+                const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
-                const a = document.createElement('a'); a.href = url; a.download = 'qd-derivation.json'; document.body.appendChild(a); a.click(); a.remove();
+                const a = document.createElement('a'); a.href = url; a.download = 'qd-proof.json'; document.body.appendChild(a); a.click(); a.remove();
                 setTimeout(() => URL.revokeObjectURL(url), 2000);
-                toast('Derivation exported (qd-derivation.json).');
+                toast('Proof exported (qd-proof.json) — verdict + rigor audit trail + derivation DAG.');
               } catch (e) { toast('Export failed: ' + ((e && e.message) || e), { kind: 'error' }); }
             },
           });
         }
       }
       const vSet = { text: verdict, assumptions: specializationLedger(cl), rigor: pr.rigor };
+      if (pr.rigorProvenance && pr.rigorProvenance.length) vSet.rigorProvenance = pr.rigorProvenance;   // Phase E: "why this rigor"
       if (rows.length) vSet.solutionsText = rows.join('\n');
       if (vActions.length) vSet.actions = vActions;
       if (canvas) canvas.setVerdict(vSet);

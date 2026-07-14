@@ -454,6 +454,18 @@ const QD = _QD;
         verdict.appendChild(led);
       }
       verdict.appendChild(body);
+      // Phase E: the AUDIT TRAIL behind the rigor badge — an expandable "why this rigor" list so a '='
+      // or '≥' is not merely asserted but justified (each binding condition ✓ met / ✗ not met). data.
+      // rigorProvenance is a string[] from the engine (prove-plan rigorProvenance). Built via DOM (no markup).
+      if (data.rigorProvenance && data.rigorProvenance.length) {
+        const det = document.createElement('details'); det.className = 'algebra-verdict-why';
+        const sum = document.createElement('summary'); sum.textContent = 'Why this rigor'; sum.style.cssText = 'cursor:pointer;font-size:12px;opacity:0.8;margin-top:4px;';
+        det.appendChild(sum);
+        const ul = document.createElement('ul'); ul.style.cssText = 'margin:3px 0 0 0;padding-left:18px;font-size:12px;';
+        data.rigorProvenance.forEach((it) => { const li = document.createElement('li'); li.textContent = it; ul.appendChild(li); });
+        det.appendChild(ul);
+        verdict.appendChild(det);
+      }
       if (data.solutionsLatex && data.solutionsLatex.length) {
         const box = div('algebra-verdict-math');
         data.solutionsLatex.forEach((tex) => { const d = div('algebra-verdict-mathrow'); renderKatex(d, tex, true); box.appendChild(d); });

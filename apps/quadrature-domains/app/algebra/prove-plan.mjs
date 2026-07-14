@@ -275,7 +275,26 @@ export function assembleVerdict(a) {
   if (D >= 1) verdict += ' · class: classical bounded quadrature domains, up to the rotation gauge'
     + (deps.w0Fixed ? ' (among domains whose interior contains the fixed w₀)' : '');
   verdict += sliceCaveat(cl);
-  return { verdict, rigor: certRigor, bad, count: D, cc, rec };
+  const prov = rigorProvenance({ certified: !!r.certified, allExactFilter, allExactVerified, disagree: rec.disagree, ccOk, ccAvailable: cc.oracleAvailable, ccChecked: cc.checked, undercount, partial: rec.partial });
+  return { verdict, rigor: certRigor, bad, count: D, cc, rec, rigorProvenance: prov };
+}
+
+// The human-readable AUDIT TRAIL behind a rigor badge (Phase E): why the verdict earned '='/'≥'/'≈'/… —
+// each binding condition marked ✓ (met) / ✗ (not met). flags = { certified, allExactFilter,
+// allExactVerified, disagree, ccOk, ccAvailable, ccChecked, undercount, partial, truncated }. Pure;
+// rendered as a "why this rigor" list in the verdict card and included in the exported proof object.
+export function rigorProvenance(f) {
+  f = f || {};
+  const mark = (ok, txt) => (ok ? '✓ ' : '✗ ') + txt;
+  const items = [
+    mark(f.certified, 'certified real count (RUR + exact Sturm)'),
+    mark(f.allExactFilter, 'exact ℚ(i) univalence filters (no numeric fold / boundary fallback)'),
+    mark(f.allExactVerified, 'every genuine solution exact-verified over ℚ(i) (fold / boundary at the true root)'),
+  ];
+  if (f.ccChecked) items.push(mark(f.ccOk, 'numeric cross-check' + (f.ccAvailable ? ' — matches the numeric solver' : ' — residual integrity (no numeric solve)')));
+  if (f.truncated) items.push('✗ every branch of the case tree closed (a case hit the depth / branch cap, or had no factorable cause)');
+  if (f.undercount || f.partial) items.push('✗ complete — the numeric solver may have undercounted (clustered / non-radical)');
+  return items;
 }
 
 // The top-level single-system plan: run the stages in order (regime → solve → filter → gauge
@@ -335,7 +354,7 @@ export async function runCertifyPlan(ctx) {
   const asm = assembleVerdict({ distinct, gaugeMerged, leaf: a.leaf, cl: a.cl, real: a.real, r: a.r, deps: ctx.deps, hData: ctx.hData, sliceCaveat: ctx.sliceCaveat, oracle: ctx.oracle });
   return {
     kind: 'zero-dim', verdict: asm.verdict, rigor: asm.rigor, bad: asm.bad,
-    cl: a.cl, real: a.real, certified: !!a.r.certified, distinctPhis: distinct, rows: a.leaf.rows, count: asm.count, cc: asm.cc,
+    cl: a.cl, real: a.real, certified: !!a.r.certified, distinctPhis: distinct, rows: a.leaf.rows, count: asm.count, cc: asm.cc, rigorProvenance: asm.rigorProvenance,
   };
 }
 
@@ -374,7 +393,8 @@ export function assembleTreeVerdict(a) {
   if (cl) verdict += sliceCaveat(cl);
   const rigor = truncated ? 'bound' : (exactAggregate ? 'exact' : 'estimate');
   const bad = D === 0 || truncated || !ccOk;
-  return { verdict, rigor, bad, count: D, bound: exactAggregate ? '=' : '≥', cc };
+  const prov = rigorProvenance({ certified: allCertified, allExactFilter: allExact, allExactVerified: allExact, ccOk, ccAvailable: cc.oracleAvailable, ccChecked: cc.checked, truncated });
+  return { verdict, rigor, bad, count: D, bound: exactAggregate ? '=' : '≥', cc, rigorProvenance: prov };
 }
 
 // The BRANCH-AWARE plan (Phase B): walk the proof tree, auto-forking a positive-dimensional system
@@ -420,6 +440,6 @@ export async function runProofTree(ctx, opts) {
   const asm = assembleTreeVerdict({ distinct, leaves, truncated, deps: ctx.deps, hData: ctx.hData, sliceCaveat: ctx.sliceCaveat, oracle: ctx.oracle, cl: rootCl });
   return {
     kind: 'tree', verdict: asm.verdict, rigor: asm.rigor, bad: asm.bad, count: asm.count, bound: asm.bound,
-    distinctPhis: distinct, rows, leaves, truncated, cl: rootCl, cc: asm.cc,
+    distinctPhis: distinct, rows, leaves, truncated, cl: rootCl, cc: asm.cc, rigorProvenance: asm.rigorProvenance,
   };
 }
