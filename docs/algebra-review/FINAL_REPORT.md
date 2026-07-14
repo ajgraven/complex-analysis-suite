@@ -150,6 +150,24 @@ root). **A certified `=` now means what it says unconditionally for rational sol
 
 Tests: `qd-discriminant-variety` (+2), `qd-triangular-initials` (2); **1316 tests**, gate-green.
 
+## 11. Addendum — P3 engineering-hardening batch shipped
+
+Track-F hardening (all LOW except F5 MEDIUM), no behavior change to a correct result:
+
+- **F5** — `store.casColumn` prepends a **warning** for a Maple (real) export of a conjugate-model (ℚ(i))
+  column; `casColumnComplex` + a `copyCAS` toast warn that a real-CAS "real count" of a complex system is not
+  the QD count (reim-split first). `qd-cas-export-guard.test.ts` (3).
+- **F1** — `_CAP_KEYS` completed (the `maxDim`/`maxTries`/`maxCalls`/`maxSegments`/`formTries` the RUR /
+  parametric ops read) so the worker path honours the same caps as the sync fallback; the coverage test's
+  ground-truth `OP_CAPS` was de-omitted (it had shared the omission).
+- **F2** — sync `_classifyImpl` threads `_capOpts` to `buchberger`/`realSolutionCount` (== the worker).
+- **F3** — the `sym-worker` abort listener is removable + detached on every settle (a late abort can't cancel a
+  successor); **F4** — a worker LOAD error now falls back to the main thread instead of re-erroring forever.
+- **F6** — the worker↔main differential test covers `solveRealCertified` / `shapeFromMoments` /
+  `parametricRealCount1D` (bit-identical across the boundary).
+
+**1322 tests**, gate-green.
+
 **Remaining:** interval / number-field Schur–Cohn to *keep* `=` for genuinely-irrational solutions (they now
 honestly read `≈`); A-1's literal record-at-generation for the Schwarz `φ′` denominator; the fuller
-orchestrator redesign; and the **P3–P4** tiers (engineering hardening + polish).
+orchestrator redesign; and the **P4** polish tier (console-dump, cap-export-as-button).
