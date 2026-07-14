@@ -133,6 +133,23 @@ irrational (only-≈) solution. This closes PF-1 **and E1** (an exact verificati
 Test `qd-verify-exact.test.ts` (5); **1313 tests**; browser-verified (the default QD certifies at the exact
 root). **A certified `=` now means what it says unconditionally for rational solutions.**
 
+## 10. Addendum — P2 honesty-gap batch shipped
+
+- **C-MED-2:** `discriminantVariety` now **certifies its separating form** — it computes the generic fiber
+  size `N` (max distinct-complex count over generic parameter points) and prefers a form whose eliminant
+  `deg_u = N`, returning `{ separated, genericFiberCount }` (an unseparated boundary is honestly flagged, not
+  silently under-counted).
+- **B-3:** `store.triangularize` surfaces the **regular-chain initials** (`initialCount`,
+  `hasRegularityConditions`); the UI shows the "a Wu chain is not saturated by its pivots — spurious branches /
+  missed components off the initials" caveat.
+- **D-4:** active **univalence constraints** (convex/star/spiral/injectivity) now appear in the "Computed
+  under:" ledger, so a constraint-restricted count never reads as the full one.
+- **E4/D-3/E3/E5** needed no separate change: a cross-check failure already forces `certRigor ≠ 'exact'` (via
+  `ccOk`), and **S1 + PF-1 filter the spurious solutions E4/D-3 worried about**; E3 (numeric gauge dedup) and
+  E5 (boundary curve, empirically clean) are documented known limits.
+
+Tests: `qd-discriminant-variety` (+2), `qd-triangular-initials` (2); **1316 tests**, gate-green.
+
 **Remaining:** interval / number-field Schur–Cohn to *keep* `=` for genuinely-irrational solutions (they now
 honestly read `≈`); A-1's literal record-at-generation for the Schwarz `φ′` denominator; the fuller
-orchestrator redesign; and the untouched **P2–P4** tiers.
+orchestrator redesign; and the **P3–P4** tiers (engineering hardening + polish).
