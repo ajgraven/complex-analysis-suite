@@ -1659,6 +1659,10 @@ const QD = _QD;
         const sym = QE.realAxisSymmetry(activeEnv.hData);
         if (sym && sym.allReal && !store.realVars.length) { const r = store.assumeReal(store.baseVariables()); if (r && r.ok) rerender(); }
         for (let i = 0; i < 4; i++) { const pr = store.reducePropagate(); if (!pr || !pr.ok) break; rerender(); if (pr.inconsistent) break; }
+        // A-1 / S5-depth: saturate away the {|z_j|=1} + cross Möbius denominator strata so the certify
+        // pipeline runs on the EXACT admissible system (a genuine QD has |z_j|<1, so nothing genuine is
+        // dropped). Best-effort — a no-op once the map variables are pinned/eliminated.
+        try { const sr = store.saturateMobius(); if (sr && sr.ok) rerender(); } catch (e) { /* best-effort */ }
         refreshPickers();
       } catch (e) { /* the prelude is best-effort; the certify pipeline still runs */ }
       doCertifyUnivalence();
@@ -2049,6 +2053,11 @@ const QD = _QD;
         const ccOk = !cc.checked || (cc.maxResidual < 1e-4 && cc.oracleMatch);
         const certRigor = (undercount || rec.partial) ? 'partial'
           : (r.certified && allExactFilter && !rec.disagree && ccOk) ? 'exact' : 'estimate';
+        // CLASS + EQUIVALENCE (S5-depth / finding G): state explicitly what the count is modulo, so a
+        // "unique" verdict is never read as unqualified — classical bounded quadrature domains, counted up
+        // to the rotation gauge (+ restricted to domains containing the fixed w₀ when φ(0) is pinned).
+        if (D >= 1) verdict += ' · class: classical bounded quadrature domains, up to the rotation gauge'
+          + (store.w0Fixed ? ' (among domains whose interior contains the fixed w₀)' : '');
         // Honest labeling: even a certified count is only the count ON the active slice (if any).
         verdict += sliceCaveat(cl);
         setStatus(verdict);
@@ -2081,6 +2090,23 @@ const QD = _QD;
             label: 'View in the QD plot',
             title: 'Render the reconstructed quadrature domain in the geometric QD tab (boundary, cusps, critical set) and switch to it.',
             onClick: () => { if (!ctx.showQDSolution(distinct[0], activeEnv.hData)) toast('Could not open in the QD plot', { kind: 'error' }); },
+          });
+        }
+        // S5-depth: one-click export of the full derivation DAG (columns + assumptions + provenance) — a
+        // reproducible, re-importable proof object (store.exportDAG is a lossless round-trip) → JSON download.
+        if (typeof store.exportDAG === 'function') {
+          vActions.push({
+            label: 'Export derivation (JSON)',
+            title: 'Download the whole derivation DAG — every column, assumption, and provenance op — as JSON. Reproducible and re-importable (Load workspace).',
+            onClick: () => {
+              try {
+                const blob = new Blob([JSON.stringify(store.exportDAG(), null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = 'qd-derivation.json'; document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 2000);
+                toast('Derivation exported (qd-derivation.json).');
+              } catch (e) { toast('Export failed: ' + ((e && e.message) || e), { kind: 'error' }); }
+            },
           });
         }
         if (canvas) canvas.setVerdict({ text: verdict, solutionsText: rows.join('\n'), assumptions: specializationLedger(cl), actions: vActions, rigor: certRigor });

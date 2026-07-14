@@ -251,6 +251,23 @@ file BEFORE returning. Orchestrator alone integrates + adjudicates + commits.
 
 ## Next action
 
+**▓▓ P1 COMPLETE ▓▓** (user requested "take all of P1", 2026-07-13). Three gated slices shipped on the branch:
+- [x] **P1.1 (B-2)** — `store.eliminate` uses the exact `eliminationIdeal` (Gröbner) — no extraneous Sylvester
+      factors (`{yx+1,yx²−x}`→⟨1⟩, the 2y discarded); flagged resultant fallback; `provenance.method`.
+      `vitest/qd-eliminate-ideal.test.ts` (2) + 3 updated/added headless assertions. Gate green (1307).
+- [x] **P1.2 (A-1)** — `saturateMobius` now covers ALL Möbius pairs (self `{|z_j|=1}` + cross `{z̄_a z_b=1}`),
+      reconstructed from the pole variables (safe — all disjoint from the genuine |z_j|<1 set). +1 cross-term
+      test (2-pole count 2→1). Gate green (1308). (Literal record-at-generation, only needed for the Schwarz
+      φ′ denominator, remains a small follow-up.)
+- [x] **P1.3 (S5-depth)** — `doProveExistenceUniqueness` auto-applies `saturateMobius` before certify
+      (best-effort — no-op once map vars are pinned); the verdict always states the **class + equivalence**
+      ("classical bounded QDs, up to the rotation gauge [+ containing w₀ if pinned]"); a one-click **"Export
+      derivation (JSON)"** verdict action (`store.exportDAG` → download). **Browser-verified LIVE:** class
+      clause + the export action present; rigor still `= certified`. Gate green (1308). (Full strategy-plan +
+      branch-tree-as-objects redesign remains the noted larger follow-up.)
+
+## Next action (original review — DONE)
+
 **REVIEW COMPLETE** (S1–S5 shipped gate-green; FINAL_REPORT.md written). If resuming for MORE, the value-ordered
 continuation (from FINAL_REPORT §7 / PLAN.md deferred) is: (1) **PF-1** exact-at-the-isolating-box univalence
 cert (`sym-core.mjs:1968`) — the #1 rigor item; (2) **S5-depth** — strategy plan + branch/case tree + auto-apply
