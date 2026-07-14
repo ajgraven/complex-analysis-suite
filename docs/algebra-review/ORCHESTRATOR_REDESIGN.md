@@ -293,3 +293,18 @@ are additive and low-risk. Order-of-magnitude: 5 PRs, comparable in aggregate to
   `=`-closure needs a CERTIFIED symmetry argument ("real-symmetric data ⇒ every QD is real-symmetric"), proven
   not asserted. **Decision pending: honest-but-limited Phase C now, vs. reprioritize to Phase D (from-data,
   a clean mechanical win) / E (transcript UI).**
+- **2026-07-14 — Phase C DEFERRED (user's call); Phase D (from-data / PF-2) DONE.** *(engine core `ae8f238`,
+  UI entry this commit)*. **Engine (part 1):** `crossCheckPhis` now reports `oracleAvailable`;
+  `assembleVerdict` + `assembleTreeVerdict` pass the cross-check when `residual<1e-4 && (oracleMatch ||
+  !oracleAvailable)` — a from-data proof (no numeric φ) certifies on the residual alone (the oracle was
+  always a bonus, not the basis of exactness). +4 tests (29 total). **UI (part 2):** `hDataParamValues(hData)`
+  + `buildPlanCtx(ctrl, opts)` generalized to take an explicit hData/oracle; `lastHData` captured from the
+  solve subscription (present even on a FAILED solve); `seedFromDataDirect(hData)` + `poleCentroid(hData)`;
+  `doProveExistenceUniqueness` routes to from-data when `!activeEnv && state.mode==='bounded' && lastHData`
+  — seeds directly from hData, runs with `numPhi=null`. **The clean signal is `state.mode==='bounded'`** (=
+  classical bounded; not `lqd-*`/`pqd-*`/`unbounded`) from the shared `ui-state` — no QD-tab DOM coupling.
+  This answers "does a QD exist?" even when the numeric solver failed. **NB the live positive trigger (a
+  classical-bounded config whose numeric solve FAILS) is hard to reproduce with the built-in presets (they
+  all solve), so the from-data verdict path is covered by the engine unit tests + no-regression (the
+  activeEnv path is unchanged by construction: `buildPlanCtx(ctrl)` with no opts == the old behavior).**
+  Phase D COMPLETE. Remaining: Phase E (transcript UI + export); Phase C deferred.

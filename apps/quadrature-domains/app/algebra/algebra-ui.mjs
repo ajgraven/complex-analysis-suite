@@ -193,6 +193,8 @@ const QD = _QD;
     const _trackVerdict = new Map(); // A6: tid -> { sig, badge, state, title } existence/uniqueness chip cache
     let mounted = false;
     let activeEnv = null;          // latest classical-bounded solve envelope
+    let lastHData = null;          // the latest quadrature DATA the solver was asked about — present even
+                                   // when the numeric solve FAILED; the from-data proof source (Phase D / PF-2)
     let lastCap = 6;
     const elimSel = new Set();     // raw variable names chosen to eliminate (Gröbner)
     const realSel = new Set();     // primal variable names asserted real
@@ -1679,6 +1681,27 @@ const QD = _QD;
       })();
     }
 
+    // Centroid of the poles a_j — the default φ(0) for a FROM-DATA seed (no numeric w₀ available).
+    function poleCentroid(hData) {
+      const poles = (hData && hData.poles) || []; if (!poles.length) return { re: 0, im: 0 };
+      let re = 0, im = 0; for (const p of poles) { re += (p.a && p.a.re) || 0; im += (p.a && p.a.im) || 0; }
+      return { re: re / poles.length, im: im / poles.length };
+    }
+    // Seed the (●)/(★)/gauge system directly from raw classical-bounded quadrature DATA — the from-data
+    // proof path (Phase D / PF-2), used when there is no numeric solve (activeEnv is null). Mirrors
+    // seedFromCurrent but takes hData explicitly; φ(0) is fixed to the pole centroid when the w₀ box is on.
+    function seedFromDataDirect(hData) {
+      try {
+        const w0cb = $('#alg-w0-fix'), fixW0 = !w0cb || w0cb.checked;
+        const sys = QE.generateClassicalBounded(hData, { maxPoleOrder: lastCap, w0: fixW0 ? poleCentroid(hData) : undefined });
+        store.seedFromSystem(sys);
+        _seededHData = hData;
+        realSel.clear(); elimSel.clear(); refreshPickers();
+        if (canvas) canvas.clearSelection();
+        rerender();
+        return true;
+      } catch (e) { showError('Seed from data: ' + ((e && e.message) || e)); return false; }
+    }
     // THE one-click orchestrator (finding G-1 + Phase B): from the seeded system to the AUTHORITATIVE
     // genuine-QD verdict, with no manual op-chaining. Runs the cheap reductions (auto-reality if h is
     // real-axis symmetric, then linear propagation to a fixpoint, then Möbius saturation — each a labeled
@@ -1691,13 +1714,19 @@ const QD = _QD;
     // exclusive to this ✦ button; the standalone Certify keeps the manual pin/split card.
     function doProveExistenceUniqueness() {
       if (_abort) return;
-      if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
+      // From-data (PF-2): prove from the current solve when one exists, else DIRECTLY from the raw
+      // classical-bounded quadrature data (lastHData) with NO numeric solve — gated on the classical-
+      // bounded MODE (state.mode ≠ lqd-*/pqd-*/unbounded). Answers "does a QD exist?" even when the
+      // numeric solver failed to find one.
+      const fromData = !activeEnv;
+      const hData = activeEnv ? activeEnv.hData : (state.mode === 'bounded' ? lastHData : null);
+      if (!hData) { toast(activeEnv ? (STR.noSolve || 'No classical bounded QD solved yet.') : 'No classical bounded quadrature data — load a bounded (classical) h (or solve one) first.', { kind: 'error' }); return; }
       if (typeof QD.isBoundaryUnivalent !== 'function') { showError('Univalence: the numeric univalence machinery (solver.js) is not loaded.'); return; }
-      if (!ensureSeed()) return;
+      if (fromData) { if (_seededHData !== hData && !seedFromDataDirect(hData)) return; } else if (!ensureSeed()) return;
       clearError();
       // Cheap reductions first (best-effort — the pipeline still runs on the current system on any error).
       try {
-        const sym = QE.realAxisSymmetry(activeEnv.hData);
+        const sym = QE.realAxisSymmetry(hData);
         if (sym && sym.allReal && !store.realVars.length) { const r = store.assumeReal(store.baseVariables()); if (r && r.ok) rerender(); }
         for (let i = 0; i < 4; i++) { const pr = store.reducePropagate(); if (!pr || !pr.ok) break; rerender(); if (pr.inconsistent) break; }
         // A-1 / S5-depth: saturate away the {|z_j|=1} + cross Möbius denominator strata (a genuine QD has
@@ -1706,8 +1735,9 @@ const QD = _QD;
         refreshPickers();
       } catch (e) { /* the prelude is best-effort; the pipeline still runs */ }
       const ctrl = _newAbort(); _abort = ctrl;
-      setBusy(true, 'Proving existence / uniqueness…');
-      const planCtx = buildPlanCtx(ctrl);
+      setBusy(true, fromData ? 'Proving from data (no numeric solve needed)…' : 'Proving existence / uniqueness…');
+      const w0cb = $('#alg-w0-fix'), fixW0 = !w0cb || w0cb.checked;
+      const planCtx = fromData ? buildPlanCtx(ctrl, { hData, numPhi: null, w0Sel: fixW0 ? poleCentroid(hData) : undefined }) : buildPlanCtx(ctrl);
       PROVE.runCertifyPlan(planCtx).then((pr) => {
         if (pr.kind === 'positive-dim') {
           // ESCALATE (Phase B): the prelude left it underdetermined with a factorable cause — auto-walk
@@ -1736,8 +1766,8 @@ const QD = _QD;
     // The known quadrature-data values (a_j, C_{j,s} and their conjugates) keyed by the
     // conjugate-model variable names — to PIN the parameters for the existence verdict
     // (they are given data, not unknowns).
-    function hDataParamValues() {
-      const hData = activeEnv && activeEnv.hData; if (!hData) return null;
+    function hDataParamValues(hDataArg) {
+      const hData = hDataArg || (activeEnv && activeEnv.hData) || (state.mode === 'bounded' ? lastHData : null); if (!hData) return null;
       const m = {};
       (hData.poles || []).forEach((pole, i) => {
         const j = i + 1, a = pole.a || { re: 0, im: 0 };
@@ -1809,14 +1839,19 @@ const QD = _QD;
     // ✦ Prove orchestrator (which ESCALATES to the branch tree on a positive-dimensional result). The
     // pinned quadrature data `params` is stashed on the ctx so the tree's fork re-runs spuriousFactors
     // with the same pinning.
-    function buildPlanCtx(ctrl) {
-      const params = hDataParamValues();
+    function buildPlanCtx(ctrl, opts) {
+      opts = opts || {};
+      const hData = opts.hData || (activeEnv && activeEnv.hData);
+      const params = hDataParamValues(hData);
       const w0cb = $('#alg-w0-fix'), fixW0 = !w0cb || w0cb.checked;
-      const w0Sel = fixW0 ? (activeEnv && (activeEnv.w0Used || (activeEnv.primary && activeEnv.primary.phi && activeEnv.primary.phi.w0))) : undefined;
+      // From-data (Phase D): opts overrides the oracle — numPhi=null (no numeric solve) so the engine's
+      // cross-check certifies on the residual alone; w0Sel is the caller's choice (else the solve's w₀).
+      const numPhi = ('numPhi' in opts) ? opts.numPhi : ((activeEnv && activeEnv.primary && activeEnv.primary.phi) || null);
+      const w0Sel = ('w0Sel' in opts) ? opts.w0Sel : (fixW0 ? (activeEnv && (activeEnv.w0Used || (activeEnv.primary && activeEnv.primary.phi && activeEnv.primary.phi.w0))) : undefined);
       const _solveOpts = { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Solving the real system… ' + info.basis + ' generators, ' + info.pairs + ' pairs left') };
       return {
-        hData: activeEnv.hData, deps: proveDeps(), params,
-        oracle: { numPhi: (activeEnv && activeEnv.primary && activeEnv.primary.phi) || null, fixW0, w0Sel },
+        hData, deps: proveDeps(), params,
+        oracle: { numPhi, fixW0, w0Sel },
         signal: ctrl && ctrl.signal, sliceCaveat, posDimDesc,
         // REGIME: the heavy reim Gröbner + Hermite real-count in the WORKER (cancellable).
         classify: () => store.classifyAsync(null, { paramValues: params }, {
@@ -2637,6 +2672,9 @@ const QD = _QD;
       QD.PrimarySolution.subscribe((env) => {
         const phi = env && env.success && env.primary && env.primary.phi;
         activeEnv = isClassicalBounded(phi, env && env.hData) ? env : null;
+        // Track the raw quadrature data even when the numeric solve FAILED — the from-data prover (Phase D)
+        // works from this when there is no activeEnv, gated on the classical-BOUNDED mode (state.mode).
+        if (env && env.hData && env.hData.poles && env.hData.poles.length) lastHData = env.hData;
         // A4: a NEW solve makes any graph seeded from the OLD one stale — clear the
         // stale picker selections and prompt a re-seed instead of letting a later op
         // splice new-hData constraints onto an old-hData graph.
