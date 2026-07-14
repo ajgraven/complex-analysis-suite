@@ -277,4 +277,19 @@ are additive and low-risk. Order-of-magnitude: 5 PRs, comparable in aggregate to
   fully-truncated tree falls back to the manual card; no console errors throughout. **⚠ browser gotcha:
   the `qd-esm` preview serves a production `dist/` BUILD, not a Vite dev server — a source edit is invisible
   until `pnpm -C apps/quadrature-domains build` + SW-clear + reload (paths like `/app/algebra/*.mjs` hit the
-  SPA fallback = index.html, which misled the freshness check).** Phase B COMPLETE. Next: Phase C.
+  SPA fallback = index.html, which misled the freshness check).** Phase B COMPLETE + MERGED (PR #83, `718b165`).
+- **2026-07-14 — Phase C GROUNDING FINDING (⚠ revises the Phase-C plan).** Investigating `assumeReal` /
+  `assumeImaginary` + `realAxisSymmetry` (qd-equations.mjs:697): `allReal` ⇒ the complex solution set is
+  **closed under conjugation** (z↦z̄). The real slice (`z̄≡z`) captures the self-conjugate (real) solutions;
+  off-slice solutions come in **conjugate pairs**, and a QD's conjugate is a DISTINCT domain (conjugation ≠
+  the rotation gauge), so the real-slice count genuinely undercounts. **To promote a slice lower bound to `=`
+  you must close the GENERAL (un-sliced) conjugate-model system — but that is POSITIVE-DIMENSIONAL** (z̄, Ā
+  are independent; only the reality assumption ties them down enough to be zero-dimensional — even with the
+  rotation-gauge node + φ(0) fixed, confirmed by Phase A's real-seed DIAG). So the Phase-B tree on the general
+  system usually truncates → no `=`. **Consequence: Phase C's headline "promote lower bounds to `=`" is
+  MATH-LIMITED for the conjugate model.** Honest achievable Phase C = run the complementary imaginary slice +
+  the general system as tree branches, pool-then-quotient to *improve* the lower bound (surface off-slice
+  conjugate-pair QDs when the general tree closes) + label the outstanding gap precisely — rarely `=`. A true
+  `=`-closure needs a CERTIFIED symmetry argument ("real-symmetric data ⇒ every QD is real-symmetric"), proven
+  not asserted. **Decision pending: honest-but-limited Phase C now, vs. reprioritize to Phase D (from-data,
+  a clean mechanical win) / E (transcript UI).**
