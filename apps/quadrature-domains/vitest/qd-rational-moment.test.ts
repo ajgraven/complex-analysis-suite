@@ -38,6 +38,12 @@ describe("rationalMomentSystem (C2-1) — degree-2 multi-node builder", () => {
     for (const p of sysm.polys) expect(vanishesAt(p, { t: [1, 2], d: [1, 4] })).toBe(true);
   });
 
+  it("#4: the builder canonicalizes node order — SWAPPED input yields the SAME system (t=½, d=¼ still solves)", () => {
+    const swapped = { nodes: [{ re: -7 / 15, im: 0 }, { re: 3 / 5, im: 0 }], weights: [{ re: 52 / 225, im: 0 }, { re: 28 / 25, im: 0 }] };
+    const sysm = QE.rationalMomentSystem(swapped, { degree: 2 });
+    for (const p of sysm.polys) expect(vanishesAt(p, { t: [1, 2], d: [1, 4] })).toBe(true);   // NOT d=−¼ — the sort fixes the +t pairing
+  });
+
   it("SYMMETRIC: the known shape (t=½, d=0) EXACTLY satisfies both equations", () => {
     const sysm = QE.rationalMomentSystem(sym, { degree: 2 });
     for (const p of sysm.polys) expect(vanishesAt(p, { t: [1, 2], d: [0, 1] })).toBe(true);

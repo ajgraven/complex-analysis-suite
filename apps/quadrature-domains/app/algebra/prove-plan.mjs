@@ -490,7 +490,9 @@ export function momentUnivalence(w, order, deps) {
     for (let j = 0; j < k - 1; j++) term = term.mul(Z);
     phiP = phiP.add(term);
   }
-  try { const sc = Sym.schurCohn(Sym.uniCoeffs(phiP, 'Z')); return { inside: sc.inside, onCircle: sc.onCircle || 0 }; } catch (e) { return null; }
+  // reliable ⟺ the exact Schur–Cohn resolved (not a degenerate stratum, or resolved past it); an UNRELIABLE
+  // result (dim over the Hermite cap / parity failure — sym-core's honest fallback) must NOT feed a `=` badge.
+  try { const sc = Sym.schurCohn(Sym.uniCoeffs(phiP, 'Z')); return { inside: sc.inside, onCircle: sc.onCircle || 0, reliable: (!sc.degenerate || !!sc.resolved) }; } catch (e) { return null; }
 }
 
 // EXACT boundary-injectivity test for a moment candidate (Phase C1-ext, GLOBAL univalence). Is φ(∂𝔻) a
@@ -553,7 +555,7 @@ export function rationalUnivalence(t, d, deps) {
   const num = gc(1).add(gc(2 * (d || 0)).mul(Z)).add(cC.mul(Z).mul(Z));            // 1 + 2dz + cz²
   let sc; try { sc = Sym.schurCohn(Sym.uniCoeffs(num, 'Z')); } catch (e) { return null; }
   const cNum = tR[0] * tR[0], cDen = tR[1] * tR[1];
-  return { inside: sc.inside, onCircle: sc.onCircle || 0, poleOk: cNum < cDen };   // c = t² < 1
+  return { inside: sc.inside, onCircle: sc.onCircle || 0, poleOk: cNum < cDen, reliable: (!sc.degenerate || !!sc.resolved) };   // c = t² < 1
 }
 
 // C2-2 — GLOBAL univalence for the rational map: is φ(∂𝔻) simple? The divided difference collapses to
@@ -581,7 +583,7 @@ export function triangleUnivalence(c, deps) {
   const Z = Sym.mpolyVar('Z');
   const num = gc(1).add(gc(2 * (c || 0)).mul(Z).mul(Z).mul(Z));                     // 1 + 2c·z³
   let sc; try { sc = Sym.schurCohn(Sym.uniCoeffs(num, 'Z')); } catch (e) { return null; }
-  return { inside: sc.inside, onCircle: sc.onCircle || 0, poleOk: Math.abs(c || 0) < 1 };   // poles outside 𝔻̄ ⟺ |c|<1
+  return { inside: sc.inside, onCircle: sc.onCircle || 0, poleOk: Math.abs(c || 0) < 1, reliable: (!sc.degenerate || !!sc.resolved) };   // poles outside 𝔻̄ ⟺ |c|<1
 }
 
 // C3-2 — GLOBAL univalence for the triangle map: is φ(∂𝔻) simple? The divided difference collapses to
@@ -621,9 +623,8 @@ export function momentCertifyLeaf(real, order, deps, momentPolys) {
   real.forEach((sol, idx) => {
     const w = reconstructMomentW(sol, order);
     const ver = momentExactVerify(sol, momentPolys, order, deps);
-    if (!ver.exact) allVerified = false;
     const u = momentUnivalence(w, order, deps);
-    if (!u) { allExact = false; }
+    if (!u || !u.reliable) allExact = false;                                 // unreliable Schur–Cohn ⇒ not a `=`
     const w1 = (w[1] && w[1].re != null) ? w[1].re : w[1];
     const fold = u ? u.inside > 0 : false;
     const cusps = u ? u.onCircle : 0;
@@ -631,11 +632,13 @@ export function momentCertifyLeaf(real, order, deps, momentPolys) {
     if (fold) { folded++; rows.push('#' + (idx + 1) + ': φ′ = 0 inside 𝔻 (fold, Schur–Cohn) — not univalent'); return; }
     if (!(w1 > 0)) { gaugeDropped++; rows.push('#' + (idx + 1) + ': w₁ = ' + (Math.round(w1 * 1e4) / 1e4) + ' ≤ 0 — rotation-gauge copy (w₁>0 representative kept)'); return; }
     // GLOBAL univalence (C1-ext): φ(∂𝔻) simple via the exact boundary double-point count (SIMPLE ⟺ count
-    // === cusps). Required for order ≥ 3; for order ≤ 2 it confirms A&S. Unavailable ⇒ local-only.
+    // === cusps). Trust it ONLY when the LOCAL Schur–Cohn was reliable (else `cusps` is unreliable and the
+    // count===cusps test could be wrong). Required for order ≥ 3; order ≤ 2 it confirms A&S; else local-only.
     let boundarySimple = true, boundaryExact = false;
-    if (u) { const bs = momentBoundarySimple(w, order, cusps, deps); if (bs) { boundarySimple = bs.simple; boundaryExact = true; } }
+    if (u && u.reliable) { const bs = momentBoundarySimple(w, order, cusps, deps); if (bs) { boundarySimple = bs.simple; boundaryExact = true; } }
     if (!boundaryExact) allBoundaryExact = false;
     if (!boundarySimple) { selfInt++; rows.push('#' + (idx + 1) + ': boundary φ(∂𝔻) self-intersects (real double-point count) — not globally univalent'); return; }
+    if (!ver.exact) allVerified = false;                                     // only GENUINE (kept) candidates gate allVerified
     genuine.push({ w, order, exactPoint: !!ver.exact, cusps, boundaryExact });
     const cuspNote = cusps > 0 ? ' — boundary cusp ×' + cusps : '';
     rows.push('#' + (idx + 1) + ': univalent ✓ — genuine quadrature domain' + cuspNote + (u ? ' (Schur–Cohn' + (boundaryExact ? ' + boundary-simple' : '') + ptNote + ')' : ''));
@@ -658,9 +661,11 @@ export function assembleMomentVerdict(a) {
   const tail = rej ? ' (' + rej + ' rejected)' : '';
   const form = ' · point-functional / Aharonov–Shapiro formulation, order ' + order;
   let verdict;
+  // WORDING honesty: only claim "genuine QD ✓" when GLOBAL univalence is certified (a locally-univalent map
+  // need not be globally injective); otherwise present the count as locally-univalent CANDIDATES.
   if (D === 0) verdict = 'No genuine quadrature domain: ' + real.length + ' real moment solution' + plur + ', none univalent' + tail + '.' + form;
-  else if (D === 1) verdict = 'Unique quadrature domain ✓ — 1 genuine QD of ' + real.length + ' real moment solution' + plur + tail + '.' + form;
-  else verdict = D + ' distinct quadrature domains of ' + real.length + ' real moment solution' + plur + tail + '.' + form;
+  else if (globalCertified) verdict = (D === 1 ? 'Unique quadrature domain ✓ — 1 genuine QD' : D + ' distinct quadrature domains') + ' of ' + real.length + ' real moment solution' + plur + tail + '.' + form;
+  else verdict = D + ' locally-univalent candidate' + (D === 1 ? '' : 's') + ' of ' + real.length + ' real moment solution' + plur + tail + '.' + form;
   if (D >= 1) {
     const atRoot = allVerified ? ' at the exact ℚ(i) root' : ' at rationalized coordinates';
     verdict += leaf.allBoundaryExact
@@ -677,7 +682,7 @@ export function assembleMomentVerdict(a) {
     ? '✓ global univalence: φ(∂𝔻) simple, exact boundary double-point count (SIMPLE ⟺ count === cusps)'
     : (order <= 2 ? '✓ global univalence via Aharonov–Shapiro (order ≤ 2: φ′≠0 in 𝔻 ⇔ univalent)'
                   : '✗ global univalence (only LOCAL φ′≠0 certified; the boundary-simple count was unavailable — order ≥ 3 not certified)'));
-  return { verdict, rigor, bad: D === 0, count: D, rigorProvenance: prov };
+  return { verdict, rigor, bound: rigor === 'exact' ? '=' : '≈', bad: D === 0, count: D, rigorProvenance: prov };
 }
 
 // The moment-route plan (Phase C1): classify the point-functional moment system, certified-solve it, filter
@@ -702,7 +707,7 @@ export async function runMomentPlan(ctx) {
   const leaf = momentCertifyLeaf(real, order, ctx.deps, ctx.momentPolys);
   stage('gauge'); stage('assemble');
   const asm = assembleMomentVerdict({ genuine: leaf.genuine, real, leaf, order, deps: ctx.deps, sliceCaveat: ctx.sliceCaveat, cl });
-  return { kind: 'moment', verdict: asm.verdict, rigor: asm.rigor, bad: asm.bad, count: asm.count, cl, real, certified: true, rows: leaf.rows, rigorProvenance: asm.rigorProvenance, genuine: leaf.genuine, order };
+  return { kind: 'moment', verdict: asm.verdict, rigor: asm.rigor, bound: asm.bound, bad: asm.bad, count: asm.count, cl, real, certified: true, rows: leaf.rows, rigorProvenance: asm.rigorProvenance, genuine: leaf.genuine, order };
 }
 
 // ============================================================================================
@@ -724,7 +729,8 @@ export function reconstructRationalMap(sol, nodeData) {
   const g = (nm) => { const c = sol[nm + '__re']; return c ? c.re : 0; };
   const reOf = (z) => (z && z.re != null) ? z.re : z;
   const t = g('t'), d = g('d');
-  const a1 = reOf(nodeData.nodes[0]), a2 = reOf(nodeData.nodes[1]);
+  let a1 = reOf(nodeData.nodes[0]), a2 = reOf(nodeData.nodes[1]);
+  if (a1 < a2) { const tmp = a1; a1 = a2; a2 = tmp; }                     // canonical: a₁ = larger Re (the +t node ⇒ R>0), matching the builder's node sort
   const c = t * t, om = 1 - c * c;                                        // c = t², om = 1 − t⁴
   const R = (Math.abs(t) > 1e-12 && Math.abs(om) > 1e-12) ? (a1 - a2) * om / (2 * t) : NaN;
   const w0 = (Math.abs(om) > 1e-12) ? (a1 + a2) / 2 - R * d * c / om : NaN;   // d·t² = d·c
@@ -751,21 +757,24 @@ export function rationalCertifyLeaf(real, nodeData, sysPolys, deps) {
   const rows = [], genuine = [], seen = [], rnd = (x) => Math.round(x * 1e4) / 1e4;
   real.forEach((sol, idx) => {
     const m = reconstructRationalMap(sol, nodeData);
+    // Node order is canonicalized (a₁ = larger Re, in both the builder and reconstructRationalMap), so the
+    // genuine (pole-outside, t<1) candidate has R>0 by construction; t≤0 is the rotation-gauge copy, and a
+    // pole-inside (t>1 ⇒ R<0) candidate is caught below by the poleOk check with its own informative reason.
     if (!(m.t > 0)) { gaugeDropped++; rows.push('#' + (idx + 1) + ': t = ' + rnd(m.t) + ' ≤ 0 — rotation-gauge copy (t>0 / R>0 representative kept)'); return; }
     const ver = rationalExactVerify(sol, sysPolys, deps);
-    if (!ver.exact) allVerified = false;
     const u = rationalUnivalence(m.t, m.d, deps);
-    if (!u) allExact = false;
+    if (!u || !u.reliable) allExact = false;                                 // unreliable Schur–Cohn ⇒ not a `=`
     if (u && !u.poleOk) { poleRej++; rows.push('#' + (idx + 1) + ': pole inside 𝔻̄ (c = t² ≥ 1) — not an analytic QD map'); return; }
     const fold = u ? u.inside > 0 : false;
     const cusps = u ? u.onCircle : 0;
     if (fold) { folded++; rows.push('#' + (idx + 1) + ': φ′ = 0 inside 𝔻 (fold, Schur–Cohn) — not univalent'); return; }
     let boundarySimple = true, boundaryExact = false;
-    if (u) { const bs = rationalBoundarySimple(m.t, m.d, cusps, deps); if (bs) { boundarySimple = bs.simple; boundaryExact = true; } }
+    if (u && u.reliable) { const bs = rationalBoundarySimple(m.t, m.d, cusps, deps); if (bs) { boundarySimple = bs.simple; boundaryExact = true; } }
     if (!boundaryExact) allBoundaryExact = false;
     if (!boundarySimple) { selfInt++; rows.push('#' + (idx + 1) + ': boundary φ(∂𝔻) self-intersects (real double-point count) — not globally univalent'); return; }
     if (seen.some((s) => Math.abs(s.c - m.c) < 1e-7 && Math.abs(s.d - m.d) < 1e-7)) { gaugeDropped++; return; }   // same shape (c,d)
     seen.push({ c: m.c, d: m.d });
+    if (!ver.exact) allVerified = false;                                     // only GENUINE (kept) candidates gate allVerified
     const ptNote = ver.exact ? ' [exact ℚ(i) root]' : ' [rationalized ≈]';
     const cuspNote = cusps > 0 ? ' — boundary cusp ×' + cusps : '';
     genuine.push({ ...m, cusps, exactPoint: !!ver.exact, boundaryExact });
@@ -785,9 +794,11 @@ export function assembleRationalVerdict(a) {
   const tail = rej ? ' (' + rej + ' rejected)' : '';
   const form = ' · rational-φ (degree-2 multi-node, Gustafsson) formulation';
   let verdict;
+  // WORDING honesty: "genuine QD ✓" only when GLOBAL univalence is certified (allBoundaryExact); a merely
+  // locally-univalent map need not be a simple domain, so present it as a candidate.
   if (D === 0) verdict = 'No genuine quadrature domain: ' + real.length + ' real shape solution' + plur + ', none univalent' + tail + '.' + form;
-  else if (D === 1) verdict = 'Unique quadrature domain ✓ — 1 genuine QD of ' + real.length + ' real shape solution' + plur + tail + '.' + form;
-  else verdict = D + ' distinct quadrature domains of ' + real.length + ' real shape solution' + plur + tail + '.' + form;
+  else if (leaf.allBoundaryExact) verdict = (D === 1 ? 'Unique quadrature domain ✓ — 1 genuine QD' : D + ' distinct quadrature domains') + ' of ' + real.length + ' real shape solution' + plur + tail + '.' + form;
+  else verdict = D + ' locally-univalent candidate' + (D === 1 ? '' : 's') + ' of ' + real.length + ' real shape solution' + plur + tail + '.' + form;
   if (D >= 1) {
     const atRoot = allVerified ? ' at the exact ℚ(i) root' : ' at rationalized coordinates';
     verdict += leaf.allBoundaryExact
@@ -802,7 +813,7 @@ export function assembleRationalVerdict(a) {
   if (D >= 1) prov.push(leaf.allBoundaryExact
     ? '✓ global univalence: φ(∂𝔻) simple, exact boundary double-point count (SIMPLE ⟺ count === cusps)'
     : '✗ global univalence (only LOCAL φ′≠0 certified; the boundary-simple count was unavailable)');
-  return { verdict, rigor, bad: D === 0, count: D, rigorProvenance: prov };
+  return { verdict, rigor, bound: rigor === 'exact' ? '=' : '≈', bad: D === 0, count: D, rigorProvenance: prov };
 }
 
 // The rational-route plan (Phase C2): classify the rational-φ shape system, certified-solve it in (t, d),
@@ -826,7 +837,7 @@ export async function runRationalPlan(ctx) {
   const leaf = rationalCertifyLeaf(real, ctx.nodeData, ctx.sysPolys, ctx.deps);
   stage('gauge'); stage('assemble');
   const asm = assembleRationalVerdict({ genuine: leaf.genuine, real, leaf, deps: ctx.deps, sliceCaveat: ctx.sliceCaveat, cl });
-  return { kind: 'rational', verdict: asm.verdict, rigor: asm.rigor, bad: asm.bad, count: asm.count, cl, real, certified: true, rows: leaf.rows, rigorProvenance: asm.rigorProvenance, genuine: leaf.genuine, nodeData: ctx.nodeData };
+  return { kind: 'rational', verdict: asm.verdict, rigor: asm.rigor, bound: asm.bound, bad: asm.bad, count: asm.count, cl, real, certified: true, rows: leaf.rows, rigorProvenance: asm.rigorProvenance, genuine: leaf.genuine, nodeData: ctx.nodeData };
 }
 
 // ============================================================================================
@@ -867,19 +878,19 @@ export function triangleCertifyLeaf(real, nodeData, sysPolys, deps) {
     const m = reconstructTriangleMap(sol);
     if (!(m.R > 0) || !(m.s > 0)) { gaugeDropped++; rows.push('#' + (idx + 1) + ': R = ' + rnd(m.R) + ', s = ' + rnd(m.s) + ' — rotation/sign-gauge copy (R>0, s>0 representative kept)'); return; }
     const ver = triangleExactVerify(sol, sysPolys, deps);
-    if (!ver.exact) allVerified = false;
     const u = triangleUnivalence(m.c, deps);
-    if (!u) allExact = false;
+    if (!u || !u.reliable) allExact = false;                                 // unreliable Schur–Cohn ⇒ not a `=`
     if (u && !u.poleOk) { poleRej++; rows.push('#' + (idx + 1) + ': pole inside 𝔻̄ (c = s³ ≥ 1) — not an analytic QD map'); return; }
     const fold = u ? u.inside > 0 : false;
     const cusps = u ? u.onCircle : 0;
     if (fold) { folded++; rows.push('#' + (idx + 1) + ': φ′ = 0 inside 𝔻 (fold, Schur–Cohn) — not univalent'); return; }
     let boundarySimple = true, boundaryExact = false;
-    if (u) { const bs = triangleBoundarySimple(m.c, cusps, deps); if (bs) { boundarySimple = bs.simple; boundaryExact = true; } }
+    if (u && u.reliable) { const bs = triangleBoundarySimple(m.c, cusps, deps); if (bs) { boundarySimple = bs.simple; boundaryExact = true; } }
     if (!boundaryExact) allBoundaryExact = false;
     if (!boundarySimple) { selfInt++; rows.push('#' + (idx + 1) + ': boundary φ(∂𝔻) self-intersects (real double-point count) — not globally univalent'); return; }
     if (seen.some((cv) => Math.abs(cv - m.c) < 1e-7)) { gaugeDropped++; return; }        // same shape c
     seen.push(m.c);
+    if (!ver.exact) allVerified = false;                                     // only GENUINE (kept) candidates gate allVerified
     const ptNote = ver.exact ? ' [exact ℚ(i) root]' : ' [rationalized ≈]';
     const cuspNote = cusps > 0 ? ' — boundary cusp ×' + cusps : '';
     genuine.push({ ...m, cusps, exactPoint: !!ver.exact, boundaryExact });
@@ -899,9 +910,11 @@ export function assembleTriangleVerdict(a) {
   const tail = rej ? ' (' + rej + ' rejected)' : '';
   const form = ' · rational-φ (equilateral triangle, degree-3, Gustafsson) formulation';
   let verdict;
+  // WORDING honesty: "genuine QD ✓" only when GLOBAL univalence is certified (allBoundaryExact); else present
+  // the locally-univalent maps as candidates.
   if (D === 0) verdict = 'No genuine quadrature domain: ' + real.length + ' real shape solution' + plur + ', none univalent' + tail + '.' + form;
-  else if (D === 1) verdict = 'Unique quadrature domain ✓ — 1 genuine QD of ' + real.length + ' real shape solution' + plur + tail + '.' + form;
-  else verdict = D + ' distinct quadrature domains of ' + real.length + ' real shape solution' + plur + tail + '.' + form;
+  else if (leaf.allBoundaryExact) verdict = (D === 1 ? 'Unique quadrature domain ✓ — 1 genuine QD' : D + ' distinct quadrature domains') + ' of ' + real.length + ' real shape solution' + plur + tail + '.' + form;
+  else verdict = D + ' locally-univalent candidate' + (D === 1 ? '' : 's') + ' of ' + real.length + ' real shape solution' + plur + tail + '.' + form;
   if (D >= 1) {
     const atRoot = allVerified ? ' at the exact ℚ(i) root' : ' at rationalized coordinates';
     verdict += leaf.allBoundaryExact
@@ -916,7 +929,7 @@ export function assembleTriangleVerdict(a) {
   if (D >= 1) prov.push(leaf.allBoundaryExact
     ? '✓ global univalence: φ(∂𝔻) simple, exact boundary double-point count (SIMPLE ⟺ count === cusps)'
     : '✗ global univalence (only LOCAL φ′≠0 certified; the boundary-simple count was unavailable)');
-  return { verdict, rigor, bad: D === 0, count: D, rigorProvenance: prov };
+  return { verdict, rigor, bound: rigor === 'exact' ? '=' : '≈', bad: D === 0, count: D, rigorProvenance: prov };
 }
 
 // The triangle-route plan (Phase C3): classify → certified real solve in (R, s) → filter univalence → gauge
@@ -940,5 +953,5 @@ export async function runTrianglePlan(ctx) {
   const leaf = triangleCertifyLeaf(real, ctx.nodeData, ctx.sysPolys, ctx.deps);
   stage('gauge'); stage('assemble');
   const asm = assembleTriangleVerdict({ genuine: leaf.genuine, real, leaf, sliceCaveat: ctx.sliceCaveat, cl });
-  return { kind: 'triangle', verdict: asm.verdict, rigor: asm.rigor, bad: asm.bad, count: asm.count, cl, real, certified: true, rows: leaf.rows, rigorProvenance: asm.rigorProvenance, genuine: leaf.genuine, nodeData: ctx.nodeData };
+  return { kind: 'triangle', verdict: asm.verdict, rigor: asm.rigor, bound: asm.bound, bad: asm.bad, count: asm.count, cl, real, certified: true, rows: leaf.rows, rigorProvenance: asm.rigorProvenance, genuine: leaf.genuine, nodeData: ctx.nodeData };
 }
