@@ -848,6 +848,57 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
     return { polys, vars, params };
   }
 
+  // C2-1 — the MULTI-NODE (rational-φ) moment-match system, the rational analog of pointFunctionalSystem.
+  // A classical bounded quadrature domain of order n has a Riemann map φ:𝔻→Ω that is RATIONAL of degree n
+  // (Gustafsson); the single-node polynomial route (pointFunctionalSystem) cannot represent >1 node. For
+  // DEGREE 2 (2 nodes) the gauge-fixed general map is  φ(z) = w0 + R·(z + d·z²)/(1 − c·z²)  (w0=φ(0), R=φ′(0)
+  // rotation gauge, poles ±1/√c outside 𝔻̄), whose real-parameter count (7 incl. complex w0,d,c + real R)
+  // matches the degree-2 QD-map moduli. On |z|=1 the Schwarz function gives the DATA MAP (nodes = the poles of
+  // S(φ(z)), weights = residues), which inverts to a REAL zero-dimensional system in the map coefficients —
+  // certified-solvable + count-able exactly, exactly like C1 (spikes: symmetric + asymmetric both zero-dim,
+  // realCount=1 on the full data; see docs/algebra-review/RATIONAL_MOMENT_C2.md).
+  //
+  // THIS INCREMENT: degree 2, REAL data only (nodes on the real axis, real weights — covers two-point-symmetric
+  // + any real-axis-symmetric 2-node h). The gauge unknowns w0=φ(0) and R=φ′(0) are LINEAR in the node
+  // equations, so we eliminate them analytically (node[0]↦+t, node[1]↦−t):
+  //   R = (a₁ − a₂)(1 − t⁴)/(2t)         [from node₁ − node₂]
+  //   w0 = (a₁ + a₂)/2 − R·d·t²/(1 − t⁴) [from node₁ + node₂]
+  // Substituting R into the two weight equations (the (1−t⁴)² cancels) leaves the ZERO-DIMENSIONAL shape
+  // system in (t = √c, d):
+  //   8·b₁·t³ − (a₁ − a₂)²·(t + d)(1 + 2dt + t⁴) = 0
+  //   8·b₂·t³ − (a₁ − a₂)²·(t − d)(1 − 2dt + t⁴) = 0
+  // This avoids the spurious positive-dimensional component {t⁴=1, R=0, w0/d free} (a pole on ∂𝔻 with a
+  // degenerate map) that keeping w0,R as unknowns introduces. w0, R, c=t² are RECONSTRUCTED from (t,d) + the
+  // data downstream (C2-3), exactly as C1 reconstructs φ from the wₖ. Variables ['t','d']; coefficient field
+  // ℚ. Returns { polys, vars, params }. Complex (off-axis) node data throws (the reim-split is a later increment).
+  function rationalMomentSystem(data, opts) {
+    const S = getSym();
+    if (!S) throw new Error('QD.QDEquations: QD.Sym not loaded');
+    const { mpolyVar: mv, mpolyInt: mi, mpolyConst: mc, gauss, rat } = S;
+    const degree = (opts && opts.degree) || 2;
+    if (degree !== 2) throw new Error('rationalMomentSystem: only degree 2 (2-node) is supported in this increment');
+    const nodes = (data && data.nodes) || [], weights = (data && data.weights) || [];
+    if (nodes.length !== 2 || weights.length !== 2) throw new Error('rationalMomentSystem: degree 2 needs exactly 2 nodes and 2 weights');
+    const reOf = (z) => (z && typeof z === 'object' && z.re != null) ? z.re : z;
+    const imOf = (z) => (z && typeof z === 'object' && z.im != null) ? z.im : 0;
+    if (![...nodes, ...weights].every((z) => Math.abs(imOf(z)) < 1e-9))
+      throw new Error('rationalMomentSystem: complex (off-axis) node data is not yet supported — degree-2 REAL only in this increment');
+    const Q = (x) => { const [n, dd] = _ratApprox(x || 0); return mc(gauss(rat(n, dd), rat(0, 1))); };   // exact ℚ const
+    const a1 = Q(reOf(nodes[0])), a2 = Q(reOf(nodes[1])), b1 = Q(reOf(weights[0])), b2 = Q(reOf(weights[1]));
+    const A = a1.sub(a2);                                                 // exact node gap a₁ − a₂
+    if (A.isZero()) throw new Error('rationalMomentSystem: the two nodes coincide (not a 2-node quadrature domain)');
+    const A2 = A.mul(A);                                                  // exact (a₁ − a₂)²
+    const d = mv('d'), t = mv('t');
+    const t3 = t.mul(t).mul(t), t4 = t3.mul(t);
+    const p1 = mi(1).add(mi(2).mul(d).mul(t)).add(t4);                    // 1 + 2dt + t⁴
+    const m1 = mi(1).sub(mi(2).mul(d).mul(t)).add(t4);                    // 1 − 2dt + t⁴
+    const polys = [
+      mi(8).mul(b1).mul(t3).sub(A2.mul(t.add(d)).mul(p1)),               // 8 b₁ t³ − A²(t+d)(1+2dt+t⁴)
+      mi(8).mul(b2).mul(t3).sub(A2.mul(t.sub(d)).mul(m1)),               // 8 b₂ t³ − A²(t−d)(1−2dt+t⁴)
+    ].filter((p) => !p.isZero());
+    return { polys, vars: ['t', 'd'], params: [] };
+  }
+
   // Classical BOUNDED QD gate (the bounded analog of the Faber UQD gate): bounded,
   // no weighted-family markers, and a φ with one branch per pole (so the bounded
   // {z_j, A_{j,k}} representation is present). PQD/LQD carry alpha/lqdBeta/z0/gamma/q
@@ -952,7 +1003,7 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
   }
 
   const QDEquations = {
-    generateClassicalBounded, generateSchwarzBounded, pointFunctionalSystem, reimSplit, realAxisSymmetry,
+    generateClassicalBounded, generateSchwarzBounded, pointFunctionalSystem, rationalMomentSystem, reimSplit, realAxisSymmetry,
     isClassicalBounded, boundaryCurve, boundaryCurveFromPhi,   // exact Schwarz curve Q(w,w̄)=0 + rational S(w) from a (solved) QD
     residualAtSolution, residualReimAtSolution, verifySolutionExact,   // exact ℚ(i) solution verification (PF-1/E1)
     buildVarMap, buildRealVarMap,
