@@ -514,6 +514,19 @@ export function momentBoundarySimple(w, order, cusps, deps) {
     for (let j = 0; j <= k - 1; j++) { let t = gc(1, 0); for (let aa = 0; aa < j; aa++) t = t.mul(Z1); for (let bb = 0; bb < k - 1 - j; bb++) t = t.mul(Z2); inner = inner.add(t); }
     N = N.add(gc(wk.re || 0, wk.im || 0).mul(inner));
   }
+  return boundarySimpleFromN(N, cusps, deps);
+}
+
+// Shared core of the exact boundary double-point count (used by BOTH the polynomial moment route and the
+// rational C2 route — the condition is formulation-agnostic once the divided difference N is built). Given
+// N(Z₁,Z₂) — an MPoly in vars 'Z1','Z2' over ℚ(i) with N(z₁,z₂)=0 ⟺ φ(z₁)=φ(z₂) for z₁≠z₂ — substitute
+// ζ→x+iy, append the two unit-circle quadrics, and count the REAL solutions on the torus via
+// Sym.realSolutionCount. SIMPLE ⟺ count === cusps (each boundary cusp = one diagonal solution). Returns
+// { simple } or null (positive-dim / over the Hermite cap / unavailable ⇒ caller falls back to local-only).
+export function boundarySimpleFromN(N, cusps, deps) {
+  const Sym = deps && deps.QD && deps.QD.Sym;
+  if (!Sym || !N || typeof Sym.realSolutionCount !== 'function' || typeof Sym.mpolyVar !== 'function') return null;
+  const iC = Sym.mpolyConst(Sym.gauss(Sym.rat(0, 1), Sym.rat(1, 1)));
   const cx = (x, y) => Sym.mpolyVar(x).add(iC.mul(Sym.mpolyVar(y)));
   let Nr; try { Nr = N.subst({ Z1: cx('x1', 'y1'), Z2: cx('x2', 'y2') }); } catch (e) { return null; }
   const circ = (x, y) => Sym.mpolyVar(x).pow(2).add(Sym.mpolyVar(y).pow(2)).sub(Sym.mpolyInt(1));
@@ -521,6 +534,40 @@ export function momentBoundarySimple(w, order, cusps, deps) {
   let r; try { r = Sym.realSolutionCount(sys, null, ['x1', 'y1', 'x2', 'y2'], {}); } catch (e) { return null; }
   if (!r || !r.ok) return null;
   return { simple: r.realCount === (cusps || 0) };
+}
+
+// C2-2 — LOCAL univalence for the degree-2 rational QD map φ(z) = w0 + R(z + d·z²)/(1 − c·z²), c = t².
+// Univalence is a property of the SHAPE only (w0, R = translation/rotation/positive-scale preserve
+// injectivity), so it depends on (t, d) alone. φ′ = R(1 + 2dz + cz²)/(1 − cz²)², so φ′≠0 in 𝔻 ⟺ the
+// numerator 1 + 2dz + cz² has no root in 𝔻 (Schur–Cohn), AND the poles ±1/√c lie outside 𝔻̄ (c = t² < 1).
+// Returns { inside, onCircle, poleOk } (inside>0 ⇒ fold; onCircle = boundary cusps; poleOk=false ⇒ the map
+// is not analytic in 𝔻 — reject) or null if unavailable. (t, d) numeric ⇒ rationalized; c is kept = t²
+// exactly from the rationalized t so the test runs at a consistent point.
+export function rationalUnivalence(t, d, deps) {
+  const Sym = deps && deps.QD && deps.QD.Sym, QE = deps && deps.QE;
+  if (!Sym || !QE || typeof QE.ratApprox !== 'function' || typeof Sym.schurCohn !== 'function' || typeof Sym.uniCoeffs !== 'function') return null;
+  const gc = (x) => { const a = QE.ratApprox(x || 0); return Sym.mpolyConst(Sym.gauss(Sym.rat(a[0], a[1]), Sym.rat(0, 1))); };
+  const tR = QE.ratApprox(t || 0);
+  const cC = Sym.mpolyConst(Sym.gauss(Sym.rat(tR[0] * tR[0], tR[1] * tR[1]), Sym.rat(0, 1)));   // c = t² exact
+  const Z = Sym.mpolyVar('Z');
+  const num = gc(1).add(gc(2 * (d || 0)).mul(Z)).add(cC.mul(Z).mul(Z));            // 1 + 2dz + cz²
+  let sc; try { sc = Sym.schurCohn(Sym.uniCoeffs(num, 'Z')); } catch (e) { return null; }
+  const cNum = tR[0] * tR[0], cDen = tR[1] * tR[1];
+  return { inside: sc.inside, onCircle: sc.onCircle || 0, poleOk: cNum < cDen };   // c = t² < 1
+}
+
+// C2-2 — GLOBAL univalence for the rational map: is φ(∂𝔻) simple? The divided difference collapses to
+// N(Z₁,Z₂) = 1 + c·Z₁Z₂ + d(Z₁+Z₂) (c = t²), since φ(z₁)−φ(z₂) = (z₁−z₂)·N/[(1−cz₁²)(1−cz₂²)]. Count its
+// real double points on the torus (boundarySimpleFromN): SIMPLE ⟺ count === cusps. Returns { simple } or null.
+export function rationalBoundarySimple(t, d, cusps, deps) {
+  const Sym = deps && deps.QD && deps.QD.Sym, QE = deps && deps.QE;
+  if (!Sym || !QE || typeof QE.ratApprox !== 'function' || typeof Sym.mpolyVar !== 'function') return null;
+  const gc = (x) => { const a = QE.ratApprox(x || 0); return Sym.mpolyConst(Sym.gauss(Sym.rat(a[0], a[1]), Sym.rat(0, 1))); };
+  const tR = QE.ratApprox(t || 0);
+  const cC = Sym.mpolyConst(Sym.gauss(Sym.rat(tR[0] * tR[0], tR[1] * tR[1]), Sym.rat(0, 1)));   // c = t² exact
+  const Z1 = Sym.mpolyVar('Z1'), Z2 = Sym.mpolyVar('Z2');
+  const N = gc(1).add(cC.mul(Z1).mul(Z2)).add(gc(d || 0).mul(Z1.add(Z2)));         // 1 + c Z₁Z₂ + d(Z₁+Z₂)
+  return boundarySimpleFromN(N, cusps, deps);
 }
 
 // PF-1 for the moment route: snap each real coordinate to a nearby simple rational and check it solves
