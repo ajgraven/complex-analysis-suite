@@ -123,12 +123,18 @@ is 3-fold equivariant (φ(ωz)=ωφ(z)), so — the degree-3 analog of the symme
   Validated numerically (Green's area + the ∫w³ moment `∫_Ω w³ dA = π·3·b·|a|³`).
 - Divided difference collapses to `N(z₁,z₂) = 1 + c·z₁z₂(z₁+z₂)` (a cubic) — the degree-3 analog of the
   degree-2 `1 + c·z₁z₂ + d(z₁+z₂)`.
-- Inverse (spike): with s=c^{1/3}, the eq for |a| SQUARED to stay over ℚ gives the ZERO-DIM system in (R, s):
-  `R²s² − |a|²(1−s⁶)² = 0`, `R²(1+2s⁶) − 3b(1−s⁶)² = 0`. `two-point`-style: the equilateral-triangle preset
-  (|a|=1, b=1) recovers c ≈ 0.221 (a root of 2v³−3v+1, v=c^{2/3}); its shape is irrational ⇒ honest `≈`.
+- Inverse: with s=c^{1/3} AND **P = R²** (both equations are even in R — solving in P keeps them LINEAR in P,
+  eliminating P gives a univariate in s: fast + non-degenerate; the raw R² form degenerates the RUR resolvent
+  and the certified solve returns null coordinates), the eq for |a| SQUARED to stay over ℚ gives the ZERO-DIM
+  system in (P, s): `P·s² − |a|²(1−s⁶)² = 0`, `P(1+2s⁶) − 3b(1−s⁶)² = 0`; c=s³, R=√P. The equilateral-triangle
+  preset (|a|=1, b=1) recovers c ≈ 0.221 (a root of 2v³−3v+1, v=c^{2/3}); its shape is irrational ⇒ honest `≈`.
 
-**C3-1 SHIPPED:** `QE.triangleMomentSystem(data)` — the reduced (R, s) system, guarded by the rational
-ground-truth oracle (R=63/32, s=½, c=⅛ ⇒ cube-root nodes, weight 11/8) + zero-dim + the symmetry rejections
-(non-equilateral / off-centre / unequal weights). NEXT = C3-2 (univalence for the degree-3 map: φ′ numerator
-1+2cz³, boundary via `N=1+c·z₁z₂(z₁+z₂)`) → C3-3 (reconstruct + verdict) → C3-4 (detect triangular data +
-route + thumbnail). Degree-3 EQUILATERAL only; general asymmetric 3-node stays the frontier.
+**C3-1 + C3-2 + C3-3 SHIPPED:** `QE.triangleMomentSystem(data)` — the reduced (P, s) system, guarded by the
+rational ground-truth oracle (P=(63/32)²=3969/1024, s=½, c=⅛ ⇒ cube-root nodes, weight 11/8) + zero-dim + the
+symmetry rejections (non-equilateral / off-centre / unequal weights); `triangleUnivalence(c)` (Schur–Cohn on
+1+2cz³ + pole |c|<1) + `triangleBoundarySimple(c)` (N=1+c·z₁z₂(z₁+z₂) → `boundarySimpleFromN`);
+`reconstructTriangleMap`/`triangleCertifyLeaf`/`assembleTriangleVerdict`/`runTrianglePlan` (kind `'triangle'`,
+E2E: the preset proves Unique ✓ recovering c=⅛, fast). ⚠ PF-1 snaps SIMPLE certified roots to `=`; a Sturm-
+floated complex rational (e.g. P=3969/1024) may miss the snap ⇒ honest `≈` (the same interval/number-field
+`=` gap noted for irrational shapes). NEXT = C3-4 (detect equilateral 3-node data → route + degree-3
+thumbnail). Degree-3 EQUILATERAL only; general asymmetric 3-node stays the frontier.

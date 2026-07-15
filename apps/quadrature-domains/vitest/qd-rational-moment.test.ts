@@ -77,20 +77,20 @@ describe("triangleMomentSystem (C3-1) — equilateral (3-fold symmetric) degree-
   const cubeRoots = [{ re: 1, im: 0 }, { re: -0.5, im: W }, { re: -0.5, im: -W }];
   const tri = { nodes: cubeRoots, weights: [{ re: 11 / 8, im: 0 }, { re: 11 / 8, im: 0 }, { re: 11 / 8, im: 0 }] };
 
-  it("emits the reduced degree-3 symmetric system: 2 polys in [R, s]", () => {
+  it("emits the reduced degree-3 symmetric system: 2 polys in [P, s] (P = R²)", () => {
     const sysm = QE.triangleMomentSystem(tri);
-    expect(sysm.vars).toEqual(["R", "s"]);
+    expect(sysm.vars).toEqual(["P", "s"]);
     expect(sysm.polys.length).toBe(2);
   });
 
-  it("the known map (R=63/32, s=½) EXACTLY satisfies both equations", () => {
+  it("the known map (P=(63/32)²=3969/1024, s=½) EXACTLY satisfies both equations", () => {
     const sysm = QE.triangleMomentSystem(tri);
-    for (const p of sysm.polys) expect(vanishesAt(p, { R: [63, 32], s: [1, 2] })).toBe(true);
+    for (const p of sysm.polys) expect(vanishesAt(p, { P: [3969, 1024], s: [1, 2] })).toBe(true);
   });
 
   it("a wrong shape does NOT satisfy the system (the oracle has teeth)", () => {
     const sysm = QE.triangleMomentSystem(tri);
-    expect(sysm.polys.some((p: any) => !vanishesAt(p, { R: [63, 32], s: [1, 3] }))).toBe(true);
+    expect(sysm.polys.some((p: any) => !vanishesAt(p, { P: [3969, 1024], s: [1, 3] }))).toBe(true);
   });
 
   it("is ZERO-DIMENSIONAL with a finite real solution set", () => {

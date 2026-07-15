@@ -903,12 +903,15 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
   // rational; the equilateral case (3 nodes at |a|·{1,ω,ω²}, equal weight b, centroid 0) is 3-fold equivariant
   // (φ(ωz)=ωφ(z)), so — the degree-3 analog of the symmetric 2-node — it is φ(z) = R·z/(1 − c·z³) with a SINGLE
   // real shape parameter c (poles ±c^{-1/3}·{1,ω,ω²} outside 𝔻̄ ⟺ c<1). On |z|=1 the Schwarz function gives
-  // nodes at R·c^{1/3}/(1−c²)·{1,ω,ω²} and weight b = R²(1+2c²)/(3(1−c²)²). With s = c^{1/3} the inverse — the
-  // eq for |a| SQUARED to stay over ℚ (|a|² = |a|·conj rational even when |a| is not) — is the ZERO-DIM system:
-  //   R²·s² − |a|²·(1 − s⁶)² = 0
-  //   R²·(1 + 2 s⁶) − 3·b·(1 − s⁶)² = 0
-  // in (R, s). The ±R / ±s gauge is quotiented downstream (R>0, s>0); c = s³. Variables ['R','s']; field ℚ.
-  // Non-equilateral / off-centre / complex-weight data throws (general degree-3 is a later increment).
+  // nodes at R·c^{1/3}/(1−c²)·{1,ω,ω²} and weight b = R²(1+2c²)/(3(1−c²)²). With s = c^{1/3} AND P = R² (both
+  // equations are even in R, so solving in P=R² keeps them LINEAR in P — eliminating P gives a univariate in s,
+  // fast + non-degenerate; the raw R² form degenerates the RUR resolvent), the ZERO-DIM system is (|a| SQUARED
+  // to stay over ℚ):
+  //   P·s² − |a|²·(1 − s⁶)² = 0
+  //   P·(1 + 2 s⁶) − 3·b·(1 − s⁶)² = 0
+  // in (P, s). c = s³, R = √P (P>0). The s-sign gauge (nodes at 0/120/240 ⟺ s>0) is quotiented downstream.
+  // Variables ['P','s']; field ℚ. Non-equilateral / off-centre / complex-weight data throws (general degree-3
+  // is a later increment). PRECONDITION: canonical orientation (one node on the +real axis — the preset is).
   function triangleMomentSystem(data) {
     const S = getSym();
     if (!S) throw new Error('QD.QDEquations: QD.Sym not loaded');
@@ -927,13 +930,13 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
     if (!(A2 > 1e-12) || !(b0 > 1e-12)) throw new Error('triangleMomentSystem: degenerate node magnitude or weight');
     const Q = (x) => { const [n, d] = _ratApprox(x || 0); return mc(gauss(rat(n, d), rat(0, 1))); };   // exact ℚ const
     const A2c = Q(A2), Bc = Q(b0);
-    const R = mv('R'), s = mv('s'), s6 = s.pow(6), one = mi(1), om = one.sub(s6);
-    const R2 = R.mul(R), s2 = s.mul(s), om2 = om.mul(om);
+    const P = mv('P'), s = mv('s'), s6 = s.pow(6), one = mi(1), om = one.sub(s6);   // P = R²
+    const s2 = s.mul(s), om2 = om.mul(om);
     const polys = [
-      R2.mul(s2).sub(A2c.mul(om2)),                                       // R²s² − |a|²(1−s⁶)²
-      R2.mul(one.add(mi(2).mul(s6))).sub(mi(3).mul(Bc).mul(om2)),         // R²(1+2s⁶) − 3b(1−s⁶)²
+      P.mul(s2).sub(A2c.mul(om2)),                                        // P·s² − |a|²(1−s⁶)²
+      P.mul(one.add(mi(2).mul(s6))).sub(mi(3).mul(Bc).mul(om2)),          // P(1+2s⁶) − 3b(1−s⁶)²
     ].filter((p) => !p.isZero());
-    return { polys, vars: ['R', 's'], params: [] };
+    return { polys, vars: ['P', 's'], params: [] };
   }
 
   // Classical BOUNDED QD gate (the bounded analog of the Faber UQD gate): bounded,
