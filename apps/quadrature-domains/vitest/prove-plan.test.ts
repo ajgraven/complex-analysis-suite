@@ -513,3 +513,45 @@ describe("prove-plan (8) moment route — point-functional / Aharonov–Shapiro 
     expect(asm.verdict).toContain("1 self-intersecting");
   });
 });
+
+describe("prove-plan (9) rational-φ univalence — the multi-node route (Phase C2-2)", () => {
+  const rdeps = { QE, QD };
+
+  it("rationalUnivalence: the ground-truth shape (t=½, d=¼) is locally univalent, poles outside 𝔻̄", () => {
+    // φ=(z+¼z²)/(1−¼z²): φ′ numerator 1+½z+¼z² has roots −1±i√3 (|z|=2), so no fold.
+    const u: any = PROVE.rationalUnivalence(0.5, 0.25, rdeps);
+    expect(u).not.toBeNull();
+    expect(u.inside).toBe(0);
+    expect(u.onCircle).toBe(0);
+    expect(u.poleOk).toBe(true);       // c = t² = ¼ < 1
+  });
+
+  it("rationalUnivalence: a large-d shape folds (φ′ numerator vanishes inside 𝔻)", () => {
+    // t=½ (c=¼), d=2: 1+4z+¼z² has a root at ≈ −0.25 (inside 𝔻) ⇒ inside ≥ 1.
+    const u: any = PROVE.rationalUnivalence(0.5, 2, rdeps);
+    expect(u.inside).toBeGreaterThanOrEqual(1);
+  });
+
+  it("rationalUnivalence: a pole inside 𝔻̄ (t ≥ 1 ⇒ c ≥ 1) is flagged not-analytic", () => {
+    const u: any = PROVE.rationalUnivalence(1.5, 0, rdeps);   // c = 2.25 ≥ 1
+    expect(u.poleOk).toBe(false);
+  });
+
+  it("rationalBoundarySimple: the asymmetric ground truth φ(∂𝔻) is simple (count === cusps = 0)", () => {
+    const u: any = PROVE.rationalUnivalence(0.5, 0.25, rdeps);
+    const bs: any = PROVE.rationalBoundarySimple(0.5, 0.25, u.onCircle, rdeps);
+    expect(bs).not.toBeNull();
+    expect(bs.simple).toBe(true);
+  });
+
+  it("rationalBoundarySimple: the symmetric shape (d=0) is simple", () => {
+    const u: any = PROVE.rationalUnivalence(0.5, 0, rdeps);
+    const bs: any = PROVE.rationalBoundarySimple(0.5, 0, u.onCircle, rdeps);
+    expect(bs.simple).toBe(true);
+  });
+
+  it("boundarySimpleFromN returns null without the Sym engine", () => {
+    expect(PROVE.boundarySimpleFromN(null, 0, {})).toBeNull();
+    expect(PROVE.rationalUnivalence(0.5, 0.25, {})).toBeNull();      // missing deps
+  });
+});
