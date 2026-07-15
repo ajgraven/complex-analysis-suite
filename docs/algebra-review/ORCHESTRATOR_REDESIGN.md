@@ -356,3 +356,17 @@ are additive and low-risk. Order-of-magnitude: 5 PRs, comparable in aggregate to
   1367 vitest + 2261 QD headless green; browser-verified (cardioid ✦ Prove now reads "φ′≠0 in 𝔻 + φ(∂𝔻)
   simple certified (Schur–Cohn + exact boundary double-point count) ⇒ globally univalent", row "+ boundary-
   simple", still Unique ✓ `=`). **NEXT = C1-ext-B: surface the moment φ=Σw_k zᵏ in the QD plot.**
+- **2026-07-15 — C1-ext-B: surface the reconstructed moment map φ in the verdict thumbnail.** The moment
+  route's genuine map is the POLYNOMIAL Riemann map φ(z) = a + Σ_{k=1}^{order} w_k zᵏ (a = φ(0) = the
+  quadrature node), so its boundary φ(∂𝔻) is a direct trig sum of the coefficients — no elimination, no
+  (z_j,A) ansatz, no `evalPhi`. New pure helper `momentPlotData(w, order, node, opts)` in
+  `domain-mini-plot.mjs` returns the same `{boundary,nodes,view}` the canvas already renders; `renderProofVerdict`
+  computes it inline for the `'moment'` kind (first genuine when several) and passes `plot` + a `plotCaption`
+  override ("reconstructed domain φ(∂𝔻) = a + Σ wₖzᵏ · node a = φ(0)"); `doProveMoment` threads `pr.node =
+  pf.node`; the canvas gained a one-line `data.plotCaption ||` fallback. +5 tests (incl. a cross-check that the
+  coefficient route ≡ the app's `QD.evalPhi` on the cardioid to 1e-9). 1372 vitest + 2261 QD headless green;
+  browser-verified — the cardioid ✦ Prove now draws the cardioid (boundary path starts at the nose φ(1)=1.5,
+  single node at the origin, viewBox matches the true extent). **C1 (point-functional / moment) is now
+  complete: certified real solve → Schur–Cohn + exact boundary count (rigorous `=` at all orders) → gauge
+  quotient → verdict → reconstructed-φ thumbnail.** C2 (general multi-pole) remains DEFERRED (conjugate
+  model intractable).
