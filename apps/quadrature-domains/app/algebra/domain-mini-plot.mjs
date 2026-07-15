@@ -114,3 +114,34 @@ export function rationalPlotData(m, nodes, opts) {
   const bw = maxX - minX, bh = maxY - minY, pad = 0.1 * Math.max(bw, bh, 1e-6);
   return { boundary, nodes: nds, view: [minX - pad, minY - pad, bw + 2 * pad, bh + 2 * pad] };
 }
+
+// trianglePlotData(m, nodes, opts) → { boundary, nodes, view } for the EQUILATERAL-TRIANGLE route (Phase C3).
+// The genuine map is φ(z) = R·z/(1 − c·z³) (real R, c<1, centred at 0), so its boundary φ(∂𝔻) samples straight
+// from the reconstructed shape. Pure.  m: { c, R } (numeric); nodes: the 3 quadrature nodes to mark.
+export function trianglePlotData(m, nodes, opts) {
+  opts = opts || {};
+  const N = Math.max(24, opts.samples || 240);
+  if (!m || m.R == null || m.c == null || !(Math.abs(m.c) < 1)) return null;
+  const c = m.c, R = m.R;
+  const boundary = [];
+  for (let k = 0; k < N; k++) {
+    const th = (2 * Math.PI * k) / N, zr = Math.cos(th), zi = Math.sin(th);
+    const z3r = zr * (zr * zr - 3 * zi * zi), z3i = zi * (3 * zr * zr - zi * zi);   // z³
+    const dr = 1 - c * z3r, di = -c * z3i;             // 1 − c z³ (c real)
+    const den = dr * dr + di * di;
+    if (den < 1e-14) return null;                       // a pole hit the circle
+    const nr = R * zr, ni = R * zi;                     // R z
+    const re = (nr * dr + ni * di) / den, im = (ni * dr - nr * di) / den;   // Rz/(1−cz³)
+    if (!isFinite(re) || !isFinite(im)) return null;
+    boundary.push([re, -im]);                           // SVG y grows downward
+  }
+  const nds = (nodes || []).map((a) => { const ar = (a && a.re != null) ? a.re : (a || 0), ai = (a && a.im != null) ? a.im : 0; return [ar, ai ? -ai : 0]; });
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const [x, y] of boundary) {
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+  }
+  if (!isFinite(minX) || !isFinite(minY)) return null;
+  const bw = maxX - minX, bh = maxY - minY, pad = 0.1 * Math.max(bw, bh, 1e-6);
+  return { boundary, nodes: nds, view: [minX - pad, minY - pad, bw + 2 * pad, bh + 2 * pad] };
+}

@@ -136,5 +136,22 @@ symmetry rejections (non-equilateral / off-centre / unequal weights); `triangleU
 `reconstructTriangleMap`/`triangleCertifyLeaf`/`assembleTriangleVerdict`/`runTrianglePlan` (kind `'triangle'`,
 E2E: the preset proves Unique ✓ recovering c=⅛, fast). ⚠ PF-1 snaps SIMPLE certified roots to `=`; a Sturm-
 floated complex rational (e.g. P=3969/1024) may miss the snap ⇒ honest `≈` (the same interval/number-field
-`=` gap noted for irrational shapes). NEXT = C3-4 (detect equilateral 3-node data → route + degree-3
-thumbnail). Degree-3 EQUILATERAL only; general asymmetric 3-node stays the frontier.
+`=` gap noted for irrational shapes). **C3-4 SHIPPED (the C3 route is COMPLETE):** `multiNodeTriangleData(hData)`
+(3 equal-magnitude real-weight nodes, centroid 0) → `doProveTriangle` (seed `triangleMomentSystem` →
+`runTrianglePlan`), routed AFTER the 2-node rational check; `renderProofVerdict` handles kind `'triangle'`;
+`trianglePlotData` samples φ=Rz/(1−cz³) for the thumbnail. **Browser-verified:** the equilateral-triangle preset
+(nodes 1,ω,ω², weight 1) routes here, reads *"Unique quadrature domain ✓ … rational-φ (equilateral triangle,
+degree-3, Gustafsson)"*, and draws the rounded-triangle domain (3 nodes, φ(1)≈2.019); honest `≈` (irrational
+shape c≈0.221). Degree-3 EQUILATERAL only; general asymmetric 3-node stays the frontier.
+
+## 8. Overall status — Phase C is COMPLETE
+
+The **whole ✦ Prove routing** now handles, in order: single quadrature node with real M₀ → **C1** (moment /
+Aharonov–Shapiro, polynomial φ); 2 real nodes → **C2** (rational φ=w₀+R(z+dz²)/(1−cz²)); 3 equal-magnitude
+real-weight nodes → **C3** (equilateral triangle, φ=Rz/(1−cz³)); everything else → the honest `(●)/(★)` tree
+(lower bound). Each tractable route is REAL, zero-dimensional, certified-solvable, univalence-filtered
+(Schur–Cohn + exact boundary double-point count via the shared `boundarySimpleFromN`), gauge-quotiented, and
+draws its reconstructed-φ thumbnail. `=` when PF-1 snaps the exact root, honest `≈` otherwise.
+
+**Deferred frontier:** general asymmetric / off-centre multi-node (needs the complex reim-split builder +
+higher-degree ansätze); interval / number-field certifier to upgrade irrational-shape `≈` to `=`.
