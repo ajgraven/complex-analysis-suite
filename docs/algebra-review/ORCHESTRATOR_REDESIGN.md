@@ -340,3 +340,19 @@ are additive and low-risk. Order-of-magnitude: 5 PRs, comparable in aggregate to
   (37 total). **Scope:** C1 = point-functional (`=`, off-slice-complete, order ≤ 2 rigorous); C2 = general
   multi-pole (conjugate model, research-limited, honest lower bound) — DEFERRED. Gate + browser-verify + PR
   in progress.
+- **2026-07-15 — C1-ext-A: exact boundary double-point count (global univalence for order ≥ 3), MERGED
+  as PR #86 follow-on.** C1's headline gap was that global univalence (⇒ rigorous `=`) was only proven for
+  order ≤ 2 (the A&S theorem); order ≥ 3 read a LOCAL-only `estimate`. Fix: `momentBoundarySimple(w, order,
+  cusps, deps)` builds the divided-difference N(Z₁,Z₂)=Σ_k w_k Σ_{j<k} Z₁ʲZ₂^{k-1-j}, substitutes ζ→x+iy
+  with two circle quadrics, and runs `Sym.realSolutionCount` on the reim system — `φ(∂𝔻)` is **simple ⟺
+  count === cusps** (each boundary cusp is one diagonal solution). Exact over ℚ(i), so it CERTIFIES global
+  univalence for ANY order. `momentCertifyLeaf` now runs it per genuine candidate (tracks `allBoundaryExact`,
+  rejects `selfInt`); `assembleMomentVerdict` grants `=` when `allBoundaryExact` (all orders), else the
+  order ≤ 2 A&S fallback, else honest order ≥ 3 LOCAL-only. **Empirical finding (exact sweep, throwaway):
+  across 116 locally-univalent order-3 points, EVERY one is also boundary-simple** — for order 3 the local
+  Schur–Cohn test already implies global univalence in this coefficient region, so the boundary test never
+  *rejects* here; its value is the **rigor UPGRADE** (order ≥ 3 now certifies `=` instead of `estimate`).
+  The `selfInt` reject path stays as a correctness guard (reachable at higher order). +8 tests (45 total);
+  1367 vitest + 2261 QD headless green; browser-verified (cardioid ✦ Prove now reads "φ′≠0 in 𝔻 + φ(∂𝔻)
+  simple certified (Schur–Cohn + exact boundary double-point count) ⇒ globally univalent", row "+ boundary-
+  simple", still Unique ✓ `=`). **NEXT = C1-ext-B: surface the moment φ=Σw_k zᵏ in the QD plot.**
