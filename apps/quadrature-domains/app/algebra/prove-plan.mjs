@@ -570,6 +570,32 @@ export function rationalBoundarySimple(t, d, cusps, deps) {
   return boundarySimpleFromN(N, cusps, deps);
 }
 
+// C3-2 — LOCAL univalence for the equilateral-triangle map φ(z) = R·z/(1 − c·z³). Depends on the SHAPE c only
+// (R = positive scale, preserves injectivity). φ′ = R(1 + 2c·z³)/(1 − c·z³)², so φ′≠0 in 𝔻 ⟺ the numerator
+// 1 + 2c·z³ has no root in 𝔻 (Schur–Cohn — folds when |c|>½), AND the poles ±c^{−1/3}·{1,ω,ω²} lie outside
+// 𝔻̄ (|c|<1). Returns { inside, onCircle, poleOk } or null. c numeric ⇒ rationalized.
+export function triangleUnivalence(c, deps) {
+  const Sym = deps && deps.QD && deps.QD.Sym, QE = deps && deps.QE;
+  if (!Sym || !QE || typeof QE.ratApprox !== 'function' || typeof Sym.schurCohn !== 'function' || typeof Sym.uniCoeffs !== 'function') return null;
+  const gc = (x) => { const a = QE.ratApprox(x || 0); return Sym.mpolyConst(Sym.gauss(Sym.rat(a[0], a[1]), Sym.rat(0, 1))); };
+  const Z = Sym.mpolyVar('Z');
+  const num = gc(1).add(gc(2 * (c || 0)).mul(Z).mul(Z).mul(Z));                     // 1 + 2c·z³
+  let sc; try { sc = Sym.schurCohn(Sym.uniCoeffs(num, 'Z')); } catch (e) { return null; }
+  return { inside: sc.inside, onCircle: sc.onCircle || 0, poleOk: Math.abs(c || 0) < 1 };   // poles outside 𝔻̄ ⟺ |c|<1
+}
+
+// C3-2 — GLOBAL univalence for the triangle map: is φ(∂𝔻) simple? The divided difference collapses to
+// N(Z₁,Z₂) = 1 + c·Z₁Z₂(Z₁+Z₂) (since φ(z₁)−φ(z₂) = R(z₁−z₂)·N/[(1−cz₁³)(1−cz₂³)]). Count its real double
+// points on the torus (boundarySimpleFromN): SIMPLE ⟺ count === cusps. Returns { simple } or null.
+export function triangleBoundarySimple(c, cusps, deps) {
+  const Sym = deps && deps.QD && deps.QD.Sym, QE = deps && deps.QE;
+  if (!Sym || !QE || typeof QE.ratApprox !== 'function' || typeof Sym.mpolyVar !== 'function') return null;
+  const gc = (x) => { const a = QE.ratApprox(x || 0); return Sym.mpolyConst(Sym.gauss(Sym.rat(a[0], a[1]), Sym.rat(0, 1))); };
+  const Z1 = Sym.mpolyVar('Z1'), Z2 = Sym.mpolyVar('Z2');
+  const N = gc(1).add(gc(c || 0).mul(Z1).mul(Z2).mul(Z1.add(Z2)));                  // 1 + c·Z₁Z₂(Z₁+Z₂)
+  return boundarySimpleFromN(N, cusps, deps);
+}
+
 // PF-1 for the moment route: snap each real coordinate to a nearby simple rational and check it solves
 // EVERY moment equation EXACTLY over ℚ(i). If so the candidate IS that exact rational point, so the
 // Schur–Cohn test runs at the TRUE root (rigorous). momentPolys are the seeded moment MPolys (real vars).

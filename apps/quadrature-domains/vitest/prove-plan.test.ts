@@ -615,3 +615,37 @@ describe("prove-plan (10) rational-φ verdict assembly + plan (Phase C2-3)", () 
     expect(pr.rigor).toBe("exact");
   });
 });
+
+describe("prove-plan (11) equilateral-triangle univalence — degree-3 route (Phase C3-2)", () => {
+  const tdeps = { QE, QD };
+
+  it("triangleUnivalence: c=1/5 (< ½) is locally univalent with poles outside 𝔻̄", () => {
+    // φ=z/(1−z³/5): φ′ numerator 1+2z³/5 has roots at |z|=(5/2)^{1/3}≈1.36 ⇒ no fold.
+    const u: any = PROVE.triangleUnivalence(0.2, tdeps);
+    expect(u).not.toBeNull();
+    expect(u.inside).toBe(0);
+    expect(u.onCircle).toBe(0);
+    expect(u.poleOk).toBe(true);
+  });
+
+  it("triangleUnivalence: c=0.7 (> ½) folds (φ′ numerator vanishes inside 𝔻)", () => {
+    const u: any = PROVE.triangleUnivalence(0.7, tdeps);   // 1+1.4z³ root at |z|≈0.89 (inside)
+    expect(u.inside).toBeGreaterThanOrEqual(1);
+  });
+
+  it("triangleUnivalence: |c| ≥ 1 ⇒ a pole inside 𝔻̄ (not analytic)", () => {
+    expect(PROVE.triangleUnivalence(1.5, tdeps).poleOk).toBe(false);
+  });
+
+  it("triangleBoundarySimple: the c=1/5 triangle φ(∂𝔻) is simple (count === cusps = 0)", () => {
+    const u: any = PROVE.triangleUnivalence(0.2, tdeps);
+    const bs: any = PROVE.triangleBoundarySimple(0.2, u.onCircle, tdeps);
+    expect(bs).not.toBeNull();
+    expect(bs.simple).toBe(true);
+  });
+
+  it("returns null without the Sym engine", () => {
+    expect(PROVE.triangleUnivalence(0.2, {})).toBeNull();
+    expect(PROVE.triangleBoundarySimple(0.2, 0, {})).toBeNull();
+  });
+});
