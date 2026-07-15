@@ -555,3 +555,63 @@ describe("prove-plan (9) rational-φ univalence — the multi-node route (Phase 
     expect(PROVE.rationalUnivalence(0.5, 0.25, {})).toBeNull();      // missing deps
   });
 });
+
+describe("prove-plan (10) rational-φ verdict assembly + plan (Phase C2-3)", () => {
+  const rdeps = { QE, QD };
+  // ASYMMETRIC ground truth: nodes 3/5, −7/15 (the +t / −t pair); shape (t=½, d=¼).
+  const asymNodes = { nodes: [{ re: 3 / 5, im: 0 }, { re: -7 / 15, im: 0 }], weights: [{ re: 28 / 25, im: 0 }, { re: 52 / 225, im: 0 }] };
+  const rsol = (t: number, d: number) => ({ t__re: { re: t, im: 0 }, d__re: { re: d, im: 0 } });
+
+  it("reconstructRationalMap recovers c=t², R≈1, w0≈0 from the shape + nodes", () => {
+    const m: any = PROVE.reconstructRationalMap(rsol(0.5, 0.25), asymNodes);
+    expect(m.c).toBeCloseTo(0.25, 9);
+    expect(m.R).toBeCloseTo(1, 6);        // (a₁−a₂)(1−t⁴)/(2t) = (16/15)(15/16)/1 = 1
+    expect(m.w0).toBeCloseTo(0, 6);       // (a₁+a₂)/2 − R·d·t²/(1−t⁴) = 1/15 − 1/15 = 0
+  });
+
+  it("rationalCertifyLeaf: keeps the genuine QD, drops the t≤0 gauge copy + the pole-inside candidate", () => {
+    const real = [rsol(0.5, 0.25), rsol(-0.5, 0.25), rsol(1.5, 0)];   // genuine, gauge copy, pole-in-𝔻̄
+    const leaf: any = PROVE.rationalCertifyLeaf(real, asymNodes, null, rdeps);
+    expect(leaf.genuine.length).toBe(1);
+    expect(leaf.gaugeDropped).toBeGreaterThanOrEqual(1);
+    expect(leaf.poleRej).toBeGreaterThanOrEqual(1);
+    expect(leaf.allBoundaryExact).toBe(true);
+    expect(leaf.genuine[0].c).toBeCloseTo(0.25, 6);
+  });
+
+  it("assembleRationalVerdict: allBoundaryExact ⇒ Unique ✓, exact, globally univalent", () => {
+    const leaf: any = { genuine: [{ c: 0.25, d: 0.25 }], folded: 0, selfInt: 0, poleRej: 0, gaugeDropped: 1, allExact: true, allVerified: true, allBoundaryExact: true };
+    const asm = PROVE.assembleRationalVerdict({ genuine: leaf.genuine, real: [{}, {}], leaf, deps: {}, sliceCaveat: () => "", cl: null });
+    expect(asm.count).toBe(1);
+    expect(asm.rigor).toBe("exact");
+    expect(asm.verdict).toContain("Unique quadrature domain ✓");
+    expect(asm.verdict).toContain("globally univalent");
+    expect(asm.verdict).toContain("rational-φ");
+    expect(asm.verdict).toContain("1 gauge copy rejected");
+  });
+
+  it("assembleRationalVerdict: no boundary count ⇒ estimate + honest LOCAL-only; pole rejects in the tail", () => {
+    const leaf: any = { genuine: [{ c: 0.25, d: 0.25 }], folded: 0, selfInt: 0, poleRej: 2, gaugeDropped: 0, allExact: true, allVerified: true, allBoundaryExact: false };
+    const asm = PROVE.assembleRationalVerdict({ genuine: leaf.genuine, real: [{}, {}, {}], leaf, deps: {}, sliceCaveat: () => "", cl: null });
+    expect(asm.rigor).toBe("estimate");
+    expect(asm.verdict).toContain("LOCAL univalence certified");
+    expect(asm.verdict).toContain("2 pole-in-𝔻̄");
+  });
+
+  it("runRationalPlan E2E: the asymmetric 2-node data proves a genuine QD over the real engine", async () => {
+    const sys = QE.rationalMomentSystem(asymNodes, { degree: 2 });
+    const store = AS.create();
+    store.seedFromPolys({ polys: sys.polys, vars: sys.vars });
+    const pr: any = await PROVE.runRationalPlan({
+      sysPolys: sys.polys, nodeData: asymNodes, deps: { QE, QC, QD, caps: {} },
+      sliceCaveat: () => "", posDimDesc: (cl: any) => cl.numVars + " vars",
+      classify: async () => store.classify(null, {}),
+      solveCertified: async () => store.solveRealCertifiedSync(null, {}),
+    });
+    expect(pr.kind).toBe("rational");
+    expect(pr.count).toBeGreaterThanOrEqual(1);
+    // the genuine set includes the ground-truth shape (c≈¼, d≈¼)
+    expect(pr.genuine.some((g: any) => Math.abs(g.c - 0.25) < 1e-4 && Math.abs(g.d - 0.25) < 1e-4)).toBe(true);
+    expect(pr.rigor).toBe("exact");
+  });
+});
