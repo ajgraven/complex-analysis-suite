@@ -79,3 +79,38 @@ export function momentPlotData(w, order, node, opts) {
   const bw = maxX - minX, bh = maxY - minY, pad = 0.1 * Math.max(bw, bh, 1e-6);
   return { boundary, nodes, view: [minX - pad, minY - pad, bw + 2 * pad, bh + 2 * pad] };
 }
+
+// rationalPlotData(m, nodes, opts) → { boundary, nodes, view } for the MULTI-NODE rational route (Phase C2).
+// The genuine map there is the degree-2 RATIONAL map φ(z) = w0 + R(z + d·z²)/(1 − c·z²) (real w0,R,d,c in
+// this increment), so its boundary φ(∂𝔻) samples straight from the reconstructed shape — no evalPhi. Pure.
+//   m     : { c, d, R, w0 } (numeric; w0 a number or {re,im}); c = t² < 1 (poles outside 𝔻̄).
+//   nodes : the quadrature nodes a_j to mark (each {re,im} or a real number); [] to omit.
+export function rationalPlotData(m, nodes, opts) {
+  opts = opts || {};
+  const N = Math.max(24, opts.samples || 240);
+  if (!m || m.R == null || m.c == null || !(m.c < 1)) return null;
+  const c = m.c, d = m.d || 0, R = m.R;
+  const w0re = (m.w0 && m.w0.re != null) ? m.w0.re : (m.w0 || 0), w0im = (m.w0 && m.w0.im != null) ? m.w0.im : 0;
+  const boundary = [];
+  for (let k = 0; k < N; k++) {
+    const th = (2 * Math.PI * k) / N, zr = Math.cos(th), zi = Math.sin(th);
+    const z2r = zr * zr - zi * zi, z2i = 2 * zr * zi;
+    const nr = zr + d * z2r, ni = zi + d * z2i;         // z + d z²
+    const dr = 1 - c * z2r, di = -c * z2i;              // 1 − c z²
+    const den = dr * dr + di * di;
+    if (den < 1e-14) return null;                        // a pole hit the circle
+    const qr = (nr * dr + ni * di) / den, qi = (ni * dr - nr * di) / den;   // (z+dz²)/(1−cz²)
+    const re = w0re + R * qr, im = w0im + R * qi;
+    if (!isFinite(re) || !isFinite(im)) return null;
+    boundary.push([re, -im]);                            // SVG y grows downward
+  }
+  const nds = (nodes || []).map((a) => { const ar = (a && a.re != null) ? a.re : (a || 0), ai = (a && a.im != null) ? a.im : 0; return [ar, ai ? -ai : 0]; });
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const [x, y] of boundary) {
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+  }
+  if (!isFinite(minX) || !isFinite(minY)) return null;
+  const bw = maxX - minX, bh = maxY - minY, pad = 0.1 * Math.max(bw, bh, 1e-6);
+  return { boundary, nodes: nds, view: [minX - pad, minY - pad, bw + 2 * pad, bh + 2 * pad] };
+}

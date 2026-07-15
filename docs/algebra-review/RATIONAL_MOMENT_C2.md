@@ -89,3 +89,26 @@ preset) is untested but has the same structure (reim-split like C1) and is expec
 - **Scope:** degree-2 (2-node) FIRST — covers `two-point-symmetric` + general 2-node. Higher degree
   (triangle = 3-node ⇒ degree-3 rational) is a later increment. The general multi-node beyond what the
   builder covers stays an honest LOWER BOUND via the Phase-B tree.
+
+## 6. Status — C2 route SHIPPED (degree-2 real)
+
+All four phases merged: **C2-1** `rationalMomentSystem` (builder), **C2-2** `rationalUnivalence` +
+`rationalBoundarySimple` (+ the shared `boundarySimpleFromN`), **C2-3** `reconstructRationalMap` /
+`rationalCertifyLeaf` / `assembleRationalVerdict` / `runRationalPlan`, **C2-4** the UI
+(`multiNodeRationalData` → `doProveRational`; `renderProofVerdict` kind `'rational'`; `rationalPlotData`
+thumbnail). ✦ Prove on 2-real-node data now routes here instead of the intractable `(●)/(★)` tree.
+
+**Convention finding (browser + node verified):** the app's h-data residue **IS** the quadrature weight
+b_j — NO π factor (the app's `dA = dxdy/π` convention makes ∫_Ω f dA_app = Σ b_j f(a_j)). So
+`multiNodeRationalData` passes the pole residues straight through as weights. `two-point-symmetric`
+(nodes ±1, weight 1.5) ⇒ **Unique QD ✓**, recovering the exact golden-ratio shape R=(1+√5)/2,
+c=(3−√5)/2, d=0, φ(1)=√5.
+
+**Honest-labeling note:** `two-point-symmetric`'s shape is IRRATIONAL (c=(3−√5)/2), so the rational PF-1
+snap can't certify `=` — it correctly reads **`≈` (estimate)**. Rational-shape QDs (e.g. the c=¼,d=¼ test
+family) read `=`. Upgrading irrational shapes to `=` needs an interval / number-field certifier (the same
+deferred item flagged in the maturity review) — out of scope here.
+
+**Deferred:** complex (off-axis) node data (e.g. the equilateral triangle — needs the reim-split
+generalization of the builder); degree ≥ 3 (higher-order QDs); interval/number-field `=` for irrational
+shapes.

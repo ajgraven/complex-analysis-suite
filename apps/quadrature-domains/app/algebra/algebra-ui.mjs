@@ -41,7 +41,7 @@ import { state } from '../ui-state.mjs';
 import { QD_UI } from '../ui-registry.mjs';
 import _QD from '../solver.mjs';
 import { plainVar } from '../qd-varscheme.mjs';   // conjugate-model var scheme (plain-text labels)
-import { domainPlotData, momentPlotData } from './domain-mini-plot.mjs';   // #3 + C1-ext-B: reconstructed-domain thumbnail geometry
+import { domainPlotData, momentPlotData, rationalPlotData } from './domain-mini-plot.mjs';   // #3 + C1-ext-B + C2-4: reconstructed-domain thumbnail geometry
 import * as PROVE from './prove-plan.mjs';   // the pure existence/uniqueness proof engine (fuller-orchestrator Phase A)
 const QD = _QD;
 
@@ -1742,6 +1742,48 @@ const QD = _QD;
         renderProofVerdict(pr);   // moment / inconsistent / no-real
       }).catch((e) => { _abort = null; setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
     }
+    // Detect MULTI-NODE data provable via the rational-φ route (Phase C2): exactly 2 simple (order-1) poles,
+    // both on the real axis with real residues (the degree-2 REAL increment — covers two-point-symmetric).
+    // Returns { nodes:[{re,im}×2], weights:[{re,im}×2] } (the QD nodes + quadrature weights) or null.
+    function multiNodeRationalData(hData) {
+      const poles = (hData && hData.poles) || [];
+      if (poles.length !== 2) return null;
+      const nodes = [], weights = [];
+      for (const p of poles) {
+        const pp = p.principal || [];
+        if (pp.length !== 1) return null;                              // order-1 nodes only (degree-2 rational)
+        const a = p.a || { re: 0, im: 0 }, b = pp[0] || { re: 0, im: 0 };
+        if (Math.abs(a.im || 0) > 1e-9 || Math.abs(b.im || 0) > 1e-9) return null;   // real nodes + weights only
+        nodes.push({ re: a.re || 0, im: 0 }); weights.push({ re: b.re || 0, im: 0 });
+      }
+      if (Math.abs(nodes[0].re - nodes[1].re) < 1e-9) return null;     // distinct nodes
+      return { nodes, weights };
+    }
+    // Prove existence/uniqueness via the RATIONAL-φ (multi-node) formulation (Phase C2). Re-seeds the workspace
+    // with the degree-2 rational shape system (so the shown derivation IS the proof), then runs
+    // PROVE.runRationalPlan (certified real solve in (t,d) → poles-outside-𝔻̄ + Schur–Cohn + boundary-simple
+    // univalence → gauge quotient → rigor verdict). Two-real-node data only in this increment.
+    function doProveRational(rd, hData) {
+      let sys; try { sys = QE.rationalMomentSystem(rd, { degree: 2 }); } catch (e) { showError('Rational system: ' + ((e && e.message) || e)); return; }
+      clearError();
+      try { store.seedFromPolys({ polys: sys.polys, vars: sys.vars }); } catch (e) { showError('Rational system: could not seed — ' + ((e && e.message) || e)); return; }
+      _seededHData = hData; realSel.clear(); elimSel.clear(); refreshPickers(); if (canvas) canvas.clearSelection(); rerender();
+      const ctrl = _newAbort(); _abort = ctrl;
+      setBusy(true, 'Proving via the rational-φ (multi-node) formulation…');
+      const ratCtx = {
+        sysPolys: sys.polys, nodeData: rd, deps: proveDeps(),
+        sliceCaveat, posDimDesc, signal: ctrl && ctrl.signal,
+        classify: () => store.classifyAsync(null, {}, { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Rational regime… ' + info.basis + ' generators, ' + info.pairs + ' pairs left') }),
+        solveCertified: () => store.solveRealCertifiedAsync(null, {}, { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Solving the shape system… ' + info.basis + ' gen, ' + info.pairs + ' pairs') }),
+      };
+      PROVE.runRationalPlan(ratCtx).then((pr) => {
+        _abort = null; setBusy(false); setStatus('');
+        if (pr.kind === 'aborted') { toast('Cancelled'); return; }
+        if (pr.kind === 'error') { const rn = pr.reason || 'failed'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
+        if (pr.kind === 'positive-dim') { renderPositiveDimVerdict(pr); return; }
+        renderProofVerdict(pr);   // rational / inconsistent / no-real
+      }).catch((e) => { _abort = null; setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
+    }
     // THE one-click orchestrator (finding G-1 + Phase B): from the seeded system to the AUTHORITATIVE
     // genuine-QD verdict, with no manual op-chaining. Runs the cheap reductions (auto-reality if h is
     // real-axis symmetric, then linear propagation to a fixpoint, then Möbius saturation — each a labeled
@@ -1768,6 +1810,10 @@ const QD = _QD;
       // positive-dimensional / intractable for). Exclusive to point-functional data.
       const pf = (typeof QE.pointFunctionalSystem === 'function') ? pointFunctionalMoments(hData) : null;
       if (pf) { doProveMoment(pf, hData); return; }
+      // MULTI-NODE (rational-φ) route (Phase C2): 2 real quadrature nodes ⇒ the degree-2 rational map — REAL,
+      // zero-dimensional in the shape (t=√c, d), certified + univalence-filtered (exclusive to 2-real-node data).
+      const rd = (typeof QE.rationalMomentSystem === 'function') ? multiNodeRationalData(hData) : null;
+      if (rd) { doProveRational(rd, hData); return; }
       if (fromData) { if (_seededHData !== hData && !seedFromDataDirect(hData)) return; } else if (!ensureSeed()) return;
       clearError();
       // Cheap reductions first (best-effort — the pipeline still runs on the current system on any error).
@@ -2004,11 +2050,12 @@ const QD = _QD;
       const rows = pr.rows || [];
       setStatus(verdict);
       const vActions = [];
-      if (pr.kind === 'zero-dim' || pr.kind === 'tree' || pr.kind === 'moment') {
-        // #1 (roadmap ALGEBRA_EXTENSIONS): a one-click EXACT boundary curve for a genuine QD. (The moment
-        // route's genuine maps are POLYNOMIAL φ=Σw_k zᵏ, not the (z_j,A) rational ansatz — the boundary-curve
-        // / QD-plot actions below are (z_j,A)-specific, so they are skipped for the 'moment' kind.)
-        if (pr.kind !== 'moment' && D >= 1 && QE && typeof QE.boundaryCurveFromPhi === 'function') {
+      if (pr.kind === 'zero-dim' || pr.kind === 'tree' || pr.kind === 'moment' || pr.kind === 'rational') {
+        // #1 (roadmap ALGEBRA_EXTENSIONS): a one-click EXACT boundary curve for a genuine QD. (The moment /
+        // rational routes' genuine maps are POLYNOMIAL φ=Σw_k zᵏ / RATIONAL φ=w0+R(z+dz²)/(1−cz²), not the
+        // (z_j,A) ansatz — the boundary-curve / QD-plot actions below are (z_j,A)-specific, so they are
+        // skipped for those kinds; both draw the reconstructed-φ thumbnail below instead.)
+        if (pr.kind !== 'moment' && pr.kind !== 'rational' && D >= 1 && QE && typeof QE.boundaryCurveFromPhi === 'function') {
           vActions.push({
             label: 'Show exact boundary curve',
             title: 'Eliminate the disk parameter to get the exact algebraic boundary curve Q(w,w̄)=0 and, when single-valued, the Schwarz function S(w) of the reconstructed quadrature domain (exact over ℚ(i) for the rationalized solution).',
@@ -2024,7 +2071,7 @@ const QD = _QD;
           });
         }
         // #3b (roadmap): hand the reconstructed genuine QD to the geometric QD tab (algebra→geometry).
-        if (pr.kind !== 'moment' && D >= 1 && ctx && typeof ctx.showQDSolution === 'function' && activeEnv && activeEnv.hData && distinct[0]) {
+        if (pr.kind !== 'moment' && pr.kind !== 'rational' && D >= 1 && ctx && typeof ctx.showQDSolution === 'function' && activeEnv && activeEnv.hData && distinct[0]) {
           vActions.push({
             label: 'View in the QD plot',
             title: 'Render the reconstructed quadrature domain in the geometric QD tab (boundary, cusps, critical set) and switch to it.',
@@ -2041,7 +2088,7 @@ const QD = _QD;
                 const proof = {
                   kind: pr.kind, verdict: pr.verdict, rigor: pr.rigor, bound: pr.bound || null, count: (pr.count != null ? pr.count : null),
                   rigorProvenance: pr.rigorProvenance || [], perSolution: rows, assumptions: specializationLedger(cl),
-                  stages: ((pr.kind === 'moment' ? PROVE.MOMENT_STAGES : PROVE.CERTIFY_STAGES) || []).map((s) => ({ id: s.id, title: s.title, why: s.why })),
+                  stages: ((pr.kind === 'moment' ? PROVE.MOMENT_STAGES : pr.kind === 'rational' ? PROVE.RATIONAL_STAGES : PROVE.CERTIFY_STAGES) || []).map((s) => ({ id: s.id, title: s.title, why: s.why })),
                 };
                 const out = { format: 'qd-proof', version: 1, proof, derivation: store.exportDAG() };
                 const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
@@ -2066,6 +2113,16 @@ const QD = _QD;
         if (mp) {
           vSet.plot = mp;
           vSet.plotCaption = 'reconstructed domain φ(∂𝔻) = a + Σ wₖzᵏ · node a = φ(0)' + (D > 1 ? ' · showing 1 of ' + D : '');
+        }
+      }
+      // C2-4: the rational route's genuine map is φ = w0 + R(z + dz²)/(1 − cz²) — sample its boundary φ(∂𝔻)
+      // from the reconstructed shape + mark the two quadrature nodes (the given data). Cheap; no elimination.
+      if (pr.kind === 'rational' && pr.genuine && pr.genuine.length && pr.genuine[0]) {
+        const nds = (pr.nodeData && pr.nodeData.nodes) || [];
+        let rp = null; try { rp = rationalPlotData(pr.genuine[0], nds); } catch (e) { rp = null; }
+        if (rp) {
+          vSet.plot = rp;
+          vSet.plotCaption = 'reconstructed domain φ(∂𝔻) = w₀ + R(z+dz²)/(1−cz²) · quadrature nodes' + (D > 1 ? ' · showing 1 of ' + D : '');
         }
       }
       if (vActions.length) vSet.actions = vActions;
