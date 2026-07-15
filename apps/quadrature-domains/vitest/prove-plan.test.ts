@@ -485,24 +485,31 @@ describe("prove-plan (8) moment route — point-functional / Aharonov–Shapiro 
     const leaf: any = { genuine: [{}], folded: 0, selfInt: 0, gaugeDropped: 0, allExact: true, allVerified: true, allBoundaryExact: true };
     const asm = PROVE.assembleMomentVerdict({ genuine: leaf.genuine, real: [{}], leaf, order: 3, deps: {}, sliceCaveat: () => "", cl: null });
     expect(asm.rigor).toBe("exact");
+    expect(asm.bound).toBe("=");                                          // #6: machine bound emitted
+    expect(asm.verdict).toContain("Unique quadrature domain ✓");
     expect(asm.verdict).toContain("globally univalent");
     expect(asm.verdict).toContain("boundary double-point count");
     expect(asm.rigorProvenance.some((p: string) => /global univalence/.test(p) && /^✓/.test(p))).toBe(true);
   });
 
-  it("assembleMomentVerdict order-3 WITHOUT the boundary count ⇒ estimate, honest LOCAL-only note", () => {
+  it("assembleMomentVerdict order-3 WITHOUT the boundary count ⇒ estimate + honest 'candidate' wording (not ✓)", () => {
     const leaf: any = { genuine: [{}], folded: 0, selfInt: 0, gaugeDropped: 0, allExact: true, allVerified: true, allBoundaryExact: false };
     const asm = PROVE.assembleMomentVerdict({ genuine: leaf.genuine, real: [{}], leaf, order: 3, deps: {}, sliceCaveat: () => "", cl: null });
     expect(asm.rigor).toBe("estimate");
+    expect(asm.bound).toBe("≈");                                          // #6
+    expect(asm.verdict).toContain("locally-univalent candidate");        // #3: no "Unique ✓ genuine" for local-only
+    expect(asm.verdict).not.toContain("genuine QD");
+    expect(asm.verdict).not.toContain("Unique quadrature domain ✓");
     expect(asm.verdict).toContain("LOCAL univalence certified");
     expect(asm.verdict).toContain("order ≥ 3");
     expect(asm.rigorProvenance.some((p: string) => /^✗ global univalence/.test(p))).toBe(true);
   });
 
-  it("assembleMomentVerdict order-2 falls back to A&S when the boundary count is unavailable (still exact)", () => {
+  it("assembleMomentVerdict order-2 falls back to A&S when the boundary count is unavailable (still exact ✓)", () => {
     const leaf: any = { genuine: [{}], folded: 0, selfInt: 0, gaugeDropped: 0, allExact: true, allVerified: true, allBoundaryExact: false };
     const asm = PROVE.assembleMomentVerdict({ genuine: leaf.genuine, real: [{}], leaf, order: 2, deps: {}, sliceCaveat: () => "", cl: null });
     expect(asm.rigor).toBe("exact");
+    expect(asm.verdict).toContain("Unique quadrature domain ✓");         // order ≤ 2 stays certified via A&S
     expect(asm.verdict).toContain("Aharonov–Shapiro, order ≤ 2");
   });
 
@@ -524,6 +531,7 @@ describe("prove-plan (9) rational-φ univalence — the multi-node route (Phase 
     expect(u.inside).toBe(0);
     expect(u.onCircle).toBe(0);
     expect(u.poleOk).toBe(true);       // c = t² = ¼ < 1
+    expect(u.reliable).toBe(true);     // #1: exact Schur–Cohn resolved (a degree-2 numerator, well within the cap)
   });
 
   it("rationalUnivalence: a large-d shape folds (φ′ numerator vanishes inside 𝔻)", () => {
@@ -569,6 +577,13 @@ describe("prove-plan (10) rational-φ verdict assembly + plan (Phase C2-3)", () 
     expect(m.w0).toBeCloseTo(0, 6);       // (a₁+a₂)/2 − R·d·t²/(1−t⁴) = 1/15 − 1/15 = 0
   });
 
+  it("#4: reconstructRationalMap canonicalizes node order ⇒ R>0 regardless of the caller's ordering", () => {
+    const swapped = { nodes: [{ re: -7 / 15, im: 0 }, { re: 3 / 5, im: 0 }], weights: [{ re: 52 / 225, im: 0 }, { re: 28 / 25, im: 0 }] };
+    const m: any = PROVE.reconstructRationalMap(rsol(0.5, 0.25), swapped);   // node[0] is the SMALLER node
+    expect(m.R).toBeCloseTo(1, 6);        // still +1 (a₁ re-sorted to the larger node), not −1
+    expect(m.c).toBeCloseTo(0.25, 9);
+  });
+
   it("rationalCertifyLeaf: keeps the genuine QD, drops the t≤0 gauge copy + the pole-inside candidate", () => {
     const real = [rsol(0.5, 0.25), rsol(-0.5, 0.25), rsol(1.5, 0)];   // genuine, gauge copy, pole-in-𝔻̄
     const leaf: any = PROVE.rationalCertifyLeaf(real, asymNodes, null, rdeps);
@@ -584,16 +599,20 @@ describe("prove-plan (10) rational-φ verdict assembly + plan (Phase C2-3)", () 
     const asm = PROVE.assembleRationalVerdict({ genuine: leaf.genuine, real: [{}, {}], leaf, deps: {}, sliceCaveat: () => "", cl: null });
     expect(asm.count).toBe(1);
     expect(asm.rigor).toBe("exact");
+    expect(asm.bound).toBe("=");
     expect(asm.verdict).toContain("Unique quadrature domain ✓");
     expect(asm.verdict).toContain("globally univalent");
     expect(asm.verdict).toContain("rational-φ");
     expect(asm.verdict).toContain("1 gauge copy rejected");
   });
 
-  it("assembleRationalVerdict: no boundary count ⇒ estimate + honest LOCAL-only; pole rejects in the tail", () => {
+  it("assembleRationalVerdict: no boundary count ⇒ estimate + honest 'candidate' wording; pole rejects in the tail", () => {
     const leaf: any = { genuine: [{ c: 0.25, d: 0.25 }], folded: 0, selfInt: 0, poleRej: 2, gaugeDropped: 0, allExact: true, allVerified: true, allBoundaryExact: false };
     const asm = PROVE.assembleRationalVerdict({ genuine: leaf.genuine, real: [{}, {}, {}], leaf, deps: {}, sliceCaveat: () => "", cl: null });
     expect(asm.rigor).toBe("estimate");
+    expect(asm.bound).toBe("≈");
+    expect(asm.verdict).toContain("locally-univalent candidate");        // #3
+    expect(asm.verdict).not.toContain("Unique quadrature domain ✓");
     expect(asm.verdict).toContain("LOCAL univalence certified");
     expect(asm.verdict).toContain("2 pole-in-𝔻̄");
   });
@@ -679,6 +698,7 @@ describe("prove-plan (12) triangle verdict assembly + plan (Phase C3-3)", () => 
     const asm = PROVE.assembleTriangleVerdict({ genuine: leaf.genuine, real: [{}, {}], leaf, sliceCaveat: () => "", cl: null });
     expect(asm.count).toBe(1);
     expect(asm.rigor).toBe("exact");
+    expect(asm.bound).toBe("=");
     expect(asm.verdict).toContain("Unique quadrature domain ✓");
     expect(asm.verdict).toContain("equilateral triangle, degree-3");
     expect(asm.verdict).toContain("globally univalent");
@@ -698,8 +718,9 @@ describe("prove-plan (12) triangle verdict assembly + plan (Phase C3-3)", () => 
     expect(pr.count).toBe(1);
     expect(pr.verdict).toContain("Unique quadrature domain ✓");
     expect(pr.genuine.some((g: any) => Math.abs(g.c - 0.125) < 1e-3)).toBe(true);   // c = ⅛ recovered
-    // rigor is 'exact' when PF-1 snaps the certified root exactly, else the honest 'estimate' — for the
-    // Sturm-floated P=3969/1024 (denominator 1024) the snap may miss, so accept either (both are honest).
-    expect(["exact", "estimate"]).toContain(pr.rigor);
+    // #9: the rational shape (c=⅛) is exact-verified at the true root and its rejected candidates no longer
+    // pollute allVerified, so this earns a certified `=` (was a spurious 'estimate' before the pollution fix).
+    expect(pr.rigor).toBe("exact");
+    expect(pr.bound).toBe("=");
   });
 });

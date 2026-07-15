@@ -884,8 +884,13 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
     if (![...nodes, ...weights].every((z) => Math.abs(imOf(z)) < 1e-9))
       throw new Error('rationalMomentSystem: complex (off-axis) node data is not yet supported — degree-2 REAL only in this increment');
     const Q = (x) => { const [n, dd] = _ratApprox(x || 0); return mc(gauss(rat(n, dd), rat(0, 1))); };   // exact ℚ const
-    const a1 = Q(reOf(nodes[0])), a2 = Q(reOf(nodes[1])), b1 = Q(reOf(weights[0])), b2 = Q(reOf(weights[1]));
-    const A = a1.sub(a2);                                                 // exact node gap a₁ − a₂
+    // Canonicalize the node order so node[0] is the LARGER-Re node (mapped from +t), keeping each weight
+    // paired with its node. This makes the reconstructed R = (a₁−a₂)(1−t⁴)/(2t) > 0 regardless of the
+    // caller's ordering (reconstructRationalMap applies the same sort); a swapped order otherwise yields a
+    // non-canonical R<0 representative. (Correct count either way — this fixes the reconstructed map's gauge.)
+    const io = (reOf(nodes[0]) >= reOf(nodes[1])) ? [0, 1] : [1, 0];
+    const a1 = Q(reOf(nodes[io[0]])), a2 = Q(reOf(nodes[io[1]])), b1 = Q(reOf(weights[io[0]])), b2 = Q(reOf(weights[io[1]]));
+    const A = a1.sub(a2);                                                 // exact node gap a₁ − a₂ (≥ 0 by the sort)
     if (A.isZero()) throw new Error('rationalMomentSystem: the two nodes coincide (not a 2-node quadrature domain)');
     const A2 = A.mul(A);                                                  // exact (a₁ − a₂)²
     const d = mv('d'), t = mv('t');
