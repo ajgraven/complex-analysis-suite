@@ -649,3 +649,57 @@ describe("prove-plan (11) equilateral-triangle univalence — degree-3 route (Ph
     expect(PROVE.triangleBoundarySimple(0.2, 0, {})).toBeNull();
   });
 });
+
+describe("prove-plan (12) triangle verdict assembly + plan (Phase C3-3)", () => {
+  const W = 0.8660254037844386;
+  // GROUND TRUTH (rational shape): R=63/32, s=½, c=⅛ ⇒ cube-root nodes (magnitude 1), weight 11/8.
+  const triNodes = { nodes: [{ re: 1, im: 0 }, { re: -0.5, im: W }, { re: -0.5, im: -W }], weights: [{ re: 11 / 8, im: 0 }, { re: 11 / 8, im: 0 }, { re: 11 / 8, im: 0 }] };
+  const P0 = (63 / 32) * (63 / 32);   // P = R²
+  const tsol = (P: number, s: number) => ({ P__re: { re: P, im: 0 }, s__re: { re: s, im: 0 } });
+
+  it("reconstructTriangleMap: R = √P, c = s³ from the shape (P, s)", () => {
+    const m: any = PROVE.reconstructTriangleMap(tsol(P0, 0.5));
+    expect(m.R).toBeCloseTo(63 / 32, 9);
+    expect(m.s).toBeCloseTo(0.5, 9);
+    expect(m.c).toBeCloseTo(0.125, 9);
+  });
+
+  it("triangleCertifyLeaf: keeps the genuine QD, drops the s≤0 gauge copy + the pole-inside candidate", () => {
+    const real = [tsol(P0, 0.5), tsol(P0, -0.5), tsol(4, 1.2)];   // genuine, gauge copy (s<0), pole (s>1 ⇒ c>1)
+    const leaf: any = PROVE.triangleCertifyLeaf(real, triNodes, null, { QE, QD });
+    expect(leaf.genuine.length).toBe(1);
+    expect(leaf.gaugeDropped).toBeGreaterThanOrEqual(1);
+    expect(leaf.poleRej).toBeGreaterThanOrEqual(1);
+    expect(leaf.allBoundaryExact).toBe(true);
+    expect(leaf.genuine[0].c).toBeCloseTo(0.125, 6);
+  });
+
+  it("assembleTriangleVerdict: allBoundaryExact ⇒ Unique ✓, exact, globally univalent", () => {
+    const leaf: any = { genuine: [{ c: 0.125 }], folded: 0, selfInt: 0, poleRej: 0, gaugeDropped: 1, allExact: true, allVerified: true, allBoundaryExact: true };
+    const asm = PROVE.assembleTriangleVerdict({ genuine: leaf.genuine, real: [{}, {}], leaf, sliceCaveat: () => "", cl: null });
+    expect(asm.count).toBe(1);
+    expect(asm.rigor).toBe("exact");
+    expect(asm.verdict).toContain("Unique quadrature domain ✓");
+    expect(asm.verdict).toContain("equilateral triangle, degree-3");
+    expect(asm.verdict).toContain("globally univalent");
+  });
+
+  it("runTrianglePlan E2E: the equilateral triangle proves a Unique ✓ genuine QD over the real engine", async () => {
+    const sys = QE.triangleMomentSystem(triNodes);
+    const store = AS.create();
+    store.seedFromPolys({ polys: sys.polys, vars: sys.vars });
+    const pr: any = await PROVE.runTrianglePlan({
+      sysPolys: sys.polys, nodeData: triNodes, deps: { QE, QC, QD, caps: {} },
+      sliceCaveat: () => "", posDimDesc: (cl: any) => cl.numVars + " vars",
+      classify: async () => store.classify(null, {}),
+      solveCertified: async () => store.solveRealCertifiedSync(null, {}),
+    });
+    expect(pr.kind).toBe("triangle");
+    expect(pr.count).toBe(1);
+    expect(pr.verdict).toContain("Unique quadrature domain ✓");
+    expect(pr.genuine.some((g: any) => Math.abs(g.c - 0.125) < 1e-3)).toBe(true);   // c = ⅛ recovered
+    // rigor is 'exact' when PF-1 snaps the certified root exactly, else the honest 'estimate' — for the
+    // Sturm-floated P=3969/1024 (denominator 1024) the snap may miss, so accept either (both are honest).
+    expect(["exact", "estimate"]).toContain(pr.rigor);
+  });
+});

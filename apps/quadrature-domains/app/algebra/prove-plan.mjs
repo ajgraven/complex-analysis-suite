@@ -828,3 +828,117 @@ export async function runRationalPlan(ctx) {
   const asm = assembleRationalVerdict({ genuine: leaf.genuine, real, leaf, deps: ctx.deps, sliceCaveat: ctx.sliceCaveat, cl });
   return { kind: 'rational', verdict: asm.verdict, rigor: asm.rigor, bad: asm.bad, count: asm.count, cl, real, certified: true, rows: leaf.rows, rigorProvenance: asm.rigorProvenance, genuine: leaf.genuine, nodeData: ctx.nodeData };
 }
+
+// ============================================================================================
+// C3-3 — the EQUILATERAL-TRIANGLE (degree-3) route: gauge quotient + verdict assembly.
+// ============================================================================================
+export const TRIANGLE_STAGES = [
+  { id: 'regime', title: 'Regime', why: 'Classify the equilateral-triangle shape system in (R, s=c^{1/3}): inconsistent ⇒ no QD; positive-dimensional ⇒ underdetermined; zero-dimensional ⇒ a finite count.' },
+  { id: 'solve-real', title: 'Solve (real)', why: 'Certified real solutions (RUR + exact Sturm) of the shape system — every candidate map φ(z)=R·z/(1−c·z³).' },
+  { id: 'filter', title: 'Univalence filter', why: 'Per candidate: poles outside 𝔻̄ (|c|<1), exact Schur–Cohn on the φ′ numerator 1+2cz³ (φ′≠0 in 𝔻), and the exact boundary double-point count (φ(∂𝔻) simple) ⇒ globally univalent.' },
+  { id: 'gauge', title: 'Gauge quotient', why: 'The rotation gauge is R = φ′(0) > 0 (s = c^{1/3} > 0); the ±R/±s copies are the same domain — keep R>0, s>0, dedupe by c.' },
+  { id: 'assemble', title: 'Verdict', why: 'Count the distinct genuine domains + assemble the rigor-badged verdict.' },
+];
+
+// Reconstruct the triangle map from a solved shape (P=R², s): R = √P, c = s³. φ(z) = R·z/(1 − c·z³), centred 0.
+export function reconstructTriangleMap(sol) {
+  const g = (nm) => { const c = sol[nm + '__re']; return c ? c.re : 0; };
+  const P = g('P'), s = g('s');
+  return { R: P >= 0 ? Math.sqrt(P) : NaN, s, c: s * s * s, P };
+}
+
+// PF-1 for the triangle route: rationalize (P, s) and check they solve every shape equation exactly over ℚ.
+export function triangleExactVerify(sol, sysPolys, deps) {
+  const Sym = deps && deps.QD && deps.QD.Sym, QE = deps && deps.QE;
+  if (!Sym || !QE || !sysPolys || typeof QE.ratApprox !== 'function') return { exact: false };
+  const snap = (x) => { const a = QE.ratApprox(x || 0); return Sym.mpolyConst(Sym.gauss(Sym.rat(a[0], a[1]), Sym.rat(0, 1))); };
+  const g = (nm) => { const c = sol[nm + '__re']; return c ? c.re : 0; };
+  const sub = { P: snap(g('P')), s: snap(g('s')) };
+  try { for (const p of sysPolys) { if (!p.subst(sub).isZero()) return { exact: false }; } } catch (e) { return { exact: false }; }
+  return { exact: true };
+}
+
+// Per-system univalence filter for the triangle route: reconstruct each real (R,s) candidate, gauge-quotient
+// (R>0, s>0 canonical; dedupe by c), keep the genuine (poles outside 𝔻̄, φ′≠0 in 𝔻, φ(∂𝔻) simple).
+export function triangleCertifyLeaf(real, nodeData, sysPolys, deps) {
+  let folded = 0, selfInt = 0, poleRej = 0, gaugeDropped = 0, allExact = true, allVerified = true, allBoundaryExact = true;
+  const rows = [], genuine = [], seen = [], rnd = (x) => Math.round(x * 1e4) / 1e4;
+  real.forEach((sol, idx) => {
+    const m = reconstructTriangleMap(sol);
+    if (!(m.R > 0) || !(m.s > 0)) { gaugeDropped++; rows.push('#' + (idx + 1) + ': R = ' + rnd(m.R) + ', s = ' + rnd(m.s) + ' — rotation/sign-gauge copy (R>0, s>0 representative kept)'); return; }
+    const ver = triangleExactVerify(sol, sysPolys, deps);
+    if (!ver.exact) allVerified = false;
+    const u = triangleUnivalence(m.c, deps);
+    if (!u) allExact = false;
+    if (u && !u.poleOk) { poleRej++; rows.push('#' + (idx + 1) + ': pole inside 𝔻̄ (c = s³ ≥ 1) — not an analytic QD map'); return; }
+    const fold = u ? u.inside > 0 : false;
+    const cusps = u ? u.onCircle : 0;
+    if (fold) { folded++; rows.push('#' + (idx + 1) + ': φ′ = 0 inside 𝔻 (fold, Schur–Cohn) — not univalent'); return; }
+    let boundarySimple = true, boundaryExact = false;
+    if (u) { const bs = triangleBoundarySimple(m.c, cusps, deps); if (bs) { boundarySimple = bs.simple; boundaryExact = true; } }
+    if (!boundaryExact) allBoundaryExact = false;
+    if (!boundarySimple) { selfInt++; rows.push('#' + (idx + 1) + ': boundary φ(∂𝔻) self-intersects (real double-point count) — not globally univalent'); return; }
+    if (seen.some((cv) => Math.abs(cv - m.c) < 1e-7)) { gaugeDropped++; return; }        // same shape c
+    seen.push(m.c);
+    const ptNote = ver.exact ? ' [exact ℚ(i) root]' : ' [rationalized ≈]';
+    const cuspNote = cusps > 0 ? ' — boundary cusp ×' + cusps : '';
+    genuine.push({ ...m, cusps, exactPoint: !!ver.exact, boundaryExact });
+    rows.push('#' + (idx + 1) + ': univalent ✓ — genuine quadrature domain' + cuspNote + ' (Schur–Cohn' + (boundaryExact ? ' + boundary-simple' : '') + ptNote + ')');
+  });
+  return { genuine, rows, folded, selfInt, poleRej, gaugeDropped, nonUniv: folded + selfInt + poleRej, allExact, allVerified, allBoundaryExact };
+}
+
+// Assemble the triangle-route verdict. `=` ONLY when the exact boundary count certifies GLOBAL univalence
+// (allBoundaryExact) at the exact ℚ(i) root; else LOCAL-only `estimate`. Returns { verdict, rigor, bad, count,
+// rigorProvenance }.
+export function assembleTriangleVerdict(a) {
+  const { genuine, real, leaf, sliceCaveat, cl } = a;
+  const D = genuine.length, plur = real.length === 1 ? '' : 's';
+  const allExactFilter = leaf.allExact, allVerified = leaf.allVerified;
+  const rej = [leaf.folded ? leaf.folded + ' fold' : '', leaf.selfInt ? leaf.selfInt + ' self-intersecting' : '', leaf.poleRej ? leaf.poleRej + ' pole-in-𝔻̄' : '', leaf.gaugeDropped ? leaf.gaugeDropped + ' gauge copy' : ''].filter(Boolean).join(', ');
+  const tail = rej ? ' (' + rej + ' rejected)' : '';
+  const form = ' · rational-φ (equilateral triangle, degree-3, Gustafsson) formulation';
+  let verdict;
+  if (D === 0) verdict = 'No genuine quadrature domain: ' + real.length + ' real shape solution' + plur + ', none univalent' + tail + '.' + form;
+  else if (D === 1) verdict = 'Unique quadrature domain ✓ — 1 genuine QD of ' + real.length + ' real shape solution' + plur + tail + '.' + form;
+  else verdict = D + ' distinct quadrature domains of ' + real.length + ' real shape solution' + plur + tail + '.' + form;
+  if (D >= 1) {
+    const atRoot = allVerified ? ' at the exact ℚ(i) root' : ' at rationalized coordinates';
+    verdict += leaf.allBoundaryExact
+      ? ' · φ′≠0 in 𝔻 + φ(∂𝔻) simple certified (Schur–Cohn + exact boundary double-point count) ⇒ globally univalent' + atRoot
+      : ' · ⚠ LOCAL univalence certified (Schur–Cohn φ′≠0 in 𝔻); the exact boundary-simple count was unavailable — GLOBAL univalence not certified';
+    verdict += ' · class: classical bounded quadrature domains for the equilateral 3-node data, up to the rotation gauge (R>0)';
+  }
+  if (cl) verdict += sliceCaveat(cl);
+  const rigor = D === 0 ? (allExactFilter ? 'exact' : 'estimate')
+    : (leaf.allBoundaryExact && allExactFilter && allVerified) ? 'exact' : 'estimate';
+  const prov = rigorProvenance({ certified: true, allExactFilter, allExactVerified: allVerified, ccChecked: false, undercount: false, partial: false, truncated: false });
+  if (D >= 1) prov.push(leaf.allBoundaryExact
+    ? '✓ global univalence: φ(∂𝔻) simple, exact boundary double-point count (SIMPLE ⟺ count === cusps)'
+    : '✗ global univalence (only LOCAL φ′≠0 certified; the boundary-simple count was unavailable)');
+  return { verdict, rigor, bad: D === 0, count: D, rigorProvenance: prov };
+}
+
+// The triangle-route plan (Phase C3): classify → certified real solve in (R, s) → filter univalence → gauge
+// quotient → assemble. ctx = { classify, solveCertified, sysPolys, nodeData, deps, sliceCaveat, posDimDesc,
+// onStage, signal }. Returns a ProofResult (kind 'triangle' on success).
+export async function runTrianglePlan(ctx) {
+  const stage = (id) => { if (ctx.onStage) ctx.onStage(id); };
+  stage('regime');
+  const cl = await ctx.classify();
+  if (cl && cl.aborted) return { kind: 'aborted', cl };
+  if (!cl || !cl.ok) return { kind: 'error', reason: (cl && cl.reason) || 'classify failed', cl: cl || null };
+  if (cl.inconsistent) return { kind: 'inconsistent', verdict: 'No quadrature domain: the triangle shape system is inconsistent (1 ∈ I).' + ctx.sliceCaveat(cl), rigor: 'exact', bad: true, cl };
+  if (!cl.zeroDim) return { kind: 'positive-dim', verdict: 'Underdetermined: the triangle shape system is positive-dimensional (' + ctx.posDimDesc(cl) + ').' + ctx.sliceCaveat(cl), rigor: 'unknown', bad: true, cl };
+  stage('solve-real');
+  const r = await ctx.solveCertified();
+  if (r && r.aborted) return { kind: 'aborted', cl };
+  if (!r || !r.ok) return { kind: 'error', reason: (r && r.reason) || 'solve failed', cl };
+  const real = (r.solutions || []).filter((s) => Object.keys(s).every((k) => Math.abs(s[k].im) < 1e-4));
+  if (!real.length) return { kind: 'no-real', verdict: 'No quadrature domain: the triangle shape system has no real solution' + (cl.complexCount != null ? ' (of ' + cl.complexCount + ' distinct complex)' : '') + '.' + ctx.sliceCaveat(cl), rigor: 'exact', bad: true, cl, real };
+  stage('filter');
+  const leaf = triangleCertifyLeaf(real, ctx.nodeData, ctx.sysPolys, ctx.deps);
+  stage('gauge'); stage('assemble');
+  const asm = assembleTriangleVerdict({ genuine: leaf.genuine, real, leaf, sliceCaveat: ctx.sliceCaveat, cl });
+  return { kind: 'triangle', verdict: asm.verdict, rigor: asm.rigor, bad: asm.bad, count: asm.count, cl, real, certified: true, rows: leaf.rows, rigorProvenance: asm.rigorProvenance, genuine: leaf.genuine, nodeData: ctx.nodeData };
+}
