@@ -5,7 +5,7 @@ import { describe, it, expect } from "vitest";
 import _QD from "../app/solver.mjs";
 import "../app/sym-core.mjs";
 import "../app/workers/solver-graph.mjs"; // registers the QD families (boundedQD) so QD.evalPhi resolves headlessly
-import { domainPlotData, momentPlotData } from "../app/algebra/domain-mini-plot.mjs";
+import { domainPlotData, momentPlotData, rationalPlotData } from "../app/algebra/domain-mini-plot.mjs";
 
 const evalPhi = (_QD as any).evalPhi;
 const cardioid = { unbounded: false, family: "boundedQD", w0: { re: 0, im: 0 }, branches: [{ z: { re: 0, im: 0 }, A: [{ re: 1, im: 0 }, { re: 0.5, im: 0 }] }] };
@@ -71,5 +71,30 @@ describe("momentPlotData — moment-route polynomial φ = a + Σ wₖzᵏ thumbn
   it("returns null on bad input", () => {
     expect(momentPlotData(null as any, 2, { re: 0, im: 0 })).toBeNull();
     expect(momentPlotData([null, 1], 0, { re: 0, im: 0 })).toBeNull();
+  });
+});
+
+describe("rationalPlotData — multi-node rational φ = w0 + R(z+dz²)/(1−cz²) thumbnail (C2-4)", () => {
+  const m = { c: 0.25, d: 0.25, R: 1, w0: 0 };   // the asymmetric ground-truth shape
+  const nodes = [{ re: 3 / 5, im: 0 }, { re: -7 / 15, im: 0 }];
+
+  it("samples a finite closed boundary; φ(1) = w0 + R(1+d)/(1−c) = 5/3", () => {
+    const d: any = rationalPlotData(m, nodes, { samples: 240 });
+    expect(d).not.toBeNull();
+    expect(d.boundary.length).toBe(240);
+    expect(d.boundary.every((p: number[]) => p.length === 2 && p.every((cc) => Number.isFinite(cc)))).toBe(true);
+    expect(d.boundary[0][0]).toBeCloseTo(5 / 3, 6);   // θ=0 → (1.25)/(0.75)
+    expect(d.boundary[0][1]).toBeCloseTo(0, 6);
+  });
+
+  it("marks the two quadrature nodes (SVG y-flipped)", () => {
+    const d: any = rationalPlotData(m, nodes, { samples: 64 });
+    expect(d.nodes).toEqual([[3 / 5, 0], [-7 / 15, 0]]);
+  });
+
+  it("returns null when a pole is inside 𝔻̄ (c ≥ 1) or on bad input", () => {
+    expect(rationalPlotData({ c: 1.5, d: 0, R: 1, w0: 0 }, nodes)).toBeNull();
+    expect(rationalPlotData(null as any, nodes)).toBeNull();
+    expect(rationalPlotData({ d: 0, R: 1, w0: 0 } as any, nodes)).toBeNull();   // no c
   });
 });
