@@ -1,0 +1,69 @@
+name: Deploy to GitHub Pages
+
+# Publishes the suite as a single combined GitHub Pages site: the launcher at the site root, with
+# each app under a subpath (see the assemble step). Kept SEPARATE from ci.yml so the CI gate is
+# untouched. All apps build with `base: "./"` (CLAUDE.md decision 11), so relative asset paths work
+# from any Pages sub-path.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# Permissions the deploy-pages action requires on GITHUB_TOKEN.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one in-flight Pages deploy at a time; don't cancel a publish mid-flight.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # Let corepack fetch the pinned pnpm without an interactive prompt (mirrors ci.yml).
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 22 LTS + corepack-provided pnpm, matching ci.yml and CLAUDE.md decision 10.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # Builds packages + all apps via the root script. We only publish launcher + CD + QD below;
+      # building correspondences too is harmless and keeps parity with the CI build.
+      - name: Build
+        run: pnpm build
+
+      - name: Assemble _site (launcher at root, apps under subpaths)
+        run: |
+          mkdir -p _site
+          cp -r apps/launcher/dist/.         _site/
+          cp -r apps/complex-dynamics/dist   _site/complex-dynamics
+          cp -r apps/quadrature-domains/dist _site/quadrature-domains
+          touch _site/.nojekyll
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
