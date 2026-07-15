@@ -442,4 +442,74 @@ describe("prove-plan (8) moment route — point-functional / Aharonov–Shapiro 
     expect(pr.kind).toBe("no-real");
     expect(pr.verdict).toContain("No quadrature domain");
   });
+
+  // ---- C1-ext-A: exact boundary double-point count (global univalence for order ≥ 3) ----------
+  const bdeps = { QE, QD };
+
+  it("momentBoundarySimple: cardioid (order 2, 1 cusp) is boundary-simple (count === cusps)", () => {
+    const w = [null, 1, { re: 0.5, im: 0 }];               // φ = z + z²/2, cusp at z=-1
+    const u = PROVE.momentUnivalence(w, 2, bdeps);
+    expect(u.onCircle).toBe(1);
+    const bs = PROVE.momentBoundarySimple(w, 2, u.onCircle, bdeps);
+    expect(bs).not.toBeNull();
+    expect(bs.simple).toBe(true);
+  });
+
+  it("momentBoundarySimple: a locally-univalent order-3 φ (no cusp) is boundary-simple", () => {
+    const w = [null, 1, { re: 0.2, im: 0.1 }, { re: 0.1, im: 0 }];  // φ′≠0 in 𝔻̄ (dominant w1)
+    const u = PROVE.momentUnivalence(w, 3, bdeps);
+    expect(u.inside).toBe(0);
+    expect(u.onCircle).toBe(0);
+    const bs = PROVE.momentBoundarySimple(w, 3, u.onCircle, bdeps);
+    expect(bs).not.toBeNull();
+    expect(bs.simple).toBe(true);        // certifies GLOBAL univalence exactly (beyond A&S order ≤ 2)
+  });
+
+  it("momentBoundarySimple returns null when the exact deps are unavailable", () => {
+    expect(PROVE.momentBoundarySimple([null, 1], 1, 0, {})).toBeNull();
+    expect(PROVE.momentBoundarySimple([null, 1], 1, 0, { QD })).toBeNull();  // missing QE.ratApprox
+  });
+
+  it("momentCertifyLeaf order-3: a locally-univalent w is genuine + boundary-certified (allBoundaryExact)", () => {
+    // reim solution literal for φ = z + (0.2+0.1i)z² + 0.1z³
+    const sol3: any = { w1__re: { re: 1, im: 0 }, u2__re: { re: 0.2, im: 0 }, v2__re: { re: 0.1, im: 0 }, u3__re: { re: 0.1, im: 0 }, v3__re: { re: 0, im: 0 } };
+    const leaf = PROVE.momentCertifyLeaf([sol3], 3, bdeps, null);
+    expect(leaf.genuine.length).toBe(1);
+    expect(leaf.allBoundaryExact).toBe(true);
+    expect(leaf.selfInt).toBe(0);
+    expect(leaf.genuine[0].boundaryExact).toBe(true);
+    expect(leaf.rows[0]).toContain("boundary-simple");
+  });
+
+  it("assembleMomentVerdict order-3 + allBoundaryExact ⇒ exact rigor, global univalence certified", () => {
+    const leaf: any = { genuine: [{}], folded: 0, selfInt: 0, gaugeDropped: 0, allExact: true, allVerified: true, allBoundaryExact: true };
+    const asm = PROVE.assembleMomentVerdict({ genuine: leaf.genuine, real: [{}], leaf, order: 3, deps: {}, sliceCaveat: () => "", cl: null });
+    expect(asm.rigor).toBe("exact");
+    expect(asm.verdict).toContain("globally univalent");
+    expect(asm.verdict).toContain("boundary double-point count");
+    expect(asm.rigorProvenance.some((p: string) => /global univalence/.test(p) && /^✓/.test(p))).toBe(true);
+  });
+
+  it("assembleMomentVerdict order-3 WITHOUT the boundary count ⇒ estimate, honest LOCAL-only note", () => {
+    const leaf: any = { genuine: [{}], folded: 0, selfInt: 0, gaugeDropped: 0, allExact: true, allVerified: true, allBoundaryExact: false };
+    const asm = PROVE.assembleMomentVerdict({ genuine: leaf.genuine, real: [{}], leaf, order: 3, deps: {}, sliceCaveat: () => "", cl: null });
+    expect(asm.rigor).toBe("estimate");
+    expect(asm.verdict).toContain("LOCAL univalence certified");
+    expect(asm.verdict).toContain("order ≥ 3");
+    expect(asm.rigorProvenance.some((p: string) => /^✗ global univalence/.test(p))).toBe(true);
+  });
+
+  it("assembleMomentVerdict order-2 falls back to A&S when the boundary count is unavailable (still exact)", () => {
+    const leaf: any = { genuine: [{}], folded: 0, selfInt: 0, gaugeDropped: 0, allExact: true, allVerified: true, allBoundaryExact: false };
+    const asm = PROVE.assembleMomentVerdict({ genuine: leaf.genuine, real: [{}], leaf, order: 2, deps: {}, sliceCaveat: () => "", cl: null });
+    expect(asm.rigor).toBe("exact");
+    expect(asm.verdict).toContain("Aharonov–Shapiro, order ≤ 2");
+  });
+
+  it("assembleMomentVerdict lists self-intersecting rejects in the tail", () => {
+    const leaf: any = { genuine: [], folded: 0, selfInt: 1, gaugeDropped: 0, allExact: true, allVerified: true, allBoundaryExact: true };
+    const asm = PROVE.assembleMomentVerdict({ genuine: [], real: [{}, {}], leaf, order: 3, deps: {}, sliceCaveat: () => "", cl: null });
+    expect(asm.bad).toBe(true);
+    expect(asm.verdict).toContain("1 self-intersecting");
+  });
 });

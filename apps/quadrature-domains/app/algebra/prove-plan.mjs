@@ -493,6 +493,36 @@ export function momentUnivalence(w, order, deps) {
   try { const sc = Sym.schurCohn(Sym.uniCoeffs(phiP, 'Z')); return { inside: sc.inside, onCircle: sc.onCircle || 0 }; } catch (e) { return null; }
 }
 
+// EXACT boundary-injectivity test for a moment candidate (Phase C1-ext, GLOBAL univalence). Is φ(∂𝔻) a
+// SIMPLE closed curve (cusps allowed)? Build the divided-difference N(Z₁,Z₂) = Σ_k w_k Σ_{j=0}^{k-1}
+// Z₁ʲ Z₂^{k-1-j}, substitute ζ→x+iy (real x,y), append the circle quadrics x²+y²−1, and count the REAL
+// double points on the torus via Sym.realSolutionCount — the SAME formulation-agnostic core as
+// QC.boundaryDoublePointCount. Each boundary cusp (φ′=0 on ∂𝔻) contributes one diagonal solution, so
+// SIMPLE ⟺ count === cusps. Returns { simple } or null (positive-dim / over the Hermite cap / unavailable
+// ⇒ caller falls back to local-only). PRECONDITION: φ′≠0 strictly INSIDE 𝔻 (the caller's local gate). For
+// order ≤ 2 this always confirms A&S; for order ≥ 3 it is what makes global univalence rigorous.
+export function momentBoundarySimple(w, order, cusps, deps) {
+  const Sym = deps && deps.QD && deps.QD.Sym, QE = deps && deps.QE;
+  if (!Sym || !QE || typeof Sym.realSolutionCount !== 'function' || typeof QE.ratApprox !== 'function') return null;
+  const gc = (re, im) => { const a = QE.ratApprox(re || 0), b = QE.ratApprox(im || 0); return Sym.mpolyConst(Sym.gauss(Sym.rat(a[0], a[1]), Sym.rat(b[0], b[1]))); };
+  const iC = Sym.mpolyConst(Sym.gauss(Sym.rat(0, 1), Sym.rat(1, 1)));
+  const Z1 = Sym.mpolyVar('Z1'), Z2 = Sym.mpolyVar('Z2');
+  let N = gc(0, 0);
+  for (let k = 1; k <= order; k++) {
+    const wk = (k === 1) ? { re: (w[1] && w[1].re != null) ? w[1].re : w[1], im: 0 } : (w[k] || { re: 0, im: 0 });
+    let inner = gc(0, 0);
+    for (let j = 0; j <= k - 1; j++) { let t = gc(1, 0); for (let aa = 0; aa < j; aa++) t = t.mul(Z1); for (let bb = 0; bb < k - 1 - j; bb++) t = t.mul(Z2); inner = inner.add(t); }
+    N = N.add(gc(wk.re || 0, wk.im || 0).mul(inner));
+  }
+  const cx = (x, y) => Sym.mpolyVar(x).add(iC.mul(Sym.mpolyVar(y)));
+  let Nr; try { Nr = N.subst({ Z1: cx('x1', 'y1'), Z2: cx('x2', 'y2') }); } catch (e) { return null; }
+  const circ = (x, y) => Sym.mpolyVar(x).pow(2).add(Sym.mpolyVar(y).pow(2)).sub(Sym.mpolyInt(1));
+  const sys = [Nr.realPart(), Nr.imagPart(), circ('x1', 'y1'), circ('x2', 'y2')].filter((p) => !p.isZero());
+  let r; try { r = Sym.realSolutionCount(sys, null, ['x1', 'y1', 'x2', 'y2'], {}); } catch (e) { return null; }
+  if (!r || !r.ok) return null;
+  return { simple: r.realCount === (cusps || 0) };
+}
+
 // PF-1 for the moment route: snap each real coordinate to a nearby simple rational and check it solves
 // EVERY moment equation EXACTLY over ℚ(i). If so the candidate IS that exact rational point, so the
 // Schur–Cohn test runs at the TRUE root (rigorous). momentPolys are the seeded moment MPolys (real vars).
@@ -513,7 +543,7 @@ export function momentExactVerify(sol, momentPolys, order, deps) {
 // run the Schur–Cohn φ′ test, and keep the GENUINE ones (univalent AND the rotation-gauge canonical w₁>0).
 // Returns { genuine:[{w,order,exactPoint,cusps}], rows, folded, gaugeDropped, nonUniv, allExact, allVerified }.
 export function momentCertifyLeaf(real, order, deps, momentPolys) {
-  let folded = 0, gaugeDropped = 0, allExact = true, allVerified = true;
+  let folded = 0, selfInt = 0, gaugeDropped = 0, allExact = true, allVerified = true, allBoundaryExact = true;
   const rows = [], genuine = [];
   real.forEach((sol, idx) => {
     const w = reconstructMomentW(sol, order);
@@ -527,11 +557,17 @@ export function momentCertifyLeaf(real, order, deps, momentPolys) {
     const ptNote = ver.exact ? ' [exact ℚ(i) root]' : ' [rationalized ≈]';
     if (fold) { folded++; rows.push('#' + (idx + 1) + ': φ′ = 0 inside 𝔻 (fold, Schur–Cohn) — not univalent'); return; }
     if (!(w1 > 0)) { gaugeDropped++; rows.push('#' + (idx + 1) + ': w₁ = ' + (Math.round(w1 * 1e4) / 1e4) + ' ≤ 0 — rotation-gauge copy (w₁>0 representative kept)'); return; }
-    genuine.push({ w, order, exactPoint: !!ver.exact, cusps });
+    // GLOBAL univalence (C1-ext): φ(∂𝔻) simple via the exact boundary double-point count (SIMPLE ⟺ count
+    // === cusps). Required for order ≥ 3; for order ≤ 2 it confirms A&S. Unavailable ⇒ local-only.
+    let boundarySimple = true, boundaryExact = false;
+    if (u) { const bs = momentBoundarySimple(w, order, cusps, deps); if (bs) { boundarySimple = bs.simple; boundaryExact = true; } }
+    if (!boundaryExact) allBoundaryExact = false;
+    if (!boundarySimple) { selfInt++; rows.push('#' + (idx + 1) + ': boundary φ(∂𝔻) self-intersects (real double-point count) — not globally univalent'); return; }
+    genuine.push({ w, order, exactPoint: !!ver.exact, cusps, boundaryExact });
     const cuspNote = cusps > 0 ? ' — boundary cusp ×' + cusps : '';
-    rows.push('#' + (idx + 1) + ': univalent ✓ — genuine quadrature domain' + cuspNote + (u ? ' (Schur–Cohn' + ptNote + ')' : ''));
+    rows.push('#' + (idx + 1) + ': univalent ✓ — genuine quadrature domain' + cuspNote + (u ? ' (Schur–Cohn' + (boundaryExact ? ' + boundary-simple' : '') + ptNote + ')' : ''));
   });
-  return { genuine, rows, folded, gaugeDropped, nonUniv: folded, allExact, allVerified };
+  return { genuine, rows, folded, selfInt, gaugeDropped, nonUniv: folded + selfInt, allExact, allVerified, allBoundaryExact };
 }
 
 // Assemble the moment-route verdict. ORDER ≤ 2 is fully rigorous (A&S: φ′≠0 in 𝔻 ⇔ genuine QD, unique);
@@ -540,9 +576,12 @@ export function momentCertifyLeaf(real, order, deps, momentPolys) {
 export function assembleMomentVerdict(a) {
   const { genuine, real, leaf, order, deps, sliceCaveat, cl } = a;
   const D = genuine.length, plur = real.length === 1 ? '' : 's';
-  const rigorousOrder = order <= 2;                 // A&S global-univalence theorem
   const allExactFilter = leaf.allExact, allVerified = leaf.allVerified;
-  const rej = [leaf.folded ? leaf.folded + ' fold' : '', leaf.gaugeDropped ? leaf.gaugeDropped + ' gauge copy' : ''].filter(Boolean).join(', ');
+  // GLOBAL univalence is certified when the exact boundary double-point count ran for every genuine
+  // candidate (φ(∂𝔻) simple ⟺ count === cusps — rigorous for ANY order); for order ≤ 2 the A&S theorem
+  // also gives global from the local φ′≠0 test, a fallback when the boundary count is unavailable.
+  const globalCertified = leaf.allBoundaryExact || order <= 2;
+  const rej = [leaf.folded ? leaf.folded + ' fold' : '', leaf.selfInt ? leaf.selfInt + ' self-intersecting' : '', leaf.gaugeDropped ? leaf.gaugeDropped + ' gauge copy' : ''].filter(Boolean).join(', ');
   const tail = rej ? ' (' + rej + ' rejected)' : '';
   const form = ' · point-functional / Aharonov–Shapiro formulation, order ' + order;
   let verdict;
@@ -550,18 +589,21 @@ export function assembleMomentVerdict(a) {
   else if (D === 1) verdict = 'Unique quadrature domain ✓ — 1 genuine QD of ' + real.length + ' real moment solution' + plur + tail + '.' + form;
   else verdict = D + ' distinct quadrature domains of ' + real.length + ' real moment solution' + plur + tail + '.' + form;
   if (D >= 1) {
-    verdict += rigorousOrder
-      ? ' · φ′≠0 in 𝔻 certified (Schur–Cohn) ⇒ globally univalent (Aharonov–Shapiro)' + (allVerified ? ' at the exact ℚ(i) root' : ' at rationalized coordinates')
-      : ' · ⚠ LOCAL univalence certified (Schur–Cohn φ′≠0 in 𝔻); GLOBAL univalence is proven only for order ≤ 2';
+    const atRoot = allVerified ? ' at the exact ℚ(i) root' : ' at rationalized coordinates';
+    verdict += leaf.allBoundaryExact
+      ? ' · φ′≠0 in 𝔻 + φ(∂𝔻) simple certified (Schur–Cohn + exact boundary double-point count) ⇒ globally univalent' + (order <= 2 ? ' (Aharonov–Shapiro)' : '') + atRoot
+      : (order <= 2 ? ' · φ′≠0 in 𝔻 certified (Schur–Cohn) ⇒ globally univalent (Aharonov–Shapiro, order ≤ 2)' + atRoot
+                    : ' · ⚠ LOCAL univalence certified (Schur–Cohn φ′≠0 in 𝔻); the exact boundary-simple count was unavailable — GLOBAL univalence not certified for order ≥ 3');
     verdict += ' · class: classical bounded quadrature domains for the point functional, up to the rotation gauge (w₁>0)';
   }
   if (cl) verdict += sliceCaveat(cl);
   const rigor = D === 0 ? 'exact'
-    : (rigorousOrder && allExactFilter && allVerified) ? 'exact'
-    : (rigorousOrder && allExactFilter) ? 'estimate' : 'estimate';
+    : (globalCertified && allExactFilter && allVerified) ? 'exact' : 'estimate';
   const prov = rigorProvenance({ certified: true, allExactFilter, allExactVerified: allVerified, ccChecked: false, undercount: false, partial: false, truncated: false });
-  if (D >= 1 && !rigorousOrder) prov.push('✗ global univalence (Schur–Cohn certifies LOCAL φ′≠0 only; A&S global theorem holds for order ≤ 2)');
-  else if (D >= 1) prov.push('✓ global univalence via Aharonov–Shapiro (order ≤ 2: φ′≠0 in 𝔻 ⇔ univalent)');
+  if (D >= 1) prov.push(leaf.allBoundaryExact
+    ? '✓ global univalence: φ(∂𝔻) simple, exact boundary double-point count (SIMPLE ⟺ count === cusps)'
+    : (order <= 2 ? '✓ global univalence via Aharonov–Shapiro (order ≤ 2: φ′≠0 in 𝔻 ⇔ univalent)'
+                  : '✗ global univalence (only LOCAL φ′≠0 certified; the boundary-simple count was unavailable — order ≥ 3 not certified)'));
   return { verdict, rigor, bad: D === 0, count: D, rigorProvenance: prov };
 }
 
