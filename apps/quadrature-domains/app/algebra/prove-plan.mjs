@@ -678,3 +678,127 @@ export async function runMomentPlan(ctx) {
   const asm = assembleMomentVerdict({ genuine: leaf.genuine, real, leaf, order, deps: ctx.deps, sliceCaveat: ctx.sliceCaveat, cl });
   return { kind: 'moment', verdict: asm.verdict, rigor: asm.rigor, bad: asm.bad, count: asm.count, cl, real, certified: true, rows: leaf.rows, rigorProvenance: asm.rigorProvenance, genuine: leaf.genuine, order };
 }
+
+// ============================================================================================
+// C2-3 — the RATIONAL-φ multi-node route: gauge quotient + verdict assembly (mirrors the moment route).
+// ============================================================================================
+export const RATIONAL_STAGES = [
+  { id: 'regime', title: 'Regime', why: 'Classify the rational-φ shape system in (t=√c, d): inconsistent ⇒ no QD; positive-dimensional ⇒ underdetermined; zero-dimensional ⇒ a finite count.' },
+  { id: 'solve-real', title: 'Solve (real)', why: 'Certified real solutions (RUR + exact Sturm) of the shape system — every candidate degree-2 rational map φ(z)=w₀+R(z+dz²)/(1−cz²).' },
+  { id: 'filter', title: 'Univalence filter', why: 'Per candidate: poles outside 𝔻̄ (c<1), exact Schur–Cohn on the φ′ numerator (φ′≠0 in 𝔻), and the exact boundary double-point count (φ(∂𝔻) simple) ⇒ globally univalent.' },
+  { id: 'gauge', title: 'Gauge quotient', why: 'The rotation gauge is R = φ′(0) > 0 (t = √c > 0); the ±t/±R copies are the same domain — keep t>0, and dedupe by the shape (c, d).' },
+  { id: 'assemble', title: 'Verdict', why: 'Count the distinct genuine domains + assemble the rigor-badged verdict.' },
+];
+
+// Reconstruct the degree-2 rational map from a solved shape (t, d) + the node data: c = t², and the gauge
+// unknowns R = φ′(0), w0 = φ(0) recovered from the (analytically-eliminated) node equations
+//   R = (a₁ − a₂)(1 − t⁴)/(2t),  w0 = (a₁ + a₂)/2 − R·d·t²/(1 − t⁴).
+// Returns { t, d, c, R, w0 } (numeric).
+export function reconstructRationalMap(sol, nodeData) {
+  const g = (nm) => { const c = sol[nm + '__re']; return c ? c.re : 0; };
+  const reOf = (z) => (z && z.re != null) ? z.re : z;
+  const t = g('t'), d = g('d');
+  const a1 = reOf(nodeData.nodes[0]), a2 = reOf(nodeData.nodes[1]);
+  const c = t * t, om = 1 - c * c;                                        // c = t², om = 1 − t⁴
+  const R = (Math.abs(t) > 1e-12 && Math.abs(om) > 1e-12) ? (a1 - a2) * om / (2 * t) : NaN;
+  const w0 = (Math.abs(om) > 1e-12) ? (a1 + a2) / 2 - R * d * c / om : NaN;   // d·t² = d·c
+  return { t, d, c, R, w0 };
+}
+
+// PF-1 for the rational route: rationalize (t, d) and check they solve EVERY shape equation exactly over ℚ.
+export function rationalExactVerify(sol, sysPolys, deps) {
+  const Sym = deps && deps.QD && deps.QD.Sym, QE = deps && deps.QE;
+  if (!Sym || !QE || !sysPolys || typeof QE.ratApprox !== 'function') return { exact: false };
+  const snap = (x) => { const a = QE.ratApprox(x || 0); return Sym.mpolyConst(Sym.gauss(Sym.rat(a[0], a[1]), Sym.rat(0, 1))); };
+  const g = (nm) => { const c = sol[nm + '__re']; return c ? c.re : 0; };
+  const sub = { t: snap(g('t')), d: snap(g('d')) };
+  try { for (const p of sysPolys) { if (!p.subst(sub).isZero()) return { exact: false }; } } catch (e) { return { exact: false }; }
+  return { exact: true };
+}
+
+// Per-system univalence filter for the rational route: reconstruct each real (t,d) candidate's map,
+// gauge-quotient (t>0 canonical; dedupe by the shape (c,d)), and keep the GENUINE ones (poles outside 𝔻̄,
+// φ′≠0 in 𝔻, φ(∂𝔻) simple). Returns { genuine, rows, folded, selfInt, poleRej, gaugeDropped, allExact,
+// allVerified, allBoundaryExact }.
+export function rationalCertifyLeaf(real, nodeData, sysPolys, deps) {
+  let folded = 0, selfInt = 0, poleRej = 0, gaugeDropped = 0, allExact = true, allVerified = true, allBoundaryExact = true;
+  const rows = [], genuine = [], seen = [], rnd = (x) => Math.round(x * 1e4) / 1e4;
+  real.forEach((sol, idx) => {
+    const m = reconstructRationalMap(sol, nodeData);
+    if (!(m.t > 0)) { gaugeDropped++; rows.push('#' + (idx + 1) + ': t = ' + rnd(m.t) + ' ≤ 0 — rotation-gauge copy (t>0 / R>0 representative kept)'); return; }
+    const ver = rationalExactVerify(sol, sysPolys, deps);
+    if (!ver.exact) allVerified = false;
+    const u = rationalUnivalence(m.t, m.d, deps);
+    if (!u) allExact = false;
+    if (u && !u.poleOk) { poleRej++; rows.push('#' + (idx + 1) + ': pole inside 𝔻̄ (c = t² ≥ 1) — not an analytic QD map'); return; }
+    const fold = u ? u.inside > 0 : false;
+    const cusps = u ? u.onCircle : 0;
+    if (fold) { folded++; rows.push('#' + (idx + 1) + ': φ′ = 0 inside 𝔻 (fold, Schur–Cohn) — not univalent'); return; }
+    let boundarySimple = true, boundaryExact = false;
+    if (u) { const bs = rationalBoundarySimple(m.t, m.d, cusps, deps); if (bs) { boundarySimple = bs.simple; boundaryExact = true; } }
+    if (!boundaryExact) allBoundaryExact = false;
+    if (!boundarySimple) { selfInt++; rows.push('#' + (idx + 1) + ': boundary φ(∂𝔻) self-intersects (real double-point count) — not globally univalent'); return; }
+    if (seen.some((s) => Math.abs(s.c - m.c) < 1e-7 && Math.abs(s.d - m.d) < 1e-7)) { gaugeDropped++; return; }   // same shape (c,d)
+    seen.push({ c: m.c, d: m.d });
+    const ptNote = ver.exact ? ' [exact ℚ(i) root]' : ' [rationalized ≈]';
+    const cuspNote = cusps > 0 ? ' — boundary cusp ×' + cusps : '';
+    genuine.push({ ...m, cusps, exactPoint: !!ver.exact, boundaryExact });
+    rows.push('#' + (idx + 1) + ': univalent ✓ — genuine quadrature domain' + cuspNote + ' (Schur–Cohn' + (boundaryExact ? ' + boundary-simple' : '') + ptNote + ')');
+  });
+  return { genuine, rows, folded, selfInt, poleRej, gaugeDropped, nonUniv: folded + selfInt + poleRej, allExact, allVerified, allBoundaryExact };
+}
+
+// Assemble the rational-route verdict. Unlike the moment route there is NO A&S order≤2 fallback — GLOBAL
+// univalence is `=` ONLY when the exact boundary double-point count ran (allBoundaryExact); otherwise LOCAL
+// only. Returns { verdict, rigor, bad, count, rigorProvenance }.
+export function assembleRationalVerdict(a) {
+  const { genuine, real, leaf, deps, sliceCaveat, cl } = a;
+  const D = genuine.length, plur = real.length === 1 ? '' : 's';
+  const allExactFilter = leaf.allExact, allVerified = leaf.allVerified;
+  const rej = [leaf.folded ? leaf.folded + ' fold' : '', leaf.selfInt ? leaf.selfInt + ' self-intersecting' : '', leaf.poleRej ? leaf.poleRej + ' pole-in-𝔻̄' : '', leaf.gaugeDropped ? leaf.gaugeDropped + ' gauge copy' : ''].filter(Boolean).join(', ');
+  const tail = rej ? ' (' + rej + ' rejected)' : '';
+  const form = ' · rational-φ (degree-2 multi-node, Gustafsson) formulation';
+  let verdict;
+  if (D === 0) verdict = 'No genuine quadrature domain: ' + real.length + ' real shape solution' + plur + ', none univalent' + tail + '.' + form;
+  else if (D === 1) verdict = 'Unique quadrature domain ✓ — 1 genuine QD of ' + real.length + ' real shape solution' + plur + tail + '.' + form;
+  else verdict = D + ' distinct quadrature domains of ' + real.length + ' real shape solution' + plur + tail + '.' + form;
+  if (D >= 1) {
+    const atRoot = allVerified ? ' at the exact ℚ(i) root' : ' at rationalized coordinates';
+    verdict += leaf.allBoundaryExact
+      ? ' · φ′≠0 in 𝔻 + φ(∂𝔻) simple certified (Schur–Cohn + exact boundary double-point count) ⇒ globally univalent' + atRoot
+      : ' · ⚠ LOCAL univalence certified (Schur–Cohn φ′≠0 in 𝔻); the exact boundary-simple count was unavailable — GLOBAL univalence not certified';
+    verdict += ' · class: classical bounded quadrature domains for the multi-node data, up to the rotation gauge (R>0)';
+  }
+  if (cl) verdict += sliceCaveat(cl);
+  const rigor = D === 0 ? (allExactFilter ? 'exact' : 'estimate')
+    : (leaf.allBoundaryExact && allExactFilter && allVerified) ? 'exact' : 'estimate';
+  const prov = rigorProvenance({ certified: true, allExactFilter, allExactVerified: allVerified, ccChecked: false, undercount: false, partial: false, truncated: false });
+  if (D >= 1) prov.push(leaf.allBoundaryExact
+    ? '✓ global univalence: φ(∂𝔻) simple, exact boundary double-point count (SIMPLE ⟺ count === cusps)'
+    : '✗ global univalence (only LOCAL φ′≠0 certified; the boundary-simple count was unavailable)');
+  return { verdict, rigor, bad: D === 0, count: D, rigorProvenance: prov };
+}
+
+// The rational-route plan (Phase C2): classify the rational-φ shape system, certified-solve it in (t, d),
+// filter univalence, gauge-quotient, and assemble. ctx = { classify, solveCertified, sysPolys, nodeData,
+// deps, sliceCaveat, posDimDesc, onStage, signal }. Returns a ProofResult (kind 'rational' on success).
+export async function runRationalPlan(ctx) {
+  const stage = (id) => { if (ctx.onStage) ctx.onStage(id); };
+  stage('regime');
+  const cl = await ctx.classify();
+  if (cl && cl.aborted) return { kind: 'aborted', cl };
+  if (!cl || !cl.ok) return { kind: 'error', reason: (cl && cl.reason) || 'classify failed', cl: cl || null };
+  if (cl.inconsistent) return { kind: 'inconsistent', verdict: 'No quadrature domain: the rational-φ shape system is inconsistent (1 ∈ I).' + ctx.sliceCaveat(cl), rigor: 'exact', bad: true, cl };
+  if (!cl.zeroDim) return { kind: 'positive-dim', verdict: 'Underdetermined: the rational-φ shape system is positive-dimensional (' + ctx.posDimDesc(cl) + ').' + ctx.sliceCaveat(cl), rigor: 'unknown', bad: true, cl };
+  stage('solve-real');
+  const r = await ctx.solveCertified();
+  if (r && r.aborted) return { kind: 'aborted', cl };
+  if (!r || !r.ok) return { kind: 'error', reason: (r && r.reason) || 'solve failed', cl };
+  const real = (r.solutions || []).filter((s) => Object.keys(s).every((k) => Math.abs(s[k].im) < 1e-4));
+  if (!real.length) return { kind: 'no-real', verdict: 'No quadrature domain: the rational-φ shape system has no real solution' + (cl.complexCount != null ? ' (of ' + cl.complexCount + ' distinct complex)' : '') + '.' + ctx.sliceCaveat(cl), rigor: 'exact', bad: true, cl, real };
+  stage('filter');
+  const leaf = rationalCertifyLeaf(real, ctx.nodeData, ctx.sysPolys, ctx.deps);
+  stage('gauge'); stage('assemble');
+  const asm = assembleRationalVerdict({ genuine: leaf.genuine, real, leaf, deps: ctx.deps, sliceCaveat: ctx.sliceCaveat, cl });
+  return { kind: 'rational', verdict: asm.verdict, rigor: asm.rigor, bad: asm.bad, count: asm.count, cl, real, certified: true, rows: leaf.rows, rigorProvenance: asm.rigorProvenance, genuine: leaf.genuine, nodeData: ctx.nodeData };
+}
