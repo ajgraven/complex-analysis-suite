@@ -41,7 +41,7 @@ import { state } from '../ui-state.mjs';
 import { QD_UI } from '../ui-registry.mjs';
 import _QD from '../solver.mjs';
 import { plainVar } from '../qd-varscheme.mjs';   // conjugate-model var scheme (plain-text labels)
-import { domainPlotData, momentPlotData, rationalPlotData } from './domain-mini-plot.mjs';   // #3 + C1-ext-B + C2-4: reconstructed-domain thumbnail geometry
+import { domainPlotData, momentPlotData, rationalPlotData, trianglePlotData } from './domain-mini-plot.mjs';   // #3 + C1-ext-B + C2-4 + C3-4: reconstructed-domain thumbnail geometry
 import * as PROVE from './prove-plan.mjs';   // the pure existence/uniqueness proof engine (fuller-orchestrator Phase A)
 const QD = _QD;
 
@@ -1784,6 +1784,53 @@ const QD = _QD;
         renderProofVerdict(pr);   // rational / inconsistent / no-real
       }).catch((e) => { _abort = null; setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
     }
+    // Detect EQUILATERAL-TRIANGLE data provable via the degree-3 route (Phase C3): exactly 3 simple (order-1)
+    // poles, real weights, equal magnitudes, centroid at the origin (the triangleMomentSystem symmetry gate
+    // re-checks exactly). Returns { nodes:[{re,im}×3], weights:[{re,im}×3] } or null.
+    function multiNodeTriangleData(hData) {
+      const poles = (hData && hData.poles) || [];
+      if (poles.length !== 3) return null;
+      const nodes = [], weights = [];
+      for (const p of poles) {
+        const pp = p.principal || [];
+        if (pp.length !== 1) return null;                              // order-1 nodes only (degree-3)
+        const a = p.a || { re: 0, im: 0 }, b = pp[0] || { re: 0, im: 0 };
+        if (Math.abs(b.im || 0) > 1e-9) return null;                   // real weights only
+        nodes.push({ re: a.re || 0, im: a.im || 0 }); weights.push({ re: b.re || 0, im: 0 });
+      }
+      const mag2 = nodes.map((z) => z.re * z.re + z.im * z.im), A2 = mag2[0], sc = Math.max(1, A2);
+      if (mag2.some((m) => Math.abs(m - A2) > 1e-6 * sc)) return null;                       // equal magnitudes
+      const cx = (nodes[0].re + nodes[1].re + nodes[2].re) / 3, cy = (nodes[0].im + nodes[1].im + nodes[2].im) / 3;
+      if (Math.hypot(cx, cy) > 1e-6 * Math.max(1, Math.sqrt(A2))) return null;               // centroid at origin
+      const b0 = weights[0].re;
+      if (weights.some((w) => Math.abs(w.re - b0) > 1e-6 * Math.max(1, Math.abs(b0)))) return null;   // equal weights
+      return { nodes, weights };
+    }
+    // Prove existence/uniqueness via the RATIONAL-φ EQUILATERAL-TRIANGLE (degree-3) formulation (Phase C3).
+    // Re-seeds the workspace with the 3-fold-symmetric shape system, then runs PROVE.runTrianglePlan (certified
+    // real solve in (P=R², s) → poles-outside-𝔻̄ + Schur–Cohn + boundary-simple univalence → gauge quotient →
+    // rigor verdict). Equilateral 3-real-magnitude-node data only in this increment.
+    function doProveTriangle(td, hData) {
+      let sys; try { sys = QE.triangleMomentSystem(td); } catch (e) { showError('Triangle system: ' + ((e && e.message) || e)); return; }
+      clearError();
+      try { store.seedFromPolys({ polys: sys.polys, vars: sys.vars }); } catch (e) { showError('Triangle system: could not seed — ' + ((e && e.message) || e)); return; }
+      _seededHData = hData; realSel.clear(); elimSel.clear(); refreshPickers(); if (canvas) canvas.clearSelection(); rerender();
+      const ctrl = _newAbort(); _abort = ctrl;
+      setBusy(true, 'Proving via the rational-φ (equilateral triangle, degree-3) formulation…');
+      const triCtx = {
+        sysPolys: sys.polys, nodeData: td, deps: proveDeps(),
+        sliceCaveat, posDimDesc, signal: ctrl && ctrl.signal,
+        classify: () => store.classifyAsync(null, {}, { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Triangle regime… ' + info.basis + ' generators, ' + info.pairs + ' pairs left') }),
+        solveCertified: () => store.solveRealCertifiedAsync(null, {}, { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Solving the shape system… ' + info.basis + ' gen, ' + info.pairs + ' pairs') }),
+      };
+      PROVE.runTrianglePlan(triCtx).then((pr) => {
+        _abort = null; setBusy(false); setStatus('');
+        if (pr.kind === 'aborted') { toast('Cancelled'); return; }
+        if (pr.kind === 'error') { const rn = pr.reason || 'failed'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
+        if (pr.kind === 'positive-dim') { renderPositiveDimVerdict(pr); return; }
+        renderProofVerdict(pr);   // triangle / inconsistent / no-real
+      }).catch((e) => { _abort = null; setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
+    }
     // THE one-click orchestrator (finding G-1 + Phase B): from the seeded system to the AUTHORITATIVE
     // genuine-QD verdict, with no manual op-chaining. Runs the cheap reductions (auto-reality if h is
     // real-axis symmetric, then linear propagation to a fixpoint, then Möbius saturation — each a labeled
@@ -1814,6 +1861,9 @@ const QD = _QD;
       // zero-dimensional in the shape (t=√c, d), certified + univalence-filtered (exclusive to 2-real-node data).
       const rd = (typeof QE.rationalMomentSystem === 'function') ? multiNodeRationalData(hData) : null;
       if (rd) { doProveRational(rd, hData); return; }
+      // EQUILATERAL-TRIANGLE (degree-3) route (Phase C3): 3 equal-magnitude real-weight nodes, centroid 0.
+      const td = (typeof QE.triangleMomentSystem === 'function') ? multiNodeTriangleData(hData) : null;
+      if (td) { doProveTriangle(td, hData); return; }
       if (fromData) { if (_seededHData !== hData && !seedFromDataDirect(hData)) return; } else if (!ensureSeed()) return;
       clearError();
       // Cheap reductions first (best-effort — the pipeline still runs on the current system on any error).
@@ -2050,12 +2100,13 @@ const QD = _QD;
       const rows = pr.rows || [];
       setStatus(verdict);
       const vActions = [];
-      if (pr.kind === 'zero-dim' || pr.kind === 'tree' || pr.kind === 'moment' || pr.kind === 'rational') {
+      const isReconstructKind = pr.kind === 'moment' || pr.kind === 'rational' || pr.kind === 'triangle';
+      if (pr.kind === 'zero-dim' || pr.kind === 'tree' || isReconstructKind) {
         // #1 (roadmap ALGEBRA_EXTENSIONS): a one-click EXACT boundary curve for a genuine QD. (The moment /
-        // rational routes' genuine maps are POLYNOMIAL φ=Σw_k zᵏ / RATIONAL φ=w0+R(z+dz²)/(1−cz²), not the
-        // (z_j,A) ansatz — the boundary-curve / QD-plot actions below are (z_j,A)-specific, so they are
-        // skipped for those kinds; both draw the reconstructed-φ thumbnail below instead.)
-        if (pr.kind !== 'moment' && pr.kind !== 'rational' && D >= 1 && QE && typeof QE.boundaryCurveFromPhi === 'function') {
+        // rational / triangle routes' genuine maps are POLYNOMIAL / RATIONAL φ, not the (z_j,A) ansatz — the
+        // boundary-curve / QD-plot actions below are (z_j,A)-specific, so they are skipped for those kinds;
+        // each draws its reconstructed-φ thumbnail below instead.)
+        if (!isReconstructKind && D >= 1 && QE && typeof QE.boundaryCurveFromPhi === 'function') {
           vActions.push({
             label: 'Show exact boundary curve',
             title: 'Eliminate the disk parameter to get the exact algebraic boundary curve Q(w,w̄)=0 and, when single-valued, the Schwarz function S(w) of the reconstructed quadrature domain (exact over ℚ(i) for the rationalized solution).',
@@ -2071,7 +2122,7 @@ const QD = _QD;
           });
         }
         // #3b (roadmap): hand the reconstructed genuine QD to the geometric QD tab (algebra→geometry).
-        if (pr.kind !== 'moment' && pr.kind !== 'rational' && D >= 1 && ctx && typeof ctx.showQDSolution === 'function' && activeEnv && activeEnv.hData && distinct[0]) {
+        if (!isReconstructKind && D >= 1 && ctx && typeof ctx.showQDSolution === 'function' && activeEnv && activeEnv.hData && distinct[0]) {
           vActions.push({
             label: 'View in the QD plot',
             title: 'Render the reconstructed quadrature domain in the geometric QD tab (boundary, cusps, critical set) and switch to it.',
@@ -2088,7 +2139,7 @@ const QD = _QD;
                 const proof = {
                   kind: pr.kind, verdict: pr.verdict, rigor: pr.rigor, bound: pr.bound || null, count: (pr.count != null ? pr.count : null),
                   rigorProvenance: pr.rigorProvenance || [], perSolution: rows, assumptions: specializationLedger(cl),
-                  stages: ((pr.kind === 'moment' ? PROVE.MOMENT_STAGES : pr.kind === 'rational' ? PROVE.RATIONAL_STAGES : PROVE.CERTIFY_STAGES) || []).map((s) => ({ id: s.id, title: s.title, why: s.why })),
+                  stages: ((pr.kind === 'moment' ? PROVE.MOMENT_STAGES : pr.kind === 'rational' ? PROVE.RATIONAL_STAGES : pr.kind === 'triangle' ? PROVE.TRIANGLE_STAGES : PROVE.CERTIFY_STAGES) || []).map((s) => ({ id: s.id, title: s.title, why: s.why })),
                 };
                 const out = { format: 'qd-proof', version: 1, proof, derivation: store.exportDAG() };
                 const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
@@ -2123,6 +2174,15 @@ const QD = _QD;
         if (rp) {
           vSet.plot = rp;
           vSet.plotCaption = 'reconstructed domain φ(∂𝔻) = w₀ + R(z+dz²)/(1−cz²) · quadrature nodes' + (D > 1 ? ' · showing 1 of ' + D : '');
+        }
+      }
+      // C3-4: the triangle route's genuine map is φ = R·z/(1 − c·z³) — sample its boundary + mark the 3 nodes.
+      if (pr.kind === 'triangle' && pr.genuine && pr.genuine.length && pr.genuine[0]) {
+        const nds = (pr.nodeData && pr.nodeData.nodes) || [];
+        let tp = null; try { tp = trianglePlotData(pr.genuine[0], nds); } catch (e) { tp = null; }
+        if (tp) {
+          vSet.plot = tp;
+          vSet.plotCaption = 'reconstructed domain φ(∂𝔻) = R·z/(1−cz³) · quadrature nodes' + (D > 1 ? ' · showing 1 of ' + D : '');
         }
       }
       if (vActions.length) vSet.actions = vActions;

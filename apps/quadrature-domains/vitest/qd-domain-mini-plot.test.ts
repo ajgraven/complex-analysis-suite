@@ -5,7 +5,7 @@ import { describe, it, expect } from "vitest";
 import _QD from "../app/solver.mjs";
 import "../app/sym-core.mjs";
 import "../app/workers/solver-graph.mjs"; // registers the QD families (boundedQD) so QD.evalPhi resolves headlessly
-import { domainPlotData, momentPlotData, rationalPlotData } from "../app/algebra/domain-mini-plot.mjs";
+import { domainPlotData, momentPlotData, rationalPlotData, trianglePlotData } from "../app/algebra/domain-mini-plot.mjs";
 
 const evalPhi = (_QD as any).evalPhi;
 const cardioid = { unbounded: false, family: "boundedQD", w0: { re: 0, im: 0 }, branches: [{ z: { re: 0, im: 0 }, A: [{ re: 1, im: 0 }, { re: 0.5, im: 0 }] }] };
@@ -96,5 +96,31 @@ describe("rationalPlotData — multi-node rational φ = w0 + R(z+dz²)/(1−cz²
     expect(rationalPlotData({ c: 1.5, d: 0, R: 1, w0: 0 }, nodes)).toBeNull();
     expect(rationalPlotData(null as any, nodes)).toBeNull();
     expect(rationalPlotData({ d: 0, R: 1, w0: 0 } as any, nodes)).toBeNull();   // no c
+  });
+});
+
+describe("trianglePlotData — equilateral rational φ = R·z/(1−cz³) thumbnail (C3-4)", () => {
+  const W = 0.8660254037844386;
+  const m = { c: 0.125, R: 63 / 32 };   // the c=⅛ ground-truth shape
+  const triNodes = [{ re: 1, im: 0 }, { re: -0.5, im: W }, { re: -0.5, im: -W }];
+
+  it("samples a finite closed boundary; φ(1) = R/(1−c) = 9/4", () => {
+    const d: any = trianglePlotData(m, triNodes, { samples: 240 });
+    expect(d).not.toBeNull();
+    expect(d.boundary.length).toBe(240);
+    expect(d.boundary.every((p: number[]) => p.every((cc) => Number.isFinite(cc)))).toBe(true);
+    expect(d.boundary[0][0]).toBeCloseTo(2.25, 6);   // θ=0 → R/(1−c) = (63/32)/(7/8) = 9/4
+    expect(d.boundary[0][1]).toBeCloseTo(0, 6);
+  });
+
+  it("marks the three quadrature nodes", () => {
+    const d: any = trianglePlotData(m, triNodes, { samples: 96 });
+    expect(d.nodes.length).toBe(3);
+  });
+
+  it("returns null when a pole is inside 𝔻̄ (|c| ≥ 1) or on bad input", () => {
+    expect(trianglePlotData({ c: 1.2, R: 1 }, triNodes)).toBeNull();
+    expect(trianglePlotData(null as any, triNodes)).toBeNull();
+    expect(trianglePlotData({ R: 1 } as any, triNodes)).toBeNull();   // no c
   });
 });
