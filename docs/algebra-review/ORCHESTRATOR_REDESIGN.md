@@ -370,3 +370,13 @@ are additive and low-risk. Order-of-magnitude: 5 PRs, comparable in aggregate to
   complete: certified real solve → Schur–Cohn + exact boundary count (rigorous `=` at all orders) → gauge
   quotient → verdict → reconstructed-φ thumbnail.** C2 (general multi-pole) remains DEFERRED (conjugate
   model intractable).
+- **2026-07-15 — C2 REOPENED (user: attempt it) → grounded + spun off to its own thread.** The multi-node
+  case needs a RATIONAL φ (the conjugate `(●)/(★)` model is positive-dim/intractable, C0; C1's polynomial φ is
+  single-node-only). Two throwaway spikes proved a **rational-φ moment route** is tractable + rigorous `=` for
+  degree-2 (symmetric AND general asymmetric: zero-dim, exact, `realCount=1` on the full data). Design + phased
+  plan: **[`RATIONAL_MOMENT_C2.md`](RATIONAL_MOMENT_C2.md)**. **C2-1 SHIPPED:** `QE.rationalMomentSystem(nodeData,
+  {degree:2})` — the rational analog of `pointFunctionalSystem` — emits the reduced zero-dim (t=√c, d) shape
+  system (gauge unknowns w0,R eliminated analytically to avoid a spurious positive-dim component), guarded by
+  the two ground-truth oracles (exact-satisfaction + zero-dim + recovers the truth). +6 tests. NEXT = C2-2
+  (univalence for rational φ) → C2-3 (gauge quotient + verdict) → C2-4 (UI + thumbnail). Degree-2 real first;
+  complex/off-axis + higher degree deferred.
