@@ -392,3 +392,54 @@ describe("prove-plan (7) rigorProvenance — the audit trail behind the badge (P
     expect(p.some((s: string) => /every branch of the case tree closed/.test(s))).toBe(true);
   });
 });
+
+describe("prove-plan (8) moment route — point-functional / Aharonov–Shapiro (Phase C1)", () => {
+  const buildCtx = (moments: any, order: number) => {
+    const sys = QE.pointFunctionalSystem(moments, { order });
+    const store = AS.create();
+    store.seedFromPolys({ polys: sys.polys, vars: sys.vars });
+    return {
+      order, momentPolys: sys.polys, deps: { QE, QC, QD, caps: { maxPoleOrder: 6 } },
+      sliceCaveat: () => "", posDimDesc: (cl: any) => (cl.numVars + " vars"),
+      classify: async () => store.classify(null, {}),
+      solveCertified: async () => store.solveRealCertifiedSync(null, {}),
+    };
+  };
+
+  it("reconstructMomentW extracts [null, w1, {re,im}₂] from a reim solution", () => {
+    const sol = { w1__re: { re: 1.5, im: 0 }, u2__re: { re: 0.5, im: 0 }, v2__re: { re: -0.2, im: 0 } };
+    const w = PROVE.reconstructMomentW(sol, 2);
+    expect(w[1]).toBeCloseTo(1.5);
+    expect(w[2].re).toBeCloseTo(0.5);
+    expect(w[2].im).toBeCloseTo(-0.2);
+  });
+
+  it("momentUnivalence: φ=z (w1=1) has no fold; w1≪2|w2| folds; w1≥2|w2| is univalent", () => {
+    const deps = { QE, QD };
+    expect(PROVE.momentUnivalence([null, 1], 1, deps).inside).toBe(0);                    // disk
+    expect(PROVE.momentUnivalence([null, 0.5, { re: 1, im: 0 }], 2, deps).inside).toBeGreaterThan(0); // fold
+    expect(PROVE.momentUnivalence([null, 3, { re: 0.5, im: 0 }], 2, deps).inside).toBe(0);            // ok
+  });
+
+  it("cardioid {M0:1.5,M1:0.5} ⇒ Unique quadrature domain ✓ (A&S), rigor exact", async () => {
+    const pr = await PROVE.runMomentPlan(buildCtx({ M0: 1.5, M1: 0.5 }, 2));
+    expect(pr.kind).toBe("moment");
+    expect(pr.count).toBe(1);
+    expect(pr.verdict).toContain("Unique quadrature domain ✓");
+    expect(pr.verdict).toContain("Aharonov–Shapiro");
+    expect(pr.rigor).toBe("exact");
+  });
+
+  it("complex moment {M0:2,M1:0.7+0.3i} (OFF-SLICE) ⇒ one genuine QD, folds rejected", async () => {
+    const pr = await PROVE.runMomentPlan(buildCtx({ M0: 2, M1: { re: 0.7, im: 0.3 } }, 2));
+    expect(pr.kind).toBe("moment");
+    expect(pr.count).toBe(1);   // the off-slice domain the real slice can't see
+    expect(pr.rows.filter((r: string) => /fold/.test(r)).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("{M0:1,M1:0.4} ⇒ no real moment solution ⇒ No quadrature domain", async () => {
+    const pr = await PROVE.runMomentPlan(buildCtx({ M0: 1, M1: 0.4 }, 2));
+    expect(pr.kind).toBe("no-real");
+    expect(pr.verdict).toContain("No quadrature domain");
+  });
+});
