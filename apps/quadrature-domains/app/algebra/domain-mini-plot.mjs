@@ -43,3 +43,39 @@ export function domainPlotData(phi, evalPhi, opts) {
   const bw = maxX - minX, bh = maxY - minY, pad = 0.1 * Math.max(bw, bh, 1e-6);
   return { boundary, nodes, view: [minX - pad, minY - pad, bw + 2 * pad, bh + 2 * pad] };
 }
+
+// momentPlotData(w, order, node, opts) → { boundary, nodes, view } for the MOMENT route (Phase C1).
+// The genuine map there is a POLYNOMIAL Riemann map φ(z) = a + Σ_{k=1}^{order} w_k zᵏ (rotation gauge
+// w₁>0 real), where a = φ(0) is the quadrature node. So the boundary φ(∂𝔻) is a direct trig sum of the
+// coefficients — no evalPhi and no (z_j,A) ansatz. Pure, unit-testable. Returns null on bad input / a
+// non-finite sample (same SVG y-down convention as domainPlotData).
+//   w    : [null, w1, {re,im}₂, …, {re,im}_order]  (w1 may be a number or {re}).
+//   node : {re,im} = a (the constant term / quadrature node); defaults to the origin.
+export function momentPlotData(w, order, node, opts) {
+  opts = opts || {};
+  const N = Math.max(24, opts.samples || 240);
+  if (!Array.isArray(w) || !(order >= 1)) return null;
+  const a = node || { re: 0, im: 0 };
+  const coef = [];   // coef[k] = {re,im} for k = 1..order
+  for (let k = 1; k <= order; k++) {
+    if (k === 1) { const w1 = (w[1] && w[1].re != null) ? w[1].re : w[1]; coef[k] = { re: w1 || 0, im: 0 }; }
+    else coef[k] = { re: (w[k] && w[k].re) || 0, im: (w[k] && w[k].im) || 0 };
+  }
+  const boundary = [];
+  for (let j = 0; j < N; j++) {
+    const th = (2 * Math.PI * j) / N;
+    let re = a.re || 0, im = a.im || 0;
+    for (let k = 1; k <= order; k++) { const c = Math.cos(k * th), s = Math.sin(k * th); re += coef[k].re * c - coef[k].im * s; im += coef[k].re * s + coef[k].im * c; }
+    if (!isFinite(re) || !isFinite(im)) return null;
+    boundary.push([re, -im]);   // SVG y grows downward
+  }
+  const nodes = [[a.re || 0, a.im ? -a.im : 0]];   // the single quadrature node a = φ(0) (avoid −0)
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const [x, y] of boundary) {
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+  }
+  if (!isFinite(minX) || !isFinite(minY)) return null;
+  const bw = maxX - minX, bh = maxY - minY, pad = 0.1 * Math.max(bw, bh, 1e-6);
+  return { boundary, nodes, view: [minX - pad, minY - pad, bw + 2 * pad, bh + 2 * pad] };
+}

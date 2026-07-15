@@ -494,7 +494,7 @@ const QD = _QD;
           svg.appendChild(c);
         });
         wrap.appendChild(svg);
-        const cap = div('algebra-verdict-plotcap'); cap.textContent = 'reconstructed domain φ(∂𝔻) · quadrature node(s) φ(zⱼ)';
+        const cap = div('algebra-verdict-plotcap'); cap.textContent = data.plotCaption || 'reconstructed domain φ(∂𝔻) · quadrature node(s) φ(zⱼ)';
         cap.style.fontSize = '11px'; cap.style.opacity = '0.7'; cap.style.marginTop = '2px';
         wrap.appendChild(cap);
         verdict.appendChild(wrap);

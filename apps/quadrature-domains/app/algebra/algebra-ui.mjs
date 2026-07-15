@@ -41,7 +41,7 @@ import { state } from '../ui-state.mjs';
 import { QD_UI } from '../ui-registry.mjs';
 import _QD from '../solver.mjs';
 import { plainVar } from '../qd-varscheme.mjs';   // conjugate-model var scheme (plain-text labels)
-import { domainPlotData } from './domain-mini-plot.mjs';   // #3: reconstructed-domain thumbnail geometry
+import { domainPlotData, momentPlotData } from './domain-mini-plot.mjs';   // #3 + C1-ext-B: reconstructed-domain thumbnail geometry
 import * as PROVE from './prove-plan.mjs';   // the pure existence/uniqueness proof engine (fuller-orchestrator Phase A)
 const QD = _QD;
 
@@ -1738,6 +1738,7 @@ const QD = _QD;
         if (pr.kind === 'aborted') { toast('Cancelled'); return; }
         if (pr.kind === 'error') { const rn = pr.reason || 'failed'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
         if (pr.kind === 'positive-dim') { renderPositiveDimVerdict(pr); return; }   // degenerate moment data
+        if (pr.kind === 'moment') pr.node = pf.node;   // C1-ext-B: the constant term a = φ(0) for the plot
         renderProofVerdict(pr);   // moment / inconsistent / no-real
       }).catch((e) => { _abort = null; setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
     }
@@ -2056,6 +2057,17 @@ const QD = _QD;
       const vSet = { text: verdict, assumptions: specializationLedger(cl), rigor: pr.rigor };
       if (pr.rigorProvenance && pr.rigorProvenance.length) vSet.rigorProvenance = pr.rigorProvenance;   // Phase E: "why this rigor"
       if (rows.length) vSet.solutionsText = rows.join('\n');
+      // C1-ext-B: the moment route's genuine map is the POLYNOMIAL φ = a + Σ w_k zᵏ, so plot its boundary
+      // φ(∂𝔻) + the quadrature node a straight from the coefficients (cheap — no elimination). Shows the
+      // FIRST genuine QD when several exist (the count is already in the verdict).
+      if (pr.kind === 'moment' && pr.genuine && pr.genuine.length && pr.genuine[0] && pr.genuine[0].w) {
+        const g0 = pr.genuine[0];
+        let mp = null; try { mp = momentPlotData(g0.w, g0.order || pr.order, pr.node); } catch (e) { mp = null; }
+        if (mp) {
+          vSet.plot = mp;
+          vSet.plotCaption = 'reconstructed domain φ(∂𝔻) = a + Σ wₖzᵏ · node a = φ(0)' + (D > 1 ? ' · showing 1 of ' + D : '');
+        }
+      }
       if (vActions.length) vSet.actions = vActions;
       if (canvas) canvas.setVerdict(vSet);
       toast(verdict, pr.bad ? { kind: 'error' } : {});
