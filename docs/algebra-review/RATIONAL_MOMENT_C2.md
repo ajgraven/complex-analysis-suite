@@ -109,6 +109,26 @@ snap can't certify `=` — it correctly reads **`≈` (estimate)**. Rational-sha
 family) read `=`. Upgrading irrational shapes to `=` needs an interval / number-field certifier (the same
 deferred item flagged in the maturity review) — out of scope here.
 
-**Deferred:** complex (off-axis) node data (e.g. the equilateral triangle — needs the reim-split
-generalization of the builder); degree ≥ 3 (higher-order QDs); interval/number-field `=` for irrational
+**Deferred:** general (asymmetric / off-centre) complex node data; interval/number-field `=` for irrational
 shapes.
+
+## 7. C3 — the equilateral triangle (3-fold symmetric, degree 3)
+
+A 3-node QD is degree-3 rational. The **equilateral** case (3 nodes at |a|·{1,ω,ω²}, equal weight b, centroid 0)
+is 3-fold equivariant (φ(ωz)=ωφ(z)), so — the degree-3 analog of the symmetric 2-node — it is
+**φ(z) = R·z/(1 − c·z³)**, a SINGLE real shape parameter c (poles ±c^{−1/3}·{1,ω,ω²} outside 𝔻̄ ⟺ c<1). The
+3-fold symmetry collapses the three OFF-AXIS nodes to a REAL system, avoiding the complex reim-split.
+
+- Data map (Schwarz residues): nodes at `R·c^{1/3}/(1−c²)·{1,ω,ω²}`, weight `b = R²(1+2c²)/(3(1−c²)²)`.
+  Validated numerically (Green's area + the ∫w³ moment `∫_Ω w³ dA = π·3·b·|a|³`).
+- Divided difference collapses to `N(z₁,z₂) = 1 + c·z₁z₂(z₁+z₂)` (a cubic) — the degree-3 analog of the
+  degree-2 `1 + c·z₁z₂ + d(z₁+z₂)`.
+- Inverse (spike): with s=c^{1/3}, the eq for |a| SQUARED to stay over ℚ gives the ZERO-DIM system in (R, s):
+  `R²s² − |a|²(1−s⁶)² = 0`, `R²(1+2s⁶) − 3b(1−s⁶)² = 0`. `two-point`-style: the equilateral-triangle preset
+  (|a|=1, b=1) recovers c ≈ 0.221 (a root of 2v³−3v+1, v=c^{2/3}); its shape is irrational ⇒ honest `≈`.
+
+**C3-1 SHIPPED:** `QE.triangleMomentSystem(data)` — the reduced (R, s) system, guarded by the rational
+ground-truth oracle (R=63/32, s=½, c=⅛ ⇒ cube-root nodes, weight 11/8) + zero-dim + the symmetry rejections
+(non-equilateral / off-centre / unequal weights). NEXT = C3-2 (univalence for the degree-3 map: φ′ numerator
+1+2cz³, boundary via `N=1+c·z₁z₂(z₁+z₂)`) → C3-3 (reconstruct + verdict) → C3-4 (detect triangular data +
+route + thumbnail). Degree-3 EQUILATERAL only; general asymmetric 3-node stays the frontier.

@@ -899,6 +899,43 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
     return { polys, vars: ['t', 'd'], params: [] };
   }
 
+  // C3-1 — the EQUILATERAL-TRIANGLE (3-fold symmetric) rational moment-match system. A 3-node QD is degree-3
+  // rational; the equilateral case (3 nodes at |a|·{1,ω,ω²}, equal weight b, centroid 0) is 3-fold equivariant
+  // (φ(ωz)=ωφ(z)), so — the degree-3 analog of the symmetric 2-node — it is φ(z) = R·z/(1 − c·z³) with a SINGLE
+  // real shape parameter c (poles ±c^{-1/3}·{1,ω,ω²} outside 𝔻̄ ⟺ c<1). On |z|=1 the Schwarz function gives
+  // nodes at R·c^{1/3}/(1−c²)·{1,ω,ω²} and weight b = R²(1+2c²)/(3(1−c²)²). With s = c^{1/3} the inverse — the
+  // eq for |a| SQUARED to stay over ℚ (|a|² = |a|·conj rational even when |a| is not) — is the ZERO-DIM system:
+  //   R²·s² − |a|²·(1 − s⁶)² = 0
+  //   R²·(1 + 2 s⁶) − 3·b·(1 − s⁶)² = 0
+  // in (R, s). The ±R / ±s gauge is quotiented downstream (R>0, s>0); c = s³. Variables ['R','s']; field ℚ.
+  // Non-equilateral / off-centre / complex-weight data throws (general degree-3 is a later increment).
+  function triangleMomentSystem(data) {
+    const S = getSym();
+    if (!S) throw new Error('QD.QDEquations: QD.Sym not loaded');
+    const { mpolyVar: mv, mpolyInt: mi, mpolyConst: mc, gauss, rat } = S;
+    const nodes = (data && data.nodes) || [], weights = (data && data.weights) || [];
+    if (nodes.length !== 3 || weights.length !== 3) throw new Error('triangleMomentSystem: needs exactly 3 nodes and 3 weights');
+    const reOf = (z) => (z && z.re != null) ? z.re : z, imOf = (z) => (z && z.im != null) ? z.im : 0;
+    const mag2 = nodes.map((z) => reOf(z) * reOf(z) + imOf(z) * imOf(z));
+    const A2 = mag2[0], sc = Math.max(1, A2);
+    if (mag2.some((m) => Math.abs(m - A2) > 1e-6 * sc)) throw new Error('triangleMomentSystem: the 3 nodes are not equidistant from the centroid — not 3-fold symmetric');
+    const cX = (reOf(nodes[0]) + reOf(nodes[1]) + reOf(nodes[2])) / 3, cY = (imOf(nodes[0]) + imOf(nodes[1]) + imOf(nodes[2])) / 3;
+    if (Math.hypot(cX, cY) > 1e-6 * Math.max(1, Math.sqrt(A2))) throw new Error('triangleMomentSystem: the nodes are not centred at the origin — off-centre triangles need the general degree-3 route');
+    if (weights.some((w) => Math.abs(imOf(w)) > 1e-9)) throw new Error('triangleMomentSystem: complex weights are not supported');
+    const b0 = reOf(weights[0]);
+    if (weights.some((w) => Math.abs(reOf(w) - b0) > 1e-6 * Math.max(1, Math.abs(b0)))) throw new Error('triangleMomentSystem: the 3 weights are not equal — not 3-fold symmetric');
+    if (!(A2 > 1e-12) || !(b0 > 1e-12)) throw new Error('triangleMomentSystem: degenerate node magnitude or weight');
+    const Q = (x) => { const [n, d] = _ratApprox(x || 0); return mc(gauss(rat(n, d), rat(0, 1))); };   // exact ℚ const
+    const A2c = Q(A2), Bc = Q(b0);
+    const R = mv('R'), s = mv('s'), s6 = s.pow(6), one = mi(1), om = one.sub(s6);
+    const R2 = R.mul(R), s2 = s.mul(s), om2 = om.mul(om);
+    const polys = [
+      R2.mul(s2).sub(A2c.mul(om2)),                                       // R²s² − |a|²(1−s⁶)²
+      R2.mul(one.add(mi(2).mul(s6))).sub(mi(3).mul(Bc).mul(om2)),         // R²(1+2s⁶) − 3b(1−s⁶)²
+    ].filter((p) => !p.isZero());
+    return { polys, vars: ['R', 's'], params: [] };
+  }
+
   // Classical BOUNDED QD gate (the bounded analog of the Faber UQD gate): bounded,
   // no weighted-family markers, and a φ with one branch per pole (so the bounded
   // {z_j, A_{j,k}} representation is present). PQD/LQD carry alpha/lqdBeta/z0/gamma/q
@@ -1003,7 +1040,7 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
   }
 
   const QDEquations = {
-    generateClassicalBounded, generateSchwarzBounded, pointFunctionalSystem, rationalMomentSystem, reimSplit, realAxisSymmetry,
+    generateClassicalBounded, generateSchwarzBounded, pointFunctionalSystem, rationalMomentSystem, triangleMomentSystem, reimSplit, realAxisSymmetry,
     isClassicalBounded, boundaryCurve, boundaryCurveFromPhi,   // exact Schwarz curve Q(w,w̄)=0 + rational S(w) from a (solved) QD
     residualAtSolution, residualReimAtSolution, verifySolutionExact,   // exact ℚ(i) solution verification (PF-1/E1)
     buildVarMap, buildRealVarMap,
