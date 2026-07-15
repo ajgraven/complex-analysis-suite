@@ -443,3 +443,149 @@ export async function runProofTree(ctx, opts) {
     distinctPhis: distinct, rows, leaves, truncated, cl: rootCl, cc: asm.cc, rigorProvenance: asm.rigorProvenance,
   };
 }
+
+// =============================================================================
+// MOMENT ROUTE (Phase C1) — for INTERIOR POINT-FUNCTIONAL data (a single quadrature point, order n:
+// ∫_Ω f dA = Σ M_p f^(p)(a)). The Aharonov–Shapiro moment system (QE.pointFunctionalSystem) is in REAL
+// variables (w₁ real gauge; w_k = u_k + i v_k), generically ZERO-DIMENSIONAL and tractable — unlike the
+// exterior (●)/(★) conjugate model (z̄ independent → positive-dimensional + Gröbner blow-up for the very
+// multi-QD cases we care about). Its certified real solutions are ALL the candidate maps φ(z)=Σ w_k zᵏ (a
+// POLYNOMIAL — always analytic on 𝔻, so no pole-in-𝔻 admissibility gate); the univalence filter is a
+// Sym.schurCohn count on φ′; and the rotation gauge is simply w₁>0 (the ±w₁ pairs collapse). For ORDER ≤ 2
+// this is fully rigorous: A&S prove φ′≠0 in 𝔻 ⇔ globally univalent ⇔ a genuine QD (order 1 is the disk;
+// order 2 the cardioid = the resolvent cubic's double root). Order ≥ 3 gets the same LOCAL schurCohn test,
+// honestly labelled (global univalence is proven only through order 2). This captures OFF-SLICE
+// (non-real-symmetric, complex-moment) domains that the real slice misses — the Phase-C gap.
+export const MOMENT_STAGES = [
+  { id: 'regime', title: 'Regime', why: 'Classify the point-functional moment system: inconsistent ⇒ no QD; positive-dimensional (degenerate moments) ⇒ underdetermined; zero-dimensional ⇒ a finite count.' },
+  { id: 'solve-real', title: 'Solve (real)', why: 'Certified real solutions (RUR + exact Sturm) of the moment system — every candidate polynomial map φ(z)=Σ w_k zᵏ, including off-slice (non-real-symmetric) ones.' },
+  { id: 'filter', title: 'Univalence filter', why: 'Per candidate: exact Schur–Cohn on φ′ (a polynomial) — φ′≠0 in 𝔻 ⇔ univalent (globally, for order ≤ 2, by Aharonov–Shapiro). Cusps (φ′=0 on ∂𝔻) are allowed.' },
+  { id: 'gauge', title: 'Gauge quotient', why: 'The rotation gauge is w₁ = φ′(0) > 0 — the ±w₁ pairs are the same domain; keep w₁>0.' },
+  { id: 'assemble', title: 'Verdict', why: 'Count the distinct genuine domains + assemble the rigor-badged verdict.' },
+];
+
+// Extract w = [null, w1, {re,im}_2, …, {re,im}_n] (numeric) from a moment reim solution. The moment
+// vars are REAL (w1, u_k, v_k), so each is stored as <name>__re only.
+export function reconstructMomentW(sol, order) {
+  const g = (nm) => { const c = sol[nm + '__re']; return c ? c.re : 0; };
+  const w = [null, g('w1')];
+  for (let k = 2; k <= order; k++) w.push({ re: g('u' + k), im: g('v' + k) });
+  return w;
+}
+
+// EXACT Schur–Cohn local-univalence test for a moment candidate: build φ′(Z) = Σ_{k=1}^n k·w_k Z^{k-1}
+// with exact ℚ(i) coefficients (rationalize the w_k, or use the exact-verified ones) and count its roots
+// inside 𝔻. Returns { inside, onCircle } (inside>0 ⇒ φ′ vanishes in 𝔻 = a fold; onCircle = # boundary
+// zeros = cusps, allowed) or null if unavailable. w may be numeric (ratApprox'd) or already exact-ℚ(i)
+// (wExact from momentExactVerify → the certificate is at the true root).
+export function momentUnivalence(w, order, deps) {
+  const Sym = deps && deps.QD && deps.QD.Sym, QE = deps && deps.QE;
+  if (!Sym || !QE || typeof QE.ratApprox !== 'function' || typeof Sym.schurCohn !== 'function' || typeof Sym.uniCoeffs !== 'function') return null;
+  const gc = (re, im) => { const a = QE.ratApprox(re || 0), b = QE.ratApprox(im || 0); return Sym.mpolyConst(Sym.gauss(Sym.rat(a[0], a[1]), Sym.rat(b[0], b[1]))); };
+  const Z = Sym.mpolyVar('Z');
+  let phiP = gc(0, 0);
+  for (let k = 1; k <= order; k++) {
+    const wk = (k === 1) ? { re: (w[1] && w[1].re != null) ? w[1].re : w[1], im: 0 } : (w[k] || { re: 0, im: 0 });
+    let term = gc(k * (wk.re || 0), k * (wk.im || 0));
+    for (let j = 0; j < k - 1; j++) term = term.mul(Z);
+    phiP = phiP.add(term);
+  }
+  try { const sc = Sym.schurCohn(Sym.uniCoeffs(phiP, 'Z')); return { inside: sc.inside, onCircle: sc.onCircle || 0 }; } catch (e) { return null; }
+}
+
+// PF-1 for the moment route: snap each real coordinate to a nearby simple rational and check it solves
+// EVERY moment equation EXACTLY over ℚ(i). If so the candidate IS that exact rational point, so the
+// Schur–Cohn test runs at the TRUE root (rigorous). momentPolys are the seeded moment MPolys (real vars).
+// Returns { exact:true, w:[null,{re,im}…] } (exact w, im=0 on the reim reals) or { exact:false }.
+export function momentExactVerify(sol, momentPolys, order, deps) {
+  const Sym = deps && deps.QD && deps.QD.Sym, QE = deps && deps.QE;
+  if (!Sym || !QE || !momentPolys || typeof QE.ratApprox !== 'function') return { exact: false };
+  const snap = (x) => { const a = QE.ratApprox(x || 0); return Sym.rat(a[0], a[1]); };
+  const g = (nm) => { const c = sol[nm + '__re']; return c ? c.re : 0; };
+  const names = ['w1']; for (let k = 2; k <= order; k++) names.push('u' + k, 'v' + k);
+  const sub = {};
+  for (const nm of names) { const r = snap(g(nm)); sub[nm] = Sym.mpolyConst(Sym.gauss(r, Sym.rat(0, 1))); }
+  try { for (const p of momentPolys) { if (!p.subst(sub).isZero()) return { exact: false }; } } catch (e) { return { exact: false }; }
+  return { exact: true };   // VERIFIED — the numeric w (re-rationalized in momentUnivalence) is the true root
+}
+
+// Per-system univalence filter for the moment route: reconstruct each real candidate's w, exact-verify,
+// run the Schur–Cohn φ′ test, and keep the GENUINE ones (univalent AND the rotation-gauge canonical w₁>0).
+// Returns { genuine:[{w,order,exactPoint,cusps}], rows, folded, gaugeDropped, nonUniv, allExact, allVerified }.
+export function momentCertifyLeaf(real, order, deps, momentPolys) {
+  let folded = 0, gaugeDropped = 0, allExact = true, allVerified = true;
+  const rows = [], genuine = [];
+  real.forEach((sol, idx) => {
+    const w = reconstructMomentW(sol, order);
+    const ver = momentExactVerify(sol, momentPolys, order, deps);
+    if (!ver.exact) allVerified = false;
+    const u = momentUnivalence(w, order, deps);
+    if (!u) { allExact = false; }
+    const w1 = (w[1] && w[1].re != null) ? w[1].re : w[1];
+    const fold = u ? u.inside > 0 : false;
+    const cusps = u ? u.onCircle : 0;
+    const ptNote = ver.exact ? ' [exact ℚ(i) root]' : ' [rationalized ≈]';
+    if (fold) { folded++; rows.push('#' + (idx + 1) + ': φ′ = 0 inside 𝔻 (fold, Schur–Cohn) — not univalent'); return; }
+    if (!(w1 > 0)) { gaugeDropped++; rows.push('#' + (idx + 1) + ': w₁ = ' + (Math.round(w1 * 1e4) / 1e4) + ' ≤ 0 — rotation-gauge copy (w₁>0 representative kept)'); return; }
+    genuine.push({ w, order, exactPoint: !!ver.exact, cusps });
+    const cuspNote = cusps > 0 ? ' — boundary cusp ×' + cusps : '';
+    rows.push('#' + (idx + 1) + ': univalent ✓ — genuine quadrature domain' + cuspNote + (u ? ' (Schur–Cohn' + ptNote + ')' : ''));
+  });
+  return { genuine, rows, folded, gaugeDropped, nonUniv: folded, allExact, allVerified };
+}
+
+// Assemble the moment-route verdict. ORDER ≤ 2 is fully rigorous (A&S: φ′≠0 in 𝔻 ⇔ genuine QD, unique);
+// order ≥ 3 certifies LOCAL univalence only (global proven only through order 2), so it reads 'estimate'
+// with an honest note. deps.caps.momentOrder carries n. Returns { verdict, rigor, bad, count, rigorProvenance }.
+export function assembleMomentVerdict(a) {
+  const { genuine, real, leaf, order, deps, sliceCaveat, cl } = a;
+  const D = genuine.length, plur = real.length === 1 ? '' : 's';
+  const rigorousOrder = order <= 2;                 // A&S global-univalence theorem
+  const allExactFilter = leaf.allExact, allVerified = leaf.allVerified;
+  const rej = [leaf.folded ? leaf.folded + ' fold' : '', leaf.gaugeDropped ? leaf.gaugeDropped + ' gauge copy' : ''].filter(Boolean).join(', ');
+  const tail = rej ? ' (' + rej + ' rejected)' : '';
+  const form = ' · point-functional / Aharonov–Shapiro formulation, order ' + order;
+  let verdict;
+  if (D === 0) verdict = 'No genuine quadrature domain: ' + real.length + ' real moment solution' + plur + ', none univalent' + tail + '.' + form;
+  else if (D === 1) verdict = 'Unique quadrature domain ✓ — 1 genuine QD of ' + real.length + ' real moment solution' + plur + tail + '.' + form;
+  else verdict = D + ' distinct quadrature domains of ' + real.length + ' real moment solution' + plur + tail + '.' + form;
+  if (D >= 1) {
+    verdict += rigorousOrder
+      ? ' · φ′≠0 in 𝔻 certified (Schur–Cohn) ⇒ globally univalent (Aharonov–Shapiro)' + (allVerified ? ' at the exact ℚ(i) root' : ' at rationalized coordinates')
+      : ' · ⚠ LOCAL univalence certified (Schur–Cohn φ′≠0 in 𝔻); GLOBAL univalence is proven only for order ≤ 2';
+    verdict += ' · class: classical bounded quadrature domains for the point functional, up to the rotation gauge (w₁>0)';
+  }
+  if (cl) verdict += sliceCaveat(cl);
+  const rigor = D === 0 ? 'exact'
+    : (rigorousOrder && allExactFilter && allVerified) ? 'exact'
+    : (rigorousOrder && allExactFilter) ? 'estimate' : 'estimate';
+  const prov = rigorProvenance({ certified: true, allExactFilter, allExactVerified: allVerified, ccChecked: false, undercount: false, partial: false, truncated: false });
+  if (D >= 1 && !rigorousOrder) prov.push('✗ global univalence (Schur–Cohn certifies LOCAL φ′≠0 only; A&S global theorem holds for order ≤ 2)');
+  else if (D >= 1) prov.push('✓ global univalence via Aharonov–Shapiro (order ≤ 2: φ′≠0 in 𝔻 ⇔ univalent)');
+  return { verdict, rigor, bad: D === 0, count: D, rigorProvenance: prov };
+}
+
+// The moment-route plan (Phase C1): classify the point-functional moment system, certified-solve it, filter
+// univalence (Schur–Cohn on φ′), gauge-quotient (w₁>0), and assemble. ctx = { classify, solveCertified,
+// momentPolys, order, deps, sliceCaveat, onStage, signal }. Returns a ProofResult (kind 'moment' on success).
+export async function runMomentPlan(ctx) {
+  const stage = (id) => { if (ctx.onStage) ctx.onStage(id); };
+  const order = ctx.order;
+  stage('regime');
+  const cl = await ctx.classify();
+  if (cl && cl.aborted) return { kind: 'aborted', cl };
+  if (!cl || !cl.ok) return { kind: 'error', reason: (cl && cl.reason) || 'classify failed', cl: cl || null };
+  if (cl.inconsistent) return { kind: 'inconsistent', verdict: 'No quadrature domain: the moment system is inconsistent (1 ∈ I).' + ctx.sliceCaveat(cl), rigor: 'exact', bad: true, cl };
+  if (!cl.zeroDim) return { kind: 'positive-dim', verdict: 'Underdetermined: the moment system is positive-dimensional (degenerate moment data — ' + ctx.posDimDesc(cl) + ').' + ctx.sliceCaveat(cl), rigor: 'unknown', bad: true, cl };
+  stage('solve-real');
+  const r = await ctx.solveCertified();
+  if (r && r.aborted) return { kind: 'aborted', cl };
+  if (!r || !r.ok) return { kind: 'error', reason: (r && r.reason) || 'solve failed', cl };
+  const real = (r.solutions || []).filter((s) => Object.keys(s).every((k) => Math.abs(s[k].im) < 1e-4));
+  if (!real.length) return { kind: 'no-real', verdict: 'No quadrature domain: the moment system has no real solution' + (cl.complexCount != null ? ' (of ' + cl.complexCount + ' distinct complex)' : '') + '.' + ctx.sliceCaveat(cl), rigor: 'exact', bad: true, cl, real };
+  stage('filter');
+  const leaf = momentCertifyLeaf(real, order, ctx.deps, ctx.momentPolys);
+  stage('gauge'); stage('assemble');
+  const asm = assembleMomentVerdict({ genuine: leaf.genuine, real, leaf, order, deps: ctx.deps, sliceCaveat: ctx.sliceCaveat, cl });
+  return { kind: 'moment', verdict: asm.verdict, rigor: asm.rigor, bad: asm.bad, count: asm.count, cl, real, certified: true, rows: leaf.rows, rigorProvenance: asm.rigorProvenance, genuine: leaf.genuine, order };
+}

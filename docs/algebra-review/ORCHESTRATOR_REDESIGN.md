@@ -321,3 +321,22 @@ are additive and low-risk. Order-of-magnitude: 5 PRs, comparable in aggregate to
   `rigorProvenance` helper marks conditions + notes a truncated tree / residual-only cross-check. Gate +
   browser-verify pending. **▓▓ Phase E is the LAST phase — the fuller-orchestrator redesign is COMPLETE
   (A engine → B tree → [C deferred] → D from-data → E transcript). ▓▓**
+- **2026-07-15 — Phase C REVISED + BUILT (C0 pivot + C1 moment route).** User: off-slice QDs DO occur;
+  do C0 grounding first, then build C1. **C0 spikes (throwaway) found:** the conjugate `(●)/(★)` reim system
+  keeps z̄,Ā INDEPENDENT (disk = 8 reim vars) ⇒ POSITIVE-DIMENSIONAL (disk Krull 2) even after
+  assumeReal+propagate+saturate; certified solve FAILS; two-point solve HANGS; cardioid Gröbner > 300 gens.
+  **The conjugate model is intractable exactly for the multi-QD / off-slice cases** — "add the imaginary
+  slice" is a dead end (it's identically positive-dim). **PIVOT: the MOMENT (point-functional / Aharonov–
+  Shapiro) formulation** (`QE.pointFunctionalSystem`) is REAL-variable, generically ZERO-DIM, tractable, and
+  its certified real solutions are ALL candidate polynomial maps φ=Σw_k zᵏ — capturing off-slice domains,
+  with NO reality slice. Validated: cardioid {1.5,0.5}→certReal 2, φ′ Schur–Cohn ⇒ w₁=±1 (both univalent,
+  cusp), w₁>0 gauge ⇒ **Unique** (A&S); **complex moment {2, 0.7+0.3i} (OFF-SLICE) ⇒ certReal 4, 2 folds
+  rejected, w₁>0 ⇒ Unique** — the domain the real slice can't see; {1,0.4}→0 (no QD). **C1 ENGINE + UI
+  BUILT** on branch `feat/prove-moment-route`: `prove-plan.mjs` gains `MOMENT_STAGES`, `reconstructMomentW`,
+  `momentUnivalence` (Schur–Cohn on φ′), `momentExactVerify` (PF-1), `momentCertifyLeaf`,
+  `assembleMomentVerdict` (order ≤ 2 rigorous `=` via A&S; order ≥ 3 LOCAL-only, honest), `runMomentPlan`;
+  `algebra-ui.mjs` gains `pointFunctionalMoments(hData)` (single node, real M₀) + `doProveMoment` — ✦ Prove
+  ROUTES point-functional data to the moment plan; `renderProofVerdict` handles kind `'moment'`. +5 tests
+  (37 total). **Scope:** C1 = point-functional (`=`, off-slice-complete, order ≤ 2 rigorous); C2 = general
+  multi-pole (conjugate model, research-limited, honest lower bound) — DEFERRED. Gate + browser-verify + PR
+  in progress.

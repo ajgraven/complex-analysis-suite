@@ -1702,6 +1702,45 @@ const QD = _QD;
         return true;
       } catch (e) { showError('Seed from data: ' + ((e && e.message) || e)); return false; }
     }
+    // Detect INTERIOR POINT-FUNCTIONAL data (Phase C1): a single quadrature node whose leading residue
+    // M₀ = C_{1} is real & positive (the area). Then the Aharonov–Shapiro MOMENT system applies, with
+    // moments M_p = C_{p+1} (the principal-part coefficients) and order = #principal terms. Returns
+    // { moments, order, node } or null (⇒ not point-functional; use the (●)/(★) route).
+    function pointFunctionalMoments(hData) {
+      const poles = (hData && hData.poles) || [];
+      if (poles.length !== 1) return null;
+      const pp = poles[0].principal || [];
+      if (!pp.length) return null;
+      const M0 = pp[0] || { re: 0, im: 0 };
+      if (Math.abs(M0.im || 0) > 1e-9 || !(M0.re > 1e-12)) return null;   // M₀ = area must be real + positive
+      const moments = { M0: M0.re };
+      for (let p = 1; p < pp.length; p++) moments['M' + p] = { re: pp[p].re || 0, im: pp[p].im || 0 };
+      return { moments, order: pp.length, node: poles[0].a || { re: 0, im: 0 } };
+    }
+    // Prove existence/uniqueness via the MOMENT formulation (Phase C1). Re-seeds the workspace with the
+    // Aharonov–Shapiro moment system (so the shown derivation IS the proof), then runs PROVE.runMomentPlan
+    // (certified real solve → Schur–Cohn φ′ univalence → w₁>0 gauge → rigor verdict). Point-functional only.
+    function doProveMoment(pf, hData) {
+      let sys; try { sys = QE.pointFunctionalSystem(pf.moments, { order: pf.order }); } catch (e) { showError('Moment system: ' + ((e && e.message) || e)); return; }
+      clearError();
+      try { store.seedFromPolys({ polys: sys.polys, vars: sys.vars }); } catch (e) { showError('Moment system: could not seed — ' + ((e && e.message) || e)); return; }
+      _seededHData = hData; realSel.clear(); elimSel.clear(); refreshPickers(); if (canvas) canvas.clearSelection(); rerender();
+      const ctrl = _newAbort(); _abort = ctrl;
+      setBusy(true, 'Proving via the moment (point-functional / Aharonov–Shapiro) formulation…');
+      const momentCtx = {
+        order: pf.order, momentPolys: sys.polys, deps: proveDeps(),
+        sliceCaveat, posDimDesc, signal: ctrl && ctrl.signal,
+        classify: () => store.classifyAsync(null, {}, { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Moment regime… ' + info.basis + ' generators, ' + info.pairs + ' pairs left') }),
+        solveCertified: () => store.solveRealCertifiedAsync(null, {}, { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Solving the moment system… ' + info.basis + ' gen, ' + info.pairs + ' pairs') }),
+      };
+      PROVE.runMomentPlan(momentCtx).then((pr) => {
+        _abort = null; setBusy(false); setStatus('');
+        if (pr.kind === 'aborted') { toast('Cancelled'); return; }
+        if (pr.kind === 'error') { const rn = pr.reason || 'failed'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
+        if (pr.kind === 'positive-dim') { renderPositiveDimVerdict(pr); return; }   // degenerate moment data
+        renderProofVerdict(pr);   // moment / inconsistent / no-real
+      }).catch((e) => { _abort = null; setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
+    }
     // THE one-click orchestrator (finding G-1 + Phase B): from the seeded system to the AUTHORITATIVE
     // genuine-QD verdict, with no manual op-chaining. Runs the cheap reductions (auto-reality if h is
     // real-axis symmetric, then linear propagation to a fixpoint, then Möbius saturation — each a labeled
@@ -1722,6 +1761,12 @@ const QD = _QD;
       const hData = activeEnv ? activeEnv.hData : (state.mode === 'bounded' ? lastHData : null);
       if (!hData) { toast(activeEnv ? (STR.noSolve || 'No classical bounded QD solved yet.') : 'No classical bounded quadrature data — load a bounded (classical) h (or solve one) first.', { kind: 'error' }); return; }
       if (typeof QD.isBoundaryUnivalent !== 'function') { showError('Univalence: the numeric univalence machinery (solver.js) is not loaded.'); return; }
+      // MOMENT ROUTE (Phase C1): point-functional data (a single quadrature node with real M₀) proves via the
+      // Aharonov–Shapiro MOMENT formulation — REAL, zero-dimensional, tractable — and it captures OFF-SLICE
+      // (non-real-symmetric) domains that the (●)/(★) reality slice misses (and that the conjugate model is
+      // positive-dimensional / intractable for). Exclusive to point-functional data.
+      const pf = (typeof QE.pointFunctionalSystem === 'function') ? pointFunctionalMoments(hData) : null;
+      if (pf) { doProveMoment(pf, hData); return; }
       if (fromData) { if (_seededHData !== hData && !seedFromDataDirect(hData)) return; } else if (!ensureSeed()) return;
       clearError();
       // Cheap reductions first (best-effort — the pipeline still runs on the current system on any error).
@@ -1958,9 +2003,11 @@ const QD = _QD;
       const rows = pr.rows || [];
       setStatus(verdict);
       const vActions = [];
-      if (pr.kind === 'zero-dim' || pr.kind === 'tree') {
-        // #1 (roadmap ALGEBRA_EXTENSIONS): a one-click EXACT boundary curve for a genuine QD.
-        if (D >= 1 && QE && typeof QE.boundaryCurveFromPhi === 'function') {
+      if (pr.kind === 'zero-dim' || pr.kind === 'tree' || pr.kind === 'moment') {
+        // #1 (roadmap ALGEBRA_EXTENSIONS): a one-click EXACT boundary curve for a genuine QD. (The moment
+        // route's genuine maps are POLYNOMIAL φ=Σw_k zᵏ, not the (z_j,A) rational ansatz — the boundary-curve
+        // / QD-plot actions below are (z_j,A)-specific, so they are skipped for the 'moment' kind.)
+        if (pr.kind !== 'moment' && D >= 1 && QE && typeof QE.boundaryCurveFromPhi === 'function') {
           vActions.push({
             label: 'Show exact boundary curve',
             title: 'Eliminate the disk parameter to get the exact algebraic boundary curve Q(w,w̄)=0 and, when single-valued, the Schwarz function S(w) of the reconstructed quadrature domain (exact over ℚ(i) for the rationalized solution).',
@@ -1976,7 +2023,7 @@ const QD = _QD;
           });
         }
         // #3b (roadmap): hand the reconstructed genuine QD to the geometric QD tab (algebra→geometry).
-        if (D >= 1 && ctx && typeof ctx.showQDSolution === 'function' && activeEnv && activeEnv.hData && distinct[0]) {
+        if (pr.kind !== 'moment' && D >= 1 && ctx && typeof ctx.showQDSolution === 'function' && activeEnv && activeEnv.hData && distinct[0]) {
           vActions.push({
             label: 'View in the QD plot',
             title: 'Render the reconstructed quadrature domain in the geometric QD tab (boundary, cusps, critical set) and switch to it.',
@@ -1993,7 +2040,7 @@ const QD = _QD;
                 const proof = {
                   kind: pr.kind, verdict: pr.verdict, rigor: pr.rigor, bound: pr.bound || null, count: (pr.count != null ? pr.count : null),
                   rigorProvenance: pr.rigorProvenance || [], perSolution: rows, assumptions: specializationLedger(cl),
-                  stages: (PROVE.CERTIFY_STAGES || []).map((s) => ({ id: s.id, title: s.title, why: s.why })),
+                  stages: ((pr.kind === 'moment' ? PROVE.MOMENT_STAGES : PROVE.CERTIFY_STAGES) || []).map((s) => ({ id: s.id, title: s.title, why: s.why })),
                 };
                 const out = { format: 'qd-proof', version: 1, proof, derivation: store.exportDAG() };
                 const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
