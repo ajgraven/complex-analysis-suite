@@ -1,19 +1,25 @@
 // =============================================================================
 // prove-plan.mjs — the pure, DOM-free ENGINE for the existence/uniqueness proof
-// pipeline (the "fuller orchestrator", Phase A: docs/algebra-review/ORCHESTRATOR_REDESIGN.md).
+// pipeline (the "fuller orchestrator": docs/algebra-review/ORCHESTRATOR_REDESIGN.md +
+// docs/algebra-review/RATIONAL_MOMENT_C2.md). All phases A–E and the Phase-C routes are shipped.
 //
-// This is the authoritative genuine-QD verdict path, EXTRACTED verbatim from the
-// closures that used to live inside algebra-ui.mjs's doCertifyUnivalence — so it can be
-// unit-tested in node and, later (Phase B), driven over a BRANCH TREE. There is NO new
-// math here: the exact ℚ(i) per-solution certificate (nodeInsideDisk admissibility →
-// verifySolutionExact → Schur–Cohn fold → boundary-simple), the gauge quotient, the
-// reconcile oracle, and the numeric cross-check are the same sound pieces, only
-// re-expressed as pure functions over an injected `deps` bag + injected async ops.
-//
-// The engine owns SEQUENCING + the structured ProofResult; algebra-ui.mjs is reduced to a
-// thin DOM binding (progress, verdict card, action buttons). Everything the engine needs
-// arrives via ctx/deps — it never touches `window`, `activeEnv`, the store closures, or a
-// worker directly. See CERTIFY_STAGES for the (introspectable) strategy plan.
+// The engine owns SEQUENCING + the structured ProofResult; algebra-ui.mjs is reduced to a thin
+// DOM binding (progress, verdict card, action buttons). Everything the engine needs arrives via
+// ctx/deps — it never touches `window`, `activeEnv`, the store closures, or a worker directly.
+// It contains SEVERAL prove routes; ✦ Prove dispatches on the raw data via the ROUTING DETECTORS
+// (pointFunctionalMoments / multiNodeRationalData / multiNodeTriangleData, all pure + exported):
+//   • the general (●)/(★) CERTIFY pipeline (CERTIFY_STAGES / runCertifyPlan) + the pooled ProofTree
+//     escalation (runProofTree, pool-then-quotient) — the exact ℚ(i) per-solution certificate
+//     (nodeInsideDisk → verifySolutionExact → Schur–Cohn fold → boundary-simple), gauge quotient,
+//     reconcile oracle, and numeric cross-check, as pure functions over an injected `deps` bag;
+//   • C1 — MOMENT / Aharonov–Shapiro route for single-node data (polynomial φ=Σwₖzᵏ): MOMENT_STAGES,
+//     runMomentPlan, momentCertifyLeaf, assembleMomentVerdict, momentBoundarySimple;
+//   • C2 — RATIONAL-φ route for 2-node data (φ=w₀+R(z+dz²)/(1−cz²)): RATIONAL_STAGES, runRationalPlan;
+//   • C3 — EQUILATERAL-TRIANGLE route for 3-node data (φ=Rz/(1−cz³)): TRIANGLE_STAGES, runTrianglePlan.
+// Honest labeling is uniform: `rigor='exact'`/`bound='='` ONLY when the count is certified AND every
+// genuine root is exact-verified (PF-1) AND univalence is certified exactly (a RELIABLE Schur–Cohn +,
+// for the boundary, an exact double-point count); otherwise `estimate`/`≈`. See CERTIFY_STAGES for the
+// introspectable strategy plan and rigorProvenance for the ✓/✗ audit trail behind the badge.
 //
 // deps = { QE, QC, QD, known, w0Fixed, caps:{maxPoleOrder} }
 //   QE/QC/QD  the QDEquations / QDConstraints / solver namespaces (data sources, pure use)
@@ -456,6 +462,70 @@ export async function runProofTree(ctx, opts) {
 // order 2 the cardioid = the resolvent cubic's double root). Order ≥ 3 gets the same LOCAL schurCohn test,
 // honestly labelled (global univalence is proven only through order 2). This captures OFF-SLICE
 // (non-real-symmetric, complex-moment) domains that the real slice misses — the Phase-C gap.
+// ============================================================================================
+// ROUTING DETECTORS — pure classifiers of the raw quadrature data (h-data) that decide which prove ROUTE
+// applies. Extracted here (from the algebra-ui closure) so they are unit-testable. ✦ Prove tries them in
+// order: point-functional (single node) → 2-node rational → equilateral-3-node → else the (●)/(★) tree.
+// Each returns the route's input object or null (⇒ not this route). The corresponding builder in
+// qd-equations.mjs re-checks its own preconditions and throws on bad data, so these are the OUTER gate.
+// ============================================================================================
+
+// Detect INTERIOR POINT-FUNCTIONAL data (C1): a single quadrature node whose leading residue M₀ = C₁ is real
+// & positive (the area). Moments M_p = C_{p+1} (principal-part coefficients), order = #principal terms.
+// Returns { moments, order, node } or null.
+export function pointFunctionalMoments(hData) {
+  const poles = (hData && hData.poles) || [];
+  if (poles.length !== 1) return null;
+  const pp = poles[0].principal || [];
+  if (!pp.length) return null;
+  const M0 = pp[0] || { re: 0, im: 0 };
+  if (Math.abs(M0.im || 0) > 1e-9 || !(M0.re > 1e-12)) return null;       // M₀ = area must be real + positive
+  const moments = { M0: M0.re };
+  for (let p = 1; p < pp.length; p++) moments['M' + p] = { re: pp[p].re || 0, im: pp[p].im || 0 };
+  return { moments, order: pp.length, node: poles[0].a || { re: 0, im: 0 } };
+}
+
+// Detect MULTI-NODE data for the rational-φ route (C2): exactly 2 simple (order-1) poles, both on the real
+// axis with real residues (the degree-2 REAL increment — covers two-point-symmetric + general real 2-node).
+// Returns { nodes:[{re,im}×2], weights:[{re,im}×2] } or null.
+export function multiNodeRationalData(hData) {
+  const poles = (hData && hData.poles) || [];
+  if (poles.length !== 2) return null;
+  const nodes = [], weights = [];
+  for (const p of poles) {
+    const pp = p.principal || [];
+    if (pp.length !== 1) return null;                                     // order-1 nodes only (degree-2 rational)
+    const a = p.a || { re: 0, im: 0 }, b = pp[0] || { re: 0, im: 0 };
+    if (Math.abs(a.im || 0) > 1e-9 || Math.abs(b.im || 0) > 1e-9) return null;   // real nodes + weights only
+    nodes.push({ re: a.re || 0, im: 0 }); weights.push({ re: b.re || 0, im: 0 });
+  }
+  if (Math.abs(nodes[0].re - nodes[1].re) < 1e-9) return null;            // distinct nodes
+  return { nodes, weights };
+}
+
+// Detect EQUILATERAL-TRIANGLE data for the degree-3 route (C3): exactly 3 simple (order-1) poles, real
+// weights, equal magnitudes, centroid at the origin (triangleMomentSystem re-checks the symmetry exactly).
+// Returns { nodes:[{re,im}×3], weights:[{re,im}×3] } or null.
+export function multiNodeTriangleData(hData) {
+  const poles = (hData && hData.poles) || [];
+  if (poles.length !== 3) return null;
+  const nodes = [], weights = [];
+  for (const p of poles) {
+    const pp = p.principal || [];
+    if (pp.length !== 1) return null;                                     // order-1 nodes only (degree-3)
+    const a = p.a || { re: 0, im: 0 }, b = pp[0] || { re: 0, im: 0 };
+    if (Math.abs(b.im || 0) > 1e-9) return null;                          // real weights only
+    nodes.push({ re: a.re || 0, im: a.im || 0 }); weights.push({ re: b.re || 0, im: 0 });
+  }
+  const mag2 = nodes.map((z) => z.re * z.re + z.im * z.im), A2 = mag2[0], sc = Math.max(1, A2);
+  if (mag2.some((m) => Math.abs(m - A2) > 1e-6 * sc)) return null;                          // equal magnitudes
+  const cx = (nodes[0].re + nodes[1].re + nodes[2].re) / 3, cy = (nodes[0].im + nodes[1].im + nodes[2].im) / 3;
+  if (Math.hypot(cx, cy) > 1e-6 * Math.max(1, Math.sqrt(A2))) return null;                  // centroid at origin
+  const b0 = weights[0].re;
+  if (weights.some((w) => Math.abs(w.re - b0) > 1e-6 * Math.max(1, Math.abs(b0)))) return null;   // equal weights
+  return { nodes, weights };
+}
+
 export const MOMENT_STAGES = [
   { id: 'regime', title: 'Regime', why: 'Classify the point-functional moment system: inconsistent ⇒ no QD; positive-dimensional (degenerate moments) ⇒ underdetermined; zero-dimensional ⇒ a finite count.' },
   { id: 'solve-real', title: 'Solve (real)', why: 'Certified real solutions (RUR + exact Sturm) of the moment system — every candidate polynomial map φ(z)=Σ w_k zᵏ, including off-slice (non-real-symmetric) ones.' },
