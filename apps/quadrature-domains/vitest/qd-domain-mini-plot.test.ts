@@ -22,10 +22,13 @@ describe("domainPlotData — reconstructed-domain thumbnail geometry", () => {
     expect(d.view.every((c: number) => Number.isFinite(c))).toBe(true);
     expect(d.view[2]).toBeGreaterThan(0); // width
     expect(d.view[3]).toBeGreaterThan(0); // height
-    // the boundary bounding box lies within the padded view
+    // the boundary bounding box lies within the padded view (both axes)
     const xs = d.boundary.map((p: number[]) => p[0]);
     expect(Math.min(...xs)).toBeGreaterThanOrEqual(d.view[0] - 1e-9);
     expect(Math.max(...xs)).toBeLessThanOrEqual(d.view[0] + d.view[2] + 1e-9);
+    const ys = d.boundary.map((p: number[]) => p[1]);
+    expect(Math.min(...ys)).toBeGreaterThanOrEqual(d.view[1] - 1e-9);
+    expect(Math.max(...ys)).toBeLessThanOrEqual(d.view[1] + d.view[3] + 1e-9);
   });
 
   it("returns null for a non-QD map / missing evaluator", () => {
@@ -47,17 +50,17 @@ describe("momentPlotData — moment-route polynomial φ = a + Σ wₖzᵏ thumbn
     expect(d.nodes).toEqual([[0, 0]]);   // node a = φ(0) = 0
   });
 
-  it("unit disk φ = z is the unit circle; w₁ may be a bare number", () => {
-    const d: any = momentPlotData([null, 1], 1, { re: 0, im: 0 }, { samples: 64 });
-    expect(d.boundary.every((p: number[]) => Math.abs(Math.hypot(p[0], p[1]) - 1) < 1e-9)).toBe(true);
-    expect(d.boundary[0][0]).toBeCloseTo(1, 9);   // θ=0 → (1,0)
-  });
-
-  it("translates the whole domain by the node a = φ(0)", () => {
-    const d: any = momentPlotData([null, 1], 1, { re: 2, im: 1 }, { samples: 64 });
-    expect(d.nodes).toEqual([[2, -1]]);            // SVG y-down: (2,1) → (2,−1)
-    expect(d.boundary[0][0]).toBeCloseTo(3, 9); expect(d.boundary[0][1]).toBeCloseTo(-1, 9);   // a + (1,0)
-    expect(d.boundary.every((p: number[]) => Math.abs(Math.hypot(p[0] - 2, p[1] + 1) - 1) < 1e-9)).toBe(true);
+  it("φ = z (bare-number w₁) is the unit circle, translated by the node a = φ(0)", () => {
+    // at the origin: the unit circle, node at 0, w₁ supplied as a bare number
+    const o: any = momentPlotData([null, 1], 1, { re: 0, im: 0 }, { samples: 64 });
+    expect(o.nodes).toEqual([[0, 0]]);
+    expect(o.boundary[0][0]).toBeCloseTo(1, 9);   // θ=0 → (1,0)
+    expect(o.boundary.every((p: number[]) => Math.abs(Math.hypot(p[0], p[1]) - 1) < 1e-9)).toBe(true);
+    // translated by a = (2,1): node + whole circle shift, SVG y-down so (2,1) → (2,−1)
+    const t: any = momentPlotData([null, 1], 1, { re: 2, im: 1 }, { samples: 64 });
+    expect(t.nodes).toEqual([[2, -1]]);
+    expect(t.boundary[0][0]).toBeCloseTo(3, 9); expect(t.boundary[0][1]).toBeCloseTo(-1, 9);   // a + (1,0)
+    expect(t.boundary.every((p: number[]) => Math.abs(Math.hypot(p[0] - 2, p[1] + 1) - 1) < 1e-9)).toBe(true);
   });
 
   it("agrees with the app's QD.evalPhi route on the cardioid (coefficients ≡ evaluator)", () => {
@@ -68,9 +71,10 @@ describe("momentPlotData — moment-route polynomial φ = a + Σ wₖzᵏ thumbn
     expect(maxd).toBeLessThan(1e-9);
   });
 
-  it("returns null on bad input", () => {
+  it("returns null on bad input or a non-finite sample", () => {
     expect(momentPlotData(null as any, 2, { re: 0, im: 0 })).toBeNull();
     expect(momentPlotData([null, 1], 0, { re: 0, im: 0 })).toBeNull();
+    expect(momentPlotData([null, Infinity], 1, { re: 0, im: 0 })).toBeNull();   // non-finite coefficient ⇒ null sample
   });
 });
 
@@ -92,8 +96,9 @@ describe("rationalPlotData — multi-node rational φ = w0 + R(z+dz²)/(1−cz²
     expect(d.nodes).toEqual([[3 / 5, 0], [-7 / 15, 0]]);
   });
 
-  it("returns null when a pole is inside 𝔻̄ (c ≥ 1) or on bad input", () => {
+  it("returns null when a pole is inside 𝔻̄ (c ≥ 1), a pole grazes ∂𝔻, or on bad input", () => {
     expect(rationalPlotData({ c: 1.5, d: 0, R: 1, w0: 0 }, nodes)).toBeNull();
+    expect(rationalPlotData({ c: 1 - 1e-8, d: 0, R: 1, w0: 0 }, nodes)).toBeNull();   // pole grazes ∂𝔻 at θ=0 (den→0)
     expect(rationalPlotData(null as any, nodes)).toBeNull();
     expect(rationalPlotData({ d: 0, R: 1, w0: 0 } as any, nodes)).toBeNull();   // no c
   });
@@ -118,8 +123,9 @@ describe("trianglePlotData — equilateral rational φ = R·z/(1−cz³) thumbna
     expect(d.nodes.length).toBe(3);
   });
 
-  it("returns null when a pole is inside 𝔻̄ (|c| ≥ 1) or on bad input", () => {
+  it("returns null when a pole is inside 𝔻̄ (|c| ≥ 1), a pole grazes ∂𝔻, or on bad input", () => {
     expect(trianglePlotData({ c: 1.2, R: 1 }, triNodes)).toBeNull();
+    expect(trianglePlotData({ c: 1 - 1e-8, R: 1 }, triNodes)).toBeNull();   // pole grazes ∂𝔻 at θ=0 (den→0)
     expect(trianglePlotData(null as any, triNodes)).toBeNull();
     expect(trianglePlotData({ R: 1 } as any, triNodes)).toBeNull();   // no c
   });

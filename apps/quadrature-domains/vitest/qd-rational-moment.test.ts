@@ -26,6 +26,8 @@ describe("rationalMomentSystem (C2-1) — degree-2 multi-node builder", () => {
   const asym = { nodes: [{ re: 3 / 5, im: 0 }, { re: -7 / 15, im: 0 }], weights: [{ re: 28 / 25, im: 0 }, { re: 52 / 225, im: 0 }] };
   // SYMMETRIC ground truth: φ=Rz/(1−cz²), R=1, c=¼ ⇒ nodes ±8/15, equal weight 136/225, d=0.
   const sym = { nodes: [{ re: 8 / 15, im: 0 }, { re: -8 / 15, im: 0 }], weights: [{ re: 136 / 225, im: 0 }, { re: 136 / 225, im: 0 }] };
+  // SWAPPED asymmetric (nodes/weights supplied in the other order) — exercises the node-order canonicalization.
+  const swapped = { nodes: [{ re: -7 / 15, im: 0 }, { re: 3 / 5, im: 0 }], weights: [{ re: 52 / 225, im: 0 }, { re: 28 / 25, im: 0 }] };
 
   it("emits the reduced degree-2 shape system: 2 polys in [t, d]", () => {
     const sysm = QE.rationalMomentSystem(asym, { degree: 2 });
@@ -33,20 +35,17 @@ describe("rationalMomentSystem (C2-1) — degree-2 multi-node builder", () => {
     expect(sysm.polys.length).toBe(2);
   });
 
-  it("ASYMMETRIC: the known shape (t=½, d=¼) EXACTLY satisfies both equations", () => {
-    const sysm = QE.rationalMomentSystem(asym, { degree: 2 });
-    for (const p of sysm.polys) expect(vanishesAt(p, { t: [1, 2], d: [1, 4] })).toBe(true);
-  });
-
-  it("#4: the builder canonicalizes node order — SWAPPED input yields the SAME system (t=½, d=¼ still solves)", () => {
-    const swapped = { nodes: [{ re: -7 / 15, im: 0 }, { re: 3 / 5, im: 0 }], weights: [{ re: 52 / 225, im: 0 }, { re: 28 / 25, im: 0 }] };
-    const sysm = QE.rationalMomentSystem(swapped, { degree: 2 });
-    for (const p of sysm.polys) expect(vanishesAt(p, { t: [1, 2], d: [1, 4] })).toBe(true);   // NOT d=−¼ — the sort fixes the +t pairing
-  });
-
-  it("SYMMETRIC: the known shape (t=½, d=0) EXACTLY satisfies both equations", () => {
-    const sysm = QE.rationalMomentSystem(sym, { degree: 2 });
-    for (const p of sysm.polys) expect(vanishesAt(p, { t: [1, 2], d: [0, 1] })).toBe(true);
+  // The crux: the known map coefficients must EXACTLY satisfy every emitted equation (validating the
+  // node/weight↔coefficient derivation), for both fixtures AND under node-order canonicalization (#4) —
+  // a SWAPPED asymmetric input must yield the SAME system, so the sort fixes the +t pairing and the truth
+  // stays d=+¼ (NOT −¼).
+  it.each(([
+    ["ASYMMETRIC (t=½, d=¼)", asym, { t: [1, 2], d: [1, 4] }],
+    ["#4 SWAPPED asymmetric ⇒ SAME system (order-invariant; still d=+¼, NOT −¼)", swapped, { t: [1, 2], d: [1, 4] }],
+    ["SYMMETRIC (t=½, d=0)", sym, { t: [1, 2], d: [0, 1] }],
+  ]) as [string, any, Record<string, [number, number]>][])("the known shape %s EXACTLY satisfies both equations", (_label, data, sub) => {
+    const sysm = QE.rationalMomentSystem(data, { degree: 2 });
+    for (const p of sysm.polys) expect(vanishesAt(p, sub)).toBe(true);
   });
 
   it("a WRONG shape does NOT satisfy the system (the oracle has teeth)", () => {
@@ -69,8 +68,10 @@ describe("rationalMomentSystem (C2-1) — degree-2 multi-node builder", () => {
     expect(hit).toBe(true);
   });
 
-  it("rejects complex (off-axis) data and a wrong node count", () => {
+  it("rejects complex (off-axis) data, coincident nodes, a wrong node count, and non-degree-2", () => {
     expect(() => QE.rationalMomentSystem({ nodes: [{ re: 0, im: 1 }, { re: 0, im: -1 }], weights: [{ re: 1, im: 0 }, { re: 1, im: 0 }] }, { degree: 2 })).toThrow(/off-axis|complex/i);
+    // coincident nodes ⇒ zero node-gap (a₁−a₂=0) ⇒ not a genuine 2-node quadrature domain
+    expect(() => QE.rationalMomentSystem({ nodes: [{ re: 1 / 2, im: 0 }, { re: 1 / 2, im: 0 }], weights: [{ re: 1, im: 0 }, { re: 1, im: 0 }] }, { degree: 2 })).toThrow(/coincide/i);
     expect(() => QE.rationalMomentSystem({ nodes: [{ re: 1, im: 0 }], weights: [{ re: 1, im: 0 }] }, { degree: 2 })).toThrow(/2 nodes/);
     expect(() => QE.rationalMomentSystem(asym, { degree: 3 })).toThrow(/degree 2/);
   });
@@ -107,13 +108,18 @@ describe("triangleMomentSystem (C3-1) — equilateral (3-fold symmetric) degree-
     expect(rc.realCount).toBeGreaterThanOrEqual(1);
   });
 
-  it("rejects non-equilateral, off-centre, unequal-weight, and wrong-count data", () => {
-    // unequal magnitudes (not 3-fold symmetric)
+  it("rejects non-equilateral, off-centre, complex-weight, unequal-weight, degenerate, and wrong-count data", () => {
+    // unequal magnitudes ⇒ not equidistant from the centroid (not 3-fold symmetric)
     expect(() => QE.triangleMomentSystem({ nodes: [{ re: 2, im: 0 }, { re: -0.5, im: W }, { re: -0.5, im: -W }], weights: tri.weights })).toThrow(/equidistant|symmetric/i);
-    // off-centre (centroid ≠ 0)
-    expect(() => QE.triangleMomentSystem({ nodes: [{ re: 1.5, im: 0 }, { re: 0, im: W }, { re: 0, im: -W }], weights: tri.weights })).toThrow(/centred|centre|symmetric|equidistant/i);
-    // unequal weights
+    // GENUINELY off-centre: equidistant from the ORIGIN (all |a|=1) but centroid = (0,⅓) ≠ 0 — reaches the
+    // centre guard rather than tripping the equidistant one first (as (1.5,0),(0,W),(0,−W) would).
+    expect(() => QE.triangleMomentSystem({ nodes: [{ re: 1, im: 0 }, { re: 0, im: 1 }, { re: -1, im: 0 }], weights: tri.weights })).toThrow(/centred|centre/i);
+    // complex weights
+    expect(() => QE.triangleMomentSystem({ nodes: cubeRoots, weights: [{ re: 11 / 8, im: 1 }, { re: 11 / 8, im: 0 }, { re: 11 / 8, im: 0 }] })).toThrow(/complex/i);
+    // unequal (real) weights
     expect(() => QE.triangleMomentSystem({ nodes: cubeRoots, weights: [{ re: 1, im: 0 }, { re: 2, im: 0 }, { re: 1, im: 0 }] })).toThrow(/equal|symmetric/i);
+    // degenerate node magnitude (all nodes at the origin ⇒ |a|²=0)
+    expect(() => QE.triangleMomentSystem({ nodes: [{ re: 0, im: 0 }, { re: 0, im: 0 }, { re: 0, im: 0 }], weights: tri.weights })).toThrow(/degenerate/i);
     // wrong node count
     expect(() => QE.triangleMomentSystem({ nodes: [{ re: 1, im: 0 }, { re: -1, im: 0 }], weights: [{ re: 1, im: 0 }, { re: 1, im: 0 }] })).toThrow(/3 nodes/);
   });
