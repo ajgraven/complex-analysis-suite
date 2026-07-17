@@ -148,6 +148,12 @@ importers:
       '@cas/interchange':
         specifier: workspace:*
         version: link:../../packages/interchange
+      katex:
+        specifier: 0.16.47
+        version: 0.16.47
+      mathjs:
+        specifier: ^12.4.1
+        version: 12.4.3
     devDependencies:
       eslint:
         specifier: ^9.39.4
@@ -158,12 +164,6 @@ importers:
       jsdom:
         specifier: ^26.1.0
         version: 26.1.0
-      katex:
-        specifier: 0.16.47
-        version: 0.16.47
-      mathjs:
-        specifier: ^12.4.1
-        version: 12.4.3
       vite:
         specifier: ^5.4.10
         version: 5.4.21(@types/node@26.1.1)(terser@5.48.0)

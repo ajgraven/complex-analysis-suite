@@ -6,6 +6,10 @@
 //
 // GENERATED from asset-manifest.js PAGE_SCRIPTS by scratchpad/gen-main.mjs.
 // =============================================================================
+// Self-hosted mathjs + KaTeX as window.math / window.katex (was CDN <script> tags).
+// MUST be first so the globals exist before the page modules below run.
+import './vendor-globals.mjs';
+
 import QD from './solver.mjs';
 
 import './complex.mjs';

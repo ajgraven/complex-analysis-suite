@@ -22,17 +22,9 @@
   <meta name="twitter:title" content="Quadrature Domains — Solver &amp; Visualizer">
   <meta name="twitter:description" content="Solve and visualize (log-weighted) quadrature domains: Schwarz-reflection dynamics, limit sets, sphere view, parameter-slice sweeps.">
 
-  <!-- math.js for any user-facing complex arithmetic needs in the future -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.1/math.js"
-          integrity="sha384-u7NVJRP+LoHaUk6TkyQVNWO4E5yTtyJv/F1tKpQonoXMMjbxVQ0+B2ihDnrOKrCZ"
-          crossorigin="anonymous"></script>
-  <!-- KaTeX for typeset math in the Riemann-map card -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.47/dist/katex.min.css"
-        integrity="sha384-nH0MfJ44wi1dd7w6jinlyBgljjS8EJAh2JBoRad8a3VDw2K69vfaaqm4WnR+gXtA"
-        crossorigin="anonymous">
-  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.47/dist/katex.min.js"
-          integrity="sha384-CwjPRVHTvLiMBFjEoij+QZViMV5rhTOIp7CJzl24JEqpRDA1sJFHVXXLURktbYYp"
-          crossorigin="anonymous"></script>
+  <!-- math.js (complex arithmetic / expression parsing) and KaTeX (typeset math) are
+       bundled and self-hosted via app/vendor-globals.mjs (imported first in main.mjs),
+       not loaded from a CDN — see that file. -->
 </head>
 <body>
 <div id="app">
