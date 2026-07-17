@@ -93,4 +93,54 @@ describe("Schwarz fractal-mode interaction (jsdom)", () => {
     T.runHoverOrbit();
     expect(T.sState.hoverOrbit == null).toBe(true);
   });
+
+  // A disabled sphere handle stands in for a browser without WebGL 2 (createRenderer
+  // returns null → sphere-ui returns _disabledHandle with isAvailable() === false).
+  const disabledSphereHandle = () => ({
+    isAvailable: () => false,
+    activate() {}, deactivate() {}, setPhi: () => false,
+    setRenderParams() {}, setDisplayParams() {}, resetCamera() {},
+    requestRender() {}, markFractalDirty() {}, destroy() {},
+  });
+  const liveSphereHandle = (onActivate: () => void) => ({
+    isAvailable: () => true,
+    activate() { onActivate(); }, deactivate() {}, setPhi: () => false,
+    setRenderParams() {}, setDisplayParams() {}, resetCamera() {},
+    requestRender() {}, markFractalDirty() {}, destroy() {},
+  });
+
+  it("sphere view without WebGL 2: notifies the user and reverts to the prior 2-D view", async () => {
+    if (!T) return;
+    const QD: any = (await import("../app/solver.mjs")).default;
+    const toasts: any[] = [];
+    QD.QoL = { toast: (msg: string, opts: any) => toasts.push({ msg, opts }) };
+    QD.SphereView = { mount: () => disabledSphereHandle() };
+
+    T.sState.sphereView = null;      // force a fresh mount
+    T.sState.viewMode = "plane";
+    T.setViewMode("sphere");
+
+    // Reverted to where the user was, and told them why (an error-kind toast).
+    expect(T.sState.viewMode).toBe("plane");
+    expect(toasts.length).toBe(1);
+    expect(toasts[0].opts.kind).toBe("error");
+    expect(/WebGL 2/i.test(toasts[0].msg)).toBe(true);
+  });
+
+  it("sphere view with WebGL 2: activates and stays on the sphere view", async () => {
+    if (!T) return;
+    const QD: any = (await import("../app/solver.mjs")).default;
+    const toasts: any[] = [];
+    QD.QoL = { toast: (msg: string, opts: any) => toasts.push({ msg, opts }) };
+    let activated = false;
+    QD.SphereView = { mount: () => liveSphereHandle(() => { activated = true; }) };
+
+    T.sState.sphereView = null;
+    T.sState.viewMode = "plane";
+    T.setViewMode("sphere");
+
+    expect(T.sState.viewMode).toBe("sphere");
+    expect(activated).toBe(true);
+    expect(toasts.length).toBe(0);   // no fallback notice when it works
+  });
 });

@@ -798,6 +798,7 @@ const QD = _QD;
   function setViewMode(mode) {
     if (mode !== 'plane' && mode !== 'z' && mode !== 'sphere') return;
     if (mode === sState.viewMode) return;
+    const prevMode = sState.viewMode;
     sState.viewMode = mode;
     // Update the view-toggle highlight. Scope to the view card so the Mode
     // card's fractal/domain seg-btns (which carry data-mode, not data-view)
@@ -809,7 +810,19 @@ const QD = _QD;
     refreshSourceStatus();
     if (mode === 'sphere') {
       showGLLayer(false);
-      _activateSphereView();
+      if (!_activateSphereView()) {
+        // Sphere needs WebGL 2 (no CPU equivalent). Tell the user why and put them
+        // back on the 2-D view they came from instead of a blank sphere tab.
+        if (QD.QoL && QD.QoL.toast) {
+          QD.QoL.toast(
+            "The sphere view needs WebGL 2, which isn't available in this browser. " +
+              'The 2-D views still work — try a recent Chrome, Firefox, or Edge, or ' +
+              'Safari 15+ with hardware acceleration enabled.',
+            { kind: 'error', duration: 6000 },
+          );
+        }
+        setViewMode(prevMode);
+      }
       return;
     }
     // 2D views (plane or z). Both can use the GPU — the shader's u_viewMode
@@ -852,7 +865,7 @@ const QD = _QD;
     if (!sState.sphereView) {
       if (!QD.SphereView || !QD.SphereView.mount) {
         console.warn('schwarz-ui: QD.SphereView unavailable; sphere view disabled.');
-        return;
+        return false;
       }
       const sidebarRoot = document.getElementById('schwarz-sphere-slot')
                        || document.getElementById('controls-schwarz');
@@ -864,7 +877,7 @@ const QD = _QD;
       });
       if (!sState.sphereView || !sState.sphereView.isAvailable()) {
         console.warn('schwarz-ui: sphere view unavailable (WebGL 2 missing).');
-        return;
+        return false;
       }
       // Re-apply visibility so the newly-built display/camera cards respect
       // the current view mode (.view-sphere-only).
@@ -883,7 +896,11 @@ const QD = _QD;
                                   sState.boundarySnapshot);
       }
     }
+    // A prior mount may have left a disabled handle (WebGL 2 missing); never
+    // activate that, and report unavailability so the caller can notify the user.
+    if (!sState.sphereView.isAvailable()) return false;
     sState.sphereView.activate();
+    return true;
   }
 
   function makeSourceCard() {
@@ -1436,7 +1453,7 @@ const QD = _QD;
   // ---------------------------------------------------------------------------
   if (typeof window !== 'undefined' && window.__SCHWARZ_UI_TEST_HOOK__) {
     window.__schwarzUiTest = {
-      sState, setMode, onCanvasClick, onCanvasDblClick, onMouseMove,
+      sState, setMode, setViewMode, onCanvasClick, onCanvasDblClick, onMouseMove,
       runHoverOrbit, pinOrbitAt,
       get CLICK_DELAY() { return _schwarzInter.getClickDelay(); },
       set CLICK_DELAY(v) { _schwarzInter.setClickDelay(v); },
