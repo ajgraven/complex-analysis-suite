@@ -10,9 +10,10 @@ import { dirname, resolve } from "node:path";
 //   • worker.format: "es" — the app spawns NATIVE module workers.
 //   • vite-plugin-pwa     — Workbox service worker + precache (replaces the retired hand-rolled
 //                           sw.js + gen-cache-version). autoUpdate = the new SW activates on its
-//                           own; the CDN (mathjs/KaTeX) is runtime-cached NetworkFirst so offline
-//                           reloads still get them. Uses the existing app/manifest.webmanifest
-//                           (linked in index.html), so `manifest: false`.
+//                           own. mathjs/KaTeX are now bundled + self-hosted (app/vendor-globals.mjs),
+//                           so they fall under the glob precache below — no CDN runtime cache needed.
+//                           Uses the existing app/manifest.webmanifest (linked in index.html), so
+//                           `manifest: false`.
 // One config serves both `vite` (dev, HMR) and `vite build` (static dist/).
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -31,18 +32,9 @@ export default defineConfig({
       injectRegister: "auto",
       manifest: false,
       workbox: {
+        // Bundled JS/CSS/fonts (incl. self-hosted mathjs + KaTeX + KaTeX fonts) are
+        // precached — the app is fully offline-capable with no third-party runtime cache.
         globPatterns: ["**/*.{js,css,html,svg,ttf,woff,woff2,webmanifest}"],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)\/.*/i,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "cdn-cache",
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 30 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
       },
       devOptions: { enabled: false },
     }),
