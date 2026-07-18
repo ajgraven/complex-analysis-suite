@@ -1698,6 +1698,9 @@ if (restoredFromUrl) {
   }
 }
 
+// The app shell + first render are wired up; drop the boot overlay.
+{ const _boot = document.getElementById('boot-loading'); if (_boot) _boot.remove(); }
+
 // ---------- Hooks for the Direct view (within the QD tab) ----------------------------
 // direct-ui.js calls these to (a) push a ∂Ω preview onto the shared canvas,
 // (b) send a computed h back to the QD tab's inverse view and switch view modes.

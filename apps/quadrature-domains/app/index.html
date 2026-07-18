@@ -25,8 +25,40 @@
   <!-- math.js (complex arithmetic / expression parsing) and KaTeX (typeset math) are
        bundled and self-hosted via app/vendor-globals.mjs (imported first in main.mjs),
        not loaded from a CDN — see that file. -->
+
+  <!-- Boot overlay: shown immediately (inline-styled, no bundled CSS needed) while the module
+       graph downloads/parses and the app wires up; removed on boot (ui.mjs). -->
+  <style>
+    #boot-loading {
+      position: fixed; inset: 0; z-index: 99999;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; background: #0f1115; color: #cbd3e1;
+      font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    #boot-loading .boot-spinner {
+      width: 34px; height: 34px; border-radius: 50%;
+      border: 3px solid rgba(255, 255, 255, 0.18); border-top-color: #6ea8fe;
+      animation: boot-spin 0.8s linear infinite;
+    }
+    @keyframes boot-spin { to { transform: rotate(360deg); } }
+    @media (prefers-color-scheme: light) {
+      #boot-loading { background: #f6f7fa; color: #46506a; }
+      #boot-loading .boot-spinner { border-color: rgba(0, 0, 0, 0.12); border-top-color: #3b6fd4; }
+    }
+  </style>
+  <script>
+    // Safety net: never let the overlay stick if the app fails to boot catastrophically.
+    setTimeout(function () {
+      var el = document.getElementById("boot-loading");
+      if (el) el.remove();
+    }, 12000);
+  </script>
 </head>
 <body>
+<div id="boot-loading" role="status" aria-live="polite">
+  <div class="boot-spinner"></div>
+  <div>Loading Quadrature Domains…</div>
+</div>
 <div id="app">
 
   <!-- ============== LEFT: CONTROLS ============== -->

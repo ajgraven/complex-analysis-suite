@@ -4323,4 +4323,7 @@ try {
           "hardware acceleration is enabled."
       : "Something went wrong starting the visualizer. See the browser console for details.",
   );
+} finally {
+  // Remove the boot overlay whether init succeeded or threw (on failure the fatal banner shows).
+  document.getElementById("boot-loading")?.remove();
 }
