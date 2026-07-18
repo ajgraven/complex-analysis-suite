@@ -86,6 +86,20 @@ const QD = _QD;
       const expr = inp.value.trim();
       if (!expr) { setHTextMsg('Enter an expression in w.'); return; }
       if (expr.length > MAX_H_TEXT_LEN) { setHTextMsg('Expression too long (max ' + MAX_H_TEXT_LEN + ' chars).'); return; }
+      // mathjs is loaded lazily (off the initial critical path). If it isn't ready yet — e.g. a
+      // zero-click share-link `h` restore that fires before the idle prefetch lands, or a very
+      // early click — fetch it, then re-run this once. parseAndApplyHText ends in scheduleSolve,
+      // so the retry produces the same result as if math had been present.
+      if (typeof math === 'undefined' || !math || !math.parse) {
+        setHTextMsg('Loading math engine…');
+        if (typeof window !== 'undefined' && window.ensureMath) {
+          window.ensureMath().then(() => parseAndApplyHText())
+            .catch(() => setHTextMsg('Could not load the math engine.'));
+        } else {
+          setHTextMsg('math.js not loaded');
+        }
+        return;
+      }
       let parsed;
       try {
         parsed = QD.parseH(expr, math, { mode: state.mode });
