@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Complex Dynamics">
+  <!-- Full-bleed dark square so the icon also works as a maskable PWA icon. -->
+  <rect width="512" height="512" rx="72" fill="#0f1115"/>
+  <!-- Faint unit circle. -->
+  <circle cx="256" cy="256" r="196" fill="none" stroke="#2b3242" stroke-width="6"/>
+  <!-- An inward orbit spiral (semicircle spiral) — the escape-time / iteration motif. -->
+  <path d="M76,256 A165,165 0 0,1 406,256 A135,135 0 0,1 136,256 A106,106 0 0,1 348,256
+           A79,79 0 0,1 190,256 A55,55 0 0,1 300,256 A35,35 0 0,1 230,256 A19,19 0 0,1 268,256
+           A8,8 0 0,1 252,256"
+        fill="none" stroke="#6ea8fe" stroke-width="16" stroke-linecap="round"/>
+  <!-- Attracting fixed point at the spiral's core, and the orbit's outer seed. -->
+  <circle cx="256" cy="256" r="12" fill="#e7e9ee"/>
+  <circle cx="76" cy="256" r="12" fill="#6ea8fe"/>
+</svg>
