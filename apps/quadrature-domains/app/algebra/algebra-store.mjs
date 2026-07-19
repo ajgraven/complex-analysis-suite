@@ -1831,10 +1831,18 @@ import _QD from '../solver.mjs';
     // If the analyzed column is one CASE of a factor split (applyFactor), its counts are
     // for that branch only — V(original) = ⋃ₖ V(caseₖ), so branch counts ADD. Detect it so
     // the verdict can say so. Returns { partialBranch, caseIndex, caseCount } or {}.
+    // 'component' (a minimalPrimes / regular-chain split, V(I)=⋃ₖV(componentₖ)) carries exactly the
+    // same caveat as 'factor' (V(p)=⋃ₖV(fₖ)) — one branch of a union — so it must report partial the
+    // same way, or a component's count would read as the whole system's. `branchIncomplete` is the
+    // extra hazard a factor split does not have: when the decomposition itself hit a cost cap, the
+    // components may not even cover V(I), so the branches can add to LESS than the total.
     function _factorBranchInfo(ids) {
       const ns = (ids && ids.length) ? ids.map(get).filter(Boolean) : lastColumnNodes();
-      const f = ns.find((n) => n.provenance && n.provenance.op === 'factor' && !n.provenance.carried);
-      return f ? { partialBranch: true, caseIndex: f.provenance.caseIndex, caseCount: f.provenance.caseCount } : {};
+      const f = ns.find((n) => n.provenance && (n.provenance.op === 'factor' || n.provenance.op === 'component') && !n.provenance.carried);
+      if (!f) return {};
+      const out = { partialBranch: true, caseIndex: f.provenance.caseIndex, caseCount: f.provenance.caseCount, branchOp: f.provenance.op };
+      if (f.provenance.op === 'component' && f.provenance.complete === false) out.branchIncomplete = true;
+      return out;
     }
     // The SPECIALIZATION under which a column is analyzed: assumeReal (z̄≡z) and assumeImaginary
     // (z̄≡−z) restrict the system to a SLICE — they can drop quadrature domains lying OFF that
@@ -2141,6 +2149,100 @@ import _QD from '../solver.mjs';
         (res) => _pruneSolutionsByAssumptions(res, opts, track),
         (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
           : { ok: false, reason: (err && err.message) || String(err) });
+    }
+
+    // ---- decomposition into components (#12 minimal primes / #13 regular chains) ----
+    // The escape hatch from a POSITIVE-DIMENSIONAL verdict: V(I) = ⋃ₖ V(componentₖ), so each
+    // component can be analyzed on its own and the existence counts ADD — the same case-split
+    // semantics applyFactor already has, one level up (a variety split rather than a factor split).
+    // These are QUERIES: they compute and return, and never touch the graph. Entering a component is
+    // the separate, undoable applyComponent below, so the user sees the decomposition before
+    // committing to a branch of it. Both run in the worker — factorizing Buchberger is heavy enough
+    // that a main-thread call would freeze the tab.
+    // Returns { ok, complete, count, primes:[[termList]] } / { ok, complete, count, chains:[…] }.
+    // ⚠ complete:false ⇒ a cost cap fired and the component list may be INCOMPLETE. The union of
+    // what came back is then a SUBSET of V(I), so counts over it are a lower bound, not the total.
+    function _decomposeInputs(ids) {
+      const inputs = ((ids && ids.length) ? ids.map(get) : lastColumnNodes()).filter(Boolean).filter((n) => n.rel === '=');
+      return { inputs, polys: inputs.map((n) => n.poly) };
+    }
+    function decomposeComponentsAsync(ids, opts, runOpts) {
+      opts = opts || {};
+      const { polys } = _decomposeInputs(ids);
+      if (!polys.length) return Promise.resolve({ ok: false, reason: 'no equality nodes to decompose' });
+      const SW = symWorker();
+      const vars = _varsOf(polys);
+      if (!SW) {
+        const S = getSym();
+        try {
+          const res = S.minimalPrimes(polys, Object.assign({}, opts, { vars }));
+          return Promise.resolve(res.ok
+            ? { ok: true, complete: !!res.complete, count: res.count, note: res.note || '', primes: res.primes.map((G) => G.map((g) => g.termList())) }
+            : { ok: false, reason: res.reason });
+        } catch (e) { return Promise.resolve({ ok: false, reason: (e && e.message) || String(e) }); }
+      }
+      return SW.run('minimalPrimes', { polys: polys.map((p) => p.termList()), vars, opts: _capOpts(opts) }, runOpts || {}).then(
+        (res) => res,
+        (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
+          : { ok: false, reason: (err && err.message) || String(err) });
+    }
+    function regularChainsAsync(ids, opts, runOpts) {
+      opts = opts || {};
+      const { polys } = _decomposeInputs(ids);
+      if (!polys.length) return Promise.resolve({ ok: false, reason: 'no equality nodes to decompose' });
+      const SW = symWorker();
+      const vars = _varsOf(polys);
+      if (!SW) {
+        const S = getSym();
+        try {
+          const res = S.triangularDecomposition(polys, Object.assign({}, opts, { vars }));
+          return Promise.resolve(res.ok
+            ? { ok: true, complete: !!res.complete, count: res.count,
+                chains: res.chains.map((c) => ({ chain: (c.chain || []).map((p) => p.termList()), mainVars: c.mainVars || [], freeVars: c.freeVars || [], initials: (c.initials || []).map((p) => p.termList()), whole: !!c.whole })) }
+            : { ok: false, reason: res.reason });
+        } catch (e) { return Promise.resolve({ ok: false, reason: (e && e.message) || String(e) }); }
+      }
+      return SW.run('triangularDecomposition', { polys: polys.map((p) => p.termList()), vars, opts: _capOpts(opts) }, runOpts || {}).then(
+        (res) => res,
+        (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
+          : { ok: false, reason: (err && err.message) || String(err) });
+    }
+    // ENTER one component as a new column: its generators REPLACE the current equalities, and the
+    // non-equality nodes (inequality constraints — side conditions, not part of the ideal) are
+    // carried forward. Provenance op 'component' with caseIndex/caseCount, which _factorBranchInfo
+    // recognizes, so the verdict says the count is for THIS branch only. Undoable. `info.complete`
+    // is recorded on every node so a decomposition that hit a cap can never be read as exhaustive.
+    function applyComponent(termLists, k, count, info) {
+      const S = getSym();
+      const cur = lastColumnNodes();
+      const inputs = cur.filter((n) => n.rel === '=');
+      if (!inputs.length) return { ok: false, reason: 'no current system to replace', created: [] };
+      let polys;
+      try { polys = (termLists || []).map((tl) => S.polyFromTermList(tl)).filter((p) => p && !p.isZero()); }
+      catch (e) { return { ok: false, reason: 'could not rebuild the component: ' + ((e && e.message) || String(e)), created: [] }; }
+      if (!polys.length) return { ok: false, reason: 'that component is the whole space (no equations) — nothing to enter', created: [] };
+      const inputIds = inputs.map((n) => n.id);
+      checkpoint();
+      const col = maxColumn() + 1;
+      const created = [];
+      const prov = () => ({ op: 'component', inputs: inputIds.slice(), caseIndex: k, caseCount: count,
+        complete: !!(info && info.complete), method: (info && info.method) || 'minimalPrimes' });
+      polys.forEach((p, i) => {
+        const node = addNode({ id: nid(), kind: 'derived', poly: p, rel: '=',
+          label: 'component ' + (k + 1) + '/' + count + ' · g' + (i + 1), model,
+          provenance: prov(), column: col, meta: {} });
+        for (const id of inputIds) edges.push({ from: id, to: node.id });
+        created.push(node);
+      });
+      // Side conditions are not part of the ideal being decomposed, so they survive the split.
+      cur.filter((n) => n.rel !== '=').forEach((n) => {
+        const node = addNode({ id: nid(), kind: n.kind, poly: n.poly, rel: n.rel, label: n.label, model: n.model,
+          provenance: Object.assign(prov(), { carried: true, inputs: [n.id] }), column: col, meta: n.meta });
+        edges.push({ from: n.id, to: node.id });
+        created.push(node);
+      });
+      normalizeColumn(col);
+      return { ok: true, created, column: col, caseIndex: k, caseCount: count, complete: !!(info && info.complete) };
     }
 
     // Triangular decomposition (Wu pseudo-elimination) of the current system (or a
@@ -2825,6 +2927,7 @@ import _QD from '../solver.mjs';
       seedFromSystem, seedFromPolys, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, autoAbbreviate, addEquation, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes, saturateMobius,
+      decomposeComponentsAsync, regularChainsAsync, applyComponent,
       currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, solveRealCertifiedSync, solveRealCertifiedAsync, parametricBifurcation, parametricBifurcationAsync, shapeFromMoments, shapeFromMomentsAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casColumnComplex, casNode, msolveColumn, msolveVarOrder, importMsolve, derivationSteps, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,

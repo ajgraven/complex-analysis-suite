@@ -159,6 +159,23 @@ const QD = _QD;
       column: (p) => p.contradiction ? '↳ triangular · inconsistent' : '↳ triangular decomposition',
       edge:   () => 'triangular',
     },
+    // A variety split (minimalPrimes / regular chains), one level up from a factor split. Without a
+    // record here the lane would fall back to a bare "↳ column N" and the graph would not say that
+    // this column is ONE BRANCH of a union — the same thing the verdict ledger is careful to state.
+    component: {
+      text: (p) => p.carried
+        ? 'carried through a component decomposition'
+        : 'component ' + ((p.caseIndex || 0) + 1) + ' of ' + (p.caseCount || '?') + ' (V(I)=⋃V(componentᵢ))'
+          + (p.complete === false ? ' — capped: the components may not cover V(I)' : ''),
+      column: (p, { ns }) => {
+        const cn = (ns || []).find((n) => n.provenance && n.provenance.op === 'component' && !n.provenance.carried);
+        const cp = (cn && cn.provenance) || p;
+        return '↳ component ' + ((cp.caseIndex || 0) + 1) + '/' + (cp.caseCount || '?')
+          + (cp.method === 'regularChains' ? ' (regular chain)' : '')
+          + (cp.complete === false ? ' ⚠ capped' : '');
+      },
+      edge: () => 'component',
+    },
     factor: {
       text:   (p) => p.carried ? 'carried through a factor split' : 'factor: case ' + ((p.caseIndex || 0) + 1) + ' of ' + (p.caseCount || '?') + ' (V(p)=⋃V(fᵢ))',
       column: (p, { ns }) => {
@@ -1051,7 +1068,9 @@ const QD = _QD;
         // turn to discover whether it splits; this scans the whole current system at once, which is
         // the shape "simplify and reduce these equations" actually asks for.
         '      <div class="row" style="gap:4px; flex-wrap:wrap; margin-top:4px;">' +
-        '        <button id="alg-factor-scan" class="small" type="button" title="Factor every equation in the current system and report which ones split — each becomes a one-click case column V(p)=⋃ₖV(fₖ). Equations past the in-browser factorizer caps are reported as UNDETERMINED, never as irreducible.">Factor / simplify column</button></div>' +
+        '        <button id="alg-factor-scan" class="small" type="button" title="Factor every equation in the current system and report which ones split — each becomes a one-click case column V(p)=⋃ₖV(fₖ). Equations past the in-browser factorizer caps are reported as UNDETERMINED, never as irreducible.">Factor / simplify column</button>' +
+        '        <button id="alg-decompose" class="small heavy-op" type="button" title="Minimal primes: split the variety into its irreducible components, V(I)=⋃ₖV(componentₖ). The standard way out of a positive-dimensional (underdetermined) verdict — enter one component and analyze it alone; the branches\' existence counts add up. Runs in a worker.">Decompose into components</button>' +
+        '        <button id="alg-regular-chains" class="small heavy-op" type="button" title="Regular chains (saturated triangular decomposition): like Triangular decomp. above, but SATURATED by its initials — the degenerate cases where an initial vanishes are resolved rather than left as an unstated caveat, so back-substitution is sound on every branch. Runs in a worker.">Regular chains (saturated)</button></div>' +
         '      <div id="alg-factor-out" class="algebra-factor-out"></div>' +
         '      <details class="algebra-advanced"><summary>Advanced</summary>' +
         '        <div class="algebra-line"><span class="algebra-line-label" title="Monomial order. lex = elimination order; grevlex = fastest general.">order</span>' +
@@ -1150,6 +1169,8 @@ const QD = _QD;
       $('#alg-groebner').addEventListener('click', () => doGroebner(null));
       $('#alg-autosolve').addEventListener('click', doAutoSolve);
       $('#alg-factor-scan').addEventListener('click', doFactorScan);
+      $('#alg-decompose').addEventListener('click', () => doDecompose('components'));
+      $('#alg-regular-chains').addEventListener('click', () => doDecompose('chains'));
       $('#alg-triangular').addEventListener('click', doTriangular);
       $('#alg-saturate').addEventListener('click', doSaturate);
       $('#alg-propagate-all').addEventListener('click', doPropagateAll);
@@ -1372,6 +1393,70 @@ const QD = _QD;
         out.appendChild(u);
       }
       toast(split.length ? (split.length + ' equation' + (split.length === 1 ? '' : 's') + ' can be split.') : 'No equation in the current system factors.');
+    }
+    // Decompose the current system into irreducible components (minimalPrimes) or saturated regular
+    // chains, and offer to ENTER one. This is the escape hatch from the positive-dimensional dead
+    // end: V(I) = ⋃ₖ V(componentₖ), so a component can be analyzed alone and the counts add.
+    // Worker-backed and cancellable — factorizing Buchberger is not a main-thread computation.
+    function doDecompose(mode) {
+      if (busyGuard()) return;
+      if (!ensureSeed()) return;
+      const out = $('#alg-factor-out'); if (out) out.innerHTML = '';
+      const chains = mode === 'chains';
+      const label = chains ? 'Regular chains' : 'Decomposing into components';
+      setBusy(true, label + '…');
+      _abort = new AbortController();
+      const call = chains ? store.regularChainsAsync(null, {}, { signal: _abort.signal })
+                          : store.decomposeComponentsAsync(null, {}, { signal: _abort.signal });
+      call.then((r) => {
+        _abort = null; setBusy(false); setStatus('');
+        if (r && r.aborted) { toast('Cancelled'); return; }
+        if (!r || !r.ok) { showError((chains ? 'Regular chains: ' : 'Decompose: ') + withGuidance((r && r.reason) || 'unavailable')); return; }
+        const items = chains ? (r.chains || []).map((c) => ({ polys: c.chain, whole: c.whole, meta: c }))
+                             : (r.primes || []).map((G) => ({ polys: G, whole: !G.length, meta: null }));
+        renderDecomposition(items, r, chains);
+      }, (e) => { _abort = null; setBusy(false); setStatus(''); showError((chains ? 'Regular chains: ' : 'Decompose: ') + ((e && e.message) || String(e))); });
+    }
+    function renderDecomposition(items, r, chains) {
+      const out = $('#alg-factor-out'); if (!out) return;
+      out.innerHTML = '';
+      const head = document.createElement('div'); head.className = 'hint';
+      head.textContent = (chains ? 'Regular chains: ' : 'Irreducible components: ') + items.length
+        + ' — V(I) = ' + (items.length === 1 ? 'V(component 1)' : '⋃ₖ V(componentₖ)') + '.';
+      out.appendChild(head);
+      if (r.note) { const nt = document.createElement('div'); nt.className = 'hint'; nt.textContent = r.note; out.appendChild(nt); }
+      // The honesty line. complete:false ⇒ a cost cap fired, so these components may not COVER V(I)
+      // — a strictly weaker statement than a factor split's, and one the user cannot infer.
+      if (r.complete === false) {
+        const w = document.createElement('div'); w.className = 'algebra-restore';
+        w.textContent = '⚠ A cost cap stopped the decomposition, so these components may not cover the whole variety. '
+          + 'Counts over them add to a LOWER BOUND on the original system, not the total.';
+        out.appendChild(w);
+      }
+      if (!items.length) { const e = document.createElement('div'); e.className = 'hint'; e.textContent = 'The variety is empty (the system is inconsistent) — there is nothing to enter.'; out.appendChild(e); return; }
+      items.forEach((it, k) => {
+        const row = document.createElement('div'); row.className = 'algebra-factor-row';
+        const lab = document.createElement('span'); lab.className = 'algebra-factor-eq';
+        lab.textContent = 'component ' + (k + 1) + '/' + items.length + ' — ' + (it.whole ? 'the whole space' : it.polys.length + ' generator' + (it.polys.length === 1 ? '' : 's'))
+          + (chains && it.meta && it.meta.freeVars && it.meta.freeVars.length ? ' · free: ' + it.meta.freeVars.map(latexPlain).join(', ') : '');
+        row.appendChild(lab);
+        if (!it.whole) {
+          const go = document.createElement('button'); go.type = 'button'; go.className = 'small'; go.textContent = 'Enter';
+          go.title = 'Replace the current system with this component in a new column. The other components still have to be analyzed for a complete count (undo to pick another).';
+          go.addEventListener('click', () => {
+            if (busyGuard()) return;
+            const res = store.applyComponent(it.polys, k, items.length, { complete: r.complete !== false, method: chains ? 'regularChains' : 'minimalPrimes' });
+            if (!res || !res.ok) { showError('Enter component: ' + ((res && res.reason) || 'failed')); return; }
+            if (canvas) canvas.clearSelection();
+            rerender(); refreshPickers();
+            toast('Entered component ' + (k + 1) + ' of ' + items.length + ' (column ' + res.column + '); undo to pick another.');
+            doCertifyUnivalence();
+          });
+          row.appendChild(go);
+        }
+        out.appendChild(row);
+      });
+      toast(items.length + (chains ? ' regular chain' : ' component') + (items.length === 1 ? '' : 's') + ' found.');
     }
     function doFactor(id, box) {
       if (busyGuard()) return;
@@ -1706,7 +1791,8 @@ const QD = _QD;
     let _abort = null;
     function setBusy(on, label) {
       ['alg-prove', 'alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-saturate', 'alg-classify', 'alg-univalence', 'alg-resolvent', 'alg-bifurc', 'alg-moments-go', 'alg-autosolve',
-        'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-real-detect', 'alg-propagate-all', 'alg-val-apply', 'alg-def-apply', 'alg-abbrev', 'alg-eq-apply']
+        'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-real-detect', 'alg-propagate-all', 'alg-val-apply', 'alg-def-apply', 'alg-abbrev', 'alg-eq-apply',
+        'alg-factor-scan', 'alg-decompose', 'alg-regular-chains']
         .forEach((id) => { const b = $('#' + id); if (b) b.disabled = on; });
       const pal = $('#alg-palette'); if (pal) pal.querySelectorAll('button').forEach((b) => { b.disabled = on; });
       const cancel = $('#alg-cancel'); if (cancel) cancel.classList.toggle('hidden', !on);
@@ -1857,7 +1943,8 @@ const QD = _QD;
     function specializationLedger(r) {
       const out = sliceLabels(r).map((s) => s.charAt(0).toUpperCase() + s.slice(1));
       if (store.w0Fixed) out.push('φ(0) = w₀ fixed (center/translation gauge — restricts to domains whose interior contains w₀; a domain not containing w₀ is not counted)');
-      if (r && r.partialBranch) out.push('Factor case ' + ((r.caseIndex || 0) + 1) + ' of ' + r.caseCount + ' (branches add up)');
+      if (r && r.partialBranch) out.push((r.branchOp === 'component' ? 'Component ' : 'Factor case ') + ((r.caseIndex || 0) + 1) + ' of ' + r.caseCount
+        + (r.branchIncomplete ? ' (branches add to a LOWER BOUND — the decomposition hit a cap)' : ' (branches add up)'));
       // D-4: a user-added univalence constraint (convex / star / spiral / injectivity) restricts the count to
       // the domains meeting it — record it in the ledger so a restricted count never reads as the full one.
       try {
@@ -2171,7 +2258,16 @@ const QD = _QD;
           else verdict = r.realCount + ' real algebraic solutions' + tail + ' — run Certify univalence for the genuine-QD count (gauge copies merged, non-univalent ones filtered).';
         }
         // A factor "case" column counts ONE branch of V(p)=⋃V(fᵢ) — the branches add up.
-        if (r.partialBranch) verdict += '  [case ' + ((r.caseIndex || 0) + 1) + ' of ' + r.caseCount + ' of a factor split — this counts THIS branch only; the branches add up to the original.]';
+        if (r.partialBranch) {
+          const what = r.branchOp === 'component' ? 'a component decomposition' : 'a factor split';
+          verdict += '  [case ' + ((r.caseIndex || 0) + 1) + ' of ' + r.caseCount + ' of ' + what
+            + ' — this counts THIS branch only; the branches add up to the original.'
+            // A decomposition that hit a cost cap may not even COVER V(I), so its branches can sum
+            // to less than the whole. That is a strictly weaker claim than a factor split's and has
+            // to be said, or a partial cover reads as an exhaustive one.
+            + (r.branchIncomplete ? ' ⚠ the decomposition hit a cost cap, so the components may not cover the whole variety — the branch counts then add to a LOWER BOUND, not the total.' : '')
+            + ']';
+        }
         // A reality/imaginary assumption slices the system — the count is a lower bound (honest labeling).
         verdict += sliceCaveat(r);
         setStatus(verdict);
@@ -2326,6 +2422,12 @@ const QD = _QD;
             } });
         });
       } catch (e) { /* the split offer is best-effort — never break the verdict card */ }
+      // The canonical way out of a positive-dimensional system: decompose the variety and analyze one
+      // component at a time. Offered unconditionally here — this is the state it exists for, and the
+      // card's other actions depend on spuriousFactors finding something, which it often does not.
+      actions.push({ label: 'Decompose into components',
+        title: 'Split V(I) into irreducible components (minimal primes) and enter one. Each is analyzed alone and the existence counts add up — the standard route out of an underdetermined system.',
+        onClick: () => { const sec = $('#alg-sections'); if (sec) { const d = sec.querySelector('details.algebra-section:nth-of-type(2)'); if (d) d.open = true; } doDecompose('components'); } });
       if (canvas) canvas.setVerdict({ text, actions: actions.slice(0, 6), assumptions: specializationLedger(cl), rigor: 'unknown' });
       setStatus(text); toast('Positive-dimensional — fix the gauge / pin a forced variable.', { kind: 'error' });
     }
@@ -3002,7 +3104,9 @@ const QD = _QD;
       // branch by the store) narrow the count. Fold both into the tooltip and mark the badge with '*'
       // so a slice/branch count on a chip never reads as the general QD count (honest labeling).
       const notes = [];
-      if (r.partialBranch) notes.push('case ' + ((r.caseIndex || 0) + 1) + '/' + r.caseCount + ' of a factor split');
+      if (r.partialBranch) notes.push('case ' + ((r.caseIndex || 0) + 1) + '/' + r.caseCount
+        + ' of ' + (r.branchOp === 'component' ? 'a component decomposition' : 'a factor split')
+        + (r.branchIncomplete ? ' (capped — components may not cover V(I))' : ''));
       const sl = sliceLabels(r);
       if (sl.length) notes.push('on the ' + sl.join(' + ') + ' only — a LOWER BOUND; off-slice QDs not counted');
       const tail = notes.length ? ' [' + notes.join('; ') + ']' : '';
