@@ -5236,6 +5236,32 @@ import _QD from './solver.mjs';
       const cells = res.cells.map((c) => Object.assign({}, c, { lo: Number.isFinite(c.lo) ? c.lo : null, hi: Number.isFinite(c.hi) ? c.hi : null }));
       return Object.assign({}, res, { cells });
     }
+    if (kind === 'minimalPrimes') {
+      // Irreducible components of V(I) (#12). Heavy — factorizing Buchberger — so it belongs off the
+      // main thread. `complete:false` means a cost cap fired, i.e. the component list may be
+      // INCOMPLETE; the caller must not present it as an exhaustive decomposition.
+      const opts = Object.assign({}, payload.opts, { vars: payload.vars }, onProgress ? { onProgress } : {});
+      const res = minimalPrimes(polys, opts);
+      if (!res.ok) return { ok: false, reason: res.reason };
+      return { ok: true, complete: !!res.complete, count: res.count, note: res.note || '',
+        primes: (res.primes || []).map((G) => G.map((g) => g.termList())) };
+    }
+    if (kind === 'triangularDecomposition') {
+      // Regular chains (#13) — minimalPrimes + triangularize per component, so `complete` inherits
+      // the same honesty. Unlike the Wu chain from 'triangularize', these ARE saturated by their
+      // initials, which is what makes back-substitution sound on every branch.
+      const opts = Object.assign({}, payload.opts, { vars: payload.vars }, onProgress ? { onProgress } : {});
+      const res = triangularDecomposition(polys, opts);
+      if (!res.ok) return { ok: false, reason: res.reason };
+      return { ok: true, complete: !!res.complete, count: res.count,
+        chains: (res.chains || []).map((c) => ({
+          chain: (c.chain || []).map((p) => p.termList()),
+          mainVars: (c.mainVars || []).slice(),
+          freeVars: (c.freeVars || []).slice(),
+          initials: (c.initials || []).map((p) => p.termList()),
+          whole: !!c.whole,
+        })) };
+    }
     if (kind === 'dimension') {
       const vars = payload.vars || _ambientVars(polys);
       const order = monomialOrder('grevlex', vars);

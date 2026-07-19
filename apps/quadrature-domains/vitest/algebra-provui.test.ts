@@ -29,7 +29,7 @@ describe("PROV_UI provenance-op registry (UI side)", () => {
   // no custom UI label — it renders via the default — so it is intentionally not listed here).
   const CONTRACT = ["generate", "fork", "conjugate", "resultant", "groebner", "constraint",
     "duplicate", "substitute", "linear-reduce", "assume-real", "assume-imaginary", "identify",
-    "identify-conj", "fix-w0", "define-subst", "add-equation", "triangular", "factor", "rctd", "propagate"];
+    "identify-conj", "fix-w0", "define-subst", "add-equation", "triangular", "factor", "component", "rctd", "propagate"];
 
   const text = (op: string, p: any) => { const d = PU[op]; return d && d.text ? d.text({ op, ...p }, ctx) : op; };
   const col = (op: string, p: any, extra: any = {}) => { const d = PU[op]; return d && d.column ? d.column({ op, ...p }, { ...ctx, ...extra }) : "↳ column " + ctx.c; };
@@ -79,6 +79,32 @@ describe("PROV_UI provenance-op registry (UI side)", () => {
   });
   it("fork.column degrades to the raw track id when ctx has no trackLabelOf", () => {
     expect(col("fork", { fromTrack: "t2", fromColumn: 1 })).toBe("↳ forked from t2 · column 1");
+  });
+
+  // A component column is ONE BRANCH of V(I)=⋃ₖV(componentₖ). The lane has to say so — and has to
+  // say when the decomposition was capped, because then the branches may not even cover V(I).
+  describe("component (a variety split, one level up from a factor split)", () => {
+    const P = { caseIndex: 1, caseCount: 3 };
+    it("names the case in both the node text and the lane label", () => {
+      expect(text("component", P)).toMatch(/component 2 of 3/);
+      expect(col("component", P, { ns: [] })).toBe("↳ component 2/3");
+    });
+    it("marks a CAPPED decomposition in both places", () => {
+      expect(text("component", { ...P, complete: false })).toMatch(/capped|may not cover/i);
+      expect(col("component", { ...P, complete: false }, { ns: [] })).toMatch(/capped/i);
+    });
+    it("says nothing about capping when the decomposition completed", () => {
+      expect(text("component", { ...P, complete: true })).not.toMatch(/capped/i);
+      expect(col("component", { ...P, complete: true }, { ns: [] })).not.toMatch(/capped/i);
+    });
+    it("distinguishes a regular-chain split from a minimal-primes one", () => {
+      expect(col("component", { ...P, method: "regularChains" }, { ns: [] })).toMatch(/regular chain/);
+      expect(col("component", { ...P, method: "minimalPrimes" }, { ns: [] })).not.toMatch(/regular chain/);
+    });
+    it("a carried side condition is not labeled as the split itself", () => {
+      expect(text("component", { ...P, carried: true })).toMatch(/carried/i);
+      expect(text("component", { ...P, carried: true })).not.toMatch(/component 2 of 3/);
+    });
   });
 
   it("edge() labels are behavior-preserving (golden)", () => {
