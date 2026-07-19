@@ -3065,10 +3065,14 @@ const QD = _QD;
         onSeed: seedFromCurrent,
       });
       buildToolbar(surface);
-      breadcrumb = document.createElement('div'); breadcrumb.className = 'algebra-breadcrumb';
-      surface.appendChild(breadcrumb);
+      // Into the canvas's bottom RAIL, not floating over the surface: as free-floating overlays
+      // these sat at z-index 11, above the verdict card, so they painted over the result on any
+      // surface narrower than ~1000px.
+      const rail = (canvas && canvas.rail) || surface;
       trackbar = document.createElement('div'); trackbar.className = 'algebra-trackbar hidden';
-      surface.appendChild(trackbar);
+      rail.appendChild(trackbar);
+      breadcrumb = document.createElement('div'); breadcrumb.className = 'algebra-breadcrumb';
+      rail.appendChild(breadcrumb);
       // Keyboard a11y (active only while the Algebra tab is visible, and not while typing in
       // a field): Esc clears the selection; Delete/Backspace deletes a single selected node.
       document.addEventListener('keydown', (ev) => {

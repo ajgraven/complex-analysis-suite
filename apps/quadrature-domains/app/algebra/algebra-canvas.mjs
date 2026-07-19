@@ -99,12 +99,27 @@ const QD = _QD;
     const mmView = div('algebra-minimap-view');
     minimap.appendChild(mmInner); minimap.appendChild(mmView);
     container.appendChild(minimap);
+    // Bottom chrome rail. The branch bar and reduction breadcrumb used to be absolutely positioned
+    // at z-index 11 — i.e. ABOVE the verdict card at z-index 10 — so on any surface narrower than
+    // ~1000px the navigation furniture painted over the result. In the grid they own a row and
+    // cannot collide with anything. The UI layer appends into this instead of the container.
+    const rail = div('algebra-rail');
+    container.appendChild(rail);
 
     let zoom = 1;
     let minimapOn = false;
     // The last verdict payload, so a re-render can re-show it demoted instead of destroying a result
     // that cost tens of seconds. Cleared only by an explicit dismiss.
     let lastVerdictData = null;
+    let verdictCollapsed = false;
+    function setVerdictCollapsed(on) {
+      verdictCollapsed = !!on;
+      verdict.classList.toggle('is-collapsed', verdictCollapsed);
+      const b = verdict.querySelector('.algebra-verdict-dock');
+      if (b) { b.textContent = verdictCollapsed ? '«' : '»'; b.title = verdictCollapsed ? 'Expand the result panel' : 'Collapse the result panel (keeps the result)'; }
+      relayout();                 // the canvas viewport just changed width
+      return verdictCollapsed;
+    }
     let selected = [];
     let lastStore = null, lastLatexOf = null;
     const collapsed = new Map();        // id -> bool (default: collapsed). Persists across rerenders.
@@ -591,6 +606,11 @@ const QD = _QD;
       if (!data || !data.text) { lastVerdictData = null; verdict.classList.add('hidden'); return; }
       if (!data.stale) lastVerdictData = data;   // keep the pristine payload, not the demoted re-show
       verdict.innerHTML = '';
+      // Docked, the card takes real width from the canvas, so it needs a way to yield it that is
+      // NOT dismissal — collapsing keeps the result (and its Export action) one click away.
+      const collapse = iconBtn('algebra-verdict-dock', verdictCollapsed ? '«' : '»',
+        verdictCollapsed ? 'Expand the result panel' : 'Collapse the result panel (keeps the result)',
+        () => setVerdictCollapsed(!verdictCollapsed));
       const close = iconBtn('algebra-verdict-close', '×', 'Dismiss', () => { lastVerdictData = null; verdict.classList.add('hidden'); });
       const head = div('algebra-verdict-head');
       // Rigor badge (G-2): a prominent, color-coded =/≤/≈/⚠/? pill leads the card so a certified '=' and an
@@ -602,7 +622,7 @@ const QD = _QD;
         head.appendChild(pill);
         const tspan = document.createElement('span'); tspan.textContent = data.title || 'Existence / uniqueness'; head.appendChild(tspan);
       } else { head.appendChild(document.createTextNode(data.title || 'Existence / uniqueness')); }
-      head.appendChild(close);
+      head.appendChild(collapse); head.appendChild(close);
       const body = div('algebra-verdict-body'); body.textContent = data.text;
       verdict.appendChild(head);
       // Everything below the head scrolls; the head (rigor pill + ×) is pinned, so a tall card
@@ -678,6 +698,7 @@ const QD = _QD;
         });
         bodyWrap.appendChild(bar);
       }
+      verdict.classList.toggle('is-collapsed', verdictCollapsed);
       verdict.classList.remove('hidden');
     }
 
@@ -694,7 +715,7 @@ const QD = _QD;
 
     track.style.transform = 'scale(1)';
     return { render, rerender, fit, fitWidth, scrollToColumn, getSelection, clearSelection, setZoom, zoomAt,
-      setAllCollapsed, setVerdict, setMinimap, setQuery, moveSelection };
+      setAllCollapsed, setVerdict, setMinimap, setQuery, moveSelection, rail, setVerdictCollapsed };
   }
 
   window.QD = window.QD || {};
