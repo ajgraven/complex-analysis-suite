@@ -265,7 +265,30 @@ const QD = _QD;
     // QE is non-null past the install guard above).
     const isClassicalBounded = QE.isClassicalBounded;
     function toast(msg, opts) { if (QD.QoL && QD.QoL.toast) QD.QoL.toast(msg, opts || {}); }
-    function rerender() { if (canvas) canvas.render(store, latexOf); renderInspector(canvas ? canvas.getSelection() : []); buildBreadcrumb(); buildTrackBar(); renderSuggestions(); renderHypotheses(); refreshUndoButtons(); scheduleAutosave(); }
+    // Applying a reduction appends a column at the far right of an already-wide track and nothing
+    // scrolled there — the primary action of the workspace produced output the user could not see,
+    // with a toast reading "→ column 7" standing in for it. Follow the work: when the derivation
+    // grows (or the branch changes), bring the new current column into view. The movement IS the
+    // feedback. Tracked here rather than in the canvas because only the caller knows what changed.
+    let _lastMaxCol = -1, _lastTrack = null;
+    function rerender() {
+      if (canvas) canvas.render(store, latexOf);
+      renderInspector(canvas ? canvas.getSelection() : []); buildBreadcrumb(); buildTrackBar();
+      renderSuggestions(); renderHypotheses(); refreshUndoButtons(); scheduleAutosave(); refreshStatusBar();
+      const mx = store.size ? store.maxColumn() : -1, tr = store.activeTrack;
+      if (canvas && canvas.scrollToColumn && mx >= 0 && (mx !== _lastMaxCol || tr !== _lastTrack)) {
+        canvas.scrollToColumn(mx);
+      }
+      _lastMaxCol = mx; _lastTrack = tr;
+    }
+    // Keep the standing readout current after a mutation, but never stomp a transient message
+    // (progress / a verdict) that an in-flight operation is showing.
+    function refreshStatusBar() {
+      const el = $('#alg-status'); if (!el) return;
+      if (_busy) return;                                   // an operation is reporting progress
+      if (el.dataset.transient === '1') return;            // a verdict / result line is standing
+      el.textContent = baselineStatus();
+    }
 
     // ---- undo/redo affordance ------------------------------------------------
     // The model was always sound (snapshot stack, 26 checkpoint sites); only the surface was
@@ -969,7 +992,28 @@ const QD = _QD;
     }
 
     // ---- sidebar -------------------------------------------------------------
-    function setStatus(t) { const el = $('#alg-status'); if (el) el.textContent = t; }
+    // Where am I? #alg-status is the sidebar's only state surface, and `setStatus('')` appears at ~23
+    // sites — essentially every completion path — so after the first successful operation it went
+    // blank and stayed blank, leaving the canvas as the sole answer. Clearing now means "no transient
+    // message", not "nothing to say": it falls back to a standing description of the derivation.
+    function baselineStatus() {
+      if (!store.size) return activeEnv ? 'Ready — click Generate / re-seed to build the original system.'
+                                        : 'No classical bounded QD solved yet — solve one on the QD tab, or seed the A–S moment system.';
+      const c = store.maxColumn(), at = store.activeTrack;
+      const eqs = store.list().filter((n) => (n.track || 't0') === at && n.column === c).length;
+      const a = (store.realVars || []).length + (store.imagVars || []).length + (store.w0Fixed ? 1 : 0);
+      const multi = store.tracks && store.tracks().length > 1;
+      return 'column ' + c + ' of ' + c + ' · ' + eqs + ' equation' + (eqs === 1 ? '' : 's')
+        + (multi ? ' · branch ' + trackLabelOf(at) : '')
+        + ' · ' + (a ? a + ' assumption' + (a === 1 ? '' : 's') : 'no assumptions');
+    }
+    // A truthy message is TRANSIENT (progress, a verdict) and sticks until something replaces it;
+    // clearing drops back to the standing readout rather than to nothing.
+    function setStatus(t) {
+      const el = $('#alg-status'); if (!el) return;
+      if (t) { el.textContent = t; el.dataset.transient = '1'; }
+      else { el.textContent = baselineStatus(); el.dataset.transient = '0'; }
+    }
     function setStatusHTML(html) { const el = $('#alg-status'); if (el) el.innerHTML = html; }
     function mountSidebar() {
       const panel = $('#controls-algebra');
@@ -987,12 +1031,16 @@ const QD = _QD;
         '    <button id="alg-steps-x" class="algebra-steps-x" type="button" title="Hide this hint">×</button>' +
         '  </div>' +
         '  <div class="row algebra-primary">' +
-        '    <button id="alg-prove" class="small heavy-op" type="button" title="One click, seed → certified verdict: auto-assume reality (if h is real-axis symmetric), propagate linear consequences, then run the FULL Certify-univalence pipeline — regime (inconsistent / positive-dim / zero-dim) → certified real solve (RUR + exact Sturm) → EXACT |z_j|<1 admissibility gate → Schur–Cohn fold + boundary-simple filter → gauge quotient → numeric cross-check — and label the verdict with a =/≤/≈ rigor badge. Every step is a new labeled column; if still underdetermined it offers one-click pin/split, never failing ambiguously.">✦ Prove existence / uniqueness</button>' +
+        '    <button id="alg-prove" class="small heavy-op" type="button" title="One click: seed → certified existence/uniqueness verdict, with a =/≤/≈ rigor badge.">✦ Prove existence / uniqueness</button>' +
         '    <button id="alg-autosolve" class="small heavy-op" type="button" title="Semi-autonomous: auto-assume reality (if h is symmetric), propagate linear consequences, then determine existence/uniqueness and the explicit real solutions — each step a new labeled column">★ Auto-reduce &amp; solve</button>' +
         '    <button id="alg-seed" class="small" type="button" title="Generate the original (●)/(★)/gauge system from the current bounded solve at column 0 (replaces the graph; assumptions are then added as columns)">Generate / re-seed</button>' +
         '    <button id="alg-seed-moment" class="small" type="button" title="Seed the Aharonov–Shapiro moment system: order-2 quadrature domains from their harmonic moments M₀, M₁ (symbolic — needs no solve; pin the moments via “Set values” to determine a specific QD)">Seed A–S moments</button>' +
         '    <button id="alg-cancel" class="small hidden" type="button" title="Cancel the running computation">Cancel</button>' +
         '  </div>' +
+        // The pipeline description used to live in a 543-character `title`: invisible on touch,
+        // unreachable by keyboard, gone on pointer-move. It is the substance of the tool, so it is
+        // caption text now. See finding 4.3 — nothing over ~120 chars belongs in a tooltip.
+        '  <div class="hint algebra-cta-caption">✦ <strong>Prove</strong> runs the full certified pipeline: regime → certified real solve (RUR + exact Sturm) → exact |zⱼ|&lt;1 gate → Schur–Cohn fold + boundary-simple filter → gauge quotient → numeric cross-check. ★ <strong>Auto-reduce</strong> stops after the algebraic count — no univalence filter, no gauge merge.</div>' +
         '  <div id="alg-status" class="hint" style="margin:4px 0;"></div>' +
         '  <div id="alg-error" class="algebra-error hidden">' +
         '    <span id="alg-error-msg" class="algebra-error-msg"></span>' +
@@ -1028,28 +1076,28 @@ const QD = _QD;
         '    <summary>Assumptions</summary>' +
         '    <div class="algebra-section-body">' +
         '      <div class="algebra-line"><span class="algebra-line-label">Assume real</span><span id="alg-real-pick" class="algebra-picker"></span>' +
-        '        <button id="alg-real-apply" class="small" type="button" data-str-title="tooltips.assumeReal">Apply</button>' +
-        '        <button id="alg-real-auto" class="small" type="button" title="Detect real-axis symmetry of h and, if the data is fully real, assume every base variable real in one step (the biggest tractability lever)">Auto</button>' +
+        '        <button id="alg-real-apply" class="small" type="button" data-str-title="tooltips.assumeReal">Assume real</button>' +
+        '        <button id="alg-real-auto" class="small" type="button" title="Detect real-axis symmetry of h and, if the data is fully real, assume every base variable real in one step (the biggest tractability lever)">Assume all real</button>' +
         '        <button id="alg-real-detect" class="small" type="button" title="Scan the current equations for variable symmetries — a variable forced real (v − v̄ = 0, e.g. the gauge) or imaginary (v + v̄ = 0), or two variables identified (x ∓ y = 0) — and surface one-click suggestions">Detect symmetry</button></div>' +
         '      <div class="algebra-line-label" style="margin-top:8px;">Set values <span class="hint" style="font-weight:400;">(each value also fixes its conjugate)</span></div>' +
         '      <div id="alg-val-rows"></div>' +
         '      <div class="row" style="gap:4px; align-items:center; margin-top:2px;">' +
         '        <button id="alg-val-add" class="small" type="button" title="Add another variable to fix in the same column">＋ add variable</button>' +
         '        <label style="font-size:11px;" title="After substituting, run a linear-propagation pass (eliminate forced variables) as a further column."><input type="checkbox" id="alg-val-prop" checked> propagate</label>' +
-        '        <button id="alg-val-apply" class="small" type="button" title="Substitute the exact values (continued-fraction ℚ(i)) for these variables — and their conjugates — in one new column">Apply</button></div>' +
+        '        <button id="alg-val-apply" class="small" type="button" title="Substitute the exact values (continued-fraction ℚ(i)) for these variables — and their conjugates — in one new column">Set values</button></div>' +
         '      <div class="algebra-line-label" style="margin-top:8px;">Define substitution <span class="hint" style="font-weight:400;">(abbreviate a sub-expression as a new symbol)</span></div>' +
         '      <div class="algebra-define-row">' +
         '        <input id="alg-def-name" class="alg-def-name" type="text" placeholder="t" autocomplete="off" spellcheck="false" title="A fresh name for the new symbol" />' +
         '        <span class="alg-def-eq">:=</span>' +
         '        <input id="alg-def-expr" class="alg-def-expr" type="text" placeholder="e.g.  w1^2,  z1+zb1,  z1*zb1" autocomplete="off" spellcheck="false" title="An expression in the current variables.  + − * / ^ ( ),  i = imaginary unit,  exact rationals" />' +
-        '        <button id="alg-def-apply" class="small" type="button" title="Introduce the new symbol and substitute it into the current system (a new labeled column)">Apply</button></div>' +
+        '        <button id="alg-def-apply" class="small" type="button" title="Introduce the new symbol and substitute it into the current system (a new labeled column)">Define symbol</button></div>' +
         '      <div id="alg-def-preview" class="alg-def-preview hint"></div>' +
-        '      <div class="row" style="margin-top:4px;"><button id="alg-abbrev" class="small" type="button" title="Repeatedly apply the highest-value detected substitution (repeated expressions / structural regularities) until none remain — abbreviate the whole system in one step">Auto-abbreviate</button></div>' +
+        '      <div class="row" style="margin-top:4px;"><button id="alg-abbrev" class="small" type="button" title="Repeatedly apply the highest-value detected substitution (repeated expressions / structural regularities) until none remain — abbreviate the whole system in one step">Abbreviate repeatedly</button></div>' +
         '      <div class="algebra-line-label" style="margin-top:8px;">Add equation <span class="hint" style="font-weight:400;">(impose a custom condition)</span></div>' +
         '      <div class="algebra-define-row">' +
         '        <input id="alg-eq-expr" class="alg-def-expr" type="text" placeholder="e.g.  A1_1 - 1,  z1*zb1 - 1" autocomplete="off" spellcheck="false" title="A polynomial in the current variables.  + − * / ^ ( ),  i = imaginary unit,  exact rationals" />' +
         '        <select id="alg-eq-rel" class="alg-eq-rel" title="Relation: = 0 (equality), ≠ 0 (non-vanishing), or > 0 (Hermitian inequality)"><option value="=">= 0</option><option value="≠">≠ 0</option><option value="&gt;">&gt; 0</option></select>' +
-        '        <button id="alg-eq-apply" class="small" type="button" title="Add this equation/inequality as a new node in the current system">Apply</button></div>' +
+        '        <button id="alg-eq-apply" class="small" type="button" title="Add this equation/inequality as a new node in the current system">Add equation</button></div>' +
         '      <div id="alg-eq-preview" class="alg-def-preview hint"></div>' +
         '      <label style="font-size:11px;" title="In the conjugate model, also add the conjugate equation p̄ = 0 (keeps the system conjugation-closed for reim / existence analysis)."><input type="checkbox" id="alg-eq-conj" checked> add conjugate</label>' +
         '    </div>' +
@@ -1126,13 +1174,13 @@ const QD = _QD;
         '        <button id="alg-copy-sympy" class="small" type="button" title="Copy the active branch as a runnable SymPy script — substitution steps are recomputed by SymPy from the previous column; engine reductions (Gröbner / resultant) are given as exact ℚ(i) literals">Copy SymPy script</button></div>' +
         '      <div class="algebra-line" style="margin-top:4px;"><span class="algebra-line-label">Mathematica</span>' +
         '        <select id="alg-mma-col" title="Which column of equations to export"></select>' +
-        '        <button id="alg-copy-mma" class="small" type="button" title="Copy the chosen column as a Wolfram-Language list of equations ({lhs == 0, …}) ready to paste into Mathematica">Copy</button>' +
+        '        <button id="alg-copy-mma" class="small" type="button" title="Copy the chosen column as a Wolfram-Language list of equations ({lhs == 0, …}) ready to paste into Mathematica">Copy column</button>' +
         '        <button id="alg-copy-mma-all" class="small" type="button" title="Copy every column as labeled Wolfram-Language lists (col0 = {…}; col1 = {…}; …)">Copy all</button></div>' +
         '      <div class="algebra-line" style="margin-top:4px;"><span class="algebra-line-label">CAS / RCTD</span>' +
         '        <select id="alg-cas-dialect" title="Maple RCTD = parametric REAL triangular decomposition (RealComprehensiveTriangularize) — the fully-parametric uniqueness route; Singular / Sage = equality-ideal Gröbner cross-checks of the variety.">' +
         '          <option value="maple">Maple RCTD</option><option value="singular">Singular</option><option value="sage">Sage</option></select>' +
         '        <input id="alg-cas-params" class="small" type="text" placeholder="params e.g. a1,C1_1" title="Comma-separated variable names to treat as PARAMETERS — declared last for Maple RealComprehensiveTriangularize. Blank ⇒ non-parametric RealTriangularize." style="width:8.5em;" />' +
-        '        <button id="alg-copy-cas" class="small" type="button" title="Copy the chosen column (above) as CAS input for the selected dialect (runs in your own Maple / Singular / Sage — nothing executes in-browser)">Copy</button>' +
+        '        <button id="alg-copy-cas" class="small" type="button" title="Copy the chosen column (above) as CAS input for the selected dialect (runs in your own Maple / Singular / Sage — nothing executes in-browser)">Copy for CAS</button>' +
         '        <button id="alg-copy-msolve" class="small" type="button" title="Copy the chosen column as msolve .ms input (over ℚ; complex coefficients become a variable i with i²+1). Run offline: msolve -f sys.ms -o out. Nothing executes in-browser.">Copy msolve (.ms)</button></div>' +
         '      <div class="algebra-line" style="margin-top:6px; align-items:flex-start;"><span class="algebra-line-label">Import RCTD</span>' +
         '        <div style="flex:1; min-width:0;">' +
@@ -1789,7 +1837,9 @@ const QD = _QD;
     // mutation can't land mid-op and orphan an in-flight derivation (A5), reveals
     // Cancel, and routes progress to the status line.
     let _abort = null;
+    let _busy = false;
     function setBusy(on, label) {
+      _busy = !!on;
       ['alg-prove', 'alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-saturate', 'alg-classify', 'alg-univalence', 'alg-resolvent', 'alg-bifurc', 'alg-moments-go', 'alg-autosolve',
         'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-real-detect', 'alg-propagate-all', 'alg-val-apply', 'alg-def-apply', 'alg-abbrev', 'alg-eq-apply',
         'alg-factor-scan', 'alg-decompose', 'alg-regular-chains']
@@ -2072,6 +2122,7 @@ const QD = _QD;
       const momentCtx = {
         order: pf.order, momentPolys: sys.polys, deps: proveDeps(),
         sliceCaveat, posDimDesc, signal: ctrl && ctrl.signal,
+        onStage: stageReporter(PROVE.MOMENT_STAGES),
         classify: () => store.classifyAsync(null, {}, { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Moment regime… ' + info.basis + ' generators, ' + info.pairs + ' pairs left') }),
         solveCertified: () => store.solveRealCertifiedAsync(null, {}, { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Solving the moment system… ' + info.basis + ' gen, ' + info.pairs + ' pairs') }),
       };
@@ -2098,6 +2149,7 @@ const QD = _QD;
       const ratCtx = {
         sysPolys: sys.polys, nodeData: rd, deps: proveDeps(),
         sliceCaveat, posDimDesc, signal: ctrl && ctrl.signal,
+        onStage: stageReporter(PROVE.RATIONAL_STAGES),
         classify: () => store.classifyAsync(null, {}, { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Rational regime… ' + info.basis + ' generators, ' + info.pairs + ' pairs left') }),
         solveCertified: () => store.solveRealCertifiedAsync(null, {}, { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Solving the shape system… ' + info.basis + ' gen, ' + info.pairs + ' pairs') }),
       };
@@ -2123,6 +2175,7 @@ const QD = _QD;
       const triCtx = {
         sysPolys: sys.polys, nodeData: td, deps: proveDeps(),
         sliceCaveat, posDimDesc, signal: ctrl && ctrl.signal,
+        onStage: stageReporter(PROVE.TRIANGLE_STAGES),
         classify: () => store.classifyAsync(null, {}, { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Triangle regime… ' + info.basis + ' generators, ' + info.pairs + ' pairs left') }),
         solveCertified: () => store.solveRealCertifiedAsync(null, {}, { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Solving the shape system… ' + info.basis + ' gen, ' + info.pairs + ' pairs') }),
       };
@@ -2293,6 +2346,21 @@ const QD = _QD;
     // ✦ Prove orchestrator (which ESCALATES to the branch tree on a positive-dimensional result). The
     // pinned quadrature data `params` is stashed on the ctx so the tree's fork re-runs spuriousFactors
     // with the same pinning.
+    // ---- strategy transcript ------------------------------------------------
+    // Every plan table (CERTIFY / MOMENT / RATIONAL / TRIANGLE) carries a { id, title, why } per
+    // stage and the engine faithfully emits onStage(id) as it enters each — roughly twenty written
+    // explanations that, until now, NO ctx supplied a handler for, so they reached the user only
+    // inside a downloaded qd-proof.json. During a 30-second prove the entire feedback was one line
+    // describing a sub-step of stage 1. Zero engine work: just listen.
+    function stageReporter(stages) {
+      const table = stages || [];
+      return (id) => {
+        const i = table.findIndex((s) => s.id === id);
+        const s = i >= 0 ? table[i] : { title: id, why: '' };
+        setStatus('Stage ' + (i >= 0 ? (i + 1) + '/' + table.length : '?') + ' — ' + s.title
+          + (s.why ? ' · ' + s.why : ''));
+      };
+    }
     function buildPlanCtx(ctrl, opts) {
       opts = opts || {};
       const hData = opts.hData || (activeEnv && activeEnv.hData);
@@ -2307,6 +2375,7 @@ const QD = _QD;
         hData, deps: proveDeps(), params,
         oracle: { numPhi, fixW0, w0Sel },
         signal: ctrl && ctrl.signal, sliceCaveat, posDimDesc,
+        onStage: stageReporter(opts.stages || PROVE.CERTIFY_STAGES),
         // REGIME: the heavy reim Gröbner + Hermite real-count in the WORKER (cancellable).
         classify: () => store.classifyAsync(null, { paramValues: params }, {
           signal: ctrl && ctrl.signal,
