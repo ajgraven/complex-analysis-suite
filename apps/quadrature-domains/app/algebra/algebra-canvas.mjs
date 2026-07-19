@@ -438,7 +438,7 @@ const QD = _QD;
       // Rigor badge (G-2): a prominent, color-coded =/≤/≈/⚠/? pill leads the card so a certified '=' and an
       // estimate/bound/partial are never confusable at a glance. data.rigor ∈ {exact,bound,estimate,partial,unknown}.
       if (data.rigor) {
-        const rm = rigorMeta(data.rigor);
+        const rm = rigorMeta(data.rigor, data.bound);
         const pill = div('algebra-verdict-rigor'); pill.textContent = rm.symbol; pill.title = 'Rigor: ' + rm.label;
         pill.style.cssText = 'display:inline-block;min-width:1.4em;text-align:center;font-weight:700;border-radius:5px;padding:1px 6px;margin-right:7px;color:#fff;background:' + rm.color + ';';
         head.appendChild(pill);
@@ -538,10 +538,17 @@ const QD = _QD;
   //   'estimate' '≈' — numerical evidence only (a verdict that leaned on a numeric fold/boundary fallback).
   //   'partial' '⚠' — incomplete (e.g. the numeric solver undercounted; some solutions may be missing).
   //   'unknown' '?' — undetermined (positive-dimensional, or the real count over the cap).
-  function rigorMeta(level) {
+  // level → the honest-labeling pill. `bound` is the DIRECTION of a 'bound' level ('=' / '≤' / '≥',
+  // from ProofResult.bound) and is required to render a lower bound correctly: runProofTree returns
+  // rigor:'bound' for BOTH an upper bound (the algebraic count over-counts the genuine domains) and
+  // a LOWER bound (a truncated tree walk found at least N), and rendering '≤' on the latter states
+  // the opposite of what was proved. Omitted ⇒ '≤', the historical default.
+  function rigorMeta(level, bound) {
     switch (level) {
       case 'exact':    return { symbol: '=', label: 'exact — certified', color: '#2e9e5b' };
-      case 'bound':    return { symbol: '≤', label: 'rigorous bound', color: '#3b82c4' };
+      case 'bound':    return (bound === '≥')
+        ? { symbol: '≥', label: 'rigorous lower bound', color: '#3b82c4' }
+        : { symbol: '≤', label: 'rigorous bound', color: '#3b82c4' };
       case 'estimate': return { symbol: '≈', label: 'numerical estimate', color: '#c98a2e' };
       case 'partial':  return { symbol: '⚠', label: 'partial — may be incomplete', color: '#d1791f' };
       default:         return { symbol: '?', label: 'undetermined', color: '#8a8a8a' };

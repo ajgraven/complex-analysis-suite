@@ -50,6 +50,32 @@ describe("AlgebraCanvas.rigorMeta — verdict rigor badge (G-2 legibility)", () 
     expect(cols.size).toBe(5);
   });
 
+  // runProofTree returns rigor:'bound' for BOTH directions — an upper bound (the algebraic count
+  // over-counts genuine domains) and a LOWER bound (a truncated tree walk found at least N). It
+  // distinguishes them only via ProofResult.bound, so without the direction the pill renders '≤' on
+  // a proof that established '≥' — stating the opposite of what was proved.
+  describe("bound DIRECTION (ProofResult.bound)", () => {
+    it("renders ≥ for a lower bound and ≤ for an upper one", () => {
+      expect(AC.rigorMeta("bound", "≥").symbol).toBe("≥");
+      expect(AC.rigorMeta("bound", "≤").symbol).toBe("≤");
+    });
+    it("defaults to ≤ when no direction is supplied (historical behavior)", () => {
+      expect(AC.rigorMeta("bound").symbol).toBe("≤");
+      expect(AC.rigorMeta("bound", undefined).symbol).toBe("≤");
+    });
+    it("says 'lower' on the ≥ label, and neither direction reads as certified", () => {
+      expect(AC.rigorMeta("bound", "≥").label).toMatch(/lower/i);
+      expect(AC.rigorMeta("bound", "≥").label).not.toMatch(/certified/i);
+      expect(AC.rigorMeta("bound", "≤").label).not.toMatch(/certified/i);
+    });
+    it("the direction affects ONLY the 'bound' level — it can never upgrade another level", () => {
+      for (const l of ["exact", "estimate", "partial", "unknown", "bogus"]) {
+        expect(AC.rigorMeta(l, "≥").symbol).toBe(AC.rigorMeta(l).symbol);
+      }
+      expect(AC.rigorMeta("estimate", "=").symbol).toBe("≈");
+    });
+  });
+
   it("every level yields a well-formed { symbol, label, color:#rrggbb }", () => {
     for (const l of LEVELS) {
       const m = AC.rigorMeta(l);
