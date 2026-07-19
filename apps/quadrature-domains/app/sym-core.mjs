@@ -2287,7 +2287,12 @@ import _QD from './solver.mjs';
   // A remainder none of these split is pushed whole (irreducible). Every step
   // strictly shrinks `cur` (or, in (4)/(5), only splices STRICTLY smaller distinct factors), so the
   // recursion terminates; constants are dropped.
-  function _factorRec(p, out) {
+  // `caps` (optional) collects the reason a CAP — not a proof — ended the search on some branch.
+  // Without it, "we proved this is irreducible" and "we gave up at 9 variables" both surface as the
+  // same empty result, and the caller cannot tell a certificate from a shrug. Each record is
+  // { code, detail }; the detail is user-facing.
+  function _cap(caps, code, detail) { if (caps) caps.push({ code, detail }); }
+  function _factorRec(p, out, caps) {
     if (p.vars().size === 0) return;
     let cur = p;
     for (const v of [...cur.vars()]) {                         // (1) monomial factors
@@ -2296,61 +2301,94 @@ import _QD from './solver.mjs';
     }
     if (cur.vars().size === 0) return;
     const facs = _separableSplit(cur);                         // (2) separable (variable-disjoint) product
-    if (facs) { facs.forEach((f) => _factorRec(f, out)); return; }
-    if (cur.vars().size === 1) {                               // (3) univariate over ℚ(i)
+    if (facs) { facs.forEach((f) => _factorRec(f, out, caps)); return; }
+    if (cur.vars().size === 1) {                               // (3) univariate over ℚ(i) — always exact
       const v = [...cur.vars()][0];
       if (cur.degreeIn(v) >= 2) { _qiFactor(cur, v).forEach((f) => _factorPush(out, f)); return; }
     }
-    if (cur.vars().size === 2 && cur.terms.size <= 300) {      // (4) genuine bivariate over ℚ(i) — Gao (roadmap #19)
+    if (cur.vars().size === 2) {                               // (4) genuine bivariate over ℚ(i) — Gao (roadmap #19)
       const vs = [...cur.vars()];
       // Gao needs a squarefree main variable; try either ordering. Degree caps keep the Ruppert
       // nullspace bounded — a curve past them falls through and is pushed whole (honest: not certified).
-      let xv = null, yv = null;
-      if (bivariateSquarefreeInX(cur, vs[0])) { xv = vs[0]; yv = vs[1]; }
-      else if (bivariateSquarefreeInX(cur, vs[1])) { xv = vs[1]; yv = vs[0]; }
-      if (xv && cur.degreeIn(xv) >= 1 && cur.degreeIn(yv) >= 1 && cur.degreeIn(xv) <= 12 && cur.degreeIn(yv) <= 12) {
-        let res = null;
-        try { res = factorBivariate(cur, xv, yv); } catch (e) { res = null; }
-        // Only act on a VERIFIED-complete split (≥2 factors, or a non-unit pure-yVar content to peel);
-        // an irreducible curve (r = 1, unit content) falls through to the whole-push below.
-        if (res && res.ok && res.complete && (res.factors.length >= 2 || res.content.vars().size > 0)) {
-          res.factors.forEach((Fk) => _factorPush(out, Fk));  // ℚ(i)-irreducible factors (already irreducible — do not recurse)
-          if (res.content.vars().size > 0) _factorRec(res.content, out); // pure-yVar content: univariate, terminates
-          return;
+      if (cur.terms.size > 300) _cap(caps, 'bivariate-terms', cur.terms.size + ' terms exceeds the bivariate cap (300)');
+      else {
+        let xv = null, yv = null;
+        if (bivariateSquarefreeInX(cur, vs[0])) { xv = vs[0]; yv = vs[1]; }
+        else if (bivariateSquarefreeInX(cur, vs[1])) { xv = vs[1]; yv = vs[0]; }
+        if (!xv) _cap(caps, 'bivariate-squarefree', 'neither variable is squarefree as the main variable');
+        else if (cur.degreeIn(xv) >= 1 && cur.degreeIn(yv) >= 1) {
+          if (cur.degreeIn(xv) > 12 || cur.degreeIn(yv) > 12) {
+            _cap(caps, 'bivariate-degree', 'degree ' + Math.max(cur.degreeIn(xv), cur.degreeIn(yv)) + ' exceeds the bivariate cap (12)');
+          } else {
+            let res = null;
+            try { res = factorBivariate(cur, xv, yv); } catch (e) { res = null; }
+            // Only act on a VERIFIED-complete split (≥2 factors, or a non-unit pure-yVar content to peel);
+            // an irreducible curve (r = 1, unit content) falls through to the whole-push below.
+            if (res && res.ok && res.complete && (res.factors.length >= 2 || res.content.vars().size > 0)) {
+              res.factors.forEach((Fk) => _factorPush(out, Fk));  // ℚ(i)-irreducible factors (already irreducible — do not recurse)
+              if (res.content.vars().size > 0) _factorRec(res.content, out, caps); // pure-yVar content: univariate, terminates
+              return;
+            }
+            // A COMPLETE run that found one factor with unit content is a genuine irreducibility
+            // certificate — no cap. Anything else means the method did not settle the question.
+            if (!(res && res.ok && res.complete)) _cap(caps, 'bivariate-incomplete', (res && res.reason) || 'the bivariate factorizer did not complete');
+          }
         }
       }
     }
-    if (cur.vars().size >= 3 && cur.vars().size <= 6 && cur.terms.size <= 200) { // (5) genuine ≥3-variable over ℚ(i) — Hensel lift (roadmap #19 n-variate)
-      let maxDeg = 0; for (const v of cur.vars()) maxDeg = Math.max(maxDeg, cur.degreeIn(v));
+    if (cur.vars().size >= 3) {                                // (5) genuine ≥3-variable over ℚ(i) — Hensel lift (roadmap #19 n-variate)
       // Degree / variable-count caps keep the evaluation search + Hensel lift bounded; a polynomial past
       // them (or non-monic in every variable) falls through and is pushed whole (honest: not certified).
-      if (maxDeg <= 8) {
-        let res = null;
-        try { res = factorMultivariate(cur); } catch (e) { res = null; }
-        if (res && res.ok && res.complete && res.factors.length >= 2) {
-          res.factors.forEach((fk) => _factorPush(out, fk)); // distinct ℚ(i)-irreducibles of cur (content already folded in)
-          return;
+      if (cur.vars().size > 6) _cap(caps, 'vars', cur.vars().size + ' variables exceeds the in-browser cap (6)');
+      else if (cur.terms.size > 200) _cap(caps, 'multivariate-terms', cur.terms.size + ' terms exceeds the multivariate cap (200)');
+      else {
+        let maxDeg = 0; for (const v of cur.vars()) maxDeg = Math.max(maxDeg, cur.degreeIn(v));
+        if (maxDeg > 8) _cap(caps, 'multivariate-degree', 'degree ' + maxDeg + ' exceeds the multivariate cap (8)');
+        else {
+          let res = null;
+          try { res = factorMultivariate(cur); } catch (e) { res = null; }
+          if (res && res.ok && res.complete && res.factors.length >= 2) {
+            res.factors.forEach((fk) => _factorPush(out, fk)); // distinct ℚ(i)-irreducibles of cur (content already folded in)
+            return;
+          }
+          if (!(res && res.ok && res.complete)) _cap(caps, 'multivariate-incomplete', (res && res.reason) || 'the multivariate factorizer did not complete');
         }
       }
     }
-    _factorPush(out, cur);                                     // irreducible by our methods
+    _factorPush(out, cur);                                     // irreducible by our methods, or past a cap
   }
+  // Returns { ok, status, caps, factors, reason }. `ok` is unchanged (true ⇔ a nontrivial
+  // factorization was found), so every existing caller keeps its meaning; `status` and `caps` are
+  // additive and are what let a UI distinguish the three genuinely different outcomes:
+  //   'reducible'    — factored (ok:true)
+  //   'irreducible'  — PROVED irreducible over ℚ(i) by a method that ran to completion
+  //   'undetermined' — a cap stopped the search; `caps` says which. NOT a claim about the input.
+  // Collapsing the last two (as a bare ok:false does) is what made "irreducible" and "we didn't
+  // try" indistinguishable at the UI boundary.
   function factor(poly, opts) {
     opts = opts || {};   // accepted for back-compat (rootFinder/ratApprox); the univariate path is now exact
-    if (!poly || poly.isZero()) return { ok: false, reason: 'cannot factor the zero polynomial', factors: [] };
-    if (poly.vars().size === 0) return { ok: false, reason: 'a constant has no nontrivial factorization', factors: [poly] };
-    const out = [];
-    try { _factorRec(poly, out); }
-    catch (e) { return { ok: false, reason: (e && e.message) || String(e), factors: [poly] }; }
-    if (out.length <= 1) return { ok: false, reason: 'no nontrivial factorization found', factors: [poly] };
+    if (!poly || poly.isZero()) return { ok: false, status: 'undetermined', caps: [{ code: 'zero', detail: 'the zero polynomial' }], reason: 'cannot factor the zero polynomial', factors: [] };
+    if (poly.vars().size === 0) return { ok: false, status: 'irreducible', caps: [], reason: 'a constant has no nontrivial factorization', factors: [poly] };
+    const out = []; const caps = [];
+    try { _factorRec(poly, out, caps); }
+    catch (e) { return { ok: false, status: 'undetermined', caps: [{ code: 'error', detail: (e && e.message) || String(e) }], reason: (e && e.message) || String(e), factors: [poly] }; }
+    // De-dupe by code: a separable split recurses, so the same cap can fire on several branches.
+    const seenCap = new Set(), capList = caps.filter((c) => (seenCap.has(c.code) ? false : (seenCap.add(c.code), true)));
+    if (out.length <= 1) {
+      return capList.length
+        ? { ok: false, status: 'undetermined', caps: capList, factors: [poly],
+            reason: 'not factored — ' + capList.map((c) => c.detail).join('; ') }
+        : { ok: false, status: 'irreducible', caps: [], factors: [poly],
+            reason: 'irreducible over ℚ(i) (no nontrivial factorization exists)' };
+    }
     // Defensive: make the contract literal — every returned factor must divide `poly`
     // exactly. The separable leaves are only transitively verified inside _factorRec, so
     // confirm each here; a (theoretically impossible) bad divisor downgrades to ok:false.
     for (const f of out) {
       try { mpolyExactDiv(poly, f); }
-      catch (e) { return { ok: false, reason: 'internal: a candidate factor did not divide the input', factors: [poly] }; }
+      catch (e) { return { ok: false, status: 'undetermined', caps: [{ code: 'error', detail: 'a candidate factor did not divide the input' }], reason: 'internal: a candidate factor did not divide the input', factors: [poly] }; }
     }
-    return { ok: true, factors: out, reason: '' };
+    return { ok: true, status: 'reducible', caps: capList, factors: out, reason: '' };
   }
 
   // ---------------------------------------------------------------------------
