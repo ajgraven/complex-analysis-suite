@@ -953,6 +953,11 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #controls-algebra .algebra-inspector.hidden { display: none; }
 #controls-algebra .algebra-inspector-head { display: flex; align-items: center; justify-content: space-between; }
 #controls-algebra .algebra-inspector-eq { overflow-x: auto; padding: 4px 0; border-bottom: 1px dashed var(--c-border-soft, #eee); }
+/* Column-level factor scan output (Factor / simplify column). Bounded: a wide system can list many
+   equations, and this sits inside an already-scrolling sidebar. */
+#controls-algebra .algebra-factor-out { max-height: 220px; overflow-y: auto; margin-top: 4px; }
+#controls-algebra .algebra-factor-out:empty { display: none; }
+
 /* Factor chooser (Attempt to factor → pick a case) */
 #controls-algebra .algebra-factor-chooser { margin-top: 6px; border-top: 1px dashed var(--c-border-soft, #eee); padding-top: 4px; }
 #controls-algebra .algebra-factor-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
