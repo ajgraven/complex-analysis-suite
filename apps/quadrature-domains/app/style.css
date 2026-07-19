@@ -859,6 +859,15 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 }
 #controls-algebra .algebra-suggest-msg { flex: 1; }
 
+/* Session-restore offer: shown once on mount when an autosaved derivation from a previous
+   session exists. Warm (not error-red) — it is an offer, not a failure. Removed once answered. */
+#controls-algebra .algebra-restore {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  margin: 6px 0; padding: 6px 8px; font-size: 12px; border-radius: 4px;
+  background: #fff8e6; border: 1px solid #d9a441; color: #6b4a12;
+}
+#controls-algebra .algebra-restore-msg { flex: 1 1 100%; }
+
 /* Active-hypotheses context strip (C1): the assumptions conditioning the current branch */
 #controls-algebra .algebra-hypotheses {
   display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
