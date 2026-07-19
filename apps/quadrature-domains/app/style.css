@@ -785,8 +785,15 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #algebra-graph .algebra-empty-hint { font-size: 12px; color: var(--c-muted, #88a); max-width: 420px; }
 #algebra-graph .algebra-scroll.hidden { display: none; }
 /* Verdict result card (existence / uniqueness) — floats over the bottom-right */
+/* The card is anchored bottom-right inside `#algebra-graph { overflow: hidden }` and had NO
+   max-height, so a full one (rigor pill + title + assumptions ledger + body + "why this rigor" +
+   200px math + 140px solutions + a 176px plot + actions) grew UPWARD past the top and was clipped
+   there — losing the rigor badge and the × first, i.e. exactly the honest-labeling signal the card
+   exists to carry and the only way to close it. Bound the height and scroll the BODY, with the head
+   pinned so the badge and × are always reachable. */
 #algebra-graph .algebra-verdict {
   position: absolute; right: 12px; bottom: 12px; z-index: 10; max-width: 360px;
+  max-height: calc(100% - 24px); display: flex; flex-direction: column; overflow: hidden;
   background: var(--c-surface, #fff); border: 1px solid var(--c-accent, #2b7);
   border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.18); padding: 8px 10px; font-size: 12px;
 }
@@ -794,6 +801,15 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #algebra-graph .algebra-verdict-head {
   display: flex; align-items: center; justify-content: space-between;
   font-weight: 700; color: var(--c-muted, #667); font-size: 11px; margin-bottom: 4px;
+  flex: 0 0 auto;                       /* never shrink: the badge + × live here */
+}
+#algebra-graph .algebra-verdict-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+/* A verdict that outlived the system it was computed on: kept (with its Export-proof action) but
+   visibly demoted, so a stale answer can never be mistaken for the current one. */
+#algebra-graph .algebra-verdict.is-stale { opacity: 0.72; border-color: var(--c-border, #ccc); }
+#algebra-graph .algebra-verdict-stale {
+  margin: 2px 0 4px; padding: 3px 6px; border-radius: 4px; font-size: 11px;
+  background: #fff8e6; border: 1px solid #d9a441; color: #6b4a12;
 }
 #algebra-graph .algebra-verdict-body { color: var(--c-text, #222); }
 /* Assumptions ledger — the specializations a verdict was computed under (real/imaginary slice,
