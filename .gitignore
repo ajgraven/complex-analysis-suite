@@ -9,6 +9,9 @@ build/
 
 # Vite
 .vite/
+# Vite writes one of these next to a TS config each time it loads one (apps/*/vite.config.ts).
+# They are build scratch, but land in the repo root of the app — so `git add -A` sweeps them in.
+*.timestamp-*.mjs
 
 # Test / coverage
 coverage/
