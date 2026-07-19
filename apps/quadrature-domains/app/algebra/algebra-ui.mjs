@@ -1047,6 +1047,12 @@ const QD = _QD;
         '        <button id="alg-triangular" class="small" type="button" title="Triangular decomposition (Wu pseudo-elimination) of the current system — an alternative to Gröbner that exhibits the solution structure (free variables, no-solution)">Triangular decomp.</button>' +
         '        <button id="alg-saturate" class="small" type="button" title="Saturate the current system by the Möbius denominators ∏(1−z̄_j z_j) — removes the |z_j|=1 boundary stratum the cleared (●)/(★) denominators carry, so the existence count becomes the EXACT number of algebraic quadrature-domain solutions (e.g. the unit disk 4 → 2). Safe: a genuine QD has |z_j|<1, so nothing genuine is dropped.">Saturate (admissibility)</button>' +
         '        <button id="alg-propagate-all" class="small" type="button" title="Carry EVERY univalence constraint into the current system in one step, with all assumptions (reality, imaginary, fixed φ(0), pinned values) applied to each">Propagate constraints → current</button></div>' +
+        // Column-level factoring. The per-node "Attempt to factor" requires selecting each card in
+        // turn to discover whether it splits; this scans the whole current system at once, which is
+        // the shape "simplify and reduce these equations" actually asks for.
+        '      <div class="row" style="gap:4px; flex-wrap:wrap; margin-top:4px;">' +
+        '        <button id="alg-factor-scan" class="small" type="button" title="Factor every equation in the current system and report which ones split — each becomes a one-click case column V(p)=⋃ₖV(fₖ). Equations past the in-browser factorizer caps are reported as UNDETERMINED, never as irreducible.">Factor / simplify column</button></div>' +
+        '      <div id="alg-factor-out" class="algebra-factor-out"></div>' +
         '      <details class="algebra-advanced"><summary>Advanced</summary>' +
         '        <div class="algebra-line"><span class="algebra-line-label" title="Monomial order. lex = elimination order; grevlex = fastest general.">order</span>' +
         '          <select id="alg-gb-order"><option value="grevlex">grevlex</option><option value="grlex">grlex</option><option value="lex">lex</option></select></div>' +
@@ -1143,6 +1149,7 @@ const QD = _QD;
       if (w0FixCb) w0FixCb.addEventListener('change', () => { if (store.size) seedFromCurrent(); });
       $('#alg-groebner').addEventListener('click', () => doGroebner(null));
       $('#alg-autosolve').addEventListener('click', doAutoSolve);
+      $('#alg-factor-scan').addEventListener('click', doFactorScan);
       $('#alg-triangular').addEventListener('click', doTriangular);
       $('#alg-saturate').addEventListener('click', doSaturate);
       $('#alg-propagate-all').addEventListener('click', doPropagateAll);
@@ -1325,10 +1332,80 @@ const QD = _QD;
 
     // Attempt to factor an equation: show its factors; picking one pursues that case
     // (V(fᵢ)=0) as a new "case" column. The other factors remain — undo and pick another.
+    // Factor every equality in the current system and report the three-way split. The per-node
+    // action answers "does THIS one factor?" only after you select it; this answers "which of my
+    // equations can be simplified?" in one click, which is the question actually being asked.
+    // Equations past a factorizer cap are listed as UNDETERMINED — never folded in with the
+    // irreducible ones, since that is precisely the conflation this pass exists to remove.
+    function doFactorScan() {
+      if (busyGuard()) return;
+      if (!ensureSeed()) return;
+      const out = $('#alg-factor-out'); if (!out) return;
+      out.innerHTML = '';
+      const ns = store.list().filter((n) => n.rel === '=' && n.column === store.maxColumn());
+      if (!ns.length) { out.textContent = 'No equations in the current system.'; return; }
+      const split = [], irred = [], undet = [];
+      ns.forEach((n) => {
+        const fi = _factorInfo(n.id);
+        (fi.status === 'reducible' ? split : fi.status === 'irreducible' ? irred : undet).push({ n, fi });
+      });
+      const head = document.createElement('div'); head.className = 'hint';
+      head.textContent = ns.length + ' equation' + (ns.length === 1 ? '' : 's') + ' scanned — '
+        + split.length + ' factor, ' + irred.length + ' proved irreducible, ' + undet.length + ' undetermined.';
+      out.appendChild(head);
+      split.forEach(({ n, fi }) => {
+        const row = document.createElement('div'); row.className = 'algebra-factor-row';
+        const lab = document.createElement('span'); lab.className = 'algebra-factor-eq';
+        lab.textContent = (n.label || 'equation') + ' → ' + fi.count + ' factors';
+        const go = document.createElement('button'); go.type = 'button'; go.className = 'small'; go.textContent = 'Split…';
+        go.title = 'Show the factors and pick a case to pursue (V(p)=⋃ₖV(fₖ))';
+        go.addEventListener('click', () => { out.querySelectorAll('.algebra-factor-chooser').forEach((c) => c.remove()); doFactor(n.id, out); });
+        row.appendChild(lab); row.appendChild(go); out.appendChild(row);
+      });
+      if (undet.length) {
+        const u = document.createElement('div'); u.className = 'hint';
+        const strong = document.createElement('strong'); strong.textContent = 'Undetermined: ';
+        u.appendChild(strong);
+        u.appendChild(document.createTextNode(undet.map((x) => (x.n.label || '?')).join(', ')
+          + ' — a factorizer cap stopped the search (' + (undet[0].fi.caps.map((c) => c.detail)[0] || 'see the per-equation note')
+          + '). Not a proof of irreducibility; an external CAS has no such cap.'));
+        out.appendChild(u);
+      }
+      toast(split.length ? (split.length + ' equation' + (split.length === 1 ? '' : 's') + ' can be split.') : 'No equation in the current system factors.');
+    }
     function doFactor(id, box) {
       if (busyGuard()) return;
       const fr = store.factorOf(id);
-      if (!fr.ok) { toast('No nontrivial factorization: ' + (fr.reason || 'irreducible by our methods (monomial / separable / univariate)'), { kind: 'error' }); return; }
+      if (!fr.ok) {
+        // Three genuinely different answers, which a bare "no factorization" used to conflate.
+        // 'irreducible' is a RESULT — the method ran to completion and settled it. 'undetermined'
+        // is a statement about our search, not about the polynomial, so it must never read as a
+        // proof; it names the cap and offers the escape hatch that does have the headroom.
+        const prev = box.querySelector('.algebra-factor-chooser'); if (prev) prev.remove();
+        const note = document.createElement('div'); note.className = 'algebra-factor-chooser hint';
+        const lead = document.createElement('strong');
+        if (fr.status === 'irreducible') {
+          lead.textContent = 'Irreducible over ℚ(i) ✓';
+          note.appendChild(lead);
+          note.appendChild(document.createTextNode(' — this equation has no nontrivial factorization, '
+            + 'so there is no case split to make here.'));
+        } else {
+          const caps = (fr.caps || []).map((c) => c.detail).join('; ');
+          lead.textContent = 'Not factored';
+          note.appendChild(lead);
+          note.appendChild(document.createTextNode(' — ' + (caps || fr.reason || 'the search was cut short')
+            + '. This is a limit of the in-browser factorizer, not a proof that the equation is irreducible.'));
+          const cas = document.createElement('button'); cas.type = 'button'; cas.className = 'small';
+          cas.textContent = 'Copy for an external CAS';
+          cas.title = 'Copy this column as CAS input — Singular / Sage / Maple carry no such cap and can factor it';
+          cas.addEventListener('click', () => copyCAS());
+          note.appendChild(document.createElement('br')); note.appendChild(cas);
+        }
+        box.appendChild(note);
+        toast(fr.status === 'irreducible' ? 'Irreducible over ℚ(i) — nothing to split.' : 'Not factored — see the note (a cap, not a proof).',
+          fr.status === 'irreducible' ? {} : { kind: 'error' });
+        return;
+      }
       let chooser = box.querySelector('.algebra-factor-chooser');
       if (chooser) chooser.remove();
       chooser = document.createElement('div'); chooser.className = 'algebra-factor-chooser';
@@ -1445,27 +1522,33 @@ const QD = _QD;
     // 0 selected → hide the inspector, show the workflow sections; 1 selected → that
     // node's equation + provenance + per-node actions (Duplicate / Copy / Delete);
     // 2 selected → the eliminate-a-variable (Sylvester resultant) panel.
-    // D3 — does this equality node actually factor? (guarded; the inspector hides the
-    // "Attempt to factor" action on irreducible equations). Cached per id+poly so repeated
-    // renders of the same selection don't refactor.
-    // Caches the FACTOR COUNT (0 ⇒ does not factor) rather than a boolean, so the positive-dim
-    // verdict can label a split "case 1 of N" without refactoring — factoring is capped but real
-    // work, and that card scans every node in the current column.
+    // Caches the full factor OUTCOME — { status, count, reason, caps } — not a boolean, because the
+    // three states have to be told apart at every call site: 'reducible' offers a split, 'irreducible'
+    // is a result worth stating, and 'undetermined' means a cap stopped the search and we may claim
+    // nothing. Cached per id+size: factoring is capped but real work, and the positive-dim verdict
+    // scans every node in the current column.
+    const FACTOR_NONE = { status: 'undetermined', count: 0, reason: 'node not found', caps: [] };
     const _factorCache = new Map();
-    function _factorCount(id) {
-      const n = store.get(id); if (!n) return 0;
+    function _factorInfo(id) {
+      const n = store.get(id); if (!n) return FACTOR_NONE;
       const key = id + ':' + (n.poly && n.poly.size ? n.poly.size() : 0);
       if (_factorCache.has(key)) return _factorCache.get(key);
-      let cnt = 0;
+      let info = FACTOR_NONE;
       try {
         const fr = store.factorOf && store.factorOf(id);
-        cnt = (fr && fr.ok && fr.factors) ? fr.factors.length : 0;
-      } catch (e) { cnt = 0; }
-      _factorCache.set(key, cnt);
+        info = {
+          status: (fr && fr.status) || 'undetermined',
+          count: (fr && fr.ok && fr.factors) ? fr.factors.length : 0,
+          reason: (fr && fr.reason) || '',
+          caps: (fr && fr.caps) || [],
+        };
+      } catch (e) { info = { status: 'undetermined', count: 0, reason: (e && e.message) || String(e), caps: [] }; }
+      _factorCache.set(key, info);
       if (_factorCache.size > 256) _factorCache.delete(_factorCache.keys().next().value);
-      return cnt;
+      return info;
     }
-    function _factorable(id) { return _factorCount(id) >= 2; }
+    function _factorCount(id) { return _factorInfo(id).count; }
+    function _factorable(id) { return _factorInfo(id).status === 'reducible'; }
     function renderInspector(sel) {
       const box = $('#alg-inspector'), sections = $('#alg-sections');
       if (!box) return;
@@ -1528,11 +1611,35 @@ const QD = _QD;
             toast('Propagated to column ' + r.column + (r.applied && r.applied.length ? ' (applied ' + r.applied.join(', ') + ')' : ''));
           }));
         }
-        // Attempt to factor (equalities in the current system only): split p=f·g into
-        // candidate systems V(p)=⋃V(fᵢ), pursued one case (factor) at a time. D3: shown only
-        // when the equation ACTUALLY factors (store.factorOf(id).ok) — not on irreducible ones.
-        if (n.rel === '=' && n.column === store.maxColumn() && _factorable(sel[0])) {
-          acts.appendChild(mkBtn('Attempt to factor', 'Factor this equation; pick a factor fᵢ to pursue V(fᵢ)=0 as a new "case" column (V(p)=⋃ᵢV(fᵢ))', () => doFactor(sel[0], box)));
+        // Attempt to factor: split p = f·g into candidate systems V(p)=⋃V(fᵢ), pursued one case at
+        // a time. ALWAYS offered on an equality — the old D3 filter hid it whenever factorOf().ok
+        // was false, which made "irreducible", "past a factorizer cap" and "this feature does not
+        // exist" render identically (nothing at all). doFactor now reports which of the three it is.
+        if (n.rel === '=') {
+          const fi = _factorInfo(sel[0]);
+          const inCurrent = n.column === store.maxColumn();
+          const label = fi.status === 'reducible' ? ('Attempt to factor (' + fi.count + ' factors)') : 'Attempt to factor';
+          if (inCurrent) {
+            acts.appendChild(mkBtn(label, 'Factor this equation; pick a factor fᵢ to pursue V(fᵢ)=0 as a new "case" column (V(p)=⋃ᵢV(fᵢ))', () => doFactor(sel[0], box)));
+          } else if (fi.status === 'reducible') {
+            // applyFactor only acts on the CURRENT column, so a factorable equation left behind in
+            // an earlier column used to offer nothing at all — with no hint that carrying it forward
+            // would restore the option. Chain the two steps the user would have had to guess.
+            acts.appendChild(mkBtn('Propagate + factor (' + fi.count + ' factors)',
+              'This equation factors, but only the current system can be split. Carry it into the last column (with every assumption applied) and factor it there.',
+              () => {
+                if (busyGuard()) return;
+                const r = store.propagateNode(sel[0]);
+                if (!r.ok) { showError('Propagate: ' + (r.reason || 'could not propagate')); return; }
+                rerender(); refreshPickers();
+                const moved = (r.node && r.node.id) || null;
+                toast('Propagated to column ' + r.column + ' — factoring it there.');
+                if (moved) { const nb = $('#alg-inspector'); if (nb) doFactor(moved, nb); }
+              }));
+          } else {
+            // Not in the current column and not factorable: still say WHY rather than showing nothing.
+            acts.appendChild(mkBtn(label, 'Report whether this equation factors (it is not in the current system, so it cannot be split here)', () => doFactor(sel[0], box)));
+          }
         }
         // Solve this equation for one variable in radicals (closed form), keeping the
         // others symbolic — degree ≤4 or reducible (e.g. x⁶+b x⁴+c x²+d as a cubic in x²).

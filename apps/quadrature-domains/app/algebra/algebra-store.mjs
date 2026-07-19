@@ -2726,12 +2726,14 @@ import _QD from '../solver.mjs';
     // ---- factoring: split an equation by its factors (V(p)=⋃V(fᵢ)) ----
     // Pure query: attempt to factor a node's polynomial into the radical case factors.
     // Equalities only (f·g=0 ⟺ f=0 or g=0; an inequality f·g>0 does NOT split that way).
-    // Returns { ok, factors:[MPoly], reason }.
+    // Returns Sym.factor's { ok, status, caps, factors:[MPoly], reason } — status ∈ reducible /
+    // irreducible / undetermined, so a caller can tell a proof from a cap. The two refusals below
+    // are 'undetermined' by construction: neither is a claim about the polynomial.
     function factorOf(id) {
       const S = getSym(), QE = getQE();
       const n = get(id);
-      if (!n) return { ok: false, reason: 'node not found', factors: [] };
-      if (n.rel !== '=') return { ok: false, reason: 'only equality equations can be factored', factors: [] };
+      if (!n) return { ok: false, status: 'undetermined', caps: [{ code: 'no-node', detail: 'node not found' }], reason: 'node not found', factors: [] };
+      if (n.rel !== '=') return { ok: false, status: 'undetermined', caps: [{ code: 'not-equality', detail: 'only an equality splits as V(p)=⋃V(fᵢ)' }], reason: 'only equality equations can be factored', factors: [] };
       return S.factor(n.poly, { ratApprox: QE && QE.ratApprox });
     }
     // Pursue ONE factor as a new candidate system: replace the factored equation with
