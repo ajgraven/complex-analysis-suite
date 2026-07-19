@@ -870,6 +870,10 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 }
 #controls-algebra .algebra-suggest-msg { flex: 1; }
 
+/* What the primary CTAs actually do — was a 543-char `title`, i.e. unreachable by keyboard,
+   invisible on touch, and gone the moment the pointer moved. */
+#controls-algebra .algebra-cta-caption { margin: 3px 0 2px; line-height: 1.45; }
+
 /* Session-restore offer: shown once on mount when an autosaved derivation from a previous
    session exists. Warm (not error-red) — it is an offer, not a failure. Removed once answered. */
 #controls-algebra .algebra-restore {

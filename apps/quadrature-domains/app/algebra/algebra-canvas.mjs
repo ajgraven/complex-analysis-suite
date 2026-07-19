@@ -158,10 +158,21 @@ const QD = _QD;
       });
       colorEdgeLineage();
     }
-    function toggleSelect(id) {
+    // A plain click REPLACES the selection; Ctrl/Cmd/Shift+click toggles membership (capped at the
+    // two nodes the eliminate/Gröbner panels take). Previously every click added, so clicking a
+    // second card silently swapped the sidebar to the two-node panel and made that card's own
+    // actions unreachable — the opposite of the universal convention, and the first thing anyone
+    // does. `additive` is passed by the click handler from the event's modifier keys.
+    function toggleSelect(id, additive) {
       const i = selected.indexOf(id);
-      if (i >= 0) selected.splice(i, 1);
-      else { selected.push(id); if (selected.length > 2) selected.shift(); }
+      if (!additive) {
+        selected = (i >= 0 && selected.length === 1) ? [] : [id];   // clicking the sole selection deselects
+      } else if (i >= 0) {
+        selected.splice(i, 1);
+      } else {
+        selected.push(id);
+        if (selected.length > 2) selected.shift();
+      }
       renderSelection();
       if (handlers.onSelect) handlers.onSelect(selected.slice());
     }
@@ -201,11 +212,12 @@ const QD = _QD;
       }
       card.appendChild(math);
 
-      card.addEventListener('click', (ev) => { ev.stopPropagation(); toggleSelect(n.id); if (handlers.onClick) handlers.onClick(n.id); });
+      const additive = (ev) => !!(ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey));
+      card.addEventListener('click', (ev) => { ev.stopPropagation(); toggleSelect(n.id, additive(ev)); if (handlers.onClick) handlers.onClick(n.id); });
       // Keyboard-selectable (a11y): focusable, and Enter/Space toggles selection.
       card.tabIndex = 0; card.setAttribute('role', 'button'); card.setAttribute('aria-label', n.label);
       card.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.stopPropagation(); toggleSelect(n.id); if (handlers.onClick) handlers.onClick(n.id); }
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.stopPropagation(); toggleSelect(n.id, additive(ev)); if (handlers.onClick) handlers.onClick(n.id); }
       });
       return card;
     }
@@ -420,7 +432,20 @@ const QD = _QD;
     function scrollToColumn(c) {
       const el = track.querySelector('.algebra-column[data-col="' + c + '"]');
       if (!el) return;
-      scroll.scrollTo({ left: Math.max(0, el.offsetLeft * zoom - 16), behavior: 'smooth' });
+      // `top: 0` matters: jumping from deep in a tall lane into a short one otherwise lands on
+      // blank space below its content — and the flash then plays off-screen.
+      const left = Math.max(0, el.offsetLeft * zoom - 16);
+      const before = scroll.scrollLeft;
+      try { scroll.scrollTo({ left, top: 0, behavior: 'smooth' }); }
+      catch (e) { scroll.scrollLeft = left; scroll.scrollTop = 0; }
+      // Some engines drop a smooth scrollTo entirely (verified here: behavior:'auto' scrolls,
+      // behavior:'smooth' does nothing), which made this function — and therefore the breadcrumb
+      // that is its only caller — a SILENT no-op. Land the scroll directly if nothing moved at all.
+      // Comparing against `before` rather than the target means a genuine in-flight animation is
+      // left alone; only a request that was ignored outright gets forced.
+      setTimeout(() => {
+        if (scroll.scrollLeft === before && Math.abs(before - left) > 2) { scroll.scrollLeft = left; scroll.scrollTop = 0; }
+      }, 600);
       el.classList.add('algebra-column-flash');
       el.addEventListener('animationend', () => el.classList.remove('algebra-column-flash'), { once: true });
     }
