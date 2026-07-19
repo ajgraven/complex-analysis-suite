@@ -74,6 +74,10 @@ const QD = _QD;
     generate:  { text: (p) => 'generated (' + (p.block || '?') + ' block)' },
     fork: {
       text: (p) => 'forked from ' + (p.fromTrack || '?') + ' · column ' + (p.fromColumn != null ? p.fromColumn : '?'),
+      // A fork's copied nodes are written at column 0 (forkTrack), so WITHOUT this the lane would
+      // fall through to columnLabel's `c === 0` case and read "Original system" — asserting a
+      // provenance it does not have, beside the parent's assumptions it actually inherited.
+      column: (p, ctx) => '↳ forked from ' + ((ctx && ctx.trackLabelOf) ? ctx.trackLabelOf(p.fromTrack) : (p.fromTrack || '?')) + ' · column ' + (p.fromColumn != null ? p.fromColumn : '?'),
       edge: () => 'fork',
     },
     conjugate: {
@@ -1078,9 +1082,13 @@ const QD = _QD;
       const prev = sel.value;
       sel.innerHTML = '';
       const mx = store.maxColumn();
+      // On a FORKED branch, column 0 is a copy of the parent's fork column — not the original
+      // system — so it must not be offered under that name (same rule as the lane + breadcrumb).
+      const at = store.activeTrack;
+      const rootForked = isForkedColumn(store.list().filter((n) => (n.track || 't0') === at && n.column === 0));
       for (let c = 0; c <= mx; c++) {
         const o = document.createElement('option'); o.value = String(c);
-        o.textContent = 'col ' + c + (c === 0 ? ' · original' : '') + (c === mx ? ' · current' : '');
+        o.textContent = 'col ' + c + (c === 0 ? (rootForked ? ' · forked' : ' · original') : '') + (c === mx ? ' · current' : '');
         sel.appendChild(o);
       }
       sel.value = (prev !== '' && Number(prev) <= mx) ? prev : String(mx);
@@ -1168,7 +1176,10 @@ const QD = _QD;
         return head + (cons.length ? '\\ \\text{where}\\ ' + cons.join(',\\ ') : '\\ \\text{(all parameters)}');
       });
       setStatus(text2);
-      if (canvas) canvas.setVerdict({ text: 'RCTD: ' + res.cellCount + ' parameter cell' + (res.cellCount === 1 ? '' : 's') + (counted.length ? ' · ' + total + ' real solution(s) total' : ''), solutionsLatex: cellLatex });
+      // These counts are REPORTED BY the user's own Maple run, parsed here — nothing in this app
+      // certified them, so the card must not wear a rigor we did not earn. 'unknown' (?) is the
+      // honest level; the title names the provenance so the pill reads as "external", not "dubious".
+      if (canvas) canvas.setVerdict({ title: 'RCTD import (external CAS)', text: 'RCTD: ' + res.cellCount + ' parameter cell' + (res.cellCount === 1 ? '' : 's') + (counted.length ? ' · ' + total + ' real solution(s) total' : '') + ' — as reported by Maple; not verified in-app.', solutionsLatex: cellLatex, rigor: 'unknown' });
       toast(text2);
     }
 
@@ -1279,7 +1290,10 @@ const QD = _QD;
         const summary = 'Solved ' + latexPlain(sel.value) + ': ' + r.count + ' root' + (r.count === 1 ? '' : 's') + ' — ' + r.method + (verOk ? ' (verified ✓)' : '');
         setStatus(summary);
         // Verdict card: TYPESET roots (solutionsLatex) — not raw LaTeX. Copy-LaTeX lives below.
-        if (canvas) canvas.setVerdict({ title: 'Solve for a variable', text: summary, solutionsLatex: latexes });
+        // The roots are closed-form radicals — exact BY CONSTRUCTION (degree ≤4 or reducible), with the
+        // numeric residual check guarding the implementation. If that guard did not pass we cannot stand
+        // behind the closed form, so it degrades to 'partial' — never to '=' on an unverified solve.
+        if (canvas) canvas.setVerdict({ title: 'Solve for a variable', text: summary, solutionsLatex: latexes, rigor: verOk ? 'exact' : 'partial' });
         toast(summary, verOk ? {} : { kind: 'error' });
       };
       go.addEventListener('click', run);
@@ -1294,17 +1308,24 @@ const QD = _QD;
     // D3 — does this equality node actually factor? (guarded; the inspector hides the
     // "Attempt to factor" action on irreducible equations). Cached per id+poly so repeated
     // renders of the same selection don't refactor.
+    // Caches the FACTOR COUNT (0 ⇒ does not factor) rather than a boolean, so the positive-dim
+    // verdict can label a split "case 1 of N" without refactoring — factoring is capped but real
+    // work, and that card scans every node in the current column.
     const _factorCache = new Map();
-    function _factorable(id) {
-      const n = store.get(id); if (!n) return false;
+    function _factorCount(id) {
+      const n = store.get(id); if (!n) return 0;
       const key = id + ':' + (n.poly && n.poly.size ? n.poly.size() : 0);
       if (_factorCache.has(key)) return _factorCache.get(key);
-      let ok = false;
-      try { ok = !!(store.factorOf && store.factorOf(id).ok); } catch (e) { ok = false; }
-      _factorCache.set(key, ok);
+      let cnt = 0;
+      try {
+        const fr = store.factorOf && store.factorOf(id);
+        cnt = (fr && fr.ok && fr.factors) ? fr.factors.length : 0;
+      } catch (e) { cnt = 0; }
+      _factorCache.set(key, cnt);
       if (_factorCache.size > 256) _factorCache.delete(_factorCache.keys().next().value);
-      return ok;
+      return cnt;
     }
+    function _factorable(id) { return _factorCount(id) >= 2; }
     function renderInspector(sel) {
       const box = $('#alg-inspector'), sections = $('#alg-sections');
       if (!box) return;
@@ -2028,12 +2049,36 @@ const QD = _QD;
           const key = 'pin:' + f.pinVar; if (seen[key]) return; seen[key] = 1;
           actions.push({ label: 'Pin ' + v + ' = ' + vs, title: 'An equation factors through ' + v + ' — pin it to isolate the component (substitute + propagate).',
             onClick: () => { const r = store.substituteValues([{ varName: f.pinVar, value: val }], { propagate: true }); if (r && r.ok !== false) { rerender(); refreshPickers(); doCertifyUnivalence(); } } });
-        } else {
-          const key = 'split:' + h.nodeId; if (seen[key]) return; seen[key] = 1;
-          actions.push({ label: 'Split ' + (h.label || 'equation') + ' into cases', title: 'This equation factors — split V(p)=⋃V(fᵢ) into candidate case columns (Attempt to factor).',
-            onClick: () => { const r = store.applyFactor(h.nodeId, f.factorIndex); if (r && r.ok) { rerender(); refreshPickers(); doCertifyUnivalence(); } } });
         }
+        // NOTE: a 'general' reim-side factor deliberately produces NO split action here. It used to,
+        // via `h.nodeId` — a field spuriousFactors never returns — so applyFactor(undefined, …) failed
+        // 'node not found' and the ok-guard swallowed it: the button did nothing, ever. It could not be
+        // repaired by supplying an id, either: these factors are of the REAL (reim) polynomials, where
+        // one complex node becomes up to two real ones, and Re(p) = f·g does NOT imply p factors — so
+        // f.factorIndex indexes a different factor list than applyFactor's. The valid case-split is
+        // offered below, computed from the nodes' OWN factorizations.
       }));
+      // Genuine case-splits: a CURRENT-COLUMN equation whose own (complex) polynomial factors, so
+      // V(p) = ⋃ₖ V(fₖ) and applyFactor can pursue a case. This is the actionable escape from a
+      // positive-dimensional dead end, and it is independent of the reim analysis above.
+      try {
+        store.list().filter((n) => n.rel === '=' && n.column === store.maxColumn()).forEach((n) => {
+          if (seen['split:' + n.id]) return;
+          const cnt = _factorCount(n.id);          // cached; 0 ⇒ irreducible / past a factorizer cap
+          if (cnt < 2) return;
+          seen['split:' + n.id] = 1;
+          actions.push({ label: 'Split ' + (n.label || 'equation') + ' → case 1 of ' + cnt,
+            title: 'This equation factors: V(p) = ⋃ₖ V(fₖ). Pursue case 1 in a new column — the other cases still have to be pursued for a complete count (undo to pick another, or fork).',
+            onClick: () => {
+              if (busyGuard()) return;
+              const r = store.applyFactor(n.id, 0);
+              if (!r || !r.ok) { showError('Split into cases: ' + ((r && r.reason) || 'failed')); return; }
+              rerender(); refreshPickers();
+              toast('Split → case 1 of ' + r.factorCount + ' (column ' + r.column + '); undo to pursue another case.');
+              doCertifyUnivalence();
+            } });
+        });
+      } catch (e) { /* the split offer is best-effort — never break the verdict card */ }
       if (canvas) canvas.setVerdict({ text, actions: actions.slice(0, 6), assumptions: specializationLedger(cl), rigor: 'unknown' });
       setStatus(text); toast('Positive-dimensional — fix the gauge / pin a forced variable.', { kind: 'error' });
     }
@@ -2065,7 +2110,9 @@ const QD = _QD;
               let plot = null; try { plot = (QD && typeof QD.evalPhi === 'function') ? domainPlotData(distinct[0], QD.evalPhi) : null; } catch (e) { plot = null; }
               const note = ' · exact boundary curve Q(w,w̄)=0 (over ℚ(i), rationalized solution; order ' + bc.order +
                 (bc.schwarz ? ', Schwarz function S(w) single-valued' : '; Schwarz function algebraic of degree ' + bc.degWb) + ')';
-              if (canvas) canvas.setVerdict({ text: verdict + note, solutionsLatex: latex, plot, solutionsText: rows.join('\n'), assumptions: specializationLedger(cl), actions: vActions, rigor: pr.rigor });
+              // `bound` carries the DIRECTION of a rigor:'bound' result — a truncated tree walk proves a
+              // LOWER bound (≥) and rendering the default '≤' would state the opposite of the proof.
+              if (canvas) canvas.setVerdict({ text: verdict + note, solutionsLatex: latex, plot, solutionsText: rows.join('\n'), assumptions: specializationLedger(cl), actions: vActions, rigor: pr.rigor, bound: pr.bound });
             },
           });
         }
@@ -2190,7 +2237,9 @@ const QD = _QD;
         const mathLatex = ['\\chi = ' + reimSafeLatex(r.latex), '\\text{square-free} = ' + reimSafeLatex(r.squareFreeLatex)];
         if (r.discLatex) mathLatex.push('\\operatorname{disc} = ' + reimSafeLatex(r.discLatex));
         setStatus(text);
-        if (canvas) canvas.setVerdict({ text, solutionsLatex: mathLatex });
+        // EXACT: χ, its square-free part and the discriminant are computed symbolically over ℚ(i);
+        // `degenerate` (disc = 0) is itself an exact conclusion, not a failure to certify.
+        if (canvas) canvas.setVerdict({ text, solutionsLatex: mathLatex, rigor: 'exact' });
         toast(text, r.degenerate ? { kind: 'error' } : {});
       }, 20);
     }
@@ -2233,7 +2282,11 @@ const QD = _QD;
         let text = 'Bifurcation in ' + fv + ': real-solution count = ' + parts.join('; ') + '. Critical ' + fv + ' = ' + critStr + '.';
         if (r.crosschecked === false) text += ' ⚠ the eliminant did not fully cross-check (a separating form was not confirmed) — the critical set may be incomplete, though each interval’s count is still exact at its sample.';
         setStatus(text);
-        if (canvas) canvas.setVerdict({ text });
+        // Each interval's count is exact at its sample, but an un-cross-checked eliminant may have
+        // MISSED a critical value (so a cell could straddle a bifurcation), and a cell with ok:false
+        // has no count at all — both are 'partial' (may be incomplete), never a bare '='.
+        const bifPartial = (r.crosschecked === false) || r.cells.some((c) => !c.ok);
+        if (canvas) canvas.setVerdict({ text, rigor: bifPartial ? 'partial' : 'exact' });
         toast('Bifurcation computed (' + r.cells.length + ' interval' + (r.cells.length === 1 ? '' : 's') + ').');
       }, (e) => { _abort = null; setBusy(false); setStatus(''); showError('Bifurcation: ' + ((e && e.message) || String(e))); });
     }
@@ -2493,13 +2546,23 @@ const QD = _QD;
     }
     // The per-column LABEL (the relationship to the previous column): column 0 is the
     // original system; each later column is phrased as the transformation that derived it.
+    // A column whose nodes carry fork provenance is a forked branch's COPY — not the original
+    // system — even though forkTrack writes it at column 0. Every surface that special-cases
+    // column 0 has to ask this first, or it claims a provenance the column does not have.
+    function isForkedColumn(ns) { return (ns || []).some((n) => n.provenance && n.provenance.op === 'fork'); }
     function columnLabel(c, ns) {
+      const ctx = { latexPlain, substList, ratioStrRec, valStr, trackLabelOf, ns, c };
+      // A branch forked five reductions deep would otherwise fall into the `c === 0` case below and
+      // read "Original system", beside the parent assumptions it actually inherited. Resolve a fork
+      // from provenance FIRST; only a column 0 with no fork is genuinely the original system.
+      const fk = (ns || []).find((n) => n.provenance && n.provenance.op === 'fork');
+      if (fk) return PROV_UI.fork.column(fk.provenance, ctx);
       if (c === 0) return 'Original system' + (store.formulation === 'schwarz' ? ' (Schwarz formulation)' : '') +
         (store.w0Fixed ? ' · φ(0) fixed' : '');
       const rep = (ns || []).find((n) => n.provenance && n.provenance.op !== 'conjugate' && n.provenance.op !== 'propagate') || (ns || [])[0];
       const p = (rep && rep.provenance) || {};
       const d = PROV_UI[p.op];                                     // op → its .column label (registry)
-      return (d && d.column) ? d.column(p, { latexPlain, substList, ratioStrRec, valStr, ns, c }) : ('↳ column ' + c);
+      return (d && d.column) ? d.column(p, ctx) : ('↳ column ' + c);
     }
     // Structured column-header data for the canvas lane headers: step badge, the
     // transition label (relationship to the previous column), a stats line with the Δ in
@@ -2590,11 +2653,14 @@ const QD = _QD;
       const at = store.activeTrack;
       cols.forEach((c, i) => {
         if (i > 0) { const arr = document.createElement('span'); arr.className = 'algebra-bc-sep'; arr.textContent = '→'; breadcrumb.appendChild(arr); }
-        const info = columnInfo(c.index, store.list().filter((n) => (n.track || 't0') === at && n.column === c.index));
+        const ns = store.list().filter((n) => (n.track || 't0') === at && n.column === c.index);
+        const info = columnInfo(c.index, ns);
         const chip = document.createElement('button');
         chip.type = 'button';
         chip.className = 'algebra-bc-chip' + (c.index === mx ? ' is-current' : '');
-        chip.textContent = info.step + (c.index === 0 ? ' original' : ' ' + (info.label || '').replace(/^↳\s*/, ''));
+        // 'original' only for a genuine column 0 — a forked branch's column 0 falls through to its
+        // own label ("forked from …"), matching the lane header instead of contradicting it.
+        chip.textContent = info.step + ((c.index === 0 && !isForkedColumn(ns)) ? ' original' : ' ' + (info.label || '').replace(/^↳\s*/, ''));
         chip.title = info.label + '  ·  ' + info.stats;
         chip.addEventListener('click', () => { if (canvas && canvas.scrollToColumn) canvas.scrollToColumn(c.index); });
         breadcrumb.appendChild(chip);

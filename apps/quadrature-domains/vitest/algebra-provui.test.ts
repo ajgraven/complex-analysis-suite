@@ -66,7 +66,19 @@ describe("PROV_UI provenance-op registry (UI side)", () => {
     expect(col("factor", { caseIndex: 0, caseCount: 2 }, { ns: [] })).toBe("↳ factor · case 1/2");
     expect(col("rctd", {}, { ns: [] })).toBe("↳ RCTD · 0 parameter cells");
     // an op with no column record falls back to '↳ column ' + c
-    expect(col("fork", {})).toBe("↳ column 3");
+    expect(col("conjugate", {})).toBe("↳ column 3");
+  });
+
+  // fork.column exists specifically so a forked branch's lane is NOT labeled "Original system".
+  // forkTrack writes the copied nodes at column 0, so columnLabel's `c === 0` case would otherwise
+  // claim a five-reductions-deep branch is the starting point — beside the assumptions it inherited.
+  it("fork gets a column label naming its parent (never 'Original system')", () => {
+    const s = col("fork", { fromTrack: "t0", fromColumn: 5 }, { trackLabelOf: (t: string) => "T<" + t + ">" });
+    expect(s).toBe("↳ forked from T<t0> · column 5");
+    expect(s).not.toMatch(/original/i);
+  });
+  it("fork.column degrades to the raw track id when ctx has no trackLabelOf", () => {
+    expect(col("fork", { fromTrack: "t2", fromColumn: 1 })).toBe("↳ forked from t2 · column 1");
   });
 
   it("edge() labels are behavior-preserving (golden)", () => {
