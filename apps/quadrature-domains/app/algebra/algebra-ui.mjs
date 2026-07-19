@@ -1702,21 +1702,8 @@ const QD = _QD;
         return true;
       } catch (e) { showError('Seed from data: ' + ((e && e.message) || e)); return false; }
     }
-    // Detect INTERIOR POINT-FUNCTIONAL data (Phase C1): a single quadrature node whose leading residue
-    // M₀ = C_{1} is real & positive (the area). Then the Aharonov–Shapiro MOMENT system applies, with
-    // moments M_p = C_{p+1} (the principal-part coefficients) and order = #principal terms. Returns
-    // { moments, order, node } or null (⇒ not point-functional; use the (●)/(★) route).
-    function pointFunctionalMoments(hData) {
-      const poles = (hData && hData.poles) || [];
-      if (poles.length !== 1) return null;
-      const pp = poles[0].principal || [];
-      if (!pp.length) return null;
-      const M0 = pp[0] || { re: 0, im: 0 };
-      if (Math.abs(M0.im || 0) > 1e-9 || !(M0.re > 1e-12)) return null;   // M₀ = area must be real + positive
-      const moments = { M0: M0.re };
-      for (let p = 1; p < pp.length; p++) moments['M' + p] = { re: pp[p].re || 0, im: pp[p].im || 0 };
-      return { moments, order: pp.length, node: poles[0].a || { re: 0, im: 0 } };
-    }
+    // Routing detectors — pointFunctionalMoments / multiNodeRationalData / multiNodeTriangleData — are pure
+    // and live in prove-plan.mjs (PROVE.*), unit-tested there; ✦ Prove calls them in doProveExistenceUniqueness.
     // Prove existence/uniqueness via the MOMENT formulation (Phase C1). Re-seeds the workspace with the
     // Aharonov–Shapiro moment system (so the shown derivation IS the proof), then runs PROVE.runMomentPlan
     // (certified real solve → Schur–Cohn φ′ univalence → w₁>0 gauge → rigor verdict). Point-functional only.
@@ -1742,23 +1729,6 @@ const QD = _QD;
         renderProofVerdict(pr);   // moment / inconsistent / no-real
       }).catch((e) => { _abort = null; setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
     }
-    // Detect MULTI-NODE data provable via the rational-φ route (Phase C2): exactly 2 simple (order-1) poles,
-    // both on the real axis with real residues (the degree-2 REAL increment — covers two-point-symmetric).
-    // Returns { nodes:[{re,im}×2], weights:[{re,im}×2] } (the QD nodes + quadrature weights) or null.
-    function multiNodeRationalData(hData) {
-      const poles = (hData && hData.poles) || [];
-      if (poles.length !== 2) return null;
-      const nodes = [], weights = [];
-      for (const p of poles) {
-        const pp = p.principal || [];
-        if (pp.length !== 1) return null;                              // order-1 nodes only (degree-2 rational)
-        const a = p.a || { re: 0, im: 0 }, b = pp[0] || { re: 0, im: 0 };
-        if (Math.abs(a.im || 0) > 1e-9 || Math.abs(b.im || 0) > 1e-9) return null;   // real nodes + weights only
-        nodes.push({ re: a.re || 0, im: 0 }); weights.push({ re: b.re || 0, im: 0 });
-      }
-      if (Math.abs(nodes[0].re - nodes[1].re) < 1e-9) return null;     // distinct nodes
-      return { nodes, weights };
-    }
     // Prove existence/uniqueness via the RATIONAL-φ (multi-node) formulation (Phase C2). Re-seeds the workspace
     // with the degree-2 rational shape system (so the shown derivation IS the proof), then runs
     // PROVE.runRationalPlan (certified real solve in (t,d) → poles-outside-𝔻̄ + Schur–Cohn + boundary-simple
@@ -1783,28 +1753,6 @@ const QD = _QD;
         if (pr.kind === 'positive-dim') { renderPositiveDimVerdict(pr); return; }
         renderProofVerdict(pr);   // rational / inconsistent / no-real
       }).catch((e) => { _abort = null; setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
-    }
-    // Detect EQUILATERAL-TRIANGLE data provable via the degree-3 route (Phase C3): exactly 3 simple (order-1)
-    // poles, real weights, equal magnitudes, centroid at the origin (the triangleMomentSystem symmetry gate
-    // re-checks exactly). Returns { nodes:[{re,im}×3], weights:[{re,im}×3] } or null.
-    function multiNodeTriangleData(hData) {
-      const poles = (hData && hData.poles) || [];
-      if (poles.length !== 3) return null;
-      const nodes = [], weights = [];
-      for (const p of poles) {
-        const pp = p.principal || [];
-        if (pp.length !== 1) return null;                              // order-1 nodes only (degree-3)
-        const a = p.a || { re: 0, im: 0 }, b = pp[0] || { re: 0, im: 0 };
-        if (Math.abs(b.im || 0) > 1e-9) return null;                   // real weights only
-        nodes.push({ re: a.re || 0, im: a.im || 0 }); weights.push({ re: b.re || 0, im: 0 });
-      }
-      const mag2 = nodes.map((z) => z.re * z.re + z.im * z.im), A2 = mag2[0], sc = Math.max(1, A2);
-      if (mag2.some((m) => Math.abs(m - A2) > 1e-6 * sc)) return null;                       // equal magnitudes
-      const cx = (nodes[0].re + nodes[1].re + nodes[2].re) / 3, cy = (nodes[0].im + nodes[1].im + nodes[2].im) / 3;
-      if (Math.hypot(cx, cy) > 1e-6 * Math.max(1, Math.sqrt(A2))) return null;               // centroid at origin
-      const b0 = weights[0].re;
-      if (weights.some((w) => Math.abs(w.re - b0) > 1e-6 * Math.max(1, Math.abs(b0)))) return null;   // equal weights
-      return { nodes, weights };
     }
     // Prove existence/uniqueness via the RATIONAL-φ EQUILATERAL-TRIANGLE (degree-3) formulation (Phase C3).
     // Re-seeds the workspace with the 3-fold-symmetric shape system, then runs PROVE.runTrianglePlan (certified
@@ -1855,14 +1803,14 @@ const QD = _QD;
       // Aharonov–Shapiro MOMENT formulation — REAL, zero-dimensional, tractable — and it captures OFF-SLICE
       // (non-real-symmetric) domains that the (●)/(★) reality slice misses (and that the conjugate model is
       // positive-dimensional / intractable for). Exclusive to point-functional data.
-      const pf = (typeof QE.pointFunctionalSystem === 'function') ? pointFunctionalMoments(hData) : null;
+      const pf = (typeof QE.pointFunctionalSystem === 'function') ? PROVE.pointFunctionalMoments(hData) : null;
       if (pf) { doProveMoment(pf, hData); return; }
       // MULTI-NODE (rational-φ) route (Phase C2): 2 real quadrature nodes ⇒ the degree-2 rational map — REAL,
       // zero-dimensional in the shape (t=√c, d), certified + univalence-filtered (exclusive to 2-real-node data).
-      const rd = (typeof QE.rationalMomentSystem === 'function') ? multiNodeRationalData(hData) : null;
+      const rd = (typeof QE.rationalMomentSystem === 'function') ? PROVE.multiNodeRationalData(hData) : null;
       if (rd) { doProveRational(rd, hData); return; }
       // EQUILATERAL-TRIANGLE (degree-3) route (Phase C3): 3 equal-magnitude real-weight nodes, centroid 0.
-      const td = (typeof QE.triangleMomentSystem === 'function') ? multiNodeTriangleData(hData) : null;
+      const td = (typeof QE.triangleMomentSystem === 'function') ? PROVE.multiNodeTriangleData(hData) : null;
       if (td) { doProveTriangle(td, hData); return; }
       if (fromData) { if (_seededHData !== hData && !seedFromDataDirect(hData)) return; } else if (!ensureSeed()) return;
       clearError();

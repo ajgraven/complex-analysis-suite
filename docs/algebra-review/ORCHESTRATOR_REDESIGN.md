@@ -1,18 +1,32 @@
 # The "Fuller Orchestrator" Redesign — Design & Plan
 
-> **Status: DESIGN APPROVED; Phase A in progress.** The deferred item (iii) from
-> [`FINAL_REPORT.md`](FINAL_REPORT.md) §"Status" and [`PLAN.md`](PLAN.md) — "the larger *fuller
-> orchestrator* redesign (a first-class strategy plan + branch-case tree)". This is the authoritative
-> spec; it survives interruption and is value-ordered into five independently-shippable PRs (A–E).
+> **Status: COMPLETE — every phase shipped & merged (PRs #82–#97).** Phases **A** (pure StrategyPlan
+> engine, #82), **B** (branch/case ProofTree + pool-then-quotient aggregation, #83), **D** (from-data
+> entry, #84), and **E** (auditable rigor badge + reproducible proof export, #85) shipped in that
+> order. **Phase C pivoted** away from the originally-planned reality/imaginary slice-completion —
+> found math-limited for the conjugate model (the general system stays positive-dimensional; §8
+> grounding finding) — to **three tractable, real, zero-dimensional "prove routes"**: **C1** moment /
+> Aharonov–Shapiro (single-node, polynomial φ; #86–#88), **C2** rational-φ (2-node, degree-2; #89–#92),
+> **C3** equilateral-triangle (3-node, degree-3; #93–#96), followed by a review-driven honest-labeling
+> + gauge-canonicalization fix pass (#97). **The C-routes are documented in full in
+> [`RATIONAL_MOMENT_C2.md`](RATIONAL_MOMENT_C2.md)** (the (P,s) triangle formulation, the residue-vs-π
+> convention finding, and its §8 "Phase C is COMPLETE"); this doc points there rather than duplicating.
+> §§1–4 remain the design/ADR rationale (still current); §5 records the shipped phase plan; §8 is the
+> re-entrant progress log.
 >
-> **Binding decisions (this session):**
-> 1. **Persist this doc, then implement Phase A** (the pure StrategyPlan extraction, no behavior change).
+> Originating from the deferred item (iii) of [`FINAL_REPORT.md`](FINAL_REPORT.md) §"Status" and
+> [`PLAN.md`](PLAN.md) — "the larger *fuller orchestrator* redesign (a first-class strategy plan +
+> branch-case tree)". This was the authoritative spec; it was value-ordered into independently-shippable
+> PRs, shipped **A → B → D → E**, then **Phase C reborn as C1/C2/C3**, then a review-fix pass.
+>
+> **Binding decisions (design session; retained below as ADR history):**
+> 1. **Persist this doc, then implement Phase A** (the pure StrategyPlan extraction, no behavior change). — done (#82).
 > 2. **Aggregation = POOL-THEN-QUOTIENT** (§3.2) — not sum-with-seam-dedup. Recorded as an ADR-style
 >    decision below; do not re-litigate without a note here.
 
 ## 1. What "fuller" means (and doesn't)
 
-The maturity review shipped `doProveExistenceUniqueness` ([`algebra/algebra-ui.mjs`](../../apps/quadrature-domains/app/algebra/algebra-ui.mjs) `:1689`) as **one-click orchestration of sound
+The maturity review shipped `doProveExistenceUniqueness` ([`algebra/algebra-ui.mjs`](../../apps/quadrature-domains/app/algebra/algebra-ui.mjs)) as **one-click orchestration of sound
 pieces**: a best-effort prelude (auto-reality → linear-propagate ×4 → `saturateMobius`) then the
 authoritative `doCertifyUnivalence` pipeline. That closed finding G-1 and is **correct and honestly
 labeled**. But it is *control flow*, not a *proof engine*.
@@ -68,18 +82,24 @@ append-only DAG semantics are untouched.
 
 ```
 Stage = {
-  id,                    // 'regime' | 'solve-real' | 'per-solution-filter' | 'gauge' | …
+  id,                    // 'regime' | 'solve-real' | 'filter' | 'gauge' | 'assemble'
   title, why,            // legible: what this stage proves and why it's needed
-  run(ctx) → StageResult // pure over an injected ctx (store async ops, hData, signal)
-  terminal?,             // true ⇒ short-circuit (inconsistent / positive-dimensional)
-  rigorContribution      // how this stage can cap the aggregate rigor
 }
-runPlan(ctx, stages, { onStage, signal }) → { stageResults[], proofResult }
+CERTIFY_STAGES = [ Stage, … ]   // module-level, ordered — the declarative stage descriptors
+runCertifyPlan(ctx) → ProofResult   // async; walks the stages over an injected ctx (store async
+                                     // ops, hData, oracle, signal), emits ctx.onStage(id) per stage,
+                                     // short-circuits when a terminal regime carries its own verdict
 ```
 
-`doCertifyUnivalence`'s body becomes ~7 named stages calling the same helpers. The driver threads one
-shared context, emits per-stage progress, and short-circuits on a terminal stage. **Behavior
-identical; the win is introspection + a stage transcript + the substrate for branching.**
+**As shipped** (`prove-plan.mjs`), the stages are *declarative* `{ id, title, why }` descriptors and
+the driver (`analyzeLeaf` + `runCertifyPlan`) holds the per-stage logic and emits `ctx.onStage(id)` —
+rather than each Stage carrying its own `run`/`terminal`/`rigorContribution`, as the sketch above
+first imagined. `doCertifyUnivalence`'s body became the five `CERTIFY_STAGES` (regime → solve-real →
+filter → gauge → assemble) calling the same helpers; `algebra-ui.mjs` is a thin binding. **Behavior
+identical; the win is introspection + a stage transcript + the substrate for branching.** The engine
+later grew sibling stage-lists + plans for the C-routes — `MOMENT_STAGES`/`runMomentPlan` (C1),
+`RATIONAL_STAGES`/`runRationalPlan` (C2), `TRIANGLE_STAGES`/`runTrianglePlan` (C3) — and the
+tree walker `runProofTree` (§3.2), all in the same module.
 
 ### 3.2 ProofTree — branches as data, aggregated by POOLING (the correctness heart)
 
@@ -90,8 +110,10 @@ ProofNode = { branchKind: 'root' | 'factor-case' | 'pin' | 'slice',
 
 When a stage detects a split — a `spuriousFactors` hit (factor union), a forced pin (positive-dim),
 or a reality/imaginary slice — the driver **auto-forks** a child node per branch (via
-`store.applyFactor` / `store.substituteValues` on a child column), **recurses `runPlan` on each**,
-then aggregates.
+`store.applyFactor` / `store.substituteValues` on a child column), **recurses on each** (as shipped:
+`runProofTree` walking the fork, `analyzeLeaf` certifying each determined leaf), then aggregates.
+*(The shipped tree wires the factor-union + forced-pin forks; the `'slice'` branchKind stayed a design
+intent — Phase C pivoted away from slice-completion, §4/§5.)*
 
 **ADR — Aggregate by pooling genuine φ's across the whole tree, then gauge-quotient the pool ONCE;
 do NOT sum per-branch counts.**
@@ -137,11 +159,16 @@ without doing that work.
 
 ### 3.4 From-data entry (PF-2)
 
-`proveFromData(hData, opts)` seeds directly from raw quadrature data — no `activeEnv` precondition
-(today all three entry points require a prior numeric geometry-tab solve, `:1691` / `:1919`). The
-numeric cross-check (`crossCheckPhis`' oracle match against `activeEnv.primary.phi`, `:2184`) becomes
-an **optional corroboration** run iff a numeric φ exists — never a gate. This makes it a genuine
-*from-scratch* existence prover.
+As shipped, from-data is a **branch inside the single entry point `doProveExistenceUniqueness()`**
+(no args) — `const fromData = !activeEnv`: when there is no active numeric solve it takes
+`hData = lastHData` (captured from the solve subscription, present even on a *failed* solve) provided
+`state.mode === 'bounded'` (classical bounded), seeds directly via `seedFromDataDirect(hData)`, and
+builds the plan context with `buildPlanCtx(ctrl, { hData, numPhi: null, … })` — no `activeEnv`
+precondition. The numeric cross-check (`crossCheckPhis`) reports `oracleAvailable`; when no numeric φ
+exists the assemble step passes on the residual alone (`residual < 1e-4 && (oracleMatch ||
+!oracleAvailable)`), so the oracle is **optional corroboration, never a gate**. This makes it a genuine
+*from-scratch* existence prover. *(The `proveFromData(hData, opts)` name in the original sketch was
+never a standalone export — the logic lives in the `fromData` branch + `buildPlanCtx` opts.)*
 
 ## 4. Honesty semantics (binding — the aggregation rules)
 
@@ -160,22 +187,35 @@ enforce:
 The gauge/equivalence class is stated on the **aggregate**, once. A slice-only proof is *never*
 silently promoted to `=`.
 
-## 5. The plan — five value-ordered phases (one PR each, gate-green, branch-first)
+> **As shipped:** the Phase-B tree (`runProofTree` / `assembleTreeVerdict`) wired the **factor-union**
+> and **forced-pin** rows above — variable PINs (`substituteValues`) are enterable, general splits
+> (`applyFactor`, needs a store node id) are flagged `truncated` = an honest LOWER BOUND. The two
+> **slice rows never shipped**: Phase C pivoted away from slice-completion (§5, §8 grounding finding),
+> so there is no slice-branch kind in the tree. Instead, the certified `=` for symmetric/off-slice
+> multi-node cases comes from the **C1/C2/C3 prove routes** (§5), each of which carries its own honest
+> labeling per the #97 fix — `=` only when zero-dim + certified count + exact ℚ(i) verification +
+> *reliable* Schur–Cohn univalence + exact boundary-simple; *"locally-univalent candidate"* when only
+> local univalence is certified; `≈` otherwise — and emits the `bound` field this table anticipates.
+
+## 5. The plan — value-ordered phases (one PR each, gate-green, branch-first) — **all shipped**
 
 Repo flow: branch off master, tests green at every commit, `lint && typecheck && test && build`
-before each PR, append-only DAG + worker parity + honest labeling preserved throughout.
+before each PR, append-only DAG + worker parity + honest labeling preserved throughout. Each phase
+below is annotated with its shipped status; the blow-by-blow (with commits + gate counts) is in §8.
+**Note the shipped order was A → B → D → E → C** (Phase C was deferred, then rebuilt last as the
+C1/C2/C3 routes), not the A→B→C→D→E the numbering suggests.
 
-### Phase A — Extract the pipeline into a pure StrategyPlan engine *(no behavior change)*
+### Phase A — Extract the pipeline into a pure StrategyPlan engine *(no behavior change)* — ✅ **SHIPPED (PR #82)**
 - **Goal:** new `prove-plan.mjs`; refactor `doCertifyUnivalence`'s body into injected stages calling
   the same helpers; emit a `ProofResult`; `setVerdict` renders it. Zero user-visible change.
 - **Why first:** the **safety net**. A golden test pinning the current disk + cardioid verdicts to
   the new `ProofResult` guards every phase after it.
 - **Footprint:** `prove-plan.mjs` (new, pure); `algebra-ui.mjs` (thin binding); store ops injected.
-- **Tests:** node vitest drives `runPlan` on canned hData through an injected store; asserts
+- **Tests:** node vitest drives `runCertifyPlan` on canned hData through an injected store; asserts
   `ProofResult` reproduces today's verdict for disk (unique) + cardioid (cusped-simple).
 - **Acceptance:** identical output; gate green + browser-verify. **Risk:** Low (pure refactor under a golden).
 
-### Phase B — Branch/case tree + pool-then-quotient aggregation *(the capability core)*
+### Phase B — Branch/case tree + pool-then-quotient aggregation *(the capability core)* — ✅ **SHIPPED (PR #83)**
 - **Goal:** auto-fork factor-splits + forced pins into a `ProofTree`; aggregate per §3.2; bounded
   walk with honest partial labeling; abort threads through.
 - **Footprint:** `prove-plan.mjs` (tree walk + `aggregate`); reuses `applyFactor` /
@@ -187,24 +227,57 @@ before each PR, append-only DAG + worker parity + honest labeling preserved thro
   browser-verify. **Risk:** Med — the intersection double-count is the subtle point; pool-then-quotient
   + the seam-dedup test are the mitigation.
 
-### Phase C — Slice completion (reality/imaginary) into the tree
-- **Goal:** when a slice is taken, auto-offer/run the complement (+ general when feasible) and
-  aggregate slice ∪ complement; else stay a lower bound that *names* the outstanding slice.
-- **Footprint:** `prove-plan.mjs` (slice-branch kind); reuses `assumeReal` / `assumeImaginary`.
-- **Tests:** a real-axis-symmetric h where slice + complement recover the general `=`; an un-closable
-  complement → labeled `≥` with the gap named.
-- **Acceptance:** slice proofs promoted to `=` when closable, else legibly bounded; gate green. **Risk:** Low–Med.
+### Phase C — three tractable "prove routes" (moment / rational / triangle) — ✅ **SHIPPED (PRs #86–#96, fix #97)**
 
-### Phase D — From-data entry (PF-2)
-- **Goal:** `proveFromData(hData)` with no `activeEnv`; cross-check becomes optional corroboration; a
-  "Prove from data" UI path.
+> **⚠ Pivoted from the original plan.** Phase C was first specced as *slice completion*: when a
+> reality/imaginary slice is taken, auto-run the complement + the general system and aggregate
+> slice ∪ complement into the §3.2 tree to promote a lower bound to `=`. Grounding (§8, `ffcc8ef`)
+> showed this is **math-limited for the conjugate `(●)/(★)` model**: real-symmetric data leaves the
+> general system positive-dimensional (z̄, Ā stay independent), so the tree usually truncates and `=`
+> is unreachable without a *certified* symmetry argument. Phase C was deferred, then **rebuilt as three
+> real, zero-dimensional routes** that sidestep the conjugate model entirely. **Full design + status:
+> [`RATIONAL_MOMENT_C2.md`](RATIONAL_MOMENT_C2.md).**
+
+- **Goal (as shipped):** route ✦ Prove, by node structure of the quadrature data, to whichever exact
+  route is tractable, each REAL and generically zero-dimensional:
+  - **C1 — moment / Aharonov–Shapiro (single node, polynomial φ = Σ wₖzᵏ):** `MOMENT_STAGES` +
+    `runMomentPlan`; captures OFF-SLICE domains the reality slice can't see. Global univalence certified
+    at **all orders** via the exact boundary double-point count (`momentBoundarySimple`, C1-ext-A);
+    order ≤ 2 also confirmed by A&S. Reconstructed-φ thumbnail (C1-ext-B). *(#86–#88)*
+  - **C2 — rational φ = w₀ + R(z + dz²)/(1 − cz²) (2 real nodes, degree 2):** `RATIONAL_STAGES` +
+    `runRationalPlan`, solved in the shape (t = √c, d). *(#89–#92)*
+  - **C3 — equilateral triangle φ = Rz/(1 − cz³) (3 equal-magnitude real-weight nodes, centroid 0,
+    degree 3):** the 3-fold-symmetric collapse to a REAL (P = R², s = c^{1/3}) system; `TRIANGLE_STAGES`
+    + `runTrianglePlan`. *(#93–#96)*
+  - Everything else → the honest `(●)/(★)` Phase-B tree (a lower bound).
+- **Footprint:** `prove-plan.mjs` (the three stage-lists / plans / `assemble*Verdict` / univalence +
+  `boundarySimpleFromN`); `qd-equations.mjs` (`pointFunctionalSystem`, `rationalMomentSystem`,
+  `triangleMomentSystem`); `algebra-ui.mjs` routing (`pointFunctionalMoments` → `multiNodeRationalData`
+  → `multiNodeTriangleData` inside `doProveExistenceUniqueness`); `domain-mini-plot.mjs` thumbnails.
+- **Honest labeling (fix pass #97):** each route's `*Univalence` propagates a Schur–Cohn `reliable`
+  flag (an unreliable fold/cusp count never feeds a `=`); `allVerified` is gated on **genuine (kept)**
+  candidates only; a verdict reads *"N locally-univalent candidate(s)"* — not *"Unique ✓ genuine QD"* —
+  when only LOCAL univalence is certified; the 2-node order is canonicalized (a₁ = larger Re, +t branch
+  ⇒ R > 0); and every `assemble*Verdict` emits a `bound` field (`=` when exact, `≈` when estimate).
+- **Rigor:** `=` only when zero-dim + certified real count + exact ℚ(i) root verification (PF-1) +
+  univalence (reliable Schur–Cohn φ′≠0 in 𝔻 **and** exact boundary-simple) + gauge quotient; otherwise
+  honest `≈`. Irrational-shape QDs (e.g. `two-point-symmetric`, `c = (3−√5)/2`) can't PF-1-snap and
+  correctly read `≈` — upgrading them needs the deferred interval / number-field certifier.
+- **Deferred frontier:** general asymmetric / off-centre multi-node (needs the complex reim-split
+  builder + higher-degree ansätze); interval / number-field `=` for irrational shapes. The original
+  slice-completion idea is **not** revived (superseded, per the grounding finding).
+
+### Phase D — From-data entry (PF-2) — ✅ **SHIPPED (PR #84)**
+- **Goal:** a `fromData` branch in `doProveExistenceUniqueness` with no `activeEnv` (§3.4); cross-check
+  becomes optional corroboration; a "Prove from data" UI path.
 - **Footprint:** `prove-plan.mjs` entry + `algebra-ui.mjs` binding; `crossCheckPhis` guarded on
   oracle presence.
-- **Tests:** `proveFromData` on canned h with no activeEnv → full verdict; cross-check stage marked
-  "not run (no numeric oracle)" without downgrading a certified `=`.
+- **Tests:** the from-data path (`buildPlanCtx(ctrl, { hData, numPhi: null })` → `runCertifyPlan`) on
+  canned h with no activeEnv → full verdict; cross-check marked "not run (no numeric oracle)" without
+  downgrading a certified `=`.
 - **Acceptance:** from-scratch proof works with no prior numeric solve; gate green + browser-verify. **Risk:** Low.
 
-### Phase E — Proof transcript UI + reproducible proof export *(Phase-4 clarity)*
+### Phase E — Proof transcript UI + reproducible proof export *(Phase-4 clarity)* — ✅ **SHIPPED (PR #85)**
 - **Goal:** render the `ProofResult` as an expandable transcript — strategy stages (with *why* +
   rigor each), the branch tree (each case's local verdict + how the pool sums), per-solution rows,
   assumption ledger, and the aggregate badge **with its provenance**. Export the whole `ProofResult`
@@ -228,10 +301,14 @@ before each PR, append-only DAG + worker parity + honest labeling preserved thro
 ## 7. Sequencing rationale & effort
 
 A (safety-net refactor, no behavior change) → B (auto-aggregated branches — changes what the tool can
-*prove*) → C (slice completion, promotes lower bounds to `=`) → D (from-data, drops the
-numeric-solve precondition) → E (make the richer proof legible + exportable). Each PR leaves the tool
-strictly more capable and no less honest. **A and B carry the design weight** (~½ the total); C/D/E
-are additive and low-risk. Order-of-magnitude: 5 PRs, comparable in aggregate to the P1–P4 backlog.
+*prove*) → D (from-data, drops the numeric-solve precondition) → E (make the richer proof legible +
+exportable) → C (the tractable prove routes). Each PR leaves the tool strictly more capable and no
+less honest. **A and B carry the design weight** (~⅓ the total); D/E are additive and low-risk. **The
+shipped Phase C grew into its own sub-program** — C1/C2/C3 plus a boundary-rigor extension and a
+honest-labeling fix pass (PRs #86–#97) — because slice-completion proved math-limited and the
+moment/rational/triangle routes replaced it (§5, [`RATIONAL_MOMENT_C2.md`](RATIONAL_MOMENT_C2.md)).
+Order-of-magnitude as shipped: PRs #82–#97, larger than the original 5-PR estimate because of the
+Phase-C pivot.
 
 ## 8. Progress log (re-entrant)
 
@@ -380,3 +457,53 @@ are additive and low-risk. Order-of-magnitude: 5 PRs, comparable in aggregate to
   the two ground-truth oracles (exact-satisfaction + zero-dim + recovers the truth). +6 tests. NEXT = C2-2
   (univalence for rational φ) → C2-3 (gauge quotient + verdict) → C2-4 (UI + thumbnail). Degree-2 real first;
   complex/off-axis + higher degree deferred.
+- **2026-07-15 — C2 COMPLETE (degree-2 rational-φ route SHIPPED, PRs #89–#92).** **C2-2** (#90)
+  `rationalUnivalence` (Schur–Cohn on 1+2dz+cz² + the pole `|c|<1` constraint) + `rationalBoundarySimple`,
+  factoring the exact double-point test into the shared `boundarySimpleFromN`. **C2-3** (#91)
+  `reconstructRationalMap` / `rationalCertifyLeaf` / `assembleRationalVerdict` / `runRationalPlan`
+  (`RATIONAL_STAGES`, honest `=`/`≈`). **C2-4** (#92) UI: `multiNodeRationalData(hData)` → `doProveRational`,
+  `renderProofVerdict` kind `'rational'`, `rationalPlotData` thumbnail. **Convention finding (browser + node
+  verified):** the app's h-data residue **IS** the quadrature weight b_j — NO π factor (the `dA = dxdy/π`
+  convention), so residues pass straight through as weights. `two-point-symmetric` (nodes ±1, weight 1.5) ⇒
+  **Unique QD ✓**, recovering the golden-ratio shape R=(1+√5)/2, c=(3−√5)/2, d=0 — but the shape is IRRATIONAL,
+  so PF-1 can't snap and it correctly reads `≈`; rational-shape families (c=¼, d=¼) read `=`. Detail:
+  [`RATIONAL_MOMENT_C2.md`](RATIONAL_MOMENT_C2.md) §6. NEXT = C3 (equilateral triangle, degree-3).
+- **2026-07-15 — C3 COMPLETE (equilateral-triangle degree-3 route SHIPPED, PRs #93–#96).** The 3-fold-symmetric
+  (φ(ωz)=ωφ(z)) case collapses the three OFF-AXIS nodes to a REAL single-shape-parameter map φ = Rz/(1−cz³),
+  avoiding the complex reim-split. **C3-1** (#93) `QE.triangleMomentSystem(data)` — the reduced zero-dim
+  **(P=R², s=c^{1/3})** system (solving in P keeps the equations LINEAR in P; the raw R² form degenerates the
+  RUR resolvent), guarded by the rational ground-truth oracle + the symmetry rejections (non-equilateral /
+  off-centre / unequal weights). **C3-2** (#94) `triangleUnivalence(c)` (Schur–Cohn on 1+2cz³, pole `|c|<1`) +
+  `triangleBoundarySimple(c)` (N=1+c·z₁z₂(z₁+z₂) → `boundarySimpleFromN`). **C3-3** (#95)
+  `reconstructTriangleMap` / `triangleCertifyLeaf` / `assembleTriangleVerdict` / `runTrianglePlan`. **C3-4**
+  (#96) `multiNodeTriangleData(hData)` → `doProveTriangle` (routed AFTER the 2-node rational check),
+  `renderProofVerdict` kind `'triangle'`, `trianglePlotData`. **Browser-verified:** the equilateral-triangle
+  preset (nodes 1, ω, ω², weight 1) reads *"Unique quadrature domain ✓ … rational-φ (equilateral triangle,
+  degree-3, Gustafsson)"* and draws the rounded triangle, recovering c≈0.221 (a root of 2v³−3v+1) — irrational
+  shape ⇒ honest `≈`. Degree-3 EQUILATERAL only; general asymmetric 3-node stays the frontier. Detail:
+  [`RATIONAL_MOMENT_C2.md`](RATIONAL_MOMENT_C2.md) §7–§8.
+- **2026-07-15 — REVIEW FIX PASS (honest-labeling + gauge canonicalization for C1/C2/C3, PR #97 `83fff3d`).**
+  A review of the three routes found no wrong verdicts but five labeling/gauge gaps, now closed: **(1)**
+  `momentUnivalence` / `rationalUnivalence` / `triangleUnivalence` return a Schur–Cohn `reliable` flag
+  (`!degenerate || resolved`); each `*CertifyLeaf` treats an UNRELIABLE result as non-exact and skips the
+  boundary-simple test (an unreliable `cusps` could make `count===cusps` pass falsely) — a latent false-`=`
+  vector (needs φ′ degree > 64) now shut. **(2)** `allVerified` is gated on GENUINE (kept) candidates only —
+  a rejected irrational root no longer downgrades a certified-exact unique QD to `≈` (the c=⅛ triangle now
+  correctly earns `=`). **(3)** wording: *"N locally-univalent candidate(s)"* replaces *"Unique ✓ — genuine
+  QD"* when only LOCAL univalence is certified (global not certified). **(4)** the 2-node order is
+  canonicalized in `rationalMomentSystem` + `reconstructRationalMap` (a₁ = larger Re, the +t branch) so R>0
+  regardless of caller node order (was a 180°-rotated thumbnail). **(5)** every `assembleMoment/Rational/
+  TriangleVerdict` emits a `bound` field (`=`/`≈`) threaded through the ProofResult, so Export-proof JSON no
+  longer writes `bound:null` for C1–C3. +4 tests; 1411 vitest + 2261 QD headless green; browser-verified.
+- **2026-07-16 — ▓▓ THE FULLER-ORCHESTRATOR REDESIGN IS COMPLETE. ▓▓** All phases merged to master
+  (PRs #82–#97): **A** engine → **B** ProofTree → **D** from-data → **E** transcript/export → **C** reborn as
+  the three tractable prove routes **C1** (moment/A&S), **C2** (rational-φ), **C3** (equilateral triangle),
+  hardened by the #97 fix pass. ✦ Prove now routes, in order: single-node-with-real-M₀ → C1, 2-real-node → C2,
+  3-equal-magnitude-real-weight-node → C3, everything else → the honest `(●)/(★)` Phase-B tree (lower bound);
+  each tractable route is REAL, zero-dimensional, certified-solved, univalence-filtered (Schur–Cohn + exact
+  boundary double-point count), gauge-quotiented, thumbnailed, and honestly badged (`=` when PF-1 snaps the
+  exact root, `≈` otherwise). This doc synced to that reality; the C-route detail lives in
+  [`RATIONAL_MOMENT_C2.md`](RATIONAL_MOMENT_C2.md). **NEXT = the deferred frontier only** — general asymmetric /
+  off-centre multi-node (needs the complex reim-split builder + higher-degree ansätze) and an interval /
+  number-field certifier to upgrade irrational-shape `≈` to `=`. Phase-C slice-completion is NOT revived
+  (superseded — math-limited for the conjugate model, per the grounding finding above).

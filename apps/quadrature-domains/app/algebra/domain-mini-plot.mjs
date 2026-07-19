@@ -1,11 +1,15 @@
 // =============================================================================
-// domain-mini-plot.js -- a small, PURE geometry helper for the Algebra tab's verdict
-// card: from a reconstructed bounded-QD map φ, produce the SVG-ready points of the
-// domain boundary φ(∂𝔻) and the quadrature nodes φ(z_j), so the verdict can draw a
-// thumbnail of the solved quadrature domain next to the exact boundary curve (roadmap
-// #3 — closing the algebra→geometry loop). Pure: no DOM, no QD namespace; the φ
-// evaluator is injected (algebra-ui passes QD.evalPhi, the same evaluator the geometry
-// tab uses), so this stays unit-testable and self-contained.
+// domain-mini-plot.mjs -- small, PURE geometry helpers for the Algebra tab's verdict card: from a
+// reconstructed bounded-QD map φ, produce the SVG-ready points of the boundary φ(∂𝔻) + the quadrature
+// nodes, so the verdict can draw a thumbnail of the solved domain (roadmap #3 — closing the
+// algebra→geometry loop). All pure: no DOM, no QD namespace. Four producers, one per prove route, each
+// returning { boundary:[[x,y],…], nodes:[[x,y],…], view:[minX,minY,w,h] } in SVG coords (y flipped so
+// mathematical +i points UP) or null on a non-finite / degenerate sample:
+//   • domainPlotData(phi, evalPhi, opts)     — the (z_j,A) ansatz; φ evaluated via the injected QD.evalPhi.
+//   • momentPlotData(w, order, node, opts)   — C1 moment route: φ = a + Σ wₖzᵏ, sampled from the coefficients.
+//   • rationalPlotData(m, nodes, opts)       — C2 rational route: φ = w0 + R(z+dz²)/(1−cz²), from the shape m.
+//   • trianglePlotData(m, nodes, opts)       — C3 triangle route: φ = R·z/(1−cz³), from the shape m.
+// opts.samples : boundary sample count (default 240; min 24).
 // =============================================================================
 
 // domainPlotData(phi, evalPhi, opts) → { boundary:[[x,y],…], nodes:[[x,y],…],

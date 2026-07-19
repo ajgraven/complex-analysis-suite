@@ -481,17 +481,6 @@ describe("prove-plan (8) moment route — point-functional / Aharonov–Shapiro 
     expect(leaf.rows[0]).toContain("boundary-simple");
   });
 
-  it("assembleMomentVerdict order-3 + allBoundaryExact ⇒ exact rigor, global univalence certified", () => {
-    const leaf: any = { genuine: [{}], folded: 0, selfInt: 0, gaugeDropped: 0, allExact: true, allVerified: true, allBoundaryExact: true };
-    const asm = PROVE.assembleMomentVerdict({ genuine: leaf.genuine, real: [{}], leaf, order: 3, deps: {}, sliceCaveat: () => "", cl: null });
-    expect(asm.rigor).toBe("exact");
-    expect(asm.bound).toBe("=");                                          // #6: machine bound emitted
-    expect(asm.verdict).toContain("Unique quadrature domain ✓");
-    expect(asm.verdict).toContain("globally univalent");
-    expect(asm.verdict).toContain("boundary double-point count");
-    expect(asm.rigorProvenance.some((p: string) => /global univalence/.test(p) && /^✓/.test(p))).toBe(true);
-  });
-
   it("assembleMomentVerdict order-3 WITHOUT the boundary count ⇒ estimate + honest 'candidate' wording (not ✓)", () => {
     const leaf: any = { genuine: [{}], folded: 0, selfInt: 0, gaugeDropped: 0, allExact: true, allVerified: true, allBoundaryExact: false };
     const asm = PROVE.assembleMomentVerdict({ genuine: leaf.genuine, real: [{}], leaf, order: 3, deps: {}, sliceCaveat: () => "", cl: null });
@@ -562,6 +551,16 @@ describe("prove-plan (9) rational-φ univalence — the multi-node route (Phase 
     expect(PROVE.boundarySimpleFromN(null, 0, {})).toBeNull();
     expect(PROVE.rationalUnivalence(0.5, 0.25, {})).toBeNull();      // missing deps
   });
+
+  it("boundarySimpleFromN returns null when the exact real-count can't resolve (positive-dim torus) — honest fallthrough", () => {
+    // N = Z₁ + Z₂ ⇒ the torus double-point system {x₁+x₂, y₁+y₂, |z₁|²−1, |z₂|²−1} is a 1-parameter
+    // family (z₂ = −z₁ on ∂𝔻), so Sym.realSolutionCount can't count it and returns not-ok ⇒ null (NOT a
+    // spurious {simple:true}). That null is exactly what drives allBoundaryExact=false ⇒ an honest
+    // 'estimate' downstream, never a bogus '='. Locks the labeling guard at its source.
+    const Sym: any = QD.Sym;
+    const Z1 = Sym.mpolyVar("Z1"), Z2 = Sym.mpolyVar("Z2");
+    expect(PROVE.boundarySimpleFromN(Z1.add(Z2), 0, { QE, QD })).toBeNull();
+  });
 });
 
 describe("prove-plan (10) rational-φ verdict assembly + plan (Phase C2-3)", () => {
@@ -594,16 +593,18 @@ describe("prove-plan (10) rational-φ verdict assembly + plan (Phase C2-3)", () 
     expect(leaf.genuine[0].c).toBeCloseTo(0.25, 6);
   });
 
-  it("assembleRationalVerdict: allBoundaryExact ⇒ Unique ✓, exact, globally univalent", () => {
-    const leaf: any = { genuine: [{ c: 0.25, d: 0.25 }], folded: 0, selfInt: 0, poleRej: 0, gaugeDropped: 1, allExact: true, allVerified: true, allBoundaryExact: true };
-    const asm = PROVE.assembleRationalVerdict({ genuine: leaf.genuine, real: [{}, {}], leaf, deps: {}, sliceCaveat: () => "", cl: null });
-    expect(asm.count).toBe(1);
-    expect(asm.rigor).toBe("exact");
-    expect(asm.bound).toBe("=");
-    expect(asm.verdict).toContain("Unique quadrature domain ✓");
-    expect(asm.verdict).toContain("globally univalent");
-    expect(asm.verdict).toContain("rational-φ");
-    expect(asm.verdict).toContain("1 gauge copy rejected");
+  it("#9: a REJECTED (pole-inside, irrational) candidate does NOT pollute allVerified — only GENUINE candidates gate it", () => {
+    // Real sysPolys so exact-verify actually runs over ℚ: (a) the ground-truth rational shape (t=½,d=¼)
+    // exact-verifies at the TRUE root (exactPoint); (b) an IRRATIONAL t=√2 (c=2≥1) candidate whose
+    // exact-verify FAILS is rejected at the pole-in-𝔻̄ gate BEFORE the `allVerified` update — the #9 fix.
+    // So the rejected one's failed verify must not drag allVerified down (that would spuriously → 'estimate').
+    const sys = QE.rationalMomentSystem(asymNodes, { degree: 2 });
+    const real = [rsol(0.5, 0.25), rsol(Math.SQRT2, 0.3)];
+    const leaf: any = PROVE.rationalCertifyLeaf(real, asymNodes, sys.polys, rdeps);
+    expect(leaf.genuine.length).toBe(1);
+    expect(leaf.genuine[0].exactPoint).toBe(true);        // the kept shape IS exact-verified over ℚ
+    expect(leaf.poleRej).toBeGreaterThanOrEqual(1);       // the irrational √2 candidate was rejected (pole in 𝔻̄)
+    expect(leaf.allVerified).toBe(true);                  // …and its failed exact-verify did NOT pollute allVerified
   });
 
   it("assembleRationalVerdict: no boundary count ⇒ estimate + honest 'candidate' wording; pole rejects in the tail", () => {
@@ -693,17 +694,6 @@ describe("prove-plan (12) triangle verdict assembly + plan (Phase C3-3)", () => 
     expect(leaf.genuine[0].c).toBeCloseTo(0.125, 6);
   });
 
-  it("assembleTriangleVerdict: allBoundaryExact ⇒ Unique ✓, exact, globally univalent", () => {
-    const leaf: any = { genuine: [{ c: 0.125 }], folded: 0, selfInt: 0, poleRej: 0, gaugeDropped: 1, allExact: true, allVerified: true, allBoundaryExact: true };
-    const asm = PROVE.assembleTriangleVerdict({ genuine: leaf.genuine, real: [{}, {}], leaf, sliceCaveat: () => "", cl: null });
-    expect(asm.count).toBe(1);
-    expect(asm.rigor).toBe("exact");
-    expect(asm.bound).toBe("=");
-    expect(asm.verdict).toContain("Unique quadrature domain ✓");
-    expect(asm.verdict).toContain("equilateral triangle, degree-3");
-    expect(asm.verdict).toContain("globally univalent");
-  });
-
   it("runTrianglePlan E2E: the equilateral triangle proves a Unique ✓ genuine QD over the real engine", async () => {
     const sys = QE.triangleMomentSystem(triNodes);
     const store = AS.create();
@@ -724,3 +714,64 @@ describe("prove-plan (12) triangle verdict assembly + plan (Phase C3-3)", () => 
     expect(pr.bound).toBe("=");
   });
 });
+
+// The three Phase-C verdict assemblers (moment / rational / triangle) mirror each other: given a
+// CERTIFIED count with allExact + allVerified + allBoundaryExact, D=1 reads "Unique ✓" and D≥2 reads
+// "N distinct quadrature domains" — both exact / bound '='. Only the formulation string and the
+// solution noun differ per route. This table drives the shared D=1 / D≥2 characterization, folding
+// what were three copy-pasted "allBoundaryExact ⇒ Unique ✓" `it`s into one place AND adding the
+// previously-untested D≥2 template. Route-specific locks (moment's order/A&S fallback, the estimate
+// wording, the reject tails, the E2E plans) stay in blocks (8)/(10)/(12).
+const routeVerdictCases = [
+  {
+    route: "moment", solWord: "moment solution", form: "point-functional / Aharonov–Shapiro",
+    call: (leaf: any, real: any[]) => PROVE.assembleMomentVerdict({ genuine: leaf.genuine, real, leaf, order: 3, deps: {}, sliceCaveat: () => "", cl: null }),
+  },
+  {
+    route: "rational", solWord: "shape solution", form: "rational-φ (degree-2 multi-node, Gustafsson)",
+    call: (leaf: any, real: any[]) => PROVE.assembleRationalVerdict({ genuine: leaf.genuine, real, leaf, deps: {}, sliceCaveat: () => "", cl: null }),
+  },
+  {
+    route: "triangle", solWord: "shape solution", form: "equilateral triangle, degree-3, Gustafsson",
+    call: (leaf: any, real: any[]) => PROVE.assembleTriangleVerdict({ genuine: leaf.genuine, real, leaf, sliceCaveat: () => "", cl: null }),
+  },
+];
+
+describe.each(routeVerdictCases)(
+  "prove-plan (13) $route verdict template — D=1 vs D≥2 (allBoundaryExact ⇒ exact '=')",
+  ({ solWord, form, call }) => {
+    // A fully-certified genuine pool: exact filters, every genuine root exact-verified, boundary exact.
+    const exactLeaf = (nGenuine: number, over: any = {}) => Object.assign(
+      { genuine: Array.from({ length: nGenuine }, () => ({})), folded: 0, selfInt: 0, poleRej: 0, gaugeDropped: 0, allExact: true, allVerified: true, allBoundaryExact: true },
+      over,
+    );
+
+    it("D=1 ⇒ 'Unique quadrature domain ✓' (exact, bound '=', globally univalent, gauge tail)", () => {
+      const leaf = exactLeaf(1, { gaugeDropped: 1 });   // 1 genuine + 1 rotation copy of 2 real solutions
+      const asm: any = call(leaf, [{}, {}]);
+      expect(asm.count).toBe(1);
+      expect(asm.bad).toBe(false);
+      expect(asm.rigor).toBe("exact");
+      expect(asm.bound).toBe("=");
+      expect(asm.verdict).toContain("Unique quadrature domain ✓");
+      expect(asm.verdict).toContain("globally univalent");
+      expect(asm.verdict).toContain("boundary double-point count");
+      expect(asm.verdict).toContain(form);                        // route-specific formulation preserved
+      expect(asm.verdict).toContain("1 gauge copy rejected");     // gauge-copy tail rendering
+      expect(asm.rigorProvenance.some((p: string) => /global univalence/.test(p) && /^✓/.test(p))).toBe(true);
+    });
+
+    it("D≥2 ⇒ 'N distinct quadrature domains' (NOT 'Unique'), still exact / bound '='", () => {
+      const asm: any = call(exactLeaf(2), [{}, {}]);
+      expect(asm.count).toBe(2);
+      expect(asm.bad).toBe(false);
+      expect(asm.rigor).toBe("exact");
+      expect(asm.bound).toBe("=");
+      expect(asm.verdict).toContain("2 distinct quadrature domains");
+      expect(asm.verdict).not.toContain("Unique");
+      expect(asm.verdict).toContain("of 2 real " + solWord + "s");
+      expect(asm.verdict).toContain("globally univalent");
+      expect(asm.verdict).toContain(form);
+    });
+  },
+);

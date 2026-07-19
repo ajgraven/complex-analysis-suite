@@ -888,6 +888,9 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
     // paired with its node. This makes the reconstructed R = (a₁−a₂)(1−t⁴)/(2t) > 0 regardless of the
     // caller's ordering (reconstructRationalMap applies the same sort); a swapped order otherwise yields a
     // non-canonical R<0 representative. (Correct count either way — this fixes the reconstructed map's gauge.)
+    // ⚠ the real data is SNAPPED to ℚ via ratApprox — for IRRATIONAL input the emitted "exact" system encodes
+    // a rational APPROXIMATION of the data, so a downstream `=` is only "exact given the rationalized data";
+    // the true `=` is earned by the certified solve + PF-1 exact-verification at the algebraic root, not here.
     const io = (reOf(nodes[0]) >= reOf(nodes[1])) ? [0, 1] : [1, 0];
     const a1 = Q(reOf(nodes[io[0]])), a2 = Q(reOf(nodes[io[1]])), b1 = Q(reOf(weights[io[0]])), b2 = Q(reOf(weights[io[1]]));
     const A = a1.sub(a2);                                                 // exact node gap a₁ − a₂ (≥ 0 by the sort)
@@ -933,6 +936,8 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
     const b0 = reOf(weights[0]);
     if (weights.some((w) => Math.abs(reOf(w) - b0) > 1e-6 * Math.max(1, Math.abs(b0)))) throw new Error('triangleMomentSystem: the 3 weights are not equal — not 3-fold symmetric');
     if (!(A2 > 1e-12) || !(b0 > 1e-12)) throw new Error('triangleMomentSystem: degenerate node magnitude or weight');
+    // ⚠ the real data is SNAPPED to ℚ via ratApprox — for irrational input this is a rational APPROXIMATION,
+    // so a downstream `=` is only "exact given the rationalized data"; PF-1 at the algebraic root earns the true `=`.
     const Q = (x) => { const [n, d] = _ratApprox(x || 0); return mc(gauss(rat(n, d), rat(0, 1))); };   // exact ℚ const
     const A2c = Q(A2), Bc = Q(b0);
     const P = mv('P'), s = mv('s'), s6 = s.pow(6), one = mi(1), om = one.sub(s6);   // P = R²
