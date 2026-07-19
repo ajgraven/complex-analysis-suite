@@ -847,13 +847,24 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 }
 
 /* Auto-detected reality suggestions ("an equation forces this variable real") — an info-
-   colored sibling of the error panel; one row per detected variable. */
+   colored sibling of the error panel; one row per detected variable. A <details>: the list is
+   unbounded (7+ rows for even a single order-1 pole), so past AUTO_OPEN_MAX it collapses to a
+   counted summary rather than burying the workflow sections below it. */
 #controls-algebra .algebra-suggest {
   margin: 4px 0; padding: 4px 8px; font-size: 12px; border-radius: 4px;
   background: var(--c-info-bg, #eaf3fb); border: 1px solid var(--c-accent, #2b7);
   color: var(--c-info-text, #245);
 }
 #controls-algebra .algebra-suggest.hidden { display: none; }
+#controls-algebra .algebra-suggest-summary {
+  cursor: pointer; user-select: none; font-weight: 600; padding: 1px 0;
+  list-style: none;   /* the ▸ marker is drawn below so it matches .algebra-section */
+}
+#controls-algebra .algebra-suggest-summary::-webkit-details-marker { display: none; }
+#controls-algebra .algebra-suggest-summary::before { content: '▸ '; display: inline-block; transition: transform 0.12s; }
+#controls-algebra .algebra-suggest[open] > .algebra-suggest-summary::before { content: '▾ '; }
+/* Even expanded and out of the pinned header, a long list shouldn't run the sidebar off-screen. */
+#controls-algebra .algebra-suggest-body { max-height: 40vh; overflow-y: auto; }
 #controls-algebra .algebra-suggest-row {
   display: flex; align-items: center; gap: 6px; padding: 2px 0;
 }
@@ -889,7 +900,15 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #controls-algebra .algebra-hyp-chip.h-pin  { color: var(--c-text, #444); }
 
 /* ---- Node-editor sidebar: pinned header, workflow sections, value table, inspector ---- */
-#controls-algebra .algebra-head { position: sticky; top: 0; z-index: 4; background: var(--c-bg, #fff); padding-bottom: 4px; }
+/* The pinned header must never eat the sidebar: whatever it holds (a long error, the expanded
+   help panel, a multi-row hypotheses strip) scrolls INSIDE it rather than pushing the workflow
+   sections off-screen. Sticky height is subtracted from the viewport permanently, so this cap is
+   the backstop that keeps the sections below reachable. Safe to make a scroll container — no
+   absolutely-positioned child (the .algebra-picker dropdowns all live in the sections below). */
+#controls-algebra .algebra-head {
+  position: sticky; top: 0; z-index: 4; background: var(--c-bg, #fff); padding-bottom: 4px;
+  max-height: 45vh; overflow-y: auto;
+}
 #controls-algebra .algebra-primary { gap: 4px; margin-top: 4px; }
 #controls-algebra .algebra-primary #alg-autosolve { flex: 1; }
 /* Heavy / async operations get an accent so they read as "this does real work". */
