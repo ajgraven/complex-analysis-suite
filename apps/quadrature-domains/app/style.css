@@ -23,6 +23,17 @@
   --c-ok:            #2a8f2a;
   --c-warn:          #b8860b;
   --c-err:           #b53030;
+  /* Feedback + link surfaces. These were REFERENCED but never declared, so every use silently
+     rendered its inline fallback and sat outside the token system entirely — unthemeable, and a
+     prerequisite for dark mode. Declared here at exactly the values they were already rendering,
+     so this change is visually inert (the one deliberate exception is the h-real chip below). */
+  --c-error:         #d9534f;   /* error panel border */
+  --c-error-bg:      #fdecea;
+  --c-error-text:    #a02622;
+  --c-info-bg:       #eaf3fb;   /* suggestion / info panel */
+  --c-info-text:     #224455;
+  --c-link:          #1a56db;
+  --c-danger:        #cc3333;   /* destructive affordances (was also spelled --danger) */
   /* spacing scale */
   --sp-1: 4px; --sp-2: 6px; --sp-3: 8px; --sp-4: 12px; --sp-5: 16px;
 }
@@ -677,7 +688,7 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
    is active (SVG edges + absolutely-positioned KaTeX node cards). */
 #algebra-graph {
   position: absolute; inset: 0; z-index: 5;
-  background: var(--c-bg, #fff); overflow: hidden;
+  background: var(--c-bg); overflow: hidden;
 }
 #algebra-graph.hidden { display: none; }
 /* Structured column lanes: a natively-scrolling track; the .algebra-sizer is sized by
@@ -686,8 +697,8 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   position: absolute; inset: 0; overflow: auto;
   /* subtle edge shadows cue off-screen columns/rows */
   background:
-    linear-gradient(to right, var(--c-bg, #fff) 30%, rgba(255,255,255,0)) left center / 24px 100% no-repeat,
-    linear-gradient(to left, var(--c-bg, #fff) 30%, rgba(255,255,255,0)) right center / 24px 100% no-repeat,
+    linear-gradient(to right, var(--c-bg) 30%, rgba(255,255,255,0)) left center / 24px 100% no-repeat,
+    linear-gradient(to left, var(--c-bg) 30%, rgba(255,255,255,0)) right center / 24px 100% no-repeat,
     radial-gradient(farthest-side at 0 50%, rgba(0,0,0,0.10), rgba(0,0,0,0)) left center / 12px 100% no-repeat,
     radial-gradient(farthest-side at 100% 50%, rgba(0,0,0,0.10), rgba(0,0,0,0)) right center / 12px 100% no-repeat;
   background-attachment: local, local, scroll, scroll;
@@ -698,12 +709,12 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   padding: 12px 16px; transform-origin: top left; min-width: max-content;
 }
 #algebra-graph .algebra-edges { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; z-index: 0; }
-#algebra-graph .algebra-edge { fill: none; stroke: var(--c-border, #bbb); stroke-width: 1.5; }
-#algebra-graph .algebra-arrowhead { fill: var(--c-border, #bbb); }
+#algebra-graph .algebra-edge { fill: none; stroke: var(--c-border); stroke-width: 1.5; }
+#algebra-graph .algebra-arrowhead { fill: var(--c-border); }
 /* B3: inline operation label on a derivation edge (white halo so it reads over the bézier) */
 #algebra-graph .algebra-edge-label {
-  font-size: 9px; fill: var(--c-muted, #667); pointer-events: none;
-  paint-order: stroke; stroke: var(--c-surface, #fff); stroke-width: 3px; stroke-linejoin: round;
+  font-size: 9px; fill: var(--c-muted); pointer-events: none;
+  paint-order: stroke; stroke: var(--c-surface); stroke-width: 3px; stroke-linejoin: round;
 }
 .algebra-ref { margin: 4px 0; max-height: 320px; overflow: auto; }
 .algebra-ref-math { overflow-x: auto; margin: 2px 0 4px; }
@@ -718,40 +729,40 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #algebra-graph .algebra-column.is-current { /* accent the CURRENT system (the last lane) */ }
 #algebra-graph .algebra-column-head {
   position: sticky; top: 0; z-index: 3; box-sizing: border-box;
-  background: var(--c-bg, #fff); border-bottom: 2px solid var(--c-border-soft, #ddd);
+  background: var(--c-bg); border-bottom: 2px solid var(--c-border-soft);
   padding: 2px 4px 5px;
 }
-#algebra-graph .algebra-column.is-current .algebra-column-head { border-bottom-color: var(--c-accent, #2b7); }
+#algebra-graph .algebra-column.is-current .algebra-column-head { border-bottom-color: var(--c-accent); }
 #algebra-graph .algebra-column-top { display: flex; align-items: center; gap: 6px; }
 #algebra-graph .algebra-column-step {
   flex: none; width: 18px; height: 18px; border-radius: 50%;
-  background: var(--c-border-soft, #e7e7ea); color: var(--c-muted, #667);
+  background: var(--c-border-soft); color: var(--c-muted);
   font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
 }
-#algebra-graph .algebra-column.is-current .algebra-column-step { background: var(--c-accent, #2b7); color: #fff; }
+#algebra-graph .algebra-column.is-current .algebra-column-step { background: var(--c-accent); color: #fff; }
 #algebra-graph .algebra-column-label {
-  flex: 1; min-width: 0; font-size: 12px; font-weight: 600; color: var(--c-text, #222);
+  flex: 1; min-width: 0; font-size: 12px; font-weight: 600; color: var(--c-text);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 #algebra-graph .algebra-column-chip {
-  flex: none; font-size: 10px; font-weight: 600; color: #fff; background: var(--c-accent, #2b7);
+  flex: none; font-size: 10px; font-weight: 600; color: #fff; background: var(--c-accent);
   border-radius: 8px; padding: 1px 6px;
 }
-#algebra-graph .algebra-column-stats { font-size: 11px; color: var(--c-muted, #88a); margin-top: 2px; }
+#algebra-graph .algebra-column-stats { font-size: 11px; color: var(--c-muted); margin-top: 2px; }
 #algebra-graph .algebra-column-body { display: flex; flex-direction: column; gap: 14px; }
 #algebra-graph .algebra-node {
   position: relative; box-sizing: border-box; width: 100%;
-  background: var(--c-surface, #fff); border: 1px solid var(--c-border, #ccc);
+  background: var(--c-surface); border: 1px solid var(--c-border);
   border-radius: 6px; padding: 6px 8px; font-size: 12px; cursor: pointer;
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
-#algebra-graph .algebra-node.selected { border-color: var(--c-accent, #2b7); box-shadow: 0 0 0 2px var(--c-accent, #2b7); }
+#algebra-graph .algebra-node.selected { border-color: var(--c-accent); box-shadow: 0 0 0 2px var(--c-accent); }
 /* B1: derivation lineage — softer ring on the selection's ancestors/descendants + lit edges */
-#algebra-graph .algebra-node.lineage:not(.selected) { border-color: var(--c-accent, #2b7); box-shadow: 0 0 0 2px rgba(43,187,119,0.4); }
-#algebra-graph .algebra-edge.lineage { stroke: var(--c-accent, #2b7); stroke-width: 2.2; }
-#algebra-graph .algebra-generated  { border-left: 3px solid var(--c-accent, #2b7); }
-#algebra-graph .algebra-constraint { border-left: 3px solid var(--c-warn, #d80); }
-#algebra-graph .algebra-derived    { border-left: 3px solid var(--c-muted, #88a); }
+#algebra-graph .algebra-node.lineage:not(.selected) { border-color: var(--c-accent); box-shadow: 0 0 0 2px rgba(43,187,119,0.4); }
+#algebra-graph .algebra-edge.lineage { stroke: var(--c-accent); stroke-width: 2.2; }
+#algebra-graph .algebra-generated  { border-left: 3px solid var(--c-accent); }
+#algebra-graph .algebra-constraint { border-left: 3px solid var(--c-warn); }
+#algebra-graph .algebra-derived    { border-left: 3px solid var(--c-muted); }
 /* Header is a flex toolbar: chevron · title (grows) · reorder/copy tools. */
 #algebra-graph .algebra-node-head {
   display: flex; align-items: center; gap: 4px;
@@ -763,10 +774,10 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #algebra-graph .algebra-node-tools { display: flex; gap: 2px; flex: none; }
 #algebra-graph .algebra-icon {
   flex: none; border: none; background: transparent; cursor: pointer;
-  color: var(--c-muted, #88a); font-size: 11px; line-height: 1;
+  color: var(--c-muted); font-size: 11px; line-height: 1;
   padding: 1px 3px; border-radius: 3px;
 }
-#algebra-graph .algebra-icon:hover { background: var(--c-border-soft, #eee); color: var(--c-text, #222); }
+#algebra-graph .algebra-icon:hover { background: var(--c-border-soft); color: var(--c-text); }
 #algebra-graph .algebra-chevron { font-size: 10px; }
 /* Collapsed body: single-line equation preview, clipped with an ellipsis.
    Expanded body: full typeset math, horizontally scrollable if it overflows. */
@@ -781,8 +792,8 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 24px;
 }
 #algebra-graph .algebra-empty.hidden { display: none; }
-#algebra-graph .algebra-empty-title { font-size: 15px; font-weight: 700; color: var(--c-text, #222); }
-#algebra-graph .algebra-empty-hint { font-size: 12px; color: var(--c-muted, #88a); max-width: 420px; }
+#algebra-graph .algebra-empty-title { font-size: 15px; font-weight: 700; color: var(--c-text); }
+#algebra-graph .algebra-empty-hint { font-size: 12px; color: var(--c-muted); max-width: 420px; }
 #algebra-graph .algebra-scroll.hidden { display: none; }
 /* Verdict result card (existence / uniqueness) — floats over the bottom-right */
 /* The card is anchored bottom-right inside `#algebra-graph { overflow: hidden }` and had NO
@@ -794,24 +805,24 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #algebra-graph .algebra-verdict {
   position: absolute; right: 12px; bottom: 12px; z-index: 10; max-width: 360px;
   max-height: calc(100% - 24px); display: flex; flex-direction: column; overflow: hidden;
-  background: var(--c-surface, #fff); border: 1px solid var(--c-accent, #2b7);
+  background: var(--c-surface); border: 1px solid var(--c-accent);
   border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.18); padding: 8px 10px; font-size: 12px;
 }
 #algebra-graph .algebra-verdict.hidden { display: none; }
 #algebra-graph .algebra-verdict-head {
   display: flex; align-items: center; justify-content: space-between;
-  font-weight: 700; color: var(--c-muted, #667); font-size: 11px; margin-bottom: 4px;
+  font-weight: 700; color: var(--c-muted); font-size: 11px; margin-bottom: 4px;
   flex: 0 0 auto;                       /* never shrink: the badge + × live here */
 }
 #algebra-graph .algebra-verdict-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
 /* A verdict that outlived the system it was computed on: kept (with its Export-proof action) but
    visibly demoted, so a stale answer can never be mistaken for the current one. */
-#algebra-graph .algebra-verdict.is-stale { opacity: 0.72; border-color: var(--c-border, #ccc); }
+#algebra-graph .algebra-verdict.is-stale { opacity: 0.72; border-color: var(--c-border); }
 #algebra-graph .algebra-verdict-stale {
   margin: 2px 0 4px; padding: 3px 6px; border-radius: 4px; font-size: 11px;
   background: #fff8e6; border: 1px solid #d9a441; color: #6b4a12;
 }
-#algebra-graph .algebra-verdict-body { color: var(--c-text, #222); }
+#algebra-graph .algebra-verdict-body { color: var(--c-text); }
 /* Assumptions ledger — the specializations a verdict was computed under (real/imaginary slice,
    φ(0) gauge fix, factor case). An amber caveat strip so a slice count never reads as certified. */
 #algebra-graph .algebra-verdict-assume {
@@ -820,13 +831,13 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 }
 #algebra-graph .algebra-verdict-assume strong { color: #b54708; font-weight: 700; }
 #algebra-graph .algebra-verdict-sols {
-  margin: 6px 0 0; padding: 6px; background: var(--c-border-soft, #f4f4f6); border-radius: 4px;
+  margin: 6px 0 0; padding: 6px; background: var(--c-border-soft); border-radius: 4px;
   font-size: 11px; max-height: 140px; overflow: auto; white-space: pre;
 }
 #algebra-graph .algebra-verdict-math { margin: 6px 0 0; max-height: 200px; overflow: auto; }
 #algebra-graph .algebra-verdict-mathrow { overflow-x: auto; padding: 3px 0; }
 #algebra-graph .algebra-verdict-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-#controls-algebra .card-sub { border-top: 1px solid var(--c-border-soft, #eee); padding-top: 6px; }
+#controls-algebra .card-sub { border-top: 1px solid var(--c-border-soft); padding-top: 6px; }
 #controls-algebra .card-sub.hidden { display: none; }
 #controls-algebra #alg-help.hidden { display: none; }
 #controls-algebra .algebra-help-q {
@@ -838,7 +849,7 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #controls-algebra .algebra-picker-menu {
   position: absolute; z-index: 30; top: 100%; left: 0; margin-top: 2px;
   min-width: 150px; max-height: 220px; overflow: auto;
-  background: var(--c-bg, #fff); border: 1px solid var(--c-border, #ccc);
+  background: var(--c-bg); border: 1px solid var(--c-border);
   border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 4px;
 }
 #controls-algebra .algebra-picker-menu.hidden { display: none; }
@@ -846,14 +857,14 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   display: flex; align-items: center; gap: 6px; padding: 2px 4px;
   font-size: 12px; white-space: nowrap; cursor: pointer;
 }
-#controls-algebra .algebra-picker-row:hover { background: var(--c-border-soft, #f0f0f0); }
+#controls-algebra .algebra-picker-row:hover { background: var(--c-border-soft); }
 
 /* Persistent, dismissible error panel */
 #controls-algebra .algebra-error {
   display: flex; align-items: flex-start; gap: 6px; margin: 4px 0; padding: 6px 8px;
   font-size: 12px; border-radius: 4px;
-  background: var(--c-error-bg, #fdecea); border: 1px solid var(--c-error, #d9534f);
-  color: var(--c-error-text, #a02622);
+  background: var(--c-error-bg); border: 1px solid var(--c-error);
+  color: var(--c-error-text);
 }
 #controls-algebra .algebra-error.hidden { display: none; }
 #controls-algebra .algebra-error-msg { flex: 1; }
@@ -868,8 +879,8 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
    counted summary rather than burying the workflow sections below it. */
 #controls-algebra .algebra-suggest {
   margin: 4px 0; padding: 4px 8px; font-size: 12px; border-radius: 4px;
-  background: var(--c-info-bg, #eaf3fb); border: 1px solid var(--c-accent, #2b7);
-  color: var(--c-info-text, #245);
+  background: var(--c-info-bg); border: 1px solid var(--c-accent);
+  color: var(--c-info-text);
 }
 #controls-algebra .algebra-suggest.hidden { display: none; }
 #controls-algebra .algebra-suggest-summary {
@@ -903,21 +914,25 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #controls-algebra .algebra-hypotheses {
   display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
   margin: 4px 0; padding: 3px 6px; font-size: 11px; border-radius: 4px;
-  background: var(--c-border-soft, #f2f2f5); border: 1px solid var(--c-border, #ddd);
+  background: var(--c-border-soft); border: 1px solid var(--c-border);
 }
 #controls-algebra .algebra-hypotheses.hidden { display: none; }
 #controls-algebra .algebra-hyp-label {
-  font-weight: 600; color: var(--c-muted, #667); text-transform: uppercase;
+  font-weight: 600; color: var(--c-muted); text-transform: uppercase;
   letter-spacing: 0.02em; font-size: 9px; margin-right: 2px;
 }
-#controls-algebra .algebra-hyp-none { color: var(--c-muted, #88a); font-style: italic; }
+#controls-algebra .algebra-hyp-none { color: var(--c-muted); font-style: italic; }
 #controls-algebra .algebra-hyp-chip {
   border-radius: 8px; padding: 0 6px; white-space: nowrap; border: 1px solid currentColor;
 }
-#controls-algebra .algebra-hyp-chip.h-real { color: var(--c-accent, #1a7f37); }
-#controls-algebra .algebra-hyp-chip.h-imag { color: var(--c-link, #1a56db); }
+/* real vs imaginary must be distinguishable at a glance — they are opposite assumptions. This was
+   written as var(--c-accent): the fallback is GREEN, i.e. the original intent was
+   green-for-real. Introducing --c-accent as a blue silently turned the chip blue, colliding with
+   the imaginary chip's blue and erasing the distinction. Restore it with the green token. */
+#controls-algebra .algebra-hyp-chip.h-real { color: var(--c-ok); }
+#controls-algebra .algebra-hyp-chip.h-imag { color: var(--c-link); }
 #controls-algebra .algebra-hyp-chip.h-w0   { color: #b54708; }
-#controls-algebra .algebra-hyp-chip.h-pin  { color: var(--c-text, #444); }
+#controls-algebra .algebra-hyp-chip.h-pin  { color: var(--c-text); }
 
 /* ---- Node-editor sidebar: pinned header, workflow sections, value table, inspector ---- */
 /* The pinned header must never eat the sidebar: whatever it holds (a long error, the expanded
@@ -926,27 +941,27 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
    the backstop that keeps the sections below reachable. Safe to make a scroll container — no
    absolutely-positioned child (the .algebra-picker dropdowns all live in the sections below). */
 #controls-algebra .algebra-head {
-  position: sticky; top: 0; z-index: 4; background: var(--c-bg, #fff); padding-bottom: 4px;
+  position: sticky; top: 0; z-index: 4; background: var(--c-bg); padding-bottom: 4px;
   max-height: 45vh; overflow-y: auto;
 }
 #controls-algebra .algebra-primary { gap: 4px; margin-top: 4px; }
 #controls-algebra .algebra-primary #alg-autosolve { flex: 1; }
 /* Heavy / async operations get an accent so they read as "this does real work". */
-#controls-algebra .heavy-op { border-color: var(--c-accent, #2b7); font-weight: 600; }
+#controls-algebra .heavy-op { border-color: var(--c-accent); font-weight: 600; }
 
 /* Collapsible workflow sections (native <details>) */
-#controls-algebra .algebra-section { border-top: 1px solid var(--c-border-soft, #eee); }
+#controls-algebra .algebra-section { border-top: 1px solid var(--c-border-soft); }
 #controls-algebra .algebra-section > summary {
-  cursor: pointer; padding: 7px 2px; font-size: 12px; font-weight: 600; color: var(--c-text, #222);
+  cursor: pointer; padding: 7px 2px; font-size: 12px; font-weight: 600; color: var(--c-text);
   list-style: none; user-select: none;
 }
 #controls-algebra .algebra-section > summary::-webkit-details-marker { display: none; }
-#controls-algebra .algebra-section > summary::before { content: '▸ '; color: var(--c-muted, #88a); font-weight: 400; }
+#controls-algebra .algebra-section > summary::before { content: '▸ '; color: var(--c-muted); font-weight: 400; }
 #controls-algebra .algebra-section[open] > summary::before { content: '▾ '; }
 #controls-algebra .algebra-section-body { padding: 2px 2px 8px; display: flex; flex-direction: column; gap: 6px; }
-#controls-algebra .algebra-advanced > summary { cursor: pointer; font-size: 11px; color: var(--c-muted, #88a); padding: 2px 0; }
+#controls-algebra .algebra-advanced > summary { cursor: pointer; font-size: 11px; color: var(--c-muted); padding: 2px 0; }
 #controls-algebra .algebra-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-#controls-algebra .algebra-line-label { font-size: 11px; font-weight: 600; color: var(--c-muted, #667); }
+#controls-algebra .algebra-line-label { font-size: 11px; font-weight: 600; color: var(--c-muted); }
 
 /* "Set values" multi-row table */
 #controls-algebra .algebra-value-row { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
@@ -961,7 +976,8 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #controls-algebra .algebra-define-row .alg-def-eq { font-size: 11px; opacity: 0.7; }
 #controls-algebra .algebra-define-row .alg-def-expr { flex: 1 1 auto; min-width: 60px; }
 #controls-algebra .alg-def-preview { font-size: 11px; min-height: 1em; margin: 1px 0 2px; overflow-x: auto; }
-#controls-algebra .alg-def-preview.alg-def-error { color: var(--danger, #c0392b); }
+/* was var(--danger) — a second spelling of the same concept, with a slightly different literal */
+#controls-algebra .alg-def-preview.alg-def-error { color: var(--c-danger); }
 #controls-algebra .algebra-define-row .alg-eq-rel { flex: none; }
 
 /* Univalence-constraint palette as a 2-column grid */
@@ -972,53 +988,53 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #controls-algebra .algebra-inspector { padding: 4px 2px 8px; display: flex; flex-direction: column; gap: 4px; }
 #controls-algebra .algebra-inspector.hidden { display: none; }
 #controls-algebra .algebra-inspector-head { display: flex; align-items: center; justify-content: space-between; }
-#controls-algebra .algebra-inspector-eq { overflow-x: auto; padding: 4px 0; border-bottom: 1px dashed var(--c-border-soft, #eee); }
+#controls-algebra .algebra-inspector-eq { overflow-x: auto; padding: 4px 0; border-bottom: 1px dashed var(--c-border-soft); }
 /* Column-level factor scan output (Factor / simplify column). Bounded: a wide system can list many
    equations, and this sits inside an already-scrolling sidebar. */
 #controls-algebra .algebra-factor-out { max-height: 220px; overflow-y: auto; margin-top: 4px; }
 #controls-algebra .algebra-factor-out:empty { display: none; }
 
 /* Factor chooser (Attempt to factor → pick a case) */
-#controls-algebra .algebra-factor-chooser { margin-top: 6px; border-top: 1px dashed var(--c-border-soft, #eee); padding-top: 4px; }
+#controls-algebra .algebra-factor-chooser { margin-top: 6px; border-top: 1px dashed var(--c-border-soft); padding-top: 4px; }
 #controls-algebra .algebra-factor-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
 #controls-algebra .algebra-factor-eq { flex: 1; overflow-x: auto; }
 #controls-algebra .algebra-factor-row button { flex: none; }
 /* Solve-for-a-variable (in radicals) → picker + rendered closed-form roots */
-#controls-algebra .algebra-solve-panel { margin-top: 6px; border-top: 1px dashed var(--c-border-soft, #eee); padding-top: 4px; }
+#controls-algebra .algebra-solve-panel { margin-top: 6px; border-top: 1px dashed var(--c-border-soft); padding-top: 4px; }
 #controls-algebra .algebra-solve-out { margin-top: 4px; }
 #controls-algebra .algebra-solve-root { overflow-x: auto; padding: 3px 0; }
 /* D5 — step-by-step derivation panel in the inspector */
-#controls-algebra .algebra-steps-panel { margin-top: 6px; border-top: 1px dashed var(--c-border-soft, #eee); padding-top: 4px; }
+#controls-algebra .algebra-steps-panel { margin-top: 6px; border-top: 1px dashed var(--c-border-soft); padding-top: 4px; }
 #controls-algebra .algebra-steps-list { margin: 4px 0 0; padding-left: 1.4em; }
 #controls-algebra .algebra-steps-list li { margin-bottom: 5px; }
-#controls-algebra .algebra-step-rule { font-size: 0.85em; color: var(--c-muted, #777); }
+#controls-algebra .algebra-step-rule { font-size: 0.85em; color: var(--c-muted); }
 #controls-algebra .algebra-step-eq { overflow-x: auto; padding: 2px 0; }
 
 /* Floating view/history toolbar over the graph */
 #algebra-graph .algebra-toolbar {
   position: absolute; top: 8px; right: 8px; z-index: 11; display: flex; align-items: center; gap: 2px;
-  background: var(--c-surface, #fff); border: 1px solid var(--c-border, #ccc);
+  background: var(--c-surface); border: 1px solid var(--c-border);
   border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.14); padding: 3px 5px;
 }
 #algebra-graph .algebra-toolbar .algebra-tb-btn { padding: 1px 7px; }
-#algebra-graph .algebra-toolbar .algebra-tb-btn.active { border-color: var(--c-accent, #2b7); color: var(--c-accent, #2b7); font-weight: 600; }
-#algebra-graph .algebra-toolbar-zoom { font-size: 11px; min-width: 36px; text-align: center; color: var(--c-muted, #667); }
+#algebra-graph .algebra-toolbar .algebra-tb-btn.active { border-color: var(--c-accent); color: var(--c-accent); font-weight: 600; }
+#algebra-graph .algebra-toolbar-zoom { font-size: 11px; min-width: 36px; text-align: center; color: var(--c-muted); }
 
 /* B2: DAG minimap — a scaled bird's-eye of the lanes with a draggable viewport box (top-left) */
 #algebra-graph .algebra-minimap {
   position: absolute; left: 8px; top: 8px; z-index: 12; width: 168px; height: 116px;
-  background: var(--c-surface, #fff); border: 1px solid var(--c-border, #ccc);
+  background: var(--c-surface); border: 1px solid var(--c-border);
   border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.16); cursor: pointer; overflow: hidden;
 }
 #algebra-graph .algebra-minimap.hidden { display: none; }
 #algebra-graph .algebra-minimap-inner { position: relative; width: 168px; height: 116px; }
 #algebra-graph .algebra-mm-lane {
-  position: absolute; background: var(--c-border-soft, #e6e6ee); border: 1px solid var(--c-border, #ccd);
+  position: absolute; background: var(--c-border-soft); border: 1px solid var(--c-border);
   border-radius: 2px;
 }
-#algebra-graph .algebra-mm-lane.is-current { background: var(--c-accent, #2b7); opacity: 0.45; border-color: var(--c-accent, #2b7); }
+#algebra-graph .algebra-mm-lane.is-current { background: var(--c-accent); opacity: 0.45; border-color: var(--c-accent); }
 #algebra-graph .algebra-minimap-view {
-  position: absolute; border: 1.5px solid var(--c-accent, #2b7); background: rgba(43,187,119,0.12);
+  position: absolute; border: 1.5px solid var(--c-accent); background: rgba(43,187,119,0.12);
   pointer-events: none; border-radius: 2px;
 }
 
@@ -1027,11 +1043,11 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 
 /* φ / h reference shown at the top of the Algebra sidebar (always visible, compact math) */
 #controls-algebra .algebra-ref-block {
-  border-top: 1px solid var(--c-border-soft, #eee); border-bottom: 1px solid var(--c-border-soft, #eee);
+  border-top: 1px solid var(--c-border-soft); border-bottom: 1px solid var(--c-border-soft);
   padding: 4px 2px; margin-bottom: 2px;
 }
 #controls-algebra .algebra-ref-controls { gap: 8px; align-items: center; flex-wrap: wrap; }
-#controls-algebra .algebra-ref-opt { font-size: 70%; color: var(--c-muted, #667); }
+#controls-algebra .algebra-ref-opt { font-size: 70%; color: var(--c-muted); }
 #controls-algebra .algebra-ref { margin: 2px 0; max-height: 230px; overflow: auto; }
 #controls-algebra .algebra-ref-math .katex-display,
 #controls-algebra .algebra-ref-math .katex { font-size: 0.72em; }
@@ -1041,32 +1057,32 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 /* Numbered onboarding steps strip (dismissible) */
 #controls-algebra .algebra-steps {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-  font-size: 70%; color: var(--c-muted, #667); margin: 4px 0 2px;
+  font-size: 70%; color: var(--c-muted); margin: 4px 0 2px;
 }
 #controls-algebra .algebra-steps.hidden { display: none; }
 #controls-algebra .algebra-steps span {
-  background: var(--c-border-soft, #f0f0f2); border-radius: 8px; padding: 1px 7px; white-space: nowrap;
+  background: var(--c-border-soft); border-radius: 8px; padding: 1px 7px; white-space: nowrap;
 }
 #controls-algebra .algebra-steps-x {
   margin-left: auto; border: none; background: transparent; cursor: pointer;
-  font-size: 13px; line-height: 1; color: var(--c-muted, #88a); padding: 0 2px;
+  font-size: 13px; line-height: 1; color: var(--c-muted); padding: 0 2px;
 }
 
 /* Reduction breadcrumb: a clickable chip rail floating over the graph (bottom-left) */
 #algebra-graph .algebra-breadcrumb {
   position: absolute; left: 8px; bottom: 8px; z-index: 11; display: flex; align-items: center; gap: 2px;
   max-width: 62%; overflow-x: auto; padding: 3px 5px;
-  background: var(--c-surface, #fff); border: 1px solid var(--c-border, #ccc);
+  background: var(--c-surface); border: 1px solid var(--c-border);
   border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.14);
 }
 #algebra-graph .algebra-breadcrumb.hidden { display: none; }
 #algebra-graph .algebra-bc-chip {
-  border: 1px solid var(--c-border-soft, #ddd); background: var(--c-bg, #fff); cursor: pointer;
-  font-size: 11px; border-radius: 10px; padding: 1px 8px; white-space: nowrap; color: var(--c-text, #222);
+  border: 1px solid var(--c-border-soft); background: var(--c-bg); cursor: pointer;
+  font-size: 11px; border-radius: 10px; padding: 1px 8px; white-space: nowrap; color: var(--c-text);
 }
-#algebra-graph .algebra-bc-chip:hover { background: var(--c-border-soft, #eef); }
-#algebra-graph .algebra-bc-chip.is-current { border-color: var(--c-accent, #2b7); font-weight: 600; }
-#algebra-graph .algebra-bc-sep { color: var(--c-muted, #88a); font-size: 11px; }
+#algebra-graph .algebra-bc-chip:hover { background: var(--c-border-soft); }
+#algebra-graph .algebra-bc-chip.is-current { border-color: var(--c-accent); font-weight: 600; }
+#algebra-graph .algebra-bc-sep { color: var(--c-muted); font-size: 11px; }
 
 /* Track switcher: parallel derivation branches, a chip rail floating over the graph.
    Stacked just ABOVE the column breadcrumb (bottom-left) — branches are the outer
@@ -1074,46 +1090,46 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #algebra-graph .algebra-trackbar {
   position: absolute; left: 8px; bottom: 40px; z-index: 11; display: flex; align-items: center; gap: 4px;
   max-width: 62%; overflow-x: auto; padding: 3px 6px;
-  background: var(--c-surface, #fff); border: 1px solid var(--c-border, #ccc);
+  background: var(--c-surface); border: 1px solid var(--c-border);
   border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.14);
 }
 #algebra-graph .algebra-trackbar.hidden { display: none; }
-#algebra-graph .algebra-track-lbl { color: var(--c-muted, #88a); font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
+#algebra-graph .algebra-track-lbl { color: var(--c-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
 #algebra-graph .algebra-track-chip {
   display: inline-flex; align-items: center; gap: 2px;
-  border: 1px solid var(--c-border-soft, #ddd); background: var(--c-bg, #fff);
-  font-size: 11px; border-radius: 10px; padding: 1px 6px 1px 8px; white-space: nowrap; color: var(--c-text, #222);
+  border: 1px solid var(--c-border-soft); background: var(--c-bg);
+  font-size: 11px; border-radius: 10px; padding: 1px 6px 1px 8px; white-space: nowrap; color: var(--c-text);
 }
-#algebra-graph .algebra-track-chip.is-current { border-color: var(--c-accent, #2b7); font-weight: 600; }
+#algebra-graph .algebra-track-chip.is-current { border-color: var(--c-accent); font-weight: 600; }
 #algebra-graph .algebra-track-name { border: none; background: transparent; cursor: pointer; font: inherit; color: inherit; padding: 0; }
 #algebra-graph .algebra-track-chip.is-current .algebra-track-name { cursor: default; }
 #algebra-graph .algebra-track-name:hover { text-decoration: underline; }
 #algebra-graph .algebra-track-chip.is-current .algebra-track-name:hover { text-decoration: none; }
 #algebra-graph .algebra-track-x {
-  border: none; background: transparent; cursor: pointer; color: var(--c-muted, #88a);
+  border: none; background: transparent; cursor: pointer; color: var(--c-muted);
   font-size: 13px; line-height: 1; padding: 0 1px;
 }
-#algebra-graph .algebra-track-x:hover { color: var(--c-danger, #c33); }
+#algebra-graph .algebra-track-x:hover { color: var(--c-danger); }
 #algebra-graph .algebra-track-fork {
-  border: 1px dashed var(--c-border, #bbb); background: var(--c-bg, #fff); cursor: pointer;
-  font-size: 11px; border-radius: 10px; padding: 1px 8px; white-space: nowrap; color: var(--c-text, #222);
+  border: 1px dashed var(--c-border); background: var(--c-bg); cursor: pointer;
+  font-size: 11px; border-radius: 10px; padding: 1px 8px; white-space: nowrap; color: var(--c-text);
 }
-#algebra-graph .algebra-track-fork:hover { background: var(--c-border-soft, #eef); border-color: var(--c-accent, #2b7); }
+#algebra-graph .algebra-track-fork:hover { background: var(--c-border-soft); border-color: var(--c-accent); }
 /* A6: per-branch existence/uniqueness verdict badge on each track chip + the "classify all" button */
 #algebra-graph .algebra-track-verdict {
   font-size: 9px; border-radius: 6px; padding: 0 4px; margin-left: 2px; font-weight: 700;
   white-space: nowrap; border: 1px solid currentColor;
 }
-#algebra-graph .algebra-track-verdict.v-none    { color: var(--c-danger, #c33); }
-#algebra-graph .algebra-track-verdict.v-unique  { color: var(--c-accent, #1a7f37); }
-#algebra-graph .algebra-track-verdict.v-multi   { color: var(--c-link, #1a56db); }
+#algebra-graph .algebra-track-verdict.v-none    { color: var(--c-danger); }
+#algebra-graph .algebra-track-verdict.v-unique  { color: var(--c-accent); }
+#algebra-graph .algebra-track-verdict.v-multi   { color: var(--c-link); }
 #algebra-graph .algebra-track-verdict.v-open    { color: #b54708; }
-#algebra-graph .algebra-track-verdict.v-unknown { color: var(--c-muted, #667); }
+#algebra-graph .algebra-track-verdict.v-unknown { color: var(--c-muted); }
 #algebra-graph .algebra-track-verdicts {
-  border: 1px solid var(--c-border, #ccc); background: var(--c-bg, #fff); cursor: pointer;
-  font-size: 11px; border-radius: 10px; padding: 1px 8px; white-space: nowrap; color: var(--c-muted, #667);
+  border: 1px solid var(--c-border); background: var(--c-bg); cursor: pointer;
+  font-size: 11px; border-radius: 10px; padding: 1px 8px; white-space: nowrap; color: var(--c-muted);
 }
-#algebra-graph .algebra-track-verdicts:hover { background: var(--c-border-soft, #eef); color: var(--c-text, #222); }
+#algebra-graph .algebra-track-verdicts:hover { background: var(--c-border-soft); color: var(--c-text); }
 
 /* Brief highlight when a breadcrumb chip scrolls its lane into view */
 @keyframes algebra-col-flash { 0%, 100% { background: transparent; } 30% { background: rgba(34,170,119,0.16); } }
@@ -1122,7 +1138,7 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 /* Seed summary as a compact table (replaces the run-on status sentence) */
 #controls-algebra .algebra-seed-table { border-collapse: collapse; margin: 2px 0; }
 #controls-algebra .algebra-seed-table th {
-  text-align: left; font-weight: 600; color: var(--c-muted, #667);
+  text-align: left; font-weight: 600; color: var(--c-muted);
   padding: 1px 8px 1px 0; vertical-align: top; white-space: nowrap;
 }
 #controls-algebra .algebra-seed-table td { padding: 1px 0; }
