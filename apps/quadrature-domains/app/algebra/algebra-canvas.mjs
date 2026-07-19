@@ -40,6 +40,7 @@ const QD = _QD;
   const SVGNS = 'http://www.w3.org/2000/svg';
   const DISPLAY_CAP = 120;            // elide KaTeX above this term count (card lane width is CSS-driven)
   const ZMIN = 0.4, ZMAX = 1.6;       // zoom clamp
+  const CONDENSE_BELOW = 0.8;         // below this zoom, switch to the condensed overview (see setZoom)
 
   // KaTeX render with the codebase's plain-text fallback (shared helper in
   // riemann-latex.js; a local wrapper keeps the call sites + a fallback if it's absent).
@@ -508,9 +509,17 @@ const QD = _QD;
     function setZoom(z) {
       zoom = Math.max(ZMIN, Math.min(ZMAX, z));
       track.style.transform = 'scale(' + zoom + ')';
+      // Below the threshold, scaling text is the wrong lever for an overview: the 12px card math
+      // renders at ~5px AND so do the 11px lane headers, so the wayfinding degrades at exactly the
+      // same rate as the content it exists to help you navigate. Condensed mode instead collapses
+      // the cards, narrows the lanes, and counter-scales the header type back to full size.
+      const condensed = zoom < CONDENSE_BELOW;
+      container.classList.toggle('is-condensed', condensed);
+      track.style.setProperty('--alg-zoom', String(zoom));
       relayout();
       return zoom;
     }
+    function isCondensed() { return zoom < CONDENSE_BELOW; }
     function fit() { setZoom(1); scroll.scrollLeft = 0; scroll.scrollTop = 0; }
     // Zoom about a viewport point: keep whatever is under (cx, cy) fixed. setZoom alone preserves
     // nothing, so zooming used to drift the content out from under the pointer.
@@ -567,11 +576,22 @@ const QD = _QD;
       }
     }, { passive: false });
     // Zoom so all lanes fit the viewport width (clamped by setZoom's [ZMIN, ZMAX]).
+    // Returns { zoom, fits, condensed }. It used to return only the clamped zoom, so the caller
+    // wrote "40%" into the label while the content was still cut off — ZMIN is 0.4 and ten 300px
+    // lanes need ~0.27. Condensed mode is what actually makes a wide pipeline fit, so report both.
     function fitWidth() {
       const natural = track.offsetWidth || 1;
       const avail = (scroll.clientWidth || natural) - 8;
       scroll.scrollLeft = 0;
-      return setZoom(avail / natural);
+      const wanted = avail / natural;
+      const z = setZoom(wanted);
+      // After condensing, the lanes are narrower, so re-measure and try again once.
+      if (isCondensed()) {
+        const natural2 = track.offsetWidth || 1;
+        if (natural2 < natural) setZoom(avail / natural2);
+      }
+      const fits = (track.offsetWidth * zoom) <= avail + 2;
+      return { zoom, fits, condensed: isCondensed() };
     }
     // Scroll a column lane into view (left-aligned) and pulse a brief highlight. `offsetLeft`
     // is the NATURAL layout x within the track; the sizer is scaled by `zoom`, so the scroll

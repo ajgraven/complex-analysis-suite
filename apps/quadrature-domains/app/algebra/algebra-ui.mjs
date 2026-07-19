@@ -3313,7 +3313,19 @@ const QD = _QD;
       bar.appendChild(zlabel);
       bar.appendChild(btn('+', 'Zoom in', () => setZ(_zoom * 1.15)));
       bar.appendChild(btn('Fit', 'Reset zoom & scroll to the start', () => { if (canvas) { canvas.fit(); _zoom = 1; zlabel.textContent = '100%'; } }));
-      bar.appendChild(btn('Fit ↔', 'Zoom so every column lane fits the width', () => { if (canvas && canvas.fitWidth) { _zoom = canvas.fitWidth(); zlabel.textContent = Math.round(_zoom * 100) + '%'; } }));
+      // fitWidth now reports whether it ACTUALLY fit. It used to return only the clamped zoom, so
+      // past ~7 columns the button wrote "40%" (ZMIN) while the track was still cut off — the label
+      // asserted a fit that had not happened. Say "condensed" when that is what made it fit, and
+      // say so plainly when even that was not enough.
+      bar.appendChild(btn('Fit ↔', 'Zoom so every column lane fits the width (switches to a condensed overview when needed)', () => {
+        if (!canvas || !canvas.fitWidth) return;
+        const r = canvas.fitWidth();
+        _zoom = (r && typeof r === 'object') ? r.zoom : r;
+        const pct = Math.round(_zoom * 100) + '%';
+        zlabel.textContent = (r && r.condensed) ? (pct + ' ·⊟') : pct;
+        zlabel.title = (r && !r.fits) ? 'Still wider than the viewport even condensed — scroll or zoom out further'
+          : (r && r.condensed) ? 'Condensed overview: cards collapsed, lane headers kept at full size' : '';
+      }));
       bar.appendChild(btn('Expand', 'Expand every card to the full typeset form', () => { if (canvas) canvas.setAllCollapsed(false); }));
       bar.appendChild(btn('Collapse', 'Collapse every card to a one-line preview', () => { if (canvas) canvas.setAllCollapsed(true); }));
       const mapBtn = btn('▣ map', 'Toggle the DAG minimap (a bird\'s-eye of all lanes with a draggable viewport)', () => {

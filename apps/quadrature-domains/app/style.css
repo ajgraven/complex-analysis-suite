@@ -34,6 +34,10 @@
   --c-info-text:     #224455;
   --c-link:          #1a56db;
   --c-danger:        #cc3333;   /* destructive affordances (was also spelled --danger) */
+  /* Live canvas zoom, written onto .algebra-track by setZoom and read back by the condensed
+     overview to counter-scale its header type. Declared here so the token invariant holds
+     (every var() has a :root default) and so the pre-JS value is sane. */
+  --alg-zoom:        1;
   /* spacing scale */
   --sp-1: 4px; --sp-2: 6px; --sp-3: 8px; --sp-4: 12px; --sp-5: 16px;
 }
@@ -713,6 +717,26 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   min-width: 0;
 }
 #algebra-graph .algebra-rail:empty { display: none; }
+
+/* CONDENSED OVERVIEW. Past ~7 columns a 300px-lane track cannot fit, and `transform: scale` is the
+   wrong lever for an overview: it shrinks the 11px lane headers at exactly the same rate as the
+   content they exist to help you navigate. Below CONDENSE_BELOW the lanes narrow, the card bodies
+   collapse to a one-line summary, and the header type is COUNTER-SCALED by --alg-zoom so it stays
+   readable at full size while the pipeline shrinks around it. */
+#algebra-graph.is-condensed .algebra-column { width: 168px; min-width: 168px; }
+#algebra-graph.is-condensed .algebra-node-math,
+#algebra-graph.is-condensed .algebra-node-tools { display: none; }
+#algebra-graph.is-condensed .algebra-node { padding: 2px 4px; }
+/* Counter-scale the whole header rather than a font-size: scaling one hardcoded px target shrinks
+   the header instead of preserving it (the natural size is inherited, not declared), and would not
+   hold the relative sizes of the label / step badge / stats inside it. An inverse transform keeps
+   every child at exactly its natural rendered size while the lane around it shrinks. */
+#algebra-graph.is-condensed .algebra-column-head {
+  transform: scale(calc(1 / var(--alg-zoom)));
+  transform-origin: top left;
+  width: calc(100% * var(--alg-zoom));
+}
+#algebra-graph.is-condensed .algebra-node-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Structured column lanes: a natively-scrolling track; the .algebra-sizer is sized by
    JS to trackNatural × zoom so the scrollbars stay correct while the track is scaled. */
 #algebra-graph .algebra-scroll {
