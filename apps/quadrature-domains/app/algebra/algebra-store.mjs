@@ -354,6 +354,10 @@ import _QD from '../solver.mjs';
     function nodeVars(n) { return polyVars(n.poly); }
     function undo() { if (!undoStack.length) return false; redoStack.push(snapshot()); restore(undoStack.pop()); return true; }
     function redo() { if (!redoStack.length) return false; undoStack.push(snapshot()); restore(redoStack.pop()); return true; }
+    // Stack depths, so the UI can disable the undo/redo controls when there is nothing to do
+    // rather than offering a button that silently no-ops. Read-only view of the history.
+    function undoDepth() { return undoStack.length; }
+    function redoDepth() { return redoStack.length; }
 
     function addNode(n) {
       if (n.track === undefined) n.track = activeTrackId;   // stamp the active branch
@@ -2823,7 +2827,7 @@ import _QD from '../solver.mjs';
       sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casColumnComplex, casNode, msolveColumn, msolveVarOrder, importMsolve, derivationSteps, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
       moveNode, orderOf: ordOf, orderedColumn,
       forkTrack, setActiveTrack, deleteTrack, tracks: tracksList,
-      undo, redo, reset,
+      undo, redo, undoDepth, redoDepth, reset,
       list, get,
       get edges() { return edges; },
       get activeTrack() { return activeTrackId; },

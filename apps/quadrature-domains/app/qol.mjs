@@ -240,10 +240,29 @@ import _QD from './solver.mjs';
     const isEl = opts.nodeType === 1;          // back-compat: bare element = anchor
     const anchor = isEl ? opts : opts.anchor;
     const kind = isEl ? null : opts.kind;
-    const duration = (isEl ? 0 : opts.duration) || 750;
+    // 750ms is right for a "copied ✓" confirmation and far too short for a failure: the Algebra
+    // tab alone raises ~50 error toasts, none passing a duration, several of them multi-sentence
+    // warnings (e.g. that an exported script will produce a WRONG quadrature-domain count). Give
+    // errors long enough to read, and a click to dismiss so a long one is never in the way.
+    const ERROR_MS = 8000;
+    const duration = (isEl ? 0 : opts.duration) || (kind === 'error' ? ERROR_MS : 750);
     const t = document.createElement('div');
     t.className = 'copy-toast' + (kind === 'error' ? ' toast-error' : '');
+    // Announced to assistive tech: assertive for a failure, polite for a confirmation. Without
+    // this a screen-reader user gets no signal at all that an operation failed.
+    t.setAttribute('role', kind === 'error' ? 'alert' : 'status');
     t.textContent = msg;
+    let gone = false;
+    const dismiss = () => {
+      if (gone) return; gone = true;
+      t.classList.add('fade');
+      setTimeout(() => t.remove(), 350);
+    };
+    if (kind === 'error') {
+      t.title = 'Click to dismiss';
+      t.style.cursor = 'pointer';
+      t.addEventListener('click', dismiss);
+    }
     document.body.appendChild(t);
     if (anchor && typeof anchor.getBoundingClientRect === 'function') {
       const r = anchor.getBoundingClientRect();
@@ -252,10 +271,7 @@ import _QD from './solver.mjs';
     } else {
       t.classList.add('toast-floating');
     }
-    setTimeout(() => {
-      t.classList.add('fade');
-      setTimeout(() => t.remove(), 350);
-    }, duration);
+    setTimeout(dismiss, duration);
   }
 
   // Global last-resort error surface. Uncaught main-thread exceptions and

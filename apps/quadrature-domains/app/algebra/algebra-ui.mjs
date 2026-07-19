@@ -248,7 +248,104 @@ const QD = _QD;
     // QE is non-null past the install guard above).
     const isClassicalBounded = QE.isClassicalBounded;
     function toast(msg, opts) { if (QD.QoL && QD.QoL.toast) QD.QoL.toast(msg, opts || {}); }
-    function rerender() { if (canvas) canvas.render(store, latexOf); renderInspector(canvas ? canvas.getSelection() : []); buildBreadcrumb(); buildTrackBar(); renderSuggestions(); renderHypotheses(); }
+    function rerender() { if (canvas) canvas.render(store, latexOf); renderInspector(canvas ? canvas.getSelection() : []); buildBreadcrumb(); buildTrackBar(); renderSuggestions(); renderHypotheses(); refreshUndoButtons(); scheduleAutosave(); }
+
+    // ---- undo/redo affordance ------------------------------------------------
+    // The model was always sound (snapshot stack, 26 checkpoint sites); only the surface was
+    // missing. Keep the two toolbar glyphs honest about whether they can do anything, and name
+    // how many steps are available — a button that silently no-ops reads as broken.
+    function refreshUndoButtons() {
+      const ud = store.undoDepth ? store.undoDepth() : 0, rd = store.redoDepth ? store.redoDepth() : 0;
+      const u = document.getElementById('alg-undo'), r = document.getElementById('alg-redo');
+      const step = (n) => n + ' step' + (n === 1 ? '' : 's') + ' available';
+      if (u) { u.disabled = !ud; u.setAttribute('aria-label', 'Undo'); u.title = ud ? ('Undo (Ctrl+Z) — ' + step(ud)) : 'Nothing to undo'; }
+      if (r) { r.disabled = !rd; r.setAttribute('aria-label', 'Redo'); r.title = rd ? ('Redo (Ctrl+Shift+Z) — ' + step(rd)) : 'Nothing to redo'; }
+    }
+
+    // ---- session persistence (autosave / restore) ----------------------------
+    // The store is purely in-memory, so a reload, a crash, or a stray Ctrl+W destroyed an entire
+    // derivation with no warning and no recovery — and QD is a PWA, where a service-worker update
+    // is itself a routine reload path. exportDAG()/importDAG() already round-trip a faithful
+    // session, so autosave is just a debounce around them. localStorage rather than IndexedDB
+    // because it is synchronous: the beforeunload flush below is then reliable.
+    const AUTOSAVE_KEY = 'qd-algebra-autosave-v1';
+    const AUTOSAVE_MAX = 2000000;      // ~2MB; past this we stop rather than thrash the quota
+    const AUTOSAVE_DEBOUNCE = 800;
+    let _saveTimer = null, _saveBlocked = false;
+    function _writeAutosave() {
+      _saveTimer = null;
+      try {
+        if (!store.size) { localStorage.removeItem(AUTOSAVE_KEY); _saveBlocked = false; return; }
+        const payload = JSON.stringify({ at: Date.now(), nodes: store.size, columns: store.maxColumn() + 1, dag: store.exportDAG() });
+        if (payload.length > AUTOSAVE_MAX) {
+          // Say so ONCE: silently not saving is exactly the failure this feature exists to prevent.
+          if (!_saveBlocked) { _saveBlocked = true; toast('This derivation is too large to autosave — use Download DAG (JSON) to keep it.', { kind: 'error' }); }
+          return;
+        }
+        localStorage.setItem(AUTOSAVE_KEY, payload);
+        _saveBlocked = false;
+      } catch (e) {
+        // Private mode / quota / disabled storage. Never break the workspace over a save, but do
+        // remember it failed so the beforeunload guard below still warns.
+        _saveBlocked = true;
+      }
+    }
+    function scheduleAutosave() {
+      if (_saveTimer) clearTimeout(_saveTimer);
+      _saveTimer = setTimeout(_writeAutosave, AUTOSAVE_DEBOUNCE);
+    }
+    function _readAutosave() {
+      try {
+        const raw = localStorage.getItem(AUTOSAVE_KEY); if (!raw) return null;
+        const p = JSON.parse(raw);
+        return (p && p.dag) ? p : null;
+      } catch (e) { return null; }
+    }
+    function _agoStr(ms) {
+      const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+      if (s < 90) return s + 's ago';
+      const m = Math.round(s / 60); if (m < 90) return m + ' min ago';
+      return Math.round(m / 60) + 'h ago';
+    }
+    // Offer the previous session back. Inserted at runtime (not in the panel template) so it sits
+    // above the workflow without competing for room when there is nothing to restore. Returns true
+    // when an offer was shown — the caller then skips auto-seeding, because seeding would discard
+    // the very thing being offered.
+    function offerRestore() {
+      const saved = _readAutosave(); if (!saved || store.size) return false;
+      const panel = $('#controls-algebra'); if (!panel) return false;
+      const strip = document.createElement('div');
+      strip.id = 'alg-restore'; strip.className = 'algebra-restore';
+      const msg = document.createElement('span'); msg.className = 'algebra-restore-msg';
+      msg.textContent = 'Unsaved derivation from your last session — '
+        + saved.columns + ' column' + (saved.columns === 1 ? '' : 's') + ', '
+        + saved.nodes + ' equation' + (saved.nodes === 1 ? '' : 's') + ', ' + _agoStr(saved.at) + '.';
+      const yes = document.createElement('button'); yes.type = 'button'; yes.className = 'small'; yes.textContent = 'Restore';
+      yes.title = 'Rebuild the workspace from your last session';
+      const no = document.createElement('button'); no.type = 'button'; no.className = 'small'; no.textContent = 'Discard';
+      no.title = 'Start fresh — this deletes the saved session';
+      yes.addEventListener('click', () => {
+        let r; try { r = store.importDAG(saved.dag); } catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
+        if (!r || r.ok === false) { showError('Restore: ' + ((r && r.reason) || 'the saved session could not be read')); return; }
+        strip.remove(); rerender(); refreshPickers();
+        toast('Restored ' + saved.columns + ' column' + (saved.columns === 1 ? '' : 's') + ' from your last session.');
+      });
+      no.addEventListener('click', () => {
+        try { localStorage.removeItem(AUTOSAVE_KEY); } catch (e) { /* nothing to clear */ }
+        strip.remove();
+        if (!store.size && activeEnv) seedFromCurrent(); else rerender();
+      });
+      strip.appendChild(msg); strip.appendChild(yes); strip.appendChild(no);
+      const ref = panel.querySelector('.algebra-ref-block');
+      if (ref) panel.insertBefore(strip, ref); else panel.appendChild(strip);
+      return true;
+    }
+    // Flush a pending save, and warn only when the work is genuinely unrecoverable — i.e. the
+    // autosave could not take it. If it saved, the reload is recoverable and a prompt is noise.
+    window.addEventListener('beforeunload', (ev) => {
+      if (_saveTimer) { clearTimeout(_saveTimer); _writeAutosave(); }
+      if (store.size && _saveBlocked) { ev.preventDefault(); ev.returnValue = ''; }
+    });
 
     // ---- auto-detected variable-symmetry suggestions ("popup the moment an equation forces a
     // variable real/imaginary, or identifies two variables"). store.detectVariableRelations scans
@@ -2675,11 +2772,29 @@ const QD = _QD;
         const ae = document.activeElement;
         if (ae && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return;
         const sel = canvas ? canvas.getSelection() : [];
+        const mod = ev.ctrlKey || ev.metaKey;
+        // Undo/redo were reachable ONLY as two unlabeled glyphs in a floating toolbar, so a user
+        // who pressed Ctrl+Z (and saw nothing happen) would reasonably conclude the workspace has
+        // no undo at all — while Delete, which removes a node AND its descendants, was bound.
+        // Both accelerator spellings: Ctrl/Cmd+Shift+Z and Ctrl+Y.
+        if (mod && (ev.key === 'z' || ev.key === 'Z') && !ev.shiftKey) {
+          if (busyGuard()) return;
+          if (store.undo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); toast('Undo'); }
+          else toast('Nothing to undo', { kind: 'error' });
+          ev.preventDefault(); return;
+        }
+        if (mod && ((ev.key === 'z' || ev.key === 'Z') && ev.shiftKey || ev.key === 'y' || ev.key === 'Y')) {
+          if (busyGuard()) return;
+          if (store.redo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); toast('Redo'); }
+          else toast('Nothing to redo', { kind: 'error' });
+          ev.preventDefault(); return;
+        }
         if (ev.key === 'Escape') { if (sel.length && canvas) { canvas.clearSelection(); ev.preventDefault(); } }
         else if ((ev.key === 'Delete' || ev.key === 'Backspace') && sel.length === 1) {
           if (busyGuard()) return;
           const removed = store.deleteNode(sel[0]); if (canvas) canvas.clearSelection(); rerender();
-          toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)'); ev.preventDefault();
+          // Deleting cascades to descendants, so the toast has to say the recovery path exists.
+          toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s) — Ctrl+Z to undo'); ev.preventDefault();
         }
       });
     }
@@ -2882,8 +2997,11 @@ const QD = _QD;
         if (!canvas) return; _minimapOn = canvas.setMinimap(!_minimapOn); mapBtn.classList.toggle('active', _minimapOn);
       });
       bar.appendChild(mapBtn);
-      bar.appendChild(btn('↶', 'Undo', () => { if (store.undo()) rerender(); }, 'alg-undo'));
-      bar.appendChild(btn('↷', 'Redo', () => { if (store.redo()) rerender(); }, 'alg-redo'));
+      // The glyph is the whole accessible name otherwise ("↶, button"), and neither control said
+      // it had a keyboard equivalent. refreshUndoButtons() keeps the enabled state + the label of
+      // what would be reverted current — see rerender().
+      bar.appendChild(btn('↶', 'Undo (Ctrl+Z)', () => { if (store.undo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); } }, 'alg-undo'));
+      bar.appendChild(btn('↷', 'Redo (Ctrl+Shift+Z)', () => { if (store.redo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); } }, 'alg-redo'));
       zlabel.textContent = Math.round(_zoom * 100) + '%';
       host.appendChild(bar);
     }
@@ -2893,7 +3011,12 @@ const QD = _QD;
     document.addEventListener('tab-changed', (e) => {
       const active = e.detail && e.detail.tab === 'algebra';
       if (!active) { showSurface(false); return; }
-      if (!mounted) { mountSidebar(); mountSurface(); mounted = true; }
+      if (!mounted) {
+        mountSidebar(); mountSurface(); mounted = true;
+        // A saved session outranks auto-seeding: seeding would clear the graph and discard the
+        // very derivation being offered back, so ask first.
+        if (offerRestore()) { showSurface(true); return; }
+      }
       showSurface(true);
       if (!store.size && activeEnv) seedFromCurrent();
       else rerender();
