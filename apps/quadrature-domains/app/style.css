@@ -795,6 +795,40 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #algebra-graph .algebra-empty-title { font-size: 15px; font-weight: 700; color: var(--c-text); }
 #algebra-graph .algebra-empty-hint { font-size: 12px; color: var(--c-muted); max-width: 420px; }
 #algebra-graph .algebra-scroll.hidden { display: none; }
+/* Drag-to-pan on the background. `grab` only over empty canvas — cards keep the default cursor so
+   the affordance reads as "the surface moves", not "this card is draggable". */
+#algebra-graph .algebra-scroll { cursor: grab; }
+#algebra-graph .algebra-scroll.is-panning { cursor: grabbing; user-select: none; }
+#algebra-graph .algebra-node { cursor: default; }
+
+/* Search: non-matches DIM rather than disappear, so the shape of the derivation is preserved
+   while the hits stand out. A per-lane count answers "which column holds them". */
+#algebra-graph .algebra-node.is-dimmed { opacity: 0.25; }
+#algebra-graph .algebra-node.is-match { box-shadow: 0 0 0 2px var(--c-accent); }
+#algebra-graph .algebra-column-hits {
+  font-size: 10px; font-weight: 600; color: var(--c-accent); margin-top: 2px;
+}
+#algebra-graph .algebra-column-hits.hidden { display: none; }
+#algebra-graph .algebra-search {
+  display: flex; align-items: center; gap: 4px;
+}
+#algebra-graph .algebra-search input {
+  width: 9em; font: inherit; font-size: 12px; padding: 2px 5px;
+  border: 1px solid var(--c-border-input); border-radius: 4px; background: var(--c-surface);
+}
+#algebra-graph .algebra-search-count { font-size: 11px; color: var(--c-muted); min-width: 4.5em; }
+
+/* .algebra-node-tools is 3 always-on icon buttons per card (move up / move down / copy) — permanent
+   furniture in a 300px lane, x100 cards, for controls of very unequal value. Reveal on hover/focus.
+   The collapse chevron is a sibling, not a member, so it stays visible — correctly: it is the
+   affordance for the collapsed state itself. */
+#algebra-graph .algebra-node-tools { opacity: 0; transition: opacity 0.12s; }
+#algebra-graph .algebra-node:hover .algebra-node-tools,
+#algebra-graph .algebra-node:focus-within .algebra-node-tools,
+#algebra-graph .algebra-node.selected .algebra-node-tools { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  #algebra-graph .algebra-node-tools { transition: none; }
+}
 /* Verdict result card (existence / uniqueness) — floats over the bottom-right */
 /* The card is anchored bottom-right inside `#algebra-graph { overflow: hidden }` and had NO
    max-height, so a full one (rigor pill + title + assumptions ledger + body + "why this rigor" +
@@ -1134,6 +1168,11 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 /* Brief highlight when a breadcrumb chip scrolls its lane into view */
 @keyframes algebra-col-flash { 0%, 100% { background: transparent; } 30% { background: rgba(34,170,119,0.16); } }
 #algebra-graph .algebra-column.algebra-column-flash { animation: algebra-col-flash 0.9s ease; border-radius: 6px; }
+/* The app gates its other two animations; this one fires on every breadcrumb jump and on every
+   new column now that the canvas follows the work, so it is the most frequent of the three. */
+@media (prefers-reduced-motion: reduce) {
+  #algebra-graph .algebra-column.algebra-column-flash { animation: none; }
+}
 
 /* Seed summary as a compact table (replaces the run-on status sentence) */
 #controls-algebra .algebra-seed-table { border-collapse: collapse; margin: 2px 0; }
