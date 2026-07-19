@@ -351,6 +351,32 @@ const QD = _QD;
     // above the workflow without competing for room when there is nothing to restore. Returns true
     // when an offer was shown — the caller then skips auto-seeding, because seeding would discard
     // the very thing being offered.
+    // ---- confirm before replacing a derivation --------------------------------
+    // The C1/C2/C3 prove routes re-seed, and seeding calls clearGraph(): a click on ✦ Prove could
+    // discard an hour of hand reduction with no warning, and the route is chosen from the h-data
+    // AFTER the click, so the user cannot anticipate which press is destructive. It is checkpointed
+    // and now autosaved, but "recoverable" is not the same as "asked". Only prompts when there is
+    // real work to lose — a freshly seeded column 0 is regenerated, not destroyed.
+    function confirmReplace(what, onYes) {
+      if (!store.size || store.maxColumn() === 0) { onYes(); return; }
+      const panel = $('#controls-algebra'); if (!panel) { onYes(); return; }
+      const old = $('#alg-confirm'); if (old) old.remove();
+      const strip = document.createElement('div');
+      strip.id = 'alg-confirm'; strip.className = 'algebra-restore';
+      const msg = document.createElement('span'); msg.className = 'algebra-restore-msg';
+      const cols = store.maxColumn() + 1;
+      msg.textContent = what + ' replaces your current derivation (' + cols + ' column' + (cols === 1 ? '' : 's')
+        + ') with a freshly seeded system. Ctrl+Z restores it.';
+      const yes = document.createElement('button'); yes.type = 'button'; yes.className = 'small'; yes.textContent = 'Replace and continue';
+      const no = document.createElement('button'); no.type = 'button'; no.className = 'small'; no.textContent = 'Keep my derivation';
+      yes.addEventListener('click', () => { strip.remove(); onYes(); });
+      no.addEventListener('click', () => { strip.remove(); setStatus(''); });
+      strip.appendChild(msg); strip.appendChild(yes); strip.appendChild(no);
+      const ref = panel.querySelector('.algebra-ref-block');
+      if (ref) panel.insertBefore(strip, ref); else panel.appendChild(strip);
+      strip.scrollIntoView({ block: 'nearest' });
+      toast(what + ' would replace your derivation — confirm in the sidebar.', { kind: 'error' });
+    }
     function offerRestore() {
       const saved = _readAutosave(); if (!saved || store.size) return false;
       const panel = $('#controls-algebra'); if (!panel) return false;
@@ -2212,14 +2238,14 @@ const QD = _QD;
       // (non-real-symmetric) domains that the (●)/(★) reality slice misses (and that the conjugate model is
       // positive-dimensional / intractable for). Exclusive to point-functional data.
       const pf = (typeof QE.pointFunctionalSystem === 'function') ? PROVE.pointFunctionalMoments(hData) : null;
-      if (pf) { doProveMoment(pf, hData); return; }
+      if (pf) { confirmReplace('✦ Prove (moment route)', () => doProveMoment(pf, hData)); return; }
       // MULTI-NODE (rational-φ) route (Phase C2): 2 real quadrature nodes ⇒ the degree-2 rational map — REAL,
       // zero-dimensional in the shape (t=√c, d), certified + univalence-filtered (exclusive to 2-real-node data).
       const rd = (typeof QE.rationalMomentSystem === 'function') ? PROVE.multiNodeRationalData(hData) : null;
-      if (rd) { doProveRational(rd, hData); return; }
+      if (rd) { confirmReplace('✦ Prove (rational-φ route)', () => doProveRational(rd, hData)); return; }
       // EQUILATERAL-TRIANGLE (degree-3) route (Phase C3): 3 equal-magnitude real-weight nodes, centroid 0.
       const td = (typeof QE.triangleMomentSystem === 'function') ? PROVE.multiNodeTriangleData(hData) : null;
-      if (td) { doProveTriangle(td, hData); return; }
+      if (td) { confirmReplace('✦ Prove (equilateral-triangle route)', () => doProveTriangle(td, hData)); return; }
       if (fromData) { if (_seededHData !== hData && !seedFromDataDirect(hData)) return; } else if (!ensureSeed()) return;
       clearError();
       // Cheap reductions first (best-effort — the pipeline still runs on the current system on any error).

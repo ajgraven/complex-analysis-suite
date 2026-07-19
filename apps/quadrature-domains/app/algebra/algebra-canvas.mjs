@@ -102,6 +102,9 @@ const QD = _QD;
 
     let zoom = 1;
     let minimapOn = false;
+    // The last verdict payload, so a re-render can re-show it demoted instead of destroying a result
+    // that cost tens of seconds. Cleared only by an explicit dismiss.
+    let lastVerdictData = null;
     let selected = [];
     let lastStore = null, lastLatexOf = null;
     const collapsed = new Map();        // id -> bool (default: collapsed). Persists across rerenders.
@@ -267,7 +270,14 @@ const QD = _QD;
     // Shows the empty state when the store has no nodes.
     function render(store, latexOf) {
       lastStore = store; lastLatexOf = latexOf;
-      verdict.classList.add('hidden');                 // a new render = a changed system; the old verdict is stale
+      // A new render means the system changed, so the standing verdict no longer describes it. It
+      // used to be DESTROYED here — and since rerender() runs on every reduction, branch switch and
+      // tab re-entry, that took "Export proof (JSON)", "Show exact boundary curve" and "View in the
+      // QD plot" with it: the documented flow (prove → view in the QD plot → come back) returned to
+      // a workspace with no verdict and no way to export the proof it had just spent 30s computing.
+      // Keep it, demoted and clearly labeled stale. Dismissing is the user's call, not the renderer's.
+      if (lastVerdictData) setVerdict(Object.assign({}, lastVerdictData, { stale: true }));
+      else verdict.classList.add('hidden');
       selected = selected.filter((id) => store.get(id));
       // clear columns (keep the svg overlay)
       track.querySelectorAll('.algebra-column').forEach((el) => el.remove());
@@ -456,9 +466,10 @@ const QD = _QD;
     // ledger of the active specializations (real/imaginary slice, φ(0) gauge fix, factor case) — so a
     // specialized/slice count never reads as the certified general one (CLAUDE.md honest labeling).
     function setVerdict(data) {
-      if (!data || !data.text) { verdict.classList.add('hidden'); return; }
+      if (!data || !data.text) { lastVerdictData = null; verdict.classList.add('hidden'); return; }
+      if (!data.stale) lastVerdictData = data;   // keep the pristine payload, not the demoted re-show
       verdict.innerHTML = '';
-      const close = iconBtn('algebra-verdict-close', '×', 'Dismiss', () => verdict.classList.add('hidden'));
+      const close = iconBtn('algebra-verdict-close', '×', 'Dismiss', () => { lastVerdictData = null; verdict.classList.add('hidden'); });
       const head = div('algebra-verdict-head');
       // Rigor badge (G-2): a prominent, color-coded =/≤/≈/⚠/? pill leads the card so a certified '=' and an
       // estimate/bound/partial are never confusable at a glance. data.rigor ∈ {exact,bound,estimate,partial,unknown}.
@@ -472,13 +483,23 @@ const QD = _QD;
       head.appendChild(close);
       const body = div('algebra-verdict-body'); body.textContent = data.text;
       verdict.appendChild(head);
+      // Everything below the head scrolls; the head (rigor pill + ×) is pinned, so a tall card
+      // can never clip away its own badge or its only means of dismissal.
+      const bodyWrap = div('algebra-verdict-scroll');
+      verdict.appendChild(bodyWrap);
+      if (data.stale) {
+        verdict.classList.add('is-stale');
+        const s = div('algebra-verdict-stale');
+        s.textContent = '⚠ Computed on an earlier system — the derivation has changed since. Re-run to refresh; the actions below still apply to this result.';
+        bodyWrap.appendChild(s);
+      } else { verdict.classList.remove('is-stale'); }
       if (data.assumptions && data.assumptions.length) {
         const led = div('algebra-verdict-assume');
         const lab = document.createElement('strong'); lab.textContent = 'Computed under: '; led.appendChild(lab);
         led.appendChild(document.createTextNode(data.assumptions.join(' · ')));
-        verdict.appendChild(led);
+        bodyWrap.appendChild(led);
       }
-      verdict.appendChild(body);
+      bodyWrap.appendChild(body);
       // Phase E: the AUDIT TRAIL behind the rigor badge — an expandable "why this rigor" list so a '='
       // or '≥' is not merely asserted but justified (each binding condition ✓ met / ✗ not met). data.
       // rigorProvenance is a string[] from the engine (prove-plan rigorProvenance). Built via DOM (no markup).
@@ -489,14 +510,14 @@ const QD = _QD;
         const ul = document.createElement('ul'); ul.style.cssText = 'margin:3px 0 0 0;padding-left:18px;font-size:12px;';
         data.rigorProvenance.forEach((it) => { const li = document.createElement('li'); li.textContent = it; ul.appendChild(li); });
         det.appendChild(ul);
-        verdict.appendChild(det);
+        bodyWrap.appendChild(det);
       }
       if (data.solutionsLatex && data.solutionsLatex.length) {
         const box = div('algebra-verdict-math');
         data.solutionsLatex.forEach((tex) => { const d = div('algebra-verdict-mathrow'); renderKatex(d, tex, true); box.appendChild(d); });
-        verdict.appendChild(box);
+        bodyWrap.appendChild(box);
       }
-      if (data.solutionsText) { const pre = document.createElement('pre'); pre.className = 'algebra-verdict-sols'; pre.textContent = data.solutionsText; verdict.appendChild(pre); }
+      if (data.solutionsText) { const pre = document.createElement('pre'); pre.className = 'algebra-verdict-sols'; pre.textContent = data.solutionsText; bodyWrap.appendChild(pre); }
       // Optional reconstructed-domain thumbnail (roadmap #3): data.plot = { boundary:[[x,y]…],
       // nodes:[[x,y]…], view:[x,y,w,h] } in SVG coordinates (numeric only — built via DOM, never
       // untrusted markup). Draws the solved domain φ(∂𝔻) + its quadrature nodes beside the exact curve.
@@ -522,7 +543,7 @@ const QD = _QD;
         const cap = div('algebra-verdict-plotcap'); cap.textContent = data.plotCaption || 'reconstructed domain φ(∂𝔻) · quadrature node(s) φ(zⱼ)';
         cap.style.fontSize = '11px'; cap.style.opacity = '0.7'; cap.style.marginTop = '2px';
         wrap.appendChild(cap);
-        verdict.appendChild(wrap);
+        bodyWrap.appendChild(wrap);
       }
       // Optional one-click actions (e.g. spurious-component pin/split suggestions).
       if (data.actions && data.actions.length) {
@@ -533,7 +554,7 @@ const QD = _QD;
           b.addEventListener('click', () => { try { a.onClick(); } catch (e) { /* ignore */ } });
           bar.appendChild(b);
         });
-        verdict.appendChild(bar);
+        bodyWrap.appendChild(bar);
       }
       verdict.classList.remove('hidden');
     }
