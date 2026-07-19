@@ -179,6 +179,72 @@ const QD = _QD;
       renderSelection();
       if (handlers.onSelect) handlers.onSelect(selected.slice());
     }
+    // ---- keyboard navigation --------------------------------------------------
+    // Cards are tabIndex=0, so Tab walks ~5 stops per card — roughly 400 presses to cross ten
+    // columns. Arrows move by card within a lane and by lane across, Home/End jump to the ends.
+    // Reads live DOM order, so it follows collapse/reorder without a parallel model.
+    function laneEls() { return [...track.querySelectorAll('.algebra-column')]; }
+    function cardsIn(col) { return [...col.querySelectorAll('.algebra-node')]; }
+    function locate(id) {
+      const lanes = laneEls();
+      for (let c = 0; c < lanes.length; c++) {
+        const cards = cardsIn(lanes[c]);
+        const r = cards.findIndex((el) => el.getAttribute('data-id') === id);
+        if (r >= 0) return { c, r, lanes, cards };
+      }
+      return null;
+    }
+    function moveSelection(dc, dr, absolute) {
+      const lanes = laneEls(); if (!lanes.length) return false;
+      let pos = selected.length ? locate(selected[selected.length - 1]) : null;
+      if (!pos) { const first = cardsIn(lanes[0])[0]; if (!first) return false; selectOnly(first.getAttribute('data-id')); return true; }
+      let c = pos.c, r = pos.r;
+      if (absolute === 'home') { c = 0; r = 0; }
+      else if (absolute === 'end') { c = lanes.length - 1; r = 0; }
+      else { c = Math.max(0, Math.min(lanes.length - 1, c + dc)); r = Math.max(0, r + dr); }
+      const cards = cardsIn(lanes[c]); if (!cards.length) return false;
+      const el = cards[Math.min(r, cards.length - 1)];
+      selectOnly(el.getAttribute('data-id'));
+      el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      el.focus({ preventScroll: true });
+      return true;
+    }
+    function selectOnly(id) { selected = [id]; renderSelection(); if (handlers.onSelect) handlers.onSelect(selected.slice()); }
+
+    // ---- search / filter ------------------------------------------------------
+    // "Which nodes still contain z̄₁?" / "where did A₁,₁ get eliminated?" had no answer short of
+    // expanding everything and reading. Matches label, any variable name, and the provenance op —
+    // all already on the node. Non-matches dim rather than disappear, so the shape of the
+    // derivation is preserved while the hits stand out.
+    let _query = '';
+    function nodeMatches(n, q) {
+      if (!q) return true;
+      if ((n.label || '').toLowerCase().includes(q)) return true;
+      if (n.provenance && (n.provenance.op || '').toLowerCase().includes(q)) return true;
+      try { for (const v of n.poly.vars()) if (v.toLowerCase().includes(q)) return true; } catch (e) { /* ignore */ }
+      return false;
+    }
+    function applyFilter() {
+      const q = _query.trim().toLowerCase();
+      let hits = 0;
+      const perCol = new Map();
+      track.querySelectorAll('.algebra-node').forEach((el) => {
+        const n = lastStore && lastStore.get(el.getAttribute('data-id'));
+        const on = !q || (n && nodeMatches(n, q));
+        el.classList.toggle('is-dimmed', !!q && !on);
+        el.classList.toggle('is-match', !!q && on);
+        if (q && on) { hits++; const c = n ? n.column : -1; perCol.set(c, (perCol.get(c) || 0) + 1); }
+      });
+      laneEls().forEach((lane) => {
+        const c = Number(lane.getAttribute('data-col'));
+        const badge = lane.querySelector('.algebra-column-hits');
+        const k = perCol.get(c) || 0;
+        if (badge) { badge.textContent = k ? (k + ' match' + (k === 1 ? '' : 'es')) : ''; badge.classList.toggle('hidden', !q || !k); }
+      });
+      return { query: q, hits };
+    }
+    function setQuery(q) { _query = q || ''; return applyFilter(); }
+
     function getSelection() { return selected.slice(); }
     function clearSelection() { selected = []; renderSelection(); if (handlers.onSelect) handlers.onSelect([]); }
 
@@ -257,6 +323,7 @@ const QD = _QD;
       if (info.isCurrent) { const chip = div('algebra-column-chip'); chip.textContent = 'current system'; top.appendChild(chip); }
       head.appendChild(top);
       if (info.stats) { const s = div('algebra-column-stats'); s.textContent = info.stats; head.appendChild(s); }
+      const hits = div('algebra-column-hits hidden'); head.appendChild(hits);   // search match count (applyFilter)
       col.appendChild(head);
 
       const body = div('algebra-column-body');
@@ -299,6 +366,7 @@ const QD = _QD;
         track.appendChild(buildColumn(store, latexOf, c, arr, c === last));
       }
       renderSelection();
+      applyFilter();          // a live search must survive a rebuild, not silently reset on any mutation
       relayout();
     }
 
@@ -429,6 +497,60 @@ const QD = _QD;
       return zoom;
     }
     function fit() { setZoom(1); scroll.scrollLeft = 0; scroll.scrollTop = 0; }
+    // Zoom about a viewport point: keep whatever is under (cx, cy) fixed. setZoom alone preserves
+    // nothing, so zooming used to drift the content out from under the pointer.
+    function zoomAt(z, cx, cy) {
+      const r = scroll.getBoundingClientRect();
+      const px = cx - r.left + scroll.scrollLeft, py = cy - r.top + scroll.scrollTop;
+      const before = zoom;
+      const after = setZoom(z);
+      const k = after / before;
+      scroll.scrollLeft = px * k - (cx - r.left);
+      scroll.scrollTop = py * k - (cy - r.top);
+      return after;
+    }
+
+    // ---- pointer navigation ---------------------------------------------------
+    // The module had NO wheel handler and no drag-to-pan: the only way to move a wide derivation
+    // was the scrollbar, or an off-by-default 168px minimap. These are the three gestures every
+    // canvas tool shares.
+    let _pan = null;
+    scroll.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 0) return;
+      if (ev.target.closest && ev.target.closest('.algebra-node, .algebra-column-head, button, a, input, select, textarea')) return;
+      _pan = { x: ev.clientX, y: ev.clientY, sl: scroll.scrollLeft, st: scroll.scrollTop, id: ev.pointerId, moved: false };
+      scroll.classList.add('is-panning');
+      try { scroll.setPointerCapture(ev.pointerId); } catch (e) { /* not captureable */ }
+    });
+    scroll.addEventListener('pointermove', (ev) => {
+      if (!_pan || ev.pointerId !== _pan.id) return;
+      const dx = ev.clientX - _pan.x, dy = ev.clientY - _pan.y;
+      if (!_pan.moved && Math.abs(dx) + Math.abs(dy) < 3) return;   // tolerate a shaky click
+      _pan.moved = true;
+      scroll.scrollLeft = _pan.sl - dx;
+      scroll.scrollTop = _pan.st - dy;
+    });
+    const endPan = (ev) => {
+      if (!_pan || (ev && ev.pointerId !== _pan.id)) return;
+      const moved = _pan.moved;
+      try { scroll.releasePointerCapture(_pan.id); } catch (e) { /* ignore */ }
+      _pan = null; scroll.classList.remove('is-panning');
+      // A click on empty canvas deselects. Cards stopPropagation, so reaching here means the
+      // background — but a drag must NOT clear the selection, hence the moved guard.
+      if (!moved && selected.length) clearSelection();
+    };
+    scroll.addEventListener('pointerup', endPan);
+    scroll.addEventListener('pointercancel', endPan);
+    scroll.addEventListener('wheel', (ev) => {
+      if (ev.ctrlKey || ev.metaKey) {
+        ev.preventDefault();
+        zoomAt(zoom * (ev.deltaY < 0 ? 1.12 : 1 / 1.12), ev.clientX, ev.clientY);
+        if (handlers.onZoom) handlers.onZoom(zoom);
+      } else if (ev.shiftKey && !ev.deltaX) {
+        ev.preventDefault();
+        scroll.scrollLeft += ev.deltaY;                              // shift+wheel = horizontal
+      }
+    }, { passive: false });
     // Zoom so all lanes fit the viewport width (clamped by setZoom's [ZMIN, ZMAX]).
     function fitWidth() {
       const natural = track.offsetWidth || 1;
@@ -571,7 +693,8 @@ const QD = _QD;
     })();
 
     track.style.transform = 'scale(1)';
-    return { render, rerender, fit, fitWidth, scrollToColumn, getSelection, clearSelection, setZoom, setAllCollapsed, setVerdict, setMinimap };
+    return { render, rerender, fit, fitWidth, scrollToColumn, getSelection, clearSelection, setZoom, zoomAt,
+      setAllCollapsed, setVerdict, setMinimap, setQuery, moveSelection };
   }
 
   window.QD = window.QD || {};

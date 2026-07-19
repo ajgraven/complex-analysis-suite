@@ -3093,6 +3093,19 @@ const QD = _QD;
           else toast('Nothing to redo', { kind: 'error' });
           ev.preventDefault(); return;
         }
+        // Arrow keys walk the DAG. Cards are tabIndex=0, so Tab takes ~5 stops per card — about 400
+        // presses to cross ten columns. ←/→ move between lanes, ↑/↓ within one, Home/End to the ends.
+        if (!mod && canvas && canvas.moveSelection) {
+          const nav = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[ev.key];
+          if (nav) { if (canvas.moveSelection(nav[0], nav[1])) ev.preventDefault(); return; }
+          if (ev.key === 'Home' || ev.key === 'End') {
+            if (canvas.moveSelection(0, 0, ev.key === 'Home' ? 'home' : 'end')) ev.preventDefault();
+            return;
+          }
+        }
+        // `/` focuses the node search (the conventional binding; it is not a typing target here
+        // because the guard above already returned for INPUT/SELECT/TEXTAREA).
+        if (!mod && ev.key === '/') { const s = document.getElementById('alg-search'); if (s) { s.focus(); s.select(); ev.preventDefault(); return; } }
         if (ev.key === 'Escape') { if (sel.length && canvas) { canvas.clearSelection(); ev.preventDefault(); } }
         else if ((ev.key === 'Delete' || ev.key === 'Backspace') && sel.length === 1) {
           if (busyGuard()) return;
@@ -3306,6 +3319,25 @@ const QD = _QD;
       // The glyph is the whole accessible name otherwise ("↶, button"), and neither control said
       // it had a keyboard equivalent. refreshUndoButtons() keeps the enabled state + the label of
       // what would be reverted current — see rerender().
+      // Search over the DAG. "Which nodes still contain z̄₁?" / "where did A₁,₁ get eliminated?"
+      // previously had no answer short of expanding every card and reading. Matches label, variable
+      // and provenance op; non-matches dim. `/` focuses it (see the key handler).
+      const searchWrap = document.createElement('div'); searchWrap.className = 'algebra-search';
+      const searchIn = document.createElement('input');
+      searchIn.type = 'search'; searchIn.id = 'alg-search'; searchIn.placeholder = 'Search nodes…';
+      searchIn.title = 'Filter by equation label, variable name, or the step that produced it ( / to focus, Esc to clear )';
+      const searchCount = document.createElement('span'); searchCount.className = 'algebra-search-count';
+      const runSearch = () => {
+        if (!canvas || !canvas.setQuery) return;
+        const r = canvas.setQuery(searchIn.value);
+        searchCount.textContent = r.query ? (r.hits + ' match' + (r.hits === 1 ? '' : 'es')) : '';
+      };
+      searchIn.addEventListener('input', runSearch);
+      searchIn.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Escape') { searchIn.value = ''; runSearch(); searchIn.blur(); ev.stopPropagation(); }
+      });
+      searchWrap.appendChild(searchIn); searchWrap.appendChild(searchCount);
+      bar.appendChild(searchWrap);
       bar.appendChild(btn('↶', 'Undo (Ctrl+Z)', () => { if (store.undo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); } }, 'alg-undo'));
       bar.appendChild(btn('↷', 'Redo (Ctrl+Shift+Z)', () => { if (store.redo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); } }, 'alg-redo'));
       zlabel.textContent = Math.round(_zoom * 100) + '%';
