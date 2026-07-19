@@ -3162,9 +3162,31 @@ const QD = _QD;
       const active = store.activeTrack;
       const lbl = document.createElement('span'); lbl.className = 'algebra-track-lbl'; lbl.textContent = 'branches';
       trackbar.appendChild(lbl);
-      store.tracks().forEach((t) => {
+      // Ancestry is REAL data (parentId / forkColumn) that was being spent entirely on a hover
+      // tooltip, so five branches — two of them forked off branch 3 — rendered as five peers. For a
+      // tool whose model is a ProofTree of case splits, the tree was the one thing not drawn.
+      // Order parents before their children and mark the depth, so the rail reads as a hierarchy.
+      const all = store.tracks();
+      const byParent = new Map();
+      all.forEach((t) => { const k = t.parentId || ''; if (!byParent.has(k)) byParent.set(k, []); byParent.get(k).push(t); });
+      const ordered = [];
+      (function walk(parentKey, depth) {
+        (byParent.get(parentKey) || []).forEach((t) => { ordered.push({ t, depth }); walk(t.id, depth + 1); });
+      })('', 0);
+      // Any track whose parent is missing (a deleted ancestor) would be dropped by the walk — keep
+      // it rather than silently hiding a branch that still holds work.
+      all.forEach((t) => { if (!ordered.some((o) => o.t.id === t.id)) ordered.push({ t, depth: 0 }); });
+      ordered.forEach(({ t, depth }) => {
         const chip = document.createElement('span');
-        chip.className = 'algebra-track-chip' + (t.id === active ? ' is-current' : '');
+        chip.className = 'algebra-track-chip' + (t.id === active ? ' is-current' : '') + (depth ? ' is-child' : '');
+        if (depth) {
+          chip.style.setProperty('--alg-depth', String(depth));
+          const arrow = document.createElement('span');
+          arrow.className = 'algebra-track-from';
+          arrow.textContent = '↳';
+          arrow.title = 'forked from ' + (trackLabelOf(t.parentId) || t.parentId) + ' · column ' + (t.forkColumn != null ? t.forkColumn : '?');
+          chip.appendChild(arrow);
+        }
         const name = document.createElement('button');
         name.type = 'button'; name.className = 'algebra-track-name'; name.textContent = t.label;
         name.title = t.parentId

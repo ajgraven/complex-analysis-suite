@@ -453,11 +453,17 @@ const QD = _QD;
 
     // ---- B2: DAG minimap ----------------------------------------------------
     const MM_W = 168, MM_H = 116;     // minimap inner coordinate box (matches the CSS size)
+    // Scale to WIDTH and let height overflow (the box clips). Fitting both axes made a wide track
+    // collapse into the top sliver of a 116px box with the rest empty.
     function mmScale() {
-      const natW = track.offsetWidth || 1, natH = track.offsetHeight || 1;
-      return Math.min(MM_W / natW, MM_H / natH) || 0;
+      const natW = track.offsetWidth || 1;
+      return (MM_W / natW) || 0;
     }
-    // Rebuild the minimap lanes (one mini-rect per column lane) + the viewport box.
+    // Rebuild the minimap + the viewport box. It used to draw ONE RECT PER LANE — for a
+    // left-to-right pipeline of uniform lanes that is a row of equal rectangles, conveying column
+    // count and viewport position, both of which the labelled breadcrumb already gives you. Drawing
+    // NODES instead makes it an overview the breadcrumb cannot replace: density, where the
+    // selection and its lineage sit, and where the search hits are.
     function updateMinimap() {
       if (!minimapOn || !lastStore) return;
       const s = mmScale(); if (!s) return;
@@ -465,12 +471,28 @@ const QD = _QD;
       mmInner.innerHTML = '';
       track.querySelectorAll('.algebra-column').forEach((col) => {
         const cr = col.getBoundingClientRect();
-        const x = (cr.left - tr.left) / zoom, y = (cr.top - tr.top) / zoom, w = cr.width / zoom, h = cr.height / zoom;
         const lane = document.createElement('div');
         lane.className = 'algebra-mm-lane' + (col.classList.contains('is-current') ? ' is-current' : '');
-        lane.style.left = (x * s) + 'px'; lane.style.top = (y * s) + 'px';
-        lane.style.width = Math.max(2, w * s) + 'px'; lane.style.height = Math.max(2, h * s) + 'px';
+        lane.style.left = (((cr.left - tr.left) / zoom) * s) + 'px';
+        lane.style.top = (((cr.top - tr.top) / zoom) * s) + 'px';
+        lane.style.width = Math.max(2, (cr.width / zoom) * s) + 'px';
+        lane.style.height = Math.max(2, (cr.height / zoom) * s) + 'px';
         mmInner.appendChild(lane);
+      });
+      track.querySelectorAll('.algebra-node').forEach((el) => {
+        const nr = el.getBoundingClientRect();
+        const id = el.getAttribute('data-id');
+        const n = lastStore.get(id);
+        const dot = document.createElement('div');
+        dot.className = 'algebra-mm-node'
+          + (n && n.kind ? ' k-' + n.kind : '')
+          + (selected.indexOf(id) >= 0 ? ' is-selected' : (lineageSet.has(id) ? ' is-lineage' : ''))
+          + (el.classList.contains('is-match') ? ' is-match' : '');
+        dot.style.left = (((nr.left - tr.left) / zoom) * s) + 'px';
+        dot.style.top = (((nr.top - tr.top) / zoom) * s) + 'px';
+        dot.style.width = Math.max(2, (nr.width / zoom) * s) + 'px';
+        dot.style.height = Math.max(2, (nr.height / zoom) * s) + 'px';
+        mmInner.appendChild(dot);
       });
       updateMinimapView(s);
     }

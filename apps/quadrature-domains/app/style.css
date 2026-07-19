@@ -38,6 +38,9 @@
      overview to counter-scale its header type. Declared here so the token invariant holds
      (every var() has a :root default) and so the pre-JS value is sane. */
   --alg-zoom:        1;
+  /* Branch nesting depth, written onto a trackbar chip by buildTrackBar. Same contract as
+     --alg-zoom: a :root default keeps every var() declared, the runtime value cascades over it. */
+  --alg-depth:       1;
   /* spacing scale */
   --sp-1: 4px; --sp-2: 6px; --sp-3: 8px; --sp-4: 12px; --sp-5: 16px;
 }
@@ -1175,6 +1178,20 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 }
 #algebra-graph .algebra-trackbar.hidden { display: none; }
 #algebra-graph .algebra-track-lbl { color: var(--c-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
+/* Branch ancestry, drawn rather than hidden in a tooltip: children sit after their parent and are
+   indented by depth, so a branch forked off another reads as subordinate instead of as a peer. */
+#algebra-graph .algebra-track-chip.is-child { margin-left: calc(var(--alg-depth) * 10px); }
+#algebra-graph .algebra-track-from { color: var(--c-muted); font-size: 11px; cursor: help; margin-right: 1px; }
+
+/* Minimap NODES (the lanes are a faint backdrop). Coloured by kind, with selection, lineage and
+   search hits accented — the things the labelled breadcrumb cannot show. */
+#algebra-graph .algebra-mm-node { position: absolute; background: var(--c-muted); border-radius: 1px; opacity: 0.55; }
+#algebra-graph .algebra-mm-node.k-generated  { background: var(--c-primary); }
+#algebra-graph .algebra-mm-node.k-constraint { background: var(--c-warn); }
+#algebra-graph .algebra-mm-node.k-derived    { background: var(--c-muted-2); }
+#algebra-graph .algebra-mm-node.is-lineage   { opacity: 0.95; }
+#algebra-graph .algebra-mm-node.is-selected  { background: var(--c-accent); opacity: 1; outline: 1px solid var(--c-accent); }
+#algebra-graph .algebra-mm-node.is-match     { background: var(--c-ok); opacity: 1; }
 #algebra-graph .algebra-track-chip {
   display: inline-flex; align-items: center; gap: 2px;
   border: 1px solid var(--c-border-soft); background: var(--c-bg);
