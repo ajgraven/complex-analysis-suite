@@ -178,6 +178,30 @@ const QD = _QD;
     },
   };
 
+  // ---- suggestion-list collapse (sidebar real estate) ----------------------
+  // The auto-detected suggestion list is UNBOUNDED (one row per detected symmetry / abbreviation,
+  // each a wrapped sentence + button), so past a couple of rows it collapses to a counted
+  // <summary>. Measured motivation: a single order-1 pole already yields 7 rows ≈ 229px, and the
+  // list used to live inside the `position: sticky` .algebra-head — which pinned 525px of a 720px
+  // viewport and left ~195px for every workflow section below. See renderSuggestions.
+  const AUTO_OPEN_MAX = 2;
+  // "3 symmetries · 2 abbreviations suggested" — the collapsed <summary> label. Pure + unit-tested
+  // (exposed as QD_UI.suggestSummaryLabel); vocabulary matches the Detect-symmetry / Auto-abbreviate
+  // buttons. Either count may be 0, but not both (the caller hides the box when nothing is detected).
+  function suggestSummaryLabel(nRel, nSub) {
+    const parts = [];
+    if (nRel) parts.push(nRel + ' symmetr' + (nRel === 1 ? 'y' : 'ies'));
+    if (nSub) parts.push(nSub + ' abbreviation' + (nSub === 1 ? '' : 's'));
+    return parts.join(' · ') + ' suggested';
+  }
+  // Should the list render expanded? `userPref` is the remembered explicit toggle (null = never
+  // touched ⇒ auto: expand only a short list). An explicit choice WINS over the threshold in both
+  // directions — re-rendering (every dismissal does) must not snap the list shut on a user who
+  // opened it, nor re-open one they closed.
+  function suggestAutoOpen(total, userPref) {
+    return (userPref == null) ? (total <= AUTO_OPEN_MAX) : !!userPref;
+  }
+
   function installAlgebra(ctx) {
     const $ = ctx.$;
     const QE = QD && QD.QDEquations;
@@ -229,6 +253,7 @@ const QD = _QD;
     // (⇒ identify x = ±y). Each is surfaced as a one-click apply in the #alg-suggest banner,
     // skipping any the user dismissed this session. Re-run from rerender() so it tracks reductions.
     const _dismissedRel = new Set();
+    let _suggestOpen = null;   // explicit user expand/collapse of the list; null ⇒ follow AUTO_OPEN_MAX
     function _relKey(h) {
       if (h.kind === 'identify') return 'id:' + h.keep + '=' + h.drop;
       if (h.kind === 'linear') return 'lin:' + h.vars.slice().sort().join(',');
@@ -263,6 +288,19 @@ const QD = _QD;
       const subHits = _detectSubsts().filter((h) => !_dismissedRel.has(_substKey(h)));
       if (!hits.length && !subHits.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
       box.innerHTML = '';
+      // <details> shell: a counted summary, open by default only for a short list. `_suggestOpen`
+      // remembers an explicit user toggle (null = follow AUTO_OPEN_MAX) so re-renders — including
+      // the one each dismissal triggers — don't snap the list shut under the user.
+      const sum = document.createElement('summary'); sum.className = 'algebra-suggest-summary';
+      sum.textContent = suggestSummaryLabel(hits.length, subHits.length);
+      sum.title = 'Show / hide the detected assumptions, definitions and actions';
+      // Read the flip on CLICK (box.open is still the OLD value here), not on `toggle` — `toggle`
+      // also fires for our own programmatic `box.open` below, which would defeat the auto mode.
+      sum.addEventListener('click', () => { _suggestOpen = !box.open; });
+      box.appendChild(sum);
+      box.open = suggestAutoOpen(hits.length + subHits.length, _suggestOpen);
+      const body = document.createElement('div'); body.className = 'algebra-suggest-body';
+      box.appendChild(body);
       hits.forEach((h) => {
         const row = document.createElement('div'); row.className = 'algebra-suggest-row';
         const msg = document.createElement('span'); msg.className = 'algebra-suggest-msg';
@@ -313,7 +351,7 @@ const QD = _QD;
         x.textContent = '×'; x.title = 'Dismiss this suggestion for the session';
         x.addEventListener('click', () => { _dismissedRel.add(_relKey(h)); renderSuggestions(); });
         row.appendChild(x);
-        box.appendChild(row);
+        body.appendChild(row);
       });
       // structural-regularity substitution suggestions (modulus / power / gcd / conjugate-sum)
       subHits.forEach((h) => {
@@ -335,7 +373,7 @@ const QD = _QD;
         x.textContent = '×'; x.title = 'Dismiss this suggestion for the session';
         x.addEventListener('click', () => { _dismissedRel.add(_substKey(h)); renderSuggestions(); });
         row.appendChild(x);
-        box.appendChild(row);
+        body.appendChild(row);
       });
       box.classList.remove('hidden');
     }
@@ -842,13 +880,18 @@ const QD = _QD;
         '    <span id="alg-error-msg" class="algebra-error-msg"></span>' +
         '    <button id="alg-error-close" class="algebra-error-close" type="button" title="Dismiss">×</button>' +
         '  </div>' +
-        // Auto-detected reality suggestions: when an equation forces a variable real
-        // (v − v̄ = 0), a one-click "Assume … real" appears here (populated by renderSuggestions).
-        '  <div id="alg-suggest" class="algebra-suggest hidden"></div>' +
         // Active-hypotheses strip (C1): the assumptions conditioning the CURRENT branch's
         // system — reality / imaginary / fixed φ(0) / pinned values (populated by renderHypotheses).
+        // Stays INSIDE the pinned header: it is small (one line) and deliberately always-visible.
         '  <div id="alg-hypotheses" class="algebra-hypotheses hidden"></div>' +
         '</div>' +
+        // Auto-detected suggestions: an equation forcing a variable real (v − v̄ = 0) or imaginary,
+        // identifying two variables, or a structural abbreviation — each a one-click apply
+        // (populated by renderSuggestions).
+        // Deliberately OUTSIDE .algebra-head. The list is unbounded, and inside a `position: sticky`
+        // header its height is subtracted from the sidebar viewport PERMANENTLY — scrolling cannot
+        // reveal what sits under it. Out here it scrolls away like any other content.
+        '<details id="alg-suggest" class="algebra-suggest hidden"></details>' +
         // ---- φ / h REFERENCE (always visible at the top: the symbolic forms + legend) ----
         '<div class="algebra-ref-block">' +
         '  <div class="row algebra-ref-controls">' +
@@ -2826,4 +2869,7 @@ const QD = _QD;
 
   QD_UI.installAlgebra = installAlgebra;
   QD_UI.PROV_UI = PROV_UI;   // the UI-side provenance-op registry (testable + companion to the store's PROV_OPS)
+  QD_UI.suggestSummaryLabel = suggestSummaryLabel;   // collapsed suggestion-list <summary> label (pure)
+  QD_UI.suggestAutoOpen = suggestAutoOpen;           // …and its expand/collapse decision (pure)
+  QD_UI.SUGGEST_AUTO_OPEN_MAX = AUTO_OPEN_MAX;
 })();
