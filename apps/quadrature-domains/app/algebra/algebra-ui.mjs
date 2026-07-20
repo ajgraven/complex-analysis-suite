@@ -247,6 +247,22 @@ const QD = _QD;
     return (userPref == null) ? (total <= AUTO_OPEN_MAX) : !!userPref;
   }
 
+  // Does a stored result still describe the system in front of you? (P6b)
+  //
+  //   'current' — same branch, same frontier: it still describes what you are looking at.
+  //   'stale'   — same branch, frontier moved: it described an EARLIER column of this derivation.
+  //   'branch'  — another track entirely: it describes a DIFFERENT system, not an earlier one.
+  //
+  // The stale/branch distinction is not cosmetic. "The derivation has changed since" is true of
+  // the first and false of the second — a cross-branch result has no history on the branch you
+  // are viewing — and a result redisplayed beside a system it never saw, still wearing its
+  // original '=' pill, is a false attribution (CLAUDE.md honest labeling). Pure and module-scope
+  // so the decision that governs that labeling is unit-testable without a live DOM.
+  function resultStateOf(entryTrack, entrySig, curTrack, curSig) {
+    if (entryTrack !== curTrack) return 'branch';
+    return entrySig === curSig ? 'current' : 'stale';
+  }
+
   // Single-key accelerators → the button that already owns the action. This table is the
   // single source for BOTH the keydown handler and the `?` cheatsheet (algebraShortcutItems),
   // so a binding cannot exist undocumented and the cheatsheet cannot advertise a dead key.
@@ -311,6 +327,7 @@ const QD = _QD;
     let _zoom = 1;                 // canvas zoom level (View ± controls)
     let _minimapOn = false;        // DAG minimap toggle (B2)
     let _focusOn = false;          // focus mode toggle (P6a): isolate the selection's derivation
+    let _drawerOpen = true;        // results drawer (P6b): index above the docked verdict
 
     // LaTeX for the conjugate-model vars + the constraint boundary/aux vars.
     const baseLatex = QE.latexOf('conjugate');
@@ -339,6 +356,10 @@ const QD = _QD;
       if (canvas) canvas.render(store, latexOf);
       renderInspector(canvas ? canvas.getSelection() : []); buildBreadcrumb(); buildTrackBar();
       renderSuggestions(); renderHypotheses(); refreshUndoButtons(); scheduleAutosave(); refreshStatusBar();
+      // Every stored result's state is relative to the CURRENT branch and frontier, and this is
+      // the function that changes both. Without redrawing here, a reduction would leave results
+      // still labelled "current" for a system that no longer exists.
+      renderDrawer();
       const mx = store.size ? store.maxColumn() : -1, tr = store.activeTrack;
       if (canvas && canvas.scrollToColumn && mx >= 0 && (mx !== _lastMaxCol || tr !== _lastTrack)) {
         canvas.scrollToColumn(mx);
@@ -1611,7 +1632,7 @@ const QD = _QD;
       // These counts are REPORTED BY the user's own Maple run, parsed here — nothing in this app
       // certified them, so the card must not wear a rigor we did not earn. 'unknown' (?) is the
       // honest level; the title names the provenance so the pill reads as "external", not "dubious".
-      if (canvas) canvas.setVerdict({ title: 'RCTD import (external CAS)', text: 'RCTD: ' + res.cellCount + ' parameter cell' + (res.cellCount === 1 ? '' : 's') + (counted.length ? ' · ' + total + ' real solution(s) total' : '') + ' — as reported by Maple; not verified in-app.', solutionsLatex: cellLatex, rigor: 'unknown' });
+      if (canvas) showResult({ title: 'RCTD import (external CAS)', text: 'RCTD: ' + res.cellCount + ' parameter cell' + (res.cellCount === 1 ? '' : 's') + (counted.length ? ' · ' + total + ' real solution(s) total' : '') + ' — as reported by Maple; not verified in-app.', solutionsLatex: cellLatex, rigor: 'unknown' });
       toast(text2);
     }
 
@@ -1859,7 +1880,7 @@ const QD = _QD;
         // The roots are closed-form radicals — exact BY CONSTRUCTION (degree ≤4 or reducible), with the
         // numeric residual check guarding the implementation. If that guard did not pass we cannot stand
         // behind the closed form, so it degrades to 'partial' — never to '=' on an unverified solve.
-        if (canvas) canvas.setVerdict({ title: 'Solve for a variable', text: summary, solutionsLatex: latexes, rigor: verOk ? 'exact' : 'partial' });
+        if (canvas) showResult({ title: 'Solve for a variable', text: summary, solutionsLatex: latexes, rigor: verOk ? 'exact' : 'partial' });
         toast(summary, verOk ? {} : { kind: 'error' });
       };
       go.addEventListener('click', run);
@@ -2210,7 +2231,7 @@ const QD = _QD;
       if (!_isCapFailure(reason) || !canvas || !store.size) return false;
       const c = store.maxColumn();
       const text = prefix + ': ' + withGuidance(reason);
-      canvas.setVerdict({ text, rigor: 'unknown', actions: [{
+      showResult({ text, rigor: 'unknown', actions: [{
         label: 'Copy Maple RCTD export',
         title: 'Copy the current system as a Maple RealComprehensiveTriangularize script — run the certified parametric decomposition in your own Maple, then import the result (Import RCTD).',
         onClick: () => {
@@ -2416,7 +2437,7 @@ const QD = _QD;
           }
           _abort = null; setBusy(false); refreshPickers();
           setStatus(verdict + coords);
-          if (canvas) canvas.setVerdict({ text: verdict, solutionsText, assumptions: specializationLedger(cl), rigor: classifyRigor(cl) });
+          if (canvas) showResult({ text: verdict, solutionsText, assumptions: specializationLedger(cl), rigor: classifyRigor(cl) });
           toast(verdict, cl.inconsistent || cl.realCount === 0 ? { kind: 'error' } : {});
         } catch (e) { _abort = null; setBusy(false); showError('Auto-reduce & solve: ' + ((e && e.message) || String(e))); }
       })();
@@ -2660,7 +2681,7 @@ const QD = _QD;
         // A reality/imaginary assumption slices the system — the count is a lower bound (honest labeling).
         verdict += sliceCaveat(r);
         setStatus(verdict);
-        if (canvas) canvas.setVerdict({ text: verdict, assumptions: specializationLedger(r), rigor: classifyRigor(r) });
+        if (canvas) showResult({ text: verdict, assumptions: specializationLedger(r), rigor: classifyRigor(r) });
         if (!sel) cacheActiveVerdict(r);   // A6: stamp the active branch's chip (whole last column analyzed)
         toast(verdict, r.inconsistent || r.realCount === 0 ? { kind: 'error' } : {});
       });
@@ -2833,7 +2854,7 @@ const QD = _QD;
       actions.push({ label: 'Decompose into components',
         title: 'Split V(I) into irreducible components (minimal primes) and enter one. Each is analyzed alone and the existence counts add up — the standard route out of an underdetermined system.',
         onClick: () => { const sec = $('#alg-sections'); if (sec) { const d = sec.querySelector('details.algebra-section:nth-of-type(2)'); if (d) d.open = true; } doDecompose('components'); } });
-      if (canvas) canvas.setVerdict({ text, actions: actions.slice(0, 6), assumptions: specializationLedger(cl), rigor: 'unknown' });
+      if (canvas) showResult({ text, actions: actions.slice(0, 6), assumptions: specializationLedger(cl), rigor: 'unknown' });
       setStatus(text); toast('Positive-dimensional — fix the gauge / pin a forced variable.', { kind: 'error' });
     }
     // Render a terminal verdict card (inconsistent / no-real / zero-dim, or an aggregated 'tree' result
@@ -2866,7 +2887,7 @@ const QD = _QD;
                 (bc.schwarz ? ', Schwarz function S(w) single-valued' : '; Schwarz function algebraic of degree ' + bc.degWb) + ')';
               // `bound` carries the DIRECTION of a rigor:'bound' result — a truncated tree walk proves a
               // LOWER bound (≥) and rendering the default '≤' would state the opposite of the proof.
-              if (canvas) canvas.setVerdict({ text: verdict + note, solutionsLatex: latex, plot, solutionsText: rows.join('\n'), assumptions: specializationLedger(cl), actions: vActions, rigor: pr.rigor, bound: pr.bound });
+              if (canvas) showResult({ text: verdict + note, solutionsLatex: latex, plot, solutionsText: rows.join('\n'), assumptions: specializationLedger(cl), actions: vActions, rigor: pr.rigor, bound: pr.bound });
             },
           });
         }
@@ -2935,7 +2956,7 @@ const QD = _QD;
         }
       }
       if (vActions.length) vSet.actions = vActions;
-      if (canvas) canvas.setVerdict(vSet);
+      if (canvas) showResult(vSet);
       toast(verdict, pr.bad ? { kind: 'error' } : {});
     }
 
@@ -2993,7 +3014,7 @@ const QD = _QD;
         setStatus(text);
         // EXACT: χ, its square-free part and the discriminant are computed symbolically over ℚ(i);
         // `degenerate` (disc = 0) is itself an exact conclusion, not a failure to certify.
-        if (canvas) canvas.setVerdict({ text, solutionsLatex: mathLatex, rigor: 'exact' });
+        if (canvas) showResult({ text, solutionsLatex: mathLatex, rigor: 'exact' });
         toast(text, r.degenerate ? { kind: 'error' } : {});
       }, 20);
     }
@@ -3040,7 +3061,7 @@ const QD = _QD;
         // MISSED a critical value (so a cell could straddle a bifurcation), and a cell with ok:false
         // has no count at all — both are 'partial' (may be incomplete), never a bare '='.
         const bifPartial = (r.crosschecked === false) || r.cells.some((c) => !c.ok);
-        if (canvas) canvas.setVerdict({ text, rigor: bifPartial ? 'partial' : 'exact' });
+        if (canvas) showResult({ text, rigor: bifPartial ? 'partial' : 'exact' });
         toast('Bifurcation computed (' + r.cells.length + ' interval' + (r.cells.length === 1 ? '' : 's') + ').');
       }, (e) => { _abort = null; setBusy(false); setStatus(''); showError('Bifurcation: ' + ((e && e.message) || String(e))); });
     }
@@ -3178,7 +3199,7 @@ const QD = _QD;
           '#' + (i + 1) + '  ' + Object.keys(s).sort().map((k) =>
             latexPlain(k) + '=' + fmt(s[k].re) + (Math.abs(s[k].im) < 1e-6 ? '' : (s[k].im >= 0 ? '+' : '−') + fmt(Math.abs(s[k].im)) + 'i')).join('  ')).join('\n')
           + (r.solutions.length > 8 ? '\n… ' + (r.solutions.length - 8) + ' more (full set in the console)' : '');
-        if (canvas) canvas.setVerdict({ title: 'Numeric solve', text, solutionsText: rows, rigor: (r.complete === false) ? 'partial' : 'estimate' });
+        if (canvas) showResult({ title: 'Numeric solve', text, solutionsText: rows, rigor: (r.complete === false) ? 'partial' : 'estimate' });
         toast(text, partial ? { kind: 'error' } : {});
         try {
           console.table(r.solutions.map((s) => {
@@ -3577,6 +3598,107 @@ const QD = _QD;
       }
     }
     // A6: per-branch verdict chips. Helpers + the "classify all branches" action.
+    // ---- results drawer (P6b) ------------------------------------------------
+    // Every analysis wrote into ONE docked verdict slot. Eleven call sites — solve, classify,
+    // dimension, prove, bifurcation, resolvent, univalence, RCTD import, shape-from-moments —
+    // competed for a single lastVerdictData, so running Dimension after Classify DESTROYED
+    // Classify's answer with no way back, on results that cost tens of seconds each.
+    //
+    // They now go through showResult, which keeps each one keyed by the system it was computed
+    // about: (track, branchSig). That key is the whole point. A result computed three reductions
+    // ago, redisplayed beside today's column still wearing its original '=' pill, is a false
+    // attribution — the worst class of bug this project has (CLAUDE.md honest labeling). The key
+    // is what lets the drawer tell "still true of what you are looking at" from "was true of
+    // something else", and demote the second on sight.
+    const RESULTS_CAP = 40;
+    const _results = [];            // newest first: { id, track, sig, data }
+    let _resultSeq = 0;
+    let _resultsDropped = 0;        // surfaced in the drawer — a silent cap reads as "that's all"
+    // Results are SESSION-scoped and deliberately not autosaved: restoring a verdict across a
+    // reload would restore a claim about a system state that may no longer exist, which is the
+    // same false attribution with a longer fuse.
+    function showResult(data) {
+      if (!canvas) return;
+      if (data && data.text) {
+        const track = store.activeTrack;
+        _results.unshift({ id: ++_resultSeq, track, sig: _branchSig(track), data });
+        while (_results.length > RESULTS_CAP) { _results.pop(); _resultsDropped++; }
+        renderDrawer();
+      }
+      canvas.setVerdict(data);
+    }
+    // Bind the pure decision (resultStateOf, module scope) to the live store.
+    function resultState(r) {
+      const cur = store.activeTrack;
+      return resultStateOf(r.track, r.sig, cur, _branchSig(cur));
+    }
+    function reshowResult(r) {
+      const st = resultState(r);
+      if (st === 'current') { canvas.setVerdict(r.data); return; }
+      canvas.setVerdict(Object.assign({}, r.data, {
+        stale: true,
+        // 'the derivation has changed since' is the right sentence for a same-branch result and
+        // the WRONG one for a cross-branch result — it implies a history this branch never had.
+        staleNote: st === 'branch'
+          ? '⚠ Computed on ' + trackLabelOf(r.track) + ', and you are viewing ' + trackLabelOf(store.activeTrack)
+            + '. It describes that branch’s system — not this one. Switch branches to see it in context.'
+          : undefined,
+      }));
+    }
+    function renderDrawer() {
+      const host = canvas && canvas.drawer; if (!host) return;
+      host.innerHTML = '';
+      if (!_results.length) { host.classList.add('hidden'); return; }
+      host.classList.remove('hidden');
+      const head = document.createElement('div'); head.className = 'algebra-drawer-head';
+      const toggle = document.createElement('button');
+      toggle.type = 'button'; toggle.className = 'algebra-drawer-toggle';
+      toggle.textContent = _drawerOpen ? '▾' : '▸';
+      toggle.title = _drawerOpen ? 'Collapse the results list' : 'Show the results list';
+      toggle.addEventListener('click', () => { _drawerOpen = !_drawerOpen; renderDrawer(); });
+      const lbl = document.createElement('span'); lbl.className = 'algebra-line-label';
+      lbl.textContent = 'Results (' + _results.length + ')';
+      head.appendChild(toggle); head.appendChild(lbl);
+      host.appendChild(head);
+      if (!_drawerOpen) return;
+      const list = document.createElement('div'); list.className = 'algebra-drawer-list';
+      _results.forEach((r) => {
+        const st = resultState(r);
+        const row = document.createElement('button');
+        row.type = 'button'; row.className = 'algebra-drawer-row is-' + st;
+        const rm = (QD.AlgebraCanvas && QD.AlgebraCanvas.rigorMeta)
+          ? QD.AlgebraCanvas.rigorMeta(r.data.rigor, r.data.bound) : null;
+        if (rm) {
+          const pill = document.createElement('span'); pill.className = 'algebra-drawer-pill';
+          pill.textContent = rm.symbol; pill.style.background = rm.color;
+          // The pill states the rigor of the ORIGINAL computation. On anything but a current
+          // result that claim no longer applies to the visible system, so the row says so in
+          // its own right rather than letting a green '=' speak for a system it never saw.
+          pill.title = 'Rigor when computed: ' + rm.label;
+          row.appendChild(pill);
+        }
+        const t = document.createElement('span'); t.className = 'algebra-drawer-title';
+        t.textContent = r.data.title || 'Existence / uniqueness';
+        row.appendChild(t);
+        if (st !== 'current') {
+          const tag = document.createElement('span'); tag.className = 'algebra-drawer-tag';
+          tag.textContent = st === 'branch' ? trackLabelOf(r.track) : 'earlier';
+          tag.title = st === 'branch'
+            ? 'Computed on ' + trackLabelOf(r.track) + ' — a different system from the one shown'
+            : 'Computed before the current reduction — no longer describes the visible column';
+          row.appendChild(tag);
+        }
+        row.addEventListener('click', () => reshowResult(r));
+        list.appendChild(row);
+      });
+      host.appendChild(list);
+      if (_resultsDropped) {
+        const note = document.createElement('div'); note.className = 'algebra-drawer-note';
+        note.textContent = _resultsDropped + ' older result' + (_resultsDropped === 1 ? '' : 's')
+          + ' dropped (keeps the most recent ' + RESULTS_CAP + ')';
+        host.appendChild(note);
+      }
+    }
     function _lastColIds(tid) { return store.orderedColumn(store.maxColumn(tid), tid).map((n) => n.id); }
     // Cheap content signature of a branch's CURRENT last column — changes whenever the system
     // changes (a new reduction, fork, undo), so a cached verdict is shown only while still valid.
@@ -3808,6 +3930,7 @@ const QD = _QD;
 
   QD_UI.installAlgebra = installAlgebra;
   QD_UI.PROV_UI = PROV_UI;   // the UI-side provenance-op registry (testable + companion to the store's PROV_OPS)
+  QD_UI.resultStateOf = resultStateOf;               // does a stored result still describe this system? (pure)
   QD_UI.ALGEBRA_KEY_ACTIONS = KEY_ACTIONS;           // single-key accelerator table (pure data)
   QD_UI.algebraShortcutItems = algebraShortcutItems; // …and the `?` cheatsheet it generates (pure)
   QD_UI.suggestSummaryLabel = suggestSummaryLabel;   // collapsed suggestion-list <summary> label (pure)

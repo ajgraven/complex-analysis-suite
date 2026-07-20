@@ -51,7 +51,7 @@
 //
 // Public API: create() → { render, rerender, fit, fitWidth, scrollToColumn, getSelection,
 // clearSelection, setZoom, zoomAt, setAllCollapsed, setVerdict, setMinimap, setQuery, setFocus,
-// moveSelection, rail, corner, setVerdictCollapsed }.  Module: { create, rigorMeta, DISPLAY_CAP }
+// moveSelection, rail, corner, drawer, setVerdictCollapsed }.  Module: { create, rigorMeta, DISPLAY_CAP }
 // — DISPLAY_CAP is exported so the sidebar inspector shares one elision threshold.
 //
 // ⚠ scrollToColumn lands the scroll DIRECTLY when a smooth scrollTo is ignored: this engine drops
@@ -124,8 +124,15 @@ const QD = _QD;
 
     const empty = div('algebra-empty hidden');
     container.appendChild(empty);
+    // The `result` grid area holds an INDEX above a DETAIL: the drawer lists every result this
+    // session has produced, the verdict shows the selected one. They share the column because
+    // they are the same concern — which is why the drawer costs no new grid track. The UI layer
+    // fills the drawer (it needs tracks and branch signatures); the canvas owns the seat.
+    const resultCol = div('algebra-result-col');
+    const drawer = div('algebra-drawer hidden');
     const verdict = div('algebra-verdict hidden');
-    container.appendChild(verdict);
+    resultCol.appendChild(drawer); resultCol.appendChild(verdict);
+    container.appendChild(resultCol);
     // B2 — DAG minimap: a scaled bird's-eye of the active track's lanes with a draggable
     // viewport box; toggled off by default. Click/drag scrolls the main view.
     const minimap = div('algebra-minimap hidden');
@@ -157,6 +164,9 @@ const QD = _QD;
     function setVerdictCollapsed(on) {
       verdictCollapsed = !!on;
       verdict.classList.toggle('is-collapsed', verdictCollapsed);
+      // The column owns the width now, so collapsing has to reach it or the drawer would keep
+      // holding 340px open next to a 34px verdict.
+      resultCol.classList.toggle('is-collapsed', verdictCollapsed);
       const b = verdict.querySelector('.algebra-verdict-dock');
       if (b) { b.textContent = verdictCollapsed ? '«' : '»'; b.title = verdictCollapsed ? 'Expand the result panel' : 'Collapse the result panel (keeps the result)'; }
       relayout();                 // the canvas viewport just changed width
@@ -773,7 +783,12 @@ const QD = _QD;
       if (data.stale) {
         verdict.classList.add('is-stale');
         const s = div('algebra-verdict-stale');
-        s.textContent = '⚠ Computed on an earlier system — the derivation has changed since. Re-run to refresh; the actions below still apply to this result.';
+        // staleNote lets the caller say WHICH mismatch this is. Re-showing a result from another
+        // BRANCH is not the same claim as re-showing one this branch has moved past, and the
+        // default wording ("the derivation has changed since") would be wrong for the first —
+        // it implies a history the viewed branch does not have.
+        s.textContent = data.staleNote
+          || '⚠ Computed on an earlier system — the derivation has changed since. Re-run to refresh; the actions below still apply to this result.';
         bodyWrap.appendChild(s);
       } else { verdict.classList.remove('is-stale'); }
       if (data.assumptions && data.assumptions.length) {
@@ -856,7 +871,7 @@ const QD = _QD;
 
     track.style.transform = 'scale(1)';
     return { render, rerender, fit, fitWidth, scrollToColumn, getSelection, clearSelection, setZoom, zoomAt,
-      setAllCollapsed, setVerdict, setMinimap, setQuery, setFocus, moveSelection, rail, corner, setVerdictCollapsed };
+      setAllCollapsed, setVerdict, setMinimap, setQuery, setFocus, moveSelection, rail, corner, drawer, setVerdictCollapsed };
   }
 
   window.QD = window.QD || {};

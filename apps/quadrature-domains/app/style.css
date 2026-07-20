@@ -917,15 +917,68 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
    there — losing the rigor badge and the × first, i.e. exactly the honest-labeling signal the card
    exists to carry and the only way to close it. Bound the height and scroll the BODY, with the head
    pinned so the badge and × are always reachable. */
+/* The result column holds an INDEX (drawer) above a DETAIL (verdict) — the same concern, so they
+   share the grid area and the drawer costs no new grid track. Collapsing reaches the column, or
+   the drawer would keep holding 340px open next to a 34px verdict.
+   The width lives on the CHILDREN, not the column: the column then shrink-wraps, so with both
+   the drawer and the verdict hidden it is 0-wide and the canvas gets the whole row back — a fixed
+   width on the column would hold 340px of empty gutter open before the first result exists. */
+#algebra-graph .algebra-result-col {
+  grid-area: result; min-height: 0; min-width: 0;
+  display: flex; flex-direction: column;
+}
+#algebra-graph .algebra-drawer { width: 340px; max-width: 46vw; flex: 0 0 auto; }
+#algebra-graph .algebra-result-col.is-collapsed .algebra-drawer,
+#algebra-graph .algebra-result-col.is-collapsed .algebra-verdict { width: 34px; }
 #algebra-graph .algebra-verdict {
-  width: 340px; max-width: 46vw; min-height: 0;
+  width: 340px; max-width: 46vw; min-height: 0; flex: 1 1 auto;
   display: flex; flex-direction: column; overflow: hidden;
   background: var(--c-surface); border-left: 1px solid var(--c-accent);
   padding: 8px 10px; font-size: 12px;
 }
 /* Collapsed: yields its width back to the canvas WITHOUT dismissing the result, so the answer and
    its Export action stay one click away. */
-#algebra-graph .algebra-verdict.is-collapsed { width: 34px; padding: 8px 4px; }
+#algebra-graph .algebra-verdict.is-collapsed { padding: 8px 4px; }
+
+/* RESULTS DRAWER (P6b). Eleven analyses shared one verdict slot, so each new answer destroyed the
+   last. This is the index; the verdict below is the detail. Rows stay one line — the column is
+   340px and the verdict beneath it is already dense (rigor pill, math, solutions, a 176px plot,
+   actions), so a drawer with previews would push the answer off screen to list the answers. */
+#algebra-graph .algebra-drawer {
+  background: var(--c-surface); border-left: 1px solid var(--c-accent);
+  border-bottom: 1px solid var(--c-border-soft);
+  padding: 4px 6px; font-size: 11px; max-height: 34%; overflow: auto; min-height: 0;
+}
+#algebra-graph .algebra-result-col.is-collapsed .algebra-drawer { display: none; }
+.algebra-drawer-head { display: flex; align-items: center; gap: 5px; }
+.algebra-drawer-toggle {
+  border: 0; background: transparent; font: inherit; cursor: pointer;
+  color: var(--c-muted); padding: 0 2px; border-radius: 3px; line-height: 1;
+}
+.algebra-drawer-toggle:hover { color: var(--c-text); background: var(--c-hover); }
+.algebra-drawer-list { display: flex; flex-direction: column; gap: 1px; margin-top: 3px; }
+.algebra-drawer-row {
+  display: flex; align-items: center; gap: 5px; width: 100%; text-align: left;
+  border: 0; background: transparent; font: inherit; font-size: 11px;
+  padding: 2px 3px; border-radius: 3px; cursor: pointer; color: var(--c-text);
+}
+.algebra-drawer-row:hover { background: var(--c-hover); }
+.algebra-drawer-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.algebra-drawer-pill {
+  flex: 0 0 auto; min-width: 1.3em; text-align: center; font-weight: 700;
+  border-radius: 4px; padding: 0 4px; color: #fff;
+}
+/* A result that no longer describes the visible system is muted, and carries a word for WHY —
+   'earlier' (this branch moved on) or the branch name (a different system entirely). Leaving it
+   looking current would let a green '=' speak for a system it never saw. */
+.algebra-drawer-row.is-stale, .algebra-drawer-row.is-branch { color: var(--c-muted); }
+.algebra-drawer-row.is-stale .algebra-drawer-pill,
+.algebra-drawer-row.is-branch .algebra-drawer-pill { opacity: 0.45; }
+.algebra-drawer-tag {
+  flex: 0 0 auto; font-size: 9px; text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--c-muted); border: 1px solid var(--c-border-soft); border-radius: 3px; padding: 0 3px;
+}
+.algebra-drawer-note { font-size: 9px; color: var(--c-muted); margin-top: 3px; }
 #algebra-graph .algebra-verdict.is-collapsed .algebra-verdict-scroll { display: none; }
 #algebra-graph .algebra-verdict.is-collapsed .algebra-verdict-head { flex-direction: column; gap: 4px; }
 #algebra-graph .algebra-verdict.is-collapsed .algebra-verdict-head > span { display: none; }
