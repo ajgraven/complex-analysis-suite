@@ -50,7 +50,7 @@
 // lane, which merely duplicated the labelled breadcrumb.
 //
 // Public API: create() → { render, rerender, fit, fitWidth, scrollToColumn, getSelection,
-// clearSelection, setZoom, zoomAt, setAllCollapsed, setVerdict, setMinimap, setQuery,
+// clearSelection, setZoom, zoomAt, setAllCollapsed, setVerdict, setMinimap, setQuery, setFocus,
 // moveSelection, rail, corner, setVerdictCollapsed }.  Module: { create, rigorMeta, DISPLAY_CAP }
 // — DISPLAY_CAP is exported so the sidebar inspector shares one elision threshold.
 //
@@ -217,6 +217,10 @@ const QD = _QD;
         el.classList.toggle('lineage', lineageSet.has(id));
       });
       colorEdgeLineage();
+      // Focus mode is defined BY the selection, so changing the selection has to redraw it —
+      // otherwise focusing a node and then clicking a different one leaves the first node's
+      // lineage lit while the header says you selected something else.
+      if (_focus) applyFilter();
     }
     // A plain click REPLACES the selection; Ctrl/Cmd/Shift+click toggles membership (capped at the
     // two nodes the eliminate/Gröbner panels take). Previously every click added, so clicking a
@@ -274,6 +278,7 @@ const QD = _QD;
     // all already on the node. Non-matches dim rather than disappear, so the shape of the
     // derivation is preserved while the hits stand out.
     let _query = '';
+    let _focus = false;         // focus mode: fade everything outside the selection's lineage
     function nodeMatches(n, q) {
       if (!q) return true;
       if ((n.label || '').toLowerCase().includes(q)) return true;
@@ -281,16 +286,34 @@ const QD = _QD;
       try { for (const v of n.poly.vars()) if (v.toLowerCase().includes(q)) return true; } catch (e) { /* ignore */ }
       return false;
     }
+    // The ONE place that decides what is dimmed. Search and focus mode both want to fade nodes
+    // out, and both were candidates to own `.is-dimmed` — two writers would have meant whichever
+    // ran last silently undid the other (applyFilter sets the class unconditionally from the
+    // query, so it would have cleared focus dimming on every keystroke). They compose here
+    // instead: a node survives if it matches the query AND is in focus.
     function applyFilter() {
       const q = _query.trim().toLowerCase();
+      // Focus only bites when there is a selection to focus ON — with nothing selected the
+      // lineage set is empty, and dimming everything would just blank the canvas.
+      const focusing = _focus && selected.length > 0;
+      if (focusing) computeLineage();
+      const inFocus = (id) => selected.indexOf(id) >= 0 || lineageSet.has(id);
       let hits = 0;
       const perCol = new Map();
       track.querySelectorAll('.algebra-node').forEach((el) => {
         const n = lastStore && lastStore.get(el.getAttribute('data-id'));
-        const on = !q || (n && nodeMatches(n, q));
-        el.classList.toggle('is-dimmed', !!q && !on);
-        el.classList.toggle('is-match', !!q && on);
-        if (q && on) { hits++; const c = n ? n.column : -1; perCol.set(c, (perCol.get(c) || 0) + 1); }
+        const matches = !q || (n && nodeMatches(n, q));
+        const kept = matches && (!focusing || inFocus(el.getAttribute('data-id')));
+        el.classList.toggle('is-dimmed', (!!q || focusing) && !kept);
+        el.classList.toggle('is-match', !!q && !!matches);
+        // Count what is actually READABLE, not what merely matched: reporting "3 matches" while
+        // focus has faded two of them out states the opposite of what the user can see.
+        if (q && kept) { hits++; const c = n ? n.column : -1; perCol.set(c, (perCol.get(c) || 0) + 1); }
+      });
+      // Edges follow their endpoints, or the lineage chain reads as floating cards.
+      svg.querySelectorAll('path.algebra-edge').forEach((p) => {
+        const off = focusing && !(inFocus(p.getAttribute('data-from')) && inFocus(p.getAttribute('data-to')));
+        p.classList.toggle('is-dimmed', !!off);
       });
       laneEls().forEach((lane) => {
         const c = Number(lane.getAttribute('data-col'));
@@ -301,6 +324,11 @@ const QD = _QD;
       return { query: q, hits };
     }
     function setQuery(q) { _query = q || ''; return applyFilter(); }
+    // Focus mode: show only the selected node's derivation (itself ∪ ancestors ∪ descendants) and
+    // fade the rest. computeLineage already built that set — until now it only tinted borders with
+    // it, so on a 22-card graph the answer to "where did this equation come from" was still a
+    // manual trace. Returns the new state so the caller can style its toggle.
+    function setFocus(on) { _focus = !!on; applyFilter(); return _focus; }
 
     function getSelection() { return selected.slice(); }
     function clearSelection() { selected = []; renderSelection(); if (handlers.onSelect) handlers.onSelect([]); }
@@ -805,7 +833,7 @@ const QD = _QD;
 
     track.style.transform = 'scale(1)';
     return { render, rerender, fit, fitWidth, scrollToColumn, getSelection, clearSelection, setZoom, zoomAt,
-      setAllCollapsed, setVerdict, setMinimap, setQuery, moveSelection, rail, corner, setVerdictCollapsed };
+      setAllCollapsed, setVerdict, setMinimap, setQuery, setFocus, moveSelection, rail, corner, setVerdictCollapsed };
   }
 
   window.QD = window.QD || {};

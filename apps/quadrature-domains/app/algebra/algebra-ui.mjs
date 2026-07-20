@@ -260,6 +260,7 @@ const QD = _QD;
     g: { sel: '#alg-groebner',    name: 'Gröbner basis of the current column' },
     p: { sel: '#alg-prove',       name: 'Prove existence & uniqueness' },
     e: { sel: '#alg-export-json', name: 'Download the derivation (JSON)' },
+    l: { sel: '#alg-focus',       name: 'Focus on the selected equation’s lineage' },
   };
   // The `?` cheatsheet's Algebra section. ui-strings has advertised "Press ? for shortcuts"
   // all along, and `?` did open an overlay — listing three generic lines (?, Esc, and a
@@ -309,6 +310,7 @@ const QD = _QD;
     let _seededHData = null;       // the hData the store was last seeded from (A4: detect a stale seed)
     let _zoom = 1;                 // canvas zoom level (View ± controls)
     let _minimapOn = false;        // DAG minimap toggle (B2)
+    let _focusOn = false;          // focus mode toggle (P6a): isolate the selection's derivation
 
     // LaTeX for the conjugate-model vars + the constraint boundary/aux vars.
     const baseLatex = QE.latexOf('conjugate');
@@ -3703,6 +3705,17 @@ const QD = _QD;
         if (!canvas) return; _minimapOn = canvas.setMinimap(!_minimapOn); mapBtn.classList.toggle('active', _minimapOn);
       });
       bar.appendChild(mapBtn);
+      // Focus mode. computeLineage has always known a node's derivation (itself ∪ ancestors ∪
+      // descendants) and only used it to tint borders — on a 22-card graph "where did this come
+      // from" was still a manual trace. Carries an id so the P5 accelerator table can click it.
+      const focusBtn = btn('◎ focus', 'Show only the selected equation\'s derivation — its ancestors and descendants — and fade the rest (needs a selection)', () => {
+        if (!canvas) return;
+        const on = canvas.setFocus(!_focusOn);
+        _focusOn = on; focusBtn.classList.toggle('active', on);
+        if (on && !canvas.getSelection().length) toast('Focus is on — select an equation to isolate its derivation');
+      });
+      focusBtn.id = 'alg-focus';
+      bar.appendChild(focusBtn);
       // The glyph is the whole accessible name otherwise ("↶, button"), and neither control said
       // it had a keyboard equivalent. refreshUndoButtons() keeps the enabled state + the label of
       // what would be reverted current — see rerender().

@@ -869,6 +869,10 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 /* Search: non-matches DIM rather than disappear, so the shape of the derivation is preserved
    while the hits stand out. A per-lane count answers "which column holds them". */
 #algebra-graph .algebra-node.is-dimmed { opacity: 0.25; }
+/* Focus mode fades the same way search does, and applyFilter is the single writer of .is-dimmed so
+   the two compose rather than overwrite. Edges fade with their endpoints — a lineage chain whose
+   arrows stayed at full strength would read as a set of floating cards. */
+#algebra-graph .algebra-edge.is-dimmed { opacity: 0.15; }
 #algebra-graph .algebra-node.is-match { box-shadow: 0 0 0 2px var(--c-accent); }
 #algebra-graph .algebra-column-hits {
   font-size: 10px; font-weight: 600; color: var(--c-accent); margin-top: 2px;

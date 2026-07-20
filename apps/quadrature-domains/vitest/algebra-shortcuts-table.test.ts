@@ -23,12 +23,18 @@ beforeAll(async () => {
 });
 
 describe("KEY_ACTIONS is the single source for the handler and the cheatsheet", () => {
-  it("every accelerator targets a button the sidebar actually builds", () => {
+  it("every accelerator targets a button the module actually builds", () => {
     // Dispatching through the button is the safety property: the keystroke inherits every
     // gate the click path has (setBusy disables these mid-worker). A renamed id would turn
-    // the shortcut into a silent no-op, so pin each selector to markup that exists.
+    // the shortcut into a silent no-op, so pin each selector to an id that exists.
+    //
+    // Two spellings, because the sidebar is built from a markup string while the canvas
+    // toolbar is built from DOM calls — `id="alg-seed"` vs `focusBtn.id = 'alg-focus'`.
+    // What matters is that the id is created somewhere, not which style created it.
+    const created = (id: string) =>
+      SRC.includes('id="' + id + '"') || new RegExp("\\.id\\s*=\\s*['\"]" + id + "['\"]").test(SRC);
     const missing = Object.entries(UI.ALGEBRA_KEY_ACTIONS as Record<string, any>)
-      .filter(([, a]) => !SRC.includes('id="' + a.sel.slice(1) + '"'))
+      .filter(([, a]) => !created(a.sel.slice(1)))
       .map(([k, a]) => k + " → " + a.sel);
     expect(missing).toEqual([]);
   });
