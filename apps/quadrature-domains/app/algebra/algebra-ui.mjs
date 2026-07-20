@@ -1041,6 +1041,29 @@ const QD = _QD;
       else { el.textContent = baselineStatus(); el.dataset.transient = '0'; }
     }
     function setStatusHTML(html) { const el = $('#alg-status'); if (el) el.innerHTML = html; }
+    // Which workflow sections are open. Only "Assume" opened by default and nothing persisted, so
+    // every reload re-shut Reduce and Analyze — two thirds of the actual working loop — while the
+    // one left open was the section that most deserved collapsing. Remembered per section id.
+    const SECTIONS_KEY = 'qd-algebra-sections-v1';
+    function readOpenSections() {
+      try { const v = JSON.parse(localStorage.getItem(SECTIONS_KEY) || 'null'); return (v && typeof v === 'object') ? v : null; }
+      catch (e) { return null; }
+    }
+    function wireSectionPersistence(panel) {
+      const saved = readOpenSections();
+      panel.querySelectorAll('details.algebra-section').forEach((d) => {
+        const sum = d.querySelector('summary');
+        const key = sum ? sum.textContent.trim() : null;
+        if (!key) return;
+        d.dataset.section = key;
+        if (saved && Object.prototype.hasOwnProperty.call(saved, key)) d.open = !!saved[key];
+        d.addEventListener('toggle', () => {
+          const cur = readOpenSections() || {};
+          cur[key] = d.open;
+          try { localStorage.setItem(SECTIONS_KEY, JSON.stringify(cur)); } catch (e) { /* private mode */ }
+        });
+      });
+    }
     function mountSidebar() {
       const panel = $('#controls-algebra');
       if (!panel) return;
@@ -1057,7 +1080,7 @@ const QD = _QD;
         '    <button id="alg-steps-x" class="algebra-steps-x" type="button" title="Hide this hint">×</button>' +
         '  </div>' +
         '  <div class="row algebra-primary">' +
-        '    <button id="alg-prove" class="small heavy-op" type="button" title="One click: seed → certified existence/uniqueness verdict, with a =/≤/≈ rigor badge.">✦ Prove existence / uniqueness</button>' +
+        '    <button id="alg-prove" class="small primary heavy-op" type="button" title="One click: seed → certified existence/uniqueness verdict, with a =/≤/≈ rigor badge.">✦ Prove existence / uniqueness</button>' +
         '    <button id="alg-autosolve" class="small heavy-op" type="button" title="Semi-autonomous: auto-assume reality (if h is symmetric), propagate linear consequences, then determine existence/uniqueness and the explicit real solutions — each step a new labeled column">★ Auto-reduce &amp; solve</button>' +
         '    <button id="alg-seed" class="small" type="button" title="Generate the original (●)/(★)/gauge system from the current bounded solve at column 0 (replaces the graph; assumptions are then added as columns)">Generate / re-seed</button>' +
         '    <button id="alg-seed-moment" class="small" type="button" title="Seed the Aharonov–Shapiro moment system: order-2 quadrature domains from their harmonic moments M₀, M₁ (symbolic — needs no solve; pin the moments via “Set values” to determine a specific QD)">Seed A–S moments</button>' +
@@ -1097,21 +1120,37 @@ const QD = _QD;
         '<div id="alg-inspector" class="algebra-inspector hidden"></div>' +
         // ---- WORKFLOW SECTIONS (collapsible; hidden while the inspector is up) ----
         '<div id="alg-sections">' +
-        // 1. Assumptions (open by default — the most common first step)
+        // 1. Assume — reality / symmetry only. This section used to hold NINETEEN controls across four
+        // unrelated tools; "Define substitution" and "Add equation" in particular are system EDITS,
+        // not assumptions, and were filed here purely by accretion. Split into three honest headings.
         '  <details class="algebra-section" open>' +
-        '    <summary>Assumptions</summary>' +
+        '    <summary>Assume</summary>' +
         '    <div class="algebra-section-body">' +
         '      <div class="algebra-line"><span class="algebra-line-label">Assume real</span><span id="alg-real-pick" class="algebra-picker"></span>' +
         '        <button id="alg-real-apply" class="small" type="button" data-str-title="tooltips.assumeReal">Assume real</button>' +
         '        <button id="alg-real-auto" class="small" type="button" title="Detect real-axis symmetry of h and, if the data is fully real, assume every base variable real in one step (the biggest tractability lever)">Assume all real</button>' +
         '        <button id="alg-real-detect" class="small" type="button" title="Scan the current equations for variable symmetries — a variable forced real (v − v̄ = 0, e.g. the gauge) or imaginary (v + v̄ = 0), or two variables identified (x ∓ y = 0) — and surface one-click suggestions">Detect symmetry</button></div>' +
-        '      <div class="algebra-line-label" style="margin-top:8px;">Set values <span class="hint" style="font-weight:400;">(each value also fixes its conjugate)</span></div>' +
+        '    </div>' +
+        '  </details>' +
+        // 2. Pin values — fixing a variable to an exact ℚ(i) value is a different act from assuming
+        //    a symmetry, and has its own multi-row editor.
+        '  <details class="algebra-section">' +
+        '    <summary>Pin values</summary>' +
+        '    <div class="algebra-section-body">' +
+        '      <div class="algebra-line-label">Set values <span class="hint" style="font-weight:400;">(each value also fixes its conjugate)</span></div>' +
         '      <div id="alg-val-rows"></div>' +
         '      <div class="row" style="gap:4px; align-items:center; margin-top:2px;">' +
         '        <button id="alg-val-add" class="small" type="button" title="Add another variable to fix in the same column">＋ add variable</button>' +
         '        <label style="font-size:11px;" title="After substituting, run a linear-propagation pass (eliminate forced variables) as a further column."><input type="checkbox" id="alg-val-prop" checked> propagate</label>' +
         '        <button id="alg-val-apply" class="small" type="button" title="Substitute the exact values (continued-fraction ℚ(i)) for these variables — and their conjugates — in one new column">Set values</button></div>' +
-        '      <div class="algebra-line-label" style="margin-top:8px;">Define substitution <span class="hint" style="font-weight:400;">(abbreviate a sub-expression as a new symbol)</span></div>' +
+        '    </div>' +
+        '  </details>' +
+        // 3. Edit system — introducing a symbol or imposing a custom condition CHANGES the system;
+        //    neither is an assumption about a variable.
+        '  <details class="algebra-section">' +
+        '    <summary>Edit system</summary>' +
+        '    <div class="algebra-section-body">' +
+        '      <div class="algebra-line-label">Define substitution <span class="hint" style="font-weight:400;">(abbreviate a sub-expression as a new symbol)</span></div>' +
         '      <div class="algebra-define-row">' +
         '        <input id="alg-def-name" class="alg-def-name" type="text" placeholder="t" autocomplete="off" spellcheck="false" title="A fresh name for the new symbol" />' +
         '        <span class="alg-def-eq">:=</span>' +
@@ -1309,6 +1348,7 @@ const QD = _QD;
       _realPicker = buildPicker($('#alg-real-pick'), { label: 'pick', friendly: (raw) => latexPlain(raw) + ' · ' + raw, selected: realSel, getOptions: () => store.baseVariables() });
       refreshValueVars();   // seeds the first value-table row
       refreshMmaColumns();  // populate the Mathematica-export column picker
+      wireSectionPersistence(panel);   // restore + remember which workflow sections are open
       // close any open picker menu when clicking elsewhere
       document.addEventListener('click', () => { if (_openMenu) { _openMenu.classList.add('hidden'); _openMenu = null; } });
 
@@ -1708,23 +1748,50 @@ const QD = _QD;
     }
     function _factorCount(id) { return _factorInfo(id).count; }
     function _factorable(id) { return _factorInfo(id).status === 'reducible'; }
+    // Typeset a polynomial, or elide it with a useful summary when it is too large to render.
+    // DISPLAY_CAP comes from the canvas so the two surfaces cannot drift apart on the threshold.
+    function polyCap() { const AC = QD.AlgebraCanvas; return (AC && AC.DISPLAY_CAP) || 120; }
+    function renderPolyCapped(el, poly, tex, display) {
+      const RL = QD.RiemannLatex;
+      const size = (poly && poly.size) ? poly.size() : 0;
+      if (size > polyCap()) {
+        let deg = 0, vars = [];
+        try { vars = [...poly.vars()]; for (const v of vars) deg = Math.max(deg, poly.degreeIn(v)); } catch (e) { /* best effort */ }
+        el.textContent = size + ' terms · degree ' + deg
+          + (vars.length ? ' · ' + vars.slice(0, 6).map(latexPlain).join(', ') + (vars.length > 6 ? ', …' : '') : '')
+          + ' — too large to typeset; use Copy LaTeX / Export.';
+        el.classList.add('hint');
+        return false;
+      }
+      el.classList.remove('hint');
+      if (RL && RL.render) RL.render(el, tex, !!display); else el.textContent = tex;
+      return true;
+    }
     function renderInspector(sel) {
       const box = $('#alg-inspector'), sections = $('#alg-sections');
       if (!box) return;
       sel = (sel || []).filter((id) => store.get(id));
       if (!sel.length) {
         box.classList.add('hidden'); box.innerHTML = '';
-        if (sections) sections.classList.remove('hidden');
+        if (sections) { sections.classList.remove('hidden'); sections.classList.remove('is-behind-inspector'); }
         return;
       }
       box.classList.remove('hidden');
-      if (sections) sections.classList.add('hidden');
+      // Selecting a node used to HIDE the whole workflow — Assume / Reduce / Analyze / Export all
+      // vanished and the only way back was a button labelled "Done". Collapse them instead: they
+      // stay listed and one click away, so inspecting an equation is no longer modal.
+      if (sections) { sections.classList.remove('hidden'); sections.classList.add('is-behind-inspector'); }
       box.innerHTML = '';
       const head = document.createElement('div'); head.className = 'algebra-inspector-head';
       const title = document.createElement('span'); title.className = 'algebra-line-label';
-      title.textContent = sel.length === 1 ? 'Selected equation' : 'Eliminate a variable';
-      const done = document.createElement('button'); done.type = 'button'; done.className = 'small'; done.textContent = 'Done';
-      done.title = 'Clear selection'; done.addEventListener('click', () => { if (canvas) canvas.clearSelection(); });
+      // Name WHICH equation, not just "Selected equation" — the panel is ~900px from the card that
+      // was clicked, so the label is the only thing tying the two together.
+      const n0 = sel.length === 1 ? store.get(sel[0]) : null;
+      title.textContent = sel.length === 1 ? ((n0 && n0.label) ? n0.label : 'Selected equation') : ('Eliminate a variable · ' + sel.length + ' selected');
+      title.title = sel.length === 1 ? 'The equation selected on the graph' : '';
+      const done = document.createElement('button'); done.type = 'button'; done.className = 'small'; done.textContent = '← Back';
+      done.title = 'Clear the selection and return to the workflow';
+      done.addEventListener('click', () => { if (canvas) canvas.clearSelection(); });
       head.appendChild(title); head.appendChild(done); box.appendChild(head);
       const mkBtn = (txt, tip, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'small'; b.textContent = txt; if (tip) b.title = tip; b.addEventListener('click', fn); return b; };
 
@@ -1732,8 +1799,12 @@ const QD = _QD;
         const n = store.get(sel[0]);
         const lab = document.createElement('div'); lab.className = 'hint'; lab.textContent = n.label; box.appendChild(lab);
         const eq = document.createElement('div'); eq.className = 'algebra-inspector-eq';
-        const RL = QD.RiemannLatex; const tex = n.poly.toLatex(latexOf) + relSuffix(n.rel);
-        if (RL && RL.render) RL.render(eq, tex, true); else eq.textContent = tex;
+        // The canvas elides past DISPLAY_CAP terms; the sidebar did NOT, so selecting a
+        // post-Gröbner node with a few thousand terms typeset all of it, in DISPLAY mode, into a
+        // narrow panel, on the main thread. Share the canvas's cap rather than inventing a second
+        // one, and make the placeholder informative — a bare term count says nothing about the
+        // equation, so give degree, term count and the surviving variables.
+        renderPolyCapped(eq, n.poly, n.poly.toLatex(latexOf) + relSuffix(n.rel), true);
         box.appendChild(eq);
         const prov = provText(n.provenance);
         if (prov) { const p = document.createElement('div'); p.className = 'hint'; p.textContent = 'Origin: ' + prov; box.appendChild(p); }
