@@ -20,6 +20,7 @@
     "mathjs": "^12.4.1"
   },
   "devDependencies": {
+    "@cas/exact": "workspace:*",
     "eslint": "^9.39.4",
     "globals": "^15.15.0",
     "jsdom": "^26.1.0",
