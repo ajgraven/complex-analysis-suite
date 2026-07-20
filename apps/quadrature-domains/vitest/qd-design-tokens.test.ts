@@ -39,6 +39,63 @@ describe("every referenced custom property is declared", () => {
   });
 });
 
+describe("comment delimiters are balanced", () => {
+  // A real failure while moving the φ/h reference onto the canvas: an edit left four lines of
+  // prose AFTER a comment's closing `*/`, then a second `*/`. CSS has no error reporting — the
+  // parser discarded tokens until it could resync, taking the whole `.algebra-corner` rule with
+  // it, and the card rendered unstyled (full width, wrong corner). Every other test passed,
+  // including the token guards above, because the file is still "valid CSS" to a regex.
+  it("no nested or stray /* */ anywhere in the stylesheet", () => {
+    let depth = 0, line = 1;
+    const problems: string[] = [];
+    for (let i = 0; i < RAW.length; i++) {
+      if (RAW[i] === "\n") line++;
+      if (RAW[i] === "/" && RAW[i + 1] === "*") {
+        if (depth > 0) problems.push(`nested /* at line ${line}`);
+        depth++; i++;
+      } else if (RAW[i] === "*" && RAW[i + 1] === "/") {
+        depth--;
+        if (depth < 0) { problems.push(`stray */ at line ${line}`); depth = 0; }
+        i++;
+      }
+    }
+    expect(problems).toEqual([]);
+    expect(depth, "unclosed /* at end of file").toBe(0);
+  });
+});
+
+describe("the canvas corner slot stays inside the canvas cell", () => {
+  const rule = (sel: string) => {
+    const m = new RegExp(sel.replace(/[.#]/g, "\\$&") + "\\s*\\{([^}]*)\\}").exec(CSS);
+    return m ? m[1] : null;
+  };
+
+  it("is a grid item in the canvas area, not an absolute overlay", () => {
+    // #algebra-graph is position:absolute, so `bottom: 8px` on a floating child measures from the
+    // bottom of the WHOLE grid and lays the card over the rail. Placing it in the canvas area with
+    // align-self:end pins it to the track's box instead. Verified in-browser: clears both the rail
+    // and the toolbar. Keep it declarative so a later "just make it absolute" reintroduces neither.
+    const body = rule("#algebra-graph .algebra-corner");
+    expect(body, ".algebra-corner rule must exist").toBeTruthy();
+    expect(body).toMatch(/grid-area:\s*canvas/);
+    expect(body).toMatch(/align-self:\s*end/);
+    expect(body).not.toMatch(/position:\s*absolute/);
+  });
+
+  it("does not swallow clicks meant for the cards underneath", () => {
+    expect(rule("#algebra-graph .algebra-corner")).toMatch(/pointer-events:\s*none/);
+    expect(rule("#algebra-graph .algebra-corner > \\*")).toMatch(/pointer-events:\s*auto/);
+  });
+
+  it("bounds itself against the cell, not the viewport", () => {
+    // Below 860px the app stacks: the canvas keeps its width and loses most of its height, so a
+    // viewport-width breakpoint would miss the dimension that actually runs out.
+    const body = rule("#algebra-graph .algebra-corner")!;
+    expect(body).toMatch(/max-height:\s*calc\(100% - \d+px\)/);
+    expect(body).toMatch(/max-width:\s*min\(/);
+  });
+});
+
 describe("no inline fallbacks — they are how the palette drifted", () => {
   it("var(--x, …) does not appear", () => {
     const withFallback = [...CSS.matchAll(/var\(\s*(--[a-z0-9-]+)\s*,([^)]*)\)/g)]

@@ -434,8 +434,11 @@ const QD = _QD;
       yes.addEventListener('click', () => { strip.remove(); onYes(); });
       no.addEventListener('click', () => { strip.remove(); setStatus(''); });
       strip.appendChild(msg); strip.appendChild(yes); strip.appendChild(no);
-      const ref = panel.querySelector('.algebra-ref-block');
-      if (ref) panel.insertBefore(strip, ref); else panel.appendChild(strip);
+      // Anchor on the inspector, which now occupies the slot the φ/h reference block used to —
+      // directly under the header. Falling through to appendChild would drop the strip at the
+      // BOTTOM of a long sidebar, where "confirm in the sidebar" sends you looking for nothing.
+      const anchor = panel.querySelector('#alg-inspector');
+      if (anchor) panel.insertBefore(strip, anchor); else panel.appendChild(strip);
       strip.scrollIntoView({ block: 'nearest' });
       toast(what + ' would replace your derivation — confirm in the sidebar.', { kind: 'error' });
     }
@@ -464,8 +467,11 @@ const QD = _QD;
         if (!store.size && activeEnv) seedFromCurrent(); else rerender();
       });
       strip.appendChild(msg); strip.appendChild(yes); strip.appendChild(no);
-      const ref = panel.querySelector('.algebra-ref-block');
-      if (ref) panel.insertBefore(strip, ref); else panel.appendChild(strip);
+      // Anchor on the inspector, which now occupies the slot the φ/h reference block used to —
+      // directly under the header. Falling through to appendChild would drop the strip at the
+      // BOTTOM of a long sidebar, where "confirm in the sidebar" sends you looking for nothing.
+      const anchor = panel.querySelector('#alg-inspector');
+      if (anchor) panel.insertBefore(strip, anchor); else panel.appendChild(strip);
       return true;
     }
     // Flush a pending save, and warn only when the work is genuinely unrecoverable — i.e. the
@@ -859,6 +865,56 @@ const QD = _QD;
     // Populate the φ / h reference panel: the symbolic forms of φ (RiemannLatex.build) and
     // h (buildHForm), plus a legend mapping every variable to its meaning + (optionally) its
     // value. Rebuilt on open, on the show-values toggle, and when the active solve changes.
+    // ---- φ / h reference card (canvas, bottom-left) --------------------------
+    // Finding 4.2: this was an always-visible, non-collapsible block at the TOP of the sidebar,
+    // outranking every workflow section below it and costing ~230px of a panel that has to hold
+    // four sections plus an inspector. It describes the map, so it belongs beside the equations,
+    // not above the controls.
+    //
+    // Defaults OPEN, and the user's toggle sticks for the session.
+    //
+    // The first draft auto-collapsed once a graph existed, to pre-empt the card covering column 0.
+    // Measured in-browser that never happened: at 22 nodes with a 17-equation column, scrolled and
+    // unscrolled, it covers ZERO cards — the card only intersects column 0's x-band, and column 0
+    // is the short ORIGINAL system (5 equations here); every reduction lands in a column to its
+    // right. A tall column 0 (a moment seed, a wide decomposition) can still reach it, which is
+    // what the toggle is for. Auto-collapsing the common case to pre-empt the rare one would hide
+    // the thing this change exists to surface.
+    let _refUserPref = null;        // null = default; true/false = explicit user choice
+    function refShouldOpen() { return (_refUserPref == null) ? true : !!_refUserPref; }
+    function setRefCollapsed(on) {
+      const card = $('#alg-refcard'); if (!card) return;
+      card.classList.toggle('is-collapsed', !!on);
+      const t = card.querySelector('.algebra-refcard-toggle');
+      if (t) { t.textContent = on ? '▸' : '▾'; t.title = on ? 'Show the φ / h reference' : 'Collapse the φ / h reference'; }
+    }
+    function mountReferenceCard() {
+      const host = canvas && canvas.corner; if (!host) return;
+      host.innerHTML = '';
+      const card = document.createElement('div');
+      card.id = 'alg-refcard'; card.className = 'algebra-refcard';
+      const head = document.createElement('div'); head.className = 'algebra-refcard-head';
+      const toggle = document.createElement('button');
+      toggle.type = 'button'; toggle.className = 'algebra-refcard-toggle'; toggle.textContent = '▾';
+      toggle.addEventListener('click', () => {
+        const nowCollapsed = !card.classList.contains('is-collapsed');
+        _refUserPref = !nowCollapsed;          // remember the CHOICE, not the auto default
+        setRefCollapsed(nowCollapsed);
+      });
+      const title = document.createElement('span');
+      title.className = 'algebra-line-label'; title.textContent = 'φ / h reference';
+      const vals = document.createElement('label'); vals.className = 'algebra-ref-opt';
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.id = 'alg-ref-values';
+      vals.appendChild(cb); vals.appendChild(document.createTextNode(' values'));
+      head.appendChild(toggle); head.appendChild(title); head.appendChild(vals);
+      const body = document.createElement('div');
+      body.id = 'alg-ref'; body.className = 'algebra-ref';     // buildReference() writes here
+      card.appendChild(head); card.appendChild(body);
+      host.appendChild(card);
+      cb.addEventListener('change', buildReference);
+      setRefCollapsed(!refShouldOpen());
+      buildReference();
+    }
     function buildReference() {
       const box = $('#alg-ref'); if (!box) return;
       box.innerHTML = '';
@@ -1176,6 +1232,11 @@ const QD = _QD;
         '    <button id="alg-seed-moment" class="small" type="button" title="Seed the Aharonov–Shapiro moment system: order-2 quadrature domains from their harmonic moments M₀, M₁ (symbolic — needs no solve; pin the moments via “Set values” to determine a specific QD)">Seed A–S moments</button>' +
         '    <button id="alg-cancel" class="small hidden" type="button" title="Cancel the running computation">Cancel</button>' +
         '  </div>' +
+        // A seeding option, so it lives with the seed buttons (it used to hang off the φ/h
+        // reference block, which described the map rather than generating it).
+        '  <div class="row algebra-seed-opt">' +
+        '    <label class="algebra-ref-opt" data-str-title="tooltips.algFixW0"><input type="checkbox" id="alg-w0-fix" checked> fix φ(0)=w₀</label>' +
+        '  </div>' +
         // The pipeline description used to live in a 543-character `title`: invisible on touch,
         // unreachable by keyboard, gone on pointer-move. It is the substance of the tool, so it is
         // caption text now. See finding 4.3 — nothing over ~120 chars belongs in a tooltip.
@@ -1197,15 +1258,12 @@ const QD = _QD;
         // header its height is subtracted from the sidebar viewport PERMANENTLY — scrolling cannot
         // reveal what sits under it. Out here it scrolls away like any other content.
         '<details id="alg-suggest" class="algebra-suggest hidden"></details>' +
-        // ---- φ / h REFERENCE (always visible at the top: the symbolic forms + legend) ----
-        '<div class="algebra-ref-block">' +
-        '  <div class="row algebra-ref-controls">' +
-        '    <span class="algebra-line-label">φ / h reference</span>' +
-        '    <label class="algebra-ref-opt" data-str-title="tooltips.algFixW0"><input type="checkbox" id="alg-w0-fix" checked> fix φ(0)=w₀</label>' +
-        '    <label class="algebra-ref-opt"><input type="checkbox" id="alg-ref-values"> show values</label>' +
-        '  </div>' +
-        '  <div id="alg-ref" class="algebra-ref"></div>' +
-        '</div>' +
+        // The φ/h reference used to sit HERE — an always-visible, non-collapsible 230px block
+        // outranking the entire workflow (finding 4.2). It is now a collapsible card on the canvas
+        // (mountReferenceCard), beside the equations it describes. Its "fix φ(0)=w₀" checkbox did
+        // NOT go with it: that is a generation choice (it changes which system column 0 *is*), not
+        // a display option, and it was only filed under "reference" by accretion. It now sits with
+        // the seed buttons that act on it, in the primary row above.
         // ---- CONTEXTUAL NODE INSPECTOR (shown only when ≥1 node is selected) ----
         '<div id="alg-inspector" class="algebra-inspector hidden"></div>' +
         // ---- WORKFLOW SECTIONS (collapsible; hidden while the inspector is up) ----
@@ -1363,8 +1421,8 @@ const QD = _QD;
 
       const helpBtn = $('#alg-help-toggle');
       if (helpBtn) helpBtn.addEventListener('click', () => { const h = $('#alg-help'); if (h) h.classList.toggle('hidden'); });
-      const refVals = $('#alg-ref-values');
-      if (refVals) refVals.addEventListener('change', buildReference);
+      // (#alg-ref-values now lives on the canvas reference card and is wired by mountReferenceCard,
+      // which owns the element — wiring it from here would depend on a mount order that no longer holds.)
       $('#alg-seed').addEventListener('click', seedFromCurrent);
       { const mb = $('#alg-seed-moment'); if (mb) mb.addEventListener('click', seedMomentSystem); }
       const w0FixCb = $('#alg-w0-fix');
@@ -1443,7 +1501,7 @@ const QD = _QD;
       document.addEventListener('click', () => { _closeOpenMenu(); });
 
       if (QD.Strings && QD.Strings.apply) QD.Strings.apply(panel);
-      buildReference();     // the φ/h reference is visible by default
+      // (the reference itself is built by mountReferenceCard, after the canvas exists)
       setStatus(activeEnv ? '' : (STR.noSolve || 'No classical bounded QD solved yet.'));
     }
 
@@ -3687,7 +3745,7 @@ const QD = _QD;
       const active = e.detail && e.detail.tab === 'algebra';
       if (!active) { showSurface(false); return; }
       if (!mounted) {
-        mountSidebar(); mountSurface(); mounted = true;
+        mountSidebar(); mountSurface(); mountReferenceCard(); mounted = true;
         // A saved session outranks auto-seeding: seeding would clear the graph and discard the
         // very derivation being offered back, so ask first.
         if (offerRestore()) { showSurface(true); return; }

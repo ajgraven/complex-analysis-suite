@@ -1190,18 +1190,51 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 /* Smaller sidebar description / prose text (~70% of the card default) */
 #controls-algebra .hint { font-size: 70%; line-height: 1.4; }
 
-/* φ / h reference shown at the top of the Algebra sidebar (always visible, compact math) */
-#controls-algebra .algebra-ref-block {
-  border-top: 1px solid var(--c-border-soft); border-bottom: 1px solid var(--c-border-soft);
-  padding: 4px 2px; margin-bottom: 2px;
+/* φ / h REFERENCE CARD (finding 4.2). This was an always-visible, non-collapsible block pinned to
+   the TOP of the sidebar: ~230px outranking all four workflow sections and the inspector, to show
+   data that describes the equations rather than acting on them. It is now a collapsible card over
+   the lane track, beside what it describes.
+
+   The slot is a GRID ITEM in the `canvas` area, not an absolute overlay — the container is
+   position:absolute, so `bottom: 8px` would measure from the bottom of the whole grid and lay the
+   card over the rail. align-self:end inside the canvas cell pins it to the track's own box.
+   pointer-events are off on the slot and back on for the card, so the empty space around it does
+   not swallow clicks meant for the cards underneath.
+
+   Both size bounds are ELEMENT-relative (% of the canvas cell), not viewport media queries: below
+   860px the app stacks and the canvas keeps its width but loses most of its height, so a
+   viewport-width breakpoint would miss the dimension that actually runs out. Capping against the
+   cell means the body scrolls instead of the card overflowing the track. */
+#algebra-graph .algebra-corner {
+  grid-area: canvas; align-self: end; justify-self: start;
+  margin: 0 0 8px 8px; z-index: 12; min-width: 0; display: flex;
+  max-width: min(300px, 42%); max-height: calc(100% - 16px);
+  pointer-events: none;
 }
-#controls-algebra .algebra-ref-controls { gap: 8px; align-items: center; flex-wrap: wrap; }
+#algebra-graph .algebra-corner > * { pointer-events: auto; }
+.algebra-refcard {
+  background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.16);
+  padding: 4px 6px; font-size: 11px; max-width: 100%;
+  display: flex; flex-direction: column; min-height: 0;
+}
+.algebra-refcard-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.algebra-refcard-toggle {
+  border: 0; background: transparent; font: inherit; cursor: pointer;
+  color: var(--c-muted); padding: 0 2px; border-radius: 3px; line-height: 1;
+}
+.algebra-refcard-toggle:hover { color: var(--c-text); background: var(--c-hover); }
+.algebra-refcard .algebra-ref-opt { font-size: 10px; color: var(--c-muted); margin-left: auto; }
+.algebra-refcard .algebra-ref { margin: 2px 0 0; max-height: 236px; overflow: auto; min-height: 0; }
+.algebra-refcard.is-collapsed .algebra-ref,
+.algebra-refcard.is-collapsed .algebra-ref-opt { display: none; }
+.algebra-refcard .algebra-ref-math .katex-display,
+.algebra-refcard .algebra-ref-math .katex { font-size: 0.72em; }
+.algebra-refcard .algebra-ref-math .katex-display { margin: 2px 0; }
+.algebra-refcard .algebra-ref-legend { font-size: 9px; }
+/* The seeding option that used to hang off the reference block, now with the seed buttons. */
+#controls-algebra .algebra-seed-opt { margin-top: 2px; }
 #controls-algebra .algebra-ref-opt { font-size: 70%; color: var(--c-muted); }
-#controls-algebra .algebra-ref { margin: 2px 0; max-height: 230px; overflow: auto; }
-#controls-algebra .algebra-ref-math .katex-display,
-#controls-algebra .algebra-ref-math .katex { font-size: 0.72em; }
-#controls-algebra .algebra-ref-math .katex-display { margin: 2px 0; }
-#controls-algebra .algebra-ref-legend { font-size: 9px; }
 
 /* Numbered onboarding steps strip (dismissible) */
 #controls-algebra .algebra-steps {

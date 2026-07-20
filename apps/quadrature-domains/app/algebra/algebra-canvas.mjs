@@ -51,7 +51,7 @@
 //
 // Public API: create() → { render, rerender, fit, fitWidth, scrollToColumn, getSelection,
 // clearSelection, setZoom, zoomAt, setAllCollapsed, setVerdict, setMinimap, setQuery,
-// moveSelection, rail, setVerdictCollapsed }.  Module: { create, rigorMeta, DISPLAY_CAP }
+// moveSelection, rail, corner, setVerdictCollapsed }.  Module: { create, rigorMeta, DISPLAY_CAP }
 // — DISPLAY_CAP is exported so the sidebar inspector shares one elision threshold.
 //
 // ⚠ scrollToColumn lands the scroll DIRECTLY when a smooth scrollTo is ignored: this engine drops
@@ -133,6 +133,14 @@ const QD = _QD;
     const mmView = div('algebra-minimap-view');
     minimap.appendChild(mmInner); minimap.appendChild(mmView);
     container.appendChild(minimap);
+    // Bottom-left corner slot for a floating card over the lane track (the φ/h reference lives
+    // here — P6a/4.2). Deliberately a GRID ITEM in the `canvas` area rather than an absolutely
+    // positioned overlay like the minimap: the container is position:absolute, so `bottom: 8px`
+    // would measure from the bottom of the whole grid and put the card over the rail. Sharing the
+    // canvas cell with align-self:end pins it inside the track's box and nothing else's.
+    // The canvas owns the seat; the UI layer fills it (same split as `rail`).
+    const corner = div('algebra-corner');
+    container.appendChild(corner);
     // Bottom chrome rail. The branch bar and reduction breadcrumb used to be absolutely positioned
     // at z-index 11 — i.e. ABOVE the verdict card at z-index 10 — so on any surface narrower than
     // ~1000px the navigation furniture painted over the result. In the grid they own a row and
@@ -797,7 +805,7 @@ const QD = _QD;
 
     track.style.transform = 'scale(1)';
     return { render, rerender, fit, fitWidth, scrollToColumn, getSelection, clearSelection, setZoom, zoomAt,
-      setAllCollapsed, setVerdict, setMinimap, setQuery, moveSelection, rail, setVerdictCollapsed };
+      setAllCollapsed, setVerdict, setMinimap, setQuery, moveSelection, rail, corner, setVerdictCollapsed };
   }
 
   window.QD = window.QD || {};
