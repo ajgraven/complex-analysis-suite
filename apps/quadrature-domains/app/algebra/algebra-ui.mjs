@@ -365,6 +365,15 @@ const QD = _QD;
     let _minimapOn = false;        // DAG minimap toggle (B2)
     let _focusOn = false;          // focus mode toggle (P6a): isolate the selection's derivation
     let _drawerOpen = true;        // results drawer (P6b): index above the docked verdict
+    let _colCollapsed = false;     // whole result column collapsed to a 34px sliver
+    // One place decides the column's width, because two controls drive it: the drawer's « (always
+    // present while there are results) and the verdict's « (present only while a verdict shows).
+    // Before this, only the verdict had one — so dismissing a result stranded the column open.
+    function setResultColCollapsed(on) {
+      _colCollapsed = !!on;
+      if (canvas && canvas.setVerdictCollapsed) canvas.setVerdictCollapsed(_colCollapsed);
+      renderDrawer();
+    }
 
     // LaTeX for the conjugate-model vars + the constraint boundary/aux vars.
     const baseLatex = QE.latexOf('conjugate');
@@ -1134,6 +1143,63 @@ const QD = _QD;
       toast(msg);
     }
 
+    // ---- pin the known quadrature data ---------------------------------------
+    // The seeded system keeps the quadrature data (a_j, C_{j,s}) SYMBOLIC even though the solve
+    // already knows their values — deliberately, because the workspace is for reasoning about the
+    // family, not one member. But it creates an asymmetry that reads as a bug: `fix φ(0)=w₀`
+    // SUBSTITUTES w₀ (it stops being a variable and, when w₀ = 0, its terms simply vanish), while
+    // a_j stays a visible symbol. So the two "known" quantities are treated oppositely and the
+    // gauge looks like it did nothing.
+    //
+    // This closes the gap on demand: substitute the solved data, in one column, using the same
+    // exact ℚ(i) rationalisation and the same store call the "Set values" panel uses. On the
+    // cardioid that turns (●)₁ into z₁·(…) = 0 — because a₁ = w₀ = 0 makes the (a₁ − w₀)(1−z₁z̄₁)²
+    // group vanish — which is what makes z₁ = 0 visible as a factor.
+    //
+    // NOT automatic, and z₁ = 0 is NOT then forced: it is one factor of two, and picking it is a
+    // univalence argument, not an algebraic consequence. The action reports that rather than
+    // implying the system proved it.
+    function knownDataPairs() {
+      const hd = (activeEnv && activeEnv.hData) || lastHData;
+      if (!hd || !hd.poles || !hd.poles.length) return [];
+      const out = [];
+      hd.poles.forEach((pole, i) => {
+        const j = i + 1;
+        if (pole.a) out.push({ varName: 'a' + j, value: { re: pole.a.re || 0, im: pole.a.im || 0 } });
+        (pole.principal || []).forEach((C, s) => {
+          if (C) out.push({ varName: 'C' + j + '_' + (s + 1), value: { re: C.re || 0, im: C.im || 0 } });
+        });
+      });
+      // Only pin what the current system actually contains — a stale or higher-order hData would
+      // otherwise inject variables this column has never heard of.
+      const live = new Set(store.variables());
+      return out.filter((p) => live.has(p.varName));
+    }
+    function doPinKnownData() {
+      if (!ensureSeed()) return;
+      if (busyGuard()) return;
+      const pairs = knownDataPairs();
+      if (!pairs.length) {
+        toast('No quadrature data to pin — the current column has no a_j / C_{j,s} left symbolic.', { kind: 'error' });
+        return;
+      }
+      const r = store.substituteValues(pairs, { propagate: true });
+      if (!r.ok) { showError('Pin data: ' + (r.reason || 'failed')); return; }
+      rerender(); refreshPickers();
+      const kv = (store.knownValues && store.knownValues()) || {};
+      const w0 = store.w0Fixed ? kv.w0 : null;
+      const matches = w0 ? pairs.filter((p) => /^a\d+$/.test(p.varName)
+        && Math.abs(p.value.re - (w0.re || 0)) < 1e-12 && Math.abs(p.value.im - (w0.im || 0)) < 1e-12) : [];
+      let msg = 'Pinned ' + pairs.length + ' known value' + (pairs.length === 1 ? '' : 's') + ' → column ' + r.column;
+      // The coincidence the user is usually chasing: a node sitting exactly at the gauge centre.
+      // Worth naming, because that is when the locator equation loses a whole group and factors.
+      if (matches.length) {
+        msg += ' · ' + matches.map((p) => latexPlain(p.varName)).join(', ')
+          + ' = φ(0), so the (a−w₀) group drops out — try "Attempt to factor" on the locator row';
+      }
+      toast(msg);
+    }
+
     // Live preview for the "Define substitution" control: parse the typed expression against the
     // current variables and render it (KaTeX); surface a parse error and disable Apply when invalid.
     function previewSubst() {
@@ -1385,6 +1451,7 @@ const QD = _QD;
         '        <button id="alg-triangular" class="small" type="button" title="Triangular decomposition (Wu pseudo-elimination) of the current system — an alternative to Gröbner that exhibits the solution structure (free variables, no-solution)">Triangular decomp.</button>' +
         '        <button id="alg-saturate" class="small" type="button" title="Saturate the current system by the Möbius denominators ∏(1−z̄_j z_j) — removes the |z_j|=1 boundary stratum the cleared (●)/(★) denominators carry, so the existence count becomes the EXACT number of algebraic quadrature-domain solutions (e.g. the unit disk 4 → 2). Safe: a genuine QD has |z_j|<1, so nothing genuine is dropped.">Saturate (admissibility)</button>' +
         '        <button id="alg-propagate-all" class="small" type="button" title="Carry EVERY univalence constraint into the current system in one step, with all assumptions (reality, imaginary, fixed φ(0), pinned values) applied to each">Propagate constraints → current</button></div>' +
+        '        <div class="row"><button id="alg-pin-data" class="small" type="button" title="Substitute the SOLVED quadrature data (the nodes a_j and principal parts C_{j,s}) as exact ℚ(i) values, in one new column. They are kept symbolic by default so the workspace describes the whole family; pin them to see what the specific domain collapses to — e.g. when a node sits at φ(0), the locator equation loses its (a−w₀) group and factors.">Pin known quadrature data</button></div>' +
         // Column-level factoring. The per-node "Attempt to factor" requires selecting each card in
         // turn to discover whether it splits; this scans the whole current system at once, which is
         // the shape "simplify and reduce these equations" actually asks for.
@@ -1495,6 +1562,7 @@ const QD = _QD;
       $('#alg-triangular').addEventListener('click', doTriangular);
       $('#alg-saturate').addEventListener('click', doSaturate);
       $('#alg-propagate-all').addEventListener('click', doPropagateAll);
+      { const pd = $('#alg-pin-data'); if (pd) pd.addEventListener('click', doPinKnownData); }
       $('#alg-classify').addEventListener('click', doClassify);
       $('#alg-dimension').addEventListener('click', doDimension);
       $('#alg-solve').addEventListener('click', doSolve);
@@ -1898,8 +1966,35 @@ const QD = _QD;
           : '⚠ not numerically verified';
         head.appendChild(vspan);
         out.appendChild(head);
+        // SIMPLIFY FOR DISPLAY, then re-verify. RatFn never cancels (a gcd per step would sit in
+        // the solver's hot loop), so a closed form arrives carrying common factors, unit
+        // denominators and zero terms — correct but unreadable. simplifyRadical cancels them
+        // exactly over ℚ(i).
+        //
+        // The re-verification is the point: the header above may already say "verified ✓", and
+        // that verdict was earned by the ORIGINAL roots. Showing a simplified expression under
+        // it without re-checking would let a bug in the simplifier inherit a guarantee it never
+        // earned — a false '=' , which is the worst failure this project has. So the simplified
+        // roots are re-run through the same verifier, and if they do not clear the same bar the
+        // ORIGINAL roots are displayed instead.
+        let roots = r.roots, simplified = false;
+        if (typeof SR.simplifyRadical === 'function' && r.roots.length) {
+          try {
+            const cand = r.roots.map((root) => SR.simplifyRadical(root, S));
+            const v2 = SR.verifyRoots(n.poly, sel.value, cand, { samples: 6 });
+            const stillOk = v2 && v2.checked > 0 && v2.maxResidual < 1e-6;
+            // Only adopt when the ORIGINAL verified too — if it didn't, there is no bar to clear
+            // and silently swapping in a different expression would hide that.
+            if (stillOk && verOk) { roots = cand; simplified = true; }
+          } catch (e) { /* keep the originals — an unreadable answer beats an unverified one */ }
+        }
+        if (simplified) {
+          const s = document.createElement('span'); s.className = 'hint';
+          s.textContent = '  · simplified (exact cancellation, re-verified)';
+          head.appendChild(s);
+        }
         const latexes = [];
-        r.roots.forEach((root) => {
+        roots.forEach((root) => {
           const tex = latexPlain(sel.value) + ' = ' + SR.radicalToLatex(root, latexOf, S);
           latexes.push(tex);
           const d = document.createElement('div'); d.className = 'algebra-solve-root';
@@ -3411,7 +3506,24 @@ const QD = _QD;
       }
       // …and what the step actually changed, which the counts above cannot say: a Gröbner step
       // can hold the equation count fixed while replacing every generator.
-      const diff = columnDiffLabel(columnDiffFor(c));
+      let diff = columnDiffLabel(columnDiffFor(c));
+      // Column 0 has no predecessor to diff, but it does have one thing worth stating: "φ(0) fixed"
+      // in the label means w₀ was SUBSTITUTED, not constrained — so it is not a variable here and,
+      // when w₀ = 0, its terms vanished rather than appearing. Users reasonably read the absence as
+      // "the option did nothing". Say what it did, and name the case where a node coincides with
+      // the gauge centre, because that is when a whole group drops out of the locator row.
+      if (!c && store.w0Fixed) {
+        const kv = (store.knownValues && store.knownValues()) || {};
+        const w0 = kv.w0 || { re: 0, im: 0 };
+        const at = ((activeEnv && activeEnv.hData && activeEnv.hData.poles) || [])
+          .map((p, i) => ({ p: p, j: i + 1 }))
+          .filter((x) => x.p && x.p.a
+            && Math.abs((x.p.a.re || 0) - (w0.re || 0)) < 1e-12
+            && Math.abs((x.p.a.im || 0) - (w0.im || 0)) < 1e-12)
+          .map((x) => 'a' + x.j);
+        diff = 'w₀ := ' + _fmtComplex(w0) + ' substituted — not a variable here'
+          + (at.length ? ' (= ' + at.join(', ') + ')' : '');
+      }
       return { step: String(c + 1), label: columnLabel(c, ns), stats, diff, isCurrent: c === store.maxColumn() };
     }
     // B3 — a terse operation label for a derivation edge (drawn on the arrow + as its hover
@@ -3713,6 +3825,21 @@ const QD = _QD;
       if (!_results.length) { host.classList.add('hidden'); return; }
       host.classList.remove('hidden');
       const head = document.createElement('div'); head.className = 'algebra-drawer-head';
+      // Column collapse lives HERE, not only on the verdict. P6b put the « on the verdict card,
+      // so dismissing a result with × left the drawer holding 340px open with no control left to
+      // reclaim it — the canvas stayed at 580px of a 920px row with no way out. The drawer is the
+      // one element present whenever the column is, so the control belongs on it.
+      const dock = document.createElement('button');
+      dock.type = 'button'; dock.className = 'algebra-drawer-dock';
+      dock.textContent = _colCollapsed ? '»' : '«';
+      dock.title = _colCollapsed
+        ? 'Expand the results panel'
+        : 'Collapse the results panel (keeps every result — give the width back to the graph)';
+      dock.addEventListener('click', () => setResultColCollapsed(!_colCollapsed));
+      head.appendChild(dock);
+      // Collapsed, the head is the whole panel: just the » to get back. Anything else would
+      // either overflow the 34px sliver or be unreadable in it.
+      if (_colCollapsed) { host.appendChild(head); return; }
       const toggle = document.createElement('button');
       toggle.type = 'button'; toggle.className = 'algebra-drawer-toggle';
       toggle.textContent = _drawerOpen ? '▾' : '▸';

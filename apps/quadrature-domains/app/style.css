@@ -952,7 +952,18 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   border-bottom: 1px solid var(--c-border-soft);
   padding: 4px 6px; font-size: 11px; max-height: 34%; overflow: auto; min-height: 0;
 }
-#algebra-graph .algebra-result-col.is-collapsed .algebra-drawer { display: none; }
+/* Collapsed, the drawer STAYS — reduced to its head, which carries the » that expands the column
+   again. Hiding it (the P6b behaviour) left a 34px sliver with no control in it whenever the
+   verdict had been dismissed, i.e. no way back at all. */
+#algebra-graph .algebra-result-col.is-collapsed .algebra-drawer {
+  max-height: none; padding: 4px 2px; overflow: visible;
+}
+#algebra-graph .algebra-result-col.is-collapsed .algebra-drawer-head { justify-content: center; }
+.algebra-drawer-dock {
+  border: 0; background: transparent; font: inherit; cursor: pointer;
+  color: var(--c-muted); padding: 0 2px; border-radius: 3px; line-height: 1;
+}
+.algebra-drawer-dock:hover { color: var(--c-text); background: var(--c-hover); }
 .algebra-drawer-head { display: flex; align-items: center; gap: 5px; }
 .algebra-drawer-toggle {
   border: 0; background: transparent; font: inherit; cursor: pointer;
