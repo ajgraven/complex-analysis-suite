@@ -49,14 +49,15 @@ below is still open.
 | 3.3 inspector hides the whole workflow | ✅ shipped — #111 (sections recede rather than vanish) |
 | 4.9 nine flat inspector buttons, Delete mid-row | ✅ shipped — #112 (`.danger`, moved) |
 | 4.10 360px breakages | ✅ shipped — #112 |
-| 5.7 `?` overlay's shortcut registry | ✅ shipped — [#114](https://github.com/ajgraven/complex-analysis-suite/pull/114) (`QoL.registerShortcuts(scope, items)`; the overlay composes global + the tab active **at press time**) |
-| 5.3 focus management | ✅ shipped — #114 (context menu, variable picker, `?` dialog: focus in, trap, Esc, restore) |
-| 5.4 ARIA gaps (tab↔panel) | ◐ partial — #114 wired `aria-controls`/`aria-labelledby`/panel `tabindex`, plus `role=menu(item)` and `aria-expanded`. Roving-tabindex arrow nav **inside the tablist** is deliberately not done: the Algebra canvas binds arrows at document level, so the two would fight |
+| 5.7 `?` overlay's shortcut registry | ✅ shipped — [#115](https://github.com/ajgraven/complex-analysis-suite/pull/115) (`QoL.registerShortcuts(scope, items)`; the overlay composes global + the tab active **at press time**) |
+| 5.3 focus management | ✅ shipped — #115 (context menu, variable picker, `?` dialog: focus in, trap, Esc, restore) |
+| 5.4 ARIA gaps (tab↔panel) | ◐ partial — #115 wired `aria-controls`/`aria-labelledby`/panel `tabindex`, plus `role=menu(item)` and `aria-expanded`. Roving-tabindex arrow nav **inside the tablist** is deliberately not done: the Algebra canvas binds arrows at document level, so the two would fight |
 
 | 4.2 φ/h reference outranks the workflow | ✅ shipped — [#116](https://github.com/ajgraven/complex-analysis-suite/pull/116) (collapsible canvas card, bottom-left; its `fix φ(0)=w₀` checkbox stayed behind — that is a *generation* choice, not a display option) |
 | 3.6 collapsed cards clip with no marker | ✅ shipped — #116 (`text-overflow` cannot help: KaTeX emits atomic inline-block boxes) |
 | — focus mode (isolate a lineage) | ✅ shipped — #116 (`computeLineage`'s set finally does something; `applyFilter` is the single writer of `.is-dimmed` so search and focus compose) |
-| 2.1 one verdict slot, eleven writers | ✅ shipped — [#117](https://github.com/ajgraven/complex-analysis-suite/pull/117) (results drawer keyed `(track, branchSig)`; `current`/`stale`/`branch`) |
+| 2.1 one verdict slot, eleven writers | ✅ shipped — [#117](https://github.com/ajgraven/complex-analysis-suite/pull/117) (results drawer keyed `(track, branchSig)`; `current`/`stale`/`branch`) — **supersedes the #107 row above**, which only stopped a re-render destroying the *current* verdict; #117 keeps all of them |
+| — column diff (what a step changed) | ✅ shipped — [#118](https://github.com/ajgraven/complex-analysis-suite/pull/118) (`+15 new · 2 carried · −3 gone` by exact polynomial key; multiset, zero parts omitted) |
 
 **Still open.** From Tier 4: **4.4** (section order / "Shape from moments" misfiled), **4.5**
 (the ①②③④ strip is still decoration), **4.12**, **4.13**. From Tier 5: **5.2** dark mode (5.1
@@ -79,9 +80,8 @@ count) **only via a transient toast**. It was never one of the eleven verdict si
 in the drawer either — the same "the workspace does not keep what it told you" problem, one layer
 down.
 
-**Planned next (P6c).** Lightweight column diff: extend the lane header to `+3 new · 14 carried ·
-2 eliminated`, derived from store edges and exact term lists. `columnInfo` already computes a
-variable-count delta between adjacent columns, so this is an increment rather than a new feature.
+**The six-PR rework is complete.** P1 (#108) → P2 (#109) → P3 (#110) → P4 (#111, #112) → P5 (#115)
+→ P6a (#116) → P6b (#117) → P6c (#118).
 
 **What P6 settled.**
 
@@ -425,7 +425,10 @@ registered. Exits are `Esc` and a "Done" button in the off-screen panel. One lin
 ## Tier 4 — Sidebar information architecture
 
 Census: **~67 interactive controls** in one panel, 53 `title` attributes totalling ~7k characters,
-29 inline `style=` attributes, 1 of 7 sections open by default.
+29 inline `style=` attributes, 1 of 7 sections open by default. *(The census is the pre-rework
+snapshot. The sidebar now has **8** sections — 4.7 split "Assumptions" into Assume / Pin values /
+Edit system — and the open state persists per-section, so "1 of N by default" no longer applies
+after the first visit.)*
 
 ### 4.1 ✅ Four buttons labeled "Apply"; two labeled "Copy"
 `alg-real-apply`, `alg-val-apply`, `alg-def-apply`, `alg-eq-apply` — all labeled exactly **"Apply"**.
@@ -446,6 +449,13 @@ most permanent high real estate, while every *actionable* step below it sits beh
 
 **Fix:** make it a `<details>`, open on first visit and closed once seeded — or move it onto the
 canvas as a corner card, since it is reference for reading the graph.
+
+> **✅ Shipped in [#116](https://github.com/ajgraven/complex-analysis-suite/pull/116)** — the second
+> option. It is a collapsible card in the canvas's bottom-left corner slot (`mountReferenceCard` →
+> `canvas.corner`), reclaiming ~230px of sidebar. The "closed once seeded" half of the first option
+> was *deliberately not* taken: measured at 22 nodes, scrolled and unscrolled, the card covers zero
+> cards, so auto-collapsing would have hidden the feature to prevent something that does not happen.
+> Its `fix φ(0)=w₀` checkbox stayed in the sidebar — that is a generation choice, not a display one.
 
 ### 4.3 ✅ The product documentation lives in native tooltips
 ~7k characters across 53 `title` attributes; 9 exceed 200 chars; the ✦ Prove tooltip alone is ~540.
@@ -593,8 +603,8 @@ tested capability behind no control. `docs/ALGEBRA_EXTENSIONS.md` already flags 
 
 | Capability | Symbol | Why it matters here |
 |---|---|---|
-| **Minimal primes / primary decomposition** | `minimalPrimes` | The canonical positive-dimensional escape hatch — the exact hard case that today offers a dead button (0.1) |
-| **Regular chains (saturated)** | `triangularDecomposition` | The UI *warns* the shipped Wu chain isn't saturated by its initials and offers no remedy. This is the remedy, already built. |
+| ~~**Minimal primes / primary decomposition**~~ | `minimalPrimes` | ✅ **Wired in [#105](https://github.com/ajgraven/complex-analysis-suite/pull/105)** — worker job, store query, `applyComponent`, verdict-card action. (The "dead button (0.1)" it referenced also shipped, in #101.) |
+| ~~**Regular chains (saturated)**~~ | `triangularDecomposition` | ✅ **Wired in #105**, same route. The saturation warning now has the remedy it was pointing at. |
 | **Absolute irreducibility** | `isAbsolutelyIrreducible`, `bivariateAbsFactorCount` | Can positively *certify* irreducibility — the missing counterpart to 0.6 |
 | Radical of a zero-dim ideal | `radicalZeroDim` | Direct fix for "N with multiplicity vs N distinct" |
 | Ideal membership | `inIdeal` | "Is this equation already implied?" |
