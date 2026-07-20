@@ -299,6 +299,13 @@ const QD = _QD;
 
       const additive = (ev) => !!(ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey));
       card.addEventListener('click', (ev) => { ev.stopPropagation(); toggleSelect(n.id, additive(ev)); if (handlers.onClick) handlers.onClick(n.id); });
+      // Right-click surfaces the node's actions on the CANVAS. Selecting first means the
+      // inspector is already showing this node for the actions that render into it.
+      card.addEventListener('contextmenu', (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        if (selected.indexOf(n.id) < 0) toggleSelect(n.id, false);
+        if (handlers.onContextMenu) handlers.onContextMenu(n.id, ev.clientX, ev.clientY);
+      });
       // Keyboard-selectable (a11y): focusable, and Enter/Space toggles selection.
       card.tabIndex = 0; card.setAttribute('role', 'button'); card.setAttribute('aria-label', n.label);
       card.addEventListener('keydown', (ev) => {
