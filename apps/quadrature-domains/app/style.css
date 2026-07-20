@@ -814,6 +814,9 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   border-radius: 8px; padding: 1px 6px;
 }
 #algebra-graph .algebra-column-stats { font-size: 11px; color: var(--c-muted); margin-top: 2px; }
+/* What the step CHANGED, on its own line under the size counts — the two answer different
+   questions and a Gröbner step can hold the counts fixed while replacing every generator. */
+#algebra-graph .algebra-column-diff { font-size: 10px; color: var(--c-muted); margin-top: 1px; }
 #algebra-graph .algebra-column-body { display: flex; flex-direction: column; gap: 14px; }
 #algebra-graph .algebra-node {
   position: relative; box-sizing: border-box; width: 100%;

@@ -247,6 +247,39 @@ const QD = _QD;
     return (userPref == null) ? (total <= AUTO_OPEN_MAX) : !!userPref;
   }
 
+  // What a reduction actually DID to a column (P6c).
+  //
+  // A lane header said "17 eqns · 6 vars", which answers "how big is this" and not "what changed".
+  // Between two columns of a derivation those are different questions: a Gröbner step can leave
+  // the count identical while replacing every generator, and a propagate step can add three
+  // equations while touching nothing that was already there. The header now says which.
+  //
+  // MULTISET, not set: if a column holds the same polynomial twice and the next holds it once,
+  // that is one carried and one gone. Collapsing to sets would report "carried" and lose the
+  // removal. Pure and module-scope so the counting is testable without a store.
+  function columnDiff(prevKeys, curKeys) {
+    const pool = new Map();
+    (prevKeys || []).forEach((k) => pool.set(k, (pool.get(k) || 0) + 1));
+    let carried = 0, added = 0;
+    (curKeys || []).forEach((k) => {
+      const n = pool.get(k) || 0;
+      if (n > 0) { pool.set(k, n - 1); carried++; } else added++;
+    });
+    let removed = 0;
+    pool.forEach((n) => { removed += n; });
+    return { added, carried, removed };
+  }
+  // "+3 new · 14 carried · 2 gone" — zero parts omitted, because "0 gone" is noise and reads as a
+  // claim that something was checked. Empty string when nothing changed at all.
+  function columnDiffLabel(d) {
+    if (!d) return '';
+    const parts = [];
+    if (d.added) parts.push('+' + d.added + ' new');
+    if (d.carried) parts.push(d.carried + ' carried');
+    if (d.removed) parts.push('−' + d.removed + ' gone');
+    return parts.join(' · ');
+  }
+
   // Does a stored result still describe the system in front of you? (P6b)
   //
   //   'current' — same branch, same frontier: it still describes what you are looking at.
@@ -3342,6 +3375,28 @@ const QD = _QD;
     // Structured column-header data for the canvas lane headers: step badge, the
     // transition label (relationship to the previous column), a stats line with the Δ in
     // variable count vs the previous column, and whether this is the CURRENT system.
+    // Canonical content key per node, memoised. poly.key() walks every term, and columnInfo runs
+    // for each lane on every rerender — but the store is append-only, so a node's content can
+    // never change under its id and the cache can simply grow.
+    const _keyCache = new Map();
+    function nodeKey(n) {
+      let k = _keyCache.get(n.id);
+      if (k === undefined) {
+        try { k = n.poly ? n.poly.key() : ('#' + n.id); } catch (e) { k = '#' + n.id; }
+        _keyCache.set(n.id, k);
+      }
+      return k;
+    }
+    function columnDiffFor(c) {
+      if (!c) return null;                       // column 0 has no predecessor to diff against
+      const tr = store.activeTrack;
+      try {
+        const prev = store.orderedColumn(c - 1, tr).map(nodeKey);
+        const cur = store.orderedColumn(c, tr).map(nodeKey);
+        if (!prev.length) return null;           // a forked column 0 sits at c>0 with no local predecessor
+        return columnDiff(prev, cur);
+      } catch (e) { return null; }
+    }
     function columnInfo(c, ns) {
       const st = store.columnStats(c);
       let stats = st.eqCount + ' eqn' + (st.eqCount === 1 ? '' : 's') + ' · ' + st.varCount + ' var' + (st.varCount === 1 ? '' : 's');
@@ -3350,7 +3405,10 @@ const QD = _QD;
         const d = st.varCount - prev.varCount;
         if (d !== 0) stats += '  (' + (d > 0 ? '+' : '−') + Math.abs(d) + ' var' + (Math.abs(d) === 1 ? '' : 's') + ')';
       }
-      return { step: String(c + 1), label: columnLabel(c, ns), stats, isCurrent: c === store.maxColumn() };
+      // …and what the step actually changed, which the counts above cannot say: a Gröbner step
+      // can hold the equation count fixed while replacing every generator.
+      const diff = columnDiffLabel(columnDiffFor(c));
+      return { step: String(c + 1), label: columnLabel(c, ns), stats, diff, isCurrent: c === store.maxColumn() };
     }
     // B3 — a terse operation label for a derivation edge (drawn on the arrow + as its hover
     // title by the canvas). Describes the transformation that produced the TARGET node;
@@ -3512,7 +3570,7 @@ const QD = _QD;
         // 'original' only for a genuine column 0 — a forked branch's column 0 falls through to its
         // own label ("forked from …"), matching the lane header instead of contradicting it.
         chip.textContent = info.step + ((c.index === 0 && !isForkedColumn(ns)) ? ' original' : ' ' + (info.label || '').replace(/^↳\s*/, ''));
-        chip.title = info.label + '  ·  ' + info.stats;
+        chip.title = info.label + '  ·  ' + info.stats + (info.diff ? '  ·  ' + info.diff : '');
         chip.addEventListener('click', () => { if (canvas && canvas.scrollToColumn) canvas.scrollToColumn(c.index); });
         breadcrumb.appendChild(chip);
       });
@@ -3930,6 +3988,8 @@ const QD = _QD;
 
   QD_UI.installAlgebra = installAlgebra;
   QD_UI.PROV_UI = PROV_UI;   // the UI-side provenance-op registry (testable + companion to the store's PROV_OPS)
+  QD_UI.columnDiff = columnDiff;                     // what a reduction changed, as a multiset diff (pure)
+  QD_UI.columnDiffLabel = columnDiffLabel;            // …and its lane-header wording (pure)
   QD_UI.resultStateOf = resultStateOf;               // does a stored result still describe this system? (pure)
   QD_UI.ALGEBRA_KEY_ACTIONS = KEY_ACTIONS;           // single-key accelerator table (pure data)
   QD_UI.algebraShortcutItems = algebraShortcutItems; // …and the `?` cheatsheet it generates (pure)
