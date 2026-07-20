@@ -17,18 +17,42 @@
 // here by `columnInfo` and passed as the canvas `colInfo` handler — names the
 // transformation relating it to the previous column, with eqn/var counts + a Δ.
 //
-// SIDEBAR is a NODE-EDITOR model (mountSidebar): a pinned header (★ Auto-reduce & solve +
-// Generate + status table + error), the φ/h reference shown by default, collapsible
-// <details> workflow sections (Assumptions / Reduce / Analyze / Univalence constraints /
-// Export), and a CONTEXTUAL INSPECTOR (renderInspector) that replaces the sections when a
-// node is selected: 1 node → its equation + Duplicate/Copy/Delete + Attempt-to-factor
-// (doFactor → store.applyFactor, a V(p)=⋃V(fᵢ) case split); 2 nodes → the eliminate panel.
-// View/history live in a FLOATING TOOLBAR over the graph (buildToolbar: zoom/fit/fit-width/
-// expand/collapse/undo/redo); a REDUCTION BREADCRUMB (buildBreadcrumb) jumps to any lane via
-// canvas.scrollToColumn. Export covers DAG-JSON, LaTeX, and MATHEMATICA (a column, all
-// columns, or one node). provText/columnLabel/edgeLabel render provenance.op from the PROV_UI
-// registry (below) — the UI companion to the store's PROV_STORE; add a node type as one record
-// in each (both coverage-tested).
+// SIDEBAR is a NODE-EDITOR model (mountSidebar): a pinned header (✦ Prove as the single
+// button.primary + a caption stating how it differs from ★ Auto-reduce, Generate, status, error),
+// the φ/h reference, and collapsible <details> workflow sections — Assume / Pin values / Edit
+// system / Reduce / Analyze / Shape from moments / Univalence constraints / Export. Their open
+// state PERSISTS (wireSectionPersistence → localStorage): only "Assume" opened by default and
+// nothing was remembered, so every reload re-shut two thirds of the working loop.
+// A CONTEXTUAL INSPECTOR (renderInspector) shows the selection: 1 node → its equation + the
+// nodeActions list; 2 nodes → the eliminate panel. It no longer HIDES the sections — they recede
+// (`is-behind-inspector`) so inspecting an equation is not modal.
+//   • nodeActions(id, box) is the single-node action list AS DATA, consumed by both the inspector
+//     and the canvas right-click menu (openNodeMenu). Built inline once, it could not be offered
+//     on the canvas without a second copy of the availability logic — and a duplicated list drifts.
+//   • renderPolyCapped applies the canvas's DISPLAY_CAP in the sidebar too: without it, selecting a
+//     post-Gröbner node typeset thousands of terms in display mode on the main thread.
+// View/history live in the surface's toolbar ROW (buildToolbar: zoom/fit/fit-width/expand/collapse/
+// minimap/node-search/undo/redo); the REDUCTION BREADCRUMB + trackbar live in the canvas's bottom
+// rail (canvas.rail), not floating over the graph. Export covers DAG-JSON, LaTeX, and MATHEMATICA
+// (a column, all columns, or one node). provText/columnLabel/edgeLabel render provenance.op from
+// the PROV_UI registry (below) — the UI companion to the store's PROV_STORE; add a node type as one
+// record in each (both coverage-tested). ⚠ columnLabel resolves a FORK before the `c === 0` case:
+// forkTrack writes copies at column 0, so otherwise a branch five reductions deep claims to be the
+// original system.
+//
+// WORKSPACE GUARANTEES (the review passes; see docs/algebra-review/WORKSPACE_REVIEW.md):
+//   • Work survives — debounced autosave of store.exportDAG() to localStorage, a restore offer on
+//     mount (which SUPPRESSES auto-seeding, since seeding would clear the thing being offered), and
+//     a beforeunload warning only when the autosave could not take it.
+//   • Mistakes are reversible — Ctrl/Cmd+Z / Shift+Z / Ctrl+Y, with undoDepth()/redoDepth() driving
+//     the toolbar's disabled state and labels. The model always existed; only the surface was absent.
+//   • Failures are legible — error toasts last 8s, are click-dismissible and carry a live-region
+//     role (750ms was unreadable, and ~50 sites pass no duration).
+//   • The proof narrates itself — stageReporter feeds ctx.onStage from the plan tables, whose ~20
+//     {title, why} strings previously reached the user only inside a downloaded qd-proof.json.
+//   • setStatus('') means "no transient message", not "nothing to say": it falls back to a standing
+//     readout (baselineStatus), because ~23 sites clear it on completion.
+//   • ✦ Prove CONFIRMS before re-seeding over a non-trivial derivation (confirmReplace).
 //
 // CAS-UX (Stoutemyer): preview-before-commit (cost), navigable derivation tree +
 // backtracking (DAG + undo), equation selection, accumulate alternatives (branch/

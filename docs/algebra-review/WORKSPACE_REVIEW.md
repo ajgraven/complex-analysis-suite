@@ -27,10 +27,46 @@ below is still open.
 | 1.2 no Ctrl+Z | ✅ shipped — #102 (bindings + `undoDepth`/`redoDepth` + disabled states) |
 | 1.3 750 ms error toasts | ✅ shipped — #102 (8 s, click-dismiss, live-region roles) |
 
-**Next up (3b):** Tier 6's `minimalPrimes` + `triangularDecomposition` as the
-positive-dimensional escape hatch. Deferred deliberately from #103 — neither has a store
-wrapper or a worker job, and both are heavy enough that a main-thread call would freeze the
-UI, so they need the async plumbing first.
+| 3b Tier-6 positive-dim escape hatch | ✅ shipped — [#105](https://github.com/ajgraven/complex-analysis-suite/pull/105) (`minimalPrimes` + `triangularDecomposition`: worker jobs, store queries, `applyComponent`, verdict-card action) |
+| 2.2 `onStage` computed and discarded | ✅ shipped — [#106](https://github.com/ajgraven/complex-analysis-suite/pull/106) |
+| 4.1 four buttons named "Apply" | ✅ shipped — #106 |
+| 4.3 the 543-char CTA tooltip | ✅ shipped — #106 (now visible caption text; tooltip 83 chars) |
+| 4.6 status bar blank after first op | ✅ shipped — #106 (`setStatus('')` → standing readout) |
+| 3.1 canvas never follows the work | ✅ shipped — #106 — **and uncovered that `scrollToColumn` never worked**: this engine drops `scrollTo({behavior:'smooth'})` entirely, so the function *and the breadcrumb that was its only caller* were a silent no-op |
+| 3.2 plain click ADDS to selection | ✅ shipped — #106 |
+| 1.4 ✦ Prove re-seeds silently | ✅ shipped — [#107](https://github.com/ajgraven/complex-analysis-suite/pull/107) |
+| 0.5 verdict card clips its own badge | ✅ shipped — #107 |
+| 2.1 verdict destroyed on re-render | ✅ shipped — #107 (kept + demoted stale; Export-proof survives) |
+| 5.1 eight phantom CSS tokens | ✅ shipped — [#108](https://github.com/ajgraven/complex-analysis-suite/pull/108) — **21 disagreeing (token, fallback) pairs**, all 114 fallbacks dropped behind a guard test |
+| 3.4 no pan / wheel-zoom / search / context menu | ✅ pan, cursor-anchored zoom, search, keyboard nav — [#109](https://github.com/ajgraven/complex-analysis-suite/pull/109); context menu — [#112](https://github.com/ajgraven/complex-analysis-suite/pull/112) |
+| 3.5 "Fit ↔" cannot fit past ~7 columns | ✅ shipped — [#110](https://github.com/ajgraven/complex-analysis-suite/pull/110) (condensed overview; `fitWidth` reports whether it actually fit) |
+| 3.8 branches drawn flat; verdict/rail collide | ✅ shipped — #110 (grid chrome, docked verdict, branch tree, minimap draws nodes) |
+| 3.9 empty canvas doesn't deselect | ✅ shipped — #109 |
+| 3.7 no display cap in the inspector | ✅ shipped — [#111](https://github.com/ajgraven/complex-analysis-suite/pull/111) |
+| 4.7 "Assumptions" = 19 unrelated controls | ✅ shipped — #111 (Assume / Pin values / Edit system) |
+| 4.8 no true primary CTA | ✅ shipped — #111 (`button.primary` shipped unused across the module) |
+| 4.11 disclosure state never persists | ✅ shipped — #111 |
+| 3.3 inspector hides the whole workflow | ✅ shipped — #111 (sections recede rather than vanish) |
+| 4.9 nine flat inspector buttons, Delete mid-row | ✅ shipped — #112 (`.danger`, moved) |
+| 4.10 360px breakages | ✅ shipped — #112 |
+
+**Still open.** From Tier 4: **4.2** (the φ/h reference is still an always-visible,
+non-collapsible block outranking the workflow — the plan moves it onto the canvas as a corner
+card), **4.4** (section order / "Shape from moments" misfiled), **4.5** (the ①②③④ strip is
+still decoration), **4.12**, **4.13**. From Tier 5: **5.2** dark mode (5.1 was its
+prerequisite and is done), **5.3** focus management (there are still **zero** `.focus()` calls
+in the app), **5.4** ARIA gaps, **5.5** contrast, **5.7** the `?` overlay's shortcut registry,
+**5.8**, **5.9**. From Tier 3: **3.6** (collapsed cards clip mid-expression with no truncation
+marker), and the **ghost stub lane** that would let the fork *edge* render — deferred from #110
+because it means drawing a foreign track's column into the current view, touching `drawEdges`,
+`relayout`, the minimap, the search filter and keyboard nav at once. Tier 6 beyond 3b, and
+Tier 2's 2.3–2.5, are untouched.
+
+**Planned next (P5, P6 of the six-PR rework plan).** P5 = keyboard shortcut registry that the
+`?` overlay reads (it accepts a custom list but no caller ever passes one, so it always shows
+three generic entries) + focus management. P6 = results drawer keyed by `(track, _branchSig)`,
+column diff, focus mode (`computeLineage` already computes the set and only uses it to tint
+borders).
 
 One measurement from #103 worth recording here, because it quantifies 0.6 better than the
 finding text does: the new column scan reports **"5 equations scanned — 0 factor, 1 proved
