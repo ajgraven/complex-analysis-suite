@@ -1078,6 +1078,42 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #controls-algebra .algebra-inspector.hidden { display: none; }
 #controls-algebra .algebra-inspector-head { display: flex; align-items: center; justify-content: space-between; }
 #controls-algebra .algebra-inspector-eq { overflow-x: auto; padding: 4px 0; border-bottom: 1px dashed var(--c-border-soft); }
+/* At the sidebar clamp floor (360px) there are 328px of content width, and several rows need more:
+   the primary CTA row wrapped to three ragged lines, the CAS line needed ~400px and stranded its
+   params input on a different line from its label, and the constraint palette's hard 1fr 1fr wrapped
+   two-word buttons. Below ~390px, stack into predictable grids instead of ragged flex wrapping. */
+@media (max-width: 400px) {
+  #controls-algebra .algebra-primary { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  #controls-algebra .algebra-primary #alg-prove { grid-column: 1 / -1; }
+  #controls-algebra .algebra-palette { grid-template-columns: 1fr; }
+  #controls-algebra #alg-cas-params { flex: 1 1 100%; width: auto; }
+  #controls-algebra .algebra-value-row { grid-template-columns: 1fr 1fr; }
+  #controls-algebra .algebra-inspector .row { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  #controls-algebra .algebra-inspector .row button.danger { grid-column: 2; margin-left: 0 !important; }
+}
+
+/* Node context menu — the same action list the inspector renders, on the canvas where the card is. */
+.algebra-ctx-menu {
+  position: fixed; z-index: 60; min-width: 190px; max-height: 70vh; overflow-y: auto;
+  background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,0.22); padding: 4px;
+}
+.algebra-ctx-head {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--c-muted); padding: 3px 8px 5px; border-bottom: 1px solid var(--c-border-soft); margin-bottom: 3px;
+}
+.algebra-ctx-item {
+  display: block; width: 100%; text-align: left; border: 0; background: transparent;
+  font: inherit; font-size: 12px; padding: 4px 8px; border-radius: 4px; cursor: pointer; color: var(--c-text);
+}
+.algebra-ctx-item:hover { background: var(--c-hover); }
+.algebra-ctx-item.danger { color: var(--c-danger); }
+.algebra-ctx-item.danger:hover { background: var(--c-error-bg); }
+
+/* Delete removes a node AND its descendants; it sat mid-row in identical styling while
+   button.danger shipped unused across the whole module. */
+#controls-algebra .algebra-inspector button.danger { color: var(--c-danger); border-color: var(--c-danger); }
+
 /* While a node is selected the workflow sections stay present but recede: force-collapsed and
    dimmed, so the inspector reads as the foreground without the rest of the panel disappearing.
    Hover/focus restores full contrast, so reaching past the inspector needs no extra click. */

@@ -1767,6 +1767,129 @@ const QD = _QD;
       if (RL && RL.render) RL.render(el, tex, !!display); else el.textContent = tex;
       return true;
     }
+    // The single-node action list, as DATA. It was built inline inside renderInspector, so the
+    // canvas could not offer the same actions without a second copy of the availability logic —
+    // and a duplicated list is a list that drifts. The body below is the ORIGINAL code verbatim;
+    // only `acts` and `mkBtn` are redefined, so nothing could be altered in transit. Returns
+    // [{ label, title, run }]; `box` is what the panel-rendering actions draw into.
+    function nodeActions(id, box) {
+      const n = store.get(id); if (!n) return [];
+      const out = [];
+      const mkBtn = (label, title, run) => ({ label, title, run });
+      const acts = { appendChild: (d) => out.push(d) };
+        acts.appendChild(mkBtn('Duplicate', 'Copy this equation into a new node', () => { if (busyGuard()) return; if (store.duplicate(id)) { rerender(); toast('Duplicated ' + n.label); } }));
+        acts.appendChild(mkBtn('Copy LaTeX', 'Copy this equation as LaTeX', () => copyNodeLatex(id)));
+        acts.appendChild(mkBtn('Copy Mathematica', 'Copy this equation as Wolfram-Language (lhs == 0)', () => { const code = store.mathematicaNode(id); if (code) writeClipboard(code, n.label + ' (Mathematica)'); }));
+        // D5: show how this derived equation was obtained from its input(s) — for substitutions
+        // / reality assumptions the transformation is replayed one variable at a time (genuine
+        // intermediate polynomials); engine reductions get an input → method → output summary.
+        if (n.provenance && (n.provenance.inputs || []).length) {
+          acts.appendChild(mkBtn('Show steps', 'Show how this equation was derived from its input(s); substitutions and reality assumptions are replayed one variable at a time', () => doShowSteps(id, box)));
+        }
+        acts.appendChild(mkBtn('Delete', 'Delete this node and its descendants', () => { if (busyGuard()) return; const removed = store.deleteNode(id); if (canvas) canvas.clearSelection(); rerender(); toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)'); }));
+        // Generate the conjugate equation p̄ = 0 (folding in variables already assumed real).
+        // Useful for derived equations that did not get a seed-time companion. Equalities/≠ only.
+        if (n.rel !== '>') {
+          acts.appendChild(mkBtn('Generate conjugate', 'Add the conjugate equation p̄ = 0 as a paired companion, folding in any variables already assumed real (v̄ ≡ v)', () => {
+            if (busyGuard()) return;
+            const r = store.generateConjugate(id);
+            if (!r.ok) { toast(r.reason || 'could not generate the conjugate', { kind: 'error' }); return; }
+            rerender(); toast('Added conjugate: ' + r.node.label);
+          }));
+        }
+        // Propagate a constraint forward into the current system, folding in every assumption
+        // (reality / imaginary / fixed φ(0) / pinned values) applied across the columns.
+        if (n.column < store.maxColumn()) {
+          acts.appendChild(mkBtn('Propagate to current system', 'Carry this equation into the last column with all assumptions (reality, imaginary, fixed φ(0), pinned values) applied to it', () => {
+            if (busyGuard()) return;
+            const r = store.propagateNode(id);
+            if (!r.ok) { toast(r.reason || 'could not propagate', { kind: 'error' }); return; }
+            if (canvas) canvas.clearSelection();
+            rerender(); refreshPickers();
+            toast('Propagated to column ' + r.column + (r.applied && r.applied.length ? ' (applied ' + r.applied.join(', ') + ')' : ''));
+          }));
+        }
+        // Attempt to factor: split p = f·g into candidate systems V(p)=⋃V(fᵢ), pursued one case at
+        // a time. ALWAYS offered on an equality — the old D3 filter hid it whenever factorOf().ok
+        // was false, which made "irreducible", "past a factorizer cap" and "this feature does not
+        // exist" render identically (nothing at all). doFactor now reports which of the three it is.
+        if (n.rel === '=') {
+          const fi = _factorInfo(id);
+          const inCurrent = n.column === store.maxColumn();
+          const label = fi.status === 'reducible' ? ('Attempt to factor (' + fi.count + ' factors)') : 'Attempt to factor';
+          if (inCurrent) {
+            acts.appendChild(mkBtn(label, 'Factor this equation; pick a factor fᵢ to pursue V(fᵢ)=0 as a new "case" column (V(p)=⋃ᵢV(fᵢ))', () => doFactor(id, box)));
+          } else if (fi.status === 'reducible') {
+            // applyFactor only acts on the CURRENT column, so a factorable equation left behind in
+            // an earlier column used to offer nothing at all — with no hint that carrying it forward
+            // would restore the option. Chain the two steps the user would have had to guess.
+            acts.appendChild(mkBtn('Propagate + factor (' + fi.count + ' factors)',
+              'This equation factors, but only the current system can be split. Carry it into the last column (with every assumption applied) and factor it there.',
+              () => {
+                if (busyGuard()) return;
+                const r = store.propagateNode(id);
+                if (!r.ok) { showError('Propagate: ' + (r.reason || 'could not propagate')); return; }
+                rerender(); refreshPickers();
+                const moved = (r.node && r.node.id) || null;
+                toast('Propagated to column ' + r.column + ' — factoring it there.');
+                if (moved) { const nb = $('#alg-inspector'); if (nb) doFactor(moved, nb); }
+              }));
+          } else {
+            // Not in the current column and not factorable: still say WHY rather than showing nothing.
+            acts.appendChild(mkBtn(label, 'Report whether this equation factors (it is not in the current system, so it cannot be split here)', () => doFactor(id, box)));
+          }
+        }
+        // Solve this equation for one variable in radicals (closed form), keeping the
+        // others symbolic — degree ≤4 or reducible (e.g. x⁶+b x⁴+c x²+d as a cubic in x²).
+        // Read-only display (roots are radicals, not polynomials); any equality, any column.
+        // D3: shown only when the equation actually has a variable to solve for.
+        if (n.rel === '=' && n.poly.vars().size >= 1) {
+          acts.appendChild(mkBtn('Solve for a variable', 'Solve this equation for one chosen variable in radicals (closed form), keeping the remaining variables symbolic; degree ≤4 or reducible (quasi-polynomial / factorable). Result is displayed + numerically verified, not added to the graph.', () => doSolveRadical(id, box)));
+        }
+        // Fork a new parallel branch starting from THIS node's column (A2) — explore a
+        // different line of assumptions from here while leaving the current branch intact.
+        acts.appendChild(mkBtn('Fork from here', 'Start a new parallel branch from this column: copies the column into a fresh track you can reduce independently, leaving the current branch untouched.', () => { if (canvas) canvas.clearSelection(); doFork(n.column); }));
+      return out;
+    }
+    // Right-click a card for its actions, built from the SAME nodeActions list the inspector
+    // renders. Ten actions previously lived only in a sidebar panel that can sit ~900px from the
+    // card you clicked; on the canvas a card offered four (collapse / up / down / copy).
+    let _ctxMenu = null;
+    function closeNodeMenu() { if (_ctxMenu) { _ctxMenu.remove(); _ctxMenu = null; } }
+    function openNodeMenu(id, x, y) {
+      closeNodeMenu();
+      const box = $('#alg-inspector');
+      const acts = nodeActions(id, box);
+      if (!acts.length) return;
+      const n = store.get(id);
+      const menu = document.createElement('div'); menu.className = 'algebra-ctx-menu';
+      const head = document.createElement('div'); head.className = 'algebra-ctx-head';
+      head.textContent = (n && n.label) || 'equation';
+      menu.appendChild(head);
+      acts.forEach((a) => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'algebra-ctx-item';
+        if (a.label === 'Delete') b.classList.add('danger');
+        b.textContent = a.label; if (a.title) b.title = a.title;
+        b.addEventListener('click', () => {
+          closeNodeMenu();
+          // Panel-rendering actions (factor chooser / steps / radical solve) draw into the
+          // inspector, so make sure it is showing this node before running one.
+          if (canvas && canvas.getSelection().indexOf(id) < 0) { canvas.clearSelection(); }
+          try { a.run(); } catch (e) { showError((a.label || 'Action') + ': ' + ((e && e.message) || String(e))); }
+        });
+        menu.appendChild(b);
+      });
+      document.body.appendChild(menu);
+      // Keep it on screen when opened near an edge.
+      const r = menu.getBoundingClientRect();
+      menu.style.left = Math.max(4, Math.min(x, window.innerWidth - r.width - 6)) + 'px';
+      menu.style.top = Math.max(4, Math.min(y, window.innerHeight - r.height - 6)) + 'px';
+      _ctxMenu = menu;
+      setTimeout(() => {
+        const off = (ev) => { if (_ctxMenu && !_ctxMenu.contains(ev.target)) { closeNodeMenu(); document.removeEventListener('pointerdown', off, true); } };
+        document.addEventListener('pointerdown', off, true);
+      }, 0);
+    }
     function renderInspector(sel) {
       const box = $('#alg-inspector'), sections = $('#alg-sections');
       if (!box) return;
@@ -1809,78 +1932,13 @@ const QD = _QD;
         const prov = provText(n.provenance);
         if (prov) { const p = document.createElement('div'); p.className = 'hint'; p.textContent = 'Origin: ' + prov; box.appendChild(p); }
         const acts = document.createElement('div'); acts.className = 'row'; acts.style.gap = '4px'; acts.style.marginTop = '4px';
-        acts.appendChild(mkBtn('Duplicate', 'Copy this equation into a new node', () => { if (busyGuard()) return; if (store.duplicate(sel[0])) { rerender(); toast('Duplicated ' + n.label); } }));
-        acts.appendChild(mkBtn('Copy LaTeX', 'Copy this equation as LaTeX', () => copyNodeLatex(sel[0])));
-        acts.appendChild(mkBtn('Copy Mathematica', 'Copy this equation as Wolfram-Language (lhs == 0)', () => { const code = store.mathematicaNode(sel[0]); if (code) writeClipboard(code, n.label + ' (Mathematica)'); }));
-        // D5: show how this derived equation was obtained from its input(s) — for substitutions
-        // / reality assumptions the transformation is replayed one variable at a time (genuine
-        // intermediate polynomials); engine reductions get an input → method → output summary.
-        if (n.provenance && (n.provenance.inputs || []).length) {
-          acts.appendChild(mkBtn('Show steps', 'Show how this equation was derived from its input(s); substitutions and reality assumptions are replayed one variable at a time', () => doShowSteps(sel[0], box)));
-        }
-        acts.appendChild(mkBtn('Delete', 'Delete this node and its descendants', () => { if (busyGuard()) return; const removed = store.deleteNode(sel[0]); if (canvas) canvas.clearSelection(); rerender(); toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)'); }));
-        // Generate the conjugate equation p̄ = 0 (folding in variables already assumed real).
-        // Useful for derived equations that did not get a seed-time companion. Equalities/≠ only.
-        if (n.rel !== '>') {
-          acts.appendChild(mkBtn('Generate conjugate', 'Add the conjugate equation p̄ = 0 as a paired companion, folding in any variables already assumed real (v̄ ≡ v)', () => {
-            if (busyGuard()) return;
-            const r = store.generateConjugate(sel[0]);
-            if (!r.ok) { toast(r.reason || 'could not generate the conjugate', { kind: 'error' }); return; }
-            rerender(); toast('Added conjugate: ' + r.node.label);
-          }));
-        }
-        // Propagate a constraint forward into the current system, folding in every assumption
-        // (reality / imaginary / fixed φ(0) / pinned values) applied across the columns.
-        if (n.column < store.maxColumn()) {
-          acts.appendChild(mkBtn('Propagate to current system', 'Carry this equation into the last column with all assumptions (reality, imaginary, fixed φ(0), pinned values) applied to it', () => {
-            if (busyGuard()) return;
-            const r = store.propagateNode(sel[0]);
-            if (!r.ok) { toast(r.reason || 'could not propagate', { kind: 'error' }); return; }
-            if (canvas) canvas.clearSelection();
-            rerender(); refreshPickers();
-            toast('Propagated to column ' + r.column + (r.applied && r.applied.length ? ' (applied ' + r.applied.join(', ') + ')' : ''));
-          }));
-        }
-        // Attempt to factor: split p = f·g into candidate systems V(p)=⋃V(fᵢ), pursued one case at
-        // a time. ALWAYS offered on an equality — the old D3 filter hid it whenever factorOf().ok
-        // was false, which made "irreducible", "past a factorizer cap" and "this feature does not
-        // exist" render identically (nothing at all). doFactor now reports which of the three it is.
-        if (n.rel === '=') {
-          const fi = _factorInfo(sel[0]);
-          const inCurrent = n.column === store.maxColumn();
-          const label = fi.status === 'reducible' ? ('Attempt to factor (' + fi.count + ' factors)') : 'Attempt to factor';
-          if (inCurrent) {
-            acts.appendChild(mkBtn(label, 'Factor this equation; pick a factor fᵢ to pursue V(fᵢ)=0 as a new "case" column (V(p)=⋃ᵢV(fᵢ))', () => doFactor(sel[0], box)));
-          } else if (fi.status === 'reducible') {
-            // applyFactor only acts on the CURRENT column, so a factorable equation left behind in
-            // an earlier column used to offer nothing at all — with no hint that carrying it forward
-            // would restore the option. Chain the two steps the user would have had to guess.
-            acts.appendChild(mkBtn('Propagate + factor (' + fi.count + ' factors)',
-              'This equation factors, but only the current system can be split. Carry it into the last column (with every assumption applied) and factor it there.',
-              () => {
-                if (busyGuard()) return;
-                const r = store.propagateNode(sel[0]);
-                if (!r.ok) { showError('Propagate: ' + (r.reason || 'could not propagate')); return; }
-                rerender(); refreshPickers();
-                const moved = (r.node && r.node.id) || null;
-                toast('Propagated to column ' + r.column + ' — factoring it there.');
-                if (moved) { const nb = $('#alg-inspector'); if (nb) doFactor(moved, nb); }
-              }));
-          } else {
-            // Not in the current column and not factorable: still say WHY rather than showing nothing.
-            acts.appendChild(mkBtn(label, 'Report whether this equation factors (it is not in the current system, so it cannot be split here)', () => doFactor(sel[0], box)));
-          }
-        }
-        // Solve this equation for one variable in radicals (closed form), keeping the
-        // others symbolic — degree ≤4 or reducible (e.g. x⁶+b x⁴+c x²+d as a cubic in x²).
-        // Read-only display (roots are radicals, not polynomials); any equality, any column.
-        // D3: shown only when the equation actually has a variable to solve for.
-        if (n.rel === '=' && n.poly.vars().size >= 1) {
-          acts.appendChild(mkBtn('Solve for a variable', 'Solve this equation for one chosen variable in radicals (closed form), keeping the remaining variables symbolic; degree ≤4 or reducible (quasi-polynomial / factorable). Result is displayed + numerically verified, not added to the graph.', () => doSolveRadical(sel[0], box)));
-        }
-        // Fork a new parallel branch starting from THIS node's column (A2) — explore a
-        // different line of assumptions from here while leaving the current branch intact.
-        acts.appendChild(mkBtn('Fork from here', 'Start a new parallel branch from this column: copies the column into a fresh track you can reduce independently, leaving the current branch untouched.', () => { if (canvas) canvas.clearSelection(); doFork(n.column); }));
+        nodeActions(sel[0], box).forEach((a) => {
+          const b = mkBtn(a.label, a.title, a.run);
+          // Delete removes the node AND its descendants; it sat mid-row in identical styling while
+          // button.danger shipped unused. Mark it and push it away from the constructive actions.
+          if (a.label === 'Delete') { b.classList.add('danger'); b.style.marginLeft = 'auto'; }
+          acts.appendChild(b);
+        });
         box.appendChild(acts);
         return;
       }
@@ -3134,6 +3192,7 @@ const QD = _QD;
         colInfo: columnInfo,
         edgeLabelOf: edgeLabel,
         onSeed: seedFromCurrent,
+        onContextMenu: (id, x, y) => openNodeMenu(id, x, y),
       });
       buildToolbar(surface);
       // Into the canvas's bottom RAIL, not floating over the surface: as free-floating overlays
