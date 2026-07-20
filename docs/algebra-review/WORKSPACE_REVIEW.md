@@ -53,19 +53,55 @@ below is still open.
 | 5.3 focus management | ✅ shipped — #114 (context menu, variable picker, `?` dialog: focus in, trap, Esc, restore) |
 | 5.4 ARIA gaps (tab↔panel) | ◐ partial — #114 wired `aria-controls`/`aria-labelledby`/panel `tabindex`, plus `role=menu(item)` and `aria-expanded`. Roving-tabindex arrow nav **inside the tablist** is deliberately not done: the Algebra canvas binds arrows at document level, so the two would fight |
 
-**Still open.** From Tier 4: **4.2** (the φ/h reference is still an always-visible,
-non-collapsible block outranking the workflow — the plan moves it onto the canvas as a corner
-card), **4.4** (section order / "Shape from moments" misfiled), **4.5** (the ①②③④ strip is
-still decoration), **4.12**, **4.13**. From Tier 5: **5.2** dark mode (5.1 was its
-prerequisite and is done), **5.5** contrast, **5.8**, **5.9**. From Tier 3: **3.6** (collapsed
-cards clip mid-expression with no truncation marker), and the **ghost stub lane** that would let
-the fork *edge* render — deferred from #110 because it means drawing a foreign track's column
-into the current view, touching `drawEdges`, `relayout`, the minimap, the search filter and
-keyboard nav at once. Tier 6 beyond 3b, and Tier 2's 2.3–2.5, are untouched.
+| 4.2 φ/h reference outranks the workflow | ✅ shipped — [#116](https://github.com/ajgraven/complex-analysis-suite/pull/116) (collapsible canvas card, bottom-left; its `fix φ(0)=w₀` checkbox stayed behind — that is a *generation* choice, not a display option) |
+| 3.6 collapsed cards clip with no marker | ✅ shipped — #116 (`text-overflow` cannot help: KaTeX emits atomic inline-block boxes) |
+| — focus mode (isolate a lineage) | ✅ shipped — #116 (`computeLineage`'s set finally does something; `applyFilter` is the single writer of `.is-dimmed` so search and focus compose) |
+| 2.1 one verdict slot, eleven writers | ✅ shipped — [#117](https://github.com/ajgraven/complex-analysis-suite/pull/117) (results drawer keyed `(track, branchSig)`; `current`/`stale`/`branch`) |
 
-**Planned next (P6 of the six-PR rework plan).** Results drawer keyed by `(track, _branchSig)`,
-column diff, focus mode (`computeLineage` already computes the set and only uses it to tint
-borders).
+**Still open.** From Tier 4: **4.4** (section order / "Shape from moments" misfiled), **4.5**
+(the ①②③④ strip is still decoration), **4.12**, **4.13**. From Tier 5: **5.2** dark mode (5.1
+was its prerequisite and is done), **5.5** contrast, **5.8**, **5.9**. From Tier 3: the **ghost
+stub lane** that would let the fork *edge* render — deferred from #110 because it means drawing a
+foreign track's column into the current view, touching `drawEdges`, `relayout`, the minimap, the
+search filter and keyboard nav at once. Tier 6 beyond 3b, and Tier 2's 2.3–2.5, are untouched.
+
+**Deliberately not done, with reasons** (so they are not re-proposed as oversights):
+
+- *Copy ▾ grouping* (P4 leftover). `nodeActions` has exactly two copy actions out of nine.
+  Grouping 2 of 9 behind a dropdown costs a click to reach either and saves one row.
+- *Roving-tabindex arrow nav in the tablist.* The canvas binds arrows at document level; the two
+  would fight.
+- *Auto-collapsing the φ/h card once a graph exists.* Proposed, then dropped on measurement — see
+  below.
+
+**Noted, not fixed.** `doDimension` reports its answer (zero- vs positive-dimensional, solution
+count) **only via a transient toast**. It was never one of the eleven verdict sites, so it is not
+in the drawer either — the same "the workspace does not keep what it told you" problem, one layer
+down.
+
+**Planned next (P6c).** Lightweight column diff: extend the lane header to `+3 new · 14 carried ·
+2 eliminated`, derived from store edges and exact term lists. `columnInfo` already computes a
+variable-count delta between adjacent columns, so this is an increment rather than a new feature.
+
+**What P6 settled.**
+
+- *The drawer costs no new grid track.* The results index and the verdict are the same concern —
+  index above, detail below — so they share the `result` area. The width lives on the children,
+  not the column, so with both hidden the column is 0-wide and the canvas gets the whole row.
+- *A kept result must say which system it describes.* `(track, branchSig)` → `current` / `stale` /
+  `branch`. The stale/branch split is not cosmetic: "the derivation has changed since" is true of
+  the first and false of the second, because a cross-branch result has no history on the branch
+  being viewed. Anything but `current` is muted with its rigor pill dimmed — a `=` redisplayed
+  beside a system it never saw is a false attribution.
+- *Measure before mitigating.* The plan had the φ/h card auto-collapse once a graph existed, to
+  pre-empt it covering column 0. Measured at 22 nodes, scrolled and unscrolled, it covers **zero**
+  cards: it only intersects column 0's x-band, and column 0 is the short *original* system while
+  every reduction lands to its right. The mitigation would have hidden the feature to prevent
+  something that does not happen.
+- *CSS fails silently.* An edit left prose after a comment's `*/` plus a stray second `*/`; the
+  parser discarded tokens until it resynced, taking a whole rule with it, and the card rendered
+  unstyled. **Every existing test passed** — the file is still "valid CSS" to a regex. There is now
+  a comment-balance guard that names the offending line.
 
 **What P5 settled, and why it is shaped that way.** Two things are load-bearing beyond the
 feature itself:
