@@ -681,6 +681,14 @@ const QD = _QD;
     const runBtn = document.getElementById('ps-run');
     if (runBtn && !runBtn.disabled) runBtn.click();
   });
+  // …and say so in the `?` cheatsheet. This lived in the GLOBAL default list, so every tab
+  // advertised a Param-slice binding — including the Algebra workspace, where no axis field
+  // exists. Scoped here, it appears on the tab that actually honours it.
+  if (QD.QoL && QD.QoL.registerShortcuts) {
+    QD.QoL.registerShortcuts('param-slice', [
+      { key: 'Enter', desc: 'In an axis-range field: render the slice' },
+    ]);
+  }
 
   // ---------------------------------------------------------------------------
   // Canvas handling

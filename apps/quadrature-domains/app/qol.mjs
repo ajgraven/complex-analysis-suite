@@ -20,8 +20,13 @@
 //     unavailable (selects and shows fallback hint).
 //
 // Plus:
-//   openShortcutsOverlay() / closeShortcutsOverlay()
-//     Page-level shortcut cheatsheet, anchored to the page (not a card).
+//   registerShortcuts(scope, items)
+//     Declares a tab's key bindings for the cheatsheet. `scope` is a tab id
+//     (matching .tab-btn[data-tab]) or 'global'. Items are { key, desc, group? }.
+//   openShortcutsOverlay(items) / closeShortcutsOverlay()
+//     Page-level shortcut cheatsheet, anchored to the page (not a card). With no
+//     argument it composes 'global' + the ACTIVE tab's registration, so each tab
+//     documents its own bindings; an explicit list still overrides.
 //   wireGlobalKeyboardShortcuts()
 //     Esc → close all popovers/tooltips; '?' → toggle shortcuts overlay.
 //
@@ -43,6 +48,7 @@ import _QD from './solver.mjs';
   let _activePopover = null;          // currently-open help popover element
   let _tooltipEl     = null;          // shared hover-tooltip div
   let _shortcutsEl   = null;          // shortcuts overlay element
+  let _shortcutsReturn = null;        // element focused before the overlay opened
 
   function _ensureTooltipEl() {
     if (_tooltipEl) return _tooltipEl;
@@ -307,34 +313,120 @@ import _QD from './solver.mjs';
   }
 
   // ---------------------------------------------------------------------------
-  // Shortcuts overlay
+  // Shortcut registry + overlay
   // ---------------------------------------------------------------------------
+  // openShortcutsOverlay has always accepted a custom list, but no caller ever passed
+  // one — so `?` showed the same three generic lines on every tab while the tabs quietly
+  // grew bindings of their own (the Algebra workspace alone has a dozen). A tab registers
+  // its list once via registerShortcuts(tabId, items); the overlay then composes
+  // 'global' + whichever tab is active *at the moment the key is pressed*, so the
+  // cheatsheet always describes the surface actually in front of you.
+  //
+  // Item shape: { key, desc, group? }. `group` is an optional heading; ungrouped items
+  // render first, under no heading.
+  const _shortcutScopes = Object.create(null);
+  function registerShortcuts(scope, items) {
+    _shortcutScopes[scope || 'global'] = (items || []).slice();
+  }
+  function _activeTabId() {
+    try {
+      const b = document.querySelector('.tab-btn.active');
+      return (b && b.dataset && b.dataset.tab) || 'qd';   // QD is the default tab
+    } catch (e) { return 'qd'; }
+  }
+  function _composeShortcuts() {
+    const global = _shortcutScopes.global || _defaultShortcuts();
+    const tab = _shortcutScopes[_activeTabId()] || [];
+    return global.concat(tab);
+  }
+  // Rows are built as DOM nodes with textContent rather than interpolated into an HTML
+  // string: descriptions carry math ("zoom < 0.8", "V(I) = ⋃ₖ") and a bare `<` in an
+  // innerHTML template silently eats the rest of the row.
   function openShortcutsOverlay(items) {
     closeShortcutsOverlay();
-    const list = items || _defaultShortcuts();
-    const html = `
-      <div class="help-popover">
-        <h3 style="margin:0 0 6px 0; font-size:13px;">Keyboard shortcuts</h3>
-        <table class="shortcuts-table">
-          ${list.map(it => `<tr><td><kbd>${it.key}</kbd></td><td>${it.desc}</td></tr>`).join('')}
-        </table>
-        <div class="hint" style="margin-top:6px;">Press Esc or ? to dismiss.</div>
-      </div>
-    `;
+    const list = items || _composeShortcuts();
     const wrap = document.createElement('div');
     wrap.className = 'shortcuts-overlay';
-    wrap.innerHTML = html;
+    wrap.setAttribute('role', 'dialog');
+    wrap.setAttribute('aria-modal', 'true');
+    wrap.setAttribute('aria-label', 'Keyboard shortcuts');
+    wrap.tabIndex = -1;
+
+    const pop = document.createElement('div'); pop.className = 'help-popover';
+    const head = document.createElement('div'); head.className = 'shortcuts-head';
+    const h3 = document.createElement('h3'); h3.textContent = 'Keyboard shortcuts';
+    const x = document.createElement('button');
+    x.type = 'button'; x.className = 'shortcuts-close'; x.textContent = '×';
+    x.title = 'Close (Esc)'; x.setAttribute('aria-label', 'Close');
+    x.addEventListener('click', closeShortcutsOverlay);
+    head.appendChild(h3); head.appendChild(x); pop.appendChild(head);
+
+    // Preserve registration order for both the groups and the rows inside them.
+    const groups = []; const seen = Object.create(null);
+    list.forEach((it) => {
+      const g = (it && it.group) || '';
+      if (!(g in seen)) { seen[g] = { name: g, rows: [] }; groups.push(seen[g]); }
+      seen[g].rows.push(it);
+    });
+    groups.forEach((g) => {
+      if (g.name) {
+        const cap = document.createElement('div');
+        cap.className = 'shortcuts-group'; cap.textContent = g.name;
+        pop.appendChild(cap);
+      }
+      const table = document.createElement('table'); table.className = 'shortcuts-table';
+      const tbody = document.createElement('tbody');
+      g.rows.forEach((it) => {
+        const tr = document.createElement('tr');
+        const kd = document.createElement('td'); const kbd = document.createElement('kbd');
+        kbd.textContent = String((it && it.key) || ''); kd.appendChild(kbd);
+        const dd = document.createElement('td'); dd.textContent = String((it && it.desc) || '');
+        tr.appendChild(kd); tr.appendChild(dd); tbody.appendChild(tr);
+      });
+      table.appendChild(tbody); pop.appendChild(table);
+    });
+
+    const hint = document.createElement('div');
+    hint.className = 'hint'; hint.style.marginTop = '6px';
+    hint.textContent = 'Press Esc or ? to dismiss.';
+    pop.appendChild(hint);
+    wrap.appendChild(pop);
     document.body.appendChild(wrap);
     _shortcutsEl = wrap;
+
+    // Return focus where it was: `?` is often pressed mid-task from a focused card, and
+    // dropping focus to <body> on dismiss would restart tabbing from the top of the page.
+    _shortcutsReturn = (document.activeElement && document.activeElement !== document.body)
+      ? document.activeElement : null;
+    try { wrap.focus(); } catch (e) {}
+    // Trap Tab inside the dialog — it is modal, so tabbing out to the page behind it
+    // would leave focus somewhere the user cannot see.
+    wrap.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Tab') return;
+      const f = wrap.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (!f.length) { ev.preventDefault(); return; }
+      const first = f[0], last = f[f.length - 1];
+      if (ev.shiftKey && (document.activeElement === first || document.activeElement === wrap)) {
+        last.focus(); ev.preventDefault();
+      } else if (!ev.shiftKey && document.activeElement === last) {
+        first.focus(); ev.preventDefault();
+      }
+    });
   }
   function closeShortcutsOverlay() {
-    if (_shortcutsEl) { _shortcutsEl.remove(); _shortcutsEl = null; }
+    if (!_shortcutsEl) return;
+    _shortcutsEl.remove(); _shortcutsEl = null;
+    const back = _shortcutsReturn; _shortcutsReturn = null;
+    if (back && typeof back.focus === 'function' && back.isConnected !== false) {
+      try { back.focus(); } catch (e) {}
+    }
   }
+  // Genuinely global keys only. A Param-slice binding used to sit here, so every tab claimed
+  // it — that one now registers under its own scope (param-slice-ui).
   function _defaultShortcuts() {
     return [
       { key: '?',   desc: 'Show / hide this shortcut list' },
       { key: 'Esc', desc: 'Close help popovers and tooltips' },
-      { key: 'Enter', desc: 'In a Param-slice axis field: render slice' },
     ];
   }
 
@@ -381,6 +473,7 @@ import _QD from './solver.mjs';
   QoL.attachHoverTooltip        = attachHoverTooltip;
   QoL.copyButton                = copyButton;
   QoL.toast                     = function (msg, opts) { _showToast(msg, opts); };
+  QoL.registerShortcuts         = registerShortcuts;
   QoL.openShortcutsOverlay      = openShortcutsOverlay;
   QoL.closeShortcutsOverlay     = closeShortcutsOverlay;
   QoL.wireGlobalKeyboardShortcuts = wireGlobalKeyboardShortcuts;
