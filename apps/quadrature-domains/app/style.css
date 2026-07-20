@@ -497,6 +497,22 @@ button.attention {
 }
 .shortcuts-table { font-size: 12px; border-spacing: 6px 4px; }
 .shortcuts-table td:first-child { text-align: right; white-space: nowrap; vertical-align: top; }
+/* The cheatsheet is now per-tab and composed (see qol.mjs registerShortcuts), so it can
+   run to ~20 rows — group captions keep it scannable, and a real close button makes the
+   dialog dismissible by pointer as well as by Esc (and gives the focus trap a target). */
+.shortcuts-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.shortcuts-head h3 { margin: 0; font-size: 13px; }
+.shortcuts-close {
+  border: 0; background: transparent; font: inherit; font-size: 16px; line-height: 1;
+  padding: 0 2px; cursor: pointer; color: var(--c-muted); border-radius: 4px;
+}
+.shortcuts-close:hover { color: var(--c-text); background: var(--c-hover); }
+.shortcuts-group {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--c-muted);
+  margin: 8px 0 2px; padding-bottom: 3px; border-bottom: 1px solid var(--c-border-soft);
+}
+.shortcuts-group:first-of-type { margin-top: 4px; }
+.shortcuts-overlay:focus { outline: none; }
 
 /* ===== Inputs ===== */
 input[type="text"], input[type="number"], select {
