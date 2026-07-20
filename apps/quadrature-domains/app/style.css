@@ -34,6 +34,13 @@
   --c-info-text:     #224455;
   --c-link:          #1a56db;
   --c-danger:        #cc3333;   /* destructive affordances (was also spelled --danger) */
+  /* Live canvas zoom, written onto .algebra-track by setZoom and read back by the condensed
+     overview to counter-scale its header type. Declared here so the token invariant holds
+     (every var() has a :root default) and so the pre-JS value is sane. */
+  --alg-zoom:        1;
+  /* Branch nesting depth, written onto a trackbar chip by buildTrackBar. Same contract as
+     --alg-zoom: a :root default keeps every var() declared, the runtime value cascades over it. */
+  --alg-depth:       1;
   /* spacing scale */
   --sp-1: 4px; --sp-2: 6px; --sp-3: 8px; --sp-4: 12px; --sp-5: 16px;
 }
@@ -686,11 +693,53 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 /* ===== Algebra tab: equation-derivation DAG workspace ===== */
 /* Full-area graph surface laid over the shared #plot-area while the Algebra tab
    is active (SVG edges + absolutely-positioned KaTeX node cards). */
+/* The surface is a GRID, not a canvas with four independently-positioned overlays on top. The old
+   arrangement had the verdict at z-index 10 and the breadcrumb + trackbar at 11, so the navigation
+   furniture painted OVER the result whenever the surface was narrower than ~1000px — and the
+   verdict covered the graph rather than making room for itself. Now: toolbar row, a canvas/result
+   row, and a bottom chrome rail. The result column is `auto`, so a hidden or collapsed panel costs
+   the canvas nothing. */
 #algebra-graph {
   position: absolute; inset: 0; z-index: 5;
   background: var(--c-bg); overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "toolbar toolbar"
+    "canvas  result"
+    "rail    rail";
 }
 #algebra-graph.hidden { display: none; }
+#algebra-graph .algebra-scroll { grid-area: canvas; min-width: 0; min-height: 0; }
+#algebra-graph .algebra-empty  { grid-area: canvas; }
+#algebra-graph .algebra-verdict { grid-area: result; }
+#algebra-graph .algebra-rail {
+  grid-area: rail; display: flex; flex-direction: column; gap: 2px;
+  padding: 4px 6px; border-top: 1px solid var(--c-border); background: var(--c-surface);
+  min-width: 0;
+}
+#algebra-graph .algebra-rail:empty { display: none; }
+
+/* CONDENSED OVERVIEW. Past ~7 columns a 300px-lane track cannot fit, and `transform: scale` is the
+   wrong lever for an overview: it shrinks the 11px lane headers at exactly the same rate as the
+   content they exist to help you navigate. Below CONDENSE_BELOW the lanes narrow, the card bodies
+   collapse to a one-line summary, and the header type is COUNTER-SCALED by --alg-zoom so it stays
+   readable at full size while the pipeline shrinks around it. */
+#algebra-graph.is-condensed .algebra-column { width: 168px; min-width: 168px; }
+#algebra-graph.is-condensed .algebra-node-math,
+#algebra-graph.is-condensed .algebra-node-tools { display: none; }
+#algebra-graph.is-condensed .algebra-node { padding: 2px 4px; }
+/* Counter-scale the whole header rather than a font-size: scaling one hardcoded px target shrinks
+   the header instead of preserving it (the natural size is inherited, not declared), and would not
+   hold the relative sizes of the label / step badge / stats inside it. An inverse transform keeps
+   every child at exactly its natural rendered size while the lane around it shrinks. */
+#algebra-graph.is-condensed .algebra-column-head {
+  transform: scale(calc(1 / var(--alg-zoom)));
+  transform-origin: top left;
+  width: calc(100% * var(--alg-zoom));
+}
+#algebra-graph.is-condensed .algebra-node-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Structured column lanes: a natively-scrolling track; the .algebra-sizer is sized by
    JS to trackNatural × zoom so the scrollbars stay correct while the track is scaled. */
 #algebra-graph .algebra-scroll {
@@ -837,11 +886,17 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
    exists to carry and the only way to close it. Bound the height and scroll the BODY, with the head
    pinned so the badge and × are always reachable. */
 #algebra-graph .algebra-verdict {
-  position: absolute; right: 12px; bottom: 12px; z-index: 10; max-width: 360px;
-  max-height: calc(100% - 24px); display: flex; flex-direction: column; overflow: hidden;
-  background: var(--c-surface); border: 1px solid var(--c-accent);
-  border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.18); padding: 8px 10px; font-size: 12px;
+  width: 340px; max-width: 46vw; min-height: 0;
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--c-surface); border-left: 1px solid var(--c-accent);
+  padding: 8px 10px; font-size: 12px;
 }
+/* Collapsed: yields its width back to the canvas WITHOUT dismissing the result, so the answer and
+   its Export action stay one click away. */
+#algebra-graph .algebra-verdict.is-collapsed { width: 34px; padding: 8px 4px; }
+#algebra-graph .algebra-verdict.is-collapsed .algebra-verdict-scroll { display: none; }
+#algebra-graph .algebra-verdict.is-collapsed .algebra-verdict-head { flex-direction: column; gap: 4px; }
+#algebra-graph .algebra-verdict.is-collapsed .algebra-verdict-head > span { display: none; }
 #algebra-graph .algebra-verdict.hidden { display: none; }
 #algebra-graph .algebra-verdict-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -1046,9 +1101,9 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 
 /* Floating view/history toolbar over the graph */
 #algebra-graph .algebra-toolbar {
-  position: absolute; top: 8px; right: 8px; z-index: 11; display: flex; align-items: center; gap: 2px;
-  background: var(--c-surface); border: 1px solid var(--c-border);
-  border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.14); padding: 3px 5px;
+  grid-area: toolbar; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  background: var(--c-surface); border-bottom: 1px solid var(--c-border);
+  padding: 4px 6px; min-width: 0;
 }
 #algebra-graph .algebra-toolbar .algebra-tb-btn { padding: 1px 7px; }
 #algebra-graph .algebra-toolbar .algebra-tb-btn.active { border-color: var(--c-accent); color: var(--c-accent); font-weight: 600; }
@@ -1104,10 +1159,7 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 
 /* Reduction breadcrumb: a clickable chip rail floating over the graph (bottom-left) */
 #algebra-graph .algebra-breadcrumb {
-  position: absolute; left: 8px; bottom: 8px; z-index: 11; display: flex; align-items: center; gap: 2px;
-  max-width: 62%; overflow-x: auto; padding: 3px 5px;
-  background: var(--c-surface); border: 1px solid var(--c-border);
-  border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.14);
+  display: flex; align-items: center; gap: 2px; overflow-x: auto; min-width: 0;
 }
 #algebra-graph .algebra-breadcrumb.hidden { display: none; }
 #algebra-graph .algebra-bc-chip {
@@ -1122,13 +1174,24 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
    Stacked just ABOVE the column breadcrumb (bottom-left) — branches are the outer
    context, columns the inner — so it never collides with the top-right view toolbar. */
 #algebra-graph .algebra-trackbar {
-  position: absolute; left: 8px; bottom: 40px; z-index: 11; display: flex; align-items: center; gap: 4px;
-  max-width: 62%; overflow-x: auto; padding: 3px 6px;
-  background: var(--c-surface); border: 1px solid var(--c-border);
-  border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.14);
+  display: flex; align-items: center; gap: 4px; overflow-x: auto; min-width: 0;
 }
 #algebra-graph .algebra-trackbar.hidden { display: none; }
 #algebra-graph .algebra-track-lbl { color: var(--c-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
+/* Branch ancestry, drawn rather than hidden in a tooltip: children sit after their parent and are
+   indented by depth, so a branch forked off another reads as subordinate instead of as a peer. */
+#algebra-graph .algebra-track-chip.is-child { margin-left: calc(var(--alg-depth) * 10px); }
+#algebra-graph .algebra-track-from { color: var(--c-muted); font-size: 11px; cursor: help; margin-right: 1px; }
+
+/* Minimap NODES (the lanes are a faint backdrop). Coloured by kind, with selection, lineage and
+   search hits accented — the things the labelled breadcrumb cannot show. */
+#algebra-graph .algebra-mm-node { position: absolute; background: var(--c-muted); border-radius: 1px; opacity: 0.55; }
+#algebra-graph .algebra-mm-node.k-generated  { background: var(--c-primary); }
+#algebra-graph .algebra-mm-node.k-constraint { background: var(--c-warn); }
+#algebra-graph .algebra-mm-node.k-derived    { background: var(--c-muted-2); }
+#algebra-graph .algebra-mm-node.is-lineage   { opacity: 0.95; }
+#algebra-graph .algebra-mm-node.is-selected  { background: var(--c-accent); opacity: 1; outline: 1px solid var(--c-accent); }
+#algebra-graph .algebra-mm-node.is-match     { background: var(--c-ok); opacity: 1; }
 #algebra-graph .algebra-track-chip {
   display: inline-flex; align-items: center; gap: 2px;
   border: 1px solid var(--c-border-soft); background: var(--c-bg);

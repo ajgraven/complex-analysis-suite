@@ -3065,10 +3065,14 @@ const QD = _QD;
         onSeed: seedFromCurrent,
       });
       buildToolbar(surface);
-      breadcrumb = document.createElement('div'); breadcrumb.className = 'algebra-breadcrumb';
-      surface.appendChild(breadcrumb);
+      // Into the canvas's bottom RAIL, not floating over the surface: as free-floating overlays
+      // these sat at z-index 11, above the verdict card, so they painted over the result on any
+      // surface narrower than ~1000px.
+      const rail = (canvas && canvas.rail) || surface;
       trackbar = document.createElement('div'); trackbar.className = 'algebra-trackbar hidden';
-      surface.appendChild(trackbar);
+      rail.appendChild(trackbar);
+      breadcrumb = document.createElement('div'); breadcrumb.className = 'algebra-breadcrumb';
+      rail.appendChild(breadcrumb);
       // Keyboard a11y (active only while the Algebra tab is visible, and not while typing in
       // a field): Esc clears the selection; Delete/Backspace deletes a single selected node.
       document.addEventListener('keydown', (ev) => {
@@ -3158,9 +3162,31 @@ const QD = _QD;
       const active = store.activeTrack;
       const lbl = document.createElement('span'); lbl.className = 'algebra-track-lbl'; lbl.textContent = 'branches';
       trackbar.appendChild(lbl);
-      store.tracks().forEach((t) => {
+      // Ancestry is REAL data (parentId / forkColumn) that was being spent entirely on a hover
+      // tooltip, so five branches — two of them forked off branch 3 — rendered as five peers. For a
+      // tool whose model is a ProofTree of case splits, the tree was the one thing not drawn.
+      // Order parents before their children and mark the depth, so the rail reads as a hierarchy.
+      const all = store.tracks();
+      const byParent = new Map();
+      all.forEach((t) => { const k = t.parentId || ''; if (!byParent.has(k)) byParent.set(k, []); byParent.get(k).push(t); });
+      const ordered = [];
+      (function walk(parentKey, depth) {
+        (byParent.get(parentKey) || []).forEach((t) => { ordered.push({ t, depth }); walk(t.id, depth + 1); });
+      })('', 0);
+      // Any track whose parent is missing (a deleted ancestor) would be dropped by the walk — keep
+      // it rather than silently hiding a branch that still holds work.
+      all.forEach((t) => { if (!ordered.some((o) => o.t.id === t.id)) ordered.push({ t, depth: 0 }); });
+      ordered.forEach(({ t, depth }) => {
         const chip = document.createElement('span');
-        chip.className = 'algebra-track-chip' + (t.id === active ? ' is-current' : '');
+        chip.className = 'algebra-track-chip' + (t.id === active ? ' is-current' : '') + (depth ? ' is-child' : '');
+        if (depth) {
+          chip.style.setProperty('--alg-depth', String(depth));
+          const arrow = document.createElement('span');
+          arrow.className = 'algebra-track-from';
+          arrow.textContent = '↳';
+          arrow.title = 'forked from ' + (trackLabelOf(t.parentId) || t.parentId) + ' · column ' + (t.forkColumn != null ? t.forkColumn : '?');
+          chip.appendChild(arrow);
+        }
         const name = document.createElement('button');
         name.type = 'button'; name.className = 'algebra-track-name'; name.textContent = t.label;
         name.title = t.parentId
@@ -3309,7 +3335,19 @@ const QD = _QD;
       bar.appendChild(zlabel);
       bar.appendChild(btn('+', 'Zoom in', () => setZ(_zoom * 1.15)));
       bar.appendChild(btn('Fit', 'Reset zoom & scroll to the start', () => { if (canvas) { canvas.fit(); _zoom = 1; zlabel.textContent = '100%'; } }));
-      bar.appendChild(btn('Fit ↔', 'Zoom so every column lane fits the width', () => { if (canvas && canvas.fitWidth) { _zoom = canvas.fitWidth(); zlabel.textContent = Math.round(_zoom * 100) + '%'; } }));
+      // fitWidth now reports whether it ACTUALLY fit. It used to return only the clamped zoom, so
+      // past ~7 columns the button wrote "40%" (ZMIN) while the track was still cut off — the label
+      // asserted a fit that had not happened. Say "condensed" when that is what made it fit, and
+      // say so plainly when even that was not enough.
+      bar.appendChild(btn('Fit ↔', 'Zoom so every column lane fits the width (switches to a condensed overview when needed)', () => {
+        if (!canvas || !canvas.fitWidth) return;
+        const r = canvas.fitWidth();
+        _zoom = (r && typeof r === 'object') ? r.zoom : r;
+        const pct = Math.round(_zoom * 100) + '%';
+        zlabel.textContent = (r && r.condensed) ? (pct + ' ·⊟') : pct;
+        zlabel.title = (r && !r.fits) ? 'Still wider than the viewport even condensed — scroll or zoom out further'
+          : (r && r.condensed) ? 'Condensed overview: cards collapsed, lane headers kept at full size' : '';
+      }));
       bar.appendChild(btn('Expand', 'Expand every card to the full typeset form', () => { if (canvas) canvas.setAllCollapsed(false); }));
       bar.appendChild(btn('Collapse', 'Collapse every card to a one-line preview', () => { if (canvas) canvas.setAllCollapsed(true); }));
       const mapBtn = btn('▣ map', 'Toggle the DAG minimap (a bird\'s-eye of all lanes with a draggable viewport)', () => {

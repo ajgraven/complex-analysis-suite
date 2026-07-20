@@ -40,6 +40,7 @@ const QD = _QD;
   const SVGNS = 'http://www.w3.org/2000/svg';
   const DISPLAY_CAP = 120;            // elide KaTeX above this term count (card lane width is CSS-driven)
   const ZMIN = 0.4, ZMAX = 1.6;       // zoom clamp
+  const CONDENSE_BELOW = 0.8;         // below this zoom, switch to the condensed overview (see setZoom)
 
   // KaTeX render with the codebase's plain-text fallback (shared helper in
   // riemann-latex.js; a local wrapper keeps the call sites + a fallback if it's absent).
@@ -99,12 +100,27 @@ const QD = _QD;
     const mmView = div('algebra-minimap-view');
     minimap.appendChild(mmInner); minimap.appendChild(mmView);
     container.appendChild(minimap);
+    // Bottom chrome rail. The branch bar and reduction breadcrumb used to be absolutely positioned
+    // at z-index 11 — i.e. ABOVE the verdict card at z-index 10 — so on any surface narrower than
+    // ~1000px the navigation furniture painted over the result. In the grid they own a row and
+    // cannot collide with anything. The UI layer appends into this instead of the container.
+    const rail = div('algebra-rail');
+    container.appendChild(rail);
 
     let zoom = 1;
     let minimapOn = false;
     // The last verdict payload, so a re-render can re-show it demoted instead of destroying a result
     // that cost tens of seconds. Cleared only by an explicit dismiss.
     let lastVerdictData = null;
+    let verdictCollapsed = false;
+    function setVerdictCollapsed(on) {
+      verdictCollapsed = !!on;
+      verdict.classList.toggle('is-collapsed', verdictCollapsed);
+      const b = verdict.querySelector('.algebra-verdict-dock');
+      if (b) { b.textContent = verdictCollapsed ? '«' : '»'; b.title = verdictCollapsed ? 'Expand the result panel' : 'Collapse the result panel (keeps the result)'; }
+      relayout();                 // the canvas viewport just changed width
+      return verdictCollapsed;
+    }
     let selected = [];
     let lastStore = null, lastLatexOf = null;
     const collapsed = new Map();        // id -> bool (default: collapsed). Persists across rerenders.
@@ -437,11 +453,17 @@ const QD = _QD;
 
     // ---- B2: DAG minimap ----------------------------------------------------
     const MM_W = 168, MM_H = 116;     // minimap inner coordinate box (matches the CSS size)
+    // Scale to WIDTH and let height overflow (the box clips). Fitting both axes made a wide track
+    // collapse into the top sliver of a 116px box with the rest empty.
     function mmScale() {
-      const natW = track.offsetWidth || 1, natH = track.offsetHeight || 1;
-      return Math.min(MM_W / natW, MM_H / natH) || 0;
+      const natW = track.offsetWidth || 1;
+      return (MM_W / natW) || 0;
     }
-    // Rebuild the minimap lanes (one mini-rect per column lane) + the viewport box.
+    // Rebuild the minimap + the viewport box. It used to draw ONE RECT PER LANE — for a
+    // left-to-right pipeline of uniform lanes that is a row of equal rectangles, conveying column
+    // count and viewport position, both of which the labelled breadcrumb already gives you. Drawing
+    // NODES instead makes it an overview the breadcrumb cannot replace: density, where the
+    // selection and its lineage sit, and where the search hits are.
     function updateMinimap() {
       if (!minimapOn || !lastStore) return;
       const s = mmScale(); if (!s) return;
@@ -449,12 +471,28 @@ const QD = _QD;
       mmInner.innerHTML = '';
       track.querySelectorAll('.algebra-column').forEach((col) => {
         const cr = col.getBoundingClientRect();
-        const x = (cr.left - tr.left) / zoom, y = (cr.top - tr.top) / zoom, w = cr.width / zoom, h = cr.height / zoom;
         const lane = document.createElement('div');
         lane.className = 'algebra-mm-lane' + (col.classList.contains('is-current') ? ' is-current' : '');
-        lane.style.left = (x * s) + 'px'; lane.style.top = (y * s) + 'px';
-        lane.style.width = Math.max(2, w * s) + 'px'; lane.style.height = Math.max(2, h * s) + 'px';
+        lane.style.left = (((cr.left - tr.left) / zoom) * s) + 'px';
+        lane.style.top = (((cr.top - tr.top) / zoom) * s) + 'px';
+        lane.style.width = Math.max(2, (cr.width / zoom) * s) + 'px';
+        lane.style.height = Math.max(2, (cr.height / zoom) * s) + 'px';
         mmInner.appendChild(lane);
+      });
+      track.querySelectorAll('.algebra-node').forEach((el) => {
+        const nr = el.getBoundingClientRect();
+        const id = el.getAttribute('data-id');
+        const n = lastStore.get(id);
+        const dot = document.createElement('div');
+        dot.className = 'algebra-mm-node'
+          + (n && n.kind ? ' k-' + n.kind : '')
+          + (selected.indexOf(id) >= 0 ? ' is-selected' : (lineageSet.has(id) ? ' is-lineage' : ''))
+          + (el.classList.contains('is-match') ? ' is-match' : '');
+        dot.style.left = (((nr.left - tr.left) / zoom) * s) + 'px';
+        dot.style.top = (((nr.top - tr.top) / zoom) * s) + 'px';
+        dot.style.width = Math.max(2, (nr.width / zoom) * s) + 'px';
+        dot.style.height = Math.max(2, (nr.height / zoom) * s) + 'px';
+        mmInner.appendChild(dot);
       });
       updateMinimapView(s);
     }
@@ -493,9 +531,17 @@ const QD = _QD;
     function setZoom(z) {
       zoom = Math.max(ZMIN, Math.min(ZMAX, z));
       track.style.transform = 'scale(' + zoom + ')';
+      // Below the threshold, scaling text is the wrong lever for an overview: the 12px card math
+      // renders at ~5px AND so do the 11px lane headers, so the wayfinding degrades at exactly the
+      // same rate as the content it exists to help you navigate. Condensed mode instead collapses
+      // the cards, narrows the lanes, and counter-scales the header type back to full size.
+      const condensed = zoom < CONDENSE_BELOW;
+      container.classList.toggle('is-condensed', condensed);
+      track.style.setProperty('--alg-zoom', String(zoom));
       relayout();
       return zoom;
     }
+    function isCondensed() { return zoom < CONDENSE_BELOW; }
     function fit() { setZoom(1); scroll.scrollLeft = 0; scroll.scrollTop = 0; }
     // Zoom about a viewport point: keep whatever is under (cx, cy) fixed. setZoom alone preserves
     // nothing, so zooming used to drift the content out from under the pointer.
@@ -552,11 +598,22 @@ const QD = _QD;
       }
     }, { passive: false });
     // Zoom so all lanes fit the viewport width (clamped by setZoom's [ZMIN, ZMAX]).
+    // Returns { zoom, fits, condensed }. It used to return only the clamped zoom, so the caller
+    // wrote "40%" into the label while the content was still cut off — ZMIN is 0.4 and ten 300px
+    // lanes need ~0.27. Condensed mode is what actually makes a wide pipeline fit, so report both.
     function fitWidth() {
       const natural = track.offsetWidth || 1;
       const avail = (scroll.clientWidth || natural) - 8;
       scroll.scrollLeft = 0;
-      return setZoom(avail / natural);
+      const wanted = avail / natural;
+      const z = setZoom(wanted);
+      // After condensing, the lanes are narrower, so re-measure and try again once.
+      if (isCondensed()) {
+        const natural2 = track.offsetWidth || 1;
+        if (natural2 < natural) setZoom(avail / natural2);
+      }
+      const fits = (track.offsetWidth * zoom) <= avail + 2;
+      return { zoom, fits, condensed: isCondensed() };
     }
     // Scroll a column lane into view (left-aligned) and pulse a brief highlight. `offsetLeft`
     // is the NATURAL layout x within the track; the sizer is scaled by `zoom`, so the scroll
@@ -591,6 +648,11 @@ const QD = _QD;
       if (!data || !data.text) { lastVerdictData = null; verdict.classList.add('hidden'); return; }
       if (!data.stale) lastVerdictData = data;   // keep the pristine payload, not the demoted re-show
       verdict.innerHTML = '';
+      // Docked, the card takes real width from the canvas, so it needs a way to yield it that is
+      // NOT dismissal — collapsing keeps the result (and its Export action) one click away.
+      const collapse = iconBtn('algebra-verdict-dock', verdictCollapsed ? '«' : '»',
+        verdictCollapsed ? 'Expand the result panel' : 'Collapse the result panel (keeps the result)',
+        () => setVerdictCollapsed(!verdictCollapsed));
       const close = iconBtn('algebra-verdict-close', '×', 'Dismiss', () => { lastVerdictData = null; verdict.classList.add('hidden'); });
       const head = div('algebra-verdict-head');
       // Rigor badge (G-2): a prominent, color-coded =/≤/≈/⚠/? pill leads the card so a certified '=' and an
@@ -602,7 +664,7 @@ const QD = _QD;
         head.appendChild(pill);
         const tspan = document.createElement('span'); tspan.textContent = data.title || 'Existence / uniqueness'; head.appendChild(tspan);
       } else { head.appendChild(document.createTextNode(data.title || 'Existence / uniqueness')); }
-      head.appendChild(close);
+      head.appendChild(collapse); head.appendChild(close);
       const body = div('algebra-verdict-body'); body.textContent = data.text;
       verdict.appendChild(head);
       // Everything below the head scrolls; the head (rigor pill + ×) is pinned, so a tall card
@@ -678,6 +740,7 @@ const QD = _QD;
         });
         bodyWrap.appendChild(bar);
       }
+      verdict.classList.toggle('is-collapsed', verdictCollapsed);
       verdict.classList.remove('hidden');
     }
 
@@ -694,7 +757,7 @@ const QD = _QD;
 
     track.style.transform = 'scale(1)';
     return { render, rerender, fit, fitWidth, scrollToColumn, getSelection, clearSelection, setZoom, zoomAt,
-      setAllCollapsed, setVerdict, setMinimap, setQuery, moveSelection };
+      setAllCollapsed, setVerdict, setMinimap, setQuery, moveSelection, rail, setVerdictCollapsed };
   }
 
   window.QD = window.QD || {};
