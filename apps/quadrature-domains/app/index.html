@@ -666,6 +666,17 @@
     'param-slice': document.getElementById('controls-param-slice'),
     algebra:      document.getElementById('controls-algebra'),
   };
+  // Wire the tab↔panel association once. The markup carried role="tab"/role="tabpanel"
+  // but no aria-controls / aria-labelledby, so assistive tech saw four tabs and four
+  // unrelated panels; done here (rather than by hand on eight elements) so adding a tab
+  // cannot forget it. Ids are generated only if the author did not supply one.
+  tabs.forEach(t => {
+    const el = panels[t.dataset.tab];
+    if (!el) return;
+    if (!t.id) t.id = 'tab-' + t.dataset.tab;
+    t.setAttribute('aria-controls', el.id);
+    el.setAttribute('aria-labelledby', t.id);
+  });
   function activate(tabId) {
     tabs.forEach(t => {
       const on = t.dataset.tab === tabId;
@@ -677,12 +688,23 @@
       const on = id === tabId;
       el.classList.toggle('active', on);
       el.hidden = !on;
+      // The visible panel is itself a tab stop (APG): it makes the panel reachable and
+      // scrollable from the keyboard. Focus is deliberately NOT moved here — a click on
+      // a tab should leave focus on the tab. The Algebra launcher, which is an explicit
+      // "take me there", moves focus itself (openWorkspace in algebra-ui).
+      if (on) el.setAttribute('tabindex', '0'); else el.removeAttribute('tabindex');
     });
     // Notify subsystems. Listeners are optional.
     document.dispatchEvent(new CustomEvent('tab-changed', { detail: { tab: tabId } }));
   }
   tabs.forEach(t => t.addEventListener('click', () => activate(t.dataset.tab)));
-  // Initial: QD tab active (matches HTML markup).
+  // Initial: QD tab active (matches HTML markup) — activate() never runs for it, so give
+  // the first panel the same tab stop the others get on switch.
+  {
+    const init = document.querySelector('.tab-btn.active');
+    const el = init && panels[init.dataset.tab];
+    if (el) el.setAttribute('tabindex', '0');
+  }
 })();
 </script>
 
