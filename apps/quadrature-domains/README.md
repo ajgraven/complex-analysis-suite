@@ -563,6 +563,19 @@ view is active.
   contextual **inspector** with its full action set (Duplicate, Copy LaTeX, Copy Mathematica,
   Show steps, Delete, Generate conjugate, Propagate to current system, Attempt to factor,
   Solve for a variable, Fork from here) — the same list the right-click menu offers; two nodes
+  **Solve for a variable** returns a closed form in radicals (degree ≤ 4 or reducible), tidied
+  for reading: identities folded and common factors cancelled exactly over ℚ(i). The tidied form
+  is **re-verified** against the original equation before it is shown, and the untidied form is
+  displayed instead if it does not clear the same bar — the `verified ✓` belongs to the roots, not
+  to the prettifier. Radicals are *not* canonicalised: Cardano/Ferrari stay nested, and two
+  differently-written surds are not recognised as equal.
+  **Pin known quadrature data** substitutes the solved `a_j` / `C_{j,s}` as exact values in one
+  new column. They are symbolic by default because the workspace describes the whole *family*;
+  pin them to see what a specific domain collapses to. Note the asymmetry this resolves: `fix
+  φ(0)=w₀` **substitutes** w₀ (it stops being a variable, and at w₀ = 0 its terms vanish rather
+  than appear), while `a_j` stays symbolic — so column 0's header states what the gauge baked in,
+  and names any node sitting at the gauge centre, since the locator row depends only on
+  `(a_j − w₀)` and such a coincidence drops a whole group.
   open the eliminate panel. A **results drawer** above the verdict keeps every result the session
   produced, marking each `current`, `earlier`, or a branch name, so a verdict is never shown as
   describing a system it was not computed on. The **φ / h reference** is a collapsible card in

@@ -21,7 +21,12 @@
 // SURFACE LAYOUT (P3). The container is a GRID, not a canvas with overlays stacked on it:
 //   "toolbar toolbar" / "canvas result" / "rail rail"
 // The verdict DOCKS into the `result` column — it takes width from the canvas rather than covering
-// it, and collapses to a sliver (setVerdictCollapsed) to give that width back WITHOUT dismissing.
+// it, and the column collapses to a 34px sliver (setVerdictCollapsed, which despite its name sizes
+// the whole COLUMN) to give that width back WITHOUT dismissing anything.
+//   ⚠ The BUTTON that calls it is in the drawer head, built by algebra-ui's renderDrawer — not on
+//   this card. It lived here once; because this card is dismissable and the drawer is not, pressing
+//   × removed the only control that could reclaim the width and stranded the column open. One
+//   control, on the element that is always present.
 // The trackbar + breadcrumb live in the bottom `rail` (the UI layer appends into the exported
 // `rail` element); as free-floating overlays they sat at z-index 11 against the verdict's 10 and
 // painted over the result on any surface under ~1000px.
