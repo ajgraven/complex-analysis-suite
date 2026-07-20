@@ -33,7 +33,10 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
    (standard) and convention-tagged. This prevents a *silent* factor-of-π/2πi error.
    ([ADR-0006](docs/DECISIONS.md))
 6. **Extraction is demand-driven:** a primitive becomes a package when a **second
-   consumer** needs it. ([ADR-0007](docs/DECISIONS.md))
+   consumer** needs it — and, symmetrically, two engines are not *merged* without one either.
+   ([ADR-0007](docs/DECISIONS.md); worked example + the standing exception in
+   [ADR-0008](docs/DECISIONS.md), which extracted `@cas/exact` and deliberately left QD's
+   `sym-core.mjs` separate.)
 7. **Package scope `@cas/*`** (internal, `workspace:*`, not published).
 8. **Topology:** separate apps + a **unified menu** (a launcher page in `apps/launcher`,
    plus a shared nav header later). **No** unified single-page shell.

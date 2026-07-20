@@ -16,14 +16,19 @@ Format follows Michael Nygard's ADR convention.
 | [0005](#adr-0005-expr--interchange-as-the-map-representation-keystone) | `expr` + `interchange` as the map-representation keystone | Accepted |
 | [0006](#adr-0006-convention-neutral-core-packages) | Convention-neutral core packages | Accepted |
 | [0007](#adr-0007-incremental-extraction-driven-by-real-need) | Incremental extraction driven by real need | Accepted |
+| [0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) | Extract `@cas/exact`; keep QD's `sym-core` separate | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
-> All seven are **Accepted** as of this session's decisions (recorded in
-> [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you)).
+> All eight are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
+> [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you));
+> **0008 is the first *follow-on*** — a decision made during the build, which
+> [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) explicitly asked to be recorded
+> this way. Expect more of that shape than of the original seven.
 > Supersede rather than rewrite if any change later.
 >
-> **✅ Executed.** All seven decisions were carried out — the [migration runbook](MIGRATION.md)
-> ran to completion — with two conscious deviations recorded inline in the Action Items below:
+> **✅ Executed.** The seven up-front decisions were carried out — the
+> [migration runbook](MIGRATION.md) ran to completion — with two conscious deviations recorded
+> inline in the Action Items below:
 > (1) **ADR-0005's *multivalued* `expr` / `interchange` extension was not built** — the
 > Correspondences app enumerates correspondence branches with its own engine, so no second
 > consumer ever forced a shared branch-aware representation (which is precisely the
@@ -437,8 +442,118 @@ need-driven rule also directly serves principle #2 (extract on evidence).
 - **Harder:** living with a temporarily heterogeneous repo; deciding extraction timing
   (guided by "a second consumer needs it").
 - **Revisit:** each extraction is its own small decision; record notable ones as
-  follow-on ADRs.
+  follow-on ADRs. *(First one: [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate),
+  `@cas/exact`.)*
 
 ### Action Items
 1. [x] Sequence per the [migration runbook](MIGRATION.md) (Phases 0–6, overlapping 5–6).
 2. [x] Gate each package extraction on a concrete second consumer.
+
+---
+
+## ADR-0008: Extract `@cas/exact`; keep QD's `sym-core` separate
+
+**Status:** Accepted  **Date:** 2026-07  **Deciders:** Andrew
+
+*The first follow-on ADR that [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need)
+asked for ("record notable [extractions] as follow-on ADRs"). It records two decisions: one
+extraction that happened, and one that deliberately did not.*
+
+### Context
+The Correspondences app needed **exact** arithmetic — not floating point — to locate the deltoid
+correspondence curve's cusps. A cusp is a *decision* ("the discriminant vanishes here"), and a
+decision computed in floating point is an estimate wearing a decision's clothing. It grew an
+in-app engine at `apps/correspondences/src/exact/`: ℚ over `BigInt`, ℚ(i) on top, and exact
+univariate polynomials over that field.
+
+Complex Dynamics then needed the same field for **Gleason polynomials** (Mandelbrot period-*n*
+centers) and, later, dynatomic Φ<sub>n</sub>(z, c). That is a second consumer, which under
+ADR-0007 is the trigger to extract.
+
+Two facts make this worth its own record rather than a line in a changelog:
+
+1. **`exact` was not in the phase plan.** [MIGRATION.md](MIGRATION.md) Phases 3–5 named `core`,
+   `interchange`, `expr`, `gpu`. Nobody predicted a fifth package. It was pulled into existence
+   by a real requirement — which is ADR-0007 working exactly as intended, not a plan overrun.
+   The suite therefore has **five** packages, not the four the phase plan implies; several
+   documents said four for some time afterwards.
+2. **The suite already had an exact engine, and we did not use it.** The Quadrature app's
+   `app/sym-core.mjs` is 5,805 lines of exact ℚ(i) — `Rational`, `Gaussian`, multivariate
+   `MPoly`, Gröbner/FGLM, Hermite forms, and a full factorizer. The obvious move was to extract
+   *that* and have everyone share it. We didn't.
+
+### Decision
+**Extract the Correspondences engine to `@cas/exact`** (`d62e439`, PR #57, 2026-07-13), moving
+`gaussian.ts` and `qiPoly.ts` out of the app and adding shared `render.ts`. Grow it from there:
+`biPoly.ts` and `resultant.ts` followed as CD's dynatomic and multiplier-specialization work
+needed them.
+
+**Leave `sym-core.mjs` where it is**, un-extracted and unconsolidated. The suite runs two exact
+engines, on purpose.
+
+### Options Considered
+
+#### Option A: Extract the Correspondences engine (this ADR)
+**Pros:** the code already existed, was already tested, and was already the right shape for CD's
+need (univariate over ℚ(i), abstract variable — `z̄` for a correspondence curve, `c` for a
+Gleason polynomial). Small: ~370 lines moved. **Cons:** creates a fifth package the phase plan
+never mentioned, and a second exact implementation in the repo.
+
+#### Option B: Have Complex Dynamics import from `apps/correspondences`
+**Pros:** no new package. **Cons:** violates the one dependency rule the architecture actually
+enforces — no app imports another app ([§4](ARCHITECTURE.md#4-the-dependency-rule), lint-guarded).
+Rejected on principle, not taste.
+
+#### Option C: Copy the primitives into Complex Dynamics
+**Pros:** fastest. **Cons:** two divergent copies of the field arithmetic that every exactness
+claim in two apps rests on. Bugs would be fixed once and survive once. Rejected.
+
+#### Option D: Extract `sym-core` instead, and have everyone share it
+**Pros:** one exact engine for the suite; no duplicated ℚ(i). **Cons, and why it was rejected:**
+- **Shape mismatch.** `sym-core` is *multivariate* (`MPoly` over a variable-name map) and built
+  for ideal-theoretic work — Gröbner bases, elimination, real-root counting. CD and
+  Correspondences need *univariate and bivariate* polynomials with a single abstract variable.
+  Sharing would mean either using a heavyweight representation for a lightweight job, or adding
+  a second representation to `sym-core` — i.e. building `@cas/exact` inside it anyway.
+- **Risk concentration.** `sym-core` is the most correctness-critical code in the repo: the
+  project's honest-labeling guarantee (`=` exact / `≤` bound / `≈` estimate) is only meaningful
+  because that engine can actually decide things. Refactoring 5,805 lines of it to serve two
+  consumers that don't need its capabilities trades a real guarantee for a tidier diagram.
+- **No demand.** ADR-0007's rule is symmetric: don't extract without a second consumer, and don't
+  *merge* without one either. Nothing needs `sym-core`'s multivariate machinery outside QD.
+- **It is deliberately self-contained.** `sym-core.mjs` imports only `./solver.mjs`, which is
+  what lets it run unchanged in a module worker and in the headless Node suite.
+
+### Trade-off Analysis
+The honest cost of A + not-D is **duplication of the same mathematics**: ℚ over `BigInt` and
+ℚ(i) are implemented twice, in `sym-core.mjs` and in `packages/exact/src/gaussian.ts`. That is
+real debt and should be named as such rather than explained away.
+
+It is accepted because the two implementations serve different shapes, are independently tested,
+and — crucially — a bug in one does not silently corrupt the other's claims. The alternative
+(Option D) concentrates risk in the one module whose correctness the project's central guarantee
+depends on, in exchange for removing a duplication that is not currently causing errors. For a
+solo developer that is a bad trade. It stops being a bad trade under the conditions in *Revisit*.
+
+### Consequences
+- **Easier:** CD and Correspondences share one tested exact kernel; a fix lands once. `@cas/exact`
+  is small enough to read in a sitting, and convention-neutral per
+  [ADR-0006](#adr-0006-convention-neutral-core-packages).
+- **Harder:** two ℚ(i) implementations to keep correct. Anyone reading the repo must learn that
+  "the exact engine" is ambiguous — hence the explicit note in
+  [`packages/exact/README.md`](../packages/exact/README.md) that QD does *not* use this package.
+- **Watch for:** a third consumer wanting multivariate exact work outside QD. That is the point
+  at which the two engines stop being different-shaped and start being redundant.
+- **Revisit if** any of: (a) a second consumer needs `sym-core`'s multivariate/Gröbner layer;
+  (b) the two ℚ(i) implementations are found to disagree on any input (a differential test
+  between them is the cheap early-warning, and does not exist yet); or (c) `@cas/exact` grows a
+  multivariate representation of its own — at which point it is reimplementing `sym-core` and
+  the merge argument becomes real.
+
+### Action Items
+1. [x] Extract `gaussian`/`qiPoly` into `packages/exact` with its own tests (`d62e439`, PR #57).
+2. [x] Grow `biPoly` + `resultant` as CD's dynatomic and multiplier work required them.
+3. [x] Give the package a README that states the `sym-core` boundary explicitly (#119).
+4. [ ] **Open:** add a differential test asserting `@cas/exact`'s `Gauss` and `sym-core`'s
+       `Gaussian` agree on a shared corpus — the cheap guard against the duplication in
+       *Trade-off Analysis* drifting silently. This is the one unmitigated cost of this ADR.
