@@ -472,7 +472,30 @@ const QD = _QD;
       svg.setAttribute('width', w); svg.setAttribute('height', h);
       svg.style.width = w + 'px'; svg.style.height = h + 'px';
       drawEdges();
+      markClipped();
       updateMinimap();
+    }
+    // 3.6 — a collapsed card whose equation is wider than the lane gets CUT, silently. The
+    // `text-overflow: ellipsis` on the body does not save it: KaTeX renders atomic inline-block
+    // boxes, and a browser cannot split one to make room for an ellipsis, so it just clips.
+    // Measured on the default seed + one Gröbner step: 2 of 22 cards overflow (336px and 289px
+    // of math in a 281px box) and neither showed any marker — so "x = ⅓y + …" and "x = ⅓y" were
+    // indistinguishable. Flag it on the CARD (the body is overflow:hidden, so a marker drawn
+    // inside it would be clipped by the very thing it is reporting).
+    //
+    // Lives in relayout because that already runs on exactly the events that change whether a
+    // card clips: render, collapse/expand, reorder, container resize and zoom.
+    function markClipped() {
+      track.querySelectorAll('.algebra-node').forEach((card) => {
+        const m = card.querySelector('.algebra-node-math');
+        // Only the collapsed one-liner clips; expanded bodies scroll horizontally by design.
+        const clipped = !!m && m.classList.contains('collapsed') && m.scrollWidth > m.clientWidth + 1;
+        card.classList.toggle('is-clipped', clipped);
+        if (m) {
+          if (clipped) m.title = 'Truncated — expand the card to see the whole equation';
+          else m.removeAttribute('title');
+        }
+      });
     }
 
     // Redraw the derivation edges: for each store edge, anchor source-right → target-left
