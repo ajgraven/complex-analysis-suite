@@ -38,12 +38,16 @@ function scrub(s: string): string {
   return out;
 }
 
-// Every `setVerdict({ … })` argument object, sliced from the ORIGINAL source (so content
-// assertions see the real strings) using boundaries found in the scrubbed copy.
+// Every verdict-payload literal, sliced from the ORIGINAL source (so content assertions see the
+// real strings) using boundaries found in the scrubbed copy.
+//
+// The needle was `setVerdict({` until P6b routed all eleven call sites through showResult(),
+// which records the result against the system it was computed on before displaying it. This
+// scanner's self-guard below is what caught the rename — keep it.
 function setVerdictCalls(src: string): string[] {
   const clean = scrub(src);
   const out: string[] = [];
-  const needle = "setVerdict({";
+  const needle = "showResult({";
   let i = clean.indexOf(needle);
   while (i >= 0) {
     let depth = 0, j = i + needle.length - 1;
