@@ -49,24 +49,41 @@ below is still open.
 | 3.3 inspector hides the whole workflow | ✅ shipped — #111 (sections recede rather than vanish) |
 | 4.9 nine flat inspector buttons, Delete mid-row | ✅ shipped — #112 (`.danger`, moved) |
 | 4.10 360px breakages | ✅ shipped — #112 |
+| 5.7 `?` overlay's shortcut registry | ✅ shipped — [#114](https://github.com/ajgraven/complex-analysis-suite/pull/114) (`QoL.registerShortcuts(scope, items)`; the overlay composes global + the tab active **at press time**) |
+| 5.3 focus management | ✅ shipped — #114 (context menu, variable picker, `?` dialog: focus in, trap, Esc, restore) |
+| 5.4 ARIA gaps (tab↔panel) | ◐ partial — #114 wired `aria-controls`/`aria-labelledby`/panel `tabindex`, plus `role=menu(item)` and `aria-expanded`. Roving-tabindex arrow nav **inside the tablist** is deliberately not done: the Algebra canvas binds arrows at document level, so the two would fight |
 
 **Still open.** From Tier 4: **4.2** (the φ/h reference is still an always-visible,
 non-collapsible block outranking the workflow — the plan moves it onto the canvas as a corner
 card), **4.4** (section order / "Shape from moments" misfiled), **4.5** (the ①②③④ strip is
 still decoration), **4.12**, **4.13**. From Tier 5: **5.2** dark mode (5.1 was its
-prerequisite and is done), **5.3** focus management (there are still **zero** `.focus()` calls
-in the app), **5.4** ARIA gaps, **5.5** contrast, **5.7** the `?` overlay's shortcut registry,
-**5.8**, **5.9**. From Tier 3: **3.6** (collapsed cards clip mid-expression with no truncation
-marker), and the **ghost stub lane** that would let the fork *edge* render — deferred from #110
-because it means drawing a foreign track's column into the current view, touching `drawEdges`,
-`relayout`, the minimap, the search filter and keyboard nav at once. Tier 6 beyond 3b, and
-Tier 2's 2.3–2.5, are untouched.
+prerequisite and is done), **5.5** contrast, **5.8**, **5.9**. From Tier 3: **3.6** (collapsed
+cards clip mid-expression with no truncation marker), and the **ghost stub lane** that would let
+the fork *edge* render — deferred from #110 because it means drawing a foreign track's column
+into the current view, touching `drawEdges`, `relayout`, the minimap, the search filter and
+keyboard nav at once. Tier 6 beyond 3b, and Tier 2's 2.3–2.5, are untouched.
 
-**Planned next (P5, P6 of the six-PR rework plan).** P5 = keyboard shortcut registry that the
-`?` overlay reads (it accepts a custom list but no caller ever passes one, so it always shows
-three generic entries) + focus management. P6 = results drawer keyed by `(track, _branchSig)`,
+**Planned next (P6 of the six-PR rework plan).** Results drawer keyed by `(track, _branchSig)`,
 column diff, focus mode (`computeLineage` already computes the set and only uses it to tint
 borders).
+
+**What P5 settled, and why it is shaped that way.** Two things are load-bearing beyond the
+feature itself:
+
+- *Accelerators dispatch through the button, never the handler.* `KEY_ACTIONS` maps a key to a
+  **selector**, and the handler calls `.click()` on it. Every gate the click path carries —
+  `setBusy` disabling it mid-worker, the `confirmReplace` strips added in #107 — is therefore
+  inherited for free and stays in one place. Calling `doGroebner()` directly would work and
+  would silently bypass the disabled state, letting a keypress start a second worker job mid-solve.
+  A guard test pins both halves.
+- *A keystroke asks before discarding a derivation, where a click does not.* Clicking a labelled
+  button is aimed; brushing a key is not. `s` (re-seed) routes through `confirmReplace` even
+  though `#alg-seed`'s own click handler does not — verified in-browser: the strip appears and
+  the 22-card graph is untouched until confirmed.
+
+Also folded in: the global default list advertised a Param-slice binding on *every* tab, so the
+Algebra workspace listed a key with nothing to act on. It now registers under `param-slice`.
+Measured in-browser after the change — QD: 2 rows, Param-slice: 3, Algebra: 16 in 3 groups.
 
 One measurement from #103 worth recording here, because it quantifies 0.6 better than the
 finding text does: the new column scan reports **"5 equations scanned — 0 factor, 1 proved

@@ -247,6 +247,44 @@ const QD = _QD;
     return (userPref == null) ? (total <= AUTO_OPEN_MAX) : !!userPref;
   }
 
+  // Single-key accelerators → the button that already owns the action. This table is the
+  // single source for BOTH the keydown handler and the `?` cheatsheet (algebraShortcutItems),
+  // so a binding cannot exist undocumented and the cheatsheet cannot advertise a dead key.
+  // Dispatching through the BUTTON is the point: every gate the click path carries (setBusy
+  // disables it mid-worker; some stay disabled until a solve exists) lives on the button, so
+  // a keystroke can never reach a state a click would refuse, and the gates stay in one place.
+  // `reseeds` marks the ones that would DISCARD the derivation, which the handler confirms.
+  // Module scope (not inside installAlgebra) so a unit test can read it without a live DOM.
+  const KEY_ACTIONS = {
+    s: { sel: '#alg-seed',        name: 'Seed from the current solve', reseeds: true },
+    g: { sel: '#alg-groebner',    name: 'Gröbner basis of the current column' },
+    p: { sel: '#alg-prove',       name: 'Prove existence & uniqueness' },
+    e: { sel: '#alg-export-json', name: 'Download the derivation (JSON)' },
+  };
+  // The `?` cheatsheet's Algebra section. ui-strings has advertised "Press ? for shortcuts"
+  // all along, and `?` did open an overlay — listing three generic lines (?, Esc, and a
+  // Param-slice binding) on every tab, none of them an Algebra binding. The workspace has ~14.
+  // The action rows are generated from KEY_ACTIONS so the list and the handler cannot drift.
+  function algebraShortcutItems() {
+    const items = [];
+    Object.keys(KEY_ACTIONS).forEach((k) => {
+      items.push({ key: k, desc: KEY_ACTIONS[k].name, group: 'Algebra — actions' });
+    });
+    items.push({ key: 'f', desc: 'Fork a branch from the selected column', group: 'Algebra — actions' });
+    items.push({ key: 'm', desc: 'Open the selected card’s action menu (also Shift+F10)', group: 'Algebra — actions' });
+    [['←  →', 'Move between columns'],
+     ['↑  ↓', 'Move within a column'],
+     ['Home  End', 'Jump to the first / last column'],
+     ['/', 'Search the equations'],
+     ['Esc', 'Clear the selection (or close a menu)']]
+      .forEach(([key, desc]) => items.push({ key, desc, group: 'Algebra — navigate' }));
+    [['Ctrl+Z', 'Undo'],
+     ['Ctrl+Shift+Z', 'Redo (also Ctrl+Y)'],
+     ['Delete', 'Delete the selected node and its descendants']]
+      .forEach(([key, desc]) => items.push({ key, desc, group: 'Algebra — edit' }));
+    return items;
+  }
+
   function installAlgebra(ctx) {
     const $ = ctx.$;
     const QE = QD && QD.QDEquations;
@@ -630,6 +668,16 @@ const QD = _QD;
     // getOptions() returns the raw names (rebuilt each open); `selected` is a Set
     // that the picker mutates; onChange fires after each toggle.
     let _openMenu = null;
+    // Close whichever picker is open. Routed through one helper so every close path keeps the
+    // button's aria-expanded honest — three call sites used to hide the menu directly, leaving
+    // the button telling assistive tech it was still open.
+    function _closeOpenMenu() {
+      if (!_openMenu) return;
+      _openMenu.classList.add('hidden');
+      const b = _openMenu._pickerBtn;
+      if (b) b.setAttribute('aria-expanded', 'false');
+      _openMenu = null;
+    }
     function buildPicker(host, opts) {
       if (!host) return;
       host.innerHTML = '';
@@ -654,14 +702,32 @@ const QD = _QD;
           row.appendChild(cb); row.appendChild(span); menu.appendChild(row);
         });
       }
+      btn.setAttribute('aria-expanded', 'false');
+      btn.setAttribute('aria-haspopup', 'true');
+      menu._pickerBtn = btn;
+      const setOpen = (on) => { menu.classList.toggle('hidden', !on); btn.setAttribute('aria-expanded', on ? 'true' : 'false'); };
       btn.addEventListener('click', (ev) => {
         ev.stopPropagation();
         const willOpen = menu.classList.contains('hidden');
-        if (_openMenu && _openMenu !== menu) _openMenu.classList.add('hidden');
-        if (willOpen) { render(); menu.classList.remove('hidden'); _openMenu = menu; }
-        else { menu.classList.add('hidden'); _openMenu = null; }
+        if (_openMenu && _openMenu !== menu) _closeOpenMenu();
+        if (willOpen) {
+          render(); setOpen(true); _openMenu = menu;
+          // Land on the first variable rather than making the user Tab past the button
+          // into a list that only just appeared.
+          const first = menu.querySelector('input[type="checkbox"]');
+          if (first) { try { first.focus(); } catch (e) {} }
+        } else { setOpen(false); _openMenu = null; }
       });
       menu.addEventListener('click', (ev) => ev.stopPropagation());
+      // Esc closes the checklist and hands focus back to the button that opened it — without
+      // this the only way out was a click elsewhere, which for a keyboard user is no way out.
+      menu.addEventListener('keydown', (ev) => {
+        if (ev.key !== 'Escape') return;
+        setOpen(false);
+        if (_openMenu === menu) _openMenu = null;
+        try { btn.focus(); } catch (e) {}
+        ev.preventDefault(); ev.stopPropagation();
+      });
       label();
       return { refresh: label };
     }
@@ -1374,7 +1440,7 @@ const QD = _QD;
       refreshMmaColumns();  // populate the Mathematica-export column picker
       wireSectionPersistence(panel);   // restore + remember which workflow sections are open
       // close any open picker menu when clicking elsewhere
-      document.addEventListener('click', () => { if (_openMenu) { _openMenu.classList.add('hidden'); _openMenu = null; } });
+      document.addEventListener('click', () => { _closeOpenMenu(); });
 
       if (QD.Strings && QD.Strings.apply) QD.Strings.apply(panel);
       buildReference();     // the φ/h reference is visible by default
@@ -1879,7 +1945,17 @@ const QD = _QD;
     // renders. Ten actions previously lived only in a sidebar panel that can sit ~900px from the
     // card you clicked; on the canvas a card offered four (collapse / up / down / copy).
     let _ctxMenu = null;
-    function closeNodeMenu() { if (_ctxMenu) { _ctxMenu.remove(); _ctxMenu = null; } }
+    let _ctxReturn = null;             // element focused before the menu opened
+    function closeNodeMenu() {
+      if (!_ctxMenu) return;
+      _ctxMenu.remove(); _ctxMenu = null;
+      // Dismissing a menu must put focus back where it was, or it lands on <body> and the
+      // next Tab restarts from the top of the document — which, on this page, is the tab bar.
+      const back = _ctxReturn; _ctxReturn = null;
+      if (back && typeof back.focus === 'function' && back.isConnected !== false) {
+        try { back.focus(); } catch (e) {}
+      }
+    }
     function openNodeMenu(id, x, y) {
       closeNodeMenu();
       const box = $('#alg-inspector');
@@ -1887,11 +1963,14 @@ const QD = _QD;
       if (!acts.length) return;
       const n = store.get(id);
       const menu = document.createElement('div'); menu.className = 'algebra-ctx-menu';
+      menu.setAttribute('role', 'menu');
+      menu.setAttribute('aria-label', ((n && n.label) || 'equation') + ' actions');
       const head = document.createElement('div'); head.className = 'algebra-ctx-head';
       head.textContent = (n && n.label) || 'equation';
       menu.appendChild(head);
       acts.forEach((a) => {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'algebra-ctx-item';
+        b.setAttribute('role', 'menuitem');
         if (a.label === 'Delete') b.classList.add('danger');
         b.textContent = a.label; if (a.title) b.title = a.title;
         b.addEventListener('click', () => {
@@ -1903,12 +1982,30 @@ const QD = _QD;
         });
         menu.appendChild(b);
       });
+      // Keyboard menu semantics. These keys are handled HERE and stopped: the document-level
+      // handler binds the same arrows to canvas navigation, so without this an open menu
+      // would scroll the graph out from under itself.
+      menu.addEventListener('keydown', (ev) => {
+        const items = Array.from(menu.querySelectorAll('.algebra-ctx-item'));
+        if (!items.length) return;
+        const at = items.indexOf(document.activeElement);
+        const go = (i) => { items[(i + items.length) % items.length].focus(); ev.preventDefault(); ev.stopPropagation(); };
+        if (ev.key === 'ArrowDown')      go(at + 1);
+        else if (ev.key === 'ArrowUp')   go(at - 1);
+        else if (ev.key === 'Home')      go(0);
+        else if (ev.key === 'End')       go(items.length - 1);
+        else if (ev.key === 'Escape' || ev.key === 'Tab') { closeNodeMenu(); ev.preventDefault(); ev.stopPropagation(); }
+      });
       document.body.appendChild(menu);
       // Keep it on screen when opened near an edge.
       const r = menu.getBoundingClientRect();
       menu.style.left = Math.max(4, Math.min(x, window.innerWidth - r.width - 6)) + 'px';
       menu.style.top = Math.max(4, Math.min(y, window.innerHeight - r.height - 6)) + 'px';
       _ctxMenu = menu;
+      _ctxReturn = (document.activeElement && document.activeElement !== document.body)
+        ? document.activeElement : null;
+      const first = menu.querySelector('.algebra-ctx-item');
+      if (first) { try { first.focus(); } catch (e) {} }
       setTimeout(() => {
         const off = (ev) => { if (_ctxMenu && !_ctxMenu.contains(ev.target)) { closeNodeMenu(); document.removeEventListener('pointerdown', off, true); } };
         document.addEventListener('pointerdown', off, true);
@@ -3233,6 +3330,10 @@ const QD = _QD;
         if (!surface || surface.classList.contains('hidden')) return;
         const ae = document.activeElement;
         if (ae && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return;
+        // An open card menu owns the keyboard. Its own handler stops the keys it uses, but
+        // the single-key accelerators below would otherwise still fire *through* it — so
+        // pressing `p` to skim the menu would launch a proof.
+        if (_ctxMenu) return;
         const sel = canvas ? canvas.getSelection() : [];
         const mod = ev.ctrlKey || ev.metaKey;
         // Undo/redo were reachable ONLY as two unlabeled glyphs in a floating toolbar, so a user
@@ -3264,6 +3365,42 @@ const QD = _QD;
         // `/` focuses the node search (the conventional binding; it is not a typing target here
         // because the guard above already returned for INPUT/SELECT/TEXTAREA).
         if (!mod && ev.key === '/') { const s = document.getElementById('alg-search'); if (s) { s.focus(); s.select(); ev.preventDefault(); return; } }
+        // Single-key accelerators for the primary actions. Each dispatches through its BUTTON
+        // rather than calling the handler: the button carries every gate the click path has
+        // (setBusy disables it mid-worker; some stay disabled until a solve exists), so a
+        // keystroke can never reach a state a click would refuse — and the gates stay in one
+        // place. A disabled button swallows .click() silently, hence the say-why toast.
+        if (!mod && !ev.altKey) {
+          const act = KEY_ACTIONS[ev.key];
+          if (act) {
+            const b = $(act.sel);
+            if (!b) return;
+            if (b.disabled) { toast(act.name + ' is not available right now', { kind: 'error' }); ev.preventDefault(); return; }
+            // Seeding discards the derivation. Clicking a labelled button is an aimed act;
+            // brushing a key is not, so the keystroke asks first where the click does not.
+            if (act.reseeds) confirmReplace(act.name, () => b.click());
+            else b.click();
+            ev.preventDefault(); return;
+          }
+          // Fork branches from the selected node's column, else from the newest column —
+          // the same two choices the "Fork from here" action and the trackbar button offer.
+          if (ev.key === 'f') {
+            if (busyGuard()) { ev.preventDefault(); return; }
+            const n = sel.length === 1 ? store.get(sel[0]) : null;
+            const col = n ? n.column : store.maxColumn();
+            if (canvas) canvas.clearSelection();
+            doFork(col); ev.preventDefault(); return;
+          }
+          // The card actions were pointer-only: right-click opened them and nothing else did,
+          // so a keyboard user could select a card (arrows) and then reach none of its ten
+          // actions. Shift+F10 / the Menu key are the platform conventions; `m` is the local one.
+          if (sel.length === 1 && (ev.key === 'm' || ev.key === 'ContextMenu' || (ev.shiftKey && ev.key === 'F10'))) {
+            const el = surface.querySelector('.algebra-node[data-id="' + String(sel[0]).replace(/"/g, '\\"') + '"]');
+            const r = el ? el.getBoundingClientRect() : null;
+            openNodeMenu(sel[0], r ? r.left + 12 : 80, r ? r.top + 24 : 80);
+            ev.preventDefault(); return;
+          }
+        }
         if (ev.key === 'Escape') { if (sel.length && canvas) { canvas.clearSelection(); ev.preventDefault(); } }
         else if ((ev.key === 'Delete' || ev.key === 'Backspace') && sel.length === 1) {
           if (busyGuard()) return;
@@ -3537,6 +3674,14 @@ const QD = _QD;
     }
     function showSurface(on) { if (surface) surface.classList.toggle('hidden', !on); }
 
+    // ---- the `?` cheatsheet --------------------------------------------------
+    // The list itself is module-scope (algebraShortcutItems, above installAlgebra); this
+    // just hands it to the registry once the tab exists.
+    (function registerShortcutHelp() {
+      const QoL = QD.QoL;
+      if (QoL && QoL.registerShortcuts) QoL.registerShortcuts('algebra', algebraShortcutItems());
+    })();
+
     // ---- tab lifecycle -------------------------------------------------------
     document.addEventListener('tab-changed', (e) => {
       const active = e.detail && e.detail.tab === 'algebra';
@@ -3552,11 +3697,15 @@ const QD = _QD;
       else rerender();
     });
 
-    // Open programmatically (the sidebar launcher calls this).
+    // Open programmatically (the sidebar launcher calls this). Unlike clicking the tab —
+    // where focus belongs on the tab you clicked — this is an explicit "take me to the
+    // workspace" from somewhere else on the page, so it moves focus into the panel.
     function openWorkspace() {
       const btn = document.querySelector('.tab-btn[data-tab="algebra"]');
       if (btn) btn.click();
       if (mounted) seedFromCurrent();
+      const panel = $('#controls-algebra');
+      if (panel && typeof panel.focus === 'function') { try { panel.focus(); } catch (e) {} }
     }
     ctx.openAlgebra = openWorkspace;
 
@@ -3588,6 +3737,8 @@ const QD = _QD;
 
   QD_UI.installAlgebra = installAlgebra;
   QD_UI.PROV_UI = PROV_UI;   // the UI-side provenance-op registry (testable + companion to the store's PROV_OPS)
+  QD_UI.ALGEBRA_KEY_ACTIONS = KEY_ACTIONS;           // single-key accelerator table (pure data)
+  QD_UI.algebraShortcutItems = algebraShortcutItems; // …and the `?` cheatsheet it generates (pure)
   QD_UI.suggestSummaryLabel = suggestSummaryLabel;   // collapsed suggestion-list <summary> label (pure)
   QD_UI.suggestAutoOpen = suggestAutoOpen;           // …and its expand/collapse decision (pure)
   QD_UI.SUGGEST_AUTO_OPEN_MAX = AUTO_OPEN_MAX;
