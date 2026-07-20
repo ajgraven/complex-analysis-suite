@@ -36,6 +36,7 @@ import {
   isComplex,
   isConventions,
   isMapSpec,
+  isEnvelopeOfKind,
 } from "@cas/interchange";
 import type {
   Envelope,
@@ -102,4 +103,4 @@ unknown optional fields gracefully.
 ## Tests
 
 `test/interchange.test.ts` — round-trips the codec and exercises the validator's accept/reject
-paths.
+paths. `test/viewstate.test.ts` — covers the view-state codec documented above.

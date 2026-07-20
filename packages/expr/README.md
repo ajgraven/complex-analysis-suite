@@ -43,7 +43,7 @@ import { parse, makeComplexFn, makeEscapeFn, compileF, compileEscape } from "@ca
 
 | Pass               | Entry                                        | What it gives you                                                                                                                                                     |
 | ------------------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Parse**          | `@cas/expr` / `./parser`, `./lexer`, `./ast` | `tokenize(src) → Token[]`, `parse(src) → Node`; the `Node` tagged-union AST + helpers (`referencesVar`, `assignsVar`, `isFreeParameter`); `ExprError` (carries `pos`) |
+| **Parse**          | `@cas/expr` / `./parser`, `./lexer`, `./ast` | `tokenize(src) → Token[]`, `parse(src) → Node`; the `Node` tagged-union AST + helpers (`referencesVar`, `isFreeParameter`); `ExprError` (carries `pos`) |
 | **Evaluate (JS)**  | `./evaluate`                                 | `makeComplexFn(node) → (z,c) → Complex` and `makeEscapeFn(node) → (z,c) → boolean` — the float64 reference backend                                                    |
 | **Compile (GLSL)** | `./glsl`                                     | `compileF(node)` and `compileEscape(node)` — emit GLSL fragment functions; `glslFloat` for literals                                                                   |
 | **Differentiate**  | `./derivative`                               | `differentiate(node, v?) → Node` (symbolic ∂/∂v) and `newtonIteration(f, df)` (GLSL Newton step)                                                                      |
