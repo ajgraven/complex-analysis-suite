@@ -786,5 +786,5 @@ const QD = _QD;
       default:         return { symbol: '?', label: 'undetermined', color: '#8a8a8a' };
     }
   }
-  QD.AlgebraCanvas = { create, rigorMeta };
+  QD.AlgebraCanvas = { create, rigorMeta, DISPLAY_CAP };
 })();
