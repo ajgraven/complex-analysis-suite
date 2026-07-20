@@ -1,7 +1,7 @@
 # Vision & Scope
 
 > **✅ Realized.** This document is the *why*, written before the build and kept as the durable
-> rationale. The plan it motivates has since been executed: three apps now ride four shared
+> rationale. The plan it motivates has since been executed: three apps now ride five shared
 > `@cas/*` packages, the QD → CD Schwarz-reflection hand-off round-trips, and the correspondence
 > tool reproduced the deltoid and grew a full mating visualizer — every item in
 > [§6 "What success looks like"](#6-what-success-looks-like) now holds. The framing below is
@@ -158,7 +158,9 @@ necessary.
   end-to-end.
 - Adding a *fourth* tool (the argument-principle applet, Arnold tongues, or the Zipper
   conformal mapper — all genuinely complex-analysis visualizers) is visibly cheaper
-  than the third was, because `core`, `gpu`, `expr`, `ui`, and `interchange` already exist.
+  than the third was, because `core`, `gpu`, `expr`, `interchange`, and `exact` already exist.
+  *(As built: `ui` was never extracted — no second consumer needed it. See ADR-0007 and the
+  "As built" note atop [ARCHITECTURE.md](ARCHITECTURE.md).)*
 
 ## 7. Non-goals (at least for now)
 

@@ -1,6 +1,8 @@
 name: CI
 
-# One workflow for the whole workspace. The `build` job is the main gate:
+# The quality gate for the whole workspace — one of two workflows (see deploy-pages.yml, which
+# publishes to Pages on push to master and runs its own lint/typecheck/test). The `build` job is
+# the main gate:
 # install → lint → typecheck → test → build (MIGRATION.md Phase 1 step 4; mirrors the local
 # gate `pnpm lint && pnpm typecheck && pnpm test && pnpm build`). The parallel `browser` job
 # executes the ACTUAL WebGL2 GLSL (the @cas/gpu dual-backend harness) in headless Chromium —

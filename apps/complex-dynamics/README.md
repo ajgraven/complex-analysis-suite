@@ -45,7 +45,8 @@ Other scripts:
 
 The rendering engine has no dependencies (hand-written WebGL2); a few small libraries
 power peripheral features (KaTeX for formula typesetting, driver.js for the tour, gif.js
-for GIF export), all bundled by Vite. CI (the workspace-wide GitHub Actions workflow,
+for GIF export, vite-plugin-pwa for offline/installable support), all bundled by Vite.
+CI (one of two workspace-wide GitHub Actions workflows — see also `deploy-pages.yml`;
 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)) runs lint, typecheck, tests, and
 build on every push and pull request, plus a `browser` job that executes the real WebGL2 GLSL
 dual-backend harness in headless Chromium.
@@ -677,9 +678,10 @@ pnpm --filter complex-dynamics preview    # sanity-check the build locally
 The Vite config sets `base: "./"`, so all asset URLs are **relative** — `dist/` works served
 from a domain root or a sub-path. The favicon is copied from `public/` into `dist/` automatically.
 
-Publishing is **manual**: no automated GitHub-Pages workflow is configured in-repo (the only
-GitHub Actions workflow is CI). To publish, serve the contents of `dist/` yourself (e.g. upload it
-to a Pages site); no extra path configuration is needed because the base is already relative.
+Publishing is **automated**: `.github/workflows/deploy-pages.yml` builds this app on every push to
+`master` (gated on lint + typecheck + test) and publishes its `dist/` under `complex-dynamics/` on
+the suite's combined Pages site. You only need to serve `dist/` yourself to host this app somewhere
+other than that site; no extra path configuration is needed either way, because the base is relative.
 
 ## Troubleshooting
 
