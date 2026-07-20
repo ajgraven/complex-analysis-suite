@@ -18,12 +18,45 @@
 // (store.moveNode), and a copy-as-LaTeX button; a hovertext from handlers.titleOf.
 // Cards FLOW in their column body (flex), so collapse/reorder reflow naturally.
 //
-// Also: an empty state (with a Generate call-to-action) before seeding, an
-// expand/collapse-all hook, and a dismissible verdict panel (setVerdict) for the
-// existence/uniqueness result. Public API: create() → { render, rerender, fit,
-// fitWidth (zoom so all lanes fit the width), scrollToColumn (jump to + flash a lane —
-// the sidebar's reduction breadcrumb drives this), getSelection, clearSelection, setZoom,
-// setAllCollapsed, setVerdict }.
+// SURFACE LAYOUT (P3). The container is a GRID, not a canvas with overlays stacked on it:
+//   "toolbar toolbar" / "canvas result" / "rail rail"
+// The verdict DOCKS into the `result` column — it takes width from the canvas rather than covering
+// it, and collapses to a sliver (setVerdictCollapsed) to give that width back WITHOUT dismissing.
+// The trackbar + breadcrumb live in the bottom `rail` (the UI layer appends into the exported
+// `rail` element); as free-floating overlays they sat at z-index 11 against the verdict's 10 and
+// painted over the result on any surface under ~1000px.
+//
+// CONDENSED OVERVIEW (P3). Below CONDENSE_BELOW the container gets `.is-condensed`: lanes narrow,
+// card bodies hide, and the lane header is counter-scaled via the `--alg-zoom` custom property so
+// it keeps its natural rendered size. `transform: scale` alone shrinks the wayfinding at the same
+// rate as the content, which is why "Fit ↔" was unusable past ~7 columns; fitWidth therefore
+// returns { zoom, fits, condensed } rather than a bare number, so the caller cannot claim a fit
+// that did not happen.
+//
+// INTERACTION (P2). Drag-to-pan on the background; Ctrl/Cmd+wheel zoom ANCHORED at the cursor
+// (zoomAt — setZoom alone preserves nothing); Shift+wheel horizontal. A plain click REPLACES the
+// selection, Ctrl/Cmd/Shift+click toggles (capped at the 2 the eliminate/Gröbner panels take), and
+// a click on empty canvas deselects — but a DRAG must not, hence the movement tolerance.
+// Right-click emits handlers.onContextMenu so the UI can show the shared nodeActions list.
+// setQuery filters by label / variable / provenance op, dimming non-matches and badging per-lane
+// counts; it is re-applied after every render so a live query survives a mutation.
+//
+// VERDICT PERSISTENCE (pass 5). A re-render no longer destroys the card: the last payload is kept
+// and re-shown demoted (`is-stale`), because rerender() runs on every reduction, branch switch AND
+// tab re-entry — and Export-proof / boundary-curve / view-in-plot live only on that card.
+//
+// Also: an empty state (with a Generate call-to-action) before seeding, and a minimap that draws
+// NODES (coloured by kind, accenting selection / lineage / search hits) rather than one rect per
+// lane, which merely duplicated the labelled breadcrumb.
+//
+// Public API: create() → { render, rerender, fit, fitWidth, scrollToColumn, getSelection,
+// clearSelection, setZoom, zoomAt, setAllCollapsed, setVerdict, setMinimap, setQuery,
+// moveSelection, rail, setVerdictCollapsed }.  Module: { create, rigorMeta, DISPLAY_CAP }
+// — DISPLAY_CAP is exported so the sidebar inspector shares one elision threshold.
+//
+// ⚠ scrollToColumn lands the scroll DIRECTLY when a smooth scrollTo is ignored: this engine drops
+// behavior:'smooth' entirely (verified — 'auto' scrolls, 'smooth' does not), which silently made
+// this function, and the breadcrumb that was its only caller, a no-op for as long as both existed.
 //
 // SVG+HTML (not the raster #canvas used by the plot/sphere tabs) because nodes need
 // real typeset math, text selection, and per-card hit-testing.
