@@ -167,8 +167,8 @@ const QD = _QD;
       // The column owns the width now, so collapsing has to reach it or the drawer would keep
       // holding 340px open next to a 34px verdict.
       resultCol.classList.toggle('is-collapsed', verdictCollapsed);
-      const b = verdict.querySelector('.algebra-verdict-dock');
-      if (b) { b.textContent = verdictCollapsed ? '«' : '»'; b.title = verdictCollapsed ? 'Expand the result panel' : 'Collapse the result panel (keeps the result)'; }
+      // The button that drives this lives in the drawer head (algebra-ui), which re-renders itself
+      // — nothing to update here.
       relayout();                 // the canvas viewport just changed width
       return verdictCollapsed;
     }
@@ -765,11 +765,10 @@ const QD = _QD;
       if (!data || !data.text) { lastVerdictData = null; verdict.classList.add('hidden'); return; }
       if (!data.stale) lastVerdictData = data;   // keep the pristine payload, not the demoted re-show
       verdict.innerHTML = '';
-      // Docked, the card takes real width from the canvas, so it needs a way to yield it that is
-      // NOT dismissal — collapsing keeps the result (and its Export action) one click away.
-      const collapse = iconBtn('algebra-verdict-dock', verdictCollapsed ? '«' : '»',
-        verdictCollapsed ? 'Expand the result panel' : 'Collapse the result panel (keeps the result)',
-        () => setVerdictCollapsed(!verdictCollapsed));
+      // Column collapse used to live here. It moved to the DRAWER head (algebra-ui's renderDrawer)
+      // because this card is dismissable and the drawer is not: with the « here, pressing × left
+      // the column stranded at full width with no control to reclaim it. One control, on the
+      // element that is always present, means no second copy to keep in sync either.
       const close = iconBtn('algebra-verdict-close', '×', 'Dismiss', () => { lastVerdictData = null; verdict.classList.add('hidden'); });
       const head = div('algebra-verdict-head');
       // Rigor badge (G-2): a prominent, color-coded =/≤/≈/⚠/? pill leads the card so a certified '=' and an
@@ -781,7 +780,7 @@ const QD = _QD;
         head.appendChild(pill);
         const tspan = document.createElement('span'); tspan.textContent = data.title || 'Existence / uniqueness'; head.appendChild(tspan);
       } else { head.appendChild(document.createTextNode(data.title || 'Existence / uniqueness')); }
-      head.appendChild(collapse); head.appendChild(close);
+      head.appendChild(close);
       const body = div('algebra-verdict-body'); body.textContent = data.text;
       verdict.appendChild(head);
       // Everything below the head scrolls; the head (rigor pill + ×) is pinned, so a tall card

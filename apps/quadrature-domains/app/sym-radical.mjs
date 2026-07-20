@@ -483,7 +483,143 @@ import _QD from './solver.mjs';
     return { ok: ok, checked: checked, samples: want, maxResidual: maxResidual, allNonFinite: allNonFinite };
   }
 
-  const ns = { solveByRadicals, denest, verifyRoots, evalRadical, radicalToLatex, builders: Rx };
+  // ---------------------------------------------------------------------------
+  // simplifyRadical — tidy a solved root for DISPLAY, exactly.
+  // ---------------------------------------------------------------------------
+  // The solver builds roots out of RatFn, and RatFn is deliberately LAZY: add/mul/div
+  // cross-multiply and never cancel (sym-core RatFn — a gcd on every step would put a
+  // multivariate gcd inside the solver's hot loop). So a closed form accumulates common
+  // factors, unit denominators and zero terms that are correct but unreadable — "0/1", a
+  // denominator of −1+2t−t² that is just −(1−t)², a −4·X·−a₁ nobody wants to read.
+  //
+  // Reducing at DISPLAY time gets the readability without paying gcd during the solve. Two
+  // passes, both exact:
+  //   1. reduceRat — per rational leaf: divide num and den by gcd(num, den), then normalise the
+  //      sign so the denominator's leading coefficient is positive.
+  //   2. structural identity folding — 0+x, 0·x, 0/x, x/1, x^1, x^0, −(−x), and folding a
+  //      div of two rational leaves into ONE reduced leaf (which is what removes most of the
+  //      nesting).
+  //
+  // Every step is exact division over ℚ(i); nothing here is numeric and nothing rounds. It can
+  // still be WRONG through a bug, which is why the caller re-verifies the simplified form
+  // against the original equation and falls back if it does not check out — a simplification
+  // that silently changed a root would be a false "verified ✓", the worst outcome available.
+  function _isZeroNode(node) { return node.k === 'rat' && node.v.num.isZero(); }
+  function _isOneNode(node, S) {
+    return node.k === 'rat' && _isOne(node.v.den, S) && _isOne(node.v.num, S);
+  }
+  // gcd-cancel a RatFn. Returns the same object when nothing is reducible, so callers can cheaply
+  // detect "no change". Any failure (no gcd available, inexact division) returns the input — the
+  // display stays ugly rather than becoming wrong.
+  function reduceRat(rf, S) {
+    try {
+      if (!rf || !rf.den || _isOne(rf.den, S)) return rf;
+      if (rf.num.isZero()) return new S.RatFn(rf.num, S.MPoly.fromInt(1));
+      let num = rf.num, den = rf.den;
+      if (typeof S.gcdMV === 'function' && typeof S.mpolyExactDiv === 'function') {
+        const g = S.gcdMV(num, den);
+        if (g && !g.isZero() && !_isOne(g, S)) {
+          const qn = S.mpolyExactDiv(num, g), qd = S.mpolyExactDiv(den, g);
+          if (qn && qd && !qd.isZero()) { num = qn; den = qd; }
+        }
+      }
+      // Sign normalisation: a leading −1 on the denominator reads as noise ("−1+2t−t²"), and
+      // moving it up top turns it into the negation the reader expects.
+      if (typeof den.leadingCoeff === 'function') {
+        const lc = den.leadingCoeff();
+        if (lc && lc.re && typeof lc.re.sign === 'function' && lc.re.sign() < 0 && lc.im.isZero()) {
+          num = num.neg(); den = den.neg();
+        }
+      }
+      return (num === rf.num && den === rf.den) ? rf : new S.RatFn(num, den);
+    } catch (e) { return rf; }
+  }
+  // A `rat` leaf that is a single term with a negative real coefficient → the same leaf negated
+  // (so the caller can hoist the sign). Returns null for anything else, including a SUM: only a
+  // monomial has one unambiguous sign to pull out.
+  function _negMonomial(node, S) {
+    try {
+      if (!node || node.k !== 'rat') return null;
+      const rf = node.v;
+      if (!rf.num || typeof rf.num.size !== 'function' || rf.num.size() !== 1) return null;
+      const c = rf.num.leadingCoeff();
+      if (!c || !c.im.isZero() || c.re.sign() >= 0) return null;
+      return Rx.rat(new S.RatFn(rf.num.neg(), rf.den));
+    } catch (e) { return null; }
+  }
+  function simplifyRadical(node, S) {
+    if (!node) return node;
+    switch (node.k) {
+      case 'rat': { const v = reduceRat(node.v, S); return v === node.v ? node : Rx.rat(v); }
+      case 'neg': {
+        const a = simplifyRadical(node.a, S);
+        if (_isZeroNode(a)) return a;                 // −0 → 0
+        if (a.k === 'neg') return a.a;                // −(−x) → x
+        // Fold the negation INTO a rational leaf rather than leaving a wrapper. Two things own
+        // "the sign" otherwise — this node and reduceRat's denominator normalisation — and they
+        // both emit one, which is where `\frac{--a_1}{…}` came from. One owner, one minus.
+        if (a.k === 'rat') return Rx.rat(reduceRat(a.v.neg(), S));
+        return Rx.neg(a);
+      }
+      case 'add': {
+        const a = simplifyRadical(node.a, S), b = simplifyRadical(node.b, S);
+        if (_isZeroNode(a)) return b;
+        if (_isZeroNode(b)) return a;
+        // Two rational leaves add exactly — folding them removes a whole level of `+` nesting
+        // rather than leaving the reader to combine terms by eye.
+        if (a.k === 'rat' && b.k === 'rat') {
+          try { return Rx.rat(reduceRat(a.v.add(b.v), S)); } catch (e) { /* keep the tree */ }
+        }
+        return Rx.add(a, b);
+      }
+      case 'mul': {
+        const a = simplifyRadical(node.a, S), b = simplifyRadical(node.b, S);
+        if (_isZeroNode(a) || _isZeroNode(b)) return Rx.rat(S.RatFn.fromInt(0));
+        if (_isOneNode(a, S)) return b;
+        if (_isOneNode(b, S)) return a;
+        // Hoist a negative single-term factor out of the product: `4 · X · (−a₁)` reads far worse
+        // than `−4 · X · a₁`, and the mid-expression "· −" is the artifact that survives every
+        // other fold. Only for a MONOMIAL — a sum like (−p + q − r) is not uniformly negative and
+        // pulling a sign off it would be wrong, not merely ugly.
+        // A `neg` OPERAND hoists the same way, and must — otherwise the sign this pass just
+        // pulled off a leaf gets stranded mid-product as `· −(…)`, which is no better than what
+        // it replaced. Hoisting all the way out lets the enclosing context absorb it: `b² − 4·X·(−a₁)`
+        // becomes `b² + 4·X·a₁`, because the outer subtraction meets a negation and cancels it.
+        const na = _negMonomial(a, S) || (a.k === 'neg' ? a.a : null);
+        const nb = _negMonomial(b, S) || (b.k === 'neg' ? b.a : null);
+        if (na && nb) return simplifyRadical(Rx.mul(na, nb), S);   // (−x)(−y) → xy
+        if (na) return simplifyRadical(Rx.neg(Rx.mul(na, b)), S);
+        if (nb) return simplifyRadical(Rx.neg(Rx.mul(a, nb)), S);
+        return Rx.mul(a, b);
+      }
+      case 'div': {
+        const a = simplifyRadical(node.a, S), b = simplifyRadical(node.b, S);
+        if (_isZeroNode(a)) return a;                 // 0/x → 0  (x ≠ 0 by construction)
+        if (_isOneNode(b, S)) return a;               // x/1 → x
+        // Two rational leaves collapse into one reduced leaf — this is what removes the
+        // \frac{\frac{…}{…}}{…} nesting the quadratic formula otherwise produces.
+        if (a.k === 'rat' && b.k === 'rat' && !b.v.num.isZero()) {
+          try { return Rx.rat(reduceRat(a.v.div(b.v), S)); } catch (e) { /* fall through */ }
+        }
+        return Rx.div(a, b);
+      }
+      case 'pow': {
+        const a = simplifyRadical(node.a, S);
+        if (node.n === 1) return a;
+        if (node.n === 0) return Rx.rat(S.RatFn.fromInt(1));
+        return Rx.pow(a, node.n);
+      }
+      case 'root': {
+        const a = simplifyRadical(node.a, S);
+        if (node.n === 1) return a;
+        return Rx.root(a, node.n);
+      }
+      default: return node;                            // 'rou' and anything unknown pass through
+    }
+  }
+
+  const ns = { solveByRadicals, denest, verifyRoots, evalRadical, radicalToLatex,
+    simplifyRadical, reduceRat, builders: Rx };
 
   const QD = _QD;
   QD.SymRadical = ns;
