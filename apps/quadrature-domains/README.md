@@ -85,7 +85,9 @@ over HTTP and the workers are native ES-module workers.
 
 Modern browser recommended (WebGL 2 is used for the Schwarz/sphere views, with a
 CPU fallback). [math.js](https://mathjs.org) and [KaTeX](https://katex.org) are
-loaded from a CDN (pinned + SRI) for expression parsing and math display.
+bundled and self-hosted (`app/vendor-globals.mjs`) for expression parsing and math
+display — KaTeX eagerly, math.js lazily on first use (it is ~260 kB gzip and only
+needed for parsing h-text). The app makes no CDN requests and works fully offline.
 
 ### Deploying / hosting
 
@@ -195,6 +197,13 @@ visualizations, complementary to the headless runner.
     │   ├── algebra-store.mjs          QD.AlgebraStore: equation-DAG model (DOM-free)
     │   ├── algebra-canvas.mjs         QD.AlgebraCanvas: SVG + KaTeX DAG renderer
     │                                   (collapsible cards, reorder, copy-LaTeX, hovertext)
+    │   ├── prove-plan.mjs             the ✦ Prove pipeline as pure StrategyPlans: the
+    │   │                              certify tree + the C1/C2/C3 moment routes, and the
+    │   │                              rigor provenance behind each =/≤/≈ badge
+    │   ├── cas-export.mjs             external-CAS bridge: Singular/Sage/Maple emitters
+    │   │                              + parseRCTD for the Maple round trip
+    │   ├── expr-parser.mjs            parses typed equations into store polynomials
+    │   ├── domain-mini-plot.mjs       verdict-card thumbnails (one producer per prove route)
     │   └── algebra-ui.mjs             QD_UI.installAlgebra: tab, palette, eliminate,
     │                                   Gröbner basis, dimension/solve, export
     │
@@ -511,10 +520,16 @@ view is active.
   preview; expand for the full form), **reorderable** within a column (▲/▼), copy as
   **LaTeX** individually (⧉), and carry **hovertext** (variable count, real-equation
   contribution, per-variable order, total degree, provenance); conjugate equations are
-  paired adjacently. **Attempt to factor** an equation (in the node inspector) splits
-  `p = f·g` into candidate systems `V(p) = ⋃ V(fᵢ)` — pick a factor to pursue that case
-  as a new column (exact: monomial + separable-product + univariate factoring, every
-  factor verified by exact division). Undo/redo, a cost preview, and export as JSON, LaTeX, or
+  paired adjacently. **Attempt to factor** an equation — from the node inspector, or by
+  right-clicking the card (also `m` / `Shift+F10`) — splits `p = f·g` into candidate systems
+  `V(p) = ⋃ V(fᵢ)`; pick a factor to pursue that case as a new column (exact: monomial +
+  separable-product + univariate + bivariate/n-variate factoring, every factor verified by exact
+  division). It is offered on **every** equality, and reports one of **three** outcomes —
+  *reducible*, *proved irreducible*, or *undetermined* (the search hit a cost cap). Those are not
+  the same claim, and "undetermined" is never folded into "irreducible". **Factor / simplify
+  column** runs the same scan across every equation in the current system at once.
+  Undo/redo (Ctrl+Z), a debounced **autosave** to `localStorage` with a restore offer on return,
+  a `?` **keyboard cheatsheet** listing the tab's ~14 bindings, a cost preview, and export as JSON, LaTeX, or
   **Mathematica** (a chosen column, all columns, or a single equation — a paste-ready
   Wolfram-Language list). A **reduction breadcrumb** over the graph jumps to any column.
   Every assumption is now an **append-column reduction** — column 0 stays the original
@@ -536,13 +551,26 @@ view is active.
   from the previous column (e.g. `① Original system` → `↳ assume real · …`) with its
   equation/variable counts and a Δ, the **current system** lane badged, arrowed edges
   between cards, and the verdict surfaced as a result card. The sidebar follows a
-  **node-editor** model: a pinned primary-action header (★ Auto-reduce & solve +
-  Generate), collapsible workflow sections (System & reference / Assumptions / Reduce /
-  Analyze / Constraints / Export), a floating canvas toolbar (zoom · fit · expand /
-  collapse · undo / redo), and a contextual **inspector** when you select a node (its
-  equation + Duplicate / Copy / Delete, or the eliminate panel for two). From
-  `app/qd-constraints.mjs` (`QD.QDConstraints`) + `app/algebra/`; an external-CAS / RCTD
-  bridge is the remaining future step.
+  **node-editor** model: a pinned header whose single primary action is **✦ Prove existence /
+  uniqueness** (the certified route — regime routing → RUR + exact Sturm → exact `|zⱼ|<1` gate →
+  Schur–Cohn fold + boundary-simple filter → gauge quotient → numeric cross-check, badged `=`/`≤`/`≈`
+  for how rigorous the answer actually is), beside the faster, less-certified **★ Auto-reduce &
+  solve**, plus Generate / re-seed, Seed A–S moments, and the `fix φ(0)=w₀` seeding option.
+  Below it are eight collapsible workflow sections (Assume / Pin values / Edit system / Reduce /
+  Analyze / Shape from moments / Univalence constraints / Export) whose open state persists.
+  A canvas toolbar carries zoom · fit · fit-width · expand / collapse · minimap · **focus mode**
+  (isolate one equation's derivation) · node search · undo / redo. Selecting a node opens a
+  contextual **inspector** with its full action set (Duplicate, Copy LaTeX, Copy Mathematica,
+  Show steps, Delete, Generate conjugate, Propagate to current system, Attempt to factor,
+  Solve for a variable, Fork from here) — the same list the right-click menu offers; two nodes
+  open the eliminate panel. A **results drawer** above the verdict keeps every result the session
+  produced, marking each `current`, `earlier`, or a branch name, so a verdict is never shown as
+  describing a system it was not computed on. The **φ / h reference** is a collapsible card in
+  the canvas's bottom-left corner. From `app/qd-constraints.mjs` (`QD.QDConstraints`) +
+  `app/algebra/`. The external-CAS bridge is **shipped**: export the system as a Maple
+  `RealComprehensiveTriangularize` script, run it in your own Maple, and paste the result back
+  via **Import RCTD** — it lands as a new column, labelled as externally computed and not
+  verified in-app.
 * **φ(0)** — the Riemann-map center w₀ = φ(0) defaults to the centroid of the poles
   (manually overridable in bounded mode), and now also drives the **symbolic** equation
   system and the Algebra-tab seeding (exact-rational substitution).
@@ -839,5 +867,6 @@ retained. See [`LICENSE`](LICENSE).
 If you use this tool in published work, a citation of the thesis (reference [1]
 above) is appreciated.
 
-Third-party libraries (loaded from a CDN, not bundled): [KaTeX](https://katex.org)
-(MIT) and [math.js](https://mathjs.org) (Apache-2.0).
+Third-party libraries (bundled and redistributed with the build): [KaTeX](https://katex.org)
+(MIT) and [math.js](https://mathjs.org) (Apache-2.0). Both ship inside `dist/`, so their
+licenses travel with any copy you deploy.

@@ -259,8 +259,8 @@ import _QD from './solver.mjs';
 
       algebraCard:
         `Symbolic workspace for the solved QD system below. Add assumptions and reductions —
-         each becomes a new column. Hover any control for details, or press <b>?</b> for the
-         full guide.`,
+         each becomes a new column. Hover any control for details, click <b>?</b> above for the
+         full guide, or press the <b>?</b> key for the keyboard shortcuts.`,
 
       searchOptions:
         `Overrides for the aggressiveness preset. Leave a field blank to use

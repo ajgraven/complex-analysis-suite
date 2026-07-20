@@ -8,7 +8,7 @@
 // real (identify v̄≡v), Specify value (fix a variable to an exact ℚ(i) value, auto-
 // propagating the linear cascade), pairwise resultant elimination (select 2 nodes +
 // a shared variable, with a cost preview), batch gauge elimination, Gröbner basis, and
-// triangular decomposition. Plus a univalence-constraint palette, a φ/h reference panel,
+// triangular decomposition. Plus a univalence-constraint palette,
 // dimension / numeric solve and an existence/uniqueness verdict (# real solutions =
 // # quadrature domains) + a one-click ★ Auto-reduce & solve, all over the CURRENT system
 // (the last column, off the main thread with a Cancel button), a persistent dismissible
@@ -18,9 +18,9 @@
 // transformation relating it to the previous column, with eqn/var counts + a Δ.
 //
 // SIDEBAR is a NODE-EDITOR model (mountSidebar): a pinned header (✦ Prove as the single
-// button.primary + a caption stating how it differs from ★ Auto-reduce, Generate, status, error),
-// the φ/h reference, and collapsible <details> workflow sections — Assume / Pin values / Edit
-// system / Reduce / Analyze / Shape from moments / Univalence constraints / Export. Their open
+// button.primary + a caption stating how it differs from ★ Auto-reduce, Generate, the φ(0)=w₀
+// seeding option, status, error) and collapsible <details> workflow sections — Assume / Pin values
+// / Edit system / Reduce / Analyze / Shape from moments / Univalence constraints / Export. Their open
 // state PERSISTS (wireSectionPersistence → localStorage): only "Assume" opened by default and
 // nothing was remembered, so every reload re-shut two thirds of the working loop.
 // A CONTEXTUAL INSPECTOR (renderInspector) shows the selection: 1 node → its equation + the
@@ -32,8 +32,12 @@
 //   • renderPolyCapped applies the canvas's DISPLAY_CAP in the sidebar too: without it, selecting a
 //     post-Gröbner node typeset thousands of terms in display mode on the main thread.
 // View/history live in the surface's toolbar ROW (buildToolbar: zoom/fit/fit-width/expand/collapse/
-// minimap/node-search/undo/redo); the REDUCTION BREADCRUMB + trackbar live in the canvas's bottom
-// rail (canvas.rail), not floating over the graph. Export covers DAG-JSON, LaTeX, and MATHEMATICA
+// minimap/focus/node-search/undo/redo); the REDUCTION BREADCRUMB + trackbar live in the canvas's
+// bottom rail (canvas.rail), not floating over the graph. The φ/h REFERENCE is a collapsible card
+// in the canvas's bottom-left corner slot (mountReferenceCard → canvas.corner) — it describes the
+// map rather than acting on it, so it sits beside the equations, not above the controls (4.2).
+// The RESULTS DRAWER (renderDrawer → canvas.drawer) indexes every verdict this session above the
+// docked verdict card. Export covers DAG-JSON, LaTeX, and MATHEMATICA
 // (a column, all columns, or one node). provText/columnLabel/edgeLabel render provenance.op from
 // the PROV_UI registry (below) — the UI companion to the store's PROV_STORE; add a node type as one
 // record in each (both coverage-tested). ⚠ columnLabel resolves a FORK before the `c === 0` case:
@@ -3977,7 +3981,7 @@ const QD = _QD;
           if (!activeEnv) setStatus(STR.noSolve || 'No classical bounded QD solved yet.');
           else if (staleSeed) { refreshPickers(); setStatus('Solve changed — click Generate / re-seed to refresh the workspace for the new domain.'); }
           else setStatus((STR.ready || 'Ready — click Generate / re-seed.'));
-          buildReference();   // the φ/h reference is always visible — keep it in sync
+          buildReference();   // keep the reference card's content current (it may be collapsed)
           refreshMmaColumns();
         }
       });
