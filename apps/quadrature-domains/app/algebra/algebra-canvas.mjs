@@ -425,6 +425,14 @@ const QD = _QD;
       if (info.isCurrent) { const chip = div('algebra-column-chip'); chip.textContent = 'current system'; top.appendChild(chip); }
       head.appendChild(top);
       if (info.stats) { const s = div('algebra-column-stats'); s.textContent = info.stats; head.appendChild(s); }
+      // …and what the step CHANGED (P6c). Separate line from the size counts: "17 eqns" answers
+      // how big the system is, "+3 new · 14 carried" answers what the reduction did to it, and a
+      // Gröbner step can hold the first fixed while replacing everything the second counts.
+      if (info.diff) {
+        const d = div('algebra-column-diff'); d.textContent = info.diff;
+        d.title = 'Compared with the previous column, by exact polynomial identity';
+        head.appendChild(d);
+      }
       const hits = div('algebra-column-hits hidden'); head.appendChild(hits);   // search match count (applyFilter)
       col.appendChild(head);
 
