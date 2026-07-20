@@ -127,9 +127,16 @@ describe("semantically opposite states are visually distinct", () => {
     expect(real).not.toBe(imag);
   });
 
-  it("the five rigor levels keep distinct colours (honest-labeling legibility)", () => {
-    // Guarded in algebra-rigor-badge.test.ts against rigorMeta; asserted here so a palette edit
-    // cannot quietly collapse two of them either.
+  it("the five status colours stay distinct from each other", () => {
+    // NOT the rigor badge. That claim used to be made here and was false: rigorMeta
+    // (algebra-canvas.mjs) hardcodes its own hex literals (#2e9e5b, #3b82c4, …) and applies them
+    // via inline cssText — it reads none of these tokens, so a palette edit cannot collapse two
+    // rigor levels, and a collision introduced inside rigorMeta would not be caught here.
+    // The rigor pill's real guard is algebra-rigor-badge.test.ts.
+    //
+    // What this DOES guard is still worth guarding: ~40 selectors (status panels, hypothesis
+    // chips, borders) distinguish states by these five tokens, so collapsing two of them makes
+    // ok/warn/error indistinguishable across the app.
     const levels = ["--c-ok", "--c-warn", "--c-err", "--c-accent", "--c-muted"];
     const cols = levels.map(colorOf);
     expect(cols.every(Boolean)).toBe(true);

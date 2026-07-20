@@ -43,9 +43,9 @@ conceptual (ES-module resolution handles the actual ordering):
 ```mermaid
 flowchart LR
   M0[main.mjs]
-  subgraph CDN
-    A1[math.js 12.4.1]
-    A2[KaTeX 0.16.47]
+  subgraph Vendor["Bundled — vendor-globals.mjs (no CDN)"]
+    A1["math.js (lazy)"]
+    A2["KaTeX (eager)"]
   end
   subgraph Math["Math primitives"]
     B1[complex.mjs]
@@ -99,7 +99,7 @@ flowchart LR
   end
 
   M0 --> Math
-  CDN --> Math --> Solver --> Utility --> Tabs --> UI --> Sphere
+  Vendor --> Math --> Solver --> Utility --> Tabs --> UI --> Sphere
 ```
 
 Registration order still matters — every solver-family module calls
@@ -374,13 +374,28 @@ domain. Data flows one way; all exact math lives at the bottom.
   (`classify`/`solve`/`dimension`/`factorOf`/`applyFactor`) defaulting to the *current* (last)
   column. Heavy ops route through `sym-worker.mjs`.
 - **`algebra-canvas.mjs` (`QD.AlgebraCanvas`)** — renders the store as structured column lanes
-  (sticky headers, arrowed SVG edges, zoom); exposes `scrollToColumn`/`fitWidth`/`setVerdict`.
+  (sticky headers, arrowed SVG edges, zoom); exposes `scrollToColumn`/`fitWidth`/`setVerdict`,
+  plus the slots the UI layer fills: `rail` (breadcrumb + trackbar), `corner` (the φ/h reference
+  card) and `drawer` (the results index above the docked verdict).
+- **`prove-plan.mjs`** — the second "heavy ops" component alongside `sym-core`/`sym-worker`: the
+  ✦ Prove pipeline expressed as pure `StrategyPlan` stage tables (the certify tree plus the
+  C1 moment / C2 rational / C3 triangle routes), and the `rigorProvenance` that justifies each
+  `=`/`≤`/`≈` badge rather than merely asserting it.
+- **`cas-export.mjs`** — the external-CAS bridge: Singular/Sage/Maple emitters and `parseRCTD`
+  for the Maple `RealComprehensiveTriangularize` round trip.
+- **`expr-parser.mjs`** — parses typed equations into store polynomials.
+  **`domain-mini-plot.mjs`** — verdict-card thumbnails, one producer per prove route.
 - **`algebra-ui.mjs` (`QD_UI.installAlgebra`)** — the node-editor sidebar + inspector + floating
   toolbar + breadcrumb; drives the store and reads selection back from the canvas via `onSelect`.
 
-**Provenance-op contract** (the one cross-layer coupling to know): every store reduction stamps
-`provenance.op` ∈ `{generate, conjugate, resultant, groebner, constraint, duplicate, substitute,
-linear-reduce, assume-real, fix-w0, triangular, factor}`, and `algebra-ui.mjs`'s `provText` +
+**Provenance-op contract** (the one cross-layer coupling to know): every store reduction stamps a
+`provenance.op`, and **`algebra-ui.mjs`'s `PROV_UI` registry is the living list** — read it there
+rather than trusting an inlined copy, because an inlined copy is exactly what drifted (this
+paragraph named 12 ops long after the store emitted 22). As of this writing the set is
+`{generate, fork, conjugate, constraint, duplicate, resultant, groebner, saturate, substitute,
+linear-reduce, assume-real, assume-imaginary, identify, identify-conj, fix-w0, define-subst,
+add-equation, triangular, component, factor, rctd, propagate}`. A coverage test fails loudly if
+the store emits an op neither registry knows. `algebra-ui.mjs`'s `provText` +
 `columnLabel` switch on exactly those strings — a new reduction op must be added in **both** the
 store (emit) and the UI (render), or its column shows as a bare "column N". See the headers of
 `algebra-store.mjs` and `algebra-ui.mjs`, and the THEORY_MAP rows for the per-feature function→file

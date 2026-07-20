@@ -37,7 +37,18 @@ import {
   runGLSL,
   compareResults,
 } from "@cas/gpu/dual-backend";
+import {
+  sampleStops,
+  buildGradientLUT,
+  buildColormapLUT,
+  makeColormapTexture,
+} from "@cas/gpu/colormap";
 ```
+
+**Colormaps** (`./colormap`) — `sampleStops(stops, t)` interpolates a `ColorStop[]` ramp;
+`buildGradientLUT` / `buildColormapLUT` bake one into a lookup table; `makeColormapTexture(gl, …)`
+uploads it as a GL texture. Extracted once it had its second consumer per ADR-0007 — Complex
+Dynamics (`src/palettes.ts`) and the Quadrature app's Schwarz renderer both use it.
 
 **Shader plumbing** (`./shader`) — `compileShader(gl, type, src)`, `linkProgram(gl, vs, fs)`,
 and `createProgram(gl, vsSource, fsSource)` (compile + link in one call), each throwing with
@@ -72,7 +83,7 @@ the end-to-end GPU leg is validated in a preview browser rather than headless No
 ## Not yet here
 
 Per the extraction's demand-driven scope: the full escape-time **program scaffold**,
-**colormaps/palettes**, sphere/projection remaps, and per-program compile caching remain in
+sphere/projection remaps, and per-program compile caching remain in
 the apps until a second consumer needs them
 ([ADR-0007](../../docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)).
 This package is the shared _substrate_ (df64 + complex GLSL + compile/link + the dual-backend

@@ -2,7 +2,7 @@
 
 Most of the app's editable prose now lives in **one file**:
 
-> ### `app/ui-strings.js`  (the `QD.Strings` object)
+> ### `app/ui-strings.mjs`  (the `QD.Strings` object)
 
 Open it and edit the value you want — the code reads from there, so nothing else
 needs to change. That file's header explains the grouping and the markup rules
@@ -32,10 +32,11 @@ text or are interleaved with computed values:
 | What | Where |
 |---|---|
 | Control labels / buttons / options / tab names | `app/index.html` |
-| Validation errors + family external-field labels | `app/ui-modes.js` |
-| Live status / validity / geometry / cusp / observable lines (interleaved with numbers) | `app/ui-solve.js` |
-| Oracle row names (with computed values) | `app/thesis-examples.js` (`checkOracle`) |
-| On-canvas labels (pole `aₙ`, cusp `(p,q)`, `Fₙ roots`, tip / max-κ) | `app/ui-domain-plot.js` |
-| Keyboard-shortcut descriptions + copy/help affordance text | `app/qol.js` |
+| Validation errors + family external-field labels | `app/ui-modes.mjs` |
+| Live status / validity / geometry / cusp / observable lines (interleaved with numbers) | `app/ui-solve.mjs` |
+| Oracle row names (with computed values) | `app/thesis-examples.mjs` (`checkOracle`) |
+| On-canvas labels (pole `aₙ`, cusp `(p,q)`, `Fₙ roots`, tip / max-κ) | `app/ui-domain-plot.mjs` |
+| Copy/help affordance text + the shared `?` overlay chrome | `app/qol.mjs` |
+| Keyboard-shortcut **descriptions** | per tab, via `QD.QoL.registerShortcuts(scope, items)` — e.g. the Algebra tab's ~14 in `algebraShortcutItems()` (`app/algebra/algebra-ui.mjs`). `qol.mjs` owns the overlay, not the text. |
 
 To locate any specific string, search the repo for a few words of it.

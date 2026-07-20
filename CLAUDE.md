@@ -42,9 +42,13 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
    milestone.
 10. **Node 22 LTS** (`.nvmrc` = `22`, `engines.node >= 22`). *(This supersedes the "20"
     mentioned in some docs.)*
-11. **Deployment:** each app builds static (`base: "./"`) and is *designed to* deploy to GitHub
-    Pages independently, with the launcher at the top-level Pages URL. *(No deploy workflow is
-    configured in-repo yet — the only GitHub Actions workflow is CI; Pages deploys are manual.)*
+11. **Deployment:** each app builds static (`base: "./"`) so its assets resolve from any path.
+    **`.github/workflows/deploy-pages.yml` publishes automatically on every push to `master`**
+    (and on `workflow_dispatch`), gated on `lint` + `typecheck` + `test`. It assembles **one
+    combined Pages site** — launcher at the root, `complex-dynamics/` and `quadrature-domains/`
+    beneath it. `apps/correspondences` is **built but not published** (the launcher shows it as
+    "Coming soon"). There are **two** workflows: `ci.yml` (the `build` + `browser` gate) and
+    `deploy-pages.yml`; the `browser` job is not a publish blocker.
 
 ## Non-negotiable guardrails
 
@@ -80,8 +84,10 @@ ESM-ification) and the shared-package extractions — **`@cas/core`** (Phase 3),
 (Phase 4), **`@cas/expr` + `@cas/gpu`** (Phase 5) — are done and merged. **Phase 6**
 (`apps/correspondences`) is complete through Milestone C: the deltoid Schwarz reflection σ (CPU + GPU),
 its deleted correspondence (branch engine + orbit trees + density render), the family parameter plane,
-and the parabolic-Tricorn model coordinate. Three apps ride the four shared `@cas/*` packages
-(`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`).
+and the parabolic-Tricorn model coordinate. Three apps ride the five shared `@cas/*` packages
+(`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`) — `@cas/exact` was
+extracted later than the phase plan, on the ADR-0007 second-consumer rule, and is used by
+Complex-Dynamics and Correspondences. (The launcher consumes no packages.)
 
 Deferred / exploratory (not started): further correspondence families (circle-and-cardioid → cubic
 Chebyshev → general d:d), analytic branch continuation through cusps (uncertified — RISKS §3), and QD

@@ -1,9 +1,28 @@
 # Algebra Maturity Review — STATE
 
+> ## ⛔ CLOSED — do not resume from this file
+>
+> This *was* a re-entrant control file, and the instructions below are written as live
+> operational directives ("branch NOT merged", "I do not auto-merge to master", "continue from
+> **Next action**"). **All of that is finished and every one of those directives is now false.**
+>
+> - The branch `algebra-maturity-review` **merged as [PR #81](https://github.com/ajgraven/complex-analysis-suite/pull/81)** (`2566b6a`) and **no longer exists**. There is nothing to resume, rebase, or open a PR for.
+> - Its deliverables are live on `master` — `nodeInsideDisk`, `saturateMobius`, `verifySolutionExact` are all in `prove-plan.mjs` / `qd-equations.mjs` / `algebra-store.mjs` today.
+> - The work it hands off to has itself shipped: the orchestrator redesign ([ORCHESTRATOR_REDESIGN.md](ORCHESTRATOR_REDESIGN.md), phases A–E) and the six-PR workspace rework ([WORKSPACE_REVIEW.md](WORKSPACE_REVIEW.md), #108–#118).
+>
+> **Read [WORKSPACE_REVIEW.md](WORKSPACE_REVIEW.md) for current state.** Everything below this
+> banner is a historical record of how this review ran — accurate as of its own time, and kept
+> because the reasoning is worth having. Treat it as a log, not as a set of instructions.
+
+<details>
+<summary>Original re-entrant header (superseded — see banner above)</summary>
+
 > **Re-entrant control file.** A fresh session with zero memory resumes from here.
 > Read this top-to-bottom, then read every artifact it references, then verify repo
 > state (`git status`; `git log --oneline -20` on branch `algebra-maturity-review`),
 > then continue from **Next action** at the bottom. Do not redo completed units.
+
+</details>
 
 ## Mission (from the review prompt)
 
@@ -97,7 +116,9 @@ D-1 over-count — now fixed.
         retained; safe — disjoint from the QD set). PROV_STORE + PROV_UI 'saturate' entries; toolbar button
         "Saturate (admissibility)" + wire + busy-list. Test `vitest/qd-saturate-mobius.test.ts` (4). **Gate
         GREEN: all 0; 1305 tests (+4), 150 files; PROV sync test passed.** Closes B-1 at the COUNT level.
-  - [ ] **S6** CAS-export guard [F5] + LOW/MED batch.
+  - [x] **S6** CAS-export guard [F5] + LOW/MED batch. *(Shipped — F1–F6 are all marked done in the
+        P3 engineering-hardening batch below, and FINAL_REPORT §11 records `store.casColumn`'s
+        warning prepend. This box was simply never ticked.)*
 
 **EXECUTION-ORDER decision (final):** S1+S2 already fixed every WRONG result — the authoritative Certify verdict
 is correct (S1) and the raw count is honestly labeled as an upper bound (S2), so the disk user gets the right

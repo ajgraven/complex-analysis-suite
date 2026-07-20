@@ -65,6 +65,10 @@ coincident-root handling.
 power-series arithmetic (`Series<C>` = coefficient array, index `i` = coefficient of `xⁱ`),
 using error-free splits for accuracy.
 
+**Stereographic projection** — `planeToSphere(z)` / `sphereToPlane(p)` map `ℂ ∪ {∞}` to and
+from the Riemann sphere, with a cancellation-safe inverse. Shared by both apps' sphere views,
+which is what earned it a place in the kernel (ADR-0007).
+
 ## What is _not_ here
 
 By design (and per the kernel's own header comment): **no** Newton/deflation, **no**
@@ -77,4 +81,4 @@ them here the day a second app needs them, with golden tests, not before.
 ## Tests
 
 `test/` — a golden-value corpus representing both apps' needs (`complex`, `durand-kerner`,
-`series`). This corpus is what makes "fix a bug once" safe for a shared kernel.
+`series`, `sphere`). This corpus is what makes "fix a bug once" safe for a shared kernel.

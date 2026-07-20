@@ -10,7 +10,7 @@ visualization tools** that share common underlying packages and can hand data of
 another. The organizing goal — the **north star** — is that **each new tool added to the
 suite requires building fewer primitives from scratch than the last**.
 
-It currently hosts **three** applications riding **four** shared `@cas/*` packages:
+It currently hosts **three** applications riding **five** shared `@cas/*` packages:
 
 | App                                                | What it does                                                                                                                                                                                                                                                                                                  | Stack                   |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
@@ -29,10 +29,10 @@ incidental.
 
 **Built.** The phased migration ([docs/MIGRATION.md](docs/MIGRATION.md), Phases 0–6) is
 **fully executed and merged.** The workspace skeleton, unified tooling, the
-Quadrature-app-onto-Vite ESM-ification, and the four shared-package extractions
+Quadrature-app-onto-Vite ESM-ification, and the five shared-package extractions
 (`@cas/core` → `@cas/interchange` → `@cas/expr` + `@cas/gpu`) are all done; the
 Correspondences app exists through its parameter-space milestone plus a complete
-interactive mating visualizer. The whole workspace is green (**800+ Vitest tests**, lint,
+interactive mating visualizer. The whole workspace is green (**1550+ Vitest tests**, lint,
 typecheck, and per-app builds).
 
 What's **deferred / exploratory** (by design, not omission):
@@ -75,10 +75,12 @@ pnpm format                              # Prettier --write .
 > and tests consume the packages' **built `dist/`**, so a package change is picked up only
 > after its build runs (the root scripts handle this for you).
 
-Each app is an independent static Vite build (`base: "./"`), designed to deploy to GitHub Pages
-on its own, with the launcher at the top-level Pages URL. *(No automated Pages workflow is
-configured yet — deploys are manual; the only CI workflow is lint/typecheck/test/build plus a
-`browser` job for the WebGL2 GLSL harness.)* See
+Each app is an independent static Vite build (`base: "./"`), so its assets resolve from any path.
+`.github/workflows/deploy-pages.yml` publishes on every push to `master`, gated on
+lint + typecheck + test: one combined Pages site with the launcher at the root and
+`complex-dynamics/` + `quadrature-domains/` beneath it. Correspondences is built but not yet
+published (the launcher lists it as "Coming soon"). `ci.yml` remains the separate
+lint/typecheck/test/build gate plus a `browser` job for the WebGL2 GLSL harness. See
 [ARCHITECTURE §8](docs/ARCHITECTURE.md#8-build--deployment-model).
 
 ---
@@ -93,7 +95,8 @@ complex-analysis-suite/
 │   ├── core/                 ← @cas/core        complex arithmetic, the ComplexAlgebra contract, Durand–Kerner, series-multiply
 │   ├── gpu/                  ← @cas/gpu         WebGL2 substrate: shader compile/link, df64 deep-zoom, complex-GLSL
 │   ├── expr/                 ← @cas/expr        one AST → GLSL shader body + JS evaluator (dual-backend)
-│   └── interchange/          ← @cas/interchange typed hand-off schema (envelope + MapSpec/SchwarzReflection) + deep-link codec
+│   ├── interchange/          ← @cas/interchange typed hand-off schema (envelope + MapSpec/SchwarzReflection) + deep-link codec
+│   └── exact/                ← @cas/exact       exact polynomial arithmetic (CD + Correspondences)
 └── apps/                     ← thin applications; each a Vite build that consumes packages
     ├── launcher/             ← the unified menu: a static landing page linking to each app
     ├── complex-dynamics/
@@ -101,11 +104,12 @@ complex-analysis-suite/
     └── correspondences/      ← the Phase-6 tool (dynamical views + the mating explorer)
 ```
 
-> **The four packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`, and
-> `@cas/interchange`. Packages were extracted **only as a second consumer proved it needed
-> them** ([ADR-0007](docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)) —
+> **The five packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`,
+> `@cas/interchange`, and `@cas/exact`. Packages were extracted **only as a second consumer
+> proved it needed them** ([ADR-0007](docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)) —
 > which is why the `ui`, `quadrature`, and `dynamics` packages that
-> [ARCHITECTURE.md](docs/ARCHITECTURE.md) sketches as a target never materialized.
+> [ARCHITECTURE.md](docs/ARCHITECTURE.md) sketches as a target never materialized, and why
+> `@cas/exact` appeared *later* than the phase plan: it waited for its second consumer.
 
 > **Unified menu, not a unified shell.** The suite ships **separate apps that hand off to
 > each other**, fronted by a lightweight **launcher** (`apps/launcher`) — deliberately

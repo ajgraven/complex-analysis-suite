@@ -2,14 +2,20 @@
 // prove-plan — the pure existence/uniqueness proof ENGINE extracted from algebra-ui's
 // doCertifyUnivalence (fuller-orchestrator Phase A; docs/algebra-review/ORCHESTRATOR_REDESIGN.md).
 //
-// Phase A is a NO-BEHAVIOR-CHANGE extraction, so this is the safety net that locks the moved
-// logic byte-for-byte before Phases B–E build on it. Three layers:
+// Phase A is a NO-BEHAVIOR-CHANGE extraction, so this began as the safety net that locks the moved
+// logic byte-for-byte before Phases B–E build on it. It has since GROWN WITH THE ENGINE — there are
+// now 12 `describe` blocks, not the original three, because each later phase added its coverage
+// here rather than in a new file. Blocks 1–4 are the original Phase-A net:
 //   (1) the pure per-solution helpers (reconstructPhi / poleSubst / nodeInsideDisk / gaugeQuotient)
 //       on hand-built + real-engine inputs;
 //   (2) a CHARACTERIZATION of assembleVerdict — the risky verdict-string assembly — with fake
 //       minimal deps, so every verdict shape is pinned deterministically;
 //   (3) runCertifyPlan's control flow (regime short-circuits + a full zero-dim pass) with fake
 //       injected ops, plus one REAL-seed disk end-to-end that must read "Unique quadrature domain ✓".
+// Blocks 5–12 came later and are roughly 70% of the file: runProofTree (Phase B), the optional
+// numeric-oracle path (Phase D), rigorProvenance (Phase E), and the C1 moment / C2 rational-φ /
+// C3 triangle prove routes. Read the block headers rather than this list — it is the part most
+// likely to fall behind next.
 import { describe, it, expect } from "vitest";
 import _QD from "../app/solver.mjs";
 import "../app/sym-core.mjs";

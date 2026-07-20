@@ -8,8 +8,10 @@ for why extraction is demand-driven rather than up-front.
 > **✅ As built.** The suite is now built, and the diagrams below are the *target*, not an
 > inventory. What actually exists:
 >
-> - **Four packages** were extracted: **`@cas/core`, `@cas/gpu`, `@cas/expr`,
->   `@cas/interchange`**. The **`ui`, `quadrature`, and `dynamics`** packages sketched in the
+> - **Five packages** were extracted: **`@cas/core`, `@cas/gpu`, `@cas/expr`,
+>   `@cas/interchange`, `@cas/exact`** — the last later than the phase plan, on the same
+>   second-consumer rule (Complex Dynamics and Correspondences both needed exact polynomial
+>   arithmetic). The **`ui`, `quadrature`, and `dynamics`** packages sketched in the
 >   layer diagram and §3 were **never extracted** — no second consumer needed them, so that
 >   mathematics stayed in the apps (the Correspondences app keeps its own σ-construction and
 >   parabolic-Tricorn model). That is the [ADR-0007](DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)
@@ -128,7 +130,7 @@ instead of an ad-hoc JSON blob.
 
 > The three packages below were part of the original design but were **NEVER EXTRACTED** — the
 > demand-driven rule (extract only when a second consumer needs it, ADR-0007) never fired for them.
-> The suite ships **four** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`. The
+> The suite ships **five** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`. The
 > sections are kept as design intent; each notes where the functionality actually lives today.
 
 ### `@cas/ui` — the shared UI kit *(planned — not built)*
@@ -164,7 +166,7 @@ that benefit.
 
 Concretely, the shipped layering is: `core` → { `gpu`, `expr`, `interchange` } → `apps`. (The
 `@cas/ui` / `@cas/quadrature` / `@cas/dynamics` domain layer above `apps` was planned but never
-extracted — see §3 — so apps depend directly on the four shipped packages. `@cas/gpu` depends on
+extracted — see §3 — so apps depend directly on the shipped packages. `@cas/gpu` depends on
 `@cas/expr`; `@cas/interchange` is standalone.)
 
 ## 5. The keystone: map representation
@@ -250,10 +252,18 @@ tools:
 ## 8. Build & deployment model
 
 - Each **app** is an independent Vite build producing static files with relative asset
-  paths (`base: "./"`), **designed to** deploy to GitHub Pages independently; there is no
-  single suite-wide version. **NOTE:** no deploy workflow is configured in-repo yet — the only
-  GitHub Actions workflow is CI (`.github/workflows/ci.yml`, jobs `build` + `browser`); Pages
-  deploys are manual for now.
+  paths (`base: "./"`), so its assets resolve from any path; there is no single suite-wide version.
+- **Publishing is automated.** `.github/workflows/deploy-pages.yml` runs on every push to `master`
+  (and on `workflow_dispatch`), gates on `lint` → `typecheck` → `test` → `build`, then assembles
+  **one combined Pages site**: `apps/launcher/dist` at the root, with `complex-dynamics/` and
+  `quadrature-domains/` beneath it. Note the shape — apps build independently but publish
+  *together*, as a single artifact, not as independent Pages sites.
+- `apps/correspondences` is **built but not published** (kept in the build for CI parity; the
+  launcher lists it as a non-linking "Coming soon" card). Publishing it means adding one `cp` to
+  the assemble step and turning that card into a link.
+- There are **two** workflows: `ci.yml` (jobs `build` + `browser`) and `deploy-pages.yml`. The
+  `browser` job — the real-WebGL2 numeric backstop — lives only in CI and is *not* a publish
+  blocker, so a GPU-only regression can reach the live site while still failing CI.
 - Packages are **not** separately built or published: apps consume package *source*
   through the workspace, and each app's Vite build transpiles and bundles everything it
   imports. There is exactly **one build per app**. (This is the payoff of accepting a
@@ -283,8 +293,8 @@ tools:
 
 ## 10. How the correspondence tool fits (forward reference)
 
-The correspondence tool is `apps/correspondences`. It depends on the four shipped packages
-(`@cas/core`, `@cas/gpu`, `@cas/expr`, `@cas/interchange`) and — because `@cas/quadrature` and
+The correspondence tool is `apps/correspondences`. It depends on all five shipped packages
+(`@cas/core`, `@cas/gpu`, `@cas/expr`, `@cas/interchange`, `@cas/exact`) and — because `@cas/quadrature` and
 `@cas/dynamics` were never extracted (§3) — builds its own **σ-construction** (the deltoid
 Schwarz reflection) and reuses Complex-Dynamics' **Tricorn** model space via a shared `@cas/expr`
 preset, both app-local. Its only genuinely new code is the **branch-aware correspondence
@@ -307,9 +317,9 @@ This is realized in two cheap, additive pieces:
 
 1. **A launcher app (`apps/launcher`).** A small static landing page — its own trivial
    Vite app (or just an `index.html`) — that lists the tools with a one-line description
-   and a link to each. Intended to sit at the suite's top-level GitHub Pages URL with each app
-   deployed independently underneath (no Pages workflow is configured yet — see §8). This is the
-   "menu to select between apps."
+   and a link to each. It sits at the suite's top-level GitHub Pages URL with each published app
+   under a subpath beneath it — one combined deploy, not independent per-app sites (see §8). This
+   is the "menu to select between apps."
 2. **A shared navigation header (later, not built).** A small component that would be promoted into
    a shared `@cas/ui` package (never extracted — §3) and rendered by each app, offering a dropdown to jump to the sibling
    apps (and, where a hand-off is meaningful, a "send this to <app>" action that uses the
