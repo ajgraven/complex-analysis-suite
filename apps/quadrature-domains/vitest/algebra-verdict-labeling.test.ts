@@ -44,21 +44,45 @@ function scrub(s: string): string {
 // The needle was `setVerdict({` until P6b routed all eleven call sites through showResult(),
 // which records the result against the system it was computed on before displaying it. This
 // scanner's self-guard below is what caught the rename — keep it.
+//
+// ⚠ It also has to follow ONE INDIRECTION. Most call sites pass an inline literal, but one builds
+// the payload as `const vSet = { … }` and calls `showResult(vSet)`. A brace-matching scan for
+// `showResult({` is structurally blind to that, so for a long time this file asserted "no call
+// omits rigor" while checking 10 of 11 — a hole in a guard whose entire job is honest labeling.
+// Bare-identifier calls are now resolved back to their `const NAME = { … }` declaration, and
+// callsFound() below cross-checks the total so a THIRD calling shape fails loudly instead of
+// silently shrinking the guard again.
+function braceSlice(src: string, clean: string, openIdx: number): string {
+  let depth = 0, j = openIdx;
+  for (; j < clean.length; j++) {
+    if (clean[j] === "{") depth++;
+    else if (clean[j] === "}") { depth--; if (depth === 0) break; }
+  }
+  return src.slice(openIdx, j + 1);
+}
 function setVerdictCalls(src: string): string[] {
   const clean = scrub(src);
   const out: string[] = [];
-  const needle = "showResult({";
-  let i = clean.indexOf(needle);
-  while (i >= 0) {
-    let depth = 0, j = i + needle.length - 1;
-    for (; j < clean.length; j++) {
-      if (clean[j] === "{") depth++;
-      else if (clean[j] === "}") { depth--; if (depth === 0) break; }
-    }
-    out.push(src.slice(i, j + 1));
-    i = clean.indexOf(needle, j);
+  // (a) inline literals — showResult({ … })
+  for (let i = clean.indexOf("showResult({"); i >= 0; i = clean.indexOf("showResult({", i + 1)) {
+    out.push(braceSlice(src, clean, i + "showResult(".length));
+  }
+  // (b) one indirection — showResult(name), resolved to `const name = { … }`
+  for (const m of clean.matchAll(/\bshowResult\(\s*([A-Za-z_$][\w$]*)\s*\)/g)) {
+    const decl = clean.indexOf("const " + m[1] + " = {");
+    if (decl >= 0) out.push(braceSlice(src, clean, clean.indexOf("{", decl)));
   }
   return out;
+}
+// Real call sites: every `showResult(` minus its own definition. `reshowResult(` needs no
+// subtraction — the leading \b does not match inside it (the preceding `h` is a word character),
+// which is worth stating because subtracting it anyway double-counts and silently understates the
+// total, making the cross-check below fail in the safe direction but for the wrong reason.
+function callsFound(src: string): number {
+  const clean = scrub(src);
+  const all = [...clean.matchAll(/\bshowResult\(/g)].length;
+  const defs = [...clean.matchAll(/function showResult\(/g)].length;
+  return all - defs;
 }
 
 describe("every verdict card declares a rigor level", () => {
@@ -66,6 +90,13 @@ describe("every verdict card declares a rigor level", () => {
 
   it("finds the call sites (guards the scanner itself)", () => {
     expect(calls.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it("reaches EVERY call site, not just the inline-literal ones", () => {
+    // The assertions below claim something about *every* verdict. If the scanner silently stops
+    // matching some calling shape, they keep passing while guarding less — which is worse than
+    // failing, because the file reads as coverage that isn't there.
+    expect(calls.length).toBe(callsFound(SRC));
   });
 
   // Four call sites (RCTD import, Solve-for-a-variable, resolvent, bifurcation) used to pass no
