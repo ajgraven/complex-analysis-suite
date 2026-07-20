@@ -554,6 +554,14 @@ solo developer that is a bad trade. It stops being a bad trade under the conditi
 1. [x] Extract `gaussian`/`qiPoly` into `packages/exact` with its own tests (`d62e439`, PR #57).
 2. [x] Grow `biPoly` + `resultant` as CD's dynatomic and multiplier work required them.
 3. [x] Give the package a README that states the `sym-core` boundary explicitly (#119).
-4. [ ] **Open:** add a differential test asserting `@cas/exact`'s `Gauss` and `sym-core`'s
-       `Gaussian` agree on a shared corpus — the cheap guard against the duplication in
-       *Trade-off Analysis* drifting silently. This is the one unmitigated cost of this ADR.
+4. [x] Add a differential test asserting `@cas/exact`'s `Gauss` and `sym-core`'s `Gaussian`
+       agree on a shared corpus — the guard against the duplication in *Trade-off Analysis*
+       drifting silently. Shipped as
+       `apps/quadrature-domains/vitest/exact-symcore-differential.test.ts`: 43 assertions
+       comparing **canonical `(n, d)` BigInt tuples**, never `toNumber()`, over a corpus aimed
+       at normalization (negative denominators, unreduced inputs, values past 2⁵³, and the gcd
+       fast paths `sym-core` has that `@cas/exact` does not). Verified by mutation in **both**
+       directions: breaking `sym-core`'s `d === -1n` fast path produces 105 disagreements;
+       breaking `@cas/exact`'s complex-multiply sign produces 200. This required adding
+       `@cas/exact` to the QD app's **devDependencies** — the app's runtime still does not use
+       it, and the boundary this ADR draws is unchanged.

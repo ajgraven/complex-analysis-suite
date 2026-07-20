@@ -55,10 +55,17 @@ display the same polynomial the same way.
 - **Correspondences** — `src/exact/correspondenceCurve.ts` (the exact deltoid correspondence
   curve and its cusps).
 
-The Quadrature-Domains app does **not** use this package. Its Algebra module has its own exact
-engine (`app/sym-core.mjs` — ℚ(i), `MPoly`, Gröbner/FGLM, Hermite, the factorizer), which is
-older, larger, and multivariate. Consolidating the two has not been attempted; they solve
-overlapping but differently-shaped problems, and `sym-core` imports only `./solver.mjs`.
+The Quadrature-Domains app's **runtime** does not use this package. Its Algebra module has its
+own exact engine (`app/sym-core.mjs` — ℚ(i), `MPoly`, Gröbner/FGLM, Hermite, the factorizer),
+which is older, larger, and multivariate. Consolidating the two was considered and rejected —
+see [ADR-0008](../../docs/DECISIONS.md#adr-0008-extract-casexact-keep-qds-sym-core-separate) for
+the four reasons and the revisit triggers.
+
+QD does carry `@cas/exact` as a **devDependency**, for one purpose:
+`vitest/exact-symcore-differential.test.ts` imports both engines into one process and asserts
+they agree on a shared ℚ(i) corpus, comparing canonical `(n, d)` tuples rather than floats. Two
+independent implementations of the same field are safe only while they agree, and that test is
+what makes the disagreement loud instead of silent.
 
 ## Tests
 
