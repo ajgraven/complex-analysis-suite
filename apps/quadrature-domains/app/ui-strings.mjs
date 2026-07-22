@@ -43,6 +43,198 @@ import _QD from './solver.mjs';
 
   const S = {
 
+    // ---- Algebra operation help (the three-tier rule) ------------------------
+    // `short` is the one-line title (hard rule: nothing over ~120 chars in a `title` —
+    // invisible on touch, unreachable by keyboard, gone on pointer-move). `detail` is the
+    // full explanation, shown in the section's `?` popover, and is the ORIGINAL tooltip text
+    // moved verbatim: the content was good, it was stored in the least readable affordance
+    // the platform offers. `section` is the panel whose `?` renders it.
+    //
+    // Single source for both: the title and the popover entry come from the same record, so
+    // they cannot drift the way a hand-copied summary would.
+    algebraOps: {
+      'alg-w0-fix': {
+        section: `header`,
+        short: `Bake the solve’s centre into the seed as φ(0) = w₀. Untick for a symbolic w₀.`,
+        detail: `Seed the workspace with the selected φ(0) = w₀ substituted in as an exact rational (centroid of the poles by default; set manually under Map parameters). Removes w₀/w̄₀ from the variables — 2 fewer for elimination / Gröbner — and the same value is substituted into any univalence constraint added later (e.g. the star form's φ − w₀). Untick for the fully-symbolic system.`,
+      },
+      'alg-real-apply': {
+        section: `Assume`,
+        short: `Identify v̄ ≡ v for the picked variables — the biggest tractability lever.`,
+        detail: `Assert the chosen variables are real (z̄ⱼ ≡ zⱼ, …) and re-seed. This substitutes each variable's conjugate away, simplifying the system — often the difference between an intractable and a feasible Gröbner basis. Pick the variables, then click to regenerate.`,
+      },
+      'alg-gauge-elim': {
+        section: `Reduce`,
+        short: `Eliminate one shared variable between the gauge equation and every other, at once.`,
+        detail: `Eliminate a variable between the gauge equation and every other equation at once (one shared variable each). Because the gauge is linear in the A_{j,1}, this applies the gauge normalization throughout.`,
+      },
+      'alg-groebner': {
+        section: `Reduce`,
+        short: `Gröbner basis of the current column in the order set under Advanced.`,
+        detail: `Compute a Gröbner basis of the selected equality nodes (or, with no selection, the current column) — the multivariate generalization of the resultant — in the monomial order set under Advanced. To remove variables instead, use "Eliminate picked variables" above. Buchberger over ℚ(i) with the Gebauer–Möller criteria + sugar selection; runs off the main thread (cancellable). A cost blow-up suggests assuming variables real or using the CAS export.`,
+      },
+      'alg-dimension': {
+        section: `Analyze`,
+        short: `Dimension and solution count of the current equality system.`,
+        detail: `Report whether the equality system has finitely many solutions (zero-dimensional) and, if so, the solution count with multiplicity — the quotient-ring dimension of a grevlex Gröbner basis.`,
+      },
+      'alg-solve': {
+        section: `Analyze`,
+        short: `Numeric solutions of the current system (Gröbner → FGLM → roots).`,
+        detail: `Solve the equality system numerically: a grevlex Gröbner basis → FGLM to a lex basis → if it is in shape position, the univariate factor is solved by Durand–Kerner and back-substituted; otherwise it falls back to Möller–Stetter eigenvalue solving (the multiplication matrices of the quotient ring), which handles any radical zero-dimensional system. Solutions print to the console; truly unsolvable systems (positive-dimensional, or past the size cap) report why (route to the CAS bridge).`,
+      },
+      'alg-bifurc': {
+        section: `Analyze`,
+        short: `Exact critical parameter values and the certified real-solution count on each interval.`,
+        detail: `1-parameter bifurcation: the EXACT critical parameter values (eliminant border polynomial + Sturm isolation) and the CERTIFIED real-solution count (Hermite trace form) on each interval between them.`,
+      },
+      'alg-bifurc-var': {
+        section: `Analyze`,
+        short: `The real parameter to vary. Needs a 1-parameter family.`,
+        detail: `The real parameter to vary. Reports how the number of real solutions (= quadrature domains) changes as this variable ranges over ℝ: the critical values where the count jumps, and the count on each interval. Needs a 1-parameter family — a system that becomes zero-dimensional once this variable is fixed.`,
+      },
+      'alg-classify': {
+        section: `Analyze`,
+        short: `Count the real solutions (= quadrature domains) of the current system, exactly.`,
+        detail: `Existence / uniqueness: count the REAL solutions (= actual quadrature domains) of the current system via the Hermite trace form, plus distinct-complex / inconsistent / positive-dimensional verdicts`,
+      },
+      'alg-resolvent': {
+        section: `Analyze`,
+        short: `The univariate eliminant in the chosen variable; a repeated root signals a degeneracy.`,
+        detail: `Resolvent / discriminant: the univariate eliminant χ_v(x)=det(x·I − M_v) of the current system in the chosen variable. squareFreePart = distinct v-values; a repeated root (discriminant 0) ⇒ coincident solutions / a degeneracy (e.g. a cusp). NB a repeat can also be fibre multiplicity if v does not separate the solutions.`,
+      },
+      'alg-resolvent-var': {
+        section: `Analyze`,
+        short: `The real variable to eliminate to.`,
+        detail: `The real variable to eliminate to. The resolvent χ_v is the characteristic polynomial of multiplication-by-v on the quotient ring; its roots are v’s values across the solutions.`,
+      },
+      'alg-univalence': {
+        section: `Analyze`,
+        short: `Reconstruct each candidate φ and report how many real solutions are genuine QDs.`,
+        detail: `Certify univalence: solve for the real solutions, reconstruct each candidate Riemann map φ, and test whether it is univalent (schlicht) on 𝔻 — reports how many real solutions are GENUINE quadrature domains (the rest are algebraic solutions whose φ folds or self-intersects)`,
+      },
+      'alg-real-auto': {
+        section: `Assume`,
+        short: `If h is real-axis symmetric, assume every base variable real in one step.`,
+        detail: `Detect real-axis symmetry of h and, if the data is fully real, assume every base variable real in one step (the biggest tractability lever)`,
+      },
+      'alg-real-detect': {
+        section: `Assume`,
+        short: `Scan for forced-real, forced-imaginary or identified variables and offer one-click fixes.`,
+        detail: `Scan the current equations for variable symmetries — a variable forced real (v − v̄ = 0, e.g. the gauge) or imaginary (v + v̄ = 0), or two variables identified (x ∓ y = 0) — and surface one-click suggestions`,
+      },
+      'alg-abbrev': {
+        section: `Edit system`,
+        short: `Apply the best detected substitution repeatedly until none remain.`,
+        detail: `Repeatedly apply the highest-value detected substitution (repeated expressions / structural regularities) until none remain — abbreviate the whole system in one step`,
+      },
+      'alg-eq-conj': {
+        section: `Edit system`,
+        short: `Also add the conjugate equation, keeping the system conjugation-closed.`,
+        detail: `In the conjugate model, also add the conjugate equation p̄ = 0 (keeps the system conjugation-closed for reim / existence analysis).`,
+      },
+      'alg-cas-dialect': {
+        section: `Export`,
+        short: `Maple RCTD = the parametric real route; Singular / Sage = Gröbner cross-checks.`,
+        detail: `Maple RCTD = parametric REAL triangular decomposition (RealComprehensiveTriangularize) — the fully-parametric uniqueness route; Singular / Sage = equality-ideal Gröbner cross-checks of the variety.`,
+      },
+      'alg-cas-params': {
+        section: `Export`,
+        short: `Variable names to treat as parameters. Blank ⇒ non-parametric.`,
+        detail: `Comma-separated variable names to treat as PARAMETERS — declared last for Maple RealComprehensiveTriangularize. Blank ⇒ non-parametric RealTriangularize.`,
+      },
+      'alg-copy-cas': {
+        section: `Export`,
+        short: `The chosen column as input for your own Maple / Singular / Sage — nothing runs in-browser.`,
+        detail: `Copy the chosen column (above) as CAS input for the selected dialect (runs in your own Maple / Singular / Sage — nothing executes in-browser)`,
+      },
+      'alg-copy-derivation': {
+        section: `Export`,
+        short: `The active branch as a literate LaTeX derivation, one align block per column.`,
+        detail: `Copy the active branch as a literate LaTeX derivation — one align block per column, each annotated with the transition that produced it + the active hypotheses`,
+      },
+      'alg-copy-latex': {
+        section: `Export`,
+        short: `Every equation in the session — all columns and branches — as one gathered LaTeX block.`,
+        detail: `Copy EVERY equation in the session — all columns and all branches — as one gathered LaTeX block. For just the active branch, use Copy derivation.`,
+      },
+      'alg-copy-msolve': {
+        section: `Export`,
+        short: `The chosen column as msolve .ms input, to run offline.`,
+        detail: `Copy the chosen column as msolve .ms input (over ℚ; complex coefficients become a variable i with i²+1). Run offline: msolve -f sys.ms -o out. Nothing executes in-browser.`,
+      },
+      'alg-copy-sympy': {
+        section: `Export`,
+        short: `The active branch as a runnable SymPy script.`,
+        detail: `Copy the active branch as a runnable SymPy script — substitution steps are recomputed by SymPy from the previous column; engine reductions (Gröbner / resultant) are given as exact ℚ(i) literals`,
+      },
+      'alg-import-json': {
+        section: `Export`,
+        short: `Load a downloaded DAG JSON, rebuilding the whole workspace. Replaces the graph (undoable).`,
+        detail: `Load a previously downloaded DAG JSON — rebuilds the whole workspace (nodes, branches, assumptions). Replaces the current graph (undoable).`,
+      },
+      'alg-rctd-json': {
+        section: `Export`,
+        short: `Paste the qd-rctd JSON from your Maple run; imports as a new RCTD column.`,
+        detail: `Paste the parametric RealComprehensiveTriangularize result, serialized to the qd-rctd term-list JSON by the documented Maple post-script. Imports as a new RCTD column (one node per cell constraint / chain poly).`,
+      },
+      'alg-decompose': {
+        section: `Reduce`,
+        short: `Minimal primes — split the variety into irreducible components you can enter one at a time.`,
+        detail: `Minimal primes: split the variety into its irreducible components, V(I)=⋃ₖV(componentₖ). The standard way out of a positive-dimensional (underdetermined) verdict — enter one component and analyze it alone; the branches\\' existence counts add up. Runs in a worker.`,
+      },
+      'alg-factor-scan': {
+        section: `Reduce`,
+        short: `Factor every equation and report which split; each becomes a one-click case column.`,
+        detail: `Factor every equation in the current system and report which ones split — each becomes a one-click case column V(p)=⋃ₖV(fₖ). Equations past the in-browser factorizer caps are reported as UNDETERMINED, never as irreducible.`,
+      },
+      'alg-pin-data': {
+        section: `Reduce`,
+        short: `Substitute the solved nodes and principal parts as exact values, in one new column.`,
+        detail: `Substitute the SOLVED quadrature data (the nodes a_j and principal parts C_{j,s}) as exact ℚ(i) values, in one new column. They are kept symbolic by default so the workspace describes the whole family; pin them to see what the specific domain collapses to — e.g. when a node sits at φ(0), the locator equation loses its (a−w₀) group and factors.`,
+      },
+      'alg-propagate-all': {
+        section: `Reduce`,
+        short: `Carry every univalence constraint into the current system, assumptions applied.`,
+        detail: `Carry EVERY univalence constraint into the current system in one step, with all assumptions (reality, imaginary, fixed φ(0), pinned values) applied to each`,
+      },
+      'alg-regular-chains': {
+        section: `Reduce`,
+        short: `Saturated triangular decomposition — resolves the degenerate cases a Wu chain leaves implicit.`,
+        detail: `Regular chains (saturated triangular decomposition): like Triangular decomp. above, but SATURATED by its initials — the degenerate cases where an initial vanishes are resolved rather than left as an unstated caveat, so back-substitution is sound on every branch. Runs in a worker.`,
+      },
+      'alg-saturate': {
+        section: `Reduce`,
+        short: `Remove the |z_j| = 1 boundary stratum, making the count the exact algebraic QD count.`,
+        detail: `Saturate the current system by the Möbius denominators ∏(1−z̄_j z_j) — removes the |z_j|=1 boundary stratum the cleared (●)/(★) denominators carry, so the existence count becomes the EXACT number of algebraic quadrature-domain solutions (e.g. the unit disk 4 → 2). Safe: a genuine QD has |z_j|<1, so nothing genuine is dropped.`,
+      },
+      'alg-triangular': {
+        section: `Reduce`,
+        short: `Wu triangular chain — an alternative to Gröbner that exposes free variables and no-solution.`,
+        detail: `Triangular decomposition (Wu pseudo-elimination) of the current system — an alternative to Gröbner that exhibits the solution structure (free variables, no-solution)`,
+      },
+      'alg-moments-go': {
+        section: `Shape from moments`,
+        short: `Exact Prony–Hankel reconstruction: QD-order, Prony polynomial, numeric nodes and weights.`,
+        detail: `Exact Prony–Hankel reconstruction: the QD-order (Hankel rank drop), the exact Prony polynomial, and the numeric nodes/weights + a reconstruction residual.`,
+      },
+      'alg-autosolve': {
+        section: `header`,
+        short: `Auto-assume reality, propagate, then count and solve — each step a new column.`,
+        detail: `Semi-autonomous: auto-assume reality (if h is symmetric), propagate linear consequences, then determine existence/uniqueness and the explicit real solutions — each step a new labeled column`,
+      },
+      'alg-seed': {
+        section: `header`,
+        short: `Build the original (●)/(★)/gauge system at column 0 from the current solve. Replaces the graph.`,
+        detail: `Generate the original (●)/(★)/gauge system from the current bounded solve at column 0 (replaces the graph; assumptions are then added as columns)`,
+      },
+      'alg-seed-moment': {
+        section: `header`,
+        short: `Seed the Aharonov–Shapiro moment system for order-2 QDs. Needs no solve.`,
+        detail: `Seed the Aharonov–Shapiro moment system: order-2 quadrature domains from their harmonic moments M₀, M₁ (symbolic — needs no solve; pin the moments via “Set values” to determine a specific QD)`,
+      },
+    },
+
     // ---- "?" help-popovers (HTML) -------------------------------------------
     help: {
       // App title — "What is this?" intro.
@@ -299,15 +491,9 @@ import _QD from './solver.mjs';
       faberRoots: `Plot the roots of the Faber polynomials Fₙ of the bounded complement K (classical unbounded QD only). Roots cluster inside K. Teal circles = union of all roots up to N; violet diamonds = the single selected Fₙ. Drive N / the mode from the Faber polynomials card.`,
       openAlgebra: `Open this system in the Algebra tab — an interactive workspace for adding univalence constraints and eliminating variables (resultants).`,
       eliminateVars: `Remove the picked variables from the whole current system (exact; details below the buttons).`,
-      gaugeElim: `Eliminate a variable between the gauge equation and every other equation at once (one shared variable each). Because the gauge is linear in the A_{j,1}, this applies the gauge normalization throughout.`,
-      groebner: `Compute a Gröbner basis of the selected equality nodes (or, with no selection, the current column) — the multivariate generalization of the resultant — in the monomial order set under Advanced. To remove variables instead, use "Eliminate picked variables" above. Buchberger over ℚ(i) with the Gebauer–Möller criteria + sugar selection; runs off the main thread (cancellable). A cost blow-up suggests assuming variables real or using the CAS export.`,
-      assumeReal: `Assert the chosen variables are real (z̄ⱼ ≡ zⱼ, …) and re-seed. This substitutes each variable's conjugate away, simplifying the system — often the difference between an intractable and a feasible Gröbner basis. Pick the variables, then click to regenerate.`,
       qdeqFixW0: `Substitute the selected Riemann-map center w₀ = φ(0) into the equations as an exact rational, regenerating the system for that normalization (w₀/w̄₀ stop being parameters). The value comes from Map parameters ▸ "Riemann map center φ(0)" — the centroid of the poles by default, or your manual choice; changing it re-solves and regenerates here. Untick to keep w₀ symbolic.`,
       qdeqFormClassical: `Classical (forward) formulation: the principal-part block (★) computes the quadrature coefficients C_{j,s} directly from the Riemann-map coefficients A_{j,k} via the local power series of φ (no compositional inverse). The default.`,
       qdeqFormSchwarz: `Schwarz-function formulation: the (★) block is replaced by (★_S), which matches each C_{j,s} to the principal parts of the Schwarz function σ(w) at the quadrature node a_j = φ(z_j) — the inverse-direction dual of the forward block (via series reversion). Same solution variety, algebraically different polynomials; useful for cross-validation and matching the uniqueness literature. "Open in Algebra workspace" seeds whichever formulation is selected here.`,
-      algFixW0: `Seed the workspace with the selected φ(0) = w₀ substituted in as an exact rational (centroid of the poles by default; set manually under Map parameters). Removes w₀/w̄₀ from the variables — 2 fewer for elimination / Gröbner — and the same value is substituted into any univalence constraint added later (e.g. the star form's φ − w₀). Untick for the fully-symbolic system.`,
-      dimension: `Report whether the equality system has finitely many solutions (zero-dimensional) and, if so, the solution count with multiplicity — the quotient-ring dimension of a grevlex Gröbner basis.`,
-      solveNumeric: `Solve the equality system numerically: a grevlex Gröbner basis → FGLM to a lex basis → if it is in shape position, the univariate factor is solved by Durand–Kerner and back-substituted; otherwise it falls back to Möller–Stetter eigenvalue solving (the multiplication matrices of the quotient ring), which handles any radical zero-dimensional system. Solutions print to the console; truly unsolvable systems (positive-dimensional, or past the size cap) report why (route to the CAS bridge).`,
       fit: `Fit view to data`,
       reset: `Reset view`,
       dock: `Dock the panel into the sidebar (clear the plot)`,

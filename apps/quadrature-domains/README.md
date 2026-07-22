@@ -575,6 +575,12 @@ view is active.
   variable real removes its **conjugate**, not itself — so removing `z̄₁` means "assume `z₁` real" —
   and pinning fixes the conjugate too, so one pin removes two. Rows navigate; they do not act, so
   each operation's own gates and confirmations stay the only thing that decides whether it runs.
+  **Where the explanations live.** Every control's tooltip is one line (nothing over ~120
+  characters — a long `title` is invisible on touch, unreachable by keyboard, and gone the moment
+  the pointer moves). The full explanation sits in the section's **?** popover, one entry per
+  control keyed by its own label; the pinned header's controls are covered by the panel's own **?**.
+  Both come from a single record per control in `QD.Strings.algebraOps`, so the tooltip and the
+  popover entry cannot drift apart.
   **Operation scope.** Three operations — Existence / uniqueness, Saturate, Triangular decomp. —
   run on the *canvas selection* when there is one; every other operation always uses the whole
   current column. While a selection is live a banner at the top of the sections says so and names
