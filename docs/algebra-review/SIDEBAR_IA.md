@@ -322,18 +322,43 @@ off positional selectors onto `data-section` names. Verified after the move — 
 open exactly `Reduce` and `Analyze`, and every section's persistence key is unchanged, so no saved
 open-state was lost.
 
-### Tier 4 — the elimination lens *(the cross-cutting fix; the most interesting)*
+### Tier 4 — the elimination lens ✅ *slice 1 shipped*
 
-§3 says elimination cannot be a section. Two candidate shapes:
+§3 says elimination cannot be a section, because the concept is orthogonal to the sections. The
+lens asks from the other end: pick a **variable**, be told which of the thirteen acts apply to it
+and where each one lives. It sits under *Reduce › Eliminate variables* as **"Which variable? — what
+removes each one"**, one row per variable in the current column, ordered by how many equations hold
+it — the ranking a flat picker cannot give.
 
-- **Variable-centric panel.** "`z̄₁` appears in 4 equations. Remove it by: assume real · pin a value
-  · eliminate (Gröbner) · resultant against …" — routes to the existing thirteen operations from
-  the question a user actually has, which is about a *variable*, not a technique.
-- **A lens/filter** over the sidebar that highlights every control which reduces the variable count.
+Per the plan, slice 1 is **navigation only**: every row opens the section that owns the act
+(`openSection`) and explains what it would do. No new mutation logic, so the gates and confirms on
+those controls remain the single place that decides whether an act may run.
 
-The first is more work and much more useful; it turns "which of these thirteen buttons do I want?"
-into "what do I want to happen to this variable?" I'd prototype it read-only first — show the
-variable census and what each option would cost — before wiring any of it to mutations.
+#### The asymmetry that made it worth building rather than documenting
+
+**Assuming a variable real does not remove that variable — it removes its conjugate.** Identifying
+`v̄ ≡ v` drops `v̄` and keeps `v`. So the honest answer to *"how do I get rid of z̄₁"* is **"assume
+z₁ real"** — a different variable than the one asked about, and the naive answer is simply wrong.
+Verified in the running app:
+
+```
+A1,1  in 4 of 5   Assume real · Pin a value · Eliminate · Eliminate with gauge · Resultant
+Ā1,1  in 4 of 5   Assume A1,1 real · …          ← names the partner
+z1    in 4 of 5   Assume real · …               ← removes z̄1, and the note says so
+z̄1    in 4 of 5   Assume z1 real · …
+a1    in 1 of 5   Assume real · Pin a value · Eliminate     ← no Resultant: needs two equations
+```
+
+Pinning is the mirror case: `substituteValues` fixes a value **and its conjugate**, so one pin
+removes two — stated on the row rather than left to be discovered.
+
+#### Remaining slices
+
+- **4b** — act directly from the row (currently it routes and explains). Wants the mutation paths
+  to go through the owning controls rather than duplicating them.
+- **4c** — cost estimates per option (Sylvester matrix size is already available via
+  `store.previewCost`; a Gröbner estimate is not, and guessing one would be dishonest).
+- **4d** — the same lens over *equations* rather than variables, if the variable view proves out.
 
 ### Tier 5 — tooltip debt *(S7)*
 

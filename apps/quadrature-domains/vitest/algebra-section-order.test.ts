@@ -12,12 +12,31 @@ const CODE = UI
   .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
   .replace(/(^|[^:])\/\/[^\n]*/g, (m) => m.replace(/[^\n]/g, " "));
 
-/** Section names in DOM order. */
-const ORDER = [...CODE.matchAll(/<summary>([^<]+)<\/summary>/g)].map((m) => m[1])
-  .filter((n) => n !== "Advanced");
+/**
+ * Section names in DOM order — the summaries of `details.algebra-section` ONLY.
+ *
+ * This began as "every <summary>, minus the one called 'Advanced'". That filtered by NAME, so the
+ * next nested disclosure to appear anywhere in the panel silently became an eighth/ninth "section"
+ * — which is exactly what happened when the elimination lens added "Which variable?". Matching the
+ * class instead ties the list to what a section actually is.
+ */
+const ORDER = [...CODE.matchAll(/class="algebra-section"[^>]*>'\s*\+\s*'\s*<summary>([^<]+)<\/summary>/g)]
+  .map((m) => m[1]);
 const at = (name: string) => ORDER.indexOf(name);
 
 describe("the column workflow reads in the order it is performed", () => {
+  it("counts sections, not every disclosure in the panel", () => {
+    // Guard the guard. There ARE nested <details> inside sections (Advanced, and the elimination
+    // lens's "Which variable?"), so a summary-count and a section-count must differ — if they ever
+    // coincide, the extraction has stopped distinguishing them and every check below goes soft.
+    const allSummaries = [...CODE.matchAll(/<summary>([^<]+)<\/summary>/g)].map((m) => m[1]);
+    expect(allSummaries.length).toBeGreaterThan(ORDER.length);
+    for (const nested of ["Advanced", "Which variable? — what removes each one"]) {
+      expect(allSummaries, nested + " should exist as a disclosure").toContain(nested);
+      expect(ORDER, nested + " is not a section").not.toContain(nested);
+    }
+  });
+
   it("has all eight sections", () => {
     expect(ORDER).toEqual([
       "Assume", "Pin values", "Edit system", "Reduce", "Analyze",

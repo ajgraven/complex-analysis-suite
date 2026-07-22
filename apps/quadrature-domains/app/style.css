@@ -1171,6 +1171,18 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
    inspector. Indented to read as belonging to the buttons above it rather than the next group. */
 #controls-algebra .algebra-elim-hint { margin: 2px 0 0 2px; }
 
+/* The elimination lens — one row per variable in the current column, each listing the acts that
+   would remove it and where each lives. Bounded height: a wide system has many variables and this
+   sits inside an already-scrolling sidebar. */
+#controls-algebra .algebra-varlens { max-height: 260px; overflow-y: auto; margin-top: 2px; }
+#controls-algebra .algebra-varlens-row {
+  padding: 4px 0; border-top: 1px solid var(--c-border-soft);
+}
+#controls-algebra .algebra-varlens-row:first-child { border-top: none; }
+#controls-algebra .algebra-varlens-head { font-size: 11px; margin-bottom: 3px; }
+#controls-algebra .algebra-varlens-acts { display: flex; flex-wrap: wrap; gap: 3px; }
+#controls-algebra .algebra-varlens-act { font-size: 10px; padding: 1px 5px; }
+
 /* The two-node selection cap, stated in the inspector. algebra-canvas caps at two and drops the
    oldest on a third ctrl+click; without this the first equation just vanishes. */
 #controls-algebra .algebra-sel-cap { margin: 0 0 2px; font-style: italic; }
