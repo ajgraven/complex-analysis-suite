@@ -39,8 +39,16 @@ describe("2.1 — the Gröbner button names the scope it actually uses", () => {
   });
 
   it("the tooltip agrees with the label", () => {
-    expect(STRINGS).toMatch(/groebner:[^`]*`[^`]*with no selection, the current column/);
-    expect(STRINGS).not.toMatch(/groebner:[^`]*`[^`]*\(or all of them\)/);
+    // Originally asserted on tooltips.groebner. Tier 5 moved that text into algebraOps and the
+    // now-unreferenced tooltips.* entry was deleted — leaving the assertion pointed at dead prose
+    // would have kept it green while guarding a string the app no longer reads.
+    const rec = STRINGS.match(/'alg-groebner':\s*\{\s*section:\s*`([^`]*)`,\s*short:\s*`([^`]*)`,\s*detail:\s*`([^`]*)`/);
+    expect(rec, "alg-groebner has no algebraOps record").toBeTruthy();
+    const [, section, short, detail] = rec as RegExpMatchArray;
+    expect(section).toBe("Reduce");
+    expect(short).toMatch(/current column/);                 // agrees with the button's label
+    expect(detail).toMatch(/with no selection, the current column/);
+    expect(detail).not.toMatch(/\(or all of them\)/);
   });
 });
 
@@ -48,9 +56,16 @@ describe("2.2 / 2.3 — exports state their scope and refuse when empty", () => 
   it("Copy LaTeX says it takes every branch and column", () => {
     // copyLatex walks store.list() — all columns, all branches — while sitting next to
     // "Copy derivation (LaTeX)", which is the active branch. The pair read as scoped and was not.
+    //
+    // The LABEL is still in the markup; the scope sentence is not. Tier 5 moved every over-length
+    // title into QD.Strings.algebraOps, so this originally-145-char tooltip now lives there. That
+    // relocation is exactly what this assertion had to follow — it failed the gate by still
+    // looking at the markup, which is the guard working, not the content going missing.
     const btn = UI.slice(UI.indexOf('id="alg-copy-latex"'), UI.indexOf('id="alg-copy-latex"') + 320);
-    expect(btn).toMatch(/all columns and all branches/);
     expect(btn).toMatch(/>Copy all LaTeX</);
+    const rec = STRINGS.match(/'alg-copy-latex':\s*\{[^}]*?detail:\s*`([^`]*)`/);
+    expect(rec, "alg-copy-latex has no algebraOps record").toBeTruthy();
+    expect((rec as RegExpMatchArray)[1]).toMatch(/all columns and all branches/);
   });
 
   it("both unguarded exports now refuse an empty workspace", () => {

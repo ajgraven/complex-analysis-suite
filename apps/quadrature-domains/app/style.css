@@ -1671,3 +1671,11 @@ input.so-num {
 }
 
 /* .view-plane-only / .view-sphere-only — visibility toggled by JS. */
+
+/* Definition list inside a section's `?` popover — one entry per control, keyed by its own label.
+   Keeping the label beside its detail is what makes moving 36 tooltips out of `title` safe: a flat
+   blob of prose in a popover loses which button it was about. */
+.help-popover .algebra-op-help { margin: 0; }
+.help-popover .algebra-op-help dt { font-weight: 600; margin-top: 6px; }
+.help-popover .algebra-op-help dt:first-child { margin-top: 0; }
+.help-popover .algebra-op-help dd { margin: 2px 0 0; color: var(--c-muted-2); }

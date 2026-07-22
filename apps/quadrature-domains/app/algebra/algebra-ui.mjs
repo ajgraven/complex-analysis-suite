@@ -988,6 +988,63 @@ const QD = _QD;
       });
       if (keep) box.appendChild(keep);
     }
+    // ── The three-tier tooltip rule, applied ────────────────────────────────────────────────
+    // Thirty controls carried a `title` over the ~120-char hard rule — the worst 345 — and a long
+    // `title` is the least readable affordance the platform offers: invisible on touch, unreachable
+    // by keyboard, gone the moment the pointer moves. The content was good; the container was not.
+    //
+    // QD.Strings.algebraOps holds one record per control: `short` (the one-line title) and `detail`
+    // (the original text, moved VERBATIM — no rewriting, so nothing was lost in the move). Both come
+    // from that single record, so the title and the popover entry cannot drift.
+    //
+    // Tier 3 is the section's own `?`: QoL.attachHelp on each <summary>, rendering a definition list
+    // of that section's controls. Keeping the label beside its detail is what makes the relocation
+    // safe — a flat blob of prose in a popover loses which button it was about.
+    function applyOpHelp() {
+      const OPS = (QD.Strings && QD.Strings.algebraOps) || null;
+      if (!OPS) return;                                  // strings module absent: leave titles alone
+      const bySection = new Map();
+      Object.keys(OPS).forEach((id) => {
+        const rec = OPS[id];
+        const el = $('#' + id);
+        if (el) el.title = rec.short;                    // tier 1: one line, always present
+        if (!bySection.has(rec.section)) bySection.set(rec.section, []);
+        bySection.get(rec.section).push({ id, rec, label: _opLabel(el, id) });
+      });
+      const QoL = QD.QoL;
+      if (!QoL || typeof QoL.attachHelp !== 'function') return;
+      const esc = (typeof QoL.escapeHTML === 'function') ? QoL.escapeHTML : ((s) => String(s));
+      const dl = (items) => '<dl class="algebra-op-help">'
+        + items.map((it) => '<dt>' + esc(it.label) + '</dt><dd>' + esc(it.rec.detail) + '</dd>').join('')
+        + '</dl>';
+      const sections = document.querySelectorAll('#alg-sections details.algebra-section');
+      Array.prototype.forEach.call(sections, (d) => {
+        const name = d.dataset.section, sum = d.querySelector('summary');
+        const items = bySection.get(name);
+        if (!sum || !items || !items.length) return;
+        QoL.attachHelp(sum, () => '<h3>' + esc(name) + '</h3>' + dl(items));
+      });
+      // The pinned header has no <summary> to hang a `?` on, so its controls' details would have
+      // been stranded — moved out of their tooltips with nowhere to land, which is worse than the
+      // long tooltip was. They go into the panel's existing `?` block (#alg-help) instead.
+      const head = bySection.get('header');
+      const helpBox = $('#alg-help');
+      if (head && head.length && helpBox && !helpBox.querySelector('.algebra-op-help')) {
+        const wrap = document.createElement('div');
+        wrap.innerHTML = '<h3>Seeding and one-click routes</h3>' + dl(head);
+        helpBox.appendChild(wrap);
+      }
+    }
+    // A control's human name for the help list: its own text, or the label wrapping it (checkboxes
+    // and selects carry their name outside the element), falling back to the id.
+    function _opLabel(el, id) {
+      if (!el) return id;
+      const own = (el.textContent || '').trim();
+      if (own) return own;
+      const lab = el.closest && el.closest('label');
+      const t = lab && (lab.textContent || '').trim();
+      return t || id;
+    }
     function renderHypotheses() {
       const box = $('#alg-hypotheses'); if (!box) return;
       if (!store.size) { box.classList.add('hidden'); box.innerHTML = ''; return; }
@@ -1638,15 +1695,15 @@ const QD = _QD;
         '  </div>' +
         '  <div class="row algebra-primary">' +
         '    <button id="alg-prove" class="small primary heavy-op" type="button" title="One click: seed → certified existence/uniqueness verdict, with a =/≤/≈ rigor badge.">✦ Prove existence / uniqueness</button>' +
-        '    <button id="alg-autosolve" class="small heavy-op" type="button" title="Semi-autonomous: auto-assume reality (if h is symmetric), propagate linear consequences, then determine existence/uniqueness and the explicit real solutions — each step a new labeled column">★ Auto-reduce &amp; solve</button>' +
-        '    <button id="alg-seed" class="small" type="button" title="Generate the original (●)/(★)/gauge system from the current bounded solve at column 0 (replaces the graph; assumptions are then added as columns)">Generate / re-seed</button>' +
-        '    <button id="alg-seed-moment" class="small" type="button" title="Seed the Aharonov–Shapiro moment system: order-2 quadrature domains from their harmonic moments M₀, M₁ (symbolic — needs no solve; pin the moments via “Set values” to determine a specific QD)">Seed A–S moments</button>' +
+        '    <button id="alg-autosolve" class="small heavy-op" type="button">★ Auto-reduce &amp; solve</button>' +
+        '    <button id="alg-seed" class="small" type="button">Generate / re-seed</button>' +
+        '    <button id="alg-seed-moment" class="small" type="button">Seed A–S moments</button>' +
         '    <button id="alg-cancel" class="small hidden" type="button" title="Cancel the running computation">Cancel</button>' +
         '  </div>' +
         // A seeding option, so it lives with the seed buttons (it used to hang off the φ/h
         // reference block, which described the map rather than generating it).
         '  <div class="row algebra-seed-opt">' +
-        '    <label class="algebra-ref-opt" data-str-title="tooltips.algFixW0"><input type="checkbox" id="alg-w0-fix" checked> fix φ(0)=w₀</label>' +
+        '    <label class="algebra-ref-opt"><input type="checkbox" id="alg-w0-fix" checked> fix φ(0)=w₀</label>' +
         '  </div>' +
         // The pipeline description used to live in a 543-character `title`: invisible on touch,
         // unreachable by keyboard, gone on pointer-move. It is the substance of the tool, so it is
@@ -1697,9 +1754,9 @@ const QD = _QD;
         '    <summary>Assume</summary>' +
         '    <div class="algebra-section-body">' +
         '      <div class="algebra-line"><span class="algebra-line-label">Assume real</span><span id="alg-real-pick" class="algebra-picker"></span>' +
-        '        <button id="alg-real-apply" class="small" type="button" data-str-title="tooltips.assumeReal">Assume real</button>' +
-        '        <button id="alg-real-auto" class="small" type="button" title="Detect real-axis symmetry of h and, if the data is fully real, assume every base variable real in one step (the biggest tractability lever)">Assume all real</button>' +
-        '        <button id="alg-real-detect" class="small" type="button" title="Scan the current equations for variable symmetries — a variable forced real (v − v̄ = 0, e.g. the gauge) or imaginary (v + v̄ = 0), or two variables identified (x ∓ y = 0) — and surface one-click suggestions">Detect symmetry</button></div>' +
+        '        <button id="alg-real-apply" class="small" type="button">Assume real</button>' +
+        '        <button id="alg-real-auto" class="small" type="button">Assume all real</button>' +
+        '        <button id="alg-real-detect" class="small" type="button">Detect symmetry</button></div>' +
         '    </div>' +
         '  </details>' +
         // 2. Pin values — fixing a variable to an exact ℚ(i) value is a different act from assuming
@@ -1727,14 +1784,14 @@ const QD = _QD;
         '        <input id="alg-def-expr" class="alg-def-expr" type="text" placeholder="e.g.  w1^2,  z1+zb1,  z1*zb1" autocomplete="off" spellcheck="false" title="An expression in the current variables.  + − * / ^ ( ),  i = imaginary unit,  exact rationals" />' +
         '        <button id="alg-def-apply" class="small" type="button" title="Introduce the new symbol and substitute it into the current system (a new labeled column)">Define symbol</button></div>' +
         '      <div id="alg-def-preview" class="alg-def-preview hint"></div>' +
-        '      <div class="row" style="margin-top:4px;"><button id="alg-abbrev" class="small" type="button" title="Repeatedly apply the highest-value detected substitution (repeated expressions / structural regularities) until none remain — abbreviate the whole system in one step">Abbreviate repeatedly</button></div>' +
+        '      <div class="row" style="margin-top:4px;"><button id="alg-abbrev" class="small" type="button">Abbreviate repeatedly</button></div>' +
         '      <div class="algebra-line-label" style="margin-top:8px;">Add equation <span class="hint" style="font-weight:400;">(impose a custom condition)</span></div>' +
         '      <div class="algebra-define-row">' +
         '        <input id="alg-eq-expr" class="alg-def-expr" type="text" placeholder="e.g.  A1_1 - 1,  z1*zb1 - 1" autocomplete="off" spellcheck="false" title="A polynomial in the current variables.  + − * / ^ ( ),  i = imaginary unit,  exact rationals" />' +
         '        <select id="alg-eq-rel" class="alg-eq-rel" title="Relation: = 0 (equality), ≠ 0 (non-vanishing), or > 0 (Hermitian inequality)"><option value="=">= 0</option><option value="≠">≠ 0</option><option value="&gt;">&gt; 0</option></select>' +
         '        <button id="alg-eq-apply" class="small" type="button" title="Add this equation/inequality as a new node in the current system">Add equation</button></div>' +
         '      <div id="alg-eq-preview" class="alg-def-preview hint"></div>' +
-        '      <label style="font-size:11px;" title="In the conjugate model, also add the conjugate equation p̄ = 0 (keeps the system conjugation-closed for reim / existence analysis)."><input type="checkbox" id="alg-eq-conj" checked> add conjugate</label>' +
+        '      <label style="font-size:11px;"><input type="checkbox" id="alg-eq-conj" checked> add conjugate</label>' +
         '    </div>' +
         '  </details>' +
         // 4. Reduce. Grouped into four honest sub-headings (the "Edit system" idiom above).
@@ -1758,7 +1815,7 @@ const QD = _QD;
         '      <div class="algebra-line"><span class="algebra-line-label">eliminate</span><span id="alg-elim-pick" class="algebra-picker"></span></div>' +
         '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
         '        <button id="alg-eliminate-vars" class="small heavy-op" type="button" data-str-title="tooltips.eliminateVars">Eliminate picked variables</button>' +
-        '        <button id="alg-gauge-elim" class="small" type="button" data-str-title="tooltips.gaugeElim">Eliminate with gauge (all)</button></div>' +
+        '        <button id="alg-gauge-elim" class="small" type="button">Eliminate with gauge (all)</button></div>' +
         // Caption, not a tooltip: the hard rule is nothing over ~120 chars in a `title` (finding 4.3).
         // This also carries the pointer to the two-node resultant, which is the same act living in
         // the inspector — the split that made elimination hard to find in the first place.
@@ -1777,21 +1834,21 @@ const QD = _QD;
         // they do to the solution set — which is also the distinction a user needs before clicking.
         '      <div class="algebra-line-label" style="margin-top:8px;">Rewrite the system <span class="hint" style="font-weight:400;">(same solutions, better shape)</span></div>' +
         '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
-        '        <button id="alg-groebner" class="small heavy-op" type="button" data-str-title="tooltips.groebner">Gröbner basis (current column)</button>' +
-        '        <button id="alg-triangular" class="small" type="button" title="Triangular decomposition (Wu pseudo-elimination) of the current system — an alternative to Gröbner that exhibits the solution structure (free variables, no-solution)">Triangular decomp.</button></div>' +
+        '        <button id="alg-groebner" class="small heavy-op" type="button">Gröbner basis (current column)</button>' +
+        '        <button id="alg-triangular" class="small" type="button">Triangular decomp.</button></div>' +
         '      <div class="algebra-line-label" style="margin-top:8px;">Narrow the system <span class="hint" style="font-weight:400;">(deliberately changes what solves it)</span></div>' +
         '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
-        '        <button id="alg-saturate" class="small" type="button" title="Saturate the current system by the Möbius denominators ∏(1−z̄_j z_j) — removes the |z_j|=1 boundary stratum the cleared (●)/(★) denominators carry, so the existence count becomes the EXACT number of algebraic quadrature-domain solutions (e.g. the unit disk 4 → 2). Safe: a genuine QD has |z_j|<1, so nothing genuine is dropped.">Saturate (admissibility)</button>' +
-        '        <button id="alg-propagate-all" class="small" type="button" title="Carry EVERY univalence constraint into the current system in one step, with all assumptions (reality, imaginary, fixed φ(0), pinned values) applied to each">Propagate constraints → current</button>' +
-        '        <button id="alg-pin-data" class="small" type="button" title="Substitute the SOLVED quadrature data (the nodes a_j and principal parts C_{j,s}) as exact ℚ(i) values, in one new column. They are kept symbolic by default so the workspace describes the whole family; pin them to see what the specific domain collapses to — e.g. when a node sits at φ(0), the locator equation loses its (a−w₀) group and factors.">Pin known quadrature data</button></div>' +
+        '        <button id="alg-saturate" class="small" type="button">Saturate (admissibility)</button>' +
+        '        <button id="alg-propagate-all" class="small" type="button">Propagate constraints → current</button>' +
+        '        <button id="alg-pin-data" class="small" type="button">Pin known quadrature data</button></div>' +
         // Column-level factoring. The per-node "Attempt to factor" requires selecting each card in
         // turn to discover whether it splits; this scans the whole current system at once, which is
         // the shape "simplify and reduce these equations" actually asks for.
         '      <div class="algebra-line-label" style="margin-top:8px;">Split into cases <span class="hint" style="font-weight:400;">(one branch per component; the counts add up)</span></div>' +
         '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
-        '        <button id="alg-factor-scan" class="small" type="button" title="Factor every equation in the current system and report which ones split — each becomes a one-click case column V(p)=⋃ₖV(fₖ). Equations past the in-browser factorizer caps are reported as UNDETERMINED, never as irreducible.">Factor / simplify column</button>' +
-        '        <button id="alg-decompose" class="small heavy-op" type="button" title="Minimal primes: split the variety into its irreducible components, V(I)=⋃ₖV(componentₖ). The standard way out of a positive-dimensional (underdetermined) verdict — enter one component and analyze it alone; the branches\' existence counts add up. Runs in a worker.">Decompose into components</button>' +
-        '        <button id="alg-regular-chains" class="small heavy-op" type="button" title="Regular chains (saturated triangular decomposition): like Triangular decomp. above, but SATURATED by its initials — the degenerate cases where an initial vanishes are resolved rather than left as an unstated caveat, so back-substitution is sound on every branch. Runs in a worker.">Regular chains (saturated)</button></div>' +
+        '        <button id="alg-factor-scan" class="small" type="button">Factor / simplify column</button>' +
+        '        <button id="alg-decompose" class="small heavy-op" type="button">Decompose into components</button>' +
+        '        <button id="alg-regular-chains" class="small heavy-op" type="button">Regular chains (saturated)</button></div>' +
         '      <div id="alg-factor-out" class="algebra-factor-out"></div>' +
         // The `eliminate` picker moved OUT of Advanced and up into the elimination sub-section — it
         // is the whole point of that act, not a tuning knob. Only the monomial order stays here.
@@ -1805,16 +1862,16 @@ const QD = _QD;
         '  <details class="algebra-section">' +
         '    <summary>Analyze</summary>' +
         '    <div class="algebra-section-body"><div class="row" style="flex-wrap:wrap; gap:4px;">' +
-        '      <button id="alg-classify" class="small heavy-op" type="button" title="Existence / uniqueness: count the REAL solutions (= actual quadrature domains) of the current system via the Hermite trace form, plus distinct-complex / inconsistent / positive-dimensional verdicts">Existence / uniqueness</button>' +
-        '      <button id="alg-dimension" class="small" type="button" data-str-title="tooltips.dimension">Dimension / count</button>' +
-        '      <button id="alg-solve" class="small" type="button" data-str-title="tooltips.solveNumeric">Solve (numeric)</button>' +
-        '      <button id="alg-univalence" class="small heavy-op" type="button" title="Certify univalence: solve for the real solutions, reconstruct each candidate Riemann map φ, and test whether it is univalent (schlicht) on 𝔻 — reports how many real solutions are GENUINE quadrature domains (the rest are algebraic solutions whose φ folds or self-intersects)">Certify univalence</button></div>' +
+        '      <button id="alg-classify" class="small heavy-op" type="button">Existence / uniqueness</button>' +
+        '      <button id="alg-dimension" class="small" type="button">Dimension / count</button>' +
+        '      <button id="alg-solve" class="small" type="button">Solve (numeric)</button>' +
+        '      <button id="alg-univalence" class="small heavy-op" type="button">Certify univalence</button></div>' +
         '    <div class="row" style="flex-wrap:wrap; gap:4px; margin-top:4px;">' +
-        '      <label class="small">Resolvent in <select id="alg-resolvent-var" title="The real variable to eliminate to. The resolvent χ_v is the characteristic polynomial of multiplication-by-v on the quotient ring; its roots are v’s values across the solutions."></select></label>' +
-        '      <button id="alg-resolvent" class="small heavy-op" type="button" title="Resolvent / discriminant: the univariate eliminant χ_v(x)=det(x·I − M_v) of the current system in the chosen variable. squareFreePart = distinct v-values; a repeated root (discriminant 0) ⇒ coincident solutions / a degeneracy (e.g. a cusp). NB a repeat can also be fibre multiplicity if v does not separate the solutions.">Resolvent / discriminant</button></div>' +
+        '      <label class="small">Resolvent in <select id="alg-resolvent-var"></select></label>' +
+        '      <button id="alg-resolvent" class="small heavy-op" type="button">Resolvent / discriminant</button></div>' +
         '    <div class="row" style="flex-wrap:wrap; gap:4px; margin-top:4px;">' +
-        '      <label class="small">Bifurcation over <select id="alg-bifurc-var" title="The real parameter to vary. Reports how the number of real solutions (= quadrature domains) changes as this variable ranges over ℝ: the critical values where the count jumps, and the count on each interval. Needs a 1-parameter family — a system that becomes zero-dimensional once this variable is fixed."></select></label>' +
-        '      <button id="alg-bifurc" class="small heavy-op" type="button" title="1-parameter bifurcation: the EXACT critical parameter values (eliminant border polynomial + Sturm isolation) and the CERTIFIED real-solution count (Hermite trace form) on each interval between them.">Bifurcation (real count)</button></div></div>' +
+        '      <label class="small">Bifurcation over <select id="alg-bifurc-var"></select></label>' +
+        '      <button id="alg-bifurc" class="small heavy-op" type="button">Bifurcation (real count)</button></div></div>' +
         '  </details>' +
         // ── End of the main route ──────────────────────────────────────────────────────────
         // Everything above is the column workflow: assume → edit → reduce → analyze, each step
@@ -1850,7 +1907,7 @@ const QD = _QD;
         '      <div class="hint" style="margin-bottom:4px;"><strong>Standalone — this does not touch the workspace:</strong> no column is added and the graph is unchanged. Reconstruct a discrete measure Σ aⱼ·δ(zⱼ) — a quadrature domain’s data — from its complex moments mₖ = Σ aⱼ·zⱼᵏ, by exact Prony–Hankel. The <strong>order</strong> (= #nodes = the QD-order) is the EXACT Hankel rank drop; the Prony polynomial Π(z−zⱼ) is exact; nodes/weights are numeric (well-conditioned, from the exact polynomial).</div>' +
         '      <div class="algebra-define-row">' +
         '        <input id="alg-moments" class="alg-def-expr" type="text" placeholder="m0, m1, m2, …   e.g.  3, 6, 14, 36, 98, 276   or  2, 0, -2, 0" autocomplete="off" spellcheck="false" title="Comma-separated complex moments m_0, m_1, …. Each: a (real), a+bi, a-bi, bi, i, -i; rationals 3/2 and decimals allowed." />' +
-        '        <button id="alg-moments-go" class="small heavy-op" type="button" title="Exact Prony–Hankel reconstruction: the QD-order (Hankel rank drop), the exact Prony polynomial, and the numeric nodes/weights + a reconstruction residual.">Reconstruct</button></div>' +
+        '        <button id="alg-moments-go" class="small heavy-op" type="button">Reconstruct</button></div>' +
         '      <div id="alg-moments-out" class="alg-def-preview hint"></div>' +
         '    </div>' +
         '  </details>' +
@@ -1860,24 +1917,24 @@ const QD = _QD;
         '    <div class="algebra-section-body">' +
         '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
         '        <button id="alg-export-json" class="small" type="button" title="Download the whole session as exact ℚ(i) term lists + edges + tracks + assumptions (round-trips via Load)">Download DAG (JSON)</button>' +
-        '        <button id="alg-import-json" class="small" type="button" title="Load a previously downloaded DAG JSON — rebuilds the whole workspace (nodes, branches, assumptions). Replaces the current graph (undoable).">Load DAG (JSON)</button>' +
+        '        <button id="alg-import-json" class="small" type="button">Load DAG (JSON)</button>' +
         '        <input id="alg-import-file" type="file" accept="application/json,.json" style="display:none;" />' +
-        '        <button id="alg-copy-latex" class="small" type="button" title="Copy EVERY equation in the session — all columns and all branches — as one gathered LaTeX block. For just the active branch, use Copy derivation.">Copy all LaTeX</button>' +
-        '        <button id="alg-copy-derivation" class="small" type="button" title="Copy the active branch as a literate LaTeX derivation — one align block per column, each annotated with the transition that produced it + the active hypotheses">Copy derivation (LaTeX)</button>' +
-        '        <button id="alg-copy-sympy" class="small" type="button" title="Copy the active branch as a runnable SymPy script — substitution steps are recomputed by SymPy from the previous column; engine reductions (Gröbner / resultant) are given as exact ℚ(i) literals">Copy SymPy script</button></div>' +
+        '        <button id="alg-copy-latex" class="small" type="button">Copy all LaTeX</button>' +
+        '        <button id="alg-copy-derivation" class="small" type="button">Copy derivation (LaTeX)</button>' +
+        '        <button id="alg-copy-sympy" class="small" type="button">Copy SymPy script</button></div>' +
         '      <div class="algebra-line" style="margin-top:4px;"><span class="algebra-line-label">Mathematica</span>' +
         '        <select id="alg-mma-col" title="Which column of equations to export"></select>' +
         '        <button id="alg-copy-mma" class="small" type="button" title="Copy the chosen column as a Wolfram-Language list of equations ({lhs == 0, …}) ready to paste into Mathematica">Copy column</button>' +
         '        <button id="alg-copy-mma-all" class="small" type="button" title="Copy every column as labeled Wolfram-Language lists (col0 = {…}; col1 = {…}; …)">Copy all</button></div>' +
         '      <div class="algebra-line" style="margin-top:4px;"><span class="algebra-line-label">CAS / RCTD</span>' +
-        '        <select id="alg-cas-dialect" title="Maple RCTD = parametric REAL triangular decomposition (RealComprehensiveTriangularize) — the fully-parametric uniqueness route; Singular / Sage = equality-ideal Gröbner cross-checks of the variety.">' +
+        '        <select id="alg-cas-dialect">' +
         '          <option value="maple">Maple RCTD</option><option value="singular">Singular</option><option value="sage">Sage</option></select>' +
-        '        <input id="alg-cas-params" class="small" type="text" placeholder="params e.g. a1,C1_1" title="Comma-separated variable names to treat as PARAMETERS — declared last for Maple RealComprehensiveTriangularize. Blank ⇒ non-parametric RealTriangularize." style="width:8.5em;" />' +
-        '        <button id="alg-copy-cas" class="small" type="button" title="Copy the chosen column (above) as CAS input for the selected dialect (runs in your own Maple / Singular / Sage — nothing executes in-browser)">Copy for CAS</button>' +
-        '        <button id="alg-copy-msolve" class="small" type="button" title="Copy the chosen column as msolve .ms input (over ℚ; complex coefficients become a variable i with i²+1). Run offline: msolve -f sys.ms -o out. Nothing executes in-browser.">Copy msolve (.ms)</button></div>' +
+        '        <input id="alg-cas-params" class="small" type="text" placeholder="params e.g. a1,C1_1" style="width:8.5em;" />' +
+        '        <button id="alg-copy-cas" class="small" type="button">Copy for CAS</button>' +
+        '        <button id="alg-copy-msolve" class="small" type="button">Copy msolve (.ms)</button></div>' +
         '      <div class="algebra-line" style="margin-top:6px; align-items:flex-start;"><span class="algebra-line-label">Import RCTD</span>' +
         '        <div style="flex:1; min-width:0;">' +
-        '          <textarea id="alg-rctd-json" class="small" rows="3" placeholder=\'paste the qd-rctd JSON from your Maple run (see the post-script)\' title="Paste the parametric RealComprehensiveTriangularize result, serialized to the qd-rctd term-list JSON by the documented Maple post-script. Imports as a new RCTD column (one node per cell constraint / chain poly)." style="width:100%; box-sizing:border-box; font-family:monospace; resize:vertical;"></textarea>' +
+        '          <textarea id="alg-rctd-json" class="small" rows="3" placeholder=\'paste the qd-rctd JSON from your Maple run (see the post-script)\' style="width:100%; box-sizing:border-box; font-family:monospace; resize:vertical;"></textarea>' +
         '          <div class="row" style="gap:4px; margin-top:2px;"><button id="alg-import-rctd" class="small heavy-op" type="button" title="Parse the qd-rctd JSON and append a new column of the decomposition cells">Import cells</button></div>' +
         '        </div></div>' +
         '    </div>' +
@@ -2000,6 +2057,12 @@ const QD = _QD;
       document.addEventListener('click', () => { _closeOpenMenu(); });
 
       if (QD.Strings && QD.Strings.apply) QD.Strings.apply(panel);
+      // AFTER Strings.apply, and that ordering is load-bearing twice over: applyOpHelp needs the
+      // data-section keys wireSectionPersistence writes, and it appends the header ops into
+      // #alg-help — which carries data-str-html, so apply() would overwrite the block if it ran
+      // second. Measured: with applyOpHelp first, the header details silently vanished.
+      applyOpHelp();
+
       // (the reference itself is built by mountReferenceCard, after the canvas exists)
       setStatus(activeEnv ? '' : (STR.noSolve || 'No classical bounded QD solved yet.'));
     }

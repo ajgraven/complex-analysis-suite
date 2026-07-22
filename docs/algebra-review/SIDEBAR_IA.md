@@ -90,7 +90,7 @@ system, or split it; the variable set is untouched.
 | **S4** ❌ | ~~*Silent no-op at 3+ selection.*~~ **Withdrawn — the state is unreachable**: `algebra-canvas` caps the selection at two (`selected.shift()`). Derived from reading the consumer without checking the producer. The cap's *silence* is the real issue, and is now stated. | see Tier 2 |
 | **S5** ✅ | *Unguarded exports.* `Download DAG (JSON)` and `Copy LaTeX` have no `store.size` guard and will emit an empty artifact silently, unlike their six guarded siblings. | `exportJson`, `copyLatex` |
 | **S6** ✅ | *`fix φ(0)=w₀` re-seeds destructively with no confirmation.* Its `change` handler calls `seedFromCurrent()` whenever `store.size`, discarding the derivation. `confirmReplace` guards the `s` accelerator but **not** this checkbox and **not** the `Generate / re-seed` button click. | sharpens open finding **4.13** with a mechanism |
-| **S7** | *Tooltip debt is larger than 4.3 closed.* Against the stated hard rule of ~120 chars: `solveNumeric` 489, `groebner` 433, `algFixW0` 371, `pin-data` 345, `saturate` 327, `bifurc-var` 303. Roughly 20 controls exceed it. Only 6 `data-str-title` hooks exist against ~53 hardcoded titles. | 4.3 fixed the CTA caption only |
+| **S7** ✅ | *Tooltip debt is larger than 4.3 closed.* Against the ~120-char hard rule: `solveNumeric` 489, `groebner` 448, `algFixW0` 371, `pin-data` 345, `saturate` 327, `bifurc-var` 303. **Measured at 36, not the ~20 first estimated** — 30 hardcoded `title=` plus 6 reaching their controls via `data-str-title`, which a scan of the markup alone cannot see. | **Fixed** — max title now 119; see Tier 5 |
 | **S9** ✅ | *Basis replacements discard inequality nodes silently.* Gröbner reports `skipped`; `saturateMobius` and `triangularizeNodes` did not. The univalence palette is mostly inequalities, so building constraints and reducing once destroys them — and `✦ Prove` saturates in its prelude. | **Fixed** — reproduced in-browser, see the 1.2 section |
 | **S8** ❌ | ~~*Two sibling operations are two rows apart.*~~ **Withdrawn.** They are related algorithms but produce different SHAPES: `triangularize` emits one column (`maxColumn() + 1`); `regularChainsAsync` feeds `applyComponent`, giving N enterable branches. Grouping by what an act does to the system therefore puts them apart correctly, and the tooltip's "like Triangular decomp. above" is a cross-reference, not evidence of misfiling. | verified against both call paths |
 
@@ -360,11 +360,40 @@ removes two — stated on the row rather than left to be discovered.
   `store.previewCost`; a Gröbner estimate is not, and guessing one would be dishonest).
 - **4d** — the same lens over *equations* rather than variables, if the variable view proves out.
 
-### Tier 5 — tooltip debt *(S7)*
+### Tier 5 — tooltip debt ✅ *shipped (S7)*
 
-Apply the existing three-tier rule to the ~20 over-length tooltips, routing text through
-`ui-strings.mjs`. Largely mechanical, and it makes Tier 1's captions consistent rather than a
-local exception.
+**The estimate was low and the shape was wrong.** S7 said "roughly 20 controls" and "largely
+mechanical". Measured: **36** — 30 hardcoded `title=` attributes plus 6 reaching their controls via
+`data-str-title`, which a first pass over the markup alone misses entirely. The worst was 489
+characters. And it is not mechanical: relocating text needs somewhere to relocate it *to*.
+
+**`QD.Strings.algebraOps`** now holds one record per control — `section`, `short` (the title),
+`detail` (the original text, moved **verbatim**: the content was good, the container was not).
+Titles and popover entries come from the same record, so they cannot drift the way a hand-copied
+summary would. Result: **max title 119 chars, zero over the rule.**
+
+Tier 3 of the rule is the section's own `?` — `QoL.attachHelp` on each `<summary>`, rendering a
+definition list of that section's controls. **Keeping each label beside its own detail is what makes
+the move safe**; a flat blob of prose in a popover loses which button it was about.
+
+#### Two things the measurement caught
+
+*The six `data-str-title` tooltips were invisible to the obvious scan.* They live in `ui-strings`
+and are applied at runtime, so grepping the markup for long `title="…"` found 30 of 36. Only
+reading the rendered DOM showed the remaining six still at 120+ — one of them 489. All seven
+algebra-only `tooltips.*` entries were folded into the registry so a single mechanism owns every
+tooltip.
+
+*The pinned header has no `<summary>` to hang a `?` on.* Its three controls' details would have been
+moved out of their tooltips and then dropped — strictly worse than leaving them long. They go into
+the panel's existing `?` block (`#alg-help`) instead.
+
+#### An ordering bug this created
+
+`applyOpHelp` first ran *before* `QD.Strings.apply(panel)`. But `#alg-help` carries `data-str-html`,
+so `apply()` rewrites its `innerHTML` — silently wiping the header block. Measured in-browser as
+**0 entries placed**. The call now runs after `apply()`, and a test pins the ordering, because
+nothing about the code's appearance suggests the dependency.
 
 ### Tier 6 — deferred infrastructure
 
@@ -385,9 +414,13 @@ above is what it looked like in practice.
 
 **Tiers 1, 2 and 3 are complete.**
 
-**Next: Tier 4** — the elimination lens, the item that would most change how the panel feels and
-the one worth a design conversation before building. Then **Tier 5** (~20 over-length tooltips,
-mechanical) and **Tier 6** (dark mode, contrast, busy-lock drift, export identity).
+**Next: Tier 6** — dark mode (**5.2**, unblocked since 5.1), contrast (**5.5**), the hand-maintained
+busy-lock id array (**5.9**), and export session identity (**5.8**). Plus the deferred lens slices
+**4b–4d**.
+
+Tier 4 slice 1 and Tier 5 are done; **4b** (act from the row) and **4c** (cost estimates) remain.
+4c is worth a note: `store.previewCost` gives an honest Sylvester matrix size, but there is no
+comparable Gröbner estimate, and inventing one would put a fabricated number beside a real one.
 
 ### What the three tiers taught
 
