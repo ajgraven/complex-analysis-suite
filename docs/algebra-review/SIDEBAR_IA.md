@@ -91,6 +91,7 @@ system, or split it; the variable set is untouched.
 | **S5** | *Unguarded exports.* `Download DAG (JSON)` and `Copy LaTeX` have no `store.size` guard and will emit an empty artifact silently, unlike their six guarded siblings. | `exportJson`, `copyLatex` |
 | **S6** | *`fix φ(0)=w₀` re-seeds destructively with no confirmation.* Its `change` handler calls `seedFromCurrent()` whenever `store.size`, discarding the derivation. `confirmReplace` guards the `s` accelerator but **not** this checkbox and **not** the `Generate / re-seed` button click. | sharpens open finding **4.13** with a mechanism |
 | **S7** | *Tooltip debt is larger than 4.3 closed.* Against the stated hard rule of ~120 chars: `solveNumeric` 489, `groebner` 433, `algFixW0` 371, `pin-data` 345, `saturate` 327, `bifurc-var` 303. Roughly 20 controls exceed it. Only 6 `data-str-title` hooks exist against ~53 hardcoded titles. | 4.3 fixed the CTA caption only |
+| **S9** ✅ | *Basis replacements discard inequality nodes silently.* Gröbner reports `skipped`; `saturateMobius` and `triangularizeNodes` did not. The univalence palette is mostly inequalities, so building constraints and reducing once destroys them — and `✦ Prove` saturates in its prelude. | **Fixed** — reproduced in-browser, see the 1.2 section |
 | **S8** | *Two sibling operations are two rows apart.* `Regular chains` is, by its own tooltip, "like Triangular decomp. above, but SATURATED by its initials" — the saturated form of its neighbour, filed in a different group. `doTriangular` even emits the unsaturated caveat that regular chains exists to remove. | `doDecompose`, `hasRegularityConditions` |
 
 ---
@@ -202,6 +203,49 @@ remembering, since the sidebar's sections are exactly such a list.
 
 ---
 
+## 1.2 — certified route vs. manual toolkit (shipped)
+
+Written up as a labeling gap. Investigating it turned up a **silent work-loss defect** underneath.
+
+### S9 — basis replacements discard inequality nodes without saying so
+
+A basis-replacement reduction (Gröbner · saturate · triangular · resultant) emits a fresh set of
+**equality** generators, so a `>` or `≠` node in the column is consumed *by omission* — it simply
+does not appear in the next one. Gröbner reported that as `skipped`. **`saturateMobius` and
+`triangularizeNodes` did not**, and the column diff showed only a bare `−N gone`, which reads
+exactly like the ordinary rewrite churn.
+
+It bites hardest on the **Univalence constraints** palette, whose content is mostly inequalities.
+Reproduced in-browser on the default system:
+
+```
+col 0   (●)₁ … (gauge), convex: Re(1+ζφ″/φ′) > 0, circle: ζζ̄ = 1
+        ↓ Saturate
+col 1   14 equality generators          ← the convexity condition is simply gone
+        diff: "+11 new · 3 carried · −4 gone"   ← the only trace, and it reads as churn
+```
+
+And `✦ Prove`'s prelude *saturates*, so proving after building constraints discards them on the way
+past — while never having read them anyway. The palette is a parallel route: `certifyLeaf` decides
+univalence by an exact Schur–Cohn fold plus a boundary-simplicity test on each reconstructed φ.
+
+**Fix.** `saturateMobius` and `triangularizeNodes` now return `skipped` in the same shape Gröbner
+uses, on every exit path including the early-outs. The toast **names** what went (`dropped 1
+inequality node (convex: Re(1+ζφ″/φ′) > 0)`), and the count is recorded in provenance so the column
+label carries it permanently — `↳ saturate · (1−z̄z) · ⚠ 1 inequality node dropped`. A toast is
+gone in seconds; this is the user's own modelling work, and it has to survive into an exported
+derivation.
+
+### The labeling half
+
+- **Reduce** opens with what the certified route actually runs: `✦ Prove` does *assume real →
+  propagate → saturate* by itself, and Gröbner / triangular / regular chains / minimal primes are
+  never run by it.
+- **Univalence constraints** says what it is: for your own analysis, not read by `✦ Prove`, and
+  dropped by any basis reduction.
+
+---
+
 ## The plan
 
 Tiers are ordered by leverage-per-risk. Each is independently shippable.
@@ -210,10 +254,8 @@ Tiers are ordered by leverage-per-risk. Each is independently shippable.
 
 **1.1 Bind the ①②③④ strip to real state** — closes **4.5**. ✅ **Shipped** — see below.
 
-**1.2 Separate the certified route from the manual toolkit** — §2 above. The cheapest honest
-version: a one-line caption on the manual block saying `✦ Prove` never runs these, and that they
-are for when it stalls. The fuller version reorders so the canonical prelude (assume → propagate →
-saturate) reads as a sequence.
+**1.2 Separate the certified route from the manual toolkit** — §2 above. ✅ **Shipped** — see below.
+It turned out to sit on top of a real defect, not just a labeling gap.
 
 **1.3 Resolve the scope inconsistency** — **S2**. ✅ **Shipped** — see the section above. Landed
 first, ahead of 1.1, because it was the one item here that could hand back a materially wrong
@@ -275,10 +317,19 @@ above is what it looked like in practice.
 
 ~~**Next: 1.1 (bind the step strip), then 1.2.**~~ **1.1 is done too.**
 
-**Next: 1.2** — separating the certified route from the manual toolkit, which is the last of the
-three Tier-1 items and the one that most changes how the panel reads. Tier 2 is cheap enough to
-fold into whichever branch touches those call sites; **2.4** (the 3+-selection silent no-op) is
-adjacent to the scope work and would reuse `SELECTION_SCOPED`.
+**Tier 1 is complete** — 1.1, 1.2 and 1.3 all shipped.
+
+**Next: Tier 2**, the honest-label cleanups. They are small and mechanical, and **2.4** (the
+3+-selection silent no-op) is adjacent to the scope work and would reuse `SELECTION_SCOPED`. After
+that, **Tier 3** (section order, closing 4.4) is now unblocked: 1.2 answered the question it was
+waiting on — Univalence constraints is off the certified path and now says so, which settles where
+it belongs in the order.
+
+Worth noting how the three Tier-1 items actually went: each was written up as a legibility problem
+and each turned out to sit on a concrete defect — a verdict that could describe a system you did
+not ask about (**S2**), a section-opener pointing at the wrong panel since #111 (**1.1**), and
+modelling work destroyed without notice (**S9**). *"The gap is almost entirely at the surfacing
+layer"* remains true, but the surfacing layer is where the bugs were hiding.
 
 Tier 4 is the item that would most change how the panel feels, and the one I would most want a
 design conversation about before building.

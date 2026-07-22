@@ -1666,8 +1666,17 @@ import _QD from '../solver.mjs';
     function saturateMobius(ids, opts) {
       const S = getSym();
       opts = opts || {};
-      const inputs = ((ids && ids.length) ? ids.map(get) : lastColumnNodes()).filter(Boolean).filter((n) => n.rel === '=');
-      if (!inputs.length) return { ok: false, reason: 'no equality nodes to saturate', created: [] };
+      const pool = ((ids && ids.length) ? ids.map(get) : lastColumnNodes()).filter(Boolean);
+      const inputs = pool.filter((n) => n.rel === '=');
+      // Non-equality nodes are CONSUMED BY OMISSION here: this emits a fresh equality basis, so a
+      // '>' or '≠' node in the column simply does not appear in the next one. Gröbner already
+      // reported that as `skipped`; saturate and triangularize dropped silently, which mattered
+      // most for the univalence palette — its conditions are mostly inequalities, so building them
+      // up and then reducing (or running ✦ Prove, whose prelude saturates) discarded them with no
+      // notice. The column diff showed only a bare "−N gone", indistinguishable from the ordinary
+      // rewrite churn. Same shape as groebner's so the UI can treat all four uniformly.
+      const skipped = pool.filter((n) => n.rel !== '=').map((n) => ({ id: n.id, label: n.label, rel: n.rel, reason: 'not an equality (' + n.rel + ')' }));
+      if (!inputs.length) return { ok: false, reason: 'no equality nodes to saturate', created: [], skipped };
       const polys = inputs.map((n) => n.poly), inputIds = inputs.map((n) => n.id);
       const vars = new Set();
       for (const p of polys) for (const v of p.vars()) vars.add(v);
@@ -1686,11 +1695,11 @@ import _QD from '../solver.mjs';
         const fac = one.sub(S.mpolyVar('zb' + a).mul(S.mpolyVar('z' + b)));   // 1 − z̄_a·z_b
         f = f ? f.mul(fac) : fac;
       }
-      if (!f) return { ok: false, reason: 'no Möbius denominator (z_j, z̄_j) present to saturate — the map variables may be pinned/eliminated', created: [] };
+      if (!f) return { ok: false, reason: 'no Möbius denominator (z_j, z̄_j) present to saturate — the map variables may be pinned/eliminated', created: [], skipped };
       let gens;
-      try { gens = S.saturate(polys, f, '_wsat', opts); } catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [] }; }
+      try { gens = S.saturate(polys, f, '_wsat', opts); } catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [], skipped }; }
       gens = (gens || []).filter((g) => !g.isZero());
-      if (!gens.length) return { ok: false, reason: 'saturation removed every generator (the system lies entirely on |z_j|=1)', created: [] };
+      if (!gens.length) return { ok: false, reason: 'saturation removed every generator (the system lies entirely on |z_j|=1)', created: [], skipped };
       checkpoint();
       const col = Math.max.apply(null, inputs.map((n) => n.column)) + 1;
       const created = [];
@@ -1698,13 +1707,13 @@ import _QD from '../solver.mjs';
         const node = addNode({
           id: nid(), kind: 'derived', poly, rel: '=',
           label: 'saturate ' + (i + 1) + '/' + gens.length + ' (∏(1−z̄z))', model,
-          provenance: { op: 'saturate', inputs: inputIds.slice(), factor: '(1−z̄z)', poles: poles.slice() },
+          provenance: { op: 'saturate', inputs: inputIds.slice(), factor: '(1−z̄z)', poles: poles.slice(), droppedNonEq: skipped.length },
           column: col, meta: {},
         });
         for (const src of inputIds) edges.push({ from: src, to: node.id });
         created.push(node);
       });
-      return { ok: true, created, poles: poles.slice() };
+      return { ok: true, created, poles: poles.slice(), skipped };
     }
 
     // QD.SymWorker handle (off-main-thread runner), or null if unavailable.
@@ -2252,19 +2261,23 @@ import _QD from '../solver.mjs';
     // Returns { ok, created[], column, contradiction, mainVars, freeVars } or { ok:false, reason }.
     function triangularizeNodes(ids, opts) {
       const S = getSym();
-      const inputs = ((ids && ids.length) ? ids.map(get) : lastColumnNodes()).filter(Boolean).filter((n) => n.rel === '=');
-      if (inputs.length < 1) return { ok: false, reason: 'no equality nodes to triangularize', created: [] };
+      const pool = ((ids && ids.length) ? ids.map(get) : lastColumnNodes()).filter(Boolean);
+      const inputs = pool.filter((n) => n.rel === '=');
+      // See saturateMobius: a chain is an equality basis, so '>' / '≠' nodes are consumed by
+      // omission. Reported in the same `skipped` shape groebner uses, rather than vanishing.
+      const skipped = pool.filter((n) => n.rel !== '=').map((n) => ({ id: n.id, label: n.label, rel: n.rel, reason: 'not an equality (' + n.rel + ')' }));
+      if (inputs.length < 1) return { ok: false, reason: 'no equality nodes to triangularize', created: [], skipped };
       const polys = inputs.map((n) => n.poly);
       const vars = _varsOf(polys);
       const res = S.triangularize(polys, vars, opts || {});
-      if (!res.ok) return { ok: false, reason: res.reason, created: [] };
+      if (!res.ok) return { ok: false, reason: res.reason, created: [], skipped };
       const inputIds = inputs.map((n) => n.id);
       checkpoint();
       const col = maxColumn() + 1;
       const created = [];
       const emit = (poly, label, meta) => {
         const node = addNode({ id: nid(), kind: 'derived', poly, rel: '=', label, model,
-          provenance: { op: 'triangular', inputs: inputIds.slice(), contradiction: !!res.contradiction, freeVars: (res.freeVars || []).slice() }, column: col, meta: meta || {} });
+          provenance: { op: 'triangular', inputs: inputIds.slice(), contradiction: !!res.contradiction, freeVars: (res.freeVars || []).slice(), droppedNonEq: skipped.length }, column: col, meta: meta || {} });
         for (const id of inputIds) edges.push({ from: id, to: node.id });
         created.push(node);
       };
@@ -2279,7 +2292,7 @@ import _QD from '../solver.mjs';
       // or miss components — the caller must show this caveat (a genuine regular-chain decomposition would
       // case-split on the initials). initialCount = the number of non-constant initials (the real conditions).
       const nonTrivialInit = (res.initials || []).filter((p) => p && p.vars && p.vars().size > 0 && !p.isZero());
-      return { ok: true, created, column: col, contradiction: !!res.contradiction, mainVars: res.mainVars || [], freeVars: res.freeVars || [], initialCount: nonTrivialInit.length, hasRegularityConditions: nonTrivialInit.length > 0 };
+      return { ok: true, created, column: col, contradiction: !!res.contradiction, mainVars: res.mainVars || [], freeVars: res.freeVars || [], initialCount: nonTrivialInit.length, hasRegularityConditions: nonTrivialInit.length > 0, skipped };
     }
 
     // Duplicate a node to start an alternative derivation line (accumulate alternatives).
