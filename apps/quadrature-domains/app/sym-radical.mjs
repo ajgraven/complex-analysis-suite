@@ -22,9 +22,24 @@ import _QD from './solver.mjs';
 // branches) — the latter is the correctness oracle: every returned root, with
 // the remaining variables set to random sample values, must satisfy p ≈ 0.
 //
-// NO radical SIMPLIFICATION/canonicalization — the formula is displayed as built
-// (Cardano/Ferrari nest deeply); rigor comes from the numeric oracle, not from
-// normalizing the surd. Pure module: no DOM; loads after sym-core.js.
+// NO radical canonicalization — no surd denesting, no attempt to recognise that two
+// differently-written radicals are equal. Cardano/Ferrari nest deeply and stay nested;
+// rigor comes from the numeric oracle, not from normalizing the surd.
+//
+// There IS exact TIDYING, added later: `simplifyRadical(node, S)` folds identities
+// (0+x, 0·x, 0/x, x/1, x^1, x^0, −(−x)), cancels common factors between a rational leaf's
+// numerator and denominator via gcdMV + exact division, and hoists negative monomials out of
+// products. This exists because RatFn is deliberately LAZY — add/mul/div cross-multiply and
+// never cancel, since a multivariate gcd per step would sit in the solver's hot loop — so a
+// closed form arrives carrying unit denominators, zero terms and uncancelled factors.
+// Tidying at DISPLAY time gets the readability without paying gcd during the solve.
+//
+// ⚠ Every rewrite is exact over ℚ(i), but "exact" is not "correct" — a bug here would change a
+// root while the header still read "verified ✓". The UI (algebra-ui's doSolveRadical) therefore
+// RE-VERIFIES the simplified roots against the original equation and falls back to the
+// unsimplified form if they do not clear the same bar. Keep that contract if you touch this.
+//
+// Pure module: no DOM; loads after sym-core.js.
 // =============================================================================
 
 (function (global) {

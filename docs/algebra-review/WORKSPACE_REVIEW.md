@@ -83,6 +83,24 @@ down.
 **The six-PR rework is complete.** P1 (#108) → P2 (#109) → P3 (#110) → P4 (#111, #112) → P5 (#115)
 → P6a (#116) → P6b (#117) → P6c (#118).
 
+**Post-rework, from real use** ([#122](https://github.com/ajgraven/complex-analysis-suite/pull/122)) —
+three reports from working the Cardioid example, all reproduced in-browser before any code changed:
+
+| Report | Finding |
+|---|---|
+| Solved roots carry redundant terms | **Root cause: `RatFn` never cancels.** add/mul/div cross-multiply by design — a multivariate gcd per step would sit in the solver's hot loop — so closed forms accumulate unit denominators, zero terms and common factors, and nothing removes them. Fixed at DISPLAY time (`simplifyRadical`), and the simplified form is **re-verified** before display: the "verified ✓" was earned by the *original* roots, and letting a simplifier bug inherit it would be a false `=` |
+| Results panel could not be collapsed | **A P6b regression of ours.** The `«` was on the dismissable verdict card, so `×` removed the only control that could reclaim the width — column stranded at 340px of a 920px row. Moved to the drawer head; the verdict's copy deleted rather than duplicated |
+| `fix φ(0)=w₀` appeared inert | **It works** (A/B verified: with it off the locator carries `+ w₀ − 2w₀z₁z̄₁ + w₀z₁²z̄₁²`). It SUBSTITUTES rather than constrains, so at w₀ = 0 the terms vanish instead of appearing. Column 0 now says so, naming any node at the gauge centre; `Pin known quadrature data` makes the collapse visible |
+
+The third is the one worth remembering, because it is a *class*: the workspace keeps quadrature
+data symbolic (it describes the family) but substitutes the gauge (it does not). Two "known"
+quantities treated oppositely, with no visible account of either — so a correct gauge and a broken
+one look identical. Any future option that bakes a value in should say what it baked.
+
+**Honest limit recorded with it:** `z₁ = 0` does **not** follow by algebra from the seeded system.
+Pinning makes it one factor of two; choosing it is a univalence argument. The UI says that rather
+than implying the system proved it.
+
 **What P6 settled.**
 
 - *The drawer costs no new grid track.* The results index and the verdict are the same concern —

@@ -3,7 +3,17 @@
 // (QD_UI.installAlgebra). Hosts a QD.AlgebraStore rendered by QD.AlgebraCanvas in
 // a full-area #algebra-graph surface over #plot-area, with sidebar controls in
 // #controls-algebra: seed the ORIGINAL (●)/(★)/gauge system from the current
-// classical-bounded solve (φ(0) fixed at generation time by default) at column 0,
+// classical-bounded solve at column 0. φ(0) is fixed at GENERATION time by default, and the
+// word to hold onto is SUBSTITUTED, not constrained: w₀ is replaced by its exact ℚ(i) value
+// and stops being a variable. When w₀ = 0 (the default — the centroid of the poles, and 0 for
+// most centred examples) its terms therefore VANISH rather than appear, so a correctly applied
+// gauge is indistinguishable from one that did nothing. That reads as a bug and was reported as
+// one. Column 0's header now states it ("w₀ := 0 substituted — not a variable here"), naming any
+// node that coincides with the gauge centre, because the locator row depends only on (aⱼ − w₀)
+// and such a coincidence makes a whole group drop out. `Pin known quadrature data`
+// (doPinKnownData) substitutes the solved aⱼ / C_{j,s} on demand so that collapse is visible —
+// the data is kept symbolic by default because the workspace describes the FAMILY, not one
+// member, which is the asymmetry that made the gauge look inert.
 // then apply AUDIT-TRAIL reductions that each append a new labeled column — Assume
 // real (identify v̄≡v), Specify value (fix a variable to an exact ℚ(i) value, auto-
 // propagating the linear cascade), pairwise resultant elimination (select 2 nodes +
@@ -37,7 +47,12 @@
 // in the canvas's bottom-left corner slot (mountReferenceCard → canvas.corner) — it describes the
 // map rather than acting on it, so it sits beside the equations, not above the controls (4.2).
 // The RESULTS DRAWER (renderDrawer → canvas.drawer) indexes every verdict this session above the
-// docked verdict card. Export covers DAG-JSON, LaTeX, and MATHEMATICA
+// docked verdict card. Its head also owns the « that collapses the WHOLE result column to a 34px
+// sliver (setResultColCollapsed): the drawer is present whenever the column is, whereas the
+// verdict card is dismissable — with the control on the card, pressing × removed the only way to
+// reclaim the width. Collapsed, the drawer keeps its head so the » remains reachable; there is
+// deliberately no second copy of this control to keep in sync.
+// Export covers DAG-JSON, LaTeX, and MATHEMATICA
 // (a column, all columns, or one node). provText/columnLabel/edgeLabel render provenance.op from
 // the PROV_UI registry (below) — the UI companion to the store's PROV_STORE; add a node type as one
 // record in each (both coverage-tested). ⚠ columnLabel resolves a FORK before the `c === 0` case:
