@@ -565,6 +565,13 @@ view is active.
   known data), and *Split into cases* (factor, minimal primes, regular chains — the branches' counts
   add up). Eliminating is its own act with its own button: it is not a mode of the Gröbner button,
   which always computes the plain basis in the monomial order set under Advanced.
+  **Operation scope.** Three operations — Existence / uniqueness, Saturate, Triangular decomp. —
+  run on the *canvas selection* when there is one; every other operation always uses the whole
+  current column. While a selection is live a banner at the top of the sections says so and names
+  them, and a result computed that way carries its scope in the verdict: a count over a strict
+  subset of the column is an **upper bound** on the full system's, since dropping equations can
+  only add solutions. (A selection reaching into earlier columns is a different system rather than
+  a subset, and is labelled as such instead of being given a bound.)
   A canvas toolbar carries zoom · fit · fit-width · expand / collapse · minimap · **focus mode**
   (isolate one equation's derivation) · node search · undo / redo. Selecting a node opens a
   contextual **inspector** with its full action set (Duplicate, Copy LaTeX, Copy Mathematica,

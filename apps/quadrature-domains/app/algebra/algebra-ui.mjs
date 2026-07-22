@@ -330,6 +330,22 @@ const QD = _QD;
     e: { sel: '#alg-export-json', name: 'Download the derivation (JSON)' },
     l: { sel: '#alg-focus',       name: 'Focus on the selected equation’s lineage' },
   };
+  // ── Which sidebar operations SILENTLY narrow to the canvas selection ────────────────────────
+  // Three of them do; their neighbours in the same sections always take the whole current column.
+  // Nothing said so, and the selection lives ~900px away on the canvas — so "Existence /
+  // uniqueness" could return a rigor-badged count for two equations out of sixteen, and read
+  // exactly like a verdict about the whole system. doClassify even KNEW (it skips caching the
+  // branch chip when a selection was used) without telling the user.
+  //
+  // This is the single source of truth for that set. It drives the pre-click banner AND the
+  // post-hoc caveat on the verdict, so the warning and the behaviour cannot drift apart. Adding a
+  // selection-aware op means adding it here; a `scopeCaveat` with no banner entry (or vice versa)
+  // is the drift this registry exists to prevent.
+  const SELECTION_SCOPED = [
+    { id: 'alg-classify',   label: 'Existence / uniqueness' },
+    { id: 'alg-saturate',   label: 'Saturate' },
+    { id: 'alg-triangular', label: 'Triangular decomp.' },
+  ];
   // The `?` cheatsheet's Algebra section. ui-strings has advertised "Press ? for shortcuts"
   // all along, and `?` did open an overlay — listing three generic lines (?, Esc, and a
   // Param-slice binding) on every tab, none of them an Algebra binding. The workspace has ~14.
@@ -1407,6 +1423,17 @@ const QD = _QD;
         // the seed buttons that act on it, in the primary row above.
         // ---- CONTEXTUAL NODE INSPECTOR (shown only when ≥1 node is selected) ----
         '<div id="alg-inspector" class="algebra-inspector hidden"></div>' +
+        // Scope banner: appears only while a selection is live, naming the ops that will narrow to
+        // it. Sits directly above the sections rather than beside any one button — the distinction
+        // it draws is between GROUPS of buttons, and repeating it per-control would put the same
+        // sentence in three places. Populated by renderScopeBanner.
+        //
+        // OUTSIDE #alg-sections, and that is load-bearing. A selection puts .is-behind-inspector on
+        // the sections, which fades them to opacity .55 — and `opacity` composites the whole
+        // subtree, so a child cannot opt out of it (a `.algebra-scope { opacity: 1 }` override
+        // inside was measured still rendering at .55). The banner would therefore have been dimmed
+        // by precisely the state it exists to warn about. As a sibling it keeps full contrast.
+        '<div id="alg-scope" class="algebra-scope hidden"></div>' +
         // ---- WORKFLOW SECTIONS (collapsible; hidden while the inspector is up) ----
         '<div id="alg-sections">' +
         // 1. Assume — reality / symmetry only. This section used to hold NINETEEN controls across four
@@ -2268,6 +2295,9 @@ const QD = _QD;
       const box = $('#alg-inspector'), sections = $('#alg-sections');
       if (!box) return;
       sel = (sel || []).filter((id) => store.get(id));
+      // onSelect is the single selection-change entry point, so the scope banner is refreshed here
+      // — including on the empty path, which is what clears it.
+      renderScopeBanner(sel);
       if (!sel.length) {
         box.classList.add('hidden'); box.innerHTML = '';
         if (sections) { sections.classList.remove('hidden'); sections.classList.remove('is-behind-inspector'); }
@@ -2470,7 +2500,7 @@ const QD = _QD;
       if (!r.ok) { showError('Saturate (admissibility): ' + withGuidance(r.reason || 'nothing to saturate')); return; }
       if (canvas) canvas.clearSelection();
       rerender(); refreshPickers();
-      toast('Saturated by ∏(1−z̄z): the |z_j| = 1 boundary stratum removed (' + r.created.length + ' generator' + (r.created.length === 1 ? '' : 's') + ') — the existence count is now the exact algebraic QD-solution count.');
+      toast('Saturated by ∏(1−z̄z): the |z_j| = 1 boundary stratum removed (' + r.created.length + ' generator' + (r.created.length === 1 ? '' : 's') + ')' + scopeNote(sel) + ' — the existence count is now the exact algebraic QD-solution count.');
     }
     // Triangular decomposition of the current system → a triangular chain column.
     function doTriangular() {
@@ -2482,8 +2512,11 @@ const QD = _QD;
       if (!r.ok) { showError('Triangular decomposition: ' + withGuidance(r.reason || 'failed')); return; }
       if (canvas) canvas.clearSelection();
       rerender();
-      if (r.contradiction) { toast('Triangular decomposition: system is INCONSISTENT — no solution.'); return; }
-      toast('Triangular decomposition: ' + r.created.length + ' element(s)' +
+      // Inconsistency is the one verdict that survives narrowing in the STRONG direction: adding the
+      // dropped equations back can only shrink the (already empty) variety. Still named, so "the
+      // system" is not left ambiguous about which one was tested.
+      if (r.contradiction) { toast('Triangular decomposition: system is INCONSISTENT — no solution' + scopeNote(sel) + (sel.length ? ' (so the full system is inconsistent too).' : '.')); return; }
+      toast('Triangular decomposition: ' + r.created.length + ' element(s)' + scopeNote(sel) +
         (r.freeVars.length ? '; free variable(s) ' + r.freeVars.map(latexPlain).join(', ') + ' ⇒ a positive-dimensional family' : ' ⇒ zero-dimensional (finitely many solutions)') +
         (r.hasRegularityConditions ? ' · ⚠ ' + r.initialCount + ' non-constant initial(s) — a Wu chain is NOT saturated by its pivots, so where an initial vanishes it may add spurious branches or miss components (a full regular-chain decomposition would case-split on the initials)' : ''));
     }
@@ -2519,6 +2552,58 @@ const QD = _QD;
       return '  [on the ' + s.join(' + ') + ' only — a specialization that can omit off-slice quadrature'
         + ' domains: a count here is a LOWER BOUND on the general one, and an empty/inconsistent verdict'
         + ' rules out only on-slice solutions.]';
+    }
+    // Companion to sliceCaveat for the OTHER way a verdict can silently describe less than the whole
+    // system: the op ran on the canvas selection. Every neighbouring caveat here (slice, factor
+    // branch, incomplete decomposition) was already stated; this one was not, so a count over two of
+    // sixteen equations rendered with a full rigor badge and no way to tell.
+    //
+    // The bound direction is only claimed when it holds. Dropping generators can only ENLARGE the
+    // variety (V(J) ⊇ V(I) for J ⊆ I), so a count over a strict subset of the current column is an
+    // upper bound on the full system's. A selection reaching into earlier columns is not a subset of
+    // anything current — it is a different system — and gets the scope statement with no bound.
+    function scopeCaveat(sel) {
+      if (!sel || !sel.length) return '';
+      const cur = store.currentColumnIds ? (store.currentColumnIds() || []) : [];
+      const curSet = new Set(cur);
+      const subsetOfCurrent = sel.every((id) => curSet.has(id));
+      const n = sel.length;
+      const head = '  [computed on the ' + n + ' selected equation' + (n === 1 ? '' : 's') + ' only';
+      if (!subsetOfCurrent) {
+        return head + ', which are not all part of the current system — this describes the selected'
+          + ' equations as a system of their own, and says nothing directly about the current one.]';
+      }
+      if (n >= cur.length) return '';   // the whole column happens to be selected: same scope, no caveat
+      return head + ', not the whole current system (' + cur.length + ') — dropping equations can only'
+        + ' add solutions, so this count is an UPPER BOUND on the full system’s.]';
+    }
+    // Short form of the same disclosure, for the toasts of the two scoped ops that MUTATE rather
+    // than report. Both assert something about "the system" — saturate even claims the count is now
+    // exact — so which system it was has to travel with the claim.
+    function scopeNote(sel) {
+      if (!sel || !sel.length) return '';
+      return ' · on the ' + sel.length + ' selected equation' + (sel.length === 1 ? '' : 's') + ' only';
+    }
+    // The pre-click half of the same problem: the selection lives on the canvas, ~900px from these
+    // buttons, so nothing warned BEFORE the op ran. Shown only while a selection is live.
+    function renderScopeBanner(sel) {
+      const el = $('#alg-scope');
+      if (!el) return;
+      sel = (sel || []).filter((id) => store.get(id));
+      const cur = store.currentColumnIds ? (store.currentColumnIds() || []) : [];
+      if (!sel.length) { el.classList.add('hidden'); el.textContent = ''; return; }
+      el.classList.remove('hidden');
+      el.textContent = '';
+      const names = SELECTION_SCOPED.map((o) => o.label);
+      const lead = document.createElement('strong');
+      lead.textContent = '⌖ ' + sel.length + ' equation' + (sel.length === 1 ? '' : 's') + ' selected.';
+      const rest = document.createElement('span');
+      // textContent throughout: node labels are not interpolated here, but the same innerHTML habit
+      // is what previously ate a row at the first bare '<'.
+      rest.textContent = ' ' + names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1]
+        + ' will use only those; every other operation uses the whole current column ('
+        + cur.length + ' equation' + (cur.length === 1 ? '' : 's') + ').';
+      el.appendChild(lead); el.appendChild(rest);
     }
     // Honest one-line size of a positive-dimensional verdict: the true Krull DIMENSION (the number
     // of free parameters, read off the leading-term staircase — roadmap #8) when the result carries
@@ -2863,6 +2948,9 @@ const QD = _QD;
         }
         // A reality/imaginary assumption slices the system — the count is a lower bound (honest labeling).
         verdict += sliceCaveat(r);
+        // …and so does running on a selection, which was the one narrowing this verdict never
+        // disclosed. Appended after sliceCaveat so the two read in the order they were applied.
+        verdict += scopeCaveat(sel);
         setStatus(verdict);
         if (canvas) showResult({ text: verdict, assumptions: specializationLedger(r), rigor: classifyRigor(r) });
         if (!sel) cacheActiveVerdict(r);   // A6: stamp the active branch's chip (whole last column analyzed)

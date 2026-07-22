@@ -1105,6 +1105,21 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   background: var(--c-border-soft); border: 1px solid var(--c-border);
 }
 #controls-algebra .algebra-hypotheses.hidden { display: none; }
+
+/* Scope banner — shown only while a canvas selection is live, naming the three operations that
+   will narrow to it. A SIBLING of #alg-sections, not a child: a selection fades the sections to
+   opacity .55 via .is-behind-inspector, and opacity composites the entire subtree, so a child
+   cannot opt back out (an `opacity: 1` override inside was measured still rendering at .55). The
+   banner would have been dimmed by exactly the state it warns about.
+   Colours: the info surface (this is a notice, not an error) with the warn border for caution.
+   --c-warn-bg / --c-warn-text do NOT exist — only --c-warn does; reaching for them would have
+   re-created the phantom-token defect the fallback sweep cleaned up. */
+#controls-algebra .algebra-scope {
+  margin: 0 0 6px; padding: 4px 7px; font-size: 11px; line-height: 1.4; border-radius: 4px;
+  background: var(--c-info-bg); border: 1px solid var(--c-warn);
+  color: var(--c-info-text);
+}
+#controls-algebra .algebra-scope.hidden { display: none; }
 #controls-algebra .algebra-hyp-label {
   font-weight: 600; color: var(--c-muted); text-transform: uppercase;
   letter-spacing: 0.02em; font-size: 9px; margin-right: 2px;
