@@ -1345,9 +1345,21 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   font-size: 70%; color: var(--c-muted); margin: 4px 0 2px;
 }
 #controls-algebra .algebra-steps.hidden { display: none; }
-#controls-algebra .algebra-steps span {
-  background: var(--c-border-soft); border-radius: 8px; padding: 1px 7px; white-space: nowrap;
+/* Each step is a real button now (it opens its section), not a decorative <span>.
+   State is carried by the BORDER plus the step's own detail text ("✓" / "stale" / "re-seed"),
+   never by text colour alone: at this size (70%) a saturated --c-ok would land near 3.4:1 on the
+   chip background, and low-contrast small text is already an open finding — so the label stays at
+   --c-muted-2 and colour is an accent. That also keeps the states distinguishable without relying
+   on hue. */
+#controls-algebra .algebra-step {
+  font: inherit; color: var(--c-muted-2); background: var(--c-border-soft);
+  border: 1px solid transparent; border-radius: 8px; padding: 1px 7px;
+  white-space: nowrap; cursor: pointer;
 }
+#controls-algebra .algebra-step:hover { background: var(--c-hover); }
+#controls-algebra .algebra-step.is-done  { border-color: var(--c-ok); background: var(--c-surface); }
+#controls-algebra .algebra-step.is-stale { border-color: var(--c-warn); background: var(--c-surface); }
+#controls-algebra .algebra-step.is-next  { border-color: var(--c-link); color: var(--c-text); font-weight: 600; }
 #controls-algebra .algebra-steps-x {
   margin-left: auto; border: none; background: transparent; cursor: pointer;
   font-size: 13px; line-height: 1; color: var(--c-muted); padding: 0 2px;
