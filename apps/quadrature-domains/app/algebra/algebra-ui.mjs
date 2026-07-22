@@ -363,6 +363,58 @@ const QD = _QD;
     { id: 'alg-saturate',   label: 'Saturate' },
     { id: 'alg-triangular', label: 'Triangular decomp.' },
   ];
+  // ── The elimination lens ────────────────────────────────────────────────────────────────────
+  // Thirteen operations remove a variable, spread across Assume, Pin values, Edit system, Reduce,
+  // Analyze, the node inspector and a header checkbox. No sectioning fixes that, because the
+  // concept is orthogonal to the sections — so the panel answers the question from the other end:
+  // pick a VARIABLE, and be told which of the thirteen apply to it and where each one lives.
+  //
+  // The subtlety that makes this worth building rather than documenting: **assuming a variable
+  // real does not remove that variable — it removes its CONJUGATE.** Identifying v̄ ≡ v drops v̄
+  // and keeps v. So the honest answer to "how do I get rid of z̄₁" is "assume z₁ real", which
+  // names a different variable than the one asked about, and the naive answer is simply wrong.
+  // Pinning is the mirror case: substituteValues fixes a value AND its conjugate, so one pin
+  // removes two.
+  //
+  // Pure and exposed on QD_UI so the routing table is tested without a DOM. `where` is a section
+  // name for openSection, or null when the act does not live in a section.
+  // `fmt` renders a variable name for display (latexPlain in the app). Defaults to identity so
+  // the routing table stays testable on raw names, which are the stable thing to assert on.
+  function variableRemovals(v, fmt) {
+    const f = fmt || ((x) => x);
+    const out = [];
+    if (v.isW0) {
+      out.push({ key: 'fix-w0', label: 'Fix φ(0) = w₀', where: null,
+        note: 'the header checkbox — substitutes w₀ away and re-seeds' });
+    }
+    // Removing a conjugate: assume its PRIMAL partner real (or imaginary). Naming the partner is
+    // the point — "assume real" alone would send the user to the wrong variable.
+    if (v.conjOf && !v.isReal && !v.isImag) {
+      out.push({ key: 'assume-real', label: 'Assume ' + f(v.conjOf) + ' real', where: 'Assume',
+        note: 'identifies ' + f(v.name) + ' ≡ ' + f(v.conjOf) + ', so ' + f(v.name) + ' stops being a variable' });
+    }
+    // Assuming a BASE variable real removes its conjugate, not itself — offered, but labelled for
+    // what it actually does, so the row cannot be misread as self-removal.
+    if (v.isBase && v.conjName && !v.isReal && !v.isImag) {
+      out.push({ key: 'assume-real-partner', label: 'Assume real', where: 'Assume',
+        note: 'removes ' + f(v.conjName) + ' (its conjugate) — ' + f(v.name) + ' itself stays' });
+    }
+    if (!v.isPinned) {
+      out.push({ key: 'pin', label: 'Pin a value', where: 'Pin values',
+        note: v.conjName ? 'also fixes ' + f(v.conjName) + ' — one pin removes both' : 'substitutes an exact ℚ(i) value' });
+    }
+    out.push({ key: 'eliminate', label: 'Eliminate', where: 'Reduce',
+      note: 'Gröbner in a block order — keeps every consequence in the survivors' });
+    if (v.inGauge) {
+      out.push({ key: 'gauge', label: 'Eliminate with gauge', where: 'Reduce',
+        note: 'the gauge equation shares it, so one resultant pass clears it' });
+    }
+    if (v.uses >= 2) {
+      out.push({ key: 'resultant', label: 'Resultant', where: null,
+        note: 'select two of the ' + v.uses + ' equations holding it on the canvas' });
+    }
+    return out;
+  }
   // ── The ①②③④ workflow strip ─────────────────────────────────────────────────────────────────
   // Four static <span>s with no handler, no state binding and no current-step marker: it asserted
   // a fixed four-step procedure and then never said where you were in it, which of the four you
@@ -510,7 +562,7 @@ const QD = _QD;
     function rerender() {
       if (canvas) canvas.render(store, latexOf);
       renderInspector(canvas ? canvas.getSelection() : []); buildBreadcrumb(); buildTrackBar();
-      renderSuggestions(); renderHypotheses(); renderSteps(); refreshUndoButtons(); scheduleAutosave(); refreshStatusBar();
+      renderSuggestions(); renderHypotheses(); renderSteps(); renderVarLens(); refreshUndoButtons(); scheduleAutosave(); refreshStatusBar();
       // Every stored result's state is relative to the CURRENT branch and frontier, and this is
       // the function that changes both. Without redrawing here, a reduction would leave results
       // still labelled "current" for a system that no longer exists.
@@ -811,6 +863,81 @@ const QD = _QD;
       if (!v.im) return f(v.re);
       if (!v.re) return f(v.im) + 'i';
       return f(v.re) + (v.im < 0 ? ' − ' : ' + ') + f(Math.abs(v.im)) + 'i';
+    }
+    // Live facts per variable in the CURRENT column, feeding variableRemovals. Ordered by how many
+    // equations hold the variable, descending — the ones costing the most are the ones worth
+    // removing, and that ranking is the answer to "which should I attack?" that a flat picker
+    // cannot give.
+    function variableCensus() {
+      // orderedColumn, not currentColumnIds: the latter filters to equalities, and an inequality
+      // node holds variables too — a census that ignored them would under-report exactly the
+      // univalence-constraint variables 1.2 was about.
+      const nodes = (store.orderedColumn ? store.orderedColumn(store.maxColumn()) : []).filter(Boolean);
+      const uses = new Map();
+      nodes.forEach((n) => {
+        const vs = (n.poly && n.poly.vars) ? n.poly.vars() : [];
+        for (const v of vs) uses.set(v, (uses.get(v) || 0) + 1);
+      });
+      const base = new Set(store.baseVariables ? store.baseVariables() : []);
+      const known = (store.knownValues && store.knownValues()) || {};
+      const real = new Set(store.realVars || []), imag = new Set(store.imagVars || []);
+      const conjOf = (name) => (QC && typeof QC.conjVarName === 'function') ? QC.conjVarName(name) : null;
+      const gaugeNode = nodes.find((n) => n.meta && n.meta.block === 'gauge');
+      const gaugeVars = gaugeNode && gaugeNode.poly && gaugeNode.poly.vars ? new Set(gaugeNode.poly.vars()) : new Set();
+      const all = [...uses.keys()].sort((a, b) => (uses.get(b) - uses.get(a)) || a.localeCompare(b));
+      return all.map((name) => {
+        const c = conjOf(name);
+        // `name` is a conjugate iff conjugating it yields a primal base variable.
+        const partner = (c && base.has(c)) ? c : null;
+        return {
+          name,
+          uses: uses.get(name) || 0,
+          total: nodes.length,
+          isBase: base.has(name),
+          conjName: (c && c !== name && base.has(name)) ? c : null,
+          conjOf: partner,
+          isReal: real.has(name) || (partner && real.has(partner)),
+          isImag: imag.has(name) || (partner && imag.has(partner)),
+          isPinned: Object.prototype.hasOwnProperty.call(known, name),
+          inGauge: gaugeVars.has(name),
+          isW0: /^w_?0$/.test(name),
+        };
+      });
+    }
+    // Render the lens. Each removal routes to the section that OWNS it — the panel's whole claim is
+    // that the answer lives elsewhere, so it opens that elsewhere rather than duplicating controls.
+    // No mutation logic of its own: every row is navigation, so the existing gates and confirms on
+    // those controls stay the single place that decides whether an act may run.
+    function renderVarLens() {
+      const box = $('#alg-varlens'); if (!box) return;
+      const rows = store.size ? variableCensus() : [];
+      box.textContent = '';
+      if (!rows.length) {
+        const p = document.createElement('div'); p.className = 'hint';
+        p.textContent = store.size ? 'No variables in the current column.' : 'Generate a system first.';
+        box.appendChild(p); return;
+      }
+      rows.forEach((v) => {
+        const row = document.createElement('div'); row.className = 'algebra-varlens-row';
+        const head = document.createElement('div'); head.className = 'algebra-varlens-head';
+        const nm = document.createElement('strong'); nm.textContent = latexPlain(v.name);
+        const cnt = document.createElement('span'); cnt.className = 'hint';
+        cnt.textContent = ' in ' + v.uses + ' of ' + v.total + (v.isReal ? ' · assumed real' : '')
+          + (v.isImag ? ' · assumed imaginary' : '') + (v.isPinned ? ' · pinned' : '');
+        head.appendChild(nm); head.appendChild(cnt); row.appendChild(head);
+        const acts = document.createElement('div'); acts.className = 'algebra-varlens-acts';
+        variableRemovals(v, latexPlain).forEach((r) => {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = 'small algebra-varlens-act';
+          b.textContent = r.label; b.title = r.note;
+          b.addEventListener('click', () => {
+            if (r.where) { openSection(r.where); const d = $('#alg-sections'); if (d) d.classList.remove('is-behind-inspector'); }
+            toast(latexPlain(v.name) + ' — ' + r.label + ': ' + r.note);
+          });
+          acts.appendChild(b);
+        });
+        row.appendChild(acts); box.appendChild(row);
+      });
     }
     // Gather the live facts the strip's state machine reads. Each is the SAME signal the panel
     // already displays elsewhere, so the strip cannot disagree with the thing it summarizes:
@@ -1636,6 +1763,12 @@ const QD = _QD;
         // This also carries the pointer to the two-node resultant, which is the same act living in
         // the inspector — the split that made elimination hard to find in the first place.
         '      <div class="hint algebra-elim-hint">Exact over ℚ(i): a Gröbner basis in a block elimination order, whose generators in the remaining variables are the elimination ideal. <strong>Between two equations</strong> instead — select both on the canvas; the inspector offers the Sylvester resultant in one shared variable.</div>' +
+        // The elimination lens. Asks the question from the variable's end, and routes to whichever
+        // section owns each answer — the panel's claim is that the answer lives elsewhere, so it
+        // opens that elsewhere rather than duplicating the control.
+        '      <details class="algebra-advanced algebra-varlens-wrap"><summary>Which variable? — what removes each one</summary>' +
+        '        <div id="alg-varlens" class="algebra-varlens"></div>' +
+        '      </details>' +
         // Two headings, not one. "Same solutions, better shape" is TRUE of Gröbner and the
         // triangular chain and FALSE of the other three: Saturate deletes the |z_j|=1 stratum,
         // Pin known data specializes the family to one domain, and Propagate ADDS constraint nodes.
@@ -4469,6 +4602,7 @@ const QD = _QD;
   QD_UI.WORKFLOW_STEPS = WORKFLOW_STEPS;             // the ①②③④ strip's steps + the section each opens
   QD_UI.workflowStepStates = workflowStepStates;     // …and the done/stale/todo state machine (pure)
   QD_UI.SELECTION_SCOPED = SELECTION_SCOPED;         // ops that narrow to the canvas selection (pure data)
+  QD_UI.variableRemovals = variableRemovals;         // the elimination lens's per-variable routing table (pure)
   QD_UI.suggestAutoOpen = suggestAutoOpen;           // …and its expand/collapse decision (pure)
   QD_UI.SUGGEST_AUTO_OPEN_MAX = AUTO_OPEN_MAX;
 })();

@@ -568,6 +568,13 @@ view is active.
   known data), and *Split into cases* (factor, minimal primes, regular chains — the branches' counts
   add up). Eliminating is its own act with its own button: it is not a mode of the Gröbner button,
   which always computes the plain basis in the monomial order set under Advanced.
+  **Which variable?** — inside *Eliminate variables* — is the elimination lens: thirteen operations
+  across the app remove a variable, so rather than asking which technique you want, it lists each
+  variable in the current column (ordered by how many equations hold it) with the acts that would
+  remove *it* and where each lives. It states the asymmetry that trips people up: assuming a
+  variable real removes its **conjugate**, not itself — so removing `z̄₁` means "assume `z₁` real" —
+  and pinning fixes the conjugate too, so one pin removes two. Rows navigate; they do not act, so
+  each operation's own gates and confirmations stay the only thing that decides whether it runs.
   **Operation scope.** Three operations — Existence / uniqueness, Saturate, Triangular decomp. —
   run on the *canvas selection* when there is one; every other operation always uses the whole
   current column. While a selection is live a banner at the top of the sections says so and names
