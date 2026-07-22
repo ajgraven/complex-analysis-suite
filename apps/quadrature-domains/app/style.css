@@ -1151,6 +1151,11 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
 #controls-algebra .algebra-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 #controls-algebra .algebra-line-label { font-size: 11px; font-weight: 600; color: var(--c-muted); }
 
+/* Caption under the "Eliminate variables" buttons. Carries what used to be a ~275-char `title`
+   (over the ~120-char hard rule) plus the pointer to the two-node Sylvester resultant in the
+   inspector. Indented to read as belonging to the buttons above it rather than the next group. */
+#controls-algebra .algebra-elim-hint { margin: 2px 0 0 2px; }
+
 /* "Set values" multi-row table */
 #controls-algebra .algebra-value-row { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
 #controls-algebra .algebra-value-row select { max-width: 116px; flex: 1 1 auto; }

@@ -448,6 +448,16 @@ snapshot. The sidebar now has **8** sections — 4.7 split "Assumptions" into As
 Edit system — and the open state persists per-section, so "1 of N by default" no longer applies
 after the first visit.)*
 
+> **See also [`SIDEBAR_IA.md`](SIDEBAR_IA.md)** — a deeper pass on *why* the panel reads as it does,
+> written after the Tier-4 structural items shipped. It carries eight new verified findings
+> (**S1**–**S8**) and a tiered plan. Three of its diagnoses cut across the numbering here: the
+> sidebar is grouped by **technique rather than task**; it gives the **manual escape hatches the
+> same weight as the certified route** (`✦ Prove` never calls Gröbner, triangular decomposition,
+> regular chains or minimal primes — verified against `prove-plan.mjs`); and **elimination is a
+> cross-cutting concept**, thirteen operations across seven locations, which no re-sectioning can
+> fix. Open items **4.4**, **4.5**, **4.12** and **4.13** are sequenced inside its plan rather than
+> restated here.
+
 ### 4.1 ✅ Four buttons labeled "Apply"; two labeled "Copy"
 `alg-real-apply`, `alg-val-apply`, `alg-def-apply`, `alg-eq-apply` — all labeled exactly **"Apply"**.
 `alg-copy-mma`, `alg-copy-cas` — both exactly **"Copy"**. The only disambiguator is an 11px muted
