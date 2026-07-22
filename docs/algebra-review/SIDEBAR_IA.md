@@ -158,18 +158,57 @@ longer happen without being said.
 
 ---
 
+## 1.1 — the ①②③④ strip (shipped)
+
+Closes **4.5**. Binding rather than deleting was the right branch of the review's either/or, and it
+is right *now* specifically because Phases A–E gave the workspace a real state model to bind to.
+
+The strip is a **readout, not a progress bar** — and the difference is the point. Each step is
+`done` / `stale` / `todo`, plus one marked `next`:
+
+| Step | done when | detail shown |
+|---|---|---|
+| ① Seed | a system exists | `5 eqns` (or `re-seed` when stale) |
+| ② Assume | any active hypothesis | how many |
+| ③ Reduce | ≥1 reduction column | `col 3` |
+| ④ Analyze | a stored result still describes the current system | `✓`, or `stale` |
+
+Every fact comes from the signal the panel *already* displays elsewhere, so the strip cannot
+disagree with what it summarizes: hypotheses are the chips `renderHypotheses` builds, `staleSeed`
+is exactly what `ensureSeed` refuses on, and ④ reuses the results drawer's own current/stale/branch
+decision. **Progress can therefore go backwards** — reduce after analyzing and ④ drops from `✓` to
+`stale`, because the verdict no longer describes the system. A progress bar could not say that.
+
+Two behaviours worth recording:
+
+- **A stale seed is the next action even when later steps show work.** `ensureSeed` refuses every
+  downstream operation, so pointing at Reduce would point at buttons that will not run.
+- **Steps are buttons that open their section**, which fixes the strip's old habit of naming panels
+  that are collapsed by default and then not opening them. ✦ Prove is named in the tips: it
+  performs all four, so running it lights the whole strip — the clearest available account of what
+  it did.
+
+### A latent bug this uncovered
+
+The one pre-existing caller of "open a section" used `details.algebra-section:nth-of-type(2)`. That
+meant **Reduce** when written, because *Assumptions* was then a single section. Finding **4.7** split
+it into Assume / Pin values / Edit system, pushing Reduce from 2nd to 4th — and the selector went on
+silently opening **"Pin values"** while running a decomposition whose controls live in Reduce.
+Nothing threw; the wrong panel just unfolded. Confirmed in-browser, then replaced with a by-name
+`openSection` helper that both call sites now share.
+
+*Positional selectors over a list a later refactor can reorder are the hazard here* — worth
+remembering, since the sidebar's sections are exactly such a list.
+
+---
+
 ## The plan
 
 Tiers are ordered by leverage-per-risk. Each is independently shippable.
 
 ### Tier 1 — make the canonical path visible *(recommended first)*
 
-**1.1 Bind the ①②③④ strip to real state** — closes **4.5**. It is currently decoration, and the
-review authorizes either binding or deleting it. Binding is now the right call *because there is
-finally a state model to bind to*: `ProofTree` / `ProofResult` landed in Phases A–E. Each step
-reflects what the store has actually done (assumptions present? reductions? verdict recorded?) and
-clicking it opens and scrolls to the owning section. This also fixes the strip's silent lie that
-steps ③ and ④ point at sections which are collapsed by default.
+**1.1 Bind the ①②③④ strip to real state** — closes **4.5**. ✅ **Shipped** — see below.
 
 **1.2 Separate the certified route from the manual toolkit** — §2 above. The cheapest honest
 version: a one-line caption on the manual block saying `✦ Prove` never runs these, and that they
@@ -234,9 +273,12 @@ identity.
 measurement: it was a correctness-shaped bug wearing UI clothing, and the dimension-2-vs-1 split
 above is what it looked like in practice.
 
-**Next: 1.1 (bind the step strip), then 1.2.** Tier 2 is cheap enough to fold into whichever branch
-touches those call sites — 2.4 in particular (the 3+-selection silent no-op) is adjacent to the
-scope work just shipped and would reuse the same registry.
+~~**Next: 1.1 (bind the step strip), then 1.2.**~~ **1.1 is done too.**
+
+**Next: 1.2** — separating the certified route from the manual toolkit, which is the last of the
+three Tier-1 items and the one that most changes how the panel reads. Tier 2 is cheap enough to
+fold into whichever branch touches those call sites; **2.4** (the 3+-selection silent no-op) is
+adjacent to the scope work and would reuse `SELECTION_SCOPED`.
 
 Tier 4 is the item that would most change how the panel feels, and the one I would most want a
 design conversation about before building.

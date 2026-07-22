@@ -346,6 +346,49 @@ const QD = _QD;
     { id: 'alg-saturate',   label: 'Saturate' },
     { id: 'alg-triangular', label: 'Triangular decomp.' },
   ];
+  // ── The ①②③④ workflow strip ─────────────────────────────────────────────────────────────────
+  // Four static <span>s with no handler, no state binding and no current-step marker: it asserted
+  // a fixed four-step procedure and then never said where you were in it, which of the four you
+  // had done, or that ✦ Prove performs all four in one click. Two of its steps named sections that
+  // are collapsed by default, so it pointed at things it did not open.
+  //
+  // `section` is the panel a step opens when clicked, looked up BY NAME (see openSection). null =
+  // the pinned header, which is not a section. Step ② covers Assume / Pin values / Edit system —
+  // the three panels the old single "Assumptions" section became — and opens the first.
+  const WORKFLOW_STEPS = [
+    { n: '①', label: 'Seed',    section: null,      key: 'seed' },
+    { n: '②', label: 'Assume',  section: 'Assume',  key: 'assume' },
+    { n: '③', label: 'Reduce',  section: 'Reduce',  key: 'reduce' },
+    { n: '④', label: 'Analyze', section: 'Analyze', key: 'analyze' },
+  ];
+  // One line each — the strip is a readout, not documentation (the ~120-char tooltip rule).
+  // ✦ Prove is named here because it performs all four, which the strip never used to admit:
+  // running it lights every step, and that is the clearest way to show what it did.
+  const STEP_TIPS = {
+    seed:    'Build the original system from the current solve. ✦ Prove does this and the next three.',
+    assume:  'Reality / symmetry, pinned values, and edits — the specializations that make it tractable.',
+    reduce:  'Eliminate, rewrite, narrow, or split into cases.',
+    analyze: 'Count solutions, solve, certify univalence. A result goes stale when the system changes.',
+  };
+  // Pure state machine for the strip, module scope so it can be tested without a live store.
+  // `done` marks a step whose work is present in the workspace RIGHT NOW; `next` is the first
+  // step that is not done, i.e. the honest "you are here". A `stale` step is one whose work
+  // exists but no longer describes the current system — the same distinction the results drawer
+  // draws, and the reason this is not a plain progress bar: progress can go backwards here.
+  function workflowStepStates(f) {
+    const st = {
+      seed:    f.seeded ? (f.staleSeed ? 'stale' : 'done') : 'todo',
+      assume:  f.hypotheses > 0 ? 'done' : 'todo',
+      reduce:  f.reductions > 0 ? 'done' : 'todo',
+      // A result that exists but describes an earlier frontier is NOT an analyzed current system.
+      analyze: f.resultCurrent ? 'done' : (f.resultAny ? 'stale' : 'todo'),
+    };
+    const order = WORKFLOW_STEPS.map((s) => s.key);
+    // A stale seed blocks everything downstream (ensureSeed refuses), so it is the next action
+    // even though later steps may still show work from before the solve changed.
+    const next = st.seed === 'stale' ? 'seed' : (order.find((k) => st[k] === 'todo') || null);
+    return { states: st, next };
+  }
   // The `?` cheatsheet's Algebra section. ui-strings has advertised "Press ? for shortcuts"
   // all along, and `?` did open an overlay — listing three generic lines (?, Esc, and a
   // Param-slice binding) on every tab, none of them an Algebra binding. The workspace has ~14.
@@ -429,10 +472,28 @@ const QD = _QD;
     // grows (or the branch changes), bring the new current column into view. The movement IS the
     // feedback. Tracked here rather than in the canvas because only the caller knows what changed.
     let _lastMaxCol = -1, _lastTrack = null;
+    // Open (and scroll to) a workflow section BY NAME. Sections are keyed by their summary text in
+    // `data-section`, set by wireSectionPersistence.
+    //
+    // The one previous caller of this idea used `details.algebra-section:nth-of-type(2)` to reach
+    // "Reduce" — correct when written, because "Assumptions" was then a single section. Splitting it
+    // into Assume / Pin values / Edit system pushed Reduce from 2nd to 4th, and the selector went on
+    // silently opening whichever section now sat at index 2 ("Pin values") while running an
+    // operation whose controls live in Reduce. Nothing failed loudly; the wrong panel just unfolded.
+    // Positional selectors over a list that a later refactor can reorder are the hazard — hence a
+    // name lookup, and one helper rather than a second hand-rolled query.
+    function openSection(name) {
+      const sec = $('#alg-sections'); if (!sec) return null;
+      const d = sec.querySelector('details.algebra-section[data-section="' + name + '"]');
+      if (!d) return null;
+      d.open = true;
+      if (d.scrollIntoView) d.scrollIntoView({ block: 'nearest' });
+      return d;
+    }
     function rerender() {
       if (canvas) canvas.render(store, latexOf);
       renderInspector(canvas ? canvas.getSelection() : []); buildBreadcrumb(); buildTrackBar();
-      renderSuggestions(); renderHypotheses(); refreshUndoButtons(); scheduleAutosave(); refreshStatusBar();
+      renderSuggestions(); renderHypotheses(); renderSteps(); refreshUndoButtons(); scheduleAutosave(); refreshStatusBar();
       // Every stored result's state is relative to the CURRENT branch and frontier, and this is
       // the function that changes both. Without redrawing here, a reduction would leave results
       // still labelled "current" for a system that no longer exists.
@@ -733,6 +794,55 @@ const QD = _QD;
       if (!v.im) return f(v.re);
       if (!v.re) return f(v.im) + 'i';
       return f(v.re) + (v.im < 0 ? ' − ' : ' + ') + f(Math.abs(v.im)) + 'i';
+    }
+    // Gather the live facts the strip's state machine reads. Each is the SAME signal the panel
+    // already displays elsewhere, so the strip cannot disagree with the thing it summarizes:
+    // hypotheses are the chips renderHypotheses builds, staleSeed is exactly what ensureSeed
+    // refuses on, and resultCurrent is the drawer's own current/stale/branch decision.
+    function workflowFacts() {
+      const known = (store.knownValues && store.knownValues()) || {};
+      const hypotheses = (store.realVars || []).length + (store.imagVars || []).length
+        + (store.w0Fixed ? 1 : 0) + Object.keys(known).filter((k) => k !== 'w0').length;
+      const any = _results.length > 0;
+      return {
+        seeded: store.size > 0,
+        staleSeed: !!(activeEnv && _seededHData && _seededHData !== activeEnv.hData),
+        hypotheses,
+        reductions: store.size ? store.maxColumn() : 0,
+        resultAny: any,
+        resultCurrent: any && _results.some((r) => resultState(r) === 'current'),
+      };
+    }
+    // Render the strip. Each step is a real button that opens its section — two of the four named
+    // panels that are collapsed by default, so the strip previously pointed at things it would not
+    // open. ① has no section (seeding lives in the pinned header); it focuses the seed button.
+    function renderSteps() {
+      const box = $('#alg-steps'); if (!box) return;
+      const facts = workflowFacts();
+      const { states, next } = workflowStepStates(facts);
+      const detail = {
+        seed:    states.seed === 'stale' ? 're-seed' : (states.seed === 'done' ? store.size + ' eqns' : ''),
+        assume:  states.assume === 'done' ? String(facts.hypotheses) : '',
+        reduce:  states.reduce === 'done' ? 'col ' + store.maxColumn() : '',
+        analyze: states.analyze === 'stale' ? 'stale' : (states.analyze === 'done' ? '✓' : ''),
+      };
+      const keep = box.querySelector('#alg-steps-x');
+      box.innerHTML = '';
+      WORKFLOW_STEPS.forEach((s) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'algebra-step is-' + states[s.key] + (next === s.key ? ' is-next' : '');
+        b.dataset.step = s.key;
+        b.textContent = s.n + ' ' + s.label + (detail[s.key] ? ' · ' + detail[s.key] : '');
+        b.title = STEP_TIPS[s.key] + (next === s.key ? '  (next)' : '');
+        b.setAttribute('aria-current', next === s.key ? 'step' : 'false');
+        b.addEventListener('click', () => {
+          if (s.section) { openSection(s.section); const d = $('#alg-sections'); if (d) d.classList.remove('is-behind-inspector'); }
+          else { const seed = $('#alg-seed'); if (seed) seed.focus(); }
+        });
+        box.appendChild(b);
+      });
+      if (keep) box.appendChild(keep);
     }
     function renderHypotheses() {
       const box = $('#alg-hypotheses'); if (!box) return;
@@ -3124,7 +3234,7 @@ const QD = _QD;
       // card's other actions depend on spuriousFactors finding something, which it often does not.
       actions.push({ label: 'Decompose into components',
         title: 'Split V(I) into irreducible components (minimal primes) and enter one. Each is analyzed alone and the existence counts add up — the standard route out of an underdetermined system.',
-        onClick: () => { const sec = $('#alg-sections'); if (sec) { const d = sec.querySelector('details.algebra-section:nth-of-type(2)'); if (d) d.open = true; } doDecompose('components'); } });
+        onClick: () => { openSection('Reduce'); doDecompose('components'); } });
       if (canvas) showResult({ text, actions: actions.slice(0, 6), assumptions: specializationLedger(cl), rigor: 'unknown' });
       setStatus(text); toast('Positive-dimensional — fix the gauge / pin a forced variable.', { kind: 'error' });
     }
@@ -4264,6 +4374,9 @@ const QD = _QD;
   QD_UI.ALGEBRA_KEY_ACTIONS = KEY_ACTIONS;           // single-key accelerator table (pure data)
   QD_UI.algebraShortcutItems = algebraShortcutItems; // …and the `?` cheatsheet it generates (pure)
   QD_UI.suggestSummaryLabel = suggestSummaryLabel;   // collapsed suggestion-list <summary> label (pure)
+  QD_UI.WORKFLOW_STEPS = WORKFLOW_STEPS;             // the ①②③④ strip's steps + the section each opens
+  QD_UI.workflowStepStates = workflowStepStates;     // …and the done/stale/todo state machine (pure)
+  QD_UI.SELECTION_SCOPED = SELECTION_SCOPED;         // ops that narrow to the canvas selection (pure data)
   QD_UI.suggestAutoOpen = suggestAutoOpen;           // …and its expand/collapse decision (pure)
   QD_UI.SUGGEST_AUTO_OPEN_MAX = AUTO_OPEN_MAX;
 })();

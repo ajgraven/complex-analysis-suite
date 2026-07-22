@@ -572,6 +572,11 @@ view is active.
   subset of the column is an **upper bound** on the full system's, since dropping equations can
   only add solutions. (A selection reaching into earlier columns is a different system rather than
   a subset, and is labelled as such instead of being given a bound.)
+  The **①②③④ strip** above the sections is a live readout, not a progress bar: each step reads
+  `done` / `stale` / `todo` from what the workspace actually holds, one is marked as next, and
+  clicking a step opens its section. ④ Analyze goes **stale** — not "done" — once a further
+  reduction means the stored verdict no longer describes the current system, so progress can go
+  backwards. ✦ Prove performs all four, so running it lights the whole strip.
   A canvas toolbar carries zoom · fit · fit-width · expand / collapse · minimap · **focus mode**
   (isolate one equation's derivation) · node search · undo / redo. Selecting a node opens a
   contextual **inspector** with its full action set (Duplicate, Copy LaTeX, Copy Mathematica,
