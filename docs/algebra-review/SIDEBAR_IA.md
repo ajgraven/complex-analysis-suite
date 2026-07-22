@@ -92,7 +92,7 @@ system, or split it; the variable set is untouched.
 | **S6** ✅ | *`fix φ(0)=w₀` re-seeds destructively with no confirmation.* Its `change` handler calls `seedFromCurrent()` whenever `store.size`, discarding the derivation. `confirmReplace` guards the `s` accelerator but **not** this checkbox and **not** the `Generate / re-seed` button click. | sharpens open finding **4.13** with a mechanism |
 | **S7** | *Tooltip debt is larger than 4.3 closed.* Against the stated hard rule of ~120 chars: `solveNumeric` 489, `groebner` 433, `algFixW0` 371, `pin-data` 345, `saturate` 327, `bifurc-var` 303. Roughly 20 controls exceed it. Only 6 `data-str-title` hooks exist against ~53 hardcoded titles. | 4.3 fixed the CTA caption only |
 | **S9** ✅ | *Basis replacements discard inequality nodes silently.* Gröbner reports `skipped`; `saturateMobius` and `triangularizeNodes` did not. The univalence palette is mostly inequalities, so building constraints and reducing once destroys them — and `✦ Prove` saturates in its prelude. | **Fixed** — reproduced in-browser, see the 1.2 section |
-| **S8** | *Two sibling operations are two rows apart.* `Regular chains` is, by its own tooltip, "like Triangular decomp. above, but SATURATED by its initials" — the saturated form of its neighbour, filed in a different group. `doTriangular` even emits the unsaturated caveat that regular chains exists to remove. | `doDecompose`, `hasRegularityConditions` |
+| **S8** ❌ | ~~*Two sibling operations are two rows apart.*~~ **Withdrawn.** They are related algorithms but produce different SHAPES: `triangularize` emits one column (`maxColumn() + 1`); `regularChainsAsync` feeds `applyComponent`, giving N enterable branches. Grouping by what an act does to the system therefore puts them apart correctly, and the tooltip's "like Triangular decomp. above" is a cross-reference, not evidence of misfiling. | verified against both call paths |
 
 ---
 
@@ -294,17 +294,33 @@ invalidating it.
 called a bug. Two of the eight S-findings came from static reads; this is the one that did not
 survive contact.
 
-### Tier 3 — section order and misfiling *(closes 4.4)*
+### Tier 3 — section order and misfiling ✅ *shipped (closes 4.4)*
 
-Move **Shape from moments** out of the workflow sequence — it is a *different input modality*, not
-a step — and group it with `Seed A–S moments`, currently as far from it as the panel allows, under
-a "Start from…" disclosure. Reorder to `Assume → Constraints → Reduce → Analyze → Export`.
+The order is now `Assume · Pin values · Edit system · Reduce · Analyze` — **── Beyond the main
+route ──** — `Univalence constraints · Shape from moments · Export`, and the stale header comments
+(which ran 1, 3, 4, 4b, 5, 6 — no 2, an artefact of 4.7's split) are contiguous 1..8.
 
-⚠ Sequence this **after** Tier 1.2 decides what to say about Univalence constraints. If that
-section is off the certified path, where it belongs in the order is a different question from the
-one 4.4 was written to answer.
+**Two parts of the original sketch were wrong, and 1.2 is why one of them was.**
 
-Also here: put `Triangular decomp.` adjacent to `Regular chains` (**S8**).
+*Constraints must NOT go before Reduce.* The sketch proposed `Assumptions → Constraints → Reduce`.
+1.2 established that any basis reduction discards those inequality nodes, so that order would have
+staged the user's modelling work directly in front of the thing that destroys it. It **feeds
+Analyze** — add a condition, then count — so it sits straight after it.
+
+*Shape from moments does not belong with `Seed A–S moments`.* The sketch grouped them under a
+"Start from…" disclosure. But `seedMomentSystem` calls `store.seedFromPolys` — it seeds — while
+`doShapeFromMoments` calls `shapeFromMomentsAsync` and renders to `#alg-moments-out`, never
+touching the store. **They share a word, not a behaviour.** It is a standalone calculator, and now
+says so in the section itself.
+
+*A reorder alone would not have closed 4.4.* The complaint is that the panel does not distinguish
+**kinds** — workflow step vs. alternative track vs. standalone tool — and pure sequence is
+invisible. Hence the labelled divider rather than extra whitespace.
+
+*Payoff from 1.1:* the reorder was safe precisely because section lookup had already been moved
+off positional selectors onto `data-section` names. Verified after the move — the ①②③④ steps still
+open exactly `Reduce` and `Analyze`, and every section's persistence key is unchanged, so no saved
+open-state was lost.
 
 ### Tier 4 — the elimination lens *(the cross-cutting fix; the most interesting)*
 
@@ -342,19 +358,29 @@ above is what it looked like in practice.
 
 ~~**Next: 1.1 (bind the step strip), then 1.2.**~~ **1.1 is done too.**
 
-**Tier 1 is complete** — 1.1, 1.2 and 1.3 all shipped.
+**Tiers 1, 2 and 3 are complete.**
 
-**Next: Tier 2**, the honest-label cleanups. They are small and mechanical, and **2.4** (the
-3+-selection silent no-op) is adjacent to the scope work and would reuse `SELECTION_SCOPED`. After
-that, **Tier 3** (section order, closing 4.4) is now unblocked: 1.2 answered the question it was
-waiting on — Univalence constraints is off the certified path and now says so, which settles where
-it belongs in the order.
+**Next: Tier 4** — the elimination lens, the item that would most change how the panel feels and
+the one worth a design conversation before building. Then **Tier 5** (~20 over-length tooltips,
+mechanical) and **Tier 6** (dark mode, contrast, busy-lock drift, export identity).
 
-Worth noting how the three Tier-1 items actually went: each was written up as a legibility problem
-and each turned out to sit on a concrete defect — a verdict that could describe a system you did
-not ask about (**S2**), a section-opener pointing at the wrong panel since #111 (**1.1**), and
-modelling work destroyed without notice (**S9**). *"The gap is almost entirely at the surfacing
-layer"* remains true, but the surfacing layer is where the bugs were hiding.
+### What the three tiers taught
+
+*Tier 1: "cosmetic" findings hid real defects.* All three sat on one — a verdict that could
+describe a system you did not ask about (**S2**), a section-opener pointing at the wrong panel
+since #111 (**1.1**), and modelling work destroyed without notice (**S9**). *"The gap is almost
+entirely at the surfacing layer"* remains true; the surfacing layer is where the bugs were hiding.
+
+*Tiers 2–3: two findings did not survive contact.* **S4** (3+-selection no-op) described an
+unreachable state — the canvas caps selection at two. **S8** (sibling ops misfiled) mistook related
+algorithms for identical output shapes. Both were derived by reading a consumer without checking
+the producer, and both would have shipped as dead code carrying tests that claimed to close a live
+defect.
+
+**The working rule that follows:** reproduction, not code-reading, is the gate for calling
+something a defect — and a finding about what a component *receives* is not established until the
+component that *sends* has been checked. Six of the nine S-findings survived that bar; the three
+that did so most convincingly were the ones observed failing in the running app first.
 
 Tier 4 is the item that would most change how the panel feels, and the one I would most want a
 design conversation about before building.

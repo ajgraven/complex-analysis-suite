@@ -1610,7 +1610,7 @@ const QD = _QD;
         '      <label style="font-size:11px;" title="In the conjugate model, also add the conjugate equation p̄ = 0 (keeps the system conjugation-closed for reim / existence analysis)."><input type="checkbox" id="alg-eq-conj" checked> add conjugate</label>' +
         '    </div>' +
         '  </details>' +
-        // 3. Reduce. Grouped into four honest sub-headings (the "Edit system" idiom above).
+        // 4. Reduce. Grouped into four honest sub-headings (the "Edit system" idiom above).
         //    Variable elimination used to be INVISIBLE here: the only whole-system eliminator was a
         //    hidden MODE of the plain Gröbner button — it silently switched to an elimination order
         //    iff the `eliminate` picker, two levels down under Advanced, was non-empty. A user who
@@ -1668,7 +1668,7 @@ const QD = _QD;
         '      </details>' +
         '    </div>' +
         '  </details>' +
-        // 4. Analyze
+        // 5. Analyze
         '  <details class="algebra-section">' +
         '    <summary>Analyze</summary>' +
         '    <div class="algebra-section-body"><div class="row" style="flex-wrap:wrap; gap:4px;">' +
@@ -1683,18 +1683,16 @@ const QD = _QD;
         '      <label class="small">Bifurcation over <select id="alg-bifurc-var" title="The real parameter to vary. Reports how the number of real solutions (= quadrature domains) changes as this variable ranges over ℝ: the critical values where the count jumps, and the count on each interval. Needs a 1-parameter family — a system that becomes zero-dimensional once this variable is fixed."></select></label>' +
         '      <button id="alg-bifurc" class="small heavy-op" type="button" title="1-parameter bifurcation: the EXACT critical parameter values (eliminant border polynomial + Sturm isolation) and the CERTIFIED real-solution count (Hermite trace form) on each interval between them.">Bifurcation (real count)</button></div></div>' +
         '  </details>' +
-        // 4b. Shape from moments (a NEW input modality — reconstruct a QD from its moments, not the columns)
-        '  <details class="algebra-section">' +
-        '    <summary>Shape from moments</summary>' +
-        '    <div class="algebra-section-body">' +
-        '      <div class="hint" style="margin-bottom:4px;">Reconstruct a discrete measure Σ aⱼ·δ(zⱼ) — a quadrature domain’s data — from its complex moments mₖ = Σ aⱼ·zⱼᵏ, by exact Prony–Hankel. The <strong>order</strong> (= #nodes = the QD-order) is the EXACT Hankel rank drop; the Prony polynomial Π(z−zⱼ) is exact; nodes/weights are numeric (well-conditioned, from the exact polynomial).</div>' +
-        '      <div class="algebra-define-row">' +
-        '        <input id="alg-moments" class="alg-def-expr" type="text" placeholder="m0, m1, m2, …   e.g.  3, 6, 14, 36, 98, 276   or  2, 0, -2, 0" autocomplete="off" spellcheck="false" title="Comma-separated complex moments m_0, m_1, …. Each: a (real), a+bi, a-bi, bi, i, -i; rationals 3/2 and decimals allowed." />' +
-        '        <button id="alg-moments-go" class="small heavy-op" type="button" title="Exact Prony–Hankel reconstruction: the QD-order (Hankel rank drop), the exact Prony polynomial, and the numeric nodes/weights + a reconstruction residual.">Reconstruct</button></div>' +
-        '      <div id="alg-moments-out" class="alg-def-preview hint"></div>' +
-        '    </div>' +
-        '  </details>' +
-        // 5. Univalence constraints (2-column grid palette)
+        // ── End of the main route ──────────────────────────────────────────────────────────
+        // Everything above is the column workflow: assume → edit → reduce → analyze, each step
+        // acting on the system in the graph. The two sections below are NOT steps in it, which is
+        // what finding 4.4 meant by "section order contradicts the stated workflow", and a bare
+        // reorder would not have said so — the boundary has to be visible, not merely respected.
+        '  <div class="algebra-section-divider">Beyond the main route</div>' +
+        // 6. Univalence constraints (2-column grid palette). Placed straight after Analyze because
+        //    it FEEDS Analyze: you add a condition and then count. NOT before Reduce, which the
+        //    original 4.4 sketch proposed — 1.2 established that any basis reduction discards these
+        //    inequality nodes, so that order would have staged the user's work for destruction.
         '  <details class="algebra-section">' +
         '    <summary>Univalence constraints</summary>' +
         '    <div class="algebra-section-body">' +
@@ -1709,7 +1707,21 @@ const QD = _QD;
         '      <div id="alg-palette" class="algebra-palette"></div>' +
         '    </div>' +
         '  </details>' +
-        // 6. Export
+        // 7. Shape from moments — a STANDALONE calculator, not a step and not a seeding route.
+        //    doShapeFromMoments calls shapeFromMomentsAsync and renders to #alg-moments-out; it never
+        //    touches the store. 4.4 proposed grouping it with the "Seed A–S moments" button, but that
+        //    one DOES seed (store.seedFromPolys) — the two share a word, not a behaviour.
+        '  <details class="algebra-section">' +
+        '    <summary>Shape from moments</summary>' +
+        '    <div class="algebra-section-body">' +
+        '      <div class="hint" style="margin-bottom:4px;"><strong>Standalone — this does not touch the workspace:</strong> no column is added and the graph is unchanged. Reconstruct a discrete measure Σ aⱼ·δ(zⱼ) — a quadrature domain’s data — from its complex moments mₖ = Σ aⱼ·zⱼᵏ, by exact Prony–Hankel. The <strong>order</strong> (= #nodes = the QD-order) is the EXACT Hankel rank drop; the Prony polynomial Π(z−zⱼ) is exact; nodes/weights are numeric (well-conditioned, from the exact polynomial).</div>' +
+        '      <div class="algebra-define-row">' +
+        '        <input id="alg-moments" class="alg-def-expr" type="text" placeholder="m0, m1, m2, …   e.g.  3, 6, 14, 36, 98, 276   or  2, 0, -2, 0" autocomplete="off" spellcheck="false" title="Comma-separated complex moments m_0, m_1, …. Each: a (real), a+bi, a-bi, bi, i, -i; rationals 3/2 and decimals allowed." />' +
+        '        <button id="alg-moments-go" class="small heavy-op" type="button" title="Exact Prony–Hankel reconstruction: the QD-order (Hankel rank drop), the exact Prony polynomial, and the numeric nodes/weights + a reconstruction residual.">Reconstruct</button></div>' +
+        '      <div id="alg-moments-out" class="alg-def-preview hint"></div>' +
+        '    </div>' +
+        '  </details>' +
+        // 8. Export
         '  <details class="algebra-section">' +
         '    <summary>Export</summary>' +
         '    <div class="algebra-section-body">' +

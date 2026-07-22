@@ -1175,6 +1175,18 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
    oldest on a third ctrl+click; without this the first equation just vanishes. */
 #controls-algebra .algebra-sel-cap { margin: 0 0 2px; font-style: italic; }
 
+/* Kind boundary between the column workflow and the sections that are not steps in it (finding
+   4.4). A rule with a caption rather than extra whitespace: the point is that the two groups are
+   different KINDS, and a gap alone would read as spacing. */
+#controls-algebra .algebra-section-divider {
+  display: flex; align-items: center; gap: 6px;
+  margin: 10px 0 4px; font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--c-muted);
+}
+#controls-algebra .algebra-section-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--c-border);
+}
+
 /* "What the certified route actually runs" note at the top of Reduce. Bordered rather than plain
    hint text because it qualifies every button below it, not the next one. */
 #controls-algebra .algebra-route-note {

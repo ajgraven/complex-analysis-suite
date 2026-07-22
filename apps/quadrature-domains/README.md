@@ -556,8 +556,11 @@ view is active.
   Schur–Cohn fold + boundary-simple filter → gauge quotient → numeric cross-check, badged `=`/`≤`/`≈`
   for how rigorous the answer actually is), beside the faster, less-certified **★ Auto-reduce &
   solve**, plus Generate / re-seed, Seed A–S moments, and the `fix φ(0)=w₀` seeding option.
-  Below it are eight collapsible workflow sections (Assume / Pin values / Edit system / Reduce /
-  Analyze / Shape from moments / Univalence constraints / Export) whose open state persists.
+  Below it are eight collapsible sections whose open state persists, ordered by *kind*: the column
+  workflow (Assume / Pin values / Edit system / Reduce / Analyze), then a **Beyond the main route**
+  divider, then the two that are not steps in it — *Univalence constraints* (which feeds Analyze,
+  and which ✦ Prove does not read) and *Shape from moments* (a standalone calculator that never
+  touches the workspace) — and finally Export.
   **Reduce** is grouped by what each act does to the system: *Eliminate variables* (remove unknowns
   — pick them, or use the gauge; between two selected equations the inspector offers the Sylvester
   resultant), *Rewrite the system* (same solutions, better shape — Gröbner, triangular chain),
