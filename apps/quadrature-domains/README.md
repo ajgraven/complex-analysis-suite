@@ -558,6 +558,13 @@ view is active.
   solve**, plus Generate / re-seed, Seed A–S moments, and the `fix φ(0)=w₀` seeding option.
   Below it are eight collapsible workflow sections (Assume / Pin values / Edit system / Reduce /
   Analyze / Shape from moments / Univalence constraints / Export) whose open state persists.
+  **Reduce** is grouped by what each act does to the system: *Eliminate variables* (remove unknowns
+  — pick them, or use the gauge; between two selected equations the inspector offers the Sylvester
+  resultant), *Rewrite the system* (same solutions, better shape — Gröbner, triangular chain),
+  *Narrow the system* (deliberately changes what solves it — saturate, propagate constraints, pin
+  known data), and *Split into cases* (factor, minimal primes, regular chains — the branches' counts
+  add up). Eliminating is its own act with its own button: it is not a mode of the Gröbner button,
+  which always computes the plain basis in the monomial order set under Advanced.
   A canvas toolbar carries zoom · fit · fit-width · expand / collapse · minimap · **focus mode**
   (isolate one equation's derivation) · node search · undo / redo. Selecting a node opens a
   contextual **inspector** with its full action set (Duplicate, Copy LaTeX, Copy Mathematica,

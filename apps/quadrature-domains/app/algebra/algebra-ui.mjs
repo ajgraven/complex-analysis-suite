@@ -1456,29 +1456,53 @@ const QD = _QD;
         '      <label style="font-size:11px;" title="In the conjugate model, also add the conjugate equation p̄ = 0 (keeps the system conjugation-closed for reim / existence analysis)."><input type="checkbox" id="alg-eq-conj" checked> add conjugate</label>' +
         '    </div>' +
         '  </details>' +
-        // 3. Reduce (alternative eliminators; order/eliminate behind Advanced)
+        // 3. Reduce. Grouped into three honest sub-headings (the "Edit system" idiom above).
+        //    Variable elimination used to be INVISIBLE here: the only whole-system eliminator was a
+        //    hidden MODE of the button labelled "Gröbner basis (all eqns)" — it silently switched to
+        //    an elimination order iff the `eliminate` picker, two levels down under Advanced, was
+        //    non-empty. A user who wanted to remove a variable had no way to find that. Elimination is
+        //    now its own sub-section with its own button, and #alg-groebner does ONE thing.
         '  <details class="algebra-section">' +
         '    <summary>Reduce</summary>' +
         '    <div class="algebra-section-body">' +
+        '      <div class="algebra-line-label">Eliminate variables <span class="hint" style="font-weight:400;">(remove unknowns; every consequence in the survivors is kept)</span></div>' +
+        '      <div class="algebra-line"><span class="algebra-line-label">eliminate</span><span id="alg-elim-pick" class="algebra-picker"></span></div>' +
         '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
-        '        <button id="alg-gauge-elim" class="small" type="button" data-str-title="tooltips.gaugeElim">Eliminate with gauge (all)</button>' +
+        '        <button id="alg-eliminate-vars" class="small heavy-op" type="button" data-str-title="tooltips.eliminateVars">Eliminate picked variables</button>' +
+        '        <button id="alg-gauge-elim" class="small" type="button" data-str-title="tooltips.gaugeElim">Eliminate with gauge (all)</button></div>' +
+        // Caption, not a tooltip: the hard rule is nothing over ~120 chars in a `title` (finding 4.3).
+        // This also carries the pointer to the two-node resultant, which is the same act living in
+        // the inspector — the split that made elimination hard to find in the first place.
+        '      <div class="hint algebra-elim-hint">Exact over ℚ(i): a Gröbner basis in a block elimination order, whose generators in the remaining variables are the elimination ideal. <strong>Between two equations</strong> instead — select both on the canvas; the inspector offers the Sylvester resultant in one shared variable.</div>' +
+        // Two headings, not one. "Same solutions, better shape" is TRUE of Gröbner and the
+        // triangular chain and FALSE of the other three: Saturate deletes the |z_j|=1 stratum,
+        // Pin known data specializes the family to one domain, and Propagate ADDS constraint nodes.
+        // Filing all five under one honest-sounding caption would have been a labeling defect of
+        // exactly the kind this project treats as a correctness bug, so they are separated by what
+        // they do to the solution set — which is also the distinction a user needs before clicking.
+        '      <div class="algebra-line-label" style="margin-top:8px;">Rewrite the system <span class="hint" style="font-weight:400;">(same solutions, better shape)</span></div>' +
+        '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
         '        <button id="alg-groebner" class="small heavy-op" type="button" data-str-title="tooltips.groebner">Gröbner basis (all eqns)</button>' +
-        '        <button id="alg-triangular" class="small" type="button" title="Triangular decomposition (Wu pseudo-elimination) of the current system — an alternative to Gröbner that exhibits the solution structure (free variables, no-solution)">Triangular decomp.</button>' +
+        '        <button id="alg-triangular" class="small" type="button" title="Triangular decomposition (Wu pseudo-elimination) of the current system — an alternative to Gröbner that exhibits the solution structure (free variables, no-solution)">Triangular decomp.</button></div>' +
+        '      <div class="algebra-line-label" style="margin-top:8px;">Narrow the system <span class="hint" style="font-weight:400;">(deliberately changes what solves it)</span></div>' +
+        '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
         '        <button id="alg-saturate" class="small" type="button" title="Saturate the current system by the Möbius denominators ∏(1−z̄_j z_j) — removes the |z_j|=1 boundary stratum the cleared (●)/(★) denominators carry, so the existence count becomes the EXACT number of algebraic quadrature-domain solutions (e.g. the unit disk 4 → 2). Safe: a genuine QD has |z_j|<1, so nothing genuine is dropped.">Saturate (admissibility)</button>' +
-        '        <button id="alg-propagate-all" class="small" type="button" title="Carry EVERY univalence constraint into the current system in one step, with all assumptions (reality, imaginary, fixed φ(0), pinned values) applied to each">Propagate constraints → current</button></div>' +
-        '        <div class="row"><button id="alg-pin-data" class="small" type="button" title="Substitute the SOLVED quadrature data (the nodes a_j and principal parts C_{j,s}) as exact ℚ(i) values, in one new column. They are kept symbolic by default so the workspace describes the whole family; pin them to see what the specific domain collapses to — e.g. when a node sits at φ(0), the locator equation loses its (a−w₀) group and factors.">Pin known quadrature data</button></div>' +
+        '        <button id="alg-propagate-all" class="small" type="button" title="Carry EVERY univalence constraint into the current system in one step, with all assumptions (reality, imaginary, fixed φ(0), pinned values) applied to each">Propagate constraints → current</button>' +
+        '        <button id="alg-pin-data" class="small" type="button" title="Substitute the SOLVED quadrature data (the nodes a_j and principal parts C_{j,s}) as exact ℚ(i) values, in one new column. They are kept symbolic by default so the workspace describes the whole family; pin them to see what the specific domain collapses to — e.g. when a node sits at φ(0), the locator equation loses its (a−w₀) group and factors.">Pin known quadrature data</button></div>' +
         // Column-level factoring. The per-node "Attempt to factor" requires selecting each card in
         // turn to discover whether it splits; this scans the whole current system at once, which is
         // the shape "simplify and reduce these equations" actually asks for.
-        '      <div class="row" style="gap:4px; flex-wrap:wrap; margin-top:4px;">' +
+        '      <div class="algebra-line-label" style="margin-top:8px;">Split into cases <span class="hint" style="font-weight:400;">(one branch per component; the counts add up)</span></div>' +
+        '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
         '        <button id="alg-factor-scan" class="small" type="button" title="Factor every equation in the current system and report which ones split — each becomes a one-click case column V(p)=⋃ₖV(fₖ). Equations past the in-browser factorizer caps are reported as UNDETERMINED, never as irreducible.">Factor / simplify column</button>' +
         '        <button id="alg-decompose" class="small heavy-op" type="button" title="Minimal primes: split the variety into its irreducible components, V(I)=⋃ₖV(componentₖ). The standard way out of a positive-dimensional (underdetermined) verdict — enter one component and analyze it alone; the branches\' existence counts add up. Runs in a worker.">Decompose into components</button>' +
         '        <button id="alg-regular-chains" class="small heavy-op" type="button" title="Regular chains (saturated triangular decomposition): like Triangular decomp. above, but SATURATED by its initials — the degenerate cases where an initial vanishes are resolved rather than left as an unstated caveat, so back-substitution is sound on every branch. Runs in a worker.">Regular chains (saturated)</button></div>' +
         '      <div id="alg-factor-out" class="algebra-factor-out"></div>' +
+        // The `eliminate` picker moved OUT of Advanced and up into the elimination sub-section — it
+        // is the whole point of that act, not a tuning knob. Only the monomial order stays here.
         '      <details class="algebra-advanced"><summary>Advanced</summary>' +
-        '        <div class="algebra-line"><span class="algebra-line-label" title="Monomial order. lex = elimination order; grevlex = fastest general.">order</span>' +
+        '        <div class="algebra-line"><span class="algebra-line-label" title="Monomial order for the plain Gröbner basis. lex is itself an elimination order; grevlex is fastest.">order</span>' +
         '          <select id="alg-gb-order"><option value="grevlex">grevlex</option><option value="grlex">grlex</option><option value="lex">lex</option></select></div>' +
-        '        <div class="algebra-line"><span class="algebra-line-label">eliminate</span><span id="alg-elim-pick" class="algebra-picker"></span></div>' +
         '      </details>' +
         '    </div>' +
         '  </details>' +
@@ -1570,6 +1594,7 @@ const QD = _QD;
       const w0FixCb = $('#alg-w0-fix');
       if (w0FixCb) w0FixCb.addEventListener('change', () => { if (store.size) seedFromCurrent(); });
       $('#alg-groebner').addEventListener('click', () => doGroebner(null));
+      $('#alg-eliminate-vars').addEventListener('click', doEliminateVars);
       $('#alg-autosolve').addEventListener('click', doAutoSolve);
       $('#alg-factor-scan').addEventListener('click', doFactorScan);
       $('#alg-decompose').addEventListener('click', () => doDecompose('components'));
@@ -2345,7 +2370,7 @@ const QD = _QD;
     function setBusy(on, label) {
       _busy = !!on;
       ['alg-prove', 'alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-saturate', 'alg-classify', 'alg-univalence', 'alg-resolvent', 'alg-bifurc', 'alg-moments-go', 'alg-autosolve',
-        'alg-gauge-elim', 'alg-eliminate', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-real-detect', 'alg-propagate-all', 'alg-val-apply', 'alg-def-apply', 'alg-abbrev', 'alg-eq-apply',
+        'alg-gauge-elim', 'alg-eliminate', 'alg-eliminate-vars', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-real-detect', 'alg-propagate-all', 'alg-val-apply', 'alg-def-apply', 'alg-abbrev', 'alg-eq-apply',
         'alg-factor-scan', 'alg-decompose', 'alg-regular-chains']
         .forEach((id) => { const b = $('#' + id); if (b) b.disabled = on; });
       const pal = $('#alg-palette'); if (pal) pal.querySelectorAll('button').forEach((b) => { b.disabled = on; });
@@ -2392,10 +2417,21 @@ const QD = _QD;
       return true;
     }
 
+    // Eliminate the variables picked in #alg-elim-pick from the whole current system, by a Gröbner
+    // basis in a block elimination order. Split out of doGroebner: this used to be a hidden MODE of
+    // the "Gröbner basis" button, silently entered whenever the (Advanced-buried) picker was
+    // non-empty — so the one control that removes a variable was both unlabelled and undiscoverable.
+    // Now the act has its own button, and #alg-groebner always means the plain basis.
+    function doEliminateVars() {
+      const elim = [...elimSel];
+      if (!elim.length) { toast('Pick at least one variable to eliminate.', { kind: 'error' }); return; }
+      doGroebner(null, { eliminate: elim });
+    }
     // Gröbner basis of a node selection (null/empty ⇒ every equality node), run
     // off the main thread via QD.SymWorker (falls back to sync if unavailable).
-    // Reads the order selector and the elimination-variable picker.
-    function doGroebner(sel) {
+    // `optsOverride` carries the elimination request from doEliminateVars; without it this reads
+    // only the order selector, so the button does exactly what its label says.
+    function doGroebner(sel, optsOverride) {
       if (_abort) return;                       // an op is already running
       if (!ensureSeed()) return;
       clearError();
@@ -2403,7 +2439,7 @@ const QD = _QD;
         : store.currentColumnIds();      // default: the CURRENT system (last column), not every column
       const orderEl = $('#alg-gb-order');
       const order = (orderEl && orderEl.value) || 'grevlex';
-      const elim = [...elimSel];
+      const elim = (optsOverride && optsOverride.eliminate) ? optsOverride.eliminate.slice() : [];
       const opts = elim.length ? { eliminate: elim } : { order };
       const ctrl = _newAbort(); _abort = ctrl;
       setBusy(true, 'Computing Gröbner basis…');
