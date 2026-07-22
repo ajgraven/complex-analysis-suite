@@ -85,7 +85,7 @@ system, or split it; the variable set is untouched.
 | # | Finding | Evidence |
 |---|---|---|
 | **S1** | *Elimination was a hidden mode of a differently-labelled button.* `doGroebner` read the module-level `elimSel`, switching to a block elimination order iff the picker — two collapsed levels down, inside Advanced inside Reduce — was non-empty. | **Fixed today.** Verified in-app: pick active, plain button now yields `Gröbner · grevlex`, not `Gröbner · elim Ā1,1`. |
-| **S2** | *Neighbouring buttons differ silently in scope.* `Triangular decomp.`, `Saturate` and `Existence / uniqueness` operate on the canvas selection when there is one; `Dimension / count` and `Solve (numeric)` always take the whole column. Same section, no visible difference. | handlers pass `sel.length ? sel : null` vs hard `null` |
+| **S2** ✅ | *Neighbouring buttons differ silently in scope.* `Triangular decomp.`, `Saturate` and `Existence / uniqueness` operate on the canvas selection when there is one; `Dimension / count` and `Solve (numeric)` always take the whole column. Same section, no visible difference. | **Fixed** — see below |
 | **S3** | *Labels overstate scope.* "Gröbner basis (**all eqns**)" defaults to `store.currentColumnIds()` — the last column only. "Copy LaTeX" copies **every node in the whole store, all branches**. | direct read of `doGroebner`, `copyLatex` |
 | **S4** | *Silent no-op at 3+ selection.* The inspector shows the 2-node eliminate panel titled "· N selected", `#alg-eliminate` is **not** disabled, and `doEliminate` returns immediately because `sel.length !== 2`. Clicking does nothing, with no message. | `renderInspector`, `doEliminate` |
 | **S5** | *Unguarded exports.* `Download DAG (JSON)` and `Copy LaTeX` have no `store.size` guard and will emit an empty artifact silently, unlike their six guarded siblings. | `exportJson`, `copyLatex` |
@@ -123,6 +123,41 @@ Three things beyond the regrouping:
 
 ---
 
+## S2 — operation scope (shipped)
+
+The severity was underestimated when this was first written. Measured in the running app on the
+default seeded system: `Existence / uniqueness` over **two selected equations returns dimension 2**;
+over the **whole column it returns dimension 1**. Different mathematics, same button, and the only
+difference was a selection made on a canvas ~900px away. The narrowed answer arrived badged, with
+the assumptions ledger attached, and stored in the results drawer — reading exactly like a verdict
+about the whole system.
+
+`doClassify` already *knew*: it skips caching the branch chip when a selection was used. It
+disclosed the slice caveat, the factor-branch caveat and the incomplete-decomposition caveat, and
+not this one. An omission in an otherwise meticulous pattern — an oversight, not a decision.
+
+Three parts, all keyed off one registry (`SELECTION_SCOPED`) so the warning and the behaviour
+cannot drift:
+
+1. **Before the click** — a scope banner at the top of the sections, live only while a selection
+   exists, naming the three ops that will narrow and stating that everything else uses the whole
+   column. Held at full opacity when the sections recede for the inspector: a warning that fades
+   exactly when the condition it warns about holds is worse than none.
+2. **On the verdict** — `scopeCaveat` in the `sliceCaveat` idiom. It claims the **bound direction
+   only where it holds**: dropping generators enlarges the variety (`V(J) ⊇ V(I)` for `J ⊆ I`), so a
+   count over a strict subset of the current column is an *upper bound* on the full system's. A
+   selection reaching into earlier columns is not a subset of anything current — it is a different
+   system, and gets the scope statement with no bound.
+3. **On the mutating ops** — `scopeNote` in the toasts of Saturate (which asserts the count is now
+   *exact*) and Triangular decomp. Inconsistency is called out as the one verdict that survives
+   narrowing in the strong direction: restoring the dropped equations can only shrink an already
+   empty variety, so a subset being inconsistent proves the whole system is.
+
+Not unified to one scope. Classifying a sub-system is genuinely useful — the fix is that it can no
+longer happen without being said.
+
+---
+
 ## The plan
 
 Tiers are ordered by leverage-per-risk. Each is independently shippable.
@@ -141,9 +176,9 @@ version: a one-line caption on the manual block saying `✦ Prove` never runs th
 are for when it stalls. The fuller version reorders so the canonical prelude (assume → propagate →
 saturate) reads as a sequence.
 
-**1.3 Resolve the scope inconsistency** — **S2**. Either every op honours the selection or none
-does, and the button says which. This is the most confusing single behaviour found, and it is
-invisible: two adjacent buttons quietly disagree about what "the system" means.
+**1.3 Resolve the scope inconsistency** — **S2**. ✅ **Shipped** — see the section above. Landed
+first, ahead of 1.1, because it was the one item here that could hand back a materially wrong
+answer rather than merely an illegible one.
 
 ### Tier 2 — honest labels *(small, mechanical, guardrail work)*
 
@@ -195,11 +230,13 @@ identity.
 
 ## Recommendation
 
-**Tier 1 first, and within it, 1.3 before 1.1.** The scope inconsistency is a correctness-shaped
-bug wearing UI clothing — a user can get a verdict about a system they did not think they were
-asking about — while the step strip is a legibility win. Fix the one that can mislead first.
+~~**Tier 1 first, and within it, 1.3 before 1.1.**~~ **1.3 is done.** The reasoning held up under
+measurement: it was a correctness-shaped bug wearing UI clothing, and the dimension-2-vs-1 split
+above is what it looked like in practice.
 
-Tier 2 is cheap enough to fold into whichever branch touches those call sites.
+**Next: 1.1 (bind the step strip), then 1.2.** Tier 2 is cheap enough to fold into whichever branch
+touches those call sites — 2.4 in particular (the 3+-selection silent no-op) is adjacent to the
+scope work just shipped and would reuse the same registry.
 
 Tier 4 is the item that would most change how the panel feels, and the one I would most want a
 design conversation about before building.
