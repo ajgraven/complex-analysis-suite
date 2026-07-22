@@ -86,10 +86,10 @@ system, or split it; the variable set is untouched.
 |---|---|---|
 | **S1** | *Elimination was a hidden mode of a differently-labelled button.* `doGroebner` read the module-level `elimSel`, switching to a block elimination order iff the picker — two collapsed levels down, inside Advanced inside Reduce — was non-empty. | **Fixed today.** Verified in-app: pick active, plain button now yields `Gröbner · grevlex`, not `Gröbner · elim Ā1,1`. |
 | **S2** ✅ | *Neighbouring buttons differ silently in scope.* `Triangular decomp.`, `Saturate` and `Existence / uniqueness` operate on the canvas selection when there is one; `Dimension / count` and `Solve (numeric)` always take the whole column. Same section, no visible difference. | **Fixed** — see below |
-| **S3** | *Labels overstate scope.* "Gröbner basis (**all eqns**)" defaults to `store.currentColumnIds()` — the last column only. "Copy LaTeX" copies **every node in the whole store, all branches**. | direct read of `doGroebner`, `copyLatex` |
-| **S4** | *Silent no-op at 3+ selection.* The inspector shows the 2-node eliminate panel titled "· N selected", `#alg-eliminate` is **not** disabled, and `doEliminate` returns immediately because `sel.length !== 2`. Clicking does nothing, with no message. | `renderInspector`, `doEliminate` |
-| **S5** | *Unguarded exports.* `Download DAG (JSON)` and `Copy LaTeX` have no `store.size` guard and will emit an empty artifact silently, unlike their six guarded siblings. | `exportJson`, `copyLatex` |
-| **S6** | *`fix φ(0)=w₀` re-seeds destructively with no confirmation.* Its `change` handler calls `seedFromCurrent()` whenever `store.size`, discarding the derivation. `confirmReplace` guards the `s` accelerator but **not** this checkbox and **not** the `Generate / re-seed` button click. | sharpens open finding **4.13** with a mechanism |
+| **S3** ✅ | *Labels overstate scope.* "Gröbner basis (**all eqns**)" defaults to `store.currentColumnIds()` — the last column only. "Copy LaTeX" copies **every node in the whole store, all branches**. | direct read of `doGroebner`, `copyLatex` |
+| **S4** ❌ | ~~*Silent no-op at 3+ selection.*~~ **Withdrawn — the state is unreachable**: `algebra-canvas` caps the selection at two (`selected.shift()`). Derived from reading the consumer without checking the producer. The cap's *silence* is the real issue, and is now stated. | see Tier 2 |
+| **S5** ✅ | *Unguarded exports.* `Download DAG (JSON)` and `Copy LaTeX` have no `store.size` guard and will emit an empty artifact silently, unlike their six guarded siblings. | `exportJson`, `copyLatex` |
+| **S6** ✅ | *`fix φ(0)=w₀` re-seeds destructively with no confirmation.* Its `change` handler calls `seedFromCurrent()` whenever `store.size`, discarding the derivation. `confirmReplace` guards the `s` accelerator but **not** this checkbox and **not** the `Generate / re-seed` button click. | sharpens open finding **4.13** with a mechanism |
 | **S7** | *Tooltip debt is larger than 4.3 closed.* Against the stated hard rule of ~120 chars: `solveNumeric` 489, `groebner` 433, `algFixW0` 371, `pin-data` 345, `saturate` 327, `bifurc-var` 303. Roughly 20 controls exceed it. Only 6 `data-str-title` hooks exist against ~53 hardcoded titles. | 4.3 fixed the CTA caption only |
 | **S9** ✅ | *Basis replacements discard inequality nodes silently.* Gröbner reports `skipped`; `saturateMobius` and `triangularizeNodes` did not. The univalence palette is mostly inequalities, so building constraints and reducing once destroys them — and `✦ Prove` saturates in its prelude. | **Fixed** — reproduced in-browser, see the 1.2 section |
 | **S8** | *Two sibling operations are two rows apart.* `Regular chains` is, by its own tooltip, "like Triangular decomp. above, but SATURATED by its initials" — the saturated form of its neighbour, filed in a different group. `doTriangular` even emits the unsaturated caveat that regular chains exists to remove. | `doDecompose`, `hasRegularityConditions` |
@@ -261,13 +261,38 @@ It turned out to sit on top of a real defect, not just a labeling gap.
 first, ahead of 1.1, because it was the one item here that could hand back a materially wrong
 answer rather than merely an illegible one.
 
-### Tier 2 — honest labels *(small, mechanical, guardrail work)*
+### Tier 2 — honest labels ✅ *shipped*
 
-**2.1** "Gröbner basis (all eqns)" → name the actual scope (**S3**).
-**2.2** "Copy LaTeX" → say it takes the whole store, all branches (**S3**).
-**2.3** Guard the two unguarded exports (**S5**).
-**2.4** Disable `#alg-eliminate` at 3+ selection, or make it use the first two and say so (**S4**).
-**2.5** Route `fix φ(0)=w₀` through `confirmReplace` (**S6**, sharpening 4.13).
+**2.1** "Gröbner basis (all eqns)" → "(current column)", which is what `doGroebner(null)` uses (**S3**).
+**2.2** "Copy LaTeX" → "Copy all LaTeX", stating it takes every column and branch (**S3**).
+**2.3** `exportJson` / `copyLatex` refuse an empty workspace instead of emitting an empty artifact (**S5**).
+**2.4** ~~Disable `#alg-eliminate` at 3+ selection~~ — **the finding was wrong; see below** (**S4**).
+**2.5** `fix φ(0)=w₀` routes through `confirmReplace`, with the box uncommitted until the re-seed (**S6** / 4.13).
+
+#### S4 was not a defect — the state is unreachable
+
+Filed as "at 3+ selection, `#alg-eliminate` stays enabled and `doEliminate` silently returns". The
+inspector does branch on `sel.length`, and `doEliminate` does require exactly 2 — but
+`algebra-canvas`'s `toggleSelect` caps the selection:
+
+```js
+selected.push(id);
+if (selected.length > 2) selected.shift();
+```
+
+so the inspector never sees more than two. The finding came from reading `renderInspector` without
+checking what the canvas can produce. A guard would have been dead code, shipped with tests
+asserting it closed a live defect.
+
+**The real defect is the cap's silence.** Ctrl+clicking a third card drops the oldest with no
+indication — observed live, a selection reading `(●)₁ × (●)₁ (conj)` became `(●)₁ (conj) × (★)₁,₁`
+with the first equation simply gone. The inspector now states the rule, and a test pins the cap
+itself so that lifting it surfaces the inspector's two-node assumption rather than silently
+invalidating it.
+
+*Generalisable:* a finding derived from reading a consumer needs the producer checked before it is
+called a bug. Two of the eight S-findings came from static reads; this is the one that did not
+survive contact.
 
 ### Tier 3 — section order and misfiling *(closes 4.4)*
 
