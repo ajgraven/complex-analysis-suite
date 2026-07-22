@@ -1694,16 +1694,16 @@ const QD = _QD;
         '    <button id="alg-steps-x" class="algebra-steps-x" type="button" title="Hide this hint">×</button>' +
         '  </div>' +
         '  <div class="row algebra-primary">' +
-        '    <button id="alg-prove" class="small primary heavy-op" type="button" title="One click: seed → certified existence/uniqueness verdict, with a =/≤/≈ rigor badge.">✦ Prove existence / uniqueness</button>' +
-        '    <button id="alg-autosolve" class="small heavy-op" type="button">★ Auto-reduce &amp; solve</button>' +
-        '    <button id="alg-seed" class="small" type="button">Generate / re-seed</button>' +
-        '    <button id="alg-seed-moment" class="small" type="button">Seed A–S moments</button>' +
+        '    <button id="alg-prove" class="small primary heavy-op js-busy-lock" type="button" title="One click: seed → certified existence/uniqueness verdict, with a =/≤/≈ rigor badge.">✦ Prove existence / uniqueness</button>' +
+        '    <button id="alg-autosolve" class="small heavy-op js-busy-lock" type="button">★ Auto-reduce &amp; solve</button>' +
+        '    <button id="alg-seed" class="small js-busy-lock" type="button">Generate / re-seed</button>' +
+        '    <button id="alg-seed-moment" class="small js-busy-lock" type="button">Seed A–S moments</button>' +
         '    <button id="alg-cancel" class="small hidden" type="button" title="Cancel the running computation">Cancel</button>' +
         '  </div>' +
         // A seeding option, so it lives with the seed buttons (it used to hang off the φ/h
         // reference block, which described the map rather than generating it).
         '  <div class="row algebra-seed-opt">' +
-        '    <label class="algebra-ref-opt"><input type="checkbox" id="alg-w0-fix" checked> fix φ(0)=w₀</label>' +
+        '    <label class="algebra-ref-opt"><input class="js-busy-lock" type="checkbox" id="alg-w0-fix" checked> fix φ(0)=w₀</label>' +
         '  </div>' +
         // The pipeline description used to live in a 543-character `title`: invisible on touch,
         // unreachable by keyboard, gone on pointer-move. It is the substance of the tool, so it is
@@ -1754,9 +1754,9 @@ const QD = _QD;
         '    <summary>Assume</summary>' +
         '    <div class="algebra-section-body">' +
         '      <div class="algebra-line"><span class="algebra-line-label">Assume real</span><span id="alg-real-pick" class="algebra-picker"></span>' +
-        '        <button id="alg-real-apply" class="small" type="button">Assume real</button>' +
-        '        <button id="alg-real-auto" class="small" type="button">Assume all real</button>' +
-        '        <button id="alg-real-detect" class="small" type="button">Detect symmetry</button></div>' +
+        '        <button id="alg-real-apply" class="small js-busy-lock" type="button">Assume real</button>' +
+        '        <button id="alg-real-auto" class="small js-busy-lock" type="button">Assume all real</button>' +
+        '        <button id="alg-real-detect" class="small js-busy-lock" type="button">Detect symmetry</button></div>' +
         '    </div>' +
         '  </details>' +
         // 2. Pin values — fixing a variable to an exact ℚ(i) value is a different act from assuming
@@ -1769,7 +1769,7 @@ const QD = _QD;
         '      <div class="row" style="gap:4px; align-items:center; margin-top:2px;">' +
         '        <button id="alg-val-add" class="small" type="button" title="Add another variable to fix in the same column">＋ add variable</button>' +
         '        <label style="font-size:11px;" title="After substituting, run a linear-propagation pass (eliminate forced variables) as a further column."><input type="checkbox" id="alg-val-prop" checked> propagate</label>' +
-        '        <button id="alg-val-apply" class="small" type="button" title="Substitute the exact values (continued-fraction ℚ(i)) for these variables — and their conjugates — in one new column">Set values</button></div>' +
+        '        <button id="alg-val-apply" class="small js-busy-lock" type="button" title="Substitute the exact values (continued-fraction ℚ(i)) for these variables — and their conjugates — in one new column">Set values</button></div>' +
         '    </div>' +
         '  </details>' +
         // 3. Edit system — introducing a symbol or imposing a custom condition CHANGES the system;
@@ -1782,14 +1782,14 @@ const QD = _QD;
         '        <input id="alg-def-name" class="alg-def-name" type="text" placeholder="t" autocomplete="off" spellcheck="false" title="A fresh name for the new symbol" />' +
         '        <span class="alg-def-eq">:=</span>' +
         '        <input id="alg-def-expr" class="alg-def-expr" type="text" placeholder="e.g.  w1^2,  z1+zb1,  z1*zb1" autocomplete="off" spellcheck="false" title="An expression in the current variables.  + − * / ^ ( ),  i = imaginary unit,  exact rationals" />' +
-        '        <button id="alg-def-apply" class="small" type="button" title="Introduce the new symbol and substitute it into the current system (a new labeled column)">Define symbol</button></div>' +
+        '        <button id="alg-def-apply" class="small js-busy-lock" type="button" title="Introduce the new symbol and substitute it into the current system (a new labeled column)">Define symbol</button></div>' +
         '      <div id="alg-def-preview" class="alg-def-preview hint"></div>' +
-        '      <div class="row" style="margin-top:4px;"><button id="alg-abbrev" class="small" type="button">Abbreviate repeatedly</button></div>' +
+        '      <div class="row" style="margin-top:4px;"><button id="alg-abbrev" class="small js-busy-lock" type="button">Abbreviate repeatedly</button></div>' +
         '      <div class="algebra-line-label" style="margin-top:8px;">Add equation <span class="hint" style="font-weight:400;">(impose a custom condition)</span></div>' +
         '      <div class="algebra-define-row">' +
         '        <input id="alg-eq-expr" class="alg-def-expr" type="text" placeholder="e.g.  A1_1 - 1,  z1*zb1 - 1" autocomplete="off" spellcheck="false" title="A polynomial in the current variables.  + − * / ^ ( ),  i = imaginary unit,  exact rationals" />' +
         '        <select id="alg-eq-rel" class="alg-eq-rel" title="Relation: = 0 (equality), ≠ 0 (non-vanishing), or > 0 (Hermitian inequality)"><option value="=">= 0</option><option value="≠">≠ 0</option><option value="&gt;">&gt; 0</option></select>' +
-        '        <button id="alg-eq-apply" class="small" type="button" title="Add this equation/inequality as a new node in the current system">Add equation</button></div>' +
+        '        <button id="alg-eq-apply" class="small js-busy-lock" type="button" title="Add this equation/inequality as a new node in the current system">Add equation</button></div>' +
         '      <div id="alg-eq-preview" class="alg-def-preview hint"></div>' +
         '      <label style="font-size:11px;"><input type="checkbox" id="alg-eq-conj" checked> add conjugate</label>' +
         '    </div>' +
@@ -1814,8 +1814,8 @@ const QD = _QD;
         '      <div class="algebra-line-label">Eliminate variables <span class="hint" style="font-weight:400;">(remove unknowns; every consequence in the survivors is kept)</span></div>' +
         '      <div class="algebra-line"><span class="algebra-line-label">eliminate</span><span id="alg-elim-pick" class="algebra-picker"></span></div>' +
         '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
-        '        <button id="alg-eliminate-vars" class="small heavy-op" type="button" data-str-title="tooltips.eliminateVars">Eliminate picked variables</button>' +
-        '        <button id="alg-gauge-elim" class="small" type="button">Eliminate with gauge (all)</button></div>' +
+        '        <button id="alg-eliminate-vars" class="small heavy-op js-busy-lock" type="button" data-str-title="tooltips.eliminateVars">Eliminate picked variables</button>' +
+        '        <button id="alg-gauge-elim" class="small js-busy-lock" type="button">Eliminate with gauge (all)</button></div>' +
         // Caption, not a tooltip: the hard rule is nothing over ~120 chars in a `title` (finding 4.3).
         // This also carries the pointer to the two-node resultant, which is the same act living in
         // the inspector — the split that made elimination hard to find in the first place.
@@ -1834,21 +1834,21 @@ const QD = _QD;
         // they do to the solution set — which is also the distinction a user needs before clicking.
         '      <div class="algebra-line-label" style="margin-top:8px;">Rewrite the system <span class="hint" style="font-weight:400;">(same solutions, better shape)</span></div>' +
         '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
-        '        <button id="alg-groebner" class="small heavy-op" type="button">Gröbner basis (current column)</button>' +
-        '        <button id="alg-triangular" class="small" type="button">Triangular decomp.</button></div>' +
+        '        <button id="alg-groebner" class="small heavy-op js-busy-lock" type="button">Gröbner basis (current column)</button>' +
+        '        <button id="alg-triangular" class="small js-busy-lock" type="button">Triangular decomp.</button></div>' +
         '      <div class="algebra-line-label" style="margin-top:8px;">Narrow the system <span class="hint" style="font-weight:400;">(deliberately changes what solves it)</span></div>' +
         '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
-        '        <button id="alg-saturate" class="small" type="button">Saturate (admissibility)</button>' +
-        '        <button id="alg-propagate-all" class="small" type="button">Propagate constraints → current</button>' +
+        '        <button id="alg-saturate" class="small js-busy-lock" type="button">Saturate (admissibility)</button>' +
+        '        <button id="alg-propagate-all" class="small js-busy-lock" type="button">Propagate constraints → current</button>' +
         '        <button id="alg-pin-data" class="small" type="button">Pin known quadrature data</button></div>' +
         // Column-level factoring. The per-node "Attempt to factor" requires selecting each card in
         // turn to discover whether it splits; this scans the whole current system at once, which is
         // the shape "simplify and reduce these equations" actually asks for.
         '      <div class="algebra-line-label" style="margin-top:8px;">Split into cases <span class="hint" style="font-weight:400;">(one branch per component; the counts add up)</span></div>' +
         '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
-        '        <button id="alg-factor-scan" class="small" type="button">Factor / simplify column</button>' +
-        '        <button id="alg-decompose" class="small heavy-op" type="button">Decompose into components</button>' +
-        '        <button id="alg-regular-chains" class="small heavy-op" type="button">Regular chains (saturated)</button></div>' +
+        '        <button id="alg-factor-scan" class="small js-busy-lock" type="button">Factor / simplify column</button>' +
+        '        <button id="alg-decompose" class="small heavy-op js-busy-lock" type="button">Decompose into components</button>' +
+        '        <button id="alg-regular-chains" class="small heavy-op js-busy-lock" type="button">Regular chains (saturated)</button></div>' +
         '      <div id="alg-factor-out" class="algebra-factor-out"></div>' +
         // The `eliminate` picker moved OUT of Advanced and up into the elimination sub-section — it
         // is the whole point of that act, not a tuning knob. Only the monomial order stays here.
@@ -1862,16 +1862,16 @@ const QD = _QD;
         '  <details class="algebra-section">' +
         '    <summary>Analyze</summary>' +
         '    <div class="algebra-section-body"><div class="row" style="flex-wrap:wrap; gap:4px;">' +
-        '      <button id="alg-classify" class="small heavy-op" type="button">Existence / uniqueness</button>' +
-        '      <button id="alg-dimension" class="small" type="button">Dimension / count</button>' +
-        '      <button id="alg-solve" class="small" type="button">Solve (numeric)</button>' +
-        '      <button id="alg-univalence" class="small heavy-op" type="button">Certify univalence</button></div>' +
+        '      <button id="alg-classify" class="small heavy-op js-busy-lock" type="button">Existence / uniqueness</button>' +
+        '      <button id="alg-dimension" class="small js-busy-lock" type="button">Dimension / count</button>' +
+        '      <button id="alg-solve" class="small js-busy-lock" type="button">Solve (numeric)</button>' +
+        '      <button id="alg-univalence" class="small heavy-op js-busy-lock" type="button">Certify univalence</button></div>' +
         '    <div class="row" style="flex-wrap:wrap; gap:4px; margin-top:4px;">' +
         '      <label class="small">Resolvent in <select id="alg-resolvent-var"></select></label>' +
-        '      <button id="alg-resolvent" class="small heavy-op" type="button">Resolvent / discriminant</button></div>' +
+        '      <button id="alg-resolvent" class="small heavy-op js-busy-lock" type="button">Resolvent / discriminant</button></div>' +
         '    <div class="row" style="flex-wrap:wrap; gap:4px; margin-top:4px;">' +
         '      <label class="small">Bifurcation over <select id="alg-bifurc-var"></select></label>' +
-        '      <button id="alg-bifurc" class="small heavy-op" type="button">Bifurcation (real count)</button></div></div>' +
+        '      <button id="alg-bifurc" class="small heavy-op js-busy-lock" type="button">Bifurcation (real count)</button></div></div>' +
         '  </details>' +
         // ── End of the main route ──────────────────────────────────────────────────────────
         // Everything above is the column workflow: assume → edit → reduce → analyze, each step
@@ -1907,7 +1907,7 @@ const QD = _QD;
         '      <div class="hint" style="margin-bottom:4px;"><strong>Standalone — this does not touch the workspace:</strong> no column is added and the graph is unchanged. Reconstruct a discrete measure Σ aⱼ·δ(zⱼ) — a quadrature domain’s data — from its complex moments mₖ = Σ aⱼ·zⱼᵏ, by exact Prony–Hankel. The <strong>order</strong> (= #nodes = the QD-order) is the EXACT Hankel rank drop; the Prony polynomial Π(z−zⱼ) is exact; nodes/weights are numeric (well-conditioned, from the exact polynomial).</div>' +
         '      <div class="algebra-define-row">' +
         '        <input id="alg-moments" class="alg-def-expr" type="text" placeholder="m0, m1, m2, …   e.g.  3, 6, 14, 36, 98, 276   or  2, 0, -2, 0" autocomplete="off" spellcheck="false" title="Comma-separated complex moments m_0, m_1, …. Each: a (real), a+bi, a-bi, bi, i, -i; rationals 3/2 and decimals allowed." />' +
-        '        <button id="alg-moments-go" class="small heavy-op" type="button">Reconstruct</button></div>' +
+        '        <button id="alg-moments-go" class="small heavy-op js-busy-lock" type="button">Reconstruct</button></div>' +
         '      <div id="alg-moments-out" class="alg-def-preview hint"></div>' +
         '    </div>' +
         '  </details>' +
@@ -1935,7 +1935,7 @@ const QD = _QD;
         '      <div class="algebra-line" style="margin-top:6px; align-items:flex-start;"><span class="algebra-line-label">Import RCTD</span>' +
         '        <div style="flex:1; min-width:0;">' +
         '          <textarea id="alg-rctd-json" class="small" rows="3" placeholder=\'paste the qd-rctd JSON from your Maple run (see the post-script)\' style="width:100%; box-sizing:border-box; font-family:monospace; resize:vertical;"></textarea>' +
-        '          <div class="row" style="gap:4px; margin-top:2px;"><button id="alg-import-rctd" class="small heavy-op" type="button" title="Parse the qd-rctd JSON and append a new column of the decomposition cells">Import cells</button></div>' +
+        '          <div class="row" style="gap:4px; margin-top:2px;"><button id="alg-import-rctd" class="small heavy-op js-busy-lock" type="button" title="Parse the qd-rctd JSON and append a new column of the decomposition cells">Import cells</button></div>' +
         '        </div></div>' +
         '    </div>' +
         '  </details>' +
@@ -2734,8 +2734,8 @@ const QD = _QD;
       const select = document.createElement('select'); select.id = 'alg-var';
       const vars = store.sharedVars(sel[0], sel[1]);
       vars.forEach((v) => { const o = document.createElement('option'); o.value = v; o.textContent = latexPlain(v); select.appendChild(o); });
-      const elimBtn = mkBtn('Eliminate', 'Take the Sylvester resultant of the two selected nodes in the chosen variable', doEliminate); elimBtn.id = 'alg-eliminate'; elimBtn.disabled = vars.length === 0;
-      const gbBtn = mkBtn('Gröbner', 'Gröbner basis of the two selected nodes (uses every shared variable, not just one)', () => doGroebner(canvas ? canvas.getSelection() : [])); gbBtn.id = 'alg-groebner-sel';
+      const elimBtn = mkBtn('Eliminate', 'Take the Sylvester resultant of the two selected nodes in the chosen variable', doEliminate); elimBtn.id = 'alg-eliminate'; elimBtn.classList.add('js-busy-lock'); elimBtn.disabled = vars.length === 0;
+      const gbBtn = mkBtn('Gröbner', 'Gröbner basis of the two selected nodes (uses every shared variable, not just one)', () => doGroebner(canvas ? canvas.getSelection() : [])); gbBtn.id = 'alg-groebner-sel'; gbBtn.classList.add('js-busy-lock');
       line.appendChild(varLabel); line.appendChild(select); line.appendChild(elimBtn); line.appendChild(gbBtn);
       box.appendChild(line);
       const cost = document.createElement('div'); cost.className = 'hint'; cost.id = 'alg-cost'; cost.title = 'Sylvester matrix size and term counts — the elimination cost'; box.appendChild(cost);
@@ -2778,10 +2778,14 @@ const QD = _QD;
     let _busy = false;
     function setBusy(on, label) {
       _busy = !!on;
-      ['alg-prove', 'alg-groebner', 'alg-groebner-sel', 'alg-solve', 'alg-dimension', 'alg-triangular', 'alg-saturate', 'alg-classify', 'alg-univalence', 'alg-resolvent', 'alg-bifurc', 'alg-moments-go', 'alg-autosolve',
-        'alg-gauge-elim', 'alg-eliminate', 'alg-eliminate-vars', 'alg-seed', 'alg-undo', 'alg-redo', 'alg-real-apply', 'alg-real-auto', 'alg-real-detect', 'alg-propagate-all', 'alg-val-apply', 'alg-def-apply', 'alg-abbrev', 'alg-eq-apply',
-        'alg-factor-scan', 'alg-decompose', 'alg-regular-chains']
-        .forEach((id) => { const b = $('#' + id); if (b) b.disabled = on; });
+      // Marked with `js-busy-lock` AT the control, not listed here. This was a hand-maintained
+      // array of 30 ids sitting ~700 lines from the buttons it named (finding 5.9, "will
+      // drift") — and it had drifted: `alg-seed-moment` and `alg-w0-fix` both RE-SEED, and
+      // neither was in the array nor self-guarded, so either could drop a fresh system on top
+      // of an in-flight worker derivation. That is precisely what this lock exists to prevent.
+      // The marker now sits in the markup beside the control, where it is visible to whoever
+      // adds one. (It does not make remembering unnecessary — it puts the reminder in view.)
+      document.querySelectorAll('.js-busy-lock').forEach((b) => { b.disabled = on; });
       const pal = $('#alg-palette'); if (pal) pal.querySelectorAll('button').forEach((b) => { b.disabled = on; });
       const cancel = $('#alg-cancel'); if (cancel) cancel.classList.toggle('hidden', !on);
       if (on && label) setStatus(label);
@@ -3572,7 +3576,7 @@ const QD = _QD;
                   rigorProvenance: pr.rigorProvenance || [], perSolution: rows, assumptions: specializationLedger(cl),
                   stages: ((pr.kind === 'moment' ? PROVE.MOMENT_STAGES : pr.kind === 'rational' ? PROVE.RATIONAL_STAGES : pr.kind === 'triangle' ? PROVE.TRIANGLE_STAGES : PROVE.CERTIFY_STAGES) || []).map((s) => ({ id: s.id, title: s.title, why: s.why })),
                 };
-                const out = { format: 'qd-proof', version: 1, proof, derivation: store.exportDAG() };
+                const out = { format: 'qd-proof', version: 1, session: exportStamp(), proof, derivation: store.exportDAG() };
                 const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a'); a.href = url; a.download = 'qd-proof.json'; document.body.appendChild(a); a.click(); a.remove();
@@ -3880,13 +3884,31 @@ const QD = _QD;
     }
 
     // ---- export --------------------------------------------------------------
+    // ── Export identity (finding 5.8) ───────────────────────────────────────────────────────
+    // A downloaded DAG carried version / tracks / nodes and nothing that said WHICH workspace it
+    // came from, or when. Two exports taken either side of a re-seed are indistinguishable once
+    // they are files on disk, which is exactly when it matters.
+    //
+    // Deliberately identity, NOT a correctness claim: the mode and pole count describe the solve
+    // the workspace was seeded from, and nothing here asserts the derivation is right. A `sessionId`
+    // that survives re-seeds but not a reload is the honest granularity — it groups exports from one
+    // sitting without implying they describe the same system.
+    const _sessionId = 'qda-' + Math.random().toString(36).slice(2, 10);
+    function exportStamp() {
+      const hd = (activeEnv && activeEnv.hData) || lastHData || null;
+      return {
+        sessionId: _sessionId,
+        exportedAt: new Date().toISOString(),
+        source: hd ? { mode: (state && state.mode) || 'unknown', poles: (hd.poles || []).length } : null,
+      };
+    }
     function exportJson() {
       // Six of the eight export controls guard on store.size; these two did not, so an empty
       // workspace downloaded an empty DAG / copied an empty \begin{gathered} block. A file that
       // arrives looking normal and contains nothing is worse than a refusal — it gets filed,
       // shared, and only fails much later.
       if (!store.size) { toast('Nothing to export yet — generate a system first.', { kind: 'error' }); return; }
-      const data = store.exportDAG();
+      const data = Object.assign({ session: exportStamp() }, store.exportDAG());
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url; a.download = 'qd-algebra-dag.json';
@@ -4528,7 +4550,10 @@ const QD = _QD;
       const setZ = (z) => { if (canvas) { _zoom = canvas.setZoom(z); zlabel.textContent = Math.round(_zoom * 100) + '%'; } };
       const btn = (glyph, title, fn, id) => {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'small algebra-tb-btn'; b.textContent = glyph; b.title = title;
-        if (id) b.id = id; b.addEventListener('click', fn); return b;
+        // The only ids this factory assigns are alg-undo / alg-redo, both of which mutate the
+        // graph and must therefore be caught by the busy lock.
+        if (id) { b.id = id; b.classList.add('js-busy-lock'); }
+        b.addEventListener('click', fn); return b;
       };
       bar.appendChild(btn('−', 'Zoom out (fit more columns)', () => setZ(_zoom / 1.15)));
       bar.appendChild(zlabel);
