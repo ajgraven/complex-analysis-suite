@@ -1610,12 +1610,14 @@ const QD = _QD;
         '      <label style="font-size:11px;" title="In the conjugate model, also add the conjugate equation p̄ = 0 (keeps the system conjugation-closed for reim / existence analysis)."><input type="checkbox" id="alg-eq-conj" checked> add conjugate</label>' +
         '    </div>' +
         '  </details>' +
-        // 3. Reduce. Grouped into three honest sub-headings (the "Edit system" idiom above).
+        // 3. Reduce. Grouped into four honest sub-headings (the "Edit system" idiom above).
         //    Variable elimination used to be INVISIBLE here: the only whole-system eliminator was a
-        //    hidden MODE of the button labelled "Gröbner basis (all eqns)" — it silently switched to
-        //    an elimination order iff the `eliminate` picker, two levels down under Advanced, was
-        //    non-empty. A user who wanted to remove a variable had no way to find that. Elimination is
-        //    now its own sub-section with its own button, and #alg-groebner does ONE thing.
+        //    hidden MODE of the plain Gröbner button — it silently switched to an elimination order
+        //    iff the `eliminate` picker, two levels down under Advanced, was non-empty. A user who
+        //    wanted to remove a variable had no way to find that. Elimination is now its own
+        //    sub-section with its own button, and #alg-groebner does ONE thing.
+        //    (That button's label has since been corrected too: it said "all eqns" while operating
+        //    on the current column alone.)
         '  <details class="algebra-section">' +
         '    <summary>Reduce</summary>' +
         '    <div class="algebra-section-body">' +
@@ -1642,7 +1644,7 @@ const QD = _QD;
         // they do to the solution set — which is also the distinction a user needs before clicking.
         '      <div class="algebra-line-label" style="margin-top:8px;">Rewrite the system <span class="hint" style="font-weight:400;">(same solutions, better shape)</span></div>' +
         '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
-        '        <button id="alg-groebner" class="small heavy-op" type="button" data-str-title="tooltips.groebner">Gröbner basis (all eqns)</button>' +
+        '        <button id="alg-groebner" class="small heavy-op" type="button" data-str-title="tooltips.groebner">Gröbner basis (current column)</button>' +
         '        <button id="alg-triangular" class="small" type="button" title="Triangular decomposition (Wu pseudo-elimination) of the current system — an alternative to Gröbner that exhibits the solution structure (free variables, no-solution)">Triangular decomp.</button></div>' +
         '      <div class="algebra-line-label" style="margin-top:8px;">Narrow the system <span class="hint" style="font-weight:400;">(deliberately changes what solves it)</span></div>' +
         '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
@@ -1715,7 +1717,7 @@ const QD = _QD;
         '        <button id="alg-export-json" class="small" type="button" title="Download the whole session as exact ℚ(i) term lists + edges + tracks + assumptions (round-trips via Load)">Download DAG (JSON)</button>' +
         '        <button id="alg-import-json" class="small" type="button" title="Load a previously downloaded DAG JSON — rebuilds the whole workspace (nodes, branches, assumptions). Replaces the current graph (undoable).">Load DAG (JSON)</button>' +
         '        <input id="alg-import-file" type="file" accept="application/json,.json" style="display:none;" />' +
-        '        <button id="alg-copy-latex" class="small" type="button" title="Copy all equations as a gathered LaTeX block">Copy LaTeX</button>' +
+        '        <button id="alg-copy-latex" class="small" type="button" title="Copy EVERY equation in the session — all columns and all branches — as one gathered LaTeX block. For just the active branch, use Copy derivation.">Copy all LaTeX</button>' +
         '        <button id="alg-copy-derivation" class="small" type="button" title="Copy the active branch as a literate LaTeX derivation — one align block per column, each annotated with the transition that produced it + the active hypotheses">Copy derivation (LaTeX)</button>' +
         '        <button id="alg-copy-sympy" class="small" type="button" title="Copy the active branch as a runnable SymPy script — substitution steps are recomputed by SymPy from the previous column; engine reductions (Gröbner / resultant) are given as exact ℚ(i) literals">Copy SymPy script</button></div>' +
         '      <div class="algebra-line" style="margin-top:4px;"><span class="algebra-line-label">Mathematica</span>' +
@@ -1758,8 +1760,25 @@ const QD = _QD;
       // which owns the element — wiring it from here would depend on a mount order that no longer holds.)
       $('#alg-seed').addEventListener('click', seedFromCurrent);
       { const mb = $('#alg-seed-moment'); if (mb) mb.addEventListener('click', seedMomentSystem); }
+      // 4.13: a destructive re-seed wearing a display toggle's clothes. Ticking this discarded the
+      // whole derivation with no warning, while the `s` accelerator — which does the same thing —
+      // asks first. The project's own rule discriminates correctly here: a keystroke confirms
+      // because brushing a key is not aimed, and a labelled button does not because clicking it is.
+      // A checkbox reads as a view option, so it belongs with the keystroke.
+      //
+      // The checkbox is treated as UNCOMMITTED until the re-seed actually happens: `change` has
+      // already flipped it, so it is flipped back at once and only restored inside onYes. Declining,
+      // superseding the strip with another confirm, or leaving it on screen therefore all leave the
+      // box showing the gauge that is actually in effect — reverting in an onNo callback would miss
+      // the last two.
       const w0FixCb = $('#alg-w0-fix');
-      if (w0FixCb) w0FixCb.addEventListener('change', () => { if (store.size) seedFromCurrent(); });
+      if (w0FixCb) w0FixCb.addEventListener('change', () => {
+        if (!store.size) return;                 // nothing to lose; the next seed reads it anyway
+        const want = w0FixCb.checked;
+        w0FixCb.checked = !want;
+        confirmReplace(want ? 'Fixing φ(0)=w₀' : 'Releasing φ(0)=w₀',
+          () => { w0FixCb.checked = want; seedFromCurrent(); });
+      });
       $('#alg-groebner').addEventListener('click', () => doGroebner(null));
       $('#alg-eliminate-vars').addEventListener('click', doEliminateVars);
       $('#alg-autosolve').addEventListener('click', doAutoSolve);
@@ -2487,9 +2506,21 @@ const QD = _QD;
         return;
       }
 
-      // two nodes: the resultant elimination panel
+      // two nodes: the resultant elimination panel.
+      //
+      // `sel.length` is exactly 2 here and cannot exceed it: algebra-canvas's toggleSelect caps the
+      // selection with `if (selected.length > 2) selected.shift()`. So the resultant — a strictly
+      // two-node operation — always has its pair, and no 3+ branch is needed.
+      //
+      // What the cap DOES cost is surprise: ctrl+clicking a third card silently drops the oldest,
+      // and nothing said so. Observed directly — a selection reading "(●)₁ × (●)₁ (conj)" became
+      // "(●)₁ (conj) × (★)₁,₁" on the third click, with the first equation quietly gone. The panel
+      // now states the rule, which turns a disappearing selection into an expected one.
       const a = store.get(sel[0]), b = store.get(sel[1]);
       const selLine = document.createElement('div'); selLine.className = 'hint'; selLine.textContent = a.label + '   ×   ' + b.label; box.appendChild(selLine);
+      const capLine = document.createElement('div'); capLine.className = 'hint algebra-sel-cap';
+      capLine.textContent = 'Two at a time — selecting a third replaces the older of these.';
+      box.appendChild(capLine);
       const line = document.createElement('div'); line.className = 'algebra-line';
       const varLabel = document.createElement('span'); varLabel.className = 'algebra-line-label'; varLabel.textContent = 'Variable';
       const select = document.createElement('select'); select.id = 'alg-var';
@@ -3642,6 +3673,11 @@ const QD = _QD;
 
     // ---- export --------------------------------------------------------------
     function exportJson() {
+      // Six of the eight export controls guard on store.size; these two did not, so an empty
+      // workspace downloaded an empty DAG / copied an empty \begin{gathered} block. A file that
+      // arrives looking normal and contains nothing is worse than a refusal — it gets filed,
+      // shared, and only fails much later.
+      if (!store.size) { toast('Nothing to export yet — generate a system first.', { kind: 'error' }); return; }
       const data = store.exportDAG();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -3677,6 +3713,9 @@ const QD = _QD;
     }
     // Copy ALL nodes as a gathered LaTeX environment (sidebar "Copy LaTeX").
     function copyLatex() {
+      if (!store.size) { toast('Nothing to copy yet — generate a system first.', { kind: 'error' }); return; }
+      // store.list() is EVERY node: all columns, all branches. The label and title now say so —
+      // "Copy LaTeX" beside "Copy derivation (LaTeX)" read as a pair of scopes it did not have.
       const lines = store.list().map((n) => '\\text{[' + n.id + ']}\\quad ' + n.poly.toLatex(latexOf) + relSuffix(n.rel));
       writeClipboard('\\begin{gathered}\n' + lines.join(' \\\\[4pt]\n') + '\n\\end{gathered}', 'LaTeX');
     }
