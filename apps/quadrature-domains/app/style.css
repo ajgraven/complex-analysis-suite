@@ -10,7 +10,12 @@
   --c-accent:        #2d70c8;   /* segmented-control active fill */
   --c-ink:           #1a2a44;   /* strong text + headings */
   --c-text:          #2a2a2a;   /* body text */
-  --c-muted:         #777;      /* secondary text / hints */
+  /* 5.5: #777 measured 4.48:1 on --c-surface and 4.07:1 on --c-bg — under WCAG AA's 4.5 for
+     normal text, and this token carries most of the app's explanatory prose plus the algebra
+     status line, at 11px (70% inside #controls-algebra). #6f6f6f is the LIGHTEST neutral grey
+     clearing 4.5 on both (5.02 / 4.57) — 8/255 darker, so the change is near-imperceptible
+     while the failure it fixes is not. */
+  --c-muted:         #6f6f6f;   /* secondary text / hints — AA on --c-surface and --c-bg */
   --c-muted-2:       #555;      /* readouts */
   --c-border:        #d8dbe0;   /* primary separators / rule lines */
   --c-border-soft:   #e3e5ea;   /* card + pole borders */

@@ -395,12 +395,42 @@ so `apply()` rewrites its `innerHTML` — silently wiping the header block. Meas
 **0 entries placed**. The call now runs after `apply()`, and a test pins the ordering, because
 nothing about the code's appearance suggests the dependency.
 
-### Tier 6 — deferred infrastructure
+### Tier 6 — deferred infrastructure ✅ *shipped, except dark mode*
 
-**5.9** busy-lock id array (a hand-maintained list of 27 ids; adding today's button to it was a live
-demonstration of the drift), **5.2** dark mode (unblocked — 5.1 shipped), **5.5** contrast (`.hint`
-at ≈4.48:1, just under AA, and it carries most of the panel's prose), **5.8** export session
-identity.
+**5.2 dark mode is out of scope** by request; it remains open and unblocked (5.1 was its
+prerequisite).
+
+**5.9 — the busy lock had drifted three times.** A hand-maintained array of 30 ids sat ~700 lines
+from the buttons it named. Verified missing: `alg-seed-moment` and `alg-w0-fix` both **re-seed**,
+and neither was in the array nor self-guarded — so either could drop a fresh system on top of an
+in-flight worker derivation, precisely what the lock exists to prevent. The marker (`js-busy-lock`)
+now sits on the control, and `setBusy` selects by class.
+
+*A derivable half of the invariant is now tested:* every `heavy-op` control must be locked. It
+earned its keep on the first run by finding a **third** drift — `alg-import-rctd`, heavy and
+unlocked. That one self-guards via `busyGuard()`, so it was not silently broken; it was the one
+heavy control whose unavailability you discovered by clicking rather than seeing. Verified live:
+31 controls disabled at t=0 of a worker op, Cancel revealed, all released on completion.
+
+*Honest about what this does not do:* a class is still something to remember. It moves the reminder
+next to the thing being edited, and makes the heavy-op subset machine-checkable — it does not make
+the non-heavy mutators derivable.
+
+**5.5 — the muted token was below AA.** Measured `#777` at **4.48:1** on `--c-surface` and
+**4.07:1** on `--c-bg`; AA wants 4.5 for normal text, and this token carries most of the app's
+prose plus the algebra status line at 11px (70% inside the panel). `#6f6f6f` is the **lightest**
+neutral grey clearing 4.5 on both (5.02 / 4.57) — 8/255 darker, so the change is near-imperceptible
+while the failure it fixes is not. The test computes the WCAG ratio rather than asserting a hex.
+
+**5.8 — exports carried no identity.** `exportDAG` emitted `version` / `tracks` / `nodes` and
+nothing saying which workspace produced it or when; two exports either side of a re-seed are
+indistinguishable once they are files. Both the DAG download and the proof export now carry
+`{ sessionId, exportedAt, source: { mode, poles } }`.
+
+*Deliberately identity, not a correctness claim.* The source describes the solve the workspace was
+seeded from and asserts nothing about the derivation. It is `null` rather than invented when
+nothing has been solved — a fabricated provenance line reads as a fact about a solve that never
+happened, which is worse than an absent one.
 
 ---
 
@@ -414,13 +444,32 @@ above is what it looked like in practice.
 
 **Tiers 1, 2 and 3 are complete.**
 
-**Next: Tier 6** — dark mode (**5.2**, unblocked since 5.1), contrast (**5.5**), the hand-maintained
-busy-lock id array (**5.9**), and export session identity (**5.8**). Plus the deferred lens slices
-**4b–4d**.
+**Every tier is now shipped except two deliberate exclusions.**
 
-Tier 4 slice 1 and Tier 5 are done; **4b** (act from the row) and **4c** (cost estimates) remain.
-4c is worth a note: `store.previewCost` gives an honest Sylvester matrix size, but there is no
-comparable Gröbner estimate, and inventing one would put a fabricated number beside a real one.
+Open, by choice rather than oversight:
+
+- **5.2 dark mode** — out of scope by request; unblocked whenever it is wanted.
+- **4b** — act directly from a lens row (it currently routes and explains).
+- **4c** — per-option cost estimates. `store.previewCost` gives an honest Sylvester matrix size,
+  but there is **no comparable Gröbner estimate**, and putting an invented number beside a measured
+  one is the failure mode this whole review has been about. Wants a real estimator first.
+- **4d** — the same lens over equations, if the variable view proves out.
+
+### What nine findings taught
+
+Of S1–S9: **seven held**, and **two did not survive contact** — **S4** (a state the canvas cannot
+produce) and **S8** (sibling ops that in fact emit different shapes). Both were derived by reading
+a *consumer* without checking the *producer*, and both would have shipped as dead code carrying
+tests that claimed to close a live defect.
+
+Three findings filed as legibility problems sat on concrete defects: a verdict that could describe
+a system you did not ask about (**S2**), a section-opener pointing at the wrong panel since #111,
+and modelling work destroyed without notice (**S9** in 1.2). And three of the four Tier-6 drifts
+were only found by making an invariant *machine-checkable* rather than re-reading the list.
+
+**The rule that came out of it:** reproduction, not code-reading, is the gate for calling something
+a defect — and a finding about what a component *receives* is not established until the component
+that *sends* has been checked.
 
 ### What the three tiers taught
 

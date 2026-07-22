@@ -114,10 +114,15 @@ describe("the group captions describe what the buttons do to the solution set", 
 
 describe("the new control is wired like its neighbours", () => {
   it("is disabled while a worker op runs", () => {
-    // setBusy's id list is hand-maintained (a known drift risk). A heavy op left clickable can
-    // start a second worker run and orphan the in-flight derivation.
-    const busy = bodyOf("setBusy");
-    expect(busy).toMatch(/'alg-eliminate-vars'/);
+    // A heavy op left clickable can start a second worker run and orphan the in-flight derivation.
+    //
+    // This originally asserted the id appeared in setBusy's hand-maintained array. Tier 6 (5.9)
+    // replaced that array with a `js-busy-lock` marker on the control itself, after the array was
+    // found to have drifted three times. The property is unchanged; where it is expressed moved.
+    const btn = UI.slice(UI.indexOf('id="alg-eliminate-vars"') - 120,
+                         UI.indexOf('id="alg-eliminate-vars"') + 120);
+    expect(btn, "alg-eliminate-vars must carry js-busy-lock").toMatch(/js-busy-lock/);
+    expect(UI).toMatch(/querySelectorAll\('\.js-busy-lock'\)/);
   });
 
   it("has a click handler", () => {
