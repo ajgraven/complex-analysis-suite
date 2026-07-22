@@ -1171,6 +1171,14 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
    inspector. Indented to read as belonging to the buttons above it rather than the next group. */
 #controls-algebra .algebra-elim-hint { margin: 2px 0 0 2px; }
 
+/* "What the certified route actually runs" note at the top of Reduce. Bordered rather than plain
+   hint text because it qualifies every button below it, not the next one. */
+#controls-algebra .algebra-route-note {
+  margin: 0 0 4px; padding: 3px 6px; border-radius: 4px;
+  background: var(--c-info-bg); color: var(--c-info-text);
+  border-left: 3px solid var(--c-link);
+}
+
 /* "Set values" multi-row table */
 #controls-algebra .algebra-value-row { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
 #controls-algebra .algebra-value-row select { max-width: 116px; flex: 1 1 auto; }

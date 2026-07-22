@@ -145,8 +145,8 @@ const QD = _QD;
       edge:   (p, { latexPlain }) => p.eliminate && p.eliminate.length ? 'Gröbner · elim ' + p.eliminate.map(latexPlain).join(',') : 'Gröbner',
     },
     saturate: {
-      text:   (p) => 'saturate ⟨I⟩ : ' + (p.factor || '(1−z̄z)') + '^∞ — dropped the |z_j|=1 boundary stratum, of ' + (p.inputs || []).join(', '),
-      column: (p) => '↳ saturate · ' + (p.factor || '(1−z̄z)'),
+      text:   (p) => 'saturate ⟨I⟩ : ' + (p.factor || '(1−z̄z)') + '^∞ — dropped the |z_j|=1 boundary stratum, of ' + (p.inputs || []).join(', ') + _droppedSuffix(p),
+      column: (p) => '↳ saturate · ' + (p.factor || '(1−z̄z)') + _droppedSuffix(p),
       edge:   () => 'saturate',
     },
     substitute: {
@@ -198,8 +198,8 @@ const QD = _QD;
       edge:   () => 'custom eqn',
     },
     triangular: {
-      text:   (p) => p.contradiction ? 'triangular decomposition (inconsistent)' : 'triangular decomposition (Wu) of ' + (p.inputs || []).join(', '),
-      column: (p) => p.contradiction ? '↳ triangular · inconsistent' : '↳ triangular decomposition',
+      text:   (p) => (p.contradiction ? 'triangular decomposition (inconsistent)' : 'triangular decomposition (Wu) of ' + (p.inputs || []).join(', ')) + _droppedSuffix(p),
+      column: (p) => (p.contradiction ? '↳ triangular · inconsistent' : '↳ triangular decomposition') + _droppedSuffix(p),
       edge:   () => 'triangular',
     },
     // A variety split (minimalPrimes / regular chains), one level up from a factor split. Without a
@@ -341,6 +341,23 @@ const QD = _QD;
   // post-hoc caveat on the verdict, so the warning and the behaviour cannot drift apart. Adding a
   // selection-aware op means adding it here; a `scopeCaveat` with no banner entry (or vice versa)
   // is the drift this registry exists to prevent.
+  // A basis-replacement reduction (Gröbner / saturate / triangular / resultant) emits a fresh set
+  // of EQUALITY generators, so any '>' or '≠' node in the column is consumed by omission — it
+  // simply does not appear in the next one. Gröbner reported that as `skipped`; saturate and
+  // triangularize dropped silently, and the column diff showed only a bare "−N gone" that reads
+  // exactly like the ordinary rewrite churn.
+  //
+  // It matters most for the univalence palette, whose conditions are mostly inequalities: build up
+  // "convex", reduce once, and the convexity condition is gone. ✦ Prove's prelude saturates, so it
+  // discards them too — and it never read them anyway (it certifies univalence by an exact
+  // Schur–Cohn fold + boundary-simplicity test on each reconstructed φ).
+  //
+  // Recorded in provenance so the column label carries it permanently, not just a toast: the loss
+  // is of the user's own modelling work, and it must still be visible in an exported derivation.
+  function _droppedSuffix(p) {
+    const n = (p && p.droppedNonEq) || 0;
+    return n ? ' · ⚠ ' + n + ' inequality node' + (n === 1 ? '' : 's') + ' dropped' : '';
+  }
   const SELECTION_SCOPED = [
     { id: 'alg-classify',   label: 'Existence / uniqueness' },
     { id: 'alg-saturate',   label: 'Saturate' },
@@ -1602,6 +1619,12 @@ const QD = _QD;
         '  <details class="algebra-section">' +
         '    <summary>Reduce</summary>' +
         '    <div class="algebra-section-body">' +
+        // Which of these the certified route actually uses. ✦ Prove's prelude is exactly
+        // assumeReal → reducePropagate ×4 → saturateMobius, then the plan engine; it never calls
+        // Gröbner, triangular decomposition, regular chains or minimal primes (prove-plan.mjs does
+        // not reference them). They are manual tractability tools, and the panel gave them the same
+        // weight as the canonical path without saying so.
+        '      <div class="hint algebra-route-note">✦ Prove runs <em>assume real → propagate → saturate</em> by itself. Everything else here is a manual tool for when that stalls — Gröbner, triangular, regular chains and minimal primes are never run by the certified route.</div>' +
         '      <div class="algebra-line-label">Eliminate variables <span class="hint" style="font-weight:400;">(remove unknowns; every consequence in the survivors is kept)</span></div>' +
         '      <div class="algebra-line"><span class="algebra-line-label">eliminate</span><span id="alg-elim-pick" class="algebra-picker"></span></div>' +
         '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
@@ -1673,7 +1696,14 @@ const QD = _QD;
         '  <details class="algebra-section">' +
         '    <summary>Univalence constraints</summary>' +
         '    <div class="algebra-section-body">' +
-        '      <div class="hint" id="alg-palette-note" style="margin-bottom:4px;">Append a boundary-univalence condition as new node(s) — hover each for its meaning.</div>' +
+        // What this palette is NOT. ✦ Prove certifies univalence by an exact Schur–Cohn fold plus a
+        // boundary-simplicity test on each reconstructed φ — it never reads these nodes. And their
+        // substance is inequalities, which any basis replacement (Gröbner / saturate / triangular)
+        // consumes by omission; ✦ Prove's own prelude saturates, so it discards them on the way
+        // past. Someone can otherwise build up a careful univalence model, prove, and never learn
+        // that none of it reached the verdict.
+        '      <div class="hint" id="alg-palette-note" style="margin-bottom:4px;">Append a boundary-univalence condition as new node(s) — hover each for its meaning. ' +
+        '<strong>These are for your own analysis:</strong> ✦ Prove does not read them (it certifies univalence by an exact Schur–Cohn fold + boundary-simplicity test on each reconstructed φ), and because they are mostly inequalities, any basis reduction — Gröbner, Saturate, Triangular — drops them.</div>' +
         '      <div id="alg-palette" class="algebra-palette"></div>' +
         '    </div>' +
         '  </details>' +
@@ -2610,7 +2640,7 @@ const QD = _QD;
       if (!r.ok) { showError('Saturate (admissibility): ' + withGuidance(r.reason || 'nothing to saturate')); return; }
       if (canvas) canvas.clearSelection();
       rerender(); refreshPickers();
-      toast('Saturated by ∏(1−z̄z): the |z_j| = 1 boundary stratum removed (' + r.created.length + ' generator' + (r.created.length === 1 ? '' : 's') + ')' + scopeNote(sel) + ' — the existence count is now the exact algebraic QD-solution count.');
+      toast('Saturated by ∏(1−z̄z): the |z_j| = 1 boundary stratum removed (' + r.created.length + ' generator' + (r.created.length === 1 ? '' : 's') + ')' + scopeNote(sel) + ' — the existence count is now the exact algebraic QD-solution count.' + droppedNote(r.skipped), r.skipped && r.skipped.length ? { kind: 'error' } : {});
     }
     // Triangular decomposition of the current system → a triangular chain column.
     function doTriangular() {
@@ -2628,7 +2658,8 @@ const QD = _QD;
       if (r.contradiction) { toast('Triangular decomposition: system is INCONSISTENT — no solution' + scopeNote(sel) + (sel.length ? ' (so the full system is inconsistent too).' : '.')); return; }
       toast('Triangular decomposition: ' + r.created.length + ' element(s)' + scopeNote(sel) +
         (r.freeVars.length ? '; free variable(s) ' + r.freeVars.map(latexPlain).join(', ') + ' ⇒ a positive-dimensional family' : ' ⇒ zero-dimensional (finitely many solutions)') +
-        (r.hasRegularityConditions ? ' · ⚠ ' + r.initialCount + ' non-constant initial(s) — a Wu chain is NOT saturated by its pivots, so where an initial vanishes it may add spurious branches or miss components (a full regular-chain decomposition would case-split on the initials)' : ''));
+        (r.hasRegularityConditions ? ' · ⚠ ' + r.initialCount + ' non-constant initial(s) — a Wu chain is NOT saturated by its pivots, so where an initial vanishes it may add spurious branches or miss components (a full regular-chain decomposition would case-split on the initials)' : '') +
+        droppedNote(r.skipped), r.skipped && r.skipped.length ? { kind: 'error' } : {});
     }
     // Carry every univalence constraint into the current system, assumptions applied (batch).
     function doPropagateAll() {
@@ -2693,6 +2724,16 @@ const QD = _QD;
     function scopeNote(sel) {
       if (!sel || !sel.length) return '';
       return ' · on the ' + sel.length + ' selected equation' + (sel.length === 1 ? '' : 's') + ' only';
+    }
+    // Toast wording for the non-equality nodes a basis replacement consumed by omission. Names
+    // them: "2 dropped" leaves the user hunting, and the whole point is that they were THEIRS.
+    function droppedNote(skipped) {
+      if (!skipped || !skipped.length) return '';
+      const named = skipped.slice(0, 2).map((s) => s.label).filter(Boolean);
+      const more = skipped.length - named.length;
+      return ' · ⚠ dropped ' + skipped.length + ' inequality node' + (skipped.length === 1 ? '' : 's')
+        + (named.length ? ' (' + named.join('; ') + (more > 0 ? '; +' + more + ' more' : '') + ')' : '')
+        + ' — a basis replaces the equalities only, so > and ≠ conditions do not carry forward';
     }
     // The pre-click half of the same problem: the selection lives on the canvas, ~900px from these
     // buttons, so nothing warned BEFORE the op ran. Shown only while a selection is live.
