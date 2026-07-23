@@ -430,6 +430,56 @@ const QD = _QD;
     }
     return out;
   }
+  // Live facts per variable in the CURRENT column, feeding variableRemovals. Ordered by how many
+  // equations hold the variable, descending — the ones costing the most are the ones worth
+  // removing, and that ranking is the answer to "which should I attack?" a flat picker cannot give.
+  //
+  // A pure function of the store (module scope, exposed on QD_UI), so it is testable in isolation —
+  // its absence of a test is how the conjugate bug below shipped. The conjugate lookup goes through
+  // store.conjNameOf (the substConj-overlay-aware `_conjName`), NOT the raw QC.conjVarName the UI
+  // reached for before: the raw table cannot know symbols introduced by "Define substitution", so
+  // a defined symbol's conjugate t̄ computed conjOf: null and its lens row silently omitted the
+  // "Assume t real" and "one pin removes both" routes.
+  function variableCensus(store) {
+    // orderedColumn, not currentColumnIds: the latter filters to equalities, and an inequality node
+    // holds variables too — a census that ignored them would under-report exactly the univalence-
+    // constraint variables 1.2 was about.
+    const nodes = (store.orderedColumn ? store.orderedColumn(store.maxColumn()) : []).filter(Boolean);
+    const uses = new Map();
+    nodes.forEach((n) => {
+      const vs = (n.poly && n.poly.vars) ? n.poly.vars() : [];
+      for (const v of vs) uses.set(v, (uses.get(v) || 0) + 1);
+    });
+    const base = new Set(store.baseVariables ? store.baseVariables() : []);
+    const known = (store.knownValues && store.knownValues()) || {};
+    const real = new Set(store.realVars || []), imag = new Set(store.imagVars || []);
+    const conjOf = (name) => (typeof store.conjNameOf === 'function') ? store.conjNameOf(name) : name;
+    const gaugeNode = nodes.find((n) => n.meta && n.meta.block === 'gauge');
+    const gaugeVars = gaugeNode && gaugeNode.poly && gaugeNode.poly.vars ? new Set(gaugeNode.poly.vars()) : new Set();
+    const all = [...uses.keys()].sort((a, b) => (uses.get(b) - uses.get(a)) || a.localeCompare(b));
+    return all.map((name) => {
+      const c = conjOf(name);
+      // `name` is a conjugate iff conjugating it yields a DIFFERENT primal base variable.
+      // `c !== name` matters: conjNameOf returns its input unchanged for anything self-conjugate
+      // (cosL, sinL, Wsat, a real defined symbol). Without the guard those became their own
+      // "partner", and the lens offered "Assume t real" noting "identifies t ≡ t" — a wrong-variable
+      // recommendation, the exact failure the lens exists to prevent.
+      const partner = (c && c !== name && base.has(c)) ? c : null;
+      return {
+        name,
+        uses: uses.get(name) || 0,
+        total: nodes.length,
+        isBase: base.has(name),
+        conjName: (c && c !== name && base.has(name)) ? c : null,
+        conjOf: partner,
+        isReal: real.has(name) || (partner && real.has(partner)),
+        isImag: imag.has(name) || (partner && imag.has(partner)),
+        isPinned: Object.prototype.hasOwnProperty.call(known, name),
+        inGauge: gaugeVars.has(name),
+        isW0: /^w_?0$/.test(name),
+      };
+    });
+  }
   // ── The ①②③④ workflow strip ─────────────────────────────────────────────────────────────────
   // Four static <span>s with no handler, no state binding and no current-step marker: it asserted
   // a fixed four-step procedure and then never said where you were in it, which of the four you
@@ -886,59 +936,13 @@ const QD = _QD;
       if (!v.re) return f(v.im) + 'i';
       return f(v.re) + (v.im < 0 ? ' − ' : ' + ') + f(Math.abs(v.im)) + 'i';
     }
-    // Live facts per variable in the CURRENT column, feeding variableRemovals. Ordered by how many
-    // equations hold the variable, descending — the ones costing the most are the ones worth
-    // removing, and that ranking is the answer to "which should I attack?" that a flat picker
-    // cannot give.
-    function variableCensus() {
-      // orderedColumn, not currentColumnIds: the latter filters to equalities, and an inequality
-      // node holds variables too — a census that ignored them would under-report exactly the
-      // univalence-constraint variables 1.2 was about.
-      const nodes = (store.orderedColumn ? store.orderedColumn(store.maxColumn()) : []).filter(Boolean);
-      const uses = new Map();
-      nodes.forEach((n) => {
-        const vs = (n.poly && n.poly.vars) ? n.poly.vars() : [];
-        for (const v of vs) uses.set(v, (uses.get(v) || 0) + 1);
-      });
-      const base = new Set(store.baseVariables ? store.baseVariables() : []);
-      const known = (store.knownValues && store.knownValues()) || {};
-      const real = new Set(store.realVars || []), imag = new Set(store.imagVars || []);
-      const conjOf = (name) => (QC && typeof QC.conjVarName === 'function') ? QC.conjVarName(name) : null;
-      const gaugeNode = nodes.find((n) => n.meta && n.meta.block === 'gauge');
-      const gaugeVars = gaugeNode && gaugeNode.poly && gaugeNode.poly.vars ? new Set(gaugeNode.poly.vars()) : new Set();
-      const all = [...uses.keys()].sort((a, b) => (uses.get(b) - uses.get(a)) || a.localeCompare(b));
-      return all.map((name) => {
-        const c = conjOf(name);
-        // `name` is a conjugate iff conjugating it yields a primal base variable.
-        // `c !== name` matters: QC.conjVarName returns its input unchanged for anything outside
-        // the bar-toggle scheme (cosL, sinL, Wsat, and any self-conjugate defined symbol). Without
-        // the guard those variables became their own "partner", and the lens offered "Assume t
-        // real" with the note "identifies t ≡ t, so t stops being a variable" — a wrong-variable
-        // recommendation, which is the exact failure the lens exists to prevent. The sibling field
-        // `conjName` already had this guard; `conjOf` did not.
-        const partner = (c && c !== name && base.has(c)) ? c : null;
-        return {
-          name,
-          uses: uses.get(name) || 0,
-          total: nodes.length,
-          isBase: base.has(name),
-          conjName: (c && c !== name && base.has(name)) ? c : null,
-          conjOf: partner,
-          isReal: real.has(name) || (partner && real.has(partner)),
-          isImag: imag.has(name) || (partner && imag.has(partner)),
-          isPinned: Object.prototype.hasOwnProperty.call(known, name),
-          inGauge: gaugeVars.has(name),
-          isW0: /^w_?0$/.test(name),
-        };
-      });
-    }
     // Render the lens. Each removal routes to the section that OWNS it — the panel's whole claim is
     // that the answer lives elsewhere, so it opens that elsewhere rather than duplicating controls.
     // No mutation logic of its own: every row is navigation, so the existing gates and confirms on
     // those controls stay the single place that decides whether an act may run.
     function renderVarLens() {
       const box = $('#alg-varlens'); if (!box) return;
-      const rows = store.size ? variableCensus() : [];
+      const rows = store.size ? variableCensus(store) : [];
       box.textContent = '';
       if (!rows.length) {
         const p = document.createElement('div'); p.className = 'hint';
@@ -4776,6 +4780,7 @@ const QD = _QD;
   QD_UI.WORKFLOW_STEPS = WORKFLOW_STEPS;             // the ①②③④ strip's steps + the section each opens
   QD_UI.workflowStepStates = workflowStepStates;     // …and the done/stale/todo state machine (pure)
   QD_UI.variableRemovals = variableRemovals;         // the elimination lens's per-variable routing table (pure)
+  QD_UI.variableCensus = variableCensus;             // …and the per-variable fact-gather it feeds (pure fn of the store)
   QD_UI.suggestAutoOpen = suggestAutoOpen;           // …and its expand/collapse decision (pure)
   QD_UI.SUGGEST_AUTO_OPEN_MAX = AUTO_OPEN_MAX;
 })();
