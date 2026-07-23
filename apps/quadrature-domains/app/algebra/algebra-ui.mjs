@@ -2857,18 +2857,24 @@ const QD = _QD;
     // Eliminate the chosen shared variable from the two selected nodes by their exact
     // Sylvester resultant (store.eliminate) → a derived node in the current column.
     function doEliminate() {
-      if (busyGuard()) return;
+      if (_abort) return;
       const sel = canvas ? canvas.getSelection() : [];
       const v = $('#alg-var') && $('#alg-var').value;
       if (sel.length !== 2 || !v) return;
-      const r = store.eliminate(sel[0], sel[1], v);
-      if (!r.ok) { toast(r.reason || 'elimination failed', { kind: 'error' }); return; }
-      canvas.clearSelection();
-      rerender();
-      const created = r.created || (r.node ? [r.node] : []);
-      const exact = (r.method || (r.node && r.node.provenance && r.node.provenance.method)) === 'ideal';
-      toast('Eliminated ' + latexPlain(v) + ' → ' + created.length + ' exact ' + (created.length === 1 ? 'relation' : 'relations')
-        + (exact ? ' (elimination ideal — no extraneous factors)' : ' (Sylvester resultant fallback — may carry extraneous factors)'));
+      // Q2 — offloaded (the elimination ideal / Sylvester resultant ran synchronously on the UI thread).
+      const ctrl = _newAbort(); _abort = ctrl;
+      setBusy(true, 'Eliminating ' + latexPlain(v) + '…');
+      store.eliminateAsync(sel[0], sel[1], v, { signal: ctrl && ctrl.signal }).then((r) => {
+        _abort = null; setBusy(false); setStatus('');
+        if (r.aborted) { toast('Cancelled'); return; }
+        if (!r.ok) { toast(r.reason || 'elimination failed', { kind: 'error' }); return; }
+        canvas.clearSelection();
+        rerender();
+        const created = r.created || (r.node ? [r.node] : []);
+        const exact = (r.method || (r.node && r.node.provenance && r.node.provenance.method)) === 'ideal';
+        toast('Eliminated ' + latexPlain(v) + ' → ' + created.length + ' exact ' + (created.length === 1 ? 'relation' : 'relations')
+          + (exact ? ' (elimination ideal — no extraneous factors)' : ' (Sylvester resultant fallback — may carry extraneous factors)'));
+      }, (e) => { _abort = null; setBusy(false); setStatus(''); toast('Elimination: ' + ((e && e.message) || String(e)), { kind: 'error' }); });
     }
     // Busy-state manager for the off-main-thread (worker) ops — disables the heavy
     // controls AND the graph-mutating controls (undo/redo, reductions, palette) so a

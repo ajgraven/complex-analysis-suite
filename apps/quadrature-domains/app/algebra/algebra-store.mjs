@@ -1473,37 +1473,24 @@ import _QD from '../solver.mjs';
 
     // Core elimination (no checkpoint; mutates only on success). Returns
     // { ok:true, node } or { ok:false, reason }.
-    function _eliminate(idA, idB, varName) {
-      const S = getSym();
+    // ── Q2 eliminate: cheap PLAN (validate the pair + compute the kept variables) + FINISH (create the
+    // elimination nodes), so the sync path (_eliminate — checkpoint-free, reused by eliminateWithGauge's
+    // single-undo batch) and the worker-offloaded eliminateAsync share IDENTICAL validation + node-building.
+    function _eliminatePlan(idA, idB, varName) {
       const a = get(idA), b = get(idB);
       if (!a || !b) return { ok: false, reason: 'node not found' };
       if ((a.track || 't0') !== (b.track || 't0')) return { ok: false, reason: 'select nodes from one branch' };
       if (!a.poly.vars().has(varName) || !b.poly.vars().has(varName)) {
         return { ok: false, reason: 'variable ' + varName + ' is not shared by both equations' };
       }
-      // B-2: prefer the EXACT elimination ideal ⟨A, B⟩ ∩ k[rest] (Gröbner) — the raw Sylvester resultant
-      // can carry extraneous leading-coefficient factors (e.g. Res_x(yx+1, yx²−x) = 2y, but the true
-      // elimination ideal is ⟨1⟩ — the system is inconsistent, so y=0 is spurious). Fall back to the
-      // resultant (flagged `method:'resultant'`) only if the ideal computation is unavailable / throws.
       const keep = new Set();
       for (const v of a.poly.vars()) keep.add(v);
       for (const v of b.poly.vars()) keep.add(v);
       keep.delete(varName);
-      let gens = null, method = 'ideal';
-      try {
-        if (typeof S.eliminationIdeal === 'function') {
-          const g = S.eliminationIdeal([a.poly, b.poly], [varName], [...keep].sort());
-          gens = (g || []).filter((p) => !p.isZero());
-        }
-      } catch (e) { gens = null; }
-      if (gens === null) {                              // fallback: the Sylvester resultant (may carry extraneous factors)
-        let res;
-        try { res = S.resultant(a.poly, b.poly, varName); }
-        catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
-        if (res.isZero()) return { ok: false, reason: 'resultant ≡ 0 (the equations share a component); pick a different pair or variable' };
-        gens = [res]; method = 'resultant';
-      }
-      if (!gens.length) return { ok: false, reason: 'the elimination ideal in the remaining variables is trivial (no relation free of ' + varName + ')' };
+      return { ok: true, a, b, idA, idB, varName, keep: [...keep].sort() };
+    }
+    function _eliminateFinish(plan, gens, method) {
+      const { a, b, idA, idB, varName } = plan;
       const col = Math.max(a.column, b.column) + 1;
       const created = [];
       gens.forEach((poly, i) => {
@@ -1517,6 +1504,49 @@ import _QD from '../solver.mjs';
         created.push(node);
       });
       return { ok: true, node: created[0], created: created, method: method };
+    }
+    function _eliminate(idA, idB, varName) {
+      const S = getSym();
+      const plan = _eliminatePlan(idA, idB, varName);
+      if (!plan.ok) return plan;
+      // B-2: prefer the EXACT elimination ideal ⟨A, B⟩ ∩ k[rest] (Gröbner) — the raw Sylvester resultant
+      // can carry extraneous leading-coefficient factors (Res_x(yx+1, yx²−x)=2y, but ⟨A,B⟩∩k[y]=⟨1⟩, so
+      // y=0 is spurious). Fall back to the resultant (`method:'resultant'`) only if the ideal path throws.
+      let gens = null, method = 'ideal';
+      try {
+        if (typeof S.eliminationIdeal === 'function') gens = (S.eliminationIdeal([plan.a.poly, plan.b.poly], [varName], plan.keep) || []).filter((p) => !p.isZero());
+      } catch (e) { gens = null; }
+      if (gens === null) {                              // fallback: the Sylvester resultant (may carry extraneous factors)
+        let res;
+        try { res = S.resultant(plan.a.poly, plan.b.poly, varName); }
+        catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+        if (res.isZero()) return { ok: false, reason: 'resultant ≡ 0 (the equations share a component); pick a different pair or variable' };
+        gens = [res]; method = 'resultant';
+      }
+      if (!gens.length) return { ok: false, reason: 'the elimination ideal in the remaining variables is trivial (no relation free of ' + varName + ')' };
+      return _eliminateFinish(plan, gens, method);
+    }
+    // Off-main-thread pairwise elimination (Q2) — falls back to sync when no worker. Byte-identical: SAME
+    // plan + finish, only the elimination-ideal / resultant compute runs in the worker. Checkpoints on
+    // SUCCESS only (a failed/empty elimination leaves no redundant undo step), matching eliminate().
+    function eliminateAsync(idA, idB, varName, runOpts) {
+      const S = getSym();
+      const plan = _eliminatePlan(idA, idB, varName);
+      if (!plan.ok) return Promise.resolve(plan);
+      const SW = symWorker();
+      if (!SW) return Promise.resolve(eliminate(idA, idB, varName));
+      const payload = { polys: [plan.a.poly.termList(), plan.b.poly.termList()], elimVars: [varName], keepVars: plan.keep, opts: {} };
+      return SW.run('eliminate', payload, runOpts || {}).then(
+        (r) => {
+          if (!r.ok) return { ok: false, reason: r.reason };
+          if (r.resultantZero) return { ok: false, reason: 'resultant ≡ 0 (the equations share a component); pick a different pair or variable' };
+          const gens = (r.generators || []).map((tl) => S.polyFromTermList(tl));
+          if (!gens.length) return { ok: false, reason: 'the elimination ideal in the remaining variables is trivial (no relation free of ' + varName + ')' };
+          checkpoint();
+          return _eliminateFinish(plan, gens, r.method || 'ideal');
+        },
+        (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
+          : { ok: false, reason: (err && err.message) || String(err) });
     }
     // Eliminate `varName` from nodes A,B via the Sylvester resultant → derived node.
     function eliminate(idA, idB, varName) {
@@ -3034,7 +3064,7 @@ import _QD from '../solver.mjs';
     }
 
     return {
-      seedFromSystem, seedFromPolys, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
+      seedFromSystem, seedFromPolys, addConstraint, eliminate, eliminateAsync, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
       substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, autoAbbreviate, addEquation, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes, triangularizeAsync, saturateMobius, saturateAsync,
       decomposeComponentsAsync, regularChainsAsync, applyComponent,
