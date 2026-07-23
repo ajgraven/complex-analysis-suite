@@ -5293,6 +5293,62 @@ import _QD from './solver.mjs';
       if (!rc.ok) return { ok: true, inconsistent: false, zeroDim: true, realCount: null, complexCount: null, multiplicity, reason: rc.reason, numVars: vars.length };
       return { ok: true, inconsistent: false, zeroDim: true, realCount: rc.realCount, complexCount: rc.complexCount, multiplicity, numVars: vars.length };
     }
+    // ── Q2: five previously main-thread-only heavy ops, offloaded. Each calls the SAME sym-core
+    // function the store's sync path calls, on deserialized inputs, and serializes the output — so the
+    // result is byte-identical to running it inline; only WHERE it runs changes. ──────────────────
+    if (kind === 'saturate') {
+      // Saturate ⟨polys⟩ by the Möbius product satPoly (the store built it), eliminating satVar. Heavy:
+      // an elimination Gröbner. Returns the surviving generators as term-lists.
+      const f = MPoly.fromTermList(payload.satPoly);
+      const opts = Object.assign({}, payload.opts, onProgress ? { onProgress } : {});
+      const gens = saturate(polys, f, payload.satVar || '_wsat', opts);
+      return { generators: (gens || []).map((g) => g.termList()) };
+    }
+    if (kind === 'eliminate') {
+      // Eliminate elimVars from ⟨polys⟩ via the exact elimination ideal ∩ k[keepVars]; on failure fall
+      // back to the Sylvester resultant of the two inputs — the SAME try/fallback the store's sync path
+      // uses, kept here so the choice (and thus the result) is identical. Heavy: a Gröbner elimination.
+      const opts = Object.assign({}, payload.opts, onProgress ? { onProgress } : {});
+      const keep = (payload.keepVars || []).slice();
+      let gens = null, method = 'ideal';
+      try { gens = (eliminationIdeal(polys, payload.elimVars || [], keep, opts) || []).filter((p) => !p.isZero()); }
+      catch (e) { gens = null; }
+      if (gens === null) {
+        let res;
+        try { res = resultant(polys[0], polys[1], (payload.elimVars || [])[0]); }
+        catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+        if (res.isZero()) return { ok: true, method: 'resultant', resultantZero: true, generators: [] };
+        gens = [res]; method = 'resultant';
+      }
+      return { ok: true, method, generators: gens.map((g) => g.termList()) };
+    }
+    if (kind === 'triangularize') {
+      // Wu characteristic set of ⟨polys⟩ (pseudo-remainder chains). Returns the chain + main/free vars +
+      // initials as term-lists and the contradiction flag — the shape the store's node-builder expects.
+      const opts = Object.assign({}, payload.opts, onProgress ? { onProgress } : {});
+      const res = triangularize(polys, payload.vars || _ambientVars(polys), opts);
+      if (!res.ok) return { ok: false, reason: res.reason };
+      return { ok: true, contradiction: !!res.contradiction, mainVars: (res.mainVars || []).slice(), freeVars: (res.freeVars || []).slice(),
+        chain: (res.chain || []).map((p) => p.termList()), initials: (res.initials || []).map((p) => p.termList()) };
+    }
+    if (kind === 'resolvent') {
+      // Single-variable resolvent of a reim system (its roots = the variable's values across solutions).
+      // Returns the resolvent poly + square-free part + discriminant as term-lists and the scalar
+      // degree/multiplicity/degeneracy fields; the store renders LaTeX (cheap) on the main thread.
+      const res = resolvent(polys, payload.resVar, payload.vars || _ambientVars(polys), payload.opts || {});
+      if (!res.ok) return { ok: false, reason: res.reason };
+      return { ok: true, poly: res.poly.termList(), squareFree: res.squareFree.termList(),
+        discriminant: res.discriminant ? res.discriminant.termList() : null,
+        degree: res.degree, distinctDegree: res.distinctDegree, dimension: res.dimension, degenerate: res.degenerate };
+    }
+    if (kind === 'factor') {
+      // Factor a single polynomial (Berlekamp–Zassenhaus / Hensel / Ruppert). factor() ignores opts
+      // (ratApprox is dead back-compat — the univariate path is exact), so an empty opts is byte-identical.
+      const p = MPoly.fromTermList(payload.poly);
+      const res = factor(p, {});
+      return { ok: res.ok, status: res.status, caps: res.caps, reason: res.reason,
+        factors: (res.factors || []).map((g) => g.termList()) };
+    }
     throw new Error('runJob: unknown kind ' + kind);
   }
 

@@ -460,6 +460,12 @@ button.attention {
 }
 .copy-toast-action:hover { background: rgba(255, 255, 255, 0.3); }
 
+/* Q2 — busy state on the algebra canvas during an offloaded heavy op (saturate / factor / …). The result
+   lands on this surface, so dimming it + blocking its pointer is where the eye is: it reads as "working",
+   not "did my click register?". The op label + Cancel live in the sidebar (setStatus / #alg-cancel).
+   Pure opacity + pointer-events — no layout/position dependency, so it can never shift the graph. */
+#algebra-graph.is-busy { opacity: 0.5; pointer-events: none; transition: opacity 0.15s ease; }
+
 /* Service-worker "new version available" banner (I2): fixed top-center. */
 #sw-update-banner {
   position: fixed;

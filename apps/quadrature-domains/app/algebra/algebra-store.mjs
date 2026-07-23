@@ -1676,56 +1676,38 @@ import _QD from '../solver.mjs';
         reason: n.rel === '=' ? 'an equality outside the selection' : 'not an equality (' + n.rel + ')',
       }));
     }
-    function saturateMobius(ids, opts) {
+    // ── Q2 saturate: split into a cheap PLAN (build the Möbius product f + the dropped-node accounting)
+    // and a FINISH (checkpoint + create the saturated nodes) so the sync path and the worker-offloaded
+    // saturateAsync share IDENTICAL setup + node-building — only the heavy S.saturate call differs. ──
+    function _saturatePlan(ids) {
       const S = getSym();
-      opts = opts || {};
       const pool = ((ids && ids.length) ? ids.map(get) : lastColumnNodes()).filter(Boolean);
       const inputs = pool.filter((n) => n.rel === '=');
-      // The loss is measured against the WHOLE CURRENT COLUMN, not against `pool`. A basis
-      // replacement emits one new column and everything not folded into it is gone — and when
-      // `ids` is a canvas selection, that includes the unselected EQUALITIES, which are usually
-      // the larger part. Measuring against `pool` reported only the non-equalities the user had
-      // happened to select, i.e. nothing at all in the common case: select two equality cards out
-      // of a seven-node column, saturate, and five nodes vanished in silence while the toast
-      // asserted the count was now exact. Verified in-browser before this fix.
+      // The loss is measured against the WHOLE CURRENT COLUMN, not `pool`: a canvas selection would
+      // otherwise under-report the dropped UNSELECTED equalities (usually the larger part).
       const column = lastColumnNodes().filter(Boolean);
-      const keptIds = new Set(inputs.map((n) => n.id));
-      // Non-equality nodes are CONSUMED BY OMISSION here: this emits a fresh equality basis, so a
-      // '>' or '≠' node in the column simply does not appear in the next one. Gröbner already
-      // reported that as `skipped`; saturate and triangularize dropped silently, which mattered
-      // most for the univalence palette — its conditions are mostly inequalities, so building them
-      // up and then reducing (or running ✦ Prove, whose prelude saturates) discarded them with no
-      // notice. The column diff showed only a bare "−N gone", indistinguishable from the ordinary
-      // rewrite churn. See _droppedByBasisReplacement above for the shape and why it is richer
-      // than groebner's.
-      const skipped = _droppedByBasisReplacement(column, keptIds);
-      if (!inputs.length) return { ok: false, reason: 'no equality nodes to saturate', created: [], skipped };
+      const skipped = _droppedByBasisReplacement(column, new Set(inputs.map((n) => n.id)));
+      if (!inputs.length) return { ok: false, reason: 'no equality nodes to saturate', skipped };
       const polys = inputs.map((n) => n.poly), inputIds = inputs.map((n) => n.id);
       const vars = new Set();
       for (const p of polys) for (const v of p.vars()) vars.add(v);
-      // ∏_j (1 − z_j·z̄_j) over poles whose BOTH z_j and z̄_j (zb_j) variables are still present (a pinned/
-      // eliminated z_j already has a definite modulus — nothing to saturate for it).
+      // ∏ over ALL ordered pole pairs (a, b): (1 − z̄_a·z_b) — the FULL cleared Möbius denominators (self
+      // a=b drops {|z_j|=1}; cross a≠b drops {z̄_a z_b=1}), all disjoint from the genuine |z_j|<1 set, so no
+      // genuine QD is removed. Only poles whose BOTH z_j and z̄_j (zb_j) survive contribute.
       const one = S.mpolyConst(S.gaussInt(1));
-      // Pole indices whose BOTH z_j and z̄_j (zb_j) variables are still present.
       const poleIdx = [];
       for (const v of [...vars].sort()) { const m = /^z(\d+)$/.exec(v); if (m && vars.has('zb' + m[1])) poleIdx.push(m[1]); }
-      // ∏ over ALL ordered pairs (a, b): (1 − z̄_a·z_b) — the FULL set of cleared Möbius denominators (A-1:
-      // pole a's branch factor (1 − z̄_a z) evaluated at node z_b). Self a=b drops {|z_j|=1}; cross a≠b drops
-      // the {z̄_a z_b = 1} stratum a MULTI-pole (●) equation clears. All disjoint from the genuine |z_j|<1 set
-      // (there |z̄_a z_b| = |z_a||z_b| < 1 ⇒ ≠ 1), so no genuine QD is removed.
       let f = null; const poles = poleIdx.slice();
-      for (const a of poleIdx) for (const b of poleIdx) {
-        const fac = one.sub(S.mpolyVar('zb' + a).mul(S.mpolyVar('z' + b)));   // 1 − z̄_a·z_b
-        f = f ? f.mul(fac) : fac;
-      }
-      if (!f) return { ok: false, reason: 'no Möbius denominator (z_j, z̄_j) present to saturate — the map variables may be pinned/eliminated', created: [], skipped };
-      let gens;
-      try { gens = S.saturate(polys, f, '_wsat', opts); } catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [], skipped }; }
+      for (const a of poleIdx) for (const b of poleIdx) { const fac = one.sub(S.mpolyVar('zb' + a).mul(S.mpolyVar('z' + b))); f = f ? f.mul(fac) : fac; }
+      if (!f) return { ok: false, reason: 'no Möbius denominator (z_j, z̄_j) present to saturate — the map variables may be pinned/eliminated', skipped };
+      return { ok: true, inputs, inputIds, polys, f, poles, skipped };
+    }
+    function _saturateFinish(plan, gens) {
       gens = (gens || []).filter((g) => !g.isZero());
-      if (!gens.length) return { ok: false, reason: 'saturation removed every generator (the system lies entirely on |z_j|=1)', created: [], skipped };
+      if (!gens.length) return { ok: false, reason: 'saturation removed every generator (the system lies entirely on |z_j|=1)', created: [], skipped: plan.skipped };
       checkpoint();
-      const col = Math.max.apply(null, inputs.map((n) => n.column)) + 1;
-      const created = [];
+      const col = Math.max.apply(null, plan.inputs.map((n) => n.column)) + 1;
+      const created = [], inputIds = plan.inputIds, poles = plan.poles, skipped = plan.skipped;
       gens.forEach((poly, i) => {
         const node = addNode({
           id: nid(), kind: 'derived', poly, rel: '=',
@@ -1739,6 +1721,29 @@ import _QD from '../solver.mjs';
         created.push(node);
       });
       return { ok: true, created, poles: poles.slice(), skipped };
+    }
+    function saturateMobius(ids, opts) {
+      const S = getSym();
+      const plan = _saturatePlan(ids);
+      if (!plan.ok) return { ok: false, reason: plan.reason, created: [], skipped: plan.skipped || [] };
+      let gens;
+      try { gens = S.saturate(plan.polys, plan.f, '_wsat', opts || {}); }
+      catch (e) { return { ok: false, reason: (e && e.message) || String(e), created: [], skipped: plan.skipped }; }
+      return _saturateFinish(plan, gens);
+    }
+    // Off-main-thread saturate via QD.SymWorker (Q2) — falls back to the sync path when the worker is
+    // unavailable. Byte-identical to saturateMobius: SAME plan + finish, only S.saturate runs in the worker.
+    function saturateAsync(ids, opts, runOpts) {
+      const S = getSym();
+      const plan = _saturatePlan(ids);
+      if (!plan.ok) return Promise.resolve({ ok: false, reason: plan.reason, created: [], skipped: plan.skipped || [] });
+      const SW = symWorker();
+      if (!SW) return Promise.resolve(saturateMobius(ids, opts));
+      const payload = { polys: plan.polys.map((p) => p.termList()), satPoly: plan.f.termList(), satVar: '_wsat', opts: _capOpts(opts || {}) };
+      return SW.run('saturate', payload, runOpts || {}).then(
+        (res) => _saturateFinish(plan, (res.generators || []).map((tl) => S.polyFromTermList(tl))),
+        (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled', created: [], skipped: plan.skipped }
+          : { ok: false, reason: (err && err.message) || String(err), created: [], skipped: plan.skipped });
     }
 
     // QD.SymWorker handle (off-main-thread runner), or null if unavailable.
@@ -2973,7 +2978,7 @@ import _QD from '../solver.mjs';
     return {
       seedFromSystem, seedFromPolys, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
-      substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, autoAbbreviate, addEquation, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes, saturateMobius,
+      substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, autoAbbreviate, addEquation, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes, saturateMobius, saturateAsync,
       decomposeComponentsAsync, regularChainsAsync, applyComponent,
       currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, solveRealCertifiedSync, solveRealCertifiedAsync, parametricBifurcation, parametricBifurcationAsync, shapeFromMoments, shapeFromMomentsAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casColumnComplex, casNode, msolveColumn, msolveVarOrder, importMsolve, derivationSteps, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
