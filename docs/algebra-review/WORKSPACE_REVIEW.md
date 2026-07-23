@@ -44,7 +44,7 @@ below is still open.
 | 3.9 empty canvas doesn't deselect | ✅ shipped — #109 |
 | 3.7 no display cap in the inspector | ✅ shipped — [#111](https://github.com/ajgraven/complex-analysis-suite/pull/111) |
 | 4.7 "Assumptions" = 19 unrelated controls | ✅ shipped — #111 (Assume / Pin values / Edit system) |
-| 4.8 no true primary CTA | ✅ shipped — #111 (`button.primary` shipped unused across the module) |
+| 4.8 no true primary CTA | ✅ shipped — #111 (`button.primary` now carried by ✦ Prove; `.danger` by Delete) |
 | 4.11 disclosure state never persists | ✅ shipped — #111 |
 | 3.3 inspector hides the whole workflow | ✅ shipped — #111 (sections recede rather than vanish) |
 | 4.9 nine flat inspector buttons, Delete mid-row | ✅ shipped — #112 (`.danger`, moved) |
@@ -59,17 +59,12 @@ below is still open.
 | 2.1 one verdict slot, eleven writers | ✅ shipped — [#117](https://github.com/ajgraven/complex-analysis-suite/pull/117) (results drawer keyed `(track, branchSig)`; `current`/`stale`/`branch`) — **supersedes the #107 row above**, which only stopped a re-render destroying the *current* verdict; #117 keeps all of them |
 | — column diff (what a step changed) | ✅ shipped — [#118](https://github.com/ajgraven/complex-analysis-suite/pull/118) (`+15 new · 2 carried · −3 gone` by exact polynomial key; multiset, zero parts omitted) |
 
-**Still open.** From Tier 4: **4.4** (section order / "Shape from moments" misfiled), **4.5**
-(the ①②③④ strip is still decoration), **4.12**, **4.13**. From Tier 5: **5.2** dark mode (5.1
-was its prerequisite and is done), **5.5** contrast, **5.8**, **5.9**. From Tier 3: the **ghost
-stub lane** that would let the fork *edge* render — deferred from #110 because it means drawing a
-foreign track's column into the current view, touching `drawEdges`, `relayout`, the minimap, the
-search filter and keyboard nav at once. Tier 6 beyond 3b, and Tier 2's 2.3–2.5, are untouched.
+**Still open.** From Tier 4: **4.12** (batch/single control pairs named differently). From Tier 5: **5.2** dark mode (5.1 was its prerequisite and is done; deliberately deferred). *Everything else once listed here shipped in the sidebar-IA batch (PRs #124–#132) — **4.4** section order, **4.5** the ①②③④ strip, **4.13** the `fix φ(0)` toggle, **5.5** contrast, **5.8** export identity, **5.9** the busy-lock drift. See [`SIDEBAR_IA.md`](SIDEBAR_IA.md) for each.*
 
 **Deliberately not done, with reasons** (so they are not re-proposed as oversights):
 
-- *Copy ▾ grouping* (P4 leftover). `nodeActions` has exactly two copy actions out of nine.
-  Grouping 2 of 9 behind a dropdown costs a click to reach either and saves one row.
+- *Copy ▾ grouping* (P4 leftover). `nodeActions` has exactly two copy actions out of ten.
+  Grouping 2 of 10 behind a dropdown costs a click to reach either and saves one row.
 - *Roving-tabindex arrow nav in the tablist.* The canvas binds arrows at document level; the two
   would fight.
 - *Auto-collapsing the φ/h card once a graph exists.* Proposed, then dropped on measurement — see
@@ -455,8 +450,10 @@ after the first visit.)*
 > same weight as the certified route** (`✦ Prove` never calls Gröbner, triangular decomposition,
 > regular chains or minimal primes — verified against `prove-plan.mjs`); and **elimination is a
 > cross-cutting concept**, thirteen operations across seven locations, which no re-sectioning can
-> fix. Open items **4.4**, **4.5**, **4.12** and **4.13** are sequenced inside its plan rather than
-> restated here.
+> fix. Open items **4.4**, **4.5** and **4.13** are sequenced inside its plan and have since
+> shipped. **4.12** is *not* covered there and is still open — and its own example label
+> ("Gröbner basis (all eqns)") was corrected by Tier 2, so §4.12 below needs restating against
+> the current UI.
 
 ### 4.1 ✅ Four buttons labeled "Apply"; two labeled "Copy"
 `alg-real-apply`, `alg-val-apply`, `alg-def-apply`, `alg-eq-apply` — all labeled exactly **"Apply"**.

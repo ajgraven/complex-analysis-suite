@@ -80,6 +80,27 @@ describe("the drop is recorded permanently, not just toasted", () => {
     expect(PU.saturate.column({ droppedNonEq: 3 }, ctx)).toMatch(/3 inequality nodes dropped/);
   });
 
+  it("names the out-of-scope loss separately from the inequality loss", () => {
+    // The defect this closes: `skipped` was measured against the SELECTION, so selecting two
+    // equality cards out of a seven-node column and saturating dropped five nodes in total —
+    // one inequality plus four unselected equations — and reported nothing, because neither
+    // selected node was an inequality. Reproduced in-browser before the fix.
+    //
+    // Lumping the two under one count then rendered "5 inequality nodes dropped", which
+    // misdescribes four of the five. A durable record of a loss must say what was actually lost.
+    const both = PU.saturate.column({ factor: "(1−z̄z)", droppedNonEq: 1, droppedOutOfScope: 4 }, ctx);
+    expect(both).toMatch(/1 inequality node\b/);
+    expect(both).toMatch(/4 equations outside the selection/);
+    expect(both).not.toMatch(/5 inequality/);
+  });
+
+  it("reports only the cause that occurred", () => {
+    expect(PU.saturate.column({ droppedNonEq: 2, droppedOutOfScope: 0 }, ctx))
+      .not.toMatch(/outside the selection/);
+    expect(PU.saturate.column({ droppedNonEq: 0, droppedOutOfScope: 3 }, ctx))
+      .not.toMatch(/inequality/);
+  });
+
   it("an absent count is treated as no drop, not as undefined", () => {
     // Every column predating this change has no droppedNonEq — they must not render "⚠ undefined".
     for (const rec of [PU.saturate, PU.triangular]) {

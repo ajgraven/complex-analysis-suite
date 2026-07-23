@@ -1663,19 +1663,42 @@ import _QD from '../solver.mjs';
     // so the saturated locus is disjoint from the QD set (UNLIKE saturating by z_j, which would delete the
     // z_j=0 disk — see spuriousFactors' note). Appends ONE labeled 'saturate' column (append-only DAG; column 0
     // stays pristine). Pure/DOM-free; sync (these systems are small). Returns { ok, created, poles } / reason.
+    // What a basis replacement discards: every node of the current column that is not among the
+    // generators' inputs. Two distinct causes, kept distinct because they read very differently to
+    // a user — an inequality was never eligible, whereas an unselected equality was dropped by the
+    // scope THEY chose. Richer than groebner's { id, reason } shape — these carry label, rel and
+    // cause — so the UI can name what went and say why. groebner's own reporting is unchanged and
+    // still count-only; wiring droppedNote to it would need its entries to carry a label first.
+    function _droppedByBasisReplacement(column, keptIds) {
+      return column.filter((n) => !keptIds.has(n.id)).map((n) => ({
+        id: n.id, label: n.label, rel: n.rel,
+        cause: n.rel === '=' ? 'out-of-scope' : 'inequality',
+        reason: n.rel === '=' ? 'an equality outside the selection' : 'not an equality (' + n.rel + ')',
+      }));
+    }
     function saturateMobius(ids, opts) {
       const S = getSym();
       opts = opts || {};
       const pool = ((ids && ids.length) ? ids.map(get) : lastColumnNodes()).filter(Boolean);
       const inputs = pool.filter((n) => n.rel === '=');
+      // The loss is measured against the WHOLE CURRENT COLUMN, not against `pool`. A basis
+      // replacement emits one new column and everything not folded into it is gone — and when
+      // `ids` is a canvas selection, that includes the unselected EQUALITIES, which are usually
+      // the larger part. Measuring against `pool` reported only the non-equalities the user had
+      // happened to select, i.e. nothing at all in the common case: select two equality cards out
+      // of a seven-node column, saturate, and five nodes vanished in silence while the toast
+      // asserted the count was now exact. Verified in-browser before this fix.
+      const column = lastColumnNodes().filter(Boolean);
+      const keptIds = new Set(inputs.map((n) => n.id));
       // Non-equality nodes are CONSUMED BY OMISSION here: this emits a fresh equality basis, so a
       // '>' or '≠' node in the column simply does not appear in the next one. Gröbner already
       // reported that as `skipped`; saturate and triangularize dropped silently, which mattered
       // most for the univalence palette — its conditions are mostly inequalities, so building them
       // up and then reducing (or running ✦ Prove, whose prelude saturates) discarded them with no
       // notice. The column diff showed only a bare "−N gone", indistinguishable from the ordinary
-      // rewrite churn. Same shape as groebner's so the UI can treat all four uniformly.
-      const skipped = pool.filter((n) => n.rel !== '=').map((n) => ({ id: n.id, label: n.label, rel: n.rel, reason: 'not an equality (' + n.rel + ')' }));
+      // rewrite churn. See _droppedByBasisReplacement above for the shape and why it is richer
+      // than groebner's.
+      const skipped = _droppedByBasisReplacement(column, keptIds);
       if (!inputs.length) return { ok: false, reason: 'no equality nodes to saturate', created: [], skipped };
       const polys = inputs.map((n) => n.poly), inputIds = inputs.map((n) => n.id);
       const vars = new Set();
@@ -1707,7 +1730,9 @@ import _QD from '../solver.mjs';
         const node = addNode({
           id: nid(), kind: 'derived', poly, rel: '=',
           label: 'saturate ' + (i + 1) + '/' + gens.length + ' (∏(1−z̄z))', model,
-          provenance: { op: 'saturate', inputs: inputIds.slice(), factor: '(1−z̄z)', poles: poles.slice(), droppedNonEq: skipped.length },
+          provenance: { op: 'saturate', inputs: inputIds.slice(), factor: '(1−z̄z)', poles: poles.slice(),
+            droppedNonEq: skipped.filter((k) => k.cause === 'inequality').length,
+            droppedOutOfScope: skipped.filter((k) => k.cause === 'out-of-scope').length },
           column: col, meta: {},
         });
         for (const src of inputIds) edges.push({ from: src, to: node.id });
@@ -2263,9 +2288,9 @@ import _QD from '../solver.mjs';
       const S = getSym();
       const pool = ((ids && ids.length) ? ids.map(get) : lastColumnNodes()).filter(Boolean);
       const inputs = pool.filter((n) => n.rel === '=');
-      // See saturateMobius: a chain is an equality basis, so '>' / '≠' nodes are consumed by
-      // omission. Reported in the same `skipped` shape groebner uses, rather than vanishing.
-      const skipped = pool.filter((n) => n.rel !== '=').map((n) => ({ id: n.id, label: n.label, rel: n.rel, reason: 'not an equality (' + n.rel + ')' }));
+      // See saturateMobius — measured against the whole current column, not the selection.
+      const skipped = _droppedByBasisReplacement(lastColumnNodes().filter(Boolean),
+                                                 new Set(inputs.map((n) => n.id)));
       if (inputs.length < 1) return { ok: false, reason: 'no equality nodes to triangularize', created: [], skipped };
       const polys = inputs.map((n) => n.poly);
       const vars = _varsOf(polys);
@@ -2277,7 +2302,9 @@ import _QD from '../solver.mjs';
       const created = [];
       const emit = (poly, label, meta) => {
         const node = addNode({ id: nid(), kind: 'derived', poly, rel: '=', label, model,
-          provenance: { op: 'triangular', inputs: inputIds.slice(), contradiction: !!res.contradiction, freeVars: (res.freeVars || []).slice(), droppedNonEq: skipped.length }, column: col, meta: meta || {} });
+          provenance: { op: 'triangular', inputs: inputIds.slice(), contradiction: !!res.contradiction, freeVars: (res.freeVars || []).slice(),
+            droppedNonEq: skipped.filter((k) => k.cause === 'inequality').length,
+            droppedOutOfScope: skipped.filter((k) => k.cause === 'out-of-scope').length }, column: col, meta: meta || {} });
         for (const id of inputIds) edges.push({ from: id, to: node.id });
         created.push(node);
       };
