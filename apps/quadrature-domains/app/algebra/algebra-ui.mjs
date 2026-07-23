@@ -3003,18 +3003,24 @@ const QD = _QD;
       if (!ensureSeed()) return;
       clearError();
       const sel = canvas ? canvas.getSelection() : [];
-      const r = store.triangularize(sel.length ? sel : null);
-      if (!r.ok) { showError('Triangular decomposition: ' + withGuidance(r.reason || 'failed')); return; }
-      if (canvas) canvas.clearSelection();
-      rerender();
-      // Inconsistency is the one verdict that survives narrowing in the STRONG direction: adding the
-      // dropped equations back can only shrink the (already empty) variety. Still named, so "the
-      // system" is not left ambiguous about which one was tested.
-      if (r.contradiction) { toast('Triangular decomposition: system is INCONSISTENT — no solution' + scopeNote(sel) + (sel.length ? ' (so the full system is inconsistent too).' : '.')); return; }
-      toast('Triangular decomposition: ' + r.created.length + ' element(s)' + scopeNote(sel) +
-        (r.freeVars.length ? '; free variable(s) ' + r.freeVars.map(latexPlain).join(', ') + ' ⇒ a positive-dimensional family' : ' ⇒ zero-dimensional (finitely many solutions)') +
-        (r.hasRegularityConditions ? ' · ⚠ ' + r.initialCount + ' non-constant initial(s) — a Wu chain is NOT saturated by its pivots, so where an initial vanishes it may add spurious branches or miss components (a full regular-chain decomposition would case-split on the initials)' : '') +
-        droppedNote(r.skipped), r.skipped && r.skipped.length ? { kind: 'error' } : {});
+      // Q2 — offloaded (the Wu pseudo-elimination chain ran synchronously on the UI thread, no spinner/cancel).
+      const ctrl = _newAbort(); _abort = ctrl;
+      setBusy(true, 'Triangularizing (Wu chain)…');
+      store.triangularizeAsync(sel.length ? sel : null, {}, { signal: ctrl && ctrl.signal }).then((r) => {
+        _abort = null; setBusy(false); setStatus('');
+        if (r.aborted) { toast('Cancelled'); return; }
+        if (!r.ok) { showError('Triangular decomposition: ' + withGuidance(r.reason || 'failed')); return; }
+        if (canvas) canvas.clearSelection();
+        rerender();
+        // Inconsistency is the one verdict that survives narrowing in the STRONG direction: adding the
+        // dropped equations back can only shrink the (already empty) variety. Still named, so "the
+        // system" is not left ambiguous about which one was tested.
+        if (r.contradiction) { toast('Triangular decomposition: system is INCONSISTENT — no solution' + scopeNote(sel) + (sel.length ? ' (so the full system is inconsistent too).' : '.')); return; }
+        toast('Triangular decomposition: ' + r.created.length + ' element(s)' + scopeNote(sel) +
+          (r.freeVars.length ? '; free variable(s) ' + r.freeVars.map(latexPlain).join(', ') + ' ⇒ a positive-dimensional family' : ' ⇒ zero-dimensional (finitely many solutions)') +
+          (r.hasRegularityConditions ? ' · ⚠ ' + r.initialCount + ' non-constant initial(s) — a Wu chain is NOT saturated by its pivots, so where an initial vanishes it may add spurious branches or miss components (a full regular-chain decomposition would case-split on the initials)' : '') +
+          droppedNote(r.skipped), r.skipped && r.skipped.length ? { kind: 'error' } : {});
+      }, (e) => { _abort = null; setBusy(false); setStatus(''); showError('Triangular decomposition: ' + ((e && e.message) || String(e))); });
     }
     // Carry every univalence constraint into the current system, assumptions applied (batch).
     function doPropagateAll() {
@@ -3823,10 +3829,11 @@ const QD = _QD;
       if (!v) { showError('Resolvent: no real variable available — reduce to a finite (reality-assumed) system first.'); return; }
       const ctrl = _newAbort(); _abort = ctrl;   // coherent busy state (guards re-entry / inspector mutations)
       setBusy(true, 'Computing the resolvent…');
-      setTimeout(() => {
-        let r; try { r = store.resolventOf(null, v, { paramValues: hDataParamValues() }); }
-        catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
+      // Q2 — offloaded to the worker. This used to be a setTimeout that still ran S.resolvent SYNCHRONOUSLY
+      // on the main thread, so the Cancel was cosmetic; now the abort signal really cancels.
+      store.resolventAsync(null, v, { paramValues: hDataParamValues() }, { signal: ctrl && ctrl.signal }).then((r) => {
         _abort = null; setBusy(false); setStatus('');
+        if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Resolvent: ' + withGuidance(r.reason || 'unavailable')); return; }
         const fv = friendlyReim(r.variable);
         const distWord = r.distinct === 1 ? 'value' : 'values';
@@ -3844,7 +3851,7 @@ const QD = _QD;
         // `degenerate` (disc = 0) is itself an exact conclusion, not a failure to certify.
         if (canvas) showResult({ text, solutionsLatex: mathLatex, rigor: 'exact' });
         toast(text, r.degenerate ? { kind: 'error' } : {});
-      }, 20);
+      }, (e) => { _abort = null; setBusy(false); setStatus(''); showError('Resolvent: ' + ((e && e.message) || String(e))); });
     }
 
     // Repopulate the bifurcation parameter picker from the current column's reim variables.

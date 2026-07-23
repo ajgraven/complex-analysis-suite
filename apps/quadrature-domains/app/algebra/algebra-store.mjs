@@ -1970,8 +1970,9 @@ import _QD from '../solver.mjs';
     // name (A1_1__re) or a base name (A1_1 → its real part A1_1__re). opts.paramValues pins the
     // known data (like classify). Returns { ok, variable, latex, squareFreeLatex, degree,
     // distinct, multiplicity, degenerate, discLatex, reason }.
-    function resolventOf(ids, varName, opts) {
-      const S = getSym();
+    // ── Q2 resolvent: cheap PLAN (reim system + resolve the variable) + FINISH (the LaTeX + scalar readout),
+    // shared by the sync path and the worker-offloaded resolventAsync. ──
+    function _resolventPlan(ids, varName, opts) {
       const reim = currentReimSystem(ids, opts);
       if (!reim.polys.length) return { ok: false, reason: 'no equality nodes to analyze' };
       let v = varName;
@@ -1979,8 +1980,9 @@ import _QD from '../solver.mjs';
         if (reim.vars.indexOf(v + '__re') !== -1) v = v + '__re';
         else return { ok: false, reason: 'variable "' + varName + '" is not a real variable of the current system' };
       }
-      let r; try { r = S.resolvent(reim.polys, v, reim.vars, {}); }
-      catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+      return { ok: true, reim, v };
+    }
+    function _resolventFinish(v, r) {
       if (!r.ok) return { ok: false, reason: r.reason };
       return {
         ok: true, variable: v,
@@ -1988,6 +1990,36 @@ import _QD from '../solver.mjs';
         degree: r.degree, distinct: r.distinctDegree, multiplicity: r.dimension,
         degenerate: r.degenerate, discLatex: r.discriminant ? r.discriminant.toLatex() : null,
       };
+    }
+    function resolventOf(ids, varName, opts) {
+      const S = getSym();
+      const plan = _resolventPlan(ids, varName, opts);
+      if (!plan.ok) return { ok: false, reason: plan.reason };
+      let r; try { r = S.resolvent(plan.reim.polys, plan.v, plan.reim.vars, {}); }
+      catch (e) { return { ok: false, reason: (e && e.message) || String(e) }; }
+      return _resolventFinish(plan.v, r);
+    }
+    // Off-main-thread resolvent (Q2). This op's Cancel used to be cosmetic — a setTimeout still ran
+    // S.resolvent synchronously on the main thread and ignored the abort signal. Now it runs in the worker;
+    // SAME plan + finish, byte-identical (the worker returns poly / square-free / disc as term-lists, and the
+    // main thread renders their LaTeX — cheap).
+    function resolventAsync(ids, varName, opts, runOpts) {
+      const S = getSym();
+      const plan = _resolventPlan(ids, varName, opts);
+      if (!plan.ok) return Promise.resolve({ ok: false, reason: plan.reason });
+      const SW = symWorker();
+      if (!SW) return Promise.resolve(resolventOf(ids, varName, opts));
+      const payload = { polys: plan.reim.polys.map((p) => p.termList()), resVar: plan.v, vars: plan.reim.vars, opts: {} };
+      return SW.run('resolvent', payload, runOpts || {}).then(
+        (rr) => {
+          if (!rr.ok) return { ok: false, reason: rr.reason };
+          const r = { ok: true, poly: S.polyFromTermList(rr.poly), squareFree: S.polyFromTermList(rr.squareFree),
+            discriminant: rr.discriminant ? S.polyFromTermList(rr.discriminant) : null,
+            degree: rr.degree, distinctDegree: rr.distinctDegree, dimension: rr.dimension, degenerate: rr.degenerate };
+          return _resolventFinish(plan.v, r);
+        },
+        (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled' }
+          : { ok: false, reason: (err && err.message) || String(err) });
     }
     // The real (reim) variable names of the current column — for the resolvent variable picker.
     function reimVariables(ids, opts) { return currentReimSystem(ids, opts || {}).vars; }
@@ -2289,19 +2321,21 @@ import _QD from '../solver.mjs';
     // Gröbner eliminate path that exhibits solution structure: a contradiction ⇒ a 1=0
     // marker (no solution); free variables ⇒ a positive-dimensional family (reported).
     // Returns { ok, created[], column, contradiction, mainVars, freeVars } or { ok:false, reason }.
-    function triangularizeNodes(ids, opts) {
-      const S = getSym();
+    // ── Q2 triangularize: cheap PLAN (inputs + dropped-node accounting) + FINISH (checkpoint + emit the
+    // chain), shared by the sync path and the worker-offloaded triangularizeAsync. ──
+    function _triangularizePlan(ids) {
       const pool = ((ids && ids.length) ? ids.map(get) : lastColumnNodes()).filter(Boolean);
       const inputs = pool.filter((n) => n.rel === '=');
       // See saturateMobius — measured against the whole current column, not the selection.
-      const skipped = _droppedByBasisReplacement(lastColumnNodes().filter(Boolean),
-                                                 new Set(inputs.map((n) => n.id)));
-      if (inputs.length < 1) return { ok: false, reason: 'no equality nodes to triangularize', created: [], skipped };
+      const skipped = _droppedByBasisReplacement(lastColumnNodes().filter(Boolean), new Set(inputs.map((n) => n.id)));
+      if (inputs.length < 1) return { ok: false, reason: 'no equality nodes to triangularize', skipped };
       const polys = inputs.map((n) => n.poly);
-      const vars = _varsOf(polys);
-      const res = S.triangularize(polys, vars, opts || {});
-      if (!res.ok) return { ok: false, reason: res.reason, created: [], skipped };
-      const inputIds = inputs.map((n) => n.id);
+      return { ok: true, inputs, inputIds: inputs.map((n) => n.id), polys, vars: _varsOf(polys), skipped };
+    }
+    function _triangularizeFinish(plan, res) {
+      const S = getSym();
+      if (!res.ok) return { ok: false, reason: res.reason, created: [], skipped: plan.skipped };
+      const inputIds = plan.inputIds, skipped = plan.skipped;
       checkpoint();
       const col = maxColumn() + 1;
       const created = [];
@@ -2320,11 +2354,35 @@ import _QD from '../solver.mjs';
       }
       normalizeColumn(col);
       // B-3: surface the regular-chain INITIALS (the pivots' leading coefficients). A Wu chain is triangular
-      // but NOT saturated by them, so where a NON-CONSTANT initial vanishes the chain may add spurious branches
-      // or miss components — the caller must show this caveat (a genuine regular-chain decomposition would
-      // case-split on the initials). initialCount = the number of non-constant initials (the real conditions).
+      // but NOT saturated by them, so a non-constant initial vanishing may add spurious branches or miss
+      // components — the caller shows this caveat. initialCount = the number of non-constant initials.
       const nonTrivialInit = (res.initials || []).filter((p) => p && p.vars && p.vars().size > 0 && !p.isZero());
       return { ok: true, created, column: col, contradiction: !!res.contradiction, mainVars: res.mainVars || [], freeVars: res.freeVars || [], initialCount: nonTrivialInit.length, hasRegularityConditions: nonTrivialInit.length > 0, skipped };
+    }
+    function triangularizeNodes(ids, opts) {
+      const S = getSym();
+      const plan = _triangularizePlan(ids);
+      if (!plan.ok) return { ok: false, reason: plan.reason, created: [], skipped: plan.skipped || [] };
+      return _triangularizeFinish(plan, S.triangularize(plan.polys, plan.vars, opts || {}));
+    }
+    // Off-main-thread Wu triangularization (Q2) — falls back to sync when no worker. Byte-identical: SAME
+    // plan + finish, only S.triangularize runs in the worker (its chain/initials return as term-lists).
+    function triangularizeAsync(ids, opts, runOpts) {
+      const S = getSym();
+      const plan = _triangularizePlan(ids);
+      if (!plan.ok) return Promise.resolve({ ok: false, reason: plan.reason, created: [], skipped: plan.skipped || [] });
+      const SW = symWorker();
+      if (!SW) return Promise.resolve(triangularizeNodes(ids, opts));
+      const payload = { polys: plan.polys.map((p) => p.termList()), vars: plan.vars, opts: _capOpts(opts || {}) };
+      return SW.run('triangularize', payload, runOpts || {}).then(
+        (r) => {
+          if (!r.ok) return { ok: false, reason: r.reason, created: [], skipped: plan.skipped };
+          const res = { ok: true, contradiction: !!r.contradiction, mainVars: r.mainVars || [], freeVars: r.freeVars || [],
+            chain: (r.chain || []).map((tl) => S.polyFromTermList(tl)), initials: (r.initials || []).map((tl) => S.polyFromTermList(tl)) };
+          return _triangularizeFinish(plan, res);
+        },
+        (err) => (err && err.aborted) ? { ok: false, aborted: true, reason: 'cancelled', created: [], skipped: plan.skipped }
+          : { ok: false, reason: (err && err.message) || String(err), created: [], skipped: plan.skipped });
     }
 
     // Duplicate a node to start an alternative derivation line (accumulate alternatives).
@@ -2978,9 +3036,9 @@ import _QD from '../solver.mjs';
     return {
       seedFromSystem, seedFromPolys, addConstraint, eliminate, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
-      substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, autoAbbreviate, addEquation, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes, saturateMobius, saturateAsync,
+      substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, autoAbbreviate, addEquation, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes, triangularizeAsync, saturateMobius, saturateAsync,
       decomposeComponentsAsync, regularChainsAsync, applyComponent,
-      currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, solveRealCertifiedSync, solveRealCertifiedAsync, parametricBifurcation, parametricBifurcationAsync, shapeFromMoments, shapeFromMomentsAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
+      currentReimSystem, classify, classifyAsync, resolventOf, resolventAsync, solveForVariable, reimVariables, solveReal, solveRealAsync, solveRealCertifiedSync, solveRealCertifiedAsync, parametricBifurcation, parametricBifurcationAsync, shapeFromMoments, shapeFromMomentsAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casColumnComplex, casNode, msolveColumn, msolveVarOrder, importMsolve, derivationSteps, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
       // Overlay-aware conjugate lookup. Consults substConj (the "Define substitution" pairs QC's
       // raw table cannot know) before falling back to QC.conjVarName. Exposed so the elimination
