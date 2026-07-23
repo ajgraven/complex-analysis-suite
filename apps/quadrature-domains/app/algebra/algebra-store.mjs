@@ -2970,6 +2970,10 @@ import _QD from '../solver.mjs';
       decomposeComponentsAsync, regularChainsAsync, applyComponent,
       currentReimSystem, classify, classifyAsync, resolventOf, solveForVariable, reimVariables, solveReal, solveRealAsync, solveRealCertifiedSync, solveRealCertifiedAsync, parametricBifurcation, parametricBifurcationAsync, shapeFromMoments, shapeFromMomentsAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casColumnComplex, casNode, msolveColumn, msolveVarOrder, importMsolve, derivationSteps, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,
+      // Overlay-aware conjugate lookup. Consults substConj (the "Define substitution" pairs QC's
+      // raw table cannot know) before falling back to QC.conjVarName. Exposed so the elimination
+      // lens finds a defined symbol's partner instead of computing conjOf: null for it.
+      conjNameOf: _conjName,
       moveNode, orderOf: ordOf, orderedColumn,
       forkTrack, setActiveTrack, deleteTrack, tracks: tracksList,
       undo, redo, undoDepth, redoDepth, reset,

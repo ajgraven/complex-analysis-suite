@@ -122,3 +122,94 @@ describe("every offer routes somewhere real", () => {
     }
   });
 });
+
+// ── The census that PRODUCES those rows at runtime ─────────────────────────────────────────────
+// The block above tests `variableRemovals` against hand-built fixtures — the pure routing table.
+// `variableCensus`, the function that computes those rows from a live store, had no test, and that
+// is how a real bug shipped: it called the RAW `QC.conjVarName`, which cannot know symbols
+// introduced by "Define substitution". For a defined symbol `t` with a genuine conjugate `t̄`, the
+// store registers the pair (in `substConj`) but the raw table returns `t̄` unchanged — so the census
+// computed `conjOf: null` for `t̄` and its lens row silently dropped the "Assume t real" and "one
+// pin removes both" routes. The fix routes the census through `store.conjNameOf` (overlay-aware).
+describe("variableCensus finds a defined symbol's conjugate partner", () => {
+  let census: any, remove: any, Store: any, S: any, QC: any;
+  beforeAll(async () => {
+    const _QD: any = (await import("../app/solver.mjs")).default;
+    await import("../app/sym-core.mjs");
+    await import("../app/qd-constraints.mjs");
+    await import("../app/algebra/algebra-store.mjs");
+    const reg: any = await import("../app/ui-registry.mjs");
+    await import("../app/algebra/algebra-ui.mjs");
+    census = reg.QD_UI.variableCensus;
+    remove = reg.QD_UI.variableRemovals;
+    Store = _QD.AlgebraStore; S = _QD.Sym; QC = _QD.QDConstraints;
+  });
+
+  // A store whose system contains z1² and z̄1², then abbreviates t := z1². Because z1² is NOT
+  // self-conjugate, the store registers the barred partner tb (= z̄1²) in its overlay.
+  // A store holding z1² − z̄1² = 0, so its current column contains z1 and z̄1 (the built-in pair).
+  function seeded() {
+    const st = Store.create();
+    const z1 = S.mpolyVar("z1"), zb1 = S.mpolyVar("zb1");
+    st.seedFromPolys({ polys: [z1.mul(z1).sub(zb1.mul(zb1))], vars: ["z1", "zb1"], model: "conjugate" });
+    return { st, z1, zb1 };
+  }
+  // …then abbreviate t := z1². Because z1² is NOT self-conjugate the store registers the barred
+  // partner tb (= z̄1²) in its overlay, AND substitutes both, so the current column becomes t − tb.
+  function withDefinedSymbol() {
+    const { st, z1 } = seeded();
+    const d = st.defineSubstitution("t", z1.mul(z1));
+    expect(d.ok, "defineSubstitution should register the pair: " + (d.reason || "")).not.toBe(false);
+    return st;
+  }
+
+  it("the store knows the pair the raw table does not — this is the bug in one line", () => {
+    const st = withDefinedSymbol();
+    expect(st.conjNameOf("t")).toBe("tb");          // overlay-aware: knows the defined pair
+    expect(st.conjNameOf("tb")).toBe("t");
+    expect(QC.conjVarName("t")).toBe("t");          // raw table (what the census used to call): blind
+  });
+
+  it("the barred symbol's row offers 'Assume t real'", () => {
+    const rows = census(withDefinedSymbol());
+    const tb = rows.find((r: any) => r.name === "tb");
+    expect(tb, "tb should be in the census").toBeTruthy();
+    expect(tb.conjOf).toBe("t");
+    const assume = remove(tb).find((o: any) => o.key === "assume-real");
+    expect(assume, "the fix: the assume-real route must appear").toBeTruthy();
+    expect(assume.label).toBe("Assume t real");
+  });
+
+  it("the primal symbol's pin route says one pin removes both", () => {
+    const rows = census(withDefinedSymbol());
+    const t = rows.find((r: any) => r.name === "t");
+    expect(t.conjName).toBe("tb");
+    expect(remove(t).find((o: any) => o.key === "pin").note).toContain("also fixes tb");
+  });
+
+  it("the built-in z/z̄ pair still resolves — the common case is not regressed", () => {
+    // The whole point of overlay-awareness is to ADD the defined-symbol case without losing the
+    // conjugate scheme the raw table already handled. Checked on the seeded store (no substitution),
+    // whose current column still holds z1 and z̄1 — the define above substitutes them away.
+    // Asserting only that the pair RESOLVES; whether assume-real is offered depends on reality
+    // state (this toy z1²=z̄1² system pins z1 real), which is incidental to the regression concern.
+    const rows = census(seeded().st);
+    const zb1 = rows.find((r: any) => r.name === "zb1");
+    const z1 = rows.find((r: any) => r.name === "z1");
+    expect(zb1, "z̄1 should be in the seeded census").toBeTruthy();
+    expect(zb1.conjOf).toBe("z1");        // barred → primal, via the fallback path of conjNameOf
+    expect(z1.conjName).toBe("zb1");      // primal → barred, the pin-both direction
+  });
+
+  it("a self-conjugate symbol is NOT offered a self-referential route", () => {
+    // conjNameOf returns a self-conjugate name unchanged; the `c !== name` guard must still hold on
+    // real census output, not only on the hand-built fixtures above.
+    const rows = census(withDefinedSymbol());
+    for (const r of rows) {
+      if (r.conjOf) expect(r.conjOf, r.name + " is its own partner").not.toBe(r.name);
+      const offers = remove(r);
+      const self = offers.find((o: any) => o.key === "assume-real" && o.note.includes(r.name + " ≡ " + r.name));
+      expect(self, r.name + " offered 'identifies " + r.name + " ≡ " + r.name + "'").toBeFalsy();
+    }
+  });
+});
