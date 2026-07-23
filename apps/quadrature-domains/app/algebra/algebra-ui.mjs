@@ -430,6 +430,30 @@ const QD = _QD;
     }
     return out;
   }
+  // Compact inline formatting of a complex value { re, im } — pinned values, φ(0), gauge substitutions.
+  // ONE copy at module scope (+ on QD_UI, so it is unit-tested): there used to be TWO shadowed in-closure
+  // declarations with divergent rounding, and JS hoisting silently used the LATTER (re snapped at 1e-10,
+  // im rounded, |im| < 1e-8 ⇒ real) — which had LOST the earlier copy's null-guard, so _fmtComplex(known.w0)
+  // on an unpinned value threw instead of yielding '?'. This keeps the live rounding/format and the guard.
+  function _fmtComplex(v) {
+    if (!v) return '?';
+    const re = Math.abs(v.re) < 1e-10 ? 0 : Math.round(v.re * 1e6) / 1e6;
+    const im = Math.round(v.im * 1e6) / 1e6;
+    if (Math.abs(im) < 1e-8) return String(re);
+    return re + (im < 0 ? ' − ' : ' + ') + Math.abs(im) + 'i';
+  }
+  // Q1 — pick the k-th of a proof verdict's genuine domains, WRAPPING so ◀/▶ cycle. The distinct-map kinds
+  // (zero-dim / tree) carry pr.distinctPhis; the reconstruction kinds (moment / rational / triangle) carry
+  // pr.genuine. Pure + on QD_UI so the stepper's selection logic is tested without a DOM mount. Returns
+  // { N, index, domain }; N === 0 (no domains) yields index 0, domain null.
+  function selectDomain(pr, k) {
+    const isReconstruct = !!pr && (pr.kind === 'moment' || pr.kind === 'rational' || pr.kind === 'triangle');
+    const list = (isReconstruct ? (pr && pr.genuine) : (pr && pr.distinctPhis)) || [];
+    const N = list.length;
+    if (!N) return { N: 0, index: 0, domain: null };
+    const index = (((k | 0) % N) + N) % N;
+    return { N, index, domain: list[index] };
+  }
   // Live facts per variable in the CURRENT column, feeding variableRemovals. Ordered by how many
   // equations hold the variable, descending — the ones costing the most are the ones worth
   // removing, and that ranking is the answer to "which should I attack?" a flat picker cannot give.
@@ -600,6 +624,13 @@ const QD = _QD;
     // QE is non-null past the install guard above).
     const isClassicalBounded = QE.isClassicalBounded;
     function toast(msg, opts) { if (QD.QoL && QD.QoL.toast) QD.QoL.toast(msg, opts || {}); }
+    // Q3 — a reusable "Undo" action for a destructive op's toast (delete node / delete branch / Load DAG).
+    // Runs exactly the store.undo() + refresh the ↶ toolbar button and Ctrl+Z do, so undoing from the toast
+    // is identical to undoing from the toolbar. Attached only where the op checkpoints (deleteNode /
+    // deleteTrack / importDAG all do), so the button never promises a revert it cannot deliver.
+    function undoToastAction() {
+      return { label: 'Undo', onClick: () => { if (store.undo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); } } };
+    }
     // Applying a reduction appends a column at the far right of an already-wide track and nothing
     // scrolled there — the primary action of the workspace produced output the user could not see,
     // with a toast reading "→ column 7" standing in for it. Follow the work: when the derivation
@@ -929,13 +960,6 @@ const QD = _QD;
     // system: variables assumed real / imaginary, the fixed φ(0), and any pinned constant
     // values (substitute / linear-reduce). Per-branch since C3, so it names the active branch
     // when more than one exists. Re-run from rerender() so it tracks every reduction.
-    function _fmtComplex(v) {
-      if (!v) return '?';
-      const f = (x) => String(Math.round(x * 1e6) / 1e6);
-      if (!v.im) return f(v.re);
-      if (!v.re) return f(v.im) + 'i';
-      return f(v.re) + (v.im < 0 ? ' − ' : ' + ') + f(Math.abs(v.im)) + 'i';
-    }
     // Render the lens. Each removal routes to the section that OWNS it — the panel's whole claim is
     // that the answer lives elsewhere, so it opens that elsewhere rather than duplicating controls.
     // No mutation logic of its own: every row is navigation, so the existing gates and confirms on
@@ -2553,7 +2577,6 @@ const QD = _QD;
       return info;
     }
     function _factorCount(id) { return _factorInfo(id).count; }
-    function _factorable(id) { return _factorInfo(id).status === 'reducible'; }
     // Typeset a polynomial, or elide it with a useful summary when it is too large to render.
     // DISPLAY_CAP comes from the canvas so the two surfaces cannot drift apart on the threshold.
     function polyCap() { const AC = QD.AlgebraCanvas; return (AC && AC.DISPLAY_CAP) || 120; }
@@ -2592,7 +2615,7 @@ const QD = _QD;
         if (n.provenance && (n.provenance.inputs || []).length) {
           acts.appendChild(mkBtn('Show steps', 'Show how this equation was derived from its input(s); substitutions and reality assumptions are replayed one variable at a time', () => doShowSteps(id, box)));
         }
-        acts.appendChild(mkBtn('Delete', 'Delete this node and its descendants', () => { if (busyGuard()) return; const removed = store.deleteNode(id); if (canvas) canvas.clearSelection(); rerender(); toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)'); }));
+        acts.appendChild(mkBtn('Delete', 'Delete this node and its descendants', () => { if (busyGuard()) return; const removed = store.deleteNode(id); if (canvas) canvas.clearSelection(); rerender(); toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)', { action: undoToastAction() }); }));
         // Generate the conjugate equation p̄ = 0 (folding in variables already assumed real).
         // Useful for derived equations that did not get a seed-time companion. Equalities/≠ only.
         if (n.rel !== '>') {
@@ -3626,11 +3649,17 @@ const QD = _QD;
     // from the Phase-B branch walk). For a zero-dim OR tree result with genuine QDs it adds the one-click
     // derivation actions: the exact boundary curve Q(w,w̄)=0 (+ Schwarz S(w)) and "View in the QD plot"
     // for the first genuine QD, and always the reproducible derivation-DAG export.
+    // Q1 — which of the N genuine domains the stepper is showing. Reset to 0 on a NEW verdict (a different
+    // `pr` object); preserved across a stepper-driven re-render of the SAME verdict.
+    let _domainIdx = 0, _lastVerdictPr = null;
     function renderProofVerdict(pr) {
       const cl = pr.cl, verdict = pr.verdict;
       const distinct = pr.distinctPhis || [];
       const D = pr.count || 0;
       const rows = pr.rows || [];
+      if (pr !== _lastVerdictPr) { _lastVerdictPr = pr; _domainIdx = 0; }   // new verdict → back to domain 1
+      const sel = selectDomain(pr, _domainIdx);
+      const dN = sel.N, dIdx = sel.index, dPhi = sel.domain;   // N genuine domains; the selected index; its map
       setStatus(verdict);
       const vActions = [];
       const isReconstructKind = pr.kind === 'moment' || pr.kind === 'rational' || pr.kind === 'triangle';
@@ -3644,11 +3673,11 @@ const QD = _QD;
             label: 'Show exact boundary curve',
             title: 'Eliminate the disk parameter to get the exact algebraic boundary curve Q(w,w̄)=0 and, when single-valued, the Schwarz function S(w) of the reconstructed quadrature domain (exact over ℚ(i) for the rationalized solution).',
             onClick: () => {
-              let bc; try { bc = QE.boundaryCurveFromPhi(distinct[0]); }
+              let bc; try { bc = QE.boundaryCurveFromPhi(dPhi); }
               catch (e) { toast('Boundary curve: ' + ((e && e.message) || e), { kind: 'error' }); return; }
               const latex = [bc.latexQ]; if (bc.latexS) latex.push(bc.latexS);
-              let plot = null; try { plot = (QD && typeof QD.evalPhi === 'function') ? domainPlotData(distinct[0], QD.evalPhi) : null; } catch (e) { plot = null; }
-              const note = ' · exact boundary curve Q(w,w̄)=0 (over ℚ(i), rationalized solution; order ' + bc.order +
+              let plot = null; try { plot = (QD && typeof QD.evalPhi === 'function') ? domainPlotData(dPhi, QD.evalPhi) : null; } catch (e) { plot = null; }
+              const note = (dN > 1 ? ' · domain ' + (dIdx + 1) + ' of ' + dN : '') + ' · exact boundary curve Q(w,w̄)=0 (over ℚ(i), rationalized solution; order ' + bc.order +
                 (bc.schwarz ? ', Schwarz function S(w) single-valued' : '; Schwarz function algebraic of degree ' + bc.degWb) + ')';
               // `bound` carries the DIRECTION of a rigor:'bound' result — a truncated tree walk proves a
               // LOWER bound (≥) and rendering the default '≤' would state the opposite of the proof.
@@ -3657,11 +3686,11 @@ const QD = _QD;
           });
         }
         // #3b (roadmap): hand the reconstructed genuine QD to the geometric QD tab (algebra→geometry).
-        if (!isReconstructKind && D >= 1 && ctx && typeof ctx.showQDSolution === 'function' && activeEnv && activeEnv.hData && distinct[0]) {
+        if (!isReconstructKind && D >= 1 && ctx && typeof ctx.showQDSolution === 'function' && activeEnv && activeEnv.hData && dPhi) {
           vActions.push({
             label: 'View in the QD plot',
             title: 'Render the reconstructed quadrature domain in the geometric QD tab (boundary, cusps, critical set) and switch to it.',
-            onClick: () => { if (!ctx.showQDSolution(distinct[0], activeEnv.hData)) toast('Could not open in the QD plot', { kind: 'error' }); },
+            onClick: () => { if (!ctx.showQDSolution(dPhi, activeEnv.hData)) toast('Could not open in the QD plot', { kind: 'error' }); },
           });
         }
         // S5-depth: one-click export of the full derivation DAG — a reproducible, re-importable proof object.
@@ -3698,32 +3727,41 @@ const QD = _QD;
       // C1-ext-B: the moment route's genuine map is the POLYNOMIAL φ = a + Σ w_k zᵏ, so plot its boundary
       // φ(∂𝔻) + the quadrature node a straight from the coefficients (cheap — no elimination). Shows the
       // FIRST genuine QD when several exist (the count is already in the verdict).
-      if (pr.kind === 'moment' && pr.genuine && pr.genuine.length && pr.genuine[0] && pr.genuine[0].w) {
-        const g0 = pr.genuine[0];
+      if (pr.kind === 'moment' && dPhi && dPhi.w) {
+        const g0 = dPhi;
         let mp = null; try { mp = momentPlotData(g0.w, g0.order || pr.order, pr.node); } catch (e) { mp = null; }
         if (mp) {
           vSet.plot = mp;
-          vSet.plotCaption = 'reconstructed domain φ(∂𝔻) = a + Σ wₖzᵏ · node a = φ(0)' + (D > 1 ? ' · showing 1 of ' + D : '');
+          vSet.plotCaption = 'reconstructed domain φ(∂𝔻) = a + Σ wₖzᵏ · node a = φ(0)' + (dN > 1 ? ' · showing ' + (dIdx + 1) + ' of ' + dN : '');
         }
       }
       // C2-4: the rational route's genuine map is φ = w0 + R(z + dz²)/(1 − cz²) — sample its boundary φ(∂𝔻)
       // from the reconstructed shape + mark the two quadrature nodes (the given data). Cheap; no elimination.
-      if (pr.kind === 'rational' && pr.genuine && pr.genuine.length && pr.genuine[0]) {
+      if (pr.kind === 'rational' && dPhi) {
         const nds = (pr.nodeData && pr.nodeData.nodes) || [];
-        let rp = null; try { rp = rationalPlotData(pr.genuine[0], nds); } catch (e) { rp = null; }
+        let rp = null; try { rp = rationalPlotData(dPhi, nds); } catch (e) { rp = null; }
         if (rp) {
           vSet.plot = rp;
-          vSet.plotCaption = 'reconstructed domain φ(∂𝔻) = w₀ + R(z+dz²)/(1−cz²) · quadrature nodes' + (D > 1 ? ' · showing 1 of ' + D : '');
+          vSet.plotCaption = 'reconstructed domain φ(∂𝔻) = w₀ + R(z+dz²)/(1−cz²) · quadrature nodes' + (dN > 1 ? ' · showing ' + (dIdx + 1) + ' of ' + dN : '');
         }
       }
       // C3-4: the triangle route's genuine map is φ = R·z/(1 − c·z³) — sample its boundary + mark the 3 nodes.
-      if (pr.kind === 'triangle' && pr.genuine && pr.genuine.length && pr.genuine[0]) {
+      if (pr.kind === 'triangle' && dPhi) {
         const nds = (pr.nodeData && pr.nodeData.nodes) || [];
-        let tp = null; try { tp = trianglePlotData(pr.genuine[0], nds); } catch (e) { tp = null; }
+        let tp = null; try { tp = trianglePlotData(dPhi, nds); } catch (e) { tp = null; }
         if (tp) {
           vSet.plot = tp;
-          vSet.plotCaption = 'reconstructed domain φ(∂𝔻) = R·z/(1−cz³) · quadrature nodes' + (D > 1 ? ' · showing 1 of ' + D : '');
+          vSet.plotCaption = 'reconstructed domain φ(∂𝔻) = R·z/(1−cz³) · quadrature nodes' + (dN > 1 ? ' · showing ' + (dIdx + 1) + ' of ' + dN : '');
         }
+      }
+      // Q1 — the ◀ k/N ▶ stepper: re-target the plot + actions to another of the N certified domains, so a
+      // certified COUNT can be spot-checked / plotted / exported / handed off for EVERY domain it claims,
+      // not only #1. Prepended so navigation reads first; each button re-invokes this renderer at the new index.
+      if (dN > 1) {
+        vActions.unshift(
+          { label: '◀ domain', title: 'Show the previous of the ' + dN + ' genuine domains', onClick: () => { _domainIdx = (dIdx - 1 + dN) % dN; renderProofVerdict(pr); } },
+          { label: 'domain ' + (dIdx + 1) + ' / ' + dN + ' ▶', title: 'Show the next genuine domain — each of the ' + dN + ' certified domains can be plotted, exported, and verified independently', onClick: () => { _domainIdx = (dIdx + 1) % dN; renderProofVerdict(pr); } },
+        );
       }
       if (vActions.length) vSet.actions = vActions;
       if (canvas) showResult(vSet);
@@ -3866,12 +3904,6 @@ const QD = _QD;
       const imStr = splitAt < 0 ? noI : noI.slice(splitAt);
       return { re: reStr === '' ? 0 : _parseMomentNum(reStr), im: _parseMomentNum(imStr === '' ? '1' : imStr) };
     }
-    function _fmtComplex(c) {
-      const re = Math.abs(c.re) < 1e-10 ? 0 : Math.round(c.re * 1e6) / 1e6;
-      const im = Math.round(c.im * 1e6) / 1e6;
-      if (Math.abs(im) < 1e-8) return String(re);
-      return re + (im < 0 ? ' − ' : ' + ') + Math.abs(im) + 'i';
-    }
     // LaTeX of the (ascending {re,im}) Prony polynomial P(z) = Σ c_k z^k = 0.
     function _pronyLatex(coeffs) {
       let out = '';
@@ -3944,8 +3976,17 @@ const QD = _QD;
         _abort = null; setBusy(false); setStatus('');
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Dimension: ' + withGuidance(r.reason || 'unavailable')); return; }
-        if (r.zeroDim) toast('Zero-dimensional: ' + r.dimension + ' solution(s) (with multiplicity), ' + r.numVars + ' variables.');
-        else toast('Positive-dimensional: infinitely many solutions (' + posDimDesc(r) + ') — assume more variables real or add constraints.');
+        // Q4 — the dimension/count is an EXACT structural fact (the quotient's ℂ-dimension for a zero-dim
+        // ideal; certified positive-dimensionality otherwise), so it belongs in the results drawer, not a
+        // 750 ms toast that vanished before a count + variable tally could be read — and, in the
+        // positive-dim case, before its next-step hint could be acted on. It is the solution count WITH
+        // MULTIPLICITY, explicitly NOT the #QD count classify bounds; the wording says so beside the '=' badge.
+        const dimRigor = 'exact';
+        const dimText = r.zeroDim
+          ? 'Zero-dimensional: ' + r.dimension + ' solution(s) with multiplicity, ' + r.numVars + ' variables — an exact algebraic count, NOT the #QD count (run ✦ Prove / Certify univalence for that).'
+          : 'Positive-dimensional: infinitely many solutions (' + posDimDesc(r) + ') — assume more variables real or add constraints.';
+        if (canvas) showResult({ title: 'Dimension / count', text: dimText, rigor: dimRigor });
+        toast(r.zeroDim ? 'Dimension computed — zero-dimensional.' : 'Dimension computed — positive-dimensional.');
       });
     }
     // Solve the current equality system numerically (shape-lemma path), off the main
@@ -4041,7 +4082,7 @@ const QD = _QD;
         if (!r || !r.ok) { showError('Load DAG: ' + withGuidance((r && r.reason) || 'import failed')); return; }
         if (canvas) canvas.clearSelection();
         clearError(); rerender(); refreshPickers();
-        toast('Loaded ' + r.nodes + ' node(s) across ' + r.tracks + ' branch' + (r.tracks === 1 ? '' : 'es'));
+        toast('Loaded ' + r.nodes + ' node(s) across ' + r.tracks + ' branch' + (r.tracks === 1 ? '' : 'es'), { action: undoToastAction() });
       };
       reader.onerror = () => showError('Load DAG: could not read the file');
       reader.readAsText(file);
@@ -4331,7 +4372,7 @@ const QD = _QD;
           if (busyGuard()) return;
           const removed = store.deleteNode(sel[0]); if (canvas) canvas.clearSelection(); rerender();
           // Deleting cascades to descendants, so the toast has to say the recovery path exists.
-          toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s) — Ctrl+Z to undo'); ev.preventDefault();
+          toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)', { action: undoToastAction() }); ev.preventDefault();
         }
       });
     }
@@ -4649,7 +4690,7 @@ const QD = _QD;
       if (!r || !r.ok) { toast((r && r.reason) || 'could not delete this branch', { kind: 'error' }); return; }
       if (canvas) canvas.clearSelection();
       rerender(); refreshPickers();
-      toast('Deleted branch');
+      toast('Deleted branch', { action: undoToastAction() });
     }
     // Floating view/history toolbar over the graph (node-editor pattern): zoom, fit,
     // expand/collapse-all, undo/redo. Appended AFTER canvas.create (which clears the
@@ -4805,6 +4846,8 @@ const QD = _QD;
   QD_UI.workflowStepStates = workflowStepStates;     // …and the done/stale/todo state machine (pure)
   QD_UI.variableRemovals = variableRemovals;         // the elimination lens's per-variable routing table (pure)
   QD_UI.variableCensus = variableCensus;             // …and the per-variable fact-gather it feeds (pure fn of the store)
+  QD_UI.fmtComplex = _fmtComplex;                     // compact { re, im } inline formatter (pure; guarded)
+  QD_UI.selectDomain = selectDomain;                 // the multi-domain stepper's k-th-domain selector (pure; wraps)
   QD_UI.suggestAutoOpen = suggestAutoOpen;           // …and its expand/collapse decision (pure)
   QD_UI.SUGGEST_AUTO_OPEN_MAX = AUTO_OPEN_MAX;
 })();

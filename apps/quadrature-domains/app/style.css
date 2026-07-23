@@ -445,6 +445,20 @@ button.attention {
 }
 /* Error styling — red instead of the default green. */
 .copy-toast.toast-error { background: rgba(150, 40, 40, 0.95); }
+/* Action toast (Q3): carries an interactive control (e.g. Undo after a delete), so it must RECEIVE
+   clicks — the base toast is pointer-events:none. Lay the message + button out in a row. */
+.copy-toast.toast-action { pointer-events: auto; display: inline-flex; align-items: center; gap: 10px; }
+.copy-toast-action {
+  pointer-events: auto;
+  cursor: pointer;
+  font: inherit;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 3px;
+  padding: 1px 8px;
+}
+.copy-toast-action:hover { background: rgba(255, 255, 255, 0.3); }
 
 /* Service-worker "new version available" banner (I2): fixed top-center. */
 #sw-update-banner {
