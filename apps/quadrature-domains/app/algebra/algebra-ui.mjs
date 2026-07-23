@@ -1244,7 +1244,15 @@ const QD = _QD;
     // (centroid of the poles by default) is baked into the seed, so column 0 is the
     // system "as generated" and its header notes φ(0) is fixed; untick for symbolic w₀.
     function seedFromCurrent() {
-      if (!activeEnv) { setStatus(STR.noSolve || 'No classical bounded QD solved yet.'); return false; }
+      if (!activeEnv) {
+        // U2 — no bounded SOLVE, but there may be classical-bounded quadrature DATA (lastHData): seed the
+        // system directly from it (the same from-data path ✦ Prove uses), so the Algebra tab is not a soft
+        // dead-end before a geometric solve — the canvas "Generate" button now yields a workable system.
+        const hData = (state.mode === 'bounded') ? lastHData : null;
+        if (hData && seedFromDataDirect(hData)) return true;
+        setStatus(STR.noSolve || 'No classical bounded QD solved yet — and no bounded quadrature data to seed from.');
+        return false;
+      }
       try {
         clearError();
         const w0cb = $('#alg-w0-fix');
@@ -2880,6 +2888,11 @@ const QD = _QD;
       document.querySelectorAll('.js-busy-lock').forEach((b) => { b.disabled = on; });
       const pal = $('#alg-palette'); if (pal) pal.querySelectorAll('button').forEach((b) => { b.disabled = on; });
       const cancel = $('#alg-cancel'); if (cancel) cancel.classList.toggle('hidden', !on);
+      // Q2 — a busy state on the CANVAS surface too (not just the sidebar): the result lands here, so the
+      // graph dimming + spinner is where the eye is during a multi-second op, and it reads as "working"
+      // rather than "did my click register?". CSS draws the overlay from the .is-busy class + data-busy label.
+      const graph = $('#algebra-graph');
+      if (graph) { graph.classList.toggle('is-busy', on); if (on && label) graph.setAttribute('data-busy', label); else graph.removeAttribute('data-busy'); }
       if (on && label) setStatus(label);
     }
     function cancelOp() { if (_abort) { try { _abort.abort(); } catch (e) { /* ignore */ } } if (QD.SymWorker) QD.SymWorker.cancel(); }
@@ -2971,11 +2984,18 @@ const QD = _QD;
       if (!ensureSeed()) return;
       clearError();
       const sel = canvas ? canvas.getSelection() : [];
-      let r; try { r = store.saturateMobius(sel.length ? sel : null); } catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
-      if (!r.ok) { showError('Saturate (admissibility): ' + withGuidance(r.reason || 'nothing to saturate')); return; }
-      if (canvas) canvas.clearSelection();
-      rerender(); refreshPickers();
-      toast('Saturated by ∏(1−z̄z): the |z_j| = 1 boundary stratum removed (' + r.created.length + ' generator' + (r.created.length === 1 ? '' : 's') + ')' + scopeNote(sel) + ' — the existence count is now the exact algebraic QD-solution count.' + droppedNote(r.skipped), r.skipped && r.skipped.length ? { kind: 'error' } : {});
+      // Q2 — offloaded (was a synchronous elimination Gröbner on the UI thread, degree 2p², and on the
+      // ✦ Prove prelude). setBusy reveals the spinner + Cancel; the abort signal makes Cancel real.
+      const ctrl = _newAbort(); _abort = ctrl;
+      setBusy(true, 'Saturating by ∏(1−z̄z)…');
+      store.saturateAsync(sel.length ? sel : null, {}, { signal: ctrl && ctrl.signal }).then((r) => {
+        _abort = null; setBusy(false); setStatus('');
+        if (r.aborted) { toast('Cancelled'); return; }
+        if (!r.ok) { showError('Saturate (admissibility): ' + withGuidance(r.reason || 'nothing to saturate')); return; }
+        if (canvas) canvas.clearSelection();
+        rerender(); refreshPickers();
+        toast('Saturated by ∏(1−z̄z): the |z_j| = 1 boundary stratum removed (' + r.created.length + ' generator' + (r.created.length === 1 ? '' : 's') + ')' + scopeNote(sel) + ' — the existence count is now the exact algebraic QD-solution count.' + droppedNote(r.skipped), r.skipped && r.skipped.length ? { kind: 'error' } : {});
+      }, (e) => { _abort = null; setBusy(false); setStatus(''); showError('Saturate: ' + ((e && e.message) || String(e))); });
     }
     // Triangular decomposition of the current system → a triangular chain column.
     function doTriangular() {
