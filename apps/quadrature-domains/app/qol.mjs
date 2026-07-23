@@ -251,19 +251,33 @@ import _QD from './solver.mjs';
     // warnings (e.g. that an exported script will produce a WRONG quadrature-domain count). Give
     // errors long enough to read, and a click to dismiss so a long one is never in the way.
     const ERROR_MS = 8000;
-    const duration = (isEl ? 0 : opts.duration) || (kind === 'error' ? ERROR_MS : 750);
+    // An optional { label, onClick } action (e.g. Undo). A text-only toast could not host a button, so a
+    // destructive act's recovery affordance was invisible exactly when the user needed it — right after a
+    // delete, looking at the toast rather than the canvas toolbar. An action toast also stays longer, so
+    // it can be reached for. (Ignored for the anchored copy-button form.)
+    const action = (!isEl && opts.action && typeof opts.action.onClick === 'function' && opts.action.label) ? opts.action : null;
+    const ACTION_MS = 6000;
+    const duration = (isEl ? 0 : opts.duration) || (kind === 'error' ? ERROR_MS : action ? ACTION_MS : 750);
     const t = document.createElement('div');
-    t.className = 'copy-toast' + (kind === 'error' ? ' toast-error' : '');
+    t.className = 'copy-toast' + (kind === 'error' ? ' toast-error' : '') + (action ? ' toast-action' : '');
     // Announced to assistive tech: assertive for a failure, polite for a confirmation. Without
     // this a screen-reader user gets no signal at all that an operation failed.
     t.setAttribute('role', kind === 'error' ? 'alert' : 'status');
-    t.textContent = msg;
     let gone = false;
     const dismiss = () => {
       if (gone) return; gone = true;
       t.classList.add('fade');
       setTimeout(() => t.remove(), 350);
     };
+    if (action) {
+      const span = document.createElement('span'); span.textContent = msg; t.appendChild(span);
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'copy-toast-action'; btn.textContent = action.label;
+      btn.addEventListener('click', (e) => { e.stopPropagation(); try { action.onClick(); } finally { dismiss(); } });
+      t.appendChild(btn);
+    } else {
+      t.textContent = msg;
+    }
     if (kind === 'error') {
       t.title = 'Click to dismiss';
       t.style.cursor = 'pointer';
