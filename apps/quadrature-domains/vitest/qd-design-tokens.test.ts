@@ -9,7 +9,7 @@
 // different fallbacks. Since every token is declared, a fallback is pure duplication that will
 // drift again — so they are gone, and these tests are what makes that safe.
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const RAW = readFileSync(fileURLToPath(new URL("../app/style.css", import.meta.url)), "utf8");
@@ -22,9 +22,35 @@ const declared = (() => {
 })();
 const used = new Set([...CSS.matchAll(/var\(\s*(--[a-z0-9-]+)/g)].map((x) => x[1]));
 
+// Tokens referenced from JavaScript, not just from CSS. A token can be read via var() inside a
+// JS-built inline style, or WRITTEN via element.style.setProperty('--x', …) and read from CSS
+// (that is how --alg-zoom / --alg-depth work). A declared→used check that scanned only style.css
+// would wrongly flag those as dead, so the app's .mjs files are folded into the "used" side.
+const appDir = fileURLToPath(new URL("../app/", import.meta.url));
+const usedInJs = (() => {
+  const out = new Set<string>();
+  for (const f of readdirSync(appDir, { recursive: true, encoding: "utf8" })) {
+    if (!f.endsWith(".mjs")) continue;
+    const src = readFileSync(appDir + f, "utf8");
+    for (const m of src.matchAll(/var\(\s*(--[a-z0-9-]+)/g)) out.add(m[1]);
+    for (const m of src.matchAll(/setProperty\(\s*['"](--[a-z0-9-]+)/g)) out.add(m[1]);
+  }
+  return out;
+})();
+const usedAnywhere = new Set([...used, ...usedInJs]);
+
 describe("every referenced custom property is declared", () => {
   it("no var(--x) refers to a token missing from :root", () => {
     expect([...used].filter((t) => !declared.has(t)).sort()).toEqual([]);
+  });
+
+  it("no token is declared and then referenced nowhere", () => {
+    // The other direction, which the used→declared check above cannot see. Five --sp-1..5 spacing
+    // tokens sat in :root, referenced by zero var() calls in any CSS or JS — declared-but-dead,
+    // pure confusion for the next reader, and nothing flagged them. Usage is counted across the
+    // stylesheet AND the app's .mjs (see usedInJs) so a JS-only token is not a false positive.
+    const dead = [...declared].filter((t) => !usedAnywhere.has(t)).sort();
+    expect(dead, "declared in :root but referenced nowhere: " + dead.join(", ")).toEqual([]);
   });
 
   it("all custom properties are declared in :root (nothing scoped elsewhere)", () => {
