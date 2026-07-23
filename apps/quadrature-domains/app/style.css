@@ -46,8 +46,6 @@
   /* Branch nesting depth, written onto a trackbar chip by buildTrackBar. Same contract as
      --alg-zoom: a :root default keeps every var() declared, the runtime value cascades over it. */
   --alg-depth:       1;
-  /* spacing scale */
-  --sp-1: 4px; --sp-2: 6px; --sp-3: 8px; --sp-4: 12px; --sp-5: 16px;
 }
 
 /* ===== Layout ===== */

@@ -566,7 +566,6 @@ import _QD from './solver.mjs';
         `external CAS (Gröbner / RCTD) for systems beyond the in-browser engine.`,
       noSolve: `No classical bounded QD solved yet — solve one on the QD tab first.`,
       ready: `Ready — click “Generate / re-seed” to load the system.`,
-      seeded: `Seeded`,
       unavailablePrefix: `Generation unavailable: `,
     },
 
