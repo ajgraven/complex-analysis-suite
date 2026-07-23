@@ -2717,7 +2717,11 @@ import _QD from '../solver.mjs';
       if ((op === 'assume-real' || op === 'assume-imaginary') && Array.isArray(prov.vars) && QC && QC.conjVarName) {
         replayHead(); let cur = base.poly;
         for (const v of prov.vars) {
-          const c = QC.conjVarName(v); if (c === v) continue;
+          // Overlay-aware, matching the reduction site (assumeReal/assumeImaginary use _conjName): a DEFINED
+          // symbol t's conjugate is tb (registered in substConj), invisible to the raw QC.conjVarName. Using
+          // the raw table here made the replay fold NOTHING for a defined symbol, silently breaking this
+          // function's "the final step provably equals this node's polynomial" contract. (Same class as #135.)
+          const c = _conjName(v); if (c === v) continue;
           if (op === 'assume-real') { cur = cur.relabel((nm) => (nm === c ? v : nm)); push('assume ' + v + ' real (' + c + ' ≡ ' + v + ')', cur); }
           else { const sub = {}; sub[c] = S.mpolyVar(v).neg(); cur = cur.subst(sub); push('assume ' + v + ' imaginary (' + c + ' ≡ −' + v + ')', cur); }
         }
@@ -2743,7 +2747,10 @@ import _QD from '../solver.mjs';
     function _subsForRepro(prov) {
       const QC = getQC(), CAS = _getCAS(); if (!prov || !QC || !QC.conjVarName || !CAS) return null;
       const d = PROV_STORE[prov.op]; if (!d || !d.subs) return null;   // op → its .subs builder (registry)
-      const map = d.subs(prov, { cj: (v) => QC.conjVarName(v), CAS, conjRec: _conjRec });
+      // Overlay-aware conjugate (see derivationSteps): a defined symbol's partner lives in substConj,
+      // invisible to the raw QC.conjVarName — using it emitted an EMPTY SymPy subs dict for a
+      // defined-symbol assume-real, so the "reproducible" transcript silently did not reproduce the step.
+      const map = d.subs(prov, { cj: (v) => _conjName(v), CAS, conjRec: _conjRec });
       return (map && Object.keys(map).length) ? map : null;
     }
     // A terse, ASCII transition label for a column's representative provenance (store-side; the

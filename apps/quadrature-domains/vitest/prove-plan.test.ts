@@ -514,6 +514,23 @@ describe("prove-plan (8) moment route — point-functional / Aharonov–Shapiro 
     expect(asm.bad).toBe(true);
     expect(asm.verdict).toContain("1 self-intersecting");
   });
+
+  it("assembleMomentVerdict: an empty result on an UNRELIABLE filter reads 'estimate', not a certified '=' (C3)", () => {
+    // momentCertifyLeaf clears allExact when a candidate's Schur–Cohn was unresolved but still folds on the
+    // raw inertia count, so a genuine QD can be mis-rejected there. When that empties the set, "no genuine
+    // QD" must NOT wear a green '='. Previously the moment route stamped D===0 as unconditional 'exact';
+    // now it gates on the filter's reliability, matching the rational/triangle routes.
+    const unreliable: any = { genuine: [], folded: 1, selfInt: 0, gaugeDropped: 0, allExact: false, allVerified: false, allBoundaryExact: false };
+    const asmU = PROVE.assembleMomentVerdict({ genuine: [], real: [{}], leaf: unreliable, order: 3, deps: {}, sliceCaveat: () => "", cl: null });
+    expect(asmU.bad).toBe(true);
+    expect(asmU.rigor).toBe("estimate");   // was 'exact' before the fix — this is the regression guard
+    expect(asmU.bound).toBe("≈");
+    // …but a RELIABLE filter that empties the set still certifies "no QD" exactly:
+    const reliable: any = { genuine: [], folded: 1, selfInt: 0, gaugeDropped: 0, allExact: true, allVerified: true, allBoundaryExact: true };
+    const asmR = PROVE.assembleMomentVerdict({ genuine: [], real: [{}], leaf: reliable, order: 3, deps: {}, sliceCaveat: () => "", cl: null });
+    expect(asmR.rigor).toBe("exact");
+    expect(asmR.bound).toBe("=");
+  });
 });
 
 describe("prove-plan (9) rational-φ univalence — the multi-node route (Phase C2-2)", () => {

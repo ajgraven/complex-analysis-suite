@@ -79,6 +79,22 @@ export function isConventions(v: unknown): v is Conventions {
   );
 }
 
+/** The interchange wire is CANONICAL by contract (schema.ts: "canonical on the wire; producer converts
+ *  TO, consumer converts FROM"). Per ADR-0006 the convention tag exists so a mis-conversion fails LOUDLY
+ *  instead of silently rendering a domain scaled by a stray factor of π / 2πi. `isConventions` above only
+ *  checks well-formedness (the type can EXPRESS a non-canonical tag precisely so we can detect one); a
+ *  well-formed-but-non-canonical tag means a producer failed to convert to canonical before export.
+ *  Reject it here, because the consumer reads the payload AS canonical without inspecting the tag — so an
+ *  un-caught non-canonical payload becomes a mis-scaled picture with no other guardrail in the path. */
+function assertCanonicalWire(c: Conventions, kind: string): void {
+  if (c.area !== "standard" || c.contour !== "standard") {
+    throw new InterchangeError(
+      `interchange: ${kind}.conventions is non-canonical (area="${c.area}", contour="${c.contour}"); ` +
+        `the wire format is canonical (area & contour "standard") — the producer must convert before export`,
+    );
+  }
+}
+
 export function isMapSpec(v: unknown): v is MapSpec {
   if (!isObject(v)) return false;
   switch (v.form) {
@@ -125,6 +141,7 @@ function validatePayload(kind: PayloadKind, payload: unknown): void {
     case "schwarz-reflection":
       if (!isMapSpec(payload.sigma)) throw new InterchangeError("interchange: schwarz-reflection.sigma is not a valid MapSpec");
       if (!isConventions(payload.conventions)) throw new InterchangeError("interchange: schwarz-reflection.conventions is missing or invalid");
+      assertCanonicalWire(payload.conventions, "schwarz-reflection");
       // escape is optional, but a present-yet-malformed escape (bad predicate / non-finite R) used to be
       // trusted — a consumer reading escape.R got NaN as its escape radius. Validate it when present.
       if (payload.escape !== undefined && !isEscapeSpec(payload.escape))
@@ -133,6 +150,7 @@ function validatePayload(kind: PayloadKind, payload: unknown): void {
     case "quadrature-domain":
       if (!isMapSpec(payload.phi)) throw new InterchangeError("interchange: quadrature-domain.phi is not a valid MapSpec");
       if (!isConventions(payload.conventions)) throw new InterchangeError("interchange: quadrature-domain.conventions is missing or invalid");
+      assertCanonicalWire(payload.conventions, "quadrature-domain");
       // boundarySamples is optional, but when present must be a bounded Complex[] (the MAX_COEFF_LEN cap the
       // other Complex[] fields carry — a crafted mega-array otherwise validated and slipped past the cap).
       if (payload.boundarySamples !== undefined && !isComplexArray(payload.boundarySamples))
