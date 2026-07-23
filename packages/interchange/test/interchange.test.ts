@@ -79,6 +79,22 @@ describe("validateEnvelope", () => {
     expect(() => validateEnvelope({ ...bad, payload })).toThrow(/conventions/);
   });
 
+  it("rejects a well-formed but NON-canonical conventions tag — the ADR-0006 π/2πi guard", () => {
+    // The wire is canonical by contract; a non-canonical tag means a producer failed to convert, and the
+    // consumer reads the payload AS canonical (it never inspects the tag). isConventions accepts these as
+    // WELL-FORMED, so validateEnvelope must still reject them loudly — otherwise a domain scaled by a stray
+    // factor of π / 2πi renders silently, the exact failure ADR-0006 keeps the tag to prevent.
+    const nonCanonical = [
+      { area: "normalized", contour: "standard" },
+      { area: "standard", contour: "suppressed-2pii" },
+      { area: "normalized", contour: "suppressed-2pii" },
+    ];
+    for (const conventions of nonCanonical) {
+      const bad = schwarzEnvelope();
+      expect(() => validateEnvelope({ ...bad, payload: { sigma: bad.payload.sigma, conventions } })).toThrow(/non-canonical/);
+    }
+  });
+
   it("rejects a schwarz-reflection with an invalid sigma", () => {
     expect(() => validateEnvelope({ ...schwarzEnvelope(), payload: { sigma: { form: "nope" }, conventions: CANONICAL } })).toThrow(/MapSpec/);
   });

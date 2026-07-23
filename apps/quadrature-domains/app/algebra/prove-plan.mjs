@@ -745,7 +745,13 @@ export function assembleMomentVerdict(a) {
     verdict += ' · class: classical bounded quadrature domains for the point functional, up to the rotation gauge (w₁>0)';
   }
   if (cl) verdict += sliceCaveat(cl);
-  const rigor = D === 0 ? 'exact'
+  // D === 0 (no genuine QD): "no quadrature domain exists" is certified `=` ONLY when the univalence
+  // filter that emptied the set was itself reliable. momentCertifyLeaf clears allExact when any
+  // candidate's Schur–Cohn was UNRESOLVED (it still folds on the raw, unreliable inertia count), so a
+  // genuine QD can be mis-rejected there — read 'estimate' in that case. The rational and triangle
+  // routes already gate the empty case this way (assembleRationalVerdict / assembleTriangleVerdict);
+  // the moment route was the lone exception, stamping a green `=` on a possibly-wrong "no QD".
+  const rigor = D === 0 ? (allExactFilter ? 'exact' : 'estimate')
     : (globalCertified && allExactFilter && allVerified) ? 'exact' : 'estimate';
   const prov = rigorProvenance({ certified: true, allExactFilter, allExactVerified: allVerified, ccChecked: false, undercount: false, partial: false, truncated: false });
   if (D >= 1) prov.push(leaf.allBoundaryExact

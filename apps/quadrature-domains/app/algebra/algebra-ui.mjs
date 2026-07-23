@@ -2191,6 +2191,14 @@ const QD = _QD;
       const code = store.msolveColumn(c, { params });
       if (!code) { toast('Column ' + c + ' has no equality system to export.', { kind: 'error' }); return; }
       writeClipboard(code, 'msolve .ms (column ' + c + ')');
+      // F5-parity with the Maple export (copyCAS): msolve solves over ℚ, so an ℚ(i) (conjugate-model)
+      // column is exported with `i` as a variable + i²+1 — which has NO real root, so msolve's REAL-solution
+      // output is empty/degenerate and is NOT the quadrature-domain count. The Maple path warns about the
+      // same conjugate-model hazard; msolve did not. (The warning is a toast, not embedded in the `.ms`: the
+      // format is strict — line 1 vars, line 2 characteristic, then polys — and comments would break paste.)
+      if (typeof store.casColumnComplex === 'function' && store.casColumnComplex(c)) {
+        toast('⚠ Column ' + c + ' has complex ℚ(i) coefficients (conjugate model). msolve solves over ℚ (i becomes a variable with i²+1, which has no real root), so its REAL solutions are NOT the quadrature-domain count. Reim-split (assume the base variables real) first for the QD count.', { kind: 'error' });
+      }
     }
     // Import a parametric RCTD result (the return trip for the Maple RealComprehensiveTriangularize
     // export). Parse the pasted qd-rctd JSON with QD.CASExport.parseRCTD, land the cells as a new
@@ -3109,7 +3117,12 @@ const QD = _QD;
           .filter((n) => n && (n.track || 't0') === at && n.provenance && n.provenance.op === 'constraint')
           .map((n) => (n.provenance && n.provenance.form) || (n.meta && n.meta.form)).filter(Boolean))];
         if (forms.length) out.push('Univalence constraint' + (forms.length > 1 ? 's' : '') + ' active (' + forms.join(', ') + ') — restricts to domains meeting ' + (forms.length > 1 ? 'them' : 'it') + '; a domain that does not is not counted');
-      } catch (e) { /* ignore */ }
+      } catch (e) {
+        // Honest failure, NOT silent. This scan records the ACTIVE univalence constraints so a restricted
+        // count never reads as the full one. Swallowing a throw would drop that disclosure and let a
+        // restricted count look general — the exact mislabel the ledger exists to prevent. Emit a caveat.
+        out.push('⚠ could not scan for active univalence constraints — if any are set, this count is restricted to the domains meeting them, not the full count');
+      }
       return out;
     }
 
@@ -3674,7 +3687,12 @@ const QD = _QD;
           });
         }
       }
-      const vSet = { text: verdict, assumptions: specializationLedger(cl), rigor: pr.rigor };
+      // `bound` carries the DIRECTION of a rigor:'bound' result — a truncated proof-tree walk proves a
+      // LOWER bound (≥). The action callbacks above already thread it; omitting it here made the
+      // always-shown card default to '≤', stating the OPPOSITE of the proof and contradicting its own
+      // "the count is a LOWER BOUND" body text. Thread it so the badge matches the verdict. (Undefined
+      // for the routes with no direction — rigorMeta then keeps its correct default.)
+      const vSet = { text: verdict, assumptions: specializationLedger(cl), rigor: pr.rigor, bound: pr.bound };
       if (pr.rigorProvenance && pr.rigorProvenance.length) vSet.rigorProvenance = pr.rigorProvenance;   // Phase E: "why this rigor"
       if (rows.length) vSet.solutionsText = rows.join('\n');
       // C1-ext-B: the moment route's genuine map is the POLYNOMIAL φ = a + Σ w_k zᵏ, so plot its boundary
@@ -3813,7 +3831,13 @@ const QD = _QD;
         // MISSED a critical value (so a cell could straddle a bifurcation), and a cell with ok:false
         // has no count at all — both are 'partial' (may be incomplete), never a bare '='.
         const bifPartial = (r.crosschecked === false) || r.cells.some((c) => !c.ok);
-        if (canvas) showResult({ text, rigor: bifPartial ? 'partial' : 'exact' });
+        // Each interval's count is exact AS A REIM REAL-SOLUTION COUNT at its sample, but that quantity is a
+        // rigorous UPPER BOUND on #QD, not the QD count — it also counts non-univalent maps, gauge copies, and
+        // the |z_j|=1 stratum, exactly as classifyRigor labels the identical quantity '≤'. Badge it 'bound'
+        // (→ ≤), never a bare '=', with classify's caveat, so a clean count can't read as a certified unique
+        // QD across the range. (An incomplete critical set / an ok:false cell stays 'partial'.)
+        if (!bifPartial) text += ' · each count is a rigorous upper bound on #QD (real solutions also count non-univalent maps + gauge copies) — run Certify univalence for the genuine-QD count.';
+        if (canvas) showResult({ text, rigor: bifPartial ? 'partial' : 'bound' });
         toast('Bifurcation computed (' + r.cells.length + ' interval' + (r.cells.length === 1 ? '' : 's') + ').');
       }, (e) => { _abort = null; setBusy(false); setStatus(''); showError('Bifurcation: ' + ((e && e.message) || String(e))); });
     }
