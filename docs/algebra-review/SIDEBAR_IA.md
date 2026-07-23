@@ -13,7 +13,7 @@ settled is re-litigated), and a reading of the *mathematical* task model out of 
 `algebra-store.mjs` — then direct verification of every load-bearing claim against the running app.
 
 The claim that most of this plan rests on was checked by hand rather than taken on report: see
-[§2](#2-the-sidebar-weights-escape-hatches-like-the-main-road).
+[§2](#2-it-weights-escape-hatches-like-the-main-road).
 
 ---
 
@@ -25,17 +25,19 @@ concept that no amount of re-sectioning can fix.
 ### 1. It is grouped by technique, not by task
 
 Sections are named for *what an operation is* — Assume, Pin values, Edit system, Reduce, Analyze,
-Export. That is the taxonomy of the **library**. What a user needs is the taxonomy of the **job**:
+Univalence constraints, Shape from moments, Export. That is the taxonomy of the **library**. What a user needs is the taxonomy of the **job**:
 where am I in the proof, and what is the next legitimate move?
 
 The job has a canonical shape, and the codebase states it unusually clearly. Four independent proof
 routes (`CERTIFY_STAGES`, `MOMENT_STAGES`, `RATIONAL_STAGES`, `TRIANGLE_STAGES` in
 `prove-plan.mjs`) declare **the same five stage ids**: `regime → solve-real → filter → gauge →
 assemble`. The mathematical task does not vary by route. Above that, `doProveExistenceUniqueness`
-runs a fixed, ordered prelude: assume reality → propagate ×4 to fixpoint → saturate.
+runs a fixed, ordered prelude on the **general** route: assume reality → propagate ×4 to fixpoint →
+saturate. (The C1/C2/C3 moment / rational / triangle routes return before it — they call
+`seedFromPolys`, which replaces the graph outright.)
 
-None of that structure is visible in the sidebar. The ①②③④ strip gestures at it and is inert
-(finding **4.5** — four static spans, no handler, no state binding).
+None of that structure is visible in the sidebar. The ①②③④ strip gestured at it and was inert
+(finding **4.5** — four static spans, no handler, no state binding); Tier 1.1 has since bound it.
 
 ### 2. It weights escape hatches like the main road
 
@@ -84,7 +86,7 @@ system, or split it; the variable set is untouched.
 
 | # | Finding | Evidence |
 |---|---|---|
-| **S1** | *Elimination was a hidden mode of a differently-labelled button.* `doGroebner` read the module-level `elimSel`, switching to a block elimination order iff the picker — two collapsed levels down, inside Advanced inside Reduce — was non-empty. | **Fixed today.** Verified in-app: pick active, plain button now yields `Gröbner · grevlex`, not `Gröbner · elim Ā1,1`. |
+| **S1** ✅ | *Elimination was a hidden mode of a differently-labelled button.* `doGroebner` read the module-level `elimSel`, switching to a block elimination order iff the picker — two collapsed levels down, inside Advanced inside Reduce — was non-empty. | **Fixed today.** Verified in-app: pick active, plain button now yields `Gröbner · grevlex`, not `Gröbner · elim Ā1,1`. |
 | **S2** ✅ | *Neighbouring buttons differ silently in scope.* `Triangular decomp.`, `Saturate` and `Existence / uniqueness` operate on the canvas selection when there is one; `Dimension / count` and `Solve (numeric)` always take the whole column. Same section, no visible difference. | **Fixed** — see below |
 | **S3** ✅ | *Labels overstate scope.* "Gröbner basis (**all eqns**)" defaults to `store.currentColumnIds()` — the last column only. "Copy LaTeX" copies **every node in the whole store, all branches**. | direct read of `doGroebner`, `copyLatex` |
 | **S4** ❌ | ~~*Silent no-op at 3+ selection.*~~ **Withdrawn — the state is unreachable**: `algebra-canvas` caps the selection at two (`selected.shift()`). Derived from reading the consumer without checking the producer. The cap's *silence* is the real issue, and is now stated. | see Tier 2 |
@@ -184,8 +186,9 @@ Two behaviours worth recording:
 
 - **A stale seed is the next action even when later steps show work.** `ensureSeed` refuses every
   downstream operation, so pointing at Reduce would point at buttons that will not run.
-- **Steps are buttons that open their section**, which fixes the strip's old habit of naming panels
-  that are collapsed by default and then not opening them. ✦ Prove is named in the tips: it
+- **Steps are buttons that open their section** — except ①, which has no section (seeding lives in
+  the pinned header) and focuses the seed button instead. This fixes the strip's old habit of naming
+  panels that are collapsed by default and then not opening them. ✦ Prove is named in the tips: it
   performs all four, so running it lights the whole strip — the clearest available account of what
   it did.
 
@@ -380,9 +383,10 @@ the move safe**; a flat blob of prose in a popover loses which button it was abo
 
 *The six `data-str-title` tooltips were invisible to the obvious scan.* They live in `ui-strings`
 and are applied at runtime, so grepping the markup for long `title="…"` found 30 of 36. Only
-reading the rendered DOM showed the remaining six still at 120+ — one of them 489. All seven
-algebra-only `tooltips.*` entries were folded into the registry so a single mechanism owns every
-tooltip.
+reading the rendered DOM showed the remaining six still at 120+ — one of them 489. Six of the seven
+algebra-only `tooltips.*` entries were folded into the registry — the seventh,
+`tooltips.eliminateVars`, was already inside the rule at 93 chars and still reaches its control the
+old way, so two delivery mechanisms remain rather than one.
 
 *The pinned header has no `<summary>` to hang a `?` on.* Its three controls' details would have been
 moved out of their tooltips and then dropped — strictly worse than leaving them long. They go into
@@ -486,7 +490,7 @@ defect.
 
 **The working rule that follows:** reproduction, not code-reading, is the gate for calling
 something a defect — and a finding about what a component *receives* is not established until the
-component that *sends* has been checked. Six of the nine S-findings survived that bar; the three
+component that *sends* has been checked. Seven of the nine survived that bar — S4 and S8 did not; the three
 that did so most convincingly were the ones observed failing in the running app first.
 
 Tier 4 is the item that would most change how the panel feels, and the one I would most want a

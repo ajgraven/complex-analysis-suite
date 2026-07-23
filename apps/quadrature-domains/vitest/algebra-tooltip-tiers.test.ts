@@ -22,10 +22,18 @@ function ops(): Record<string, { section: string; short: string; detail: string 
   expect(start, "algebraOps block not found").toBeGreaterThan(-1);
   const end = STRINGS.indexOf("\n    },", start);
   const block = STRINGS.slice(start, end);
+  // Field-order tolerant. The first version pinned `section, short, detail` in that exact order and
+  // silently dropped every record once an optional `label` was added ahead of them — reporting 31
+  // of 36 rather than failing on the missing field. Parse each record's body, then read fields by
+  // name.
   const out: any = {};
-  for (const m of block.matchAll(
-    /'([a-z0-9-]+)':\s*\{\s*section:\s*`([^`]*)`,\s*short:\s*`([^`]*)`,\s*detail:\s*`([^`]*)`/g)) {
-    out[m[1]] = { section: m[2], short: m[3], detail: m[4] };
+  for (const m of block.matchAll(/'([a-z0-9-]+)':\s*\{([\s\S]*?)\n      \},/g)) {
+    const body = m[2];
+    const field = (name: string) => {
+      const f = body.match(new RegExp(name + ":\\s*`([^`]*)`"));
+      return f ? f[1] : undefined;
+    };
+    out[m[1]] = { section: field("section"), short: field("short"), detail: field("detail"), label: field("label") };
   }
   return out;
 }

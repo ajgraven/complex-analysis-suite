@@ -132,7 +132,7 @@ calls its `apply()` after importing the graph to fill `[data-str*]` elements bef
 | Boundary cusps | `QD.classifyCusps`, `QD.Cusps.classifyCusps` |
 | Max conformal radius | `QD.estimateMaxConformalRadius` (unbounded c\*; bracket+bisection with a two-regime gate — genuine-QD identity away from the cusp, cusp criterion `max\|z\|` over φ′ zeros near it; returns `mechanism` cusp/fold — `solver-cmax.mjs`) |
 | Custom h(w) text | `QD.parseH`, `QD.formatH` |
-| Editable UI prose | `QD.Strings.{help, familyHints, hints, tooltips, notes, faber, oracle, blurbs, guidance, get, apply}` — single source of truth for descriptions/helptext/tooltips/blurbs; `apply()` injects static HTML into `[data-str]`/`[data-str-html]`/`[data-str-title]` elements (`ui-strings.mjs`; see `HELPTEXT.md`) |
+| Editable UI prose | `QD.Strings.{algebraOps, help, familyHints, hints, tooltips, notes, faber, qdEquations, algebra, oracle, blurbs, guidance, get, apply}` — single source of truth for descriptions/helptext/tooltips/blurbs (`algebraOps` carries the Algebra tab's per-control `short`/`detail` pairs); `apply()` injects static HTML into `[data-str]`/`[data-str-html]`/`[data-str-title]` elements (`ui-strings.mjs`; see `HELPTEXT.md`) |
 | Cross-tab envelope (P0.1a) | `QD.PrimarySolution.{get, hasSolution, subscribe, publish, update, clear}` |
 | Warm worker (P0.2) | `QD.PrimarySolverWorker.{ensureReady, solve, cancel, isBusy, searchAlternates, cancelAux, isAuxBusy}` |
 | Family registry | `QD.Family.boundedQD`, `QD.Family.unboundedQD`, `QD.Family.boundedLQD`, `QD.Family.boundedLQD_singular`, `QD.Family.unboundedLQD`, `QD.Family.unboundedLQD_singular` |

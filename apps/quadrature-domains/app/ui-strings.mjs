@@ -46,8 +46,9 @@ import _QD from './solver.mjs';
     // ---- Algebra operation help (the three-tier rule) ------------------------
     // `short` is the one-line title (hard rule: nothing over ~120 chars in a `title` —
     // invisible on touch, unreachable by keyboard, gone on pointer-move). `detail` is the
-    // full explanation, shown in the section's `?` popover, and is the ORIGINAL tooltip text
-    // moved verbatim: the content was good, it was stored in the least readable affordance
+    // full explanation, shown in the section's `?` popover — the ORIGINAL tooltip text, moved
+    // across essentially unchanged (two were reworded on purpose: alg-groebner and
+    // alg-copy-latex). The content was good; it was stored in the least readable affordance
     // the platform offers. `section` is the panel whose `?` renders it.
     //
     // Single source for both: the title and the popover entry come from the same record, so
@@ -89,6 +90,7 @@ import _QD from './solver.mjs';
         detail: `1-parameter bifurcation: the EXACT critical parameter values (eliminant border polynomial + Sturm isolation) and the CERTIFIED real-solution count (Hermite trace form) on each interval between them.`,
       },
       'alg-bifurc-var': {
+        label: `Bifurcation parameter`,
         section: `Analyze`,
         short: `The real parameter to vary. Needs a 1-parameter family.`,
         detail: `The real parameter to vary. Reports how the number of real solutions (= quadrature domains) changes as this variable ranges over ℝ: the critical values where the count jumps, and the count on each interval. Needs a 1-parameter family — a system that becomes zero-dimensional once this variable is fixed.`,
@@ -104,6 +106,7 @@ import _QD from './solver.mjs';
         detail: `Resolvent / discriminant: the univariate eliminant χ_v(x)=det(x·I − M_v) of the current system in the chosen variable. squareFreePart = distinct v-values; a repeated root (discriminant 0) ⇒ coincident solutions / a degeneracy (e.g. a cusp). NB a repeat can also be fibre multiplicity if v does not separate the solutions.`,
       },
       'alg-resolvent-var': {
+        label: `Resolvent variable`,
         section: `Analyze`,
         short: `The real variable to eliminate to.`,
         detail: `The real variable to eliminate to. The resolvent χ_v is the characteristic polynomial of multiplication-by-v on the quotient ring; its roots are v’s values across the solutions.`,
@@ -134,11 +137,13 @@ import _QD from './solver.mjs';
         detail: `In the conjugate model, also add the conjugate equation p̄ = 0 (keeps the system conjugation-closed for reim / existence analysis).`,
       },
       'alg-cas-dialect': {
+        label: `CAS dialect`,
         section: `Export`,
         short: `Maple RCTD = the parametric real route; Singular / Sage = Gröbner cross-checks.`,
         detail: `Maple RCTD = parametric REAL triangular decomposition (RealComprehensiveTriangularize) — the fully-parametric uniqueness route; Singular / Sage = equality-ideal Gröbner cross-checks of the variety.`,
       },
       'alg-cas-params': {
+        label: `CAS parameters`,
         section: `Export`,
         short: `Variable names to treat as parameters. Blank ⇒ non-parametric.`,
         detail: `Comma-separated variable names to treat as PARAMETERS — declared last for Maple RealComprehensiveTriangularize. Blank ⇒ non-parametric RealTriangularize.`,
@@ -174,6 +179,7 @@ import _QD from './solver.mjs';
         detail: `Load a previously downloaded DAG JSON — rebuilds the whole workspace (nodes, branches, assumptions). Replaces the current graph (undoable).`,
       },
       'alg-rctd-json': {
+        label: `RCTD paste box`,
         section: `Export`,
         short: `Paste the qd-rctd JSON from your Maple run; imports as a new RCTD column.`,
         detail: `Paste the parametric RealComprehensiveTriangularize result, serialized to the qd-rctd term-list JSON by the documented Maple post-script. Imports as a new RCTD column (one node per cell constraint / chain poly).`,

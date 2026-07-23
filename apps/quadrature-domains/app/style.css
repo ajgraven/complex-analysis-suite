@@ -760,7 +760,8 @@ details.pole[open] > .pole-header { margin-bottom: 6px; }
   transform-origin: top left;
   width: calc(100% * var(--alg-zoom));
 }
-#algebra-graph.is-condensed .algebra-node-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* (Removed a dead `.is-condensed .algebra-node-label` rule: the canvas builds `.algebra-node-title`,
+   never `-label`, and that class already truncates unconditionally below, so this targeted nothing.) */
 /* Structured column lanes: a natively-scrolling track; the .algebra-sizer is sized by
    JS to trackNatural × zoom so the scrollbars stay correct while the track is scaled. */
 #algebra-graph .algebra-scroll {

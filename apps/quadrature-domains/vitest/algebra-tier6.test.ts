@@ -94,6 +94,30 @@ describe("5.9 — the busy lock cannot drift", () => {
   });
 });
 
+describe("5.9 addendum — Undo cannot be re-enabled mid-operation", () => {
+  // Two writers own alg-undo/alg-redo's `disabled`: setBusy (via .js-busy-lock) and
+  // refreshUndoButtons (from undo depth). doAutoSolve calls rerender() — hence refreshUndoButtons —
+  // several times INSIDE the busy window, and each call used to flip Undo back on because
+  // undoDepth() was already > 0. Clicking it then rolled the graph back under a pending worker,
+  // whose result rendered as a verdict about a system that no longer existed. Verified in-browser:
+  // across the whole auto-solve window Undo now stays disabled.
+  it("refreshUndoButtons honours _busy", () => {
+    // Asserted against raw UI, not comment-blanked CODE: the exact strings below appear only in the
+    // function body (no comment contains `u.disabled = _busy`), and the multi-line rationale comment
+    // above the function confuses CODE's line-based blanking.
+    expect(UI).toMatch(/u\.disabled = _busy \|\| !ud/);
+    expect(UI).toMatch(/r\.disabled = _busy \|\| !rd/);
+  });
+
+  it("the toolbar undo/redo handlers busyGuard, matching the keyboard path", () => {
+    // Belt and braces: even if a mid-op repaint momentarily clears `disabled`, the handler refuses.
+    const undo = CODE.slice(CODE.indexOf("'Undo (Ctrl+Z)'"), CODE.indexOf("'Undo (Ctrl+Z)'") + 160);
+    expect(undo).toMatch(/busyGuard\(\)/);
+    const redo = CODE.slice(CODE.indexOf("'Redo (Ctrl+Shift+Z)'"), CODE.indexOf("'Redo (Ctrl+Shift+Z)'") + 160);
+    expect(redo).toMatch(/busyGuard\(\)/);
+  });
+});
+
 describe("5.8 — exports carry an identity", () => {
   it("the DAG download and the proof export are both stamped", () => {
     expect(CODE).toMatch(/session: exportStamp\(\)/);

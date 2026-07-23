@@ -30,7 +30,8 @@
 // SIDEBAR is a NODE-EDITOR model (mountSidebar): a pinned header (✦ Prove as the single
 // button.primary + a caption stating how it differs from ★ Auto-reduce, Generate, the φ(0)=w₀
 // seeding option, status, error) and collapsible <details> workflow sections — Assume / Pin values
-// / Edit system / Reduce / Analyze / Shape from moments / Univalence constraints / Export. Their open
+// / Edit system / Reduce / Analyze — then a "Beyond the main route" divider — / Univalence
+// constraints / Shape from moments / Export. Their open
 // state PERSISTS (wireSectionPersistence → localStorage): only "Assume" opened by default and
 // nothing was remembered, so every reload re-shut two thirds of the working loop.
 // A CONTEXTUAL INSPECTOR (renderInspector) shows the selection: 1 node → its equation + the
@@ -337,11 +338,13 @@ const QD = _QD;
   // exactly like a verdict about the whole system. doClassify even KNEW (it skips caching the
   // branch chip when a selection was used) without telling the user.
   //
-  // This is the single source of truth for that set. It drives the pre-click banner AND the
-  // post-hoc caveat on the verdict, so the warning and the behaviour cannot drift apart. Adding a
-  // selection-aware op means adding it here; a `scopeCaveat` with no banner entry (or vice versa)
-  // is the drift this registry exists to prevent.
-  // A basis-replacement reduction (Gröbner / saturate / triangular / resultant) emits a fresh set
+  // This is the source of truth for the pre-click BANNER. It does not drive `scopeCaveat` —
+  // that is called unconditionally by each scoped handler — so the registry alone cannot stop the
+  // two from drifting apart. What actually enforces the pairing is
+  // algebra-scope-disclosure.test.ts: its WHOLE_COLUMN tripwire fails if a handler that currently
+  // ignores the selection starts reading it, and its entry-count assertion fails if this list and
+  // the scoped set diverge. Adding a selection-aware op means adding it here AND to that test.
+  // A basis-replacement reduction (Gröbner / saturate / triangular) emits a fresh set
   // of EQUALITY generators, so any '>' or '≠' node in the column is consumed by omission — it
   // simply does not appear in the next one. Gröbner reported that as `skipped`; saturate and
   // triangularize dropped silently, and the column diff showed only a bare "−N gone" that reads
@@ -355,8 +358,17 @@ const QD = _QD;
   // Recorded in provenance so the column label carries it permanently, not just a toast: the loss
   // is of the user's own modelling work, and it must still be visible in an exported derivation.
   function _droppedSuffix(p) {
-    const n = (p && p.droppedNonEq) || 0;
-    return n ? ' · ⚠ ' + n + ' inequality node' + (n === 1 ? '' : 's') + ' dropped' : '';
+    // Two causes, counted separately in provenance. Lumping them rendered "5 inequality nodes
+    // dropped" for a case that was 1 inequality plus 4 out-of-scope equalities — a durable record
+    // of a loss must not misdescribe what was lost. Columns written before this change carry only
+    // droppedNonEq and still render correctly.
+    const ineq = (p && p.droppedNonEq) || 0;
+    const scope = (p && p.droppedOutOfScope) || 0;
+    if (!ineq && !scope) return '';
+    const bits = [];
+    if (ineq) bits.push(ineq + ' inequality node' + (ineq === 1 ? '' : 's'));
+    if (scope) bits.push(scope + ' equation' + (scope === 1 ? '' : 's') + ' outside the selection');
+    return ' · ⚠ ' + bits.join(' + ') + ' dropped';
   }
   const SELECTION_SCOPED = [
     { id: 'alg-classify',   label: 'Existence / uniqueness' },
@@ -367,7 +379,10 @@ const QD = _QD;
   // Thirteen operations remove a variable, spread across Assume, Pin values, Edit system, Reduce,
   // Analyze, the node inspector and a header checkbox. No sectioning fixes that, because the
   // concept is orthogonal to the sections — so the panel answers the question from the other end:
-  // pick a VARIABLE, and be told which of the thirteen apply to it and where each one lives.
+  // pick a VARIABLE, and be told which acts apply to it and where each one lives. It routes to
+  // seven of the thirteen — the ones that target a NAMED variable. Propagation, abbreviation and
+  // the resolvent remove whatever the system forces rather than what you point at, so they are
+  // deliberately absent rather than missing.
   //
   // The subtlety that makes this worth building rather than documenting: **assuming a variable
   // real does not remove that variable — it removes its CONJUGATE.** Identifying v̄ ≡ v drops v̄
@@ -590,8 +605,15 @@ const QD = _QD;
       const ud = store.undoDepth ? store.undoDepth() : 0, rd = store.redoDepth ? store.redoDepth() : 0;
       const u = document.getElementById('alg-undo'), r = document.getElementById('alg-redo');
       const step = (n) => n + ' step' + (n === 1 ? '' : 's') + ' available';
-      if (u) { u.disabled = !ud; u.setAttribute('aria-label', 'Undo'); u.title = ud ? ('Undo (Ctrl+Z) — ' + step(ud)) : 'Nothing to undo'; }
-      if (r) { r.disabled = !rd; r.setAttribute('aria-label', 'Redo'); r.title = rd ? ('Redo (Ctrl+Shift+Z) — ' + step(rd)) : 'Nothing to redo'; }
+      // The SECOND writer of these buttons' `disabled` (setBusy is the other, via .js-busy-lock).
+      // It must honour _busy, or it re-enables Undo mid-operation: doAutoSolve calls rerender() —
+      // hence this — several times inside the busy window, and each call flipped Undo back on
+      // because undoDepth() was already > 0. Clicking it then rolled the graph back under a pending
+      // worker, whose result rendered as a verdict about a system that no longer existed. The
+      // toolbar handlers also busyGuard() now, so the button cannot fire even if a repaint slips a
+      // frame; this keeps the visible state honest.
+      if (u) { u.disabled = _busy || !ud; u.setAttribute('aria-label', 'Undo'); u.title = ud ? ('Undo (Ctrl+Z) — ' + step(ud)) : 'Nothing to undo'; }
+      if (r) { r.disabled = _busy || !rd; r.setAttribute('aria-label', 'Redo'); r.title = rd ? ('Redo (Ctrl+Shift+Z) — ' + step(rd)) : 'Nothing to redo'; }
     }
 
     // ---- session persistence (autosave / restore) ----------------------------
@@ -888,7 +910,13 @@ const QD = _QD;
       return all.map((name) => {
         const c = conjOf(name);
         // `name` is a conjugate iff conjugating it yields a primal base variable.
-        const partner = (c && base.has(c)) ? c : null;
+        // `c !== name` matters: QC.conjVarName returns its input unchanged for anything outside
+        // the bar-toggle scheme (cosL, sinL, Wsat, and any self-conjugate defined symbol). Without
+        // the guard those variables became their own "partner", and the lens offered "Assume t
+        // real" with the note "identifies t ≡ t, so t stops being a variable" — a wrong-variable
+        // recommendation, which is the exact failure the lens exists to prevent. The sibling field
+        // `conjName` already had this guard; `conjOf` did not.
+        const partner = (c && c !== name && base.has(c)) ? c : null;
         return {
           name,
           uses: uses.get(name) || 0,
@@ -943,6 +971,16 @@ const QD = _QD;
     // already displays elsewhere, so the strip cannot disagree with the thing it summarizes:
     // hypotheses are the chips renderHypotheses builds, staleSeed is exactly what ensureSeed
     // refuses on, and resultCurrent is the drawer's own current/stale/branch decision.
+    // Columns produced by a REDUCE-class operation, as opposed to an assumption or an edit.
+    const _REDUCE_OPS = ['groebner', 'saturate', 'triangular', 'resultant', 'linear-reduce', 'factor', 'component', 'rctd'];
+    function _reduceColumnCount() {
+      const cols = new Set();
+      store.list().forEach((n) => {
+        const op = n.provenance && n.provenance.op;
+        if (op && _REDUCE_OPS.indexOf(op) >= 0) cols.add(n.column);
+      });
+      return cols.size;
+    }
     function workflowFacts() {
       const known = (store.knownValues && store.knownValues()) || {};
       const hypotheses = (store.realVars || []).length + (store.imagVars || []).length
@@ -952,7 +990,11 @@ const QD = _QD;
         seeded: store.size > 0,
         staleSeed: !!(activeEnv && _seededHData && _seededHData !== activeEnv.hData),
         hypotheses,
-        reductions: store.size ? store.maxColumn() : 0,
+        // maxColumn() counts EVERY appended column, and assumeReal / substituteValues /
+        // defineSubstitution / addEquation / fixW0 all append — they are step ② by the strip's own
+        // taxonomy. Using it meant "Assume all real" lit ③ Reduce and moved `next` past the step
+        // the user still had to do. Count only nodes whose provenance is a reduce-class op.
+        reductions: store.size ? _reduceColumnCount() : 0,
         resultAny: any,
         resultCurrent: any && _results.some((r) => resultState(r) === 'current'),
       };
@@ -989,12 +1031,14 @@ const QD = _QD;
       if (keep) box.appendChild(keep);
     }
     // ── The three-tier tooltip rule, applied ────────────────────────────────────────────────
-    // Thirty controls carried a `title` over the ~120-char hard rule — the worst 345 — and a long
+    // Thirty-six controls carried a `title` over the ~120-char hard rule — the worst 489 — and a long
     // `title` is the least readable affordance the platform offers: invisible on touch, unreachable
     // by keyboard, gone the moment the pointer moves. The content was good; the container was not.
     //
     // QD.Strings.algebraOps holds one record per control: `short` (the one-line title) and `detail`
-    // (the original text, moved VERBATIM — no rewriting, so nothing was lost in the move). Both come
+    // (the original tooltip, moved across essentially unchanged — two were deliberately reworded:
+    // alg-groebner, whose text described the elimination mode #124 split out, and alg-copy-latex,
+    // whose scope claim #128 corrected. Nothing was dropped in the move). Both come
     // from that single record, so the title and the popover entry cannot drift.
     //
     // Tier 3 is the section's own `?`: QoL.attachHelp on each <summary>, rendering a definition list
@@ -1009,7 +1053,7 @@ const QD = _QD;
         const el = $('#' + id);
         if (el) el.title = rec.short;                    // tier 1: one line, always present
         if (!bySection.has(rec.section)) bySection.set(rec.section, []);
-        bySection.get(rec.section).push({ id, rec, label: _opLabel(el, id) });
+        bySection.get(rec.section).push({ id, rec, label: rec.label || _opLabel(el, id) });
       });
       const QoL = QD.QoL;
       if (!QoL || typeof QoL.attachHelp !== 'function') return;
@@ -1039,11 +1083,25 @@ const QD = _QD;
     // and selects carry their name outside the element), falling back to the id.
     function _opLabel(el, id) {
       if (!el) return id;
-      const own = (el.textContent || '').trim();
+      // textContent is only a NAME for elements whose content is their label — a button. For a
+      // <select> it is the concatenation of every option, which rendered the Export popover's
+      // dialect picker as "Maple RCTDSingularSage"; for a bare <input>/<textarea> it is empty, and
+      // the id leaked through as "alg-cas-params". Verified in-browser before this fix.
+      const tag = (el.tagName || '').toUpperCase();
+      const isField = tag === 'SELECT' || tag === 'INPUT' || tag === 'TEXTAREA';
+      const own = isField ? '' : (el.textContent || '').trim();
       if (own) return own;
       const lab = el.closest && el.closest('label');
       const t = lab && (lab.textContent || '').trim();
-      return t || id;
+      if (t) return t;
+      // No label element: fall back to the nearest label-ish text in the same row, then the
+      // placeholder — anything but the raw id, which is not user-facing. Where even that is
+      // ambiguous (two fields sharing one row label), the record carries an explicit `label` and
+      // this function is not consulted.
+      const row = el.closest && el.closest('.algebra-line, .algebra-define-row, .row');
+      const lead = row && row.querySelector('.algebra-line-label');
+      const leadTxt = lead && (lead.textContent || '').trim();
+      return leadTxt || (el.getAttribute && el.getAttribute('placeholder')) || id;
     }
     function renderHypotheses() {
       const box = $('#alg-hypotheses'); if (!box) return;
@@ -1690,8 +1748,7 @@ const QD = _QD;
         '  </div>' +
         '  <div id="alg-help" class="hint card-sub hidden" data-str-html="algebra.help" style="margin:4px 0;"></div>' +
         '  <div id="alg-steps" class="algebra-steps">' +
-        '    <span>① Seed</span><span>② Assume / Set</span><span>③ Reduce</span><span>④ Analyze</span>' +
-        '    <button id="alg-steps-x" class="algebra-steps-x" type="button" title="Hide this hint">×</button>' +
+                '    <button id="alg-steps-x" class="algebra-steps-x" type="button" title="Hide this hint">×</button>' +
         '  </div>' +
         '  <div class="row algebra-primary">' +
         '    <button id="alg-prove" class="small primary heavy-op js-busy-lock" type="button" title="One click: seed → certified existence/uniqueness verdict, with a =/≤/≈ rigor badge.">✦ Prove existence / uniqueness</button>' +
@@ -1823,7 +1880,7 @@ const QD = _QD;
         // The elimination lens. Asks the question from the variable's end, and routes to whichever
         // section owns each answer — the panel's claim is that the answer lives elsewhere, so it
         // opens that elsewhere rather than duplicating the control.
-        '      <details class="algebra-advanced algebra-varlens-wrap"><summary>Which variable? — what removes each one</summary>' +
+        '      <details class="algebra-advanced"><summary>Which variable? — what removes each one</summary>' +
         '        <div id="alg-varlens" class="algebra-varlens"></div>' +
         '      </details>' +
         // Two headings, not one. "Same solutions, better shape" is TRUE of Gröbner and the
@@ -2946,9 +3003,19 @@ const QD = _QD;
     // variety (V(J) ⊇ V(I) for J ⊆ I), so a count over a strict subset of the current column is an
     // upper bound on the full system's. A selection reaching into earlier columns is not a subset of
     // anything current — it is a different system — and gets the scope statement with no bound.
+    // Every node of the current column. store.currentColumnIds() is equality-ONLY (it feeds the
+    // solvers), which is the right default there and the wrong one for anything counting or
+    // describing "the column" to a user.
+    function _currentColumnNodes() {
+      return (store.orderedColumn ? store.orderedColumn(store.maxColumn()) : []).filter(Boolean);
+    }
     function scopeCaveat(sel) {
       if (!sel || !sel.length) return '';
-      const cur = store.currentColumnIds ? (store.currentColumnIds() || []) : [];
+      // orderedColumn, NOT currentColumnIds: the latter filters to equalities, so selecting an
+      // inequality node alongside an equality made `subsetOfCurrent` false and stamped the verdict
+      // "not all part of the current system" — factually wrong, and it withdrew an upper-bound
+      // claim that actually held. variableCensus already used orderedColumn for this reason.
+      const cur = _currentColumnNodes().map((n) => n.id);
       const curSet = new Set(cur);
       const subsetOfCurrent = sel.every((id) => curSet.has(id));
       const n = sel.length;
@@ -2972,11 +3039,27 @@ const QD = _QD;
     // them: "2 dropped" leaves the user hunting, and the whole point is that they were THEIRS.
     function droppedNote(skipped) {
       if (!skipped || !skipped.length) return '';
-      const named = skipped.slice(0, 2).map((s) => s.label).filter(Boolean);
-      const more = skipped.length - named.length;
-      return ' · ⚠ dropped ' + skipped.length + ' inequality node' + (skipped.length === 1 ? '' : 's')
-        + (named.length ? ' (' + named.join('; ') + (more > 0 ? '; +' + more + ' more' : '') + ')' : '')
-        + ' — a basis replaces the equalities only, so > and ≠ conditions do not carry forward';
+      const ineq = skipped.filter((s) => s.cause === 'inequality');
+      const scope = skipped.filter((s) => s.cause === 'out-of-scope');
+      const name = (list) => {
+        const named = list.slice(0, 2).map((s) => s.label).filter(Boolean);
+        const more = list.length - named.length;
+        return named.length ? ' (' + named.join('; ') + (more > 0 ? '; +' + more + ' more' : '') + ')' : '';
+      };
+      const parts = [];
+      if (ineq.length) {
+        parts.push(ineq.length + ' inequality node' + (ineq.length === 1 ? '' : 's') + name(ineq)
+          + ' — a basis replaces the equalities only, so > and ≠ conditions do not carry forward');
+      }
+      // The out-of-scope half is the one that was missing, and it is usually the larger: running a
+      // basis replacement on a canvas selection replaces the column with generators of the SELECTED
+      // equations, so every unselected equation goes too. Said separately because the cause is
+      // different — the user chose this scope, whereas an inequality was never eligible.
+      if (scope.length) {
+        parts.push(scope.length + ' equation' + (scope.length === 1 ? '' : 's') + ' outside the selection'
+          + name(scope) + ' — the new column is built from the selected equations alone');
+      }
+      return ' · ⚠ dropped ' + parts.join('; and ');
     }
     // The pre-click half of the same problem: the selection lives on the canvas, ~900px from these
     // buttons, so nothing warned BEFORE the op ran. Shown only while a selection is live.
@@ -2984,7 +3067,7 @@ const QD = _QD;
       const el = $('#alg-scope');
       if (!el) return;
       sel = (sel || []).filter((id) => store.get(id));
-      const cur = store.currentColumnIds ? (store.currentColumnIds() || []) : [];
+      const cur = _currentColumnNodes();          // all nodes, not just equalities — see scopeCaveat
       if (!sel.length) { el.classList.add('hidden'); el.textContent = ''; return; }
       el.classList.remove('hidden');
       el.textContent = '';
@@ -4611,8 +4694,11 @@ const QD = _QD;
       });
       searchWrap.appendChild(searchIn); searchWrap.appendChild(searchCount);
       bar.appendChild(searchWrap);
-      bar.appendChild(btn('↶', 'Undo (Ctrl+Z)', () => { if (store.undo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); } }, 'alg-undo'));
-      bar.appendChild(btn('↷', 'Redo (Ctrl+Shift+Z)', () => { if (store.redo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); } }, 'alg-redo'));
+      // busyGuard() here matches the keyboard undo/redo path, which always had it. The button used
+      // to rely on `disabled` alone; a mid-op repaint could momentarily clear that (see
+      // refreshUndoButtons), so guard at the handler too.
+      bar.appendChild(btn('↶', 'Undo (Ctrl+Z)', () => { if (busyGuard()) return; if (store.undo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); } }, 'alg-undo'));
+      bar.appendChild(btn('↷', 'Redo (Ctrl+Shift+Z)', () => { if (busyGuard()) return; if (store.redo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); } }, 'alg-redo'));
       zlabel.textContent = Math.round(_zoom * 100) + '%';
       host.appendChild(bar);
     }
@@ -4689,7 +4775,6 @@ const QD = _QD;
   QD_UI.suggestSummaryLabel = suggestSummaryLabel;   // collapsed suggestion-list <summary> label (pure)
   QD_UI.WORKFLOW_STEPS = WORKFLOW_STEPS;             // the ①②③④ strip's steps + the section each opens
   QD_UI.workflowStepStates = workflowStepStates;     // …and the done/stale/todo state machine (pure)
-  QD_UI.SELECTION_SCOPED = SELECTION_SCOPED;         // ops that narrow to the canvas selection (pure data)
   QD_UI.variableRemovals = variableRemovals;         // the elimination lens's per-variable routing table (pure)
   QD_UI.suggestAutoOpen = suggestAutoOpen;           // …and its expand/collapse decision (pure)
   QD_UI.SUGGEST_AUTO_OPEN_MAX = AUTO_OPEN_MAX;
