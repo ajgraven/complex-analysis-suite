@@ -355,6 +355,39 @@ a1    in 1 of 5   Assume real · Pin a value · Eliminate     ← no Resultant: 
 Pinning is the mirror case: `substituteValues` fixes a value **and its conjugate**, so one pin
 removes two — stated on the row rather than left to be discovered.
 
+#### The census had no test — and a conjugate-overlay bug shipped underneath it (#135)
+
+The asymmetry above is computed by `variableCensus`, which feeds the pure routing table
+`variableRemovals`. Only the routing table had a test — against hand-built fixtures — and the census
+that *produces* those rows from a live store had none. That untested seam is exactly where a bug
+lived.
+
+`variableCensus` resolved each variable's conjugate with the **raw** `QC.conjVarName`, which knows
+only the built-in bar-toggle scheme (`z1 ↔ z̄1`). It is blind to symbols introduced by **Define
+substitution**: for a defined `t` whose genuine conjugate `t̄` the store had registered in its
+`substConj` overlay, the raw table returned `t̄` unchanged, so the census set `conjOf: null` and the
+`t̄` row **silently dropped its "Assume t real" and "one pin removes both" offers** — the two
+conjugate-aware routes this lens exists to surface. It failed precisely for the symbols the user had
+introduced themselves.
+
+**Fix.** The store already had an overlay-aware `_conjName` (it consults `substConj` before falling
+back to `QC.conjVarName`); it is now exposed as `conjNameOf` and the census routes through it.
+`variableCensus` was lifted to module scope as a pure function of the store and exported on `QD_UI`,
+so the seam is now testable the way `variableRemovals` already was — its absence of a test is how
+this shipped. Five census-level tests were added: the bug in one line (`conjNameOf` knows the pair,
+`QC.conjVarName` does not), the `t̄` row now offering "Assume t real", the pin-both note, the built-in
+`z/z̄` pair not regressed, and no self-referential route on self-conjugate output. The `c !== name`
+guard is kept on **both** `conjOf` and `conjName`, since `conjNameOf` returns a self-conjugate name
+(cosL, sinL, Wsat, a real defined symbol) unchanged — without it, such a symbol would be offered
+itself as partner.
+
+Verified in-app: define `t := z1 + a1` — deliberately **not** self-conjugate; `z1 + z̄1` is, and would
+not exercise the overlay at all — open "Which variable?", and the `t̄` row offers **"Assume t real"**.
+
+*The same lesson as S4/S8, sharper: the routing table was tested and the thing that fed it was not,
+and that is the seam the bug chose. A pure function is only as safe as its least-tested input, and
+the census was the input.*
+
 #### Remaining slices
 
 - **4b** — act directly from the row (currently it routes and explains). Wants the mutation paths
