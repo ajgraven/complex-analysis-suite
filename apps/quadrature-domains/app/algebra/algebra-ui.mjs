@@ -454,6 +454,40 @@ const QD = _QD;
     const index = (((k | 0) % N) + N) % N;
     return { N, index, domain: list[index] };
   }
+  // ── T1: honest-labeling verdict/rigor helpers lifted from the installAlgebra closure to module scope so
+  // the =/≤/≈ decisions are BEHAVIOURALLY testable (they were guarded only by source-regex, which broke on a
+  // rename — e.g. applyFactor→applyFactorAsync in #142) and safe to refactor. These four are PURE; exposed
+  // on QD_UI. (The slice/scope/ledger helpers that need latexPlain or the column read are the next slice.)
+  function classifyRigor(r) {
+    // The reim real-solution count is a rigorous UPPER BOUND on #QD (⇒ 'bound'); an inconsistent system
+    // certifies "no QD" ('exact'); a positive-dimensional / over-cap count is undetermined ('unknown').
+    if (!r || !r.ok) return 'unknown';
+    if (r.inconsistent) return 'exact';
+    if (!r.zeroDim || r.realCount == null) return 'unknown';
+    return 'bound';
+  }
+  // Honest one-line size of a positive-dimensional verdict: the true Krull DIMENSION when carried,
+  // alongside the ambient real-variable count; degrades to the variable count alone otherwise.
+  function posDimDesc(r) {
+    const nv = (r && r.numVars != null ? r.numVars : '?') + ' real variables';
+    return (r && r.krullDim != null && r.krullDim >= 1) ? ('dimension ' + r.krullDim + ', ' + nv) : nv;
+  }
+  // Short scope disclosure for a scoped MUTATING op's toast — which system the claim was about.
+  function scopeNote(sel) {
+    if (!sel || !sel.length) return '';
+    return ' · on the ' + sel.length + ' selected equation' + (sel.length === 1 ? '' : 's') + ' only';
+  }
+  // Toast wording naming the non-equality / out-of-scope nodes a basis replacement consumed by omission.
+  function droppedNote(skipped) {
+    if (!skipped || !skipped.length) return '';
+    const ineq = skipped.filter((s) => s.cause === 'inequality');
+    const scope = skipped.filter((s) => s.cause === 'out-of-scope');
+    const name = (list) => { const named = list.slice(0, 2).map((s) => s.label).filter(Boolean); const more = list.length - named.length; return named.length ? ' (' + named.join('; ') + (more > 0 ? '; +' + more + ' more' : '') + ')' : ''; };
+    const parts = [];
+    if (ineq.length) parts.push(ineq.length + ' inequality node' + (ineq.length === 1 ? '' : 's') + name(ineq) + ' — a basis replaces the equalities only, so > and ≠ conditions do not carry forward');
+    if (scope.length) parts.push(scope.length + ' equation' + (scope.length === 1 ? '' : 's') + ' outside the selection' + name(scope) + ' — the new column is built from the selected equations alone');
+    return ' · ⚠ dropped ' + parts.join('; and ');
+  }
   // Live facts per variable in the CURRENT column, feeding variableRemovals. Ordered by how many
   // equations hold the variable, descending — the ones costing the most are the ones worth
   // removing, and that ranking is the answer to "which should I attack?" a flat picker cannot give.
@@ -3128,39 +3162,7 @@ const QD = _QD;
       return head + ', not the whole current system (' + cur.length + ') — dropping equations can only'
         + ' add solutions, so this count is an UPPER BOUND on the full system’s.]';
     }
-    // Short form of the same disclosure, for the toasts of the two scoped ops that MUTATE rather
-    // than report. Both assert something about "the system" — saturate even claims the count is now
-    // exact — so which system it was has to travel with the claim.
-    function scopeNote(sel) {
-      if (!sel || !sel.length) return '';
-      return ' · on the ' + sel.length + ' selected equation' + (sel.length === 1 ? '' : 's') + ' only';
-    }
-    // Toast wording for the non-equality nodes a basis replacement consumed by omission. Names
-    // them: "2 dropped" leaves the user hunting, and the whole point is that they were THEIRS.
-    function droppedNote(skipped) {
-      if (!skipped || !skipped.length) return '';
-      const ineq = skipped.filter((s) => s.cause === 'inequality');
-      const scope = skipped.filter((s) => s.cause === 'out-of-scope');
-      const name = (list) => {
-        const named = list.slice(0, 2).map((s) => s.label).filter(Boolean);
-        const more = list.length - named.length;
-        return named.length ? ' (' + named.join('; ') + (more > 0 ? '; +' + more + ' more' : '') + ')' : '';
-      };
-      const parts = [];
-      if (ineq.length) {
-        parts.push(ineq.length + ' inequality node' + (ineq.length === 1 ? '' : 's') + name(ineq)
-          + ' — a basis replaces the equalities only, so > and ≠ conditions do not carry forward');
-      }
-      // The out-of-scope half is the one that was missing, and it is usually the larger: running a
-      // basis replacement on a canvas selection replaces the column with generators of the SELECTED
-      // equations, so every unselected equation goes too. Said separately because the cause is
-      // different — the user chose this scope, whereas an inequality was never eligible.
-      if (scope.length) {
-        parts.push(scope.length + ' equation' + (scope.length === 1 ? '' : 's') + ' outside the selection'
-          + name(scope) + ' — the new column is built from the selected equations alone');
-      }
-      return ' · ⚠ dropped ' + parts.join('; and ');
-    }
+    // scopeNote / droppedNote lifted to module scope (T1) — see QD_UI.scopeNote / QD_UI.droppedNote.
     // The pre-click half of the same problem: the selection lives on the canvas, ~900px from these
     // buttons, so nothing warned BEFORE the op ran. Shown only while a selection is live.
     function renderScopeBanner(sel) {
@@ -3182,13 +3184,7 @@ const QD = _QD;
         + cur.length + ' equation' + (cur.length === 1 ? '' : 's') + ').';
       el.appendChild(lead); el.appendChild(rest);
     }
-    // Honest one-line size of a positive-dimensional verdict: the true Krull DIMENSION (the number
-    // of free parameters, read off the leading-term staircase — roadmap #8) when the result carries
-    // it, alongside the ambient real-variable count. Degrades to the variable count alone otherwise.
-    function posDimDesc(r) {
-      const nv = (r && r.numVars != null ? r.numVars : '?') + ' real variables';
-      return (r && r.krullDim != null && r.krullDim >= 1) ? ('dimension ' + r.krullDim + ', ' + nv) : nv;
-    }
+    // posDimDesc lifted to module scope (T1) — see QD_UI.posDimDesc.
     // The persistent "assumptions ledger" for the verdict card — every active specialization that
     // narrows the verdict, one short label each (slices, φ(0) gauge fix, factor case). Shown as a
     // banner so no slice/branch count on the card reads as the certified general count. [] ⇒ general.
@@ -3214,15 +3210,7 @@ const QD = _QD;
       return out;
     }
 
-    // Rigor level (finding G-2 badge) for a classify/count RESULT: the reim real-solution count is a
-    // rigorous UPPER BOUND on #QD (⇒ 'bound'); an inconsistent system certifies "no QD" ('exact'); a
-    // positive-dimensional system or an over-cap real count is undetermined ('unknown').
-    function classifyRigor(r) {
-      if (!r || !r.ok) return 'unknown';
-      if (r.inconsistent) return 'exact';
-      if (!r.zeroDim || r.realCount == null) return 'unknown';
-      return 'bound';
-    }
+    // classifyRigor lifted to a module-scope pure fn (T1) — behaviourally tested; see QD_UI.classifyRigor.
     // Semi-autonomous "Auto-reduce & solve": chain the reductions (auto-reality →
     // linear propagation), each appended as a labeled column, then determine existence/
     // uniqueness and the explicit real solutions. The reduction history stays visible.
@@ -4919,6 +4907,10 @@ const QD = _QD;
   QD_UI.variableCensus = variableCensus;             // …and the per-variable fact-gather it feeds (pure fn of the store)
   QD_UI.fmtComplex = _fmtComplex;                     // compact { re, im } inline formatter (pure; guarded)
   QD_UI.selectDomain = selectDomain;                 // the multi-domain stepper's k-th-domain selector (pure; wraps)
+  QD_UI.classifyRigor = classifyRigor;               // T1: the =/≤/unknown decider for a classify/count result (pure)
+  QD_UI.posDimDesc = posDimDesc;                     // T1: honest one-line size of a positive-dimensional verdict (pure)
+  QD_UI.scopeNote = scopeNote;                       // T1: scoped-mutating-op toast disclosure (pure)
+  QD_UI.droppedNote = droppedNote;                   // T1: basis-replacement dropped-node toast wording (pure)
   QD_UI.suggestAutoOpen = suggestAutoOpen;           // …and its expand/collapse decision (pure)
   QD_UI.SUGGEST_AUTO_OPEN_MAX = AUTO_OPEN_MAX;
 })();
