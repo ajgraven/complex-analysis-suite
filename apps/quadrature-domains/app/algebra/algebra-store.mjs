@@ -3003,6 +3003,40 @@ import _QD from '../solver.mjs';
       if (res.ok) { res.factorCount = cnt; res.factors = fr.factors; }
       return res;
     }
+    // Off-main-thread factor of a single node's polynomial (Q2) — the SAME S.factor the sync factorOf runs
+    // (factor() ignores opts), so byte-identical; only WHERE it runs changes. Returns factorOf's shape.
+    function factorNodeAsync(id, runOpts) {
+      const S = getSym();
+      const n = get(id);
+      if (!n) return Promise.resolve({ ok: false, status: 'undetermined', caps: [{ code: 'no-node', detail: 'node not found' }], reason: 'node not found', factors: [] });
+      if (n.rel !== '=') return Promise.resolve({ ok: false, status: 'undetermined', caps: [{ code: 'not-equality', detail: 'only an equality splits as V(p)=⋃V(fᵢ)' }], reason: 'only equality equations can be factored', factors: [] });
+      const SW = symWorker();
+      if (!SW) return Promise.resolve(factorOf(id));
+      return SW.run('factor', { poly: n.poly.termList() }, runOpts || {}).then(
+        (fr) => ({ ok: fr.ok, status: fr.status, caps: fr.caps, reason: fr.reason, factors: (fr.factors || []).map((tl) => S.polyFromTermList(tl)) }),
+        (err) => (err && err.aborted) ? { ok: false, aborted: true, status: 'undetermined', caps: [], reason: 'cancelled', factors: [] }
+          : { ok: false, status: 'undetermined', caps: [], reason: (err && err.message) || String(err), factors: [] });
+    }
+    // Off-main-thread applyFactor (Q2) — offloads S.factor, then picks factor k and appends the case column
+    // on the main thread (cheap, via _appendReduction which checkpoints). Byte-identical to applyFactor.
+    function applyFactorAsync(id, k, runOpts) {
+      const n = get(id);
+      if (!n) return Promise.resolve({ ok: false, reason: 'node not found', created: [] });
+      if (n.column !== maxColumn()) return Promise.resolve({ ok: false, reason: 'factor an equation in the current system (the last column)', created: [] });
+      return factorNodeAsync(id, runOpts).then((fr) => {
+        if (!fr.ok) return { ok: false, aborted: !!fr.aborted, reason: fr.reason || 'no nontrivial factorization', created: [] };
+        const chosen = fr.factors[k];
+        if (!chosen) return { ok: false, reason: 'no such factor index', created: [] };
+        const cnt = fr.factors.length;
+        const label = 'factor: case ' + (k + 1) + ' of ' + cnt;
+        const res = _appendReduction((m) => ({
+          poly: m.id === id ? chosen : m.poly,
+          provenance: m.id === id ? { op: 'factor', inputs: [id], caseIndex: k, caseCount: cnt } : { op: 'factor', inputs: [m.id], carried: true }, label,
+        }));
+        if (res.ok) { res.factorCount = cnt; res.factors = fr.factors; }
+        return res;
+      });
+    }
 
     // Spurious-component detection: factor the current column's REAL (reim) equations — the
     // common cause of a positive-dimensional seeded system is a locator/gauge equation that
@@ -3066,7 +3100,7 @@ import _QD from '../solver.mjs';
     return {
       seedFromSystem, seedFromPolys, addConstraint, eliminate, eliminateAsync, eliminateWithGauge, groebner, groebnerAsync,
       dimension, dimensionAsync, solve, solveAsync, duplicate, deleteNode,
-      substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, autoAbbreviate, addEquation, factorOf, applyFactor, spuriousFactors, triangularize: triangularizeNodes, triangularizeAsync, saturateMobius, saturateAsync,
+      substituteValue, substituteValues, reducePropagate, assumeReal, assumeImaginary, identifyVariables, applyConjugatePair, detectVariableRelations, generateConjugate, propagateNode, propagateAllConstraints, fixW0, defineSubstitution, defineSubstitutionAsync, detectSubstitutions, autoAbbreviate, addEquation, factorOf, applyFactor, factorNodeAsync, applyFactorAsync, spuriousFactors, triangularize: triangularizeNodes, triangularizeAsync, saturateMobius, saturateAsync,
       decomposeComponentsAsync, regularChainsAsync, applyComponent,
       currentReimSystem, classify, classifyAsync, resolventOf, resolventAsync, solveForVariable, reimVariables, solveReal, solveRealAsync, solveRealCertifiedSync, solveRealCertifiedAsync, parametricBifurcation, parametricBifurcationAsync, shapeFromMoments, shapeFromMomentsAsync, knownValues, currentColumnIds, maxColumn, columnStats, columns,
       sharedVars, previewCost, exportDAG, importDAG, mathematicaColumn, mathematicaNode, mathematicaAll, casColumn, casColumnComplex, casNode, msolveColumn, msolveVarOrder, importMsolve, derivationSteps, sympyDerivation, importRCTD, nodeStats, variables, baseVariables,

@@ -2284,40 +2284,48 @@ const QD = _QD;
     // Equations past a factorizer cap are listed as UNDETERMINED — never folded in with the
     // irreducible ones, since that is precisely the conflation this pass exists to remove.
     function doFactorScan() {
-      if (busyGuard()) return;
+      if (_abort) return;
       if (!ensureSeed()) return;
       const out = $('#alg-factor-out'); if (!out) return;
       out.innerHTML = '';
       const ns = store.list().filter((n) => n.rel === '=' && n.column === store.maxColumn());
       if (!ns.length) { out.textContent = 'No equations in the current system.'; return; }
-      const split = [], irred = [], undet = [];
-      ns.forEach((n) => {
-        const fi = _factorInfo(n.id);
-        (fi.status === 'reducible' ? split : fi.status === 'irreducible' ? irred : undet).push({ n, fi });
-      });
-      const head = document.createElement('div'); head.className = 'hint';
-      head.textContent = ns.length + ' equation' + (ns.length === 1 ? '' : 's') + ' scanned — '
-        + split.length + ' factor, ' + irred.length + ' proved irreducible, ' + undet.length + ' undetermined.';
-      out.appendChild(head);
-      split.forEach(({ n, fi }) => {
-        const row = document.createElement('div'); row.className = 'algebra-factor-row';
-        const lab = document.createElement('span'); lab.className = 'algebra-factor-eq';
-        lab.textContent = (n.label || 'equation') + ' → ' + fi.count + ' factors';
-        const go = document.createElement('button'); go.type = 'button'; go.className = 'small'; go.textContent = 'Split…';
-        go.title = 'Show the factors and pick a case to pursue (V(p)=⋃ₖV(fₖ))';
-        go.addEventListener('click', () => { out.querySelectorAll('.algebra-factor-chooser').forEach((c) => c.remove()); doFactor(n.id, out); });
-        row.appendChild(lab); row.appendChild(go); out.appendChild(row);
-      });
-      if (undet.length) {
-        const u = document.createElement('div'); u.className = 'hint';
-        const strong = document.createElement('strong'); strong.textContent = 'Undetermined: ';
-        u.appendChild(strong);
-        u.appendChild(document.createTextNode(undet.map((x) => (x.n.label || '?')).join(', ')
-          + ' — a factorizer cap stopped the search (' + (undet[0].fi.caps.map((c) => c.detail)[0] || 'see the per-equation note')
-          + '). Not a proof of irreducibility; an external CAS has no such cap.'));
-        out.appendChild(u);
-      }
-      toast(split.length ? (split.length + ' equation' + (split.length === 1 ? '' : 's') + ' can be split.') : 'No equation in the current system factors.');
+      // Q2 — offloaded: factor every current-column equation OFF the main thread (was a synchronous per-node
+      // S.factor loop — Berlekamp–Zassenhaus / Hensel — that froze the tab on a big system). setBusy + a real
+      // Cancel; _factorInfoAsync populates the same cache the passive badges read, so after a Scan they light up.
+      const ctrl = _newAbort(); _abort = ctrl;
+      setBusy(true, 'Scanning ' + ns.length + ' equation' + (ns.length === 1 ? '' : 's') + ' for factorizations…');
+      out.textContent = 'Scanning…';
+      Promise.all(ns.map((n) => _factorInfoAsync(n.id, { signal: ctrl && ctrl.signal }).then((fi) => ({ n, fi })))).then((results) => {
+        _abort = null; setBusy(false); setStatus('');
+        if (ctrl && ctrl.signal && ctrl.signal.aborted) { out.innerHTML = ''; toast('Cancelled'); return; }
+        out.innerHTML = '';
+        const split = [], irred = [], undet = [];
+        results.forEach(({ n, fi }) => (fi.status === 'reducible' ? split : fi.status === 'irreducible' ? irred : undet).push({ n, fi }));
+        const head = document.createElement('div'); head.className = 'hint';
+        head.textContent = ns.length + ' equation' + (ns.length === 1 ? '' : 's') + ' scanned — '
+          + split.length + ' factor, ' + irred.length + ' proved irreducible, ' + undet.length + ' undetermined.';
+        out.appendChild(head);
+        split.forEach(({ n, fi }) => {
+          const row = document.createElement('div'); row.className = 'algebra-factor-row';
+          const lab = document.createElement('span'); lab.className = 'algebra-factor-eq';
+          lab.textContent = (n.label || 'equation') + ' → ' + fi.count + ' factors';
+          const go = document.createElement('button'); go.type = 'button'; go.className = 'small'; go.textContent = 'Split…';
+          go.title = 'Show the factors and pick a case to pursue (V(p)=⋃ₖV(fₖ))';
+          go.addEventListener('click', () => { out.querySelectorAll('.algebra-factor-chooser').forEach((c) => c.remove()); doFactor(n.id, out); });
+          row.appendChild(lab); row.appendChild(go); out.appendChild(row);
+        });
+        if (undet.length) {
+          const u = document.createElement('div'); u.className = 'hint';
+          const strong = document.createElement('strong'); strong.textContent = 'Undetermined: ';
+          u.appendChild(strong);
+          u.appendChild(document.createTextNode(undet.map((x) => (x.n.label || '?')).join(', ')
+            + ' — a factorizer cap stopped the search (' + (undet[0].fi.caps.map((c) => c.detail)[0] || 'see the per-equation note')
+            + '). Not a proof of irreducibility; an external CAS has no such cap.'));
+          out.appendChild(u);
+        }
+        toast(split.length ? (split.length + ' equation' + (split.length === 1 ? '' : 's') + ' can be split.') : 'No equation in the current system factors.');
+      }, (e) => { _abort = null; setBusy(false); setStatus(''); out.innerHTML = ''; showError('Scan for factorizations: ' + ((e && e.message) || String(e))); });
     }
     // Decompose the current system into irreducible components (minimalPrimes) or saturated regular
     // chains, and offer to ENTER one. This is the escape hatch from the positive-dimensional dead
@@ -2431,12 +2439,18 @@ const QD = _QD;
         const use = document.createElement('button'); use.type = 'button'; use.className = 'small'; use.textContent = 'case f' + (i + 1) + '=0';
         use.title = 'Replace this equation with f' + (i + 1) + ' = 0 in a new column';
         use.addEventListener('click', () => {
-          if (busyGuard()) return;
-          const r = store.applyFactor(id, i);
-          if (!r.ok) { showError('Factor: ' + (r.reason || 'failed')); return; }
-          if (canvas) canvas.clearSelection();
-          rerender(); refreshPickers();
-          toast('Factored → case ' + (i + 1) + ' of ' + r.factorCount + ' (column ' + r.column + '); undo to pursue another case.');
+          if (_abort) return;
+          // Q2 — applyFactor re-runs S.factor; offload it (setBusy + real Cancel) so a big case-poly doesn't freeze.
+          const ctrl = _newAbort(); _abort = ctrl;
+          setBusy(true, 'Factoring (case f' + (i + 1) + '=0)…');
+          store.applyFactorAsync(id, i, { signal: ctrl && ctrl.signal }).then((r) => {
+            _abort = null; setBusy(false); setStatus('');
+            if (r.aborted) { toast('Cancelled'); return; }
+            if (!r.ok) { showError('Factor: ' + (r.reason || 'failed')); return; }
+            if (canvas) canvas.clearSelection();
+            rerender(); refreshPickers();
+            toast('Factored → case ' + (i + 1) + ' of ' + r.factorCount + ' (column ' + r.column + '); undo to pursue another case.');
+          }, (e) => { _abort = null; setBusy(false); setStatus(''); showError('Factor: ' + ((e && e.message) || String(e))); });
         });
         row.appendChild(eq); row.appendChild(use); chooser.appendChild(row);
       });
@@ -2566,23 +2580,42 @@ const QD = _QD;
     // scans every node in the current column.
     const FACTOR_NONE = { status: 'undetermined', count: 0, reason: 'node not found', caps: [] };
     const _factorCache = new Map();
+    // Q2 — a large polynomial is NOT auto-factored on the render path (the suggested-actions builder factors
+    // every current-column equation to auto-offer "Split into cases", and the node badges do likewise; a big
+    // system froze the tab per-render). Above this term count, _factorInfo returns UNKNOWN instead of running
+    // S.factor synchronously; the explicit async "Scan" (_factorInfoAsync) computes those off the main thread.
+    const FACTOR_AUTO_CAP = 120;
+    const FACTOR_UNKNOWN = { status: 'undetermined', count: 0, reason: 'large — not auto-factored (run Scan for factorizations)', caps: [], pending: true };
+    function _infoFromResult(fr) {
+      return { status: (fr && fr.status) || 'undetermined', count: (fr && fr.ok && fr.factors) ? fr.factors.length : 0, reason: (fr && fr.reason) || '', caps: (fr && fr.caps) || [] };
+    }
     function _factorInfo(id) {
       const n = store.get(id); if (!n) return FACTOR_NONE;
-      const key = id + ':' + (n.poly && n.poly.size ? n.poly.size() : 0);
+      const sz = (n.poly && n.poly.size) ? n.poly.size() : 0;
+      const key = id + ':' + sz;
       if (_factorCache.has(key)) return _factorCache.get(key);
+      if (sz > FACTOR_AUTO_CAP) return FACTOR_UNKNOWN;   // do not freeze the render path on a big poly (uncached)
       let info = FACTOR_NONE;
-      try {
-        const fr = store.factorOf && store.factorOf(id);
-        info = {
-          status: (fr && fr.status) || 'undetermined',
-          count: (fr && fr.ok && fr.factors) ? fr.factors.length : 0,
-          reason: (fr && fr.reason) || '',
-          caps: (fr && fr.caps) || [],
-        };
-      } catch (e) { info = { status: 'undetermined', count: 0, reason: (e && e.message) || String(e), caps: [] }; }
+      try { info = _infoFromResult(store.factorOf && store.factorOf(id)); }
+      catch (e) { info = { status: 'undetermined', count: 0, reason: (e && e.message) || String(e), caps: [] }; }
       _factorCache.set(key, info);
       if (_factorCache.size > 256) _factorCache.delete(_factorCache.keys().next().value);
       return info;
+    }
+    // Q2 — the async twin of _factorInfo: ALWAYS factors (even large polys), off the main thread via the
+    // worker, and populates the same cache. Used by the explicit "Scan for factorizations" action.
+    function _factorInfoAsync(id, runOpts) {
+      const n = store.get(id); if (!n) return Promise.resolve(FACTOR_NONE);
+      const key = id + ':' + (n.poly && n.poly.size ? n.poly.size() : 0);
+      if (_factorCache.has(key)) return Promise.resolve(_factorCache.get(key));
+      const run = store.factorNodeAsync ? store.factorNodeAsync(id, runOpts) : Promise.resolve(store.factorOf(id));
+      return run.then((fr) => {
+        if (fr && fr.aborted) return FACTOR_UNKNOWN;      // cancelled — leave it uncached / unknown
+        const info = _infoFromResult(fr);
+        _factorCache.set(key, info);
+        if (_factorCache.size > 256) _factorCache.delete(_factorCache.keys().next().value);
+        return info;
+      });
     }
     function _factorCount(id) { return _factorInfo(id).count; }
     // Typeset a polynomial, or elide it with a useful summary when it is too large to render.
@@ -3659,12 +3692,17 @@ const QD = _QD;
           actions.push({ label: 'Split ' + (n.label || 'equation') + ' → case 1 of ' + cnt,
             title: 'This equation factors: V(p) = ⋃ₖ V(fₖ). Pursue case 1 in a new column — the other cases still have to be pursued for a complete count (undo to pick another, or fork).',
             onClick: () => {
-              if (busyGuard()) return;
-              const r = store.applyFactor(n.id, 0);
-              if (!r || !r.ok) { showError('Split into cases: ' + ((r && r.reason) || 'failed')); return; }
-              rerender(); refreshPickers();
-              toast('Split → case 1 of ' + r.factorCount + ' (column ' + r.column + '); undo to pursue another case.');
-              doCertifyUnivalence();
+              if (_abort) return;
+              const ctrl = _newAbort(); _abort = ctrl;   // Q2 — offload the factor (setBusy + real Cancel)
+              setBusy(true, 'Splitting into cases…');
+              store.applyFactorAsync(n.id, 0, { signal: ctrl && ctrl.signal }).then((r) => {
+                _abort = null; setBusy(false); setStatus('');
+                if (r && r.aborted) { toast('Cancelled'); return; }
+                if (!r || !r.ok) { showError('Split into cases: ' + ((r && r.reason) || 'failed')); return; }
+                rerender(); refreshPickers();
+                toast('Split → case 1 of ' + r.factorCount + ' (column ' + r.column + '); undo to pursue another case.');
+                doCertifyUnivalence();
+              }, (e) => { _abort = null; setBusy(false); setStatus(''); showError('Split into cases: ' + ((e && e.message) || String(e))); });
             } });
         });
       } catch (e) { /* the split offer is best-effort — never break the verdict card */ }
