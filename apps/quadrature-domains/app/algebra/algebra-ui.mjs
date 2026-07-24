@@ -538,6 +538,34 @@ const QD = _QD;
     return head + ', not the whole current system (' + cur.length + ') — dropping equations can only'
       + ' add solutions, so this count is an UPPER BOUND on the full system’s.]';
   }
+  // ── T1 (slice 3): the assumptions LEDGER — every active specialization that narrows the verdict, one
+  // short label each (reality/imaginary slices, the φ(0) gauge fix, a factor/component branch, and active
+  // univalence constraints). Shown as a banner so no slice/branch count on the card reads as the certified
+  // GENERAL count; [] ⇒ the general system. Lifted from installAlgebra to IIFE scope with its store reads
+  // injected as ctx = { w0Fixed, activeTrack, nodes } (the call site passes _ledgerCtx()), so the whole
+  // ledger — including the honest-FAILURE caveat when the constraint scan throws — is behaviourally testable.
+  function specializationLedger(r, ctx) {
+    ctx = ctx || {};
+    const out = sliceLabels(r).map((s) => s.charAt(0).toUpperCase() + s.slice(1));
+    if (ctx.w0Fixed) out.push('φ(0) = w₀ fixed (center/translation gauge — restricts to domains whose interior contains w₀; a domain not containing w₀ is not counted)');
+    if (r && r.partialBranch) out.push((r.branchOp === 'component' ? 'Component ' : 'Factor case ') + ((r.caseIndex || 0) + 1) + ' of ' + r.caseCount
+      + (r.branchIncomplete ? ' (branches add to a LOWER BOUND — the decomposition hit a cap)' : ' (branches add up)'));
+    // D-4: a user-added univalence constraint (convex / star / spiral / injectivity) restricts the count to
+    // the domains meeting it — record it in the ledger so a restricted count never reads as the full one.
+    try {
+      const at = ctx.activeTrack;
+      const forms = [...new Set((ctx.nodes || [])
+        .filter((n) => n && (n.track || 't0') === at && n.provenance && n.provenance.op === 'constraint')
+        .map((n) => (n.provenance && n.provenance.form) || (n.meta && n.meta.form)).filter(Boolean))];
+      if (forms.length) out.push('Univalence constraint' + (forms.length > 1 ? 's' : '') + ' active (' + forms.join(', ') + ') — restricts to domains meeting ' + (forms.length > 1 ? 'them' : 'it') + '; a domain that does not is not counted');
+    } catch (e) {
+      // Honest failure, NOT silent. This scan records the ACTIVE univalence constraints so a restricted
+      // count never reads as the full one. Swallowing a throw would drop that disclosure and let a
+      // restricted count look general — the exact mislabel the ledger exists to prevent. Emit a caveat.
+      out.push('⚠ could not scan for active univalence constraints — if any are set, this count is restricted to the domains meeting them, not the full count');
+    }
+    return out;
+  }
   // Live facts per variable in the CURRENT column, feeding variableRemovals. Ordered by how many
   // equations hold the variable, descending — the ones costing the most are the ones worth
   // removing, and that ranking is the answer to "which should I attack?" a flat picker cannot give.
@@ -3190,29 +3218,11 @@ const QD = _QD;
       el.appendChild(lead); el.appendChild(rest);
     }
     // posDimDesc lifted to module scope (T1) — see QD_UI.posDimDesc.
-    // The persistent "assumptions ledger" for the verdict card — every active specialization that
-    // narrows the verdict, one short label each (slices, φ(0) gauge fix, factor case). Shown as a
-    // banner so no slice/branch count on the card reads as the certified general count. [] ⇒ general.
-    function specializationLedger(r) {
-      const out = sliceLabels(r).map((s) => s.charAt(0).toUpperCase() + s.slice(1));
-      if (store.w0Fixed) out.push('φ(0) = w₀ fixed (center/translation gauge — restricts to domains whose interior contains w₀; a domain not containing w₀ is not counted)');
-      if (r && r.partialBranch) out.push((r.branchOp === 'component' ? 'Component ' : 'Factor case ') + ((r.caseIndex || 0) + 1) + ' of ' + r.caseCount
-        + (r.branchIncomplete ? ' (branches add to a LOWER BOUND — the decomposition hit a cap)' : ' (branches add up)'));
-      // D-4: a user-added univalence constraint (convex / star / spiral / injectivity) restricts the count to
-      // the domains meeting it — record it in the ledger so a restricted count never reads as the full one.
-      try {
-        const at = store.activeTrack;
-        const forms = [...new Set((store.list ? store.list() : [])
-          .filter((n) => n && (n.track || 't0') === at && n.provenance && n.provenance.op === 'constraint')
-          .map((n) => (n.provenance && n.provenance.form) || (n.meta && n.meta.form)).filter(Boolean))];
-        if (forms.length) out.push('Univalence constraint' + (forms.length > 1 ? 's' : '') + ' active (' + forms.join(', ') + ') — restricts to domains meeting ' + (forms.length > 1 ? 'them' : 'it') + '; a domain that does not is not counted');
-      } catch (e) {
-        // Honest failure, NOT silent. This scan records the ACTIVE univalence constraints so a restricted
-        // count never reads as the full one. Swallowing a throw would drop that disclosure and let a
-        // restricted count look general — the exact mislabel the ledger exists to prevent. Emit a caveat.
-        out.push('⚠ could not scan for active univalence constraints — if any are set, this count is restricted to the domains meeting them, not the full count');
-      }
-      return out;
+    // specializationLedger lifted to module scope (T1) — see QD_UI.specializationLedger. Its store reads
+    // are injected via _ledgerCtx(): read fresh at each call (w0Fixed and the constraint nodes change as
+    // the user works), and passed as the ledger's second argument at every call site.
+    function _ledgerCtx() {
+      return { w0Fixed: store.w0Fixed, activeTrack: store.activeTrack, nodes: store.list ? store.list() : [] };
     }
 
     // classifyRigor lifted to a module-scope pure fn (T1) — behaviourally tested; see QD_UI.classifyRigor.
@@ -3280,7 +3290,7 @@ const QD = _QD;
           }
           _abort = null; setBusy(false); refreshPickers();
           setStatus(verdict + coords);
-          if (canvas) showResult({ text: verdict, solutionsText, assumptions: specializationLedger(cl), rigor: classifyRigor(cl) });
+          if (canvas) showResult({ text: verdict, solutionsText, assumptions: specializationLedger(cl, _ledgerCtx()), rigor: classifyRigor(cl) });
           toast(verdict, cl.inconsistent || cl.realCount === 0 ? { kind: 'error' } : {});
         } catch (e) { _abort = null; setBusy(false); showError('Auto-reduce & solve: ' + ((e && e.message) || String(e))); }
       })();
@@ -3530,7 +3540,7 @@ const QD = _QD;
         // and withdraw an upper-bound claim that holds. variableCensus uses orderedColumn for the same reason.
         verdict += scopeCaveat(sel, _currentColumnNodes().map((n) => n.id));
         setStatus(verdict);
-        if (canvas) showResult({ text: verdict, assumptions: specializationLedger(r), rigor: classifyRigor(r) });
+        if (canvas) showResult({ text: verdict, assumptions: specializationLedger(r, _ledgerCtx()), rigor: classifyRigor(r) });
         if (!sel) cacheActiveVerdict(r);   // A6: stamp the active branch's chip (whole last column analyzed)
         toast(verdict, r.inconsistent || r.realCount === 0 ? { kind: 'error' } : {});
       });
@@ -3708,7 +3718,7 @@ const QD = _QD;
       actions.push({ label: 'Decompose into components',
         title: 'Split V(I) into irreducible components (minimal primes) and enter one. Each is analyzed alone and the existence counts add up — the standard route out of an underdetermined system.',
         onClick: () => { openSection('Reduce'); doDecompose('components'); } });
-      if (canvas) showResult({ text, actions: actions.slice(0, 6), assumptions: specializationLedger(cl), rigor: 'unknown' });
+      if (canvas) showResult({ text, actions: actions.slice(0, 6), assumptions: specializationLedger(cl, _ledgerCtx()), rigor: 'unknown' });
       setStatus(text); toast('Positive-dimensional — fix the gauge / pin a forced variable.', { kind: 'error' });
     }
     // Render a terminal verdict card (inconsistent / no-real / zero-dim, or an aggregated 'tree' result
@@ -3747,7 +3757,7 @@ const QD = _QD;
                 (bc.schwarz ? ', Schwarz function S(w) single-valued' : '; Schwarz function algebraic of degree ' + bc.degWb) + ')';
               // `bound` carries the DIRECTION of a rigor:'bound' result — a truncated tree walk proves a
               // LOWER bound (≥) and rendering the default '≤' would state the opposite of the proof.
-              if (canvas) showResult({ text: verdict + note, solutionsLatex: latex, plot, solutionsText: rows.join('\n'), assumptions: specializationLedger(cl), actions: vActions, rigor: pr.rigor, bound: pr.bound });
+              if (canvas) showResult({ text: verdict + note, solutionsLatex: latex, plot, solutionsText: rows.join('\n'), assumptions: specializationLedger(cl, _ledgerCtx()), actions: vActions, rigor: pr.rigor, bound: pr.bound });
             },
           });
         }
@@ -3768,7 +3778,7 @@ const QD = _QD;
               try {
                 const proof = {
                   kind: pr.kind, verdict: pr.verdict, rigor: pr.rigor, bound: pr.bound || null, count: (pr.count != null ? pr.count : null),
-                  rigorProvenance: pr.rigorProvenance || [], perSolution: rows, assumptions: specializationLedger(cl),
+                  rigorProvenance: pr.rigorProvenance || [], perSolution: rows, assumptions: specializationLedger(cl, _ledgerCtx()),
                   stages: ((pr.kind === 'moment' ? PROVE.MOMENT_STAGES : pr.kind === 'rational' ? PROVE.RATIONAL_STAGES : pr.kind === 'triangle' ? PROVE.TRIANGLE_STAGES : PROVE.CERTIFY_STAGES) || []).map((s) => ({ id: s.id, title: s.title, why: s.why })),
                 };
                 const out = { format: 'qd-proof', version: 1, session: exportStamp(), proof, derivation: store.exportDAG() };
@@ -3787,7 +3797,7 @@ const QD = _QD;
       // always-shown card default to '≤', stating the OPPOSITE of the proof and contradicting its own
       // "the count is a LOWER BOUND" body text. Thread it so the badge matches the verdict. (Undefined
       // for the routes with no direction — rigorMeta then keeps its correct default.)
-      const vSet = { text: verdict, assumptions: specializationLedger(cl), rigor: pr.rigor, bound: pr.bound };
+      const vSet = { text: verdict, assumptions: specializationLedger(cl, _ledgerCtx()), rigor: pr.rigor, bound: pr.bound };
       if (pr.rigorProvenance && pr.rigorProvenance.length) vSet.rigorProvenance = pr.rigorProvenance;   // Phase E: "why this rigor"
       if (rows.length) vSet.solutionsText = rows.join('\n');
       // C1-ext-B: the moment route's genuine map is the POLYNOMIAL φ = a + Σ w_k zᵏ, so plot its boundary
@@ -4918,6 +4928,7 @@ const QD = _QD;
   QD_UI.sliceLabels = sliceLabels;                   // T1: active-slice human labels of a classify result (pure)
   QD_UI.sliceCaveat = sliceCaveat;                   // T1: LOWER-BOUND slice caveat appended to a verdict (pure)
   QD_UI.scopeCaveat = scopeCaveat;                   // T1: UPPER-BOUND / different-system selection caveat (pure; curIds injected)
+  QD_UI.specializationLedger = specializationLedger; // T1: the assumptions ledger — active specializations that narrow the verdict (pure; store snapshot injected)
   QD_UI.suggestAutoOpen = suggestAutoOpen;           // …and its expand/collapse decision (pure)
   QD_UI.SUGGEST_AUTO_OPEN_MAX = AUTO_OPEN_MAX;
 })();

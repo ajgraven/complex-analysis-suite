@@ -18,6 +18,8 @@ let latexPlain: (name: string) => string;
 let sliceLabels: (r: unknown) => string[];
 let sliceCaveat: (r: unknown) => string;
 let scopeCaveat: (sel: unknown, curIds: unknown) => string;
+// slice 3 — the assumptions ledger (store snapshot injected)
+let specializationLedger: (r: unknown, ctx: unknown) => string[];
 
 beforeAll(async () => {
   await import("../app/solver.mjs");
@@ -31,6 +33,7 @@ beforeAll(async () => {
   sliceLabels = reg.QD_UI.sliceLabels;
   sliceCaveat = reg.QD_UI.sliceCaveat;
   scopeCaveat = reg.QD_UI.scopeCaveat;
+  specializationLedger = reg.QD_UI.specializationLedger;
 });
 
 describe("QD_UI.classifyRigor — the =/≤/unknown decider for a classify/count result", () => {
@@ -201,5 +204,64 @@ describe("QD_UI.scopeCaveat — a selection count's UPPER-BOUND vs different-sys
 
   it("uses the singular 'equation' for a single selected node", () => {
     expect(scopeCaveat(["a"], ["a", "b"])).toContain("selected equation only");
+  });
+});
+
+// ── T1 slice 3 — the assumptions LEDGER. Every entry is a specialization that narrows the verdict, so
+// that no slice/branch/constraint count on the card ever reads as the certified GENERAL count. This is
+// the honest-labeling banner in list form; the store reads it needs are injected as a { w0Fixed,
+// activeTrack, nodes } snapshot, which is exactly what makes each branch testable here.
+describe("QD_UI.specializationLedger — the narrowing-assumptions ledger", () => {
+  it("is empty for the general system (no slice, no gauge, no branch, no constraint)", () => {
+    // [] is load-bearing: a non-empty ledger is what tells the card its count is NOT the general one.
+    expect(specializationLedger({}, {})).toEqual([]);
+  });
+
+  it("capitalizes the active slice labels", () => {
+    const led = specializationLedger({ realVars: ["z1"] }, {});
+    expect(led[0].startsWith("Real slice (z̄≡z: z1)")).toBe(true);
+  });
+
+  it("records the φ(0) = w₀ gauge fix when w0Fixed is set", () => {
+    const led = specializationLedger({}, { w0Fixed: true });
+    expect(led.some((s) => s.startsWith("φ(0) = w₀ fixed"))).toBe(true);
+  });
+
+  it("records a factor-case branch that adds UP (a complete decomposition)", () => {
+    expect(specializationLedger({ partialBranch: true, caseIndex: 0, caseCount: 3 }, {}))
+      .toContain("Factor case 1 of 3 (branches add up)");
+  });
+
+  it("flags an INCOMPLETE component branch as a LOWER BOUND (the cap was hit)", () => {
+    const led = specializationLedger(
+      { partialBranch: true, branchOp: "component", caseIndex: 1, caseCount: 2, branchIncomplete: true }, {});
+    expect(led).toContain("Component 2 of 2 (branches add to a LOWER BOUND — the decomposition hit a cap)");
+  });
+
+  it("scans the nodes for active univalence constraints and names the forms", () => {
+    const led = specializationLedger({}, {
+      activeTrack: "t0",
+      nodes: [
+        { track: "t0", provenance: { op: "constraint", form: "convex" } },
+        { track: "t0", provenance: { op: "constraint", form: "star" } },
+      ],
+    });
+    expect(led.some((s) => s.startsWith("Univalence constraints active (convex, star)"))).toBe(true);
+  });
+
+  it("only counts constraints on the ACTIVE track", () => {
+    const led = specializationLedger({}, {
+      activeTrack: "t0",
+      nodes: [{ track: "t1", provenance: { op: "constraint", form: "convex" } }],
+    });
+    expect(led.some((s) => s.includes("Univalence constraint"))).toBe(false);
+  });
+
+  it("emits an honest CAVEAT (not silence) if the constraint scan throws", () => {
+    // The scan records active constraints so a restricted count never reads as full. If it throws, the
+    // ledger must SAY the count may be restricted — swallowing the error is the exact mislabel it prevents.
+    const throwingNodes = { filter() { throw new Error("scan failed"); } };
+    const led = specializationLedger({}, { activeTrack: "t0", nodes: throwingNodes });
+    expect(led.some((s) => s.startsWith("⚠ could not scan for active univalence constraints"))).toBe(true);
   });
 });
