@@ -232,3 +232,67 @@ Canvas pan works on touch (Pointer Events, `algebra-canvas.mjs:686`) but zoom is
 4. **X3–X6 / P1 / P3** as larger, separately-scoped efforts, each measured/profiled first where noted.
 
 *Investigation method: six parallel `general-purpose` agents (math extensions · UX/QoL · correctness/rigor · performance · code-quality/architecture · testing/interop), each grounded against the docs trail and the already-shipped list, returning structured file:line-cited findings. Tier-0 and the ✔ items re-verified at source by the synthesizing session.*
+
+---
+
+## Future directions (post-implementation, 2026-07-24)
+
+> Written **after** implementing Tier 0 (#137), Tier 1 QoL Q1–Q5 (#138), the full Q2 worker offload —
+> all five heavy ops — (saturate #139, triangularize+resolvent #140, eliminate #141, factor #142), and
+> U2. These directions are grounded in what the *implementation itself* surfaced, not only the original
+> investigation — so priorities have shifted from the tier order above.
+
+### 1. Pay down the verdict-function testability debt (T1) — now proven costly, do first
+T1 began as a Tier-4 nicety; the implementation promoted it. In #142 a one-word rename
+(`applyFactor` → `applyFactorAsync`) broke `algebra-verdict-labeling.test.ts`, which asserts against
+**literal source tokens**, and that brittleness recurred across Q2. The honest-labeling decision functions
+(`classifyRigor`, `specializationLedger`, `scopeCaveat`, `sliceCaveat`, `sliceLabels`, `posDimDesc`,
+`droppedNote`, `scopeNote`) are trapped in the 4200-line `installAlgebra` closure and guarded only by
+regex. Lifting them to module scope on the proven `QD_UI` pattern makes the `=`/`≤`/`≈` decisions
+**behaviorally** testable (the paramount value, currently untested), kills the rename-brittleness, and
+unblocks safe refactoring of that file. Highest-leverage code-health item, now with direct evidence.
+
+### 2. The honest-labeling frontier — X1 + X2 (highest capability value)
+Both most advance the paramount value AND reuse machinery already shipped:
+- **X1 — certified univalence for irrational-algebraic domains (`≈`→`=`).** The RUR + interval-Horner
+  enclosures are *already computed on the prove path and discarded* (`prove-plan.mjs`); the module doc
+  calls this "the remaining refinement." Widens exact `=` to the generic QD (irrational shape params).
+- **X2 — null-QD classifier + mother-body skeleton.** `boundaryCurve` already detects the algebraic-Schwarz
+  (`schwarz:null`, e.g. the ellipse) case but discards it as a string; `discriminant` + `realRootIsolate`
+  are shipped. Turns an ellipse-type false positive into an honest "not a classical QD."
+
+### 3. Performance — P1 is now tractable; tune what was left heuristic
+- **P1 — ✦ Prove recomputes the grevlex Gröbner basis 2–3× per leaf × branches.** Q2 mapped the worker
+  boundary thoroughly, so threading the precomputed `{G, order}` across classify→solve is now a natural
+  win (the engine already accepts it; the only barrier is `classify`'s runJob returning counts, not
+  generators).
+- **Tune `FACTOR_AUTO_CAP`** (`algebra-ui.mjs`, set to 120 terms in #142 **without profiling**). Measure
+  factor latency vs. poly size and tune it, or replace the cap with a fully-lazy async badge. The
+  deliberate behaviour change (a very large current-column system no longer auto-offers "Split into cases"
+  on render) deserves an in-browser check.
+- **P3** (Buchberger/FGLM inner-loop structures) stays **profile-first** — ℚ(i) BigInt arithmetic likely
+  dominates.
+
+### 4. New mathematics (the QD trinity) — longer horizon
+**X3** exact Richardson/harmonic moments (`≈`→`=`, foundation for X6) → **X6** Hele-Shaw evolution with
+certified cusp times (headline new math) · **X4** general-degree rational prove route (the honest
+resolution of the deferred Phase C) · **X5** inverse arrow `S(w)`→quadrature data + exact-Schwarz hand-off
+to the sibling apps · **X7** real-radical ideals.
+
+### 5. Verification infrastructure — a UI-flow test harness
+Across this round the UI honest-labeling flows (the C1/C6 badges, the Q2 spinners, the factor cap) could
+not be browser-verified without a manual seed (now eased by U2) and there is **no headless harness that
+drives the actual algebra handlers** — the source-scans are a poor substitute (see §1). A small
+mounted/jsdom or Playwright harness would let the badges *and* the offload spinners be tested behaviorally.
+
+### Reusable assets this round produced
+The `plan → worker → finish` offload pattern and the `vitest/algebra-offload-kinds.test.ts` **differential
+harness** (`runJob(kind)` === the inline sym-core call) are proven templates for any future heavy sync op
+(or the sibling apps).
+
+### Standing "don'ts" (do not re-propose)
+Defer the `@cas/ui` seed (real duplication, trivial payoff); do **not** split `algebra-store.mjs`
+(cohesive, DOM-free, unit-tested).
+
+**Recommended next:** T1 (§1) as enabling groundwork — cheap, evidenced, and it makes every subsequent
+honest-labeling change (X1, X2) safe and testable — then X1, the single highest-value `≈`→`=` win.
