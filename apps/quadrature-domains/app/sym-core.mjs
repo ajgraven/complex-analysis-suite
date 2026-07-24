@@ -4708,6 +4708,110 @@ import _QD from './solver.mjs';
   }
 
   // ===========================================================================
+  // INTERVAL SCHUR–COHN (X1) — the CERTIFIED fold test at an IRRATIONAL algebraic
+  // root. Same C = A·Aᴴ − B·Bᴴ inertia as `schurCohn`, but the coefficients aₖ are
+  // rational-INTERVAL Gaussians (rigorous enclosures of aₖ(t*) at the isolating box,
+  // built upstream by interval-Horner on the RUR coordinate maps). Because the
+  // endpoints are EXACT `Rational`s (BigInt fractions, no float rounding), every
+  // enclosure below is rigorous by construction — an operation returns the tightest
+  // rational interval containing all true values.
+  //
+  // The one atomic decision is unchanged from `_hermitianInertia`: the SIGN of each
+  // real congruence pivot. An interval certifies a sign only when it STRICTLY EXCLUDES
+  // 0 (lo.sign() === hi.sign() ≠ 0). A pivot interval that straddles/touches 0 is an
+  // honest "cannot certify" — it is exactly the on-circle-root / self-inversive-pair /
+  // box-too-wide case, which the exact code handles by an equality-driven swap/fold
+  // that intervals may NEVER take. The caller then refines the box and retries, or
+  // falls back. So this returns { certified:false } rather than guessing — a false
+  // `inside` here would become a false `=` on the verdict, the one unacceptable error.
+  // ---------------------------------------------------------------------------
+  // Rational-interval scalar arithmetic ({ lo, hi }, lo ≤ hi; endpoints are Rational).
+  function _riAdd(a, b) { return { lo: a.lo.add(b.lo), hi: a.hi.add(b.hi) }; }
+  function _riSub(a, b) { return { lo: a.lo.sub(b.hi), hi: a.hi.sub(b.lo) }; }
+  function _riNeg(a) { return { lo: a.hi.neg(), hi: a.lo.neg() }; }
+  function _riMul(a, b) {                                   // min/max of the 4 endpoint products
+    const p = [a.lo.mul(b.lo), a.lo.mul(b.hi), a.hi.mul(b.lo), a.hi.mul(b.hi)];
+    let mn = p[0], mx = p[0];
+    for (let k = 1; k < 4; k++) { if (p[k].sub(mn).sign() < 0) mn = p[k]; if (p[k].sub(mx).sign() > 0) mx = p[k]; }
+    return { lo: mn, hi: mx };
+  }
+  // 1/[lo,hi] for a bracket that STRICTLY EXCLUDES 0 (same nonzero sign) is [1/hi, 1/lo] — another
+  // clean interval; the caller only ever divides by a sign-certified pivot, so this precondition holds.
+  function _riDivByNonzero(a, b) { return _riMul(a, { lo: RONE.div(b.hi), hi: RONE.div(b.lo) }); }
+
+  // Interval Gaussian ({ re, im } each a rational interval). Mirrors the Gaussian ring ops.
+  function _igFromGauss(g) { return { re: { lo: g.re, hi: g.re }, im: { lo: g.im, hi: g.im } }; }
+  function _igAdd(a, b) { return { re: _riAdd(a.re, b.re), im: _riAdd(a.im, b.im) }; }
+  function _igSub(a, b) { return { re: _riSub(a.re, b.re), im: _riSub(a.im, b.im) }; }
+  function _igConj(a) { return { re: a.re, im: _riNeg(a.im) }; }
+  function _igMul(a, b) {                                   // (ar+i·ai)(br+i·bi) = (ar·br − ai·bi) + i(ar·bi + ai·br)
+    return { re: _riSub(_riMul(a.re, b.re), _riMul(a.im, b.im)),
+             im: _riAdd(_riMul(a.re, b.im), _riMul(a.im, b.re)) };
+  }
+  function _igDivByReal(a, rint) { return { re: _riDivByNonzero(a.re, rint), im: _riDivByNonzero(a.im, rint) }; }
+  const _IGZERO = { re: { lo: RZERO, hi: RZERO }, im: { lo: RZERO, hi: RZERO } };
+  const _riNonzero = (ri) => ri.lo.sign() === ri.hi.sign() && ri.lo.sign() !== 0;
+
+  // Interval Hermitian congruence inertia. Returns { certified, pos, neg, zero:0 } when EVERY real
+  // pivot interval excludes 0 (⇒ the matrix is certified NONSINGULAR and every sign is known), else
+  // { certified:false }. No swap/fold: those are the exact code's zero-pivot branches, which an
+  // interval cannot license. (A[k][k] is real in exact arithmetic, so its im interval always contains
+  // 0 by soundness; only the re interval's sign is read, exactly as `_hermitianInertia` does.)
+  function _hermitianInertiaInterval(C) {
+    const n = C.length;
+    const A = C.map((row) => row.map((g) => ({ re: { lo: g.re.lo, hi: g.re.hi }, im: { lo: g.im.lo, hi: g.im.hi } })));
+    let pos = 0, neg = 0;
+    for (let k = 0; k < n; k++) {
+      const pr = A[k][k].re;
+      if (!_riNonzero(pr)) return { certified: false };    // straddles/touches 0 ⇒ sign & nonsingularity NOT certifiable
+      if (pr.lo.sign() > 0) pos++; else neg++;
+      for (let i = k + 1; i < n; i++) {
+        const f = _igDivByReal(A[i][k], pr);               // f = A[i][k] / piv (piv real)
+        for (let j = k; j < n; j++) A[i][j] = _igSub(A[i][j], _igMul(f, A[k][j]));
+      }
+    }
+    return { certified: true, pos, neg, zero: 0 };
+  }
+
+  // schurCohnInterval(icoeffs) → { inside, outside, degree, certified } | { certified:false, reason }.
+  // icoeffs = ASCENDING array of interval Gaussians { re:{lo,hi}, im:{lo,hi} } (the enclosed p(ζ)
+  // coefficients). CERTIFIED only for a nonsingular C — then `inside` = #roots strictly in 𝔻 WITH
+  // MULTIPLICITY, exactly as the exact `schurCohn` reports on its nonsingular path. Anything a rational
+  // interval cannot settle (a straddling pivot, an unbounded-from-0 leading coefficient) returns
+  // certified:false so the caller refines or falls back rather than mislabelling.
+  function schurCohnInterval(icoeffs) {
+    const a = (icoeffs || []).map((g) => ({ re: { lo: g.re.lo, hi: g.re.hi }, im: { lo: g.im.lo, hi: g.im.hi } }));
+    const isPtZero = (g) => g.re.lo.isZero() && g.re.hi.isZero() && g.im.lo.isZero() && g.im.hi.isZero();
+    while (a.length && isPtZero(a[a.length - 1])) a.pop();  // trim only EXACT trailing zeros (a mere 0-containing coeff keeps the degree honest)
+    const n = a.length - 1;
+    if (n <= 0) return { inside: 0, outside: 0, onCircle: 0, degenerate: false, degree: Math.max(n, 0), certified: true };
+    const lead = a[n];
+    if (!(_riNonzero(lead.re) || _riNonzero(lead.im)))       // degree not rigorous unless the top coeff is bounded from 0
+      return { certified: false, reason: 'leading coefficient not bounded away from 0 — refine the isolating box' };
+    const Z = _IGZERO, A = [], B = [];
+    for (let i = 0; i < n; i++) {
+      A.push(new Array(n)); B.push(new Array(n));
+      for (let j = 0; j < n; j++) {
+        if (i >= j) { A[i][j] = a[i - j]; B[i][j] = _igConj(a[n - (i - j)]); }
+        else { A[i][j] = Z; B[i][j] = Z; }
+      }
+    }
+    const C = [];                                            // C = A·Aᴴ − B·Bᴴ (Hermitian)
+    for (let i = 0; i < n; i++) {
+      C.push(new Array(n));
+      for (let k = 0; k < n; k++) {
+        let s = Z;
+        for (let j = 0; j < n; j++) s = _igSub(_igAdd(s, _igMul(A[i][j], _igConj(A[k][j]))), _igMul(B[i][j], _igConj(B[k][j])));
+        C[i][k] = s;
+      }
+    }
+    const inertia = _hermitianInertiaInterval(C);
+    if (!inertia.certified)
+      return { certified: false, reason: 'a Schur–Cohn pivot interval straddles 0 (on-circle root, self-inversive pair, or box too wide) — refine or fall back' };
+    return { inside: inertia.neg, outside: inertia.pos, onCircle: 0, degenerate: false, degree: n, certified: true };
+  }
+
+  // ===========================================================================
   // G1 — COMPREHENSIVE GRÖBNER SYSTEM (Suzuki–Sato), in-engine.
   //
   // A PARAMETRIC ideal ⟨F⟩ ⊆ ℚ(i)[Ā][X̄] (Ā = parameters, X̄ = the unknowns) does NOT have a
@@ -5849,7 +5953,7 @@ import _QD from './solver.mjs';
     multivariateContent, multivariatePrimitivePart, multivariateSquarefreeInX, multivariateSquarefreePart, nvarMainVariable, nvarEvaluationPoint, // #19 n-variate P1: content/primitive/squarefree(+part) in a main var + main-var choice + univariate evaluation-point search
     mvHenselLift, // #19 n-variate P2: multivariate Hensel lift (univariate base → lift each variable → recombine), monic-in-main-var
     factorMultivariate, // #19 n-variate P3: assembled ℚ(i) multivariate factorizer (content-strip + squarefree + main-var choice + mvHenselLift)
-    solveByEigenvalues, realSolutionCount, parametricRealCount1D, discriminantVariety, reconcileRealCount, schurCohn, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
+    solveByEigenvalues, realSolutionCount, parametricRealCount1D, discriminantVariety, reconcileRealCount, schurCohn, schurCohnInterval, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
     seriesDeriv, seriesIntegral, seriesLog, seriesExp,   // series calculus (Taylor)
