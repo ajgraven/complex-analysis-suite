@@ -137,7 +137,9 @@ describe("the positive-dimensional verdict does not read a field spuriousFactors
   });
 
   it("still offers a split, driven by applyFactor on a real node id", () => {
-    expect(body).toMatch(/applyFactor\(\s*n\.id\s*,/);
+    // Q2 offloaded the apply to applyFactorAsync — still a REAL node id (n.id), NOT the undefined
+    // h.nodeId spuriousFactors never returns; only the sync/async variant changed.
+    expect(body).toMatch(/applyFactor(?:Async)?\(\s*n\.id\s*,/);
     expect(body).toMatch(/Split /);
   });
 

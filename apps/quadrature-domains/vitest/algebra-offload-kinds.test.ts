@@ -72,3 +72,26 @@ describe("Q2 eliminate worker kind is byte-identical to inline S.eliminationIdea
     expect(viaJob.ok).toBe(true);
   });
 });
+
+describe("Q2 factor worker kind is byte-identical to inline S.factor", () => {
+  it("runJob('factor') === S.factor (status + the factors)", () => {
+    const x = S.mpolyVar("x");
+    // (x − 1)(x − 2) = x² − 3x + 2 — reducible over ℚ(i).
+    const p = x.sub(S.mpolyConst(S.gaussInt(1))).mul(x.sub(S.mpolyConst(S.gaussInt(2))));
+    const inline = S.factor(p, {});
+    const viaJob = S.runJob("factor", { poly: p.termList() });
+    expect(viaJob.ok).toBe(inline.ok);
+    expect(viaJob.status).toBe(inline.status);   // 'reducible'
+    expect(viaJob.factors).toEqual((inline.factors || []).map((g: any) => g.termList()));
+  });
+
+  it("runJob('factor') on an irreducible poly reports irreducible (no split)", () => {
+    const x = S.mpolyVar("x");
+    const p = x.mul(x).sub(S.mpolyConst(S.gaussInt(2)));   // x² − 2, irreducible over ℚ(i) (√2 ∉ ℚ(i))
+    const inline = S.factor(p, {});
+    const viaJob = S.runJob("factor", { poly: p.termList() });
+    expect(viaJob.ok).toBe(inline.ok);
+    expect(viaJob.status).toBe(inline.status);
+    expect(viaJob.factors).toEqual((inline.factors || []).map((g: any) => g.termList()));
+  });
+});
