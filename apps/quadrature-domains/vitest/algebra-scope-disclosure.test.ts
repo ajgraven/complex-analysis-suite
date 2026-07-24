@@ -58,32 +58,19 @@ describe("the scoped set is what we think it is", () => {
 describe("the verdict discloses a narrowed scope", () => {
   it("doClassify appends scopeCaveat", () => {
     // The defect: a count over 2 of 16 equations rendered with a full rigor badge and no way to
-    // tell it was not about the whole system.
-    expect(bodyOf("doClassify")).toMatch(/verdict\s*\+=\s*scopeCaveat\(sel\)/);
+    // tell it was not about the whole system. A WIRING check: is the caveat threaded into the
+    // verdict at all? T1 gave scopeCaveat a second argument (the current-column ids — its only store
+    // read, now injected), so match the call by its head, `scopeCaveat(sel`, not a fixed arity.
+    expect(bodyOf("doClassify")).toMatch(/verdict\s*\+=\s*scopeCaveat\(sel\b/);
   });
 
-  it("scopeCaveat is silent when nothing is selected", () => {
-    // It must not decorate ordinary whole-column verdicts, or the caveat becomes noise and stops
-    // being read — which is how the real ones get ignored too.
-    expect(bodyOf("scopeCaveat")).toMatch(/if\s*\(!sel\s*\|\|\s*!sel\.length\)\s*return\s*''/);
-  });
-
-  it("scopeCaveat is silent when the whole column is selected", () => {
-    // Selecting everything narrows nothing. A caveat there would be false.
-    expect(bodyOf("scopeCaveat")).toMatch(/n\s*>=\s*cur\.length/);
-  });
-
-  it("only claims the bound direction when the selection is a subset of the current column", () => {
-    // V(J) ⊇ V(I) for J ⊆ I, so dropping equations can only ADD solutions — the sub-system count is
-    // an upper bound on the full one. That reasoning needs the selection to BE a subset; a
-    // selection reaching into earlier columns is a different system and gets no bound claim.
-    const body = bodyOf("scopeCaveat");
-    expect(body).toMatch(/subsetOfCurrent/);
-    const guard = body.indexOf("if (!subsetOfCurrent)");
-    const bound = body.indexOf("UPPER BOUND");
-    expect(guard).toBeGreaterThan(-1);
-    expect(bound).toBeGreaterThan(guard);          // the bound claim sits after the non-subset bail
-  });
+  // scopeCaveat's OWN behaviour — silent with no selection or the whole column, UPPER BOUND only on a
+  // strict subset, "a system of their own" for a selection reaching outside the current column — was
+  // lifted to module scope (T1) and is now pinned BEHAVIOURALLY in algebra-verdict-rigor.test.ts,
+  // which RUNS the function against those inputs. That supersedes the source-pattern scans that used
+  // to sit here: they scanned scopeCaveat's internals by regex and broke on precisely the
+  // scopeCaveat(sel) → scopeCaveat(sel, curIds) refactor the lift enabled — the exact brittleness T1
+  // exists to remove. Only the wiring checks (this one and scopeNote below) remain source-level.
 
   it("the mutating scoped ops carry the note into their toasts", () => {
     // Saturate asserts the count is now EXACT; triangular asserts zero- vs positive-dimensional.
