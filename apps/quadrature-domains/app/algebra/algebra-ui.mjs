@@ -488,6 +488,56 @@ const QD = _QD;
     if (scope.length) parts.push(scope.length + ' equation' + (scope.length === 1 ? '' : 's') + ' outside the selection' + name(scope) + ' — the new column is built from the selected equations alone');
     return ' · ⚠ dropped ' + parts.join('; and ');
   }
+  // ── T1 (slice 2): the SLICE/SCOPE caveat helpers, also lifted from installAlgebra to IIFE scope so the
+  // "this count describes less than the whole system" wording is behaviourally testable. latexPlain comes
+  // along because it is a PURE var-name formatter (imported plainVar + string replace) with no closure
+  // state, so lifting it lets sliceLabels/sliceCaveat move with ZERO call-site churn. scopeCaveat takes the
+  // current-column ids as a parameter (its only closure dependency was reading them off the store).
+  // specializationLedger stays in the closure for now — it aggregates store gauge/branch/constraint state.
+  function latexPlain(name) {
+    const p = plainVar(name);                        // A/C/z/a/w0 conjugate-model families (shared scheme)
+    if (p != null) return p;
+    // non-scheme: the constraint ζ (Z / Zb / Z1 / …) + a first-underscore → comma for the rest
+    return name.replace(/^Zb/, 'ζ̄').replace(/^Z/, 'ζ').replace('_', ',');
+  }
+  // The active-slice human labels of a classify result: assumeReal (z̄≡z) / assumeImaginary (z̄≡−z)
+  // restrict the system to a SLICE, and the analyzed branch's slice vars ride on r.realVars / r.imagVars.
+  function sliceLabels(r) {
+    const out = [];
+    if (r && r.realVars && r.realVars.length) out.push('real slice (z̄≡z: ' + r.realVars.map(latexPlain).join(', ') + ')');
+    if (r && r.imagVars && r.imagVars.length) out.push('imaginary slice (z̄≡−z: ' + r.imagVars.map(latexPlain).join(', ') + ')');
+    return out;
+  }
+  // The inline caveat appended to a slice verdict so a count never reads as the general QD count: a count
+  // on a slice is a LOWER BOUND on the general one, and an empty/inconsistent slice rules out only on-slice
+  // solutions. '' ⇒ the general system (no slice).
+  function sliceCaveat(r) {
+    const s = sliceLabels(r);
+    if (!s.length) return '';
+    return '  [on the ' + s.join(' + ') + ' only — a specialization that can omit off-slice quadrature'
+      + ' domains: a count here is a LOWER BOUND on the general one, and an empty/inconsistent verdict'
+      + ' rules out only on-slice solutions.]';
+  }
+  // The OTHER way a verdict can silently describe less than the whole system: the op ran on the canvas
+  // selection. curIds = the current column's node ids (injected — the sole store read). Dropping generators
+  // can only ENLARGE the variety (V(J) ⊇ V(I) for J ⊆ I), so a count over a strict subset of the current
+  // column is an UPPER BOUND; a selection reaching outside the current column is a different system and
+  // gets the scope statement with no bound claim.
+  function scopeCaveat(sel, curIds) {
+    if (!sel || !sel.length) return '';
+    const cur = curIds || [];
+    const curSet = new Set(cur);
+    const subsetOfCurrent = sel.every((id) => curSet.has(id));
+    const n = sel.length;
+    const head = '  [computed on the ' + n + ' selected equation' + (n === 1 ? '' : 's') + ' only';
+    if (!subsetOfCurrent) {
+      return head + ', which are not all part of the current system — this describes the selected'
+        + ' equations as a system of their own, and says nothing directly about the current one.]';
+    }
+    if (n >= cur.length) return '';   // the whole column happens to be selected: same scope, no caveat
+    return head + ', not the whole current system (' + cur.length + ') — dropping equations can only'
+      + ' add solutions, so this count is an UPPER BOUND on the full system’s.]';
+  }
   // Live facts per variable in the CURRENT column, feeding variableRemovals. Ordered by how many
   // equations hold the variable, descending — the ones costing the most are the ones worth
   // removing, and that ranking is the answer to "which should I attack?" a flat picker cannot give.
@@ -3107,61 +3157,16 @@ const QD = _QD;
     }
 
     // --- Honest labeling of SPECIALIZED verdicts (CLAUDE.md guardrail) -------------------------
-    // assumeReal (z̄≡z) and assumeImaginary (z̄≡−z) restrict the system to a SLICE and can silently
-    // drop quadrature domains lying off it; the ★ Auto-reduce path auto-applies assumeReal, so its
-    // count is a slice count too. A classify result carries the analyzed branch's slice vars
-    // (r.realVars / r.imagVars, threaded by the store). Build the human labels of the active slices.
-    function sliceLabels(r) {
-      const out = [];
-      if (r && r.realVars && r.realVars.length) out.push('real slice (z̄≡z: ' + r.realVars.map(latexPlain).join(', ') + ')');
-      if (r && r.imagVars && r.imagVars.length) out.push('imaginary slice (z̄≡−z: ' + r.imagVars.map(latexPlain).join(', ') + ')');
-      return out;
-    }
-    // The inline caveat appended to a verdict string when it was computed on a slice — so a count
-    // never reads as the general quadrature-domain count. Mirrors the factor-branch annotation. '' ⇒
-    // no slice (the general system). Covers both the count ("lower bound") and existence ("rules out
-    // only on-slice") readings, since an inconsistent/empty slice verdict does NOT rule out the rest.
-    function sliceCaveat(r) {
-      const s = sliceLabels(r);
-      if (!s.length) return '';
-      return '  [on the ' + s.join(' + ') + ' only — a specialization that can omit off-slice quadrature'
-        + ' domains: a count here is a LOWER BOUND on the general one, and an empty/inconsistent verdict'
-        + ' rules out only on-slice solutions.]';
-    }
-    // Companion to sliceCaveat for the OTHER way a verdict can silently describe less than the whole
-    // system: the op ran on the canvas selection. Every neighbouring caveat here (slice, factor
-    // branch, incomplete decomposition) was already stated; this one was not, so a count over two of
-    // sixteen equations rendered with a full rigor badge and no way to tell.
-    //
-    // The bound direction is only claimed when it holds. Dropping generators can only ENLARGE the
-    // variety (V(J) ⊇ V(I) for J ⊆ I), so a count over a strict subset of the current column is an
-    // upper bound on the full system's. A selection reaching into earlier columns is not a subset of
-    // anything current — it is a different system — and gets the scope statement with no bound.
+    // sliceLabels / sliceCaveat / scopeCaveat lifted to module scope (T1) — see QD_UI.* + the behavioural
+    // guards in algebra-verdict-rigor.test.ts. _currentColumnNodes stays here (it reads the store).
     // Every node of the current column. store.currentColumnIds() is equality-ONLY (it feeds the
     // solvers), which is the right default there and the wrong one for anything counting or
     // describing "the column" to a user.
     function _currentColumnNodes() {
       return (store.orderedColumn ? store.orderedColumn(store.maxColumn()) : []).filter(Boolean);
     }
-    function scopeCaveat(sel) {
-      if (!sel || !sel.length) return '';
-      // orderedColumn, NOT currentColumnIds: the latter filters to equalities, so selecting an
-      // inequality node alongside an equality made `subsetOfCurrent` false and stamped the verdict
-      // "not all part of the current system" — factually wrong, and it withdrew an upper-bound
-      // claim that actually held. variableCensus already used orderedColumn for this reason.
-      const cur = _currentColumnNodes().map((n) => n.id);
-      const curSet = new Set(cur);
-      const subsetOfCurrent = sel.every((id) => curSet.has(id));
-      const n = sel.length;
-      const head = '  [computed on the ' + n + ' selected equation' + (n === 1 ? '' : 's') + ' only';
-      if (!subsetOfCurrent) {
-        return head + ', which are not all part of the current system — this describes the selected'
-          + ' equations as a system of their own, and says nothing directly about the current one.]';
-      }
-      if (n >= cur.length) return '';   // the whole column happens to be selected: same scope, no caveat
-      return head + ', not the whole current system (' + cur.length + ') — dropping equations can only'
-        + ' add solutions, so this count is an UPPER BOUND on the full system’s.]';
-    }
+    // scopeCaveat lifted to module scope (T1) — curIds injected (was its only store read via
+    // _currentColumnNodes); the orderedColumn-vs-currentColumnIds subtlety now lives at the call site.
     // scopeNote / droppedNote lifted to module scope (T1) — see QD_UI.scopeNote / QD_UI.droppedNote.
     // The pre-click half of the same problem: the selection lives on the canvas, ~900px from these
     // buttons, so nothing warned BEFORE the op ran. Shown only while a selection is live.
@@ -3520,7 +3525,10 @@ const QD = _QD;
         verdict += sliceCaveat(r);
         // …and so does running on a selection, which was the one narrowing this verdict never
         // disclosed. Appended after sliceCaveat so the two read in the order they were applied.
-        verdict += scopeCaveat(sel);
+        // orderedColumn (via _currentColumnNodes), NOT store.currentColumnIds: the latter filters to
+        // equalities, so selecting an inequality alongside an equality would falsely fail the subset test
+        // and withdraw an upper-bound claim that holds. variableCensus uses orderedColumn for the same reason.
+        verdict += scopeCaveat(sel, _currentColumnNodes().map((n) => n.id));
         setStatus(verdict);
         if (canvas) showResult({ text: verdict, assumptions: specializationLedger(r), rigor: classifyRigor(r) });
         if (!sel) cacheActiveVerdict(r);   // A6: stamp the active branch's chip (whole last column analyzed)
@@ -4087,12 +4095,7 @@ const QD = _QD;
     }
 
     // crude plain-text rendering of a variable name for <option>/toasts
-    function latexPlain(name) {
-      const p = plainVar(name);                        // A/C/z/a/w0 conjugate-model families (shared scheme)
-      if (p != null) return p;
-      // non-scheme: the constraint ζ (Z / Zb / Z1 / …) + a first-underscore → comma for the rest
-      return name.replace(/^Zb/, 'ζ̄').replace(/^Z/, 'ζ').replace('_', ',');
-    }
+    // latexPlain lifted to module scope (T1) — pure (imported plainVar + string replace); see QD_UI.latexPlain.
 
     // ---- export --------------------------------------------------------------
     // ── Export identity (finding 5.8) ───────────────────────────────────────────────────────
@@ -4911,6 +4914,10 @@ const QD = _QD;
   QD_UI.posDimDesc = posDimDesc;                     // T1: honest one-line size of a positive-dimensional verdict (pure)
   QD_UI.scopeNote = scopeNote;                       // T1: scoped-mutating-op toast disclosure (pure)
   QD_UI.droppedNote = droppedNote;                   // T1: basis-replacement dropped-node toast wording (pure)
+  QD_UI.latexPlain = latexPlain;                     // T1: conjugate-model var-name → plain-text formatter (pure)
+  QD_UI.sliceLabels = sliceLabels;                   // T1: active-slice human labels of a classify result (pure)
+  QD_UI.sliceCaveat = sliceCaveat;                   // T1: LOWER-BOUND slice caveat appended to a verdict (pure)
+  QD_UI.scopeCaveat = scopeCaveat;                   // T1: UPPER-BOUND / different-system selection caveat (pure; curIds injected)
   QD_UI.suggestAutoOpen = suggestAutoOpen;           // …and its expand/collapse decision (pure)
   QD_UI.SUGGEST_AUTO_OPEN_MAX = AUTO_OPEN_MAX;
 })();

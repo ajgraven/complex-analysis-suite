@@ -13,6 +13,11 @@ let classifyRigor: (r: unknown) => string;
 let posDimDesc: (r: unknown) => string;
 let scopeNote: (sel: unknown) => string;
 let droppedNote: (skipped: unknown) => string;
+// slice 2 — the slice/scope caveat helpers + their pure formatter
+let latexPlain: (name: string) => string;
+let sliceLabels: (r: unknown) => string[];
+let sliceCaveat: (r: unknown) => string;
+let scopeCaveat: (sel: unknown, curIds: unknown) => string;
 
 beforeAll(async () => {
   await import("../app/solver.mjs");
@@ -22,6 +27,10 @@ beforeAll(async () => {
   posDimDesc = reg.QD_UI.posDimDesc;
   scopeNote = reg.QD_UI.scopeNote;
   droppedNote = reg.QD_UI.droppedNote;
+  latexPlain = reg.QD_UI.latexPlain;
+  sliceLabels = reg.QD_UI.sliceLabels;
+  sliceCaveat = reg.QD_UI.sliceCaveat;
+  scopeCaveat = reg.QD_UI.scopeCaveat;
 });
 
 describe("QD_UI.classifyRigor — the =/≤/unknown decider for a classify/count result", () => {
@@ -116,5 +125,81 @@ describe("QD_UI.droppedNote — basis-replacement dropped-node toast wording", (
   it("is empty when nothing was dropped", () => {
     expect(droppedNote([])).toBe("");
     expect(droppedNote(null)).toBe("");
+  });
+});
+
+// ── T1 slice 2 — the slice/scope caveat helpers. These are the strings that keep a count computed on a
+// specialization (a reality/imaginary slice, or a canvas selection) from reading as the general
+// quadrature-domain count. The lower-bound vs upper-bound vs different-system distinction is the whole
+// point, so it is exactly what these assertions pin.
+
+describe("QD_UI.latexPlain — the pure conjugate-model var-name formatter", () => {
+  it("routes scheme vars through plainVar (bar → combining macron)", () => {
+    expect(latexPlain("z1")).toBe("z1");
+    expect(latexPlain("zb1")).toBe("z̄1");   // the bar partner renders with the macron, not a stray 'b'
+  });
+  it("falls back to the ζ-constraint rendering for non-scheme names", () => {
+    expect(latexPlain("Z1")).toBe("ζ1");
+  });
+});
+
+describe("QD_UI.sliceLabels — human labels of the active reality/imaginary slices", () => {
+  it("labels a real slice (z̄≡z) with its formatted vars", () => {
+    expect(sliceLabels({ realVars: ["z1", "z2"] })).toEqual(["real slice (z̄≡z: z1, z2)"]);
+  });
+  it("labels an imaginary slice (z̄≡−z), formatting the bar vars", () => {
+    expect(sliceLabels({ imagVars: ["zb1"] })).toEqual(["imaginary slice (z̄≡−z: z̄1)"]);
+  });
+  it("emits BOTH labels when both slices are active", () => {
+    expect(sliceLabels({ realVars: ["z1"], imagVars: ["z2"] })).toHaveLength(2);
+  });
+  it("is empty for the general system (no slice vars)", () => {
+    expect(sliceLabels({})).toEqual([]);
+    expect(sliceLabels(null)).toEqual([]);
+  });
+});
+
+describe("QD_UI.sliceCaveat — a slice count is a LOWER BOUND on the general one", () => {
+  it("declares the lower-bound direction and names the slice", () => {
+    const c = sliceCaveat({ realVars: ["z1"] });
+    expect(c.startsWith("  [on the real slice (z̄≡z: z1)")).toBe(true);
+    expect(c).toContain("LOWER BOUND");
+    expect(c).toContain("rules out only on-slice solutions");
+  });
+  it("is empty for the general system — no caveat, so no spurious bound label", () => {
+    expect(sliceCaveat({})).toBe("");
+    expect(sliceCaveat(null)).toBe("");
+  });
+});
+
+describe("QD_UI.scopeCaveat — a selection count's UPPER-BOUND vs different-system distinction", () => {
+  it("a strict subset of the current column is an UPPER BOUND on the full system", () => {
+    // Dropping generators enlarges the variety (V(J) ⊇ V(I) for J ⊆ I), so counting fewer equations
+    // over-counts the full system — the claim that holds, and the one the old code sometimes withdrew.
+    const c = scopeCaveat(["a"], ["a", "b", "c"]);
+    expect(c).toContain("UPPER BOUND");
+    expect(c).toContain("not the whole current system (3)");
+  });
+
+  it("a selection reaching OUTSIDE the current column is a different system, with NO bound claim", () => {
+    // 'x' is not in the current column, so the selection is not a subset — the honest statement is that
+    // it says nothing directly about the current system, and it must NOT assert an upper bound.
+    const c = scopeCaveat(["a", "x"], ["a", "b", "c"]);
+    expect(c).toContain("not all part of the current system");
+    expect(c).toContain("system of their own");
+    expect(c).not.toContain("UPPER BOUND");
+  });
+
+  it("the whole column selected ⇒ same scope ⇒ no caveat", () => {
+    expect(scopeCaveat(["a", "b", "c"], ["a", "b", "c"])).toBe("");
+  });
+
+  it("no selection ⇒ empty (whole-column scope needs no caveat)", () => {
+    expect(scopeCaveat([], ["a", "b"])).toBe("");
+    expect(scopeCaveat(null, ["a", "b"])).toBe("");
+  });
+
+  it("uses the singular 'equation' for a single selected node", () => {
+    expect(scopeCaveat(["a"], ["a", "b"])).toContain("selected equation only");
   });
 });
