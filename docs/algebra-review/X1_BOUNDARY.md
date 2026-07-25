@@ -74,6 +74,14 @@ fallback if a future need wants the *value* of a non-zero count; it is **not** r
 
 ## Slice plan (boundary first, then fold wiring, then the flip)
 
+> **✅ COMPLETE — all six X1 slices shipped (PRs #146–#151, master `b6db624`).** Fold primitive
+> `schurCohnInterval` (#146) · boundary certificate `boundaryDoublePointCountParametric` (#147) · shared RUR
+> channel (#148) · boundary wire `barredSubstFromRUR`/`boundaryCertifiedAtRoot` (#149) · fold wire
+> `schurCohnAtBox`/`foldCertifiedAtRoot` (#150) · the flip in `certifyLeaf`/`assembleVerdict` (#151). An
+> irrational-algebraic quadrature domain now earns a certified `=`. Follow-up: a real end-to-end
+> irrational-QD fixture (the flip is validated by the unit certificates + the `intervalCertified` verdict
+> characterization, not yet by a full solve-to-`=`).
+
 1. **B1 — the augmented `count===0` certificate** (this branch). A glue function that builds the
    augmented system (substitute `g_v(t)` into `phiDividedDifference`, reim-split, adjoin `minPoly`) and
    calls `realSolutionCount`; returns `{ simple, certified }` with `certified` only on a clean
