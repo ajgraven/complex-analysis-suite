@@ -1958,7 +1958,10 @@ import _QD from './solver.mjs';
       }
       return sol;
     });
-    return { ok: true, certified: true, count: iso.count, degree: rur.degree, verified: rur.verified, tName, solutions,
+    // X1: each root's isolating box in t — a PARALLEL array aligned with `solutions` (keeping the solution
+    // objects clean of non-coordinate keys), over which the certified per-solution fold encloses φ′.
+    const tBoxes = iso.roots.map((rt) => ({ lo: rt.lo, hi: rt.hi }));
+    return { ok: true, certified: true, count: iso.count, degree: rur.degree, verified: rur.verified, tName, solutions, tBoxes,
       // X1: expose the RUR itself — minPoly(t) + the coordinate maps g_v(t) — so the certified fold/boundary
       // tests can be run AT the true algebraic root (through interval-Horner / the augmented minPoly system)
       // instead of at a rationalized float. certifiedRealToJSON serializes it across the worker boundary.
@@ -1979,6 +1982,10 @@ import _QD from './solver.mjs';
       }
       return o;
     });
+    // X1: the PARALLEL isolating t-boxes, serialized [num,den] (JSON-safe), aligned with `solutions` — the
+    // per-solution certified fold reconstructs each via ratBoxFromJSON. Kept OFF the solution objects so no
+    // coordinate-iterating consumer ever sees a non-coordinate key.
+    const tBoxes = (res.tBoxes || []).map((b) => ({ lo: [String(b.lo.n), String(b.lo.d)], hi: [String(b.hi.n), String(b.hi.d)] }));
     // X1: carry the RUR across the worker boundary as term-lists (JSON-safe) so the main-thread univalence
     // filter can rebuild minPoly + the coordinate maps g_v(t) and run the certified fold/boundary tests at
     // the true algebraic root. rurFromJSON reverses this; absent on the numeric-solve fallback (no RUR).
@@ -1989,7 +1996,7 @@ import _QD from './solver.mjs';
       rur = { minPoly: res.rur.minPoly.termList(), coords, tName: res.rur.tName };
     }
     return { ok: true, certified: true, count: res.count, degree: res.degree, verified: res.verified,
-      allExact: solutions.every((s) => Object.keys(s).every((v) => s[v].exact)), solutions, rur };
+      allExact: solutions.every((s) => Object.keys(s).every((v) => s[v].exact)), solutions, tBoxes, rur };
   }
 
   // X1: rebuild the RUR ({ minPoly, coords } as MPolys in tName) from the term-list form certifiedRealToJSON
@@ -1999,6 +2006,13 @@ import _QD from './solver.mjs';
     const coords = {};
     for (const v of Object.keys(j.coords)) coords[v] = MPoly.fromTermList(j.coords[v]);
     return { minPoly: MPoly.fromTermList(j.minPoly), coords, tName: j.tName };
+  }
+
+  // X1: rebuild a rational isolating box { lo, hi } from its [num,den] JSON form (a solution's serialized
+  // __tbox) — what the per-solution certified fold encloses φ′ over. null if absent (numeric-solve fallback).
+  function ratBoxFromJSON(jb) {
+    if (!jb || !jb.lo || !jb.hi) return null;
+    return { lo: new Rational(BigInt(jb.lo[0]), BigInt(jb.lo[1])), hi: new Rational(BigInt(jb.hi[0]), BigInt(jb.hi[1])) };
   }
 
   // ===========================================================================
@@ -5977,7 +5991,7 @@ import _QD from './solver.mjs';
     rat, gauss, gaussInt, mpolyVar, mpolyConst, mpolyInt,
     polyFromTermList: (list) => MPoly.fromTermList(list),
     monoKey, monoCmp,
-    mpolyDet, mpolyDetLaplace, resultant, discriminant, reducedDiscriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, comprehensiveGroebnerSystem, verifySOS, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep, solveRealCertified, certifiedRealToJSON, rurFromJSON,
+    mpolyDet, mpolyDetLaplace, resultant, discriminant, reducedDiscriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, comprehensiveGroebnerSystem, verifySOS, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep, solveRealCertified, certifiedRealToJSON, rurFromJSON, ratBoxFromJSON,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     inIdeal, eliminationIdeal, idealIntersect, idealQuotient, minimalPrimes, triangularDecomposition, curveGenus,   // ideal ops: membership, projection, ∩, colon, irreducible components, regular chains, plane-curve genus
 

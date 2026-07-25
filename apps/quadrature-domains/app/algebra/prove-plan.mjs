@@ -241,9 +241,9 @@ export function crossCheckPhis(phis, hData, deps, oracle) {
 // collect the GENUINE φ's (schlicht on 𝔻). This is the reusable "analyze one system → its
 // genuine-QD pool" unit — Phase B calls it per branch leaf and pools the results. Returns
 // { genuinePhis, rows, folded, selfInt, unrec, poleOut, allExactFilter, allExactVerified }.
-export function certifyLeaf(real, hData, deps) {
+export function certifyLeaf(real, hData, deps, atRoot) {
   const QD = deps && deps.QD, QE = deps && deps.QE;
-  let folded = 0, selfInt = 0, unrec = 0, poleOut = 0, allExactFilter = true, allExactVerified = true;
+  let folded = 0, selfInt = 0, unrec = 0, poleOut = 0, allExactFilter = true, allExactVerified = true, intervalCertified = false;
   const rows = []; const genuinePhis = [];
   real.forEach((sol, idx) => {
     const phi = reconstructPhi(sol, hData, deps);
@@ -261,31 +261,50 @@ export function certifyLeaf(real, hData, deps) {
     // generated equation exactly; if so run the fold/boundary tests at that EXACT-verified sub.
     let exactSub = null, exactPoint = false;
     try { const ver = QE && typeof QE.verifySolutionExact === 'function' ? QE.verifySolutionExact(phi, hData, { maxPoleOrder: deps.caps.maxPoleOrder }) : null; if (ver && ver.exact && ver.barSub) { exactSub = ver.barSub; exactPoint = true; } } catch (e) { /* fall back to ratApprox */ }
-    // Local fold test: EXACT Schur–Cohn when non-degenerate/resolved; numeric fallback else.
+    // X1: for an IRRATIONAL solution, try the CERTIFIED fold at the true algebraic root — the interval
+    // Schur–Cohn over φ′ enclosed at this root's isolating t-box. It upgrades the rationalized test only when
+    // it certifies; gated to irrational solutions so an all-rational prove pays nothing.
+    let foldAtRoot = null;
+    const boxJSON = atRoot && atRoot.boxes ? atRoot.boxes[idx] : null;   // this solution's isolating t-box (aligned with `real`)
+    if (!exactPoint && atRoot && atRoot.rur && boxJSON && QD && QD.Sym && typeof QD.Sym.ratBoxFromJSON === 'function') {
+      try { const box = QD.Sym.ratBoxFromJSON(boxJSON); const fc = foldCertifiedAtRoot(atRoot.rur, box, hData, deps); if (fc && fc.certified) foldAtRoot = fc; } catch (e) { /* fall back */ }
+    }
+    // Local fold test: certified-at-root interval Schur–Cohn (irrational) → EXACT Schur–Cohn at the rational
+    // sub → numeric fallback. A clean interval certificate is non-degenerate with no on-circle cusp (cusps 0).
     let fold = false, exact = false, cusps = 0;
-    const scf = schurCohnFold(sol, hData, deps, exactSub);
-    if (scf && (!scf.degenerate || scf.resolved)) { fold = scf.inside > 0; cusps = scf.onCircle || 0; exact = true; }
-    else { try { const crit = (typeof QD.findCriticalPoints === 'function') ? QD.findCriticalPoints(phi, {}) : null; fold = !!(crit && crit.points && crit.points.some((p) => p.inDomain)); } catch (e) { /* treat as no fold */ } }
+    if (foldAtRoot) { fold = foldAtRoot.inside > 0; exact = true; }
+    else {
+      const scf = schurCohnFold(sol, hData, deps, exactSub);
+      if (scf && (!scf.degenerate || scf.resolved)) { fold = scf.inside > 0; cusps = scf.onCircle || 0; exact = true; }
+      else { try { const crit = (typeof QD.findCriticalPoints === 'function') ? QD.findCriticalPoints(phi, {}) : null; fold = !!(crit && crit.points && crit.points.some((p) => p.inDomain)); } catch (e) { /* treat as no fold */ } }
+    }
     if (!exact) allExactFilter = false;   // numeric fold fallback ⇒ not fully certified (D-2)
     const tag = exact ? 'Schur–Cohn' : 'numeric';
-    // Boundary test: EXACT circle double-point count when φ′≠0 strictly inside 𝔻; else numeric.
-    let simple = true, simpleExact = false;
-    if (exact && !fold) { const bs = boundarySimpleExact(sol, hData, deps, cusps, exactSub); if (bs) { simple = bs.simple; simpleExact = true; } }
+    // Boundary test: certified-at-root BATCH count===0 (irrational; excludes on-circle cusps AND
+    // self-intersections) → EXACT circle double-point count at the rational sub → numeric.
+    let simple = true, simpleExact = false, boundaryAtRoot = false;
+    if (foldAtRoot && !fold && atRoot.boundaryCertified()) { simple = true; simpleExact = true; boundaryAtRoot = true; }
+    else if (exact && !fold) { const bs = boundarySimpleExact(sol, hData, deps, cusps, exactSub); if (bs) { simple = bs.simple; simpleExact = true; } }
     if (!simpleExact) { try { simple = QD.isBoundaryUnivalent(phi, 360); } catch (e) { simple = true; } }
     if (exact && !fold && !simpleExact) allExactFilter = false;   // numeric boundary fallback ⇒ not fully certified (D-2)
-    const bTag = simpleExact ? 'real-count' : 'numeric';
+    const bTag = boundaryAtRoot ? 'interval-count' : (simpleExact ? 'real-count' : 'numeric');
     if (fold) { folded++; rows.push('#' + (idx + 1) + ': φ′ = 0 inside 𝔻 (fold, ' + tag + ') — not univalent'); }
     else if (!simple) { selfInt++; rows.push('#' + (idx + 1) + ': boundary φ(∂𝔻) self-intersects (' + bTag + ') — not univalent'); }
     else {
       genuinePhis.push(phi);
-      if (!exactPoint) allExactVerified = false;   // PF-1: an irrational genuine solution ⇒ univalence at the ratApprox point
+      // Verified at the TRUE root iff rational-exact, OR both the fold and the boundary were certified at the
+      // algebraic root (interval Schur–Cohn ∧ augmented boundary count). Otherwise an irrational solution ran
+      // at the rationalized ≈ point and the verdict must stay an estimate.
+      const atRootCertified = !!(foldAtRoot && boundaryAtRoot);
+      if (!exactPoint && !atRootCertified) allExactVerified = false;
+      if (!exactPoint && atRootCertified) intervalCertified = true;
       const cuspNote = (cusps > 0) ? ' — boundary cusp ×' + cusps : '';
-      const ptNote = exactPoint ? ' [exact ℚ(i) root]' : ' [rationalized ≈]';
+      const ptNote = exactPoint ? ' [exact ℚ(i) root]' : (atRootCertified ? ' [true algebraic root — interval Schur–Cohn + boundary count]' : ' [rationalized ≈]');
       rows.push('#' + (idx + 1) + ': univalent ✓ — genuine quadrature domain' + cuspNote +
         (exact && simpleExact ? ' (Schur–Cohn + real-count certified' + ptNote + ')' : (exact ? ' (φ′≠0 in 𝔻 certified' + ptNote + ')' : '')));
     }
   });
-  return { genuinePhis, rows, folded, selfInt, unrec, poleOut, allExactFilter, allExactVerified };
+  return { genuinePhis, rows, folded, selfInt, unrec, poleOut, allExactFilter, allExactVerified, intervalCertified };
 }
 
 // GAUGE QUOTIENT: genuine solutions related by a disk rotation (QD.sameDomain) are the SAME
@@ -313,7 +332,7 @@ function reconcile(cl, real, complete, deps) {
 // { verdict, rigor, bad, count, cc, rec }. `sliceCaveat` is injected (uses the UI's latexPlain).
 export function assembleVerdict(a) {
   const { distinct, gaugeMerged, leaf, cl, real, r, deps, hData, sliceCaveat, oracle } = a;
-  const { folded, selfInt, unrec, poleOut, allExactFilter, allExactVerified } = leaf;
+  const { folded, selfInt, unrec, poleOut, allExactFilter, allExactVerified, intervalCertified } = leaf;
   const D = distinct.length;
   const bits = [];
   if (gaugeMerged > 0) bits.push(gaugeMerged + ' gauge/rotation ' + (gaugeMerged === 1 ? 'copy' : 'copies') + ' merged');
@@ -355,7 +374,9 @@ export function assembleVerdict(a) {
   if (D >= 1 && r.certified && allExactFilter && !undercount && !rec.disagree && ccOk && !allExactVerified)
     verdict += ' · ⚠ univalence certified at RATIONALIZED coordinates — a genuine solution is not exactly rational, so the fold / boundary test ran at an approximation of the true root (the real-solution COUNT is still certified)';
   else if (D >= 1 && certRigor === 'exact')
-    verdict += ' · exact ℚ(i) root — univalence certified at the true algebraic root';
+    verdict += intervalCertified
+      ? ' · certified at the true algebraic root (interval Schur–Cohn fold + augmented boundary count over ℚ(i)) — the X1 refinement, so an irrational-algebraic quadrature domain earns ='
+      : ' · exact ℚ(i) root — univalence certified at the true algebraic root';
   if (D >= 1) verdict += ' · class: classical bounded quadrature domains, up to the rotation gauge'
     + (deps.w0Fixed ? ' (among domains whose interior contains the fixed w₀)' : '');
   verdict += sliceCaveat(cl);
@@ -414,7 +435,10 @@ export async function analyzeLeaf(ctx) {
   else r = await ctx.solveNumeric();
   if (r && r.aborted) return { kind: 'aborted', cl };
   if (!r || !r.ok) return { kind: 'error', reason: (r && r.reason) || 'solve failed', cl };
-  const real = (r.solutions || []).filter((s) => Object.keys(s).every((k) => Math.abs(s[k].im) < 1e-4));
+  // X1: keep each real solution PAIRED with its isolating t-box (r.tBoxes is aligned with r.solutions) so the
+  // per-solution certified fold can enclose φ′ at the right root once the complex solutions are filtered out.
+  const _realPairs = (r.solutions || []).map((s, i) => ({ s, box: (r.tBoxes || [])[i] })).filter((p) => Object.keys(p.s).every((k) => Math.abs(p.s[k].im) < 1e-4));
+  const real = _realPairs.map((p) => p.s);
   if (!real.length) {
     const v = ((cl.realCount != null && cl.realCount > 0)
       ? '⚠ PARTIAL: ' + cl.realCount + ' certified real solution' + (cl.realCount === 1 ? '' : 's') + ', but the numeric solver separated none (clustered / non-radical) — use the CAS bridge for coordinates.'
@@ -422,7 +446,20 @@ export async function analyzeLeaf(ctx) {
     return { kind: 'no-real', verdict: v, rigor: (cl.realCount != null && cl.realCount > 0) ? 'partial' : 'exact', bad: true, cl, real };
   }
   stage('filter');
-  const leaf = certifyLeaf(real, hData, deps);
+  // X1: the certified-at-root context — the reconstructed RUR + a LAZY batch boundary certificate (a memoized
+  // thunk, so it runs only if an irrational genuine solution actually reaches for it; all-rational proves and
+  // the numeric-solve fallback pay nothing). certifyLeaf uses it to upgrade the fold / boundary tests from a
+  // rationalized point to the true algebraic root.
+  let atRoot = null;
+  if (r.certified && r.rur) {
+    const S = deps && deps.QD && deps.QD.Sym;
+    const rur = S && typeof S.rurFromJSON === 'function' ? S.rurFromJSON(r.rur) : null;
+    if (rur) {
+      let bcMemo;
+      atRoot = { rur, boxes: _realPairs.map((p) => p.box), boundaryCertified: () => { if (bcMemo === undefined) bcMemo = !!(boundaryCertifiedAtRoot(r, hData, deps).certified); return bcMemo; } };
+    }
+  }
+  const leaf = certifyLeaf(real, hData, deps, atRoot);
   return { kind: 'zero-dim', cl, real, r, leaf };
 }
 

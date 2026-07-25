@@ -134,6 +134,21 @@ describe("prove-plan (2) assembleVerdict characterization (locks the verdict str
     expect(asm.count).toBe(2);
   });
 
+  it("X1: an IRRATIONAL-algebraic QD certified at the true root (intervalCertified) earns rigor exact + the honest interval note", () => {
+    // This is the ≈→= flip: leaf.allExactVerified is satisfied by the interval Schur–Cohn fold ∧ augmented
+    // boundary count at the true algebraic root, and leaf.intervalCertified marks that it was NOT a rational
+    // root — so the verdict must say so honestly, never claim "exact ℚ(i) root", and never keep the estimate caveat.
+    const asm = PROVE.assembleVerdict({
+      distinct: [{ k: 1 }], gaugeMerged: 0, leaf: leafClean({ intervalCertified: true }),
+      cl: { realCount: 1 }, real: [{}], r: { certified: true, complete: true },
+      deps: fakeDeps(), hData: diskH, sliceCaveat: noSlice, oracle: null,
+    });
+    expect(asm.rigor).toBe("exact");
+    expect(asm.verdict).toContain("certified at the true algebraic root (interval Schur–Cohn fold + augmented boundary count over ℚ(i))");
+    expect(asm.verdict).not.toContain("exact ℚ(i) root");            // NOT the rational-root wording
+    expect(asm.verdict).not.toContain("RATIONALIZED coordinates");   // NOT the estimate caveat
+  });
+
   it("a numeric fold fallback (allExactFilter=false) downgrades the rigor to estimate", () => {
     const asm = PROVE.assembleVerdict({
       distinct: [{ k: 1 }], gaugeMerged: 0, leaf: leafClean({ allExactFilter: false, allExactVerified: false }),
