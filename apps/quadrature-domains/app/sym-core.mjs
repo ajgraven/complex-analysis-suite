@@ -4833,6 +4833,22 @@ import _QD from './solver.mjs';
     return { inside: inertia.neg, outside: inertia.pos, onCircle: 0, degenerate: false, degree: n, certified: true };
   }
 
+  // X1 — the CERTIFIED fold test at an isolating box of the true algebraic root. `coeffPolys[k]` is the
+  // coefficient of ζ^k of the univalence polynomial (num φ′) as a polynomial in the RUR primitive `tName`,
+  // and t ∈ [lo, hi] (Rational) isolates the real root. Enclose each coefficient at the box by interval-Horner
+  // (re / im split, exactly as solveRealCertified encloses the coordinate maps) and run the interval
+  // Schur–Cohn. Returns what schurCohnInterval returns — { certified, inside, … } — certified ONLY when every
+  // pivot interval excludes 0; a straddle ⇒ { certified:false } and the caller keeps the rationalized fold
+  // test (honest ≈). A false `inside` here would be a false `=`, so certifying requires the enclosure, at this
+  // box width, to determine every sign; otherwise it refuses.
+  function schurCohnAtBox(coeffPolys, tName, lo, hi) {
+    const icoeffs = (coeffPolys || []).map((p) => {
+      const arr = _uniToArr(p, tName);                           // Gaussian coeffs of tⱼ (ascending in t)
+      return { re: _intervalPolyEval(arr.map((g) => g.re), lo, hi), im: _intervalPolyEval(arr.map((g) => g.im), lo, hi) };
+    });
+    return schurCohnInterval(icoeffs);
+  }
+
   // ===========================================================================
   // G1 — COMPREHENSIVE GRÖBNER SYSTEM (Suzuki–Sato), in-engine.
   //
@@ -5975,7 +5991,7 @@ import _QD from './solver.mjs';
     multivariateContent, multivariatePrimitivePart, multivariateSquarefreeInX, multivariateSquarefreePart, nvarMainVariable, nvarEvaluationPoint, // #19 n-variate P1: content/primitive/squarefree(+part) in a main var + main-var choice + univariate evaluation-point search
     mvHenselLift, // #19 n-variate P2: multivariate Hensel lift (univariate base → lift each variable → recombine), monic-in-main-var
     factorMultivariate, // #19 n-variate P3: assembled ℚ(i) multivariate factorizer (content-strip + squarefree + main-var choice + mvHenselLift)
-    solveByEigenvalues, realSolutionCount, parametricRealCount1D, discriminantVariety, reconcileRealCount, schurCohn, schurCohnInterval, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
+    solveByEigenvalues, realSolutionCount, parametricRealCount1D, discriminantVariety, reconcileRealCount, schurCohn, schurCohnInterval, schurCohnAtBox, unitCircleRootCount, resolvent, uniCoeffs: _uniToArr, pseudoRemainder, triangularize, runJob,
     seriesZero, seriesConst, seriesAdd, seriesScale, seriesMul, seriesPow,
     seriesCompose, seriesInverse, seriesReversion, seriesScaleByCoeff, seriesRecip,
     seriesDeriv, seriesIntegral, seriesLog, seriesExp,   // series calculus (Taylor)
