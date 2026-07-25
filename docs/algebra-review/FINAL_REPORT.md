@@ -78,10 +78,13 @@ verdict whose rigor is legibly badged and honestly bounded:
 
 ## 6. Remaining gaps
 
-- **Mathematical (the deep rigor item — PF-1/E2/D-2):** the per-solution univalence certificate is exact
-  arithmetic on the `ratApprox`'d *midpoint*, not the exact algebraic root. To make `=` unconditional,
-  evaluate the Schur–Cohn fold + boundary tests at the exact algebraic point using the certified isolating
-  box already computed at `sym-core.mjs:1968` (interval Schur–Cohn, or substitute the RUR coordinates).
+- **Mathematical (the deep rigor item — PF-1/E2/D-2). ✅ RESOLVED by X1 (PRs #146–#151, 2026-07-24/25).**
+  *As reported at the time:* the per-solution univalence certificate was exact arithmetic on the `ratApprox`'d
+  *midpoint*, not the exact algebraic root. *Now:* the Schur–Cohn fold + boundary tests run at the true
+  algebraic point using the certified isolating box — the fold via interval Schur–Cohn (`schurCohnAtBox` over
+  φ′ enclosed at the RUR box), the boundary via an exact `count === 0` over an augmented `minPoly(t)` system —
+  exactly the approach recommended here, so an irrational-algebraic QD now earns a certified `=`. Design record:
+  [`X1_BOUNDARY.md`](X1_BOUNDARY.md).
 - **A-1 (generation):** `clearDenominators` records no excluded locus; S3 reconstructs the Möbius factors in
   the store. Recording them at generation would let `classify` saturate automatically + generalize to Schwarz.
 - **Engineering (all LOW, from track F):** `_CAP_KEYS` omits some worker-read caps (F1); the differential
@@ -178,11 +181,13 @@ Track-F hardening (all LOW except F5 MEDIUM), no behavior change to a correct re
   **"Copy Maple RCTD export"** button (at `doSolve`/`doGroebner`/`doClassify`/`doCertifyUnivalence`), so the
   documented external-CAS escape is one click away instead of only named in prose.
 
-**Status: the entire prioritized backlog (P0/PF-1, P1, P2, P3, P4) is complete.** The only work not done is what
-was *explicitly deferred by design*: (i) interval / number-field Schur–Cohn to keep `=` for genuinely
-**irrational** solutions (they honestly read `≈` today); (ii) A-1's literal record-at-generation for the Schwarz
-`φ′` denominator; (iii) the larger "fuller orchestrator" redesign (a first-class strategy plan + branch-case
-tree). All three are noted here and in `PLAN.md` for a future session; none blocks the shipped result.
+**Status: the entire prioritized backlog (P0/PF-1, P1, P2, P3, P4) is complete.** Of the three items this report
+deferred by design, **two have since shipped:** **(i) interval Schur–Cohn to keep `=` for genuinely
+irrational solutions — ✅ DONE (X1, PRs #146–#151)** — an irrational-algebraic QD now earns a certified `=`,
+its fold + boundary checked at the true algebraic root (`X1_BOUNDARY.md`); (ii) A-1's literal
+record-at-generation for the Schwarz `φ′` denominator **remains open**; **(iii) the "fuller orchestrator"
+redesign — ✅ DONE (ORCHESTRATOR_REDESIGN.md, phases A–E, PRs #82–#85).** Only (ii) remains, noted here and in
+`PLAN.md`; none blocked the shipped result.
 
 **Final tally:** 20 commits on `algebra-maturity-review`, **1280 → 1322 tests**, gate-green at every commit;
 a 7-track audit + 5 core slices + PF-1 + the full P1–P4 backlog. The QD Algebra module is now a legibly-rigorous,

@@ -113,11 +113,10 @@ when a term has `coeff.im[0]!=='0'` or a barred variable.
 **Acceptance:** no silent semantic-mismatch export; gate green.
 
 ### Deferred / follow-on (record; do NOT auto-start beyond budget)
-- **PF-1 / C-MED-1 / D-2 — exact-at-the-algebraic-point univalence certificate.** Evaluate the Schur–Cohn
-  fold + boundary tests at the EXACT algebraic root (carry the RUR coordinates / a certified interval),
-  not `ratApprox(numeric)`. Harder; the current path is exact-arithmetic-on-approximate-point. Until then,
-  Slice 4's per-solution badge should read `≈` when the filter used the numeric fallback (partial credit
-  from Slice 1/4). **Highest-value remaining rigor item after the slices above.**
+- **PF-1 / C-MED-1 / D-2 — exact-at-the-algebraic-point univalence certificate. ✅ DONE (X1, PRs #146–#151).**
+  The Schur–Cohn fold + boundary tests now run at the EXACT algebraic root — carrying the RUR coordinates + a
+  certified isolating interval, exactly as planned here — so an irrational-algebraic QD earns a certified `=`
+  (`X1_BOUNDARY.md`). *(Was: "exact-arithmetic-on-approximate-point… the highest-value remaining rigor item.")*
 - **B-2** interactive "Eliminate" → default to `eliminationIdeal` (Gröbner) instead of raw Sylvester
   `resultant` (or warn on extraneous factors); **B-3** surface triangular-chain initials + caveat;
   **C-MED-2** discriminantVariety separating-form certificate; **F1** cap-forwarding; **F6** differential

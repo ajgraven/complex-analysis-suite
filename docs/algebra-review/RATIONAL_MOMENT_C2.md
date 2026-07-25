@@ -106,11 +106,12 @@ c=(3−√5)/2, d=0, φ(1)=√5.
 
 **Honest-labeling note:** `two-point-symmetric`'s shape is IRRATIONAL (c=(3−√5)/2), so the rational PF-1
 snap can't certify `=` — it correctly reads **`≈` (estimate)**. Rational-shape QDs (e.g. the c=¼,d=¼ test
-family) read `=`. Upgrading irrational shapes to `=` needs an interval / number-field certifier (the same
-deferred item flagged in the maturity review) — out of scope here.
+family) read `=`. Upgrading these irrational shapes to `=` needs the interval certifier — now **BUILT (X1, PRs
+#146–#151)** and wired into the `(●)/(★)` route, but **not yet wired to these C1/C2/C3 moment/rational routes**,
+so their irrational shapes still read `≈` here.
 
-**Deferred:** general (asymmetric / off-centre) complex node data; interval/number-field `=` for irrational
-shapes.
+**Deferred:** general (asymmetric / off-centre) complex node data; wiring the X1 interval `=` certifier (built
+for the main route) into the C1/C2/C3 routes for irrational shapes.
 
 ## 7. C3 — the equilateral triangle (3-fold symmetric, degree 3)
 
@@ -154,4 +155,5 @@ real-weight nodes → **C3** (equilateral triangle, φ=Rz/(1−cz³)); everythin
 draws its reconstructed-φ thumbnail. `=` when PF-1 snaps the exact root, honest `≈` otherwise.
 
 **Deferred frontier:** general asymmetric / off-centre multi-node (needs the complex reim-split builder +
-higher-degree ansätze); interval / number-field certifier to upgrade irrational-shape `≈` to `=`.
+higher-degree ansätze); wiring the interval certifier — **built as X1 (PRs #146–#151)** for the main route —
+into these C-routes to upgrade their irrational-shape `≈` to `=`.

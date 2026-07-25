@@ -493,7 +493,8 @@ const QD = _QD;
   // along because it is a PURE var-name formatter (imported plainVar + string replace) with no closure
   // state, so lifting it lets sliceLabels/sliceCaveat move with ZERO call-site churn. scopeCaveat takes the
   // current-column ids as a parameter (its only closure dependency was reading them off the store).
-  // specializationLedger stays in the closure for now — it aggregates store gauge/branch/constraint state.
+  // specializationLedger was lifted to module scope in T1 slice 3 (its store reads — gauge/branch/constraint
+  // state — injected via _ledgerCtx()); see the lifted definition below and QD_UI.specializationLedger.
   function latexPlain(name) {
     const p = plainVar(name);                        // A/C/z/a/w0 conjugate-model families (shared scheme)
     if (p != null) return p;
