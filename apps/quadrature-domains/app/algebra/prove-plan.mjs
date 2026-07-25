@@ -139,6 +139,59 @@ export function boundarySimpleExact(sol, hData, deps, cusps, subOverride) {
   return { simple: r.count === (cusps || 0) };
 }
 
+// X1 — the barred-pole SUBSTITUTION built from the RUR coordinate maps instead of a rationalized point: for
+// each pole j, z̄_j → conj(z_j(t)) = coords['z_j__re'](t) − i·coords['z_j__im'](t), Ā_{j,k} likewise. This is
+// the SAME barred sub `poleSubst` builds, but as POLYNOMIALS in the RUR primitive t, so the fold / boundary
+// tests can be run AT the true algebraic root. `rur` = what Sym.rurFromJSON returns ({ minPoly, coords,
+// tName }). Returns null if any needed coordinate map is absent (a map parameter was eliminated) so the
+// caller falls back to the rationalized path — never a wrong φ′.
+export function barredSubstFromRUR(rur, hData, deps) {
+  const S = deps && deps.QD && deps.QD.Sym;
+  if (!S || !rur || !rur.coords) return null;
+  const coords = rur.coords, iC = S.mpolyConst(S.gaussInt(0, 1));
+  const conjOf = (reName, imName) => {
+    const re = coords[reName]; if (!re) return null;                // eliminated / not a solved unknown
+    const im = coords[imName];
+    return im ? re.sub(iC.mul(im)) : re;                            // im absent ⇒ real (assumed-real slice) ⇒ conj = re
+  };
+  const poles = (hData && hData.poles) || [];
+  const sub = {};
+  for (let j = 0; j < poles.length; j++) {
+    const zc = conjOf('z' + (j + 1) + '__re', 'z' + (j + 1) + '__im');
+    if (!zc) return null;
+    sub['zb' + (j + 1)] = zc;
+    const order = (poles[j].principal || []).length;
+    for (let k = 1; k <= order; k++) {
+      const ac = conjOf('A' + (j + 1) + '_' + k + '__re', 'A' + (j + 1) + '_' + k + '__im');
+      if (!ac) return null;
+      sub['Ab' + (j + 1) + '_' + k] = ac;
+    }
+  }
+  return sub;
+}
+
+// X1 — the CERTIFIED boundary test for a whole certified-solve result (ALL real solutions at once). Rebuild
+// the RUR from r.rur, build the barred sub from its coordinate maps, and run the augmented parametric count:
+// count === 0 ⇒ φ(∂𝔻) is simple at EVERY real algebraic root. The divided-difference system's diagonal is the
+// on-circle cusp locus (N(ζ,ζ)=φ′(ζ)), so count===0 excludes cusps AND self-intersections — sound WITHOUT a
+// separate φ′≠0 gate. Returns { ok, certified, count }: `certified` only on a clean count===0; ok:false /
+// count>0 ⇒ the caller keeps the rationalized/numeric boundary test (honest ≈). BATCH result — the interior
+// fold is still per-solution (schurCohnInterval), so a `=` still needs the fold-at-root certificate too.
+export function boundaryCertifiedAtRoot(r, hData, deps) {
+  const S = deps && deps.QD && deps.QD.Sym, QC = deps && deps.QC;
+  if (!S || !QC || typeof QC.boundaryDoublePointCountParametric !== 'function' || typeof S.rurFromJSON !== 'function')
+    return { ok: false, certified: false };
+  const rur = S.rurFromJSON(r && r.rur);
+  if (!rur) return { ok: false, certified: false };
+  const sub = barredSubstFromRUR(rur, hData, deps);
+  if (!sub) return { ok: false, certified: false };
+  let bc;
+  try { bc = QC.boundaryDoublePointCountParametric(hData, sub, rur.minPoly, rur.tName); }
+  catch (e) { return { ok: false, certified: false, reason: (e && e.message) || String(e) }; }
+  if (!bc || !bc.ok) return { ok: false, certified: false, reason: bc && bc.reason, count: bc && bc.count };
+  return { ok: true, certified: bc.count === 0, count: bc.count };
+}
+
 // Numeric cross-check (was crossCheckPhis): each reconstructed φ must satisfy the freshly
 // regenerated original system (residual ≈ 0 — reduction integrity) AND, WHEN a numeric solve is
 // available, match the numeric solver's map (oracle) up to the rotation gauge. oracle = { numPhi,
