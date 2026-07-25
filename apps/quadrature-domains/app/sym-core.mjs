@@ -1958,7 +1958,11 @@ import _QD from './solver.mjs';
       }
       return sol;
     });
-    return { ok: true, certified: true, count: iso.count, degree: rur.degree, verified: rur.verified, tName, solutions };
+    return { ok: true, certified: true, count: iso.count, degree: rur.degree, verified: rur.verified, tName, solutions,
+      // X1: expose the RUR itself — minPoly(t) + the coordinate maps g_v(t) — so the certified fold/boundary
+      // tests can be run AT the true algebraic root (through interval-Horner / the augmented minPoly system)
+      // instead of at a rationalized float. certifiedRealToJSON serializes it across the worker boundary.
+      rur: { minPoly: rur.minPoly, coords: rur.coords, tName } };
   }
 
   // Serialize a solveRealCertified result to a JSON-safe shape (for postMessage / storage): each
@@ -1975,8 +1979,26 @@ import _QD from './solver.mjs';
       }
       return o;
     });
+    // X1: carry the RUR across the worker boundary as term-lists (JSON-safe) so the main-thread univalence
+    // filter can rebuild minPoly + the coordinate maps g_v(t) and run the certified fold/boundary tests at
+    // the true algebraic root. rurFromJSON reverses this; absent on the numeric-solve fallback (no RUR).
+    let rur;
+    if (res.rur && res.rur.minPoly && res.rur.coords) {
+      const coords = {};
+      for (const v of Object.keys(res.rur.coords)) coords[v] = res.rur.coords[v].termList();
+      rur = { minPoly: res.rur.minPoly.termList(), coords, tName: res.rur.tName };
+    }
     return { ok: true, certified: true, count: res.count, degree: res.degree, verified: res.verified,
-      allExact: solutions.every((s) => Object.keys(s).every((v) => s[v].exact)), solutions };
+      allExact: solutions.every((s) => Object.keys(s).every((v) => s[v].exact)), solutions, rur };
+  }
+
+  // X1: rebuild the RUR ({ minPoly, coords } as MPolys in tName) from the term-list form certifiedRealToJSON
+  // emits — the main-thread inverse of the serialization above. null when the payload carries no RUR.
+  function rurFromJSON(j) {
+    if (!j || !j.minPoly || !j.coords || !j.tName) return null;
+    const coords = {};
+    for (const v of Object.keys(j.coords)) coords[v] = MPoly.fromTermList(j.coords[v]);
+    return { minPoly: MPoly.fromTermList(j.minPoly), coords, tName: j.tName };
   }
 
   // ===========================================================================
@@ -5939,7 +5961,7 @@ import _QD from './solver.mjs';
     rat, gauss, gaussInt, mpolyVar, mpolyConst, mpolyInt,
     polyFromTermList: (list) => MPoly.fromTermList(list),
     monoKey, monoCmp,
-    mpolyDet, mpolyDetLaplace, resultant, discriminant, reducedDiscriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, comprehensiveGroebnerSystem, verifySOS, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep, solveRealCertified, certifiedRealToJSON,
+    mpolyDet, mpolyDetLaplace, resultant, discriminant, reducedDiscriminant, mpolyExactDiv, factor, factorOverQ: _factorOverQ, qiFactor: _qiFactor, univariateGCD, squareFreePart, realRootIsolate, realRootCount, sturmHabicht, realRootCountSturm, comprehensiveGroebnerSystem, verifySOS, gcdMV, gcdList, radicalZeroDim, rationalUnivariateRep, solveRealCertified, certifiedRealToJSON, rurFromJSON,
     monomialOrder, eliminationOrder, monoLcm, mpolyDivMod, normalForm, sPoly, buchberger, buchbergerSig, reduceGroebner, saturate,
     inIdeal, eliminationIdeal, idealIntersect, idealQuotient, minimalPrimes, triangularDecomposition, curveGenus,   // ideal ops: membership, projection, ∩, colon, irreducible components, regular chains, plane-curve genus
 
