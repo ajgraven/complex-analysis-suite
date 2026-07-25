@@ -263,6 +263,38 @@ import { conjVar } from './qd-varscheme.mjs';   // the shared conjugate-model va
     return { ok: true, count: r.realCount, complexCount: r.complexCount };
   }
 
+  // X1 — CERTIFIED boundary injectivity at an IRRATIONAL algebraic root (docs/algebra-review/X1_BOUNDARY.md).
+  // Same divided-difference / circle-double-point system as boundaryDoublePointCount, but the barred pole
+  // vars are substituted with the RUR coordinate MAPS g_v(t) (so they become polynomials in the RUR
+  // primitive t, not rationalized constants), and minPoly(t)=0 is adjoined with t a solve variable. The
+  // real roots of minPoly are EXACTLY the real QD solutions, so realSolutionCount returns the TOTAL boundary
+  // double points over ALL of them; by the Hermite signature = #distinct-real-points theorem that total is
+  // ≥ 0, hence count === 0 ⇒ EVERY real solution's boundary is simple — including the true root the proof is
+  // about. Conservative (a real sibling self-intersection refuses the whole batch) but NEVER mis-certifies;
+  // positive-dimensional / over the Hermite cap ⇒ ok:false ⇒ numeric fallback. PRECONDITION, as for the exact
+  // test: φ′≠0 on 𝔻̄ (co-certified by the interval fold), so no diagonal solutions contaminate the count.
+  // poleSubstInT: { z̄_j → MPoly(t), Ā_{j,k} → MPoly(t) }; minPolyInT: the RUR minimal polynomial in `tName`.
+  function boundaryDoublePointCountParametric(hData, poleSubstInT, minPolyInT, tName, opts) {
+    const S = getSym();
+    if (!S || typeof S.realSolutionCount !== 'function') return { ok: false, count: null, reason: 'QD.Sym.realSolutionCount unavailable' };
+    if (!minPolyInT || typeof minPolyInT.isZero !== 'function' || minPolyInT.isZero() || !tName)
+      return { ok: false, count: null, reason: 'parametric boundary count needs a nonzero minPoly(t) and its variable name' };
+    let N;
+    try { N = phiDividedDifference(hData).subst(poleSubstInT || {}); }
+    catch (e) { return { ok: false, count: null, reason: (e && e.message) || String(e) }; }
+    const iC = S.mpolyConst(S.gaussInt(0, 1));
+    const cx = (x, y) => S.mpolyVar(x).add(iC.mul(S.mpolyVar(y)));        // ζ_k = x_k + i·y_k
+    const Nreim = N.subst({ [Z1]: cx('x1', 'y1'), [Z2]: cx('x2', 'y2') });
+    const circ = (x, y) => S.mpolyVar(x).pow(2).add(S.mpolyVar(y).pow(2)).sub(S.mpolyInt(1));
+    // …+ minPoly(t): pins t to the real QD solutions; t joins the solve variables (so the count sums over them).
+    const system = [Nreim.realPart(), Nreim.imagPart(), circ('x1', 'y1'), circ('x2', 'y2'), minPolyInT].filter((p) => !p.isZero());
+    let r;
+    try { r = S.realSolutionCount(system, null, ['x1', 'y1', 'x2', 'y2', tName], opts || {}); }
+    catch (e) { return { ok: false, count: null, reason: (e && e.message) || String(e) }; }
+    if (!r.ok) return { ok: false, count: null, reason: r.reason };
+    return { ok: true, count: r.realCount, complexCount: r.complexCount };
+  }
+
   // Dispatcher: form → node descriptors.
   const FORMS = {
     convex: convexIneq, star: starIneq, spiral: spiralIneq,
@@ -296,7 +328,7 @@ import { conjVar } from './qd-varscheme.mjs';   // the shared conjugate-model va
   const QDConstraints = {
     generateConstraint, FORMS: Object.keys(FORMS),
     convexIneq, starIneq, spiralIneq, geometricBorder, localUnivalence, injectivity,
-    phiDividedDifference, boundaryDoublePointCount,
+    phiDividedDifference, boundaryDoublePointCount, boundaryDoublePointCountParametric,
     phiData, phiPrimeNumerator, hermitianReNum, foldCircle, conjMPoly, conjVarName, conjFR,
     boundaryVarMap,
     VARS: { Z, ZB, Z1, ZB1, Z2, ZB2, COSL, SINL, WSAT },
