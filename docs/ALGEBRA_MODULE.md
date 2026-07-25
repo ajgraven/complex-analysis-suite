@@ -239,7 +239,14 @@ hardened the genuine-QD certificate: an exact `|z_j|<1` node-location admissibil
 has a pole in 𝔻 is no longer counted), Möbius `saturateMobius` to make the raw count exact (the unit disk
 now reads 2, not 4), honest labeling of the algebraic count as an upper bound, a color-coded `=`/`≤`/`≈`
 rigor badge on every verdict, and the one-click "✦ Prove existence/uniqueness" orchestrator. The per-solution
-univalence certificate is verified at the **exact algebraic root** when the solution is rational
-(`verifySolutionExact` — a snap-to-ℚ(i) + exact-zero residual check, so a `=` badge is then unconditional);
-a genuinely-irrational solution honestly reads `≈`. Keeping `=` for irrational solutions (interval /
-number-field Schur–Cohn) is the remaining refinement. See `docs/algebra-review/FINAL_REPORT.md`.
+univalence certificate is verified at the **true algebraic root** — for a rational solution via
+`verifySolutionExact` (a snap-to-ℚ(i) + exact-zero residual check, so a `=` badge is then unconditional) and,
+since the **X1** refinement, for a genuinely-**irrational** algebraic solution too: the fold test runs as an
+interval Schur–Cohn over φ′ enclosed at the root's isolating box (`Sym.schurCohnAtBox` / `schurCohnInterval` +
+`foldCertifiedAtRoot`), and the boundary test as an exact `count === 0` over an augmented `minPoly(t)` system
+(`boundaryDoublePointCountParametric` + `boundaryCertifiedAtRoot`), both driven from the RUR carried across the
+worker (`solveRealCertified`'s `rur` + `tBoxes`, rebuilt by `rurFromJSON` / `ratBoxFromJSON`). So an
+irrational-algebraic quadrature domain now earns a certified `=`, labeled honestly as certified at the true
+algebraic root (interval Schur–Cohn fold + augmented boundary count over ℚ(i)) — never claimed as an "exact
+ℚ(i) root". When either certificate cannot be established at the box width it refuses and the verdict honestly
+stays `≈`. See `docs/algebra-review/X1_BOUNDARY.md` (design record) and `docs/algebra-review/FINAL_REPORT.md`.

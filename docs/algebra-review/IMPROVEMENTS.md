@@ -25,16 +25,16 @@
 | **C1** | Verdict card renders a proven `≥` lower bound with a `≤` badge | Honest-label | S | High | ✔ |
 | **C2** | Derivation transcript + SymPy export use raw `QC.conjVarName` (census bug, unswept) | Honest-label | S | High | ✔ |
 | **C3** | Moment route stamps "No QD" `=` even when Schur–Cohn was unreliable | Honest-label | S | High | ✔ |
-| **C4** | msolve export of a conjugate-model column lacks the Maple real-count warning | Honest-label | S | High | ○ |
+| **C4** | msolve export of a conjugate-model column lacks the Maple real-count warning | Honest-label | S | High | ✔ #137 |
 | **C5** | ADR-0006 convention tag is decorative — no π/2πi guard on import | Honest-label | S | High | ✔ |
 | **C6** | Bifurcation labels the reim real-count `=`; classify calls the same quantity `≤` | Honest-label | S–M | Med | ✔(basis) |
 | **C7** | `specializationLedger` swallows errors — a restricting constraint can silently drop | Honest-label | S | Med | ✔ |
 | **Q1** | Multi-domain verdict: inspect/plot/export locked to 1 of N certified domains | QoL+label | M | High | ✔ |
-| **Q2** | Heavy ops (saturate/factor/triangular/resolvent/eliminate) freeze the UI, no cancel | Perf/QoL | M | High | ○ |
-| **Q3** | Destructive actions confirm via a text-only toast that can't offer Undo (Undo exists) | QoL | S–M | High | ○ |
-| **Q4** | `doDimension`'s count flashes 750 ms and never enters the results drawer | QoL | S | High | ○ |
+| **Q2** | Heavy ops (saturate/factor/triangular/resolvent/eliminate) freeze the UI, no cancel | Perf/QoL | M | High | ✔ #139–#142 |
+| **Q3** | Destructive actions confirm via a text-only toast that can't offer Undo (Undo exists) | QoL | S–M | High | ✔ #138 |
+| **Q4** | `doDimension`'s count flashes 750 ms and never enters the results drawer | QoL | S | High | ✔ #138 |
 | **Q5** | Duplicate `_fmtComplex`: one dead, the live one lost its null-guard | Dead code | S | High | ✔ |
-| **X1** | Certified univalence for irrational-algebraic domains (`≈`→`=`) via RUR + interval Schur–Cohn | Extension | M | High | ○ |
+| **X1** | Certified univalence for irrational-algebraic domains (`≈`→`=`) via RUR + interval Schur–Cohn | Extension | M | High | ✔ #146–#151 |
 | **X2** | Null-QD classifier + mother-body/balayage skeleton (honest QD-vs-not-a-QD) | Extension | S–M | High | ○ |
 | **X3** | Exact Richardson/harmonic moments + area of a solved QD (`≈`→`=`) | Extension | M | High | ○ |
 | **X4** | General-degree rational-φ prove route (honest resolution of deferred Phase C) | Extension | L | Med-High | ○ |
@@ -44,7 +44,7 @@
 | **P1** | ✦ Prove recomputes the same grevlex Gröbner basis 2–3× per leaf × branches | Perf | M | High | ○ |
 | **P2** | Canvas `render()` tears down + rebuilds every card's DOM on every mutation | Perf | M | High/Med | ○ |
 | **P3** | Buchberger/FGLM inner-loop data-structure + swell (profile-gated) | Perf | L | Med/Low | ○ |
-| **T1** | Lift the honest-labeling verdict functions out of the closure + behavioral tests | Code-qual | M | High | ✔(motiv) |
+| **T1** | Lift the honest-labeling verdict functions out of the closure + behavioral tests | Code-qual | M | High | ✔ #143–#145 |
 | **T2** | Define-substitution differential harness (guards the C2 bug class) | Testing | M | High | ○ |
 | **T3** | Behavioral test for the RCTD external-count `rigor:'unknown'` label | Testing | S | Med-High | ○ |
 | **T4** | Weighted-QD export completeness (`weight`/`hData` never populated) | Interop | M | Med | ○ |
@@ -251,12 +251,18 @@ T1 began as a Tier-4 nicety; the implementation promoted it. In #142 a one-word 
 regex. Lifting them to module scope on the proven `QD_UI` pattern makes the `=`/`≤`/`≈` decisions
 **behaviorally** testable (the paramount value, currently untested), kills the rename-brittleness, and
 unblocks safe refactoring of that file. Highest-leverage code-health item, now with direct evidence.
+**✅ SHIPPED (T1, PRs #143–#145):** all nine — `classifyRigor`, `posDimDesc`, `scopeNote`, `droppedNote`,
+`latexPlain`, `sliceLabels`, `sliceCaveat`, `scopeCaveat`, `specializationLedger` — are now module-scope on
+`QD_UI` and behaviourally pinned in `vitest/algebra-verdict-rigor.test.ts`.
 
 ### 2. The honest-labeling frontier — X1 + X2 (highest capability value)
 Both most advance the paramount value AND reuse machinery already shipped:
-- **X1 — certified univalence for irrational-algebraic domains (`≈`→`=`).** The RUR + interval-Horner
-  enclosures are *already computed on the prove path and discarded* (`prove-plan.mjs`); the module doc
-  calls this "the remaining refinement." Widens exact `=` to the generic QD (irrational shape params).
+- **X1 — certified univalence for irrational-algebraic domains (`≈`→`=`). ✅ SHIPPED (PRs #146–#151).** The
+  RUR + interval-Horner enclosures — already computed on the prove path — now drive the fold (interval
+  Schur–Cohn over φ′ enclosed at the root's isolating box) and the boundary (an exact `count === 0` over an
+  augmented `minPoly(t)` system) *at the true algebraic root*, so an irrational-algebraic QD earns a certified
+  `=`, labeled honestly ("interval Schur–Cohn fold + augmented boundary count over ℚ(i)"). Design record:
+  [`X1_BOUNDARY.md`](X1_BOUNDARY.md).
 - **X2 — null-QD classifier + mother-body skeleton.** `boundaryCurve` already detects the algebraic-Schwarz
   (`schwarz:null`, e.g. the ellipse) case but discards it as a string; `discriminant` + `realRootIsolate`
   are shipped. Turns an ellipse-type false positive into an honest "not a classical QD."
@@ -294,5 +300,8 @@ harness** (`runJob(kind)` === the inline sym-core call) are proven templates for
 Defer the `@cas/ui` seed (real duplication, trivial payoff); do **not** split `algebra-store.mjs`
 (cohesive, DOM-free, unit-tested).
 
-**Recommended next:** T1 (§1) as enabling groundwork — cheap, evidenced, and it makes every subsequent
-honest-labeling change (X1, X2) safe and testable — then X1, the single highest-value `≈`→`=` win.
+**Status (updated 2026-07-25):** T1 (§1) SHIPPED (#143–#145) and X1 (§2) SHIPPED (#146–#151) — an
+irrational-algebraic QD now earns a certified `=`, its univalence checked at the true algebraic root. Earlier
+this round: Tier-0 honest-labeling (C1–C7, #137), Tier-1 QoL (Q1/Q3/Q4/Q5, #138), and the Q2 heavy-op worker
+offload (#139–#142). **Recommended next:** X2 (§2 — the null-QD classifier, prevents the ellipse-type false
+positive) and P1 (§3 — the ✦ Prove Gröbner recompute, now tractable post-Q2).

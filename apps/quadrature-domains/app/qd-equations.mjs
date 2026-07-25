@@ -579,8 +579,10 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
   // satisfies EVERY generated equation EXACTLY over ℚ(i). If it does, the solution IS that exact rational
   // point — PROVEN by the exact-zero residual, independent of how the candidate was found — so the exact
   // Schur–Cohn / boundary-injectivity univalence tests evaluated at it are UNCONDITIONAL (not at a float
-  // approximation). If not, the solution is (almost surely) irrational and the per-solution univalence
-  // certificate is only ≈. Returns { exact, barSub }, where barSub is the exact barred-variable substitution
+  // approximation). If not, the solution is (almost surely) irrational, so THIS function cannot exact-verify it
+  // (returns exact:false) — but the caller (`certifyLeaf`) may still certify univalence at the TRUE algebraic
+  // root via the X1 interval Schur–Cohn fold + augmented parametric boundary count. Returns { exact, barSub },
+  // where barSub is the exact barred-variable substitution
   // (z̄_j, Ā_{j,k} → the snapped conjugate values), byte-compatible with poleSubst, so the caller can run the
   // fold / boundary tests at the SAME verified point. opts.w0 fixes φ(0); opts.snapTol (default 1e-6) is the
   // snap window — wider than the numeric solver's residual (~1e-8) so a rational root snaps, tight enough that

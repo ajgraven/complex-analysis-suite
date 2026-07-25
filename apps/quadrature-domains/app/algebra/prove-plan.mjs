@@ -17,9 +17,12 @@
 //   • C2 — RATIONAL-φ route for 2-node data (φ=w₀+R(z+dz²)/(1−cz²)): RATIONAL_STAGES, runRationalPlan;
 //   • C3 — EQUILATERAL-TRIANGLE route for 3-node data (φ=Rz/(1−cz³)): TRIANGLE_STAGES, runTrianglePlan.
 // Honest labeling is uniform: `rigor='exact'`/`bound='='` ONLY when the count is certified AND every
-// genuine root is exact-verified (PF-1) AND univalence is certified exactly (a RELIABLE Schur–Cohn +,
-// for the boundary, an exact double-point count); otherwise `estimate`/`≈`. See CERTIFY_STAGES for the
-// introspectable strategy plan and rigorProvenance for the ✓/✗ audit trail behind the badge.
+// genuine root is verified at the TRUE algebraic root — either by the PF-1 rational snap (`verifySolutionExact`),
+// or, for an IRRATIONAL algebraic root (X1), certified at the isolating box by the interval Schur–Cohn fold
+// (`foldCertifiedAtRoot`) + the augmented-`minPoly(t)` parametric boundary count (`boundaryCertifiedAtRoot`) —
+// AND univalence is certified exactly (a reliable exact Schur–Cohn + exact double-point count at a rational
+// root, or the interval / parametric certificate at the true root); otherwise `estimate`/`≈`. See
+// CERTIFY_STAGES for the introspectable strategy plan and rigorProvenance for the ✓/✗ audit trail.
 //
 // deps = { QE, QC, QD, known, w0Fixed, caps:{maxPoleOrder} }
 //   QE/QC/QD  the QDEquations / QDConstraints / solver namespaces (data sources, pure use)

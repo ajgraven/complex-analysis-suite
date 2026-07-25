@@ -153,9 +153,10 @@ ProofResult = {
 ```
 
 The verdict *string* becomes a **render** of this object. Aggregate rigor is computed **from the
-tree** by one rule (§3.2), not re-derived per call site. The `bound` field is the seam where a future
-interval-certified irrational (the *other* deferred item) flips `≈`→`=` — this design leaves the seam
-without doing that work.
+tree** by one rule (§3.2), not re-derived per call site. The `bound` field is the seam where an
+interval-certified irrational root flips `≈`→`=`. This design left the seam; **X1 (PRs #146–#151) has since
+consumed it** — an irrational-algebraic QD now earns a certified `=`, its fold + boundary checked at the true
+algebraic root (`certifyLeaf`'s `intervalCertified`; see `X1_BOUNDARY.md`).
 
 ### 3.4 From-data entry (PF-2)
 
@@ -291,9 +292,9 @@ C1/C2/C3 routes), not the A→B→C→D→E the numbering suggests.
 
 - **No change** to: the exact ℚ(i) kernel, the per-solution certificate math (reused verbatim as a
   stage), worker parity, or append-only DAG semantics.
-- **Not this redesign** (orthogonal deferred items; `ProofResult.bound` leaves the seam): (i) interval
-  / number-field Schur–Cohn to promote irrational `≈`→`=`; (ii) A-1's literal `φ′`-denominator
-  record-at-generation.
+- **Not this redesign** (orthogonal items; `ProofResult.bound` left the seam): (i) interval Schur–Cohn to
+  promote irrational `≈`→`=` — **since SHIPPED as X1 (PRs #146–#151)**, wired into `certifyLeaf` for the
+  `(●)/(★)` route; (ii) A-1's literal `φ′`-denominator record-at-generation (still open).
 - **Not** speculative strategy search / autonomous "try many tactics." The plan is a fixed, legible
   pipeline with deterministic branching, consistent with the honest-labeling guardrail. (A pluggable
   stage list leaves room to add tactics later without inviting a black box now.)
