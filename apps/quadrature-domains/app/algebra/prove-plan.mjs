@@ -192,6 +192,31 @@ export function boundaryCertifiedAtRoot(r, hData, deps) {
   return { ok: true, certified: bc.count === 0, count: bc.count };
 }
 
+// X1 — the CERTIFIED interior-fold test (φ′≠0 in 𝔻) at the true algebraic root, for ONE real solution whose
+// isolating box in the RUR primitive is `box` = { lo, hi } (Rational). Substitute the RUR coordinate maps for
+// the barred pole vars in φ′'s numerator (φ′ becomes a polynomial in ζ and t), take its ζ-coefficients as
+// polynomials in t, enclose them at the box, and run the interval Schur–Cohn. Returns { ok, certified, inside }:
+// certified only on a clean interval certificate; inside === 0 ⇒ φ′≠0 in 𝔻 at the true root. Not certified /
+// ok:false ⇒ the caller keeps the rationalized fold test (honest ≈). Unlike the boundary certificate this is
+// PER-SOLUTION (each real root has its own box), mirroring the exact schurCohnFold it upgrades.
+export function foldCertifiedAtRoot(rur, box, hData, deps) {
+  const S = deps && deps.QD && deps.QD.Sym, QC = deps && deps.QC;
+  if (!S || !QC || typeof QC.phiPrimeNumerator !== 'function' || typeof S.schurCohnAtBox !== 'function' || !rur || !box || !box.lo || !box.hi)
+    return { ok: false, certified: false };
+  const sub = barredSubstFromRUR(rur, hData, deps);
+  if (!sub) return { ok: false, certified: false };
+  let coeffs;
+  try {
+    const phiP = QC.phiPrimeNumerator(hData).subst(sub);         // φ′ numerator in (ζ = 'Z', t)
+    coeffs = phiP.coeffsIn('Z');                                 // its ζ-coefficients, each a polynomial in t
+  } catch (e) { return { ok: false, certified: false, reason: (e && e.message) || String(e) }; }
+  let r;
+  try { r = S.schurCohnAtBox(coeffs, rur.tName, box.lo, box.hi); }
+  catch (e) { return { ok: false, certified: false, reason: (e && e.message) || String(e) }; }
+  if (!r || !r.certified) return { ok: false, certified: false, reason: r && r.reason };
+  return { ok: true, certified: true, inside: r.inside };
+}
+
 // Numeric cross-check (was crossCheckPhis): each reconstructed φ must satisfy the freshly
 // regenerated original system (residual ≈ 0 — reduction integrity) AND, WHEN a numeric solve is
 // available, match the numeric solver's map (oracle) up to the rotation gauge. oracle = { numPhi,
