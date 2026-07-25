@@ -61,4 +61,21 @@ describe("X1 RUR channel — solveRealCertified exposes the RUR, and it round-tr
     expect(S.rurFromJSON({})).toBe(null);
     expect(S.rurFromJSON({ minPoly: [], coords: {} })).toBe(null);   // missing tName
   });
+
+  it("the PARALLEL isolating t-boxes (tBoxes) serialize and reconstruct to Rationals — solutions stay clean", () => {
+    // The per-solution certified fold encloses φ′ over each box, so tBoxes must survive the worker boundary,
+    // aligned with `solutions`. They ride BESIDE the solutions (not as a solution key) so no coordinate-
+    // iterating consumer ever sees a non-coordinate.
+    const json = S.certifiedRealToJSON(S.solveRealCertified(system(), { vars: ["x", "y"] }));
+    expect(json.solutions.length).toBe(2);
+    expect(json.tBoxes.length).toBe(json.solutions.length);          // one box per solution, aligned
+    // solutions carry ONLY coordinate objects — every key resolves to a { …, reLo } box
+    for (const sol of json.solutions) for (const v of Object.keys(sol)) expect(typeof sol[v].reLo).toBe("number");
+    for (const b of json.tBoxes) {
+      expect(Array.isArray(b.lo)).toBe(true);                        // [num, den] strings, JSON-safe
+      const box = S.ratBoxFromJSON(b);
+      expect(box.lo.sub(box.hi).sign()).toBeLessThanOrEqual(0);      // lo ≤ hi — a valid isolating bracket
+    }
+    expect(S.ratBoxFromJSON(null)).toBe(null);
+  });
 });
