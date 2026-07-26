@@ -817,12 +817,31 @@ function setupHelpReference(): void {
   });
 }
 
-/** Show the export-progress overlay; returns progress + cancel hooks and a closer. */
+/** One export at a time — see {@link beginExport}. Mirrors the `recording` flag on the video path. */
+let exporting = false;
+
+/**
+ * Claim the export-progress overlay; returns progress + cancel hooks and a closer, or **null** when
+ * an export is already running.
+ *
+ * The overlay, its progress bar and its cancel button are one shared instance, so two exports could
+ * not share them: the label and bar flipped between the two jobs, the cancel button carried both
+ * jobs' listeners so one press aborted both, and whichever finished first hid the dialog out from
+ * under the other — leaving that job with no progress display, no way to cancel, and its button
+ * stuck on "Rendering…". The guard lives here rather than in the callers so a future one inherits
+ * it. Serialising is also the right behaviour on its own: two full-resolution tile renders share a
+ * single GL context. (cd-shell-12)
+ */
 function beginExport(label: string): {
   onProgress: (fraction: number) => void;
   isCancelled: () => boolean;
   done: () => void;
-} {
+} | null {
+  if (exporting) {
+    showToast("An export is already running.", "warn");
+    return null;
+  }
+  exporting = true;
   const overlay = byId("export-progress");
   const bar = byId<HTMLProgressElement>("export-progress-bar");
   const text = byId("export-progress-label");
@@ -844,6 +863,7 @@ function beginExport(label: string): {
     },
     isCancelled: () => cancelled,
     done: () => {
+      exporting = false;
       overlay.hidden = true;
       cancelBtn.removeEventListener("click", onCancel);
     },
@@ -2244,10 +2264,12 @@ function init(): void {
     const overlays = byId<HTMLInputElement>(overlayId).checked;
     const scaleBar = byId<HTMLInputElement>(scaleBarId).checked;
     const filename = byId<HTMLInputElement>(filenameId).value;
+    // Claim the shared overlay BEFORE touching the button, so a refused export leaves it untouched.
+    const progress = beginExport(`Rendering ${size}×${size}…`);
+    if (!progress) return;
     const label = button.textContent;
     button.disabled = true;
     button.textContent = "Rendering…";
-    const progress = beginExport(`Rendering ${size}×${size}…`);
     try {
       await view.exportPng({
         size,
@@ -2280,10 +2302,11 @@ function init(): void {
     const size = Number(byId<HTMLSelectElement>(sizeId).value);
     const overlays = byId<HTMLInputElement>(overlayId).checked;
     const scaleBar = byId<HTMLInputElement>(scaleBarId).checked;
+    const progress = beginExport(`Copying ${size}×${size}…`);
+    if (!progress) return;
     const label = button.textContent;
     button.disabled = true;
     button.textContent = "Copying…";
-    const progress = beginExport(`Copying ${size}×${size}…`);
     try {
       await view.copyPng({
         size,
