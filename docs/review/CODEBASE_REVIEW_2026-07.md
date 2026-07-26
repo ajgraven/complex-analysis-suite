@@ -7,7 +7,7 @@
 
 ## ▶ RESUME HERE
 
-Everything a fresh session needs to continue. **Next up: Batch C** — CD state fidelity.
+Everything a fresh session needs to continue. **Next up: Batch D** — worker / resource lifecycle.
 
 ### Where the work stands
 
@@ -15,8 +15,8 @@ Everything a fresh session needs to continue. **Next up: Batch C** — CD state 
 | --- | --- | --- |
 | Findings surviving verification | **112** | 84 confirmed + 28 overstated; 4 refuted and excluded |
 | **HIGH** | **12 of 12 FIXED** | tier complete |
-| Medium / low | 20 of 99 fixed | Batches A, A-2 and B done |
-| Remaining | **79** | 35 medium, 44 low |
+| Medium / low | 26 of 99 fixed | Batches A, A-2, B and C done |
+| Remaining | **73** | 31 medium, 42 low |
 
 Batch A-2 also closed **three defects it discovered along the way** that were not in the original 124
 — see [Pass 5](#pass-5--batch-a-2-exact-arithmetic-contracts-and-the-bla-reference-162). Expect this:
@@ -38,38 +38,44 @@ branch is cut from `master` with disjoint files.
 | [#161](https://github.com/ajgraven/complex-analysis-suite/pull/161) | `fix/batch-a-honest-labeling` | Batch A (this document's latest updates ride here) |
 | [#162](https://github.com/ajgraven/complex-analysis-suite/pull/162) | `fix/batch-a2-claim-accuracy` | Batch A-2 — exact-arithmetic contracts + the BLA reference |
 | [#163](https://github.com/ajgraven/complex-analysis-suite/pull/163) | `fix/batch-b-numerical-robustness` | Batch B — numerical robustness in the shared packages |
+| **#164** *(to open)* | `fix/batch-c-state-fidelity` | Batch C — CD state fidelity |
 
 Already merged: **#154** (`@cas/core` NaN-convergence + aliasing), **#155** (7 honest-labeling
 defects), **#156** (this review record).
 
-### Batch A-2 and Batch B — DONE
+> **Batch C's branch is committed but NOT yet pushed** — `github.com` was unreachable from the dev
+> machine at the end of that session (`Recv failure: Connection was reset`, on both `git push` and
+> `git ls-remote`). Nothing is lost; `git push -u origin fix/batch-c-state-fidelity` and then open the
+> PR. Unrelated to the Actions billing block below.
+
+### Batches A-2, B and C — DONE
 
 | batch | PR | Closed | Write-up |
 | --- | --- | --- | --- |
 | A-2 | [#162](https://github.com/ajgraven/complex-analysis-suite/pull/162) | `cd-res-11`, `cd-disc-06`, `cd-disc-12`, `cd-test-08`, `cd-render-10`, `qd-dc-imagedata-01` + 3 found while fixing | [Pass 5](#pass-5--batch-a-2-exact-arithmetic-contracts-and-the-bla-reference-162) |
 | B | [#163](https://github.com/ajgraven/complex-analysis-suite/pull/163) | `cd-div-02`, `cd-cpow-05`, `cd-frac-07`, `expr-glsl-01`, `expr-glsl-02`, `expr-parser-01`, `expr-parser-depth-04`, `expr-eval-01` + 2 found while fixing | [Pass 6](#pass-6--batch-b-numerical-robustness-in-the-shared-packages-163) |
+| C | #164 | `cd-shell-07`, `cd-shell-05`, `cd-shell-06`, `cd-views-destructive-01`, `cd-shell-12`, `qd-urlstate-untested-06` | [Pass 7](#pass-7--batch-c-cd-state-fidelity-164) |
 
-### ▶ Batch C — start here
+### ▶ Batch D — start here
 
-CD state fidelity: the view is not what the URL, the saved view, the sidebar or the undo stack say it
-is. Six items. **`cd-shell-01`, `cd-shell-02`, `cd-shell-04` and `qd-polyh-01` are NOT in this batch —
-they were the HIGH-tier members of this theme and are already fixed** (#158/#159).
+Worker / resource lifecycle + memory. Six items, all **verified open** against the source at the end
+of Batch C. Note two lifecycle findings in the corpus are already CLOSED and must not be re-opened:
+`cd-dup-01` and `qd-schwarz-cpuworker-01` are the *same* defect (the Schwarz CPU worker's `error`
+handler never settling the in-flight render) and shipped in #159.
 
 | id | Where | Severity / effort | The defect |
 | --- | --- | --- | --- |
-| `cd-shell-07` | `apps/complex-dynamics/src/state/appState.ts:15` | medium / small | Nine view-defining controls are missing from `SHARE_IDS` (and five from `reset_all`), so permalinks, saved views and undo silently drop the Yoccoz / lamination / inverse-Julia / Siegel / projection state. |
-| `cd-shell-05` | `apps/complex-dynamics/src/main.ts:2706` | medium / trivial | Selecting a "Place" silently deletes every pinned annotation. |
-| `cd-shell-06` | `apps/complex-dynamics/src/main.ts:3038` | medium / trivial | Keyframe scrubbing moves the plot without writing back the centre/zoom inputs, so the sidebar, view chip, share link and history all keep the pre-scrub values. |
-| `cd-views-destructive-01` | `apps/complex-dynamics/src/main.ts:2837` | low / small | Deleting a saved view is irreversible with no confirmation, and saving over an existing name silently destroys the old one. |
-| `cd-shell-12` | `apps/complex-dynamics/src/main.ts:820` | low / small | Two concurrent exports share one progress overlay and one cancel button, so the first to finish hides the dialog out from under the second. |
-| `qd-urlstate-untested-06` | `apps/quadrature-domains/app/ui-url-state.mjs:26` | medium / small | QD's share-link codec (`installUrlState`) has **zero tests**, while share-link preservation is a stated CLAUDE.md guardrail. |
+| `qd-psw-untested-03` | `apps/quadrature-domains/app/test/worker.test.js:11` | medium / medium | `PrimarySolverWorker`'s cancel / supersede / crash lifecycle (3 workers, 381 lines) is covered only by 14 `typeof … === 'function'` assertions plus one functional assertion nested inside `if (base.success)`. |
+| `cd-render-07` | `apps/complex-dynamics/src/render/glPlot.ts:1964` | medium / small | `renderToImageData` holds two full-size RGBA buffers at once (`pixels` stays live through the flip loop), doubling peak export memory. |
+| `qd-psw-fallback-latch-01` | `apps/quadrature-domains/app/primary-solver-worker.mjs:233` | low / small | One module-level `_mainThreadFallback` latch is written from all three catch blocks and read by all three solve paths, so an aux/live-worker failure silently demotes the primary too. |
+| `qd-ctxmenu-leak-01` | `apps/quadrature-domains/app/algebra/algebra-ui.mjs:2902` | low / trivial | Every algebra context-menu interaction leaks a permanent capture-phase `document` pointerdown listener (`closeNodeMenu` nulls `_ctxMenu` without removing it). |
+| `cd-metricsworker-01` | `apps/complex-dynamics/src/render/juliaMetricsClient.ts:65` | low / trivial | `disableWorker` sets `this.worker = null` with no `terminate()` and without clearing `onmessage`/`onerror`, leaking the thread. |
+| `qd-schwarz-gl-listener-01` | `apps/quadrature-domains/app/schwarz/schwarz-webgl.mjs:829` | low / trivial | `createGPURenderer` attaches a `webglcontextlost` listener that `destroy()` never removes, accumulating one per renderer. |
 
-**Watch for, based on A-2 and B.** Every batch so far has turned up a defect *adjacent* to the one
-being fixed, usually a test or fixture that pinned the wrong behaviour — budget for it. Two of these
-six are user-visible behaviour changes (`cd-shell-05` stops deleting annotations;
-`cd-views-destructive-01` adds a confirmation), which the standing decisions say to surface in the PR
-rather than ask about. `qd-urlstate-untested-06` is a pure test item: per the standing decision it
-gets fixed in place with no new CI infrastructure.
+`qd-paramslice-hover-01` (hover preview runs a full `solveInverseQD` synchronously on the main
+thread) looks like it belongs here but is a **performance** finding — it goes with Batch E.
+`qd-psw-signal-dead-01` (unreachable `AbortSignal` support in `PrimarySolverWorker.solve`) is
+**dead code** — Batch G. Keeping D to lifecycle/memory keeps the PR reviewable.
 
 `qd-exact-count-guard-11` (`vitest/algebra-verdict-labeling.test.ts:114` — the `rigor:'exact'` guard
 counts call sites instead of identifying them, so the exemption can migrate silently) stays with the
@@ -81,8 +87,8 @@ test-integrity batch (F).
 | --- | --- | ---: |
 | ~~**A-2**~~ | ~~claim accuracy, exact-arithmetic contracts~~ — **done** | ~~5~~ |
 | ~~**B**~~ | ~~numerical robustness~~ — **done** ([#163](https://github.com/ajgraven/complex-analysis-suite/pull/163)) | ~~8~~ |
-| **C** | CD state fidelity (`SHARE_IDS` gaps, Place deletes annotations, mating panel c/f mismatch) | ~6 |
-| **D** | worker / resource lifecycle + memory | ~6 |
+| ~~**C**~~ | ~~CD state fidelity~~ — **done** (#164) | ~~6~~ |
+| **D** | worker / resource lifecycle + memory | 6 |
 | **E** | performance | ~14 |
 | **F** | test integrity — *fix in place, no new infra* | ~14 |
 | **G** | duplication / dead code | ~15 |
@@ -119,6 +125,19 @@ test-integrity batch (F).
 - `git checkout -- <file>` to undo a temporary revert will silently discard uncommitted work in that
   file. Use `git stash push -- <files>` / `git stash pop` for the "does this test fail against the old
   code?" check.
+- **`main.ts` is untestable, so browser-verify it instead of shrugging.** `preview_start` with the
+  `cd-esm` launch config, then drive the real handlers with `javascript_tool` — synthesize the events
+  the app listens for (`new Event('change', {bubbles:true})`, `new PointerEvent('pointerdown'|'pointerup')`
+  on the overlay canvas) and read the result back out of the DOM / `localStorage` / the decoded share
+  hash. That verified all five of Batch C's CD fixes end-to-end. Two gotchas: `cd-esm` serves the
+  **`dist/` build**, so `pnpm build` first; and screenshots need the Browser pane displayed, while
+  `javascript_tool` and `read_console_messages` work without it.
+- **The Vitest IPC stall is real and recurs.** A gate run failed with a 600 s `beforeAll` timeout on
+  an unrelated file plus two `[vitest-worker]: Timeout calling "resolveId"` unhandled errors; the run
+  took 2.5 h wall-clock. The same file passed alone in 223 ms and the full re-run was 1869/1869 green
+  in 112 s. It is an environmental forks-pool/IPC hiccup, **not** a code failure — but confirm by
+  re-running, never by assuming. Also: `cmd && cmd && … ; echo "EXIT=$?"` reports the *echo's* status,
+  so a background-task "exit code 0" can hide a failed gate. Read the `EXIT=` line.
 - Verifier notes for every finding live in `RAW_FINDINGS_2026-07.md` next to the original evidence.
 
 ## Commission
@@ -591,6 +610,97 @@ the suite by ~17%. Updated to the measured number.
 | --- | --- | --- |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | Durand–Kerner withholds convergence on non-finite iterates (V-1) | new test, proven to fail against the old code |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | `addMulInto` honours its aliasing contract (V-2) | new test, proven to fail against the old code |
+
+### Pass 7 — Batch C: CD state fidelity ([#164](https://github.com/ajgraven/complex-analysis-suite/pull/164))
+
+Branch `fix/batch-c-state-fidelity`. Six commits, six findings. The theme: **the view is not what the
+URL, the saved view, the sidebar or the undo stack say it is.**
+
+| id | What shipped |
+| --- | --- |
+| `cd-shell-07` | Ten live, view-defining controls sat outside `SHARE_IDS` — the inverse-iteration Julia cloud, the Siegel curves, the whole Yoccoz puzzle, both pinched-disk laminations, and the coordinate projection. Turn on the puzzle and the QML widget, press **Share link**, and the recipient gets the view and the colouring but neither instrument. CONTRIBUTING.md states the rule; nothing enforced it. `reset_all` separately left five of those toggles alone despite its own "reset every option". |
+| `cd-shell-05` | `applyFullState` cleared the notes array unconditionally, so picking any **Places** entry — a curated *partial* state — silently deleted every pinned annotation. |
+| `cd-shell-06` | Keyframe scrubbing moved the plot without telling anything else, so the sidebar, the view chip, the share link and the undo stack all kept the pre-scrub view, and the next Apply snapped it back. |
+| `cd-views-destructive-01` | Deleting a saved view, and saving over an existing name, both wrote to `localStorage` with no confirmation and no way back. |
+| `cd-shell-12` | `beginExport` had no re-entrancy guard over a single shared overlay / progress bar / cancel button. |
+| `qd-urlstate-untested-06` | QD's share-link codec had **zero** tests, against a stated CLAUDE.md guardrail. |
+
+**The finding whose proposed fix was wrong.** `cd-shell-07`'s write-up says to append the ten ids to
+`SHARE_IDS`. That is right for nine of them and **not sufficient for `projection-mode`** — and the
+shortfall is the failure mode the finding is about. Two pieces of state behind the picker cannot be
+reached by a control id: the projection **anchor** and the **linear view** saved for the trip back.
+Panning inside a projected frame writes a *projected-space* coordinate into the centre input (the
+pointer path fires `onViewChanged` regardless of projection), so restoring from the inputs alone
+re-anchors the projection somewhere else and hands the recipient **a different picture** — worse
+than the missing one. They now travel as `_proj`, the way `_z0` / `_grad` / `_pcdd` already do, and
+the change handler splits into two functions that were doing different jobs under one name:
+
+- `applyProjection()` — the interactive transition; *moves* the view. Picker + `reset_all`.
+- `setProjectionState()` — restores mode + anchor + saved view and **does not touch centre/zoom**,
+  which `applyFullState` has just set. Runs on every full-state apply, so a link with no `_proj`
+  still cannot leave the picker disagreeing with the picture.
+
+**The guard is the durable part.** `test/appState.test.ts` only checked that every `SHARE_IDS` id
+exists in the markup — the direction that does not drift. It now also asserts the forward direction:
+every control in `index.html` is either shared or on an explicit opt-out list with a stated reason
+(persisted prefs, export settings, the documented sphere-MVP exclusion, one-shot tool inputs, panel
+readout parameters, mirrors of shared fields, pickers, transient playback), plus a second test that
+rejects **stale** exemptions so a removed control cannot leave a phantom entry behind. Against the
+pre-fix source it fails naming exactly the ten ids.
+
+**Two behaviour changes, surfaced rather than asked about** (per the standing decisions): selecting a
+Place no longer clears pins, and a saved view or link created *before* this batch carries no
+`_notes`, so loading one now **preserves** the current pins instead of clearing them. Same rule,
+applied to states written before it existed, and it errs toward not destroying the user's work.
+
+**Two extractions, both to buy a test seam.** `main.ts` exports nothing, so anything left in it is
+unreachable from a test:
+
+- `src/state/notes.ts` — the `_notes` codec. Its validation guards against a hostile link
+  (non-finite coordinates, unknown planes, over-long text, 256 / 2000 caps) and had **no test at
+  all**; it has eleven now, three of which fail against the old semantics.
+- `syncParamViewInputs()` — the `onViewChanged` body, now called by both the hook and `applyScrub`
+  so the two paths cannot drift. Still not unit-testable; verified by reading the call graph.
+
+**QD's codec test is proved by mutation, not by assertion.** 18 tests over a stub `ui` and a minimal
+jsdom DOM, using the real `MODES` / `PRESETS` tables. The load-bearing one is the **key-coverage
+diff**: each key the write side can emit is applied *alone* and shown to have an observable effect,
+because a key renamed on one side only still survives encode/decode and a plain write-then-apply
+assertion would miss it. Verified by mutating the source — renaming the write-side `agg` key fails 5
+tests including that guard; removing the `SWITCHABLE_TABS` whitelist makes the crafted-tab test throw
+the exact `DOMException` SyntaxError its comment says would abort init; removing the `PRESETS` gate
+and the α validation each fail their own seatbelt test.
+
+**Not tested, and why.** CD's vitest runs `environment: "node"` with no jsdom (QD has it, CD does
+not). The toast action and the export guard therefore have no unit test — adding jsdom to CD for one
+toast is not worth a new devDependency when the accessibility/UX batch (H) will have several
+consumers and is the right place to decide it. Recorded rather than faked, per the standing decision.
+
+**Also noted, deliberately not fixed here.** The export overlay is not a real modal — no `<dialog>`,
+no `inert`, no focus trap — so keyboard activation can still reach the buttons behind it. The
+concurrency defect underneath that is closed; the modality belongs with Batch H.
+
+**Browser-verified, since `main.ts` has no test seam.** Against the real built app (`cd-esm` preview,
+zero console errors throughout):
+
+| | Observed |
+| --- | --- |
+| `cd-shell-07` write | The share link carries all ten controls plus `_proj` (`{"p":{"a":[-0.75,0],"c":[-0.75,0],"z":0.75},"d":{…}}`) and `_notes:"[]"`. |
+| `cd-shell-07` restore | Reloading from that hash restores all seven set controls **and the derived overlays** — the projection caption returns and the QML reports "117 minor leaves on ∂M (period ≤ 7)", so the restored `lamination-detail` really drove the widget. |
+| `cd-shell-07` reset | `reset_all` clears all five toggles, returns both sliders to the markup defaults (2 / 6), and sets the projection back to linear. |
+| `cd-shell-05` | A pin survives selecting "Elephant Valley" — the view moves to `0.275,0.006` and `_notes` is byte-identical before and after. |
+| `cd-shell-06` | Scrubbing to 0.5 writes `-0.7475,0.05` / zoom `4.33013` (the geometric mean of 0.75 and 25) into the inputs **and** the view chip. |
+| `cd-views-destructive-01` | A fresh save toasts plain success with no button; an overwrite toasts *warn* "Replaced the saved view …" with an Undo that restores the previous state; delete → Undo puts the entry back in `localStorage`. |
+| `cd-shell-12` | The second concurrent export is refused with "An export is already running." and its button is untouched — still "Save", not stuck on "Rendering…". |
+
+Gate: **1869 tests / 198 files**, all green, plus lint, typecheck and all four builds. The QD headless
+suite (`app/node-test.js`, run through `node-suite.test.ts`) passes with 0 failures.
+
+**One gate run failed first, and it was environmental.** A 600 s `beforeAll` timeout on
+`algebra-column-diff.test.ts` with two `[vitest-worker]: Timeout calling "resolveId"` unhandled
+errors, in a run that took 2.5 h of wall clock. That file passes alone in 223 ms and the full re-run
+was green in 112 s. Recorded in the working notes — the point is that it was **confirmed by
+re-running**, not waved off.
 
 ### Pass 6 — Batch B: numerical robustness in the shared packages ([#163](https://github.com/ajgraven/complex-analysis-suite/pull/163))
 
