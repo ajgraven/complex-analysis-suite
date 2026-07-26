@@ -32,8 +32,8 @@ incidental.
 Quadrature-app-onto-Vite ESM-ification, and the five shared-package extractions
 (`@cas/core` → `@cas/interchange` → `@cas/expr` + `@cas/gpu`) are all done; the
 Correspondences app exists through its parameter-space milestone plus a complete
-interactive mating visualizer. The whole workspace is green (**1550+ Vitest tests**, lint,
-typecheck, and per-app builds).
+interactive mating visualizer. The whole workspace is green (**1820 Vitest tests** across 193
+files, lint, typecheck, and per-app builds).
 
 What's **deferred / exploratory** (by design, not omission):
 

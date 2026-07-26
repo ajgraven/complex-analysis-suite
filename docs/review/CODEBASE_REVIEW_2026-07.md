@@ -61,7 +61,8 @@ Gate at baseline, measured directly:
 | `pnpm -r --filter "./packages/*" run build` | **green** (exit 0) |
 | `pnpm lint` | **green** (exit 0, zero warnings) |
 | `pnpm typecheck` | **green** (exit 0) |
-| `pnpm test` | deferred — run at the end, to avoid the known Windows forks-pool flake under agent CPU contention |
+| `pnpm test` | **green** — 1820 tests / 193 files, exit 0 (run at the end, after agent CPU contention subsided) |
+| `pnpm build` | **green** (exit 0; two chunk-size warnings — see 0-5) |
 
 So every finding below is a latent issue, not a currently-red gate.
 
@@ -449,10 +450,11 @@ Recorded so it is not re-investigated:
 - `mathjs` in QD is genuinely used (51 references across `direct-common.mjs`, `main.mjs`,
   `ui-h-text.mjs`, `vendor-globals.mjs`, and tests). Not dead weight.
 
-#### 0-7 — `docs/` and `README.md` test-count claim to re-verify · LOW · documentation
+#### 0-7 — `README.md` test count was stale · LOW · documentation · ✅ FIXED
 
-[README.md:35](README.md:35) claims "**1550+ Vitest tests**". This is re-measured at the end of
-this review against an actual full run.
+[README.md:35](README.md:35) claimed "**1550+ Vitest tests**". A full run measures **1820 tests
+across 193 files** (exit 0). The old figure was not *wrong* — it carried a `+` — but it understated
+the suite by ~17%. Updated to the measured number.
 
 <!-- FINDINGS-LOG -->
 
