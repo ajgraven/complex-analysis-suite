@@ -1942,7 +1942,12 @@ function init(): void {
       ptype =
         p.cycle.multiplierMag < 1e-6
           ? `superattracting · period ${p.cycle.period}`
-          : `attracting · period ${p.cycle.period} · |λ| ${holo ? "=" : "≈"} ${jNum(p.cycle.multiplierMag, 3)}`;
+          : // Always ≈. `holo` says an analytic f′ exists, NOT that the value is exact: the cycle is
+            // located numerically and Newton-refined to ~1e-13, then |λ| = |exp(Σ log f′(z_k))| in
+            // float64. The holomorphic path is a BETTER estimate than the finite-difference one, not
+            // an exact one, so the distinction belongs in the provenance note, not in the relation.
+            `attracting · period ${p.cycle.period} · |λ| ≈ ${jNum(p.cycle.multiplierMag, 3)}` +
+            (holo ? "" : " (finite-diff)");
     else if (p.paramClass === "neutral") ptype = "neutral (|λ| ≈ 1, on the boundary)";
     else ptype = "no attracting cycle found (iteration-limited)";
     if (p.cycle?.rotation) ptype += ` · ${p.cycle.rotation.p}/${p.cycle.rotation.q}`;
@@ -1956,7 +1961,10 @@ function init(): void {
           ? "—"
           : p.lyapunov === -Infinity
             ? "−∞ (superattracting)"
-            : `${holo ? "" : "≈ "}${jNum(p.lyapunov, 4)} nats/iter`,
+            : // Derived from the same numerically located cycle (log|λ|/period) or accumulated along
+              // the critical orbit, so it is an estimate on both paths — the holomorphic branch used
+              // to print a bare number with no marker at all.
+              `≈ ${jNum(p.lyapunov, 4)} nats/iter` + (holo ? "" : " (finite-diff)"),
     );
 
     jSet(
