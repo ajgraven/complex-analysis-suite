@@ -460,16 +460,40 @@ the suite by ~17%. Updated to the measured number.
 
 ---
 
-## Fixes applied inline
+## Fixes applied
+
+### Pass 1 — inline, during the review
 
 | Commit | Change | Guarded by |
 | --- | --- | --- |
 | `60d8772` | Durand–Kerner withholds convergence on non-finite iterates (V-1) | new test, proven to fail against the old code |
 | `60d8772` | `addMulInto` honours its aliasing contract (V-2) | new test, proven to fail against the old code |
 
-Nothing else was auto-fixed. Everything below is a recommendation, because every remaining item
-either changes user-visible mathematical claims (V-5, V-6, V-7), touches a solver's behaviour, or
-would surface a 294-item backlog (V-3) — none of which qualify as "trivial and zero-risk."
+### Pass 2 — the honest-labeling sweep (Tier 1, step 1)
+
+All seven mislabels, each with a regression test.
+
+| Commit | Finding | Change |
+| --- | --- | --- |
+| `cc511b7` | `corr-univalence-01` + `corr-param-body-02` | The `\|a\| ≤ √2` bound shown to users as **"proven"** is false — the area theorem is necessary, not sufficient. True bound `\|a\| ≤ 1` from `φ_a'(z) = 1 − a/z³`. Corrected in `family.ts`, both captions, `paramGpu.ts`, and `deltoid.ts`'s `exteriorRoot`. Captions now say to read `\|a\| > 1` as unclassified rather than as membership. |
+| `3cf2b7f` | `cd-render-02` | `OrbitFate`'s explicit `"undetermined"` no longer collapses to `connected: true`; added `connectivityUndetermined` and the row hedges it. |
+| `3cf2b7f` | `cd-render-03` | `critical.ts`'s "RIGOROUS connectivity" corrected — only `cantor` (all orbits escaped) is a determination; `connected`/`disconnected` rest on the 400-iteration cap and now render with `≈`. |
+| `8a53b19` | `cd-shell-03` | `\|λ\| =` → `≈` on both paths. `holo` means "an analytic f′ exists", not "exact"; the analytic-vs-finite-difference distinction moved to a `(finite-diff)` suffix. `jp-lyapunov` had the same bug in reverse (bare number, no marker). |
+| `04c558c` | `qd-ui-algebra-badge-01` | `showQDSolution` no longer hardcodes `univalent: true`; the hand-off carries the verdict's rigor and only `'exact'` earns the ✓. Absent opts ⇒ **not** certified, so a future caller cannot inherit a certified badge. `qdValidityBadge` lifted to module scope for testing. |
+| `437584a` | `qd-direct-verify-01` | `{ weight: 'log' }` is not a dispatch key — **no solver reads `opts.weight`** — so bounded log-weighted round-trips fell through to the classical catch-all and reported the wrong family's verdict as a pass. Now `{ lqd: true, w0 }`, matching the sibling handler. |
+
+**A counterexample was computed, not asserted.** For `a = 1.2` (inside the old √2 claim) the distinct
+exterior points `z = 1.052307+0.208604i` and `w = 1.02−0.2i` satisfy `φ_a(z) = φ_a(w)` to 2e-16 —
+pinned as a golden in `familyUnivalence.test.ts`.
+
+**One finding was deliberately *not* "fixed".** `family.ts:98`'s `if (!next) return maxIter` looks
+like the σ-undefined bug, but its comment gives a sound reason: the orbit left Ω *inward*, which
+genuinely is not an escape to ∞. The honest correction there is the labeling, not the bookkeeping.
+
+### Still recommendations, not applied
+
+V-3 (the lint hole — a 294-item backlog), V-4 (the disarmed test guard), and the Tier 2/3 items.
+None qualify as "trivial and zero-risk".
 
 ---
 
