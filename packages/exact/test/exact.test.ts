@@ -31,6 +31,60 @@ describe("Gauss (ℚ(i)) is a field", () => {
     }
     expect(() => Gauss.ZERO.inv()).toThrow();
   });
+
+  describe("the real × real fast path (cd-perf-04)", () => {
+    // mul() shortcuts when both imaginary parts are zero — the case CD's whole dynatomic tower and
+    // the Correspondences deltoid curve are made of. It must be indistinguishable from the general
+    // form, which is what these pin: same value, and the general form still used everywhere else.
+    const general = (a: Gauss, b: Gauss): Gauss =>
+      new Gauss(a.re.mul(b.re).sub(a.im.mul(b.im)), a.re.mul(b.im).add(a.im.mul(b.re)));
+
+    const SAMPLES = [
+      Gauss.ZERO,
+      Gauss.ONE,
+      Gauss.int(-1),
+      Gauss.int(7),
+      Gauss.int(-123456789),
+      Gauss.rat(22n, 7n, 0n, 1n), // real, non-integer
+      Gauss.rat(-355n, 113n, 0n, 1n),
+      Gauss.I,
+      Gauss.int(3, 4),
+      Gauss.int(0, -9),
+      Gauss.rat(3n, 5n, -7n, 4n),
+    ];
+
+    it("agrees with the general form on every pairing (real, mixed and complex)", () => {
+      for (const a of SAMPLES) {
+        for (const b of SAMPLES) {
+          expect(a.mul(b).equals(general(a, b)), `${a.re.n}/${a.re.d}+${a.im.n}/${a.im.d}i × …`).toBe(true);
+        }
+      }
+    });
+
+    it("keeps a zero imaginary part exactly zero, not a normalised 0/k", () => {
+      // The shortcut hands back Frac.ZERO rather than computing 0·d + 0·c. Frac is normalised, so
+      // this is belt-and-braces — but a regression to an unnormalised zero would break `equals`.
+      const p = Gauss.rat(22n, 7n, 0n, 1n).mul(Gauss.rat(-355n, 113n, 0n, 1n));
+      expect(p.im.isZero()).toBe(true);
+      expect(p.im.n).toBe(0n);
+      expect(p.im.d).toBe(1n);
+    });
+
+    it("still multiplies correctly when only ONE operand is real", () => {
+      // The mixed case deliberately does NOT take a shortcut — it has no consumer today, and an
+      // untested branch is worse than a general one. Guard that it stays correct regardless.
+      expect(Gauss.int(2).mul(Gauss.int(3, 4)).equals(Gauss.int(6, 8))).toBe(true);
+      expect(Gauss.int(3, 4).mul(Gauss.int(2)).equals(Gauss.int(6, 8))).toBe(true);
+    });
+
+    it("associates and distributes across the real/complex boundary", () => {
+      // A shortcut that fired on the wrong branch would show up as broken algebra here.
+      const [a, b, c] = [Gauss.int(5), Gauss.int(2, -3), Gauss.rat(1n, 3n, 0n, 1n)];
+      expect(a.mul(b).mul(c).equals(a.mul(b.mul(c)))).toBe(true);
+      expect(a.mul(b.add(c)).equals(a.mul(b).add(a.mul(c)))).toBe(true);
+      expect(c.mul(a.add(b)).equals(c.mul(a).add(c.mul(b)))).toBe(true);
+    });
+  });
 });
 
 describe("QiPoly (exact univariate over ℚ(i))", () => {
