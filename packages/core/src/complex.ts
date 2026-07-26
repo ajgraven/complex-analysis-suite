@@ -21,6 +21,33 @@ export interface Cx {
   im: number;
 }
 
+/**
+ * The quotient a/b as a `[re, im]` pair, computed WITHOUT ever forming |b|² — Smith's algorithm
+ * (1962): divide through by the larger component of b, so every intermediate stays within a factor
+ * of |b| rather than |b|².
+ *
+ * Forming |b|² halves the usable exponent range, and the naive formula therefore fails on perfectly
+ * representable, perfectly ordinary numbers: |b| ≳ 1.34e154 makes |b|² overflow to Infinity and the
+ * quotient collapses to 0 or NaN, while |b| ≲ 1.49e-162 makes it underflow to exactly 0 and the
+ * divide reports "division by zero" for a nonzero divisor. Both are silent wrong answers in a
+ * *shared kernel* — no current consumer reaches them (the Durand–Kerner caller diverts on
+ * `abs2 < 1e-300` before the underflow tail, and the shipped Gleason/dynatomic degrees stay ~1e96
+ * below the overflow tail), but the next one has no way to know that. (cd-div-02)
+ *
+ * The callers keep the unscaled expression as their fast path and reach this only in those tails,
+ * so nothing on the reachable range changes by even one ulp. `b` must be nonzero (callers check).
+ */
+export function divScaled(ax: number, ay: number, bx: number, by: number): [number, number] {
+  if (Math.abs(bx) >= Math.abs(by)) {
+    const r = by / bx; // |r| ≤ 1
+    const d = bx + by * r; // = bx·(1 + r²), same magnitude as b — never squared
+    return [(ax + ay * r) / d, (ay - ax * r) / d];
+  }
+  const r = bx / by; // |r| < 1
+  const d = by + bx * r;
+  return [(ax * r + ay) / d, (ay * r - ax) / d];
+}
+
 // A signed decimal / scientific-notation real. Anchored (^…$) so a token with trailing junk —
 // "2i3", "1.2.3", "3x", a dangling "1e" — is REJECTED (→ NaN) rather than silently truncated by
 // parseFloat, preserving Complex.parse's documented `| null` contract for malformed input.
@@ -103,13 +130,22 @@ export const Complex = {
 
   inv(a: Cx): Cx {
     const d = a.re * a.re + a.im * a.im;
-    if (d === 0) throw new Error("Complex.inv: division by zero");
-    return { re: a.re / d, im: -a.im / d };
+    if (d !== 0 && d !== Infinity) return { re: a.re / d, im: -a.im / d };
+    if (a.re === 0 && a.im === 0) throw new Error("Complex.inv: division by zero");
+    const [re, im] = divScaled(1, 0, a.re, a.im);
+    return { re, im };
   },
   div(a: Cx, b: Cx): Cx {
     const d = b.re * b.re + b.im * b.im;
-    if (d === 0) throw new Error("Complex.div: division by zero");
-    return { re: (a.re * b.re + a.im * b.im) / d, im: (a.im * b.re - a.re * b.im) / d };
+    // Fast path — the original expression, unchanged, so every operand any current consumer
+    // produces divides bit-for-bit as before. `d` leaves this range only in the two tails the
+    // fallback exists for: |b| ≳ 1.34e154 (d = Infinity) and |b| ≲ 1.49e-162 (d underflows to 0).
+    if (d !== 0 && d !== Infinity) {
+      return { re: (a.re * b.re + a.im * b.im) / d, im: (a.im * b.re - a.re * b.im) / d };
+    }
+    if (b.re === 0 && b.im === 0) throw new Error("Complex.div: division by zero");
+    const [re, im] = divScaled(a.re, a.im, b.re, b.im);
+    return { re, im };
   },
 
   abs(a: Cx): number {
@@ -144,10 +180,24 @@ export const Complex = {
   // with Complex.pow up to floating-point (principal-branch choice matches the
   // positive real axis). a = 0 returns 0 (valid for p > 0; callers in the PQD code
   // never request 0^p with p <= 0).
+  //
+  // The `mag2` fast path is the original formula, kept so the ~30 PQD/Schwarz call sites — all of
+  // them order-1 conformal-map quantities — are bit-identical. It is only *outside* that range that
+  // squaring the modulus first was wrong: the old `mag2 < 1e-300` guard was documented as the a = 0
+  // case but actually fired for every |a| < 1e-150, returning exactly 0 where e.g. the 4th root of
+  // 1e-160 is a perfectly ordinary 1e-40; and |a| > 1.34e154 overflowed mag2, so `r*cos` and
+  // `r*sin` disagreed about the failure ({Infinity, NaN}). Math.hypot avoids the intermediate.
+  // (cd-cpow-05)
   cpow(a: Cx, p: number): Cx {
     const mag2 = a.re * a.re + a.im * a.im;
-    if (mag2 < 1e-300) return { re: 0, im: 0 };
-    const r = Math.pow(mag2, 0.5 * p);
+    let r: number;
+    if (mag2 >= 1e-300 && mag2 !== Infinity) {
+      r = Math.pow(mag2, 0.5 * p); // unchanged fast path
+    } else if (a.re === 0 && a.im === 0) {
+      return { re: 0, im: 0 }; // the genuine zero the docstring means
+    } else {
+      r = Math.pow(Math.hypot(a.re, a.im), p); // |a| un-squareable, but the modulus is fine
+    }
     const ang = Math.atan2(a.im, a.re) * p;
     return { re: r * Math.cos(ang), im: r * Math.sin(ang) };
   },

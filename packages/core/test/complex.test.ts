@@ -122,3 +122,79 @@ describe("@cas/core Complex (object representation)", () => {
     expect(a.re).toBe(1);
   });
 });
+
+// Forming |b|² costs half the exponent range, so the naive quotient and the naive modulus fail on
+// perfectly representable numbers: |b| ≳ 1.34e154 overflows the intermediate, |b| ≲ 1.49e-162
+// underflows it to exactly 0. Both are silent wrong answers in a SHARED kernel — no current consumer
+// reaches them, but that is a fact about today's callers, not about the contract. (cd-div-02, cd-cpow-05)
+describe("@cas/core Complex — magnitudes outside the squareable range", () => {
+  const relClose = (got: number, want: number, tol = 1e-12) =>
+    Number.isFinite(got) && Math.abs(got - want) <= tol * Math.max(1, Math.abs(want));
+
+  it("div survives an operand whose square overflows", () => {
+    // Previously {re: NaN, im: 0} — |b|² = Infinity, so both components divided by Infinity.
+    expect(relClose(Complex.div({ re: 1e200, im: 0 }, { re: 1e200, im: 0 }).re, 1)).toBe(true);
+    expect(relClose(Complex.div({ re: 1, im: 0 }, { re: 1e200, im: 0 }).re, 1e-200)).toBe(true);
+    const q = Complex.div({ re: 3, im: 4 }, { re: 0, im: 1e200 }); // (3+4i)/(1e200 i)
+    expect(relClose(q.re, 4e-200)).toBe(true);
+    expect(relClose(q.im, -3e-200)).toBe(true);
+    expect(relClose(Complex.inv({ re: 1e200, im: 0 }).re, 1e-200)).toBe(true);
+  });
+
+  it("div survives an operand whose square underflows, instead of claiming division by zero", () => {
+    // Previously threw "division by zero" for a divisor that is emphatically not zero.
+    expect(relClose(Complex.div({ re: 1, im: 0 }, { re: 1e-200, im: 0 }).re, 1e200)).toBe(true);
+    expect(relClose(Complex.div({ re: 1e-200, im: 0 }, { re: 1e-200, im: 0 }).re, 1)).toBe(true);
+    expect(relClose(Complex.inv({ re: 1e-200, im: 0 }).re, 1e200)).toBe(true);
+  });
+
+  it("still throws on an exact zero divisor", () => {
+    expect(() => Complex.div({ re: 1, im: 1 }, { re: 0, im: 0 })).toThrow(/division by zero/);
+    expect(() => Complex.inv({ re: 0, im: 0 })).toThrow(/division by zero/);
+  });
+
+  it("cpow takes roots of an operand 150 orders below the old cutoff", () => {
+    // The old guard returned exactly 0 for every |a| < 1e-150 while documenting itself as the a = 0
+    // case. The 4th root of 1e-160 is 1e-40 — an ordinary, meaningful number.
+    expect(relClose(Complex.cpow({ re: 1e-160, im: 0 }, 0.25).re, 1e-40)).toBe(true);
+    expect(relClose(Complex.cpow({ re: 1e-160, im: 0 }, 0.5).re, 1e-80)).toBe(true);
+    expect(relClose(Complex.cpow({ re: 1e-160, im: 0 }, -1).re, 1e160)).toBe(true);
+  });
+
+  it("cpow returns a consistent pair above the overflow threshold", () => {
+    // Previously {Infinity, NaN}: r*cos(0) overflowed while r*sin(0) was Infinity*0, so the two
+    // components disagreed about what had gone wrong.
+    expect(relClose(Complex.cpow({ re: 1e200, im: 0 }, 0.5).re, 1e100)).toBe(true);
+    expect(Number.isNaN(Complex.cpow({ re: 1e200, im: 0 }, 0.5).im)).toBe(false);
+  });
+
+  it("cpow(0) is still exactly 0 — the case the docstring actually means", () => {
+    expect(Complex.cpow({ re: 0, im: 0 }, 2)).toEqual({ re: 0, im: 0 });
+    expect(Complex.cpow({ re: 0, im: 0 }, 0.5)).toEqual({ re: 0, im: 0 });
+  });
+
+  it("leaves the reachable range bit-for-bit unchanged", () => {
+    // The whole point of the two-path shape: the fallback must be unobservable to every operand a
+    // current consumer produces, so this pins the fast path against the original expressions.
+    let seed = 12345;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff) * 4 - 2;
+    for (let i = 0; i < 4000; i++) {
+      const a: Cx = { re: rnd(), im: rnd() };
+      const b: Cx = { re: rnd(), im: rnd() };
+      const d = b.re * b.re + b.im * b.im;
+      if (d === 0) continue;
+      const q = Complex.div(a, b);
+      expect(Object.is(q.re, (a.re * b.re + a.im * b.im) / d)).toBe(true);
+      expect(Object.is(q.im, (a.im * b.re - a.re * b.im) / d)).toBe(true);
+
+      const p = rnd() * 1.5;
+      const mag2 = a.re * a.re + a.im * a.im;
+      if (mag2 < 1e-300) continue;
+      const r = Math.pow(mag2, 0.5 * p);
+      const ang = Math.atan2(a.im, a.re) * p;
+      const w = Complex.cpow(a, p);
+      expect(Object.is(w.re, r * Math.cos(ang))).toBe(true);
+      expect(Object.is(w.im, r * Math.sin(ang))).toBe(true);
+    }
+  });
+});
