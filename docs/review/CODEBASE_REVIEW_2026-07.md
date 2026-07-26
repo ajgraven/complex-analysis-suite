@@ -42,11 +42,34 @@ branch is cut from `master` with disjoint files.
 Already merged: **#154** (`@cas/core` NaN-convergence + aliasing), **#155** (7 honest-labeling
 defects), **#156** (this review record).
 
-### Batch A-2 — DONE ([#162](https://github.com/ajgraven/complex-analysis-suite/pull/162))
+### Batch A-2 and Batch B — DONE
 
-Closed `cd-res-11`, `cd-disc-06`, `cd-disc-12`, `cd-test-08`, `cd-render-10`, `qd-dc-imagedata-01`,
-plus three defects found while fixing them. Full write-up in
-[Pass 5](#pass-5--batch-a-2-exact-arithmetic-contracts-and-the-bla-reference-162).
+| batch | PR | Closed | Write-up |
+| --- | --- | --- | --- |
+| A-2 | [#162](https://github.com/ajgraven/complex-analysis-suite/pull/162) | `cd-res-11`, `cd-disc-06`, `cd-disc-12`, `cd-test-08`, `cd-render-10`, `qd-dc-imagedata-01` + 3 found while fixing | [Pass 5](#pass-5--batch-a-2-exact-arithmetic-contracts-and-the-bla-reference-162) |
+| B | [#163](https://github.com/ajgraven/complex-analysis-suite/pull/163) | `cd-div-02`, `cd-cpow-05`, `cd-frac-07`, `expr-glsl-01`, `expr-glsl-02`, `expr-parser-01`, `expr-parser-depth-04`, `expr-eval-01` + 2 found while fixing | [Pass 6](#pass-6--batch-b-numerical-robustness-in-the-shared-packages-163) |
+
+### ▶ Batch C — start here
+
+CD state fidelity: the view is not what the URL, the saved view, the sidebar or the undo stack say it
+is. Six items. **`cd-shell-01`, `cd-shell-02`, `cd-shell-04` and `qd-polyh-01` are NOT in this batch —
+they were the HIGH-tier members of this theme and are already fixed** (#158/#159).
+
+| id | Where | Severity / effort | The defect |
+| --- | --- | --- | --- |
+| `cd-shell-07` | `apps/complex-dynamics/src/state/appState.ts:15` | medium / small | Nine view-defining controls are missing from `SHARE_IDS` (and five from `reset_all`), so permalinks, saved views and undo silently drop the Yoccoz / lamination / inverse-Julia / Siegel / projection state. |
+| `cd-shell-05` | `apps/complex-dynamics/src/main.ts:2706` | medium / trivial | Selecting a "Place" silently deletes every pinned annotation. |
+| `cd-shell-06` | `apps/complex-dynamics/src/main.ts:3038` | medium / trivial | Keyframe scrubbing moves the plot without writing back the centre/zoom inputs, so the sidebar, view chip, share link and history all keep the pre-scrub values. |
+| `cd-views-destructive-01` | `apps/complex-dynamics/src/main.ts:2837` | low / small | Deleting a saved view is irreversible with no confirmation, and saving over an existing name silently destroys the old one. |
+| `cd-shell-12` | `apps/complex-dynamics/src/main.ts:820` | low / small | Two concurrent exports share one progress overlay and one cancel button, so the first to finish hides the dialog out from under the second. |
+| `qd-urlstate-untested-06` | `apps/quadrature-domains/app/ui-url-state.mjs:26` | medium / small | QD's share-link codec (`installUrlState`) has **zero tests**, while share-link preservation is a stated CLAUDE.md guardrail. |
+
+**Watch for, based on A-2 and B.** Every batch so far has turned up a defect *adjacent* to the one
+being fixed, usually a test or fixture that pinned the wrong behaviour — budget for it. Two of these
+six are user-visible behaviour changes (`cd-shell-05` stops deleting annotations;
+`cd-views-destructive-01` adds a confirmation), which the standing decisions say to surface in the PR
+rather than ask about. `qd-urlstate-untested-06` is a pure test item: per the standing decision it
+gets fixed in place with no new CI infrastructure.
 
 `qd-exact-count-guard-11` (`vitest/algebra-verdict-labeling.test.ts:114` — the `rigor:'exact'` guard
 counts call sites instead of identifying them, so the exemption can migrate silently) stays with the
@@ -85,6 +108,17 @@ test-integrity batch (F).
 - Vite derives `publicDir` from `root`; QD sets `root: app/`, so package-level `public/` needs an
   explicit `publicDir`. A build that silently copies nothing is the failure mode.
 - `main.ts` (complex-dynamics) exports nothing, so its internals are unreachable from tests.
+- `pnpm test:browser` runs a REAL headless-WebGL2 harness (Playwright chromium already installed) that
+  **compiles the emitted GLSL**. Use it to prove a codegen finding rather than reading the emitter —
+  that is how Batch B proved `expr-glsl-01` and, in passing, found that the harness had never been
+  able to compile any program using the live parameter `a`.
+- Fixing a hot shared primitive: keep the ORIGINAL expression as the fast path, branch to the safe
+  form only once the intermediate has overflowed/underflowed, and **assert** bit-identity on the
+  reachable range. `@cas/core`'s series multiply is deliberately bit-identical to both apps', so a
+  rounding shift there is not a local decision.
+- `git checkout -- <file>` to undo a temporary revert will silently discard uncommitted work in that
+  file. Use `git stash push -- <files>` / `git stash pop` for the "does this test fail against the old
+  code?" check.
 - Verifier notes for every finding live in `RAW_FINDINGS_2026-07.md` next to the original evidence.
 
 ## Commission
