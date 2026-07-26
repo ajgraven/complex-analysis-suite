@@ -1182,6 +1182,19 @@ const QD = _QD;
     }
   }
 
+  // Release the GPU renderer before forgetting it. Nulling `sState.gpu` alone left the renderer's
+  // own 'webglcontextlost' listener attached to #schwarz-gl-canvas — and that canvas is created ONCE
+  // and reused, so every loss/restore cycle stacked another dead listener on a node that is never
+  // replaced. destroy() removes it (and frees the GL objects, which is a no-op after a real context
+  // loss — they are already invalid — but keeps one teardown path). (qd-schwarz-gl-listener-01)
+  function dropGPU(msg) {
+    if (sState.gpu && typeof sState.gpu.destroy === 'function') {
+      try { sState.gpu.destroy(); } catch (e) { /* the context may already be gone */ }
+    }
+    sState.gpu = null;
+    sState.gpuMsg = msg;
+  }
+
   function ensureGPU() {
     if (sState.gpu) return;
     if (!QD.Schwarz.createGPURenderer) return;
@@ -1217,11 +1230,10 @@ const QD = _QD;
       // re-render. (The renderer's own listener calls preventDefault, which is
       // what lets the browser fire 'restored' at all.)
       glC.addEventListener('webglcontextlost', () => {
-        sState.gpu = null;
-        sState.gpuMsg = 'GPU context lost; using CPU until it is restored.';
+        dropGPU('GPU context lost; using CPU until it is restored.');
       }, false);
       glC.addEventListener('webglcontextrestored', () => {
-        sState.gpu = null; sState.gpuMsg = '';
+        dropGPU('');
         ensureGPU();
         if (sState.schwarz && isSchwarzActive() && sState.viewMode === 'plane') {
           requestRecompute();
