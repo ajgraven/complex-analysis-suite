@@ -777,10 +777,15 @@ export class GLPlot {
     return null;
   }
 
-  private rebuild(): void {
-    const gl = this.gl;
-    const iterError = this.updateIteration();
-    this._monicDegree = this.probeMonicDegree();
+  /**
+   * Re-derive the perturbation state that depends on the live parameter `a`.
+   *
+   * Split out of rebuild() so setParamA can refresh it WITHOUT a shader recompile — dragging the `a`
+   * slider would otherwise rebuild a program per input event. Safe to call on its own because
+   * `_monicDegree` is `a`-independent (probeMonicDegree rejects any a-dependence, which is exactly
+   * why an a-dependent polynomial lands on the _polyPerturb path).
+   */
+  private refreshPolyPerturbation(): void {
     // General-polynomial perturbation (f = P(z) + B·c) for NON-monic polynomials; monic z^d + c keeps
     // its own (byte-identical z²+c) path. Degree ≥ 2 (a linear map has no interesting deep zoom).
     this._polyPerturb =
@@ -792,6 +797,16 @@ export class GLPlot {
     this._perturbEligible =
       (this._monicDegree !== null && this._monicDegree <= MAX_PERTURB_DEGREE) ||
       this._polyPerturb !== null;
+    this.orbitDirty = true;
+  }
+
+  private rebuild(): void {
+    const gl = this.gl;
+    const iterError = this.updateIteration();
+    this._monicDegree = this.probeMonicDegree();
+    // General-polynomial perturbation (f = P(z) + B·c) for NON-monic polynomials; monic z^d + c keeps
+    // its own (byte-identical z²+c) path. Degree ≥ 2 (a linear map has no interesting deep zoom).
+    this.refreshPolyPerturbation();
     const divergenceEscape = this.probeDivergenceEscape();
     this._interiorBailout = this._monicDegree === 2 && divergenceEscape;
     this._periodicityBailout = divergenceEscape;
@@ -2319,7 +2334,20 @@ export class GLPlot {
 
   /** Set the live parameter `a` (real part `re`, optional imaginary `im`); re-renders. */
   setParamA(re: number, im = 0): void {
+    const changed = this._paramA[0] !== re || this._paramA[1] !== im;
     this._paramA = [re, im];
+    // The perturbation path renders from coefficients BAKED at rebuild() time — extractPolyPerturbation
+    // evaluates the polynomial's coefficients at the then-current `a`, and setupPerturbDraw uploads
+    // those, while ensureOrbit iterates `this._polyPerturb.coeffs`. The standard path re-uploads the
+    // live `a` every draw, so it needed nothing here; perturbation did. scheduleRender() alone marks
+    // the orbit dirty, which recomputed it from the STALE coefficients — so for an a-dependent
+    // polynomial (e.g. `a*z^2+c`) the picture was byte-identical across the entire slider range while
+    // every readout said `a` had changed.
+    //
+    // Re-derive just the a-dependent perturbation state — not a full rebuild(), which would recompile
+    // a shader program on every slider input event. Gated on `changed` and on _polyPerturb being live,
+    // so the ordinary non-perturbation slider stays exactly as cheap as before.
+    if (changed && this._polyPerturb) this.refreshPolyPerturbation();
     this.scheduleRender();
   }
 
@@ -2360,7 +2388,14 @@ export class GLPlot {
     return this.perturbationActive && this.blaEnabled ? this.blaNumLevels : 0;
   }
 
-  /** Whether the current f is z²+c (so perturbation could apply on the param plane). */
+  /**
+   * Whether PERTURBATION could apply to the current f on the param plane — true for any monic
+   * z^d + c with d ≤ MAX_PERTURB_DEGREE, and for a general additive-c polynomial.
+   *
+   * ⚠ NOT an is-quadratic flag. It said "z²+c" here for a long time and main.ts consequently used
+   * it as one, which let the z³+c `cubic` / `biomorph` presets unlock nine overlays whose maths is
+   * hard-coded quadratic. Use `monicDegree === 2` (main.ts's `isQuadraticFamily`) for that.
+   */
   get perturbationEligible(): boolean {
     return this._perturbEligible;
   }
