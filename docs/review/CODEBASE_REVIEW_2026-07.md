@@ -357,7 +357,22 @@ harness suite — are outside the one rule the root config exists to enforce. Th
 (no current violation), but the guard has a hole in exactly the file type the QD app uses for
 its headless tests. Adding `js` to the app glob costs nothing.
 
-#### 0-3 — CI runs the full gate two-to-four times per change · MEDIUM · efficiency
+#### 0-3 — CI runs the full gate two-to-four times per change · MEDIUM · efficiency · ✅ FIXED
+
+> **Resolved.** The double-fire and the missing store cache are both fixed. `ci.yml`'s `push`
+> trigger is narrowed from `["**"]` to `[master]`, so `pull_request` gates everything that can
+> reach master (branch protection makes a PR the only route) while a direct push to master — which
+> bypasses branch protection — is still gated. All three jobs now restore the pnpm
+> content-addressable store from an `actions/cache` keyed on `pnpm-lock.yaml`.
+>
+> **This became urgent rather than merely wasteful:** the three review merges exhausted the
+> repository's GitHub Actions spending limit, and every post-merge run on `master` — `ci.yml` and
+> `deploy-pages.yml` alike — failed with *"The job was not started because recent account payments
+> have failed or your spending limit needs to be increased"*, without executing a single step. The
+> live Pages site consequently still serves the pre-merge build. Raising the limit and re-running
+> the latest `deploy-pages` workflow publishes it; nothing needs re-merging.
+>
+> The original finding, for the record:
 
 Verified by reading both workflows:
 
@@ -535,7 +550,7 @@ Items 2–5 are all small, localized edits. #2 and #3 should ship together — t
 | # | Finding | Measured | Status |
 | --- | --- | --- | --- |
 | 9 | **Both published apps ship one oversized eager chunk.** QD 1 326 KB (contains the entire ~15 k-line symbolic-algebra engine — `Buchberger`/`groebner` verified present in the bundle); CD 608 KB with **zero** dynamic imports. Both trip Vite's 500 KB warning; neither configures `manualChunks`. Correspondences, the one app with `rollupOptions`, is 76 KB total. | real `pnpm build` | VERIFIED |
-| 10 | **CI runs the full gate 3–4× per change** (push + PR triggers don't share a concurrency group; `deploy-pages.yml` re-runs it on master) and **no job caches the pnpm store**. | read both workflows | VERIFIED |
+| 10 | **CI runs the full gate 3–4× per change** (push + PR triggers don't share a concurrency group; `deploy-pages.yml` re-runs it on master) and **no job caches the pnpm store**. | read both workflows | ✅ **FIXED** — see below |
 
 ### Tier 4 — the remaining findings, now fully adjudicated
 

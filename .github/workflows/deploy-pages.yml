@@ -37,6 +37,17 @@ jobs:
           node-version: 22
       - run: corepack enable
 
+      # Same pnpm-store cache as ci.yml, and the same key — a publish right after a green CI run
+      # restores the store CI just populated instead of refetching it.
+      - name: Resolve the pnpm store path
+        run: echo "PNPM_STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+      - name: Cache the pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PNPM_STORE }}
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
+
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
