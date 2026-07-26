@@ -103,6 +103,7 @@ import {
 import { decodeLink, validateEnvelope, type Envelope } from "@cas/interchange";
 import { envelopeToMapSpec, mapSpecToExpr } from "./interchange/importMap";
 import { PLACES } from "./state/places";
+import { decodeNotes, encodeNotes, type Note } from "./state/notes";
 import GIF from "gif.js";
 import gifWorkerUrl from "gif.js/dist/gif.worker.js?url";
 import katex from "katex";
@@ -1309,7 +1310,7 @@ function init(): void {
   }
 
   /** User annotations (gold pins), tagged by plane; pushed to each plot's overlay. */
-  let notes: { plane: FractType; x: number; y: number; text: string }[] = [];
+  let notes: Note[] = [];
   function refreshNotes(): void {
     const pick = (pl: FractType): Annotation[] =>
       notes.filter((n) => n.plane === pl).map(({ x, y, text }) => ({ x, y, text }));
@@ -2654,7 +2655,10 @@ function init(): void {
     const dc = dynamicalView.plot.centerDD;
     if (dynamicalView.plot.zoom > 1e3 || dc[0][1] !== 0 || dc[1][1] !== 0)
       state._dcdd = ddCenterToString(dc[0], dc[1]);
-    if (notes.length > 0) state._notes = JSON.stringify(notes); // pinned annotations
+    // Pinned annotations. Always emitted, even empty: applyFullState treats a MISSING `_notes` as
+    // "this state says nothing about notes, leave them alone", so an undo step or a saved view that
+    // genuinely has none still has to say so explicitly to restore an empty board. (cd-shell-05)
+    state._notes = encodeNotes(notes);
     const proj = readProjectionState(); // anchor + saved linear view behind an active projection
     if (proj) state._proj = proj;
     const pv = byId<HTMLSelectElement>("profile").value; // the active use-case profile (label hint)
@@ -2722,32 +2726,19 @@ function init(): void {
     }
     // The coordinate remap, once both centres are final — its anchor is relative to them.
     setProjectionState(state._proj);
-    // Restore pinned annotations (validated; ignore a malformed list from a corrupt link). Caps bound a
-    // hostile link: reject non-finite coordinates (`typeof NaN === "number"` would otherwise admit them
-    // straight into the label geometry) and cap both the note count and per-note text length.
-    notes = [];
-    const MAX_NOTES = 256;
-    const MAX_NOTE_TEXT = 2000;
-    if (typeof state._notes === "string") {
-      try {
-        const parsed: unknown = JSON.parse(state._notes);
-        if (Array.isArray(parsed))
-          notes = parsed
-            .filter(
-              (n): n is { plane: FractType; x: number; y: number; text: string } =>
-                !!n &&
-                Number.isFinite(n.x) &&
-                Number.isFinite(n.y) &&
-                typeof n.text === "string" &&
-                n.text.length <= MAX_NOTE_TEXT &&
-                (n.plane === "param" || n.plane === "dyn"),
-            )
-            .slice(0, MAX_NOTES);
-      } catch {
-        /* ignore malformed _notes */
-      }
+    // Restore pinned annotations. Present-only, like `_grad` / `_z0` / `_profile`: a state that does
+    // not MENTION notes leaves them alone (decodeNotes returns null), and the validation + hostile-link
+    // caps live with the codec in state/notes.ts. This used to clear them unconditionally — invisible
+    // for the callers that pass a readFullState-derived state, but it silently wiped every pin the
+    // moment a "Places" entry was picked, since those are curated partial states built from six control
+    // ids (state/places.ts), so "no `_notes` key" read as "delete them all". Recovery was Ctrl+Z, with
+    // nothing hinting anything had been lost. A pre-fix saved view or link carries no `_notes` and so
+    // now preserves the current pins — the same rule, applied to states written before it existed.
+    const restoredNotes = decodeNotes(state._notes);
+    if (restoredNotes) {
+      notes = restoredNotes;
+      refreshNotes();
     }
-    refreshNotes();
     if (typeof state._profile === "string") adoptProfile(state._profile); // show the carried profile label
   }
 
