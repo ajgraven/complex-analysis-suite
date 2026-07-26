@@ -59,6 +59,33 @@ import _QD from './solver.mjs';
   if (!C) throw new Error("parse-h.js: Complex namespace not found");
 
   // ===========================================================================
+  // Is a polynomial part of h meaningful in this mode?
+  //
+  // SINGLE SOURCE OF TRUTH — exported as QD.modeAllowsPoly and consumed by the UI
+  // (ui-h-text.mjs). It previously existed twice: this engine listed only the three
+  // modes {unbounded, lqd-unbounded, lqd-unbounded-singular} while the UI's copy also
+  // listed pqd-unbounded and pqd-unbounded-singular. The UI's copy was the correct one
+  // — ui-modes.mjs gives all five *unbounded* descriptors `cards.poly: true`, and five
+  // shipped PQD-unbounded presets carry polyCoeffs — so the engine's shorter list threw
+  // "polynomial part of h is only valid in unbounded mode" on data the app itself ships,
+  // which also broke share-link restore for those presets (ui-url-state re-parses #h-text).
+  //
+  // The rule is simply UNBOUNDED, independent of the weight: ∞ ∈ Ω is what admits a
+  // polynomial part, and the classical / power / log families are all unbounded there.
+  // Bounded modes must have polyCoeffs = []. Listed explicitly rather than sniffed with
+  // `mode.includes('unbounded')`, so a future mode has to opt in deliberately.
+  // `vitest/parse-h-poly-modes.test.ts` asserts this agrees with cards.poly for EVERY
+  // mode descriptor, which is the guard the two hand-kept copies never had.
+  const POLY_MODES = new Set([
+    'unbounded',
+    'pqd-unbounded',
+    'pqd-unbounded-singular',
+    'lqd-unbounded',
+    'lqd-unbounded-singular',
+  ]);
+  function modeAllowsPoly(mode) { return POLY_MODES.has(mode); }
+
+  // ===========================================================================
   // Polynomial-in-w helpers (ascending-power Complex[]).
   // Generic dense-polynomial arithmetic lives in poly-helpers.js (QD.Poly,
   // code-review CR3). parse-h trims trailing near-zero coefficients after add
@@ -403,13 +430,8 @@ import _QD from './solver.mjs';
   // ===========================================================================
   function parseH(expr, math, opts) {
     opts = opts || {};
-    const mode = opts.mode || 'unbounded';      // 'bounded' / 'unbounded' / lqd-*
-    // Polynomial part of h is allowed exactly in the three unbounded family
-    // panels (classical unbounded + unbounded LQD ± singular). Bounded modes
-    // — including bounded LQDs — must have polyCoeffs = [].
-    const allowPoly = (mode === 'unbounded' ||
-                       mode === 'lqd-unbounded' ||
-                       mode === 'lqd-unbounded-singular');
+    const mode = opts.mode || 'unbounded';      // 'bounded' / 'unbounded' / pqd-* / lqd-*
+    const allowPoly = modeAllowsPoly(mode);
 
     if (!math || !math.parse) throw new Error("parseH: math.js required");
     if (typeof expr !== 'string' || !expr.trim()) throw new Error("empty expression");
@@ -587,4 +609,5 @@ import _QD from './solver.mjs';
   // Attach onto QD without clobbering existing keys (Complex, Taylor, Direct, …).
   QD.parseH  = parseH;
   QD.formatH = formatH;
+  QD.modeAllowsPoly = modeAllowsPoly;   // the UI reads this instead of keeping its own copy
 })(typeof globalThis !== 'undefined' ? globalThis : this);
