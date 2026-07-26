@@ -66,12 +66,18 @@ cvec invertPhi(cvec w, cvec a, out bool ok) {
 cvec sigma_a(cvec w, cvec a, out bool ok) {
   cvec z = invertPhi(w, a, ok);
   if (!ok) return w;
-  // Exterior branch only: φ_a is univalent on {|z|>1} for the entire family window (area theorem,
-  // |a| ≤ √2), so a preimage inside the closed unit disk is the WRONG branch. Treat it as "no exterior
-  // preimage" (the orbit left Ω inward — bounded, not an escape), matching the CPU UnboundedLaurent-
-  // Schwarz and the deltoid shader's length(z) < 0.999 call-site guard; 1e-4 slack mirrors acceptZ
-  // elsewhere. Previously only z ~ 0 was rejected, so an accepted interior root corrupted the escape
-  // count on the ~0.04% of pixels where the cold seed converged inward. (CORR-2)
+  // Exterior branch only: a preimage inside the closed unit disk is the WRONG branch. Treat it as "no
+  // exterior preimage" (the orbit left Ω inward — bounded, not an escape), matching the CPU
+  // UnboundedLaurentSchwarz and the deltoid shader's length(z) < 0.999 call-site guard; 1e-4 slack
+  // mirrors acceptZ elsewhere. Previously only z ~ 0 was rejected, so an accepted interior root
+  // corrupted the escape count on the ~0.04% of pixels where the cold seed converged inward. (CORR-2)
+  //
+  // ⚠ "Exactly one preimage lies outside" holds only where φ_a is univalent on {|z|>1}, i.e. |a| ≤ 1
+  // (φ_a'(z) = 1 − a/z³ vanishes at |z| = |a|^{1/3}). This comment previously claimed the area theorem
+  // gave that for the whole window at |a| ≤ √2 — it does not; the area theorem is necessary for
+  // univalence, not sufficient (see family.ts). The window reaches |a| ≈ 2.4, so on the |a| > 1 part
+  // σ_a is not a well-defined branch at all and "the outermost root" is an arbitrary pick. The escape
+  // count there is exploratory only; the caption says so.
   if (length(z) < 1.0 - 1e-4) { ok = false; return w; }
   return cconj(fSch_a(z, a));
 }
