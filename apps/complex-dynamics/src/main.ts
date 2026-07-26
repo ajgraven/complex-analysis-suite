@@ -200,6 +200,24 @@ const FATE_TEXT: Record<OrbitFate, string> = {
   undetermined: "no escape or cycle within the iteration limit",
 };
 
+/**
+ * Is the plot's f the QUADRATIC family z²+c? The gate for every overlay whose mathematics is
+ * hard-coded quadratic — external rays and ray pairs (`rays.ts` iterates z ← z²+c), Farey bulb
+ * labels (`farey.ts` bulbRoot = μ/2 − μ²/4), the inverse-iteration Julia cloud and Siegel curves
+ * (`inverseJulia.ts` β = (1+√(1−4c))/2), the Yoccoz puzzle and parapuzzle (`yoccozPuzzle.ts`
+ * α = (1−√(1−4c))/2), the lamination/QML, and the "Mandelbrot set" legend name.
+ *
+ * These were gated on `plot.perturbationEligible`, which is NOT an is-quadratic flag: glPlot sets it
+ * for any monic z^d+c with d ≤ 8, and for general additive-c polynomials. The shipped `cubic` and
+ * `biomorph` presets are z³+c, so they passed the gate and the overlays drew z²+c objects on a
+ * cubic picture as fact — including labelling the parameter plane "Mandelbrot set", and silently
+ * skipping updateYoccoz's own caveat string ("The Yoccoz puzzle is defined for z²+c"), which was
+ * unreachable precisely because the gate passed.
+ *
+ * `perturbationEligible` remains correct where PERTURBATION itself is the subject.
+ */
+const isQuadraticFamily = (plot: { monicDegree: number | null }): boolean => plot.monicDegree === 2;
+
 /** Opens the glossary modal at an optional term anchor; assigned by setupGlossary(). */
 let openGlossary: (termId?: string) => void = () => {};
 
@@ -1250,7 +1268,7 @@ function init(): void {
    *  (a rotation p/q was found) and f is z²+c (where external rays are defined). */
   function updateBulbRaysButton(info: InspectResult, plane: FractType): void {
     const eligible =
-      plane === "param" && info.rotation !== null && parameterView.plot.perturbationEligible;
+      plane === "param" && info.rotation !== null && isQuadraticFamily(parameterView.plot);
     byId("inspector-rays").hidden = !eligible;
   }
 
@@ -1269,7 +1287,7 @@ function init(): void {
       rot !== null &&
       rot.q >= 2 &&
       rot.q <= MAX_DOUBLING_Q &&
-      dynamicalView.plot.perturbationEligible;
+      isQuadraticFamily(dynamicalView.plot);
     byId("inspector-portrait").hidden = !eligible;
     lastPortraitRotation = eligible && rot ? { p: rot.p, q: rot.q } : null;
   }
@@ -1436,7 +1454,7 @@ function init(): void {
     const critToggle = byId<HTMLInputElement>("yoccoz-critical");
     const note = byId("yoccoz-note");
     byId("yoccoz-depth-value").textContent = depthInput.value; // keep the slider label in sync
-    const eligible = dynamicalView.plot.perturbationEligible; // z²+c (both planes share f)
+    const eligible = isQuadraticFamily(dynamicalView.plot); // z²+c (both planes share f)
     dynToggle.disabled = !eligible;
     paraToggle.disabled = !eligible;
     const anyOn = eligible && (dynToggle.checked || paraToggle.checked);
@@ -1526,7 +1544,7 @@ function init(): void {
     const detailInput = byId<HTMLInputElement>("lamination-detail");
     const note = byId("lamination-note");
     byId("lamination-detail-value").textContent = detailInput.value; // keep the slider label in sync
-    const eligible = dynamicalView.plot.perturbationEligible; // z²+c (both planes share f)
+    const eligible = isQuadraticFamily(dynamicalView.plot); // z²+c (both planes share f)
     dynToggle.disabled = !eligible;
     qmlToggle.disabled = !eligible;
     const anyOn = eligible && (dynToggle.checked || qmlToggle.checked);
@@ -2367,7 +2385,7 @@ function init(): void {
    *  (dynamical plane), or a generic "set" for other parameter families. */
   function legendSetName(view: PlotView, plane: "param" | "dyn"): string {
     if (plane === "dyn") return "filled Julia set";
-    return view.plot.perturbationEligible ? "Mandelbrot set" : "the set";
+    return isQuadraticFamily(view.plot) ? "Mandelbrot set" : "the set";
   }
 
   /** Redraw both plot legends for the current colouring (or clear them when the toggle is off; an
@@ -2453,7 +2471,7 @@ function init(): void {
 
   /** Toggle Farey bulb labels on the parameter plane; disabled unless f is z²+c. */
   function applyFarey(): void {
-    const eligible = parameterView.plot.perturbationEligible;
+    const eligible = isQuadraticFamily(parameterView.plot);
     const cb = byId<HTMLInputElement>("farey");
     cb.disabled = !eligible;
     parameterView.setFarey(eligible && cb.checked);
@@ -2461,7 +2479,7 @@ function init(): void {
 
   /** Trace the entered external-ray angle on both planes; gated to z²+c. */
   function applyRays(): void {
-    const eligible = parameterView.plot.perturbationEligible;
+    const eligible = isQuadraticFamily(parameterView.plot);
     const on = byId<HTMLInputElement>("rays").checked;
     const angle = parseAngle(byId<HTMLInputElement>("ray-angle").value);
     byId<HTMLInputElement>("rays").disabled = !eligible;
@@ -2475,7 +2493,7 @@ function init(): void {
 
   /** Draw the landing-ray pair for each visible Farey bulb (parameter plane); z²+c only. */
   function applyRayPairs(): void {
-    const eligible = parameterView.plot.perturbationEligible;
+    const eligible = isQuadraticFamily(parameterView.plot);
     const cb = byId<HTMLInputElement>("ray-pairs");
     cb.disabled = !eligible;
     parameterView.setRayPairs(eligible && cb.checked);
@@ -2483,7 +2501,7 @@ function init(): void {
 
   /** Draw the inverse-iteration Julia point cloud (dynamical plane); z²+c only. */
   function applyInverseJulia(): void {
-    const eligible = dynamicalView.plot.perturbationEligible;
+    const eligible = isQuadraticFamily(dynamicalView.plot);
     const cb = byId<HTMLInputElement>("inverse-julia");
     cb.disabled = !eligible;
     dynamicalView.setInverseJulia(eligible && cb.checked);
@@ -2491,7 +2509,7 @@ function init(): void {
 
   /** Draw the Siegel-disc invariant curves (dynamical plane); z²+c only. */
   function applySiegelCurves(): void {
-    const eligible = dynamicalView.plot.perturbationEligible;
+    const eligible = isQuadraticFamily(dynamicalView.plot);
     const cb = byId<HTMLInputElement>("siegel-curves");
     cb.disabled = !eligible;
     dynamicalView.setSiegelCurves(eligible && cb.checked);
@@ -3351,7 +3369,7 @@ function init(): void {
   // Angles of a point (the inverse of ray landing): snap the last-clicked point to the nearest
   // low-period landing, draw the co-landing rays in cyan, and report valence + biaccessibility.
   byId("angles-find").addEventListener("click", () => {
-    if (!parameterView.plot.perturbationEligible) {
+    if (!isQuadraticFamily(parameterView.plot)) {
       showToast("External rays (and their angles) are defined for z²+c only.", "warn");
       return;
     }
