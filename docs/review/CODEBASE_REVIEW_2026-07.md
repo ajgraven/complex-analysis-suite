@@ -7,7 +7,7 @@
 
 ## ▶ RESUME HERE
 
-Everything a fresh session needs to continue. **Next up: Batch B** — numerical robustness.
+Everything a fresh session needs to continue. **Next up: Batch C** — CD state fidelity.
 
 ### Where the work stands
 
@@ -15,8 +15,8 @@ Everything a fresh session needs to continue. **Next up: Batch B** — numerical
 | --- | --- | --- |
 | Findings surviving verification | **112** | 84 confirmed + 28 overstated; 4 refuted and excluded |
 | **HIGH** | **12 of 12 FIXED** | tier complete |
-| Medium / low | 12 of 99 fixed | Batches A and A-2 done |
-| Remaining | **87** | 37 medium, 50 low |
+| Medium / low | 20 of 99 fixed | Batches A, A-2 and B done |
+| Remaining | **79** | 35 medium, 44 low |
 
 Batch A-2 also closed **three defects it discovered along the way** that were not in the original 124
 — see [Pass 5](#pass-5--batch-a-2-exact-arithmetic-contracts-and-the-bla-reference-162). Expect this:
@@ -37,6 +37,7 @@ branch is cut from `master` with disjoint files.
 | [#160](https://github.com/ajgraven/complex-analysis-suite/pull/160) | `fix/qd-lint-mjs` | the QD lint hole (last HIGH) |
 | [#161](https://github.com/ajgraven/complex-analysis-suite/pull/161) | `fix/batch-a-honest-labeling` | Batch A (this document's latest updates ride here) |
 | [#162](https://github.com/ajgraven/complex-analysis-suite/pull/162) | `fix/batch-a2-claim-accuracy` | Batch A-2 — exact-arithmetic contracts + the BLA reference |
+| [#163](https://github.com/ajgraven/complex-analysis-suite/pull/163) | `fix/batch-b-numerical-robustness` | Batch B — numerical robustness in the shared packages |
 
 Already merged: **#154** (`@cas/core` NaN-convergence + aliasing), **#155** (7 honest-labeling
 defects), **#156** (this review record).
@@ -56,7 +57,7 @@ test-integrity batch (F).
 | Batch | Theme | ~Items |
 | --- | --- | ---: |
 | ~~**A-2**~~ | ~~claim accuracy, exact-arithmetic contracts~~ — **done** | ~~5~~ |
-| **B** | numerical robustness (`Complex.div` NaN >1.3e154, `cpow`, `Frac.toNumber`, GLSL emit) | ~10 |
+| ~~**B**~~ | ~~numerical robustness~~ — **done** ([#163](https://github.com/ajgraven/complex-analysis-suite/pull/163)) | ~~8~~ |
 | **C** | CD state fidelity (`SHARE_IDS` gaps, Place deletes annotations, mating panel c/f mismatch) | ~6 |
 | **D** | worker / resource lifecycle + memory | ~6 |
 | **E** | performance | ~14 |
@@ -556,6 +557,52 @@ the suite by ~17%. Updated to the measured number.
 | --- | --- | --- |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | Durand–Kerner withholds convergence on non-finite iterates (V-1) | new test, proven to fail against the old code |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | `addMulInto` honours its aliasing contract (V-2) | new test, proven to fail against the old code |
+
+### Pass 6 — Batch B: numerical robustness in the shared packages ([#163](https://github.com/ajgraven/complex-analysis-suite/pull/163))
+
+Branch `fix/batch-b-numerical-robustness`. Six commits, eight findings, all four shared packages
+(`@cas/core`, `@cas/exact`, `@cas/expr`, `@cas/gpu`).
+
+| id | What shipped |
+| --- | --- |
+| `cd-div-02` + `cd-cpow-05` | `Complex.div` / `inv` / `tupleAlgebra.div` / `Complex.cpow` all squared the modulus before using it, halving the exponent range. `div(1e200, 1e200)` returned `{NaN, 0}`; `div(1, 1e-200)` threw *"division by zero"* for a nonzero divisor; and `cpow`'s guard — documented as the `a = 0` case — fired for every \|a\| < 1e-150, so the 4th root of 1e-160 came back as exactly 0 instead of 1e-40, while \|a\| > 1.34e154 gave `{Infinity, NaN}`, the two components disagreeing about the failure. |
+| `cd-frac-07` | `Frac.toNumber` returned `Infinity/Infinity = NaN` once both sides passed ~1.8e308 — and `Frac` is kept in lowest terms, so "both huge" is an ordinary state. This is the sole exact→numeric crossing, and what is downstream of it is a read-out labelled `(= exact)`. |
+| `expr-glsl-01` | Read-before-assign of the live parameter emitted the self-referential `cvec a = cmul(a, …);`. GLSL rejects it, the JS backend runs it, and the GPU keeps rendering the previous map. `a` is now declared from the uniform whenever it is READ — which is also the JS semantics. |
+| `expr-glsl-02` | Complex `==` went through `cre1`, which returns only the **hi limb** in df64 — fp32-width equality on a ~47-bit value, exactly where df64 is the point. Now a whole-value `(a == b)`. |
+| `expr-parser-01` + `expr-parser-depth-04` | The `MAX_DEPTH` guard covered parens but not the unary chain (`parseUnary` self-recursion) or the power chain (`parsePower` re-entering it), so both threw `RangeError` instead of the clean positioned `ExprError` the guard exists for. The test claimed the general property while exercising parens only — and the two paths it skipped were exactly the two the guard missed. |
+| `expr-eval-01` | The interpreter threw on a complex `if` condition while **both** compiled backends coerce it, so that node was one the parity/fuzz contract could not cover at all: the reference refusing what the two implementations accepted and agreed on. |
+
+**The design decision worth recording.** For `div` / `inv` / `cpow` the original expression stays the
+fast path, and the safe form (Smith's algorithm for the quotient, `Math.hypot` for the modulus) is
+reached only once the intermediate has already overflowed or underflowed. The cost is one comparison
+on a value the old code computed anyway, and it makes the fix unobservable on the reachable range —
+**20 000 random ordinary divides, 20 000 random `cpow` calls and 2 000 in-range fractions produce
+zero bit-level differences**, asserted rather than measured. That mattered because these are hot
+shared kernels and `@cas/core`'s series multiply is *deliberately* bit-identical to both apps'.
+
+None of the eight is reachable from a current consumer. That is a fact about today's callers, not
+about the contract, and these packages exist to be depended on by code that cannot know it.
+
+**Also closed, found while fixing the above:**
+
+- **The GLSL harness could not compile any program using the live parameter.** `buildProbeGLSL` and
+  `buildEscapeProbeGLSL` emitted their uniform declarations *after* the compiled function — invisible
+  for `uZ`/`uC` (read only from `main`), fatal for `uA` (read from inside `fFn`). So the harness that
+  exists specifically to catch GPU-only codegen bugs had the whole live-parameter path outside what it
+  could compile. Production was already correct and says so in a comment. Found by adding the
+  `expr-glsl-01` case to `F_REGRESSION_CORPUS` and running it for real.
+- **Two app-level tests pinned the pre-fix GLSL**, with the refuted rationale in their comments
+  (`glslCodegen.test.ts`). The gate caught them. Rewritten rather than deleted, so the corrected
+  reasoning lives where the wrong rule used to.
+
+**Verification.** Against the pre-fix source: 5 `@cas/core` + 1 `@cas/exact` + 3 expr-codegen + 2
+parser + 2 parity tests fail; the no-change guards pass on both. And the **real-WebGL2 harness**
+compiles both new corpus entries (12/12) — against the pre-fix codegen it fails with
+`ERROR: 'a' : undeclared identifier`, so this finding is proved by compiling rather than by reading.
+Recorded honestly in the corpus: the `==` entry *cannot* catch the df64 defect, because that harness
+is single-precision; catching it there would need a df64 probe builder.
+
+Gate: 1864 tests / 196 files (from 1820 / 193 at the review baseline), all four builds, QD headless 2261.
 
 ### Pass 5 — Batch A-2: exact-arithmetic contracts and the BLA reference ([#162](https://github.com/ajgraven/complex-analysis-suite/pull/162))
 
