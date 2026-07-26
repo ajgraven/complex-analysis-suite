@@ -217,7 +217,9 @@ function renderParamPlane(canvas: HTMLCanvasElement): void {
       "capP",
       `Family parameter plane φ_a = z + a/(2z²) — GPU render (${PARAM_GPU}², ${Math.round(performance.now() - t0)} ms). ` +
         `Dark body ≈ critical/cusp orbits bounded (a=1 deltoid, a=0 disk); exterior by escape speed. ` +
-        `≈ exploratory — not a certified connectedness locus (φ_a proven univalent only for |a| ≤ √2).`,
+        `≈ exploratory — not a certified connectedness locus. φ_a is univalent on {|z|>1} only for ` +
+        `|a| ≤ 1, and this window extends past that, so σ_a is not well defined over much of the ` +
+        `picture: read |a| > 1 as an unclassified region, not as membership.`,
     );
     return;
   }
@@ -233,8 +235,9 @@ function renderParamPlane(canvas: HTMLCanvasElement): void {
     (pct) => `Parameter plane — critical-orbit escape (CPU)… ${pct}%`,
     (ms) =>
       `Family parameter plane φ_a = z + a/(2z²) — CPU fallback (${PARAM_CPU}², ${ms} ms). ` +
-      `Dark body ≈ critical/cusp orbits bounded (a=1 deltoid, a=0 disk). ≈ exploratory — not certified ` +
-      `(φ_a proven univalent only for |a| ≤ √2).`,
+      `Dark body ≈ critical/cusp orbits bounded (a=1 deltoid, a=0 disk). ≈ exploratory — not certified. ` +
+      `φ_a is univalent on {|z|>1} only for |a| ≤ 1, and this window extends past that, so σ_a is not ` +
+      `well defined over much of the picture: read |a| > 1 as an unclassified region, not as membership.`,
   );
 }
 

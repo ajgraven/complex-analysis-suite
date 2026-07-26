@@ -1908,21 +1908,31 @@ function init(): void {
       lastConnectivityRigorous = pc !== null;
       jSet(
         "jp-connectivity",
+        // Fatou–Julia is a theorem, but "critical orbit bounded" is decided by surviving CONN_ITERS
+        // iterations, so only the all-escaped verdict is a determination — escape is the decisive
+        // half. "connected" rests entirely on the cap, and separating "disconnected" from "cantor"
+        // does too, so both are hedged (critical.ts documents the split).
         pc === "connected"
-          ? "connected (all critical orbits bounded)"
+          ? "≈ connected (all critical orbits bounded to the iteration cap)"
           : pc === "cantor"
             ? "totally disconnected — Cantor dust"
             : pc === "disconnected"
-              ? "disconnected (mixed critical orbits)"
+              ? "≈ disconnected (mixed critical orbits)"
               : "measuring…", // non-polynomial ⇒ image estimate fills this from the Tier-2 pass
       );
     } else {
       lastConnectivityRigorous = false;
       jSet(
         "jp-connectivity",
-        p.connected
-          ? `connected (c ∈ ${d === 2 ? "Mandelbrot set" : `multibrot M${d}`})`
-          : "totally disconnected — Cantor dust",
+        // `p.connected` is only "the critical orbit did not escape", which is also true when the
+        // orbit was iteration-limited. Reporting THAT as "c ∈ Mandelbrot set" would state a
+        // membership the computation never established, so hedge it — matching the honest
+        // "no attracting cycle found (iteration-limited)" wording used for jp-paramtype below.
+        p.connectivityUndetermined
+          ? "≈ undetermined (iteration-limited — orbit neither escaped nor closed)"
+          : p.connected
+            ? `connected (c ∈ ${d === 2 ? "Mandelbrot set" : `multibrot M${d}`})`
+            : "totally disconnected — Cantor dust",
       );
     }
 
@@ -1932,7 +1942,12 @@ function init(): void {
       ptype =
         p.cycle.multiplierMag < 1e-6
           ? `superattracting · period ${p.cycle.period}`
-          : `attracting · period ${p.cycle.period} · |λ| ${holo ? "=" : "≈"} ${jNum(p.cycle.multiplierMag, 3)}`;
+          : // Always ≈. `holo` says an analytic f′ exists, NOT that the value is exact: the cycle is
+            // located numerically and Newton-refined to ~1e-13, then |λ| = |exp(Σ log f′(z_k))| in
+            // float64. The holomorphic path is a BETTER estimate than the finite-difference one, not
+            // an exact one, so the distinction belongs in the provenance note, not in the relation.
+            `attracting · period ${p.cycle.period} · |λ| ≈ ${jNum(p.cycle.multiplierMag, 3)}` +
+            (holo ? "" : " (finite-diff)");
     else if (p.paramClass === "neutral") ptype = "neutral (|λ| ≈ 1, on the boundary)";
     else ptype = "no attracting cycle found (iteration-limited)";
     if (p.cycle?.rotation) ptype += ` · ${p.cycle.rotation.p}/${p.cycle.rotation.q}`;
@@ -1946,7 +1961,10 @@ function init(): void {
           ? "—"
           : p.lyapunov === -Infinity
             ? "−∞ (superattracting)"
-            : `${holo ? "" : "≈ "}${jNum(p.lyapunov, 4)} nats/iter`,
+            : // Derived from the same numerically located cycle (log|λ|/period) or accumulated along
+              // the critical orbit, so it is an estimate on both paths — the holomorphic branch used
+              // to print a bare number with no marker at all.
+              `≈ ${jNum(p.lyapunov, 4)} nats/iter` + (holo ? "" : " (finite-diff)"),
     );
 
     jSet(

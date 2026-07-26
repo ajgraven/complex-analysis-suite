@@ -27,6 +27,27 @@ const QD = _QD;
 (function (global) {
   'use strict';
 
+  // Map a solved solution to the valid/invalid verdict shown in the #status-panel badge.
+  //
+  // Pure in `sol`, and it encodes an honest-labeling contract, so it lives at module scope and is
+  // exported on QD_UI for direct testing (same lift pattern as the algebra verdict helpers) rather
+  // than being buried in the installSolve closure.
+  function qdValidityBadge(sol) {
+    if (!sol)                              return { cls: 'err',  text: '✗ No solution' };
+    // An externally supplied φ (the Algebra tab's hand-off) carries the rigor of the verdict that
+    // produced it. Only an absent/true `univalenceCertified` earns the unqualified ✓; an explicit
+    // false means the univalence filter ran but was NOT certified at the exact algebraic point, so
+    // the badge must not read as certified. Solver-produced solutions never set the field
+    // (undefined) and keep their existing verdict.
+    if (sol.univalent && sol.identityOK && sol.univalenceCertified === false)
+      return { cls: 'warn', text: '⚠ Quadrature domain — univalence ≈ estimated, not certified' };
+    if (sol.univalent && sol.identityOK)   return { cls: 'ok',   text: '✓ Valid quadrature domain' };
+    if (!sol.univalent && !sol.identityOK) return { cls: 'err',  text: '✗ Spurious root (non-univalent + identity fails)' };
+    if (!sol.univalent)                    return { cls: 'warn', text: '⚠ Boundary self-intersects (non-univalent)' };
+    return { cls: 'warn', text: '⚠ Quadrature identity not satisfied' };
+  }
+  QD_UI.qdValidityBadge = qdValidityBadge;
+
   QD_UI.installSolve = function installSolve(ui) {
     // ---- Injected ui.js dependencies (original names; bodies verbatim) ----
     const state                 = ui.state;
@@ -809,14 +830,8 @@ function renderObservables(res) {
 // hosts the geometric properties + boundary singularities. (The Riemann map
 // φ(z) lives separately, at the bottom of the Domain-type tile — renderRiemannMap.)
 
-// Map a solved solution to the valid/invalid verdict shown in the panel badge.
-function qdValidityBadge(sol) {
-  if (!sol)                              return { cls: 'err',  text: '✗ No solution' };
-  if (sol.univalent && sol.identityOK)   return { cls: 'ok',   text: '✓ Valid quadrature domain' };
-  if (!sol.univalent && !sol.identityOK) return { cls: 'err',  text: '✗ Spurious root (non-univalent + identity fails)' };
-  if (!sol.univalent)                    return { cls: 'warn', text: '⚠ Boundary self-intersects (non-univalent)' };
-  return { cls: 'warn', text: '⚠ Quadrature identity not satisfied' };
-}
+// (qdValidityBadge is lifted to module scope — see the top of this file — so the honest-labeling
+// contract it encodes can be tested directly. `renderValidityBadge` reaches it by closure.)
 function renderValidityBadge(sol) {
   const el = $('#sp-badge');
   if (!el) return;

@@ -3767,7 +3767,10 @@ const QD = _QD;
           vActions.push({
             label: 'View in the QD plot',
             title: 'Render the reconstructed quadrature domain in the geometric QD tab (boundary, cusps, critical set) and switch to it.',
-            onClick: () => { if (!ctx.showQDSolution(dPhi, activeEnv.hData)) toast('Could not open in the QD plot', { kind: 'error' }); },
+            // Carry the verdict's rigor across the hand-off: the QD tab's validity badge only earns
+            // its unqualified ✓ when this was 'exact'. Without it an ≈ verdict rendered there as a
+            // certified quadrature domain.
+            onClick: () => { if (!ctx.showQDSolution(dPhi, activeEnv.hData, { rigor: pr.rigor })) toast('Could not open in the QD plot', { kind: 'error' }); },
           });
         }
         // S5-depth: one-click export of the full derivation DAG — a reproducible, re-importable proof object.

@@ -1,12 +1,23 @@
 /**
- * Critical points and RIGOROUS connectivity for a polynomial map f. By the Fatou–Julia theorem, a
- * degree-d polynomial's filled Julia set is:
+ * Critical points and critical-orbit connectivity for a polynomial map f. By the Fatou–Julia theorem,
+ * a degree-d polynomial's filled Julia set is:
  *   • connected                       ⟺ every critical point (a root of f′) has a bounded orbit;
  *   • totally disconnected (Cantor)   ⟺ all critical orbits escape;
  *   • disconnected, ∞-many components ⟺ some escape and some stay bounded.
  * This generalizes the single-critical-point test (correct only for z^d+c, whose one critical point
  * is 0) to ANY polynomial. Non-polynomial / non-holomorphic maps return null — the caller falls back
  * to the image-based estimate. All CPU, using the expression evaluator + Durand–Kerner root finding.
+ *
+ * RIGOUR — the classification RULE above is a theorem; the COMPUTATION feeding it is not. Two inputs
+ * are numerical: the critical points come from Durand–Kerner, and "the orbit is bounded" is decided
+ * by surviving CONN_ITERS iterations, which is a proxy, not a proof (a slow escaper survives it).
+ * Escape is the only decisive half — if the escape test fires, that orbit really does escape. So:
+ *   • "cantor"       — every orbit escaped ⇒ a determination;
+ *   • "connected"    — rests entirely on the iteration cap ⇒ an ESTIMATE;
+ *   • "disconnected" — "not connected" is decided, but telling it apart from "cantor" rests on the
+ *                      cap ⇒ an ESTIMATE.
+ * Callers must label the last two accordingly. This header previously read "RIGOROUS connectivity",
+ * which the `=`/`≤`/`≈` rule reserves for the first case only.
  */
 
 import { makeDurandKerner, tupleAlgebra } from "@cas/core";
@@ -252,9 +263,12 @@ export function findRationalCriticalPoints(fAst: Node, a: Complex, c: Complex): 
 const CONN_ITERS = 400; // orbit length to decide a critical point's fate
 
 /**
- * Rigorous connectivity of a polynomial filled Julia set, from the fate of every critical orbit
- * (see the module comment). Returns null when f is not a polynomial — the caller then uses the
- * image-based estimate.
+ * Connectivity of a polynomial filled Julia set from the fate of every critical orbit (see the
+ * module comment). Returns null when f is not a polynomial — the caller then uses the image-based
+ * estimate.
+ *
+ * Only "cantor" is a determination; "connected" and "disconnected" are estimates, because a critical
+ * orbit counts as bounded merely by surviving CONN_ITERS iterations. Present them hedged.
  */
 export function polynomialConnectivity(
   fAst: Node,

@@ -1,9 +1,19 @@
 // The correspondence FAMILY — Milestone C (MIGRATION.md Phase 6 step 4). The deltoid φ(z)=z+1/(2z²) is
 // ONE member of the 1-(complex-)parameter Laurent family
 //   φ_a(z) = z + a/(2 z²)      (a ∈ ℂ;  a = 1 is the deltoid,  a → 0 the round disk),
-// realized directly through makeUnboundedLaurentSchwarz(1, [[0,0],[0,0],[a/2,0]]) — no new engine. The
-// area theorem (Σ n|bₙ|² = |a|²/2 ≤ 1) keeps φ_a univalent on {|z|>1} for |a| ≤ √2, so the deltoid sits
-// safely inside the family.
+// realized directly through makeUnboundedLaurentSchwarz(1, [[0,0],[0,0],[a/2,0]]) — no new engine.
+//
+// UNIVALENCE RANGE: φ_a is univalent on {|z|>1} exactly for **|a| ≤ 1**, straight from the derivative
+//   φ_a'(z) = 1 − a/z³ = 0  ⟺  |z| = |a|^{1/3},
+// so a critical point enters the exterior {|z|>1} as soon as |a| > 1 and φ_a is not even locally
+// injective there. The deltoid (a = 1) sits exactly ON that boundary, with its critical points on
+// |z| = 1 — which is what makes its cusps land on ∂Ω.
+//
+// ⚠ Do NOT restate the old "univalent for |a| ≤ √2" bound. It came from reading the area theorem
+// (Σ n|bₙ|² = |a|²/2 ≤ 1 ⟺ |a| ≤ √2) backwards: the area theorem is a NECESSARY condition satisfied
+// BY univalent functions, never a sufficient one. Concrete counterexample inside the old range —
+// for a = 1.2 the distinct points z = 1.052307+0.208604i and w = 1.02−0.2i both lie outside the unit
+// disk and satisfy φ_a(z) = φ_a(w) to 2e-16.
 //
 // MARKED ORBIT & MEMBERSHIP. φ_a has three critical points ζ_k = a^{1/3}·{1,ω,ω²} (φ_a'(z)=1−a/z³=0);
 // their images m_k = φ_a(ζ_k) = 1.5·a^{1/3}·{1,ω,ω²} are the CUSPS — the critical values of the Schwarz

@@ -29,8 +29,16 @@ export type ParamClass = "outside" | "hyperbolic" | "neutral" | "bounded";
 export interface JuliaProperties {
   /** Degree d when f = z^d + c, else null (an arbitrary f gates out the monic-only rows). */
   degree: number | null;
-  /** Critical orbit bounded ⟺ K_c connected ⟺ c in the connectedness locus. */
+  /** Critical orbit did not escape ⟹ K_c connected. NOT a determination on its own: it is also true
+   *  when the orbit was iteration-limited, so read it together with `connectivityUndetermined` and
+   *  only present it as a definite class when that is false. */
   connected: boolean;
+  /** The critical orbit neither escaped nor settled onto a cycle within the cap, so connectivity is
+   *  UNKNOWN — a slow escaper, a Siegel/irrational orbit, or a cycle past CLASSIFY_MAX_PERIOD all
+   *  land here (see `classifyOrbit`, which documents that this is not a claim of boundedness).
+   *  `connected` is true in this case purely because "did not escape", so a caller that reports it
+   *  as connected is turning an estimate into a determination. */
+  connectivityUndetermined: boolean;
   /** The attracting/landed cycle, when one is found (period, |λ|, internal angle p/q); else null. */
   cycle: {
     period: number;
@@ -169,6 +177,9 @@ export function computeJuliaProperties(opts: {
   const info = inspect(fAst, escAst, "param", criticalPoint, c, a);
   const escapes = info.fate === "escaped";
   const connected = !escapes;
+  // `!escapes` folds "converged"/"periodic" (genuinely bounded) together with "undetermined" (the cap
+  // ran out). Keep the third state so the UI can hedge instead of asserting membership.
+  const connectivityUndetermined = info.fate === "undetermined";
   const cycle =
     info.period >= 1 && info.multiplierMag !== null
       ? { period: info.period, multiplierMag: info.multiplierMag, rotation: info.rotation }
@@ -196,6 +207,7 @@ export function computeJuliaProperties(opts: {
   return {
     degree,
     connected,
+    connectivityUndetermined,
     cycle,
     paramClass,
     lyapunov,

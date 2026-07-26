@@ -1613,12 +1613,20 @@ if (QD_UI && QD_UI.installQdEquations) QD_UI.installQdEquations(uiCtx);
 // from a symbolic solve) in the QD plot, then switch to the QD tab — the reverse of
 // ctx.openAlgebra, closing the algebra→geometry loop (roadmap #3b). Reuses the solver's OWN
 // render path (state.current → publishPrimarySolution → showSolution) so the canvas, the
-// mirror, and the Riemann display stay consistent; the algebra tab has already certified the
-// φ univalent, so it is passed as such. Defensive: never throws into the caller.
-uiCtx.showQDSolution = function (phi, hData) {
+// mirror, and the Riemann display stay consistent. Defensive: never throws into the caller.
+//
+// RIGOR: this used to hardcode `univalent: true, identityOK: true` on the claim that "the algebra
+// tab has already certified the φ univalent" — an invariant the caller never enforced. A φ reaches
+// here through certifyLeaf's genuine list even when neither exactPoint nor atRootCertified holds
+// (it is then row-noted '[rationalized ≈]' and the verdict drops to non-exact), so an ESTIMATE was
+// rendering in the QD tab as an unqualified '✓ Valid quadrature domain'. The caller now passes the
+// verdict's rigor and the badge says what was actually established. Absent opts ⇒ NOT certified, so
+// a future caller cannot inherit a certified badge by forgetting to pass it.
+uiCtx.showQDSolution = function (phi, hData, opts) {
   try {
     if (!phi || !hData || typeof showSolution !== 'function') return false;
-    state.current = { success: true, primary: { phi, univalent: true, identityOK: true, identity: null, method: 'algebra' }, alternates: [], hData };
+    const rigor = (opts && opts.rigor) || null;
+    state.current = { success: true, primary: { phi, univalent: true, identityOK: true, identity: null, method: 'algebra', rigor, univalenceCertified: rigor === 'exact' }, alternates: [], hData };
     state.current.w0Used = phi.w0;
     state.current.cUsed = null;
     state.current.unbounded = !!phi.unbounded;

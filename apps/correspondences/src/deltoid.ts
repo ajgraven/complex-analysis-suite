@@ -89,7 +89,10 @@ export function makeUnboundedLaurentSchwarz(
 
   // The EXACT exterior branch of φ⁻¹. φ(z)=w, times z^{m-1}, is the degree-m polynomial
   //   c·zᵐ + (F[0]−w)·z^{m-1} + F[1]·z^{m-2} + … + F[m-1] = 0;
-  // φ is univalent on {|z|>1}, so for w ∈ Ω exactly one root lies there — the branch σ needs. Solving
+  // Where φ is univalent on {|z|>1} — for the family φ_a that is |a| ≤ 1, and it holds for the deltoid
+  // a = 1 this engine was built for — exactly one root lies there for w ∈ Ω: the branch σ needs. Past
+  // that range (family.ts) a critical point enters the exterior and "the outermost root" below is an
+  // arbitrary pick rather than a canonical branch. Solving
   // for all roots (Durand–Kerner) and taking |z|>1 is immune to the branch drift that a warm-seeded
   // Newton suffers when σ maps w far from its previous iterate (that drift onto an interior preimage is
   // what produced the spurious "non-escaping" wings in the σ dynamical plane).
