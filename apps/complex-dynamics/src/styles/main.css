@@ -1083,6 +1083,25 @@ select.invalid {
   cursor: pointer;
 }
 
+/* Recovery affordance inside a toast (e.g. "Deleted view … [Undo]"). Outlined rather than filled so
+   it reads as an option on the coloured toast, and inherits the toast's own text colour. */
+.toast-action {
+  margin-left: 0.5rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid currentcolor;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.toast-action:hover,
+.toast-action:focus-visible {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .toast-info {
   background: var(--accent);
 }

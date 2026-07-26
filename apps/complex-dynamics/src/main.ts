@@ -2836,13 +2836,34 @@ function init(): void {
       return;
     }
     const views = loadSavedViews();
+    // Saving over an existing name destroys the old view. Report that rather than toasting plain
+    // success, and offer the way back — the previous state is right here (cd-views-destructive-01).
+    const replaced = Object.prototype.hasOwnProperty.call(views, name) ? views[name] : null;
     views[name] = readFullState();
     saveSavedViews(views);
     populateViewSelect();
     byId<HTMLSelectElement>("saved-views").value = name;
     byId<HTMLButtonElement>("delete-view-btn").disabled = false;
     input.value = "";
-    showToast(`Saved view “${name}”.`, "info");
+    if (replaced) {
+      showToast(`Replaced the saved view “${name}”.`, "warn", 10000, {
+        label: "Undo",
+        onClick: () => restoreView(name, replaced, `Restored the previous “${name}”.`),
+      });
+    } else {
+      showToast(`Saved view “${name}”.`, "info");
+    }
+  }
+
+  /** Put a captured view back under its name (the Undo behind a delete / overwrite). */
+  function restoreView(name: string, state: AppState, message: string): void {
+    const views = loadSavedViews();
+    views[name] = state;
+    saveSavedViews(views);
+    populateViewSelect();
+    byId<HTMLSelectElement>("saved-views").value = name;
+    byId<HTMLButtonElement>("delete-view-btn").disabled = false;
+    showToast(message, "info");
   }
 
   /** Load the view selected in the dropdown. */
@@ -2857,15 +2878,24 @@ function init(): void {
     showToast(`Loaded view “${name}”.`, "info");
   }
 
-  /** Delete the selected saved view. */
+  /** Delete the selected saved view, keeping a copy so the toast can put it back. */
   function deleteSelectedView(): void {
     const name = byId<HTMLSelectElement>("saved-views").value;
     if (!name) return;
     const views = loadSavedViews();
+    // The deletion is committed straight to localStorage with no confirmation, so the recovery
+    // affordance has to be visible right after the act rather than left to Ctrl+Z, which does not
+    // reach localStorage at all. Capture before deleting (cd-views-destructive-01).
+    const removed = Object.prototype.hasOwnProperty.call(views, name) ? views[name] : null;
     delete views[name];
     saveSavedViews(views);
     populateViewSelect();
-    showToast(`Deleted view “${name}”.`, "info");
+    showToast(`Deleted view “${name}”.`, "info", 10000, {
+      label: "Undo",
+      onClick: () => {
+        if (removed) restoreView(name, removed, `Restored view “${name}”.`);
+      },
+    });
   }
 
   // --- undo / redo (a debounced history stack over the AppState) ---------
