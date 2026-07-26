@@ -2705,6 +2705,11 @@ function init(): void {
     applyAllControls();
     // applyAllControls reset each centre from the rounded f64 input; if the state carries an exact
     // double-double centre (a deep zoom), restore it now so the view reproduces to full precision.
+    //
+    // ⚠ PRECEDENCE: `_pcdd`/`_dcdd` therefore WIN over `inpparamcenter`/`inpdyncenter`. Any caller
+    // that hands us a readFullState() result with an overridden centre input must delete the matching
+    // `_*dd` key first, or the override is silently discarded — see the "Self-similar zoom" handler,
+    // which is the one caller that does this and where exactly that bug lived.
     if (typeof state._pcdd === "string") {
       const c = ddCenterFromString(state._pcdd);
       // Reject a non-finite centre from a corrupt link before it reaches the GL uniform (→ a blank plot).
@@ -3766,6 +3771,16 @@ function init(): void {
     const state = readFullState();
     state.inpparamcenter = `${c0[0]},${c0[1]}`;
     state.inpparamzoom = String(parameterView.plot.zoom * mag);
+    // Drop the exact double-double centre readFullState captured: it is the centre we are zooming
+    // AWAY from. applyFullState restores `_pcdd` AFTER applyAllControls (deliberately, so a deep-zoom
+    // permalink beats its own rounded input), so leaving it here silently overwrote the recentre and
+    // the view magnified about the OLD point while the toast claimed otherwise. Reachable on every
+    // normal use: `_pcdd` is emitted once zoom > 1e3 OR either low limb is non-zero, and GLPlot.shift
+    // folds pan deltas through ddAddNumber/twoSum, so any drag leaves a non-zero limb.
+    //
+    // Deleting it loses no precision — c0 is an f64 point from the inspector, and the template string
+    // above round-trips f64 exactly, so applyAllControls reconstructs the same centre from the input.
+    delete state._pcdd;
     applyFullState(state);
     showToast(
       `Self-similar zoom ×${mag.toFixed(2)} about the Misiurewicz-type point (ρ = λ).`,
