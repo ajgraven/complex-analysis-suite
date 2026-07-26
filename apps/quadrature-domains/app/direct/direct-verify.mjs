@@ -92,9 +92,16 @@ const QD = _QD;
           + (okStrong ? ' ✓ — h reproduces the weighted identity (incl. the origin term ' + term + ').' : '.');
         return;
       }
+      // Family dispatch keys, NOT display labels: selectFamily walks each family's matches(opts),
+      // and boundedLQD's is `opts.lqd && !opts.unbounded` (solver-lqd.mjs). No solver reads
+      // `opts.weight` at all, so the log branch used to build a bag that matched nothing and fell
+      // through to boundedQD's catch-all `matches(){ return true; }` — the CLASSICAL solver. The
+      // round-trip then reported the classical verdict as a pass for the log-weighted construction.
+      // `alpha` is already a real dispatch key (solver-pqd), which is why only the log branch broke.
+      // The sibling "send to inverse tab" handler (direct-ui.mjs) has always set `lqd: true`.
       const opts = (directState.weight === 'power')
         ? { alpha: parseFloat(directState.alpha) }
-        : { weight: 'log', w0: parseComplex(directState.logW0) };
+        : { lqd: true, w0: parseComplex(directState.logW0) };
       let r;
       try { r = QD.solveInverseQD(directState.lastH, opts); }
       catch (e) { resBox.style.color = '#b53030'; resBox.textContent = 'Round-trip solve error: ' + (e.message || e); return; }
