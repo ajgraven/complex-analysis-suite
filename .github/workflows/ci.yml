@@ -7,6 +7,12 @@ name: CI
 # gate `pnpm lint && pnpm typecheck && pnpm test && pnpm build`). The parallel `browser` job
 # executes the ACTUAL WebGL2 GLSL (the @cas/gpu dual-backend harness) in headless Chromium —
 # the backstop for float32 GPU-only drift the CPU mirrors can't catch (Review P4).
+#
+# WHO GATES WHAT (review finding 0-3 — the gate used to run 3–4× per change):
+#   pull_request      → build + browser.   The merge-blocking signal; the only route to master.
+#   push to master    → browser only.      deploy-pages.yml carries the full gate before publishing.
+#   push to a branch  → nothing.           Open the PR to gate it.
+# Net effect: exactly one full gate per change, plus the browser backstop wherever it adds signal.
 
 # Triggers are deliberately NOT symmetric, to run the gate ONCE per change.
 #
@@ -36,6 +42,16 @@ env:
 
 jobs:
   build:
+    # Skipped on a push to master, because deploy-pages.yml runs this EXACT gate (lint → typecheck →
+    # test → build) before it publishes, so running it here as well doubles the cost for no extra
+    # signal. `pull_request` — the only route to master under branch protection — still runs it, and
+    # that is where the merge-blocking status check comes from. A direct push to master, which does
+    # bypass branch protection, is still gated: by the publish gate in deploy-pages.yml, which is
+    # exactly the reason that gate exists.
+    #
+    # The `browser` job below is deliberately NOT skipped: deploy-pages.yml does not run it, so it is
+    # the one signal on a master push that would otherwise be lost.
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

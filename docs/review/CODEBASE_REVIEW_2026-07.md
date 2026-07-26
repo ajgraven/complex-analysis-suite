@@ -359,11 +359,35 @@ its headless tests. Adding `js` to the app glob costs nothing.
 
 #### 0-3 — CI runs the full gate two-to-four times per change · MEDIUM · efficiency · ✅ FIXED
 
-> **Resolved.** The double-fire and the missing store cache are both fixed. `ci.yml`'s `push`
-> trigger is narrowed from `["**"]` to `[master]`, so `pull_request` gates everything that can
-> reach master (branch protection makes a PR the only route) while a direct push to master — which
-> bypasses branch protection — is still gated. All three jobs now restore the pnpm
-> content-addressable store from an `actions/cache` keyed on `pnpm-lock.yaml`.
+> **Resolved — all three parts.** (a) `ci.yml`'s `push` trigger narrowed from `["**"]` to `[master]`,
+> killing the push/PR double-fire — which normalizing the concurrency group could *not* have fixed,
+> since the two events describe genuinely different refs (a branch tip vs the merge commit).
+> (b) All three jobs now restore the pnpm content-addressable store from an `actions/cache` keyed on
+> `pnpm-lock.yaml`, with `restore-keys` so a dependency change refetches only what changed.
+> (c) The master-side duplication is collapsed: `ci.yml`'s `build` is skipped on a push
+> (`if: github.event_name != 'push'`) because `deploy-pages.yml` runs that identical gate before
+> publishing. `browser` still runs, since deploy-pages does not run it and it would otherwise be the
+> one signal a master push loses.
+>
+> Who gates what now — **exactly one full gate per change**:
+>
+> | Event | Runs |
+> | --- | --- |
+> | `pull_request` | `build` + `browser` — the merge-blocking signal, and the only route to master |
+> | push to `master` | `browser` only — `deploy-pages.yml` carries the full gate |
+> | push to a branch | nothing — open the PR to gate it |
+>
+> **Safe against branch protection, checked not assumed:** the protection API reports `build` and
+> `browser` as required contexts, but required checks gate PR *merges*, and on a `pull_request` event
+> `github.event_name` is `pull_request`, so `build` still runs and still reports.
+>
+> **The double-fire fix is confirmed empirically.** The branch carrying it produced **one** CI run
+> (`event=pull_request`); the branch immediately before it, under the old config, produced **two**
+> (`event=push` *and* `event=pull_request`). Same repo, same day, one variable.
+>
+> **The cache half is UNVERIFIED** — Actions is billing-blocked (below), so no run could exercise it.
+> Locally confirmed only that both files parse with the intended step order and that
+> `pnpm store path --silent` exits 0 printing one path.
 >
 > **This became urgent rather than merely wasteful:** the three review merges exhausted the
 > repository's GitHub Actions spending limit, and every post-merge run on `master` — `ci.yml` and
