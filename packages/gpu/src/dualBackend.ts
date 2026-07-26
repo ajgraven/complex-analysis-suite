@@ -47,6 +47,14 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
  * Assemble a self-contained WebGL2 (GLSL ES 3.00) fragment shader that evaluates f(z, c) — compiled
  * from `source` by @cas/expr — on the `uZ`/`uC` uniforms, writing the complex result's (re, im) into
  * an RGBA32F render target. Single precision (`cvec` = `vec2`), which is what the render path uses.
+ *
+ * Uniform declarations precede `${"${fFn}"}`, matching the production assembly order in
+ * `apps/complex-dynamics/src/render/shaderBuilder.ts`. This is load-bearing for `uA`: when the program
+ * reads the live parameter, `compileF` opens the body with `cvec a = vec_(uA.x, uA.y);`, and GLSL ES
+ * requires declaration before use. The uniforms used to come AFTER, which never showed up because
+ * `uZ`/`uC` are only read from `main` — so the harness could not compile ANY program referencing `a`,
+ * regardless of whether the codegen was right. Found by adding exactly such a program to
+ * F_REGRESSION_CORPUS; production was already correct.
  */
 export function buildProbeGLSL(source: string): string {
   const fFn = compileF(parse(source));
@@ -54,10 +62,10 @@ export function buildProbeGLSL(source: string): string {
 precision highp float;
 ${COMPLEX_SINGLE_GLSL}
 ${COMPLEX_DERIVED_GLSL}
-${fFn}
 uniform vec2 uZ;
 uniform vec2 uC;
-uniform vec2 uA;
+uniform vec2 uA; // live parameter a — MUST precede fFn, which references it (see below)
+${fFn}
 out vec4 fragColor;
 void main() {
   cvec r = fFn(vec_(uZ.x, uZ.y), vec_(uC.x, uC.y));
@@ -189,12 +197,29 @@ export function defaultSamples(): Sample[] {
 export const F_REGRESSION_CORPUS: DualCase[] = [
   { name: "H2: z = z^2 + c; z (reassign param z)", source: "z = z^2 + c; z" },
   { name: "H2: c = c^2; z + c (reassign param c)", source: "c = c^2; z + c" },
+  // expr-glsl-01: reading the live parameter `a` BEFORE assigning it used to emit the self-referential
+  // `cvec a = cmul(a, …);` — a GLSL declaration-before-use error, while the JS backend ran fine. This
+  // entry is here rather than only in the CPU-side codegen test because "does it compile" is the actual
+  // defect, and only this harness compiles. `runGLSL` leaves `uA` at its default (0,0) and
+  // `makeComplexFn` defaults `a` to [0,0], so both backends evaluate at a = 0 and the map reduces to
+  // z² — enough to check the value too, though not to check that `a` carries a non-zero uniform.
+  { name: "expr-glsl-01: a = a*2; z^2 + a (read-before-assign of the live parameter)", source: "a = a*2; z^2 + a" },
 ];
 
 /** H1 (PKG-expr-B-01): an escape predicate ENDING in an assignment must coerce to bool (real-part ≠ 0), not
  *  `return <cvec>;` from a `bool escapeFn` (a GLSL type error). `fSource` is the map makeEscapeFn needs. */
 export const ESCAPE_REGRESSION_CORPUS: { name: string; source: string; fSource: string }[] = [
   { name: "H1: x = z^2 (assignment-ending escape predicate)", source: "x = z^2", fSource: "z^2 + c" },
+  // expr-glsl-02: complex `==` now emits a whole-value compare (`(z == c)`, a component-wise vector
+  // test yielding a scalar bool) instead of going through `cre1`.
+  //
+  // ⚠ What this entry does NOT prove. The defect was df64-only — `cre1` returns the hi limb of a vec4
+  // there, so equality collapsed to fp32 width on a ~47-bit value. This harness is SINGLE precision
+  // (`cvec` = vec2), where `cre1` is the whole float, so the old and new forms agree here and this
+  // case passes against the pre-fix codegen. It is a compile-and-shape guard, not a regression test
+  // for the hi-limb bug; that one is pinned on the emitted string in
+  // packages/expr/test/emitBodyHighs.test.ts. Catching it here would need a df64 probe builder.
+  { name: "expr-glsl-02: z == c (whole-value complex equality)", source: "z == c", fSource: "z^2 + c" },
 ];
 
 /** Assemble a self-contained WebGL2 fragment shader for a `bool escapeFn(z,c)` (compileEscape), writing
@@ -205,9 +230,10 @@ export function buildEscapeProbeGLSL(source: string): string {
 precision highp float;
 ${COMPLEX_SINGLE_GLSL}
 ${COMPLEX_DERIVED_GLSL}
-${escFn}
 uniform vec2 uZ;
 uniform vec2 uC;
+uniform vec2 uA; // as in buildProbeGLSL: declared BEFORE escapeFn, which may reference it
+${escFn}
 out vec4 fragColor;
 void main() {
   bool e = escapeFn(vec_(uZ.x, uZ.y), vec_(uC.x, uC.y));
