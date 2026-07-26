@@ -130,7 +130,9 @@ function renderSigma(canvas: HTMLCanvasElement): void {
     setCap(
       "capS",
       `σ dynamical plane — GPU render (${SIGMA_GPU}², ${Math.round(performance.now() - t0)} ms). ` +
-        `K at the centre; tiling set coloured by escape time; the non-escaping set (≈ the limit set) in black.`,
+        `K at the centre; the coloured region is the tiling set TOGETHER WITH the basin of ∞, both ` +
+        `shaded by escape time (~31% of it is the ∞-basin, not tiles); the non-escaping set ` +
+        `(≈ the limit set) in black.`,
     );
     return;
   }
