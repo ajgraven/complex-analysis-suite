@@ -117,7 +117,13 @@ export function makeDurandKerner<C>(alg: ComplexAlgebra<C>) {
           const delta = alg.div(evalMonic(zi), denom);
           ziNext = alg.sub(zi, delta);
           const dm = alg.abs(delta);
-          if (dm > maxDelta) maxDelta = dm;
+          // `!(dm <= maxDelta)` rather than `dm > maxDelta`: a NaN delta (evalMonic overflowed to
+          // Infinity, or denom did, giving Inf/Inf) fails EVERY comparison, so the plain `>` form
+          // left maxDelta at 0 and the sweep then reported converged=true with NaN roots — a
+          // non-answer labelled certified. Negating `<=` lets NaN through, and `NaN < tol` is
+          // false, so convergence is correctly withheld. Same honest-reporting rule as the
+          // `skipped` guard below.
+          if (!(dm <= maxDelta)) maxDelta = dm;
         }
 
         if (bail && !alg.isFinite(ziNext)) return null;

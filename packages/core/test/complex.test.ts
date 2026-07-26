@@ -42,6 +42,13 @@ describe("@cas/core Complex (object representation)", () => {
     const acc: Cx = { re: 1, im: 1 };
     Complex.addMulInto({ re: 1, im: 0 }, { re: 0, im: 1 }, acc); // acc += i
     expect(cNear(acc, 1, 2)).toBe(true);
+    // ...and addMulInto must honour the "SAFE TO ALIAS" contract too, not just mulInto.
+    // acc2 += acc2 * i  with acc2 = 1+i  ⇒  (1+i) + (1+i)i = (1+i) + (-1+i) = 0 + 2i.
+    // Pre-fix this returned 0+1i: `out.re` was written first, so the imaginary line read the
+    // ALREADY-UPDATED `a.re` (0) instead of the original (1).
+    const acc2: Cx = { re: 1, im: 1 };
+    Complex.addMulInto(acc2, { re: 0, im: 1 }, acc2);
+    expect(cNear(acc2, 0, 2)).toBe(true);
   });
 
   it("abs / abs2 / arg", () => {
