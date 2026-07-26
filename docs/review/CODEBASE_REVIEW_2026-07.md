@@ -224,7 +224,98 @@ the scenario it was written to catch.
 
 Fix: assert `r.success` first, then unconditionally run the body.
 
-<!-- more verified findings appended here as adjudication proceeds -->
+#### V-5 — `corr-univalence-01` + `corr-param-body-02` — the `|a| ≤ √2` univalence bound is false, and it explains the parameter plane's shape · **HIGH** · **VERIFIED**
+
+These arrived as two findings. They are **one defect with two symptoms**, and the maths checks out.
+
+**The bound is wrong.** [family.ts:5](apps/correspondences/src/family.ts:5) reasons:
+
+> "The area theorem (Σ n|bₙ|² = |a|²/2 ≤ 1) keeps φ_a univalent on {|z|>1} for |a| ≤ √2"
+
+The arithmetic is right (`b₂ = a/2`, so `2·|a/2|² = |a|²/2 ≤ 1 ⟺ |a| ≤ √2`) but **the implication runs
+backwards**. The area theorem is a *necessary* condition satisfied *by* univalent functions; it does
+not *imply* univalence. The actual bound is immediate from the derivative:
+
+$$\varphi_a'(z) = 1 - a/z^3 = 0 \iff |z| = |a|^{1/3}$$
+
+Univalence on `{|z|>1}` requires no critical point there, i.e. `|a|^{1/3} ≤ 1`, i.e. **`|a| ≤ 1`**.
+For `1 < |a| ≤ √2` a critical point sits *inside* the exterior domain, so φ_a is not even locally
+injective — decisively not univalent. (The deltoid, `a = 1`, sits exactly on the true boundary.)
+
+**It is shown to the user as "proven."** [main.ts:220](apps/correspondences/src/main.ts:220) and
+[main.ts:237](apps/correspondences/src/main.ts:237) both render:
+
+> `≈ exploratory — not a certified connectedness locus (φ_a proven univalent only for |a| ≤ √2).`
+
+The `≈` caveat covers the *locus*; the parenthetical asserts the univalence bound as **proven**, and
+it is false. [paramGpu.ts:69](apps/correspondences/src/paramGpu.ts:69) repeats it as the
+justification for an exterior-branch shader guard — "univalent on {|z|>1} for the entire family
+window" — so it is load-bearing, not decorative.
+
+**And it explains the picture.** [family.ts:98](apps/correspondences/src/family.ts:98):
+
+```ts
+const next = schwarz.sigma(w);
+if (!next) return maxIter;   // σ undefined ⇒ same sentinel as "never escaped"
+```
+
+`maxIter` is the *did-not-escape* return, i.e. **in the connectedness locus**. Past `|a| = 1` the
+σ construction breaks (critical point in the exterior), `sigma` returns null, and every such
+parameter is silently counted as a member. The rendered "connectedness body" is therefore the disk
+`|a| ≤ 1` — an artifact of undefined-treated-as-bounded, not a computed locus.
+
+**This is the most consequential correctness finding after V-1**, because the app's central visual
+is showing an artifact while a caption asserts something "proven" that is false. Fix: correct the
+bound to `|a| ≤ 1` in all three sites, and give `sigma`-undefined its own return value distinct from
+"did not escape" so those parameters render as *unknown* rather than as members.
+
+#### V-6 — `cd-render-02` — `"undetermined"` is collapsed into "connected" · **HIGH** · **VERIFIED**
+
+[overlay.ts:67](apps/complex-dynamics/src/render/overlay.ts:67) declares four outcomes:
+
+```ts
+export type OrbitFate = "escaped" | "converged" | "periodic" | "undetermined";
+```
+
+[juliaProperties.ts:173-174](apps/complex-dynamics/src/render/juliaProperties.ts:173) then reduces
+them to a boolean:
+
+```ts
+const escapes = info.fate === "escaped";
+const connected = !escapes;
+```
+
+So **`"undetermined"` — the explicit "the iteration cap ran out and we do not know" state — becomes
+`connected: true`.** An unresolved estimate is reported as a determination, and downstream
+`paramClass` reads `"bounded"` from it. The type system is carrying the honest answer and the
+boolean discards it.
+
+#### V-7 — `cd-render-03` — `polynomialConnectivity` is documented "Rigorous" but is a 400-iteration escape test · **HIGH** · **VERIFIED**
+
+[critical.ts:255-256](apps/complex-dynamics/src/render/critical.ts:255):
+
+```ts
+const CONN_ITERS = 400; // orbit length to decide a critical point's fate
+
+/**
+ * Rigorous connectivity of a polynomial filled Julia set, from the fate of every critical orbit
+```
+
+A critical orbit that stays bounded for 400 iterations is **not** proof of boundedness — it is an
+estimate with a cap. The docstring's "Rigorous" is the exact word the project's labeling rule
+reserves for `=`, and the finder notes the function is consumed as rigorous (it suppresses the
+image-based fallback estimate when it returns non-null). Fix: either rename/redocument as an
+estimate, or return an explicit "undetermined" for orbits that neither escape nor resolve.
+
+### Reviewer-refuted findings
+
+Recorded so they are not re-investigated.
+
+- **The 12 `no-undef` hits in the QD lint probe** (see V-3) are probe artifacts, not defects.
+  `math` and `katex` are declared globals at
+  [eslint.config.mjs:51-53](apps/quadrature-domains/eslint.config.mjs:51).
+- **QD's `@cas/exact` devDependency**, the apparent undeclared `@cas/expr` import, and `mathjs`
+  as dead weight — all checked and correct; see § 0-6.
 
 ### Scope 0 — direct observations (reviewer's own, pre-sweep)
 
@@ -369,14 +460,88 @@ this review against an actual full run.
 
 ## Fixes applied inline
 
-_(trivial / zero-risk changes made during the review)_
+| Commit | Change | Guarded by |
+| --- | --- | --- |
+| `60d8772` | Durand–Kerner withholds convergence on non-finite iterates (V-1) | new test, proven to fail against the old code |
+| `60d8772` | `addMulInto` honours its aliasing contract (V-2) | new test, proven to fail against the old code |
 
-<!-- FIXES-LOG -->
+Nothing else was auto-fixed. Everything below is a recommendation, because every remaining item
+either changes user-visible mathematical claims (V-5, V-6, V-7), touches a solver's behaviour, or
+would surface a 294-item backlog (V-3) — none of which qualify as "trivial and zero-risk."
 
 ---
 
 ## Prioritized report
 
-_(written last, once every scope has been verified)_
+### Tier 1 — fix now (mislabelled results: the project's one unacceptable bug class)
 
-<!-- PRIORITIZED-REPORT -->
+Every item here presents an estimate as a determination, which
+[CLAUDE.md](../../CLAUDE.md)'s honest-labeling guardrail treats as the highest-severity defect
+in the repo.
+
+| # | Finding | Where | Status |
+| --- | --- | --- | --- |
+| 1 | **Durand–Kerner returns `converged: true` with all-NaN roots.** 7 of 8 call sites exposed. | `packages/core` | ✅ **FIXED** `60d8772` |
+| 2 | **`φ_a` "proven univalent for \|a\| ≤ √2" is false** (true bound `\|a\| ≤ 1`), shown to users as *proven*, and load-bearing for a shader guard. | `apps/correspondences` | VERIFIED |
+| 3 | **σ-undefined is counted as "in the connectedness locus"**, so the parameter plane's central body is an artifact. Same root cause as #2. | `apps/correspondences` | VERIFIED |
+| 4 | **`"undetermined"` orbit fate collapses to `connected: true`.** | `apps/complex-dynamics` | VERIFIED |
+| 5 | **`polynomialConnectivity` documented "Rigorous", is a 400-iteration escape test**, and suppresses the fallback estimate. | `apps/complex-dynamics` | VERIFIED |
+
+Items 2–5 are all small, localized edits. #2 and #3 should ship together — they are one defect.
+
+### Tier 2 — structural risks that let defects through undetected
+
+| # | Finding | Impact | Status |
+| --- | --- | --- | --- |
+| 6 | **97 of QD's 98 production `.mjs` files have zero lint rules** — 56 k lines, no static analysis. Cost to close: 294 `no-unused-vars`, **no live bugs hidden**. | `apps/quadrature-domains` | VERIFIED |
+| 7 | **Test blocks convert solver failure into a silent PASS** (`if (r.success) { …assertions… }`), disarming the HANDOFF #26 regression guard in exactly the case it was written for. | `apps/quadrature-domains` | VERIFIED |
+| 8 | **`apps/launcher` is in no gate** (no lint/typecheck/test script) despite being the published root of the Pages site. `@cas/expr` + `@cas/gpu` have no `build` script — `pnpm -r run` skips missing scripts silently, so the holes are invisible in a green run. | workspace | VERIFIED |
+
+### Tier 3 — performance, with measured numbers
+
+| # | Finding | Measured | Status |
+| --- | --- | --- | --- |
+| 9 | **Both published apps ship one oversized eager chunk.** QD 1 326 KB (contains the entire ~15 k-line symbolic-algebra engine — `Buchberger`/`groebner` verified present in the bundle); CD 608 KB with **zero** dynamic imports. Both trip Vite's 500 KB warning; neither configures `manualChunks`. Correspondences, the one app with `rollupOptions`, is 76 KB total. | real `pnpm build` | VERIFIED |
+| 10 | **CI runs the full gate 3–4× per change** (push + PR triggers don't share a concurrency group; `deploy-pages.yml` re-runs it on master) and **no job caches the pnpm store**. | read both workflows | VERIFIED |
+
+### Tier 4 — the remaining 114 findings
+
+Catalogued in full in [`RAW_FINDINGS_2026-07.md`](RAW_FINDINGS_2026-07.md), every one with cited
+evidence, a concrete failure scenario, a proposed fix, and an effort estimate. **They are
+`UNVERIFIED`** — the adversarial-verifier stage was killed by the usage limit — so they are leads,
+not established defects. The strongest-looking clusters, for whoever picks this up:
+
+- **Worker lifecycle** (`cd-dup-01`, `qd-psw-fallback-latch-01`): a Schwarz CPU worker whose error
+  handler never settles the in-flight render; one fallback latch shared across three worker
+  lifecycles.
+- **Duplication with drift** (`cd-dup-06`, `cd-dup-07`): `continuationInC` triplicated verbatim
+  across three QD solvers and *already diverging in its error text*; a finite-pole Taylor block
+  copy-pasted eight times across six files.
+- **Test-integrity** (`corr-shader-mirror-02`, `cd-shader-uncompiled-07`): "GPU ↔ CPU agreement"
+  tests that exercise a hand-written TypeScript replica of the shader rather than the shader, so
+  the real GLSL can drift while the test stays green.
+- **Honest labeling, further instances** (`qd-ui-algebra-badge-01`, `qd-cmax-ceiling-01`,
+  `qd-direct-verify-01`): a hardcoded `univalent:true` that renders an `≈` verdict as an
+  unqualified "✓ Valid quadrature domain"; solve-budget exhaustion reported as a `≤` claim.
+
+### What is healthy
+
+Worth stating, because a defect list is not a portrait. The finders' scope summaries independently
+described the shell as "unusually disciplined for a 4.3 k-line entry point": listeners wired once,
+rAF guarded, `localStorage` uniformly try-caught, untrusted permalink payloads validated and capped,
+MediaRecorder tracks and probe contexts explicitly released. No listener, RAF, worker, or
+WebGL-context leak was found in that scope. Lint, typecheck, and the full production build are green
+at `c2f5777`. And the two `@cas/core` defects fixed here were each *one instance of a bug class the
+codebase had already identified and guarded elsewhere* — the coincident-root convergence guard and
+`mulInto`'s aliasing temp both exist. The engineering instincts are right; these were misses, not
+absences.
+
+### Suggested sequencing
+
+1. **Tier 1 items 2–5** — small, localized, and they are the ones that make the apps *say false
+   things*. One PR each, or one PR for the linked pair #2/#3.
+2. **Tier 2 item 7** then **item 6** — restore the disarmed test guard first (cheap), then close the
+   lint hole and burn down the 294-item backlog incrementally.
+3. **Tier 3 item 9** — code-split QD's algebra workspace and CD's KaTeX/tour/GIF. Highest
+   user-visible win per line changed; the mechanism is already proven in-repo.
+4. **Re-run the killed verifier stage** over Tier 4 before acting on any of it.
