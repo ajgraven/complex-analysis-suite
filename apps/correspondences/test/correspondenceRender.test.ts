@@ -98,3 +98,80 @@ describe("densityToImage — the blur actually reaches the pixels (not a silent 
     expect(smooth.data[nb]).toBeGreaterThan(0); // heat()'s red channel — the neighbour is genuinely lit
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// The K-mask memo (review corr-density-01).
+//
+// densityToImage used to ray-cast the 256-gon deltoid boundary per zero-density pixel, on every one
+// of the 22 progressive chunks — ~98 ms per full pass over 380², i.e. 1.2–2.2 s of redundant
+// main-thread work per page load for a mask that never changes. It is now cached on (W, H, view).
+//
+// Caching is where the risk moved, so these pin the invalidation: same view must reuse, a different
+// view or size must NOT.
+describe("densityToImage — the K-mask cache is correct, not just fast", () => {
+  const mk = (w: number, h: number): ImageData =>
+    ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }) as unknown as ImageData;
+  const rgbAt = (img: ImageData, i: number): number[] => [
+    img.data[i * 4],
+    img.data[i * 4 + 1],
+    img.data[i * 4 + 2],
+  ];
+
+  it("paints K darker-blue and the exterior near-black on an all-zero density", () => {
+    const W2 = 48;
+    const H2 = 48;
+    const img = mk(W2, H2);
+    densityToImage(new Float32Array(W2 * H2), img, DEFAULT_VIEW, false);
+    // The centre of the default view lies inside the deltoid; a far corner does not.
+    const centre = (H2 >> 1) * W2 + (W2 >> 1);
+    expect(rgbAt(img, centre)).toEqual([20, 22, 34]); // K
+    expect(rgbAt(img, 0)).toEqual([8, 8, 12]); // exterior
+  });
+
+  it("repeated calls at the same view are identical (a cache hit must change nothing)", () => {
+    const W2 = 40;
+    const H2 = 40;
+    const d = new Float32Array(W2 * H2);
+    const a = mk(W2, H2);
+    const b = mk(W2, H2);
+    densityToImage(d, a, DEFAULT_VIEW, false);
+    densityToImage(d, b, DEFAULT_VIEW, false); // served from the memo
+    expect(Array.from(b.data)).toEqual(Array.from(a.data));
+  });
+
+  it("a different view invalidates the mask — K is not painted in the stale place", () => {
+    const W2 = 40;
+    const H2 = 40;
+    const d = new Float32Array(W2 * H2);
+    const near = mk(W2, H2);
+    const far = mk(W2, H2);
+    densityToImage(d, near, DEFAULT_VIEW, false);
+    // Pan far away from the deltoid: every pixel should now be exterior.
+    densityToImage(d, far, { ...DEFAULT_VIEW, centerX: 500, centerY: 500 }, false);
+
+    const centre = (H2 >> 1) * W2 + (W2 >> 1);
+    expect(rgbAt(near, centre)).toEqual([20, 22, 34]); // was inside K
+    expect(rgbAt(far, centre)).toEqual([8, 8, 12]); // stale mask would have kept it K
+  });
+
+  it("a different size invalidates the mask (no length mismatch, no stale reuse)", () => {
+    const small = mk(24, 24);
+    const large = mk(56, 56);
+    densityToImage(new Float32Array(24 * 24), small, DEFAULT_VIEW, false);
+    densityToImage(new Float32Array(56 * 56), large, DEFAULT_VIEW, false);
+    expect(rgbAt(large, (56 >> 1) * 56 + (56 >> 1))).toEqual([20, 22, 34]);
+    expect(rgbAt(large, 0)).toEqual([8, 8, 12]);
+  });
+
+  it("returning to the first view recomputes correctly (not poisoned by the pan)", () => {
+    const W2 = 40;
+    const H2 = 40;
+    const d = new Float32Array(W2 * H2);
+    const first = mk(W2, H2);
+    const back = mk(W2, H2);
+    densityToImage(d, first, DEFAULT_VIEW, false);
+    densityToImage(d, mk(W2, H2), { ...DEFAULT_VIEW, centerX: 500 }, false);
+    densityToImage(d, back, DEFAULT_VIEW, false);
+    expect(Array.from(back.data)).toEqual(Array.from(first.data));
+  });
+});
