@@ -144,9 +144,18 @@ export function resultant(Ain: readonly QiPoly[], Bin: readonly QiPoly[]): QiPol
 
 /**
  * The discriminant in the outer variable of a polynomial given as its little-endian coefficient list —
- * disc(A) = (−1)^{d(d−1)/2} · Res(A, A′) / lc(A), returned in content-cleared (primitive) form. Its roots
- * (in the inner variable) are where A has a repeated outer-variable root. A degree < 2 polynomial has no
- * repeated roots, so the discriminant is the constant 1.
+ * disc(A) = (−1)^{d(d−1)/2} · Res(A, A′) / lc(A), exactly as written. Its roots (in the inner variable)
+ * are where A has a repeated outer-variable root. A degree < 2 polynomial has no repeated roots, so the
+ * discriminant is the constant 1.
+ *
+ * The return value is the classical discriminant, sign and magnitude intact: disc(x²+1) = −4,
+ * disc(x²−2) = 8, disc(x³−1) = −27. It used to be wrapped in {@link primitivePoly}, which re-derives the
+ * sign from the leading coefficient and divides out the content — so the `(−1)^{d(d−1)/2}` line above was
+ * provably dead, and both the sign and the magnitude the docstring promised were discarded before the
+ * caller saw them (disc(x²−2) and disc(x²+1) both came back as 1, which would tell a caller testing
+ * `disc > 0` that x²+1 has two real roots). Callers that want the canonical zero-locus generator rather
+ * than the discriminant itself wrap this in `primitivePoly`, as `dynatomic.ts` already does for
+ * {@link resultant}. (cd-disc-06)
  */
 export function discriminant(coeffsIn: readonly QiPoly[]): QiPoly {
   // Trim first, so `d` is the TRUE degree and `lead` is nonzero. An untrimmed list used to reach
@@ -160,7 +169,6 @@ export function discriminant(coeffsIn: readonly QiPoly[]): QiPoly {
   for (let j = 1; j <= d; j++) B.push((coeffs[j] ?? QiPoly.zero()).scale(Gauss.int(j))); // A′
   const res = resultant(coeffs, B);
   const lead = coeffs[d] ?? QiPoly.zero();
-  let disc = res.divExact(lead);
-  if (Math.floor((d * (d - 1)) / 2) % 2 === 1) disc = disc.neg();
-  return primitivePoly(disc);
+  const disc = res.divExact(lead);
+  return Math.floor((d * (d - 1)) / 2) % 2 === 1 ? disc.neg() : disc;
 }

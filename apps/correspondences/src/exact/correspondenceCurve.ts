@@ -16,7 +16,7 @@
 //
 // Honest labelling (RISKS.md §3): the curve and its cusp locus are EXACT (=). The dynamics built on the
 // correspondence — orbit trees, straightening, branch continuation through cusps — remain exploratory (≈).
-import { discriminant, Gauss, integerPrimitive, QiPoly, renderGaussMag } from "@cas/exact";
+import { discriminant, Gauss, integerPrimitive, primitivePoly, QiPoly, renderGaussMag } from "@cas/exact";
 
 /** A single monomial g · wʲ · z̄ᵏ of the bivariate curve, used for rendering and numeric evaluation. */
 interface CurveTerm {
@@ -193,5 +193,10 @@ export function correspondenceCurve(c: Gauss, F: readonly Gauss[]): ExactCorresp
  */
 export function cuspLocus(curve: ExactCorrespondenceCurve): QiPoly {
   // disc_w C(w, z̄): the shared @cas/exact discriminant eliminates w (Sylvester + fraction-free Bareiss).
-  return discriminant(curve.wCoeffs);
+  // Only the ZERO SET matters here — where two w-branches collide — so content-clear to the canonical
+  // generator. `discriminant` used to do this internally; it now returns the true discriminant (sign and
+  // magnitude intact) and the normalization lives at the call site that wants it, matching how
+  // `dynatomic.ts` already wraps `resultant`. Same value either way: disc_w(2w² − z̄²w − z̄) = z̄⁴ + 8z̄ is
+  // already primitive.
+  return primitivePoly(discriminant(curve.wCoeffs));
 }
