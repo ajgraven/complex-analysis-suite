@@ -1629,7 +1629,47 @@ function init(): void {
    * only — its boundary needs the ∞-basin connectivity, deferred). "disconnected" ⇒ a polynomial whose
    * K is disconnected; "unavailable" ⇒ not such a map (incl. Newton mode, where ∞ isn't superattracting).
    */
-  function dynExterior(
+  type DynExterior =
+    | { kind: "ok"; coeffs: Complex[]; lead: Complex; source: "polynomial" | "rational" }
+    | { kind: "disconnected" }
+    | { kind: "unavailable" };
+
+  // Memo for dynExterior. It depends only on the dynamical map (f, the live parameter a, c), the
+  // order n, and Newton mode — NOT on the Laurent boundary radius r, which is the one thing the
+  // radius slider changes. `laurent-r` is wired to `input` (main.ts, "laurent-r" listener), so a
+  // drag fired a full re-derivation per event: measured 0.3 ms for monic z²+c, 0.8–1.2 ms for a
+  // general polynomial, and 4.1–7.9 ms for a rational map — the last being half a frame budget, at
+  // 60 Hz, on top of the render. Worse on that path: applyLaurent only uses the result when
+  // `source === "polynomial"`, so for a rational map those 4–8 ms were computed and then discarded.
+  // The memo also absorbs the second call per Apply (updateExteriorMap and applyLaurent each ask for
+  // the same n) — it does not remove that duplication, which is cd-shell-08's business, only its cost.
+  // (cd-shell-09)
+  let dynExtKey = "";
+  let dynExtVal: DynExterior = { kind: "unavailable" };
+
+  function dynExterior(n: number): DynExterior {
+    const plot = dynamicalView.plot;
+    const [cx, cy] = plot.cValue;
+    const [ax, ay] = plot.paramA;
+    // Every input the uncached form reads, and nothing else. `esc` is in here because the
+    // general-polynomial branch runs polynomialConnectivity(fAst, escAst, …) — the escape test is
+    // editable independently of f, so leaving it out would serve a stale connectivity verdict.
+    const key = [
+      byId<HTMLInputElement>("newton").checked ? 1 : 0,
+      plot.f,
+      plot.esc,
+      `${ax},${ay}`,
+      `${cx},${cy}`,
+      plot.monicDegree ?? "-",
+      n,
+    ].join("|");
+    if (key === dynExtKey) return dynExtVal;
+    dynExtVal = dynExteriorUncached(n);
+    dynExtKey = key;
+    return dynExtVal;
+  }
+
+  function dynExteriorUncached(
     n: number,
   ):
     | { kind: "ok"; coeffs: Complex[]; lead: Complex; source: "polynomial" | "rational" }
