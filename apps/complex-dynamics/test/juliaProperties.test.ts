@@ -407,3 +407,40 @@ describe("polynomialCapacity (cap = |a_d|^(−1/(d−1)))", () => {
     expect(props(null, [0, 0], parse("exp(z)+c")).capacity).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// Honest labelling of connectivity (review 2026-07).
+//
+// `classifyOrbit` documents that "undetermined" is NOT a claim of boundedness — a slow escaper, a
+// Siegel/irrational orbit, or a cycle past CLASSIFY_MAX_PERIOD all land there. computeJuliaProperties
+// then derived `connected = !escapes`, which folded that unknown in with genuinely bounded orbits, and
+// main.ts rendered the result as "connected (c ∈ Mandelbrot set)" — a membership claim the
+// computation never established. `connectivityUndetermined` keeps the third state visible.
+describe("connectivity honesty: undetermined is not connected", () => {
+  it("a resolved interior c reports connected AND determined", () => {
+    // c = −1 is the basilica: the critical orbit 0 → −1 → 0 closes at period 2, so the fate is
+    // "periodic" and the verdict is a real determination, not a cap artifact.
+    const p = props(2, [-1, 0]);
+    expect(p.connected).toBe(true);
+    expect(p.connectivityUndetermined).toBe(false);
+    expect(p.cycle?.period).toBe(2);
+  });
+
+  it("an escaping c reports neither connected nor undetermined", () => {
+    const p = props(2, [2, 0]);
+    expect(p.escapes).toBe(true);
+    expect(p.connected).toBe(false);
+    expect(p.connectivityUndetermined).toBe(false);
+  });
+
+  it("`connected` alone cannot distinguish bounded from iteration-limited", () => {
+    // The contract that makes the flag safe to consume: whenever the orbit is undetermined,
+    // `connected` is nonetheless true — so any caller reading `connected` on its own is at risk of
+    // presenting an unresolved orbit as set membership. This is the invariant the UI now respects.
+    for (const c of [[-1, 0], [2, 0], [-0.5, 0], [0, 0], [0.25, 0], [-0.75, 0.1]] as Complex[]) {
+      const p = props(2, c);
+      if (p.connectivityUndetermined) expect(p.connected).toBe(true);
+      expect(p.connected).toBe(!p.escapes);
+    }
+  });
+});
