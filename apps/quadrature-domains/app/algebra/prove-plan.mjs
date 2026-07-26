@@ -695,7 +695,6 @@ export function momentBoundarySimple(w, order, cusps, deps) {
   const Sym = deps && deps.QD && deps.QD.Sym, QE = deps && deps.QE;
   if (!Sym || !QE || typeof Sym.realSolutionCount !== 'function' || typeof QE.ratApprox !== 'function') return null;
   const gc = (re, im) => { const a = QE.ratApprox(re || 0), b = QE.ratApprox(im || 0); return Sym.mpolyConst(Sym.gauss(Sym.rat(a[0], a[1]), Sym.rat(b[0], b[1]))); };
-  const iC = Sym.mpolyConst(Sym.gauss(Sym.rat(0, 1), Sym.rat(1, 1)));
   const Z1 = Sym.mpolyVar('Z1'), Z2 = Sym.mpolyVar('Z2');
   let N = gc(0, 0);
   for (let k = 1; k <= order; k++) {
@@ -838,7 +837,7 @@ export function momentCertifyLeaf(real, order, deps, momentPolys) {
 // order ≥ 3 certifies LOCAL univalence only (global proven only through order 2), so it reads 'estimate'
 // with an honest note. deps.caps.momentOrder carries n. Returns { verdict, rigor, bad, count, rigorProvenance }.
 export function assembleMomentVerdict(a) {
-  const { genuine, real, leaf, order, deps, sliceCaveat, cl } = a;
+  const { genuine, real, leaf, order, sliceCaveat, cl } = a;
   const D = genuine.length, plur = real.length === 1 ? '' : 's';
   const allExactFilter = leaf.allExact, allVerified = leaf.allVerified;
   // GLOBAL univalence is certified when the exact boundary double-point count ran for every genuine
@@ -981,7 +980,7 @@ export function rationalCertifyLeaf(real, nodeData, sysPolys, deps) {
 // univalence is `=` ONLY when the exact boundary double-point count ran (allBoundaryExact); otherwise LOCAL
 // only. Returns { verdict, rigor, bad, count, rigorProvenance }.
 export function assembleRationalVerdict(a) {
-  const { genuine, real, leaf, deps, sliceCaveat, cl } = a;
+  const { genuine, real, leaf, sliceCaveat, cl } = a;
   const D = genuine.length, plur = real.length === 1 ? '' : 's';
   const allExactFilter = leaf.allExact, allVerified = leaf.allVerified;
   const rej = [leaf.folded ? leaf.folded + ' fold' : '', leaf.selfInt ? leaf.selfInt + ' self-intersecting' : '', leaf.poleRej ? leaf.poleRej + ' pole-in-𝔻̄' : '', leaf.gaugeDropped ? leaf.gaugeDropped + ' gauge copy' : ''].filter(Boolean).join(', ');

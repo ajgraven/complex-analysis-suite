@@ -185,6 +185,11 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
   // (i→−i) AND swap every variable with its partner.
   function conjMPoly(p) { return p.conjCoeffs().relabel(conjVarName); }
   // Complex conjugate of an FRatFn (numerator + each factored-denominator factor).
+  // Currently unused HERE, and kept deliberately: the block comment above establishes these three
+  // (conjVarName / conjMPoly / conjFR) as self-contained local copies, because qd-constraints.mjs's
+  // equivalents load AFTER this file. Its two siblings are used; dropping only the third would leave
+  // a half-set that the next caller has to re-derive, against the stated intent.
+  // eslint-disable-next-line no-unused-vars -- intentional: completes the documented local trio
   function conjFR(S, fr) {
     return new S.FRatFn(conjMPoly(fr.num), fr.den.map((f) => ({ p: conjMPoly(f.p), e: f.e })));
   }
