@@ -89,9 +89,15 @@ export const Complex = {
     return out;
   },
   // Accumulator: out += a*b (used for residual / branch-sum kernels).
+  // Both products are formed BEFORE either component of `out` is written, so the
+  // "SAFE TO ALIAS" contract above holds when `out === a` or `out === b`. Writing
+  // `out.re` first and then reading `a.re` would feed the updated value into the
+  // imaginary part.
   addMulInto(a: Cx, b: Cx, out: Cx): Cx {
-    out.re += a.re * b.re - a.im * b.im;
-    out.im += a.re * b.im + a.im * b.re;
+    const re = a.re * b.re - a.im * b.im;
+    const im = a.re * b.im + a.im * b.re;
+    out.re += re;
+    out.im += im;
     return out;
   },
 

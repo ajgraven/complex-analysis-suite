@@ -149,4 +149,21 @@ describe("makeDurandKerner (generic, both representations)", () => {
     expect(res).not.toBeNull();
     expect(res?.converged).toBe(false); // a skipped root can no longer count as converged (was `true` pre-fix)
   });
+
+  it("does not report converged when the iterates go non-finite (bailOnNonFinite off)", () => {
+    // The sibling of the `skipped` case above, on the OTHER path that can leave maxDelta at 0.
+    // bailOnNonFinite defaults to FALSE (7 of the 8 call sites in this repo rely on that default),
+    // so a diverging solve stays in the loop. Once a delta is NaN, `dm > maxDelta` is false —
+    // every NaN comparison is — and the pre-fix kernel left maxDelta at 0, passed `maxDelta < tol`
+    // and returned converged=true carrying NaN roots: a non-answer labelled certified, which is
+    // exactly the mislabel this project treats as unacceptable.
+    const dk = makeDurandKerner(objAlgebra);
+    const res = dk(() => objAlgebra.make(Infinity, 0), [objAlgebra.make(0, 0), objAlgebra.make(1, 0)], {
+      tol: 1e-12,
+      maxIter: 5,
+    });
+    expect(res).not.toBeNull();
+    expect(res?.converged).toBe(false); // was `true` (with NaN roots) pre-fix
+    expect(res?.roots.every((z) => objAlgebra.isFinite(z))).toBe(false); // the roots really are garbage
+  });
 });
