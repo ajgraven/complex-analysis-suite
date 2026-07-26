@@ -168,7 +168,13 @@ const QD = _QD;
           escapeR,
         });
         if (!ok) {
-          console.warn('sphere-ui: setPhi rejected (GPU capacity exceeded).');
+          // setPhi now clears hasPhi on refusal, so the sphere renders EMPTY rather than continuing
+          // to show the previous domain under the new domain's caption. Report the recorded reason
+          // rather than guessing "capacity exceeded" — the powerQD refusal is a missing shader, not
+          // a capacity limit.
+          const why = (state.renderer.capacityError && state.renderer.capacityError())
+            || 'GPU capacity exceeded';
+          console.warn('sphere-ui: setPhi rejected — ' + why);
           return false;
         }
         if (state.polesSnapshot.length && state.renderer.setPolePts) {

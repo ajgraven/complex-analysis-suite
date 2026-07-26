@@ -214,6 +214,9 @@ void main() { fragColor = u_color; }`;
 
     // ---- Phi state (matches phiState in schwarz-webgl.js) ----
     const phiState = {
+      /** Why the last setPhi refused this φ, or null when it was accepted. Mirrors
+       *  schwarz-webgl's field of the same name; exposed via rendererPublic.capacityError(). */
+      capacityError: null,
       unbounded:    false,
       familyId:     0,
       w0:           new Float32Array(2),
@@ -307,19 +310,44 @@ void main() { fragColor = u_color; }`;
           : (phi.branches || []);
 
       // Validate capacity (same as schwarz-webgl.js).
+      //
+      // Every refusal below returns BEFORE any phiState mutation, so the packed state still
+      // describes the PREVIOUS φ. `hasPhi` was set true by that earlier successful setPhi and had no
+      // reset — not even in suspend(), which frees the FBO but leaves hasPhi true and marks
+      // fractalDirty — so the next render() rebuilt the fractal from the stale phiState and the
+      // sphere drew the OLD domain while the surrounding UI had already moved to the new one
+      // (refreshSourceStatus writes the NEW φ's family into the caption). The only diagnostic was a
+      // console.warn in sphere-ui.
+      //
+      // `_reject` therefore does two things: records the reason the way schwarz-webgl does
+      // (phiState.capacityError, so a caller can surface it instead of guessing), and clears hasPhi
+      // so render() falls through to defaultFractalTex — an empty sphere, which is honest — rather
+      // than a confidently-wrong picture of a domain the user is no longer looking at.
+      const _reject = (why) => {
+        phiState.capacityError = why;
+        hasPhi = false;
+        fractalDirty = true;
+        return false;
+      };
       const nb    = effBranches.length;
       const polyA = phi.polyA || phi.F || [];
       const beta  = phi.lqdBeta || [];
-      if (nb > MAX_BRANCHES || polyA.length > MAX_LAURENT) return false;
-      if (beta.length > MAX_BETA) return false;
+      if (nb > MAX_BRANCHES) return _reject(`Too many branches (${nb} > ${MAX_BRANCHES}); sphere GPU view unavailable.`);
+      if (polyA.length > MAX_LAURENT) return _reject(`Laurent length too large (${polyA.length} > ${MAX_LAURENT}); sphere GPU view unavailable.`);
+      if (beta.length > MAX_BETA) return _reject(`lqdBeta length too large (${beta.length} > ${MAX_BETA}); sphere GPU view unavailable.`);
       for (let j = 0; j < nb; j++) {
-        if (effBranches[j].A.length > MAX_K) return false;
+        if (effBranches[j].A.length > MAX_K) {
+          return _reject(`Branch ${j} A-length too large (${effBranches[j].A.length} > ${MAX_K}); sphere GPU view unavailable.`);
+        }
       }
       // Family.powerQD: GPU shader for (R#)^{1/α} not yet implemented (Q3
       // follow-up). Refuse capacity so the sphere view falls back / stays
       // empty until the shader gains principal-αth-root arithmetic.
       if (phi.family === 'powerQD' || phi.family === 'powerQD_singular'
-          || phi.family === 'unboundedPQD' || phi.family === 'unboundedPQD_singular') return false;
+          || phi.family === 'unboundedPQD' || phi.family === 'unboundedPQD_singular') {
+        return _reject(`Family.${phi.family} (α=${phi.alpha || '?'}): GPU shader for (R#)^{1/α} not yet implemented; sphere GPU view unavailable.`);
+      }
+      phiState.capacityError = null;   // this φ fits — clear any refusal from a previous one
 
       // Pack phi state.
       phiState.unbounded = !!phi.unbounded;
@@ -807,6 +835,9 @@ void main() { fragColor = u_color; }`;
       suspend,
       destroy,
       markFractalDirty() { fractalDirty = true; },
+      /** Why the last setPhi refused, or null if it succeeded — mirrors schwarz-webgl, whose
+       *  capacityError schwarz-ui surfaces in the source-status line. */
+      capacityError() { return phiState.capacityError || null; },
     };
     return rendererPublic;
   }
