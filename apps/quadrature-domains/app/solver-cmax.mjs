@@ -256,8 +256,22 @@ import _QD from './solver.mjs';
       }
     }
     if (!bracketed) {
+      // The growth loop has TWO exits and they mean different things. Reporting one reason for both
+      // let the UI turn budget exhaustion into a `≤` claim over c values that were never probed:
+      //   • cHi > cCeiling      — we really did test up to the ceiling without finding an invalid c.
+      //   • solves >= maxSolves — the search ran out of budget somewhere BELOW the ceiling.
+      // The second is genuinely reachable, not theoretical: once loCrit ≥ CUSP_NEAR the step drops to
+      // cuspGrow = 1.06, and log(256)/log(1.06) ≈ 95 growth steps exceeds the ~78 solves left after
+      // bracketing, so cLo can stop far short of cCeiling.
+      //
+      // `cLowValid` (= cLo) is the largest c actually PROBED and found valid, and it is the only
+      // honest upper end for a claim — note that even on the ceiling exit it sits one step factor
+      // below cCeiling, so the old message over-claimed there too, just by less.
+      const exhausted = solves >= maxSolves;
       return { found: false, cMax: null, cLowValid: cLo, phiAtMax: loPhi,
-               trace, reason: 'no-invalid-below-ceiling', ceiling: cCeiling,
+               trace,
+               reason: exhausted ? 'search-budget-exhausted' : 'no-invalid-below-ceiling',
+               ceiling: cCeiling, budgetExhausted: exhausted, maxSolves,
                critAtMax: loCrit, solves };
     }
 
