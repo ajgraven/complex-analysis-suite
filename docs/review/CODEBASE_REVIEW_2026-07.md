@@ -7,7 +7,7 @@
 
 ## ▶ RESUME HERE
 
-Everything a fresh session needs to continue. **Next up: Batch A-2** (listed below).
+Everything a fresh session needs to continue. **Next up: Batch B** — numerical robustness.
 
 ### Where the work stands
 
@@ -15,8 +15,12 @@ Everything a fresh session needs to continue. **Next up: Batch A-2** (listed bel
 | --- | --- | --- |
 | Findings surviving verification | **112** | 84 confirmed + 28 overstated; 4 refuted and excluded |
 | **HIGH** | **12 of 12 FIXED** | tier complete |
-| Medium / low | 6 of 99 fixed | Batch A done |
-| Remaining | **93** | 37 medium, 56 low |
+| Medium / low | 12 of 99 fixed | Batches A and A-2 done |
+| Remaining | **87** | 37 medium, 50 low |
+
+Batch A-2 also closed **three defects it discovered along the way** that were not in the original 124
+— see [Pass 5](#pass-5--batch-a-2-exact-arithmetic-contracts-and-the-bla-reference-162). Expect this:
+fixing a false claim tends to expose the thing the claim was covering for.
 
 ### Open PRs — all blocked on ONE external thing
 
@@ -32,32 +36,26 @@ branch is cut from `master` with disjoint files.
 | [#159](https://github.com/ajgraven/complex-analysis-suite/pull/159) | `fix/tier-a-batch-2` | the 6 small-effort HIGHs |
 | [#160](https://github.com/ajgraven/complex-analysis-suite/pull/160) | `fix/qd-lint-mjs` | the QD lint hole (last HIGH) |
 | [#161](https://github.com/ajgraven/complex-analysis-suite/pull/161) | `fix/batch-a-honest-labeling` | Batch A (this document's latest updates ride here) |
+| [#162](https://github.com/ajgraven/complex-analysis-suite/pull/162) | `fix/batch-a2-claim-accuracy` | Batch A-2 — exact-arithmetic contracts + the BLA reference |
 
 Already merged: **#154** (`@cas/core` NaN-convergence + aliasing), **#155** (7 honest-labeling
 defects), **#156** (this review record).
 
-### ▶ Batch A-2 — start here
+### Batch A-2 — DONE ([#162](https://github.com/ajgraven/complex-analysis-suite/pull/162))
 
-Five claim-accuracy items deliberately deferred from Batch A because they touch exact-arithmetic
-semantics and warranted verify-first treatment rather than a hurried pass:
-
-| id | Where | The claim vs the code |
-| --- | --- | --- |
-| `cd-res-11` | `packages/exact/src/resultant.ts:101` | `resultant` returns **1** for a zero-polynomial argument, contradicting its own "Res = 0 ⟺ shared root" contract. |
-| `cd-disc-06` | `packages/exact/src/resultant.ts:129` | `discriminant`'s `(−1)^{d(d−1)/2}` sign line is **dead** — `primitivePoly` overwrites the sign, so the return value is not the discriminant the docstring promises. |
-| `cd-disc-12` | `packages/exact/src/resultant.ts:127` | `discriminant` throws an internal-sounding "division by zero polynomial" on an untrimmed coefficient list. |
-| `cd-render-10` | `apps/complex-dynamics/src/render/bla.ts:182` | `traverseBLA` claims to be the canonical mirror of the GPU kernel but hard-codes the degree-2 step and a bailout of 4. |
-| `qd-dc-imagedata-01` | `apps/quadrature-domains/app/schwarz/schwarz-paint.mjs:672` | The comment says the ImageData is cached; it allocates a fresh one and re-copies on every paint. |
+Closed `cd-res-11`, `cd-disc-06`, `cd-disc-12`, `cd-test-08`, `cd-render-10`, `qd-dc-imagedata-01`,
+plus three defects found while fixing them. Full write-up in
+[Pass 5](#pass-5--batch-a-2-exact-arithmetic-contracts-and-the-bla-reference-162).
 
 `qd-exact-count-guard-11` (`vitest/algebra-verdict-labeling.test.ts:114` — the `rigor:'exact'` guard
-counts call sites instead of identifying them, so the exemption can migrate silently) belongs to the
-test-integrity batch (F) rather than here.
+counts call sites instead of identifying them, so the exemption can migrate silently) stays with the
+test-integrity batch (F).
 
 ### Remaining batch plan (agreed: by theme, most-valuable first)
 
 | Batch | Theme | ~Items |
 | --- | --- | ---: |
-| **A-2** | claim accuracy, exact-arithmetic contracts | 5 |
+| ~~**A-2**~~ | ~~claim accuracy, exact-arithmetic contracts~~ — **done** | ~~5~~ |
 | **B** | numerical robustness (`Complex.div` NaN >1.3e154, `cpow`, `Frac.toNumber`, GLSL emit) | ~10 |
 | **C** | CD state fidelity (`SHARE_IDS` gaps, Place deletes annotations, mating panel c/f mismatch) | ~6 |
 | **D** | worker / resource lifecycle + memory | ~6 |
@@ -558,6 +556,55 @@ the suite by ~17%. Updated to the measured number.
 | --- | --- | --- |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | Durand–Kerner withholds convergence on non-finite iterates (V-1) | new test, proven to fail against the old code |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | `addMulInto` honours its aliasing contract (V-2) | new test, proven to fail against the old code |
+
+### Pass 5 — Batch A-2: exact-arithmetic contracts and the BLA reference ([#162](https://github.com/ajgraven/complex-analysis-suite/pull/162))
+
+Branch `fix/batch-a2-claim-accuracy`. Eight commits, one per finding. The five items were deferred
+out of Batch A because they touch exact-arithmetic semantics and the shipped deep-zoom kernel, and
+warranted verify-first treatment. All five reproduced against the source before being touched.
+
+| id | What shipped |
+| --- | --- |
+| `cd-res-11` + `cd-disc-12` | `resultant` / `discriminant` now trim their coefficient **list** to its true degree, and the degenerate cases are resolved against the stated contract instead of falling through: `0` vs degree ≥ 1 → **0**, `0` vs a nonzero constant → **1**, `0` vs `0` → **0**. The old code returned the constant 1 for *any* empty list — "no shared root" for the argument that shares them all. `discriminant` no longer surfaces `QiPoly.divmod: division by zero polynomial` on an untrimmed list; it returns the correct lower-degree discriminant. |
+| `cd-disc-06` | `discriminant` returns the **true classical discriminant**, sign and magnitude intact — `disc(x²+1) = −4`, `disc(x²−2) = 8`, `disc(x³−1) = −27`, all of which previously came back as the constant `1`. The `(−1)^{d(d−1)/2}` line was provably dead because `primitivePoly` re-derived the sign. Content-clearing moved to `cuspLocus`, the one caller that wants a zero-locus generator — matching how `dynatomic.ts` already wraps `resultant`. |
+| `cd-test-08` | New `packages/exact/test/resultant.test.ts` — 18 tests over the elimination layer, which had **none**. Also corrects the README, which attributed a `resultant` identity test to two files that never mentioned it. |
+| `cd-render-10` | `traverseBLA` takes the map and bailout from options and delegates its step to `multibrotStep` / `polyStep`, so it is genuinely the CPU mirror of the shipped kernel — which builds BLA tables for **d = 2…8 and polyMode**, and reads its bailout from `uPerturbEscape2`. Those kernel paths previously had no CPU reference at all. |
+| `qd-dc-imagedata-01` | `paintDomainColoring` caches the `ImageData` alongside the offscreen canvas and re-blits only when `dc.buf` changes identity. Pan/zoom in domain-coloring mode now costs one `drawImage` per frame. |
+
+**Also closed, found while fixing the above** — three claims that were false in the same way the
+batch is about, and one stale milestone:
+
+- **The BLA traversal tests never took a single skip.** A BLA is valid only while |δz| < r ≈ ε·|A|
+  ~ 1e-7·|2Z|, so it engages around |δc| ≲ 1e-9; the traversal tests ran at 1e-3…3e-4 and inferred
+  coverage from a comment reading "a long pre-escape orbit ⇒ multi-step skips were used". That does
+  not follow, and instrumenting the loop put the true count at **0** over every fixture. The file's
+  headline claim was therefore untested. Fixed by moving each test to a deep-zoom block and asserting
+  the new `TraverseResult.skips` rather than inferring it; the shallow case now asserts `skips === 0`
+  explicitly.
+- **Two fixtures used unbounded reference orbits.** `referenceOrbit`'s docstring said "assumed bounded
+  over M iterations" and iterated blindly regardless. Both d=2 fixtures violated it — `c = −0.745+0.113i`
+  escapes at 127 and `c = −0.75+0.05i` at 63 (the latter has |c+1| = 0.2550 > ¼, outside the period-2
+  bulb). This matters because a skip does not check the bailout at its intermediate iterations; that is
+  sound only because `m + bla.l <= refMax` confines it to the stored reference, and in production
+  `refMax` **is** the escape index (`computeMultibrotOrbitDD` breaks at `BAILOUT2`). Fed an orbit
+  iterated past the bailout, a 16-step skip stepped over the escape and the traversal returned one
+  iteration too many on **120 of 120** Julia-plane samples. Shrinking every radius by 1e-6 left it
+  unchanged, which is what ruled out approximation error. The helpers now truncate as production does,
+  and `traverseBLA`'s docstring states the precondition.
+- **D2b was shipped but three docs called it pending** — `FRONTIER_ROADMAP.md` ("Half-built … unwired"),
+  `PERFORMANCE_REVIEW.md` (twice) and `FEATURE_RESEARCH.md`. `glPlot.ensureBLA` uploads the packed
+  table and the shader's `fetchBLA`/`lookupBLA` traverse it. The same bullet's "z²+c only" scope claim
+  was also wrong.
+
+**Verification.** Every fix was proved against the pre-fix code, not just asserted:
+
+- 4 of the 18 new `@cas/exact` tests fail on the old source, one per finding; the other 14 pass on both
+  and are the no-change guards.
+- 12 of the rewritten BLA tests fail against the old `traverseBLA`; the skip-past-escape guard fails
+  against the old fixture.
+- One test caught an error in its own first draft (a 3×3 asserted as `det = 3` is in fact singular).
+
+CD 661 tests, `@cas/exact` 38 (from 20), QD headless 2261.
 
 ### Pass 4 — Batch A: claims that contradict the code ([#161](https://github.com/ajgraven/complex-analysis-suite/pull/161))
 
