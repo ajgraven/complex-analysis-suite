@@ -506,25 +506,62 @@ Items 2–5 are all small, localized edits. #2 and #3 should ship together — t
 | 9 | **Both published apps ship one oversized eager chunk.** QD 1 326 KB (contains the entire ~15 k-line symbolic-algebra engine — `Buchberger`/`groebner` verified present in the bundle); CD 608 KB with **zero** dynamic imports. Both trip Vite's 500 KB warning; neither configures `manualChunks`. Correspondences, the one app with `rollupOptions`, is 76 KB total. | real `pnpm build` | VERIFIED |
 | 10 | **CI runs the full gate 3–4× per change** (push + PR triggers don't share a concurrency group; `deploy-pages.yml` re-runs it on master) and **no job caches the pnpm store**. | read both workflows | VERIFIED |
 
-### Tier 4 — the remaining 114 findings
+### Tier 4 — the remaining findings, now fully adjudicated
 
-Catalogued in full in [`RAW_FINDINGS_2026-07.md`](RAW_FINDINGS_2026-07.md), every one with cited
-evidence, a concrete failure scenario, a proposed fix, and an effort estimate. **They are
-`UNVERIFIED`** — the adversarial-verifier stage was killed by the usage limit — so they are leads,
-not established defects. The strongest-looking clusters, for whoever picks this up:
+**The verifier stage was re-run to completion** (10 scope verifiers, 0 errors). Every one of the
+105 outstanding findings now carries a verdict, joined into
+[`RAW_FINDINGS_2026-07.md`](RAW_FINDINGS_2026-07.md) alongside the original evidence.
 
-- **Worker lifecycle** (`cd-dup-01`, `qd-psw-fallback-latch-01`): a Schwarz CPU worker whose error
-  handler never settles the in-flight render; one fallback latch shared across three worker
-  lifecycles.
-- **Duplication with drift** (`cd-dup-06`, `cd-dup-07`): `continuationInC` triplicated verbatim
-  across three QD solvers and *already diverging in its error text*; a finite-pole Taylor block
-  copy-pasted eight times across six files.
-- **Test-integrity** (`corr-shader-mirror-02`, `cd-shader-uncompiled-07`): "GPU ↔ CPU agreement"
-  tests that exercise a hand-written TypeScript replica of the shader rather than the shader, so
-  the real GLSL can drift while the test stays green.
-- **Honest labeling, further instances** (`qd-ui-algebra-badge-01`, `qd-cmax-ceiling-01`,
-  `qd-direct-verify-01`): a hardcoded `univalent:true` that renders an `≈` verdict as an
-  unqualified "✓ Valid quadrature domain"; solve-budget exhaustion reported as a `≤` claim.
+| | Count |
+| --- | ---: |
+| **confirmed** | 84 |
+| **overstated** (real, but narrower than claimed) | 28 |
+| **refuted** | 4 |
+| **surviving** | **112** — 12 high, 43 medium, 57 low |
+
+**Severity moved in one direction only: 26 revisions, all downward, none upward.** That asymmetry
+is itself the useful signal — the original sweep was systematically over-severe, which is exactly
+the failure mode an adversarial pass exists to correct. Read alongside the 4 refutations, it says
+the finder agents were reliable about *locating* things and unreliable about *grading* them.
+
+#### The four refutations are worth reading
+
+They are the strongest evidence the verification was real rather than ceremonial:
+
+- **`qd-paintfield-01`** (was HIGH) — "allocates a 3-element RGB array per pixel." The quoted code
+  is accurate, but the verifier *benchmarked it*: the tuple never escapes, so V8 scalar-replaces
+  it. At 768² × 60 repaints — the exact scenario claimed to produce ~1.1 GB of nursery traffic —
+  `node --trace-gc` showed **zero scavenges**, and the proposed out-parameter fix measured
+  10.57 vs 10.72 ms/paint (1.4%, within noise). The reviewer missed escape analysis.
+- **`corr-mating-render-01`** — "no rAF coalescing on pointermove." Browsers already coalesce
+  pointermove to the frame rate and expose the raw stream only via `getCoalescedEvents()`, which
+  this code does not call. There is no burst to coalesce.
+- **`corr-dk-null-dead-09`** — "three unreachable null-guards." `makeDurandKerner` is *declared*
+  `DurandKernerResult<C> | null`, and Correspondences is `strict: true`. Deleting the guards is a
+  compile error, not a cleanup.
+- **`bt-unused-exports-11`** — "two `exports` subpaths have no consumer." Both packages export
+  one subpath per module by convention (11 modules ↔ 11 entries in `@cas/expr`); the maps are not
+  curated by demand, and both packages are `private: true` with no external contract.
+
+#### The 12 surviving HIGH findings
+
+| id | Where | What |
+| --- | --- | --- |
+| `cd-shell-01` | `main.ts:2468` | z²+c-only overlays gated on `perturbationEligible` (true for z^d+c, d ≤ 8) — the shipped **cubic** and **biomorph** presets unlock nine quadratic-family overlays and draw them as fact. The correct predicate `monicDegree === 2` is already used correctly four other places in the same file. |
+| `cd-shell-02` | `main.ts:3748` | "Self-similar zoom" never recentres — the stale `_pcdd` double-double centre is restored *after* `applyAllControls`, clobbering the requested one. Triggered by any pan (a non-zero low limb) or zoom > 1e3. |
+| `cd-shell-03` | `main.ts:1935` | Julia panel prints `\|λ\| =` for a numerically-located cycle multiplier. `holo` is an "f′ exists" flag, not an exactness flag. Every sibling row is hedged (`≈`, `≤`, `(exact)`); this one is not, and `copyJuliaProperties` exports the `=` verbatim. |
+| `cd-render-01` | `glPlot.ts:2321` | `setParamA` never rebuilds — perturbation renders with stale `a`; the image freezes while the slider moves. |
+| `cd-dup-01` | `schwarz-cpu-worker.mjs:82` | Worker `error` listener is a bare `console.error`: `_inflight` never cleared, no watchdog anywhere in `schwarz-render`/`schwarz-ui`. The tab sticks on "Pass 1/3 (coarse)…" forever. Three sibling wrappers have the fix, with the reason written down. |
+| `cd-dup-02` | `sphere-webgl.mjs:313` | `setPhi` clone dropped capacity-error reporting — on rejection the sphere keeps rendering the **previous** domain under the **new** domain's caption. |
+| `qd-direct-verify-01` | `direct-verify.mjs:95` | Direct-tab "Verify" for bounded **log-weighted** maps dispatches to the **classical** solver and reports the wrong family's verdict as a pass. |
+| `qd-ui-algebra-badge-01` | `ui.mjs:1621` | `showQDSolution` hardcodes `univalent:true, identityOK:true` — an algebra-tab φ whose verdict was `≈`/`≥` renders in the QD tab as an unqualified "✓ Valid quadrature domain". |
+| `qd-polyh-01` | `parse-h.mjs:410` | Polynomial-part mode list disagrees with the UI's, so five shipped PQD-unbounded presets cannot be re-parsed — their share links silently fail to restore. |
+| `bt-pwa-manifest-02` | `vite.config.mjs:33` | `manifest: false` + a plain `<link rel="manifest">` ⇒ Vite hashes it into `assets/`, so `scope`/`start_url`/icon URLs all resolve one directory too deep. Verified against a fresh build by md5: contents are **not** rewritten. QD is not installable. |
+| `corr-density-01` | `correspondenceRender.ts:136` | `densityToImage` recomputes the static deltoid K-mask (256-gon ray cast) for **every background pixel on all 22 progressive chunks**. |
+| `expr-rational-01` | `rational.ts:116` | `fToRational` raises polynomials by repeated multiply with no exponent cap — `z^40000+c` freezes the CD tab for minutes. |
+
+Note that three of these (`cd-shell-03`, `qd-ui-algebra-badge-01`, `qd-direct-verify-01`) are
+**further honest-labeling violations**, joining the four already in Tier 1.
 
 ### What is healthy
 

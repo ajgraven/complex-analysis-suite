@@ -64,7 +64,9 @@ Retarget the config at the post-flip file layout. Change the main block (line 96
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **high** | correctness | small | `apps/quadrature-domains/vite.config.mjs:33` | `UNVERIFIED` |
+| **high** | correctness | small | `apps/quadrature-domains/vite.config.mjs:33` | **CONFIRMED** |
+
+> **Verifier:** Verified against a FRESH build (dist/index.html mtime 2026-07-25 20:33, newer than every source). apps/quadrature-domains/vite.config.mjs:33 `manifest: false`; app/index.html:10 `<link rel="manifest" href="manifest.webmanifest">`; Vite hashes it as an asset -> dist/index.html emits `href="./assets/manifest-DGRKEIyY.webmanifest"`, and md5 of dist/assets/manifest-DGRKEIyY.webmanifest == md5 of app/manifest.webmanifest (e06f0933e869623c58efdb0543b1a77e) so the CONTENTS are not rewritten. Therefore scope "./" resolves to /quadrature-domains/assets/ (the document at /quadrature-domains/ is outside it), start_url "./index.html" -> /quadrature-domains/assets/index.html (404), icons "icon.svg" -> /quadrature-domains/assets/icon.svg (404; the emitted file is assets/icon-Cvb3xz71.svg). There is no public/ dir and no publicDir override. CD avoids it via VitePWA's generator (apps/complex-dynamics/vite.config.ts:23-39). Two small over-claims: theme_color still applies via the separate `<meta name="theme-color">` at app/index.html:12, and the favicon href IS rewritten (dist rel=icon -> ./assets/icon-Cvb3xz71.svg); the SW/offline path is unaffected. Broken scope = installability, standalone display, and app identity only. Still high.
 
 **Evidence**
 
@@ -99,7 +101,9 @@ Two clean options. (a) Match CD: drop `manifest: false` and move the manifest's 
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | trivial | `eslint.config.js:36` | `UNVERIFIED` |
+| **medium** | correctness | trivial | `eslint.config.js:36` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** The count is right, the failure mechanism is wrong. ESLint API confirms `.claude/worktrees/**` is NOT ignored (isPathIgnored=false) and a real lintFiles(['.claude']) enumerated exactly 415 files. But calculateConfigForFile on .claude/worktrees/bold-hopper-697a2a/packages/core/src/algebra.ts returns `rules: undefined` (the same call on packages/core/src/algebra.ts returns the full no-restricted-imports config), because the boundary block's files globs at eslint.config.js:57-60 (`apps/**`, `packages/**`) are anchored at the repo root and cannot match `.claude/worktrees/*/packages/...`. So the stated scenario -- 'the boundary rule fires and pnpm lint exits 1 on code not in your tree' -- is impossible. Measured current state: 415 files, 0 errors, 4.0 s. Residual is ~4 s of rule-less parsing per lint run plus a theoretical fatal parse error. Hygiene, not correctness.
 
 **Evidence**
 
@@ -133,7 +137,9 @@ Add `"**/.claude/**"` (or at minimum `"**/.claude/worktrees/**"`) to the `ignore
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | performance | trivial | `apps/quadrature-domains/vite.config.mjs:37` | `UNVERIFIED` |
+| **medium** | performance | trivial | `apps/quadrature-domains/vite.config.mjs:37` | **CONFIRMED** |
+
+> **Verifier:** Measured in both fresh dists, identical: ttf 20 files/513,664 B, woff 20/303,116 B, woff2 19/256,168 B -> 816,780 B (798 KiB) of ttf+woff per app. apps/quadrature-domains/vite.config.mjs:37 and apps/complex-dynamics/vite.config.ts:20 both glob ttf+woff; QD's dist/sw.js has 70 precache entries including 20 `.ttf` urls. The 'never fetched' premise checks out from the built CSS itself: every @font-face is `src:url(...woff2) format("woff2"),url(...woff) format("woff"),url(...ttf) format("truetype")`, woff2 first, and every browser with service workers + WebGL2 supports woff2. If anything understated: CD's dist is 1.92 MB not 2.1 MB, so the dead fonts are ~42% of CD's precache (QD: 21.7% of 3.77 MB).
 
 **Evidence**
 
@@ -164,7 +170,9 @@ Drop `ttf` and `woff` from both `globPatterns` (keep `woff2`). The files stay in
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | trivial | `apps/quadrature-domains/vite.config.mjs:34` | `UNVERIFIED` |
+| **medium** | correctness | trivial | `apps/quadrature-domains/vite.config.mjs:34` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** Every stated fact is true -- apps/quadrature-domains/vite.config.mjs:34-38 sets only globPatterns; workbox-build@7.4.1 defaults maximumFileSizeToCacheInBytes to 2,097,152 (GenerateSWOptions.json) and silently drops larger files via lib/maximum-size-transform.js; CD guards it at vite.config.ts:22. But there is no defect today: the current main chunk dist/assets/index-C6P5SEJC.js is 1,358,452 B and IS present in dist/sw.js's precache manifest (verified). Nothing is currently mis-precached and no user can hit anything; this is a latent config-hardening item whose trigger requires a future ~720 KB of growth. Hygiene.
 
 **Evidence**
 
@@ -202,7 +210,9 @@ Add `maximumFileSizeToCacheInBytes: 4 * 1024 * 1024` to the workbox block in app
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | maintainability | trivial | `apps/quadrature-domains/package.json:10` | `UNVERIFIED` |
+| **medium** | maintainability | trivial | `apps/quadrature-domains/package.json:10` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** Half true. Confirmed: apps/quadrature-domains/node_modules contains neither typescript nor vitest, and .bin holds only browserslist/eslint/katex/mathjs/rollup/terser/vite -- yet package.json:10 is `"typecheck": "tsc -p tsconfig.json"`, and QD is the only one of 8 members not declaring typescript (CD, correspondences, and all 5 packages do). The vitest half is refuted: QD's own test script is `node app/node-test.js` and never invokes vitest; the 88 specs in apps/quadrature-domains/vitest/ are run by the ROOT runner (vitest.workspace.ts lists ./apps/quadrature-domains/vitest.config.ts), and the root package.json declares vitest -- that is where it belongs. The reviewer also over-reads .npmrc: pnpm's non-hoisted strictness is about a package's own transitive deps, not about workspace-root devDependencies being visible to members, which is standard intended behaviour. Net: one undeclared direct tool (typescript), no runtime or gate impact.
 
 **Evidence**
 
@@ -231,7 +241,9 @@ Add `"typescript": "^5.7.2"` and `"vitest": "^2.1.4"` to apps/quadrature-domains
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | redundancy | small | `apps/quadrature-domains/package.json:19` | `UNVERIFIED` |
+| **low** | redundancy | small | `apps/quadrature-domains/package.json:19` | **CONFIRMED** |
+
+> **Verifier:** All numbers check out. pnpm-lock.yaml:2256 and :2260 carry katex@0.16.47 AND katex@0.17.0; apps/quadrature-domains/package.json:19 exact-pins "0.16.47" while apps/complex-dynamics/package.json floats "^0.17.0"; both dists ship the identical full self-hosted font set (20 ttf + 20 woff + 19 woff2, ~1.07 MB each), so the combined Pages site carries two complete KaTeX payloads with no cross-app cache reuse. Declaration drift is exactly as listed and all collapses to one resolved version each: eslint ^9.13.0/^9.17.0/^9.39.4 -> 9.39.4; typescript ^5.6.3/^5.7.2 -> 5.9.3; globals ^15.11.0/^15.14.0/^15.15.0 -> 15.15.0; prettier ^3.3.3/^3.4.2 -> 3.9.4. One thing the reviewer missed that supports the fix: HANDOFF.md:470-476 shows 0.16.47 arrived as a security bump applied across CDN `<link>`/`<script>` tags with recomputed SRI hashes -- SRI requires an exact version, so the pin is a vestige of the pre-bundling CDN era and has no live reason now that KaTeX is bundled.
 
 **Evidence**
 
@@ -260,7 +272,9 @@ Align on one KaTeX version across both apps and use the same range style (`^0.17
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | performance | trivial | `.github/workflows/ci.yml:33` | `UNVERIFIED` |
+| **low** | performance | trivial | `.github/workflows/ci.yml:33` | **CONFIRMED** |
+
+> **Verifier:** Verified in both workflows: .github/workflows/ci.yml `build` job (actions/setup-node@v4 with only `node-version: 22`, then `corepack enable`, then `pnpm install --frozen-lockfile`), ci.yml `browser` job (same pattern), and .github/workflows/deploy-pages.yml `build` (same pattern) -- none sets `cache:` or `cache-dependency-path`. The only cache anywhere is actions/cache for ~/.cache/ms-playwright in the browser job, keyed on hashFiles('pnpm-lock.yaml'). Every push to master therefore runs three cold installs of the same 221 KB lockfile. Pure performance/hygiene, no correctness impact; the proposed ordering caveat (corepack enable must precede setup-node for `cache: 'pnpm'` to work) is also correct as written.
 
 **Evidence**
 
@@ -291,7 +305,9 @@ Add pnpm store caching to all three jobs. Because `corepack enable` currently ru
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | correctness | small | `eslint.config.js:62` | `UNVERIFIED` |
+| **low** | correctness | small | `eslint.config.js:62` | **CONFIRMED** |
+
+> **Verifier:** Verified from the rule source rather than a probe: node_modules/.pnpm/eslint@9.39.4/.../lib/rules/no-restricted-imports.js returns a visitor of exactly ImportDeclaration, ExportNamedDeclaration, ExportAllDeclaration and TSImportEqualsDeclaration (lines 816-825); grep finds no `ImportExpression` anywhere in the file, so `await import("../../apps/complex-dynamics/...")` is never checked. eslint.config.js:62 is the only boundary control, and no compensating check exists -- eslint.config.js:6-8 and CLAUDE.md both state dependency-cruiser is planned, not wired. The idiom is live in this repo (apps/quadrature-domains/app/vendor-globals.mjs:22 `import('mathjs')`). No current cross-app dynamic import exists, so this is a guardrail gap, not a live violation -- low is right.
 
 **Evidence**
 
@@ -323,7 +339,9 @@ Two layers. Cheap: add `"no-restricted-modules"`-style coverage by pairing the r
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | redundancy | trivial | `apps/quadrature-domains/app/test.html:1` | `UNVERIFIED` |
+| **low** | redundancy | trivial | `apps/quadrature-domains/app/test.html:1` | **CONFIRMED** |
+
+> **Verifier:** Dead, and more definitively than claimed: app/test.html loads `<script src="complex.js">`, `taylor.js`, `solver.js` (lines 24-26) and none of those files exist -- the ESM flip left only app/complex.mjs, app/taylor.mjs, app/solver.mjs -- so the page cannot execute at all, independent of the retired asset-manifest loader. Not a build input either (vite.config.mjs sets no build.rollupOptions.input; dist contains only assets/, index.html, registerSW.js, sw.js, workbox-*.js). One evidence claim is WRONG and makes the fix bigger, not smaller: 'referenced nowhere' came from a grep that excluded .md. It is advertised as a live harness in apps/quadrature-domains/README.md:120 ('an in-browser test page with small per-test visualizations, complementary to the headless runner') and again in the file-layout tree at README.md:279, plus HANDOFF.md:2069. Deleting the file must also strip those three doc references.
 
 **Evidence**
 
@@ -351,7 +369,9 @@ Delete apps/quadrature-domains/app/test.html. If an in-browser smoke page is sti
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | redundancy | trivial | `packages/expr/package.json:20` | `UNVERIFIED` |
+| **low** | redundancy | trivial | `packages/expr/package.json:20` | **REFUTED** |
+
+> **Verifier:** The census is accurate (0 uses of "@cas/expr/latex" and "@cas/gpu/dual-backend") but this is not a defect. Both entries resolve to real, existing files (packages/expr/src/latex.ts, packages/gpu/src/dualBackend.ts), so no export map is broken. What the reviewer missed is that both maps are deliberately one-subpath-per-module, not curated by demand: packages/expr/src holds exactly 11 modules (ast, complex, complexJs, derivative, evaluate, glsl, index, latex, lexer, parser, rational) and packages/expr/package.json declares exactly 11 export entries -- a strict 1:1 surface of which ./latex is simply the one nobody imports yet; @cas/gpu likewise exports every top-level src module (colormap, dualBackend, shader, index) plus the glsl barrel and glsl/df64Ref. Deleting the two would break that convention while fixing nothing, and both packages are `"private": true` workspace-only, so there is no external API contract to keep honest. ADR-0007's demand-driven rule governs when a PACKAGE is extracted, not which of a package's own modules appear in its export map.
 
 **Evidence**
 
@@ -388,7 +408,9 @@ The real problems cluster in three places. (1) `perturbationEligible` — which 
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **high** | correctness | small | `apps/complex-dynamics/src/main.ts:2468` | `UNVERIFIED` |
+| **high** | correctness | small | `apps/complex-dynamics/src/main.ts:2468` | **CONFIRMED** (severity → high) |
+
+> **Verifier:** Verified. glPlot.ts:792-794 sets `_perturbEligible = (monicDegree !== null && monicDegree <= 8) || _polyPerturb !== null`, and probeMonicDegree (glPlot.ts:1121-1133) accepts any integer d in [2,64]; the getter docstring at glPlot.ts:2363 still claims "z²+c". presets.ts:137/174 ship `cubic` and `biomorph` as f = z^3+c, so probe → 3 → eligible = true. main.ts then uses that flag as an is-quadratic gate at 1253, 1272, 1439 (`// z²+c (both planes share f)`), 1529, 2352, 2438, 2446, 2460, 2468, 2476, 3336, while the drawn objects are hard-coded quadratic: farey.ts:36-47 bulbRoot = μ/2 − μ²/4, rays.ts:66 iterates `z ← z²+c`, inverseJulia.ts:19-22 β = (1+√(1−4c))/2 with z↦±√(z−c), yoccozPuzzle.ts:2/29 α = (1−√(1−4c))/2. The correct predicate is already used at 2571/3272/3392/3553 (`monicDegree === 2`). Worst part needs no user action: legendSetName (main.ts:2350-2352) labels the z^3+c parameter plane "Mandelbrot set", and updateYoccoz's own caveat string "The Yoccoz puzzle is defined for z²+c" (main.ts:1453) is unreachable because the gate passes.
 
 **Evidence**
 
@@ -428,7 +450,9 @@ Introduce a single `isQuadratic` predicate (`view.plot.monicDegree === 2`) and u
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **high** | correctness | trivial | `apps/complex-dynamics/src/main.ts:3748` | `UNVERIFIED` |
+| **high** | correctness | trivial | `apps/complex-dynamics/src/main.ts:3748` | **CONFIRMED** (severity → high) |
+
+> **Verifier:** Verified. main.ts:3748-3751 does `const state = readFullState(); state.inpparamcenter = c0; state.inpparamzoom = …; applyFullState(state)`. readFullState (main.ts:2633-2635) attaches `state._pcdd` whenever `zoom > 1e3 || pc[0][1] !== 0 || pc[1][1] !== 0`, and applyFullState restores it AFTER applyAllControls (main.ts:2687-2696), calling `parameterView.plot.setCenterDD(...)` with the stale centre — clobbering the requested one. Reachable: the button is shown for any param-plane point with multiplierMag > 1.0001 on a holomorphic plane (main.ts:1288-1294), and `_pcdd` is emitted after any pan (GLPlot.shift, glPlot.ts:2044-2052, folds the delta through ddAddNumber/twoSum → non-zero lo limb) or once zoom exceeds 1e3, which is exactly the deep-zoom workflow this feature exists for. The toast at 3752-3755 still asserts the recentre happened.
 
 **Evidence**
 
@@ -471,7 +495,9 @@ In the `inspector-rho-zoom` handler, delete the exact centre alongside the f64 o
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **high** | correctness | trivial | `apps/complex-dynamics/src/main.ts:1935` | `UNVERIFIED` |
+| **high** | correctness | trivial | `apps/complex-dynamics/src/main.ts:1935` | **CONFIRMED** (severity → high) |
+
+> **Verifier:** Verified. main.ts:1935 prints `|λ| ${holo ? "=" : "≈"} …`, and `holo` is `parameterView.plot.holomorphic` (main.ts:1881) — an "an analytic f′ exists" flag, not an exactness flag. The value is float64: inspect.ts:308-322 Newton-refines a numerically located cycle (refineCycle) and returns `cabs(exp(Σ log f′(z_k)))`; juliaProperties.ts:186-188 then derives the Lyapunov as `log(multiplierMag)/period`, printed with no marker in the holomorphic branch (main.ts:1949). Every sibling row is hedged honestly — `≈ … (box-count)`, `≤ … (bound)` (main.ts:1796-1799), `|z| ≤ R (disk)` (1954), `≈ …`/`(exact)` (1966) — and the caveat footnote is deliberately blank for a z^d+c map (main.ts:1968-1973), so on the default Mandelbrot preset the bare `=` carries no qualifier. index.html:1210-1212 gives the `jp-paramtype` row no glossary hedge either. copyJuliaProperties (main.ts:1981-1994) exports the `=` verbatim. Direct violation of the `=` exact / `≈` estimate rule.
 
 **Evidence**
 
@@ -501,7 +527,9 @@ Stop using `holo` as an exactness proxy. Print `|λ| ≈ …` unconditionally (k
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | medium | `apps/complex-dynamics/src/main.ts:1882` | `UNVERIFIED` |
+| **medium** | correctness | medium | `apps/complex-dynamics/src/main.ts:1882` | **CONFIRMED** (severity → medium) |
+
+> **Verifier:** Verified. updateJuliaProperties (main.ts:1879-1889) takes `degree`, `fAst`, `escAst`, `criticalPoint`, `a` from parameterView but `c` from dynamicalView. renderMatedMap (main.ts:3599-3620) is the only site that re-presets the dynamical plot alone (`dynamicalView.applyPreset` appears at 2116, 2149, 3600; the first two apply the same f to both planes), setting f = the mated rational map with c = "0" and never touching `#inpf`. Nothing in renderMatedMap blanks or annotates the c-dependent panels. Opening/toggling the panel afterwards fires updateJuliaProperties (wired at main.ts:3882) and it reports the properties of z²+0 — including `1 (exact)` capacity (main.ts:1966) — while the canvas shows the rational map. One detail of the write-up is off: the on-screen panel header is static text (index.html:1185), the `— c = …` header exists only in the copied report (main.ts:1983). The substantive defect stands.
 
 **Evidence**
 
@@ -539,7 +567,9 @@ Either drive the panel from the plane it describes (`dynamicalView.plot.fAst/esc
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | trivial | `apps/complex-dynamics/src/main.ts:2706` | `UNVERIFIED` |
+| **medium** | correctness | trivial | `apps/complex-dynamics/src/main.ts:2706` | **CONFIRMED** (severity → medium) |
+
+> **Verifier:** Verified. applyFullState clears `notes = []` unconditionally at main.ts:2706 and only refills from `state._notes` when the key is present (2709-2727), then calls refreshNotes() at 2728. readFullState only emits `_notes` when non-empty (main.ts:2639), so a state object that never had notes is indistinguishable from "clear them". Every other applyFullState caller (2765 importInterchange, 2788 loadFromHash, 2831/2879 saved-view + undo) passes a readFullState-derived or previously-serialized full state; setupPlaces (main.ts:2654-2658) is the sole exception, passing `place.state`, which places.ts:16-23 builds from six control ids only. So picking any Place silently drops every pinned annotation, with no toast. Recoverable only via Ctrl+Z, which is unhinted.
 
 **Evidence**
 
@@ -577,7 +607,9 @@ Preserve state the incoming object does not mention. Either treat `_notes` like 
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | trivial | `apps/complex-dynamics/src/main.ts:3038` | `UNVERIFIED` |
+| **medium** | correctness | trivial | `apps/complex-dynamics/src/main.ts:3038` | **CONFIRMED** (severity → medium) |
+
+> **Verifier:** Verified. applyScrub (main.ts:3038-3043) assigns `parameterView.plot.center` / `.zoom` directly; those setters (glPlot.ts:2126-2134) only call scheduleRender(). onViewChanged — the hook that runs setParamCenterInput/setParamZoomInput/updateViewChips/scheduleRecord/scheduleSuggestions (main.ts:995-1002) — is invoked only from plotView.ts:648, 675, 695, 742, 799, all pointer/keyboard interaction paths. The slider is wired at main.ts:4120 (`kf-scrub` → applyScrub), and the same `input` event reaches the document-level scheduleRecord (main.ts:3982), so the debounced history snapshot is built from the stale centre/zoom fields. Share link (readFullState → readAppState, appState.ts:69-77) likewise reads the stale inputs, and Enter/Apply re-applies them and snaps the plot back. The contrast the reviewer draws is right: recordKeyframePath (main.ts:3065-3069) and recordZoomMovie (3005-3008) restore the pre-move view rather than leaving the divergence.
 
 **Evidence**
 
@@ -605,7 +637,9 @@ Have `applyScrub` mirror the interaction path: after setting `center`/`zoom`, ca
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | small | `apps/complex-dynamics/src/state/appState.ts:15` | `UNVERIFIED` |
+| **medium** | correctness | small | `apps/complex-dynamics/src/state/appState.ts:15` | **CONFIRMED** (severity → medium) |
+
+> **Verifier:** Verified. SHARE_IDS (appState.ts:15-58) ends at `perturbation`, `param-a`; all ten named controls exist in index.html (inverse-julia:981, siegel-curves:990, yoccoz-toggle:1492, parapuzzle-toggle:1495, yoccoz-depth:1499, yoccoz-critical:1502, lamination-toggle:1523, qml-toggle:1526, lamination-detail:1530, projection-mode:1701) and are live controls with change/input handlers (main.ts:1506-1509, 3479, and the apply* fns at 2467/2475). readAppState/applyAppState iterate SHARE_IDS only, so encodeState / saved views / recordHistory cannot see them. CONTRIBUTING.md:193-196 states the rule verbatim, and test/appState.test.ts:40-46 only asserts the converse ("every SHARE_IDS id exists in index.html"), so the drift is unguarded. reset_all (main.ts:4003-4073) resets inverse-julia (4035), siegel-curves (4037) and projection-mode (4060) but never yoccoz-toggle / parapuzzle-toggle / yoccoz-critical / lamination-toggle / qml-toggle, despite "Reset every option" at 4004. One nit in the proposed fix: updateYoccoz/updateLamination ARE already reached from applyAllControls transitively (applyChanges → syncDynamicalC → updateDynCaption → refreshDynPanels, main.ts:2120/1400-1421), so only the SHARE_IDS + reset_all halves need work.
 
 **Evidence**
 
@@ -623,7 +657,9 @@ Append the ten ids to `SHARE_IDS`, and re-run `updateYoccoz()` / `updateLaminati
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | redundancy | trivial | `apps/complex-dynamics/src/main.ts:2134` | `UNVERIFIED` |
+| **medium** | redundancy | trivial | `apps/complex-dynamics/src/main.ts:2134` | **CONFIRMED** (severity → medium) |
+
+> **Verifier:** Verified. syncDynamicalC (main.ts:2069-2073) → updateDynCaption (1414-1422) → refreshDynPanels (1400-1407), which runs updateExteriorMap + applyLaurent + updateJuliaProperties + updateYoccoz + updateLamination. `coupledDrafting` (set only by the parameter-plane drag coupling, main.ts:989-993) is false on a click-driven Apply, so the refresh is synchronous. applyChanges then repeats three of them at 2134-2136, applyPreset at 2171-2173; nothing between those points mutates f, c, degree or paramA. So dynExterior (which itself runs twice per refresh — once in updateExteriorMap:1689 and once in applyLaurent:1751), mandelbrotExteriorCoeffs and computeJuliaProperties all run twice per Apply/preset. Two narrowings: all three are panel/toggle-gated early-returns (main.ts:1672, 1730, 1878), so the cost only lands with the panels open; and the "re-arms scheduleJuliaMeasure twice" cost is nil — it is a clearTimeout-debounced timer (main.ts:1866-1869), so the Tier-2 measure still runs once.
 
 **Evidence**
 
@@ -668,7 +704,9 @@ Delete lines 2134-2136 and 2171-2173; `syncDynamicalC()` above them already cove
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | performance | small | `apps/complex-dynamics/src/main.ts:3923` | `UNVERIFIED` |
+| **medium** | performance | small | `apps/complex-dynamics/src/main.ts:3923` | **CONFIRMED** (severity → medium) |
+
+> **Verifier:** Verified. main.ts:3923-3926 wires `laurent-r`'s `input` to updateLaurentR() + applyLaurent(). applyLaurent memoises only the parameter side by `${dMonic}:${n}` (main.ts:1739-1745) and then calls `dynExterior(n)` unconditionally at 1751 — no cache — even though `r` is only forwarded as a scalar to setLaurentBoundary (1753). dynExterior (1632-1664) calls juliaConnected + juliaExteriorCoeffs for a monic map, or polynomialConnectivity + a DFT for a general polynomial. uniformize.ts:136-153 confirms the cost: `for (m = 1..N) seriesPow(g, d, m)` with seriesPow binary-exponentiating O(m²) seriesMul, i.e. ~O(n³), with n capped at 128 (main.ts:1736). Only reached with the boundary toggle on (early return at 1730), which is the scenario described.
 
 **Evidence**
 
@@ -704,7 +742,9 @@ Give the dynamical side the same memo the parameter side already has: cache `{ k
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | usability | small | `apps/complex-dynamics/src/main.ts:3180` | `UNVERIFIED` |
+| **low** | usability | small | `apps/complex-dynamics/src/main.ts:3180` | **CONFIRMED** (severity → low) |
+
+> **Verifier:** Verified. main.ts:3180-3182 is `document.addEventListener("keyup", e => { if (e.key === "Enter") applyChanges(); })` with no target filter, in contrast to the Ctrl+Z handler at 3983-3986 which explicitly skips INPUT/TEXTAREA. index.html contains no <form>, so nothing else consumes Enter in a text field. Confirmed consequences: (a) keyboard-activating any button fires click on keydown and then this handler on keyup, so "Apply preset" (main.ts:4000-4002) runs applyPreset then applyChanges — a full double two-plane recompile; (b) `#strip-address` (index.html:1558) has no Enter handler, so Enter there commits Apply instead of Strip; (c) after renderMatedMap, applyChanges re-applies the untouched `#inpf` to the dynamical plot (main.ts:2116) and silently destroys the mating. Usability, low, as claimed.
 
 **Evidence**
 
@@ -728,7 +768,9 @@ Scope the shortcut: skip when the event target is an element with its own Enter 
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | correctness | trivial | `apps/complex-dynamics/src/main.ts:1991` | `UNVERIFIED` |
+| **low** | correctness | trivial | `apps/complex-dynamics/src/main.ts:1991` | **CONFIRMED** (severity → low) |
+
+> **Verifier:** Verified. Four sites dereference `navigator.clipboard` before any promise exists — main.ts:1991 (copyJuliaProperties), 3760 (inspector-copy), 3804 (copyCoords), 3886 (copyCoeffs) — all shaped `void navigator.clipboard.writeText(...).then(...).catch(...)`. Outside a secure context `navigator.clipboard` is undefined, so the property read throws TypeError synchronously and the attached .catch cannot observe it (no toast at all). The codebase already knows the correct shapes: shareLink awaits inside try/catch (main.ts:2736-2741), cite-copy likewise (3863-3871), and plotView.ts:351 explicitly guards `if (!navigator.clipboard || typeof ClipboardItem === "undefined")`. Latent on the HTTPS Pages deployment; hit on a plain-HTTP LAN preview.
 
 **Evidence**
 
@@ -754,7 +796,9 @@ Extract the working pattern into one helper — `async function copyText(text: s
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | usability | small | `apps/complex-dynamics/src/main.ts:820` | `UNVERIFIED` |
+| **low** | usability | small | `apps/complex-dynamics/src/main.ts:820` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** The code defect is real — beginExport (main.ts:820-850) has no re-entrancy guard, adds an onCancel listener to the single shared #export-cancel, and its done() unconditionally sets `overlay.hidden = true`; runExport/runCopy (2204-2273) disable only their own button and are launched independently at 4074/4084/4094/4103. But the stated failure scenario is not reachable by pointer: styles/main.css:1099-1108 gives `.export-progress` `position: fixed; inset: 0; z-index: 1200` with a translucent backdrop and no `pointer-events: none`, and beginExport sets `overlay.hidden = false` synchronously before runExport's first await (main.ts:2218-2220), so the second "Export PNG" click lands on the backdrop, not the button. index.html:2184-2190 shows no <dialog>/inert/focus trap, so the only way to start a concurrent export is keyboard activation (Tab to the other export button + Enter/Space) while the modal is up — a genuine but much narrower window than "click one, then immediately click the other".
 
 **Evidence**
 
@@ -796,7 +840,9 @@ I read every file named in the scope brief in full — glPlot.ts (2450 lines, al
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **high** | correctness | small | `apps/complex-dynamics/src/render/glPlot.ts:2321` | `UNVERIFIED` |
+| **high** | correctness | small | `apps/complex-dynamics/src/render/glPlot.ts:2321` | **CONFIRMED** |
+
+> **Verifier:** Verified end-to-end. glPlot.ts:2321-2324 setParamA only assigns `_paramA` + scheduleRender(). `_polyPerturb` is assigned ONLY at glPlot.ts:786-790 inside rebuild(), and rebuild() is reachable from exactly five places (grep: :607 init, :2028 preset, :2107 setF, :2115 setEscape, :2287 setNewton) — never from setParamA. main.ts:3935 binds only applyParamA, which (main.ts:2590-2595) calls setParamA on both plots and nothing else. The perturbation path consumes the baked coefficients (setupPerturbDraw uploads poly.coeffs/poly.dcCoeff at :1380-1388; ensureOrbit iterates `this._polyPerturb.coeffs` at :1255-1258), while the standard path re-uploads the live `a` every draw (`gl.uniform2f(u.uA, ...)`, :1038). scheduleRender does set orbitDirty (:959-962), so the orbit IS recomputed — from stale coeffs, so the image is byte-identical across the whole slider range. Reachable exactly as described: `a*z^2+c` fails probeMonicDegree (:1125-1128 rejects a-dependence) but passes extractPolyPerturbation (perturbationPoly.ts:207-231, degree 2, B=1) ⇒ _perturbEligible true; usePerturbation() (:1221-1225) has no zoom gate, so the checkbox alone activates it. Preconditions are two non-default ones (user-typed a-dependent polynomial — no shipped preset uses `a` — plus the perturbation checkbox), but the reviewer stated them accurately, and when hit the picture silently contradicts every live readout.
 
 **Evidence**
 
@@ -888,7 +934,9 @@ Add an `"indeterminate"` outcome: track a third counter for critical points that
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | trivial | `apps/complex-dynamics/src/render/glPlot.ts:1176` | `UNVERIFIED` |
+| **medium** | correctness | trivial | `apps/complex-dynamics/src/render/glPlot.ts:1176` | **CONFIRMED** |
+
+> **Verifier:** Confirmed. packages/expr/src/evaluate.ts:377-381 defaults `a: Complex = [0, 0]`; glPlot.ts:1176 (probeDivergenceEscape) and :1214 (probeEscapeRadius2) both call makeEscapeFn without `this._paramA`, while the compiled shader evaluates escapeFn against the live uniform (shaderBuilder.ts:691 `uniform vec2 uA`, set at glPlot.ts:1038). Their outputs gate real render decisions at :796-799. The cardioid claim is solid: the shortcut is emitted BEFORE the iteration loop (shaderBuilder.ts:749 `${cardioidShortcut}` → :565-570 `return vec3(0.0)`), so a wrongly-enabled `_interiorBailout` paints the cardioid/bulb black without ever evaluating the user's predicate. Two narrowings worth recording: (a) the periodicity-bailout half of the claim is weak — `if (escapeFn(z, cc)) break;` runs at shaderBuilder.ts:764 before the periodStep at :778, so it cannot override a genuine escape; (b) the contrast with probeMonicDegree (:1124-1128, which deliberately double-probes `a`) is real and makes the omission look accidental. Medium stands on the cardioid + _perturbEscape2 halves.
 
 **Evidence**
 
@@ -913,7 +961,9 @@ Pass the live parameter: `makeEscapeFn(this._iterEscAst, this._iterAst, this._pa
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | performance | medium | `apps/complex-dynamics/src/render/glPlot.ts:1300` | `UNVERIFIED` |
+| **medium** | performance | medium | `apps/complex-dynamics/src/render/glPlot.ts:1300` | **CONFIRMED** |
+
+> **Verifier:** Confirmed structurally (I did not re-measure the ms figures). setupPerturbDraw calls ensureOrbit + ensureBLA unconditionally on every draw (glPlot.ts:1352-1353), and drawFractal routes every frame through it when perturbation is active (:1410-1413). shift() (:2044-2053) and the zoom setter call scheduleRender() with the default invalidateContent, which sets orbitDirty (:959-962); ensureOrbit then recomputes the DD orbit and forces `this.blaDirty = true` (:1272); ensureBLA materialises `orbitLen` fresh [x,y] tuples (:1307-1308), rebuilds the whole tree and does a full texImage2D (:1321-1331). The warp escape hatch is genuinely unavailable at depth: canUsePreview() requires desiredPrecision() === "single" (:1653-1661) and desiredPrecision is purely zoom-based (:921-925), so render() falls past the preview branch (:1838) into a real draft re-render. plotView.ts:598 issues one shift() per pointermove during a drag. Performance-only (rebasing keeps a stale reference correct), so medium is right.
 
 **Evidence**
 
@@ -941,7 +991,9 @@ Three independent, cheap wins. (1) Don't recompute the reference orbit every dra
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | small | `apps/complex-dynamics/src/render/glPlot.ts:799` | `UNVERIFIED` |
+| **medium** | correctness | small | `apps/complex-dynamics/src/render/glPlot.ts:799` | **CONFIRMED** |
+
+> **Verifier:** Confirmed. Eligibility never consults the escape predicate (glPlot.ts:792-794) and the bailout silently defaults (:799 `this.probeEscapeRadius2() ?? 4.0`). I traced radialEscapeSq (:128-161) against the shipped biomorph escape `if(abs(re(z))>10,true,abs(im(z))>10)`: it bisects R=10 on the +real axis, then the diagonal probe at 1.1·R = (7.78, 7.78) fails the "just outside MUST escape" test at :157 ⇒ returns null ⇒ _perturbEscape2 = 4.0, while the standard program runs the real box predicate. biomorph is f=z^3+c (presets.ts:174-182 and 348-357) ⇒ probeMonicDegree returns 3 ≤ MAX_PERTURB_DEGREE ⇒ eligible, and the kernel then tests the circle `dot(z, z) > uPerturbEscape2` (shaderBuilder.ts:264). No caveat is surfaced: the perturbation-note (apps/complex-dynamics/index.html:1076-1079) mentions only lighting/outline/equipotential, and applyPerturbation's toast (main.ts:2526-2531) fires only when INELIGIBLE. The secondary claim also holds — BAILOUT2 = 4 is hard-coded at perturbation.ts:29 and perturbationPoly.ts:27, independent of _perturbEscape2.
 
 **Evidence**
 
@@ -970,7 +1022,9 @@ Gate eligibility on a certified bailout: `this._perturbEligible = (…) && this.
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | memory | small | `apps/complex-dynamics/src/render/glPlot.ts:1964` | `UNVERIFIED` |
+| **medium** | memory | small | `apps/complex-dynamics/src/render/glPlot.ts:1964` | **CONFIRMED** |
+
+> **Verifier:** Confirmed. glPlot.ts:1964 allocates `pixels = new Uint8Array(size*size*4)` and :2004 allocates `out = new Uint8ClampedArray(size*size*4)`; `pixels` stays live through the flip loop at :2005-2008, so both full-size buffers coexist. The 8000 option really exists (apps/complex-dynamics/index.html:1769 and :1803) ⇒ 256 MB each. Worth noting in the reviewer's favour: a previous pass already removed the per-strip scratch copy (:1990-1992 reads straight into `pixels`), so the one remaining full-size staging buffer is exactly the avoidable allocation named, and the proposed per-strip-into-flipped-position fix would remove it plus the final full-image pass. Only mild overreach is the failure scenario's arithmetic — the GPU texture, destination canvas and overlay canvas mean total peak rises ~25%, not 2×; the CPU-side export buffers do double.
 
 **Evidence**
 
@@ -1003,7 +1057,9 @@ Read each strip into a small reusable scratch buffer (`STRIP` rows = 256 × size
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | performance | small | `apps/complex-dynamics/src/render/angleOfPoint.ts:113` | `UNVERIFIED` |
+| **medium** | performance | small | `apps/complex-dynamics/src/render/angleOfPoint.ts:113` | **CONFIRMED** |
+
+> **Verifier:** Confirmed, and I checked the two obvious refutations. (1) No cache anywhere: landAll (angleOfPoint.ts:113-124) builds a fresh array each call, nearestParameterAngles (:216-226) and nearestDynamicalAngles (:200-210) call it fresh, and a grep for Map/cache/memo/WeakMap across render/angleParameter.ts returns nothing. (2) The call site does not memoize either — main.ts:3335-3354 re-runs it on every "Find angles" click with `{maxPeriod: 6}` (param) / `{maxPeriod: 8}` (dyn), synchronously. I re-ran the enumerateLandingAngles algorithm (angleOfPoint.ts:80-98) in node: 420 distinct angles at (6,2) and 1884 at (8,2) — the reviewer's counts are exact. parameterLanding(p,q) depends on nothing but (p,q), so the parameter-plane table is a genuine app constant. I did not re-measure the 34.5 ms / 95.8 ms timings.
 
 **Evidence**
 
@@ -1035,7 +1091,9 @@ Memoize `landAll` per (plane, bounds) and, for the dynamical plane, per `c` — 
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | correctness | trivial | `apps/complex-dynamics/src/render/juliaProperties.ts:51` | `UNVERIFIED` |
+| **low** | correctness | trivial | `apps/complex-dynamics/src/render/juliaProperties.ts:51` | **CONFIRMED** |
+
+> **Verifier:** Confirmed, doc-only. juliaProperties.ts:51-53 says "Exact small-c Hausdorff dimension 1 + |c|²/(4 ln d)"; the implementation at :205-210 is explicitly the Ruelle / Bodart–Zinsmeister asymptotic with O(|c|³) error, "exact only at c = 0", gated to `degree === 2` and using `4 * Math.LN2` — so the field doc is wrong twice ("Exact", and "ln d" where the code is ln 2 and d is pinned to 2). I confirmed the reviewer's own mitigation: main.ts:1784 renders it as `≈ … (small-c)` with a correct explanatory comment at :1782-1783, so nothing user-visible is mislabelled today. Low is right — the exposure is a future consumer of the interface, not the shipped UI.
 
 **Evidence**
 
@@ -1059,7 +1117,9 @@ Change the field doc to match the implementation comment: "Small-|c| ASYMPTOTIC 
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | redundancy | small | `apps/complex-dynamics/src/render/bla.ts:182` | `UNVERIFIED` |
+| **low** | redundancy | small | `apps/complex-dynamics/src/render/bla.ts:182` | **CONFIRMED** |
+
+> **Verifier:** Confirmed. bla.ts:169-181 doc calls it "the **canonical BLA render loop** … the reference the GPU kernel (D2b) mirrors", but the body is quadratic-only: `> 4` bailout at :198 and the fixed `2·Z·δz + δz² + cAdd` step at :209-213. Its own module already generalises — buildBLATable takes `degree = 2` (:125) and buildBLATablePoly exists (:134-139) — and the shipped kernel takes its bailout from uPerturbEscape2 (shaderBuilder.ts:264). I re-ran the "no production caller" grep repo-wide: only test/bla.test.ts (imports at :16, calls at :251/:271/:283) plus doc mentions. One thing the reviewer did not flag: FRONTIER_ROADMAP.md:144 still calls bla.ts "Half-built … unwired (D2b)", which is itself stale now that ensureBLA/blaTex ship — so the "D2b" back-reference in the doc points at a milestone label that no longer describes the code. Low (doc/scope accuracy), no runtime effect.
 
 **Evidence**
 
@@ -1087,7 +1147,9 @@ Either generalise it to match the shipped kernel (take `degree`/`coeffs`/`dcCoef
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | redundancy | trivial | `apps/complex-dynamics/src/render/glPlot.ts:564` | `UNVERIFIED` |
+| **low** | redundancy | trivial | `apps/complex-dynamics/src/render/glPlot.ts:564` | **CONFIRMED** |
+
+> **Verifier:** Confirmed verbatim. glPlot.ts:564-566 sets histoFbo/histoTex/cdfTex to null, and :596-598 repeats the identical three assignments under a comment written as if it were the first clear. Both writes are idempotent so there is no runtime effect — pure hygiene in a 45-line flat reset block. The reviewer's side observation also checks out: blaNumLevels/blaWidth/blaBuiltZoom are not reset in restoreContext (only blaTex :592 and blaDirty :593), and correctness there rests on ensureBLA's `!this.orbitXY || this.orbitLen < 2` guard (:1301) combined with orbitXY = null at :591. Low.
 
 **Evidence**
 
@@ -1126,7 +1188,9 @@ Cross-cutting performance/memory pass over all three apps and the five shared pa
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **high** | performance | small | `apps/correspondences/src/correspondenceRender.ts:136` | `UNVERIFIED` |
+| **high** | performance | small | `apps/correspondences/src/correspondenceRender.ts:136` | **CONFIRMED** (severity → high) |
+
+> **Verifier:** Verified at apps/correspondences/src/correspondenceRender.ts:136 — `pointInPolygon([wx, wy], BOUNDARY)` runs inline per zero-density pixel, BOUNDARY = deltoidBoundary(256) (line 15), and there is no memo of any kind. main.ts:191 calls densityToImage once per chunk; sy1 = min(64, sy+3) (main.ts:187) ⇒ 22 chunks, and `chunk` is a setTimeout(0) loop (main.ts:78-81), so each of those 22 passes blocks the main thread. Benchmarked a faithful port (380² pixels × a 256-gon ray cast): 97.9 ms per full pass ⇒ ~1.2-2.2 s of redundant main-thread work per page load, in ~50-100 ms blocking slices, for a K-mask that is byte-identical on every chunk (W, H, view all constant). Confirmed as written, at high.
 
 **Evidence**
 
@@ -1154,7 +1218,9 @@ Compute the K mask once into a `Uint8Array(W*H)` (memoised on W/H/view identity,
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **high** | performance | trivial | `apps/quadrature-domains/app/schwarz/schwarz-paint.mjs:132` | `UNVERIFIED` |
+| **high** | performance | trivial | `apps/quadrature-domains/app/schwarz/schwarz-paint.mjs:132` | **REFUTED** |
+
+> **Verifier:** The source quote is accurate (schwarz-paint.mjs:132 `const c = colormap(cmap, t)`; interpStops returns a fresh array at line 855), but the defect — allocation churn — does not occur at runtime. The returned 3-tuple never escapes: it is inlined through colormap into the destructure in paintField, so V8 scalar-replaces it. Benchmarked the exact shape (colormap dispatch + interpStops + the paintField loop) at 768² × 60 repaints = one second of the claimed scenario, which the finding says should produce ~1.1 GB of nursery traffic: `node --trace-gc` shows ZERO scavenges across the timed run, and the out-parameter 'fix' measures 10.57 vs 10.72 ms/paint (1.4%, within noise). The claimed 'GC pauses that make the progressive pyramid visibly stutter' cannot happen. The reviewer missed escape analysis. (The 10 ms/repaint loop itself is real, but that is the loop, not the allocation, and the proposed fix does not touch it.)
 
 **Evidence**
 
@@ -1192,7 +1258,9 @@ Give the colour path an out-parameter: add a module-level `const _rgb = [0, 0, 0
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **high** | performance | medium | `apps/complex-dynamics/src/render/glPlot.ts:1305` | `UNVERIFIED` |
+| **high** | performance | medium | `apps/complex-dynamics/src/render/glPlot.ts:1305` | **OVERSTATED** (severity → medium) |
+
+> **Verifier:** The mechanism is real — glPlot.ts:1305 guard, full `ref: Complex[]` materialisation (1307-1308), full buildBLATable, fresh packBLATable Float32Array and a storage-reallocating texImage2D (1321) on every view-changed frame; `set zoom` → scheduleRender() → orbitDirty (glPlot.ts:2126, 962) confirms the trigger chain. Measured cost of one rebuild at orbitLen=16384: 4.88 ms/frame of JS (~98k escaping objects, real scavenges) plus the 1.05 MB upload. But the headline claim is wrong for the cited gesture: the wheel handler sets zoom AND calls plot.shift() (plotView.ts:736-737), and shift() moves _centerDD (glPlot.ts:2044-2052), so the reference orbit — and therefore level 0 — genuinely changes every wheel tick. Proposed fix (2) 'cache the maxC-independent level 0' is a no-op for the wheel scenario; it only helps centre-preserving zooms (keyboard +/-, typed zoom), where the far larger redundancy is the identical reference-orbit recompute, not the BLA. Fixes (1) and (3) stand. True scope: ~5 ms/frame + a 1 MB texture realloc during deep-zoom gestures with perturbation on — bounded overhead, not the '≈7 M objects/s' jank implied.
 
 **Evidence**
 
@@ -1219,7 +1287,9 @@ Three independent changes, all behaviour-preserving: (1) drop the `ref: Complex[
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | memory | trivial | `apps/quadrature-domains/app/schwarz/schwarz-paint.mjs:672` | `UNVERIFIED` |
+| **medium** | memory | trivial | `apps/quadrature-domains/app/schwarz/schwarz-paint.mjs:672` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** Factually correct: schwarz-paint.mjs:672 does `_dcOffCtx.createImageData(dc.W, dc.H)` + `img.data.set(dc.buf)` every call while only the canvas is cached (666-671), so the header comment 'Caches an offscreen W×H ImageData' is untrue. But the per-frame cost is far smaller than claimed: liveDomainColoringRepaint ALREADY coalesces to one paintAll per animation frame (schwarz-interaction.mjs:209-211, with the comment 'Coalesce the live re-blit to one paint per frame'), and dc.W = dc.H = 256 (schwarz-features.mjs:46), so the waste is one 256 KB zero-filled allocation (~15 µs) + a 256 KB set (~15 µs) + a 65k-pixel putImageData (~0.1 ms) per frame — roughly 0.15 ms out of a 16 ms budget, in domain-coloring mode only. Real and worth the trivial fix, but hygiene, not a memory problem.
 
 **Evidence**
 
@@ -1248,7 +1318,9 @@ Cache the ImageData next to `_dcOffCanvas` (allocate it in the same `if` that cr
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | performance | small | `apps/complex-dynamics/src/render/plotView.ts:114` | `UNVERIFIED` |
+| **medium** | performance | small | `apps/complex-dynamics/src/render/plotView.ts:114` | **CONFIRMED** (severity → medium) |
+
+> **Verifier:** Verified: plotView.ts:114 `this.plot.afterRender = () => this.drawOverlay();` and PlotView.drawOverlay (plotView.ts:380-405) has no change detection — it unconditionally calls the module drawOverlay, which itself dispatches per-flag with no caching (overlay.ts:758-761). GLPlot.render fires afterRender on all three paths (glPlot.ts:1840 preview, 1851 accumulate, 1885 main), and renderAccumulate re-arms up to MAX_ACCUM = 16 (glPlot.ts:257, 1931) with PROGRESSIVE_LADDER = [0.5, 1.0] (line 254) giving two more. During accumulation centre/zoom/c are unchanged by construction (the only per-frame delta is this._jitter, which the overlay never sees), so those 16 redraws are pixel-identical. With the inverse-Julia cloud on that is 16 × up to 12,000 plotToPx + fillRect (overlay.ts:503-507). Genuinely redundant work; bounded to sessions with a heavy overlay enabled, hence medium is right.
 
 **Evidence**
 
@@ -1270,7 +1342,9 @@ Give `PlotView` an overlay content key built from the values it already passes i
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | performance | small | `apps/complex-dynamics/src/render/overlay.ts:481` | `UNVERIFIED` |
+| **medium** | performance | small | `apps/complex-dynamics/src/render/overlay.ts:481` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** The mechanism checks out: overlay.ts:481-488 keys the cloud cache on `${c[0]},${c[1]}` (same for cachedSiegelCurves:513 and cachedPortraitRay:446, which clears its whole Map on a c change), and a coupled drag changes c every frame — main.ts:982 coupling.setC → setCValue (glPlot.ts:2094-2101) → invalidateInteractionPreview() + scheduleRender(), so canUsePreview() is false and a real render + afterRender + drawOverlay happens with the new c. But the magnitude is far smaller than 'visibly janky': I benchmarked inverseJuliaCloud(c, 12000, 30, 1) (inverseJulia.ts:29-50) at 0.87 ms/call, i.e. ~5% of a 16 ms frame, and dynamicRay (rays.ts:87-115) is ~0.05 ms/ray. Also note this is not pure waste — c really did change, so the cloud really is different; the finding is an optimisation opportunity (defer while coupledDrafting), not a correctness or cache bug, and the cache is behaving exactly as its comment documents.
 
 **Evidence**
 
@@ -1300,7 +1374,9 @@ With the inverse-Julia overlay enabled, drag the parameter point on the paramete
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | memory | trivial | `apps/quadrature-domains/app/algebra/algebra-ui.mjs:2902` | `UNVERIFIED` |
+| **medium** | memory | trivial | `apps/quadrature-domains/app/algebra/algebra-ui.mjs:2902` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** The leak is real: algebra-ui.mjs:2902-2904 registers `off` on document with capture and only removes it from inside itself under `if (_ctxMenu && !_ctxMenu.contains(ev.target))`; closeNodeMenu (2842-2846) nulls _ctxMenu without removing it, and the menu-item click path (2870) reaches closeNodeMenu after the pointerdown has already passed the contains() test. But the reviewer missed two things. (1) _ctxMenu is a shared closure variable, not a per-menu snapshot, so on the NEXT outside-click dismissal the oldest surviving `off` fires first, sees the new _ctxMenu, closes it and removes ITSELF — the pile drains by one per outside-click, and no listener ever retains a detached DOM node (it closes over the variable, not the menu). (2) 'canvas drags, which fire them at pointer rate' is wrong — this is pointerdown, one per press, not pointermove. Net effect is a handful of retained no-op closures with an unmeasurable dispatch cost and no functional misbehaviour: hygiene, and the proposed one-line fix is still correct.
 
 **Evidence**
 
@@ -1331,7 +1407,9 @@ Hoist the handler to a module-scoped `let _ctxOff = null;`, assign it when insta
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | performance | small | `apps/correspondences/src/orbitTree.ts:51` | `UNVERIFIED` |
+| **medium** | performance | small | `apps/correspondences/src/orbitTree.ts:51` | **CONFIRMED** (severity → medium) |
+
+> **Verifier:** Verified at apps/correspondences/src/orbitTree.ts:51-53 (map to {p, arg} wrappers then Array.prototype.sort with a comparator) and :69 (orbitPoints re-copies via .map(n => n.point)). The deltoid correspondence really is d = 2 — makeUnboundedLaurentCorrespondence closed-forms the quadratic (correspondence.ts:64-69) — so children.length is 2 for essentially every node, and the seed count is real (seedGrid 64 = 4096 seeds × maxNodes 220 ⇒ up to ~900k nodes per render, correspondenceRender.ts:27, 65). Benchmarked map+sort vs a direct two-element compare at the 900k upper bound: 141.4 ms vs 64.5 ms, so ~77 ms of avoidable overhead — real, but under the claimed '~100-200 ms of pure sort overhead'. Medium stands.
 
 **Evidence**
 
@@ -1360,7 +1438,9 @@ Special-case the common width: when `children.length === 2`, compute the two `at
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | memory | trivial | `apps/complex-dynamics/src/render/juliaMetricsClient.ts:65` | `UNVERIFIED` |
+| **low** | memory | trivial | `apps/complex-dynamics/src/render/juliaMetricsClient.ts:65` | **CONFIRMED** (severity → low) |
+
+> **Verifier:** Verified at apps/complex-dynamics/src/render/juliaMetricsClient.ts:65-68 — disableWorker() sets this.worker = null with no terminate() and without clearing onmessage/onerror, and it is the onerror handler (line 48). One caveat the finding overstates slightly: for a script LOAD failure the worker agent is never started, so nothing leaks there; the leak is real for the runtime-error path, where the worker thread and its @cas/expr + juliaProperties module graph stay resident. Scope is one instance (main.ts:1770 constructs a single JuliaMetricsClient), so at most one orphaned thread per session, on an error path. Low is correct, and the proposed terminate() fix is right.
 
 **Evidence**
 
@@ -1386,7 +1466,9 @@ Terminate before dropping: `try { this.worker?.terminate(); } catch { /* ignore 
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | performance | trivial | `apps/quadrature-domains/app/schwarz/schwarz-render.mjs:255` | `UNVERIFIED` |
+| **low** | performance | trivial | `apps/quadrature-domains/app/schwarz/schwarz-render.mjs:255` | **CONFIRMED** (severity → low) |
+
+> **Verifier:** Verified at apps/quadrature-domains/app/schwarz/schwarz-render.mjs:255 — chainPass calls fillFromCoarseSamples(stride) unconditionally, and _renderCpuPyramid chains 4 → 2 → 1 (lines 137-139). On the stride-1 pass the sampling loop skips nothing (`if ((row % stride) !== 0 || (col % stride) !== 0) continue` is never true, and the `stride > 1` skip at line 219 is false), and every branch assigns fieldKind, so on entry to fillFromCoarseSamples every cell is non-zero and the `if (sState.fieldKind[idx]) continue` at line 271 fires for all W·H cells — doubly a no-op, since at stride 1 rAnchor/cAnchor equal row/col anyway. The worker path does guard it (`if (m.stride > 1)`, line 174). Cost is one wasted ~1-3 ms W·H scan per render, and only on the no-Worker/file:// fallback path — exactly a low-severity hygiene fix.
 
 **Evidence**
 
@@ -1410,7 +1492,9 @@ Mirror the worker path: `if (stride > 1) fillFromCoarseSamples(stride);` at line
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | performance | trivial | `apps/correspondences/src/mating/matingMain.ts:169` | `UNVERIFIED` |
+| **low** | performance | trivial | `apps/correspondences/src/mating/matingMain.ts:169` | **REFUTED** |
+
+> **Verifier:** The code facts are right (matingMain.ts:169-174 renders straight from pointermove; render() at :45-50 does clearRect + drawImage + overlay for all three panels; pointerToTheta brute-forces 360 evalPhi at matingView.ts:213-221), but the failure scenario does not happen. Browsers already coalesce pointermove dispatch to the frame rate — Chrome/Firefox/Safari deliver one pointermove per BeginFrame and expose the raw stream only via getCoalescedEvents(), which this code does not use — so there is no burst to coalesce and the 'at most half the frames can ever be displayed' premise is false: on a 120 Hz display all 120 renders are displayed. The 360-sample search is also negligible (~360 evalPhi ≈ tens of microseconds, not a hot spot). The QD DomainPlot rAF guard it is compared against exists because paintAll there is driven from several sources per frame (wheel + move + resize), which is not the case here. Adding a rAF guard would change nothing measurable.
 
 **Evidence**
 
@@ -1519,7 +1603,9 @@ Give the degenerate case its own classification. Add a third kind to `ParamEscap
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | performance | small | `apps/correspondences/src/main.ts:191` | `UNVERIFIED` |
+| **medium** | performance | small | `apps/correspondences/src/main.ts:191` | **CONFIRMED** |
+
+> **Verifier:** main.ts:191 calls densityToImage on every tick; correspondenceRender.ts:135-136 ray-casts a 256-vertex BOUNDARY for every zero-density pixel, and both BOUNDARY (line 15) and DEFAULT_VIEW are module constants with no zoom/pan on this panel, so the K mask is genuinely static. Re-ran the real 22-tick 380x380 progressive loop in node: densityToImage = 1196 ms vs accumulateBand = 199 ms (6:1), with 61.6% of pixels still zero-density at the end and therefore re-scanned every tick; precomputing the mask once costs 74 ms and colorizing from it 2 ms/frame, so ~1.12 s of the 1.2 s is removable. The absolute headline (4.2 s of 4.8 s) is hardware-specific — I measure 1.2 s of 1.4 s — but the redundant SHARE (~86%) and the diagnosis are exactly right.
 
 **Evidence**
 
@@ -1551,7 +1637,9 @@ Hoist the K mask out of the per-tick path: build a `Uint8Array(W*H)` once (eithe
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | small | `apps/correspondences/src/render.ts:49` | `UNVERIFIED` |
+| **medium** | correctness | small | `apps/correspondences/src/render.ts:49` | **CONFIRMED** |
+
+> **Verifier:** render.ts:49-51 collapses kind==='escaped' and kind==='fundamental' into one pal(0.11*n) ramp (gpu.ts:81 likewise), and main.ts:133 captions the coloured region as 'tiling set' with 'the non-escaping set' in black. My 240^2 sweep of DEFAULT_VIEW reproduces the reviewer's census to the pixel: 5128 K / 34561 fundamental / 17911 escaped = 31.10%. The escaped class is not tiles: the orbit of w=3 runs 4.668 -> 11.004 -> 60.587 -> 1835.4 -> 1.68e6 and is in Omega at every step, so render.ts:50's 'left Omega ... toward infinity' is wrong (Omega = C\K contains a neighbourhood of infinity, and mapSide.ts:1-3 already treats that basin as the mating's MAP side via greenSigma). 31% of the frame is captioned as the object it is complementary to.
 
 **Evidence**
 
@@ -1579,7 +1667,9 @@ Split the two classes visually and verbally: give `escaped` its own ramp (or a h
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | small | `apps/correspondences/src/mating/matingMain.ts:55` | `UNVERIFIED` |
+| **medium** | correctness | small | `apps/correspondences/src/mating/matingMain.ts:55` | **CONFIRMED** |
+
+> **Verifier:** Verified analytically and numerically: on |z|=1, F(z)=1/z+z^2/2 = conj(phi(z)), so sigma(phi(e^{i0}))=phi(e^{i0}); measured max deviation 2.3e-14 over 12 angles, and at theta=0.524 the panel marker jumps from (1.11548,0.06713) to (0.24861,-0.43382) while sigma of that point is (1.11548,0.06713) unchanged. equatorPoint (matingView.ts:203-206) plots exactly those deltoid-curve points, and matingMain.ts:55 appends '(same dynamics on all three)'. Note in mitigation: matingView.ts:10 and README:72-73 both correctly attribute the theta->-2theta realisation to z-bar^2 and the Nielsen map ONLY, and glue.ts:8 already hedges the Psi transport ('visually evident but NOT asserted') — so the defect is the one readout string (plus arguably the matingView header's 'equator ... deltoid curve' identification), not the whole module.
 
 **Evidence**
 
@@ -1603,7 +1693,9 @@ Reword the readout and the matingView header to say what is actually shown: the 
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | performance | small | `apps/correspondences/src/mating/matingMain.ts:164` | `UNVERIFIED` |
+| **low** | performance | small | `apps/correspondences/src/mating/matingMain.ts:164` | **CONFIRMED** |
+
+> **Verifier:** Structurally exact: build() runs at module scope (matingMain.ts:208), its SPACES.map synchronously calls drawPanel (line 164) -> drawSigma -> drawSigmaEquipotentials (132^2 greenSigma, matingView.ts:120-147) + drawSigmaRays (24-ray sigmaRayFan, lines 41-49), with no yield anywhere — unlike index.html, which routes every comparable pass through chunk/chunkImageBands (main.ts:78-110). mating.html's body is just <div id="app"></div>, so there is no placeholder to look at. Measured here: 114 ms for the grid + 77 ms for the fan = 192 ms of unyielded sigma work (plus the tessellation/glue/fold layers). The '~0.8 s' headline is the reviewer's hardware; on this box it is ~0.2 s. Defect real, severity correctly filed as low.
 
 **Evidence**
 
@@ -1628,7 +1720,9 @@ Draw the two cheap disk panels (`map`, `group`) first and paint them, then run t
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | correctness | trivial | `apps/correspondences/src/paramGpu.ts:10` | `UNVERIFIED` |
+| **low** | correctness | trivial | `apps/correspondences/src/paramGpu.ts:10` | **CONFIRMED** |
+
+> **Verifier:** paramGpu.ts:9-10 claims the render is 'cross-validated PIXEL-FOR-PIXEL against the CPU classifier (criticalEscape)'. gpuAgreement.test.ts:147-181 only asserts single-step sigma_a agreement (worst < 1e-4, branchDisagree === 0) on 32^2 grids for 4 a-values — no escape count is ever compared, and it exercises a hand-written TS mirror, not the shader. Mirroring the shader (paramGpu.ts:49-63: 24 Newton steps, accept at 1e-6, post-loop 1e-4) against criticalEscape on a 140^2 grid of DEFAULT_PARAM_VIEW: 57/19600 = 0.29% of pixels get a different escape count, all with the shader escaping exactly one step earlier, |delta n| <= 1, and 0 body-membership flips — and that is in float64, so the real float32 shader can only be worse. Cosmetic band-boundary shift, so low is right, but the comment is measurably false.
 
 **Evidence**
 
@@ -1650,7 +1744,9 @@ Downgrade the comment to what is true ("colours and classifier match; escape cou
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | redundancy | trivial | `apps/correspondences/src/correspondenceRender.ts:27` | `UNVERIFIED` |
+| **low** | redundancy | trivial | `apps/correspondences/src/correspondenceRender.ts:27` | **CONFIRMED** |
+
+> **Verifier:** Ran expandOrbitTree over the actual 64x64 accumulateBand seed grid at DEFAULT_DENSITY (correspondenceRender.ts:27, maxNodes 220, escapeR 6): all 4096 trees return exactly 220 nodes (avg 220.0, min 220), depth histogram {7: 3962, 8: 134}, and zero seeds reach depth >= 18. So orbitTree.ts:45's node cap always fires first and orbitTree.ts:48's maxDepth check can never bind at the shipped defaults — the 18 is inert configuration. Hygiene only (no wrong output), which matches the filed low severity.
 
 **Evidence**
 
@@ -1670,7 +1766,9 @@ Either set `maxDepth` to a value that can actually bind (≈ 8, documenting that
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | redundancy | trivial | `apps/correspondences/src/deltoid.ts:113` | `UNVERIFIED` |
+| **low** | redundancy | trivial | `apps/correspondences/src/deltoid.ts:113` | **REFUTED** |
+
+> **Verifier:** The runtime observation is right (durand-kerner.ts:129 is the only null return and is gated on bail = opts.bailOnNonFinite ?? false, line 84, which none of the three sites sets) but the defect claim is not. makeDurandKerner is DECLARED to return DurandKernerResult<C> | null unconditionally (durand-kerner.ts:78); apps/correspondences/tsconfig.json sets strict: true with no allowJs, so deleting the guards at deltoid.ts:113, correspondence.ts:79 and exact/deltoidExact.ts:80 — the reviewer's proposed fix, premised on 'the return type is non-null without bailOnNonFinite' — is a compile error, not a cleanup. Handling a documented nullable return is required, not redundant; the rest (a hypothetical future maintainer enabling bailOnNonFinite) is speculation about code that does not exist.
 
 **Evidence**
 
@@ -1703,7 +1801,9 @@ Drop the three `if (!res)` / `if (res)` guards (the return type is non-null with
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | maintainability | trivial | `apps/correspondences/README.md:6` | `UNVERIFIED` |
+| **low** | maintainability | trivial | `apps/correspondences/README.md:6` | **CONFIRMED** |
+
+> **Verifier:** All three sub-claims check out. (a) README.md:6 says 'four shared packages' but src/exact/correspondenceCurve.ts:19 imports discriminant/Gauss/integerPrimitive/QiPoly/renderGaussMag from @cas/exact and src/exact/index.ts:6 re-exports it — five. (b) A grep of src/, test/, *.html and package.json shows @cas/interchange imported only at test/smoke.test.ts:5 while listed as a runtime dependency (package.json:23). (c) README.md:36-38's 'pixel-consistent with it (a node-safe agreement test guards the two)' overstates test/gpuAgreement.test.ts, which compares one sigma step through a TS mirror, never pixels; the two paths also run different caps (gpu.ts:167 uMaxIter 96 vs render.ts:27 MAX_ITER 64) and different resolutions entirely (main.ts:20-21, SIGMA_GPU 560 vs SIGMA_CPU 240), so 'pixel-consistent' cannot be literally true. Documentation-only impact, so low.
 
 **Evidence**
 
@@ -1735,7 +1835,9 @@ Overall health of this scope is good and better than I expected. The demand-driv
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **high** | correctness | small | `apps/quadrature-domains/app/schwarz/schwarz-cpu-worker.mjs:82` | `UNVERIFIED` |
+| **high** | correctness | small | `apps/quadrature-domains/app/schwarz/schwarz-cpu-worker.mjs:82` | **CONFIRMED** |
+
+> **Verifier:** Verified. apps/quadrature-domains/app/schwarz/schwarz-cpu-worker.mjs:82-85 — the whole 'error' listener is a single console.error; `_inflight` (:63) is never cleared, `_disposeWorker()` is never called, no `messageerror` listener exists. primary-solver-worker.mjs:92-114 has the fix WITH the reason written down. The caller waits purely on the three callbacks: schwarz-render.mjs:169-181, and the only `sState.rendering = false` resets are the normal `m.done` path (:176) and the in-process pyramid (:141) — I grepped schwarz-render/schwarz-ui for any watchdog and there is none, so the tab is stuck on 'Pass 1/3 (coarse) …' with a blank canvas. Reachable: schwarz-worker-entry.mjs guards only buildSchwarzFromPhi (:26-32); the escapeTime loop (:41-86) is unprotected, and a module-load failure of the worker entry (QD is a PWA, stale SW caches) also fires `error` without throwing synchronously from `new Worker`, so `_mainThreadFallback` is never set.
 
 **Evidence**
 
@@ -1781,7 +1883,9 @@ Mirror primary-solver-worker.mjs:92-114 into schwarz-cpu-worker.mjs: in the `err
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **high** | correctness | small | `apps/quadrature-domains/app/sphere/sphere-webgl.mjs:313` | `UNVERIFIED` |
+| **high** | correctness | small | `apps/quadrature-domains/app/sphere/sphere-webgl.mjs:313` | **CONFIRMED** |
+
+> **Verifier:** Verified. sphere-webgl.mjs:313-322 — all five `return false` paths execute before any phiState mutation, and `hasPhi` is declared false at :289 and assigned true only at :408 (grep: 4 hits total, no reset). suspend() (:765-772) frees the FBO but sets fractalDirty=true and leaves hasPhi true, so the next render (:477) REBUILDS the fractal from the stale phiState — the previous domain survives even across deactivate/activate. sphere-ui.mjs:170-173 only console.warns; schwarz-ui.mjs:1168-1172 and :893-897 discard the boolean; refreshSourceStatus (:1075-1099) then writes the NEW φ's family into #schwarz-src-status. schwarz-webgl.mjs:912/917/922/927/939 by contrast set phiState.capacityError, surfaced at schwarz-ui.mjs:1158-1159. So the sphere draws φ₁ under φ₂'s caption with the only diagnostic in devtools.
 
 **Evidence**
 
@@ -1827,7 +1931,9 @@ Two changes. (1) In sphere-webgl.mjs, on any rejection path set `hasPhi = false`
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | small | `apps/quadrature-domains/app/schwarz/schwarz-paint.mjs:867` | `UNVERIFIED` |
+| **medium** | correctness | small | `apps/quadrature-domains/app/schwarz/schwarz-paint.mjs:867` | **CONFIRMED** |
+
+> **Verifier:** Verified. schwarz-paint.mjs:867-878 CMAP vs schwarz-webgl.mjs:642-680 (MAGMA…TWOTONE, dispatched by pickColormap :721-736) — I diffed all ten pairs and they are identical today, with the parity contract asserted in the painter header at :821-822. schwarz-colormap.test.ts:79-86 iterates only ["magma","viridis","turbo","grayscale"] (it does genuinely cross-check CPU table vs GPU table, via interp(t, pickColormap(name)) — but only for those four plus cyclic). inferno/plasma/cividis/rainbow/iceandfire/twotone are unguarded; schwarz-shader-parity.test.ts:33-42 only checks 0..255 well-formedness, never CPU↔GPU. The cyclic comment at schwarz-paint.mjs:844-850 documents that this pair has already silently diverged once.
 
 **Evidence**
 
@@ -1871,7 +1977,9 @@ Either (a) extend the parity test's palette list to all ten names — `pickColor
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | testing | medium | `apps/correspondences/test/gpuAgreement.test.ts:16` | `UNVERIFIED` |
+| **medium** | testing | medium | `apps/correspondences/test/gpuAgreement.test.ts:16` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** Facts check out — gpuAgreement.test.ts:16-29 and :102-119 are TS replicas and no assertion path reads gpu.ts/paramGpu.ts's FRAG strings; packages/gpu/vitest.browser.config.ts is the only browser config in the repo (glob confirmed). I diffed coldInvert against gpu.ts:42-54: identical (seed 1.3, 24 iters, 1e-6/1e-30/1e8). But the reviewer's framing — that the test overstates its guarantee — is not supported: the file header at :6-11 states the mirror contract in its first paragraph ("we mirror the shader's inverse strategy in TS … If someone changes gpu.ts's inverse, keep this mirror in sync") and the describe/it titles already hedge ("shader σ *algorithm*", "shader strategy reproduces…"). What is left is a documented, intentional coverage gap on a purely visual exploratory render with no certified label attached — hygiene, not medium.
 
 **Evidence**
 
@@ -1903,7 +2011,9 @@ Retitle the describe blocks to say what they test ("the cold-seed Newton STRATEG
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | redundancy | small | `apps/complex-dynamics/src/combinatorics/dynatomic.ts:111` | `UNVERIFIED` |
+| **medium** | redundancy | small | `apps/complex-dynamics/src/combinatorics/dynatomic.ts:111` | **CONFIRMED** |
+
+> **Verifier:** Verified verbatim. dynatomic.ts:111-124 and deltoidExact.ts:65-79 are the same monic-normalize + Horner evaluator + Cauchy bound `1+max|a_k|` + `(k+0.5)·2π/n` seed ring + makeDurandKerner call, differing only in maxIter (400 vs 300, no stated reason). Both are exact-ℚ(i)-polynomial root paths in two DIFFERENT apps, both consuming @cas/core's makeDurandKerner, so ADR-0007's second-consumer trigger genuinely fires (this is not the single-consumer case the ADR excludes). The reviewer is also right to exempt deltoid.ts:106-112 exteriorRoot, whose seed radius is w-dependent. No wrong output today; the failure scenario is prospective.
 
 **Evidence**
 
@@ -1956,7 +2066,9 @@ Add `rootsOfMonicCauchy(alg, coeffs, opts)` (or `solveMonic`) to `packages/core/
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | redundancy | medium | `apps/quadrature-domains/app/solver-uqd.mjs:286` | `UNVERIFIED` |
+| **medium** | redundancy | medium | `apps/quadrature-domains/app/solver-uqd.mjs:286` | **CONFIRMED** |
+
+> **Verifier:** Verified all three. solver-uqd.mjs:286-368, solver-uqd-lqd.mjs:297-379, solver-uqd-lqd-singular.mjs:537-613 share identical defaults (growFactor 1.6 / shrinkFactor 0.5 / minStep 1e-4 / maxSteps 80), identical startGuess = cStart ?? min(cTarget, 0.25·min|p.a|), identical warm-up-with-shrink loop and identical main loop; only the initial-guess fn, the `method` string and the error prefix differ. The claimed drift is real: solver-uqd.mjs:349-350 appends " (target c=" + cTarget.toFixed(4) + ")" to the underflow message, which solver-uqd-lqd.mjs:363 and solver-uqd-lqd-singular.mjs:597 both lack.
 
 **Evidence**
 
@@ -1997,7 +2109,9 @@ Extract the loop into `solver-lqd-common.mjs` (or a new `solver-continuation.mjs
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | redundancy | medium | `apps/quadrature-domains/app/solver-qd.mjs:63` | `UNVERIFIED` |
+| **medium** | redundancy | medium | `apps/quadrature-domains/app/solver-qd.mjs:63` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** Six sites, not eight. The finite-pole block (α = 1 − conj(z_j)·z₀, Complex.inv(alpha), the uT closed form, then the k-accumulation) exists at solver-qd.mjs:63, solver-uqd.mjs:108, solver-pqd.mjs:111, solver-pqd-singular.mjs:136, solver-uqd-pqd.mjs:114, solver-uqd-pqd-singular.mjs:104 — a grep for `alphaInvPow` returns exactly those six. The two extra cited sites are a DIFFERENT expansion: solver-uqd-pqd.mjs:243 `rHashInS_UPQD` and solver-uqd-pqd-singular.mjs:226 `rHashInS_UPQDS` are Taylor in s = 1/z AT INFINITY with u(s) = 1/(s − conj z_j), uT[m] = −(1/conj z_j)^{m+1}; they contain no α at all, so the reviewer's own failure scenario (guarding Complex.inv(alpha)) cannot apply to them. Only the generic 5-line Σ_k conj(A_k)·u^k tail is shared there. The six genuine copies are byte-identical and have not diverged — pure hygiene.
 
 **Evidence**
 
@@ -2042,7 +2156,9 @@ Add `branchTaylorAccumulate(result, branches, z0, L)` to `solver-qd.mjs`'s share
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | redundancy | small | `apps/quadrature-domains/app/ui-thesis.mjs:21` | `UNVERIFIED` |
+| **medium** | redundancy | small | `apps/quadrature-domains/app/ui-thesis.mjs:21` | **CONFIRMED** |
+
+> **Verifier:** Verified all five. qol.mjs:480 escapes [&<>"'] and its header (:476-479) declares itself the HANDOFF #35 consolidation point; ui.mjs:375 and param-slice-ui.mjs:823 delegate correctly; ui.mjs:329 escapeAttr escapes only & and "; direct-ui.mjs:756-758 escapeAttr escapes & " <; ui-thesis.mjs:21, ui-faber.mjs:23 and ui-qd-equations.mjs:29 are three byte-identical 4-char `esc`s. Three distinct character sets confirmed. I also checked exploitability independently: every escapeAttr call site (direct-ui 529/532/704, ui-pole-grid 58/85/138, ui-solve 585/792/802) is a DOUBLE-quoted attribute value, and there are no single-quoted attributes fed by the three `esc` copies — so, as the reviewer says, this is a divergence hazard in a security-adjacent helper, not a live vulnerability.
 
 **Evidence**
 
@@ -2075,7 +2191,9 @@ Delete `esc` from ui-thesis.mjs, ui-faber.mjs and ui-qd-equations.mjs and the tw
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | redundancy | trivial | `packages/expr/src/glsl.ts:191` | `UNVERIFIED` |
+| **medium** | redundancy | trivial | `packages/expr/src/glsl.ts:191` | **CONFIRMED** |
+
+> **Verifier:** Verified. evaluate.ts:181-195 and glsl.ts:188-204 are the same 13-line function, both module-private, both switching over the closed Node union with `default: return false` — so there is NO exhaustiveness error when a new bool-producing kind is added, which makes the divergence silent at compile time. The glsl.ts copy's own comment names the invariant it protects (a bool middle-statement must route through emitBool, not emitComplex). No test asserts the two agree, and no existing corpus would cover a newly-added kind. @cas/expr is the keystone package (ADR-0005) and this is the predicate the JS↔GLSL split rests on.
 
 **Evidence**
 
@@ -2115,7 +2233,9 @@ Move `nodeIsBool` into a shared module both backends import — `ast.ts` is the 
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | redundancy | small | `apps/complex-dynamics/src/render/matingEngine.ts:51` | `UNVERIFIED` |
+| **low** | redundancy | small | `apps/complex-dynamics/src/render/matingEngine.ts:51` | **CONFIRMED** |
+
+> **Verifier:** Verified. matingEngine.ts:45/47/51, interiorDE.ts:29/33/35, perturbationPoly.ts:86/177/179 and rays.ts:33-38 restate @cas/expr/complexJs's add/mul/div (packages/expr/src/complexJs.ts:28-36) byte-for-byte, and bla.ts:36/40 duplicates cmul/cadd; meanwhile critical.ts:15, inspect.ts:25 and uniformize.ts:36 in the same directory import the package. The only stated rationale is matingEngine.ts:44 "Self-contained complex arithmetic" — a description, not a divergence guard; indeed matingEngine.ts:59-61 already documents that its csqrt has to be hand-kept in step with @cas/expr's copy. Low is the right severity: no behavioural difference today.
 
 **Evidence**
 
@@ -2142,7 +2262,9 @@ Delete the private `cadd`/`cmul`/`cdiv`/`cabs` in bla.ts, interiorDE.ts, matingE
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | redundancy | trivial | `apps/complex-dynamics/src/render/overlay.ts:33` | `UNVERIFIED` |
+| **low** | redundancy | trivial | `apps/complex-dynamics/src/render/overlay.ts:33` | **CONFIRMED** |
+
+> **Verifier:** Verified all six plus the CSS rule with a repo-wide grep over .ts/.mjs/.js/.html/.css/.md: the only hits for pxToPlot, renderDeltoid, exportPhiJSON, MapForm, MAX_LAMINATION_DETAIL and MAX_PUZZLE_DEPTH are their own definition lines (plus .claude worktree copies, coverage HTML and the findings doc itself). I checked the escape hatches the brief warns about: there is no `import * as` of overlay.ts, render.ts or schema.ts anywhere (only complexJs is namespace-imported), schwarz-export.mjs uses plain named ESM exports with no QD-namespace registration, no worker entry or .html references them, and none is self-referenced as a default inside its own module. renderDeltoid's doc comment (render.ts:79) claims "used off the UI thread / in tests" and that is false. main.ts:1457 `const depth = Number(depthInput.value)` and :1543 `const maxPeriod = Number(detailInput.value)` confirm neither cap is enforced in TS. `.param-field-wide` (main.css:631) has no HTML/TS user — only `.param-field` and `.param-field center-field` appear in index.html.
 
 **Evidence**
 
@@ -2169,7 +2291,9 @@ Delete `pxToPlot`, `renderDeltoid`, `exportPhiJSON`, `MapForm` and the `.param-f
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | redundancy | small | `apps/complex-dynamics/src/render/perturbationPoly.ts:259` | `UNVERIFIED` |
+| **low** | redundancy | small | `apps/complex-dynamics/src/render/perturbationPoly.ts:259` | **CONFIRMED** |
+
+> **Verifier:** Verified. perturbation.ts:65-97, perturbationPoly.ts:52-82 and perturbationPoly.ts:251-281 share a character-identical skeleton (cap clamp, Float32Array((cap+1)*2), ddToNumber sample, `rx*rx+ry*ry > BAILOUT2` bail, `Math.min(n+1, cap+1)` length, same return shape) differing only in the per-step map (inlined Z², ddCPow, ddPolyEval). perturbation.ts:36-58 computeReferenceOrbit is a fourth instance in plain double. BAILOUT2 is restated at perturbation.ts:29 and perturbationPoly.ts:27, the latter with an explicit "(matches perturbation.ts)" hand-sync comment — i.e. the escape constant is maintained by comment, exactly as claimed. No perf rationale is documented for the specializations. Low is right: outputs are stored as f32 so there is no numerical discrepancy today.
 
 **Evidence**
 
@@ -2234,7 +2358,9 @@ In each of the seven blocks, hoist an unconditional success assertion before the
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **high** | testing | small | `apps/correspondences/test/gpuAgreement.test.ts:16` | `UNVERIFIED` |
+| **high** | testing | small | `apps/correspondences/test/gpuAgreement.test.ts:16` | **OVERSTATED** (severity → medium) |
+
+> **Verifier:** Facts hold: apps/correspondences/src/gpu.ts's FRAG (invertPhi at :42-54, the `if (length(z) < 0.999) break;` guard at :78) and paramGpu.ts:49-72 are template strings compiled by no test; the only *.browser.test.ts in the repo is packages/gpu/test/dualBackend.browser.test.ts, and ci.yml's browser job runs `pnpm test:browser` = `pnpm -C packages/gpu run test:browser` whose include is `test/**/*.browser.test.ts` (packages/gpu/vitest.browser.config.ts). But 'high' overstates it. (1) The test does not misrepresent itself — gpuAgreement.test.ts:6-11 states in full that it mirrors the shader's *algorithm* in TS and that the GLSL numerics are validated separately by @cas/gpu's dual-backend harness; the manual-sync coupling is documented, not hidden. (2) apps/correspondences is built but NOT published (CLAUDE.md decision 11; deploy-pages.yml:57 comment) so a shader-only regression reaches no user — dev-facing risk only. Real residual gap: a change to the shader-only constants (24 iters, 1.3 seed, 1e-6 tol, the 0.999 branch guard) is caught by nothing.
 
 **Evidence**
 
@@ -2260,7 +2386,9 @@ Two options, cheapest first: (a) add a source-scan cross-check in the same file 
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **high** | testing | medium | `apps/quadrature-domains/app/test/worker.test.js:11` | `UNVERIFIED` |
+| **high** | testing | medium | `apps/quadrature-domains/app/test/worker.test.js:11` | **OVERSTATED** (severity → medium) |
+
+> **Verifier:** Every factual claim verified. worker.test.js is 14 `typeof … === 'function'` assertions plus one functional assertion nested inside `if (base.success)` (:26-37). No file under apps/quadrature-domains/vitest or app/test references primary-solver-worker; the abort/supersede/crash paths at primary-solver-worker.mjs:79-82, :99-103, :106-113, :141, :200-210, :249, :293-303, :345 are unexercised, and vitest/helpers/web-worker-shim.mjs plus vitest/sym-worker-lifecycle.test.ts show the pattern exists for the sibling worker. The dead `runOpts.signal` is also real: ui-solve.mjs:308, ui-thesis.mjs:127, ui.mjs:1129 and ui.mjs:1509 all call PSW.solve with exactly two arguments, so the documented branch at :159-166 (and its doc block at :16-21) never runs. Downgraded from high because nothing is currently wrong — the lifecycle code is correct as written, this is latent-regression risk, and node-test.js structurally cannot reach it (Worker is undefined there, which is precisely why that file asserts only the surface). The one live sub-defect (documented-but-dead `signal` option) is low on its own.
 
 **Evidence**
 
@@ -2285,7 +2413,9 @@ Add `apps/quadrature-domains/vitest/primary-solver-lifecycle.test.ts` modelled o
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | testing | small | `packages/expr/test/parser.test.ts:59` | `UNVERIFIED` |
+| **medium** | testing | small | `packages/expr/test/parser.test.ts:59` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** The code claim is exactly right: packages/expr/src/parser.ts guards depth only in parseExpr (:77-88), while parseUnary self-recurses at :121 and parsePower recurses into parseUnary at :131 without touching this.depth, so long unary/power chains overflow instead of raising ExprError. But the impact is far smaller than 'medium'. MAX_DEPTH is explicitly documented as belt-and-braces — parser.ts:27-29: '(EXPR-5, defense-in-depth — call sites already catch, this just makes it a clean error.)' — and every parse() call site in CD does catch: ui/validate.ts:25-31 wraps it and degrades only the message (`err instanceof ExprError` just adds the position), and glPlot.ts:728-735 `tryParse` catches into lastError. So the worst outcome is a positionless 'Maximum call stack size exceeded' on an input no user types; there is no crash, no wrong answer, no labeling issue. Reachability via interchange is also unproven — the reviewer's own note concedes a sub-8192-char dash chain only overflows 'on a smaller stack'. Real but low: an incomplete hardening plus a test title (parser.test.ts:59) broader than the paren-only case its own comment scopes it to.
 
 **Evidence**
 
@@ -2313,7 +2443,9 @@ Move the depth check into a shared `enter()/exit()` helper called by `parseExpr`
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | testing | trivial | `apps/quadrature-domains/app/node-test.js:66` | `UNVERIFIED` |
+| **medium** | testing | trivial | `apps/quadrature-domains/app/node-test.js:66` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** Arithmetic verified exactly: bootstrap.js:28 swallows the mathjs require, direct.test.js has 162 `ok(` calls of which 23 (lines 24-88) + 8 (870-941) + 26 (956+) = 57 sit inside mathjs gates, and FLOORS has `direct: 1` / `riemann: 1` (node-test.js:64-66). But the framing 'the degradation they were written for' is refuted by the file's own comment. node-test.js:52-58 states the floors exist to catch 'a file that early-returns or loses its body (a broken guard, a stray return, a throw swallowed upstream)', and :60-62 explicitly carves this case out: 'Optional-dep / jsdom-gated files legitimately skip to a single marker assertion when their dep is absent, so they floor at 1.' The floor of 1 is the documented, intentional consequence of the skip design, not an oversight. (Also note riemann.test.js:24 gates on katex, not mathjs.) Residual real gap — nothing signals a silent optional-dep loss — is genuine but hygiene-level, and mathjs is only reached in the app through a dynamic `import('mathjs')` in vendor-globals.mjs:22, so a true resolution failure would break `pnpm build` loudly.
 
 **Evidence**
 
@@ -2337,7 +2469,9 @@ Either (a) make the dep non-optional in the harness — replace the try/catch at
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | testing | small | `apps/quadrature-domains/app/ui-url-state.mjs:26` | `UNVERIFIED` |
+| **medium** | testing | small | `apps/quadrature-domains/app/ui-url-state.mjs:26` | **CONFIRMED** |
+
+> **Verifier:** Verified: `grep -rln "aggressiveness|SWITCHABLE_TABS|encodeViewState"` over apps/quadrature-domains/vitest and app/test returns nothing, and no file in either tree names installUrlState / writeUrlState / applyUrlState. The whole field mapping is unguarded — write side ui-url-state.mjs:74-84 (mode/h/w0m/w0/c/a/q/agg/tab), read side :104-147, including the two silent-drop gates the finding names: `if (s.agg != null && PRESETS[String(s.agg)])` at :131 and `SWITCHABLE_TABS.has(String(tab))` at :144 (SWITCHABLE_TABS is a local literal set at :54). packages/interchange/test/viewstate.test.ts covers only the envelope, never QD's keys. The failure mode is user-visible and silent — writeUrlState's whole body is inside `try { … } catch (e) { /* never let URL bookkeeping break the app */ }` (:71-90), so a rename degrades a shared link to a different domain with no error anywhere — and CLAUDE.md lists share-link preservation as a non-negotiable guardrail. The module takes every dependency via `installUrlState(ui)` (:26-37), so it is directly testable; medium stands.
 
 **Evidence**
 
@@ -2365,7 +2499,9 @@ Add `apps/quadrature-domains/vitest/qd-url-state.test.ts` (jsdom): stub `ui` wit
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | testing | medium | `apps/complex-dynamics/test/glslCodegen.test.ts:62` | `UNVERIFIED` |
+| **medium** | testing | medium | `apps/complex-dynamics/test/glslCodegen.test.ts:62` | **CONFIRMED** |
+
+> **Verifier:** Verified end to end. glslCodegen.test.ts:62-67 asserts only `toContain("vec3 multiplierColor(")` plus two negative substring matches; nothing in apps/complex-dynamics/test calls createProgram on buildFragmentShader's output. `find . -name "*.browser.test.ts"` outside node_modules returns exactly one file, packages/gpu/test/dualBackend.browser.test.ts; root package.json:17 defines `test:browser` as `pnpm -C packages/gpu run test:browser`, packages/gpu/vitest.browser.config.ts sets `include: ["test/**/*.browser.test.ts"]` (package-local), and ci.yml's `browser` job runs only that. So no app shader is ever compiled in CI. Unlike the correspondences case, complex-dynamics IS published by deploy-pages.yml, so a df64-only GLSL error would reach users; bounded by the fact that link failure is caught and surfaced (glPlot records lastError) rather than throwing, which keeps it at medium rather than high.
 
 **Evidence**
 
@@ -2391,7 +2527,9 @@ Add `apps/complex-dynamics/test/shaderCompile.browser.test.ts` that calls `creat
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | testing | small | `apps/complex-dynamics/test/importMap.test.ts:28` | `UNVERIFIED` |
+| **medium** | testing | small | `apps/complex-dynamics/test/importMap.test.ts:28` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** The literal duplication is real (importMap.test.ts:22-37 hand-builds the envelope; the same deltoid coefficients are pinned independently at apps/quadrature-domains/vitest/schwarz-export.test.ts and again at packages/interchange/test/interchange.test.ts:19), but the reviewer missed the coupling that already exists and the rule the proposed fix breaks. (1) The named failure scenario — phiToMapSpec gaining a new MapSpec form — is caught at compile time: MapSpec is the shared union `RationalMap | LaurentMap | ExprMap` (packages/interchange/src/schema.ts:67) and CD's consumer switches on `m.form` with no default and no fallthrough return (apps/complex-dynamics/src/interchange/importMap.ts:61-70) under `strict: true` (apps/complex-dynamics/tsconfig.json), so adding a form fails `pnpm typecheck` (TS2366) the day it lands. The producer/consumer are coupled through the shared keystone type (ADR-0005), which is the architecturally intended coupling point. (2) The proposed fix — a CD test relative-importing apps/quadrature-domains/app/schwarz/schwarz-export.mjs — violates the non-negotiable 'no app imports another app' guardrail (ARCHITECTURE.md §4, encoded in the root eslint.config.js boundary rule). Residual genuine gap is narrow: semantic drift *within* an existing form (e.g. coefficient ordering) would not be caught.
 
 **Evidence**
 
@@ -2416,7 +2554,9 @@ Make one test import across the boundary: in `apps/complex-dynamics/test/importM
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | testing | small | `apps/complex-dynamics/src/render/glPlot.ts:560` | `UNVERIFIED` |
+| **low** | testing | small | `apps/complex-dynamics/src/render/glPlot.ts:560` | **CONFIRMED** (severity → low) |
+
+> **Verifier:** Verified. glPlot.ts declares exactly 17 GL-handle fields (lines 357, 358, 359, 361, 363, 364, 372, 385, 407, 408, 412, 413, 423, 424, 435, 437, 438) and all 17 do appear in restoreContext's flat reset body (:560-609), so — as the finding itself says — there is no live bug. No CD test touches restoreContext or context loss: the four test files that mention glPlot (autoIterations, escapeRadius, halton, initialRes) import unrelated pure helpers, and restoreContext is private and needs a GL context. So this is purely 'a hand-maintained list with no regression guard', which is exactly the low/hygiene severity claimed. The suggested source-scan idiom is already used in the repo (vitest/qd-design-tokens.test.ts), so the fix is cheap; but nothing is broken today.
 
 **Evidence**
 
@@ -2443,7 +2583,9 @@ Add a source-scan guard in the CD suite (the repo already uses this idiom well �
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | testing | trivial | `apps/quadrature-domains/vitest/algebra-offload-kinds.test.ts:65` | `UNVERIFIED` |
+| **low** | testing | trivial | `apps/quadrature-domains/vitest/algebra-offload-kinds.test.ts:65` | **CONFIRMED** (severity → low) |
+
+> **Verifier:** Both halves verified. algebra-offload-kinds.test.ts:65 is titled "runJob('eliminate') reports resultantZero when the pair shares a component" and its body's only assertion is `expect(viaJob.ok).toBe(true)` at :72 — `resultantZero` appears in no assertion in the file. And the two genuine differentials do gate their comparison on the inline result: `expect(viaJob.ok).toBe(inline.ok); if (inline.ok) { … }` at :22-23 and :41-42, so a regression making S.triangularize/S.resolvent return {ok:false} leaves the equality true and skips every field comparison. Partially mitigated for the first half: the inline comment at :70-71 openly explains that either outcome is honest and that the test deliberately only asserts the kind returns without throwing — so it is a stale/overbroad title rather than a hidden false claim. Low is the right severity; the `expect(inline.ok).toBe(true)` hardening is a one-line fix.
 
 **Evidence**
 
@@ -2473,7 +2615,9 @@ Assert the expected shape unconditionally rather than mirroring it: add `expect(
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | testing | trivial | `apps/quadrature-domains/vitest/algebra-verdict-labeling.test.ts:114` | `UNVERIFIED` |
+| **low** | testing | trivial | `apps/quadrature-domains/vitest/algebra-verdict-labeling.test.ts:114` | **CONFIRMED** (severity → low) |
+
+> **Verifier:** Verified exactly as described. algebra-verdict-labeling.test.ts:114-117 filters call sites on /rigor\s*:\s*'exact'/ and asserts only `expect(hard.length).toBeLessThanOrEqual(1)` — a cardinality bound with no identity pin, so relocating the unconditional 'exact' to a different card keeps the count at 1 and the guard green. The context also checks out: algebra-ui.mjs has exactly one `rigor: 'exact'` literal, at :3903, and it is the resolvent card the test's comment names (`store.resolventAsync(...)` at :3885, with the justification comment at :3901-3902). The neighbouring assertions in the same file are stronger by comparison (the :99 scanner self-cross-check, the :106 no-omitted-rigor check), which is what makes this one the weak link. No live mislabeling exists today, so low/hygiene stands; pinning /resolvent/i on hard[0] is a two-line fix.
 
 **Evidence**
 
@@ -2556,7 +2700,9 @@ Make non-finiteness block convergence unconditionally, independent of the `bailO
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **high** | correctness | small | `packages/core/src/complex.ts:104` | `UNVERIFIED` |
+| **high** | correctness | small | `packages/core/src/complex.ts:104` | **OVERSTATED** (severity → medium) |
+
+> **Verifier:** Code claim true: complex.ts:110 (and inv at :105, tupleAlgebra.div at algebra.ts:77) form |b|^2 unscaled, halving the exponent range. Reachability is refuted. (a) Underflow half is unreachable inside DK: durand-kerner.ts:108 diverts to the coincident branch when abs2(denom) < 1e-300, and div throws only when abs2 underflows to exactly 0 (abs2 < 5e-324) — strictly inside that guard. (b) Overflow examples are wrong: 'degree 200 on |z|=2' gives at most 4^199 ~ 1e120, 34 orders under the 1.34e154 threshold (you need degree > 257). CD's only DK-over-exact-polys path is capped at n<=6 (main.ts:773); I computed the Gleason data: n=6 is degree 27, Cauchy bound 5893, so worst-case |denom| ~ 7e105 / abs2 ~ 5e211, ~1e96 below overflow (and that bound is grossly pessimistic). (c) The 'silently reported converged' amplifier no longer exists — durand-kerner.ts:126 already uses !(dm <= maxDelta) (landed in 60d8772, after the review doc). Real latent robustness defect in a shared kernel; not behaviour a user hits today.
 
 **Evidence**
 
@@ -2644,7 +2790,9 @@ No behaviour change for disjoint `out` (same operands, same operation order, bit
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | performance | trivial | `packages/exact/src/gaussian.ts:130` | `UNVERIFIED` |
+| **medium** | performance | trivial | `packages/exact/src/gaussian.ts:130` | **CONFIRMED** |
+
+> **Verifier:** gaussian.ts:130-136 unconditionally runs 4 Frac.mul + 1 add + 1 sub = 6 Frac.of calls, each doing a bigGcd (gaussian.ts:38-46). The premise holds: CD's exact tower is entirely real — criticalOrbit (dynatomic.ts:59), iteratedMap (dynatomic.ts:138), multiplierMap (dynatomic.ts:196-197) are built only from QiPoly.variable() and Gauss.int, so every Gauss has im = Frac.ZERO. The sync-UI claim holds too: main.ts:796 wires render to the 'input' event and main.ts:791-792 runs multiplierSpecializationRoots twice. Caveat on scope: the 823 ms n=4 figure is unreachable — MAX_MULT_N = 3 (main.ts:788) and n is clamped to <=6 (main.ts:773), so the real cost is ~70 ms per keystroke. Fix is bit-identical by construction.
 
 **Evidence**
 
@@ -2681,7 +2829,9 @@ Add a real-real fast path at the top of `Gauss.mul`: `if (this.im.isZero() && o.
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | trivial | `packages/core/src/complex.ts:141` | `UNVERIFIED` |
+| **medium** | correctness | trivial | `packages/core/src/complex.ts:141` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** complex.ts:148-152 behaves exactly as described (mag2 < 1e-300 returns 0 for all |a| < 1e-150; mag2 = Infinity above ~1.34e154 gives {Infinity, NaN}). But no consumer can supply such operands: every cpow argument is a conformal-map/geometric quantity of order 1 — schwarz-common.mjs:464 (c^alpha), :465/:533 (R#(z)^{1/alpha}), :719 (w0^alpha), :737 (phi^{alpha-1}). Reaching the thresholds needs a value ~150 orders of magnitude outside anything a QD boundary computation produces. The genuine residual is documentation: the comment at complex.ts:145 justifies the guard as 'a = 0 returns 0' when it actually fires 150 orders from zero. Hygiene.
 
 **Evidence**
 
@@ -2717,7 +2867,9 @@ Keep the squared-modulus fast path so the normal range stays bit-identical, and 
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | small | `packages/exact/src/resultant.ts:129` | `UNVERIFIED` |
+| **medium** | correctness | small | `packages/exact/src/resultant.ts:129` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** The dead-code claim is true: resultant.ts:129 negates disc, then :130 primitivePoly -> integerPrimitive re-derives the sign at :38-47 from the (negated) leading coefficient, so the flip cancels and line 129 can never change the return value. But the 'live trap' framing is wrong. The docstring itself says the result is 'returned in content-cleared (primitive) form', and primitivePoly's own docstring (resultant.ts:54) says 'leading coefficient positive' — the sign normalization IS documented. Content-clearing also destroys the magnitude, so disc(x^2-2)=8 and disc(x^2+1)=-4 both collapse to 1 regardless of the sign line; no caller could ever have read a real-root count out of this return value. Residual = one provably dead line plus a docstring that states a formula it does not deliver.
 
 **Evidence**
 
@@ -2751,7 +2903,9 @@ Pick one and make the code and docstring agree. Either (a) delete the dead line 
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | small | `packages/exact/src/gaussian.ts:81` | `UNVERIFIED` |
+| **medium** | correctness | small | `packages/exact/src/gaussian.ts:81` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** gaussian.ts:81-83 does saturate as described (Number(bigint) -> Infinity past ~1.8e308; both-huge gives NaN), and Gauss.toTuple (:163-165) inherits it. Unreachable in practice, and the reviewer's margin argument is off by ~289 orders of magnitude. The only exact->numeric crossings are dynatomic.ts:108, correspondenceCurve.ts:181, deltoidExact.ts:48 and dynatomic.test.ts:93. I computed the Gleason coefficient growth: max |coeff| is 5892 at n=6 and 1.8e10 at n=7, while the UI clamps n to <=6 (main.ts:773) and multiplier specialization to n<=3 (MAX_MULT_N, main.ts:788). NaN needs ~308-digit numerator AND denominator. Latent library-robustness only, no reachable path.
 
 **Evidence**
 
@@ -2783,7 +2937,9 @@ Divide out the shared magnitude before converting. Compute the bit lengths of |n
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | testing | medium | `packages/exact/test/exact.test.ts:1` | `UNVERIFIED` |
+| **medium** | testing | medium | `packages/exact/test/exact.test.ts:1` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** Both facts check out: grep of packages/exact/test for resultant|discriminant|bareiss|Primitive returns nothing (the suite is exact.test.ts = Frac/Gauss/QiPoly/render and biPoly.test.ts), and README.md:72-74 does claim the shared-root identity is tested there — that sentence is false. But 'zero tests' and the failure scenario are wrong: the module is pinned by both consumers' suites in the same CI gate — apps/correspondences/test/deltoidExact.test.ts:15 asserts disc_w = 'z-bar^4 + 8 z-bar', exactCorrespondence.test.ts:74 exercises the degree-3 resultant, and apps/complex-dynamics/test/dynatomic.test.ts:142-160 pins multiplierSpecializationPoly (= resultant + primitivePoly) against known values (4c-1, 4c+3, cardioid cusp 0.25, bifurcation -0.75). A bareissDet regression would surface as a red test in the same run, not as 'a wrong picture two packages away'. Real gap = missing package-level corpus + one false README sentence.
 
 **Evidence**
 
@@ -2808,7 +2964,9 @@ Add `packages/exact/test/resultant.test.ts` pinning what I verified by hand: `Re
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | maintainability | trivial | `packages/core/README.md:66` | `UNVERIFIED` |
+| **medium** | maintainability | trivial | `packages/core/README.md:66` | **CONFIRMED** |
+
+> **Verifier:** README.md:66 says the series multiply uses 'error-free splits for accuracy'. series.ts:50-64 is a plain schoolbook convolution with unguarded accumulation (out[i+j] = alg.add(out[i+j], alg.mul(ai, bj)) at :60); there is no error-free transformation anywhere in the package, and series.ts:10-12 states the opposite and correctly ('same convolution, same accumulation order; a zero-coefficient skip is just a +0 no-op'). The claim in the kernel README is flatly false. Impact is documentation-only — no computed value is wrong and no result label is affected — but it is an unbacked numerical-accuracy claim in the highest-trust package.
 
 **Evidence**
 
@@ -2833,7 +2991,9 @@ Delete the "using error-free splits for accuracy" clause from README.md:66 and r
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | redundancy | trivial | `packages/core/src/complex.ts:76` | `UNVERIFIED` |
+| **low** | redundancy | trivial | `packages/core/src/complex.ts:76` | **CONFIRMED** (severity → low) |
+
+> **Verifier:** Verified. addInto/subInto/scaleInto (complex.ts:76-90) have zero call sites in any .ts/.mjs/.js under apps/ or packages/ — the only hits are their own declarations, README.md:48-49, HANDOFF.md, and the stale comment at apps/quadrature-domains/app/test/param-slice.test.js:228 whose block calls only mulInto/addMulInto. No .html, worker, or test consumer exists. BiPoly.monomial (biPoly.ts:46-51) has zero references anywhere including tests; QiPoly.monomial only exact.test.ts:44; makeSeries().unit only series.test.ts:58. One correction: the 'this is what let cd-alias-03 ship' framing is now moot — addMulInto was fixed in 60d8772 (complex.ts:96-102 stages both products) with aliasing assertions added.
 
 **Evidence**
 
@@ -2859,7 +3019,9 @@ Either delete `addInto`/`subInto`/`scaleInto` and `BiPoly.monomial` (and their R
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | correctness | trivial | `packages/exact/src/resultant.ts:101` | `UNVERIFIED` |
+| **low** | correctness | trivial | `packages/exact/src/resultant.ts:101` | **CONFIRMED** (severity → low) |
+
+> **Verifier:** resultant.ts:101-104 takes degrees as length-1 with no emptiness check, so an empty list drives N <= 0 and returns QiPoly.int(1), contradicting the 'Res = 0 <=> shared root' contract stated at resultant.ts:98. This is an in-convention input, not a malformed one: BiPoly's own encoding of the zero polynomial IS the empty array (biPoly.ts:11 and :31-33), so resultant(phi.coeffs, zeroBiPoly.coeffs) is the natural call shape. Narrowing: the padded encoding [QiPoly.zero()] is handled correctly (q=0 => N=p, rows q..q+p-1 filled with the zero coefficient => det = 0), so only a literally empty list is wrong. Not reachable from either consumer — multiplierMap(n) has positive z-degree for n>=1 so mMinus (dynatomic.ts:207) can never be zero, and corr's wCoeffs come from deflation.
 
 **Evidence**
 
@@ -2891,7 +3053,9 @@ Guard the degenerate inputs explicitly at the top of `resultant`: if either list
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | usability | trivial | `packages/exact/src/resultant.ts:127` | `UNVERIFIED` |
+| **low** | usability | trivial | `packages/exact/src/resultant.ts:127` | **CONFIRMED** (severity → low) |
+
+> **Verifier:** Verified from source: discriminant takes d = coeffs.length - 1 (resultant.ts:122) and lead = coeffs[d] on faith (:127), with no trimming of the outer list anywhere; a zero top entry makes res.divExact(QiPoly.zero()) reach qiPoly.ts:140 and throw 'QiPoly.divmod: division by zero polynomial' — an internal-helper message that names neither discriminant nor the untrimmed-list cause. Note QiPoly.fromCoeffs trims within a polynomial (qiPoly.ts:21-25) but nothing trims the QiPoly[] list these two functions take. Not reachable from the one consumer (cuspLocus at correspondenceCurve.ts:196 passes deflation output). Usability/hygiene.
 
 **Evidence**
 
@@ -2933,7 +3097,9 @@ I read all 21 source files and 11 test files across packages/expr (ast, lexer, p
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **high** | performance | small | `packages/expr/src/rational.ts:116` | `UNVERIFIED` |
+| **high** | performance | small | `packages/expr/src/rational.ts:116` | **CONFIRMED** |
+
+> **Verifier:** Verified. packages/expr/src/rational.ts:115 guards only integrality/realness of the exponent, then rational.ts:116 calls ratPow -> pPow (rational.ts:52-56), a linear loop of quadratic-cost pMul. No cap anywhere upstream: glPlot.ts:1131 probeMonicDegree returns null for z^40000 (f(2,0)=2^40000 is non-finite, and complexJs.pow only fast-paths |n|<=1024), so glPlot.ts:788 falls through to extractPolyPerturbation -> perturbationPoly.ts:213 fToRational, whose maxDegree check is only at line 219, AFTER the work; viewAdvisories.ts:65 has no cap at all; importMap.ts:38 turns an imported 4096-coefficient rational MapSpec into '... + (c)*z^4095'. I re-measured the cost curve with a standalone replica of pMul/pPow: 1000->27ms, 2000->94ms, 4000->370ms (clean O(k^2)), so z^40000 is ~35-40s per plot on this machine rather than the claimed ~320s, and the 4096-coefficient import path (sum of k^2) is ~10 minutes. The timing is ~8x optimistic in the writeup but the defect class -- unbounded main-thread work reachable from a typed expression and from a pasted envelope -- is exactly as described, in a package that explicitly guards this input class elsewhere (INTPOW_INLINE_MAX_BASE_LEN, MAX_COEFF_LEN).
 
 **Evidence**
 
@@ -2954,7 +3120,9 @@ Bound the work inside rational.ts before doing it: in the `^` case reject an exp
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | small | `packages/expr/src/glsl.ts:215` | `UNVERIFIED` |
+| **medium** | correctness | small | `packages/expr/src/glsl.ts:215` | **CONFIRMED** |
+
+> **Verifier:** Verified. For 'a = a*2; z^2 + a', ast.ts:71-72 isFreeParameter is false (a is assigned), so glsl.ts:246 paramAlias emits nothing; glsl.ts:215 seeds `declared` with z,c only, so glsl.ts:220 emits `cvec a = cmul(a, vec_(2.0,0.0));` -- a self-reference with no `a` in scope (GLSL ES 3.00 requires declaration before use; ANGLE reduces the initializer before declaring the identifier). The designed case IS handled (paramA.test.ts:14-16 pins `a = z^2; a + c`, which emits validly); the hole is specifically read-before-assign of `a`. glPlot.ts:802-804 only deletes/replaces the old program on success, so the GPU keeps rendering the previous map while CPU overlays use the new AST. Two corrections to the writeup: it is NOT silent (glPlot.ts:807 sets lastError and main.ts:1377-1381 surfaces 'Dynamical plane: <compile error>' on the f field), and the JS backend does honour the assignment (evaluate.ts:199-205 compileStmt writes s.a, so the read at evaluate.ts:230 sees 2a) -- its [2,0] is not 'a read regardless of assignment'. The GPU/CPU divergence stands; medium is right.
 
 **Evidence**
 
@@ -2979,7 +3147,9 @@ Make the two `a` cases mutually exclusive at the point of decision rather than b
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | testing | trivial | `packages/gpu/src/dualBackend.ts:60` | `UNVERIFIED` |
+| **medium** | testing | trivial | `packages/gpu/src/dualBackend.ts:60` | **CONFIRMED** |
+
+> **Verifier:** Verified exactly as described. packages/gpu/src/dualBackend.ts:57 emits ${fFn} and only then declares `uniform vec2 uZ/uC/uA` at lines 58-60, so any source with a free `a` (whose fFn opens with `cvec a = vec_(uA.x, uA.y);` per glsl.ts:246) references uA before declaration -> GLSL ES 3.00 compile error. buildEscapeProbeGLSL (dualBackend.ts:204-215) declares no uA at all, and runGLSL fetches only uZ/uC (dualBackend.ts:102-103) so it could never set it. The contrast is real: apps/complex-dynamics/src/render/shaderBuilder.ts:691 declares `uniform vec2 uA;` before ${compileF(fAst)} at line 693, with a comment saying exactly why. Impact is confined to the harness (no corpus entry uses `a` today), but it structurally blocks covering paramAlias -- the one codegen branch carrying an explicit df64 type-error hazard note.
 
 **Evidence**
 
@@ -3007,7 +3177,9 @@ Move `uniform vec2 uZ; uniform vec2 uC; uniform vec2 uA;` above `${fFn}` in buil
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | testing | small | `packages/gpu/src/glsl/df64Ref.ts:142` | `UNVERIFIED` |
+| **medium** | testing | small | `packages/gpu/src/glsl/df64Ref.ts:142` | **CONFIRMED** |
+
+> **Verifier:** Verified. df64Ref.ts:142 seeds `y = df(Math.log(a[0]))` -- df() (df64Ref.ts:22-25) splits a full float64 log into two limbs (~46-bit seed) -- while df64.glsl.ts:113 seeds `vec2 y = vec2(log(a.x), 0.0)` (fp32 log, lo limb hard 0, ~24-bit). Same mismatch in atan2: df64Ref.ts:175-176 uses Math.atan2 + df(t0) vs df64.glsl.ts:143-144 `atan(y.x, x.x)` + `vec2(t0, 0.0)`. This contradicts the file's own contract (header lines 6-9 'the GLSL ... transliterates these line-for-line') and dfLog's own comment ('single-precision seed'), and it is inconsistent with the discipline dfExp/dfSinCos apply deliberately (df64Ref.ts:126-129, 151 pick k/q from the fp32 hi-limb constant 'matching the GLSL exactly'). The test consequence checks out: test/df64.test.ts:68-72 asserts toBeCloseTo(Math.log(x), 11), which the ~1e-16 seed satisfies with zero Newton steps, so the assertion cannot pin the iteration the GLSL actually runs.
 
 **Evidence**
 
@@ -3028,7 +3200,9 @@ Make the reference an actual transliteration: seed with `let y: DF = [Math.froun
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | small | `packages/interchange/src/validate.ts:141` | `UNVERIFIED` |
+| **medium** | correctness | small | `packages/interchange/src/validate.ts:141` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** The validation gap is real -- validate.ts:141-149 checks only sigma/conventions/escape and validate.ts:150-158 only phi/conventions/boundarySamples, while schema.ts:77 (hData), :87 (sourceDomain) and :90 (tilingSetHint.fundamentalTile) are declared and unchecked, and assertCanonicalWire (validate.ts:89-96) never sees a nested sourceDomain.conventions. But the stated consequences cannot occur today: a repo-wide grep finds sourceDomain/tilingSetHint nowhere outside schema.ts (+ its dist .d.ts) -- no producer, no consumer -- and the only interchange producer in the suite emits {phi, bounded, conventions} with no hData (apps/quadrature-domains/app/schwarz/schwarz-export.mjs:49), while CD's importer reads only payload.phi/sigma/map (importMap.ts:77-90). So there is no code path where a nested non-canonical tag becomes a mis-scaled picture, and no consumer expands fundamentalTile past MAX_COEFF_LEN. Defense-in-depth hardening for future/third-party payloads, not a live correctness defect.
 
 **Evidence**
 
@@ -3053,7 +3227,9 @@ In validate.ts, extend validatePayload: (1) factor the quadrature-domain body in
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | small | `packages/expr/src/evaluate.ts:109` | `UNVERIFIED` |
+| **medium** | correctness | small | `packages/expr/src/evaluate.ts:109` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** The asymmetry is real: evaluate.ts:61-65 throws on a complex `if` condition (reached from evaluate.ts:109) while compileBool's default (evaluate.ts:327-332) and emitBool's default (glsl.ts:96-99) both coerce via re != 0. But there is no production divergence: `evaluate` is imported only by tests (apps/complex-dynamics/test/expr.test.ts:7 and packages/expr tests) -- every shipping path uses makeComplexFn/getComplexFn/makeEscapeFn/getEscapeFn (main.ts:64, glPlot.ts:27, inspect.ts:27, overlay.ts:15, critical.ts:17, correspondences/src/tricorn.ts:19) -- and the two shipping backends agree with each other. The interpreter's throw also matches its own documented contract (evaluate.ts:7: 'if(cond, a, b) takes a boolean condition'), so the 'fix' is a semantics choice, not a bug fix. Scope: a test-reference/fuzz-coverage gap, no user-reachable wrong behaviour.
 
 **Evidence**
 
@@ -3074,7 +3250,9 @@ Pick one semantics and make all three agree. The production behaviour (coerce vi
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | correctness | trivial | `packages/expr/src/glsl.ts:91` | `UNVERIFIED` |
+| **low** | correctness | trivial | `packages/expr/src/glsl.ts:91` | **CONFIRMED** |
+
+> **Verifier:** Verified. glsl.ts:90-91 emits `cre1(a) == cre1(b) && cre1(cim(a)) == cre1(cim(b))`, and in the df64 build complexDf64.glsl.ts:20 cre1 returns a.x with cim (line 43) returning vec4(a.zw,0,0) -- so the emitted test is a.x==b.x && a.z==b.z, i.e. fp32-width equality on a ~47-bit value, exactly in the regime the df64 program exists for. The single build is unaffected (complexSingle.glsl.ts:17/34: cre1 is the whole float). The comment's rationale is also unsound: every df64 value in the pipeline is normalized (constructed by vec_ = vec4(re,0,im,0), or returned through quickTwoSum, df64.glsl.ts), so a normalized pair is canonical and `all(equal(a,b))` would be both exact and full-width. Low is right -- `==` on complex floats is rare in practice.
 
 **Evidence**
 
@@ -3095,7 +3273,9 @@ Emit a full-width comparison instead of a hi-limb one. Add a precision-agnostic 
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | correctness | trivial | `packages/expr/src/parser.ts:121` | `UNVERIFIED` |
+| **low** | correctness | trivial | `packages/expr/src/parser.ts:121` | **CONFIRMED** |
+
+> **Verifier:** Verified structurally. The depth counter is incremented only in parseExpr (parser.ts:79-87); parseUnary (parser.ts:118-124) recurses on itself for each leading '-' without touching it, and parsePower:131 re-enters parseUnary for the exponent, so neither path is covered by the MAX_DEPTH=256 guard whose comment (parser.ts:26-29) claims 'a pathologically nested input can't overflow the stack'. There is no input-length or token-count cap in lexer.ts to bound the chain, and V8 overflows well before 50k frames, so a long unary run raises RangeError rather than the ExprError-with-pos the guard promises. Hygiene/defense-in-depth only: call sites catch broadly (glPlot.ts:730-733 tryParse), so the user-visible effect is a confusing message.
 
 **Evidence**
 
@@ -3116,7 +3296,9 @@ Increment the same counter in parseUnary: wrap its recursive branch the way pars
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | usability | trivial | `packages/interchange/src/codec.ts:35` | `UNVERIFIED` |
+| **low** | usability | trivial | `packages/interchange/src/codec.ts:35` | **CONFIRMED** |
+
+> **Verifier:** Verified. base64url.ts:25 throws RangeError('payload too large to decode') above MAX_BASE64URL_LEN=64K, and codec.ts:33-37's untyped catch relabels it 'link payload is not valid base64'; encodeLink (codec.ts:20-22) has no size check at all, so a producer cannot learn its link is undecodable. The cap mismatch is real too: MAX_COEFF_LEN=4096 per Complex[] field (validate.ts:33) is several times the ~48 KB the transport can carry. One narrowing: no in-suite producer can trigger it -- the only encodeLink caller is schwarz-export.mjs:62, whose phi is a handful of partial-fraction coefficients -- so the misleading message needs a hand-built or third-party envelope. Low/usability is the right level.
 
 **Evidence**
 
@@ -3136,7 +3318,9 @@ Two small changes in codec.ts: rethrow the size case with its own message (`catc
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | maintainability | trivial | `packages/expr/src/glsl.ts:171` | `UNVERIFIED` |
+| **low** | maintainability | trivial | `packages/expr/src/glsl.ts:171` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** The 'contradicts its own comment' half is a misreading. complexDerived.glsl.ts:13-16 documents cintpow, and cintpow (lines 17-28) does match complexJs.intPow (complexJs.ts:75-86) loop-for-loop -- same k&1 test, same >>1, same squaring order -- so 'matching the JS intPow multiply tree exactly' is true of the function it heads; the same comment then explicitly states that small n is inlined as repeated cmul, i.e. it discloses the different path rather than denying it. What survives is the narrow and accurate testing observation: glsl.ts:171-174 emits a left-linear chain for n<=8 while intPow squares, so the trees differ for n>=4 by about one ulp (no wrong answer, far inside the harness's 2e-6 tolerance), and DUAL_BACKEND_CORPUS (dualBackend.ts:155-162) contains only z^2/z^3, the exponents where the two trees coincide. Corpus-coverage nit, not a documentation defect.
 
 **Evidence**
 
@@ -3166,7 +3350,9 @@ I read the QD app end-to-end outside `app/algebra/` and `sym-core.mjs`: the full
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **high** | correctness | small | `apps/quadrature-domains/app/direct/direct-verify.mjs:95` | `UNVERIFIED` |
+| **high** | correctness | small | `apps/quadrature-domains/app/direct/direct-verify.mjs:95` | **CONFIRMED** |
+
+> **Verifier:** Verified. `apps/quadrature-domains/app/direct/direct-verify.mjs:97` builds `{ weight:'log', w0 }` and no family predicate reads `opts.weight` — I grepped every `matches(opts)` in app/: solver-lqd.mjs:398 gates on `opts.lqd`, solver-lqd-singular.mjs:433 on `opts.lqd && opts.singular`, PQD on `opts.alpha`, UQD on `opts.unbounded`, and solver-qd.mjs:357 `matches(opts){return true;}` is the catch-all. solver.mjs has zero occurrences of 'weight', so nothing normalises log→lqd. The bounded+log+non-singular path is reachable (weight 'log' is a real dropdown option, direct-ui.mjs:243, with singular off), and line 71 only intercepts `lastSingular`. The sibling Send handler at direct-ui.mjs:1008-1009 does `opts.lqd = true`, proving the divergence. The 'power' branch is fine (solver-pqd.mjs:658 matches on alpha) — only the log branch mis-dispatches, and the verdict at direct-verify.mjs:105-106 attributes the classical result to the log-weighted construction.
 
 **Evidence**
 
@@ -3207,7 +3393,9 @@ Build the options with the same family tag the Send path uses: replace `{ weight
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **high** | correctness | small | `apps/quadrature-domains/app/ui.mjs:1621` | `UNVERIFIED` |
+| **high** | correctness | small | `apps/quadrature-domains/app/ui.mjs:1621` | **CONFIRMED** |
+
+> **Verifier:** Verified. `apps/quadrature-domains/app/ui.mjs:1621` hardcodes `univalent:true, identityOK:true, identity:null`; `qdValidityBadge` (ui-solve.mjs:815) reads exactly those two and emits '✓ Valid quadrature domain' in the ok class, and `showSolution` suppresses the identity line because `sol.identity` is null. The caller `algebra-ui.mjs:3766` gates only on `!isReconstructKind && D >= 1`, never on `pr.rigor`. And a φ can reach `distinctPhis` without exact certification: `certifyLeaf` (prove-plan.mjs:296-307) pushes to `genuinePhis` and then sets `allExactVerified = false` with row note '[rationalized ≈]' when neither `exactPoint` nor `atRootCertified` holds. So an `≈` verdict renders as an unqualified certified-looking badge in the QD tab — the estimate-reads-as-certified failure. The in-code comment at ui.mjs:1616 ('the algebra tab has already certified the φ univalent') states an invariant the caller does not enforce. Borders critical under the honest-labeling rule.
 
 **Evidence**
 
@@ -3235,7 +3423,9 @@ Two independent fixes, either sufficient, both cheap: (a) actually measure — r
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | small | `apps/quadrature-domains/app/schwarz/schwarz-cpu-worker.mjs:82` | `UNVERIFIED` |
+| **medium** | correctness | small | `apps/quadrature-domains/app/schwarz/schwarz-cpu-worker.mjs:82` | **CONFIRMED** |
+
+> **Verifier:** Verified. `schwarz-cpu-worker.mjs:82-85` — the `error` listener only `console.error`s: it never clears `_inflight`, never sets `_mainThreadFallback`, never invokes `cbs` (which isn't even reachable from module scope, since `_inflight = { jobId, onMessage }` at line 134 omits it). There is no `messageerror` listener at all. `isUsable()` (99-104) is a static gate, so `doRecompute` commits to the worker at schwarz-render.mjs:127-130 and the `onUnavailable`/`onError` fallbacks wired at 179-180 can never fire on this path. Two real triggers: a module-script load failure (fires asynchronously, `new Worker` does not throw), and an uncaught throw inside the pyramid loop of `workers/schwarz-worker-entry.mjs:41-86`, which — unlike the `buildSchwarzFromPhi` call at 26-32 — is not wrapped in try/catch. Result: `sState.rendering` stays true and progress sticks at 'Pass 1/3'. The sibling `param-slice-pool` does route `error` into a settling handler, so this module is the odd one out.
 
 **Evidence**
 
@@ -3271,7 +3461,9 @@ Mirror `param-slice-pool._onWorkerError`: keep a reference to the active callbac
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | small | `apps/quadrature-domains/app/primary-solver-worker.mjs:233` | `UNVERIFIED` |
+| **medium** | correctness | small | `apps/quadrature-domains/app/primary-solver-worker.mjs:233` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** The shared latch is real: one module-level `_mainThreadFallback` is written from all three catch blocks (primary-solver-worker.mjs:120, 233, 326) and read by `solve` (131), `searchAlternatesAsync` (244), `liveSolveAsync` (340) and all three `ensure*Ready` short-circuits (86, 213, 306), so an aux/live latch does demote the interactive solve and leaves `_worker` parked. But the reviewer missed that the flag can only be set by a SYNCHRONOUS throw out of the async IIFE, whose only statements are the `typeof Worker` check and `new Worker(...)`. The realistic failures the scenario names (stale precache/404, worker crash, OOM) do NOT throw there — they arrive as `error` events, and those listeners (92-105, 219-228, 312-321) correctly settle and dispose only their OWN worker without touching the latch. Since the aux/live workers use the identical URL as the already-successful primary, the trigger reduces to an exotic per-page worker-cap SecurityError. Real hygiene defect, exotic trigger.
 
 **Evidence**
 
@@ -3314,7 +3506,9 @@ Give each lifecycle its own latch: `_mainFallback`, `_auxFallback`, `_liveFallba
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | correctness | small | `apps/quadrature-domains/app/solver-cmax.mjs:246` | `UNVERIFIED` |
+| **medium** | correctness | small | `apps/quadrature-domains/app/solver-cmax.mjs:246` | **CONFIRMED** |
+
+> **Verifier:** Verified. `solver-cmax.mjs:246` `while (cHi <= cCeiling && solves < maxSolves)` has two exits and `if (!bracketed)` at 258-262 returns the single `reason:'no-invalid-below-ceiling'` for both, with `maxSolves` defaulting to 80 (line 150). `ui.mjs:1140-1144` turns that reason into 'the unbounded QD remains valid up to c ≤ <ceiling>' with `kind:'ok'`, and `res.cLowValid` (returned at 259) is never displayed. Budget exhaustion is genuinely reachable: once `loCrit >= CUSP_NEAR` the step drops to `cuspGrow = 1.06` (148, 243), and log(256)/log(1.06) ≈ 95 growth steps exceeds the ~78 solves left after `bracket-lo`, so cLo can stop far below the ceiling while the UI asserts a `≤` bound over the untested remainder. Even the genuine ceiling exit only over-claims by one step factor, so the budget case is the substantive one.
 
 **Evidence**
 
@@ -3357,7 +3551,9 @@ Distinguish the exits: set `const outOfBudget = solves >= maxSolves && cHi <= cC
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | performance | medium | `apps/quadrature-domains/app/solver.mjs:1272` | `UNVERIFIED` |
+| **medium** | performance | medium | `apps/quadrature-domains/app/solver.mjs:1272` | **OVERSTATED** (severity → low) |
+
+> **Verifier:** The mechanism is real — `solver.mjs:1216-1281` ranks a fixed 61-candidate grid (1 + 5 radii × 12 angles), each surviving candidate walking the whole polygon twice (`inside` 1236-1246, `distBoundary` 1247-1254), and `solver-uqd.mjs:416` re-runs it inside every `evalAtN`, so the escalation chain re-ranks from scratch. But 'dominating unbounded-family verification cost' is not established: the same `evalAtN` spends `testPoints × maxOrder × N` = 9N iterations each doing sub/pow/inv/3×mul/add with ~7 object allocations, plus N `phiTaylorAt_UQD` calls — comparable to or larger than the 61×2N Math.hypot/crossing scan. And the c* scenario is wrong by roughly an order of magnitude: `solver-cmax.mjs:188` sets `adaptiveSamples:false` explicitly, so the 'Estimate max c' path never escalates (single 3000-node pass per verify), and the '~30 candidates per solve' figure is a worst case, not the typical first-valid-wins Phase A. Real redundant work with a cheap fix, but bounded and not the hot spot.
 
 **Evidence**
 
@@ -3388,7 +3584,9 @@ Two independent wins: (1) stop re-ranking per escalation level — hoist the cho
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | performance | medium | `apps/quadrature-domains/app/ui-solve.mjs:753` | `UNVERIFIED` |
+| **medium** | performance | medium | `apps/quadrature-domains/app/ui-solve.mjs:753` | **CONFIRMED** |
+
+> **Verifier:** Verified. `ui-solve.mjs:753` calls `QD.estimateAccuracy(sol.phi, hData, {})` inline inside the idle callback fired with `IDLE_ANALYSIS_TIMEOUT_MS = 250` (line 78, 766-767), preceded at 747 by `boundaryObservables` at 1024 samples. `observables.mjs:246-294` then does `findCriticalPoints`, `residual`, two `verifyQuadratureIdentity` calls at N=600/1200, and a `numericalJacobian` (2·dim residual evaluations) — all synchronous main thread. For unbounded families `solver-uqd.mjs:380` floors both verifies at 1500 nodes and, with `adaptiveSamples` undefined, the near-cusp loop at 492-503 doubles to `cap = 8000`. The comment at ui-solve.mjs:744-746 shows the authors already recognised this as 'the heavy accuracy estimate' and skipped it for live drags only — the drag-end full solve and every normal solve still pay it on-thread. Two scoping notes: the escalation only fires in the near-cusp regime, and for bounded families the verifies stay at 600/1200 nodes.
 
 **Evidence**
 
@@ -3422,7 +3620,9 @@ Move the accuracy pass to the existing aux worker. `QD.estimateAccuracy` takes p
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **medium** | performance | medium | `apps/quadrature-domains/app/param-slice/param-slice-ui.mjs:429` | `UNVERIFIED` |
+| **medium** | performance | medium | `apps/quadrature-domains/app/param-slice/param-slice-ui.mjs:429` | **CONFIRMED** |
+
+> **Verifier:** Verified. `param-slice-ui.mjs:429` calls `PS.solveOnePoint(...)` synchronously inside `runLiveSolve`; with no cached φ the `canWarm` branch is skipped and `param-slice-common.mjs:445` runs a full `QD.solveInverseQD(s.hData, {bootstrapW0:false, ...opts})`. The opts really do carry `direct:true` and `multistart:true` (param-slice-ui.mjs:890-892) with `numRestarts:1` (884). The pool is present and idle — `sliceState.pool` is created by the lazy `_ensurePool` at 1114-1119 and exposes cancel at 978. Mild narrowing of the claimed impact: the call is debounced behind `LIVE_SOLVE_SETTLE_MS = 150` (376) with a token guard, so a fast sweep fires nothing and even a slow one caps at ~6 solves/sec rather than a continuous train — but each one is still an unbounded synchronous block on a tab whose whole architecture exists to avoid that.
 
 **Evidence**
 
@@ -3452,7 +3652,9 @@ Route the hover solve through the pool: `sliceState.pool.solveBatch(sceneWithOpt
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | correctness | trivial | `apps/quadrature-domains/app/schwarz/schwarz-render.mjs:86` | `UNVERIFIED` |
+| **low** | correctness | trivial | `apps/quadrature-domains/app/schwarz/schwarz-render.mjs:86` | **CONFIRMED** |
+
+> **Verifier:** Verified. `schwarz-render.mjs:86` writes the sticky `sState.gpuMsg` in the catch and line 89 branches on `sState.gpuMsg.indexOf('failed')` rather than a frame-local flag. Grepping every write: schwarz-ui.mjs clears it only at 1162 (successful `setPhi` on a NEW φ capture) and 1224 (`webglcontextrestored`); nothing in the render loop resets it. `activeRenderer()` (schwarz-ui.mjs:1244-1249) consults only `sState.gpu` and `capacityError()`, never `gpuMsg`, so the GPU branch keeps being entered and keeps succeeding while line 89 keeps failing — every subsequent frame renders on the GPU, hides it via `showGLLayer(false)` at 111, and re-renders on the CPU pyramid. Correctly rated low: the visible output stays correct, the cost is a permanent double render plus a stale error string appended to the progress text.
 
 **Evidence**
 
@@ -3478,7 +3680,9 @@ Use a frame-local boolean: `let gpuOk = true;` set `gpuOk = false` in the `catch
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | memory | trivial | `apps/quadrature-domains/app/schwarz/schwarz-webgl.mjs:829` | `UNVERIFIED` |
+| **low** | memory | trivial | `apps/quadrature-domains/app/schwarz/schwarz-webgl.mjs:829` | **CONFIRMED** |
+
+> **Verifier:** Verified. `schwarz-webgl.mjs:829` attaches an anonymous `webglcontextlost` closure and `destroy()` (1100-1106) frees only GL objects — no `removeEventListener`. Grepping `destroy` across app/: the only caller anywhere is `sphere-ui.mjs:207` for the sphere renderer; the Schwarz UI never calls it. The re-invocation path is real: `schwarz-ui.mjs:1223-1229` sets `sState.gpu = null` and calls `ensureGPU()`, whose `if (!glC)` guard at 1197 skips re-creating the canvas (so the UI's own listeners aren't duplicated) but whose `createGPURenderer(glC)` at 1232 runs unconditionally, adding one more renderer-scope closure to the same long-lived canvas per loss/restore cycle. Correctly rated low — hygiene, only material on hardware that loses the context repeatedly.
 
 **Evidence**
 
@@ -3509,7 +3713,9 @@ Name the handler and detach it in `destroy()`: `const onLost = (e) => e.preventD
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | redundancy | trivial | `apps/quadrature-domains/app/primary-solver-worker.mjs:159` | `UNVERIFIED` |
+| **low** | redundancy | trivial | `apps/quadrature-domains/app/primary-solver-worker.mjs:159` | **CONFIRMED** |
+
+> **Verifier:** Verified. `primary-solver-worker.mjs:159-166` is unreachable: every call site passes two arguments — ui-solve.mjs:308, ui.mjs:1509, ui.mjs:1129, ui-thesis.mjs:127 — so `runOpts` is always `{}`. Not rescued by a test or an html/worker entry either: the only test reference is `app/test/worker.test.js:12` (`typeof PSW.solve === 'function'`), and the two vitest files matching 'signal' are algebra-worksafety/sym-worker-lifecycle, which don't touch PSW.solve. The header comment at line 16 documents `{signal?}` as public API and line 160 names `ui.js` as the supplier, so the docs describe a consumer that does not exist. The latent-bug half of the claim also checks out: `onAbort` is never removed and `cancel()` unconditionally `_disposeWorker()`s, so a signal aborted after its own job settled would kill a newer solve.
 
 **Evidence**
 
@@ -3541,7 +3747,9 @@ Either delete the block and the `runOpts` parameter (supersession already works 
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | redundancy | trivial | `apps/quadrature-domains/app/solver-qd.mjs:359` | `UNVERIFIED` |
+| **low** | redundancy | trivial | `apps/quadrature-domains/app/solver-qd.mjs:359` | **CONFIRMED** |
+
+> **Verifier:** Verified. `solver-qd.mjs:359-368` open-codes the pole mean while `solver.mjs:1718-1725` is the documented single source whose own comment (1716-1717) says it absorbed 'three open-coded copies (ui.js buildW0, solver-pqd bootstrap, solver-lqd normalizeOpts)'. The migrated siblings resolve it at call time through the namespace — solver-lqd.mjs:405 `QD.poleCentroid(hData, {re:1,im:0})`, solver-pqd.mjs:525, ui.mjs:271 — so there's no load-order obstacle for solver-qd.mjs doing the same. Behaviour is identical today: `poleCentroid` with no fallback returns `{re:0,im:0}` for an empty pole list (solver.mjs:1721, pinned by app/test/solvers.test.js:1867). Pure divergence risk on the most-executed (catch-all) family; low is right.
 
 **Evidence**
 
@@ -3578,7 +3786,9 @@ Replace the body with `let w0 = opts.w0 || QD.poleCentroid(hData); return { w0 }
 
 | severity | category | effort | location | verdict |
 | --- | --- | --- | --- | --- |
-| **low** | correctness | trivial | `apps/quadrature-domains/app/ui-solve.mjs:988` | `UNVERIFIED` |
+| **low** | correctness | trivial | `apps/quadrature-domains/app/ui-solve.mjs:988` | **CONFIRMED** |
+
+> **Verifier:** Verified. `ui-solve.mjs:988` reads `state.current.success` with no guard, `state.current` starts null (ui-state.mjs:70), and `ui.mjs:1377-1380` calls `refreshAlternatesPanel()` directly from the display-only handlers for `#so-show-non-univalent` / `#so-show-id-failing` with nothing establishing a solve first. Reachable two ways: the cold-load window (ui.mjs:1686 schedules the boot solve, and `state.current` is only assigned at ui-solve.mjs:394 when the worker replies), and a zero-pole configuration — `buildHData` returns null at ui.mjs:260 when `poles.length === 0 && polyPart.length === 0`, so `solveAndRender` bails at 275-278 and never assigns `state.current`. One narrowing: the second cited route is not real. `stop()` (ui-solve.mjs:1069) only runs inside the alt-search loop, which is started after a solve, and `state.current` is never re-assigned null anywhere in the app, so its `!state.current` branch at 1079 is genuinely dead. Severity unchanged.
 
 **Evidence**
 
