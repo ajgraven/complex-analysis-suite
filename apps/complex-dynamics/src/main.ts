@@ -993,14 +993,7 @@ function init(): void {
           if (!on) refreshDynPanels(); // drag ended → recompute the dyn panels once for the final c
         },
       },
-      onViewChanged: (center, zoom) => {
-        setParamCenterInput(center);
-        setParamZoomInput(zoom);
-        updateViewChips();
-        announce(`Parameter space — ${paramChip.textContent}`);
-        scheduleRecord();
-        scheduleSuggestions();
-      },
+      onViewChanged: (center, zoom) => syncParamViewInputs(center, zoom),
       onHover: (coord) => {
         paramReadout(coord);
         updateOrbitPreview(coord);
@@ -2025,6 +2018,24 @@ function init(): void {
     paramChip.textContent = fmt(parameterView, INPUT_IDS.paramN);
     dynChip.textContent = fmt(dynamicalView, INPUT_IDS.dynN);
     updateEffectiveIterations();
+  }
+
+  /**
+   * Everything that has to follow a parameter-plane view move: the sidebar centre/zoom boxes, the
+   * view chip, a history snapshot, and the advisory re-run.
+   *
+   * This is the body of `parameterView`'s `onViewChanged` hook, which PlotView fires only from its
+   * pointer/keyboard handlers — a PROGRAMMATIC `plot.center = …` renders the new view and tells
+   * nothing else. Any code that moves the parameter plane without a user gesture must call this, or
+   * it leaves the readouts describing a view that is no longer on screen (cd-shell-06).
+   */
+  function syncParamViewInputs(center: Vec2, zoom: number): void {
+    setParamCenterInput(center);
+    setParamZoomInput(zoom);
+    updateViewChips();
+    announce(`Parameter space — ${paramChip.textContent}`);
+    scheduleRecord();
+    scheduleSuggestions();
   }
 
   /** With auto-iterations on, show each plot's live effective cap next to its iterations box
@@ -3053,6 +3064,12 @@ function init(): void {
     const v = interpolateView(keyframes, Number(byId<HTMLInputElement>("kf-scrub").value));
     parameterView.plot.center = v.center;
     parameterView.plot.zoom = v.zoom;
+    // The plot's setters only schedule a render, so without this the scrub was invisible to
+    // everything BUT the picture: the sidebar and view chip kept the pre-scrub centre/zoom, the
+    // debounced history snapshot was built from those stale fields (so the scrubbed view never
+    // entered the undo stack), "Share link" produced a permalink to the pre-scrub view, and the
+    // next Apply — or Enter anywhere — re-read the stale inputs and snapped the plot back.
+    syncParamViewInputs(parameterView.plot.center, parameterView.plot.zoom);
   }
 
   /** Play the keyframe path and record it to a WebM clip. */
