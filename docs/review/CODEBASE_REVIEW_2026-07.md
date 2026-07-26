@@ -7,7 +7,7 @@
 
 ## ▶ RESUME HERE
 
-Everything a fresh session needs to continue. **Next up: Batch D** — worker / resource lifecycle.
+Everything a fresh session needs to continue. **Next up: Batch E** — performance.
 
 ### Where the work stands
 
@@ -15,8 +15,8 @@ Everything a fresh session needs to continue. **Next up: Batch D** — worker / 
 | --- | --- | --- |
 | Findings surviving verification | **112** | 84 confirmed + 28 overstated; 4 refuted and excluded |
 | **HIGH** | **12 of 12 FIXED** | tier complete |
-| Medium / low | 26 of 99 fixed | Batches A, A-2, B and C done |
-| Remaining | **73** | 31 medium, 42 low |
+| Medium / low | 32 of 99 fixed | Batches A, A-2, B, C and D done |
+| Remaining | **67** | 29 medium, 38 low |
 
 Batch A-2 also closed **three defects it discovered along the way** that were not in the original 124
 — see [Pass 5](#pass-5--batch-a-2-exact-arithmetic-contracts-and-the-bla-reference-162). Expect this:
@@ -39,14 +39,25 @@ branch is cut from `master` with disjoint files.
 | [#162](https://github.com/ajgraven/complex-analysis-suite/pull/162) | `fix/batch-a2-claim-accuracy` | Batch A-2 — exact-arithmetic contracts + the BLA reference |
 | [#163](https://github.com/ajgraven/complex-analysis-suite/pull/163) | `fix/batch-b-numerical-robustness` | Batch B — numerical robustness in the shared packages |
 | **#164** *(to open)* | `fix/batch-c-state-fidelity` | Batch C — CD state fidelity |
+| **#165** *(to open)* | `fix/batch-d-lifecycle` | Batch D — worker / resource lifecycle |
 
 Already merged: **#154** (`@cas/core` NaN-convergence + aliasing), **#155** (7 honest-labeling
 defects), **#156** (this review record).
 
-> **Batch C's branch is committed but NOT yet pushed** — `github.com` was unreachable from the dev
-> machine at the end of that session (`Recv failure: Connection was reset`, on both `git push` and
-> `git ls-remote`). Nothing is lost; `git push -u origin fix/batch-c-state-fidelity` and then open the
-> PR. Unrelated to the Actions billing block below.
+> **⛔ Batches C and D are committed but NOT pushed, and this branch has unpushed doc commits.**
+> `github.com` became unreachable from the dev machine and stayed that way: `git push`, `git ls-remote`
+> AND plain `curl https://github.com` all fail (timeout / `Recv failure: Connection was reset`) while
+> the rest of the internet is fine (`curl https://example.com` → 200). So it is a network path or
+> firewall issue local to that machine, **not** the Actions billing block below and not a repo problem.
+> Nothing is lost. When it clears:
+>
+> ```
+> git push -u origin fix/batch-c-state-fidelity
+> git push -u origin fix/batch-d-lifecycle
+> git push origin fix/batch-a-honest-labeling
+> ```
+>
+> …then open #164 and #165.
 
 ### Batches A-2, B and C — DONE
 
@@ -55,27 +66,48 @@ defects), **#156** (this review record).
 | A-2 | [#162](https://github.com/ajgraven/complex-analysis-suite/pull/162) | `cd-res-11`, `cd-disc-06`, `cd-disc-12`, `cd-test-08`, `cd-render-10`, `qd-dc-imagedata-01` + 3 found while fixing | [Pass 5](#pass-5--batch-a-2-exact-arithmetic-contracts-and-the-bla-reference-162) |
 | B | [#163](https://github.com/ajgraven/complex-analysis-suite/pull/163) | `cd-div-02`, `cd-cpow-05`, `cd-frac-07`, `expr-glsl-01`, `expr-glsl-02`, `expr-parser-01`, `expr-parser-depth-04`, `expr-eval-01` + 2 found while fixing | [Pass 6](#pass-6--batch-b-numerical-robustness-in-the-shared-packages-163) |
 | C | #164 | `cd-shell-07`, `cd-shell-05`, `cd-shell-06`, `cd-views-destructive-01`, `cd-shell-12`, `qd-urlstate-untested-06` | [Pass 7](#pass-7--batch-c-cd-state-fidelity-164) |
+| D | #165 | `qd-psw-untested-03`, `cd-render-07`, `qd-psw-fallback-latch-01`, `qd-ctxmenu-leak-01`, `cd-metricsworker-01`, `qd-schwarz-gl-listener-01` | [Pass 8](#pass-8--batch-d-worker--resource-lifecycle-165) |
 
-### ▶ Batch D — start here
+### ▶ Batch E — start here
 
-Worker / resource lifecycle + memory. Six items, all **verified open** against the source at the end
-of Batch C. Note two lifecycle findings in the corpus are already CLOSED and must not be re-opened:
-`cd-dup-01` and `qd-schwarz-cpuworker-01` are the *same* defect (the Schwarz CPU worker's `error`
-handler never settling the in-flight render) and shipped in #159.
+Performance. **15 items**, the largest batch — 13 medium + 2 low, all verified open against the
+source at the end of Batch D. Three perf findings in the corpus are **already CLOSED and must not be
+re-opened**: `expr-rational-01` (the `z^40000` freeze, #158), `corr-density-01` (the deltoid K-mask
+ray-cast per pixel, #159), and `bt-ci-nocache-08` (no pnpm store cache, #157).
 
 | id | Where | Severity / effort | The defect |
 | --- | --- | --- | --- |
-| `qd-psw-untested-03` | `apps/quadrature-domains/app/test/worker.test.js:11` | medium / medium | `PrimarySolverWorker`'s cancel / supersede / crash lifecycle (3 workers, 381 lines) is covered only by 14 `typeof … === 'function'` assertions plus one functional assertion nested inside `if (base.success)`. |
-| `cd-render-07` | `apps/complex-dynamics/src/render/glPlot.ts:1964` | medium / small | `renderToImageData` holds two full-size RGBA buffers at once (`pixels` stays live through the flip loop), doubling peak export memory. |
-| `qd-psw-fallback-latch-01` | `apps/quadrature-domains/app/primary-solver-worker.mjs:233` | low / small | One module-level `_mainThreadFallback` latch is written from all three catch blocks and read by all three solve paths, so an aux/live-worker failure silently demotes the primary too. |
-| `qd-ctxmenu-leak-01` | `apps/quadrature-domains/app/algebra/algebra-ui.mjs:2902` | low / trivial | Every algebra context-menu interaction leaks a permanent capture-phase `document` pointerdown listener (`closeNodeMenu` nulls `_ctxMenu` without removing it). |
-| `cd-metricsworker-01` | `apps/complex-dynamics/src/render/juliaMetricsClient.ts:65` | low / trivial | `disableWorker` sets `this.worker = null` with no `terminate()` and without clearing `onmessage`/`onerror`, leaking the thread. |
-| `qd-schwarz-gl-listener-01` | `apps/quadrature-domains/app/schwarz/schwarz-webgl.mjs:829` | low / trivial | `createGPURenderer` attaches a `webglcontextlost` listener that `destroy()` never removes, accumulating one per renderer. |
+| `cd-bla-01` | `apps/complex-dynamics/src/render/glPlot.ts:1305` | medium / medium | The perturbation BLA table is fully rebuilt and re-uploaded (≈1 MB `texImage2D`) on every zoom-changed frame, including the maxC-independent level 0. |
+| `cd-render-05` | `apps/complex-dynamics/src/render/glPlot.ts:1300` | medium / medium | Perturbation rebuilds the whole double-double reference orbit *and* BLA tree on every draft frame of a deep-zoom pan/zoom. |
+| `cd-overlay-01` | `apps/complex-dynamics/src/render/plotView.ts:114` | medium / small | The whole 2D overlay is redrawn from `afterRender` on every progressive and temporal-accumulation frame, even when none of its inputs changed. |
+| `cd-invjulia-01` | `apps/complex-dynamics/src/render/overlay.ts:481` | medium / small | The c-keyed overlay caches (inverse-Julia cloud, Siegel curves, portrait rays) miss on every frame of a coupled parameter drag. |
+| `cd-render-08` | `apps/complex-dynamics/src/render/angleOfPoint.ts:113` | medium / small | "Find angles" re-traces every enumerated external ray from scratch on each click — a pure function with no memoization. |
+| `cd-shell-09` | `apps/complex-dynamics/src/main.ts:3923` | medium / small | The Laurent boundary-radius slider re-derives all dynamical exterior coefficients on every input event, though only `r` changed. |
+| `cd-perf-04` | `packages/exact/src/gaussian.ts:130` | medium / trivial | `Gauss.mul` always runs the 4-multiplication complex form — 4.1× the real-only cost, and CD's entire exact tower is real. |
+| `corr-density-recolour-03` | `apps/correspondences/src/main.ts:191` | medium / small | The correspondence render re-runs a full-frame point-in-polygon colorize on every progressive tick — ~4.2 s of ~4.8 s redundant. |
+| `corr-orbittree-01` | `apps/correspondences/src/orbitTree.ts:51` | medium / small | `expandOrbitTree` allocates two wrappers and runs a comparator sort per node for a 2-element branch list; `orbitPoints` copies the whole node array. |
+| `qd-accuracy-mainthread-01` | `apps/quadrature-domains/app/ui-solve.mjs:753` | medium / medium | The post-solve "Geometry & accuracy" pass runs two escalating ≥1500-node identity verifies plus a critical-point solve **on the main thread** after every solve. |
+| `qd-chooseholetestpoints-01` | `apps/quadrature-domains/app/solver.mjs:1272` | medium / medium | `chooseHoleTestPoints` is O(61 × N) per identity verify and re-runs at every escalation level, dominating unbounded-family verification. |
+| `qd-paramslice-hover-01` | `apps/quadrature-domains/app/param-slice/param-slice-ui.mjs:429` | medium / medium | Param-slice hover preview runs a full `solveInverseQD` synchronously on the main thread while the idle worker pool sits right there. |
+| `bt-precache-fonts-04` | `apps/quadrature-domains/vite.config.mjs:37` | medium / trivial | Both PWAs precache KaTeX `.ttf` *and* `.woff` — 798 KB of never-fetched font bytes per app, 1.6 MB across the deployed site. |
+| `corr-mating-blocking-06` | `apps/correspondences/src/mating/matingMain.ts:164` | low / small | `mating.html` blocks the main thread for ~0.8 s of unyielded σ evaluation before painting anything. |
+| `qd-fillcoarse-01` | `apps/quadrature-domains/app/schwarz/schwarz-render.mjs:255` | low / trivial | The in-process Schwarz pyramid runs `fillFromCoarseSamples` on the stride-1 pass — a full W·H no-op scan. |
 
-`qd-paramslice-hover-01` (hover preview runs a full `solveInverseQD` synchronously on the main
-thread) looks like it belongs here but is a **performance** finding — it goes with Batch E.
+**Do `cd-bla-01` and `cd-render-05` together** — both are the deep-zoom rebuild path within five
+lines of each other in `glPlot.ts`, and they share a cache key.
+
+**⚠ Measure, do not assert.** This batch is the one where the sweep's finders are least trustworthy:
+the single **refuted** finding of the whole review was a performance claim killed by benchmarking (a
+per-pixel allocation that never escapes, so V8 scalar-replaces it — `--trace-gc` showed zero
+scavenges and the proposed fix measured 1.4%, i.e. noise). Every item here should carry a
+before/after number in its commit, and an item that measures as noise should be recorded as refuted
+rather than "optimized".
+
 `qd-psw-signal-dead-01` (unreachable `AbortSignal` support in `PrimarySolverWorker.solve`) is
-**dead code** — Batch G. Keeping D to lifecycle/memory keeps the PR reviewable.
+**dead code** — Batch G. Note when you get there that the block is also *wrong*: its `onAbort`
+listener is never removed when a job settles normally, so a reused long-lived signal would
+accumulate handlers that call `cancel()` on the current worker. Found during Batch D; harmless only
+because no caller passes a signal.
 
 `qd-exact-count-guard-11` (`vitest/algebra-verdict-labeling.test.ts:114` — the `rigor:'exact'` guard
 counts call sites instead of identifying them, so the exemption can migrate silently) stays with the
@@ -88,8 +120,8 @@ test-integrity batch (F).
 | ~~**A-2**~~ | ~~claim accuracy, exact-arithmetic contracts~~ — **done** | ~~5~~ |
 | ~~**B**~~ | ~~numerical robustness~~ — **done** ([#163](https://github.com/ajgraven/complex-analysis-suite/pull/163)) | ~~8~~ |
 | ~~**C**~~ | ~~CD state fidelity~~ — **done** (#164) | ~~6~~ |
-| **D** | worker / resource lifecycle + memory | 6 |
-| **E** | performance | ~14 |
+| ~~**D**~~ | ~~worker / resource lifecycle + memory~~ — **done** (#165) | ~~6~~ |
+| **E** | performance | 15 |
 | **F** | test integrity — *fix in place, no new infra* | ~14 |
 | **G** | duplication / dead code | ~15 |
 | **H** | accessibility / UX | ~13 |
@@ -138,6 +170,10 @@ test-integrity batch (F).
   in 112 s. It is an environmental forks-pool/IPC hiccup, **not** a code failure — but confirm by
   re-running, never by assuming. Also: `cmd && cmd && … ; echo "EXIT=$?"` reports the *echo's* status,
   so a background-task "exit code 0" can hide a failed gate. Read the `EXIT=` line.
+- **Check that a fix is REACHABLE, not just correct.** Batch D's Schwarz listener removal belonged in
+  `destroy()` — which nothing in the Schwarz path ever called, so the two-line fix would have shipped
+  as code that provably never runs. Before closing a "release it in the teardown" item, grep for a
+  caller of that teardown.
 - Verifier notes for every finding live in `RAW_FINDINGS_2026-07.md` next to the original evidence.
 
 ## Commission
@@ -610,6 +646,76 @@ the suite by ~17%. Updated to the measured number.
 | --- | --- | --- |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | Durand–Kerner withholds convergence on non-finite iterates (V-1) | new test, proven to fail against the old code |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | `addMulInto` honours its aliasing contract (V-2) | new test, proven to fail against the old code |
+
+### Pass 8 — Batch D: worker / resource lifecycle ([#165](https://github.com/ajgraven/complex-analysis-suite/pull/165))
+
+Branch `fix/batch-d-lifecycle`. Six commits, six findings — things the app acquires and never gives
+back, plus the one place three workers shared a piece of state they should not have.
+
+| id | What shipped |
+| --- | --- |
+| `qd-psw-untested-03` | 381 lines driving three independent workers, covered by fourteen `typeof … === 'function'` assertions. 13 real lifecycle tests now: round-trip per lane, `isBusy` only while outstanding, supersede vs. cancel, terminate-and-respawn, lane isolation. |
+| `cd-render-07` | `renderToImageData` held two full-size RGBA buffers at once (2 × 268 MB at 8192²). The flip is now in place and `ImageData` gets a view over the same `ArrayBuffer` — peak is one buffer plus one row. |
+| `qd-psw-fallback-latch-01` | One `_mainThreadFallback` was written by all three catch blocks and read by all three solve paths, so whichever lane failed to spawn first silently demoted the other two for the session. Three latches now. |
+| `qd-ctxmenu-leak-01` | The context menu's capture-phase `document` pointerdown listener removed itself only on the one close path that ran it. Every other close — Escape, Tab, picking an item, opening another menu — left it subscribed. |
+| `cd-metricsworker-01` | `disableWorker` dropped the reference without `terminate()`, leaking the thread *and* leaving a queued response able to call `cb` a second time. |
+| `qd-schwarz-gl-listener-01` | `createGPURenderer` attached an anonymous `webglcontextlost` listener that `destroy()` never removed — on a canvas that is created once and reused across every loss/restore cycle. |
+
+**The trap this batch was built around: a fix that is dead code.** `qd-schwarz-gl-listener-01` reads
+as a two-line change — name the handler, remove it in `destroy()`. But **nothing in the Schwarz path
+ever called `destroy()`**; `sState.gpu = null` was the whole teardown, and the only `.destroy()` call
+anywhere belonged to sphere-ui's own renderer. Removing the listener inside `destroy()` would have
+shipped a fix that provably never runs. The commit therefore also adds `dropGPU()` in schwarz-ui and
+routes both the loss and restore paths through it. Check that the fix is *reachable*, not just
+correct.
+
+**Extraction to buy a test seam, again.** `renderToImageData` lives in `glPlot.ts`, which needs a
+WebGL context and is untestable. The flip moved to `hiResExport.ts` — the existing home for
+engine-agnostic export helpers, which already had a test file — and the load-bearing assertion is
+**byte-identity against the copying implementation it replaced**, over even *and odd* sizes (an odd
+size has a middle row that is a fixed point the swap loop must skip). This is a memory fix; one
+changed output byte would make it a rendering change instead.
+
+**The existing worker shim was enough.** `vitest/helpers/web-worker-shim.mjs` — the
+`node:worker_threads` Worker facade built for the sym-worker suites — drove the *solver* worker
+unchanged, spawning the real `solver-worker-entry.mjs`. No new CI infrastructure, per the standing
+decision. Its terminate counter is what makes "cancel really terminated it" a deterministic
+assertion instead of a timing guess, and that distinction matters here: terminate-and-recreate is the
+only way to preempt a solve deep in nested Newton, so a cancel that merely dropped the listener would
+look identical from the outside while leaving a core burning.
+
+**Proven by fault injection.** The spawn-failure paths are unreachable in any real environment, so
+the latch fix is guarded by a stub `Worker` that fails on demand over a freshly re-imported module.
+Both directions are pinned — an aux failure must not demote primary/live, *and* a primary failure
+must not demote aux/live — so the fix is not merely "aux happens to be checked first". All three
+fail against the pre-fix single latch. One detail that decided whether these tests were worth
+anything: the fresh import pulls the whole `solver-graph` barrel, not just `solver.mjs`, because the
+main-thread fallback calls `QD.solveInverseQD` *on this thread* and needs every family registered.
+Without it the fallback cannot solve and the tests pass vacuously.
+
+**Found while verifying, not fixed here.** `solve()`'s `AbortSignal` handler is added with
+`{ once: true }` and never removed when the job settles normally, so a long-lived signal reused
+across solves would accumulate handlers that call `cancel()` — terminating the *current* worker —
+long after their own job finished. It is latent: `qd-psw-signal-dead-01` establishes that **no caller
+passes a signal at all**. That finding is Batch G's (dead code); flagging it here so G does not
+delete the block without noticing it was also wrong.
+
+**Not tested, and why.** `qd-ctxmenu-leak-01` is a closure inside `installAlgebra`, reachable only
+from a canvas callback or a keyboard shortcut, and no harness boots that panel — and the pattern is
+unique in QD (the other two `document`-level dismiss listeners are app-lifetime or use a stable named
+reference the DOM de-duplicates), so there is no second consumer to justify extracting a testable
+helper. `qd-schwarz-gl-listener-01` needs a real WebGL2 context, which jsdom does not have; the GL
+frees it sits beside were equally untested before.
+
+**Browser-verified where the unit test cannot reach.** `flipRowsInPlace` is proved byte-identical in
+isolation, but nothing in that test touches glPlot's wiring, so a mis-hooked `ImageData` would ship an
+upside-down PNG. Framing the period-2 disk off-centre — centre (−1, 0.2), half-width ⅛, so the frame
+covers y ∈ [0.075, 0.325] and the disk boundary at x = −1 sits at y = 0.25 — the exported PNG has a
+bright top row (luma 117, exterior) and a black bottom row (luma 0, inside the set). The **default**
+Mandelbrot view is mirror-symmetric about the real axis, so a flipped export looks identical there;
+the first probe proved nothing and had to be redone asymmetric.
+
+Gate: **1856 tests / 197 files**, lint, typecheck, all four builds green.
 
 ### Pass 7 — Batch C: CD state fidelity ([#164](https://github.com/ajgraven/complex-analysis-suite/pull/164))
 
