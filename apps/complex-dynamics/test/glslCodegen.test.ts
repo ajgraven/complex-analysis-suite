@@ -23,20 +23,37 @@ describe("live parameter `a` alias (df64-safe)", () => {
     expect(compileF(parse("z*z + c"))).not.toContain("uA");
   });
 
-  it("emits no alias when `a` is a local assignment, not a free parameter", () => {
-    // `a` is assigned → not a free variable → must not be aliased to the uniform.
-    expect(compileF(parse("a = z*z; a + c"))).not.toContain("uA");
+  it("emits no alias when `a` is written but never read back", () => {
+    // Only then is `a` a genuine local rather than the uniform.
+    expect(compileF(parse("a = z*z; z + c"))).not.toContain("uA");
+  });
+
+  it("DOES alias `a` when it is read, even if it is also assigned", () => {
+    // This assertion used to be the opposite ("a is assigned → not a free variable → must not be
+    // aliased"). That rule left read-before-assign with no declaration at all: `a = a*2; z^2 + a`
+    // emitted the self-referential `cvec a = cmul(a, …);`, which GLSL rejects while the JS backend
+    // ran fine. Aliasing on READ is also the JS semantics — `a` enters scope holding the uniform and
+    // assignment overwrites it. (expr-glsl-01)
+    const readThenAssign = compileF(parse("a = a*2; z^2 + a"));
+    expect(readThenAssign).toContain("cvec a = vec_(uA.x, uA.y);");
+    expect(readThenAssign).not.toMatch(/cvec a = cmul\(a/); // the old, uncompilable output
+    // Assign-then-read keeps exactly one declaration — the alias must not introduce a second.
+    expect((compileF(parse("a = z*z; a + c")).match(/cvec a\b/g) ?? []).length).toBe(1);
   });
 });
 
 describe("equality comparison (df64-safe)", () => {
-  it("compares real AND imaginary parts via cre1/cim, not a raw cvec ==", () => {
+  it("compares the whole value with a raw cvec ==, not the hi limbs via cre1", () => {
+    // This assertion used to be the opposite, on the theory that a raw `(z == c)` "would diverge in
+    // df64 (compares error limbs)". It does not: every df64 value in the pipeline is normalized —
+    // constants arrive through `vec_(re, im)` = vec4(re, 0, im, 0), and df_add / df_mul / df_div /
+    // df_sqrt all return via quickTwoSum — so the representation is canonical. The cre1 form was the
+    // actually-wrong one: cre1 returns only the HI limb in df64, making the test fp32-width equality
+    // on a ~47-bit value, exactly where df64 is the point. GLSL `==` on a vector is component-wise
+    // yielding a scalar bool, so one expression covers vec2 and vec4. (expr-glsl-02)
     const code = compileEscape(parse("z == c"));
-    expect(code).toContain("cre1(");
-    expect(code).toContain("cim(");
-    expect(code).toContain("&&"); // two-part (re && im) comparison
-    // A raw `(z == c)` on the complex values would diverge in df64 (compares error limbs).
-    expect(code).not.toMatch(/\(\s*z\s*==\s*c\s*\)/);
+    expect(code).toMatch(/\(\s*z\s*==\s*c\s*\)/);
+    expect(code).not.toContain("cre1(");
   });
 
   it("still emits ordering comparisons via the real-part accessor", () => {
