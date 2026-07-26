@@ -9,7 +9,7 @@ tools. Compiled 2026-06-29.
 > their entries). Tier 2 **#6 (coupled-drag panel debounce)**, **#7 (Julia metrics worker)** and
 > **#8 (content-gated orbit/CDF invalidation)** are implemented too. Since then **#9 (general cycle
 > detection)** and the deep-zoom **rebasing (D1)** + **BLA CPU foundation (D2a)** have landed (see their
-> entries); the remaining open items are the deep-zoom **GPU BLA traversal (D2b)** and **#5**. This
+> entries), and so has the deep-zoom **GPU BLA traversal (D2b)**; the remaining open item is **#5**. This
 > document is the standing roadmap. Speedup figures from the literature are attributed; figures that
 > could not be pinned to a primary source are marked **[UNVERIFIED]**.
 
@@ -177,17 +177,20 @@ The tool already has df64 + a CPU perturbation path for z²+c. The modern upgrad
   `drawFractal` (perturbation-aware). Verified by a CPU oracle (`test/rebasing.test.ts`: rebased ==
   direct iteration) + a live overlap test (rebased kernel ≈ df64 at 1e9: 99.1% pixel-identical,
   meanDiff 4/255, no glitch clusters). **[Effort M — done]**
-- **🟡 BLA (bivariate linear approximation) — D2a done (CPU table); D2b pending (GPU).** Where δz is
+- **✅ BLA (bivariate linear approximation) — D2a (CPU table) and D2b (GPU traversal) both done.** Where δz is
   small enough that δz² is negligible, the step is linear (`δz_{m+l} = A·δz_m + B·δc`, valid
   `|δz_m| < r`); a binary tree of merged BLAs lets the kernel skip many iterations at extreme zoom.
   **D2a (done):** `src/render/bla.ts` builds + queries the tree (single step `A=2Z, B=1`; the Zhuoran
   merge radius `r = min(rₓ, max(0,(r_y − |Bₓ|·maxC)/|Aₓ|))`; `lookupBLA` = largest valid skip), with a
   self-validating test (`test/bla.test.ts`) proving a skip reproduces the true per-step iteration
   within each radius — so the f32-precision-tied radius is provably safe (a conservative radius just
-  skips less). **D2b (remaining):** pack the table into texture(s), traverse it in the perturbation
-  kernel (skip when valid, else a single rebased step), and verify BLA-on == rebasing-only at extreme
-  zoom. Quoted 1.7×–36× over SA, activating only at ≳1e25; z²+c only (sidesteps the "100+ formulas"
-  cost that made Kalles Fraktaler decline it). **[Effort: D2a done; D2b M–H]**
+  skips less). **D2b (done):** `packBLATable` lays the tree out as an RGBA32F texture, `glPlot.ensureBLA`
+  uploads it per orbit + zoom, and the kernel's `fetchBLA`/`lookupBLA` take the largest valid skip per
+  fragment (else a single rebased step). `traverseBLA` is the CPU mirror of that loop, pinned against the
+  per-step reference at d = 2…5 and in polynomial mode. Quoted 1.7×–36× over SA, activating only at
+  ≳1e25. Not z²+c only, as this line used to say — the table builder takes a degree (d = 2…8) and
+  `buildBLATablePoly` covers general polynomials, so the "100+ formulas" objection that made Kalles
+  Fraktaler decline BLA does not apply here. **[Effort: D2a + D2b done]**
 - **Generalize perturbation to multibrot z^d+c** (binomial) and **Burning Ship/tricorn** (`diffabs` +
   a 2×2 Jacobian). **[Effort M]**
 - **Hard limit:** there is **no known perturbation/BLA/series scheme for rational, transcendental, or
