@@ -149,7 +149,7 @@ default and consume `converged` as a trustworthy flag.
 "`maxDelta` stays 0 → false convergence" trap on the *coincident-root* path. The non-finite path
 was simply missed.
 
-**Fix applied** (`60d8772`): `if (!(dm <= maxDelta)) maxDelta = dm;` — NaN now reaches `maxDelta`,
+**Fix applied** (PR [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154)): `if (!(dm <= maxDelta)) maxDelta = dm;` — NaN now reaches `maxDelta`,
 and `NaN < tol` is false, so convergence is correctly withheld. Guarded by a new test **proven to
 fail against the old code** (old: `maxDelta = 0 → converged = true`; new: `maxDelta = NaN →
 converged = false`).
@@ -166,7 +166,7 @@ reference in the entire repo is the package's own test. This is a latent trap in
 a live bug. (It is also the vector by which finding `cd-dead-10` — the unused in-place exports —
 went unnoticed.)
 
-**Fix applied** (`60d8772`): both products are now formed before either component of `out` is
+**Fix applied** (PR [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154)): both products are now formed before either component of `out` is
 written. Guarded by a test proven to fail against the old code.
 
 #### V-3 — `bt-lint-mjs-01` — 97 of QD's 98 production `.mjs` files have **zero** lint rules · **HIGH** · **VERIFIED — corrected**
@@ -460,27 +460,34 @@ the suite by ~17%. Updated to the measured number.
 
 ---
 
-## Fixes applied
+## Fixes
 
-### Pass 1 — inline, during the review
+> **These land in two separate pull requests, not in this one.** This document is the review
+> record; the code changes it describes are reviewed on their own merits in
+> [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) (the `@cas/core` defects) and
+> [#155](https://github.com/ajgraven/complex-analysis-suite/pull/155) (the honest-labeling sweep).
+> If you are reading this before those merge, treat the rows below as *proposed and gate-verified*
+> rather than as already on `master`.
 
-| Commit | Change | Guarded by |
+### Pass 1 — the two defects fixed inline during the review
+
+| PR | Change | Guarded by |
 | --- | --- | --- |
-| `60d8772` | Durand–Kerner withholds convergence on non-finite iterates (V-1) | new test, proven to fail against the old code |
-| `60d8772` | `addMulInto` honours its aliasing contract (V-2) | new test, proven to fail against the old code |
+| [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | Durand–Kerner withholds convergence on non-finite iterates (V-1) | new test, proven to fail against the old code |
+| [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | `addMulInto` honours its aliasing contract (V-2) | new test, proven to fail against the old code |
 
 ### Pass 2 — the honest-labeling sweep (Tier 1, step 1)
 
 All seven mislabels, each with a regression test.
 
-| Commit | Finding | Change |
+| PR | Finding | Change |
 | --- | --- | --- |
-| `cc511b7` | `corr-univalence-01` + `corr-param-body-02` | The `\|a\| ≤ √2` bound shown to users as **"proven"** is false — the area theorem is necessary, not sufficient. True bound `\|a\| ≤ 1` from `φ_a'(z) = 1 − a/z³`. Corrected in `family.ts`, both captions, `paramGpu.ts`, and `deltoid.ts`'s `exteriorRoot`. Captions now say to read `\|a\| > 1` as unclassified rather than as membership. |
-| `3cf2b7f` | `cd-render-02` | `OrbitFate`'s explicit `"undetermined"` no longer collapses to `connected: true`; added `connectivityUndetermined` and the row hedges it. |
-| `3cf2b7f` | `cd-render-03` | `critical.ts`'s "RIGOROUS connectivity" corrected — only `cantor` (all orbits escaped) is a determination; `connected`/`disconnected` rest on the 400-iteration cap and now render with `≈`. |
-| `8a53b19` | `cd-shell-03` | `\|λ\| =` → `≈` on both paths. `holo` means "an analytic f′ exists", not "exact"; the analytic-vs-finite-difference distinction moved to a `(finite-diff)` suffix. `jp-lyapunov` had the same bug in reverse (bare number, no marker). |
-| `04c558c` | `qd-ui-algebra-badge-01` | `showQDSolution` no longer hardcodes `univalent: true`; the hand-off carries the verdict's rigor and only `'exact'` earns the ✓. Absent opts ⇒ **not** certified, so a future caller cannot inherit a certified badge. `qdValidityBadge` lifted to module scope for testing. |
-| `437584a` | `qd-direct-verify-01` | `{ weight: 'log' }` is not a dispatch key — **no solver reads `opts.weight`** — so bounded log-weighted round-trips fell through to the classical catch-all and reported the wrong family's verdict as a pass. Now `{ lqd: true, w0 }`, matching the sibling handler. |
+| [#155](https://github.com/ajgraven/complex-analysis-suite/pull/155) | `corr-univalence-01` + `corr-param-body-02` | The `\|a\| ≤ √2` bound shown to users as **"proven"** is false — the area theorem is necessary, not sufficient. True bound `\|a\| ≤ 1` from `φ_a'(z) = 1 − a/z³`. Corrected in `family.ts`, both captions, `paramGpu.ts`, and `deltoid.ts`'s `exteriorRoot`. Captions now say to read `\|a\| > 1` as unclassified rather than as membership. |
+| [#155](https://github.com/ajgraven/complex-analysis-suite/pull/155) | `cd-render-02` | `OrbitFate`'s explicit `"undetermined"` no longer collapses to `connected: true`; added `connectivityUndetermined` and the row hedges it. |
+| [#155](https://github.com/ajgraven/complex-analysis-suite/pull/155) | `cd-render-03` | `critical.ts`'s "RIGOROUS connectivity" corrected — only `cantor` (all orbits escaped) is a determination; `connected`/`disconnected` rest on the 400-iteration cap and now render with `≈`. |
+| [#155](https://github.com/ajgraven/complex-analysis-suite/pull/155) | `cd-shell-03` | `\|λ\| =` → `≈` on both paths. `holo` means "an analytic f′ exists", not "exact"; the analytic-vs-finite-difference distinction moved to a `(finite-diff)` suffix. `jp-lyapunov` had the same bug in reverse (bare number, no marker). |
+| [#155](https://github.com/ajgraven/complex-analysis-suite/pull/155) | `qd-ui-algebra-badge-01` | `showQDSolution` no longer hardcodes `univalent: true`; the hand-off carries the verdict's rigor and only `'exact'` earns the ✓. Absent opts ⇒ **not** certified, so a future caller cannot inherit a certified badge. `qdValidityBadge` lifted to module scope for testing. |
+| [#155](https://github.com/ajgraven/complex-analysis-suite/pull/155) | `qd-direct-verify-01` | `{ weight: 'log' }` is not a dispatch key — **no solver reads `opts.weight`** — so bounded log-weighted round-trips fell through to the classical catch-all and reported the wrong family's verdict as a pass. Now `{ lqd: true, w0 }`, matching the sibling handler. |
 
 **A counterexample was computed, not asserted.** For `a = 1.2` (inside the old √2 claim) the distinct
 exterior points `z = 1.052307+0.208604i` and `w = 1.02−0.2i` satisfy `φ_a(z) = φ_a(w)` to 2e-16 —
@@ -507,7 +514,7 @@ in the repo.
 
 | # | Finding | Where | Status |
 | --- | --- | --- | --- |
-| 1 | **Durand–Kerner returns `converged: true` with all-NaN roots.** 7 of 8 call sites exposed. | `packages/core` | ✅ **FIXED** `60d8772` |
+| 1 | **Durand–Kerner returns `converged: true` with all-NaN roots.** 7 of 8 call sites exposed. | `packages/core` | ✅ **FIXED** — PR [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) |
 | 2 | **`φ_a` "proven univalent for \|a\| ≤ √2" is false** (true bound `\|a\| ≤ 1`), shown to users as *proven*, and load-bearing for a shader guard. | `apps/correspondences` | VERIFIED |
 | 3 | **σ-undefined is counted as "in the connectedness locus"**, so the parameter plane's central body is an artifact. Same root cause as #2. | `apps/correspondences` | VERIFIED |
 | 4 | **`"undetermined"` orbit fate collapses to `connected: true`.** | `apps/complex-dynamics` | VERIFIED |
