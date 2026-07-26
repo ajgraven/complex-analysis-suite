@@ -2655,6 +2655,8 @@ function init(): void {
     if (dynamicalView.plot.zoom > 1e3 || dc[0][1] !== 0 || dc[1][1] !== 0)
       state._dcdd = ddCenterToString(dc[0], dc[1]);
     if (notes.length > 0) state._notes = JSON.stringify(notes); // pinned annotations
+    const proj = readProjectionState(); // anchor + saved linear view behind an active projection
+    if (proj) state._proj = proj;
     const pv = byId<HTMLSelectElement>("profile").value; // the active use-case profile (label hint)
     if (pv && pv !== "custom") state._profile = pv;
     return state;
@@ -2718,6 +2720,8 @@ function init(): void {
         dynamicalView.plot.setCenterDD(c[0], c[1]);
       }
     }
+    // The coordinate remap, once both centres are final — its anchor is relative to them.
+    setProjectionState(state._proj);
     // Restore pinned annotations (validated; ignore a malformed list from a corrupt link). Caps bound a
     // hostile link: reject non-finite coordinates (`typeof NaN === "number"` would otherwise admit them
     // straight into the label geometry) and cap both the note count and per-note text length.
@@ -3494,7 +3498,20 @@ function init(): void {
   // entry and restore it on exit; anchor the projection at the plot's current centre, then show the
   // canonical projected frame (full unit disk for Poincaré, one angular period for log-polar).
   const savedProjViews = new Map<PlotView, { center: Vec2; zoom: number }>();
-  byId("projection-mode").addEventListener("change", () => {
+  /** The caption under the projection picker (empty when the view is linear). */
+  function updateProjectionNote(val: string): void {
+    byId("projection-note").textContent =
+      (PROJECTIONS[val as ProjectionMode] ?? 0) === 0
+        ? ""
+        : `${val === "poincare" ? "Poincaré disk" : "Log-polar"} view active — overlays are hidden; choose Linear to restore the view.`;
+  }
+  /**
+   * Enter / leave the projection the picker now names. This is the INTERACTIVE transition: it moves
+   * the view (to the canonical projected frame on entry, back to the saved linear view on exit), so
+   * it is wrong for restoring a serialized state — that path has its own centre/zoom to honour and
+   * uses {@link setProjectionState} instead.
+   */
+  function applyProjection(): void {
     const val = byId<HTMLSelectElement>("projection-mode").value;
     const mode = PROJECTIONS[val as ProjectionMode] ?? 0; // string→uProjection int (shared with GLSL)
     for (const view of [parameterView, dynamicalView]) {
@@ -3515,11 +3532,72 @@ function init(): void {
       }
       view.refreshOverlay();
     }
-    byId("projection-note").textContent =
-      mode === 0
-        ? ""
-        : `${val === "poincare" ? "Poincaré disk" : "Log-polar"} view active — overlays are hidden; choose Linear to restore the view.`;
-  });
+    updateProjectionNote(val);
+  }
+  byId("projection-mode").addEventListener("change", applyProjection);
+  // --- serializing an active projection ------------------------------------------------------
+  // The picker's value rides in SHARE_IDS, but two pieces of plot state behind it cannot be reached
+  // by a control id: the projection ANCHOR (projCentre) and the LINEAR view saved for the trip back.
+  // Without them a restored projection would re-anchor at whatever the centre input happens to hold
+  // — which, after a pan inside the projected frame, is a projected-space coordinate, so the
+  // recipient would see a different picture. They travel as `_proj`, like `_z0` / `_grad`.
+  type ProjPlane = { a: Vec2; c: Vec2; z: number };
+  const projPlanes = (): [string, PlotView][] => [
+    ["p", parameterView],
+    ["d", dynamicalView],
+  ];
+  /** `_proj` for the current projection, or undefined when both planes are linear. */
+  function readProjectionState(): string | undefined {
+    const out: Record<string, ProjPlane> = {};
+    for (const [key, view] of projPlanes()) {
+      if (view.plot.projection === 0) continue;
+      const saved = savedProjViews.get(view) ?? { center: view.plot.center, zoom: view.plot.zoom };
+      out[key] = { a: view.plot.projCentre, c: saved.center, z: saved.zoom };
+    }
+    return Object.keys(out).length > 0 ? JSON.stringify(out) : undefined;
+  }
+  /**
+   * Restore the projection as STATE rather than as a transition: set each plane's mode + anchor and
+   * re-seed the saved linear view, leaving centre/zoom alone (the caller has just set those from the
+   * restored inputs, and under a projection they are already in projected space). Called for every
+   * full-state apply — with `_proj` absent it still carries the picker's value onto the plots, so an
+   * old link that predates `_proj`, or one that drops it, cannot leave the picker disagreeing with
+   * the picture; the anchor then falls back to the restored centre, which is exact unless the sender
+   * had panned inside the projected frame.
+   */
+  function setProjectionState(raw: unknown): void {
+    const val = byId<HTMLSelectElement>("projection-mode").value;
+    const mode = PROJECTIONS[val as ProjectionMode] ?? 0;
+    let planes: Record<string, Partial<ProjPlane>> = {};
+    if (typeof raw === "string") {
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
+          planes = parsed as Record<string, Partial<ProjPlane>>;
+      } catch {
+        /* ignore a malformed _proj from a corrupt link — fall back to the current view */
+      }
+    }
+    // A hostile / corrupt link must not feed NaN into the projection uniform (→ a blank plot).
+    const vec = (v: unknown, fallback: Vec2): Vec2 =>
+      Array.isArray(v) && v.length === 2 && Number.isFinite(v[0]) && Number.isFinite(v[1])
+        ? [Number(v[0]), Number(v[1])]
+        : fallback;
+    for (const [key, view] of projPlanes()) {
+      const plot = view.plot;
+      if (mode === 0) {
+        plot.setProjection(0, [0, 0]);
+        savedProjViews.delete(view);
+      } else {
+        const p = planes[key] ?? {};
+        plot.setProjection(mode, vec(p.a, plot.center));
+        const z = typeof p.z === "number" && Number.isFinite(p.z) && p.z > 0 ? p.z : plot.zoom;
+        savedProjViews.set(view, { center: vec(p.c, plot.center), zoom: z });
+      }
+      view.refreshOverlay();
+    }
+    updateProjectionNote(val);
+  }
   byId("herman-detect").addEventListener("click", () => {
     // Detect a Herman ring on the dynamical plane around z = 0 (the hole of the standard preset),
     // using the pure detector. Reports rotation number + modulus and draws the invariant circles.
@@ -4073,11 +4151,23 @@ function init(): void {
     applyPerturbation();
     byId<HTMLInputElement>("param-a").value = "1";
     applyParamA();
-    // Projection & Riemann-sphere view (wired via inline change handlers, no apply* fn) — restore the
-    // flat/linear defaults so a reset also clears an active projection or 3D sphere, not just coloring.
-    const projSel = byId<HTMLSelectElement>("projection-mode");
-    projSel.value = "linear";
-    projSel.dispatchEvent(new Event("change"));
+    // Yoccoz puzzle + pinched-disk laminations — instruments drawn ON TOP of the plots, so leaving
+    // them on would keep puzzle rays and a lamination disk over the freshly reset default view.
+    for (const id of ["yoccoz-toggle", "parapuzzle-toggle", "yoccoz-critical"] as const) {
+      byId<HTMLInputElement>(id).checked = false;
+    }
+    byId<HTMLInputElement>("yoccoz-depth").value = "2"; // the markup defaults
+    updateYoccoz();
+    for (const id of ["lamination-toggle", "qml-toggle"] as const) {
+      byId<HTMLInputElement>(id).checked = false;
+    }
+    byId<HTMLInputElement>("lamination-detail").value = "6";
+    updateLamination();
+    // Projection & Riemann-sphere view — restore the flat/linear defaults so a reset also clears an
+    // active projection or 3D sphere, not just coloring. The projection uses its interactive
+    // transition, which puts each plot back at the linear view it saved on entry.
+    byId<HTMLSelectElement>("projection-mode").value = "linear";
+    applyProjection();
     for (const id of ["sphere-param", "sphere-dyn"]) {
       const cb = byId<HTMLInputElement>(id);
       cb.checked = false;
