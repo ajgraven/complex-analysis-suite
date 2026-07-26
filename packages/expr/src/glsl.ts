@@ -11,7 +11,7 @@
  */
 
 import type { Node } from "./ast";
-import { ExprError, isFreeParameter } from "./ast";
+import { ExprError, referencesVar } from "./ast";
 
 /** Function-call names for unary complex builtins → GLSL stdlib names. */
 const UNARY_GLSL: Record<string, string> = {
@@ -83,12 +83,21 @@ function emitBool(node: Node): string {
     case "compare": {
       const a = emitComplex(node.left);
       const b = emitComplex(node.right);
-      // Compare real AND imaginary parts via the limb accessors. A raw `cvec == cvec`
-      // is correct in single precision (vec2) but in df64 (vec4) it also compares the
-      // error limbs, so equal values with different hi/lo splits would test unequal —
-      // diverging from the JS evaluator (which compares re/im only).
-      if (node.op === "==")
-        return `(cre1(${a}) == cre1(${b}) && cre1(cim(${a})) == cre1(cim(${b})))`;
+      // Equality compares the WHOLE value. GLSL `==` on vectors is a component-wise test yielding a
+      // scalar bool, so this is one expression for both builds: vec2 (re, im) in single precision and
+      // vec4 (re.hi, re.lo, im.hi, im.lo) in df64. It matches the JS evaluator, which tests
+      // `a[0] === b[0] && a[1] === b[1]`.
+      //
+      // This used to route through `cre1`, which returns only the HI limb in the df64 build — so the
+      // emitted test was `a.x == b.x && a.z == b.z`, an fp32-width comparison of a ~47-bit value,
+      // exactly in the regime the df64 program exists for. The rationale given for that (equal values
+      // could carry different hi/lo splits) does not apply here: every df64 value in the pipeline is
+      // normalized — constants arrive via `vec_(re, im)` = `vec4(re, 0, im, 0)`, and df_add / df_mul /
+      // df_div / df_sqrt all return through `quickTwoSum` — so the representation is canonical and a
+      // full-vector `==` is both exact and full-precision. (expr-glsl-02)
+      if (node.op === "==") return `(${a} == ${b})`;
+      // Ordering compares real parts only, matching the JS evaluator (`l[0] > r[0]`). `cre1` is the
+      // right accessor here: `<` / `>` on a df64 pair is decided by the hi limb except within one ulp.
       return `(cre1(${a}) ${node.op} cre1(${b}))`;
     }
     case "if":
@@ -210,9 +219,15 @@ function emitBody(ast: Node, emitFinal: (n: Node) => string): string {
   // Seed with the function parameters so `z = z^2 + c; z` (a natural iteration form) emits an ASSIGNMENT to
   // the existing parameter `z`, not `cvec z = …` which would REDECLARE the parameter → GLSL redefinition
   // error (the JS backend has no such notion, so the GPU shader used to die where the CPU overlay worked).
-  // `a` is deliberately NOT seeded: when used it is a read-only alias (see paramAlias); when assigned it is
-  // a genuine new local that must be declared.
+  //
+  // `a` is seeded on exactly the same condition that makes {@link paramAlias} emit its declaration — that
+  // it is READ anywhere — so the two stay in lockstep. Keying on "read but never assigned" instead left a
+  // hole at read-before-assign: `a = a*2; z^2 + a` got no alias AND no seed, so it emitted the
+  // self-referential `cvec a = cmul(a, vec_(2.0, 0.0));`, which GLSL rejects (declaration before use),
+  // while the JS backend compiled and ran. The GPU then kept rendering the PREVIOUS map under the new
+  // caption. (expr-glsl-01)
   const declared = new Set<string>(["z", "c"]);
+  if (referencesVar(ast, "a")) declared.add("a");
   for (let i = 0; i < stmts.length; i++) {
     const stmt = stmts[i];
     const isLast = i === stmts.length - 1;
@@ -237,13 +252,21 @@ function emitBody(ast: Node, emitFinal: (n: Node) => string): string {
   return lines.join("\n");
 }
 
-/** Live-parameter alias: bind `a` to the `uA` uniform when it's a free variable (used
- *  but not assigned as a local of the same name). Empty otherwise, so locals named `a`
- *  keep working. Built via `vec_(uA.x, uA.y)` (the precision-agnostic complex constructor)
- *  rather than `= uA`, so it is valid in the df64 build where `cvec` is a `vec4` — a raw
- *  `cvec a = uA;` would be a vec4=vec2 type error that silently fails df64 compilation. */
+/** Live-parameter alias: declare `a` from the `uA` uniform whenever the program READS it. Empty
+ *  otherwise, so `a = z^2; z + c` (a local that is written but never read back) still declares its own
+ *  `cvec a` and programs that never mention `a` cost nothing.
+ *
+ *  Emitting on "read" rather than on "read and never assigned" is what matches the JS backend, where
+ *  `a` enters scope holding the uniform and an assignment simply overwrites it — so `a = a*2; z^2 + a`
+ *  reads 2·uA on both backends. Under the old condition that program got no declaration at all and the
+ *  shader failed to compile (expr-glsl-01); `emitBody` seeds `declared` on the same condition, so the
+ *  assignment that follows is emitted as `a = …` rather than a redeclaration.
+ *
+ *  Built via `vec_(uA.x, uA.y)` (the precision-agnostic complex constructor) rather than `= uA`, so it
+ *  is valid in the df64 build where `cvec` is a `vec4` — a raw `cvec a = uA;` would be a vec4=vec2 type
+ *  error that silently fails df64 compilation. */
 function paramAlias(ast: Node): string {
-  return isFreeParameter(ast, "a") ? "  cvec a = vec_(uA.x, uA.y);\n" : "";
+  return referencesVar(ast, "a") ? "  cvec a = vec_(uA.x, uA.y);\n" : "";
 }
 
 /** GLSL for `cvec <name>(cvec z, cvec c) { … }` (default name `fFn`). The name param
