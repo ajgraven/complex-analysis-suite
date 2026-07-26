@@ -92,9 +92,139 @@ Twelve scopes, each find→verify:
 
 ---
 
+## What happened to the sweep (and what that means for confidence)
+
+The 12-scope find→verify workflow **hit a usage limit mid-run**. Outcome:
+
+- **11 of 12 finder scopes completed** and returned **124 findings** (1 critical, 25 high,
+  59 medium, 39 low). All are recovered verbatim into
+  [`RAW_FINDINGS_2026-07.md`](RAW_FINDINGS_2026-07.md) and committed, so they cannot be lost again.
+- **The `qd-algebra` finder did not complete.** That was the deliberately light re-pass over the
+  most heavily reviewed code in the repo, so it is the cheapest scope to have lost.
+- **The adversarial-verifier stage was almost entirely killed** — only `ux-a11y` was
+  machine-verified. Verification therefore falls to the reviewer, by hand.
+
+**This matters for how the report should be read.** The verifier existed to kill plausible-but-wrong
+findings, and its absence is the single largest caveat here. Consequently every finding below
+carries an explicit status:
+
+| Status | Meaning |
+| --- | --- |
+| **VERIFIED** | The reviewer opened the cited code and confirmed the defect first-hand. |
+| **VERIFIED — corrected** | Real, but narrower or less severe than the finder claimed; severity restated. |
+| **REFUTED** | Checked and *not* a defect. Recorded so it is not re-investigated. |
+| `UNVERIFIED` | Cited evidence looks sound but the reviewer has not personally confirmed it. **Treat as a lead, not a fact.** |
+
+---
+
 ## Findings log
 
-_(populated as scopes report in; each entry records the adversarial verdict)_
+### Reviewer-verified findings
+
+#### V-1 — `cd-dk-01` — Durand–Kerner returns `converged: true` with all-NaN roots · **CRITICAL** · **VERIFIED** · ✅ FIXED
+
+The single most serious finding, and squarely in the class this project calls the one unacceptable
+bug: a non-answer labelled certified.
+
+[durand-kerner.ts:84](packages/core/src/durand-kerner.ts:84) defaults `bailOnNonFinite` to `false`.
+When a delta becomes NaN (e.g. `evalMonic` overflows to `Infinity` and `Infinity/Infinity → NaN`),
+the accumulator
+
+```ts
+if (dm > maxDelta) maxDelta = dm;   // NaN > 0  ===  false
+```
+
+never fires, because **every** NaN comparison is false. `maxDelta` stays `0`, the sweep's
+`maxDelta < tol` test passes, and the kernel returns `{ converged: true, roots: [NaN, NaN, …] }`.
+
+**Exposure is wide.** `bailOnNonFinite: true` is set at exactly **one of eight** call sites
+([critical.ts:172](apps/complex-dynamics/src/render/critical.ts:172)). The other seven —
+`dynatomic.ts:124`, `matingEngine.ts`, `correspondence.ts:58`, `deltoid.ts:44`,
+`deltoidExact.ts:79`, QD's `direct-common.mjs:73` and `faber-analysis.mjs:57` — all run on the
+default and consume `converged` as a trustworthy flag.
+
+**The codebase had already fixed this bug's sibling.**
+[durand-kerner.test.ts:142](packages/core/test/durand-kerner.test.ts:142) guards the identical
+"`maxDelta` stays 0 → false convergence" trap on the *coincident-root* path. The non-finite path
+was simply missed.
+
+**Fix applied** (`60d8772`): `if (!(dm <= maxDelta)) maxDelta = dm;` — NaN now reaches `maxDelta`,
+and `NaN < tol` is false, so convergence is correctly withheld. Guarded by a new test **proven to
+fail against the old code** (old: `maxDelta = 0 → converged = true`; new: `maxDelta = NaN →
+converged = false`).
+
+#### V-2 — `cd-alias-03` — `addMulInto` violates its own documented aliasing contract · HIGH → **MEDIUM** · **VERIFIED — corrected** · ✅ FIXED
+
+[complex.ts:66](packages/core/src/complex.ts:66) states, for the whole in-place family:
+*"SAFE TO ALIAS: `out` may be the same object as `a` or `b`."* `mulInto` honours it with a temp;
+`addMulInto` did not — it wrote `out.re`, then read `a.re` (the same field, now updated) to form the
+imaginary part. Proven: aliased `acc += acc*i` on `1+i` returned `0+1i` instead of `0+2i`.
+
+**Severity corrected down from HIGH.** `addMulInto` has **no production call site** — the only
+reference in the entire repo is the package's own test. This is a latent trap in a shared API, not
+a live bug. (It is also the vector by which finding `cd-dead-10` — the unused in-place exports —
+went unnoticed.)
+
+**Fix applied** (`60d8772`): both products are now formed before either component of `out` is
+written. Guarded by a test proven to fail against the old code.
+
+#### V-3 — `bt-lint-mjs-01` — 97 of QD's 98 production `.mjs` files have **zero** lint rules · **HIGH** · **VERIFIED — corrected**
+
+Confirmed empirically rather than by reading, via `eslint --print-config`:
+
+| File | Active rules |
+| --- | ---: |
+| `app/ui.mjs` | **0** |
+| `app/sym-core.mjs` | **0** |
+| `app/main.mjs` | **0** |
+| `app/qd.mjs` | 1 |
+| `app/test/harness.js` | 14 |
+
+Every `files:` glob in [eslint.config.mjs](apps/quadrature-domains/eslint.config.mjs) targets
+`app/**/*.js` or a named `.js` file; the sole `.mjs` glob is `app/qd.mjs`. The correctness rules the
+config deliberately enumerates — `no-undef`, `no-unused-vars`, `no-unreachable`, `use-isnan`,
+`valid-typeof`, `no-dupe-keys` — therefore apply only to the legacy `.js` files, which after the
+ESM migration are mostly tests.
+
+**Root cause is visible in the config itself.** The comment at
+[eslint.config.mjs:100](apps/quadrature-domains/eslint.config.mjs:100) reads *"classic `<script>`
+tags; ESM lives in qd.mjs"* — true before the Phase-2 ESM migration. The migration moved the whole
+app to `.mjs`; the lint config never followed.
+
+**Severity corrected: the hole is real, but it is not hiding live bugs.** Applying QD's own rule
+set to the `.mjs` tree surfaces **306 findings across 57 of 126 files**, and the breakdown is
+reassuring:
+
+| Rule | Count | Assessment |
+| --- | ---: | --- |
+| `no-unused-vars` | 294 | dead bindings — cleanup, low risk |
+| `no-undef` | 12 | **all false positives of the probe** — every one is `katex` or `math`, which the real config declares as globals at [eslint.config.mjs:51-53](apps/quadrature-domains/eslint.config.mjs:51) |
+
+Zero parse errors, so the config change is mechanically viable. This makes closing the hole a
+**schedulable cleanup, not an emergency** — but it should be closed, because right now the largest
+body of source in the repo has no static analysis at all.
+
+#### V-4 — `qd-schwarz-skip-01` — test blocks convert solver failure into a silent PASS · **HIGH** · **VERIFIED**
+
+[schwarz.test.js:1149-1152](apps/quadrature-domains/app/test/schwarz.test.js:1149) wraps its
+assertions in `if (r.success) { … }`:
+
+```js
+const r = solveInverseQD(hData, { lqd: true, unbounded: true, c: 1 });
+if (r.success) {
+  …
+  ok('Schwarz/unboundedLQD-polyPart h=1 c=1: builder + family tag', …);
+  ok('Schwarz/unboundedLQD-polyPart h=1 c=1: phi.lqdBeta carried through', …);
+```
+
+If the solver regresses and `r.success` becomes false, **every assertion inside is skipped and the
+suite reports success**. The block's own comment says it exists to guard the HANDOFF #26 regression
+(where the Schwarz adapter silently dropped `phi.lqdBeta`) — so the guard disarms itself in exactly
+the scenario it was written to catch.
+
+Fix: assert `r.success` first, then unconditionally run the body.
+
+<!-- more verified findings appended here as adjudication proceeds -->
 
 ### Scope 0 — direct observations (reviewer's own, pre-sweep)
 
