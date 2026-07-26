@@ -1,9 +1,92 @@
 # Whole-codebase review — 2026-07-25
 
-> **Status: IN PROGRESS.** This file is the running log of a comprehensive review of the whole
-> monorepo for errors, redundancies, inefficiencies, and optimization/extension opportunities.
-> It is written incrementally so that findings survive a context loss. The prioritized summary
-> lives at the end, in [§ Prioritized report](#prioritized-report), and is filled in last.
+> **Status: remediation in progress.** This file is the running log of a comprehensive review of the
+> whole monorepo. It is written incrementally so findings survive a context loss. The prioritized
+> summary is in [§ Prioritized report](#prioritized-report); the raw corpus with per-finding verdicts
+> is in [`RAW_FINDINGS_2026-07.md`](RAW_FINDINGS_2026-07.md).
+
+## ▶ RESUME HERE
+
+Everything a fresh session needs to continue. **Next up: Batch A-2** (listed below).
+
+### Where the work stands
+
+| | Count | Notes |
+| --- | --- | --- |
+| Findings surviving verification | **112** | 84 confirmed + 28 overstated; 4 refuted and excluded |
+| **HIGH** | **12 of 12 FIXED** | tier complete |
+| Medium / low | 6 of 99 fixed | Batch A done |
+| Remaining | **93** | 37 medium, 56 low |
+
+### Open PRs — all blocked on ONE external thing
+
+**The GitHub Actions spending limit is exhausted.** No PR can obtain a green check, and the live
+Pages site still serves the pre-merge build from before #154–#156. Nothing needs redoing; raising
+the limit in *Settings → Billing & plans* unblocks the whole queue. Merge order is free — every
+branch is cut from `master` with disjoint files.
+
+| PR | Branch | Contents |
+| --- | --- | --- |
+| [#157](https://github.com/ajgraven/complex-analysis-suite/pull/157) | `fix/ci-cache-and-double-fire` | pnpm store cache + push/PR double-fire + master gate duplication |
+| [#158](https://github.com/ajgraven/complex-analysis-suite/pull/158) | `fix/three-trivial-highs` | 3 trivial HIGHs + the `z^40000` perf fix |
+| [#159](https://github.com/ajgraven/complex-analysis-suite/pull/159) | `fix/tier-a-batch-2` | the 6 small-effort HIGHs |
+| [#160](https://github.com/ajgraven/complex-analysis-suite/pull/160) | `fix/qd-lint-mjs` | the QD lint hole (last HIGH) |
+| [#161](https://github.com/ajgraven/complex-analysis-suite/pull/161) | `fix/batch-a-honest-labeling` | Batch A (this document's latest updates ride here) |
+
+Already merged: **#154** (`@cas/core` NaN-convergence + aliasing), **#155** (7 honest-labeling
+defects), **#156** (this review record).
+
+### ▶ Batch A-2 — start here
+
+Five claim-accuracy items deliberately deferred from Batch A because they touch exact-arithmetic
+semantics and warranted verify-first treatment rather than a hurried pass:
+
+| id | Where | The claim vs the code |
+| --- | --- | --- |
+| `cd-res-11` | `packages/exact/src/resultant.ts:101` | `resultant` returns **1** for a zero-polynomial argument, contradicting its own "Res = 0 ⟺ shared root" contract. |
+| `cd-disc-06` | `packages/exact/src/resultant.ts:129` | `discriminant`'s `(−1)^{d(d−1)/2}` sign line is **dead** — `primitivePoly` overwrites the sign, so the return value is not the discriminant the docstring promises. |
+| `cd-disc-12` | `packages/exact/src/resultant.ts:127` | `discriminant` throws an internal-sounding "division by zero polynomial" on an untrimmed coefficient list. |
+| `cd-render-10` | `apps/complex-dynamics/src/render/bla.ts:182` | `traverseBLA` claims to be the canonical mirror of the GPU kernel but hard-codes the degree-2 step and a bailout of 4. |
+| `qd-dc-imagedata-01` | `apps/quadrature-domains/app/schwarz/schwarz-paint.mjs:672` | The comment says the ImageData is cached; it allocates a fresh one and re-copies on every paint. |
+
+`qd-exact-count-guard-11` (`vitest/algebra-verdict-labeling.test.ts:114` — the `rigor:'exact'` guard
+counts call sites instead of identifying them, so the exemption can migrate silently) belongs to the
+test-integrity batch (F) rather than here.
+
+### Remaining batch plan (agreed: by theme, most-valuable first)
+
+| Batch | Theme | ~Items |
+| --- | --- | ---: |
+| **A-2** | claim accuracy, exact-arithmetic contracts | 5 |
+| **B** | numerical robustness (`Complex.div` NaN >1.3e154, `cpow`, `Frac.toNumber`, GLSL emit) | ~10 |
+| **C** | CD state fidelity (`SHARE_IDS` gaps, Place deletes annotations, mating panel c/f mismatch) | ~6 |
+| **D** | worker / resource lifecycle + memory | ~6 |
+| **E** | performance | ~14 |
+| **F** | test integrity — *fix in place, no new infra* | ~14 |
+| **G** | duplication / dead code | ~15 |
+| **H** | accessibility / UX | ~13 |
+| **I** | build / config leftovers | ~5 |
+
+### Standing decisions for this remediation
+
+- **Autonomy:** decide and proceed; surface every judgement call in the PR. Ask only when a change
+  alters user-visible behaviour, removes a capability, or the finding turns out to be wrong.
+- **Test items (F):** fix in place, **no new CI infrastructure**. Where a real fix needs a GPU
+  harness, document precisely what the test does not prove rather than fake it.
+- **Delivery:** one PR per batch, one commit per finding.
+- **Verify before fixing.** This is not ceremony: of the twelve HIGHs, several needed correction, and
+  in Batch A alone `conjFR` and `MM_H` turned out to be *intentional* despite looking dead. Expect a
+  similar rate below and check each finding against the source before acting.
+
+### Working notes that cost time to learn
+
+- The gate is `corepack pnpm@9.15.9 run lint && … typecheck && … test && … build`. **Run it
+  backgrounded** — it exceeds the 2-minute foreground timeout. Never pipe it through `tail`.
+- **No backticks in `git commit -m` strings** — bash executes them. Use `-F <file>`.
+- Vite derives `publicDir` from `root`; QD sets `root: app/`, so package-level `public/` needs an
+  explicit `publicDir`. A build that silently copies nothing is the failure mode.
+- `main.ts` (complex-dynamics) exports nothing, so its internals are unreachable from tests.
+- Verifier notes for every finding live in `RAW_FINDINGS_2026-07.md` next to the original evidence.
 
 ## Commission
 
@@ -475,6 +558,34 @@ the suite by ~17%. Updated to the measured number.
 | --- | --- | --- |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | Durand–Kerner withholds convergence on non-finite iterates (V-1) | new test, proven to fail against the old code |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | `addMulInto` honours its aliasing contract (V-2) | new test, proven to fail against the old code |
+
+### Pass 4 — Batch A: claims that contradict the code ([#161](https://github.com/ajgraven/complex-analysis-suite/pull/161))
+
+| Finding | Change |
+| --- | --- |
+| `qd-cmax-ceiling-01` | The c\* growth loop's two exits (ceiling reached vs **solve budget exhausted**) returned one reason, and the UI turned it into "valid up to c ≤ ceiling" with an `ok` status over unprobed c. Budget exhaustion is reachable — near the cusp the step is ×1.06, needing ~95 growth steps against ~78 remaining solves. Both exits now distinguished; both messages phrased against `cLowValid`, the largest c actually tested (which also fixes the ceiling exit's one-step-factor over-claim). |
+| `corr-sigma-tiling-label-04` | `escaped` and `fundamental` share one ramp and the caption named only the tiling set — but `escaped` is the ∞-basin, and those orbits never leave Ω (Ω = ℂ\K contains a neighbourhood of ∞). ~31% of the coloured area was attributed to the complementary object. Caption now names both and quantifies the split; the shared ramp is kept deliberately. |
+| `corr-mating-orbit-label-05` | "(same dynamics on all three)" — but on \|z\|=1, F(z) = conj(φ(z)), so σ fixes the deltoid curve **pointwise** (2.3e-14 across 12 angles). The *angle* is synced; the dynamics is not. |
+| `cd-render-09` | `smallCDimension` documented "Exact", contradicting its own implementation comment ("exact only at c = 0"). It is the leading term of an O(\|c\|³) asymptotic. |
+| `cd-doc-09` | `@cas/core` README claimed "error-free splits for accuracy" over a plain convolution — and that plainness is *deliberate*, since bit-identical accumulation order is what let it be shared. |
+| `corr-param-gpu-claim-07` | `paramGpu` claimed pixel-for-pixel CPU cross-validation; ~0.22% differ (fp32 vs float64 shifts the escape count near class boundaries). |
+| `corr-readme-stale-10` | README listed four shared packages (omitting `@cas/exact`) and repeated the pixel-consistency overstatement; the agreement test is now described as exercising a TypeScript transcription, not the compiled GLSL. |
+
+### Pass 3 — the remaining Tier A findings ([#158](https://github.com/ajgraven/complex-analysis-suite/pull/158), [#159](https://github.com/ajgraven/complex-analysis-suite/pull/159), [#160](https://github.com/ajgraven/complex-analysis-suite/pull/160))
+
+All 12 HIGH findings are now fixed. Beyond the code changes, three corrections to the *findings
+themselves* are worth carrying forward:
+
+- **`qd-schwarz-skip-01` is seven blocks, not twelve.** Twelve `if (r.success)` blocks exist and none
+  has an `else`, but five are *preceded* by an `ok(…, r.success, …)` assertion — a correct pattern.
+  Check for the preceding assertion, not a trailing `else`.
+- **`expr-rational-01` was two stacked defects.** `pPow` was O(k²) (~7.4 min at k=40 000) *and* its
+  dominant caller builds the whole polynomial to read two degrees on every view change. Fixed at the
+  algorithm (zero-skipping multiply + binary exponentiation → 14 ms); a degree-only fast path for the
+  caller was considered and **rejected as unsound**, since leading coefficients cancel under `+`/`−`.
+- **`bt-lint-mjs-01`'s backlog was 22, not 294.** The 294 figure came from a probe using a stricter
+  `no-unused-vars` config than QD's own calibrated rule. Two of the 22 (`conjFR`, `MM_H`) were
+  *intentional* and are kept with the reason recorded.
 
 ### Pass 2 — the honest-labeling sweep (Tier 1, step 1)
 
