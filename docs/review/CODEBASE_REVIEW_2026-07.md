@@ -7,7 +7,9 @@
 
 ## ▶ RESUME HERE
 
-Everything a fresh session needs to continue. **Next up: Batch E** — performance.
+Everything a fresh session needs to continue. **Batch E is IN PROGRESS — 6 of its 15 findings are
+closed on `fix/batch-e-performance`.** Resume from the "remaining" list in
+[Pass 9](#pass-9--batch-e-performance-in-progress--6-of-15-166) and the Batch E table below.
 
 ### Where the work stands
 
@@ -15,8 +17,8 @@ Everything a fresh session needs to continue. **Next up: Batch E** — performan
 | --- | --- | --- |
 | Findings surviving verification | **112** | 84 confirmed + 28 overstated; 4 refuted and excluded |
 | **HIGH** | **12 of 12 FIXED** | tier complete |
-| Medium / low | 32 of 99 fixed | Batches A, A-2, B, C and D done |
-| Remaining | **67** | 29 medium, 38 low |
+| Medium / low | 38 of 99 fixed | Batches A, A-2, B, C, D done; E 6 of 15 |
+| Remaining | **61** | 24 medium, 37 low |
 
 Batch A-2 also closed **three defects it discovered along the way** that were not in the original 124
 — see [Pass 5](#pass-5--batch-a-2-exact-arithmetic-contracts-and-the-bla-reference-162). Expect this:
@@ -40,6 +42,7 @@ branch is cut from `master` with disjoint files.
 | [#163](https://github.com/ajgraven/complex-analysis-suite/pull/163) | `fix/batch-b-numerical-robustness` | Batch B — numerical robustness in the shared packages |
 | **#164** *(to open)* | `fix/batch-c-state-fidelity` | Batch C — CD state fidelity |
 | **#165** *(to open)* | `fix/batch-d-lifecycle` | Batch D — worker / resource lifecycle |
+| **#166** *(to open)* | `fix/batch-e-performance` | Batch E — performance (partial: 6 of 15) |
 
 Already merged: **#154** (`@cas/core` NaN-convergence + aliasing), **#155** (7 honest-labeling
 defects), **#156** (this review record).
@@ -54,10 +57,11 @@ defects), **#156** (this review record).
 > ```
 > git push -u origin fix/batch-c-state-fidelity
 > git push -u origin fix/batch-d-lifecycle
+> git push -u origin fix/batch-e-performance
 > git push origin fix/batch-a-honest-labeling
 > ```
 >
-> …then open #164 and #165.
+> …then open #164, #165 and #166.
 
 ### Batches A-2, B and C — DONE
 
@@ -81,17 +85,26 @@ ray-cast per pixel, #159), and `bt-ci-nocache-08` (no pnpm store cache, #157).
 | `cd-render-05` | `apps/complex-dynamics/src/render/glPlot.ts:1300` | medium / medium | Perturbation rebuilds the whole double-double reference orbit *and* BLA tree on every draft frame of a deep-zoom pan/zoom. |
 | `cd-overlay-01` | `apps/complex-dynamics/src/render/plotView.ts:114` | medium / small | The whole 2D overlay is redrawn from `afterRender` on every progressive and temporal-accumulation frame, even when none of its inputs changed. |
 | `cd-invjulia-01` | `apps/complex-dynamics/src/render/overlay.ts:481` | medium / small | The c-keyed overlay caches (inverse-Julia cloud, Siegel curves, portrait rays) miss on every frame of a coupled parameter drag. |
-| `cd-render-08` | `apps/complex-dynamics/src/render/angleOfPoint.ts:113` | medium / small | "Find angles" re-traces every enumerated external ray from scratch on each click — a pure function with no memoization. |
-| `cd-shell-09` | `apps/complex-dynamics/src/main.ts:3923` | medium / small | The Laurent boundary-radius slider re-derives all dynamical exterior coefficients on every input event, though only `r` changed. |
-| `cd-perf-04` | `packages/exact/src/gaussian.ts:130` | medium / trivial | `Gauss.mul` always runs the 4-multiplication complex form — 4.1× the real-only cost, and CD's entire exact tower is real. |
-| `corr-density-recolour-03` | `apps/correspondences/src/main.ts:191` | medium / small | The correspondence render re-runs a full-frame point-in-polygon colorize on every progressive tick — ~4.2 s of ~4.8 s redundant. |
-| `corr-orbittree-01` | `apps/correspondences/src/orbitTree.ts:51` | medium / small | `expandOrbitTree` allocates two wrappers and runs a comparator sort per node for a 2-element branch list; `orbitPoints` copies the whole node array. |
+| ~~`cd-render-08`~~ **done** | `apps/complex-dynamics/src/render/angleOfPoint.ts:113` | medium / small | "Find angles" re-traces every enumerated external ray from scratch on each click — a pure function with no memoization. |
+| ~~`cd-shell-09`~~ **done** | `apps/complex-dynamics/src/main.ts:3923` | medium / small | The Laurent boundary-radius slider re-derives all dynamical exterior coefficients on every input event, though only `r` changed. |
+| ~~`cd-perf-04`~~ **done** | `packages/exact/src/gaussian.ts:130` | medium / trivial | `Gauss.mul` always runs the 4-multiplication complex form — 4.1× the real-only cost, and CD's entire exact tower is real. |
+| ⛔ `corr-density-recolour-03` *(superseded by #159 — do not fix)* | `apps/correspondences/src/main.ts:191` | medium / small | The correspondence render re-runs a full-frame point-in-polygon colorize on every progressive tick — ~4.2 s of ~4.8 s redundant. |
+| ~~`corr-orbittree-01`~~ **done** | `apps/correspondences/src/orbitTree.ts:51` | medium / small | `expandOrbitTree` allocates two wrappers and runs a comparator sort per node for a 2-element branch list; `orbitPoints` copies the whole node array. |
 | `qd-accuracy-mainthread-01` | `apps/quadrature-domains/app/ui-solve.mjs:753` | medium / medium | The post-solve "Geometry & accuracy" pass runs two escalating ≥1500-node identity verifies plus a critical-point solve **on the main thread** after every solve. |
 | `qd-chooseholetestpoints-01` | `apps/quadrature-domains/app/solver.mjs:1272` | medium / medium | `chooseHoleTestPoints` is O(61 × N) per identity verify and re-runs at every escalation level, dominating unbounded-family verification. |
 | `qd-paramslice-hover-01` | `apps/quadrature-domains/app/param-slice/param-slice-ui.mjs:429` | medium / medium | Param-slice hover preview runs a full `solveInverseQD` synchronously on the main thread while the idle worker pool sits right there. |
-| `bt-precache-fonts-04` | `apps/quadrature-domains/vite.config.mjs:37` | medium / trivial | Both PWAs precache KaTeX `.ttf` *and* `.woff` — 798 KB of never-fetched font bytes per app, 1.6 MB across the deployed site. |
+| ~~`bt-precache-fonts-04`~~ **done** | `apps/quadrature-domains/vite.config.mjs:37` | medium / trivial | Both PWAs precache KaTeX `.ttf` *and* `.woff` — 798 KB of never-fetched font bytes per app, 1.6 MB across the deployed site. |
 | `corr-mating-blocking-06` | `apps/correspondences/src/mating/matingMain.ts:164` | low / small | `mating.html` blocks the main thread for ~0.8 s of unyielded σ evaluation before painting anything. |
-| `qd-fillcoarse-01` | `apps/quadrature-domains/app/schwarz/schwarz-render.mjs:255` | low / trivial | The in-process Schwarz pyramid runs `fillFromCoarseSamples` on the stride-1 pass — a full W·H no-op scan. |
+| ~~`qd-fillcoarse-01`~~ **done** | `apps/quadrature-domains/app/schwarz/schwarz-render.mjs:255` | low / trivial | The in-process Schwarz pyramid runs `fillFromCoarseSamples` on the stride-1 pass — a full W·H no-op scan. |
+
+
+**Batch E status: 6 of 15 closed** (struck through above), on `fix/batch-e-performance`. The nine
+rows still live are the eight below plus `corr-density-recolour-03`, which is superseded rather than
+open — see [Pass 9](#pass-9--batch-e-performance-in-progress--6-of-15-166) for why touching it would
+conflict with #159. Of the eight genuinely remaining, `cd-bla-01` + `cd-render-05` need a browser to
+measure (they are behind a WebGL context), and `qd-accuracy-mainthread-01` +
+`qd-paramslice-hover-01` are the two worker offloads — real async-semantics changes, confirmed
+in scope for this batch rather than split out.
 
 **Do `cd-bla-01` and `cd-render-05` together** — both are the deep-zoom rebuild path within five
 lines of each other in `glPlot.ts`, and they share a cache key.
@@ -646,6 +659,51 @@ the suite by ~17%. Updated to the measured number.
 | --- | --- | --- |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | Durand–Kerner withholds convergence on non-finite iterates (V-1) | new test, proven to fail against the old code |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | `addMulInto` honours its aliasing contract (V-2) | new test, proven to fail against the old code |
+
+### Pass 9 — Batch E: performance (IN PROGRESS — 6 of 15) ([#166](https://github.com/ajgraven/complex-analysis-suite/pull/166))
+
+Branch `fix/batch-e-performance`. Five commits so far. **Every one carries a measured before/after**,
+which is the batch's whole discipline — and measuring changed the verdict on three of the six.
+
+| id | measured |
+| --- | --- |
+| `cd-render-08` | "Find angles" re-traced every enumerated ray per click. **190.2 → 0.33 ms** (parameter plane), **78.8 → 0.31 ms** (dynamical) on repeat clicks; a new `c` correctly misses at 103 ms. Parameter landings are c-independent, so that memo keys on the search bounds alone. |
+| `corr-orbittree-01` | Per-node `{p, arg}` wrappers + a comparator sort on a **two**-element branch list, in the innermost loop of the density render (once per seed of a 64×64 grid). Full accumulate **187 → 137 ms (−27%)** at the shipped defaults. |
+| `bt-precache-fonts-04` | KaTeX ships each face as ttf + woff + woff2 behind one `@font-face` fallback; all three were precached. CD **1856.79 → 1058.95 KiB (−43%)**, QD **3659.00 → 2861.36 KiB (−22%)** — **1595 KiB** site-wide. All 19 woff2 still precached, all 40 ttf/woff still shipped. |
+| `cd-perf-04` | `Gauss.mul` ran the 4-multiply complex form on operands that are 100% real (instrumented: 15 133 of 15 133 calls in CD's n=3 tower). Micro 3.0–3.6× on integer operands; **keystroke path 12.76 → 9.19 ms (−28%)**. |
+| `cd-shell-09` | The Laurent radius slider re-derived the whole exterior map per `input` event: 0.3 ms monic, 0.8–1.2 ms general polynomial, **4.1–7.9 ms rational**. Memoized on every input the derivation reads. |
+| `qd-fillcoarse-01` | `fillFromCoarseSamples` on the stride-1 pass is a full W·H no-op. **0.49–2.13 ms, once per render, fallback path only — noise.** Landed as `refactor`, not `perf`. |
+
+**Three corrections, all from measuring rather than reading.**
+
+- `cd-perf-04` claims **~70 ms per keystroke**; it measures **12.8 ms** (its 823 ms n=4 figure was
+  already known unreachable — `MAX_MULT_N = 3`). Real, worth fixing, not a freeze.
+- `corr-orbittree-01`'s second half — that `orbitPoints` copying the node array matters — is
+  **REFUTED**: the extra copy measured *below noise*, coming out negative against a 2 ms baseline.
+- `qd-fillcoarse-01` is factually correct and its severity is not. Fixed anyway because the guard is
+  free and the function no longer claims work it cannot do, but labelled as clarity.
+
+**Two findings understated what was there.** The Laurent slider's rational path doesn't just
+recompute — `applyLaurent` only uses the result when `source === "polynomial"`, so those 4–8 ms per
+tick were computed and then *discarded*. And `corr-orbittree-01` reads like a 2 ms one-shot until you
+notice `orbitPoints` runs once per seed of a 64×64 grid.
+
+**⛔ `corr-density-recolour-03` is NOT fixed here, deliberately.** It targets `densityToImage` — the
+same function `corr-density-01` already fixed in **#159** (`847b709`, unmerged). Measured on master:
+**165.7 ms per chunk × 22 chunks = 3.6 s**, which matches the finding's "~4.2 s of ~4.8 s". #159's
+K-mask memo removes the point-in-polygon part; what remains (~1.4 s of colorize) is *inherent* to
+progressive rendering — the density changes every chunk, and the splat has no spatial locality, so
+the colorize cannot be restricted to a changed region. Editing it here would conflict with an
+unmerged PR for a much smaller remainder. **Record as substantially superseded; revisit only after
+#159 merges.**
+
+**Method, earned the hard way.** My first `cd-perf-04` A/B was a single unwarmed sample per side and
+reported **19.2 → 19.7 ms — the wrong sign**. The warmed median-of-9 gave 12.76 → 9.19. A one-shot
+before/after is not a measurement. Likewise my first micro-benchmark used *fractional* `Frac`
+operands and reported 1.82× for a case CD's tower never holds; on the integer-valued operands it
+actually contains it is 3.0–3.6×. Benchmark what the consumer has.
+
+Interim gate: **1849 tests / 196 files**, lint, typecheck, all four builds green.
 
 ### Pass 8 — Batch D: worker / resource lifecycle ([#165](https://github.com/ajgraven/complex-analysis-suite/pull/165))
 
