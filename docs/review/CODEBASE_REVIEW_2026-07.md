@@ -357,7 +357,46 @@ harness suite — are outside the one rule the root config exists to enforce. Th
 (no current violation), but the guard has a hole in exactly the file type the QD app uses for
 its headless tests. Adding `js` to the app glob costs nothing.
 
-#### 0-3 — CI runs the full gate two-to-four times per change · MEDIUM · efficiency
+#### 0-3 — CI runs the full gate two-to-four times per change · MEDIUM · efficiency · ✅ FIXED
+
+> **Resolved — all three parts.** (a) `ci.yml`'s `push` trigger narrowed from `["**"]` to `[master]`,
+> killing the push/PR double-fire — which normalizing the concurrency group could *not* have fixed,
+> since the two events describe genuinely different refs (a branch tip vs the merge commit).
+> (b) All three jobs now restore the pnpm content-addressable store from an `actions/cache` keyed on
+> `pnpm-lock.yaml`, with `restore-keys` so a dependency change refetches only what changed.
+> (c) The master-side duplication is collapsed: `ci.yml`'s `build` is skipped on a push
+> (`if: github.event_name != 'push'`) because `deploy-pages.yml` runs that identical gate before
+> publishing. `browser` still runs, since deploy-pages does not run it and it would otherwise be the
+> one signal a master push loses.
+>
+> Who gates what now — **exactly one full gate per change**:
+>
+> | Event | Runs |
+> | --- | --- |
+> | `pull_request` | `build` + `browser` — the merge-blocking signal, and the only route to master |
+> | push to `master` | `browser` only — `deploy-pages.yml` carries the full gate |
+> | push to a branch | nothing — open the PR to gate it |
+>
+> **Safe against branch protection, checked not assumed:** the protection API reports `build` and
+> `browser` as required contexts, but required checks gate PR *merges*, and on a `pull_request` event
+> `github.event_name` is `pull_request`, so `build` still runs and still reports.
+>
+> **The double-fire fix is confirmed empirically.** The branch carrying it produced **one** CI run
+> (`event=pull_request`); the branch immediately before it, under the old config, produced **two**
+> (`event=push` *and* `event=pull_request`). Same repo, same day, one variable.
+>
+> **The cache half is UNVERIFIED** — Actions is billing-blocked (below), so no run could exercise it.
+> Locally confirmed only that both files parse with the intended step order and that
+> `pnpm store path --silent` exits 0 printing one path.
+>
+> **This became urgent rather than merely wasteful:** the three review merges exhausted the
+> repository's GitHub Actions spending limit, and every post-merge run on `master` — `ci.yml` and
+> `deploy-pages.yml` alike — failed with *"The job was not started because recent account payments
+> have failed or your spending limit needs to be increased"*, without executing a single step. The
+> live Pages site consequently still serves the pre-merge build. Raising the limit and re-running
+> the latest `deploy-pages` workflow publishes it; nothing needs re-merging.
+>
+> The original finding, for the record:
 
 Verified by reading both workflows:
 
@@ -535,7 +574,7 @@ Items 2–5 are all small, localized edits. #2 and #3 should ship together — t
 | # | Finding | Measured | Status |
 | --- | --- | --- | --- |
 | 9 | **Both published apps ship one oversized eager chunk.** QD 1 326 KB (contains the entire ~15 k-line symbolic-algebra engine — `Buchberger`/`groebner` verified present in the bundle); CD 608 KB with **zero** dynamic imports. Both trip Vite's 500 KB warning; neither configures `manualChunks`. Correspondences, the one app with `rollupOptions`, is 76 KB total. | real `pnpm build` | VERIFIED |
-| 10 | **CI runs the full gate 3–4× per change** (push + PR triggers don't share a concurrency group; `deploy-pages.yml` re-runs it on master) and **no job caches the pnpm store**. | read both workflows | VERIFIED |
+| 10 | **CI runs the full gate 3–4× per change** (push + PR triggers don't share a concurrency group; `deploy-pages.yml` re-runs it on master) and **no job caches the pnpm store**. | read both workflows | ✅ **FIXED** — see below |
 
 ### Tier 4 — the remaining findings, now fully adjudicated
 
