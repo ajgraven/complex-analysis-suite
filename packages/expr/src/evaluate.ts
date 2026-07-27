@@ -9,7 +9,7 @@
 
 import type { Complex } from "./complex";
 import type { Node } from "./ast";
-import { ExprError } from "./ast";
+import { ExprError, nodeIsBool } from "./ast";
 import * as C from "./complexJs";
 
 export type Value = Complex | boolean;
@@ -177,22 +177,6 @@ interface Scope {
 }
 type CFn = (s: Scope, depth: number) => Complex;
 type BFn = (s: Scope, depth: number) => boolean;
-
-/** Is this node boolean-valued (vs complex-valued)? Mirrors the GLSL backend's split. */
-function nodeIsBool(node: Node): boolean {
-  switch (node.kind) {
-    case "bool":
-    case "not":
-    case "compare":
-      return true;
-    case "if":
-      return nodeIsBool(node.then) || nodeIsBool(node.otherwise);
-    case "seq":
-      return nodeIsBool(node.stmts[node.stmts.length - 1]);
-    default:
-      return false;
-  }
-}
 
 /** Compile a non-final seq statement: evaluated for its side effect (assignment) and value. */
 function compileStmt(node: Node, fRef: () => CFn): (s: Scope, depth: number) => void {

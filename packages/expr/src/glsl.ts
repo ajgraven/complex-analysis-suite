@@ -11,7 +11,7 @@
  */
 
 import type { Node } from "./ast";
-import { ExprError, isFreeParameter } from "./ast";
+import { ExprError, isFreeParameter, nodeIsBool } from "./ast";
 
 /** Function-call names for unary complex builtins → GLSL stdlib names. */
 const UNARY_GLSL: Record<string, string> = {
@@ -183,24 +183,6 @@ function emitCall(name: string, args: Node[]): string {
   const binary = BINARY_GLSL[name];
   if (binary) return `${binary}(${emitComplex(args[0])}, ${emitComplex(args[1])})`;
   throw new ExprError(`Unknown function '${name}'`, 0);
-}
-
-/** Whether a node is boolean-valued (vs complex). Mirrors evaluate.ts's nodeIsBool so both backends
- *  agree on which statements are boolean (a bool middle-statement must go through emitBool, not
- *  emitComplex, which throws on it). */
-function nodeIsBool(node: Node): boolean {
-  switch (node.kind) {
-    case "bool":
-    case "not":
-    case "compare":
-      return true;
-    case "if":
-      return nodeIsBool(node.then) || nodeIsBool(node.otherwise);
-    case "seq":
-      return nodeIsBool(node.stmts[node.stmts.length - 1]);
-    default:
-      return false;
-  }
 }
 
 /** Emit the body (local declarations + `return`) shared by `f` and `escape`. */
