@@ -17,7 +17,14 @@ export default defineConfig({
       registerType: "autoUpdate",
       injectRegister: "auto",
       workbox: {
-        globPatterns: ["**/*.{js,css,html,svg,ico,png,ttf,woff,woff2}"],
+        // woff2 only. KaTeX emits each face three times (ttf / woff / woff2) and its @font-face
+        // lists them as a progressive fallback, so a browser takes the FIRST it supports — and
+        // woff2 has been universally supported since ~2016, well before the WebGL2 this app
+        // requires. Precaching the other two downloaded 797 KiB per app on service-worker install
+        // that no browser capable of running it will ever request. They still SHIP in dist/, so the
+        // fallback chain is intact for anything exotic; they are simply not fetched up front.
+        // (bt-precache-fonts-04)
+        globPatterns: ["**/*.{js,css,html,svg,ico,png,woff2}"],
         // The WebGL engine + KaTeX make the main chunk large; precache it anyway.
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },

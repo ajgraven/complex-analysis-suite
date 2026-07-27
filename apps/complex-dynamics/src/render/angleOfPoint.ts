@@ -124,6 +124,38 @@ function landAll(
 }
 
 /**
+ * Memo for the two interactive entry points below, whose whole cost is `landAll` — tracing every
+ * enumerated external ray. The landings depend ONLY on the search bounds (and, on the dynamical
+ * plane, on `c`); `query`, `snapRadius` and `tol` reach nothing but the cheap `nearestCluster` snap.
+ * So clicking twice re-traced every ray to answer a different question about the same set of
+ * landings. Measured per click: **159 ms** for the parameter plane and **92 ms** for the dynamical
+ * plane at the shipped bounds — a visible freeze, repeated on every click. (cd-render-08)
+ *
+ * Single-entry, matching the interactive pattern (repeated clicks at one `c`) and the memo idiom
+ * already used elsewhere in this app. The cached array is never handed out — `nearestCluster` only
+ * reads it, and `collect` sorts a freshly filtered copy — so a caller cannot corrupt it.
+ */
+function memoLandAll(): (key: string, compute: () => Landed[]) => Landed[] {
+  let lastKey: string | null = null;
+  let lastVal: Landed[] = [];
+  return (key, compute) => {
+    if (key !== lastKey) {
+      lastVal = compute();
+      lastKey = key;
+    }
+    return lastVal;
+  };
+}
+const dynLandings = memoLandAll();
+const paramLandings = memoLandAll();
+
+/** Drop both memos. Exposed for tests; the app has no reason to call it. */
+export function _resetAngleLandingCache(): void {
+  dynLandings("", () => []);
+  paramLandings("", () => []);
+}
+
+/**
  * Snap `query` to the nearest landing among `all`, then return every angle co-landing there. This is
  * the interactive form — a hand-click never sits exactly on a low-period point, so we snap to the
  * closest one (within `snapRadius`) and report its full valence, rather than requiring an exact hit.
@@ -198,13 +230,17 @@ export function parameterAnglesOfPoint(target: Vec2, opts: AngleSearchOpts = {})
  * landing on ∂K_c and report the angles co-landing there, plus the snapped point.
  */
 export function nearestDynamicalAngles(query: Vec2, c: Vec2, opts: NearestOpts = {}): NearestAngles {
-  const all = landAll(
-    (p, q) => {
-      const l = dynamicalLanding(p, q, c);
-      return l ? [l.point[0], l.point[1]] : null;
-    },
-    opts.maxPeriod ?? DEFAULT_MAX_PERIOD,
-    opts.maxPreperiod ?? DEFAULT_MAX_PREPERIOD,
+  const maxPeriod = opts.maxPeriod ?? DEFAULT_MAX_PERIOD;
+  const maxPreperiod = opts.maxPreperiod ?? DEFAULT_MAX_PREPERIOD;
+  const all = dynLandings(`${maxPeriod}|${maxPreperiod}|${c[0]},${c[1]}`, () =>
+    landAll(
+      (p, q) => {
+        const l = dynamicalLanding(p, q, c);
+        return l ? [l.point[0], l.point[1]] : null;
+      },
+      maxPeriod,
+      maxPreperiod,
+    ),
   );
   return nearestCluster(all, query, opts.snapRadius ?? DEFAULT_SNAP_RADIUS, opts.tol ?? DEFAULT_TOL);
 }
@@ -214,13 +250,19 @@ export function nearestDynamicalAngles(query: Vec2, c: Vec2, opts: NearestOpts =
  * landing on ∂M and report the angles co-landing there, plus the snapped point.
  */
 export function nearestParameterAngles(query: Vec2, opts: NearestOpts = {}): NearestAngles {
-  const all = landAll(
-    (p, q) => {
-      const l = parameterLanding(p, q);
-      return l ? [l.point[0], l.point[1]] : null;
-    },
-    opts.maxPeriod ?? DEFAULT_MAX_PERIOD,
-    opts.maxPreperiod ?? DEFAULT_MAX_PREPERIOD,
+  const maxPeriod = opts.maxPeriod ?? DEFAULT_MAX_PERIOD;
+  const maxPreperiod = opts.maxPreperiod ?? DEFAULT_MAX_PREPERIOD;
+  // Parameter-plane landings are c-INDEPENDENT — they are a property of ∂M alone — so this key
+  // carries only the search bounds and every later click at the shipped defaults is a hit.
+  const all = paramLandings(`${maxPeriod}|${maxPreperiod}`, () =>
+    landAll(
+      (p, q) => {
+        const l = parameterLanding(p, q);
+        return l ? [l.point[0], l.point[1]] : null;
+      },
+      maxPeriod,
+      maxPreperiod,
+    ),
   );
   return nearestCluster(all, query, opts.snapRadius ?? DEFAULT_SNAP_RADIUS, opts.tol ?? DEFAULT_TOL);
 }

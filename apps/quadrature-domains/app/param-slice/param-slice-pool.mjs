@@ -127,6 +127,15 @@ const _pool = (function () {
     // Cancel never dispatches again (submitTile's promises never resolve → the render hangs).
     arm() { this._cancelled = false; }
 
+    /**
+     * Can this pool take work RIGHT NOW? False after a cancel() until the next arm(), and false once
+     * every worker has died. Exposed because a caller outside the render loop (the hover live-solve)
+     * must not push a job into a latched-cancelled pool: `_dispatch` refuses to run while
+     * `_cancelled`, so the job would sit in `pending` and its promise would never settle. Reading the
+     * private latch from the UI would be worse than asking. (qd-paramslice-hover-01)
+     */
+    canAccept() { return !this._cancelled && this.workers.length > 0; }
+
     cancel() {
       this._cancelled = true;
       // Resolve outstanding pending jobs with empty results so the
@@ -263,6 +272,10 @@ const _pool = (function () {
     arm()       { this._cancelled = false; }
     cancel()    { this._cancelled = true; }
     terminate() { this.cancel(); }
+    // Same contract as Pool.canAccept — there are no workers to lose here, only the cancel latch.
+    // (Routing a hover through this fallback runs the same solve on the same thread it would have
+    // run on anyway; it costs nothing and keeps ONE code path in the caller.)
+    canAccept() { return !this._cancelled; }
 
     // solveBatch: process all points sequentially on the main thread, yielding
     // between chunks of `chunkYieldEvery` so the UI stays responsive. Per-point

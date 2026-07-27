@@ -53,7 +53,11 @@ export default defineConfig({
       workbox: {
         // Bundled JS/CSS/fonts (incl. self-hosted mathjs + KaTeX + KaTeX fonts) are
         // precached — the app is fully offline-capable with no third-party runtime cache.
-        globPatterns: ["**/*.{js,css,html,svg,ttf,woff,woff2,webmanifest}"],
+        // woff2 only — see the twin comment in apps/complex-dynamics/vite.config.ts. KaTeX ships
+        // each face as ttf + woff + woff2 behind one @font-face fallback list; precaching all three
+        // pulled 797 KiB per app that no WebGL2-capable browser ever requests. The files still ship
+        // in dist/, so the fallback chain is intact. (bt-precache-fonts-04)
+        globPatterns: ["**/*.{js,css,html,svg,woff2,webmanifest}"],
       },
       devOptions: { enabled: false },
     }),

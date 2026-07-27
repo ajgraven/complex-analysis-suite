@@ -262,6 +262,13 @@ const QD = _QD;
   // Fill un-resolved cells (kind === 0) with their nearest stride-aligned
   // neighbor's value, so the coarse pass shows blocky filled-in content.
   function fillFromCoarseSamples(stride) {
+    // At stride 1 there is nothing to fill: the pass just wrote every cell (fieldKind is always
+    // assigned a nonzero value in the loop above, and the mid-pass yield returns before reaching
+    // here), so the anchor of every cell is itself and the guard below skips all of them. It was a
+    // full W·H scan that did nothing. Measured at 0.5–2.1 ms depending on canvas size, once per
+    // render on the in-process fallback path — genuinely negligible next to the escape-time pass it
+    // follows, so this is a say-what-you-mean fix, not a performance win. (qd-fillcoarse-01)
+    if (stride <= 1) return;
     const W = sState.fieldW, H = sState.fieldH;
     for (let row = 0; row < H; row++) {
       const rAnchor = row - (row % stride);
