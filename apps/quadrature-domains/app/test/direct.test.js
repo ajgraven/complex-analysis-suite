@@ -16,10 +16,12 @@ module.exports = async function run() {
 let mathjs = null;
 try { mathjs = require('mathjs'); } catch (e) { /* skip if not installed */ }
 
-// Emit a skip marker so this file always contributes ≥1 assertion (mathjs is an
-// optional devDep; node-test.js's per-file floor relies on a nonzero count, and
-// this mirrors the skip markers in riemann/ui-domain-plot tests).
-if (!mathjs) ok('Direct parser tests (mathjs not installed — skipped)', true);
+// mathjs is a hard `dependency` in package.json, NOT an optional devDep as this
+// marker used to claim — so its absence is a broken install, not a legitimate
+// skip, and the 179 parser assertions below silently not running is exactly the
+// degradation node-test.js's per-file floor exists to catch. Fail here (and the
+// floor fails too) rather than reporting a green run over one skip marker.
+if (!mathjs) ok('Direct parser tests: mathjs is a declared dependency but is not installed', false);
 
 if (mathjs) {
   const P = (e) => Direct.parsePolynomialInZ(e, mathjs);

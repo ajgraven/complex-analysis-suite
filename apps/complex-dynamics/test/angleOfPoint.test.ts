@@ -7,6 +7,7 @@ import {
   nearestDynamicalAngles,
   nearestParameterAngles,
   parameterAnglesOfPoint,
+  _resetAngleLandingCache,
 } from "../src/render/angleOfPoint";
 import { findNucleus } from "../src/render/inspect";
 
@@ -114,5 +115,65 @@ describe("nearest*Angles (snap an imprecise click to the co-landing cluster)", (
     const res = nearestDynamicalAngles([5, 5], [-1, 0], OPTS);
     expect(res.angles).toEqual([]);
     expect(res.point).toBeNull();
+  });
+});
+
+describe("landing memo (cd-render-08)", () => {
+  // The interactive entry points cache landAll — tracing every enumerated ray — because only the
+  // cheap snap depends on where the user clicked. Measured 190 ms / 79 ms for a cold click on the
+  // parameter / dynamical plane, so a stale or shared-mutable cache would be both wrong AND the
+  // thing that made it fast. These pin that it stays correct.
+  it("a repeated call returns the same answer as a cold one (parameter plane)", () => {
+    _resetAngleLandingCache();
+    const cold = nearestParameterAngles([-0.75, 0.1], OPTS);
+    const warm = nearestParameterAngles([-0.75, 0.1], OPTS);
+    expect(warm).toEqual(cold);
+  });
+
+  it("a repeated call returns the same answer as a cold one (dynamical plane)", () => {
+    const c: Complex = [-1, 0];
+    const alpha = alphaFixedPoint(c);
+    _resetAngleLandingCache();
+    const cold = nearestDynamicalAngles([alpha[0] + 0.01, alpha[1]], c, OPTS);
+    const warm = nearestDynamicalAngles([alpha[0] + 0.01, alpha[1]], c, OPTS);
+    expect(warm).toEqual(cold);
+  });
+
+  it("serves DIFFERENT queries correctly from one cached landing set", () => {
+    // The cached array is shared across calls. If anything downstream mutated it — a sort in place,
+    // a splice — the second query would silently get a corrupted set. Ask two different questions
+    // against one cache and compare each to its own cold answer.
+    _resetAngleLandingCache();
+    const warmA = nearestParameterAngles([-0.75, 0.1], OPTS);
+    const warmB = nearestParameterAngles([0.25, 0], OPTS);
+    _resetAngleLandingCache();
+    const coldB = nearestParameterAngles([0.25, 0], OPTS);
+    _resetAngleLandingCache();
+    const coldA = nearestParameterAngles([-0.75, 0.1], OPTS);
+    expect(warmA).toEqual(coldA);
+    expect(warmB).toEqual(coldB);
+  });
+
+  it("re-derives when c changes — the dynamical key carries it", () => {
+    // Landings on ∂K_c depend on c. A key that dropped it would answer for the previous Julia set.
+    _resetAngleLandingCache();
+    const basilica = alphaFixedPoint([-1, 0]);
+    const atBasilica = nearestDynamicalAngles([basilica[0] + 0.01, basilica[1]], [-1, 0], OPTS);
+    const atZero = nearestDynamicalAngles([basilica[0] + 0.01, basilica[1]], [0, 0], OPTS);
+    _resetAngleLandingCache();
+    const atZeroCold = nearestDynamicalAngles([basilica[0] + 0.01, basilica[1]], [0, 0], OPTS);
+    expect(atZero).toEqual(atZeroCold);
+    expect(atBasilica.angles).not.toEqual(atZero.angles); // c really is a different problem
+  });
+
+  it("re-derives when the search bounds change", () => {
+    _resetAngleLandingCache();
+    const narrow = nearestParameterAngles([-0.75, 0.1], { maxPeriod: 2, maxPreperiod: 1 });
+    const wide = nearestParameterAngles([-0.75, 0.1], OPTS);
+    _resetAngleLandingCache();
+    const wideCold = nearestParameterAngles([-0.75, 0.1], OPTS);
+    expect(wide).toEqual(wideCold);
+    // A wider search can only find at least as many landings as a narrower one.
+    expect(wide.angles.length).toBeGreaterThanOrEqual(narrow.angles.length);
   });
 });

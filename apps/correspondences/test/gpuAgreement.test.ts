@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { tupleAlgebra } from "@cas/core";
 import { DELTOID, deltoidBoundary, pointInPolygon, type Complex } from "../src/deltoid.js";
 import { familyMember } from "../src/family.js";
@@ -8,21 +10,57 @@ import { familyMember } from "../src/family.js";
 // GLSL float32 numerics themselves are browser-validated (as @cas/gpu's dual-backend harness is: real
 // GLSL needs a WebGL2 context). Here we mirror the shader's inverse strategy in TS — reusing the shared
 // φ / φ' / F so only the cold-seed Newton is under test — and assert it (a) lands on the exterior branch
-// and (b) reproduces DELTOID.sigma. If someone changes gpu.ts's inverse, keep this mirror in sync.
+// and (b) reproduces DELTOID.sigma.
+//
+// ⚠ THE MIRROR READS ITS CONSTANTS OUT OF THE REAL SHADER (corr-shader-mirror-02 / cd-dup-04). This
+// file used to hardcode 1.3 / 24 / 1e-6 / 1e-30 / 1e8 and merely ASK, in a comment, that anyone editing
+// gpu.ts "keep this mirror in sync" — so the shader could drift arbitrarily far while the test stayed
+// green, validating a TypeScript replica nobody ships. Pulling the numbers from the GLSL source closes
+// that: change the shader's tolerance or iteration cap and the mirror adopts it, so the σ-agreement
+// assertions below re-validate what the shader ACTUALLY does. A change that breaks the algorithm now
+// fails here, and a change to the shader's STRUCTURE fails in `shaderConst` instead of passing quietly.
+//
+// This is deliberately not a claim that the GLSL is *executed*. It is not — see
+// cd-shader-uncompiled-07 / the browser job for the compile-and-run half.
+const GPU_SRC = readFileSync(fileURLToPath(new URL("../src/gpu.ts", import.meta.url)), "utf8");
+const PARAM_GPU_SRC = readFileSync(fileURLToPath(new URL("../src/paramGpu.ts", import.meta.url)), "utf8");
+
+/** Pull a numeric literal out of the real GLSL. Throws (rather than defaulting) when the shader no
+ *  longer has that shape — a silent fallback would restore exactly the drift this is here to stop. */
+function shaderConst(src: string, label: string, re: RegExp): number {
+  const m = src.match(re);
+  if (!m) throw new Error(`shader constant "${label}" not found — gpu.ts changed shape; update the mirror`);
+  return Number(m[1]);
+}
+const NUM = String.raw`([0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)`;
+/** gpu.ts `invertPhi` — the deltoid cold-seed Newton. */
+const INV = {
+  seed: shaderConst(GPU_SRC, "seed factor", new RegExp(String.raw`\(r > ${NUM}\)`)),
+  rFloor: shaderConst(GPU_SRC, "seed radius floor", new RegExp(String.raw`max\(r, ${NUM}\)`)),
+  iters: shaderConst(GPU_SRC, "iteration cap", new RegExp(String.raw`it < ${NUM};`)),
+  tol: shaderConst(GPU_SRC, "convergence tol", new RegExp(String.raw`length\(fz\) < ${NUM}`)),
+  dzFloor: shaderConst(GPU_SRC, "derivative floor", new RegExp(String.raw`length\(dz\) < ${NUM}`)),
+  divergeAt: shaderConst(GPU_SRC, "divergence bound", new RegExp(String.raw`length\(z\) > ${NUM}`)),
+};
+
 const A = tupleAlgebra;
 const conj = (z: Complex): Complex => [z[0], -z[1]];
 
-/** Mirror of gpu.ts `invertPhi`: cold-seed Newton for the exterior branch of φ⁻¹ (24 iters, 1e-6 tol). */
+/** Mirror of gpu.ts `invertPhi`: cold-seed Newton for the exterior branch of φ⁻¹, with the shader's
+ *  own constants (see INV above — nothing here is hardcoded). */
 function coldInvert(w: Complex): Complex {
   const r = A.abs(w);
-  let z: Complex = r > 1.3 ? w : [(w[0] * 1.3) / Math.max(r, 1e-6), (w[1] * 1.3) / Math.max(r, 1e-6)];
-  for (let it = 0; it < 24; it++) {
+  let z: Complex =
+    r > INV.seed
+      ? w
+      : [(w[0] * INV.seed) / Math.max(r, INV.rFloor), (w[1] * INV.seed) / Math.max(r, INV.rFloor)];
+  for (let it = 0; it < INV.iters; it++) {
     const fz = A.sub(DELTOID.evalPhi(z), w);
-    if (A.abs(fz) < 1e-6) break;
+    if (A.abs(fz) < INV.tol) break;
     const dz = DELTOID.evalPhiDeriv(z);
-    if (A.abs(dz) < 1e-30) break;
+    if (A.abs(dz) < INV.dzFloor) break;
     z = A.sub(z, A.div(fz, dz));
-    if (!A.isFinite(z) || A.abs(z) > 1e8) break;
+    if (!A.isFinite(z) || A.abs(z) > INV.divergeAt) break;
   }
   return z;
 }
@@ -41,6 +79,25 @@ const OMEGA_PROBES: Complex[] = [
   [-2.2, 0.1],
   [0.2, 1.9],
 ];
+
+describe("the mirror is bound to the real shader source (corr-shader-mirror-02)", () => {
+  it("extracts every Newton constant from the GLSL, and they are the values in use", () => {
+    // Pins the extraction itself. If gpu.ts is restructured so a pattern stops matching, `shaderConst`
+    // throws at module load and the whole file fails — but if a pattern silently matched the WRONG
+    // literal (say, a number from an unrelated line), the mirror would still run and the agreement
+    // tests could pass against nonsense. These values are what the shader reads today.
+    expect(INV).toEqual({ seed: 1.3, rFloor: 1e-6, iters: 24, tol: 1e-6, dzFloor: 1e-30, divergeAt: 1e8 });
+    expect(PINV).toEqual({
+      seed: 1.3, rFloor: 1e-6, iters: 24, tol: 1e-6, dzFloor: 1e-30, divergeAt: 1e8,
+      okTol: 1e-4, branchSlack: 1e-4,
+    });
+  });
+
+  it("reads the shaders it claims to mirror", () => {
+    expect(GPU_SRC).toContain("cvec invertPhi(cvec w)");
+    expect(PARAM_GPU_SRC).toContain("cvec invertPhi(cvec w, cvec a, out bool ok)");
+  });
+});
 
 describe("GPU deltoid shader σ algorithm ↔ CPU engine agreement", () => {
   it("all probes are in Ω, cold-seed Newton lands on the exterior branch |z|>1, and σ matches the CPU engine", () => {
@@ -99,22 +156,41 @@ const fSchA = (z: Complex, a: Complex): Complex =>
  *  the cold-seed Newton fails to converge or lands inside the unit disk (the wrong branch → not in Ω) —
  *  matching the CPU engine's null. The z≈0 guard mirrors the shader's NaN-from-cdiv-by-0 → ok=false
  *  (the TS algebra throws on an exact-zero divide where GLSL yields NaN). */
+/** paramGpu.ts `invertPhi`/`sigma_a` constants, read from that shader (same rationale as INV). */
+const PINV = {
+  seed: shaderConst(PARAM_GPU_SRC, "seed factor", new RegExp(String.raw`\(r > ${NUM}\)`)),
+  rFloor: shaderConst(PARAM_GPU_SRC, "seed radius floor", new RegExp(String.raw`max\(r, ${NUM}\)`)),
+  iters: shaderConst(PARAM_GPU_SRC, "iteration cap", new RegExp(String.raw`it < ${NUM};`)),
+  tol: shaderConst(PARAM_GPU_SRC, "convergence tol", new RegExp(String.raw`length\(fz\) < ${NUM}`)),
+  dzFloor: shaderConst(PARAM_GPU_SRC, "derivative floor", new RegExp(String.raw`length\(dz\) < ${NUM}`)),
+  divergeAt: shaderConst(PARAM_GPU_SRC, "divergence bound", new RegExp(String.raw`length\(z\) > ${NUM}`)),
+  okTol: shaderConst(PARAM_GPU_SRC, "final residual tol", new RegExp(String.raw`ok = length\(csub\(phi_a\(z, a\), w\)\) < ${NUM}`)),
+  branchSlack: shaderConst(PARAM_GPU_SRC, "CORR-2 branch slack", new RegExp(String.raw`length\(z\) < 1\.0 - ${NUM}`)),
+};
+/** TS-only: the shader gets NaN from cdiv-by-0 and sets ok=false, but the TS algebra throws on an
+ *  exact-zero divide, so the mirror needs an explicit floor. Not read from the GLSL — there is no
+ *  corresponding literal there. */
+const TS_ZERO_GUARD = 1e-12;
+
 function shaderSigmaA(w: Complex, a: Complex): Complex | null {
   const r = A.abs(w);
-  let z: Complex = r > 1.3 ? w : [(w[0] * 1.3) / Math.max(r, 1e-6), (w[1] * 1.3) / Math.max(r, 1e-6)];
+  let z: Complex =
+    r > PINV.seed
+      ? w
+      : [(w[0] * PINV.seed) / Math.max(r, PINV.rFloor), (w[1] * PINV.seed) / Math.max(r, PINV.rFloor)];
   let ok = true;
-  for (let it = 0; it < 24; it++) {
-    if (A.abs(z) < 1e-12) { ok = false; break; }
+  for (let it = 0; it < PINV.iters; it++) {
+    if (A.abs(z) < TS_ZERO_GUARD) { ok = false; break; }
     const fz = A.sub(phiA(z, a), w);
-    if (A.abs(fz) < 1e-6) { ok = true; break; }
+    if (A.abs(fz) < PINV.tol) { ok = true; break; }
     const dz = dphiA(z, a);
-    if (A.abs(dz) < 1e-30) { ok = false; break; }
+    if (A.abs(dz) < PINV.dzFloor) { ok = false; break; }
     z = A.sub(z, A.div(fz, dz));
-    if (!A.isFinite(z) || A.abs(z) > 1e8) { ok = false; break; }
-    ok = A.abs(A.sub(phiA(z, a), w)) < 1e-4;
+    if (!A.isFinite(z) || A.abs(z) > PINV.divergeAt) { ok = false; break; }
+    ok = A.abs(A.sub(phiA(z, a), w)) < PINV.okTol;
   }
   if (!ok) return null;
-  if (A.abs(z) < 1 - 1e-4) return null; // interior branch → no exterior preimage (CORR-2)
+  if (A.abs(z) < 1 - PINV.branchSlack) return null; // interior branch → no exterior preimage (CORR-2)
   return conj(fSchA(z, a));
 }
 

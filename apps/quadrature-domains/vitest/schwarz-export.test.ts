@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { decodeLink, isEnvelopeOfKind, validateEnvelope } from "@cas/interchange";
+import {
+  decodeLink,
+  isEnvelopeOfKind,
+  validateEnvelope,
+  GOLDEN_CREATED_AT,
+  QD_TO_CD_DELTOID_LINK,
+} from "@cas/interchange";
 import { buildExportEnvelope, exportPhiLink, phiToMapSpec } from "../app/schwarz/schwarz-export.mjs";
 
 // Phase 4 (C2, QD emit): the φ -> interchange serialization + a full round-trip through the
@@ -45,5 +51,17 @@ describe("QD φ -> interchange (Phase 4 C2)", () => {
 
   it("exportPhiLink returns null for a non-exportable φ", () => {
     expect(exportPhiLink({ w0: C(0) })).toBeNull();
+  });
+
+  // The PRODUCER half of the QD -> CD contract (qd-interchange-e2e-08). The assertions above only
+  // say QD is self-consistent; this one says QD emits the exact bytes CD is tested against. The
+  // golden lives in @cas/interchange because the dependency rule forbids either app importing the
+  // other, so the wire artifact is the only place the two suites can meet — see
+  // packages/interchange/src/goldens.ts, and apps/complex-dynamics/test/importMap.test.ts for the
+  // consumer half. If this fails, the hand-off format changed: regenerate the golden only if that
+  // was intended, and expect CD's test to start consuming the new bytes immediately.
+  it("emits the exact link CD is tested against (cross-app golden)", () => {
+    const link = exportPhiLink(deltoidPhi, { createdAt: GOLDEN_CREATED_AT, appVersion: "0.1.0" });
+    expect(link).toBe(QD_TO_CD_DELTOID_LINK);
   });
 });

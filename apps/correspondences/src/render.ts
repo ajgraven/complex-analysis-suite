@@ -47,7 +47,17 @@ function paint(kind: string, n: number, data: Uint8ClampedArray, o: number): voi
     g = 28;
     b = 41;
   } else if (kind === "escaped" || kind === "fundamental") {
-    // A tile: the orbit left Ω after n steps (into K or toward ∞). Colour by tile generation.
+    // Two DIFFERENT classes deliberately share one ramp, coloured by escape time n.
+    //
+    // Only `fundamental` is the tiling set — the orbit left Ω inward, into K. `escaped` is the
+    // basin of ∞, and those points never leave Ω at all: Ω = ℂ\K contains a neighbourhood of ∞, so
+    // e.g. the orbit of w = 3 runs 4.67 → 11.0 → 60.6 → 1835 → 1.7e6 and is in Ω at every step.
+    // (mapSide.ts already treats that basin as the mating's MAP side, via greenSigma.)
+    //
+    // Sharing the ramp is fine — escape time is the meaningful quantity for both — but the CAPTION
+    // must not name only the tiling set: on the default view the split is ~34.6k fundamental to
+    // ~17.9k escaped, so 31% of the coloured area would be attributed to the object it is
+    // complementary to. See the capS caption in main.ts.
     [r, g, b] = pal(0.11 * n);
   } else {
     // interior / invalid — the (thin) non-escaping limit set.

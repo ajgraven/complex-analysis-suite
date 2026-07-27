@@ -4,6 +4,8 @@
 //   - schema.ts   : the versioned types (Envelope, Conventions/CANONICAL, MapSpec, payloads).
 //   - validate.ts : the runtime seatbelt (validateEnvelope + type guards + InterchangeError).
 //   - codec.ts    : the deep-link codec (encodeLink / decodeLink).
+//   - goldens.ts  : the cross-app golden corpus — wire artifacts BOTH apps pin against, since the
+//                   dependency rule forbids a producer->consumer test living in either app.
 //
 // Initial version carries what the first hand-off needs (a single-valued Schwarz reflection,
 // QD -> CD) plus its obvious neighbours. Correspondence / parameter-slice payloads arrive, with
@@ -13,3 +15,4 @@ export { InterchangeError, isComplex, isConventions, isMapSpec, isEnvelopeOfKind
 export { encodeLink, decodeLink } from "./codec.js";
 export { encodeViewState, decodeViewState, VIEWSTATE_VERSION } from "./viewstate.js";
 export type { ViewStateEnvelope } from "./viewstate.js";
+export { GOLDEN_CREATED_AT, QD_TO_CD_DELTOID_LINK, QD_TO_CD_DELTOID_PHI_AT_2 } from "./goldens.js";

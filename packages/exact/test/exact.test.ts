@@ -16,6 +16,53 @@ describe("Frac (ℚ over BigInt)", () => {
     expect(Frac.of(2n, 3n).mul(Frac.of(3n, 4n)).equals(Frac.of(1n, 2n))).toBe(true);
     expect(Frac.of(1n).div(Frac.of(3n)).equals(Frac.of(1n, 3n))).toBe(true);
   });
+
+  // toNumber is the SOLE crossing from the exact engine into the numeric plane (Gauss.toTuple
+  // delegates to it), and Number(bigint) saturates to ±Infinity past ~1.8e308. Because Frac is kept
+  // in lowest terms, "both sides huge" is an ordinary state, not a degenerate one — so the direct
+  // quotient returned Infinity/Infinity = NaN for ratios that are themselves perfectly tame, and a
+  // NaN here propagates into a read-out labelled "= exact". (cd-frac-07)
+  describe("toNumber past the double range", () => {
+    const close = (got: number, want: number, tol = 1e-9) =>
+      Number.isFinite(got) && Math.abs(got - want) <= tol * Math.max(1, Math.abs(want));
+
+    // Every fixture below must be IRREDUCIBLE, or Frac.of quietly reduces it to something small and
+    // the test proves nothing: 10^400/(3·10^400) is stored as 1/3. Using a/(k·a + 1) keeps it huge,
+    // since gcd(a, k·a + 1) = gcd(a, 1) = 1.
+    const HUGE = 10n ** 400n;
+    it("evaluates a tame ratio whose numerator and denominator both overflow", () => {
+      expect(close(Frac.of(HUGE, 3n * HUGE + 1n).toNumber(), 1 / 3)).toBe(true);
+      expect(close(Frac.of(-HUGE, 3n * HUGE + 1n).toNumber(), -1 / 3)).toBe(true);
+      // 2^1400 / 3^900 — coprime by construction, ~422 and ~430 digits.
+      expect(
+        close(Frac.of(2n ** 1400n, 3n ** 900n).toNumber(), Math.exp(1400 * Math.LN2 - 900 * Math.log(3))),
+      ).toBe(true);
+    });
+
+    it("Gauss.toTuple inherits the fix", () => {
+      const g = new Gauss(Frac.of(HUGE, 3n * HUGE + 1n), Frac.of(HUGE, 2n * HUGE + 1n));
+      const [re, im] = g.toTuple();
+      expect(close(re, 1 / 3)).toBe(true);
+      expect(close(im, 1 / 2)).toBe(true);
+    });
+
+    it("still saturates when the ratio itself is out of range", () => {
+      expect(Frac.of(10n ** 400n, 1n).toNumber()).toBe(Infinity);
+      expect(Frac.of(-(10n ** 400n), 1n).toNumber()).toBe(-Infinity);
+      expect(Frac.of(1n, 10n ** 400n).toNumber()).toBe(0);
+    });
+
+    it("is unchanged for everything already in range", () => {
+      let seed = 987654321;
+      const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff);
+      for (let i = 0; i < 2000; i++) {
+        const f = Frac.of(BigInt(rnd() - 0x3fffffff), BigInt(rnd() + 1));
+        expect(Object.is(f.toNumber(), Number(f.n) / Number(f.d))).toBe(true);
+      }
+      expect(Frac.of(1n, 3n).toNumber()).toBe(1 / 3);
+      expect(Frac.of(0n, 7n).toNumber()).toBe(0);
+    });
+  });
 });
 
 describe("Gauss (ℚ(i)) is a field", () => {
@@ -30,6 +77,60 @@ describe("Gauss (ℚ(i)) is a field", () => {
       expect(z.mul(z.inv()).equals(Gauss.ONE)).toBe(true);
     }
     expect(() => Gauss.ZERO.inv()).toThrow();
+  });
+
+  describe("the real × real fast path (cd-perf-04)", () => {
+    // mul() shortcuts when both imaginary parts are zero — the case CD's whole dynatomic tower and
+    // the Correspondences deltoid curve are made of. It must be indistinguishable from the general
+    // form, which is what these pin: same value, and the general form still used everywhere else.
+    const general = (a: Gauss, b: Gauss): Gauss =>
+      new Gauss(a.re.mul(b.re).sub(a.im.mul(b.im)), a.re.mul(b.im).add(a.im.mul(b.re)));
+
+    const SAMPLES = [
+      Gauss.ZERO,
+      Gauss.ONE,
+      Gauss.int(-1),
+      Gauss.int(7),
+      Gauss.int(-123456789),
+      Gauss.rat(22n, 7n, 0n, 1n), // real, non-integer
+      Gauss.rat(-355n, 113n, 0n, 1n),
+      Gauss.I,
+      Gauss.int(3, 4),
+      Gauss.int(0, -9),
+      Gauss.rat(3n, 5n, -7n, 4n),
+    ];
+
+    it("agrees with the general form on every pairing (real, mixed and complex)", () => {
+      for (const a of SAMPLES) {
+        for (const b of SAMPLES) {
+          expect(a.mul(b).equals(general(a, b)), `${a.re.n}/${a.re.d}+${a.im.n}/${a.im.d}i × …`).toBe(true);
+        }
+      }
+    });
+
+    it("keeps a zero imaginary part exactly zero, not a normalised 0/k", () => {
+      // The shortcut hands back Frac.ZERO rather than computing 0·d + 0·c. Frac is normalised, so
+      // this is belt-and-braces — but a regression to an unnormalised zero would break `equals`.
+      const p = Gauss.rat(22n, 7n, 0n, 1n).mul(Gauss.rat(-355n, 113n, 0n, 1n));
+      expect(p.im.isZero()).toBe(true);
+      expect(p.im.n).toBe(0n);
+      expect(p.im.d).toBe(1n);
+    });
+
+    it("still multiplies correctly when only ONE operand is real", () => {
+      // The mixed case deliberately does NOT take a shortcut — it has no consumer today, and an
+      // untested branch is worse than a general one. Guard that it stays correct regardless.
+      expect(Gauss.int(2).mul(Gauss.int(3, 4)).equals(Gauss.int(6, 8))).toBe(true);
+      expect(Gauss.int(3, 4).mul(Gauss.int(2)).equals(Gauss.int(6, 8))).toBe(true);
+    });
+
+    it("associates and distributes across the real/complex boundary", () => {
+      // A shortcut that fired on the wrong branch would show up as broken algebra here.
+      const [a, b, c] = [Gauss.int(5), Gauss.int(2, -3), Gauss.rat(1n, 3n, 0n, 1n)];
+      expect(a.mul(b).mul(c).equals(a.mul(b.mul(c)))).toBe(true);
+      expect(a.mul(b.add(c)).equals(a.mul(b).add(a.mul(c)))).toBe(true);
+      expect(c.mul(a.add(b)).equals(c.mul(a).add(c.mul(b)))).toBe(true);
+    });
   });
 });
 

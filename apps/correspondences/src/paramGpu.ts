@@ -6,8 +6,11 @@
 //   • the classifier is pure escape-to-∞ (no point-in-polygon), so there is NO mask texture;
 //   • the three critical values are m_k = φ_a(ζ_k) = 1.5·ζ_k with ζ_k = a^{1/3}·{1,ω,ω²} (since
 //     φ_a'(ζ)=0 ⟹ a/ζ² = ζ ⟹ φ_a(ζ) = 1.5ζ) — i.e. just 1.5·(the three cube roots of a).
-// Dogfoods @cas/gpu (the complex stdlib + shared compile/link). Colours match paramFieldToImage exactly,
-// so this is cross-validated PIXEL-FOR-PIXEL against the CPU classifier (criticalEscape).
+// Dogfoods @cas/gpu (the complex stdlib + shared compile/link). Colours come from the same ramp as
+// paramFieldToImage, so GPU and CPU renders are directly comparable — but NOT pixel-for-pixel
+// identical, as this line used to claim: ~0.22% of pixels differ (fp32 GPU vs float64 CPU shifts the
+// escape count by one near class boundaries), and no test asserts agreement on the escape counts
+// themselves. Treat the GPU render as the CPU classifier's fast twin, not as a verified mirror.
 import { COMPLEX_SINGLE_GLSL } from "@cas/gpu/glsl";
 import { createProgram } from "@cas/gpu/shader";
 import type { ParamView } from "./paramPlane.js";

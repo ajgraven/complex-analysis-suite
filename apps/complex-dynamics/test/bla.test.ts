@@ -3,7 +3,8 @@
  * is only safe if, WITHIN its radius r, it reproduces the true l-step perturbation iteration
  * (δz → 2Z·δz + δz² + δc). These tests assert exactly that — so the radius is provably safe (a
  * conservative radius merely skips fewer iterations) — and that the radius is meaningful (the
- * approximation visibly breaks down well outside it). The GPU kernel (D2b) mirrors `lookupBLA`.
+ * approximation visibly breaks down well outside it). The shipped GPU kernel (shaderBuilder.ts
+ * `pColorAt`) mirrors `lookupBLA` and `traverseBLA`, for d = 2…8 and for general polynomials alike.
  */
 import { describe, it, expect } from "vitest";
 import type { Complex } from "../src/complex";
@@ -17,7 +18,12 @@ import {
   type BLA,
   type TraverseResult,
 } from "../src/render/bla";
-import { multibrotStep, polyStep } from "../src/render/perturbationPoly";
+import {
+  multibrotStep,
+  perturbMultibrot,
+  perturbPoly,
+  polyStep,
+} from "../src/render/perturbationPoly";
 
 const cmul = (p: Complex, q: Complex): Complex => [
   p[0] * q[0] - p[1] * q[1],
@@ -26,13 +32,26 @@ const cmul = (p: Complex, q: Complex): Complex => [
 const cadd = (p: Complex, q: Complex): Complex => [p[0] + q[0], p[1] + q[1]];
 const cabs = (p: Complex): number => Math.hypot(p[0], p[1]);
 
-/** Reference orbit Z_0…Z_M for z²+c (Z_0 = 0), assumed bounded over M iterations. */
+/**
+ * Reference orbit Z_0…Z_M for z²+c (Z_0 = 0), TRUNCATED at the bailout exactly as production's
+ * `computeMultibrotOrbitDD` truncates it.
+ *
+ * This is not cosmetic. `traverseBLA` may skip l iterations without checking the bailout in between,
+ * which is sound only because the guard `m + bla.l <= refMax` confines a skip to the stored reference —
+ * and in production `refMax` IS the reference's escape index. These helpers used to iterate blindly for
+ * M steps regardless (the docstring claimed "assumed bounded" and two fixtures were not: c = −0.745+0.113i
+ * escapes at 127 and c = −0.75+0.05i at 63, both lying just outside M). Feeding that unbounded tail to
+ * the BLA builder let a 16-step skip jump straight over the escape, and the traversal then reported one
+ * iteration too many on every single Julia-plane sample. It went unnoticed only because the old block
+ * sizes were too shallow for any skip to be taken at all.
+ */
 function referenceOrbit(c0: Complex, M: number): Complex[] {
   const ref: Complex[] = [[0, 0]];
   let z: Complex = [0, 0];
   for (let k = 0; k < M; k++) {
     z = [z[0] * z[0] - z[1] * z[1] + c0[0], 2 * z[0] * z[1] + c0[1]];
     ref.push(z);
+    if (z[0] * z[0] + z[1] * z[1] > 4) break;
   }
   return ref;
 }
@@ -52,7 +71,7 @@ function truePerturb(ref: Complex[], m: number, dz0: Complex, dc: Complex, l: nu
 const applyBLA = (bla: BLA, dz0: Complex, dc: Complex): Complex =>
   cadd(cmul(bla.a, dz0), cmul(bla.b, dc));
 
-/** Reference orbit Z_0…Z_M for the multibrot z^d + c (Z_0 = 0). */
+/** Reference orbit Z_0…Z_M for the multibrot z^d + c (Z_0 = 0), truncated at the bailout as above. */
 function referenceOrbitPoly(c0: Complex, M: number, degree: number): Complex[] {
   const ref: Complex[] = [[0, 0]];
   let z: Complex = [0, 0];
@@ -61,6 +80,7 @@ function referenceOrbitPoly(c0: Complex, M: number, degree: number): Complex[] {
     for (let e = 0; e < degree; e++) p = cmul(p, z); // z^d
     z = [p[0] + c0[0], p[1] + c0[1]];
     ref.push(z);
+    if (z[0] * z[0] + z[1] * z[1] > 4) break;
   }
   return ref;
 }
@@ -204,86 +224,234 @@ describe("BLA table (multibrot z^d + c)", () => {
   }
 });
 
-/** Ground truth: the perturbation render loop with single steps only (no BLA) — same escape semantics
- *  and rebasing as {@link traverseBLA}, so the two must agree iteration-for-iteration. */
-function naivePerturb(orbit: Complex[], cAdd: Complex, dz0: Complex, maxIter: number): TraverseResult {
-  const refMax = orbit.length - 1;
-  const Z0 = orbit[0];
-  let Z = Z0;
-  let m = 0;
-  let dz: Complex = [dz0[0], dz0[1]];
-  let z: Complex = [Z[0] + dz[0], Z[1] + dz[1]];
-  for (let k = 0; k < maxIter; k++) {
-    z = [Z[0] + dz[0], Z[1] + dz[1]];
-    if (z[0] * z[0] + z[1] * z[1] > 4) return { iters: k, escaped: true, z };
-    dz = [
-      2 * (Z[0] * dz[0] - Z[1] * dz[1]) + (dz[0] * dz[0] - dz[1] * dz[1]) + cAdd[0],
-      2 * (Z[0] * dz[1] + Z[1] * dz[0]) + 2 * dz[0] * dz[1] + cAdd[1],
-    ];
-    m++;
-    Z = orbit[Math.min(m, refMax)];
-    const full: Complex = [Z[0] + dz[0], Z[1] + dz[1]];
-    const d0: Complex = [full[0] - Z0[0], full[1] - Z0[1]];
-    if (m >= refMax || d0[0] * d0[0] + d0[1] * d0[1] < dz[0] * dz[0] + dz[1] * dz[1]) {
-      dz = d0;
-      Z = Z0;
-      m = 0;
-    }
-  }
-  return { iters: maxIter, escaped: false, z };
-}
+/**
+ * Ground truth for the traversal tests: the perturbation render loop with single steps only (no BLA).
+ * This is `perturbMultibrot` / `perturbPoly` from perturbationPoly.ts — same escape semantics and same
+ * rebasing as {@link traverseBLA}, differing *only* in whether skips are taken, which is precisely the
+ * property under test. (A hand-copied third loop used to live here; it duplicated `perturbMultibrot`
+ * line for line except for inlining the quadratic step, which also silently limited every traversal
+ * test below to degree 2.)
+ */
+const naivePerturb = (orbit: Complex[], cAdd: Complex, dz0: Complex, maxIter: number): TraverseResult =>
+  perturbMultibrot(orbit, 2, cAdd, dz0, maxIter) as TraverseResult;
 
+/** The δc sample grid every traversal test uses: three magnitudes × six directions. */
+const samples = (block: number): Complex[] => {
+  const out: Complex[] = [];
+  for (const mag of [0.2 * block, 0.6 * block, block]) {
+    for (const ang of [0, 1, 2, 3, 4, 5]) out.push([mag * Math.cos(ang), mag * Math.sin(ang)]);
+  }
+  return out;
+};
+
+/**
+ * BLA is a DEEP-ZOOM tool. A skip is valid only while |δz| < r ≈ ε·|A| ~ 1e-7·|2Z|, so it engages only
+ * once |δc| is around 1e-9 or below — which is why the table tests above use maxC = 1e-15.
+ *
+ * That makes each traversal test's block size load-bearing in a way that is easy to get wrong: at a
+ * shallow block NO skip is ever taken, `traverseBLA` degenerates to the per-step loop, and comparing it
+ * to that same loop passes trivially. These tests previously ran at 1e-3…3e-4 and inferred coverage from
+ * "a long pre-escape orbit ⇒ multi-step skips were used", which does not follow — instrumenting the loop
+ * put the real skip count over every one of those fixtures at **0**. Hence `TraverseResult.skips`, and
+ * hence every deep test below asserting `skips > 0` instead of inferring it.
+ *
+ * Where a configuration cannot both skip and escape (deep enough to skip ⇒ the whole block sits inside
+ * one basin), it is split into a deep case and a shallow case, and each states what it covers.
+ */
 describe("BLA full traversal (the GPU render loop)", () => {
   it("reproduces the naive per-step escape count EXACTLY, over a deep block that both skips and escapes", () => {
-    // A point in the seahorse valley (near ∂M): a long reference orbit, and nearby pixels escape at a
-    // spread of high iteration counts — so the traversal exercises both multi-step skips and escape.
-    const centre: Complex = [-0.745, 0.113];
+    // c = i is a Misiurewicz point: the critical orbit is preperiodic, so c is IN M and the reference is
+    // long, while ∂M is locally self-similar there — a 1e-9 block still straddles it and every sample
+    // escapes at a spread of counts. The traversal therefore exercises skip, fallback and escape.
     const N = 4000;
-    const block = 3e-4; // half-width of the pixel block ⇒ maxC
-    const orbit = referenceOrbit(centre, N);
+    const block = 1e-9;
+    const orbit = referenceOrbit([0, 1], N);
+    expect(orbit.length - 1).toBe(N); // the reference itself never escapes
     const levels = buildBLATable(orbit, block);
     let escapes = 0;
-    let checked = 0;
-    for (const mag of [0.25 * block, 0.6 * block, block]) {
-      for (const ang of [0, 1, 2, 3, 4, 5]) {
-        const dc: Complex = [mag * Math.cos(ang), mag * Math.sin(ang)];
-        const naive = naivePerturb(orbit, dc, [0, 0], N); // parameter plane: cAdd = δc, δz₀ = 0
-        const bla = traverseBLA(orbit, levels, dc, [0, 0], N);
-        expect(bla.iters).toBe(naive.iters);
-        expect(bla.escaped).toBe(naive.escaped);
-        if (naive.escaped) {
-          escapes++;
-          expect(naive.iters).toBeGreaterThan(30); // a long pre-escape orbit ⇒ multi-step skips were used
-        }
-        checked++;
-      }
+    let totalSkips = 0;
+    for (const dc of samples(block)) {
+      const naive = naivePerturb(orbit, dc, [0, 0], N); // parameter plane: cAdd = δc, δz₀ = 0
+      const bla = traverseBLA(orbit, levels, dc, [0, 0], N);
+      expect(bla.iters).toBe(naive.iters);
+      expect(bla.escaped).toBe(naive.escaped);
+      totalSkips += bla.skips;
+      if (naive.escaped) escapes++;
     }
-    expect(checked).toBeGreaterThan(15);
     expect(escapes).toBeGreaterThan(0);
+    // Asserted, not inferred. The old form of this test used `naive.iters > 30` as a stand-in for
+    // "multi-step skips were used" — an inference that does not hold and was in fact false here.
+    expect(totalSkips).toBeGreaterThan(0);
   });
 
   it("matches over an interior block too (full maxIter, exercising rebasing to the orbit end)", () => {
-    const orbit = referenceOrbit([-0.122561, 0.744862], 2000); // the rabbit centre — bounded orbit
-    const levels = buildBLATable(orbit, 1e-3);
-    for (const ang of [0, 1.5, 3, 4.5]) {
-      const dc: Complex = [8e-4 * Math.cos(ang), 8e-4 * Math.sin(ang)];
-      const naive = naivePerturb(orbit, dc, [0, 0], 2000);
-      const bla = traverseBLA(orbit, levels, dc, [0, 0], 2000);
-      expect(bla.escaped).toBe(false); // interior: stays bounded for all 2000 iterations
+    const N = 2000;
+    const block = 1e-9;
+    const orbit = referenceOrbit([-0.122561, 0.744862], N); // the rabbit centre — period-3, bounded
+    const levels = buildBLATable(orbit, block);
+    let totalSkips = 0;
+    for (const dc of samples(block)) {
+      const naive = naivePerturb(orbit, dc, [0, 0], N);
+      const bla = traverseBLA(orbit, levels, dc, [0, 0], N);
+      expect(bla.escaped).toBe(false); // interior: stays bounded for all N iterations
       expect(bla.iters).toBe(naive.iters);
+      totalSkips += bla.skips;
     }
+    expect(totalSkips).toBeGreaterThan(1000); // the interior is where skipping pays most
   });
 
   it("also matches on the Julia plane (δz₀ = δc, cAdd = 0)", () => {
-    const orbit = referenceOrbit([-0.75, 0.05], 3000);
-    const levels = buildBLATable(orbit, 1e-4);
-    for (const ang of [0.5, 2.5, 4.5]) {
-      const dc: Complex = [1e-4 * Math.cos(ang), 1e-4 * Math.sin(ang)];
-      const naive = naivePerturb(orbit, [0, 0], dc, 3000);
-      const bla = traverseBLA(orbit, levels, [0, 0], dc, 3000);
+    const N = 3000;
+    const block = 1e-10;
+    const orbit = referenceOrbit([0, 1], N);
+    const levels = buildBLATable(orbit, block);
+    let totalSkips = 0;
+    let escapes = 0;
+    for (const dz0 of samples(block)) {
+      const naive = naivePerturb(orbit, [0, 0], dz0, N);
+      const bla = traverseBLA(orbit, levels, [0, 0], dz0, N);
+      expect(bla.iters).toBe(naive.iters);
+      expect(bla.escaped).toBe(naive.escaped);
+      totalSkips += bla.skips;
+      if (naive.escaped) escapes++;
+    }
+    expect(totalSkips).toBeGreaterThan(0);
+    expect(escapes).toBeGreaterThan(0);
+  });
+
+  it("takes no skip at shallow zoom — where |δc| ≫ the BLA radius — and still matches", () => {
+    // The complement of the deep tests, and the reason they had to move deep: at a shallow block the
+    // linearization is never valid, so this covers only the escape/rebasing logic. Asserted rather than
+    // left implicit, so a future radius change that silently disables skipping shows up here.
+    const N = 4000;
+    const block = 3e-4;
+    const orbit = referenceOrbit([0, 1], N);
+    const levels = buildBLATable(orbit, block);
+    for (const dc of samples(block)) {
+      const naive = naivePerturb(orbit, dc, [0, 0], N);
+      const bla = traverseBLA(orbit, levels, dc, [0, 0], N);
+      expect(bla.iters).toBe(naive.iters);
+      expect(bla.skips).toBe(0);
+    }
+  });
+
+  it("does not skip PAST the escape of a reference orbit that itself escapes", () => {
+    // A skip advances k by l without checking the bailout in between, which is safe only because the
+    // guard `m + bla.l <= refMax` keeps a skip inside the stored reference — and `refMax` is the
+    // reference's own escape index, because production truncates there (computeMultibrotOrbitDD).
+    // With a fixture that iterated blindly past the bailout this silently broke: a 16-step skip jumped
+    // over the escape and the traversal reported one iteration too many on EVERY sample.
+    const N = 3000;
+    const block = 1e-9;
+    const orbit = referenceOrbit([-0.75, 0.05], N); // just outside the period-2 bulb — escapes at 63
+    expect(orbit.length - 1).toBeLessThan(N); // the reference really does escape
+    const levels = buildBLATable(orbit, block);
+    for (const dz0 of samples(block)) {
+      const naive = naivePerturb(orbit, [0, 0], dz0, N);
+      const bla = traverseBLA(orbit, levels, [0, 0], dz0, N);
       expect(bla.iters).toBe(naive.iters);
       expect(bla.escaped).toBe(naive.escaped);
     }
+  });
+
+  it("honours a non-default escape radius (the kernel reads uPerturbEscape2, not a hard-coded 4)", () => {
+    // probeEscapeRadius2() derives the bailout per map, so a traversal that hard-codes |z| > 2 is not
+    // the kernel's loop. A larger R² must push the escape strictly later.
+    const orbit = referenceOrbit([0, 1], 4000);
+    const levels = buildBLATable(orbit, 3e-4);
+    const dc: Complex = [3e-4, 0];
+    const at4 = traverseBLA(orbit, levels, dc, [0, 0], 4000);
+    const at100 = traverseBLA(orbit, levels, dc, [0, 0], 4000, { escape2: 100 });
+    expect(at4.escaped).toBe(true);
+    expect(at100.escaped).toBe(true);
+    expect(at100.iters).toBeGreaterThan(at4.iters);
+  });
+});
+
+/**
+ * The traversal at the degrees and in the polynomial mode the shipped kernel actually renders.
+ * `glPlot.ensureBLA` calls `buildBLATable(ref, maxC, perturbDegree())` or `buildBLATablePoly`, so BLA
+ * skipping runs for d = 2…8 and for general polynomials — but until Batch A-2 `traverseBLA` hard-coded
+ * the quadratic step, so *every* traversal test was silently a degree-2 test and those kernel paths had
+ * no CPU reference at all. (cd-render-10)
+ */
+describe("BLA full traversal at the degrees the kernel renders", () => {
+  /** c on the boundary of the multibrot's period-1 component: d·z^{d−1} = e^{iθ}, c = z − z^d. */
+  const boundaryC = (degree: number, theta: number): Complex => {
+    const r = Math.pow(1 / degree, 1 / (degree - 1));
+    const a = theta / (degree - 1);
+    const z: Complex = [r * Math.cos(a), r * Math.sin(a)];
+    let zd: Complex = [1, 0];
+    for (let e = 0; e < degree; e++) zd = cmul(zd, z);
+    return [z[0] - zd[0], z[1] - zd[1]];
+  };
+
+  for (const degree of [3, 4, 5]) {
+    it(`degree ${degree}: deep zoom — long skips reproduce the per-step iteration EXACTLY`, () => {
+      const N = 2000;
+      const block = 1e-9;
+      const orbit = referenceOrbitPoly(boundaryC(degree, 2.0), N, degree);
+      expect(orbit.length - 1).toBe(N); // indifferent fixed point ⇒ bounded reference
+      const levels = buildBLATable(orbit, block, degree);
+      let totalSkips = 0;
+      for (const dc of samples(block)) {
+        const naive = perturbMultibrot(orbit, degree, dc, [0, 0], N);
+        const bla = traverseBLA(orbit, levels, dc, [0, 0], N, { degree });
+        expect(bla.iters).toBe(naive.iters);
+        expect(bla.escaped).toBe(naive.escaped);
+        expect(bla.iters).toBe(N); // this block sits inside the basin; escape is covered below
+        totalSkips += bla.skips;
+      }
+      expect(totalSkips).toBeGreaterThan(0);
+    });
+
+    it(`degree ${degree}: shallow block straddling the cusp — escape counts match`, () => {
+      // Deep enough to skip ⇒ the whole block sits in one basin, so escape has to be covered at a
+      // shallow block, where (per the d=2 test above) no skip is taken. The pair covers both halves.
+      const N = 2000;
+      const block = 2e-3;
+      const orbit = referenceOrbitPoly(boundaryC(degree, 0), N, degree); // θ = 0 ⇒ the cusp
+      const levels = buildBLATable(orbit, block, degree);
+      let escapes = 0;
+      let bounded = 0;
+      for (const dc of samples(block)) {
+        const naive = perturbMultibrot(orbit, degree, dc, [0, 0], N);
+        const bla = traverseBLA(orbit, levels, dc, [0, 0], N, { degree });
+        expect(bla.iters).toBe(naive.iters);
+        expect(bla.escaped).toBe(naive.escaped);
+        if (naive.escaped) escapes++;
+        else bounded++;
+      }
+      // Both outcomes must occur, or a wrong step could pass by classifying every sample the same way.
+      expect(escapes).toBeGreaterThan(0);
+      expect(bounded).toBeGreaterThan(0);
+    });
+  }
+
+  it("polynomial mode (f = P(z) + B·c) skips AND escapes, matching per-step exactly", () => {
+    const N = 2000;
+    const block = 1e-9;
+    const B: Complex = [1, 0];
+    const coeffs: Complex[] = [
+      [0, 0],
+      [-1, 0],
+      [0, 0],
+      [1, 0],
+    ]; // z³ − z
+    const orbit = referenceOrbitPolyGen(coeffs, B, [0.22, 0.21], N);
+    const levels = buildBLATablePoly(orbit, block, coeffs, B);
+    let escapes = 0;
+    let totalSkips = 0;
+    for (const dc of samples(block)) {
+      const naive = perturbPoly(orbit, coeffs, B, dc, [0, 0], N);
+      const bla = traverseBLA(orbit, levels, dc, [0, 0], N, { poly: { coeffs, dcCoeff: B } });
+      expect(bla.iters).toBe(naive.iters);
+      expect(bla.escaped).toBe(naive.escaped);
+      totalSkips += bla.skips;
+      if (naive.escaped) escapes++;
+    }
+    expect(escapes).toBeGreaterThan(0);
+    expect(totalSkips).toBeGreaterThan(0);
   });
 });
 
@@ -322,6 +490,7 @@ function referenceOrbitPolyGen(coeffs: Complex[], B: Complex, c0: Complex, M: nu
     for (let j = d - 1; j >= 0; j--) r = cadd(cmul(r, z), coeffs[j]); // P(z) via Horner
     z = [r[0] + B[0] * c0[0] - B[1] * c0[1], r[1] + B[0] * c0[1] + B[1] * c0[0]];
     ref.push(z);
+    if (z[0] * z[0] + z[1] * z[1] > 4) break; // truncate at the bailout, as production does
   }
   return ref;
 }

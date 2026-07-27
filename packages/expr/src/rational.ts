@@ -40,18 +40,66 @@ function pAdd(a: Poly, b: Poly): Poly {
 
 const pSub = (a: Poly, b: Poly): Poly => pAdd(a, pNeg(b));
 
+/**
+ * Longest coefficient array we will build — a MEMORY bound, not a capability limit. Each coefficient
+ * is a boxed `[re, im]`, so ~1e6 entries is a few tens of MB and builds in well under a second.
+ * Beyond it, `fToRational` returns null, which every consumer already handles as "not a rational
+ * function of z" and degrades to its non-rational path. Refusing fast beats freezing the tab.
+ */
+const MAX_POLY_LEN = 1_000_001; // degree ≤ 1e6
+
+/**
+ * Dense polynomial multiply, skipping zero coefficients and accumulating in place.
+ *
+ * The zero-skip is what makes SPARSE polynomials cheap: `z^k` carries k+1 coefficients of which one
+ * is non-zero, so squaring it costs O(1) multiply-adds plus the unavoidable O(k) allocation and scan
+ * instead of O(k²). Accumulating into `out[i+j]` also drops one `Complex` allocation per
+ * multiply-add (the old form allocated two via C.mul + C.add). Safe to mutate: `out` is freshly
+ * allocated here, so it can never alias `a` or `b` — including when a === b (squaring).
+ */
 function pMul(a: Poly, b: Poly): Poly {
   if (a.length === 0 || b.length === 0) return [];
   const out: Poly = Array.from({ length: a.length + b.length - 1 }, () => [0, 0] as Complex);
   for (let i = 0; i < a.length; i++) {
-    for (let j = 0; j < b.length; j++) out[i + j] = C.add(out[i + j], C.mul(a[i], b[j]));
+    const ar = a[i][0];
+    const ai = a[i][1];
+    if (ar === 0 && ai === 0) continue;
+    for (let j = 0; j < b.length; j++) {
+      const br = b[j][0];
+      const bi = b[j][1];
+      if (br === 0 && bi === 0) continue;
+      const o = out[i + j];
+      o[0] += ar * br - ai * bi;
+      o[1] += ar * bi + ai * br;
+    }
   }
   return out;
 }
 
+/**
+ * Binary exponentiation: ~2·log₂(k) multiplies instead of k.
+ *
+ * The old form multiplied by `a` k times, so `z^40000` performed 40 000 multiplies against a
+ * steadily growing dense array — Σ 2(i+1) ≈ 1.6e9 complex multiply-adds and ~8e8 coefficient
+ * allocations, measured at ~7.4 MINUTES. That froze the tab through `escapeIsMeaningless`, a
+ * view-level advisory which calls fToRational on every view change and then reads nothing but the
+ * two degrees. With the zero-skipping pMul above, `z^40000` now takes ~14 ms and `z^200000` ~58 ms.
+ *
+ * ⚠ NUMERICS: this changes the multiply TREE, so for a genuinely DENSE base the coefficients can
+ * differ from repeated multiplication in the last few ulps (measured max relative difference
+ * ~2e-15 on (z²+z+1)^k). Monomial results are bit-identical. Immaterial for every consumer here
+ * (Laurent expansion, degree comparison, root finding at tol 1e-13), but it is a change, not a
+ * pure speedup.
+ */
 function pPow(a: Poly, k: number): Poly {
   let r: Poly = [[1, 0]];
-  for (let i = 0; i < k; i++) r = pMul(r, a);
+  let base = a;
+  let e = k;
+  while (e > 0) {
+    if (e & 1) r = pMul(r, base);
+    e >>>= 1;
+    if (e > 0) base = pMul(base, base);
+  }
   return r;
 }
 
@@ -66,10 +114,17 @@ const ratSub = (x: Rat, y: Rat): Rat => ({
   den: pMul(x.den, y.den),
 });
 
-function ratPow(x: Rat, k: number): Rat {
+/** Length pPow(p, e) will produce, without building it — the degree grows linearly in e. */
+const powLen = (p: Poly, e: number): number => (p.length <= 1 ? p.length : (p.length - 1) * e + 1);
+
+function ratPow(x: Rat, k: number): Rat | null {
   if (k === 0) return { num: [[1, 0]], den: [[1, 0]] };
   const base = k < 0 ? { num: x.den, den: x.num } : x;
   const e = Math.abs(k);
+  // Refuse before allocating, so an absurd exponent (z^1e9 ⇒ ~32 GB of boxed coefficients) returns
+  // null — "not a rational function of z", which every consumer already handles — instead of
+  // exhausting memory. The bound is a memory limit, not a capability limit: z^1e6 still works.
+  if (powLen(base.num, e) > MAX_POLY_LEN || powLen(base.den, e) > MAX_POLY_LEN) return null;
   return { num: pPow(base.num, e), den: pPow(base.den, e) };
 }
 

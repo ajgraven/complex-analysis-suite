@@ -1137,11 +1137,28 @@ if (cEstimateBtn) cEstimateBtn.addEventListener('click', () => {
       });
 
       if (!res.found) {
-        if (res.reason === 'no-invalid-below-ceiling') {
+        if (res.reason === 'search-budget-exhausted') {
+          // The search stopped BELOW the ceiling because it ran out of solves, so nothing is known
+          // about c between cLowValid and the ceiling. Report the largest c actually probed and say
+          // the rest is untested — the old code shared the ceiling message with the case below and
+          // asserted `≤ ceiling` over a range it had never looked at.
+          const upto = (res.cLowValid != null) ? res.cLowValid.toFixed(2) : '?';
+          showResult('Search budget exhausted',
+                     'valid up to c = ' + upto + ' (largest c tested); c above that was not probed, '
+                     + 'so no bound is claimed up to the ceiling ' + res.ceiling.toFixed(2) + '.');
+          setStatus({ kind: 'warn',
+            text: 'Search budget exhausted after ' + res.solves + ' solves — verified valid only up to c = '
+                  + upto + '; the range up to the ceiling was NOT tested.' });
+        } else if (res.reason === 'no-invalid-below-ceiling') {
+          // Genuine ceiling exit. Still phrased against the largest c actually probed rather than the
+          // ceiling itself, since the last accepted step sits one growth factor below it.
+          const upto = (res.cLowValid != null) ? res.cLowValid.toFixed(2) : res.ceiling.toFixed(2);
           showResult('No finite maximum found',
-                     'the unbounded QD stays valid up to the search ceiling c ≤ ' + res.ceiling.toFixed(2) + '.');
+                     'no invalid c found while testing up to the search ceiling ' + res.ceiling.toFixed(2)
+                     + '; the unbounded QD is verified valid up to c = ' + upto + '.');
           setStatus({ kind: 'ok',
-            text: 'No critical c found below the ceiling — the unbounded QD remains valid up to c ≤ ' + res.ceiling.toFixed(2) + '.' });
+            text: 'No critical c found below the ceiling ' + res.ceiling.toFixed(2)
+                  + ' — verified valid up to c = ' + upto + '.' });
         } else {
           showResult('No valid QD at this scale',
                      'no valid unbounded QD at or below the current c — adjust the quadrature data.');

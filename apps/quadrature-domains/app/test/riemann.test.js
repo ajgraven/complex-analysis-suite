@@ -14,14 +14,16 @@ module.exports = async function run() {
 // throwOnError:false — so a bad string renders a red error node instead of
 // throwing, which is invisible without a guard (this exact bug shipped once).
 // Here we render every family's build() output with throwOnError:TRUE and
-// assert it parses. Requires the `katex` devDependency; skipped cleanly if
-// absent (mirrors the optional-mathjs pattern).
+// assert it parses. `katex` is a hard dependency, so absence is a broken install
+// and fails rather than skipping (mirrors the mathjs marker in direct.test.js).
 // =============================================================================
 {
   let katexLib = null;
   try { katexLib = require('katex'); } catch (e) { katexLib = null; }
   if (!katexLib) {
-    ok('RiemannLatex KaTeX smoke (katex not installed — skipped)', true);
+    // katex is a hard `dependency` (0.16.47), not an optional devDep — absence is
+    // a broken install. See the FLOORS note in node-test.js.
+    ok('RiemannLatex KaTeX smoke: katex is a declared dependency but is not installed', false);
   } else {
     const RL = QD_NS.RiemannLatex;
     const br = (z, ...A) => ({ z, A });

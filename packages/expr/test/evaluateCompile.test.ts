@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import type { Complex } from "../src/complex.js";
 import { parse } from "../src/parser.js";
 import { evaluate, makeComplexFn, makeEscapeFn } from "../src/evaluate.js";
+import { compileF } from "../src/glsl.js";
 
 /** Deterministic LCG so any mismatch is reproducible. */
 function rng(seed: number): () => number {
@@ -54,6 +55,13 @@ const F_EXPRS = [
   "if(abs(z)>2, c, z^2+c)",
   "if(re(z)<0, z, -z) + c",
   "if(not(abs(z)>1), z*c, z+c)",
+  // COMPLEX (non-boolean) conditions — true when the real part is non-zero. Both compiled backends
+  // always coerced these, but the interpreter threw, so this fuzz could not include them and the node
+  // went unverified. It now agrees, and these entries are what make that a checked claim rather than a
+  // stated one. (expr-eval-01)
+  "if(z, c, z^2+c)",
+  "if(re(z), z, c) + c",
+  "if(z*c - c, z^2, c)",
   "w = z^2; w + c",
   "u = z*c; v = u + 1; u*v + c",
   "a*z*(1-z)",
@@ -127,5 +135,27 @@ describe("compiled evaluator matches the interpreter (bitwise)", () => {
     const esc = makeEscapeFn(parse("abs(z) > 2"), parse("z^2+c"));
     expect(esc([3, 0], [0, 0])).toBe(true);
     expect(esc([0.5, 0], [0, 0])).toBe(false);
+  });
+
+  // All THREE implementations must agree on a complex `if` condition, not just the two compiled ones.
+  // The interpreter is the reference the other two are checked against, so while it threw here the
+  // agreement between them was unwitnessed. (expr-eval-01)
+  it("interpreter, compiled closure and GLSL all coerce a complex condition by its real part", () => {
+    const ast = parse("if(z, c, z^2+c)");
+    const compiled = makeComplexFn(ast);
+
+    // re(z) != 0 ⇒ take `c`; re(z) == 0 ⇒ take `z^2 + c`.
+    for (const [z, c, want] of [
+      [[2, 0], [7, 0], [7, 0]], // re = 2 ⇒ c
+      [[0, 5], [7, 0], [-18, 0]], // re = 0 ⇒ z² + c = -25 + 7
+      [[-1, 0], [7, 0], [7, 0]], // re = -1 is still non-zero ⇒ c
+      [[0, 0], [7, 0], [7, 0]], // re = 0 ⇒ z² + c = 0 + 7
+    ] as [Complex, Complex, Complex][]) {
+      expect(evaluate(ast, z, c)).toEqual(want);
+      expect(compiled(z, c)).toEqual(want);
+    }
+
+    // And the GLSL backend emits that same coercion rather than a boolean test.
+    expect(compileF(ast)).toContain("!= 0.0");
   });
 });

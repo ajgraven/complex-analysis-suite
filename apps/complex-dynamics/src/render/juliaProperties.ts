@@ -56,8 +56,12 @@ export interface JuliaProperties {
   /** Filled-area upper bound π(1 − Σ k|b_k|²) from the exterior coefficients; 0 if disconnected;
    *  null for a non-monic f. A monotone upper bound — tight for interior c, loose near ∂M. */
   analyticArea: number | null;
-  /** Exact small-c Hausdorff dimension 1 + |c|²/(4 ln d); null unless monic and in the principal
-   *  (period-1) cardioid, where the perturbative formula applies. */
+  /** Small-c Hausdorff dimension from the perturbative formula 1 + |c|²/(4 ln d); null unless monic
+   *  and in the principal (period-1) cardioid, where that formula applies.
+   *
+   *  ≈, NOT exact. This said "Exact small-c Hausdorff dimension", contradicting the implementation's
+   *  own note that the result "is exact only at c = 0" — it is the leading term of an O(|c|³)
+   *  asymptotic, so it degrades as |c| grows away from the centre. Callers must present it hedged. */
   smallCDimension: number | null;
   /** Logarithmic capacity: exactly 1 for monic z^d + c, |a_d|^{−1/(d−1)} for any polynomial f
    *  (numerically detected), null for a non-polynomial map where it is undefined. */

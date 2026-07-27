@@ -55,6 +55,20 @@ export const SHARE_IDS = [
   "accumulate",
   "perturbation",
   "param-a",
+  // Instruments and the coordinate remap. These define the picture just as much as the colouring
+  // does, so a permalink / saved view / undo step has to carry them (CONTRIBUTING.md's live-control
+  // rule). The overlays are re-applied by applyAllControls → applyChanges → refreshDynPanels; the
+  // projection additionally needs plot-side state no id can reach, layered on as `_proj`.
+  "inverse-julia",
+  "siegel-curves",
+  "yoccoz-toggle",
+  "parapuzzle-toggle",
+  "yoccoz-depth",
+  "yoccoz-critical",
+  "lamination-toggle",
+  "qml-toggle",
+  "lamination-detail",
+  "projection-mode",
 ] as const;
 
 export type AppState = Record<string, string | boolean>;

@@ -103,6 +103,7 @@ import {
 import { decodeLink, validateEnvelope, type Envelope } from "@cas/interchange";
 import { envelopeToMapSpec, mapSpecToExpr } from "./interchange/importMap";
 import { PLACES } from "./state/places";
+import { decodeNotes, encodeNotes, type Note } from "./state/notes";
 import GIF from "gif.js";
 import gifWorkerUrl from "gif.js/dist/gif.worker.js?url";
 import katex from "katex";
@@ -199,6 +200,24 @@ const FATE_TEXT: Record<OrbitFate, string> = {
   periodic: "settles into a cycle",
   undetermined: "no escape or cycle within the iteration limit",
 };
+
+/**
+ * Is the plot's f the QUADRATIC family z²+c? The gate for every overlay whose mathematics is
+ * hard-coded quadratic — external rays and ray pairs (`rays.ts` iterates z ← z²+c), Farey bulb
+ * labels (`farey.ts` bulbRoot = μ/2 − μ²/4), the inverse-iteration Julia cloud and Siegel curves
+ * (`inverseJulia.ts` β = (1+√(1−4c))/2), the Yoccoz puzzle and parapuzzle (`yoccozPuzzle.ts`
+ * α = (1−√(1−4c))/2), the lamination/QML, and the "Mandelbrot set" legend name.
+ *
+ * These were gated on `plot.perturbationEligible`, which is NOT an is-quadratic flag: glPlot sets it
+ * for any monic z^d+c with d ≤ 8, and for general additive-c polynomials. The shipped `cubic` and
+ * `biomorph` presets are z³+c, so they passed the gate and the overlays drew z²+c objects on a
+ * cubic picture as fact — including labelling the parameter plane "Mandelbrot set", and silently
+ * skipping updateYoccoz's own caveat string ("The Yoccoz puzzle is defined for z²+c"), which was
+ * unreachable precisely because the gate passed.
+ *
+ * `perturbationEligible` remains correct where PERTURBATION itself is the subject.
+ */
+const isQuadraticFamily = (plot: { monicDegree: number | null }): boolean => plot.monicDegree === 2;
 
 /** Opens the glossary modal at an optional term anchor; assigned by setupGlossary(). */
 let openGlossary: (termId?: string) => void = () => {};
@@ -816,12 +835,31 @@ function setupHelpReference(): void {
   });
 }
 
-/** Show the export-progress overlay; returns progress + cancel hooks and a closer. */
+/** One export at a time — see {@link beginExport}. Mirrors the `recording` flag on the video path. */
+let exporting = false;
+
+/**
+ * Claim the export-progress overlay; returns progress + cancel hooks and a closer, or **null** when
+ * an export is already running.
+ *
+ * The overlay, its progress bar and its cancel button are one shared instance, so two exports could
+ * not share them: the label and bar flipped between the two jobs, the cancel button carried both
+ * jobs' listeners so one press aborted both, and whichever finished first hid the dialog out from
+ * under the other — leaving that job with no progress display, no way to cancel, and its button
+ * stuck on "Rendering…". The guard lives here rather than in the callers so a future one inherits
+ * it. Serialising is also the right behaviour on its own: two full-resolution tile renders share a
+ * single GL context. (cd-shell-12)
+ */
 function beginExport(label: string): {
   onProgress: (fraction: number) => void;
   isCancelled: () => boolean;
   done: () => void;
-} {
+} | null {
+  if (exporting) {
+    showToast("An export is already running.", "warn");
+    return null;
+  }
+  exporting = true;
   const overlay = byId("export-progress");
   const bar = byId<HTMLProgressElement>("export-progress-bar");
   const text = byId("export-progress-label");
@@ -843,6 +881,7 @@ function beginExport(label: string): {
     },
     isCancelled: () => cancelled,
     done: () => {
+      exporting = false;
       overlay.hidden = true;
       cancelBtn.removeEventListener("click", onCancel);
     },
@@ -992,14 +1031,7 @@ function init(): void {
           if (!on) refreshDynPanels(); // drag ended → recompute the dyn panels once for the final c
         },
       },
-      onViewChanged: (center, zoom) => {
-        setParamCenterInput(center);
-        setParamZoomInput(zoom);
-        updateViewChips();
-        announce(`Parameter space — ${paramChip.textContent}`);
-        scheduleRecord();
-        scheduleSuggestions();
-      },
+      onViewChanged: (center, zoom) => syncParamViewInputs(center, zoom),
       onHover: (coord) => {
         paramReadout(coord);
         updateOrbitPreview(coord);
@@ -1250,7 +1282,7 @@ function init(): void {
    *  (a rotation p/q was found) and f is z²+c (where external rays are defined). */
   function updateBulbRaysButton(info: InspectResult, plane: FractType): void {
     const eligible =
-      plane === "param" && info.rotation !== null && parameterView.plot.perturbationEligible;
+      plane === "param" && info.rotation !== null && isQuadraticFamily(parameterView.plot);
     byId("inspector-rays").hidden = !eligible;
   }
 
@@ -1269,7 +1301,7 @@ function init(): void {
       rot !== null &&
       rot.q >= 2 &&
       rot.q <= MAX_DOUBLING_Q &&
-      dynamicalView.plot.perturbationEligible;
+      isQuadraticFamily(dynamicalView.plot);
     byId("inspector-portrait").hidden = !eligible;
     lastPortraitRotation = eligible && rot ? { p: rot.p, q: rot.q } : null;
   }
@@ -1309,7 +1341,7 @@ function init(): void {
   }
 
   /** User annotations (gold pins), tagged by plane; pushed to each plot's overlay. */
-  let notes: { plane: FractType; x: number; y: number; text: string }[] = [];
+  let notes: Note[] = [];
   function refreshNotes(): void {
     const pick = (pl: FractType): Annotation[] =>
       notes.filter((n) => n.plane === pl).map(({ x, y, text }) => ({ x, y, text }));
@@ -1436,7 +1468,7 @@ function init(): void {
     const critToggle = byId<HTMLInputElement>("yoccoz-critical");
     const note = byId("yoccoz-note");
     byId("yoccoz-depth-value").textContent = depthInput.value; // keep the slider label in sync
-    const eligible = dynamicalView.plot.perturbationEligible; // z²+c (both planes share f)
+    const eligible = isQuadraticFamily(dynamicalView.plot); // z²+c (both planes share f)
     dynToggle.disabled = !eligible;
     paraToggle.disabled = !eligible;
     const anyOn = eligible && (dynToggle.checked || paraToggle.checked);
@@ -1526,7 +1558,7 @@ function init(): void {
     const detailInput = byId<HTMLInputElement>("lamination-detail");
     const note = byId("lamination-note");
     byId("lamination-detail-value").textContent = detailInput.value; // keep the slider label in sync
-    const eligible = dynamicalView.plot.perturbationEligible; // z²+c (both planes share f)
+    const eligible = isQuadraticFamily(dynamicalView.plot); // z²+c (both planes share f)
     dynToggle.disabled = !eligible;
     qmlToggle.disabled = !eligible;
     const anyOn = eligible && (dynToggle.checked || qmlToggle.checked);
@@ -1629,7 +1661,47 @@ function init(): void {
    * only — its boundary needs the ∞-basin connectivity, deferred). "disconnected" ⇒ a polynomial whose
    * K is disconnected; "unavailable" ⇒ not such a map (incl. Newton mode, where ∞ isn't superattracting).
    */
-  function dynExterior(
+  type DynExterior =
+    | { kind: "ok"; coeffs: Complex[]; lead: Complex; source: "polynomial" | "rational" }
+    | { kind: "disconnected" }
+    | { kind: "unavailable" };
+
+  // Memo for dynExterior. It depends only on the dynamical map (f, the live parameter a, c), the
+  // order n, and Newton mode — NOT on the Laurent boundary radius r, which is the one thing the
+  // radius slider changes. `laurent-r` is wired to `input` (main.ts, "laurent-r" listener), so a
+  // drag fired a full re-derivation per event: measured 0.3 ms for monic z²+c, 0.8–1.2 ms for a
+  // general polynomial, and 4.1–7.9 ms for a rational map — the last being half a frame budget, at
+  // 60 Hz, on top of the render. Worse on that path: applyLaurent only uses the result when
+  // `source === "polynomial"`, so for a rational map those 4–8 ms were computed and then discarded.
+  // The memo also absorbs the second call per Apply (updateExteriorMap and applyLaurent each ask for
+  // the same n) — it does not remove that duplication, which is cd-shell-08's business, only its cost.
+  // (cd-shell-09)
+  let dynExtKey = "";
+  let dynExtVal: DynExterior = { kind: "unavailable" };
+
+  function dynExterior(n: number): DynExterior {
+    const plot = dynamicalView.plot;
+    const [cx, cy] = plot.cValue;
+    const [ax, ay] = plot.paramA;
+    // Every input the uncached form reads, and nothing else. `esc` is in here because the
+    // general-polynomial branch runs polynomialConnectivity(fAst, escAst, …) — the escape test is
+    // editable independently of f, so leaving it out would serve a stale connectivity verdict.
+    const key = [
+      byId<HTMLInputElement>("newton").checked ? 1 : 0,
+      plot.f,
+      plot.esc,
+      `${ax},${ay}`,
+      `${cx},${cy}`,
+      plot.monicDegree ?? "-",
+      n,
+    ].join("|");
+    if (key === dynExtKey) return dynExtVal;
+    dynExtVal = dynExteriorUncached(n);
+    dynExtKey = key;
+    return dynExtVal;
+  }
+
+  function dynExteriorUncached(
     n: number,
   ):
     | { kind: "ok"; coeffs: Complex[]; lead: Complex; source: "polynomial" | "rational" }
@@ -2026,6 +2098,24 @@ function init(): void {
     updateEffectiveIterations();
   }
 
+  /**
+   * Everything that has to follow a parameter-plane view move: the sidebar centre/zoom boxes, the
+   * view chip, a history snapshot, and the advisory re-run.
+   *
+   * This is the body of `parameterView`'s `onViewChanged` hook, which PlotView fires only from its
+   * pointer/keyboard handlers — a PROGRAMMATIC `plot.center = …` renders the new view and tells
+   * nothing else. Any code that moves the parameter plane without a user gesture must call this, or
+   * it leaves the readouts describing a view that is no longer on screen (cd-shell-06).
+   */
+  function syncParamViewInputs(center: Vec2, zoom: number): void {
+    setParamCenterInput(center);
+    setParamZoomInput(zoom);
+    updateViewChips();
+    announce(`Parameter space — ${paramChip.textContent}`);
+    scheduleRecord();
+    scheduleSuggestions();
+  }
+
   /** With auto-iterations on, show each plot's live effective cap next to its iterations box
    *  (each plane scales by its own zoom) so the base count isn't read as the count in use. */
   function updateEffectiveIterations(): void {
@@ -2232,10 +2322,12 @@ function init(): void {
     const overlays = byId<HTMLInputElement>(overlayId).checked;
     const scaleBar = byId<HTMLInputElement>(scaleBarId).checked;
     const filename = byId<HTMLInputElement>(filenameId).value;
+    // Claim the shared overlay BEFORE touching the button, so a refused export leaves it untouched.
+    const progress = beginExport(`Rendering ${size}×${size}…`);
+    if (!progress) return;
     const label = button.textContent;
     button.disabled = true;
     button.textContent = "Rendering…";
-    const progress = beginExport(`Rendering ${size}×${size}…`);
     try {
       await view.exportPng({
         size,
@@ -2268,10 +2360,11 @@ function init(): void {
     const size = Number(byId<HTMLSelectElement>(sizeId).value);
     const overlays = byId<HTMLInputElement>(overlayId).checked;
     const scaleBar = byId<HTMLInputElement>(scaleBarId).checked;
+    const progress = beginExport(`Copying ${size}×${size}…`);
+    if (!progress) return;
     const label = button.textContent;
     button.disabled = true;
     button.textContent = "Copying…";
-    const progress = beginExport(`Copying ${size}×${size}…`);
     try {
       await view.copyPng({
         size,
@@ -2367,7 +2460,7 @@ function init(): void {
    *  (dynamical plane), or a generic "set" for other parameter families. */
   function legendSetName(view: PlotView, plane: "param" | "dyn"): string {
     if (plane === "dyn") return "filled Julia set";
-    return view.plot.perturbationEligible ? "Mandelbrot set" : "the set";
+    return isQuadraticFamily(view.plot) ? "Mandelbrot set" : "the set";
   }
 
   /** Redraw both plot legends for the current colouring (or clear them when the toggle is off; an
@@ -2453,7 +2546,7 @@ function init(): void {
 
   /** Toggle Farey bulb labels on the parameter plane; disabled unless f is z²+c. */
   function applyFarey(): void {
-    const eligible = parameterView.plot.perturbationEligible;
+    const eligible = isQuadraticFamily(parameterView.plot);
     const cb = byId<HTMLInputElement>("farey");
     cb.disabled = !eligible;
     parameterView.setFarey(eligible && cb.checked);
@@ -2461,7 +2554,7 @@ function init(): void {
 
   /** Trace the entered external-ray angle on both planes; gated to z²+c. */
   function applyRays(): void {
-    const eligible = parameterView.plot.perturbationEligible;
+    const eligible = isQuadraticFamily(parameterView.plot);
     const on = byId<HTMLInputElement>("rays").checked;
     const angle = parseAngle(byId<HTMLInputElement>("ray-angle").value);
     byId<HTMLInputElement>("rays").disabled = !eligible;
@@ -2475,7 +2568,7 @@ function init(): void {
 
   /** Draw the landing-ray pair for each visible Farey bulb (parameter plane); z²+c only. */
   function applyRayPairs(): void {
-    const eligible = parameterView.plot.perturbationEligible;
+    const eligible = isQuadraticFamily(parameterView.plot);
     const cb = byId<HTMLInputElement>("ray-pairs");
     cb.disabled = !eligible;
     parameterView.setRayPairs(eligible && cb.checked);
@@ -2483,7 +2576,7 @@ function init(): void {
 
   /** Draw the inverse-iteration Julia point cloud (dynamical plane); z²+c only. */
   function applyInverseJulia(): void {
-    const eligible = dynamicalView.plot.perturbationEligible;
+    const eligible = isQuadraticFamily(dynamicalView.plot);
     const cb = byId<HTMLInputElement>("inverse-julia");
     cb.disabled = !eligible;
     dynamicalView.setInverseJulia(eligible && cb.checked);
@@ -2491,7 +2584,7 @@ function init(): void {
 
   /** Draw the Siegel-disc invariant curves (dynamical plane); z²+c only. */
   function applySiegelCurves(): void {
-    const eligible = dynamicalView.plot.perturbationEligible;
+    const eligible = isQuadraticFamily(dynamicalView.plot);
     const cb = byId<HTMLInputElement>("siegel-curves");
     cb.disabled = !eligible;
     dynamicalView.setSiegelCurves(eligible && cb.checked);
@@ -2654,7 +2747,12 @@ function init(): void {
     const dc = dynamicalView.plot.centerDD;
     if (dynamicalView.plot.zoom > 1e3 || dc[0][1] !== 0 || dc[1][1] !== 0)
       state._dcdd = ddCenterToString(dc[0], dc[1]);
-    if (notes.length > 0) state._notes = JSON.stringify(notes); // pinned annotations
+    // Pinned annotations. Always emitted, even empty: applyFullState treats a MISSING `_notes` as
+    // "this state says nothing about notes, leave them alone", so an undo step or a saved view that
+    // genuinely has none still has to say so explicitly to restore an empty board. (cd-shell-05)
+    state._notes = encodeNotes(notes);
+    const proj = readProjectionState(); // anchor + saved linear view behind an active projection
+    if (proj) state._proj = proj;
     const pv = byId<HTMLSelectElement>("profile").value; // the active use-case profile (label hint)
     if (pv && pv !== "custom") state._profile = pv;
     return state;
@@ -2705,6 +2803,11 @@ function init(): void {
     applyAllControls();
     // applyAllControls reset each centre from the rounded f64 input; if the state carries an exact
     // double-double centre (a deep zoom), restore it now so the view reproduces to full precision.
+    //
+    // ⚠ PRECEDENCE: `_pcdd`/`_dcdd` therefore WIN over `inpparamcenter`/`inpdyncenter`. Any caller
+    // that hands us a readFullState() result with an overridden centre input must delete the matching
+    // `_*dd` key first, or the override is silently discarded — see the "Self-similar zoom" handler,
+    // which is the one caller that does this and where exactly that bug lived.
     if (typeof state._pcdd === "string") {
       const c = ddCenterFromString(state._pcdd);
       // Reject a non-finite centre from a corrupt link before it reaches the GL uniform (→ a blank plot).
@@ -2718,32 +2821,21 @@ function init(): void {
         dynamicalView.plot.setCenterDD(c[0], c[1]);
       }
     }
-    // Restore pinned annotations (validated; ignore a malformed list from a corrupt link). Caps bound a
-    // hostile link: reject non-finite coordinates (`typeof NaN === "number"` would otherwise admit them
-    // straight into the label geometry) and cap both the note count and per-note text length.
-    notes = [];
-    const MAX_NOTES = 256;
-    const MAX_NOTE_TEXT = 2000;
-    if (typeof state._notes === "string") {
-      try {
-        const parsed: unknown = JSON.parse(state._notes);
-        if (Array.isArray(parsed))
-          notes = parsed
-            .filter(
-              (n): n is { plane: FractType; x: number; y: number; text: string } =>
-                !!n &&
-                Number.isFinite(n.x) &&
-                Number.isFinite(n.y) &&
-                typeof n.text === "string" &&
-                n.text.length <= MAX_NOTE_TEXT &&
-                (n.plane === "param" || n.plane === "dyn"),
-            )
-            .slice(0, MAX_NOTES);
-      } catch {
-        /* ignore malformed _notes */
-      }
+    // The coordinate remap, once both centres are final — its anchor is relative to them.
+    setProjectionState(state._proj);
+    // Restore pinned annotations. Present-only, like `_grad` / `_z0` / `_profile`: a state that does
+    // not MENTION notes leaves them alone (decodeNotes returns null), and the validation + hostile-link
+    // caps live with the codec in state/notes.ts. This used to clear them unconditionally — invisible
+    // for the callers that pass a readFullState-derived state, but it silently wiped every pin the
+    // moment a "Places" entry was picked, since those are curated partial states built from six control
+    // ids (state/places.ts), so "no `_notes` key" read as "delete them all". Recovery was Ctrl+Z, with
+    // nothing hinting anything had been lost. A pre-fix saved view or link carries no `_notes` and so
+    // now preserves the current pins — the same rule, applied to states written before it existed.
+    const restoredNotes = decodeNotes(state._notes);
+    if (restoredNotes) {
+      notes = restoredNotes;
+      refreshNotes();
     }
-    refreshNotes();
     if (typeof state._profile === "string") adoptProfile(state._profile); // show the carried profile label
   }
 
@@ -2830,13 +2922,34 @@ function init(): void {
       return;
     }
     const views = loadSavedViews();
+    // Saving over an existing name destroys the old view. Report that rather than toasting plain
+    // success, and offer the way back — the previous state is right here (cd-views-destructive-01).
+    const replaced = Object.prototype.hasOwnProperty.call(views, name) ? views[name] : null;
     views[name] = readFullState();
     saveSavedViews(views);
     populateViewSelect();
     byId<HTMLSelectElement>("saved-views").value = name;
     byId<HTMLButtonElement>("delete-view-btn").disabled = false;
     input.value = "";
-    showToast(`Saved view “${name}”.`, "info");
+    if (replaced) {
+      showToast(`Replaced the saved view “${name}”.`, "warn", 10000, {
+        label: "Undo",
+        onClick: () => restoreView(name, replaced, `Restored the previous “${name}”.`),
+      });
+    } else {
+      showToast(`Saved view “${name}”.`, "info");
+    }
+  }
+
+  /** Put a captured view back under its name (the Undo behind a delete / overwrite). */
+  function restoreView(name: string, state: AppState, message: string): void {
+    const views = loadSavedViews();
+    views[name] = state;
+    saveSavedViews(views);
+    populateViewSelect();
+    byId<HTMLSelectElement>("saved-views").value = name;
+    byId<HTMLButtonElement>("delete-view-btn").disabled = false;
+    showToast(message, "info");
   }
 
   /** Load the view selected in the dropdown. */
@@ -2851,15 +2964,24 @@ function init(): void {
     showToast(`Loaded view “${name}”.`, "info");
   }
 
-  /** Delete the selected saved view. */
+  /** Delete the selected saved view, keeping a copy so the toast can put it back. */
   function deleteSelectedView(): void {
     const name = byId<HTMLSelectElement>("saved-views").value;
     if (!name) return;
     const views = loadSavedViews();
+    // The deletion is committed straight to localStorage with no confirmation, so the recovery
+    // affordance has to be visible right after the act rather than left to Ctrl+Z, which does not
+    // reach localStorage at all. Capture before deleting (cd-views-destructive-01).
+    const removed = Object.prototype.hasOwnProperty.call(views, name) ? views[name] : null;
     delete views[name];
     saveSavedViews(views);
     populateViewSelect();
-    showToast(`Deleted view “${name}”.`, "info");
+    showToast(`Deleted view “${name}”.`, "info", 10000, {
+      label: "Undo",
+      onClick: () => {
+        if (removed) restoreView(name, removed, `Restored view “${name}”.`);
+      },
+    });
   }
 
   // --- undo / redo (a debounced history stack over the AppState) ---------
@@ -3058,6 +3180,12 @@ function init(): void {
     const v = interpolateView(keyframes, Number(byId<HTMLInputElement>("kf-scrub").value));
     parameterView.plot.center = v.center;
     parameterView.plot.zoom = v.zoom;
+    // The plot's setters only schedule a render, so without this the scrub was invisible to
+    // everything BUT the picture: the sidebar and view chip kept the pre-scrub centre/zoom, the
+    // debounced history snapshot was built from those stale fields (so the scrubbed view never
+    // entered the undo stack), "Share link" produced a permalink to the pre-scrub view, and the
+    // next Apply — or Enter anywhere — re-read the stale inputs and snapped the plot back.
+    syncParamViewInputs(parameterView.plot.center, parameterView.plot.zoom);
   }
 
   /** Play the keyframe path and record it to a WebM clip. */
@@ -3351,7 +3479,7 @@ function init(): void {
   // Angles of a point (the inverse of ray landing): snap the last-clicked point to the nearest
   // low-period landing, draw the co-landing rays in cyan, and report valence + biaccessibility.
   byId("angles-find").addEventListener("click", () => {
-    if (!parameterView.plot.perturbationEligible) {
+    if (!isQuadraticFamily(parameterView.plot)) {
       showToast("External rays (and their angles) are defined for z²+c only.", "warn");
       return;
     }
@@ -3494,7 +3622,20 @@ function init(): void {
   // entry and restore it on exit; anchor the projection at the plot's current centre, then show the
   // canonical projected frame (full unit disk for Poincaré, one angular period for log-polar).
   const savedProjViews = new Map<PlotView, { center: Vec2; zoom: number }>();
-  byId("projection-mode").addEventListener("change", () => {
+  /** The caption under the projection picker (empty when the view is linear). */
+  function updateProjectionNote(val: string): void {
+    byId("projection-note").textContent =
+      (PROJECTIONS[val as ProjectionMode] ?? 0) === 0
+        ? ""
+        : `${val === "poincare" ? "Poincaré disk" : "Log-polar"} view active — overlays are hidden; choose Linear to restore the view.`;
+  }
+  /**
+   * Enter / leave the projection the picker now names. This is the INTERACTIVE transition: it moves
+   * the view (to the canonical projected frame on entry, back to the saved linear view on exit), so
+   * it is wrong for restoring a serialized state — that path has its own centre/zoom to honour and
+   * uses {@link setProjectionState} instead.
+   */
+  function applyProjection(): void {
     const val = byId<HTMLSelectElement>("projection-mode").value;
     const mode = PROJECTIONS[val as ProjectionMode] ?? 0; // string→uProjection int (shared with GLSL)
     for (const view of [parameterView, dynamicalView]) {
@@ -3515,11 +3656,72 @@ function init(): void {
       }
       view.refreshOverlay();
     }
-    byId("projection-note").textContent =
-      mode === 0
-        ? ""
-        : `${val === "poincare" ? "Poincaré disk" : "Log-polar"} view active — overlays are hidden; choose Linear to restore the view.`;
-  });
+    updateProjectionNote(val);
+  }
+  byId("projection-mode").addEventListener("change", applyProjection);
+  // --- serializing an active projection ------------------------------------------------------
+  // The picker's value rides in SHARE_IDS, but two pieces of plot state behind it cannot be reached
+  // by a control id: the projection ANCHOR (projCentre) and the LINEAR view saved for the trip back.
+  // Without them a restored projection would re-anchor at whatever the centre input happens to hold
+  // — which, after a pan inside the projected frame, is a projected-space coordinate, so the
+  // recipient would see a different picture. They travel as `_proj`, like `_z0` / `_grad`.
+  type ProjPlane = { a: Vec2; c: Vec2; z: number };
+  const projPlanes = (): [string, PlotView][] => [
+    ["p", parameterView],
+    ["d", dynamicalView],
+  ];
+  /** `_proj` for the current projection, or undefined when both planes are linear. */
+  function readProjectionState(): string | undefined {
+    const out: Record<string, ProjPlane> = {};
+    for (const [key, view] of projPlanes()) {
+      if (view.plot.projection === 0) continue;
+      const saved = savedProjViews.get(view) ?? { center: view.plot.center, zoom: view.plot.zoom };
+      out[key] = { a: view.plot.projCentre, c: saved.center, z: saved.zoom };
+    }
+    return Object.keys(out).length > 0 ? JSON.stringify(out) : undefined;
+  }
+  /**
+   * Restore the projection as STATE rather than as a transition: set each plane's mode + anchor and
+   * re-seed the saved linear view, leaving centre/zoom alone (the caller has just set those from the
+   * restored inputs, and under a projection they are already in projected space). Called for every
+   * full-state apply — with `_proj` absent it still carries the picker's value onto the plots, so an
+   * old link that predates `_proj`, or one that drops it, cannot leave the picker disagreeing with
+   * the picture; the anchor then falls back to the restored centre, which is exact unless the sender
+   * had panned inside the projected frame.
+   */
+  function setProjectionState(raw: unknown): void {
+    const val = byId<HTMLSelectElement>("projection-mode").value;
+    const mode = PROJECTIONS[val as ProjectionMode] ?? 0;
+    let planes: Record<string, Partial<ProjPlane>> = {};
+    if (typeof raw === "string") {
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
+          planes = parsed as Record<string, Partial<ProjPlane>>;
+      } catch {
+        /* ignore a malformed _proj from a corrupt link — fall back to the current view */
+      }
+    }
+    // A hostile / corrupt link must not feed NaN into the projection uniform (→ a blank plot).
+    const vec = (v: unknown, fallback: Vec2): Vec2 =>
+      Array.isArray(v) && v.length === 2 && Number.isFinite(v[0]) && Number.isFinite(v[1])
+        ? [Number(v[0]), Number(v[1])]
+        : fallback;
+    for (const [key, view] of projPlanes()) {
+      const plot = view.plot;
+      if (mode === 0) {
+        plot.setProjection(0, [0, 0]);
+        savedProjViews.delete(view);
+      } else {
+        const p = planes[key] ?? {};
+        plot.setProjection(mode, vec(p.a, plot.center));
+        const z = typeof p.z === "number" && Number.isFinite(p.z) && p.z > 0 ? p.z : plot.zoom;
+        savedProjViews.set(view, { center: vec(p.c, plot.center), zoom: z });
+      }
+      view.refreshOverlay();
+    }
+    updateProjectionNote(val);
+  }
   byId("herman-detect").addEventListener("click", () => {
     // Detect a Herman ring on the dynamical plane around z = 0 (the hole of the standard preset),
     // using the pure detector. Reports rotation number + modulus and draws the invariant circles.
@@ -3766,6 +3968,16 @@ function init(): void {
     const state = readFullState();
     state.inpparamcenter = `${c0[0]},${c0[1]}`;
     state.inpparamzoom = String(parameterView.plot.zoom * mag);
+    // Drop the exact double-double centre readFullState captured: it is the centre we are zooming
+    // AWAY from. applyFullState restores `_pcdd` AFTER applyAllControls (deliberately, so a deep-zoom
+    // permalink beats its own rounded input), so leaving it here silently overwrote the recentre and
+    // the view magnified about the OLD point while the toast claimed otherwise. Reachable on every
+    // normal use: `_pcdd` is emitted once zoom > 1e3 OR either low limb is non-zero, and GLPlot.shift
+    // folds pan deltas through ddAddNumber/twoSum, so any drag leaves a non-zero limb.
+    //
+    // Deleting it loses no precision — c0 is an f64 point from the inspector, and the template string
+    // above round-trips f64 exactly, so applyAllControls reconstructs the same centre from the input.
+    delete state._pcdd;
     applyFullState(state);
     showToast(
       `Self-similar zoom ×${mag.toFixed(2)} about the Misiurewicz-type point (ρ = λ).`,
@@ -4073,11 +4285,23 @@ function init(): void {
     applyPerturbation();
     byId<HTMLInputElement>("param-a").value = "1";
     applyParamA();
-    // Projection & Riemann-sphere view (wired via inline change handlers, no apply* fn) — restore the
-    // flat/linear defaults so a reset also clears an active projection or 3D sphere, not just coloring.
-    const projSel = byId<HTMLSelectElement>("projection-mode");
-    projSel.value = "linear";
-    projSel.dispatchEvent(new Event("change"));
+    // Yoccoz puzzle + pinched-disk laminations — instruments drawn ON TOP of the plots, so leaving
+    // them on would keep puzzle rays and a lamination disk over the freshly reset default view.
+    for (const id of ["yoccoz-toggle", "parapuzzle-toggle", "yoccoz-critical"] as const) {
+      byId<HTMLInputElement>(id).checked = false;
+    }
+    byId<HTMLInputElement>("yoccoz-depth").value = "2"; // the markup defaults
+    updateYoccoz();
+    for (const id of ["lamination-toggle", "qml-toggle"] as const) {
+      byId<HTMLInputElement>(id).checked = false;
+    }
+    byId<HTMLInputElement>("lamination-detail").value = "6";
+    updateLamination();
+    // Projection & Riemann-sphere view — restore the flat/linear defaults so a reset also clears an
+    // active projection or 3D sphere, not just coloring. The projection uses its interactive
+    // transition, which puts each plot back at the linear view it saved on entry.
+    byId<HTMLSelectElement>("projection-mode").value = "linear";
+    applyProjection();
     for (const id of ["sphere-param", "sphere-dyn"]) {
       const cb = byId<HTMLInputElement>(id);
       cb.checked = false;

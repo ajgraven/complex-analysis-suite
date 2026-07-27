@@ -7,10 +7,28 @@ name: CI
 # gate `pnpm lint && pnpm typecheck && pnpm test && pnpm build`). The parallel `browser` job
 # executes the ACTUAL WebGL2 GLSL (the @cas/gpu dual-backend harness) in headless Chromium —
 # the backstop for float32 GPU-only drift the CPU mirrors can't catch (Review P4).
+#
+# WHO GATES WHAT (review finding 0-3 — the gate used to run 3–4× per change):
+#   pull_request      → build + browser.   The merge-blocking signal; the only route to master.
+#   push to master    → browser only.      deploy-pages.yml carries the full gate before publishing.
+#   push to a branch  → nothing.           Open the PR to gate it.
+# Net effect: exactly one full gate per change, plus the browser backstop wherever it adds signal.
 
+# Triggers are deliberately NOT symmetric, to run the gate ONCE per change.
+#
+# `push` was previously `branches: ["**"]` alongside `pull_request`. Because a push ref
+# (refs/heads/x) and a PR ref (refs/pull/N/merge) produce different concurrency groups, opening a PR
+# from a branch in this repo ran the whole build + browser gate TWICE, in parallel, on identical
+# code — and normalizing the group cannot fix it, since the two events legitimately describe
+# different refs (a branch tip vs the merge commit).
+#
+# So: `pull_request` gates every change that can actually reach master (branch protection means a
+# PR is the only route), and `push` is narrowed to master so a direct push — which bypasses branch
+# protection — is still gated. The deliberate consequence is that pushing to a branch with no PR
+# open runs nothing; opening the PR runs it.
 on:
   push:
-    branches: ["**"]
+    branches: [master]
   pull_request:
 
 # Avoid piling up redundant runs on rapid pushes to the same ref.
@@ -24,6 +42,16 @@ env:
 
 jobs:
   build:
+    # Skipped on a push to master, because deploy-pages.yml runs this EXACT gate (lint → typecheck →
+    # test → build) before it publishes, so running it here as well doubles the cost for no extra
+    # signal. `pull_request` — the only route to master under branch protection — still runs it, and
+    # that is where the merge-blocking status check comes from. A direct push to master, which does
+    # bypass branch protection, is still gated: by the publish gate in deploy-pages.yml, which is
+    # exactly the reason that gate exists.
+    #
+    # The `browser` job below is deliberately NOT skipped: deploy-pages.yml does not run it, so it is
+    # the one signal on a master push that would otherwise be lost.
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,6 +62,22 @@ jobs:
         with:
           node-version: 22
       - run: corepack enable
+
+      # Cache the pnpm content-addressable store so install is not a cold network fetch every run.
+      # Done explicitly rather than via setup-node's `cache: pnpm`, because that resolves the store
+      # path while restoring the toolchain — i.e. BEFORE `corepack enable` has put pnpm on PATH.
+      # Reordering to satisfy it would mean enabling corepack against the runner's preinstalled Node
+      # rather than the one setup-node selects; this way the proven step order is untouched.
+      - name: Resolve the pnpm store path
+        run: echo "PNPM_STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+      - name: Cache the pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PNPM_STORE }}
+          # Keyed on the lockfile: any dependency change makes a new key, and `restore-keys` still
+          # seeds from the previous store so only the changed packages are fetched.
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
 
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
@@ -50,10 +94,23 @@ jobs:
       - name: Build
         run: pnpm build
 
-  # Runs the real WebGL2 GLSL (runGLSL over DUAL_BACKEND_CORPUS) in headless Chromium — the
-  # numeric backstop the node/jsdom gate structurally can't be (Review P4). Kept SEPARATE from
-  # `build` so it never slows the main gate; SwiftShader (software WebGL2) renders it, so the
-  # test uses renderer-appropriate tolerances (arithmetic float32-exact, transcendentals ~1e-3).
+  # Everything that needs a real WebGL2 context, in headless Chromium — the backstop the node/jsdom
+  # gate structurally can't be. Two harnesses, both under `pnpm test:browser`:
+  #
+  #   · @cas/gpu — runGLSL over DUAL_BACKEND_CORPUS: executes the emitted GLSL and compares against
+  #     the JS reference, catching float32 GPU-only drift (Review P4). SwiftShader (software WebGL2)
+  #     renders it, so tolerances are renderer-appropriate (arithmetic float32-exact,
+  #     transcendentals ~1e-3).
+  #   · complex-dynamics — COMPILES AND LINKS the app's real shaders in single AND df64
+  #     (cd-shader-uncompiled-07). Before this, no app shader was compiled anywhere in CI: the
+  #     codegen tests assert on the emitted GLSL as a string, which cannot tell you the program
+  #     builds. Verified the gap was real — a `cvec v = vec2(...)` in the generated template
+  #     (valid as vec2, a type error as vec4) fails all four df64 compiles here while every string
+  #     assertion in glslCodegen.test.ts still passes 9/9. CD is published, so that class of defect
+  #     would reach users as a dead canvas.
+  #
+  # Kept SEPARATE from `build` so it never slows the main gate.
+  # NOT covered: apps/correspondences' shaders are still never compiled (unpublished app).
   browser:
     runs-on: ubuntu-latest
     steps:
@@ -62,6 +119,17 @@ jobs:
         with:
           node-version: 22
       - run: corepack enable
+
+      # Same pnpm-store cache as the `build` job (see the rationale there); the key is shared, so
+      # whichever job finishes install first populates it for the other.
+      - name: Resolve the pnpm store path
+        run: echo "PNPM_STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+      - name: Cache the pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PNPM_STORE }}
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
 
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
@@ -77,5 +145,6 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Browser dual-backend harness (real WebGL2 GLSL)
+      # @cas/gpu's dual-backend numeric harness, then CD's real-shader compile/link sweep.
+      - name: Browser harnesses (real WebGL2 GLSL — execute + compile)
         run: pnpm test:browser

@@ -3,8 +3,10 @@
 The suite's third tool: a visualizer for **anti-holomorphic correspondences and
 Schwarz-reflection matings**, motivated by the Lee–Lyubich–Makarov–Mukherjee (LLMM) and
 Lyubich–Mazor–Mukherjee program. It is the app the whole monorepo was factored to enable —
-it rides the four shared packages (`@cas/core`, `@cas/expr`, `@cas/gpu`, `@cas/interchange`)
-rather than reimplementing complex arithmetic, root-finding, GLSL, or the map compiler.
+it rides all **five** shared packages — `@cas/core`, `@cas/exact`, `@cas/expr`, `@cas/gpu` and
+`@cas/interchange` — rather than reimplementing complex arithmetic, root-finding, exact polynomial
+arithmetic, GLSL, or the map compiler. (`@cas/exact` backs the exact correspondence-curve engine;
+`@cas/interchange` is exercised through the σ hand-off in the smoke test.)
 
 Built in [Phase 6](../../docs/MIGRATION.md#phase-6--build-appscorrespondences-in-parallel-with-the-tail-of-phase-5),
 **deltoid-first**: the deltoid Schwarz reflection is the ground-truth milestone that
@@ -34,8 +36,11 @@ It is a **two-page** Vite app (`base: "./"`, `rollupOptions.input`):
    `η(z) = 1/z̄` is unit-circle reflection; equivalently `σ(w) = conj(F(φ⁻¹(w)))` with `F`
    the Schwarz extension. Rendered by escape time — the filled set K (deltoid interior)
    black, the tiling exterior coloured by escape generation. **GPU** (WebGL2 via `@cas/gpu`,
-   per-pixel Newton inversion of φ) with a **CPU** fallback that is pixel-consistent with it
-   (a node-safe agreement test guards the two).
+   per-pixel Newton inversion of φ) with a **CPU** fallback that agrees with it closely but *not*
+   pixel-for-pixel — fp32 on the GPU versus float64 on the CPU shifts the escape count by one near
+   class boundaries (~0.22% of pixels on the parameter plane). A node-safe agreement test guards the
+   two, but note it exercises a TypeScript transcription of the shader rather than the compiled GLSL,
+   so it cannot catch drift in the shader itself.
 
 2. **Deleted correspondence.** The genuinely multivalued object: the non-trivial branches of
    `φ(w) = φ(η(z))` (a 2:2 correspondence for the degree-3 deltoid, after deleting the

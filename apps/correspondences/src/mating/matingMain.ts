@@ -52,7 +52,12 @@ function render(): void {
   if (!readout) return;
   if (state.orbit && state.orbit.length) {
     const start = Math.round(((state.orbit[0] * 180) / Math.PI + 360) % 360);
-    readout.textContent = `orbit  θ ↦ −2θ  ·  ${state.orbit.length} points  ·  from ${start}°  (same dynamics on all three)`;
+    // NOT "same dynamics on all three". θ ↦ −2θ is the shared angle dynamics, realised by z̄² and by
+    // the Nielsen map — but σ does NOT move the deltoid-curve points this panel marks: on |z| = 1,
+    // F(z) = 1/z + z²/2 = conj(φ(z)), so σ(φ(e^{iθ})) = φ(e^{iθ}). Measured max deviation 2.3e-14
+    // across 12 angles, i.e. σ fixes that curve POINTWISE while the marker moves along it.
+    // The angle is what is synchronised across the panels; the dynamics is not.
+    readout.textContent = `orbit  θ ↦ −2θ  ·  ${state.orbit.length} points  ·  from ${start}°  (angle synced across all three; σ fixes the deltoid curve pointwise)`;
   } else if (state.theta !== null) {
     readout.textContent = `equator angle  θ = ${Math.round(((state.theta * 180) / Math.PI + 360) % 360)}°  ·  synced across all three panels`;
   } else {

@@ -59,7 +59,7 @@ import _QD from '../solver.mjs';
   /** @type {Promise<void>|null} */
   let _readyPromise = null;
   let _nextJobId = 1;
-  /** @type {{ jobId:number, onMessage:(e:MessageEvent)=>void }|null} */
+  /** @type {{ jobId:number, onMessage:(e:MessageEvent)=>void, cbs:object }|null} */
   let _inflight = null;
   let _mainThreadFallback = false;
 
@@ -79,9 +79,39 @@ import _QD from '../solver.mjs';
     _readyPromise = (async () => {
       if (typeof Worker === 'undefined') throw new Error('Worker unavailable in this environment');
       const w = new Worker(new URL('../workers/schwarz-worker-entry.mjs', import.meta.url), { type: 'module' });
+      // Settle the in-flight render on a worker-LEVEL failure. Such a failure posts no
+      // {kind:'schwarzError'} message, so logging alone left `_inflight` set and the caller
+      // waiting on callbacks that could never fire: schwarz-render only clears
+      // `sState.rendering` from the `m.done` path, and there is no watchdog anywhere in
+      // schwarz-render / schwarz-ui — so the tab stuck on "Pass 1/3 (coarse) …" with a blank
+      // canvas, permanently. Routing it to onError instead runs the caller's `fallback()`,
+      // which restarts the render in-process and recovers.
+      //
+      // Reachable: schwarz-worker-entry guards only buildSchwarzFromPhi, leaving the
+      // escapeTime loop unprotected, and a module-load failure of the entry (QD is a PWA —
+      // stale service-worker caches) also fires `error` without throwing synchronously from
+      // `new Worker`, so `_mainThreadFallback` is never set either.
+      //
+      // This is the fix the other three worker wrappers already carry; only this one lacked
+      // it (primary-solver-worker.mjs has it with the same reasoning written down).
+      const _failInflight = (detail) => {
+        const job = _inflight;
+        _inflight = null;
+        if (job) {
+          try { w.removeEventListener('message', job.onMessage); } catch (_) { /* ignore */ }
+          if (job.cbs && job.cbs.onError) job.cbs.onError(detail);
+        }
+        _disposeWorker();
+      };
       w.addEventListener('error', (ev) => {
-        console.error('[schwarz-cpu worker] error: '
-          + (ev.message || ev) + ' @ ' + (ev.filename || 'bundle') + ':' + (ev.lineno || '?'));
+        const detail = 'schwarz CPU worker crashed: ' + (ev.message || ev)
+          + ' @ ' + (ev.filename || 'bundle') + ':' + (ev.lineno || '?');
+        console.error('[schwarz-cpu worker] error: ' + detail);
+        _failInflight(detail);
+      });
+      w.addEventListener('messageerror', (ev) => {
+        console.error('[schwarz-cpu worker] messageerror (postMessage clone failed):', ev);
+        _failInflight('schwarz CPU worker message error (structured-clone failed)');
       });
       _worker = w;
     })().catch((err) => {
@@ -131,7 +161,10 @@ import _QD from '../solver.mjs';
         try { _worker.removeEventListener('message', onMessage); } catch (_) { /* ignore */ }
         if (_inflight && _inflight.jobId === jobId) _inflight = null;
       }
-      _inflight = { jobId, onMessage };
+      // `cbs` rides along so the worker-level error/messageerror handlers above can settle this
+      // job through onError — they fire outside this closure and would otherwise have no way to
+      // reach the caller.
+      _inflight = { jobId, onMessage, cbs };
       _worker.addEventListener('message', onMessage);
       try {
         _worker.postMessage(Object.assign({ kind: 'schwarzRender', jobId }, params));
