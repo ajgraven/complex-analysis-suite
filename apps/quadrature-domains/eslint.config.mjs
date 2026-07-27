@@ -132,6 +132,51 @@ export default [
     files: ['app/complex.js', 'app/taylor.js', 'app/schwarz/schwarz-common.js', 'app/ui.js'],
     rules: { 'no-redeclare': 'off' },
   },
+  // The ESM app source — 97 of the 98 .mjs files under app/.
+  //
+  // These had NO rules at all. Every `files:` glob above targets app/**/*.js or a named .js file,
+  // and the only .mjs glob was app/qd.mjs — so `eslint --print-config app/ui.mjs` (and sym-core.mjs,
+  // and main.mjs) resolved to zero active rules. The comment on the classic-script block, "classic
+  // <script> tags; ESM lives in qd.mjs", explains why: it was written before the Phase-2 ESM
+  // migration, which moved the whole app to .mjs and left the lint config behind. The result was
+  // that the correctness rules this config carefully picks — no-undef, no-unreachable, use-isnan,
+  // valid-typeof, no-dupe-keys — applied only to the legacy .js files, which after the migration are
+  // mostly tests.
+  //
+  // Same rule set as the classic-script block, with sourceType 'module'. no-unused-vars stays at
+  // WARN (NO_UNUSED_VARS_RULE), deliberately: turning it on surfaces ~294 findings across this tree,
+  // and a green gate that shows them beats a red gate that blocks everything until a 294-item
+  // cleanup lands. The genuinely-bug-shaped rules are errors, and they were measured at zero
+  // findings before being switched on — so they gate from day one without a backlog.
+  {
+    files: ['app/**/*.mjs'],
+    ignores: ['app/qd.mjs'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      // Worker entries (app/workers/*.mjs) run in a worker realm, so include those globals
+      // alongside the browser ones; node covers the handful of environment probes.
+      globals: {
+        ...browserGlobalsClean,
+        ...globals.worker,
+        ...globals.node,
+        ...QD_GLOBALS,
+      },
+    },
+    rules: {
+      // -------- Correctness (errors — measured at zero findings before enabling) --------
+      'no-undef': 'error',
+      'no-redeclare': 'error',
+      'no-dupe-keys': 'error',
+      'no-dupe-args': 'error',
+      'no-unreachable': 'error',
+      'no-self-compare': 'error',
+      'use-isnan': 'error',
+      'valid-typeof': 'error',
+      // -------- Visible but non-blocking (the ~294-item backlog) --------
+      'no-unused-vars': NO_UNUSED_VARS_RULE,
+    },
+  },
   // ESM façade (qd.mjs).
   {
     files: ['app/qd.mjs'],

@@ -3731,7 +3731,6 @@ const QD = _QD;
     let _domainIdx = 0, _lastVerdictPr = null;
     function renderProofVerdict(pr) {
       const cl = pr.cl, verdict = pr.verdict;
-      const distinct = pr.distinctPhis || [];
       const D = pr.count || 0;
       const rows = pr.rows || [];
       if (pr !== _lastVerdictPr) { _lastVerdictPr = pr; _domainIdx = 0; }   // new verdict → back to domain 1

@@ -68,7 +68,6 @@
 // =============================================================================
 
 // ESM (Phase 2 port) — twin of algebra/algebra-canvas.js (classic stays frozen). UI orchestrator/consumer.
-import { state } from '../ui-state.mjs';
 import _QD from '../solver.mjs';
 const QD = _QD;
 
@@ -574,7 +573,11 @@ const QD = _QD;
     }
 
     // ---- B2: DAG minimap ----------------------------------------------------
-    const MM_W = 168, MM_H = 116;     // minimap inner coordinate box (matches the CSS size)
+    // The minimap's inner coordinate box, matching the CSS size. Only the width is used (the scale
+    // is width-driven), but the pair is what documents the box — keeping the height stops the next
+    // reader having to re-measure it from the stylesheet.
+    // eslint-disable-next-line no-unused-vars -- intentional: documents the CSS box as a pair
+    const MM_W = 168, MM_H = 116;
     // Scale to WIDTH and let height overflow (the box clips). Fitting both axes made a wide track
     // collapse into the top sliver of a 116px box with the rest empty.
     function mmScale() {
@@ -728,7 +731,7 @@ const QD = _QD;
       const avail = (scroll.clientWidth || natural) - 8;
       scroll.scrollLeft = 0;
       const wanted = avail / natural;
-      const z = setZoom(wanted);
+      setZoom(wanted);
       // After condensing, the lanes are narrower, so re-measure and try again once.
       if (isCondensed()) {
         const natural2 = track.offsetWidth || 1;
