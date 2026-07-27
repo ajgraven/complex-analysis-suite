@@ -75,11 +75,45 @@ defects), **#156** (this review record).
 
 ### ▶ Batch F — start here
 
-**Test integrity — fix in place, no new CI infrastructure** (standing decision). ~14 items; the one
-already named is `qd-exact-count-guard-11` (`vitest/algebra-verdict-labeling.test.ts:114` — the
-`rigor:'exact'` guard counts call sites instead of identifying them, so the exemption can migrate
-silently). Enumerate the rest from `RAW_FINDINGS_2026-07.md` by `category: testing` minus what is
-already closed, exactly as Batches D and E were scoped.
+Test integrity. **8 distinct items** (10 `category: testing` findings, minus two — see the traps).
+Standing decision: **fix in place, no new CI infrastructure**; where a real fix needs a harness,
+*document precisely what the test does not prove rather than fake it*.
+
+| id | Where | Severity / effort | The defect |
+| --- | --- | --- | --- |
+| `corr-shader-mirror-02` | `apps/correspondences/test/gpuAgreement.test.ts:16` | medium / small | The "GPU shader ↔ CPU engine agreement" test compiles nothing — it exercises a hand-written **TypeScript replica** of the correspondences GLSL, so the real shader can drift freely while the test stays green. |
+| `cd-shader-uncompiled-07` | `apps/complex-dynamics/test/glslCodegen.test.ts:62` | medium / medium | CD's `buildFragmentShader` output is only string-asserted; **no app shader is compiled in any CI job**. CD *is* published, so a df64-only GLSL error would reach users. |
+| `gpu-df64-01` | `packages/gpu/src/glsl/df64Ref.ts:142` | medium / small | `df64Ref`'s `dfLog`/`dfAtan2` seed from float64 `Math`, not the fp32 seed the GLSL uses — so the tests cannot detect a convergence failure in `df_log`/`df_atan2`. |
+| `qd-interchange-e2e-08` | `apps/complex-dynamics/test/importMap.test.ts:28` | low / small | The QD→CD hand-off is tested as two independent hand-written literals; nothing connects the real producer to the real consumer. |
+| `qd-floors-optional-dep-05` | `apps/quadrature-domains/app/node-test.js:66` | medium / trivial | `node-test.js` FLOORS of 1 for `direct` and `riemann` cannot detect the mathjs-absent degradation they were written for. |
+| `cd-glcontext-restore-09` | `apps/complex-dynamics/src/render/glPlot.ts:560` | low / small | `restoreContext()`'s hand-maintained 17-field GL-handle reset list has no regression guard — a new handle silently survives a context loss. |
+| `qd-exact-count-guard-11` | `apps/quadrature-domains/vitest/algebra-verdict-labeling.test.ts:114` | low / trivial | The unconditional-`rigor:'exact'` guard **counts** call sites instead of identifying them, so the exemption can migrate silently. |
+| `qd-offload-tautology-10` | `apps/quadrature-domains/vitest/algebra-offload-kinds.test.ts:65` | low / trivial | An offload differential test names a behaviour it never asserts, and **its comparisons pass when both sides fail**. |
+
+**⛔ Two traps, both already paid for once in earlier batches.**
+
+- **`gpu-dual-01` is ALREADY FIXED** — Batch B (#163) corrected `dualBackend.ts`'s uniform ordering
+  (`uA` declared before `${fFn}`) as one of its found-while-fixing items. Do not re-open.
+- **`cd-dup-04` is the SAME defect as `corr-shader-mirror-02`** — same file, same line, one graded
+  medium and one low. Fix once, close both. (Batch D hit exactly this shape with
+  `cd-dup-01` / `qd-schwarz-cpuworker-01`.)
+
+**⚠ The decision this batch cannot avoid.** `corr-shader-mirror-02` and `cd-shader-uncompiled-07` both
+want the same thing — *compile the real shader* — and the only mechanism that does that is
+`pnpm test:browser`, which today runs **only** `packages/gpu`'s own probes
+(`packages/gpu/vitest.browser.config.ts` is package-local; root `package.json` defines `test:browser`
+as `pnpm -C packages/gpu run test:browser`). Extending it to the apps means new `*.browser.test.ts`
+files plus a root-script change — i.e. **exactly the "new CI infrastructure" the standing decision
+rules out**. So Batch F should open by settling that explicitly rather than discovering it midway:
+either relax the decision for these two (the browser job already exists and is not a publish blocker,
+so the marginal cost is small), or fix what is fixable in place and *document precisely what the
+tests still do not prove*. Note the asymmetry when deciding: **CD is published, correspondences is
+not.**
+
+**Watch for.** Batch E refuted 6 of 15 by measurement; a testing batch has no equivalent measurement,
+so the discipline here is different — for each item, first establish that the test really is
+vacuous by **making the guarded defect real and confirming the test still passes**. That is the
+testing-batch analogue of a before/after number, and Batches A-2/B/D all found it decisive.
 
 <details>
 <summary>Batch E (complete) — the 15 findings and their outcomes</summary>
@@ -199,6 +233,25 @@ test-integrity batch (F).
   `destroy()` — which nothing in the Schwarz path ever called, so the two-line fix would have shipped
   as code that provably never runs. Before closing a "release it in the teardown" item, grep for a
   caller of that teardown.
+- **The fixture decides the answer in a perf measurement.** Batch E's deep-zoom cost came out at
+  1–2 ms on an *escaping* reference (the orbit truncates at its bailout) and 3.8–35.7 ms on a
+  *bounded* one, which is the case that actually matters. Same code, same benchmark, 10× apart.
+  Likewise `Gauss.mul` measured 1.82× on fractional operands and 3.0–3.6× on the integer operands the
+  consumer actually holds. Before trusting a number, ask what input the *real* caller passes.
+- **Warm up and take a median.** A single unwarmed before/after on the CD exact tower reported
+  19.2 → 19.7 ms — the WRONG SIGN — where the warmed median-of-9 gave 12.76 → 9.19 ms.
+- **`git checkout -- <file>` bit again**, this time discarding an *uncommitted* fix while restoring
+  after a control build. The note below has said to use `git stash push`/`pop` since Batch A-2. The
+  stronger habit: **commit the fix before running any control that touches the same file.**
+- **rAF does not fire while the Browser pane is hidden** (verified: 0 callbacks in 800 ms). Anything
+  rAF-coalesced — QD's `attachHoverTooltip`, CD's live render loop — is therefore unreachable
+  headlessly, and a "responsive" reading taken over it measures nothing. What *is* reachable: paths
+  driven by `setTimeout` or called synchronously, notably CD's PNG export (`renderToImageData` calls
+  `drawFractal` directly), which is why a **byte-identical export hash** works as a render-correctness
+  control where the live loop cannot be observed at all.
+- **Rebuild with `master`'s copy of the touched file as a control.** It settled two questions this
+  session: that the deep-zoom orbit memo changes no pixel (`ebf05269` both ways), and that QD's
+  param-slice `toFixed` crash is pre-existing rather than ours.
 - Verifier notes for every finding live in `RAW_FINDINGS_2026-07.md` next to the original evidence.
 
 ## Commission
