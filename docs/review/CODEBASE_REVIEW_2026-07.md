@@ -615,6 +615,27 @@ They are the strongest evidence the verification was real rather than ceremonial
 
 #### The 12 surviving HIGH findings
 
+> **4 of these are now fixed** in [#158](https://github.com/ajgraven/complex-analysis-suite/pull/158):
+> `qd-polyh-01`, `qd-schwarz-skip-01`, `cd-shell-02` (the three trivial-effort ones) and
+> `expr-rational-01`. **8 remain open**, listed unchanged below.
+>
+> Three notes worth carrying forward, because each corrected something the finding got wrong or
+> under-stated:
+>
+> - **`qd-schwarz-skip-01` was right at seven, and it is easy to miscount as twelve.** There are
+>   twelve `if (r.success)` blocks and none has an `else` — but five are *preceded* by an
+>   `ok(…, r.success, …)` assertion, which is a correct pattern. Check for the preceding assertion,
+>   not a trailing `else`.
+> - **`expr-rational-01` was two stacked defects, not one.** `pPow` was O(k²) (~7.4 min at k=40 000),
+>   *and* its dominant caller `escapeIsMeaningless` builds the whole polynomial to read two degrees,
+>   on every view change. Fixed at the algorithm (zero-skipping multiply + binary exponentiation,
+>   z^40000 → 14 ms) rather than by capping the exponent. A degree-only fast path for the caller was
+>   considered and **rejected as unsound** — leading coefficients cancel under `+`/`−`, so degree
+>   arithmetic gives only an upper bound.
+> - **Some things at that scale are inherently expensive.** With the exterior-map or connectivity
+>   panels open, `critical.ts` runs Durand–Kerner on the derivative, so `z^40000+c` means locating
+>   39 999 roots. No representation change fixes that; it is real computation.
+
 | id | Where | What |
 | --- | --- | --- |
 | `cd-shell-01` | `main.ts:2468` | z²+c-only overlays gated on `perturbationEligible` (true for z^d+c, d ≤ 8) — the shipped **cubic** and **biomorph** presets unlock nine quadratic-family overlays and draw them as fact. The correct predicate `monicDegree === 2` is already used correctly four other places in the same file. |

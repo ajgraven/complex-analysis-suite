@@ -901,6 +901,7 @@ if (mathjs) {
 {
   const hData = { poles: [{ a: {re:1,im:0}, principal: [{re:0.5,im:0}] }] };
   const r = solveInverseQD(hData, { lqd: true, w0: {re:1,im:0} });
+  ok('Schwarz/boundedLQD: solve success', r.success, r.success ? '' : r.error);
   if (r.success) {
     const phi = r.primary.phi;
     const pts = QD_NS.sampleBoundary(phi, 256);
@@ -971,6 +972,7 @@ if (mathjs) {
   const r = solveInverseQD(hData, {
     lqd: true, singular: true, w0: {re:1,im:0}, q: {re:0.5,im:0}
   });
+  ok('Schwarz/boundedLQD_singular: solve success', r.success, r.success ? '' : r.error);
   if (r.success) {
     const phi = r.primary.phi;
     const pts = QD_NS.sampleBoundary(phi, 256);
@@ -1019,6 +1021,7 @@ if (mathjs) {
 {
   const hData = { poles: [{ a: {re:2,im:0}, principal: [{re:1,im:0}] }] };
   const r = solveInverseQD(hData, { lqd: true, unbounded: true, c: 0.6 });
+  ok('Schwarz/unboundedLQD: solve success', r.success, r.success ? '' : r.error);
   if (r.success) {
     const phi = r.primary.phi;
     const pts = QD_NS.sampleBoundary(phi, 256);
@@ -1088,6 +1091,7 @@ if (mathjs) {
   const r = solveInverseQD(hData, {
     lqd: true, unbounded: true, singular: true, c: 0.6, q: {re:0.5,im:0}
   });
+  ok('Schwarz/unboundedLQD_singular: solve success', r.success, r.success ? '' : r.error);
   if (r.success) {
     const phi = r.primary.phi;
     const pts = QD_NS.sampleBoundary(phi, 256);
@@ -1149,6 +1153,7 @@ if (mathjs) {
 {
   const hData = { poles: [], polyPart: [{re:1, im:0}] };
   const r = solveInverseQD(hData, { lqd: true, unbounded: true, c: 1 });
+  ok('Schwarz/unboundedLQD-polyPart h=1 c=1: solve success', r.success, r.success ? '' : r.error);
   if (r.success) {
     const phi = r.primary.phi;
     const pts = QD_NS.sampleBoundary(phi, 256);
@@ -1180,6 +1185,7 @@ if (mathjs) {
     polyPart: [{re:0.05, im:0}],
   };
   const r = solveInverseQD(hData, { lqd: true, unbounded: true, c: 0.6 });
+  ok('Schwarz/unboundedLQD-polyPart+1pole: solve success', r.success, r.success ? '' : r.error);
   if (r.success) {
     const phi = r.primary.phi;
     const pts = QD_NS.sampleBoundary(phi, 256);
@@ -1215,6 +1221,7 @@ if (mathjs) {
   const r = solveInverseQD(hData, {
     lqd: true, unbounded: true, singular: true, c: 0.5, q: {re:0.2, im:0}
   });
+  ok('Schwarz/unboundedLQD_singular+γ: solve success', r.success, r.success ? '' : r.error);
   if (r.success) {
     const phi = r.primary.phi;
     const pts = QD_NS.sampleBoundary(phi, 256);
