@@ -68,7 +68,14 @@ import _QD from './solver.mjs';
   let _nextJobId = 1;
   /** @type {InflightJob|null} */
   let _inflight = null;            // current outstanding solve, if any
-  let _mainThreadFallback = false; // set true after the worker fails to load once.
+  // Set true after THIS lane's worker fails to load once. One latch per lane — the three workers
+  // below are deliberately independent (a background alt-search must not be able to preempt an
+  // interactive solve), so a single shared latch broke that independence in the one case it mattered
+  // most: whichever lane happened to fail first silently demoted the other two to the main thread for
+  // the rest of the session, re-introducing exactly the UI freeze each worker exists to prevent. The
+  // lanes fail independently in practice — the live lane only spawns on a pole drag, the aux lane
+  // only on a background search — so this is not merely theoretical. (qd-psw-fallback-latch-01)
+  let _mainThreadFallback = false;
 
   function _disposeWorker() {
     if (_worker) {
@@ -196,6 +203,7 @@ import _QD from './solver.mjs';
   let _auxNextJobId = 1;
   /** @type {InflightJob|null} */
   let _auxInflight = null;
+  let _auxFallback = false;        // this lane's own latch — see _mainThreadFallback
 
   function _disposeAux() {
     if (_auxWorker) {
@@ -210,7 +218,7 @@ import _QD from './solver.mjs';
   }
 
   async function ensureAuxReady() {
-    if (_mainThreadFallback) return;
+    if (_auxFallback) return;
     if (_auxWorker) return;
     if (_auxReady) { await _auxReady; return; }
     _auxReady = (async () => {
@@ -230,7 +238,7 @@ import _QD from './solver.mjs';
     })().catch((err) => {
       console.warn('[primary-solver-worker] Aux worker unavailable (' + (err && err.message || err) +
         '). Alternate search will run on the main thread.');
-      _mainThreadFallback = true;
+      _auxFallback = true;
       _auxReady = null;
     });
     await _auxReady;
@@ -241,7 +249,7 @@ import _QD from './solver.mjs';
   // supersedes any prior in-flight aux job (its promise rejects { aborted }).
   function searchAlternatesAsync(hData, norm, known, opts) {
     return ensureAuxReady().then(() => {
-      if (_mainThreadFallback || !_auxWorker) {
+      if (_auxFallback || !_auxWorker) {
         return Promise.resolve().then(() =>
           _QD.searchAlternates(hData, norm, known || [], opts || {}));
       }
@@ -289,6 +297,7 @@ import _QD from './solver.mjs';
   let _liveNextJobId = 1;
   /** @type {InflightJob|null} */
   let _liveInflight = null;
+  let _liveFallback = false;       // this lane's own latch — see _mainThreadFallback
 
   function _disposeLive() {
     if (_liveWorker) {
@@ -303,7 +312,7 @@ import _QD from './solver.mjs';
   }
 
   async function ensureLiveReady() {
-    if (_mainThreadFallback) return;
+    if (_liveFallback) return;
     if (_liveWorker) return;
     if (_liveReady) { await _liveReady; return; }
     _liveReady = (async () => {
@@ -323,7 +332,7 @@ import _QD from './solver.mjs';
     })().catch((err) => {
       console.warn('[primary-solver-worker] Live worker unavailable (' + (err && err.message || err) +
         '). Live drag solve will run on the main thread.');
-      _mainThreadFallback = true;
+      _liveFallback = true;
       _liveReady = null;
     });
     await _liveReady;
@@ -337,7 +346,7 @@ import _QD from './solver.mjs';
   // when the worker bundle is unavailable (e.g. file:// origin).
   function liveSolveAsync(hData, initPhi, opts) {
     return ensureLiveReady().then(() => {
-      if (_mainThreadFallback || !_liveWorker) {
+      if (_liveFallback || !_liveWorker) {
         return Promise.resolve().then(() =>
           _QD.liveSolveStep(hData, initPhi, opts || {}));
       }
@@ -372,9 +381,14 @@ import _QD from './solver.mjs';
     searchAlternates: searchAlternatesAsync, cancelAux, isAuxBusy,
     // Live drag-frame solve — runs on a dedicated live worker (Tier-2 pole-drag).
     liveSolve: liveSolveAsync, cancelLive, isLiveBusy,
-    // Diagnostics — used by tests / dev tools.
+    // Diagnostics — used by tests / dev tools. One pair per lane: the three latches are
+    // independent, so a test can prove that one lane's failure leaves the others on the worker path.
     _isMainThreadFallback() { return _mainThreadFallback; },
     _hasWorker()           { return _worker !== null; },
+    _isAuxFallback()       { return _auxFallback; },
+    _hasAuxWorker()        { return _auxWorker !== null; },
+    _isLiveFallback()      { return _liveFallback; },
+    _hasLiveWorker()       { return _liveWorker !== null; },
   };
   _QD.PrimarySolverWorker = ns;
 

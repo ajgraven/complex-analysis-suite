@@ -61,9 +61,29 @@ export class JuliaMetricsClient {
     else cb(runSync(req));
   }
 
-  /** Drop the worker and re-run the in-flight request on the main thread (worker became unusable). */
+  /**
+   * Drop the worker and re-run the in-flight request on the main thread (worker became unusable).
+   *
+   * Terminating first is load-bearing twice over. Dropping the reference alone leaked the thread —
+   * a Worker is kept alive by the agent, not by our variable, so an errored-but-running worker went
+   * on holding its module graph and any allocation it was mid-way through for the life of the page.
+   * And it left the message channel open: a response already queued for the request we are about to
+   * recompute would still dispatch, calling `cb` a second time with a result from a worker we have
+   * just declared unusable. Clearing the handlers makes that unambiguous either way.
+   * (cd-metricsworker-01)
+   */
   private disableWorker(): void {
+    const w = this.worker;
     this.worker = null;
+    if (w) {
+      w.onmessage = null;
+      w.onerror = null;
+      try {
+        w.terminate();
+      } catch {
+        /* already dead / terminate unsupported — the reference is dropped regardless */
+      }
+    }
     if (this.last && this.cb) this.cb(runSync(this.last));
   }
 }

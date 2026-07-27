@@ -23,6 +23,7 @@ import {
   type Precision,
 } from "./shaderBuilder";
 import { buildGradient, DEFAULT_GRADIENT, type GradientStop } from "../palettes";
+import { flipRowsInPlace } from "../hiResExport";
 import { differentiate, newtonIteration } from "@cas/expr/derivative";
 import { makeComplexFn, makeEscapeFn } from "@cas/expr/evaluate";
 import { createProgram } from "@cas/gpu/shader";
@@ -2015,13 +2016,11 @@ export class GLPlot {
     this.scheduleRender(); // restore the live viewport + re-render the canvas
     if (cancelled) return null;
 
-    // WebGL reads bottom-up; ImageData is top-down, so flip rows.
-    const out = new Uint8ClampedArray(size * size * 4);
-    for (let row = 0; row < size; row++) {
-      const src = row * rowBytes;
-      out.set(pixels.subarray(src, src + rowBytes), (size - 1 - row) * rowBytes);
-    }
-    return new ImageData(out, size, size);
+    // WebGL reads bottom-up; ImageData is top-down, so flip rows — in place, then hand ImageData a
+    // VIEW over the same ArrayBuffer. Allocating a second full-size buffer here doubled the peak of
+    // the whole export (2 × 268 MB at 8192²); this holds one buffer plus one row. (cd-render-07)
+    flipRowsInPlace(pixels, size);
+    return new ImageData(new Uint8ClampedArray(pixels.buffer), size, size);
   }
 
   ApplyPreset(preset: Preset): void {

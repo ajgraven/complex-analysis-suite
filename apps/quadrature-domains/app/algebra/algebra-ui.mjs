@@ -2839,7 +2839,15 @@ const QD = _QD;
     // card you clicked; on the canvas a card offered four (collapse / up / down / copy).
     let _ctxMenu = null;
     let _ctxReturn = null;             // element focused before the menu opened
+    let _ctxDismiss = null;            // the outside-pointerdown listener, so closeNodeMenu can drop it
     function closeNodeMenu() {
+      // Drop the dismiss listener FIRST, and unconditionally: it is registered on `document` with
+      // capture, and it used to remove itself only from inside its own body, on the one path where
+      // the pointerdown landed outside the menu. Every other way a menu closes — Escape, Tab, picking
+      // an item, or opening another menu — left it subscribed forever, one per menu ever opened, each
+      // closing over the `_ctxMenu` VARIABLE and so re-firing against whatever menu is open next.
+      // (qd-ctxmenu-leak-01)
+      if (_ctxDismiss) { document.removeEventListener('pointerdown', _ctxDismiss, true); _ctxDismiss = null; }
       if (!_ctxMenu) return;
       _ctxMenu.remove(); _ctxMenu = null;
       // Dismissing a menu must put focus back where it was, or it lands on <body> and the
@@ -2899,9 +2907,12 @@ const QD = _QD;
         ? document.activeElement : null;
       const first = menu.querySelector('.algebra-ctx-item');
       if (first) { try { first.focus(); } catch (e) {} }
+      // Deferred a tick so the pointerdown that OPENED the menu doesn't immediately dismiss it.
+      // If the menu is already gone by the time this runs, don't subscribe at all.
       setTimeout(() => {
-        const off = (ev) => { if (_ctxMenu && !_ctxMenu.contains(ev.target)) { closeNodeMenu(); document.removeEventListener('pointerdown', off, true); } };
-        document.addEventListener('pointerdown', off, true);
+        if (menu !== _ctxMenu) return;
+        _ctxDismiss = (ev) => { if (_ctxMenu && !_ctxMenu.contains(ev.target)) closeNodeMenu(); };
+        document.addEventListener('pointerdown', _ctxDismiss, true);
       }, 0);
     }
     function renderInspector(sel) {
