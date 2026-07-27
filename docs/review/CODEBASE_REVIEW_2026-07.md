@@ -7,10 +7,10 @@
 
 ## ▶ RESUME HERE
 
-Everything a fresh session needs to continue. **Batch E is COMPLETE — all 15 findings settled (9 fixed, 6 adjudicated as
-refuted/superseded/deprioritised) on `fix/batch-e-performance`. Next up: Batch F** — test integrity;
-start from the table under "▶ Batch F — start here" below. Batch E's outcomes, with the numbers behind
-each verdict, are in [Pass 9](#pass-9--batch-e-performance--complete-9-fixed-6-adjudicated-and-closed-of-15).
+Everything a fresh session needs to continue. **Batch F is COMPLETE — all 8 items fixed on
+`fix/batch-f-test-integrity` (PR #167). Next up: Batch G** — duplication / dead code; start from the
+table under "▶ Batch G — start here" below. Batch F's outcomes are in
+[Pass 10](#pass-10--batch-f-test-integrity--complete-8-of-8-167).
 
 ### Where the work stands
 
@@ -18,8 +18,8 @@ each verdict, are in [Pass 9](#pass-9--batch-e-performance--complete-9-fixed-6-a
 | --- | --- | --- |
 | Findings surviving verification | **112** | 84 confirmed + 28 overstated; 4 refuted and excluded |
 | **HIGH** | **12 of 12 FIXED** | tier complete |
-| Medium / low | 41 of 99 fixed | Batches A, A-2, B, C, D and E all done |
-| Remaining | **58** | 21 medium, 37 low |
+| Medium / low | 51 of 99 fixed | Batches A, A-2, B, C, D, E and F all done |
+| Remaining | **48** | 15 medium, 33 low |
 
 Batch A-2 also closed **three defects it discovered along the way** that were not in the original 124
 — see [Pass 5](#pass-5--batch-a-2-exact-arithmetic-contracts-and-the-bla-reference-162). Expect this:
@@ -44,6 +44,7 @@ branch is cut from `master` with disjoint files.
 | [#164](https://github.com/ajgraven/complex-analysis-suite/pull/164) | `fix/batch-c-state-fidelity` | Batch C — CD state fidelity |
 | [#165](https://github.com/ajgraven/complex-analysis-suite/pull/165) | `fix/batch-d-lifecycle` | Batch D — worker / resource lifecycle |
 | [#166](https://github.com/ajgraven/complex-analysis-suite/pull/166) | `fix/batch-e-performance` | Batch E — performance (9 fixed + 6 adjudicated of 15) |
+| [#167](https://github.com/ajgraven/complex-analysis-suite/pull/167) | `fix/batch-f-test-integrity` | Batch F — test integrity (8 of 8) |
 
 Already merged: **#154** (`@cas/core` NaN-convergence + aliasing), **#155** (7 honest-labeling
 defects), **#156** (this review record).
@@ -58,7 +59,7 @@ limit is raised.
 > returned 200 — cleared on its own and was unrelated to billing. Recorded only so it is not
 > mistaken for the same problem if it recurs.)*
 
-### Batches A-2, B and C — DONE
+### Batches A-2 through F — DONE
 
 | batch | PR | Closed | Write-up |
 | --- | --- | --- | --- |
@@ -66,48 +67,58 @@ limit is raised.
 | B | [#163](https://github.com/ajgraven/complex-analysis-suite/pull/163) | `cd-div-02`, `cd-cpow-05`, `cd-frac-07`, `expr-glsl-01`, `expr-glsl-02`, `expr-parser-01`, `expr-parser-depth-04`, `expr-eval-01` + 2 found while fixing | [Pass 6](#pass-6--batch-b-numerical-robustness-in-the-shared-packages-163) |
 | C | #164 | `cd-shell-07`, `cd-shell-05`, `cd-shell-06`, `cd-views-destructive-01`, `cd-shell-12`, `qd-urlstate-untested-06` | [Pass 7](#pass-7--batch-c-cd-state-fidelity-164) |
 | D | #165 | `qd-psw-untested-03`, `cd-render-07`, `qd-psw-fallback-latch-01`, `qd-ctxmenu-leak-01`, `cd-metricsworker-01`, `qd-schwarz-gl-listener-01` | [Pass 8](#pass-8--batch-d-worker--resource-lifecycle-165) |
+| E | #166 | 9 fixed + 6 adjudicated of 15 (see the collapsed table below) | [Pass 9](#pass-9--batch-e-performance--complete-9-fixed-6-adjudicated-and-closed-of-15) |
+| F | #167 | `qd-exact-count-guard-11`, `qd-offload-tautology-10`, `qd-floors-optional-dep-05`, `gpu-df64-01`, `cd-glcontext-restore-09`, `qd-interchange-e2e-08`, `corr-shader-mirror-02`+`cd-dup-04`, `cd-shader-uncompiled-07` | [Pass 10](#pass-10--batch-f-test-integrity--complete-8-of-8-167) |
 
-### ▶ Batch F — start here
+### ▶ Batch G — start here
 
-Test integrity. **8 distinct items** (10 `category: testing` findings, minus two — see the traps).
-Standing decision: **fix in place, no new CI infrastructure**; where a real fix needs a harness,
-*document precisely what the test does not prove rather than fake it*.
+Duplication / dead code. **18 open items** — the 20 `category: redundancy` findings minus two already
+closed (see the traps). Mostly `low`/`trivial`, with a cluster of genuinely large QD copy-paste in the
+middle that is where the value is.
 
 | id | Where | Severity / effort | The defect |
 | --- | --- | --- | --- |
-| `corr-shader-mirror-02` | `apps/correspondences/test/gpuAgreement.test.ts:16` | medium / small | The "GPU shader ↔ CPU engine agreement" test compiles nothing — it exercises a hand-written **TypeScript replica** of the correspondences GLSL, so the real shader can drift freely while the test stays green. |
-| `cd-shader-uncompiled-07` | `apps/complex-dynamics/test/glslCodegen.test.ts:62` | medium / medium | CD's `buildFragmentShader` output is only string-asserted; **no app shader is compiled in any CI job**. CD *is* published, so a df64-only GLSL error would reach users. |
-| `gpu-df64-01` | `packages/gpu/src/glsl/df64Ref.ts:142` | medium / small | `df64Ref`'s `dfLog`/`dfAtan2` seed from float64 `Math`, not the fp32 seed the GLSL uses — so the tests cannot detect a convergence failure in `df_log`/`df_atan2`. |
-| `qd-interchange-e2e-08` | `apps/complex-dynamics/test/importMap.test.ts:28` | low / small | The QD→CD hand-off is tested as two independent hand-written literals; nothing connects the real producer to the real consumer. |
-| `qd-floors-optional-dep-05` | `apps/quadrature-domains/app/node-test.js:66` | medium / trivial | `node-test.js` FLOORS of 1 for `direct` and `riemann` cannot detect the mathjs-absent degradation they were written for. |
-| `cd-glcontext-restore-09` | `apps/complex-dynamics/src/render/glPlot.ts:560` | low / small | `restoreContext()`'s hand-maintained 17-field GL-handle reset list has no regression guard — a new handle silently survives a context loss. |
-| `qd-exact-count-guard-11` | `apps/quadrature-domains/vitest/algebra-verdict-labeling.test.ts:114` | low / trivial | The unconditional-`rigor:'exact'` guard **counts** call sites instead of identifying them, so the exemption can migrate silently. |
-| `qd-offload-tautology-10` | `apps/quadrature-domains/vitest/algebra-offload-kinds.test.ts:65` | low / trivial | An offload differential test names a behaviour it never asserts, and **its comparisons pass when both sides fail**. |
+| `cd-dup-07` | `apps/quadrature-domains/app/solver-qd.mjs:63` | medium / medium | The finite-pole branch-Taylor accumulation is copy-pasted **eight times across six** QD solver files. |
+| `cd-dup-06` | `apps/quadrature-domains/app/solver-uqd.mjs:286` | medium / medium | `continuationInC` is triplicated verbatim across three QD solvers — ~85 lines each, identical tuning constants. |
+| `cd-dup-05` | `apps/complex-dynamics/src/combinatorics/dynatomic.ts:111` | medium / small | Identical Cauchy-bound Durand–Kerner seeding + monic Horner block duplicated across complex-dynamics. |
+| `cd-dup-08` | `apps/quadrature-domains/app/ui-thesis.mjs:21` | medium / small | Four different HTML escapers with **three different character sets** coexist in QD, despite `QD.QoL.escapeHtml`. |
+| `cd-dup-09` | `packages/expr/src/glsl.ts:191` | medium / trivial | `nodeIsBool` is duplicated between `@cas/expr`'s two backends — the one predicate the JS↔GLSL equivalence rests on. |
+| `cd-shell-08` | `apps/complex-dynamics/src/main.ts:2134` | medium / trivial | `applyChanges` and `applyPreset` recompute the exterior map, Laurent boundary and Julia properties redundantly. |
+| `cd-dup-10` | `apps/complex-dynamics/src/render/matingEngine.ts:51` | low / small | Four private copies of complex divide/multiply/add restate `@cas/expr/complexJs`. |
+| `cd-dup-12` | `apps/complex-dynamics/src/render/perturbationPoly.ts:259` | low / small | The double-double reference-orbit loop exists **three times** in complex-dynamics. |
+| `cd-dup-11` | `apps/complex-dynamics/src/render/overlay.ts:33` | low / trivial | Six dead exports: `pxToPlot`, `renderDeltoid`, `exportPhiJSON`, `MapForm`, + two "largest offered". |
+| `cd-dead-10` | `packages/core/src/complex.ts:76` | low / trivial | Unused in-place exports (`addInto`/`subInto`/`scaleInto`) and `BiPoly.monomial` — untested, unconsumed. |
+| `cd-render-11` | `apps/complex-dynamics/src/render/glPlot.ts:564` | low / trivial | `restoreContext` nulls the histogram handles twice. *(Confirmed still present during Batch F.)* |
+| `qd-psw-signal-dead-01` | `apps/quadrature-domains/app/primary-solver-worker.mjs:159` | low / trivial | `PrimarySolverWorker.solve`'s `AbortSignal` support is unreachable — no caller passes a third arg. |
+| `qd-solverqd-centroid-01` | `apps/quadrature-domains/app/solver-qd.mjs:359` | low / trivial | `Family.boundedQD.normalizeOpts` open-codes the pole centroid `QD.poleCentroid` was extracted to provide. |
+| `qd-inline777-01` | `apps/quadrature-domains/app/index.html:286` | low / trivial | Eleven inline `color:#777` sites bypass the `--c-muted` token introduced to fix exactly that. |
+| `corr-maxdepth-dead-08` | `apps/correspondences/src/correspondenceRender.ts:27` | low / trivial | `DEFAULT_DENSITY.maxDepth = 18` is dead configuration — the node cap always binds at depth ≤ 8. |
+| `corr-dk-null-dead-09` | `apps/correspondences/src/deltoid.ts:113` | low / trivial | Three unreachable null-guards after `makeDurandKerner` calls. |
+| `bt-dead-testhtml-10` | `apps/quadrature-domains/app/test.html:1` | low / trivial | Dead file: sits in the Vite root but is not a build input. |
+| `bt-unused-exports-11` | `packages/expr/package.json:20` | low / trivial | Two package `exports` subpaths have no consumer (`@cas/expr "./latex"`, `@cas/gpu "./dual-backend"`). |
+| `bt-version-skew-07` | `apps/quadrature-domains/package.json:19` | low / small | Two KaTeX majors ship in one deployed site (QD pins 0.16.47, CD floats `^0.17.0`). |
 
-**⛔ Two traps, both already paid for once in earlier batches.**
+**⛔ Traps.**
 
-- **`gpu-dual-01` is ALREADY FIXED** — Batch B (#163) corrected `dualBackend.ts`'s uniform ordering
-  (`uA` declared before `${fFn}`) as one of its found-while-fixing items. Do not re-open.
-- **`cd-dup-04` is the SAME defect as `corr-shader-mirror-02`** — same file, same line, one graded
-  medium and one low. Fix once, close both. (Batch D hit exactly this shape with
-  `cd-dup-01` / `qd-schwarz-cpuworker-01`.)
+- **`cd-render-10` is ALREADY FIXED** — Batch A-2 (#162) made `traverseBLA` actually mirror the GPU
+  kernel. It still reads as open in the corpus. Do not re-open.
+- **`qd-psw-signal-dead-01` is dead *and wrong*.** Found during Batch D: its `onAbort` listener is
+  never removed when a job settles normally, so a reused long-lived signal would accumulate handlers
+  that call `cancel()` on the current worker. Deleting the block closes both problems; "fixing" it in
+  place does not.
+- **`bt-version-skew-07` is not purely redundancy** — two KaTeX majors in one deployed site is a
+  behaviour risk, not just weight. Check whether CD's `^0.17.0` actually resolves to a different
+  major before treating it as a dedupe.
 
-**⚠ The decision this batch cannot avoid.** `corr-shader-mirror-02` and `cd-shader-uncompiled-07` both
-want the same thing — *compile the real shader* — and the only mechanism that does that is
-`pnpm test:browser`, which today runs **only** `packages/gpu`'s own probes
-(`packages/gpu/vitest.browser.config.ts` is package-local; root `package.json` defines `test:browser`
-as `pnpm -C packages/gpu run test:browser`). Extending it to the apps means new `*.browser.test.ts`
-files plus a root-script change — i.e. **exactly the "new CI infrastructure" the standing decision
-rules out**. So Batch F should open by settling that explicitly rather than discovering it midway:
-either relax the decision for these two (the browser job already exists and is not a publish blocker,
-so the marginal cost is small), or fix what is fixable in place and *document precisely what the
-tests still do not prove*. Note the asymmetry when deciding: **CD is published, correspondences is
-not.**
+**Watch for.** This is the batch where "duplicated" most often means "deliberately duplicated". Batch A
+already found `conjFR` and `MM_H` were *intentional* despite looking dead, and `@cas/core`'s series
+multiply is bit-identical to both apps' copies **on purpose** (Batch B) — consolidating it would be a
+rounding-behaviour change, not a cleanup. So for every item here, establish that the copies are
+actually interchangeable before merging them: **diff the copies and check the tuning constants**,
+which is what `cd-dup-06`'s "identical tuning constants" claim needs verified rather than trusted.
 
-**Watch for.** Batch E refuted 6 of 15 by measurement; a testing batch has no equivalent measurement,
-so the discipline here is different — for each item, first establish that the test really is
-vacuous by **making the guarded defect real and confirming the test still passes**. That is the
-testing-batch analogue of a before/after number, and Batches A-2/B/D all found it decisive.
+Remaining after G: **Batch H** — usability / a11y (13 `category: usability`), then **Batch I** —
+build/config leftovers.
 
 <details>
 <summary>Batch E (complete) — the 15 findings and their outcomes</summary>
@@ -193,8 +204,34 @@ test-integrity batch (F).
 
 ### Working notes that cost time to learn
 
+- **To show a test is vacuous, break the thing it guards and watch it stay green.** Batch F's whole
+  method. Two refinements it taught: (a) pick the break that matches the REAL failure mode — for the
+  offload differentials that is the *shared* sym-core function, since breaking only the worker path
+  fails honestly and proves nothing; (b) the break must be one the test could plausibly see, so
+  injecting into `VERTEX_SHADER` (shared by every program, no `cvec` in scope) broke everything and
+  demonstrated nothing, while injecting into the generated fragment template isolated df64 exactly.
+- **A guard that COUNTS can be satisfied by moving the problem.** `hard.length <= 1` is as happy with
+  one lie as with one legitimate exemption. Name the exempt site instead. Generalise: prefer
+  `toEqual([...names])` over `toBe(n)` wherever the guard is about *which*, not *how many*.
+- **A differential test between two paths that call the same function is tautological when both
+  fail.** Pin the expected outcome first (`expect(inline.ok).toBe(true)`, the specific degree/status),
+  then compare. Same trap in any A/B-agreement harness.
+- **For a dep-gated assertion floor, the floor must exceed what the file contributes WITHOUT the
+  dep** — not merely be below the full count. `direct` contributes 179 with mathjs and **116**
+  without, so any floor ≤ 116 detects nothing. Measure both numbers, not one.
+- **My own pin can be wrong, and the pin is what reveals it.** `S.factor`'s `ok` means "a nontrivial
+  factorization was produced", not "the call succeeded", so an irreducible input legitimately returns
+  `ok:false`. Probe the real return shape before asserting on it.
+- **Don't "strengthen" a numeric test into a regime the algorithm cannot serve.** df64 `log(1+u)`
+  loses the `u²/2` term to cancellation against magnitude-1 intermediates (measured 4.3e-19 at
+  `a = 1 + 2^-30`) — correct behaviour that would read as a failure and invite a wrong pin.
+- **The dependency rule leaves cross-app contracts homeless**, so put the wire artifact in the shared
+  package and have both sides pin it. Check the binding in BOTH directions: drift must fail the
+  producer, *and* regenerating the golden to appease the producer must fail the consumer.
 - The gate is `corepack pnpm@9.15.9 run lint && … typecheck && … test && … build`. **Run it
   backgrounded** — it exceeds the 2-minute foreground timeout. Never pipe it through `tail`.
+- **Restore experiment files from a scratchpad copy, not `git checkout`** — the twice-burned hazard.
+  Batch F copied each file to the scratchpad before injecting and restored from there; zero incidents.
 - **No backticks in `git commit -m` strings** — bash executes them. Use `-F <file>`.
 - Vite derives `publicDir` from `root`; QD sets `root: app/`, so package-level `public/` needs an
   explicit `publicDir`. A build that silently copies nothing is the failure mode.
@@ -718,6 +755,35 @@ the suite by ~17%. Updated to the measured number.
 | --- | --- | --- |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | Durand–Kerner withholds convergence on non-finite iterates (V-1) | new test, proven to fail against the old code |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | `addMulInto` honours its aliasing contract (V-2) | new test, proven to fail against the old code |
+
+### Pass 10 — Batch F: test integrity — COMPLETE (8 of 8) ([#167](https://github.com/ajgraven/complex-analysis-suite/pull/167))
+
+Every item was a test that passed while guarding nothing, so each fix carries the same evidence:
+**the guarded defect made real, and the old test shown to stay green.** That is this batch's
+substitute for a before/after number.
+
+| id | Proof the guard was vacuous | Fix |
+| --- | --- | --- |
+| `qd-exact-count-guard-11` | Moving the hardcoded `rigor:'exact'` off `doResolvent` and onto the **Numeric solve** card — an estimate path, i.e. a false `=` — kept all 7 tests green. A count cannot distinguish one legitimate exact from one lie. | The scanner carries the enclosing handler (`enclosingFn`, resolved in the scrubbed source) and the guard NAMES the exempt site. Re-running the migration now fails with `expected [ 'doSolve' ] to deeply equal [ 'doResolvent' ]`. |
+| `qd-offload-tautology-10` | Making `triangularize` return `{ok:false}` unconditionally — a dead feature — kept all 6 green: `viaJob.ok === inline.ok` is `false === false` and the content block sat behind `if (inline.ok)`. | Each differential pins the expected outcome first, then compares. Also: the "reports resultantZero" test never reached that branch (measured `{method:'ideal'}`, flag undefined) — split into three tests, with `maxBasis:1` forcing the real fallback. |
+| `qd-floors-optional-dep-05` | Floors of **1** against measured contributions of **179 / 20 / 40**. | Floors 120 / 15 / 30. `direct`'s 120 is load-bearing: with mathjs stubbed it still contributes **116**, so 100 would pass a broken install. Both dep markers now fail — mathjs and katex are hard `dependencies`, not the optional devDeps the comments claimed. |
+| `gpu-df64-01` | **Partly refuted.** The predicted consequence is false — cutting `dfLog`'s Newton loop to zero iterations FAILS the suite (the seed uses the hi limb only, so refinement is load-bearing). | Seeds now match the GLSL (fp32, lo = 0), closing a spec-fidelity gap, not a live bug — both seeds converge identically (1.4e-14 vs 2.0e-14, tolerance 1e-11). The real gap was elsewhere: every case used a generic `df(x)`, so all would pass against a hi-limb-only implementation. Added low-limb cases. |
+| `cd-glcontext-restore-09` | An unreset `WebGLTexture` field — a dead-context handle surviving a restore — was invisible. | Guard keys on the DECLARED TYPE (18 fields found), not a name convention. |
+| `qd-interchange-e2e-08` | CD decoded an envelope **CD itself built**. | Shared golden link in `@cas/interchange`. Verified both ways: reversing `F` fails QD, and then regenerating the golden so QD passes makes CD fail (`expected 2.5 to be close to 2.125`). |
+| `corr-shader-mirror-02` + `cd-dup-04` | The mirror hardcoded the shader's constants and never read `gpu.ts`; only a comment asked for sync. | The mirror READS the constants from the GLSL. Dropping the shader's cap 24 → 2 now fails the σ-agreement assertions themselves (worst 0.526 vs 1e-4). |
+| `cd-shader-uncompiled-07` | A `cvec v = vec2(...)` in the generated template fails **all four df64 compiles** while `glslCodegen.test.ts` still passes **9/9**. | Compile + link, single AND df64, over four shapes, in the existing browser job. |
+
+**The CI decision, settled.** The standing "no new CI infrastructure" rule blocked exactly one item.
+It was **relaxed narrowly**: the browser harness and its CI job already exist and are already required
+for merge, so this adds test files to an existing job, not infrastructure — one config mirroring
+`packages/gpu`'s. Everything else in the batch was fixed in place. Deciding factor: **CD is
+published**, and the defect class is one string assertions structurally cannot catch.
+
+**Found while wiring it up (not predicted — the full gate caught it):** CD's `vite.config.ts` test
+block had no `exclude`, so the main gate picked the browser file up in jsdom and failed on
+`getContext`. `@cas/gpu` already solved this; CD now mirrors it.
+
+Gate: `lint 0 · typecheck 0 · test 1847 / 197 files · build 0`, plus `test:browser` 10 + 10.
 
 ### Pass 9 — Batch E: performance — COMPLETE (9 fixed, 6 adjudicated-and-closed, of 15) ([#166](https://github.com/ajgraven/complex-analysis-suite/pull/166))
 
