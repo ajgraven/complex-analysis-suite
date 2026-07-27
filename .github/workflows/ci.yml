@@ -94,10 +94,23 @@ jobs:
       - name: Build
         run: pnpm build
 
-  # Runs the real WebGL2 GLSL (runGLSL over DUAL_BACKEND_CORPUS) in headless Chromium — the
-  # numeric backstop the node/jsdom gate structurally can't be (Review P4). Kept SEPARATE from
-  # `build` so it never slows the main gate; SwiftShader (software WebGL2) renders it, so the
-  # test uses renderer-appropriate tolerances (arithmetic float32-exact, transcendentals ~1e-3).
+  # Everything that needs a real WebGL2 context, in headless Chromium — the backstop the node/jsdom
+  # gate structurally can't be. Two harnesses, both under `pnpm test:browser`:
+  #
+  #   · @cas/gpu — runGLSL over DUAL_BACKEND_CORPUS: executes the emitted GLSL and compares against
+  #     the JS reference, catching float32 GPU-only drift (Review P4). SwiftShader (software WebGL2)
+  #     renders it, so tolerances are renderer-appropriate (arithmetic float32-exact,
+  #     transcendentals ~1e-3).
+  #   · complex-dynamics — COMPILES AND LINKS the app's real shaders in single AND df64
+  #     (cd-shader-uncompiled-07). Before this, no app shader was compiled anywhere in CI: the
+  #     codegen tests assert on the emitted GLSL as a string, which cannot tell you the program
+  #     builds. Verified the gap was real — a `cvec v = vec2(...)` in the generated template
+  #     (valid as vec2, a type error as vec4) fails all four df64 compiles here while every string
+  #     assertion in glslCodegen.test.ts still passes 9/9. CD is published, so that class of defect
+  #     would reach users as a dead canvas.
+  #
+  # Kept SEPARATE from `build` so it never slows the main gate.
+  # NOT covered: apps/correspondences' shaders are still never compiled (unpublished app).
   browser:
     runs-on: ubuntu-latest
     steps:
@@ -132,5 +145,6 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Browser dual-backend harness (real WebGL2 GLSL)
+      # @cas/gpu's dual-backend numeric harness, then CD's real-shader compile/link sweep.
+      - name: Browser harnesses (real WebGL2 GLSL — execute + compile)
         run: pnpm test:browser

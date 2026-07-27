@@ -1,5 +1,9 @@
-/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
+// `configDefaults` (used by the test.exclude below) is a value import from vitest/config; it also
+// pulls in vitest's augmentation of Vite's UserConfig, so the `test` block type-checks without the
+// former `/// <reference types="vitest/config" />` — which @typescript-eslint/triple-slash-reference
+// now forbids precisely because an equivalent import is present.
+import { configDefaults } from "vitest/config";
 import { VitePWA } from "vite-plugin-pwa";
 
 // Relative base so the production build also works when served from a
@@ -48,8 +52,13 @@ export default defineConfig({
       devOptions: { enabled: false },
     }),
   ],
+  // The node/jsdom suite. `*.browser.test.ts` compiles real GLSL and needs a live WebGL2 context,
+  // so it is EXCLUDED here and run by the separate vitest.browser.config.ts (`pnpm test:browser`) —
+  // the same split @cas/gpu uses. Without the exclude the main gate picks those files up and they
+  // fail on `HTMLCanvasElement.prototype.getContext` not being implemented in jsdom.
   test: {
     environment: "node",
     include: ["test/**/*.test.ts"],
+    exclude: [...configDefaults.exclude, "test/**/*.browser.test.ts"],
   },
 });
