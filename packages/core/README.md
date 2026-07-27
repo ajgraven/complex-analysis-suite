@@ -62,8 +62,11 @@ iterations }`). Options cover tolerance, iteration cap, Jacobi vs. Seidel update
 coincident-root handling.
 
 **Formal series** — `makeSeries(alg)` returns `{ zeros, unit, mul }` for truncated
-power-series arithmetic (`Series<C>` = coefficient array, index `i` = coefficient of `xⁱ`),
-using error-free splits for accuracy.
+power-series arithmetic (`Series<C>` = coefficient array, index `i` = coefficient of `xⁱ`).
+`mul` is a plain convolution in the supplied algebra — deliberately so: both apps' multiplies are
+bit-for-bit identical to it (same accumulation order), which is what let it be shared without
+shifting either app's rounding. It does **not** use error-free splits, as this line previously
+claimed.
 
 **Stereographic projection** — `planeToSphere(z)` / `sphereToPlane(p)` map `ℂ ∪ {∞}` to and
 from the Riemann sphere, with a cancellation-safe inverse. Shared by both apps' sphere views,

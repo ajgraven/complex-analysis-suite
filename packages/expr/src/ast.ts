@@ -123,3 +123,26 @@ function assignsVar(node: Node, name: string): boolean {
       return false;
   }
 }
+
+/**
+ * Whether a node is boolean-valued (vs complex). This is the one predicate the JS↔GLSL backend
+ * equivalence rests on: a bool middle-statement must be compiled through the boolean path
+ * (`compileBool` / `emitBool`), never the complex path (which throws on it). The two backends must
+ * agree on the classification, so it lives here in the shared AST rather than being copied into each
+ * — the copies were byte-identical, and a silent divergence would desync the CPU overlay from the
+ * GPU shader on exactly the branch/comparison forms this decides.
+ */
+export function nodeIsBool(node: Node): boolean {
+  switch (node.kind) {
+    case "bool":
+    case "not":
+    case "compare":
+      return true;
+    case "if":
+      return nodeIsBool(node.then) || nodeIsBool(node.otherwise);
+    case "seq":
+      return nodeIsBool(node.stmts[node.stmts.length - 1]);
+    default:
+      return false;
+  }
+}

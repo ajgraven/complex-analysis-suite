@@ -59,6 +59,33 @@ import _QD from './solver.mjs';
   if (!C) throw new Error("parse-h.js: Complex namespace not found");
 
   // ===========================================================================
+  // Is a polynomial part of h meaningful in this mode?
+  //
+  // SINGLE SOURCE OF TRUTH — exported as QD.modeAllowsPoly and consumed by the UI
+  // (ui-h-text.mjs). It previously existed twice: this engine listed only the three
+  // modes {unbounded, lqd-unbounded, lqd-unbounded-singular} while the UI's copy also
+  // listed pqd-unbounded and pqd-unbounded-singular. The UI's copy was the correct one
+  // — ui-modes.mjs gives all five *unbounded* descriptors `cards.poly: true`, and five
+  // shipped PQD-unbounded presets carry polyCoeffs — so the engine's shorter list threw
+  // "polynomial part of h is only valid in unbounded mode" on data the app itself ships,
+  // which also broke share-link restore for those presets (ui-url-state re-parses #h-text).
+  //
+  // The rule is simply UNBOUNDED, independent of the weight: ∞ ∈ Ω is what admits a
+  // polynomial part, and the classical / power / log families are all unbounded there.
+  // Bounded modes must have polyCoeffs = []. Listed explicitly rather than sniffed with
+  // `mode.includes('unbounded')`, so a future mode has to opt in deliberately.
+  // `vitest/parse-h-poly-modes.test.ts` asserts this agrees with cards.poly for EVERY
+  // mode descriptor, which is the guard the two hand-kept copies never had.
+  const POLY_MODES = new Set([
+    'unbounded',
+    'pqd-unbounded',
+    'pqd-unbounded-singular',
+    'lqd-unbounded',
+    'lqd-unbounded-singular',
+  ]);
+  function modeAllowsPoly(mode) { return POLY_MODES.has(mode); }
+
+  // ===========================================================================
   // Polynomial-in-w helpers (ascending-power Complex[]).
   // Generic dense-polynomial arithmetic lives in poly-helpers.js (QD.Poly,
   // code-review CR3). parse-h trims trailing near-zero coefficients after add
@@ -401,28 +428,10 @@ import _QD from './solver.mjs';
   // ===========================================================================
   // Public API: parseH and formatH.
   // ===========================================================================
-
-  // Modes whose family carries a polynomial part of h — i.e. h has a pole at ∞.
-  // These are exactly the unbounded families: classical unbounded, unbounded PQD
-  // (± singular) and unbounded LQD (± singular). Bounded families (incl. bounded
-  // LQDs) must have polyCoeffs = []. SINGLE SOURCE OF TRUTH: this predicate backs
-  // both the parser's accept/reject (parseH, below) and the UI's poly-editor
-  // visibility — ui-h-text's modeAllowsPoly delegates here, and every mode
-  // descriptor's cards.poly in ui-modes must agree (asserted in
-  // h-text-roundtrip.test.js). They had drifted: parse-h lagged the UI by the two
-  // PQD-unbounded modes, so five shipped presets threw on re-parse and their share
-  // links silently dropped the quadrature datum (review qd-polyh-01).
-  const POLY_MODES = new Set([
-    'unbounded',
-    'pqd-unbounded', 'pqd-unbounded-singular',
-    'lqd-unbounded', 'lqd-unbounded-singular',
-  ]);
-  function modeAllowsPoly(mode) { return POLY_MODES.has(mode); }
-
   function parseH(expr, math, opts) {
     opts = opts || {};
-    const mode = opts.mode || 'unbounded';      // 'bounded' / 'unbounded' / lqd-* / pqd-*
-    const allowPoly = modeAllowsPoly(mode);     // single source of truth (see above)
+    const mode = opts.mode || 'unbounded';      // 'bounded' / 'unbounded' / pqd-* / lqd-*
+    const allowPoly = modeAllowsPoly(mode);
 
     if (!math || !math.parse) throw new Error("parseH: math.js required");
     if (typeof expr !== 'string' || !expr.trim()) throw new Error("empty expression");
@@ -512,9 +521,8 @@ import _QD from './solver.mjs';
       let anyNonzero = false;
       for (const c of result.polyCoeffs) if (Math.hypot(c.re, c.im) > 1e-14) { anyNonzero = true; break; }
       if (anyNonzero) {
-        throw new Error("polynomial part of h is not valid in '" + mode + "' mode " +
-                        "(only unbounded families carry a w^k / pole-at-∞ part — " +
-                        "switch to an unbounded mode or remove the w^k terms)");
+        throw new Error("polynomial part of h is only valid in unbounded mode " +
+                        "(switch the mode or remove the w^k terms)");
       }
       result.polyCoeffs = [];
     }
@@ -599,7 +607,7 @@ import _QD from './solver.mjs';
   // Export.
   // ===========================================================================
   // Attach onto QD without clobbering existing keys (Complex, Taylor, Direct, …).
-  QD.parseH         = parseH;
-  QD.formatH        = formatH;
-  QD.modeAllowsPoly = modeAllowsPoly;   // single source of truth (ui-h-text delegates here)
+  QD.parseH  = parseH;
+  QD.formatH = formatH;
+  QD.modeAllowsPoly = modeAllowsPoly;   // the UI reads this instead of keeping its own copy
 })(typeof globalThis !== 'undefined' ? globalThis : this);

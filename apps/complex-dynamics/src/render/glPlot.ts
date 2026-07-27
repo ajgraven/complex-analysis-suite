@@ -23,6 +23,7 @@ import {
   type Precision,
 } from "./shaderBuilder";
 import { buildGradient, DEFAULT_GRADIENT, type GradientStop } from "../palettes";
+import { flipRowsInPlace } from "../hiResExport";
 import { differentiate, newtonIteration } from "@cas/expr/derivative";
 import { makeComplexFn, makeEscapeFn } from "@cas/expr/evaluate";
 import { createProgram } from "@cas/gpu/shader";
@@ -364,6 +365,8 @@ export class GLPlot {
   private orbitTex: WebGLTexture | null = null;
   private orbitLen = 0;
   private orbitDirty = true;
+  /** {@link orbitKeyFor} of the orbit currently uploaded; "" until one is built. */
+  private orbitKey = "";
   private orbitXY: Float32Array | null = null; // the uploaded reference orbit, kept to rebuild the BLA
   // C(d, j) binomial coefficients for the perturbation kernel's z^d + c step, uploaded as `uBinom`.
   private binomBuf = new Float32Array(MAX_PERTURB_DEGREE + 1);
@@ -777,10 +780,15 @@ export class GLPlot {
     return null;
   }
 
-  private rebuild(): void {
-    const gl = this.gl;
-    const iterError = this.updateIteration();
-    this._monicDegree = this.probeMonicDegree();
+  /**
+   * Re-derive the perturbation state that depends on the live parameter `a`.
+   *
+   * Split out of rebuild() so setParamA can refresh it WITHOUT a shader recompile — dragging the `a`
+   * slider would otherwise rebuild a program per input event. Safe to call on its own because
+   * `_monicDegree` is `a`-independent (probeMonicDegree rejects any a-dependence, which is exactly
+   * why an a-dependent polynomial lands on the _polyPerturb path).
+   */
+  private refreshPolyPerturbation(): void {
     // General-polynomial perturbation (f = P(z) + B·c) for NON-monic polynomials; monic z^d + c keeps
     // its own (byte-identical z²+c) path. Degree ≥ 2 (a linear map has no interesting deep zoom).
     this._polyPerturb =
@@ -792,6 +800,16 @@ export class GLPlot {
     this._perturbEligible =
       (this._monicDegree !== null && this._monicDegree <= MAX_PERTURB_DEGREE) ||
       this._polyPerturb !== null;
+    this.orbitDirty = true;
+  }
+
+  private rebuild(): void {
+    const gl = this.gl;
+    const iterError = this.updateIteration();
+    this._monicDegree = this.probeMonicDegree();
+    // General-polynomial perturbation (f = P(z) + B·c) for NON-monic polynomials; monic z^d + c keeps
+    // its own (byte-identical z²+c) path. Degree ≥ 2 (a linear map has no interesting deep zoom).
+    this.refreshPolyPerturbation();
     const divergenceEscape = this.probeDivergenceEscape();
     this._interiorBailout = this._monicDegree === 2 && divergenceEscape;
     this._periodicityBailout = divergenceEscape;
@@ -948,16 +966,20 @@ export class GLPlot {
   /**
    * Request a render, restarting the progressive ladder + temporal-AA accumulation. Pass
    * `invalidateContent = false` for appearance-only changes (palette, lighting, overlays) so the
-   * reference orbit (perturbation) and the histogram CDF — which depend only on the view, c, f and
-   * the iteration cap — are not needlessly recomputed (the CDF rebuild does a synchronous
-   * readPixels). Content changes keep the default so the orbit/CDF stay correct; the orbit/CDF are
-   * still rebuilt lazily (only when perturbation / histogram mode actually reads them).
+   * histogram CDF is not needlessly recomputed (its rebuild does a synchronous readPixels).
+   *
+   * This deliberately no longer marks the reference orbit dirty, which was the whole of
+   * cd-render-05: every content-affecting render — each rung of the progressive ladder, each
+   * temporal-AA frame, each frame of a drag — invalidated an orbit whose inputs had usually not
+   * changed. {@link ensureOrbit} now decides from {@link orbitKeyFor}, which is exact about what the
+   * orbit depends on — and, crucially, that zoom is not one of those things. The explicit
+   * `orbitDirty` invalidations elsewhere (context loss, a rebuilt f, toggling perturbation) remain
+   * as a belt-and-braces on top of that key.
    */
   scheduleRender(invalidateContent = true): void {
     this._level = 0;
     this.accumCount = 0;
     if (invalidateContent) {
-      this.orbitDirty = true;
       this.cdfDirty = true; // the escape-count distribution may have changed → rebuild the CDF
     }
     this.requestFrame();
@@ -1232,8 +1254,44 @@ export class GLPlot {
   }
 
   /** Recompute + upload the reference orbit (RG32F texture) when the view changed. */
+  /**
+   * Everything {@link ensureOrbit}'s result depends on. **Zoom is deliberately absent**: the
+   * reference orbit is a property of the centre, c, f and the iteration cap — magnifying does not
+   * change which points it visits. That is the whole point of the key (cd-render-05).
+   */
+  private orbitKeyFor(maxIter: number): string {
+    const p = this._polyPerturb;
+    return [
+      this.fractType,
+      maxIter,
+      this._centerDD[0][0], this._centerDD[0][1], this._centerDD[1][0], this._centerDD[1][1],
+      this._cVal[0], this._cVal[1],
+      this.perturbDegree(),
+      this._perturbEscape2,
+      // f's identity as the perturbation kernel sees it: a changed formula or live `a` produces
+      // different coefficients here, which must re-derive the orbit.
+      p ? `p${p.coeffs.map((c) => `${c[0]},${c[1]}`).join(";")}|${p.dcCoeff[0]},${p.dcCoeff[1]}` : "m",
+    ].join("|");
+  }
+
   private ensureOrbit(maxIter: number): void {
-    if (!this.orbitDirty && this.orbitLen > 0) return;
+    // Reuse whenever the inputs are unchanged, rather than trusting `orbitDirty` alone — which
+    // `scheduleRender()` used to set on EVERY content-affecting render, including every rung of the
+    // progressive ladder, every temporal-AA frame, and every frame of a pan/zoom drag. So a deep
+    // zoom rebuilt the whole double-double reference orbit per frame and (because this sets
+    // `blaDirty` below) dragged the BLA table rebuild + upload along with it. Measured on a BOUNDED
+    // reference, where the orbit runs the full cap: 3.8 ms/frame at 4 000 iterations, 8.0 ms +
+    // 1.25 MB at 20 000, 35.7 ms + 4.00 MB at 65 536 — the last being two frame budgets of CPU
+    // before the upload even starts. (cd-render-05, and cd-bla-01 by consequence: the BLA table
+    // genuinely does depend on zoom through maxC, but it was rebuilding on frames where nothing had
+    // changed at all.)
+    //
+    // `orbitDirty` is KEPT as a belt-and-braces on top of the key, so the explicit invalidations
+    // (context loss, a rebuilt f, toggling perturbation) still force a rebuild even if the key were
+    // ever to miss one. The `orbitLen > 0` half covers context loss specifically: that path drops
+    // the texture and zeroes orbitLen without changing a single keyed input.
+    const key = this.orbitKeyFor(maxIter);
+    if (!this.orbitDirty && this.orbitLen > 0 && key === this.orbitKey) return;
     const gl = this.gl;
     // The reference orbit is uploaded as a 1×N RG32F texture, so N must not exceed the GPU's max
     // texture width. Auto-iterations at extreme zoom (or a very high manual cap) can push the
@@ -1288,6 +1346,7 @@ export class GLPlot {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.bindTexture(gl.TEXTURE_2D, null);
+    this.orbitKey = key;
     this.orbitDirty = false;
   }
 
@@ -2000,13 +2059,11 @@ export class GLPlot {
     this.scheduleRender(); // restore the live viewport + re-render the canvas
     if (cancelled) return null;
 
-    // WebGL reads bottom-up; ImageData is top-down, so flip rows.
-    const out = new Uint8ClampedArray(size * size * 4);
-    for (let row = 0; row < size; row++) {
-      const src = row * rowBytes;
-      out.set(pixels.subarray(src, src + rowBytes), (size - 1 - row) * rowBytes);
-    }
-    return new ImageData(out, size, size);
+    // WebGL reads bottom-up; ImageData is top-down, so flip rows — in place, then hand ImageData a
+    // VIEW over the same ArrayBuffer. Allocating a second full-size buffer here doubled the peak of
+    // the whole export (2 × 268 MB at 8192²); this holds one buffer plus one row. (cd-render-07)
+    flipRowsInPlace(pixels, size);
+    return new ImageData(new Uint8ClampedArray(pixels.buffer), size, size);
   }
 
   ApplyPreset(preset: Preset): void {
@@ -2319,7 +2376,20 @@ export class GLPlot {
 
   /** Set the live parameter `a` (real part `re`, optional imaginary `im`); re-renders. */
   setParamA(re: number, im = 0): void {
+    const changed = this._paramA[0] !== re || this._paramA[1] !== im;
     this._paramA = [re, im];
+    // The perturbation path renders from coefficients BAKED at rebuild() time — extractPolyPerturbation
+    // evaluates the polynomial's coefficients at the then-current `a`, and setupPerturbDraw uploads
+    // those, while ensureOrbit iterates `this._polyPerturb.coeffs`. The standard path re-uploads the
+    // live `a` every draw, so it needed nothing here; perturbation did. scheduleRender() alone marks
+    // the orbit dirty, which recomputed it from the STALE coefficients — so for an a-dependent
+    // polynomial (e.g. `a*z^2+c`) the picture was byte-identical across the entire slider range while
+    // every readout said `a` had changed.
+    //
+    // Re-derive just the a-dependent perturbation state — not a full rebuild(), which would recompile
+    // a shader program on every slider input event. Gated on `changed` and on _polyPerturb being live,
+    // so the ordinary non-perturbation slider stays exactly as cheap as before.
+    if (changed && this._polyPerturb) this.refreshPolyPerturbation();
     this.scheduleRender();
   }
 
@@ -2360,7 +2430,14 @@ export class GLPlot {
     return this.perturbationActive && this.blaEnabled ? this.blaNumLevels : 0;
   }
 
-  /** Whether the current f is z²+c (so perturbation could apply on the param plane). */
+  /**
+   * Whether PERTURBATION could apply to the current f on the param plane — true for any monic
+   * z^d + c with d ≤ MAX_PERTURB_DEGREE, and for a general additive-c polynomial.
+   *
+   * ⚠ NOT an is-quadratic flag. It said "z²+c" here for a long time and main.ts consequently used
+   * it as one, which let the z³+c `cubic` / `biomorph` presets unlock nine overlays whose maths is
+   * hard-coded quadratic. Use `monicDegree === 2` (main.ts's `isQuadraticFamily`) for that.
+   */
   get perturbationEligible(): boolean {
     return this._perturbEligible;
   }

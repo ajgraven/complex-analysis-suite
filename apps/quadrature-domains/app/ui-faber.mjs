@@ -20,9 +20,14 @@ import _QD from './solver.mjs';
 (function () {
   'use strict';
 
+  // Delegates to the shared QD.QoL.escapeHTML (cd-dup-08); local body kept as a defensive fallback,
+  // matching param-slice's HANDOFF #35 consolidation. The shared escaper is a superset (also escapes
+  // '), so the rendered output is unchanged in these element-content positions.
   function esc(s) {
-    return String(s).replace(/[&<>"]/g, c =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    return (QD && QD.QoL && QD.QoL.escapeHTML)
+      ? QD.QoL.escapeHTML(s)
+      : String(s).replace(/[&<>"]/g, c =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   }
   // Subscripts index an object (Fₙ, c₀); superscripts are exponents (ζ², 1/cⁿ).
   // Delegate to the shared QD.Format helpers (poly-helpers.js) so the digit maps

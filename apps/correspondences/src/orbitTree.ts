@@ -47,13 +47,29 @@ export function expandOrbitTree(
     const node = nodes[i];
     if (node.depth >= maxDepth) continue;
     if (Math.hypot(node.point[0], node.point[1]) > escapeR) continue; // escaped → leaf
+    // Order the branches by argument so `label` is stable and geometric. In place, and without the
+    // {p, arg} wrappers this used to allocate: `corr.branches` hands back a fresh array each call,
+    // and this is the innermost loop of the whole density render — accumulateBand calls it once per
+    // node of one tree per seed, over a 64×64 seed grid. The active deltoid is 2:2, so the general
+    // sort was ordering a TWO-element list: one compare-and-swap does it with no allocation and no
+    // comparator dispatch. d ≥ 3 keeps a comparator sort; it recomputes atan2 O(n log n) times
+    // instead of O(n), which is nothing at n = 3 and is the case that does not ship yet.
+    // (corr-orbittree-01)
     const children = corr.branches(node.point);
-    const ordered = children
-      .map((p) => ({ p, arg: Math.atan2(p[1], p[0]) }))
-      .sort((a, b) => a.arg - b.arg);
-    for (let label = 0; label < ordered.length; label++) {
+    if (children.length === 2) {
+      const a0 = Math.atan2(children[0][1], children[0][0]);
+      const a1 = Math.atan2(children[1][1], children[1][0]);
+      if (a0 > a1) {
+        const t = children[0];
+        children[0] = children[1];
+        children[1] = t;
+      }
+    } else if (children.length > 2) {
+      children.sort((a, b) => Math.atan2(a[1], a[0]) - Math.atan2(b[1], b[0]));
+    }
+    for (let label = 0; label < children.length; label++) {
       if (nodes.length >= maxNodes) break;
-      nodes.push({ point: ordered[label].p, label, depth: node.depth + 1, parent: i });
+      nodes.push({ point: children[label], label, depth: node.depth + 1, parent: i });
       queue.push(nodes.length - 1);
     }
   }

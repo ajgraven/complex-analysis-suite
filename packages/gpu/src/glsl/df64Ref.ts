@@ -137,9 +137,18 @@ export function dfExp(a: DF): DF {
   return dfMul(sum, df(Math.pow(2, k)));
 }
 
-/** df64 log: single-precision seed refined by two Newton steps y += a·e^-y − 1. */
+/** df64 log: single-precision seed refined by two Newton steps y += a·e^-y − 1.
+ *
+ *  The seed is `[f(log(a₀)), 0]` — a float32 value with a ZERO low limb — because that is exactly
+ *  what GLSL `df_log` can compute (`vec2 y = vec2(log(a.x), 0.0);`). `df(Math.log(a[0]))` would
+ *  hand the reference a low limb the shader has no way to produce, so the "GLSL transliterates
+ *  this line-for-line" contract at the top of this file would not hold at the seed — the same
+ *  reason dfExp/dfSinCos reduce with the float32 LN2/PI_2 hi limbs rather than the full-precision
+ *  Math constants. Measured: both seeds converge to the same df64 accuracy (worst case over
+ *  x ∈ {1, 2, 0.5, 10, 1e-4, 1234.5, 3.7, 1e6} — 1.4e-14 with the old seed, 2.0e-14 with this one,
+ *  against a test tolerance of 1e-11), so this closes a spec-fidelity gap, not a live numeric bug. */
 export function dfLog(a: DF): DF {
-  let y = df(Math.log(a[0]));
+  let y: DF = [f(Math.log(a[0])), 0];
   for (let i = 0; i < 2; i++) {
     y = dfAdd(y, dfSub(dfMul(a, dfExp(dfNeg(y))), [1, 0]));
   }
@@ -169,12 +178,16 @@ export function dfSinCos(a: DF): { sin: DF; cos: DF } {
   return { sin: dfNeg(csum), cos: ssum };
 }
 
-/** df64 atan2: single seed θ₀, then one small-angle correction by rotating (x,y) by −θ₀. */
+/** df64 atan2: single seed θ₀, then one small-angle correction by rotating (x,y) by −θ₀.
+ *
+ *  θ₀ is rounded to float32 and carried with a zero low limb, matching GLSL `df_atan2`
+ *  (`float t0 = atan(y.x, x.x);` then `df_sincos(vec2(t0, 0.0))` and `df_add(vec2(t0, 0.0), …)`).
+ *  See dfLog for why the reference must not seed more precisely than the shader can. */
 export function dfAtan2(y: DF, x: DF): DF {
   if (x[0] === 0 && y[0] === 0) return [0, 0];
-  const t0 = Math.atan2(y[0], x[0]);
-  const { sin: s, cos: c } = dfSinCos(df(t0));
+  const t0 = f(Math.atan2(y[0], x[0]));
+  const { sin: s, cos: c } = dfSinCos([t0, 0]);
   const rx = dfAdd(dfMul(x, c), dfMul(y, s));
   const ry = dfSub(dfMul(y, c), dfMul(x, s));
-  return dfAdd(df(t0), dfDiv(ry, rx));
+  return dfAdd([t0, 0], dfDiv(ry, rx));
 }

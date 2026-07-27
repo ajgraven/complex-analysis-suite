@@ -60,17 +60,33 @@ function braceSlice(src: string, clean: string, openIdx: number): string {
   }
   return src.slice(openIdx, j + 1);
 }
-function setVerdictCalls(src: string): string[] {
+/** The `function NAME(` most recently opened before `idx`, in the SCRUBBED source (so a name inside a
+ *  comment or string can't win). This is what lets a guard name the call site it exempts instead of
+ *  merely counting exemptions — see "the exempt site is the resolvent" below. */
+function enclosingFn(clean: string, idx: number): string {
+  let name = "<top-level>";
+  for (const m of clean.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g)) {
+    if (m.index !== undefined && m.index < idx) name = m[1];
+    else break;
+  }
+  return name;
+}
+/** Each verdict payload plus the handler that renders it. `fn` is attributed from the CALL position
+ *  (not the declaration, for shape (b)) — the call is what puts the card on screen. */
+interface VerdictCall { text: string; fn: string }
+function setVerdictCalls(src: string): VerdictCall[] {
   const clean = scrub(src);
-  const out: string[] = [];
+  const out: VerdictCall[] = [];
   // (a) inline literals — showResult({ … })
   for (let i = clean.indexOf("showResult({"); i >= 0; i = clean.indexOf("showResult({", i + 1)) {
-    out.push(braceSlice(src, clean, i + "showResult(".length));
+    out.push({ text: braceSlice(src, clean, i + "showResult(".length), fn: enclosingFn(clean, i) });
   }
   // (b) one indirection — showResult(name), resolved to `const name = { … }`
   for (const m of clean.matchAll(/\bshowResult\(\s*([A-Za-z_$][\w$]*)\s*\)/g)) {
     const decl = clean.indexOf("const " + m[1] + " = {");
-    if (decl >= 0) out.push(braceSlice(src, clean, clean.indexOf("{", decl)));
+    if (decl >= 0) {
+      out.push({ text: braceSlice(src, clean, clean.indexOf("{", decl)), fn: enclosingFn(clean, m.index ?? 0) });
+    }
   }
   return out;
 }
@@ -104,16 +120,22 @@ describe("every verdict card declares a rigor level", () => {
   // closed-form roots sat unbadged beside correctly-badged siblings. An absent badge is the most
   // ambiguous state the card can be in, so absence must never be reachable.
   it("no setVerdict call omits `rigor` — an unbadged card is the ambiguous one", () => {
-    const missing = calls.filter((c) => !/\brigor\s*:/.test(c));
-    expect(missing).toEqual([]);
+    const missing = calls.filter((c) => !/\brigor\s*:/.test(c.text));
+    expect(missing.map((c) => c.fn)).toEqual([]);
   });
 
   // 'exact' is the only level that claims certification, so an unconditional one is the shape a
   // false '=' would take. The resolvent is the single legitimate case: χ, its square-free part and
   // the discriminant are all symbolic over ℚ(i), so that card is exact on every path.
-  it("at most one call site asserts rigor:'exact' unconditionally", () => {
-    const hard = calls.filter((c) => /rigor\s*:\s*'exact'/.test(c));
-    expect(hard.length).toBeLessThanOrEqual(1);
+  //
+  // ⚠ This NAMES the exempt handler rather than counting exemptions. A count of "at most one" is
+  // satisfied just as well by moving the hardcoded 'exact' somewhere it is a lie: migrating it from
+  // doResolvent to the *Numeric solve* card (an estimate path) keeps the count at 1 and a counting
+  // guard stays green — verified, all 7 tests passed with that edit in place. Since the whole point
+  // is the =/≤/≈ guardrail, the exemption has to be pinned to the site that earns it.
+  it("the ONLY unconditional rigor:'exact' is the resolvent's — by name, not by count", () => {
+    const hard = calls.filter((c) => /rigor\s*:\s*'exact'/.test(c.text));
+    expect(hard.map((c) => c.fn)).toEqual(["doResolvent"]);
   });
 });
 

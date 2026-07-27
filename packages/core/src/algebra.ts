@@ -14,7 +14,7 @@
 // Both are numerically identical (same formulas); only the container differs.
 // =============================================================================
 
-import { Complex, type Cx } from "./complex.js";
+import { Complex, divScaled, type Cx } from "./complex.js";
 
 /** The [re, im] tuple representation used by the Complex Dynamics evaluator. */
 export type ComplexTuple = [re: number, im: number];
@@ -75,8 +75,14 @@ export const tupleAlgebra: ComplexAlgebra<ComplexTuple> = {
   mul: (a, b) => [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]],
   div: (a, b) => {
     const d = b[0] * b[0] + b[1] * b[1];
-    if (d === 0) throw new Error("tupleAlgebra.div: division by zero"); // match objAlgebra / Complex.div
-    return [(a[0] * b[0] + a[1] * b[1]) / d, (a[1] * b[0] - a[0] * b[1]) / d];
+    // Same two-path shape as Complex.div: the unscaled expression stays the fast path (so the
+    // reachable range is bit-identical), and |b|² overflowing or underflowing falls through to the
+    // scaled form instead of returning a silent 0/NaN or a false "division by zero". (cd-div-02)
+    if (d !== 0 && d !== Infinity) {
+      return [(a[0] * b[0] + a[1] * b[1]) / d, (a[1] * b[0] - a[0] * b[1]) / d];
+    }
+    if (b[0] === 0 && b[1] === 0) throw new Error("tupleAlgebra.div: division by zero"); // match objAlgebra / Complex.div
+    return divScaled(a[0], a[1], b[0], b[1]);
   },
   scale: (a, s) => [a[0] * s, a[1] * s],
   abs: (z) => Math.hypot(z[0], z[1]),

@@ -93,15 +93,45 @@ export function bareissDet(matrix: readonly (readonly QiPoly[])[]): QiPoly {
 }
 
 /**
+ * Drop trailing zero entries so a coefficient LIST reflects its true outer-variable degree.
+ *
+ * `QiPoly.fromCoeffs` trims within a single polynomial, but nothing trims the `QiPoly[]` list that
+ * `resultant` / `discriminant` take — so an untrimmed list was previously read at its *declared* length,
+ * which is a different (and generally wrong) elimination. Trimming is a no-op for both shipped callers,
+ * whose top entries are provably nonzero.
+ */
+function trimTop(coeffs: readonly QiPoly[]): readonly QiPoly[] {
+  let n = coeffs.length;
+  while (n > 0 && (coeffs[n - 1] ?? QiPoly.zero()).isZero()) n--;
+  return n === coeffs.length ? coeffs : coeffs.slice(0, n);
+}
+
+/**
  * The Sylvester resultant Res(A, B) in the OUTER variable, eliminating it. A and B are little-endian
  * outer-variable coefficient lists (each entry a QiPoly in the inner variable); the result is a QiPoly in
  * the inner variable. Res = 0 ⟺ A and B share a root (in the outer variable) over the algebraic closure.
+ *
+ * Lists are trimmed to their true degree first, and the degenerate cases are resolved *against that
+ * contract* rather than by falling through to the determinant — see the guard below.
  */
-export function resultant(A: readonly QiPoly[], B: readonly QiPoly[]): QiPoly {
+export function resultant(Ain: readonly QiPoly[], Bin: readonly QiPoly[]): QiPoly {
+  const A = trimTop(Ain);
+  const B = trimTop(Bin);
   const p = A.length - 1;
   const q = B.length - 1;
+  // An empty (post-trim) list IS the zero polynomial, which vanishes everywhere. Reading the contract
+  // literally: 0 shares a root with anything that HAS a root, i.e. anything of degree ≥ 1 — so
+  //   0 vs degree ≥ 1  ⇒ 0        0 vs nonzero constant ⇒ 1 (a constant has no roots to share)
+  //   0 vs 0           ⇒ 0 (they agree everywhere)
+  // Previously ANY empty list drove N = p + q ≤ 0 and returned the constant 1, reporting "no shared
+  // root" for the polynomial that shares them all — a false negative on an elimination result, which is
+  // the direction that reads as a certified absence. (cd-res-11)
+  if (p < 0 || q < 0) {
+    if (p < 0 && q < 0) return QiPoly.zero();
+    return (p < 0 ? q : p) >= 1 ? QiPoly.zero() : QiPoly.int(1);
+  }
   const N = p + q;
-  if (N <= 0) return QiPoly.int(1);
+  if (N <= 0) return QiPoly.int(1); // two nonzero constants: neither has a root, so none is shared
   const M: QiPoly[][] = Array.from({ length: N }, () => new Array<QiPoly>(N).fill(QiPoly.zero()));
   for (let i = 0; i < q; i++) {
     for (let kk = 0; kk <= p; kk++) M[i][i + kk] = A[p - kk] ?? QiPoly.zero(); // high-to-low
@@ -114,18 +144,31 @@ export function resultant(A: readonly QiPoly[], B: readonly QiPoly[]): QiPoly {
 
 /**
  * The discriminant in the outer variable of a polynomial given as its little-endian coefficient list —
- * disc(A) = (−1)^{d(d−1)/2} · Res(A, A′) / lc(A), returned in content-cleared (primitive) form. Its roots
- * (in the inner variable) are where A has a repeated outer-variable root. A degree < 2 polynomial has no
- * repeated roots, so the discriminant is the constant 1.
+ * disc(A) = (−1)^{d(d−1)/2} · Res(A, A′) / lc(A), exactly as written. Its roots (in the inner variable)
+ * are where A has a repeated outer-variable root. A degree < 2 polynomial has no repeated roots, so the
+ * discriminant is the constant 1.
+ *
+ * The return value is the classical discriminant, sign and magnitude intact: disc(x²+1) = −4,
+ * disc(x²−2) = 8, disc(x³−1) = −27. It used to be wrapped in {@link primitivePoly}, which re-derives the
+ * sign from the leading coefficient and divides out the content — so the `(−1)^{d(d−1)/2}` line above was
+ * provably dead, and both the sign and the magnitude the docstring promised were discarded before the
+ * caller saw them (disc(x²−2) and disc(x²+1) both came back as 1, which would tell a caller testing
+ * `disc > 0` that x²+1 has two real roots). Callers that want the canonical zero-locus generator rather
+ * than the discriminant itself wrap this in `primitivePoly`, as `dynatomic.ts` already does for
+ * {@link resultant}. (cd-disc-06)
  */
-export function discriminant(coeffs: readonly QiPoly[]): QiPoly {
+export function discriminant(coeffsIn: readonly QiPoly[]): QiPoly {
+  // Trim first, so `d` is the TRUE degree and `lead` is nonzero. An untrimmed list used to reach
+  // `divExact(QiPoly.zero())` and surface `QiPoly.divmod: division by zero polynomial` — an internal
+  // helper's message, naming neither this function nor the actual cause. A degree-dropped input now
+  // yields the correct lower-degree discriminant instead of an error. (cd-disc-12)
+  const coeffs = trimTop(coeffsIn);
   const d = coeffs.length - 1;
   if (d < 2) return QiPoly.int(1);
   const B: QiPoly[] = [];
   for (let j = 1; j <= d; j++) B.push((coeffs[j] ?? QiPoly.zero()).scale(Gauss.int(j))); // A′
   const res = resultant(coeffs, B);
   const lead = coeffs[d] ?? QiPoly.zero();
-  let disc = res.divExact(lead);
-  if (Math.floor((d * (d - 1)) / 2) % 2 === 1) disc = disc.neg();
-  return primitivePoly(disc);
+  const disc = res.divExact(lead);
+  return Math.floor((d * (d - 1)) / 2) % 2 === 1 ? disc.neg() : disc;
 }

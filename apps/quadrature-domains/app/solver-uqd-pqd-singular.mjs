@@ -1,6 +1,7 @@
 // ESM (Phase 2 port) — twin of solver-uqd-pqd-singular.js (classic stays frozen). Registers onto the QD namespace.
 import { Complex } from './complex.mjs';
 import { Taylor } from './taylor.mjs';
+import { branchTaylorAccumulate } from './solver-taylor-common.mjs';
 import _QD from './solver.mjs';
 // =============================================================================
 // solver-uqd-pqd-singular.js -- Unbounded SINGULAR power-weighted QDs
@@ -101,28 +102,8 @@ import _QD from './solver.mjs';
         if (l < phi.polyA.length) z0invPowL = Complex.mul(z0invPowL, z0inv);
       }
     }
-    for (const br of phi.branches) {
-      const zjC = Complex.conj(br.z);
-      const alpha_z = Complex.sub(Complex.ONE(), Complex.mul(zjC, z0pt));
-      const alphaInv = Complex.inv(alpha_z);
-      const uT = Taylor.zero(L + 1);
-      uT[0] = Complex.mul(z0pt, alphaInv);
-      if (L >= 1) {
-        let zjcPow = { re: 1, im: 0 };
-        let alphaInvPow = Complex.mul(alphaInv, alphaInv);
-        for (let l = 1; l <= L; l++) {
-          uT[l] = Complex.mul(zjcPow, alphaInvPow);
-          zjcPow = Complex.mul(zjcPow, zjC);
-          alphaInvPow = Complex.mul(alphaInvPow, alphaInv);
-        }
-      }
-      let uPow = Taylor.truncate(uT, L);
-      for (let k = 1; k <= br.A.length; k++) {
-        const AkC = Complex.conj(br.A[k - 1]);
-        for (let i = 0; i <= L; i++) result[i] = Complex.add(result[i], Complex.mul(AkC, uPow[i]));
-        if (k < br.A.length) uPow = Taylor.mul(uPow, uT, L);
-      }
-    }
+    // Finite-pole tail (shared with every family — solver-taylor-common.mjs).
+    branchTaylorAccumulate(result, phi.branches, z0pt, L);
     return result;
   }
 

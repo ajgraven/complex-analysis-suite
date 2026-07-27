@@ -27,6 +27,34 @@ export function clampExportSize(
   return { size, clamped: size !== wanted };
 }
 
+/**
+ * Flip an RGBA8 image's rows **in place** — WebGL reads bottom-up, `ImageData` is top-down.
+ *
+ * In place, and that is the point. The obvious version allocates a second full-size buffer and
+ * copies row by row into it, which doubles peak memory at exactly the moment it is already highest:
+ * an 8192² export is 268 MB per buffer, so holding both peaked at 537 MB and put the export within
+ * reach of an allocation failure on a modest machine for no reason. Swapping through one row of
+ * scratch costs 32 KB at that size. The caller then hands the SAME `ArrayBuffer` to `ImageData` via
+ * a `Uint8ClampedArray` view, so there is no copy on that side either. (cd-render-07)
+ *
+ * `size` is the side length in pixels; `buf.length` must be `size * size * 4`.
+ */
+export function flipRowsInPlace(buf: Uint8Array, size: number): void {
+  const rowBytes = size * 4;
+  if (buf.length !== rowBytes * size) {
+    throw new Error(`flipRowsInPlace: expected ${rowBytes * size} bytes for ${size}², got ${buf.length}`);
+  }
+  const scratch = new Uint8Array(rowBytes);
+  // A middle row (odd `size`) is already in place, so the loop stops before it.
+  for (let top = 0, bottom = size - 1; top < bottom; top++, bottom--) {
+    const t = top * rowBytes;
+    const b = bottom * rowBytes;
+    scratch.set(buf.subarray(t, t + rowBytes));
+    buf.copyWithin(t, b, b + rowBytes);
+    buf.set(scratch, b);
+  }
+}
+
 /** Ensure a safe, `.png`-suffixed filename (falling back to `plot.png`). */
 export function ensurePngName(name: string): string {
   const cleaned = name.trim().replace(/[\\/:*?"<>|]/g, "_");

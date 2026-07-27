@@ -48,3 +48,51 @@ describe("correspondence orbit tree", () => {
     }
   });
 });
+
+describe("branch labels are ordered by argument (corr-orbittree-01)", () => {
+  // The label is the branch's index after ordering by arg — it is what makes an orbit address
+  // meaningful and stable across runs, so the in-place two-element swap that replaced the general
+  // comparator sort has to produce exactly the same order the sort did. Nothing else pinned this.
+  const seed: Complex = [0.35, 0.2];
+  const nodes = expandOrbitTree(corr, seed, { maxDepth: 8, maxNodes: 600, escapeR: 20 });
+
+  it("siblings appear in ascending argument order, and labels count 0,1,… in that order", () => {
+    const byParent = new Map<number, { label: number; arg: number }[]>();
+    for (const n of nodes) {
+      if (n.parent < 0) continue;
+      const arr = byParent.get(n.parent) ?? [];
+      arr.push({ label: n.label, arg: Math.atan2(n.point[1], n.point[0]) });
+      byParent.set(n.parent, arr);
+    }
+    expect(byParent.size).toBeGreaterThan(10); // the assertion below is not vacuous
+    for (const [parent, sibs] of byParent) {
+      // Labels are 0..k-1 in push order…
+      expect(sibs.map((s) => s.label), `parent ${parent}`).toEqual(sibs.map((_, k) => k));
+      // …and push order is ascending by argument.
+      for (let k = 1; k < sibs.length; k++) {
+        expect(sibs[k].arg, `parent ${parent} label ${k}`).toBeGreaterThanOrEqual(sibs[k - 1].arg);
+      }
+    }
+  });
+
+  it("reproduces the ordering the general comparator sort produced", () => {
+    // The reference implementation this replaced, run over the same branch sets.
+    for (const n of nodes) {
+      const children = corr.branches(n.point);
+      if (children.length < 2) continue;
+      const reference = children
+        .map((p) => ({ p, arg: Math.atan2(p[1], p[0]) }))
+        .sort((a, b) => a.arg - b.arg)
+        .map((w) => w.p);
+      const actual = corr.branches(n.point);
+      if (actual.length === 2) {
+        const a0 = Math.atan2(actual[0][1], actual[0][0]);
+        const a1 = Math.atan2(actual[1][1], actual[1][0]);
+        if (a0 > a1) [actual[0], actual[1]] = [actual[1], actual[0]];
+      } else {
+        actual.sort((a, b) => Math.atan2(a[1], a[0]) - Math.atan2(b[1], b[0]));
+      }
+      expect(actual).toEqual(reference);
+    }
+  });
+});

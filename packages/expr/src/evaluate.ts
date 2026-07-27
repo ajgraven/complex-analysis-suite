@@ -4,12 +4,15 @@
  * iterates for the overlay and as the reference implementation in unit tests.
  *
  * Values flowing through arithmetic are {@link Complex}; comparisons / `not` /
- * `true` / `false` yield booleans. `if(cond, a, b)` takes a boolean condition.
+ * `true` / `false` yield booleans. `if(cond, a, b)` takes a boolean condition, or a complex one, which
+ * is true when its real part is non-zero — the same coercion the two compiled backends apply. The
+ * interpreter is the REFERENCE those backends are checked against, so where it is stricter than both of
+ * them the parity contract silently covers nothing; this docstring used to promise the stricter rule.
  */
 
 import type { Complex } from "./complex";
 import type { Node } from "./ast";
-import { ExprError } from "./ast";
+import { ExprError, nodeIsBool } from "./ast";
 import * as C from "./complexJs";
 
 export type Value = Complex | boolean;
@@ -58,10 +61,20 @@ class Evaluator {
     return v;
   }
 
+  /**
+   * Coerce a node to a boolean the way BOTH compiled backends do: a genuine boolean passes through,
+   * and a complex value is true when its real part is non-zero.
+   *
+   * This used to throw on a complex value. That made the interpreter STRICTER than the two backends it
+   * exists to certify — `compileBool`'s default (below) and `emitBool`'s default (glsl.ts) both coerce —
+   * so `if(z, a, b)` was a node the parity/fuzz contract could not cover at all: the reference refused
+   * the input that the JS closure and the GLSL shader both accepted and agreed on. Nothing shipping
+   * changed here; `Interpreter` is imported only by tests, while every production path goes through
+   * makeComplexFn / makeEscapeFn. (expr-eval-01)
+   */
   private bool(node: Node): boolean {
     const v = this.eval(node);
-    if (isComplex(v)) throw new ExprError("Expected a boolean, got a number", 0);
-    return v;
+    return isComplex(v) ? v[0] !== 0 : v;
   }
 
   eval(node: Node): Value {
@@ -177,22 +190,6 @@ interface Scope {
 }
 type CFn = (s: Scope, depth: number) => Complex;
 type BFn = (s: Scope, depth: number) => boolean;
-
-/** Is this node boolean-valued (vs complex-valued)? Mirrors the GLSL backend's split. */
-function nodeIsBool(node: Node): boolean {
-  switch (node.kind) {
-    case "bool":
-    case "not":
-    case "compare":
-      return true;
-    case "if":
-      return nodeIsBool(node.then) || nodeIsBool(node.otherwise);
-    case "seq":
-      return nodeIsBool(node.stmts[node.stmts.length - 1]);
-    default:
-      return false;
-  }
-}
 
 /** Compile a non-final seq statement: evaluated for its side effect (assignment) and value. */
 function compileStmt(node: Node, fRef: () => CFn): (s: Scope, depth: number) => void {

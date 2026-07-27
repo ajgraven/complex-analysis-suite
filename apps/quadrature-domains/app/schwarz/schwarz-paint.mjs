@@ -657,9 +657,19 @@ import { QD_UI } from '../ui-registry.mjs';
     }
   }
 
-  // S5 / F6: paint domain-coloring field into the canvas. Caches an
-  // offscreen W×H ImageData and stretches to the current viewport.
-  let _dcOffCanvas = null, _dcOffCtx = null;
+  // S5 / F6: paint the domain-coloring field into the canvas. Caches an offscreen W×H canvas AND its
+  // ImageData, and stretches to the current viewport.
+  //
+  // The ImageData cache is the point: `_recomputeDomainColoring` is debounced to 120 ms and builds a
+  // fresh `{buf, W, H, viewport}` each time, whereas `liveDomainColoringRepaint` schedules a paintAll
+  // once per animation frame for the whole of a pan or zoom gesture. Only the drawImage destination
+  // rect varies between those frames, so re-uploading an unchanged 256×256 field was ~256 KB of
+  // allocation plus a 256 KB copy plus a putImageData every frame. Comparing `dc.buf` by identity is
+  // sound precisely because the recompute always allocates a new buffer.
+  //
+  // This header used to claim the ImageData was cached while the body called createImageData on every
+  // paint. (qd-dc-imagedata-01)
+  let _dcOffCanvas = null, _dcOffCtx = null, _dcImg = null, _dcLastBuf = null;
   function paintDomainColoring() {
     if (sState.mode !== 'domain-coloring' || !sState.domainColor) return;
     const dc = sState.domainColor;
@@ -668,10 +678,14 @@ import { QD_UI } from '../ui-registry.mjs';
       _dcOffCanvas.width  = dc.W;
       _dcOffCanvas.height = dc.H;
       _dcOffCtx = _dcOffCanvas.getContext('2d');
+      _dcImg = _dcOffCtx.createImageData(dc.W, dc.H);
+      _dcLastBuf = null; // the new offscreen canvas is blank, so the field must be re-blitted
     }
-    const img = _dcOffCtx.createImageData(dc.W, dc.H);
-    img.data.set(dc.buf);
-    _dcOffCtx.putImageData(img, 0, 0);
+    if (_dcLastBuf !== dc.buf) {
+      _dcImg.data.set(dc.buf);
+      _dcOffCtx.putImageData(_dcImg, 0, 0);
+      _dcLastBuf = dc.buf;
+    }
     const ctx = getCtx();
     // Map source viewport → screen pixel rect.
     const a = worldToPixel(dc.viewport.reMin, dc.viewport.imMax);

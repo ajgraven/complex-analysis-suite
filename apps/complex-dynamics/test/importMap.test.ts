@@ -5,6 +5,8 @@ import {
   VERSION,
   decodeLink,
   encodeLink,
+  QD_TO_CD_DELTOID_LINK,
+  QD_TO_CD_DELTOID_PHI_AT_2,
   type Envelope,
   type QuadratureDomain,
 } from "@cas/interchange";
@@ -69,6 +71,30 @@ describe("CD consume interchange map (Phase 4 C3)", () => {
     const v: Complex = makeComplexFn(parse(src))([1, 0], [0, 0]);
     // φ(1) = 1/(1+1) = 0.5
     expect(v[0]).toBeCloseTo(0.5, 12);
+    expect(v[1]).toBeCloseTo(0, 12);
+  });
+
+  // The CONSUMER half of the QD -> CD contract (qd-interchange-e2e-08). Everything above decodes an
+  // envelope THIS FILE built — self-consistency, not interoperability: QD's exporter could have
+  // drifted (a renamed field, a reordered F, a changed `bounded` sense) and these tests would stay
+  // green against a literal no exporter had emitted in months.
+  //
+  // This one consumes the real wire artifact. The link is not hand-written here — it is the exact
+  // string QD's `exportPhiLink` produces, asserted on the QD side in
+  // apps/quadrature-domains/vitest/schwarz-export.test.ts and stored in @cas/interchange because
+  // the dependency rule (ARCHITECTURE.md §4) forbids either app importing the other, so the shared
+  // package is the only place the two suites can meet. Regenerating the golden to satisfy QD makes
+  // CD consume the NEW bytes on the next run, which is the point: an incompatibility fails here
+  // instead of hiding in a stale duplicate.
+  it("consumes the exact link QD's exporter emits (cross-app golden)", () => {
+    const env = decodeLink(QD_TO_CD_DELTOID_LINK);
+    expect(env.kind).toBe("quadrature-domain");
+    expect(env.provenance.app).toBe("quadrature-domains");
+    const spec = envelopeToMapSpec(env);
+    if (!spec) throw new Error("expected a map spec from the QD golden link");
+    // Straight through CD's real path: MapSpec -> expr string -> parse -> compile -> evaluate.
+    const v: Complex = makeComplexFn(parse(mapSpecToExpr(spec)))([2, 0], [0, 0]);
+    expect(v[0]).toBeCloseTo(QD_TO_CD_DELTOID_PHI_AT_2, 12);
     expect(v[1]).toBeCloseTo(0, 12);
   });
 

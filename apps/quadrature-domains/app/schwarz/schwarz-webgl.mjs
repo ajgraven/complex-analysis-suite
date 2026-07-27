@@ -826,7 +826,12 @@ void main() {
     // isContextLost() and the owner (schwarz-ui ensureGPU) recreates the whole
     // renderer on the 'webglcontextrestored' event rather than rebuilding in
     // place. We only need the loss listener here.
-    canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); }, false);
+    // Named + removed by destroy(), because the canvas OUTLIVES the renderer: schwarz-ui creates
+    // #schwarz-gl-canvas once and reuses it, calling createGPURenderer again on every
+    // 'webglcontextrestored'. An anonymous closure here therefore accumulated one dead listener per
+    // loss/restore cycle on a node that is never replaced. (qd-schwarz-gl-listener-01)
+    const onContextLost = (e) => { e.preventDefault(); };
+    canvas.addEventListener('webglcontextlost', onContextLost, false);
 
     let prog, vs, fs, vbo;
     try {
@@ -1098,6 +1103,9 @@ void main() {
     }
 
     function destroy() {
+      canvas.removeEventListener('webglcontextlost', onContextLost, false);
+      // After a context loss every GL object is already invalid and these calls are no-ops; that is
+      // fine and keeps one teardown path for both reasons a renderer is dropped.
       if (phiState.mask) gl.deleteTexture(phiState.mask);
       if (colormapTex) gl.deleteTexture(colormapTex);
       gl.deleteBuffer(vbo);

@@ -11,6 +11,7 @@ import {
   dfSqrt,
   dfSub,
   toNumber,
+  type DF,
 } from "../src/glsl/df64Ref.js";
 
 const f = Math.fround;
@@ -94,6 +95,27 @@ describe("df64 transcendentals match Math to ~13 digits", () => {
     for (const [y, x] of cases) {
       expect(toNumber(dfAtan2(df(y), df(x)))).toBeCloseTo(Math.atan2(y, x), 11);
     }
+  });
+
+  // The cases above all pass `df(x)` for a generic x, where the float32 hi limb is already a good
+  // approximation — so they would still pass against an implementation that ignored the low limb
+  // entirely. These two feed a low limb that is invisible to float32 (1e-8 is below the float32
+  // spacing at 1.5 and at 2) and pin the answer it must produce. The signal is enormous relative to
+  // the noise: dropping the low limb moves log by 6.7e-9 and atan2 by 2.0e-9, while the df64 results
+  // sit within 5.6e-17 and 8.9e-16 of the truth.
+  //
+  // ⚠ Do NOT "strengthen" these toward a ≈ 1 / y ≈ x: log(1+u) and atan2 near a diagonal lose the
+  // u²/2 term to cancellation against the magnitude-1 intermediates, which is below df64's ~2^-48
+  // relative precision. Measured at a = 1 + 2^-30, dfLog is off by 4.3e-19 — correct for the
+  // algorithm, but it would look like a failure and invite a "fix" that is really a wrong pin.
+  it("log and atan2 use the LOW limb, not just the float32 hi limb", () => {
+    const aLog: DF = [1.5, 1e-8];
+    expect(toNumber(dfLog(aLog))).toBeCloseTo(Math.log(1.5 + 1e-8), 14);
+    expect(Math.abs(toNumber(dfLog(aLog)) - Math.log(1.5))).toBeGreaterThan(1e-9); // hi-only is wrong
+
+    const yA: DF = [2, 1e-8], xA: DF = [1, 0];
+    expect(toNumber(dfAtan2(yA, xA))).toBeCloseTo(Math.atan2(2 + 1e-8, 1), 14);
+    expect(Math.abs(toNumber(dfAtan2(yA, xA)) - Math.atan2(2, 1))).toBeGreaterThan(1e-9);
   });
 });
 

@@ -16,7 +16,6 @@
 // =============================================================================
 
 // ESM (Phase 2 port) — twin of param-slice/param-slice-ui.js (classic stays frozen). UI orchestrator/consumer.
-import { state } from '../ui-state.mjs';
 import { QD_UI } from '../ui-registry.mjs';
 import ParamSlice from '../param-slice/param-slice-common.mjs';
 import ParamSlicePool from '../param-slice/param-slice-pool.mjs';
@@ -393,11 +392,14 @@ const QD = _QD;
     ls.timer = setTimeout(() => {
       ls.timer = null;
       if (sliceState.liveSolve.token !== myToken) return;   // superseded
-      runLiveSolve(cellInfo, cachedPhi, myToken, statusEl, canvas, cellKey);
+      // Fire-and-forget: runLiveSolve is async now (it may await a worker), and it re-checks the
+      // token itself before touching the DOM, so a rejection here would only be a programming error.
+      void Promise.resolve(runLiveSolve(cellInfo, cachedPhi, myToken, statusEl, canvas, cellKey))
+        .catch((e) => console.error('[param-slice] live solve failed:', e));
     }, LIVE_SOLVE_SETTLE_MS);
   }
 
-  function runLiveSolve(cellInfo, cachedPhi, myToken, statusEl, canvas, cellKey) {
+  async function runLiveSolve(cellInfo, cachedPhi, myToken, statusEl, canvas, cellKey) {
     const scenario = sliceState.lastScenario;
     if (!scenario || !sliceState.lastAxes) return;
     if (statusEl) { statusEl.textContent = '(solving…)'; statusEl.style.color = '#888'; }
@@ -424,13 +426,39 @@ const QD = _QD;
     // matched, so weighted-family hovers fell back to a cold solve.
     const expectedFamilyTag = (PS.MODE_FAMILY_TAG && scenario.mode)
       ? PS.MODE_FAMILY_TAG[scenario.mode] : undefined;
+    // Solve on a WORKER when the sweep pool can take it, on this thread otherwise.
+    //
+    // The cost is bimodal, and the bad half is what this is for. Over a valid cell the hover always
+    // has a warm hint from the rendered grid and the solve is 0.2–0.7 ms — nothing to move. Over a
+    // cell where no QD exists there is no nearby valid φ to hint from, so the solver spends its whole
+    // multistart budget before reporting `no-root`: measured 86.6 ms, on the main thread, once
+    // per 150 ms settle. That is exactly the region someone exploring the boundary hovers over.
+    //
+    // No new job kind is needed: pool.solveBatch already takes an array of points with per-point warm
+    // hints and runs them through the same PS.solveOnePointWithScratch this used to call directly, so
+    // a one-element batch IS this solve. canAccept() is the gate — _dispatch refuses to run while the
+    // pool is cancel-latched, so a job pushed then would never settle and the preview would hang.
+    // (qd-paramslice-hover-01)
     let r;
-    try {
-      r = PS.solveOnePoint(sceneWithOpts, point, warmHint, expectedFamilyTag);
-    } catch (e) {
-      r = { cls: 'unclassified', errSample: String(e && e.message || e) };
+    const pool = sliceState.pool;
+    if (pool && typeof pool.canAccept === 'function' && pool.canAccept()) {
+      try {
+        const out = await pool.solveBatch(sceneWithOpts, scenario.mode, [point], [warmHint]);
+        r = out && out[0];
+      } catch (e) {
+        r = { cls: 'unclassified', errSample: String(e && e.message || e) };
+      }
+      // A render cancelled while this was queued resolves pending jobs with null. That is not a
+      // solve failure and must not be reported as one — leave the cached preview and its label alone.
+      if (!r) return;
+    } else {
+      try {
+        r = PS.solveOnePoint(sceneWithOpts, point, warmHint, expectedFamilyTag);
+      } catch (e) {
+        r = { cls: 'unclassified', errSample: String(e && e.message || e) };
+      }
     }
-    if (sliceState.liveSolve.token !== myToken) return;   // superseded
+    if (sliceState.liveSolve.token !== myToken) return;   // superseded (re-checked AFTER the await)
     if (r.cls === PS.CLASS_VALID && r.phiSerialized) {
       sliceState.liveSolve.lastPhi = r.phiSerialized;
       sliceState.liveSolve.lastCellKey = cellKey;

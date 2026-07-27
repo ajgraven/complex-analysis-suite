@@ -36,11 +36,14 @@ const QD = _QD;
   QD_UI.installHText = function installHText(ui) {
     const state = ui.state;
 
-    // Whether the current mode's family carries a polynomial part of h. Delegates
-    // to the parser's single source of truth (QD.modeAllowsPoly in parse-h) so the
-    // editor's visibility can never disagree with what parseH will accept — the
-    // drift that broke five PQD-unbounded presets and their share links (qd-polyh-01).
-    function modeAllowsPoly(mode) { return QD.modeAllowsPoly(mode); }
+    // Polynomial part of h is meaningful exactly in the UNBOUNDED family panels.
+    //
+    // Delegated to the engine (QD.modeAllowsPoly, parse-h.mjs) rather than kept as a
+    // local copy. The two copies had drifted: this one correctly listed all five
+    // unbounded modes, while parse-h listed only three and therefore THREW on the
+    // pqd-unbounded presets this function had happily written into #h-text. One list
+    // now decides both what the UI shows and what the parser accepts.
+    const modeAllowsPoly = (mode) => QD.modeAllowsPoly(mode);
 
     function refreshHText() {
       const inp = document.getElementById('h-text');
