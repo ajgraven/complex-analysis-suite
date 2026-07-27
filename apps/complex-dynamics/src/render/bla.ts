@@ -18,6 +18,7 @@
  * per-step iteration within each BLA's radius, so the (conservative) radius is provably safe.
  */
 import type { Complex } from "../complex";
+import { multibrotStep, polyStep } from "./perturbationPoly";
 
 export interface BLA {
   /** δz_{m+l} = a·δz_m + b·δc. */
@@ -164,20 +165,64 @@ export interface TraverseResult {
   iters: number;
   escaped: boolean;
   z: Complex;
+  /**
+   * How many multi-iteration BLA skips were applied. Zero means the traversal degenerated to a plain
+   * per-step loop — which is the *normal* outcome at shallow zoom, since a BLA is only valid while
+   * |δz| < r ≈ ε·|A| ~ 1e-7·|2Z|, far below a shallow view's |δc|. Reported because it is otherwise
+   * unobservable: an equivalence test against the per-step loop passes trivially when no skip is taken,
+   * and `test/bla.test.ts` previously inferred "multi-step skips were used" from a long pre-escape orbit,
+   * which does not follow — measured over its own fixtures, the count was 0.
+   */
+  skips: number;
 }
 
 /**
- * The **canonical BLA render loop** for one perturbed pixel — the reference the GPU kernel (D2b)
- * mirrors. Iterates δz about the reference orbit `ref` (Z₀…Z_refMax), skipping many steps at once with
- * {@link lookupBLA} where the linear approximation is valid and falling back to a single perturbation
- * step otherwise, with rebasing to Z₀ (the exact identity δz ← (Z_m+δz)−Z₀) when that shrinks δz.
+ * Which map {@link traverseBLA} is iterating, and where it bails out. Defaults reproduce the historical
+ * behaviour exactly (z² + c, |z| > 2), so existing calls are unaffected.
+ */
+export interface TraverseBLAOptions {
+  /** Degree d of z^d + c. Default 2. Ignored when `poly` is given. */
+  degree?: number;
+  /** General polynomial f = P(z) + B·c — the kernel's `uPolyMode == 1` branch. */
+  poly?: { coeffs: Complex[]; dcCoeff: Complex };
+  /** Squared escape radius R², mirroring the kernel's `uPerturbEscape2`. Default 4 (⇒ |z| > 2). */
+  escape2?: number;
+}
+
+/**
+ * The **canonical BLA render loop** for one perturbed pixel — the CPU reference for the GPU kernel's
+ * `pColorAt` (shaderBuilder.ts). Iterates δz about the reference orbit `ref` (Z₀…Z_refMax), skipping many
+ * steps at once with {@link lookupBLA} where the linear approximation is valid and falling back to a
+ * single perturbation step otherwise, with rebasing to Z₀ (the exact identity δz ← (Z_m+δz)−Z₀) when that
+ * shrinks δz.
  *
  * `cAdd` is the per-step additive constant — δc on the parameter plane, 0 on the Julia plane; `dz0` is
  * the initial perturbation — 0 on the parameter plane, δc on the Julia plane. Because a BLA only
  * applies while |δz| < its radius (≈ ε·|A|, far below the escape scale), the orbit cannot escape
  * mid-skip; near the boundary δz grows, the lookup falls back to single steps, and the escape iterate
  * is reproduced exactly — so this loop yields the *same* escape count as the naive per-step iteration,
- * just faster. `test/bla.test.ts` pins that equivalence.
+ * just faster. `test/bla.test.ts` pins that equivalence, now at d = 2…5 and in polynomial mode.
+ *
+ * That "cannot escape mid-skip" argument has a **precondition**: `ref` must stop at its own bailout, so
+ * that `refMax` is the reference's escape index and the `m + bla.l <= refMax` guard below keeps a skip
+ * inside it. Production satisfies this — `computeMultibrotOrbitDD` breaks at `BAILOUT2` and returns the
+ * truncated `length`. Hand `ref` an orbit that was iterated blindly past the bailout and a long skip will
+ * step straight over the escape, silently returning a larger `iters`; that is exactly what two fixtures
+ * in `test/bla.test.ts` used to do.
+ *
+ * The map and bailout come from `opts`, because the shipped kernel's do too: `glPlot.ensureBLA` builds
+ * tables via `buildBLATable(ref, maxC, perturbDegree())` or `buildBLATablePoly`, and the shader reads its
+ * bailout from `uPerturbEscape2` (which `probeEscapeRadius2()` derives per map — it is *not* always 4).
+ * This function used to hard-code the degree-2 step and `> 4` while still describing itself as the
+ * canonical mirror, so a maintainer reaching for it as a degree-5 or polyMode oracle would have been
+ * silently handed quadratic escape counts. (cd-render-10)
+ *
+ * The step itself delegates to {@link multibrotStep} / {@link polyStep} — the same routines
+ * `perturbMultibrot` / `perturbPoly` use — so the BLA path and the per-step path differ *only* in the
+ * skipping, which is what the equivalence test is meant to isolate. Note the shader evaluates the d ≥ 3
+ * binomial series in Horner form rather than as a plain sum; that is the same series in a different
+ * summation order, so CPU and GPU agree mathematically but not bit-for-bit (they already differ by fp32
+ * vs float64 anyway).
  */
 export function traverseBLA(
   ref: Complex[],
@@ -185,17 +230,25 @@ export function traverseBLA(
   cAdd: Complex,
   dz0: Complex,
   maxIter: number,
+  opts: TraverseBLAOptions = {},
 ): TraverseResult {
+  const escape2 = opts.escape2 ?? 4;
+  const poly = opts.poly;
+  const degree = opts.degree ?? 2;
+  const step = poly
+    ? (Z: Complex, dz: Complex): Complex => polyStep(Z, dz, poly.coeffs, poly.dcCoeff, cAdd)
+    : (Z: Complex, dz: Complex): Complex => multibrotStep(Z, dz, degree, cAdd);
   const refMax = ref.length - 1;
   const Z0 = ref[0];
   let Z = Z0;
   let m = 0;
   let dz: Complex = [dz0[0], dz0[1]];
   let k = 0;
+  let skips = 0;
   let z: Complex = [Z[0] + dz[0], Z[1] + dz[1]];
   while (k < maxIter) {
     z = [Z[0] + dz[0], Z[1] + dz[1]];
-    if (z[0] * z[0] + z[1] * z[1] > 4) return { iters: k, escaped: true, z };
+    if (z[0] * z[0] + z[1] * z[1] > escape2) return { iters: k, escaped: true, z, skips };
     const bla = lookupBLA(levels, m, cabs(dz));
     if (bla && bla.l > 1 && k + bla.l <= maxIter && m + bla.l <= refMax) {
       // Skip l iterations: δz ← A·δz + B·δc.
@@ -205,12 +258,9 @@ export function traverseBLA(
       ];
       k += bla.l;
       m += bla.l;
+      skips++;
     } else {
-      // Single perturbation step: δz ← 2·Z·δz + δz² + cAdd.
-      dz = [
-        2 * (Z[0] * dz[0] - Z[1] * dz[1]) + (dz[0] * dz[0] - dz[1] * dz[1]) + cAdd[0],
-        2 * (Z[0] * dz[1] + Z[1] * dz[0]) + 2 * dz[0] * dz[1] + cAdd[1],
-      ];
+      dz = step(Z, dz); // one exact perturbation step for the configured map
       k += 1;
       m += 1;
     }
@@ -224,7 +274,7 @@ export function traverseBLA(
       m = 0;
     }
   }
-  return { iters: maxIter, escaped: false, z };
+  return { iters: maxIter, escaped: false, z, skips };
 }
 
 /** A BLA binary tree packed for a GPU float texture: two RGBA32F texels per BLA, levels laid end-to-end. */

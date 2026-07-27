@@ -69,6 +69,14 @@ what makes the disagreement loud instead of silent.
 
 ## Tests
 
-`test/exact.test.ts` and `test/biPoly.test.ts` — golden values plus algebraic identities
-(e.g. `resultant(f, g)` vanishing exactly when `f` and `g` share a root). Exactness makes these
-assertions unusually strong: there is no tolerance to tune, so a regression cannot hide inside one.
+`test/exact.test.ts` (ℚ, ℚ(i), `QiPoly`), `test/biPoly.test.ts`, and `test/resultant.test.ts` (the
+elimination layer) — golden values plus algebraic identities. Exactness makes these assertions
+unusually strong: there is no tolerance to tune, so a regression cannot hide inside one.
+
+The elimination file is newer than the rest. Until it landed, this section attributed
+`resultant(f, g)` vanishing exactly when `f` and `g` share a root to the first two files, which
+tested no such thing — `resultant`, `discriminant`, `bareissDet` and `integerPrimitive` had no
+package-level coverage at all. They were pinned only indirectly, through the two consumers' suites,
+and both consumers use only the *zero set* of the result — so a wrong sign, a discarded magnitude,
+or a degenerate input answered backwards was invisible. Three such defects were in fact live
+(`cd-res-11`, `cd-disc-06`, `cd-disc-12`).
