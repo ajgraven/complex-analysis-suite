@@ -49,6 +49,36 @@ describe("@cas/core Complex (object representation)", () => {
     const acc2: Cx = { re: 1, im: 1 };
     Complex.addMulInto(acc2, { re: 0, im: 1 }, acc2);
     expect(cNear(acc2, 0, 2)).toBe(true);
+
+    // addInto / subInto / scaleInto complete the documented in-place API (the perf-only sibling set of
+    // add/sub/scale). They are currently opted into by no consumer — the review's cd-dead-10 proposed
+    // deleting them as dead — but they are a deliberate, symmetric substrate API (@cas/core exists to
+    // provide such primitives; cf. the intentional conjFR/MM_H in review #4 Batch A), and the natural
+    // completion the next allocation-free kernel reaches for. Rather than delete useful API on a
+    // finding that was itself wrong about half its content (it mislocated a non-existent
+    // `BiPoly.monomial` to @cas/core), we KEEP them and CLOSE the real risk it gestures at — that
+    // untested code rots — by exercising them here, including the "SAFE TO ALIAS" contract. For these
+    // three the contract is trivially safe (component-wise, no cross term, unlike mul), and this pins
+    // that so a future refactor cannot regress it silently.
+    const s1: Cx = { re: 5, im: 7 };
+    Complex.addInto({ re: 1, im: 2 }, { re: 3, im: -1 }, s1);
+    expect(cNear(s1, 4, 1)).toBe(true);
+    const s2: Cx = { re: 0, im: 0 };
+    Complex.subInto({ re: 1, im: 2 }, { re: 3, im: -1 }, s2);
+    expect(cNear(s2, -2, 3)).toBe(true);
+    const s3: Cx = { re: 0, im: 0 };
+    Complex.scaleInto({ re: 2, im: -3 }, 4, s3);
+    expect(cNear(s3, 8, -12)).toBe(true);
+    // aliasing (out === a): add/sub/scale in place must read the original before overwriting.
+    const al1: Cx = { re: 1, im: 1 };
+    Complex.addInto(al1, al1, al1); // 2(1+i)
+    expect(cNear(al1, 2, 2)).toBe(true);
+    const al2: Cx = { re: 3, im: 5 };
+    Complex.subInto(al2, { re: 1, im: 2 }, al2);
+    expect(cNear(al2, 2, 3)).toBe(true);
+    const al3: Cx = { re: 1, im: -1 };
+    Complex.scaleInto(al3, -2, al3);
+    expect(cNear(al3, -2, 2)).toBe(true);
   });
 
   it("abs / abs2 / arg", () => {
