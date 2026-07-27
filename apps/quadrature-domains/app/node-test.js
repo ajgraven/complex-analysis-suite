@@ -31,6 +31,7 @@ const TESTS = [
   'faber',
   'riemann',
   'parse-check',
+  'h-text-roundtrip',
   'worker',
   'ui-inputs',
   'cmax',
@@ -84,7 +85,7 @@ const TESTS = [
 const FLOORS = {
   solvers: 30, direct: 120, schwarz: 20, 'param-slice': 15, sphere: 5,
   cusps: 5, 'cusp-accuracy': 5, symmetry: 2, 'thesis-examples': 8, faber: 8,
-  riemann: 15, 'parse-check': 3, worker: 3,
+  riemann: 15, 'parse-check': 3, 'h-text-roundtrip': 15, worker: 3,
   'ui-inputs': 30, cmax: 3, observables: 5, 'sym-core': 250, 'sym-radical': 45, 'qd-equations': 60, 'qd-constraints': 16,
   'algebra-store': 220, 'cas-export': 33, 'expr-parser': 18, 'define-subst': 36, 'cardioid-uniqueness': 19,
 };
