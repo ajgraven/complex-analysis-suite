@@ -109,19 +109,51 @@ export function blurDensity(src: Float32Array, W: number, H: number, passes = 2)
   return cur;
 }
 
+/**
+ * The K-mask: 1 where the pixel centre lies inside the deltoid boundary, 0 outside.
+ *
+ * Cached because it depends only on (W, H, view) — never on the density — while `densityToImage` is
+ * called once per progressive chunk (22 of them for the default 64-row seed grid, each a
+ * setTimeout(0) slice that blocks the main thread). Recomputing it inline meant a 256-gon ray cast
+ * per zero-density pixel on EVERY chunk: benchmarked at ~98 ms per full pass over 380², i.e. roughly
+ * 1.2–2.2 s of redundant main-thread work per page load, in 50–100 ms blocking slices, for a mask
+ * that is byte-identical every time.
+ *
+ * Keyed on the view too, so a pan/zoom (or a resize) correctly invalidates it rather than painting K
+ * in the wrong place.
+ */
+let _kMask: Uint8Array | null = null;
+let _kMaskKey = "";
+
+function kMaskFor(W: number, H: number, view: View): Uint8Array {
+  const key = `${W}x${H}|${view.centerX},${view.centerY},${view.halfSpan}`;
+  if (_kMask && _kMaskKey === key && _kMask.length === W * H) return _kMask;
+  const aspect = W / H;
+  const mask = new Uint8Array(W * H);
+  for (let py = 0; py < H; py++) {
+    const wy = view.centerY + (0.5 - (py + 0.5) / H) * 2 * view.halfSpan;
+    for (let px = 0; px < W; px++) {
+      const wx = view.centerX + ((px + 0.5) / W - 0.5) * 2 * view.halfSpan * aspect;
+      mask[py * W + px] = pointInPolygon([wx, wy], BOUNDARY) ? 1 : 0;
+    }
+  }
+  _kMask = mask;
+  _kMaskKey = key;
+  return mask;
+}
+
 /** Colorize a density buffer (optionally blurred, then log-normalized) into `image`, with K as a dark
  *  base. Progressive chunk redraws pass blur=false (the intermediate frames are transient); the final
  *  frame blurs once — avoiding a full blur (and its allocations) on every tick. */
 export function densityToImage(density: Float32Array, image: ImageData, view: View, blur = true): void {
   const { width: W, height: H, data } = image;
-  const aspect = W / H;
+  const kMask = kMaskFor(W, H, view);
   const dens = blur ? blurDensity(density, W, H) : density;
   let max = 0;
   for (let i = 0; i < dens.length; i++) if (dens[i] > max) max = dens[i];
   const norm = max > 0 ? 1 / Math.log(1 + max) : 0;
 
   for (let py = 0; py < H; py++) {
-    const wy = view.centerY + (0.5 - (py + 0.5) / H) * 2 * view.halfSpan;
     for (let px = 0; px < W; px++) {
       const i = py * W + px;
       let r: number;
@@ -131,17 +163,14 @@ export function densityToImage(density: Float32Array, image: ImageData, view: Vi
       // the raw `density` here would make the de-speckle blur a silent no-op.
       if (dens[i] > 0) {
         [r, g, b] = heat(Math.log(1 + dens[i]) * norm);
+      } else if (kMask[i]) {
+        r = 20;
+        g = 22;
+        b = 34;
       } else {
-        const wx = view.centerX + ((px + 0.5) / W - 0.5) * 2 * view.halfSpan * aspect;
-        if (pointInPolygon([wx, wy], BOUNDARY)) {
-          r = 20;
-          g = 22;
-          b = 34;
-        } else {
-          r = 8;
-          g = 8;
-          b = 12;
-        }
+        r = 8;
+        g = 8;
+        b = 12;
       }
       const o = i * 4;
       data[o] = r;
