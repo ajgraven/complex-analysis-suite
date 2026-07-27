@@ -29,8 +29,19 @@ fixing a false claim tends to expose the thing the claim was covering for.
 
 **The GitHub Actions spending limit is exhausted.** No PR can obtain a green check, and the live
 Pages site still serves the pre-merge build from before #154–#156. Nothing needs redoing; raising
-the limit in *Settings → Billing & plans* unblocks the whole queue. Merge order is free — every
-branch is cut from `master` with disjoint files.
+the limit in *Settings → Billing & plans* unblocks the whole queue.
+
+> **⚠ Correction (integration review, 2026-07-27): merge order is NOT entirely free.** An earlier
+> draft of this section claimed every branch was cut from master "with disjoint files"; that is wrong.
+> **14 files are touched by ≥2 branches.** Merging all twelve PRs (#157–#168) onto a throwaway branch
+> and gating the union proved they compose — **green: 1987 tests / 204 files, both browser suites,
+> lint/typecheck/build 0** — but **eleven merge cleanly and one does not: #168 (Batch G) conflicts with
+> #163 (Batch B) on a single import line in `packages/expr/src/glsl.ts`** (order-independent). Taking
+> either side alone breaks the build; resolve to `import { ExprError, referencesVar, nodeIsBool } from
+> "./ast";` (B swapped `isFreeParameter`→`referencesVar`; G added `nodeIsBool`; `isFreeParameter` is
+> then unused). `evaluate.ts` and `core/test/complex.test.ts` (also B∩G) auto-merge; CD `main.ts` is
+> touched by four branches (#158/#159/C/E) but auto-merges. No functional regression exists in the
+> union — the only manual step is that one import.
 
 | PR | Branch | Contents |
 | --- | --- | --- |
