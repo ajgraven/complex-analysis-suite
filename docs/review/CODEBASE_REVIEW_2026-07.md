@@ -737,6 +737,25 @@ unmerged PR for a much smaller remainder. **Record as substantially superseded; 
   by `_analysisToken`. Offloading 5 ms would add a job kind plus a φ + hData serialisation round trip
   in both directions, plausibly costing more than it saves. Not done, deliberately.
 
+**Browser verification of the hover offload — what it could and could NOT establish.** The QD app
+loads and renders a parameter slice correctly with the change in (a 64-point sweep whose range
+includes no-root cells completes in 0.5 s on a real 20-worker pool), which exercises the *shared*
+`solveBatch` path the pool edit touches. But the **hover path itself is unreachable in this
+environment**: `attachHoverTooltip` coalesces its `mousemove` through `requestAnimationFrame`, and
+rAF never fires while the Browser pane is hidden (verified directly — 0 callbacks in 800 ms). A
+"main thread stayed responsive, 12.5 ms worst gap" reading taken before noticing that was measuring
+nothing and is discarded rather than reported. The offload therefore rests on the unit tests (the
+one-element-batch equivalence, `canAccept`'s contract on both pool kinds, the cancelled-pool null)
+plus the Node measurement — not on a browser observation of a hover.
+
+**A pre-existing crash found while verifying, and confirmed not ours.** Rendering a slice whose range
+contains cells with no valid QD logs two uncaught
+`TypeError: Cannot read properties of undefined (reading 'toFixed')`. Controlled by rebuilding with
+**master's** `param-slice-pool.mjs` and `param-slice-ui.mjs` and reproducing identically, so it
+predates this batch. It is a real crash in a display formatter (a per-cell statistic that does not
+exist for a failed solve) and it fires on most exploratory sweeps; filed separately rather than
+folded into a performance PR.
+
 **`cd-overlay-01` / `cd-invjulia-01` — sized, and the risk is not the speed.** Both want a dirty-check
 so the 2D overlay is not redrawn on every progressive and accumulation frame. Two things make them
 larger than "medium / small" suggests. First, `drawOverlay` takes **~26 inputs**
