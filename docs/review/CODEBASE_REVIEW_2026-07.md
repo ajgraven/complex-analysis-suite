@@ -41,28 +41,22 @@ branch is cut from `master` with disjoint files.
 | [#161](https://github.com/ajgraven/complex-analysis-suite/pull/161) | `fix/batch-a-honest-labeling` | Batch A (this document's latest updates ride here) |
 | [#162](https://github.com/ajgraven/complex-analysis-suite/pull/162) | `fix/batch-a2-claim-accuracy` | Batch A-2 — exact-arithmetic contracts + the BLA reference |
 | [#163](https://github.com/ajgraven/complex-analysis-suite/pull/163) | `fix/batch-b-numerical-robustness` | Batch B — numerical robustness in the shared packages |
-| **#164** *(to open)* | `fix/batch-c-state-fidelity` | Batch C — CD state fidelity |
-| **#165** *(to open)* | `fix/batch-d-lifecycle` | Batch D — worker / resource lifecycle |
-| **#166** *(to open)* | `fix/batch-e-performance` | Batch E — performance (partial: 6 of 15) |
+| [#164](https://github.com/ajgraven/complex-analysis-suite/pull/164) | `fix/batch-c-state-fidelity` | Batch C — CD state fidelity |
+| [#165](https://github.com/ajgraven/complex-analysis-suite/pull/165) | `fix/batch-d-lifecycle` | Batch D — worker / resource lifecycle |
+| [#166](https://github.com/ajgraven/complex-analysis-suite/pull/166) | `fix/batch-e-performance` | Batch E — performance (9 fixed + 6 adjudicated of 15) |
 
 Already merged: **#154** (`@cas/core` NaN-convergence + aliasing), **#155** (7 honest-labeling
 defects), **#156** (this review record).
 
-> **⛔ Batches C and D are committed but NOT pushed, and this branch has unpushed doc commits.**
-> `github.com` became unreachable from the dev machine and stayed that way: `git push`, `git ls-remote`
-> AND plain `curl https://github.com` all fail (timeout / `Recv failure: Connection was reset`) while
-> the rest of the internet is fine (`curl https://example.com` → 200). So it is a network path or
-> firewall issue local to that machine, **not** the Actions billing block below and not a repo problem.
-> Nothing is lost. When it clears:
->
-> ```
-> git push -u origin fix/batch-c-state-fidelity
-> git push -u origin fix/batch-d-lifecycle
-> git push -u origin fix/batch-e-performance
-> git push origin fix/batch-a-honest-labeling
-> ```
->
-> …then open #164, #165 and #166.
+**All ten PRs are pushed and open.** Every run fails in **~3 seconds with zero steps executed** —
+the signature of a run that never started, i.e. the spending limit, not a code failure. The full
+gate is green locally on every branch. `master` is branch-protected, so nothing merges until the
+limit is raised.
+
+> *(A transient episode where `github.com` was unreachable from the dev box — `git push`,
+> `git ls-remote` and plain `curl https://github.com` all failing while `curl https://example.com`
+> returned 200 — cleared on its own and was unrelated to billing. Recorded only so it is not
+> mistaken for the same problem if it recurs.)*
 
 ### Batches A-2, B and C — DONE
 
