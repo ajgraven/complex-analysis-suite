@@ -7,8 +7,8 @@
 
 ## ▶ RESUME HERE
 
-Everything a fresh session needs to continue. **Batch E is IN PROGRESS — 9 of its 15 findings are settled
-(6 fixed, 3 adjudicated as refuted/superseded/deprioritised) on `fix/batch-e-performance`.** Resume from the "remaining" list in
+Everything a fresh session needs to continue. **Batch E is IN PROGRESS — 11 of its 15 findings are settled
+(7 fixed, 4 adjudicated as refuted/superseded/deprioritised) on `fix/batch-e-performance`.** Resume from the "remaining" list in
 [Pass 9](#pass-9--batch-e-performance-in-progress--6-of-15-166) and the Batch E table below.
 
 ### Where the work stands
@@ -17,8 +17,8 @@ Everything a fresh session needs to continue. **Batch E is IN PROGRESS — 9 of 
 | --- | --- | --- |
 | Findings surviving verification | **112** | 84 confirmed + 28 overstated; 4 refuted and excluded |
 | **HIGH** | **12 of 12 FIXED** | tier complete |
-| Medium / low | 38 of 99 fixed | A, A-2, B, C, D done; E 6 fixed + 3 adjudicated of 15 |
-| Remaining | **61** | 24 medium, 37 low |
+| Medium / low | 39 of 99 fixed | A, A-2, B, C, D done; E 7 fixed + 4 adjudicated of 15 |
+| Remaining | **60** | 23 medium, 37 low |
 
 Batch A-2 also closed **three defects it discovered along the way** that were not in the original 124
 — see [Pass 5](#pass-5--batch-a-2-exact-arithmetic-contracts-and-the-bla-reference-162). Expect this:
@@ -90,18 +90,17 @@ ray-cast per pixel, #159), and `bt-ci-nocache-08` (no pnpm store cache, #157).
 | ~~`cd-perf-04`~~ **done** | `packages/exact/src/gaussian.ts:130` | medium / trivial | `Gauss.mul` always runs the 4-multiplication complex form — 4.1× the real-only cost, and CD's entire exact tower is real. |
 | ⛔ `corr-density-recolour-03` *(superseded by #159 — do not fix)* | `apps/correspondences/src/main.ts:191` | medium / small | The correspondence render re-runs a full-frame point-in-polygon colorize on every progressive tick — ~4.2 s of ~4.8 s redundant. |
 | ~~`corr-orbittree-01`~~ **done** | `apps/correspondences/src/orbitTree.ts:51` | medium / small | `expandOrbitTree` allocates two wrappers and runs a comparator sort per node for a 2-element branch list; `orbitPoints` copies the whole node array. |
-| `qd-accuracy-mainthread-01` | `apps/quadrature-domains/app/ui-solve.mjs:753` | medium / medium | The post-solve "Geometry & accuracy" pass runs two escalating ≥1500-node identity verifies plus a critical-point solve **on the main thread** after every solve. |
+| ⛔ `qd-accuracy-mainthread-01` *(refuted: ~5 ms, already idle-deferred — do not offload)* | `apps/quadrature-domains/app/ui-solve.mjs:753` | medium / medium | The post-solve "Geometry & accuracy" pass runs two escalating ≥1500-node identity verifies plus a critical-point solve **on the main thread** after every solve. |
 | ⛔ `qd-chooseholetestpoints-01` *(refuted: 9.23% not dominant — do not fix)* | `apps/quadrature-domains/app/solver.mjs:1272` | medium / medium | `chooseHoleTestPoints` is O(61 × N) per identity verify and re-runs at every escalation level, dominating unbounded-family verification. |
-| `qd-paramslice-hover-01` | `apps/quadrature-domains/app/param-slice/param-slice-ui.mjs:429` | medium / medium | Param-slice hover preview runs a full `solveInverseQD` synchronously on the main thread while the idle worker pool sits right there. |
+| ~~`qd-paramslice-hover-01`~~ **done** | `apps/quadrature-domains/app/param-slice/param-slice-ui.mjs:429` | medium / medium | Param-slice hover preview runs a full `solveInverseQD` synchronously on the main thread while the idle worker pool sits right there. |
 | ~~`bt-precache-fonts-04`~~ **done** | `apps/quadrature-domains/vite.config.mjs:37` | medium / trivial | Both PWAs precache KaTeX `.ttf` *and* `.woff` — 798 KB of never-fetched font bytes per app, 1.6 MB across the deployed site. |
 | ⏸ `corr-mating-blocking-06` *(deprioritised: unpublished app)* | `apps/correspondences/src/mating/matingMain.ts:164` | low / small | `mating.html` blocks the main thread for ~0.8 s of unyielded σ evaluation before painting anything. |
 | ~~`qd-fillcoarse-01`~~ **done** | `apps/quadrature-domains/app/schwarz/schwarz-render.mjs:255` | low / trivial | The in-process Schwarz pyramid runs `fillFromCoarseSamples` on the stride-1 pass — a full W·H no-op scan. |
 
 
-**Batch E status: 9 of 15 settled — 6 fixed (struck through above), 3 adjudicated without a code change** (`corr-density-recolour-03` superseded, `qd-chooseholetestpoints-01` refuted, `corr-mating-blocking-06` deprioritised), on `fix/batch-e-performance`. **Six genuinely remain:** `cd-bla-01` + `cd-render-05` (do together; behind a WebGL context, so they
-need a browser to measure), `cd-overlay-01`, `cd-invjulia-01`, and the two worker offloads
-`qd-accuracy-mainthread-01` + `qd-paramslice-hover-01` — each of which needs a NEW worker job kind,
-not a rewire; see Pass 9 for the exact files and why the supersession half is already done.
+**Batch E status: 11 of 15 settled — 7 fixed (struck through above), 4 adjudicated without a code change** (`corr-density-recolour-03` superseded · `qd-chooseholetestpoints-01`, `qd-accuracy-mainthread-01` refuted by measurement · `corr-mating-blocking-06` deprioritised), on `fix/batch-e-performance`. **Four genuinely remain:** `cd-bla-01` + `cd-render-05` (do together; behind a WebGL context, so
+they need a browser to measure) and `cd-overlay-01` + `cd-invjulia-01` (the overlay dirty-check —
+read the sizing below before starting; the risk there is a stale overlay, not the speed).
 
 **Do `cd-bla-01` and `cd-render-05` together** — both are the deep-zoom rebuild path within five
 lines of each other in `glPlot.ts`, and they share a cache key.
@@ -657,7 +656,7 @@ the suite by ~17%. Updated to the measured number.
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | Durand–Kerner withholds convergence on non-finite iterates (V-1) | new test, proven to fail against the old code |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | `addMulInto` honours its aliasing contract (V-2) | new test, proven to fail against the old code |
 
-### Pass 9 — Batch E: performance (IN PROGRESS — 6 fixed, 3 adjudicated-and-closed, 6 open of 15) ([#166](https://github.com/ajgraven/complex-analysis-suite/pull/166))
+### Pass 9 — Batch E: performance (IN PROGRESS — 7 fixed, 4 adjudicated-and-closed, 4 open of 15) ([#166](https://github.com/ajgraven/complex-analysis-suite/pull/166))
 
 Branch `fix/batch-e-performance`. Five commits so far. **Every one carries a measured before/after**,
 which is the batch's whole discipline — and measuring changed the verdict on three of the six.
@@ -710,6 +709,33 @@ unmerged PR for a much smaller remainder. **Record as substantially superseded; 
   into yielded chunks — worth doing when that app ships, not before. (The same unpublished caveat
   applies to `corr-orbittree-01`, which *was* fixed: a 6-line change with a clean 27 % measurement is a
   different proposition from restructuring a startup sequence.)
+
+**The two worker offloads: one shipped, one refuted — and my own sizing of the first was wrong.**
+
+- **`qd-paramslice-hover-01` — OFFLOADED.** The cost is bimodal and only one half mattered. Hovering a
+  **valid** cell always has a warm hint from the rendered grid: **0.2–0.7 ms**, nothing worth moving.
+  Hovering a **no-root** cell has no nearby valid φ to hint from, so the solver spends its entire
+  multistart budget before it can report the failure: **86.6 ms**, on the main thread, once per 150 ms
+  settle — and that is precisely the region someone exploring a slice hovers over. Now runs on the
+  sweep pool.
+  **Correction to the sizing recorded above:** it did *not* need a new job kind. `pool.solveBatch`
+  already accepts an array of points with per-point warm hints and routes them through the same
+  `PS.solveOnePointWithScratch` the tile handler uses, so a **one-element batch is exactly this
+  solve** — the offload is a dozen lines. What it did need was a public `canAccept()` on both pool
+  kinds (`_dispatch` refuses to run while cancel-latched, so a hover job pushed then would never
+  settle and the preview would hang on "(solving…)") and a null guard (a render cancelled mid-queue
+  resolves pending jobs with `null`, which is not a solve failure and must not be labelled as one).
+  The supersession half was already free: the token was re-checked after the solve returned, so it
+  simply became a check after the `await`.
+- **`qd-accuracy-mainthread-01` — REFUTED.** The finding's *structure* is accurate — `estimateAccuracy`
+  really does run `findCriticalPoints`, two `verifyQuadratureIdentity` passes (at N = 600 and 2N =
+  1200, not the "≥1500" claimed — that number belongs to the *solver's* internal escalating verify,
+  a different code path), and a `numericalJacobian` + `houseQR`. Its **cost** is not: the whole pass
+  measures **4.8–5.6 ms**, consistently across bounded / cardioid / 2-pole / unbounded fixtures. It is
+  also already mitigated three ways the finding does not mention — deferred through
+  `requestIdleCallback`, skipped entirely on live/drag passes (`opts.live`), and supersession-guarded
+  by `_analysisToken`. Offloading 5 ms would add a job kind plus a φ + hData serialisation round trip
+  in both directions, plausibly costing more than it saves. Not done, deliberately.
 
 **`cd-overlay-01` / `cd-invjulia-01` — sized, and the risk is not the speed.** Both want a dirty-check
 so the 2D overlay is not redrawn on every progressive and accumulation frame. Two things make them
