@@ -711,6 +711,16 @@ unmerged PR for a much smaller remainder. **Record as substantially superseded; 
   applies to `corr-orbittree-01`, which *was* fixed: a 6-line change with a clean 27 % measurement is a
   different proposition from restructuring a startup sequence.)
 
+**`cd-overlay-01` / `cd-invjulia-01` — sized, and the risk is not the speed.** Both want a dirty-check
+so the 2D overlay is not redrawn on every progressive and accumulation frame. Two things make them
+larger than "medium / small" suggests. First, `drawOverlay` takes **~26 inputs**
+(`plotView.ts:387–415`), most of them object references — `fAst`, `puzzleRays`, `lamination`,
+`annotations`, `cyclePoints` — so a signature has to compare identity, and any input that is ever
+mutated *in place* rather than replaced would leave a **stale overlay**: a wrong picture, which this
+project treats as worse than a slow one. Second, `drawOverlay` needs a 2D context, so like
+`drawSigma` it cannot be measured headlessly — the size of the prize is currently unknown, and it
+should be measured in the browser before the dirty-check is written, not after.
+
 **The two worker offloads need a new message protocol, not a rewire — sized before starting.** Both
 `qd-accuracy-mainthread-01` and `qd-paramslice-hover-01` want work moved onto an existing worker, but
 the param-slice pool exposes only a `'tile'` job kind (`param-slice-pool.mjs:77`) and calls
