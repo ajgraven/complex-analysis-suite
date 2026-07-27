@@ -1,5 +1,8 @@
-/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
+// `configDefaults` (used by the test.exclude below) is a value import from vitest/config; it also
+// pulls in vitest's augmentation of Vite's UserConfig, so the `test` block type-checks without the
+// former `/// <reference types="vitest/config" />` — which @typescript-eslint/triple-slash-reference
+// now forbids precisely because an equivalent import is present.
 import { configDefaults } from "vitest/config";
 import { VitePWA } from "vite-plugin-pwa";
 
