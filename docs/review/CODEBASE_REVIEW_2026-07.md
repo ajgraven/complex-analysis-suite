@@ -8,8 +8,9 @@
 ## ▶ RESUME HERE
 
 Everything a fresh session needs to continue. **Batch E is COMPLETE — all 15 findings settled (9 fixed, 6 adjudicated as
-refuted/superseded/deprioritised) on `fix/batch-e-performance`. Next up: Batch F** — test integrity. Resume from the "remaining" list in
-[Pass 9](#pass-9--batch-e-performance-in-progress--6-of-15-166) and the Batch E table below.
+refuted/superseded/deprioritised) on `fix/batch-e-performance`. Next up: Batch F** — test integrity;
+start from the table under "▶ Batch F — start here" below. Batch E's outcomes, with the numbers behind
+each verdict, are in [Pass 9](#pass-9--batch-e-performance--complete-9-fixed-6-adjudicated-and-closed-of-15).
 
 ### Where the work stands
 
