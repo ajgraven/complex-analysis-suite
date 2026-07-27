@@ -58,13 +58,34 @@ const TESTS = [
 // conservative minimum, so a silently-disabled subsystem fails the run.
 //
 // Floors are deliberately WELL BELOW current counts — raise one only on a
-// measured, intentional increase. Optional-dep / jsdom-gated files legitimately
-// skip to a single marker assertion when their dep is absent, so they floor at 1.
+// measured, intentional increase.
+//
+// ⚠ `direct`, `riemann` and `ui-inputs` used to floor at 1, on the rationale that
+// an optional-dep / jsdom-gated file "legitimately skips to a single marker
+// assertion when its dep is absent". That rationale does not hold, and a floor of
+// 1 made these three files effectively unguarded:
+//   · mathjs and katex are hard `dependencies` in package.json (not optional
+//     devDeps), so `pnpm install --frozen-lockfile` always provides them. Their
+//     absence is a BROKEN INSTALL, which must fail loudly, not skip silently —
+//     the skip markers in direct/riemann now fail for exactly that reason.
+//   · `ui-inputs` is not dep-gated at all: the file states "Seam-level (no jsdom,
+//     no DOM)". Its floor of 1 was simply stale.
+// Measured contributions when the suite runs whole: direct 179, riemann 20,
+// ui-inputs 40. At a floor of 1, 178 of direct's 179 assertions could vanish
+// and the run stayed green.
+//
+// ⚠ For a dep-gated file the floor must sit ABOVE what the file still contributes
+// with the dep missing, or it detects nothing. Measured with the dep stubbed out:
+// direct 179 → 116 (only 63 assertions are inside the mathjs gate; the rest run
+// regardless), riemann 20 → 1. Hence direct's floor is 120, not some rounder
+// smaller number — 100 would sit BELOW 116 and pass a run with mathjs absent.
+// Both were verified by simulating the absent dependency: each run went red on
+// the floor and on the dependency marker.
 const FLOORS = {
-  solvers: 30, direct: 1, schwarz: 20, 'param-slice': 15, sphere: 5,
+  solvers: 30, direct: 120, schwarz: 20, 'param-slice': 15, sphere: 5,
   cusps: 5, 'cusp-accuracy': 5, symmetry: 2, 'thesis-examples': 8, faber: 8,
-  riemann: 1, 'parse-check': 3, worker: 3,
-  'ui-inputs': 1, cmax: 3, observables: 5, 'sym-core': 250, 'sym-radical': 45, 'qd-equations': 60, 'qd-constraints': 16,
+  riemann: 15, 'parse-check': 3, worker: 3,
+  'ui-inputs': 30, cmax: 3, observables: 5, 'sym-core': 250, 'sym-radical': 45, 'qd-equations': 60, 'qd-constraints': 16,
   'algebra-store': 220, 'cas-export': 33, 'expr-parser': 18, 'define-subst': 36, 'cardioid-uniqueness': 19,
 };
 const DEFAULT_FLOOR = 3;
