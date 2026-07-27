@@ -357,13 +357,11 @@ import _QD from './solver.mjs';
     matches(opts) { return true; },           // catch-all (checked last)
 
     normalizeOpts(opts, hData) {
+      // Default w₀ = centroid of the poles (empty-pole fallback → 0). Use the shared
+      // QD.poleCentroid — this was the FOURTH open-coded copy, missed when the other three
+      // (ui buildW0, solver-pqd bootstrap, solver-lqd normalizeOpts) were consolidated onto it.
       let w0 = opts.w0;
-      if (!w0) {
-        let sumRe = 0, sumIm = 0;
-        for (const p of hData.poles) { sumRe += p.a.re; sumIm += p.a.im; }
-        const n = hData.poles.length;
-        w0 = n > 0 ? { re: sumRe / n, im: sumIm / n } : { re: 0, im: 0 };
-      }
+      if (!w0) w0 = QD.poleCentroid(hData, { re: 0, im: 0 });
       return { w0 };
     },
 
