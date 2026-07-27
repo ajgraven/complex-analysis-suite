@@ -7,8 +7,8 @@
 
 ## ▶ RESUME HERE
 
-Everything a fresh session needs to continue. **Batch E is IN PROGRESS — 6 of its 15 findings are
-closed on `fix/batch-e-performance`.** Resume from the "remaining" list in
+Everything a fresh session needs to continue. **Batch E is IN PROGRESS — 9 of its 15 findings are settled
+(6 fixed, 3 adjudicated as refuted/superseded/deprioritised) on `fix/batch-e-performance`.** Resume from the "remaining" list in
 [Pass 9](#pass-9--batch-e-performance-in-progress--6-of-15-166) and the Batch E table below.
 
 ### Where the work stands
@@ -17,7 +17,7 @@ closed on `fix/batch-e-performance`.** Resume from the "remaining" list in
 | --- | --- | --- |
 | Findings surviving verification | **112** | 84 confirmed + 28 overstated; 4 refuted and excluded |
 | **HIGH** | **12 of 12 FIXED** | tier complete |
-| Medium / low | 38 of 99 fixed | Batches A, A-2, B, C, D done; E 6 of 15 |
+| Medium / low | 38 of 99 fixed | A, A-2, B, C, D done; E 6 fixed + 3 adjudicated of 15 |
 | Remaining | **61** | 24 medium, 37 low |
 
 Batch A-2 also closed **three defects it discovered along the way** that were not in the original 124
@@ -91,20 +91,17 @@ ray-cast per pixel, #159), and `bt-ci-nocache-08` (no pnpm store cache, #157).
 | ⛔ `corr-density-recolour-03` *(superseded by #159 — do not fix)* | `apps/correspondences/src/main.ts:191` | medium / small | The correspondence render re-runs a full-frame point-in-polygon colorize on every progressive tick — ~4.2 s of ~4.8 s redundant. |
 | ~~`corr-orbittree-01`~~ **done** | `apps/correspondences/src/orbitTree.ts:51` | medium / small | `expandOrbitTree` allocates two wrappers and runs a comparator sort per node for a 2-element branch list; `orbitPoints` copies the whole node array. |
 | `qd-accuracy-mainthread-01` | `apps/quadrature-domains/app/ui-solve.mjs:753` | medium / medium | The post-solve "Geometry & accuracy" pass runs two escalating ≥1500-node identity verifies plus a critical-point solve **on the main thread** after every solve. |
-| `qd-chooseholetestpoints-01` | `apps/quadrature-domains/app/solver.mjs:1272` | medium / medium | `chooseHoleTestPoints` is O(61 × N) per identity verify and re-runs at every escalation level, dominating unbounded-family verification. |
+| ⛔ `qd-chooseholetestpoints-01` *(refuted: 9.23% not dominant — do not fix)* | `apps/quadrature-domains/app/solver.mjs:1272` | medium / medium | `chooseHoleTestPoints` is O(61 × N) per identity verify and re-runs at every escalation level, dominating unbounded-family verification. |
 | `qd-paramslice-hover-01` | `apps/quadrature-domains/app/param-slice/param-slice-ui.mjs:429` | medium / medium | Param-slice hover preview runs a full `solveInverseQD` synchronously on the main thread while the idle worker pool sits right there. |
 | ~~`bt-precache-fonts-04`~~ **done** | `apps/quadrature-domains/vite.config.mjs:37` | medium / trivial | Both PWAs precache KaTeX `.ttf` *and* `.woff` — 798 KB of never-fetched font bytes per app, 1.6 MB across the deployed site. |
-| `corr-mating-blocking-06` | `apps/correspondences/src/mating/matingMain.ts:164` | low / small | `mating.html` blocks the main thread for ~0.8 s of unyielded σ evaluation before painting anything. |
+| ⏸ `corr-mating-blocking-06` *(deprioritised: unpublished app)* | `apps/correspondences/src/mating/matingMain.ts:164` | low / small | `mating.html` blocks the main thread for ~0.8 s of unyielded σ evaluation before painting anything. |
 | ~~`qd-fillcoarse-01`~~ **done** | `apps/quadrature-domains/app/schwarz/schwarz-render.mjs:255` | low / trivial | The in-process Schwarz pyramid runs `fillFromCoarseSamples` on the stride-1 pass — a full W·H no-op scan. |
 
 
-**Batch E status: 6 of 15 closed** (struck through above), on `fix/batch-e-performance`. The nine
-rows still live are the eight below plus `corr-density-recolour-03`, which is superseded rather than
-open — see [Pass 9](#pass-9--batch-e-performance-in-progress--6-of-15-166) for why touching it would
-conflict with #159. Of the eight genuinely remaining, `cd-bla-01` + `cd-render-05` need a browser to
-measure (they are behind a WebGL context), and `qd-accuracy-mainthread-01` +
-`qd-paramslice-hover-01` are the two worker offloads — real async-semantics changes, confirmed
-in scope for this batch rather than split out.
+**Batch E status: 9 of 15 settled — 6 fixed (struck through above), 3 adjudicated without a code change** (`corr-density-recolour-03` superseded, `qd-chooseholetestpoints-01` refuted, `corr-mating-blocking-06` deprioritised), on `fix/batch-e-performance`. **Six genuinely remain:** `cd-bla-01` + `cd-render-05` (do together; behind a WebGL context, so they
+need a browser to measure), `cd-overlay-01`, `cd-invjulia-01`, and the two worker offloads
+`qd-accuracy-mainthread-01` + `qd-paramslice-hover-01` — each of which needs a NEW worker job kind,
+not a rewire; see Pass 9 for the exact files and why the supersession half is already done.
 
 **Do `cd-bla-01` and `cd-render-05` together** — both are the deep-zoom rebuild path within five
 lines of each other in `glPlot.ts`, and they share a cache key.
@@ -660,7 +657,7 @@ the suite by ~17%. Updated to the measured number.
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | Durand–Kerner withholds convergence on non-finite iterates (V-1) | new test, proven to fail against the old code |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | `addMulInto` honours its aliasing contract (V-2) | new test, proven to fail against the old code |
 
-### Pass 9 — Batch E: performance (IN PROGRESS — 6 of 15) ([#166](https://github.com/ajgraven/complex-analysis-suite/pull/166))
+### Pass 9 — Batch E: performance (IN PROGRESS — 6 fixed, 3 adjudicated-and-closed, 6 open of 15) ([#166](https://github.com/ajgraven/complex-analysis-suite/pull/166))
 
 Branch `fix/batch-e-performance`. Five commits so far. **Every one carries a measured before/after**,
 which is the batch's whole discipline — and measuring changed the verdict on three of the six.
@@ -696,6 +693,32 @@ progressive rendering — the density changes every chunk, and the splat has no 
 the colorize cannot be restricted to a changed region. Editing it here would conflict with an
 unmerged PR for a much smaller remainder. **Record as substantially superseded; revisit only after
 #159 merges.**
+
+**Two more findings adjudicated by measurement, and NOT fixed.**
+
+- **`qd-chooseholetestpoints-01` — the "dominates" claim is refuted.** Instrumented during a real
+  unbounded-family solve: **11 calls, 7.9 ms, 9.23 % of an 85 ms solve** (largest N seen 1500). In
+  isolation it costs 0.64 ms at N = 400 rising linearly to 4.13 ms at N = 4000, so the O(61 × N) shape
+  is real — it simply is not the dominant term. Left alone deliberately: the candidate fix restructures
+  `inside` / `distBoundary`, which would change *which* test points the identity verify selects. Trading
+  verification semantics for ~6 % of solve time is the wrong trade in this codebase.
+- **`corr-mating-blocking-06` — deprioritised, with a measurement gap stated.** `map` = 0.2 ms and
+  `group` = 1.3 ms are cheap; `sigma` is the expensive panel and could **not** be measured headlessly
+  (`drawSigma` needs `document`), so the finding's ~0.8 s is neither confirmed nor refuted here. It also
+  lands on a page **no user can reach**: `apps/correspondences` is built for parity but *not published*
+  (`deploy-pages.yml`; the launcher shows "Coming soon"). The fix is a structural rewrite of the startup
+  into yielded chunks — worth doing when that app ships, not before. (The same unpublished caveat
+  applies to `corr-orbittree-01`, which *was* fixed: a 6-line change with a clean 27 % measurement is a
+  different proposition from restructuring a startup sequence.)
+
+**The two worker offloads need a new message protocol, not a rewire — sized before starting.** Both
+`qd-accuracy-mainthread-01` and `qd-paramslice-hover-01` want work moved onto an existing worker, but
+the param-slice pool exposes only a `'tile'` job kind (`param-slice-pool.mjs:77`) and calls
+`solveOnePointWithScratch` worker-side *inside* that handler (`:283`). So each needs a new job kind in
+`workers/param-slice-worker-entry.mjs` + the pool + a promise-returning client method, then
+`_liveSolveAt` (`param-slice-ui.mjs:427`) rewired to async. The supersession machinery already exists —
+`sliceState.liveSolve.token` is checked after the solve returns — so staleness is the *easy* half.
+Budget these as a pair with browser verification that hovering does not regress.
 
 **Method, earned the hard way.** My first `cd-perf-04` A/B was a single unwarmed sample per side and
 reported **19.2 → 19.7 ms — the wrong sign**. The warmed median-of-9 gave 12.76 → 9.19. A one-shot
