@@ -1,9 +1,300 @@
 # Whole-codebase review — 2026-07-25
 
-> **Status: IN PROGRESS.** This file is the running log of a comprehensive review of the whole
-> monorepo for errors, redundancies, inefficiencies, and optimization/extension opportunities.
-> It is written incrementally so that findings survive a context loss. The prioritized summary
-> lives at the end, in [§ Prioritized report](#prioritized-report), and is filled in last.
+> **Status: remediation in progress.** This file is the running log of a comprehensive review of the
+> whole monorepo. It is written incrementally so findings survive a context loss. The prioritized
+> summary is in [§ Prioritized report](#prioritized-report); the raw corpus with per-finding verdicts
+> is in [`RAW_FINDINGS_2026-07.md`](RAW_FINDINGS_2026-07.md).
+
+## ▶ RESUME HERE
+
+Everything a fresh session needs to continue. **Batch F is COMPLETE — all 8 items fixed on
+`fix/batch-f-test-integrity` (PR #167). Next up: Batch G** — duplication / dead code; start from the
+table under "▶ Batch G — start here" below. Batch F's outcomes are in
+[Pass 10](#pass-10--batch-f-test-integrity--complete-8-of-8-167).
+
+### Where the work stands
+
+| | Count | Notes |
+| --- | --- | --- |
+| Findings surviving verification | **112** | 84 confirmed + 28 overstated; 4 refuted and excluded |
+| **HIGH** | **12 of 12 FIXED** | tier complete |
+| Medium / low | 51 of 99 fixed | Batches A, A-2, B, C, D, E and F all done |
+| Remaining | **48** | 15 medium, 33 low |
+
+Batch A-2 also closed **three defects it discovered along the way** that were not in the original 124
+— see [Pass 5](#pass-5--batch-a-2-exact-arithmetic-contracts-and-the-bla-reference-162). Expect this:
+fixing a false claim tends to expose the thing the claim was covering for.
+
+### Open PRs — all blocked on ONE external thing
+
+**The GitHub Actions spending limit is exhausted.** No PR can obtain a green check, and the live
+Pages site still serves the pre-merge build from before #154–#156. Nothing needs redoing; raising
+the limit in *Settings → Billing & plans* unblocks the whole queue.
+
+> **⚠ Correction (integration review, 2026-07-27): merge order is NOT entirely free.** An earlier
+> draft of this section claimed every branch was cut from master "with disjoint files"; that is wrong.
+> **14 files are touched by ≥2 branches.** Merging all twelve PRs (#157–#168) onto a throwaway branch
+> and gating the union proved they compose — **green: 1987 tests / 204 files, both browser suites,
+> lint/typecheck/build 0** — but **eleven merge cleanly and one does not: #168 (Batch G) conflicts with
+> #163 (Batch B) on a single import line in `packages/expr/src/glsl.ts`** (order-independent). Taking
+> either side alone breaks the build; resolve to `import { ExprError, referencesVar, nodeIsBool } from
+> "./ast";` (B swapped `isFreeParameter`→`referencesVar`; G added `nodeIsBool`; `isFreeParameter` is
+> then unused). `evaluate.ts` and `core/test/complex.test.ts` (also B∩G) auto-merge; CD `main.ts` is
+> touched by four branches (#158/#159/C/E) but auto-merges. No functional regression exists in the
+> union — the only manual step is that one import.
+
+| PR | Branch | Contents |
+| --- | --- | --- |
+| [#157](https://github.com/ajgraven/complex-analysis-suite/pull/157) | `fix/ci-cache-and-double-fire` | pnpm store cache + push/PR double-fire + master gate duplication |
+| [#158](https://github.com/ajgraven/complex-analysis-suite/pull/158) | `fix/three-trivial-highs` | 3 trivial HIGHs + the `z^40000` perf fix |
+| [#159](https://github.com/ajgraven/complex-analysis-suite/pull/159) | `fix/tier-a-batch-2` | the 6 small-effort HIGHs |
+| [#160](https://github.com/ajgraven/complex-analysis-suite/pull/160) | `fix/qd-lint-mjs` | the QD lint hole (last HIGH) |
+| [#161](https://github.com/ajgraven/complex-analysis-suite/pull/161) | `fix/batch-a-honest-labeling` | Batch A (this document's latest updates ride here) |
+| [#162](https://github.com/ajgraven/complex-analysis-suite/pull/162) | `fix/batch-a2-claim-accuracy` | Batch A-2 — exact-arithmetic contracts + the BLA reference |
+| [#163](https://github.com/ajgraven/complex-analysis-suite/pull/163) | `fix/batch-b-numerical-robustness` | Batch B — numerical robustness in the shared packages |
+| [#164](https://github.com/ajgraven/complex-analysis-suite/pull/164) | `fix/batch-c-state-fidelity` | Batch C — CD state fidelity |
+| [#165](https://github.com/ajgraven/complex-analysis-suite/pull/165) | `fix/batch-d-lifecycle` | Batch D — worker / resource lifecycle |
+| [#166](https://github.com/ajgraven/complex-analysis-suite/pull/166) | `fix/batch-e-performance` | Batch E — performance (9 fixed + 6 adjudicated of 15) |
+| [#167](https://github.com/ajgraven/complex-analysis-suite/pull/167) | `fix/batch-f-test-integrity` | Batch F — test integrity (8 of 8) |
+
+Already merged: **#154** (`@cas/core` NaN-convergence + aliasing), **#155** (7 honest-labeling
+defects), **#156** (this review record).
+
+**All ten PRs are pushed and open.** Every run fails in **~3 seconds with zero steps executed** —
+the signature of a run that never started, i.e. the spending limit, not a code failure. The full
+gate is green locally on every branch. `master` is branch-protected, so nothing merges until the
+limit is raised.
+
+> *(A transient episode where `github.com` was unreachable from the dev box — `git push`,
+> `git ls-remote` and plain `curl https://github.com` all failing while `curl https://example.com`
+> returned 200 — cleared on its own and was unrelated to billing. Recorded only so it is not
+> mistaken for the same problem if it recurs.)*
+
+### Batches A-2 through F — DONE
+
+| batch | PR | Closed | Write-up |
+| --- | --- | --- | --- |
+| A-2 | [#162](https://github.com/ajgraven/complex-analysis-suite/pull/162) | `cd-res-11`, `cd-disc-06`, `cd-disc-12`, `cd-test-08`, `cd-render-10`, `qd-dc-imagedata-01` + 3 found while fixing | [Pass 5](#pass-5--batch-a-2-exact-arithmetic-contracts-and-the-bla-reference-162) |
+| B | [#163](https://github.com/ajgraven/complex-analysis-suite/pull/163) | `cd-div-02`, `cd-cpow-05`, `cd-frac-07`, `expr-glsl-01`, `expr-glsl-02`, `expr-parser-01`, `expr-parser-depth-04`, `expr-eval-01` + 2 found while fixing | [Pass 6](#pass-6--batch-b-numerical-robustness-in-the-shared-packages-163) |
+| C | #164 | `cd-shell-07`, `cd-shell-05`, `cd-shell-06`, `cd-views-destructive-01`, `cd-shell-12`, `qd-urlstate-untested-06` | [Pass 7](#pass-7--batch-c-cd-state-fidelity-164) |
+| D | #165 | `qd-psw-untested-03`, `cd-render-07`, `qd-psw-fallback-latch-01`, `qd-ctxmenu-leak-01`, `cd-metricsworker-01`, `qd-schwarz-gl-listener-01` | [Pass 8](#pass-8--batch-d-worker--resource-lifecycle-165) |
+| E | #166 | 9 fixed + 6 adjudicated of 15 (see the collapsed table below) | [Pass 9](#pass-9--batch-e-performance--complete-9-fixed-6-adjudicated-and-closed-of-15) |
+| F | #167 | `qd-exact-count-guard-11`, `qd-offload-tautology-10`, `qd-floors-optional-dep-05`, `gpu-df64-01`, `cd-glcontext-restore-09`, `qd-interchange-e2e-08`, `corr-shader-mirror-02`+`cd-dup-04`, `cd-shader-uncompiled-07` | [Pass 10](#pass-10--batch-f-test-integrity--complete-8-of-8-167) |
+
+### ▶ Batch G — start here
+
+Duplication / dead code. **18 open items** — the 20 `category: redundancy` findings minus two already
+closed (see the traps). Mostly `low`/`trivial`, with a cluster of genuinely large QD copy-paste in the
+middle that is where the value is.
+
+| id | Where | Severity / effort | The defect |
+| --- | --- | --- | --- |
+| `cd-dup-07` | `apps/quadrature-domains/app/solver-qd.mjs:63` | medium / medium | The finite-pole branch-Taylor accumulation is copy-pasted **eight times across six** QD solver files. |
+| `cd-dup-06` | `apps/quadrature-domains/app/solver-uqd.mjs:286` | medium / medium | `continuationInC` is triplicated verbatim across three QD solvers — ~85 lines each, identical tuning constants. |
+| `cd-dup-05` | `apps/complex-dynamics/src/combinatorics/dynatomic.ts:111` | medium / small | Identical Cauchy-bound Durand–Kerner seeding + monic Horner block duplicated across complex-dynamics. |
+| `cd-dup-08` | `apps/quadrature-domains/app/ui-thesis.mjs:21` | medium / small | Four different HTML escapers with **three different character sets** coexist in QD, despite `QD.QoL.escapeHtml`. |
+| `cd-dup-09` | `packages/expr/src/glsl.ts:191` | medium / trivial | `nodeIsBool` is duplicated between `@cas/expr`'s two backends — the one predicate the JS↔GLSL equivalence rests on. |
+| `cd-shell-08` | `apps/complex-dynamics/src/main.ts:2134` | medium / trivial | `applyChanges` and `applyPreset` recompute the exterior map, Laurent boundary and Julia properties redundantly. |
+| `cd-dup-10` | `apps/complex-dynamics/src/render/matingEngine.ts:51` | low / small | Four private copies of complex divide/multiply/add restate `@cas/expr/complexJs`. |
+| `cd-dup-12` | `apps/complex-dynamics/src/render/perturbationPoly.ts:259` | low / small | The double-double reference-orbit loop exists **three times** in complex-dynamics. |
+| `cd-dup-11` | `apps/complex-dynamics/src/render/overlay.ts:33` | low / trivial | Six dead exports: `pxToPlot`, `renderDeltoid`, `exportPhiJSON`, `MapForm`, + two "largest offered". |
+| `cd-dead-10` | `packages/core/src/complex.ts:76` | low / trivial | Unused in-place exports (`addInto`/`subInto`/`scaleInto`) and `BiPoly.monomial` — untested, unconsumed. |
+| `cd-render-11` | `apps/complex-dynamics/src/render/glPlot.ts:564` | low / trivial | `restoreContext` nulls the histogram handles twice. *(Confirmed still present during Batch F.)* |
+| `qd-psw-signal-dead-01` | `apps/quadrature-domains/app/primary-solver-worker.mjs:159` | low / trivial | `PrimarySolverWorker.solve`'s `AbortSignal` support is unreachable — no caller passes a third arg. |
+| `qd-solverqd-centroid-01` | `apps/quadrature-domains/app/solver-qd.mjs:359` | low / trivial | `Family.boundedQD.normalizeOpts` open-codes the pole centroid `QD.poleCentroid` was extracted to provide. |
+| `qd-inline777-01` | `apps/quadrature-domains/app/index.html:286` | low / trivial | Eleven inline `color:#777` sites bypass the `--c-muted` token introduced to fix exactly that. |
+| `corr-maxdepth-dead-08` | `apps/correspondences/src/correspondenceRender.ts:27` | low / trivial | `DEFAULT_DENSITY.maxDepth = 18` is dead configuration — the node cap always binds at depth ≤ 8. |
+| `corr-dk-null-dead-09` | `apps/correspondences/src/deltoid.ts:113` | low / trivial | Three unreachable null-guards after `makeDurandKerner` calls. |
+| `bt-dead-testhtml-10` | `apps/quadrature-domains/app/test.html:1` | low / trivial | Dead file: sits in the Vite root but is not a build input. |
+| `bt-unused-exports-11` | `packages/expr/package.json:20` | low / trivial | Two package `exports` subpaths have no consumer (`@cas/expr "./latex"`, `@cas/gpu "./dual-backend"`). |
+| `bt-version-skew-07` | `apps/quadrature-domains/package.json:19` | low / small | Two KaTeX majors ship in one deployed site (QD pins 0.16.47, CD floats `^0.17.0`). |
+
+**⛔ Traps.**
+
+- **`cd-render-10` is ALREADY FIXED** — Batch A-2 (#162) made `traverseBLA` actually mirror the GPU
+  kernel. It still reads as open in the corpus. Do not re-open.
+- **`qd-psw-signal-dead-01` is dead *and wrong*.** Found during Batch D: its `onAbort` listener is
+  never removed when a job settles normally, so a reused long-lived signal would accumulate handlers
+  that call `cancel()` on the current worker. Deleting the block closes both problems; "fixing" it in
+  place does not.
+- **`bt-version-skew-07` is not purely redundancy** — two KaTeX majors in one deployed site is a
+  behaviour risk, not just weight. Check whether CD's `^0.17.0` actually resolves to a different
+  major before treating it as a dedupe.
+
+**Watch for.** This is the batch where "duplicated" most often means "deliberately duplicated". Batch A
+already found `conjFR` and `MM_H` were *intentional* despite looking dead, and `@cas/core`'s series
+multiply is bit-identical to both apps' copies **on purpose** (Batch B) — consolidating it would be a
+rounding-behaviour change, not a cleanup. So for every item here, establish that the copies are
+actually interchangeable before merging them: **diff the copies and check the tuning constants**,
+which is what `cd-dup-06`'s "identical tuning constants" claim needs verified rather than trusted.
+
+Remaining after G: **Batch H** — usability / a11y (13 `category: usability`), then **Batch I** —
+build/config leftovers.
+
+<details>
+<summary>Batch E (complete) — the 15 findings and their outcomes</summary>
+
+
+Performance. **15 items**, the largest batch — 13 medium + 2 low, all verified open against the
+source at the end of Batch D. Three perf findings in the corpus are **already CLOSED and must not be
+re-opened**: `expr-rational-01` (the `z^40000` freeze, #158), `corr-density-01` (the deltoid K-mask
+ray-cast per pixel, #159), and `bt-ci-nocache-08` (no pnpm store cache, #157).
+
+| id | Where | Severity / effort | The defect |
+| --- | --- | --- | --- |
+| ~~`cd-bla-01`~~ **done** | `apps/complex-dynamics/src/render/glPlot.ts:1305` | medium / medium | The perturbation BLA table is fully rebuilt and re-uploaded (≈1 MB `texImage2D`) on every zoom-changed frame, including the maxC-independent level 0. |
+| ~~`cd-render-05`~~ **done** | `apps/complex-dynamics/src/render/glPlot.ts:1300` | medium / medium | Perturbation rebuilds the whole double-double reference orbit *and* BLA tree on every draft frame of a deep-zoom pan/zoom. |
+| ⛔ `cd-overlay-01` *(refuted: 1.2 ms worst case)* | `apps/complex-dynamics/src/render/plotView.ts:114` | medium / small | The whole 2D overlay is redrawn from `afterRender` on every progressive and temporal-accumulation frame, even when none of its inputs changed. |
+| ⛔ `cd-invjulia-01` *(refuted: ~1 ms, caches are correct)* | `apps/complex-dynamics/src/render/overlay.ts:481` | medium / small | The c-keyed overlay caches (inverse-Julia cloud, Siegel curves, portrait rays) miss on every frame of a coupled parameter drag. |
+| ~~`cd-render-08`~~ **done** | `apps/complex-dynamics/src/render/angleOfPoint.ts:113` | medium / small | "Find angles" re-traces every enumerated external ray from scratch on each click — a pure function with no memoization. |
+| ~~`cd-shell-09`~~ **done** | `apps/complex-dynamics/src/main.ts:3923` | medium / small | The Laurent boundary-radius slider re-derives all dynamical exterior coefficients on every input event, though only `r` changed. |
+| ~~`cd-perf-04`~~ **done** | `packages/exact/src/gaussian.ts:130` | medium / trivial | `Gauss.mul` always runs the 4-multiplication complex form — 4.1× the real-only cost, and CD's entire exact tower is real. |
+| ⛔ `corr-density-recolour-03` *(superseded by #159 — do not fix)* | `apps/correspondences/src/main.ts:191` | medium / small | The correspondence render re-runs a full-frame point-in-polygon colorize on every progressive tick — ~4.2 s of ~4.8 s redundant. |
+| ~~`corr-orbittree-01`~~ **done** | `apps/correspondences/src/orbitTree.ts:51` | medium / small | `expandOrbitTree` allocates two wrappers and runs a comparator sort per node for a 2-element branch list; `orbitPoints` copies the whole node array. |
+| ⛔ `qd-accuracy-mainthread-01` *(refuted: ~5 ms, already idle-deferred — do not offload)* | `apps/quadrature-domains/app/ui-solve.mjs:753` | medium / medium | The post-solve "Geometry & accuracy" pass runs two escalating ≥1500-node identity verifies plus a critical-point solve **on the main thread** after every solve. |
+| ⛔ `qd-chooseholetestpoints-01` *(refuted: 9.23% not dominant — do not fix)* | `apps/quadrature-domains/app/solver.mjs:1272` | medium / medium | `chooseHoleTestPoints` is O(61 × N) per identity verify and re-runs at every escalation level, dominating unbounded-family verification. |
+| ~~`qd-paramslice-hover-01`~~ **done** | `apps/quadrature-domains/app/param-slice/param-slice-ui.mjs:429` | medium / medium | Param-slice hover preview runs a full `solveInverseQD` synchronously on the main thread while the idle worker pool sits right there. |
+| ~~`bt-precache-fonts-04`~~ **done** | `apps/quadrature-domains/vite.config.mjs:37` | medium / trivial | Both PWAs precache KaTeX `.ttf` *and* `.woff` — 798 KB of never-fetched font bytes per app, 1.6 MB across the deployed site. |
+| ⏸ `corr-mating-blocking-06` *(deprioritised: unpublished app)* | `apps/correspondences/src/mating/matingMain.ts:164` | low / small | `mating.html` blocks the main thread for ~0.8 s of unyielded σ evaluation before painting anything. |
+| ~~`qd-fillcoarse-01`~~ **done** | `apps/quadrature-domains/app/schwarz/schwarz-render.mjs:255` | low / trivial | The in-process Schwarz pyramid runs `fillFromCoarseSamples` on the stride-1 pass — a full W·H no-op scan. |
+
+
+**Batch E status: COMPLETE — all 15 settled: 9 fixed, 6 adjudicated without a code change**
+(`corr-density-recolour-03` superseded by #159 · `qd-chooseholetestpoints-01`,
+`qd-accuracy-mainthread-01`, `cd-overlay-01`, `cd-invjulia-01` refuted by measurement ·
+`corr-mating-blocking-06` deprioritised), on `fix/batch-e-performance`. Six of fifteen were
+adjudicated rather than coded — the highest refutation rate of any batch, which is exactly what
+the "measure, don't assert" rule was for.
+
+**Do `cd-bla-01` and `cd-render-05` together** — both are the deep-zoom rebuild path within five
+lines of each other in `glPlot.ts`, and they share a cache key.
+
+**⚠ Measure, do not assert.** This batch is the one where the sweep's finders are least trustworthy:
+the single **refuted** finding of the whole review was a performance claim killed by benchmarking (a
+per-pixel allocation that never escapes, so V8 scalar-replaces it — `--trace-gc` showed zero
+scavenges and the proposed fix measured 1.4%, i.e. noise). Every item here should carry a
+before/after number in its commit, and an item that measures as noise should be recorded as refuted
+rather than "optimized".
+
+`qd-psw-signal-dead-01` (unreachable `AbortSignal` support in `PrimarySolverWorker.solve`) is
+**dead code** — Batch G. Note when you get there that the block is also *wrong*: its `onAbort`
+listener is never removed when a job settles normally, so a reused long-lived signal would
+accumulate handlers that call `cancel()` on the current worker. Found during Batch D; harmless only
+because no caller passes a signal.
+
+`qd-exact-count-guard-11` (`vitest/algebra-verdict-labeling.test.ts:114` — the `rigor:'exact'` guard
+counts call sites instead of identifying them, so the exemption can migrate silently) stays with the
+test-integrity batch (F).
+
+</details>
+
+### Remaining batch plan (agreed: by theme, most-valuable first)
+
+| Batch | Theme | ~Items |
+| --- | --- | ---: |
+| ~~**A-2**~~ | ~~claim accuracy, exact-arithmetic contracts~~ — **done** | ~~5~~ |
+| ~~**B**~~ | ~~numerical robustness~~ — **done** ([#163](https://github.com/ajgraven/complex-analysis-suite/pull/163)) | ~~8~~ |
+| ~~**C**~~ | ~~CD state fidelity~~ — **done** (#164) | ~~6~~ |
+| ~~**D**~~ | ~~worker / resource lifecycle + memory~~ — **done** (#165) | ~~6~~ |
+| ~~**E**~~ | ~~performance~~ — **done** (#166) | ~~15~~ |
+| **F** | test integrity — *fix in place, no new infra* | **8** |
+| **G** | duplication / dead code | ~15 |
+| **H** | accessibility / UX | ~13 |
+| **I** | build / config leftovers | ~5 |
+
+### Standing decisions for this remediation
+
+- **Autonomy:** decide and proceed; surface every judgement call in the PR. Ask only when a change
+  alters user-visible behaviour, removes a capability, or the finding turns out to be wrong.
+- **Test items (F):** fix in place, **no new CI infrastructure**. Where a real fix needs a GPU
+  harness, document precisely what the test does not prove rather than fake it.
+- **Delivery:** one PR per batch, one commit per finding.
+- **Verify before fixing.** This is not ceremony: of the twelve HIGHs, several needed correction, and
+  in Batch A alone `conjFR` and `MM_H` turned out to be *intentional* despite looking dead. Expect a
+  similar rate below and check each finding against the source before acting.
+
+### Working notes that cost time to learn
+
+- **To show a test is vacuous, break the thing it guards and watch it stay green.** Batch F's whole
+  method. Two refinements it taught: (a) pick the break that matches the REAL failure mode — for the
+  offload differentials that is the *shared* sym-core function, since breaking only the worker path
+  fails honestly and proves nothing; (b) the break must be one the test could plausibly see, so
+  injecting into `VERTEX_SHADER` (shared by every program, no `cvec` in scope) broke everything and
+  demonstrated nothing, while injecting into the generated fragment template isolated df64 exactly.
+- **A guard that COUNTS can be satisfied by moving the problem.** `hard.length <= 1` is as happy with
+  one lie as with one legitimate exemption. Name the exempt site instead. Generalise: prefer
+  `toEqual([...names])` over `toBe(n)` wherever the guard is about *which*, not *how many*.
+- **A differential test between two paths that call the same function is tautological when both
+  fail.** Pin the expected outcome first (`expect(inline.ok).toBe(true)`, the specific degree/status),
+  then compare. Same trap in any A/B-agreement harness.
+- **For a dep-gated assertion floor, the floor must exceed what the file contributes WITHOUT the
+  dep** — not merely be below the full count. `direct` contributes 179 with mathjs and **116**
+  without, so any floor ≤ 116 detects nothing. Measure both numbers, not one.
+- **My own pin can be wrong, and the pin is what reveals it.** `S.factor`'s `ok` means "a nontrivial
+  factorization was produced", not "the call succeeded", so an irreducible input legitimately returns
+  `ok:false`. Probe the real return shape before asserting on it.
+- **Don't "strengthen" a numeric test into a regime the algorithm cannot serve.** df64 `log(1+u)`
+  loses the `u²/2` term to cancellation against magnitude-1 intermediates (measured 4.3e-19 at
+  `a = 1 + 2^-30`) — correct behaviour that would read as a failure and invite a wrong pin.
+- **The dependency rule leaves cross-app contracts homeless**, so put the wire artifact in the shared
+  package and have both sides pin it. Check the binding in BOTH directions: drift must fail the
+  producer, *and* regenerating the golden to appease the producer must fail the consumer.
+- The gate is `corepack pnpm@9.15.9 run lint && … typecheck && … test && … build`. **Run it
+  backgrounded** — it exceeds the 2-minute foreground timeout. Never pipe it through `tail`.
+- **Restore experiment files from a scratchpad copy, not `git checkout`** — the twice-burned hazard.
+  Batch F copied each file to the scratchpad before injecting and restored from there; zero incidents.
+- **No backticks in `git commit -m` strings** — bash executes them. Use `-F <file>`.
+- Vite derives `publicDir` from `root`; QD sets `root: app/`, so package-level `public/` needs an
+  explicit `publicDir`. A build that silently copies nothing is the failure mode.
+- `main.ts` (complex-dynamics) exports nothing, so its internals are unreachable from tests.
+- `pnpm test:browser` runs a REAL headless-WebGL2 harness (Playwright chromium already installed) that
+  **compiles the emitted GLSL**. Use it to prove a codegen finding rather than reading the emitter —
+  that is how Batch B proved `expr-glsl-01` and, in passing, found that the harness had never been
+  able to compile any program using the live parameter `a`.
+- Fixing a hot shared primitive: keep the ORIGINAL expression as the fast path, branch to the safe
+  form only once the intermediate has overflowed/underflowed, and **assert** bit-identity on the
+  reachable range. `@cas/core`'s series multiply is deliberately bit-identical to both apps', so a
+  rounding shift there is not a local decision.
+- `git checkout -- <file>` to undo a temporary revert will silently discard uncommitted work in that
+  file. Use `git stash push -- <files>` / `git stash pop` for the "does this test fail against the old
+  code?" check.
+- **`main.ts` is untestable, so browser-verify it instead of shrugging.** `preview_start` with the
+  `cd-esm` launch config, then drive the real handlers with `javascript_tool` — synthesize the events
+  the app listens for (`new Event('change', {bubbles:true})`, `new PointerEvent('pointerdown'|'pointerup')`
+  on the overlay canvas) and read the result back out of the DOM / `localStorage` / the decoded share
+  hash. That verified all five of Batch C's CD fixes end-to-end. Two gotchas: `cd-esm` serves the
+  **`dist/` build**, so `pnpm build` first; and screenshots need the Browser pane displayed, while
+  `javascript_tool` and `read_console_messages` work without it.
+- **The Vitest IPC stall is real and recurs.** A gate run failed with a 600 s `beforeAll` timeout on
+  an unrelated file plus two `[vitest-worker]: Timeout calling "resolveId"` unhandled errors; the run
+  took 2.5 h wall-clock. The same file passed alone in 223 ms and the full re-run was 1869/1869 green
+  in 112 s. It is an environmental forks-pool/IPC hiccup, **not** a code failure — but confirm by
+  re-running, never by assuming. Also: `cmd && cmd && … ; echo "EXIT=$?"` reports the *echo's* status,
+  so a background-task "exit code 0" can hide a failed gate. Read the `EXIT=` line.
+- **Check that a fix is REACHABLE, not just correct.** Batch D's Schwarz listener removal belonged in
+  `destroy()` — which nothing in the Schwarz path ever called, so the two-line fix would have shipped
+  as code that provably never runs. Before closing a "release it in the teardown" item, grep for a
+  caller of that teardown.
+- **The fixture decides the answer in a perf measurement.** Batch E's deep-zoom cost came out at
+  1–2 ms on an *escaping* reference (the orbit truncates at its bailout) and 3.8–35.7 ms on a
+  *bounded* one, which is the case that actually matters. Same code, same benchmark, 10× apart.
+  Likewise `Gauss.mul` measured 1.82× on fractional operands and 3.0–3.6× on the integer operands the
+  consumer actually holds. Before trusting a number, ask what input the *real* caller passes.
+- **Warm up and take a median.** A single unwarmed before/after on the CD exact tower reported
+  19.2 → 19.7 ms — the WRONG SIGN — where the warmed median-of-9 gave 12.76 → 9.19 ms.
+- **`git checkout -- <file>` bit again**, this time discarding an *uncommitted* fix while restoring
+  after a control build. The note below has said to use `git stash push`/`pop` since Batch A-2. The
+  stronger habit: **commit the fix before running any control that touches the same file.**
+- **rAF does not fire while the Browser pane is hidden** (verified: 0 callbacks in 800 ms). Anything
+  rAF-coalesced — QD's `attachHoverTooltip`, CD's live render loop — is therefore unreachable
+  headlessly, and a "responsive" reading taken over it measures nothing. What *is* reachable: paths
+  driven by `setTimeout` or called synchronously, notably CD's PNG export (`renderToImageData` calls
+  `drawFractal` directly), which is why a **byte-identical export hash** works as a render-correctness
+  control where the live loop cannot be observed at all.
+- **Rebuild with `master`'s copy of the touched file as a control.** It settled two questions this
+  session: that the deep-zoom orbit memo changes no pixel (`ebf05269` both ways), and that QD's
+  param-slice `toFixed` crash is pre-existing rather than ours.
+- Verifier notes for every finding live in `RAW_FINDINGS_2026-07.md` next to the original evidence.
 
 ## Commission
 
@@ -514,6 +805,479 @@ the suite by ~17%. Updated to the measured number.
 | --- | --- | --- |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | Durand–Kerner withholds convergence on non-finite iterates (V-1) | new test, proven to fail against the old code |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | `addMulInto` honours its aliasing contract (V-2) | new test, proven to fail against the old code |
+
+### Pass 10 — Batch F: test integrity — COMPLETE (8 of 8) ([#167](https://github.com/ajgraven/complex-analysis-suite/pull/167))
+
+Every item was a test that passed while guarding nothing, so each fix carries the same evidence:
+**the guarded defect made real, and the old test shown to stay green.** That is this batch's
+substitute for a before/after number.
+
+| id | Proof the guard was vacuous | Fix |
+| --- | --- | --- |
+| `qd-exact-count-guard-11` | Moving the hardcoded `rigor:'exact'` off `doResolvent` and onto the **Numeric solve** card — an estimate path, i.e. a false `=` — kept all 7 tests green. A count cannot distinguish one legitimate exact from one lie. | The scanner carries the enclosing handler (`enclosingFn`, resolved in the scrubbed source) and the guard NAMES the exempt site. Re-running the migration now fails with `expected [ 'doSolve' ] to deeply equal [ 'doResolvent' ]`. |
+| `qd-offload-tautology-10` | Making `triangularize` return `{ok:false}` unconditionally — a dead feature — kept all 6 green: `viaJob.ok === inline.ok` is `false === false` and the content block sat behind `if (inline.ok)`. | Each differential pins the expected outcome first, then compares. Also: the "reports resultantZero" test never reached that branch (measured `{method:'ideal'}`, flag undefined) — split into three tests, with `maxBasis:1` forcing the real fallback. |
+| `qd-floors-optional-dep-05` | Floors of **1** against measured contributions of **179 / 20 / 40**. | Floors 120 / 15 / 30. `direct`'s 120 is load-bearing: with mathjs stubbed it still contributes **116**, so 100 would pass a broken install. Both dep markers now fail — mathjs and katex are hard `dependencies`, not the optional devDeps the comments claimed. |
+| `gpu-df64-01` | **Partly refuted.** The predicted consequence is false — cutting `dfLog`'s Newton loop to zero iterations FAILS the suite (the seed uses the hi limb only, so refinement is load-bearing). | Seeds now match the GLSL (fp32, lo = 0), closing a spec-fidelity gap, not a live bug — both seeds converge identically (1.4e-14 vs 2.0e-14, tolerance 1e-11). The real gap was elsewhere: every case used a generic `df(x)`, so all would pass against a hi-limb-only implementation. Added low-limb cases. |
+| `cd-glcontext-restore-09` | An unreset `WebGLTexture` field — a dead-context handle surviving a restore — was invisible. | Guard keys on the DECLARED TYPE (18 fields found), not a name convention. |
+| `qd-interchange-e2e-08` | CD decoded an envelope **CD itself built**. | Shared golden link in `@cas/interchange`. Verified both ways: reversing `F` fails QD, and then regenerating the golden so QD passes makes CD fail (`expected 2.5 to be close to 2.125`). |
+| `corr-shader-mirror-02` + `cd-dup-04` | The mirror hardcoded the shader's constants and never read `gpu.ts`; only a comment asked for sync. | The mirror READS the constants from the GLSL. Dropping the shader's cap 24 → 2 now fails the σ-agreement assertions themselves (worst 0.526 vs 1e-4). |
+| `cd-shader-uncompiled-07` | A `cvec v = vec2(...)` in the generated template fails **all four df64 compiles** while `glslCodegen.test.ts` still passes **9/9**. | Compile + link, single AND df64, over four shapes, in the existing browser job. |
+
+**The CI decision, settled.** The standing "no new CI infrastructure" rule blocked exactly one item.
+It was **relaxed narrowly**: the browser harness and its CI job already exist and are already required
+for merge, so this adds test files to an existing job, not infrastructure — one config mirroring
+`packages/gpu`'s. Everything else in the batch was fixed in place. Deciding factor: **CD is
+published**, and the defect class is one string assertions structurally cannot catch.
+
+**Found while wiring it up (not predicted — the full gate caught it):** CD's `vite.config.ts` test
+block had no `exclude`, so the main gate picked the browser file up in jsdom and failed on
+`getContext`. `@cas/gpu` already solved this; CD now mirrors it.
+
+Gate: `lint 0 · typecheck 0 · test 1847 / 197 files · build 0`, plus `test:browser` 10 + 10.
+
+### Pass 9 — Batch E: performance — COMPLETE (9 fixed, 6 adjudicated-and-closed, of 15) ([#166](https://github.com/ajgraven/complex-analysis-suite/pull/166))
+
+Branch `fix/batch-e-performance`. Five commits so far. **Every one carries a measured before/after**,
+which is the batch's whole discipline — and measuring changed the verdict on three of the six.
+
+| id | measured |
+| --- | --- |
+| `cd-render-08` | "Find angles" re-traced every enumerated ray per click. **190.2 → 0.33 ms** (parameter plane), **78.8 → 0.31 ms** (dynamical) on repeat clicks; a new `c` correctly misses at 103 ms. Parameter landings are c-independent, so that memo keys on the search bounds alone. |
+| `corr-orbittree-01` | Per-node `{p, arg}` wrappers + a comparator sort on a **two**-element branch list, in the innermost loop of the density render (once per seed of a 64×64 grid). Full accumulate **187 → 137 ms (−27%)** at the shipped defaults. |
+| `bt-precache-fonts-04` | KaTeX ships each face as ttf + woff + woff2 behind one `@font-face` fallback; all three were precached. CD **1856.79 → 1058.95 KiB (−43%)**, QD **3659.00 → 2861.36 KiB (−22%)** — **1595 KiB** site-wide. All 19 woff2 still precached, all 40 ttf/woff still shipped. |
+| `cd-perf-04` | `Gauss.mul` ran the 4-multiply complex form on operands that are 100% real (instrumented: 15 133 of 15 133 calls in CD's n=3 tower). Micro 3.0–3.6× on integer operands; **keystroke path 12.76 → 9.19 ms (−28%)**. |
+| `cd-shell-09` | The Laurent radius slider re-derived the whole exterior map per `input` event: 0.3 ms monic, 0.8–1.2 ms general polynomial, **4.1–7.9 ms rational**. Memoized on every input the derivation reads. |
+| `qd-fillcoarse-01` | `fillFromCoarseSamples` on the stride-1 pass is a full W·H no-op. **0.49–2.13 ms, once per render, fallback path only — noise.** Landed as `refactor`, not `perf`. |
+
+**Three corrections, all from measuring rather than reading.**
+
+- `cd-perf-04` claims **~70 ms per keystroke**; it measures **12.8 ms** (its 823 ms n=4 figure was
+  already known unreachable — `MAX_MULT_N = 3`). Real, worth fixing, not a freeze.
+- `corr-orbittree-01`'s second half — that `orbitPoints` copying the node array matters — is
+  **REFUTED**: the extra copy measured *below noise*, coming out negative against a 2 ms baseline.
+- `qd-fillcoarse-01` is factually correct and its severity is not. Fixed anyway because the guard is
+  free and the function no longer claims work it cannot do, but labelled as clarity.
+
+**Two findings understated what was there.** The Laurent slider's rational path doesn't just
+recompute — `applyLaurent` only uses the result when `source === "polynomial"`, so those 4–8 ms per
+tick were computed and then *discarded*. And `corr-orbittree-01` reads like a 2 ms one-shot until you
+notice `orbitPoints` runs once per seed of a 64×64 grid.
+
+**⛔ `corr-density-recolour-03` is NOT fixed here, deliberately.** It targets `densityToImage` — the
+same function `corr-density-01` already fixed in **#159** (`847b709`, unmerged). Measured on master:
+**165.7 ms per chunk × 22 chunks = 3.6 s**, which matches the finding's "~4.2 s of ~4.8 s". #159's
+K-mask memo removes the point-in-polygon part; what remains (~1.4 s of colorize) is *inherent* to
+progressive rendering — the density changes every chunk, and the splat has no spatial locality, so
+the colorize cannot be restricted to a changed region. Editing it here would conflict with an
+unmerged PR for a much smaller remainder. **Record as substantially superseded; revisit only after
+#159 merges.**
+
+**Two more findings adjudicated by measurement, and NOT fixed.**
+
+- **`qd-chooseholetestpoints-01` — the "dominates" claim is refuted.** Instrumented during a real
+  unbounded-family solve: **11 calls, 7.9 ms, 9.23 % of an 85 ms solve** (largest N seen 1500). In
+  isolation it costs 0.64 ms at N = 400 rising linearly to 4.13 ms at N = 4000, so the O(61 × N) shape
+  is real — it simply is not the dominant term. Left alone deliberately: the candidate fix restructures
+  `inside` / `distBoundary`, which would change *which* test points the identity verify selects. Trading
+  verification semantics for ~6 % of solve time is the wrong trade in this codebase.
+- **`corr-mating-blocking-06` — deprioritised, with a measurement gap stated.** `map` = 0.2 ms and
+  `group` = 1.3 ms are cheap; `sigma` is the expensive panel and could **not** be measured headlessly
+  (`drawSigma` needs `document`), so the finding's ~0.8 s is neither confirmed nor refuted here. It also
+  lands on a page **no user can reach**: `apps/correspondences` is built for parity but *not published*
+  (`deploy-pages.yml`; the launcher shows "Coming soon"). The fix is a structural rewrite of the startup
+  into yielded chunks — worth doing when that app ships, not before. (The same unpublished caveat
+  applies to `corr-orbittree-01`, which *was* fixed: a 6-line change with a clean 27 % measurement is a
+  different proposition from restructuring a startup sequence.)
+
+**The two worker offloads: one shipped, one refuted — and my own sizing of the first was wrong.**
+
+- **`qd-paramslice-hover-01` — OFFLOADED.** The cost is bimodal and only one half mattered. Hovering a
+  **valid** cell always has a warm hint from the rendered grid: **0.2–0.7 ms**, nothing worth moving.
+  Hovering a **no-root** cell has no nearby valid φ to hint from, so the solver spends its entire
+  multistart budget before it can report the failure: **86.6 ms**, on the main thread, once per 150 ms
+  settle — and that is precisely the region someone exploring a slice hovers over. Now runs on the
+  sweep pool.
+  **Correction to the sizing recorded above:** it did *not* need a new job kind. `pool.solveBatch`
+  already accepts an array of points with per-point warm hints and routes them through the same
+  `PS.solveOnePointWithScratch` the tile handler uses, so a **one-element batch is exactly this
+  solve** — the offload is a dozen lines. What it did need was a public `canAccept()` on both pool
+  kinds (`_dispatch` refuses to run while cancel-latched, so a hover job pushed then would never
+  settle and the preview would hang on "(solving…)") and a null guard (a render cancelled mid-queue
+  resolves pending jobs with `null`, which is not a solve failure and must not be labelled as one).
+  The supersession half was already free: the token was re-checked after the solve returned, so it
+  simply became a check after the `await`.
+- **`qd-accuracy-mainthread-01` — REFUTED.** The finding's *structure* is accurate — `estimateAccuracy`
+  really does run `findCriticalPoints`, two `verifyQuadratureIdentity` passes (at N = 600 and 2N =
+  1200, not the "≥1500" claimed — that number belongs to the *solver's* internal escalating verify,
+  a different code path), and a `numericalJacobian` + `houseQR`. Its **cost** is not: the whole pass
+  measures **4.8–5.6 ms**, consistently across bounded / cardioid / 2-pole / unbounded fixtures. It is
+  also already mitigated three ways the finding does not mention — deferred through
+  `requestIdleCallback`, skipped entirely on live/drag passes (`opts.live`), and supersession-guarded
+  by `_analysisToken`. Offloading 5 ms would add a job kind plus a φ + hData serialisation round trip
+  in both directions, plausibly costing more than it saves. Not done, deliberately.
+
+**Browser verification of the hover offload — what it could and could NOT establish.** The QD app
+loads and renders a parameter slice correctly with the change in (a 64-point sweep whose range
+includes no-root cells completes in 0.5 s on a real 20-worker pool), which exercises the *shared*
+`solveBatch` path the pool edit touches. But the **hover path itself is unreachable in this
+environment**: `attachHoverTooltip` coalesces its `mousemove` through `requestAnimationFrame`, and
+rAF never fires while the Browser pane is hidden (verified directly — 0 callbacks in 800 ms). A
+"main thread stayed responsive, 12.5 ms worst gap" reading taken before noticing that was measuring
+nothing and is discarded rather than reported. The offload therefore rests on the unit tests (the
+one-element-batch equivalence, `canAccept`'s contract on both pool kinds, the cancelled-pool null)
+plus the Node measurement — not on a browser observation of a hover.
+
+**A pre-existing crash found while verifying, and confirmed not ours.** Rendering a slice whose range
+contains cells with no valid QD logs two uncaught
+`TypeError: Cannot read properties of undefined (reading 'toFixed')`. Controlled by rebuilding with
+**master's** `param-slice-pool.mjs` and `param-slice-ui.mjs` and reproducing identically, so it
+predates this batch. It is a real crash in a display formatter (a per-cell statistic that does not
+exist for a failed solve) and it fires on most exploratory sweeps; filed separately rather than
+folded into a performance PR.
+
+**The deep-zoom rebuild pair — FIXED, and it is the batch's largest win.** `scheduleRender()` set
+`orbitDirty` on every content-affecting render: each rung of the progressive ladder, each temporal-AA
+frame, each frame of a drag. So a deep zoom recomputed the whole double-double reference orbit per
+frame — and, because `ensureOrbit` sets `blaDirty`, dragged the BLA rebuild + upload with it.
+Measured on a **bounded** reference (the deep-zoom case, where the orbit runs the full cap):
+
+| iteration cap | per frame | upload |
+| ---: | ---: | ---: |
+| 4 000 | 3.8 ms | 0.25 MB |
+| 20 000 | **8.0 ms** | **1.25 MB** |
+| 65 536 | **35.7 ms** | **4.00 MB** |
+
+The 20 000 row is `cd-bla-01`'s "≈1 MB `texImage2D`"; the 65 536 row is two frame budgets of CPU
+before the upload starts. A first measurement on an *escaping* reference under-reported this at
+1–2 ms — the orbit truncates at its bailout, so the fixture choice decided the answer.
+`ensureOrbit` now keys on its real inputs, with **zoom deliberately absent** (the orbit is a property
+of the centre, c, f and the cap). Pure zoom reuses the orbit and rebuilds only the BLA table (whose
+`maxC` genuinely is zoom-dependent); a pan rebuilds both; the many frames at a fixed view rebuild
+neither. That closes `cd-bla-01` without touching `ensureBLA` — its zoom check was already correct,
+just overridden by an orbit that rebuilt unconditionally. **Verified byte-identical**: a 2000²
+export at zoom 1e9 with perturbation active hashes to `ebf05269` both with the change and with
+master's `glPlot.ts` rebuilt in its place.
+
+**`cd-overlay-01` / `cd-invjulia-01` — REFUTED, both.** The sizing below was right that the risk is
+staleness rather than speed; measurement settled it by showing there is no speed to win either.
+`inverseJuliaCloud` costs **0.70–0.81 ms** and `siegelInvariantCurves` **0.99 ms**, and their caches
+are *correct* — they miss during a coupled drag because `c` genuinely changed, which is not a cache
+defect. The overlay's heaviest per-frame element, scattering the cached 12 000-point cloud as
+`fillRect`s, measures **1.2 ms in a real 2D context — 7.2 % of a 60 Hz budget** — and is only drawn
+when the inverse-Julia toggle is on (off by default). Against ~1 ms, a dirty-check over ~26 mostly
+by-reference inputs, where one missed in-place mutation leaves a **stale overlay**, is the wrong
+trade.
+
+**`cd-overlay-01` / `cd-invjulia-01` — sized, and the risk is not the speed.** Both want a dirty-check
+so the 2D overlay is not redrawn on every progressive and accumulation frame. Two things make them
+larger than "medium / small" suggests. First, `drawOverlay` takes **~26 inputs**
+(`plotView.ts:387–415`), most of them object references — `fAst`, `puzzleRays`, `lamination`,
+`annotations`, `cyclePoints` — so a signature has to compare identity, and any input that is ever
+mutated *in place* rather than replaced would leave a **stale overlay**: a wrong picture, which this
+project treats as worse than a slow one. Second, `drawOverlay` needs a 2D context, so like
+`drawSigma` it cannot be measured headlessly — the size of the prize is currently unknown, and it
+should be measured in the browser before the dirty-check is written, not after.
+
+**The two worker offloads need a new message protocol, not a rewire — sized before starting.** Both
+`qd-accuracy-mainthread-01` and `qd-paramslice-hover-01` want work moved onto an existing worker, but
+the param-slice pool exposes only a `'tile'` job kind (`param-slice-pool.mjs:77`) and calls
+`solveOnePointWithScratch` worker-side *inside* that handler (`:283`). So each needs a new job kind in
+`workers/param-slice-worker-entry.mjs` + the pool + a promise-returning client method, then
+`_liveSolveAt` (`param-slice-ui.mjs:427`) rewired to async. The supersession machinery already exists —
+`sliceState.liveSolve.token` is checked after the solve returns — so staleness is the *easy* half.
+Budget these as a pair with browser verification that hovering does not regress.
+
+**Method, earned the hard way.** My first `cd-perf-04` A/B was a single unwarmed sample per side and
+reported **19.2 → 19.7 ms — the wrong sign**. The warmed median-of-9 gave 12.76 → 9.19. A one-shot
+before/after is not a measurement. Likewise my first micro-benchmark used *fractional* `Frac`
+operands and reported 1.82× for a case CD's tower never holds; on the integer-valued operands it
+actually contains it is 3.0–3.6×. Benchmark what the consumer has.
+
+Interim gate: **1849 tests / 196 files**, lint, typecheck, all four builds green.
+
+### Pass 8 — Batch D: worker / resource lifecycle ([#165](https://github.com/ajgraven/complex-analysis-suite/pull/165))
+
+Branch `fix/batch-d-lifecycle`. Six commits, six findings — things the app acquires and never gives
+back, plus the one place three workers shared a piece of state they should not have.
+
+| id | What shipped |
+| --- | --- |
+| `qd-psw-untested-03` | 381 lines driving three independent workers, covered by fourteen `typeof … === 'function'` assertions. 13 real lifecycle tests now: round-trip per lane, `isBusy` only while outstanding, supersede vs. cancel, terminate-and-respawn, lane isolation. |
+| `cd-render-07` | `renderToImageData` held two full-size RGBA buffers at once (2 × 268 MB at 8192²). The flip is now in place and `ImageData` gets a view over the same `ArrayBuffer` — peak is one buffer plus one row. |
+| `qd-psw-fallback-latch-01` | One `_mainThreadFallback` was written by all three catch blocks and read by all three solve paths, so whichever lane failed to spawn first silently demoted the other two for the session. Three latches now. |
+| `qd-ctxmenu-leak-01` | The context menu's capture-phase `document` pointerdown listener removed itself only on the one close path that ran it. Every other close — Escape, Tab, picking an item, opening another menu — left it subscribed. |
+| `cd-metricsworker-01` | `disableWorker` dropped the reference without `terminate()`, leaking the thread *and* leaving a queued response able to call `cb` a second time. |
+| `qd-schwarz-gl-listener-01` | `createGPURenderer` attached an anonymous `webglcontextlost` listener that `destroy()` never removed — on a canvas that is created once and reused across every loss/restore cycle. |
+
+**The trap this batch was built around: a fix that is dead code.** `qd-schwarz-gl-listener-01` reads
+as a two-line change — name the handler, remove it in `destroy()`. But **nothing in the Schwarz path
+ever called `destroy()`**; `sState.gpu = null` was the whole teardown, and the only `.destroy()` call
+anywhere belonged to sphere-ui's own renderer. Removing the listener inside `destroy()` would have
+shipped a fix that provably never runs. The commit therefore also adds `dropGPU()` in schwarz-ui and
+routes both the loss and restore paths through it. Check that the fix is *reachable*, not just
+correct.
+
+**Extraction to buy a test seam, again.** `renderToImageData` lives in `glPlot.ts`, which needs a
+WebGL context and is untestable. The flip moved to `hiResExport.ts` — the existing home for
+engine-agnostic export helpers, which already had a test file — and the load-bearing assertion is
+**byte-identity against the copying implementation it replaced**, over even *and odd* sizes (an odd
+size has a middle row that is a fixed point the swap loop must skip). This is a memory fix; one
+changed output byte would make it a rendering change instead.
+
+**The existing worker shim was enough.** `vitest/helpers/web-worker-shim.mjs` — the
+`node:worker_threads` Worker facade built for the sym-worker suites — drove the *solver* worker
+unchanged, spawning the real `solver-worker-entry.mjs`. No new CI infrastructure, per the standing
+decision. Its terminate counter is what makes "cancel really terminated it" a deterministic
+assertion instead of a timing guess, and that distinction matters here: terminate-and-recreate is the
+only way to preempt a solve deep in nested Newton, so a cancel that merely dropped the listener would
+look identical from the outside while leaving a core burning.
+
+**Proven by fault injection.** The spawn-failure paths are unreachable in any real environment, so
+the latch fix is guarded by a stub `Worker` that fails on demand over a freshly re-imported module.
+Both directions are pinned — an aux failure must not demote primary/live, *and* a primary failure
+must not demote aux/live — so the fix is not merely "aux happens to be checked first". All three
+fail against the pre-fix single latch. One detail that decided whether these tests were worth
+anything: the fresh import pulls the whole `solver-graph` barrel, not just `solver.mjs`, because the
+main-thread fallback calls `QD.solveInverseQD` *on this thread* and needs every family registered.
+Without it the fallback cannot solve and the tests pass vacuously.
+
+**Found while verifying, not fixed here.** `solve()`'s `AbortSignal` handler is added with
+`{ once: true }` and never removed when the job settles normally, so a long-lived signal reused
+across solves would accumulate handlers that call `cancel()` — terminating the *current* worker —
+long after their own job finished. It is latent: `qd-psw-signal-dead-01` establishes that **no caller
+passes a signal at all**. That finding is Batch G's (dead code); flagging it here so G does not
+delete the block without noticing it was also wrong.
+
+**Not tested, and why.** `qd-ctxmenu-leak-01` is a closure inside `installAlgebra`, reachable only
+from a canvas callback or a keyboard shortcut, and no harness boots that panel — and the pattern is
+unique in QD (the other two `document`-level dismiss listeners are app-lifetime or use a stable named
+reference the DOM de-duplicates), so there is no second consumer to justify extracting a testable
+helper. `qd-schwarz-gl-listener-01` needs a real WebGL2 context, which jsdom does not have; the GL
+frees it sits beside were equally untested before.
+
+**Browser-verified where the unit test cannot reach.** `flipRowsInPlace` is proved byte-identical in
+isolation, but nothing in that test touches glPlot's wiring, so a mis-hooked `ImageData` would ship an
+upside-down PNG. Framing the period-2 disk off-centre — centre (−1, 0.2), half-width ⅛, so the frame
+covers y ∈ [0.075, 0.325] and the disk boundary at x = −1 sits at y = 0.25 — the exported PNG has a
+bright top row (luma 117, exterior) and a black bottom row (luma 0, inside the set). The **default**
+Mandelbrot view is mirror-symmetric about the real axis, so a flipped export looks identical there;
+the first probe proved nothing and had to be redone asymmetric.
+
+Gate: **1856 tests / 197 files**, lint, typecheck, all four builds green.
+
+### Pass 7 — Batch C: CD state fidelity ([#164](https://github.com/ajgraven/complex-analysis-suite/pull/164))
+
+Branch `fix/batch-c-state-fidelity`. Six commits, six findings. The theme: **the view is not what the
+URL, the saved view, the sidebar or the undo stack say it is.**
+
+| id | What shipped |
+| --- | --- |
+| `cd-shell-07` | Ten live, view-defining controls sat outside `SHARE_IDS` — the inverse-iteration Julia cloud, the Siegel curves, the whole Yoccoz puzzle, both pinched-disk laminations, and the coordinate projection. Turn on the puzzle and the QML widget, press **Share link**, and the recipient gets the view and the colouring but neither instrument. CONTRIBUTING.md states the rule; nothing enforced it. `reset_all` separately left five of those toggles alone despite its own "reset every option". |
+| `cd-shell-05` | `applyFullState` cleared the notes array unconditionally, so picking any **Places** entry — a curated *partial* state — silently deleted every pinned annotation. |
+| `cd-shell-06` | Keyframe scrubbing moved the plot without telling anything else, so the sidebar, the view chip, the share link and the undo stack all kept the pre-scrub view, and the next Apply snapped it back. |
+| `cd-views-destructive-01` | Deleting a saved view, and saving over an existing name, both wrote to `localStorage` with no confirmation and no way back. |
+| `cd-shell-12` | `beginExport` had no re-entrancy guard over a single shared overlay / progress bar / cancel button. |
+| `qd-urlstate-untested-06` | QD's share-link codec had **zero** tests, against a stated CLAUDE.md guardrail. |
+
+**The finding whose proposed fix was wrong.** `cd-shell-07`'s write-up says to append the ten ids to
+`SHARE_IDS`. That is right for nine of them and **not sufficient for `projection-mode`** — and the
+shortfall is the failure mode the finding is about. Two pieces of state behind the picker cannot be
+reached by a control id: the projection **anchor** and the **linear view** saved for the trip back.
+Panning inside a projected frame writes a *projected-space* coordinate into the centre input (the
+pointer path fires `onViewChanged` regardless of projection), so restoring from the inputs alone
+re-anchors the projection somewhere else and hands the recipient **a different picture** — worse
+than the missing one. They now travel as `_proj`, the way `_z0` / `_grad` / `_pcdd` already do, and
+the change handler splits into two functions that were doing different jobs under one name:
+
+- `applyProjection()` — the interactive transition; *moves* the view. Picker + `reset_all`.
+- `setProjectionState()` — restores mode + anchor + saved view and **does not touch centre/zoom**,
+  which `applyFullState` has just set. Runs on every full-state apply, so a link with no `_proj`
+  still cannot leave the picker disagreeing with the picture.
+
+**The guard is the durable part.** `test/appState.test.ts` only checked that every `SHARE_IDS` id
+exists in the markup — the direction that does not drift. It now also asserts the forward direction:
+every control in `index.html` is either shared or on an explicit opt-out list with a stated reason
+(persisted prefs, export settings, the documented sphere-MVP exclusion, one-shot tool inputs, panel
+readout parameters, mirrors of shared fields, pickers, transient playback), plus a second test that
+rejects **stale** exemptions so a removed control cannot leave a phantom entry behind. Against the
+pre-fix source it fails naming exactly the ten ids.
+
+**Two behaviour changes, surfaced rather than asked about** (per the standing decisions): selecting a
+Place no longer clears pins, and a saved view or link created *before* this batch carries no
+`_notes`, so loading one now **preserves** the current pins instead of clearing them. Same rule,
+applied to states written before it existed, and it errs toward not destroying the user's work.
+
+**Two extractions, both to buy a test seam.** `main.ts` exports nothing, so anything left in it is
+unreachable from a test:
+
+- `src/state/notes.ts` — the `_notes` codec. Its validation guards against a hostile link
+  (non-finite coordinates, unknown planes, over-long text, 256 / 2000 caps) and had **no test at
+  all**; it has eleven now, three of which fail against the old semantics.
+- `syncParamViewInputs()` — the `onViewChanged` body, now called by both the hook and `applyScrub`
+  so the two paths cannot drift. Still not unit-testable; verified by reading the call graph.
+
+**QD's codec test is proved by mutation, not by assertion.** 18 tests over a stub `ui` and a minimal
+jsdom DOM, using the real `MODES` / `PRESETS` tables. The load-bearing one is the **key-coverage
+diff**: each key the write side can emit is applied *alone* and shown to have an observable effect,
+because a key renamed on one side only still survives encode/decode and a plain write-then-apply
+assertion would miss it. Verified by mutating the source — renaming the write-side `agg` key fails 5
+tests including that guard; removing the `SWITCHABLE_TABS` whitelist makes the crafted-tab test throw
+the exact `DOMException` SyntaxError its comment says would abort init; removing the `PRESETS` gate
+and the α validation each fail their own seatbelt test.
+
+**Not tested, and why.** CD's vitest runs `environment: "node"` with no jsdom (QD has it, CD does
+not). The toast action and the export guard therefore have no unit test — adding jsdom to CD for one
+toast is not worth a new devDependency when the accessibility/UX batch (H) will have several
+consumers and is the right place to decide it. Recorded rather than faked, per the standing decision.
+
+**Also noted, deliberately not fixed here.** The export overlay is not a real modal — no `<dialog>`,
+no `inert`, no focus trap — so keyboard activation can still reach the buttons behind it. The
+concurrency defect underneath that is closed; the modality belongs with Batch H.
+
+**Browser-verified, since `main.ts` has no test seam.** Against the real built app (`cd-esm` preview,
+zero console errors throughout):
+
+| | Observed |
+| --- | --- |
+| `cd-shell-07` write | The share link carries all ten controls plus `_proj` (`{"p":{"a":[-0.75,0],"c":[-0.75,0],"z":0.75},"d":{…}}`) and `_notes:"[]"`. |
+| `cd-shell-07` restore | Reloading from that hash restores all seven set controls **and the derived overlays** — the projection caption returns and the QML reports "117 minor leaves on ∂M (period ≤ 7)", so the restored `lamination-detail` really drove the widget. |
+| `cd-shell-07` reset | `reset_all` clears all five toggles, returns both sliders to the markup defaults (2 / 6), and sets the projection back to linear. |
+| `cd-shell-05` | A pin survives selecting "Elephant Valley" — the view moves to `0.275,0.006` and `_notes` is byte-identical before and after. |
+| `cd-shell-06` | Scrubbing to 0.5 writes `-0.7475,0.05` / zoom `4.33013` (the geometric mean of 0.75 and 25) into the inputs **and** the view chip. |
+| `cd-views-destructive-01` | A fresh save toasts plain success with no button; an overwrite toasts *warn* "Replaced the saved view …" with an Undo that restores the previous state; delete → Undo puts the entry back in `localStorage`. |
+| `cd-shell-12` | The second concurrent export is refused with "An export is already running." and its button is untouched — still "Save", not stuck on "Rendering…". |
+
+Gate: **1869 tests / 198 files**, all green, plus lint, typecheck and all four builds. The QD headless
+suite (`app/node-test.js`, run through `node-suite.test.ts`) passes with 0 failures.
+
+**One gate run failed first, and it was environmental.** A 600 s `beforeAll` timeout on
+`algebra-column-diff.test.ts` with two `[vitest-worker]: Timeout calling "resolveId"` unhandled
+errors, in a run that took 2.5 h of wall clock. That file passes alone in 223 ms and the full re-run
+was green in 112 s. Recorded in the working notes — the point is that it was **confirmed by
+re-running**, not waved off.
+
+### Pass 6 — Batch B: numerical robustness in the shared packages ([#163](https://github.com/ajgraven/complex-analysis-suite/pull/163))
+
+Branch `fix/batch-b-numerical-robustness`. Six commits, eight findings, all four shared packages
+(`@cas/core`, `@cas/exact`, `@cas/expr`, `@cas/gpu`).
+
+| id | What shipped |
+| --- | --- |
+| `cd-div-02` + `cd-cpow-05` | `Complex.div` / `inv` / `tupleAlgebra.div` / `Complex.cpow` all squared the modulus before using it, halving the exponent range. `div(1e200, 1e200)` returned `{NaN, 0}`; `div(1, 1e-200)` threw *"division by zero"* for a nonzero divisor; and `cpow`'s guard — documented as the `a = 0` case — fired for every \|a\| < 1e-150, so the 4th root of 1e-160 came back as exactly 0 instead of 1e-40, while \|a\| > 1.34e154 gave `{Infinity, NaN}`, the two components disagreeing about the failure. |
+| `cd-frac-07` | `Frac.toNumber` returned `Infinity/Infinity = NaN` once both sides passed ~1.8e308 — and `Frac` is kept in lowest terms, so "both huge" is an ordinary state. This is the sole exact→numeric crossing, and what is downstream of it is a read-out labelled `(= exact)`. |
+| `expr-glsl-01` | Read-before-assign of the live parameter emitted the self-referential `cvec a = cmul(a, …);`. GLSL rejects it, the JS backend runs it, and the GPU keeps rendering the previous map. `a` is now declared from the uniform whenever it is READ — which is also the JS semantics. |
+| `expr-glsl-02` | Complex `==` went through `cre1`, which returns only the **hi limb** in df64 — fp32-width equality on a ~47-bit value, exactly where df64 is the point. Now a whole-value `(a == b)`. |
+| `expr-parser-01` + `expr-parser-depth-04` | The `MAX_DEPTH` guard covered parens but not the unary chain (`parseUnary` self-recursion) or the power chain (`parsePower` re-entering it), so both threw `RangeError` instead of the clean positioned `ExprError` the guard exists for. The test claimed the general property while exercising parens only — and the two paths it skipped were exactly the two the guard missed. |
+| `expr-eval-01` | The interpreter threw on a complex `if` condition while **both** compiled backends coerce it, so that node was one the parity/fuzz contract could not cover at all: the reference refusing what the two implementations accepted and agreed on. |
+
+**The design decision worth recording.** For `div` / `inv` / `cpow` the original expression stays the
+fast path, and the safe form (Smith's algorithm for the quotient, `Math.hypot` for the modulus) is
+reached only once the intermediate has already overflowed or underflowed. The cost is one comparison
+on a value the old code computed anyway, and it makes the fix unobservable on the reachable range —
+**20 000 random ordinary divides, 20 000 random `cpow` calls and 2 000 in-range fractions produce
+zero bit-level differences**, asserted rather than measured. That mattered because these are hot
+shared kernels and `@cas/core`'s series multiply is *deliberately* bit-identical to both apps'.
+
+None of the eight is reachable from a current consumer. That is a fact about today's callers, not
+about the contract, and these packages exist to be depended on by code that cannot know it.
+
+**Also closed, found while fixing the above:**
+
+- **The GLSL harness could not compile any program using the live parameter.** `buildProbeGLSL` and
+  `buildEscapeProbeGLSL` emitted their uniform declarations *after* the compiled function — invisible
+  for `uZ`/`uC` (read only from `main`), fatal for `uA` (read from inside `fFn`). So the harness that
+  exists specifically to catch GPU-only codegen bugs had the whole live-parameter path outside what it
+  could compile. Production was already correct and says so in a comment. Found by adding the
+  `expr-glsl-01` case to `F_REGRESSION_CORPUS` and running it for real.
+- **Two app-level tests pinned the pre-fix GLSL**, with the refuted rationale in their comments
+  (`glslCodegen.test.ts`). The gate caught them. Rewritten rather than deleted, so the corrected
+  reasoning lives where the wrong rule used to.
+
+**Verification.** Against the pre-fix source: 5 `@cas/core` + 1 `@cas/exact` + 3 expr-codegen + 2
+parser + 2 parity tests fail; the no-change guards pass on both. And the **real-WebGL2 harness**
+compiles both new corpus entries (12/12) — against the pre-fix codegen it fails with
+`ERROR: 'a' : undeclared identifier`, so this finding is proved by compiling rather than by reading.
+Recorded honestly in the corpus: the `==` entry *cannot* catch the df64 defect, because that harness
+is single-precision; catching it there would need a df64 probe builder.
+
+Gate: 1864 tests / 196 files (from 1820 / 193 at the review baseline), all four builds, QD headless 2261.
+
+### Pass 5 — Batch A-2: exact-arithmetic contracts and the BLA reference ([#162](https://github.com/ajgraven/complex-analysis-suite/pull/162))
+
+Branch `fix/batch-a2-claim-accuracy`. Eight commits, one per finding. The five items were deferred
+out of Batch A because they touch exact-arithmetic semantics and the shipped deep-zoom kernel, and
+warranted verify-first treatment. All five reproduced against the source before being touched.
+
+| id | What shipped |
+| --- | --- |
+| `cd-res-11` + `cd-disc-12` | `resultant` / `discriminant` now trim their coefficient **list** to its true degree, and the degenerate cases are resolved against the stated contract instead of falling through: `0` vs degree ≥ 1 → **0**, `0` vs a nonzero constant → **1**, `0` vs `0` → **0**. The old code returned the constant 1 for *any* empty list — "no shared root" for the argument that shares them all. `discriminant` no longer surfaces `QiPoly.divmod: division by zero polynomial` on an untrimmed list; it returns the correct lower-degree discriminant. |
+| `cd-disc-06` | `discriminant` returns the **true classical discriminant**, sign and magnitude intact — `disc(x²+1) = −4`, `disc(x²−2) = 8`, `disc(x³−1) = −27`, all of which previously came back as the constant `1`. The `(−1)^{d(d−1)/2}` line was provably dead because `primitivePoly` re-derived the sign. Content-clearing moved to `cuspLocus`, the one caller that wants a zero-locus generator — matching how `dynatomic.ts` already wraps `resultant`. |
+| `cd-test-08` | New `packages/exact/test/resultant.test.ts` — 18 tests over the elimination layer, which had **none**. Also corrects the README, which attributed a `resultant` identity test to two files that never mentioned it. |
+| `cd-render-10` | `traverseBLA` takes the map and bailout from options and delegates its step to `multibrotStep` / `polyStep`, so it is genuinely the CPU mirror of the shipped kernel — which builds BLA tables for **d = 2…8 and polyMode**, and reads its bailout from `uPerturbEscape2`. Those kernel paths previously had no CPU reference at all. |
+| `qd-dc-imagedata-01` | `paintDomainColoring` caches the `ImageData` alongside the offscreen canvas and re-blits only when `dc.buf` changes identity. Pan/zoom in domain-coloring mode now costs one `drawImage` per frame. |
+
+**Also closed, found while fixing the above** — three claims that were false in the same way the
+batch is about, and one stale milestone:
+
+- **The BLA traversal tests never took a single skip.** A BLA is valid only while |δz| < r ≈ ε·|A|
+  ~ 1e-7·|2Z|, so it engages around |δc| ≲ 1e-9; the traversal tests ran at 1e-3…3e-4 and inferred
+  coverage from a comment reading "a long pre-escape orbit ⇒ multi-step skips were used". That does
+  not follow, and instrumenting the loop put the true count at **0** over every fixture. The file's
+  headline claim was therefore untested. Fixed by moving each test to a deep-zoom block and asserting
+  the new `TraverseResult.skips` rather than inferring it; the shallow case now asserts `skips === 0`
+  explicitly.
+- **Two fixtures used unbounded reference orbits.** `referenceOrbit`'s docstring said "assumed bounded
+  over M iterations" and iterated blindly regardless. Both d=2 fixtures violated it — `c = −0.745+0.113i`
+  escapes at 127 and `c = −0.75+0.05i` at 63 (the latter has |c+1| = 0.2550 > ¼, outside the period-2
+  bulb). This matters because a skip does not check the bailout at its intermediate iterations; that is
+  sound only because `m + bla.l <= refMax` confines it to the stored reference, and in production
+  `refMax` **is** the escape index (`computeMultibrotOrbitDD` breaks at `BAILOUT2`). Fed an orbit
+  iterated past the bailout, a 16-step skip stepped over the escape and the traversal returned one
+  iteration too many on **120 of 120** Julia-plane samples. Shrinking every radius by 1e-6 left it
+  unchanged, which is what ruled out approximation error. The helpers now truncate as production does,
+  and `traverseBLA`'s docstring states the precondition.
+- **D2b was shipped but three docs called it pending** — `FRONTIER_ROADMAP.md` ("Half-built … unwired"),
+  `PERFORMANCE_REVIEW.md` (twice) and `FEATURE_RESEARCH.md`. `glPlot.ensureBLA` uploads the packed
+  table and the shader's `fetchBLA`/`lookupBLA` traverse it. The same bullet's "z²+c only" scope claim
+  was also wrong.
+
+**Verification.** Every fix was proved against the pre-fix code, not just asserted:
+
+- 4 of the 18 new `@cas/exact` tests fail on the old source, one per finding; the other 14 pass on both
+  and are the no-change guards.
+- 12 of the rewritten BLA tests fail against the old `traverseBLA`; the skip-past-escape guard fails
+  against the old fixture.
+- One test caught an error in its own first draft (a 3×3 asserted as `det = 3` is in fact singular).
+
+CD 661 tests, `@cas/exact` 38 (from 20), QD headless 2261.
+
+### Pass 4 — Batch A: claims that contradict the code ([#161](https://github.com/ajgraven/complex-analysis-suite/pull/161))
+
+| Finding | Change |
+| --- | --- |
+| `qd-cmax-ceiling-01` | The c\* growth loop's two exits (ceiling reached vs **solve budget exhausted**) returned one reason, and the UI turned it into "valid up to c ≤ ceiling" with an `ok` status over unprobed c. Budget exhaustion is reachable — near the cusp the step is ×1.06, needing ~95 growth steps against ~78 remaining solves. Both exits now distinguished; both messages phrased against `cLowValid`, the largest c actually tested (which also fixes the ceiling exit's one-step-factor over-claim). |
+| `corr-sigma-tiling-label-04` | `escaped` and `fundamental` share one ramp and the caption named only the tiling set — but `escaped` is the ∞-basin, and those orbits never leave Ω (Ω = ℂ\K contains a neighbourhood of ∞). ~31% of the coloured area was attributed to the complementary object. Caption now names both and quantifies the split; the shared ramp is kept deliberately. |
+| `corr-mating-orbit-label-05` | "(same dynamics on all three)" — but on \|z\|=1, F(z) = conj(φ(z)), so σ fixes the deltoid curve **pointwise** (2.3e-14 across 12 angles). The *angle* is synced; the dynamics is not. |
+| `cd-render-09` | `smallCDimension` documented "Exact", contradicting its own implementation comment ("exact only at c = 0"). It is the leading term of an O(\|c\|³) asymptotic. |
+| `cd-doc-09` | `@cas/core` README claimed "error-free splits for accuracy" over a plain convolution — and that plainness is *deliberate*, since bit-identical accumulation order is what let it be shared. |
+| `corr-param-gpu-claim-07` | `paramGpu` claimed pixel-for-pixel CPU cross-validation; ~0.22% differ (fp32 vs float64 shifts the escape count near class boundaries). |
+| `corr-readme-stale-10` | README listed four shared packages (omitting `@cas/exact`) and repeated the pixel-consistency overstatement; the agreement test is now described as exercising a TypeScript transcription, not the compiled GLSL. |
+
+### Pass 3 — the remaining Tier A findings ([#158](https://github.com/ajgraven/complex-analysis-suite/pull/158), [#159](https://github.com/ajgraven/complex-analysis-suite/pull/159), [#160](https://github.com/ajgraven/complex-analysis-suite/pull/160))
+
+All 12 HIGH findings are now fixed. Beyond the code changes, three corrections to the *findings
+themselves* are worth carrying forward:
+
+- **`qd-schwarz-skip-01` is seven blocks, not twelve.** Twelve `if (r.success)` blocks exist and none
+  has an `else`, but five are *preceded* by an `ok(…, r.success, …)` assertion — a correct pattern.
+  Check for the preceding assertion, not a trailing `else`.
+- **`expr-rational-01` was two stacked defects.** `pPow` was O(k²) (~7.4 min at k=40 000) *and* its
+  dominant caller builds the whole polynomial to read two degrees on every view change. Fixed at the
+  algorithm (zero-skipping multiply + binary exponentiation → 14 ms); a degree-only fast path for the
+  caller was considered and **rejected as unsound**, since leading coefficients cancel under `+`/`−`.
+- **`bt-lint-mjs-01`'s backlog was 22, not 294.** The 294 figure came from a probe using a stricter
+  `no-unused-vars` config than QD's own calibrated rule. Two of the 22 (`conjFR`, `MM_H`) were
+  *intentional* and are kept with the reason recorded.
 
 ### Pass 2 — the honest-labeling sweep (Tier 1, step 1)
 
