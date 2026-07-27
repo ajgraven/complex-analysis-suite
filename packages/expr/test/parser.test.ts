@@ -56,12 +56,45 @@ describe("parser error cases", () => {
     expect(() => parse("if(abs(z) > 2, z, c)")).not.toThrow();
   });
 
-  it("rejects pathologically nested input with a clean error (not a stack overflow)", () => {
-    // Deep parens re-enter parseExpr per level; without the depth cap this overflows the stack with a
-    // RangeError. It must throw a clean ExprError instead. (EXPR-5)
-    const deep = "(".repeat(5000) + "z" + ")".repeat(5000);
-    expect(() => parse(deep)).toThrow(/nested too deeply/);
-    // Moderate nesting (well under the cap) still parses.
-    expect(() => parse("(".repeat(100) + "z + c" + ")".repeat(100))).not.toThrow();
+  // The depth cap has to hold on EVERY self-recursive descent, not just the one this test used to
+  // cover. It previously exercised parenthesis nesting only, while its title claimed the general
+  // property — and the two paths it skipped were exactly the two the guard did not cover. (expr-parser-01,
+  // expr-parser-depth-04)
+  describe("rejects pathologically nested input with a clean error (not a stack overflow)", () => {
+    const DEEP = 5000; // comfortably past MAX_DEPTH (256) and past the JS stack on every path below
+
+    it("parenthesis nesting (parseExpr)", () => {
+      expect(() => parse("(".repeat(DEEP) + "z" + ")".repeat(DEEP))).toThrow(/nested too deeply/);
+    });
+
+    it("unary chain (parseUnary self-recursion) — used to throw RangeError", () => {
+      expect(() => parse("-".repeat(DEEP) + "z")).toThrow(/nested too deeply/);
+    });
+
+    it("power chain (parsePower re-entering parseUnary) — used to throw RangeError", () => {
+      expect(() => parse("z^".repeat(DEEP) + "z")).toThrow(/nested too deeply/);
+    });
+
+    it("call-argument nesting", () => {
+      expect(() => parse("exp(".repeat(DEEP) + "z" + ")".repeat(DEEP))).toThrow(/nested too deeply/);
+    });
+
+    it("never a RangeError — the whole point is a positioned ExprError", () => {
+      for (const src of [
+        "(".repeat(DEEP) + "z" + ")".repeat(DEEP),
+        "-".repeat(DEEP) + "z",
+        "z^".repeat(DEEP) + "z",
+      ]) {
+        expect(() => parse(src)).not.toThrow(RangeError);
+      }
+    });
+
+    it("moderate nesting on every path still parses", () => {
+      expect(() => parse("(".repeat(100) + "z + c" + ")".repeat(100))).not.toThrow();
+      expect(() => parse("-".repeat(100) + "z")).not.toThrow();
+      expect(() => parse("z^".repeat(50) + "z")).not.toThrow();
+      expect(() => parse("--z")).not.toThrow(); // the ordinary case must be unaffected
+      expect(() => parse("z^-2")).not.toThrow();
+    });
   });
 });

@@ -74,17 +74,31 @@ class Parser {
     return this.parseExpr();
   }
 
-  private parseExpr(): Node {
-    // Guard the primary recursion path (parens + call args re-enter here) against unbounded nesting.
+  /**
+   * Run `body` one nesting level deeper, refusing past MAX_DEPTH.
+   *
+   * This has to wrap EVERY self-recursive descent, not just the primary one. The guard used to live
+   * only in `parseExpr` — so parenthesis nesting was covered, but `parseUnary` recursing on itself for
+   * each leading `-` was not, and neither was `parsePower` re-entering it for an exponent. A long run
+   * of minus signs therefore blew the JS stack and surfaced a positionless "Maximum call stack size
+   * exceeded" instead of the clean, positioned ExprError this guard exists to produce. Nothing is
+   * lexer-side to bound the chain. (expr-parser-01)
+   */
+  private nested<T>(body: () => T): T {
     if (this.depth >= Parser.MAX_DEPTH) {
       throw new ExprError("Expression nested too deeply", this.peek().pos);
     }
     this.depth++;
     try {
-      return this.parseComparison();
+      return body();
     } finally {
       this.depth--;
     }
+  }
+
+  private parseExpr(): Node {
+    // The primary recursion path: parens and call args re-enter here.
+    return this.nested(() => this.parseComparison());
   }
 
   private parseComparison(): Node {
@@ -118,7 +132,9 @@ class Parser {
   private parseUnary(): Node {
     if (this.peek().type === "op" && this.peek().value === "-") {
       this.next();
-      return { kind: "neg", operand: this.parseUnary() };
+      // Counted: `-----…-z` recurses once per sign, and `parsePower` reaches this for an exponent too,
+      // so both of the paths the old guard missed are now bounded.
+      return this.nested((): Node => ({ kind: "neg", operand: this.parseUnary() }));
     }
     return this.parsePower();
   }
@@ -127,8 +143,11 @@ class Parser {
     const base = this.parsePrimary();
     if (this.peek().type === "op" && this.peek().value === "^") {
       this.next();
-      // Right-associative; exponent may carry its own unary minus.
-      return { kind: "arith", op: "^", left: base, right: this.parseUnary() };
+      // Right-associative; exponent may carry its own unary minus. Counted here rather than by wrapping
+      // all of parseUnary, because `z^z^z^…` recurses through parseUnary's NON-minus branch (straight
+      // back into parsePower) — and wrapping the whole of parseUnary would charge every plain operand a
+      // level, halving the effective cap for parenthesis nesting.
+      return this.nested((): Node => ({ kind: "arith", op: "^", left: base, right: this.parseUnary() }));
     }
     return base;
   }

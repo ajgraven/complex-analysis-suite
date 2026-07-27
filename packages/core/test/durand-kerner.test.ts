@@ -139,6 +139,24 @@ describe("makeDurandKerner (generic, both representations)", () => {
     expect(() => objAlgebra.div({ re: 1, im: 0 }, { re: 0, im: 0 })).toThrow();
   });
 
+  it("both algebras divide identically outside the squareable range (genericity contract)", () => {
+    // The representation-genericity promise is that the two instances are numerically identical, so
+    // the |b|² overflow/underflow fix has to land on BOTH — tupleAlgebra.div carries its own copy of
+    // the formula rather than delegating (it would have to allocate a {re,im} per call). (cd-div-02)
+    for (const [a, b] of [
+      [[1, 0], [1e-200, 0]],
+      [[1e200, 0], [1e200, 0]],
+      [[3, 4], [0, 1e200]],
+      [[1e-200, 0], [1e-200, 0]],
+    ] as [[number, number], [number, number]][]) {
+      const t = tupleAlgebra.div(a, b);
+      const o = objAlgebra.div({ re: a[0], im: a[1] }, { re: b[0], im: b[1] });
+      expect(Number.isFinite(t[0]) && Number.isFinite(t[1])).toBe(true);
+      expect(Object.is(t[0], o.re)).toBe(true);
+      expect(Object.is(t[1], o.im)).toBe(true);
+    }
+  });
+
   it("does not report converged when coincident seeds leave roots unrefined (honest skip)", () => {
     // Two identical seeds ⇒ the product-of-differences is 0 ⇒ both roots are skipped (unrefined). Without
     // the guard, maxDelta stays 0 < tol and the solve would falsely report converged with non-root estimates.
