@@ -1,6 +1,7 @@
 // ESM (Phase 2 port) — twin of solver-qd.js (classic stays frozen). Registers onto the QD namespace.
 import { Complex } from './complex.mjs';
 import { Taylor } from './taylor.mjs';
+import { branchTaylorAccumulate } from './solver-taylor-common.mjs';
 import _QD from './solver.mjs';
 // =============================================================================
 // solver-qd.js -- Bounded classical quadrature domains (Family.boundedQD)
@@ -53,40 +54,13 @@ import _QD from './solver.mjs';
   // ===========================================================================
   // 2. Taylor expansion of φ at z = z_0 up to order L
   // ===========================================================================
-  // Closed form for u_j(z) = z/(1 − conj(z_j) z) at z = z_0:
-  //   u_j(z_0) = z_0 / α,   u_j^{(l)}(z_0)/l! = conj(z_j)^{l-1} / α^{l+1}   (l ≥ 1)
-  // with α = 1 − conj(z_j) z_0.
+  // φ(z_0) = w_0 + (finite-pole branch tail). The tail Σ_j Σ_k conj(A_{j,k}) u_j^k,
+  // u_j(z) = z/(1 − conj(z_j) z), is shared with every other family via
+  // branchTaylorAccumulate (solver-taylor-common.mjs), which documents the closed form.
   function phiTaylorAt_QD(z0, phi, L) {
     const result = Taylor.zero(L + 1);
     result[0] = Complex.clone(phi.w0);
-
-    for (const br of phi.branches) {
-      const zjC = Complex.conj(br.z);
-      const alpha = Complex.sub(Complex.ONE(), Complex.mul(zjC, z0));
-      const alphaInv = Complex.inv(alpha);
-
-      const uT = Taylor.zero(L + 1);
-      uT[0] = Complex.mul(z0, alphaInv);
-      if (L >= 1) {
-        let zjcPow = { re: 1, im: 0 };                              // conj(z_j)^0
-        let alphaInvPow = Complex.mul(alphaInv, alphaInv);          // 1/α^2
-        for (let l = 1; l <= L; l++) {
-          uT[l] = Complex.mul(zjcPow, alphaInvPow);
-          zjcPow = Complex.mul(zjcPow, zjC);
-          alphaInvPow = Complex.mul(alphaInvPow, alphaInv);
-        }
-      }
-
-      let uPow = Taylor.truncate(uT, L);                            // u^1
-      for (let k = 1; k <= br.A.length; k++) {
-        const AkC = Complex.conj(br.A[k - 1]);
-        for (let i = 0; i <= L; i++) {
-          result[i] = Complex.add(result[i], Complex.mul(AkC, uPow[i]));
-        }
-        if (k < br.A.length) uPow = Taylor.mul(uPow, uT, L);
-      }
-    }
-    return result;
+    return branchTaylorAccumulate(result, phi.branches, z0, L);
   }
 
   // ===========================================================================
@@ -357,13 +331,11 @@ import _QD from './solver.mjs';
     matches(opts) { return true; },           // catch-all (checked last)
 
     normalizeOpts(opts, hData) {
+      // Default w₀ = centroid of the poles (empty-pole fallback → 0). Use the shared
+      // QD.poleCentroid — this was the FOURTH open-coded copy, missed when the other three
+      // (ui buildW0, solver-pqd bootstrap, solver-lqd normalizeOpts) were consolidated onto it.
       let w0 = opts.w0;
-      if (!w0) {
-        let sumRe = 0, sumIm = 0;
-        for (const p of hData.poles) { sumRe += p.a.re; sumIm += p.a.im; }
-        const n = hData.poles.length;
-        w0 = n > 0 ? { re: sumRe / n, im: sumIm / n } : { re: 0, im: 0 };
-      }
+      if (!w0) w0 = QD.poleCentroid(hData, { re: 0, im: 0 });
       return { w0 };
     },
 

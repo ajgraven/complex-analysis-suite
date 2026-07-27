@@ -1,6 +1,7 @@
 // ESM (Phase 2 port) — twin of solver-uqd-lqd.js (classic stays frozen). Registers onto the QD namespace.
 import { Complex } from './complex.mjs';
 import { Taylor } from './taylor.mjs';
+import { continuationInC as runContinuationInC } from './solver-continuation.mjs';
 import _QD from './solver.mjs';
 // =============================================================================
 // solver-uqd-lqd.js -- Unbounded NON-SINGULAR log-weighted QDs
@@ -292,90 +293,16 @@ import _QD from './solver.mjs';
   // ===========================================================================
   // 8. Continuation in c
   // ===========================================================================
-  // Analogous to continuationInC_UQD (unbounded QD): walk c from a small
-  // starting value up to the user's target, warm-starting Newton each step.
+  // Walk c from a small start up to norm.c, warm-starting Newton each step — the
+  // shared continuation-in-c homotopy (solver-continuation.mjs, cd-dup-06), with
+  // this family's own initial-guess builder, error label and method tag.
   function continuationSolve_UQDL(hData, norm, options) {
-    options = options || {};
-    const {
-      cStart       = null,
-      growFactor   = 1.6,
-      shrinkFactor = 0.5,
-      minStep      = 1e-4,
-      maxSteps     = 80,
-      newton       = {},
-    } = options;
-    const cTarget = norm.c;
-
-    let minA = Infinity;
-    for (const p of hData.poles) {
-      const m = Complex.abs(p.a);
-      if (m > 0 && m < minA) minA = m;
-    }
-    const startGuess = cStart ?? Math.min(cTarget, isFinite(minA) ? 0.25 * minA : 0.25);
-    if (startGuess <= 0) {
-      return { success: false, error: "continuationInC (LQD): invalid starting c", trace: [] };
-    }
-
-    const trace = [];
-    let c = startGuess;
-    let phi = initialGuess_UQDL(hData, { c });
-
-    let warmup;
-    while (true) {
-      warmup = QD.newtonSolve(phi, hData, newton);
-      if (warmup.success) { phi = warmup.phi; break; }
-      c *= shrinkFactor;
-      if (c < minStep) {
-        return {
-          success: false,
-          error: "continuationInC (LQD): warmup failed even at c=" + c.toExponential(2),
-          phi: warmup.phi, trace,
-        };
-      }
-      phi = initialGuess_UQDL(hData, { c });
-    }
-    trace.push({ c, ok: true, residual: warmup.residual });
-
-    if (c >= cTarget - 1e-12) {
-      return { success: true, phi, iterations: 0, residual: warmup.residual,
-               trace, method: "continuation-in-c-lqd" };
-    }
-
-    let lastSuccessC = c;
-    let stepSize = Math.max((cTarget - c) * 0.4, minStep);
-    for (let step = 0; step < maxSteps; step++) {
-      if (lastSuccessC >= cTarget - 1e-12) break;
-      const nextC = Math.min(cTarget, lastSuccessC + stepSize);
-      const phiNext = QD.clonePhi(phi);
-      phiNext.c = nextC;
-      const result = QD.newtonSolve(phiNext, hData, newton);
-      if (result.success) {
-        phi = result.phi;
-        lastSuccessC = nextC;
-        trace.push({ c: nextC, ok: true, residual: result.residual });
-        stepSize *= growFactor;
-      } else {
-        stepSize *= shrinkFactor;
-        trace.push({ c: nextC, ok: false, residual: result.residual ?? null });
-        if (stepSize < minStep) {
-          return {
-            success: false,
-            error: "continuationInC (LQD): step underflow at c=" + lastSuccessC.toFixed(4),
-            phi, trace, lastC: lastSuccessC,
-          };
-        }
-      }
-    }
-    if (lastSuccessC < cTarget - 1e-9) {
-      return {
-        success: false,
-        error: "continuationInC (LQD): max steps reached at c=" + lastSuccessC.toFixed(4),
-        phi, trace, lastC: lastSuccessC,
-      };
-    }
-    return { success: true, phi, iterations: 0,
-             residual: trace[trace.length - 1].residual,
-             trace, method: "continuation-in-c-lqd" };
+    return runContinuationInC(hData, norm.c, {
+      initialGuess: (c) => initialGuess_UQDL(hData, { c }),
+      label: " (LQD)",
+      method: "continuation-in-c-lqd",
+      options: options || {},
+    });
   }
 
   // ===========================================================================

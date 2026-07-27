@@ -29,13 +29,6 @@ export function plotToPx(pt: Vec2, center: Vec2, zoom: number, size: number): Ve
   return [ux * size, (1 - uy) * size];
 }
 
-/** Map overlay pixel coordinates (y down) back to a plot coordinate. */
-export function pxToPlot([px, py]: Vec2, center: Vec2, zoom: number, size: number): Vec2 {
-  const ux = px / size;
-  const uy = 1 - py / size;
-  return [center[0] + (ux * 2 - 1) / zoom, center[1] + (uy * 2 - 1) / zoom];
-}
-
 type ComplexFn = (z: Complex, c: Complex) => Complex;
 type EscapeFn = (z: Complex, c: Complex) => boolean;
 

@@ -1,6 +1,8 @@
 // ESM (Phase 2 port) — twin of solver-uqd.js (classic stays frozen). Registers onto the QD namespace.
 import { Complex } from './complex.mjs';
 import { Taylor } from './taylor.mjs';
+import { branchTaylorAccumulate } from './solver-taylor-common.mjs';
+import { continuationInC as runContinuationInC } from './solver-continuation.mjs';
 import _QD from './solver.mjs';
 // =============================================================================
 // solver-uqd.js -- Unbounded classical quadrature domains (Family.unboundedQD)
@@ -104,31 +106,9 @@ import _QD from './solver.mjs';
       }
     }
 
-    // Finite-pole contributions (same shape as bounded case).
-    for (const br of phi.branches) {
-      const zjC = Complex.conj(br.z);
-      const alpha = Complex.sub(Complex.ONE(), Complex.mul(zjC, z0));
-      const alphaInv = Complex.inv(alpha);
-      const uT = Taylor.zero(L + 1);
-      uT[0] = Complex.mul(z0, alphaInv);
-      if (L >= 1) {
-        let zjcPow = { re: 1, im: 0 };
-        let alphaInvPow = Complex.mul(alphaInv, alphaInv);
-        for (let l = 1; l <= L; l++) {
-          uT[l] = Complex.mul(zjcPow, alphaInvPow);
-          zjcPow = Complex.mul(zjcPow, zjC);
-          alphaInvPow = Complex.mul(alphaInvPow, alphaInv);
-        }
-      }
-      let uPow = Taylor.truncate(uT, L);
-      for (let k = 1; k <= br.A.length; k++) {
-        const AkC = Complex.conj(br.A[k - 1]);
-        for (let i = 0; i <= L; i++) {
-          result[i] = Complex.add(result[i], Complex.mul(AkC, uPow[i]));
-        }
-        if (k < br.A.length) uPow = Taylor.mul(uPow, uT, L);
-      }
-    }
+    // Finite-pole contributions (same tail as every other family — see
+    // branchTaylorAccumulate in solver-taylor-common.mjs).
+    branchTaylorAccumulate(result, phi.branches, z0, L);
     return result;
   }
 
@@ -283,88 +263,17 @@ import _QD from './solver.mjs';
   // ===========================================================================
   // 7. Continuation in c
   // ===========================================================================
+  // The continuation-in-c homotopy itself lives in solver-continuation.mjs (shared
+  // with the two unbounded-LQD families — review cd-dup-06). This family supplies
+  // its own initial-guess builder, error label and method tag. Still exported as
+  // QD.continuationInC (see below).
   function continuationInC_UQD(hData, cTarget, options = {}) {
-    const {
-      cStart       = null,
-      growFactor   = 1.6,
-      shrinkFactor = 0.5,
-      minStep      = 1e-4,
-      maxSteps     = 80,
-      newton       = {},
-    } = options;
-
-    let minA = Infinity;
-    for (const p of hData.poles) {
-      const m = Complex.abs(p.a);
-      if (m > 0 && m < minA) minA = m;
-    }
-    const startGuess = cStart ?? Math.min(cTarget, isFinite(minA) ? 0.25 * minA : 0.25);
-    if (startGuess <= 0) {
-      return { success: false, error: "continuationInC: invalid starting c", trace: [] };
-    }
-
-    const trace = [];
-    let c = startGuess;
-    let phi = unboundedInitialGuess_UQD(hData, c);
-
-    let warmup;
-    while (true) {
-      warmup = QD.newtonSolve(phi, hData, newton);
-      if (warmup.success) { phi = warmup.phi; break; }
-      c *= shrinkFactor;
-      if (c < minStep) {
-        return {
-          success: false,
-          error: "continuationInC: warmup failed even at c=" + c.toExponential(2),
-          phi: warmup.phi, trace,
-        };
-      }
-      phi = unboundedInitialGuess_UQD(hData, c);
-    }
-    trace.push({ c, ok: true, residual: warmup.residual });
-
-    if (c >= cTarget - 1e-12) {
-      return { success: true, phi, iterations: 0, residual: warmup.residual, trace, method: "continuation-in-c" };
-    }
-
-    let lastSuccessC = c;
-    let stepSize = Math.max((cTarget - c) * 0.4, minStep);
-    for (let step = 0; step < maxSteps; step++) {
-      if (lastSuccessC >= cTarget - 1e-12) break;
-      const nextC = Math.min(cTarget, lastSuccessC + stepSize);
-      const phiNext = QD.clonePhi(phi);
-      phiNext.c = nextC;
-      const result = QD.newtonSolve(phiNext, hData, newton);
-      if (result.success) {
-        phi = result.phi;
-        lastSuccessC = nextC;
-        trace.push({ c: nextC, ok: true, residual: result.residual });
-        stepSize *= growFactor;
-      } else {
-        stepSize *= shrinkFactor;
-        trace.push({ c: nextC, ok: false, residual: result.residual ?? null });
-        if (stepSize < minStep) {
-          return {
-            success: false,
-            error: "continuationInC: step underflow at c=" + lastSuccessC.toFixed(4) +
-                   " (target c=" + cTarget.toFixed(4) + ")",
-            phi, trace, lastC: lastSuccessC,
-          };
-        }
-      }
-    }
-    if (lastSuccessC < cTarget - 1e-9) {
-      return {
-        success: false,
-        error: "continuationInC: max steps reached at c=" + lastSuccessC.toFixed(4),
-        phi, trace, lastC: lastSuccessC,
-      };
-    }
-    return {
-      success: true, phi, iterations: 0,
-      residual: trace[trace.length - 1].residual,
-      trace, method: "continuation-in-c",
-    };
+    return runContinuationInC(hData, cTarget, {
+      initialGuess: (c) => unboundedInitialGuess_UQD(hData, c),
+      label: "",
+      method: "continuation-in-c",
+      options,
+    });
   }
 
   // ===========================================================================
