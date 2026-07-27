@@ -7,8 +7,8 @@
 
 ## ▶ RESUME HERE
 
-Everything a fresh session needs to continue. **Batch E is IN PROGRESS — 11 of its 15 findings are settled
-(7 fixed, 4 adjudicated as refuted/superseded/deprioritised) on `fix/batch-e-performance`.** Resume from the "remaining" list in
+Everything a fresh session needs to continue. **Batch E is COMPLETE — all 15 findings settled (9 fixed, 6 adjudicated as
+refuted/superseded/deprioritised) on `fix/batch-e-performance`. Next up: Batch F** — test integrity. Resume from the "remaining" list in
 [Pass 9](#pass-9--batch-e-performance-in-progress--6-of-15-166) and the Batch E table below.
 
 ### Where the work stands
@@ -17,8 +17,8 @@ Everything a fresh session needs to continue. **Batch E is IN PROGRESS — 11 of
 | --- | --- | --- |
 | Findings surviving verification | **112** | 84 confirmed + 28 overstated; 4 refuted and excluded |
 | **HIGH** | **12 of 12 FIXED** | tier complete |
-| Medium / low | 39 of 99 fixed | A, A-2, B, C, D done; E 7 fixed + 4 adjudicated of 15 |
-| Remaining | **60** | 23 medium, 37 low |
+| Medium / low | 41 of 99 fixed | Batches A, A-2, B, C, D and E all done |
+| Remaining | **58** | 21 medium, 37 low |
 
 Batch A-2 also closed **three defects it discovered along the way** that were not in the original 124
 — see [Pass 5](#pass-5--batch-a-2-exact-arithmetic-contracts-and-the-bla-reference-162). Expect this:
@@ -72,7 +72,17 @@ defects), **#156** (this review record).
 | C | #164 | `cd-shell-07`, `cd-shell-05`, `cd-shell-06`, `cd-views-destructive-01`, `cd-shell-12`, `qd-urlstate-untested-06` | [Pass 7](#pass-7--batch-c-cd-state-fidelity-164) |
 | D | #165 | `qd-psw-untested-03`, `cd-render-07`, `qd-psw-fallback-latch-01`, `qd-ctxmenu-leak-01`, `cd-metricsworker-01`, `qd-schwarz-gl-listener-01` | [Pass 8](#pass-8--batch-d-worker--resource-lifecycle-165) |
 
-### ▶ Batch E — start here
+### ▶ Batch F — start here
+
+**Test integrity — fix in place, no new CI infrastructure** (standing decision). ~14 items; the one
+already named is `qd-exact-count-guard-11` (`vitest/algebra-verdict-labeling.test.ts:114` — the
+`rigor:'exact'` guard counts call sites instead of identifying them, so the exemption can migrate
+silently). Enumerate the rest from `RAW_FINDINGS_2026-07.md` by `category: testing` minus what is
+already closed, exactly as Batches D and E were scoped.
+
+<details>
+<summary>Batch E (complete) — the 15 findings and their outcomes</summary>
+
 
 Performance. **15 items**, the largest batch — 13 medium + 2 low, all verified open against the
 source at the end of Batch D. Three perf findings in the corpus are **already CLOSED and must not be
@@ -81,10 +91,10 @@ ray-cast per pixel, #159), and `bt-ci-nocache-08` (no pnpm store cache, #157).
 
 | id | Where | Severity / effort | The defect |
 | --- | --- | --- | --- |
-| `cd-bla-01` | `apps/complex-dynamics/src/render/glPlot.ts:1305` | medium / medium | The perturbation BLA table is fully rebuilt and re-uploaded (≈1 MB `texImage2D`) on every zoom-changed frame, including the maxC-independent level 0. |
-| `cd-render-05` | `apps/complex-dynamics/src/render/glPlot.ts:1300` | medium / medium | Perturbation rebuilds the whole double-double reference orbit *and* BLA tree on every draft frame of a deep-zoom pan/zoom. |
-| `cd-overlay-01` | `apps/complex-dynamics/src/render/plotView.ts:114` | medium / small | The whole 2D overlay is redrawn from `afterRender` on every progressive and temporal-accumulation frame, even when none of its inputs changed. |
-| `cd-invjulia-01` | `apps/complex-dynamics/src/render/overlay.ts:481` | medium / small | The c-keyed overlay caches (inverse-Julia cloud, Siegel curves, portrait rays) miss on every frame of a coupled parameter drag. |
+| ~~`cd-bla-01`~~ **done** | `apps/complex-dynamics/src/render/glPlot.ts:1305` | medium / medium | The perturbation BLA table is fully rebuilt and re-uploaded (≈1 MB `texImage2D`) on every zoom-changed frame, including the maxC-independent level 0. |
+| ~~`cd-render-05`~~ **done** | `apps/complex-dynamics/src/render/glPlot.ts:1300` | medium / medium | Perturbation rebuilds the whole double-double reference orbit *and* BLA tree on every draft frame of a deep-zoom pan/zoom. |
+| ⛔ `cd-overlay-01` *(refuted: 1.2 ms worst case)* | `apps/complex-dynamics/src/render/plotView.ts:114` | medium / small | The whole 2D overlay is redrawn from `afterRender` on every progressive and temporal-accumulation frame, even when none of its inputs changed. |
+| ⛔ `cd-invjulia-01` *(refuted: ~1 ms, caches are correct)* | `apps/complex-dynamics/src/render/overlay.ts:481` | medium / small | The c-keyed overlay caches (inverse-Julia cloud, Siegel curves, portrait rays) miss on every frame of a coupled parameter drag. |
 | ~~`cd-render-08`~~ **done** | `apps/complex-dynamics/src/render/angleOfPoint.ts:113` | medium / small | "Find angles" re-traces every enumerated external ray from scratch on each click — a pure function with no memoization. |
 | ~~`cd-shell-09`~~ **done** | `apps/complex-dynamics/src/main.ts:3923` | medium / small | The Laurent boundary-radius slider re-derives all dynamical exterior coefficients on every input event, though only `r` changed. |
 | ~~`cd-perf-04`~~ **done** | `packages/exact/src/gaussian.ts:130` | medium / trivial | `Gauss.mul` always runs the 4-multiplication complex form — 4.1× the real-only cost, and CD's entire exact tower is real. |
@@ -98,9 +108,12 @@ ray-cast per pixel, #159), and `bt-ci-nocache-08` (no pnpm store cache, #157).
 | ~~`qd-fillcoarse-01`~~ **done** | `apps/quadrature-domains/app/schwarz/schwarz-render.mjs:255` | low / trivial | The in-process Schwarz pyramid runs `fillFromCoarseSamples` on the stride-1 pass — a full W·H no-op scan. |
 
 
-**Batch E status: 11 of 15 settled — 7 fixed (struck through above), 4 adjudicated without a code change** (`corr-density-recolour-03` superseded · `qd-chooseholetestpoints-01`, `qd-accuracy-mainthread-01` refuted by measurement · `corr-mating-blocking-06` deprioritised), on `fix/batch-e-performance`. **Four genuinely remain:** `cd-bla-01` + `cd-render-05` (do together; behind a WebGL context, so
-they need a browser to measure) and `cd-overlay-01` + `cd-invjulia-01` (the overlay dirty-check —
-read the sizing below before starting; the risk there is a stale overlay, not the speed).
+**Batch E status: COMPLETE — all 15 settled: 9 fixed, 6 adjudicated without a code change**
+(`corr-density-recolour-03` superseded by #159 · `qd-chooseholetestpoints-01`,
+`qd-accuracy-mainthread-01`, `cd-overlay-01`, `cd-invjulia-01` refuted by measurement ·
+`corr-mating-blocking-06` deprioritised), on `fix/batch-e-performance`. Six of fifteen were
+adjudicated rather than coded — the highest refutation rate of any batch, which is exactly what
+the "measure, don't assert" rule was for.
 
 **Do `cd-bla-01` and `cd-render-05` together** — both are the deep-zoom rebuild path within five
 lines of each other in `glPlot.ts`, and they share a cache key.
@@ -122,6 +135,8 @@ because no caller passes a signal.
 counts call sites instead of identifying them, so the exemption can migrate silently) stays with the
 test-integrity batch (F).
 
+</details>
+
 ### Remaining batch plan (agreed: by theme, most-valuable first)
 
 | Batch | Theme | ~Items |
@@ -130,7 +145,7 @@ test-integrity batch (F).
 | ~~**B**~~ | ~~numerical robustness~~ — **done** ([#163](https://github.com/ajgraven/complex-analysis-suite/pull/163)) | ~~8~~ |
 | ~~**C**~~ | ~~CD state fidelity~~ — **done** (#164) | ~~6~~ |
 | ~~**D**~~ | ~~worker / resource lifecycle + memory~~ — **done** (#165) | ~~6~~ |
-| **E** | performance | 15 |
+| ~~**E**~~ | ~~performance~~ — **done** (#166) | ~~15~~ |
 | **F** | test integrity — *fix in place, no new infra* | ~14 |
 | **G** | duplication / dead code | ~15 |
 | **H** | accessibility / UX | ~13 |
@@ -656,7 +671,7 @@ the suite by ~17%. Updated to the measured number.
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | Durand–Kerner withholds convergence on non-finite iterates (V-1) | new test, proven to fail against the old code |
 | [#154](https://github.com/ajgraven/complex-analysis-suite/pull/154) | `addMulInto` honours its aliasing contract (V-2) | new test, proven to fail against the old code |
 
-### Pass 9 — Batch E: performance (IN PROGRESS — 7 fixed, 4 adjudicated-and-closed, 4 open of 15) ([#166](https://github.com/ajgraven/complex-analysis-suite/pull/166))
+### Pass 9 — Batch E: performance — COMPLETE (9 fixed, 6 adjudicated-and-closed, of 15) ([#166](https://github.com/ajgraven/complex-analysis-suite/pull/166))
 
 Branch `fix/batch-e-performance`. Five commits so far. **Every one carries a measured before/after**,
 which is the batch's whole discipline — and measuring changed the verdict on three of the six.
@@ -755,6 +770,39 @@ contains cells with no valid QD logs two uncaught
 predates this batch. It is a real crash in a display formatter (a per-cell statistic that does not
 exist for a failed solve) and it fires on most exploratory sweeps; filed separately rather than
 folded into a performance PR.
+
+**The deep-zoom rebuild pair — FIXED, and it is the batch's largest win.** `scheduleRender()` set
+`orbitDirty` on every content-affecting render: each rung of the progressive ladder, each temporal-AA
+frame, each frame of a drag. So a deep zoom recomputed the whole double-double reference orbit per
+frame — and, because `ensureOrbit` sets `blaDirty`, dragged the BLA rebuild + upload with it.
+Measured on a **bounded** reference (the deep-zoom case, where the orbit runs the full cap):
+
+| iteration cap | per frame | upload |
+| ---: | ---: | ---: |
+| 4 000 | 3.8 ms | 0.25 MB |
+| 20 000 | **8.0 ms** | **1.25 MB** |
+| 65 536 | **35.7 ms** | **4.00 MB** |
+
+The 20 000 row is `cd-bla-01`'s "≈1 MB `texImage2D`"; the 65 536 row is two frame budgets of CPU
+before the upload starts. A first measurement on an *escaping* reference under-reported this at
+1–2 ms — the orbit truncates at its bailout, so the fixture choice decided the answer.
+`ensureOrbit` now keys on its real inputs, with **zoom deliberately absent** (the orbit is a property
+of the centre, c, f and the cap). Pure zoom reuses the orbit and rebuilds only the BLA table (whose
+`maxC` genuinely is zoom-dependent); a pan rebuilds both; the many frames at a fixed view rebuild
+neither. That closes `cd-bla-01` without touching `ensureBLA` — its zoom check was already correct,
+just overridden by an orbit that rebuilt unconditionally. **Verified byte-identical**: a 2000²
+export at zoom 1e9 with perturbation active hashes to `ebf05269` both with the change and with
+master's `glPlot.ts` rebuilt in its place.
+
+**`cd-overlay-01` / `cd-invjulia-01` — REFUTED, both.** The sizing below was right that the risk is
+staleness rather than speed; measurement settled it by showing there is no speed to win either.
+`inverseJuliaCloud` costs **0.70–0.81 ms** and `siegelInvariantCurves` **0.99 ms**, and their caches
+are *correct* — they miss during a coupled drag because `c` genuinely changed, which is not a cache
+defect. The overlay's heaviest per-frame element, scattering the cached 12 000-point cloud as
+`fillRect`s, measures **1.2 ms in a real 2D context — 7.2 % of a 60 Hz budget** — and is only drawn
+when the inverse-Julia toggle is on (off by default). Against ~1 ms, a dirty-check over ~26 mostly
+by-reference inputs, where one missed in-place mutation leaves a **stale overlay**, is the wrong
+trade.
 
 **`cd-overlay-01` / `cd-invjulia-01` — sized, and the risk is not the speed.** Both want a dirty-check
 so the 2D overlay is not redrawn on every progressive and accumulation frame. Two things make them
