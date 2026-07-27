@@ -36,16 +36,11 @@ const QD = _QD;
   QD_UI.installHText = function installHText(ui) {
     const state = ui.state;
 
-    // Polynomial part of h is meaningful exactly in the three unbounded family
-    // panels. Keep this predicate centralized so refreshHText / parseAndApplyHText
-    // agree with what the mode descriptors expose (cards.poly).
-    function modeAllowsPoly(mode) {
-      return mode === 'unbounded' ||
-             mode === 'pqd-unbounded' ||
-             mode === 'pqd-unbounded-singular' ||
-             mode === 'lqd-unbounded' ||
-             mode === 'lqd-unbounded-singular';
-    }
+    // Whether the current mode's family carries a polynomial part of h. Delegates
+    // to the parser's single source of truth (QD.modeAllowsPoly in parse-h) so the
+    // editor's visibility can never disagree with what parseH will accept — the
+    // drift that broke five PQD-unbounded presets and their share links (qd-polyh-01).
+    function modeAllowsPoly(mode) { return QD.modeAllowsPoly(mode); }
 
     function refreshHText() {
       const inp = document.getElementById('h-text');
