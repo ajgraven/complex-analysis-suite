@@ -1,6 +1,7 @@
 // ESM (Phase 2 port) — twin of solver-uqd-lqd-singular.js (classic stays frozen). Registers onto the QD namespace.
 import { Complex } from './complex.mjs';
 import { Taylor } from './taylor.mjs';
+import { continuationInC as runContinuationInC } from './solver-continuation.mjs';
 import _QD from './solver.mjs';
 // =============================================================================
 // solver-uqd-lqd-singular.js -- Unbounded SINGULAR log-weighted QDs
@@ -534,82 +535,16 @@ import _QD from './solver.mjs';
   // ===========================================================================
   // 6. Continuation in c
   // ===========================================================================
+  // Walk c from a small start up to norm.c, warm-starting Newton each step — the
+  // shared continuation-in-c homotopy (solver-continuation.mjs, cd-dup-06). The
+  // singular family also threads q through to its initial-guess builder.
   function continuationSolve_UQDLS(hData, norm, options) {
-    options = options || {};
-    const { cStart = null, growFactor = 1.6, shrinkFactor = 0.5,
-            minStep = 1e-4, maxSteps = 80, newton = {} } = options;
-    const cTarget = norm.c;
-
-    let minA = Infinity;
-    for (const p of hData.poles) {
-      const m = Complex.abs(p.a);
-      if (m > 0 && m < minA) minA = m;
-    }
-    const startGuess = cStart ?? Math.min(cTarget, isFinite(minA) ? 0.25 * minA : 0.25);
-    if (startGuess <= 0) {
-      return { success: false, error: "continuationInC (UQDLS): invalid starting c", trace: [] };
-    }
-
-    const trace = [];
-    let c = startGuess;
-    let phi = initialGuess_UQDLS(hData, { c, q: norm.q });
-
-    let warmup;
-    while (true) {
-      warmup = QD.newtonSolve(phi, hData, newton);
-      if (warmup.success) { phi = warmup.phi; break; }
-      c *= shrinkFactor;
-      if (c < minStep) {
-        return {
-          success: false,
-          error: "continuationInC (UQDLS): warmup failed even at c=" + c.toExponential(2),
-          phi: warmup.phi, trace,
-        };
-      }
-      phi = initialGuess_UQDLS(hData, { c, q: norm.q });
-    }
-    trace.push({ c, ok: true, residual: warmup.residual });
-
-    if (c >= cTarget - 1e-12) {
-      return { success: true, phi, iterations: 0, residual: warmup.residual,
-               trace, method: "continuation-in-c-uqdls" };
-    }
-
-    let lastSuccessC = c;
-    let stepSize = Math.max((cTarget - c) * 0.4, minStep);
-    for (let step = 0; step < maxSteps; step++) {
-      if (lastSuccessC >= cTarget - 1e-12) break;
-      const nextC = Math.min(cTarget, lastSuccessC + stepSize);
-      const phiNext = QD.clonePhi(phi);
-      phiNext.c = nextC;
-      const result = QD.newtonSolve(phiNext, hData, newton);
-      if (result.success) {
-        phi = result.phi;
-        lastSuccessC = nextC;
-        trace.push({ c: nextC, ok: true, residual: result.residual });
-        stepSize *= growFactor;
-      } else {
-        stepSize *= shrinkFactor;
-        trace.push({ c: nextC, ok: false, residual: result.residual ?? null });
-        if (stepSize < minStep) {
-          return {
-            success: false,
-            error: "continuationInC (UQDLS): step underflow at c=" + lastSuccessC.toFixed(4),
-            phi, trace, lastC: lastSuccessC,
-          };
-        }
-      }
-    }
-    if (lastSuccessC < cTarget - 1e-9) {
-      return {
-        success: false,
-        error: "continuationInC (UQDLS): max steps reached at c=" + lastSuccessC.toFixed(4),
-        phi, trace, lastC: lastSuccessC,
-      };
-    }
-    return { success: true, phi, iterations: 0,
-             residual: trace[trace.length - 1].residual,
-             trace, method: "continuation-in-c-uqdls" };
+    return runContinuationInC(hData, norm.c, {
+      initialGuess: (c) => initialGuess_UQDLS(hData, { c, q: norm.q }),
+      label: " (UQDLS)",
+      method: "continuation-in-c-uqdls",
+      options: options || {},
+    });
   }
 
   // ===========================================================================
