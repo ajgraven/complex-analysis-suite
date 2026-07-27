@@ -753,8 +753,14 @@ const QD = _QD;
     return card;
   }
 
+  // Delegates to QD.QoL.escapeHTML — the attribute-safe superset ('&<>"\'') documented as correct in
+  // both content and attribute positions (cd-dup-08). The former local body escaped only &"< , which is
+  // a latent gap in a single-quoted attribute; the shared escaper closes it. Local fallback kept
+  // defensively (matches param-slice's HANDOFF #35 consolidation) for the case qol.js failed to load.
   function escapeAttr(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+    return (QD && QD.QoL && QD.QoL.escapeHTML)
+      ? QD.QoL.escapeHTML(s)
+      : String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
   }
 
   // Try parsing the paste field. Accepts polynomial OR rational expressions in z.

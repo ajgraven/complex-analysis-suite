@@ -26,9 +26,13 @@ import _QD from './solver.mjs';
 (function () {
   'use strict';
 
+  // Delegates to the shared QD.QoL.escapeHTML (cd-dup-08); local body kept as a defensive fallback.
+  // The shared escaper is a superset (also escapes '), so rendered output is unchanged here.
   function esc(s) {
-    return String(s).replace(/[&<>"]/g, c =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    return (QD && QD.QoL && QD.QoL.escapeHTML)
+      ? QD.QoL.escapeHTML(s)
+      : String(s).replace(/[&<>"]/g, c =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   }
 
   // KaTeX render — delegate to the shared QD.RiemannLatex.render (loaded before this
