@@ -175,7 +175,7 @@ test-integrity batch (F).
 | ~~**C**~~ | ~~CD state fidelity~~ — **done** (#164) | ~~6~~ |
 | ~~**D**~~ | ~~worker / resource lifecycle + memory~~ — **done** (#165) | ~~6~~ |
 | ~~**E**~~ | ~~performance~~ — **done** (#166) | ~~15~~ |
-| **F** | test integrity — *fix in place, no new infra* | ~14 |
+| **F** | test integrity — *fix in place, no new infra* | **8** |
 | **G** | duplication / dead code | ~15 |
 | **H** | accessibility / UX | ~13 |
 | **I** | build / config leftovers | ~5 |
