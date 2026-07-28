@@ -14,6 +14,8 @@
 // later slices.
 // =============================================================================
 import { QD_UI } from './ui-registry.mjs';
+import _QD from './solver.mjs';
+const QD = _QD;
 
 (function () {
   'use strict';
@@ -58,7 +60,76 @@ import { QD_UI } from './ui-registry.mjs';
       });
     }
 
+    // ----- Boundary colour + width -----------------------------------------
+    // The color <input> can't represent "no override", so a checkbox owns on/off:
+    // unchecked → boundaryColor = null (status-based default blue/red), checked →
+    // the picker's value. The renderer applies it to a UNIVALENT boundary only; a
+    // non-univalent ∂Ω stays warning-red (honest labelling), which the status
+    // note below spells out.
+    const customCb = $('#fig-boundary-custom');
+    const colorInp = $('#fig-boundary-color');
+    const applyBoundaryColor = () => {
+      if (customCb && customCb.checked && colorInp) {
+        fig.boundaryColor = colorInp.value;
+        colorInp.disabled = false;
+      } else {
+        fig.boundaryColor = null;
+        if (colorInp) colorInp.disabled = true;
+      }
+      repaint();
+    };
+    if (customCb) {
+      customCb.checked = !!fig.boundaryColor;
+      customCb.addEventListener('change', applyBoundaryColor);
+    }
+    if (colorInp) {
+      if (fig.boundaryColor) colorInp.value = fig.boundaryColor;
+      colorInp.disabled = !(customCb && customCb.checked);
+      colorInp.addEventListener('input', applyBoundaryColor);
+    }
+
+    // Width override. Empty → null → the family default (1.6 bounded / 1.8 unbounded).
+    const widthInp = $('#fig-boundary-width');
+    if (widthInp) {
+      if (typeof fig.boundaryWidth === 'number') widthInp.value = String(fig.boundaryWidth);
+      widthInp.addEventListener('input', () => {
+        const v = parseFloat(widthInp.value);
+        fig.boundaryWidth = (isFinite(v) && v > 0) ? v : null;
+        repaint();
+      });
+    }
+
+    // ----- Honest-labelling status note ------------------------------------
+    // Tells the figure-maker whether the CURRENT boundary is a valid (univalent)
+    // QD, so a recolour is never applied blind. Reads the exact data on the plot
+    // (what is actually drawn); refreshed on each solve.
+    const refreshNote = () => {
+      const note = $('#fig-univalence-note');
+      if (!note) return;
+      const d = ui.plot && ui.plot.data;
+      const hasBoundary = !!(d && d.boundaryPts && d.boundaryPts.length > 0);
+      if (!hasBoundary) {
+        note.textContent = 'No solved boundary yet — solve a domain to recolour it.';
+        note.dataset.kind = 'muted';
+      } else if (d.univalent) {
+        note.textContent = 'Boundary is univalent ✓ — a custom colour applies to it.';
+        note.dataset.kind = 'ok';
+      } else {
+        note.textContent = 'Boundary is non-univalent — drawn in warning red regardless of the colour above.';
+        note.dataset.kind = 'warn';
+      }
+    };
+    try {
+      if (typeof QD !== 'undefined' && QD.PrimarySolution && QD.PrimarySolution.subscribe) {
+        // setData runs synchronously in the solve handler; defer a frame so the
+        // note reads the freshly-set plot.data, not the previous solve's.
+        const raf = (typeof requestAnimationFrame === 'function') ? requestAnimationFrame : (fn) => setTimeout(fn, 0);
+        QD.PrimarySolution.subscribe(() => raf(refreshNote));
+      }
+    } catch (e) { /* the note is diagnostic only — never break install over it */ }
+    refreshNote();
+
     // Small surface for tests / later slices.
-    return { ELEMENT_TOGGLES };
+    return { ELEMENT_TOGGLES, refreshNote, applyBoundaryColor };
   };
 })();
