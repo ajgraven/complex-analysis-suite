@@ -339,6 +339,15 @@ button.attention {
   margin-bottom: 6px;
 }
 
+/* ===== Figure / Export card ===== */
+#figure-export-card .fig-group { margin: 8px 0 4px; }
+#figure-export-card .fig-group-label {
+  font-size: 11px; font-weight: 600; color: var(--c-muted);
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px;
+}
+/* Stack the element checkboxes one per row (base `label` is inline-flex). */
+#figure-export-card .fig-group label { display: flex; margin: 2px 0; }
+
 /* ===== QoL: help button, hover tooltip, copy button (HANDOFF #33) ===== */
 .help-btn {
   display: inline-flex;

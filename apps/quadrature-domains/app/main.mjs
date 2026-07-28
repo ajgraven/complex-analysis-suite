@@ -77,6 +77,7 @@ import './ui-url-state.mjs';
 import './ui-thesis.mjs';
 import './ui-faber.mjs';
 import './ui-qd-equations.mjs';
+import './ui-figure-export.mjs';
 import './algebra/sym-worker.mjs';
 import './algebra/cas-export.mjs';
 import './algebra/expr-parser.mjs';

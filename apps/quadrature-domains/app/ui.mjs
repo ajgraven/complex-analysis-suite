@@ -1631,6 +1631,12 @@ if (QD_UI && QD_UI.installFaber) QD_UI.installFaber(uiCtx);
 // Quadrature↔map equation-system card (classical bounded QD) — ui-qd-equations.js.
 if (QD_UI && QD_UI.installQdEquations) QD_UI.installQdEquations(uiCtx);
 
+// Figure & export card — ui-figure-export.js. Formatting + export controls for
+// publication figures / artwork. Needs the plot instance to repaint on a toggle
+// (and, in a later slice, to export); expose it on uiCtx for the factory.
+uiCtx.plot = plot;
+if (QD_UI && QD_UI.installFigureExport) QD_UI.installFigureExport(uiCtx);
+
 // Render an EXTERNALLY-supplied bounded-QD solution (e.g. the Algebra tab's reconstructed φ
 // from a symbolic solve) in the QD plot, then switch to the QD tab — the reverse of
 // ctx.openAlgebra, closing the algebra→geometry loop (roadmap #3b). Reuses the solver's OWN
