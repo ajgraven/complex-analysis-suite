@@ -107,18 +107,29 @@ describe("Figure card wiring (jsdom)", () => {
   beforeEach(() => {
     document.body.innerHTML = `
       <section id="figure-export-card">
+        <select id="fig-preset"><option value="default" selected>d</option><option value="publication">p</option><option value="print">pr</option><option value="dark">dk</option><option value="grayscale">g</option><option value="colorblind">cb</option></select>
         <input type="checkbox" id="fig-axes" checked>
         <input type="checkbox" id="fig-grid" checked>
+        <input type="checkbox" id="fig-ticks" checked>
         <input type="checkbox" id="fig-fill" checked>
+        <input type="checkbox" id="fig-nodes" checked>
+        <input type="checkbox" id="fig-w0" checked>
+        <input type="checkbox" id="fig-cusps" checked>
         <input type="checkbox" id="fig-hide-overlays">
         <label><input type="checkbox" id="fig-boundary-custom">
           <input type="color" id="fig-boundary-color" value="#1a3e7a" disabled></label>
         <input type="number" id="fig-boundary-width">
         <div class="fig-status" id="fig-univalence-note" data-kind="muted"></div>
+        <input type="color" id="fig-color-bg" value="#fafafa">
+        <input type="color" id="fig-color-grid" value="#e8eaef">
+        <input type="color" id="fig-color-axis" value="#bbbbbb">
+        <button id="fig-colors-reset"></button>
         <select id="fig-export-scale"><option value="1">1</option><option value="2" selected>2</option><option value="4">4</option></select>
         <input type="number" id="fig-export-width">
         <select id="fig-export-bg"><option value="white" selected>white</option><option value="transparent">transparent</option></select>
         <button id="fig-export-png"></button>
+        <button id="fig-copy-image"></button>
+        <span class="fig-status" id="fig-copy-status" data-kind="muted"></span>
       </section>`;
   });
 
@@ -217,5 +228,69 @@ describe("Figure card wiring (jsdom)", () => {
     expect(plot._lastArgs[0]).toBe(1000);
     expect(plot._lastArgs[1]).toBe(750); // 300 · (1000/400)
     expect(plot._lastArgs[2]).toEqual({ transparent: true });
+  });
+
+  it("colour pickers write state.figure and Reset colours clears them", () => {
+    const { ui, state } = makeUi({}, null);
+    REG.installFigureExport(ui);
+    const bg = document.getElementById("fig-color-bg") as HTMLInputElement;
+    bg.value = "#123456";
+    bg.dispatchEvent(new Event("input"));
+    expect(state.figure.bg).toBe("#123456");
+    // seed a couple more overrides, then reset
+    state.figure.grid = "#010203";
+    state.figure.boundaryColor = "#ff0000";
+    document.getElementById("fig-colors-reset")!.dispatchEvent(new Event("click"));
+    expect(state.figure.bg).toBeNull();
+    expect(state.figure.grid).toBeNull();
+    expect(state.figure.boundaryColor).toBeNull();
+    expect(bg.value).toBe("#fafafa"); // picker reflected back to its default
+  });
+
+  it("a preset applies a state.figure bundle and reflects onto the controls", () => {
+    const { ui, state } = makeUi({}, null);
+    REG.installFigureExport(ui);
+    const sel = document.getElementById("fig-preset") as HTMLSelectElement;
+    sel.value = "print";
+    sel.dispatchEvent(new Event("change"));
+    expect(state.figure.showFill).toBe(false);
+    expect(state.figure.hideOverlays).toBe(true);
+    expect(state.figure.boundaryColor).toBe("#000000");
+    expect(state.figure.bg).toBe("#ffffff");
+    // reflected onto the controls
+    expect((document.getElementById("fig-fill") as HTMLInputElement).checked).toBe(false);
+    expect((document.getElementById("fig-color-bg") as HTMLInputElement).value).toBe("#ffffff");
+    expect((document.getElementById("fig-boundary-custom") as HTMLInputElement).checked).toBe(true);
+    // Default clears every override back to the app look.
+    sel.value = "default";
+    sel.dispatchEvent(new Event("change"));
+    expect(state.figure.showFill).toBe(true);
+    expect(state.figure.boundaryColor).toBeNull();
+    expect(state.figure.bg).toBeNull();
+    expect((document.getElementById("fig-fill") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("Copy image writes an image/png ClipboardItem at the export size", () => {
+    const writes: any[] = [];
+    Object.defineProperty(globalThis, "ClipboardItem", {
+      configurable: true, writable: true,
+      value: class { data: any; constructor(d: any) { this.data = d; } },
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { write: (arr: any) => { writes.push(arr); return Promise.resolve(); } },
+    });
+    const { ui, plot } = makeUi({}, { boundaryPts: [{ re: 0, im: 0 }], univalent: true });
+    REG.installFigureExport(ui);
+    document.getElementById("fig-copy-image")!.dispatchEvent(new Event("click"));
+    expect(plot._lastArgs[0]).toBe(800); // 400 · 2× default → same size the export would use
+    expect(writes.length).toBe(1);
+    expect(Object.keys(writes[0][0].data)[0]).toBe("image/png");
+  });
+
+  it("DEFAULT_FIGURE keys stay in sync with state.figure", async () => {
+    const api = REG.installFigureExport(makeUi({}, null).ui);
+    const stateMod: any = await import("../app/ui-state.mjs");
+    expect(Object.keys(api.DEFAULT_FIGURE).sort()).toEqual(Object.keys(stateMod.state.figure).sort());
   });
 });

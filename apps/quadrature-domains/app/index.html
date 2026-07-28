@@ -570,6 +570,23 @@
         </summary>
         <div class="hint">Strip the plot to just the elements a figure needs, recolour the boundary, and export a high-resolution image — for research-paper figures and mathematical art.</div>
 
+        <!-- Preset: one-click bundles of the settings below. Purely visual; a
+             preset's boundary colour still applies to a univalent boundary only. -->
+        <div class="fig-group" role="group" aria-label="Style preset">
+          <div class="fig-group-label">Preset</div>
+          <div class="row">
+            <label for="fig-preset" style="margin:0;">Style</label>
+            <select id="fig-preset">
+              <option value="default" selected>Default (app look)</option>
+              <option value="publication">Publication</option>
+              <option value="print">Print — B/W line art</option>
+              <option value="dark">Dark</option>
+              <option value="grayscale">Grayscale</option>
+              <option value="colorblind">Colourblind-safe</option>
+            </select>
+          </div>
+        </div>
+
         <!-- Elements: what the figure shows. All on by default; the plot is
              unchanged until a box is unchecked. -->
         <div class="fig-group" role="group" aria-label="Figure elements">
@@ -599,6 +616,24 @@
           <div class="fig-status" id="fig-univalence-note" data-kind="muted" aria-live="polite"></div>
         </div>
 
+        <!-- Colours: recolour the plot surface. Each picker writes a state.figure
+             key the renderer already resolves through _pal; "Reset colours" clears
+             them (and the boundary colour) back to the defaults. -->
+        <div class="fig-group" role="group" aria-label="Colours">
+          <div class="fig-group-label">Colours</div>
+          <div class="row fig-colour-row">
+            <label for="fig-color-bg" style="margin:0;">Background</label>
+            <input type="color" id="fig-color-bg" value="#fafafa" aria-label="Background colour">
+            <label for="fig-color-grid" style="margin:0;">Grid</label>
+            <input type="color" id="fig-color-grid" value="#e8eaef" aria-label="Grid colour">
+            <label for="fig-color-axis" style="margin:0;">Axes</label>
+            <input type="color" id="fig-color-axis" value="#bbbbbb" aria-label="Axis colour">
+          </div>
+          <div class="row">
+            <button id="fig-colors-reset" class="small" type="button">Reset colours</button>
+          </div>
+        </div>
+
         <!-- Export: a raster PNG of the current framing at 1×/2×/4× (or a custom
              pixel width), on white or a transparent background. Rendered off-
              screen at the target size so lines stay crisp — not a bitmap upscale. -->
@@ -622,6 +657,8 @@
           </div>
           <div class="row">
             <button id="fig-export-png" class="primary small" type="button">Export PNG</button>
+            <button id="fig-copy-image" class="small" type="button">Copy image</button>
+            <span class="fig-status" id="fig-copy-status" data-kind="muted" aria-live="polite"></span>
           </div>
         </div>
       </details>

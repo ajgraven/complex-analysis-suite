@@ -94,6 +94,14 @@ export const state = {
     // warning red (the colour is a validity signal — honest labelling).
     boundaryColor: null,       // '#rrggbb' | null
     boundaryWidth: null,       // px (>0)   | null → family default (1.6 / 1.8)
+
+    // Plot-surface colour overrides — null → the renderer's DEFAULT_PALETTE
+    // literal (resolved generically by _pal, so setting any of these just works).
+    // Written by the Colours pickers and the style presets.
+    bg:        null,           // canvas background (and the opaque-export background)
+    grid:      null,           // background grid lines
+    gridLabel: null,           // numeric tick labels (presets set this; no dedicated picker)
+    axis:      null,           // the two zero-axis lines
   },
 
   // Solver result
