@@ -570,6 +570,23 @@
         </summary>
         <div class="hint">Strip the plot to just the elements a figure needs, recolour the boundary, and export a high-resolution image — for research-paper figures and mathematical art.</div>
 
+        <!-- Preset: one-click bundles of the settings below. Purely visual; a
+             preset's boundary colour still applies to a univalent boundary only. -->
+        <div class="fig-group" role="group" aria-label="Style preset">
+          <div class="fig-group-label">Preset</div>
+          <div class="row">
+            <label for="fig-preset" style="margin:0;">Style</label>
+            <select id="fig-preset">
+              <option value="default" selected>Default (app look)</option>
+              <option value="publication">Publication</option>
+              <option value="print">Print — B/W line art</option>
+              <option value="dark">Dark</option>
+              <option value="grayscale">Grayscale</option>
+              <option value="colorblind">Colourblind-safe</option>
+            </select>
+          </div>
+        </div>
+
         <!-- Elements: what the figure shows. All on by default; the plot is
              unchanged until a box is unchecked. -->
         <div class="fig-group" role="group" aria-label="Figure elements">
