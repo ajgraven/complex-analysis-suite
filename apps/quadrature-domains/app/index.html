@@ -661,6 +661,32 @@
             <span class="fig-status" id="fig-copy-status" data-kind="muted" aria-live="polite"></span>
           </div>
         </div>
+
+        <!-- Family sweep: overlay a one-parameter family of QD boundary curves.
+             Solves the inverse problem across a range of one parameter and draws
+             the VALID members coloured by a ramp; the status reports how many of
+             the swept values were valid quadrature domains. -->
+        <div class="fig-group" role="group" aria-label="Family sweep">
+          <div class="fig-group-label">Family sweep</div>
+          <div class="hint" style="margin:0 0 4px;">Sweep one parameter and overlay the resulting QD boundaries.</div>
+          <div class="row">
+            <label for="fig-family-param" style="margin:0;">Parameter</label>
+            <select id="fig-family-param"><option value="">(solve a domain first)</option></select>
+          </div>
+          <div class="row">
+            <label for="fig-family-min" style="margin:0;">from</label>
+            <input type="number" id="fig-family-min" step="any" aria-label="Sweep minimum">
+            <label for="fig-family-max" style="margin:0;">to</label>
+            <input type="number" id="fig-family-max" step="any" aria-label="Sweep maximum">
+            <label for="fig-family-n" style="margin:0;">steps</label>
+            <input type="number" id="fig-family-n" min="2" max="80" step="1" value="20" aria-label="Sweep steps">
+          </div>
+          <div class="row">
+            <button id="fig-family-go" class="small" type="button">Generate</button>
+            <button id="fig-family-clear" class="small" type="button">Clear</button>
+          </div>
+          <div class="fig-status" id="fig-family-status" data-kind="muted" aria-live="polite"></div>
+        </div>
       </details>
     </section>
 
