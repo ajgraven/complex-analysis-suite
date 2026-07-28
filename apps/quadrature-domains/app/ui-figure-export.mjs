@@ -73,7 +73,15 @@ const QD = _QD;
     if (!card) return {};                       // card absent (e.g. a trimmed test DOM)
 
     const fig = state.figure || (state.figure = {});
-    const repaint = () => { if (ui.plot && typeof ui.plot.render === 'function') ui.plot.render(); };
+    // Repaint the plot AND refresh the shareable URL, so a figure change (a toggle,
+    // colour, width, preset) makes it into a copied link. writeUrlState is
+    // otherwise fired only by solves / tab-switch / view-change, so without this a
+    // recolour-then-copy would hand out a stale link. It's rAF-coalesced and
+    // no-op-guarded, so calling it on every control tick is cheap.
+    const repaint = () => {
+      if (ui.plot && typeof ui.plot.render === 'function') ui.plot.render();
+      if (typeof ui.writeUrlState === 'function') ui.writeUrlState();
+    };
 
     // --- Element-visibility checkboxes -------------------------------------
     for (const [id, flag] of ELEMENT_TOGGLES) {
@@ -262,6 +270,12 @@ const QD = _QD;
 
     reflect();       // initial control sync
     refreshNote();
+
+    // Expose reflect + the defaults so the share-link codec (ui-url-state.mjs)
+    // can restore figure settings and re-sync these controls. Read at call time,
+    // after this factory has run (the codec installs earlier but runs later).
+    ui.figureReflect = reflect;
+    ui.figureDefaults = DEFAULT_FIGURE;
 
     // Small surface for tests / later slices.
     return { ELEMENT_TOGGLES, PRESETS, DEFAULT_FIGURE, reflect, applyPreset, refreshNote, applyBoundaryColor, exportPng, copyImage, exportTargetSize };

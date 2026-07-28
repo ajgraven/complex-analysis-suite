@@ -4,7 +4,7 @@
 // Phase-2 flip: instead of W.eval-ing the classic ui-domain-plot.js in a hand-built JSDOM window,
 // it imports the ESM twin (which attaches QD_UI.installDomainPlot onto the ui-registry) and drives
 // the same interactions in Vitest's jsdom environment. Same assertions as the classic test.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { QD_UI } from "../app/ui-registry.mjs";
 import "../app/ui-domain-plot.mjs"; // side effect: QD_UI.installDomainPlot
 
@@ -51,5 +51,33 @@ describe("DomainPlot double-click → add-pole (jsdom)", () => {
     plot.data = null;
     expect(() => plot.setLivePole(0, { re: 0, im: 0 })).not.toThrow();
     plot.data = saved;
+  });
+
+  it("debounces onViewChange and only fires when a callback is set", () => {
+    vi.useFakeTimers();
+    try {
+      document.body.innerHTML =
+        '<button class="tab-btn active" data-tab="qd"></button><canvas id="c2"></canvas>';
+      const DP: any = QD_UI.installDomainPlot({
+        state: { poles: [], viewMode: "inverse" },
+        modeDescriptor: () => ({}),
+        formatTick: (v: number) => String(v),
+        sub: (n: number) => String(n),
+      });
+      DP.prototype.render = function () {}; // jsdom has no 2D ctx
+      const plot: any = new DP(document.getElementById("c2"), { textContent: "" });
+      // No callback set → no throw, no fire.
+      expect(() => plot._notifyViewChange()).not.toThrow();
+      vi.advanceTimersByTime(300);
+      let fired = 0;
+      plot.onViewChange = () => { fired++; };
+      plot._notifyViewChange();
+      plot._notifyViewChange(); // burst → coalesced into one
+      expect(fired).toBe(0);    // debounced — nothing yet
+      vi.advanceTimersByTime(300);
+      expect(fired).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

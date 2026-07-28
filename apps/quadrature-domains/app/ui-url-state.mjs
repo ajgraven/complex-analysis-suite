@@ -82,6 +82,30 @@ import { encodeViewState, decodeViewState } from '@cas/interchange';
           if (state.aggressiveness) s.agg = state.aggressiveness;
           const tab = _activeTabId();
           if (tab && tab !== 'qd') s.tab = tab;
+
+          // Figure & export settings — serialize only the DIFF from the defaults
+          // (ui.figureDefaults, exposed by ui-figure-export) so a default-look
+          // link stays short. Absent (a trimmed harness) → skip.
+          const fig = state.figure, figDefaults = ui.figureDefaults;
+          if (fig && figDefaults) {
+            const d = {};
+            for (const k of Object.keys(figDefaults)) {
+              const v = fig[k];
+              if (v !== undefined && v !== null && v !== figDefaults[k]) d[k] = v;
+            }
+            if (Object.keys(d).length) s.fig = d;
+          }
+          // Plot viewport (pan/zoom) — serialized only when framed off the default
+          // {0,0,100}, so a plain link carries no view. Rounded to keep it short.
+          const plot = ui.plot;
+          if (plot && plot.view) {
+            const v = plot.view;
+            if (!(v.cx === 0 && v.cy === 0 && v.scale === 100)) {
+              const r6 = (x) => Math.round(x * 1e6) / 1e6;
+              s.view = { cx: r6(v.cx), cy: r6(v.cy), scale: r6(v.scale) };
+            }
+          }
+
           const hash = encodeViewState('qd', s);   // "#vs=..."
           // Avoid redundant history churn when nothing changed.
           if (hash !== location.hash) {
@@ -144,6 +168,32 @@ import { encodeViewState, decodeViewState } from '@cas/interchange';
       if (tab && SWITCHABLE_TABS.has(String(tab))) {
         const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
         if (btn) setTimeout(() => btn.click(), 0);
+      }
+
+      // 5. Figure & export settings — overlay the serialized diff onto the current
+      //    (default) state.figure with per-key validation (a crafted link is
+      //    untrusted: booleans coerced, colours must match #rgb/#rrggbb, width a
+      //    positive number, unknown keys dropped), then re-sync the card controls.
+      if (s.fig && typeof s.fig === 'object' && state.figure && ui.figureDefaults) {
+        const fig = state.figure, defs = ui.figureDefaults;
+        for (const k of Object.keys(s.fig)) {
+          if (!(k in defs)) continue;
+          const dv = defs[k], val = s.fig[k];
+          if (typeof dv === 'boolean') fig[k] = !!val;
+          else if (k === 'boundaryWidth') { const w = +val; if (isFinite(w) && w > 0) fig[k] = w; }
+          else if (typeof val === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(val)) fig[k] = val;
+        }
+        if (typeof ui.figureReflect === 'function') ui.figureReflect();
+      }
+      // 6. Plot viewport — restore pan/zoom, validated + clamped exactly like the
+      //    live wheel-zoom ([1e-3, 1e7]). A solve does not re-fit (state.autoFit is
+      //    false by default), so the restored frame survives the restore solve.
+      if (s.view && typeof s.view === 'object' && ui.plot) {
+        const cx = +s.view.cx, cy = +s.view.cy, scale = +s.view.scale;
+        if (isFinite(cx) && isFinite(cy) && isFinite(scale) && scale > 0) {
+          ui.plot.view = { cx, cy, scale: Math.max(1e-3, Math.min(1e7, scale)) };
+          if (typeof ui.plot.render === 'function') ui.plot.render();
+        }
       }
       return true;
     }
