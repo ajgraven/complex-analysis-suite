@@ -137,6 +137,7 @@ describe("Figure card wiring (jsdom)", () => {
   // browser-verified, so toBlob is a no-op here).
   function makeUi(figure: any, plotData: any) {
     let renders = 0;
+    let urlWrites = 0;
     const plot: any = {
       cssW: 400,
       cssH: 300,
@@ -146,18 +147,21 @@ describe("Figure card wiring (jsdom)", () => {
       get renders() { return renders; },
     };
     const state: any = { figure };
-    return { ui: { state, $: (s: string) => document.querySelector(s), plot }, state, plot };
+    const ui: any = { state, $: (s: string) => document.querySelector(s), plot, writeUrlState: () => { urlWrites++; } };
+    return { ui, state, plot, urlWrites: () => urlWrites };
   }
 
-  it("an element checkbox drives its state.figure flag and repaints", () => {
-    const { ui, state, plot } = makeUi({}, { boundaryPts: [{ re: 0, im: 0 }], univalent: true });
+  it("an element checkbox drives its state.figure flag, repaints, and refreshes the link", () => {
+    const { ui, state, plot, urlWrites } = makeUi({}, { boundaryPts: [{ re: 0, im: 0 }], univalent: true });
     REG.installFigureExport(ui);
     const before = plot.renders;
+    const beforeUrl = urlWrites();
     const axes = document.getElementById("fig-axes") as HTMLInputElement;
     axes.checked = false;
     axes.dispatchEvent(new Event("change"));
     expect(state.figure.showAxes).toBe(false);
     expect(plot.renders).toBe(before + 1);
+    expect(urlWrites()).toBe(beforeUrl + 1); // a figure change makes it into a copied link
     // hide-overlays: checked === hidden (no inversion).
     const hide = document.getElementById("fig-hide-overlays") as HTMLInputElement;
     hide.checked = true;
