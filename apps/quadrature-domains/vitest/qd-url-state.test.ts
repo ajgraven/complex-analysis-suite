@@ -50,14 +50,16 @@ interface QdState {
 
 interface Harness extends UrlState {
   state: QdState;
-  calls: { applyModeVisuals: number; setC: number[]; setQ: string[]; parseAndApplyHText: number };
+  calls: { applyModeVisuals: number; setC: number[]; setQ: string[]; parseAndApplyHText: number; figureReflect: number; render: number };
+  plot: { view: { cx: number; cy: number; scale: number }; render: () => void };
+  figure: () => Record<string, unknown>;
   hText: () => string;
   setHText: (v: string) => void;
   activateTab: (id: string) => void;
 }
 
 /** Build the minimal DOM the codec reads, plus a stub `ui`, and install a fresh codec over it. */
-function harness(initial: Partial<QdState> = {}): Harness {
+function harness(initial: Partial<QdState> = {}, extra: { figure?: Record<string, unknown>; view?: { cx: number; cy: number; scale: number } } = {}): Harness {
   document.body.innerHTML = `
     <input id="h-text" />
     <input id="alpha-input" />
@@ -74,7 +76,9 @@ function harness(initial: Partial<QdState> = {}): Harness {
     <button class="tab-btn" data-tab="algebra"></button>`;
 
   const state: QdState = { mode: "bounded", ...initial };
-  const calls = { applyModeVisuals: 0, setC: [] as number[], setQ: [] as string[], parseAndApplyHText: 0 };
+  (state as unknown as { figure: Record<string, unknown> }).figure = { ...DEFAULT_FIG, ...(extra.figure || {}) };
+  const calls = { applyModeVisuals: 0, setC: [] as number[], setQ: [] as string[], parseAndApplyHText: 0, figureReflect: 0, render: 0 };
+  const plot = { view: extra.view ? { ...extra.view } : { cx: 0, cy: 0, scale: 100 }, render: () => { calls.render++; } };
   const $ = (sel: string): Element | null => document.querySelector(sel);
 
   const codec = installUrlState({
@@ -82,6 +86,9 @@ function harness(initial: Partial<QdState> = {}): Harness {
     MODES,
     PRESETS,
     $,
+    plot,
+    figureDefaults: DEFAULT_FIG,
+    figureReflect: () => calls.figureReflect++,
     applyModeVisuals: () => calls.applyModeVisuals++,
     setC: (c: number) => {
       calls.setC.push(c);
@@ -98,6 +105,8 @@ function harness(initial: Partial<QdState> = {}): Harness {
     ...codec,
     state,
     calls,
+    plot,
+    figure: () => (state as unknown as { figure: Record<string, unknown> }).figure,
     hText: () => (document.getElementById("h-text") as HTMLInputElement).value,
     setHText: (v) => {
       (document.getElementById("h-text") as HTMLInputElement).value = v;
@@ -128,19 +137,33 @@ function writtenState(): Record<string, unknown> {
   return env?.state ?? {};
 }
 
+/** Mirrors ui-state.mjs's state.figure defaults — the diff base + validation source the codec uses. */
+const DEFAULT_FIG: Record<string, unknown> = {
+  showAxes: true, showGrid: true, showTickLabels: true, showFill: true,
+  showNodes: true, showW0: true, showCusps: true, hideOverlays: false,
+  boundaryColor: null, boundaryWidth: null,
+  bg: null, grid: null, gridLabel: null, axis: null,
+};
+
 /** Every key writeUrlState can emit. A new one must be added here AND handled by applyUrlState. */
-const WRITE_KEYS = ["mode", "h", "w0m", "w0", "c", "a", "q", "agg", "tab"] as const;
+const WRITE_KEYS = ["mode", "h", "w0m", "w0", "c", "a", "q", "agg", "tab", "fig", "view"] as const;
 
 /** A state that trips every optional write branch at once. */
 function maximal(): Harness {
-  const h = harness({
-    w0Mode: "manual",
-    w0Manual: "0.5",
-    c: 2,
-    alpha: 1.5, // ≠ 1, or the write branch skips it
-    q: "3", // ≠ '0', or the write branch skips it
-    aggressiveness: "thorough",
-  });
+  const h = harness(
+    {
+      w0Mode: "manual",
+      w0Manual: "0.5",
+      c: 2,
+      alpha: 1.5, // ≠ 1, or the write branch skips it
+      q: "3", // ≠ '0', or the write branch skips it
+      aggressiveness: "thorough",
+    },
+    {
+      figure: { showAxes: false, boundaryColor: "#000000", bg: "#ffffff" }, // ≠ defaults, or the `fig` diff is empty
+      view: { cx: 1.5, cy: -0.5, scale: 250 }, // ≠ {0,0,100}, or the `view` branch skips it
+    },
+  );
   h.setHText("1/(w-2)");
   h.activateTab("schwarz"); // ≠ 'qd', or the write branch skips it
   return h;
@@ -198,6 +221,12 @@ describe("QD share-link codec — round trip", () => {
     expect(dst.state.q).toBe("3");
     expect(dst.state.aggressiveness).toBe("thorough");
     expect(dst.hText()).toBe("1/(w-2)");
+    // figure settings + viewport (the reproducible-figure fields)
+    expect(dst.figure().showAxes).toBe(false);
+    expect(dst.figure().boundaryColor).toBe("#000000");
+    expect(dst.figure().bg).toBe("#ffffff");
+    expect(dst.plot.view).toEqual({ cx: 1.5, cy: -0.5, scale: 250 });
+    expect(dst.calls.figureReflect).toBe(1); // the card controls were re-synced
     // …and the side effects the restore has to trigger for the app to actually be in that state.
     expect(dst.calls.applyModeVisuals).toBe(1);
     expect(dst.calls.setC).toEqual([2]);
@@ -276,6 +305,8 @@ describe("QD share-link codec — round trip", () => {
       q: (h) => h.state.q,
       agg: (h) => h.state.aggressiveness,
       tab: (h) => h.calls, // the tab click is deferred; presence is asserted by the test above
+      fig: (h) => ({ ...h.figure() }), // snapshot — state.figure is mutated in place, so a live ref would false-pass
+      view: (h) => ({ ...h.plot.view }), // snapshot, same reason
     };
 
     const ignored: string[] = [];
@@ -349,6 +380,37 @@ describe("QD share-link codec — untrusted input", () => {
     const h = harness({ w0Mode: "auto" });
     h.applyUrlState();
     expect(h.state.w0Mode).toBe("auto");
+  });
+
+  it("clamps a restored viewport scale and drops a non-finite frame", () => {
+    // scale is clamped to the live wheel-zoom range [1e-3, 1e7]; NaN/negative/garbage is dropped.
+    history.replaceState(null, "", location.pathname + encodeViewState("qd", { view: { cx: 0, cy: 0, scale: 1e12 } }));
+    let h = harness();
+    h.applyUrlState();
+    expect(h.plot.view.scale).toBe(1e7);
+    for (const bad of [{ cx: 0, cy: 0, scale: -1 }, { cx: NaN, cy: 0, scale: 100 }, "x"]) {
+      history.replaceState(null, "", location.pathname + encodeViewState("qd", { view: bad }));
+      h = harness();
+      h.applyUrlState();
+      expect(h.plot.view).toEqual({ cx: 0, cy: 0, scale: 100 }); // untouched default
+    }
+  });
+
+  it("drops unknown figure keys and malformed colours, coerces booleans", () => {
+    history.replaceState(
+      null,
+      "",
+      location.pathname +
+        encodeViewState("qd", { fig: { showAxes: 0, boundaryColor: "javascript:alert(1)", bg: "#0a0a0a", boundaryWidth: -3, evil: "x" } }),
+    );
+    const h = harness();
+    h.applyUrlState();
+    const f = h.figure();
+    expect(f.showAxes).toBe(false); // 0 coerced to boolean
+    expect(f.boundaryColor).toBeNull(); // malformed colour rejected → default
+    expect(f.bg).toBe("#0a0a0a"); // valid hex accepted
+    expect(f.boundaryWidth).toBeNull(); // non-positive rejected
+    expect("evil" in f).toBe(false); // unknown key never copied
   });
 
   it("does not let a crafted tab id reach the querySelector", () => {

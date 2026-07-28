@@ -263,6 +263,12 @@ const QD = _QD;
     reflect();       // initial control sync
     refreshNote();
 
+    // Expose reflect + the defaults so the share-link codec (ui-url-state.mjs)
+    // can restore figure settings and re-sync these controls. Read at call time,
+    // after this factory has run (the codec installs earlier but runs later).
+    ui.figureReflect = reflect;
+    ui.figureDefaults = DEFAULT_FIGURE;
+
     // Small surface for tests / later slices.
     return { ELEMENT_TOGGLES, PRESETS, DEFAULT_FIGURE, reflect, applyPreset, refreshNote, applyBoundaryColor, exportPng, copyImage, exportTargetSize };
   };
