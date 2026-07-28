@@ -71,7 +71,16 @@ const QD = _QD;
       const el = document.getElementById('h-text-msg');
       if (!el) return;
       el.textContent = msg || '';
-      el.style.color = (kind === 'warn') ? '#9a6a00' : '#b53030';
+      el.style.color = (kind === 'warn') ? 'var(--c-warn)' : 'var(--c-err)';
+      // Tie the failure to the field for assistive tech: aria-invalid + the .invalid
+      // outline on #h-text while a genuine error is shown (a 'warn' stays valid). The
+      // #h-text-msg div is role="alert", so its text is announced. (qd-htextmsg-live-01)
+      const input = document.getElementById('h-text');
+      if (input) {
+        const isError = !!msg && kind !== 'warn';
+        input.setAttribute('aria-invalid', String(isError));
+        input.classList.toggle('invalid', isError);
+      }
     }
 
     // Reject an over-long expression before parsing — a valid h(w) is a short low-order rational

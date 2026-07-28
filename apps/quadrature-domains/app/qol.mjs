@@ -484,6 +484,14 @@ import _QD from './solver.mjs';
 
   QoL.attachHelp                = attachHelp;
   QoL.escapeHTML                = escapeHTML;
+  // Reflect a segmented control's selection to assistive tech: the visual cue is a CSS
+  // .active class only, so pair every toggle with aria-pressed so screen-reader users can
+  // tell which weight / domain / view / mode is current (qd-seg-aria-01). Use on any
+  // role="group" segmented button set.
+  QoL.setSegActive = (btn, on) => {
+    btn.classList.toggle('active', !!on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  };
   QoL.attachHoverTooltip        = attachHoverTooltip;
   QoL.copyButton                = copyButton;
   QoL.toast                     = function (msg, opts) { _showToast(msg, opts); };

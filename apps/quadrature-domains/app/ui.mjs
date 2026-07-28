@@ -82,7 +82,7 @@ const uiCtx = { state };
 // by the install calls near the end of this file; referenced by name throughout.
 let renderPolesList, renderPolyCoefList;
 let modeAllowsPoly, refreshHText, setHTextMsg, parseAndApplyHText;
-let scheduleSolve, scheduleQuickSolve, solveAndRender, cancelSolve;
+let scheduleSolve, scheduleQuickSolve, solveAndRender, cancelSolve, showSolveBusy, hideSolveBusy;
 let showSolution, refreshAlternatesPanel, viewSolutionByIndex;
 let startBackgroundAltSearch, updateStatusPanelVisibility;
 
@@ -711,8 +711,8 @@ function decomposeMode(mode) {
 }
 function syncDomainModeControl(mode) {
   const d = decomposeMode(mode);
-  $$('#dm-weight .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.weight === d.weight));
-  $$('#dm-domain .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.domain === d.domain));
+  $$('#dm-weight .seg-btn').forEach(b => QD.QoL.setSegActive(b, b.dataset.weight === d.weight));
+  $$('#dm-domain .seg-btn').forEach(b => QD.QoL.setSegActive(b, b.dataset.domain === d.domain));
   const sing = $('#dm-singular');
   if (sing) {
     const classical = d.weight === 'classical';   // Classical has no singular variant
@@ -878,7 +878,7 @@ function setViewMode(mode) {
   state.viewMode = mode;
   // Toggle segmented-control highlight.
   document.querySelectorAll('#qd-view-toggle .seg-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.view === mode);
+    QD.QoL.setSegActive(btn, btn.dataset.view === mode);
   });
   const inv = document.getElementById('qd-inverse-content');
   const dir = document.getElementById('controls-direct');
@@ -973,13 +973,13 @@ mountQolHelp();
 // Compact domain-type control: weight + domain segmented buttons + singular
 // checkbox all route through applyDomainModeControl() → setMode().
 $$('#dm-weight .seg-btn').forEach(b => b.addEventListener('click', () => {
-  $$('#dm-weight .seg-btn').forEach(x => x.classList.toggle('active', x === b));
+  $$('#dm-weight .seg-btn').forEach(x => QD.QoL.setSegActive(x, x === b));
   // Classical has no singular variant — clear it before composing the mode.
   if (b.dataset.weight === 'classical') { const s = $('#dm-singular'); if (s) s.checked = false; }
   applyDomainModeControl();
 }));
 $$('#dm-domain .seg-btn').forEach(b => b.addEventListener('click', () => {
-  $$('#dm-domain .seg-btn').forEach(x => x.classList.toggle('active', x === b));
+  $$('#dm-domain .seg-btn').forEach(x => QD.QoL.setSegActive(x, x === b));
   applyDomainModeControl();
 }));
 {
@@ -1501,9 +1501,11 @@ $('#faber-roots-toggle')?.addEventListener('change', e => {
 
 $('#try-harder-btn').addEventListener('click', () => {
   const btn = $('#try-harder-btn');
-  const busy = $('#try-harder-busy');
   btn.disabled = true;
-  busy.classList.remove('hidden');
+  // Reuse the solve busy-row (elapsed timer + a working Cancel wired to #solve-cancel-btn
+  // → cancelSolve → PSW.cancel) so the heaviest search is cancellable and shows progress,
+  // like the ordinary solve — not the old static "running…" spinner (qd-tryharder-cancel-01).
+  showSolveBusy();
   (async () => {
     try {
       const built = buildHData();
@@ -1519,8 +1521,11 @@ $('#try-harder-btn').addEventListener('click', () => {
       const preset = PRESETS.exhaustive;
       const opts = buildSolverOptions(preset, { findAlternates: true });
       applyNormToOpts(opts, norm);
-      // Route through the worker when available; main-thread fallback runs
-      // inline (the spinner above + the async wrap let it still paint).
+      // Yield once so the busy row (timer + Cancel) actually paints before we start:
+      // the worker path awaits, but the no-worker fallback blocks the main thread.
+      await new Promise((r) => setTimeout(r, 0));
+      // The worker run is cancellable via #solve-cancel-btn; the abort surfaces here as a
+      // rejected promise (handled by the `e.aborted` catch below).
       const PSW = QD.PrimarySolverWorker;
       const result = (PSW && typeof PSW.solve === 'function')
         ? await PSW.solve(built, opts)
@@ -1544,7 +1549,7 @@ $('#try-harder-btn').addEventListener('click', () => {
       setStatus({ kind: 'err', text: 'Try-harder error: ' + (e && e.message || e) });
     } finally {
       btn.disabled = false;
-      busy.classList.add('hidden');
+      hideSolveBusy();
     }
   })();
 });
@@ -1584,7 +1589,7 @@ Object.assign(uiCtx, {
 // Solve / render / analysis pipeline (installed before pole-grid/h-text so the
 // shared scheduleSolve they call via uiCtx is available).
 ({
-  scheduleSolve, scheduleQuickSolve, solveAndRender, cancelSolve,
+  scheduleSolve, scheduleQuickSolve, solveAndRender, cancelSolve, showSolveBusy, hideSolveBusy,
   showSolution, refreshAlternatesPanel, viewSolutionByIndex,
   startBackgroundAltSearch, updateStatusPanelVisibility,
 } = QD_UI.installSolve(uiCtx));
