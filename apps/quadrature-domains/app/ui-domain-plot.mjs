@@ -84,6 +84,10 @@ class DomainPlot {
     // Double-click on empty plot space -> add a new simple pole there. Set by
     // ui.js (which owns state.poles + the solve pipeline). (worldPoint) -> void
     this.onAddPole     = null;
+    // Owner (ui.js) callback fired — debounced — when the view (pan / zoom / fit
+    // / reset) settles, so it can refresh the shareable URL's viewport.
+    this.onViewChange     = null;
+    this._viewChangeTimer = null;
 
     this.attachEvents();
     this.resize();
@@ -186,6 +190,7 @@ class DomainPlot {
         this.view.cy += dy / this.view.scale;
         lastX = e.clientX; lastY = e.clientY;
         this.render();
+        this._notifyViewChange();
       }
 
       // Mouse-coordinate readout + hover cursor (pointer over a pole, grab
@@ -236,6 +241,7 @@ class DomainPlot {
       this.view.cy += wBefore.im - wAfter.im;
       this._markVfInteracting();   // wheel has no mouseup; the settle timer redraws
       this.render();
+      this._notifyViewChange();
     }, { passive: false });
 
     // Double-click on empty plot space drops a new simple pole at that w
@@ -265,6 +271,7 @@ class DomainPlot {
   reset() {
     this.view = { cx: 0, cy: 0, scale: 100 };
     this.render();
+    this._notifyViewChange();
   }
 
   fit() {
@@ -287,6 +294,7 @@ class DomainPlot {
     this.view.cx = (minRe + maxRe) / 2;
     this.view.cy = (minIm + maxIm) / 2;
     this.render();
+    this._notifyViewChange();
   }
 
   // Live-update one pole marker's position WITHOUT waiting for a re-solve.
@@ -323,6 +331,19 @@ class DomainPlot {
   _settleVectorField() {
     if (this._vfSettleTimer) { clearTimeout(this._vfSettleTimer); this._vfSettleTimer = null; }
     if (this._vfInteracting) { this._vfInteracting = false; this.render(); }
+  }
+
+  // Debounced "the view settled" notification (pan / zoom / fit / reset). Coalesces
+  // the burst a drag or wheel fires into one onViewChange call ~250 ms after motion
+  // stops, so an owner (ui.js) can refresh the shareable URL's viewport without a
+  // history write per frame. No-op unless onViewChange was set.
+  _notifyViewChange() {
+    if (!this.onViewChange) return;
+    if (this._viewChangeTimer) clearTimeout(this._viewChangeTimer);
+    this._viewChangeTimer = setTimeout(() => {
+      this._viewChangeTimer = null;
+      if (this.onViewChange) this.onViewChange();
+    }, 250);
   }
 
   // Public repaint entry point. Coalesces bursts of render() calls (pan,

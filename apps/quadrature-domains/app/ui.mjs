@@ -1611,6 +1611,10 @@ Object.assign(uiCtx, { modeAllowsPoly, refreshHText, setHTextMsg, parseAndApplyH
 const { writeUrlState, applyUrlState } = QD_UI.installUrlState(uiCtx);
 uiCtx.writeUrlState = writeUrlState;
 uiCtx.applyUrlState = applyUrlState;
+// Keep the shareable URL's viewport current: a settled pan / zoom / fit / reset
+// refreshes it (writeUrlState is otherwise only called on solves + tab switch),
+// so a frame chosen after the last solve still makes it into a copied link.
+plot.onViewChange = writeUrlState;
 
 // Thesis-example gallery + analytic-oracle card (#8) — ui-thesis.js.
 uiCtx.loadThesisExample = loadThesisExample;
