@@ -66,6 +66,21 @@ export const state = {
   showFaberRoots: false,     // overlay Faber-polynomial roots in the ζ-plane (UQD only)
   faberRoots: null,          // payload from ui-faber.js: { mode:'all'|'single', N, n, sets:[{n,roots,converged}] }
 
+  // Figure / export settings — the bottom-of-sidebar "Figure / Export" card
+  // (for publication figures / artwork). Every field defaults to null/true so
+  // the plot is byte-identical to its pre-card appearance until the user
+  // touches a control. Read by the DomainPlot renderer (ui-domain-plot.mjs) via
+  // its _pal()/_boundary* helpers and its draw gates. Nested (like
+  // searchOptions) so the whole block can serialise as one unit into the share
+  // link in a later slice.
+  figure: {
+    // Colours: null → the renderer's built-in default literal. boundaryColor
+    // recolours the UNIVALENT boundary only; a non-univalent ∂Ω keeps its
+    // warning red (the colour is a validity signal — honest labelling).
+    boundaryColor: null,       // '#rrggbb' | null
+    boundaryWidth: null,       // px (>0)   | null → family default (1.6 / 1.8)
+  },
+
   // Solver result
   current: null,             // last solve envelope (see PrimaryEnvelope typedef
                              // in primary-solution.js for the full field set)

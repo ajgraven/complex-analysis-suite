@@ -34,6 +34,33 @@ const QD = _QD;
     const POLE_CLICK_HIT_RADIUS_PX = 9;
     const POLE_HOVER_HIT_RADIUS_PX = 12;
 
+    // -----------------------------------------------------------------------
+    // Figure palette — the single home of the plot's default colours/widths.
+    // Every value here is the exact literal the draw methods used before the
+    // "Figure / Export" card existed; the card overrides them via state.figure,
+    // resolved per-draw by _pal / _boundaryStroke / _boundaryFill /
+    // _boundaryWidth. Centralising the defaults here (rather than as scattered
+    // inline hex) is what lets a user recolour the figure at all. At defaults
+    // the render is byte-identical to before this layer existed.
+    // -----------------------------------------------------------------------
+    const DEFAULT_PALETTE = {
+      bg:        '#fafafa',
+      grid:      '#e8eaef',
+      gridLabel: '#777',
+      axis:      '#bbb',
+      boundaryUnivalent:          '#1a3e7a',
+      boundaryNonUnivalent:       '#b53030',
+      fillBoundedUnivalent:       'rgba(86, 119, 168, 0.16)',
+      fillBoundedNonUnivalent:    'rgba(181, 48, 48, 0.14)',
+      fillUnboundedUnivalent:     'rgba(180, 195, 220, 0.45)',
+      fillUnboundedNonUnivalent:  'rgba(220, 180, 180, 0.45)',
+      boundaryWidthBounded:   1.6,
+      boundaryWidthUnbounded: 1.8,
+      // Alphas used when a custom boundary colour derives its own fill tint.
+      fillAlphaBounded:   0.16,
+      fillAlphaUnbounded: 0.45,
+    };
+
 class DomainPlot {
   constructor(canvas, readout) {
     this.canvas = canvas;
@@ -316,7 +343,7 @@ class DomainPlot {
     const c = this.ctx;
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     c.clearRect(0, 0, this.cssW, this.cssH);
-    c.fillStyle = '#fafafa';
+    c.fillStyle = this._pal('bg');
     c.fillRect(0, 0, this.cssW, this.cssH);
 
     this.drawGrid();
@@ -373,6 +400,59 @@ class DomainPlot {
     const noBoundary = !(this.data && this.data.boundaryPts && this.data.boundaryPts.length > 0);
     const noPoles = !(this.data && this.data.poles && this.data.poles.length > 0);
     if (noBoundary && noPoles) this.drawEmptyState();
+  }
+
+  // ----- Figure palette resolution (see DEFAULT_PALETTE) --------------------
+  // Resolve a palette entry: the state.figure override if the user set one,
+  // else the built-in default. A null/undefined override (an unset control, or
+  // a mock state with no `figure` — e.g. a unit test) falls through to the
+  // default, so the plot is byte-identical to its pre-card look until a control
+  // is touched.
+  _pal(key) {
+    const f = state.figure;
+    const v = f ? f[key] : undefined;
+    return (v === undefined || v === null) ? DEFAULT_PALETTE[key] : v;
+  }
+
+  // Univalent boundary stroke colour: the figure override if set, else default
+  // blue. Non-univalent boundaries deliberately do NOT consult the override —
+  // their warning red is a validity signal, not a style choice (honest
+  // labelling) — so callers apply this only on the `ok` (univalent) branch.
+  _boundaryStroke() {
+    const f = state.figure;
+    return (f && f.boundaryColor) || this._pal('boundaryUnivalent');
+  }
+
+  // Univalent boundary fill: when the user picked a custom boundary colour,
+  // derive a translucent tint of it (the same alpha as the default) so the fill
+  // stays coherent with the recoloured outline; otherwise the default tint.
+  _boundaryFill(defKey, alphaKey) {
+    const f = state.figure;
+    const o = f && f.boundaryColor;
+    return o ? this._hexToRgba(o, this._pal(alphaKey)) : this._pal(defKey);
+  }
+
+  // Boundary stroke width: one figure override applies to both bounded and
+  // unbounded families; else the per-family default.
+  _boundaryWidth(defKey) {
+    const f = state.figure;
+    const w = f && f.boundaryWidth;
+    return (typeof w === 'number' && w > 0) ? w : this._pal(defKey);
+  }
+
+  // '#rgb' / '#rrggbb' → 'rgba(r, g, b, a)'. Any non-hex value (already an
+  // rgba()/named colour, or nullish) is returned unchanged, so this is safe on
+  // any palette value.
+  _hexToRgba(hex, alpha) {
+    if (typeof hex !== 'string') return hex;
+    let h = hex.trim();
+    if (h[0] === '#') h = h.slice(1);
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    if (h.length !== 6 || /[^0-9a-fA-F]/.test(h)) return hex;
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
   }
 
   drawEmptyState() {
@@ -644,7 +724,7 @@ class DomainPlot {
     const minIm = Math.floor(br.im / step) * step;
     const maxIm = Math.ceil(tl.im / step) * step;
 
-    c.strokeStyle = '#e8eaef';
+    c.strokeStyle = this._pal('grid');
     c.lineWidth = 1;
     c.beginPath();
     for (let r = minRe; r <= maxRe + 1e-9; r += step) {
@@ -658,7 +738,7 @@ class DomainPlot {
     c.stroke();
 
     // tick labels
-    c.fillStyle = '#777';
+    c.fillStyle = this._pal('gridLabel');
     c.font = '10px ui-monospace, "SF Mono", Consolas, monospace';
     c.textAlign = 'left';
     c.textBaseline = 'top';
@@ -677,7 +757,7 @@ class DomainPlot {
 
   drawAxes() {
     const c = this.ctx;
-    c.strokeStyle = '#bbb';
+    c.strokeStyle = this._pal('axis');
     c.lineWidth = 1;
     c.beginPath();
     const yAxisX = this.toScreen(0, 0).x;
@@ -700,20 +780,23 @@ class DomainPlot {
     c.closePath();
 
     const ok = this.data.univalent;
+    const stroke = ok ? this._boundaryStroke() : this._pal('boundaryNonUnivalent');
     if (this.data.unbounded) {
       // Unbounded: shade the bounded complement K (= inside of the boundary
       // curve) in a contrasting muted color and outline ∂Ω.
-      c.fillStyle = ok ? 'rgba(180, 195, 220, 0.45)' : 'rgba(220, 180, 180, 0.45)';
+      c.fillStyle = ok ? this._boundaryFill('fillUnboundedUnivalent', 'fillAlphaUnbounded')
+                       : this._pal('fillUnboundedNonUnivalent');
       c.fill('evenodd');
-      c.strokeStyle = ok ? '#1a3e7a' : '#b53030';
-      c.lineWidth = 1.8;
+      c.strokeStyle = stroke;
+      c.lineWidth = this._boundaryWidth('boundaryWidthUnbounded');
       c.stroke();
     } else {
       // Bounded: shade Ω (= inside of the curve) in the standard tint.
-      c.fillStyle   = ok ? 'rgba(86, 119, 168, 0.16)' : 'rgba(181, 48, 48, 0.14)';
+      c.fillStyle = ok ? this._boundaryFill('fillBoundedUnivalent', 'fillAlphaBounded')
+                       : this._pal('fillBoundedNonUnivalent');
       c.fill('evenodd');
-      c.strokeStyle = ok ? '#1a3e7a' : '#b53030';
-      c.lineWidth = 1.6;
+      c.strokeStyle = stroke;
+      c.lineWidth = this._boundaryWidth('boundaryWidthBounded');
       c.stroke();
     }
   }
