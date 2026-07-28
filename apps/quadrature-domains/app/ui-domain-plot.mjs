@@ -343,8 +343,15 @@ class DomainPlot {
     const c = this.ctx;
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     c.clearRect(0, 0, this.cssW, this.cssH);
-    c.fillStyle = this._pal('bg');
-    c.fillRect(0, 0, this.cssW, this.cssH);
+    // Background fill — suppressed while _bgTransparent is set, which
+    // renderToCanvas does for every export (it has already painted the backing
+    // store in device space, so rounding can't leave an unfilled sliver; a
+    // transparent export leaves it unpainted for alpha). Undefined on the live
+    // render, so the on-screen plot fills normally.
+    if (!this._bgTransparent) {
+      c.fillStyle = this._pal('bg');
+      c.fillRect(0, 0, this.cssW, this.cssH);
+    }
 
     if (this._show('showGrid')) this.drawGrid();
     if (this._show('showTickLabels')) this.drawTickLabels();
@@ -405,6 +412,44 @@ class DomainPlot {
     const noBoundary = !(this.data && this.data.boundaryPts && this.data.boundaryPts.length > 0);
     const noPoles = !(this.data && this.data.poles && this.data.poles.length > 0);
     if (noBoundary && noPoles) this.drawEmptyState();
+  }
+
+  // Render the current scene — same world framing (cx/cy/scale) and the same
+  // state.figure toggles/colours — into a NEW off-screen canvas at an arbitrary
+  // pixel size, for high-resolution figure export. Not a bitmap upscale: the
+  // scene is re-drawn at the target resolution (the size ratio is fed in as the
+  // dpr the draw code already honours), so lines and text stay crisp. Opaque by
+  // default (the background is painted across the whole backing store first);
+  // pass { transparent:true } for a PNG with alpha. Returns the canvas, or null
+  // with no DOM / an unsized live canvas. Aspect is the caller's responsibility:
+  // pass targetH ≈ targetW · cssH/cssW to avoid distortion.
+  renderToCanvas(targetW, targetH, opts) {
+    opts = opts || {};
+    if (typeof document === 'undefined' || !(this.cssW > 0) || !(this.cssH > 0)) return null;
+    const off = document.createElement('canvas');
+    off.width  = Math.max(1, Math.round(targetW));
+    off.height = Math.max(1, Math.round(targetH));
+    const octx = off.getContext('2d');
+    if (!octx) return off;                        // jsdom / no 2D — caller handles
+    if (!opts.transparent) {
+      octx.save();
+      octx.setTransform(1, 0, 0, 1, 0, 0);
+      octx.fillStyle = this._pal('bg');
+      octx.fillRect(0, 0, off.width, off.height);
+      octx.restore();
+    }
+    const saved = { ctx: this.ctx, dpr: this.dpr, bgT: this._bgTransparent };
+    this.ctx = octx;
+    this.dpr = off.width / this.cssW;             // uniform scale; caller kept aspect
+    this._bgTransparent = true;                   // bg handled above (or none wanted)
+    try {
+      this._renderNow();
+    } finally {
+      this.ctx = saved.ctx;
+      this.dpr = saved.dpr;
+      this._bgTransparent = saved.bgT;
+    }
+    return off;
   }
 
   // ----- Figure palette resolution (see DEFAULT_PALETTE) --------------------

@@ -129,7 +129,42 @@ const QD = _QD;
     } catch (e) { /* the note is diagnostic only — never break install over it */ }
     refreshNote();
 
+    // ----- PNG export ------------------------------------------------------
+    // Re-render the plot off-screen at the chosen resolution (crisp lines, not a
+    // bitmap upscale) on white or a transparent background, then download it. The
+    // download is the user's own click on their own figure — no network egress.
+    const exportPng = () => {
+      const plot = ui.plot;
+      if (!plot || typeof plot.renderToCanvas !== 'function') return;
+      const cssW = plot.cssW || 0, cssH = plot.cssH || 0;
+      if (!(cssW > 0 && cssH > 0)) return;
+      const scaleSel = $('#fig-export-scale');
+      const widthInp2 = $('#fig-export-width');
+      const bgSel = $('#fig-export-bg');
+      const scale = scaleSel ? (parseFloat(scaleSel.value) || 1) : 2;
+      const customW = widthInp2 ? parseInt(widthInp2.value, 10) : NaN;
+      const targetW = (isFinite(customW) && customW > 0) ? customW : Math.round(cssW * scale);
+      const targetH = Math.round(cssH * (targetW / cssW));
+      const transparent = bgSel ? (bgSel.value === 'transparent') : false;
+      const canvas = plot.renderToCanvas(targetW, targetH, { transparent });
+      if (!canvas) return;
+      const name = 'quadrature-domain-' + targetW + 'x' + targetH + '.png';
+      const download = (href, revoke) => {
+        const a = document.createElement('a');
+        a.href = href; a.download = name;
+        document.body.appendChild(a); a.click(); a.remove();
+        if (revoke) setTimeout(() => { try { URL.revokeObjectURL(href); } catch (e) {} }, 1000);
+      };
+      if (typeof canvas.toBlob === 'function') {
+        canvas.toBlob((blob) => { if (blob) download(URL.createObjectURL(blob), true); }, 'image/png');
+      } else if (typeof canvas.toDataURL === 'function') {
+        download(canvas.toDataURL('image/png'), false);
+      }
+    };
+    const exportBtn = $('#fig-export-png');
+    if (exportBtn) exportBtn.addEventListener('click', exportPng);
+
     // Small surface for tests / later slices.
-    return { ELEMENT_TOGGLES, refreshNote, applyBoundaryColor };
+    return { ELEMENT_TOGGLES, refreshNote, applyBoundaryColor, exportPng };
   };
 })();

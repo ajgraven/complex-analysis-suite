@@ -598,6 +598,32 @@
           </div>
           <div class="fig-status" id="fig-univalence-note" data-kind="muted" aria-live="polite"></div>
         </div>
+
+        <!-- Export: a raster PNG of the current framing at 1×/2×/4× (or a custom
+             pixel width), on white or a transparent background. Rendered off-
+             screen at the target size so lines stay crisp — not a bitmap upscale. -->
+        <div class="fig-group" role="group" aria-label="Export">
+          <div class="fig-group-label">Export</div>
+          <div class="row">
+            <label for="fig-export-scale" style="margin:0;">Resolution</label>
+            <select id="fig-export-scale">
+              <option value="1">1×</option>
+              <option value="2" selected>2×</option>
+              <option value="4">4×</option>
+            </select>
+            <input type="number" id="fig-export-width" min="64" max="8000" step="1" placeholder="width px" aria-label="Custom export width in pixels">
+          </div>
+          <div class="row">
+            <label for="fig-export-bg" style="margin:0;">Background</label>
+            <select id="fig-export-bg">
+              <option value="white" selected>White</option>
+              <option value="transparent">Transparent</option>
+            </select>
+          </div>
+          <div class="row">
+            <button id="fig-export-png" class="primary small" type="button">Export PNG</button>
+          </div>
+        </div>
       </details>
     </section>
 
