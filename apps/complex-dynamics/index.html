@@ -505,9 +505,12 @@ abs(z)>2</textarea
           </main>
         </div>
         <div class="controls-pane" id="controls-pane">
-          <!-- Mobile-only bottom-sheet header (drag grip, title, close); hidden on desktop. -->
-          <div class="sheet-handle" aria-hidden="true">
-            <span class="sheet-grip"></span>
+          <!-- Mobile-only bottom-sheet header (drag grip, title, close); hidden on desktop.
+               aria-hidden is on the decorative grip ALONE: it used to wrap the whole handle,
+               which hid the focusable ✕ (and its "Close controls" label) from assistive tech
+               while it stayed in the tab order — cd-aria-hidden-focus-01 (WCAG 4.1.2). -->
+          <div class="sheet-handle">
+            <span class="sheet-grip" aria-hidden="true"></span>
             <span class="sheet-title">Controls</span>
             <button
               type="button"
@@ -2248,7 +2251,9 @@ z^2+c</textarea
           <h2 id="glossary-title">Glossary &amp; conventions</h2>
           <button id="glossary-close" type="button" aria-label="Close glossary">×</button>
         </div>
-        <div id="glossary-body" class="glossary-body"></div>
+        <!-- tabindex 0 makes the long scroll area a keyboard tab stop so it can be
+             arrow-scrolled (its entries hold no focusable controls) — cd-modal-focus-01. -->
+        <div id="glossary-body" class="glossary-body" tabindex="0" aria-label="Glossary entries"></div>
       </div>
     </div>
   </body>

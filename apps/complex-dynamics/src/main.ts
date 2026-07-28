@@ -685,6 +685,58 @@ function setupLayout(): void {
   if (dynStack instanceof HTMLElement) wireResize(byId("resize-dyn"), dynStack);
 }
 
+// --- Modal focus management (cd-modal-focus-01) --------------------------------
+// The Glossary and Help overlays declare role="dialog" aria-modal="true" but used to
+// only toggle `hidden`, so focus stayed on the background behind the backdrop: a
+// keyboard user tabbed through the ~190 page controls to reach Close, and screen
+// readers announced nothing on open. `withModalFocus` moves focus into the dialog,
+// traps Tab within it, and restores focus to the opener on close (WCAG 2.4.3 / 4.1.2).
+// A DOM-location-agnostic Tab trap (not `inert` on a wrapper) is used because #help-ref
+// lives inside `.page` while #glossary sits at the end of <body>.
+const MODAL_FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** Wrap an overlay's raw open/close (the bare `hidden` toggles) with focus-in, a
+ *  Tab-cycle trap, and focus restore. `initialFocus` is focused on open (the ✕). */
+function withModalFocus(
+  overlay: HTMLElement,
+  initialFocus: HTMLElement,
+  rawOpen: () => void,
+  rawClose: () => void,
+): { open: () => void; close: () => void } {
+  let returnFocus: HTMLElement | null = null;
+  const onKeydown = (e: KeyboardEvent): void => {
+    if (e.key !== "Tab") return;
+    const items = [...overlay.querySelectorAll<HTMLElement>(MODAL_FOCUSABLE)].filter(
+      (el) => el.offsetWidth > 0 || el.offsetHeight > 0 || el === document.activeElement,
+    );
+    if (items.length === 0) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      last.focus();
+      e.preventDefault();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      first.focus();
+      e.preventDefault();
+    }
+  };
+  return {
+    open() {
+      returnFocus = document.activeElement as HTMLElement | null;
+      rawOpen();
+      overlay.addEventListener("keydown", onKeydown);
+      initialFocus.focus();
+    },
+    close() {
+      overlay.removeEventListener("keydown", onKeydown);
+      rawClose();
+      if (returnFocus && typeof returnFocus.focus === "function") returnFocus.focus();
+      returnFocus = null;
+    },
+  };
+}
+
 /** Populate + wire the glossary modal, and set the module-level {@link openGlossary} opener
  *  used by the app-bar button, the inspector "?" links, and the overlay "?" links. */
 function setupGlossary(): void {
@@ -720,11 +772,19 @@ function setupGlossary(): void {
   addSection("Terms", GLOSSARY);
   addSection("Conventions in this app", CONVENTIONS);
 
-  const close = (): void => {
-    overlay.hidden = true;
-  };
+  const modal = withModalFocus(
+    overlay,
+    byId("glossary-close"),
+    () => {
+      overlay.hidden = false;
+    },
+    () => {
+      overlay.hidden = true;
+    },
+  );
+  const close = modal.close;
   openGlossary = (termId?: string): void => {
-    overlay.hidden = false;
+    modal.open();
     if (termId) {
       const t = document.getElementById(`gl-${termId}`);
       if (t) {
@@ -820,12 +880,18 @@ function setupComponentData(): void {
  *  a backdrop click, or Escape — the same lightweight pattern as {@link setupGlossary}. */
 function setupHelpReference(): void {
   const overlay = byId("help-ref");
-  const close = (): void => {
-    overlay.hidden = true;
-  };
-  byId("help-ref-btn").addEventListener("click", () => {
-    overlay.hidden = false;
-  });
+  const modal = withModalFocus(
+    overlay,
+    byId("help-ref-close"),
+    () => {
+      overlay.hidden = false;
+    },
+    () => {
+      overlay.hidden = true;
+    },
+  );
+  const close = modal.close;
+  byId("help-ref-btn").addEventListener("click", modal.open);
   byId("help-ref-close").addEventListener("click", close);
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) close(); // backdrop click
