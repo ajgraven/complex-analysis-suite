@@ -99,6 +99,32 @@ const QD = _QD;
       });
     }
 
+    // ----- Plot-surface colours --------------------------------------------
+    // Each picker writes a state.figure colour key the renderer resolves via
+    // _pal (no per-colour checkbox — the pickers are always live). "Reset
+    // colours" clears them, and the boundary colour, back to the defaults. On
+    // install we reflect any existing override onto the picker so a preset /
+    // share-link restore shows through.
+    const COLOUR_PICKERS = [['fig-color-bg', 'bg'], ['fig-color-grid', 'grid'], ['fig-color-axis', 'axis']];
+    const COLOUR_DEFAULTS = { 'fig-color-bg': '#fafafa', 'fig-color-grid': '#e8eaef', 'fig-color-axis': '#bbbbbb' };
+    for (const [id, key] of COLOUR_PICKERS) {
+      const el = $('#' + id);
+      if (!el) continue;
+      if (fig[key]) el.value = fig[key];
+      el.addEventListener('input', () => { fig[key] = el.value; repaint(); });
+    }
+    const colorsReset = $('#fig-colors-reset');
+    if (colorsReset) {
+      colorsReset.addEventListener('click', () => {
+        fig.bg = null; fig.grid = null; fig.gridLabel = null; fig.axis = null;
+        fig.boundaryColor = null;
+        for (const [id, v] of Object.entries(COLOUR_DEFAULTS)) { const e = $('#' + id); if (e) e.value = v; }
+        if (customCb) customCb.checked = false;
+        if (colorInp) { colorInp.value = '#1a3e7a'; colorInp.disabled = true; }
+        repaint();
+      });
+    }
+
     // ----- Honest-labelling status note ------------------------------------
     // Tells the figure-maker whether the CURRENT boundary is a valid (univalent)
     // QD, so a recolour is never applied blind. Reads the exact data on the plot

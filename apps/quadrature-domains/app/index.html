@@ -599,6 +599,24 @@
           <div class="fig-status" id="fig-univalence-note" data-kind="muted" aria-live="polite"></div>
         </div>
 
+        <!-- Colours: recolour the plot surface. Each picker writes a state.figure
+             key the renderer already resolves through _pal; "Reset colours" clears
+             them (and the boundary colour) back to the defaults. -->
+        <div class="fig-group" role="group" aria-label="Colours">
+          <div class="fig-group-label">Colours</div>
+          <div class="row fig-colour-row">
+            <label for="fig-color-bg" style="margin:0;">Background</label>
+            <input type="color" id="fig-color-bg" value="#fafafa" aria-label="Background colour">
+            <label for="fig-color-grid" style="margin:0;">Grid</label>
+            <input type="color" id="fig-color-grid" value="#e8eaef" aria-label="Grid colour">
+            <label for="fig-color-axis" style="margin:0;">Axes</label>
+            <input type="color" id="fig-color-axis" value="#bbbbbb" aria-label="Axis colour">
+          </div>
+          <div class="row">
+            <button id="fig-colors-reset" class="small" type="button">Reset colours</button>
+          </div>
+        </div>
+
         <!-- Export: a raster PNG of the current framing at 1×/2×/4× (or a custom
              pixel width), on white or a transparent background. Rendered off-
              screen at the target size so lines stay crisp — not a bitmap upscale. -->
