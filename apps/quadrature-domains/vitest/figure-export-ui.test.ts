@@ -130,6 +130,13 @@ describe("Figure card wiring (jsdom)", () => {
         <button id="fig-export-png"></button>
         <button id="fig-copy-image"></button>
         <span class="fig-status" id="fig-copy-status" data-kind="muted"></span>
+        <select id="fig-family-param"><option value="">(solve a domain first)</option></select>
+        <input type="number" id="fig-family-min">
+        <input type="number" id="fig-family-max">
+        <input type="number" id="fig-family-n" value="20">
+        <button id="fig-family-go"></button>
+        <button id="fig-family-clear"></button>
+        <div class="fig-status" id="fig-family-status" data-kind="muted"></div>
       </section>`;
   });
 
@@ -296,5 +303,30 @@ describe("Figure card wiring (jsdom)", () => {
     const api = REG.installFigureExport(makeUi({}, null).ui);
     const stateMod: any = await import("../app/ui-state.mjs");
     expect(Object.keys(api.DEFAULT_FIGURE).sort()).toEqual(Object.keys(stateMod.state.figure).sort());
+  });
+
+  it("familyRamp runs blue → red across the swept value", () => {
+    const api = REG.installFigureExport(makeUi({}, null).ui);
+    expect(api.familyRamp(0)).toBe("hsl(240, 75%, 45%)"); // blue (low)
+    expect(api.familyRamp(0.5)).toBe("hsl(120, 75%, 45%)"); // green (mid)
+    expect(api.familyRamp(1)).toBe("hsl(0, 75%, 45%)"); // red (high)
+  });
+
+  it("Clear removes the family overlay and repaints", () => {
+    const { ui, state, plot } = makeUi({}, null);
+    REG.installFigureExport(ui);
+    state.family = { curves: [{ pts: [{ re: 0, im: 0 }], color: "#000" }] };
+    const before = plot.renders;
+    document.getElementById("fig-family-clear")!.dispatchEvent(new Event("click"));
+    expect(state.family).toBeNull();
+    expect(plot.renders).toBe(before + 1);
+  });
+
+  it("Generate with no parameter selected warns instead of sweeping", () => {
+    REG.installFigureExport(makeUi({}, null).ui);
+    document.getElementById("fig-family-go")!.dispatchEvent(new Event("click"));
+    const st = document.getElementById("fig-family-status") as HTMLElement;
+    expect(st.dataset.kind).toBe("warn");
+    expect((st.textContent || "").toLowerCase()).toContain("parameter");
   });
 });
