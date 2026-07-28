@@ -66,6 +66,36 @@ export const state = {
   showFaberRoots: false,     // overlay Faber-polynomial roots in the ζ-plane (UQD only)
   faberRoots: null,          // payload from ui-faber.js: { mode:'all'|'single', N, n, sets:[{n,roots,converged}] }
 
+  // Figure / export settings — the bottom-of-sidebar "Figure / Export" card
+  // (for publication figures / artwork). Every field defaults to null/true so
+  // the plot is byte-identical to its pre-card appearance until the user
+  // touches a control. Read by the DomainPlot renderer (ui-domain-plot.mjs) via
+  // its _pal()/_boundary* helpers and its draw gates. Nested (like
+  // searchOptions) so the whole block can serialise as one unit into the share
+  // link in a later slice.
+  figure: {
+    // Element visibility — all default true → nothing hidden, so the plot is
+    // unchanged until a box is unchecked. Each gates one draw layer in
+    // _renderNow. hideOverlays is a MASTER switch that suppresses the diagnostic
+    // overlays (vector field / curvature / critical set / phenomena / Faber) for
+    // a clean figure WITHOUT touching the Overlays-card toggles, so re-showing
+    // them restores exactly what those were.
+    showAxes:       true,
+    showGrid:       true,
+    showTickLabels: true,
+    showFill:       true,    // interior tint of ∂Ω (outline-only figure → false)
+    showNodes:      true,    // quadrature-node dots aₙ
+    showW0:         true,    // φ(0) marker
+    showCusps:      true,    // boundary cusp triangles
+    hideOverlays:   false,   // master hide for the diagnostic overlays
+
+    // Colours: null → the renderer's built-in default literal. boundaryColor
+    // recolours the UNIVALENT boundary only; a non-univalent ∂Ω keeps its
+    // warning red (the colour is a validity signal — honest labelling).
+    boundaryColor: null,       // '#rrggbb' | null
+    boundaryWidth: null,       // px (>0)   | null → family default (1.6 / 1.8)
+  },
+
   // Solver result
   current: null,             // last solve envelope (see PrimaryEnvelope typedef
                              // in primary-solution.js for the full field set)

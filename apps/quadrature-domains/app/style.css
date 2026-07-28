@@ -339,6 +339,27 @@ button.attention {
   margin-bottom: 6px;
 }
 
+/* ===== Figure / Export card ===== */
+#figure-export-card .fig-group { margin: 8px 0 4px; }
+#figure-export-card .fig-group-label {
+  font-size: 11px; font-weight: 600; color: var(--c-muted);
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px;
+}
+/* Stack the element checkboxes one per row (base `label` is inline-flex). */
+#figure-export-card .fig-group label { display: flex; margin: 2px 0; }
+#figure-export-card input[type="color"] {
+  width: 34px; height: 20px; padding: 0; margin-left: 4px;
+  border: 1px solid var(--c-border-input); border-radius: 4px;
+  background: var(--c-surface); cursor: pointer; vertical-align: middle;
+}
+#figure-export-card input[type="color"]:disabled { cursor: not-allowed; opacity: 0.5; }
+#figure-export-card input[type="number"] { width: 72px; }
+#figure-export-card .fig-unit { font-size: 11px; color: var(--c-muted); }
+#figure-export-card .fig-status { font-size: 11px; margin-top: 6px; line-height: 1.4; }
+#figure-export-card .fig-status[data-kind="ok"]    { color: var(--c-ok); }
+#figure-export-card .fig-status[data-kind="warn"]  { color: var(--c-warn); }
+#figure-export-card .fig-status[data-kind="muted"] { color: var(--c-muted); }
+
 /* ===== QoL: help button, hover tooltip, copy button (HANDOFF #33) ===== */
 .help-btn {
   display: inline-flex;

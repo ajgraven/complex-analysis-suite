@@ -557,6 +557,76 @@
       <div id="alternates-list"></div>
     </section>
 
+    <!-- ============== Figure / Export ==============
+         Formatting + export controls for producing publication-quality figures
+         and mathematical art from the current domain plot. Collapsed by default
+         (native <details>, like #search-options-card). Wired by
+         ui-figure-export.mjs (QD_UI.installFigureExport); every control writes
+         state.figure and repaints via plot.render(). -->
+    <section class="card" id="figure-export-card">
+      <details>
+        <summary style="cursor: pointer; user-select: none;">
+          <h2 style="display:inline; font-size:inherit; text-transform:inherit; letter-spacing:inherit;">Figure &amp; export</h2>
+        </summary>
+        <div class="hint">Strip the plot to just the elements a figure needs, recolour the boundary, and export a high-resolution image — for research-paper figures and mathematical art.</div>
+
+        <!-- Elements: what the figure shows. All on by default; the plot is
+             unchanged until a box is unchecked. -->
+        <div class="fig-group" role="group" aria-label="Figure elements">
+          <div class="fig-group-label">Elements</div>
+          <label><input type="checkbox" id="fig-axes" checked> Axes</label>
+          <label><input type="checkbox" id="fig-grid" checked> Grid</label>
+          <label><input type="checkbox" id="fig-ticks" checked> Tick labels</label>
+          <label><input type="checkbox" id="fig-fill" checked> Interior fill</label>
+          <label><input type="checkbox" id="fig-nodes" checked> Quadrature nodes</label>
+          <label><input type="checkbox" id="fig-w0" checked> φ(0) marker</label>
+          <label><input type="checkbox" id="fig-cusps" checked> Cusp markers</label>
+          <label><input type="checkbox" id="fig-hide-overlays"> Hide diagnostic overlays</label>
+        </div>
+
+        <!-- Boundary style: recolour / re-weight the ∂Ω curve. The colour
+             applies to a UNIVALENT boundary only — a non-univalent one stays
+             warning-red (the status note below says which you have). -->
+        <div class="fig-group" role="group" aria-label="Boundary style">
+          <div class="fig-group-label">Boundary</div>
+          <label><input type="checkbox" id="fig-boundary-custom"> Custom colour
+            <input type="color" id="fig-boundary-color" value="#1a3e7a" disabled aria-label="Boundary colour"></label>
+          <div class="row">
+            <label for="fig-boundary-width" style="margin:0;">Width</label>
+            <input type="number" id="fig-boundary-width" min="0.5" max="8" step="0.1" placeholder="auto" aria-label="Boundary width in pixels">
+            <span class="fig-unit">px</span>
+          </div>
+          <div class="fig-status" id="fig-univalence-note" data-kind="muted" aria-live="polite"></div>
+        </div>
+
+        <!-- Export: a raster PNG of the current framing at 1×/2×/4× (or a custom
+             pixel width), on white or a transparent background. Rendered off-
+             screen at the target size so lines stay crisp — not a bitmap upscale. -->
+        <div class="fig-group" role="group" aria-label="Export">
+          <div class="fig-group-label">Export</div>
+          <div class="row">
+            <label for="fig-export-scale" style="margin:0;">Resolution</label>
+            <select id="fig-export-scale">
+              <option value="1">1×</option>
+              <option value="2" selected>2×</option>
+              <option value="4">4×</option>
+            </select>
+            <input type="number" id="fig-export-width" min="64" max="8000" step="1" placeholder="width px" aria-label="Custom export width in pixels">
+          </div>
+          <div class="row">
+            <label for="fig-export-bg" style="margin:0;">Background</label>
+            <select id="fig-export-bg">
+              <option value="white" selected>White</option>
+              <option value="transparent">Transparent</option>
+            </select>
+          </div>
+          <div class="row">
+            <button id="fig-export-png" class="primary small" type="button">Export PNG</button>
+          </div>
+        </div>
+      </details>
+    </section>
+
     </div><!-- /#qd-inverse-content -->
 
     <!-- Direct UI (HANDOFF #30): the former "Direct problem" tab is now

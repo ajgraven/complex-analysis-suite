@@ -34,6 +34,33 @@ const QD = _QD;
     const POLE_CLICK_HIT_RADIUS_PX = 9;
     const POLE_HOVER_HIT_RADIUS_PX = 12;
 
+    // -----------------------------------------------------------------------
+    // Figure palette — the single home of the plot's default colours/widths.
+    // Every value here is the exact literal the draw methods used before the
+    // "Figure / Export" card existed; the card overrides them via state.figure,
+    // resolved per-draw by _pal / _boundaryStroke / _boundaryFill /
+    // _boundaryWidth. Centralising the defaults here (rather than as scattered
+    // inline hex) is what lets a user recolour the figure at all. At defaults
+    // the render is byte-identical to before this layer existed.
+    // -----------------------------------------------------------------------
+    const DEFAULT_PALETTE = {
+      bg:        '#fafafa',
+      grid:      '#e8eaef',
+      gridLabel: '#777',
+      axis:      '#bbb',
+      boundaryUnivalent:          '#1a3e7a',
+      boundaryNonUnivalent:       '#b53030',
+      fillBoundedUnivalent:       'rgba(86, 119, 168, 0.16)',
+      fillBoundedNonUnivalent:    'rgba(181, 48, 48, 0.14)',
+      fillUnboundedUnivalent:     'rgba(180, 195, 220, 0.45)',
+      fillUnboundedNonUnivalent:  'rgba(220, 180, 180, 0.45)',
+      boundaryWidthBounded:   1.6,
+      boundaryWidthUnbounded: 1.8,
+      // Alphas used when a custom boundary colour derives its own fill tint.
+      fillAlphaBounded:   0.16,
+      fillAlphaUnbounded: 0.45,
+    };
+
 class DomainPlot {
   constructor(canvas, readout) {
     this.canvas = canvas;
@@ -316,17 +343,28 @@ class DomainPlot {
     const c = this.ctx;
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     c.clearRect(0, 0, this.cssW, this.cssH);
-    c.fillStyle = '#fafafa';
-    c.fillRect(0, 0, this.cssW, this.cssH);
+    // Background fill — suppressed while _bgTransparent is set, which
+    // renderToCanvas does for every export (it has already painted the backing
+    // store in device space, so rounding can't leave an unfilled sliver; a
+    // transparent export leaves it unpainted for alpha). Undefined on the live
+    // render, so the on-screen plot fills normally.
+    if (!this._bgTransparent) {
+      c.fillStyle = this._pal('bg');
+      c.fillRect(0, 0, this.cssW, this.cssH);
+    }
 
-    this.drawGrid();
-    this.drawAxes();
+    if (this._show('showGrid')) this.drawGrid();
+    if (this._show('showTickLabels')) this.drawTickLabels();
+    if (this._show('showAxes')) this.drawAxes();
 
     // Vector field underlays the domain so the boundary remains crisp. Skipped
     // mid-gesture (drag / pan / zoom) — it re-samples h(w) over the whole grid
     // with no cache, the dominant cost while interacting; _settleVectorField /
-    // the settle timer redraw it once the gesture ends.
-    if (state.vectorFieldMode !== 'off' && this.data && this.data.hData
+    // the settle timer redraw it once the gesture ends. The figure card's
+    // "hide diagnostic overlays" master (state.figure.hideOverlays) suppresses
+    // it — and curvature / critical-set / phenomena / Faber below — for a clean
+    // plate, without disturbing the Overlays-card toggles themselves.
+    if (!this._hideOverlays() && state.vectorFieldMode !== 'off' && this.data && this.data.hData
         && !this._vfInteracting) {
       this.drawVectorField();
     }
@@ -338,8 +376,8 @@ class DomainPlot {
     if (this.data && this.data.overlayBoundary && this.data.overlayBoundary.length > 0) {
       this.drawOverlayBoundary();
     }
-    if (this.data && this.data.poles)  this.drawPoles();
-    if (this.data && this.data.w0)     this.drawW0();
+    if (this.data && this.data.poles && this._show('showNodes')) this.drawPoles();
+    if (this.data && this.data.w0 && this._show('showW0'))       this.drawW0();
     // Critical-set image overlay (zeros of φ', mapped to w-plane).  Drawn
     // last so the markers sit on top of everything; lazy-computed and
     // cached on state.current.criticalSet to avoid recomputing per render.
@@ -347,23 +385,24 @@ class DomainPlot {
     // Lazy-computed + cached on state.current.observables (shared with the
     // "Geometry & accuracy" card). Drawn over the boundary but under the
     // critical-set / cusp markers.
-    if (state.showCurvature && this.data && this.data.phi) {
+    if (!this._hideOverlays() && state.showCurvature && this.data && this.data.phi) {
       this.drawCurvature();
     }
-    if (state.showCriticalSet && this.data && this.data.phi) {
+    if (!this._hideOverlays() && state.showCriticalSet && this.data && this.data.phi) {
       this.drawCriticalSet();
     }
     // Boundary cusp markers (zeros of φ′ on ∂𝔻), from the async classifyCusps
-    // result stashed on state.current.cuspProps. Drawn last, on top.
-    if (this.data && this.data.phi) this.drawCusps();
+    // result stashed on state.current.cuspProps. Drawn last, on top. Gated by
+    // the figure card's own "cusps" element toggle (not the overlays master).
+    if (this.data && this.data.phi && this._show('showCusps')) this.drawCusps();
     // Annotated-phenomena overlay (#9): harmonic-measure / curvature peaks +
     // symmetry axes. Opt-in; reuses the cached observables + symmetry results.
-    if (state.showPhenomena && this.data && this.data.phi) this.drawPhenomenaAnnotations();
+    if (!this._hideOverlays() && state.showPhenomena && this.data && this.data.phi) this.drawPhenomenaAnnotations();
     // Faber-polynomial roots overlay (UQD only): roots of the Faber polynomials
     // F_n of the bounded complement K, plotted in the ζ = image plane (where ∂Ω
     // lives). They cluster inside K, the "hole" of the unbounded domain. The
     // payload is pushed by ui-faber.js onto state.faberRoots. Drawn last (top).
-    if (state.showFaberRoots && state.faberRoots && this.data && this.data.unbounded) {
+    if (!this._hideOverlays() && state.showFaberRoots && state.faberRoots && this.data && this.data.unbounded) {
       this.drawFaberRoots();
     }
 
@@ -373,6 +412,113 @@ class DomainPlot {
     const noBoundary = !(this.data && this.data.boundaryPts && this.data.boundaryPts.length > 0);
     const noPoles = !(this.data && this.data.poles && this.data.poles.length > 0);
     if (noBoundary && noPoles) this.drawEmptyState();
+  }
+
+  // Render the current scene — same world framing (cx/cy/scale) and the same
+  // state.figure toggles/colours — into a NEW off-screen canvas at an arbitrary
+  // pixel size, for high-resolution figure export. Not a bitmap upscale: the
+  // scene is re-drawn at the target resolution (the size ratio is fed in as the
+  // dpr the draw code already honours), so lines and text stay crisp. Opaque by
+  // default (the background is painted across the whole backing store first);
+  // pass { transparent:true } for a PNG with alpha. Returns the canvas, or null
+  // with no DOM / an unsized live canvas. Aspect is the caller's responsibility:
+  // pass targetH ≈ targetW · cssH/cssW to avoid distortion.
+  renderToCanvas(targetW, targetH, opts) {
+    opts = opts || {};
+    if (typeof document === 'undefined' || !(this.cssW > 0) || !(this.cssH > 0)) return null;
+    const off = document.createElement('canvas');
+    off.width  = Math.max(1, Math.round(targetW));
+    off.height = Math.max(1, Math.round(targetH));
+    const octx = off.getContext('2d');
+    if (!octx) return off;                        // jsdom / no 2D — caller handles
+    if (!opts.transparent) {
+      octx.save();
+      octx.setTransform(1, 0, 0, 1, 0, 0);
+      octx.fillStyle = this._pal('bg');
+      octx.fillRect(0, 0, off.width, off.height);
+      octx.restore();
+    }
+    const saved = { ctx: this.ctx, dpr: this.dpr, bgT: this._bgTransparent };
+    this.ctx = octx;
+    this.dpr = off.width / this.cssW;             // uniform scale; caller kept aspect
+    this._bgTransparent = true;                   // bg handled above (or none wanted)
+    try {
+      this._renderNow();
+    } finally {
+      this.ctx = saved.ctx;
+      this.dpr = saved.dpr;
+      this._bgTransparent = saved.bgT;
+    }
+    return off;
+  }
+
+  // ----- Figure palette resolution (see DEFAULT_PALETTE) --------------------
+  // Resolve a palette entry: the state.figure override if the user set one,
+  // else the built-in default. A null/undefined override (an unset control, or
+  // a mock state with no `figure` — e.g. a unit test) falls through to the
+  // default, so the plot is byte-identical to its pre-card look until a control
+  // is touched.
+  _pal(key) {
+    const f = state.figure;
+    const v = f ? f[key] : undefined;
+    return (v === undefined || v === null) ? DEFAULT_PALETTE[key] : v;
+  }
+
+  // Univalent boundary stroke colour: the figure override if set, else default
+  // blue. Non-univalent boundaries deliberately do NOT consult the override —
+  // their warning red is a validity signal, not a style choice (honest
+  // labelling) — so callers apply this only on the `ok` (univalent) branch.
+  _boundaryStroke() {
+    const f = state.figure;
+    return (f && f.boundaryColor) || this._pal('boundaryUnivalent');
+  }
+
+  // Univalent boundary fill: when the user picked a custom boundary colour,
+  // derive a translucent tint of it (the same alpha as the default) so the fill
+  // stays coherent with the recoloured outline; otherwise the default tint.
+  _boundaryFill(defKey, alphaKey) {
+    const f = state.figure;
+    const o = f && f.boundaryColor;
+    return o ? this._hexToRgba(o, this._pal(alphaKey)) : this._pal(defKey);
+  }
+
+  // Boundary stroke width: one figure override applies to both bounded and
+  // unbounded families; else the per-family default.
+  _boundaryWidth(defKey) {
+    const f = state.figure;
+    const w = f && f.boundaryWidth;
+    return (typeof w === 'number' && w > 0) ? w : this._pal(defKey);
+  }
+
+  // '#rgb' / '#rrggbb' → 'rgba(r, g, b, a)'. Any non-hex value (already an
+  // rgba()/named colour, or nullish) is returned unchanged, so this is safe on
+  // any palette value.
+  _hexToRgba(hex, alpha) {
+    if (typeof hex !== 'string') return hex;
+    let h = hex.trim();
+    if (h[0] === '#') h = h.slice(1);
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    if (h.length !== 6 || /[^0-9a-fA-F]/.test(h)) return hex;
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
+  }
+
+  // Element-visibility gate: true unless state.figure explicitly set the flag to
+  // false. Default-on (and on when there's no `figure` at all, e.g. a mock) so
+  // an untouched figure draws every layer exactly as before.
+  _show(key) {
+    const f = state.figure;
+    return !f || f[key] !== false;
+  }
+
+  // The figure card's master "hide diagnostic overlays" switch (vector field /
+  // curvature / critical set / phenomena / Faber). Independent of, and does not
+  // mutate, the Overlays-card toggles.
+  _hideOverlays() {
+    const f = state.figure;
+    return !!(f && f.hideOverlays);
   }
 
   drawEmptyState() {
@@ -644,7 +790,7 @@ class DomainPlot {
     const minIm = Math.floor(br.im / step) * step;
     const maxIm = Math.ceil(tl.im / step) * step;
 
-    c.strokeStyle = '#e8eaef';
+    c.strokeStyle = this._pal('grid');
     c.lineWidth = 1;
     c.beginPath();
     for (let r = minRe; r <= maxRe + 1e-9; r += step) {
@@ -656,9 +802,23 @@ class DomainPlot {
       c.moveTo(0, y); c.lineTo(this.cssW, y);
     }
     c.stroke();
+  }
 
-    // tick labels
-    c.fillStyle = '#777';
+  // Numeric tick labels along the two axes. Split out of drawGrid (was its
+  // second half) so a figure can carry ticks without the grid lines, or the
+  // grid without the ticks; the positions still derive from the same
+  // niceStep() spacing the grid uses, so the two stay aligned.
+  drawTickLabels() {
+    const c = this.ctx;
+    const step = this.niceStep();
+    const tl = this.toWorld(0, 0);
+    const br = this.toWorld(this.cssW, this.cssH);
+    const minRe = Math.floor(tl.re / step) * step;
+    const maxRe = Math.ceil(br.re / step) * step;
+    const minIm = Math.floor(br.im / step) * step;
+    const maxIm = Math.ceil(tl.im / step) * step;
+
+    c.fillStyle = this._pal('gridLabel');
     c.font = '10px ui-monospace, "SF Mono", Consolas, monospace';
     c.textAlign = 'left';
     c.textBaseline = 'top';
@@ -677,7 +837,7 @@ class DomainPlot {
 
   drawAxes() {
     const c = this.ctx;
-    c.strokeStyle = '#bbb';
+    c.strokeStyle = this._pal('axis');
     c.lineWidth = 1;
     c.beginPath();
     const yAxisX = this.toScreen(0, 0).x;
@@ -700,20 +860,28 @@ class DomainPlot {
     c.closePath();
 
     const ok = this.data.univalent;
+    const stroke = ok ? this._boundaryStroke() : this._pal('boundaryNonUnivalent');
+    const fill = this._show('showFill');   // outline-only figure → fill off
     if (this.data.unbounded) {
       // Unbounded: shade the bounded complement K (= inside of the boundary
       // curve) in a contrasting muted color and outline ∂Ω.
-      c.fillStyle = ok ? 'rgba(180, 195, 220, 0.45)' : 'rgba(220, 180, 180, 0.45)';
-      c.fill('evenodd');
-      c.strokeStyle = ok ? '#1a3e7a' : '#b53030';
-      c.lineWidth = 1.8;
+      if (fill) {
+        c.fillStyle = ok ? this._boundaryFill('fillUnboundedUnivalent', 'fillAlphaUnbounded')
+                         : this._pal('fillUnboundedNonUnivalent');
+        c.fill('evenodd');
+      }
+      c.strokeStyle = stroke;
+      c.lineWidth = this._boundaryWidth('boundaryWidthUnbounded');
       c.stroke();
     } else {
       // Bounded: shade Ω (= inside of the curve) in the standard tint.
-      c.fillStyle   = ok ? 'rgba(86, 119, 168, 0.16)' : 'rgba(181, 48, 48, 0.14)';
-      c.fill('evenodd');
-      c.strokeStyle = ok ? '#1a3e7a' : '#b53030';
-      c.lineWidth = 1.6;
+      if (fill) {
+        c.fillStyle = ok ? this._boundaryFill('fillBoundedUnivalent', 'fillAlphaBounded')
+                         : this._pal('fillBoundedNonUnivalent');
+        c.fill('evenodd');
+      }
+      c.strokeStyle = stroke;
+      c.lineWidth = this._boundaryWidth('boundaryWidthBounded');
       c.stroke();
     }
   }
