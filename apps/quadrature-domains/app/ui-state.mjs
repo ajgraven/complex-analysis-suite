@@ -74,6 +74,21 @@ export const state = {
   // searchOptions) so the whole block can serialise as one unit into the share
   // link in a later slice.
   figure: {
+    // Element visibility — all default true → nothing hidden, so the plot is
+    // unchanged until a box is unchecked. Each gates one draw layer in
+    // _renderNow. hideOverlays is a MASTER switch that suppresses the diagnostic
+    // overlays (vector field / curvature / critical set / phenomena / Faber) for
+    // a clean figure WITHOUT touching the Overlays-card toggles, so re-showing
+    // them restores exactly what those were.
+    showAxes:       true,
+    showGrid:       true,
+    showTickLabels: true,
+    showFill:       true,    // interior tint of ∂Ω (outline-only figure → false)
+    showNodes:      true,    // quadrature-node dots aₙ
+    showW0:         true,    // φ(0) marker
+    showCusps:      true,    // boundary cusp triangles
+    hideOverlays:   false,   // master hide for the diagnostic overlays
+
     // Colours: null → the renderer's built-in default literal. boundaryColor
     // recolours the UNIVALENT boundary only; a non-univalent ∂Ω keeps its
     // warning red (the colour is a validity signal — honest labelling).

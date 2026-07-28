@@ -346,14 +346,18 @@ class DomainPlot {
     c.fillStyle = this._pal('bg');
     c.fillRect(0, 0, this.cssW, this.cssH);
 
-    this.drawGrid();
-    this.drawAxes();
+    if (this._show('showGrid')) this.drawGrid();
+    if (this._show('showTickLabels')) this.drawTickLabels();
+    if (this._show('showAxes')) this.drawAxes();
 
     // Vector field underlays the domain so the boundary remains crisp. Skipped
     // mid-gesture (drag / pan / zoom) — it re-samples h(w) over the whole grid
     // with no cache, the dominant cost while interacting; _settleVectorField /
-    // the settle timer redraw it once the gesture ends.
-    if (state.vectorFieldMode !== 'off' && this.data && this.data.hData
+    // the settle timer redraw it once the gesture ends. The figure card's
+    // "hide diagnostic overlays" master (state.figure.hideOverlays) suppresses
+    // it — and curvature / critical-set / phenomena / Faber below — for a clean
+    // plate, without disturbing the Overlays-card toggles themselves.
+    if (!this._hideOverlays() && state.vectorFieldMode !== 'off' && this.data && this.data.hData
         && !this._vfInteracting) {
       this.drawVectorField();
     }
@@ -365,8 +369,8 @@ class DomainPlot {
     if (this.data && this.data.overlayBoundary && this.data.overlayBoundary.length > 0) {
       this.drawOverlayBoundary();
     }
-    if (this.data && this.data.poles)  this.drawPoles();
-    if (this.data && this.data.w0)     this.drawW0();
+    if (this.data && this.data.poles && this._show('showNodes')) this.drawPoles();
+    if (this.data && this.data.w0 && this._show('showW0'))       this.drawW0();
     // Critical-set image overlay (zeros of φ', mapped to w-plane).  Drawn
     // last so the markers sit on top of everything; lazy-computed and
     // cached on state.current.criticalSet to avoid recomputing per render.
@@ -374,23 +378,24 @@ class DomainPlot {
     // Lazy-computed + cached on state.current.observables (shared with the
     // "Geometry & accuracy" card). Drawn over the boundary but under the
     // critical-set / cusp markers.
-    if (state.showCurvature && this.data && this.data.phi) {
+    if (!this._hideOverlays() && state.showCurvature && this.data && this.data.phi) {
       this.drawCurvature();
     }
-    if (state.showCriticalSet && this.data && this.data.phi) {
+    if (!this._hideOverlays() && state.showCriticalSet && this.data && this.data.phi) {
       this.drawCriticalSet();
     }
     // Boundary cusp markers (zeros of φ′ on ∂𝔻), from the async classifyCusps
-    // result stashed on state.current.cuspProps. Drawn last, on top.
-    if (this.data && this.data.phi) this.drawCusps();
+    // result stashed on state.current.cuspProps. Drawn last, on top. Gated by
+    // the figure card's own "cusps" element toggle (not the overlays master).
+    if (this.data && this.data.phi && this._show('showCusps')) this.drawCusps();
     // Annotated-phenomena overlay (#9): harmonic-measure / curvature peaks +
     // symmetry axes. Opt-in; reuses the cached observables + symmetry results.
-    if (state.showPhenomena && this.data && this.data.phi) this.drawPhenomenaAnnotations();
+    if (!this._hideOverlays() && state.showPhenomena && this.data && this.data.phi) this.drawPhenomenaAnnotations();
     // Faber-polynomial roots overlay (UQD only): roots of the Faber polynomials
     // F_n of the bounded complement K, plotted in the ζ = image plane (where ∂Ω
     // lives). They cluster inside K, the "hole" of the unbounded domain. The
     // payload is pushed by ui-faber.js onto state.faberRoots. Drawn last (top).
-    if (state.showFaberRoots && state.faberRoots && this.data && this.data.unbounded) {
+    if (!this._hideOverlays() && state.showFaberRoots && state.faberRoots && this.data && this.data.unbounded) {
       this.drawFaberRoots();
     }
 
@@ -453,6 +458,22 @@ class DomainPlot {
     const g = parseInt(h.slice(2, 4), 16);
     const b = parseInt(h.slice(4, 6), 16);
     return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
+  }
+
+  // Element-visibility gate: true unless state.figure explicitly set the flag to
+  // false. Default-on (and on when there's no `figure` at all, e.g. a mock) so
+  // an untouched figure draws every layer exactly as before.
+  _show(key) {
+    const f = state.figure;
+    return !f || f[key] !== false;
+  }
+
+  // The figure card's master "hide diagnostic overlays" switch (vector field /
+  // curvature / critical set / phenomena / Faber). Independent of, and does not
+  // mutate, the Overlays-card toggles.
+  _hideOverlays() {
+    const f = state.figure;
+    return !!(f && f.hideOverlays);
   }
 
   drawEmptyState() {
@@ -736,8 +757,22 @@ class DomainPlot {
       c.moveTo(0, y); c.lineTo(this.cssW, y);
     }
     c.stroke();
+  }
 
-    // tick labels
+  // Numeric tick labels along the two axes. Split out of drawGrid (was its
+  // second half) so a figure can carry ticks without the grid lines, or the
+  // grid without the ticks; the positions still derive from the same
+  // niceStep() spacing the grid uses, so the two stay aligned.
+  drawTickLabels() {
+    const c = this.ctx;
+    const step = this.niceStep();
+    const tl = this.toWorld(0, 0);
+    const br = this.toWorld(this.cssW, this.cssH);
+    const minRe = Math.floor(tl.re / step) * step;
+    const maxRe = Math.ceil(br.re / step) * step;
+    const minIm = Math.floor(br.im / step) * step;
+    const maxIm = Math.ceil(tl.im / step) * step;
+
     c.fillStyle = this._pal('gridLabel');
     c.font = '10px ui-monospace, "SF Mono", Consolas, monospace';
     c.textAlign = 'left';
@@ -781,20 +816,25 @@ class DomainPlot {
 
     const ok = this.data.univalent;
     const stroke = ok ? this._boundaryStroke() : this._pal('boundaryNonUnivalent');
+    const fill = this._show('showFill');   // outline-only figure → fill off
     if (this.data.unbounded) {
       // Unbounded: shade the bounded complement K (= inside of the boundary
       // curve) in a contrasting muted color and outline ∂Ω.
-      c.fillStyle = ok ? this._boundaryFill('fillUnboundedUnivalent', 'fillAlphaUnbounded')
-                       : this._pal('fillUnboundedNonUnivalent');
-      c.fill('evenodd');
+      if (fill) {
+        c.fillStyle = ok ? this._boundaryFill('fillUnboundedUnivalent', 'fillAlphaUnbounded')
+                         : this._pal('fillUnboundedNonUnivalent');
+        c.fill('evenodd');
+      }
       c.strokeStyle = stroke;
       c.lineWidth = this._boundaryWidth('boundaryWidthUnbounded');
       c.stroke();
     } else {
       // Bounded: shade Ω (= inside of the curve) in the standard tint.
-      c.fillStyle = ok ? this._boundaryFill('fillBoundedUnivalent', 'fillAlphaBounded')
-                       : this._pal('fillBoundedNonUnivalent');
-      c.fill('evenodd');
+      if (fill) {
+        c.fillStyle = ok ? this._boundaryFill('fillBoundedUnivalent', 'fillAlphaBounded')
+                         : this._pal('fillBoundedNonUnivalent');
+        c.fill('evenodd');
+      }
       c.strokeStyle = stroke;
       c.lineWidth = this._boundaryWidth('boundaryWidthBounded');
       c.stroke();
