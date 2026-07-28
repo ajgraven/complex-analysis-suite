@@ -121,10 +121,12 @@ const QD = _QD;
     };
     try {
       if (typeof QD !== 'undefined' && QD.PrimarySolution && QD.PrimarySolution.subscribe) {
-        // setData runs synchronously in the solve handler; defer a frame so the
-        // note reads the freshly-set plot.data, not the previous solve's.
-        const raf = (typeof requestAnimationFrame === 'function') ? requestAnimationFrame : (fn) => setTimeout(fn, 0);
-        QD.PrimarySolution.subscribe(() => raf(refreshNote));
+        // Defer to a macrotask so the note reads the freshly-set plot.data (setData
+        // runs synchronously later in the same solve handler). setTimeout, NOT
+        // requestAnimationFrame: rAF PAUSES in a background/hidden tab, which would
+        // leave this honest-labelling note stale until the tab is refocused; a
+        // throttled timeout still fires.
+        QD.PrimarySolution.subscribe(() => setTimeout(refreshNote, 0));
       }
     } catch (e) { /* the note is diagnostic only — never break install over it */ }
     refreshNote();
