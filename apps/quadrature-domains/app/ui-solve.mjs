@@ -874,6 +874,7 @@ function reflectFamilyMode(family) {
 // they don't reframe the viewport. Auto-fit happens iff (state.autoFit &&
 // isPrimary); it is NOT an "autoFit" flag despite some historical call sites.
 function showSolution(sol, hData, isPrimary) {
+  state.family = null;       // a fresh solution supersedes any family-sweep overlay
   const boundary = QD.sampleBoundaryAdaptive(sol.phi, state.samples, Math.floor(state.samples * 1.5));
   const boundaryPts = boundary.map(p => p.w);
   const poles = hData.poles.map(p => p.a);

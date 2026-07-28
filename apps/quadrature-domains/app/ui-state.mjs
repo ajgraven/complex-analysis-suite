@@ -104,6 +104,11 @@ export const state = {
     axis:      null,           // the two zero-axis lines
   },
 
+  // Family-sweep overlay (Figure card): { curves:[{pts:[{re,im}], color}], param, counts }
+  // or null. Transient figure content drawn UNDER the main boundary; cleared on
+  // the next solve (showSolution) so it never lingers over a changed domain.
+  family: null,
+
   // Solver result
   current: null,             // last solve envelope (see PrimaryEnvelope typedef
                              // in primary-solution.js for the full field set)
