@@ -188,19 +188,38 @@ const QD = _QD;
     // Re-render the plot off-screen at the chosen resolution (crisp lines, not a
     // bitmap upscale) on white or a transparent background, then download it. The
     // download is the user's own click on their own figure — no network egress.
-    const exportPng = () => {
+    // Target pixel size + background for export/copy, from the Export controls.
+    // Shared so the downloaded PNG and the clipboard image are byte-for-byte the
+    // same framing.
+    const exportTargetSize = () => {
       const plot = ui.plot;
-      if (!plot || typeof plot.renderToCanvas !== 'function') return;
-      const cssW = plot.cssW || 0, cssH = plot.cssH || 0;
-      if (!(cssW > 0 && cssH > 0)) return;
+      const cssW = (plot && plot.cssW) || 0, cssH = (plot && plot.cssH) || 0;
       const scaleSel = $('#fig-export-scale');
       const widthInp2 = $('#fig-export-width');
       const bgSel = $('#fig-export-bg');
       const scale = scaleSel ? (parseFloat(scaleSel.value) || 1) : 2;
       const customW = widthInp2 ? parseInt(widthInp2.value, 10) : NaN;
       const targetW = (isFinite(customW) && customW > 0) ? customW : Math.round(cssW * scale);
-      const targetH = Math.round(cssH * (targetW / cssW));
+      const targetH = cssW > 0 ? Math.round(cssH * (targetW / cssW)) : 0;
       const transparent = bgSel ? (bgSel.value === 'transparent') : false;
+      return { cssW, cssH, targetW, targetH, transparent };
+    };
+
+    // Transient feedback for the Copy button (the export downloads, so it's
+    // self-evident; copy needs a word since nothing visibly changes).
+    const copyStatus = (msg, kind) => {
+      const el = $('#fig-copy-status');
+      if (!el) return;
+      el.textContent = msg;
+      el.dataset.kind = (kind === 'ok') ? 'ok' : 'warn';
+      setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 4000);
+    };
+
+    const exportPng = () => {
+      const plot = ui.plot;
+      if (!plot || typeof plot.renderToCanvas !== 'function') return;
+      const { cssW, cssH, targetW, targetH, transparent } = exportTargetSize();
+      if (!(cssW > 0 && cssH > 0)) return;
       const canvas = plot.renderToCanvas(targetW, targetH, { transparent });
       if (!canvas) return;
       const name = 'quadrature-domain-' + targetW + 'x' + targetH + '.png';
@@ -219,10 +238,32 @@ const QD = _QD;
     const exportBtn = $('#fig-export-png');
     if (exportBtn) exportBtn.addEventListener('click', exportPng);
 
+    // Copy the same framing/size/background to the clipboard as a PNG. Uses the
+    // ClipboardItem-with-a-Promise form so navigator.clipboard.write is called
+    // synchronously in the click gesture (the async toBlob would otherwise lose
+    // the user-activation and the write would be rejected).
+    const copyImage = () => {
+      const plot = ui.plot;
+      if (!plot || typeof plot.renderToCanvas !== 'function') return;
+      const canWrite = typeof navigator !== 'undefined' && navigator.clipboard &&
+        typeof navigator.clipboard.write === 'function' && typeof ClipboardItem !== 'undefined';
+      if (!canWrite) { copyStatus('Clipboard image copy isn’t supported here', 'warn'); return; }
+      const { cssW, cssH, targetW, targetH, transparent } = exportTargetSize();
+      if (!(cssW > 0 && cssH > 0)) return;
+      const canvas = plot.renderToCanvas(targetW, targetH, { transparent });
+      if (!canvas || typeof canvas.toBlob !== 'function') { copyStatus('Copy failed', 'warn'); return; }
+      const blob = new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+      navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+        .then(() => copyStatus('Copied to clipboard ✓', 'ok'))
+        .catch(() => copyStatus('Copy blocked by the browser', 'warn'));
+    };
+    const copyBtn = $('#fig-copy-image');
+    if (copyBtn) copyBtn.addEventListener('click', copyImage);
+
     reflect();       // initial control sync
     refreshNote();
 
     // Small surface for tests / later slices.
-    return { ELEMENT_TOGGLES, PRESETS, DEFAULT_FIGURE, reflect, applyPreset, refreshNote, applyBoundaryColor, exportPng };
+    return { ELEMENT_TOGGLES, PRESETS, DEFAULT_FIGURE, reflect, applyPreset, refreshNote, applyBoundaryColor, exportPng, copyImage, exportTargetSize };
   };
 })();
