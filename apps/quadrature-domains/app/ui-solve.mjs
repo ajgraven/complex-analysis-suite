@@ -1132,6 +1132,7 @@ function startBackgroundAltSearch(hData, norm) {
 
     return {
       scheduleSolve, scheduleQuickSolve, solveAndRender, cancelSolve,
+      showSolveBusy, hideSolveBusy,   // reused by "Try harder" so it gets a timer + Cancel too
       showSolution, refreshAlternatesPanel, viewSolutionByIndex,
       startBackgroundAltSearch, updateStatusPanelVisibility,
     };

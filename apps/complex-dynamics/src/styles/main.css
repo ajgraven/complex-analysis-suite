@@ -1725,10 +1725,18 @@ select.invalid {
     border-radius: 14px 14px 0 0;
     box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.35);
     transform: translateY(100%);
-    transition: transform 0.25s ease;
+    /* visibility:hidden takes the CLOSED sheet out of the tab order AND the a11y tree —
+       transform alone left ~190 controls focusable off-screen (cd-sheet-offscreen-01).
+       The 0.25s visibility delay lets the slide-out finish before the pane is hidden. */
+    visibility: hidden;
+    transition:
+      transform 0.25s ease,
+      visibility 0s linear 0.25s;
   }
   .controls-pane.is-open {
     transform: translateY(0);
+    visibility: visible;
+    transition: transform 0.25s ease;
   }
 
   /* Sticky sheet header: a drag grip, a title, and a close button. */

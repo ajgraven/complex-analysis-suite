@@ -321,7 +321,7 @@ const QD = _QD;
     card.id = 'schwarz-view-card';
     card.innerHTML = `
       <h2>View</h2>
-      <div class="segmented" role="tablist" aria-label="View mode">
+      <div class="segmented" role="group" aria-label="View mode">
         <button class="seg-btn active" data-view="plane"  type="button">plane</button>
         <button class="seg-btn"        data-view="z"      type="button">z-disk</button>
         <button class="seg-btn"        data-view="sphere" type="button">sphere</button>
@@ -347,7 +347,7 @@ const QD = _QD;
     card.innerHTML = `
       <h2>Mode</h2>
       <div class="view-plane-only">
-        <div class="segmented" role="tablist" aria-label="Schwarz mode">
+        <div class="segmented" role="group" aria-label="Schwarz mode">
           <button class="seg-btn active" data-mode="fractal"        type="button">fractal</button>
           <button class="seg-btn"        data-mode="domain-coloring" type="button">domain color</button>
         </div>
@@ -421,7 +421,7 @@ const QD = _QD;
     if (mode === sState.mode) return;
     sState.mode = mode;
     document.querySelectorAll('#schwarz-mode-card .seg-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.mode === mode);
+      QD.QoL.setSegActive(btn, btn.dataset.mode === mode);
     });
     _applyModeOptionsVisibility();
     // All overlays (tree + orbits) are fractal-mode-only; clear them on any
@@ -804,7 +804,7 @@ const QD = _QD;
     // card's fractal/domain seg-btns (which carry data-mode, not data-view)
     // aren't deactivated as a side effect.
     document.querySelectorAll('#schwarz-view-card .seg-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.view === mode);
+      QD.QoL.setSegActive(btn, btn.dataset.view === mode);
     });
     _applyViewModeVisibility();
     refreshSourceStatus();

@@ -125,7 +125,9 @@
         <input type="checkbox" id="dm-singular" disabled> singular (0 ∈ Ω)
       </label>
       <!-- Item 5: plain-language "what you're solving" line, set by applyModeVisuals. -->
-      <div class="hint" id="dm-summary" style="margin-top:4px;"></div>
+      <!-- aria-live announces the plain-language mode summary when weight/domain change,
+           so a screen-reader user gets confirmation the selection took (qd-seg-aria-01). -->
+      <div class="hint" id="dm-summary" style="margin-top:4px;" aria-live="polite"></div>
 
       <!-- Explicit Riemann map φ(z) of the solved domain (moved here from the
            on-plot status panel). The numerical closed form is shown inline; the
@@ -178,11 +180,14 @@
         <label style="flex:1; display:flex; align-items:center; gap:6px;">
           h(w) =
           <input type="text" id="h-text" style="flex:1; font-family: ui-monospace, Consolas, monospace;"
+                 aria-describedby="h-text-msg" aria-invalid="false"
                  placeholder="e.g. 1.5/w + 0.5/w^2 or 1/(w-2) + (1+i)/(w-2)^2">
         </label>
         <button id="h-parse" class="small" style="margin-left:6px;">Parse</button>
       </div>
-      <div id="h-text-msg" class="hint" style="margin-bottom: 8px; min-height: 1em; color: #b53030;"></div>
+      <!-- role="alert" makes an h(w) parse failure announced to assistive tech; the colour
+           is set by setHTextMsg from the error/warn tokens (qd-htextmsg-live-01). -->
+      <div id="h-text-msg" class="hint" role="alert" style="margin-bottom: 8px; min-height: 1em;"></div>
 
       <div id="poles-list"></div>
       <button id="add-pole" class="small">+ Add pole</button>

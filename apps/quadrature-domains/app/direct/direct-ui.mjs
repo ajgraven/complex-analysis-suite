@@ -217,10 +217,10 @@ const QD = _QD;
 
     // Domain-type segmented control + singular checkbox sync.
     root.querySelectorAll('#dir-dm-weight .seg-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.weight === weight);
+      QD.QoL.setSegActive(b, b.dataset.weight === weight);
       b.disabled = numerical;                       // weight is meaningless for numerical
     });
-    root.querySelectorAll('#dir-dm-domain .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.domain === mode));
+    root.querySelectorAll('#dir-dm-domain .seg-btn').forEach(b => QD.QoL.setSegActive(b, b.dataset.domain === mode));
     const sing = root.querySelector('#dir-dm-singular');
     if (sing) {
       const allowed = !numerical && weight !== 'classical';

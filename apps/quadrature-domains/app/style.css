@@ -1670,6 +1670,12 @@ input.so-num {
   background: var(--c-accent);
   color: #fff;
 }
+/* Keyboard focus ring must be INSET: the shared button:focus-visible outline
+   (outline-offset: 2px) is clipped by .segmented's overflow:hidden — qd-seg-aria-01. */
+.segmented .seg-btn:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--c-primary);
+}
 .segmented .seg-btn:not(:last-child) {
   border-right: 1px solid #c2cad6;
 }
