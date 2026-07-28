@@ -17,6 +17,8 @@
 // =============================================================================
 import { QD_UI } from './ui-registry.mjs';
 import _QD from './solver.mjs';
+import PS from './param-slice/param-slice-common.mjs';
+import { sweepFamily, linspace } from './family-sweep.mjs';
 const QD = _QD;
 
 (function () {
@@ -65,6 +67,9 @@ const QD = _QD;
 
   const COLOUR_PICKERS = [['fig-color-bg', 'bg'], ['fig-color-grid', 'grid'], ['fig-color-axis', 'axis']];
   const COLOUR_DEFAULTS = { 'fig-color-bg': '#fafafa', 'fig-color-grid': '#e8eaef', 'fig-color-axis': '#bbbbbb' };
+
+  const FAMILY_MAX_STEPS = 80;   // cap the sweep so a runaway N can't freeze the tab
+  const FAMILY_SAMPLES   = 96;   // boundary points sampled per family member
 
   QD_UI.installFigureExport = function installFigureExport(ui) {
     const state = ui.state || {};
@@ -268,6 +273,116 @@ const QD = _QD;
     const copyBtn = $('#fig-copy-image');
     if (copyBtn) copyBtn.addEventListener('click', copyImage);
 
+    // ----- Family sweep ----------------------------------------------------
+    // Overlay a one-parameter family of QD boundary curves. The axis <select> is
+    // (re)populated from the current domain each solve, since the pole count /
+    // mode can change what is sweepable. Generate runs the sweep engine; a second
+    // click cancels; Clear removes the overlay. The family is EPHEMERAL figure
+    // content (not in the share link) — regenerated on demand, not serialised.
+    const famParam = $('#fig-family-param');
+    const famMin = $('#fig-family-min');
+    const famMax = $('#fig-family-max');
+    const famN = $('#fig-family-n');
+    const famGo = $('#fig-family-go');
+    const famClear = $('#fig-family-clear');
+    let famParamList = [];   // [{ref,label}] indexed by the <option> value
+
+    const round4 = (x) => Math.round(x * 1e4) / 1e4;
+    const famRepaint = () => { if (ui.plot && typeof ui.plot.render === 'function') ui.plot.render(); };
+    const famSetStatus = (msg, kind) => {
+      const el = $('#fig-family-status');
+      if (!el) return;
+      el.textContent = msg || '';
+      el.dataset.kind = kind || 'muted';
+    };
+    // Blue → red hue ramp over the swept value (no muddy wrap past magenta).
+    const familyRamp = (t) => 'hsl(' + Math.round(240 * (1 - Math.max(0, Math.min(1, +t || 0)))) + ', 75%, 45%)';
+
+    const currentScenario = () => {
+      try { return (typeof QD_UI !== 'undefined' && QD_UI.snapshotScenario) ? QD_UI.snapshotScenario() : null; }
+      catch (e) { return null; }
+    };
+    const prefillFamilyRange = (overwrite) => {
+      const p = famParamList[famParam ? +famParam.value : -1];
+      if (!p) return;
+      let cur = 0;
+      try { const s = currentScenario(); if (s) cur = PS.readParam(s, p.ref); } catch (e) { cur = 0; }
+      if (!isFinite(cur)) cur = 0;
+      const span = Math.max(0.5, Math.abs(cur) * 0.5);
+      if (famMin && (overwrite || !famMin.value)) famMin.value = String(round4(cur - span));
+      if (famMax && (overwrite || !famMax.value)) famMax.value = String(round4(cur + span));
+    };
+    const refreshFamilyParams = () => {
+      if (!famParam) return;
+      const scen = currentScenario();
+      let list = [];
+      if (scen) { try { list = PS.listAvailableParams(scen, scen.mode) || []; } catch (e) { list = []; } }
+      famParamList = list;
+      const prev = famParam.value;
+      if (!list.length) {
+        famParam.innerHTML = '<option value="">' + (scen ? '(no sweepable parameters)' : '(solve a domain first)') + '</option>';
+        return;
+      }
+      famParam.innerHTML = list.map((p, i) =>
+        '<option value="' + i + '">' + String(p.label || ('param ' + i)).replace(/[<>&]/g, '') + '</option>').join('');
+      famParam.value = (prev !== '' && list[+prev]) ? prev : '0';
+      prefillFamilyRange(false);
+    };
+    if (famParam) famParam.addEventListener('change', () => prefillFamilyRange(true));
+
+    let famRunning = false;
+    let famAbort = null;
+    const runFamily = async () => {
+      if (famRunning) { if (famAbort) famAbort.aborted = true; return; }   // second click cancels
+      const p = famParamList[famParam ? +famParam.value : -1];
+      if (!p) { famSetStatus('Pick a parameter to sweep.', 'warn'); return; }
+      const scen = currentScenario();
+      if (!scen) { famSetStatus('Solve a domain first.', 'warn'); return; }
+      const min = parseFloat(famMin && famMin.value);
+      const max = parseFloat(famMax && famMax.value);
+      let N = parseInt(famN && famN.value, 10);
+      if (!isFinite(min) || !isFinite(max)) { famSetStatus('Enter a numeric range.', 'warn'); return; }
+      if (!(N >= 2)) N = 20;
+      N = Math.min(N, FAMILY_MAX_STEPS);
+
+      famRunning = true;
+      famAbort = { aborted: false };
+      if (famGo) famGo.textContent = 'Cancel';
+      famSetStatus('Sweeping… 0/' + N, 'muted');
+      let result = null;
+      try {
+        result = await sweepFamily({
+          scenario: scen, ref: p.ref, values: linspace(min, max, N), sampleN: FAMILY_SAMPLES,
+          onProgress: (done, total) => { if (famRunning) famSetStatus('Sweeping… ' + done + '/' + total, 'muted'); },
+          signal: famAbort,
+        });
+      } catch (e) { result = null; }
+      famRunning = false;
+      if (famGo) famGo.textContent = 'Generate';
+      if (!result) { famSetStatus('Sweep failed.', 'warn'); return; }
+
+      const valid = result.curves.filter((cv) => cv.ok);
+      state.family = valid.length
+        ? { curves: valid.map((cv) => ({ pts: cv.pts, color: familyRamp(cv.t) })), param: p.label, counts: result.counts }
+        : null;
+      famRepaint();
+      const c = result.counts;
+      const parts = [c.valid + ' of ' + c.total + ' valid QDs'];
+      if (c.nonUnivalent) parts.push(c.nonUnivalent + ' non-univalent');
+      if (c.unsolved) parts.push(c.unsolved + ' unsolved');
+      famSetStatus(parts.join(' · '), c.valid ? 'ok' : 'warn');
+    };
+    const clearFamily = () => { state.family = null; famRepaint(); famSetStatus('', 'muted'); };
+    if (famGo) famGo.addEventListener('click', runFamily);
+    if (famClear) famClear.addEventListener('click', clearFamily);
+
+    try {
+      if (typeof QD !== 'undefined' && QD.PrimarySolution && QD.PrimarySolution.subscribe) {
+        QD.PrimarySolution.subscribe(() => setTimeout(refreshFamilyParams, 0));
+      }
+    } catch (e) { /* the param list is best-effort */ }
+    refreshFamilyParams();
+
     reflect();       // initial control sync
     refreshNote();
 
@@ -278,6 +393,6 @@ const QD = _QD;
     ui.figureDefaults = DEFAULT_FIGURE;
 
     // Small surface for tests / later slices.
-    return { ELEMENT_TOGGLES, PRESETS, DEFAULT_FIGURE, reflect, applyPreset, refreshNote, applyBoundaryColor, exportPng, copyImage, exportTargetSize };
+    return { ELEMENT_TOGGLES, PRESETS, DEFAULT_FIGURE, reflect, applyPreset, refreshNote, applyBoundaryColor, exportPng, copyImage, exportTargetSize, familyRamp, refreshFamilyParams, runFamily, clearFamily };
   };
 })();

@@ -390,6 +390,13 @@ class DomainPlot {
       this.drawVectorField();
     }
 
+    // Family-sweep overlay (Figure card): swept boundary curves UNDER the main
+    // boundary, so the current solution stays dominant. This is figure CONTENT,
+    // not a diagnostic overlay, so state.figure.hideOverlays does not suppress it.
+    if (state.family && state.family.curves && state.family.curves.length > 0) {
+      this.drawFamily();
+    }
+
     if (this.data && this.data.boundaryPts && this.data.boundaryPts.length > 0) {
       this.drawBoundary();
     }
@@ -571,6 +578,33 @@ class DomainPlot {
     c.lineWidth = 1.8;
     if (c.setLineDash) c.setLineDash([6, 4]);
     c.stroke();
+    c.restore();
+  }
+
+  // Family-sweep overlay: an array of boundary curves from a one-parameter sweep,
+  // each in its own colour (a ramp over the swept value). Drawn UNDER the main
+  // boundary. Reads state.family.curves = [{ pts:[{re,im}], color }]; set by the
+  // Figure card's sweep and cleared on the next solve (see showSolution).
+  drawFamily() {
+    const fam = state.family;
+    if (!fam || !fam.curves) return;
+    const c = this.ctx;
+    c.save();
+    c.lineWidth = 1;
+    for (const cv of fam.curves) {
+      const pts = cv && cv.pts;
+      if (!pts || pts.length < 2) continue;
+      c.beginPath();
+      const p0 = this.toScreen(pts[0].re, pts[0].im);
+      c.moveTo(p0.x, p0.y);
+      for (let i = 1; i < pts.length; i++) {
+        const p = this.toScreen(pts[i].re, pts[i].im);
+        c.lineTo(p.x, p.y);
+      }
+      c.closePath();
+      c.strokeStyle = cv.color || '#888';
+      c.stroke();
+    }
     c.restore();
   }
 
