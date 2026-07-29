@@ -92,7 +92,8 @@ Mathematical structure visualization + dynamics views + output quality.
   Orthogonal information to escape time; classic complex-function viz.
 
 - [ ] **#22 — PNG / SVG export**
-  PNG via current canvas; SVG by emitting boundary curves + overlays as
+  **PNG shipped** (Figure & export card — high-res off-screen re-render +
+  clipboard copy; #171–#175). SVG remains: emit boundary curves + overlays as
   vector primitives. Vector-perfect for papers.
 
 - [ ] **#23 — High-res Schwarz render**

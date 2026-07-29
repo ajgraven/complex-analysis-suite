@@ -194,12 +194,16 @@ synchronous `setTimeout` chunks (which janked the 2D plot).
 ### URL/hash state (B1)
 
 `ui.mjs` serializes the user-meaningful config — `{mode, h(w) text,
-w0(mode), c, α, q, aggressiveness, tab}` — into `location.hash` via
-`writeUrlState` (`history.replaceState`, rAF-coalesced) on each solve and
+w0(mode), c, α, q, aggressiveness, tab}`, plus the Figure & export look
+(`fig`, stored as the diff from the figure defaults) and the plot viewport
+(`view` = `{cx, cy, scale}`) — into `location.hash` via `writeUrlState`
+(`history.replaceState`, rAF-coalesced) on each solve, recolour, framing, and
 tab switch, and restores it on load via `applyUrlState`. The h-text
 round-trips both the poles and the polynomial part (`formatH` ⇄
-`parseH`), so it alone reproduces the quadrature data. This makes a
-configuration bookmarkable, shareable, and reload-restorable.
+`parseH`), so it alone reproduces the quadrature data; `fig`/`view` are
+validated defensively on restore (a hand-crafted link is untrusted) and default
+cleanly when absent (older links). This makes a configuration bookmarkable,
+shareable, and reload-restorable.
 
 Fallback: if `Worker` is unavailable (e.g. Node / no-Worker), `solve()`
 runs `QD.solveInverseQD` on the main thread inside a microtask. Logged once
@@ -229,7 +233,8 @@ moving cohesive clusters into sibling factory modules, all on the same pattern:
 | [`app/ui-pole-grid.mjs`](app/ui-pole-grid.mjs) | `renderPolesList` / `renderPolyCoefList` (the pole + poly-coef DOM builders) |
 | [`app/ui-h-text.mjs`](app/ui-h-text.mjs) | the `#h-text` ⇄ structured-grid mirror (`parseAndApplyHText`, `refreshHText`, `modeAllowsPoly`) |
 | [`app/ui-solve.mjs`](app/ui-solve.mjs) | the solve→render→analyze pipeline (`solveAndRender`, `showSolution`, the geom/cusp/realizability analysis, alternates, background search) |
-| [`app/ui-url-state.mjs`](app/ui-url-state.mjs) | `writeUrlState` / `applyUrlState` (B1 hash serialize+restore) |
+| [`app/ui-url-state.mjs`](app/ui-url-state.mjs) | `writeUrlState` / `applyUrlState` (B1 hash serialize+restore, incl. the `fig`/`view` figure+viewport diff) |
+| [`app/ui-figure-export.mjs`](app/ui-figure-export.mjs) | the "Figure & export" card — element/colour/marker controls, style presets, PNG + clipboard export, and the one-parameter family sweep (engine in [`app/family-sweep.mjs`](app/family-sweep.mjs)) |
 
 `ui.mjs` builds ONE shared mutable context object, `uiCtx`, carrying the closures
 the modules need (`state`, the descriptor tables, DOM helpers, the small shared

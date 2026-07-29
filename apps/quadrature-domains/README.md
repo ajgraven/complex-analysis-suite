@@ -191,6 +191,12 @@ visualizations, complementary to the headless runner.
     │                                  bounded QD): LaTeX display + self-verify + export
     │                                  (all: QD_UI.installX(uiCtx) factories,
     │                                   Phase-3 item E split of ui.mjs)
+    ├── ui-figure-export.mjs           "Figure & export" card: element/colour/marker
+    │                                  controls, style presets, PNG + clipboard export,
+    │                                  and the one-parameter family sweep
+    │                                  (QD_UI.installFigureExport factory)
+    ├── family-sweep.mjs               DOM-free family-sweep engine for the Figure card
+    │                                  (sweepFamily → boundary curves + honest counts)
     ├── algebra/                       Algebra tab — symbolic elimination workspace:
     │   ├── sym-worker.mjs             QD.SymWorker: off-main-thread Gröbner/solve
     │   │                              (native module worker; progress + cancel)
@@ -629,10 +635,20 @@ view is active.
   Newton / continuation tolerances, deflation strength, identity-tol,
   RNG seed.
 * **Status, Riemann map, Alternates** cards.
+* **Figure & export** (bottom of the sidebar, collapsible) — strip the plot to
+  just the elements a figure needs, recolour the boundary / surface, style the
+  quadrature-node markers, apply a one-click **style preset** (Publication /
+  Print — B/W line art / Dark / Grayscale / Colourblind-safe), overlay a
+  one-parameter **family sweep** of QD boundaries, and export a high-resolution
+  **PNG** (or copy it to the clipboard) — for research-paper figures and
+  mathematical art. Honest labelling throughout: a non-univalent boundary keeps
+  its warning red regardless of the custom colour, and family members that are not
+  valid QDs are drawn dashed and excluded from the "valid" count.
 * **🔗 Copy link** (top of the sidebar) — copies a shareable URL that encodes
-  the current configuration (mode, `h(w)`, gauges, active tab); paste it to
-  restore the exact state. The whole app is also responsive (the sidebar stacks
-  above the plot on narrow viewports).
+  the current configuration (mode, `h(w)`, gauges, active tab) plus the figure
+  look (Figure & export settings) and the plot viewport (pan / zoom); paste it to
+  restore the exact state and framing. The whole app is also responsive (the
+  sidebar stacks above the plot on narrow viewports).
 
 **Schwarz dynamics tab.**
 * **Source-of-φ card** — mirrors the Inverse tab's last solved φ. Click
@@ -839,6 +855,14 @@ Matching the thesis:
 
 Highlights from the recent ship cadence — full retrospectives in `HANDOFF.md`:
 
+* **Figure & export.** A collapsible **Figure & export** card turns the domain
+  plot into a publication figure or artwork: per-element visibility, boundary /
+  surface / marker recolouring, one-click style presets, a one-parameter **family
+  sweep** overlay, and high-resolution **PNG** export / clipboard copy — all
+  reproducible from the share link (`fig`/`view`). Honest labelling is preserved:
+  non-univalent boundaries stay warning-red, and invalid family members are drawn
+  dashed and never counted valid. (`app/ui-figure-export.mjs`,
+  `app/family-sweep.mjs`.)
 * **Faber polynomials (UQD).** A **Faber polynomials** card computes the Faber
   polynomials `Fₙ(ζ)` of the bounded complement `K = ℂ∖Ω` of a classical unbounded
   QD from φ's Laurent expansion at ∞, shows them (formula + coefficient table) with
