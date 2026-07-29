@@ -102,6 +102,13 @@ export const state = {
     grid:      null,           // background grid lines
     gridLabel: null,           // numeric tick labels (presets set this; no dedicated picker)
     axis:      null,           // the two zero-axis lines
+
+    // Marker + label styling (the "Markers & labels" figure group).
+    nodeColor:      null,      // quadrature-node dot colour ('#rrggbb' | null → red)
+    nodeSize:       null,      // node radius px (>0)  | null → 5.5
+    nodeShape:      'circle',  // 'circle' | 'square' | 'diamond'
+    showNodeLabels: true,      // the aₙ / φ(0) text labels
+    labelSize:      null,      // label font px (>0)   | null → 11
   },
 
   // Family-sweep overlay (Figure card): { curves:[{pts:[{re,im}], color}], param, counts }

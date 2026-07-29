@@ -140,9 +140,10 @@ function writtenState(): Record<string, unknown> {
 /** Mirrors ui-state.mjs's state.figure defaults — the diff base + validation source the codec uses. */
 const DEFAULT_FIG: Record<string, unknown> = {
   showAxes: true, showGrid: true, showTickLabels: true, showFill: true,
-  showNodes: true, showW0: true, showCusps: true, hideOverlays: false,
+  showNodes: true, showW0: true, showCusps: true, hideOverlays: false, showNodeLabels: true,
   boundaryColor: null, boundaryWidth: null,
   bg: null, grid: null, gridLabel: null, axis: null,
+  nodeColor: null, nodeSize: null, nodeShape: "circle", labelSize: null,
 };
 
 /** Every key writeUrlState can emit. A new one must be added here AND handled by applyUrlState. */
@@ -160,7 +161,7 @@ function maximal(): Harness {
       aggressiveness: "thorough",
     },
     {
-      figure: { showAxes: false, boundaryColor: "#000000", bg: "#ffffff" }, // ≠ defaults, or the `fig` diff is empty
+      figure: { showAxes: false, boundaryColor: "#000000", bg: "#ffffff", nodeShape: "square", nodeSize: 3, showNodeLabels: false }, // ≠ defaults, or the `fig` diff is empty
       view: { cx: 1.5, cy: -0.5, scale: 250 }, // ≠ {0,0,100}, or the `view` branch skips it
     },
   );
@@ -225,6 +226,9 @@ describe("QD share-link codec — round trip", () => {
     expect(dst.figure().showAxes).toBe(false);
     expect(dst.figure().boundaryColor).toBe("#000000");
     expect(dst.figure().bg).toBe("#ffffff");
+    expect(dst.figure().nodeShape).toBe("square");
+    expect(dst.figure().nodeSize).toBe(3);
+    expect(dst.figure().showNodeLabels).toBe(false);
     expect(dst.plot.view).toEqual({ cx: 1.5, cy: -0.5, scale: 250 });
     expect(dst.calls.figureReflect).toBe(1); // the card controls were re-synced
     // …and the side effects the restore has to trigger for the app to actually be in that state.
@@ -411,6 +415,21 @@ describe("QD share-link codec — untrusted input", () => {
     expect(f.bg).toBe("#0a0a0a"); // valid hex accepted
     expect(f.boundaryWidth).toBeNull(); // non-positive rejected
     expect("evil" in f).toBe(false); // unknown key never copied
+  });
+
+  it("validates figure enum + numeric keys on restore", () => {
+    history.replaceState(
+      null,
+      "",
+      location.pathname + encodeViewState("qd", { fig: { nodeShape: "hexagon", nodeSize: -2, labelSize: 14, showNodeLabels: 0 } }),
+    );
+    const h = harness();
+    h.applyUrlState();
+    const f = h.figure();
+    expect(f.nodeShape).toBe("circle"); // invalid enum → default
+    expect(f.nodeSize).toBeNull(); // non-positive → default
+    expect(f.labelSize).toBe(14); // valid positive accepted
+    expect(f.showNodeLabels).toBe(false); // 0 coerced to boolean
   });
 
   it("does not let a crafted tab id reach the querySelector", () => {

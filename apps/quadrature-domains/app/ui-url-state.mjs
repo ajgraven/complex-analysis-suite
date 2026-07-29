@@ -52,6 +52,11 @@ import { encodeViewState, decodeViewState } from '@cas/interchange';
     // no switch. Whitelisted because applyUrlState interpolates the id into a querySelector — an
     // untrusted value would otherwise throw a SyntaxError and abort init.
     const SWITCHABLE_TABS = new Set(['schwarz', 'param-slice', 'algebra']);
+    // Figure-key validation for a restored (untrusted) link. Positive-number and
+    // enum keys can't be told from a null default by type alone, so they're
+    // listed; everything else with a string value is validated as a #hex colour.
+    const FIG_NUM_KEYS = new Set(['boundaryWidth', 'nodeSize', 'labelSize']);
+    const FIG_ENUMS = { nodeShape: ['circle', 'square', 'diamond'] };
     function _activeTabId() {
       const el = document.querySelector('.tab-btn.active');
       return (el && el.dataset.tab) || 'qd';
@@ -180,7 +185,8 @@ import { encodeViewState, decodeViewState } from '@cas/interchange';
           if (!(k in defs)) continue;
           const dv = defs[k], val = s.fig[k];
           if (typeof dv === 'boolean') fig[k] = !!val;
-          else if (k === 'boundaryWidth') { const w = +val; if (isFinite(w) && w > 0) fig[k] = w; }
+          else if (FIG_NUM_KEYS.has(k)) { const w = +val; if (isFinite(w) && w > 0) fig[k] = w; }
+          else if (FIG_ENUMS[k]) { if (FIG_ENUMS[k].indexOf(val) >= 0) fig[k] = val; }
           else if (typeof val === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(val)) fig[k] = val;
         }
         if (typeof ui.figureReflect === 'function') ui.figureReflect();

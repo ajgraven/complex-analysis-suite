@@ -35,6 +35,7 @@ const QD = _QD;
     ['fig-nodes',         'showNodes'],
     ['fig-w0',            'showW0'],
     ['fig-cusps',         'showCusps'],
+    ['fig-node-labels',   'showNodeLabels'],
     ['fig-hide-overlays', 'hideOverlays'],
   ];
 
@@ -43,9 +44,10 @@ const QD = _QD;
   // defaults (kept in sync by hand; the figure-export test asserts the keys).
   const DEFAULT_FIGURE = {
     showAxes: true, showGrid: true, showTickLabels: true, showFill: true,
-    showNodes: true, showW0: true, showCusps: true, hideOverlays: false,
+    showNodes: true, showW0: true, showCusps: true, hideOverlays: false, showNodeLabels: true,
     boundaryColor: null, boundaryWidth: null,
     bg: null, grid: null, gridLabel: null, axis: null,
+    nodeColor: null, nodeSize: null, nodeShape: 'circle', labelSize: null,
   };
 
   // One-click style presets — each a PARTIAL state.figure overlaid on
@@ -65,8 +67,9 @@ const QD = _QD;
     colorblind:  { hideOverlays: true, bg: '#ffffff', boundaryColor: '#0072b2', boundaryWidth: 2 },
   };
 
-  const COLOUR_PICKERS = [['fig-color-bg', 'bg'], ['fig-color-grid', 'grid'], ['fig-color-axis', 'axis']];
-  const COLOUR_DEFAULTS = { 'fig-color-bg': '#fafafa', 'fig-color-grid': '#e8eaef', 'fig-color-axis': '#bbbbbb' };
+  const COLOUR_PICKERS = [['fig-color-bg', 'bg'], ['fig-color-grid', 'grid'], ['fig-color-axis', 'axis'], ['fig-node-color', 'nodeColor']];
+  const COLOUR_DEFAULTS = { 'fig-color-bg': '#fafafa', 'fig-color-grid': '#e8eaef', 'fig-color-axis': '#bbbbbb', 'fig-node-color': '#b53030' };
+  const NUM_INPUTS = [['fig-node-size', 'nodeSize'], ['fig-label-size', 'labelSize']];
 
   const FAMILY_MAX_STEPS = 80;   // cap the sweep so a runaway N can't freeze the tab
   const FAMILY_SAMPLES   = 96;   // boundary points sampled per family member
@@ -124,6 +127,18 @@ const QD = _QD;
       if (!el) continue;
       el.addEventListener('input', () => { fig[key] = el.value; repaint(); });
     }
+    // Numeric marker/label overrides (empty → null → the renderer default).
+    for (const [id, key] of NUM_INPUTS) {
+      const el = $('#' + id);
+      if (!el) continue;
+      el.addEventListener('input', () => {
+        const v = parseFloat(el.value);
+        fig[key] = (isFinite(v) && v > 0) ? v : null;
+        repaint();
+      });
+    }
+    const nodeShapeSel = $('#fig-node-shape');
+    if (nodeShapeSel) nodeShapeSel.addEventListener('change', () => { fig.nodeShape = nodeShapeSel.value || 'circle'; repaint(); });
 
     // --- reflect(): sync every control FROM state.figure -------------------
     // Called after a preset / reset (which rewrite fig wholesale) and once at
@@ -141,6 +156,12 @@ const QD = _QD;
         const el = $('#' + id);
         if (el) el.value = fig[key] || COLOUR_DEFAULTS[id];
       }
+      for (const [id, key] of NUM_INPUTS) {
+        const el = $('#' + id);
+        if (el) el.value = (typeof fig[key] === 'number') ? String(fig[key]) : '';
+      }
+      const shapeEl = $('#fig-node-shape');
+      if (shapeEl) shapeEl.value = fig.nodeShape || 'circle';
     };
 
     // "Reset colours" — clear the surface + boundary colours (not the element
@@ -149,7 +170,7 @@ const QD = _QD;
     if (colorsReset) {
       colorsReset.addEventListener('click', () => {
         fig.bg = null; fig.grid = null; fig.gridLabel = null; fig.axis = null;
-        fig.boundaryColor = null;
+        fig.boundaryColor = null; fig.nodeColor = null;
         reflect();
         repaint();
       });
@@ -345,6 +366,9 @@ const QD = _QD;
       if (!(N >= 2)) N = 20;
       N = Math.min(N, FAMILY_MAX_STEPS);
 
+      const famNonUniv = $('#fig-family-nonuniv');
+      const includeNonUnivalent = !!(famNonUniv && famNonUniv.checked);
+
       famRunning = true;
       famAbort = { aborted: false };
       if (famGo) famGo.textContent = 'Cancel';
@@ -353,6 +377,7 @@ const QD = _QD;
       try {
         result = await sweepFamily({
           scenario: scen, ref: p.ref, values: linspace(min, max, N), sampleN: FAMILY_SAMPLES,
+          includeNonUnivalent,
           onProgress: (done, total) => { if (famRunning) famSetStatus('Sweeping… ' + done + '/' + total, 'muted'); },
           signal: famAbort,
         });
@@ -361,9 +386,11 @@ const QD = _QD;
       if (famGo) famGo.textContent = 'Generate';
       if (!result) { famSetStatus('Sweep failed.', 'warn'); return; }
 
-      const valid = result.curves.filter((cv) => cv.ok);
-      state.family = valid.length
-        ? { curves: valid.map((cv) => ({ pts: cv.pts, color: familyRamp(cv.t) })), param: p.label, counts: result.counts }
+      // Draw every member that produced a boundary: valid solid, non-univalent
+      // dashed. Members that didn't solve at all (no pts) are honest gaps.
+      const drawable = result.curves.filter((cv) => cv.pts && cv.pts.length > 1);
+      state.family = drawable.length
+        ? { curves: drawable.map((cv) => ({ pts: cv.pts, color: familyRamp(cv.t), dashed: !cv.ok })), param: p.label, counts: result.counts }
         : null;
       famRepaint();
       const c = result.counts;
