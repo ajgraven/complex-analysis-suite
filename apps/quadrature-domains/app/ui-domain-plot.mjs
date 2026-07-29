@@ -589,8 +589,9 @@ class DomainPlot {
 
   // Family-sweep overlay: an array of boundary curves from a one-parameter sweep,
   // each in its own colour (a ramp over the swept value). Drawn UNDER the main
-  // boundary. Reads state.family.curves = [{ pts:[{re,im}], color }]; set by the
-  // Figure card's sweep and cleared on the next solve (see showSolution).
+  // boundary. Reads state.family.curves = [{ pts:[{re,im}], color, dashed }]
+  // (dashed ⇒ an invalid member, drawn dashed — the honest not-a-QD signal); set
+  // by the Figure card's sweep and cleared on the next solve (see showSolution).
   drawFamily() {
     const fam = state.family;
     if (!fam || !fam.curves) return;

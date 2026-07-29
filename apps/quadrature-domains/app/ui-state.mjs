@@ -66,13 +66,14 @@ export const state = {
   showFaberRoots: false,     // overlay Faber-polynomial roots in the ζ-plane (UQD only)
   faberRoots: null,          // payload from ui-faber.js: { mode:'all'|'single', N, n, sets:[{n,roots,converged}] }
 
-  // Figure / export settings — the bottom-of-sidebar "Figure / Export" card
-  // (for publication figures / artwork). Every field defaults to null/true so
-  // the plot is byte-identical to its pre-card appearance until the user
-  // touches a control. Read by the DomainPlot renderer (ui-domain-plot.mjs) via
-  // its _pal()/_boundary* helpers and its draw gates. Nested (like
-  // searchOptions) so the whole block can serialise as one unit into the share
-  // link in a later slice.
+  // Figure / export settings — the bottom-of-sidebar "Figure & export" card
+  // (for publication figures / artwork). Every field defaults to its pre-card
+  // value (null / true, plus hideOverlays:false and nodeShape:'circle') so the
+  // plot is byte-identical to its pre-card appearance until the user touches a
+  // control. Read by the DomainPlot renderer (ui-domain-plot.mjs) via its
+  // _pal()/_boundary* helpers and its draw gates. Nested (like searchOptions) so
+  // the block serialises as one unit into the share link — the DIFF from these
+  // defaults; see ui-url-state.mjs.
   figure: {
     // Element visibility — all default true → nothing hidden, so the plot is
     // unchanged until a box is unchecked. Each gates one draw layer in
@@ -111,9 +112,10 @@ export const state = {
     labelSize:      null,      // label font px (>0)   | null → 11
   },
 
-  // Family-sweep overlay (Figure card): { curves:[{pts:[{re,im}], color}], param, counts }
-  // or null. Transient figure content drawn UNDER the main boundary; cleared on
-  // the next solve (showSolution) so it never lingers over a changed domain.
+  // Family-sweep overlay (Figure card): { curves:[{pts:[{re,im}], color, dashed}], param, counts }
+  // or null (dashed ⇒ an invalid member — self-intersecting or identity-failing —
+  // drawn dashed). Transient figure content drawn UNDER the main boundary; cleared
+  // on the next solve (showSolution) so it never lingers over a changed domain.
   family: null,
 
   // Solver result
