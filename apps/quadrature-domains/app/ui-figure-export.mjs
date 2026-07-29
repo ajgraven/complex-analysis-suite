@@ -35,6 +35,7 @@ const QD = _QD;
     ['fig-nodes',         'showNodes'],
     ['fig-w0',            'showW0'],
     ['fig-cusps',         'showCusps'],
+    ['fig-node-labels',   'showNodeLabels'],
     ['fig-hide-overlays', 'hideOverlays'],
   ];
 
@@ -66,8 +67,9 @@ const QD = _QD;
     colorblind:  { hideOverlays: true, bg: '#ffffff', boundaryColor: '#0072b2', boundaryWidth: 2 },
   };
 
-  const COLOUR_PICKERS = [['fig-color-bg', 'bg'], ['fig-color-grid', 'grid'], ['fig-color-axis', 'axis']];
-  const COLOUR_DEFAULTS = { 'fig-color-bg': '#fafafa', 'fig-color-grid': '#e8eaef', 'fig-color-axis': '#bbbbbb' };
+  const COLOUR_PICKERS = [['fig-color-bg', 'bg'], ['fig-color-grid', 'grid'], ['fig-color-axis', 'axis'], ['fig-node-color', 'nodeColor']];
+  const COLOUR_DEFAULTS = { 'fig-color-bg': '#fafafa', 'fig-color-grid': '#e8eaef', 'fig-color-axis': '#bbbbbb', 'fig-node-color': '#b53030' };
+  const NUM_INPUTS = [['fig-node-size', 'nodeSize'], ['fig-label-size', 'labelSize']];
 
   const FAMILY_MAX_STEPS = 80;   // cap the sweep so a runaway N can't freeze the tab
   const FAMILY_SAMPLES   = 96;   // boundary points sampled per family member
@@ -125,6 +127,18 @@ const QD = _QD;
       if (!el) continue;
       el.addEventListener('input', () => { fig[key] = el.value; repaint(); });
     }
+    // Numeric marker/label overrides (empty → null → the renderer default).
+    for (const [id, key] of NUM_INPUTS) {
+      const el = $('#' + id);
+      if (!el) continue;
+      el.addEventListener('input', () => {
+        const v = parseFloat(el.value);
+        fig[key] = (isFinite(v) && v > 0) ? v : null;
+        repaint();
+      });
+    }
+    const nodeShapeSel = $('#fig-node-shape');
+    if (nodeShapeSel) nodeShapeSel.addEventListener('change', () => { fig.nodeShape = nodeShapeSel.value || 'circle'; repaint(); });
 
     // --- reflect(): sync every control FROM state.figure -------------------
     // Called after a preset / reset (which rewrite fig wholesale) and once at
@@ -142,6 +156,12 @@ const QD = _QD;
         const el = $('#' + id);
         if (el) el.value = fig[key] || COLOUR_DEFAULTS[id];
       }
+      for (const [id, key] of NUM_INPUTS) {
+        const el = $('#' + id);
+        if (el) el.value = (typeof fig[key] === 'number') ? String(fig[key]) : '';
+      }
+      const shapeEl = $('#fig-node-shape');
+      if (shapeEl) shapeEl.value = fig.nodeShape || 'circle';
     };
 
     // "Reset colours" — clear the surface + boundary colours (not the element
@@ -150,7 +170,7 @@ const QD = _QD;
     if (colorsReset) {
       colorsReset.addEventListener('click', () => {
         fig.bg = null; fig.grid = null; fig.gridLabel = null; fig.axis = null;
-        fig.boundaryColor = null;
+        fig.boundaryColor = null; fig.nodeColor = null;
         reflect();
         repaint();
       });
