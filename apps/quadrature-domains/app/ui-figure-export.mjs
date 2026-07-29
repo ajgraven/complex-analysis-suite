@@ -10,10 +10,10 @@
 // repaint via plot.render(); the DomainPlot renderer gates every draw layer and
 // resolves every colour/width against state.figure (ui-domain-plot.mjs), so the
 // plot updates on the next frame. Sections: element visibility, boundary colour
-// / width, plot-surface colours, one-click style presets, and PNG export.
-// reflect() is the single place that syncs every control FROM the model (after a
-// preset / reset, and once at install — also the seam a future share-link
-// restore would use).
+// / width, plot-surface colours, one-click style presets, marker/label styling,
+// family sweep, and PNG export / clipboard copy. reflect() is the single place
+// that syncs every control FROM the model (after a preset / reset, and once at
+// install — also the seam the share-link restore hooks into, ui-url-state.mjs).
 // =============================================================================
 import { QD_UI } from './ui-registry.mjs';
 import _QD from './solver.mjs';
@@ -142,8 +142,8 @@ const QD = _QD;
 
     // --- reflect(): sync every control FROM state.figure -------------------
     // Called after a preset / reset (which rewrite fig wholesale) and once at
-    // install, so the controls always mirror the model. Also the seam a future
-    // share-link restore hooks into.
+    // install, so the controls always mirror the model. Also the seam the
+    // share-link restore hooks into (ui-url-state.mjs applyUrlState).
     const reflect = () => {
       for (const [id, flag] of ELEMENT_TOGGLES) {
         const el = $('#' + id);
@@ -220,8 +220,10 @@ const QD = _QD;
 
     // --- PNG export --------------------------------------------------------
     // Re-render the plot off-screen at the chosen resolution (crisp lines, not a
-    // bitmap upscale) on white or a transparent background, then download it. The
-    // download is the user's own click on their own figure — no network egress.
+    // bitmap upscale) on the figure background (default #fafafa, and whatever the
+    // Colours picker / preset set it to) or a transparent background, then
+    // download it. The download is the user's own click on their own figure — no
+    // network egress.
     // Target pixel size + background for export/copy, from the Export controls.
     // Shared so the downloaded PNG and the clipboard image are byte-for-byte the
     // same framing.
@@ -359,6 +361,10 @@ const QD = _QD;
       if (!p) { famSetStatus('Pick a parameter to sweep.', 'warn'); return; }
       const scen = currentScenario();
       if (!scen) { famSetStatus('Solve a domain first.', 'warn'); return; }
+      // Pin the solve this sweep is based on; if it changes mid-sweep we discard
+      // (see the currency guard after the await) so a family computed for the old
+      // domain is never drawn over a new boundary.
+      const baseCurrent = state.current;
       const min = parseFloat(famMin && famMin.value);
       const max = parseFloat(famMax && famMax.value);
       let N = parseInt(famN && famN.value, 10);
@@ -384,17 +390,33 @@ const QD = _QD;
       } catch (e) { result = null; }
       famRunning = false;
       if (famGo) famGo.textContent = 'Generate';
+      // Currency guard: a solve landed while we were sweeping (the user dragged a
+      // pole or edited a gauge), so state.current is a new envelope and these
+      // curves belong to the OLD domain — drawing them over the new boundary would
+      // be dishonest. showSolution already cleared state.family; leave it cleared.
+      if (state.current !== baseCurrent) {
+        famSetStatus('Domain changed during the sweep — discarded.', 'muted');
+        return;
+      }
       if (!result) { famSetStatus('Sweep failed.', 'warn'); return; }
 
-      // Draw every member that produced a boundary: valid solid, non-univalent
-      // dashed. Members that didn't solve at all (no pts) are honest gaps.
+      // Draw every member that produced a boundary: valid solid, invalid (self-
+      // intersecting OR identity-failing) dashed. Members that didn't solve at all
+      // (no pts) are honest gaps.
       const drawable = result.curves.filter((cv) => cv.pts && cv.pts.length > 1);
       state.family = drawable.length
         ? { curves: drawable.map((cv) => ({ pts: cv.pts, color: familyRamp(cv.t), dashed: !cv.ok })), param: p.label, counts: result.counts }
         : null;
       famRepaint();
       const c = result.counts;
-      const parts = [c.valid + ' of ' + c.total + ' valid QDs'];
+      // Honest denominator: after a Cancel only `swept` values were attempted, so
+      // "K of total" would imply the un-swept remainder was invalid. Report the
+      // attempted count and flag the cancellation.
+      const swept = c.valid + c.nonUnivalent + c.unsolved;
+      const cancelled = !!(famAbort && famAbort.aborted);
+      const parts = [cancelled
+        ? c.valid + ' of ' + swept + ' valid QDs (cancelled, ' + swept + '/' + c.total + ' swept)'
+        : c.valid + ' of ' + c.total + ' valid QDs'];
       if (c.nonUnivalent) parts.push(c.nonUnivalent + ' non-univalent');
       if (c.unsolved) parts.push(c.unsolved + ' unsolved');
       famSetStatus(parts.join(' · '), c.valid ? 'ok' : 'warn');
