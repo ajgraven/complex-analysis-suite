@@ -345,6 +345,9 @@ const QD = _QD;
       if (!(N >= 2)) N = 20;
       N = Math.min(N, FAMILY_MAX_STEPS);
 
+      const famNonUniv = $('#fig-family-nonuniv');
+      const includeNonUnivalent = !!(famNonUniv && famNonUniv.checked);
+
       famRunning = true;
       famAbort = { aborted: false };
       if (famGo) famGo.textContent = 'Cancel';
@@ -353,6 +356,7 @@ const QD = _QD;
       try {
         result = await sweepFamily({
           scenario: scen, ref: p.ref, values: linspace(min, max, N), sampleN: FAMILY_SAMPLES,
+          includeNonUnivalent,
           onProgress: (done, total) => { if (famRunning) famSetStatus('Sweeping… ' + done + '/' + total, 'muted'); },
           signal: famAbort,
         });
@@ -361,9 +365,11 @@ const QD = _QD;
       if (famGo) famGo.textContent = 'Generate';
       if (!result) { famSetStatus('Sweep failed.', 'warn'); return; }
 
-      const valid = result.curves.filter((cv) => cv.ok);
-      state.family = valid.length
-        ? { curves: valid.map((cv) => ({ pts: cv.pts, color: familyRamp(cv.t) })), param: p.label, counts: result.counts }
+      // Draw every member that produced a boundary: valid solid, non-univalent
+      // dashed. Members that didn't solve at all (no pts) are honest gaps.
+      const drawable = result.curves.filter((cv) => cv.pts && cv.pts.length > 1);
+      state.family = drawable.length
+        ? { curves: drawable.map((cv) => ({ pts: cv.pts, color: familyRamp(cv.t), dashed: !cv.ok })), param: p.label, counts: result.counts }
         : null;
       famRepaint();
       const c = result.counts;

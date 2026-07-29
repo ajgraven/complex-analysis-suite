@@ -602,6 +602,10 @@ class DomainPlot {
         c.lineTo(p.x, p.y);
       }
       c.closePath();
+      // Non-univalent members (cv.dashed) are drawn dashed — the honest signal
+      // that they are NOT valid quadrature domains — while keeping the ramp
+      // colour so the sweep position still reads.
+      if (c.setLineDash) c.setLineDash(cv.dashed ? [5, 4] : []);
       c.strokeStyle = cv.color || '#888';
       c.stroke();
     }
