@@ -52,6 +52,26 @@ describe("family-sweep engine", () => {
     expect(warmSeen[5]).toEqual({ id: 0.8 }); // 1 (unsolved) kept the last valid warm
   });
 
+  it("includeNonUnivalent draws non-univalent members (with pts) via the direct solve", async () => {
+    const ref = { kind: "poleRe", poleIdx: 0 };
+    const scenario = { hData: {}, norm: {}, mode: "bounded" };
+    // fake direct solver: value < 0.3 → non-univalent φ, value > 0.8 → no φ, else valid
+    const solveDirect = (_sc: any, _ref: any, value: number) =>
+      value > 0.8 ? null : { phi: { id: value }, univalent: value >= 0.3 };
+    const sample = (phi: any, N: number) => Array.from({ length: N }, (_, k) => ({ re: phi.id, im: k }));
+    const values = linspace(0, 1, 6); // 0 .2 .4 .6 .8 1
+    const { curves, counts } = await sweepFamily({
+      scenario, ref, values, sampleN: 3, includeNonUnivalent: true, solveDirect, sample,
+    });
+    expect(counts.valid).toBe(3); // .4 .6 .8
+    expect(counts.nonUnivalent).toBe(2); // 0 .2 — now carry pts, so the card can dash them
+    expect(counts.unsolved).toBe(1); // 1 → no φ
+    const nonUniv = curves.filter((c) => c.nonUnivalent);
+    expect(nonUniv.length).toBe(2);
+    expect(nonUniv.every((c) => c.pts && c.pts.length === 3)).toBe(true); // drawable (dashed)
+    expect(curves.filter((c) => c.ok).every((c) => c.nonUnivalent === false)).toBe(true);
+  });
+
   it("returns empty on missing inputs and stops on an abort signal", async () => {
     expect((await sweepFamily({})).counts.total).toBe(0);
     const solve = () => ({ cls: "valid", phiSerialized: {} });
