@@ -43,9 +43,10 @@ const QD = _QD;
   // defaults (kept in sync by hand; the figure-export test asserts the keys).
   const DEFAULT_FIGURE = {
     showAxes: true, showGrid: true, showTickLabels: true, showFill: true,
-    showNodes: true, showW0: true, showCusps: true, hideOverlays: false,
+    showNodes: true, showW0: true, showCusps: true, hideOverlays: false, showNodeLabels: true,
     boundaryColor: null, boundaryWidth: null,
     bg: null, grid: null, gridLabel: null, axis: null,
+    nodeColor: null, nodeSize: null, nodeShape: 'circle', labelSize: null,
   };
 
   // One-click style presets — each a PARTIAL state.figure overlaid on

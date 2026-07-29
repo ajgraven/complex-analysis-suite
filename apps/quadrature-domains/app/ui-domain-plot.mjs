@@ -59,6 +59,12 @@ const QD = _QD;
       // Alphas used when a custom boundary colour derives its own fill tint.
       fillAlphaBounded:   0.16,
       fillAlphaUnbounded: 0.45,
+      // Quadrature-node dots, φ(0) marker, and label defaults.
+      node:       '#b53030',
+      nodeHalo:   '#ffffff',
+      w0:         '#1a3e7a',
+      nodeRadius: 5.5,
+      labelPx:    11,
     };
 
 class DomainPlot {
@@ -945,39 +951,65 @@ class DomainPlot {
     }
   }
 
+  // Marker outline path (circle | square | diamond) of radius r centred at (x,y).
+  _markerPath(x, y, r, shape) {
+    const c = this.ctx;
+    c.beginPath();
+    if (shape === 'square') {
+      c.rect(x - r, y - r, 2 * r, 2 * r);
+    } else if (shape === 'diamond') {
+      c.moveTo(x, y - r); c.lineTo(x + r, y); c.lineTo(x, y + r); c.lineTo(x - r, y); c.closePath();
+    } else {
+      c.arc(x, y, r, 0, 2 * Math.PI);
+    }
+  }
+
   drawPoles() {
     const c = this.ctx;
-    c.font = '11px system-ui, sans-serif';
+    const f = state.figure || {};
+    const color = f.nodeColor || this._pal('node');
+    const r = (typeof f.nodeSize === 'number' && f.nodeSize > 0) ? f.nodeSize : this._pal('nodeRadius');
+    const shape = f.nodeShape || 'circle';
+    const labelPx = (typeof f.labelSize === 'number' && f.labelSize > 0) ? f.labelSize : this._pal('labelPx');
+    const showLabels = f.showNodeLabels !== false;
+    c.font = labelPx + 'px system-ui, sans-serif';
     c.textBaseline = 'middle';
     for (let i = 0; i < this.data.poles.length; i++) {
       const p = this.data.poles[i];
       const s = this.toScreen(p.re, p.im);
-      c.beginPath();
-      c.arc(s.x, s.y, 5.5, 0, 2*Math.PI);
-      c.fillStyle = '#b53030';
+      this._markerPath(s.x, s.y, r, shape);
+      c.fillStyle = color;
       c.fill();
-      c.strokeStyle = '#fff'; c.lineWidth = 1.5;
+      c.strokeStyle = this._pal('nodeHalo'); c.lineWidth = 1.5;
       c.stroke();
-      c.fillStyle = '#b53030';
-      c.textAlign = 'left';
-      c.fillText('a' + sub(i+1), s.x + 7, s.y);
+      if (showLabels) {
+        c.fillStyle = color;
+        c.textAlign = 'left';
+        c.fillText('a' + sub(i + 1), s.x + r + 1.5, s.y);
+      }
     }
   }
 
   drawW0() {
     const c = this.ctx;
     const s = this.toScreen(this.data.w0.re, this.data.w0.im);
-    c.strokeStyle = '#1a3e7a';
+    const f = state.figure || {};
+    const color = this._pal('w0');
+    const labelPx = (typeof f.labelSize === 'number' && f.labelSize > 0) ? f.labelSize : this._pal('labelPx');
+    const showLabels = f.showNodeLabels !== false;
+    c.strokeStyle = color;
     c.lineWidth = 1.6;
     c.beginPath();
     c.moveTo(s.x - 5, s.y); c.lineTo(s.x + 5, s.y);
     c.moveTo(s.x, s.y - 5); c.lineTo(s.x, s.y + 5);
     c.stroke();
-    c.fillStyle = '#1a3e7a';
-    c.font = '11px system-ui, sans-serif';
-    c.textAlign = 'left';
-    c.textBaseline = 'top';
-    c.fillText('φ(0)', s.x + 6, s.y + 4);
+    if (showLabels) {
+      c.fillStyle = color;
+      c.font = labelPx + 'px system-ui, sans-serif';
+      c.textAlign = 'left';
+      c.textBaseline = 'top';
+      c.fillText('φ(0)', s.x + 6, s.y + 4);
+    }
   }
 
   // -------------------------------------------------------------------------

@@ -50,6 +50,10 @@ describe("DomainPlot figure palette + gates", () => {
     expect(p._pal("fillUnboundedUnivalent")).toBe("rgba(180, 195, 220, 0.45)");
     expect(p._pal("boundaryWidthBounded")).toBe(1.6);
     expect(p._pal("boundaryWidthUnbounded")).toBe(1.8);
+    expect(p._pal("node")).toBe("#b53030");
+    expect(p._pal("w0")).toBe("#1a3e7a");
+    expect(p._pal("nodeRadius")).toBe(5.5);
+    expect(p._pal("labelPx")).toBe(11);
     // No `figure` block at all (a mock state) still resolves to defaults.
     expect(proto(undefined)._pal("bg")).toBe("#fafafa");
   });
