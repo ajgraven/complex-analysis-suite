@@ -72,6 +72,45 @@ describe("family-sweep engine", () => {
     expect(curves.filter((c) => c.ok).every((c) => c.nonUnivalent === false)).toBe(true);
   });
 
+  it("includeNonUnivalent does NOT count a univalent-but-identity-failing member as valid (honest labelling)", async () => {
+    const ref = { kind: "poleRe", poleIdx: 0 };
+    const scenario = { hData: {}, norm: {}, mode: "bounded" };
+    // solveInverseQD's "best-of-the-bad" primary can be univalent yet FAIL the
+    // quadrature identity (identityOK:false). Such a member is NOT a quadrature
+    // domain: it must be drawn dashed and excluded from the valid count, never
+    // presented as valid. (Old code keyed `ok` off univalence alone and would
+    // count it valid — this guards the honest-labelling fix.)
+    const solveDirect = (_sc: any, _ref: any, value: number) =>
+      value === 0.5
+        ? { phi: { id: value }, univalent: true, identityOK: false } // univalent, identity FAILS
+        : { phi: { id: value }, univalent: true, identityOK: true };  // genuine QD
+    const sample = (phi: any, N: number) => Array.from({ length: N }, (_, k) => ({ re: phi.id, im: k }));
+    const values = linspace(0, 1, 3); // 0, .5, 1
+    const { curves, counts } = await sweepFamily({
+      scenario, ref, values, sampleN: 3, includeNonUnivalent: true, solveDirect, sample,
+    });
+    expect(counts.valid).toBe(2);        // 0 and 1 (identityOK)
+    expect(counts.nonUnivalent).toBe(1); // .5 — identity fails ⇒ dashed, NOT valid
+    const bad = curves.find((c) => c.value === 0.5)!;
+    expect(bad.ok).toBe(false);                 // never solid/valid
+    expect(bad.nonUnivalent).toBe(true);        // dashed bucket
+    expect(bad.pts && bad.pts.length).toBe(3);  // still drawable (dashed)
+    expect(curves.find((c) => c.value === 0)!.ok).toBe(true); // genuine member stays valid
+  });
+
+  it("includeNonUnivalent treats a missing identityOK as OK (identity check disabled)", async () => {
+    // defaultSolveDirect passes identityOK straight through; when the solver's
+    // identity check is off it is undefined, which classifyResult (and this loop)
+    // treat as OK — so a univalent member with no identityOK stays valid.
+    const solveDirect = (_sc: any, _ref: any, value: number) => ({ phi: { id: value }, univalent: true });
+    const sample = (phi: any, N: number) => Array.from({ length: N }, (_, k) => ({ re: phi.id, im: k }));
+    const { counts } = await sweepFamily({
+      scenario: { hData: {}, norm: {}, mode: "bounded" }, ref: { kind: "poleRe", poleIdx: 0 },
+      values: linspace(0, 1, 3), sampleN: 2, includeNonUnivalent: true, solveDirect, sample,
+    });
+    expect(counts.valid).toBe(3); // undefined identityOK ⇒ treated OK (backward-compatible)
+  });
+
   it("returns empty on missing inputs and stops on an abort signal", async () => {
     expect((await sweepFamily({})).counts.total).toBe(0);
     const solve = () => ({ cls: "valid", phiSerialized: {} });

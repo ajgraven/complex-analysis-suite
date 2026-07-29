@@ -12,9 +12,10 @@
 //     previous valid member (0.2–0.7 ms warm). solveOnePoint returns a φ for VALID
 //     members only, so this draws valid QDs and COUNTS the rest ("K of N valid").
 //   • includeNonUnivalent — solve each member DIRECTLY (defaultSolveDirect →
-//     QD.solveInverseQD), which yields φ + validity regardless of univalence, so
-//     the non-univalent members can be drawn dashed. Cold per member (no
-//     warm-start), so it's the opt-in slower path.
+//     QD.solveInverseQD), which yields φ + full validity (univalence AND the
+//     quadrature identity), so the INVALID members (self-intersecting OR
+//     identity-failing) can be drawn dashed. Cold per member (no warm-start), so
+//     it's the opt-in slower path.
 //
 // `solve` / `solveDirect` / `sample` are injectable so the orchestration is
 // unit-testable without a real solver.
@@ -32,11 +33,15 @@ export function linspace(min, max, n) {
   return out;
 }
 
-// Direct solve returning φ + its validity REGARDLESS of univalence, for drawing
-// non-univalent members dashed (solveOnePoint hands back a φ for valid members
-// only). The scenario→opts mapping MIRRORS param-slice-common's
-// _solveScenarioBody (norm → w0/c/q/lqd/unbounded/singular/alpha); cold each
-// call (no warm-start). Returns { phi, univalent } or null.
+// Direct solve returning φ + its validity — BOTH univalence and the quadrature
+// identity — for drawing the invalid members dashed (solveOnePoint hands back a
+// φ for valid members only). identityOK is load-bearing: solveInverseQD's
+// "best-of-the-bad" primary can be univalent yet fail the quadrature identity
+// (solver.mjs sorts univalent candidates to the top when no valid QD exists),
+// and such a member is NOT a quadrature domain, so it must never read as valid.
+// The scenario→opts mapping MIRRORS param-slice-common's _solveScenarioBody
+// (norm → w0/c/q/lqd/unbounded/singular/alpha); cold each call (no warm-start).
+// Returns { phi, univalent, identityOK } or null.
 export function defaultSolveDirect(scenario, ref, value) {
   if (!QD || typeof QD.solveInverseQD !== 'function' || !PS ||
       typeof PS.cloneScenario !== 'function' || typeof PS.applyParamInPlace !== 'function') return null;
@@ -58,7 +63,12 @@ export function defaultSolveDirect(scenario, ref, value) {
   try { full = QD.solveInverseQD(s.hData, Object.assign({ bootstrapW0: false }, opts)); }
   catch (e) { return null; }
   const p = full && full.success && full.primary;
-  return (p && p.phi) ? { phi: p.phi, univalent: !!p.univalent } : null;
+  // identityOK follows classifyResult's convention (identityOK !== false ⇒ OK):
+  // undefined (identity check disabled) counts as OK; an explicit false is a
+  // quadrature-identity failure, which the sweep loop treats as NOT a valid QD.
+  return (p && p.phi)
+    ? { phi: p.phi, univalent: !!p.univalent, identityOK: p.identityOK }
+    : null;
 }
 
 // Sweep `ref` over `values` on `scenario`. Async: yields every few solves so the
@@ -104,7 +114,14 @@ export async function sweepFamily(opts = {}) {
     if (includeNonUnivalent && typeof solveDirect === 'function') {
       let d = null;
       try { d = solveDirect(scenario, ref, value); } catch (e) { d = null; }
-      if (d && d.phi) { phi = d.phi; ok = !!d.univalent; nonUniv = !d.univalent; }
+      // Valid QD ⇔ univalent AND satisfies the quadrature identity — the same
+      // predicate as the fast path's CLASS_VALID (univ && idOK). A univalent-but-
+      // identity-failing member is drawn dashed like a self-intersecting one
+      // (honest: it is NOT a quadrature domain), never counted or drawn as valid.
+      if (d && d.phi) {
+        const valid = !!d.univalent && d.identityOK !== false;
+        phi = d.phi; ok = valid; nonUniv = !valid;
+      }
     } else if (typeof solve === 'function') {
       let r = null;
       try { r = solve(scenario, [{ ref, value }], warm, tag); } catch (e) { r = null; }
