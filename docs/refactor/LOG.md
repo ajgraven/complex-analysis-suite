@@ -85,3 +85,19 @@
   No new characterization test — nothing runtime changed; the existing green suite + typecheck + madge are
   the net, and the dependency-cruiser gate (F1) will lock the no-cycle invariant. Commit 852a9a1.
 - PR to be opened; auto-merge once CI (build + browser) is green, then continue to A2.
+- **A3 MERGED** (#179, merge commit e657769, CI green build+browser); pulled to `refactor/main`.
+
+## 2026-07-30 — Phase D · Stage A2 (dispatch-order safety, QD-SOLV-1) — PR opened
+- Cut `refactor/A2-dispatch-order` from `refactor/main` @ e657769.
+- Inspection: `familyDispatchOrder` (solver.mjs:1137); `selectFamily` walks front-to-back, first `matches()`
+  wins (1139); `registerFamily` unshift (1283). 10 families; 4 singular (boundedLQD/powerQD/unboundedLQD/
+  unboundedPQD `_singular`), each base present. Precedence = reverse load order; the load lists load
+  base-before-singular → singular outranks base (correct today).
+- Commit 11e2d99: characterization spec (`selectFamily` routes a singular request to the singular family) —
+  green on unmodified code (4/4). Commit d22e247: added `checkDispatchOrder` (pure) + `assertDispatchOrder`,
+  run once lazily on the first `selectFamily` call. No-op for the correct order → behavior-preserving; fails
+  loud on a mis-order. +4 guard assertions (spec now 8/8). **Mitigates** QD-SOLV-1's footgun; the underlying
+  3-list triplication is **deferred to E2**.
+- Green bar: build/typecheck/lint exit 0; `pnpm test` 2031 passed / 208 files — the live assertion passes
+  under the node-suite (bootstrap.js order), the worker graph, AND the spec → all three load paths are correctly ordered.
+- PR to be opened; auto-merge on green, then continue to **Group B** (test Stage 0).
