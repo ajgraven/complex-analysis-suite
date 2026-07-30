@@ -11,10 +11,11 @@ extensibility, conceptual clarity, reliability/testability, and architectural co
 Behavior-preserving by default; no behavioral change without an explicit approval token.
 
 ## Phase / stage
-- **Phase D — Execute. Cadence: AUTO-MERGE ON GREEN (user, 2026-07-30).** A1 (#178) + A3 (#179) MERGED.
-  **Stage A2 IN FLIGHT — PR #180 open** (QD-SOLV-1 dispatch-order assertion; local green 2031/208).
-  Auto-merges on green CI (send_later re-check @ 23:44Z). After A2, **Group A (quick wins) is done** →
-  PAUSE to confirm the Group-B (test Stage 0) approach before B1 (a substantial node-suite migration).
+- **Phase D — Execute. GROUP A (quick wins) COMPLETE** — A1 (#178) + A2 (#180) + A3 (#179) all merged to
+  `refactor/main` (@ 3a5d18f). No stage in flight.
+- **PAUSED at the Group-A→B boundary, awaiting the user's confirmation of the Group-B (test Stage 0)
+  approach** before starting B1 (26-file node-suite → parallel Vitest) — a substantial migration w/ regression risk.
+- Cadence: auto-merge on green (user). `APPROVED: PLAN.md v1`. Deferred/open: QD-ALG-7 (→ Group D), QD-SOLV-6.
 - `APPROVED: PLAN.md v1`; decisions recorded (D-1 align `{re:0}`, D-2 folderize late, D-3 include E1 last,
   D-4 keep `harness.ok` wrapped).
 - A1 shipped: QD-SOLV-3 (centroid → `QD.poleCentroid`, D-1 behavior change, char-tested) + QD-SOLV-2
@@ -23,9 +24,8 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   E(state+folderize)/F(dependency-cruiser). Phase B complete; ASSESSMENT §1–4; 36 findings in ISSUES.
 
 ## Branches / PR
-- Integration branch: `refactor/main` @ e657769 (cut from `master` @ b1e3004). Tree clean.
-- **Stage in flight: `refactor/A2-dispatch-order` → PR #180** (auto-merge on green). A1 (#178) + A3 (#179) merged.
-  https://github.com/ajgraven/complex-analysis-suite/pull/180
+- Integration branch: `refactor/main` @ 3a5d18f (cut from `master` @ b1e3004). Tree clean. **No PR in flight.**
+- Merged stage PRs: A1 #178 (b331ae2), A3 #179 (e657769), A2 #180 (3a5d18f).
 
 ## Validation state (green bar) — established 2026-07-30 @ b1e3004; all green, no pre-existing failures
 - build:      `pnpm build`      → exit 0
@@ -45,12 +45,11 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   green bar as source of truth; report CI per PR without blocking on it.
 
 ## Next concrete steps
-1. Auto-merge PR #180 (A2) once CI is green — send_later re-check @ 23:44Z; subscribed for failures.
-2. On merge: mark **Group A complete** (A1/A2/A3 merged; QD-ALG-7 & QD-SOLV-6 remain deferred/open),
-   then **PAUSE and confirm the Group-B approach** with the user before starting B1.
-3. **Group B (test Stage 0)** once confirmed: B1 port the 26-file node-suite → parallel Vitest (keep
-   `harness.ok` wrapped, D-4); B2 shard `solvers.test.js` (~128s→~25-30s); B4 the `ui.mjs`/`ui-solve.mjs`
-   characterization net. Gates all QD structural work (C/D/E). Then C → D → E → F.
+1. **Awaiting the user's confirmation of the Group-B approach** (presented in chat). Do not start B1 until confirmed.
+2. Group B (test Stage 0), on confirmation: B1 port the 26 node-suite files → parallel Vitest specs
+   (`beforeAll(bootstrap.init)`; keep `harness.ok` wrapped per D-4; retire FLOORS); B2 shard `solvers.test.js`
+   (~128s→~25-30s); B4 fake-Worker + jsdom characterization net for `ui.mjs`/`ui-solve.mjs`. Char-test-first; each its own PR.
+3. Then C (dup collapse) → D (god-module decomposition) → E (state + folderize) → F (dependency-cruiser).
 
 ## Resume commands
 ```

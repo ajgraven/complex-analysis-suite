@@ -101,3 +101,12 @@
 - Green bar: build/typecheck/lint exit 0; `pnpm test` 2031 passed / 208 files — the live assertion passes
   under the node-suite (bootstrap.js order), the worker graph, AND the spec → all three load paths are correctly ordered.
 - PR to be opened; auto-merge on green, then continue to **Group B** (test Stage 0).
+- **A2 MERGED** (#180, merge commit 3a5d18f, CI green build+browser); pulled to `refactor/main`.
+
+## 2026-07-30 — Milestone: GROUP A (quick wins) COMPLETE
+- A1 (#178), A2 (#180), A3 (#179) all merged to `refactor/main` (@ 3a5d18f). Shipped: QD-SOLV-3, QD-SOLV-2,
+  QD-SOLV-1 (guarded), CD-4. Deferred/still open: QD-ALG-7 (→ Group D), QD-SOLV-6 (own analysis).
+- Every stage: characterization-test-first, behavior-preserving, full green bar (now 2031 tests / 208 files),
+  auto-merged on green CI. No regressions; no plan deviations beyond the logged A1 scope-narrowing.
+- **PAUSED before Group B** (test Stage 0) to confirm the approach with the user — B1 (node-suite → parallel
+  Vitest) + B4 (ui.mjs/ui-solve.mjs char net) are a substantial migration and the gate for all QD structural work.
