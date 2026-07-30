@@ -11,14 +11,19 @@ extensibility, conceptual clarity, reliability/testability, and architectural co
 Behavior-preserving by default; no behavioral change without an explicit approval token.
 
 ## Phase / stage
-- **Phase B — Review (read-only).** Breadth pass **complete** (ASSESSMENT §1–2 written & committed).
-  5 depth targets prioritized. **Next: depth pass 1 — QD `algebra/` subsystem.**
-- Approved mandate (Phase A Q&A → PLAN.md v0 §4): fresh architectural review (do NOT re-derive the
-  July-2026 line findings); focus = QD internal structure + testability/dev-loop + clarity/onboarding;
-  appetite = deeper redesign where warranted (ADR-bound, behavior-preserving unless separately approved).
-- Headline breadth findings: QD ~60% of code & untyped; QD `app/` is a flat 102-file/~57k-line pile;
-  god-modules (sym-core 6k, algebra-ui 5k/churn 20×, cd main.ts 4.6k, algebra-store 3k); QD 0 import
-  cycles (coupling hides in store/worker/globals); CD `render/` has a 2-cycle knot; packages healthy.
+- **Phase B — Review (read-only): COMPLETE.** Breadth (§1–2), all 5 depth passes (§3.1–3.5), and the
+  systemic synthesis (§4) are written to ASSESSMENT.md; 36 findings registered in ISSUES.md. All
+  subagent claims re-verified against code before recording (spot-checks in LOG.md).
+- **Next: present Phase B findings in chat and STOP for user input before Phase C** (the 2nd checkpoint
+  the user requested — "before architecting the final refactor plan"). Do NOT start Phase C / PLAN v1
+  until the user weighs in.
+- Approved mandate (PLAN.md v0 §4): fresh architectural review; focus = QD internals + testability +
+  clarity; appetite = deeper redesign where warranted (ADR-bound, behavior-preserving unless approved).
+- Headline: value is **concentrated in QD orchestration/UI + CD god-modules**; packages, prove-plan,
+  algebra-store, solver math, correspondences are healthy. 6 systemic patterns (S1 god-modules from
+  un-extracted orchestration; S2 parallel-family duplication — already shipped a bug; S3 informal state/
+  contracts; S4 safety-net thinnest where debt deepest; S5 flat org; S6 doc drift). Recommend a narrow,
+  seam-first, behavior-preserving intervention — NOT a rewrite.
 
 ## Branches / PR
 - Integration branch: `refactor/main` (cut from `master` @ b1e3004).
@@ -41,13 +46,13 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   green bar as source of truth; report CI per PR without blocking on it.
 
 ## Next concrete steps
-1. Depth pass 1 — QD `algebra/` (algebra-ui, algebra-store, prove-plan, algebra-canvas): delegate
-   read to a subagent, verify claims, write ASSESSMENT §3 + ISSUES; commit.
-2. Depth pass 2 — QD core solve/UI + store/worker coupling layer.
-3. Depth pass 3 — test infra & the ~128s node-suite.
-4. Depth pass 4 — CD `main.ts` + `render/` cycles. Depth pass 5 — sym-core/@cas-exact boundary (structural only).
-5. Light pass — packages + correspondences (confirm health). Then systemic patterns (ASSESSMENT §4).
-6. STOP before Phase C (architecting the plan) to present findings and take input, per user request.
+1. **STOP — awaiting user input on the Phase B findings before Phase C** (the 2nd requested checkpoint).
+2. On resume: write PLAN.md v1 (Phase C) — current-state assessment; classified findings; target
+   architecture; a **seam-first, behavior-preserving, staged** roadmap; decision points. Bump to v1,
+   then request `APPROVED: PLAN.md v1` before ANY implementation.
+3. Roadmap shape to propose (seam-first): build QD test seams (QD-TEST-1/2/4 — port+shard the node-suite;
+   fake-Worker tests) BEFORE any QD structural move; pair CD-4 (type-only cycle, cheap/safe) as an early
+   quick win; then S1/S2 extractions behind the seams. Sequence per S4 (safety net before movement).
 
 ## Resume commands
 ```
