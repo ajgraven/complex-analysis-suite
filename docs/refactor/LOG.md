@@ -72,3 +72,16 @@
   (fast-forward, tree clean, fix present at solver-pqd-singular.mjs:503). Session auto-unsubscribed from
   #178. Note: the user's merge delegation overrode the default "never merge your own PR" for this PR only.
   Stage A1 complete. Awaiting go-ahead on the next stage (A3 or Group B).
+
+## 2026-07-30 — Phase D · Stage A3 (CD type-only render cycle, CD-4) — PR opened
+- User set cadence to **auto-merge on green** and chose A3 next. Cut `refactor/A3-cd-cycle` from `refactor/main` @ 3f26a6f.
+- Baseline `madge --circular apps/complex-dynamics/src` = **2 cycles**, both closed by `overlay.ts:18`
+  `import type { Leaf } from "./lamination"`.
+- Change: new dependency-free `render/laminationTypes.ts` holds `Leaf`; `lamination.ts` re-exports it
+  (`import type { Leaf } from "./laminationTypes"; export type { Leaf };`); `overlay.ts:18` repointed to
+  `./laminationTypes`. Type-only (verbatimModuleSyntax) → **zero emitted-JS change**; `plotView.ts` /
+  `main.ts` importers unchanged (via the re-export).
+- Verify: `madge --circular` **2 → 0**; build/typecheck/lint exit 0; `pnpm test` 2023 passed / 207 files.
+  No new characterization test — nothing runtime changed; the existing green suite + typecheck + madge are
+  the net, and the dependency-cruiser gate (F1) will lock the no-cycle invariant. Commit 852a9a1.
+- PR to be opened; auto-merge once CI (build + browser) is green, then continue to A2.

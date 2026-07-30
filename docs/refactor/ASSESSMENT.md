@@ -214,7 +214,7 @@ but it blocks the planned dependency-cruiser gate.
 | CD-1 | high | design-problem | `init()` ~3,660-line god-function (109 nested fns, ~40 `let`s, 141 listeners) holding a dozen responsibilities as closures | main.ts:958-4623 |
 | CD-2 | high | design-problem | `GLPlot` 2,527-line god-class mixing GL plumbing + domain decisions + interaction (~90 methods) | render/glPlot.ts:344 |
 | CD-3 | med-high | design-problem | `main.ts` reaches `plotView.plot.<GLPlot internal>` **156×** — façade bypassed, welds main to GLPlot field layout | main.ts (156 `.plot.`); plotView.ts:59 |
-| CD-4 | med | design-problem | render/ 5-module import cycle — **type-only** (no runtime hazard) but blocks the dependency-cruiser guardrail; one value-import from real | overlay.ts:18; lamination.ts:32-33; tsconfig.json:17 |
+| CD-4 | med | design-problem | render/ 5-module import cycle — **type-only** (no runtime hazard) but blocks the dependency-cruiser guardrail; one value-import from real · **[FIXED · stage A3]** | overlay.ts:18; lamination.ts:32-33; tsconfig.json:17 |
 | CD-5 | med | plausible-concern | 4 largest render/ modules (glPlot, shaderBuilder, overlay-draw, plotView) have no unit tests — only browser/manual | test/ (pure-fn tests only) |
 | CD-6 | med | plausible-concern | `main.ts` imports 25 distinct render/ modules directly — no render-subsystem façade; the coupling bottleneck | main.ts (25 `./render/`) |
 | CD-7 | low | optional | No `dispose()` on GLPlot/PlotView (fine at 2 page-lifetime plots; a leak if ever mount/unmount under a shared shell) | glPlot.ts / plotView.ts |

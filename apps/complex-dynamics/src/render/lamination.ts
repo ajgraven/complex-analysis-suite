@@ -31,12 +31,11 @@ import type { Vec2 } from "../arrays";
 import { sqrt } from "@cas/expr/complexJs";
 import { dynamicalLanding, parameterLanding } from "./angleParameter";
 import { enumerateLandingAngles } from "./angleOfPoint";
-
-/** A leaf of the lamination: a chord joining two co-landing external angles (turns in [0, 1)). */
-export interface Leaf {
-  a: number;
-  b: number;
-}
+// `Leaf` lives in ./laminationTypes (a dependency-free leaf module) so that render/overlay.ts can
+// import the type without an edge back into this file — breaking the type-only import cycle (CD-4).
+// Re-exported here so existing `import { Leaf } from "./lamination"` sites (main.ts, plotView.ts) work.
+import type { Leaf } from "./laminationTypes";
+export type { Leaf };
 
 /** A computed lamination: its leaves plus the co-landing angle groups (the pinch-point gaps). */
 export interface Lamination {
