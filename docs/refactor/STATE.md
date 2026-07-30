@@ -11,10 +11,11 @@ extensibility, conceptual clarity, reliability/testability, and architectural co
 Behavior-preserving by default; no behavioral change without an explicit approval token.
 
 ## Phase / stage
-- **Phase D — Execute. GROUP A (quick wins) COMPLETE** — A1 (#178) + A2 (#180) + A3 (#179) all merged to
-  `refactor/main` (@ 3a5d18f). No stage in flight.
-- **PAUSED at the Group-A→B boundary, awaiting the user's confirmation of the Group-B (test Stage 0)
-  approach** before starting B1 (26-file node-suite → parallel Vitest) — a substantial migration w/ regression risk.
+- **Phase D — Execute. Group A COMPLETE (A1/A2/A3 merged @ 3a5d18f).** User confirmed: proceed with Group B,
+  auto-merge on green. **B1 branch `refactor/B1-parallelize-node-suite` cut (no commits) and fully DESIGNED
+  (Next steps below); implementation NOT begun.**
+- **Checkpoint before implementing B1** — it is a delicate assertion-parity test-infra port and the session
+  is very long. Recommend implementing B1 with fresh context to verify parity carefully. Can proceed now if preferred.
 - Cadence: auto-merge on green (user). `APPROVED: PLAN.md v1`. Deferred/open: QD-ALG-7 (→ Group D), QD-SOLV-6.
 - `APPROVED: PLAN.md v1`; decisions recorded (D-1 align `{re:0}`, D-2 folderize late, D-3 include E1 last,
   D-4 keep `harness.ok` wrapped).
@@ -44,12 +45,23 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - CI health unknown (July review reported an exhausted GH Actions spending limit). Treat the LOCAL
   green bar as source of truth; report CI per PR without blocking on it.
 
-## Next concrete steps
-1. **Awaiting the user's confirmation of the Group-B approach** (presented in chat). Do not start B1 until confirmed.
-2. Group B (test Stage 0), on confirmation: B1 port the 26 node-suite files → parallel Vitest specs
-   (`beforeAll(bootstrap.init)`; keep `harness.ok` wrapped per D-4; retire FLOORS); B2 shard `solvers.test.js`
-   (~128s→~25-30s); B4 fake-Worker + jsdom characterization net for `ui.mjs`/`ui-solve.mjs`. Char-test-first; each its own PR.
-3. Then C (dup collapse) → D (god-module decomposition) → E (state + folderize) → F (dependency-cruiser).
+## Next concrete steps — Stage B1 (parallelize node-suite): DESIGN READY (verified feasible), implement next
+Facts confirmed: `bootstrap.init()` memoized (test/bootstrap.js:127-130); harness counters per-worker
+(harness.js:12,40); the 26 `TESTS` are order-independent (node-test.js:19-20); all run in **node** env (the 4
+"DOM-ish" files run DOM-free today). Implementation:
+1. Add `apps/quadrature-domains/vitest/node/_run.ts` exporting `runNodeSuiteFile(name)`: `import {beforeAll,test,
+   expect}` from vitest + `createRequire(import.meta.url)`; `beforeAll(()=>require('../../app/test/bootstrap').init())`;
+   `test(name, async ()=>{ const b=report(); const run=require('../../app/test/'+name+'.test.js'); await run();
+   const a=report(); expect(a.pass+a.fail-(b.pass+b.fail)).toBeGreaterThanOrEqual(FLOORS[name]??3);
+   expect(a.fail-b.fail).toBe(0); })`. Move the FLOORS map (node-test.js:85-91) into `_run.ts` — **KEEP it**
+   (D-4 keeps `harness.ok` wrapped → per-file counts stay invisible to Vitest, so FLOORS still guards silent shrink).
+2. Generate 26 thin specs `vitest/node/<name>.test.ts` via a bash loop over TESTS: line 1 `// @vitest-environment node`,
+   then `import { runNodeSuiteFile } from "./_run"; runNodeSuiteFile("<name>");`.
+3. Delete `vitest/node-suite.test.ts` (serial execFileSync wrapper). Keep `app/node-test.js` for standalone runs.
+4. Verify: full green bar; **assertion PARITY** (sum per-file counts ≈ 2302, all pass); node-suite no longer one
+   serial spec; measure wall-time drop (~40%). Watch: global visibility across Vitest workers; createRequire paths.
+Then **B2** (shard `solvers.test.js` → ~25-30s) → **B4** (fake-Worker + jsdom net for `ui.mjs`/`ui-solve.mjs`).
+Then C → D → E → F.
 
 ## Resume commands
 ```

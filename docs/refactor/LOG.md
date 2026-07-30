@@ -110,3 +110,17 @@
   auto-merged on green CI. No regressions; no plan deviations beyond the logged A1 scope-narrowing.
 - **PAUSED before Group B** (test Stage 0) to confirm the approach with the user — B1 (node-suite → parallel
   Vitest) + B4 (ui.mjs/ui-solve.mjs char net) are a substantial migration and the gate for all QD structural work.
+
+## 2026-07-30 — Phase D · Stage B1 (parallelize node-suite): DESIGNED, checkpoint before implementing
+- User chose "proceed now, auto-merge" for Group B. Cut `refactor/B1-parallelize-node-suite` (no commits).
+- Inspected the harness end-to-end and **confirmed the port is feasible**: `bootstrap.init()` is memoized
+  (test/bootstrap.js:127-130 `_initPromise`) → safe in `beforeAll`; `harness.js` counters are module-scoped /
+  per-Vitest-worker (12,40) → a per-spec `report().fail===0` is exact parity; the 26 `TESTS` are declared
+  order-independent (node-test.js:19-20); all 26 run DOM-free in node today (the 4 grep-"DOM-ish" files —
+  cas-export/observables/ui-inputs/worker — pass under plain `node` in node-test.js, so node env is correct).
+- Full B1 implementation design recorded in STATE.md "Next concrete steps" (26 thin node-env specs +
+  `_run.ts` helper carrying the FLOORS map; delete the serial `node-suite.test.ts`; verify assertion parity).
+  **Decision: KEEP FLOORS** (contra the test-infra subagent) because D-4 keeps `harness.ok` wrapped, so per-file
+  assertion counts stay invisible to Vitest and the silent-shrink guard is still needed.
+- **CHECKPOINT (not a plan deviation):** did NOT implement B1 — a delicate assertion-parity migration + a very
+  long session. Recommend implementing with fresh context. Group A remains a clean, complete, merged deliverable.
