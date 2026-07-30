@@ -11,10 +11,14 @@ extensibility, conceptual clarity, reliability/testability, and architectural co
 Behavior-preserving by default; no behavioral change without an explicit approval token.
 
 ## Phase / stage
-- **Phase B — Review (read-only).** Breadth pass not yet started.
+- **Phase B — Review (read-only).** Breadth pass **complete** (ASSESSMENT §1–2 written & committed).
+  5 depth targets prioritized. **Next: depth pass 1 — QD `algebra/` subsystem.**
 - Approved mandate (Phase A Q&A → PLAN.md v0 §4): fresh architectural review (do NOT re-derive the
   July-2026 line findings); focus = QD internal structure + testability/dev-loop + clarity/onboarding;
   appetite = deeper redesign where warranted (ADR-bound, behavior-preserving unless separately approved).
+- Headline breadth findings: QD ~60% of code & untyped; QD `app/` is a flat 102-file/~57k-line pile;
+  god-modules (sym-core 6k, algebra-ui 5k/churn 20×, cd main.ts 4.6k, algebra-store 3k); QD 0 import
+  cycles (coupling hides in store/worker/globals); CD `render/` has a 2-cycle knot; packages healthy.
 
 ## Branches / PR
 - Integration branch: `refactor/main` (cut from `master` @ b1e3004).
@@ -37,11 +41,13 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   green bar as source of truth; report CI per PR without blocking on it.
 
 ## Next concrete steps
-1. Phase B breadth pass: install `cloc`/`madge`; produce LOC map, import/dependency graph + cycles,
-   churn, entry points, test-to-source ratio. Write ASSESSMENT.md §1; commit before depth passes.
-2. Prioritize 3–6 subsystems; say what is NOT reviewed.
-3. Depth passes one subsystem at a time; write ASSESSMENT.md + ISSUES.md after each; commit as I go.
-4. STOP before Phase C (architecting the plan) to present findings and take input, per user request.
+1. Depth pass 1 — QD `algebra/` (algebra-ui, algebra-store, prove-plan, algebra-canvas): delegate
+   read to a subagent, verify claims, write ASSESSMENT §3 + ISSUES; commit.
+2. Depth pass 2 — QD core solve/UI + store/worker coupling layer.
+3. Depth pass 3 — test infra & the ~128s node-suite.
+4. Depth pass 4 — CD `main.ts` + `render/` cycles. Depth pass 5 — sym-core/@cas-exact boundary (structural only).
+5. Light pass — packages + correspondences (confirm health). Then systemic patterns (ASSESSMENT §4).
+6. STOP before Phase C (architecting the plan) to present findings and take input, per user request.
 
 ## Resume commands
 ```
