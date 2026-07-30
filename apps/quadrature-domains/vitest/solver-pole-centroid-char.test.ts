@@ -54,4 +54,11 @@ describe("Family.powerQD_singular.normalizeOpts — w0 default (QD-SOLV-3 invari
     const out = fam().normalizeOpts({ alpha: 2, w0: { re: 5, im: 1 } }, hData);
     expect(out.w0).toEqual({ re: 5, im: 1 });
   });
+
+  it("[A1/D-1 change] fails closed on the degenerate empty-pole case (w0 -> 0 trips w0 != 0)", () => {
+    // Intended behavior change (D-1): the empty-pole fallback moved {re:1} -> {re:0} to match the
+    // PQD-family contract, so a no-finite-pole PQD-singular with no explicit w0 now throws instead
+    // of proceeding with an arbitrary w0 = 1. See docs/refactor/LOG.md 2026-07-30 stage A1.
+    expect(() => fam().normalizeOpts({ alpha: 2 }, { poles: [] })).toThrow(/nonzero/i);
+  });
 });

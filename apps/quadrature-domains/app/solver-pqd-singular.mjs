@@ -494,13 +494,13 @@ import _QD from './solver.mjs';
           && !!opts.singular && !opts.unbounded && !opts.lqd;
     },
     normalizeOpts(opts, hData) {
+      // QD-SOLV-3: route the w0 default through the shared QD.poleCentroid (this was the 5th
+      // open-coded copy). Empty-pole fallback -> 0 matches the PQD-family contract and the
+      // non-singular sibling solver-pqd (poleCentroid header: "PQD/auto-w0 -> 0"); it previously
+      // used {re:1} (the LQD value). A 0 default then trips the w0 != 0 guard below, i.e. a
+      // degenerate no-pole PQD now fails closed instead of proceeding with an arbitrary w0 = 1.
       let w0 = opts.w0;
-      if (!w0) {
-        let sumRe = 0, sumIm = 0;
-        for (const p of hData.poles) { sumRe += p.a.re; sumIm += p.a.im; }
-        const n = hData.poles.length;
-        w0 = n > 0 ? { re: sumRe / n, im: sumIm / n } : { re: 1, im: 0 };
-      }
+      if (!w0) w0 = QD.poleCentroid(hData, { re: 0, im: 0 });
       const alpha = opts.alpha;
       if (!(alpha > 0) || alpha === 1) {
         throw new Error("Family.powerQD_singular: α must be real > 0, α ≠ 1");
