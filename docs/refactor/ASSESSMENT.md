@@ -170,7 +170,7 @@ mechanical shell boilerplate.
 
 | ID | Sev | Class | Finding | Evidence |
 |---|---|---|---|---|
-| QD-SOLV-1 | high | design-problem | Dispatch precedence = reverse load order (`registerFamily` unshift); seed→solver order **triplicated** across 3 hand-maintained lists; a `_singular` mis-ordered before its base → silently wrong φ. Nothing asserts base-before-singular | solver.mjs:1283-1285; main.mjs / workers/solver-graph.mjs / test/bootstrap.js |
+| QD-SOLV-1 | high | design-problem | Dispatch precedence = reverse load order (`registerFamily` unshift); seed→solver order **triplicated** across 3 hand-maintained lists; a `_singular` mis-ordered before its base → silently wrong φ. Nothing asserts base-before-singular · **[GUARDED · stage A2 — assertDispatchOrder; list triplication → E2]** | solver.mjs:1283-1285; main.mjs / workers/solver-graph.mjs / test/bootstrap.js |
 | QD-SOLV-2 | med | confirmed-defect | Stale doc: CONTRIBUTING.md:84 says the test bootstrap "imports the same graph" — it keeps its own copy · **[FIXED · stage A1]** | apps/quadrature-domains/CONTRIBUTING.md:84 |
 | QD-SOLV-3 | med | confirmed-defect | 5th open-coded pole-centroid copy despite `QD.poleCentroid`; diverges on empty-pole fallback (`{re:1}` vs `{re:0}`) · **[FIXED · stage A1, D-1]** | solver-pqd-singular.mjs:496-503 vs solver-qd.mjs:333-336 |
 | QD-SOLV-4 | med | design-problem | ~17-key `Family.X` record + IIFE/guard/seed-alias shell re-typed 10×; identical residual locator+coeff skeleton & Z/2 canonicalize duplicated verbatim | solver-qd.mjs:95-160; solver-lqd-singular.mjs:159-265 |

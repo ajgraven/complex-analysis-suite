@@ -86,3 +86,6 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   (needs its own behavior analysis at solver.mjs:1774). Both remain **open**.
 - **2026-07-30 · stage A3 (PR → refactor/main):** **CD-4 → fixed** (type-only render cycle broken via
   `render/laminationTypes.ts`; madge 2→0; zero runtime change). A1 (#178) now **merged** (b331ae2).
+- **2026-07-30 · stage A2 (PR → refactor/main):** **QD-SOLV-1 → guarded** (`assertDispatchOrder`: every
+  `_singular` must outrank its base; lazy on first `selectFamily`; behavior-preserving). Underlying 3-list
+  triplication **remains open → E2**. A3 (#179) now **merged** (e657769).
