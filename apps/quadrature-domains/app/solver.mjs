@@ -1135,8 +1135,13 @@ function applySchemaClamps(phi, schema) {
 // the order most-specific-first; boundedQD is the catch-all default.
 const Family = {};
 const familyDispatchOrder = [];
+let _dispatchOrderChecked = false;
 
 function selectFamily(opts) {
+  // QD-SOLV-1: verify the dispatch order once, on first use (all families have registered by the time
+  // any solve runs). Fails loud if a `_singular` family was mis-ordered after its base, instead of
+  // silently misdispatching. No-op when the order is correct → behavior-preserving. See below.
+  if (!_dispatchOrderChecked) { _dispatchOrderChecked = true; assertDispatchOrder(); }
   for (const name of familyDispatchOrder) {
     const f = Family[name];
     if (f && f.matches && f.matches(opts)) return f;
@@ -1284,6 +1289,35 @@ function registerFamily(name) {
   if (familyDispatchOrder.indexOf(name) === -1) {
     familyDispatchOrder.unshift(name);
   }
+}
+
+// QD-SOLV-1 dispatch-order guard. Precedence = position in `familyDispatchOrder` (selectFamily walks
+// it front-to-back, first `matches()` wins). Each `_singular` family's `matches()` is a strict subset
+// of its base's, so a singular request also matches the base — the singular MUST appear before (out-
+// rank) its base, or the request silently dispatches to the base (a wrong φ, not a crash). The load
+// order is hand-maintained in three separate lists (main.mjs, workers/solver-graph.mjs,
+// app/test/bootstrap.js — QD-SOLV-1's triplication); this guard fails loud on a mis-order instead of
+// misdispatching. `checkDispatchOrder` is pure (an explicit order → error string or null) so it is
+// unit-testable with synthetic input; `assertDispatchOrder` throws on the live order.
+function checkDispatchOrder(order) {
+  const SUFFIX = '_singular';
+  for (const name of order) {
+    if (!name.endsWith(SUFFIX)) continue;
+    const base = name.slice(0, -SUFFIX.length);
+    const baseIdx = order.indexOf(base);
+    if (baseIdx === -1) continue;            // base not loaded → nothing to mis-order against
+    if (order.indexOf(name) > baseIdx) {
+      return `Family dispatch order: '${name}' must precede its base '${base}' in familyDispatchOrder `
+        + `(a singular request matches both, so the base would misdispatch it). Fix the load order in `
+        + `main.mjs / workers/solver-graph.mjs / app/test/bootstrap.js.`;
+    }
+  }
+  return null;
+}
+
+function assertDispatchOrder() {
+  const msg = checkDispatchOrder(familyDispatchOrder);
+  if (msg) throw new Error(msg);
 }
 
 // --------- Top-level solver -----------------------------------------------
@@ -1814,6 +1848,8 @@ const _exports = {
   diagnosePQDRealizability,
   // Family registry (populated by each solver-{qd,uqd,lqd,...}.js).
   Family, selectFamily, registerFamily, normFromPhi,
+  // QD-SOLV-1 dispatch-order guard (pure checker + live assertion).
+  checkDispatchOrder, assertDispatchOrder,
   // Schema runtime — opt-in pack/unpack/clamp from declarative schema.
   packPhiBySchema, unpackPhiBySchema, applySchemaClamps,
   // Named numeric constants.

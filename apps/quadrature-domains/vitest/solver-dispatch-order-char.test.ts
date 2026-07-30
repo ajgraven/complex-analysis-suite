@@ -32,3 +32,22 @@ describe("selectFamily dispatch precedence — singular before base (QD-SOLV-1 i
     expect(QD.selectFamily({ alpha: 2 }).name).toBe("powerQD");
   });
 });
+
+describe("dispatch-order guard added by A2 (QD-SOLV-1)", () => {
+  it("assertDispatchOrder() passes on the live order (every _singular precedes its base)", () => {
+    expect(() => QD.assertDispatchOrder()).not.toThrow();
+  });
+
+  it("checkDispatchOrder returns null for a correctly-ordered pair", () => {
+    expect(QD.checkDispatchOrder(["boundedLQD_singular", "boundedLQD"])).toBeNull();
+  });
+
+  it("checkDispatchOrder detects a mis-ordered pair (base before its singular)", () => {
+    const msg = QD.checkDispatchOrder(["boundedLQD", "boundedLQD_singular"]);
+    expect(msg).toMatch(/boundedLQD_singular.*must precede its base.*boundedLQD/);
+  });
+
+  it("checkDispatchOrder ignores a singular whose base is not loaded", () => {
+    expect(QD.checkDispatchOrder(["powerQD_singular"])).toBeNull();
+  });
+});
