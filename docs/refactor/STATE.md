@@ -11,8 +11,9 @@ extensibility, conceptual clarity, reliability/testability, and architectural co
 Behavior-preserving by default; no behavioral change without an explicit approval token.
 
 ## Phase / stage
-- **Phase D — Execute. Stage A1: MERGED** into `refactor/main` (#178 → merge commit b331ae2, CI green:
-  build + browser). No stage in flight. **Awaiting user go-ahead on the next stage.**
+- **Phase D — Execute. Cadence: AUTO-MERGE ON GREEN (user, 2026-07-30).** A1 merged (#178, b331ae2).
+  **Stage A3 IN FLIGHT — PR #179 open** (CD-4: type-only render cycle broken via `render/laminationTypes.ts`;
+  local green + madge 2→0). Auto-merges on green CI (send_later re-check @ 23:25Z), then continues to A2.
 - `APPROVED: PLAN.md v1`; decisions recorded (D-1 align `{re:0}`, D-2 folderize late, D-3 include E1 last,
   D-4 keep `harness.ok` wrapped).
 - A1 shipped: QD-SOLV-3 (centroid → `QD.poleCentroid`, D-1 behavior change, char-tested) + QD-SOLV-2
@@ -21,8 +22,9 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   E(state+folderize)/F(dependency-cruiser). Phase B complete; ASSESSMENT §1–4; 36 findings in ISSUES.
 
 ## Branches / PR
-- Integration branch: `refactor/main` @ **b331ae2** (cut from `master` @ b1e3004). Tree clean.
-- **Open PR: none.** A1 merged (#178). Stage branch `refactor/A1-confirmed-defects` is merged (safe to delete).
+- Integration branch: `refactor/main` @ 3f26a6f (cut from `master` @ b1e3004). Tree clean.
+- **Stage in flight: `refactor/A3-cd-cycle` → PR #179** (auto-merge on green). A1 (#178) merged.
+  https://github.com/ajgraven/complex-analysis-suite/pull/179
 
 ## Validation state (green bar) — established 2026-07-30 @ b1e3004; all green, no pre-existing failures
 - build:      `pnpm build`      → exit 0
@@ -42,10 +44,11 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   green bar as source of truth; report CI per PR without blocking on it.
 
 ## Next concrete steps
-1. **Awaiting user go-ahead on the next stage** (and which). Recommended: **A3** (CD type-only cycle,
-   zero-risk quick win) or straight to **Group B** (test Stage 0 — the net that gates C/D/E).
-2. At next-stage start (§7.2): re-confirm `refactor/main` green (build/typecheck/lint/test) + clean,
-   then cut `refactor/<stage>-<slug>` from `refactor/main`; characterization tests first.
+1. Auto-merge PR #179 (A3) once CI (build+browser) is green — send_later re-check @ 23:25Z; subscribed for failures.
+2. Then **A2** (QD-SOLV-1): add a startup assertion that every `_singular` family outranks its base in
+   `familyDispatchOrder` (+ characterization test); auto-merge on green.
+3. Then **Group B** (test Stage 0): B1 port node-suite → parallel Vitest, B2 shard solvers, B4 the
+   characterization net for `ui.mjs`/`ui-solve.mjs` (gates all QD structural work C/D/E).
 
 ## Resume commands
 ```
