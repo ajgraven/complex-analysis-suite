@@ -15,7 +15,7 @@ import type { Node } from "@cas/expr/ast";
 import { getComplexFn, getEscapeFn } from "@cas/expr/evaluate";
 import { fareyLabels, fareyMaxDenominator } from "./farey";
 import { inverseJuliaCloud } from "./inverseJulia";
-import type { Leaf } from "./lamination";
+import type { Leaf } from "./laminationTypes";
 import { bulbRayAngles, dynamicRay, parameterRay, rayDepthForZoom } from "./rays";
 import { siegelInvariantCurves } from "./siegelCurves";
 import { reconstructBoundary } from "./uniformize";
