@@ -78,3 +78,9 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
 **Cross-refs into the July-2026 review** (not re-derived; folded in only where a structural stage subsumes them):
 `docs/review/RAW_FINDINGS_2026-07.md` — e.g. `cd-shell-02` (_pcdd precedence), `cd-shell-07` (missing control),
 `cd-overlay-01` (per-frame redraw), `cd-metricsworker-01` (worker leak) touch code CD-1/CD-3 would move.
+
+## Status updates (mutable)
+- **2026-07-30 · stage A1 (PR → refactor/main):** **QD-SOLV-3 → fixed** (solver-pqd-singular routed to
+  `QD.poleCentroid`; D-1 behavior change, char-tested). **QD-SOLV-2 → fixed** (CONTRIBUTING.md corrected).
+- **QD-ALG-7 → deferred out of A1** to Group D (algebra work — its natural home). **QD-SOLV-6 → deferred**
+  (needs its own behavior analysis at solver.mjs:1774). Both remain **open**.
