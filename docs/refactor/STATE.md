@@ -11,19 +11,14 @@ extensibility, conceptual clarity, reliability/testability, and architectural co
 Behavior-preserving by default; no behavioral change without an explicit approval token.
 
 ## Phase / stage
-- **Phase B — Review (read-only): COMPLETE.** Breadth (§1–2), all 5 depth passes (§3.1–3.5), and the
-  systemic synthesis (§4) are written to ASSESSMENT.md; 36 findings registered in ISSUES.md. All
-  subagent claims re-verified against code before recording (spot-checks in LOG.md).
-- **Next: present Phase B findings in chat and STOP for user input before Phase C** (the 2nd checkpoint
-  the user requested — "before architecting the final refactor plan"). Do NOT start Phase C / PLAN v1
-  until the user weighs in.
-- Approved mandate (PLAN.md v0 §4): fresh architectural review; focus = QD internals + testability +
-  clarity; appetite = deeper redesign where warranted (ADR-bound, behavior-preserving unless approved).
-- Headline: value is **concentrated in QD orchestration/UI + CD god-modules**; packages, prove-plan,
-  algebra-store, solver math, correspondences are healthy. 6 systemic patterns (S1 god-modules from
-  un-extracted orchestration; S2 parallel-family duplication — already shipped a bug; S3 informal state/
-  contracts; S4 safety-net thinnest where debt deepest; S5 flat org; S6 doc drift). Recommend a narrow,
-  seam-first, behavior-preserving intervention — NOT a rewrite.
+- **Phase C — Plan: PLAN.md v1 WRITTEN. STOP — awaiting approval token `APPROVED: PLAN.md v1`.**
+  Do NOT begin any implementation (not even Group-A quick wins) until the literal token arrives.
+- Phase B (review) complete: ASSESSMENT §1–4, 36 findings in ISSUES; all claims re-verified (LOG).
+- Round-2 scope (PLAN §4): broad structural sweep **concentrated on QD** (full god-module decomposition,
+  folderize, S2 duplication collapse), **test-infra as Stage 0**, **CD = cheap type-only-cycle fix only**.
+- Roadmap (PLAN §8): Groups A(quick wins)/B(test Stage 0, B4=net)/C(dup collapse)/D(god-module decomp)/
+  E(state+folderize)/F(dependency-cruiser). ~15 PRs. 4 open decision points (PLAN §9): D-1 centroid fallback,
+  D-2 folderize timing, D-3 E1 scope, D-4 harness style.
 
 ## Branches / PR
 - Integration branch: `refactor/main` (cut from `master` @ b1e3004).
@@ -46,13 +41,11 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   green bar as source of truth; report CI per PR without blocking on it.
 
 ## Next concrete steps
-1. **STOP — awaiting user input on the Phase B findings before Phase C** (the 2nd requested checkpoint).
-2. On resume: write PLAN.md v1 (Phase C) — current-state assessment; classified findings; target
-   architecture; a **seam-first, behavior-preserving, staged** roadmap; decision points. Bump to v1,
-   then request `APPROVED: PLAN.md v1` before ANY implementation.
-3. Roadmap shape to propose (seam-first): build QD test seams (QD-TEST-1/2/4 — port+shard the node-suite;
-   fake-Worker tests) BEFORE any QD structural move; pair CD-4 (type-only cycle, cheap/safe) as an early
-   quick win; then S1/S2 extractions behind the seams. Sequence per S4 (safety net before movement).
+1. **STOP — awaiting the literal token `APPROVED: PLAN.md v1`.** No implementation until then (Phase D).
+2. On approval: confirm `refactor/main` green + clean; cut `refactor/A1-<slug>` (or A3) from `refactor/main`.
+   Group A quick wins + Stage 0 test net (B) land first; ALL QD structural work (C/D/E) is gated behind B4.
+3. Also resolve the 4 decision points (PLAN §9) — D-1 is a behavior-change sign-off; D-2/D-3/D-4 shape sequencing.
+   Any revision → bump PLAN to v2 and re-request the token.
 
 ## Resume commands
 ```
