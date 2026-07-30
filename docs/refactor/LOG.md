@@ -67,3 +67,8 @@
 - **Green bar (this session):** build/typecheck/lint exit 0; `pnpm test` exit 0 — **2023 passed / 207
   files** (+6 tests / +1 file vs baseline). (node-suite ran ~78s this pass — machine variance, not this change.)
 - Pushed branch; PR opened to `refactor/main`. **STOP for review — do not start A2/A3.**
+- **A1 MERGED** (user delegated: "merge once CI goes green"). CI on #178 went green (build success
+  22:56:02Z, browser success 22:52:29Z); merged via merge-commit b331ae2. Pulled to `refactor/main`
+  (fast-forward, tree clean, fix present at solver-pqd-singular.mjs:503). Session auto-unsubscribed from
+  #178. Note: the user's merge delegation overrode the default "never merge your own PR" for this PR only.
+  Stage A1 complete. Awaiting go-ahead on the next stage (A3 or Group B).
