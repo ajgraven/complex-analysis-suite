@@ -606,8 +606,10 @@
              warning-red (the status note below says which you have). -->
         <div class="fig-group" role="group" aria-label="Boundary style">
           <div class="fig-group-label">Boundary</div>
-          <label><input type="checkbox" id="fig-boundary-custom"> Custom colour
-            <input type="color" id="fig-boundary-color" value="#1a3e7a" disabled aria-label="Boundary colour"></label>
+          <div class="row">
+            <label style="margin:0;"><input type="checkbox" id="fig-boundary-custom"> Custom colour</label>
+            <input type="color" id="fig-boundary-color" value="#1a3e7a" disabled aria-label="Boundary colour">
+          </div>
           <div class="row">
             <label for="fig-boundary-width" style="margin:0;">Width</label>
             <input type="number" id="fig-boundary-width" min="0.5" max="8" step="0.1" placeholder="auto" aria-label="Boundary width in pixels">
@@ -627,7 +629,7 @@
             <label for="fig-color-grid" style="margin:0;">Grid</label>
             <input type="color" id="fig-color-grid" value="#e8eaef" aria-label="Grid colour">
             <label for="fig-color-axis" style="margin:0;">Axes</label>
-            <input type="color" id="fig-color-axis" value="#bbbbbb" aria-label="Axis colour">
+            <input type="color" id="fig-color-axis" value="#bbbbbb" aria-label="Axes colour">
           </div>
           <div class="row">
             <button id="fig-colors-reset" class="small" type="button">Reset colours</button>
@@ -652,7 +654,7 @@
           </div>
           <div class="row">
             <label><input type="checkbox" id="fig-node-labels" checked> Labels</label>
-            <label for="fig-label-size" style="margin:0;">size</label>
+            <label for="fig-label-size" style="margin:0;">font size</label>
             <input type="number" id="fig-label-size" min="6" max="32" step="1" placeholder="auto" aria-label="Label font size in pixels">
           </div>
         </div>
@@ -670,7 +672,8 @@
               <option value="2" selected>2×</option>
               <option value="4">4×</option>
             </select>
-            <input type="number" id="fig-export-width" min="64" max="8000" step="1" placeholder="width px" aria-label="Custom export width in pixels">
+            <label for="fig-export-width" style="margin:0;">or width</label>
+            <input type="number" id="fig-export-width" min="64" max="8000" step="1" placeholder="px" aria-label="Custom export width in pixels">
           </div>
           <div class="row">
             <label for="fig-export-bg" style="margin:0;">Background</label>
@@ -699,9 +702,9 @@
           </div>
           <div class="row">
             <label for="fig-family-min" style="margin:0;">from</label>
-            <input type="number" id="fig-family-min" step="any" aria-label="Sweep minimum">
+            <input type="number" id="fig-family-min" step="any" aria-label="Sweep from (minimum)">
             <label for="fig-family-max" style="margin:0;">to</label>
-            <input type="number" id="fig-family-max" step="any" aria-label="Sweep maximum">
+            <input type="number" id="fig-family-max" step="any" aria-label="Sweep to (maximum)">
             <label for="fig-family-n" style="margin:0;">steps</label>
             <input type="number" id="fig-family-n" min="2" max="80" step="1" value="20" aria-label="Sweep steps">
           </div>

@@ -25,8 +25,13 @@
   --c-surface-2:     #fbfcfd;   /* pole rows */
   --c-plot-bg:       #fafafa;   /* plot area (also JS-painted in ui-domain-plot) */
   --c-hover:         #eef2f7;   /* hover wash on tabs/buttons */
-  --c-ok:            #2a8f2a;
-  --c-warn:          #b8860b;
+  /* Darkened from #2a8f2a / #b8860b, which measured 4.15 / 3.25 on --c-surface and 3.77 / 2.96 on
+     --c-bg — under WCAG AA's 4.5 for normal text, and both carry status text at 11px (the Figure
+     card's honest-labelling non-univalence note among them). These are the lightest same-hue values
+     clearing 4.5 on BOTH surfaces (ok 5.08 / 4.62, warn 5.07 / 4.61). Same rationale as --c-muted
+     above; used only as light-surface text plus borders / schematic-node fills, so inert elsewhere. */
+  --c-ok:            #237f23;
+  --c-warn:          #8a6a00;
   --c-err:           #b53030;
   /* Feedback + link surfaces. These were REFERENCED but never declared, so every use silently
      rendered its inline fallback and sat outside the token system entirely — unthemeable, and a
@@ -348,7 +353,7 @@ button.attention {
 /* Stack the element checkboxes one per row (base `label` is inline-flex). */
 #figure-export-card .fig-group label { display: flex; margin: 2px 0; }
 #figure-export-card input[type="color"] {
-  width: 34px; height: 20px; padding: 0; margin-left: 4px;
+  width: 34px; height: 24px; padding: 0; margin-left: 4px;   /* 24px min target (WCAG 2.5.8) */
   border: 1px solid var(--c-border-input); border-radius: 4px;
   background: var(--c-surface); cursor: pointer; vertical-align: middle;
 }

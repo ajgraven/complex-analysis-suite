@@ -169,3 +169,41 @@ describe("semantically opposite states are visually distinct", () => {
     expect(new Set(cols).size).toBe(levels.length);
   });
 });
+
+describe("status text tokens meet WCAG AA contrast on their light surfaces", () => {
+  // --c-ok/-warn/-err/-muted(-2) are used as SMALL text (down to 11px) on the two light
+  // surfaces --c-surface (#fff, cards) and --c-bg (#f3f4f6, app background) — the Figure card's
+  // honest-labelling note, the status panels, the hints. WCAG AA needs 4.5:1 for normal text.
+  // --c-ok and --c-warn were darkened specifically to clear it (they measured 4.15 / 3.25 on white
+  // before); this pins the whole set so a later "brighter green/gold" edit can't silently drop the
+  // honest-labelling note (or its siblings) back under AA.
+  const hexOf = (token: string) => {
+    const m = new RegExp(token + "\\s*:\\s*(#[0-9a-fA-F]{3,6})\\s*;").exec(CSS);
+    return m ? m[1] : null;
+  };
+  const lin = (c: number) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const L = (hex: string) => {
+    const h = hex.length === 4 ? "#" + [...hex.slice(1)].map((d) => d + d).join("") : hex;
+    const n = parseInt(h.slice(1), 16);
+    return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  };
+  const ratio = (a: string, b: string) => { const x = L(a) + 0.05, y = L(b) + 0.05; return Math.max(x, y) / Math.min(x, y); };
+
+  const TEXT_TOKENS = ["--c-ok", "--c-warn", "--c-err", "--c-muted", "--c-muted-2"];
+  const SURFACES = ["--c-surface", "--c-bg"];
+
+  it("every status-text token clears 4.5:1 on --c-surface and --c-bg", () => {
+    const failures: string[] = [];
+    for (const token of TEXT_TOKENS) {
+      const fg = hexOf(token);
+      expect(fg, token + " must resolve to a hex in :root").toBeTruthy();
+      for (const s of SURFACES) {
+        const bg = hexOf(s);
+        expect(bg, s + " must resolve to a hex in :root").toBeTruthy();
+        const r = ratio(fg as string, bg as string);
+        if (r < 4.5) failures.push(`${token} on ${s}: ${r.toFixed(2)}:1`);
+      }
+    }
+    expect(failures, "below WCAG AA 4.5:1:\n" + failures.join("\n")).toEqual([]);
+  });
+});
