@@ -435,3 +435,26 @@
   NOT pursued (out of C3b scope — the seed math is genuinely per-family; own follow-on if wanted).
 - **Group C (dedup collapse) COMPLETE:** C1 worker lanes, C2 typed protocol, C3 family factory. Cut
   `refactor/C3b2-define-family`; PR → refactor/main; merge on green. Next: Group D (installAlgebra, ui.mjs) or pause.
+
+## 2026-07-31 — Phase D · Stage D-ui-seam (ui.mjs first seam: domain-mode algebra) — PR opened
+- User: "Proceed with Group D." Group D = god-module decomposition (installAlgebra, ui.mjs). Started with the
+  net-first **ui.mjs-seam** stage (ui.mjs = QD-UI-2, ~1931 lines, ZERO characterization coverage, no export seam).
+- **Read-only mapping (subagent, verified firsthand):** ui.mjs is the Phase-2 PORT — most god-module
+  responsibilities are ALREADY extracted into siblings (ui-modes / ui-solve / ui-pole-grid / ui-domain-plot / …)
+  and just installed here via `QD_UI.installX(uiCtx)`; the file is mostly DOM wiring + install glue. The
+  genuinely-pure, still-trapped pieces are the domain-mode algebra cluster + a geometry pair. Chose the domain-mode
+  cluster (more central; an inverse-pair invariant to pin).
+- **This PR (behavior-preserving extraction):** NEW `app/ui-domain-mode.mjs` — `composeMode` / `decomposeMode` /
+  `modeSummary` (the "10 modes = {weight}×{bounded|unbounded}×{singular}" algebra), copied VERBATIM as named
+  exports; ui.mjs imports them (+1 import, −~28 def lines, comment repointed; ZERO call-site edits — the 5 sites
+  681/713/732/1687/1818 now call the imports). All 3 are PURE (zero DOM/state/QD refs).
+- **Net-first + mutation-verified:** NEW `vitest/ui-domain-mode.test.ts` (19) pins the mapping, the compose∘
+  decompose round-trip (10 modes), and the two DELIBERATE quirks — classical drops `singular`; modeSummary emits
+  the ungrammatical "a unbounded" (pinned, not "fixed"). Mutation (fallback domain bounded→unbounded) → only the
+  fallback test fails. This is the FIRST executable coverage ui.mjs's logic has ever had (chips QD-TEST-2/QD-UI-5).
+- **Green bar:** build/typecheck/lint exit 0; `pnpm test` **2133 passed / 243 files** (+19, +1 file). Cut
+  `refactor/D-ui-seam-domain-mode`; PR → refactor/main; merge on green.
+- **Revised Group-D understanding:** ui.mjs's bulk is DOM-wiring (the logic is already in siblings), so ui.mjs
+  "decomposition" is more about grouping the wiring than extracting logic. Remaining pure seam = the geometry pair
+  (boundarySelfIntersectsSimple / segmentsIntersect). **installAlgebra (algebra-ui.mjs, ~4.2k-line fn, QD-ALG-1) is
+  the bigger, still-monolithic Group-D target** — its own net-first stage next if we continue D.
