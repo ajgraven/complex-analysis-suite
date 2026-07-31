@@ -11,12 +11,12 @@ extensibility, conceptual clarity, reliability/testability, and architectural co
 Behavior-preserving by default; no behavioral change without an explicit approval token.
 
 ## Phase / stage
-- **Phase D — Execute. Group A COMPLETE (A1/A2/A3 merged).** Group B started.
-  **B1 IN FLIGHT — PR #181** (node-suite → 26 parallel Vitest specs; parity 2329/0; per-file isolation;
-  HONEST: **NEUTRAL on wall time** — `solvers.test.js` ~77s long pole). Auto-merges on green (send_later @ 00:53Z).
-- **B2 (shard solvers) DEFERRED to a fresh session** (user: "land B1 now, do B2 fresh"). Scope discovery:
-  `solvers.test.js` is a **1,915-line monolithic `run()`** (helpers + vm + 8 interleaved batteries; no
-  `section()` seams) → a parity-safe shard is **med-high risk**, not low. **Resume point: Next steps + LOG.**
+- **Phase D — Execute. Group A COMPLETE (A1/A2/A3). Group B: B1 MERGED (#181, 08b0fab).** No stage in flight.
+  B1 = node-suite → 26 parallel `vitest/node/*` specs (parity 2329/0; per-file isolation; HONEST: **neutral on
+  wall time** — `solvers.test.js` ~77s long pole).
+- **NEXT (fresh session): B2 — shard `solvers.test.js`** (the deferred speed win; user: "do B2 fresh"). Scope
+  discovery: solvers is a **1,915-line monolithic `run()`** → parity-safe shard is **med-high risk**. Full
+  resume plan in Next steps + LOG (2026-07-31 B1 entry).
 - Cadence: auto-merge on green. `APPROVED: PLAN.md v1`. Deferred/open: QD-ALG-7 (→ Group D), QD-SOLV-6.
 - `APPROVED: PLAN.md v1`; decisions recorded (D-1 align `{re:0}`, D-2 folderize late, D-3 include E1 last,
   D-4 keep `harness.ok` wrapped).
@@ -26,9 +26,8 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   E(state+folderize)/F(dependency-cruiser). Phase B complete; ASSESSMENT §1–4; 36 findings in ISSUES.
 
 ## Branches / PR
-- Integration branch: `refactor/main` @ 207a9ca (cut from `master` @ b1e3004). Tree clean.
-- **Stage in flight: `refactor/B1-parallelize-node-suite` → PR #181** (auto-merge on green).
-- Merged: A1 #178 (b331ae2), A3 #179 (e657769), A2 #180 (3a5d18f). PR #181: https://github.com/ajgraven/complex-analysis-suite/pull/181
+- Integration branch: `refactor/main` @ 08b0fab (cut from `master` @ b1e3004). Tree clean. **No PR in flight.**
+- Merged stage PRs: A1 #178 (b331ae2), A3 #179 (e657769), A2 #180 (3a5d18f), B1 #181 (08b0fab).
 
 ## Validation state (green bar) — established 2026-07-30 @ b1e3004; all green, no pre-existing failures
 - build:      `pnpm build`      → exit 0

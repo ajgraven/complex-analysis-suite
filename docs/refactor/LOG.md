@@ -146,3 +146,6 @@
   low-risk change B2 was scoped as → per the abort criteria ("footprint materially exceeds plan"; "migration
   risk significant"), **deferred B2 to a fresh session** (user agreed: "land B1 now, do B2 fresh").
 - Committed c3cd354. Pushing B1; PR to `refactor/main`; auto-merge on green (honest PR — isolation, not speed).
+- **B1 MERGED** (#181, merge commit 08b0fab, CI green build+browser); pulled to `refactor/main` (26 node specs
+  present, serial wrapper removed, tree clean). Session auto-unsubscribed. **Group A done + B1 done; B2
+  (shard solvers) is the resume point for a fresh session** (STATE Next steps has the plan). Session concluding.
