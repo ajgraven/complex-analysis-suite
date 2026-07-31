@@ -11,55 +11,50 @@ extensibility, conceptual clarity, reliability/testability, and architectural co
 Behavior-preserving by default; no behavioral change without an explicit approval token.
 
 ## Phase / stage
-- **Phase D — Execute. Group A COMPLETE (A1/A2/A3). Group B: B1 MERGED (#181, 08b0fab).** No stage in flight.
-  B1 = node-suite → 26 parallel `vitest/node/*` specs (parity 2329/0; per-file isolation; HONEST: **neutral on
-  wall time** — `solvers.test.js` ~77s long pole).
-- **NEXT (fresh session): B2 — shard `solvers.test.js`** (the deferred speed win; user: "do B2 fresh"). Scope
-  discovery: solvers is a **1,915-line monolithic `run()`** → parity-safe shard is **med-high risk**. Full
-  resume plan in Next steps + LOG (2026-07-31 B1 entry).
-- Cadence: auto-merge on green. `APPROVED: PLAN.md v1`. Deferred/open: QD-ALG-7 (→ Group D), QD-SOLV-6.
-- `APPROVED: PLAN.md v1`; decisions recorded (D-1 align `{re:0}`, D-2 folderize late, D-3 include E1 last,
-  D-4 keep `harness.ok` wrapped).
-- A1 shipped: QD-SOLV-3 (centroid → `QD.poleCentroid`, D-1 behavior change, char-tested) + QD-SOLV-2
-  (CONTRIBUTING doc). QD-ALG-7 & QD-SOLV-6 **deferred out of A1** (→ Group D / own analysis; both open).
-- Roadmap (PLAN §8): A(quick wins)/B(test Stage 0, B4=net)/C(dup collapse)/D(god-module decomp)/
-  E(state+folderize)/F(dependency-cruiser). Phase B complete; ASSESSMENT §1–4; 36 findings in ISSUES.
+- **Phase D — Execute. Group A (A1/A2/A3) + B1 MERGED. Stage B2 IN FLIGHT** on `refactor/B2-shard-solvers`.
+- **B2 — shard the 1,915-line monolithic `solvers.test.js` `run()`** into 4 contiguous parallel `vitest/node`
+  specs (the deferred speed win; `solvers` ~77–98s is the QD long pole). User: "do B2 fresh" — this is that session.
+- **Risk downgraded from med-high** by a verified statement-map of `run()`: clean seams — only ONE trivial
+  cross-block binding (`const verifyQuadratureIdentity` @ line 62, used @ 77/129, BOTH in shard 1), NO shared
+  mutable state, `run()` returns nothing (assertions tally via injected global `ok()` side-effect). ⇒ 4 EXACT
+  contiguous slices are byte-identical to the original body (provable by diff) ⇒ behavior-preserving by construction.
+- Cadence: auto-merge on green. `APPROVED: PLAN.md v1`. Decisions D-1..D-4 recorded. Deferred/open: QD-ALG-7 (→ D), QD-SOLV-6.
+- Roadmap (PLAN §8): A✓ / B(B1✓, B2 now, B3, B4=net) / C / D / E / F. Phase B complete; ASSESSMENT §1–4; 36 findings in ISSUES.
 
 ## Branches / PR
-- Integration branch: `refactor/main` @ 08b0fab (cut from `master` @ b1e3004). Tree clean. **No PR in flight.**
+- Integration `refactor/main` @ d74fd2e (08b0fab B1 merge + docs). Tree clean.
+- **Stage branch `refactor/B2-shard-solvers`** cut from d74fd2e. **No PR yet.**
 - Merged stage PRs: A1 #178 (b331ae2), A3 #179 (e657769), A2 #180 (3a5d18f), B1 #181 (08b0fab).
 
-## Validation state (green bar) — established 2026-07-30 @ b1e3004; all green, no pre-existing failures
-- build:      `pnpm build`      → exit 0
-- typecheck:  `pnpm typecheck`  → exit 0
-- lint:       `pnpm lint`       → exit 0
-- test:       `pnpm test`       → exit 0  (206 files / 2017 tests, ~156s; QD node-suite ~128s of that)
-- browser (not in core bar): `pnpm test:browser` (Chromium preinstalled; not yet run)
-- format:     `pnpm format:check`
+## Validation state (green bar) — re-confirmed 2026-07-31 @ `refactor/main` d74fd2e; ALL GREEN
+- build / typecheck / lint → exit 0; test → exit 0 (**233 files / 2056 tests**, ~157s).
+- Oracle: `node app/node-test.js` → **2329/0** (27 runner lines ⇒ 2302 content assertions). `solvers` contributes **S=451**/0.
+- browser (not in core bar): `pnpm test:browser` NOT run — B2 is test-infra only (no GPU/shader), not needed.
 
 ## Uncommitted / unverified
-- None. A1 merged to `refactor/main`; tree clean.
-- Green: A1 content was CI-green (build+browser) and locally green (2023 passed / 207 files). The merge
-  commit adds only a docs-only STATE delta, so refactor/main is green by construction — re-confirm at next-stage start.
+- This STATE commit = B2-in-flight checkpoint (direct to refactor/main). Implementation happens next on the stage branch.
+- Parity contract for B2: Σ(4 shard contributions) == **451**; oracle 2329 → **2332** (+3 runner lines from +3 files, accounted);
+  vitest 2056 → **2059**. All to be verified against actual output before the PR.
 
 ## Known blockers / risks
-- CI health unknown (July review reported an exhausted GH Actions spending limit). Treat the LOCAL
-  green bar as source of truth; report CI per PR without blocking on it.
+- CI health unknown (July review reported an exhausted GH Actions spending limit). Treat the LOCAL green bar as
+  source of truth; report CI per PR without blocking on it.
 
-## Next concrete steps (fresh session resumes here) — Stage B2: shard solvers.test.js (the deferred speed win)
-0. Confirm PR #181 (B1) merged; `refactor/main` green + clean. (B1 done: node-suite = 26 parallel `vitest/node/*` specs.)
-1. **B2 — shard `solvers.test.js` (QD-TEST-5).** It's a **1,915-line monolithic `run()`** (app/test/solvers.test.js:10-1915):
-   shared helpers + `vm` setup (~10-676), then 8 `runFamilyBattery('X',[…preset array…])` blocks at
-   677/688/714/1138/1735/1742/1755/1800, interleaved with inline tests. Plan: extract the shared helpers so
-   shard fns can reuse them; split the 8 batteries (+ inline blocks) into ~4 balanced shards; wire each as a
-   `vitest/node` spec (extend `_run.ts`). **Verify PARITY**: sum shard assertions == solvers' ~451 (oracle
-   `node app/node-test.js` = 2329/0). Target: longest spec ~19-25s → suite ~128s→~25-35s. **Med-high risk → char-test-first.**
-2. Then B3 (QD coverage), **B4** (fake-Worker + jsdom net for `ui.mjs`/`ui-solve.mjs` — the safety net gating C/D),
-   then C (dup collapse) → D (god-module decomp) → E (state+folderize) → F (dependency-cruiser).
+## Next concrete steps — Stage B2 (on `refactor/B2-shard-solvers`)
+1. Build 4 contiguous shards `app/test/solvers-{1..4}.test.js` (identical preamble; body slices at verified block
+   boundaries near 676/1137/1734, ADJUSTED for TIME balance — measure each shard's runtime + contribution). Delete original.
+2. Rewire: `app/node-test.js` TESTS ('solvers' → 4 names) + FLOORS; replace `vitest/node/solvers.test.ts` with 4 specs;
+   `vitest/node/_run.ts` FLOORS. (`vitest.config.ts` globs `vitest/**/*.test.ts` — new specs auto-register.)
+3. VERIFY: `diff` concat(shard bodies) == original body; oracle → 2332/0 with Σ=451; full green bar; measure QD-suite
+   wall-time win (target longest shard ~20–30s, suite test phase well below the ~157s baseline).
+4. Docs on branch: LOG (B2 outcomes), PLAN (§10 fix stale "B1 IN REVIEW" → merged; mark B2), ASSESSMENT/ISSUES (QD-TEST-5).
+   STATE on refactor/main. Push; open PR; STOP for review.
+5. Then B3 (QD coverage), B4 (the UI char-net gating C/D) → C → D → E → F.
 
 ## Resume commands
 ```
-git fetch && git checkout refactor/main && git log --oneline -10 refactor/main
+git fetch && git checkout refactor/B2-shard-solvers    # or refactor/main if the B2 PR is already merged
 pnpm install --frozen-lockfile
 pnpm build && pnpm typecheck && pnpm lint && pnpm test
+node apps/quadrature-domains/app/node-test.js          # oracle: 2329/0 before B2 → 2332/0 after
 ```
