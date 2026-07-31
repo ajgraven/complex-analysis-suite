@@ -11,46 +11,47 @@ extensibility, conceptual clarity, reliability/testability, and architectural co
 Behavior-preserving by default; no behavioral change without an explicit approval token.
 
 ## Phase / stage
-- **Phase D — Execute. Group A + B (test Stage 0) COMPLETE. Group C STARTED: C1a MERGED (#186).**
-- **C1a (DONE, merged 007681a):** first STRUCTURAL refactor — `createWorkerLane(cfg)` factory collapses the
-  3 PSW lanes (primary/aux/live) to config; `primary-solver-worker.mjs` **395→238 (−40%)**. Behavior-preserving,
-  proven by the B4-2a/b net staying green (psw-crash-char 7 + psw-lifecycle 13 = 20/20). Independent fallback
-  latches kept; primary-only messageerror preserved.
-- **AWAITING USER DIRECTION** (holding — do not auto-start). Decision point after this first Group-C win:
-  - **(a) C1b** — sym / schwarz / param-slice-pool lanes onto the same `createWorkerLane` factory. ⚠ Guardrail:
-    sym IS netted (B4-2b), but **schwarz** (isUsable/preempt/handle.cancel/onUnavailable) and **param-slice-pool**
-    (event-wiring/survivor) net gaps are **open (deferred B4-2c P2)** — those must be closed BEFORE collapsing
-    schwarz/pool (no refactor without a pinned net). So C1b likely = a B4-2c net-shoring stage first, then collapse.
-  - **(b) C2** — typed worker protocol (QD-UI-4); orthogonal to the lane net gaps.
-  - **(c) deferred scope fork** — ui.mjs seam (own stage before D2) / algebra source-text (→ D1).
-  - **(d) pause.**
-- Cadence: merge on green (user delegates). `APPROVED: PLAN.md v1`. Roadmap §8: A✓ / B✓ / **C (C1a✓; C1b/C2/C3 left)** / D / E / F.
+- **Phase D — Execute. Group A + B COMPLETE. Group C in progress: C1a MERGED (#186).**
+- **B4-2c (net-first for C1b) — PR #187 OPEN (CI pending).** Tests-only: pins the schwarz + param-slice-pool
+  lane paths the crash net omitted (schwarz `isUsable`/`onUnavailable`/streaming/preempt/`handle.cancel`/
+  cancel-before-spawn = 9; pool `runSweep` event-wiring + survivor=0 drain = 2). Mutation-verified; green 2092/240.
+  **QD-UI-1: all 6 solver-worker lanes' crash+lifecycle contract is now pinned.**
+- **⚠ FINDING — C1b REVISED.** Read all 4 lane sources vs the C1a factory: the 3 remaining lanes do NOT fit
+  `createWorkerLane`. sym = terminate-on-supersede + progress + F4 idle-latch; schwarz = `isUsable` gate + streaming
+  `{cancel()}` handle; param-slice = an N-worker POOL. Collapsing them onto one factory = over-generalized config-flag
+  monster (against the clarity north-star + ADR-0007/0008). **So C1b = extract only the genuinely-shared FRAGMENT**
+  (worker `error`/`messageerror` → settle-in-flight + teardown — the drift-prone piece that shipped the schwarz
+  Pass-1/3 bug; + lazy ensureReady+fallback-latch), used by all lanes incl. retrofitting the C1a factory — NOT a
+  lane-collapse. PLAN v1 C1 "6 lanes = config" done-criterion needs revision → **design-gate confirm before I implement.**
+- Cadence: merge on green (user delegates). `APPROVED: PLAN.md v1`. Roadmap §8: A✓ / B✓ / **C (C1a✓; B4-2c in review; C1b-frag/C2/C3)** / D / E / F.
 
 ## Branches / PR
-- Integration `refactor/main` @ **007681a** (C1a merge-commit). Tree clean. **No open stage PR.**
-- Merged stage PRs: A1 #178, A3 #179, A2 #180, B1 #181, B2 #182, B4-1 #183, B4-2a #184, B4-2b #185,
-  **C1a #186 (007681a)**.
+- Integration `refactor/main` @ **e38d035** (this STATE commit advances it). Tree clean.
+- **PR #187 OPEN (CI pending):** `refactor/B4-2c-schwarz-pool-lane-nets` (bf5f49f) → `refactor/main`.
+- Merged stage PRs: A1 #178, A3 #179, A2 #180, B1 #181, B2 #182, B4-1 #183, B4-2a #184, B4-2b #185, **C1a #186 (007681a)**.
 
 ## Validation state (green bar)
-- **`refactor/main` @ 007681a — ALL GREEN (re-confirmed post-merge):** build/typecheck/lint exit 0;
-  `pnpm test` **2081 passed / 239 files** (unchanged — C1a was a source refactor, no test added). PSW net
-  (psw-crash-char + psw-lifecycle) = **20/20**. Wall ~65s this run. browser: green on PR #186 CI.
+- **B4-2c branch @ bf5f49f — ALL GREEN:** build/typecheck/lint exit 0; `pnpm test` **2092 passed / 240 files**
+  (+11 tests, +1 file vs refactor/main). Mutation-verified (3 guards → each fails only its target → reverted via Edit).
+- `refactor/main` @ e38d035 (post-C1a) green: 2081/239, PSW net 20/20.
 
 ## Uncommitted / unverified
-- None. C1a merged; this STATE commit direct to `refactor/main`.
+- None. B4-2c committed (bf5f49f) + pushed; PR #187 open. This STATE commit direct to `refactor/main`.
 
 ## Known blockers / risks
-- No open PR; **holding for user direction** on the decision point above. No blockers.
-- Guardrail note for C1b: schwarz/param-slice-pool lane nets are incomplete (B4-2c P2) — collapsing those
-  lanes onto the factory requires closing those net gaps first.
+- **Awaiting PR #187 CI green**, then merge (per cadence). Tests-only, zero behavior risk.
+- **C1b needs a design-gate confirm** (fragment-extraction, not lane-collapse — see FINDING). Behavior-preserving +
+  fully net-guarded (the complete 6-lane net) once B4-2c lands.
 
 ## Next concrete steps
-1. **HOLD** — await user's choice among (a) C1b / (b) C2 / (c) deferred scope fork / (d) pause.
-2. If (a) C1b: shore schwarz + param-slice-pool nets (B4-2c, tests-only) FIRST, then collapse remaining lanes.
-3. Group order: C (dup collapse) → D (god-module decomp) → E (state+folderize) → F (dependency-cruiser).
+1. **When PR #187 CI greens → merge** (merge-commit, title + `(#187)`), pull, re-confirm green (expect 2092/240).
+2. **C1b (revised): extract the shared worker crash-settle + ensureReady-latch fragment** as a helper used by all
+   6 lanes (retrofit the C1a factory too). Behavior-preserving, guarded by the complete 6-lane net. Present the
+   1-paragraph design at the gate for a quick confirm (it revises PLAN v1's C1 premise), then implement.
+3. Then **C2** (typed worker protocol) / **C3** (defineFamily). Group order: C → D → E → F.
 
 ## Resume commands
 ```
-git fetch && git checkout refactor/main && git pull
-pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2081/239
+git fetch && git checkout refactor/main && git pull        # after #187 merges
+pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2092/240
 ```
