@@ -523,3 +523,27 @@
 - **installAlgebra carve-outs 1+2 done** — all three verdict builders (doClassify prose, `_verdictBadge` chip) now have
   executable honest-labeling coverage (doAutoSolve's prose still inline). Next: QD-ALG-6 tolerance predicates, another
   pure helper, or (with an approval token) the char-first unification of the drifted builders.
+
+## 2026-07-31 — Phase D · Stage D-alg-carve-3 (installAlgebra carve-out 3 — exact ℚ(i) value formatter) — PR opened
+- **Third installAlgebra carve-out** ("Take the next carve out"). First firsthand-assessed the two standing candidates:
+  **QD-ALG-6** (realness/verify tolerances) — DECLINED: the ~6 literals (1e-6 verify, 1e-6 realness, 1e-12 w0-match,
+  1e-10/1e-8 display-snap) are scattered at unrelated call sites with different meanings, no single pure computation to
+  net, unifying risks behavior (left open as a constants cleanup). **`exactValueStr`/`fmtRat`** — chosen: a clean pure pair.
+- **This PR (behavior-preserving extraction):** NEW `app/algebra/algebra-format.mjs` — `exactValueStr(re, im)` (complex
+  → exact ℚ(i) string: "1/2 + 1/4i", "−1/2i") + its private helper `fmtRat` (float → rational via the store's
+  continued-fraction rationalizer). Carved VERBATIM. The one external dep is `QD.QDEquations.ratApprox`; QDEquations
+  registers on the QD singleton as an IMPORT SIDE-EFFECT (no direct `ratApprox` export — verified), so the module
+  side-effect-imports `qd-equations.mjs` (+ solver.mjs), making it self-contained and headlessly testable — cleaner
+  than carve-out 2's jsdom/QD_UI net. algebra-ui imports `exactValueStr` (its 4 call sites unchanged; `fmtRat` was
+  private); the installAlgebra `QE = QD.QDEquations` binding stays (used 20× elsewhere). +4/−13; `QD_UI.exactValueStr` added.
+- **Net-first + mutation-verified:** NEW `vitest/algebra-exact-format.test.ts` (8; HEADLESS — imports the module, no
+  jsdom) pins the rationalizer (0.2→1/5, 3→3, denom-1 drop, the `x||0` guard) and the complex assembly (re-only /
+  im-only / both, the ' + ' vs ' − ' sign) — expected values GROUND-TRUTHED against `ratApprox` (which returns BigInt
+  pairs), not guessed. A **display guardrail** pins the sign as the typographic MINUS U+2212, never an ASCII hyphen.
+  8 behavior-critical literals byte-identity-checked vs source before removal. Mutation (`=== '1'`→`'9'` denom-drop) →
+  4 tests fail (all denom-1 cases, across fmtRat + exactValueStr).
+- **Green bar:** build/typecheck/lint exit 0; `pnpm test` **2168 passed / 247 files** (+8, +1 file). Cut
+  `refactor/d-alg-carve-3-exact-format`; PR → refactor/main; merge on green.
+- **installAlgebra: 3 carve-outs done.** algebra-labeling.mjs (verdict prose + posDimDesc) + algebra-format.mjs (exact
+  value formatter) now hold pulled-out pure logic; `_verdictBadge` lifted in-file. Remaining pure candidates thinning;
+  deeper decomposition (the DOM-bound sidebar build QD-ALG-2, source-text tests QD-ALG-3) needs a different strategy.
