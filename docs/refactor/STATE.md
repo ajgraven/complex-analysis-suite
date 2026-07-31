@@ -11,47 +11,46 @@ extensibility, conceptual clarity, reliability/testability, and architectural co
 Behavior-preserving by default; no behavioral change without an explicit approval token.
 
 ## Phase / stage
-- **Phase D — Execute. Group A + B COMPLETE. Group C: C1 (worker-lane) DONE; C2 in review.**
-- **C2 (typed worker protocol, QD-UI-4) — PR #189 OPEN (CI pending).** NEW `app/workers/protocol.mjs`
-  (`reply`/`replyError` + `dispatch`); `solver-worker-entry.mjs` 53→31 (the 3-kind `if/else` chain → a handlers
-  map + `dispatch`). Char-net-first (`vitest/worker-protocol.test.ts`: known-kind round-trip pinned + mutation-
-  verified on the UNMODIFIED entry, commit aa0b98e; then the refactor, cb8fc86). Known kinds byte-identical;
-  **unknown kind drop→error-reply is the one APPROVED change** (PLAN v1 C2 "unknown kind no longer hangs").
-  Green 2103/241 (+11, +1 file). Merge on green.
-- **AWAITING USER DIRECTION for the next stage** (after #189 merges). Options: **C2b** (route the sym/param-slice/
-  schwarz entry reply-envelopes through `protocol.mjs` — envelope-DRY only, no hang there); **C3** (defineFamily,
-  QD-SOLV-4/5 — golden residual-vector tests first); **Group D** (installAlgebra + ui.mjs decomp; ui.mjs-seam
-  stage first); or **pause**.
-- Cadence: merge on green (user delegates). `APPROVED: PLAN.md v1`. Roadmap §8: A✓ / B✓ / **C (C1✓; C2 in review; C2b?/C3)** / D / E / F.
+- **Phase D — Execute. Group A + B COMPLETE. Group C: C1 (worker-lane) DONE + C2 (typed protocol) DONE.**
+- **C2 (DONE, merged 3cc3e0d):** NEW `app/workers/protocol.mjs` (`reply`/`replyError`/`dispatch`);
+  `solver-worker-entry.mjs` 53→31. Char-net-first; known kinds byte-identical (round-trip net green before/after);
+  **unknown-kind hang→error-reply was the one APPROVED change** (PLAN v1 C2). Also began closing QD-UI-5 (the
+  entry dispatch had zero coverage). QD-UI-4 addressed on the primary path.
+- **AWAITING USER DIRECTION for the next stage** (holding — do not auto-start). Options:
+  - **(a) C3** — `defineFamily(config)` + seeds-common (QD-SOLV-4/5: ~10× re-typed solver Family shell + seeds
+    mirror). Factor the SHELL only (locator/coeff skeleton, canonicalize, pack/unpack, register); NOT evalPhi/
+    phiTaylorAt/computeTargetA math. Golden per-family residual-vector tests as the FIRST commit. Med risk. *(rec — finishes Group C)*
+  - **(b) Group D** — god-module decomposition: installAlgebra (~4.2k-line fn, QD-ALG-1) + ui.mjs (~20 resp.,
+    QD-UI-2). The biggest structural wins; high risk; the deferred **ui.mjs-seam** stage comes first (before D2).
+  - **(c) C2b** — route the sym/param-slice/schwarz entry reply-envelopes through `protocol.mjs` (small DRY win;
+    no hang there). 
+  - **(d) pause.**
+- Cadence: merge on green (user delegates). `APPROVED: PLAN.md v1`. Roadmap §8: A✓ / B✓ / **C (C1✓, C2✓; C3)** / D / E / F.
 
 ## Branches / PR
-- Integration `refactor/main` @ **5456ff1** (this STATE commit advances it). Tree clean.
-- **PR #189 OPEN (CI pending):** `refactor/C2-worker-protocol` (aa0b98e char-net + cb8fc86 refactor) → `refactor/main`.
+- Integration `refactor/main` @ **3cc3e0d** (C2 merge-commit; this STATE commit advances it). Tree clean. **No open PR.**
 - Merged stage PRs: A1 #178, A3 #179, A2 #180, B1 #181, B2 #182, B4-1 #183, B4-2a #184, B4-2b #185, C1a #186,
-  B4-2c #187, **C1b #188 (a6332d5)**.
+  B4-2c #187, C1b #188, **C2 #189 (3cc3e0d)**.
 
 ## Validation state (green bar)
-- **C2 branch @ cb8fc86 — ALL GREEN:** build/typecheck/lint exit 0; `pnpm test` **2103 passed / 241 files**
-  (+11 tests, +1 file). Char net: known-kind round-trip green before AND after the refactor; unknown-kind
-  assertion flipped to the fix; 6 `protocol.mjs` unit tests.
-- `refactor/main` @ 5456ff1 (post-C1b) green: 2092/240.
+- **`refactor/main` @ 3cc3e0d — ALL GREEN (re-confirmed post-merge):** build/typecheck/lint exit 0; `pnpm test`
+  **2103 passed / 241 files**. Worker nets: 6-lane lifecycle 54/54 + worker-protocol 11/11.
 
 ## Uncommitted / unverified
-- None. C2 committed (aa0b98e, cb8fc86) + pushed; PR #189 open. This STATE commit direct to `refactor/main`.
+- None. C2 merged; this STATE commit direct to `refactor/main`.
 
 ## Known blockers / risks
-- **Awaiting PR #189 CI green**, then merge (per cadence). One approved behavior change (unknown-kind hang→settle);
-  known-kind paths behavior-preserving + net-guarded.
-- Next-stage direction open (C2b / C3 / Group D / pause) — decision at the post-merge gate.
+- No open PR; **holding for the next-stage direction** (C3 / Group D / C2b / pause). No blockers.
+- C3 needs golden residual-vector tests FIRST (touches the solver shell — math left untouched). Group D needs the
+  ui.mjs seam + net before D2.
 
 ## Next concrete steps
-1. **When PR #189 CI greens → merge** (merge-commit, title + `(#189)`), pull, re-confirm green (2103/241).
-2. Then the next stage (user's call): **C2b** (other entries' envelope DRY) / **C3** (defineFamily — golden-residual
-   -first) / **Group D** (installAlgebra + ui.mjs; ui.mjs-seam first) / pause.
-3. Group order: C (C1✓, C2✓; C2b/C3 optional) → D → E → F.
+1. **HOLD** — await user's choice: (a) C3 / (b) Group D / (c) C2b / (d) pause.
+2. Whichever: net-first, then the behavior-preserving change; own PR → refactor/main; merge on green.
+3. Group order: C (C1✓, C2✓; C3 remains) → D (god-module decomp) → E (state+folderize) → F (dependency-cruiser).
 
 ## Resume commands
 ```
-git fetch && git checkout refactor/main && git pull        # after #189 merges
+git fetch && git checkout refactor/main && git pull
 pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2103/241
 ```
