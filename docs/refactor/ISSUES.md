@@ -150,6 +150,13 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   executable coverage). Green 2103/241. **Remaining → C2b:** route the sym / param-slice / schwarz entry reply
   envelopes through `protocol.mjs` (they don't dispatch on input kind, so no hang there — envelope DRY only). C1b
   (#188) now **merged** (a6332d5).
+- **2026-07-31 · stage C3a (PR → refactor/main):** **QD-SOLV-4/5 → net laid (net-first for C3b).**
+  `vitest/solver-family-golden.test.ts` (11) pins `residual`/`packPhi`/`computeTargets` per family on the
+  deterministic `initialGuess` phi (test-derived inputs) — the safety net for the `defineFamily(config)` shell
+  factoring (C3b). Tests-only, mutation-verified, green **2114/242**. Family shells confirmed uniform (17-key base;
+  +`sampleBoundary` on the 4 PQD → 18; `{A,F,G}` only on unboundedLQD_singular; math per-family). The underlying
+  ~10× re-typed shell + seeds mirror **remains open → C3b** (this net guards it). C2 (#189) now **merged**
+  (3cc3e0d).
 - **2026-07-31 · stage C1a (PR → refactor/main):** **QD-UI-1 → PSW 3× lane duplication ELIMINATED** (86c7bcf) —
   primary/aux/live collapsed to a `createWorkerLane(cfg)` factory (primary-solver-worker.mjs 395→238, −40%),
   behavior-preserving (net stays green 20/20; full 2081/239), independent fallback latches kept. First structural

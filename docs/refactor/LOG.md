@@ -369,3 +369,24 @@
   (sym = single type; param-slice / schwarz = streaming/pool shapes) — routing their reply builders through
   `protocol.mjs` is a clean **follow-on (C2b)**, noted not done. **QD-UI-4: the silent-hang class is fixed on the
   primary path and the typed protocol is established.**
+
+## 2026-07-31 — Phase D · Stage C3a (golden solver-family net — QD-SOLV-4/5 net-first) — PR opened
+- User chose C3 (defineFamily) after C2 merged (refactor/main @ 3cc3e0d, 2103/241). C3 is the delicate SOLVER
+  stage, so per §D the golden residual-vector net lands FIRST, as its own PR (mirroring B4→C1).
+- **Understanding (evidence; subagent-mapped + runtime-verified, I checked the anchors):** the 10 families share a
+  uniform ~17-key `QD.Family.<name>` record (boundedQD = solver-qd.mjs:327). Diffs: +1 key `sampleBoundary` on the
+  4 PQD families (→18); `computeTargets` returns `{A,F:null}` bounded / `{A,F:[…]}` unbounded, and uniquely
+  `{A,F,G}` for unboundedLQD_singular; every method shares an identical external signature; the math fns are
+  per-family. `defineFamily(config)` is feasible — factor the record scaffolding + normalize the seed-arg
+  convention (3 families unwrap `norm` positionally, 7 pass it whole); the math is injected, NOT unified.
+- **This PR (tests-only):** `vitest/solver-family-golden.test.ts` (11 tests) — for each of the 10 families, pins
+  `residual`/`packPhi`/`computeTargets` on the deterministic `initialGuess` phi for a test-derived (hData, opts)
+  input (refs the solvers-*.test.js battery inline). Tolerance-compared (abs 1e-6 + rel 1e-6) to absorb
+  ~1e-17..1e-34 structurally-zero FP noise. NOTE `normalizeOpts({})` throws for 8/10 (each needs its real opts
+  bag: c/alpha/w0/q). Green on the unmodified families (11/11); mutation-verified (scale boundedQD packPhi → only
+  that family fails). Golden vectors captured headlessly via solver-graph.mjs, deterministic across 2 runs.
+- **Green bar:** build/typecheck/lint exit 0; `pnpm test` **2114 passed / 242 files** (+11, +1 file). Cut
+  `refactor/C3a-family-golden-net`; PR → refactor/main; merge on green.
+- **Next → C3b:** `defineFamily(config)` + seeds-common — factor the 17-key record scaffolding across all 10
+  solver-*.mjs (math untouched: evalPhi / phiTaylorAt / computeTargetA / residual), guarded by THIS net staying
+  bit-(near)identical before/after per family. QD-SOLV-4/5 resolved there.
