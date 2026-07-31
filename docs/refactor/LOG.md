@@ -390,3 +390,27 @@
 - **Next → C3b:** `defineFamily(config)` + seeds-common — factor the 17-key record scaffolding across all 10
   solver-*.mjs (math untouched: evalPhi / phiTaylorAt / computeTargetA / residual), guarded by THIS net staying
   bit-(near)identical before/after per family. QD-SOLV-4/5 resolved there.
+
+## 2026-07-31 — Phase D · Stage C3b part 1 (defineFamily + 3 families — QD-SOLV-4) — PR opened
+- User chose "Go — incremental" for C3b (defineFamily). Doing it in per-batch commits, each re-verified against
+  the C3a golden net + full green bar so every commit is a safe stopping point.
+- **NEW `app/solvers/define-family.mjs`** — `defineFamily(config)` assembles the `QD.Family.<name>` record,
+  factoring the mechanical scaffolding: `enforceInDisk`/`enforceOutDisk` from a single `unbounded` flag; the
+  `computeTargets` `{A[,F][,G]}` composition from the supplied target computers; a DEFAULT `diverseInitialGuess`
+  = `QD.diverseInitialGuess` delegation; the fixed key layout. The per-family math + seed/continuation kernels are
+  injected verbatim (never unified — ADR-0007/0008).
+- **FINDING (evidence, read the literals firsthand):** the shells diverge MORE than the C3a map implied —
+  `diverseInitialGuess` is per-family for LQD (its own `diverseInitialGuess_LQD`, NOT the shared delegation), and
+  the seed/continuation arg convention varies (boundedQD/unboundedQD unwrap `norm.w0`/`norm.c` positionally;
+  boundedLQD passes `norm` whole). So defineFamily is a **scaffolding-factor with injected kernels**, a
+  real-but-modest DRY win, NOT a collapse — `diverseInitialGuess` is injectable (default only when omitted);
+  seed/continuation thunks stay per-family. (The C1b lesson: don't over-generalize.)
+- **This PR (part 1 of 2) — retrofit 3 families spanning the divergences:** boundedQD (bounded · positional
+  `norm.w0` · default diverse), unboundedQD (unbounded · F-array · positional `norm.c`), boundedLQD (whole-`norm`
+  · own `diverseInitialGuess_LQD`). Each `QD.Family.X = {…}` literal → `QD.Family.X = defineFamily({…})`.
+- **Behavior-preserving:** the C3a golden net stays **11/11** (per-family residual/packPhi/computeTargets
+  identical) and the full suite is green (build/typecheck/lint exit 0; node oracle **2332/0**; 2114/242). No test
+  added — guarded by the pre-existing golden net + the end-to-end solver suite. Cut `refactor/C3b-define-family`.
+- **Part 2 (next):** the remaining 7 families — unboundedLQD, boundedLQD_singular, unboundedLQD_singular (the
+  `{A,F,G}` case → `computeTargetG`), powerQD (positional `norm.w0`+`alpha`), powerQD_singular, unboundedPQD +
+  unboundedPQD_singular (the `sampleBoundary` key). QD-SOLV-4/5 resolved when all 10 are on defineFamily.

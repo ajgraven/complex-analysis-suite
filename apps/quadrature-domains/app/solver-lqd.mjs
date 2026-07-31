@@ -2,6 +2,7 @@
 import { Complex } from './complex.mjs';
 import { Taylor } from './taylor.mjs';
 import _QD from './solver.mjs';
+import { defineFamily } from './solvers/define-family.mjs';
 // =============================================================================
 // solver-lqd.js -- Bounded non-singular log-weighted quadrature domains (LQDs)
 //
@@ -388,10 +389,9 @@ import _QD from './solver.mjs';
   // ===========================================================================
   // 6. Register Family.boundedLQD
   // ===========================================================================
-  QD.Family.boundedLQD = {
+  QD.Family.boundedLQD = defineFamily({
     name: 'boundedLQD',
-    enforceInDisk:  true,
-    enforceOutDisk: false,
+    // unbounded omitted → enforceInDisk:true / enforceOutDisk:false.
     // Dispatch criterion: any opts bag with `lqd: true` and no `unbounded`.
     // Walked by selectFamily in registration order (boundedLQD before
     // boundedQD, since boundedQD is the catch-all default).
@@ -412,22 +412,17 @@ import _QD from './solver.mjs';
 
     evalPhi: evalPhi_LQD,
     phiTaylorAt: phiTaylorAt_LQD,
-
-    computeTargets(phi, hData) {
-      return { A: computeTargetA_LQD(phi, hData), F: null };
-    },
-
+    computeTargetA: computeTargetA_LQD,       // no F/G → computeTargets { A, F:null }
     residual: residual_LQD,
     packPhi:  packPhi_LQD,
     unpackPhi: unpackPhi_LQD,
     canonicalizePhi: canonicalizePhi_LQD,
-
     initialGuess: initialGuess_LQD,
     perturbedInitialGuess: perturbedInitialGuess_LQD,
-    diverseInitialGuess: diverseInitialGuess_LQD,
+    diverseInitialGuess: diverseInitialGuess_LQD,   // family-specific (not the default)
     continuationSolve: continuationSolve_LQD,
     verifyQuadratureIdentity: verifyQuadratureIdentity_LQD,
-  };
+  });
 
   // Register with the dispatch order. This makes the internal selectFamily
   // (inside solver.js's closure) aware of boundedLQD — the previous monkey-

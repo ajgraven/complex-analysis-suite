@@ -162,3 +162,10 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   behavior-preserving (net stays green 20/20; full 2081/239), independent fallback latches kept. First structural
   refactor of Group C, guarded by the B4-2a crash net. **Remaining QD-UI-1 → C1b** (sym/schwarz/pool lanes onto the
   same factory) + **C2** (QD-UI-4 typed protocol). B4-2b (#185) now **merged** (ecb5124).
+- **2026-07-31 · stage C3b part 1 (PR → refactor/main):** **QD-SOLV-4/5 → in progress.** NEW
+  `app/solvers/define-family.mjs` (`defineFamily(config)` factors the record scaffolding); 3/10 families retrofit
+  (boundedQD/unboundedQD/boundedLQD). Behavior-preserving (C3a golden net 11/11; suite 2332/0). **FINDING:** the
+  shells diverge more than the C3a map showed — `diverseInitialGuess` is per-family for LQD (own kernel, not the
+  shared delegation) and seed/continuation arg conventions vary — so defineFamily injects those (default diverse
+  only when omitted), a scaffolding-factor not a collapse. Remaining 7 families → **C3b part 2** (incl. the
+  `{A,F,G}` `computeTargetG` case + the 4 PQD `sampleBoundary` key). C3a (#190) now **merged** (8357d15).
