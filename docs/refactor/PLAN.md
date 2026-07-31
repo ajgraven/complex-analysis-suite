@@ -127,6 +127,10 @@ cycle can land in parallel with Stage 0; all QD structural work (C/D/E) is gated
 - **B2 — shard `solvers.test.js`.** Split into ~4 parallel specs (bounded/unbounded/LQD/PQD); blocks are
   independent (verified). · Prereq: B1 · Char: same assertions across shards · Done-when: node-suite ≈ 25–30s;
   green · Footprint: small-med · Risk: low.
+  · **DONE (PR → refactor/main):** 4 contiguous *numbered* shards — families are interleaved, so numbered
+  slices, not family-partitioned (deviation from the parenthetical above; same intent, safer/provable). Parity
+  by byte-identical reconstruction (oracle 2332/0, Σ=451). Wall 157s→109s, long-pole 77s→**37s** — the ~25–30s
+  target was not reached because §PB [826-935] is one atomic ~38s block (a follow-up sub-split could go lower).
 - **B3 — QD coverage visibility (QD-TEST-6, optional).** Give QD `.mjs` a coverage path (targets get line/branch
   visibility). · Prereq: B1 · Done-when: `test:coverage` reports QD · Footprint: small · Risk: low.
 - **B4 — characterization seams for the QD-UI god-modules (the NET).** Fake-`Worker` harness + jsdom DOM tests
@@ -192,9 +196,12 @@ consistent with the broad-sweep mandate; can pause at any group boundary.
 
 ## 10. Roadmap status
 - **A1** (#178) + **A2** (#180) + **A3** (#179) — **MERGED** to `refactor/main`. Group A (quick wins) complete.
-- **B1 — IN REVIEW** (PR → `refactor/main`): node-suite → 26 parallel Vitest specs; parity-verified
-  (2329/0); per-file reporting/isolation. **Honest: NEUTRAL on wall time** — `solvers.test.js` (~77s) is the
-  long pole. The speed win is **B2** (shard solvers), now **revised to med-high risk** (solvers is a
-  1,915-line monolithic `run()`, not the low-risk change first assumed) and **deferred to a fresh session**.
-- Remaining (B2, B3, B4, C1–C3, D1–D2, E1–E2, F1): NOT STARTED. Cadence: **auto-merge on green** (user).
-- Deferred/open: QD-ALG-7 (→ Group D), QD-SOLV-6 (own analysis).
+- **B1** (#181) — **MERGED** (08b0fab): node-suite → 26 parallel Vitest specs; parity 2329/0; per-file
+  reporting/isolation. Honest: NEUTRAL on wall time (`solvers.test.js` ~77s long pole) — B1's value is
+  isolation + enabling B2.
+- **B2 — IN REVIEW** (PR → `refactor/main`): sharded `solvers.test.js` into 4 contiguous parallel node specs.
+  Risk revised med-high → **low** after a verified statement-map (contiguous slices are byte-identical to the
+  original body). **Measured win: `pnpm test` 157s → 109s (−30%); long-pole spec 77s → 37s.** Parity: oracle
+  2332/0, Σ shard contributions = 451 (== pre-split). The atomic §PB block [826-935] (~38s) caps further gains.
+- Remaining (B3, B4, C1–C3, D1–D2, E1–E2, F1): NOT STARTED. Cadence: **auto-merge on green** (user).
+- Deferred/open: QD-ALG-7 (→ Group D), QD-SOLV-6 (own analysis); §PB sub-block split (more solvers speed, higher risk).
