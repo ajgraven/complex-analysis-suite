@@ -4,6 +4,7 @@ import { Taylor } from './taylor.mjs';
 import { branchTaylorAccumulate } from './solver-taylor-common.mjs';
 import { continuationInC as runContinuationInC } from './solver-continuation.mjs';
 import _QD from './solver.mjs';
+import { defineFamily } from './solvers/define-family.mjs';
 // =============================================================================
 // solver-uqd.js -- Unbounded classical quadrature domains (Family.unboundedQD)
 //
@@ -417,10 +418,9 @@ import _QD from './solver.mjs';
   // ===========================================================================
   // 9. Register Family.unboundedQD
   // ===========================================================================
-  QD.Family.unboundedQD = {
+  QD.Family.unboundedQD = defineFamily({
     name: 'unboundedQD',
-    enforceInDisk:  false,
-    enforceOutDisk: true,
+    unbounded: true,                          // enforceInDisk:false / enforceOutDisk:true
     matches(opts) { return !!(opts && opts.unbounded); },
 
     normalizeOpts(opts, hData) {
@@ -433,9 +433,8 @@ import _QD from './solver.mjs';
 
     evalPhi: evalPhi_UQD,
     phiTaylorAt: phiTaylorAt_UQD,
-    computeTargets(phi, hData) {
-      return { A: computeTargetA_UQD(phi, hData), F: computeTargetF_UQD(phi, hData) };
-    },
+    computeTargetA: computeTargetA_UQD,
+    computeTargetF: computeTargetF_UQD,       // → computeTargets { A, F:[…] }
     residual: residual_UQD,
     packPhi: packPhi_UQD,
     unpackPhi: unpackPhi_UQD,
@@ -444,14 +443,12 @@ import _QD from './solver.mjs';
     perturbedInitialGuess(hData, norm, rng, r) {
       return perturbedUnboundedInitialGuess_UQD(hData, norm.c, rng, r);
     },
-    diverseInitialGuess(hData, norm, rng, r) {
-      return QD.diverseInitialGuess(hData, norm, rng, r);
-    },
+    // diverseInitialGuess omitted → defineFamily's default QD.diverseInitialGuess delegation.
     continuationSolve(hData, norm, opts) {
       return continuationInC_UQD(hData, norm.c, opts);
     },
     verifyQuadratureIdentity: verifyQuadratureIdentity_UQD,
-  };
+  });
   QD.registerFamily('unboundedQD');
 
   // Exports

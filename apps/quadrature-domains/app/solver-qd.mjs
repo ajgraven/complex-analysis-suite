@@ -3,6 +3,7 @@ import { Complex } from './complex.mjs';
 import { Taylor } from './taylor.mjs';
 import { branchTaylorAccumulate } from './solver-taylor-common.mjs';
 import _QD from './solver.mjs';
+import { defineFamily } from './solvers/define-family.mjs';
 // =============================================================================
 // solver-qd.js -- Bounded classical quadrature domains (Family.boundedQD)
 //
@@ -324,10 +325,9 @@ import _QD from './solver.mjs';
   // ===========================================================================
   // 8. Register Family.boundedQD
   // ===========================================================================
-  QD.Family.boundedQD = {
+  QD.Family.boundedQD = defineFamily({
     name: 'boundedQD',
-    enforceInDisk:  true,
-    enforceOutDisk: false,
+    // unbounded omitted → enforceInDisk:true / enforceOutDisk:false.
     matches(opts) { return true; },           // catch-all (checked last)
 
     normalizeOpts(opts, hData) {
@@ -341,9 +341,7 @@ import _QD from './solver.mjs';
 
     evalPhi: evalPhi_QD,
     phiTaylorAt: phiTaylorAt_QD,
-    computeTargets(phi, hData) {
-      return { A: computeTargetA_QD(phi, hData), F: null };
-    },
+    computeTargetA: computeTargetA_QD,        // no F/G → computeTargets { A, F:null }
     residual: residual_QD,
     packPhi: packPhi_QD,
     unpackPhi: unpackPhi_QD,
@@ -352,14 +350,12 @@ import _QD from './solver.mjs';
     perturbedInitialGuess(hData, norm, rng, r) {
       return perturbedInitialGuess_QD(hData, norm.w0, rng, r);
     },
-    diverseInitialGuess(hData, norm, rng, r) {
-      return QD.diverseInitialGuess(hData, norm, rng, r);
-    },
+    // diverseInitialGuess omitted → defineFamily's default QD.diverseInitialGuess delegation.
     continuationSolve(hData, norm, opts) {
       return continuationSolve_QD(hData, norm.w0, opts);
     },
     verifyQuadratureIdentity: verifyQuadratureIdentity_QD,
-  };
+  });
   QD.registerFamily('boundedQD');
 
   // Export helpers under QD for other modules that need them (notably the
