@@ -29,6 +29,7 @@
 // Blob bundle, with a main-thread MainThreadPool fallback. Exposes ParamSlicePool as the
 // default export (was a bare global). Imports the ParamSlice kernel it orchestrates.
 import PS from './param-slice-common.mjs';
+import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
 
 const _pool = (function () {
   'use strict';
@@ -250,7 +251,7 @@ const _pool = (function () {
     // forever and leaking the dead thread. Route both to the pool's crash handler.
     for (const w of workers) {
       w.addEventListener('error', (e) =>
-        pool._onWorkerError(w, ((e && e.message) || e) + ' @ ' + ((e && e.filename) || 'bundle') + ':' + ((e && e.lineno) || '?')));
+        pool._onWorkerError(w, formatWorkerErrorDetail(e)));
       w.addEventListener('messageerror', () => pool._onWorkerError(w, 'postMessage clone failed'));
     }
     return pool;
