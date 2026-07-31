@@ -178,3 +178,11 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   defineFamily unified the seed *wiring*, but the seed *strategy* files (`solvers/seeds/*`) stay per-family; a
   `seeds-common` extraction was NOT pursued (out of C3b scope). **Group C dedup COMPLETE** (C1/C2/C3). C3b-p1
   (#191) now **merged** (3ac7dc2).
+- **2026-07-31 · stage D-ui-seam (PR → refactor/main):** **QD-UI-2 → first seam carved; QD-TEST-2 → partially
+  addressed.** Extracted the pure domain-mode algebra (composeMode/decomposeMode/modeSummary) from ui.mjs into NEW
+  `app/ui-domain-mode.mjs` + a 19-test characterization net (`vitest/ui-domain-mode.test.ts`, mutation-verified) —
+  ui.mjs's FIRST executable coverage (also chips QD-UI-5). Behavior-preserving (green 2133/243). **Revised
+  understanding:** ui.mjs is the Phase-2 port; most responsibilities already live in sibling modules (installX
+  factories), so it's mostly DOM wiring — the "god-module" is less monolithic than QD-UI-2 implied. Remaining pure
+  seam: the geometry pair (boundarySelfIntersectsSimple/segmentsIntersect). The bigger still-monolithic Group-D
+  target is **installAlgebra** (QD-ALG-1). C3b-p2 (#192) now **merged** (be6a51e).

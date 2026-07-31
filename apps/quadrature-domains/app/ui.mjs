@@ -3,6 +3,7 @@ import { state } from './ui-state.mjs';
 import { QD_UI } from './ui-registry.mjs';
 import { Complex } from './complex.mjs';
 import _QD from './solver.mjs';
+import { composeMode, decomposeMode, modeSummary } from './ui-domain-mode.mjs';
 const QD = _QD;
 // =============================================================================
 // ui.js -- Frontend for the Quadrature Domain Solver
@@ -681,34 +682,12 @@ function applyModeVisuals() {
   if (summ) summ.textContent = modeSummary(state.mode);
 }
 
-// Item 5: plain-language description of the active mode, for #dm-summary.
-function modeSummary(mode) {
-  const d = decomposeMode(mode);
-  const weight = d.weight === 'classical' ? 'classical (unweighted)'
-    : d.weight === 'pqd' ? 'power-weighted (|w|^(2(α−1)))'
-    : 'log-weighted (1/|w|²)';
-  const extent = d.domain === 'bounded' ? 'bounded' : 'unbounded (reaches ∞)';
-  const sing = d.singular ? ', with the origin inside Ω' : '';
-  return `Solving for a ${extent} ${weight} quadrature domain Ω from your h(w)${sing}.`;
-}
-
 // ---------- Compact 3-axis domain-type control --------------------------
-// The 10 modes factor as {weight} × {bounded|unbounded} × {singular}. Classical
-// has no singular variant. composeMode maps the three controls → a MODES key;
-// decomposeMode is the inverse; syncDomainModeControl reflects state.mode back
-// into the buttons + checkbox (called from applyModeVisuals).
-function composeMode(weight, domain, singular) {
-  if (weight === 'classical') return domain;            // 'bounded' | 'unbounded'
-  return `${weight}-${domain}${singular ? '-singular' : ''}`;
-}
-function decomposeMode(mode) {
-  if (mode === 'bounded' || mode === 'unbounded') {
-    return { weight: 'classical', domain: mode, singular: false };
-  }
-  const m = /^(pqd|lqd)-(bounded|unbounded)(-singular)?$/.exec(mode);
-  if (!m) return { weight: 'classical', domain: 'bounded', singular: false };
-  return { weight: m[1], domain: m[2], singular: !!m[3] };
-}
+// The 10 modes factor as {weight} × {bounded|unbounded} × {singular} (classical has no
+// singular variant). The pure algebra — composeMode / decomposeMode / modeSummary — lives
+// in ui-domain-mode.mjs (imported above); the DOM reflectors below call it:
+// syncDomainModeControl reflects state.mode into the buttons + checkbox (called from
+// applyModeVisuals); applyDomainModeControl reads them back.
 function syncDomainModeControl(mode) {
   const d = decomposeMode(mode);
   $$('#dm-weight .seg-btn').forEach(b => QD.QoL.setSegActive(b, b.dataset.weight === d.weight));
