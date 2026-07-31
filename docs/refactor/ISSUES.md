@@ -212,3 +212,15 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   solution is state 'multi' + "upper bound on #QD", never a green 'unique'), and the slice/branch specialization
   suffix. In-file move ⇒ byte-identical strings (verified: the 24-line body is identical modulo indentation); callers
   (cacheActiveVerdict / classifyAllBranches) unchanged. QD-ALG-5 status unchanged (unification still deferred).
+- **2026-07-31 · stage D-alg-carve-3 (PR → refactor/main):** **QD-ALG-1 → decomposition continues (carve-out 3);
+  QD-ALG-6 → assessed, NOT the target.** Extracted the pure exact-ℚ(i) value formatter `exactValueStr` + its private
+  helper `fmtRat` (float → exact rational via the store's continued-fraction rationalizer `QD.QDEquations.ratApprox`)
+  out of installAlgebra → NEW `app/algebra/algebra-format.mjs` + an 8-test HEADLESS net
+  (`vitest/algebra-exact-format.test.ts`, mutation-verified). The module side-effect-imports `qd-equations` (which
+  registers `ratApprox` on the QD singleton — it has no direct export), so the net runs with no jsdom. Behavior-
+  preserving: 8 behavior-critical literals byte-identity-checked vs source (incl. the typographic MINUS U+2212, pinned
+  as a display guardrail); the 4 `exactValueStr` call sites unchanged; the installAlgebra `QE` binding (used 20× else)
+  kept. **QD-ALG-6** (realness/verify tolerances as magic literals) assessed firsthand and **DECLINED as a carve-out**:
+  the ~6 tolerance constants (1e-6 verify, 1e-6 realness, 1e-12 w0-match, 1e-10/1e-8 display-snap) sit at unrelated call
+  sites with genuinely different meanings — no single pure computation to net, and unifying them would risk behavior.
+  Remains **open** (a constants-table cleanup, not a pure carve-out).

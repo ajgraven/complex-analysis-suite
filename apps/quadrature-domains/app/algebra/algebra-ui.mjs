@@ -88,6 +88,7 @@ import { plainVar } from '../qd-varscheme.mjs';   // conjugate-model var scheme 
 import { domainPlotData, momentPlotData, rationalPlotData, trianglePlotData } from './domain-mini-plot.mjs';   // #3 + C1-ext-B + C2-4 + C3-4: reconstructed-domain thumbnail geometry
 import * as PROVE from './prove-plan.mjs';   // the pure existence/uniqueness proof engine (fuller-orchestrator Phase A)
 import { classifyVerdict, posDimDesc } from './algebra-labeling.mjs';   // pure honest-labeling verdict prose (carve-out 1)
+import { exactValueStr } from './algebra-format.mjs';   // pure exact-ℚ(i) value formatter (carve-out 3)
 const QD = _QD;
 
 (function () {
@@ -1606,19 +1607,8 @@ const QD = _QD;
     // The picker lists BASE variables only (not their conjugates) — a value fully
     // specifies the conjugate (z₁=1+i ⟹ z̄₁=1−i), and the store fills it automatically.
     function valBaseVars() { try { return store.baseVariables(); } catch (e) { return []; } }
-    // Exact ℚ(i) string for the inline preview (same continued-fraction rationalizer the
-    // store uses), so the user sees 0.2 → 1/5 before applying.
-    function fmtRat(x) {
-      try { const r = QE.ratApprox(x || 0); return String(r[1]) === '1' ? String(r[0]) : String(r[0]) + '/' + String(r[1]); }
-      catch (e) { return String(x || 0); }
-    }
-    function exactValueStr(re, im) {
-      re = re || 0; im = im || 0;
-      if (!im) return fmtRat(re);
-      const iAbs = fmtRat(Math.abs(im)) + 'i';
-      if (!re) return (im < 0 ? '−' : '') + iAbs;
-      return fmtRat(re) + (im < 0 ? ' − ' : ' + ') + iAbs;
-    }
+    // exactValueStr + its fmtRat helper moved to ./algebra-format.mjs (carve-out 3) — imported above,
+    // re-exported on QD_UI below. Same continued-fraction rationalizer (QD.QDEquations.ratApprox).
     function updateRowPreview(row) {
       const prev = row.querySelector('.alg-val-preview'); if (!prev) return;
       const re = parseFloat(row.querySelector('.alg-val-re').value) || 0;
@@ -4927,6 +4917,7 @@ const QD = _QD;
   QD_UI.posDimDesc = posDimDesc;                     // carve-out 1: honest size of a positive-dim verdict (pure; from ./algebra-labeling.mjs)
   QD_UI.classifyVerdict = classifyVerdict;           // carve-out 1: classify-result → verdict prose (pure; from ./algebra-labeling.mjs)
   QD_UI._verdictBadge = _verdictBadge;               // carve-out 2: classify-result → chip badge {badge,state,title} (pure)
+  QD_UI.exactValueStr = exactValueStr;               // carve-out 3: exact ℚ(i) value formatter (pure; from ./algebra-format.mjs)
   QD_UI.scopeNote = scopeNote;                       // T1: scoped-mutating-op toast disclosure (pure)
   QD_UI.droppedNote = droppedNote;                   // T1: basis-replacement dropped-node toast wording (pure)
   QD_UI.latexPlain = latexPlain;                     // T1: conjugate-model var-name → plain-text formatter (pure)
