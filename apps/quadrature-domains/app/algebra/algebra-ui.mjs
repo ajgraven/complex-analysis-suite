@@ -87,7 +87,7 @@ import _QD from '../solver.mjs';
 import { plainVar } from '../qd-varscheme.mjs';   // conjugate-model var scheme (plain-text labels)
 import { domainPlotData, momentPlotData, rationalPlotData, trianglePlotData } from './domain-mini-plot.mjs';   // #3 + C1-ext-B + C2-4 + C3-4: reconstructed-domain thumbnail geometry
 import * as PROVE from './prove-plan.mjs';   // the pure existence/uniqueness proof engine (fuller-orchestrator Phase A)
-import { classifyVerdict, posDimDesc } from './algebra-labeling.mjs';   // pure honest-labeling verdict prose (carve-out 1)
+import { classifyVerdict, posDimDesc, withGuidance, _isCapFailure } from './algebra-labeling.mjs';   // pure honest-labeling: verdict prose (1) + cap-failure guidance (6)
 import { exactValueStr, fmtRatio, ratioStrRec } from './algebra-format.mjs';   // pure exact-ℚ(i) value + ratio-prefix formatters (carve-outs 3, 4)
 import { _parseMomentToken } from './algebra-moment-parse.mjs';   // pure complex-moment input parser (carve-out 5)
 const QD = _QD;
@@ -3068,13 +3068,8 @@ const QD = _QD;
       return false;
     }
 
-    // Append a CAS-route hint to cap/too-large failures (the recurring case).
-    function _isCapFailure(reason) { return /export|cap|exceed|too large|step|basis|degree|terms/i.test(reason || ''); }
-    function withGuidance(reason) {
-      return _isCapFailure(reason)
-        ? (reason + '  Try: assume variables real (simplifies the system), eliminate fewer variables, or use the CAS export.')
-        : reason;
-    }
+    // _isCapFailure + withGuidance (cap-failure guidance) moved to ./algebra-labeling.mjs (carve-out 6) —
+    // imported above; the DOM-coupled capFailVerdict below still uses the imported _isCapFailure.
     // G-misc-2: a cap/too-large failure names the CAS export in PROSE — also make it a one-click ACTION.
     // Renders the failure in the verdict card with a "Copy Maple RCTD export" button, so the failure state is
     // actionable (the documented external-CAS route), not just advisory. Returns true when it handled a cap

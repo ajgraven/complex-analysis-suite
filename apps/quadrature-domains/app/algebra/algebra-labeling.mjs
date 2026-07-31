@@ -43,3 +43,18 @@ export function classifyVerdict(r) {
   }
   return verdict;
 }
+
+// Cap-failure guidance (carve-out 6; carved verbatim from installAlgebra). Honest labeling of the FAILURE
+// side: when an op fails because the system is too large / hit a resource cap, say so AND point at the
+// documented CAS-export escape hatch, rather than leaving a bare "exceeded …" message. `_isCapFailure` is
+// the recognizer (also used by the DOM-coupled capFailVerdict, which stays in algebra-ui and imports it).
+
+// Predicate: does a failure `reason` read like a cap / too-large / resource-limit failure?
+export function _isCapFailure(reason) { return /export|cap|exceed|too large|step|basis|degree|terms/i.test(reason || ''); }
+
+// Append a CAS-route hint to a cap/too-large failure; every other failure passes through unchanged.
+export function withGuidance(reason) {
+  return _isCapFailure(reason)
+    ? (reason + '  Try: assume variables real (simplifies the system), eliminate fewer variables, or use the CAS export.')
+    : reason;
+}

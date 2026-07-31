@@ -245,3 +245,12 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   the one external caller (`doShapeFromMoments` `.map(_parseMomentToken)`) resolves to the import. Census-ranked next:
   `withGuidance`+`_isCapFailure` (honest-labeling guidance, ~19 sites), `_pronyLatex`, `valStr`+`substList` (whose real
   impls the PROV_UI tests currently MOCK), then cheap stragglers, then `latexOf`(+`reimSafeLatex`) pure-if-injected.
+- **2026-07-31 · stage D-alg-carve-6 (PR → refactor/main):** **QD-ALG-1 → decomposition continues (carve-out 6).**
+  Extracted the cap-failure guidance pair `withGuidance` + its `_isCapFailure` recognizer (a substring regex over a
+  failure `reason` → looks like a resource/too-large cap? → append the CAS-export escape-hatch hint; else pass through)
+  out of installAlgebra → EXTEND `app/algebra/algebra-labeling.mjs` (the honest-labeling module) + a 6-test HEADLESS net
+  (`vitest/algebra-cap-guidance.test.ts`, mutation-verified; pins the guidance sentence verbatim incl. its leading
+  double-space, and the substring-match quirk — "escape" contains "cap"). Behavior-preserving (3 fragments byte-identity-
+  checked vs source). The ~19 `withGuidance` call sites (every op's failure path) resolve to the import; the DOM-coupled
+  `capFailVerdict` stays but now calls the imported `_isCapFailure`. `algebra-labeling.mjs` now holds verdict prose +
+  failure guidance.
