@@ -11,12 +11,13 @@ extensibility, conceptual clarity, reliability/testability, and architectural co
 Behavior-preserving by default; no behavioral change without an explicit approval token.
 
 ## Phase / stage
-- **Phase D — Execute. Group A COMPLETE (A1/A2/A3 merged @ 3a5d18f).** User confirmed: proceed with Group B,
-  auto-merge on green. **B1 branch `refactor/B1-parallelize-node-suite` cut (no commits) and fully DESIGNED
-  (Next steps below); implementation NOT begun.**
-- **Checkpoint before implementing B1** — it is a delicate assertion-parity test-infra port and the session
-  is very long. Recommend implementing B1 with fresh context to verify parity carefully. Can proceed now if preferred.
-- Cadence: auto-merge on green (user). `APPROVED: PLAN.md v1`. Deferred/open: QD-ALG-7 (→ Group D), QD-SOLV-6.
+- **Phase D — Execute. Group A COMPLETE (A1/A2/A3 merged).** Group B started.
+  **B1 IN FLIGHT — PR #181** (node-suite → 26 parallel Vitest specs; parity 2329/0; per-file isolation;
+  HONEST: **NEUTRAL on wall time** — `solvers.test.js` ~77s long pole). Auto-merges on green (send_later @ 00:53Z).
+- **B2 (shard solvers) DEFERRED to a fresh session** (user: "land B1 now, do B2 fresh"). Scope discovery:
+  `solvers.test.js` is a **1,915-line monolithic `run()`** (helpers + vm + 8 interleaved batteries; no
+  `section()` seams) → a parity-safe shard is **med-high risk**, not low. **Resume point: Next steps + LOG.**
+- Cadence: auto-merge on green. `APPROVED: PLAN.md v1`. Deferred/open: QD-ALG-7 (→ Group D), QD-SOLV-6.
 - `APPROVED: PLAN.md v1`; decisions recorded (D-1 align `{re:0}`, D-2 folderize late, D-3 include E1 last,
   D-4 keep `harness.ok` wrapped).
 - A1 shipped: QD-SOLV-3 (centroid → `QD.poleCentroid`, D-1 behavior change, char-tested) + QD-SOLV-2
@@ -25,8 +26,9 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   E(state+folderize)/F(dependency-cruiser). Phase B complete; ASSESSMENT §1–4; 36 findings in ISSUES.
 
 ## Branches / PR
-- Integration branch: `refactor/main` @ 3a5d18f (cut from `master` @ b1e3004). Tree clean. **No PR in flight.**
-- Merged stage PRs: A1 #178 (b331ae2), A3 #179 (e657769), A2 #180 (3a5d18f).
+- Integration branch: `refactor/main` @ 207a9ca (cut from `master` @ b1e3004). Tree clean.
+- **Stage in flight: `refactor/B1-parallelize-node-suite` → PR #181** (auto-merge on green).
+- Merged: A1 #178 (b331ae2), A3 #179 (e657769), A2 #180 (3a5d18f). PR #181: https://github.com/ajgraven/complex-analysis-suite/pull/181
 
 ## Validation state (green bar) — established 2026-07-30 @ b1e3004; all green, no pre-existing failures
 - build:      `pnpm build`      → exit 0
@@ -45,23 +47,16 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - CI health unknown (July review reported an exhausted GH Actions spending limit). Treat the LOCAL
   green bar as source of truth; report CI per PR without blocking on it.
 
-## Next concrete steps — Stage B1 (parallelize node-suite): DESIGN READY (verified feasible), implement next
-Facts confirmed: `bootstrap.init()` memoized (test/bootstrap.js:127-130); harness counters per-worker
-(harness.js:12,40); the 26 `TESTS` are order-independent (node-test.js:19-20); all run in **node** env (the 4
-"DOM-ish" files run DOM-free today). Implementation:
-1. Add `apps/quadrature-domains/vitest/node/_run.ts` exporting `runNodeSuiteFile(name)`: `import {beforeAll,test,
-   expect}` from vitest + `createRequire(import.meta.url)`; `beforeAll(()=>require('../../app/test/bootstrap').init())`;
-   `test(name, async ()=>{ const b=report(); const run=require('../../app/test/'+name+'.test.js'); await run();
-   const a=report(); expect(a.pass+a.fail-(b.pass+b.fail)).toBeGreaterThanOrEqual(FLOORS[name]??3);
-   expect(a.fail-b.fail).toBe(0); })`. Move the FLOORS map (node-test.js:85-91) into `_run.ts` — **KEEP it**
-   (D-4 keeps `harness.ok` wrapped → per-file counts stay invisible to Vitest, so FLOORS still guards silent shrink).
-2. Generate 26 thin specs `vitest/node/<name>.test.ts` via a bash loop over TESTS: line 1 `// @vitest-environment node`,
-   then `import { runNodeSuiteFile } from "./_run"; runNodeSuiteFile("<name>");`.
-3. Delete `vitest/node-suite.test.ts` (serial execFileSync wrapper). Keep `app/node-test.js` for standalone runs.
-4. Verify: full green bar; **assertion PARITY** (sum per-file counts ≈ 2302, all pass); node-suite no longer one
-   serial spec; measure wall-time drop (~40%). Watch: global visibility across Vitest workers; createRequire paths.
-Then **B2** (shard `solvers.test.js` → ~25-30s) → **B4** (fake-Worker + jsdom net for `ui.mjs`/`ui-solve.mjs`).
-Then C → D → E → F.
+## Next concrete steps (fresh session resumes here) — Stage B2: shard solvers.test.js (the deferred speed win)
+0. Confirm PR #181 (B1) merged; `refactor/main` green + clean. (B1 done: node-suite = 26 parallel `vitest/node/*` specs.)
+1. **B2 — shard `solvers.test.js` (QD-TEST-5).** It's a **1,915-line monolithic `run()`** (app/test/solvers.test.js:10-1915):
+   shared helpers + `vm` setup (~10-676), then 8 `runFamilyBattery('X',[…preset array…])` blocks at
+   677/688/714/1138/1735/1742/1755/1800, interleaved with inline tests. Plan: extract the shared helpers so
+   shard fns can reuse them; split the 8 batteries (+ inline blocks) into ~4 balanced shards; wire each as a
+   `vitest/node` spec (extend `_run.ts`). **Verify PARITY**: sum shard assertions == solvers' ~451 (oracle
+   `node app/node-test.js` = 2329/0). Target: longest spec ~19-25s → suite ~128s→~25-35s. **Med-high risk → char-test-first.**
+2. Then B3 (QD coverage), **B4** (fake-Worker + jsdom net for `ui.mjs`/`ui-solve.mjs` — the safety net gating C/D),
+   then C (dup collapse) → D (god-module decomp) → E (state+folderize) → F (dependency-cruiser).
 
 ## Resume commands
 ```
