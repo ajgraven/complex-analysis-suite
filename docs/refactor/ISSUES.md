@@ -141,6 +141,15 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   as **legitimate distinct abstractions**, not duplication — so the "6× lifecycle" finding is closed to its true
   residual, not force-merged. The drift class (the schwarz Pass-1/3 bug) stays frozen by the net. B4-2c (#187) now
   **merged** (551c9c6). **Group C worker-lane work (C1) DONE** → next C2 (typed protocol) / C3.
+- **2026-07-31 · stage C2 (PR → refactor/main):** **QD-UI-4 → addressed (primary path).** NEW
+  `app/workers/protocol.mjs` (`reply`/`replyError`/`dispatch`); `solver-worker-entry.mjs` retrofit (53→31) — the
+  3-kind chain → a `handlers` map + `dispatch`, which replies with an error envelope for an unhandled kind instead
+  of dropping it (the silent-hang fix — an APPROVED behavior change per PLAN v1 C2). Char-net-first
+  (`vitest/worker-protocol.test.ts`; known-kind round-trip pinned + mutation-verified BEFORE the refactor, then the
+  unknown-kind assertion flipped to the fix) — also begins closing **QD-UI-5** (worker-entry dispatch had no
+  executable coverage). Green 2103/241. **Remaining → C2b:** route the sym / param-slice / schwarz entry reply
+  envelopes through `protocol.mjs` (they don't dispatch on input kind, so no hang there — envelope DRY only). C1b
+  (#188) now **merged** (a6332d5).
 - **2026-07-31 · stage C1a (PR → refactor/main):** **QD-UI-1 → PSW 3× lane duplication ELIMINATED** (86c7bcf) —
   primary/aux/live collapsed to a `createWorkerLane(cfg)` factory (primary-solver-worker.mjs 395→238, −40%),
   behavior-preserving (net stays green 20/20; full 2081/239), independent fallback latches kept. First structural

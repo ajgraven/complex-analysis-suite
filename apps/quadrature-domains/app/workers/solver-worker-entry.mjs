@@ -4,49 +4,29 @@
 // that primary-solver-worker.js used to build: imports the ESM solver graph
 // directly and handles the three job kinds the warm / aux / live workers post
 // ('solve' → solveInverseQD, 'altSearch' → searchAlternates, 'liveSolve' →
-// liveSolveStep), echoing each jobId. Message protocol unchanged from the classic
-// handler so the main-thread side is untouched semantically.
+// liveSolveStep), echoing each jobId.
+//
+// The envelope + kind-dispatch now go through workers/protocol.mjs (C2): each
+// handler just returns its result (or throws); protocol.dispatch owns the
+// { kind, jobId, result | error } reply, the try/catch, and — new in C2 — an
+// error reply for an unrecognized kind (previously such a message was silently
+// dropped and the caller hung; QD-UI-4). The main-thread side is unchanged: it
+// still matches replies by kind + jobId.
 //
 // `self` is guarded so this module (and its whole import graph) can be imported
 // headlessly by the worker-entry graph-load test — Node has no worker `self`, so
 // the handler simply isn't installed there.
 // =============================================================================
 import QD from './solver-graph.mjs';
+import { dispatch } from './protocol.mjs';
+
+// kind -> (msg) => result. protocol.dispatch wraps each in the shared envelope + try/catch.
+const handlers = {
+  solve: (m) => QD.solveInverseQD(m.hData, m.opts || {}),
+  altSearch: (m) => QD.searchAlternates(m.hData, m.norm, m.known || [], m.opts || {}),
+  liveSolve: (m) => QD.liveSolveStep(m.hData, m.initPhi, m.opts || {}),
+};
 
 if (typeof self !== 'undefined') {
-  self.onmessage = function (e) {
-    const msg = e.data;
-    if (!msg) return;
-    if (msg.kind === 'solve') {
-      const { jobId, hData, opts } = msg;
-      let result;
-      try {
-        result = QD.solveInverseQD(hData, opts || {});
-      } catch (err) {
-        self.postMessage({ kind: 'solve', jobId, error: String((err && err.stack) || err) });
-        return;
-      }
-      self.postMessage({ kind: 'solve', jobId, result });
-    } else if (msg.kind === 'altSearch') {
-      const { jobId, hData, norm, known, opts } = msg;
-      let result;
-      try {
-        result = QD.searchAlternates(hData, norm, known || [], opts || {});
-      } catch (err) {
-        self.postMessage({ kind: 'altSearch', jobId, error: String((err && err.stack) || err) });
-        return;
-      }
-      self.postMessage({ kind: 'altSearch', jobId, result });
-    } else if (msg.kind === 'liveSolve') {
-      const { jobId, hData, initPhi, opts } = msg;
-      let result;
-      try {
-        result = QD.liveSolveStep(hData, initPhi, opts || {});
-      } catch (err) {
-        self.postMessage({ kind: 'liveSolve', jobId, error: String((err && err.stack) || err) });
-        return;
-      }
-      self.postMessage({ kind: 'liveSolve', jobId, result });
-    }
-  };
+  self.onmessage = (e) => dispatch(e.data, handlers, (m) => self.postMessage(m));
 }

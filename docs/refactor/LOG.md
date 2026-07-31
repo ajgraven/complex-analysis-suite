@@ -344,3 +344,28 @@
   the residual per-lane divergence is documented as legitimate (distinct abstractions), not debt. The messageerror/
   error-settle drift class that shipped the schwarz Pass-1/3 bug is now frozen by the 6-lane net + the shared
   formatter. **Group C worker-lane work (C1) is DONE.** Next: C2 (typed protocol) / C3 (defineFamily).
+
+## 2026-07-31 — Phase D · Stage C2 (typed worker protocol — QD-UI-4) — PR opened
+- User chose C2 after C1 complete (refactor/main @ a6332d5, 2092/240). Char-net-first per §D.
+- **Char net FIRST (committed aa0b98e, green on unmodified code):** `vitest/worker-protocol.test.ts` drives the
+  REAL `solver-worker-entry.mjs` via a stubbed `self` + stubbed solver methods, pinning the known-kind round-trip
+  (solve/altSearch/liveSolve → `{kind,jobId,result}`; throw → `{kind,jobId,error}`; falsy msg ignored) AND the
+  CURRENT unknown-kind behavior (silently dropped — the QD-UI-4 hang). Mutation-verified (drop the solve `result`
+  → the round-trip test bites). Also begins closing QD-UI-5 (worker-entry dispatch had zero executable coverage).
+- **Refactor (this PR, commit 2):**
+    · NEW `app/workers/protocol.mjs` — `reply(kind,jobId,result)` / `replyError(kind,jobId,err)` (the envelope every
+      entry hand-rolled) + `dispatch(msg, handlers, post)`: runs `handlers[kind]` (owning the try/catch + envelope),
+      and — the fix — replies with an error envelope for an UNHANDLED kind (echoing the request kind so the caller's
+      kind-filtered listener settles) instead of dropping it.
+    · `solver-worker-entry.mjs` 53→31 lines: the 3-kind `if / else-if` chain (no `else`) → a `handlers` map + one
+      `dispatch` call. Known-kind behavior byte-identical (the round-trip net stays green); unknown-kind now settles.
+- **Behavior:** known kinds PRESERVED (the round-trip net stays green); unknown kind **CHANGED** drop→error-reply —
+  the one APPROVED change (PLAN v1 C2 "unknown kind no longer hangs"); the char test's unknown-kind assertion was
+  flipped to the new behavior in the refactor commit. 6 new `protocol.mjs` unit tests.
+- **Green bar:** build/typecheck/lint exit 0; `pnpm test` **2103 passed / 241 files** (+11 tests, +1 file vs
+  refactor/main). Cut `refactor/C2-worker-protocol`; PR → refactor/main; merge on green.
+- **Scope (bounded, honest):** C2 covers the PRIMARY entry (the 3-kind chain — the actual hang site) + the shared
+  protocol module. The other entries hand-roll the same reply envelope but don't dispatch on input kind
+  (sym = single type; param-slice / schwarz = streaming/pool shapes) — routing their reply builders through
+  `protocol.mjs` is a clean **follow-on (C2b)**, noted not done. **QD-UI-4: the silent-hang class is fixed on the
+  primary path and the typed protocol is established.**
