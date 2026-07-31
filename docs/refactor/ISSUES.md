@@ -93,3 +93,10 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   as 26 parallel Vitest specs (per-file reporting/isolation; parity 2329/0 preserved), BUT wall time is
   **NEUTRAL** (`solvers.test.js` ~77s long pole). The speed win + **QD-TEST-5** (shard solvers) → **B2,
   DEFERRED** (solvers is a 1,915-line monolith; med-high risk; fresh session). A2 (#180) now **merged** (3a5d18f).
+- **2026-07-31 · stage B2 (PR → refactor/main):** **QD-TEST-5 → fixed** (ac5f894) — `solvers.test.js` sharded
+  into 4 contiguous parallel node specs; parity by byte-identical reconstruction (oracle **2332/0**, per-shard
+  Σ = 451 == pre-split). Risk was med-high (per B1) but a verified statement-map downgraded it to low.
+  **QD-TEST-1 → the wall-time win B1 enabled is now delivered:** full `pnpm test` **157s → 109s (−30%)**; QD
+  node long-pole **77s → 37s**. Residual: §PB [826-935] is one atomic ~38s block that caps the shard split
+  below the ~25–30s target; a future sub-block split (copy the pure `poleAt` helper — higher risk, a content
+  edit) is **noted, not scheduled**. B1 (#181) now **merged** (08b0fab).

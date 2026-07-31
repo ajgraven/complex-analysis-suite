@@ -149,3 +149,37 @@
 - **B1 MERGED** (#181, merge commit 08b0fab, CI green build+browser); pulled to `refactor/main` (26 node specs
   present, serial wrapper removed, tree clean). Session auto-unsubscribed. **Group A done + B1 done; B2
   (shard solvers) is the resume point for a fresh session** (STATE Next steps has the plan). Session concluding.
+
+## 2026-07-31 — Phase D · Stage B2 (shard solvers.test.js, QD-TEST-5) IMPLEMENTED + PR opened
+- Resumed engagement (fresh session). **Correction:** this session first mis-concluded "new engagement"
+  because it checked for `STATE.md` BEFORE `git fetch` — the fresh clone lacked the `refactor/*` refs. User
+  flagged it; `git fetch` surfaced `refactor/main` + the 4 stage branches. Lesson: fetch before the §1 check.
+  Re-confirmed green on `refactor/main` @ d74fd2e (233 files / 2056 tests; oracle 2329/0; `solvers` S=451).
+- Delegated a full statement-map of the 1,915-line `run()` to a subagent; spot-verified every load-bearing
+  claim against the code: exactly ONE top-level local (`const verifyQuadratureIdentity` @62, consumed only
+  @77/129 — both in region 1); NO shared mutable state; `run()` returns nothing (assertions tally via injected
+  global `ok()` side-effect). ⇒ the B1 "no clean seams" worry was overstated: contiguous slices are
+  behavior-preserving BY CONSTRUCTION. **Risk re-assessed med-high → low.**
+- Time-profiled the body per-block: cost concentrates in 3 atomic top-level blocks — §PB [826-935] ~38s
+  (three independent solve-loops sharing a pure `poleAt` helper — indivisible without editing block internals),
+  §CONT [1182-1233] ~22s, §23 [1234-1321] ~21s; all else ~7s combined. §PB caps the fastest longest-shard ~38s.
+- **Implementation:** 4 contiguous shards `app/test/solvers-{1..4}.test.js` at block boundaries 816/935/1233
+  (isolating §PB in shard 2); original module preamble preserved verbatim. 4 new `vitest/node/solvers-*.test.ts`;
+  `app/node-test.js` TESTS + FLOORS and `vitest/node/_run.ts` FLOORS updated (both maps); monolith + old spec
+  deleted. **No test content changed.**
+- **PARITY — three independent proofs:** (a) reconstruction `concat(4 shard bodies) == HEAD original body`,
+  byte-identical (100718 chars); (b) oracle `node app/node-test.js` = **2332 passed / 0 failed** (was 2329/0;
+  +3 runner lines from +3 files; content assertions unchanged at 2302); (c) per-shard contributions
+  187/10/71/183 = **451** == pre-split S. Zero failing assertions anywhere.
+- **DECISION (autonomous, logged per §D):** contiguous NUMBERED shards, NOT the PLAN's
+  "(bounded/unbounded/LQD/PQD)" family split — the map shows the families are interleaved, so a family split
+  would REORDER blocks (higher risk, not reconstruction-provable). Contiguous slicing is byte-identical-provable.
+  Same intent as PLAN B2, safer method — flagged in the PR as a deviation from the plan's wording.
+- **MEASURED speed win (the point of B2):** full `pnpm test` wall **156.6s → 109.0s (−30%)**; the QD node
+  long-pole spec **~77s → 37s** (solvers-2 = §PB). Vitest spec times: s1 6.3s / s2 37.0s / s3 36.1s / s4 30.7s.
+  (Absolute wall varies ~±10% with load; the long-pole halving is structural.) The ~25–30s target from the
+  plan was NOT reached because §PB is one atomic ~38s block — dissecting its 3 solve-loops (copy the pure
+  `poleAt` helper) is a content edit, higher risk, LEFT AS A FOLLOW-UP (ISSUES QD-TEST-5 note).
+- Green bar: build/typecheck/lint exit 0; `pnpm test` = **2059 passed / 236 files**. Browser harness not run
+  (test-infra only, no GPU/shader). Committed ac5f894; pushed `refactor/B2-shard-solvers`; PR → `refactor/main`;
+  auto-merge on green (honest PR — real win, §PB cap disclosed).
