@@ -191,7 +191,10 @@ consistent with the broad-sweep mandate; can pause at any group boundary.
   every `ok`→`expect` (a larger, report-changing diff). Say if you'd prefer full Vitest-native assertions.
 
 ## 10. Roadmap status
-- **A1 — MERGED** (#178, b331ae2): QD-SOLV-3 + QD-SOLV-2. **A3 — MERGED** (#179, e657769): CD-4 (madge 2→0).
-- **A2 — IN REVIEW** (PR → `refactor/main`): QD-SOLV-1 dispatch-order assertion (singular-before-base); list triplication → E2.
-- Remaining (B1–B4, C1–C3, D1–D2, E1–E2, F1): NOT STARTED. Cadence: **auto-merge on green** (user, 2026-07-30).
-- Deferred out of Group A (still open): QD-ALG-7 (→ Group D), QD-SOLV-6 (own analysis).
+- **A1** (#178) + **A2** (#180) + **A3** (#179) — **MERGED** to `refactor/main`. Group A (quick wins) complete.
+- **B1 — IN REVIEW** (PR → `refactor/main`): node-suite → 26 parallel Vitest specs; parity-verified
+  (2329/0); per-file reporting/isolation. **Honest: NEUTRAL on wall time** — `solvers.test.js` (~77s) is the
+  long pole. The speed win is **B2** (shard solvers), now **revised to med-high risk** (solvers is a
+  1,915-line monolithic `run()`, not the low-risk change first assumed) and **deferred to a fresh session**.
+- Remaining (B2, B3, B4, C1–C3, D1–D2, E1–E2, F1): NOT STARTED. Cadence: **auto-merge on green** (user).
+- Deferred/open: QD-ALG-7 (→ Group D), QD-SOLV-6 (own analysis).

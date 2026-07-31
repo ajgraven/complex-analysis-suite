@@ -236,7 +236,7 @@ coverage** — exactly the risky part of the refactor.
 
 | ID | Sev | Class | Finding | Evidence |
 |---|---|---|---|---|
-| QD-TEST-1 | high | design-problem | Node suite = one serial child process (`execFileSync`) → 2302 asserts in 1 Vitest test on 1 core; no parallelism/reporting/isolation; watch reruns full ~128s | node-suite.test.ts:14; node-test.js:97-104 |
+| QD-TEST-1 | high | design-problem | Node suite = one serial child process (`execFileSync`) → 2302 asserts in 1 Vitest test on 1 core; no parallelism/reporting/isolation; watch reruns full ~128s · **[B1: split into 26 parallel specs — reporting/isolation ✓; wall-time win pending B2 solvers-shard]** | node-suite.test.ts:14; node-test.js:97-104 |
 | QD-TEST-2 | high | design-problem | `ui.mjs` (1931, a refactor target) has **zero** characterization coverage (0 exports; only `node --check` + one regex) | parse-check.test.js:38,43-47 |
 | QD-TEST-3 | med | design-problem | ~15 QD specs assert on module **source text** (readFileSync+regex), concentrated on `algebra-ui.mjs`; break on behavior-preserving extraction and can stay green while behavior regresses | algebra-section-order.test.ts:9-13,95-102 |
 | QD-TEST-4 | med | design-problem | `ui-solve.mjs` orchestration (`installSolve` DOM+worker closure) untested — only the pure badge helper is | ui-solve.mjs:49,51 |

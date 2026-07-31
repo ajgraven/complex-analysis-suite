@@ -89,3 +89,7 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
 - **2026-07-30 · stage A2 (PR → refactor/main):** **QD-SOLV-1 → guarded** (`assertDispatchOrder`: every
   `_singular` must outrank its base; lazy on first `selectFamily`; behavior-preserving). Underlying 3-list
   triplication **remains open → E2**. A3 (#179) now **merged** (e657769).
+- **2026-07-30 · stage B1 (PR → refactor/main):** **QD-TEST-1 → partially addressed** — node-suite now runs
+  as 26 parallel Vitest specs (per-file reporting/isolation; parity 2329/0 preserved), BUT wall time is
+  **NEUTRAL** (`solvers.test.js` ~77s long pole). The speed win + **QD-TEST-5** (shard solvers) → **B2,
+  DEFERRED** (solvers is a 1,915-line monolith; med-high risk; fresh session). A2 (#180) now **merged** (3a5d18f).
