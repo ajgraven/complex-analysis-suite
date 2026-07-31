@@ -11,45 +11,44 @@ extensibility, conceptual clarity, reliability/testability, and architectural co
 Behavior-preserving by default; no behavioral change without an explicit approval token.
 
 ## Phase / stage
-- **Phase D — Execute. Group A + B COMPLETE. Group C: C1 DONE + C2 DONE; C3 started (net-first).**
-- **C3a (golden solver-family net) — PR #190 OPEN (CI pending).** Tests-only net for QD-SOLV-4/5, laid FIRST
-  (C3 is the delicate SOLVER stage; mirrors B4→C1). `vitest/solver-family-golden.test.ts` (11) pins
-  `residual`/`packPhi`/`computeTargets` per family on the deterministic `initialGuess` phi (test-derived inputs).
-  Mutation-verified; green 2114/242. Shells confirmed uniform (17-key base; +`sampleBoundary` on 4 PQD → 18;
-  `{A,F,G}` only on unboundedLQD_singular; math per-family) → `defineFamily` feasible.
-- **C3b (the factoring) is NEXT** — `defineFamily(config)` + seeds-common: factor the ~17-key record scaffolding
-  across all 10 `solver-*.mjs` + normalize the seed-arg convention (3 unwrap `norm` positionally, 7 pass whole).
-  **Math untouched** (evalPhi/phiTaylorAt/computeTargetA/residual — injected, not unified). Guarded by the C3a net
-  staying bit-(near)identical. On #190 merge I'll present the C3b design for a quick confirm, then implement.
-- Cadence: merge on green (user delegates). `APPROVED: PLAN.md v1`. Roadmap §8: A✓ / B✓ / **C (C1✓, C2✓; C3a in review, C3b)** / D / E / F.
+- **Phase D — Execute. Group A + B COMPLETE. Group C: C1 DONE, C2 DONE, C3a (golden net) MERGED.**
+- **C3a (DONE, merged 8357d15):** the golden solver-family net (`vitest/solver-family-golden.test.ts`, 11) pins
+  `residual`/`packPhi`/`computeTargets` per family on the deterministic `initialGuess` phi — the safety net for C3b.
+  Green 2114/242; shells confirmed uniform (17-key base; +`sampleBoundary` on 4 PQD → 18; `{A,F,G}` only on
+  unboundedLQD_singular; math per-family).
+- **AWAITING USER GO for C3b (the defineFamily factoring)** — presented at this gate; do NOT auto-start. C3b:
+  write `app/solvers/define-family.mjs` (`defineFamily(config)` builds the ~17-key record from config +
+  normalizes the seed-arg convention), then retrofit the 10 `solver-*.mjs` to call it. **Math untouched**
+  (evalPhi/phiTaylorAt/computeTargetA/residual/… injected, not unified). Guarded by the C3a golden net staying
+  bit-(near)identical. Plan: incremental (~2–3 families/commit) to de-risk the solver core. This is the
+  highest-stakes change of the engagement → present-and-confirm before implementing.
+- Cadence: merge on green (user delegates). `APPROVED: PLAN.md v1`. Roadmap §8: A✓ / B✓ / **C (C1✓, C2✓, C3a✓; C3b)** / D / E / F.
 
 ## Branches / PR
-- Integration `refactor/main` @ **0a05ae5** (this STATE commit advances it). Tree clean.
-- **PR #190 OPEN (CI pending):** `refactor/C3a-family-golden-net` (ec12c05 net + 7c57b23 docs) → `refactor/main`.
+- Integration `refactor/main` @ **8357d15** (C3a merge-commit; this STATE commit advances it). Tree clean. **No open PR.**
 - Merged stage PRs: A1 #178, A3 #179, A2 #180, B1 #181, B2 #182, B4-1 #183, B4-2a #184, B4-2b #185, C1a #186,
-  B4-2c #187, C1b #188, **C2 #189 (3cc3e0d)**.
+  B4-2c #187, C1b #188, C2 #189, **C3a #190 (8357d15)**.
 
 ## Validation state (green bar)
-- **C3a branch @ 7c57b23 — ALL GREEN:** build/typecheck/lint exit 0; `pnpm test` **2114 passed / 242 files**
-  (+11, +1 file). Golden net 11/11 on unmodified families; mutation-verified.
-- `refactor/main` @ 0a05ae5 (post-C2) green: 2103/241.
+- **`refactor/main` @ 8357d15 — ALL GREEN (re-confirmed post-merge):** build/typecheck/lint exit 0; `pnpm test`
+  **2114 passed / 242 files**. Golden family net 11/11; worker nets 54/54 + 11/11.
 
 ## Uncommitted / unverified
-- None. C3a committed (ec12c05, 7c57b23) + pushed; PR #190 open. This STATE commit direct to `refactor/main`.
+- None. C3a merged; this STATE commit direct to `refactor/main`.
 
 ## Known blockers / risks
-- **Awaiting PR #190 CI green**, then merge (per cadence). Tests-only, zero behavior risk.
-- **C3b is the delicate solver refactor** (10 files). Net-guarded by C3a; math injected, not touched; will present
-  its design at the post-merge gate before implementing.
+- No open PR; **holding at the C3b design gate** (await go). No blockers.
+- **C3b is the delicate solver refactor** (10 files). Fully net-guarded (C3a); math injected, not touched;
+  incremental commits + golden-vector re-check per family.
 
 ## Next concrete steps
-1. **When PR #190 CI greens → merge** (merge-commit, title + `(#190)`), pull, re-confirm green (2114/242).
-2. **C3b:** write `app/solvers/define-family.mjs` (`defineFamily(config)`); retrofit the 10 `solver-*.mjs` to
-   call it; prove the C3a golden net stays identical + full green bar. Present the 1-para design at the gate first.
-3. Group order: C (C1✓, C2✓; C3a✓/C3b) → D (god-module decomp) → E → F.
+1. **HOLD** — await user's go for C3b (or a redirect: C2b / Group D / pause).
+2. **C3b:** `defineFamily(config)` module; retrofit the 10 `solver-*.mjs` incrementally; C3a golden net + full
+   green bar identical throughout; own PR → refactor/main; merge on green.
+3. Group order: C (C1✓, C2✓, C3a✓; C3b) → D (god-module decomp) → E → F.
 
 ## Resume commands
 ```
-git fetch && git checkout refactor/main && git pull        # after #190 merges
+git fetch && git checkout refactor/main && git pull
 pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2114/242
 ```
