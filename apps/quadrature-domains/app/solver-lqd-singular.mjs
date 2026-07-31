@@ -2,6 +2,7 @@
 import { Complex } from './complex.mjs';
 import { Taylor } from './taylor.mjs';
 import _QD from './solver.mjs';
+import { defineFamily } from './solvers/define-family.mjs';
 // =============================================================================
 // solver-lqd-singular.js -- Bounded SINGULAR log-weighted quadrature domains
 //
@@ -425,10 +426,9 @@ import _QD from './solver.mjs';
   // ===========================================================================
   // 8. Register Family.boundedLQD_singular
   // ===========================================================================
-  QD.Family.boundedLQD_singular = {
+  QD.Family.boundedLQD_singular = defineFamily({
     name: 'boundedLQD_singular',
-    enforceInDisk: true,
-    enforceOutDisk: false,
+    // unbounded omitted → enforceInDisk:true / enforceOutDisk:false.
     matches(opts) {
       return !!(opts && opts.lqd && opts.singular && !opts.unbounded);
     },
@@ -443,9 +443,7 @@ import _QD from './solver.mjs';
     },
     evalPhi: evalPhi_LQDS,
     phiTaylorAt: phiTaylorAt_LQDS,
-    computeTargets(phi, hData) {
-      return { A: computeTargetA_LQDS(phi, hData), F: null };
-    },
+    computeTargetA: computeTargetA_LQDS,      // no F/G → computeTargets { A, F:null }
     residual: residual_LQDS,
     packPhi: packPhi_LQDS,
     unpackPhi: unpackPhi_LQDS,
@@ -455,7 +453,7 @@ import _QD from './solver.mjs';
     diverseInitialGuess: diverseInitialGuess_LQDS,
     continuationSolve: continuationSolve_LQDS,
     verifyQuadratureIdentity: verifyQuadratureIdentity_LQDS,
-  };
+  });
 
   if (QD.registerFamily) {
     QD.registerFamily('boundedLQD_singular');
