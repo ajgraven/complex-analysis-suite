@@ -88,7 +88,7 @@ import { plainVar } from '../qd-varscheme.mjs';   // conjugate-model var scheme 
 import { domainPlotData, momentPlotData, rationalPlotData, trianglePlotData } from './domain-mini-plot.mjs';   // #3 + C1-ext-B + C2-4 + C3-4: reconstructed-domain thumbnail geometry
 import * as PROVE from './prove-plan.mjs';   // the pure existence/uniqueness proof engine (fuller-orchestrator Phase A)
 import { classifyVerdict, posDimDesc, withGuidance, _isCapFailure } from './algebra-labeling.mjs';   // pure honest-labeling: verdict prose (1) + cap-failure guidance (6)
-import { exactValueStr, fmtRatio, ratioStrRec } from './algebra-format.mjs';   // pure exact-ℚ(i) value + ratio-prefix formatters (carve-outs 3, 4)
+import { exactValueStr, fmtRatio, ratioStrRec, valStr } from './algebra-format.mjs';   // pure value + ratio-prefix formatters (carve-outs 3, 4, 8)
 import { _parseMomentToken } from './algebra-moment-parse.mjs';   // pure complex-moment input parser (carve-out 5)
 import { _pronyLatex } from './algebra-latex.mjs';   // pure math→LaTeX formatters (carve-out 7)
 const QD = _QD;
@@ -4170,14 +4170,8 @@ const QD = _QD;
     }
 
     // ---- per-card hovertext (driven by store.nodeStats) ---------------------
-    // Compact display of a stored {re:[n,d], im:[n,d], approx} value record.
-    function valStr(rec) {
-      const a = rec && rec.approx; if (!a) return '?';
-      const f = (x) => String(Math.round(x * 1e6) / 1e6);
-      if (!a.im) return f(a.re);
-      if (!a.re) return f(a.im) + 'i';
-      return f(a.re) + (a.im < 0 ? ' − ' : ' + ') + f(Math.abs(a.im)) + 'i';
-    }
+    // valStr (compact decimal display of a stored {approx} value record) moved to ./algebra-format.mjs
+    // (carve-out 8) — imported above; substList below still uses it (now via the import).
     // A substitute provenance lists one or more (name = value) assignments. New records
     // carry a `variables` array ([{name, value, conjugate}]); older snapshots carried a
     // single `variable`/`value` pair — render either.

@@ -52,3 +52,15 @@ export function ratioStrRec(rec, sign) {
   if (im === 0 && re === -1) return '−';
   return '(' + exactValueStr(re, im) + ')·';
 }
+
+// Compact DECIMAL display of a stored {approx:{re,im}} value record: re-only, im-only, or re ± im·i, each
+// component rounded to 1e-6 (the minus is U+2212). Distinct from exactValueStr (which renders exact ℚ(i)
+// rationals): this reads the pre-computed `.approx` float and is the per-card hovertext value. `?` when
+// there is no approx. (carve-out 8; carved verbatim from installAlgebra.)
+export function valStr(rec) {
+  const a = rec && rec.approx; if (!a) return '?';
+  const f = (x) => String(Math.round(x * 1e6) / 1e6);
+  if (!a.im) return f(a.re);
+  if (!a.re) return f(a.im) + 'i';
+  return f(a.re) + (a.im < 0 ? ' − ' : ' + ') + f(Math.abs(a.im)) + 'i';
+}
