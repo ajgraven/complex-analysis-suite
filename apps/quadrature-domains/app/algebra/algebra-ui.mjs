@@ -89,6 +89,7 @@ import { domainPlotData, momentPlotData, rationalPlotData, trianglePlotData } fr
 import * as PROVE from './prove-plan.mjs';   // the pure existence/uniqueness proof engine (fuller-orchestrator Phase A)
 import { classifyVerdict, posDimDesc } from './algebra-labeling.mjs';   // pure honest-labeling verdict prose (carve-out 1)
 import { exactValueStr, fmtRatio, ratioStrRec } from './algebra-format.mjs';   // pure exact-ℚ(i) value + ratio-prefix formatters (carve-outs 3, 4)
+import { _parseMomentToken } from './algebra-moment-parse.mjs';   // pure complex-moment input parser (carve-out 5)
 const QD = _QD;
 
 (function () {
@@ -3959,29 +3960,8 @@ const QD = _QD;
     }
 
     // ---- Shape from moments (roadmap #18): reconstruct a QD's data from its complex moments ----
-    // A real number "a", exact rational "n/d", or decimal.
-    function _parseMomentNum(s) {
-      s = s.trim();
-      if (s === '' || s === '+') return 1;
-      if (s === '-') return -1;
-      if (s.indexOf('/') >= 0) { const p = s.split('/'); const n = Number(p[0]), d = Number(p[1]); if (!isFinite(n) || !isFinite(d) || d === 0) throw new Error('bad rational "' + s + '"'); return n / d; }
-      const v = Number(s);
-      if (!isFinite(v)) throw new Error('bad number "' + s + '"');
-      return v;
-    }
-    // One complex moment token: a, a+bi, a-bi, bi, i, -i (a,b real / rational / decimal).
-    function _parseMomentToken(t) {
-      t = t.replace(/\s+/g, '');
-      if (t === '') throw new Error('empty moment');
-      if (t.indexOf('i') < 0) return { re: _parseMomentNum(t), im: 0 };
-      if (t[t.length - 1] !== 'i') throw new Error('malformed complex "' + t + '" (i must be last)');
-      const noI = t.slice(0, -1); // drop the trailing 'i'
-      let splitAt = -1;
-      for (let k = noI.length - 1; k > 0; k--) { if (noI[k] === '+' || noI[k] === '-') { splitAt = k; break; } }
-      const reStr = splitAt < 0 ? '0' : noI.slice(0, splitAt);
-      const imStr = splitAt < 0 ? noI : noI.slice(splitAt);
-      return { re: reStr === '' ? 0 : _parseMomentNum(reStr), im: _parseMomentNum(imStr === '' ? '1' : imStr) };
-    }
+    // _parseMomentToken (+ its private _parseMomentNum) moved to ./algebra-moment-parse.mjs (carve-out 5) —
+    // imported above; doShapeFromMoments maps _parseMomentToken over the split input, below.
     // LaTeX of the (ascending {re,im}) Prony polynomial P(z) = Σ c_k z^k = 0.
     function _pronyLatex(coeffs) {
       let out = '';
