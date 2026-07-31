@@ -234,3 +234,14 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   ratio-prefix formatters. **The pure low-hanging targets inside installAlgebra are now nearly exhausted** — a 5th
   carve-out would need a fresh scan, and the remaining bulk (QD-ALG-2 DOM-bound sidebar, QD-ALG-3 source-text tests)
   needs a different strategy than pure extraction.
+- **2026-07-31 · stage D-alg-carve-5 (PR → refactor/main):** **QD-ALG-1 → decomposition continues (carve-out 5); the
+  "nearly exhausted" note above is CORRECTED.** A read-only census of installAlgebra found the pure fruit is NOT
+  exhausted — **~16 cleanly-pure + ~4 pure-if-injected** helpers remain. Carve-out 5 takes the census top pick: the
+  complex-moment INPUT PARSER `_parseMomentToken` + its private `_parseMomentNum` (rational `n/d` / decimal / complex
+  `a±bi` tokens, with explicit error paths: "empty moment", "i must be last", "bad rational/number") → NEW
+  `app/algebra/algebra-moment-parse.mjs` (**ZERO external deps** — a pure leaf) + a 9-test HEADLESS net
+  (`vitest/algebra-moment-parse.test.ts`, mutation-verified; pins the error MESSAGES too — they're user-facing).
+  Behavior-preserving (carved verbatim; whitespace-normalized diff vs source = identical bar a blank-line separator);
+  the one external caller (`doShapeFromMoments` `.map(_parseMomentToken)`) resolves to the import. Census-ranked next:
+  `withGuidance`+`_isCapFailure` (honest-labeling guidance, ~19 sites), `_pronyLatex`, `valStr`+`substList` (whose real
+  impls the PROV_UI tests currently MOCK), then cheap stragglers, then `latexOf`(+`reimSafeLatex`) pure-if-injected.

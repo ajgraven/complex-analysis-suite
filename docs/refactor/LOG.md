@@ -569,3 +569,25 @@
   the exact-value + ratio-prefix formatters; `algebra-labeling.mjs` the verdict prose. A 5th carve-out would need a
   fresh scan for any remaining pure helper; otherwise the remaining bulk is DOM-bound (QD-ALG-2) and needs a strategy
   shift (jsdom-drive the sidebar build, or convert the source-text tests QD-ALG-3), or the deferred verdict unification.
+
+## 2026-07-31 — Phase D · Stage D-alg-carve-5 (installAlgebra carve-out 5 — complex-moment parser) — PR opened
+- **Fifth installAlgebra carve-out** ("keep carving"). FIRST ran a read-only census of installAlgebra (a subagent, then
+  spot-verified firsthand) to correct the "pure fruit exhausted" claim from carve-out 4: it is NOT exhausted — **~16
+  cleanly-pure + ~4 pure-if-injected** helpers remain. Census top pick = the complex-moment INPUT PARSER (highest-value
+  untested logic: a real parser with branches + error paths, not just a formatter).
+- **This PR (behavior-preserving extraction):** `_parseMomentToken(t)` (one moment token `a`/`a+bi`/`a-bi`/`bi`/`i`/`-i`
+  → `{re, im}`, throwing on empty / stray-`i` / bad component) + its private helper `_parseMomentNum(s)` (a real
+  component `n/d` / decimal → number) → NEW `app/algebra/algebra-moment-parse.mjs`. **ZERO external deps** (only
+  String/Number + each other) — a pure leaf, the cleanest carve yet (no side-effect import, no injected helper). Carved
+  VERBATIM (whitespace-normalized diff vs source = identical bar a blank-line separator). algebra-ui imports only
+  `_parseMomentToken` (its one external use, `doShapeFromMoments`'s `.map(_parseMomentToken)`); `_parseMomentNum` was
+  private and moves entirely. +3/−23 in algebra-ui.
+- **Net-first + mutation-verified:** NEW `vitest/algebra-moment-parse.test.ts` (9; HEADLESS) pins the number forms
+  (integer/decimal/rational + the ''/'+'→1, '-'→−1 shorthands), every complex token form, whitespace stripping, and the
+  three user-facing ERROR MESSAGES (empty moment / i-must-be-last / bad rational|number — pinned exactly, since they
+  reach the user). Mutation (`d === 0`→`d === 999` in the rational guard) → exactly the zero-denominator test fails.
+- **Green bar:** build/typecheck/lint exit 0; `pnpm test` **2183 passed / 249 files** (+9, +1 file). Cut
+  `refactor/d-alg-carve-5-moment-parse`; PR → refactor/main; merge on green.
+- **installAlgebra: 5 carve-outs done.** Three pure modules now (`algebra-labeling` / `algebra-format` / `algebra-moment-parse`)
+  + the in-file badge lift. Census-ranked next: `withGuidance`+`_isCapFailure` (honest-labeling guidance, ~19 sites),
+  `_pronyLatex`, `valStr`+`substList`, cheap stragglers, then `latexOf` (pure-if-injected). Genuine pure work remains.
