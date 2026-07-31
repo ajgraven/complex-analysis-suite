@@ -458,3 +458,18 @@
   "decomposition" is more about grouping the wiring than extracting logic. Remaining pure seam = the geometry pair
   (boundarySelfIntersectsSimple / segmentsIntersect). **installAlgebra (algebra-ui.mjs, ~4.2k-line fn, QD-ALG-1) is
   the bigger, still-monolithic Group-D target** — its own net-first stage next if we continue D.
+
+## 2026-07-31 — Phase D · Stage D-ui-seam-2 (ui.mjs geometry seam) — PR opened
+- Continuing Group D. Extracted the SECOND (and last) pure piece the ui.mjs map found: the geometry pair
+  `boundarySelfIntersectsSimple` + `segmentsIntersect` (the Direct-tab univalence-preview self-intersection check)
+  → NEW `app/ui-geometry.mjs`, copied verbatim as named exports; ui.mjs imports `boundarySelfIntersectsSimple`
+  (its one call site, 1740). +2/−21 lines in ui.mjs.
+- **Net-first + mutation-verified:** NEW `vitest/ui-geometry.test.ts` (6) — segment crossing/parallel/collinear
+  (the strict-`>` CCW MISSES collinear overlap — pinned, not fixed) + boundary square/bow-tie/N<4. Mutation
+  (N<4 guard → true) → only the N<4 test fails.
+- **Green bar:** build/typecheck/lint exit 0; `pnpm test` **2139 passed / 244 files** (+6, +1 file). Cut
+  `refactor/D-ui-seam-geometry`; PR → refactor/main; merge on green.
+- **ui.mjs pure-seam extraction is now COMPLETE** (both pure pieces the map identified are out + netted). ui.mjs's
+  residual bulk is DOM wiring (logic already in siblings). The remaining Group-D monolith is **installAlgebra**
+  (algebra-ui.mjs, ~4.2k-line fn, QD-ALG-1) — big + DOM-heavy; needs its own char-strategy proposal + scope
+  agreement before implementation (NOT auto-started).
