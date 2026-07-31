@@ -50,6 +50,7 @@
 // bundle. isUsable() gates on Worker availability, so Node/file:// fall back to the
 // caller's in-process renderer. Registers onto the QD namespace.
 import _QD from '../solver.mjs';
+import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
 
 (function () {
   'use strict';
@@ -104,8 +105,7 @@ import _QD from '../solver.mjs';
         _disposeWorker();
       };
       w.addEventListener('error', (ev) => {
-        const detail = 'schwarz CPU worker crashed: ' + (ev.message || ev)
-          + ' @ ' + (ev.filename || 'bundle') + ':' + (ev.lineno || '?');
+        const detail = 'schwarz CPU worker crashed: ' + formatWorkerErrorDetail(ev);
         console.error('[schwarz-cpu worker] error: ' + detail);
         _failInflight(detail);
       });

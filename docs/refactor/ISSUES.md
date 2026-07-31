@@ -133,6 +133,14 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   FRAGMENT" (the drift-prone piece that shipped the schwarz Pass-1/3 bug). PLAN v1 C1 "6 lanes = config" premise →
   flagged for revision at the C1b design gate (NOT rewritten in this tests-only PR). C1a (#186) now **merged**
   (007681a).
+- **2026-07-31 · stage C1b (PR → refactor/main):** **QD-UI-1 → RESOLVED (C1a + C1b).** C1a (#186) collapsed the 3
+  verbatim PSW lanes onto `createWorkerLane` (−40%); C1b extracted the one remaining cross-cutting primitive,
+  `formatWorkerErrorDetail(ev)` (NEW `app/workers/worker-crash-detail.mjs`), retrofitting all 4 lane wrappers.
+  Behavior-preserving (6-lane net **54/54**; full 2092/240). The residual per-lane divergence (sym terminate-on-
+  supersede + F4 latch + progress; schwarz `isUsable` + streaming handle; param-slice N-worker pool) is documented
+  as **legitimate distinct abstractions**, not duplication — so the "6× lifecycle" finding is closed to its true
+  residual, not force-merged. The drift class (the schwarz Pass-1/3 bug) stays frozen by the net. B4-2c (#187) now
+  **merged** (551c9c6). **Group C worker-lane work (C1) DONE** → next C2 (typed protocol) / C3.
 - **2026-07-31 · stage C1a (PR → refactor/main):** **QD-UI-1 → PSW 3× lane duplication ELIMINATED** (86c7bcf) —
   primary/aux/live collapsed to a `createWorkerLane(cfg)` factory (primary-solver-worker.mjs 395→238, −40%),
   behavior-preserving (net stays green 20/20; full 2081/239), independent fallback latches kept. First structural

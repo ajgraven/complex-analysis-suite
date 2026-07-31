@@ -49,6 +49,7 @@
 // bundle, and falls back to the imported main-thread solver when Worker is unavailable
 // (Node tests, file://). Registers onto the QD namespace.
 import _QD from './solver.mjs';
+import { formatWorkerErrorDetail } from './workers/worker-crash-detail.mjs';
 
 (function () {
   'use strict';
@@ -94,7 +95,7 @@ import _QD from './solver.mjs';
         if (typeof Worker === 'undefined') throw new Error('Worker unavailable in this environment');
         const w = new Worker(new URL(cfg.entryUrl, import.meta.url), { type: 'module' });
         w.addEventListener('error', (ev) => {
-          const detail = (ev.message || ev) + ' @ ' + (ev.filename || 'bundle') + ':' + (ev.lineno || '?');
+          const detail = formatWorkerErrorDetail(ev);
           console.error('[primary-solver ' + cfg.logLabel + '] error: ' + detail);
           // A worker-level error (bundle load/syntax error, crash, OOM) posts NO {error} message, so
           // without this the in-flight promise would never settle and the UI would spin forever. Reject it

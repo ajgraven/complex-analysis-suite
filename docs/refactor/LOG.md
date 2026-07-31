@@ -321,3 +321,26 @@
   refactor/main's 2081/239). Cut `refactor/B4-2c-schwarz-pool-lane-nets`; PR → refactor/main; merge on green.
 - **QD-UI-1:** all six solver-worker lanes now have their crash + lifecycle contract pinned → the shared-fragment
   extraction (revised C1b) is fully net-guarded.
+
+## 2026-07-31 — Phase D · Stage C1b (worker crash-detail formatter — QD-UI-1 close-out) — PR opened
+- User "continue" (after B4-2c #187 merged; refactor/main @ 8df5487 green 2092/240) → proceeded with the
+  RIGHT-SIZED C1b per the B4-2c finding (the 3 remaining lanes do NOT fit `createWorkerLane`).
+- **Analysis outcome:** the ONLY primitive all six lanes genuinely share is the worker-`error` **detail formatter**
+  (`<message> @ <filename>:<lineno>`), copied verbatim in primary-solver + sym + schwarz (prefixed) + param-slice-
+  pool (`e &&`-guarded). The surrounding settle/teardown is legitimately per-lane (reject a Promise / call `onError`
+  / pool-survivor) — which is WHY C1a's collapse correctly stopped at the 3 PSW lanes. So C1b = extract that one
+  primitive, NOT a lane-collapse (which would have over-generalized the factory into a config-flag monster).
+- **This PR (source refactor, behavior-preserving):**
+    · NEW `app/workers/worker-crash-detail.mjs` — `formatWorkerErrorDetail(ev)` (1 pure fn). Output identical for
+      any truthy event: `(ev.message||ev)` and `((e&&e.message)||e)` both reduce to `(ev&&ev.message||ev)`.
+    · 4 call sites retrofit (import + the one line): primary-solver-worker.mjs, algebra/sym-worker.mjs,
+      schwarz/schwarz-cpu-worker.mjs (keeps its `'schwarz CPU worker crashed: '` prefix on the call),
+      param-slice/param-slice-pool.mjs. `git diff` = +8/−5 across 4 files + 1 new file.
+- **Behavior preserved — proven by the net (no new test; the refactor keeps the count):** the complete 6-lane
+  worker net stays green — psw-crash-char 7 + psw-lifecycle 13 + sym-crash 3 + sym-lifecycle 5 + schwarz-crash 5 +
+  schwarz-lifecycle 9 + param-slice-pool 12 = **54/54**; full `pnpm test` **2092/240** (unchanged). build/typecheck/
+  lint exit 0. Cut `refactor/C1b-worker-crash-detail`; PR → refactor/main; merge on green.
+- **QD-UI-1 CLOSED.** C1a collapsed the 3 verbatim PSW lanes (−40%); C1b factors the one cross-cutting primitive;
+  the residual per-lane divergence is documented as legitimate (distinct abstractions), not debt. The messageerror/
+  error-settle drift class that shipped the schwarz Pass-1/3 bug is now frozen by the 6-lane net + the shared
+  formatter. **Group C worker-lane work (C1) is DONE.** Next: C2 (typed protocol) / C3 (defineFamily).

@@ -25,6 +25,7 @@
 // and falls back to the imported main-thread QD.Sym.runJob when Worker is unavailable
 // (Node tests, file://). Registers QD.SymWorker.
 import _QD from '../solver.mjs';
+import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
 
 (function () {
   'use strict';
@@ -57,7 +58,7 @@ import _QD from '../solver.mjs';
     _readyPromise = (async () => {
       const w = new Worker(new URL('../workers/sym-worker-entry.mjs', import.meta.url), { type: 'module' });
       w.addEventListener('error', (ev) => {
-        const detail = (ev.message || ev) + ' @ ' + (ev.filename || 'bundle') + ':' + (ev.lineno || '?');
+        const detail = formatWorkerErrorDetail(ev);
         if (typeof console !== 'undefined') console.error('[sym-worker] error: ' + detail);
         const hadJob = !!_inflight;
         if (_inflight) {
