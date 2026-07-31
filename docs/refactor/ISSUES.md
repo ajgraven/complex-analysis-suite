@@ -192,3 +192,13 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   (green 2139/244). Both pure pieces the ui.mjs map found are now seamed out + netted; ui.mjs's residual bulk is
   DOM wiring (logic already in siblings). Remaining Group-D monolith = **installAlgebra** (QD-ALG-1) — big +
   DOM-heavy, needs its own char-strategy before implementation. D-ui-seam (#193) now **merged** (29a7f97).
+- **2026-07-31 · stage D-alg-carve-1 (PR → refactor/main):** **QD-ALG-1 → decomposition begun; QD-ALG-5 →
+  partially addressed + CORRECTED.** First installAlgebra carve-out (user chose "Carve-outs"): the pure
+  verdict-prose decision tree in doClassify (algebra-ui.mjs:3521-3534) → NEW `app/algebra/algebra-labeling.mjs`
+  (`classifyVerdict` + its only dep `posDimDesc`, moved from the IIFE) + an 11-test net
+  (`vitest/algebra-classify-verdict.test.ts`, mutation-verified; imported directly — pure, no jsdom). Correction to
+  QD-ALG-5's "built in two places": the wording is built in THREE — doClassify @3521, doAutoSolve @3275,
+  `_verdictBadge` @4693 — and they have DRIFTED (different strings), so this is a per-site pure SEAM (first
+  executable coverage of the =/≤ honest-labeling prose, behavior-preserving), NOT the cross-site de-dup QD-ALG-5
+  implied. That de-dup would change strings ⇒ needs an approval token; deferred to a later characterization-first
+  unification. `posDimDesc`'s QD_UI re-export is preserved, so `algebra-verdict-rigor.test.ts` stays green.

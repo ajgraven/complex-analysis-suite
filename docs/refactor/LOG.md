@@ -473,3 +473,27 @@
   residual bulk is DOM wiring (logic already in siblings). The remaining Group-D monolith is **installAlgebra**
   (algebra-ui.mjs, ~4.2k-line fn, QD-ALG-1) — big + DOM-heavy; needs its own char-strategy proposal + scope
   agreement before implementation (NOT auto-started).
+
+## 2026-07-31 — Phase D · Stage D-alg-carve-1 (installAlgebra carve-out 1 — classifyVerdict) — PR opened
+- **First installAlgebra carve-out** (user chose "Carve-outs (recommended)"): begin decomposing the god-function by
+  its PURE sub-computations. A read-only map + firsthand verification found the honest-labeling verdict prose as the
+  best first target. **Correction to QD-ALG-5** ("built in two places → de-dup"): there are THREE similar-but-DISTINCT
+  builders — doClassify @3521, doAutoSolve @3275, `_verdictBadge` @4693 — with DRIFTED wording (e.g. "the system is
+  inconsistent (1 ∈ I)." vs "the reduced system is inconsistent."). Merging would CHANGE strings (behavioral, needs an
+  approval token), so this carves ONE site as a pure seam; unification is a later characterization-first step.
+- **This PR (behavior-preserving extraction):** NEW `app/algebra/algebra-labeling.mjs` — `classifyVerdict(r)` (the
+  classify-result → existence/uniqueness verdict decision tree, carved VERBATIM from doClassify:3521-3534) +
+  `posDimDesc` (its only dep, a pure size-of-positive-dim leaf; moved from the IIFE T1 scope, so it belongs with the
+  prose). algebra-ui imports both; doClassify's 13-line inline block → `let verdict = classifyVerdict(r)` (the
+  slice/scope/branch caveat appends stay put — they read DOM/store: `sel`, the current column). QD_UI re-exports
+  preserved (keeps `algebra-verdict-rigor.test.ts`'s `QD_UI.posDimDesc` read green). −21/+7 in the god-file.
+- **Net-first + mutation-verified:** NEW `vitest/algebra-classify-verdict.test.ts` (11) pins every verdict string
+  (imported DIRECTLY from the module — pure, no jsdom/QD_UI), incl. two DELIBERATE quirks: the ==1-vs-≥2 "upper bound"
+  asymmetry (C-1 honest labeling — pinned, not "harmonized") + the loose `== null` routing `undefined`→"real count
+  unavailable". A byte-identity check (16 literals, module vs live source) guarded the transcription BEFORE the source
+  block was removed. Mutation (`mult > cx`→`>=`) → only the two `mult===cx` cases fail.
+- **Green bar:** build/typecheck/lint exit 0; `pnpm test` **2150 passed / 245 files** (+11, +1 file). Cut
+  `refactor/d-alg-carve-1-classify-verdict`; PR → refactor/main; merge on green.
+- **installAlgebra decomposition underway** (QD-ALG-1): carve-out 1 of N, mirroring the ui.mjs seam pattern (pure
+  sub-computation → small netted module, one PR). Next candidates: a later char-first UNIFICATION of the three drifted
+  builders (needs an approval token — changes strings), or QD-ALG-6 realness/verify tolerance predicates.

@@ -87,6 +87,7 @@ import _QD from '../solver.mjs';
 import { plainVar } from '../qd-varscheme.mjs';   // conjugate-model var scheme (plain-text labels)
 import { domainPlotData, momentPlotData, rationalPlotData, trianglePlotData } from './domain-mini-plot.mjs';   // #3 + C1-ext-B + C2-4 + C3-4: reconstructed-domain thumbnail geometry
 import * as PROVE from './prove-plan.mjs';   // the pure existence/uniqueness proof engine (fuller-orchestrator Phase A)
+import { classifyVerdict, posDimDesc } from './algebra-labeling.mjs';   // pure honest-labeling verdict prose (carve-out 1)
 const QD = _QD;
 
 (function () {
@@ -466,12 +467,7 @@ const QD = _QD;
     if (!r.zeroDim || r.realCount == null) return 'unknown';
     return 'bound';
   }
-  // Honest one-line size of a positive-dimensional verdict: the true Krull DIMENSION when carried,
-  // alongside the ambient real-variable count; degrades to the variable count alone otherwise.
-  function posDimDesc(r) {
-    const nv = (r && r.numVars != null ? r.numVars : '?') + ' real variables';
-    return (r && r.krullDim != null && r.krullDim >= 1) ? ('dimension ' + r.krullDim + ', ' + nv) : nv;
-  }
+  // posDimDesc moved to ./algebra-labeling.mjs (carve-out 1) — imported above, re-exported on QD_UI below.
   // Short scope disclosure for a scoped MUTATING op's toast — which system the claim was about.
   function scopeNote(sel) {
     if (!sel || !sel.length) return '';
@@ -3518,20 +3514,9 @@ const QD = _QD;
         _abort = null; setBusy(false); setStatus('');
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { const rn = r.reason || 'unavailable'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
-        let verdict;
-        if (r.inconsistent) verdict = 'No quadrature domain: the system is inconsistent (1 ∈ I).';
-        else if (!r.zeroDim) verdict = 'Infinitely many: a positive-dimensional family (' + posDimDesc(r) + ').';
-        else if (r.realCount == null) verdict = 'Zero-dimensional: ' + r.multiplicity + ' complex solution(s) with multiplicity (real count unavailable: ' + (r.reason || '') + ').';
-        else {
-          const cx = r.complexCount, mult = r.multiplicity;
-          const tail = (cx != null ? ' (of ' + cx + ' distinct complex' + (mult != null && mult > cx ? '; ' + mult + ' with multiplicity' : '') + ')' : '');
-          if (r.realCount === 0) verdict = 'No real quadrature domain' + tail + '.';
-          // HONEST LABELING (C-1): 1 real ALGEBRAIC solution is an upper bound on #QD, not "the unique QD"
-          // — it may be non-univalent, a gauge copy, or on the {|z_j|=1} boundary stratum. Only Certify
-          // univalence yields the genuine count. (The count>1 branch was already honest; align the ==1 one.)
-          else if (r.realCount === 1) verdict = 'A unique real algebraic solution' + tail + ' — an upper bound on the quadrature-domain count; run Certify univalence for the genuine-QD count (gauge copies merged, non-univalent ones filtered).';
-          else verdict = r.realCount + ' real algebraic solutions' + tail + ' — run Certify univalence for the genuine-QD count (gauge copies merged, non-univalent ones filtered).';
-        }
+        // classifyVerdict (pure, ./algebra-labeling.mjs) builds the base existence/uniqueness line; the
+        // slice/scope/branch caveats below stay here — they read DOM/store state (sel, the current column).
+        let verdict = classifyVerdict(r);
         // A factor "case" column counts ONE branch of V(p)=⋃V(fᵢ) — the branches add up.
         if (r.partialBranch) {
           const what = r.branchOp === 'component' ? 'a component decomposition' : 'a factor split';
@@ -4935,7 +4920,8 @@ const QD = _QD;
   QD_UI.fmtComplex = _fmtComplex;                     // compact { re, im } inline formatter (pure; guarded)
   QD_UI.selectDomain = selectDomain;                 // the multi-domain stepper's k-th-domain selector (pure; wraps)
   QD_UI.classifyRigor = classifyRigor;               // T1: the =/≤/unknown decider for a classify/count result (pure)
-  QD_UI.posDimDesc = posDimDesc;                     // T1: honest one-line size of a positive-dimensional verdict (pure)
+  QD_UI.posDimDesc = posDimDesc;                     // carve-out 1: honest size of a positive-dim verdict (pure; from ./algebra-labeling.mjs)
+  QD_UI.classifyVerdict = classifyVerdict;           // carve-out 1: classify-result → verdict prose (pure; from ./algebra-labeling.mjs)
   QD_UI.scopeNote = scopeNote;                       // T1: scoped-mutating-op toast disclosure (pure)
   QD_UI.droppedNote = droppedNote;                   // T1: basis-replacement dropped-node toast wording (pure)
   QD_UI.latexPlain = latexPlain;                     // T1: conjugate-model var-name → plain-text formatter (pure)
