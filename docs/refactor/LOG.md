@@ -211,3 +211,33 @@
   harness not run (jsdom/test-infra only, no GPU). Committed d17e9df; PR → refactor/main; auto-merge on green.
 - **Addresses QD-TEST-4** (ui-solve orchestration untested) + part of QD-UI-5. **QD-TEST-2 (ui.mjs) REMAINS OPEN**
   — needs the seam (deferred). Follow-up **B4-2**: worker-lane lifecycle net + shared `vitest/helpers/fake-worker.mjs`.
+
+## 2026-07-31 — Phase D · Stage B4-2a (PSW worker-lane crash net) — PR opened
+- Continued B4 per user "proceed"/"pick up". B4-1 (#183) merged (`e1a148a`); refactor/main re-confirmed green
+  (2071/237). Cut `refactor/B4-2-worker-lanes`. Scoped B4-2 with a verified subagent map: the 6 lanes + the
+  **messageerror matrix** — primary/schwarz/pool HAVE a `messageerror` handler; aux/live/sym do NOT (silent
+  copy-paste divergence). Existing coverage: `psw-lifecycle.test.ts` (round-trip/supersede/cancel/spawn-fault),
+  `schwarz-cpu-worker-crash.test.ts` (schwarz crash), `sym-worker-*.test.ts`, `param-slice-pool.test.ts` —
+  **PSW crash-settle is the zero-coverage gap.**
+- **Split B4-2 into two ADDITIVE PRs** (map's recommendation — leave the 2 existing green lane tests untouched;
+  DRY them onto the shared helper later during C1/C2 when those files may change anyway): **B4-2a** = shared
+  helper + PSW crash net (this PR); **B4-2b** = sym + schwarz + param-slice-pool gaps (follow-up).
+- **B4-2a delivered (TESTS-ONLY, no source change):**
+  - `vitest/helpers/fake-worker.mjs` — shared fake `Worker` unifying the inline `makeStubWorker` (spawn-fault)
+    + `FakeWorker` (message/crash delivery): `.fire(type,ev)`, `.posted`, `.terminated`, static
+    `instances`/`lastInstance`, `failNext`.
+  - `vitest/psw-crash-char.test.ts` — 7 tests, pins verified against source: primary `error`→
+    `Error(/solver worker crashed/)` + dispose + `_isMainThreadFallback()===false` (a crash is not a latch)
+    (primary-solver-worker.mjs:99-112); primary `messageerror`→`/structured-clone/` (:113-121); aux `error`→
+    `/alt-search worker crashed/` (:227-236); live `error`→`/live-solve worker crashed/` (:321-330); the
+    **messageerror ASYMMETRY** — aux/live have NO handler, so `.fire('messageerror')` leaves the job in-flight
+    (freezes current behavior for C2); 3rd fallback-latch independence direction (live-fails-first doesn't
+    demote primary/aux — mirrors psw-lifecycle's two directions).
+  - Driven with `vi.stubGlobal("Worker", FakeWorker)` + the freshPSW `resetModules` re-import (module-scoped
+    lane singletons). node env; no DOM.
+- **Mutation-verified the net BITES:** adding an aux `messageerror` handler failed exactly the "aux messageerror
+  does NOT settle" test (1/7), then reverted → primary-solver-worker.mjs byte-identical to HEAD.
+- Green: build/typecheck/lint exit 0; `pnpm test` **2078 passed / 238 files** (+7 / +1 vs 2071/237). Browser not
+  run (node/test-infra, no GPU). Committed 48f89cb; PR → refactor/main; merge on green.
+- **Addresses part of QD-UI-1** (the worker-lane crash + messageerror contract now pinned before the C1 lane
+  dedup) + QD-UI-4 (the untyped/asymmetric envelope behavior frozen). Remaining: **B4-2b** (sym/schwarz/pool gaps).
