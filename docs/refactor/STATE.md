@@ -16,38 +16,41 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   `ui-domain-mode.mjs` + `ui-geometry.mjs`; ui.mjs's first executable coverage, 25 tests).
 - **installAlgebra decomposition UNDERWAY** (QD-ALG-1; user chose "Carve-outs (recommended)") — attack the
   ~4.2k-line god-function by its PURE sub-computations, net-first, one PR each. **Carve-out 1 (classifyVerdict +
-  posDimDesc → NEW `app/algebra/algebra-labeling.mjs`) — MERGED (#195).** **Carve-out 2 (`_verdictBadge` chip badge,
-  lifted to IIFE scope) — MERGED (#196).** All three drifted verdict builders now have honest-labeling coverage
-  (doClassify prose #195, `_verdictBadge` chip #196; doAutoSolve's inline prose remains — a future carve/unify).
-- **Two shapes, chosen by deps:** carve-out 1 → a NEW MODULE (its dep posDimDesc was cleanly movable). Carve-out 2 →
-  an IN-FILE lift to IIFE scope (the T1 pattern), because `_verdictBadge`→`sliceLabels`→`latexPlain` and `latexPlain`
-  is referenced ~50× across installAlgebra — a module move's blast radius. Both shrank the god-FUNCTION + added coverage.
+  posDimDesc → NEW `algebra-labeling.mjs`) — MERGED (#195).** **Carve-out 2 (`_verdictBadge`, IIFE lift) — MERGED (#196).**
+  **Carve-out 3 (`exactValueStr` + `fmtRat` → NEW `algebra-format.mjs`) — PR #197 OPEN.** Two pure modules pulled out
+  (verdict prose; exact ℚ(i) value formatter) + the in-file badge lift.
+- **Shape chosen by deps each time:** a NEW MODULE when the dep is cleanly importable (1: posDimDesc; 3: QDEquations.ratApprox
+  via a side-effect import → headless net); an IN-FILE IIFE lift when a dep is woven through installAlgebra (2: latexPlain ~50×).
+- **QD-ALG-6 assessed + DECLINED** (carve-out 3): the ~6 tolerance literals sit at unrelated sites with different
+  meanings — no single pure computation to net; left open as a constants cleanup, not a carve-out.
 - Cadence: merge on green (user delegates). `APPROVED: PLAN.md v1`.
-  Roadmap §8: A✓ / B✓ / C✓ / **D (ui.mjs seams✓; installAlgebra decomposition underway — carve-outs 1✓ 2✓)** / E / F.
+  Roadmap §8: A✓ / B✓ / C✓ / **D (ui.mjs seams✓; installAlgebra decomposition underway — carve-outs 1✓ 2✓ 3(open))** / E / F.
 
 ## Branches / PR
-- Integration `refactor/main` @ **cc97481** (#196 merge; this STATE commit advances it). Tree clean. **No open PR.**
+- Integration `refactor/main` @ **4a02bce** (this STATE commit advances it). Tree clean.
+- **OPEN PR #197** — `refactor/d-alg-carve-3-exact-format` @ b51e201 (off 4a02bce): carve-out 3. CI running
+  (build in_progress / browser queued at open); subscribed + 12-min merge-on-green fallback armed (18:59Z).
 - Merged stage PRs (19): A1 #178 … D-alg-carve-1 #195, **D-alg-carve-2 #196 (cc97481)**.
 
 ## Validation state (green bar)
-- **`refactor/main` @ cc97481 — ALL GREEN (post-merge re-confirmed firsthand):** build/typecheck/lint exit 0;
-  `pnpm test` **2160 passed / 246 files**. (Carve-outs 1+2 nets: algebra-classify-verdict 11 + algebra-verdict-badge 10.)
+- **`refactor/main` @ 4a02bce — ALL GREEN:** build/typecheck/lint exit 0; `pnpm test` **2160 passed / 246 files**.
+- **PR #197 stage branch @ b51e201 — ALL GREEN (firsthand):** build/typecheck/lint exit 0; `pnpm test`
+  **2168 passed / 247 files** (+8, +1 file — new headless `algebra-exact-format.test.ts`). Lands on merge.
 
 ## Uncommitted / unverified
-- None. #196 merged + pulled; post-merge green re-confirmed; this STATE commit direct to `refactor/main`.
+- None. Carve-out 3 committed to its stage branch (b51e201) + pushed; this STATE commit direct to `refactor/main`.
 
 ## Known blockers / risks
-- No open PR. No blockers.
-- installAlgebra is DOM-heavy (QD-ALG-2) with source-text tests (QD-ALG-3); the carve-out strategy sidesteps both
-  by extracting only genuinely-PURE sub-computations (netted headlessly) — the DOM-bound bulk is not being moved.
+- PR #197 open, CI in progress; drive-to-green posture (my PR). No blockers.
+- installAlgebra's remaining bulk is DOM-bound (QD-ALG-2 sidebar innerHTML) with source-text tests (QD-ALG-3); the
+  pure-carve-out strategy is thinning out its low-hanging targets — deeper decomposition needs a different strategy.
 
 ## Next concrete steps
-1. **Carve-out 3** (natural continuation; session is very long — a fresh one is fine). Candidates: QD-ALG-6
-   realness/verify tolerance predicates (magic literals → a pure threshold helper), or the ℚ(i) value formatter
-   `exactValueStr`/`fmtRat` (dep QE.ratApprox, importable). Each: net-first, own PR, merge on green.
-2. Deferred (needs an approval token — changes strings): the char-first UNIFICATION of the 3 drifted verdict builders
-   (doClassify/doAutoSolve/`_verdictBadge`) — now all three are netted, so a later unification is well-guarded.
-3. Group order: A✓ B✓ C✓ → **D (installAlgebra decomposition underway — 2 carve-outs done)** → E (state+folderize) → F (dep-cruiser).
+1. **Merge #197 on green** (fallback armed 18:59Z). On merge → advance `refactor/main`, re-confirm green, refresh STATE.
+2. **Carve-out 4** — pure candidates thinning; needs a fresh scan (e.g. `fmtRatio`, other formatting/predicate helpers
+   still inside installAlgebra). Or pivot: (a) the char-first UNIFICATION of the 3 now-netted verdict builders (needs an
+   approval token — changes strings); (b) jsdom-drive the sidebar build (QD-ALG-2) — a bigger strategy shift.
+3. Group order: A✓ B✓ C✓ → **D (installAlgebra decomposition underway — 3 carve-outs done)** → E (state+folderize) → F (dep-cruiser).
 
 ## Resume commands
 ```
