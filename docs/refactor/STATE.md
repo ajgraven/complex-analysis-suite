@@ -13,8 +13,10 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 ## Phase / stage
 - **Phase D — Execute. Group A + B1 + B2 MERGED** (B2 = #182, `e74d3e6`; solvers 4-way shard; `pnpm test`
   long-pole 77s→37s; oracle 2332/0). refactor/main GREEN @ e74d3e6 (236 files / 2059 tests, re-confirmed).
-- **Stage B4 (UI characterization net) — SCOPING COMPLETE; SCOPE DECISION PENDING from user.** Branch
-  `refactor/B4-ui-charnet` cut (no commits yet). Skipped optional B3.
+- **Stage B4 (UI characterization net) — IN FLIGHT on `refactor/B4-ui-charnet`.** Proceeding on the RECOMMENDED
+  narrow scope (NO source change): `ui-solve` orchestration net + worker-lane net. ui.mjs-internals (needs a seam =
+  source change) and algebra source-text conversion (different module) are **DEFERRED** to their own stages (flagged
+  to user, not blocking — user may redirect). Skipped optional B3.
 - **B4 SCOPE DISCOVERY (verified — changes the plan's B4):**
   - `app/ui.mjs` (1931 L) has **NO test seam** — boots on import (`:413/:1723/:1737`), no `installUI()` factory,
     no test hook. Its internals can't be characterized without a **brittle full-boot jsdom harness** OR **adding a
@@ -43,13 +45,12 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - None. B4 has no commits yet; awaiting the scope decision before building the net.
 
 ## Known blockers / risks
-- **BLOCKED on user's B4 scope decision** (options presented): (1) ui-solve + worker-lane net only, no source change
-  [recommended]; (2) also convert algebra source-text tests; (3) also add a ui.mjs seam (source change). Recommend
-  (1); defer algebra→D1, ui.mjs-seam→its own small stage before D2.
+- B4 scope forks flagged to user (NOT blocking; proceeding on the recommended narrow net): (2) algebra source-text
+  conversion → DEFERRED to D1; (3) ui.mjs seam → DEFERRED to its own small stage before D2. User may redirect.
 - CI health: #182 CI green (build+browser) — July "exhausted GH Actions budget" note may be stale. Local green = truth.
 
 ## Next concrete steps — Stage B4
-1. **AWAIT user scope decision** (above). On answer, `git checkout refactor/B4-ui-charnet` and build.
+1. **Building B4-1** (ui-solve orchestration net) on `refactor/B4-ui-charnet`, then a follow-up PR for B4-2 (worker lanes).
 2. Recommended build order if (1): **B4-0** extract shared `vitest/helpers/fake-worker.mjs`; **B4-1** `ui-solve`
    orchestration net (supersede/abort-vs-error-settle/busy-ownership/cancel/auto-escalation/PSW-fallback), fake
    `uiCtx`+stub `QD.PrimarySolverWorker`, jsdom, model on ui-domain-plot+qd-validity-badge; **B4-2** worker-lane
