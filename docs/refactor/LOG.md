@@ -612,3 +612,23 @@
 - **installAlgebra: 6 carve-outs done.** `algebra-labeling.mjs` now holds the verdict prose + the failure guidance;
   `algebra-format.mjs` the value/ratio formatters; `algebra-moment-parse.mjs` the input parser. Census-ranked next:
   `_pronyLatex` (math→LaTeX), `valStr`+`substList` (the PROV_UI tests mock the real impls), then cheap stragglers.
+
+## 2026-07-31 — Phase D · Stage D-alg-carve-7 (installAlgebra carve-out 7 — Prony-poly math→LaTeX) — PR opened
+- **Seventh installAlgebra carve-out** (census #3, "keep carving"): `_pronyLatex(coeffs)` — renders the reconstructed
+  Prony polynomial Σ cₖzᵏ=0 as LaTeX on the "Shape from moments" card. Branchy formatting (descending powers, 1e-6
+  rounding, near-zero-term drop, unit-coeff elision on a z-power → "z" not "1z", leading-sign handling, parenthesised
+  `(a±bi)zᵏ` for complex coeffs) that had zero coverage (reachable only through a live DOM mount). Pure, ZERO external
+  deps (only Math/String + the `coeffs` arg).
+- **This PR (behavior-preserving extraction):** `_pronyLatex` carved VERBATIM into NEW `app/algebra/algebra-latex.mjs`.
+  This starts a dedicated LaTeX-formatter module (distinct from `algebra-format.mjs`'s plain-text ℚ(i)/ratio formatters)
+  — the intended home for the census's other pure LaTeX builders (`buildHForm`, `latexOf`, `reimSafeLatex`) as they're
+  carved. algebra-ui imports `_pronyLatex`; its one caller (`doShapeFromMoments`) resolves to the import. +2/−22.
+- **Net-first + mutation-verified:** NEW `vitest/algebra-prony-latex.test.ts` (8; HEADLESS) pins the all-zero '0 = 0'
+  case, a bare constant, unit-coeff elision, the leading-'-' vs joined-' - ', z^{k} for k≥2, multi-term joining, the
+  parenthesised complex form, and the 1e-6 rounding + sub-1e-9 drop. Byte-identity: the 20-line body is identical to
+  source modulo indent + `export`. Mutation (drop the leading-'-' branch) → only the leading-negative test fails.
+- **Green bar:** build/typecheck/lint exit 0; `pnpm test` **2197 passed / 251 files** (+8, +1 file). Cut
+  `refactor/d-alg-carve-7-prony-latex`; PR → refactor/main; merge on green.
+- **installAlgebra: 7 carve-outs done, 4 pure companion modules** (labeling / format / moment-parse / latex) + the
+  in-file badge lift; ~58 new characterization tests. Census-ranked next: `valStr`+`substList` (PROV_UI tests mock the
+  real impls), then `buildHForm`/`friendlyReim`/`isForkedColumn`/`_relKey`/… , then `latexOf` (pure-if-injected).
