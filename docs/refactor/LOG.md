@@ -632,3 +632,22 @@
 - **installAlgebra: 7 carve-outs done, 4 pure companion modules** (labeling / format / moment-parse / latex) + the
   in-file badge lift; ~58 new characterization tests. Census-ranked next: `valStr`+`substList` (PROV_UI tests mock the
   real impls), then `buildHForm`/`friendlyReim`/`isForkedColumn`/`_relKey`/… , then `latexOf` (pure-if-injected).
+
+## 2026-07-31 — Phase D · Stage D-alg-carve-8 (installAlgebra carve-out 8 — valStr; substList deferred) — PR opened
+- **Eighth installAlgebra carve-out** (census #4, "keep carving" — merged #201 first via the chained fallback). The
+  census paired `valStr`+`substList`; on firsthand inspection I **split the pair**: `valStr` is a clean verbatim pure
+  leaf, but `substList` calls `latexPlain` — the IIFE-scoped ~50-ref helper carve-out 2 showed is un-exportable (a
+  module import would cycle; moving latexPlain is a ~50-site blast radius). Moving substList needs latexPlain injected
+  as a PARAMETER + edits to its 2 PROV_UI builder call sites — a signature change touching the tested registry, so NOT
+  a verbatim carve. **Deferred substList; did valStr only** (behavior-preserving + verbatim > completeness).
+- **This PR:** `valStr(rec)` — compact DECIMAL display of a stored `{approx:{re,im}}` record ("re ± im·i", 1e-6
+  rounding, U+2212 minus; the per-card hovertext value, distinct from `exactValueStr`'s exact ℚ(i)) — carved VERBATIM
+  into `algebra-format.mjs`. It's INJECTED into the PROV_UI ctx (→ resolves to import); the PROV_UI param-uses and
+  substList's internal use now call the imported valStr. +12/−9. 5 fragments byte-identity-checked (incl. U+2212).
+- **Net-first + mutation-verified:** NEW `vitest/algebra-valstr.test.ts` (6; HEADLESS) pins the '?' no-approx fallback,
+  re-only / im-only / both-parts (' + ' vs ' − '), 1e-6 rounding, and the U+2212 display guardrail. This is the FIRST
+  real coverage of valStr — the PROV_UI tests inject a MOCK valStr. Mutation (im-only 'i'→'j') → only the im-only test fails.
+- **Green bar:** build/typecheck/lint exit 0; `pnpm test` **2203 passed / 252 files** (+6, +1 file). Cut
+  `refactor/d-alg-carve-8-valstr`; PR → refactor/main; merge on green.
+- **installAlgebra: 8 carve-outs done.** Census-ranked next: `substList` (as a latexPlain-injection carve), then the
+  cheap stragglers (`buildHForm`, `friendlyReim`, `isForkedColumn`, `_relKey`, …), then `latexOf`(+`reimSafeLatex`).

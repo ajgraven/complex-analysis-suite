@@ -262,3 +262,14 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   Behavior-preserving (byte-identity: the 20-line body is identical modulo indent + `export`). The one caller
   (`doShapeFromMoments`) resolves to the import. NEW `algebra-latex.mjs` is the intended home for the census's other
   pure LaTeX builders (`buildHForm` / `latexOf` / `reimSafeLatex`) as they get carved out.
+- **2026-07-31 · stage D-alg-carve-8 (PR → refactor/main):** **QD-ALG-1 → decomposition continues (carve-out 8); the
+  census's `valStr`+`substList` pair was SPLIT — `valStr` done, `substList` deferred.** Extracted `valStr(rec)` — the
+  compact DECIMAL display of a stored `{approx:{re,im}}` value record ("re ± im·i", 1e-6 rounding, U+2212 minus; the
+  per-card hovertext value, distinct from `exactValueStr`'s exact ℚ(i)) — out of installAlgebra → EXTEND
+  `app/algebra/algebra-format.mjs` + a 6-test HEADLESS net (`vitest/algebra-valstr.test.ts`, mutation-verified). `valStr`
+  is a pure leaf (Math/String only). It's INJECTED into the PROV_UI ctx (→ resolves to import); the PROV_UI param-uses
+  and `substList`'s internal use now call the imported `valStr`. 5 fragments byte-identity-checked (incl. U+2212).
+  **`substList` DEFERRED:** it calls `latexPlain` — the IIFE-scoped ~50-ref helper carve-out 2 showed is un-exportable
+  (a module import would cycle; moving `latexPlain` is a ~50-site blast radius). Moving `substList` to a module needs
+  `latexPlain` injected as a PARAMETER + edits to its 2 PROV_UI builder call sites (a signature change touching the
+  tested registry), so it is NOT a verbatim carve — left for a deliberate step (e.g. bundled with a `latexPlain`-injection carve).
