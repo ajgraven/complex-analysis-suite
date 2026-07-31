@@ -202,3 +202,13 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   executable coverage of the =/≤ honest-labeling prose, behavior-preserving), NOT the cross-site de-dup QD-ALG-5
   implied. That de-dup would change strings ⇒ needs an approval token; deferred to a later characterization-first
   unification. `posDimDesc`'s QD_UI re-export is preserved, so `algebra-verdict-rigor.test.ts` stays green.
+- **2026-07-31 · stage D-alg-carve-2 (PR → refactor/main):** **QD-ALG-1 → decomposition continues (carve-out 2).**
+  Lifted the pure chip-badge builder `_verdictBadge` (classify result → `{badge,state,title}`, the THIRD of the three
+  drifted verdict builders) out of installAlgebra to IIFE scope (the T1 in-file-lift pattern), giving it its first
+  executable coverage. Chose an in-file lift over a module move because `_verdictBadge`'s dep chain
+  (`sliceLabels`→`latexPlain`) is woven through ~50 installAlgebra references (label toasts, pickers, PROV_UI) — moving
+  it would be a huge blast radius for netting one function. NEW 10-test net (`vitest/algebra-verdict-badge.test.ts`,
+  jsdom + QD_UI, mutation-verified) pins the badge glyph/state/title, the C-1 honest-labeling guardrail (a lone real
+  solution is state 'multi' + "upper bound on #QD", never a green 'unique'), and the slice/branch specialization
+  suffix. In-file move ⇒ byte-identical strings (verified: the 24-line body is identical modulo indentation); callers
+  (cacheActiveVerdict / classifyAllBranches) unchanged. QD-ALG-5 status unchanged (unification still deferred).
