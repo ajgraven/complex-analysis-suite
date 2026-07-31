@@ -497,3 +497,29 @@
 - **installAlgebra decomposition underway** (QD-ALG-1): carve-out 1 of N, mirroring the ui.mjs seam pattern (pure
   sub-computation → small netted module, one PR). Next candidates: a later char-first UNIFICATION of the three drifted
   builders (needs an approval token — changes strings), or QD-ALG-6 realness/verify tolerance predicates.
+
+## 2026-07-31 — Phase D · Stage D-alg-carve-2 (installAlgebra carve-out 2 — _verdictBadge) — PR opened
+- **Second installAlgebra carve-out** (continuing "Carve-outs", merge-on-green cadence): the pure chip-badge builder
+  `_verdictBadge` (classify result → `{badge, state, title}`), the THIRD of the three drifted verdict builders and,
+  like carve-out 1's target, previously reachable only through a full DOM+solver mount → zero executable coverage.
+- **Shape decision (evidence-driven):** an IN-FILE lift to IIFE scope (the T1 pattern), NOT a module move like
+  carve-out 1. Reason: `_verdictBadge`'s dep chain is `_verdictBadge → sliceLabels → latexPlain`, and `latexPlain` is
+  referenced ~50× across installAlgebra (label toasts, pickers, PROV_UI derivation labels, solution formatting) —
+  relocating it (required to move `sliceLabels`, required to move `_verdictBadge`) is a huge blast radius for netting
+  ONE function. The T1 lift keeps `sliceLabels`/`latexPlain`/all ~50 sites untouched: hoist `_verdictBadge` out of
+  installAlgebra to IIFE scope (where the imported `posDimDesc` + IIFE `sliceLabels` are already in scope), expose
+  `QD_UI._verdictBadge`. Callers (cacheActiveVerdict / classifyAllBranches, both inside installAlgebra) resolve it
+  unqualified — ZERO call-site churn. +30/−25 in algebra-ui.mjs (installAlgebra shrinks; the god-FUNCTION is QD-ALG-1's target).
+- **Behavior-preserving by construction:** an in-file move ⇒ the string literals are byte-identical (verified
+  mechanically: the 24-line body is identical to HEAD's modulo leading whitespace; only the 4→2-space indent changed).
+- **Net-first + mutation-verified:** NEW `vitest/algebra-verdict-badge.test.ts` (10; jsdom + `QD_UI._verdictBadge`,
+  the T1 test pattern) pins the badge glyph / colour-`state` / `title` for all four base verdicts + the defensive
+  null/`?` paths, the **C-1 honest-labeling guardrail** (a lone real ALGEBRAIC solution is state `'multi'` with an
+  "upper bound on #QD" tooltip — never a green `'unique'`), and the slice/branch specialization suffix (`*` + LOWER
+  BOUND note). Mutation (the `===1` return's `state 'multi'→'none'`) → only the C-1 guardrail test fails.
+- **Green bar:** build/typecheck/lint exit 0; `pnpm test` **2160 passed / 246 files** (+10, +1 file). Existing
+  `algebra-verdict-rigor.test.ts` (jsdom/QD_UI) stays green (the QD_UI additions didn't disturb it). Cut
+  `refactor/d-alg-carve-2-verdict-badge`; PR → refactor/main; merge on green.
+- **installAlgebra carve-outs 1+2 done** — all three verdict builders (doClassify prose, `_verdictBadge` chip) now have
+  executable honest-labeling coverage (doAutoSolve's prose still inline). Next: QD-ALG-6 tolerance predicates, another
+  pure helper, or (with an approval token) the char-first unification of the drifted builders.

@@ -563,6 +563,34 @@ const QD = _QD;
     }
     return out;
   }
+  // Map a classify result → a compact chip badge { badge, state, title }. Pure (reads only r.* + the
+  // module-scope sliceLabels/posDimDesc leaves); lifted from installAlgebra to IIFE scope (carve-out 2) so
+  // the chip's honest labeling (badge STATE/colour + the "upper bound on #QD" tooltip) is behaviourally
+  // testable without a DOM mount. Exposed on QD_UI. Callers (cacheActiveVerdict/classifyAllBranches) unchanged.
+  function _verdictBadge(r) {
+    if (!r || r.aborted) return null;
+    if (!r.ok) return { badge: '?', state: 'unknown', title: r.reason || 'classify unavailable' };
+    // Specialization suffix: a factor CASE and/or a reality/imaginary SLICE (both resolved for THIS
+    // branch by the store) narrow the count. Fold both into the tooltip and mark the badge with '*'
+    // so a slice/branch count on a chip never reads as the general QD count (honest labeling).
+    const notes = [];
+    if (r.partialBranch) notes.push('case ' + ((r.caseIndex || 0) + 1) + '/' + r.caseCount
+      + ' of ' + (r.branchOp === 'component' ? 'a component decomposition' : 'a factor split')
+      + (r.branchIncomplete ? ' (capped — components may not cover V(I))' : ''));
+    const sl = sliceLabels(r);
+    if (sl.length) notes.push('on the ' + sl.join(' + ') + ' only — a LOWER BOUND; off-slice QDs not counted');
+    const tail = notes.length ? ' [' + notes.join('; ') + ']' : '';
+    const star = sl.length ? '*' : '';
+    if (r.inconsistent) return { badge: '∅' + star, state: 'none', title: 'no QD — system inconsistent (1 ∈ I)' + tail };
+    if (!r.zeroDim) return { badge: '∞' + star, state: 'open', title: 'positive-dimensional family (' + posDimDesc(r) + ')' + tail };
+    if (r.realCount == null) return { badge: 'fin' + star, state: 'unknown', title: r.multiplicity + ' complex solution(s); real count over the cap' + tail };
+    if (r.realCount === 0) return { badge: '0 QD' + star, state: 'none', title: 'no real quadrature domain' + tail };
+    // HONEST LABELING (C-1): the chip shows the ALGEBRAIC real-solution count — an upper bound on #QD,
+    // NOT a certified QD count — so no green 'unique' from an unfiltered count; Certify univalence
+    // (which filters non-univalent maps + quotients the gauge) produces the genuine-QD verdict.
+    if (r.realCount === 1) return { badge: '1 alg' + star, state: 'multi', title: '1 real algebraic solution — an upper bound on #QD; run Certify univalence for the genuine-QD count' + tail };
+    return { badge: r.realCount + ' alg' + star, state: 'multi', title: r.realCount + ' real algebraic solutions — an upper bound on #QD; run Certify univalence for the genuine-QD count' + tail };
+  }
   // Live facts per variable in the CURRENT column, feeding variableRemovals. Ordered by how many
   // equations hold the variable, descending — the ones costing the most are the ones worth
   // removing, and that ranking is the answer to "which should I attack?" a flat picker cannot give.
@@ -4674,31 +4702,7 @@ const QD = _QD;
     // Cheap content signature of a branch's CURRENT last column — changes whenever the system
     // changes (a new reduction, fork, undo), so a cached verdict is shown only while still valid.
     function _branchSig(tid) { return store.maxColumn(tid) + '|' + _lastColIds(tid).join(','); }
-    // Map a classify result → a compact chip badge { badge, state, title }.
-    function _verdictBadge(r) {
-      if (!r || r.aborted) return null;
-      if (!r.ok) return { badge: '?', state: 'unknown', title: r.reason || 'classify unavailable' };
-      // Specialization suffix: a factor CASE and/or a reality/imaginary SLICE (both resolved for THIS
-      // branch by the store) narrow the count. Fold both into the tooltip and mark the badge with '*'
-      // so a slice/branch count on a chip never reads as the general QD count (honest labeling).
-      const notes = [];
-      if (r.partialBranch) notes.push('case ' + ((r.caseIndex || 0) + 1) + '/' + r.caseCount
-        + ' of ' + (r.branchOp === 'component' ? 'a component decomposition' : 'a factor split')
-        + (r.branchIncomplete ? ' (capped — components may not cover V(I))' : ''));
-      const sl = sliceLabels(r);
-      if (sl.length) notes.push('on the ' + sl.join(' + ') + ' only — a LOWER BOUND; off-slice QDs not counted');
-      const tail = notes.length ? ' [' + notes.join('; ') + ']' : '';
-      const star = sl.length ? '*' : '';
-      if (r.inconsistent) return { badge: '∅' + star, state: 'none', title: 'no QD — system inconsistent (1 ∈ I)' + tail };
-      if (!r.zeroDim) return { badge: '∞' + star, state: 'open', title: 'positive-dimensional family (' + posDimDesc(r) + ')' + tail };
-      if (r.realCount == null) return { badge: 'fin' + star, state: 'unknown', title: r.multiplicity + ' complex solution(s); real count over the cap' + tail };
-      if (r.realCount === 0) return { badge: '0 QD' + star, state: 'none', title: 'no real quadrature domain' + tail };
-      // HONEST LABELING (C-1): the chip shows the ALGEBRAIC real-solution count — an upper bound on #QD,
-      // NOT a certified QD count — so no green 'unique' from an unfiltered count; Certify univalence
-      // (which filters non-univalent maps + quotients the gauge) produces the genuine-QD verdict.
-      if (r.realCount === 1) return { badge: '1 alg' + star, state: 'multi', title: '1 real algebraic solution — an upper bound on #QD; run Certify univalence for the genuine-QD count' + tail };
-      return { badge: r.realCount + ' alg' + star, state: 'multi', title: r.realCount + ' real algebraic solutions — an upper bound on #QD; run Certify univalence for the genuine-QD count' + tail };
-    }
+    // _verdictBadge lifted to IIFE scope (carve-out 2) — pure; see the definition + QD_UI._verdictBadge above.
     // Cache the active branch's verdict from a single-branch classify (doClassify) so its chip
     // updates too — only when the whole last column was analyzed (no node sub-selection).
     function cacheActiveVerdict(r) {
@@ -4922,6 +4926,7 @@ const QD = _QD;
   QD_UI.classifyRigor = classifyRigor;               // T1: the =/≤/unknown decider for a classify/count result (pure)
   QD_UI.posDimDesc = posDimDesc;                     // carve-out 1: honest size of a positive-dim verdict (pure; from ./algebra-labeling.mjs)
   QD_UI.classifyVerdict = classifyVerdict;           // carve-out 1: classify-result → verdict prose (pure; from ./algebra-labeling.mjs)
+  QD_UI._verdictBadge = _verdictBadge;               // carve-out 2: classify-result → chip badge {badge,state,title} (pure)
   QD_UI.scopeNote = scopeNote;                       // T1: scoped-mutating-op toast disclosure (pure)
   QD_UI.droppedNote = droppedNote;                   // T1: basis-replacement dropped-node toast wording (pure)
   QD_UI.latexPlain = latexPlain;                     // T1: conjugate-model var-name → plain-text formatter (pure)
