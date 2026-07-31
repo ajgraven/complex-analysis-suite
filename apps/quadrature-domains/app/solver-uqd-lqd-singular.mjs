@@ -3,6 +3,7 @@ import { Complex } from './complex.mjs';
 import { Taylor } from './taylor.mjs';
 import { continuationInC as runContinuationInC } from './solver-continuation.mjs';
 import _QD from './solver.mjs';
+import { defineFamily } from './solvers/define-family.mjs';
 // =============================================================================
 // solver-uqd-lqd-singular.js -- Unbounded SINGULAR log-weighted QDs
 //                                (Family.unboundedLQD_singular)
@@ -784,10 +785,9 @@ import _QD from './solver.mjs';
   // ===========================================================================
   // 8. Register Family.unboundedLQD_singular
   // ===========================================================================
-  QD.Family.unboundedLQD_singular = {
+  QD.Family.unboundedLQD_singular = defineFamily({
     name: 'unboundedLQD_singular',
-    enforceInDisk:  false,
-    enforceOutDisk: true,
+    unbounded: true,                          // enforceInDisk:false / enforceOutDisk:true
     matches(opts) { return !!(opts && opts.lqd && opts.unbounded && opts.singular); },
 
     normalizeOpts(opts, hData) {
@@ -826,13 +826,9 @@ import _QD from './solver.mjs';
 
     evalPhi: evalPhi_UQDLS,
     phiTaylorAt: phiTaylorAt_UQDLS,
-    computeTargets(phi, hData) {
-      return {
-        A: computeTargetA_UQDLS(phi, hData),
-        F: computeTargetF_UQDLS(phi, hData),
-        G: computeTargetGamma_UQDLS(phi, hData),
-      };
-    },
+    computeTargetA: computeTargetA_UQDLS,
+    computeTargetF: computeTargetF_UQDLS,
+    computeTargetG: computeTargetGamma_UQDLS,   // → computeTargets { A, F:[…], G:[…] }
     residual: residual_UQDLS,
     packPhi:  packPhi_UQDLS,
     unpackPhi: unpackPhi_UQDLS,
@@ -842,7 +838,7 @@ import _QD from './solver.mjs';
     diverseInitialGuess:   diverseInitialGuess_UQDLS,
     continuationSolve:     continuationSolve_UQDLS,
     verifyQuadratureIdentity: verifyQuadratureIdentity_UQDLS,
-  };
+  });
   QD.registerFamily('unboundedLQD_singular');
 
   // Exported so seeds-uqd-lqd-singular.js can build its initial guess (B3).

@@ -3,6 +3,7 @@ import { Complex } from './complex.mjs';
 import { Taylor } from './taylor.mjs';
 import { continuationInC as runContinuationInC } from './solver-continuation.mjs';
 import _QD from './solver.mjs';
+import { defineFamily } from './solvers/define-family.mjs';
 // =============================================================================
 // solver-uqd-lqd.js -- Unbounded NON-SINGULAR log-weighted QDs
 //                       (Family.unboundedLQD)
@@ -374,10 +375,9 @@ import _QD from './solver.mjs';
   // ===========================================================================
   // 10. Register Family.unboundedLQD
   // ===========================================================================
-  QD.Family.unboundedLQD = {
+  QD.Family.unboundedLQD = defineFamily({
     name: 'unboundedLQD',
-    enforceInDisk:  false,
-    enforceOutDisk: true,
+    unbounded: true,                          // enforceInDisk:false / enforceOutDisk:true
     matches(opts) { return !!(opts && opts.lqd && opts.unbounded && !opts.singular); },
     normalizeOpts(opts, hData) {
       const c = opts.c;
@@ -388,9 +388,8 @@ import _QD from './solver.mjs';
     },
     evalPhi: evalPhi_UQDL,
     phiTaylorAt: phiTaylorAt_UQDL,
-    computeTargets(phi, hData) {
-      return { A: computeTargetA_UQDL(phi, hData), F: computeTargetF_UQDL(phi, hData) };
-    },
+    computeTargetA: computeTargetA_UQDL,
+    computeTargetF: computeTargetF_UQDL,      // → computeTargets { A, F:[…] }
     residual: residual_UQDL,
     packPhi: packPhi_UQDL,
     unpackPhi: unpackPhi_UQDL,
@@ -400,7 +399,7 @@ import _QD from './solver.mjs';
     diverseInitialGuess: diverseInitialGuess_UQDL,
     continuationSolve: continuationSolve_UQDL,
     verifyQuadratureIdentity: verifyQuadratureIdentity_UQDL,
-  };
+  });
   QD.registerFamily('unboundedLQD');
 
   // Exported so seeds-uqd-lqd.js can seed lqdBeta from the ∞-pole target (B3).

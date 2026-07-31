@@ -3,6 +3,7 @@ import { Complex } from './complex.mjs';
 import { Taylor } from './taylor.mjs';
 import { branchTaylorAccumulate } from './solver-taylor-common.mjs';
 import _QD from './solver.mjs';
+import { defineFamily } from './solvers/define-family.mjs';
 // =============================================================================
 // solver-uqd-pqd.js -- Unbounded power-weighted quadrature domains
 // (Family.unboundedPQD). 0 ∉ Ω (non-singular); α > 0, α ≠ 1.
@@ -454,10 +455,9 @@ import _QD from './solver.mjs';
   // ===========================================================================
   // 8. Register Family.unboundedPQD (more specific than unboundedQD; α ≠ 1).
   // ===========================================================================
-  QD.Family.unboundedPQD = {
+  QD.Family.unboundedPQD = defineFamily({
     name: 'unboundedPQD',
-    enforceInDisk: false,
-    enforceOutDisk: true,
+    unbounded: true,                          // enforceInDisk:false / enforceOutDisk:true
     matches(opts) {
       const a = opts && opts.alpha;
       return Number.isFinite(a) && a > 0 && a !== 1
@@ -481,9 +481,8 @@ import _QD from './solver.mjs';
     },
     evalPhi: evalPhi_UPQD,
     phiTaylorAt: phiTaylorAt_UPQD,
-    computeTargets(phi, hData) {
-      return { A: computeTargetA_UPQD(phi, hData), F: laurentMatchAtInfinity_UPQD(phi, hData) };
-    },
+    computeTargetA: computeTargetA_UPQD,
+    computeTargetF: laurentMatchAtInfinity_UPQD,   // → computeTargets { A, F:[…] }
     residual: residual_UPQD,
     packPhi: packPhi_UPQD,
     unpackPhi: unpackPhi_UPQD,
@@ -498,7 +497,7 @@ import _QD from './solver.mjs';
     },
     verifyQuadratureIdentity: verifyQuadratureIdentity_UPQD,
     sampleBoundary: sampleBoundary_UPQD,
-  };
+  });
   QD.registerFamily('unboundedPQD');
 
   QD.evalRHash_UPQD     = evalRHash_UPQD;

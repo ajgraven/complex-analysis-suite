@@ -414,3 +414,24 @@
 - **Part 2 (next):** the remaining 7 families — unboundedLQD, boundedLQD_singular, unboundedLQD_singular (the
   `{A,F,G}` case → `computeTargetG`), powerQD (positional `norm.w0`+`alpha`), powerQD_singular, unboundedPQD +
   unboundedPQD_singular (the `sampleBoundary` key). QD-SOLV-4/5 resolved when all 10 are on defineFamily.
+
+## 2026-07-31 — Phase D · Stage C3b part 2 (remaining 7 families — QD-SOLV-4 RESOLVED) — PR opened
+- Continued C3b (user chose "Go — incremental"). Part 2 retrofits the remaining 7 families onto `defineFamily`,
+  completing the 10/10 migration. Executed via a subagent on `refactor/C3b2-define-family`: batch 1 (commit
+  0794629) = unboundedLQD / boundedLQD_singular / unboundedLQD_singular (incl. the only `{A,F,G}` family →
+  `computeTargetG`). The subagent then **stalled** with batch 2 (the 4 PQD families) edited-but-uncommitted and
+  terminated without a completion signal.
+- **Main session took over** (safe — TaskStop reported the agent already gone; no live process): confirmed all 10
+  families call `defineFamily`; independently re-verified the tree — **golden net 11/11**, `pnpm test` green
+  (**2114/242**, node oracle 0 failed), build/typecheck/lint exit 0; reviewed the diffs (each confined to the
+  Family literal + import — the only non-config lines are old literal `};` → `});`; **NO math touched**); then
+  committed the PQD batch (b9f0b9a: powerQD / powerQD_singular / unboundedPQD / unboundedPQD_singular, with
+  `sampleBoundary` passed through).
+- **Behavior-preserving throughout.** ~50 lines of record scaffolding removed across the 10 files (enforce flags,
+  computeTargets thunks, default-diverse thunks, literal structure).
+- **QD-SOLV-4 → RESOLVED:** the ~17-key Family shell is no longer re-typed 10×; all 10 are assembled by
+  `defineFamily(config)`. **QD-SOLV-5 (seeds mirror) → REMAINS OPEN** — defineFamily made the seed *wiring*
+  uniform, but the seed *strategy* files (`solvers/seeds/*`) are still per-family; a `seeds-common` extraction was
+  NOT pursued (out of C3b scope — the seed math is genuinely per-family; own follow-on if wanted).
+- **Group C (dedup collapse) COMPLETE:** C1 worker lanes, C2 typed protocol, C3 family factory. Cut
+  `refactor/C3b2-define-family`; PR → refactor/main; merge on green. Next: Group D (installAlgebra, ui.mjs) or pause.

@@ -3,6 +3,7 @@ import { Complex } from './complex.mjs';
 import { Taylor } from './taylor.mjs';
 import { branchTaylorAccumulate } from './solver-taylor-common.mjs';
 import _QD from './solver.mjs';
+import { defineFamily } from './solvers/define-family.mjs';
 // =============================================================================
 // solver-pqd.js -- Bounded power-weighted quadrature domains (Family.powerQD)
 //
@@ -626,10 +627,9 @@ import _QD from './solver.mjs';
   // LQD-limit regime) is fully supported (QA milestone) — the (★) closed
   // form is α-general and all power ops go through Complex.cpow.
   // ===========================================================================
-  QD.Family.powerQD = {
+  QD.Family.powerQD = defineFamily({
     name: 'powerQD',
-    enforceInDisk:  true,
-    enforceOutDisk: false,
+    // unbounded omitted → enforceInDisk:true / enforceOutDisk:false.
     matches(opts) {
       const a = opts && opts.alpha;
       return Number.isFinite(a) && a > 0 && a !== 1 && !opts.unbounded && !opts.lqd;
@@ -671,9 +671,7 @@ import _QD from './solver.mjs';
 
     evalPhi: evalPhi_PQD,
     phiTaylorAt: phiTaylorAt_PQD,
-    computeTargets(phi, hData) {
-      return { A: computeTargetA_PQD(phi, hData), F: null };
-    },
+    computeTargetA: computeTargetA_PQD,       // no F/G → computeTargets { A, F:null }
     residual: residual_PQD,
     packPhi: packPhi_PQD,
     unpackPhi: unpackPhi_PQD,
@@ -696,7 +694,7 @@ import _QD from './solver.mjs';
     // Q1.3: optional family hook. sampleBoundaryAdaptive (solver.js)
     // dispatches to this when present to get continuous-arg samples.
     sampleBoundary: sampleBoundary_PQD,
-  };
+  });
   QD.registerFamily('powerQD');
 
   // Export helpers used by downstream tabs (Schwarz / Sphere / Direct / tests)
