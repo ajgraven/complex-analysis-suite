@@ -100,3 +100,11 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   node long-pole **77s → 37s**. Residual: §PB [826-935] is one atomic ~38s block that caps the shard split
   below the ~25–30s target; a future sub-block split (copy the pure `poleAt` helper — higher risk, a content
   edit) is **noted, not scheduled**. B1 (#181) now **merged** (08b0fab).
+- **2026-07-31 · stage B4-1 (PR → refactor/main):** **QD-TEST-4 → fixed** (d17e9df) — `ui-solve.mjs` solve
+  orchestration now has a 12-test behavioral net (`vitest/ui-solve-orchestration.test.ts`): input guards,
+  dispatch/fallback, error-vs-abort settle, supersede, busy-ownership, cancel, auto-escalation. Tests-only, no
+  source change; mutation-verified to bite. **QD-UI-5 → partially addressed** (ui-solve orchestration covered; the
+  worker-message paths + ui.mjs still open → B4-2 / later). **SCOPE DISCOVERY:** **QD-TEST-2 (ui.mjs, high) stays
+  OPEN** — ui.mjs has 0 exports / no seam, so a behavioral net needs a seam first (a source change) → deferred to
+  its own small stage before D2 (D2 shrinks ui.mjs). **QD-ALG-3 / QD-TEST-3** (algebra source-text tests) stay
+  open → folded into D1 (they target `algebra-ui.mjs`, not ui-solve). B2 (#182) now **merged** (e74d3e6).

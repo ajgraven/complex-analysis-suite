@@ -139,6 +139,13 @@ cycle can land in parallel with Stage 0; all QD structural work (C/D/E) is gated
   · Prereq: B1 · Char: these tests ARE the net — they must pass against unmodified code · Done-when: the C/D
   targets have executable behavioral coverage green on today's code · Footprint: medium-large (new tests only) ·
   Risk: medium. **This stage is the safety net that authorizes Groups C & D.**
+  · **SCOPE CORRECTION (B4-1, 2026-07-31):** a verified statement-map showed `ui.mjs` has **no seam** (0 exports,
+  boots on import) so its internals are NOT characterizable without a source change; and the "~15 source-text
+  tests" are **`algebra-ui.mjs`**, a different module. B4 therefore splits: **B4-1** ✅ `ui-solve.mjs` orchestration
+  net (`installSolve`; supersede/settle/dispatch/busy/cancel/escalation — 12 tests, no source change, mutation-
+  verified) — the safety net for the **solve path** of C/D; **B4-2** worker-lane lifecycle net (6 lanes + shared
+  fake-Worker helper); **DEFERRED** the `ui.mjs` seam (→ its own small stage before D2) and the algebra source-text
+  → behavioral conversion (→ D1). Net effect: the C/D solve/worker targets get their net; ui.mjs's net waits on its seam.
 
 ### Group C — Duplication collapse (S2), behind the B4 net
 - **C1 — `createWorkerLane()` factory (QD-UI-1).** Collapse the 6 worker lifecycles to config; makes
