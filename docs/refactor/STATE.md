@@ -11,47 +11,44 @@ extensibility, conceptual clarity, reliability/testability, and architectural co
 Behavior-preserving by default; no behavioral change without an explicit approval token.
 
 ## Phase / stage
-- **Phase D — Execute. Group A + B COMPLETE. Group C: C1 DONE, C2 DONE, C3a DONE; C3b in progress.**
-- **C3b part 1 — PR #191 OPEN (CI pending).** NEW `app/solvers/define-family.mjs` (`defineFamily(config)` factors
-  the record scaffolding — enforce flags, computeTargets composition, default diverseInitialGuess, key layout) +
-  3/10 families retrofit (boundedQD/unboundedQD/boundedLQD, spanning the divergences). Behavior-preserving
-  (C3a golden net 11/11; node oracle 2332/0; 2114/242). **Math untouched** (injected verbatim).
-- **FINDING:** the shells diverge more than the C3a map showed — `diverseInitialGuess` is per-family for LQD (own
-  kernel, not the shared delegation); seed/continuation arg conventions vary. So defineFamily **injects** those
-  (default diverse only when omitted) — a scaffolding-factor, not a collapse. Modest-but-real DRY win.
-- **C3b part 2 (NEXT, on #191 merge):** retrofit the remaining 7 families — unboundedLQD, boundedLQD_singular,
-  unboundedLQD_singular (`{A,F,G}` → computeTargetG), powerQD (positional w0+alpha), powerQD_singular, unboundedPQD,
-  unboundedPQD_singular (the `sampleBoundary` key). Same proven pattern; golden net + green bar per batch. Then
-  QD-SOLV-4/5 is RESOLVED (all 10 on defineFamily).
-- Cadence: merge on green (user delegates; user chose "Go — incremental" for C3b). `APPROVED: PLAN.md v1`.
-  Roadmap §8: A✓ / B✓ / **C (C1✓, C2✓, C3a✓; C3b 3/10 in review, part 2)** / D / E / F.
+- **Phase D — Execute. Group A + B COMPLETE. Group C: C1 DONE, C2 DONE, C3a DONE, C3b part 1 MERGED.**
+- **C3b part 1 (DONE, merged 3ac7dc2):** NEW `app/solvers/define-family.mjs` + 3/10 families on it
+  (boundedQD/unboundedQD/boundedLQD). Behavior-preserving (golden net 11/11 post-merge; oracle 2332/0).
+- **C3b part 2 IN PROGRESS** — retrofit the remaining 7 families onto `defineFamily`, same proven pattern
+  (math untouched; golden net + green bar per batch). The 7: unboundedLQD, boundedLQD_singular,
+  unboundedLQD_singular (`{A,F,G}` → computeTargetG), powerQD (positional w0+alpha), powerQD_singular,
+  unboundedPQD, unboundedPQD_singular (the `sampleBoundary` key). Branch `refactor/C3b2-define-family`.
+  On completion → PR, then QD-SOLV-4/5 RESOLVED (all 10 on the factory).
+- **FINDING (part 1):** shells diverge more than the C3a map showed (per-family `diverseInitialGuess`; varying
+  seed/continuation arg conventions) → defineFamily injects those; a scaffolding-factor, not a collapse.
+- Cadence: merge on green (user delegates; chose "Go — incremental" for C3b). `APPROVED: PLAN.md v1`.
+  Roadmap §8: A✓ / B✓ / **C (C1✓, C2✓, C3a✓, C3b-1✓; C3b-2 in progress)** / D / E / F.
 
 ## Branches / PR
-- Integration `refactor/main` @ **94a37db** (this STATE commit advances it). Tree clean.
-- **PR #191 OPEN (CI pending):** `refactor/C3b-define-family` (c7a1192 refactor + b9c4efc docs) → `refactor/main`.
+- Integration `refactor/main` @ **3ac7dc2** (C3b-p1 merge; this STATE commit advances it). Tree clean.
+- **C3b part 2:** branch `refactor/C3b2-define-family` (in progress, not yet PR'd). No other open PR.
 - Merged stage PRs: A1 #178, A3 #179, A2 #180, B1 #181, B2 #182, B4-1 #183, B4-2a #184, B4-2b #185, C1a #186,
-  B4-2c #187, C1b #188, C2 #189, **C3a #190 (8357d15)**.
+  B4-2c #187, C1b #188, C2 #189, C3a #190, **C3b-p1 #191 (3ac7dc2)**.
 
 ## Validation state (green bar)
-- **C3b branch @ b9c4efc — ALL GREEN:** build/typecheck/lint exit 0; `pnpm test` **2114/242** (unchanged — source
-  refactor, guarded by the C3a golden net staying 11/11); node oracle **2332/0**.
-- `refactor/main` @ 94a37db (post-C3a) green: 2114/242.
+- **`refactor/main` @ 3ac7dc2 — green:** golden family net 11/11 (post-merge sanity check); CI `build` job (full
+  build/typecheck/lint/test) was green on the merged code; expected full `pnpm test` **2114/242**, node oracle **2332/0**.
 
 ## Uncommitted / unverified
-- None. C3b part 1 committed (c7a1192, b9c4efc) + pushed; PR #191 open. This STATE commit direct to `refactor/main`.
+- None on `refactor/main`. C3b part 2 work proceeds on its own branch (verified per batch before any PR).
 
 ## Known blockers / risks
-- **Awaiting PR #191 CI green**, then merge (per cadence). Behavior-preserving; net-guarded (golden 11/11 + suite).
-- Intermediate state after merge: 3 families on defineFamily, 7 on literals (both green) — completed by part 2.
+- No open PR. C3b part 2 is a behavior-preserving solver retrofit, net-guarded (golden 11/11 must hold + oracle
+  2332/0). Any golden-vector shift = a wiring mismatch → stop+fix that batch; never widen the tolerance.
 
 ## Next concrete steps
-1. **When PR #191 CI greens → merge** (title + `(#191)`), pull, re-confirm green (2114/242).
-2. **C3b part 2:** retrofit the remaining 7 families onto defineFamily, ~3–4/commit, golden net + green bar per
-   batch; own PR → refactor/main. Resolves QD-SOLV-4/5.
-3. Group order: C (C1✓, C2✓, C3a✓; C3b) → D (god-module decomp) → E → F.
+1. **C3b part 2:** retrofit the 7 remaining families onto `defineFamily` (~3–4/commit); golden net + green bar per
+   batch; PR "refactor(C3b part 2): remaining 7 families — QD-SOLV-4/5 resolved" → refactor/main; merge on green.
+2. Then **Group D** (god-module decomposition: installAlgebra, ui.mjs — ui.mjs-seam stage first) or pause.
+3. Group order: C (C1✓, C2✓, C3✓ on part-2 completion) → D → E → F.
 
 ## Resume commands
 ```
-git fetch && git checkout refactor/main && git pull        # after #191 merges
+git fetch && git checkout refactor/main && git pull
 pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2114/242
 ```
