@@ -283,3 +283,41 @@
 - **Remaining C1 → C1b:** apply `createWorkerLane` (or its shape) to the sym / schwarz / param-slice-pool lanes —
   a separate PR (different files, and schwarz/pool have their own quirks). C2 (typed protocol) follows.
   **QD-UI-1: the 3× PSW lane duplication is eliminated.**
+
+## 2026-07-31 — Phase D · Stage B4-2c (schwarz + param-slice-pool lane nets) — PR opened
+- After C1a merged (#186, `007681a`; refactor/main re-confirmed green 2081/239, PSW net 20/20), user chose
+  **"C1b — finish lanes."** Per the guardrail (no refactor without a pinned net), started net-first: this stage
+  (B4-2c) closes the deferred P2 lane-net gaps for the lanes C1b would touch, BEFORE any structural change.
+- **FINDING (evidence over assertion) — the remaining 3 lanes do NOT fit `createWorkerLane`.** Read all four lane
+  sources against the C1a factory. Only primary/aux/live shared its ENTIRE shape (single warm worker · Promise
+  resolve/reject · supersede=REUSE · no progress · one messageerror asymmetry). The other three are DIFFERENT
+  abstractions:
+    · **sym-worker.mjs** — supersede=TERMINATE (entry runs runJob synchronously), an F4 idle-error PERMANENT
+      fallback latch, a `progress` message channel, an F3 detach-late-abort guard, Blob/fetch env checks.
+    · **schwarz-cpu-worker.mjs** — a synchronous `isUsable()` gate + `renderField(params, cbs)` returning a
+      `{cancel()}` HANDLE that STREAMS the pyramid via onPass/onError/onUnavailable callbacks (not one Promise).
+    · **param-slice-pool.mjs** — an N-worker POOL (idle queue, load-balanced `_dispatch`, A5 scenario caching,
+      survivor drop, MainThreadPool twin) — not a single lane at all.
+  Forcing these onto one factory would grow it into a config-flag monster (supersedeMode/onProgress/streaming/
+  isUsable/onUnavailable/poolSize/survivor…) — OVER-generalization, against the refactor's clarity north-star and
+  ADR-0007/0008's "don't merge engines without a genuine shared need." **So C1b is NOT a blind lane-collapse.** The
+  genuine shared duplication among all six is NARROW: the worker-level `error`/`messageerror` → settle-in-flight +
+  teardown fragment (whose ABSENCE shipped the schwarz "Pass 1/3" bug — QD-UI-1's cited harm) + the lazy-ensureReady
+  fallback-latch. The sound C1b = extract THAT fragment as a helper used by all lanes (incl. retrofit the C1a
+  factory), leaving each lane's run/return/supersede model intact. **Flagged for the user at the C1b design gate;
+  PLAN v1's C1 "6 lanes = config / Done-when" premise needs revision → NOT rewritten in this tests-only PR.**
+- **This PR (B4-2c, TESTS-ONLY, no source change):**
+    · `vitest/schwarz-cpu-worker-lifecycle.test.ts` (NEW, 9 tests) — pins the schwarz paths the crash net omits:
+      `isUsable()` gate (Worker present / absent / post-load-failure latch), `onUnavailable` (no worker built),
+      multi-pass streaming (onPass per pass; only last `done`; stale-jobId dropped), in-flight preempt
+      (terminate+fresh), `handle.cancel()`, and the cancel-before-spawn guard.
+    · `vitest/param-slice-pool.test.ts` (+2) — the two pool paths the existing net omits: `runSweep` row-dispatch
+      → onTile → done tally, and the survivor=0 branch of `_onWorkerError` (LAST worker dying must drain `pending`,
+      not just the in-flight tile). The existing file already covered survivor≥1 / canAccept / cancel+arm.
+- **Mutation-verified (net bites, each fails ONLY its target):** schwarz `onUnavailable` disabled → onUnavailable
+  test fails; schwarz preempt disabled → preempt test fails; pool survivor=0 drain resolves non-null → drain test
+  fails. All three reverted byte-identically via Edit (no git checkout). Sources pristine (`git diff app/` empty).
+- **Green bar:** build/typecheck/lint exit 0; full `pnpm test` **2092 passed / 240 files** (+11 tests, +1 file vs
+  refactor/main's 2081/239). Cut `refactor/B4-2c-schwarz-pool-lane-nets`; PR → refactor/main; merge on green.
+- **QD-UI-1:** all six solver-worker lanes now have their crash + lifecycle contract pinned → the shared-fragment
+  extraction (revised C1b) is fully net-guarded.
