@@ -18,38 +18,41 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   ~4.2k-line god-function by its PURE sub-computations, net-first, one PR each. **Carve-out 1 (classifyVerdict +
   posDimDesc → `algebra-labeling.mjs`) — MERGED (#195).** **Carve-out 2 (`_verdictBadge`, IIFE lift) — MERGED (#196).**
   **Carve-out 3 (`exactValueStr` + `fmtRat` → NEW `algebra-format.mjs`) — MERGED (#197).** **Carve-out 4 (`fmtRatio` +
-  `ratioStrRec` ratio-prefix formatters → extend `algebra-format.mjs`) — IN PROGRESS (extraction).**
+  `ratioStrRec` ratio-prefix formatters → extend `algebra-format.mjs`) — PR #198 OPEN.**
 - **Shape chosen by deps each time:** a NEW MODULE when the dep is cleanly importable (1: posDimDesc; 3: QDEquations.ratApprox
   via a side-effect import → headless net; 4: the two formatters call the co-located `exactValueStr`); an IN-FILE IIFE lift
   when a dep is woven through installAlgebra (2: latexPlain ~50×).
 - **QD-ALG-6 assessed + DECLINED** (carve-out 3): the ~6 tolerance literals sit at unrelated sites with different
   meanings — no single pure computation to net; left open as a constants cleanup, not a carve-out.
 - Cadence: merge on green (user delegates). `APPROVED: PLAN.md v1`.
-  Roadmap §8: A✓ / B✓ / C✓ / **D (ui.mjs seams✓; installAlgebra decomposition underway — carve-outs 1✓ 2✓ 3✓ 4(wip))** / E / F.
+  Roadmap §8: A✓ / B✓ / C✓ / **D (ui.mjs seams✓; installAlgebra decomposition underway — carve-outs 1✓ 2✓ 3✓ 4(open))** / E / F.
 
 ## Branches / PR
-- Integration `refactor/main` @ **82d72b2** (#197 merge; this STATE commit advances it). Tree clean. **No open PR.**
+- Integration `refactor/main` @ **82d72b2** (this STATE commit advances it). Tree clean.
+- **OPEN PR #198** — `refactor/d-alg-carve-4-ratio-format` @ d8dd94d (off 82d72b2): carve-out 4. CI running
+  (build in_progress / browser queued at open); subscribed + 12-min merge-on-green fallback armed (19:23Z).
 - Merged stage PRs (20): A1 #178 … D-alg-carve-2 #196, **D-alg-carve-3 #197 (82d72b2)**.
 
 ## Validation state (green bar)
-- **`refactor/main` @ 82d72b2 — ALL GREEN (post-#197-merge re-confirmed firsthand):** build/typecheck/lint exit 0;
-  `pnpm test` **2168 passed / 247 files**. (algebra-format nets: exact-format 8; +ratio formatters coming in carve-out 4.)
+- **`refactor/main` @ 82d72b2 — ALL GREEN:** build/typecheck/lint exit 0; `pnpm test` **2168 passed / 247 files**.
+- **PR #198 stage branch @ d8dd94d — ALL GREEN (firsthand):** build/typecheck/lint exit 0; `pnpm test`
+  **2174 passed / 248 files** (+6, +1 file — new headless `algebra-ratio-format.test.ts`). Lands on merge.
 
 ## Uncommitted / unverified
-- None on `refactor/main` (this STATE commit direct). Carve-out 4 extraction about to start on its own branch.
+- None. Carve-out 4 committed to its stage branch (d8dd94d) + pushed; this STATE commit direct to `refactor/main`.
 
 ## Known blockers / risks
-- No open PR. No blockers.
-- installAlgebra's remaining bulk is DOM-bound (QD-ALG-2 sidebar innerHTML) with source-text tests (QD-ALG-3); the
-  pure-carve-out strategy is thinning out its low-hanging targets — after carve-out 4, deeper decomposition needs a different strategy.
+- PR #198 open, CI in progress; drive-to-green posture (my PR). No blockers.
+- installAlgebra's remaining bulk is DOM-bound (QD-ALG-2 sidebar innerHTML) with source-text tests (QD-ALG-3); after
+  carve-out 4 the pure low-hanging fruit is essentially exhausted — deeper decomposition needs a different strategy.
 
 ## Next concrete steps
-1. **Carve-out 4** (chosen): `fmtRatio(g)` + `ratioStrRec(rec, sign)` — the pure substitution ratio-prefix formatters
-   (''/'−'/'(c)·', via `exactValueStr`) → extend `algebra-format.mjs`. fmtRatio: 2 callers (1031/1037); ratioStrRec:
-   2 ctx-inject sites (4252/4261), PROV_UI param-uses unaffected. Net-first (headless), own PR, merge on green.
-2. **Carve-out 5+ / pivot** (pure candidates nearly exhausted): the char-first UNIFICATION of the 3 now-netted verdict
-   builders (needs an approval token — changes strings); or jsdom-drive the sidebar build (QD-ALG-2) — a bigger strategy shift.
-3. Group order: A✓ B✓ C✓ → **D (installAlgebra decomposition underway — 3 done, 4 wip)** → E (state+folderize) → F (dep-cruiser).
+1. **Merge #198 on green** (fallback armed 19:23Z). On merge → advance `refactor/main`, re-confirm green, refresh STATE.
+2. **Carve-out 5 / pivot** — pure candidates essentially exhausted (a 5th would need a fresh scan for any remaining pure
+   helper). Otherwise pivot: (a) the char-first UNIFICATION of the 3 now-netted verdict builders (needs an approval
+   token — changes strings); (b) jsdom-drive the sidebar build (QD-ALG-2) or convert the source-text tests (QD-ALG-3) —
+   a bigger strategy shift. Worth a check-in with the user on direction at this point.
+3. Group order: A✓ B✓ C✓ → **D (installAlgebra decomposition underway — 4 carve-outs)** → E (state+folderize) → F (dep-cruiser).
 
 ## Resume commands
 ```
