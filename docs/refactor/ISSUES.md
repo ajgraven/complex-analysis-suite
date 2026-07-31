@@ -186,3 +186,9 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   factories), so it's mostly DOM wiring — the "god-module" is less monolithic than QD-UI-2 implied. Remaining pure
   seam: the geometry pair (boundarySelfIntersectsSimple/segmentsIntersect). The bigger still-monolithic Group-D
   target is **installAlgebra** (QD-ALG-1). C3b-p2 (#192) now **merged** (be6a51e).
+- **2026-07-31 · stage D-ui-seam-2 (PR → refactor/main):** **QD-UI-2 → ui.mjs pure-seam extraction COMPLETE.**
+  Extracted the geometry pair (boundarySelfIntersectsSimple/segmentsIntersect) → NEW `app/ui-geometry.mjs` + a
+  6-test net (`vitest/ui-geometry.test.ts`, mutation-verified; pins the collinear-miss quirk). Behavior-preserving
+  (green 2139/244). Both pure pieces the ui.mjs map found are now seamed out + netted; ui.mjs's residual bulk is
+  DOM wiring (logic already in siblings). Remaining Group-D monolith = **installAlgebra** (QD-ALG-1) — big +
+  DOM-heavy, needs its own char-strategy before implementation. D-ui-seam (#193) now **merged** (29a7f97).

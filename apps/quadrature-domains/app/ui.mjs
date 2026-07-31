@@ -4,6 +4,7 @@ import { QD_UI } from './ui-registry.mjs';
 import { Complex } from './complex.mjs';
 import _QD from './solver.mjs';
 import { composeMode, decomposeMode, modeSummary } from './ui-domain-mode.mjs';
+import { boundarySelfIntersectsSimple } from './ui-geometry.mjs';
 const QD = _QD;
 // =============================================================================
 // ui.js -- Frontend for the Quadrature Domain Solver
@@ -1753,27 +1754,7 @@ QD.Direct._setPlotOverlay = function (overlayBoundary) {
   plot.render();
 };
 
-// Cheap O(N²) self-intersection check — sufficient for the preview.
-function boundarySelfIntersectsSimple(pts) {
-  const N = pts.length;
-  if (N < 4) return false;
-  for (let i = 0; i < N; i++) {
-    const a1 = pts[i], a2 = pts[(i + 1) % N];
-    for (let j = i + 2; j < N; j++) {
-      if (j === N - 1 && i === 0) continue;
-      const b1 = pts[j], b2 = pts[(j + 1) % N];
-      if (segmentsIntersect(a1, a2, b1, b2)) return true;
-    }
-  }
-  return false;
-}
-function segmentsIntersect(p1, p2, p3, p4) {
-  function ccw(a, b, c) {
-    return (c.im - a.im) * (b.re - a.re) > (b.im - a.im) * (c.re - a.re);
-  }
-  return ccw(p1, p3, p4) !== ccw(p2, p3, p4) &&
-         ccw(p1, p2, p3) !== ccw(p1, p2, p4);
-}
+// boundarySelfIntersectsSimple (+ its segmentsIntersect primitive) moved to ui-geometry.mjs (imported above).
 
 QD.Direct._sendHToInverseTab = function (hData, opts) {
   // Populate the inverse-tab state from a Direct-computed h (+ the family params
