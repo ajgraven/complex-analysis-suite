@@ -14,56 +14,47 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **Phase D — Execute. Groups A + B + C COMPLETE. Group D in progress.**
 - **ui.mjs pure-seam extraction COMPLETE** — D-ui-seam (#193) + D-ui-seam-2 (#194) both MERGED (netted
   `ui-domain-mode.mjs` + `ui-geometry.mjs`; ui.mjs's first executable coverage, 25 tests).
-- **installAlgebra decomposition UNDERWAY** (QD-ALG-1; user chose "Carve-outs" + "keep carving") — attack the
-  ~4.2k-line god-function by its PURE sub-computations, net-first, one PR each. **Carve-out 1 (classifyVerdict +
-  posDimDesc → `algebra-labeling.mjs`) — MERGED (#195).** **Carve-out 2 (`_verdictBadge`, IIFE lift) — MERGED (#196).**
-  **Carve-out 3 (`exactValueStr` + `fmtRat` → NEW `algebra-format.mjs`) — MERGED (#197).** **Carve-out 4 (`fmtRatio` +
-  `ratioStrRec` ratio-prefix formatters → extend `algebra-format.mjs`) — MERGED (#198).** **Carve-out 5 (`_parseMomentToken`
-  + `_parseMomentNum` moment parser → NEW `algebra-moment-parse.mjs`) — MERGED (#199).** **Carve-out 6 (`withGuidance` +
-  `_isCapFailure` cap-failure guidance → extend `algebra-labeling.mjs`) — MERGED (#200).** **Carve-out 7 (`_pronyLatex`
-  Prony-poly math→LaTeX → NEW `algebra-latex.mjs`) — PR #201 OPEN.**
-- **6 merged + carve-out 7 in flight** ("keep carving"). installAlgebra now has 4 pure companion modules
-  (`algebra-labeling` = verdict prose + failure guidance; `algebra-format` = value + ratio formatters; `algebra-moment-parse`
-  = input parser; `algebra-latex` = math→LaTeX) + the in-file `_verdictBadge` lift; ~58 new characterization tests over logic
-  that had ZERO coverage. The #201 fallback continues to carve-out 8 (valStr+substList) on merge.
-- **Shape chosen by deps each time:** a NEW MODULE when the dep is cleanly importable (1: posDimDesc; 3: QDEquations.ratApprox
-  via side-effect import; 4: the co-located `exactValueStr`; 5: ZERO external deps — a pure leaf); an IN-FILE IIFE lift when
-  a dep is woven through installAlgebra (2: latexPlain ~50×).
-- **Census correction (a read-only scan of installAlgebra):** the pure fruit is NOT exhausted — ~16 cleanly-pure + ~4
-  cheap pure-if-injected helpers remain. Ranked next after the moment parser: `withGuidance`+`_isCapFailure` (honest-labeling
-  guidance, ~19 call sites), `_pronyLatex` (math→LaTeX), `valStr`+`substList` (formatters the PROV_UI tests currently MOCK),
-  then `buildHForm`/`friendlyReim`/`isForkedColumn`/`_relKey`/… , and `latexOf`(+`reimSafeLatex`) as a pure-if-injected pair.
-- **QD-ALG-6 DECLINED** (carve-out 3): tolerance literals scattered at unrelated sites; not a pure computation. `poleCentroid`
-  inline copy = a DEDUP of the tested `QD.poleCentroid`, not an extraction (noted by the census).
-- Cadence: merge on green (user delegates). `APPROVED: PLAN.md v1`.
-  Roadmap §8: A✓ / B✓ / C✓ / **D (ui.mjs seams✓; installAlgebra decomposition underway — carve-outs 1✓ 2✓ 3✓ 4✓ 5✓ 6✓ 7(open))** / E / F.
+- **installAlgebra decomposition UNDERWAY** (QD-ALG-1; user: "Carve-outs" + "keep carving") — extract its PURE
+  sub-computations, net-first, one PR each. **8 carve-outs (7 merged + #202 in flight):**
+  1 classifyVerdict+posDimDesc→NEW algebra-labeling #195✓ · 2 `_verdictBadge` (IIFE lift) #196✓ · 3 exactValueStr+fmtRat→NEW
+  algebra-format #197✓ · 4 fmtRatio+ratioStrRec (+format) #198✓ · 5 `_parseMomentToken`+`_parseMomentNum`→NEW algebra-moment-parse
+  #199✓ · 6 withGuidance+`_isCapFailure` (+labeling) #200✓ · 7 `_pronyLatex`→NEW algebra-latex #201✓ · **8 valStr (+format;
+  substList DEFERRED) — PR #202 OPEN.** 4 pure companion modules (labeling/format/moment-parse/latex) + the in-file badge lift; ~64 new char tests.
+- **Shape by deps:** a NEW MODULE when the dep is cleanly importable (or a zero-dep leaf); an IN-FILE IIFE lift when a dep
+  is woven through installAlgebra (carve-out 2: `latexPlain` ~50×). **latexPlain-dependent helpers deferred** (substList,
+  friendlyReim) — moving them needs `latexPlain` injected as a param (a signature change), not a verbatim carve.
+- **Census:** a read-only scan found ~16 cleanly-pure + ~4 pure-if-injected helpers; **~12 pure left** after #202. Ranked
+  next: substList (latexPlain-injection), buildHForm (LaTeX→algebra-latex), isForkedColumn/`_relKey`/`_substKey` (cheap
+  predicates), then latexOf(+reimSafeLatex) pure-if-injected.
+- **QD-ALG-6 DECLINED** (scattered tolerance literals, not a pure computation); `poleCentroid` inline copy = a DEDUP of the tested `QD.poleCentroid`.
+- Cadence: merge on green (delegated); the merge-on-green fallbacks chain to the next carve-out. `APPROVED: PLAN.md v1`.
+  Roadmap §8: A✓ / B✓ / C✓ / **D (ui.mjs seams✓; installAlgebra — 8 carve-outs, 7 merged)** / E / F.
 
 ## Branches / PR
-- Integration `refactor/main` @ **5a52cc9** (this STATE commit advances it). Tree clean.
-- **OPEN PR #201** — `refactor/d-alg-carve-7-prony-latex` @ c74c9c1 (off 5a52cc9): carve-out 7. CI running
-  (both in_progress at open); subscribed + fallback armed (21:01Z) that merges on green AND continues to carve-out 8.
-- Merged stage PRs (23): A1 #178 … D-alg-carve-5 #199, **D-alg-carve-6 #200 (4e34dff)**.
+- Integration `refactor/main` @ **fb3a60a** (#201 merge; this STATE commit advances it). Tree clean.
+- **OPEN PR #202** — `refactor/d-alg-carve-8-valstr` @ 3f29626 (off fb3a60a): carve-out 8. CI running
+  (both in_progress at open); subscribed + fallback armed (21:26Z) that merges on green AND continues to carve-out 9.
+- Merged stage PRs (24): A1 #178 … D-alg-carve-6 #200, **D-alg-carve-7 #201 (fb3a60a)**.
 
 ## Validation state (green bar)
-- **`refactor/main` @ 5a52cc9 — ALL GREEN:** build/typecheck/lint exit 0; `pnpm test` **2189 passed / 250 files**.
-- **PR #201 stage branch @ c74c9c1 — ALL GREEN (firsthand):** build/typecheck/lint exit 0; `pnpm test`
-  **2197 passed / 251 files** (+8, +1 file — new headless `algebra-prony-latex.test.ts`). Lands on merge.
+- **`refactor/main` @ fb3a60a — ALL GREEN (confirmed by carve-out 8's green bar, which builds on it):** `pnpm test` 2197/251.
+- **PR #202 stage branch @ 3f29626 — ALL GREEN (firsthand):** build/typecheck/lint exit 0; `pnpm test`
+  **2203 passed / 252 files** (+6, +1 file — new headless `algebra-valstr.test.ts`). Lands on merge.
 
 ## Uncommitted / unverified
-- None. Carve-out 7 committed to its stage branch (c74c9c1) + pushed; this STATE commit direct to `refactor/main`.
+- None. Carve-out 8 committed to its stage branch (3f29626) + pushed; this STATE commit direct to `refactor/main`.
 
 ## Known blockers / risks
-- PR #201 open, CI in progress; drive-to-green posture (my PR). No blockers.
-- installAlgebra's remaining bulk is DOM-bound (QD-ALG-2) / store-coupled; after the census's ~13-remaining pure candidates
+- PR #202 open, CI in progress; drive-to-green posture (my PR). No blockers.
+- installAlgebra's remaining bulk is DOM-bound (QD-ALG-2) / store-coupled; after the census's ~12-remaining pure candidates
   are worked through, the residue is DOM/store readouts + builders — those need a strategy shift (jsdom-drive), not pure extraction.
 
 ## Next concrete steps
-1. **Merge #201 on green → continue to carve-out 8** (fallback armed 21:01Z; "keep carving"). Carve-out 8 = `valStr` +
-   `substList` (the PROV_UI label/value formatters whose real impls the PROV_UI tests currently MOCK; injected like
-   ratioStrRec was) → extend `algebra-format.mjs`. Firsthand-verify the inject sites, net-first, own PR.
-2. **Carve-outs 9+** — census ranking: `buildHForm`/`friendlyReim`/`isForkedColumn`/`_relKey`/… (cheap stragglers),
-   then `latexOf`(+`reimSafeLatex`) as a pure-if-injected pair (→ the new `algebra-latex.mjs`).
-3. Group order: A✓ B✓ C✓ → **D (installAlgebra decomposition underway — 6 merged + #201; census: ~13 pure left)** → E → F.
+1. **Merge #202 on green → continue to carve-out 9** (fallback armed 21:26Z; "keep carving"). Carve-out 9 = the next
+   CLEAN pure target: buildHForm (LaTeX → algebra-latex.mjs) or the cheap predicates (isForkedColumn/`_relKey`/`_substKey`);
+   AVOID substList/friendlyReim (latexPlain-injection — deferred). Firsthand-verify, net-first, own PR.
+2. **Carve-outs 10+** — work down the census; then substList (latexPlain-injection) + latexOf(+reimSafeLatex) pure-if-injected.
+3. Group order: A✓ B✓ C✓ → **D (installAlgebra — 7 merged + #202; census: ~12 pure left)** → E → F.
 
 ## Resume commands
 ```
