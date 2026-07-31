@@ -30,3 +30,25 @@ export function exactValueStr(re, im) {
   if (!re) return (im < 0 ? '−' : '') + iAbs;
   return fmtRat(re) + (im < 0 ? ' − ' : ' + ') + iAbs;
 }
+
+// Compact prefix for a substitution ratio Gaussian c: '' for 1, '−' for −1, else '(c)·'. (carve-out 4;
+// carved verbatim from installAlgebra. `g` is a Gaussian whose re/im expose .toNumber().)
+export function fmtRatio(g) {
+  try {
+    const re = g.re.toNumber(), im = g.im.toNumber();
+    if (im === 0 && re === 1) return '';
+    if (im === 0 && re === -1) return '−';
+    return '(' + exactValueStr(re, im) + ')·';
+  } catch (e) { return '(c)·'; }
+}
+
+// Ratio prefix from a serialized {re:[n,d],im:[n,d]} provenance record (falls back to a ±1 `sign` for
+// pre-ratio snapshots). '' for 1, '−' for −1, else '(c)·'. (carve-out 4; carved verbatim.)
+export function ratioStrRec(rec, sign) {
+  if (!rec) return (sign != null && sign < 0) ? '−' : '';
+  const f = (p) => (p ? Number(p[0]) / Number(p[1]) : 0);
+  const re = f(rec.re), im = f(rec.im);
+  if (im === 0 && re === 1) return '';
+  if (im === 0 && re === -1) return '−';
+  return '(' + exactValueStr(re, im) + ')·';
+}

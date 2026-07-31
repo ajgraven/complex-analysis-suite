@@ -224,3 +224,13 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   the ~6 tolerance constants (1e-6 verify, 1e-6 realness, 1e-12 w0-match, 1e-10/1e-8 display-snap) sit at unrelated call
   sites with genuinely different meanings — no single pure computation to net, and unifying them would risk behavior.
   Remains **open** (a constants-table cleanup, not a pure carve-out).
+- **2026-07-31 · stage D-alg-carve-4 (PR → refactor/main):** **QD-ALG-1 → decomposition continues (carve-out 4).**
+  Extracted the two pure substitution ratio-prefix formatters `fmtRatio(g)` (live Gaussian) + `ratioStrRec(rec, sign)`
+  (serialized `{re:[n,d],im:[n,d]}` record) — both render the "(c)·" coefficient before an identified variable — out of
+  installAlgebra to EXTEND `app/algebra/algebra-format.mjs` (they call the co-located `exactValueStr`) + a 6-test HEADLESS
+  net (`vitest/algebra-ratio-format.test.ts`, mutation-verified). Behavior-preserving: 8 fragments byte-identity-checked
+  vs source (incl. the U+2212 minus + U+00B7 middot); `fmtRatio`'s 2 callers + `ratioStrRec`'s 2 PROV_UI ctx-inject
+  sites resolve to the imports, the PROV_UI param-uses unaffected. `algebra-format.mjs` now holds the exact-value + the
+  ratio-prefix formatters. **The pure low-hanging targets inside installAlgebra are now nearly exhausted** — a 5th
+  carve-out would need a fresh scan, and the remaining bulk (QD-ALG-2 DOM-bound sidebar, QD-ALG-3 source-text tests)
+  needs a different strategy than pure extraction.
