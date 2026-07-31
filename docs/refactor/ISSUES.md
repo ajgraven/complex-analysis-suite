@@ -169,3 +169,12 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   shared delegation) and seed/continuation arg conventions vary — so defineFamily injects those (default diverse
   only when omitted), a scaffolding-factor not a collapse. Remaining 7 families → **C3b part 2** (incl. the
   `{A,F,G}` `computeTargetG` case + the 4 PQD `sampleBoundary` key). C3a (#190) now **merged** (8357d15).
+- **2026-07-31 · stage C3b part 2 (PR → refactor/main):** **QD-SOLV-4 → RESOLVED.** All 10 solver families are now
+  assembled by `defineFamily(config)`; the ~17-key record is no longer re-typed per file. Part 2 did the remaining
+  7 (unboundedLQD, boundedLQD_singular, unboundedLQD_singular [`{A,F,G}`], powerQD, powerQD_singular, unboundedPQD,
+  unboundedPQD_singular). Behavior-preserving — C3a golden net **11/11**, suite green (2114/242, oracle 0 failed);
+  diffs confined to the Family literal + import (math untouched). Executed by a subagent that stalled with the PQD
+  batch uncommitted → main session verified + committed it (b9f0b9a). **QD-SOLV-5 (seeds mirror) → REMAINS OPEN:**
+  defineFamily unified the seed *wiring*, but the seed *strategy* files (`solvers/seeds/*`) stay per-family; a
+  `seeds-common` extraction was NOT pursued (out of C3b scope). **Group C dedup COMPLETE** (C1/C2/C3). C3b-p1
+  (#191) now **merged** (3ac7dc2).
