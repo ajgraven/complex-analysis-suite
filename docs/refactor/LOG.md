@@ -651,3 +651,23 @@
   `refactor/d-alg-carve-8-valstr`; PR → refactor/main; merge on green.
 - **installAlgebra: 8 carve-outs done.** Census-ranked next: `substList` (as a latexPlain-injection carve), then the
   cheap stragglers (`buildHForm`, `friendlyReim`, `isForkedColumn`, `_relKey`, …), then `latexOf`(+`reimSafeLatex`).
+
+## 2026-07-31 — Phase D · Stage D-alg-carve-9 (installAlgebra carve-out 9 — buildHForm h(w) LaTeX) — PR opened
+- **Ninth installAlgebra carve-out** (census straggler, "keep carving" — merged #202 first via the chained fallback).
+  `buildHForm(hData, numeric)` renders the quadrature data h(w) = Σⱼ Σ_{s≥1} C_{j,s}/(w−aⱼ)^s as LaTeX on the φ/h
+  reference card — symbolic `a_{j}`/`C_{j,s}` names, or the pole/coefficient values substituted (numeric=true). Pure;
+  reachable only through a live DOM mount before, so zero coverage.
+- **This PR (behavior-preserving extraction):** `buildHForm` carved VERBATIM into `algebra-latex.mjs` (only `QD` →
+  the imported `_QD` singleton). Its one dep is `QD.RiemannLatex.katexCmpxParen` — a QD-namespace method registered on
+  the singleton by importing `riemann-latex.mjs` (no direct export) — so the module now side-effect-imports
+  riemann-latex.mjs (the same pattern algebra-format.mjs uses for QDEquations/ratApprox). algebra-ui imports buildHForm;
+  its one caller (the φ/h reference card) resolves to the import. +2/−16 in the god-file (algebra-latex +24).
+- **Net-first + mutation-verified:** NEW `vitest/algebra-hform.test.ts` (5; HEADLESS — the module chains riemann-latex,
+  so katexCmpxParen is wired) pins the empty-poles '0', symbolic 1-coeff/2-coeff (power-1 no exponent vs `^{2}`),
+  multi-pole `a_{j}`/`C_{j,s}` indexing, and numeric substitution (real→bare, complex→parenthesised). 4 fragments + the
+  return line byte-identity-checked. Mutation (`^{power}`→`^[power]`) → only the 2-coeff test fails.
+- **Green bar:** build/typecheck/lint exit 0; `pnpm test` **2208 passed / 253 files** (+5, +1 file). Cut
+  `refactor/d-alg-carve-9-hform`; PR → refactor/main; merge on green.
+- **installAlgebra: 9 carve-outs done.** `algebra-latex.mjs` now holds `_pronyLatex` + `buildHForm`. Census-ranked next:
+  the cheap predicates (`isForkedColumn`, `_relKey`, `_substKey`, `friendlyReim`, `refMeaning`, …), then the
+  latexPlain-injection carves (substList, latexOf, reimSafeLatex).

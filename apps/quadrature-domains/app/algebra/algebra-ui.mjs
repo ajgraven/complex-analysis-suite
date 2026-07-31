@@ -90,7 +90,7 @@ import * as PROVE from './prove-plan.mjs';   // the pure existence/uniqueness pr
 import { classifyVerdict, posDimDesc, withGuidance, _isCapFailure } from './algebra-labeling.mjs';   // pure honest-labeling: verdict prose (1) + cap-failure guidance (6)
 import { exactValueStr, fmtRatio, ratioStrRec, valStr } from './algebra-format.mjs';   // pure value + ratio-prefix formatters (carve-outs 3, 4, 8)
 import { _parseMomentToken } from './algebra-moment-parse.mjs';   // pure complex-moment input parser (carve-out 5)
-import { _pronyLatex } from './algebra-latex.mjs';   // pure math→LaTeX formatters (carve-out 7)
+import { _pronyLatex, buildHForm } from './algebra-latex.mjs';   // pure math→LaTeX formatters (carve-outs 7, 9)
 const QD = _QD;
 
 (function () {
@@ -1476,21 +1476,7 @@ const QD = _QD;
       [/^F_/, 'polynomial-part coefficient'],
     ];
     function refMeaning(name) { for (const [re, m] of _refMeaning) if (re.test(name)) return m; return ''; }
-    // h(w) = Σ_j Σ_{s≥1} C_{j,s}/(w − a_j)^s — symbolic names, or values substituted.
-    function buildHForm(hData, numeric) {
-      const RL = QD.RiemannLatex;
-      const terms = [];
-      (hData.poles || []).forEach((pole, j) => {
-        const aSym = numeric ? RL.katexCmpxParen(pole.a) : 'a_{' + (j + 1) + '}';
-        (pole.principal || []).forEach((C, s) => {
-          const power = s + 1;
-          const num = numeric ? RL.katexCmpxParen(C) : 'C_{' + (j + 1) + ',' + power + '}';
-          const den = power === 1 ? '(w - ' + aSym + ')' : '(w - ' + aSym + ')^{' + power + '}';
-          terms.push('\\dfrac{' + num + '}{' + den + '}');
-        });
-      });
-      return 'h(w) \\;=\\; ' + (terms.length ? terms.join(' + ') : '0');
-    }
+    // buildHForm (quadrature-data h(w) LaTeX) moved to ./algebra-latex.mjs (carve-out 9) — imported above.
     // Populate the φ / h reference panel: the symbolic forms of φ (RiemannLatex.build) and
     // h (buildHForm), plus a legend mapping every variable to its meaning + (optionally) its
     // value. Rebuilt on open, on the show-values toggle, and when the active solve changes.

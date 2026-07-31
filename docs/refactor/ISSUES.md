@@ -273,3 +273,12 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   (a module import would cycle; moving `latexPlain` is a ~50-site blast radius). Moving `substList` to a module needs
   `latexPlain` injected as a PARAMETER + edits to its 2 PROV_UI builder call sites (a signature change touching the
   tested registry), so it is NOT a verbatim carve — left for a deliberate step (e.g. bundled with a `latexPlain`-injection carve).
+- **2026-07-31 · stage D-alg-carve-9 (PR → refactor/main):** **QD-ALG-1 → decomposition continues (carve-out 9).**
+  Extracted `buildHForm(hData, numeric)` — the quadrature-data LaTeX builder (h(w) = Σⱼ Σ_{s≥1} C_{j,s}/(w−aⱼ)^s;
+  symbolic `a_{j}`/`C_{j,s}` names, or the pole/coefficient values substituted via `QD.RiemannLatex.katexCmpxParen`)
+  — out of installAlgebra → EXTEND `app/algebra/algebra-latex.mjs` + a 5-test HEADLESS net (`vitest/algebra-hform.test.ts`,
+  mutation-verified). Its one dep is `QD.RiemannLatex.katexCmpxParen`, a QD-namespace method registered on the singleton
+  by importing `riemann-latex.mjs` (no direct export), so the module side-effect-imports it (the same pattern
+  `algebra-format` uses for QDEquations) → headless net (both symbolic + numeric modes covered). Carved VERBATIM (only
+  QD→_QD; 4 fragments + the return line byte-identity-checked). The one caller (the φ/h reference card) resolves to the
+  import. `algebra-latex.mjs` now holds `_pronyLatex` + `buildHForm`.
