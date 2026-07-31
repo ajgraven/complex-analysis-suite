@@ -22,7 +22,8 @@ type Report = () => { pass: number; fail: number };
 // invisible to Vitest's reporter. The floor still guards a file that silently early-returns (a stray
 // `return`, a broken guard) from passing with ~0 assertions. Full rationale: app/node-test.js:53-91.
 const FLOORS: Record<string, number> = {
-  solvers: 30, direct: 120, schwarz: 20, "param-slice": 15, sphere: 5,
+  "solvers-1": 100, "solvers-2": 5, "solvers-3": 40, "solvers-4": 100, // B2 split; measured 187/10/71/183
+  direct: 120, schwarz: 20, "param-slice": 15, sphere: 5,
   cusps: 5, "cusp-accuracy": 5, symmetry: 2, "thesis-examples": 8, faber: 8,
   riemann: 15, "parse-check": 3, "h-text-roundtrip": 15, worker: 3,
   "ui-inputs": 30, cmax: 3, observables: 5, "sym-core": 250, "sym-radical": 45,
