@@ -90,6 +90,7 @@ import * as PROVE from './prove-plan.mjs';   // the pure existence/uniqueness pr
 import { classifyVerdict, posDimDesc, withGuidance, _isCapFailure } from './algebra-labeling.mjs';   // pure honest-labeling: verdict prose (1) + cap-failure guidance (6)
 import { exactValueStr, fmtRatio, ratioStrRec } from './algebra-format.mjs';   // pure exact-ℚ(i) value + ratio-prefix formatters (carve-outs 3, 4)
 import { _parseMomentToken } from './algebra-moment-parse.mjs';   // pure complex-moment input parser (carve-out 5)
+import { _pronyLatex } from './algebra-latex.mjs';   // pure math→LaTeX formatters (carve-out 7)
 const QD = _QD;
 
 (function () {
@@ -3957,28 +3958,7 @@ const QD = _QD;
     // ---- Shape from moments (roadmap #18): reconstruct a QD's data from its complex moments ----
     // _parseMomentToken (+ its private _parseMomentNum) moved to ./algebra-moment-parse.mjs (carve-out 5) —
     // imported above; doShapeFromMoments maps _parseMomentToken over the split input, below.
-    // LaTeX of the (ascending {re,im}) Prony polynomial P(z) = Σ c_k z^k = 0.
-    function _pronyLatex(coeffs) {
-      let out = '';
-      for (let k = coeffs.length - 1; k >= 0; k--) {
-        const c = coeffs[k];
-        const re = Math.round(c.re * 1e6) / 1e6, im = Math.round(c.im * 1e6) / 1e6;
-        if (Math.abs(re) < 1e-9 && Math.abs(im) < 1e-9) continue;
-        const zp = k === 0 ? '' : (k === 1 ? 'z' : 'z^{' + k + '}');
-        let sign, mag;
-        if (Math.abs(im) < 1e-8) {
-          sign = re < 0 ? '-' : '+';
-          const a = Math.abs(re);
-          mag = (Math.abs(a - 1) < 1e-8 && zp) ? '' : String(a);
-        } else {
-          sign = '+';
-          mag = '(' + re + (im < 0 ? '-' : '+') + Math.abs(im) + 'i)';
-        }
-        const term = (mag + zp) || '0';
-        out += out === '' ? (sign === '-' ? '-' + term : term) : ' ' + sign + ' ' + term;
-      }
-      return (out || '0') + ' = 0';
-    }
+    // _pronyLatex (Prony-polynomial math→LaTeX) moved to ./algebra-latex.mjs (carve-out 7) — imported above.
     function _renderShapeResult(out, r) {
       if (!out) return;
       out.innerHTML = '';

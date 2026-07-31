@@ -254,3 +254,11 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   checked vs source). The ~19 `withGuidance` call sites (every op's failure path) resolve to the import; the DOM-coupled
   `capFailVerdict` stays but now calls the imported `_isCapFailure`. `algebra-labeling.mjs` now holds verdict prose +
   failure guidance.
+- **2026-07-31 · stage D-alg-carve-7 (PR → refactor/main):** **QD-ALG-1 → decomposition continues (carve-out 7).**
+  Extracted `_pronyLatex(coeffs)` — the Prony-polynomial math→LaTeX formatter (Σ cₖzᵏ=0: descending powers, 1e-6
+  rounding, near-zero-term drop, unit-coeff elision on a z-power, leading-sign handling, parenthesised `(a±bi)zᵏ` for
+  complex coeffs) — out of installAlgebra → NEW `app/algebra/algebra-latex.mjs` (pure, ZERO external deps — only
+  Math/String + the `coeffs` arg) + an 8-test HEADLESS net (`vitest/algebra-prony-latex.test.ts`, mutation-verified).
+  Behavior-preserving (byte-identity: the 20-line body is identical modulo indent + `export`). The one caller
+  (`doShapeFromMoments`) resolves to the import. NEW `algebra-latex.mjs` is the intended home for the census's other
+  pure LaTeX builders (`buildHForm` / `latexOf` / `reimSafeLatex`) as they get carved out.
