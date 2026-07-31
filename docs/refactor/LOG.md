@@ -547,3 +547,25 @@
 - **installAlgebra: 3 carve-outs done.** algebra-labeling.mjs (verdict prose + posDimDesc) + algebra-format.mjs (exact
   value formatter) now hold pulled-out pure logic; `_verdictBadge` lifted in-file. Remaining pure candidates thinning;
   deeper decomposition (the DOM-bound sidebar build QD-ALG-2, source-text tests QD-ALG-3) needs a different strategy.
+
+## 2026-07-31 — Phase D · Stage D-alg-carve-4 (installAlgebra carve-out 4 — ratio-prefix formatters) — PR opened
+- **Fourth installAlgebra carve-out** ("keep carving"). The two pure substitution ratio-prefix formatters —
+  `fmtRatio(g)` (a live Gaussian ratio → prefix) + `ratioStrRec(rec, sign)` (a serialized `{re:[n,d],im:[n,d]}`
+  provenance record → prefix) — both render the "(c)·" coefficient in front of an identified variable ("x = (c)·y")
+  and were reachable only through a live DOM mount ⇒ zero executable coverage. They call `exactValueStr` (carve-out 3),
+  so their natural home is `algebra-format.mjs` — this carve-out EXTENDS that module rather than making a new one.
+- **This PR (behavior-preserving extraction):** `fmtRatio` + `ratioStrRec` carved VERBATIM into `algebra-format.mjs`
+  (they call the co-located `exactValueStr`, so no new deps). algebra-ui imports both; `fmtRatio`'s 2 callers
+  (1015/1021) + `ratioStrRec`'s 2 PROV_UI ctx-inject sites (4236/4245) resolve to the imports; the PROV_UI param-uses
+  (`(p, { ratioStrRec }) => …`, 176-182) are unaffected (they read the injected value). +26/−20 across the two files.
+- **Net-first + mutation-verified:** NEW `vitest/algebra-ratio-format.test.ts` (6; HEADLESS — the module chains
+  qd-equations for `exactValueStr`'s rationalizer, so no jsdom) pins the two compacting unit cases (c=1→'', c=−1→'−')
+  + the "(…)·" wrap for both a Gaussian (duck-typed `.toNumber()` stub) and a serialized record, plus the sign-fallback
+  and the defensive `(c)·` catch. 8 fragments byte-identity-checked vs source (incl. U+2212 minus + U+00B7 middot).
+  Mutation (`ratioStrRec` `re === 1`→`9`) → exactly the unit-case test fails.
+- **Green bar:** build/typecheck/lint exit 0; `pnpm test` **2174 passed / 248 files** (+6, +1 file). Cut
+  `refactor/d-alg-carve-4-ratio-format`; PR → refactor/main; merge on green.
+- **installAlgebra: 4 carve-outs done; pure low-hanging fruit now essentially exhausted.** `algebra-format.mjs` holds
+  the exact-value + ratio-prefix formatters; `algebra-labeling.mjs` the verdict prose. A 5th carve-out would need a
+  fresh scan for any remaining pure helper; otherwise the remaining bulk is DOM-bound (QD-ALG-2) and needs a strategy
+  shift (jsdom-drive the sidebar build, or convert the source-text tests QD-ALG-3), or the deferred verdict unification.

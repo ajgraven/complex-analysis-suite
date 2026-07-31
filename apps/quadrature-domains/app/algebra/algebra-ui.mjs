@@ -88,7 +88,7 @@ import { plainVar } from '../qd-varscheme.mjs';   // conjugate-model var scheme 
 import { domainPlotData, momentPlotData, rationalPlotData, trianglePlotData } from './domain-mini-plot.mjs';   // #3 + C1-ext-B + C2-4 + C3-4: reconstructed-domain thumbnail geometry
 import * as PROVE from './prove-plan.mjs';   // the pure existence/uniqueness proof engine (fuller-orchestrator Phase A)
 import { classifyVerdict, posDimDesc } from './algebra-labeling.mjs';   // pure honest-labeling verdict prose (carve-out 1)
-import { exactValueStr } from './algebra-format.mjs';   // pure exact-ℚ(i) value formatter (carve-out 3)
+import { exactValueStr, fmtRatio, ratioStrRec } from './algebra-format.mjs';   // pure exact-ℚ(i) value + ratio-prefix formatters (carve-outs 3, 4)
 const QD = _QD;
 
 (function () {
@@ -969,25 +969,9 @@ const QD = _QD;
     function _detectRels() { try { return store.detectVariableRelations ? (store.detectVariableRelations() || []) : []; } catch (e) { return []; } }
     function _detectSubsts() { try { return store.detectSubstitutions ? (store.detectSubstitutions() || []) : []; } catch (e) { return []; } }
     function _substKey(h) { return 'subst:' + h.kind + ':' + (h.exprTerms ? JSON.stringify(h.exprTerms) : h.newVar); }
-    // Compact prefix for a substitution ratio Gaussian c: '' for 1, '−' for −1, else '(c)·'.
-    function fmtRatio(g) {
-      try {
-        const re = g.re.toNumber(), im = g.im.toNumber();
-        if (im === 0 && re === 1) return '';
-        if (im === 0 && re === -1) return '−';
-        return '(' + exactValueStr(re, im) + ')·';
-      } catch (e) { return '(c)·'; }
-    }
-    // Ratio prefix from a serialized {re:[n,d],im:[n,d]} provenance record (falls back to a ±1
-    // `sign` for pre-ratio snapshots). '' for 1, '−' for −1, else '(c)·'.
-    function ratioStrRec(rec, sign) {
-      if (!rec) return (sign != null && sign < 0) ? '−' : '';
-      const f = (p) => (p ? Number(p[0]) / Number(p[1]) : 0);
-      const re = f(rec.re), im = f(rec.im);
-      if (im === 0 && re === 1) return '';
-      if (im === 0 && re === -1) return '−';
-      return '(' + exactValueStr(re, im) + ')·';
-    }
+    // fmtRatio + ratioStrRec (substitution ratio-prefix formatters) moved to ./algebra-format.mjs
+    // (carve-out 4) — imported above; they call the co-located exactValueStr. ratioStrRec is injected
+    // into the PROV_UI ctx below.
     function renderSuggestions() {
       const box = $('#alg-suggest'); if (!box) return;
       const hits = _detectRels().filter((h) => !_dismissedRel.has(_relKey(h)));
