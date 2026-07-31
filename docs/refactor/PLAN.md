@@ -160,6 +160,10 @@ cycle can land in parallel with Stage 0; all QD structural work (C/D/E) is gated
   `messageerror`/error-settle uniform (kills the shipped-bug class). · Prereq: B4 · Char: B4 fake-Worker tests
   green before/after; add one asserting error-settle on every lane · Done-when: 6 lanes = config, green ·
   Footprint: medium · Risk: medium.
+  · **C1a ✅ (2026-07-31):** the 3 PSW lanes (primary/aux/live) collapsed to `createWorkerLane(cfg)` —
+  primary-solver-worker.mjs 395→238 (−40%); behavior-preserving (net `psw-crash-char`+`psw-lifecycle` 20/20 green;
+  full 2081/239). Independent latches kept; error-settle char = the crash net (predates + stays green). **C1b** =
+  the sym / schwarz / param-slice-pool lanes onto the same shape (own PR — different files + schwarz/pool quirks).
 - **C2 — typed worker protocol (QD-UI-4).** One `workers/protocol.mjs` (envelope builders + `dispatch`); unknown
   `kind` no longer silently hangs. · Prereq: C1 · Char: a test for unknown-kind handling · Footprint: small-med ·
   Risk: low-med.

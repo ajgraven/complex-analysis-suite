@@ -262,3 +262,24 @@
   ALREADY covered by `schwarz-cpu-worker-crash.test.ts`), and param-slice-pool event-wiring/survivor-re-dispatch
   (a different, N-worker shape) — are **optional → B4-2c, or fold into Group C** when those files change for the
   lane dedup. **QD-UI-1** further addressed (all three solver-worker lanes' crash contract now pinned).
+
+## 2026-07-31 — Phase D · Stage C1a (createWorkerLane factory — PSW lanes) — PR opened
+- User "keep going" → took up **Group C** (duplication collapse — the payoff the B4 net was built to guard).
+  Merged B4-2b (#185, `ecb5124`); re-confirmed refactor/main green (2081/239). Cut `refactor/C1a-psw-lane-factory`.
+- **First STRUCTURAL refactor since Group A — but BEHAVIOR-PRESERVING and fully net-guarded.** Char-first per §D:
+  the net (`psw-crash-char` 7 + `psw-lifecycle` 13) was already green on the UNMODIFIED code (my baseline).
+- **C1a (this PR): `apps/quadrature-domains/app/primary-solver-worker.mjs` ONLY — 395 → 238 lines (−40%).**
+  Extracted `createWorkerLane(cfg)`; the primary/aux/live lanes (near-verbatim copies of ensureReady/dispose/
+  run-supersede-post-settle/cancel/isBusy + a per-lane spawn-fault latch) are now 3 config objects differing only
+  in: message `kind` (solve/altSearch/liveSolve), payload builder, main-thread fallback fn+args, `hasMessageError`
+  (primary=true, aux/live=false), crash/log labels, and the primary-only AbortSignal (`getSignal`). Each lane keeps
+  its OWN closure state → the fallback latches stay INDEPENDENT (qd-psw-fallback-latch-01, the shipped-bug class).
+- **Behavior preserved — proven by the net staying green:** `psw-crash-char` + `psw-lifecycle` = **20/20**; full
+  `pnpm test` **2081 passed / 239 files** (count unchanged — source refactor, no test added). Preserved exactly:
+  the primary-only messageerror handler + its `/structured-clone/` reject; the `/…worker crashed/` strings; the
+  warn/error console text; supersede (reuse worker) vs cancel (terminate); the AbortSignal forwarding. `git diff`
+  = 1 file; build/typecheck/lint exit 0. **No intended behavior change; no sign-off needed (Group C is approved,
+  behavior-preserving).** Committed 86c7bcf; PR → refactor/main; merge on green.
+- **Remaining C1 → C1b:** apply `createWorkerLane` (or its shape) to the sym / schwarz / param-slice-pool lanes —
+  a separate PR (different files, and schwarz/pool have their own quirks). C2 (typed protocol) follows.
+  **QD-UI-1: the 3× PSW lane duplication is eliminated.**

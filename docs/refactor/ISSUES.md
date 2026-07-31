@@ -123,3 +123,8 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   **Remaining lane gaps are P2** (schwarz `isUsable`/preempt/`handle.cancel`/`onUnavailable` — schwarz crash-settle
   already covered; param-slice-pool event-wiring/survivor) → **optional B4-2c / fold into Group C**. B4-2a (#184)
   now **merged** (7a025e3).
+- **2026-07-31 · stage C1a (PR → refactor/main):** **QD-UI-1 → PSW 3× lane duplication ELIMINATED** (86c7bcf) —
+  primary/aux/live collapsed to a `createWorkerLane(cfg)` factory (primary-solver-worker.mjs 395→238, −40%),
+  behavior-preserving (net stays green 20/20; full 2081/239), independent fallback latches kept. First structural
+  refactor of Group C, guarded by the B4-2a crash net. **Remaining QD-UI-1 → C1b** (sym/schwarz/pool lanes onto the
+  same factory) + **C2** (QD-UI-4 typed protocol). B4-2b (#185) now **merged** (ecb5124).
