@@ -11,46 +11,45 @@ extensibility, conceptual clarity, reliability/testability, and architectural co
 Behavior-preserving by default; no behavioral change without an explicit approval token.
 
 ## Phase / stage
-- **Phase D — Execute. Groups A + B + C COMPLETE. Group D STARTED (god-module decomposition).**
-- **D-ui-seam — PR #193 OPEN (CI pending).** ui.mjs's first seam (QD-UI-2): extracted the pure domain-mode
-  algebra (`composeMode`/`decomposeMode`/`modeSummary`) → NEW `app/ui-domain-mode.mjs` + a 19-test net
-  (`vitest/ui-domain-mode.test.ts`, mutation-verified) — **ui.mjs's first executable coverage.** Behavior-
-  preserving (green 2133/243; verbatim extraction, zero call-site edits).
-- **Revised Group-D understanding (from a verified read-only map):** ui.mjs is the Phase-2 PORT — most
-  responsibilities already live in sibling modules (installX factories); it's mostly DOM wiring. So ui.mjs
-  "decomposition" is limited; the genuinely-big still-monolithic Group-D target is **`installAlgebra`**
-  (algebra-ui.mjs, ~4.2k-line fn, QD-ALG-1). A runner-up ui.mjs pure seam (geometry pair) remains.
-- **AWAITING nothing — cadence continues.** On #193 merge, present the next Group-D choice: (a) installAlgebra
-  net-first stage (the big target; needs its own char strategy — it's DOM-heavy); (b) the ui.mjs geometry seam;
-  (c) pause. Present at the gate; do not auto-start the big installAlgebra work without a nod.
+- **Phase D — Execute. Groups A + B + C COMPLETE. Group D in progress: D-ui-seam MERGED (29a7f97).**
+- **D-ui-seam (DONE):** ui.mjs's first seam (QD-UI-2) — pure domain-mode algebra (`composeMode`/`decomposeMode`/
+  `modeSummary`) → `app/ui-domain-mode.mjs` + 19-test net (ui.mjs's first executable coverage). Behavior-preserving
+  (green 2133/243).
+- **AWAITING USER DIRECTION for the next Group-D stage** (holding — do not auto-start). Options:
+  - **(a) installAlgebra** (algebra-ui.mjs, ~4.2k-line fn, QD-ALG-1) — the big still-monolithic target. DOM-heavy
+    (builds the sidebar via one innerHTML string, QD-ALG-2), and its current tests are source-text (QD-ALG-3), so a
+    behavioral net is harder than the solver golden nets — needs a careful char-strategy proposal FIRST (likely:
+    carve pure helpers out to netted modules, jsdom-drive the sidebar wiring, or both). Highest value, highest risk.
+  - **(b) ui.mjs geometry seam** — extract the pure `boundarySelfIntersectsSimple`/`segmentsIntersect` pair
+    (another small, safe pure extraction like D-ui-seam). Low value, low risk.
+  - **(c) pause** — Groups A/B/C done + Group D started; a clean point.
 - Cadence: merge on green (user delegates; user said "Proceed with Group D"). `APPROVED: PLAN.md v1`.
-  Roadmap §8: A✓ / B✓ / C✓ / **D (ui-seam in review; installAlgebra next)** / E / F.
+  Roadmap §8: A✓ / B✓ / C✓ / **D (ui-seam✓; installAlgebra / geometry-seam next)** / E / F.
 
 ## Branches / PR
-- Integration `refactor/main` @ **89e4fc7** (this STATE commit advances it). Tree clean.
-- **PR #193 OPEN (CI pending):** `refactor/D-ui-seam-domain-mode` (a4be956) → `refactor/main`.
-- Merged stage PRs (15): A1 #178 … C3b-p2 #192 (be6a51e). (Full list in prior STATE commits / LOG.)
+- Integration `refactor/main` @ **29a7f97** (D-ui-seam merge; this STATE commit advances it). Tree clean. **No open PR.**
+- Merged stage PRs (16): A1 #178 … C3b-p2 #192, **D-ui-seam #193 (29a7f97)**. (Full list in prior STATE/LOG.)
 
 ## Validation state (green bar)
-- **D branch @ a4be956 — ALL GREEN:** build/typecheck/lint exit 0; `pnpm test` **2133 passed / 243 files**
-  (+19, +1 file); ui-domain-mode net 19/19, mutation-verified.
-- `refactor/main` @ 89e4fc7 (post-Group-C) green: 2114/242.
+- **`refactor/main` @ 29a7f97 — ALL GREEN (re-confirmed post-merge):** build/typecheck/lint exit 0; `pnpm test`
+  **2133 passed / 243 files**; ui-domain-mode net 19/19.
 
 ## Uncommitted / unverified
-- None. D-ui-seam committed (a4be956) + pushed; PR #193 open. This STATE commit direct to `refactor/main`.
+- None. D-ui-seam merged; this STATE commit direct to `refactor/main`.
 
 ## Known blockers / risks
-- **Awaiting PR #193 CI green**, then merge (per cadence). Behavior-preserving (pure-logic move + net).
-- installAlgebra (the big D target) is DOM-heavy (builds the sidebar via innerHTML) — a behavioral net for it is
-  harder than the solver golden nets; QD-ALG-3 flags its current tests are source-text. Needs a careful strategy.
+- No open PR; **holding for the next Group-D choice**. No blockers.
+- installAlgebra (option a) is the hardest net-first target of the whole engagement (DOM-heavy, source-text tests
+  today) — it warrants a proposed char-strategy + a scope agreement before implementation, not an auto-start.
 
 ## Next concrete steps
-1. **When PR #193 CI greens → merge** (title + `(#193)`), pull, re-confirm green (2133/243).
-2. Present the next Group-D choice (installAlgebra net-first / ui.mjs geometry seam / pause).
+1. **HOLD** — await user's choice: (a) installAlgebra (propose its net-first strategy first) / (b) ui.mjs geometry
+   seam / (c) pause.
+2. Whichever: net-first, behavior-preserving, own PR → refactor/main; merge on green.
 3. Group order: A✓ B✓ C✓ → **D (in progress)** → E (state+folderize) → F (dependency-cruiser).
 
 ## Resume commands
 ```
-git fetch && git checkout refactor/main && git pull        # after #193 merges
+git fetch && git checkout refactor/main && git pull
 pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2133/243
 ```
