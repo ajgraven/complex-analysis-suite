@@ -146,6 +146,10 @@ cycle can land in parallel with Stage 0; all QD structural work (C/D/E) is gated
   verified) — the safety net for the **solve path** of C/D; **B4-2** worker-lane lifecycle net (6 lanes + shared
   fake-Worker helper); **DEFERRED** the `ui.mjs` seam (→ its own small stage before D2) and the algebra source-text
   → behavioral conversion (→ D1). Net effect: the C/D solve/worker targets get their net; ui.mjs's net waits on its seam.
+  · **B4-2 split (2026-07-31):** the 6 lanes group by lifecycle shape → **B4-2a** ✅ shared `fake-worker.mjs` helper +
+  the PSW crash/messageerror net (3 lanes; the C1 dedup target; 7 tests, mutation-verified, tests-only); **B4-2b**
+  sym + schwarz + param-slice-pool gaps. Existing green lane tests (`psw-lifecycle`, `schwarz-cpu-worker-crash`,
+  `sym-worker-*`, `param-slice-pool`) left untouched — DRY them onto the helper during C1/C2, not while laying the net.
 
 ### Group C — Duplication collapse (S2), behind the B4 net
 - **C1 — `createWorkerLane()` factory (QD-UI-1).** Collapse the 6 worker lifecycles to config; makes

@@ -108,3 +108,11 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   OPEN** — ui.mjs has 0 exports / no seam, so a behavioral net needs a seam first (a source change) → deferred to
   its own small stage before D2 (D2 shrinks ui.mjs). **QD-ALG-3 / QD-TEST-3** (algebra source-text tests) stay
   open → folded into D1 (they target `algebra-ui.mjs`, not ui-solve). B2 (#182) now **merged** (e74d3e6).
+- **2026-07-31 · stage B4-2a (PR → refactor/main):** **QD-UI-1 → partially addressed** (48f89cb) — the PSW
+  worker-lane **crash + messageerror contract** is now pinned (`vitest/psw-crash-char.test.ts`, 7 tests) so the
+  Group-C lane dedup (C1 `createWorkerLane` / C2 typed protocol) can't silently change it; the messageerror
+  ASYMMETRY (primary has a handler, aux/live don't) is frozen. Shared `vitest/helpers/fake-worker.mjs` extracted
+  (additive — existing lane tests untouched). Tests-only; mutation-verified. **QD-UI-4 → partially addressed**
+  (asymmetric envelope behavior frozen). **Remaining → B4-2b:** sym + schwarz + param-slice-pool lane gaps.
+  The underlying 6× duplication itself remains **open → Group C** (this net is its safety net). B4-1 (#183) now
+  **merged** (e1a148a).
