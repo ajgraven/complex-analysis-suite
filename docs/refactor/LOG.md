@@ -183,3 +183,31 @@
 - Green bar: build/typecheck/lint exit 0; `pnpm test` = **2059 passed / 236 files**. Browser harness not run
   (test-infra only, no GPU/shader). Committed ac5f894; pushed `refactor/B2-shard-solvers`; PR → `refactor/main`;
   auto-merge on green (honest PR — real win, §PB cap disclosed).
+
+## 2026-07-31 — Phase D · Stage B4-1 (ui-solve orchestration characterization net) — PR opened
+- User: "merge when CI green, then proceed." Merged B2 (#182, `e74d3e6`); re-confirmed refactor/main GREEN
+  (236 files / 2059 tests; oracle 2332/0). Skipped optional B3. Cut `refactor/B4-ui-charnet`.
+- **B4 SCOPE DISCOVERY (verified; confirms + sharpens ASSESSMENT §3.5 / QD-TEST-2):** `ui.mjs` (1931 L) has
+  **no test seam** — 0 exports, boots on import (`:413/:1723/:1737`), no `installUI()` factory ⇒ its internals
+  can't be characterized without a brittle full-boot harness OR **adding a seam (a source change)**, which is out
+  of a tests-only stage. The "~15 source-text tests" target **`algebra/algebra-ui.mjs`** (a *different* god-module),
+  not ui.mjs/ui-solve.mjs. Cleanly testable NOW (DI seam, no source change): **`ui-solve.mjs`** (`installSolve`) +
+  the 6 worker lanes. → **Narrowed B4 to the no-source-change net**; DEFERRED the ui.mjs seam (its own small stage
+  before D2) and the algebra source-text conversion (→ D1). Flagged to the user; proceeded on the recommendation
+  (user said "proceed"/"continue").
+- **B4-1 delivered (this PR): `vitest/ui-solve-orchestration.test.ts` — 12 behavioral tests, TESTS-ONLY, no source
+  change.** Drives `QD_UI.installSolve(fakeUiCtx)` with a real `$` over jsdom + a stubbed
+  `QD.PrimarySolverWorker`/`QD.solveInverseQD` (mutated on the shared solver-namespace object, since ui-solve
+  `import`s `_QD` from solver.mjs), controlling the solve outcome via a deferred promise. No real solver/worker;
+  no solve is allowed to SUCCEED, so the heavy success-render path is intentionally NOT exercised here (a later
+  slice). Pins: input guards (no poles / built.error / norm.error → no dispatch); dispatch target (PSW when
+  present; `QD.solveInverseQD` fallback when absent); settle (rejection → visible "Solver error"; `{aborted:true}`
+  → SILENT); supersede (stale rejection dropped, no paint); busy-indicator OWNERSHIP (`:465` — a stale solve's
+  finally must not hide the newer solve's spinner); `cancelSolve` (PSW.cancel + token bump + alt-search stop +
+  "Solve cancelled"); auto-escalation (first fail + enabled → 2nd exhaustive dispatch).
+- **Mutation-verified the net BITES:** breaking the abort-settle guard (`ui-solve.mjs:411`) failed exactly the
+  "aborted settles silently" test (1/12), then reverted → ui-solve.mjs byte-identical to HEAD (`git diff` clean).
+- Green: build/typecheck/lint exit 0; `pnpm test` **2071 passed / 237 files** (+12 / +1 vs 2059/236). Browser
+  harness not run (jsdom/test-infra only, no GPU). Committed d17e9df; PR → refactor/main; auto-merge on green.
+- **Addresses QD-TEST-4** (ui-solve orchestration untested) + part of QD-UI-5. **QD-TEST-2 (ui.mjs) REMAINS OPEN**
+  — needs the seam (deferred). Follow-up **B4-2**: worker-lane lifecycle net + shared `vitest/helpers/fake-worker.mjs`.
