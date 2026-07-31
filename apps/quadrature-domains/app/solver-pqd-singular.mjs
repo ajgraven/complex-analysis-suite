@@ -3,6 +3,7 @@ import { Complex } from './complex.mjs';
 import { Taylor } from './taylor.mjs';
 import { branchTaylorAccumulate } from './solver-taylor-common.mjs';
 import _QD from './solver.mjs';
+import { defineFamily } from './solvers/define-family.mjs';
 // =============================================================================
 // solver-pqd-singular.js -- Bounded SINGULAR power-weighted quadrature domains
 // (Family.powerQD_singular). The singular case is 0 ∈ Ω: the origin is an
@@ -484,10 +485,9 @@ import _QD from './solver.mjs';
   // ===========================================================================
   // 8. Register Family.powerQD_singular (more specific than powerQD).
   // ===========================================================================
-  QD.Family.powerQD_singular = {
+  QD.Family.powerQD_singular = defineFamily({
     name: 'powerQD_singular',
-    enforceInDisk:  true,
-    enforceOutDisk: false,
+    // unbounded omitted → enforceInDisk:true / enforceOutDisk:false.
     matches(opts) {
       const a = opts && opts.alpha;
       return Number.isFinite(a) && a > 0 && a !== 1
@@ -512,7 +512,7 @@ import _QD from './solver.mjs';
     },
     evalPhi: evalPhi_PQDS,
     phiTaylorAt: phiTaylorAt_PQDS,
-    computeTargets(phi, hData) { return { A: computeTargetA_PQDS(phi, hData), F: null }; },
+    computeTargetA: computeTargetA_PQDS,      // no F/G → computeTargets { A, F:null }
     residual: residual_PQDS,
     packPhi: packPhi_PQDS,
     unpackPhi: unpackPhi_PQDS,
@@ -527,7 +527,7 @@ import _QD from './solver.mjs';
     },
     verifyQuadratureIdentity: verifyQuadratureIdentity_PQDS,
     sampleBoundary: sampleBoundary_PQDS,
-  };
+  });
   QD.registerFamily('powerQD_singular');
 
   QD.evalRHash_PQDS     = evalRHash_PQDS;
