@@ -12,43 +12,44 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 
 ## Phase / stage
 - **Phase D — Execute. Groups A + B + C COMPLETE. Group D in progress.**
-- **D-ui-seam-2 (ui.mjs geometry seam) — PR #194 OPEN (CI pending).** Extracted the pure geometry pair
-  (`boundarySelfIntersectsSimple`/`segmentsIntersect`) → NEW `app/ui-geometry.mjs` + 6-test net (mutation-verified;
-  pins the collinear-miss quirk). Behavior-preserving (green 2139/244). On merge → **ui.mjs pure-seam extraction
-  COMPLETE** (both pure pieces the map found are out + netted; D-ui-seam #193 did the domain-mode cluster).
-- **AWAITING USER DIRECTION after #194 merges** (holding — do not auto-start). ui.mjs's residual bulk is DOM
-  wiring; the remaining Group-D monolith is **installAlgebra** (algebra-ui.mjs, ~4.2k-line fn, QD-ALG-1). It's the
-  hardest net-first target of the engagement (DOM-heavy: sidebar via one innerHTML string, QD-ALG-2; current tests
-  are source-text, QD-ALG-3) — needs a proposed char-strategy + scope agreement FIRST. Options at the gate:
-  (a) installAlgebra (I propose a net-first strategy, then implement on your nod); (b) pause here.
+- **ui.mjs pure-seam extraction COMPLETE** — D-ui-seam (#193, domain-mode algebra) + D-ui-seam-2 (#194, geometry
+  pair) both MERGED. Both pure pieces the map found are now in small netted modules (`ui-domain-mode.mjs`,
+  `ui-geometry.mjs`); ui.mjs got its first executable coverage (25 tests). ui.mjs's residual bulk is DOM wiring
+  (its other logic already lives in sibling modules — installX factories).
+- **AWAITING USER DIRECTION** (holding — do not auto-start). The one remaining big Group-D target is
+  **installAlgebra** (algebra-ui.mjs, ~4.2k-line fn, QD-ALG-1) — the hardest net-first target of the engagement:
+  DOM-heavy (sidebar = one innerHTML string wired by stringly-typed ids, QD-ALG-2), current tests source-text
+  (QD-ALG-3). Needs a char-strategy + scope agreement FIRST. Candidate approaches: (i) incremental pure-helper
+  carve-outs to netted modules (the ui.mjs seam pattern); (ii) jsdom-drive the sidebar build + assert DOM/handlers;
+  (iii) convert the source-text algebra tests to behavioral. Options at the gate: **(a) installAlgebra** (I propose
+  a strategy, implement on a nod — likely wants fresh budget); **(b) pause** at this ui.mjs-seams-done milestone.
 - Cadence: merge on green (user delegates; "Proceed with Group D"). `APPROVED: PLAN.md v1`.
-  Roadmap §8: A✓ / B✓ / C✓ / **D (ui.mjs seams done on #194; installAlgebra remains)** / E / F.
+  Roadmap §8: A✓ / B✓ / C✓ / **D (ui.mjs seams✓; installAlgebra remains)** / E / F.
 
 ## Branches / PR
-- Integration `refactor/main` @ **c331733** (this STATE commit advances it). Tree clean.
-- **PR #194 OPEN (CI pending):** `refactor/D-ui-seam-geometry` (9de3e24) → `refactor/main`.
-- Merged stage PRs (16): A1 #178 … C3b-p2 #192, D-ui-seam #193 (29a7f97). (Full list in prior STATE/LOG.)
+- Integration `refactor/main` @ **43bd5c4** (D-ui-seam-2 merge; this STATE commit advances it). Tree clean. **No open PR.**
+- Merged stage PRs (17): A1 #178 … C3b-p2 #192, D-ui-seam #193, **D-ui-seam-2 #194 (43bd5c4)**.
 
 ## Validation state (green bar)
-- **D-geometry branch @ 9de3e24 — ALL GREEN:** build/typecheck/lint exit 0; `pnpm test` **2139 passed / 244 files**
-  (+6, +1 file); ui-geometry net 6/6, mutation-verified.
-- `refactor/main` @ c331733 (post-#193) green: 2133/243.
+- **`refactor/main` @ 43bd5c4 — ALL GREEN (re-confirmed post-merge):** build/typecheck/lint exit 0; `pnpm test`
+  **2139 passed / 244 files**. ui.mjs seam nets: ui-domain-mode 19/19 + ui-geometry 6/6.
 
 ## Uncommitted / unverified
-- None. D-ui-seam-2 committed (9de3e24) + pushed; PR #194 open. This STATE commit direct to `refactor/main`.
+- None. D-ui-seam-2 merged; this STATE commit direct to `refactor/main`.
 
 ## Known blockers / risks
-- **Awaiting PR #194 CI green**, then merge (per cadence). Behavior-preserving (pure-logic move + net).
-- installAlgebra is the hardest remaining target (DOM-heavy) — warrants a char-strategy proposal + scope agreement
-  before any implementation, and likely fresh budget (this session is very long).
+- No open PR; **holding for the installAlgebra decision**. No blockers.
+- installAlgebra is the single hardest remaining target (DOM-heavy, source-text tests) — warrants a char-strategy
+  proposal + scope agreement before implementation, and fresh budget (this session is very long).
 
 ## Next concrete steps
-1. **When PR #194 CI greens → merge** (title + `(#194)`), pull, re-confirm green (2139/244).
-2. Present the installAlgebra decision: (a) propose its net-first char-strategy then implement on a nod, or (b) pause.
-3. Group order: A✓ B✓ C✓ → **D (ui.mjs seams done; installAlgebra remains)** → E → F.
+1. **HOLD** — await user's choice: (a) installAlgebra (I propose its net-first strategy, then implement on a nod) /
+   (b) pause at the ui.mjs-seams-done milestone.
+2. Whichever: net-first, behavior-preserving, own PR(s) → refactor/main; merge on green.
+3. Group order: A✓ B✓ C✓ → **D (ui.mjs seams done; installAlgebra remains)** → E (state+folderize) → F (dep-cruiser).
 
 ## Resume commands
 ```
-git fetch && git checkout refactor/main && git pull        # after #194 merges
+git fetch && git checkout refactor/main && git pull
 pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2139/244
 ```
