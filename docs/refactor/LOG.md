@@ -591,3 +591,24 @@
 - **installAlgebra: 5 carve-outs done.** Three pure modules now (`algebra-labeling` / `algebra-format` / `algebra-moment-parse`)
   + the in-file badge lift. Census-ranked next: `withGuidance`+`_isCapFailure` (honest-labeling guidance, ~19 sites),
   `_pronyLatex`, `valStr`+`substList`, cheap stragglers, then `latexOf` (pure-if-injected). Genuine pure work remains.
+
+## 2026-07-31 — Phase D · Stage D-alg-carve-6 (installAlgebra carve-out 6 — cap-failure guidance) — PR opened
+- **Sixth installAlgebra carve-out** (census #2 pick, "keep carving"): the cap-failure guidance pair. `_isCapFailure(reason)`
+  is a substring regex recognizer (`/export|cap|exceed|too large|step|basis|degree|terms/i`) — does a failure look like a
+  resource / too-large cap? `withGuidance(reason)` appends the CAS-export escape-hatch hint to such a failure and passes
+  everything else through. Both pure, ZERO external deps. This is the honest-labeling of the FAILURE side (say WHY it
+  failed + the documented escape hatch), so it extends `algebra-labeling.mjs` rather than a new module.
+- **This PR (behavior-preserving extraction):** `_isCapFailure` + `withGuidance` carved VERBATIM into `algebra-labeling.mjs`.
+  algebra-ui extends its existing labeling import; the ~19 `withGuidance` call sites (every op's failure path — doGroebner,
+  doSaturate, all four doProve*, doClassify, doResolvent, doBifurcation, doDimension, doSolve, importJson, …) resolve to
+  the import, and the DOM-coupled `capFailVerdict` (which STAYS in installAlgebra) now calls the imported `_isCapFailure`.
+  +18/−8 across the two files. 3 fragments byte-identity-checked vs source (regex + the double-space guidance sentence).
+- **Net-first + mutation-verified:** NEW `vitest/algebra-cap-guidance.test.ts` (6; HEADLESS) pins each recognized keyword,
+  the false/empty/null cases, the guidance sentence verbatim (incl. its leading double space), and the SUBSTRING-match
+  quirk ("escape" contains "cap" ⇒ true — pinned, not "fixed"). Mutation (drop `|terms` from the regex) → only the
+  keyword test fails.
+- **Green bar:** build/typecheck/lint exit 0; `pnpm test` **2189 passed / 250 files** (+6, +1 file). Cut
+  `refactor/d-alg-carve-6-cap-guidance`; PR → refactor/main; merge on green.
+- **installAlgebra: 6 carve-outs done.** `algebra-labeling.mjs` now holds the verdict prose + the failure guidance;
+  `algebra-format.mjs` the value/ratio formatters; `algebra-moment-parse.mjs` the input parser. Census-ranked next:
+  `_pronyLatex` (math→LaTeX), `valStr`+`substList` (the PROV_UI tests mock the real impls), then cheap stragglers.
