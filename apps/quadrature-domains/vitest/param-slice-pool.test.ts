@@ -144,3 +144,69 @@ describe("canAccept + one-point batch — the hover live-solve offload (qd-param
     expect(pool.canAccept()).toBe(false);
   });
 });
+
+// The worker Pool's own event-wiring + full-drain, pinned before the Group-C lane dedup (B4-2c, QD-UI-1).
+// The existing cases above cover create/solveBatch, cancel+arm, the survivor≥1 crash drop, and canAccept.
+// These add the two paths a lane refactor could still silently break: runSweep's row-dispatch → onTile →
+// done tally, and the survivor=0 branch of _onWorkerError (the LAST worker dying must drain the pending
+// queue, not just the in-flight tile — else a reused sweep hangs forever).
+describe("param-slice worker Pool: runSweep event-wiring + last-worker drain (B4-2c, QD-UI-1)", () => {
+  interface PoolLike {
+    runSweep(cfg: unknown): { cancel(): void; done: Promise<{ tilesDone: number; totalTiles: number; msTotal: number }> };
+    submitTile(s: unknown, id: number, pts: unknown, hints: unknown): Promise<unknown>;
+    _onWorkerError(w: unknown, msg: string): void;
+    activeJobs: Map<number, unknown>;
+    pending: unknown[];
+    workers: unknown[];
+  }
+  const PoolClass = (ParamSlicePool as unknown as { Pool: new (workers: unknown[], url: unknown) => PoolLike }).Pool;
+
+  // A fake worker that answers each 'tile' post with one result per sweep point, so runSweep's
+  // row-dispatch → onTile → done tally can be driven deterministically without a real thread.
+  function echoWorker() {
+    const listeners: Record<string, ((ev: unknown) => void)[]> = {};
+    return {
+      addEventListener(t: string, f: (ev: unknown) => void) { (listeners[t] ||= []).push(f); },
+      removeEventListener(t: string, f: (ev: unknown) => void) { listeners[t] = (listeners[t] || []).filter((x) => x !== f); },
+      terminate() {},
+      postMessage(msg: { jobId: number; sweepPoints: unknown[] }) {
+        const results = msg.sweepPoints.map(() => ({ cls: "unclassified" }));
+        queueMicrotask(() => { for (const f of [...(listeners["message"] || [])]) f({ data: { jobId: msg.jobId, results } }); });
+      },
+    };
+  }
+
+  it("runSweep dispatches one tile per row, fires onTile for each, and resolves done with the tally", async () => {
+    const pool = new PoolClass([echoWorker()], null);
+    const axes = [
+      { ref: { kind: "poleRe", poleIdx: 0 }, min: -1, max: 1, n: 2 },
+      { ref: { kind: "poleIm", poleIdx: 0 }, min: -1, max: 1, n: 2 },
+    ]; // 2-D ⇒ n1 = 2 rows
+    const rows: number[] = [];
+    const { done } = pool.runSweep({
+      scenario: SCENARIO, mode: "bounded", axes,
+      onTile: (t: { row: number }) => rows.push(t.row),
+      onError: () => {},
+    });
+    const summary = await done;
+    expect(rows.slice().sort()).toEqual([0, 1]);       // one onTile per row
+    expect(summary.totalTiles).toBe(2);
+    expect(summary.tilesDone).toBe(2);
+    expect(typeof summary.msTotal).toBe("number");
+  });
+
+  it("when the LAST worker dies, both the in-flight tile AND the queued tiles drain (no hang)", async () => {
+    const w = { addEventListener() {}, removeEventListener() {}, postMessage() {}, terminate() {} };
+    const pool = new PoolClass([w], null);
+    const inflight = pool.submitTile({}, 1, POINTS, null);   // dispatched to the one worker ⇒ in-flight
+    const queued = pool.submitTile({}, 1, POINTS, null);     // no idle worker ⇒ waits in `pending`
+    expect(pool.activeJobs.size).toBe(1);
+    expect(pool.pending.length).toBe(1);
+
+    pool._onWorkerError(w, "boom");                          // the only worker dies
+
+    expect(pool.workers.length).toBe(0);
+    await expect(inflight).resolves.toBeNull();             // its in-flight tile settled
+    await expect(queued).resolves.toBeNull();               // the pending tile drained (survivor=0 branch)
+  });
+});

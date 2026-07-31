@@ -123,6 +123,16 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   **Remaining lane gaps are P2** (schwarz `isUsable`/preempt/`handle.cancel`/`onUnavailable` — schwarz crash-settle
   already covered; param-slice-pool event-wiring/survivor) → **optional B4-2c / fold into Group C**. B4-2a (#184)
   now **merged** (7a025e3).
+- **2026-07-31 · stage B4-2c (PR → refactor/main):** **QD-UI-1 → lifecycle net COMPLETE for all 6 lanes** — added
+  `vitest/schwarz-cpu-worker-lifecycle.test.ts` (9: `isUsable` gate / `onUnavailable` / streaming passes + stale-jobId
+  / preempt / `handle.cancel` / cancel-before-spawn) + 2 `param-slice-pool.test.ts` cases (`runSweep` event-wiring;
+  survivor=0 drain). Tests-only, mutation-verified (3 guards broken → each fails only its target → reverted via Edit).
+  Green 2092/240. **FINDING (evidence):** the remaining 3 lanes do NOT fit the C1a `createWorkerLane` factory —
+  sym=terminate-on-supersede+progress+F4-latch, schwarz=`isUsable`+streaming-handle, param-slice=N-worker pool. So
+  **C1b is revised** from "collapse onto the factory" to "extract the shared crash-settle + ensureReady-latch
+  FRAGMENT" (the drift-prone piece that shipped the schwarz Pass-1/3 bug). PLAN v1 C1 "6 lanes = config" premise →
+  flagged for revision at the C1b design gate (NOT rewritten in this tests-only PR). C1a (#186) now **merged**
+  (007681a).
 - **2026-07-31 · stage C1a (PR → refactor/main):** **QD-UI-1 → PSW 3× lane duplication ELIMINATED** (86c7bcf) —
   primary/aux/live collapsed to a `createWorkerLane(cfg)` factory (primary-solver-worker.mjs 395→238, −40%),
   behavior-preserving (net stays green 20/20; full 2081/239), independent fallback latches kept. First structural
