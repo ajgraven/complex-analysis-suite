@@ -124,3 +124,25 @@
   assertion counts stay invisible to Vitest and the silent-shrink guard is still needed.
 - **CHECKPOINT (not a plan deviation):** did NOT implement B1 — a delicate assertion-parity migration + a very
   long session. Recommend implementing with fresh context. Group A remains a clean, complete, merged deliverable.
+
+## 2026-07-30 — Phase D · Stage B1 (parallelize node-suite) IMPLEMENTED + honest findings — PR opened
+- User chose "continue now". Implemented per the recorded design: `vitest/node/_run.ts` (`runNodeSuiteFile`,
+  lazy requires) + 26 generated thin specs `vitest/node/<name>.test.ts` (`// @vitest-environment node`);
+  deleted the serial `vitest/node-suite.test.ts`; updated the config comment. `app/node-test.js`, the 26
+  test files, and the harness are UNCHANGED. **KEPT FLOORS** (D-4 keeps `harness.ok` wrapped → per-file counts
+  invisible to Vitest, so the silent-shrink guard is still needed) — a deliberate deviation from the subagent's
+  "retire FLOORS" suggestion, justified.
+- **Parity verified:** oracle `node app/node-test.js` = **2329 passed / 0 failed**; full `pnpm test` =
+  **2056 passed / 233 files** (was 2031/208: −1 wrapper, +26 specs); build/typecheck/lint exit 0.
+- **HONEST speed result: B1 is NEUTRAL on wall time** (~132s ≈ baseline ~105-131s). `solvers.test.js` (~77s)
+  is the long pole; on ~4 cores the per-spec bootstrap overhead offsets the smaller-file parallelism. The
+  review's "~40% cut from B1 alone" was wrong. B1's real value: **per-file reporting/isolation** (a failing
+  node file is named) + it **enables B2**. (First measure showed collect 34s from a module-scope require in
+  _run.ts; fixed by lazy requires → collect 573ms.)
+- **SCOPE DISCOVERY for B2 (recorded for the fresh session):** `solvers.test.js` is a **1,915-line monolithic
+  `run()`** (10-1915) — shared helpers + `vm` setup + 8 `runFamilyBattery` blocks with huge inline preset
+  arrays, interleaved; **no `section()` dividers / clean sub-function seams.** The review's "flat independent
+  blocks" was optimistic. Sharding it parity-safely is a **delicate refactor of the safety net**, not the
+  low-risk change B2 was scoped as → per the abort criteria ("footprint materially exceeds plan"; "migration
+  risk significant"), **deferred B2 to a fresh session** (user agreed: "land B1 now, do B2 fresh").
+- Committed c3cd354. Pushing B1; PR to `refactor/main`; auto-merge on green (honest PR — isolation, not speed).
