@@ -241,3 +241,24 @@
   run (node/test-infra, no GPU). Committed 48f89cb; PR → refactor/main; merge on green.
 - **Addresses part of QD-UI-1** (the worker-lane crash + messageerror contract now pinned before the C1 lane
   dedup) + QD-UI-4 (the untyped/asymmetric envelope behavior frozen). Remaining: **B4-2b** (sym/schwarz/pool gaps).
+
+## 2026-07-31 — Phase D · Stage B4-2b (SymWorker crash net) — PR opened
+- Continued per user "keep going after merging #184". B4-2a (#184) merged (`7a025e3`); refactor/main
+  re-confirmed green (2078/238). Cut `refactor/B4-2b-lanes`; **reused** `vitest/helpers/fake-worker.mjs`.
+- **B4-2b delivered (TESTS-ONLY, no source change): `vitest/sym-worker-crash-char.test.ts`, 3 tests.**
+  Completes the worker-CRASH-contract net for the solver lanes (PSW in B4-2a + sym here). Pins, verified
+  against `algebra/sym-worker.mjs`: worker `error` WHILE A JOB is in flight → reject `/sym-worker crashed/`
+  + `detachAbort` (F3) + teardown, and it is NOT the sticky latch (:59-69); **F4** — an IDLE `error` (no job)
+  → sticky `_fallback = true` (permanent main-thread fallback; a subsequent `ensureReady()` does not respawn)
+  (:70-72); `messageerror` absence — sym has no handler, so `.fire('messageerror')` leaves the job in-flight.
+  (sym-worker-lifecycle/sym-worker-thread already cover cancel/supersede/the caught-job-`m.error` path; the
+  worker-level error EVENT + F4 were the gap.)
+- **Mutation-verified the net BITES:** breaking F4 (`if (!hadJob) _fallback = true` → `if (false && …)`) failed
+  exactly the F4 test (1/3), then reverted → sym-worker.mjs byte-identical to HEAD.
+- Green: build/typecheck/lint exit 0; `pnpm test` **2081 passed / 239 files** (+3 / +1 vs 2078/238). Committed
+  932fb64; PR → refactor/main; merge on green.
+- **Scope note:** B4-2b completes the high-value worker-CRASH contract (PSW + sym). The remaining P2 lane-polish
+  gaps — schwarz `isUsable()`/renderField-preempt/`handle.cancel`/`onUnavailable` (schwarz crash-settle is
+  ALREADY covered by `schwarz-cpu-worker-crash.test.ts`), and param-slice-pool event-wiring/survivor-re-dispatch
+  (a different, N-worker shape) — are **optional → B4-2c, or fold into Group C** when those files change for the
+  lane dedup. **QD-UI-1** further addressed (all three solver-worker lanes' crash contract now pinned).

@@ -150,6 +150,10 @@ cycle can land in parallel with Stage 0; all QD structural work (C/D/E) is gated
   the PSW crash/messageerror net (3 lanes; the C1 dedup target; 7 tests, mutation-verified, tests-only); **B4-2b**
   sym + schwarz + param-slice-pool gaps. Existing green lane tests (`psw-lifecycle`, `schwarz-cpu-worker-crash`,
   `sym-worker-*`, `param-slice-pool`) left untouched — DRY them onto the helper during C1/C2, not while laying the net.
+  · **B4-2b** ✅ (2026-07-31): SymWorker crash net (3 tests) — **completes the worker-CRASH contract for all 3 solver
+  lanes** (PSW + sym). The remaining gaps are **P2 lane-polish only** (schwarz `isUsable`/preempt/`handle.cancel`/
+  `onUnavailable` — its crash-settle is already covered; param-slice-pool event-wiring/survivor, an N-worker shape)
+  → **optional B4-2c, or fold into Group C** when C1 touches those files. The high-value net (crash contracts) is done.
 
 ### Group C — Duplication collapse (S2), behind the B4 net
 - **C1 — `createWorkerLane()` factory (QD-UI-1).** Collapse the 6 worker lifecycles to config; makes

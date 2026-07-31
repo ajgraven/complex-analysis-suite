@@ -116,3 +116,10 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   (asymmetric envelope behavior frozen). **Remaining → B4-2b:** sym + schwarz + param-slice-pool lane gaps.
   The underlying 6× duplication itself remains **open → Group C** (this net is its safety net). B4-1 (#183) now
   **merged** (e1a148a).
+- **2026-07-31 · stage B4-2b (PR → refactor/main):** **QD-UI-1 → further addressed** (932fb64) — the SymWorker
+  crash contract is now pinned (`vitest/sym-worker-crash-char.test.ts`, 3 tests): worker-level `error` (job in
+  flight → reject; F4 idle → sticky fallback), `messageerror` absence. Together with B4-2a, **all three
+  solver-worker lanes' crash contract is frozen** before the Group-C lane dedup. Tests-only; mutation-verified.
+  **Remaining lane gaps are P2** (schwarz `isUsable`/preempt/`handle.cancel`/`onUnavailable` — schwarz crash-settle
+  already covered; param-slice-pool event-wiring/survivor) → **optional B4-2c / fold into Group C**. B4-2a (#184)
+  now **merged** (7a025e3).
