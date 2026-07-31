@@ -20,11 +20,12 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   **Carve-out 3 (`exactValueStr` + `fmtRat` → NEW `algebra-format.mjs`) — MERGED (#197).** **Carve-out 4 (`fmtRatio` +
   `ratioStrRec` ratio-prefix formatters → extend `algebra-format.mjs`) — MERGED (#198).** **Carve-out 5 (`_parseMomentToken`
   + `_parseMomentNum` moment parser → NEW `algebra-moment-parse.mjs`) — MERGED (#199).** **Carve-out 6 (`withGuidance` +
-  `_isCapFailure` cap-failure guidance → extend `algebra-labeling.mjs`) — MERGED (#200).**
-- **MILESTONE: 6 carve-outs done, all merged.** installAlgebra now has 3 pure companion modules (`algebra-labeling` =
-  verdict prose + failure guidance; `algebra-format` = value + ratio formatters; `algebra-moment-parse` = input parser) +
-  the in-file `_verdictBadge` lift; ~50 new characterization tests over logic that had ZERO coverage. **Holding at this
-  milestone for user direction** (do not auto-start carve-out 7).
+  `_isCapFailure` cap-failure guidance → extend `algebra-labeling.mjs`) — MERGED (#200).** **Carve-out 7 (`_pronyLatex`
+  Prony-poly math→LaTeX → NEW `algebra-latex.mjs`) — PR #201 OPEN.**
+- **6 merged + carve-out 7 in flight** ("keep carving"). installAlgebra now has 4 pure companion modules
+  (`algebra-labeling` = verdict prose + failure guidance; `algebra-format` = value + ratio formatters; `algebra-moment-parse`
+  = input parser; `algebra-latex` = math→LaTeX) + the in-file `_verdictBadge` lift; ~58 new characterization tests over logic
+  that had ZERO coverage. The #201 fallback continues to carve-out 8 (valStr+substList) on merge.
 - **Shape chosen by deps each time:** a NEW MODULE when the dep is cleanly importable (1: posDimDesc; 3: QDEquations.ratApprox
   via side-effect import; 4: the co-located `exactValueStr`; 5: ZERO external deps — a pure leaf); an IN-FILE IIFE lift when
   a dep is woven through installAlgebra (2: latexPlain ~50×).
@@ -35,32 +36,34 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **QD-ALG-6 DECLINED** (carve-out 3): tolerance literals scattered at unrelated sites; not a pure computation. `poleCentroid`
   inline copy = a DEDUP of the tested `QD.poleCentroid`, not an extraction (noted by the census).
 - Cadence: merge on green (user delegates). `APPROVED: PLAN.md v1`.
-  Roadmap §8: A✓ / B✓ / C✓ / **D (ui.mjs seams✓; installAlgebra decomposition underway — carve-outs 1✓ 2✓ 3✓ 4✓ 5✓ 6✓)** / E / F.
+  Roadmap §8: A✓ / B✓ / C✓ / **D (ui.mjs seams✓; installAlgebra decomposition underway — carve-outs 1✓ 2✓ 3✓ 4✓ 5✓ 6✓ 7(open))** / E / F.
 
 ## Branches / PR
-- Integration `refactor/main` @ **4e34dff** (#200 merge; this STATE commit advances it). Tree clean. **No open PR.**
+- Integration `refactor/main` @ **5a52cc9** (this STATE commit advances it). Tree clean.
+- **OPEN PR #201** — `refactor/d-alg-carve-7-prony-latex` @ c74c9c1 (off 5a52cc9): carve-out 7. CI running
+  (both in_progress at open); subscribed + fallback armed (21:01Z) that merges on green AND continues to carve-out 8.
 - Merged stage PRs (23): A1 #178 … D-alg-carve-5 #199, **D-alg-carve-6 #200 (4e34dff)**.
 
 ## Validation state (green bar)
-- **`refactor/main` @ 4e34dff — ALL GREEN (post-#200-merge re-confirmed firsthand):** build/typecheck/lint exit 0;
-  `pnpm test` **2189 passed / 250 files**. (installAlgebra carve-out nets 1–6: 11+10+8+6+9+6 = 50 tests.)
+- **`refactor/main` @ 5a52cc9 — ALL GREEN:** build/typecheck/lint exit 0; `pnpm test` **2189 passed / 250 files**.
+- **PR #201 stage branch @ c74c9c1 — ALL GREEN (firsthand):** build/typecheck/lint exit 0; `pnpm test`
+  **2197 passed / 251 files** (+8, +1 file — new headless `algebra-prony-latex.test.ts`). Lands on merge.
 
 ## Uncommitted / unverified
-- None. #200 merged + pulled; post-#200-merge green re-confirmed; this STATE commit direct to `refactor/main`.
+- None. Carve-out 7 committed to its stage branch (c74c9c1) + pushed; this STATE commit direct to `refactor/main`.
 
 ## Known blockers / risks
-- No open PR. No blockers.
-- installAlgebra's remaining bulk is DOM-bound (QD-ALG-2) / store-coupled; after the census's ~14-remaining pure candidates
+- PR #201 open, CI in progress; drive-to-green posture (my PR). No blockers.
+- installAlgebra's remaining bulk is DOM-bound (QD-ALG-2) / store-coupled; after the census's ~13-remaining pure candidates
   are worked through, the residue is DOM/store readouts + builders — those need a strategy shift (jsdom-drive), not pure extraction.
 
 ## Next concrete steps
-1. **HOLDING at the 6-carve-out milestone for user direction.** Options: (a) keep carving — carve-out 7 = `_pronyLatex`
-   (Prony-poly math→LaTeX), then `valStr`+`substList`, per the census (~14 pure left); (b) pause to review the PR stack;
-   (c) the deferred char-first UNIFICATION of the 3 now-netted verdict builders (needs an approval token — changes strings);
-   (d) pivot to the DOM-bound sidebar (QD-ALG-2) — a strategy shift (jsdom-drive), not pure extraction.
-2. **Carve-outs 7+** — census ranking: `_pronyLatex` (math→LaTeX), `valStr`+`substList` (PROV_UI tests mock the real impls),
-   `buildHForm`/`friendlyReim`/`isForkedColumn`/`_relKey`/… , then `latexOf`(+`reimSafeLatex`) pure-if-injected.
-3. Group order: A✓ B✓ C✓ → **D (installAlgebra decomposition underway — 6 carve-outs; census: ~14 pure left)** → E → F.
+1. **Merge #201 on green → continue to carve-out 8** (fallback armed 21:01Z; "keep carving"). Carve-out 8 = `valStr` +
+   `substList` (the PROV_UI label/value formatters whose real impls the PROV_UI tests currently MOCK; injected like
+   ratioStrRec was) → extend `algebra-format.mjs`. Firsthand-verify the inject sites, net-first, own PR.
+2. **Carve-outs 9+** — census ranking: `buildHForm`/`friendlyReim`/`isForkedColumn`/`_relKey`/… (cheap stragglers),
+   then `latexOf`(+`reimSafeLatex`) as a pure-if-injected pair (→ the new `algebra-latex.mjs`).
+3. Group order: A✓ B✓ C✓ → **D (installAlgebra decomposition underway — 6 merged + #201; census: ~13 pure left)** → E → F.
 
 ## Resume commands
 ```
