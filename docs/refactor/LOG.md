@@ -712,3 +712,22 @@
   parameterized) left as-is — noted; it can reference `QD.IDENTITY_TOL` in a later param-slice touch.
 - **Green bar:** build/typecheck/lint exit 0; `pnpm test` **2211 passed / 254 files** (+3, +1 file). Cut
   `refactor/p1-a1-residuals`; PR → refactor/main; merge on green.
+
+## 2026-08-01 — Phase 1 · Stage p1-f1-depcruise (F1 — wire dependency-cruiser) — PR opened
+- **Phase 1 close-out (F1):** the "planned follow-on" the root ESLint config header + MIGRATION.md "Ongoing"
+  anticipated — a dependency-cruiser graph gate for the two invariants ESLint's `no-restricted-imports` can't do:
+  NO import cycles, and the strictly-downward shape (no package→app, no app→app). No app/package CODE changed.
+- **Config** (`.dependency-cruiser.cjs`, root): 3 error rules — `no-circular`, `no-package-to-app` (^packages/ → ^apps/),
+  `no-cross-app` (apps/$1 → apps/other via the `$1` backref). `tsPreCompilationDeps: true` so TYPE-ONLY imports are in
+  the graph — load-bearing: CD-4 was a type-only render cycle (fixed A3) a runtime-only crawl can't see; this keeps a
+  type-only cycle from silently reappearing. node_modules not followed; dist/build/coverage/.vite excluded.
+- **Wiring:** new `dep:check` script (`depcruise packages apps`) folded into `pnpm lint` (`eslint . && pnpm dep:check
+  && …`). One source ⇒ enforced in the LOCAL green bar, the CI `build` job's Lint step, AND deploy-pages.yml's lint (so
+  the graph rules gate publishing too). ci.yml Lint step comment updated to name it.
+- **Net + mutation-verify:** the config PASSES on the current graph (580 modules / 1361 deps, 0 violations — the codebase
+  already conforms, so behavior-preserving). Mutation-verified ALL THREE rules — planted a runtime cycle + a package→app
+  import + an app→app import (each fired with the right rule name) — and separately a pure `import type` cycle (fired ⇒
+  tsPreCompilationDeps genuinely catches the CD-4 class). All temp files removed; clean re-run.
+- **Green bar:** build/typecheck/lint(+dep:check)/test exit 0; `pnpm test` **2211 / 254** (unchanged — F1 adds no unit
+  tests; its "net" is the passing graph gate + the mutation-verify). Cut `refactor/p1-f1-depcruise`; PR → refactor/main.
+- **Phase 1 COMPLETE** (A1 residuals #204 + F1). Next: Phase 2 (the D1 enabler — convert the 11 QD-ALG-3 source-text tests → jsdom).
