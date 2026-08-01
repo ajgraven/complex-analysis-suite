@@ -24,30 +24,37 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **installAlgebra decomposition (QD-ALG-1):** 9 PURE carve-outs MERGED (#195–#203) into 4 companion modules + a badge
   lift, ~69 new char tests — a **prelude**. The real D1 (DOM-bound QD-ALG-2 sidebar + store-coupled bulk) is unstarted,
   gated by Phase 2's net. installAlgebra still ≈4.1k lines (algebra-ui.mjs:714; file 4,849).
+- **Phase 1 UNDERWAY — PR #204 open** (`refactor/p1-a1-residuals`): the two A1 residuals, one behavior-preserving PR —
+  **QD-ALG-7** (`edges` getter → `.slice()` defensive copy; no caller mutated it) + **QD-SOLV-6** (the ×3 open-coded
+  `maxRelDiff < 1e-6` identity gate → one exported `IDENTITY_TOL`; default uniformly 1e-6, override semantics
+  unchanged). Net-first + mutation-verified; green 2211/254. Awaiting merge-on-green.
 - Cadence: merge on green (delegated). `APPROVED: PLAN.md v1` + `APPROVED: D1c verdict-unification`.
-  Roadmap: A✓ / B✓ / C✓ / **D (9 carve-outs merged; real D1 → Phases 2–3)** / E (E1 deferred, E2=Phase 5) / F (=Phase 1).
+  Roadmap: A✓ / B✓ / C✓ / **D (9 carve-outs merged; real D1 → Phases 2–3)** / E (E1 deferred, E2=Phase 5) / **F1=Phase 1 (in progress)**.
 
 ## Branches / PR
-- Integration `refactor/main` @ **3d4080d** (this completion-plan commit advances it). Tree clean. **No open PR.**
+- Integration `refactor/main` @ **b74cb3e** (this STATE edit advances it). Tree clean. **Open PR #204** →
+  `refactor/p1-a1-residuals` (Phase 1 A1 residuals; QD-ALG-7 + QD-SOLV-6).
 - Merged stage PRs (26): A1 #178 … D-alg-carve-9 #203 (eaff289).
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at 3d4080d (post-#203): build/typecheck/lint exit 0; `pnpm test` **2208 / 253 files**.
-  This checkpoint is **docs-only** (COMPLETION-PLAN.md + LOG/PLAN/STATE) — no code touched, green bar unchanged.
+- **`refactor/main` — ALL GREEN** at b74cb3e (docs-only completion-plan commit): `pnpm test` **2208 / 253 files**.
+- **PR #204 branch — ALL GREEN:** build/typecheck/lint exit 0; `pnpm test` **2211 / 254 files** (+3 tests, +1 file —
+  the new `solver-identity-tol.test.ts`; the QD-ALG-7 assertions live inside the existing store spec).
 
 ## Uncommitted / unverified
-- None. Docs-only planning commit, direct to `refactor/main`.
+- PR #204 work (code + both nets + LOG/ISSUES) is committed on `refactor/p1-a1-residuals` (61d593d) and pushed;
+  this STATE edit advances `refactor/main`. Nothing uncommitted.
 
 ## Known blockers / risks
-- No open PR. No blockers.
+- **Open PR #204** (awaiting merge-on-green). No blockers.
 - **Phase 2 gates Phase 3:** the 11 source-text algebra tests (QD-ALG-3) pin *text*, not *behavior*, so they cannot
   guard a decomposition — they must be converted to behavioral jsdom first. No installAlgebra structural work before that.
 
 ## Next concrete steps
-1. **Begin Phase 1** (low-risk, unblocked, no new net; ~2–3 PRs, one PR each): **F1** wire dependency-cruiser
-   (downward-only + no-cycles in `ci.yml`) + **A1 residuals** — QD-ALG-7 (`edges` getter `.slice()`,
-   algebra-store.mjs:3115) & QD-SOLV-6 (centralize `identityOK` tol — pin each of the 3 sites first; never widen a tol).
-2. Then Phase 2 (the D1 enabler). Group order: A✓ B✓ C✓ → **D (→ Phases 2–3)** → E2 (Phase 5) → F1 (Phase 1). E1 deferred.
+1. **Merge #204 on green** (build + browser complete), then pull + re-confirm green on `refactor/main`.
+2. **Continue Phase 1:** **F1** — wire `dependency-cruiser` (downward-only + no-cycles in `ci.yml`). Then **Phase 2**
+   (the D1 enabler: convert the 11 QD-ALG-3 source-text tests → behavioral jsdom). Group order: A✓ B✓ C✓ →
+   **D (→ Phases 2–3)** → E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
