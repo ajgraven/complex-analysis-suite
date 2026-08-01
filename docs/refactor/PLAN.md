@@ -202,6 +202,10 @@ cycle can land in parallel with Stage 0; all QD structural work (C/D/E) is gated
 consistent with the broad-sweep mandate; can pause at any group boundary.
 
 ## 9. Decision points requiring your input
+> **RESOLVED (2026-08-01)** — all four answered; see [`COMPLETION-PLAN.md`](COMPLETION-PLAN.md) §1: D-1 →
+> `{re:0}` (landed A1 #178); D-2 → folderize LATE (E2); **D-3 → E1 deferred**; D-4 → `harness.ok` kept wrapped.
+> A new behavioral token was also granted there: **D1c verdict-unification**.
+
 - **D-1 — QD-SOLV-3 fallback (A1).** Aligning the 5th centroid to `QD.poleCentroid` changes one empty-pole
   fallback from `{re:1,im:0}` to `{re:0,im:0}`. It only affects a degenerate no-finite-pole PQD-singular input.
   *Recommendation:* align to `{re:0}` (consistency) — but it is a (tiny) behavior change needing your OK per §3.
@@ -224,3 +228,7 @@ consistent with the broad-sweep mandate; can pause at any group boundary.
   2332/0, Σ shard contributions = 451 (== pre-split). The atomic §PB block [826-935] (~38s) caps further gains.
 - Remaining (B3, B4, C1–C3, D1–D2, E1–E2, F1): NOT STARTED. Cadence: **auto-merge on green** (user).
 - Deferred/open: QD-ALG-7 (→ Group D), QD-SOLV-6 (own analysis); §PB sub-block split (more solvers speed, higher risk).
+- **2026-08-01 — completion plan committed.** Group D installAlgebra: 9 PURE carve-outs done (#195–#203, a prelude);
+  the real D1 (DOM-bound decomposition) is sequenced in [`COMPLETION-PLAN.md`](COMPLETION-PLAN.md): Phase 1 (F1 +
+  A1 residuals) → Phase 2 (source-text→behavioral net, the D1 enabler) → Phase 3 (D1a/b → gate → **D1c token✓**/d)
+  → Phase 4 (D2) → Phase 5 (E2). **E1 deferred.** Next: **Phase 1**.

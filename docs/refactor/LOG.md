@@ -671,3 +671,22 @@
 - **installAlgebra: 9 carve-outs done.** `algebra-latex.mjs` now holds `_pronyLatex` + `buildHForm`. Census-ranked next:
   the cheap predicates (`isForkedColumn`, `_relKey`, `_substKey`, `friendlyReim`, `refMeaning`, …), then the
   latexPlain-injection carves (substList, latexOf, reimSafeLatex).
+
+## 2026-08-01 — Planning checkpoint · COMPLETION-PLAN committed (direct to refactor/main)
+- **Milestone, not a code stage.** After the 9-carve-out inflection I presented a 5-phase completion plan and asked
+  three decisions; user answered: **"1. Take the pragmatic path. 2. Defer. 3. Do the D1c verdict-unification token.
+  Commit this so it's tracked."** Committed as a tracked doc so the home stretch is on record.
+- **NEW `docs/refactor/COMPLETION-PLAN.md`** (APPROVED 2026-08-01): sequences PLAN.md Groups D/E/F into 5 phases and
+  records the decisions. (1) pragmatic path = do D1 enabler + D1a/D1b, **re-evaluate at a gate before D1c/D1d**;
+  (2) **E1 deferred** (resolves PLAN §9 D-3); (3) **D1c verdict-unification token GRANTED** — the one authorized
+  behavioral change (unifies the 3 drifted verdict builders doClassify@3521 / doAutoSolve@3275 / _verdictBadge@4693;
+  ships behind a net, honest labeling preserved, string delta logged).
+- **Grounded firsthand before committing the figures:** installAlgebra still ≈4.1k lines (algebra-ui.mjs:714, file
+  4,849) — the carve-outs were a prelude; the remaining mass is DOM-bound (QD-ALG-2) + store-coupled. The true D1
+  enabler is Phase 2: convert the **11** algebra source-text (readFileSync+regex) tests → behavioral jsdom (QD-ALG-3)
+  — corrected my earlier "17" (15 total readFileSync in QD vitest, 11 algebra). F1 unstarted (no dependency-cruiser
+  config or CI). ui.mjs 1,891 lines / 0 exports / 16 ui-*.mjs factories. 58 flat app/*.mjs (E2). Green 2208/253.
+- **PLAN.md updated (surgical):** §9 marked RESOLVED → COMPLETION-PLAN §1; §10 status appended. No change to the
+  approved v1 body/findings.
+- **Recommended immediate next step: Phase 1** (F1 dependency-cruiser + A1 residuals QD-ALG-7 `.slice()` /
+  QD-SOLV-6 `identityOK` tol). Behavior-preserving, unblocked, needs no new net.

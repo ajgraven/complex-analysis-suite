@@ -12,52 +12,45 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 
 ## Phase / stage
 - **Phase D — Execute. Groups A + B + C COMPLETE. Group D in progress.**
-- **ui.mjs pure-seam extraction COMPLETE** — D-ui-seam (#193) + D-ui-seam-2 (#194) both MERGED (netted
-  `ui-domain-mode.mjs` + `ui-geometry.mjs`; ui.mjs's first executable coverage, 25 tests).
-- **installAlgebra decomposition UNDERWAY** (QD-ALG-1; user: "Carve-outs" + "keep carving") — extract its PURE
-  sub-computations, net-first, one PR each. **9 carve-outs, ALL MERGED (#195–#203):**
-  1 classifyVerdict+posDimDesc→NEW algebra-labeling #195✓ · 2 `_verdictBadge` (IIFE lift) #196✓ · 3 exactValueStr+fmtRat→NEW
-  algebra-format #197✓ · 4 fmtRatio+ratioStrRec (+format) #198✓ · 5 `_parseMomentToken`+`_parseMomentNum`→NEW algebra-moment-parse
-  #199✓ · 6 withGuidance+`_isCapFailure` (+labeling) #200✓ · 7 `_pronyLatex`→NEW algebra-latex #201✓ · 8 valStr (+format;
-  substList DEFERRED) #202✓ · **9 buildHForm h(w) LaTeX (+algebra-latex) #203✓.** 4 pure companion modules
-  (labeling/format/moment-parse/latex) + the in-file badge lift; **~69 new char tests** over logic that had ZERO coverage.
-- **INFLECTION after carve-out 9:** the census's HIGH-VALUE pure targets (formatters, parser, guidance, LaTeX builders)
-  are DONE. What remains is (a) low-value trivial predicates (isForkedColumn/`_relKey`/`_substKey`/refMeaning),
-  (b) latexPlain-injection carves (substList/latexOf/reimSafeLatex — signature changes touching the tested PROV_UI
-  registry), or (c) the DOM-bound bulk of installAlgebra (QD-ALG-2, the real remaining mass — a jsdom-drive strategy
-  shift, NOT pure extraction). Fallback set to STOP + report the milestone after #203, not auto-grind (c).
-- **Shape by deps:** a NEW MODULE when the dep is cleanly importable (or a zero-dep leaf; 3/9 side-effect-import the QD
-  namespace module for ratApprox/RiemannLatex); an IN-FILE IIFE lift when a dep is woven through installAlgebra (2: `latexPlain` ~50×).
-- **QD-ALG-6 DECLINED** (scattered tolerance literals, not a pure computation); `poleCentroid` inline copy = a DEDUP of the tested `QD.poleCentroid`.
-- Cadence: merge on green (delegated). `APPROVED: PLAN.md v1`.
-  Roadmap §8: A✓ / B✓ / C✓ / **D (ui.mjs seams✓; installAlgebra — 9 carve-outs, 8 merged)** / E / F.
+- **COMPLETION PLAN committed & APPROVED (2026-08-01)** → `docs/refactor/COMPLETION-PLAN.md`. Sequences the home
+  stretch: **Phase 1** (F1 dependency-cruiser + A1 residuals QD-ALG-7/QD-SOLV-6) → **Phase 2** (source-text→behavioral
+  net = the D1 enabler, QD-ALG-3: convert the **11** algebra readFileSync tests → jsdom) → **Phase 3** (D1a
+  sidebar-as-data / D1b runOp single-flight → **re-eval gate** → **D1c verdict-unify [TOKEN GRANTED]** / D1d split)
+  → **Phase 4** (D2 ui.mjs→root) → **Phase 5** (E2 folderize 58 files). **E1 DEFERRED.**
+- **3 governing decisions (2026-08-01):** (1) pragmatic path — do the D1 enabler + D1a/b, re-evaluate before D1c/d;
+  (2) defer E1; (3) grant the **D1c verdict-unification token** — the one authorized behavioral change (unifies the 3
+  drifted verdict builders doClassify@3521 / doAutoSolve@3275 / _verdictBadge@4693; ships behind a net, honest
+  labeling kept, string delta logged).
+- **installAlgebra decomposition (QD-ALG-1):** 9 PURE carve-outs MERGED (#195–#203) into 4 companion modules + a badge
+  lift, ~69 new char tests — a **prelude**. The real D1 (DOM-bound QD-ALG-2 sidebar + store-coupled bulk) is unstarted,
+  gated by Phase 2's net. installAlgebra still ≈4.1k lines (algebra-ui.mjs:714; file 4,849).
+- Cadence: merge on green (delegated). `APPROVED: PLAN.md v1` + `APPROVED: D1c verdict-unification`.
+  Roadmap: A✓ / B✓ / C✓ / **D (9 carve-outs merged; real D1 → Phases 2–3)** / E (E1 deferred, E2=Phase 5) / F (=Phase 1).
 
 ## Branches / PR
-- Integration `refactor/main` @ **eaff289** (#203 merge; this STATE commit advances it). Tree clean. **No open PR.**
-- Merged stage PRs (26): A1 #178 … D-alg-carve-8 #202, **D-alg-carve-9 #203 (eaff289)**.
+- Integration `refactor/main` @ **3d4080d** (this completion-plan commit advances it). Tree clean. **No open PR.**
+- Merged stage PRs (26): A1 #178 … D-alg-carve-9 #203 (eaff289).
 
 ## Validation state (green bar)
-- **`refactor/main` @ eaff289 — ALL GREEN (post-#203-merge re-confirmed firsthand):** build/typecheck/lint exit 0;
-  `pnpm test` **2208 passed / 253 files**. (9 installAlgebra carve-out nets = ~69 of those.)
+- **`refactor/main` — ALL GREEN** at 3d4080d (post-#203): build/typecheck/lint exit 0; `pnpm test` **2208 / 253 files**.
+  This checkpoint is **docs-only** (COMPLETION-PLAN.md + LOG/PLAN/STATE) — no code touched, green bar unchanged.
 
 ## Uncommitted / unverified
-- None. #203 merged + pulled; post-#203-merge green re-confirmed; this STATE commit direct to `refactor/main`.
+- None. Docs-only planning commit, direct to `refactor/main`.
 
 ## Known blockers / risks
 - No open PR. No blockers.
-- installAlgebra's remaining bulk is DOM-bound (QD-ALG-2) / store-coupled — after the pure high-value targets (done), the
-  residue needs a strategy shift (jsdom-drive), not pure extraction.
+- **Phase 2 gates Phase 3:** the 11 source-text algebra tests (QD-ALG-3) pin *text*, not *behavior*, so they cannot
+  guard a decomposition — they must be converted to behavioral jsdom first. No installAlgebra structural work before that.
 
 ## Next concrete steps
-1. **HOLDING at the 9-carve-out milestone for user direction.** Options: (a) keep carving the trivial predicates
-   (isForkedColumn/`_relKey`/`_substKey` → a new predicates module — lowest-risk but low-value); (b) the latexPlain-injection
-   carves (substList/latexOf/reimSafeLatex — signature changes touching the tested PROV_UI registry); (c) pivot to the
-   DOM-bound sidebar (QD-ALG-2) — a jsdom-drive strategy shift, where installAlgebra's real remaining mass lives;
-   (d) pause to review the 9-PR stack. (Recommend (c) to keep denting QD-ALG-1; (a)/(b) are increasingly marginal.)
-2. Group order: A✓ B✓ C✓ → **D (installAlgebra — 9 carve-outs merged; high-value pure targets done)** → E → F.
+1. **Begin Phase 1** (low-risk, unblocked, no new net; ~2–3 PRs, one PR each): **F1** wire dependency-cruiser
+   (downward-only + no-cycles in `ci.yml`) + **A1 residuals** — QD-ALG-7 (`edges` getter `.slice()`,
+   algebra-store.mjs:3115) & QD-SOLV-6 (centralize `identityOK` tol — pin each of the 3 sites first; never widen a tol).
+2. Then Phase 2 (the D1 enabler). Group order: A✓ B✓ C✓ → **D (→ Phases 2–3)** → E2 (Phase 5) → F1 (Phase 1). E1 deferred.
 
 ## Resume commands
 ```
 git fetch && git checkout refactor/main && git pull
-pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2139/244 (2150/245 after #195)
+pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2208/253
 ```
