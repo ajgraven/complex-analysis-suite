@@ -73,6 +73,23 @@ module.exports = async function run() {
     }
   }
 
+  // ---- QD-ALG-7: the `edges` getter returns a defensive copy (was leaking the live array) ----
+  // The store exposes `get edges()`; its siblings `realVars`/`imagVars` already `.slice()`. Pins
+  // (a) the getter reflects the DAG's edges — GREEN before AND after the fix — and (b) mutating the
+  // returned array does not leak into the store's internal edges (the fix — RED before, GREEN after).
+  {
+    const st = QD.AlgebraStore.create();
+    st.seedFromSystem(system);
+    const ns = st.list();
+    const r = st.eliminate(ns[0].id, ns[1].id, st.sharedVars(ns[0].id, ns[1].id)[0]);
+    ok('QD-ALG-7 char: edges getter reflects the derived edges (2 edges, each {from,to})',
+       r.ok && Array.isArray(st.edges) && st.edges.length === 2 && st.edges.every((e) => e && e.from && e.to));
+    const leaked = st.edges;
+    leaked.push({ from: '__mutant__', to: '__mutant__' });
+    ok('QD-ALG-7 fix: edges getter returns a defensive copy — external mutation does not leak into the store',
+       st.edges.length === 2);
+  }
+
   // ---- ≡0 refusal (eliminate a node against itself shares a component) ----
   {
     const st = QD.AlgebraStore.create();

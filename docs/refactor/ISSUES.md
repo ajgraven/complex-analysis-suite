@@ -282,3 +282,9 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   `algebra-format` uses for QDEquations) → headless net (both symbolic + numeric modes covered). Carved VERBATIM (only
   QD→_QD; 4 fragments + the return line byte-identity-checked). The one caller (the φ/h reference card) resolves to the
   import. `algebra-latex.mjs` now holds `_pronyLatex` + `buildHForm`.
+- **2026-08-01 · stage p1-a1-residuals (PR → refactor/main):** **QD-ALG-7 → FIXED; QD-SOLV-6 → FIXED** (COMPLETION-PLAN
+  Phase 1, the two A1 residuals). QD-ALG-7: `edges` getter now returns `edges.slice()` (was leaking the live array;
+  no caller mutated it, so behavior-preserving) — content-pin + isolation net in `app/test/algebra-store.test.js`.
+  QD-SOLV-6: the ×3 open-coded `maxRelDiff < 1e-6` gate collapsed to one exported `IDENTITY_TOL = 1e-6` (default was
+  uniformly 1e-6 — structural, not value, divergence; override semantics unchanged) — net `vitest/solver-identity-tol.test.ts`
+  (mutation-verified). param-slice-common.mjs site D (already `opts.identityTol || 1e-6`) left as-is.

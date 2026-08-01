@@ -690,3 +690,25 @@
   approved v1 body/findings.
 - **Recommended immediate next step: Phase 1** (F1 dependency-cruiser + A1 residuals QD-ALG-7 `.slice()` /
   QD-SOLV-6 `identityOK` tol). Behavior-preserving, unblocked, needs no new net.
+
+## 2026-08-01 — Phase 1 · Stage p1-a1-residuals (QD-ALG-7 edges copy + QD-SOLV-6 identity-tol) — PR opened
+- **First Phase-1 PR** (COMPLETION-PLAN Phase 1; the two A1 residuals, one small behavior-preserving PR). Both are
+  low-severity encapsulation/consistency fixes; net-first + mutation-verified; no token needed (value-identical).
+- **QD-ALG-7 (algebra-store.mjs:3115):** the `edges` store getter returned the LIVE internal array (its siblings
+  `realVars`/`imagVars` already `.slice()`). Fixed → `return edges.slice()`. Verified NO caller mutates the returned
+  array (only `algebra-canvas.mjs` read-only `for…of` + read-only test `.length`/`.some`), so observationally
+  behavior-preserving. Net: a block in `app/test/algebra-store.test.js` (the store's bootstrapped home) — a content
+  pin (edges reflected, GREEN both sides) + an isolation assertion (external push does not leak — RED before, GREEN
+  after). Reverse mutation-verified in the pre-change run: only the isolation assertion failed on unmodified code.
+- **QD-SOLV-6 (solver.mjs):** the identity-check gate `maxRelDiff < 1e-6` was open-coded ×3 with the bare literal —
+  _computeIdentity (site A, via solveInverseQD), searchAlternates (site B), liveSolveStep (site C). The DEFAULT was
+  uniformly 1e-6 at every site (the "divergence" was structural: repeated literal, C non-overridable — NOT a value
+  difference). Centralized to one named `const IDENTITY_TOL = 1e-6`, exposed on the namespace, override semantics
+  UNCHANGED (C stays non-overridable). Behavior-preserving. Net: NEW `vitest/solver-identity-tol.test.ts` (3, headless
+  via solver-graph.mjs) — value pin `QD.IDENTITY_TOL===1e-6` [after-only] + site-A (solveInverseQD certifies the disk)
+  and site-C (liveSolveStep identityOK) accept-anchors [GREEN both sides]. Forward mutation-verified (IDENTITY_TOL→1e-30
+  ⇒ all 3 fail). The accept/REJECT boundary at 1e-6 stays pinned by the node batteries (solvers-1..4 identityOK true on
+  genuine QDs, !identityOK on spurious). **param-slice-common.mjs site D** (`opts.identityTol || 1e-6`, already
+  parameterized) left as-is — noted; it can reference `QD.IDENTITY_TOL` in a later param-slice touch.
+- **Green bar:** build/typecheck/lint exit 0; `pnpm test` **2211 passed / 254 files** (+3, +1 file). Cut
+  `refactor/p1-a1-residuals`; PR → refactor/main; merge on green.
