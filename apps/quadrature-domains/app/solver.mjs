@@ -113,6 +113,12 @@ const BOUNDARY_MAX_EXTRA     = 1500;
 const ORIGIN_RAYCAST_SAMPLES = 256;
 const LIVE_SOLVE_SAMPLES     = 96;
 
+// The quadrature-identity acceptance tolerance: a candidate φ is certified (identityOK) when the
+// verifier's maxRelDiff falls below this. Single source for the three gate sites (_computeIdentity /
+// searchAlternates / liveSolveStep); solveInverseQD & searchAlternates honor an options.identityTol
+// override, liveSolveStep uses the default. (QD-SOLV-6 — was the bare literal 1e-6 repeated ×3.)
+const IDENTITY_TOL           = 1e-6;
+
 // --------- Generic clone: must propagate every family-specific field ------
 function clonePhi(phi) {
   return {
@@ -1361,7 +1367,7 @@ function _solveResultUnivalent(res) {
 function _computeIdentity(family, phi, hData, options) {
   const univalenceSamples = options.univalenceSamples ?? UNIVALENCE_SAMPLES;
   const identitySamples   = options.identitySamples   ?? univalenceSamples;
-  const identityTol       = options.identityTol       ?? 1e-6;
+  const identityTol       = options.identityTol       ?? IDENTITY_TOL;
   const identity = family.verifyQuadratureIdentity(phi, hData,
     { numSamples: identitySamples, adaptiveSamples: options.adaptiveSamples });
   return { identity, identityOK: identity.maxRelDiff < identityTol };
@@ -1640,7 +1646,7 @@ function searchAlternates(hData, norm, knownSolutions, options = {}) {
     seed              = 0xBEEF0001,
     newton            = {},
     univalenceSamples = UNIVALENCE_SAMPLES,
-    identityTol       = 1e-6,
+    identityTol       = IDENTITY_TOL,
     diverseFraction   = 0.5,
     deflateFromKnown  = true,
     deflationAlpha    = 1,
@@ -1805,7 +1811,7 @@ function liveSolveStep(hData, initPhi, opts = {}) {
   const phi = family.canonicalizePhi(res.phi);
   const univalent = isBoundaryUnivalent(phi, numSamples);
   const identity = family.verifyQuadratureIdentity(phi, hData, { numSamples });
-  const identityOK = identity.maxRelDiff < 1e-6;
+  const identityOK = identity.maxRelDiff < IDENTITY_TOL;
   const originInside = opts.wantOriginInside ? originInsideOmega(phi) : undefined;
   return {
     success: true,
@@ -1853,7 +1859,7 @@ const _exports = {
   // Schema runtime — opt-in pack/unpack/clamp from declarative schema.
   packPhiBySchema, unpackPhiBySchema, applySchemaClamps,
   // Named numeric constants.
-  ZERO_THRESHOLD, DISK_CLAMP_OUT, DISK_CLAMP_IN, Z0_MAX_RADIUS, DEFAULT_FD_EPS,
+  ZERO_THRESHOLD, DISK_CLAMP_OUT, DISK_CLAMP_IN, Z0_MAX_RADIUS, DEFAULT_FD_EPS, IDENTITY_TOL,
 };
 // ESM (Phase 2 port). Classic solver.js stays frozen for the legacy browser loader + blob
 // workers; this .mjs is the native-module twin the test harness (and later the Vite graph)
