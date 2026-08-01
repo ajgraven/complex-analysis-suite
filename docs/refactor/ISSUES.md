@@ -288,3 +288,8 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   QD-SOLV-6: the ×3 open-coded `maxRelDiff < 1e-6` gate collapsed to one exported `IDENTITY_TOL = 1e-6` (default was
   uniformly 1e-6 — structural, not value, divergence; override semantics unchanged) — net `vitest/solver-identity-tol.test.ts`
   (mutation-verified). param-slice-common.mjs site D (already `opts.identityTol || 1e-6`) left as-is.
+- **2026-08-01 · stage p1-f1-depcruise (PR → refactor/main):** **F1 → DONE** (COMPLETION-PLAN Phase 1 close-out).
+  Wired dependency-cruiser (`.dependency-cruiser.cjs` + a `dep:check` folded into `pnpm lint`): `no-circular` +
+  `no-package-to-app` + `no-cross-app`, with `tsPreCompilationDeps: true` (type-only imports in the graph). Passes on
+  the current graph (580 modules, 0 violations); all 3 rules mutation-verified incl. a pure type-only cycle. **CD-4**
+  (type-only render cycle, fixed A3) is now ACTIVELY GATED — a regression fails `pnpm lint` locally + in CI + at deploy.

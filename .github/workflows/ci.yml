@@ -82,7 +82,11 @@ jobs:
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
+      # `pnpm lint` = ESLint (incl. the cross-app boundary rule) + `pnpm dep:check`
+      # (dependency-cruiser: no import cycles + strictly-downward package/app imports —
+      # see .dependency-cruiser.cjs) + each package's / app's own lint. One static-analysis
+      # gate; deploy-pages.yml runs the same `pnpm lint`, so the graph rules gate publishing too.
+      - name: Lint (ESLint + dependency-cruiser graph rules)
         run: pnpm lint
 
       - name: Typecheck
