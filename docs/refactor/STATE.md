@@ -33,9 +33,8 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   enforced in the local green bar, CI `build`, and the deploy gate. No app/package code changed.
 - **Phase 2 UNDERWAY (the D1 enabler, QD-ALG-3) — harness `vitest/_algebra-mount.ts` + per-file SPLITS** (markup
   assertions → behavioural jsdom `-dom` companion; source-structural residue slimmed into the node file). MERGED:
-  #206 (harness + section-order), #207 (eliminate-section). **PR 2.3 #208 OPEN** (`refactor/p2-3-labels-tooltips`):
-  honest-labels + tooltip-tiers splits (button labels; materialised-title ≤120 + relocated-hook absence;
-  mutation-verified). **4 of 11 converted.**
+  #206 (harness + section-order), #207 (eliminate-section), **#208 (honest-labels + tooltip-tiers splits; e22a852)**.
+  **4 of 11 converted. PR 2.4 next.**
 - **AUDIT REFINED + CALIBRATED:** the 11 are MIXES — (1) sidebar-MARKUP regex (brittle under **D1a** → behavioural),
   (2) FUNCTION-BODY/wiring (D1d → node), (3) ui-strings/style.css DATA (→ node). `resultStateOf` already behavioural.
   **User chose THOROUGH per-file splits** (do every mixed file the eliminate-section way). Remaining after #208:
@@ -44,28 +43,23 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   Roadmap: A✓ / B✓ / C✓ / **D (Phase 1✓; Phase 2 = QD-ALG-3 net, 1/11 → PR #206; then Phase 3 D1)** / E (E1 deferred, E2=Phase 5) / **F1✓**.
 
 ## Branches / PR
-- Integration `refactor/main` @ **ae336ca** (this STATE edit advances it). Tree clean. **Open PR #208** →
-  `refactor/p2-3-labels-tooltips` (Phase 2; honest-labels + tooltip-tiers behavioural splits).
-- Merged stage PRs (30): A1 #178 … #206, **p2-2-algebra-dom #207 (33e8bd9)**.
+- Integration `refactor/main` @ **e22a852** (#208 merge; this STATE edit advances it). Tree clean. **No open PR.**
+- Merged stage PRs (31): A1 #178 … #207, **p2-3-labels-tooltips #208 (e22a852)**.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at ae336ca (post-#207): build/typecheck/lint(+`dep:check`, 582 modules)/test exit 0;
-  `pnpm test` **2209 / 255**.
-- **PR #208 branch — ALL GREEN:** build/typecheck/lint(+`dep:check`, 584 modules)/test exit 0; `pnpm test` **2210 / 257**
-  (+2 behavioural `-dom` files, +1 test net).
+- **`refactor/main` — ALL GREEN** at e22a852 (post-#208-merge re-confirmed firsthand): build/typecheck/lint(+`dep:check`,
+  584 modules)/test exit 0; `pnpm test` **2210 passed / 257 files**.
 
 ## Uncommitted / unverified
-- PR #208 work (2 new `-dom` companions + 2 slimmed node files, LOG/ISSUES) is committed on
-  `refactor/p2-3-labels-tooltips` (ae95fd4) and pushed; this STATE edit advances `refactor/main`. Nothing uncommitted.
+- None. #208 merged + pulled; post-merge green re-confirmed; this STATE commit is direct to `refactor/main`.
 
 ## Known blockers / risks
-- **Open PR #208** (awaiting merge-on-green). No blockers.
+- No open PR. No blockers.
 - **Phase 2 gates Phase 3:** QD-ALG-3 markup assertions must become behavioural jsdom before installAlgebra
   structural work. 4 of 11 converted; function-body (D1d) + data assertions stay node-env.
 
 ## Next concrete steps
-1. **Merge #208 on green**, then pull + re-confirm green on `refactor/main`.
-2. **Phase 2 · PR 2.4:** continue THOROUGH splits — workflow-sections + scope-disclosure + tier6 (sidebar structure /
+1. **Phase 2 · PR 2.4 (IN PROGRESS):** THOROUGH splits — workflow-sections + scope-disclosure + tier6 (sidebar structure /
    scoped-op banner / setBusy marker; markup → behavioural, source/CSS residue node-env). Then **PR 2.5** — the
    interaction tests (shortcuts-table dispatch, canvas-chrome focus) + verdict-labeling (→ D1c). Group order:
    A✓ B✓ C✓ → **D (Phase 2 → Phase 3 D1)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
@@ -73,5 +67,5 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 ## Resume commands
 ```
 git fetch && git checkout refactor/main && git pull
-pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2209/255
+pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2210/257
 ```
