@@ -31,39 +31,48 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   `pnpm lint`): `no-circular` + `no-package-to-app` + `no-cross-app`, `tsPreCompilationDeps:true` (type-only imports,
   so the CD-4 class is gated). 580 modules / 0 violations; 3 rules mutation-verified incl. a type-only cycle. Now
   enforced in the local green bar, CI `build`, and the deploy gate. No app/package code changed.
-- **Phase 2 UNDERWAY (the D1 enabler, QD-ALG-3) — PR 2.1 #206 MERGED** (0fa765e): NEW reusable jsdom mount harness
-  `vitest/_algebra-mount.ts` (mounts installAlgebra headlessly — AlgebraCanvas is SVG, no canvas ctx; boot kernels →
-  scaffold → stub ctx → `tab-changed`) + first conversion `algebra-section-order.test.ts` node/source-regex →
-  jsdom/behavioural (mutation-verified). **1 of 11** source-text algebra tests converted. Audit recorded (LOG): the 11
-  are a MIX — clean DOM conversions, interaction tests, `resultStateOf` (extract+call), and genuine source-invariants
-  (comment hygiene / WCAG tokens / "every setVerdict has rigor" → node-env or D1c). **Next: PR 2.2.**
+- **Phase 2 UNDERWAY (the D1 enabler, QD-ALG-3):** PR 2.1 #206 MERGED (harness `vitest/_algebra-mount.ts` + section-order
+  behavioural). **PR 2.2 #207 OPEN** (`refactor/p2-2-algebra-dom`): eliminate-section converted as a SPLIT — NEW
+  `algebra-eliminate-section-dom.test.ts` (8 jsdom tests: picker placement, caption grouping, js-busy-lock marker,
+  ui-strings-materialised tooltip, elim-hint; mutation-verified) + slimmed node companion (function-body/wiring/
+  strings-data). **2 of 11 converted.**
+- **AUDIT REFINED (important):** the "11 source-text tests" are MIXES of three assertion kinds — (1) sidebar-MARKUP
+  regex (brittle under **D1a** → behavioural DOM), (2) FUNCTION-BODY/wiring regex (brittle under **D1d**, not cleanly
+  behavioural → stay node-env), (3) ui-strings/style.css DATA (not D1-brittle → stay). Each mixed file converts as a
+  SPLIT. `resultStateOf` is ALREADY behavioural (audit was wrong). honest-labels (~2 markup assertions) + tooltip-tiers
+  (~2) are mostly source-structural ⇒ **PR 2.3 likely CONSOLIDATES their few markup assertions into a shared spec
+  rather than a companion each — awaiting user calibration.**
 - Cadence: merge on green (delegated). `APPROVED: PLAN.md v1` + `APPROVED: D1c verdict-unification`.
   Roadmap: A✓ / B✓ / C✓ / **D (Phase 1✓; Phase 2 = QD-ALG-3 net, 1/11 → PR #206; then Phase 3 D1)** / E (E1 deferred, E2=Phase 5) / **F1✓**.
 
 ## Branches / PR
-- Integration `refactor/main` @ **0fa765e** (#206 merge; this STATE edit advances it). Tree clean. **No open PR.**
+- Integration `refactor/main` @ **5c81ba4** (this STATE edit advances it). Tree clean. **Open PR #207** →
+  `refactor/p2-2-algebra-dom` (Phase 2; eliminate-section behavioural split).
 - Merged stage PRs (29): A1 #178 … #205, **p2-1-mount-harness #206 (0fa765e)**.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at 0fa765e (post-#206-merge re-confirmed firsthand): build/typecheck/lint(+`dep:check`,
-  581 modules)/test exit 0; `pnpm test` **2210 passed / 254 files**.
+- **`refactor/main` — ALL GREEN** at 5c81ba4 (post-#206): build/typecheck/lint(+`dep:check`, 581 modules)/test exit 0;
+  `pnpm test` **2210 / 254**.
+- **PR #207 branch — ALL GREEN:** build/typecheck/lint(+`dep:check`, 582 modules)/test exit 0; `pnpm test` **2209 / 255**
+  (+1 file the behavioural companion, −1 test from the split consolidation).
 
 ## Uncommitted / unverified
-- None. #206 merged + pulled; post-merge green re-confirmed; this STATE commit is direct to `refactor/main`.
+- PR #207 work (`algebra-eliminate-section-dom.test.ts` new + slimmed `algebra-eliminate-section.test.ts`, LOG/ISSUES)
+  is committed on `refactor/p2-2-algebra-dom` (041d31c) and pushed; this STATE edit advances `refactor/main`. Nothing uncommitted.
 
 ## Known blockers / risks
-- No open PR. No blockers.
-- **Phase 2 gates Phase 3:** the source-text algebra tests (QD-ALG-3) pin *text*, not *behavior*; they must become
-  behavioral jsdom (mount harness now exists) before any installAlgebra structural work. 1 of 11 converted.
+- **Open PR #207** (awaiting merge-on-green). No blockers.
+- **Phase 2 gates Phase 3:** the source-text algebra tests (QD-ALG-3) pin *text*, not *behavior*; the D1a-brittle
+  (markup) assertions must become behavioural jsdom before installAlgebra structural work. 2 of 11 converted; the
+  function-body (D1d) and data assertions stay node-env.
 
 ## Next concrete steps
-1. **Phase 2 · PR 2.2 (IN PROGRESS):** convert the DOM-structure + label tests via the harness — honest-labels,
-   eliminate-section (picker placement), tooltip-tiers — + extract `resultStateOf` (algebra-results-drawer) for direct
-   testing; keep genuinely source-only guards as slimmed node-env checks. Each behavioural test passes against
-   unmodified algebra-ui.mjs + mutation-verified.
-2. Then **PR 2.3** (interaction tests: shortcuts dispatch, scope-disclosure, tier6 setBusy, canvas focus; +
-   op-runner/verdict-prose jsdom coverage). Group order: A✓ B✓ C✓ → **D (Phase 2 → Phase 3 D1)** → Phase 4 (D2) →
-   E2 (Phase 5). E1 deferred.
+1. **Merge #207 on green**, then pull + re-confirm green on `refactor/main`.
+2. **Phase 2 · PR 2.3 — AWAITING USER CALIBRATION** (asked): the remaining D1a-brittle markup assertions are few
+   (honest-labels ~2, tooltip-tiers ~2) — consolidate into ONE shared behavioural sidebar spec (buttons/labels/
+   tooltips/captions) vs a companion per file? And appetite: exhaustively split every mixed file, or convert just the
+   markup assertions D1a will break and move to Phase 3? Interaction tests (shortcuts/scope-disclosure/tier6/canvas)
+   follow. Group order: A✓ B✓ C✓ → **D (Phase 2 → Phase 3 D1)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
