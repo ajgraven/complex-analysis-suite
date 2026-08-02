@@ -42,35 +42,39 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   resultStateOf already behavioural. **User calibration was THOROUGH per-file splits — honoured for every D1a-relevant file.**
 - Cadence: merge on green (delegated). `APPROVED: PLAN.md v1` + `APPROVED: D1c verdict-unification`.
   Roadmap: A✓ / B✓ / C✓ / **D (Phase 1✓; Phase 2✓ QD-ALG-3 net; → Phase 3 D1)** / E (E1 deferred, E2=Phase 5) / **F1✓**.
-- **▶ PHASE 3 STARTING (D1 — installAlgebra decomposition), behind the Phase-2 behavioural net. User granted the
-  go-ahead (2026-08-02).** D1a sidebar-as-data (QD-ALG-2, behavior-preserving) → D1b runOp single-flight (QD-ALG-4,
-  behavior-preserving) → **re-eval gate** → D1c verdict-unify (QD-ALG-5, **token APPROVED** — the one behavioural
-  change) → D1d split into ctx-injected sub-units.
+- **▶ PHASE 3 UNDERWAY (D1 — installAlgebra decomposition), behind the Phase-2 behavioural net. User go-ahead
+  (2026-08-02).** D1a sidebar-as-data (QD-ALG-2) → D1b runOp single-flight (QD-ALG-4) → **re-eval gate** → D1c
+  verdict-unify (QD-ALG-5, **token APPROVED**) → D1d split into ctx-injected sub-units.
+  · **D1a NET-FIRST: PR #210 OPEN** (`refactor/p3-d1a-sidebar-snapshot`) — NEW `vitest/algebra-sidebar-html.test.ts`
+  snapshots the WHOLE normalized #controls-algebra DOM (mutation-verified — catches drift the `-dom` net misses).
+  No production change; it guards the upcoming mountSidebar → data-driven rewrite as behavior-preserving.
 
 ## Branches / PR
-- Integration `refactor/main` @ **8ab5693** (this Phase-2-closeout commit advances it). Tree clean. **No open PR.**
+- Integration `refactor/main` @ **d9e2623** (this STATE edit advances it). Tree clean. **Open PR #210** →
+  `refactor/p3-d1a-sidebar-snapshot` (Phase 3 D1a net; sidebar-HTML fingerprint).
 - Merged stage PRs (32): A1 #178 … #208, **p2-4-structure-banner #209 (8d05c66)**.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at 8ab5693: build/typecheck/lint(+`dep:check`, 587 modules)/test exit 0;
-  `pnpm test` **2210 passed / 260 files**. (This closeout is docs-only — no code touched.)
+- **`refactor/main` — ALL GREEN** at d9e2623 (Phase-2 closeout, docs-only): `pnpm test` **2210 / 260**.
+- **PR #210 branch — ALL GREEN:** build/typecheck/lint(+`dep:check`, 588 modules)/test exit 0; `pnpm test` **2211 / 261**
+  (+1: the sidebar-HTML fingerprint; no production change).
 
 ## Uncommitted / unverified
-- None. Phase-2-closeout is docs-only (LOG/ISSUES/STATE), direct to `refactor/main`.
+- PR #210 work (`vitest/algebra-sidebar-html.test.ts` + `.snap`, LOG/ISSUES) is committed on
+  `refactor/p3-d1a-sidebar-snapshot` (88633e5) and pushed; this STATE edit advances `refactor/main`. Nothing uncommitted.
 
 ## Known blockers / risks
-- No open PR. No blockers.
-- **Phase 3 is the big structural work:** D1a rewrites the sidebar from one `innerHTML` string (mountSidebar) to a
-  data-described build. Behavior-preserving, guarded by the Phase-2 `-dom` net (section order/names, captions, labels,
-  tooltips, banner placement, busy-lock markers). One concern per PR; pause at the re-eval gate before D1c/D1d.
+- **Open PR #210** (D1a net; awaiting merge-on-green). No blockers.
+- **D1a is the big structural rewrite:** mountSidebar's ~390-line `innerHTML` string → a data-described build.
+  Behavior-preserving, now guarded by BOTH the full-DOM fingerprint (#210) and the structural `-dom` net. Do it
+  incrementally (section structure as data first, bodies verbatim); one increment per PR; pause at the re-eval gate before D1c/D1d.
 
 ## Next concrete steps
-1. **Phase 3 · D1a — sidebar-as-data (QD-ALG-2):** replace mountSidebar's ~400-line concatenated HTML string with a
-   data-described sidebar (sections/controls as data → one render pass), behavior-preserving. Net = the Phase-2 `-dom`
-   companions (they assert the rendered structure survives). Scope the first PR: read mountSidebar (algebra-ui.mjs:1874+)
-   + confirm the `-dom` net covers the rendered invariants, then transform incrementally.
-2. Then D1b (runOp single-flight) → gate → D1c✓ → D1d. Group order: A✓ B✓ C✓ → **D (Phase 3 D1)** → Phase 4 (D2) →
-   E2 (Phase 5). E1 deferred.
+1. **Merge #210 on green**, then pull + re-confirm green.
+2. **Phase 3 · D1a PR-2 — the transformation:** rewrite mountSidebar into a `SECTIONS` data model + a renderer
+   (sections/divider as data; bodies verbatim first), behavior-preserving, with the #210 fingerprint + the `-dom` net
+   green after each increment. Then D1b → gate → D1c✓ → D1d. Group order: A✓ B✓ C✓ → **D (Phase 3 D1)** → Phase 4 (D2)
+   → E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
