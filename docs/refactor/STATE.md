@@ -68,15 +68,21 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - Nothing uncommitted. This STATE edit advances `refactor/main`.
 
 ## Known blockers / risks
-- **D1a✓ D1b✓ D1c✓ all merged. D1d NEXT = the big installAlgebra split (several PRs).** Gate note: the point to stop if
-  cost/benefit turns. **Plan the seams + report to the user BEFORE large edits** (ask-don't-assume; don't over-reach).
+- **D1a✓ D1b✓ D1c✓ merged. D1d approach DECIDED (user 2026-08-02): "Full split, op-runner seam first."** (Reported the
+  reality: installAlgebra = 164 densely-coupled fns, wide mutable shared state — `_abort`/`activeEnv`/`canvas`/selection/
+  pickers; higher risk class than D1a–C's leaf extractions; most ops activeEnv-gated so net = source-guards + the built nets.)
+  Several PRs, one behavior-preserving seam per PR, behind the op-runner/verdict/#210 nets. Gate note still applies — stop if
+  cost/benefit turns.
+- **▶ D1d-SEAM-1 (op-runner) UNDERWAY.** Extract `setBusy`/`cancelOp`/`_newAbort`/`_opBegin`/`_opEnd`/`busyGuard` + the
+  `_abort`/`_busy` state into a ctx-injected module; installAlgebra's ~25 async ops call its `begin/end/guard/cancel/isBusy`
+  instead of the closure locals. Behind the op-runner net (algebra-op-runner.test.ts). Behavior-preserving.
 
 ## Next concrete steps
-1. **D1d — plan the seam decomposition of installAlgebra (714–4799):** which ctx-injected sub-units (candidate seams:
-   op-runner / verdict / sidebar-wiring / inspector+canvas / session-state), what each needs from the shared closure
-   (store, _abort, canvas, activeEnv, pickers, …), dependency order; one behavior-preserving seam per PR behind the nets;
-   keep `algebra-ui.mjs` a composition root. **Report the plan to the user first.** Then execute PR-by-PR.
-2. Order: A✓ B✓ C✓ → **D (D1a✓ → D1b✓ → D1c✓ → D1d)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
+1. **D1d-SEAM-1 — op-runner module (net-first-ish; the op-runner net already exists):** design the module's API + the ctx it
+   needs (`$`/document, setStatus, toast, QD.SymWorker); move the 6 fns + 2 state vars; rewrite the call sites (silent
+   `if(_abort)return` → `isBusy()`, `busyGuard()` → `guard()`, `_opBegin/_opEnd` → `begin/end`, cancelOp wire → `cancel`);
+   op-runner net + full suite green; mutation-verify; PR; STATE checkpoint. Then seam 2 (verdict), etc.
+2. Order: A✓ B✓ C✓ → **D (D1a✓ → D1b✓ → D1c✓ → D1d: seam1 op-runner → …)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
