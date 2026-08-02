@@ -829,3 +829,25 @@
   tests: −5 node its ↔ +5 behavioural). Cut `refactor/p2-4-structure-banner`; PR → refactor/main; merge on green.
 - **QD-ALG-3: 7 of 11 converted.** Remaining: the interaction tests (shortcuts-table, canvas-chrome) + verdict-labeling
   (→ D1c) — PR 2.5. results-drawer needs nothing (no markup).
+
+## 2026-08-02 — Phase 2 CLOSEOUT (QD-ALG-3) — the D1a behavioural net is complete
+- **Phase 2's goal — a behavioural net guarding the D1a sidebar-as-data decomposition of installAlgebra — is MET.**
+  All SEVEN files that carried D1a-brittle sidebar-MARKUP assertions are now behavioural (query the mounted DOM via
+  vitest/_algebra-mount.ts): section-order (#206), eliminate-section (#207), honest-labels + tooltip-tiers (#208),
+  workflow-sections + scope-disclosure + tier6 (#209). Each split preserved its source-structural residue in a node
+  companion; every behavioural test mutation-verified against unmodified algebra-ui.mjs.
+- **The remaining source-text algebra tests are NOT D1a-brittle and stay node-source (assessed firsthand):**
+  · **canvas-chrome** reads `algebra-canvas.mjs` — a module D1 does NOT decompose (D1 is the installAlgebra split), so
+    its focus-mode / .is-dimmed / corner-slot checks are canvas-MODULE structure, not sidebar markup. Node-source.
+  · **verdict-labeling** is by its own header a SOURCE-absence guard (every setVerdict call site declares a rigor pill);
+    those call sites are exactly what **D1c (verdict unification)** restructures → revisit at D1c, not now.
+  · **shortcuts-table** — the accelerator DISPATCH (keydown → button.click, honouring the disabled gate) needs a SEEDED
+    store to test: at an empty mount the action buttons are disabled, the canvas-created #alg-focus is not rendered, and
+    the document keydown handler bails while the surface is hidden (algebra-ui.mjs:4304). Its target buttons are ALREADY
+    behaviourally guarded (they render in the sidebar); the dispatch mechanism stays a node source-guard — a seeded-mount
+    harness (paired with a future canvas-focus behavioural test) is a D1d-era nicety, not a D1a gate.
+  · **results-drawer** — resultStateOf is ALREADY behavioural (calls QD_UI.resultStateOf); its recorder-wiring block is
+    source-structural (setVerdict call counts), a D1d concern.
+- **Net:** the sidebar structure/buttons/labels/tooltips/captions/banner/markers a D1a "sidebar as data" rewrite will
+  touch are ALL pinned behaviourally. Phase 2 done → **Phase 3 (D1) proceeds** (user go-ahead recorded 2026-08-02).
+- Green unchanged (no code touched): `refactor/main` @ 8ab5693, 2210/260.

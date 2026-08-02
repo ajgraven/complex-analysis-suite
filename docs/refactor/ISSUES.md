@@ -314,3 +314,9 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   WORKFLOW_STEPS resolve; #alg-scope outside #alg-sections; the two re-seed controls + every heavy-op carry
   js-busy-lock; all mutation-verified) + slimmed node files (handler/registry/CSS/source residue). 2210/260.
   Remaining: shortcuts-table, canvas-chrome, verdict-labeling(→D1c).
+- **2026-08-02 · Phase 2 CLOSEOUT (QD-ALG-3):** the D1a behavioural net is COMPLETE — all 7 sidebar-markup files
+  converted to behavioural `-dom` companions (#206–#209), source-structural residue slimmed into node companions.
+  Remaining source-text algebra tests stay node-source (assessed): canvas-chrome tests algebra-canvas.mjs (not
+  D1-decomposed); verdict-labeling is a source-absence guard → revisit at **D1c**; shortcuts-table dispatch needs a
+  seeded-store mount (buttons disabled + #alg-focus canvas-created at empty mount) — its target buttons already
+  behaviourally guarded; results-drawer resultStateOf already behavioural. Phase 2 → Phase 3 (D1).

@@ -31,43 +31,46 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   `pnpm lint`): `no-circular` + `no-package-to-app` + `no-cross-app`, `tsPreCompilationDeps:true` (type-only imports,
   so the CD-4 class is gated). 580 modules / 0 violations; 3 rules mutation-verified incl. a type-only cycle. Now
   enforced in the local green bar, CI `build`, and the deploy gate. No app/package code changed.
-- **Phase 2 UNDERWAY (the D1 enabler, QD-ALG-3) — harness `vitest/_algebra-mount.ts` + per-file SPLITS** (markup
-  assertions → behavioural jsdom `-dom` companion; source-structural residue slimmed into the node file). MERGED:
-  #206 (harness + section-order), #207 (eliminate-section), #208 (honest-labels + tooltip-tiers),
-  **#209 (workflow-sections + scope-disclosure + tier6; 8d05c66)**. **7 of 11 converted. PR 2.5 (final batch) next.**
-- **AUDIT REFINED + CALIBRATED:** the 11 are MIXES — (1) sidebar-MARKUP regex (brittle under **D1a** → behavioural),
-  (2) FUNCTION-BODY/wiring (D1d → node), (3) ui-strings/style.css DATA (→ node). `resultStateOf` already behavioural.
-  **User chose THOROUGH per-file splits.** Remaining after #209: **shortcuts-table, canvas-chrome, verdict-labeling
-  (→ D1c)** — the final batch, PR 2.5. (results-drawer needs nothing — no markup.)
+- **✅ PHASE 2 COMPLETE (QD-ALG-3) — the D1a behavioural net is done.** harness `vitest/_algebra-mount.ts` + per-file
+  SPLITS (markup → behavioural jsdom `-dom` companion; source-structural residue slimmed into the node file). The
+  **7 files with D1a-brittle sidebar markup** are all behavioural now: #206 (harness + section-order), #207
+  (eliminate-section), #208 (honest-labels + tooltip-tiers), #209 (workflow-sections + scope-disclosure + tier6). Every
+  behavioural test mutation-verified. **The remaining source-text tests are NOT D1a-brittle and stay node-source
+  (assessed 2026-08-02, LOG closeout):** canvas-chrome tests `algebra-canvas.mjs` (not D1-decomposed); verdict-labeling
+  is a source-absence guard → **revisit at D1c**; shortcuts-table dispatch needs a SEEDED-store mount (buttons disabled
+  + #alg-focus canvas-created at empty mount) — its target buttons already behaviourally guarded; results-drawer
+  resultStateOf already behavioural. **User calibration was THOROUGH per-file splits — honoured for every D1a-relevant file.**
 - Cadence: merge on green (delegated). `APPROVED: PLAN.md v1` + `APPROVED: D1c verdict-unification`.
-  Roadmap: A✓ / B✓ / C✓ / **D (Phase 1✓; Phase 2 = QD-ALG-3 net, 1/11 → PR #206; then Phase 3 D1)** / E (E1 deferred, E2=Phase 5) / **F1✓**.
+  Roadmap: A✓ / B✓ / C✓ / **D (Phase 1✓; Phase 2✓ QD-ALG-3 net; → Phase 3 D1)** / E (E1 deferred, E2=Phase 5) / **F1✓**.
+- **▶ PHASE 3 STARTING (D1 — installAlgebra decomposition), behind the Phase-2 behavioural net. User granted the
+  go-ahead (2026-08-02).** D1a sidebar-as-data (QD-ALG-2, behavior-preserving) → D1b runOp single-flight (QD-ALG-4,
+  behavior-preserving) → **re-eval gate** → D1c verdict-unify (QD-ALG-5, **token APPROVED** — the one behavioural
+  change) → D1d split into ctx-injected sub-units.
 
 ## Branches / PR
-- Integration `refactor/main` @ **8d05c66** (#209 merge; this STATE edit advances it). Tree clean. **No open PR.**
+- Integration `refactor/main` @ **8ab5693** (this Phase-2-closeout commit advances it). Tree clean. **No open PR.**
 - Merged stage PRs (32): A1 #178 … #208, **p2-4-structure-banner #209 (8d05c66)**.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at 8d05c66 (post-#209-merge re-confirmed firsthand): build/typecheck/lint(+`dep:check`,
-  587 modules)/test exit 0; `pnpm test` **2210 passed / 260 files**.
+- **`refactor/main` — ALL GREEN** at 8ab5693: build/typecheck/lint(+`dep:check`, 587 modules)/test exit 0;
+  `pnpm test` **2210 passed / 260 files**. (This closeout is docs-only — no code touched.)
 
 ## Uncommitted / unverified
-- None. #209 merged + pulled; post-merge green re-confirmed; this STATE commit is direct to `refactor/main`.
+- None. Phase-2-closeout is docs-only (LOG/ISSUES/STATE), direct to `refactor/main`.
 
 ## Known blockers / risks
 - No open PR. No blockers.
-- **Phase 2 gates Phase 3:** QD-ALG-3 markup assertions must become behavioural jsdom before installAlgebra
-  structural work. 7 of 11 converted; function-body (D1d) + data assertions stay node-env.
+- **Phase 3 is the big structural work:** D1a rewrites the sidebar from one `innerHTML` string (mountSidebar) to a
+  data-described build. Behavior-preserving, guarded by the Phase-2 `-dom` net (section order/names, captions, labels,
+  tooltips, banner placement, busy-lock markers). One concern per PR; pause at the re-eval gate before D1c/D1d.
 
 ## Next concrete steps
-1. **Merge #209 on green**, then pull + re-confirm green on `refactor/main`.
-2. **Phase 2 · PR 2.5 (FINAL batch):** shortcuts-table (keydown→button-click dispatch) + canvas-chrome (focus-mode
-   `.is-dimmed` — reads algebra-canvas.mjs; may need a canvas mount) + verdict-labeling (the behavioural verdict-badge
-   part; the "every setVerdict call-site" scan → D1c).
-3. **→ PROCEED DIRECTLY TO PHASE 3 after PR 2.5 merges — user granted the go-ahead (2026-08-02); do NOT pause.**
-   Phase 3 = **D1 (installAlgebra decomposition)** behind the Phase-2 behavioural net: **D1a** sidebar-as-data (QD-ALG-2,
-   behavior-preserving) → **D1b** runOp single-flight (QD-ALG-4, behavior-preserving) → **re-eval gate** → **D1c**
-   verdict-unify (QD-ALG-5, **token APPROVED** — the one behavioural change) → **D1d** split into ctx-injected sub-units.
-   Group order: A✓ B✓ C✓ → **D (Phase 2 → Phase 3 D1a/b → gate → D1c✓/d)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
+1. **Phase 3 · D1a — sidebar-as-data (QD-ALG-2):** replace mountSidebar's ~400-line concatenated HTML string with a
+   data-described sidebar (sections/controls as data → one render pass), behavior-preserving. Net = the Phase-2 `-dom`
+   companions (they assert the rendered structure survives). Scope the first PR: read mountSidebar (algebra-ui.mjs:1874+)
+   + confirm the `-dom` net covers the rendered invariants, then transform incrementally.
+2. Then D1b (runOp single-flight) → gate → D1c✓ → D1d. Group order: A✓ B✓ C✓ → **D (Phase 3 D1)** → Phase 4 (D2) →
+   E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
