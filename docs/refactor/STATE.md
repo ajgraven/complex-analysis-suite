@@ -50,36 +50,33 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   preserving, 19 setups + 35 teardowns), #214 (doSolveRadical `busyGuard()` — the ONE authorized delta; net pin flipped
   runs→bails). Guard non-uniformity noted; **guard-unification (3b) SKIPPED** by user. All mutation-verified.
   · **RE-EVAL GATE PASSED (user 2026-08-02): "D1c + D1d both."**
-  · **D1c — verdict-unify (QD-ALG-5, token✓) — PR OPEN (`refactor/p3-d1c-verdict-unify`, 385f9d0).** Audit narrowed scope:
-  `classifyVerdict` (pure, algebra-labeling.mjs) already extracted + `doClassify` routed through it; `_verdictBadge` is a
-  chip (stays). Routed the last inline drift — **`doAutoSolve` → `classifyVerdict(cl)`** — so both handlers share ONE
-  builder. Authorized string delta (honest `upper bound`/`run Certify univalence` preserved) logged in LOG. Net:
-  classifyVerdict prose already pinned (`algebra-classify-verdict.test.ts`) + NEW source guard (both route through it;
-  drifted strings gone); mutation-verified. 2222/262. **DONE (pending merge).**
+  · **D1c COMPLETE — MERGED (#215, dd990ca).** Routed the last inline drift `doAutoSolve` → `classifyVerdict(cl)` (both
+  handlers share ONE builder); `_verdictBadge` chip stays. Authorized string delta logged; net = classifyVerdict's pinned
+  prose + a NEW source guard (both route through it; drifted strings gone); mutation-verified. Detail in LOG.
+  · **D1d NEXT — the big lift (planning first).** Split `installAlgebra` (~4085-line closure, 714–4799) into ctx-injected
+  sub-units. Behind the Phase-2/op-runner/verdict nets. Several PRs; plan the seams before large edits.
 
 ## Branches / PR
-- Integration `refactor/main` @ **0eee518** (#210–#214 merged). Tree clean. **Open PR → `refactor/p3-d1c-verdict-unify`
-  (385f9d0)** — D1c verdict-unify (authorized string delta, token✓).
-- Merged stage PRs (37): A1 #178 … #213, **p3-d1b-solveradical-guard #214 (0eee518)**.
+- Integration `refactor/main` @ **dd990ca** (#210–#215 merged). Tree clean. **No open PR.**
+- Merged stage PRs (38): A1 #178 … #214, **p3-d1c-verdict-unify #215 (dd990ca)**.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at 0eee518: `pnpm test` **2219 / 262**.
-- **D1c branch — ALL GREEN:** build/typecheck/lint(+`dep:check`, 588 modules)/test exit 0; `pnpm test` **2222 / 262**
-  (+3 source guards; the doAutoSolve prose change is activeEnv-gated, not behaviorally driven).
+- **`refactor/main` — ALL GREEN** at dd990ca (#215 merged): build/typecheck/lint(+`dep:check`, 588 modules)/test exit 0;
+  `pnpm test` **2222 / 262**.
 
 ## Uncommitted / unverified
-- Nothing uncommitted. D1c committed on `refactor/p3-d1c-verdict-unify` (385f9d0) + pushed; this STATE edit advances `refactor/main`.
+- Nothing uncommitted. This STATE edit advances `refactor/main`.
 
 ## Known blockers / risks
-- **D1c PR open (awaiting merge-on-green).** No blockers. Then **D1d** — the big lift.
-- **D1d NEXT (split installAlgebra — still a ~4085-line closure, 714–4799 — into ctx-injected sub-units; several PRs).**
-  Gate note: this is the point to stop if cost/benefit turns; report before/within it.
+- **D1a✓ D1b✓ D1c✓ all merged. D1d NEXT = the big installAlgebra split (several PRs).** Gate note: the point to stop if
+  cost/benefit turns. **Plan the seams + report to the user BEFORE large edits** (ask-don't-assume; don't over-reach).
 
 ## Next concrete steps
-1. **Merge D1c on green**, then pull + re-confirm green.
-2. **D1d — installAlgebra split (several PRs), behind the Phase-2/op-runner/verdict nets.** Plan the seams (sidebar /
-   verdict / op-runner / session sub-units, ctx-injected), one per PR, behavior-preserving; keep `algebra-ui.mjs` a
-   composition root. Order: A✓ B✓ C✓ → **D (D1a✓ → D1b✓ → D1c✓ → D1d)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
+1. **D1d — plan the seam decomposition of installAlgebra (714–4799):** which ctx-injected sub-units (candidate seams:
+   op-runner / verdict / sidebar-wiring / inspector+canvas / session-state), what each needs from the shared closure
+   (store, _abort, canvas, activeEnv, pickers, …), dependency order; one behavior-preserving seam per PR behind the nets;
+   keep `algebra-ui.mjs` a composition root. **Report the plan to the user first.** Then execute PR-by-PR.
+2. Order: A✓ B✓ C✓ → **D (D1a✓ → D1b✓ → D1c✓ → D1d)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
