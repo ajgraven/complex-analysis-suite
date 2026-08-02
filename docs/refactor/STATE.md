@@ -59,37 +59,33 @@ Behavior-preserving by default; no behavioral change without an explicit approva
       fit (doAutoSolve multi-step; prove-family `.then().catch()` with `||e`), so extracted the **`_opBegin(label)`/`_opEnd()`
       pair** via a scripted fold: 19 setups → `_opBegin`, 35 teardowns → `_opEnd`; guard style/control flow/error expression
       byte-preserved (NO guard-unification). Behavior-preserving by construction; mutation-verified. Full detail in LOG. **DONE.**
-    - **D1b-STAGE 3a — doSolveRadical guard (token GRANTED) — UNDERWAY.** Add `if (busyGuard()) return;` to doSolveRadical
-      so it bails "Busy — wait…" while a worker op is in flight (matching Duplicate/Delete). The Stage-1 net's
-      "doSolveRadical BUSY: STILL runs" pin FLIPS to "BAILS" — a reviewed test diff + a logged behavioral delta. Mutation-
-      verify; then PAUSE at the **re-eval gate**.
-    - **D1b-STAGE 3b — guard-unification (silent→noisy) — NEEDS A BROADER TOKEN. ASK the user at the gate** (or leave the
-      silent backstops as-is; they are nearly unobservable — buttons are js-busy-lock-disabled, keyboard path busyGuards upstream).
+    - **D1b-STAGE 3a — doSolveRadical guard (token GRANTED) — MERGED (#214, 0eee518).** `if (busyGuard()) return;` added;
+      the inspector "Solve for a variable" now bails "Busy — wait…" while a worker op is in flight (was: still ran). The
+      Stage-1 net's doSolveRadical pin FLIPPED runs→bails — a reviewed diff + logged delta; mutation-verified. **DONE. D1b's
+      coded work is COMPLETE: net✓ (#212) runOp✓ (#213) guard✓ (#214).**
+    - **D1b-STAGE 3b — guard-unification (silent→noisy) — NEEDS A BROADER TOKEN. ASKING the user at the gate** (or leave the
+      silent backstops as-is; nearly unobservable — buttons are js-busy-lock-disabled, keyboard path busyGuards upstream).
 
 ## Branches / PR
-- Integration `refactor/main` @ **ebdefee** (#210–#213 merged). Tree clean. **Open PR → `refactor/p3-d1b-solveradical-guard`
-  (6acb31d)** — D1b Stage 3a (doSolveRadical guard; the ONE authorized behavioral change).
-- Merged stage PRs (36): A1 #178 … #212, **p3-d1b-runop #213 (ebdefee)**.
+- Integration `refactor/main` @ **0eee518** (#210–#214 merged). Tree clean. **No open PR.**
+- Merged stage PRs (37): A1 #178 … #213, **p3-d1b-solveradical-guard #214 (0eee518)**.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at ebdefee: `pnpm test` **2219 / 262**.
-- **Stage-3a branch — ALL GREEN:** build/typecheck/lint(+`dep:check`, 588 modules)/test exit 0; `pnpm test` **2219 / 262**
-  (no count change — the net's doSolveRadical BUSY pin flipped runs→bails; mutation-verified).
+- **`refactor/main` — ALL GREEN** at 0eee518 (#214 merged): build/typecheck/lint(+`dep:check`, 588 modules)/test exit 0;
+  `pnpm test` **2219 / 262**.
 
 ## Uncommitted / unverified
-- Nothing uncommitted. Stage-3a committed on `refactor/p3-d1b-solveradical-guard` (6acb31d) + pushed; this STATE edit
-  advances `refactor/main`.
+- Nothing uncommitted. This STATE edit advances `refactor/main`.
 
 ## Known blockers / risks
-- **D1b Stage 3a PR open (awaiting merge-on-green).** No blockers.
-- **▶ AT THE RE-EVAL GATE once Stage 3a merges — PAUSE.** Report D1b churn/mass/risk + **ASK the user for the Stage-3b
-  guard-unification token** (silent `if(_abort)return` → noisy `busyGuard()`) — or leave the silent backstops (nearly
-  unobservable). Then, on go: **D1c** (verdict-unify, token✓) / **D1d** (split), or stop.
+- **▶ AT THE D1b RE-EVALUATION GATE — PAUSED, awaiting the user's decision.** D1b's coded work is complete (net #212 /
+  runOp #213 / doSolveRadical guard #214). Open questions posed to the user: (a) Stage-3b guard-unification token
+  (silent→noisy) — recommend SKIP (nearly unobservable); (b) go/no-go into **D1c** (verdict-unify, token already granted) /
+  **D1d** (split installAlgebra), or stop D1 here. No code work until the user answers.
 
 ## Next concrete steps
-1. **Merge Stage 3a on green**, then pull + re-confirm green.
-2. **PAUSE at the RE-EVAL GATE** — report + the guard-unification token ask; await user go/no-go for D1c✓ / D1d / Stage 3b.
-   Order: A✓ B✓ C✓ → **D (D1a✓ → D1b: net✓ runOp✓ guard✓)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
+1. **Await the user's re-eval-gate decision** (guard-unify token? D1c / D1d / stop?), then act on it.
+2. Roadmap on go: A✓ B✓ C✓ → **D (D1a✓ → D1b✓ → [D1c token✓ / D1d ?])** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
