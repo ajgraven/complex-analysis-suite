@@ -78,11 +78,16 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   instead of the closure locals. Behind the op-runner net (algebra-op-runner.test.ts). Behavior-preserving.
 
 ## Next concrete steps
-1. **D1d-SEAM-1 — op-runner module (net-first-ish; the op-runner net already exists):** design the module's API + the ctx it
-   needs (`$`/document, setStatus, toast, QD.SymWorker); move the 6 fns + 2 state vars; rewrite the call sites (silent
-   `if(_abort)return` → `isBusy()`, `busyGuard()` → `guard()`, `_opBegin/_opEnd` → `begin/end`, cancelOp wire → `cancel`);
-   op-runner net + full suite green; mutation-verify; PR; STATE checkpoint. Then seam 2 (verdict), etc.
-2. Order: A✓ B✓ C✓ → **D (D1a✓ → D1b✓ → D1c✓ → D1d: seam1 op-runner → …)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
+1. **D1d-SEAM-1 — op-runner module (op-runner net already exists → net covered).** BLAST RADIUS scoped (~90 call sites):
+   `busyGuard()` ×~31, `_opBegin(` ×19, `_opEnd()` ×35 (all UNIFORM → deterministic global-replace, like the D1b fold) +
+   the bespoke `_abort` sites (doAutoSolve's ~6 teardowns, doDecompose's `_abort = new AbortController()`, the silent
+   `if(_abort)return` guards) + the `#alg-cancel`→`cancelOp` wire (hand-fix these). **Approach:** create
+   `app/algebra/algebra-op-runner.mjs` exporting `createOpRunner(ctx)` (ctx = `$`/document, setStatus, toast, a
+   `QD.SymWorker` getter) that OWNS `_abort`/`_busy` and exposes `begin(label)`→ctrl / `end()` / `guard()` / `isBusy()` /
+   `cancel()` / `setBusy(on,label)`; installAlgebra builds `const ops = createOpRunner({…})`; scripted global-replace the
+   uniform calls → `ops.*`; hand-fix the bespoke `_abort` sites; op-runner net + full suite green; mutation-verify; PR.
+2. Then seam 2 (verdict+results), seam 3 (sidebar-wire), … one behavior-preserving PR each, behind the nets. Order:
+   A✓ B✓ C✓ → **D (D1a✓ → D1b✓ → D1c✓ → D1d: seam1 op-runner → …)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
