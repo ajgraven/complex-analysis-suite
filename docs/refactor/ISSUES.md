@@ -337,3 +337,9 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   disable primary + busyGuard backstop), and doSolveRadical's CURRENT run-while-busy. Mutation-verified (3 mutations,
   each caught the intended test + reverted byte-identically). QD.QoL not booted (would change the fingerprint) → guard
   proven by no-execution, not toast. 2219/262. Next: Stage 2 runOp extraction (behaviour-preserving).
+- **2026-08-02 · stage p3-d1b-runop (PR → refactor/main):** **Phase 3 D1b Stage 2 (QD-ALG-4), behavior-preserving.**
+  Extracted the shared busy lifecycle of the async ops into `_opBegin(label)` / `_opEnd()` (a single `runOp(run,onOk)`
+  wrapper does not fit doAutoSolve's multi-step flow or the prove-family's `.then().catch()`). Scripted fold: 19 setups →
+  `_opBegin`, 35 teardowns → `_opEnd`; guard style + control flow + error expression byte-preserved (NO guard-unification).
+  doAutoSolve + doDecompose keep bespoke inline handling. Op-runner net + 21 jsdom files green; mutation-verified.
+  2219/262 (no test delta). Next: Stage 3 (doSolveRadical guard [token✓] + guard-unify [ASK for token]).

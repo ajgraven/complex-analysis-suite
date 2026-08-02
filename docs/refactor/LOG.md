@@ -920,3 +920,26 @@
   Cut `refactor/p3-d1b-oprunner-harness`; PR → refactor/main; merge on green.
 - **Next (Stage 2):** extract `runOp()` for the ~15 async ops behind this net (behaviour-preserving; each op's guard style
   preserved). Then Stage 3 — doSolveRadical guard [token✓] + guard-unification [ASK for a broader token].
+
+## 2026-08-02 — Phase 3 · Stage p3-d1b-runop (D1b Stage 2: _opBegin/_opEnd lifecycle extraction) — PR opened
+- **The QD-ALG-4 DRY, behind the Stage-1 net, BEHAVIOR-PRESERVING.** The ~15 async ops copied one busy lifecycle:
+  `const ctrl = _newAbort(); _abort = ctrl; setBusy(true, label)` … `_abort = null; setBusy(false); setStatus('')`.
+  A single `runOp(run, onOk)` WRAPPER does not fit them — doAutoSolve is a multi-step `(async()=>{})()` with bespoke
+  per-exit teardowns (Cancelled / showError / refreshPickers+showResult), and the prove-family uses `.then().catch()`
+  with `((e&&e.message)||e)` not `||String(e)`. So the extraction is the shared **lifecycle pair**, not a runner:
+  · `function _opBegin(label) { const ctrl = _newAbort(); _abort = ctrl; setBusy(true, label); return ctrl; }`
+  · `function _opEnd() { _abort = null; setBusy(false); setStatus(''); }`
+- **Applied deterministically (scripted string transform, verified counts):** folded **19** adjacent setup+`setBusy(true,…)`
+  pairs → `const ctrl = _opBegin(label);` (labels — incl. string-concat, ternary, inner-paren prose, and 2 trailing
+  comments — preserved verbatim) and replaced **35** identical teardowns → `_opEnd();`. Left inline by design: doAutoSolve's
+  non-adjacent setup + its 6 bespoke teardowns, and doDecompose's `_abort = new AbortController()` (a direct-controller
+  variant `_newAbort()` would subtly change in AbortController-less envs). Each op's guard style (silent `if(_abort)return`
+  vs. noisy `busyGuard()`), control flow, and error EXPRESSION are byte-preserved — NO guard-unification (that is Stage 3,
+  needs a broader token). `_opBegin`/`_opEnd` do EXACTLY the statements they replace, so the change is behavior-preserving
+  by construction.
+- **Verified:** op-runner net (Stage 1) drives saturate through the new pair — green; all 21 jsdom algebra files (174) green;
+  **mutation-verified** — dropping `setBusy(false)` from `_opEnd` fails the net's "leaves busy on completion" test; reverted.
+- **Green bar:** build/typecheck/lint(+dep:check 588)/test exit 0; `pnpm test` **2219 / 262** — identical to baseline (no
+  test delta; pure refactor). Diff: one file, +60 / −73 (net −13). Cut `refactor/p3-d1b-runop`; PR → refactor/main.
+- **Next (Stage 3):** doSolveRadical `busyGuard()` (token GRANTED — the op-runner net's BUSY pin flips to a reviewed diff)
+  + guard-unification (silent→noisy) — **ASK the user for the broader token first.** Then the re-eval gate.
