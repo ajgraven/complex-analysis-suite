@@ -32,7 +32,7 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   so the CD-4 class is gated). 580 modules / 0 violations; 3 rules mutation-verified incl. a type-only cycle. Now
   enforced in the local green bar, CI `build`, and the deploy gate. No app/package code changed.
 - **Phase 2 UNDERWAY (the D1 enabler, QD-ALG-3):** PR 2.1 #206 MERGED (harness `vitest/_algebra-mount.ts` + section-order
-  behavioural). **PR 2.2 #207 OPEN** (`refactor/p2-2-algebra-dom`): eliminate-section converted as a SPLIT — NEW
+  behavioural). **PR 2.2 #207 MERGED** (33e8bd9): eliminate-section converted as a SPLIT — NEW
   `algebra-eliminate-section-dom.test.ts` (8 jsdom tests: picker placement, caption grouping, js-busy-lock marker,
   ui-strings-materialised tooltip, elim-hint; mutation-verified) + slimmed node companion (function-body/wiring/
   strings-data). **2 of 11 converted.**
@@ -46,22 +46,18 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   Roadmap: A✓ / B✓ / C✓ / **D (Phase 1✓; Phase 2 = QD-ALG-3 net, 1/11 → PR #206; then Phase 3 D1)** / E (E1 deferred, E2=Phase 5) / **F1✓**.
 
 ## Branches / PR
-- Integration `refactor/main` @ **5c81ba4** (this STATE edit advances it). Tree clean. **Open PR #207** →
-  `refactor/p2-2-algebra-dom` (Phase 2; eliminate-section behavioural split).
-- Merged stage PRs (29): A1 #178 … #205, **p2-1-mount-harness #206 (0fa765e)**.
+- Integration `refactor/main` @ **33e8bd9** (#207 merge; this STATE edit advances it). Tree clean. **No open PR.**
+- Merged stage PRs (30): A1 #178 … #206, **p2-2-algebra-dom #207 (33e8bd9)**.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at 5c81ba4 (post-#206): build/typecheck/lint(+`dep:check`, 581 modules)/test exit 0;
-  `pnpm test` **2210 / 254**.
-- **PR #207 branch — ALL GREEN:** build/typecheck/lint(+`dep:check`, 582 modules)/test exit 0; `pnpm test` **2209 / 255**
-  (+1 file the behavioural companion, −1 test from the split consolidation).
+- **`refactor/main` — ALL GREEN** at 33e8bd9 (post-#207-merge re-confirmed firsthand): build/typecheck/lint(+`dep:check`,
+  582 modules)/test exit 0; `pnpm test` **2209 passed / 255 files**.
 
 ## Uncommitted / unverified
-- PR #207 work (`algebra-eliminate-section-dom.test.ts` new + slimmed `algebra-eliminate-section.test.ts`, LOG/ISSUES)
-  is committed on `refactor/p2-2-algebra-dom` (041d31c) and pushed; this STATE edit advances `refactor/main`. Nothing uncommitted.
+- None. #207 merged + pulled; post-merge green re-confirmed; this STATE commit is direct to `refactor/main`.
 
 ## Known blockers / risks
-- **Open PR #207** (awaiting merge-on-green). No blockers.
+- No open PR. No blockers.
 - **Phase 2 gates Phase 3:** the source-text algebra tests (QD-ALG-3) pin *text*, not *behavior*; the D1a-brittle
   (markup) assertions must become behavioural jsdom before installAlgebra structural work. 2 of 11 converted; the
   function-body (D1d) and data assertions stay node-env.
