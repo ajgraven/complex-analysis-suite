@@ -304,3 +304,8 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   slimmed node `algebra-eliminate-section.test.ts` (function-body/wiring/strings-data invariants). Audit refined: the
   11 are mixes of markup-regex (→behavioural) / function-body (→node, D1d) / strings-data (→node); resultStateOf
   already behavioural. 2209/255.
+- **2026-08-01 · stage p2-3-labels-tooltips (PR → refactor/main):** **QD-ALG-3 → 4/11** (Phase 2, thorough splits per
+  user calibration). honest-labels + tooltip-tiers each split — NEW behavioural `-dom` companions (button labels;
+  materialised-title ≤120 + relocated-hook absence; both mutation-verified) + slimmed node files (wiring/guard-order/
+  algebraOps DATA). 2210/257. Remaining: workflow-sections, scope-disclosure, tier6, shortcuts-table, canvas-chrome,
+  verdict-labeling(→D1c).
