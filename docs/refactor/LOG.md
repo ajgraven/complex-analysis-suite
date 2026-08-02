@@ -943,3 +943,26 @@
   test delta; pure refactor). Diff: one file, +60 / −73 (net −13). Cut `refactor/p3-d1b-runop`; PR → refactor/main.
 - **Next (Stage 3):** doSolveRadical `busyGuard()` (token GRANTED — the op-runner net's BUSY pin flips to a reviewed diff)
   + guard-unification (silent→noisy) — **ASK the user for the broader token first.** Then the re-eval gate.
+
+## 2026-08-02 — Phase 3 · Stage p3-d1b-solveradical-guard (D1b Stage 3a: doSolveRadical single-flight) — PR opened
+- **THE ONE AUTHORIZED BEHAVIORAL CHANGE of D1b (token granted 2026-08-02, "Also guard doSolveRadical").** doSolveRadical
+  gained `if (busyGuard()) return;` as its first statement.
+- **Exact behavioral delta:** the node inspector's **"Solve for a variable"** action is a SYNCHRONOUS, main-thread radical
+  solve, and its button is NOT `js-busy-lock`, so `setBusy` never disabled it.
+  · BEFORE: clicking it while a worker op was in flight RAN the solve anyway (built the `.algebra-solve-panel`) — the
+    QD-ALG-4 gap: every other inspector action (Duplicate / Delete / Attempt-to-factor) already `busyGuard()`-ed; this one
+    did not.
+  · AFTER: it BAILS — toasts "Busy — wait for the current computation to finish (or Cancel)." and builds NO panel — while a
+    worker op is in flight. Unchanged when idle (opens the panel as before).
+- **NOT a correctness fix:** JS is single-threaded and the solve is read-only (nothing is added to the DAG), so it never
+  corrupted state; this is a UX-CONSISTENCY change that makes the last un-guarded user-initiated op match the rest.
+- **The Stage-1 net made it a REVIEWED diff, not a silent change:** `algebra-op-runner.test.ts`'s doSolveRadical block flips
+  from pinning "BUSY: it STILL runs (opens the panel)" to asserting "BUSY: it BAILS (no solve panel)"; the idle test stays.
+  Mutation-verified: disabling the guard (`if (false && busyGuard())`) fails the flipped BUSY test (the solve runs, verified
+  ✓), idle passes — so the assertion catches the guard's presence. Reverted byte-identically.
+- **Green bar:** build/typecheck/lint(+dep:check 588)/test exit 0; `pnpm test` **2219 / 262** (no test count change — the
+  one test's assertion flipped). Diff: algebra-ui.mjs +4; the net's one test updated. Cut
+  `refactor/p3-d1b-solveradical-guard`; PR → refactor/main.
+- **Next: PAUSE at the RE-EVALUATION GATE** (report D1b churn/remaining-mass/risk) + **ASK the user for a broader token**
+  to unify the silent `if(_abort)return` guards to noisy `busyGuard()` (Stage 3b) — or leave them (nearly unobservable).
+  Then, on go, D1c (verdict-unify, token✓) / D1d (split), or stop.
