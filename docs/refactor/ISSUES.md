@@ -293,3 +293,8 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   `no-package-to-app` + `no-cross-app`, with `tsPreCompilationDeps: true` (type-only imports in the graph). Passes on
   the current graph (580 modules, 0 violations); all 3 rules mutation-verified incl. a pure type-only cycle. **CD-4**
   (type-only render cycle, fixed A3) is now ACTIVELY GATED — a regression fails `pnpm lint` locally + in CI + at deploy.
+- **2026-08-01 · stage p2-1-mount-harness (PR → refactor/main):** **QD-ALG-3 → STARTED** (Phase 2, the D1 enabler).
+  NEW reusable jsdom mount harness `vitest/_algebra-mount.ts` (mounts installAlgebra headlessly — AlgebraCanvas is SVG,
+  no canvas ctx needed). First conversion: `algebra-section-order.test.ts` node/source-regex → jsdom/behavioural
+  (queries the rendered #alg-sections; mutation-verified by renaming a production section). 1 of 11 source-text algebra
+  tests converted; the harness unblocks the rest (PRs 2.2/2.3). Behavioural pins survive the D1a sidebar-as-data refactor.

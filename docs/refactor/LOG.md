@@ -731,3 +731,29 @@
 - **Green bar:** build/typecheck/lint(+dep:check)/test exit 0; `pnpm test` **2211 / 254** (unchanged — F1 adds no unit
   tests; its "net" is the passing graph gate + the mutation-verify). Cut `refactor/p1-f1-depcruise`; PR → refactor/main.
 - **Phase 1 COMPLETE** (A1 residuals #204 + F1). Next: Phase 2 (the D1 enabler — convert the 11 QD-ALG-3 source-text tests → jsdom).
+
+## 2026-08-01 — Phase 2 · Stage p2-1-mount-harness (jsdom mount harness + section-order conversion) — PR opened
+- **Phase 2 kickoff (the D1 enabler, QD-ALG-3):** replace the brittle source-text algebra tests (readFileSync + regex
+  over algebra-ui.mjs's sidebar HTML STRING) with BEHAVIOURAL jsdom tests that mount installAlgebra and assert the
+  RENDERED DOM — so they survive the D1a "sidebar as data" refactor (same DOM, new construction) instead of breaking on
+  it. Tests-only; no production code changed.
+- **AUDIT (recorded):** the mount is PROVEN feasible — AlgebraCanvas renders with SVG (no canvas 2D/GL ctx jsdom lacks);
+  installAlgebra reads ~10 mockable ctx props and mounts lazily behind a `tab-changed` listener; the panel builds into
+  #controls-algebra. The 11 source-text tests are a MIX: clean DOM-structure conversions (section-order, honest-labels,
+  tooltip-tiers, eliminate-section placement), interaction tests (shortcuts dispatch, scope-disclosure, tier6 setBusy,
+  canvas focus), a pure fn pinned via regex (resultStateOf → extract+call), and genuine source-invariants (comment
+  hygiene, "no nth-of-type", WCAG color tokens, "every setVerdict has rigor" → best handled at D1c). The node-vs-jsdom
+  env split is load-bearing (jsdom breaks fileURLToPath), so source-hygiene residue stays in node-env files.
+- **NEW `vitest/_algebra-mount.ts`** — the reusable harness: boot the QD kernels (11 imports) → scaffold (tab btn +
+  #controls-algebra + #algebra-graph) → stub ctx → installAlgebra → dispatch `tab-changed` → returns {container, $, $$,
+  sectionNames, …}. Throws if the sidebar doesn't render. Call once per file (installAlgebra adds a listener per call).
+- **CONVERTED `algebra-section-order.test.ts`** node/source → jsdom/behavioural (8 tests): section count vs nested
+  disclosures, the 8 sections in DOM order, workflow-step sequence, Export last, divider "Beyond the main route" between
+  Analyze & Univalence, "does not touch the workspace". **Mutation-verified:** renaming a production section
+  (Reduce→Reduxe) failed exactly the 3 Reduce-dependent assertions (the other 5 held), then reverted byte-identically.
+  Retired the one source-only assertion (header comments numbered 1..8 — comment hygiene, not behaviour; the sections
+  are now verified in the DOM). −1 test net (9→8).
+- **Green bar:** build/typecheck/lint(+dep:check 581 modules)/test exit 0; `pnpm test` **2210 / 254**. Cut
+  `refactor/p2-1-mount-harness`; PR → refactor/main; merge on green.
+- **Phase 2 remaining:** PR 2.2 (honest-labels, eliminate-section, tooltip-tiers + resultStateOf extract; workflow-
+  sections behavioural part + source-hygiene split), PR 2.3 (interaction tests + op-runner/verdict-prose coverage).
