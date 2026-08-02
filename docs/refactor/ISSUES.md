@@ -320,3 +320,7 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   D1-decomposed); verdict-labeling is a source-absence guard → revisit at **D1c**; shortcuts-table dispatch needs a
   seeded-store mount (buttons disabled + #alg-focus canvas-created at empty mount) — its target buttons already
   behaviourally guarded; results-drawer resultStateOf already behavioural. Phase 2 → Phase 3 (D1).
+- **2026-08-02 · stage p3-d1a-sidebar-snapshot (PR → refactor/main):** **Phase 3 D1a kickoff (QD-ALG-2).** NET-FIRST:
+  NEW `vitest/algebra-sidebar-html.test.ts` snapshots the whole normalized #controls-algebra DOM (mutation-verified —
+  catches a control-attribute change the `-dom` net misses). Guards the upcoming mountSidebar → data-driven rewrite as
+  behavior-preserving. 2211/261.

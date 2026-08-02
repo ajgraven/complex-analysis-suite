@@ -851,3 +851,20 @@
 - **Net:** the sidebar structure/buttons/labels/tooltips/captions/banner/markers a D1a "sidebar as data" rewrite will
   touch are ALL pinned behaviourally. Phase 2 done → **Phase 3 (D1) proceeds** (user go-ahead recorded 2026-08-02).
 - Green unchanged (no code touched): `refactor/main` @ 8ab5693, 2210/260.
+
+## 2026-08-02 — Phase 3 · Stage p3-d1a-sidebar-snapshot (D1a net: full-DOM sidebar fingerprint) — PR opened
+- **Phase 3 (D1) kickoff — NET-FIRST for D1a (sidebar-as-data, QD-ALG-2).** Before rewriting mountSidebar's ~390-line
+  innerHTML string into a data-described build, pin the ENTIRE rendered #controls-algebra as one normalized fingerprint
+  so the rewrite is provably behavior-preserving at the DOM level — beyond the structural `-dom` companions, which only
+  assert specific facts. No production change.
+- **NEW `vitest/algebra-sidebar-html.test.ts`** (jsdom via the mount harness) — snapshots normalize(container.innerHTML)
+  where inter-tag whitespace is collapsed (not semantic; a renderer indents differently) and text within elements is
+  preserved. Deterministic (empty-store mount; verified stable run-to-run). The `.snap` captures every control in order
+  with its attributes.
+- **Mutation-verified:** perturbing a control the `-dom` net does NOT assert (the alg-steps-x button `title`) fails the
+  fingerprint while the structural companions stay green — proving the snapshot catches drift the specific assertions miss.
+  Reverted byte-identically.
+- **Green bar:** build/typecheck/lint(+dep:check 588 modules)/test exit 0; `pnpm test` **2211 / 261** (+1). Cut
+  `refactor/p3-d1a-sidebar-snapshot`; PR → refactor/main; merge on green.
+- **Next (D1a PR-2):** transform mountSidebar → a SECTIONS data model + renderer (section structure as data, bodies
+  verbatim first), one increment at a time, this fingerprint + the `-dom` net green after each.
