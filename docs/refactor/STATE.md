@@ -58,39 +58,41 @@ Behavior-preserving by default; no behavioral change without an explicit approva
       + `seedMoments`/`nodeCards`/`selectNode`; NEW `algebra-op-runner.test.ts` (8): busy lifecycle, single-flight (button-
       disable + busyGuard backstop), doSolveRadical's CURRENT run-while-busy pinned. Net-first + mutation-verified. Full
       detail in LOG. **DONE.**
-    - **D1b-STAGE 2 (runOp lifecycle extraction) — UNDERWAY.** Inventory: teardown `_abort=null;setBusy(false);setStatus('')`
-      ×35 (identical) + setup `const ctrl=_newAbort();_abort=ctrl` ×20 (identical). A single `runOp(run,onOk)` wrapper does
-      NOT fit (doAutoSolve is multi-step; the prove-family uses `.then().catch()` with `||e` not `||String(e)`), so extract
-      the shared **`_opBegin(label)`/`_opEnd()` lifecycle pair** (`_abort` mutated ONLY there), folding setup+setBusy and
-      the teardown; each op's guard style + control flow + error EXPRESSION preserved EXACTLY. doAutoSolve's 6 bespoke
-      teardowns + the `_abort=new AbortController()` (doDecompose) setup stay inline. Behavior-preserving, behind Stage-1 net.
+    - **D1b-STAGE 2 (runOp lifecycle extraction) — PR OPEN (`refactor/p3-d1b-runop`, 3ae0205).** A single `runOp(run,onOk)`
+      wrapper does NOT fit (doAutoSolve is multi-step; the prove-family uses `.then().catch()` with `||e` not `||String(e)`),
+      so extracted the shared **`_opBegin(label)`/`_opEnd()` lifecycle pair** via a scripted fold: 19 setups+setBusy →
+      `_opBegin`, 35 teardowns → `_opEnd`; each op's guard style + control flow + error EXPRESSION byte-preserved (NO
+      guard-unification). doAutoSolve's 6 bespoke teardowns + doDecompose's `_abort=new AbortController()` stay inline.
+      Behavior-preserving by construction; op-runner net + 21 jsdom files green; mutation-verified. 2219/262. **DONE.**
     - **D1b-STAGE 3 (behavioral deltas):** add `busyGuard()` to doSolveRadical (token GRANTED — bails "Busy — wait…",
       matching Duplicate/Delete; log the delta) + guard-unification (silent→noisy). **Guard-unification needs a BROADER
       token — ASK before Stage 3's unification part.** Not correctness fixes (JS single-threaded, read-only); UX-consistency.
 
 ## Branches / PR
-- Integration `refactor/main` @ **cd2301b** (#210 + #211 + #212 merged). Tree clean. **No open PR** (cutting
-  `refactor/p3-d1b-runop` for Stage 2).
+- Integration `refactor/main` @ **cd2301b** (#210 + #211 + #212 merged). Tree clean. **Open PR → `refactor/p3-d1b-runop`
+  (3ae0205)** — D1b Stage 2 (`_opBegin`/`_opEnd` lifecycle extraction; behavior-preserving).
 - Merged stage PRs (35): A1 #178 … #211, **p3-d1b-oprunner-harness #212 (cd2301b)**.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at cd2301b (#212 merged): build/typecheck/lint(+`dep:check`, 588 modules)/test exit 0;
-  `pnpm test` **2219 / 262**.
+- **`refactor/main` — ALL GREEN** at cd2301b: `pnpm test` **2219 / 262**.
+- **Stage-2 branch — ALL GREEN:** build/typecheck/lint(+`dep:check`, 588 modules)/test exit 0; `pnpm test` **2219 / 262**
+  (no test delta — pure refactor; op-runner net + 21 jsdom files green; mutation-verified).
 
 ## Uncommitted / unverified
-- Nothing uncommitted. This STATE edit advances `refactor/main`; Stage 2 work begins on `refactor/p3-d1b-runop`.
+- Nothing uncommitted. Stage-2 work committed on `refactor/p3-d1b-runop` (3ae0205) + pushed; this STATE edit advances
+  `refactor/main`.
 
 ## Known blockers / risks
-- **D1b Stage 2 UNDERWAY** (`_opBegin`/`_opEnd` lifecycle extraction, behavior-preserving, behind the Stage-1 net). No
-  blockers. Guard-unification (Stage 3) needs a broader token — ASK before it.
+- **D1b Stage 2 PR open (awaiting merge-on-green).** No blockers. Stage 3 (doSolveRadical guard [token✓] + guard-unify)
+  is next; **guard-unification needs a broader token — ASK before it.**
 - **Re-eval gate** sits after D1b, before D1c/D1d.
 
 ## Next concrete steps
-1. **D1b-STAGE 2 — `_opBegin`/`_opEnd` extraction (behavior-preserving):** define the pair; fold the 20 setups + 35
-   teardowns (uniform, deterministic — via a scripted string transform, verified count); op-runner net + full suite green;
-   mutation-verify (break `_opEnd` → net catches); PR; STATE checkpoint.
-2. Then **Stage 3** (doSolveRadical guard [token✓] + guard-unify [ASK for token]). Then the **re-eval gate** before
-   D1c✓/D1d. Order: A✓ B✓ C✓ → **D (D1a✓ → D1b)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
+1. **Merge Stage 2 on green**, then pull + re-confirm green.
+2. **D1b-STAGE 3:** (a) add `busyGuard()` to `doSolveRadical` — token GRANTED; the op-runner net's `doSolveRadical BUSY`
+   pin flips from "runs" to "bails", i.e. a REVIEWED test diff + a logged behavioral delta. (b) **ASK the user** for a
+   broader token to unify the silent `if(_abort)return` guards to noisy `busyGuard()` (or decide to leave them). Then the
+   **re-eval gate** before D1c✓/D1d. Order: A✓ B✓ C✓ → **D (D1a✓ → D1b)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
