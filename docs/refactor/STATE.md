@@ -53,14 +53,14 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   preserving three ways (#210 fingerprint unchanged + all 20 jsdom algebra files 166 tests + mutation-verified); a
   pre-flight node oracle proved `normalize()`-equal (12394 chars) before editing. Pure refactor (2211/261, no test delta).
   **D1a COMPLETE.**
-  · **D1b — DECISION PENDING (asked user 2026-08-02).** Investigation done: the ~15 async worker ops share the
-  `busyGuard()`→`_abort`→`setBusy()`→`.then(cleanup,errCleanup)` boilerplate (candidate for a behavior-preserving
-  `runOp()` extraction). BUT `doSolveRadical` (algebra-ui.mjs:2574) is **synchronous** (`store.solveForVariable`,
-  in-thread, read-only, not added to graph), its "Solve for a variable" inspector button is **not** `js-busy-lock` and it
-  calls **no** `busyGuard` — so it can run while a worker op is in flight. COMPLETION-PLAN says "fold in doSolveRadical …
-  behavior-preserving", but adding `busyGuard` to it WOULD change behavior (it would bail "Busy — wait…" instead of
-  running) — and D1b has NO behavioral-change token (only D1c does). Asked user: behavior-preserving async-op runOp only
-  vs. also guard doSolveRadical (needs token).
+  · **D1b — DECISION MADE (user 2026-08-02): "Also guard doSolveRadical" → D1b BEHAVIORAL-CHANGE TOKEN GRANTED.**
+  The 2nd authorized behavioral change in the engagement (after D1c's). Scope: (1) extract a `runOp()` async runner and
+  route the ~15 async worker ops through it — behavior-preserving, each op's current `busyGuard()`→`_abort`→`setBusy()`→
+  `.then(cleanup,errCleanup)` behavior net-verified unchanged; (2) **AUTHORIZED CHANGE** — add `busyGuard()` to
+  `doSolveRadical` (algebra-ui.mjs:2574; synchronous, read-only "Solve for a variable" inspector op whose button is NOT
+  `js-busy-lock` and which today runs while a worker op is in flight) so it bails "Busy — wait…" instead — matching
+  Duplicate/Delete. Not a correctness fix (JS single-threaded, read-only); a UX-consistency change. **Log the exact
+  behavioral delta.** Ships behind the op-runner net (net-first).
 
 ## Branches / PR
 - Integration `refactor/main` @ **b80429c** (#210 + #211 merged; this STATE edit advances it). Tree clean. **No open PR.**
@@ -74,14 +74,17 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - Nothing uncommitted. This STATE edit advances `refactor/main` (D1a complete; D1b decision pending).
 
 ## Known blockers / risks
-- **D1b scoping decision pending** (asked user): does D1b include the `doSolveRadical` single-flight fold-in (a behavioral
-  change needing a token), or only the behavior-preserving async-op `runOp()` extraction? No code work until resolved.
-- **Re-eval gate** still sits after D1b, before D1c/D1d.
+- **D1b UNDERWAY (token granted).** No blockers. Net-first: characterize op-runner dispatch + doSolveRadical's current
+  (unguarded) behavior BEFORE extracting `runOp()` / adding the guard. Delicate (~15 call sites); keep each op's behavior
+  net-verified; the ONLY intended behavioral delta is doSolveRadical's guard (log it).
+- **Re-eval gate** sits after D1b, before D1c/D1d.
 
 ## Next concrete steps
-1. **Resolve the D1b scoping decision** (behavior-preserving runOp only vs. + doSolveRadical guard).
-2. **Phase 3 · D1b — runOp (QD-ALG-4):** net-first (characterize op-runner dispatch, mutation-verify), then the change per
-   the decision; **re-eval gate** before D1c/D1d. Order: A✓ B✓ C✓ → **D (D1a✓ → D1b)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
+1. **Phase 3 · D1b (QD-ALG-4), net-first, token granted:** (a) build/extend the op-runner net (pin the ~15 async ops'
+   busy/guard/abort/error behavior + doSolveRadical's current run-while-busy), mutation-verify; (b) extract `runOp()`,
+   route async ops through it (behavior-preserving); (c) add `busyGuard()` to doSolveRadical (authorized delta, logged);
+   full green bar; PR; STATE checkpoint. Then the **re-eval gate** before D1c✓/D1d.
+2. Order: A✓ B✓ C✓ → **D (D1a✓ → D1b)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
