@@ -6,7 +6,19 @@
 // (derived from the source, not the extraction) so the carve is provably behavior-preserving and a later
 // unification of the three drifted verdict builders can't silently change the mapping. Pure ⇒ no DOM/jsdom.
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { classifyVerdict, posDimDesc } from "../app/algebra/algebra-labeling.mjs";
+
+const UI_SRC = readFileSync(
+  fileURLToPath(new URL("../app/algebra/algebra-ui.mjs", import.meta.url)), "utf8");
+/** The body of a `function NAME(` up to the next top-of-file `function ` at the same or lower indent. */
+function fnBody(name: string): string {
+  const i = UI_SRC.indexOf("function " + name + "(");
+  if (i < 0) throw new Error("fn not found: " + name);
+  const j = UI_SRC.indexOf("\n    function ", i + 1); // next installAlgebra-scope function
+  return UI_SRC.slice(i, j < 0 ? undefined : j);
+}
 
 describe("posDimDesc — honest one-line size of a positive-dimensional verdict", () => {
   it("names the true Krull DIMENSION when carried (≥ 1)", () => {
@@ -88,5 +100,26 @@ describe("classifyVerdict — the classify-result → verdict-prose decision tre
     expect(classifyVerdict({ zeroDim: true, realCount: undefined, multiplicity: 2 })).toBe(
       "Zero-dimensional: 2 complex solution(s) with multiplicity (real count unavailable: ).",
     );
+  });
+});
+
+describe("the verdict prose is built in ONE place — no builder rebuilds it inline (QD-ALG-5, D1c)", () => {
+  // Both existence/uniqueness handlers must route their base verdict line through classifyVerdict, so the
+  // =/≤/≈ honest labeling above is defined once and cannot drift between them. doClassify was already
+  // routed (carve-out 1); doAutoSolve was the last inline copy — D1c routes it too.
+  it("doClassify builds its verdict via classifyVerdict", () => {
+    expect(fnBody("doClassify")).toMatch(/=\s*classifyVerdict\(/);
+  });
+
+  it("doAutoSolve builds its verdict via classifyVerdict (was an inline copy before D1c)", () => {
+    expect(fnBody("doAutoSolve")).toMatch(/=\s*classifyVerdict\(/);
+  });
+
+  it("the drifted inline wording doAutoSolve used is GONE from the source", () => {
+    // The exact strings the old inline copy produced — if any reappears, a second verdict path has
+    // re-drifted from the canonical classifyVerdict mapping.
+    expect(UI_SRC).not.toContain("No quadrature domain: the reduced system is inconsistent.");
+    expect(UI_SRC).not.toContain("A positive-dimensional family of solutions (");
+    expect(UI_SRC).not.toContain("an upper bound on the number of quadrature domains; run Certify univalence");
   });
 });

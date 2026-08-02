@@ -350,3 +350,10 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   UX-consistency with Duplicate/Delete. The Stage-1 net's doSolveRadical pin FLIPPED (STILL-runs → BAILS): a reviewed diff,
   mutation-verified. 2219/262 (assertion flip, no count change). Next: PAUSE at re-eval gate + ASK for the Stage-3b
   guard-unification token.
+- **2026-08-02 · stage p3-d1c-verdict-unify (PR → refactor/main):** **Phase 3 D1c (QD-ALG-5) — authorized behavioral
+  change (token✓).** Audit narrowed scope: classifyVerdict already extracted + doClassify routed through it; _verdictBadge
+  is a chip (stays); the last inline drift was doAutoSolve. Routed doAutoSolve → classifyVerdict(cl) (both handlers now
+  share ONE builder). String delta logged (LOG) — honest =/≤/≈ labeling preserved (every real-count case keeps "upper
+  bound" + "run Certify univalence"). Net: classifyVerdict prose already pinned (algebra-classify-verdict.test.ts) +
+  NEW source guard (doClassify & doAutoSolve both route through it; drifted strings gone); mutation-verified. 2222/262.
+  Next: D1d (installAlgebra split).

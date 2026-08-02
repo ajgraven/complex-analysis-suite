@@ -3242,19 +3242,13 @@ const QD = _QD;
           const cl = await store.classifyAsync(null, { paramValues: params }, runOpts);
           if (cl.aborted) { _abort = null; setBusy(false); setStatus('Cancelled.'); toast('Cancelled'); return; }
           if (!cl.ok) { _abort = null; setBusy(false); showError('Auto-reduce & solve: ' + withGuidance(cl.reason || 'failed')); return; }
-          let verdict;
-          if (cl.inconsistent) verdict = 'No quadrature domain: the reduced system is inconsistent.';
-          else if (!cl.zeroDim) verdict = 'A positive-dimensional family of solutions (' + posDimDesc(cl) + ') — add a constraint or fix a value to pin it.';
-          // HONEST LABELING (finding C-1/B-1): the reim real-solution count is the count of ALGEBRAIC
-          // solutions of the cleared system — an UPPER BOUND on the number of quadrature domains (it can
-          // include non-univalent maps, gauge copies, and the {|z_j|=1} boundary stratum the cleared
-          // denominators carry). It is NOT the QD count; only "Certify univalence" (which filters non-QDs
-          // + quotients the gauge) yields that. Count 0 IS sound (0 algebraic ⇒ 0 QD).
-          else if (cl.realCount == null) verdict = cl.multiplicity + ' solution(s) with multiplicity.';
-          else if (cl.realCount === 0) verdict = 'No real quadrature domain' + (cl.complexCount != null ? ' (of ' + cl.complexCount + ' distinct complex)' : '') + '.';
-          else verdict = cl.realCount + ' real algebraic solution' + (cl.realCount === 1 ? '' : 's')
-            + (cl.complexCount != null ? ' (of ' + cl.complexCount + ' distinct complex)' : '')
-            + ' — an upper bound on the number of quadrature domains; run Certify univalence for the genuine-QD count.';
+          // D1c (QD-ALG-5): build the existence/uniqueness line with classifyVerdict — the SAME pure
+          // honest-labeling builder doClassify uses — rather than a drifted inline copy, so the two paths
+          // can no longer diverge. classifyVerdict already carries the honest labeling (finding C-1/B-1: the
+          // reim real-solution count is an UPPER BOUND on #QD — it can include non-univalent maps, gauge
+          // copies, and the {|z_j|=1} boundary stratum; only "Certify univalence" filters non-QDs + quotients
+          // the gauge to yield the genuine count; count 0 is sound). The ★ Auto-reduce slice caveat still appends.
+          let verdict = classifyVerdict(cl);
           // ★ Auto-reduce auto-applies assumeReal ⇒ this count is on the real slice (a lower bound).
           verdict += sliceCaveat(cl);
           // 4. explicit real solutions when zero-dimensional — off the main thread

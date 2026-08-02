@@ -966,3 +966,33 @@
 - **Next: PAUSE at the RE-EVALUATION GATE** (report D1b churn/remaining-mass/risk) + **ASK the user for a broader token**
   to unify the silent `if(_abort)return` guards to noisy `busyGuard()` (Stage 3b) — or leave them (nearly unobservable).
   Then, on go, D1c (verdict-unify, token✓) / D1d (split), or stop.
+
+## 2026-08-02 — Phase 3 · Stage p3-d1c-verdict-unify (D1c: unify the verdict path, QD-ALG-5) — PR opened
+- **AUTHORIZED BEHAVIORAL CHANGE (token granted via decision #3; re-eval gate: user chose "D1c + D1d both").** AUDIT
+  finding: scope is narrower than the plan implied. A prior carve-out already extracted **`classifyVerdict`** (pure,
+  `algebra-labeling.mjs`) and routed **doClassify** through it; **`_verdictBadge`** is a compact CHIP (different
+  representation, already pure + on QD_UI) and stays. The genuine remaining drift was **doAutoSolve building the
+  existence/uniqueness line INLINE** — the last un-unified copy. D1c routes doAutoSolve → `classifyVerdict(cl)` (its
+  `+= sliceCaveat(cl)` and the ★ Auto-reduce caveats are unchanged), so both handlers now share ONE builder and cannot
+  re-diverge.
+- **EXACT STRING DELTA (doAutoSolve's verdict card; honest `=`/`≤`/`≈` labeling preserved — every real-count case still
+  says "upper bound" + "run Certify univalence"). OLD (inline) → NEW (classifyVerdict, = what doClassify already showed):**
+  · inconsistent: "…the **reduced** system is inconsistent." → "…the system is inconsistent **(1 ∈ I)**."
+  · positive-dim: "**A positive-dimensional family of solutions** (…) — **add a constraint or fix a value to pin it.**" →
+    "**Infinitely many: a positive-dimensional family** (…)."
+  · real count unavailable: "**⟨mult⟩ solution(s) with multiplicity.**" → "**Zero-dimensional:** ⟨mult⟩ **complex**
+    solution(s) with multiplicity **(real count unavailable: ⟨reason⟩)**."
+  · 0 real: "(of ⟨cx⟩ distinct complex)." → "(of ⟨cx⟩ distinct complex**[; ⟨mult⟩ with multiplicity]**)." (mult>cx clause)
+  · 1 real: "**1 real algebraic solution** … an upper bound on **the number of quadrature domains**; run Certify univalence
+    for the genuine-QD count." → "**A unique real algebraic solution** … an upper bound on **the quadrature-domain count**;
+    run Certify univalence for the genuine-QD count **(gauge copies merged, non-univalent ones filtered)**."
+  · ≥2 real: gains the "**(gauge copies merged, non-univalent ones filtered)**" clause; drops the redundant "an upper
+    bound…" phrase (the ≥2 canonical line conveys the bound via "run Certify univalence …").
+- **Net:** `classifyVerdict`'s exact prose is already pinned by `algebra-classify-verdict.test.ts` (its header explicitly
+  anticipated this unification). Added a SOURCE guard there (doAutoSolve is activeEnv-gated, un-drivable in the harness):
+  doClassify AND doAutoSolve both route through `classifyVerdict`, and the drifted inline strings are GONE from the source
+  — so a third path can't silently re-drift. **Mutation-verified:** re-introducing the inline verdict fails both guards.
+- **Green bar:** build/typecheck/lint(+dep:check 588)/test exit 0; `pnpm test` **2222 / 262** (+3 source guards; the
+  doAutoSolve prose change is not behaviorally driven — activeEnv-gated). Diff: algebra-ui.mjs −13 net; +3 guard tests.
+  Cut `refactor/p3-d1c-verdict-unify`; PR → refactor/main.
+- **Next: D1d** — split installAlgebra (~4085-line closure) into ctx-injected sub-units. The big lift, several PRs.
