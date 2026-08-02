@@ -31,47 +31,47 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   `pnpm lint`): `no-circular` + `no-package-to-app` + `no-cross-app`, `tsPreCompilationDeps:true` (type-only imports,
   so the CD-4 class is gated). 580 modules / 0 violations; 3 rules mutation-verified incl. a type-only cycle. Now
   enforced in the local green bar, CI `build`, and the deploy gate. No app/package code changed.
-- **Phase 2 UNDERWAY (the D1 enabler, QD-ALG-3):** PR 2.1 #206 MERGED (harness `vitest/_algebra-mount.ts` + section-order
-  behavioural). **PR 2.2 #207 MERGED** (33e8bd9): eliminate-section converted as a SPLIT — NEW
-  `algebra-eliminate-section-dom.test.ts` (8 jsdom tests: picker placement, caption grouping, js-busy-lock marker,
-  ui-strings-materialised tooltip, elim-hint; mutation-verified) + slimmed node companion (function-body/wiring/
-  strings-data). **2 of 11 converted.**
-- **AUDIT REFINED (important):** the "11 source-text tests" are MIXES of three assertion kinds — (1) sidebar-MARKUP
-  regex (brittle under **D1a** → behavioural DOM), (2) FUNCTION-BODY/wiring regex (brittle under **D1d**, not cleanly
-  behavioural → stay node-env), (3) ui-strings/style.css DATA (not D1-brittle → stay). Each mixed file converts as a
-  SPLIT. `resultStateOf` is ALREADY behavioural (audit was wrong). honest-labels (~2 markup assertions) + tooltip-tiers
-  (~2) are mostly source-structural ⇒ **PR 2.3 likely CONSOLIDATES their few markup assertions into a shared spec
-  rather than a companion each — awaiting user calibration.**
+- **Phase 2 UNDERWAY (the D1 enabler, QD-ALG-3) — harness `vitest/_algebra-mount.ts` + per-file SPLITS** (markup
+  assertions → behavioural jsdom `-dom` companion; source-structural residue slimmed into the node file). MERGED:
+  #206 (harness + section-order), #207 (eliminate-section). **PR 2.3 #208 OPEN** (`refactor/p2-3-labels-tooltips`):
+  honest-labels + tooltip-tiers splits (button labels; materialised-title ≤120 + relocated-hook absence;
+  mutation-verified). **4 of 11 converted.**
+- **AUDIT REFINED + CALIBRATED:** the 11 are MIXES — (1) sidebar-MARKUP regex (brittle under **D1a** → behavioural),
+  (2) FUNCTION-BODY/wiring (D1d → node), (3) ui-strings/style.css DATA (→ node). `resultStateOf` already behavioural.
+  **User chose THOROUGH per-file splits** (do every mixed file the eliminate-section way). Remaining after #208:
+  workflow-sections, scope-disclosure, tier6, shortcuts-table, canvas-chrome, verdict-labeling (→ D1c).
 - Cadence: merge on green (delegated). `APPROVED: PLAN.md v1` + `APPROVED: D1c verdict-unification`.
   Roadmap: A✓ / B✓ / C✓ / **D (Phase 1✓; Phase 2 = QD-ALG-3 net, 1/11 → PR #206; then Phase 3 D1)** / E (E1 deferred, E2=Phase 5) / **F1✓**.
 
 ## Branches / PR
-- Integration `refactor/main` @ **33e8bd9** (#207 merge; this STATE edit advances it). Tree clean. **No open PR.**
+- Integration `refactor/main` @ **ae336ca** (this STATE edit advances it). Tree clean. **Open PR #208** →
+  `refactor/p2-3-labels-tooltips` (Phase 2; honest-labels + tooltip-tiers behavioural splits).
 - Merged stage PRs (30): A1 #178 … #206, **p2-2-algebra-dom #207 (33e8bd9)**.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at 33e8bd9 (post-#207-merge re-confirmed firsthand): build/typecheck/lint(+`dep:check`,
-  582 modules)/test exit 0; `pnpm test` **2209 passed / 255 files**.
+- **`refactor/main` — ALL GREEN** at ae336ca (post-#207): build/typecheck/lint(+`dep:check`, 582 modules)/test exit 0;
+  `pnpm test` **2209 / 255**.
+- **PR #208 branch — ALL GREEN:** build/typecheck/lint(+`dep:check`, 584 modules)/test exit 0; `pnpm test` **2210 / 257**
+  (+2 behavioural `-dom` files, +1 test net).
 
 ## Uncommitted / unverified
-- None. #207 merged + pulled; post-merge green re-confirmed; this STATE commit is direct to `refactor/main`.
+- PR #208 work (2 new `-dom` companions + 2 slimmed node files, LOG/ISSUES) is committed on
+  `refactor/p2-3-labels-tooltips` (ae95fd4) and pushed; this STATE edit advances `refactor/main`. Nothing uncommitted.
 
 ## Known blockers / risks
-- No open PR. No blockers.
-- **Phase 2 gates Phase 3:** the source-text algebra tests (QD-ALG-3) pin *text*, not *behavior*; the D1a-brittle
-  (markup) assertions must become behavioural jsdom before installAlgebra structural work. 2 of 11 converted; the
-  function-body (D1d) and data assertions stay node-env.
+- **Open PR #208** (awaiting merge-on-green). No blockers.
+- **Phase 2 gates Phase 3:** QD-ALG-3 markup assertions must become behavioural jsdom before installAlgebra
+  structural work. 4 of 11 converted; function-body (D1d) + data assertions stay node-env.
 
 ## Next concrete steps
-1. **Merge #207 on green**, then pull + re-confirm green on `refactor/main`.
-2. **Phase 2 · PR 2.3 — AWAITING USER CALIBRATION** (asked): the remaining D1a-brittle markup assertions are few
-   (honest-labels ~2, tooltip-tiers ~2) — consolidate into ONE shared behavioural sidebar spec (buttons/labels/
-   tooltips/captions) vs a companion per file? And appetite: exhaustively split every mixed file, or convert just the
-   markup assertions D1a will break and move to Phase 3? Interaction tests (shortcuts/scope-disclosure/tier6/canvas)
-   follow. Group order: A✓ B✓ C✓ → **D (Phase 2 → Phase 3 D1)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
+1. **Merge #208 on green**, then pull + re-confirm green on `refactor/main`.
+2. **Phase 2 · PR 2.4:** continue THOROUGH splits — workflow-sections + scope-disclosure + tier6 (sidebar structure /
+   scoped-op banner / setBusy marker; markup → behavioural, source/CSS residue node-env). Then **PR 2.5** — the
+   interaction tests (shortcuts-table dispatch, canvas-chrome focus) + verdict-labeling (→ D1c). Group order:
+   A✓ B✓ C✓ → **D (Phase 2 → Phase 3 D1)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
 git fetch && git checkout refactor/main && git pull
-pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2211/254
+pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2209/255
 ```
