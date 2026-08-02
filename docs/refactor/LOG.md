@@ -868,3 +868,25 @@
   `refactor/p3-d1a-sidebar-snapshot`; PR → refactor/main; merge on green.
 - **Next (D1a PR-2):** transform mountSidebar → a SECTIONS data model + renderer (section structure as data, bodies
   verbatim first), one increment at a time, this fingerprint + the `-dom` net green after each.
+
+## 2026-08-02 — Phase 3 · Stage p3-d1a-sidebar-data (D1a: mountSidebar → SECTIONS data + renderer) — PR opened
+- **The D1a transformation (QD-ALG-2), behind the #210 fingerprint.** mountSidebar's inline `#alg-sections` string
+  (8 collapsible sections + the "Beyond the main route" divider, ~195 lines of `'…' +` concatenation) is now built
+  from a `SIDEBAR_SECTIONS` data array (each `{ summary, open?, body }`, plus one `{ divider }` entry) mapped through a
+  single `renderSection(s)` helper. The `<details>/<summary>/<div class="algebra-section-body">` wrapper — previously
+  hand-repeated 8× — is emitted once, in renderSection. Section **bodies are verbatim** (moved character-for-character);
+  no control markup edited. The pinned header / `#alg-suggest` / `#alg-inspector` / `#alg-scope` stay a literal template
+  (unchanged) — only `#alg-sections` became data-driven, as scoped.
+- **Deterministic pre-flight oracle.** A throwaway node script eval'd BOTH the original inline concatenation and the new
+  `SIDEBAR_SECTIONS.map(renderSection)` build and asserted `normalize()`-equal BEFORE editing the file — byte-identical
+  at 12394 chars / 9 entries. So the rewrite was proven equivalent at the string level independent of jsdom, then the
+  edit was applied by the same script (guaranteeing the verified text is what landed).
+- **Behavior-preserving, proven three ways:** (1) the #210 full-DOM fingerprint `algebra-sidebar-html.test.ts` passes
+  unchanged (byte-identical rendered `#controls-algebra`); (2) all 20 jsdom-env algebra test files green (166 tests),
+  incl. every `-dom` companion + the in-place `algebra-section-order.test.ts`; (3) **mutation-verified** — rendering
+  `SIDEBAR_SECTIONS.slice(1)` (drop a section) fails the fingerprint AND section-order; reverted byte-identically (via
+  Edit, not git).
+- **Green bar:** build/typecheck/lint(+dep:check 588 modules)/test exit 0; `pnpm test` **2211 / 261** — identical count
+  to the pre-change baseline (no test added or removed; pure structural refactor). Diff: one file, +132 / −147 (net −15;
+  the repeated wrapper is gone). Cut `refactor/p3-d1a-sidebar-data`; PR → refactor/main; merge on green.
+- **Next (D1b):** runOp single-flight (QD-ALG-4), then the **re-eval gate** before D1c/D1d.
