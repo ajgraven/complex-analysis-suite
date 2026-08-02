@@ -63,8 +63,8 @@ Behavior-preserving by default; no behavioral change without an explicit approva
       the inspector "Solve for a variable" now bails "Busy — wait…" while a worker op is in flight (was: still ran). The
       Stage-1 net's doSolveRadical pin FLIPPED runs→bails — a reviewed diff + logged delta; mutation-verified. **DONE. D1b's
       coded work is COMPLETE: net✓ (#212) runOp✓ (#213) guard✓ (#214).**
-    - **D1b-STAGE 3b — guard-unification (silent→noisy) — NEEDS A BROADER TOKEN. ASKING the user at the gate** (or leave the
-      silent backstops as-is; nearly unobservable — buttons are js-busy-lock-disabled, keyboard path busyGuards upstream).
+    - **D1b-STAGE 3b — guard-unification (silent→noisy) — SKIPPED (user decision at the gate, 2026-08-02).** The silent
+      backstops stay; no token spent. Nearly unobservable (buttons js-busy-lock-disabled; keyboard path busyGuards upstream).
 
 ## Branches / PR
 - Integration `refactor/main` @ **0eee518** (#210–#214 merged). Tree clean. **No open PR.**
@@ -78,14 +78,20 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - Nothing uncommitted. This STATE edit advances `refactor/main`.
 
 ## Known blockers / risks
-- **▶ AT THE D1b RE-EVALUATION GATE — PAUSED, awaiting the user's decision.** D1b's coded work is complete (net #212 /
-  runOp #213 / doSolveRadical guard #214). Open questions posed to the user: (a) Stage-3b guard-unification token
-  (silent→noisy) — recommend SKIP (nearly unobservable); (b) go/no-go into **D1c** (verdict-unify, token already granted) /
-  **D1d** (split installAlgebra), or stop D1 here. No code work until the user answers.
+- **RE-EVAL GATE PASSED (user decision 2026-08-02): "D1c + D1d both"** (full decomposition) + guard-unification SKIPPED.
+  D1b's coded work is complete (#212/#213/#214).
+- **▶ D1c UNDERWAY (verdict-unify, QD-ALG-5; token GRANTED via decision #3).** Collapse the 3 drifted verdict builders
+  — `_verdictBadge`@573 / `doAutoSolve`@3216 / `doClassify`@3475 — onto one path. AUTHORIZED behavioral change: some
+  verdict strings change; ship behind a verdict net (diffs REVIEWED + logged), `=`/`≤`/`≈` honest labeling preserved.
+  Net-first: pin the current verdict prose before unifying.
+- **D1d next** (split installAlgebra — still a ~4085-line closure, 714–4799 — into ctx-injected sub-units). The big lift.
 
 ## Next concrete steps
-1. **Await the user's re-eval-gate decision** (guard-unify token? D1c / D1d / stop?), then act on it.
-2. Roadmap on go: A✓ B✓ C✓ → **D (D1a✓ → D1b✓ → [D1c token✓ / D1d ?])** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
+1. **D1c — verdict-unify (net-first):** audit the 3 verdict builders + existing verdict tests (algebra-verdict-rigor/
+   -badge, rigor-badge); pin the verdict PROSE each produces so the unification's string deltas are caught; unify onto one
+   path; diff + LOG the string deltas; mutation-verify; green bar; PR; STATE checkpoint.
+2. Then **D1d** (installAlgebra split, several PRs). Order: A✓ B✓ C✓ → **D (D1a✓ → D1b✓ → D1c → D1d)** → Phase 4 (D2) →
+   E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
