@@ -41,63 +41,45 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   + #alg-focus canvas-created at empty mount) — its target buttons already behaviourally guarded; results-drawer
   resultStateOf already behavioural. **User calibration was THOROUGH per-file splits — honoured for every D1a-relevant file.**
 - Cadence: merge on green (delegated). `APPROVED: PLAN.md v1` + `APPROVED: D1c verdict-unification`.
-  Roadmap: A✓ / B✓ / C✓ / **D (Phase 1✓; Phase 2✓; Phase 3 D1: D1a✓ [#210 net + #211 xform] → D1b)** / E (E1 deferred, E2=Phase 5) / **F1✓**.
-- **▶ PHASE 3 UNDERWAY (D1 — installAlgebra decomposition), behind the Phase-2 behavioural net. User go-ahead
-  (2026-08-02).** D1a sidebar-as-data (QD-ALG-2) → D1b runOp single-flight (QD-ALG-4) → **re-eval gate** → D1c
-  verdict-unify (QD-ALG-5, **token APPROVED**) → D1d split into ctx-injected sub-units.
-  · **D1a COMPLETE — #210 (net: `algebra-sidebar-html.test.ts` full-DOM fingerprint) + #211 (xform: mountSidebar's
-  `#alg-sections` → `SIDEBAR_SECTIONS` data + `renderSection`; bodies verbatim) both MERGED (b80429c).** Behavior-preserving
-  (fingerprint + 20 jsdom files + mutation-verified + a pre-flight `normalize()`-equal oracle). Full detail in LOG.
-  · **D1b — 2 user decisions (2026-08-02): (i) "Also guard doSolveRadical" → BEHAVIORAL-CHANGE TOKEN GRANTED** (2nd of the
-  engagement, after D1c's); **(ii) "Build harness first."** (Guards are non-uniform — silent `if(_abort)return` / noisy
-  `busyGuard()` / none — so *unifying* them is extra behavioral change beyond the doSolveRadical token.) **Multi-stage:**
-    - **D1b-STAGE 1 (harness + net, NO production change) — MERGED (#212, cd2301b).** Harness `mountAlgebra(_, {withCanvas})`
-      + `seedMoments`/`nodeCards`/`selectNode`; NEW `algebra-op-runner.test.ts` (8): busy lifecycle, single-flight (button-
-      disable + busyGuard backstop), doSolveRadical's CURRENT run-while-busy pinned. Net-first + mutation-verified. Full
-      detail in LOG. **DONE.**
-    - **D1b-STAGE 2 (runOp lifecycle extraction) — MERGED (#213, ebdefee).** A single `runOp(run,onOk)` wrapper does NOT
-      fit (doAutoSolve multi-step; prove-family `.then().catch()` with `||e`), so extracted the **`_opBegin(label)`/`_opEnd()`
-      pair** via a scripted fold: 19 setups → `_opBegin`, 35 teardowns → `_opEnd`; guard style/control flow/error expression
-      byte-preserved (NO guard-unification). Behavior-preserving by construction; mutation-verified. Full detail in LOG. **DONE.**
-    - **D1b-STAGE 3a — doSolveRadical guard (token GRANTED) — MERGED (#214, 0eee518).** `if (busyGuard()) return;` added;
-      the inspector "Solve for a variable" now bails "Busy — wait…" while a worker op is in flight (was: still ran). The
-      Stage-1 net's doSolveRadical pin FLIPPED runs→bails — a reviewed diff + logged delta; mutation-verified. **DONE. D1b's
-      coded work is COMPLETE: net✓ (#212) runOp✓ (#213) guard✓ (#214).**
-    - **D1b-STAGE 3b — guard-unification (silent→noisy) — SKIPPED (user decision at the gate, 2026-08-02).** The silent
-      backstops stay; no token spent. Nearly unobservable (buttons js-busy-lock-disabled; keyboard path busyGuards upstream).
+  Roadmap: A✓ / B✓ / C✓ / **D (Phase 1✓; Phase 2✓; Phase 3 D1: D1a✓ D1b✓ → D1c[PR] → D1d)** / E (E1 deferred, E2=Phase 5) / **F1✓**.
+- **▶ PHASE 3 (D1 — installAlgebra decomposition), behind the Phase-2 net. User go-aheads 2026-08-02. Full detail per stage in LOG.**
+  · **D1a COMPLETE** — #210 (full-DOM fingerprint net) + #211 (mountSidebar `#alg-sections` → `SIDEBAR_SECTIONS` data +
+  `renderSection`, bodies verbatim). Behavior-preserving (fingerprint + mutation + a pre-flight `normalize()`-equal oracle).
+  · **D1b COMPLETE** — 2 user decisions: "Also guard doSolveRadical" (behavioral TOKEN✓) + "Build harness first". Shipped
+  #212 (seeded/canvas harness + `algebra-op-runner.test.ts` net), #213 (`_opBegin`/`_opEnd` busy-lifecycle fold — behavior-
+  preserving, 19 setups + 35 teardowns), #214 (doSolveRadical `busyGuard()` — the ONE authorized delta; net pin flipped
+  runs→bails). Guard non-uniformity noted; **guard-unification (3b) SKIPPED** by user. All mutation-verified.
+  · **RE-EVAL GATE PASSED (user 2026-08-02): "D1c + D1d both."**
+  · **D1c — verdict-unify (QD-ALG-5, token✓) — PR OPEN (`refactor/p3-d1c-verdict-unify`, 385f9d0).** Audit narrowed scope:
+  `classifyVerdict` (pure, algebra-labeling.mjs) already extracted + `doClassify` routed through it; `_verdictBadge` is a
+  chip (stays). Routed the last inline drift — **`doAutoSolve` → `classifyVerdict(cl)`** — so both handlers share ONE
+  builder. Authorized string delta (honest `upper bound`/`run Certify univalence` preserved) logged in LOG. Net:
+  classifyVerdict prose already pinned (`algebra-classify-verdict.test.ts`) + NEW source guard (both route through it;
+  drifted strings gone); mutation-verified. 2222/262. **DONE (pending merge).**
 
 ## Branches / PR
-- Integration `refactor/main` @ **0eee518** (#210–#214 merged). Tree clean. **No open PR.**
+- Integration `refactor/main` @ **0eee518** (#210–#214 merged). Tree clean. **Open PR → `refactor/p3-d1c-verdict-unify`
+  (385f9d0)** — D1c verdict-unify (authorized string delta, token✓).
 - Merged stage PRs (37): A1 #178 … #213, **p3-d1b-solveradical-guard #214 (0eee518)**.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at 0eee518 (#214 merged): build/typecheck/lint(+`dep:check`, 588 modules)/test exit 0;
-  `pnpm test` **2219 / 262**.
+- **`refactor/main` — ALL GREEN** at 0eee518: `pnpm test` **2219 / 262**.
+- **D1c branch — ALL GREEN:** build/typecheck/lint(+`dep:check`, 588 modules)/test exit 0; `pnpm test` **2222 / 262**
+  (+3 source guards; the doAutoSolve prose change is activeEnv-gated, not behaviorally driven).
 
 ## Uncommitted / unverified
-- Nothing uncommitted. This STATE edit advances `refactor/main`.
+- Nothing uncommitted. D1c committed on `refactor/p3-d1c-verdict-unify` (385f9d0) + pushed; this STATE edit advances `refactor/main`.
 
 ## Known blockers / risks
-- **RE-EVAL GATE PASSED (user decision 2026-08-02): "D1c + D1d both"** (full decomposition) + guard-unification SKIPPED.
-  D1b's coded work is complete (#212/#213/#214).
-- **▶ D1c UNDERWAY (verdict-unify, QD-ALG-5; token GRANTED via decision #3).** AUDIT DONE (task #8): scope is SMALLER than
-  the plan implied. A prior carve-out already extracted **`classifyVerdict`** (pure, `algebra-labeling.mjs`) and routed
-  **`doClassify`@3475** through it. **`_verdictBadge`@573** is a compact CHIP (different representation, already pure + on
-  QD_UI) — stays. The genuine remaining drift is **`doAutoSolve`@3216 builds the verdict INLINE** (3239–3251) with wording
-  drifted from `classifyVerdict` (e.g. "reduced system is inconsistent" vs "the system is inconsistent (1 ∈ I)"; "1 real
-  algebraic solution" vs "A unique real algebraic solution … gauge copies merged, non-univalent filtered"). **D1c change:
-  route doAutoSolve → `classifyVerdict(cl)` (keep its `+= sliceCaveat` + auto caveats).** AUTHORIZED string delta (both were
-  honest — `upper bound` + `run Certify univalence` preserved). doAutoSolve is activeEnv-gated (un-drivable in the harness),
-  so the net is `classifyVerdict`'s own tests (pin the canonical prose) + a source guard that doAutoSolve routes through it;
-  LOG the before/after strings.
-- **D1d next** (split installAlgebra — still a ~4085-line closure, 714–4799 — into ctx-injected sub-units). The big lift.
+- **D1c PR open (awaiting merge-on-green).** No blockers. Then **D1d** — the big lift.
+- **D1d NEXT (split installAlgebra — still a ~4085-line closure, 714–4799 — into ctx-injected sub-units; several PRs).**
+  Gate note: this is the point to stop if cost/benefit turns; report before/within it.
 
 ## Next concrete steps
-1. **D1c — verdict-unify (net-first):** audit the 3 verdict builders + existing verdict tests (algebra-verdict-rigor/
-   -badge, rigor-badge); pin the verdict PROSE each produces so the unification's string deltas are caught; unify onto one
-   path; diff + LOG the string deltas; mutation-verify; green bar; PR; STATE checkpoint.
-2. Then **D1d** (installAlgebra split, several PRs). Order: A✓ B✓ C✓ → **D (D1a✓ → D1b✓ → D1c → D1d)** → Phase 4 (D2) →
-   E2 (Phase 5). E1 deferred.
+1. **Merge D1c on green**, then pull + re-confirm green.
+2. **D1d — installAlgebra split (several PRs), behind the Phase-2/op-runner/verdict nets.** Plan the seams (sidebar /
+   verdict / op-runner / session sub-units, ctx-injected), one per PR, behavior-preserving; keep `algebra-ui.mjs` a
+   composition root. Order: A✓ B✓ C✓ → **D (D1a✓ → D1b✓ → D1c✓ → D1d)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
