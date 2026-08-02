@@ -996,3 +996,35 @@
   doAutoSolve prose change is not behaviorally driven — activeEnv-gated). Diff: algebra-ui.mjs −13 net; +3 guard tests.
   Cut `refactor/p3-d1c-verdict-unify`; PR → refactor/main.
 - **Next: D1d** — split installAlgebra (~4085-line closure) into ctx-injected sub-units. The big lift, several PRs.
+
+## 2026-08-02 — Phase 3 · Stage p3-d1d-op-runner (D1d seam 1: extract the op-runner) — PR opened
+- **BEHAVIOR-PRESERVING (D1d seams need no token — STATE working-rules).** First seam of the installAlgebra split: lift the
+  single-flight worker-op runner — the `_abort`/`_busy` state + `setBusy`/`_opBegin`/`_opEnd`/`busyGuard`/`cancelOp`/
+  `_newAbort` — out of the ~4085-line closure into **`app/algebra/algebra-op-runner.mjs`**, a ctx-injected factory
+  `createOpRunner({ $, setStatus, toast, cancelWorker })`. installAlgebra builds `const ops = createOpRunner(…)` up front
+  (right after setStatus, BEFORE the #alg-cancel wire — the old defs sat ~1200 lines *below* the wire, so a same-spot
+  `const` would TDZ at the wire) and the ~25 worker ops call `ops.begin/end/guard/isBusy/cancel`.
+- **Every method body is the old inline code, verbatim.** Call-site transforms — all deterministic global-replace except the
+  two bespoke begins: `_opBegin(`×19 → `ops.begin(`; `_opEnd()`×35 → `ops.end()`; `busyGuard()`×31 → `ops.guard()`; the 16
+  silent `if (_abort) return` → `if (ops.isBusy()) return` (`isBusy() === !!_abort`); the 3 `_busy` reads (refreshStatusBar +
+  the two undo/redo disables) → `ops.busyFlag()`; the #alg-cancel wire → `ops.cancel`.
+- **The two teardown SHAPES are kept distinct** — the one subtlety that is *not* a pure rename. `_opEnd()` clears the status
+  line (`setStatus('')`); but doGroebner + doAutoSolve wound down via bare `_abort=null; setBusy(false)` (NO setStatus) so
+  their own per-branch result/verdict line stands. Modeled as `end()` vs **`end({ keepStatus: true })`** (6 sites: doGroebner
+  + doAutoSolve×5); collapsing them into `end()` would have blanked the status bar between op-end and result.
+- **The two bespoke begins folded into `ops.begin`:** doDecompose (`setBusy(true,label)` + `_abort=new AbortController()`)
+  and doAutoSolve (`_newAbort();_abort=ctrl` + a separate `setBusy(true,label)`). Same synchronous end-state (no await between
+  the folded statements); doDecompose additionally gains `_newAbort`'s `typeof AbortController` guard — a no-op in every real
+  (browser/jsdom/Node) env.
+- **Nets followed the code to the module.** (1) op-runner behavioural net gained a **Gröbner keepStatus-lifecycle** case
+  (net-first: green on pre-refactor code) so BOTH teardown shapes are pinned end-to-end; begin/end/guard were already covered
+  via Saturate + inspector Duplicate + doSolveRadical. (2) tier6's `setBusy`-mechanism source pin now reads the *module*
+  (`querySelectorAll('.js-busy-lock')` moved there); its undo-guard pins updated `_busy`→`ops.busyFlag()`,
+  `busyGuard()`→`ops.guard()`. tier6-dom (rendered js-busy-lock markers) unchanged.
+- **Mutation-verified:** breaking the module's `guard()` (`if(_abort)`→`if(false && …)`) fails exactly the 2 "bails while
+  busy" net tests (Duplicate + doSolveRadical); reverted byte-identically via Edit.
+- **Green bar:** build/typecheck/lint(+dep:check **590 modules**, no new violations — the new import edge is same-package,
+  downward)/test exit 0; `pnpm test` **2223 / 262** (+1 Gröbner lifecycle test). Diff: algebra-ui.mjs −26 net (def block
+  removed) + the new module. Cut `refactor/p3-d1d-op-runner`; PR → refactor/main.
+- **Next: D1d seam 2** — verdict + results rendering, one behavior-preserving PR behind the nets. (Then seam 3 sidebar-wire,
+  inspector+canvas, ops; installAlgebra stays a composition root.)
