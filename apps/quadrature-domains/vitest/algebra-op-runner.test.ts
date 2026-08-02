@@ -59,6 +59,21 @@ describe("the busy lifecycle is entered synchronously and left on completion", (
     expect(cancelHidden()).toBe(true);
     expect(btn("#alg-groebner").disabled).toBe(false);
   });
+
+  it("a status-keeping op (Gröbner) enters busy synchronously and leaves it on completion too", async () => {
+    // Two teardown shapes exist: the saturate case above winds down via the status-CLEARING teardown;
+    // Gröbner (like Auto-reduce) winds down WITHOUT clearing the status line, so its own result line can
+    // stand. Pin that second shape's busy lifecycle end-to-end so the extraction preserves both — the
+    // op-runner exposes it as end({ keepStatus: true }) vs end(). Assertions are mechanism-agnostic
+    // (cancel affordance + graph lock), so this holds before and after the carve.
+    expect(cancelHidden()).toBe(true); // idle
+    btn("#alg-groebner").click();
+    expect(cancelHidden()).toBe(false); // busy entered synchronously
+    expect(graphBusy()).toBe(true);
+    await flush();
+    expect(cancelHidden()).toBe(true); // busy left on completion
+    expect(btn("#alg-saturate").disabled).toBe(false);
+  });
 });
 
 describe("single-flight: a second heavy op cannot start while one is in flight", () => {
