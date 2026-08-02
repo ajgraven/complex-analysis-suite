@@ -357,3 +357,11 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   bound" + "run Certify univalence"). Net: classifyVerdict prose already pinned (algebra-classify-verdict.test.ts) +
   NEW source guard (doClassify & doAutoSolve both route through it; drifted strings gone); mutation-verified. 2222/262.
   Next: D1d (installAlgebra split).
+- **2026-08-02 · stage p3-d1d-op-runner (PR → refactor/main):** **Phase 3 D1d seam 1 (QD-ALG-1) — behavior-preserving.**
+  First installAlgebra-split seam: extracted the single-flight op-runner (`_abort`/`_busy` + setBusy/begin/end/guard/cancel)
+  from the ~4085-line closure to `algebra-op-runner.mjs` (ctx-injected `createOpRunner`); ~90 call sites → `ops.*` (uniform
+  global-replace + 2 bespoke begins hand-folded). Two teardown shapes kept distinct: `end()` (clears status) vs
+  `end({ keepStatus:true })` (doGroebner/doAutoSolve, which write their own terminal status). Nets followed the code:
+  op-runner net +1 Gröbner keepStatus case (net-first, green pre-refactor); tier6 setBusy-mechanism pin reads the module.
+  Mutation-verified (guard() break → 2 net fails, reverted via Edit). Green: build/typecheck/lint(+dep:check 590)/test —
+  **2223/262**. Next: seam 2 (verdict + results).

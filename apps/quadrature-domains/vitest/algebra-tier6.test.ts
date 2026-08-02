@@ -17,6 +17,10 @@ const CSS = readFileSync(
 const CODE = UI
   .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
   .replace(/(^|[^:])\/\/[^\n]*/g, (m) => m.replace(/[^\n]/g, " "));
+// The single-flight op-runner (the setBusy MECHANISM + busy lifecycle) was extracted to its own module
+// in refactor D1d seam 1; the mechanism assertions below follow it there.
+const OPRUNNER = readFileSync(
+  fileURLToPath(new URL("../app/algebra/algebra-op-runner.mjs", import.meta.url)), "utf8");
 
 /** WCAG relative luminance / contrast, so the threshold is computed rather than asserted. */
 const rgb = (h: string) => {
@@ -60,9 +64,10 @@ describe("5.5 — the muted token clears WCAG AA", () => {
 
 describe("5.9 — the busy lock cannot drift", () => {
   it("setBusy selects by marker class, not a hand-maintained id array", () => {
-    // The array sat ~700 lines from the buttons it named. The marker now sits on the control.
-    expect(CODE).toMatch(/querySelectorAll\('\.js-busy-lock'\)/);
-    expect(CODE, "the id array should be gone").not.toMatch(/'alg-prove',\s*'alg-groebner'/);
+    // The array sat ~700 lines from the buttons it named. The marker now sits on the control. setBusy
+    // moved to algebra-op-runner.mjs (D1d seam 1), so its mechanism is asserted against that module.
+    expect(OPRUNNER).toMatch(/querySelectorAll\('\.js-busy-lock'\)/);
+    expect(OPRUNNER, "the id array should be gone").not.toMatch(/'alg-prove',\s*'alg-groebner'/);
   });
 
   // (The RENDERED marker checks — the two re-seeding controls, and every heavy-op control, carry
@@ -83,20 +88,22 @@ describe("5.9 addendum — Undo cannot be re-enabled mid-operation", () => {
   // undoDepth() was already > 0. Clicking it then rolled the graph back under a pending worker,
   // whose result rendered as a verdict about a system that no longer existed. Verified in-browser:
   // across the whole auto-solve window Undo now stays disabled.
-  it("refreshUndoButtons honours _busy", () => {
+  it("refreshUndoButtons honours the busy flag", () => {
     // Asserted against raw UI, not comment-blanked CODE: the exact strings below appear only in the
-    // function body (no comment contains `u.disabled = _busy`), and the multi-line rationale comment
-    // above the function confuses CODE's line-based blanking.
-    expect(UI).toMatch(/u\.disabled = _busy \|\| !ud/);
-    expect(UI).toMatch(/r\.disabled = _busy \|\| !rd/);
+    // function body (no comment contains `u.disabled = ops.busyFlag()`), and the multi-line rationale
+    // comment above the function confuses CODE's line-based blanking. (_busy moved into the op-runner
+    // module as D1d seam 1; refreshUndoButtons reads it back through ops.busyFlag().)
+    expect(UI).toMatch(/u\.disabled = ops\.busyFlag\(\) \|\| !ud/);
+    expect(UI).toMatch(/r\.disabled = ops\.busyFlag\(\) \|\| !rd/);
   });
 
-  it("the toolbar undo/redo handlers busyGuard, matching the keyboard path", () => {
+  it("the toolbar undo/redo handlers guard, matching the keyboard path", () => {
     // Belt and braces: even if a mid-op repaint momentarily clears `disabled`, the handler refuses.
+    // (busyGuard() → ops.guard() when the op-runner moved to its module — D1d seam 1.)
     const undo = CODE.slice(CODE.indexOf("'Undo (Ctrl+Z)'"), CODE.indexOf("'Undo (Ctrl+Z)'") + 160);
-    expect(undo).toMatch(/busyGuard\(\)/);
+    expect(undo).toMatch(/ops\.guard\(\)/);
     const redo = CODE.slice(CODE.indexOf("'Redo (Ctrl+Shift+Z)'"), CODE.indexOf("'Redo (Ctrl+Shift+Z)'") + 160);
-    expect(redo).toMatch(/busyGuard\(\)/);
+    expect(redo).toMatch(/ops\.guard\(\)/);
   });
 });
 

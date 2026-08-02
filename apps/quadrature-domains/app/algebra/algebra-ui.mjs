@@ -91,6 +91,7 @@ import { classifyVerdict, posDimDesc, withGuidance, _isCapFailure } from './alge
 import { exactValueStr, fmtRatio, ratioStrRec, valStr } from './algebra-format.mjs';   // pure value + ratio-prefix formatters (carve-outs 3, 4, 8)
 import { _parseMomentToken } from './algebra-moment-parse.mjs';   // pure complex-moment input parser (carve-out 5)
 import { _pronyLatex, buildHForm } from './algebra-latex.mjs';   // pure math→LaTeX formatters (carve-outs 7, 9)
+import { createOpRunner } from './algebra-op-runner.mjs';   // the single-flight worker-op runner (D1d seam 1): busy lifecycle + guard + cancel
 const QD = _QD;
 
 (function () {
@@ -813,7 +814,7 @@ const QD = _QD;
     // (progress / a verdict) that an in-flight operation is showing.
     function refreshStatusBar() {
       const el = $('#alg-status'); if (!el) return;
-      if (_busy) return;                                   // an operation is reporting progress
+      if (ops.busyFlag()) return;                          // an operation is reporting progress
       if (el.dataset.transient === '1') return;            // a verdict / result line is standing
       el.textContent = baselineStatus();
     }
@@ -827,14 +828,14 @@ const QD = _QD;
       const u = document.getElementById('alg-undo'), r = document.getElementById('alg-redo');
       const step = (n) => n + ' step' + (n === 1 ? '' : 's') + ' available';
       // The SECOND writer of these buttons' `disabled` (setBusy is the other, via .js-busy-lock).
-      // It must honour _busy, or it re-enables Undo mid-operation: doAutoSolve calls rerender() —
+      // It must honour the busy flag (ops.busyFlag()), or it re-enables Undo mid-operation: doAutoSolve calls rerender() —
       // hence this — several times inside the busy window, and each call flipped Undo back on
       // because undoDepth() was already > 0. Clicking it then rolled the graph back under a pending
       // worker, whose result rendered as a verdict about a system that no longer existed. The
-      // toolbar handlers also busyGuard() now, so the button cannot fire even if a repaint slips a
+      // toolbar handlers also ops.guard() now, so the button cannot fire even if a repaint slips a
       // frame; this keeps the visible state honest.
-      if (u) { u.disabled = _busy || !ud; u.setAttribute('aria-label', 'Undo'); u.title = ud ? ('Undo (Ctrl+Z) — ' + step(ud)) : 'Nothing to undo'; }
-      if (r) { r.disabled = _busy || !rd; r.setAttribute('aria-label', 'Redo'); r.title = rd ? ('Redo (Ctrl+Shift+Z) — ' + step(rd)) : 'Nothing to redo'; }
+      if (u) { u.disabled = ops.busyFlag() || !ud; u.setAttribute('aria-label', 'Undo'); u.title = ud ? ('Undo (Ctrl+Z) — ' + step(ud)) : 'Nothing to undo'; }
+      if (r) { r.disabled = ops.busyFlag() || !rd; r.setAttribute('aria-label', 'Redo'); r.title = rd ? ('Redo (Ctrl+Shift+Z) — ' + step(rd)) : 'Nothing to redo'; }
     }
 
     // ---- session persistence (autosave / restore) ----------------------------
@@ -1031,7 +1032,7 @@ const QD = _QD;
           const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'small';
           btn.textContent = btnText; btn.title = btnTip;
           btn.addEventListener('click', () => {
-            if (busyGuard()) return;
+            if (ops.guard()) return;
             const r = apply();
             if (!r || !r.ok) { showError('Apply symmetry: ' + ((r && r.reason) || 'failed')); return; }
             rerender(); refreshPickers();
@@ -1054,7 +1055,7 @@ const QD = _QD;
         const btnText = 'Define ' + latexPlain(h.newVar);
         btn.textContent = btnText; btn.title = 'Introduce ' + latexPlain(h.newVar) + ' as this abbreviation in a new step';
         btn.addEventListener('click', () => {
-          if (busyGuard()) return;
+          if (ops.guard()) return;
           let r; try { r = store.defineSubstitution(h.newVar, h.expr, { regime: h.regime }); } catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
           if (!r || !r.ok) { showError('Define substitution: ' + ((r && r.reason) || 'failed')); return; }
           rerender(); refreshPickers();
@@ -1712,7 +1713,7 @@ const QD = _QD;
     }
     function doPinKnownData() {
       if (!ensureSeed()) return;
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       const pairs = knownDataPairs();
       if (!pairs.length) {
         toast('No quadrature data to pin — the current column has no a_j / C_{j,s} left symbolic.', { kind: 'error' });
@@ -1765,7 +1766,7 @@ const QD = _QD;
       let g;
       try { g = P.parse(exprStr, store.variables(), S); }
       catch (e) { showError('Define substitution: ' + ((e && e.message) || 'parse error')); return; }
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       let r; try { r = store.defineSubstitution(nm, g); } catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
       if (!r || !r.ok) { showError('Define substitution: ' + ((r && r.reason) || 'failed')); return; }
       if ($('#alg-def-name')) $('#alg-def-name').value = '';
@@ -1777,7 +1778,7 @@ const QD = _QD;
 
     // B2 — iterated auto-CSE: apply every detected substitution to a fixpoint in one click.
     function doAutoAbbreviate() {
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       if (!ensureSeed()) return;
       const r = store.autoAbbreviate();
       if (!r || !r.count) { toast('No repeated-expression abbreviations found in the current system.'); return; }
@@ -1814,7 +1815,7 @@ const QD = _QD;
       let g;
       try { g = P.parse(exprStr, store.variables(), S); }
       catch (e) { showError('Add equation: ' + ((e && e.message) || 'parse error')); return; }
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       const withConjugate = !$('#alg-eq-conj') || $('#alg-eq-conj').checked;
       let r; try { r = store.addEquation(g, rel, { withConjugate }); } catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
       if (!r || !r.ok) { showError('Add equation: ' + ((r && r.reason) || 'failed')); return; }
@@ -1848,6 +1849,12 @@ const QD = _QD;
       else { el.textContent = baselineStatus(); el.dataset.transient = '0'; }
     }
     function setStatusHTML(html) { const el = $('#alg-status'); if (el) el.innerHTML = html; }
+    // The single-flight op-runner for the ~25 off-main-thread (worker) ops (QD-ALG-4). Owns the
+    // _abort/_busy state and the busy lifecycle (begin / end / guard / cancel) that used to be
+    // closure locals ~1200 lines below (extracted to ./algebra-op-runner.mjs — D1d seam 1). Built
+    // here, up front, because #alg-cancel wires to ops.cancel during mountSurface and every worker op
+    // guards on it. cancelWorker forwards to QD.SymWorker, kept out of the module so it stays solver-free.
+    const ops = createOpRunner({ $, setStatus, toast, cancelWorker: () => { if (QD.SymWorker) QD.SymWorker.cancel(); } });
     // Which workflow sections are open. Only "Assume" opened by default and nothing persisted, so
     // every reload re-shut Reduce and Analyze — two thirds of the actual working loop — while the
     // one left open was the section that most deserved collapsing. Remembered per section id.
@@ -2179,7 +2186,7 @@ const QD = _QD;
       { const bv = $('#alg-bifurc-var'); if (bv) bv.addEventListener('mousedown', refreshBifurcVars); }
       { const mg = $('#alg-moments-go'); if (mg) mg.addEventListener('click', doShapeFromMoments); }
       { const mi = $('#alg-moments'); if (mi) mi.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') doShapeFromMoments(); }); }
-      $('#alg-cancel').addEventListener('click', cancelOp);
+      $('#alg-cancel').addEventListener('click', ops.cancel);
       $('#alg-gauge-elim').addEventListener('click', () => {
         if (!ensureSeed()) return;
         const r = store.eliminateWithGauge();
@@ -2321,7 +2328,7 @@ const QD = _QD;
     // RCTD column via store.importRCTD, and summarize the per-cell real-solution counts in the
     // verdict card. Nothing executed Maple in-browser — this just reads its serialized output back.
     function doImportRCTD() {
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       const ta = $('#alg-rctd-json');
       const text = (ta && ta.value || '').trim();
       if (!text) { toast('Paste the qd-rctd JSON from your Maple run first.', { kind: 'error' }); return; }
@@ -2368,7 +2375,7 @@ const QD = _QD;
     // Equations past a factorizer cap are listed as UNDETERMINED — never folded in with the
     // irreducible ones, since that is precisely the conflation this pass exists to remove.
     function doFactorScan() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!ensureSeed()) return;
       const out = $('#alg-factor-out'); if (!out) return;
       out.innerHTML = '';
@@ -2377,10 +2384,10 @@ const QD = _QD;
       // Q2 — offloaded: factor every current-column equation OFF the main thread (was a synchronous per-node
       // S.factor loop — Berlekamp–Zassenhaus / Hensel — that froze the tab on a big system). setBusy + a real
       // Cancel; _factorInfoAsync populates the same cache the passive badges read, so after a Scan they light up.
-      const ctrl = _opBegin('Scanning ' + ns.length + ' equation' + (ns.length === 1 ? '' : 's') + ' for factorizations…');
+      const ctrl = ops.begin('Scanning ' + ns.length + ' equation' + (ns.length === 1 ? '' : 's') + ' for factorizations…');
       out.textContent = 'Scanning…';
       Promise.all(ns.map((n) => _factorInfoAsync(n.id, { signal: ctrl && ctrl.signal }).then((fi) => ({ n, fi })))).then((results) => {
-        _opEnd();
+        ops.end();
         if (ctrl && ctrl.signal && ctrl.signal.aborted) { out.innerHTML = ''; toast('Cancelled'); return; }
         out.innerHTML = '';
         const split = [], irred = [], undet = [];
@@ -2408,30 +2415,29 @@ const QD = _QD;
           out.appendChild(u);
         }
         toast(split.length ? (split.length + ' equation' + (split.length === 1 ? '' : 's') + ' can be split.') : 'No equation in the current system factors.');
-      }, (e) => { _opEnd(); out.innerHTML = ''; showError('Scan for factorizations: ' + ((e && e.message) || String(e))); });
+      }, (e) => { ops.end(); out.innerHTML = ''; showError('Scan for factorizations: ' + ((e && e.message) || String(e))); });
     }
     // Decompose the current system into irreducible components (minimalPrimes) or saturated regular
     // chains, and offer to ENTER one. This is the escape hatch from the positive-dimensional dead
     // end: V(I) = ⋃ₖ V(componentₖ), so a component can be analyzed alone and the counts add.
     // Worker-backed and cancellable — factorizing Buchberger is not a main-thread computation.
     function doDecompose(mode) {
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       if (!ensureSeed()) return;
       const out = $('#alg-factor-out'); if (out) out.innerHTML = '';
       const chains = mode === 'chains';
       const label = chains ? 'Regular chains' : 'Decomposing into components';
-      setBusy(true, label + '…');
-      _abort = new AbortController();
-      const call = chains ? store.regularChainsAsync(null, {}, { signal: _abort.signal })
-                          : store.decomposeComponentsAsync(null, {}, { signal: _abort.signal });
+      const ctrl = ops.begin(label + '…');
+      const call = chains ? store.regularChainsAsync(null, {}, { signal: ctrl && ctrl.signal })
+                          : store.decomposeComponentsAsync(null, {}, { signal: ctrl && ctrl.signal });
       call.then((r) => {
-        _opEnd();
+        ops.end();
         if (r && r.aborted) { toast('Cancelled'); return; }
         if (!r || !r.ok) { showError((chains ? 'Regular chains: ' : 'Decompose: ') + withGuidance((r && r.reason) || 'unavailable')); return; }
         const items = chains ? (r.chains || []).map((c) => ({ polys: c.chain, whole: c.whole, meta: c }))
                              : (r.primes || []).map((G) => ({ polys: G, whole: !G.length, meta: null }));
         renderDecomposition(items, r, chains);
-      }, (e) => { _opEnd(); showError((chains ? 'Regular chains: ' : 'Decompose: ') + ((e && e.message) || String(e))); });
+      }, (e) => { ops.end(); showError((chains ? 'Regular chains: ' : 'Decompose: ') + ((e && e.message) || String(e))); });
     }
     function renderDecomposition(items, r, chains) {
       const out = $('#alg-factor-out'); if (!out) return;
@@ -2460,7 +2466,7 @@ const QD = _QD;
           const go = document.createElement('button'); go.type = 'button'; go.className = 'small'; go.textContent = 'Enter';
           go.title = 'Replace the current system with this component in a new column. The other components still have to be analyzed for a complete count (undo to pick another).';
           go.addEventListener('click', () => {
-            if (busyGuard()) return;
+            if (ops.guard()) return;
             const res = store.applyComponent(it.polys, k, items.length, { complete: r.complete !== false, method: chains ? 'regularChains' : 'minimalPrimes' });
             if (!res || !res.ok) { showError('Enter component: ' + ((res && res.reason) || 'failed')); return; }
             if (canvas) canvas.clearSelection();
@@ -2475,7 +2481,7 @@ const QD = _QD;
       toast(items.length + (chains ? ' regular chain' : ' component') + (items.length === 1 ? '' : 's') + ' found.');
     }
     function doFactor(id, box) {
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       const fr = store.factorOf(id);
       if (!fr.ok) {
         // Three genuinely different answers, which a bare "no factorization" used to conflate.
@@ -2522,17 +2528,17 @@ const QD = _QD;
         const use = document.createElement('button'); use.type = 'button'; use.className = 'small'; use.textContent = 'case f' + (i + 1) + '=0';
         use.title = 'Replace this equation with f' + (i + 1) + ' = 0 in a new column';
         use.addEventListener('click', () => {
-          if (_abort) return;
+          if (ops.isBusy()) return;
           // Q2 — applyFactor re-runs S.factor; offload it (setBusy + real Cancel) so a big case-poly doesn't freeze.
-          const ctrl = _opBegin('Factoring (case f' + (i + 1) + '=0)…');
+          const ctrl = ops.begin('Factoring (case f' + (i + 1) + '=0)…');
           store.applyFactorAsync(id, i, { signal: ctrl && ctrl.signal }).then((r) => {
-            _opEnd();
+            ops.end();
             if (r.aborted) { toast('Cancelled'); return; }
             if (!r.ok) { showError('Factor: ' + (r.reason || 'failed')); return; }
             if (canvas) canvas.clearSelection();
             rerender(); refreshPickers();
             toast('Factored → case ' + (i + 1) + ' of ' + r.factorCount + ' (column ' + r.column + '); undo to pursue another case.');
-          }, (e) => { _opEnd(); showError('Factor: ' + ((e && e.message) || String(e))); });
+          }, (e) => { ops.end(); showError('Factor: ' + ((e && e.message) || String(e))); });
         });
         row.appendChild(eq); row.appendChild(use); chooser.appendChild(row);
       });
@@ -2573,7 +2579,7 @@ const QD = _QD;
       // Single-flight (QD-ALG-4, D1b): this is a SYNCHRONOUS, main-thread solve, and its inspector button
       // is not js-busy-lock — so (like Duplicate / Delete, which busyGuard the same way) this guard is the
       // only thing stopping it from running on top of an in-flight worker op. Bails "Busy — wait…" while busy.
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       const n = store.get(id); if (!n) return;
       const SR = QD.SymRadical, S = QD.Sym, RL = QD.RiemannLatex;
       let panel = box.querySelector('.algebra-solve-panel');
@@ -2733,7 +2739,7 @@ const QD = _QD;
       const out = [];
       const mkBtn = (label, title, run) => ({ label, title, run });
       const acts = { appendChild: (d) => out.push(d) };
-        acts.appendChild(mkBtn('Duplicate', 'Copy this equation into a new node', () => { if (busyGuard()) return; if (store.duplicate(id)) { rerender(); toast('Duplicated ' + n.label); } }));
+        acts.appendChild(mkBtn('Duplicate', 'Copy this equation into a new node', () => { if (ops.guard()) return; if (store.duplicate(id)) { rerender(); toast('Duplicated ' + n.label); } }));
         acts.appendChild(mkBtn('Copy LaTeX', 'Copy this equation as LaTeX', () => copyNodeLatex(id)));
         acts.appendChild(mkBtn('Copy Mathematica', 'Copy this equation as Wolfram-Language (lhs == 0)', () => { const code = store.mathematicaNode(id); if (code) writeClipboard(code, n.label + ' (Mathematica)'); }));
         // D5: show how this derived equation was obtained from its input(s) — for substitutions
@@ -2742,12 +2748,12 @@ const QD = _QD;
         if (n.provenance && (n.provenance.inputs || []).length) {
           acts.appendChild(mkBtn('Show steps', 'Show how this equation was derived from its input(s); substitutions and reality assumptions are replayed one variable at a time', () => doShowSteps(id, box)));
         }
-        acts.appendChild(mkBtn('Delete', 'Delete this node and its descendants', () => { if (busyGuard()) return; const removed = store.deleteNode(id); if (canvas) canvas.clearSelection(); rerender(); toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)', { action: undoToastAction() }); }));
+        acts.appendChild(mkBtn('Delete', 'Delete this node and its descendants', () => { if (ops.guard()) return; const removed = store.deleteNode(id); if (canvas) canvas.clearSelection(); rerender(); toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)', { action: undoToastAction() }); }));
         // Generate the conjugate equation p̄ = 0 (folding in variables already assumed real).
         // Useful for derived equations that did not get a seed-time companion. Equalities/≠ only.
         if (n.rel !== '>') {
           acts.appendChild(mkBtn('Generate conjugate', 'Add the conjugate equation p̄ = 0 as a paired companion, folding in any variables already assumed real (v̄ ≡ v)', () => {
-            if (busyGuard()) return;
+            if (ops.guard()) return;
             const r = store.generateConjugate(id);
             if (!r.ok) { toast(r.reason || 'could not generate the conjugate', { kind: 'error' }); return; }
             rerender(); toast('Added conjugate: ' + r.node.label);
@@ -2757,7 +2763,7 @@ const QD = _QD;
         // (reality / imaginary / fixed φ(0) / pinned values) applied across the columns.
         if (n.column < store.maxColumn()) {
           acts.appendChild(mkBtn('Propagate to current system', 'Carry this equation into the last column with all assumptions (reality, imaginary, fixed φ(0), pinned values) applied to it', () => {
-            if (busyGuard()) return;
+            if (ops.guard()) return;
             const r = store.propagateNode(id);
             if (!r.ok) { toast(r.reason || 'could not propagate', { kind: 'error' }); return; }
             if (canvas) canvas.clearSelection();
@@ -2782,7 +2788,7 @@ const QD = _QD;
             acts.appendChild(mkBtn('Propagate + factor (' + fi.count + ' factors)',
               'This equation factors, but only the current system can be split. Carry it into the last column (with every assumption applied) and factor it there.',
               () => {
-                if (busyGuard()) return;
+                if (ops.guard()) return;
                 const r = store.propagateNode(id);
                 if (!r.ok) { showError('Propagate: ' + (r.reason || 'could not propagate')); return; }
                 rerender(); refreshPickers();
@@ -2987,14 +2993,14 @@ const QD = _QD;
     // Eliminate the chosen shared variable from the two selected nodes by their exact
     // Sylvester resultant (store.eliminate) → a derived node in the current column.
     function doEliminate() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       const sel = canvas ? canvas.getSelection() : [];
       const v = $('#alg-var') && $('#alg-var').value;
       if (sel.length !== 2 || !v) return;
       // Q2 — offloaded (the elimination ideal / Sylvester resultant ran synchronously on the UI thread).
-      const ctrl = _opBegin('Eliminating ' + latexPlain(v) + '…');
+      const ctrl = ops.begin('Eliminating ' + latexPlain(v) + '…');
       store.eliminateAsync(sel[0], sel[1], v, { signal: ctrl && ctrl.signal }).then((r) => {
-        _opEnd();
+        ops.end();
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { toast(r.reason || 'elimination failed', { kind: 'error' }); return; }
         canvas.clearSelection();
@@ -3003,51 +3009,13 @@ const QD = _QD;
         const exact = (r.method || (r.node && r.node.provenance && r.node.provenance.method)) === 'ideal';
         toast('Eliminated ' + latexPlain(v) + ' → ' + created.length + ' exact ' + (created.length === 1 ? 'relation' : 'relations')
           + (exact ? ' (elimination ideal — no extraneous factors)' : ' (Sylvester resultant fallback — may carry extraneous factors)'));
-      }, (e) => { _opEnd(); toast('Elimination: ' + ((e && e.message) || String(e)), { kind: 'error' }); });
+      }, (e) => { ops.end(); toast('Elimination: ' + ((e && e.message) || String(e)), { kind: 'error' }); });
     }
-    // Busy-state manager for the off-main-thread (worker) ops — disables the heavy
-    // controls AND the graph-mutating controls (undo/redo, reductions, palette) so a
-    // mutation can't land mid-op and orphan an in-flight derivation (A5), reveals
-    // Cancel, and routes progress to the status line.
-    let _abort = null;
-    let _busy = false;
-    function setBusy(on, label) {
-      _busy = !!on;
-      // Marked with `js-busy-lock` AT the control, not listed here. This was a hand-maintained
-      // array of 30 ids sitting ~700 lines from the buttons it named (finding 5.9, "will
-      // drift") — and it had drifted: `alg-seed-moment` and `alg-w0-fix` both RE-SEED, and
-      // neither was in the array nor self-guarded, so either could drop a fresh system on top
-      // of an in-flight worker derivation. That is precisely what this lock exists to prevent.
-      // The marker now sits in the markup beside the control, where it is visible to whoever
-      // adds one. (It does not make remembering unnecessary — it puts the reminder in view.)
-      document.querySelectorAll('.js-busy-lock').forEach((b) => { b.disabled = on; });
-      const pal = $('#alg-palette'); if (pal) pal.querySelectorAll('button').forEach((b) => { b.disabled = on; });
-      const cancel = $('#alg-cancel'); if (cancel) cancel.classList.toggle('hidden', !on);
-      // Q2 — a busy state on the CANVAS surface too (not just the sidebar): the result lands here, so the
-      // graph dimming + spinner is where the eye is during a multi-second op, and it reads as "working"
-      // rather than "did my click register?". CSS draws the overlay from the .is-busy class + data-busy label.
-      const graph = $('#algebra-graph');
-      if (graph) { graph.classList.toggle('is-busy', on); if (on && label) graph.setAttribute('data-busy', label); else graph.removeAttribute('data-busy'); }
-      if (on && label) setStatus(label);
-    }
-    function cancelOp() { if (_abort) { try { _abort.abort(); } catch (e) { /* ignore */ } } if (QD.SymWorker) QD.SymWorker.cancel(); }
-    function _newAbort() { return (typeof AbortController !== 'undefined') ? new AbortController() : null; }
-    // The single-flight busy lifecycle, factored out of the async ops (QD-ALG-4, D1b): _opBegin arms a
-    // fresh abort controller as THE in-flight op (busyGuard / `if (_abort)` read it) and shows the busy
-    // label; _opEnd disarms it and restores the idle status. The ~19 standard ops route their `_abort`/busy
-    // lifecycle through this pair; doAutoSolve (multi-step, with bespoke per-exit teardowns) and doDecompose
-    // (a direct `new AbortController()`) keep their inline handling. Each op keeps its own guard (silent
-    // `if (_abort) return` or noisy `busyGuard()`) and its own result handling — this pair is state, not policy.
-    function _opBegin(label) { const ctrl = _newAbort(); _abort = ctrl; setBusy(true, label); return ctrl; }
-    function _opEnd() { _abort = null; setBusy(false); setStatus(''); }
-    // Guard a graph-mutating action so it can't land while a worker op is in flight. The
-    // inspector's action buttons (Duplicate / Delete / Attempt-to-factor / factor cases)
-    // are rebuilt on every selection, so they can't be reached by setBusy's id list (A5) —
-    // they call this instead. Returns true (and warns) when an op is running.
-    function busyGuard() {
-      if (_abort) { toast('Busy — wait for the current computation to finish (or Cancel).', { kind: 'error' }); return true; }
-      return false;
-    }
+    // The single-flight op-runner (setBusy / begin / end / guard / cancel + the _abort/_busy state,
+    // with the js-busy-lock and busy-lifecycle rationale) moved to ./algebra-op-runner.mjs — D1d seam 1;
+    // `ops` is built near setStatus above. The ~25 worker ops now call ops.begin(label) / ops.end()
+    // (or ops.end({ keepStatus: true }) when they set their own terminal status), ops.guard() /
+    // ops.isBusy() to single-flight, and ops.cancel() (wired from #alg-cancel).
 
     // _isCapFailure + withGuidance (cap-failure guidance) moved to ./algebra-labeling.mjs (carve-out 6) —
     // imported above; the DOM-coupled capFailVerdict below still uses the imported _isCapFailure.
@@ -3088,7 +3056,7 @@ const QD = _QD;
     // `optsOverride` carries the elimination request from doEliminateVars; without it this reads
     // only the order selector, so the button does exactly what its label says.
     function doGroebner(sel, optsOverride) {
-      if (_abort) return;                       // an op is already running
+      if (ops.isBusy()) return;                       // an op is already running
       if (!ensureSeed()) return;
       clearError();
       const ids = (sel && sel.length) ? sel.slice()
@@ -3097,12 +3065,12 @@ const QD = _QD;
       const order = (orderEl && orderEl.value) || 'grevlex';
       const elim = (optsOverride && optsOverride.eliminate) ? optsOverride.eliminate.slice() : [];
       const opts = elim.length ? { eliminate: elim } : { order };
-      const ctrl = _opBegin('Computing Gröbner basis…');
+      const ctrl = ops.begin('Computing Gröbner basis…');
       store.groebnerAsync(ids, opts, {
         signal: ctrl && ctrl.signal,
         onProgress: (info) => setStatus('Gröbner… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
       }).then((r) => {
-        _abort = null; setBusy(false);
+        ops.end({ keepStatus: true });
         if (r.aborted) { setStatus('Cancelled.'); toast('Cancelled'); return; }
         if (!r.ok) { const rn = r.reason || 'failed'; if (!capFailVerdict('Gröbner basis', rn)) showError('Gröbner basis: ' + withGuidance(rn)); setStatus(''); return; }
         if (canvas) canvas.clearSelection();
@@ -3117,32 +3085,32 @@ const QD = _QD;
     // drops the {|z_j|=1} boundary stratum the cleared (●)/(★) denominators carry, so the existence count is
     // the EXACT number of algebraic quadrature-domain solutions (finding B-1; e.g. the unit disk 4 → 2).
     function doSaturate() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!ensureSeed()) return;
       clearError();
       const sel = canvas ? canvas.getSelection() : [];
       // Q2 — offloaded (was a synchronous elimination Gröbner on the UI thread, degree 2p², and on the
       // ✦ Prove prelude). setBusy reveals the spinner + Cancel; the abort signal makes Cancel real.
-      const ctrl = _opBegin('Saturating by ∏(1−z̄z)…');
+      const ctrl = ops.begin('Saturating by ∏(1−z̄z)…');
       store.saturateAsync(sel.length ? sel : null, {}, { signal: ctrl && ctrl.signal }).then((r) => {
-        _opEnd();
+        ops.end();
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Saturate (admissibility): ' + withGuidance(r.reason || 'nothing to saturate')); return; }
         if (canvas) canvas.clearSelection();
         rerender(); refreshPickers();
         toast('Saturated by ∏(1−z̄z): the |z_j| = 1 boundary stratum removed (' + r.created.length + ' generator' + (r.created.length === 1 ? '' : 's') + ')' + scopeNote(sel) + ' — the existence count is now the exact algebraic QD-solution count.' + droppedNote(r.skipped), r.skipped && r.skipped.length ? { kind: 'error' } : {});
-      }, (e) => { _opEnd(); showError('Saturate: ' + ((e && e.message) || String(e))); });
+      }, (e) => { ops.end(); showError('Saturate: ' + ((e && e.message) || String(e))); });
     }
     // Triangular decomposition of the current system → a triangular chain column.
     function doTriangular() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!ensureSeed()) return;
       clearError();
       const sel = canvas ? canvas.getSelection() : [];
       // Q2 — offloaded (the Wu pseudo-elimination chain ran synchronously on the UI thread, no spinner/cancel).
-      const ctrl = _opBegin('Triangularizing (Wu chain)…');
+      const ctrl = ops.begin('Triangularizing (Wu chain)…');
       store.triangularizeAsync(sel.length ? sel : null, {}, { signal: ctrl && ctrl.signal }).then((r) => {
-        _opEnd();
+        ops.end();
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Triangular decomposition: ' + withGuidance(r.reason || 'failed')); return; }
         if (canvas) canvas.clearSelection();
@@ -3155,11 +3123,11 @@ const QD = _QD;
           (r.freeVars.length ? '; free variable(s) ' + r.freeVars.map(latexPlain).join(', ') + ' ⇒ a positive-dimensional family' : ' ⇒ zero-dimensional (finitely many solutions)') +
           (r.hasRegularityConditions ? ' · ⚠ ' + r.initialCount + ' non-constant initial(s) — a Wu chain is NOT saturated by its pivots, so where an initial vanishes it may add spurious branches or miss components (a full regular-chain decomposition would case-split on the initials)' : '') +
           droppedNote(r.skipped), r.skipped && r.skipped.length ? { kind: 'error' } : {});
-      }, (e) => { _opEnd(); showError('Triangular decomposition: ' + ((e && e.message) || String(e))); });
+      }, (e) => { ops.end(); showError('Triangular decomposition: ' + ((e && e.message) || String(e))); });
     }
     // Carry every univalence constraint into the current system, assumptions applied (batch).
     function doPropagateAll() {
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       if (!store.size) { toast('Nothing to propagate — seed a system first.', { kind: 'error' }); return; }
       const r = store.propagateAllConstraints();
       if (!r.ok) { toast(r.reason || 'nothing to propagate', { kind: 'error' }); return; }
@@ -3214,13 +3182,12 @@ const QD = _QD;
     // linear propagation), each appended as a labeled column, then determine existence/
     // uniqueness and the explicit real solutions. The reduction history stays visible.
     function doAutoSolve() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
       if (!ensureSeed()) return;
       clearError();
-      const ctrl = _newAbort(); _abort = ctrl;
+      const ctrl = ops.begin('Auto-reduce & solve…');
       const runOpts = { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Auto: ' + info.basis + ' generators, ' + info.pairs + ' pairs left') };
-      setBusy(true, 'Auto-reduce & solve…');
       const tick = () => new Promise((res) => setTimeout(res, 30));
       (async () => {
         try {
@@ -3240,8 +3207,8 @@ const QD = _QD;
           // 3. existence / uniqueness verdict (parameters pinned) — off the main thread
           const params = hDataParamValues();
           const cl = await store.classifyAsync(null, { paramValues: params }, runOpts);
-          if (cl.aborted) { _abort = null; setBusy(false); setStatus('Cancelled.'); toast('Cancelled'); return; }
-          if (!cl.ok) { _abort = null; setBusy(false); showError('Auto-reduce & solve: ' + withGuidance(cl.reason || 'failed')); return; }
+          if (cl.aborted) { ops.end({ keepStatus: true }); setStatus('Cancelled.'); toast('Cancelled'); return; }
+          if (!cl.ok) { ops.end({ keepStatus: true }); showError('Auto-reduce & solve: ' + withGuidance(cl.reason || 'failed')); return; }
           // D1c (QD-ALG-5): build the existence/uniqueness line with classifyVerdict — the SAME pure
           // honest-labeling builder doClassify uses — rather than a drifted inline copy, so the two paths
           // can no longer diverge. classifyVerdict already carries the honest labeling (finding C-1/B-1: the
@@ -3255,7 +3222,7 @@ const QD = _QD;
           let coords = '', solutionsText = '';
           if (cl.zeroDim && !cl.inconsistent) {
             const sr = await store.solveRealAsync(null, { paramValues: params }, runOpts);
-            if (sr.aborted) { _abort = null; setBusy(false); setStatus('Cancelled.'); toast('Cancelled'); return; }
+            if (sr.aborted) { ops.end({ keepStatus: true }); setStatus('Cancelled.'); toast('Cancelled'); return; }
             if (sr.ok && sr.solutions && sr.solutions.length) {
               const reals = sr.solutions.filter((s) => Object.keys(s).every((k) => Math.abs(s[k].im) < 1e-6));
               coords = ' Explicit: ' + reals.length + ' real solution(s) — see the verdict card / console.';
@@ -3266,11 +3233,11 @@ const QD = _QD;
               try { console.table(sr.solutions.map((s) => { const row = {}; Object.keys(s).forEach((k) => { row[k] = s[k].re.toFixed(6) + (s[k].im >= 0 ? '+' : '−') + Math.abs(s[k].im).toFixed(6) + 'i'; }); return row; })); } catch (e) { /* ignore */ }
             }
           }
-          _abort = null; setBusy(false); refreshPickers();
+          ops.end({ keepStatus: true }); refreshPickers();
           setStatus(verdict + coords);
           if (canvas) showResult({ text: verdict, solutionsText, assumptions: specializationLedger(cl, _ledgerCtx()), rigor: classifyRigor(cl) });
           toast(verdict, cl.inconsistent || cl.realCount === 0 ? { kind: 'error' } : {});
-        } catch (e) { _abort = null; setBusy(false); showError('Auto-reduce & solve: ' + ((e && e.message) || String(e))); }
+        } catch (e) { ops.end({ keepStatus: true }); showError('Auto-reduce & solve: ' + ((e && e.message) || String(e))); }
       })();
     }
 
@@ -3305,7 +3272,7 @@ const QD = _QD;
       clearError();
       try { store.seedFromPolys({ polys: sys.polys, vars: sys.vars }); } catch (e) { showError('Moment system: could not seed — ' + ((e && e.message) || e)); return; }
       _seededHData = hData; realSel.clear(); elimSel.clear(); refreshPickers(); if (canvas) canvas.clearSelection(); rerender();
-      const ctrl = _opBegin('Proving via the moment (point-functional / Aharonov–Shapiro) formulation…');
+      const ctrl = ops.begin('Proving via the moment (point-functional / Aharonov–Shapiro) formulation…');
       const momentCtx = {
         order: pf.order, momentPolys: sys.polys, deps: proveDeps(),
         sliceCaveat, posDimDesc, signal: ctrl && ctrl.signal,
@@ -3314,13 +3281,13 @@ const QD = _QD;
         solveCertified: () => store.solveRealCertifiedAsync(null, {}, { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Solving the moment system… ' + info.basis + ' gen, ' + info.pairs + ' pairs') }),
       };
       PROVE.runMomentPlan(momentCtx).then((pr) => {
-        _opEnd();
+        ops.end();
         if (pr.kind === 'aborted') { toast('Cancelled'); return; }
         if (pr.kind === 'error') { const rn = pr.reason || 'failed'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
         if (pr.kind === 'positive-dim') { renderPositiveDimVerdict(pr); return; }   // degenerate moment data
         if (pr.kind === 'moment') pr.node = pf.node;   // C1-ext-B: the constant term a = φ(0) for the plot
         renderProofVerdict(pr);   // moment / inconsistent / no-real
-      }).catch((e) => { _opEnd(); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
+      }).catch((e) => { ops.end(); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
     }
     // Prove existence/uniqueness via the RATIONAL-φ (multi-node) formulation (Phase C2). Re-seeds the workspace
     // with the degree-2 rational shape system (so the shown derivation IS the proof), then runs
@@ -3331,7 +3298,7 @@ const QD = _QD;
       clearError();
       try { store.seedFromPolys({ polys: sys.polys, vars: sys.vars }); } catch (e) { showError('Rational system: could not seed — ' + ((e && e.message) || e)); return; }
       _seededHData = hData; realSel.clear(); elimSel.clear(); refreshPickers(); if (canvas) canvas.clearSelection(); rerender();
-      const ctrl = _opBegin('Proving via the rational-φ (multi-node) formulation…');
+      const ctrl = ops.begin('Proving via the rational-φ (multi-node) formulation…');
       const ratCtx = {
         sysPolys: sys.polys, nodeData: rd, deps: proveDeps(),
         sliceCaveat, posDimDesc, signal: ctrl && ctrl.signal,
@@ -3340,12 +3307,12 @@ const QD = _QD;
         solveCertified: () => store.solveRealCertifiedAsync(null, {}, { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Solving the shape system… ' + info.basis + ' gen, ' + info.pairs + ' pairs') }),
       };
       PROVE.runRationalPlan(ratCtx).then((pr) => {
-        _opEnd();
+        ops.end();
         if (pr.kind === 'aborted') { toast('Cancelled'); return; }
         if (pr.kind === 'error') { const rn = pr.reason || 'failed'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
         if (pr.kind === 'positive-dim') { renderPositiveDimVerdict(pr); return; }
         renderProofVerdict(pr);   // rational / inconsistent / no-real
-      }).catch((e) => { _opEnd(); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
+      }).catch((e) => { ops.end(); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
     }
     // Prove existence/uniqueness via the RATIONAL-φ EQUILATERAL-TRIANGLE (degree-3) formulation (Phase C3).
     // Re-seeds the workspace with the 3-fold-symmetric shape system, then runs PROVE.runTrianglePlan (certified
@@ -3356,7 +3323,7 @@ const QD = _QD;
       clearError();
       try { store.seedFromPolys({ polys: sys.polys, vars: sys.vars }); } catch (e) { showError('Triangle system: could not seed — ' + ((e && e.message) || e)); return; }
       _seededHData = hData; realSel.clear(); elimSel.clear(); refreshPickers(); if (canvas) canvas.clearSelection(); rerender();
-      const ctrl = _opBegin('Proving via the rational-φ (equilateral triangle, degree-3) formulation…');
+      const ctrl = ops.begin('Proving via the rational-φ (equilateral triangle, degree-3) formulation…');
       const triCtx = {
         sysPolys: sys.polys, nodeData: td, deps: proveDeps(),
         sliceCaveat, posDimDesc, signal: ctrl && ctrl.signal,
@@ -3365,12 +3332,12 @@ const QD = _QD;
         solveCertified: () => store.solveRealCertifiedAsync(null, {}, { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Solving the shape system… ' + info.basis + ' gen, ' + info.pairs + ' pairs') }),
       };
       PROVE.runTrianglePlan(triCtx).then((pr) => {
-        _opEnd();
+        ops.end();
         if (pr.kind === 'aborted') { toast('Cancelled'); return; }
         if (pr.kind === 'error') { const rn = pr.reason || 'failed'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
         if (pr.kind === 'positive-dim') { renderPositiveDimVerdict(pr); return; }
         renderProofVerdict(pr);   // triangle / inconsistent / no-real
-      }).catch((e) => { _opEnd(); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
+      }).catch((e) => { ops.end(); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
     }
     // THE one-click orchestrator (finding G-1 + Phase B): from the seeded system to the AUTHORITATIVE
     // genuine-QD verdict, with no manual op-chaining. Runs the cheap reductions (auto-reality if h is
@@ -3383,7 +3350,7 @@ const QD = _QD;
     // an aggregated verdict (an honest LOWER BOUND when a case can't be auto-closed). Escalation is
     // exclusive to this ✦ button; the standalone Certify keeps the manual pin/split card.
     function doProveExistenceUniqueness() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       // From-data (PF-2): prove from the current solve when one exists, else DIRECTLY from the raw
       // classical-bounded quadrature data (lastHData) with NO numeric solve — gated on the classical-
       // bounded MODE (state.mode ≠ lqd-*/pqd-*/unbounded). Answers "does a QD exist?" even when the
@@ -3417,7 +3384,7 @@ const QD = _QD;
         try { const sr = store.saturateMobius(); if (sr && sr.ok) rerender(); } catch (e) { /* best-effort */ }
         refreshPickers();
       } catch (e) { /* the prelude is best-effort; the pipeline still runs */ }
-      const ctrl = _opBegin(fromData ? 'Proving from data (no numeric solve needed)…' : 'Proving existence / uniqueness…');
+      const ctrl = ops.begin(fromData ? 'Proving from data (no numeric solve needed)…' : 'Proving existence / uniqueness…');
       const w0cb = $('#alg-w0-fix'), fixW0 = !w0cb || w0cb.checked;
       const planCtx = fromData ? buildPlanCtx(ctrl, { hData, numPhi: null, w0Sel: fixW0 ? poleCentroid(hData) : undefined }) : buildPlanCtx(ctrl);
       PROVE.runCertifyPlan(planCtx).then((pr) => {
@@ -3427,7 +3394,7 @@ const QD = _QD;
           // fork mutates + reverts the store per case, so the derivation DAG is unchanged by the walk.
           setStatus('Underdetermined — auto-walking the factor / pin cases…');
           return PROVE.runProofTree(Object.assign({}, planCtx, { fork: buildProveFork(planCtx.params) })).then((tr) => {
-            _opEnd();
+            ops.end();
             if (tr.kind === 'aborted') { toast('Cancelled'); return; }
             // If the walk CLOSED at least one branch (analyzed a determined sub-case), render the
             // aggregate (pool-then-quotient) verdict. If it made NO progress — every case was an
@@ -3439,11 +3406,11 @@ const QD = _QD;
             else renderPositiveDimVerdict(pr);
           });
         }
-        _opEnd();
+        ops.end();
         if (pr.kind === 'aborted') { toast('Cancelled'); return; }
         if (pr.kind === 'error') { const rn = pr.reason || 'failed'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
         renderProofVerdict(pr);   // inconsistent / no-real / zero-dim
-      }).catch((e) => { _opEnd(); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
+      }).catch((e) => { ops.end(); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
     }
     // The known quadrature-data values (a_j, C_{j,s} and their conjugates) keyed by the
     // conjugate-model variable names — to PIN the parameters for the existence verdict
@@ -3467,16 +3434,16 @@ const QD = _QD;
     // "N real QDs (of M complex)" / "positive-dimensional family" to the status line + the
     // canvas verdict card. Runs behind a setTimeout so the busy state paints first.
     function doClassify() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!ensureSeed()) return;
       clearError();
       const sel = canvas && canvas.getSelection().length ? canvas.getSelection() : null;
-      const ctrl = _opBegin('Counting real solutions (existence / uniqueness)…');
+      const ctrl = ops.begin('Counting real solutions (existence / uniqueness)…');
       store.classifyAsync(sel, { paramValues: hDataParamValues() }, {
         signal: ctrl && ctrl.signal,
         onProgress: (info) => setStatus('Existence / uniqueness… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
       }).then((r) => {
-        _opEnd();
+        ops.end();
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { const rn = r.reason || 'unavailable'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
         // classifyVerdict (pure, ./algebra-labeling.mjs) builds the base existence/uniqueness line; the
@@ -3609,19 +3576,19 @@ const QD = _QD;
     // numeric cross-check → rigor-badged verdict. The DOM/render (progress, verdict card, one-click
     // actions) stays here; the proof logic + the honest verdict string live in the engine.
     function doCertifyUnivalence() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
       if (typeof QD.isBoundaryUnivalent !== 'function') { showError('Univalence: the numeric univalence machinery (solver.js) is not loaded.'); return; }
       if (!ensureSeed()) return;
       clearError();
-      const ctrl = _opBegin('Certifying univalence (genuine QDs)…');
+      const ctrl = ops.begin('Certifying univalence (genuine QDs)…');
       PROVE.runCertifyPlan(buildPlanCtx(ctrl)).then((pr) => {
-        _opEnd();
+        ops.end();
         if (pr.kind === 'aborted') { toast('Cancelled'); return; }
         if (pr.kind === 'error') { const rn = pr.reason || 'failed'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
         if (pr.kind === 'positive-dim') { renderPositiveDimVerdict(pr); return; }
         renderProofVerdict(pr);   // inconsistent / no-real / zero-dim
-      }).catch((e) => { _opEnd(); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
+      }).catch((e) => { ops.end(); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
     }
     // Render a POSITIVE-DIMENSIONAL (underdetermined) verdict: detect FACTORABLE causes (a locator/
     // gauge equation that splits the variety) and offer one-click pin/split actions (#2) that re-run
@@ -3659,16 +3626,16 @@ const QD = _QD;
           actions.push({ label: 'Split ' + (n.label || 'equation') + ' → case 1 of ' + cnt,
             title: 'This equation factors: V(p) = ⋃ₖ V(fₖ). Pursue case 1 in a new column — the other cases still have to be pursued for a complete count (undo to pick another, or fork).',
             onClick: () => {
-              if (_abort) return;
-              const ctrl = _opBegin('Splitting into cases…');   // Q2 — offload the factor (setBusy + real Cancel)
+              if (ops.isBusy()) return;
+              const ctrl = ops.begin('Splitting into cases…');   // Q2 — offload the factor (setBusy + real Cancel)
               store.applyFactorAsync(n.id, 0, { signal: ctrl && ctrl.signal }).then((r) => {
-                _opEnd();
+                ops.end();
                 if (r && r.aborted) { toast('Cancelled'); return; }
                 if (!r || !r.ok) { showError('Split into cases: ' + ((r && r.reason) || 'failed')); return; }
                 rerender(); refreshPickers();
                 toast('Split → case 1 of ' + r.factorCount + ' (column ' + r.column + '); undo to pursue another case.');
                 doCertifyUnivalence();
-              }, (e) => { _opEnd(); showError('Split into cases: ' + ((e && e.message) || String(e))); });
+              }, (e) => { ops.end(); showError('Split into cases: ' + ((e && e.message) || String(e))); });
             } });
         });
       } catch (e) { /* the split offer is best-effort — never break the verdict card */ }
@@ -3833,17 +3800,17 @@ const QD = _QD;
     // solutions / a degeneracy (e.g. a cusp). Surfaces the degree / distinct-vs-multiplicity count
     // + the degeneracy verdict; the polynomial (LaTeX) goes to the verdict card detail.
     function doResolvent() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!ensureSeed()) return;
       clearError();
       refreshResolventVars();
       const sel = $('#alg-resolvent-var'); const v = sel && sel.value;
       if (!v) { showError('Resolvent: no real variable available — reduce to a finite (reality-assumed) system first.'); return; }
-      const ctrl = _opBegin('Computing the resolvent…');   // coherent busy state (guards re-entry / inspector mutations)
+      const ctrl = ops.begin('Computing the resolvent…');   // coherent busy state (guards re-entry / inspector mutations)
       // Q2 — offloaded to the worker. This used to be a setTimeout that still ran S.resolvent SYNCHRONOUSLY
       // on the main thread, so the Cancel was cosmetic; now the abort signal really cancels.
       store.resolventAsync(null, v, { paramValues: hDataParamValues() }, { signal: ctrl && ctrl.signal }).then((r) => {
-        _opEnd();
+        ops.end();
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Resolvent: ' + withGuidance(r.reason || 'unavailable')); return; }
         const fv = friendlyReim(r.variable);
@@ -3862,7 +3829,7 @@ const QD = _QD;
         // `degenerate` (disc = 0) is itself an exact conclusion, not a failure to certify.
         if (canvas) showResult({ text, solutionsLatex: mathLatex, rigor: 'exact' });
         toast(text, r.degenerate ? { kind: 'error' } : {});
-      }, (e) => { _opEnd(); showError('Resolvent: ' + ((e && e.message) || String(e))); });
+      }, (e) => { ops.end(); showError('Resolvent: ' + ((e && e.message) || String(e))); });
     }
 
     // Repopulate the bifurcation parameter picker from the current column's reim variables.
@@ -3879,15 +3846,15 @@ const QD = _QD;
     // count per interval). Off the main thread (heavy Gröbner / elimination), cancellable. Counts
     // are EXACT (=); critical values are isolating boxes (≤, shown ≈ when not an exact rational).
     function doBifurcation() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!ensureSeed()) return;
       clearError();
       refreshBifurcVars();
       const sel = $('#alg-bifurc-var'); const v = sel && sel.value;
       if (!v) { showError('Bifurcation: no real variable available — reduce to a finite (reality-assumed) system first.'); return; }
-      const ctrl = _opBegin('Computing the bifurcation…');
+      const ctrl = ops.begin('Computing the bifurcation…');
       store.parametricBifurcationAsync(null, v, { paramValues: hDataParamValues() }, { signal: ctrl && ctrl.signal }).then((r) => {
-        _opEnd();
+        ops.end();
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Bifurcation: ' + withGuidance(r.reason || 'unavailable')); return; }
         const fv = friendlyReim(v);
@@ -3914,7 +3881,7 @@ const QD = _QD;
         if (!bifPartial) text += ' · each count is a rigorous upper bound on #QD (real solutions also count non-univalent maps + gauge copies) — run Certify univalence for the genuine-QD count.';
         if (canvas) showResult({ text, rigor: bifPartial ? 'partial' : 'bound' });
         toast('Bifurcation computed (' + r.cells.length + ' interval' + (r.cells.length === 1 ? '' : 's') + ').');
-      }, (e) => { _opEnd(); showError('Bifurcation: ' + ((e && e.message) || String(e))); });
+      }, (e) => { ops.end(); showError('Bifurcation: ' + ((e && e.message) || String(e))); });
     }
 
     // ---- Shape from moments (roadmap #18): reconstruct a QD's data from its complex moments ----
@@ -3936,7 +3903,7 @@ const QD = _QD;
       add('<span class="hint">reconstruction residual maxₖ |mₖ − Σⱼ aⱼzⱼᵏ| = ' + (r.maxResidual != null ? r.maxResidual.toExponential(2) : '—') + '</span>');
     }
     function doShapeFromMoments() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       clearError();
       const inp = $('#alg-moments'), out = $('#alg-moments-out');
       const raw = inp && inp.value ? inp.value.trim() : '';
@@ -3945,28 +3912,28 @@ const QD = _QD;
       try { moments = raw.split(',').map((s) => s.trim()).filter((s) => s.length).map(_parseMomentToken); }
       catch (e) { showError('Shape from moments: ' + ((e && e.message) || 'parse error')); return; }
       if (moments.length < 2) { showError('Shape from moments: give at least 2 moments (m₀, m₁, …).'); return; }
-      const ctrl = _opBegin('Reconstructing from moments…');
+      const ctrl = ops.begin('Reconstructing from moments…');
       store.shapeFromMomentsAsync(moments, {}, { signal: ctrl && ctrl.signal }).then((r) => {
-        _opEnd();
+        ops.end();
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Shape from moments: ' + withGuidance(r.reason || 'unavailable')); return; }
         _renderShapeResult(out, r);
         toast('Reconstructed: order ' + r.order + (r.saturated ? ' (≥ — supply more moments)' : '') + '.');
-      }, (e) => { _opEnd(); showError('Shape from moments: ' + ((e && e.message) || String(e))); });
+      }, (e) => { ops.end(); showError('Shape from moments: ' + ((e && e.message) || String(e))); });
     }
 
     // Report the dimension / solution count of the current equality system, off the
     // main thread (falls back to sync) so a heavy grevlex basis can't freeze the UI.
     function doDimension() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!ensureSeed()) return;
       clearError();
-      const ctrl = _opBegin('Computing dimension…');
+      const ctrl = ops.begin('Computing dimension…');
       store.dimensionAsync(null, {}, {
         signal: ctrl && ctrl.signal,
         onProgress: (info) => setStatus('Dimension… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
       }).then((r) => {
-        _opEnd();
+        ops.end();
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Dimension: ' + withGuidance(r.reason || 'unavailable')); return; }
         // Q4 — the dimension/count is an EXACT structural fact (the quotient's ℂ-dimension for a zero-dim
@@ -3985,15 +3952,15 @@ const QD = _QD;
     // Solve the current equality system numerically (shape-lemma path), off the main
     // thread via QD.SymWorker (falls back to sync if unavailable).
     function doSolve() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!ensureSeed()) return;
       clearError();
-      const ctrl = _opBegin('Solving (Gröbner → FGLM → roots)…');
+      const ctrl = ops.begin('Solving (Gröbner → FGLM → roots)…');
       store.solveAsync(null, {}, {
         signal: ctrl && ctrl.signal,
         onProgress: (info) => setStatus('Solving… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
       }).then((r) => {
-        _opEnd();
+        ops.end();
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { const rn = r.reason || 'unavailable'; if (!capFailVerdict('Numeric solve', rn)) showError('Numeric solve: ' + withGuidance(rn)); return; }
         // The eigenvalue fallback can return a PARTIAL set on clustered/near-multiple roots.
@@ -4058,7 +4025,7 @@ const QD = _QD;
     // E1 — load a downloaded DAG JSON and rebuild the whole workspace (store.importDAG).
     // Replaces the current graph (undoable). Resets stale picker/selection state, like a re-seed.
     function importJson(ev) {
-      if (busyGuard()) { ev.target.value = ''; return; }
+      if (ops.guard()) { ev.target.value = ''; return; }
       const file = ev.target.files && ev.target.files[0];
       ev.target.value = '';                      // allow re-loading the same file later
       if (!file) return;
@@ -4288,13 +4255,13 @@ const QD = _QD;
         // no undo at all — while Delete, which removes a node AND its descendants, was bound.
         // Both accelerator spellings: Ctrl/Cmd+Shift+Z and Ctrl+Y.
         if (mod && (ev.key === 'z' || ev.key === 'Z') && !ev.shiftKey) {
-          if (busyGuard()) return;
+          if (ops.guard()) return;
           if (store.undo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); toast('Undo'); }
           else toast('Nothing to undo', { kind: 'error' });
           ev.preventDefault(); return;
         }
         if (mod && ((ev.key === 'z' || ev.key === 'Z') && ev.shiftKey || ev.key === 'y' || ev.key === 'Y')) {
-          if (busyGuard()) return;
+          if (ops.guard()) return;
           if (store.redo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); toast('Redo'); }
           else toast('Nothing to redo', { kind: 'error' });
           ev.preventDefault(); return;
@@ -4332,7 +4299,7 @@ const QD = _QD;
           // Fork branches from the selected node's column, else from the newest column —
           // the same two choices the "Fork from here" action and the trackbar button offer.
           if (ev.key === 'f') {
-            if (busyGuard()) { ev.preventDefault(); return; }
+            if (ops.guard()) { ev.preventDefault(); return; }
             const n = sel.length === 1 ? store.get(sel[0]) : null;
             const col = n ? n.column : store.maxColumn();
             if (canvas) canvas.clearSelection();
@@ -4350,7 +4317,7 @@ const QD = _QD;
         }
         if (ev.key === 'Escape') { if (sel.length && canvas) { canvas.clearSelection(); ev.preventDefault(); } }
         else if ((ev.key === 'Delete' || ev.key === 'Backspace') && sel.length === 1) {
-          if (busyGuard()) return;
+          if (ops.guard()) return;
           const removed = store.deleteNode(sel[0]); if (canvas) canvas.clearSelection(); rerender();
           // Deleting cascades to descendants, so the toast has to say the recovery path exists.
           toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)', { action: undoToastAction() }); ev.preventDefault();
@@ -4595,11 +4562,11 @@ const QD = _QD;
     // Classify EVERY branch (sequential — one worker job at a time) and stamp each chip's
     // verdict. Cancellable + busy-locked like the other worker ops; progressive chip updates.
     async function classifyAllBranches() {
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       if (!store.size) return;
       const params = hDataParamValues();
       const tlist = store.tracks();
-      const ctrl = _opBegin('Classifying ' + tlist.length + ' branch' + (tlist.length === 1 ? '' : 'es') + '…');
+      const ctrl = ops.begin('Classifying ' + tlist.length + ' branch' + (tlist.length === 1 ? '' : 'es') + '…');
       let done = 0;
       try {
         for (const t of tlist) {
@@ -4616,13 +4583,13 @@ const QD = _QD;
           _trackVerdict.set(t.id, Object.assign({ sig }, _verdictBadge(r) || { badge: '?', state: 'unknown', title: 'unavailable' }));
           done++; buildTrackBar();
         }
-      } finally { _opEnd(); }
+      } finally { ops.end(); }
       toast(done ? ('Updated ' + done + ' branch verdict' + (done === 1 ? '' : 's')) : 'Cancelled');
     }
     // Switch the on-screen branch (a view change — clears the selection, which may point
     // at off-branch nodes, then rerenders the now-active branch's lanes).
     function switchTrack(id) {
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       if (!store.setActiveTrack(id)) return;
       if (canvas) canvas.clearSelection();
       rerender(); refreshPickers();
@@ -4632,7 +4599,7 @@ const QD = _QD;
     // column as the new branch's column 0, makes it active). Undoable. Clears the
     // selection so the inspector doesn't dangle on a now-off-screen node.
     function doFork(fromColumn) {
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       const r = store.forkTrack({ fromTrack: store.activeTrack, fromColumn: fromColumn, label: 'branch ' + store.tracks().length });
       if (!r || !r.ok) { toast((r && r.reason) || 'could not fork', { kind: 'error' }); return; }
       if (canvas) canvas.clearSelection();
@@ -4641,7 +4608,7 @@ const QD = _QD;
     }
     // Delete a non-main branch (store refuses 't0' / branches with children, surfaced as a toast).
     function deleteBranch(id) {
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       const r = store.deleteTrack(id);
       if (!r || !r.ok) { toast((r && r.reason) || 'could not delete this branch', { kind: 'error' }); return; }
       if (canvas) canvas.clearSelection();
@@ -4719,11 +4686,11 @@ const QD = _QD;
       });
       searchWrap.appendChild(searchIn); searchWrap.appendChild(searchCount);
       bar.appendChild(searchWrap);
-      // busyGuard() here matches the keyboard undo/redo path, which always had it. The button used
+      // ops.guard() here matches the keyboard undo/redo path, which always had it. The button used
       // to rely on `disabled` alone; a mid-op repaint could momentarily clear that (see
       // refreshUndoButtons), so guard at the handler too.
-      bar.appendChild(btn('↶', 'Undo (Ctrl+Z)', () => { if (busyGuard()) return; if (store.undo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); } }, 'alg-undo'));
-      bar.appendChild(btn('↷', 'Redo (Ctrl+Shift+Z)', () => { if (busyGuard()) return; if (store.redo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); } }, 'alg-redo'));
+      bar.appendChild(btn('↶', 'Undo (Ctrl+Z)', () => { if (ops.guard()) return; if (store.undo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); } }, 'alg-undo'));
+      bar.appendChild(btn('↷', 'Redo (Ctrl+Shift+Z)', () => { if (ops.guard()) return; if (store.redo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); } }, 'alg-redo'));
       zlabel.textContent = Math.round(_zoom * 100) + '%';
       host.appendChild(bar);
     }
