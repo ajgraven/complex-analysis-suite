@@ -68,17 +68,27 @@ async function boot(): Promise<void> {
  * not leak across files.
  *
  * @param overrides shallow-merged onto the stub ctx — pass e.g. `{ ns: [...], c: 2 }` to feed the labels.
+ * @param opts.withCanvas mount the real AlgebraCanvas (SVG node cards + selection → inspector). Default
+ *        OFF: the scaffold gives a bare #algebra-graph and mountSurface no-ops (it needs #plot-area), so
+ *        `canvas` stays null — exactly the sidebar-only environment every existing test relies on. Opt IN
+ *        only for the op-runner / inspector nets, which need node selection to reach doSolveRadical et al.
  */
-export async function mountAlgebra(overrides: Record<string, unknown> = {}): Promise<AlgebraMount> {
+export async function mountAlgebra(
+  overrides: Record<string, unknown> = {},
+  opts: { withCanvas?: boolean } = {},
+): Promise<AlgebraMount> {
   await boot();
   try { localStorage.clear(); } catch { /* private mode / unavailable */ }
 
   // Minimal scaffold: the tab button installAlgebra's openWorkspace clicks, the panel host it builds
-  // into, and the graph surface AlgebraCanvas mounts. installAlgebra templates everything else.
+  // into, and the graph host. Default = a bare #algebra-graph (mountSurface needs #plot-area, absent
+  // here, so the canvas stays unmounted). withCanvas swaps in #plot-area so mountSurface builds the
+  // real AlgebraCanvas (which creates its own #algebra-graph inside it). installAlgebra templates the rest.
+  const graphHost = opts.withCanvas ? '<div id="plot-area"></div>' : '<div id="algebra-graph"></div>';
   document.body.innerHTML =
     '<button class="tab-btn" data-tab="algebra"></button>' +
     '<div id="controls-algebra"></div>' +
-    '<div id="algebra-graph"></div>';
+    graphHost;
 
   const $ = (sel: string) => document.querySelector(sel);
   const $$ = (sel: string) => Array.from(document.querySelectorAll(sel));
@@ -116,4 +126,35 @@ export async function mountAlgebra(overrides: Record<string, unknown> = {}): Pro
 /** Section <summary> texts in DOM order — the behavioural twin of the old source regex. */
 export function sectionNames(m: AlgebraMount): string[] {
   return m.$$("#alg-sections details.algebra-section > summary").map((s) => (s.textContent || "").trim());
+}
+
+// ── Op-runner / inspector net helpers (need mountAlgebra(_, { withCanvas: true })) ──────────────
+/** The rendered canvas node cards (empty unless mounted withCanvas AND a system is seeded). */
+export function nodeCards(m: AlgebraMount): HTMLElement[] {
+  void m;
+  return Array.from(document.querySelectorAll(".algebra-node[data-id]")) as HTMLElement[];
+}
+
+/**
+ * Seed the order-2 Aharonov–Shapiro moment system — the one seed that needs NO geometric solve
+ * (store.seedFromPolys, no activeEnv), so a jsdom mount can populate the store and, withCanvas,
+ * render selectable node cards. Returns the node data-ids in DOM order.
+ */
+export function seedMoments(m: AlgebraMount): string[] {
+  const btn = m.$("#alg-seed-moment") as HTMLButtonElement | null;
+  if (!btn) throw new Error("seedMoments: #alg-seed-moment not found (sidebar not mounted?)");
+  btn.click();
+  return nodeCards(m).map((c) => c.getAttribute("data-id") || "");
+}
+
+/**
+ * Select node card `i` (a real canvas click → onSelect → renderInspector) and return #alg-inspector.
+ * Requires withCanvas + a prior seed. The single-node inspector is where doSolveRadical's
+ * "Solve for a variable" action lives.
+ */
+export function selectNode(m: AlgebraMount, i = 0): HTMLElement {
+  const cards = nodeCards(m);
+  if (!cards[i]) throw new Error(`selectNode: no card at index ${i} (have ${cards.length})`);
+  cards[i].click();
+  return m.$("#alg-inspector") as HTMLElement;
 }
