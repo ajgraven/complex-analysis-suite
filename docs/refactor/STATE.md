@@ -31,41 +31,39 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   `pnpm lint`): `no-circular` + `no-package-to-app` + `no-cross-app`, `tsPreCompilationDeps:true` (type-only imports,
   so the CD-4 class is gated). 580 modules / 0 violations; 3 rules mutation-verified incl. a type-only cycle. Now
   enforced in the local green bar, CI `build`, and the deploy gate. No app/package code changed.
-- **Phase 2 UNDERWAY (the D1 enabler, QD-ALG-3) — PR #206 OPEN** (`refactor/p2-1-mount-harness`): NEW reusable jsdom
-  mount harness `vitest/_algebra-mount.ts` (mounts installAlgebra headlessly — AlgebraCanvas is SVG, no canvas ctx;
-  boot kernels → scaffold → stub ctx → `tab-changed`) + first conversion `algebra-section-order.test.ts`
-  node/source-regex → jsdom/behavioural (mutation-verified). **1 of 11** source-text algebra tests converted.
-  Audit recorded (LOG): the 11 are a MIX — clean DOM conversions, interaction tests, `resultStateOf` (extract+call),
-  and genuine source-invariants (comment hygiene / WCAG tokens / "every setVerdict has rigor" → node-env or D1c).
+- **Phase 2 UNDERWAY (the D1 enabler, QD-ALG-3) — PR 2.1 #206 MERGED** (0fa765e): NEW reusable jsdom mount harness
+  `vitest/_algebra-mount.ts` (mounts installAlgebra headlessly — AlgebraCanvas is SVG, no canvas ctx; boot kernels →
+  scaffold → stub ctx → `tab-changed`) + first conversion `algebra-section-order.test.ts` node/source-regex →
+  jsdom/behavioural (mutation-verified). **1 of 11** source-text algebra tests converted. Audit recorded (LOG): the 11
+  are a MIX — clean DOM conversions, interaction tests, `resultStateOf` (extract+call), and genuine source-invariants
+  (comment hygiene / WCAG tokens / "every setVerdict has rigor" → node-env or D1c). **Next: PR 2.2.**
 - Cadence: merge on green (delegated). `APPROVED: PLAN.md v1` + `APPROVED: D1c verdict-unification`.
   Roadmap: A✓ / B✓ / C✓ / **D (Phase 1✓; Phase 2 = QD-ALG-3 net, 1/11 → PR #206; then Phase 3 D1)** / E (E1 deferred, E2=Phase 5) / **F1✓**.
 
 ## Branches / PR
-- Integration `refactor/main` @ **79641b6** (this STATE edit advances it). Tree clean. **Open PR #206** →
-  `refactor/p2-1-mount-harness` (Phase 2; jsdom mount harness + section-order conversion).
-- Merged stage PRs (28): A1 #178 … #204, **p1-f1-depcruise #205 (c1ae7e6)**.
+- Integration `refactor/main` @ **0fa765e** (#206 merge; this STATE edit advances it). Tree clean. **No open PR.**
+- Merged stage PRs (29): A1 #178 … #205, **p2-1-mount-harness #206 (0fa765e)**.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at 79641b6 (post-#205): build/typecheck/lint(+`dep:check`, 580 modules)/test exit 0;
-  `pnpm test` **2211 / 254**.
-- **PR #206 branch — ALL GREEN:** build/typecheck/lint(+`dep:check`, 581 modules)/test exit 0; `pnpm test` **2210 / 254**
-  (net −1: one retired comment-hygiene assertion; the new harness file is not a test file so file count holds at 254).
+- **`refactor/main` — ALL GREEN** at 0fa765e (post-#206-merge re-confirmed firsthand): build/typecheck/lint(+`dep:check`,
+  581 modules)/test exit 0; `pnpm test` **2210 passed / 254 files**.
 
 ## Uncommitted / unverified
-- PR #206 work (`vitest/_algebra-mount.ts`, converted `algebra-section-order.test.ts`, LOG/ISSUES) is committed on
-  `refactor/p2-1-mount-harness` (d967f66) and pushed; this STATE edit advances `refactor/main`. Nothing uncommitted.
+- None. #206 merged + pulled; post-merge green re-confirmed; this STATE commit is direct to `refactor/main`.
 
 ## Known blockers / risks
-- **Open PR #206** (awaiting merge-on-green). No blockers.
+- No open PR. No blockers.
 - **Phase 2 gates Phase 3:** the source-text algebra tests (QD-ALG-3) pin *text*, not *behavior*; they must become
   behavioral jsdom (mount harness now exists) before any installAlgebra structural work. 1 of 11 converted.
 
 ## Next concrete steps
-1. **Merge #206 on green**, then pull + re-confirm green on `refactor/main`.
-2. **Phase 2 · PR 2.2:** convert the DOM-structure + label tests (honest-labels, eliminate-section placement,
-   tooltip-tiers) + extract `resultStateOf` for direct testing; handle `workflow-sections` (behavioural part via the
-   harness + slimmed node-env source-hygiene). Then **PR 2.3** (interaction tests + op-runner/verdict-prose coverage).
-   Group order: A✓ B✓ C✓ → **D (Phase 2 → Phase 3 D1)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
+1. **Phase 2 · PR 2.2 (IN PROGRESS):** convert the DOM-structure + label tests via the harness — honest-labels,
+   eliminate-section (picker placement), tooltip-tiers — + extract `resultStateOf` (algebra-results-drawer) for direct
+   testing; keep genuinely source-only guards as slimmed node-env checks. Each behavioural test passes against
+   unmodified algebra-ui.mjs + mutation-verified.
+2. Then **PR 2.3** (interaction tests: shortcuts dispatch, scope-disclosure, tier6 setBusy, canvas focus; +
+   op-runner/verdict-prose jsdom coverage). Group order: A✓ B✓ C✓ → **D (Phase 2 → Phase 3 D1)** → Phase 4 (D2) →
+   E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
