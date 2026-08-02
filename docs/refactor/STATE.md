@@ -41,43 +41,44 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   + #alg-focus canvas-created at empty mount) — its target buttons already behaviourally guarded; results-drawer
   resultStateOf already behavioural. **User calibration was THOROUGH per-file splits — honoured for every D1a-relevant file.**
 - Cadence: merge on green (delegated). `APPROVED: PLAN.md v1` + `APPROVED: D1c verdict-unification`.
-  Roadmap: A✓ / B✓ / C✓ / **D (Phase 1✓; Phase 2✓ QD-ALG-3 net; → Phase 3 D1)** / E (E1 deferred, E2=Phase 5) / **F1✓**.
+  Roadmap: A✓ / B✓ / C✓ / **D (Phase 1✓; Phase 2✓; Phase 3 D1: D1a✓ [#210 net + #211 xform] → D1b)** / E (E1 deferred, E2=Phase 5) / **F1✓**.
 - **▶ PHASE 3 UNDERWAY (D1 — installAlgebra decomposition), behind the Phase-2 behavioural net. User go-ahead
   (2026-08-02).** D1a sidebar-as-data (QD-ALG-2) → D1b runOp single-flight (QD-ALG-4) → **re-eval gate** → D1c
   verdict-unify (QD-ALG-5, **token APPROVED**) → D1d split into ctx-injected sub-units.
-  · **D1a NET-FIRST: PR #210 OPEN** (`refactor/p3-d1a-sidebar-snapshot`) — NEW `vitest/algebra-sidebar-html.test.ts`
-  snapshots the WHOLE normalized #controls-algebra DOM (mutation-verified — catches drift the `-dom` net misses).
-  No production change; it guards the upcoming mountSidebar → data-driven rewrite as behavior-preserving.
+  · **D1a NET-FIRST: PR #210 MERGED (60e1406).** `vitest/algebra-sidebar-html.test.ts` snapshots the WHOLE normalized
+  #controls-algebra DOM (mutation-verified). Guards the transformation below as behavior-preserving.
+  · **D1a TRANSFORMATION: PR #211 OPEN** (`refactor/p3-d1a-sidebar-data`) — mountSidebar's inline `#alg-sections` string
+  (8 sections + "Beyond the main route" divider) → a `SIDEBAR_SECTIONS` data array (`{summary,open?,body}` + `{divider}`)
+  mapped through one `renderSection`; wrapper emitted once, **bodies verbatim**; header/suggest/inspector/scope unchanged.
+  Behavior-preserving three ways: #210 fingerprint unchanged + all 20 jsdom algebra files (166 tests) + mutation-verified;
+  a pre-flight node oracle proved `normalize()`-equal (12394 chars) before editing. Pure refactor (2211/261, no test delta).
 
 ## Branches / PR
-- Integration `refactor/main` @ **d9e2623** (this STATE edit advances it). Tree clean. **Open PR #210** →
-  `refactor/p3-d1a-sidebar-snapshot` (Phase 3 D1a net; sidebar-HTML fingerprint).
-- Merged stage PRs (32): A1 #178 … #208, **p2-4-structure-banner #209 (8d05c66)**.
+- Integration `refactor/main` @ **60e1406** (#210 merged; this STATE edit advances it). Tree clean. **Open PR #211** →
+  `refactor/p3-d1a-sidebar-data` (Phase 3 D1a transformation; mountSidebar → SECTIONS data).
+- Merged stage PRs (33): A1 #178 … #209, **p3-d1a-sidebar-snapshot #210 (60e1406)**.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at d9e2623 (Phase-2 closeout, docs-only): `pnpm test` **2210 / 260**.
-- **PR #210 branch — ALL GREEN:** build/typecheck/lint(+`dep:check`, 588 modules)/test exit 0; `pnpm test` **2211 / 261**
-  (+1: the sidebar-HTML fingerprint; no production change).
+- **`refactor/main` — ALL GREEN** at 60e1406 (#210 merged): `pnpm test` **2211 / 261**.
+- **PR #211 branch — ALL GREEN:** build/typecheck/lint(+`dep:check`, 588 modules)/test exit 0; `pnpm test` **2211 / 261**
+  (no test delta — pure structural refactor; #210 fingerprint + all 20 jsdom algebra files green).
 
 ## Uncommitted / unverified
-- PR #210 work (`vitest/algebra-sidebar-html.test.ts` + `.snap`, LOG/ISSUES) is committed on
-  `refactor/p3-d1a-sidebar-snapshot` (88633e5) and pushed; this STATE edit advances `refactor/main`. Nothing uncommitted.
+- PR #211 work (algebra-ui.mjs transformation, LOG/ISSUES) is committed on `refactor/p3-d1a-sidebar-data` (73088c2) and
+  pushed; this STATE edit advances `refactor/main`. Nothing uncommitted.
 
 ## Known blockers / risks
-- **Open PR #210** (D1a net; awaiting merge-on-green). No blockers.
-- **D1a is the big structural rewrite:** mountSidebar's ~390-line `innerHTML` string → a data-described build.
-  Behavior-preserving, now guarded by BOTH the full-DOM fingerprint (#210) and the structural `-dom` net. Do it
-  incrementally (section structure as data first, bodies verbatim); one increment per PR; pause at the re-eval gate before D1c/D1d.
+- **Open PR #211** (D1a transformation; awaiting merge-on-green). No blockers.
+- **D1a done in this PR** (sidebar structure as data, bodies verbatim). Remaining D1 work: **D1b** runOp single-flight
+  (QD-ALG-4), then the **re-eval gate** before D1c (verdict-unify, token APPROVED) / D1d (split into ctx-injected sub-units).
 
 ## Next concrete steps
-1. **Merge #210 on green**, then pull + re-confirm green.
-2. **Phase 3 · D1a PR-2 — the transformation:** rewrite mountSidebar into a `SECTIONS` data model + a renderer
-   (sections/divider as data; bodies verbatim first), behavior-preserving, with the #210 fingerprint + the `-dom` net
-   green after each increment. Then D1b → gate → D1c✓ → D1d. Group order: A✓ B✓ C✓ → **D (Phase 3 D1)** → Phase 4 (D2)
-   → E2 (Phase 5). E1 deferred.
+1. **Merge #211 on green**, then pull + re-confirm green.
+2. **Phase 3 · D1b — runOp single-flight (QD-ALG-4):** net-first, then the behavior-preserving change; **re-eval gate**
+   before D1c/D1d. Group order: A✓ B✓ C✓ → **D (Phase 3 D1: D1a✓ → D1b)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
 git fetch && git checkout refactor/main && git pull
-pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2210/257
+pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2211/261
 ```
