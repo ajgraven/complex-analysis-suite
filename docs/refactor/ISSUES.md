@@ -330,3 +330,10 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   inspector/scope unchanged. Behavior-preserving: pre-flight node oracle proved `normalize()`-equal (12394 chars) before
   editing; #210 fingerprint + all 20 jsdom algebra files (166 tests) green; mutation-verified (drop-a-section fails).
   2211/261 (unchanged count — pure refactor). Next: D1b runOp single-flight → re-eval gate.
+- **2026-08-02 · stage p3-d1b-oprunner-harness (PR → refactor/main):** **Phase 3 D1b Stage 1 (QD-ALG-4), NET-FIRST, no
+  production change.** Harness `mountAlgebra(_, {withCanvas})` + `seedMoments`/`nodeCards`/`selectNode` make the op-runner
+  seam behaviourally reachable in jsdom (seed via A–S moments = no solve; canvas opt-in keeps the #210 fingerprint +
+  20 jsdom tests byte-identical). NEW `algebra-op-runner.test.ts` (8) pins the busy lifecycle, single-flight (button-
+  disable primary + busyGuard backstop), and doSolveRadical's CURRENT run-while-busy. Mutation-verified (3 mutations,
+  each caught the intended test + reverted byte-identically). QD.QoL not booted (would change the fingerprint) → guard
+  proven by no-execution, not toast. 2219/262. Next: Stage 2 runOp extraction (behaviour-preserving).

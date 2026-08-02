@@ -890,3 +890,33 @@
   to the pre-change baseline (no test added or removed; pure structural refactor). Diff: one file, +132 / −147 (net −15;
   the repeated wrapper is gone). Cut `refactor/p3-d1a-sidebar-data`; PR → refactor/main; merge on green.
 - **Next (D1b):** runOp single-flight (QD-ALG-4), then the **re-eval gate** before D1c/D1d.
+
+## 2026-08-02 — Phase 3 · Stage p3-d1b-oprunner-harness (D1b Stage 1: behavioural harness + op-runner net) — PR opened
+- **D1b is harness-first (2 user decisions 2026-08-02): (i) "Also guard doSolveRadical" → behavioural-change TOKEN
+  GRANTED; (ii) "Build harness first."** Investigation reframed D1b: the ~15 async ops are un-nettable at unit level
+  (all gated behind `activeEnv`, set only by a real QD solve via `PrimarySolution`); the guards are non-uniform (silent
+  `if(_abort)return` / noisy `busyGuard()` / none); `doSolveRadical` is canvas-inspector-gated. So this stage builds the
+  behavioural harness + net FIRST, with NO production change, exactly as net-first requires.
+- **Harness (`vitest/_algebra-mount.ts`):** `mountAlgebra(overrides, { withCanvas })` — opt-in real AlgebraCanvas (adds
+  `#plot-area` so `mountSurface` builds it). Default stays the sidebar-only bare `#algebra-graph` (mountSurface no-ops,
+  canvas null) so the 20 existing jsdom tests + the #210 fingerprint are byte-identical — verified. New helpers:
+  `seedMoments` (clicks `#alg-seed-moment` — the ONE seed needing no geometric solve: `store.seedFromPolys`, no
+  activeEnv), `nodeCards`, `selectNode` (a real canvas click → onSelect → renderInspector). Enabler: in Node,
+  `QD.SymWorker` falls back to a resolved-Promise job, so `_abort` is set SYNCHRONOUSLY on op-start and cleared on the
+  next microtask — the single-flight window is observable between a synchronous op-start and the following await.
+- **Net (`vitest/algebra-op-runner.test.ts`, 8):** the busy lifecycle (entered synchronously — cancel shown, graph +
+  js-busy-lock buttons locked — left on completion); single-flight (every heavy-op button disabled while busy = the
+  primary guard; `busyGuard()` backs the NON-disabled paths — an inspector Duplicate BAILS while busy vs. works idle);
+  and **doSolveRadical's CURRENT run-while-busy pinned** (idle: opens the solve panel; BUSY: STILL opens it — the
+  QD-ALG-4 gap the granted Stage-3 guard will close, so that change lands as a REVIEWED test diff).
+- **NET-FIRST + mutation-verified:** green against unmodified `algebra-ui.mjs` (zero production change), then 3 mutations
+  each caught exactly the intended test and were reverted byte-identically — (i) add busyGuard to doSolveRadical → the
+  BUSY pin fails, idle still passes; (ii) busyGuard always-false → the backstop test fails; (iii) setBusy stops disabling
+  → the disabled-while-busy test fails.
+- **Note:** `QD.QoL` is deliberately NOT booted in the harness — its presence changes the sidebar fingerprint (measured:
+  it fails the #210 snapshot). So single-flight is asserted by the STRONGER signal — the guarded action does not EXECUTE
+  while busy — not merely that a toast appeared.
+- **Green bar:** build/typecheck/lint(+dep:check 588)/test exit 0; `pnpm test` **2219 / 262** (+8 op-runner; +0 prod).
+  Cut `refactor/p3-d1b-oprunner-harness`; PR → refactor/main; merge on green.
+- **Next (Stage 2):** extract `runOp()` for the ~15 async ops behind this net (behaviour-preserving; each op's guard style
+  preserved). Then Stage 3 — doSolveRadical guard [token✓] + guard-unification [ASK for a broader token].
