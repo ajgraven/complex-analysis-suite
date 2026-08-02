@@ -53,14 +53,21 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   preserving three ways (#210 fingerprint unchanged + all 20 jsdom algebra files 166 tests + mutation-verified); a
   pre-flight node oracle proved `normalize()`-equal (12394 chars) before editing. Pure refactor (2211/261, no test delta).
   **D1a COMPLETE.**
-  · **D1b — DECISION MADE (user 2026-08-02): "Also guard doSolveRadical" → D1b BEHAVIORAL-CHANGE TOKEN GRANTED.**
-  The 2nd authorized behavioral change in the engagement (after D1c's). Scope: (1) extract a `runOp()` async runner and
-  route the ~15 async worker ops through it — behavior-preserving, each op's current `busyGuard()`→`_abort`→`setBusy()`→
-  `.then(cleanup,errCleanup)` behavior net-verified unchanged; (2) **AUTHORIZED CHANGE** — add `busyGuard()` to
-  `doSolveRadical` (algebra-ui.mjs:2574; synchronous, read-only "Solve for a variable" inspector op whose button is NOT
-  `js-busy-lock` and which today runs while a worker op is in flight) so it bails "Busy — wait…" instead — matching
-  Duplicate/Delete. Not a correctness fix (JS single-threaded, read-only); a UX-consistency change. **Log the exact
-  behavioral delta.** Ships behind the op-runner net (net-first).
+  · **D1b — 2 user decisions (2026-08-02): (i) "Also guard doSolveRadical" → BEHAVIORAL-CHANGE TOKEN GRANTED** (2nd of the
+  engagement, after D1c's); **(ii) "Build harness first."** Investigation reframed D1b: the ~15 async ops are un-nettable
+  at unit level (all gated behind `activeEnv`, set only by a real QD solve via `PrimarySolution.subscribe`); the guards are
+  non-uniform (silent `if(_abort)return` / noisy `busyGuard()` / none), so *unifying* them is extra behavioral change
+  beyond the doSolveRadical token; `doSolveRadical` is canvas-inspector-gated (seed+select needed). **Chosen path — build a
+  behavioral harness FIRST, then refactor behind it. Multi-stage:**
+    - **D1b-STAGE 1 (harness + net, NO production change):** extend the mount harness to seed a system + select a node so
+      the async op-runner AND the inspector (doSolveRadical) are behaviorally reachable; write the op-runner net (single-
+      flight bail-while-busy, setBusy disables, abort/cancel, error prefix) + pin doSolveRadical's CURRENT run-while-busy.
+      Net-first: passes against unmodified code; mutation-verified.
+    - **D1b-STAGE 2 (runOp restructure):** extract the uniform `runOp()` async runner; route the ~15 ops through it.
+      Behavior-preserving, behind Stage-1 net.
+    - **D1b-STAGE 3 (behavioral deltas):** add `busyGuard()` to doSolveRadical (token GRANTED — bails "Busy — wait…",
+      matching Duplicate/Delete; log the delta) + guard-unification (silent→noisy). **Guard-unification needs a BROADER
+      token — ASK before Stage 3's unification part.** Not correctness fixes (JS single-threaded, read-only); UX-consistency.
 
 ## Branches / PR
 - Integration `refactor/main` @ **b80429c** (#210 + #211 merged; this STATE edit advances it). Tree clean. **No open PR.**
@@ -71,20 +78,21 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   `pnpm test` **2211 / 261**.
 
 ## Uncommitted / unverified
-- Nothing uncommitted. This STATE edit advances `refactor/main` (D1a complete; D1b decision pending).
+- Nothing uncommitted. This STATE edit advances `refactor/main` (D1a complete; D1b harness-first plan recorded).
 
 ## Known blockers / risks
-- **D1b UNDERWAY (token granted).** No blockers. Net-first: characterize op-runner dispatch + doSolveRadical's current
-  (unguarded) behavior BEFORE extracting `runOp()` / adding the guard. Delicate (~15 call sites); keep each op's behavior
-  net-verified; the ONLY intended behavioral delta is doSolveRadical's guard (log it).
+- **D1b UNDERWAY (harness-first, token granted for doSolveRadical).** No blockers. Building the behavioral harness/net
+  BEFORE any refactor (Stage 1). Async ops gated behind `activeEnv` (real solve via `PrimarySolution`) — the harness must
+  drive a seed + node-selection to reach them. Guard-unification (Stage 3) needs a broader token — ASK before it.
 - **Re-eval gate** sits after D1b, before D1c/D1d.
 
 ## Next concrete steps
-1. **Phase 3 · D1b (QD-ALG-4), net-first, token granted:** (a) build/extend the op-runner net (pin the ~15 async ops'
-   busy/guard/abort/error behavior + doSolveRadical's current run-while-busy), mutation-verify; (b) extract `runOp()`,
-   route async ops through it (behavior-preserving); (c) add `busyGuard()` to doSolveRadical (authorized delta, logged);
-   full green bar; PR; STATE checkpoint. Then the **re-eval gate** before D1c✓/D1d.
-2. Order: A✓ B✓ C✓ → **D (D1a✓ → D1b)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
+1. **D1b-STAGE 1 — behavioral harness + op-runner net (NO production change):** figure the seeding path (drive
+   `PrimarySolution` to set `activeEnv`, or `seedFromDataDirect`/`seedMomentSystem`) + node-selection so async ops + the
+   inspector are reachable in jsdom; write the net (single-flight bail-while-busy, setBusy-disables, abort, error prefix,
+   doSolveRadical's current run-while-busy); net-first (green vs unmodified) + mutation-verify; PR; STATE checkpoint.
+2. Then **Stage 2** (runOp restructure, behavior-preserving) → **Stage 3** (doSolveRadical guard [token✓] + guard-unify
+   [ASK for token]). Then the **re-eval gate** before D1c✓/D1d. Order: A✓ B✓ C✓ → **D (D1a✓ → D1b)** → Phase 4 → E2. E1 deferred.
 
 ## Resume commands
 ```
