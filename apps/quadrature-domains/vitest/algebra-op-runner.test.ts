@@ -93,7 +93,9 @@ describe("single-flight: a second heavy op cannot start while one is in flight",
   });
 });
 
-describe("doSolveRadical — CURRENT behaviour (pre-guard pin; Stage 3 flips the busy case)", () => {
+describe("doSolveRadical — single-flight guarded (QD-ALG-4, D1b Stage 3a — behavioral change)", () => {
+  // BEHAVIORAL DELTA (token-granted): doSolveRadical gained `if (busyGuard()) return;`. This block used to
+  // pin the CURRENT gap — busy: it STILL ran — and the "BUSY" test now asserts the flipped behavior (bails).
   it("idle: 'Solve for a variable' opens the radical solve panel", () => {
     const insp = selectNode(m, 0);
     const solve = inspectorButton(insp, /Solve for a variable/);
@@ -102,14 +104,15 @@ describe("doSolveRadical — CURRENT behaviour (pre-guard pin; Stage 3 flips the
     expect(insp.querySelector(".algebra-solve-panel")).toBeTruthy();
   });
 
-  it("BUSY: it STILL runs (opens the panel) — the QD-ALG-4 gap; the granted Stage-3 guard closes this", () => {
+  it("BUSY: it BAILS (no solve panel) — the synchronous solve does not start atop an in-flight worker op", () => {
     const insp = selectNode(m, 0);
     const solve = inspectorButton(insp, /Solve for a variable/);
     expect(solve).toBeTruthy();
     btn("#alg-saturate").click(); // enter busy synchronously
     expect(cancelHidden()).toBe(false); // confirm we are busy
-    solve!.click(); // synchronously, while busy — NOT js-busy-lock, and today NOT busyGuard-ed
-    // CURRENT: unguarded ⇒ the panel is built even though a worker op is in flight.
-    expect(insp.querySelector(".algebra-solve-panel")).toBeTruthy();
+    solve!.click(); // synchronously, while busy — its button is not js-busy-lock, so busyGuard() must catch it
+    // GUARDED (Stage 3a): the panel is NOT built while a worker op is in flight (was: still built). This is
+    // the reviewed behavioral flip. (A "Busy — wait…" toast also fires, but QD.QoL is not booted here.)
+    expect(insp.querySelector(".algebra-solve-panel")).toBeNull();
   });
 });

@@ -2570,6 +2570,10 @@ const QD = _QD;
     // inspector + the verdict card, with a numeric "verified ✓ (N samples)" line.
     // Read-only (radicals are not polynomials, so nothing is added to the DAG).
     function doSolveRadical(id, box) {
+      // Single-flight (QD-ALG-4, D1b): this is a SYNCHRONOUS, main-thread solve, and its inspector button
+      // is not js-busy-lock — so (like Duplicate / Delete, which busyGuard the same way) this guard is the
+      // only thing stopping it from running on top of an in-flight worker op. Bails "Busy — wait…" while busy.
+      if (busyGuard()) return;
       const n = store.get(id); if (!n) return;
       const SR = QD.SymRadical, S = QD.Sym, RL = QD.RiemannLatex;
       let panel = box.querySelector('.algebra-solve-panel');

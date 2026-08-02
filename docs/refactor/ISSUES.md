@@ -343,3 +343,10 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   `_opBegin`, 35 teardowns → `_opEnd`; guard style + control flow + error expression byte-preserved (NO guard-unification).
   doAutoSolve + doDecompose keep bespoke inline handling. Op-runner net + 21 jsdom files green; mutation-verified.
   2219/262 (no test delta). Next: Stage 3 (doSolveRadical guard [token✓] + guard-unify [ASK for token]).
+- **2026-08-02 · stage p3-d1b-solveradical-guard (PR → refactor/main):** **Phase 3 D1b Stage 3a — the ONE authorized
+  behavioral change (token granted).** doSolveRadical gained `if (busyGuard()) return;`. DELTA: the inspector's "Solve for
+  a variable" (a synchronous, read-only main-thread solve whose button is not js-busy-lock) now BAILS "Busy — wait…" while
+  a worker op is in flight instead of running (built the solve panel). Not a correctness fix (single-threaded, read-only) —
+  UX-consistency with Duplicate/Delete. The Stage-1 net's doSolveRadical pin FLIPPED (STILL-runs → BAILS): a reviewed diff,
+  mutation-verified. 2219/262 (assertion flip, no count change). Next: PAUSE at re-eval gate + ASK for the Stage-3b
+  guard-unification token.
