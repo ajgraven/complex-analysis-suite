@@ -785,3 +785,25 @@
   the interaction tests (shortcuts / scope-disclosure / tier6 / canvas). Given how few markup assertions honest-labels /
   tooltip-tiers carry, PR 2.3 will likely CONSOLIDATE them into a shared behavioural sidebar spec rather than a
   companion per file — flagged to the user for calibration.
+
+## 2026-08-01 — Phase 2 · Stage p2-3-labels-tooltips (honest-labels + tooltip-tiers splits) — PR opened
+- **Thorough per-file splits (user calibration: "thorough")** — continue converting each mixed algebra source-text
+  test the eliminate-section way: markup assertions → behavioural jsdom companion, source-structural residue slimmed
+  into the node file. Tests-only; no production code changed.
+- **honest-labels split:** NEW `algebra-honest-labels-dom.test.ts` (2 jsdom tests) — the Gröbner button label reads
+  "Gröbner basis (current column)" (and no control still says "all eqns"); Copy-LaTeX is labelled "Copy all LaTeX".
+  Mutation-verified (Gröbner label → "all eqns" failed the label test). Slimmed `algebra-honest-labels.test.ts` 11→10:
+  removed the label markup it; dropped the Copy-LaTeX button-label line (kept its ui-strings record check). Kept the
+  source-structural rest (button-passes-no-selection wiring, export guard ordering, tooltip DATA, canvas 2-node cap,
+  fix-φ(0) confirmReplace).
+- **tooltip-tiers split:** NEW `algebra-tooltip-tiers-dom.test.ts` (2 jsdom tests) — no MATERIALISED title (after
+  Strings.apply/applyOpHelp) exceeds 120 chars; the six relocated tooltips (assumeReal/gaugeElim/groebner/dimension/
+  solveNumeric/algFixW0) no longer reach a control via data-str-title="tooltips.*". Mutation-verified (re-adding
+  data-str-title="tooltips.groebner" failed the hooks-gone test). Slimmed `algebra-tooltip-tiers.test.ts` 10→8: removed
+  the two markup its; kept the algebraOps DATA checks (short≤120, detail>short, 36 records, sections, header fallback)
+  + the mount wiring-order.
+- **Green bar:** build/typecheck/lint(+dep:check 584 modules)/test exit 0; `pnpm test` **2210 / 257** (+2 files, +1
+  test net). Cut `refactor/p2-3-labels-tooltips`; PR → refactor/main; merge on green.
+- **QD-ALG-3: 4 of 11 converted** (section-order, eliminate-section, honest-labels, tooltip-tiers). Remaining:
+  workflow-sections, scope-disclosure, tier6 (sidebar/banner/wiring); the interaction tests (shortcuts-table,
+  canvas-chrome); verdict-labeling (→ D1c). results-drawer has no markup (resultStateOf already behavioural).
