@@ -309,3 +309,8 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   materialised-title ≤120 + relocated-hook absence; both mutation-verified) + slimmed node files (wiring/guard-order/
   algebraOps DATA). 2210/257. Remaining: workflow-sections, scope-disclosure, tier6, shortcuts-table, canvas-chrome,
   verdict-labeling(→D1c).
+- **2026-08-01 · stage p2-4-structure-banner (PR → refactor/main):** **QD-ALG-3 → 7/11** (Phase 2, thorough splits).
+  workflow-sections + scope-disclosure + tier6 each split — NEW behavioural `-dom` companions (sections render +
+  WORKFLOW_STEPS resolve; #alg-scope outside #alg-sections; the two re-seed controls + every heavy-op carry
+  js-busy-lock; all mutation-verified) + slimmed node files (handler/registry/CSS/source residue). 2210/260.
+  Remaining: shortcuts-table, canvas-chrome, verdict-labeling(→D1c).

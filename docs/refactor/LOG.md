@@ -807,3 +807,25 @@
 - **QD-ALG-3: 4 of 11 converted** (section-order, eliminate-section, honest-labels, tooltip-tiers). Remaining:
   workflow-sections, scope-disclosure, tier6 (sidebar/banner/wiring); the interaction tests (shortcuts-table,
   canvas-chrome); verdict-labeling (→ D1c). results-drawer has no markup (resultStateOf already behavioural).
+
+## 2026-08-01 — Phase 2 · Stage p2-4-structure-banner (workflow-sections + scope-disclosure + tier6 splits) — PR opened
+- **Thorough per-file splits, batch 3** — three more mixed algebra source-text tests split the eliminate-section way:
+  markup assertions → behavioural jsdom companions, source-structural residue slimmed. Tests-only; no production change.
+- **workflow-sections split:** NEW `algebra-workflow-sections-dom.test.ts` (2 jsdom) — the sidebar renders its named
+  sections (≥8, incl. Reduce); every QD_UI.WORKFLOW_STEPS.section resolves to a rendered
+  details.algebra-section[data-section]. Slimmed node 5→3 (kept the no-nth-of-type / openSection-by-data-section /
+  verdict-routes-through-openSection source guards; dropped the source-parsed SUMMARIES/STEP_SECTIONS pair).
+- **scope-disclosure split:** NEW `algebra-scope-disclosure-dom.test.ts` (1 jsdom) — #alg-scope renders OUTSIDE
+  #alg-sections, ahead of it (so the inspector opacity-fade cannot dim the warning). Slimmed node 16→15 (the many
+  handler/registry/CSS invariants — which ops read getSelection, SELECTION_SCOPED, scopeCaveat/scopeNote wiring,
+  renderScopeBanner nodes-not-innerHTML, the style.css opacity override — all stay).
+- **tier6 split:** NEW `algebra-tier6-dom.test.ts` (2 jsdom) — the two re-seeding controls (alg-seed-moment, alg-w0-fix)
+  carry js-busy-lock; EVERY rendered .heavy-op control carries js-busy-lock. Slimmed node 11→9 (setBusy mechanism,
+  dynamic .classList.add sites, WCAG colour-token contrast on style.css, Undo/_busy, export-stamp all stay).
+- **Mutation-verified (all 3 companions in one pass):** renamed Reduce (workflow resolve-test failed), removed
+  js-busy-lock from a heavy-op (tier6 every-heavy failed), renamed #alg-scope→#alg-scope-x (scope placement failed);
+  the unaffected tier6 test stayed green. All three reverted byte-identically.
+- **Green bar:** build/typecheck/lint(+dep:check 587 modules)/test exit 0; `pnpm test` **2210 / 260** (+3 files, 0 net
+  tests: −5 node its ↔ +5 behavioural). Cut `refactor/p2-4-structure-banner`; PR → refactor/main; merge on green.
+- **QD-ALG-3: 7 of 11 converted.** Remaining: the interaction tests (shortcuts-table, canvas-chrome) + verdict-labeling
+  (→ D1c) — PR 2.5. results-drawer needs nothing (no markup).

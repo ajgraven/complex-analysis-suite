@@ -6,9 +6,11 @@
 // were about to get — and doClassify, which produces the rigor-badged verdict, disclosed the slice
 // caveat, the factor-branch caveat and the incomplete-decomposition caveat but NOT this one.
 //
-// Node environment, source-only (see algebra-eliminate-section.test.ts for why the DOM is out of
-// reach here). Comments are blanked so prose about a symbol cannot satisfy a check meant to find
-// it in code — these checks are about handlers, not markup.
+// Node environment, source-only: these checks are about HANDLERS and the SELECTION_SCOPED registry,
+// not markup. The one markup fact D1a can break — #alg-scope renders OUTSIDE #alg-sections so the
+// inspector fade cannot dim it — moved to the behavioural companion algebra-scope-disclosure-dom.test.ts
+// (refactor Phase 2, QD-ALG-3). Comments are blanked so prose about a symbol cannot satisfy a check
+// meant to find it in code.
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -102,19 +104,9 @@ describe("the banner warns before the click", () => {
     expect(body).not.toMatch(/innerHTML/);
   });
 
-  it("lives OUTSIDE #alg-sections so the inspector fade cannot dim it", () => {
-    // A selection puts .is-behind-inspector on #alg-sections → opacity .55. `opacity` composites
-    // the whole subtree, so a child CANNOT opt out: an `.algebra-scope { opacity: 1 }` rule inside
-    // was measured in-browser still rendering at .55. The banner would then be faded by precisely
-    // the state it exists to warn about. Sibling placement is the only thing that fixes it, which
-    // makes the ordering here load-bearing rather than cosmetic.
-    const banner = SRC.indexOf('id="alg-scope"');
-    const sections = SRC.indexOf('<div id="alg-sections">');
-    expect(banner).toBeGreaterThan(-1);
-    expect(sections).toBeGreaterThan(-1);
-    expect(banner).toBeLessThan(sections);
-  });
-
+  // (The rendered placement — #alg-scope is a sibling of #alg-sections, ahead of it, so the inspector
+  // fade cannot dim it — moved to algebra-scope-disclosure-dom.test.ts. The CSS half stays below: a
+  // `.is-behind-inspector .algebra-scope { opacity: … }` override would defeat sibling placement.)
   it("has no opacity override that would imply the fade can be undone from inside", () => {
     const css = readFileSync(
       fileURLToPath(new URL("../app/style.css", import.meta.url)), "utf8");
