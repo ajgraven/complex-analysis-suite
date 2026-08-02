@@ -47,35 +47,41 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   verdict-unify (QD-ALG-5, **token APPROVED**) → D1d split into ctx-injected sub-units.
   · **D1a NET-FIRST: PR #210 MERGED (60e1406).** `vitest/algebra-sidebar-html.test.ts` snapshots the WHOLE normalized
   #controls-algebra DOM (mutation-verified). Guards the transformation below as behavior-preserving.
-  · **D1a TRANSFORMATION: PR #211 OPEN** (`refactor/p3-d1a-sidebar-data`) — mountSidebar's inline `#alg-sections` string
-  (8 sections + "Beyond the main route" divider) → a `SIDEBAR_SECTIONS` data array (`{summary,open?,body}` + `{divider}`)
-  mapped through one `renderSection`; wrapper emitted once, **bodies verbatim**; header/suggest/inspector/scope unchanged.
-  Behavior-preserving three ways: #210 fingerprint unchanged + all 20 jsdom algebra files (166 tests) + mutation-verified;
-  a pre-flight node oracle proved `normalize()`-equal (12394 chars) before editing. Pure refactor (2211/261, no test delta).
+  · **D1a TRANSFORMATION: PR #211 MERGED (b80429c)** — mountSidebar's inline `#alg-sections` string (8 sections +
+  "Beyond the main route" divider) → a `SIDEBAR_SECTIONS` data array (`{summary,open?,body}` + `{divider}`) mapped through
+  one `renderSection`; wrapper emitted once, **bodies verbatim**; header/suggest/inspector/scope unchanged. Behavior-
+  preserving three ways (#210 fingerprint unchanged + all 20 jsdom algebra files 166 tests + mutation-verified); a
+  pre-flight node oracle proved `normalize()`-equal (12394 chars) before editing. Pure refactor (2211/261, no test delta).
+  **D1a COMPLETE.**
+  · **D1b — DECISION PENDING (asked user 2026-08-02).** Investigation done: the ~15 async worker ops share the
+  `busyGuard()`→`_abort`→`setBusy()`→`.then(cleanup,errCleanup)` boilerplate (candidate for a behavior-preserving
+  `runOp()` extraction). BUT `doSolveRadical` (algebra-ui.mjs:2574) is **synchronous** (`store.solveForVariable`,
+  in-thread, read-only, not added to graph), its "Solve for a variable" inspector button is **not** `js-busy-lock` and it
+  calls **no** `busyGuard` — so it can run while a worker op is in flight. COMPLETION-PLAN says "fold in doSolveRadical …
+  behavior-preserving", but adding `busyGuard` to it WOULD change behavior (it would bail "Busy — wait…" instead of
+  running) — and D1b has NO behavioral-change token (only D1c does). Asked user: behavior-preserving async-op runOp only
+  vs. also guard doSolveRadical (needs token).
 
 ## Branches / PR
-- Integration `refactor/main` @ **60e1406** (#210 merged; this STATE edit advances it). Tree clean. **Open PR #211** →
-  `refactor/p3-d1a-sidebar-data` (Phase 3 D1a transformation; mountSidebar → SECTIONS data).
-- Merged stage PRs (33): A1 #178 … #209, **p3-d1a-sidebar-snapshot #210 (60e1406)**.
+- Integration `refactor/main` @ **b80429c** (#210 + #211 merged; this STATE edit advances it). Tree clean. **No open PR.**
+- Merged stage PRs (34): A1 #178 … #210, **p3-d1a-sidebar-data #211 (b80429c)**.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at 60e1406 (#210 merged): `pnpm test` **2211 / 261**.
-- **PR #211 branch — ALL GREEN:** build/typecheck/lint(+`dep:check`, 588 modules)/test exit 0; `pnpm test` **2211 / 261**
-  (no test delta — pure structural refactor; #210 fingerprint + all 20 jsdom algebra files green).
+- **`refactor/main` — ALL GREEN** at b80429c (#211 merged): build/typecheck/lint(+`dep:check`, 588 modules)/test exit 0;
+  `pnpm test` **2211 / 261**.
 
 ## Uncommitted / unverified
-- PR #211 work (algebra-ui.mjs transformation, LOG/ISSUES) is committed on `refactor/p3-d1a-sidebar-data` (73088c2) and
-  pushed; this STATE edit advances `refactor/main`. Nothing uncommitted.
+- Nothing uncommitted. This STATE edit advances `refactor/main` (D1a complete; D1b decision pending).
 
 ## Known blockers / risks
-- **Open PR #211** (D1a transformation; awaiting merge-on-green). No blockers.
-- **D1a done in this PR** (sidebar structure as data, bodies verbatim). Remaining D1 work: **D1b** runOp single-flight
-  (QD-ALG-4), then the **re-eval gate** before D1c (verdict-unify, token APPROVED) / D1d (split into ctx-injected sub-units).
+- **D1b scoping decision pending** (asked user): does D1b include the `doSolveRadical` single-flight fold-in (a behavioral
+  change needing a token), or only the behavior-preserving async-op `runOp()` extraction? No code work until resolved.
+- **Re-eval gate** still sits after D1b, before D1c/D1d.
 
 ## Next concrete steps
-1. **Merge #211 on green**, then pull + re-confirm green.
-2. **Phase 3 · D1b — runOp single-flight (QD-ALG-4):** net-first, then the behavior-preserving change; **re-eval gate**
-   before D1c/D1d. Group order: A✓ B✓ C✓ → **D (Phase 3 D1: D1a✓ → D1b)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
+1. **Resolve the D1b scoping decision** (behavior-preserving runOp only vs. + doSolveRadical guard).
+2. **Phase 3 · D1b — runOp (QD-ALG-4):** net-first (characterize op-runner dispatch, mutation-verify), then the change per
+   the decision; **re-eval gate** before D1c/D1d. Order: A✓ B✓ C✓ → **D (D1a✓ → D1b)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
