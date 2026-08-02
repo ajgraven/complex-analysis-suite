@@ -80,10 +80,16 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 ## Known blockers / risks
 - **RE-EVAL GATE PASSED (user decision 2026-08-02): "D1c + D1d both"** (full decomposition) + guard-unification SKIPPED.
   D1b's coded work is complete (#212/#213/#214).
-- **▶ D1c UNDERWAY (verdict-unify, QD-ALG-5; token GRANTED via decision #3).** Collapse the 3 drifted verdict builders
-  — `_verdictBadge`@573 / `doAutoSolve`@3216 / `doClassify`@3475 — onto one path. AUTHORIZED behavioral change: some
-  verdict strings change; ship behind a verdict net (diffs REVIEWED + logged), `=`/`≤`/`≈` honest labeling preserved.
-  Net-first: pin the current verdict prose before unifying.
+- **▶ D1c UNDERWAY (verdict-unify, QD-ALG-5; token GRANTED via decision #3).** AUDIT DONE (task #8): scope is SMALLER than
+  the plan implied. A prior carve-out already extracted **`classifyVerdict`** (pure, `algebra-labeling.mjs`) and routed
+  **`doClassify`@3475** through it. **`_verdictBadge`@573** is a compact CHIP (different representation, already pure + on
+  QD_UI) — stays. The genuine remaining drift is **`doAutoSolve`@3216 builds the verdict INLINE** (3239–3251) with wording
+  drifted from `classifyVerdict` (e.g. "reduced system is inconsistent" vs "the system is inconsistent (1 ∈ I)"; "1 real
+  algebraic solution" vs "A unique real algebraic solution … gauge copies merged, non-univalent filtered"). **D1c change:
+  route doAutoSolve → `classifyVerdict(cl)` (keep its `+= sliceCaveat` + auto caveats).** AUTHORIZED string delta (both were
+  honest — `upper bound` + `run Certify univalence` preserved). doAutoSolve is activeEnv-gated (un-drivable in the harness),
+  so the net is `classifyVerdict`'s own tests (pin the canonical prose) + a source guard that doAutoSolve routes through it;
+  LOG the before/after strings.
 - **D1d next** (split installAlgebra — still a ~4085-line closure, 714–4799 — into ctx-injected sub-units). The big lift.
 
 ## Next concrete steps
