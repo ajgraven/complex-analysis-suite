@@ -1,7 +1,11 @@
 // Tier 6 — the deferred infrastructure items: the busy-lock's drift (5.9), the sub-AA muted
 // token (5.5), and export identity (5.8). Dark mode (5.2) is deliberately out of scope.
 //
-// Node environment, source-only: jsdom breaks fileURLToPath via import.meta.url.
+// Node environment, source-only: jsdom breaks fileURLToPath via import.meta.url. The two RENDERED
+// busy-lock checks — the two re-seeding controls, and every heavy-op control, carry js-busy-lock —
+// moved to the behavioural companion algebra-tier6-dom.test.ts (refactor Phase 2, QD-ALG-3). What
+// stays here needs the source or the CSS: the setBusy MECHANISM, the dynamic .classList.add sites,
+// the WCAG colour-token contrast (style.css), the Undo/_busy wiring, and the export-stamp shape.
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -61,31 +65,9 @@ describe("5.9 — the busy lock cannot drift", () => {
     expect(CODE, "the id array should be gone").not.toMatch(/'alg-prove',\s*'alg-groebner'/);
   });
 
-  it("the two controls that had drifted out are locked", () => {
-    // Both RE-SEED. Neither was in the array nor self-guarded, so either could drop a fresh system
-    // on top of an in-flight worker derivation — the exact thing this lock exists to prevent.
-    for (const id of ["alg-seed-moment", "alg-w0-fix"]) {
-      const tag = UI.match(new RegExp('<[a-z]+[^>]*id="' + id + '"[^>]*>'))
-                || UI.match(new RegExp('<[a-z]+[^>]*class="[^"]*"[^>]*id="' + id + '"[^>]*>'));
-      expect(tag, id + " not found in the markup").toBeTruthy();
-      expect((tag as RegExpMatchArray)[0], id + " must carry js-busy-lock").toMatch(/js-busy-lock/);
-    }
-  });
-
-  it("every heavy (worker-backed) control is locked", () => {
-    // heavy-op means it starts a worker; a second run must not be startable. This is the derivable
-    // half of the invariant — the non-heavy mutators still need marking by hand.
-    //
-    // It earned its keep immediately: alg-import-rctd was heavy and unlocked. It self-guards via
-    // busyGuard(), so it was not silently broken — but it was the one heavy control whose
-    // unavailability you discovered by clicking rather than by seeing. Marked; the runtime guard
-    // stays as the backstop that dynamically-created controls still depend on.
-    for (const m of UI.matchAll(/<[a-z]+\b[^>]*class="([^"]*heavy-op[^"]*)"[^>]*>/g)) {
-      expect(m[1], "a heavy-op control is missing js-busy-lock: " + m[0].slice(0, 80))
-        .toMatch(/js-busy-lock/);
-    }
-  });
-
+  // (The RENDERED marker checks — the two re-seeding controls, and every heavy-op control, carry
+  // js-busy-lock — moved to algebra-tier6-dom.test.ts. The dynamic-creation sites stay below, since
+  // those controls are rebuilt on render and cannot be marked in the static markup.)
   it("the dynamically-created locked controls get the marker too", () => {
     // These are rebuilt on render, so they cannot be marked in the static markup.
     expect(CODE).toMatch(/elimBtn\.classList\.add\('js-busy-lock'\)/);
