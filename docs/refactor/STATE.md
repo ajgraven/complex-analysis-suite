@@ -67,8 +67,12 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 1. **Merge #209 on green**, then pull + re-confirm green on `refactor/main`.
 2. **Phase 2 · PR 2.5 (FINAL batch):** shortcuts-table (keydown→button-click dispatch) + canvas-chrome (focus-mode
    `.is-dimmed` — reads algebra-canvas.mjs; may need a canvas mount) + verdict-labeling (the behavioural verdict-badge
-   part; the "every setVerdict call-site" scan → D1c). Then **Phase 2 DONE → Phase 3 (D1)**. Group order: A✓ B✓ C✓ →
-   **D (Phase 2 → Phase 3 D1a/b → gate → D1c✓/d)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
+   part; the "every setVerdict call-site" scan → D1c).
+3. **→ PROCEED DIRECTLY TO PHASE 3 after PR 2.5 merges — user granted the go-ahead (2026-08-02); do NOT pause.**
+   Phase 3 = **D1 (installAlgebra decomposition)** behind the Phase-2 behavioural net: **D1a** sidebar-as-data (QD-ALG-2,
+   behavior-preserving) → **D1b** runOp single-flight (QD-ALG-4, behavior-preserving) → **re-eval gate** → **D1c**
+   verdict-unify (QD-ALG-5, **token APPROVED** — the one behavioural change) → **D1d** split into ctx-injected sub-units.
+   Group order: A✓ B✓ C✓ → **D (Phase 2 → Phase 3 D1a/b → gate → D1c✓/d)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
