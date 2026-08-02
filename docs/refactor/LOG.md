@@ -757,3 +757,31 @@
   `refactor/p2-1-mount-harness`; PR → refactor/main; merge on green.
 - **Phase 2 remaining:** PR 2.2 (honest-labels, eliminate-section, tooltip-tiers + resultStateOf extract; workflow-
   sections behavioural part + source-hygiene split), PR 2.3 (interaction tests + op-runner/verdict-prose coverage).
+
+## 2026-08-01 — Phase 2 · Stage p2-2-algebra-dom (eliminate-section split: DOM→behavioural) — PR opened
+- **Second Phase-2 conversion (QD-ALG-3), and a refinement of the audit.** Reading the targets firsthand showed the
+  "11 source-text tests" are MIXES of three assertion kinds, not uniform sidebar-string regexes:
+  (1) sidebar-MARKUP regexes (brittle under D1a) → convert to behavioural DOM;
+  (2) FUNCTION-BODY / wiring regexes (doGroebner reads elimSel, guard ordering, addEventListener) — brittle under D1d
+      code-movement, NOT D1a, not cleanly behavioural → stay node-env;
+  (3) STRINGS-registry data (ui-strings algebraOps) / other-file (style.css WCAG) — not D1-brittle → stay.
+  So each mixed file converts as a SPLIT (behavioural jsdom companion + slimmed node file), matching the existing
+  workflow-sections/-steps + shortcuts-table/-focus convention. Also: **resultStateOf is ALREADY behavioural**
+  (algebra-results-drawer calls QD_UI.resultStateOf directly) — the audit's "extract+call" was wrong; only its
+  recorder-wiring block is source-text.
+- **eliminate-section split:** NEW `algebra-eliminate-section-dom.test.ts` (jsdom, 8 tests via the harness) — picker
+  mounted-once / not-in-Advanced / under the Eliminate-variables heading above the buttons; the Rewrite-vs-Narrow
+  caption grouping (solution-preserving vs solution-changing ops); the eliminate button's js-busy-lock marker; its
+  tooltip materialised from ui-strings (rendered `title` === QD.Strings.tooltips.eliminateVars — STRONGER than the old
+  "no literal title= in markup"); the elim-hint caption text. **Mutation-verified:** removing js-busy-lock from the
+  production button failed exactly that assertion, reverted byte-identically.
+- **Slimmed `algebra-eliminate-section.test.ts`** (node) to the kind-(2)/(3) invariants: the Gröbner/elimSel/
+  doEliminateVars function-body checks + the click wiring + the 120-char ui-strings rule. 15 → 14 tests net (−1:
+  combined the two elim-hint assertions; dropped the querySelectorAll('.js-busy-lock') source check — that is
+  algebra-tier6's setBusy domain).
+- **Green bar:** build/typecheck/lint(+dep:check 582 modules)/test exit 0; `pnpm test` **2209 / 255** (+1 file, −1 test).
+  Cut `refactor/p2-2-algebra-dom`; PR → refactor/main; merge on green.
+- **Phase 2 remaining (re-scoped):** the D1a-brittle markup assertions in honest-labels (≈2), tooltip-tiers (≈2), and
+  the interaction tests (shortcuts / scope-disclosure / tier6 / canvas). Given how few markup assertions honest-labels /
+  tooltip-tiers carry, PR 2.3 will likely CONSOLIDATE them into a shared behavioural sidebar spec rather than a
+  companion per file — flagged to the user for calibration.

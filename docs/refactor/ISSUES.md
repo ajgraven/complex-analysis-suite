@@ -298,3 +298,9 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   no canvas ctx needed). First conversion: `algebra-section-order.test.ts` node/source-regex → jsdom/behavioural
   (queries the rendered #alg-sections; mutation-verified by renaming a production section). 1 of 11 source-text algebra
   tests converted; the harness unblocks the rest (PRs 2.2/2.3). Behavioural pins survive the D1a sidebar-as-data refactor.
+- **2026-08-01 · stage p2-2-algebra-dom (PR → refactor/main):** **QD-ALG-3 → 2/11** (Phase 2). eliminate-section
+  converted as a SPLIT — NEW behavioural `algebra-eliminate-section-dom.test.ts` (8 jsdom tests: picker placement,
+  caption grouping, js-busy-lock marker, ui-strings-materialised tooltip, elim-hint caption; mutation-verified) +
+  slimmed node `algebra-eliminate-section.test.ts` (function-body/wiring/strings-data invariants). Audit refined: the
+  11 are mixes of markup-regex (→behavioural) / function-body (→node, D1d) / strings-data (→node); resultStateOf
+  already behavioural. 2209/255.
