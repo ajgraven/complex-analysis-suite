@@ -49,11 +49,8 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   `#alg-sections` → `SIDEBAR_SECTIONS` data + `renderSection`; bodies verbatim) both MERGED (b80429c).** Behavior-preserving
   (fingerprint + 20 jsdom files + mutation-verified + a pre-flight `normalize()`-equal oracle). Full detail in LOG.
   · **D1b — 2 user decisions (2026-08-02): (i) "Also guard doSolveRadical" → BEHAVIORAL-CHANGE TOKEN GRANTED** (2nd of the
-  engagement, after D1c's); **(ii) "Build harness first."** Investigation reframed D1b: the ~15 async ops are un-nettable
-  at unit level (all gated behind `activeEnv`, set only by a real QD solve via `PrimarySolution.subscribe`); the guards are
-  non-uniform (silent `if(_abort)return` / noisy `busyGuard()` / none), so *unifying* them is extra behavioral change
-  beyond the doSolveRadical token; `doSolveRadical` is canvas-inspector-gated (seed+select needed). **Chosen path — build a
-  behavioral harness FIRST, then refactor behind it. Multi-stage:**
+  engagement, after D1c's); **(ii) "Build harness first."** (Guards are non-uniform — silent `if(_abort)return` / noisy
+  `busyGuard()` / none — so *unifying* them is extra behavioral change beyond the doSolveRadical token.) **Multi-stage:**
     - **D1b-STAGE 1 (harness + net, NO production change) — MERGED (#212, cd2301b).** Harness `mountAlgebra(_, {withCanvas})`
       + `seedMoments`/`nodeCards`/`selectNode`; NEW `algebra-op-runner.test.ts` (8): busy lifecycle, single-flight (button-
       disable + busyGuard backstop), doSolveRadical's CURRENT run-while-busy pinned. Net-first + mutation-verified. Full
