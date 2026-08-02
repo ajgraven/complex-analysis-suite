@@ -324,3 +324,9 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   NEW `vitest/algebra-sidebar-html.test.ts` snapshots the whole normalized #controls-algebra DOM (mutation-verified —
   catches a control-attribute change the `-dom` net misses). Guards the upcoming mountSidebar → data-driven rewrite as
   behavior-preserving. 2211/261.
+- **2026-08-02 · stage p3-d1a-sidebar-data (PR → refactor/main):** **Phase 3 D1a transformation (QD-ALG-2).**
+  mountSidebar's inline `#alg-sections` string → a `SIDEBAR_SECTIONS` data array (8 `{summary,open?,body}` + 1
+  `{divider}`) mapped through one `renderSection` helper; wrapper emitted once, section bodies verbatim; header/suggest/
+  inspector/scope unchanged. Behavior-preserving: pre-flight node oracle proved `normalize()`-equal (12394 chars) before
+  editing; #210 fingerprint + all 20 jsdom algebra files (166 tests) green; mutation-verified (drop-a-section fails).
+  2211/261 (unchanged count — pure refactor). Next: D1b runOp single-flight → re-eval gate.
