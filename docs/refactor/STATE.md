@@ -67,28 +67,29 @@ Behavior-preserving by default; no behavioral change without an explicit approva
       silent backstops as-is; they are nearly unobservable — buttons are js-busy-lock-disabled, keyboard path busyGuards upstream).
 
 ## Branches / PR
-- Integration `refactor/main` @ **ebdefee** (#210–#213 merged). Tree clean. **No open PR** (cutting
-  `refactor/p3-d1b-solveradical-guard` for Stage 3a).
+- Integration `refactor/main` @ **ebdefee** (#210–#213 merged). Tree clean. **Open PR → `refactor/p3-d1b-solveradical-guard`
+  (6acb31d)** — D1b Stage 3a (doSolveRadical guard; the ONE authorized behavioral change).
 - Merged stage PRs (36): A1 #178 … #212, **p3-d1b-runop #213 (ebdefee)**.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at ebdefee (#213 merged): build/typecheck/lint(+`dep:check`, 588 modules)/test exit 0;
-  `pnpm test` **2219 / 262**.
+- **`refactor/main` — ALL GREEN** at ebdefee: `pnpm test` **2219 / 262**.
+- **Stage-3a branch — ALL GREEN:** build/typecheck/lint(+`dep:check`, 588 modules)/test exit 0; `pnpm test` **2219 / 262**
+  (no count change — the net's doSolveRadical BUSY pin flipped runs→bails; mutation-verified).
 
 ## Uncommitted / unverified
-- Nothing uncommitted. This STATE edit advances `refactor/main`; Stage 3a begins on `refactor/p3-d1b-solveradical-guard`.
+- Nothing uncommitted. Stage-3a committed on `refactor/p3-d1b-solveradical-guard` (6acb31d) + pushed; this STATE edit
+  advances `refactor/main`.
 
 ## Known blockers / risks
-- **D1b Stage 3a UNDERWAY** (doSolveRadical guard, token GRANTED — the ONE authorized behavioral change here). No blockers.
-- **Stage 3b guard-unification needs a broader token — ASK at the re-eval gate.**
-- **Re-eval gate** sits right after Stage 3a, before D1c/D1d — PAUSE there (report + the guard-unification ask).
+- **D1b Stage 3a PR open (awaiting merge-on-green).** No blockers.
+- **▶ AT THE RE-EVAL GATE once Stage 3a merges — PAUSE.** Report D1b churn/mass/risk + **ASK the user for the Stage-3b
+  guard-unification token** (silent `if(_abort)return` → noisy `busyGuard()`) — or leave the silent backstops (nearly
+  unobservable). Then, on go: **D1c** (verdict-unify, token✓) / **D1d** (split), or stop.
 
 ## Next concrete steps
-1. **D1b-STAGE 3a — doSolveRadical `busyGuard()` (token GRANTED):** add the guard; FLIP the net's `doSolveRadical BUSY`
-   pin (runs → bails, no `.algebra-solve-panel`); keep the idle test; mutation-verify (remove guard → updated test fails);
-   LOG the exact behavioral delta; green bar; PR; STATE checkpoint.
-2. **PAUSE at the RE-EVAL GATE** — report D1b churn/remaining-mass/risk + **ASK for the Stage-3b guard-unification token**;
-   confirm go into D1c✓ (token granted) / D1d. Order: A✓ B✓ C✓ → **D (D1a✓ → D1b)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
+1. **Merge Stage 3a on green**, then pull + re-confirm green.
+2. **PAUSE at the RE-EVAL GATE** — report + the guard-unification token ask; await user go/no-go for D1c✓ / D1d / Stage 3b.
+   Order: A✓ B✓ C✓ → **D (D1a✓ → D1b: net✓ runOp✓ guard✓)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
