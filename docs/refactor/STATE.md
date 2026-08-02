@@ -45,14 +45,9 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **▶ PHASE 3 UNDERWAY (D1 — installAlgebra decomposition), behind the Phase-2 behavioural net. User go-ahead
   (2026-08-02).** D1a sidebar-as-data (QD-ALG-2) → D1b runOp single-flight (QD-ALG-4) → **re-eval gate** → D1c
   verdict-unify (QD-ALG-5, **token APPROVED**) → D1d split into ctx-injected sub-units.
-  · **D1a NET-FIRST: PR #210 MERGED (60e1406).** `vitest/algebra-sidebar-html.test.ts` snapshots the WHOLE normalized
-  #controls-algebra DOM (mutation-verified). Guards the transformation below as behavior-preserving.
-  · **D1a TRANSFORMATION: PR #211 MERGED (b80429c)** — mountSidebar's inline `#alg-sections` string (8 sections +
-  "Beyond the main route" divider) → a `SIDEBAR_SECTIONS` data array (`{summary,open?,body}` + `{divider}`) mapped through
-  one `renderSection`; wrapper emitted once, **bodies verbatim**; header/suggest/inspector/scope unchanged. Behavior-
-  preserving three ways (#210 fingerprint unchanged + all 20 jsdom algebra files 166 tests + mutation-verified); a
-  pre-flight node oracle proved `normalize()`-equal (12394 chars) before editing. Pure refactor (2211/261, no test delta).
-  **D1a COMPLETE.**
+  · **D1a COMPLETE — #210 (net: `algebra-sidebar-html.test.ts` full-DOM fingerprint) + #211 (xform: mountSidebar's
+  `#alg-sections` → `SIDEBAR_SECTIONS` data + `renderSection`; bodies verbatim) both MERGED (b80429c).** Behavior-preserving
+  (fingerprint + 20 jsdom files + mutation-verified + a pre-flight `normalize()`-equal oracle). Full detail in LOG.
   · **D1b — 2 user decisions (2026-08-02): (i) "Also guard doSolveRadical" → BEHAVIORAL-CHANGE TOKEN GRANTED** (2nd of the
   engagement, after D1c's); **(ii) "Build harness first."** Investigation reframed D1b: the ~15 async ops are un-nettable
   at unit level (all gated behind `activeEnv`, set only by a real QD solve via `PrimarySolution.subscribe`); the guards are
