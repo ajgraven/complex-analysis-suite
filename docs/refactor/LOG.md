@@ -1100,3 +1100,34 @@
   Diff: algebra-ui.mjs −27 net + the new module. Cut `refactor/p3-d1d-autosave`; PR → refactor/main.
 - **Next: D1d seam 5** (or a pause/re-eval) — the remaining large tenant is the inspector+canvas surface (bigger, more coupled;
   op-runner net partially covers it). Four clean seams in, installAlgebra ≈3850 lines and steadily a composition root.
+
+## 2026-08-03 — D1d re-eval gate (user) → seam 5 SCOPED, then move to Phase 4
+- **Scoped seam 5 (inspector) at the user's request; recommended NOT extracting it, and the user chose Phase 4.** Finding: the
+  "inspector" is not one function but a ~350-line woven subsystem — `renderInspector` (86) + `nodeActions` (100, **shared** by
+  the sidebar panel AND `openNodeMenu`, the context menu) + `doFactor`/`doSolveRadical` (the heavy async handlers) +
+  `updateCost`/`renderScopeBanner`. A clean `createInspector(ctx)` would need ~15 ctx deps (canvas selection, store node-ops,
+  ops, showResult, the action handlers, render helpers) — i.e. it would **re-expose installAlgebra's internals**, not decouple.
+  Architectural read: after the four clean seams, what remains (inspector + node-action layer + canvas-selection + the
+  mutation→rerender loop) **IS the composition core** — exactly what a composition root should hold. So D1d has largely done
+  its job. Recommended (1) move to Phase 4 / (2) a smaller sub-cut / (3) stop. **User: Phase 4.**
+
+## 2026-08-03 — Phase 4 · Stage p4-ui-seam (D2 stage 1: the ui.mjs testability seam) — PR opened
+- **BEHAVIOR-PRESERVING; the deferred B4 prerequisite.** `ui.mjs` (1891 lines, **0 exports**) BOOTED ON IMPORT — `import
+  './ui.mjs'` ran the whole QD-tab DOM wiring, so without the full QD HTML it threw and could not be imported/characterized.
+  Statement-mapped the whole file: the executable boot is interleaved with 41 fn declarations, and FOUR boot-region functions
+  (`markAsCustom`, `applyModeVisuals`, `mountQolHelp`, `setMode`) are called from pre-boot code — so a partial "wrap 414–1891"
+  would break scope. Because ui.mjs has 0 exports, the clean cut is to **wrap the ENTIRE body (82–1891) in one
+  `function bootQdUi()`** — one scope, everything mutually hoisted, zero boundary problem — and gate it at EOF on
+  `typeof document !== 'undefined' && document.querySelector('#canvas')`.
+- **Minimal, provably-behavior-preserving diff:** ESLint `indent:'off'`, so the body is wrapped **without re-indenting** →
+  **12 insertions, 0 deletions** (the wrapper + guard only; the 1809-line body is BYTE-UNCHANGED). `node --check` OK. Real app
+  unchanged: index.html's static `<canvas id="canvas">` precedes the deferred `main.mjs` module script, so the guard is true at
+  import → bootQdUi() runs immediately, as before. `#canvas` is static (verified); the 3 awaits are inside async fns → boot stays sync.
+- **Net (inverted net-first — the seam ENABLES a test):** NEW `ui-boot-seam.test.ts` (node env, no DOM) — importing ui.mjs now
+  neither throws nor registers its QD_UI boot hooks (snapshotScenario / loadScenarioIntoQdTab), + a source pin on the wrap +
+  #canvas guard. Mutation-verified: dropping the guard fails both (import throws + pin gone). The real-app boot on a present
+  #canvas is covered by the **browser CI** job (loads the actual HTML).
+- **Green bar:** build (vite bundles the wrapped module)/typecheck/lint/test exit 0; `pnpm test` **2234 / 262** (+2 seam net).
+  Cut `refactor/p4-ui-seam`; PR → refactor/main.
+- **Next: Phase 4 stage 2+** — lift chunks of bootQdUi() into `installX(uiCtx)` factory modules (DOM-wiring / cross-tab / help)
+  until ui.mjs is a thin composition root, behind the seam's importability net + browser CI.

@@ -388,3 +388,16 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   (algebra-autosave.test.ts, 3 jsdom tests — debounced-not-synchronous / beforeunload-flush-commits / faithful-session; green
   pre-refactor); drawer's "not autosaved" cross-check repointed SRC→module (else vacuous). Mutation-verified (misdirect the
   write → net fails). Green: build/typecheck/lint(+dep:check 595)/test — **2232/262**. Next: seam 5 (inspector) or re-eval.
+- **2026-08-03 · D1d seam-5 (inspector) SCOPED, not extracted (user → Phase 4).** The "inspector" is a ~350-line woven
+  subsystem (renderInspector + the **shared** nodeActions [used by the sidebar panel AND openNodeMenu] + doFactor/doSolveRadical
+  + updateCost/renderScopeBanner); a clean extraction needs ~15 ctx deps = re-exposing installAlgebra's internals, not
+  decoupling. Architectural read: post-4-seams, the residue (inspector + node-action layer + canvas-selection + mutation→rerender)
+  IS the composition core. D1d judged far enough; move to Phase 4.
+- **2026-08-03 · stage p4-ui-seam (PR → refactor/main):** **Phase 4 D2 stage 1 (QD-UI-2) — behavior-preserving; the deferred
+  B4 prerequisite.** ui.mjs (1891 lines, 0 exports) BOOTED ON IMPORT → un-importable/uncharacterizable. Wrapped the ENTIRE body
+  (82–1891) in `function bootQdUi()` (0 exports ⇒ one scope, all hoisted, no boundary problem — incl. 4 fns called pre-boot) +
+  EOF guard `typeof document !== 'undefined' && document.querySelector('#canvas')`. `indent:'off'` ⇒ wrapped WITHOUT re-indent
+  ⇒ **12 insertions / 0 deletions, body byte-unchanged** (node --check OK). Real app unchanged (static #canvas precedes the
+  deferred main.mjs module). Net BUILT (inverted net-first): ui-boot-seam.test.ts — import w/o DOM neither throws nor boots +
+  source pin; mutation-verified (drop guard → both fail); browser CI covers the real boot. Green: build/typecheck/lint/test —
+  **2234/262**. Next: Phase 4 stage 2+ (lift bootQdUi chunks into installX(uiCtx) factories).
