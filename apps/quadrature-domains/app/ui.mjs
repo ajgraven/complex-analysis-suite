@@ -79,6 +79,12 @@ const QD = _QD;
 // time its functions actually run. See ui-modes.js / ui-url-state.js for the
 // template and ARCHITECTURE.md "factory-injection" for the rationale.
 // ===========================================================================
+// D2 seam (Phase 4): the whole ui.mjs body is wrapped in bootQdUi() and gated on the static #canvas
+// anchor at EOF. main.mjs's deferred module import still boots the real app (the guard is true because
+// index.html has <canvas id="canvas"> before the module script), but a bare import with no DOM is now
+// side-effect-free and characterizable. ui.mjs has 0 exports, so nothing external depends on this scope;
+// later D2 PRs lift chunks of this body into installX(uiCtx) factories until it is a thin root.
+function bootQdUi() {
 const uiCtx = { state };
 // Forward bindings for Phase-3 extracted Inverse-tab modules (item E). Assigned
 // by the install calls near the end of this file; referenced by name throughout.
@@ -1889,3 +1895,9 @@ QD_UI.loadScenarioIntoQdTab = function (scenario, mode) {
   if (tabBtn) tabBtn.click();
   solveAndRender();
 };
+}  // end bootQdUi (D2 seam)
+
+// Boot the QD-tab UI only when its DOM is present — the static <canvas id="canvas"> from index.html,
+// guaranteed to exist before this deferred module script runs. A bare import with no DOM skips this,
+// so ui.mjs is now importable / characterizable without side effects.
+if (typeof document !== 'undefined' && document.querySelector('#canvas')) bootQdUi();
