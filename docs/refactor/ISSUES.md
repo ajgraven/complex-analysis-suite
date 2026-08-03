@@ -401,3 +401,12 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   deferred main.mjs module). Net BUILT (inverted net-first): ui-boot-seam.test.ts — import w/o DOM neither throws nor boots +
   source pin; mutation-verified (drop guard → both fail); browser CI covers the real boot. Green: build/typecheck/lint/test —
   **2234/262**. Next: Phase 4 stage 2+ (lift bootQdUi chunks into installX(uiCtx) factories).
+- **2026-08-03 · stage p5-e2-folderize (PR → refactor/main):** **Phase 5 (E2) — mechanical, behavior-preserving.** Folderized
+  the 57 flat app/*.mjs (main.mjs = entry) into ui/(17) solvers/(19) qd/(3) sym/(2) core/(7) analysis/(9) — by prefix + a
+  primitives/analysis split of the 16 prefix-less singletons. Codemod (scratchpad/e2-codemod.mjs): uniform relative-STRING
+  recompute over 308 files → **427 specifiers in 179 files** (imports + dynamic import() + worker `new URL` strings + readFileSync
+  SRC nets); net = build + full suite (pure path edits, zero behavior delta). Four bare-name loaders hand-fixed (codemod skips
+  non-`./` strings): bootstrap.js vm-manifest (added a disk-probing relocate() on its importApp choke-point; skip-keys unchanged),
+  parse-check.test.js + parse-h-poly-modes.test.ts path.join segments. The 3 load-order lists (main/solver-graph/bootstrap)
+  preserved in-order (paths only). git mv → 57 renames (14 R + 43 RM). Green: build/typecheck/lint(+dep:check)/test —
+  **2234/265** (tests unchanged; `/262` file-count was stale). Phase 5 done.

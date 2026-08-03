@@ -68,7 +68,7 @@
 // =============================================================================
 
 // ESM (Phase 2 port) — twin of algebra/algebra-canvas.js (classic stays frozen). UI orchestrator/consumer.
-import _QD from '../solver.mjs';
+import _QD from '../solvers/solver.mjs';
 const QD = _QD;
 
 (function () {

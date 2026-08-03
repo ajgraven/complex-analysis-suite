@@ -15,7 +15,7 @@ beforeAll(async () => {
   document.body.innerHTML = '<div id="controls-schwarz"></div><canvas id="canvas"></canvas>';
   // Opt into the test hook BEFORE the schwarz-ui IIFE runs; provide the mock QD.Schwarz it needs.
   (window as any).__SCHWARZ_UI_TEST_HOOK__ = true;
-  const QD: any = (await import("../app/solver.mjs")).default;
+  const QD: any = (await import("../app/solvers/solver.mjs")).default;
   QD.Schwarz = {
     escapeTime: () => ({ kind: stub.kind, n: stub.kind === "fundamental" ? 2 : 0 }),
     makeOrbit: (w: any) => [{ re: w.re, im: w.im }, { re: w.re + 1, im: w.im }],
@@ -111,7 +111,7 @@ describe("Schwarz fractal-mode interaction (jsdom)", () => {
 
   it("sphere view without WebGL 2: notifies the user and reverts to the prior 2-D view", async () => {
     if (!T) return;
-    const QD: any = (await import("../app/solver.mjs")).default;
+    const QD: any = (await import("../app/solvers/solver.mjs")).default;
     const toasts: any[] = [];
     QD.QoL = { toast: (msg: string, opts: any) => toasts.push({ msg, opts }) };
     QD.SphereView = { mount: () => disabledSphereHandle() };
@@ -129,7 +129,7 @@ describe("Schwarz fractal-mode interaction (jsdom)", () => {
 
   it("sphere view with WebGL 2: activates and stays on the sphere view", async () => {
     if (!T) return;
-    const QD: any = (await import("../app/solver.mjs")).default;
+    const QD: any = (await import("../app/solvers/solver.mjs")).default;
     const toasts: any[] = [];
     QD.QoL = { toast: (msg: string, opts: any) => toasts.push({ msg, opts }) };
     let activated = false;

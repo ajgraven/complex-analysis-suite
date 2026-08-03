@@ -2,8 +2,8 @@
 // series via extended Euclid over ℚ[t]. Exact goldens (geometric / Fibonacci generating functions)
 // + a general expand-back-to-a-series round-trip oracle + the existence (degeneracy) guard.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
 const { RatFn, seriesMul, seriesRecip, padeApproximant, rationalReconstruct } = S;

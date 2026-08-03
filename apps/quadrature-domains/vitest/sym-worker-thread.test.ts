@@ -15,9 +15,9 @@
 // bit-identical to a direct main-thread runJob across the postMessage boundary --
 // covering serialization/clone-safety, the error path, and progress throttling.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs"; // QD.Sym.runJob + MPoly (the main-thread reference)
-import "../app/faber-analysis.mjs"; // Durand-Kerner used by solveZeroDim
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs"; // QD.Sym.runJob + MPoly (the main-thread reference)
+import "../app/analysis/faber-analysis.mjs"; // Durand-Kerner used by solveZeroDim
 import "../app/algebra/sym-worker.mjs"; // attaches QD.SymWorker
 import { installWorkerThreadsWorker } from "./helpers/web-worker-shim.mjs";
 

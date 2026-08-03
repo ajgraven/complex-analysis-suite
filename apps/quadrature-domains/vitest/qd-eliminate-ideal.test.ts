@@ -5,9 +5,9 @@
 // elimination ideal is ⟨1⟩ and "y=0" is spurious. store.eliminate must return ⟨A,B⟩∩k[rest] (Gröbner),
 // falling back to the resultant (flagged) only if the ideal computation is unavailable.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
-import "../app/qd-equations.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
+import "../app/qd/qd-equations.mjs";
 import "../app/algebra/algebra-store.mjs";
 
 const S: any = (_QD as any).Sym;

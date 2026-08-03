@@ -22,8 +22,8 @@ let scopeCaveat: (sel: unknown, curIds: unknown) => string;
 let specializationLedger: (r: unknown, ctx: unknown) => string[];
 
 beforeAll(async () => {
-  await import("../app/solver.mjs");
-  const reg: any = await import("../app/ui-registry.mjs");
+  await import("../app/solvers/solver.mjs");
+  const reg: any = await import("../app/ui/ui-registry.mjs");
   await import("../app/algebra/algebra-ui.mjs");
   classifyRigor = reg.QD_UI.classifyRigor;
   posDimDesc = reg.QD_UI.posDimDesc;

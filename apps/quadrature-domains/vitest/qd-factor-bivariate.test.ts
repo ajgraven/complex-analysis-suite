@@ -4,8 +4,8 @@
 // must be exact (`=`), the product must reconstruct the curve, and the field of definition must be right
 // (x²+y² splits over ℚ(i); x²−2y² does NOT — it stays ℚ(i)-irreducible).
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
 const { MPoly, Gaussian, Rational, factorBivariate, factor } = S;

@@ -13,8 +13,8 @@
 //       ideal (cross-reduction to 0) -- plus every input generator lies in its own GB.
 // (The external-CAS golden corpus is the companion sym-core-cas-corpus test.)
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
 const { Rational, Gaussian, MPoly, monomialOrder, buchberger, reduceGroebner, normalForm } = S;

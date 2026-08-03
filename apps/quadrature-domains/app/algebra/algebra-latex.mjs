@@ -12,8 +12,8 @@
 // `buildHForm` (carve-out 9) renders the quadrature data h(w) as LaTeX. It reads QD.RiemannLatex — which
 // registers on the QD singleton as an import side-effect (no direct export) — so we import riemann-latex.mjs
 // here to guarantee it's present, the same pattern algebra-format.mjs uses for QD.QDEquations.
-import _QD from '../solver.mjs';
-import '../riemann-latex.mjs';   // side-effect: registers QD.RiemannLatex (incl. katexCmpxParen) on the singleton
+import _QD from '../solvers/solver.mjs';
+import '../analysis/riemann-latex.mjs';   // side-effect: registers QD.RiemannLatex (incl. katexCmpxParen) on the singleton
 
 // LaTeX of the (ascending {re,im}) Prony polynomial P(z) = Σ c_k z^k = 0.
 export function _pronyLatex(coeffs) {

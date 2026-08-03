@@ -43,18 +43,18 @@ let QD_UI: any;
 // Order mirrors the node harness's algebra bootstrap (seeds before solvers, kernels before the store).
 async function boot(): Promise<void> {
   if (booted) return;
-  QD = (await import("../app/solver.mjs")).default as any;
-  await import("../app/sym-core.mjs");
-  await import("../app/sym-radical.mjs");
-  await import("../app/faber-analysis.mjs");
+  QD = (await import("../app/solvers/solver.mjs")).default as any;
+  await import("../app/sym/sym-core.mjs");
+  await import("../app/sym/sym-radical.mjs");
+  await import("../app/analysis/faber-analysis.mjs");
   await import("../app/algebra/sym-worker.mjs");
-  await import("../app/qd-equations.mjs");
-  await import("../app/qd-constraints.mjs");
+  await import("../app/qd/qd-equations.mjs");
+  await import("../app/qd/qd-constraints.mjs");
   await import("../app/algebra/cas-export.mjs");
   await import("../app/algebra/algebra-store.mjs");
   await import("../app/algebra/algebra-canvas.mjs");
-  await import("../app/ui-strings.mjs");
-  QD_UI = (await import("../app/ui-registry.mjs") as any).QD_UI;
+  await import("../app/ui/ui-strings.mjs");
+  QD_UI = (await import("../app/ui/ui-registry.mjs") as any).QD_UI;
   await import("../app/algebra/algebra-ui.mjs"); // IIFE side-effect: QD_UI.installAlgebra = installAlgebra
   booted = true;
 }

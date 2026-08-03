@@ -4,7 +4,7 @@
 // solve/sample fakes (no real solver needed; the real PS.solveOnePoint +
 // QD.sampleBoundary path is exercised by the browser verification).
 import { describe, it, expect } from "vitest";
-import { sweepFamily, linspace } from "../app/family-sweep.mjs";
+import { sweepFamily, linspace } from "../app/analysis/family-sweep.mjs";
 
 describe("family-sweep engine", () => {
   it("linspace spans [min,max] and collapses to one point for n<=1", () => {

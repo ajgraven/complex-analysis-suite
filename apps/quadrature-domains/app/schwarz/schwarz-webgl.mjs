@@ -1,5 +1,5 @@
 // ESM (Phase 2 port) — twin of schwarz/schwarz-webgl.js (classic stays frozen). Registers onto the QD namespace.
-import _QD from '../solver.mjs';
+import _QD from '../solvers/solver.mjs';
 import { compileShader, linkProgram } from '@cas/gpu/shader';
 import { makeColormapTexture } from '@cas/gpu/colormap';
 // =============================================================================

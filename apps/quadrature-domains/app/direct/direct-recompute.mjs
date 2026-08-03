@@ -18,8 +18,8 @@
 'use strict';
 
 // ESM (Phase 2 port) — twin of direct/direct-recompute.js (classic stays frozen). QD_UI factory module.
-import { QD_UI } from '../ui-registry.mjs';
-import _QD from '../solver.mjs';
+import { QD_UI } from '../ui/ui-registry.mjs';
+import _QD from '../solvers/solver.mjs';
 const QD = _QD;
 
 (function (global) {

@@ -29,7 +29,7 @@
 // =============================================================================
 
 // ESM (Phase 2 port) — twin of algebra/cas-export.js (classic stays frozen). Registers QD.CASExport.
-import _QD from '../solver.mjs';
+import _QD from '../solvers/solver.mjs';
 
 (function () {
   'use strict';

@@ -3,8 +3,8 @@
 // CONSISTENCY with factorBivariate (a differential check — two independent algorithms), trivariate+
 // recovery, content handling, round-trip, and the honest `complete` flag. See docs/NVARIATE_FACTORING.md.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
 const { MPoly, Gaussian, Rational, factorBivariate, factorMultivariate, factor } = S;

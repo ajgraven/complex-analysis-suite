@@ -8,9 +8,9 @@
 // factors, so the polynomial fold/boundary filters are blind to this stratum; nodeInsideDisk is the
 // gate. It compares |z|² to 1 as an EXACT ℚ (BigInt) inequality on the ratApprox'd coordinate.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
-import "../app/qd-equations.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
+import "../app/qd/qd-equations.mjs";
 
 const QE: any = (_QD as any).QDEquations;
 

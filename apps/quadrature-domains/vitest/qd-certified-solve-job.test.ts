@@ -3,8 +3,8 @@
 // (numeric box midpoints + endpoints + exact flags, no Rational objects) with the certified count,
 // so the store/verdict wiring (#2a-2) can rely on it across postMessage.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
 const { MPoly, Gaussian, runJob, solveRealCertified, certifiedRealToJSON } = S;

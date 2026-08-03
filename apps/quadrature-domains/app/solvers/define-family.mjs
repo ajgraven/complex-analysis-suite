@@ -16,7 +16,7 @@
 //   initialGuess, perturbedInitialGuess, diverseInitialGuess?,   // seeds; diverse defaults to QD.diverseInitialGuess
 //   continuationSolve, verifyQuadratureIdentity, sampleBoundary?,
 // }
-import _QD from '../solver.mjs';
+import _QD from './solver.mjs';
 
 export function defineFamily(config) {
   const {

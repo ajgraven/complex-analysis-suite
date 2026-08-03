@@ -4,8 +4,8 @@
 // variables, (b) it recovers trivariate factor SETS, incl. the over-splitting case where an irreducible
 // factor's univariate specialization splits and recombination must merge it, and (c) ∏ factors = f.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
 const { MPoly, Gaussian, Rational, factorBivariate, mvHenselLift } = S;

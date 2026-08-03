@@ -1,5 +1,5 @@
 // ESM (Phase 2 port) — twin of algebra/expr-parser.js (classic stays frozen). Registers onto the QD namespace.
-import _QD from '../solver.mjs';
+import _QD from '../solvers/solver.mjs';
 // =============================================================================
 // expr-parser.js -- QD.ExprParser: a tiny, no-eval recursive-descent parser that
 // turns a USER-TYPED algebraic expression string into an exact ℚ(i) MPoly

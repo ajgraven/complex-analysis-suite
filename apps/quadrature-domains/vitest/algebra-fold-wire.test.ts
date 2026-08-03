@@ -12,10 +12,10 @@ import { describe, it, expect, beforeAll } from "vitest";
 
 let QD: any, QC: any, S: any, PP: any;
 beforeAll(async () => {
-  QD = (await import("../app/solver.mjs")).default;
-  await import("../app/sym-core.mjs");
-  await import("../app/qd-equations.mjs");
-  await import("../app/qd-constraints.mjs");
+  QD = (await import("../app/solvers/solver.mjs")).default;
+  await import("../app/sym/sym-core.mjs");
+  await import("../app/qd/qd-equations.mjs");
+  await import("../app/qd/qd-constraints.mjs");
   PP = await import("../app/algebra/prove-plan.mjs");
   QC = QD.QDConstraints;
   S = QD.Sym;

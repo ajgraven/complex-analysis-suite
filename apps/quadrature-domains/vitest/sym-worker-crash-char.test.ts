@@ -15,7 +15,7 @@ const tick = async (n = 5) => {
 
 async function freshSym(): Promise<any> {
   vi.resetModules();
-  const qd: any = (await import("../app/solver.mjs")).default;
+  const qd: any = (await import("../app/solvers/solver.mjs")).default;
   await import("../app/algebra/sym-worker.mjs"); // side effect: registers qd.SymWorker
   return qd.SymWorker;
 }

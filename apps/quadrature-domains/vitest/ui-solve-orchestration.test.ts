@@ -11,9 +11,9 @@
 // no solve is allowed to SUCCEED here, so the heavy success-render path is intentionally not
 // exercised (that belongs to a later slice) — this slice pins orchestration only.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { QD_UI } from "../app/ui-registry.mjs";
-import "../app/ui-solve.mjs"; // side effect: installs QD_UI.installSolve + imports solver.mjs
-import _QD from "../app/solver.mjs";
+import { QD_UI } from "../app/ui/ui-registry.mjs";
+import "../app/ui/ui-solve.mjs"; // side effect: installs QD_UI.installSolve + imports solver.mjs
+import _QD from "../app/solvers/solver.mjs";
 
 const QD = _QD as any;
 

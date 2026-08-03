@@ -16,7 +16,7 @@ beforeAll(async () => {
   document.body.innerHTML =
     '<div id="controls-schwarz"></div><canvas id="canvas"></canvas><div id="schwarz-readout"></div>';
   (window as any).__SCHWARZ_UI_TEST_HOOK__ = true;
-  const QD: any = (await import("../app/solver.mjs")).default;
+  const QD: any = (await import("../app/solvers/solver.mjs")).default;
   // Plane-view CPU field readout reads only sState.field/fieldKind — no σ engine needed; a light mock
   // satisfies the isSchwarzActive/isInOmega touches without pulling in the LQD graph.
   QD.Schwarz = {

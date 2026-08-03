@@ -2,8 +2,8 @@
 // the kernel-basis routine (the Ruppert-nullspace step) and content / primitive-part / squarefree-in-x
 // (the pre-processing). See docs/MULTIVARIATE_FACTORING.md. Pure engine; validated by the Phase-0 spike.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
 const { MPoly, nullspaceRational, bivariateContent, bivariatePrimitivePart, bivariateSquarefreeInX } = S;

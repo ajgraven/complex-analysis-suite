@@ -5,8 +5,8 @@
 // it imports the ESM twin (which attaches QD_UI.installDomainPlot onto the ui-registry) and drives
 // the same interactions in Vitest's jsdom environment. Same assertions as the classic test.
 import { describe, it, expect, vi } from "vitest";
-import { QD_UI } from "../app/ui-registry.mjs";
-import "../app/ui-domain-plot.mjs"; // side effect: QD_UI.installDomainPlot
+import { QD_UI } from "../app/ui/ui-registry.mjs";
+import "../app/ui/ui-domain-plot.mjs"; // side effect: QD_UI.installDomainPlot
 
 describe("DomainPlot double-click → add-pole (jsdom)", () => {
   it("loads, fires onAddPole on empty dblclick, ignores on-pole, and setLivePole moves/guards", () => {

@@ -81,10 +81,10 @@
 // =============================================================================
 
 // ESM (Phase 2 port) — twin of algebra/algebra-ui.js (classic stays frozen). UI orchestrator/consumer.
-import { state } from '../ui-state.mjs';
-import { QD_UI } from '../ui-registry.mjs';
-import _QD from '../solver.mjs';
-import { plainVar } from '../qd-varscheme.mjs';   // conjugate-model var scheme (plain-text labels)
+import { state } from '../ui/ui-state.mjs';
+import { QD_UI } from '../ui/ui-registry.mjs';
+import _QD from '../solvers/solver.mjs';
+import { plainVar } from '../qd/qd-varscheme.mjs';   // conjugate-model var scheme (plain-text labels)
 import { domainPlotData, momentPlotData, rationalPlotData, trianglePlotData } from './domain-mini-plot.mjs';   // #3 + C1-ext-B + C2-4 + C3-4: reconstructed-domain thumbnail geometry
 import * as PROVE from './prove-plan.mjs';   // the pure existence/uniqueness proof engine (fuller-orchestrator Phase A)
 import { classifyVerdict, posDimDesc, withGuidance, _isCapFailure } from './algebra-labeling.mjs';   // pure honest-labeling: verdict prose (1) + cap-failure guidance (6)

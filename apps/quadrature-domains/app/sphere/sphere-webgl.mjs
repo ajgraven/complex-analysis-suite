@@ -1,5 +1,5 @@
 // ESM (Phase 2 port) — twin of sphere/sphere-webgl.js (classic stays frozen). Registers onto the QD namespace.
-import _QD from '../solver.mjs';
+import _QD from '../solvers/solver.mjs';
 import { SphereCommon } from './sphere-common.mjs';
 // =============================================================================
 // sphere-webgl.js  — WebGL 2 renderer for the Riemann-sphere visualization.

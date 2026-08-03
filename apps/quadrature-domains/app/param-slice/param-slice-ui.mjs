@@ -16,10 +16,10 @@
 // =============================================================================
 
 // ESM (Phase 2 port) — twin of param-slice/param-slice-ui.js (classic stays frozen). UI orchestrator/consumer.
-import { QD_UI } from '../ui-registry.mjs';
+import { QD_UI } from '../ui/ui-registry.mjs';
 import ParamSlice from '../param-slice/param-slice-common.mjs';
 import ParamSlicePool from '../param-slice/param-slice-pool.mjs';
-import _QD from '../solver.mjs';
+import _QD from '../solvers/solver.mjs';
 const QD = _QD;
 
 (function (global) {

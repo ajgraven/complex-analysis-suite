@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 const UI = readFileSync(
   fileURLToPath(new URL("../app/algebra/algebra-ui.mjs", import.meta.url)), "utf8");
 const STRINGS = readFileSync(
-  fileURLToPath(new URL("../app/ui-strings.mjs", import.meta.url)), "utf8");
+  fileURLToPath(new URL("../app/ui/ui-strings.mjs", import.meta.url)), "utf8");
 
 /** The algebraOps block, parsed into {id: {section, short, detail}}. */
 function ops(): Record<string, { section: string; short: string; detail: string }> {

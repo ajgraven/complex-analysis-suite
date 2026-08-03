@@ -16,13 +16,13 @@ let colormap: (name: string, t: number) => number[];
 let pickColormap: (name: string) => number[][];
 
 beforeAll(async () => {
-  const QD: any = (await import("../app/solver.mjs")).default;
+  const QD: any = (await import("../app/solvers/solver.mjs")).default;
   // schwarz-webgl self-creates QD.Schwarz (`QD.Schwarz || (QD.Schwarz = {})`) and registers
   // Schwarz._glHelpers.pickColormap; neither it nor schwarz-paint pulls in the LQD graph, so the
   // colormap surface loads without the full solver-family chain.
   await import("../app/schwarz/schwarz-webgl.mjs"); // registers Schwarz._glHelpers.pickColormap
   await import("../app/schwarz/schwarz-paint.mjs"); // registers QD_UI.installSchwarzPaint
-  const { QD_UI } = await import("../app/ui-registry.mjs");
+  const { QD_UI } = await import("../app/ui/ui-registry.mjs");
   pickColormap = QD.Schwarz._glHelpers.pickColormap;
   // colormap/cpuComputeT are pure (no ctx use); install with a minimal stub context.
   const stub: any = {

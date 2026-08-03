@@ -153,9 +153,24 @@ async function _init() {
     vm.runInContext(src, ctx, { filename: rel });
   }
 
+  // E2 folderize (refactor Phase 5): the former flat app/*.mjs were moved into
+  // core/ solvers/ qd/ sym/ analysis/ ui/. The manifests above still name modules by their
+  // (flat) basename; relocate() maps a bare basename to wherever it now lives on disk, so the
+  // manifests AND the loadInCtx skip-keys stay keyed on the classic names. Already-subfoldered
+  // paths (solvers/seeds/…, schwarz/…, algebra/…) contain a '/' and pass through untouched.
+  const E2_DIRS = ['core', 'solvers', 'qd', 'sym', 'analysis', 'ui'];
+  function relocate(rel) {
+    if (rel.includes('/')) return rel;                        // already in a subfolder → unchanged
+    if (fs.existsSync(path.join(APP_DIR, rel))) return rel;   // still flat (defensive)
+    for (const d of E2_DIRS) {
+      if (fs.existsSync(path.join(APP_DIR, d, rel))) return d + '/' + rel;
+    }
+    return rel;                                               // not found → fail loudly at import
+  }
+
   // Import a native-ESM app module by relative path (file:// URL for Windows).
   async function importApp(rel) {
-    return import(pathToFileURL(path.join(APP_DIR, rel)).href);
+    return import(pathToFileURL(path.join(APP_DIR, relocate(rel))).href);
   }
 
   // Import every ESM-ported module and expose its exports on the ctx global, so

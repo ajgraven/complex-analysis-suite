@@ -5,7 +5,7 @@
 // limitation that the cheap strict-`>` CCW test does NOT flag collinear overlap — so the extraction is
 // provably behavior-preserving. Points are { re, im }. No DOM. Mutation-verified.
 import { describe, it, expect } from "vitest";
-import { boundarySelfIntersectsSimple, segmentsIntersect } from "../app/ui-geometry.mjs";
+import { boundarySelfIntersectsSimple, segmentsIntersect } from "../app/ui/ui-geometry.mjs";
 
 const P = (re: number, im: number) => ({ re, im });
 

@@ -3,8 +3,8 @@
 // matrix, and the exact PRONY polynomial P(z) = Π(z − z_j) comes from the Hankel system over ℚ(i). The win
 // over floating-point Prony: the rank drop is an exact integer, and P is exact. Locks both against goldens.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
 const { hankelRank, pronyPolynomial, shapeFromMoments } = S;

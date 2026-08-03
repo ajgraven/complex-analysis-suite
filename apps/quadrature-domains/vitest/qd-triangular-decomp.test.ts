@@ -2,8 +2,8 @@
 // sets, one per irreducible component via #12's minimalPrimes + triangularize), whose zero sets union
 // to V(I). Each chain is triangular (distinct main variables) and solvable by back-substitution.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
 const { MPoly, monomialOrder, buchberger, reduceGroebner, triangularDecomposition } = S;

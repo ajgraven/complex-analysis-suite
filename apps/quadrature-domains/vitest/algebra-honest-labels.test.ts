@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 const UI = readFileSync(
   fileURLToPath(new URL("../app/algebra/algebra-ui.mjs", import.meta.url)), "utf8");
 const STRINGS = readFileSync(
-  fileURLToPath(new URL("../app/ui-strings.mjs", import.meta.url)), "utf8");
+  fileURLToPath(new URL("../app/ui/ui-strings.mjs", import.meta.url)), "utf8");
 const CODE = UI
   .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
   .replace(/(^|[^:])\/\/[^\n]*/g, (m) => m.replace(/[^\n]/g, " "));

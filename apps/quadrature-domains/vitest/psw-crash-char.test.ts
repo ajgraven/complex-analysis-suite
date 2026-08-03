@@ -21,11 +21,11 @@ const tick = async (n = 5) => {
 
 async function freshPSW(): Promise<any> {
   vi.resetModules();
-  const qd: any = (await import("../app/solver.mjs")).default;
+  const qd: any = (await import("../app/solvers/solver.mjs")).default;
   // The main-thread fallback calls QD.solveInverseQD/searchAlternates/liveSolveStep on this thread, which
   // need every family registered — same as the browser main thread. (See psw-lifecycle.test.ts freshPSW.)
   await import("../app/workers/solver-graph.mjs");
-  await import("../app/primary-solver-worker.mjs");
+  await import("../app/solvers/primary-solver-worker.mjs");
   return qd.PrimarySolverWorker;
 }
 

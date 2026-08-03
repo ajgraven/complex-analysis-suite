@@ -8,9 +8,9 @@
 // residual) and the univalence tests at it are unconditional; if not, it is irrational and the per-solution
 // certificate is only ≈. Unit disk h=1/w has the exact rational solution φ=identity: w0=0, z1=0, A_{1,1}=1.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
-import "../app/qd-equations.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
+import "../app/qd/qd-equations.mjs";
 
 const QE: any = (_QD as any).QDEquations;
 const diskH = { poles: [{ a: { re: 0, im: 0 }, principal: [{ re: 1, im: 0 }] }] };

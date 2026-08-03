@@ -15,10 +15,10 @@ import { describe, it, expect, beforeAll } from "vitest";
 
 let QC: any, S: any;
 beforeAll(async () => {
-  const QD = (await import("../app/solver.mjs")).default;
-  await import("../app/sym-core.mjs");       // QD.Sym
-  await import("../app/qd-equations.mjs");
-  await import("../app/qd-constraints.mjs"); // QD.QDConstraints
+  const QD = (await import("../app/solvers/solver.mjs")).default;
+  await import("../app/sym/sym-core.mjs");       // QD.Sym
+  await import("../app/qd/qd-equations.mjs");
+  await import("../app/qd/qd-constraints.mjs"); // QD.QDConstraints
   QC = QD.QDConstraints;
   S = QD.Sym;
 });

@@ -5,9 +5,9 @@
 // miss components. store.triangularize now reports { initialCount, hasRegularityConditions } so
 // the UI can show that caveat, instead of silently presenting the chain as a full decomposition.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
-import "../app/qd-equations.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
+import "../app/qd/qd-equations.mjs";
 import "../app/algebra/algebra-store.mjs";
 
 const S: any = (_QD as any).Sym;

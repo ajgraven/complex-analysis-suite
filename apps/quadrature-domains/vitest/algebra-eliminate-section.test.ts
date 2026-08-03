@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 const UI = readFileSync(
   fileURLToPath(new URL("../app/algebra/algebra-ui.mjs", import.meta.url)), "utf8");
 const STRINGS = readFileSync(
-  fileURLToPath(new URL("../app/ui-strings.mjs", import.meta.url)), "utf8");
+  fileURLToPath(new URL("../app/ui/ui-strings.mjs", import.meta.url)), "utf8");
 
 /** Body of a top-level `function name(` in algebra-ui, up to the next same-indent function. */
 function bodyOf(name: string): string {

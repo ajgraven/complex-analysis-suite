@@ -26,10 +26,10 @@ let MODES: Record<string, unknown>;
 let PRESETS: Record<string, unknown>;
 
 beforeAll(async () => {
-  await import("../app/solver.mjs"); // installs the QD solver namespace ui-modes imports
-  const reg = (await import("../app/ui-registry.mjs")) as unknown as { QD_UI: Record<string, any> };
-  await import("../app/ui-modes.mjs");
-  await import("../app/ui-url-state.mjs");
+  await import("../app/solvers/solver.mjs"); // installs the QD solver namespace ui-modes imports
+  const reg = (await import("../app/ui/ui-registry.mjs")) as unknown as { QD_UI: Record<string, any> };
+  await import("../app/ui/ui-modes.mjs");
+  await import("../app/ui/ui-url-state.mjs");
   // The REAL mode + preset tables, so the `MODES[mode]` / `PRESETS[agg]` gates are exercised
   // against the values a live share link actually carries. installModes only reads `ui.buildW0`
   // at solve time, so an empty ctx is enough to build the descriptors.

@@ -5,7 +5,7 @@
 // drops `singular`; modeSummary emits the ungrammatical "a unbounded") — so the extraction is provably
 // behavior-preserving and a later ui.mjs decomposition can't silently change the mode mapping. No DOM needed.
 import { describe, it, expect } from "vitest";
-import { composeMode, decomposeMode, modeSummary } from "../app/ui-domain-mode.mjs";
+import { composeMode, decomposeMode, modeSummary } from "../app/ui/ui-domain-mode.mjs";
 
 describe("ui-domain-mode: composeMode (controls → MODES key)", () => {
   it("classical → the bare domain (weight + singular dropped)", () => {

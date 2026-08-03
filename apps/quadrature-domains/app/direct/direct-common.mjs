@@ -1,7 +1,7 @@
 // ESM (Phase 2 port) — twin of direct/direct-common.js (classic stays frozen). Registers onto the QD namespace.
-import { Complex } from '../complex.mjs';
-import { Taylor } from '../taylor.mjs';
-import _QD from '../solver.mjs';
+import { Complex } from '../core/complex.mjs';
+import { Taylor } from '../core/taylor.mjs';
+import _QD from '../solvers/solver.mjs';
 import { makeDurandKerner, objAlgebra } from '@cas/core';
 // =============================================================================
 // direct-common.js -- Direct problem: given a Riemann map φ, compute the
