@@ -64,11 +64,11 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   (#219). **Seam 5 (inspector) scoped = composition core (~15 ctx deps = re-expose, not decouple) → D1d closed; user → Phase 4.**
 
 ## Branches / PR
-- Integration `refactor/main` @ **aaf6d49** (#210–#221 merged). Tree clean. **No open PR.**
-- Merged stage PRs (44): A1 #178 … #220, **p5-e2-folderize #221 (aaf6d49)**.
+- Integration `refactor/main` @ **5e4ffeb** (#210–#222 merged). Tree clean. **No open PR.**
+- Merged stage PRs (45): A1 #178 … #221, **p5-e2-docs #222 (5e4ffeb)** — E2 doc-align (README File layout + main.mjs header); QD-UI-6 → fixed.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at aaf6d49 (#221 merged): build/typecheck/lint(+`dep:check`)/test exit 0;
+- **`refactor/main` — ALL GREEN** at 5e4ffeb (#222 merged): build/typecheck/lint(+`dep:check`)/test exit 0;
   `pnpm test` **2234 / 265** (the file-count read `/262` since the D1d-picker stage — stale; tests 2234 unchanged by E2).
 
 ## Uncommitted / unverified
