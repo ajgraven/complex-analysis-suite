@@ -92,6 +92,7 @@ import { exactValueStr, fmtRatio, ratioStrRec, valStr } from './algebra-format.m
 import { _parseMomentToken } from './algebra-moment-parse.mjs';   // pure complex-moment input parser (carve-out 5)
 import { _pronyLatex, buildHForm } from './algebra-latex.mjs';   // pure math→LaTeX formatters (carve-outs 7, 9)
 import { createOpRunner } from './algebra-op-runner.mjs';   // the single-flight worker-op runner (D1d seam 1): busy lifecycle + guard + cancel
+import { createResultsDrawer } from './algebra-results-drawer.mjs';   // the results drawer (D1d seam 2): keyed verdict history + honest staleness
 const QD = _QD;
 
 (function () {
@@ -737,16 +738,22 @@ const QD = _QD;
     let _zoom = 1;                 // canvas zoom level (View ± controls)
     let _minimapOn = false;        // DAG minimap toggle (B2)
     let _focusOn = false;          // focus mode toggle (P6a): isolate the selection's derivation
-    let _drawerOpen = true;        // results drawer (P6b): index above the docked verdict
-    let _colCollapsed = false;     // whole result column collapsed to a 34px sliver
-    // One place decides the column's width, because two controls drive it: the drawer's « (always
-    // present while there are results) and the verdict's « (present only while a verdict shows).
-    // Before this, only the verdict had one — so dismissing a result stranded the column open.
-    function setResultColCollapsed(on) {
-      _colCollapsed = !!on;
-      if (canvas && canvas.setVerdictCollapsed) canvas.setVerdictCollapsed(_colCollapsed);
-      renderDrawer();
-    }
+    // The results drawer (P6b) + its verdict-routing to the canvas — the _results history keyed by
+    // (track, branchSig) that keeps every analysis's verdict and honestly demotes a stale/cross-branch
+    // one — moved to ./algebra-results-drawer.mjs (D1d seam 2). showResult / renderDrawer are aliased
+    // below so their ~13 call sites and rerender's renderDrawer() read unchanged; workflowFacts queries
+    // results.hasResults()/hasCurrent(). ctx: the LIVE canvas + store + branchSig + trackLabelOf + the
+    // pure resultStateOf (QD_UI) + rigorMeta (AlgebraCanvas).
+    const results = createResultsDrawer({
+      getCanvas: () => canvas,
+      store,
+      branchSig: _branchSig,
+      trackLabelOf,
+      resultStateOf,
+      rigorMeta: (rigor, bound) => (QD.AlgebraCanvas && QD.AlgebraCanvas.rigorMeta) ? QD.AlgebraCanvas.rigorMeta(rigor, bound) : null,
+    });
+    const showResult = results.showResult;   // facade: the ~13 call sites keep calling showResult(...)
+    const renderDrawer = results.render;      // facade: rerender() and the drawer's own re-renders call renderDrawer()
 
     // LaTeX for the conjugate-model vars + the constraint boundary/aux vars.
     const baseLatex = QE.latexOf('conjugate');
@@ -1138,7 +1145,7 @@ const QD = _QD;
       const known = (store.knownValues && store.knownValues()) || {};
       const hypotheses = (store.realVars || []).length + (store.imagVars || []).length
         + (store.w0Fixed ? 1 : 0) + Object.keys(known).filter((k) => k !== 'w0').length;
-      const any = _results.length > 0;
+      const any = results.hasResults();
       return {
         seeded: store.size > 0,
         staleSeed: !!(activeEnv && _seededHData && _seededHData !== activeEnv.hData),
@@ -1149,7 +1156,7 @@ const QD = _QD;
         // the user still had to do. Count only nodes whose provenance is a reduce-class op.
         reductions: store.size ? _reduceColumnCount() : 0,
         resultAny: any,
-        resultCurrent: any && _results.some((r) => resultState(r) === 'current'),
+        resultCurrent: any && results.hasCurrent(),
       };
     }
     // Render the strip. Each step is a real button that opens its section — two of the four named
@@ -4432,121 +4439,11 @@ const QD = _QD;
     }
     // A6: per-branch verdict chips. Helpers + the "classify all branches" action.
     // ---- results drawer (P6b) ------------------------------------------------
-    // Every analysis wrote into ONE docked verdict slot. Eleven call sites — solve, classify,
-    // dimension, prove, bifurcation, resolvent, univalence, RCTD import, shape-from-moments —
-    // competed for a single lastVerdictData, so running Dimension after Classify DESTROYED
-    // Classify's answer with no way back, on results that cost tens of seconds each.
-    //
-    // They now go through showResult, which keeps each one keyed by the system it was computed
-    // about: (track, branchSig). That key is the whole point. A result computed three reductions
-    // ago, redisplayed beside today's column still wearing its original '=' pill, is a false
-    // attribution — the worst class of bug this project has (CLAUDE.md honest labeling). The key
-    // is what lets the drawer tell "still true of what you are looking at" from "was true of
-    // something else", and demote the second on sight.
-    const RESULTS_CAP = 40;
-    const _results = [];            // newest first: { id, track, sig, data }
-    let _resultSeq = 0;
-    let _resultsDropped = 0;        // surfaced in the drawer — a silent cap reads as "that's all"
-    // Results are SESSION-scoped and deliberately not autosaved: restoring a verdict across a
-    // reload would restore a claim about a system state that may no longer exist, which is the
-    // same false attribution with a longer fuse.
-    function showResult(data) {
-      if (!canvas) return;
-      if (data && data.text) {
-        const track = store.activeTrack;
-        _results.unshift({ id: ++_resultSeq, track, sig: _branchSig(track), data });
-        while (_results.length > RESULTS_CAP) { _results.pop(); _resultsDropped++; }
-        renderDrawer();
-      }
-      canvas.setVerdict(data);
-    }
-    // Bind the pure decision (resultStateOf, module scope) to the live store.
-    function resultState(r) {
-      const cur = store.activeTrack;
-      return resultStateOf(r.track, r.sig, cur, _branchSig(cur));
-    }
-    function reshowResult(r) {
-      const st = resultState(r);
-      if (st === 'current') { canvas.setVerdict(r.data); return; }
-      canvas.setVerdict(Object.assign({}, r.data, {
-        stale: true,
-        // 'the derivation has changed since' is the right sentence for a same-branch result and
-        // the WRONG one for a cross-branch result — it implies a history this branch never had.
-        staleNote: st === 'branch'
-          ? '⚠ Computed on ' + trackLabelOf(r.track) + ', and you are viewing ' + trackLabelOf(store.activeTrack)
-            + '. It describes that branch’s system — not this one. Switch branches to see it in context.'
-          : undefined,
-      }));
-    }
-    function renderDrawer() {
-      const host = canvas && canvas.drawer; if (!host) return;
-      host.innerHTML = '';
-      if (!_results.length) { host.classList.add('hidden'); return; }
-      host.classList.remove('hidden');
-      const head = document.createElement('div'); head.className = 'algebra-drawer-head';
-      // Column collapse lives HERE, not only on the verdict. P6b put the « on the verdict card,
-      // so dismissing a result with × left the drawer holding 340px open with no control left to
-      // reclaim it — the canvas stayed at 580px of a 920px row with no way out. The drawer is the
-      // one element present whenever the column is, so the control belongs on it.
-      const dock = document.createElement('button');
-      dock.type = 'button'; dock.className = 'algebra-drawer-dock';
-      dock.textContent = _colCollapsed ? '»' : '«';
-      dock.title = _colCollapsed
-        ? 'Expand the results panel'
-        : 'Collapse the results panel (keeps every result — give the width back to the graph)';
-      dock.addEventListener('click', () => setResultColCollapsed(!_colCollapsed));
-      head.appendChild(dock);
-      // Collapsed, the head is the whole panel: just the » to get back. Anything else would
-      // either overflow the 34px sliver or be unreadable in it.
-      if (_colCollapsed) { host.appendChild(head); return; }
-      const toggle = document.createElement('button');
-      toggle.type = 'button'; toggle.className = 'algebra-drawer-toggle';
-      toggle.textContent = _drawerOpen ? '▾' : '▸';
-      toggle.title = _drawerOpen ? 'Collapse the results list' : 'Show the results list';
-      toggle.addEventListener('click', () => { _drawerOpen = !_drawerOpen; renderDrawer(); });
-      const lbl = document.createElement('span'); lbl.className = 'algebra-line-label';
-      lbl.textContent = 'Results (' + _results.length + ')';
-      head.appendChild(toggle); head.appendChild(lbl);
-      host.appendChild(head);
-      if (!_drawerOpen) return;
-      const list = document.createElement('div'); list.className = 'algebra-drawer-list';
-      _results.forEach((r) => {
-        const st = resultState(r);
-        const row = document.createElement('button');
-        row.type = 'button'; row.className = 'algebra-drawer-row is-' + st;
-        const rm = (QD.AlgebraCanvas && QD.AlgebraCanvas.rigorMeta)
-          ? QD.AlgebraCanvas.rigorMeta(r.data.rigor, r.data.bound) : null;
-        if (rm) {
-          const pill = document.createElement('span'); pill.className = 'algebra-drawer-pill';
-          pill.textContent = rm.symbol; pill.style.background = rm.color;
-          // The pill states the rigor of the ORIGINAL computation. On anything but a current
-          // result that claim no longer applies to the visible system, so the row says so in
-          // its own right rather than letting a green '=' speak for a system it never saw.
-          pill.title = 'Rigor when computed: ' + rm.label;
-          row.appendChild(pill);
-        }
-        const t = document.createElement('span'); t.className = 'algebra-drawer-title';
-        t.textContent = r.data.title || 'Existence / uniqueness';
-        row.appendChild(t);
-        if (st !== 'current') {
-          const tag = document.createElement('span'); tag.className = 'algebra-drawer-tag';
-          tag.textContent = st === 'branch' ? trackLabelOf(r.track) : 'earlier';
-          tag.title = st === 'branch'
-            ? 'Computed on ' + trackLabelOf(r.track) + ' — a different system from the one shown'
-            : 'Computed before the current reduction — no longer describes the visible column';
-          row.appendChild(tag);
-        }
-        row.addEventListener('click', () => reshowResult(r));
-        list.appendChild(row);
-      });
-      host.appendChild(list);
-      if (_resultsDropped) {
-        const note = document.createElement('div'); note.className = 'algebra-drawer-note';
-        note.textContent = _resultsDropped + ' older result' + (_resultsDropped === 1 ? '' : 's')
-          + ' dropped (keeps the most recent ' + RESULTS_CAP + ')';
-        host.appendChild(note);
-      }
-    }
+    // The results-drawer subsystem (the _results history keyed by (track, branchSig) + showResult /
+    // reshowResult / resultState / renderDrawer / setResultColCollapsed) moved to
+    // ./algebra-results-drawer.mjs — D1d seam 2. `results` is built near the top of installAlgebra;
+    // showResult / renderDrawer are aliased to it there. _branchSig / _lastColIds stay below (the
+    // verdict cache + track badges also use them) and are handed to the drawer via ctx.
     function _lastColIds(tid) { return store.orderedColumn(store.maxColumn(tid), tid).map((n) => n.id); }
     // Cheap content signature of a branch's CURRENT last column — changes whenever the system
     // changes (a new reduction, fork, undo), so a cached verdict is shown only while still valid.
