@@ -17,7 +17,7 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **Net-first:** no refactor without a passing characterization net pinned to PRE-refactor code; **mutation-verify** every
   net (break a guard → confirm the intended test fails → revert byte-identically via Edit, NOT git). Never widen a tolerance.
 - **Green bar** (must be 0-exit before every PR): `pnpm build && pnpm typecheck && pnpm lint && pnpm test` (lint includes
-  `dep:check`). Currently **2234 / 262**.
+  `dep:check`). Currently **2234 / 265**.
 - **Git constraints (VERBATIM):** never `git reset --hard`, `git checkout -- <path>`, `git clean -fd`, `git commit --amend`,
   or force-push. If history seems to need rewriting, STOP and ASK. `git push -u origin <branch>`; retry ≤4× backoff 2/4/8/16s.
 - **Cadence:** integration branch `refactor/main`; each stage on `refactor/<slug>` → ONE PR → `refactor/main`; **merge on
@@ -29,6 +29,9 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - Read order for context: `docs/refactor/{COMPLETION-PLAN,PLAN,STATE,LOG,ISSUES}.md`.
 
 ## Phase / stage
+- **✅ PHASE 5 (E2 folderize) COMPLETE — #221 (aaf6d49).** All 57 flat `app/*.mjs` moved into `core/ solvers/ qd/ sym/ analysis/
+  ui/` (main.mjs = entry); 427 specifier rewrites (codemod) + 4 bare-name loaders hand-fixed (bootstrap `relocate()`) + 3 load-
+  order lists kept in-order. Behavior-preserving (net = build + full suite); tests 2234 UNCHANGED. **← the plan's last stage. Detail in LOG/ISSUES.**
 - **Phase D COMPLETE** (D1d closed at 4 seams — inspector = composition core, not a seam). **Phase 4 (D2) PAUSED at the seam
   (user 2026-08-03): stage 1 (the ui.mjs testability seam) is merged; the factory lifts are DEFERRED — no QD boot net (see risks).**
 - **COMPLETION PLAN committed & APPROVED (2026-08-01)** → `docs/refactor/COMPLETION-PLAN.md`. Sequence: **Phase 1** (F1
@@ -46,7 +49,7 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   `-dom` splits (#206–#209), all mutation-verified. Remaining source-text tests are not D1a-brittle → stay node-source. Detail in LOG.
 - Cadence: merge on green (delegated). `APPROVED: PLAN.md v1` + `APPROVED: D1c verdict-unification` + `APPROVED: D1b doSolveRadical guard`.
   Roadmap: A✓ / B✓ / C✓ / **D✓ (Phase 1✓; Phase 2✓; Phase 3 D1a–c✓; D1d seams 1–4✓, seam-5 scoped=composition-core → closed)**
-  → **Phase 4 (D2): ui.mjs seam✓ [factory lifts PAUSED — no QD boot net]** → [Phase 5 (E2) or wrap] / E (E1 deferred, E2=Phase 5) / **F1✓**.
+  → **Phase 4 (D2): ui.mjs seam✓ [factory lifts PAUSED — no QD boot net]** → **Phase 5 (E2)✓ #221** / E (E1 deferred) / **F1✓**. **PLAN COMPLETE.**
 - **▶ PHASE 3 (D1 — installAlgebra decomposition), behind the Phase-2 net. User go-aheads 2026-08-02. Full detail per stage in LOG.**
   · **D1a COMPLETE** — #210 (full-DOM fingerprint net) + #211 (mountSidebar `#alg-sections` → `SIDEBAR_SECTIONS` data +
   `renderSection`, bodies verbatim). Behavior-preserving (fingerprint + mutation + a pre-flight `normalize()`-equal oracle).
@@ -62,12 +65,12 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   (#219). **Seam 5 (inspector) scoped = composition core (~15 ctx deps = re-expose, not decouple) → D1d closed; user → Phase 4.**
 
 ## Branches / PR
-- Integration `refactor/main` @ **1793b3a** (#210–#220 merged). Tree clean. **No open PR.**
-- Merged stage PRs (43): A1 #178 … #219, **p4-ui-seam #220 (1793b3a)**.
+- Integration `refactor/main` @ **aaf6d49** (#210–#221 merged). Tree clean. **No open PR.**
+- Merged stage PRs (44): A1 #178 … #220, **p5-e2-folderize #221 (aaf6d49)**.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at 1793b3a (#220 merged): build/typecheck/lint(+`dep:check`, 595 modules)/test exit 0;
-  `pnpm test` **2234 / 262**.
+- **`refactor/main` — ALL GREEN** at aaf6d49 (#221 merged): build/typecheck/lint(+`dep:check`)/test exit 0;
+  `pnpm test` **2234 / 265** (the file-count read `/262` since the D1d-picker stage — stale; tests 2234 unchanged by E2).
 
 ## Uncommitted / unverified
 - Nothing uncommitted. This STATE edit advances `refactor/main`.
@@ -86,14 +89,13 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   the shader job.)** Resume the lifts only behind a real QD boot harness (Playwright loading app/index.html).
 
 ## Next concrete steps
-1. **DECIDE the next phase (Phase 4 lifts are paused — no QD boot net).** Remaining plan work: **Phase 5 (E2)** — codemod the
-   58 flat `app/*.mjs` into `core/ solvers/ qd/ …` folders, rewrite imports, regenerate main.mjs; mechanical, LOW-but-broad risk,
-   char = `vite build` + full suite green. Or **wrap up** (Phases 1–3 + F1 + D1d(4) + the D2 seam are all shipped). Deferred:
-   the Phase-4 factory lifts (cross-tab / help-chrome mounts → installX(uiCtx)) — resume ONLY behind a Playwright QD boot harness.
-2. Order: A✓ B✓ C✓ → **D✓ → Phase 4 (D2 seam✓ [lifts paused]) → [Phase 5 (E2) or wrap]**. E1 deferred.
+- **The COMPLETION PLAN is fully shipped** (Phases 1–3, F1, D1d×4, the D2 seam, Phase 5 E2). No open plan stage remains — awaiting direction.
+- **Deferred / paused — each a fresh scoping task, resume only on request:** the D2 factory lifts (cross-tab / help-chrome →
+  installX(uiCtx)) — need a Playwright QD boot harness first (RISKS); the inspector (composition core, not a clean seam); **E1**
+  (state/lifecycle); further correspondence families (circle-and-cardioid → cubic Chebyshev → d:d).
 
 ## Resume commands
 ```
 git fetch && git checkout refactor/main && git pull
-pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2234/262
+pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2234/265
 ```
