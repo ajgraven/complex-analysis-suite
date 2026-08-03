@@ -1028,3 +1028,27 @@
   removed) + the new module. Cut `refactor/p3-d1d-op-runner`; PR → refactor/main.
 - **Next: D1d seam 2** — verdict + results rendering, one behavior-preserving PR behind the nets. (Then seam 3 sidebar-wire,
   inspector+canvas, ops; installAlgebra stays a composition root.)
+
+## 2026-08-03 — Phase 3 · Stage p3-d1d-results-drawer (D1d seam 2: extract the results drawer) — PR opened
+- **BEHAVIOR-PRESERVING (D1d seams need no token).** Second seam: lift the results-drawer subsystem — the `_results` verdict
+  history keyed by `(track, branchSig)`; `showResult`/`reshowResult`/`resultState`/`renderDrawer`/`setResultColCollapsed`; and
+  the `_drawerOpen`/`_colCollapsed` state (~120 lines, split across the top AND bottom of the ~4046-line closure) — into
+  **`app/algebra/algebra-results-drawer.mjs`**, a ctx-injected factory
+  `createResultsDrawer({ getCanvas, store, branchSig, trackLabelOf, resultStateOf, rigorMeta })`.
+- **Facade to keep the call surface still.** installAlgebra builds `const results = createResultsDrawer(…)` up front (after
+  store/canvas; `_branchSig`/`trackLabelOf`/`resultStateOf` are hoisted / module-scope) and aliases `const showResult =
+  results.showResult` + `const renderDrawer = results.render`. So the ~13 `showResult(…)` call sites AND `rerender`'s
+  `renderDrawer()` read BYTE-UNCHANGED; only `workflowFacts` changed (→ `results.hasResults()` / `results.hasCurrent()`).
+  `reshowResult`/`resultState`/`setResultColCollapsed` are fully internal (only reached from `renderDrawer`) → not exposed.
+- **Stayed in the root:** `_branchSig` + `_lastColIds` (the verdict-badge cache + track bar use them too) → handed to the
+  drawer via ctx; the ~13 verdict-producing analyses (they call the `showResult` facade). `canvas.setVerdict` now appears 0×
+  in algebra-ui.mjs and 3× in the module (showResult + reshowResult) — the honest-labeling routing invariant, made stronger.
+- **Net followed the code.** `algebra-results-drawer.test.ts`: the pure `resultStateOf` tests unchanged (still on `UI`); the
+  structural invariants (only showResult/reshowResult touch the canvas, the `(track,sig)` key, the stale-demotion, the
+  surfaced cap) **repointed SRC → the module**; **NEW** assertion pins `canvas.setVerdict` count = 0 in algebra-ui.mjs; the
+  `rerender`-calls-renderDrawer and results-not-autosaved pins **stay on SRC** (both hold through the facade). Mutation-
+  verified: flipping the demotion (`stale: true`→`false`) in the module fails the "demotes it" test; reverted byte-identically.
+- **Green bar:** build/typecheck/lint(+dep:check **591 modules**)/test exit 0; `pnpm test` **2223 / 262** (no test delta —
+  repoint + 1 new assertion). Diff: algebra-ui.mjs −95 net (subsystem out) + the new module. Cut
+  `refactor/p3-d1d-results-drawer`; PR → refactor/main.
+- **Next: D1d seam 3** — sidebar wiring / pickers, or the inspector+canvas surface — one behavior-preserving PR behind the nets.

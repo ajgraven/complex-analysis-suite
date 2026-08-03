@@ -365,3 +365,10 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   op-runner net +1 Gröbner keepStatus case (net-first, green pre-refactor); tier6 setBusy-mechanism pin reads the module.
   Mutation-verified (guard() break → 2 net fails, reverted via Edit). Green: build/typecheck/lint(+dep:check 590)/test —
   **2223/262**. Next: seam 2 (verdict + results).
+- **2026-08-03 · stage p3-d1d-results-drawer (PR → refactor/main):** **Phase 3 D1d seam 2 (QD-ALG-1) — behavior-preserving.**
+  Extracted the results-drawer subsystem (`_results` history keyed by (track,branchSig); showResult/reshowResult/resultState/
+  renderDrawer/setResultColCollapsed) from the ~4046-line closure to `algebra-results-drawer.mjs` (ctx-injected
+  `createResultsDrawer`). Facade: `const showResult = results.showResult` + `const renderDrawer = results.render` keep the ~13
+  call sites + rerender BYTE-unchanged; workflowFacts → results.hasResults()/hasCurrent(). Net repointed SRC→module for the
+  structural invariants (+ a new "0 direct canvas.setVerdict in the root" pin); resultStateOf + rerender/autosave stay on SRC.
+  Mutation-verified (break demotion → net fails). Green: build/typecheck/lint(+dep:check 591)/test — **2223/262**. Next: seam 3.
