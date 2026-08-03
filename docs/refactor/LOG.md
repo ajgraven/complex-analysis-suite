@@ -1131,3 +1131,18 @@
   Cut `refactor/p4-ui-seam`; PR → refactor/main.
 - **Next: Phase 4 stage 2+** — lift chunks of bootQdUi() into `installX(uiCtx)` factory modules (DOM-wiring / cross-tab / help)
   until ui.mjs is a thin composition root, behind the seam's importability net + browser CI.
+
+## 2026-08-03 — Phase 4 PAUSED at the seam (user decision) + a correction
+- **CORRECTION to the p4-ui-seam entry above.** While scoping stage 2, verified what the `browser` CI job actually runs:
+  `test:browser` = `packages/gpu` + `apps/complex-dynamics` **WebGL2/GLSL shader** harnesses. It does **NOT** load the QD app,
+  navigate tabs, or run `bootQdUi()`. There is **no** Playwright/e2e test for `apps/quadrature-domains` at all. So the seam
+  entry's "the real-app boot … is covered by the browser CI job" (and #220's PR note) were **wrong** — that job is GPU shaders.
+  `ui.mjs`'s only coverage is `build` (vite *bundles* it — not a runtime boot) + the new import-without-boot net.
+- **Implication → Phase 4 lifts PAUSED.** The stage-1 seam was safe because it was a **verbatim wrap** (body byte-unchanged). A
+  factory *lift* is not: it changes dependency resolution at runtime (closure var → `uiCtx.X`), so it can introduce a boot
+  regression that passes ALL of CI and only fails in a real browser. A jsdom boot net is blocked (jsdom has no WebGL2 for
+  `new DomainPlot($('#canvas'))`); a real net needs a Playwright QD harness that doesn't exist. Under **binding net-first**, the
+  lifts cannot proceed without that net. Presented the finding + options; **user chose: pause Phase 4 at the seam.**
+- **Net state of the engagement (all merged, green @2234/262):** Phases 1–2 ✓, Phase 3 (D1a–c) ✓, D1d (4 seams) ✓, F1 ✓,
+  Phase 4 D2 **seam** ✓. Deferred/paused: the D2 factory lifts (need a Playwright QD boot harness), the inspector (composition
+  core), E1 (state/lifecycle). Remaining plan work: **Phase 5 (E2)** — mechanical folderization of the 58 flat `app/*.mjs`.

@@ -29,7 +29,8 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - Read order for context: `docs/refactor/{COMPLETION-PLAN,PLAN,STATE,LOG,ISSUES}.md`.
 
 ## Phase / stage
-- **Phase D COMPLETE** (D1d closed at 4 seams — inspector = composition core, not a seam). **▶ Phase 4 (D2: ui.mjs → composition root) IN PROGRESS — stage 1 (testability seam) merged.**
+- **Phase D COMPLETE** (D1d closed at 4 seams — inspector = composition core, not a seam). **Phase 4 (D2) PAUSED at the seam
+  (user 2026-08-03): stage 1 (the ui.mjs testability seam) is merged; the factory lifts are DEFERRED — no QD boot net (see risks).**
 - **COMPLETION PLAN committed & APPROVED (2026-08-01)** → `docs/refactor/COMPLETION-PLAN.md`. Sequence: **Phase 1** (F1
   dependency-cruiser + A1 residuals) → **Phase 2** (source-text→behavioral net, QD-ALG-3) → **Phase 3** (D1a sidebar-as-data
   / D1b runOp → **re-eval gate** → D1c verdict-unify / **D1d split**) → **Phase 4** (D2 ui.mjs→root) → **Phase 5** (E2
@@ -45,7 +46,7 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   `-dom` splits (#206–#209), all mutation-verified. Remaining source-text tests are not D1a-brittle → stay node-source. Detail in LOG.
 - Cadence: merge on green (delegated). `APPROVED: PLAN.md v1` + `APPROVED: D1c verdict-unification` + `APPROVED: D1b doSolveRadical guard`.
   Roadmap: A✓ / B✓ / C✓ / **D✓ (Phase 1✓; Phase 2✓; Phase 3 D1a–c✓; D1d seams 1–4✓, seam-5 scoped=composition-core → closed)**
-  → **▶ Phase 4 (D2): ui.mjs seam✓ → [stage 2+ installX factories]** / E (E1 deferred, E2=Phase 5) / **F1✓**.
+  → **Phase 4 (D2): ui.mjs seam✓ [factory lifts PAUSED — no QD boot net]** → [Phase 5 (E2) or wrap] / E (E1 deferred, E2=Phase 5) / **F1✓**.
 - **▶ PHASE 3 (D1 — installAlgebra decomposition), behind the Phase-2 net. User go-aheads 2026-08-02. Full detail per stage in LOG.**
   · **D1a COMPLETE** — #210 (full-DOM fingerprint net) + #211 (mountSidebar `#alg-sections` → `SIDEBAR_SECTIONS` data +
   `renderSection`, bodies verbatim). Behavior-preserving (fingerprint + mutation + a pre-flight `normalize()`-equal oracle).
@@ -75,17 +76,21 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **✅ D1d DONE — 4 behavior-preserving seams (full detail in LOG), each net-first + mutation-verified:** op-runner (#216;
   `algebra-op-runner.mjs`), results-drawer (#217; facade-aliased, "0 direct setVerdict" pin), picker (#218; ctx-free
   `createPickerManager`), autosave (#219; `createAutosaver`). installAlgebra ~4085→~3849. Seam 5 (inspector) = composition core, not extracted.
-- **▶ Phase 4 (D2) — ui.mjs → composition root.** Stage 1 (testability seam) MERGED (#220): the 1891-line body wrapped in
-  bootQdUi() + a #canvas guard (12-insertion diff, body BYTE-unchanged) ⇒ importable without booting; browser CI proves the real
-  boot. Stage 2+ lift bootQdUi chunks into installX(uiCtx) factories. NOTE: ui.mjs isn't jsdom-nettable beyond importability, so
-  each lift's behavioral verification leans on the **browser CI** job (+ the seam's import net).
+- **Phase 4 (D2) — PAUSED at the seam (user 2026-08-03).** Stage 1 MERGED (#220): the 1891-line body wrapped in bootQdUi() +
+  a #canvas guard (12-insertion diff, body BYTE-unchanged) ⇒ importable without booting. The seam is sound by construction
+  (verbatim wrap; guard true via the static #canvas before the deferred main.mjs). **FINDING that stopped the lifts: there is NO
+  QD-app boot test** — the `browser` CI job is GPU/WebGL shaders (packages/gpu + complex-dynamics), NOT the QD app; jsdom can't
+  boot the canvas/WebGL app; there is no Playwright for QD. The factory lifts change dependency resolution at runtime (closure →
+  uiCtx.X), which a verbatim wrap does not — so they carry a boot-regression risk that passes ALL of CI, with NO net to catch it.
+  Net-first (binding) therefore blocks them. **(NB: #220's PR note "browser CI confirms the real boot" was inaccurate — that was
+  the shader job.)** Resume the lifts only behind a real QD boot harness (Playwright loading app/index.html).
 
 ## Next concrete steps
-1. **Phase 4 D2 stage 2 — lift the CROSS-TAB bridge (UNDERWAY, user "Proceed" 2026-08-03).** From bootQdUi():
-   `QD.Direct._setPlotBoundary/_setPlotOverlay/_sendHToInverseTab` + `QD_UI.snapshotScenario/loadScenarioIntoQdTab` (~160 lines —
-   the file's own "cross-tab hooks") → a new `QD_UI.installCrossTab(uiCtx)` (the installX pattern used ~10× in ui.mjs). Ensure its
-   deps (buildHData/buildNormalization/markAsCustom/plot) are on uiCtx at install; behind the import net + browser CI. Then stage 3 (help/chrome mounts), etc.
-2. Order: A✓ B✓ C✓ → **D✓ → Phase 4 (D2: ui.mjs seam✓ → installX factories) → Phase 5 (E2)**. E1 deferred.
+1. **DECIDE the next phase (Phase 4 lifts are paused — no QD boot net).** Remaining plan work: **Phase 5 (E2)** — codemod the
+   58 flat `app/*.mjs` into `core/ solvers/ qd/ …` folders, rewrite imports, regenerate main.mjs; mechanical, LOW-but-broad risk,
+   char = `vite build` + full suite green. Or **wrap up** (Phases 1–3 + F1 + D1d(4) + the D2 seam are all shipped). Deferred:
+   the Phase-4 factory lifts (cross-tab / help-chrome mounts → installX(uiCtx)) — resume ONLY behind a Playwright QD boot harness.
+2. Order: A✓ B✓ C✓ → **D✓ → Phase 4 (D2 seam✓ [lifts paused]) → [Phase 5 (E2) or wrap]**. E1 deferred.
 
 ## Resume commands
 ```
