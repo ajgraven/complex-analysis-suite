@@ -20,6 +20,10 @@ const SRC = readFileSync(
 // the surfaced cap) follow the code there. The rerender + autosave pins stay on algebra-ui.mjs.
 const DRAWER = readFileSync(
   fileURLToPath(new URL("../app/algebra/algebra-results-drawer.mjs", import.meta.url)), "utf8");
+// The autosave core moved to its own module in D1d seam 4; the "results are not autosaved" cross-check
+// below follows `function _writeAutosave` there.
+const AUTOSAVE = readFileSync(
+  fileURLToPath(new URL("../app/algebra/algebra-autosave.mjs", import.meta.url)), "utf8");
 
 let UI: any;
 beforeAll(async () => {
@@ -121,7 +125,7 @@ describe("results are recorded, not overwritten", () => {
   it("is session-scoped, not autosaved", () => {
     // Restoring a verdict across a reload restores a claim about a system state that may no
     // longer exist — the same false attribution with a longer fuse.
-    const auto = SRC.slice(SRC.indexOf("function _writeAutosave"), SRC.indexOf("function _writeAutosave") + 1400);
+    const auto = AUTOSAVE.slice(AUTOSAVE.indexOf("function _writeAutosave"), AUTOSAVE.indexOf("function _writeAutosave") + 1400);
     expect(auto).not.toContain("_results");
   });
 });

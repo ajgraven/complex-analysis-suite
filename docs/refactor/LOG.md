@@ -1075,3 +1075,28 @@
   Diff: algebra-ui.mjs −59 net + the new module. Cut `refactor/p3-d1d-picker`; PR → refactor/main.
 - **Next: D1d seam 4** — the next unit (scope first): autosave/session-persistence (coherent, ~110 lines, store+localStorage
   coupling) or the inspector+canvas surface. installAlgebra continues toward a composition root.
+
+## 2026-08-03 — Phase 3 · Stage p3-d1d-autosave (D1d seam 4: extract the session-autosave core) — PR opened
+- **BEHAVIOR-PRESERVING (D1d seams need no token).** Fourth seam. The "session persistence" region held THREE concerns; the
+  clean cut is the **autosave CORE** — the debounced localStorage mirror (`AUTOSAVE_KEY`/`MAX`/`DEBOUNCE` +
+  `_saveTimer`/`_saveBlocked` + `_writeAutosave` / `scheduleAutosave` / `_readAutosave`, ~33 lines) — into
+  **`app/algebra/algebra-autosave.mjs`**, a ctx-injected `createAutosaver({ store, toast }) → { schedule, read, clear, flush,
+  isBlocked }`. **Left in the root** (they call the core through its API, not the other way): `offerRestore` (the restore-offer
+  banner — heavily UI-coupled: importDAG/rerender/refreshPickers/seedFromCurrent/$) and `confirmReplace` (a *different* concern
+  — the replace-a-derivation prompt — that merely shared the region). `_agoStr` stays with offerRestore.
+- **Wiring — 4 touch points.** `const autosave = createAutosaver({ store, toast })`; rerender's mutation hook →
+  `autosave.schedule()`; offerRestore → `autosave.read()` (the saved session) + `autosave.clear()` (Discard); the beforeunload
+  handler → `autosave.flush()` + `if (store.size && autosave.isBlocked())` (warn only when the save could not be taken). The
+  write/schedule/read bodies are verbatim; `_writeAutosave` keeps its name so the drawer cross-check can follow it.
+- **Net was BUILT (net-first).** The core had no dedicated coverage (only the drawer net cross-checks that `_writeAutosave`
+  doesn't serialize the results). NEW **`algebra-autosave.test.ts`** (3 jsdom tests, sidebar-only mount + seedMoments +
+  jsdom localStorage): a mutation schedules a **DEBOUNCED** write (asserts NOT written synchronously), a `beforeunload` flush
+  commits it, and the payload is a faithful restorable session (exported DAG + node/column/timestamp summary). **Green on
+  pre-refactor first.** The results-drawer net's "results are not autosaved" pin (a `_writeAutosave` slice) **repointed SRC →
+  the autosave module** (else it would go vacuous — `indexOf` of a moved function returns −1).
+- **Mutation-verified:** misdirecting the write (`setItem(KEY…)`→`setItem(KEY+'X'…)`) fails the flush-commits + faithful-session
+  tests; reverted byte-identically.
+- **Green bar:** build/typecheck/lint(+dep:check **595 modules**)/test exit 0; `pnpm test` **2232 / 262** (+3 autosave net).
+  Diff: algebra-ui.mjs −27 net + the new module. Cut `refactor/p3-d1d-autosave`; PR → refactor/main.
+- **Next: D1d seam 5** (or a pause/re-eval) — the remaining large tenant is the inspector+canvas surface (bigger, more coupled;
+  op-runner net partially covers it). Four clean seams in, installAlgebra ≈3850 lines and steadily a composition root.

@@ -94,6 +94,7 @@ import { _pronyLatex, buildHForm } from './algebra-latex.mjs';   // pure math→
 import { createOpRunner } from './algebra-op-runner.mjs';   // the single-flight worker-op runner (D1d seam 1): busy lifecycle + guard + cancel
 import { createResultsDrawer } from './algebra-results-drawer.mjs';   // the results drawer (D1d seam 2): keyed verdict history + honest staleness
 import { createPickerManager } from './algebra-picker.mjs';   // the variable-picker widget (D1d seam 3): dropdown checklist + single-open coordinator
+import { createAutosaver } from './algebra-autosave.mjs';   // the session-autosave core (D1d seam 4): debounced localStorage mirror
 const QD = _QD;
 
 (function () {
@@ -807,7 +808,7 @@ const QD = _QD;
     function rerender() {
       if (canvas) canvas.render(store, latexOf);
       renderInspector(canvas ? canvas.getSelection() : []); buildBreadcrumb(); buildTrackBar();
-      renderSuggestions(); renderHypotheses(); renderSteps(); renderVarLens(); refreshUndoButtons(); scheduleAutosave(); refreshStatusBar();
+      renderSuggestions(); renderHypotheses(); renderSteps(); renderVarLens(); refreshUndoButtons(); autosave.schedule(); refreshStatusBar();
       // Every stored result's state is relative to the CURRENT branch and frontier, and this is
       // the function that changes both. Without redrawing here, a reduction would leave results
       // still labelled "current" for a system that no longer exists.
@@ -847,44 +848,12 @@ const QD = _QD;
     }
 
     // ---- session persistence (autosave / restore) ----------------------------
-    // The store is purely in-memory, so a reload, a crash, or a stray Ctrl+W destroyed an entire
-    // derivation with no warning and no recovery — and QD is a PWA, where a service-worker update
-    // is itself a routine reload path. exportDAG()/importDAG() already round-trip a faithful
-    // session, so autosave is just a debounce around them. localStorage rather than IndexedDB
-    // because it is synchronous: the beforeunload flush below is then reliable.
-    const AUTOSAVE_KEY = 'qd-algebra-autosave-v1';
-    const AUTOSAVE_MAX = 2000000;      // ~2MB; past this we stop rather than thrash the quota
-    const AUTOSAVE_DEBOUNCE = 800;
-    let _saveTimer = null, _saveBlocked = false;
-    function _writeAutosave() {
-      _saveTimer = null;
-      try {
-        if (!store.size) { localStorage.removeItem(AUTOSAVE_KEY); _saveBlocked = false; return; }
-        const payload = JSON.stringify({ at: Date.now(), nodes: store.size, columns: store.maxColumn() + 1, dag: store.exportDAG() });
-        if (payload.length > AUTOSAVE_MAX) {
-          // Say so ONCE: silently not saving is exactly the failure this feature exists to prevent.
-          if (!_saveBlocked) { _saveBlocked = true; toast('This derivation is too large to autosave — use Download DAG (JSON) to keep it.', { kind: 'error' }); }
-          return;
-        }
-        localStorage.setItem(AUTOSAVE_KEY, payload);
-        _saveBlocked = false;
-      } catch (e) {
-        // Private mode / quota / disabled storage. Never break the workspace over a save, but do
-        // remember it failed so the beforeunload guard below still warns.
-        _saveBlocked = true;
-      }
-    }
-    function scheduleAutosave() {
-      if (_saveTimer) clearTimeout(_saveTimer);
-      _saveTimer = setTimeout(_writeAutosave, AUTOSAVE_DEBOUNCE);
-    }
-    function _readAutosave() {
-      try {
-        const raw = localStorage.getItem(AUTOSAVE_KEY); if (!raw) return null;
-        const p = JSON.parse(raw);
-        return (p && p.dag) ? p : null;
-      } catch (e) { return null; }
-    }
+    // The autosave CORE (the localStorage debounce: _writeAutosave / schedule / read + the
+    // _saveTimer/_saveBlocked/quota state) moved to ./algebra-autosave.mjs — D1d seam 4. offerRestore
+    // (the restore-offer UI) + the beforeunload flush stay below and drive it via read / clear / flush /
+    // isBlocked. exportDAG()/importDAG() round-trip a faithful session; autosave is just a debounce
+    // around them, in localStorage (synchronous, so the beforeunload flush is reliable).
+    const autosave = createAutosaver({ store, toast });
     function _agoStr(ms) {
       const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
       if (s < 90) return s + 's ago';
@@ -925,7 +894,7 @@ const QD = _QD;
       toast(what + ' would replace your derivation — confirm in the sidebar.', { kind: 'error' });
     }
     function offerRestore() {
-      const saved = _readAutosave(); if (!saved || store.size) return false;
+      const saved = autosave.read(); if (!saved || store.size) return false;
       const panel = $('#controls-algebra'); if (!panel) return false;
       const strip = document.createElement('div');
       strip.id = 'alg-restore'; strip.className = 'algebra-restore';
@@ -944,7 +913,7 @@ const QD = _QD;
         toast('Restored ' + saved.columns + ' column' + (saved.columns === 1 ? '' : 's') + ' from your last session.');
       });
       no.addEventListener('click', () => {
-        try { localStorage.removeItem(AUTOSAVE_KEY); } catch (e) { /* nothing to clear */ }
+        autosave.clear();
         strip.remove();
         if (!store.size && activeEnv) seedFromCurrent(); else rerender();
       });
@@ -959,8 +928,8 @@ const QD = _QD;
     // Flush a pending save, and warn only when the work is genuinely unrecoverable — i.e. the
     // autosave could not take it. If it saved, the reload is recoverable and a prompt is noise.
     window.addEventListener('beforeunload', (ev) => {
-      if (_saveTimer) { clearTimeout(_saveTimer); _writeAutosave(); }
-      if (store.size && _saveBlocked) { ev.preventDefault(); ev.returnValue = ''; }
+      autosave.flush();
+      if (store.size && autosave.isBlocked()) { ev.preventDefault(); ev.returnValue = ''; }
     });
 
     // ---- auto-detected variable-symmetry suggestions ("popup the moment an equation forces a
