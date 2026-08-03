@@ -17,7 +17,7 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **Net-first:** no refactor without a passing characterization net pinned to PRE-refactor code; **mutation-verify** every
   net (break a guard → confirm the intended test fails → revert byte-identically via Edit, NOT git). Never widen a tolerance.
 - **Green bar** (must be 0-exit before every PR): `pnpm build && pnpm typecheck && pnpm lint && pnpm test` (lint includes
-  `dep:check`). Currently **2229 / 262**.
+  `dep:check`). Currently **2232 / 262**.
 - **Git constraints (VERBATIM):** never `git reset --hard`, `git checkout -- <path>`, `git clean -fd`, `git commit --amend`,
   or force-push. If history seems to need rewriting, STOP and ASK. `git push -u origin <branch>`; retry ≤4× backoff 2/4/8/16s.
 - **Cadence:** integration branch `refactor/main`; each stage on `refactor/<slug>` → ONE PR → `refactor/main`; **merge on
@@ -36,15 +36,15 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   folderize 58 files). **E1 DEFERRED.** Governing decisions (2026-08-01): pragmatic path; defer E1; grant D1c token (see Working rules).
 - **installAlgebra decomposition (QD-ALG-1):** 9 PURE carve-outs MERGED (#195–#203) into 4 companion modules + a badge
   lift, ~69 char tests — a **prelude** (pre-Phase-3). Phase 3 D1a/D1b/D1c have since landed (see the Phase 3 block below);
-  **D1d (the module split) UNDERWAY — seams 1–3 (op-runner, results-drawer, picker) merged; seam 4 next.** installAlgebra
-  ≈**3880 lines** (file 4,622 after carving op-runner (83) + results-drawer (157) + picker (85) modules).
+  **D1d (the module split) UNDERWAY — seams 1–4 (op-runner, results-drawer, picker, autosave) merged; seam 5 next / re-eval.**
+  installAlgebra ≈**3849 lines** (file 4,591 after carving op-runner (83) + results-drawer (157) + picker (85) + autosave (70)).
 - **✅ PHASE 1 COMPLETE** — #204 (QD-ALG-7 `edges` getter → `.slice()` + QD-SOLV-6 → one exported `IDENTITY_TOL`) + #205
   (F1 **dependency-cruiser** gate: `no-circular`/`no-package-to-app`/`no-cross-app`, `dep:check` folded into `pnpm lint`
   + CI + deploy gate). Net-first + mutation-verified. Detail in LOG.
 - **✅ PHASE 2 COMPLETE (QD-ALG-3)** — the D1a behavioural net: harness `vitest/_algebra-mount.ts` + per-file markup→jsdom
   `-dom` splits (#206–#209), all mutation-verified. Remaining source-text tests are not D1a-brittle → stay node-source. Detail in LOG.
 - Cadence: merge on green (delegated). `APPROVED: PLAN.md v1` + `APPROVED: D1c verdict-unification` + `APPROVED: D1b doSolveRadical guard`.
-  Roadmap: A✓ / B✓ / C✓ / **D (Phase 1✓; Phase 2✓; Phase 3 D1: D1a✓ D1b✓ D1c✓ → D1d: seam-1 op-runner✓ seam-2 results-drawer✓ seam-3 picker✓ → [seam-4 next])** / E (E1 deferred, E2=Phase 5) / **F1✓**.
+  Roadmap: A✓ / B✓ / C✓ / **D (Phase 1✓; Phase 2✓; Phase 3 D1: D1a✓ D1b✓ D1c✓ → D1d: seams 1–4 (op-runner, results-drawer, picker, autosave)✓ → [seam-5 inspector / re-eval])** / E (E1 deferred, E2=Phase 5) / **F1✓**.
 - **▶ PHASE 3 (D1 — installAlgebra decomposition), behind the Phase-2 net. User go-aheads 2026-08-02. Full detail per stage in LOG.**
   · **D1a COMPLETE** — #210 (full-DOM fingerprint net) + #211 (mountSidebar `#alg-sections` → `SIDEBAR_SECTIONS` data +
   `renderSection`, bodies verbatim). Behavior-preserving (fingerprint + mutation + a pre-flight `normalize()`-equal oracle).
@@ -57,42 +57,42 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   handlers share ONE builder); `_verdictBadge` chip stays. Authorized string delta logged; net = classifyVerdict's pinned
   prose + a NEW source guard (both route through it; drifted strings gone); mutation-verified. Detail in LOG.
   · **D1d UNDERWAY — one behavior-preserving seam per PR.** Split `installAlgebra` into ctx-injected sub-units, behind the
-  nets. **Seams 1–3 MERGED:** op-runner (#216), results-drawer (#217, facade-aliased), picker widget (#218, ctx-free + net
-  BUILT net-first). Seam 4 next.
+  nets. **Seams 1–4 MERGED:** op-runner (#216), results-drawer (#217, facade-aliased), picker (#218, ctx-free), autosave core
+  (#219, net BUILT net-first). Seam 5 (inspector) next, or re-eval — it's a step up in coupling/risk.
 
 ## Branches / PR
-- Integration `refactor/main` @ **9d68c9c** (#210–#218 merged). Tree clean. **No open PR.**
-- Merged stage PRs (41): A1 #178 … #217, **p3-d1d-picker #218 (9d68c9c)**.
+- Integration `refactor/main` @ **645f2bb** (#210–#219 merged). Tree clean. **No open PR.**
+- Merged stage PRs (42): A1 #178 … #218, **p3-d1d-autosave #219 (645f2bb)**.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at 9d68c9c (#218 merged): build/typecheck/lint(+`dep:check`, 593 modules)/test exit 0;
-  `pnpm test` **2229 / 262**.
+- **`refactor/main` — ALL GREEN** at 645f2bb (#219 merged): build/typecheck/lint(+`dep:check`, 595 modules)/test exit 0;
+  `pnpm test` **2232 / 262**.
 
 ## Uncommitted / unverified
 - Nothing uncommitted. This STATE edit advances `refactor/main`.
 
 ## Known blockers / risks
-- **D1d in progress (user 2026-08-02: "Full split, op-runner seam first").** installAlgebra = 164 densely-coupled fns, wide
-  mutable shared state (`_abort`/`activeEnv`/`canvas`/selection/pickers) — higher risk than D1a–C's leaf extractions; most ops
-  activeEnv-gated so net = source-guards + the built nets. One behavior-preserving seam per PR; gate note applies — stop if
-  cost/benefit turns.
-- **✅ Seams 1–3 MERGED — all behavior-preserving + mutation-verified (full detail in LOG):**
+- **D1d in progress (user 2026-08-02: "Full split, op-runner seam first").** installAlgebra = densely-coupled fns + wide
+  mutable shared state; one behavior-preserving seam per PR, net-first + mutation-verified. Gate note: stop if cost/benefit turns.
+- **✅ Seams 1–4 MERGED — all behavior-preserving + mutation-verified (full detail in LOG):**
   · **Seam 1 op-runner (#216)** — `_abort`/`_busy` + setBusy/begin/end/guard/cancel → `algebra-op-runner.mjs`; ~25 ops call
     `ops.*`. Subtlety: `end()` clears status vs `end({keepStatus:true})` (doGroebner/doAutoSolve write their own).
   · **Seam 2 results-drawer (#217)** — `_results` verdict history keyed by (track,branchSig) → `algebra-results-drawer.mjs`;
     facade-aliased showResult/renderDrawer ⇒ ~13 sites + rerender byte-unchanged; net repointed + "0 direct setVerdict" pin.
   · **Seam 3 picker (#218)** — dropdown-checklist widget + single-open coordinator → `algebra-picker.mjs`, **ctx-free**
     `createPickerManager()` (no store/canvas/$/toast — the cleanest cut). Behavioural net BUILT net-first; shortcuts-table repointed.
+  · **Seam 4 autosave (#219)** — localStorage debounce (write/schedule/read + quota state) → `algebra-autosave.mjs`,
+    `createAutosaver({store,toast})`; offerRestore/confirmReplace stay in root, drive it via the API. Net BUILT net-first; drawer cross-check repointed.
 
 ## Next concrete steps
-1. **D1d-SEAM-4 — the next unit (scope first).** Candidates: autosave/session-persistence (coherent ~110 lines, store +
-   localStorage coupling, needs a net built) OR the inspector+canvas surface (op-runner net partially covers it). Investigate
-   boundary + net coverage before designing; net-first + mutation-verify; one behavior-preserving PR.
-2. Then further seams — one PR each. Order: A✓ B✓ C✓ →
-   **D (D1a✓ → D1b✓ → D1c✓ → D1d: seam1✓ seam2✓ seam3✓ → seam4 → …)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
+1. **D1d-SEAM-5 (inspector) OR re-eval gate — user's call (flagged 2026-08-03).** The remaining large tenant is the
+   inspector+canvas surface (node-detail panel + actions, tied to canvas selection / store / ops) — bigger + more coupled than
+   seams 1–4; op-runner net partially covers it. A step up in risk class. If proceeding: scope boundary + net coverage first;
+   net-first + mutation-verify. Alternatively judge D1d far enough and move to Phase 4 (D2: ui.mjs → composition root).
+2. Order: A✓ B✓ C✓ → **D (D1a✓ → D1b✓ → D1c✓ → D1d: seams1–4✓ → [seam5 inspector / re-eval])** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
 git fetch && git checkout refactor/main && git pull
-pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2229/262
+pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2232/262
 ```
