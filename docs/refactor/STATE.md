@@ -36,15 +36,15 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   folderize 58 files). **E1 DEFERRED.** Governing decisions (2026-08-01): pragmatic path; defer E1; grant D1c token (see Working rules).
 - **installAlgebra decomposition (QD-ALG-1):** 9 PURE carve-outs MERGED (#195–#203) into 4 companion modules + a badge
   lift, ~69 char tests — a **prelude** (pre-Phase-3). Phase 3 D1a/D1b/D1c have since landed (see the Phase 3 block below);
-  **D1d (the module split) UNDERWAY — seam 1 (op-runner) merged; seam 2 next.** installAlgebra ≈**4046 lines**
-  (algebra-ui.mjs:715–~4760; file 4,788 after the op-runner carve to algebra-op-runner.mjs, 83 lines).
+  **D1d (the module split) UNDERWAY — seams 1 (op-runner) + 2 (results-drawer) merged; seam 3 next.** installAlgebra
+  ≈**3943 lines** (file 4,685 after carving algebra-op-runner.mjs (83) + algebra-results-drawer.mjs (157)).
 - **✅ PHASE 1 COMPLETE** — #204 (QD-ALG-7 `edges` getter → `.slice()` + QD-SOLV-6 → one exported `IDENTITY_TOL`) + #205
   (F1 **dependency-cruiser** gate: `no-circular`/`no-package-to-app`/`no-cross-app`, `dep:check` folded into `pnpm lint`
   + CI + deploy gate). Net-first + mutation-verified. Detail in LOG.
 - **✅ PHASE 2 COMPLETE (QD-ALG-3)** — the D1a behavioural net: harness `vitest/_algebra-mount.ts` + per-file markup→jsdom
   `-dom` splits (#206–#209), all mutation-verified. Remaining source-text tests are not D1a-brittle → stay node-source. Detail in LOG.
 - Cadence: merge on green (delegated). `APPROVED: PLAN.md v1` + `APPROVED: D1c verdict-unification` + `APPROVED: D1b doSolveRadical guard`.
-  Roadmap: A✓ / B✓ / C✓ / **D (Phase 1✓; Phase 2✓; Phase 3 D1: D1a✓ D1b✓ D1c✓ → D1d: seam-1 op-runner✓ → [seam-2 verdict+results next])** / E (E1 deferred, E2=Phase 5) / **F1✓**.
+  Roadmap: A✓ / B✓ / C✓ / **D (Phase 1✓; Phase 2✓; Phase 3 D1: D1a✓ D1b✓ D1c✓ → D1d: seam-1 op-runner✓ seam-2 results-drawer✓ → [seam-3 next])** / E (E1 deferred, E2=Phase 5) / **F1✓**.
 - **▶ PHASE 3 (D1 — installAlgebra decomposition), behind the Phase-2 net. User go-aheads 2026-08-02. Full detail per stage in LOG.**
   · **D1a COMPLETE** — #210 (full-DOM fingerprint net) + #211 (mountSidebar `#alg-sections` → `SIDEBAR_SECTIONS` data +
   `renderSection`, bodies verbatim). Behavior-preserving (fingerprint + mutation + a pre-flight `normalize()`-equal oracle).
@@ -57,14 +57,15 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   handlers share ONE builder); `_verdictBadge` chip stays. Authorized string delta logged; net = classifyVerdict's pinned
   prose + a NEW source guard (both route through it; drifted strings gone); mutation-verified. Detail in LOG.
   · **D1d UNDERWAY — one behavior-preserving seam per PR.** Split `installAlgebra` into ctx-injected sub-units, behind the
-  Phase-2/op-runner/verdict nets. **Seam 1 (op-runner) MERGED (#216, 874dff3).** Seam 2 (verdict+results) next.
+  nets. **Seam 1 (op-runner) MERGED (#216).** **Seam 2 (results-drawer) MERGED (#217, 0a0e097)** — facade-aliased
+  showResult/renderDrawer keep the ~13 call sites + rerender byte-unchanged; net repointed SRC→module. Seam 3 next.
 
 ## Branches / PR
-- Integration `refactor/main` @ **874dff3** (#210–#216 merged). Tree clean. **No open PR.**
-- Merged stage PRs (39): A1 #178 … #215, **p3-d1d-op-runner #216 (874dff3)**.
+- Integration `refactor/main` @ **0a0e097** (#210–#217 merged). Tree clean. **No open PR.**
+- Merged stage PRs (40): A1 #178 … #216, **p3-d1d-results-drawer #217 (0a0e097)**.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at 874dff3 (#216 merged): build/typecheck/lint(+`dep:check`, 590 modules)/test exit 0;
+- **`refactor/main` — ALL GREEN** at 0a0e097 (#217 merged): build/typecheck/lint(+`dep:check`, 591 modules)/test exit 0;
   `pnpm test` **2223 / 262**.
 
 ## Uncommitted / unverified
@@ -78,16 +79,21 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **✅ Seam 1 (op-runner) MERGED (#216, 874dff3).** `_abort`/`_busy` + setBusy/begin/end/guard/cancel → `algebra-op-runner.mjs`
   (`createOpRunner`); ~25 ops call `ops.*`. Non-rename subtlety: `end()` (clears status) vs `end({keepStatus:true})`
   (doGroebner/doAutoSolve set their own terminal status). Net-first (+1 Gröbner keepStatus case) + mutation-verified.
+- **✅ Seam 2 (results-drawer) MERGED (#217, 0a0e097).** The `_results` verdict history keyed by (track,branchSig) +
+  showResult/reshowResult/resultState/renderDrawer/setResultColCollapsed → `algebra-results-drawer.mjs` (`createResultsDrawer`).
+  Facade (`const showResult = results.showResult`, `renderDrawer = results.render`) ⇒ ~13 call sites + rerender byte-unchanged;
+  workflowFacts → results.hasResults()/hasCurrent(). `_branchSig`/`_lastColIds` stay in root (verdict cache), passed via ctx.
+  Net repointed SRC→module + NEW "0 direct canvas.setVerdict in root" pin (routing invariant). Mutation-verified (demotion).
 
 ## Next concrete steps
-1. **D1d-SEAM-2 — verdict + results rendering.** Lift the verdict-card / results-drawer DOM (showResult / showError /
-   renderDrawer + the verdict-card builders) into a ctx-injected unit, behind the classify-verdict + honest-labels + #210
-   nets. Scope the blast radius first; net-first + mutation-verify; one behavior-preserving PR. (Token only if a seam changes behavior.)
-2. Then seam 3 (sidebar-wire), inspector+canvas, ops — one PR each, behind the nets. Order: A✓ B✓ C✓ →
-   **D (D1a✓ → D1b✓ → D1c✓ → D1d: seam1✓ → seam2 verdict+results → …)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
+1. **D1d-SEAM-3 — the next coherent unit (scope first).** Candidates: sidebar wiring / pickers (variable + elim pickers, the
+   workflow-steps strip) OR the inspector+canvas surface. Investigate boundary + net coverage before designing; net-first +
+   mutation-verify; one behavior-preserving PR. (showError/clearError = 86 trivial DOM sites, deliberately NOT a seam — low value.)
+2. Then further seams — one PR each. Order: A✓ B✓ C✓ →
+   **D (D1a✓ → D1b✓ → D1c✓ → D1d: seam1✓ seam2✓ → seam3 → …)** → Phase 4 (D2) → E2 (Phase 5). E1 deferred.
 
 ## Resume commands
 ```
 git fetch && git checkout refactor/main && git pull
-pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2222/262
+pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2223/262
 ```
