@@ -372,3 +372,11 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   call sites + rerender BYTE-unchanged; workflowFacts → results.hasResults()/hasCurrent(). Net repointed SRC→module for the
   structural invariants (+ a new "0 direct canvas.setVerdict in the root" pin); resultStateOf + rerender/autosave stay on SRC.
   Mutation-verified (break demotion → net fails). Green: build/typecheck/lint(+dep:check 591)/test — **2223/262**. Next: seam 3.
+- **2026-08-03 · stage p3-d1d-picker (PR → refactor/main):** **Phase 3 D1d seam 3 (QD-ALG-1) — behavior-preserving.** The
+  cleanest cut: the dropdown-checklist picker widget (`buildPicker` + the `_openMenu`/`_closeOpenMenu` single-open coordinator,
+  ~65 lines) → `algebra-picker.mjs`, a **ctx-FREE** `createPickerManager() → { build, closeOpen }` (no store/canvas/$/toast).
+  3 call sites: `const pickers = createPickerManager()`, `pickers.build(…)` ×2, `pickers.closeOpen()`; `friendlyVar` stays.
+  **Net BUILT net-first** (algebra-picker.test.ts, 6 jsdom tests — open/toggle/single-open/Esc/outside-click; green pre-refactor)
+  since the widget had no runtime coverage; shortcuts-table's escapability+aria pins repointed SRC→module (its context-menu pins
+  stay). Mutation-verified (neutralize coordinator hide → both nets fail). Green: build/typecheck/lint(+dep:check 593)/test —
+  **2229/262**. Next: seam 4.

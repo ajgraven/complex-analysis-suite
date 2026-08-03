@@ -1052,3 +1052,26 @@
   repoint + 1 new assertion). Diff: algebra-ui.mjs −95 net (subsystem out) + the new module. Cut
   `refactor/p3-d1d-results-drawer`; PR → refactor/main.
 - **Next: D1d seam 3** — sidebar wiring / pickers, or the inspector+canvas surface — one behavior-preserving PR behind the nets.
+
+## 2026-08-03 — Phase 3 · Stage p3-d1d-picker (D1d seam 3: extract the variable-picker widget) — PR opened
+- **BEHAVIOR-PRESERVING (D1d seams need no token).** Third seam, and the cleanest cut yet: the dropdown-checklist picker
+  (`buildPicker`) + its single-open-menu coordinator (`_openMenu`/`_closeOpenMenu`) — a self-contained, **reusable** UI widget
+  (two consumers: the eliminate + assume-real pickers) — lifted out of the ~65-line region into
+  **`app/algebra/algebra-picker.mjs`**, a **ctx-FREE** factory `createPickerManager() → { build, closeOpen }`. The widget
+  touches **no** store / canvas / `$` / toast — only DOM globals + the caller's `opts` — so it needs zero injected context.
+- **Wiring (3 call sites).** installAlgebra builds `const pickers = createPickerManager()`; the two sidebar wirings become
+  `pickers.build(host, opts)`; the outside-click handler calls `pickers.closeOpen()`. `friendlyVar` (the app-specific label
+  fn, uses `latexPlain`) stays in the root and is passed as `opts.friendly`. buildPicker's body + the coordinator are verbatim.
+- **Net was BUILT (net-first), not just repointed.** The widget had NO runtime coverage — the #210 snapshot pins only the
+  static host, and algebra-shortcuts-table pinned only the coordinator's SOURCE shape. NEW **`algebra-picker.test.ts`** (6
+  jsdom tests, sidebar-only mount + seedMoments) drives it: open → one checkbox per current variable, toggle → select + relabel
+  the button, one-menu-open-at-a-time, Esc + outside-click close. **Green on pre-refactor code first** (committed separately),
+  then the carve. algebra-shortcuts-table's escapability + aria-honesty pins (`ev.key !== 'Escape'`, `btn.focus()`,
+  `function _closeOpenMenu`, the single direct `_openMenu.classList.add('hidden')`) **repointed SRC → the module**; its
+  context-menu pins (role menu/menuitem, `_ctxReturn`, ArrowDown — a DIFFERENT component) **stay on SRC**.
+- **Mutation-verified:** neutralizing the coordinator's hide (`add('hidden')`→`add('hidden-x')`) fails BOTH the behavioural net
+  (single-open + Esc + outside-click) AND the structural pin (count→0); reverted byte-identically.
+- **Green bar:** build/typecheck/lint(+dep:check **593 modules**)/test exit 0; `pnpm test` **2229 / 262** (+6 picker net).
+  Diff: algebra-ui.mjs −59 net + the new module. Cut `refactor/p3-d1d-picker`; PR → refactor/main.
+- **Next: D1d seam 4** — the next unit (scope first): autosave/session-persistence (coherent, ~110 lines, store+localStorage
+  coupling) or the inspector+canvas surface. installAlgebra continues toward a composition root.
