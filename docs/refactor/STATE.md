@@ -29,9 +29,8 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - Read order for context: `docs/refactor/{COMPLETION-PLAN,PLAN,STATE,LOG,ISSUES}.md`.
 
 ## Phase / stage
-- **✅ PHASE 5 (E2 folderize) COMPLETE — #221 (aaf6d49).** All 57 flat `app/*.mjs` moved into `core/ solvers/ qd/ sym/ analysis/
-  ui/` (main.mjs = entry); 427 specifier rewrites (codemod) + 4 bare-name loaders hand-fixed (bootstrap `relocate()`) + 3 load-
-  order lists kept in-order. Behavior-preserving (net = build + full suite); tests 2234 UNCHANGED. **← the plan's last stage. Detail in LOG/ISSUES.**
+- **✅ PHASE 5 (E2 folderize) COMPLETE — #221 (aaf6d49).** All 57 flat `app/*.mjs` → `core/ solvers/ qd/ sym/ analysis/ ui/`
+  (main.mjs = entry); 427 codemod rewrites + 4 bare-name loaders (bootstrap `relocate()`) + 3 load-order lists in-order. Behavior-preserving; tests 2234 UNCHANGED. **Plan's last stage; detail in LOG/ISSUES.**
 - **Phase D COMPLETE** (D1d closed at 4 seams — inspector = composition core, not a seam). **Phase 4 (D2) PAUSED at the seam
   (user 2026-08-03): stage 1 (the ui.mjs testability seam) is merged; the factory lifts are DEFERRED — no QD boot net (see risks).**
 - **COMPLETION PLAN committed & APPROVED (2026-08-01)** → `docs/refactor/COMPLETION-PLAN.md`. Sequence: **Phase 1** (F1
