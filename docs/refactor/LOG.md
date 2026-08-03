@@ -1194,3 +1194,26 @@
   navigation. Subfolder READMEs (direct/ schwarz/ …) had no stale moved-file paths.
 - **Green bar:** build/typecheck/lint/test exit 0; `pnpm test` **2234 / 265** (docs + one comment; zero behavior change).
   Cut `refactor/p5-e2-docs`; PR → refactor/main.
+
+## 2026-08-03 — Boot harness · Stage 1 (QD module-graph boot net, Vitest browser mode) — PR opened
+- **NEW coverage — the enabler that unblocks the paused D2 lifts.** The QD app booted on import with ZERO executable coverage
+  (QD-UI-5 / QD-TEST-2): the `browser` CI job is GPU shaders (packages/gpu + CD), jsdom can't give a WebGL2/canvas context, so
+  nothing ran the real boot — even E2 (427 rewritten imports) shipped with the app's boot unverified. First real QD boot net.
+- **What shipped (mirrors the CD/gpu browser pattern; zero new CI infra):** `apps/quadrature-domains/vitest.browser.config.ts`
+  (Playwright/Chromium, headless, NOT registered in the workspace so `pnpm test` never launches a browser; `include` narrowed to
+  `vitest/browser/*.browser.test.ts`) + a `test:browser` script appended to the root `test:browser` (the existing CI `browser`
+  job runs it). `boot.browser.test.ts`: assembles the app's real DOM from `index.html`'s `<body>` (Vite `?raw`), imports the real
+  `main.mjs` graph → `bootQdUi()`, and pins: QD_UI boot hooks register (mirror of the no-DOM node seam test), `#canvas` is
+  2D-claimed by DomainPlot (`webgl2===null` proves it — a fresh canvas returns webgl2), static tab bar + `#controls-qd` present,
+  and NO console.error / uncaught error/rejection during boot. `smoke.browser.test.ts` guards the WebGL2 premise so that
+  null-check isn't vacuous.
+- **Empirically built + mutation-verified.** Two bring-up findings fixed: the container's pre-provisioned Chromium is a different
+  revision than the installed Playwright wants → the config points at `/opt/pw-browsers/chromium` only when it exists (CI installs
+  its own, revision-matched); and Vite mid-run dep-optimization reloaded the test → `optimizeDeps.include:[katex,mathjs]`. My
+  WebGL2-canvas assumption was WRONG (DomainPlot is a 2D canvas) — the test caught it, and the assertion is now the meaningful
+  2D-claimed signal. **Mutation-verified:** breaking a `main.mjs` import (`./core/complex.mjs` → bad path) turns the suite RED (boot
+  import throws); reverted byte-identically → green.
+- **Green bar:** build/typecheck/lint(+dep:check)/test exit 0; `pnpm test` **2234 / 265** (browser config unregistered → node gate
+  unchanged); `pnpm test:browser` (gpu + CD + **QD**) green (QD: 6). Cut `refactor/qd-boot-harness-s1`; PR → refactor/main.
+- **Next: Stage 2** (full-page Playwright against the served build — tab switching + boot-loading clears + a canonical solve); the
+  paused **D2 factory lifts** are now net-backed and resumable.

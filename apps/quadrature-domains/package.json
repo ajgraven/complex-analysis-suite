@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "test": "node app/node-test.js",
+    "test:browser": "vitest run --config vitest.browser.config.ts",
     "lint": "eslint app --max-warnings 0",
     "lint:fix": "eslint app --fix",
     "typecheck": "tsc -p tsconfig.json",
