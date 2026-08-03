@@ -5,9 +5,9 @@
 // INDEPENDENT numeric oracle — Q must vanish on the numerically sampled boundary φ(∂𝔻), and
 // the extracted rational Schwarz function must satisfy S(w)=w̄ there.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
-import "../app/qd-equations.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
+import "../app/qd/qd-equations.mjs";
 
 const S: any = (_QD as any).Sym;
 const QE: any = (_QD as any).QDEquations;

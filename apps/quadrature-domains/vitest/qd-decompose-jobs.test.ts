@@ -9,8 +9,8 @@
 //      loses that flag turns "a lower bound" into "the total" — the exact class of over-claim the
 //      project's honest-labeling guardrail exists to stop.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
 const { MPoly } = S;

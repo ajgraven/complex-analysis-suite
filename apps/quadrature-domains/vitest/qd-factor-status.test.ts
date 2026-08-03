@@ -3,8 +3,8 @@
 // response to both was to render nothing, making a certificate, a cap, and a missing feature look
 // identical. `status` + `caps` separate them; `ok` keeps its old meaning so callers are unaffected.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
 const { MPoly } = S;

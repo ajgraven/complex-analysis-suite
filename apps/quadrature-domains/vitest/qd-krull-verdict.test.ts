@@ -3,8 +3,8 @@
 // ambient variable count. This guards the runJob worker-protocol threading (store + UI are thin
 // passthroughs verified in-browser).
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
 const { MPoly, runJob } = S;

@@ -2,8 +2,8 @@
 // factorizing Buchberger — split V(I)=⋃V(I+⟨fᵢ⟩) on each factoring basis element, radicalize principal
 // leaves, prune by ideal containment. Components compared by their canonical reduced-Gröbner key.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
 const { MPoly, monomialOrder, buchberger, reduceGroebner, minimalPrimes } = S;

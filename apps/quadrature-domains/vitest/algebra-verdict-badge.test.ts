@@ -13,8 +13,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 let verdictBadge: (r: unknown) => { badge: string; state: string; title: string } | null;
 
 beforeAll(async () => {
-  await import("../app/solver.mjs");
-  const reg: any = await import("../app/ui-registry.mjs");
+  await import("../app/solvers/solver.mjs");
+  const reg: any = await import("../app/ui/ui-registry.mjs");
   await import("../app/algebra/algebra-ui.mjs");
   verdictBadge = reg.QD_UI._verdictBadge;
 });

@@ -1,6 +1,6 @@
 // ESM (Phase 2 port) — twin of schwarz/schwarz-common.js (classic stays frozen). Registers onto the QD namespace.
-import { Complex } from '../complex.mjs';
-import _QD from '../solver.mjs';
+import { Complex } from '../core/complex.mjs';
+import _QD from '../solvers/solver.mjs';
 // =============================================================================
 // schwarz-common.js -- Schwarz-reflection dynamics core.
 //

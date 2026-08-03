@@ -1,5 +1,5 @@
 // ESM (Phase 2 port) — twin of schwarz/schwarz-analysis.js (classic stays frozen). Registers onto the QD namespace.
-import _QD from '../solver.mjs';
+import _QD from '../solvers/solver.mjs';
 // =============================================================================
 // schwarz-analysis.js — Phase S4: Schwarz-function analysis utilities.
 //

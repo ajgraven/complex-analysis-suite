@@ -1,5 +1,5 @@
 // ESM (Phase 2 port) — twin of algebra/algebra-store.js (classic stays frozen). Registers onto the QD namespace.
-import _QD from '../solver.mjs';
+import _QD from '../solvers/solver.mjs';
 // =============================================================================
 // algebra-store.js -- Equation-DAG data model for the Algebra workspace
 // (QD.AlgebraStore). Pure, DOM-free, and unit-testable: it holds the nodes

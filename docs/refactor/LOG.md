@@ -1146,3 +1146,33 @@
 - **Net state of the engagement (all merged, green @2234/262):** Phases 1–2 ✓, Phase 3 (D1a–c) ✓, D1d (4 seams) ✓, F1 ✓,
   Phase 4 D2 **seam** ✓. Deferred/paused: the D2 factory lifts (need a Playwright QD boot harness), the inspector (composition
   core), E1 (state/lifecycle). Remaining plan work: **Phase 5 (E2)** — mechanical folderization of the 58 flat `app/*.mjs`.
+
+## 2026-08-03 — Phase 5 · Stage p5-e2-folderize (E2: folderize the 58 flat app/*.mjs) — PR opened
+- **MECHANICAL, behavior-preserving; net = build + full suite (pure path edits, zero behavior delta).** Moved the 57 remaining
+  flat `apps/quadrature-domains/app/*.mjs` (main.mjs stays as the entry) into six domain folders by existing prefix + a
+  primitives/analysis split for the 16 prefix-less singletons: **ui/** (17: the `ui-*` set + ui.mjs), **solvers/** (19: `solver*`
+  + primary-solution/-solver-worker, joining the pre-existing solvers/{define-family,seeds}), **qd/** (3: qd-constraints/
+  equations/varscheme), **sym/** (2: sym-core/-radical — symbolic algebra), **core/** (7 primitives: complex, poly-helpers,
+  taylor, parse-h, vendor-globals, qol, and qd — the namespace façade), **analysis/** (9 φ-analysis features: univalence,
+  cusps, critical-set, faber-analysis, observables, symmetry, family-sweep, riemann-latex, thesis-examples). `git mv` → **57
+  renames preserved** (14 R + 43 RM).
+- **Codemod (scratchpad/e2-codemod.mjs), not by-hand.** A uniform relative-STRING rewrite (NOT import-statement parsing) over
+  all 308 app/** + vitest/** source files: for every `'./…'`/`'../…'` literal that resolves to a real file, recompute it from the
+  importer's NEW dir to the target's NEW dir — so it catches `import` / `export … from` / dynamic `import()` / `new URL(…,
+  import.meta.url)` worker strings / `readFileSync` SRC-net paths alike. **427 specifiers rewritten in 179 files.** Two edges the
+  approach got right that a naive path-swap misses: a MOVED file's runtime worker string `const ENTRY='./workers/solver-worker-
+  entry.mjs'` (primary-solver-worker → solvers/) lengthened to `../workers/…`; and the 10 `solvers/seeds/*` `../../solver.mjs` →
+  `../solver.mjs` (solver.mjs moved INTO solvers/, i.e. CLOSER to the seeds).
+- **Four bare-name loaders the codemod (by design) skipped, hand-fixed:** `app/test/bootstrap.js` (the vm-harness manifest,
+  keyed by classic names) — added a disk-probing `relocate(bare)` wrapping its single `importApp` choke-point (keeps the
+  `loadInCtx` skip-keys on the classic `.js` names, zero duplicated mapping); `app/test/parse-check.test.js` `path.join(APP_DIR,
+  'ui.mjs')` → `'ui','ui.mjs'`; `vitest/parse-h-poly-modes.test.ts` `join(…,'app','ui-modes.mjs')` → +`'ui'`. (index.html →
+  ./main.mjs only; vite.config entry = app/index.html; no cross-app refs — all unaffected.)
+- **The 3 hand-maintained load-order lists stay in-order:** main.mjs (paths repointed line-by-line), workers/solver-graph.mjs,
+  and bootstrap.js — folderization changed PATHS only, never import order, so the side-effect boot order is preserved by construction.
+- **Green bar:** build (vite resolves the whole graph incl. worker URLs) / typecheck / lint (+dep:check — intra-app move, package/
+  app boundaries untouched) / test exit 0; `pnpm test` **2234 / 265** (tests UNCHANGED — E2 adds/removes none; the `/262`
+  file-count in recent records was stale, already 265 at the seam stage after the picker/autosave/seam nets). Cut
+  `refactor/p5-e2-folderize`; PR → refactor/main.
+- **Next: Phase 5 complete → the plan's remaining work is shipped** (Phases 1–3, F1, D1d×4, the D2 seam, E2). Deferred: the D2
+  factory lifts (need a Playwright QD boot harness), the inspector (composition core), E1, further correspondence families.

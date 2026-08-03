@@ -72,7 +72,7 @@ async function freshSCW(WorkerImpl: unknown = FakeWorker): Promise<SCW> {
   if (WorkerImpl === null) delete (globalThis as Record<string, unknown>).Worker;
   else (globalThis as Record<string, unknown>).Worker = WorkerImpl as unknown;
   FakeWorker.last = null;
-  const QD = (await import("../app/solver.mjs")).default as Record<string, unknown>;
+  const QD = (await import("../app/solvers/solver.mjs")).default as Record<string, unknown>;
   await import("../app/schwarz/schwarz-cpu-worker.mjs");
   return QD.SchwarzCpuWorker as SCW;
 }

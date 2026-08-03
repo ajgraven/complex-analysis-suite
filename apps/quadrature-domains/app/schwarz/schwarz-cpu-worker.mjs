@@ -49,7 +49,7 @@
 // NATIVE ES module worker (workers/schwarz-worker-entry.mjs) instead of the runtime-Blob
 // bundle. isUsable() gates on Worker availability, so Node/file:// fall back to the
 // caller's in-process renderer. Registers onto the QD namespace.
-import _QD from '../solver.mjs';
+import _QD from '../solvers/solver.mjs';
 import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
 
 (function () {

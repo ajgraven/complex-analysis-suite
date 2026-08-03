@@ -2,8 +2,8 @@
 // quotient/colon — the exact toolkit that rounds out saturate. Ideal equality is checked
 // by the canonical REDUCED Gröbner basis over a fixed order (unique ⇒ byte-identical).
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
 const { MPoly, monomialOrder, buchberger, reduceGroebner, inIdeal, eliminationIdeal, idealIntersect, idealQuotient } = S;

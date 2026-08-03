@@ -3,10 +3,10 @@
 // doCertifyUnivalence feeds its existence/uniqueness verdict — the certified count matches the
 // Hermite real count by construction, so a clustered-root undercount can't sneak into the verdict.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
-import "../app/faber-analysis.mjs";
-import "../app/qd-equations.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
+import "../app/analysis/faber-analysis.mjs";
+import "../app/qd/qd-equations.mjs";
 import "../app/algebra/algebra-store.mjs";
 
 const QE: any = (_QD as any).QDEquations;

@@ -4,9 +4,9 @@
 // merges a clustered real root. Goldens: exact rational solutions, rigorous brackets for irrationals,
 // near-coincident-root separation, an empty real set, and a cross-check against solveByEigenvalues.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
-import "../app/faber-analysis.mjs"; // registers the eigen-solver's root finder for the cross-check
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
+import "../app/analysis/faber-analysis.mjs"; // registers the eigen-solver's root finder for the cross-check
 
 const S: any = (_QD as any).Sym;
 const { MPoly, solveRealCertified, solveByEigenvalues } = S;

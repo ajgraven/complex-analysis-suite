@@ -23,8 +23,8 @@
 //                      freshly re-imported module so the latches start clean. This is
 //                      the only way to reach the spawn-failure paths at all.
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/primary-solver-worker.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/solvers/primary-solver-worker.mjs";
 import { installWorkerThreadsWorker, workerStats } from "./helpers/web-worker-shim.mjs";
 
 const PSW: any = (_QD as any).PrimarySolverWorker;
@@ -208,13 +208,13 @@ function makeStubWorker(state: { failures: number }) {
  */
 async function freshPSW(): Promise<any> {
   vi.resetModules();
-  const qd: any = (await import("../app/solver.mjs")).default;
+  const qd: any = (await import("../app/solvers/solver.mjs")).default;
   // The whole solver cluster, not just the core: the main-thread FALLBACK calls
   // QD.solveInverseQD on this thread, which needs every family registered — exactly what the
   // browser's main thread has, and what solver-worker-entry gets inside a worker. Importing only
   // solver.mjs would leave the fallback unable to solve, making the fallback tests vacuous.
   await import("../app/workers/solver-graph.mjs");
-  await import("../app/primary-solver-worker.mjs");
+  await import("../app/solvers/primary-solver-worker.mjs");
   return qd.PrimarySolverWorker;
 }
 

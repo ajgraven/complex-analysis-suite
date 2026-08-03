@@ -11,9 +11,9 @@
 // (0,0) interior (|z|=0<1, genuine) and (1,1) on the unit circle (|z|=1, spurious). Saturation must
 // take realCount 2 → 1 and keep z1=0.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
-import "../app/qd-equations.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
+import "../app/qd/qd-equations.mjs";
 import "../app/algebra/algebra-store.mjs";
 
 const S: any = (_QD as any).Sym;

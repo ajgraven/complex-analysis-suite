@@ -18,19 +18,19 @@ beforeAll(async () => {
   // Families self-register on import, and the seed modules must precede their solvers — the same
   // ordered chain main.mjs uses. Without it the registry is empty and selectFamily returns
   // undefined, so this setup is load-bearing, not ceremony.
-  const QD = (await import("../app/solver.mjs")).default as Record<string, unknown>;
+  const QD = (await import("../app/solvers/solver.mjs")).default as Record<string, unknown>;
   await import("../app/solvers/seeds/seeds-qd.mjs");
-  await import("../app/solver-qd.mjs");
+  await import("../app/solvers/solver-qd.mjs");
   await import("../app/solvers/seeds/seeds-uqd.mjs");
-  await import("../app/solver-uqd.mjs");
-  await import("../app/solver-lqd-common.mjs");
+  await import("../app/solvers/solver-uqd.mjs");
+  await import("../app/solvers/solver-lqd-common.mjs");
   await import("../app/solvers/seeds/seeds-lqd.mjs");
-  await import("../app/solver-lqd.mjs");
+  await import("../app/solvers/solver-lqd.mjs");
   await import("../app/solvers/seeds/seeds-uqd-lqd.mjs");
-  await import("../app/solver-uqd-lqd.mjs");
-  await import("../app/solver-pqd-common.mjs");
+  await import("../app/solvers/solver-uqd-lqd.mjs");
+  await import("../app/solvers/solver-pqd-common.mjs");
   await import("../app/solvers/seeds/seeds-pqd.mjs");
-  await import("../app/solver-pqd.mjs");
+  await import("../app/solvers/solver-pqd.mjs");
   selectFamily = QD.selectFamily as typeof selectFamily;
   registry = QD.Family as Record<string, Family>;
 });

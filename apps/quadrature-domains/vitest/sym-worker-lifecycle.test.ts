@@ -10,9 +10,9 @@
 // terminates its worker (asserted deterministically via the shim's terminate counter,
 // not a flaky wall-clock timing).
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
-import "../app/faber-analysis.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
+import "../app/analysis/faber-analysis.mjs";
 import "../app/algebra/sym-worker.mjs";
 import { installWorkerThreadsWorker, workerStats } from "./helpers/web-worker-shim.mjs";
 

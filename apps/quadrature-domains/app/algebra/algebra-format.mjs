@@ -12,8 +12,8 @@
 // `ratApprox` export), so we import it here to guarantee ratApprox is present when fmtRat runs — the same
 // namespace installAlgebra reached via `QE = QD.QDEquations`. Carved VERBATIM (behavior-preserving; pinned by
 // vitest/algebra-exact-format.test.ts).
-import _QD from '../solver.mjs';
-import '../qd-equations.mjs';   // side-effect: registers QD.QDEquations (incl. ratApprox) on the singleton
+import _QD from '../solvers/solver.mjs';
+import '../qd/qd-equations.mjs';   // side-effect: registers QD.QDEquations (incl. ratApprox) on the singleton
 
 // Exact ℚ(i) string for one real component (same continued-fraction rationalizer the store uses),
 // so the user sees 0.2 → 1/5 before applying. Falls back to the plain float if ratApprox is unavailable.

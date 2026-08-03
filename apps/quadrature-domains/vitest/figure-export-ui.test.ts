@@ -18,9 +18,9 @@
 //     plot records the renderToCanvas call so the size + transparent flag are
 //     asserted.
 import { describe, it, expect, beforeEach } from "vitest";
-import { QD_UI } from "../app/ui-registry.mjs";
-import "../app/ui-domain-plot.mjs"; // side effect: QD_UI.installDomainPlot
-import "../app/ui-figure-export.mjs"; // side effect: QD_UI.installFigureExport
+import { QD_UI } from "../app/ui/ui-registry.mjs";
+import "../app/ui/ui-domain-plot.mjs"; // side effect: QD_UI.installDomainPlot
+import "../app/ui/ui-figure-export.mjs"; // side effect: QD_UI.installFigureExport
 
 const REG: any = QD_UI as any;
 
@@ -305,7 +305,7 @@ describe("Figure card wiring (jsdom)", () => {
 
   it("DEFAULT_FIGURE keys stay in sync with state.figure", async () => {
     const api = REG.installFigureExport(makeUi({}, null).ui);
-    const stateMod: any = await import("../app/ui-state.mjs");
+    const stateMod: any = await import("../app/ui/ui-state.mjs");
     expect(Object.keys(api.DEFAULT_FIGURE).sort()).toEqual(Object.keys(stateMod.state.figure).sort());
   });
 

@@ -10,11 +10,11 @@
 // reduce once, and the convexity condition is gone. Verified in-browser before the fix (a Convex
 // constraint's `> 0` node vanished across a saturate, with nothing said).
 import { describe, it, expect, beforeAll } from "vitest";
-import _QD from "../app/solver.mjs";
+import _QD from "../app/solvers/solver.mjs";
 
 let Store: any;
 beforeAll(async () => {
-  await import("../app/sym-core.mjs");
+  await import("../app/sym/sym-core.mjs");
   await import("../app/algebra/algebra-store.mjs");
   Store = (_QD as any).AlgebraStore;
 });
@@ -52,7 +52,7 @@ describe("the store reports what a basis replacement consumed", () => {
 describe("the drop is recorded permanently, not just toasted", () => {
   let PU: any;
   beforeAll(async () => {
-    const reg: any = await import("../app/ui-registry.mjs");
+    const reg: any = await import("../app/ui/ui-registry.mjs");
     await import("../app/algebra/algebra-ui.mjs");
     PU = reg.QD_UI.PROV_UI;
   });

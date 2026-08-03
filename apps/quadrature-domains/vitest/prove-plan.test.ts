@@ -17,11 +17,11 @@
 // C3 triangle prove routes. Read the block headers rather than this list — it is the part most
 // likely to fall behind next.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
-import "../app/faber-analysis.mjs";      // Durand–Kerner (solveZeroDim / certified solve)
-import "../app/qd-equations.mjs";        // QDEquations (QE)
-import "../app/qd-constraints.mjs";      // QDConstraints (QC): phiPrimeNumerator, boundaryDoublePointCount
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
+import "../app/analysis/faber-analysis.mjs";      // Durand–Kerner (solveZeroDim / certified solve)
+import "../app/qd/qd-equations.mjs";        // QDEquations (QE)
+import "../app/qd/qd-constraints.mjs";      // QDConstraints (QC): phiPrimeNumerator, boundaryDoublePointCount
 import "../app/algebra/algebra-store.mjs";
 import * as PROVE from "../app/algebra/prove-plan.mjs";
 

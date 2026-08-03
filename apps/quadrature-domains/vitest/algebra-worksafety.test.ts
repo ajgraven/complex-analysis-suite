@@ -5,11 +5,11 @@
 // that make a tool feel trustworthy (your work survives, mistakes are reversible, failures are
 // legible) were each missing a surface even though the machinery existed underneath.
 import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
-import _QD from "../app/solver.mjs";
+import _QD from "../app/solvers/solver.mjs";
 
 let QoL: any, Store: any;
 beforeAll(async () => {
-  await import("../app/qol.mjs");
+  await import("../app/core/qol.mjs");
   await import("../app/algebra/algebra-store.mjs");
   QoL = (_QD as any).QoL;
   Store = (_QD as any).AlgebraStore;

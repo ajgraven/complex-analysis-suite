@@ -17,7 +17,7 @@ let frag: string;
 
 beforeAll(async () => {
   const QD: { Schwarz: { _glHelpers: typeof glHelpers; _shaders: { frag: string } } } = (
-    await import("../app/solver.mjs")
+    await import("../app/solvers/solver.mjs")
   ).default as never;
   await import("../app/schwarz/schwarz-webgl.mjs"); // registers Schwarz._glHelpers + Schwarz._shaders
   glHelpers = QD.Schwarz._glHelpers;

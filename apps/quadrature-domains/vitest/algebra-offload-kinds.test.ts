@@ -17,8 +17,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 
 let S: any;
 beforeAll(async () => {
-  const QD = (await import("../app/solver.mjs")).default;
-  await import("../app/sym-core.mjs");   // populates QD.Sym (runJob, triangularize, resolvent, …)
+  const QD = (await import("../app/solvers/solver.mjs")).default;
+  await import("../app/sym/sym-core.mjs");   // populates QD.Sym (runJob, triangularize, resolvent, …)
   S = QD.Sym;
 });
 

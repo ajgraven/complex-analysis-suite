@@ -17,16 +17,16 @@ import path from "node:path";
 let modeAllowsPoly: (mode: string) => boolean;
 
 beforeAll(async () => {
-  const QD = (await import("../app/solver.mjs")).default as Record<string, unknown>;
-  await import("../app/poly-helpers.mjs");
-  await import("../app/parse-h.mjs");
+  const QD = (await import("../app/solvers/solver.mjs")).default as Record<string, unknown>;
+  await import("../app/core/poly-helpers.mjs");
+  await import("../app/core/parse-h.mjs");
   modeAllowsPoly = QD.modeAllowsPoly as typeof modeAllowsPoly;
 });
 
 /** Every mode descriptor in ui-modes.mjs, with the `cards.poly` it declares. */
 function descriptorPolyFlags(): Array<[string, boolean]> {
   const src = fs.readFileSync(
-    path.join(__dirname, "..", "app", "ui-modes.mjs"),
+    path.join(__dirname, "..", "app", "ui", "ui-modes.mjs"),
     "utf8",
   );
   const out: Array<[string, boolean]> = [];

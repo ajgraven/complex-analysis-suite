@@ -18,7 +18,7 @@
 // =============================================================================
 
 // ESM (Phase 2 port) — twin of param-slice/param-slice-render.js (classic stays frozen). QD_UI factory module.
-import { QD_UI } from '../ui-registry.mjs';
+import { QD_UI } from '../ui/ui-registry.mjs';
 import ParamSlice from '../param-slice/param-slice-common.mjs';
 
 (function (global) {

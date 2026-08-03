@@ -14,16 +14,16 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const SRC = readFileSync(fileURLToPath(new URL("../app/ui.mjs", import.meta.url)), "utf8");
+const SRC = readFileSync(fileURLToPath(new URL("../app/ui/ui.mjs", import.meta.url)), "utf8");
 
 describe("ui.mjs is importable without booting (D2 seam)", () => {
   it("importing ui.mjs with no DOM does not throw and does not boot", async () => {
     // No `document` in the node env → the boot guard's first clause is false → bootQdUi() must not run.
     expect(typeof document, "this test must run without a DOM").toBe("undefined");
-    const reg: any = await import("../app/ui-registry.mjs");
+    const reg: any = await import("../app/ui/ui-registry.mjs");
     // The boot registers these QD_UI hooks; they must be absent before (and, post-seam, after) import.
     expect(reg.QD_UI.snapshotScenario, "boot hook absent before boot").toBeUndefined();
-    await import("../app/ui.mjs"); // THE SEAM: must not throw, must not boot
+    await import("../app/ui/ui.mjs"); // THE SEAM: must not throw, must not boot
     expect(reg.QD_UI.snapshotScenario, "bootQdUi must NOT have run (no DOM)").toBeUndefined();
     expect(reg.QD_UI.loadScenarioIntoQdTab, "bootQdUi must NOT have run (no DOM)").toBeUndefined();
   });

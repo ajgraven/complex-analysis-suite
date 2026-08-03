@@ -27,8 +27,8 @@ const AUTOSAVE = readFileSync(
 
 let UI: any;
 beforeAll(async () => {
-  await import("../app/solver.mjs");
-  const reg: any = await import("../app/ui-registry.mjs");
+  await import("../app/solvers/solver.mjs");
+  const reg: any = await import("../app/ui/ui-registry.mjs");
   await import("../app/algebra/algebra-ui.mjs");
   UI = reg.QD_UI;
 });

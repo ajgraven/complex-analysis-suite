@@ -24,7 +24,7 @@
 // NATIVE ES module worker (workers/sym-worker-entry.mjs) instead of the runtime-Blob bundle,
 // and falls back to the imported main-thread QD.Sym.runJob when Worker is unavailable
 // (Node tests, file://). Registers QD.SymWorker.
-import _QD from '../solver.mjs';
+import _QD from '../solvers/solver.mjs';
 import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
 
 (function () {

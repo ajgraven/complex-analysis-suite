@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Taylor } from "../../app/taylor.mjs";
+import { Taylor } from "../../app/core/taylor.mjs";
 
 // Golden + invariant tests for the ESM Taylor leaf. taylor.mjs imports complex.mjs, so this
 // also exercises ESM intra-graph resolution.

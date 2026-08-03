@@ -11,30 +11,30 @@
 // call it — hData arrives already parsed over the wire), matching the old bundle's
 // effective contents for the worker's purposes.
 // =============================================================================
-import _QD from '../solver.mjs';
-import '../poly-helpers.mjs';
-import '../solver-faber.mjs';
+import _QD from '../solvers/solver.mjs';
+import '../core/poly-helpers.mjs';
+import '../solvers/solver-faber.mjs';
 import '../solvers/seeds/seeds-qd.mjs';
-import '../solver-qd.mjs';
+import '../solvers/solver-qd.mjs';
 import '../solvers/seeds/seeds-uqd.mjs';
-import '../solver-uqd.mjs';
-import '../solver-lqd-common.mjs';
+import '../solvers/solver-uqd.mjs';
+import '../solvers/solver-lqd-common.mjs';
 import '../solvers/seeds/seeds-lqd.mjs';
-import '../solver-lqd.mjs';
+import '../solvers/solver-lqd.mjs';
 import '../solvers/seeds/seeds-lqd-singular.mjs';
-import '../solver-lqd-singular.mjs';
+import '../solvers/solver-lqd-singular.mjs';
 import '../solvers/seeds/seeds-uqd-lqd.mjs';
-import '../solver-uqd-lqd.mjs';
+import '../solvers/solver-uqd-lqd.mjs';
 import '../solvers/seeds/seeds-uqd-lqd-singular.mjs';
-import '../solver-uqd-lqd-singular.mjs';
-import '../solver-pqd-common.mjs';
+import '../solvers/solver-uqd-lqd-singular.mjs';
+import '../solvers/solver-pqd-common.mjs';
 import '../solvers/seeds/seeds-pqd.mjs';
-import '../solver-pqd.mjs';
+import '../solvers/solver-pqd.mjs';
 import '../solvers/seeds/seeds-pqd-singular.mjs';
-import '../solver-pqd-singular.mjs';
+import '../solvers/solver-pqd-singular.mjs';
 import '../solvers/seeds/seeds-uqd-pqd.mjs';
-import '../solver-uqd-pqd.mjs';
+import '../solvers/solver-uqd-pqd.mjs';
 import '../solvers/seeds/seeds-uqd-pqd-singular.mjs';
-import '../solver-uqd-pqd-singular.mjs';
+import '../solvers/solver-uqd-pqd-singular.mjs';
 
 export default _QD;

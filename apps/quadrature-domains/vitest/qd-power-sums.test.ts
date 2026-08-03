@@ -2,9 +2,9 @@
 // zero-dim ideal = Σ_{p∈V(I)} v(p)ᵏ (Stickelberger), Newton's identities → the coordinate's
 // univariate characteristic polynomial. Exact ℚ(i) goldens + an evaluate-on-the-solutions oracle.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
-import "../app/faber-analysis.mjs"; // registers QD.FaberAnalysis.polynomialRoots (the eigen-solver's root finder)
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
+import "../app/analysis/faber-analysis.mjs"; // registers QD.FaberAnalysis.polynomialRoots (the eigen-solver's root finder)
 
 const S: any = (_QD as any).Sym;
 const { MPoly, Gaussian, monomialOrder, buchberger, multiplicationMatrix, powerSums,

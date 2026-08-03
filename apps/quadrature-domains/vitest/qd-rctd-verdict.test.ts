@@ -3,8 +3,8 @@
 // serialization round-trip (termList → parseRCTD → polyFromTermList) + the constraint rendering
 // pipeline the UI verdict uses (the UI's latexOf/reimSafeLatex are thin var-name mappers on top).
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 import "../app/algebra/cas-export.mjs";
 
 const S: any = (_QD as any).Sym;

@@ -1,5 +1,5 @@
 // ESM (Phase 2 port) — twin of schwarz/schwarz-forward.js (classic stays frozen). Registers onto the QD namespace.
-import _QD from '../solver.mjs';
+import _QD from '../solvers/solver.mjs';
 // =============================================================================
 // schwarz-forward.js — Phase S5: forward-dynamics kernels.
 //

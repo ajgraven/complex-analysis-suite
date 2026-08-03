@@ -10,12 +10,12 @@
 // re-verification is a net, not a substitute for the rule being right). A simplification that
 // changes a SIGN is the same bug in a quieter costume.
 import { describe, it, expect, beforeAll } from "vitest";
-import _QD from "../app/solver.mjs";
+import _QD from "../app/solvers/solver.mjs";
 
 let S: any, SR: any;
 beforeAll(async () => {
-  await import("../app/sym-core.mjs");
-  await import("../app/sym-radical.mjs");
+  await import("../app/sym/sym-core.mjs");
+  await import("../app/sym/sym-radical.mjs");
   S = (_QD as any).Sym;
   SR = (_QD as any).SymRadical;
 });

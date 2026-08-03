@@ -2,8 +2,8 @@
 // SVG-ready boundary/node points for the Algebra verdict's domain thumbnail (roadmap #3).
 // Driven with the app's real QD.evalPhi on the cardioid map φ = t + ½t².
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 import "../app/workers/solver-graph.mjs"; // registers the QD families (boundedQD) so QD.evalPhi resolves headlessly
 import { domainPlotData, momentPlotData, rationalPlotData, trianglePlotData } from "../app/algebra/domain-mini-plot.mjs";
 

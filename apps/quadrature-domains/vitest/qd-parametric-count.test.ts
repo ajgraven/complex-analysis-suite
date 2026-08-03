@@ -3,8 +3,8 @@
 // its border polynomial reducedDisc_u(f)·lc_u(f), Sturm-isolated critical t-values, and a certified
 // Hermite count on each open interval. Golden bifurcations with known answers.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
 const { MPoly, parametricRealCount1D } = S;

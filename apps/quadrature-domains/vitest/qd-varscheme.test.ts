@@ -4,7 +4,7 @@
 // single source of truth: parse round-trip, the conjugate bar-toggle (self-inverse), non-scheme
 // passthrough, and the exact LaTeX.
 import { describe, it, expect } from "vitest";
-import { parseVar, encodeVar, conjVar, latexVar, plainVar } from "../app/qd-varscheme.mjs";
+import { parseVar, encodeVar, conjVar, latexVar, plainVar } from "../app/qd/qd-varscheme.mjs";
 
 describe("qd-varscheme (conjugate-model variable scheme)", () => {
   const SCHEME = ["A1_2", "Ab1_2", "C3_1", "Cb3_1", "z1", "zb1", "a2", "ab2", "w0", "wb0"];
