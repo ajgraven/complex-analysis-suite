@@ -380,3 +380,11 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   since the widget had no runtime coverage; shortcuts-table's escapability+aria pins repointed SRC→module (its context-menu pins
   stay). Mutation-verified (neutralize coordinator hide → both nets fail). Green: build/typecheck/lint(+dep:check 593)/test —
   **2229/262**. Next: seam 4.
+- **2026-08-03 · stage p3-d1d-autosave (PR → refactor/main):** **Phase 3 D1d seam 4 (QD-ALG-1) — behavior-preserving.** The
+  autosave CORE (localStorage debounce: `_writeAutosave`/`scheduleAutosave`/`_readAutosave` + `_saveTimer`/`_saveBlocked` +
+  KEY/MAX/DEBOUNCE) → `algebra-autosave.mjs`, ctx-injected `createAutosaver({store,toast}) → {schedule,read,clear,flush,
+  isBlocked}`. 4 touch points: rerender→schedule; offerRestore→read+clear; beforeunload→flush+isBlocked. offerRestore (restore
+  UI) + confirmReplace (separate concern) stay in root, driving the core via its API. **Net BUILT net-first**
+  (algebra-autosave.test.ts, 3 jsdom tests — debounced-not-synchronous / beforeunload-flush-commits / faithful-session; green
+  pre-refactor); drawer's "not autosaved" cross-check repointed SRC→module (else vacuous). Mutation-verified (misdirect the
+  write → net fails). Green: build/typecheck/lint(+dep:check 595)/test — **2232/262**. Next: seam 5 (inspector) or re-eval.
