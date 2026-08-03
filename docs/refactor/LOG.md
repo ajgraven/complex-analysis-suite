@@ -1176,3 +1176,21 @@
   `refactor/p5-e2-folderize`; PR → refactor/main.
 - **Next: Phase 5 complete → the plan's remaining work is shipped** (Phases 1–3, F1, D1d×4, the D2 seam, E2). Deferred: the D2
   factory lifts (need a Playwright QD boot harness), the inspector (composition core), E1, further correspondence families.
+
+## 2026-08-03 — Phase 5 · Stage p5-e2-docs (E2 documentation follow-up) — PR opened
+- **DOCS-ONLY follow-up to E2 (#221); no code-logic change.** After the folderize merged, the app's primary navigational doc
+  still described the OLD flat layout. Brought the docs in line with the on-disk structure + marked the issue E2 resolved:
+  · **apps/quadrature-domains/README.md `## File layout`** — rewrote the flat-file tree into the six E2 folders (core/ solvers/
+    qd/ sym/ analysis/ ui/) with per-folder purpose + per-file annotations (kept the existing ones; added the previously-
+    unlisted poly-helpers, qol, qd, vendor-globals, univalence, cusps, riemann-latex, solver-cmax/-continuation/-taylor-common,
+    primary-*, ui-domain-mode/-domain-plot/-geometry/-presets/-state/-registry, qd-varscheme, sym-radical). Plus **15 inline
+    `app/<flat>.mjs` prose refs** → their new folder paths.
+  · **app/main.mjs header** — the stale "GENERATED from asset-manifest.js by scratchpad/gen-main.mjs" claim (neither exists) →
+    an accurate note: HAND-MAINTAINED, import ORDER is significant (mirrored by workers/solver-graph.mjs + test/bootstrap.js),
+    modules live in the six E2 folders.
+  · **ISSUES QD-UI-6 → fixed** (the "flat app/ ignores half-started folder taxonomy" finding — resolved by E2 #221).
+- **Deliberately NOT touched:** the dated review/audit records (docs/review/*, docs/algebra-review/audit/*) and the completed
+  design-plan briefs (MULTIVARIATE_FACTORING.md, …) keep their original path references — point-in-time records, not living
+  navigation. Subfolder READMEs (direct/ schwarz/ …) had no stale moved-file paths.
+- **Green bar:** build/typecheck/lint/test exit 0; `pnpm test` **2234 / 265** (docs + one comment; zero behavior change).
+  Cut `refactor/p5-e2-docs`; PR → refactor/main.

@@ -1,10 +1,14 @@
 // =============================================================================
 // main.mjs -- The page ESM entry (Phase 2 flip). Vite loads THIS instead of the
 // classic asset-manifest.js + document.write loader. It side-effect-imports every
-// page module in PAGE_SCRIPTS order (each attaches onto the QD / QD_UI namespace),
+// page module in dependency order (each attaches onto the QD / QD_UI namespace),
 // then applies the editable UI strings (was an inline <script> after the loader).
 //
-// GENERATED from asset-manifest.js PAGE_SCRIPTS by scratchpad/gen-main.mjs.
+// HAND-MAINTAINED (the asset-manifest.js generator was retired at the flip). The import
+// ORDER below is significant — later modules depend on earlier side-effect registrations;
+// workers/solver-graph.mjs and test/bootstrap.js mirror this same order. Modules live in
+// core/ solvers/ qd/ sym/ analysis/ ui/ (E2 folderization) — keep new imports in dependency
+// order, not alphabetical.
 // =============================================================================
 // Self-hosted mathjs + KaTeX as window.math / window.katex (was CDN <script> tags).
 // MUST be first so the globals exist before the page modules below run.
