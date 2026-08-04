@@ -888,35 +888,9 @@ mountViewToggle();
 // Static cards in index.html; lazy-mounted cards (Direct, Schwarz, Param-slice)
 // wire their own help inside their respective ui modules.
 // -----------------------------------------------------------------------------
-function mountQolHelp() {
-  if (!window.QD || !QD.QoL || !QD.QoL.attachHelp) return;
-  const H = QD.QoL.attachHelp;
-  // All help-popover prose lives in app/ui-strings.js (QD.Strings.help.*) so it
-  // can be edited in one place. Bail quietly if the strings module isn't loaded.
-  const help = QD.Strings && QD.Strings.help;
-  if (!help) return;
-  const headerOf = (cardSelector) => {
-    const card = document.querySelector(cardSelector);
-    return card ? card.querySelector('h2') : null;
-  };
-  // Item 6: an app-level "What is a quadrature domain?" intro, as a "?" next to
-  // the title — the missing on-ramp for a newcomer.
-  const title = document.querySelector('.app-header-row h1');
-  if (title) H(title, help.intro);
-  H(headerOf('#domain-mode-card'), help.domainType);
-  H(headerOf('#h-card'), help.hCard);
-  H(headerOf('#map-params-card'), help.mapParams);
-  H(headerOf('#c-card'), help.cCard);
-  H(headerOf('#solver-settings-card'), help.solverSettings);
-  H(headerOf('#search-options-card'), help.searchOptions);
-  H(headerOf('#status-card'), help.status);
-  H(document.querySelector('#sp-geom summary'), help.geom);
-  H(document.querySelector('#sp-cusps summary'), help.cusps);
-  // (The Riemann-map symbolic identity is shown via the "?" toggle next to the
-  // numerical φ(z) in the Domain-type tile — no separate help popover.)
-  H(headerOf('#alternates-card'), help.alternates);
-}
-mountQolHelp();
+// Lifted VERBATIM to ui/ui-qol-help.mjs (refactor Phase 4 · D2 factory lift). It uses only runtime
+// globals (window.QD / QD.Strings / document), so it takes no uiCtx.
+QD_UI.installQolHelp();
 
 // Copy-link affordance: surface the (already-maintained) URL-hash state as a
 // one-click shareable link. Reuses QD.QoL.copyButton (clipboard + toast); the
