@@ -1235,3 +1235,22 @@
   `refactor/d2-lift-qolhelp`; PR → refactor/main.
 - **Next: the remaining mount lifts** (mountViewToggle / mountCopyLink / mountHTextCopyButton) the same way, each pinned by its
   boot-output assertion; then ui.mjs is a thin composition root. (Stage 2 full-page Playwright still valuable for interaction depth.)
+
+## 2026-08-04 — Phase 4 · Stage d2-lift-copybuttons (D2 factory lifts 2–3 + D2 CLOSED) — PR opened
+- **BEHAVIOR-PRESERVING; the last two clean mount lifts, then D2 closes.** Lifted ui.mjs's two QoL copy-button IIFEs →
+  **`ui/ui-copy-buttons.mjs`**: `QD_UI.installCopyLink()` (the "🔗 Copy link" in #copy-link-host) + `QD_UI.installHTextCopy()`
+  (the copy button after #h-parse), bodies VERBATIM (only change: mountCopyLink's `$('#copy-link-host')` → the identical
+  `document.querySelector('#copy-link-host')`, since ui.mjs `$` IS querySelector). Globals-only, no uiCtx; two call sites +
+  one main.mjs import, ORDER preserved (the search-options-relocate block stays between them).
+- **D2 CLOSED at 3 lifts — mountViewToggle stays in the composition root (the D2 analog of D1d's inspector).** It's coupled to
+  `setViewMode` (the inverse/direct view-state machine), which boot ALSO calls at line 1793 and whose `state.viewMode` is read
+  cross-module (ui-solve.mjs); extracting it would re-expose internals (uiCtx.state + uiCtx.setViewMode), not decouple. After
+  these lifts ui.mjs's remaining body IS the composition root: uiCtx assembly + the QD_UI.installX(uiCtx) calls + the
+  view-switching / domain-mode wiring.
+- **Net-first + mutation-verified (each isolates).** Extended boot.browser.test with a copy-buttons assertion pinned to each
+  lift's anchor (#copy-link-host button / #h-parse + button.copy-btn). MUT1 (no-op installCopyLink) → copy-link red; MUT2 (no-op
+  installHTextCopy) → h-text red; both reverted byte-identically → green (boot 8/8).
+- **Green bar:** build/typecheck/lint/test exit 0; `pnpm test` **2234 / 265** (node gate unchanged — the module isn't
+  node-imported); `pnpm test:browser` QD **8** (+1 copy-buttons pin). Cut `refactor/d2-lift-copybuttons`; PR → refactor/main.
+- **Next: Phase 4 (D2) COMPLETE — ui.mjs is a thin composition root (QD-UI-2 resolved).** Remaining engagement work is all
+  deferred/optional (Stage 2 full-page Playwright for interaction depth; E1 state/lifecycle; further correspondence families).
