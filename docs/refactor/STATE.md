@@ -64,11 +64,11 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   (#219). **Seam 5 (inspector) scoped = composition core (~15 ctx deps = re-expose, not decouple) → D1d closed; user → Phase 4.**
 
 ## Branches / PR
-- Integration `refactor/main` @ **a751f8a** (#210–#223 merged). Tree clean. **No open PR.**
-- Merged stage PRs (46): A1 #178 … #222, **qd-boot-harness-s1 #223 (a751f8a)** — first real QD boot net (Vitest browser mode); QD-TEST-2/QD-UI-5 partial; **D2 lifts now net-backed & resumable**.
+- Integration `refactor/main` @ **d79c525** (#210–#224 merged). Tree clean. **No open PR.**
+- Merged stage PRs (47): A1 #178 … #223, **d2-lift-qolhelp #224 (d79c525)** — first D2 factory lift: ui.mjs mountQolHelp → `QD_UI.installQolHelp` (verbatim, boot-net-backed). Remaining mounts: mountViewToggle/mountCopyLink/mountHTextCopyButton → thin composition root.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at a751f8a (#223 merged): build/typecheck/lint(+`dep:check`)/test exit 0 (+ `test:browser` gpu/CD/**QD** boot net);
+- **`refactor/main` — ALL GREEN** at d79c525 (#224 merged): build/typecheck/lint(+`dep:check`)/test exit 0 (+ `test:browser` gpu/CD/**QD** boot net, 7);
   `pnpm test` **2234 / 265** (the file-count read `/262` since the D1d-picker stage — stale; tests 2234 unchanged by E2).
 
 ## Uncommitted / unverified
