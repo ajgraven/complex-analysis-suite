@@ -425,3 +425,10 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   graph → `bootQdUi()`, pinning QD_UI hooks register / `#canvas` 2D-claimed / tab bar + controls present / no boot errors.
   Mutation-verified (break a `main.mjs` import → red; revert → green). Container-Chromium-revision + Vite-reload gotchas handled
   in-config. Green: build/typecheck/lint/test **2234/265**; `test:browser` (gpu+CD+QD) green. **Unblocks the paused D2 lifts.**
+- **2026-08-04 · stage d2-lift-qolhelp (PR → refactor/main):** **Phase 4 D2 — first factory lift, behavior-preserving.**
+  Resumed the paused D2 lifts now that the boot net (#223) backs them. Lifted ui.mjs's `mountQolHelp()` (inverse-tab "?" help
+  buttons) → `ui/ui-qol-help.mjs` `QD_UI.installQolHelp()` (verbatim; globals-only, no uiCtx); one call + one main.mjs import.
+  Net-first: extended boot.browser.test with a help-button assertion SPECIFIC to installQolHelp's headers (app title / #h-card /
+  #domain-mode-card) — a broad `.help-btn` count didn't isolate it (ui-faber/-thesis/-qd-equations also attachHelp at boot), which
+  the mutation-verify surfaced and the assertion was tightened for. Mutation-verified (no-op → red; revert → green). Green:
+  build/typecheck/lint/test 2234/265; QD test:browser 7. ui.mjs a step closer to a thin composition root.

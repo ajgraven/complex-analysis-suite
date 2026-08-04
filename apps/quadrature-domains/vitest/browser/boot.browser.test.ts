@@ -58,6 +58,17 @@ describe("the QD app boots its module graph against the DOM", () => {
     expect(document.querySelector("#controls-qd")).toBeTruthy();
   });
 
+  it("mounts the inverse-tab '?' help buttons at boot (QoL — pins the installQolHelp lift)", () => {
+    // installQolHelp (lifted verbatim from mountQolHelp) attaches QD.QoL.attachHelp — a
+    // `<button class="help-btn">?</button>` appended INTO each header — to the app intro title and the
+    // static inverse-tab card headers. Those headers are touched by NOTHING ELSE (ui-faber/-thesis/
+    // -qd-equations attach to their own cards), so asserting on them isolates THIS lift's boot output —
+    // a plain `.help-btn` count would stay >0 from those other mounts even if installQolHelp no-op'd.
+    expect(document.querySelector(".app-header-row h1 button.help-btn"), "intro '?' on the app title").toBeTruthy();
+    expect(document.querySelector("#h-card h2 button.help-btn"), "'?' on the h(w) card").toBeTruthy();
+    expect(document.querySelector("#domain-mode-card h2 button.help-btn"), "'?' on the domain-type card").toBeTruthy();
+  });
+
   it("boots with no console.error and no uncaught error/rejection", () => {
     expect(errors, "boot-time errors:\n" + errors.join("\n")).toEqual([]);
   });

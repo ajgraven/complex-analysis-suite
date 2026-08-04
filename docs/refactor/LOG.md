@@ -1217,3 +1217,21 @@
   unchanged); `pnpm test:browser` (gpu + CD + **QD**) green (QD: 6). Cut `refactor/qd-boot-harness-s1`; PR → refactor/main.
 - **Next: Stage 2** (full-page Playwright against the served build — tab switching + boot-loading clears + a canonical solve); the
   paused **D2 factory lifts** are now net-backed and resumable.
+
+## 2026-08-04 — Phase 4 · Stage d2-lift-qolhelp (D2 factory lift 1: QoL help buttons) — PR opened
+- **BEHAVIOR-PRESERVING; the first D2 factory lift, now net-backed by the boot harness (#223).** ui.mjs's remaining in-body work
+  is a handful of `mount*` chunks + the composition root (the ~11 installX(uiCtx) factories were the Phase-3 item-E splits).
+  Lifted the cleanest: `mountQolHelp()` (the inverse-tab "?" help buttons, HANDOFF #33) → **`ui/ui-qol-help.mjs`**, a
+  `QD_UI.installQolHelp()` factory (body VERBATIM). It uses only runtime globals (window.QD / QD.Strings / document), so it takes
+  NO uiCtx — the lift is a pure move + one `QD_UI.installQolHelp()` call + one side-effect import in main.mjs (before ui.mjs).
+- **Net-first, extended the boot net (this is why Stage 1 came first).** Added a boot.browser.test assertion that installQolHelp's
+  output is present — the "?" `button.help-btn` INSIDE the app intro title + the #h-card / #domain-mode-card headers. Made SPECIFIC
+  to headers only installQolHelp touches: a plain `.help-btn` count stayed >0 from the OTHER boot-time attachHelp callers
+  (ui-faber/-thesis/-qd-equations attach to their own cards), so the first (broad) assertion didn't isolate the lift — the
+  mutation-verify caught that, and the assertion was tightened. **Mutation-verified:** no-op installQolHelp → the specific
+  assertion goes RED; reverted byte-identically → green (boot 7/7).
+- **Green bar:** build/typecheck/lint/test exit 0; `pnpm test` **2234 / 265** (node gate unchanged — ui-qol-help.mjs isn't
+  node-imported; it boots only in the browser net); `pnpm test:browser` QD **7** (+1 the QoL-help pin). Cut
+  `refactor/d2-lift-qolhelp`; PR → refactor/main.
+- **Next: the remaining mount lifts** (mountViewToggle / mountCopyLink / mountHTextCopyButton) the same way, each pinned by its
+  boot-output assertion; then ui.mjs is a thin composition root. (Stage 2 full-page Playwright still valuable for interaction depth.)
