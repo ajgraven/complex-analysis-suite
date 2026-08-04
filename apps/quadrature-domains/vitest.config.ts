@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 // The QD app's headless suite lives in app/test/<name>.test.js — 26 CommonJS files exporting
 // `async run()`, booted by a shared vm-context (test/bootstrap.js) that installs globals. Refactor
@@ -11,6 +11,10 @@ export default defineConfig({
     name: "quadrature-domains",
     environment: "node",
     include: ["vitest/**/*.test.ts"],
+    // The real-browser boot specs live in vitest/browser/*.browser.test.ts and run under
+    // vitest.browser.config.ts (Playwright/Chromium). This node project's glob would otherwise ALSO
+    // match `*.browser.test.ts` and run them without a DOM ("document is not defined"), so exclude them.
+    exclude: [...configDefaults.exclude, "vitest/browser/**"],
     // The child runs the entire real suite (heavy solver numerics — ~7 min cold on CI).
     testTimeout: 600_000,
     hookTimeout: 600_000,
