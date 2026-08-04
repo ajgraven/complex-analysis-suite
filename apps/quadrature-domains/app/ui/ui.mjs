@@ -895,16 +895,8 @@ QD_UI.installQolHelp();
 // Copy-link affordance: surface the (already-maintained) URL-hash state as a
 // one-click shareable link. Reuses QD.QoL.copyButton (clipboard + toast); the
 // hash already encodes mode / h(w) / gauges / active tab via ui-url-state.js.
-(function mountCopyLink() {
-  const host = $('#copy-link-host');
-  if (!host || !(window.QD && QD.QoL && QD.QoL.copyButton)) return;
-  const btn = QD.QoL.copyButton(() => location.href,
-    { title: 'Copy a shareable link to this configuration' });
-  btn.classList.remove('copy-btn');
-  btn.classList.add('small');
-  btn.textContent = '🔗 Copy link';
-  host.appendChild(btn);
-})();
+// Lifted VERBATIM to ui/ui-copy-buttons.mjs (refactor Phase 4 · D2 lift). Globals-only, no uiCtx.
+QD_UI.installCopyLink();
 
 // Relocate the advanced "Search options" card to the BOTTOM of the inverse
 // sidebar — it's rarely touched, so it shouldn't sit between the everyday
@@ -917,17 +909,8 @@ QD_UI.installQolHelp();
 }
 
 // QoL: copy button on the h(w) text input (HANDOFF #33).
-(function mountHTextCopyButton() {
-  if (!window.QD || !QD.QoL || !QD.QoL.copyButton) return;
-  const parseBtn = document.getElementById('h-parse');
-  if (!parseBtn) return;
-  const copy = QD.QoL.copyButton(() => {
-    const inp = document.getElementById('h-text');
-    return inp ? inp.value : '';
-  }, { title: 'Copy h(w) text' });
-  copy.style.marginLeft = '6px';
-  parseBtn.parentNode.insertBefore(copy, parseBtn.nextSibling);
-})();
+// Lifted VERBATIM to ui/ui-copy-buttons.mjs (refactor Phase 4 · D2 lift). Globals-only, no uiCtx.
+QD_UI.installHTextCopy();
 
 // Domain-type toggle
 // Compact domain-type control: weight + domain segmented buttons + singular

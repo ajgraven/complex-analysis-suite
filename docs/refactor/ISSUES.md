@@ -432,3 +432,10 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   #domain-mode-card) — a broad `.help-btn` count didn't isolate it (ui-faber/-thesis/-qd-equations also attachHelp at boot), which
   the mutation-verify surfaced and the assertion was tightened for. Mutation-verified (no-op → red; revert → green). Green:
   build/typecheck/lint/test 2234/265; QD test:browser 7. ui.mjs a step closer to a thin composition root.
+- **2026-08-04 · stage d2-lift-copybuttons (PR → refactor/main):** **Phase 4 D2 — lifts 2–3, behavior-preserving; D2 CLOSED.**
+  Lifted ui.mjs's two QoL copy-button IIFEs → `ui/ui-copy-buttons.mjs` (`QD_UI.installCopyLink` + `installHTextCopy`; verbatim,
+  globals-only; `$`→document.querySelector, identical). mountViewToggle LEFT in the root = composition core (coupled to
+  setViewMode, which boot calls elsewhere + reads state cross-module — the D2 analog of D1d's inspector). Net-first: boot.browser
+  assertions anchored to each button (#copy-link-host / #h-parse + .copy-btn); mutation-verified each isolates (MUT1/MUT2 → red;
+  revert → green). Green: build/typecheck/lint/test 2234/265; QD test:browser 8. **QD-UI-2 → resolved: ui.mjs is now a thin
+  composition root** (uiCtx assembly + installX calls + view/domain-mode wiring; the god-module is decomposed).

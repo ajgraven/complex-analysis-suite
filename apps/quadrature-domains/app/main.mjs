@@ -89,6 +89,7 @@ import './algebra/algebra-store.mjs';
 import './algebra/algebra-canvas.mjs';
 import './algebra/algebra-ui.mjs';
 import './ui/ui-qol-help.mjs';
+import './ui/ui-copy-buttons.mjs';
 import './ui/ui.mjs';
 import './direct/direct-recompute.mjs';
 import './direct/direct-verify.mjs';

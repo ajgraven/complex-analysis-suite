@@ -69,6 +69,14 @@ describe("the QD app boots its module graph against the DOM", () => {
     expect(document.querySelector("#domain-mode-card h2 button.help-btn"), "'?' on the domain-type card").toBeTruthy();
   });
 
+  it("mounts the QoL copy buttons at boot (pins the installCopyLink / installHTextCopy lifts)", () => {
+    // mountCopyLink appends a "🔗 Copy link" button INTO #copy-link-host (a span only it touches);
+    // mountHTextCopyButton inserts a QD.QoL.copyButton (class copy-btn) right AFTER #h-parse. Each is
+    // isolated to its anchor, so these pin the two copy-button lifts' boot output.
+    expect(document.querySelector("#copy-link-host button"), "copy-link button in its host").toBeTruthy();
+    expect(document.querySelector("#h-parse + button.copy-btn"), "h(w) copy button after #h-parse").toBeTruthy();
+  });
+
   it("boots with no console.error and no uncaught error/rejection", () => {
     expect(errors, "boot-time errors:\n" + errors.join("\n")).toEqual([]);
   });
