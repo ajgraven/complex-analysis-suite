@@ -31,8 +31,9 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 ## Phase / stage
 - **✅ PHASE 5 (E2 folderize) COMPLETE — #221 (aaf6d49).** All 57 flat `app/*.mjs` → `core/ solvers/ qd/ sym/ analysis/ ui/`
   (main.mjs = entry); 427 codemod rewrites + 4 bare-name loaders (bootstrap `relocate()`) + 3 load-order lists in-order. Behavior-preserving; tests 2234 UNCHANGED. **Plan's last stage; detail in LOG/ISSUES.**
-- **Phase D COMPLETE** (D1d closed at 4 seams — inspector = composition core, not a seam). **Phase 4 (D2) PAUSED at the seam
-  (user 2026-08-03): stage 1 (the ui.mjs testability seam) is merged; the factory lifts are DEFERRED — no QD boot net (see risks).**
+- **Phase D COMPLETE** (D1d closed at 4 seams — inspector = composition core, not a seam). **✅ Phase 4 (D2) COMPLETE (2026-08-04):**
+  ui.mjs seam (#220) + the QD boot net (#223, Vitest browser mode, the unblocker) + 3 factory lifts (#224 QoL-help, #225 copy-buttons)
+  → ui.mjs is a **thin composition root** (mountViewToggle kept in root = core, the D2 analog of the inspector). QD-UI-2 resolved.
 - **COMPLETION PLAN committed & APPROVED (2026-08-01)** → `docs/refactor/COMPLETION-PLAN.md`. Sequence: **Phase 1** (F1
   dependency-cruiser + A1 residuals) → **Phase 2** (source-text→behavioral net, QD-ALG-3) → **Phase 3** (D1a sidebar-as-data
   / D1b runOp → **re-eval gate** → D1c verdict-unify / **D1d split**) → **Phase 4** (D2 ui.mjs→root) → **Phase 5** (E2
@@ -48,7 +49,7 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   `-dom` splits (#206–#209), all mutation-verified. Remaining source-text tests are not D1a-brittle → stay node-source. Detail in LOG.
 - Cadence: merge on green (delegated). `APPROVED: PLAN.md v1` + `APPROVED: D1c verdict-unification` + `APPROVED: D1b doSolveRadical guard`.
   Roadmap: A✓ / B✓ / C✓ / **D✓ (Phase 1✓; Phase 2✓; Phase 3 D1a–c✓; D1d seams 1–4✓, seam-5 scoped=composition-core → closed)**
-  → **Phase 4 (D2): ui.mjs seam✓ [factory lifts PAUSED — no QD boot net]** → **Phase 5 (E2)✓ #221** / E (E1 deferred) / **F1✓**. **PLAN COMPLETE.**
+  → **Phase 4 (D2)✓ COMPLETE: ui.mjs seam #220 + QD boot net #223 + lifts #224/#225 → thin composition root** → **Phase 5 (E2)✓ #221** / E (E1 deferred) / **F1✓**. **PLAN COMPLETE.**
 - **▶ PHASE 3 (D1 — installAlgebra decomposition), behind the Phase-2 net. User go-aheads 2026-08-02. Full detail per stage in LOG.**
   · **D1a COMPLETE** — #210 (full-DOM fingerprint net) + #211 (mountSidebar `#alg-sections` → `SIDEBAR_SECTIONS` data +
   `renderSection`, bodies verbatim). Behavior-preserving (fingerprint + mutation + a pre-flight `normalize()`-equal oracle).
@@ -64,11 +65,11 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   (#219). **Seam 5 (inspector) scoped = composition core (~15 ctx deps = re-expose, not decouple) → D1d closed; user → Phase 4.**
 
 ## Branches / PR
-- Integration `refactor/main` @ **d79c525** (#210–#224 merged). Tree clean. **No open PR.**
-- Merged stage PRs (47): A1 #178 … #223, **d2-lift-qolhelp #224 (d79c525)** — first D2 factory lift: ui.mjs mountQolHelp → `QD_UI.installQolHelp` (verbatim, boot-net-backed). Remaining mounts: mountViewToggle/mountCopyLink/mountHTextCopyButton → thin composition root.
+- Integration `refactor/main` @ **0944760** (#210–#225 merged). Tree clean. **No open PR.**
+- Merged stage PRs (48): A1 #178 … #224, **d2-lift-copybuttons #225 (0944760)** — D2 lifts 2–3 (copy buttons → ui/ui-copy-buttons.mjs; mountViewToggle kept in root as composition core). **Phase 4 (D2) COMPLETE — ui.mjs a thin composition root, QD-UI-2 resolved.**
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at d79c525 (#224 merged): build/typecheck/lint(+`dep:check`)/test exit 0 (+ `test:browser` gpu/CD/**QD** boot net, 7);
+- **`refactor/main` — ALL GREEN** at 0944760 (#225 merged): build/typecheck/lint(+`dep:check`)/test exit 0 (+ `test:browser` gpu/CD/**QD** boot net, 8);
   `pnpm test` **2234 / 265** (the file-count read `/262` since the D1d-picker stage — stale; tests 2234 unchanged by E2).
 
 ## Uncommitted / unverified
@@ -78,20 +79,18 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **✅ D1d DONE — 4 behavior-preserving seams (full detail in LOG), each net-first + mutation-verified:** op-runner (#216;
   `algebra-op-runner.mjs`), results-drawer (#217; facade-aliased, "0 direct setVerdict" pin), picker (#218; ctx-free
   `createPickerManager`), autosave (#219; `createAutosaver`). installAlgebra ~4085→~3849. Seam 5 (inspector) = composition core, not extracted.
-- **Phase 4 (D2) — PAUSED at the seam (user 2026-08-03).** Stage 1 MERGED (#220): the 1891-line body wrapped in bootQdUi() +
-  a #canvas guard (12-insertion diff, body BYTE-unchanged) ⇒ importable without booting. The seam is sound by construction
-  (verbatim wrap; guard true via the static #canvas before the deferred main.mjs). **FINDING that stopped the lifts: there is NO
-  QD-app boot test** — the `browser` CI job is GPU/WebGL shaders (packages/gpu + complex-dynamics), NOT the QD app; jsdom can't
-  boot the canvas/WebGL app; there is no Playwright for QD. The factory lifts change dependency resolution at runtime (closure →
-  uiCtx.X), which a verbatim wrap does not — so they carry a boot-regression risk that passes ALL of CI, with NO net to catch it.
-  Net-first (binding) therefore blocks them. **(NB: #220's PR note "browser CI confirms the real boot" was inaccurate — that was
-  the shader job.)** Resume the lifts only behind a real QD boot harness (Playwright loading app/index.html).
+- **✅ Phase 4 (D2) RESOLVED — the boot-net blocker is cleared.** The pause (2026-08-03) was: the factory lifts change runtime
+  dependency resolution (closure → uiCtx.X) with NO QD boot test to catch a regression (the `browser` CI job is GPU shaders, not
+  the QD app; jsdom can't boot the WebGL app). **#223 built that net** (Vitest browser mode boots the real main.mjs graph in
+  headless Chromium — CI-gotchas fixed: revision-pinned executablePath, optimizeDeps, packages built before test:browser); **#224
+  /#225** then lifted the 3 mounts behind it, each pinned by a boot-output assertion + mutation-verified. ui.mjs = thin root.
 
 ## Next concrete steps
-- **The COMPLETION PLAN is fully shipped** (Phases 1–3, F1, D1d×4, the D2 seam, Phase 5 E2). No open plan stage remains — awaiting direction.
-- **Deferred / paused — each a fresh scoping task, resume only on request:** the D2 factory lifts (cross-tab / help-chrome →
-  installX(uiCtx)) — need a Playwright QD boot harness first (RISKS); the inspector (composition core, not a clean seam); **E1**
-  (state/lifecycle); further correspondence families (circle-and-cardioid → cubic Chebyshev → d:d).
+- **The COMPLETION PLAN + Phase 4 (D2) are fully shipped and green** (Phases 1–3, F1, D1d×4, D2 seam+boot-net+3 lifts, Phase 5 E2).
+  ui.mjs is a thin composition root; QD-UI-2 resolved. No open plan stage remains — awaiting direction.
+- **Deferred / optional — each a fresh scoping task:** boot-harness **Stage 2** (full-page Playwright: tab switching + a canonical
+  solve — interaction-depth net beyond the module-graph boot net); the inspector (composition core); **E1** (state/lifecycle);
+  further correspondence families (circle-and-cardioid → cubic Chebyshev → d:d).
 
 ## Resume commands
 ```
