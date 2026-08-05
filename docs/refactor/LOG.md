@@ -1307,3 +1307,30 @@
 - **Green bar:** build/typecheck/lint(+dep:check)/test exit 0; `pnpm test` **2237 / 266** (+1 test = the A/B split; no new file).
   Cut `refactor/p0-worker-load-fallback` off the #226 fix; PR → refactor/main.
 - **This closes the (a2) decision and completes fix (a).** Next: (b) — publish-gate hardening (#2) + the collected-count assertion (#3).
+
+## 2026-08-05 — Post-review fix · Stage publish-gate-durability (fix (b): 2 CI-gate P1 findings) — PR opened
+- **Why (b).** The P0 (#226) reached the DEPLOYED site because the publish gate had two blind spots the whole-refactor review
+  flagged as P1: (#2) nothing verifies the BUILT app before upload — `pnpm test` is node/jsdom, `vite dev` serves source, the
+  browser boot net runs against source, and `vite build` SUCCEEDS while silently dropping a worker chunk; (#3) Vitest's aggregate
+  run stays green even if a whole workspace PROJECT silently collects 0 specs. Two deterministic gates close them.
+- **(b#2) built-artifact gate** — `scripts/check-built-artifacts.mjs`, run as the tail of `pnpm build`. Scans each PUBLISHED app's
+  source (QD `app/`, CD `src/`; comments stripped) for `new Worker(new URL('<literal>', import.meta.url))`, derives the chunk stem
+  (basename minus final ext — Vite names the worker chunk `<stem>-<hash>.js`, keeping `.worker`), and asserts each is present in
+  `dist/assets/`. Detection is source-derived, so a NEW worker is covered with no list to maintain; it found exactly the 5 real
+  workers (QD solver/schwarz/sym/param-slice + CD juliaMetrics), the two comment references correctly excluded. Because it rides
+  `pnpm build`, it runs locally, in ci.yml `build`, AND in deploy-pages.yml `build` (the step that uploads the site) — a dropped
+  chunk now fails the build instead of publishing. Complements #226's SOURCE-level worker-url-static-literal.test.ts (this is the
+  build-OUTPUT layer). Mutation-verified: hiding `solver-worker-entry-*.js` → gate fails naming the chunk + spawn site (exit 1);
+  restore → pass. Full `pnpm build` ends with the gate ✓, exit 0.
+- **(b#3) test-census gate** — `scripts/assert-test-census.mjs`, run as the tail of `pnpm test`. `vitest run` now also writes a
+  `--reporter=json` report (`.vitest-census.json`, gitignored); the script buckets the collected files by workspace project
+  (path prefix) and asserts each of the 8 projects ≥ 1 file plus a loose global floor (200), so a project silently emptied
+  (relocated files / glob typo / passWithNoTests) fails CI. Mirrors the repo's node-test.js FLOORS idiom. Real run: 266 files —
+  core:4 exact:3 interchange:2 expr:11 gpu:4 CD:68 corr:17 QD:157, 0 unbucketed. Mutation-verified: a doctored JSON with
+  interchange emptied → gate fails naming 'interchange' (exit 1), global floor still satisfied so the per-project guard is
+  isolated; the real JSON → pass.
+- **Scope choice.** Deterministic built-OUTPUT assertions over (a) a heavier built-app browser smoke test (serve dist + Playwright
+  → new infra + flake) and (b) reversing the deliberate "browser is not a publish blocker" topology — both left as optional
+  follow-ups; neither is needed to close the QD-BUILD-1 class.
+- **Green bar:** build(+b#2 gate)/typecheck/lint(+dep:check)/test(+b#3 census) all exit 0; `pnpm test` **2237 / 266** + census ✓.
+  Cut `refactor/publish-gate-durability` off refactor/main; PR → refactor/main.
