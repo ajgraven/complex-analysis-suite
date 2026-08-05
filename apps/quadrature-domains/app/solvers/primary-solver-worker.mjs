@@ -82,6 +82,8 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
     /** @type {{jobId:number, resolve:Function, reject:Function, onMessage:Function}|null} */
     let _inflight = null;      // current outstanding job on THIS lane, if any
     let _fallback = false;     // set true after THIS lane's worker fails to load once (its own latch)
+    let _everWorked = false;   // set once THIS worker returns a message — tells a bundle/load failure (never
+                               // worked → latch fallback) apart from a mid-run crash on a worker that worked.
 
     function _disposeWorker() {
       if (_worker) { try { _worker.terminate(); } catch (_) { /* ignore */ } _worker = null; }
@@ -111,6 +113,12 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
             try { w.removeEventListener('message', job.onMessage); } catch (_) { /* ignore */ }
             job.reject(new Error(cfg.crashLabel + ' crashed: ' + detail));
           }
+          // If the worker errored WITHOUT ever having returned a message, its bundle never loaded (e.g. a
+          // 404 entry chunk / syntax error); respawning would re-fail identically and hang every future
+          // run(). Latch this lane to the main-thread fallback so it SELF-HEALS instead of hard-failing. A
+          // worker that HAD worked keeps terminate-and-retry (a transient crash retries on the fast worker
+          // path) — the asymmetry is pinned by psw-crash-char.test.ts. See QD-BUILD-1.
+          if (!_everWorked) _fallback = true;
           _disposeWorker();
         });
         if (cfg.hasMessageError) {
@@ -153,6 +161,7 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
           const onMessage = (e) => {
             const m = e.data;
             if (!m || m.kind !== cfg.messageKind || m.jobId !== jobId) return;
+            _everWorked = true; // the worker's bundle loaded and round-tripped a message
             try { _worker.removeEventListener('message', onMessage); } catch (_) { /* ignore */ }
             _inflight = null;
             if (m.error) reject(new Error(m.error));
