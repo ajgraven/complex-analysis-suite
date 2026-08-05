@@ -17,7 +17,7 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **Net-first:** no refactor without a passing characterization net pinned to PRE-refactor code; **mutation-verify** every
   net (break a guard → confirm the intended test fails → revert byte-identically via Edit, NOT git). Never widen a tolerance.
 - **Green bar** (must be 0-exit before every PR): `pnpm build && pnpm typecheck && pnpm lint && pnpm test` (lint includes
-  `dep:check`). Currently **2236 / 266** (`refactor/main` post-#226; #227 a2 → 2237/266).
+  `dep:check`). Currently **2237 / 266** (`refactor/main` @ 80623df, post-#227).
 - **Git constraints (VERBATIM):** never `git reset --hard`, `git checkout -- <path>`, `git clean -fd`, `git commit --amend`,
   or force-push. If history seems to need rewriting, STOP and ASK. `git push -u origin <branch>`; retry ≤4× backoff 2/4/8/16s.
 - **Cadence:** integration branch `refactor/main`; each stage on `refactor/<slug>` → ONE PR → `refactor/main`; **merge on
@@ -57,16 +57,17 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   Branches/PR). **Next: fix (b)** — deploy-pages browser gate + collected-count assertion. Ranked findings in chat 2026-08-05.
 
 ## Branches / PR
-- Integration `refactor/main` @ **e0d91e8** (#210–#226 merged). **POST-REVIEW FIXES underway (post-plan, 2026-08-05).**
-- **QD-BUILD-1 (P0 from the 7-agent review): #226 MERGED (e0d91e8)** — primary-solver worker was dropped from `vite build`
-  (variable `new URL` defeats Vite's worker transform → 404 → deployed Solve/alt/live hard-fail); literal URL restored + net.
-- **#227 OPEN (a2, green-pending)** — `_everWorked`-scoped async-load-failure self-heal (refines the frozen psw-crash latch).
+- Integration `refactor/main` @ **80623df** (#210–#227 merged). **POST-REVIEW FIXES underway (post-plan, 2026-08-05).**
+- **QD-BUILD-1 (P0 from the 7-agent review) — FIXED, both parts merged:** #226 (a1, e0d91e8) restored the literal worker URL
+  (variable `new URL` had dropped the chunk from `vite build` → 404 → deployed Solve/alt/live hard-fail) + regression net;
+  #227 (a2, f475a1a) added the `_everWorked`-scoped async-load self-heal (never-loaded→main-thread; worked-then-crash→respawn).
+- **▶ NEXT: fix (b)** — publish-gate durability (deploy browser gate, review P1 #2) + collected-count assertion (P1 #3).
 - Prior plan (Phases 1–5, D2, F1; 48 stage PRs A1 #178 … #225) COMPLETE — ui.mjs a thin composition root; detail in LOG.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at e0d91e8 (#226 merged): build/typecheck/lint(+`dep:check`)/test exit 0 (+ `test:browser` 8);
-  `pnpm test` **2236 / 266** (+1 file/+2 tests = worker-url-static-literal net). #227 (a2) locally green at **2237 / 266**.
-- **QD-BUILD-1 empirical proof:** post-fix `vite build` emits `dist/assets/solver-worker-entry-*.js` (ABSENT pre-fix).
+- **`refactor/main` — ALL GREEN** at 80623df (#227 merged, re-verified post-merge): build/typecheck/lint(+`dep:check`)/test
+  exit 0; `pnpm test` **2237 / 266** (+2 files/+5 tests vs pre-fix = worker-url-static-literal + a2's crash/latch split).
+- **QD-BUILD-1 empirical proof:** post-fix `vite build` emits `dist/assets/solver-worker-entry-DJnyKXD5.js` (ABSENT pre-fix).
 
 ## Uncommitted / unverified
 - Nothing uncommitted. This STATE edit advances `refactor/main`.
@@ -82,8 +83,9 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   /#225** then lifted the 3 mounts behind it, each pinned by a boot-output assertion + mutation-verified. ui.mjs = thin root.
 
 ## Next concrete steps
-- **POST-REVIEW FIXES:** (a) QD-BUILD-1 P0 — DONE (#226 merged + #227 a2 open/green). **Next: (b)** — deploy-pages browser
-  gate (review P1 #2) + a collected-count assertion so a project silently collecting 0 specs fails (review P1 #3).
+- **POST-REVIEW FIXES:** (a) QD-BUILD-1 P0 — ✅ DONE (#226 + #227 both merged, re-verified). **▶ (b) IN PROGRESS** —
+  deploy-pages browser gate (review P1 #2, the gap that let the P0 reach prod) + a collected-count assertion so a project
+  silently collecting 0 specs fails CI (review P1 #3).
 - **Other review findings (optional):** node-suite floor tightening (P1); `--passWithNoTests`/glob-width/edges-getter (P2);
   pre-existing footnotes (dead version label, aux/live messageerror hang). Full ranked list in chat 2026-08-05.
 - **Older deferred (each a fresh scoping task):** boot-harness Stage 2 (full-page Playwright); inspector; E1 (state/lifecycle);
