@@ -1284,3 +1284,26 @@
   net-frozen contract "a crash is NOT a permanent fallback latch" (psw-crash-char.test.ts:63). Scoped design if approved:
   `_everWorked`-gated (never-loaded → arm fallback; post-success transient crash → keep respawn), preserving the transient-crash
   retry the frozen line protects. Flagged to the user for a token.
+
+## 2026-08-05 — Post-review fix · Stage p0-worker-load-fallback (QD-BUILD-1 hardening, a2) — PR opened
+- **AUTHORIZED behavior refinement (user token "Add it (scoped)").** Follow-on to #226: the literal-URL fix stops THIS bug and
+  the new regression net stops its recurrence — but a worker bundle can still fail to load in production for reasons a source
+  scan can't see (a deploy/hosting/CDN quirk, a future Vite change). Today such a failure hits the async `error` handler, which
+  rejects the solve but never arms `_fallback` (only the SYNC `.catch` does), so the lane never degrades to main-thread and each
+  retry respawns the same doomed worker — the exact hard-fail severity of the P0.
+- **The scoped fix (`_everWorked`).** Added a per-lane `_everWorked` latch (set in `onMessage` once the worker round-trips a
+  message). The `error` handler now does `if (!_everWorked) _fallback = true;` — a worker that errored WITHOUT ever having worked
+  (a bundle/load failure) latches the lane to the main-thread fallback so it SELF-HEALS; a worker that HAD worked keeps
+  terminate-and-retry (a transient crash retries on the fast worker path). This deliberately REFINES the frozen
+  psw-crash-char.test.ts contract "a crash is NOT a permanent fallback latch": never-loaded → latch; worked-then-crashed →
+  respawn. The frozen line's INTENT (don't permanently demote on a transient crash) is preserved; only the never-loaded gap is
+  closed. Per-lane `_everWorked`/`_fallback` closures keep the three latches independent (still pinned by the independence test).
+- **Net-first + mutation-verified.** Split psw-crash-char's primary-`error` test into (A) load-failure → rejects the in-flight
+  job + latches fallback + subsequent solve self-heals to main-thread, and (B) worked-then-error → settles + does NOT latch +
+  respawns on the WORKER path; added per-lane `_isAuxFallback`/`_isLiveFallback` latch pins. **RED** on the 3 new-behavior
+  assertions before the source change; **GREEN** after. **Mutation-verify:** inverting `!_everWorked`→`_everWorked` made BOTH A
+  (never latches) and B (wrongly latches) go red — proving the net pins the scoping in both directions — reverted
+  byte-identically. psw-lifecycle (round-trip/supersede/cancel/spawn-fault) unaffected.
+- **Green bar:** build/typecheck/lint(+dep:check)/test exit 0; `pnpm test` **2237 / 266** (+1 test = the A/B split; no new file).
+  Cut `refactor/p0-worker-load-fallback` off the #226 fix; PR → refactor/main.
+- **This closes the (a2) decision and completes fix (a).** Next: (b) — publish-gate hardening (#2) + the collected-count assertion (#3).

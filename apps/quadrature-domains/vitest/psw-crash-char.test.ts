@@ -10,8 +10,12 @@
 // Driven with the shared vitest/helpers/fake-worker.mjs `FakeWorker` (stubbed as global `Worker`), whose
 // `.fire('error'|'messageerror', ev)` delivers a worker-level event to the lane's real listeners. The
 // lanes are module-scoped singletons on the QD namespace, so each test re-imports fresh (the freshPSW
-// pattern from psw-lifecycle.test.ts) to avoid a tripped latch leaking between tests. Tests-only; no
-// source change.
+// pattern from psw-lifecycle.test.ts) to avoid a tripped latch leaking between tests.
+//
+// UPDATE (QD-BUILD-1, post-review): the `error` contract is REFINED — a worker that errors BEFORE ever
+// returning a message (its bundle never loaded, e.g. a 404 entry chunk) now LATCHES the lane to the
+// main-thread fallback (self-heal), while a worker that errors AFTER working still respawns (a transient
+// crash retries on the worker path — the original frozen intent). See primary-solver-worker.mjs.
 import { describe, it, expect, vi, afterAll } from "vitest";
 import { FakeWorker } from "./helpers/fake-worker.mjs";
 
@@ -52,16 +56,37 @@ afterAll(() => {
 });
 
 describe("PSW crash contract — a worker-level `error` settles the in-flight job (QD-UI-1)", () => {
-  it("primary: `error` rejects the solve as a REAL crash (not an abort) and disposes the worker", async () => {
+  it("primary: an `error` BEFORE any message (bundle never loaded) rejects the job AND latches the main-thread fallback", async () => {
     const { psw, worker, promise } = await armLane("primary");
     expect(psw.isBusy()).toBe(true);
     expect(worker).toBeTruthy();
     worker!.fire("error", { message: "boom", filename: "w.js", lineno: 7 });
-    await expect(promise).rejects.toThrow(/solver worker crashed/);
+    await expect(promise).rejects.toThrow(/solver worker crashed/); // the in-flight job still surfaces the error
     expect(psw.isBusy()).toBe(false);
-    expect(psw._hasWorker()).toBe(false); // disposed → a fresh solve respawns
-    expect(psw._isMainThreadFallback()).toBe(false); // a crash is NOT a permanent fallback latch
+    expect(psw._hasWorker()).toBe(false);           // disposed
+    expect(psw._isMainThreadFallback()).toBe(true); // never-loaded → latch (QD-BUILD-1 hardening: self-heal, don't hard-fail)
     expect(worker!.terminated).toBe(true);
+    // Subsequent solves self-heal onto the main thread instead of respawning the doomed worker.
+    psw.solve({ poles: [] }, {}).catch(() => {});
+    await tick();
+    expect(psw._isMainThreadFallback()).toBe(true);
+    expect(psw._hasWorker()).toBe(false);
+  });
+
+  it("primary: an `error` AFTER a successful message (transient crash) settles but does NOT latch — it respawns", async () => {
+    const { psw, worker, promise } = await armLane("primary");
+    const jobId = worker!.posted[0].jobId;
+    worker!.fire("message", { data: { kind: "solve", jobId, result: { ok: true } } });
+    await expect(promise).resolves.toEqual({ ok: true }); // the worker round-tripped → it "worked"
+    worker!.fire("error", { message: "boom" });           // now it crashes, idle
+    await tick();
+    expect(psw._isMainThreadFallback()).toBe(false);      // a WORKED-then-crash is NOT a permanent latch (frozen intent)
+    expect(psw._hasWorker()).toBe(false);                 // disposed
+    // A fresh solve respawns on the WORKER path (not main-thread).
+    psw.solve({ poles: [] }, {}).catch(() => {});
+    await tick();
+    expect(psw._isMainThreadFallback()).toBe(false);
+    expect(psw._hasWorker()).toBe(true);
   });
 
   it("primary: `messageerror` (structured-clone failure) rejects the solve", async () => {
@@ -77,6 +102,7 @@ describe("PSW crash contract — a worker-level `error` settles the in-flight jo
     await expect(promise).rejects.toThrow(/alt-search worker crashed/);
     expect(psw.isAuxBusy()).toBe(false);
     expect(psw._hasAuxWorker()).toBe(false);
+    expect(psw._isAuxFallback()).toBe(true); // never-loaded aux → latch main-thread fallback (QD-BUILD-1)
   });
 
   it("live: `error` rejects the live solve and disposes the live worker", async () => {
@@ -86,6 +112,7 @@ describe("PSW crash contract — a worker-level `error` settles the in-flight jo
     await expect(promise).rejects.toThrow(/live-solve worker crashed/);
     expect(psw.isLiveBusy()).toBe(false);
     expect(psw._hasLiveWorker()).toBe(false);
+    expect(psw._isLiveFallback()).toBe(true); // never-loaded live → latch main-thread fallback (QD-BUILD-1)
   });
 });
 

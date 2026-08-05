@@ -453,3 +453,14 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   `solver-worker-entry-DJnyKXD5.js` (was absent). Green: build/typecheck/lint(+dep:check)/test **2236 / 266** (+1 file / +2 tests
   = the net). **DEFERRED to an explicit decision (a2):** hardening the async worker-LOAD failure to arm `_fallback` (self-heal to
   main-thread) — it would move the deliberately net-frozen "a crash is NOT a permanent fallback latch" line (psw-crash-char.test.ts:63).
+- **2026-08-05 · stage p0-worker-load-fallback (PR → refactor/main):** **QD-BUILD-1 hardening (a2) — AUTHORIZED behavior
+  refinement** (user token 2026-08-05: "Add it (scoped)"). Follow-on to #226: harden the async worker-LOAD-failure path so a
+  FUTURE bundling/hosting failure self-heals instead of hard-failing. `createWorkerLane`'s `error` handler now latches the lane
+  to the main-thread fallback (`_fallback = true`) IFF the worker errored WITHOUT ever returning a message (`!_everWorked`) — a
+  bundle/load failure; a worker that HAD returned a message keeps terminate-and-retry (a transient crash retries on the worker
+  path). This REFINES the deliberately-frozen "a crash is NOT a permanent fallback latch" contract: a never-loaded worker now
+  latches (+ self-heals subsequent runs to main-thread), a worked-then-crashed worker still respawns — the frozen line's INTENT
+  (transient-crash retry) is preserved, only the never-loaded gap closed. NET-FIRST: split psw-crash-char's primary `error` test
+  into load-failure(A: latch + self-heal) / transient-crash(B: respawn) + per-lane latch pins for aux/live; RED on the 3
+  new-behavior assertions pre-impl, GREEN after; mutation-verified (INVERTED `!_everWorked`→`_everWorked` → BOTH A & B red;
+  revert → green). Green: build/typecheck/lint/test **2237 / 266** (+1 test = the A/B split). **Closes (a2); fix (a) complete.**
