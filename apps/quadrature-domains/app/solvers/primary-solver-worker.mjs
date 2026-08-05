@@ -69,8 +69,10 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
   // (round-trip / supersede / cancel / spawn-fault) and psw-crash-char.test.ts (error / messageerror /
   // the primary-only-messageerror asymmetry).
   //
-  // cfg: { entryUrl, messageKind, buildPost(jobId, ...args), fallback(...args), hasMessageError,
+  // cfg: { messageKind, buildPost(jobId, ...args), fallback(...args), hasMessageError,
   //        crashLabel, logLabel, warnPrefix, warnSuffix, getSignal?(args) }
+  // (All three lanes spawn the SAME solver-worker-entry bundle — its URL is a shared string literal at
+  // the `new Worker` site above, not per-lane config, so Vite's static worker transform emits the chunk.)
   function createWorkerLane(cfg) {
     /** @type {Worker|null} */
     let _worker = null;
@@ -93,7 +95,11 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
       if (_readyPromise) { await _readyPromise; return; }
       _readyPromise = (async () => {
         if (typeof Worker === 'undefined') throw new Error('Worker unavailable in this environment');
-        const w = new Worker(new URL(cfg.entryUrl, import.meta.url), { type: 'module' });
+        // The worker URL MUST be a string LITERAL: Vite's worker-import-meta-url transform only bundles a
+        // literal first arg — a variable (was: cfg.entryUrl) is left untransformed, so the entry chunk is
+        // silently omitted from the production build and 404s at runtime (invisible to node/jsdom + vite
+        // dev; pinned by worker-url-static-literal.test.ts). All three lanes share this one entry bundle.
+        const w = new Worker(new URL('../workers/solver-worker-entry.mjs', import.meta.url), { type: 'module' });
         w.addEventListener('error', (ev) => {
           const detail = formatWorkerErrorDetail(ev);
           console.error('[primary-solver ' + cfg.logLabel + '] error: ' + detail);
@@ -175,13 +181,13 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
     return { ensureReady, run, cancel, isBusy, _isFallback: () => _fallback, _hasWorker: () => _worker !== null };
   }
 
-  // The three lanes are the SAME bundle, kept as separate Worker instances so a background alt-search or a
-  // live-drag frame can never queue behind / preempt an interactive primary solve (and their spawn-failure
-  // latches stay independent — see createWorkerLane).
-  const ENTRY = '../workers/solver-worker-entry.mjs';
+  // The three lanes are the SAME bundle (workers/solver-worker-entry.mjs — the literal URL lives at the
+  // `new Worker` site inside createWorkerLane so Vite emits the chunk), kept as separate Worker instances
+  // so a background alt-search or a live-drag frame can never queue behind / preempt an interactive
+  // primary solve (and their spawn-failure latches stay independent — see createWorkerLane).
 
   const primary = createWorkerLane({
-    entryUrl: ENTRY, messageKind: 'solve', logLabel: 'worker', crashLabel: 'solver worker',
+    messageKind: 'solve', logLabel: 'worker', crashLabel: 'solver worker',
     hasMessageError: true,
     warnPrefix: 'Worker unavailable',
     warnSuffix: 'Falling back to main-thread solver. Serve via a local web server (e.g. `python -m http.server`) to enable.',
@@ -192,7 +198,7 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
 
   // Aux worker — background alternate-solution search (A3). No messageerror handler (matches the original).
   const aux = createWorkerLane({
-    entryUrl: ENTRY, messageKind: 'altSearch', logLabel: 'aux worker', crashLabel: 'alt-search worker',
+    messageKind: 'altSearch', logLabel: 'aux worker', crashLabel: 'alt-search worker',
     hasMessageError: false,
     warnPrefix: 'Aux worker unavailable',
     warnSuffix: 'Alternate search will run on the main thread.',
@@ -203,7 +209,7 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
 
   // Live worker — per-drag-frame warm-start solve (QD.liveSolveStep). No messageerror handler.
   const live = createWorkerLane({
-    entryUrl: ENTRY, messageKind: 'liveSolve', logLabel: 'live worker', crashLabel: 'live-solve worker',
+    messageKind: 'liveSolve', logLabel: 'live worker', crashLabel: 'live-solve worker',
     hasMessageError: false,
     warnPrefix: 'Live worker unavailable',
     warnSuffix: 'Live drag solve will run on the main thread.',

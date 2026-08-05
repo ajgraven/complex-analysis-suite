@@ -1254,3 +1254,33 @@
   node-imported); `pnpm test:browser` QD **8** (+1 copy-buttons pin). Cut `refactor/d2-lift-copybuttons`; PR → refactor/main.
 - **Next: Phase 4 (D2) COMPLETE — ui.mjs is a thin composition root (QD-UI-2 resolved).** Remaining engagement work is all
   deferred/optional (Stage 2 full-page Playwright for interaction depth; E1 state/lifecycle; further correspondence families).
+
+## 2026-08-05 — Post-review fix · Stage p0-solver-worker-bundle (QD-BUILD-1) — PR opened
+- **THE whole-refactor review's one production regression — a bundler-visibility bug; behavior-RESTORING fix.** The 7-slice
+  adversarial review (green bar re-confirmed genuinely 2234/265, internals faithful) found ONE severe, production-ONLY defect,
+  invisible to the green bar: the primary-solver worker is silently dropped from the `vite build` output. ROOT CAUSE — the
+  Stage-C1 `createWorkerLane` dedup replaced three literal worker URLs with one shared `new URL(cfg.entryUrl, import.meta.url)`
+  VARIABLE; Vite's static `worker-import-meta-url` transform only recognizes a string LITERAL, so the `solver-worker-entry` chunk
+  was never emitted (dist had only param-slice/schwarz/sym entries; the runtime string is baked into index-*.js and 404s on the
+  deployed site). A 404 module doesn't throw synchronously → it hits the async `error` handler (rejects the solve as "…crashed")
+  but does NOT arm the `_fallback` latch (only the sync `.catch` does), so it never degrades to main-thread and each retry
+  respawns the same doomed worker. All 3 lanes affected (primary/aux/live shared ENTRY) → deployed Solve/alt-search/live-drag
+  hard-fail. Invisible to CI: node/jsdom have no `Worker` (tests take the main-thread fallback); `vite dev` serves source; the
+  browser boot net also runs against source — only inspecting `dist/` or the live site reveals it.
+- **Fix (behavior-restoring, minimal).** Restored the string literal at the `new Worker` site
+  (`new URL('../workers/solver-worker-entry.mjs', import.meta.url)`) and removed the now-dead `entryUrl` config field + the
+  `const ENTRY` (all three lanes spawn the SAME entry bundle → the literal lives once at the construction site). The three other
+  workers (param-slice/schwarz/sym) already used literals and were unaffected. A code comment at the site documents WHY it must
+  stay a literal.
+- **Net-first (regression net, red→green).** New `vitest/worker-url-static-literal.test.ts` scans `app/**/*.mjs` and asserts
+  (1) NO `new Worker(new URL(<variable>))` anywhere (Vite would drop the chunk), (2) primary-solver-worker uses the literal
+  `solver-worker-entry` path. RED on the pre-fix variable (offender @ :96); GREEN after the fix. **Mutation-verified:** variable
+  reintroduced (`cfg.messageKind`) → net RED @ :102; reverted byte-identically via Edit → green.
+- **Empirical build proof.** Post-fix `pnpm build` emits `apps/quadrature-domains/dist/assets/solver-worker-entry-DJnyKXD5.js`
+  (was ABSENT pre-fix — the definitive proof the P0 is closed). Green bar: build/typecheck/lint(+dep:check)/test exit 0;
+  `pnpm test` **2236 / 266** (+1 file / +2 tests = the net). Cut `refactor/p0-solver-worker-bundle`; PR → refactor/main.
+- **Deferred to an explicit decision (a2).** Hardening the async worker-LOAD failure to arm the main-thread `_fallback` latch
+  (so a FUTURE bundling regression self-heals instead of hard-failing) is NOT in this stage — it would move the deliberately
+  net-frozen contract "a crash is NOT a permanent fallback latch" (psw-crash-char.test.ts:63). Scoped design if approved:
+  `_everWorked`-gated (never-loaded → arm fallback; post-success transient crash → keep respawn), preserving the transient-crash
+  retry the frozen line protects. Flagged to the user for a token.
