@@ -439,3 +439,17 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   assertions anchored to each button (#copy-link-host / #h-parse + .copy-btn); mutation-verified each isolates (MUT1/MUT2 → red;
   revert → green). Green: build/typecheck/lint/test 2234/265; QD test:browser 8. **QD-UI-2 → resolved: ui.mjs is now a thin
   composition root** (uiCtx assembly + installX calls + view/domain-mode wiring; the god-module is decomposed).
+- **2026-08-05 · stage p0-solver-worker-bundle (PR → refactor/main):** **QD-BUILD-1 → FIXED** (post-review P0 — the whole-refactor
+  review's one production regression; found by the folderize/build-integrity review slice, confirmed independently). The Stage-C1
+  `createWorkerLane` unification collapsed the primary-solver worker's three literal `new URL('../workers/solver-worker-entry.mjs',
+  import.meta.url)` into ONE `new URL(cfg.entryUrl, …)` VARIABLE. Vite's `worker-import-meta-url` transform only bundles a STRING
+  LITERAL → the `solver-worker-entry` chunk was silently omitted from `vite build` (dist had param-slice/schwarz/sym entries, not
+  solver); on the deployed build the URL 404s and — because the async load `error` never arms the `_fallback` latch (only the sync
+  `.catch` does) — Solve + alt-search + live-drag hard-fail with NO main-thread fallback. INVISIBLE to the green bar (node/jsdom
+  have no `Worker`; `vite dev` serves source; the browser boot net runs against source). FIX (behavior-RESTORING): literal restored
+  at the `new Worker` site; dead `entryUrl`/`ENTRY` indirection removed (all 3 lanes share the one entry). NET-FIRST regression net
+  `worker-url-static-literal.test.ts` (no `new Worker(new URL(<variable>))` in app/; primary uses the literal path) — RED on the
+  bug @ :96, GREEN on the fix, mutation-verified (variable → red @ :102; revert → green). EMPIRICAL: post-fix `vite build` emits
+  `solver-worker-entry-DJnyKXD5.js` (was absent). Green: build/typecheck/lint(+dep:check)/test **2236 / 266** (+1 file / +2 tests
+  = the net). **DEFERRED to an explicit decision (a2):** hardening the async worker-LOAD failure to arm `_fallback` (self-heal to
+  main-thread) — it would move the deliberately net-frozen "a crash is NOT a permanent fallback latch" line (psw-crash-char.test.ts:63).
