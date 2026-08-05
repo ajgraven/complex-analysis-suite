@@ -464,3 +464,16 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   into load-failure(A: latch + self-heal) / transient-crash(B: respawn) + per-lane latch pins for aux/live; RED on the 3
   new-behavior assertions pre-impl, GREEN after; mutation-verified (INVERTED `!_everWorked`→`_everWorked` → BOTH A & B red;
   revert → green). Green: build/typecheck/lint/test **2237 / 266** (+1 test = the A/B split). **Closes (a2); fix (a) complete.**
+- **2026-08-05 · stage publish-gate-durability (PR → refactor/main):** **2 review P1 CI-gate findings → FIXED** (fix (b), user
+  token "then (b)") — defence-in-depth for the QD-BUILD-1 class. The P0 reached prod because the publish gate had two blind
+  spots: (#2) nothing verified the BUILT app before upload (`pnpm test` = node/jsdom, `vite dev`/boot-net serve SOURCE, and
+  `vite build` succeeds while silently dropping a worker chunk); (#3) Vitest's aggregate stays green if a whole PROJECT collects
+  0 specs. TWO deterministic gates: · **built-artifact** (`scripts/check-built-artifacts.mjs`, tail of `pnpm build`) derives every
+  published-app worker from source (`new Worker(new URL('<literal>',…))`, comments stripped) and asserts each emitted a
+  `dist/assets/<stem>-*.js` chunk — all 5 (QD solver/schwarz/sym/param-slice + CD juliaMetrics) + any future worker; rides
+  local+CI+deploy-pages, so a dropped chunk fails the build not the deploy (build-OUTPUT layer under #226's SOURCE net). ·
+  **test-census** (`scripts/assert-test-census.mjs`, tail of `pnpm test`) reads Vitest `--reporter=json` and asserts each of the 8
+  projects ≥1 file (+ loose global floor 200). MUTATION-VERIFIED both (hide solver chunk → build gate fails naming it; doctor JSON
+  emptying interchange → census fails naming it; real → pass). Green: build/typecheck/lint/test **2237 / 266** + census ✓. Chose
+  built-OUTPUT assertions over a built-app browser smoke test (infra+flake) and over reversing the deliberate "browser not a
+  publish blocker" topology — both noted optional. **Closes (b); post-review fixes (a)+(b) complete.**
