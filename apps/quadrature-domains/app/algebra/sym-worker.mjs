@@ -33,8 +33,10 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
   let _worker = null;
   let _readyPromise = null;
   let _nextJobId = 1;
-  let _inflight = null;       // { jobId, resolve, reject, onMessage }
-  let _fallback = false;      // true once the worker can't be built (file://, Node, …)
+  let _inflight = null;       // { jobId, resolve, reject, onMessage, op, payload, onProgress }
+  let _fallback = false;      // true once the worker can't be built (file://, Node, …) OR a load fails
+  let _everWorked = false;    // set once THIS worker returns a message — tells a bundle/load failure
+                              // (never worked → self-heal to main thread) from a mid-run transient crash
 
   // Hard-stop the worker: terminate the thread (killing any in-flight computation) and
   // drop it so the next ensureReady() rebuilds a fresh one. Does NOT settle _inflight —
@@ -56,21 +58,32 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
     if (_worker) return;
     if (_readyPromise) { await _readyPromise; return; }
     _readyPromise = (async () => {
+      _everWorked = false; // a freshly-built worker hasn't proven it loads until it returns a message
       const w = new Worker(new URL('../workers/sym-worker-entry.mjs', import.meta.url), { type: 'module' });
       w.addEventListener('error', (ev) => {
         const detail = formatWorkerErrorDetail(ev);
         if (typeof console !== 'undefined') console.error('[sym-worker] error: ' + detail);
-        const hadJob = !!_inflight;
-        if (_inflight) {
-          const job = _inflight; _inflight = null;
+        const job = _inflight; _inflight = null;
+        if (job) {
           try { w.removeEventListener('message', job.onMessage); } catch (_) { /* ignore */ }
           if (job.detachAbort) job.detachAbort();                    // F3: drop this job's signal listener too
-          job.reject(new Error('sym-worker crashed: ' + detail));
         }
         _teardownWorker();
-        // F4: an error with NO job in flight is a LOAD/idle failure — the worker module can't be built, so fall
-        // back to the main thread PERMANENTLY instead of rebuilding + re-erroring on every subsequent run().
-        if (!hadJob) _fallback = true;
+        if (!_everWorked) {
+          // LOAD failure — the worker module never ran (bundle 404 / stale-cache chunk hash / syntax error).
+          // Rebuilding would re-fail identically, so latch to the main thread PERMANENTLY (F4, now also for the
+          // had-a-job case — QD-SYM-LOAD). And SELF-HEAL the in-flight op: re-run it on the main thread and settle
+          // the ORIGINAL promise, so ★ Auto-reduce & solve keeps working instead of surfacing "sym-worker crashed".
+          _fallback = true;
+          if (job) {
+            try { job.resolve(_QD.Sym.runJob(job.op, job.payload, job.onProgress)); }
+            catch (err) { job.reject(err instanceof Error ? err : new Error(String(err))); }
+          }
+          return;
+        }
+        // A worker that HAD returned a message then errored = a transient mid-run crash: reject the in-flight
+        // job; the next run() rebuilds a fresh worker (a crash is NOT a permanent latch).
+        if (job) job.reject(new Error('sym-worker crashed: ' + detail));
       });
       _worker = w;
     })().catch((err) => {
@@ -116,6 +129,7 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
       const detachAbort = () => { if (signal) { try { signal.removeEventListener('abort', onAbort); } catch (_) { /* ignore */ } } };
       const onMessage = (e) => {
         const m = e.data;
+        if (m) _everWorked = true; // any message from THIS worker proves its bundle loaded and ran
         if (!m || m.jobId !== jobId) return;
         if (m.kind === 'progress') { if (runOpts.onProgress) { try { runOpts.onProgress(m.info); } catch (_) { /* ignore */ } } return; }
         if (m.kind === 'done') {
@@ -125,7 +139,7 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
           if (m.error) reject(new Error(m.error)); else resolve(m.result);
         }
       };
-      _inflight = { jobId, resolve, reject, onMessage, detachAbort };
+      _inflight = { jobId, resolve, reject, onMessage, detachAbort, op, payload, onProgress: runOpts.onProgress };
       _worker.addEventListener('message', onMessage);
       if (signal) {
         if (signal.aborted) { detachAbort(); cancel(); return; }

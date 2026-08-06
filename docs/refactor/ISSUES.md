@@ -486,3 +486,13 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   — does NOT settle" specs rewritten to assert settle+dispose parity — RED pre-flip (promise never rejects → timeout), GREEN
   post-flip; per-lane isolation makes the RED→GREEN transition the mutation proof. Green: build/typecheck/lint/test **2237 / 266**
   (count unchanged). Low-probability in practice (plain numeric messages) → robustness completeness, not an urgent bug.
+- **2026-08-06 · stage sym-worker-load-selfheal (PR → refactor/main):** **QD-SYM-LOAD → FIXED** — user-reported on the LIVE site:
+  "Auto-reduce & solve: sym-worker crashed: [object Event] @ bundle:?" (cardioid, Algebra module). The bare event (empty
+  message/filename/lineno) is a worker-script LOAD 404, not a runtime error — confirmed the chunk itself loads + computes in a real
+  module-worker (Playwright). Root cause deploy-specific: the refactor changed every chunk hash + QD is an `autoUpdate` PWA, so a
+  mid-session SW swap 404s a LAZILY-spawned worker at an old hash (hard-refresh clears it for the user). Code gap: sym-worker.mjs
+  (outside the `createWorkerLane` factory) never got #227's `_everWorked` fix — a load failure WITH a job in flight rejected instead
+  of falling back. FIX: `_everWorked` split — a never-loaded worker latches `_fallback` AND self-heals the in-flight op onto the main
+  thread (`_QD.Sym.runJob`) so Auto-reduce & solve keeps working; a worked-then-crash still rejects+respawns. NET-FIRST +
+  mutation-verified (invert `!_everWorked` → both new specs red). Green: **2238 / 266**. Behavior change authorized by the bug
+  report. Follow-ups: built-app worker smoke test (the gap behind this + QD-BUILD-1); PWA autoUpdate→prompt; sym-lane messageerror.
