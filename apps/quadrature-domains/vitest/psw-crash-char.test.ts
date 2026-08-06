@@ -4,8 +4,8 @@
 // worker-level `error` / `messageerror` handling that has ZERO existing coverage (psw-lifecycle.test.ts
 // covers round-trip / supersede / cancel / spawn-fault fallback; NOT crash-settle). This freezes the
 // current behavior of the three PSW lanes so the Group-C worker-lane dedup (C1 `createWorkerLane`, C2
-// typed protocol) can't silently change it — including the deliberate ASYMMETRY that only the primary
-// lane has a `messageerror` handler (aux/live do not). Refs: QD-UI-1, primary-solver-worker.mjs.
+// typed protocol) can't silently change it. (It originally froze a deliberate ASYMMETRY — only primary
+// had a `messageerror` handler; UPDATE 2 below records closing that gap.) Refs: QD-UI-1, primary-solver-worker.mjs.
 //
 // Driven with the shared vitest/helpers/fake-worker.mjs `FakeWorker` (stubbed as global `Worker`), whose
 // `.fire('error'|'messageerror', ev)` delivers a worker-level event to the lane's real listeners. The
@@ -16,6 +16,12 @@
 // returning a message (its bundle never loaded, e.g. a 404 entry chunk) now LATCHES the lane to the
 // main-thread fallback (self-heal), while a worker that errors AFTER working still respawns (a transient
 // crash retries on the worker path — the original frozen intent). See primary-solver-worker.mjs.
+//
+// UPDATE 2 (aux/live `messageerror` parity, post-review): the primary-only `messageerror` asymmetry is
+// CLOSED — aux + live now install the SAME handler, so a structured-clone failure REJECTS the in-flight
+// job and disposes the worker instead of hanging the lane forever. The two specs that pinned "does NOT
+// settle" now assert settle+dispose parity. (A clone failure respawns, like a transient crash — it does
+// NOT arm the main-thread latch.) See primary-solver-worker.mjs (`hasMessageError` is now true per lane).
 import { describe, it, expect, vi, afterAll } from "vitest";
 import { FakeWorker } from "./helpers/fake-worker.mjs";
 
@@ -116,21 +122,25 @@ describe("PSW crash contract — a worker-level `error` settles the in-flight jo
   });
 });
 
-describe("PSW `messageerror` asymmetry — only primary has a handler (frozen for C2)", () => {
-  it("aux: a `messageerror` does NOT settle the job — aux has no messageerror listener", async () => {
-    const { psw, worker } = await armLane("aux");
+describe("PSW `messageerror` settles the job on EVERY lane (aux/live parity with primary)", () => {
+  it("aux: a `messageerror` rejects the alt-search and disposes the aux worker", async () => {
+    const { psw, worker, promise } = await armLane("aux");
+    expect(psw.isAuxBusy()).toBe(true);
     worker!.fire("messageerror", {});
-    await tick();
-    expect(psw.isAuxBusy()).toBe(true); // still in-flight (current behavior — no handler)
-    expect(psw._hasAuxWorker()).toBe(true); // not disposed
+    await expect(promise).rejects.toThrow(/structured-clone/);
+    expect(psw.isAuxBusy()).toBe(false); // settled (was: hung in-flight forever)
+    expect(psw._hasAuxWorker()).toBe(false); // disposed (was: not disposed)
+    expect(psw._isAuxFallback()).toBe(false); // a clone failure respawns — it does NOT latch main-thread
   });
 
-  it("live: a `messageerror` does NOT settle the job — live has no messageerror listener", async () => {
-    const { psw, worker } = await armLane("live");
-    worker!.fire("messageerror", {});
-    await tick();
+  it("live: a `messageerror` rejects the live solve and disposes the live worker", async () => {
+    const { psw, worker, promise } = await armLane("live");
     expect(psw.isLiveBusy()).toBe(true);
-    expect(psw._hasLiveWorker()).toBe(true);
+    worker!.fire("messageerror", {});
+    await expect(promise).rejects.toThrow(/structured-clone/);
+    expect(psw.isLiveBusy()).toBe(false);
+    expect(psw._hasLiveWorker()).toBe(false);
+    expect(psw._isLiveFallback()).toBe(false);
   });
 });
 
