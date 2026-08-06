@@ -17,7 +17,7 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **Net-first:** no refactor without a passing characterization net pinned to PRE-refactor code; **mutation-verify** every
   net (break a guard → confirm the intended test fails → revert byte-identically via Edit, NOT git). Never widen a tolerance.
 - **Green bar** (must be 0-exit before every PR): `pnpm build && pnpm typecheck && pnpm lint && pnpm test` (lint includes
-  `dep:check`). Currently **2238 / 266** (`refactor/main` @ b194a4d, post-#231) + build/test durability gates.
+  `dep:check`). Currently **2248 / 267** (`refactor/main` @ 9f945f2, post-#233) + build/test durability gates.
 - **Git constraints (VERBATIM):** never `git reset --hard`, `git checkout -- <path>`, `git clean -fd`, `git commit --amend`,
   or force-push. If history seems to need rewriting, STOP and ASK. `git push -u origin <branch>`; retry ≤4× backoff 2/4/8/16s.
 - **Cadence:** integration branch `refactor/main`; each stage on `refactor/<slug>` → ONE PR → `refactor/main`; **merge on
@@ -54,11 +54,11 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   guard [token]), D1c #215 (verdict-unify [token]), D1d #216–#219 (4 seams; inspector = composition core → closed). Detail in LOG.
 - **✅ POST-REVIEW COMPLETE + SHIPPED (2026-08-05/06).** 7-agent review → QD-BUILD-1 + two CI-gate blind spots + worker footnote,
   ALL merged (a #226+#227, b #228, #229). **SHIPPED refactor/main → master (#230, 1342c82); deploy #87 LIVE.**
-- **✅ POST-SHIP FIX — QD-SYM-LOAD (#231, b194a4d) → SHIPPED:** user hit "sym-worker crashed: [object Event]" on live ★ Auto-reduce & solve —
-  a lazily-spawned worker 404'd post-deploy (autoUpdate PWA); sym-worker now self-heals to the main thread. **SHIPPED to master (#232, dd2d08f); deploy-pages #88 LIVE.**
+- **✅ POST-SHIP FIXES.** QD-SYM-LOAD (#231→#232, deploy #88 LIVE): sym-worker self-heals to the main thread after a post-deploy 404 (autoUpdate PWA).
+  **▶ QD-HANDOFF-1 (#233, 9f945f2) — on refactor/main, NOT yet on master:** QD "Export map → copy link" targeted QD itself; now resolves the CD sibling URL.
 
 ## Branches / PR
-- Integration `refactor/main` @ **5f96baa** (#210–#231 merged) → **SHIPPED to `master` (#232, dd2d08f); deploy-pages #88 LIVE** (prior #230→#87).
+- Integration `refactor/main` @ **9f945f2** (#210–#233 merged) → **master @ dd2d08f (deploy #88 LIVE, via #232)**; refactor/main AHEAD by QD-HANDOFF-1 (#233) + the #232 checkpoint.
 - **QD-BUILD-1 (P0 from the 7-agent review) — FIXED, both parts merged:** #226 (a1, e0d91e8) restored the literal worker URL
   (variable `new URL` had dropped the chunk from `vite build` → 404 → deployed Solve/alt/live hard-fail) + regression net;
   #227 (a2, f475a1a) added the `_everWorked`-scoped async-load self-heal (never-loaded→main-thread; worked-then-crash→respawn).
@@ -68,9 +68,9 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - Prior plan (Phases 1–5, D2, F1; 48 stage PRs A1 #178 … #225) COMPLETE — ui.mjs a thin composition root; detail in LOG.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at b194a4d (#231 merged; CI build+browser green): build(+built-artifact gate)/typecheck/
-  lint(+`dep:check`)/test(+test-census) all exit 0; `pnpm test` **2238 / 266** + census ✓ (8 projects, 0 unbucketed).
-- **master @ dd2d08f LIVE (deploy #88, via #232); refactor/main in sync — QD-SYM-LOAD self-heal SHIPPED.**
+- **`refactor/main` — ALL GREEN** at 9f945f2 (#233 merged, QD-HANDOFF-1): build(+built-artifact gate)/typecheck/
+  lint(+`dep:check`)/test(+test-census) all exit 0; `pnpm test` **2248 / 267** + census ✓ (8 projects, 0 unbucketed).
+- **master @ dd2d08f LIVE (deploy #88); refactor/main AHEAD — QD-HANDOFF-1 (#233) fixed, redeploy pending user OK.**
 
 ## Uncommitted / unverified
 - Nothing uncommitted. This STATE edit advances `refactor/main`.
@@ -86,14 +86,14 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   /#225** then lifted the 3 mounts behind it, each pinned by a boot-output assertion + mutation-verified. ui.mjs = thin root.
 
 ## Next concrete steps
-- **✅ SHIPPED + LIVE:** whole refactor + post-review arc + QD-SYM-LOAD fix on master (latest: #232, dd2d08f; deploy #88).
-- **✅ REDEPLOYED — QD-SYM-LOAD LIVE:** #232 shipped refactor/main → master (dd2d08f); deploy #88 green. ★ Auto-reduce & solve
-  now resilient to worker-load failures — no hard-refresh needed.
+- **✅ LIVE on master:** whole refactor + post-review arc + QD-SYM-LOAD (latest deploy #88, dd2d08f).
+- **▶ STAGED on refactor/main, redeploy pending user OK — QD-HANDOFF-1 (#233):** QD→CD "Export map → copy link" now targets the
+  Complex Dynamics app (was linking back to QD). Recommend redeploying when ready; local split-port dev needs VITE_CD_BASE.
 - **Root-cause follow-ups:** built-app worker smoke test (caught neither QD-BUILD-1 nor QD-SYM-LOAD); PWA autoUpdate→prompt.
 - **Then the product (VISION):** next correspondence family (circle-and-cardioid → cubic Chebyshev → d:d). Optional: P2 leftovers; sym messageerror.
 
 ## Resume commands
 ```
 git fetch && git checkout refactor/main && git pull
-pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2237/266 + census ✓
+pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2248/267 + census ✓
 ```
