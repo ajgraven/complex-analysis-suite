@@ -17,7 +17,7 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **Net-first:** no refactor without a passing characterization net pinned to PRE-refactor code; **mutation-verify** every
   net (break a guard → confirm the intended test fails → revert byte-identically via Edit, NOT git). Never widen a tolerance.
 - **Green bar** (must be 0-exit before every PR): `pnpm build && pnpm typecheck && pnpm lint && pnpm test` (lint includes
-  `dep:check`). Currently **2237 / 266** (`refactor/main` @ e18fcc3, post-#229) + build/test durability gates.
+  `dep:check`). Currently **2238 / 266** (`refactor/main` @ b194a4d, post-#231) + build/test durability gates.
 - **Git constraints (VERBATIM):** never `git reset --hard`, `git checkout -- <path>`, `git clean -fd`, `git commit --amend`,
   or force-push. If history seems to need rewriting, STOP and ASK. `git push -u origin <branch>`; retry ≤4× backoff 2/4/8/16s.
 - **Cadence:** integration branch `refactor/main`; each stage on `refactor/<slug>` → ONE PR → `refactor/main`; **merge on
@@ -52,9 +52,10 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   → **Phase 4 (D2)✓ COMPLETE: ui.mjs seam #220 + QD boot net #223 + lifts #224/#225 → thin composition root** → **Phase 5 (E2)✓ #221** / E (E1 deferred) / **F1✓**. **PLAN COMPLETE.**
 - **PHASE 3 (D1 installAlgebra) COMPLETE** — D1a #210/#211 (sidebar-as-data), D1b #212–#214 (op-runner fold + doSolveRadical
   guard [token]), D1c #215 (verdict-unify [token]), D1d #216–#219 (4 seams; inspector = composition core → closed). Detail in LOG.
-- **✅ POST-REVIEW COMPLETE + SHIPPING (2026-08-05/06).** 7-agent review → ONE regression QD-BUILD-1 + two CI-gate blind spots
-  + one worker footnote, ALL merged: (a) #226+#227, (b) #228, #229 (aux/live `messageerror` parity — worker arc closed). **✅
-  SHIPPED refactor/main → master (#230, merge 1342c82) — deploy-pages run #87 SUCCEEDED; the whole refactor is LIVE.**
+- **✅ POST-REVIEW COMPLETE + SHIPPED (2026-08-05/06).** 7-agent review → QD-BUILD-1 + two CI-gate blind spots + worker footnote,
+  ALL merged (a #226+#227, b #228, #229). **SHIPPED refactor/main → master (#230, 1342c82); deploy #87 LIVE.**
+- **▶ POST-SHIP FIX — QD-SYM-LOAD (#231, b194a4d):** user hit "sym-worker crashed: [object Event]" on live ★ Auto-reduce & solve —
+  a lazily-spawned worker 404'd post-deploy (autoUpdate PWA); sym-worker now self-heals to the main thread. **refactor/main AHEAD of master → redeploy pending user OK.**
 
 ## Branches / PR
 - Integration `refactor/main` @ **b19a9c8** (#210–#229 merged) → **SHIPPED to `master` (#230, 1342c82); deploy-pages #87 LIVE.**
@@ -67,9 +68,9 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - Prior plan (Phases 1–5, D2, F1; 48 stage PRs A1 #178 … #225) COMPLETE — ui.mjs a thin composition root; detail in LOG.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at ef45c18 (#228 merged; CI build+browser both green): build(+built-artifact gate)/typecheck/
-  lint(+`dep:check`)/test(+test-census) all exit 0; `pnpm test` **2237 / 266** + census ✓ (8 projects, 0 unbucketed).
-- **QD-BUILD-1 empirical proof:** `vite build` emits all 5 worker chunks; the built-artifact gate now asserts this every build.
+- **`refactor/main` — ALL GREEN** at b194a4d (#231 merged; CI build+browser green): build(+built-artifact gate)/typecheck/
+  lint(+`dep:check`)/test(+test-census) all exit 0; `pnpm test` **2238 / 266** + census ✓ (8 projects, 0 unbucketed).
+- **master @ 1342c82 LIVE (deploy #87); refactor/main is 1 commit ahead (#231 QD-SYM-LOAD) — redeploy pending user OK.**
 
 ## Uncommitted / unverified
 - Nothing uncommitted. This STATE edit advances `refactor/main`.
@@ -85,11 +86,11 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   /#225** then lifted the 3 mounts behind it, each pinned by a boot-output assertion + mutation-verified. ui.mjs = thin root.
 
 ## Next concrete steps
-- **✅ SHIPPED + LIVE (2026-08-06):** `refactor/main` → `master` (#230, merge 1342c82); deploy-pages run #87 succeeded — the
-  whole refactor + post-review arc is on the live Pages site. **Engagement banked.**
-- **Then advance the product (VISION):** scope the next correspondence family (circle-and-cardioid → cubic Chebyshev → d:d).
-- **Optional review leftovers:** node-suite floor (P1-minor); `--passWithNoTests`/glob-width/`edges` (P2); dead version label.
-  Deferred: boot-harness Stage 2; inspector; E1. (aux/live `messageerror` — DONE #229.)
+- **✅ SHIPPED + LIVE:** whole refactor + post-review arc on master (#230, 1342c82; deploy #87).
+- **▶ DECISION PENDING — redeploy?** #231 (QD-SYM-LOAD sym-worker self-heal) is on refactor/main, NOT master. Recommend redeploying
+  (makes ★ Auto-reduce & solve resilient to the autoUpdate SW churn); user remedy meanwhile = hard-refresh.
+- **Root-cause follow-ups:** built-app worker smoke test (caught neither QD-BUILD-1 nor QD-SYM-LOAD); PWA autoUpdate→prompt.
+- **Then the product (VISION):** next correspondence family (circle-and-cardioid → cubic Chebyshev → d:d). Optional: P2 leftovers; sym messageerror.
 
 ## Resume commands
 ```
