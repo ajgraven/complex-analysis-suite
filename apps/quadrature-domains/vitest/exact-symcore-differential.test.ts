@@ -29,11 +29,11 @@
 // is the only way to compare them at all.
 import { describe, it, expect, beforeAll } from "vitest";
 import { Frac, Gauss } from "@cas/exact";
-import _QD from "../app/solver.mjs";
+import _QD from "../app/solvers/solver.mjs";
 
 let Rational: any, Gaussian: any;
 beforeAll(async () => {
-  await import("../app/sym-core.mjs");
+  await import("../app/sym/sym-core.mjs");
   Rational = (_QD as any).Sym.Rational;
   Gaussian = (_QD as any).Sym.Gaussian;
 });

@@ -14,9 +14,9 @@ import { describe, it, expect, beforeAll } from "vitest";
 
 let Store: any, S: any, QC: any;
 beforeAll(async () => {
-  const _QD: any = (await import("../app/solver.mjs")).default;
-  await import("../app/sym-core.mjs");
-  await import("../app/qd-constraints.mjs");
+  const _QD: any = (await import("../app/solvers/solver.mjs")).default;
+  await import("../app/sym/sym-core.mjs");
+  await import("../app/qd/qd-constraints.mjs");
   await import("../app/algebra/algebra-store.mjs");
   await import("../app/algebra/cas-export.mjs");   // sympyDerivation needs QD.CASExport (_subsForRepro)
   Store = _QD.AlgebraStore; S = _QD.Sym; QC = _QD.QDConstraints;

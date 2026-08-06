@@ -1,5 +1,5 @@
 // ESM (Phase 2 port) — twin of solvers/seeds/seeds-uqd-pqd-singular.js (classic stays frozen). Registers onto the QD namespace.
-import _QD from '../../solver.mjs';
+import _QD from '../solver.mjs';
 // =============================================================================
 // solvers/seeds/seeds-uqd-pqd-singular.js -- Seed strategy for
 // Family.unboundedPQD_singular (B3).

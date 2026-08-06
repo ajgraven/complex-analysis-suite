@@ -19,7 +19,12 @@ const { ok, report } = require('./test/harness');
 // Ordered for readable output. Order is not load-bearing: bootstrap eagerly
 // loads every kernel, so each file's run() only reads already-resolved globals.
 const TESTS = [
-  'solvers',
+  // solvers.test.js was split into 4 contiguous parallel shards (refactor Stage B2, QD-TEST-5):
+  // their run() bodies concatenate to the original run() body byte-for-byte. Order preserved.
+  'solvers-1',
+  'solvers-2',
+  'solvers-3',
+  'solvers-4',
   'direct',
   'schwarz',
   'param-slice',
@@ -83,7 +88,8 @@ const TESTS = [
 // Both were verified by simulating the absent dependency: each run went red on
 // the floor and on the dependency marker.
 const FLOORS = {
-  solvers: 30, direct: 120, schwarz: 20, 'param-slice': 15, sphere: 5,
+  'solvers-1': 100, 'solvers-2': 5, 'solvers-3': 40, 'solvers-4': 100,   // B2 split; measured 187/10/71/183
+  direct: 120, schwarz: 20, 'param-slice': 15, sphere: 5,
   cusps: 5, 'cusp-accuracy': 5, symmetry: 2, 'thesis-examples': 8, faber: 8,
   riemann: 15, 'parse-check': 3, 'h-text-roundtrip': 15, worker: 3,
   'ui-inputs': 30, cmax: 3, observables: 5, 'sym-core': 250, 'sym-radical': 45, 'qd-equations': 60, 'qd-constraints': 16,

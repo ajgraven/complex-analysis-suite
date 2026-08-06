@@ -9,11 +9,11 @@
 // hit a cost cap, the components may not even COVER V(I), so the branches can sum to LESS than the
 // total. That is `branchIncomplete`, and losing it would convert a lower bound into a total.
 import { describe, it, expect, beforeAll } from "vitest";
-import _QD from "../app/solver.mjs";
+import _QD from "../app/solvers/solver.mjs";
 
 let Store: any, S: any;
 beforeAll(async () => {
-  await import("../app/sym-core.mjs");
+  await import("../app/sym/sym-core.mjs");
   await import("../app/algebra/algebra-store.mjs");
   S = (_QD as any).Sym;
   Store = (_QD as any).AlgebraStore;

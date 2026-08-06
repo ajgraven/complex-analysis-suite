@@ -85,7 +85,7 @@ over HTTP and the workers are native ES-module workers.
 
 Modern browser recommended (WebGL 2 is used for the Schwarz/sphere views, with a
 CPU fallback). [math.js](https://mathjs.org) and [KaTeX](https://katex.org) are
-bundled and self-hosted (`app/vendor-globals.mjs`) for expression parsing and math
+bundled and self-hosted (`app/core/vendor-globals.mjs`) for expression parsing and math
 display — KaTeX eagerly, math.js lazily on first use (it is ~260 kB gzip and only
 needed for parsing h-text). The app makes no CDN requests and works fully offline.
 
@@ -133,70 +133,81 @@ visualizations, complementary to the headless runner.
     ├── main.mjs                       page entry: side-effect-imports the whole module
     │                                  graph, then runs QD.Strings.apply()
     │
-    ├── complex.mjs                    {re, im} complex arithmetic + string format/parse
-    ├── taylor.mjs                     truncated Taylor-series arithmetic
-    │                                  (mul, invert, exp, log, reciprocal, compose)
+    │  The former flat app/*.mjs were grouped into the six folders below by the E2
+    │  folderization (refactor Phase 5). main.mjs, workers/solver-graph.mjs, and
+    │  test/bootstrap.js hold the hand-maintained load ORDER; the folders are by KIND.
     │
-    ├── solver.mjs                     Family registry; dispatchers; schema runtime;
-    │                                  Newton driver; deflation; boundary sampler /
-    │                                  univalence check; top-level solveInverseQD
-    ├── solver-faber.mjs               shared inverse Faber transform primitives
-    ├── solver-qd.mjs                  Family.boundedQD            (classical bounded)
-    ├── solver-uqd.mjs                 Family.unboundedQD          (classical unbounded)
-    ├── solver-lqd-common.mjs          shared LQD machinery (Blaschke, modified residues)
-    ├── solver-lqd.mjs                 Family.boundedLQD           (non-singular)
-    ├── solver-lqd-singular.mjs        Family.boundedLQD_singular
-    ├── solver-uqd-lqd.mjs             Family.unboundedLQD         (non-singular)
-    ├── solver-uqd-lqd-singular.mjs    Family.unboundedLQD_singular
-    │                                  (+ solver-pqd*.mjs / solver-uqd-pqd*.mjs power families)
+    ├── core/                          convention-neutral primitives + shared infra
+    │   ├── complex.mjs                {re, im} complex arithmetic (thin re-export of @cas/core)
+    │   ├── taylor.mjs                 truncated Taylor-series arithmetic (mul/invert/exp/log/compose)
+    │   ├── poly-helpers.mjs           dense-polynomial arithmetic (QD.Poly)
+    │   ├── parse-h.mjs                custom-text h(w) parser (strict PFD walker, rational fallback)
+    │   ├── qd.mjs                     ES-module façade over the classic-script QD namespace
+    │   ├── qol.mjs                    shared quality-of-life DOM primitives (QD.QoL)
+    │   └── vendor-globals.mjs         self-hosted KaTeX (eager) + mathjs (lazy) — replaces CDN <script>
     │
-    ├── parse-h.mjs                    custom-text h(w) parser (strict PFD walker,
-    │                                  general-rational fallback via Durand–Kerner)
-    ├── critical-set.mjs               complex Newton on φ'(z) = 0 from a polar
-    │                                  seed grid; powers the inverse-tab critical-
-    │                                  set overlay
-    ├── observables.mjs                boundary observables (area / perimeter /
-    │                                  curvature / harmonic measure / accuracy)
-    ├── symmetry.mjs                   QD.detectSymmetry (D_n / Z_n via φ intertwining)
-    ├── thesis-examples.mjs            curated examples + analytic-oracle engine
-    ├── faber-analysis.mjs             QD.FaberAnalysis: Faber polynomials of a UQD
-    │                                  complement + a Durand–Kerner complex root-finder
-    ├── sym-core.mjs                   QD.Sym: exact symbolic algebra (Rational/Gaussian/
-    │                                  MPoly/RatFn/FRatFn + power series, Lagrange reversion;
-    │                                  resultant/discriminant + Gröbner basis over ℚ(i):
-    │                                  Buchberger (+ signature/GVW), FGLM, linearReduce,
-    │                                  solveZeroDim + Möller–Stetter eigenvalue solving;
-    │                                  realSolutionCount, schurCohn (exact disk-root count),
-    │                                  resolvent (char-poly eliminant + discriminant))
-    ├── qd-equations.mjs               QD.QDEquations: symbolic coefficient system for a
-    │                                  classical bounded QD (conjugate + real/imag reps;
-    │                                  pointFunctionalSystem = the interior A&S form)
-    ├── qd-constraints.mjs             QD.QDConstraints: univalence/geometric constraints
-    │                                  (convex/star/spiral, φ′≠0, global injectivity, borders;
-    │                                  boundaryDoublePointCount = exact boundary injectivity)
-    ├── ui-strings.mjs                 QD.Strings: editable UI prose (SINGLE SOURCE) +
-    │                                  the data-str applier (see HELPTEXT.md)
+    ├── solvers/                       inverse-problem solver cluster (Family registry + families)
+    │   ├── solver.mjs                 Family registry; dispatchers; schema runtime; Newton driver;
+    │   │                              deflation; boundary sampler / univalence; solveInverseQD
+    │   ├── solver-faber.mjs           shared inverse Faber transform primitives
+    │   ├── solver-qd.mjs              Family.boundedQD            (classical bounded)
+    │   ├── solver-uqd.mjs             Family.unboundedQD          (classical unbounded)
+    │   ├── solver-lqd-common.mjs      shared LQD machinery (Blaschke, modified residues)
+    │   ├── solver-lqd.mjs / -singular.mjs        Family.boundedLQD (+ _singular)
+    │   ├── solver-uqd-lqd.mjs / -singular.mjs    Family.unboundedLQD (+ _singular)
+    │   ├── solver-pqd*.mjs / solver-uqd-pqd*.mjs power (PQD) families (+ _singular)
+    │   ├── solver-cmax.mjs            c* extremal-capacity solver
+    │   ├── solver-continuation.mjs    parameter-continuation driver
+    │   ├── solver-taylor-common.mjs   shared truncated-series helpers for the families
+    │   ├── primary-solution.mjs       primary-solution envelope model
+    │   ├── primary-solver-worker.mjs  warm Inverse-tab solve worker (3 lanes) + main-thread fallback
+    │   ├── define-family.mjs          Family-shell factory (shared 17-key skeleton)
+    │   └── seeds/                     per-family multistart seed banks
     │
-    ├── ui.mjs                         QD/LQD-tab UI hub: DOM wiring, shared helpers,
-    │                                  uiCtx injection + the module installs below
-    ├── ui-modes.mjs                   MODE descriptors + aggressiveness presets
-    ├── ui-pole-grid.mjs               pole / poly-coef control renderers
-    ├── ui-h-text.mjs                  h(w) text ⇄ structured-grid mirror
-    ├── ui-solve.mjs                   solve → render → analyze pipeline
-    │                                  (+ alternates + background search)
-    ├── ui-url-state.mjs               URL/hash serialize + restore (B1)
-    ├── ui-thesis.mjs                  thesis-example gallery + analytic-oracle card
-    ├── ui-faber.mjs                   Faber-polynomials card + roots overlay (UQD)
-    ├── ui-qd-equations.mjs            Quadrature↔map equation-system card (classical
-    │                                  bounded QD): LaTeX display + self-verify + export
-    │                                  (all: QD_UI.installX(uiCtx) factories,
-    │                                   Phase-3 item E split of ui.mjs)
-    ├── ui-figure-export.mjs           "Figure & export" card: element/colour/marker
-    │                                  controls, style presets, PNG + clipboard export,
-    │                                  and the one-parameter family sweep
-    │                                  (QD_UI.installFigureExport factory)
-    ├── family-sweep.mjs               DOM-free family-sweep engine for the Figure card
-    │                                  (sweepFamily → boundary curves + honest counts)
+    ├── qd/                            classical-QD symbolic equation system
+    │   ├── qd-equations.mjs           QD.QDEquations: symbolic coefficient system (interior A&S form)
+    │   ├── qd-constraints.mjs         QD.QDConstraints: univalence/geometric constraints
+    │   │                              (convex/star/spiral, φ′≠0, boundaryDoublePointCount)
+    │   └── qd-varscheme.mjs           variable-scheme helper for the equation system
+    │
+    ├── sym/                           exact symbolic-algebra kernels
+    │   ├── sym-core.mjs               QD.Sym: exact algebra (Rational/Gaussian/MPoly/RatFn + power
+    │   │                              series; Gröbner over ℚ(i) — Buchberger/GVW, FGLM, linearReduce;
+    │   │                              solveZeroDim + Möller–Stetter; resultant/discriminant;
+    │   │                              realSolutionCount, schurCohn, resolvent)
+    │   └── sym-radical.mjs            radical-simplification layer over QD.Sym
+    │
+    ├── analysis/                      φ-analysis features (computed from a SOLVED map)
+    │   ├── univalence.mjs             special univalence criteria for the solved φ
+    │   ├── critical-set.mjs           complex Newton on φ'(z)=0 → inverse-tab critical-set overlay
+    │   ├── cusps.mjs                  boundary cusp detection + (p,q)-type classification
+    │   ├── observables.mjs            boundary observables (area/perimeter/curvature/harmonic measure)
+    │   ├── symmetry.mjs               QD.detectSymmetry (D_n / Z_n via φ intertwining)
+    │   ├── faber-analysis.mjs         QD.FaberAnalysis: Faber polynomials of a UQD complement
+    │   ├── family-sweep.mjs           DOM-free one-parameter family-sweep engine (Figure card)
+    │   ├── riemann-latex.mjs          pure LaTeX generation for the Riemann-map card
+    │   └── thesis-examples.mjs        curated examples + analytic-oracle engine
+    │
+    ├── ui/                            QD/LQD-tab UI feature modules (QD_UI.installX(uiCtx) factories)
+    │   ├── ui.mjs                     QD/LQD-tab UI hub: DOM wiring, shared helpers, uiCtx injection
+    │   │                              (whole body wrapped in bootQdUi(), #canvas-gated — D2 seam)
+    │   ├── ui-registry.mjs            QD_UI registry — the UI-side namespace hooks attach onto
+    │   ├── ui-strings.mjs             QD.Strings: editable UI prose (SINGLE SOURCE) + data-str applier
+    │   ├── ui-modes.mjs               MODE descriptors + aggressiveness presets
+    │   ├── ui-state.mjs               shared UI-state containers
+    │   ├── ui-presets.mjs             preset scenarios
+    │   ├── ui-pole-grid.mjs           pole / poly-coef control renderers
+    │   ├── ui-h-text.mjs              h(w) text ⇄ structured-grid mirror
+    │   ├── ui-solve.mjs               solve → render → analyze pipeline (+ alternates + bg search)
+    │   ├── ui-url-state.mjs           URL/hash serialize + restore
+    │   ├── ui-domain-mode.mjs         domain-type (mode) control wiring
+    │   ├── ui-domain-plot.mjs         DomainPlot canvas renderer
+    │   ├── ui-geometry.mjs            geometry-card renderers
+    │   ├── ui-thesis.mjs              thesis-example gallery + analytic-oracle card
+    │   ├── ui-faber.mjs               Faber-polynomials card + roots overlay (UQD)
+    │   ├── ui-qd-equations.mjs        Quadrature↔map equation-system card (classical bounded QD)
+    │   └── ui-figure-export.mjs       "Figure & export" card + one-parameter family sweep
+    │
     ├── algebra/                       Algebra tab — symbolic elimination workspace:
     │   ├── sym-worker.mjs             QD.SymWorker: off-main-thread Gröbner/solve
     │   │                              (native module worker; progress + cancel)
@@ -467,7 +478,7 @@ view is active.
   so genuine near-cusp domains are no longer mis-rejected. An optional **curvature
   heat-strip** toggle colors ∂Ω by |κ| (cool → hot) so the sharpest bends — and
   forming cusps — stand out.
-  These come from `app/observables.mjs` (`QD.boundaryObservables`,
+  These come from `app/analysis/observables.mjs` (`QD.boundaryObservables`,
   `QD.harmonicMeasure`, `QD.estimateAccuracy`), computed from the solved map φ.
 * **Thesis examples + analytic oracles** — a **Thesis example** gallery loads
   curated canonical quadrature domains (unit disk, symmetric multi-pole D₂/D₃/D₄
@@ -476,12 +487,12 @@ view is active.
   reproduce (area, symmetry group, cusp count/type, `c*` + mechanism, achievable
   significant digits) — and an **Analytic oracle** card shows computed vs expected
   with ✓ / ⚠ / ✗ (the heavy `c*` check verifies on demand). From
-  `app/thesis-examples.mjs` (`QD.ThesisExamples`, `QD.checkOracle`).
+  `app/analysis/thesis-examples.mjs` (`QD.ThesisExamples`, `QD.checkOracle`).
 * **Annotated phenomena** — an optional overlay labels the features the
   critical-set / cusp overlays don't: the **harmonic-measure hot spot** (the tip,
   where `ρ = 1/(2π|φ′|)` peaks), the **maximum-curvature point** on ∂Ω, and the
   domain's **symmetry axes** (dashed) with its `D_n` / `Z_n` group. Symmetry comes
-  from `app/symmetry.mjs` (`QD.detectSymmetry`), which reads the domain's symmetry
+  from `app/analysis/symmetry.mjs` (`QD.detectSymmetry`), which reads the domain's symmetry
   straight off φ via the conformal-map intertwining.
 * **Faber polynomials** *(classical unbounded QD only)* — a **Faber polynomials**
   card computes the Faber polynomials `F_n(ζ)` of the bounded complement `K = ℂ∖Ω`
@@ -490,7 +501,7 @@ view is active.
   degree and leading coefficient, and per-order root-finder **convergence flags**, and
   optionally **plots their roots** on the domain canvas — the union of all roots up to
   order N (teal circles) or the roots of a single `F_n` (violet diamonds). Roots cluster
-  inside K, the "hole" of the unbounded domain. From `app/faber-analysis.mjs`
+  inside K, the "hole" of the unbounded domain. From `app/analysis/faber-analysis.mjs`
   (`QD.FaberAnalysis`: `faberPolynomials`, `polynomialRoots` (Durand–Kerner)).
 * **Quadrature ↔ map equations** *(classical bounded QD only)* — a **Quadrature ↔ map
   equations** card generates the explicit *algebraic* system relating the quadrature data
@@ -501,7 +512,7 @@ view is active.
   ≈0), and exportable as LaTeX or a CAS-agnostic JSON term list. A default-on **"Fix φ(0) = w₀"**
   checkbox bakes the solve's selected Riemann-map center (centroid of the poles by default) into
   the equations as an *exact rational*, dropping w₀/w̄₀ from the variables. Exact arithmetic
-  throughout (`app/sym-core.mjs` `QD.Sym`; `app/qd-equations.mjs` `QD.QDEquations`); the
+  throughout (`app/sym/sym-core.mjs` `QD.Sym`; `app/qd/qd-equations.mjs` `QD.QDEquations`); the
   "Open in Algebra workspace ↗" button feeds the in-browser elimination/Gröbner reducer below.
 * **Algebra tab** *(classical bounded QD only)* — an interactive **equation-derivation
   workspace**. The generated (●)/(★)/gauge system appears as KaTeX nodes in a graph;
@@ -620,7 +631,7 @@ view is active.
   open the eliminate panel. A **results drawer** above the verdict keeps every result the session
   produced, marking each `current`, `earlier`, or a branch name, so a verdict is never shown as
   describing a system it was not computed on. The **φ / h reference** is a collapsible card in
-  the canvas's bottom-left corner. From `app/qd-constraints.mjs` (`QD.QDConstraints`) +
+  the canvas's bottom-left corner. From `app/qd/qd-constraints.mjs` (`QD.QDConstraints`) +
   `app/algebra/`. The external-CAS bridge is **shipped**: export the system as a Maple
   `RealComprehensiveTriangularize` script, run it in your own Maple, and paste the result back
   via **Import RCTD** — it lands as a new column, labelled as externally computed and not
@@ -861,14 +872,14 @@ Highlights from the recent ship cadence — full retrospectives in `HANDOFF.md`:
   sweep** overlay, and high-resolution **PNG** export / clipboard copy — all
   reproducible from the share link (`fig`/`view`). Honest labelling is preserved:
   non-univalent boundaries stay warning-red, and invalid family members are drawn
-  dashed and never counted valid. (`app/ui-figure-export.mjs`,
-  `app/family-sweep.mjs`.)
+  dashed and never counted valid. (`app/ui/ui-figure-export.mjs`,
+  `app/analysis/family-sweep.mjs`.)
 * **Faber polynomials (UQD).** A **Faber polynomials** card computes the Faber
   polynomials `Fₙ(ζ)` of the bounded complement `K = ℂ∖Ω` of a classical unbounded
   QD from φ's Laurent expansion at ∞, shows them (formula + coefficient table) with
   capacity / leading-coeff / convergence flags, and optionally plots their roots on
   the domain canvas (roots cluster inside `K`). "Estimate max c" now jumps the slider
-  to *exactly* c\*. (`app/faber-analysis.mjs`, `app/ui-faber.mjs`.)
+  to *exactly* c\*. (`app/analysis/faber-analysis.mjs`, `app/ui/ui-faber.mjs`.)
 * **Usability / clarity overhaul.** The on-plot status panel no longer obscures the
   domain (shrunk + dockable, persisted), overlay toggles unified into an **Overlays /
   Layers** card with color keys, an example-led first run + dismissible coachmark, a
@@ -876,16 +887,16 @@ Highlights from the recent ship cadence — full retrospectives in `HANDOFF.md`:
   and live solve-phase feedback.
 * **Thesis-example pack + analytic oracles.** A **Thesis example** gallery loads
   curated canonical domains, each with a closed-form *analytic oracle*; an **Analytic
-  oracle** card shows computed-vs-expected with ✓ / ⚠ / ✗. (`app/thesis-examples.mjs`.)
+  oracle** card shows computed-vs-expected with ✓ / ⚠ / ✗. (`app/analysis/thesis-examples.mjs`.)
 * **Annotated-phenomena overlay.** Labels the harmonic-measure hot spot (tip),
   maximum-curvature point, and symmetry axes / group, with an exact symmetry detector
-  read off φ via the conformal-map intertwining (`app/symmetry.mjs`).
+  read off φ via the conformal-map intertwining (`app/analysis/symmetry.mjs`).
 * **Solver accuracy near cusps.** Adaptive quadrature-identity sample escalation,
   Newton conditioning (central-difference Jacobian when ill-conditioned), a c\*
   confidence estimate, and honest near-cusp accuracy reporting.
 * **Boundary observables.** Curvature heat-strip, area / perimeter / centroid /
   moments, harmonic-measure density, and an accuracy estimate, surfaced in a
-  **Geometry & accuracy** card (`app/observables.mjs`).
+  **Geometry & accuracy** card (`app/analysis/observables.mjs`).
 
 Earlier LQD/PQD ship cadence (polynomial-h for unbounded LQDs, the singular-LQD
 q-formula, Schwarz-tab polyPart/γ support, etc.) is retrospected in `HANDOFF.md`.

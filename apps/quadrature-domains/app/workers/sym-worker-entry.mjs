@@ -7,9 +7,9 @@
 //
 // `self` is guarded so the module graph is importable headlessly.
 // =============================================================================
-import _QD from '../solver.mjs';
-import '../sym-core.mjs';          // QD.Sym (the exact-symbolic core: runJob)
-import '../faber-analysis.mjs';    // QD.FaberAnalysis — Durand–Kerner used by solveZeroDim
+import _QD from '../solvers/solver.mjs';
+import '../sym/sym-core.mjs';          // QD.Sym (the exact-symbolic core: runJob)
+import '../analysis/faber-analysis.mjs';    // QD.FaberAnalysis — Durand–Kerner used by solveZeroDim
 
 if (typeof self !== 'undefined') {
   self.onmessage = function (e) {

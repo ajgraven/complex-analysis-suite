@@ -14,8 +14,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 
 let steps: any, stepStates: any;
 beforeAll(async () => {
-  await import("../app/solver.mjs");
-  const reg: any = await import("../app/ui-registry.mjs");
+  await import("../app/solvers/solver.mjs");
+  const reg: any = await import("../app/ui/ui-registry.mjs");
   await import("../app/algebra/algebra-ui.mjs");
   steps = reg.QD_UI.WORKFLOW_STEPS;
   stepStates = reg.QD_UI.workflowStepStates;

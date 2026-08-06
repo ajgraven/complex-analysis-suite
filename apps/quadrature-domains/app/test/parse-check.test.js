@@ -40,7 +40,7 @@ module.exports = async function run() {
   // Regression guard (review item 1): the canonical poly-part state field is
   // `state.polyCoeffs` (two f's). A `state.polyCoefs` (one f) write is a silent no-op —
   // renderPolyCoefList() reads `polyCoeffs`, so loaded coefficients are dropped.
-  const uiSrc = fs.readFileSync(path.join(APP_DIR, 'ui.mjs'), 'utf8');
+  const uiSrc = fs.readFileSync(path.join(APP_DIR, 'ui', 'ui.mjs'), 'utf8');
   const hasTypo = /\bstate\.polyCoefs\b/.test(uiSrc);       // one 'f' — the bug
   const hasCanonical = /\bstate\.polyCoeffs\b/.test(uiSrc); // two 'f' — correct
   ok('ui.mjs uses state.polyCoeffs (no single-f typo)', !hasTypo && hasCanonical,

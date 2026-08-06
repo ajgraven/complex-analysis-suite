@@ -3,8 +3,8 @@
 // See docs/MULTIVARIATE_FACTORING.md §5. Pure engine; the goldens are the Phase-0 spike battery, so
 // this test is also the in-tree record of what that (transient) scratch spike validated exactly.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
 const { MPoly, bivariateAbsFactorCount, isAbsolutelyIrreducible } = S;

@@ -1,8 +1,12 @@
 // Section targeting — the source-level half of the workflow-strip work.
 //
 // Node environment (no jsdom): jsdom rewrites import.meta.url to http:, which makes fileURLToPath
-// throw, so anything reading a source file has to live here. Its behavioural companion is
-// algebra-workflow-steps.test.ts. Same split as algebra-shortcuts-focus / algebra-shortcuts-table.
+// throw, so anything reading a source file has to live here. The behavioural companions are
+// algebra-workflow-steps.test.ts (the WORKFLOW_STEPS state machine, exposed on QD_UI) and, added in
+// refactor Phase 2 (QD-ALG-3), algebra-workflow-sections-dom.test.ts (mounts the sidebar and checks
+// the sections render + every WORKFLOW_STEPS.section resolves to a real data-section). What stays here
+// is the source-level guard that sections are reached BY NAME, never by a positional nth-of-type
+// selector. Same split as algebra-shortcuts-focus / algebra-shortcuts-table.
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -16,24 +20,8 @@ const CODE = UI
   .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
   .replace(/(^|[^:])\/\/[^\n]*/g, (m) => m.replace(/[^\n]/g, " "));
 
-/** Section identity is the <summary> text — wireSectionPersistence keys data-section off it. */
-const SUMMARIES = [...UI.matchAll(/<summary>([^<]+)<\/summary>/g)].map((m) => m[1]);
-/** The `section:` field of each WORKFLOW_STEPS entry, source-read so the two files agree. */
-const STEP_SECTIONS = [...UI.matchAll(/section:\s*'([^']+)'/g)].map((m) => m[1]);
-
-describe("workflow steps point at sections that exist", () => {
-  it("finds the sidebar's sections", () => {
-    // Guard the guard: if the <summary> shape changes, the checks below would pass vacuously.
-    expect(SUMMARIES).toContain("Reduce");
-    expect(SUMMARIES.length).toBeGreaterThanOrEqual(8);
-  });
-
-  it("every named step section exists", () => {
-    // Silent failure otherwise: a step pointing at a renamed section simply stops opening anything.
-    expect(STEP_SECTIONS.length).toBeGreaterThan(0);
-    for (const s of STEP_SECTIONS) expect(SUMMARIES, s + " is not a section").toContain(s);
-  });
-});
+// (The rendered-DOM half — the sections render, and every WORKFLOW_STEPS.section resolves to a real
+// details.algebra-section[data-section] — moved to algebra-workflow-sections-dom.test.ts.)
 
 describe("sections are reached by name, never by position", () => {
   it("no caller uses nth-of-type on a workflow section", () => {

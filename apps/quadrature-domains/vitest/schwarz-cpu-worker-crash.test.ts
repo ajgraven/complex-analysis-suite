@@ -51,7 +51,7 @@ const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
 beforeAll(async () => {
   (globalThis as Record<string, unknown>).Worker = FakeWorker;
-  const QD = (await import("../app/solver.mjs")).default as Record<string, unknown>;
+  const QD = (await import("../app/solvers/solver.mjs")).default as Record<string, unknown>;
   await import("../app/schwarz/schwarz-cpu-worker.mjs");
   SCW = QD.SchwarzCpuWorker as SCW;
 });

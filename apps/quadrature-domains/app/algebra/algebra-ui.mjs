@@ -81,12 +81,20 @@
 // =============================================================================
 
 // ESM (Phase 2 port) — twin of algebra/algebra-ui.js (classic stays frozen). UI orchestrator/consumer.
-import { state } from '../ui-state.mjs';
-import { QD_UI } from '../ui-registry.mjs';
-import _QD from '../solver.mjs';
-import { plainVar } from '../qd-varscheme.mjs';   // conjugate-model var scheme (plain-text labels)
+import { state } from '../ui/ui-state.mjs';
+import { QD_UI } from '../ui/ui-registry.mjs';
+import _QD from '../solvers/solver.mjs';
+import { plainVar } from '../qd/qd-varscheme.mjs';   // conjugate-model var scheme (plain-text labels)
 import { domainPlotData, momentPlotData, rationalPlotData, trianglePlotData } from './domain-mini-plot.mjs';   // #3 + C1-ext-B + C2-4 + C3-4: reconstructed-domain thumbnail geometry
 import * as PROVE from './prove-plan.mjs';   // the pure existence/uniqueness proof engine (fuller-orchestrator Phase A)
+import { classifyVerdict, posDimDesc, withGuidance, _isCapFailure } from './algebra-labeling.mjs';   // pure honest-labeling: verdict prose (1) + cap-failure guidance (6)
+import { exactValueStr, fmtRatio, ratioStrRec, valStr } from './algebra-format.mjs';   // pure value + ratio-prefix formatters (carve-outs 3, 4, 8)
+import { _parseMomentToken } from './algebra-moment-parse.mjs';   // pure complex-moment input parser (carve-out 5)
+import { _pronyLatex, buildHForm } from './algebra-latex.mjs';   // pure math→LaTeX formatters (carve-outs 7, 9)
+import { createOpRunner } from './algebra-op-runner.mjs';   // the single-flight worker-op runner (D1d seam 1): busy lifecycle + guard + cancel
+import { createResultsDrawer } from './algebra-results-drawer.mjs';   // the results drawer (D1d seam 2): keyed verdict history + honest staleness
+import { createPickerManager } from './algebra-picker.mjs';   // the variable-picker widget (D1d seam 3): dropdown checklist + single-open coordinator
+import { createAutosaver } from './algebra-autosave.mjs';   // the session-autosave core (D1d seam 4): debounced localStorage mirror
 const QD = _QD;
 
 (function () {
@@ -466,12 +474,7 @@ const QD = _QD;
     if (!r.zeroDim || r.realCount == null) return 'unknown';
     return 'bound';
   }
-  // Honest one-line size of a positive-dimensional verdict: the true Krull DIMENSION when carried,
-  // alongside the ambient real-variable count; degrades to the variable count alone otherwise.
-  function posDimDesc(r) {
-    const nv = (r && r.numVars != null ? r.numVars : '?') + ' real variables';
-    return (r && r.krullDim != null && r.krullDim >= 1) ? ('dimension ' + r.krullDim + ', ' + nv) : nv;
-  }
+  // posDimDesc moved to ./algebra-labeling.mjs (carve-out 1) — imported above, re-exported on QD_UI below.
   // Short scope disclosure for a scoped MUTATING op's toast — which system the claim was about.
   function scopeNote(sel) {
     if (!sel || !sel.length) return '';
@@ -566,6 +569,34 @@ const QD = _QD;
       out.push('⚠ could not scan for active univalence constraints — if any are set, this count is restricted to the domains meeting them, not the full count');
     }
     return out;
+  }
+  // Map a classify result → a compact chip badge { badge, state, title }. Pure (reads only r.* + the
+  // module-scope sliceLabels/posDimDesc leaves); lifted from installAlgebra to IIFE scope (carve-out 2) so
+  // the chip's honest labeling (badge STATE/colour + the "upper bound on #QD" tooltip) is behaviourally
+  // testable without a DOM mount. Exposed on QD_UI. Callers (cacheActiveVerdict/classifyAllBranches) unchanged.
+  function _verdictBadge(r) {
+    if (!r || r.aborted) return null;
+    if (!r.ok) return { badge: '?', state: 'unknown', title: r.reason || 'classify unavailable' };
+    // Specialization suffix: a factor CASE and/or a reality/imaginary SLICE (both resolved for THIS
+    // branch by the store) narrow the count. Fold both into the tooltip and mark the badge with '*'
+    // so a slice/branch count on a chip never reads as the general QD count (honest labeling).
+    const notes = [];
+    if (r.partialBranch) notes.push('case ' + ((r.caseIndex || 0) + 1) + '/' + r.caseCount
+      + ' of ' + (r.branchOp === 'component' ? 'a component decomposition' : 'a factor split')
+      + (r.branchIncomplete ? ' (capped — components may not cover V(I))' : ''));
+    const sl = sliceLabels(r);
+    if (sl.length) notes.push('on the ' + sl.join(' + ') + ' only — a LOWER BOUND; off-slice QDs not counted');
+    const tail = notes.length ? ' [' + notes.join('; ') + ']' : '';
+    const star = sl.length ? '*' : '';
+    if (r.inconsistent) return { badge: '∅' + star, state: 'none', title: 'no QD — system inconsistent (1 ∈ I)' + tail };
+    if (!r.zeroDim) return { badge: '∞' + star, state: 'open', title: 'positive-dimensional family (' + posDimDesc(r) + ')' + tail };
+    if (r.realCount == null) return { badge: 'fin' + star, state: 'unknown', title: r.multiplicity + ' complex solution(s); real count over the cap' + tail };
+    if (r.realCount === 0) return { badge: '0 QD' + star, state: 'none', title: 'no real quadrature domain' + tail };
+    // HONEST LABELING (C-1): the chip shows the ALGEBRAIC real-solution count — an upper bound on #QD,
+    // NOT a certified QD count — so no green 'unique' from an unfiltered count; Certify univalence
+    // (which filters non-univalent maps + quotients the gauge) produces the genuine-QD verdict.
+    if (r.realCount === 1) return { badge: '1 alg' + star, state: 'multi', title: '1 real algebraic solution — an upper bound on #QD; run Certify univalence for the genuine-QD count' + tail };
+    return { badge: r.realCount + ' alg' + star, state: 'multi', title: r.realCount + ' real algebraic solutions — an upper bound on #QD; run Certify univalence for the genuine-QD count' + tail };
   }
   // Live facts per variable in the CURRENT column, feeding variableRemovals. Ordered by how many
   // equations hold the variable, descending — the ones costing the most are the ones worth
@@ -709,16 +740,22 @@ const QD = _QD;
     let _zoom = 1;                 // canvas zoom level (View ± controls)
     let _minimapOn = false;        // DAG minimap toggle (B2)
     let _focusOn = false;          // focus mode toggle (P6a): isolate the selection's derivation
-    let _drawerOpen = true;        // results drawer (P6b): index above the docked verdict
-    let _colCollapsed = false;     // whole result column collapsed to a 34px sliver
-    // One place decides the column's width, because two controls drive it: the drawer's « (always
-    // present while there are results) and the verdict's « (present only while a verdict shows).
-    // Before this, only the verdict had one — so dismissing a result stranded the column open.
-    function setResultColCollapsed(on) {
-      _colCollapsed = !!on;
-      if (canvas && canvas.setVerdictCollapsed) canvas.setVerdictCollapsed(_colCollapsed);
-      renderDrawer();
-    }
+    // The results drawer (P6b) + its verdict-routing to the canvas — the _results history keyed by
+    // (track, branchSig) that keeps every analysis's verdict and honestly demotes a stale/cross-branch
+    // one — moved to ./algebra-results-drawer.mjs (D1d seam 2). showResult / renderDrawer are aliased
+    // below so their ~13 call sites and rerender's renderDrawer() read unchanged; workflowFacts queries
+    // results.hasResults()/hasCurrent(). ctx: the LIVE canvas + store + branchSig + trackLabelOf + the
+    // pure resultStateOf (QD_UI) + rigorMeta (AlgebraCanvas).
+    const results = createResultsDrawer({
+      getCanvas: () => canvas,
+      store,
+      branchSig: _branchSig,
+      trackLabelOf,
+      resultStateOf,
+      rigorMeta: (rigor, bound) => (QD.AlgebraCanvas && QD.AlgebraCanvas.rigorMeta) ? QD.AlgebraCanvas.rigorMeta(rigor, bound) : null,
+    });
+    const showResult = results.showResult;   // facade: the ~13 call sites keep calling showResult(...)
+    const renderDrawer = results.render;      // facade: rerender() and the drawer's own re-renders call renderDrawer()
 
     // LaTeX for the conjugate-model vars + the constraint boundary/aux vars.
     const baseLatex = QE.latexOf('conjugate');
@@ -771,7 +808,7 @@ const QD = _QD;
     function rerender() {
       if (canvas) canvas.render(store, latexOf);
       renderInspector(canvas ? canvas.getSelection() : []); buildBreadcrumb(); buildTrackBar();
-      renderSuggestions(); renderHypotheses(); renderSteps(); renderVarLens(); refreshUndoButtons(); scheduleAutosave(); refreshStatusBar();
+      renderSuggestions(); renderHypotheses(); renderSteps(); renderVarLens(); refreshUndoButtons(); autosave.schedule(); refreshStatusBar();
       // Every stored result's state is relative to the CURRENT branch and frontier, and this is
       // the function that changes both. Without redrawing here, a reduction would leave results
       // still labelled "current" for a system that no longer exists.
@@ -786,7 +823,7 @@ const QD = _QD;
     // (progress / a verdict) that an in-flight operation is showing.
     function refreshStatusBar() {
       const el = $('#alg-status'); if (!el) return;
-      if (_busy) return;                                   // an operation is reporting progress
+      if (ops.busyFlag()) return;                          // an operation is reporting progress
       if (el.dataset.transient === '1') return;            // a verdict / result line is standing
       el.textContent = baselineStatus();
     }
@@ -800,55 +837,23 @@ const QD = _QD;
       const u = document.getElementById('alg-undo'), r = document.getElementById('alg-redo');
       const step = (n) => n + ' step' + (n === 1 ? '' : 's') + ' available';
       // The SECOND writer of these buttons' `disabled` (setBusy is the other, via .js-busy-lock).
-      // It must honour _busy, or it re-enables Undo mid-operation: doAutoSolve calls rerender() —
+      // It must honour the busy flag (ops.busyFlag()), or it re-enables Undo mid-operation: doAutoSolve calls rerender() —
       // hence this — several times inside the busy window, and each call flipped Undo back on
       // because undoDepth() was already > 0. Clicking it then rolled the graph back under a pending
       // worker, whose result rendered as a verdict about a system that no longer existed. The
-      // toolbar handlers also busyGuard() now, so the button cannot fire even if a repaint slips a
+      // toolbar handlers also ops.guard() now, so the button cannot fire even if a repaint slips a
       // frame; this keeps the visible state honest.
-      if (u) { u.disabled = _busy || !ud; u.setAttribute('aria-label', 'Undo'); u.title = ud ? ('Undo (Ctrl+Z) — ' + step(ud)) : 'Nothing to undo'; }
-      if (r) { r.disabled = _busy || !rd; r.setAttribute('aria-label', 'Redo'); r.title = rd ? ('Redo (Ctrl+Shift+Z) — ' + step(rd)) : 'Nothing to redo'; }
+      if (u) { u.disabled = ops.busyFlag() || !ud; u.setAttribute('aria-label', 'Undo'); u.title = ud ? ('Undo (Ctrl+Z) — ' + step(ud)) : 'Nothing to undo'; }
+      if (r) { r.disabled = ops.busyFlag() || !rd; r.setAttribute('aria-label', 'Redo'); r.title = rd ? ('Redo (Ctrl+Shift+Z) — ' + step(rd)) : 'Nothing to redo'; }
     }
 
     // ---- session persistence (autosave / restore) ----------------------------
-    // The store is purely in-memory, so a reload, a crash, or a stray Ctrl+W destroyed an entire
-    // derivation with no warning and no recovery — and QD is a PWA, where a service-worker update
-    // is itself a routine reload path. exportDAG()/importDAG() already round-trip a faithful
-    // session, so autosave is just a debounce around them. localStorage rather than IndexedDB
-    // because it is synchronous: the beforeunload flush below is then reliable.
-    const AUTOSAVE_KEY = 'qd-algebra-autosave-v1';
-    const AUTOSAVE_MAX = 2000000;      // ~2MB; past this we stop rather than thrash the quota
-    const AUTOSAVE_DEBOUNCE = 800;
-    let _saveTimer = null, _saveBlocked = false;
-    function _writeAutosave() {
-      _saveTimer = null;
-      try {
-        if (!store.size) { localStorage.removeItem(AUTOSAVE_KEY); _saveBlocked = false; return; }
-        const payload = JSON.stringify({ at: Date.now(), nodes: store.size, columns: store.maxColumn() + 1, dag: store.exportDAG() });
-        if (payload.length > AUTOSAVE_MAX) {
-          // Say so ONCE: silently not saving is exactly the failure this feature exists to prevent.
-          if (!_saveBlocked) { _saveBlocked = true; toast('This derivation is too large to autosave — use Download DAG (JSON) to keep it.', { kind: 'error' }); }
-          return;
-        }
-        localStorage.setItem(AUTOSAVE_KEY, payload);
-        _saveBlocked = false;
-      } catch (e) {
-        // Private mode / quota / disabled storage. Never break the workspace over a save, but do
-        // remember it failed so the beforeunload guard below still warns.
-        _saveBlocked = true;
-      }
-    }
-    function scheduleAutosave() {
-      if (_saveTimer) clearTimeout(_saveTimer);
-      _saveTimer = setTimeout(_writeAutosave, AUTOSAVE_DEBOUNCE);
-    }
-    function _readAutosave() {
-      try {
-        const raw = localStorage.getItem(AUTOSAVE_KEY); if (!raw) return null;
-        const p = JSON.parse(raw);
-        return (p && p.dag) ? p : null;
-      } catch (e) { return null; }
-    }
+    // The autosave CORE (the localStorage debounce: _writeAutosave / schedule / read + the
+    // _saveTimer/_saveBlocked/quota state) moved to ./algebra-autosave.mjs — D1d seam 4. offerRestore
+    // (the restore-offer UI) + the beforeunload flush stay below and drive it via read / clear / flush /
+    // isBlocked. exportDAG()/importDAG() round-trip a faithful session; autosave is just a debounce
+    // around them, in localStorage (synchronous, so the beforeunload flush is reliable).
+    const autosave = createAutosaver({ store, toast });
     function _agoStr(ms) {
       const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
       if (s < 90) return s + 's ago';
@@ -889,7 +894,7 @@ const QD = _QD;
       toast(what + ' would replace your derivation — confirm in the sidebar.', { kind: 'error' });
     }
     function offerRestore() {
-      const saved = _readAutosave(); if (!saved || store.size) return false;
+      const saved = autosave.read(); if (!saved || store.size) return false;
       const panel = $('#controls-algebra'); if (!panel) return false;
       const strip = document.createElement('div');
       strip.id = 'alg-restore'; strip.className = 'algebra-restore';
@@ -908,7 +913,7 @@ const QD = _QD;
         toast('Restored ' + saved.columns + ' column' + (saved.columns === 1 ? '' : 's') + ' from your last session.');
       });
       no.addEventListener('click', () => {
-        try { localStorage.removeItem(AUTOSAVE_KEY); } catch (e) { /* nothing to clear */ }
+        autosave.clear();
         strip.remove();
         if (!store.size && activeEnv) seedFromCurrent(); else rerender();
       });
@@ -923,8 +928,8 @@ const QD = _QD;
     // Flush a pending save, and warn only when the work is genuinely unrecoverable — i.e. the
     // autosave could not take it. If it saved, the reload is recoverable and a prompt is noise.
     window.addEventListener('beforeunload', (ev) => {
-      if (_saveTimer) { clearTimeout(_saveTimer); _writeAutosave(); }
-      if (store.size && _saveBlocked) { ev.preventDefault(); ev.returnValue = ''; }
+      autosave.flush();
+      if (store.size && autosave.isBlocked()) { ev.preventDefault(); ev.returnValue = ''; }
     });
 
     // ---- auto-detected variable-symmetry suggestions ("popup the moment an equation forces a
@@ -944,25 +949,9 @@ const QD = _QD;
     function _detectRels() { try { return store.detectVariableRelations ? (store.detectVariableRelations() || []) : []; } catch (e) { return []; } }
     function _detectSubsts() { try { return store.detectSubstitutions ? (store.detectSubstitutions() || []) : []; } catch (e) { return []; } }
     function _substKey(h) { return 'subst:' + h.kind + ':' + (h.exprTerms ? JSON.stringify(h.exprTerms) : h.newVar); }
-    // Compact prefix for a substitution ratio Gaussian c: '' for 1, '−' for −1, else '(c)·'.
-    function fmtRatio(g) {
-      try {
-        const re = g.re.toNumber(), im = g.im.toNumber();
-        if (im === 0 && re === 1) return '';
-        if (im === 0 && re === -1) return '−';
-        return '(' + exactValueStr(re, im) + ')·';
-      } catch (e) { return '(c)·'; }
-    }
-    // Ratio prefix from a serialized {re:[n,d],im:[n,d]} provenance record (falls back to a ±1
-    // `sign` for pre-ratio snapshots). '' for 1, '−' for −1, else '(c)·'.
-    function ratioStrRec(rec, sign) {
-      if (!rec) return (sign != null && sign < 0) ? '−' : '';
-      const f = (p) => (p ? Number(p[0]) / Number(p[1]) : 0);
-      const re = f(rec.re), im = f(rec.im);
-      if (im === 0 && re === 1) return '';
-      if (im === 0 && re === -1) return '−';
-      return '(' + exactValueStr(re, im) + ')·';
-    }
+    // fmtRatio + ratioStrRec (substitution ratio-prefix formatters) moved to ./algebra-format.mjs
+    // (carve-out 4) — imported above; they call the co-located exactValueStr. ratioStrRec is injected
+    // into the PROV_UI ctx below.
     function renderSuggestions() {
       const box = $('#alg-suggest'); if (!box) return;
       const hits = _detectRels().filter((h) => !_dismissedRel.has(_relKey(h)));
@@ -1020,7 +1009,7 @@ const QD = _QD;
           const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'small';
           btn.textContent = btnText; btn.title = btnTip;
           btn.addEventListener('click', () => {
-            if (busyGuard()) return;
+            if (ops.guard()) return;
             const r = apply();
             if (!r || !r.ok) { showError('Apply symmetry: ' + ((r && r.reason) || 'failed')); return; }
             rerender(); refreshPickers();
@@ -1043,7 +1032,7 @@ const QD = _QD;
         const btnText = 'Define ' + latexPlain(h.newVar);
         btn.textContent = btnText; btn.title = 'Introduce ' + latexPlain(h.newVar) + ' as this abbreviation in a new step';
         btn.addEventListener('click', () => {
-          if (busyGuard()) return;
+          if (ops.guard()) return;
           let r; try { r = store.defineSubstitution(h.newVar, h.expr, { regime: h.regime }); } catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
           if (!r || !r.ok) { showError('Define substitution: ' + ((r && r.reason) || 'failed')); return; }
           rerender(); refreshPickers();
@@ -1126,7 +1115,7 @@ const QD = _QD;
       const known = (store.knownValues && store.knownValues()) || {};
       const hypotheses = (store.realVars || []).length + (store.imagVars || []).length
         + (store.w0Fixed ? 1 : 0) + Object.keys(known).filter((k) => k !== 'w0').length;
-      const any = _results.length > 0;
+      const any = results.hasResults();
       return {
         seeded: store.size > 0,
         staleSeed: !!(activeEnv && _seededHData && _seededHData !== activeEnv.hData),
@@ -1137,7 +1126,7 @@ const QD = _QD;
         // the user still had to do. Count only nodes whose provenance is a reduce-class op.
         reductions: store.size ? _reduceColumnCount() : 0,
         resultAny: any,
-        resultCurrent: any && _results.some((r) => resultState(r) === 'current'),
+        resultCurrent: any && results.hasCurrent(),
       };
     }
     // Render the strip. Each step is a real button that opens its section — two of the four named
@@ -1279,74 +1268,10 @@ const QD = _QD;
     function clearError() { const e = $('#alg-error'); if (e) e.classList.add('hidden'); }
 
     // ---- variable picker (dropdown checklist) -------------------------------
-    // A discoverable replacement for free-text variable entry: a button that opens
-    // a checklist of the available variables, toggling membership in `selected`.
-    // getOptions() returns the raw names (rebuilt each open); `selected` is a Set
-    // that the picker mutates; onChange fires after each toggle.
-    let _openMenu = null;
-    // Close whichever picker is open. Routed through one helper so every close path keeps the
-    // button's aria-expanded honest — three call sites used to hide the menu directly, leaving
-    // the button telling assistive tech it was still open.
-    function _closeOpenMenu() {
-      if (!_openMenu) return;
-      _openMenu.classList.add('hidden');
-      const b = _openMenu._pickerBtn;
-      if (b) b.setAttribute('aria-expanded', 'false');
-      _openMenu = null;
-    }
-    function buildPicker(host, opts) {
-      if (!host) return;
-      host.innerHTML = '';
-      const btn = document.createElement('button');
-      btn.type = 'button'; btn.className = 'small algebra-picker-btn';
-      const menu = document.createElement('div');
-      menu.className = 'algebra-picker-menu hidden';
-      host.appendChild(btn); host.appendChild(menu);
-      const label = () => {
-        const n = opts.selected.size;
-        btn.textContent = (opts.label || 'pick') + (n ? ' (' + n + ') ▾' : ' ▾');
-      };
-      function render() {
-        menu.innerHTML = '';
-        const names = opts.getOptions() || [];
-        if (!names.length) { const d = document.createElement('div'); d.className = 'hint'; d.textContent = 'no variables yet'; menu.appendChild(d); return; }
-        names.forEach((raw) => {
-          const row = document.createElement('label'); row.className = 'algebra-picker-row';
-          const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = raw; cb.checked = opts.selected.has(raw);
-          cb.addEventListener('change', () => { if (cb.checked) opts.selected.add(raw); else opts.selected.delete(raw); label(); if (opts.onChange) opts.onChange(); });
-          const span = document.createElement('span'); span.textContent = (opts.friendly ? opts.friendly(raw) : raw);
-          row.appendChild(cb); row.appendChild(span); menu.appendChild(row);
-        });
-      }
-      btn.setAttribute('aria-expanded', 'false');
-      btn.setAttribute('aria-haspopup', 'true');
-      menu._pickerBtn = btn;
-      const setOpen = (on) => { menu.classList.toggle('hidden', !on); btn.setAttribute('aria-expanded', on ? 'true' : 'false'); };
-      btn.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        const willOpen = menu.classList.contains('hidden');
-        if (_openMenu && _openMenu !== menu) _closeOpenMenu();
-        if (willOpen) {
-          render(); setOpen(true); _openMenu = menu;
-          // Land on the first variable rather than making the user Tab past the button
-          // into a list that only just appeared.
-          const first = menu.querySelector('input[type="checkbox"]');
-          if (first) { try { first.focus(); } catch (e) {} }
-        } else { setOpen(false); _openMenu = null; }
-      });
-      menu.addEventListener('click', (ev) => ev.stopPropagation());
-      // Esc closes the checklist and hands focus back to the button that opened it — without
-      // this the only way out was a click elsewhere, which for a keyboard user is no way out.
-      menu.addEventListener('keydown', (ev) => {
-        if (ev.key !== 'Escape') return;
-        setOpen(false);
-        if (_openMenu === menu) _openMenu = null;
-        try { btn.focus(); } catch (e) {}
-        ev.preventDefault(); ev.stopPropagation();
-      });
-      label();
-      return { refresh: label };
-    }
+    // The picker widget (buildPicker) + its single-open-menu coordinator (_openMenu / _closeOpenMenu)
+    // moved to ./algebra-picker.mjs — D1d seam 3. One manager coordinates both sidebar pickers; the two
+    // pickers.build(…) calls and the outside-click pickers.closeOpen() wire live in mountSidebar below.
+    const pickers = createPickerManager();
     function friendlyVar(raw) { return latexPlain(raw) + ' · ' + raw; }
 
     // ---- seeding -------------------------------------------------------------
@@ -1465,21 +1390,7 @@ const QD = _QD;
       [/^F_/, 'polynomial-part coefficient'],
     ];
     function refMeaning(name) { for (const [re, m] of _refMeaning) if (re.test(name)) return m; return ''; }
-    // h(w) = Σ_j Σ_{s≥1} C_{j,s}/(w − a_j)^s — symbolic names, or values substituted.
-    function buildHForm(hData, numeric) {
-      const RL = QD.RiemannLatex;
-      const terms = [];
-      (hData.poles || []).forEach((pole, j) => {
-        const aSym = numeric ? RL.katexCmpxParen(pole.a) : 'a_{' + (j + 1) + '}';
-        (pole.principal || []).forEach((C, s) => {
-          const power = s + 1;
-          const num = numeric ? RL.katexCmpxParen(C) : 'C_{' + (j + 1) + ',' + power + '}';
-          const den = power === 1 ? '(w - ' + aSym + ')' : '(w - ' + aSym + ')^{' + power + '}';
-          terms.push('\\dfrac{' + num + '}{' + den + '}');
-        });
-      });
-      return 'h(w) \\;=\\; ' + (terms.length ? terms.join(' + ') : '0');
-    }
+    // buildHForm (quadrature-data h(w) LaTeX) moved to ./algebra-latex.mjs (carve-out 9) — imported above.
     // Populate the φ / h reference panel: the symbolic forms of φ (RiemannLatex.build) and
     // h (buildHForm), plus a legend mapping every variable to its meaning + (optionally) its
     // value. Rebuilt on open, on the show-values toggle, and when the active solve changes.
@@ -1582,19 +1493,8 @@ const QD = _QD;
     // The picker lists BASE variables only (not their conjugates) — a value fully
     // specifies the conjugate (z₁=1+i ⟹ z̄₁=1−i), and the store fills it automatically.
     function valBaseVars() { try { return store.baseVariables(); } catch (e) { return []; } }
-    // Exact ℚ(i) string for the inline preview (same continued-fraction rationalizer the
-    // store uses), so the user sees 0.2 → 1/5 before applying.
-    function fmtRat(x) {
-      try { const r = QE.ratApprox(x || 0); return String(r[1]) === '1' ? String(r[0]) : String(r[0]) + '/' + String(r[1]); }
-      catch (e) { return String(x || 0); }
-    }
-    function exactValueStr(re, im) {
-      re = re || 0; im = im || 0;
-      if (!im) return fmtRat(re);
-      const iAbs = fmtRat(Math.abs(im)) + 'i';
-      if (!re) return (im < 0 ? '−' : '') + iAbs;
-      return fmtRat(re) + (im < 0 ? ' − ' : ' + ') + iAbs;
-    }
+    // exactValueStr + its fmtRat helper moved to ./algebra-format.mjs (carve-out 3) — imported above,
+    // re-exported on QD_UI below. Same continued-fraction rationalizer (QD.QDEquations.ratApprox).
     function updateRowPreview(row) {
       const prev = row.querySelector('.alg-val-preview'); if (!prev) return;
       const re = parseFloat(row.querySelector('.alg-val-re').value) || 0;
@@ -1726,7 +1626,7 @@ const QD = _QD;
     }
     function doPinKnownData() {
       if (!ensureSeed()) return;
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       const pairs = knownDataPairs();
       if (!pairs.length) {
         toast('No quadrature data to pin — the current column has no a_j / C_{j,s} left symbolic.', { kind: 'error' });
@@ -1779,7 +1679,7 @@ const QD = _QD;
       let g;
       try { g = P.parse(exprStr, store.variables(), S); }
       catch (e) { showError('Define substitution: ' + ((e && e.message) || 'parse error')); return; }
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       let r; try { r = store.defineSubstitution(nm, g); } catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
       if (!r || !r.ok) { showError('Define substitution: ' + ((r && r.reason) || 'failed')); return; }
       if ($('#alg-def-name')) $('#alg-def-name').value = '';
@@ -1791,7 +1691,7 @@ const QD = _QD;
 
     // B2 — iterated auto-CSE: apply every detected substitution to a fixpoint in one click.
     function doAutoAbbreviate() {
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       if (!ensureSeed()) return;
       const r = store.autoAbbreviate();
       if (!r || !r.count) { toast('No repeated-expression abbreviations found in the current system.'); return; }
@@ -1828,7 +1728,7 @@ const QD = _QD;
       let g;
       try { g = P.parse(exprStr, store.variables(), S); }
       catch (e) { showError('Add equation: ' + ((e && e.message) || 'parse error')); return; }
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       const withConjugate = !$('#alg-eq-conj') || $('#alg-eq-conj').checked;
       let r; try { r = store.addEquation(g, rel, { withConjugate }); } catch (e) { r = { ok: false, reason: (e && e.message) || String(e) }; }
       if (!r || !r.ok) { showError('Add equation: ' + ((r && r.reason) || 'failed')); return; }
@@ -1862,6 +1762,12 @@ const QD = _QD;
       else { el.textContent = baselineStatus(); el.dataset.transient = '0'; }
     }
     function setStatusHTML(html) { const el = $('#alg-status'); if (el) el.innerHTML = html; }
+    // The single-flight op-runner for the ~25 off-main-thread (worker) ops (QD-ALG-4). Owns the
+    // _abort/_busy state and the busy lifecycle (begin / end / guard / cancel) that used to be
+    // closure locals ~1200 lines below (extracted to ./algebra-op-runner.mjs — D1d seam 1). Built
+    // here, up front, because #alg-cancel wires to ops.cancel during mountSurface and every worker op
+    // guards on it. cancelWorker forwards to QD.SymWorker, kept out of the module so it stays solver-free.
+    const ops = createOpRunner({ $, setStatus, toast, cancelWorker: () => { if (QD.SymWorker) QD.SymWorker.cancel(); } });
     // Which workflow sections are open. Only "Assume" opened by default and nothing persisted, so
     // every reload re-shut Reduce and Analyze — two thirds of the actual working loop — while the
     // one left open was the section that most deserved collapsing. Remembered per section id.
@@ -1885,6 +1791,184 @@ const QD = _QD;
         });
       });
     }
+    // D1a (QD-ALG-2): the workflow sidebar as DATA. Each entry is one collapsible section (or the
+    // mid-list divider); mountSidebar composes #alg-sections by mapping renderSection over this array
+    // instead of hand-concatenating one long innerHTML string. Bodies are the SAME markup as before,
+    // moved verbatim — the wrapper (<details>/<summary>/<div class="algebra-section-body">) is now
+    // produced once, in renderSection. Order is DOM order; the "Beyond the main route" divider marks
+    // the boundary between the column workflow (assume → reduce → analyze) and the standalone tools.
+    function renderSection(s) {
+      if (s.divider) return '<div class="algebra-section-divider">' + s.divider + '</div>';
+      return '<details class="algebra-section"' + (s.open ? ' open' : '') + '>' +
+        '<summary>' + s.summary + '</summary>' +
+        '<div class="algebra-section-body">' + s.body + '</div>' +
+        '</details>';
+    }
+    const SIDEBAR_SECTIONS = [
+      // 1. Assume — reality / symmetry only. This section used to hold NINETEEN controls across four
+      // unrelated tools; "Define substitution" and "Add equation" in particular are system EDITS,
+      // not assumptions, and were filed here purely by accretion. Split into three honest headings.
+      { summary: 'Assume', open: true, body:
+        '      <div class="algebra-line"><span class="algebra-line-label">Assume real</span><span id="alg-real-pick" class="algebra-picker"></span>' +
+        '        <button id="alg-real-apply" class="small js-busy-lock" type="button">Assume real</button>' +
+        '        <button id="alg-real-auto" class="small js-busy-lock" type="button">Assume all real</button>' +
+        '        <button id="alg-real-detect" class="small js-busy-lock" type="button">Detect symmetry</button></div>' },
+      // 2. Pin values — fixing a variable to an exact ℚ(i) value is a different act from assuming
+      //    a symmetry, and has its own multi-row editor.
+      { summary: 'Pin values', body:
+        '      <div class="algebra-line-label">Set values <span class="hint" style="font-weight:400;">(each value also fixes its conjugate)</span></div>' +
+        '      <div id="alg-val-rows"></div>' +
+        '      <div class="row" style="gap:4px; align-items:center; margin-top:2px;">' +
+        '        <button id="alg-val-add" class="small" type="button" title="Add another variable to fix in the same column">＋ add variable</button>' +
+        '        <label style="font-size:11px;" title="After substituting, run a linear-propagation pass (eliminate forced variables) as a further column."><input type="checkbox" id="alg-val-prop" checked> propagate</label>' +
+        '        <button id="alg-val-apply" class="small js-busy-lock" type="button" title="Substitute the exact values (continued-fraction ℚ(i)) for these variables — and their conjugates — in one new column">Set values</button></div>' },
+      // 3. Edit system — introducing a symbol or imposing a custom condition CHANGES the system;
+      //    neither is an assumption about a variable.
+      { summary: 'Edit system', body:
+        '      <div class="algebra-line-label">Define substitution <span class="hint" style="font-weight:400;">(abbreviate a sub-expression as a new symbol)</span></div>' +
+        '      <div class="algebra-define-row">' +
+        '        <input id="alg-def-name" class="alg-def-name" type="text" placeholder="t" autocomplete="off" spellcheck="false" title="A fresh name for the new symbol" />' +
+        '        <span class="alg-def-eq">:=</span>' +
+        '        <input id="alg-def-expr" class="alg-def-expr" type="text" placeholder="e.g.  w1^2,  z1+zb1,  z1*zb1" autocomplete="off" spellcheck="false" title="An expression in the current variables.  + − * / ^ ( ),  i = imaginary unit,  exact rationals" />' +
+        '        <button id="alg-def-apply" class="small js-busy-lock" type="button" title="Introduce the new symbol and substitute it into the current system (a new labeled column)">Define symbol</button></div>' +
+        '      <div id="alg-def-preview" class="alg-def-preview hint"></div>' +
+        '      <div class="row" style="margin-top:4px;"><button id="alg-abbrev" class="small js-busy-lock" type="button">Abbreviate repeatedly</button></div>' +
+        '      <div class="algebra-line-label" style="margin-top:8px;">Add equation <span class="hint" style="font-weight:400;">(impose a custom condition)</span></div>' +
+        '      <div class="algebra-define-row">' +
+        '        <input id="alg-eq-expr" class="alg-def-expr" type="text" placeholder="e.g.  A1_1 - 1,  z1*zb1 - 1" autocomplete="off" spellcheck="false" title="A polynomial in the current variables.  + − * / ^ ( ),  i = imaginary unit,  exact rationals" />' +
+        '        <select id="alg-eq-rel" class="alg-eq-rel" title="Relation: = 0 (equality), ≠ 0 (non-vanishing), or > 0 (Hermitian inequality)"><option value="=">= 0</option><option value="≠">≠ 0</option><option value="&gt;">&gt; 0</option></select>' +
+        '        <button id="alg-eq-apply" class="small js-busy-lock" type="button" title="Add this equation/inequality as a new node in the current system">Add equation</button></div>' +
+        '      <div id="alg-eq-preview" class="alg-def-preview hint"></div>' +
+        '      <label style="font-size:11px;"><input type="checkbox" id="alg-eq-conj" checked> add conjugate</label>' },
+      // 4. Reduce. Grouped into four honest sub-headings (the "Edit system" idiom above).
+      //    Variable elimination used to be INVISIBLE here: the only whole-system eliminator was a
+      //    hidden MODE of the plain Gröbner button — it silently switched to an elimination order
+      //    iff the `eliminate` picker, two levels down under Advanced, was non-empty. A user who
+      //    wanted to remove a variable had no way to find that. Elimination is now its own
+      //    sub-section with its own button, and #alg-groebner does ONE thing.
+      //    (That button's label has since been corrected too: it said "all eqns" while operating
+      //    on the current column alone.)
+      { summary: 'Reduce', body:
+        // Which of these the certified route actually uses. ✦ Prove's prelude is exactly
+        // assumeReal → reducePropagate ×4 → saturateMobius, then the plan engine; it never calls
+        // Gröbner, triangular decomposition, regular chains or minimal primes (prove-plan.mjs does
+        // not reference them). They are manual tractability tools, and the panel gave them the same
+        // weight as the canonical path without saying so.
+        '      <div class="hint algebra-route-note">✦ Prove runs <em>assume real → propagate → saturate</em> by itself. Everything else here is a manual tool for when that stalls — Gröbner, triangular, regular chains and minimal primes are never run by the certified route.</div>' +
+        '      <div class="algebra-line-label">Eliminate variables <span class="hint" style="font-weight:400;">(remove unknowns; every consequence in the survivors is kept)</span></div>' +
+        '      <div class="algebra-line"><span class="algebra-line-label">eliminate</span><span id="alg-elim-pick" class="algebra-picker"></span></div>' +
+        '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
+        '        <button id="alg-eliminate-vars" class="small heavy-op js-busy-lock" type="button" data-str-title="tooltips.eliminateVars">Eliminate picked variables</button>' +
+        '        <button id="alg-gauge-elim" class="small js-busy-lock" type="button">Eliminate with gauge (all)</button></div>' +
+        // Caption, not a tooltip: the hard rule is nothing over ~120 chars in a `title` (finding 4.3).
+        // This also carries the pointer to the two-node resultant, which is the same act living in
+        // the inspector — the split that made elimination hard to find in the first place.
+        '      <div class="hint algebra-elim-hint">Exact over ℚ(i): a Gröbner basis in a block elimination order, whose generators in the remaining variables are the elimination ideal. <strong>Between two equations</strong> instead — select both on the canvas; the inspector offers the Sylvester resultant in one shared variable.</div>' +
+        // The elimination lens. Asks the question from the variable's end, and routes to whichever
+        // section owns each answer — the panel's claim is that the answer lives elsewhere, so it
+        // opens that elsewhere rather than duplicating the control.
+        '      <details class="algebra-advanced"><summary>Which variable? — what removes each one</summary>' +
+        '        <div id="alg-varlens" class="algebra-varlens"></div>' +
+        '      </details>' +
+        // Two headings, not one. "Same solutions, better shape" is TRUE of Gröbner and the
+        // triangular chain and FALSE of the other three: Saturate deletes the |z_j|=1 stratum,
+        // Pin known data specializes the family to one domain, and Propagate ADDS constraint nodes.
+        // Filing all five under one honest-sounding caption would have been a labeling defect of
+        // exactly the kind this project treats as a correctness bug, so they are separated by what
+        // they do to the solution set — which is also the distinction a user needs before clicking.
+        '      <div class="algebra-line-label" style="margin-top:8px;">Rewrite the system <span class="hint" style="font-weight:400;">(same solutions, better shape)</span></div>' +
+        '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
+        '        <button id="alg-groebner" class="small heavy-op js-busy-lock" type="button">Gröbner basis (current column)</button>' +
+        '        <button id="alg-triangular" class="small js-busy-lock" type="button">Triangular decomp.</button></div>' +
+        '      <div class="algebra-line-label" style="margin-top:8px;">Narrow the system <span class="hint" style="font-weight:400;">(deliberately changes what solves it)</span></div>' +
+        '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
+        '        <button id="alg-saturate" class="small js-busy-lock" type="button">Saturate (admissibility)</button>' +
+        '        <button id="alg-propagate-all" class="small js-busy-lock" type="button">Propagate constraints → current</button>' +
+        '        <button id="alg-pin-data" class="small" type="button">Pin known quadrature data</button></div>' +
+        // Column-level factoring. The per-node "Attempt to factor" requires selecting each card in
+        // turn to discover whether it splits; this scans the whole current system at once, which is
+        // the shape "simplify and reduce these equations" actually asks for.
+        '      <div class="algebra-line-label" style="margin-top:8px;">Split into cases <span class="hint" style="font-weight:400;">(one branch per component; the counts add up)</span></div>' +
+        '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
+        '        <button id="alg-factor-scan" class="small js-busy-lock" type="button">Factor / simplify column</button>' +
+        '        <button id="alg-decompose" class="small heavy-op js-busy-lock" type="button">Decompose into components</button>' +
+        '        <button id="alg-regular-chains" class="small heavy-op js-busy-lock" type="button">Regular chains (saturated)</button></div>' +
+        '      <div id="alg-factor-out" class="algebra-factor-out"></div>' +
+        // The `eliminate` picker moved OUT of Advanced and up into the elimination sub-section — it
+        // is the whole point of that act, not a tuning knob. Only the monomial order stays here.
+        '      <details class="algebra-advanced"><summary>Advanced</summary>' +
+        '        <div class="algebra-line"><span class="algebra-line-label" title="Monomial order for the plain Gröbner basis. lex is itself an elimination order; grevlex is fastest.">order</span>' +
+        '          <select id="alg-gb-order"><option value="grevlex">grevlex</option><option value="grlex">grlex</option><option value="lex">lex</option></select></div>' +
+        '      </details>' },
+      // 5. Analyze
+      { summary: 'Analyze', body:
+        '      <div class="row" style="flex-wrap:wrap; gap:4px;">' +
+        '      <button id="alg-classify" class="small heavy-op js-busy-lock" type="button">Existence / uniqueness</button>' +
+        '      <button id="alg-dimension" class="small js-busy-lock" type="button">Dimension / count</button>' +
+        '      <button id="alg-solve" class="small js-busy-lock" type="button">Solve (numeric)</button>' +
+        '      <button id="alg-univalence" class="small heavy-op js-busy-lock" type="button">Certify univalence</button></div>' +
+        '    <div class="row" style="flex-wrap:wrap; gap:4px; margin-top:4px;">' +
+        '      <label class="small">Resolvent in <select id="alg-resolvent-var"></select></label>' +
+        '      <button id="alg-resolvent" class="small heavy-op js-busy-lock" type="button">Resolvent / discriminant</button></div>' +
+        '    <div class="row" style="flex-wrap:wrap; gap:4px; margin-top:4px;">' +
+        '      <label class="small">Bifurcation over <select id="alg-bifurc-var"></select></label>' +
+        '      <button id="alg-bifurc" class="small heavy-op js-busy-lock" type="button">Bifurcation (real count)</button></div>' },
+      // ── End of the main route ──────────────────────────────────────────────────────────
+      // Everything above is the column workflow: assume → edit → reduce → analyze, each step
+      // acting on the system in the graph. The two sections below are NOT steps in it, which is
+      // what finding 4.4 meant by "section order contradicts the stated workflow", and a bare
+      // reorder would not have said so — the boundary has to be visible, not merely respected.
+      { divider: 'Beyond the main route' },
+      // 6. Univalence constraints (2-column grid palette). Placed straight after Analyze because
+      //    it FEEDS Analyze: you add a condition and then count. NOT before Reduce, which the
+      //    original 4.4 sketch proposed — 1.2 established that any basis reduction discards these
+      //    inequality nodes, so that order would have staged the user's work for destruction.
+      { summary: 'Univalence constraints', body:
+        // What this palette is NOT. ✦ Prove certifies univalence by an exact Schur–Cohn fold plus a
+        // boundary-simplicity test on each reconstructed φ — it never reads these nodes. And their
+        // substance is inequalities, which any basis replacement (Gröbner / saturate / triangular)
+        // consumes by omission; ✦ Prove's own prelude saturates, so it discards them on the way
+        // past. Someone can otherwise build up a careful univalence model, prove, and never learn
+        // that none of it reached the verdict.
+        '      <div class="hint" id="alg-palette-note" style="margin-bottom:4px;">Append a boundary-univalence condition as new node(s) — hover each for its meaning. ' +
+        '<strong>These are for your own analysis:</strong> ✦ Prove does not read them (it certifies univalence by an exact Schur–Cohn fold + boundary-simplicity test on each reconstructed φ), and because they are mostly inequalities, any basis reduction — Gröbner, Saturate, Triangular — drops them.</div>' +
+        '      <div id="alg-palette" class="algebra-palette"></div>' },
+      // 7. Shape from moments — a STANDALONE calculator, not a step and not a seeding route.
+      //    doShapeFromMoments calls shapeFromMomentsAsync and renders to #alg-moments-out; it never
+      //    touches the store. 4.4 proposed grouping it with the "Seed A–S moments" button, but that
+      //    one DOES seed (store.seedFromPolys) — the two share a word, not a behaviour.
+      { summary: 'Shape from moments', body:
+        '      <div class="hint" style="margin-bottom:4px;"><strong>Standalone — this does not touch the workspace:</strong> no column is added and the graph is unchanged. Reconstruct a discrete measure Σ aⱼ·δ(zⱼ) — a quadrature domain’s data — from its complex moments mₖ = Σ aⱼ·zⱼᵏ, by exact Prony–Hankel. The <strong>order</strong> (= #nodes = the QD-order) is the EXACT Hankel rank drop; the Prony polynomial Π(z−zⱼ) is exact; nodes/weights are numeric (well-conditioned, from the exact polynomial).</div>' +
+        '      <div class="algebra-define-row">' +
+        '        <input id="alg-moments" class="alg-def-expr" type="text" placeholder="m0, m1, m2, …   e.g.  3, 6, 14, 36, 98, 276   or  2, 0, -2, 0" autocomplete="off" spellcheck="false" title="Comma-separated complex moments m_0, m_1, …. Each: a (real), a+bi, a-bi, bi, i, -i; rationals 3/2 and decimals allowed." />' +
+        '        <button id="alg-moments-go" class="small heavy-op js-busy-lock" type="button">Reconstruct</button></div>' +
+        '      <div id="alg-moments-out" class="alg-def-preview hint"></div>' },
+      // 8. Export
+      { summary: 'Export', body:
+        '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
+        '        <button id="alg-export-json" class="small" type="button" title="Download the whole session as exact ℚ(i) term lists + edges + tracks + assumptions (round-trips via Load)">Download DAG (JSON)</button>' +
+        '        <button id="alg-import-json" class="small" type="button">Load DAG (JSON)</button>' +
+        '        <input id="alg-import-file" type="file" accept="application/json,.json" style="display:none;" />' +
+        '        <button id="alg-copy-latex" class="small" type="button">Copy all LaTeX</button>' +
+        '        <button id="alg-copy-derivation" class="small" type="button">Copy derivation (LaTeX)</button>' +
+        '        <button id="alg-copy-sympy" class="small" type="button">Copy SymPy script</button></div>' +
+        '      <div class="algebra-line" style="margin-top:4px;"><span class="algebra-line-label">Mathematica</span>' +
+        '        <select id="alg-mma-col" title="Which column of equations to export"></select>' +
+        '        <button id="alg-copy-mma" class="small" type="button" title="Copy the chosen column as a Wolfram-Language list of equations ({lhs == 0, …}) ready to paste into Mathematica">Copy column</button>' +
+        '        <button id="alg-copy-mma-all" class="small" type="button" title="Copy every column as labeled Wolfram-Language lists (col0 = {…}; col1 = {…}; …)">Copy all</button></div>' +
+        '      <div class="algebra-line" style="margin-top:4px;"><span class="algebra-line-label">CAS / RCTD</span>' +
+        '        <select id="alg-cas-dialect">' +
+        '          <option value="maple">Maple RCTD</option><option value="singular">Singular</option><option value="sage">Sage</option></select>' +
+        '        <input id="alg-cas-params" class="small" type="text" placeholder="params e.g. a1,C1_1" style="width:8.5em;" />' +
+        '        <button id="alg-copy-cas" class="small" type="button">Copy for CAS</button>' +
+        '        <button id="alg-copy-msolve" class="small" type="button">Copy msolve (.ms)</button></div>' +
+        '      <div class="algebra-line" style="margin-top:6px; align-items:flex-start;"><span class="algebra-line-label">Import RCTD</span>' +
+        '        <div style="flex:1; min-width:0;">' +
+        '          <textarea id="alg-rctd-json" class="small" rows="3" placeholder=\'paste the qd-rctd JSON from your Maple run (see the post-script)\' style="width:100%; box-sizing:border-box; font-family:monospace; resize:vertical;"></textarea>' +
+        '          <div class="row" style="gap:4px; margin-top:2px;"><button id="alg-import-rctd" class="small heavy-op js-busy-lock" type="button" title="Parse the qd-rctd JSON and append a new column of the decomposition cells">Import cells</button></div>' +
+        '        </div></div>' },
+    ];
+
     function mountSidebar() {
       const panel = $('#controls-algebra');
       if (!panel) return;
@@ -1952,200 +2036,7 @@ const QD = _QD;
         // by precisely the state it exists to warn about. As a sibling it keeps full contrast.
         '<div id="alg-scope" class="algebra-scope hidden"></div>' +
         // ---- WORKFLOW SECTIONS (collapsible; hidden while the inspector is up) ----
-        '<div id="alg-sections">' +
-        // 1. Assume — reality / symmetry only. This section used to hold NINETEEN controls across four
-        // unrelated tools; "Define substitution" and "Add equation" in particular are system EDITS,
-        // not assumptions, and were filed here purely by accretion. Split into three honest headings.
-        '  <details class="algebra-section" open>' +
-        '    <summary>Assume</summary>' +
-        '    <div class="algebra-section-body">' +
-        '      <div class="algebra-line"><span class="algebra-line-label">Assume real</span><span id="alg-real-pick" class="algebra-picker"></span>' +
-        '        <button id="alg-real-apply" class="small js-busy-lock" type="button">Assume real</button>' +
-        '        <button id="alg-real-auto" class="small js-busy-lock" type="button">Assume all real</button>' +
-        '        <button id="alg-real-detect" class="small js-busy-lock" type="button">Detect symmetry</button></div>' +
-        '    </div>' +
-        '  </details>' +
-        // 2. Pin values — fixing a variable to an exact ℚ(i) value is a different act from assuming
-        //    a symmetry, and has its own multi-row editor.
-        '  <details class="algebra-section">' +
-        '    <summary>Pin values</summary>' +
-        '    <div class="algebra-section-body">' +
-        '      <div class="algebra-line-label">Set values <span class="hint" style="font-weight:400;">(each value also fixes its conjugate)</span></div>' +
-        '      <div id="alg-val-rows"></div>' +
-        '      <div class="row" style="gap:4px; align-items:center; margin-top:2px;">' +
-        '        <button id="alg-val-add" class="small" type="button" title="Add another variable to fix in the same column">＋ add variable</button>' +
-        '        <label style="font-size:11px;" title="After substituting, run a linear-propagation pass (eliminate forced variables) as a further column."><input type="checkbox" id="alg-val-prop" checked> propagate</label>' +
-        '        <button id="alg-val-apply" class="small js-busy-lock" type="button" title="Substitute the exact values (continued-fraction ℚ(i)) for these variables — and their conjugates — in one new column">Set values</button></div>' +
-        '    </div>' +
-        '  </details>' +
-        // 3. Edit system — introducing a symbol or imposing a custom condition CHANGES the system;
-        //    neither is an assumption about a variable.
-        '  <details class="algebra-section">' +
-        '    <summary>Edit system</summary>' +
-        '    <div class="algebra-section-body">' +
-        '      <div class="algebra-line-label">Define substitution <span class="hint" style="font-weight:400;">(abbreviate a sub-expression as a new symbol)</span></div>' +
-        '      <div class="algebra-define-row">' +
-        '        <input id="alg-def-name" class="alg-def-name" type="text" placeholder="t" autocomplete="off" spellcheck="false" title="A fresh name for the new symbol" />' +
-        '        <span class="alg-def-eq">:=</span>' +
-        '        <input id="alg-def-expr" class="alg-def-expr" type="text" placeholder="e.g.  w1^2,  z1+zb1,  z1*zb1" autocomplete="off" spellcheck="false" title="An expression in the current variables.  + − * / ^ ( ),  i = imaginary unit,  exact rationals" />' +
-        '        <button id="alg-def-apply" class="small js-busy-lock" type="button" title="Introduce the new symbol and substitute it into the current system (a new labeled column)">Define symbol</button></div>' +
-        '      <div id="alg-def-preview" class="alg-def-preview hint"></div>' +
-        '      <div class="row" style="margin-top:4px;"><button id="alg-abbrev" class="small js-busy-lock" type="button">Abbreviate repeatedly</button></div>' +
-        '      <div class="algebra-line-label" style="margin-top:8px;">Add equation <span class="hint" style="font-weight:400;">(impose a custom condition)</span></div>' +
-        '      <div class="algebra-define-row">' +
-        '        <input id="alg-eq-expr" class="alg-def-expr" type="text" placeholder="e.g.  A1_1 - 1,  z1*zb1 - 1" autocomplete="off" spellcheck="false" title="A polynomial in the current variables.  + − * / ^ ( ),  i = imaginary unit,  exact rationals" />' +
-        '        <select id="alg-eq-rel" class="alg-eq-rel" title="Relation: = 0 (equality), ≠ 0 (non-vanishing), or > 0 (Hermitian inequality)"><option value="=">= 0</option><option value="≠">≠ 0</option><option value="&gt;">&gt; 0</option></select>' +
-        '        <button id="alg-eq-apply" class="small js-busy-lock" type="button" title="Add this equation/inequality as a new node in the current system">Add equation</button></div>' +
-        '      <div id="alg-eq-preview" class="alg-def-preview hint"></div>' +
-        '      <label style="font-size:11px;"><input type="checkbox" id="alg-eq-conj" checked> add conjugate</label>' +
-        '    </div>' +
-        '  </details>' +
-        // 4. Reduce. Grouped into four honest sub-headings (the "Edit system" idiom above).
-        //    Variable elimination used to be INVISIBLE here: the only whole-system eliminator was a
-        //    hidden MODE of the plain Gröbner button — it silently switched to an elimination order
-        //    iff the `eliminate` picker, two levels down under Advanced, was non-empty. A user who
-        //    wanted to remove a variable had no way to find that. Elimination is now its own
-        //    sub-section with its own button, and #alg-groebner does ONE thing.
-        //    (That button's label has since been corrected too: it said "all eqns" while operating
-        //    on the current column alone.)
-        '  <details class="algebra-section">' +
-        '    <summary>Reduce</summary>' +
-        '    <div class="algebra-section-body">' +
-        // Which of these the certified route actually uses. ✦ Prove's prelude is exactly
-        // assumeReal → reducePropagate ×4 → saturateMobius, then the plan engine; it never calls
-        // Gröbner, triangular decomposition, regular chains or minimal primes (prove-plan.mjs does
-        // not reference them). They are manual tractability tools, and the panel gave them the same
-        // weight as the canonical path without saying so.
-        '      <div class="hint algebra-route-note">✦ Prove runs <em>assume real → propagate → saturate</em> by itself. Everything else here is a manual tool for when that stalls — Gröbner, triangular, regular chains and minimal primes are never run by the certified route.</div>' +
-        '      <div class="algebra-line-label">Eliminate variables <span class="hint" style="font-weight:400;">(remove unknowns; every consequence in the survivors is kept)</span></div>' +
-        '      <div class="algebra-line"><span class="algebra-line-label">eliminate</span><span id="alg-elim-pick" class="algebra-picker"></span></div>' +
-        '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
-        '        <button id="alg-eliminate-vars" class="small heavy-op js-busy-lock" type="button" data-str-title="tooltips.eliminateVars">Eliminate picked variables</button>' +
-        '        <button id="alg-gauge-elim" class="small js-busy-lock" type="button">Eliminate with gauge (all)</button></div>' +
-        // Caption, not a tooltip: the hard rule is nothing over ~120 chars in a `title` (finding 4.3).
-        // This also carries the pointer to the two-node resultant, which is the same act living in
-        // the inspector — the split that made elimination hard to find in the first place.
-        '      <div class="hint algebra-elim-hint">Exact over ℚ(i): a Gröbner basis in a block elimination order, whose generators in the remaining variables are the elimination ideal. <strong>Between two equations</strong> instead — select both on the canvas; the inspector offers the Sylvester resultant in one shared variable.</div>' +
-        // The elimination lens. Asks the question from the variable's end, and routes to whichever
-        // section owns each answer — the panel's claim is that the answer lives elsewhere, so it
-        // opens that elsewhere rather than duplicating the control.
-        '      <details class="algebra-advanced"><summary>Which variable? — what removes each one</summary>' +
-        '        <div id="alg-varlens" class="algebra-varlens"></div>' +
-        '      </details>' +
-        // Two headings, not one. "Same solutions, better shape" is TRUE of Gröbner and the
-        // triangular chain and FALSE of the other three: Saturate deletes the |z_j|=1 stratum,
-        // Pin known data specializes the family to one domain, and Propagate ADDS constraint nodes.
-        // Filing all five under one honest-sounding caption would have been a labeling defect of
-        // exactly the kind this project treats as a correctness bug, so they are separated by what
-        // they do to the solution set — which is also the distinction a user needs before clicking.
-        '      <div class="algebra-line-label" style="margin-top:8px;">Rewrite the system <span class="hint" style="font-weight:400;">(same solutions, better shape)</span></div>' +
-        '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
-        '        <button id="alg-groebner" class="small heavy-op js-busy-lock" type="button">Gröbner basis (current column)</button>' +
-        '        <button id="alg-triangular" class="small js-busy-lock" type="button">Triangular decomp.</button></div>' +
-        '      <div class="algebra-line-label" style="margin-top:8px;">Narrow the system <span class="hint" style="font-weight:400;">(deliberately changes what solves it)</span></div>' +
-        '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
-        '        <button id="alg-saturate" class="small js-busy-lock" type="button">Saturate (admissibility)</button>' +
-        '        <button id="alg-propagate-all" class="small js-busy-lock" type="button">Propagate constraints → current</button>' +
-        '        <button id="alg-pin-data" class="small" type="button">Pin known quadrature data</button></div>' +
-        // Column-level factoring. The per-node "Attempt to factor" requires selecting each card in
-        // turn to discover whether it splits; this scans the whole current system at once, which is
-        // the shape "simplify and reduce these equations" actually asks for.
-        '      <div class="algebra-line-label" style="margin-top:8px;">Split into cases <span class="hint" style="font-weight:400;">(one branch per component; the counts add up)</span></div>' +
-        '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
-        '        <button id="alg-factor-scan" class="small js-busy-lock" type="button">Factor / simplify column</button>' +
-        '        <button id="alg-decompose" class="small heavy-op js-busy-lock" type="button">Decompose into components</button>' +
-        '        <button id="alg-regular-chains" class="small heavy-op js-busy-lock" type="button">Regular chains (saturated)</button></div>' +
-        '      <div id="alg-factor-out" class="algebra-factor-out"></div>' +
-        // The `eliminate` picker moved OUT of Advanced and up into the elimination sub-section — it
-        // is the whole point of that act, not a tuning knob. Only the monomial order stays here.
-        '      <details class="algebra-advanced"><summary>Advanced</summary>' +
-        '        <div class="algebra-line"><span class="algebra-line-label" title="Monomial order for the plain Gröbner basis. lex is itself an elimination order; grevlex is fastest.">order</span>' +
-        '          <select id="alg-gb-order"><option value="grevlex">grevlex</option><option value="grlex">grlex</option><option value="lex">lex</option></select></div>' +
-        '      </details>' +
-        '    </div>' +
-        '  </details>' +
-        // 5. Analyze
-        '  <details class="algebra-section">' +
-        '    <summary>Analyze</summary>' +
-        '    <div class="algebra-section-body"><div class="row" style="flex-wrap:wrap; gap:4px;">' +
-        '      <button id="alg-classify" class="small heavy-op js-busy-lock" type="button">Existence / uniqueness</button>' +
-        '      <button id="alg-dimension" class="small js-busy-lock" type="button">Dimension / count</button>' +
-        '      <button id="alg-solve" class="small js-busy-lock" type="button">Solve (numeric)</button>' +
-        '      <button id="alg-univalence" class="small heavy-op js-busy-lock" type="button">Certify univalence</button></div>' +
-        '    <div class="row" style="flex-wrap:wrap; gap:4px; margin-top:4px;">' +
-        '      <label class="small">Resolvent in <select id="alg-resolvent-var"></select></label>' +
-        '      <button id="alg-resolvent" class="small heavy-op js-busy-lock" type="button">Resolvent / discriminant</button></div>' +
-        '    <div class="row" style="flex-wrap:wrap; gap:4px; margin-top:4px;">' +
-        '      <label class="small">Bifurcation over <select id="alg-bifurc-var"></select></label>' +
-        '      <button id="alg-bifurc" class="small heavy-op js-busy-lock" type="button">Bifurcation (real count)</button></div></div>' +
-        '  </details>' +
-        // ── End of the main route ──────────────────────────────────────────────────────────
-        // Everything above is the column workflow: assume → edit → reduce → analyze, each step
-        // acting on the system in the graph. The two sections below are NOT steps in it, which is
-        // what finding 4.4 meant by "section order contradicts the stated workflow", and a bare
-        // reorder would not have said so — the boundary has to be visible, not merely respected.
-        '  <div class="algebra-section-divider">Beyond the main route</div>' +
-        // 6. Univalence constraints (2-column grid palette). Placed straight after Analyze because
-        //    it FEEDS Analyze: you add a condition and then count. NOT before Reduce, which the
-        //    original 4.4 sketch proposed — 1.2 established that any basis reduction discards these
-        //    inequality nodes, so that order would have staged the user's work for destruction.
-        '  <details class="algebra-section">' +
-        '    <summary>Univalence constraints</summary>' +
-        '    <div class="algebra-section-body">' +
-        // What this palette is NOT. ✦ Prove certifies univalence by an exact Schur–Cohn fold plus a
-        // boundary-simplicity test on each reconstructed φ — it never reads these nodes. And their
-        // substance is inequalities, which any basis replacement (Gröbner / saturate / triangular)
-        // consumes by omission; ✦ Prove's own prelude saturates, so it discards them on the way
-        // past. Someone can otherwise build up a careful univalence model, prove, and never learn
-        // that none of it reached the verdict.
-        '      <div class="hint" id="alg-palette-note" style="margin-bottom:4px;">Append a boundary-univalence condition as new node(s) — hover each for its meaning. ' +
-        '<strong>These are for your own analysis:</strong> ✦ Prove does not read them (it certifies univalence by an exact Schur–Cohn fold + boundary-simplicity test on each reconstructed φ), and because they are mostly inequalities, any basis reduction — Gröbner, Saturate, Triangular — drops them.</div>' +
-        '      <div id="alg-palette" class="algebra-palette"></div>' +
-        '    </div>' +
-        '  </details>' +
-        // 7. Shape from moments — a STANDALONE calculator, not a step and not a seeding route.
-        //    doShapeFromMoments calls shapeFromMomentsAsync and renders to #alg-moments-out; it never
-        //    touches the store. 4.4 proposed grouping it with the "Seed A–S moments" button, but that
-        //    one DOES seed (store.seedFromPolys) — the two share a word, not a behaviour.
-        '  <details class="algebra-section">' +
-        '    <summary>Shape from moments</summary>' +
-        '    <div class="algebra-section-body">' +
-        '      <div class="hint" style="margin-bottom:4px;"><strong>Standalone — this does not touch the workspace:</strong> no column is added and the graph is unchanged. Reconstruct a discrete measure Σ aⱼ·δ(zⱼ) — a quadrature domain’s data — from its complex moments mₖ = Σ aⱼ·zⱼᵏ, by exact Prony–Hankel. The <strong>order</strong> (= #nodes = the QD-order) is the EXACT Hankel rank drop; the Prony polynomial Π(z−zⱼ) is exact; nodes/weights are numeric (well-conditioned, from the exact polynomial).</div>' +
-        '      <div class="algebra-define-row">' +
-        '        <input id="alg-moments" class="alg-def-expr" type="text" placeholder="m0, m1, m2, …   e.g.  3, 6, 14, 36, 98, 276   or  2, 0, -2, 0" autocomplete="off" spellcheck="false" title="Comma-separated complex moments m_0, m_1, …. Each: a (real), a+bi, a-bi, bi, i, -i; rationals 3/2 and decimals allowed." />' +
-        '        <button id="alg-moments-go" class="small heavy-op js-busy-lock" type="button">Reconstruct</button></div>' +
-        '      <div id="alg-moments-out" class="alg-def-preview hint"></div>' +
-        '    </div>' +
-        '  </details>' +
-        // 8. Export
-        '  <details class="algebra-section">' +
-        '    <summary>Export</summary>' +
-        '    <div class="algebra-section-body">' +
-        '      <div class="row" style="gap:4px; flex-wrap:wrap;">' +
-        '        <button id="alg-export-json" class="small" type="button" title="Download the whole session as exact ℚ(i) term lists + edges + tracks + assumptions (round-trips via Load)">Download DAG (JSON)</button>' +
-        '        <button id="alg-import-json" class="small" type="button">Load DAG (JSON)</button>' +
-        '        <input id="alg-import-file" type="file" accept="application/json,.json" style="display:none;" />' +
-        '        <button id="alg-copy-latex" class="small" type="button">Copy all LaTeX</button>' +
-        '        <button id="alg-copy-derivation" class="small" type="button">Copy derivation (LaTeX)</button>' +
-        '        <button id="alg-copy-sympy" class="small" type="button">Copy SymPy script</button></div>' +
-        '      <div class="algebra-line" style="margin-top:4px;"><span class="algebra-line-label">Mathematica</span>' +
-        '        <select id="alg-mma-col" title="Which column of equations to export"></select>' +
-        '        <button id="alg-copy-mma" class="small" type="button" title="Copy the chosen column as a Wolfram-Language list of equations ({lhs == 0, …}) ready to paste into Mathematica">Copy column</button>' +
-        '        <button id="alg-copy-mma-all" class="small" type="button" title="Copy every column as labeled Wolfram-Language lists (col0 = {…}; col1 = {…}; …)">Copy all</button></div>' +
-        '      <div class="algebra-line" style="margin-top:4px;"><span class="algebra-line-label">CAS / RCTD</span>' +
-        '        <select id="alg-cas-dialect">' +
-        '          <option value="maple">Maple RCTD</option><option value="singular">Singular</option><option value="sage">Sage</option></select>' +
-        '        <input id="alg-cas-params" class="small" type="text" placeholder="params e.g. a1,C1_1" style="width:8.5em;" />' +
-        '        <button id="alg-copy-cas" class="small" type="button">Copy for CAS</button>' +
-        '        <button id="alg-copy-msolve" class="small" type="button">Copy msolve (.ms)</button></div>' +
-        '      <div class="algebra-line" style="margin-top:6px; align-items:flex-start;"><span class="algebra-line-label">Import RCTD</span>' +
-        '        <div style="flex:1; min-width:0;">' +
-        '          <textarea id="alg-rctd-json" class="small" rows="3" placeholder=\'paste the qd-rctd JSON from your Maple run (see the post-script)\' style="width:100%; box-sizing:border-box; font-family:monospace; resize:vertical;"></textarea>' +
-        '          <div class="row" style="gap:4px; margin-top:2px;"><button id="alg-import-rctd" class="small heavy-op js-busy-lock" type="button" title="Parse the qd-rctd JSON and append a new column of the decomposition cells">Import cells</button></div>' +
-        '        </div></div>' +
-        '    </div>' +
-        '  </details>' +
-        '</div>';
+        '<div id="alg-sections">' + SIDEBAR_SECTIONS.map(renderSection).join('') + '</div>';
 
       // constraint palette buttons (2-col grid)
       const pal = $('#alg-palette');
@@ -2208,7 +2099,7 @@ const QD = _QD;
       { const bv = $('#alg-bifurc-var'); if (bv) bv.addEventListener('mousedown', refreshBifurcVars); }
       { const mg = $('#alg-moments-go'); if (mg) mg.addEventListener('click', doShapeFromMoments); }
       { const mi = $('#alg-moments'); if (mi) mi.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') doShapeFromMoments(); }); }
-      $('#alg-cancel').addEventListener('click', cancelOp);
+      $('#alg-cancel').addEventListener('click', ops.cancel);
       $('#alg-gauge-elim').addEventListener('click', () => {
         if (!ensureSeed()) return;
         const r = store.eliminateWithGauge();
@@ -2254,13 +2145,13 @@ const QD = _QD;
       $('#alg-eq-rel').addEventListener('change', previewEquation);
 
       // variable pickers (eliminate = all current vars; assume-real = primal base vars)
-      _elimPicker = buildPicker($('#alg-elim-pick'), { label: 'pick', friendly: friendlyVar, selected: elimSel, getOptions: () => store.variables() });
-      _realPicker = buildPicker($('#alg-real-pick'), { label: 'pick', friendly: (raw) => latexPlain(raw) + ' · ' + raw, selected: realSel, getOptions: () => store.baseVariables() });
+      _elimPicker = pickers.build($('#alg-elim-pick'), { label: 'pick', friendly: friendlyVar, selected: elimSel, getOptions: () => store.variables() });
+      _realPicker = pickers.build($('#alg-real-pick'), { label: 'pick', friendly: (raw) => latexPlain(raw) + ' · ' + raw, selected: realSel, getOptions: () => store.baseVariables() });
       refreshValueVars();   // seeds the first value-table row
       refreshMmaColumns();  // populate the Mathematica-export column picker
       wireSectionPersistence(panel);   // restore + remember which workflow sections are open
       // close any open picker menu when clicking elsewhere
-      document.addEventListener('click', () => { _closeOpenMenu(); });
+      document.addEventListener('click', () => { pickers.closeOpen(); });
 
       if (QD.Strings && QD.Strings.apply) QD.Strings.apply(panel);
       // AFTER Strings.apply, and that ordering is load-bearing twice over: applyOpHelp needs the
@@ -2350,7 +2241,7 @@ const QD = _QD;
     // RCTD column via store.importRCTD, and summarize the per-cell real-solution counts in the
     // verdict card. Nothing executed Maple in-browser — this just reads its serialized output back.
     function doImportRCTD() {
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       const ta = $('#alg-rctd-json');
       const text = (ta && ta.value || '').trim();
       if (!text) { toast('Paste the qd-rctd JSON from your Maple run first.', { kind: 'error' }); return; }
@@ -2397,7 +2288,7 @@ const QD = _QD;
     // Equations past a factorizer cap are listed as UNDETERMINED — never folded in with the
     // irreducible ones, since that is precisely the conflation this pass exists to remove.
     function doFactorScan() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!ensureSeed()) return;
       const out = $('#alg-factor-out'); if (!out) return;
       out.innerHTML = '';
@@ -2406,11 +2297,10 @@ const QD = _QD;
       // Q2 — offloaded: factor every current-column equation OFF the main thread (was a synchronous per-node
       // S.factor loop — Berlekamp–Zassenhaus / Hensel — that froze the tab on a big system). setBusy + a real
       // Cancel; _factorInfoAsync populates the same cache the passive badges read, so after a Scan they light up.
-      const ctrl = _newAbort(); _abort = ctrl;
-      setBusy(true, 'Scanning ' + ns.length + ' equation' + (ns.length === 1 ? '' : 's') + ' for factorizations…');
+      const ctrl = ops.begin('Scanning ' + ns.length + ' equation' + (ns.length === 1 ? '' : 's') + ' for factorizations…');
       out.textContent = 'Scanning…';
       Promise.all(ns.map((n) => _factorInfoAsync(n.id, { signal: ctrl && ctrl.signal }).then((fi) => ({ n, fi })))).then((results) => {
-        _abort = null; setBusy(false); setStatus('');
+        ops.end();
         if (ctrl && ctrl.signal && ctrl.signal.aborted) { out.innerHTML = ''; toast('Cancelled'); return; }
         out.innerHTML = '';
         const split = [], irred = [], undet = [];
@@ -2438,30 +2328,29 @@ const QD = _QD;
           out.appendChild(u);
         }
         toast(split.length ? (split.length + ' equation' + (split.length === 1 ? '' : 's') + ' can be split.') : 'No equation in the current system factors.');
-      }, (e) => { _abort = null; setBusy(false); setStatus(''); out.innerHTML = ''; showError('Scan for factorizations: ' + ((e && e.message) || String(e))); });
+      }, (e) => { ops.end(); out.innerHTML = ''; showError('Scan for factorizations: ' + ((e && e.message) || String(e))); });
     }
     // Decompose the current system into irreducible components (minimalPrimes) or saturated regular
     // chains, and offer to ENTER one. This is the escape hatch from the positive-dimensional dead
     // end: V(I) = ⋃ₖ V(componentₖ), so a component can be analyzed alone and the counts add.
     // Worker-backed and cancellable — factorizing Buchberger is not a main-thread computation.
     function doDecompose(mode) {
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       if (!ensureSeed()) return;
       const out = $('#alg-factor-out'); if (out) out.innerHTML = '';
       const chains = mode === 'chains';
       const label = chains ? 'Regular chains' : 'Decomposing into components';
-      setBusy(true, label + '…');
-      _abort = new AbortController();
-      const call = chains ? store.regularChainsAsync(null, {}, { signal: _abort.signal })
-                          : store.decomposeComponentsAsync(null, {}, { signal: _abort.signal });
+      const ctrl = ops.begin(label + '…');
+      const call = chains ? store.regularChainsAsync(null, {}, { signal: ctrl && ctrl.signal })
+                          : store.decomposeComponentsAsync(null, {}, { signal: ctrl && ctrl.signal });
       call.then((r) => {
-        _abort = null; setBusy(false); setStatus('');
+        ops.end();
         if (r && r.aborted) { toast('Cancelled'); return; }
         if (!r || !r.ok) { showError((chains ? 'Regular chains: ' : 'Decompose: ') + withGuidance((r && r.reason) || 'unavailable')); return; }
         const items = chains ? (r.chains || []).map((c) => ({ polys: c.chain, whole: c.whole, meta: c }))
                              : (r.primes || []).map((G) => ({ polys: G, whole: !G.length, meta: null }));
         renderDecomposition(items, r, chains);
-      }, (e) => { _abort = null; setBusy(false); setStatus(''); showError((chains ? 'Regular chains: ' : 'Decompose: ') + ((e && e.message) || String(e))); });
+      }, (e) => { ops.end(); showError((chains ? 'Regular chains: ' : 'Decompose: ') + ((e && e.message) || String(e))); });
     }
     function renderDecomposition(items, r, chains) {
       const out = $('#alg-factor-out'); if (!out) return;
@@ -2490,7 +2379,7 @@ const QD = _QD;
           const go = document.createElement('button'); go.type = 'button'; go.className = 'small'; go.textContent = 'Enter';
           go.title = 'Replace the current system with this component in a new column. The other components still have to be analyzed for a complete count (undo to pick another).';
           go.addEventListener('click', () => {
-            if (busyGuard()) return;
+            if (ops.guard()) return;
             const res = store.applyComponent(it.polys, k, items.length, { complete: r.complete !== false, method: chains ? 'regularChains' : 'minimalPrimes' });
             if (!res || !res.ok) { showError('Enter component: ' + ((res && res.reason) || 'failed')); return; }
             if (canvas) canvas.clearSelection();
@@ -2505,7 +2394,7 @@ const QD = _QD;
       toast(items.length + (chains ? ' regular chain' : ' component') + (items.length === 1 ? '' : 's') + ' found.');
     }
     function doFactor(id, box) {
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       const fr = store.factorOf(id);
       if (!fr.ok) {
         // Three genuinely different answers, which a bare "no factorization" used to conflate.
@@ -2552,18 +2441,17 @@ const QD = _QD;
         const use = document.createElement('button'); use.type = 'button'; use.className = 'small'; use.textContent = 'case f' + (i + 1) + '=0';
         use.title = 'Replace this equation with f' + (i + 1) + ' = 0 in a new column';
         use.addEventListener('click', () => {
-          if (_abort) return;
+          if (ops.isBusy()) return;
           // Q2 — applyFactor re-runs S.factor; offload it (setBusy + real Cancel) so a big case-poly doesn't freeze.
-          const ctrl = _newAbort(); _abort = ctrl;
-          setBusy(true, 'Factoring (case f' + (i + 1) + '=0)…');
+          const ctrl = ops.begin('Factoring (case f' + (i + 1) + '=0)…');
           store.applyFactorAsync(id, i, { signal: ctrl && ctrl.signal }).then((r) => {
-            _abort = null; setBusy(false); setStatus('');
+            ops.end();
             if (r.aborted) { toast('Cancelled'); return; }
             if (!r.ok) { showError('Factor: ' + (r.reason || 'failed')); return; }
             if (canvas) canvas.clearSelection();
             rerender(); refreshPickers();
             toast('Factored → case ' + (i + 1) + ' of ' + r.factorCount + ' (column ' + r.column + '); undo to pursue another case.');
-          }, (e) => { _abort = null; setBusy(false); setStatus(''); showError('Factor: ' + ((e && e.message) || String(e))); });
+          }, (e) => { ops.end(); showError('Factor: ' + ((e && e.message) || String(e))); });
         });
         row.appendChild(eq); row.appendChild(use); chooser.appendChild(row);
       });
@@ -2601,6 +2489,10 @@ const QD = _QD;
     // inspector + the verdict card, with a numeric "verified ✓ (N samples)" line.
     // Read-only (radicals are not polynomials, so nothing is added to the DAG).
     function doSolveRadical(id, box) {
+      // Single-flight (QD-ALG-4, D1b): this is a SYNCHRONOUS, main-thread solve, and its inspector button
+      // is not js-busy-lock — so (like Duplicate / Delete, which busyGuard the same way) this guard is the
+      // only thing stopping it from running on top of an in-flight worker op. Bails "Busy — wait…" while busy.
+      if (ops.guard()) return;
       const n = store.get(id); if (!n) return;
       const SR = QD.SymRadical, S = QD.Sym, RL = QD.RiemannLatex;
       let panel = box.querySelector('.algebra-solve-panel');
@@ -2760,7 +2652,7 @@ const QD = _QD;
       const out = [];
       const mkBtn = (label, title, run) => ({ label, title, run });
       const acts = { appendChild: (d) => out.push(d) };
-        acts.appendChild(mkBtn('Duplicate', 'Copy this equation into a new node', () => { if (busyGuard()) return; if (store.duplicate(id)) { rerender(); toast('Duplicated ' + n.label); } }));
+        acts.appendChild(mkBtn('Duplicate', 'Copy this equation into a new node', () => { if (ops.guard()) return; if (store.duplicate(id)) { rerender(); toast('Duplicated ' + n.label); } }));
         acts.appendChild(mkBtn('Copy LaTeX', 'Copy this equation as LaTeX', () => copyNodeLatex(id)));
         acts.appendChild(mkBtn('Copy Mathematica', 'Copy this equation as Wolfram-Language (lhs == 0)', () => { const code = store.mathematicaNode(id); if (code) writeClipboard(code, n.label + ' (Mathematica)'); }));
         // D5: show how this derived equation was obtained from its input(s) — for substitutions
@@ -2769,12 +2661,12 @@ const QD = _QD;
         if (n.provenance && (n.provenance.inputs || []).length) {
           acts.appendChild(mkBtn('Show steps', 'Show how this equation was derived from its input(s); substitutions and reality assumptions are replayed one variable at a time', () => doShowSteps(id, box)));
         }
-        acts.appendChild(mkBtn('Delete', 'Delete this node and its descendants', () => { if (busyGuard()) return; const removed = store.deleteNode(id); if (canvas) canvas.clearSelection(); rerender(); toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)', { action: undoToastAction() }); }));
+        acts.appendChild(mkBtn('Delete', 'Delete this node and its descendants', () => { if (ops.guard()) return; const removed = store.deleteNode(id); if (canvas) canvas.clearSelection(); rerender(); toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)', { action: undoToastAction() }); }));
         // Generate the conjugate equation p̄ = 0 (folding in variables already assumed real).
         // Useful for derived equations that did not get a seed-time companion. Equalities/≠ only.
         if (n.rel !== '>') {
           acts.appendChild(mkBtn('Generate conjugate', 'Add the conjugate equation p̄ = 0 as a paired companion, folding in any variables already assumed real (v̄ ≡ v)', () => {
-            if (busyGuard()) return;
+            if (ops.guard()) return;
             const r = store.generateConjugate(id);
             if (!r.ok) { toast(r.reason || 'could not generate the conjugate', { kind: 'error' }); return; }
             rerender(); toast('Added conjugate: ' + r.node.label);
@@ -2784,7 +2676,7 @@ const QD = _QD;
         // (reality / imaginary / fixed φ(0) / pinned values) applied across the columns.
         if (n.column < store.maxColumn()) {
           acts.appendChild(mkBtn('Propagate to current system', 'Carry this equation into the last column with all assumptions (reality, imaginary, fixed φ(0), pinned values) applied to it', () => {
-            if (busyGuard()) return;
+            if (ops.guard()) return;
             const r = store.propagateNode(id);
             if (!r.ok) { toast(r.reason || 'could not propagate', { kind: 'error' }); return; }
             if (canvas) canvas.clearSelection();
@@ -2809,7 +2701,7 @@ const QD = _QD;
             acts.appendChild(mkBtn('Propagate + factor (' + fi.count + ' factors)',
               'This equation factors, but only the current system can be split. Carry it into the last column (with every assumption applied) and factor it there.',
               () => {
-                if (busyGuard()) return;
+                if (ops.guard()) return;
                 const r = store.propagateNode(id);
                 if (!r.ok) { showError('Propagate: ' + (r.reason || 'could not propagate')); return; }
                 rerender(); refreshPickers();
@@ -3014,15 +2906,14 @@ const QD = _QD;
     // Eliminate the chosen shared variable from the two selected nodes by their exact
     // Sylvester resultant (store.eliminate) → a derived node in the current column.
     function doEliminate() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       const sel = canvas ? canvas.getSelection() : [];
       const v = $('#alg-var') && $('#alg-var').value;
       if (sel.length !== 2 || !v) return;
       // Q2 — offloaded (the elimination ideal / Sylvester resultant ran synchronously on the UI thread).
-      const ctrl = _newAbort(); _abort = ctrl;
-      setBusy(true, 'Eliminating ' + latexPlain(v) + '…');
+      const ctrl = ops.begin('Eliminating ' + latexPlain(v) + '…');
       store.eliminateAsync(sel[0], sel[1], v, { signal: ctrl && ctrl.signal }).then((r) => {
-        _abort = null; setBusy(false); setStatus('');
+        ops.end();
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { toast(r.reason || 'elimination failed', { kind: 'error' }); return; }
         canvas.clearSelection();
@@ -3031,51 +2922,16 @@ const QD = _QD;
         const exact = (r.method || (r.node && r.node.provenance && r.node.provenance.method)) === 'ideal';
         toast('Eliminated ' + latexPlain(v) + ' → ' + created.length + ' exact ' + (created.length === 1 ? 'relation' : 'relations')
           + (exact ? ' (elimination ideal — no extraneous factors)' : ' (Sylvester resultant fallback — may carry extraneous factors)'));
-      }, (e) => { _abort = null; setBusy(false); setStatus(''); toast('Elimination: ' + ((e && e.message) || String(e)), { kind: 'error' }); });
+      }, (e) => { ops.end(); toast('Elimination: ' + ((e && e.message) || String(e)), { kind: 'error' }); });
     }
-    // Busy-state manager for the off-main-thread (worker) ops — disables the heavy
-    // controls AND the graph-mutating controls (undo/redo, reductions, palette) so a
-    // mutation can't land mid-op and orphan an in-flight derivation (A5), reveals
-    // Cancel, and routes progress to the status line.
-    let _abort = null;
-    let _busy = false;
-    function setBusy(on, label) {
-      _busy = !!on;
-      // Marked with `js-busy-lock` AT the control, not listed here. This was a hand-maintained
-      // array of 30 ids sitting ~700 lines from the buttons it named (finding 5.9, "will
-      // drift") — and it had drifted: `alg-seed-moment` and `alg-w0-fix` both RE-SEED, and
-      // neither was in the array nor self-guarded, so either could drop a fresh system on top
-      // of an in-flight worker derivation. That is precisely what this lock exists to prevent.
-      // The marker now sits in the markup beside the control, where it is visible to whoever
-      // adds one. (It does not make remembering unnecessary — it puts the reminder in view.)
-      document.querySelectorAll('.js-busy-lock').forEach((b) => { b.disabled = on; });
-      const pal = $('#alg-palette'); if (pal) pal.querySelectorAll('button').forEach((b) => { b.disabled = on; });
-      const cancel = $('#alg-cancel'); if (cancel) cancel.classList.toggle('hidden', !on);
-      // Q2 — a busy state on the CANVAS surface too (not just the sidebar): the result lands here, so the
-      // graph dimming + spinner is where the eye is during a multi-second op, and it reads as "working"
-      // rather than "did my click register?". CSS draws the overlay from the .is-busy class + data-busy label.
-      const graph = $('#algebra-graph');
-      if (graph) { graph.classList.toggle('is-busy', on); if (on && label) graph.setAttribute('data-busy', label); else graph.removeAttribute('data-busy'); }
-      if (on && label) setStatus(label);
-    }
-    function cancelOp() { if (_abort) { try { _abort.abort(); } catch (e) { /* ignore */ } } if (QD.SymWorker) QD.SymWorker.cancel(); }
-    function _newAbort() { return (typeof AbortController !== 'undefined') ? new AbortController() : null; }
-    // Guard a graph-mutating action so it can't land while a worker op is in flight. The
-    // inspector's action buttons (Duplicate / Delete / Attempt-to-factor / factor cases)
-    // are rebuilt on every selection, so they can't be reached by setBusy's id list (A5) —
-    // they call this instead. Returns true (and warns) when an op is running.
-    function busyGuard() {
-      if (_abort) { toast('Busy — wait for the current computation to finish (or Cancel).', { kind: 'error' }); return true; }
-      return false;
-    }
+    // The single-flight op-runner (setBusy / begin / end / guard / cancel + the _abort/_busy state,
+    // with the js-busy-lock and busy-lifecycle rationale) moved to ./algebra-op-runner.mjs — D1d seam 1;
+    // `ops` is built near setStatus above. The ~25 worker ops now call ops.begin(label) / ops.end()
+    // (or ops.end({ keepStatus: true }) when they set their own terminal status), ops.guard() /
+    // ops.isBusy() to single-flight, and ops.cancel() (wired from #alg-cancel).
 
-    // Append a CAS-route hint to cap/too-large failures (the recurring case).
-    function _isCapFailure(reason) { return /export|cap|exceed|too large|step|basis|degree|terms/i.test(reason || ''); }
-    function withGuidance(reason) {
-      return _isCapFailure(reason)
-        ? (reason + '  Try: assume variables real (simplifies the system), eliminate fewer variables, or use the CAS export.')
-        : reason;
-    }
+    // _isCapFailure + withGuidance (cap-failure guidance) moved to ./algebra-labeling.mjs (carve-out 6) —
+    // imported above; the DOM-coupled capFailVerdict below still uses the imported _isCapFailure.
     // G-misc-2: a cap/too-large failure names the CAS export in PROSE — also make it a one-click ACTION.
     // Renders the failure in the verdict card with a "Copy Maple RCTD export" button, so the failure state is
     // actionable (the documented external-CAS route), not just advisory. Returns true when it handled a cap
@@ -3113,7 +2969,7 @@ const QD = _QD;
     // `optsOverride` carries the elimination request from doEliminateVars; without it this reads
     // only the order selector, so the button does exactly what its label says.
     function doGroebner(sel, optsOverride) {
-      if (_abort) return;                       // an op is already running
+      if (ops.isBusy()) return;                       // an op is already running
       if (!ensureSeed()) return;
       clearError();
       const ids = (sel && sel.length) ? sel.slice()
@@ -3122,13 +2978,12 @@ const QD = _QD;
       const order = (orderEl && orderEl.value) || 'grevlex';
       const elim = (optsOverride && optsOverride.eliminate) ? optsOverride.eliminate.slice() : [];
       const opts = elim.length ? { eliminate: elim } : { order };
-      const ctrl = _newAbort(); _abort = ctrl;
-      setBusy(true, 'Computing Gröbner basis…');
+      const ctrl = ops.begin('Computing Gröbner basis…');
       store.groebnerAsync(ids, opts, {
         signal: ctrl && ctrl.signal,
         onProgress: (info) => setStatus('Gröbner… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
       }).then((r) => {
-        _abort = null; setBusy(false);
+        ops.end({ keepStatus: true });
         if (r.aborted) { setStatus('Cancelled.'); toast('Cancelled'); return; }
         if (!r.ok) { const rn = r.reason || 'failed'; if (!capFailVerdict('Gröbner basis', rn)) showError('Gröbner basis: ' + withGuidance(rn)); setStatus(''); return; }
         if (canvas) canvas.clearSelection();
@@ -3143,34 +2998,32 @@ const QD = _QD;
     // drops the {|z_j|=1} boundary stratum the cleared (●)/(★) denominators carry, so the existence count is
     // the EXACT number of algebraic quadrature-domain solutions (finding B-1; e.g. the unit disk 4 → 2).
     function doSaturate() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!ensureSeed()) return;
       clearError();
       const sel = canvas ? canvas.getSelection() : [];
       // Q2 — offloaded (was a synchronous elimination Gröbner on the UI thread, degree 2p², and on the
       // ✦ Prove prelude). setBusy reveals the spinner + Cancel; the abort signal makes Cancel real.
-      const ctrl = _newAbort(); _abort = ctrl;
-      setBusy(true, 'Saturating by ∏(1−z̄z)…');
+      const ctrl = ops.begin('Saturating by ∏(1−z̄z)…');
       store.saturateAsync(sel.length ? sel : null, {}, { signal: ctrl && ctrl.signal }).then((r) => {
-        _abort = null; setBusy(false); setStatus('');
+        ops.end();
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Saturate (admissibility): ' + withGuidance(r.reason || 'nothing to saturate')); return; }
         if (canvas) canvas.clearSelection();
         rerender(); refreshPickers();
         toast('Saturated by ∏(1−z̄z): the |z_j| = 1 boundary stratum removed (' + r.created.length + ' generator' + (r.created.length === 1 ? '' : 's') + ')' + scopeNote(sel) + ' — the existence count is now the exact algebraic QD-solution count.' + droppedNote(r.skipped), r.skipped && r.skipped.length ? { kind: 'error' } : {});
-      }, (e) => { _abort = null; setBusy(false); setStatus(''); showError('Saturate: ' + ((e && e.message) || String(e))); });
+      }, (e) => { ops.end(); showError('Saturate: ' + ((e && e.message) || String(e))); });
     }
     // Triangular decomposition of the current system → a triangular chain column.
     function doTriangular() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!ensureSeed()) return;
       clearError();
       const sel = canvas ? canvas.getSelection() : [];
       // Q2 — offloaded (the Wu pseudo-elimination chain ran synchronously on the UI thread, no spinner/cancel).
-      const ctrl = _newAbort(); _abort = ctrl;
-      setBusy(true, 'Triangularizing (Wu chain)…');
+      const ctrl = ops.begin('Triangularizing (Wu chain)…');
       store.triangularizeAsync(sel.length ? sel : null, {}, { signal: ctrl && ctrl.signal }).then((r) => {
-        _abort = null; setBusy(false); setStatus('');
+        ops.end();
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Triangular decomposition: ' + withGuidance(r.reason || 'failed')); return; }
         if (canvas) canvas.clearSelection();
@@ -3183,11 +3036,11 @@ const QD = _QD;
           (r.freeVars.length ? '; free variable(s) ' + r.freeVars.map(latexPlain).join(', ') + ' ⇒ a positive-dimensional family' : ' ⇒ zero-dimensional (finitely many solutions)') +
           (r.hasRegularityConditions ? ' · ⚠ ' + r.initialCount + ' non-constant initial(s) — a Wu chain is NOT saturated by its pivots, so where an initial vanishes it may add spurious branches or miss components (a full regular-chain decomposition would case-split on the initials)' : '') +
           droppedNote(r.skipped), r.skipped && r.skipped.length ? { kind: 'error' } : {});
-      }, (e) => { _abort = null; setBusy(false); setStatus(''); showError('Triangular decomposition: ' + ((e && e.message) || String(e))); });
+      }, (e) => { ops.end(); showError('Triangular decomposition: ' + ((e && e.message) || String(e))); });
     }
     // Carry every univalence constraint into the current system, assumptions applied (batch).
     function doPropagateAll() {
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       if (!store.size) { toast('Nothing to propagate — seed a system first.', { kind: 'error' }); return; }
       const r = store.propagateAllConstraints();
       if (!r.ok) { toast(r.reason || 'nothing to propagate', { kind: 'error' }); return; }
@@ -3242,13 +3095,12 @@ const QD = _QD;
     // linear propagation), each appended as a labeled column, then determine existence/
     // uniqueness and the explicit real solutions. The reduction history stays visible.
     function doAutoSolve() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
       if (!ensureSeed()) return;
       clearError();
-      const ctrl = _newAbort(); _abort = ctrl;
+      const ctrl = ops.begin('Auto-reduce & solve…');
       const runOpts = { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Auto: ' + info.basis + ' generators, ' + info.pairs + ' pairs left') };
-      setBusy(true, 'Auto-reduce & solve…');
       const tick = () => new Promise((res) => setTimeout(res, 30));
       (async () => {
         try {
@@ -3268,28 +3120,22 @@ const QD = _QD;
           // 3. existence / uniqueness verdict (parameters pinned) — off the main thread
           const params = hDataParamValues();
           const cl = await store.classifyAsync(null, { paramValues: params }, runOpts);
-          if (cl.aborted) { _abort = null; setBusy(false); setStatus('Cancelled.'); toast('Cancelled'); return; }
-          if (!cl.ok) { _abort = null; setBusy(false); showError('Auto-reduce & solve: ' + withGuidance(cl.reason || 'failed')); return; }
-          let verdict;
-          if (cl.inconsistent) verdict = 'No quadrature domain: the reduced system is inconsistent.';
-          else if (!cl.zeroDim) verdict = 'A positive-dimensional family of solutions (' + posDimDesc(cl) + ') — add a constraint or fix a value to pin it.';
-          // HONEST LABELING (finding C-1/B-1): the reim real-solution count is the count of ALGEBRAIC
-          // solutions of the cleared system — an UPPER BOUND on the number of quadrature domains (it can
-          // include non-univalent maps, gauge copies, and the {|z_j|=1} boundary stratum the cleared
-          // denominators carry). It is NOT the QD count; only "Certify univalence" (which filters non-QDs
-          // + quotients the gauge) yields that. Count 0 IS sound (0 algebraic ⇒ 0 QD).
-          else if (cl.realCount == null) verdict = cl.multiplicity + ' solution(s) with multiplicity.';
-          else if (cl.realCount === 0) verdict = 'No real quadrature domain' + (cl.complexCount != null ? ' (of ' + cl.complexCount + ' distinct complex)' : '') + '.';
-          else verdict = cl.realCount + ' real algebraic solution' + (cl.realCount === 1 ? '' : 's')
-            + (cl.complexCount != null ? ' (of ' + cl.complexCount + ' distinct complex)' : '')
-            + ' — an upper bound on the number of quadrature domains; run Certify univalence for the genuine-QD count.';
+          if (cl.aborted) { ops.end({ keepStatus: true }); setStatus('Cancelled.'); toast('Cancelled'); return; }
+          if (!cl.ok) { ops.end({ keepStatus: true }); showError('Auto-reduce & solve: ' + withGuidance(cl.reason || 'failed')); return; }
+          // D1c (QD-ALG-5): build the existence/uniqueness line with classifyVerdict — the SAME pure
+          // honest-labeling builder doClassify uses — rather than a drifted inline copy, so the two paths
+          // can no longer diverge. classifyVerdict already carries the honest labeling (finding C-1/B-1: the
+          // reim real-solution count is an UPPER BOUND on #QD — it can include non-univalent maps, gauge
+          // copies, and the {|z_j|=1} boundary stratum; only "Certify univalence" filters non-QDs + quotients
+          // the gauge to yield the genuine count; count 0 is sound). The ★ Auto-reduce slice caveat still appends.
+          let verdict = classifyVerdict(cl);
           // ★ Auto-reduce auto-applies assumeReal ⇒ this count is on the real slice (a lower bound).
           verdict += sliceCaveat(cl);
           // 4. explicit real solutions when zero-dimensional — off the main thread
           let coords = '', solutionsText = '';
           if (cl.zeroDim && !cl.inconsistent) {
             const sr = await store.solveRealAsync(null, { paramValues: params }, runOpts);
-            if (sr.aborted) { _abort = null; setBusy(false); setStatus('Cancelled.'); toast('Cancelled'); return; }
+            if (sr.aborted) { ops.end({ keepStatus: true }); setStatus('Cancelled.'); toast('Cancelled'); return; }
             if (sr.ok && sr.solutions && sr.solutions.length) {
               const reals = sr.solutions.filter((s) => Object.keys(s).every((k) => Math.abs(s[k].im) < 1e-6));
               coords = ' Explicit: ' + reals.length + ' real solution(s) — see the verdict card / console.';
@@ -3300,11 +3146,11 @@ const QD = _QD;
               try { console.table(sr.solutions.map((s) => { const row = {}; Object.keys(s).forEach((k) => { row[k] = s[k].re.toFixed(6) + (s[k].im >= 0 ? '+' : '−') + Math.abs(s[k].im).toFixed(6) + 'i'; }); return row; })); } catch (e) { /* ignore */ }
             }
           }
-          _abort = null; setBusy(false); refreshPickers();
+          ops.end({ keepStatus: true }); refreshPickers();
           setStatus(verdict + coords);
           if (canvas) showResult({ text: verdict, solutionsText, assumptions: specializationLedger(cl, _ledgerCtx()), rigor: classifyRigor(cl) });
           toast(verdict, cl.inconsistent || cl.realCount === 0 ? { kind: 'error' } : {});
-        } catch (e) { _abort = null; setBusy(false); showError('Auto-reduce & solve: ' + ((e && e.message) || String(e))); }
+        } catch (e) { ops.end({ keepStatus: true }); showError('Auto-reduce & solve: ' + ((e && e.message) || String(e))); }
       })();
     }
 
@@ -3339,8 +3185,7 @@ const QD = _QD;
       clearError();
       try { store.seedFromPolys({ polys: sys.polys, vars: sys.vars }); } catch (e) { showError('Moment system: could not seed — ' + ((e && e.message) || e)); return; }
       _seededHData = hData; realSel.clear(); elimSel.clear(); refreshPickers(); if (canvas) canvas.clearSelection(); rerender();
-      const ctrl = _newAbort(); _abort = ctrl;
-      setBusy(true, 'Proving via the moment (point-functional / Aharonov–Shapiro) formulation…');
+      const ctrl = ops.begin('Proving via the moment (point-functional / Aharonov–Shapiro) formulation…');
       const momentCtx = {
         order: pf.order, momentPolys: sys.polys, deps: proveDeps(),
         sliceCaveat, posDimDesc, signal: ctrl && ctrl.signal,
@@ -3349,13 +3194,13 @@ const QD = _QD;
         solveCertified: () => store.solveRealCertifiedAsync(null, {}, { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Solving the moment system… ' + info.basis + ' gen, ' + info.pairs + ' pairs') }),
       };
       PROVE.runMomentPlan(momentCtx).then((pr) => {
-        _abort = null; setBusy(false); setStatus('');
+        ops.end();
         if (pr.kind === 'aborted') { toast('Cancelled'); return; }
         if (pr.kind === 'error') { const rn = pr.reason || 'failed'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
         if (pr.kind === 'positive-dim') { renderPositiveDimVerdict(pr); return; }   // degenerate moment data
         if (pr.kind === 'moment') pr.node = pf.node;   // C1-ext-B: the constant term a = φ(0) for the plot
         renderProofVerdict(pr);   // moment / inconsistent / no-real
-      }).catch((e) => { _abort = null; setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
+      }).catch((e) => { ops.end(); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
     }
     // Prove existence/uniqueness via the RATIONAL-φ (multi-node) formulation (Phase C2). Re-seeds the workspace
     // with the degree-2 rational shape system (so the shown derivation IS the proof), then runs
@@ -3366,8 +3211,7 @@ const QD = _QD;
       clearError();
       try { store.seedFromPolys({ polys: sys.polys, vars: sys.vars }); } catch (e) { showError('Rational system: could not seed — ' + ((e && e.message) || e)); return; }
       _seededHData = hData; realSel.clear(); elimSel.clear(); refreshPickers(); if (canvas) canvas.clearSelection(); rerender();
-      const ctrl = _newAbort(); _abort = ctrl;
-      setBusy(true, 'Proving via the rational-φ (multi-node) formulation…');
+      const ctrl = ops.begin('Proving via the rational-φ (multi-node) formulation…');
       const ratCtx = {
         sysPolys: sys.polys, nodeData: rd, deps: proveDeps(),
         sliceCaveat, posDimDesc, signal: ctrl && ctrl.signal,
@@ -3376,12 +3220,12 @@ const QD = _QD;
         solveCertified: () => store.solveRealCertifiedAsync(null, {}, { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Solving the shape system… ' + info.basis + ' gen, ' + info.pairs + ' pairs') }),
       };
       PROVE.runRationalPlan(ratCtx).then((pr) => {
-        _abort = null; setBusy(false); setStatus('');
+        ops.end();
         if (pr.kind === 'aborted') { toast('Cancelled'); return; }
         if (pr.kind === 'error') { const rn = pr.reason || 'failed'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
         if (pr.kind === 'positive-dim') { renderPositiveDimVerdict(pr); return; }
         renderProofVerdict(pr);   // rational / inconsistent / no-real
-      }).catch((e) => { _abort = null; setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
+      }).catch((e) => { ops.end(); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
     }
     // Prove existence/uniqueness via the RATIONAL-φ EQUILATERAL-TRIANGLE (degree-3) formulation (Phase C3).
     // Re-seeds the workspace with the 3-fold-symmetric shape system, then runs PROVE.runTrianglePlan (certified
@@ -3392,8 +3236,7 @@ const QD = _QD;
       clearError();
       try { store.seedFromPolys({ polys: sys.polys, vars: sys.vars }); } catch (e) { showError('Triangle system: could not seed — ' + ((e && e.message) || e)); return; }
       _seededHData = hData; realSel.clear(); elimSel.clear(); refreshPickers(); if (canvas) canvas.clearSelection(); rerender();
-      const ctrl = _newAbort(); _abort = ctrl;
-      setBusy(true, 'Proving via the rational-φ (equilateral triangle, degree-3) formulation…');
+      const ctrl = ops.begin('Proving via the rational-φ (equilateral triangle, degree-3) formulation…');
       const triCtx = {
         sysPolys: sys.polys, nodeData: td, deps: proveDeps(),
         sliceCaveat, posDimDesc, signal: ctrl && ctrl.signal,
@@ -3402,12 +3245,12 @@ const QD = _QD;
         solveCertified: () => store.solveRealCertifiedAsync(null, {}, { signal: ctrl && ctrl.signal, onProgress: (info) => setStatus('Solving the shape system… ' + info.basis + ' gen, ' + info.pairs + ' pairs') }),
       };
       PROVE.runTrianglePlan(triCtx).then((pr) => {
-        _abort = null; setBusy(false); setStatus('');
+        ops.end();
         if (pr.kind === 'aborted') { toast('Cancelled'); return; }
         if (pr.kind === 'error') { const rn = pr.reason || 'failed'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
         if (pr.kind === 'positive-dim') { renderPositiveDimVerdict(pr); return; }
         renderProofVerdict(pr);   // triangle / inconsistent / no-real
-      }).catch((e) => { _abort = null; setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
+      }).catch((e) => { ops.end(); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
     }
     // THE one-click orchestrator (finding G-1 + Phase B): from the seeded system to the AUTHORITATIVE
     // genuine-QD verdict, with no manual op-chaining. Runs the cheap reductions (auto-reality if h is
@@ -3420,7 +3263,7 @@ const QD = _QD;
     // an aggregated verdict (an honest LOWER BOUND when a case can't be auto-closed). Escalation is
     // exclusive to this ✦ button; the standalone Certify keeps the manual pin/split card.
     function doProveExistenceUniqueness() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       // From-data (PF-2): prove from the current solve when one exists, else DIRECTLY from the raw
       // classical-bounded quadrature data (lastHData) with NO numeric solve — gated on the classical-
       // bounded MODE (state.mode ≠ lqd-*/pqd-*/unbounded). Answers "does a QD exist?" even when the
@@ -3454,8 +3297,7 @@ const QD = _QD;
         try { const sr = store.saturateMobius(); if (sr && sr.ok) rerender(); } catch (e) { /* best-effort */ }
         refreshPickers();
       } catch (e) { /* the prelude is best-effort; the pipeline still runs */ }
-      const ctrl = _newAbort(); _abort = ctrl;
-      setBusy(true, fromData ? 'Proving from data (no numeric solve needed)…' : 'Proving existence / uniqueness…');
+      const ctrl = ops.begin(fromData ? 'Proving from data (no numeric solve needed)…' : 'Proving existence / uniqueness…');
       const w0cb = $('#alg-w0-fix'), fixW0 = !w0cb || w0cb.checked;
       const planCtx = fromData ? buildPlanCtx(ctrl, { hData, numPhi: null, w0Sel: fixW0 ? poleCentroid(hData) : undefined }) : buildPlanCtx(ctrl);
       PROVE.runCertifyPlan(planCtx).then((pr) => {
@@ -3465,7 +3307,7 @@ const QD = _QD;
           // fork mutates + reverts the store per case, so the derivation DAG is unchanged by the walk.
           setStatus('Underdetermined — auto-walking the factor / pin cases…');
           return PROVE.runProofTree(Object.assign({}, planCtx, { fork: buildProveFork(planCtx.params) })).then((tr) => {
-            _abort = null; setBusy(false); setStatus('');
+            ops.end();
             if (tr.kind === 'aborted') { toast('Cancelled'); return; }
             // If the walk CLOSED at least one branch (analyzed a determined sub-case), render the
             // aggregate (pool-then-quotient) verdict. If it made NO progress — every case was an
@@ -3477,11 +3319,11 @@ const QD = _QD;
             else renderPositiveDimVerdict(pr);
           });
         }
-        _abort = null; setBusy(false); setStatus('');
+        ops.end();
         if (pr.kind === 'aborted') { toast('Cancelled'); return; }
         if (pr.kind === 'error') { const rn = pr.reason || 'failed'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
         renderProofVerdict(pr);   // inconsistent / no-real / zero-dim
-      }).catch((e) => { _abort = null; setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
+      }).catch((e) => { ops.end(); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
     }
     // The known quadrature-data values (a_j, C_{j,s} and their conjugates) keyed by the
     // conjugate-model variable names — to PIN the parameters for the existence verdict
@@ -3505,33 +3347,21 @@ const QD = _QD;
     // "N real QDs (of M complex)" / "positive-dimensional family" to the status line + the
     // canvas verdict card. Runs behind a setTimeout so the busy state paints first.
     function doClassify() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!ensureSeed()) return;
       clearError();
       const sel = canvas && canvas.getSelection().length ? canvas.getSelection() : null;
-      const ctrl = _newAbort(); _abort = ctrl;
-      setBusy(true, 'Counting real solutions (existence / uniqueness)…');
+      const ctrl = ops.begin('Counting real solutions (existence / uniqueness)…');
       store.classifyAsync(sel, { paramValues: hDataParamValues() }, {
         signal: ctrl && ctrl.signal,
         onProgress: (info) => setStatus('Existence / uniqueness… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
       }).then((r) => {
-        _abort = null; setBusy(false); setStatus('');
+        ops.end();
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { const rn = r.reason || 'unavailable'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
-        let verdict;
-        if (r.inconsistent) verdict = 'No quadrature domain: the system is inconsistent (1 ∈ I).';
-        else if (!r.zeroDim) verdict = 'Infinitely many: a positive-dimensional family (' + posDimDesc(r) + ').';
-        else if (r.realCount == null) verdict = 'Zero-dimensional: ' + r.multiplicity + ' complex solution(s) with multiplicity (real count unavailable: ' + (r.reason || '') + ').';
-        else {
-          const cx = r.complexCount, mult = r.multiplicity;
-          const tail = (cx != null ? ' (of ' + cx + ' distinct complex' + (mult != null && mult > cx ? '; ' + mult + ' with multiplicity' : '') + ')' : '');
-          if (r.realCount === 0) verdict = 'No real quadrature domain' + tail + '.';
-          // HONEST LABELING (C-1): 1 real ALGEBRAIC solution is an upper bound on #QD, not "the unique QD"
-          // — it may be non-univalent, a gauge copy, or on the {|z_j|=1} boundary stratum. Only Certify
-          // univalence yields the genuine count. (The count>1 branch was already honest; align the ==1 one.)
-          else if (r.realCount === 1) verdict = 'A unique real algebraic solution' + tail + ' — an upper bound on the quadrature-domain count; run Certify univalence for the genuine-QD count (gauge copies merged, non-univalent ones filtered).';
-          else verdict = r.realCount + ' real algebraic solutions' + tail + ' — run Certify univalence for the genuine-QD count (gauge copies merged, non-univalent ones filtered).';
-        }
+        // classifyVerdict (pure, ./algebra-labeling.mjs) builds the base existence/uniqueness line; the
+        // slice/scope/branch caveats below stay here — they read DOM/store state (sel, the current column).
+        let verdict = classifyVerdict(r);
         // A factor "case" column counts ONE branch of V(p)=⋃V(fᵢ) — the branches add up.
         if (r.partialBranch) {
           const what = r.branchOp === 'component' ? 'a component decomposition' : 'a factor split';
@@ -3659,20 +3489,19 @@ const QD = _QD;
     // numeric cross-check → rigor-badged verdict. The DOM/render (progress, verdict card, one-click
     // actions) stays here; the proof logic + the honest verdict string live in the engine.
     function doCertifyUnivalence() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!activeEnv) { toast(STR.noSolve || 'No classical bounded QD solved yet.', { kind: 'error' }); return; }
       if (typeof QD.isBoundaryUnivalent !== 'function') { showError('Univalence: the numeric univalence machinery (solver.js) is not loaded.'); return; }
       if (!ensureSeed()) return;
       clearError();
-      const ctrl = _newAbort(); _abort = ctrl;
-      setBusy(true, 'Certifying univalence (genuine QDs)…');
+      const ctrl = ops.begin('Certifying univalence (genuine QDs)…');
       PROVE.runCertifyPlan(buildPlanCtx(ctrl)).then((pr) => {
-        _abort = null; setBusy(false); setStatus('');
+        ops.end();
         if (pr.kind === 'aborted') { toast('Cancelled'); return; }
         if (pr.kind === 'error') { const rn = pr.reason || 'failed'; if (!capFailVerdict('Existence / uniqueness', rn)) showError('Existence / uniqueness: ' + withGuidance(rn)); return; }
         if (pr.kind === 'positive-dim') { renderPositiveDimVerdict(pr); return; }
         renderProofVerdict(pr);   // inconsistent / no-real / zero-dim
-      }).catch((e) => { _abort = null; setBusy(false); setStatus(''); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
+      }).catch((e) => { ops.end(); showError('Existence / uniqueness: ' + ((e && e.message) || e)); });
     }
     // Render a POSITIVE-DIMENSIONAL (underdetermined) verdict: detect FACTORABLE causes (a locator/
     // gauge equation that splits the variety) and offer one-click pin/split actions (#2) that re-run
@@ -3710,17 +3539,16 @@ const QD = _QD;
           actions.push({ label: 'Split ' + (n.label || 'equation') + ' → case 1 of ' + cnt,
             title: 'This equation factors: V(p) = ⋃ₖ V(fₖ). Pursue case 1 in a new column — the other cases still have to be pursued for a complete count (undo to pick another, or fork).',
             onClick: () => {
-              if (_abort) return;
-              const ctrl = _newAbort(); _abort = ctrl;   // Q2 — offload the factor (setBusy + real Cancel)
-              setBusy(true, 'Splitting into cases…');
+              if (ops.isBusy()) return;
+              const ctrl = ops.begin('Splitting into cases…');   // Q2 — offload the factor (setBusy + real Cancel)
               store.applyFactorAsync(n.id, 0, { signal: ctrl && ctrl.signal }).then((r) => {
-                _abort = null; setBusy(false); setStatus('');
+                ops.end();
                 if (r && r.aborted) { toast('Cancelled'); return; }
                 if (!r || !r.ok) { showError('Split into cases: ' + ((r && r.reason) || 'failed')); return; }
                 rerender(); refreshPickers();
                 toast('Split → case 1 of ' + r.factorCount + ' (column ' + r.column + '); undo to pursue another case.');
                 doCertifyUnivalence();
-              }, (e) => { _abort = null; setBusy(false); setStatus(''); showError('Split into cases: ' + ((e && e.message) || String(e))); });
+              }, (e) => { ops.end(); showError('Split into cases: ' + ((e && e.message) || String(e))); });
             } });
         });
       } catch (e) { /* the split offer is best-effort — never break the verdict card */ }
@@ -3885,18 +3713,17 @@ const QD = _QD;
     // solutions / a degeneracy (e.g. a cusp). Surfaces the degree / distinct-vs-multiplicity count
     // + the degeneracy verdict; the polynomial (LaTeX) goes to the verdict card detail.
     function doResolvent() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!ensureSeed()) return;
       clearError();
       refreshResolventVars();
       const sel = $('#alg-resolvent-var'); const v = sel && sel.value;
       if (!v) { showError('Resolvent: no real variable available — reduce to a finite (reality-assumed) system first.'); return; }
-      const ctrl = _newAbort(); _abort = ctrl;   // coherent busy state (guards re-entry / inspector mutations)
-      setBusy(true, 'Computing the resolvent…');
+      const ctrl = ops.begin('Computing the resolvent…');   // coherent busy state (guards re-entry / inspector mutations)
       // Q2 — offloaded to the worker. This used to be a setTimeout that still ran S.resolvent SYNCHRONOUSLY
       // on the main thread, so the Cancel was cosmetic; now the abort signal really cancels.
       store.resolventAsync(null, v, { paramValues: hDataParamValues() }, { signal: ctrl && ctrl.signal }).then((r) => {
-        _abort = null; setBusy(false); setStatus('');
+        ops.end();
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Resolvent: ' + withGuidance(r.reason || 'unavailable')); return; }
         const fv = friendlyReim(r.variable);
@@ -3915,7 +3742,7 @@ const QD = _QD;
         // `degenerate` (disc = 0) is itself an exact conclusion, not a failure to certify.
         if (canvas) showResult({ text, solutionsLatex: mathLatex, rigor: 'exact' });
         toast(text, r.degenerate ? { kind: 'error' } : {});
-      }, (e) => { _abort = null; setBusy(false); setStatus(''); showError('Resolvent: ' + ((e && e.message) || String(e))); });
+      }, (e) => { ops.end(); showError('Resolvent: ' + ((e && e.message) || String(e))); });
     }
 
     // Repopulate the bifurcation parameter picker from the current column's reim variables.
@@ -3932,16 +3759,15 @@ const QD = _QD;
     // count per interval). Off the main thread (heavy Gröbner / elimination), cancellable. Counts
     // are EXACT (=); critical values are isolating boxes (≤, shown ≈ when not an exact rational).
     function doBifurcation() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!ensureSeed()) return;
       clearError();
       refreshBifurcVars();
       const sel = $('#alg-bifurc-var'); const v = sel && sel.value;
       if (!v) { showError('Bifurcation: no real variable available — reduce to a finite (reality-assumed) system first.'); return; }
-      const ctrl = _newAbort(); _abort = ctrl;
-      setBusy(true, 'Computing the bifurcation…');
+      const ctrl = ops.begin('Computing the bifurcation…');
       store.parametricBifurcationAsync(null, v, { paramValues: hDataParamValues() }, { signal: ctrl && ctrl.signal }).then((r) => {
-        _abort = null; setBusy(false); setStatus('');
+        ops.end();
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Bifurcation: ' + withGuidance(r.reason || 'unavailable')); return; }
         const fv = friendlyReim(v);
@@ -3968,55 +3794,13 @@ const QD = _QD;
         if (!bifPartial) text += ' · each count is a rigorous upper bound on #QD (real solutions also count non-univalent maps + gauge copies) — run Certify univalence for the genuine-QD count.';
         if (canvas) showResult({ text, rigor: bifPartial ? 'partial' : 'bound' });
         toast('Bifurcation computed (' + r.cells.length + ' interval' + (r.cells.length === 1 ? '' : 's') + ').');
-      }, (e) => { _abort = null; setBusy(false); setStatus(''); showError('Bifurcation: ' + ((e && e.message) || String(e))); });
+      }, (e) => { ops.end(); showError('Bifurcation: ' + ((e && e.message) || String(e))); });
     }
 
     // ---- Shape from moments (roadmap #18): reconstruct a QD's data from its complex moments ----
-    // A real number "a", exact rational "n/d", or decimal.
-    function _parseMomentNum(s) {
-      s = s.trim();
-      if (s === '' || s === '+') return 1;
-      if (s === '-') return -1;
-      if (s.indexOf('/') >= 0) { const p = s.split('/'); const n = Number(p[0]), d = Number(p[1]); if (!isFinite(n) || !isFinite(d) || d === 0) throw new Error('bad rational "' + s + '"'); return n / d; }
-      const v = Number(s);
-      if (!isFinite(v)) throw new Error('bad number "' + s + '"');
-      return v;
-    }
-    // One complex moment token: a, a+bi, a-bi, bi, i, -i (a,b real / rational / decimal).
-    function _parseMomentToken(t) {
-      t = t.replace(/\s+/g, '');
-      if (t === '') throw new Error('empty moment');
-      if (t.indexOf('i') < 0) return { re: _parseMomentNum(t), im: 0 };
-      if (t[t.length - 1] !== 'i') throw new Error('malformed complex "' + t + '" (i must be last)');
-      const noI = t.slice(0, -1); // drop the trailing 'i'
-      let splitAt = -1;
-      for (let k = noI.length - 1; k > 0; k--) { if (noI[k] === '+' || noI[k] === '-') { splitAt = k; break; } }
-      const reStr = splitAt < 0 ? '0' : noI.slice(0, splitAt);
-      const imStr = splitAt < 0 ? noI : noI.slice(splitAt);
-      return { re: reStr === '' ? 0 : _parseMomentNum(reStr), im: _parseMomentNum(imStr === '' ? '1' : imStr) };
-    }
-    // LaTeX of the (ascending {re,im}) Prony polynomial P(z) = Σ c_k z^k = 0.
-    function _pronyLatex(coeffs) {
-      let out = '';
-      for (let k = coeffs.length - 1; k >= 0; k--) {
-        const c = coeffs[k];
-        const re = Math.round(c.re * 1e6) / 1e6, im = Math.round(c.im * 1e6) / 1e6;
-        if (Math.abs(re) < 1e-9 && Math.abs(im) < 1e-9) continue;
-        const zp = k === 0 ? '' : (k === 1 ? 'z' : 'z^{' + k + '}');
-        let sign, mag;
-        if (Math.abs(im) < 1e-8) {
-          sign = re < 0 ? '-' : '+';
-          const a = Math.abs(re);
-          mag = (Math.abs(a - 1) < 1e-8 && zp) ? '' : String(a);
-        } else {
-          sign = '+';
-          mag = '(' + re + (im < 0 ? '-' : '+') + Math.abs(im) + 'i)';
-        }
-        const term = (mag + zp) || '0';
-        out += out === '' ? (sign === '-' ? '-' + term : term) : ' ' + sign + ' ' + term;
-      }
-      return (out || '0') + ' = 0';
-    }
+    // _parseMomentToken (+ its private _parseMomentNum) moved to ./algebra-moment-parse.mjs (carve-out 5) —
+    // imported above; doShapeFromMoments maps _parseMomentToken over the split input, below.
+    // _pronyLatex (Prony-polynomial math→LaTeX) moved to ./algebra-latex.mjs (carve-out 7) — imported above.
     function _renderShapeResult(out, r) {
       if (!out) return;
       out.innerHTML = '';
@@ -4032,7 +3816,7 @@ const QD = _QD;
       add('<span class="hint">reconstruction residual maxₖ |mₖ − Σⱼ aⱼzⱼᵏ| = ' + (r.maxResidual != null ? r.maxResidual.toExponential(2) : '—') + '</span>');
     }
     function doShapeFromMoments() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       clearError();
       const inp = $('#alg-moments'), out = $('#alg-moments-out');
       const raw = inp && inp.value ? inp.value.trim() : '';
@@ -4041,30 +3825,28 @@ const QD = _QD;
       try { moments = raw.split(',').map((s) => s.trim()).filter((s) => s.length).map(_parseMomentToken); }
       catch (e) { showError('Shape from moments: ' + ((e && e.message) || 'parse error')); return; }
       if (moments.length < 2) { showError('Shape from moments: give at least 2 moments (m₀, m₁, …).'); return; }
-      const ctrl = _newAbort(); _abort = ctrl;
-      setBusy(true, 'Reconstructing from moments…');
+      const ctrl = ops.begin('Reconstructing from moments…');
       store.shapeFromMomentsAsync(moments, {}, { signal: ctrl && ctrl.signal }).then((r) => {
-        _abort = null; setBusy(false); setStatus('');
+        ops.end();
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Shape from moments: ' + withGuidance(r.reason || 'unavailable')); return; }
         _renderShapeResult(out, r);
         toast('Reconstructed: order ' + r.order + (r.saturated ? ' (≥ — supply more moments)' : '') + '.');
-      }, (e) => { _abort = null; setBusy(false); setStatus(''); showError('Shape from moments: ' + ((e && e.message) || String(e))); });
+      }, (e) => { ops.end(); showError('Shape from moments: ' + ((e && e.message) || String(e))); });
     }
 
     // Report the dimension / solution count of the current equality system, off the
     // main thread (falls back to sync) so a heavy grevlex basis can't freeze the UI.
     function doDimension() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!ensureSeed()) return;
       clearError();
-      const ctrl = _newAbort(); _abort = ctrl;
-      setBusy(true, 'Computing dimension…');
+      const ctrl = ops.begin('Computing dimension…');
       store.dimensionAsync(null, {}, {
         signal: ctrl && ctrl.signal,
         onProgress: (info) => setStatus('Dimension… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
       }).then((r) => {
-        _abort = null; setBusy(false); setStatus('');
+        ops.end();
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { showError('Dimension: ' + withGuidance(r.reason || 'unavailable')); return; }
         // Q4 — the dimension/count is an EXACT structural fact (the quotient's ℂ-dimension for a zero-dim
@@ -4083,16 +3865,15 @@ const QD = _QD;
     // Solve the current equality system numerically (shape-lemma path), off the main
     // thread via QD.SymWorker (falls back to sync if unavailable).
     function doSolve() {
-      if (_abort) return;
+      if (ops.isBusy()) return;
       if (!ensureSeed()) return;
       clearError();
-      const ctrl = _newAbort(); _abort = ctrl;
-      setBusy(true, 'Solving (Gröbner → FGLM → roots)…');
+      const ctrl = ops.begin('Solving (Gröbner → FGLM → roots)…');
       store.solveAsync(null, {}, {
         signal: ctrl && ctrl.signal,
         onProgress: (info) => setStatus('Solving… ' + info.basis + ' generators, ' + info.pairs + ' pairs left'),
       }).then((r) => {
-        _abort = null; setBusy(false); setStatus('');
+        ops.end();
         if (r.aborted) { toast('Cancelled'); return; }
         if (!r.ok) { const rn = r.reason || 'unavailable'; if (!capFailVerdict('Numeric solve', rn)) showError('Numeric solve: ' + withGuidance(rn)); return; }
         // The eigenvalue fallback can return a PARTIAL set on clustered/near-multiple roots.
@@ -4157,7 +3938,7 @@ const QD = _QD;
     // E1 — load a downloaded DAG JSON and rebuild the whole workspace (store.importDAG).
     // Replaces the current graph (undoable). Resets stale picker/selection state, like a re-seed.
     function importJson(ev) {
-      if (busyGuard()) { ev.target.value = ''; return; }
+      if (ops.guard()) { ev.target.value = ''; return; }
       const file = ev.target.files && ev.target.files[0];
       ev.target.value = '';                      // allow re-loading the same file later
       if (!file) return;
@@ -4228,14 +4009,8 @@ const QD = _QD;
     }
 
     // ---- per-card hovertext (driven by store.nodeStats) ---------------------
-    // Compact display of a stored {re:[n,d], im:[n,d], approx} value record.
-    function valStr(rec) {
-      const a = rec && rec.approx; if (!a) return '?';
-      const f = (x) => String(Math.round(x * 1e6) / 1e6);
-      if (!a.im) return f(a.re);
-      if (!a.re) return f(a.im) + 'i';
-      return f(a.re) + (a.im < 0 ? ' − ' : ' + ') + f(Math.abs(a.im)) + 'i';
-    }
+    // valStr (compact decimal display of a stored {approx} value record) moved to ./algebra-format.mjs
+    // (carve-out 8) — imported above; substList below still uses it (now via the import).
     // A substitute provenance lists one or more (name = value) assignments. New records
     // carry a `variables` array ([{name, value, conjugate}]); older snapshots carried a
     // single `variable`/`value` pair — render either.
@@ -4393,13 +4168,13 @@ const QD = _QD;
         // no undo at all — while Delete, which removes a node AND its descendants, was bound.
         // Both accelerator spellings: Ctrl/Cmd+Shift+Z and Ctrl+Y.
         if (mod && (ev.key === 'z' || ev.key === 'Z') && !ev.shiftKey) {
-          if (busyGuard()) return;
+          if (ops.guard()) return;
           if (store.undo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); toast('Undo'); }
           else toast('Nothing to undo', { kind: 'error' });
           ev.preventDefault(); return;
         }
         if (mod && ((ev.key === 'z' || ev.key === 'Z') && ev.shiftKey || ev.key === 'y' || ev.key === 'Y')) {
-          if (busyGuard()) return;
+          if (ops.guard()) return;
           if (store.redo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); toast('Redo'); }
           else toast('Nothing to redo', { kind: 'error' });
           ev.preventDefault(); return;
@@ -4437,7 +4212,7 @@ const QD = _QD;
           // Fork branches from the selected node's column, else from the newest column —
           // the same two choices the "Fork from here" action and the trackbar button offer.
           if (ev.key === 'f') {
-            if (busyGuard()) { ev.preventDefault(); return; }
+            if (ops.guard()) { ev.preventDefault(); return; }
             const n = sel.length === 1 ? store.get(sel[0]) : null;
             const col = n ? n.column : store.maxColumn();
             if (canvas) canvas.clearSelection();
@@ -4455,7 +4230,7 @@ const QD = _QD;
         }
         if (ev.key === 'Escape') { if (sel.length && canvas) { canvas.clearSelection(); ev.preventDefault(); } }
         else if ((ev.key === 'Delete' || ev.key === 'Backspace') && sel.length === 1) {
-          if (busyGuard()) return;
+          if (ops.guard()) return;
           const removed = store.deleteNode(sel[0]); if (canvas) canvas.clearSelection(); rerender();
           // Deleting cascades to descendants, so the toast has to say the recovery path exists.
           toast('Deleted ' + ((removed && removed.length) || 1) + ' node(s)', { action: undoToastAction() }); ev.preventDefault();
@@ -4570,150 +4345,16 @@ const QD = _QD;
     }
     // A6: per-branch verdict chips. Helpers + the "classify all branches" action.
     // ---- results drawer (P6b) ------------------------------------------------
-    // Every analysis wrote into ONE docked verdict slot. Eleven call sites — solve, classify,
-    // dimension, prove, bifurcation, resolvent, univalence, RCTD import, shape-from-moments —
-    // competed for a single lastVerdictData, so running Dimension after Classify DESTROYED
-    // Classify's answer with no way back, on results that cost tens of seconds each.
-    //
-    // They now go through showResult, which keeps each one keyed by the system it was computed
-    // about: (track, branchSig). That key is the whole point. A result computed three reductions
-    // ago, redisplayed beside today's column still wearing its original '=' pill, is a false
-    // attribution — the worst class of bug this project has (CLAUDE.md honest labeling). The key
-    // is what lets the drawer tell "still true of what you are looking at" from "was true of
-    // something else", and demote the second on sight.
-    const RESULTS_CAP = 40;
-    const _results = [];            // newest first: { id, track, sig, data }
-    let _resultSeq = 0;
-    let _resultsDropped = 0;        // surfaced in the drawer — a silent cap reads as "that's all"
-    // Results are SESSION-scoped and deliberately not autosaved: restoring a verdict across a
-    // reload would restore a claim about a system state that may no longer exist, which is the
-    // same false attribution with a longer fuse.
-    function showResult(data) {
-      if (!canvas) return;
-      if (data && data.text) {
-        const track = store.activeTrack;
-        _results.unshift({ id: ++_resultSeq, track, sig: _branchSig(track), data });
-        while (_results.length > RESULTS_CAP) { _results.pop(); _resultsDropped++; }
-        renderDrawer();
-      }
-      canvas.setVerdict(data);
-    }
-    // Bind the pure decision (resultStateOf, module scope) to the live store.
-    function resultState(r) {
-      const cur = store.activeTrack;
-      return resultStateOf(r.track, r.sig, cur, _branchSig(cur));
-    }
-    function reshowResult(r) {
-      const st = resultState(r);
-      if (st === 'current') { canvas.setVerdict(r.data); return; }
-      canvas.setVerdict(Object.assign({}, r.data, {
-        stale: true,
-        // 'the derivation has changed since' is the right sentence for a same-branch result and
-        // the WRONG one for a cross-branch result — it implies a history this branch never had.
-        staleNote: st === 'branch'
-          ? '⚠ Computed on ' + trackLabelOf(r.track) + ', and you are viewing ' + trackLabelOf(store.activeTrack)
-            + '. It describes that branch’s system — not this one. Switch branches to see it in context.'
-          : undefined,
-      }));
-    }
-    function renderDrawer() {
-      const host = canvas && canvas.drawer; if (!host) return;
-      host.innerHTML = '';
-      if (!_results.length) { host.classList.add('hidden'); return; }
-      host.classList.remove('hidden');
-      const head = document.createElement('div'); head.className = 'algebra-drawer-head';
-      // Column collapse lives HERE, not only on the verdict. P6b put the « on the verdict card,
-      // so dismissing a result with × left the drawer holding 340px open with no control left to
-      // reclaim it — the canvas stayed at 580px of a 920px row with no way out. The drawer is the
-      // one element present whenever the column is, so the control belongs on it.
-      const dock = document.createElement('button');
-      dock.type = 'button'; dock.className = 'algebra-drawer-dock';
-      dock.textContent = _colCollapsed ? '»' : '«';
-      dock.title = _colCollapsed
-        ? 'Expand the results panel'
-        : 'Collapse the results panel (keeps every result — give the width back to the graph)';
-      dock.addEventListener('click', () => setResultColCollapsed(!_colCollapsed));
-      head.appendChild(dock);
-      // Collapsed, the head is the whole panel: just the » to get back. Anything else would
-      // either overflow the 34px sliver or be unreadable in it.
-      if (_colCollapsed) { host.appendChild(head); return; }
-      const toggle = document.createElement('button');
-      toggle.type = 'button'; toggle.className = 'algebra-drawer-toggle';
-      toggle.textContent = _drawerOpen ? '▾' : '▸';
-      toggle.title = _drawerOpen ? 'Collapse the results list' : 'Show the results list';
-      toggle.addEventListener('click', () => { _drawerOpen = !_drawerOpen; renderDrawer(); });
-      const lbl = document.createElement('span'); lbl.className = 'algebra-line-label';
-      lbl.textContent = 'Results (' + _results.length + ')';
-      head.appendChild(toggle); head.appendChild(lbl);
-      host.appendChild(head);
-      if (!_drawerOpen) return;
-      const list = document.createElement('div'); list.className = 'algebra-drawer-list';
-      _results.forEach((r) => {
-        const st = resultState(r);
-        const row = document.createElement('button');
-        row.type = 'button'; row.className = 'algebra-drawer-row is-' + st;
-        const rm = (QD.AlgebraCanvas && QD.AlgebraCanvas.rigorMeta)
-          ? QD.AlgebraCanvas.rigorMeta(r.data.rigor, r.data.bound) : null;
-        if (rm) {
-          const pill = document.createElement('span'); pill.className = 'algebra-drawer-pill';
-          pill.textContent = rm.symbol; pill.style.background = rm.color;
-          // The pill states the rigor of the ORIGINAL computation. On anything but a current
-          // result that claim no longer applies to the visible system, so the row says so in
-          // its own right rather than letting a green '=' speak for a system it never saw.
-          pill.title = 'Rigor when computed: ' + rm.label;
-          row.appendChild(pill);
-        }
-        const t = document.createElement('span'); t.className = 'algebra-drawer-title';
-        t.textContent = r.data.title || 'Existence / uniqueness';
-        row.appendChild(t);
-        if (st !== 'current') {
-          const tag = document.createElement('span'); tag.className = 'algebra-drawer-tag';
-          tag.textContent = st === 'branch' ? trackLabelOf(r.track) : 'earlier';
-          tag.title = st === 'branch'
-            ? 'Computed on ' + trackLabelOf(r.track) + ' — a different system from the one shown'
-            : 'Computed before the current reduction — no longer describes the visible column';
-          row.appendChild(tag);
-        }
-        row.addEventListener('click', () => reshowResult(r));
-        list.appendChild(row);
-      });
-      host.appendChild(list);
-      if (_resultsDropped) {
-        const note = document.createElement('div'); note.className = 'algebra-drawer-note';
-        note.textContent = _resultsDropped + ' older result' + (_resultsDropped === 1 ? '' : 's')
-          + ' dropped (keeps the most recent ' + RESULTS_CAP + ')';
-        host.appendChild(note);
-      }
-    }
+    // The results-drawer subsystem (the _results history keyed by (track, branchSig) + showResult /
+    // reshowResult / resultState / renderDrawer / setResultColCollapsed) moved to
+    // ./algebra-results-drawer.mjs — D1d seam 2. `results` is built near the top of installAlgebra;
+    // showResult / renderDrawer are aliased to it there. _branchSig / _lastColIds stay below (the
+    // verdict cache + track badges also use them) and are handed to the drawer via ctx.
     function _lastColIds(tid) { return store.orderedColumn(store.maxColumn(tid), tid).map((n) => n.id); }
     // Cheap content signature of a branch's CURRENT last column — changes whenever the system
     // changes (a new reduction, fork, undo), so a cached verdict is shown only while still valid.
     function _branchSig(tid) { return store.maxColumn(tid) + '|' + _lastColIds(tid).join(','); }
-    // Map a classify result → a compact chip badge { badge, state, title }.
-    function _verdictBadge(r) {
-      if (!r || r.aborted) return null;
-      if (!r.ok) return { badge: '?', state: 'unknown', title: r.reason || 'classify unavailable' };
-      // Specialization suffix: a factor CASE and/or a reality/imaginary SLICE (both resolved for THIS
-      // branch by the store) narrow the count. Fold both into the tooltip and mark the badge with '*'
-      // so a slice/branch count on a chip never reads as the general QD count (honest labeling).
-      const notes = [];
-      if (r.partialBranch) notes.push('case ' + ((r.caseIndex || 0) + 1) + '/' + r.caseCount
-        + ' of ' + (r.branchOp === 'component' ? 'a component decomposition' : 'a factor split')
-        + (r.branchIncomplete ? ' (capped — components may not cover V(I))' : ''));
-      const sl = sliceLabels(r);
-      if (sl.length) notes.push('on the ' + sl.join(' + ') + ' only — a LOWER BOUND; off-slice QDs not counted');
-      const tail = notes.length ? ' [' + notes.join('; ') + ']' : '';
-      const star = sl.length ? '*' : '';
-      if (r.inconsistent) return { badge: '∅' + star, state: 'none', title: 'no QD — system inconsistent (1 ∈ I)' + tail };
-      if (!r.zeroDim) return { badge: '∞' + star, state: 'open', title: 'positive-dimensional family (' + posDimDesc(r) + ')' + tail };
-      if (r.realCount == null) return { badge: 'fin' + star, state: 'unknown', title: r.multiplicity + ' complex solution(s); real count over the cap' + tail };
-      if (r.realCount === 0) return { badge: '0 QD' + star, state: 'none', title: 'no real quadrature domain' + tail };
-      // HONEST LABELING (C-1): the chip shows the ALGEBRAIC real-solution count — an upper bound on #QD,
-      // NOT a certified QD count — so no green 'unique' from an unfiltered count; Certify univalence
-      // (which filters non-univalent maps + quotients the gauge) produces the genuine-QD verdict.
-      if (r.realCount === 1) return { badge: '1 alg' + star, state: 'multi', title: '1 real algebraic solution — an upper bound on #QD; run Certify univalence for the genuine-QD count' + tail };
-      return { badge: r.realCount + ' alg' + star, state: 'multi', title: r.realCount + ' real algebraic solutions — an upper bound on #QD; run Certify univalence for the genuine-QD count' + tail };
-    }
+    // _verdictBadge lifted to IIFE scope (carve-out 2) — pure; see the definition + QD_UI._verdictBadge above.
     // Cache the active branch's verdict from a single-branch classify (doClassify) so its chip
     // updates too — only when the whole last column was analyzed (no node sub-selection).
     function cacheActiveVerdict(r) {
@@ -4724,12 +4365,11 @@ const QD = _QD;
     // Classify EVERY branch (sequential — one worker job at a time) and stamp each chip's
     // verdict. Cancellable + busy-locked like the other worker ops; progressive chip updates.
     async function classifyAllBranches() {
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       if (!store.size) return;
       const params = hDataParamValues();
       const tlist = store.tracks();
-      const ctrl = _newAbort(); _abort = ctrl;
-      setBusy(true, 'Classifying ' + tlist.length + ' branch' + (tlist.length === 1 ? '' : 'es') + '…');
+      const ctrl = ops.begin('Classifying ' + tlist.length + ' branch' + (tlist.length === 1 ? '' : 'es') + '…');
       let done = 0;
       try {
         for (const t of tlist) {
@@ -4746,13 +4386,13 @@ const QD = _QD;
           _trackVerdict.set(t.id, Object.assign({ sig }, _verdictBadge(r) || { badge: '?', state: 'unknown', title: 'unavailable' }));
           done++; buildTrackBar();
         }
-      } finally { _abort = null; setBusy(false); setStatus(''); }
+      } finally { ops.end(); }
       toast(done ? ('Updated ' + done + ' branch verdict' + (done === 1 ? '' : 's')) : 'Cancelled');
     }
     // Switch the on-screen branch (a view change — clears the selection, which may point
     // at off-branch nodes, then rerenders the now-active branch's lanes).
     function switchTrack(id) {
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       if (!store.setActiveTrack(id)) return;
       if (canvas) canvas.clearSelection();
       rerender(); refreshPickers();
@@ -4762,7 +4402,7 @@ const QD = _QD;
     // column as the new branch's column 0, makes it active). Undoable. Clears the
     // selection so the inspector doesn't dangle on a now-off-screen node.
     function doFork(fromColumn) {
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       const r = store.forkTrack({ fromTrack: store.activeTrack, fromColumn: fromColumn, label: 'branch ' + store.tracks().length });
       if (!r || !r.ok) { toast((r && r.reason) || 'could not fork', { kind: 'error' }); return; }
       if (canvas) canvas.clearSelection();
@@ -4771,7 +4411,7 @@ const QD = _QD;
     }
     // Delete a non-main branch (store refuses 't0' / branches with children, surfaced as a toast).
     function deleteBranch(id) {
-      if (busyGuard()) return;
+      if (ops.guard()) return;
       const r = store.deleteTrack(id);
       if (!r || !r.ok) { toast((r && r.reason) || 'could not delete this branch', { kind: 'error' }); return; }
       if (canvas) canvas.clearSelection();
@@ -4849,11 +4489,11 @@ const QD = _QD;
       });
       searchWrap.appendChild(searchIn); searchWrap.appendChild(searchCount);
       bar.appendChild(searchWrap);
-      // busyGuard() here matches the keyboard undo/redo path, which always had it. The button used
+      // ops.guard() here matches the keyboard undo/redo path, which always had it. The button used
       // to rely on `disabled` alone; a mid-op repaint could momentarily clear that (see
       // refreshUndoButtons), so guard at the handler too.
-      bar.appendChild(btn('↶', 'Undo (Ctrl+Z)', () => { if (busyGuard()) return; if (store.undo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); } }, 'alg-undo'));
-      bar.appendChild(btn('↷', 'Redo (Ctrl+Shift+Z)', () => { if (busyGuard()) return; if (store.redo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); } }, 'alg-redo'));
+      bar.appendChild(btn('↶', 'Undo (Ctrl+Z)', () => { if (ops.guard()) return; if (store.undo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); } }, 'alg-undo'));
+      bar.appendChild(btn('↷', 'Redo (Ctrl+Shift+Z)', () => { if (ops.guard()) return; if (store.redo()) { if (canvas) canvas.clearSelection(); rerender(); refreshPickers(); } }, 'alg-redo'));
       zlabel.textContent = Math.round(_zoom * 100) + '%';
       host.appendChild(bar);
     }
@@ -4935,7 +4575,10 @@ const QD = _QD;
   QD_UI.fmtComplex = _fmtComplex;                     // compact { re, im } inline formatter (pure; guarded)
   QD_UI.selectDomain = selectDomain;                 // the multi-domain stepper's k-th-domain selector (pure; wraps)
   QD_UI.classifyRigor = classifyRigor;               // T1: the =/≤/unknown decider for a classify/count result (pure)
-  QD_UI.posDimDesc = posDimDesc;                     // T1: honest one-line size of a positive-dimensional verdict (pure)
+  QD_UI.posDimDesc = posDimDesc;                     // carve-out 1: honest size of a positive-dim verdict (pure; from ./algebra-labeling.mjs)
+  QD_UI.classifyVerdict = classifyVerdict;           // carve-out 1: classify-result → verdict prose (pure; from ./algebra-labeling.mjs)
+  QD_UI._verdictBadge = _verdictBadge;               // carve-out 2: classify-result → chip badge {badge,state,title} (pure)
+  QD_UI.exactValueStr = exactValueStr;               // carve-out 3: exact ℚ(i) value formatter (pure; from ./algebra-format.mjs)
   QD_UI.scopeNote = scopeNote;                       // T1: scoped-mutating-op toast disclosure (pure)
   QD_UI.droppedNote = droppedNote;                   // T1: basis-replacement dropped-node toast wording (pure)
   QD_UI.latexPlain = latexPlain;                     // T1: conjugate-model var-name → plain-text formatter (pure)

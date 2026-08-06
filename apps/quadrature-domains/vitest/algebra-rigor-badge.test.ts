@@ -10,7 +10,7 @@
 // the five levels are visually DISTINCT (distinct symbols AND colors) so they can't be confused
 // at a glance. The DOM pill render in setVerdict is browser-verified.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
+import _QD from "../app/solvers/solver.mjs";
 import "../app/algebra/algebra-canvas.mjs";
 
 const AC: any = (_QD as any).AlgebraCanvas;

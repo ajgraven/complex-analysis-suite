@@ -15,11 +15,20 @@ import { fileURLToPath } from "node:url";
 
 const SRC = readFileSync(
   fileURLToPath(new URL("../app/algebra/algebra-ui.mjs", import.meta.url)), "utf8");
+// The results-drawer subsystem moved to its own module in D1d seam 2; the structural invariants
+// below (only showResult/reshowResult touch the canvas, the (track,sig) key, the stale-demotion,
+// the surfaced cap) follow the code there. The rerender + autosave pins stay on algebra-ui.mjs.
+const DRAWER = readFileSync(
+  fileURLToPath(new URL("../app/algebra/algebra-results-drawer.mjs", import.meta.url)), "utf8");
+// The autosave core moved to its own module in D1d seam 4; the "results are not autosaved" cross-check
+// below follows `function _writeAutosave` there.
+const AUTOSAVE = readFileSync(
+  fileURLToPath(new URL("../app/algebra/algebra-autosave.mjs", import.meta.url)), "utf8");
 
 let UI: any;
 beforeAll(async () => {
-  await import("../app/solver.mjs");
-  const reg: any = await import("../app/ui-registry.mjs");
+  await import("../app/solvers/solver.mjs");
+  const reg: any = await import("../app/ui/ui-registry.mjs");
   await import("../app/algebra/algebra-ui.mjs");
   UI = reg.QD_UI;
 });
@@ -73,29 +82,32 @@ describe("results are recorded, not overwritten", () => {
   it("every verdict-producing site routes through the recorder", () => {
     // The failure this closes: eleven callers writing straight into one slot. If a new analysis
     // is added later and calls canvas.setVerdict directly, its result is invisible to the drawer
-    // AND unkeyed — so it could never be marked stale. Only the drawer's own machinery may call
-    // the canvas directly.
-    const direct = [...SRC.matchAll(/canvas\.setVerdict\(/g)];
+    // AND unkeyed — so it could never be marked stale. Only the drawer's own machinery may touch
+    // the canvas directly — and since D1d seam 2 that machinery lives in algebra-results-drawer.mjs,
+    // so the ~13 analysis call sites in algebra-ui.mjs reach it only through the showResult facade.
+    const direct = [...DRAWER.matchAll(/canvas\.setVerdict\(/g)];
     expect(direct.length, "only showResult and reshowResult may call setVerdict").toBe(3);
-    const showAt = SRC.indexOf("function showResult");
+    const showAt = DRAWER.indexOf("function showResult");
     direct.forEach((m) => expect(m.index!).toBeGreaterThan(showAt));
+    expect([...SRC.matchAll(/canvas\.setVerdict\(/g)].length,
+      "no analysis in algebra-ui.mjs may call setVerdict directly — all route through showResult").toBe(0);
   });
 
   it("records the branch AND the frontier, not just the result", () => {
-    expect(/_results\.unshift\(\{[^}]*track[^}]*sig:/.test(SRC)).toBe(true);
+    expect(/_results\.unshift\(\{[^}]*track[^}]*sig:/.test(DRAWER)).toBe(true);
   });
 
   it("re-showing anything but a current result demotes it", () => {
     // The pristine payload is kept; the demotion is applied to a COPY at display time, so a
     // result cannot be permanently downgraded by having been looked at on the wrong branch.
-    expect(/if \(st === 'current'\) \{ canvas\.setVerdict\(r\.data\); return; \}/.test(SRC)).toBe(true);
-    expect(/Object\.assign\(\{\}, r\.data, \{[\s\S]{0,80}stale: true/.test(SRC)).toBe(true);
+    expect(/if \(st === 'current'\) \{ canvas\.setVerdict\(r\.data\); return; \}/.test(DRAWER)).toBe(true);
+    expect(/Object\.assign\(\{\}, r\.data, \{[\s\S]{0,80}stale: true/.test(DRAWER)).toBe(true);
   });
 
   it("says a different thing for a cross-branch result", () => {
     // "the derivation has changed since" is the same-branch sentence and is wrong here.
-    expect(SRC).toContain("staleNote");
-    expect(/st === 'branch'[\s\S]{0,200}describes that branch/.test(SRC)).toBe(true);
+    expect(DRAWER).toContain("staleNote");
+    expect(/st === 'branch'[\s\S]{0,200}describes that branch/.test(DRAWER)).toBe(true);
   });
 
   it("re-evaluates state on every rerender", () => {
@@ -106,14 +118,14 @@ describe("results are recorded, not overwritten", () => {
 
   it("does not silently forget — the cap is surfaced", () => {
     // A drawer that quietly drops the oldest entries reads as "that is everything you ran".
-    expect(/_resultsDropped\+\+/.test(SRC)).toBe(true);
-    expect(/_resultsDropped[\s\S]{0,400}dropped/.test(SRC)).toBe(true);
+    expect(/_resultsDropped\+\+/.test(DRAWER)).toBe(true);
+    expect(/_resultsDropped[\s\S]{0,400}dropped/.test(DRAWER)).toBe(true);
   });
 
   it("is session-scoped, not autosaved", () => {
     // Restoring a verdict across a reload restores a claim about a system state that may no
     // longer exist — the same false attribution with a longer fuse.
-    const auto = SRC.slice(SRC.indexOf("function _writeAutosave"), SRC.indexOf("function _writeAutosave") + 1400);
+    const auto = AUTOSAVE.slice(AUTOSAVE.indexOf("function _writeAutosave"), AUTOSAVE.indexOf("function _writeAutosave") + 1400);
     expect(auto).not.toContain("_results");
   });
 });

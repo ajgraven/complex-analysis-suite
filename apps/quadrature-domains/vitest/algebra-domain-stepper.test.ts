@@ -9,8 +9,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 
 let selectDomain: (pr: unknown, k: number) => { N: number; index: number; domain: unknown };
 beforeAll(async () => {
-  await import("../app/solver.mjs");
-  const reg: any = await import("../app/ui-registry.mjs");
+  await import("../app/solvers/solver.mjs");
+  const reg: any = await import("../app/ui/ui-registry.mjs");
   await import("../app/algebra/algebra-ui.mjs");
   selectDomain = reg.QD_UI.selectDomain;
 });

@@ -12,8 +12,8 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
 const { MPoly, monomialOrder, buchberger, reduceGroebner, resultant, realRootCount, factorBivariate, factorMultivariate, mpolyExactDiv } = S;

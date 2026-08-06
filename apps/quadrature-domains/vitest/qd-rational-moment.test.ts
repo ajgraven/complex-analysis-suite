@@ -3,10 +3,10 @@
 // + numerically-validated ground-truth families: the emitted system must be EXACTLY satisfied by the known
 // map coefficients (validates the node/weight↔coefficient derivation — the crux), and be zero-dimensional.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
-import "../app/faber-analysis.mjs";     // Durand–Kerner (solveZeroDim / realSolutionCount)
-import "../app/qd-equations.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
+import "../app/analysis/faber-analysis.mjs";     // Durand–Kerner (solveZeroDim / realSolutionCount)
+import "../app/qd/qd-equations.mjs";
 
 const QD: any = _QD;
 const QE: any = QD.QDEquations;

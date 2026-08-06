@@ -11,8 +11,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 
 let UI: any;
 beforeAll(async () => {
-  await import("../app/solver.mjs");              // installs the QD namespace
-  const reg: any = await import("../app/ui-registry.mjs");
+  await import("../app/solvers/solver.mjs");              // installs the QD namespace
+  const reg: any = await import("../app/ui/ui-registry.mjs");
   await import("../app/algebra/algebra-ui.mjs");  // IIFE side-effect: attaches the helpers
   UI = reg.QD_UI;
 });

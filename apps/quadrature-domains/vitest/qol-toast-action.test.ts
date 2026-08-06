@@ -8,8 +8,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 
 let QoL: any;
 beforeAll(async () => {
-  const QD: any = (await import("../app/solver.mjs")).default;
-  await import("../app/qol.mjs");   // populates QD.QoL
+  const QD: any = (await import("../app/solvers/solver.mjs")).default;
+  await import("../app/core/qol.mjs");   // populates QD.QoL
   QoL = QD.QoL;
 });
 

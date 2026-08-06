@@ -3,8 +3,8 @@
 // algorithm (evaluate y → y₀, factor univariately over ℚ(i), Hensel-lift, recombine) so an algorithm-level
 // bug in either path fails to survive comparing the two factor SETS. See docs/MULTIVARIATE_FACTORING.md §6.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 
 const S: any = (_QD as any).Sym;
 const { MPoly, Gaussian, Rational, factorBivariate, henselFactorBivariate } = S;

@@ -10,8 +10,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 
 let removals: any;
 beforeAll(async () => {
-  await import("../app/solver.mjs");
-  const reg: any = await import("../app/ui-registry.mjs");
+  await import("../app/solvers/solver.mjs");
+  const reg: any = await import("../app/ui/ui-registry.mjs");
   await import("../app/algebra/algebra-ui.mjs");
   removals = reg.QD_UI.variableRemovals;
 });
@@ -134,11 +134,11 @@ describe("every offer routes somewhere real", () => {
 describe("variableCensus finds a defined symbol's conjugate partner", () => {
   let census: any, remove: any, Store: any, S: any, QC: any;
   beforeAll(async () => {
-    const _QD: any = (await import("../app/solver.mjs")).default;
-    await import("../app/sym-core.mjs");
-    await import("../app/qd-constraints.mjs");
+    const _QD: any = (await import("../app/solvers/solver.mjs")).default;
+    await import("../app/sym/sym-core.mjs");
+    await import("../app/qd/qd-constraints.mjs");
     await import("../app/algebra/algebra-store.mjs");
-    const reg: any = await import("../app/ui-registry.mjs");
+    const reg: any = await import("../app/ui/ui-registry.mjs");
     await import("../app/algebra/algebra-ui.mjs");
     census = reg.QD_UI.variableCensus;
     remove = reg.QD_UI.variableRemovals;

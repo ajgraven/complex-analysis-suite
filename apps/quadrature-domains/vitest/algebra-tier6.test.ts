@@ -1,7 +1,11 @@
 // Tier 6 — the deferred infrastructure items: the busy-lock's drift (5.9), the sub-AA muted
 // token (5.5), and export identity (5.8). Dark mode (5.2) is deliberately out of scope.
 //
-// Node environment, source-only: jsdom breaks fileURLToPath via import.meta.url.
+// Node environment, source-only: jsdom breaks fileURLToPath via import.meta.url. The two RENDERED
+// busy-lock checks — the two re-seeding controls, and every heavy-op control, carry js-busy-lock —
+// moved to the behavioural companion algebra-tier6-dom.test.ts (refactor Phase 2, QD-ALG-3). What
+// stays here needs the source or the CSS: the setBusy MECHANISM, the dynamic .classList.add sites,
+// the WCAG colour-token contrast (style.css), the Undo/_busy wiring, and the export-stamp shape.
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -13,6 +17,10 @@ const CSS = readFileSync(
 const CODE = UI
   .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
   .replace(/(^|[^:])\/\/[^\n]*/g, (m) => m.replace(/[^\n]/g, " "));
+// The single-flight op-runner (the setBusy MECHANISM + busy lifecycle) was extracted to its own module
+// in refactor D1d seam 1; the mechanism assertions below follow it there.
+const OPRUNNER = readFileSync(
+  fileURLToPath(new URL("../app/algebra/algebra-op-runner.mjs", import.meta.url)), "utf8");
 
 /** WCAG relative luminance / contrast, so the threshold is computed rather than asserted. */
 const rgb = (h: string) => {
@@ -56,36 +64,15 @@ describe("5.5 — the muted token clears WCAG AA", () => {
 
 describe("5.9 — the busy lock cannot drift", () => {
   it("setBusy selects by marker class, not a hand-maintained id array", () => {
-    // The array sat ~700 lines from the buttons it named. The marker now sits on the control.
-    expect(CODE).toMatch(/querySelectorAll\('\.js-busy-lock'\)/);
-    expect(CODE, "the id array should be gone").not.toMatch(/'alg-prove',\s*'alg-groebner'/);
+    // The array sat ~700 lines from the buttons it named. The marker now sits on the control. setBusy
+    // moved to algebra-op-runner.mjs (D1d seam 1), so its mechanism is asserted against that module.
+    expect(OPRUNNER).toMatch(/querySelectorAll\('\.js-busy-lock'\)/);
+    expect(OPRUNNER, "the id array should be gone").not.toMatch(/'alg-prove',\s*'alg-groebner'/);
   });
 
-  it("the two controls that had drifted out are locked", () => {
-    // Both RE-SEED. Neither was in the array nor self-guarded, so either could drop a fresh system
-    // on top of an in-flight worker derivation — the exact thing this lock exists to prevent.
-    for (const id of ["alg-seed-moment", "alg-w0-fix"]) {
-      const tag = UI.match(new RegExp('<[a-z]+[^>]*id="' + id + '"[^>]*>'))
-                || UI.match(new RegExp('<[a-z]+[^>]*class="[^"]*"[^>]*id="' + id + '"[^>]*>'));
-      expect(tag, id + " not found in the markup").toBeTruthy();
-      expect((tag as RegExpMatchArray)[0], id + " must carry js-busy-lock").toMatch(/js-busy-lock/);
-    }
-  });
-
-  it("every heavy (worker-backed) control is locked", () => {
-    // heavy-op means it starts a worker; a second run must not be startable. This is the derivable
-    // half of the invariant — the non-heavy mutators still need marking by hand.
-    //
-    // It earned its keep immediately: alg-import-rctd was heavy and unlocked. It self-guards via
-    // busyGuard(), so it was not silently broken — but it was the one heavy control whose
-    // unavailability you discovered by clicking rather than by seeing. Marked; the runtime guard
-    // stays as the backstop that dynamically-created controls still depend on.
-    for (const m of UI.matchAll(/<[a-z]+\b[^>]*class="([^"]*heavy-op[^"]*)"[^>]*>/g)) {
-      expect(m[1], "a heavy-op control is missing js-busy-lock: " + m[0].slice(0, 80))
-        .toMatch(/js-busy-lock/);
-    }
-  });
-
+  // (The RENDERED marker checks — the two re-seeding controls, and every heavy-op control, carry
+  // js-busy-lock — moved to algebra-tier6-dom.test.ts. The dynamic-creation sites stay below, since
+  // those controls are rebuilt on render and cannot be marked in the static markup.)
   it("the dynamically-created locked controls get the marker too", () => {
     // These are rebuilt on render, so they cannot be marked in the static markup.
     expect(CODE).toMatch(/elimBtn\.classList\.add\('js-busy-lock'\)/);
@@ -101,20 +88,22 @@ describe("5.9 addendum — Undo cannot be re-enabled mid-operation", () => {
   // undoDepth() was already > 0. Clicking it then rolled the graph back under a pending worker,
   // whose result rendered as a verdict about a system that no longer existed. Verified in-browser:
   // across the whole auto-solve window Undo now stays disabled.
-  it("refreshUndoButtons honours _busy", () => {
+  it("refreshUndoButtons honours the busy flag", () => {
     // Asserted against raw UI, not comment-blanked CODE: the exact strings below appear only in the
-    // function body (no comment contains `u.disabled = _busy`), and the multi-line rationale comment
-    // above the function confuses CODE's line-based blanking.
-    expect(UI).toMatch(/u\.disabled = _busy \|\| !ud/);
-    expect(UI).toMatch(/r\.disabled = _busy \|\| !rd/);
+    // function body (no comment contains `u.disabled = ops.busyFlag()`), and the multi-line rationale
+    // comment above the function confuses CODE's line-based blanking. (_busy moved into the op-runner
+    // module as D1d seam 1; refreshUndoButtons reads it back through ops.busyFlag().)
+    expect(UI).toMatch(/u\.disabled = ops\.busyFlag\(\) \|\| !ud/);
+    expect(UI).toMatch(/r\.disabled = ops\.busyFlag\(\) \|\| !rd/);
   });
 
-  it("the toolbar undo/redo handlers busyGuard, matching the keyboard path", () => {
+  it("the toolbar undo/redo handlers guard, matching the keyboard path", () => {
     // Belt and braces: even if a mid-op repaint momentarily clears `disabled`, the handler refuses.
+    // (busyGuard() → ops.guard() when the op-runner moved to its module — D1d seam 1.)
     const undo = CODE.slice(CODE.indexOf("'Undo (Ctrl+Z)'"), CODE.indexOf("'Undo (Ctrl+Z)'") + 160);
-    expect(undo).toMatch(/busyGuard\(\)/);
+    expect(undo).toMatch(/ops\.guard\(\)/);
     const redo = CODE.slice(CODE.indexOf("'Redo (Ctrl+Shift+Z)'"), CODE.indexOf("'Redo (Ctrl+Shift+Z)'") + 160);
-    expect(redo).toMatch(/busyGuard\(\)/);
+    expect(redo).toMatch(/ops\.guard\(\)/);
   });
 });
 

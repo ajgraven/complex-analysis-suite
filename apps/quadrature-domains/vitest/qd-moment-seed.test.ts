@@ -4,10 +4,10 @@
 // real system through (v→v__re) and classify/solveReal run correctly on it — the whole point
 // being to expose the built-but-unwired moment generator as a usable one-click system.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
-import "../app/faber-analysis.mjs"; // Durand–Kerner used by the zero-dim solve
-import "../app/qd-equations.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
+import "../app/analysis/faber-analysis.mjs"; // Durand–Kerner used by the zero-dim solve
+import "../app/qd/qd-equations.mjs";
 import "../app/algebra/algebra-store.mjs";
 
 const QE: any = (_QD as any).QDEquations;

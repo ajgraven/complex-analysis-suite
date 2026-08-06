@@ -13,11 +13,15 @@ import { fileURLToPath } from "node:url";
 
 const SRC = readFileSync(
   fileURLToPath(new URL("../app/algebra/algebra-ui.mjs", import.meta.url)), "utf8");
+// The variable-picker widget (buildPicker + the _openMenu/_closeOpenMenu coordinator) moved to its
+// own module in D1d seam 3; the escapability + aria-honesty source pins below follow it there.
+const PICKER = readFileSync(
+  fileURLToPath(new URL("../app/algebra/algebra-picker.mjs", import.meta.url)), "utf8");
 
 let UI: any;
 beforeAll(async () => {
-  await import("../app/solver.mjs");                 // installs the QD namespace
-  const reg: any = await import("../app/ui-registry.mjs");
+  await import("../app/solvers/solver.mjs");                 // installs the QD namespace
+  const reg: any = await import("../app/ui/ui-registry.mjs");
   await import("../app/algebra/algebra-ui.mjs");     // IIFE side-effect: attaches the helpers
   UI = reg.QD_UI;
 });
@@ -111,15 +115,15 @@ describe("the variable picker is escapable", () => {
   it("binds Escape and hands focus back to its button", () => {
     // The pickers had exactly one way out: click elsewhere. For a keyboard user that is no
     // way out at all.
-    expect(/ev\.key !== 'Escape'/.test(SRC)).toBe(true);
-    expect(/btn\.focus\(\)/.test(SRC)).toBe(true);
+    expect(/ev\.key !== 'Escape'/.test(PICKER)).toBe(true);
+    expect(/btn\.focus\(\)/.test(PICKER)).toBe(true);
   });
 
   it("keeps aria-expanded honest through every close path", () => {
     // Three sites hid the menu directly; they now route through _closeOpenMenu so the button
-    // cannot be left claiming the list is still open.
-    expect(/function _closeOpenMenu\(\)/.test(SRC)).toBe(true);
-    const directHides = SRC.match(/_openMenu\.classList\.add\('hidden'\)/g) || [];
+    // cannot be left claiming the list is still open. (Widget in algebra-picker.mjs — D1d seam 3.)
+    expect(/function _closeOpenMenu\(\)/.test(PICKER)).toBe(true);
+    const directHides = PICKER.match(/_openMenu\.classList\.add\('hidden'\)/g) || [];
     expect(directHides.length).toBe(1);   // the one inside _closeOpenMenu itself
   });
 });

@@ -16,11 +16,11 @@
 // algebra-shortcuts-table.test.ts — jsdom rewrites import.meta.url to http:, so a test that
 // reads its own module's source cannot run here.
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
-import _QD from "../app/solver.mjs";
+import _QD from "../app/solvers/solver.mjs";
 
 let QoL: any;
 beforeAll(async () => {
-  await import("../app/qol.mjs");
+  await import("../app/core/qol.mjs");
   QoL = (_QD as any).QoL;
 });
 

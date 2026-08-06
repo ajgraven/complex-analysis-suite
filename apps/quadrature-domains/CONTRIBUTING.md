@@ -81,10 +81,12 @@ To add a seeds file for a new family, follow the same pattern:
 4. Add the seeds module to the worker-thread solver barrel
    [`app/workers/solver-graph.mjs`](app/workers/solver-graph.mjs), BEFORE
    its `solver-<familyTag>.mjs`, so the native module workers pick it up.
-   The test bootstrap (`app/test/bootstrap.js`) imports the same graph, so
-   one entry gives you both the workers and test execution; parse coverage
-   is automatic (`app/test/parse-check.test.js` `node --check`s the `.mjs`
-   files).
+   Then add it, in the same order, to the **separate** load list in the test
+   bootstrap (`app/test/bootstrap.js`) — the bootstrap `import()`s its own copy
+   of the graph rather than the barrel, so the node-suite will not execute your
+   family until that list includes it too. (These parallel lists are a known
+   duplication; see the refactor plan's QD-SOLV-1.) Parse coverage is automatic
+   (`app/test/parse-check.test.js` `node --check`s the `.mjs` files).
 
 If a seed function needs a kernel-internal helper (e.g.
 `computeTargetF_*`, `_finitePolesView`), export it onto `QD` from the

@@ -2,8 +2,8 @@
 // worker job + the store's parametricBifurcation. Guards that the result is JSON-safe (unbounded
 // cell ends map to null, not ±Infinity) and that the store's reim path reaches the engine correctly.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
 import "../app/algebra/algebra-store.mjs";
 
 const S: any = (_QD as any).Sym;

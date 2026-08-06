@@ -13,8 +13,8 @@ import { describe, expect, it, beforeAll } from "vitest";
 let badge: (sol: unknown) => { cls: string; text: string };
 
 beforeAll(async () => {
-  await import("../app/ui-solve.mjs");
-  const { QD_UI } = await import("../app/ui-registry.mjs");
+  await import("../app/ui/ui-solve.mjs");
+  const { QD_UI } = await import("../app/ui/ui-registry.mjs");
   badge = (QD_UI as Record<string, unknown>).qdValidityBadge as typeof badge;
 });
 

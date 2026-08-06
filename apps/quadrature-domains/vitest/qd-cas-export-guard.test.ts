@@ -7,9 +7,9 @@
 // (a complex triangularization, not the real count). store.casColumn now prepends a warning header for a
 // Maple export of a complex-coefficient column, and casColumnComplex lets the UI warn before copying.
 import { describe, it, expect } from "vitest";
-import _QD from "../app/solver.mjs";
-import "../app/sym-core.mjs";
-import "../app/qd-equations.mjs";
+import _QD from "../app/solvers/solver.mjs";
+import "../app/sym/sym-core.mjs";
+import "../app/qd/qd-equations.mjs";
 import "../app/algebra/cas-export.mjs";
 import "../app/algebra/algebra-store.mjs";
 

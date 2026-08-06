@@ -6,6 +6,13 @@
 // was not. QD.Strings.algebraOps now holds one record per control — `short` (the title) and
 // `detail` (the ORIGINAL text, moved verbatim) — and the section's `?` renders the details.
 //
+// SOURCE-STRUCTURAL half (refactor Phase 2, QD-ALG-3). The two RENDERED checks — no materialised
+// title over 120 chars, and the six relocated tooltips no longer wired via data-str-title="tooltips.*"
+// — moved to the behavioural companion algebra-tooltip-tiers-dom.test.ts, which mounts the sidebar and
+// reads the actual `title` attributes QD.Strings.apply()/applyOpHelp() produce. What stays here is the
+// ui-strings algebraOps DATA (record shape, 36-record coverage, per-record 120-char shorts) and the
+// mount WIRING ORDER — neither of which a rendered snapshot exposes.
+//
 // Node environment, source-only: jsdom breaks fileURLToPath via import.meta.url.
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -14,7 +21,7 @@ import { fileURLToPath } from "node:url";
 const UI = readFileSync(
   fileURLToPath(new URL("../app/algebra/algebra-ui.mjs", import.meta.url)), "utf8");
 const STRINGS = readFileSync(
-  fileURLToPath(new URL("../app/ui-strings.mjs", import.meta.url)), "utf8");
+  fileURLToPath(new URL("../app/ui/ui-strings.mjs", import.meta.url)), "utf8");
 
 /** The algebraOps block, parsed into {id: {section, short, detail}}. */
 function ops(): Record<string, { section: string; short: string; detail: string }> {
@@ -45,21 +52,8 @@ describe("tier 1 — every title is one line", () => {
     }
   });
 
-  it("no long hardcoded title survives in the sidebar markup", () => {
-    // The markup is where they were; if one comes back it bypasses the registry entirely and the
-    // section's `?` will not know about it.
-    const long = [...UI.matchAll(/title="([^"]{121,})"/g)].map((m) => m[1].slice(0, 60));
-    expect(long).toEqual([]);
-  });
-
-  it("the moved ui-strings hooks are gone, so one mechanism owns every tooltip", () => {
-    // Six tooltips reached their controls via data-str-title rather than a literal title=, which is
-    // why a first pass over the markup alone missed them — measured in-browser as still 120+.
-    for (const k of ["assumeReal", "gaugeElim", "groebner", "dimension", "solveNumeric", "algFixW0"]) {
-      expect(UI, "tooltips." + k + " should now come from algebraOps").not.toMatch(
-        new RegExp('data-str-title="tooltips\\.' + k + '"'));
-    }
-  });
+  // (Two rendered checks moved to the -dom companion: no materialised title exceeds 120 chars, and the
+  // six relocated tooltips no longer reach a control via data-str-title="tooltips.*".)
 });
 
 describe("tier 3 — the detail is relocated, not deleted", () => {

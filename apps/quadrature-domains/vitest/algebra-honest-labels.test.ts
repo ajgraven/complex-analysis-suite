@@ -1,6 +1,13 @@
 // Tier 2 — labels that overstated their scope, controls that did nothing, exports that emitted
 // nothing, and one destructive toggle that looked like a view option.
 //
+// SOURCE-STRUCTURAL half (refactor Phase 2, QD-ALG-3). The rendered button LABELS (Gröbner "current
+// column", "Copy all LaTeX") moved to the behavioural companion algebra-honest-labels-dom.test.ts,
+// which mounts the sidebar and reads them off the DOM — so they survive the D1a sidebar-as-data
+// refactor. What stays here guards things a rendered snapshot cannot see: the button-passes-no-
+// selection WIRING, the export guard-clause ORDERING, the ui-strings tooltip DATA, the canvas 2-node
+// cap, and the fix-φ(0) confirmReplace flow.
+//
 // Node environment, source-only (jsdom rewrites import.meta.url to http:, breaking fileURLToPath).
 // Comments are blanked so prose describing a defect cannot satisfy a check meant to find it.
 import { describe, it, expect } from "vitest";
@@ -10,7 +17,7 @@ import { fileURLToPath } from "node:url";
 const UI = readFileSync(
   fileURLToPath(new URL("../app/algebra/algebra-ui.mjs", import.meta.url)), "utf8");
 const STRINGS = readFileSync(
-  fileURLToPath(new URL("../app/ui-strings.mjs", import.meta.url)), "utf8");
+  fileURLToPath(new URL("../app/ui/ui-strings.mjs", import.meta.url)), "utf8");
 const CODE = UI
   .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
   .replace(/(^|[^:])\/\/[^\n]*/g, (m) => m.replace(/[^\n]/g, " "));
@@ -24,14 +31,8 @@ function bodyOf(name: string): string {
 }
 
 describe("2.1 — the Gröbner button names the scope it actually uses", () => {
-  it("the label says current column, not 'all eqns'", () => {
-    // doGroebner(null) falls back to store.currentColumnIds() — the LAST column's equalities.
-    // "all eqns" invited the reading that earlier columns were included.
-    expect(UI).toMatch(/id="alg-groebner"[^>]*>Gröbner basis \(current column\)</);
-    // CODE, not UI: the comment recording this correction quotes the old wording on purpose.
-    expect(CODE).not.toMatch(/Gröbner basis \(all eqns\)/);
-  });
-
+  // (The rendered label "Gröbner basis (current column)" — and that no control still says "all eqns" —
+  // is asserted in the -dom companion.)
   it("the sidebar button really does pass no selection", () => {
     // The label is only honest while this holds; the inspector's #alg-groebner-sel is the one
     // that passes a selection.
@@ -61,8 +62,8 @@ describe("2.2 / 2.3 — exports state their scope and refuse when empty", () => 
     // title into QD.Strings.algebraOps, so this originally-145-char tooltip now lives there. That
     // relocation is exactly what this assertion had to follow — it failed the gate by still
     // looking at the markup, which is the guard working, not the content going missing.
-    const btn = UI.slice(UI.indexOf('id="alg-copy-latex"'), UI.indexOf('id="alg-copy-latex"') + 320);
-    expect(btn).toMatch(/>Copy all LaTeX</);
+    // (The rendered "Copy all LaTeX" label is asserted in the -dom companion; here we pin the scope
+    // sentence in the ui-strings record it now reads its tooltip from.)
     const rec = STRINGS.match(/'alg-copy-latex':\s*\{[^}]*?detail:\s*`([^`]*)`/);
     expect(rec, "alg-copy-latex has no algebraOps record").toBeTruthy();
     expect((rec as RegExpMatchArray)[1]).toMatch(/all columns and all branches/);
