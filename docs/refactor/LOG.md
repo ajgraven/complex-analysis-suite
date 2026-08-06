@@ -1352,3 +1352,29 @@
   exercises only its own lane, the RED→GREEN transition proves each pins its lane's flag (no separate isolated mutation needed).
 - **Green bar:** build(+gate)/typecheck/lint(+dep:check)/test(+census) all exit 0; `pnpm test` **2237 / 266** (count unchanged —
   2 specs rewritten, none added). Cut `refactor/aux-live-messageerror` off refactor/main; PR → refactor/main.
+
+## 2026-08-06 — Post-ship bug fix · Stage sym-worker-load-selfheal (QD-SYM-LOAD) — PR opened
+- **User-reported (deployed):** "Auto-reduce & solve: sym-worker crashed: [object Event] @ bundle:?" on the cardioid, QD Algebra
+  module, on the freshly-shipped live site. DIAGNOSIS: the sym-worker CHUNK is fine — served the prod build + spawned it in a real
+  module-worker (Playwright/headless-Chromium): it loaded and returned a correct `dimension` result; `cardioid-uniqueness` passes in
+  the node suite (SymWorker uses the main-thread fallback there). `[object Event] @ bundle:?` = an ErrorEvent with empty
+  message/filename/lineno = a worker-script LOAD failure (404), not a runtime error. Root cause deploy/cache-specific: the refactor
+  changed EVERY chunk hash and QD is a `registerType:"autoUpdate"` PWA — when the new SW takes over a still-open old page mid-session,
+  a LAZILY-spawned worker (sym-worker only spawns on ★ Auto-reduce & solve) is requested at an OLD hash the new deploy no longer has
+  → 404 → the bare event. Immediate user remedy: hard-refresh / clear site data (loads the consistent new chunk set).
+- **The code gap fixed.** sym-worker.mjs predates + sits OUTSIDE the `createWorkerLane` factory, so it never got #227's `_everWorked`
+  load-failure hardening. Its F4 latch fired only for an IDLE error (`if (!hadJob) _fallback = true`); a load failure WITH a job in
+  flight (the user's case) rejected with "sym-worker crashed" and did NOT fall back → the next op re-spawned + re-failed. FIX (the
+  sym analog of #227): add `_everWorked` (set in onMessage, reset per worker build), carry `op/payload/onProgress` on `_inflight`,
+  and in the `error` handler, when `!_everWorked` (never loaded) latch `_fallback` AND SELF-HEAL the in-flight op — re-run it via
+  `_QD.Sym.runJob` on the main thread and RESOLVE the original promise — so Auto-reduce & solve keeps working. A worker that HAD
+  returned a message then errors = a transient crash → still rejects + respawns (unchanged).
+- **Net-first + mutation-verified.** Rewrote sym-worker-crash-char's load-failure spec to assert the self-heal (in-flight op
+  RESOLVES via a stubbed `QD.Sym.runJob` + `_isFallback` latches + a subsequent run goes straight to main thread) and added a
+  worked-then-crash spec (message first → error → rejects, no latch). RED on the pre-fix source (rejects), GREEN after; inverting
+  `!_everWorked` reddens BOTH new specs (+ F4) → reverted byte-identically. Green bar: build(+gate)/typecheck/lint/test **2238 / 266**
+  (+1 spec). Cut `refactor/sym-worker-load-selfheal` off refactor/main; PR → refactor/main.
+- **Behavior change — authorized by the bug report** (hard-error → graceful main-thread fallback). **Follow-ups flagged (NOT in this
+  PR):** (1) a built-app browser smoke test exercising the worker paths — the coverage gap that let BOTH QD-BUILD-1 and this reach
+  prod; (2) the PWA `autoUpdate` strategy (→ `prompt`, or drop skipWaiting) so a deploy can't strand lazy workers; (3) sym-worker
+  still lacks a `messageerror` handler (the #229 gap, in the sym lane).
