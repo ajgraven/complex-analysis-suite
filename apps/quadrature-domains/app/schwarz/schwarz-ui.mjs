@@ -40,7 +40,7 @@
 import { state } from '../ui/ui-state.mjs';
 import { QD_UI } from '../ui/ui-registry.mjs';
 import _QD from '../solvers/solver.mjs';
-import { exportPhiLink } from './schwarz-export.mjs';
+import { exportPhiDeepLink } from './schwarz-export.mjs';
 const QD = _QD;
 
 (function () {
@@ -495,15 +495,25 @@ const QD = _QD;
     const setStatus = (msg, ok) => {
       if (status) { status.textContent = msg; status.style.color = ok ? '#2a7' : '#c33'; }
     };
-    const link = exportPhiLink(sState.phiSnapshot, { note: 'phi exported from the Quadrature Domains app' });
-    if (!link) {
+    // The hand-off must open in the Complex Dynamics app (.../complex-dynamics/#s=...), not reload QD.
+    // exportPhiDeepLink resolves CD's base from the sibling deploy path; VITE_CD_BASE overrides it for
+    // local dev (where the apps run on separate Vite ports and the sibling can't be resolved from here).
+    const cdBase = (import.meta.env && import.meta.env.VITE_CD_BASE) || undefined;
+    const result = exportPhiDeepLink(sState.phiSnapshot, location, {
+      note: 'phi exported from the Quadrature Domains app',
+      cdBase,
+    });
+    if (!result) {
       setStatus('No exportable φ yet — solve one first (some families are not closed-form maps).', false);
       return;
     }
-    const url = location.origin + location.pathname + link;
+    const { url, resolvable } = result;
+    const okMsg = resolvable
+      ? 'Copied Complex Dynamics hand-off link to clipboard.'
+      : 'Copied link — set VITE_CD_BASE to reach Complex Dynamics in local dev.';
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(url).then(
-        () => setStatus('Copied interchange deep link to clipboard.', true),
+        () => setStatus(okMsg, resolvable),
         () => { console.log('[interchange] deep link:', url); setStatus('Copy blocked — link logged to console.', false); },
       );
     } else {

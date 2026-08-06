@@ -1378,3 +1378,26 @@
   PR):** (1) a built-app browser smoke test exercising the worker paths — the coverage gap that let BOTH QD-BUILD-1 and this reach
   prod; (2) the PWA `autoUpdate` strategy (→ `prompt`, or drop skipWaiting) so a deploy can't strand lazy workers; (3) sym-worker
   still lacks a `messageerror` handler (the #229 gap, in the sym lane).
+
+## 2026-08-06 · stage qd-cd-export-link — QD→CD "Export map → copy link" targeted the wrong app (QD-HANDOFF-1)
+- **The bug (user-reported).** The Schwarz tab's "Export map → copy link" hand-off produced a link that reopened the QD app instead
+  of Complex Dynamics. `_exportMap` (schwarz-ui.mjs) built `location.origin + location.pathname + link`, where `link` is only the
+  payload hash `#s=…` (encodeLink) — so it stapled the interchange payload onto QD's OWN URL. Opening it reloaded QD, which reads
+  only its own `#vs=` view-state key and ignores `#s=` (CD is the consumer, main.ts:2961) → "simply links back to QD".
+- **The fix (de-risked, per the pre-fix downside review the user asked for).** Added a PURE resolver in schwarz-export.mjs:
+  `resolveHandoffBase(loc, cdBase)` → `{base, resolvable, reason}` + `exportPhiDeepLink(phi, loc, opts)`. Combined Pages deploy = the
+  apps are siblings, so it swaps the path segment `…/quadrature-domains/…` → `…/complex-dynamics/`; an explicit `cdBase` override
+  wins; a location with no QD segment (local split-port dev, where the sibling can't be resolved) is flagged `resolvable:false`.
+  `_exportMap` now routes through it, reads `import.meta.env.VITE_CD_BASE` (dev override), and the status message is truthful per
+  `resolvable` (never claims it copied a CD link when it can't resolve one). `exportPhiLink`'s golden-pinned payload is byte-unchanged.
+- **Design.** Kept the resolver IN QD (single consumer today) rather than extracting a package — ADR-0007; a promotion note to
+  @cas/interchange is left in a comment. `CD_APP_ID` equals the interchange provenance `app` id / deploy subpath.
+- **Net-first + mutation-verified.** NEW `vitest/schwarz-handoff-link.test.ts` (10): resolver behavior (sibling-swap incl.
+  index.html + domain-root, override-normalize, dev-unresolvable) + `exportPhiDeepLink` builds the full CD URL carrying the exact
+  cross-app golden (asserts `/complex-dynamics/` present, `/quadrature-domains/` absent) + a source-pin (the worker-url-static-literal
+  idiom) that `_exportMap` routes through `exportPhiDeepLink` and no longer hand-rolls `location.origin + location.pathname`. RED on
+  the pre-fix wiring (both source-pins failed), GREEN after; the resolver net mutation-verified (swap CD→QD id → 4 red → reverted).
+- **Behavior change — authorized by the bug report** (broken link → CD-targeted link). Green bar: build(+gate)/typecheck/lint/test
+  **2248 / 267** (+1 file / +10 tests). Cut `refactor/qd-cd-export-link` off refactor/main; PR → refactor/main. **Known limit
+  (documented, not a regression):** cross-app deep-linking still can't resolve automatically in local split-port dev — set
+  `VITE_CD_BASE`; true end-to-end confidence needs the still-pending built-app browser smoke test.
