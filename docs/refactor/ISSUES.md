@@ -477,3 +477,12 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   emptying interchange → census fails naming it; real → pass). Green: build/typecheck/lint/test **2237 / 266** + census ✓. Chose
   built-OUTPUT assertions over a built-app browser smoke test (infra+flake) and over reversing the deliberate "browser not a
   publish blocker" topology — both noted optional. **Closes (b); post-review fixes (a)+(b) complete.**
+- **2026-08-05 · stage aux-live-messageerror (PR → refactor/main):** **aux/live `messageerror` hang → FIXED** (the last
+  worker-lifecycle inconsistency; the pre-existing footnote from the post-review arc report). Only PRIMARY installed a
+  `messageerror` handler; a structured-clone failure on the aux (alt-search) or live (drag-solve) lane left the job unsettled
+  forever (`isAuxBusy`/`isLiveBusy` wedged until reload). `createWorkerLane` already implemented the handler behind
+  `hasMessageError`; flipped aux+live `false→true` → all three lanes now reject + dispose on a clone failure (respawn, no
+  `_fallback` latch — a clone failure is data-specific, matching primary). NET-FIRST: the two frozen psw-crash-char "asymmetry
+  — does NOT settle" specs rewritten to assert settle+dispose parity — RED pre-flip (promise never rejects → timeout), GREEN
+  post-flip; per-lane isolation makes the RED→GREEN transition the mutation proof. Green: build/typecheck/lint/test **2237 / 266**
+  (count unchanged). Low-probability in practice (plain numeric messages) → robustness completeness, not an urgent bug.

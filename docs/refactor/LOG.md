@@ -1334,3 +1334,21 @@
   follow-ups; neither is needed to close the QD-BUILD-1 class.
 - **Green bar:** build(+b#2 gate)/typecheck/lint(+dep:check)/test(+b#3 census) all exit 0; `pnpm test` **2237 / 266** + census ✓.
   Cut `refactor/publish-gate-durability` off refactor/main; PR → refactor/main.
+
+## 2026-08-05 — Post-review follow-up · Stage aux-live-messageerror (worker-robustness completeness) — PR opened
+- **The last worker-lifecycle inconsistency.** After the QD-BUILD-1 arc hardened the worker LOAD/crash paths, one gap remained
+  (the pre-existing footnote from the arc report): only the PRIMARY lane installed a `messageerror` handler; aux (alt-search) and
+  live (drag-solve) did not. `messageerror` fires when a message from the worker fails structured-clone on receipt — on aux/live
+  that left the in-flight job UNSETTLED forever (`isAuxBusy`/`isLiveBusy` stuck true → that lane wedged until reload). Frozen (not
+  endorsed) by psw-crash-char.test.ts's "asymmetry" specs since B4-2a. Low-probability in practice (messages are plain numeric
+  data), so this is robustness COMPLETENESS, not an urgent bug.
+- **The fix (2 flags).** `createWorkerLane` already implements the handler behind `cfg.hasMessageError`; flipped aux + live from
+  `false` → `true`. Now all three lanes reject the in-flight job (`<crashLabel> message error (structured-clone failed)`) and
+  dispose the worker on a clone failure — a fresh run respawns (a clone failure is data-specific, so it does NOT arm the
+  main-thread `_fallback` latch, matching primary + the transient-crash contract). Per-lane closures keep the latches independent.
+- **Net-first + mutation-verified.** Rewrote the two frozen "asymmetry — does NOT settle" specs to assert settle+dispose parity
+  (reject `/structured-clone/` + `isAux/LiveBusy` false + `_hasAux/LiveWorker` false + `_isAux/LiveFallback` false). RED against
+  the pre-fix source (both specs time out — no handler → the promise never rejects), GREEN after the flip. Because each spec
+  exercises only its own lane, the RED→GREEN transition proves each pins its lane's flag (no separate isolated mutation needed).
+- **Green bar:** build(+gate)/typecheck/lint(+dep:check)/test(+census) all exit 0; `pnpm test` **2237 / 266** (count unchanged —
+  2 specs rewritten, none added). Cut `refactor/aux-live-messageerror` off refactor/main; PR → refactor/main.

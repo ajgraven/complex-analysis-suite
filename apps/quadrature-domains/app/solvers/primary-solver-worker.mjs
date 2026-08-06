@@ -205,10 +205,10 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
     getSignal: (args) => args[2] && args[2].signal,   // solve(hData, opts, { signal? })
   });
 
-  // Aux worker — background alternate-solution search (A3). No messageerror handler (matches the original).
+  // Aux worker — background alternate-solution search (A3).
   const aux = createWorkerLane({
     messageKind: 'altSearch', logLabel: 'aux worker', crashLabel: 'alt-search worker',
-    hasMessageError: false,
+    hasMessageError: true, // settle a structured-clone failure (reject + dispose) instead of hanging the lane
     warnPrefix: 'Aux worker unavailable',
     warnSuffix: 'Alternate search will run on the main thread.',
     buildPost: (jobId, hData, norm, known, opts) =>
@@ -216,10 +216,10 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
     fallback: (hData, norm, known, opts) => _QD.searchAlternates(hData, norm, known || [], opts || {}),
   });
 
-  // Live worker — per-drag-frame warm-start solve (QD.liveSolveStep). No messageerror handler.
+  // Live worker — per-drag-frame warm-start solve (QD.liveSolveStep).
   const live = createWorkerLane({
     messageKind: 'liveSolve', logLabel: 'live worker', crashLabel: 'live-solve worker',
-    hasMessageError: false,
+    hasMessageError: true, // settle a structured-clone failure (reject + dispose) instead of hanging the lane
     warnPrefix: 'Live worker unavailable',
     warnSuffix: 'Live drag solve will run on the main thread.',
     buildPost: (jobId, hData, initPhi, opts) =>
