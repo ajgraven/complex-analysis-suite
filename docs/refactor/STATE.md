@@ -17,7 +17,7 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **Net-first:** no refactor without a passing characterization net pinned to PRE-refactor code; **mutation-verify** every
   net (break a guard → confirm the intended test fails → revert byte-identically via Edit, NOT git). Never widen a tolerance.
 - **Green bar** (must be 0-exit before every PR): `pnpm build && pnpm typecheck && pnpm lint && pnpm test` (lint includes
-  `dep:check`). Currently **2237 / 266** (`refactor/main` @ ef45c18, post-#228) + build/test durability gates.
+  `dep:check`). Currently **2237 / 266** (`refactor/main` @ e18fcc3, post-#229) + build/test durability gates.
 - **Git constraints (VERBATIM):** never `git reset --hard`, `git checkout -- <path>`, `git clean -fd`, `git commit --amend`,
   or force-push. If history seems to need rewriting, STOP and ASK. `git push -u origin <branch>`; retry ≤4× backoff 2/4/8/16s.
 - **Cadence:** integration branch `refactor/main`; each stage on `refactor/<slug>` → ONE PR → `refactor/main`; **merge on
@@ -52,16 +52,18 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   → **Phase 4 (D2)✓ COMPLETE: ui.mjs seam #220 + QD boot net #223 + lifts #224/#225 → thin composition root** → **Phase 5 (E2)✓ #221** / E (E1 deferred) / **F1✓**. **PLAN COMPLETE.**
 - **PHASE 3 (D1 installAlgebra) COMPLETE** — D1a #210/#211 (sidebar-as-data), D1b #212–#214 (op-runner fold + doSolveRadical
   guard [token]), D1c #215 (verdict-unify [token]), D1d #216–#219 (4 seams; inspector = composition core → closed). Detail in LOG.
-- **✅ POST-REVIEW FIXES COMPLETE (post-plan, 2026-08-05).** 7-agent whole-refactor review (green bar re-confirmed genuine) →
-  ONE regression QD-BUILD-1 + two CI-gate blind spots, ALL merged: (a) #226+#227, (b) #228. Detail in Branches/PR + Next steps.
+- **✅ POST-REVIEW COMPLETE + SHIPPING (2026-08-05/06).** 7-agent review → ONE regression QD-BUILD-1 + two CI-gate blind spots
+  + one worker footnote, ALL merged: (a) #226+#227, (b) #228, #229 (aux/live `messageerror` parity — worker arc closed). **▶ Now
+  shipping refactor/main → master (233 commits go LIVE; deploy-pages re-runs the full gate incl. the new checks) — user "ship it".**
 
 ## Branches / PR
-- Integration `refactor/main` @ **ef45c18** (#210–#228 merged). **POST-REVIEW FIXES (a)+(b) COMPLETE (post-plan, 2026-08-05).**
+- Integration `refactor/main` @ **e18fcc3** (#210–#229 merged). **POST-REVIEW (a)+(b)+worker-footnote COMPLETE → SHIPPING to master.**
 - **QD-BUILD-1 (P0 from the 7-agent review) — FIXED, both parts merged:** #226 (a1, e0d91e8) restored the literal worker URL
   (variable `new URL` had dropped the chunk from `vite build` → 404 → deployed Solve/alt/live hard-fail) + regression net;
   #227 (a2, f475a1a) added the `_everWorked`-scoped async-load self-heal (never-loaded→main-thread; worked-then-crash→respawn).
 - **(b) publish-gate durability — #228 MERGED (ef45c18):** built-artifact gate (tail of `pnpm build`: every published-app
   `new Worker(new URL(literal))` must emit a dist chunk) + test-census gate (`pnpm test`: each of 8 projects ≥1 spec). Mutation-verified.
+- **#229 MERGED (e18fcc3):** aux/live worker `messageerror` settles+disposes (parity with primary) — last worker inconsistency closed.
 - Prior plan (Phases 1–5, D2, F1; 48 stage PRs A1 #178 … #225) COMPLETE — ui.mjs a thin composition root; detail in LOG.
 
 ## Validation state (green bar)
@@ -83,13 +85,11 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   /#225** then lifted the 3 mounts behind it, each pinned by a boot-output assertion + mutation-verified. ui.mjs = thin root.
 
 ## Next concrete steps
-- **POST-REVIEW FIXES ✅ COMPLETE:** (a) QD-BUILD-1 P0 — #226 + #227 merged; (b) publish-gate durability — #228 merged. The one
-  production regression + its two CI-gate blind spots are closed, each net-first + mutation-verified. No open PR.
-- **Remaining review findings — ALL OPTIONAL (awaiting direction):** node-suite per-file floor tightening (P1-minor);
-  `--passWithNoTests` default / glob-width / `edges` getter (P2); pre-existing footnotes (dead version label, aux/live
-  `messageerror` hang). Full ranked list in chat 2026-08-05.
-- **Older deferred (each a fresh scoping task):** boot-harness Stage 2 (full-page Playwright); inspector; E1 (state/lifecycle);
-  correspondence families (circle-and-cardioid → cubic Chebyshev → d:d).
+- **▶ SHIP IN PROGRESS:** merge `refactor/main` → `master` (user "ship it") → deploy-pages publishes the whole refactor live; then
+  verify the deploy run. This banks the engagement.
+- **Then advance the product (VISION):** scope the next correspondence family (circle-and-cardioid → cubic Chebyshev → d:d).
+- **Optional review leftovers:** node-suite floor (P1-minor); `--passWithNoTests`/glob-width/`edges` (P2); dead version label.
+  Deferred: boot-harness Stage 2; inspector; E1. (aux/live `messageerror` — DONE #229.)
 
 ## Resume commands
 ```
