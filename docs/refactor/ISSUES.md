@@ -496,3 +496,14 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   thread (`_QD.Sym.runJob`) so Auto-reduce & solve keeps working; a worked-then-crash still rejects+respawns. NET-FIRST +
   mutation-verified (invert `!_everWorked` → both new specs red). Green: **2238 / 266**. Behavior change authorized by the bug
   report. Follow-ups: built-app worker smoke test (the gap behind this + QD-BUILD-1); PWA autoUpdate→prompt; sym-lane messageerror.
+- **2026-08-06 · stage qd-cd-export-link (PR → refactor/main):** **QD-HANDOFF-1 → FIXED** — user-reported: the Schwarz "Export map →
+  copy link" hand-off linked back to the QD app instead of opening Complex Dynamics. `_exportMap` built the URL as `location.origin +
+  location.pathname + <hash>` — the interchange payload (`#s=…`, correct + golden-tested) stapled onto QD's OWN location; QD ignores
+  `#s=` (reads only its `#vs=` key), so the link was inert (CD is the `#s=` consumer, main.ts:2961). FIX: pure `resolveHandoffBase` +
+  `exportPhiDeepLink` in schwarz-export.mjs (deploy sibling path-swap `…/quadrature-domains/…`→`…/complex-dynamics/`; explicit
+  `VITE_CD_BASE` override; local-dev `resolvable:false` flag → truthful status). Resolver kept in QD (single consumer, ADR-0007).
+  NET-FIRST `vitest/schwarz-handoff-link.test.ts` (10: resolver behavior + full-URL golden asserting `/complex-dynamics/` not
+  `/quadrature-domains/` + a source-pin that `_exportMap` no longer hand-rolls `location.origin+location.pathname`); RED on the
+  pre-fix wiring, GREEN after, mutation-verified. Behavior change authorized by the bug report. Green: build/typecheck/lint/test
+  **2248 / 267**. **Follow-up (unchanged):** the built-app browser smoke test would catch this cross-app/built-only class (same gap
+  as QD-BUILD-1 / QD-SYM-LOAD); local split-port dev still needs VITE_CD_BASE.
