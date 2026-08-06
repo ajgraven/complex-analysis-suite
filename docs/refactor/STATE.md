@@ -53,11 +53,11 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **PHASE 3 (D1 installAlgebra) COMPLETE** — D1a #210/#211 (sidebar-as-data), D1b #212–#214 (op-runner fold + doSolveRadical
   guard [token]), D1c #215 (verdict-unify [token]), D1d #216–#219 (4 seams; inspector = composition core → closed). Detail in LOG.
 - **✅ POST-REVIEW COMPLETE + SHIPPING (2026-08-05/06).** 7-agent review → ONE regression QD-BUILD-1 + two CI-gate blind spots
-  + one worker footnote, ALL merged: (a) #226+#227, (b) #228, #229 (aux/live `messageerror` parity — worker arc closed). **▶ Now
-  shipping refactor/main → master (233 commits go LIVE; deploy-pages re-runs the full gate incl. the new checks) — user "ship it".**
+  + one worker footnote, ALL merged: (a) #226+#227, (b) #228, #229 (aux/live `messageerror` parity — worker arc closed). **✅
+  SHIPPED refactor/main → master (#230, merge 1342c82) — deploy-pages run #87 SUCCEEDED; the whole refactor is LIVE.**
 
 ## Branches / PR
-- Integration `refactor/main` @ **e18fcc3** (#210–#229 merged). **POST-REVIEW (a)+(b)+worker-footnote COMPLETE → SHIPPING to master.**
+- Integration `refactor/main` @ **b19a9c8** (#210–#229 merged) → **SHIPPED to `master` (#230, 1342c82); deploy-pages #87 LIVE.**
 - **QD-BUILD-1 (P0 from the 7-agent review) — FIXED, both parts merged:** #226 (a1, e0d91e8) restored the literal worker URL
   (variable `new URL` had dropped the chunk from `vite build` → 404 → deployed Solve/alt/live hard-fail) + regression net;
   #227 (a2, f475a1a) added the `_everWorked`-scoped async-load self-heal (never-loaded→main-thread; worked-then-crash→respawn).
@@ -85,8 +85,8 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   /#225** then lifted the 3 mounts behind it, each pinned by a boot-output assertion + mutation-verified. ui.mjs = thin root.
 
 ## Next concrete steps
-- **▶ SHIP IN PROGRESS:** merge `refactor/main` → `master` (user "ship it") → deploy-pages publishes the whole refactor live; then
-  verify the deploy run. This banks the engagement.
+- **✅ SHIPPED + LIVE (2026-08-06):** `refactor/main` → `master` (#230, merge 1342c82); deploy-pages run #87 succeeded — the
+  whole refactor + post-review arc is on the live Pages site. **Engagement banked.**
 - **Then advance the product (VISION):** scope the next correspondence family (circle-and-cardioid → cubic Chebyshev → d:d).
 - **Optional review leftovers:** node-suite floor (P1-minor); `--passWithNoTests`/glob-width/`edges` (P2); dead version label.
   Deferred: boot-harness Stage 2; inspector; E1. (aux/live `messageerror` — DONE #229.)
