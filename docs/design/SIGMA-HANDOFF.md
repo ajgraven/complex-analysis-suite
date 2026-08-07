@@ -280,7 +280,10 @@ later "generalize + dedupe QD" phase — they are *not* on the deltoid-σ critic
 load-order-sensitive QD glue + the legacy `node-test` harness. The `PhiData` / full-family / S2d-cutover
 material in this doc stays as the eventual plan for that phase.
 
-**Remaining to the goal (deltoid σ live in CD):** ~~S3a~~ ✅ → ~~S3b~~ ✅ → **S4a** (the last step) — see "S3 — execute next" below.
+**GOAL REACHED — deltoid σ live in CD:** ~~S3a~~ ✅ → ~~S3b~~ ✅ → ~~S4a~~ ✅ (**#240** engine+net, **#241** CPU render).
+**QD-HANDOFF-2 is closed end to end**: QD emits the σ recipe → CD reconstructs it → CD renders the 3-fold
+deltoid σ tiling (CPU, `≈`-labeled), Playwright-verified. Not deployed to master (awaiting ship approval).
+S4b (GPU σ) + S5 (other families, branch-aware, df64) remain separate approvals.
 
 - **S3b #239** — QD **"Export Schwarz reflection σ → copy link"** button, alongside φ. `schwarz-export.mjs`
   `buildSigmaEnvelope`/`exportSigmaLink`/`exportSigmaDeepLink` emit the `schwarz-reflection` envelope
@@ -318,7 +321,7 @@ material in this doc stays as the eventual plan for that phase.
 | S2e | correspondences → `@cas/schwarz` (dedup `deltoid.ts` engine) | ✅ done early in **#237** |
 | S3a | `@cas/interchange`: add `form:"schwarz"` + `isMapSpec` case + caps + deltoid σ golden + minor VERSION | ✅ **#238** |
 | S3b | QD export: `schwarz-reflection` envelope + "Export **σ**" button **alongside** φ (token granted) | ✅ **#239** |
-| S4a | **CD reconstructs deltoid σ (CPU)** via `@cas/schwarz`; end-to-end ground truth; `≈` labeling | ▶ **NEXT** |
+| S4a | **CD reconstructs + renders deltoid σ (CPU)** via `@cas/schwarz`; end-to-end ground truth; `≈` labeling | ✅ **#240 + #241** |
 
 **Deferred to separate approvals:** S4b (CD GPU σ — port QD's `FRAG_SRC` GLSL), S5 (non-Laurent families
 on the wire, branch-aware continuation through cusps [uncertified — RISKS §3], df64 σ, PQD GPU αth-root).
@@ -361,7 +364,10 @@ unbounded-Laurent family; the σ golden is now a byte-exact producer↔consumer 
   mirroring `_exportMap`. Net: extend `schwarz-ui.test.ts` (both buttons present, honest labels) +
   `schwarz-export.test.ts` (the σ envelope round-trips + matches the golden).
 
-**S4a — CD reconstructs the deltoid σ (CPU), the ground-truth milestone** (additive):
+**S4a — CD reconstructs the deltoid σ (CPU), the ground-truth milestone** — ✅ **DONE**: **#240** (S4a-1:
+`schwarzEngineFromMapSpec` + the ground-truth net) + **#241** (S4a-2: `src/render/schwarzView.ts` CPU render
+to `#JCSSchwarz`, `≈`-labeled, Playwright-verified). Shipped in two PRs to bank the proven ground truth
+before the render integration. (additive):
 - Add `@cas/schwarz` to `apps/complex-dynamics/package.json` deps (`pnpm install`).
 - `apps/complex-dynamics/src/interchange/importMap.ts`: `envelopeToMapSpec` already returns the
   `schwarz-reflection` `sigma`. When `sigma.form === "schwarz"`, do **not** call `mapSpecToExpr` (σ is not an
