@@ -551,3 +551,10 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   QD-HANDOFF-2 now closed (format speaks σ ✓, QD emits σ ✓). Remaining: **S4a** — CD reconstructs + renders the deltoid σ (CPU, `≈`),
   after which the σ button opens a live σ dynamical plane. Until S4a merges, a σ link opened in CD is recognized + declined gracefully
   (the S3a guard) — no crash, honest "not supported yet". Green 2263/268.
+- **2026-08-07 · stage schwarz-s4a-cd-sigma (PR → refactor/main):** **QD-HANDOFF-2 → S4a-1: CD reproduces
+  the deltoid σ numerically (ground truth).** The φ-vs-σ export gap is now closed end-to-end at the numerical
+  level: QD emits the σ recipe (S3b), and CD rebuilds the σ evaluator from it (`schwarzEngineFromMapSpec`)
+  and reproduces the frozen `σ(w₀)` through its real import path — the approved end-state's verifiable core.
+  Remaining: **S4a-2** paints the reconstructed σ escape-time field on a CPU canvas (≈-labeled), replacing
+  the S3a "σ rendering isn't supported yet" decline with the actual view. Split off to bank the proven
+  ground truth before the CD render integration (new 2D canvas + σ-mode, per the render recon).

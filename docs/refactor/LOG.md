@@ -1465,3 +1465,16 @@
   rewritten to assert BOTH buttons present + honestly labeled — RED on the missing σ button, GREEN after. Green:
   build(+gate)/typecheck/lint/test **2263 / 268** (+4 tests). Next: **S4a** (CD reconstructs the deltoid σ — CPU, `≈`), the approved
   end-state; then the σ button reaches a consumer that renders it.
+- **2026-08-07 · stage schwarz-s4a-cd-sigma (PR → refactor/main):** **σ-handoff S4a-1 — CD reconstructs the
+  deltoid σ (engine + ground-truth net).** The CD half of the hand-off, split into the verifiable core
+  (this PR) and the CPU render (S4a-2). Added `@cas/schwarz` to CD's deps and
+  `schwarzEngineFromMapSpec(sigma: SchwarzMap)` (`src/interchange/importMap.ts`): σ is not expr-compilable
+  (numerical inverse), so instead of `mapSpecToExpr` it rebuilds the evaluator from `sigma.phi` via
+  `makeUnboundedLaurentSchwarz` — converting interchange `{re,im}` coeffs to the engine's `[re,im]` tuples;
+  throws for a shape the engine can't rebuild (non-Laurent φ, complex leading c) rather than returning a
+  subtly-wrong σ. **THE GROUND-TRUTH NET** (`importMap.test.ts`): decode the S3a σ golden → `envelopeToMapSpec`
+  → `schwarzEngineFromMapSpec` → `.sigma([w₀])` reproduces the frozen `σ(1+0.75i)=0.5−0.5i` to 1e-9, END TO
+  END through CD's real import path — the reproduction the whole arc was built to reach. Mutation-verified
+  (swap the `{re,im}→[re,im]` tuple order → σ(w₀)=1.066 ≠ 0.5 → net red → reverted). Behavior-preserving:
+  `schwarzEngineFromMapSpec` is a new tested capability; `importInterchange` still shows the S3a decline
+  (S4a-2 wires the reconstruction into a CPU-rendered σ view). Green bar **2264 / 268** (+1 test).
