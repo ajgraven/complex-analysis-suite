@@ -74,6 +74,16 @@ describe("CD consume interchange map (Phase 4 C3)", () => {
     expect(v[1]).toBeCloseTo(0, 12);
   });
 
+  // S0b (SIGMA-HANDOFF): an `antiholomorphic` MapSpec acts on conj(z) — mapSpecToExpr must build it
+  // on conjugate(z), not z, or CD renders the holomorphic twin. (Latent until a σ / anti-map is emitted.)
+  it("honors the antiholomorphic flag — a laurent map so tagged acts on conj(z)", () => {
+    // φ = 1·z tagged antiholomorphic ⇒ conjugate(z). At z = 2 − 3i, conj(z) = 2 + 3i.
+    const src = mapSpecToExpr({ form: "laurent", c: { re: 1, im: 0 }, F: [], antiholomorphic: true });
+    const v: Complex = makeComplexFn(parse(src))([2, -3], [0, 0]);
+    expect(v[0]).toBeCloseTo(2, 12);
+    expect(v[1]).toBeCloseTo(3, 12); // conj(2 − 3i) = 2 + 3i (the holomorphic twin would give −3)
+  });
+
   // The CONSUMER half of the QD -> CD contract (qd-interchange-e2e-08). Everything above decodes an
   // envelope THIS FILE built — self-consistency, not interoperability: QD's exporter could have
   // drifted (a renamed field, a reordered F, a changed `bounded` sense) and these tests would stay

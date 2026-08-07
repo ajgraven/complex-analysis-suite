@@ -59,7 +59,7 @@ export interface LaurentMap {
 /** Arbitrary map as an expression string in the `expr` language (compiles to GLSL + JS). */
 export interface ExprMap {
   form: "expr";
-  expr: string; // e.g. "conj(z)^2 + c"
+  expr: string; // e.g. "conjugate(z)^2 + c" (the `expr` language spells it `conjugate`, not `conj`)
   vars: ("z" | "c" | "a")[];
   antiholomorphic?: boolean;
 }

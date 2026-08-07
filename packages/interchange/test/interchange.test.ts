@@ -36,7 +36,7 @@ describe("@cas/interchange schema + constants", () => {
   it("isMapSpec recognizes each form and rejects junk", () => {
     expect(isMapSpec(deltoidSigma)).toBe(true);
     expect(isMapSpec({ form: "rational", num: [{ re: 1, im: 0 }], den: [{ re: 1, im: 0 }] })).toBe(true);
-    expect(isMapSpec({ form: "expr", expr: "conj(z)^2 + c", vars: ["z", "c"] })).toBe(true);
+    expect(isMapSpec({ form: "expr", expr: "conjugate(z)^2 + c", vars: ["z", "c"] })).toBe(true);
     expect(isMapSpec({ form: "laurent", c: { re: 1, im: 0 } })).toBe(false); // missing F
     expect(isMapSpec({ form: "bogus" })).toBe(false);
     expect(isMapSpec(null)).toBe(false);

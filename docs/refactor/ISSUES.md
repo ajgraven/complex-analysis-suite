@@ -518,3 +518,10 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   relabel only — button/card now say φ (Riemann map) and disclaim σ; net-first + mutation-verified. The faithful σ export is S1–S4a.
   Two latent bugs the audit surfaced (queued for **S0b**): the interchange schema spells `conj` but @cas/expr only knows
   `conjugate`; CD's `mapSpecToExpr` silently ignores the `antiholomorphic` MapSpec flag.
+- **2026-08-07 · stage schwarz-s0b-antiholo (PR → refactor/main):** **QD-HANDOFF-2 → the two audit-found latent bugs FIXED (S0b).**
+  (1) CD `mapSpecToExpr` now honors the `antiholomorphic` MapSpec flag (builds rational/laurent on `conjugate(z)`; was silently
+  rendering the holomorphic twin) — net-first + mutation-verified in `apps/complex-dynamics/test/importMap.test.ts`. (2) The
+  `conj`/`conjugate` mismatch resolved by correcting the interchange schema's ExprMap example (`conj`→`conjugate`) + the test sample,
+  NOT by adding a `conj` alias to @cas/expr — the expr language is the authority on its own vocabulary. Both preventive (no producer
+  sets `antiholomorphic` or emits `conj` today); they de-risk the S3/S4 σ path (σ is anti-holomorphic). Next: **S1** — extract
+  `@cas/core/poly` + `@cas/core polynomialRoots` (ADR-0007 second-consumer), the two pure helpers the σ engine needs.
