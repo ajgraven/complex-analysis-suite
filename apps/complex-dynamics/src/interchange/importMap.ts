@@ -22,6 +22,7 @@ import type {
 import {
   makeUnboundedLaurentSchwarz,
   type Complex as SchwarzTuple,
+  type SchwarzBranch,
   type UnboundedLaurentSchwarz,
 } from "@cas/schwarz";
 
@@ -94,9 +95,11 @@ export function mapSpecToExpr(m: MapSpec): string {
  * exterior-branch engine. This is the CD half of the σ hand-off (S4a): the S3a golden's `sigma.phi`
  * feeds `makeUnboundedLaurentSchwarz`, and the resulting `.sigma(w)` reproduces the frozen σ(w₀).
  *
- * Supports the unbounded-Laurent family QD emits today (`disk:"D*"`, real leading c). Interchange
- * complex numbers are `{re,im}`; the engine works in `[re,im]` tuples, so φ's coefficients are converted.
- * Throws for a shape the engine can't reconstruct rather than returning a subtly-wrong σ.
+ * Supports the unbounded-Laurent family QD emits today (`disk:"D*"`, real leading c), pole-free AND
+ * pole-bearing: `phi.branches` (1.2.0) carry the finite-pole terms into the engine's third argument.
+ * Interchange complex numbers are `{re,im}`; the engine works in `[re,im]` tuples, so φ's coefficients
+ * (and each branch's z and A) are converted. Throws for a shape the engine can't reconstruct rather
+ * than returning a subtly-wrong σ.
  */
 export function schwarzEngineFromMapSpec(sigma: SchwarzMap): UnboundedLaurentSchwarz {
   const phi = sigma.phi;
@@ -107,7 +110,11 @@ export function schwarzEngineFromMapSpec(sigma: SchwarzMap): UnboundedLaurentSch
     throw new Error("schwarz reconstruction supports a real leading coefficient c only");
   }
   const F: SchwarzTuple[] = phi.F.map((z) => [z.re, z.im]);
-  return makeUnboundedLaurentSchwarz(phi.c.re, F);
+  const branches: SchwarzBranch[] = (phi.branches ?? []).map((br) => ({
+    z: [br.z.re, br.z.im] as SchwarzTuple,
+    A: br.A.map((a) => [a.re, a.im] as SchwarzTuple),
+  }));
+  return makeUnboundedLaurentSchwarz(phi.c.re, F, branches);
 }
 
 /**

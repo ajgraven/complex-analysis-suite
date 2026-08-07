@@ -72,3 +72,26 @@ export const QD_TO_CD_DELTOID_SIGMA_LINK =
  */
 export const QD_TO_CD_DELTOID_SIGMA_W0 = { re: 1, im: 0.75 } as const;
 export const QD_TO_CD_DELTOID_SIGMA_AT_W0 = { re: 0.5, im: -0.5 } as const;
+
+// --- Single-exterior-pole σ golden — POLE-BEARING unbounded QD (Phase 2) ----------------------------
+//
+// The first hand-off carrying finite-pole `branches` (interchange 1.2.0): a clean fixture unbounded QD
+// with c = 1 and one order-1 pole at z_j = 0.2, A = 0.3 — so φ(z) = z + 0.3·z/(1 − 0.2z). Its σ recipe's
+// `sigma.phi.branches` is what CD must thread into @cas/schwarz's makeUnboundedLaurentSchwarz to
+// reconstruct the pole-bearing σ (a reconstruction that dropped the branch would evaluate the pole-free
+// φ = z and reproduce a DIFFERENT σ). Emitted by QD's exportSigmaLink over the same fixture; pinned
+// byte-for-byte from the QD side and decoded + reconstructed from the CD side, exactly like the deltoid.
+
+/** The single-exterior-pole σ as an `Envelope<"schwarz-reflection">` deep link. Its `sigma.phi` is a
+ *  `laurent` map carrying one finite-pole branch (z_j = 0.2, A = [0.3]). */
+export const QD_TO_CD_SINGLE_POLE_SIGMA_LINK =
+  "#s=eyJzY2hlbWEiOiJjb21wbGV4LWFuYWx5c2lzLXN1aXRlL2ludGVyY2hhbmdlIiwidmVyc2lvbiI6IjEuMi4wIiwia2luZCI6InNjaHdhcnotcmVmbGVjdGlvbiIsInBheWxvYWQiOnsic2lnbWEiOnsiZm9ybSI6InNjaHdhcnoiLCJwaGkiOnsiZm9ybSI6ImxhdXJlbnQiLCJjIjp7InJlIjoxLCJpbSI6MH0sIkYiOltdLCJicmFuY2hlcyI6W3sieiI6eyJyZSI6MC4yLCJpbSI6MH0sIkEiOlt7InJlIjowLjMsImltIjowfV19XX0sImRpc2siOiJEKiIsImludmVyc2UiOiJuZXd0b24tZGsiLCJhbnRpaG9sb21vcnBoaWMiOnRydWV9LCJjb252ZW50aW9ucyI6eyJhcmVhIjoic3RhbmRhcmQiLCJjb250b3VyIjoic3RhbmRhcmQifX0sInByb3ZlbmFuY2UiOnsiYXBwIjoicXVhZHJhdHVyZS1kb21haW5zIiwiYXBwVmVyc2lvbiI6IjAuMS4wIiwiY3JlYXRlZEF0IjoiMjAyNi0wNy0wNlQwMDowMDowMFoifX0";
+
+/**
+ * A frozen (w₀, σ(w₀)) pair for the single-pole σ golden — the value CD's reconstruction must reproduce.
+ * z₀ = 2 ⇒ w₀ = φ(2) = 2 + 0.3·2/(1 − 0.4) = 3; σ(w₀) = conj(F(2)) = conj(1/2 + 0.3/(2 − 0.2)) = 2/3
+ * (real, so no sign flip here — the anti-holomorphic conj is exercised by the deltoid golden). The value
+ * is what pins the BRANCH: the pole-free φ = z would give conj(1/2)·… → conj(1/3) = 1/3, not 2/3.
+ */
+export const QD_TO_CD_SINGLE_POLE_SIGMA_W0 = { re: 3, im: 0 } as const;
+export const QD_TO_CD_SINGLE_POLE_SIGMA_AT_W0 = { re: 2 / 3, im: 0 } as const;

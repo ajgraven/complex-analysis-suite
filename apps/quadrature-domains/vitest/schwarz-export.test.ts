@@ -6,6 +6,7 @@ import {
   GOLDEN_CREATED_AT,
   QD_TO_CD_DELTOID_LINK,
   QD_TO_CD_DELTOID_SIGMA_LINK,
+  QD_TO_CD_SINGLE_POLE_SIGMA_LINK,
 } from "@cas/interchange";
 import {
   buildExportEnvelope,
@@ -208,5 +209,14 @@ describe("pole-bearing φ → branches on the interchange laurent (Phase 2)", ()
     const env = buildExportEnvelope(polePhi, { createdAt: GOLDEN_CREATED_AT });
     expect(env).not.toBeNull();
     expect((env!.payload.phi as { branches: unknown }).branches).toEqual(branchesOut);
+  });
+
+  // The PRODUCER half of the single-pole σ cross-app contract: QD's exporter reproduces the exact bytes
+  // stored as the golden and consumed by CD (apps/complex-dynamics/test/importMap.test.ts). The fixture
+  // is c=1 with one order-1 pole z_j=0.2, A=0.3. If this drifts, the pole-bearing wire format changed.
+  it("emits the exact single-pole σ link stored as the cross-app golden", () => {
+    const singlePolePhi = { unbounded: true, c: 1, polyA: [], branches: [{ z: C(0.2, 0), A: [C(0.3, 0)] }] };
+    const link = exportSigmaLink(singlePolePhi, { createdAt: GOLDEN_CREATED_AT, appVersion: "0.1.0" });
+    expect(link).toBe(QD_TO_CD_SINGLE_POLE_SIGMA_LINK);
   });
 });
