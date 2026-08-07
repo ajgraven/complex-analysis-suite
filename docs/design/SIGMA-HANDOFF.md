@@ -264,6 +264,15 @@ fallback); **(3)** σ ships **`≈`, principal exterior branch only**, with the 
   (its `deltoid.ts` re-exports the engine; 18 consumers unchanged) — **ADR-0007 second-consumer met, so the
   original S2e is already done**. Golden net (round-trip identity + exterior branch), mutation-verified.
   Green bar **2255 / 268** (census 9 projects, `schwarz:1`).
+- **S3a #238** — **`@cas/interchange` v1.1.0**: the wire now carries σ as a RECIPE. `SchwarzMap`
+  (`form:"schwarz"; phi:LaurentMap|RationalMap; disk:"D"|"D*"; inverse:"newton-dk"; antiholomorphic:true`)
+  in the `MapSpec` union + `isMapSpec` `case "schwarz"` (recurse `phi` [laurent|rational only], `disk` enum,
+  `inverse` whitelist, flag). `VERSION` **1.0.0→1.1.0** (honest-label; major-gated ⇒ old links still decode) —
+  φ golden regenerated from QD's real exporter (version field only), + a NEW deltoid-σ golden
+  (`QD_TO_CD_DELTOID_SIGMA_LINK` + frozen `σ(1+0.75i)=0.5−0.5i`, pinned against the real engine in
+  `@cas/schwarz`). **Minimal CD guard** (forced by the enlarged union, NOT S4a's feature): `mapSpecToExpr`
+  throws on `schwarz` + `importInterchange` declines gracefully — closed a latent `inpf=undefined` crash.
+  Net-first, mutation-verified (×3). Green bar **2259 / 268**.
 
 **REORDER (in effect — the PR table below is annotated):** went **deltoid-direct** (S2a before S1).
 **S1** (`@cas/core` poly/polynomialRoots) and the **full QD σ lift/cutover (S2b–d)** are **DEFERRED** to a
@@ -271,7 +280,7 @@ later "generalize + dedupe QD" phase — they are *not* on the deltoid-σ critic
 load-order-sensitive QD glue + the legacy `node-test` harness. The `PhiData` / full-family / S2d-cutover
 material in this doc stays as the eventual plan for that phase.
 
-**Remaining to the goal (deltoid σ live in CD):** **S3a → S3b → S4a** — see "S3 — execute next" below.
+**Remaining to the goal (deltoid σ live in CD):** ~~S3a~~ ✅ → **S3b → S4a** — see "S3 — execute next" below.
 
 ### What the dependency trace changed (the extraction is cleaner than §3–5 assumed)
 - QD's σ path **already runs on `@cas/core`** (its `Complex` is a re-export shim, `app/core/complex.mjs`),
@@ -300,8 +309,8 @@ material in this doc stays as the eventual plan for that phase.
 | S2c | Lift `schwarz-inverse` (σ⁻¹, preimage tree, limit set); fold monkey-patch into the builder | ⏸ DEFERRED |
 | S2d | **QD → `@cas/schwarz`** re-publish adapter (handle-shape compatible) — **highest-risk** | ⏸ DEFERRED |
 | S2e | correspondences → `@cas/schwarz` (dedup `deltoid.ts` engine) | ✅ done early in **#237** |
-| S3a | `@cas/interchange`: add `form:"schwarz"` + `isMapSpec` case + caps + deltoid σ golden + minor VERSION | ▶ **NEXT** |
-| S3b | QD export: `schwarz-reflection` envelope + "Export **σ**" button **alongside** φ (token granted) | pending |
+| S3a | `@cas/interchange`: add `form:"schwarz"` + `isMapSpec` case + caps + deltoid σ golden + minor VERSION | ✅ **#238** |
+| S3b | QD export: `schwarz-reflection` envelope + "Export **σ**" button **alongside** φ (token granted) | ▶ **NEXT** |
 | S4a | **CD reconstructs deltoid σ (CPU)** via `@cas/schwarz`; end-to-end ground truth; `≈` labeling | pending |
 
 **Deferred to separate approvals:** S4b (CD GPU σ — port QD's `FRAG_SRC` GLSL), S5 (non-Laurent families
@@ -320,7 +329,8 @@ The remaining path to the goal (deltoid σ live in CD). `@cas/schwarz` already e
 `pointInPolygon`. For the deltoid, **φ is the existing `laurent` MapSpec** (`c = 1`, `F = [0,0,0.5]`) — no
 richer `PhiData` needed yet. Each step is its own net-first PR → `refactor/main`, merge-on-green.
 
-**S3a — `@cas/interchange`: add `form:"schwarz"`** (additive; minor `VERSION` bump, stay major 1):
+**S3a — `@cas/interchange`: add `form:"schwarz"`** — ✅ **DONE (#238)**; the spec below records what shipped.
+(additive; minor `VERSION` bump, stay major 1):
 - `packages/interchange/src/schema.ts`: add `interface SchwarzMap { form:"schwarz"; phi: LaurentMap |
   RationalMap; disk:"D"|"D*"; inverse:"newton-dk"; antiholomorphic:true }` to the `MapSpec` union. (Deltoid:
   `phi` = the laurent map, `disk:"D*"` = the exterior.) Full-family `PhiData` is deferred with S2b+.
