@@ -17,7 +17,7 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **Net-first:** no refactor without a passing characterization net pinned to PRE-refactor code; **mutation-verify** every
   net (break a guard → confirm the intended test fails → revert byte-identically via Edit, NOT git). Never widen a tolerance.
 - **Green bar** (must be 0-exit before every PR): `pnpm build && pnpm typecheck && pnpm lint && pnpm test` (lint includes
-  `dep:check`). Currently **2248 / 267** (`refactor/main` @ 9f945f2, post-#233) + build/test durability gates.
+  `dep:check`). Currently **2259 / 268** (`refactor/main` @ f23bc4f, post-#238) + build/test durability gates.
 - **Git constraints (VERBATIM):** never `git reset --hard`, `git checkout -- <path>`, `git clean -fd`, `git commit --amend`,
   or force-push. If history seems to need rewriting, STOP and ASK. `git push -u origin <branch>`; retry ≤4× backoff 2/4/8/16s.
 - **Cadence:** integration branch `refactor/main`; each stage on `refactor/<slug>` → ONE PR → `refactor/main`; **merge on
@@ -68,8 +68,8 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - Prior plan (Phases 1–5, D2, F1; 48 stage PRs A1 #178 … #225) COMPLETE — ui.mjs a thin composition root; detail in LOG.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at 9f945f2 (#233 merged, QD-HANDOFF-1): build(+built-artifact gate)/typecheck/
-  lint(+`dep:check`)/test(+test-census) all exit 0; `pnpm test` **2248 / 267** + census ✓ (8 projects, 0 unbucketed).
+- **`refactor/main` — ALL GREEN** at f23bc4f (#238 merged, σ-handoff S3a): build(+built-artifact gate)/typecheck/
+  lint(+`dep:check`)/test(+test-census) all exit 0; `pnpm test` **2259 / 268** + census ✓ (9 projects, 0 unbucketed).
 - **master @ 94d59cb LIVE (deploy #91, via #234); QD-HANDOFF-1 SHIPPED — refactor/main in sync (bar STATE checkpoints).**
 
 ## Uncommitted / unverified
@@ -90,10 +90,10 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **Root-cause follow-ups:** built-app worker smoke test (caught neither QD-BUILD-1 nor QD-SYM-LOAD); PWA autoUpdate→prompt.
 - **▶ NEXT — σ hand-off (APPROVED 2026-08-07):** `docs/design/SIGMA-HANDOFF.md`. QD→CD exports φ (Riemann map), NOT σ; plan
   extracts **@cas/schwarz** (σ already ~1630 LOC on @cas/core; ADR-0007) → interchange `form:"schwarz"` → CD reconstructs deltoid σ
-  (CPU, `≈`). **S0 ✅** (#235,#236) · **S2a ✅ #237** (NEW @cas/schwarz: unbounded-Laurent σ engine; correspondences deduped [ADR-0007]; reorder=deltoid-direct, so S1 + full QD cutover S2b–d DEFERRED); next **S3** (interchange `form:"schwarz"`) → S4a. Then VISION: circle-and-cardioid → cubic Chebyshev → d:d.
+  (CPU, `≈`). **S0 ✅** (#235,#236) · **S2a ✅ #237** (NEW @cas/schwarz: unbounded-Laurent σ engine; correspondences deduped [ADR-0007]; reorder=deltoid-direct, so S1 + full QD cutover S2b–d DEFERRED) · **S3a ✅ #238** (@cas/interchange **v1.1.0**: `form:"schwarz"` recipe + validator + deltoid-σ golden [frozen σ(1+0.75i)=0.5−0.5i]; VERSION 1.0.0→1.1.0 honest-label; minimal CD guard for the enlarged union — schwarz→loud throw + graceful decline, closed a latent inpf=undefined crash). Next **S3b** (QD "Export σ" button **alongside** φ — token granted) → **S4a** (CD reconstructs the deltoid σ, CPU, `≈`). Then VISION: circle-and-cardioid → cubic Chebyshev → d:d.
 
 ## Resume commands
 ```
 git fetch && git checkout refactor/main && git pull
-pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2255/268 + census (9 projects) ✓
+pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2259/268 + census (9 projects) ✓
 ```
