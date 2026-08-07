@@ -85,8 +85,10 @@ function colorFor(res: EscapeResult, maxIter: number): readonly [number, number,
 }
 
 /**
- * Render the σ escape-time field to an RGBA buffer (size×size, row-major, 4 bytes/px), ready for
- * `new ImageData(buf, size, size)` → `putImageData`. Pure and synchronous; the caller throttles/sizes it.
+ * Render the σ escape-time field to an RGBA buffer (size×size, row-major, 4 bytes/px). The caller wraps
+ * it for `putImageData` via `const img = new ImageData(size, size); img.data.set(buf)` — the two-arg
+ * ImageData ctor + `.data.set`, NOT `new ImageData(buf, …)` (that overload trips the DOM lib's
+ * `Uint8ClampedArray<ArrayBuffer>` buffer-variance check). Pure and synchronous; the caller sizes it.
  */
 export function renderSchwarzField(
   engine: UnboundedLaurentSchwarz,
