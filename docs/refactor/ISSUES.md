@@ -558,3 +558,9 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   Remaining: **S4a-2** paints the reconstructed σ escape-time field on a CPU canvas (≈-labeled), replacing
   the S3a "σ rendering isn't supported yet" decline with the actual view. Split off to bank the proven
   ground truth before the CD render integration (new 2D canvas + σ-mode, per the render recon).
+- **2026-08-07 · stage schwarz-s4a2-cd-render (PR → refactor/main):** **QD-HANDOFF-2 → CLOSED (through the
+  approved end-state S4a).** The φ-vs-σ export gap the user reported is fully resolved: QD's "Export σ" emits
+  the Schwarz-reflection recipe (S3b), CD reconstructs the evaluator (S4a-1) and now RENDERS the deltoid σ
+  escape-time field on a CPU canvas, `≈`-labeled (S4a-2) — the reconstructed 3-fold deltoid tiling, visually
+  verified. The S3a "σ rendering isn't supported yet" decline is gone. Deferred to separate approvals: S4b
+  (GPU σ — port QD's FRAG_SRC), S5 (non-Laurent families on the wire, branch-aware continuation, df64 σ).
