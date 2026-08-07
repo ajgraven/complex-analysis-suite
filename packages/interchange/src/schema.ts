@@ -15,8 +15,14 @@
 /** The schema discriminator every envelope carries. */
 export const SCHEMA_ID = "complex-analysis-suite/interchange" as const;
 
-/** Current schema version (semver). A MAJOR bump is a breaking change consumers must reject. */
-export const VERSION = "1.0.0" as const;
+/**
+ * Current schema version (semver). A MAJOR bump is a breaking change consumers must reject; a MINOR
+ * bump adds backward-compatible vocabulary. 1.1.0 (S3a) added the `schwarz` MapSpec form — the wire
+ * gained a variant, so the version reflects it, and every `version: VERSION`-stamped export moves to
+ * 1.1.0 (a plain-φ export is byte-identical bar the version label; consumers gate on MAJOR = 1, so it
+ * decodes unchanged). Bump this whenever the type vocabulary below grows, never silently.
+ */
+export const VERSION = "1.1.0" as const;
 
 /** Cartesian complex number — the shared wire representation across the suite. */
 export interface Complex {
@@ -59,12 +65,32 @@ export interface LaurentMap {
 /** Arbitrary map as an expression string in the `expr` language (compiles to GLSL + JS). */
 export interface ExprMap {
   form: "expr";
-  expr: string; // e.g. "conj(z)^2 + c"
+  expr: string; // e.g. "conjugate(z)^2 + c" (the `expr` language spells it `conjugate`, not `conj`)
   vars: ("z" | "c" | "a")[];
   antiholomorphic?: boolean;
 }
 
-export type MapSpec = RationalMap | LaurentMap | ExprMap;
+/**
+ * A Schwarz reflection given by its RECIPE, not a closed form. σ(w) = conj(F(φ⁻¹(w))), where φ is the
+ * closed-form uniformizing map (`phi`), F its Schwarz extension, and φ⁻¹ a NUMERICAL branch of the
+ * inverse. Because that inverse is iterative, σ is NOT expr-compilable — a consumer rebuilds the σ
+ * evaluator from `phi` via @cas/schwarz's `makeUnboundedLaurentSchwarz`, not through the `expr`
+ * pipeline. (S3a first case: the deltoid, `phi` = its Laurent map, `disk` = "D*".) Full multi-branch
+ * `PhiData` for the non-Laurent families is a later, separately-versioned addition.
+ */
+export interface SchwarzMap {
+  form: "schwarz";
+  /** The closed-form uniformizing map φ this reflects; its coefficients are what the σ engine reads. */
+  phi: LaurentMap | RationalMap;
+  /** Which disk φ uniformizes: "D" = the unit disk (bounded Ω), "D*" = its exterior (unbounded Ω). */
+  disk: "D" | "D*";
+  /** How φ⁻¹ is taken. "newton-dk" = cold-seeded Newton with an exact Durand–Kerner fallback (@cas/schwarz). */
+  inverse: "newton-dk";
+  /** A Schwarz reflection is anti-holomorphic (σ = conj(…)); definitionally true, carried explicitly. */
+  antiholomorphic: true;
+}
+
+export type MapSpec = RationalMap | LaurentMap | ExprMap | SchwarzMap;
 export type MapForm = MapSpec["form"];
 
 // --- Payloads (initial set) -------------------------------------------------------------------

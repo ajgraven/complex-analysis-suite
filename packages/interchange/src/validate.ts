@@ -38,6 +38,9 @@ const MAX_VARS_LEN = 16;
 /** Keys that, as OWN properties from JSON.parse, enable prototype pollution the moment a consumer spreads
  *  or Object.assign-s the object. Rejected anywhere in the decoded tree so the boundary owns the guarantee. */
 const FORBIDDEN_KEYS: readonly string[] = ["__proto__", "constructor", "prototype"];
+/** Inverse-branch methods a `schwarz` map (schema.ts) may declare for φ⁻¹. A new method is a vocabulary
+ *  addition: extend this AND bump the schema version, never silently accept an unknown one on the wire. */
+const KNOWN_INVERSES: readonly string[] = ["newton-dk"];
 
 function isVarName(v: unknown): v is "z" | "c" | "a" {
   return v === "z" || v === "c" || v === "a";
@@ -105,6 +108,19 @@ export function isMapSpec(v: unknown): v is MapSpec {
     case "expr":
       return typeof v.expr === "string" && v.expr.length <= MAX_EXPR_LEN &&
         Array.isArray(v.vars) && v.vars.length <= MAX_VARS_LEN && v.vars.every(isVarName);
+    case "schwarz":
+      // A σ recipe (schema.ts SchwarzMap): a closed-form φ — laurent | rational ONLY, since the engine
+      // reads its coefficients (an `expr` or nested `schwarz` φ has none) — the disk φ uniformizes, a
+      // known inverse method, and the definitional anti-holomorphic flag. The `phi` recursion inherits
+      // the coefficient-length caps (MAX_COEFF_LEN), so `schwarz` adds no uncapped field of its own.
+      return (
+        isObject(v.phi) &&
+        (v.phi.form === "laurent" || v.phi.form === "rational") &&
+        isMapSpec(v.phi) &&
+        (v.disk === "D" || v.disk === "D*") &&
+        typeof v.inverse === "string" && KNOWN_INVERSES.includes(v.inverse) &&
+        v.antiholomorphic === true
+      );
     default:
       return false;
   }

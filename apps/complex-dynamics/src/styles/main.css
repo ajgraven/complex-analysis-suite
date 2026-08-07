@@ -443,6 +443,31 @@ h2 {
 .canvas-stack > .plot-legend:empty {
   display: none;
 }
+
+/* σ (Schwarz reflection) reconstruction view (S4a): a CPU raster layered over the dynamical plot
+   (reuses .overlay positioning — a square stack, so the square σ buffer isn't distorted), with a
+   top-left ≈-badge. Shown only for an imported schwarz recipe; click the raster to dismiss it. */
+.canvas-stack > .schwarz-view {
+  z-index: 4; /* above the GL canvas + interaction overlay while shown */
+  cursor: pointer;
+  background: #0e1117;
+}
+.canvas-stack > .schwarz-label {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 5;
+  width: max-content;
+  max-width: 240px;
+  padding: 0.3rem 0.45rem;
+  pointer-events: none;
+  font-size: 0.68rem;
+  line-height: 1.25;
+  color: #e7eaee;
+  background: rgba(14, 17, 23, 0.82);
+  border: 0.5px solid rgba(255, 255, 255, 0.18);
+  border-radius: 5px;
+}
 .legend-title {
   font-weight: 500;
   margin-bottom: 3px;

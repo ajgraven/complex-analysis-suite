@@ -1401,3 +1401,96 @@
   **2248 / 267** (+1 file / +10 tests). Cut `refactor/qd-cd-export-link` off refactor/main; PR → refactor/main. **Known limit
   (documented, not a regression):** cross-app deep-linking still can't resolve automatically in local split-port dev — set
   `VITE_CD_BASE`; true end-to-end confidence needs the still-pending built-app browser smoke test.
+- **2026-08-07 · stage schwarz-s0a-relabel (PR → refactor/main):** **σ-handoff S0a — honest relabel (behavior: labels;
+  bug-report authorized).** User reported the Schwarz "Export map → copy link" exports the Riemann map φ, not the Schwarz reflection
+  σ — the documented plumbing-first design (schwarz-export.mjs:4-8), but the label over-promised. Relabeled the export button
+  "Export map → copy link" → "Export **Riemann map φ** → copy link" and the card copy to state it hands off φ (the Riemann map), NOT
+  σ(w)=conj(F(φ⁻¹(w))), with a "faithful σ export is planned" note (schwarz-ui.mjs `makeOverlaysCard`). NET-FIRST: exposed
+  `makeOverlaysCard` on the `__schwarzUiTest` hook (test-only, sentinel-gated) + NEW behavioral assertions in `vitest/schwarz-ui.test.ts`
+  (button names the Riemann map φ; card disclaims σ) — RED on the old label, GREEN after, mutation-verified (disclaimer "not"→"indeed"
+  → red → reverted). Green: build(+gate)/typecheck/lint/test **2249 / 267** (+1 test). First step of the APPROVED σ hand-off plan
+  (`docs/design/SIGMA-HANDOFF.md`, S0→S4a).
+- **2026-08-07 · stage schwarz-s0b-antiholo (PR → refactor/main):** **σ-handoff S0b — anti-holomorphic import correctness (CD +
+  interchange).** Two audit-found latent bugs. (1) CD's `mapSpecToExpr` (importMap.ts) IGNORED the MapSpec `antiholomorphic` flag —
+  a rational/laurent map so tagged would render as its HOLOMORPHIC twin. Parametrized the build variable: `antiholomorphic` ⇒ build
+  on `conjugate(z)` (rational/laurent); the `expr` form threads its own conjugate and passes through verbatim. NET-FIRST: new case in
+  `importMap.test.ts` (a c=1 antiholomorphic laurent maps z=2−3i → 2+3i, not 2−3i) — RED on the old code, GREEN after, mutation-
+  verified (`? "z":"z"` → red → reverted). (2) The interchange schema's ExprMap example spelled `conj(z)^2+c`, but the expr language
+  only knows `conjugate` — a producer copying it would fail CD's parser. Aligned the schema comment + interchange test sample to
+  `conjugate` (the language owns its vocabulary; no expr alias added). Both latent today (QD emits holomorphic φ) — preventive for the
+  anti-holomorphic σ ahead. Green: build(+gate)/typecheck/lint/test **2250 / 267** (+1 test).
+- **2026-08-07 · stage schwarz-s2a-pkg (PR → refactor/main):** **σ-handoff S2a — NEW shared package @cas/schwarz (on @cas/core).**
+  **Reorder** (flagged): went deltoid-direct — S2a before S1 — because deltoid.ts is already clean TS on @cas/core, whereas the S1
+  poly extraction touches load-order-sensitive QD glue; and S1 + the full QD cutover are NOT on the deltoid-σ critical path (deferred
+  to a generalize phase). Created `packages/schwarz` (source-consumed, modeled on @cas/gpu): the unbounded-Laurent σ engine
+  `makeUnboundedLaurentSchwarz(c,F) → {evalPhi,evalPhiDeriv,evalF,invertPhi,sigma}` + `escapeTime` + `pointInPolygon`, LIFTED VERBATIM
+  (`cp`) from `apps/correspondences/src/deltoid.ts` (itself a clean-room TS port of QD's schwarz-common adaptUnbounded+sigma). Golden
+  net `test/unbounded-laurent.test.ts` (5): the σ(φ(z₀))=conj(F(z₀)) round-trip identity + exterior-branch φ⁻¹ (|z|>1) + escapeTime —
+  mutation-verified (drop `conj` in σ → round-trip red → reverted). Registered in `vitest.workspace.ts` + `assert-test-census.mjs`
+  (now 9 projects, schwarz:1). **Consumer repoint (ADR-0007 dedup, first family):** `deltoid.ts` now imports the engine from
+  @cas/schwarz and re-exports its surface, keeping only DELTOID_C/F/DELTOID + deltoidBoundary; its 18 consumers + `deltoid.test.ts`
+  UNCHANGED (behavior-preserving). Green: build(+gate)/typecheck/lint/test **2255 / 268** (+1 file). Next: S3 → S4a.
+- **2026-08-07 · stage schwarz-s3a-interchange (PR → refactor/main):** **σ-handoff S3a — @cas/interchange gains the `schwarz`
+  vocabulary (v1.1.0).** The wire can now carry the Schwarz reflection as a RECIPE, not just φ. `schema.ts`: new `SchwarzMap`
+  (`form:"schwarz"; phi:LaurentMap|RationalMap; disk:"D"|"D*"; inverse:"newton-dk"; antiholomorphic:true`) added to the `MapSpec`
+  union; `VERSION` 1.0.0 → **1.1.0** (honest-labeling: adding vocabulary must move the version — leaving 1.0.0 would silently redefine
+  it; major-gated validator ⇒ every prior φ link still decodes). `validate.ts`: `isMapSpec` `case "schwarz"` — recurse `phi` (laurent|
+  rational ONLY; the engine reads coefficients), `disk` enum, `inverse` ∈ `KNOWN_INVERSES`, `antiholomorphic===true`; the `phi`
+  recursion inherits MAX_COEFF_LEN so no uncapped field is added. NET-FIRST: `interchange.test.ts` schwarz accept + 6 reject cases —
+  RED on the missing case, GREEN after; mutation-verified twice (weaken case → disk/inverse/flag rejects go red; drop phi-form
+  restriction → expr-phi reject goes red; both reverted). **Goldens:** the φ golden was regenerated from QD's REAL `exportPhiLink`
+  (1.0.0 → 1.1.0, version field only — QD's byte-exact golden test stays green with no QD edit) and a NEW deltoid-σ golden added
+  (`QD_TO_CD_DELTOID_SIGMA_LINK` + a frozen `σ(1+0.75i)=0.5−0.5i`, derived via σ(φ(z₀))=conj(F(z₀)) at z₀=1+i to exercise the anti-
+  holomorphic conj). `@cas/schwarz` test pins those frozen σ values against the REAL numerical engine. **CD guard (minimal, forced by
+  the enlarged union — not S4a's feature):** `mapSpecToExpr` `case "schwarz"` now THROWS (σ has a numerical inverse ⇒ not expr-
+  compilable) instead of falling through to an implicit `undefined` (noImplicitReturns is off, so this was a latent crash: main.ts
+  would set `inpf=undefined`); `importInterchange` recognizes a schwarz map and declines with an honest toast rather than crash. NET-
+  FIRST in `importMap.test.ts` (mapSpecToExpr(schwarz) throws; envelopeToMapSpec surfaces the recipe) — RED (returned undefined),
+  GREEN after, mutation-verified (throw → silent return → red → reverted). Additive; behavior-preserving for every existing map.
+  Green: build(+gate)/typecheck/lint/test **2259 / 268** (+4 tests, census 9 projects). Next: **S3b** (QD "Export σ" button alongside
+  φ) → **S4a** (CD reconstructs the deltoid σ, CPU, `≈`).
+- **2026-08-07 · stage schwarz-s3b-qd-export (PR → refactor/main):** **σ-handoff S3b — QD "Export σ" button, ALONGSIDE φ
+  (behavior change — token granted, decision 2).** QD can now hand off the Schwarz reflection, not just the Riemann map.
+  `schwarz-export.mjs`: `buildSigmaEnvelope(phi, opts)` → an `Envelope<"schwarz-reflection">` whose `sigma` is the
+  `form:"schwarz"` recipe (`phi:<phiToMapSpec>`, `disk:"D*"`, `inverse:"newton-dk"`, `antiholomorphic:true`) + `conventions:
+  CANONICAL`; `exportSigmaLink` / `exportSigmaDeepLink` mirror the φ pair (reuse `resolveHandoffBase` — VITE_CD_BASE / sibling
+  path). **Scoped to the unbounded-Laurent family** (φ → a `laurent` MapSpec): that is the only σ @cas/schwarz's exterior-branch
+  engine reconstructs today, so a rational/bounded/non-exportable φ returns **null** — we never emit a σ recipe no consumer can
+  rebuild (honest labeling). Payload CANONICAL (φ is geometric; QD's dA/2πi normalizations touch h/areas, not φ). `schwarz-ui.mjs`
+  `makeOverlaysCard`: second button **"Export Schwarz reflection σ → copy link"** beside the φ button + an `_exportSigma` handler
+  mirroring `_exportMap` (null-case toast names the family limit); card copy rewritten to describe BOTH hand-offs (supersedes S0a's
+  "σ planned" disclaimer). `_exportMap` left byte-unchanged. NET-FIRST: `schwarz-export.test.ts` σ block (recipe shape + null cases +
+  codec round-trip + **the exact byte-match to the S3a golden** — closing the producer↔consumer loop S3a opened hand-built) — GREEN
+  after impl, mutation-verified (`disk:"D*"`→`"D"` → recipe + golden tests red → reverted); `schwarz-ui.test.ts` S0a card test
+  rewritten to assert BOTH buttons present + honestly labeled — RED on the missing σ button, GREEN after. Green:
+  build(+gate)/typecheck/lint/test **2263 / 268** (+4 tests). Next: **S4a** (CD reconstructs the deltoid σ — CPU, `≈`), the approved
+  end-state; then the σ button reaches a consumer that renders it.
+- **2026-08-07 · stage schwarz-s4a-cd-sigma (PR → refactor/main):** **σ-handoff S4a-1 — CD reconstructs the
+  deltoid σ (engine + ground-truth net).** The CD half of the hand-off, split into the verifiable core
+  (this PR) and the CPU render (S4a-2). Added `@cas/schwarz` to CD's deps and
+  `schwarzEngineFromMapSpec(sigma: SchwarzMap)` (`src/interchange/importMap.ts`): σ is not expr-compilable
+  (numerical inverse), so instead of `mapSpecToExpr` it rebuilds the evaluator from `sigma.phi` via
+  `makeUnboundedLaurentSchwarz` — converting interchange `{re,im}` coeffs to the engine's `[re,im]` tuples;
+  throws for a shape the engine can't rebuild (non-Laurent φ, complex leading c) rather than returning a
+  subtly-wrong σ. **THE GROUND-TRUTH NET** (`importMap.test.ts`): decode the S3a σ golden → `envelopeToMapSpec`
+  → `schwarzEngineFromMapSpec` → `.sigma([w₀])` reproduces the frozen `σ(1+0.75i)=0.5−0.5i` to 1e-9, END TO
+  END through CD's real import path — the reproduction the whole arc was built to reach. Mutation-verified
+  (swap the `{re,im}→[re,im]` tuple order → σ(w₀)=1.066 ≠ 0.5 → net red → reverted). Behavior-preserving:
+  `schwarzEngineFromMapSpec` is a new tested capability; `importInterchange` still shows the S3a decline
+  (S4a-2 wires the reconstruction into a CPU-rendered σ view). Green bar **2264 / 268** (+1 test).
+- **2026-08-07 · stage schwarz-s4a2-cd-render (PR → refactor/main):** **σ-handoff S4a-2 — CD renders the
+  deltoid σ (CPU), the approved end-state.** Built on S4a-1's reconstruction. NEW `src/render/schwarzView.ts`
+  (pure, unit-tested): `schwarzBoundaryPoly` (φ of the unit circle — Ω is its exterior), `pixelToPlot`
+  (the app's uvToPlot mapping), `schwarzEscapeAt`, and `renderSchwarzField(engine, poly, view, size)` →
+  RGBA escape-time buffer, mirroring `render/orbitPreview.ts`'s CPU pattern (σ is not GPU/expr-renderable).
+  Coloring by EscapeKind: fundamental (the tiling) ramps by n, escaped/interior/invalid flat. Net
+  `test/schwarzView.test.ts` (3): origin ∈ K → fundamental n=0, far point → escaped; pixelToPlot window;
+  buffer opaque + has structure. Mutation-verified (drop the `!` in isInOmega → origin misclassifies as
+  'invalid' → net red → reverted). **CD integration** (small, self-contained): a new full-size 2D canvas
+  `#JCSSchwarz` in the dyn `.canvas-stack` (reuses `.overlay` positioning; the stack is square so the 256²
+  buffer isn't distorted) + an `≈`-badge; `renderSchwarzView`/`exitSchwarzView` in main.ts; `importInterchange`
+  now RECONSTRUCTS + paints σ (replacing the S3a decline); `exitSchwarzView()` at the top of `applyAllControls`
+  (safe — boot shows σ AFTER the last applyAllControls) and on a click of the σ raster. **Visual verification:**
+  Playwright-loaded the σ deep-link against the built app — the 3-fold-symmetric deltoid σ tiling renders,
+  `≈`-labeled, ZERO console errors. Green bar **2267 / 269** (+1 file, +3 tests). **QD-HANDOFF-2 CLOSED end
+  to end: QD emits σ → CD reconstructs + renders it.** (S4b GPU σ + other families remain separate approvals.)

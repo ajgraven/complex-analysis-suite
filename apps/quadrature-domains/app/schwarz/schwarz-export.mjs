@@ -123,3 +123,63 @@ export function exportPhiJSON(phi, opts = {}) {
   const env = buildExportEnvelope(phi, opts);
   return env ? JSON.stringify(env, null, 2) : null;
 }
+
+// ---------------------------------------------------------------------------
+// σ (Schwarz reflection) hand-off — S3b (SIGMA-HANDOFF.md). The φ export above hands off the Riemann
+// map; this hands off σ(w)=conj(F(φ⁻¹(w))) as a RECIPE (interchange `form:"schwarz"`, v1.1.0): the
+// closed-form φ plus which disk it uniformizes and how φ⁻¹ is taken. σ is not a closed-form map (its
+// inverse is numerical), so CD reconstructs the evaluator from `sigma.phi` via @cas/schwarz (S4a) —
+// it does NOT compile through the expr pipeline. Scoped to the UNBOUNDED-LAURENT family, the only one
+// @cas/schwarz's exterior-branch engine reconstructs today; a rational/bounded φ returns null (we do
+// not emit a σ recipe no consumer can rebuild). The payload is CANONICAL: φ is a geometric map, so no
+// convention conversion — the QD normalizations touch h / areas, not φ's coefficients.
+
+/**
+ * Build an interchange Envelope<"schwarz-reflection"> carrying σ as a `form:"schwarz"` recipe, or null
+ * when φ is not an unbounded-Laurent map (the only family the shared σ engine reconstructs today).
+ */
+export function buildSigmaEnvelope(phi, opts = {}) {
+  const mapSpec = phiToMapSpec(phi);
+  // Only the unbounded classical Laurent φ (→ a `laurent` MapSpec) has a σ @cas/schwarz can rebuild
+  // (its exterior-branch Newton engine maps {|z|>1} → Ω). Rational/bounded/non-exportable φ ⇒ null.
+  if (!mapSpec || mapSpec.form !== "laurent") return null;
+  return {
+    schema: SCHEMA_ID,
+    version: VERSION,
+    kind: "schwarz-reflection",
+    payload: {
+      sigma: {
+        form: "schwarz",
+        phi: mapSpec,
+        disk: "D*", // laurent ⇒ unbounded ⇒ φ uniformizes the exterior of the unit disk
+        inverse: "newton-dk",
+        antiholomorphic: true,
+      },
+      conventions: CANONICAL,
+    },
+    provenance: {
+      app: "quadrature-domains",
+      appVersion: opts.appVersion || "0.1.0",
+      createdAt: opts.createdAt || new Date().toISOString(),
+      ...(opts.note ? { note: opts.note } : {}),
+    },
+  };
+}
+
+/** The σ envelope as a copyable deep-link hash ("#s=..."), or null. */
+export function exportSigmaLink(phi, opts = {}) {
+  const env = buildSigmaEnvelope(phi, opts);
+  return env ? encodeLink(env) : null;
+}
+
+/**
+ * Full copyable hand-off URL that opens the current σ in the Complex Dynamics app, or null when φ is
+ * not σ-exportable. Mirrors exportPhiDeepLink: prepends the resolved CD base to the σ payload hash.
+ * @returns {{url:string, resolvable:boolean, reason:string} | null}
+ */
+export function exportSigmaDeepLink(phi, loc, opts = {}) {
+  const hash = exportSigmaLink(phi, opts);
+  if (!hash) return null;
+  const { base, resolvable, reason } = resolveHandoffBase(loc, opts.cdBase);
+  return { url: base + hash, resolvable, reason };
+}

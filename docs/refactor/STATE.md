@@ -17,7 +17,7 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **Net-first:** no refactor without a passing characterization net pinned to PRE-refactor code; **mutation-verify** every
   net (break a guard → confirm the intended test fails → revert byte-identically via Edit, NOT git). Never widen a tolerance.
 - **Green bar** (must be 0-exit before every PR): `pnpm build && pnpm typecheck && pnpm lint && pnpm test` (lint includes
-  `dep:check`). Currently **2248 / 267** (`refactor/main` @ 9f945f2, post-#233) + build/test durability gates.
+  `dep:check`). Currently **2267 / 269** (`refactor/main` @ eaad49e, post-#241) + build/test durability gates.
 - **Git constraints (VERBATIM):** never `git reset --hard`, `git checkout -- <path>`, `git clean -fd`, `git commit --amend`,
   or force-push. If history seems to need rewriting, STOP and ASK. `git push -u origin <branch>`; retry ≤4× backoff 2/4/8/16s.
 - **Cadence:** integration branch `refactor/main`; each stage on `refactor/<slug>` → ONE PR → `refactor/main`; **merge on
@@ -55,10 +55,10 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **✅ POST-REVIEW COMPLETE + SHIPPED (2026-08-05/06).** 7-agent review → QD-BUILD-1 + two CI-gate blind spots + worker footnote,
   ALL merged (a #226+#227, b #228, #229). **SHIPPED refactor/main → master (#230, 1342c82); deploy #87 LIVE.**
 - **✅ POST-SHIP FIXES.** QD-SYM-LOAD (#231→#232, deploy #88 LIVE): sym-worker self-heals to the main thread after a post-deploy 404 (autoUpdate PWA).
-  **▶ QD-HANDOFF-1 (#233, 9f945f2) — on refactor/main, NOT yet on master:** QD "Export map → copy link" targeted QD itself; now resolves the CD sibling URL.
+  **✅ QD-HANDOFF-1 (#233, 9f945f2) → SHIPPED to master (#234, 94d59cb); deploy #91 LIVE:** QD "Export map → copy link" targeted QD itself; now resolves the CD sibling URL.
 
 ## Branches / PR
-- Integration `refactor/main` @ **9f945f2** (#210–#233 merged) → **master @ dd2d08f (deploy #88 LIVE, via #232)**; refactor/main AHEAD by QD-HANDOFF-1 (#233) + the #232 checkpoint.
+- Integration `refactor/main` (#210–#233 merged) → **SHIPPED to master (#234, 94d59cb); deploy #91 LIVE** — QD-HANDOFF-1; publish delayed ~7.5h by the 2026-08-06 GitHub Actions outage, shipped on recovery via workflow_dispatch. Prior: #232→#88, #230→#87.
 - **QD-BUILD-1 (P0 from the 7-agent review) — FIXED, both parts merged:** #226 (a1, e0d91e8) restored the literal worker URL
   (variable `new URL` had dropped the chunk from `vite build` → 404 → deployed Solve/alt/live hard-fail) + regression net;
   #227 (a2, f475a1a) added the `_everWorked`-scoped async-load self-heal (never-loaded→main-thread; worked-then-crash→respawn).
@@ -68,9 +68,9 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - Prior plan (Phases 1–5, D2, F1; 48 stage PRs A1 #178 … #225) COMPLETE — ui.mjs a thin composition root; detail in LOG.
 
 ## Validation state (green bar)
-- **`refactor/main` — ALL GREEN** at 9f945f2 (#233 merged, QD-HANDOFF-1): build(+built-artifact gate)/typecheck/
-  lint(+`dep:check`)/test(+test-census) all exit 0; `pnpm test` **2248 / 267** + census ✓ (8 projects, 0 unbucketed).
-- **master @ dd2d08f LIVE (deploy #88); refactor/main AHEAD — QD-HANDOFF-1 (#233) fixed, redeploy pending user OK.**
+- **`refactor/main` — ALL GREEN** at eaad49e (#241 merged, σ-handoff S4a — END-STATE): build(+built-artifact gate)/typecheck/
+  lint(+`dep:check`)/test(+test-census) all exit 0; `pnpm test` **2267 / 269** + census ✓ (9 projects, 0 unbucketed).
+- **master @ 94d59cb LIVE (deploy #91, via #234); QD-HANDOFF-1 SHIPPED — refactor/main in sync (bar STATE checkpoints).**
 
 ## Uncommitted / unverified
 - Nothing uncommitted. This STATE edit advances `refactor/main`.
@@ -86,14 +86,14 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   /#225** then lifted the 3 mounts behind it, each pinned by a boot-output assertion + mutation-verified. ui.mjs = thin root.
 
 ## Next concrete steps
-- **✅ LIVE on master:** whole refactor + post-review arc + QD-SYM-LOAD (latest deploy #88, dd2d08f).
-- **▶ STAGED on refactor/main, redeploy pending user OK — QD-HANDOFF-1 (#233):** QD→CD "Export map → copy link" now targets the
-  Complex Dynamics app (was linking back to QD). Recommend redeploying when ready; local split-port dev needs VITE_CD_BASE.
+- **✅ LIVE on master (deploy #91, 94d59cb):** whole refactor + post-review arc + QD-SYM-LOAD + QD-HANDOFF-1 (QD→CD export link opens CD now; split-port dev needs VITE_CD_BASE).
 - **Root-cause follow-ups:** built-app worker smoke test (caught neither QD-BUILD-1 nor QD-SYM-LOAD); PWA autoUpdate→prompt.
-- **Then the product (VISION):** next correspondence family (circle-and-cardioid → cubic Chebyshev → d:d). Optional: P2 leftovers; sym messageerror.
+- **▶ NEXT — σ hand-off (APPROVED 2026-08-07):** `docs/design/SIGMA-HANDOFF.md`. QD→CD exports φ (Riemann map), NOT σ; plan
+  extracts **@cas/schwarz** (σ already ~1630 LOC on @cas/core; ADR-0007) → interchange `form:"schwarz"` → CD reconstructs deltoid σ
+  (CPU, `≈`). **S0 ✅** (#235,#236) · **S2a ✅ #237** (NEW @cas/schwarz: unbounded-Laurent σ engine; correspondences deduped [ADR-0007]; reorder=deltoid-direct, so S1 + full QD cutover S2b–d DEFERRED) · **S3a ✅ #238** (@cas/interchange **v1.1.0**: `form:"schwarz"` recipe + validator + deltoid-σ golden [frozen σ(1+0.75i)=0.5−0.5i]; VERSION 1.0.0→1.1.0 honest-label; minimal CD guard for the enlarged union — schwarz→loud throw + graceful decline, closed a latent inpf=undefined crash) · **S3b ✅ #239** (QD "Export σ" button **alongside** φ; `buildSigmaEnvelope` reproduces the S3a golden BYTE-FOR-BYTE — golden is now a real producer↔consumer contract; scoped to unbounded-Laurent) · **S4a ✅ #240 (S4a-1 engine+ground-truth net) + #241 (S4a-2 CPU render)** — **QD-HANDOFF-2 CLOSED, the approved END-STATE reached.** CD's `schwarzEngineFromMapSpec` rebuilds σ from `sigma.phi` via @cas/schwarz (the S3a golden reproduces σ(1+0.75i)=0.5−0.5i through CD's import path); `src/render/schwarzView.ts` paints the σ escape-time field on a CPU canvas (`#JCSSchwarz`, `.overlay`-positioned in the dyn stack), `≈`-labeled, replacing the S3a decline — Playwright-verified: the 3-fold deltoid σ tiling renders, 0 console errors. **Deferred (separate approvals):** S4b (GPU σ — port QD's FRAG_SRC), S5 (non-Laurent families on the wire, branch-aware continuation through cusps [uncertified — RISKS §3], df64 σ). Then VISION: circle-and-cardioid → cubic Chebyshev → d:d. **Not deployed to master** — awaiting explicit ship approval.
 
 ## Resume commands
 ```
 git fetch && git checkout refactor/main && git pull
-pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2248/267 + census ✓
+pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2267/269 + census (9 projects) ✓
 ```

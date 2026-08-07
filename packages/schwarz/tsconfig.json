@@ -1,0 +1,13 @@
+{
+  // @cas/schwarz is strict TypeScript on @cas/core. SOURCE-exports model: no emit — consumers
+  // (Vite/Vitest) resolve src/*.ts directly. Mirrors @cas/gpu's rigor.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": ["src", "test"]
+}

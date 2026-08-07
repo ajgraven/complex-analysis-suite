@@ -507,3 +507,60 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   pre-fix wiring, GREEN after, mutation-verified. Behavior change authorized by the bug report. Green: build/typecheck/lint/test
   **2248 / 267**. **Follow-up (unchanged):** the built-app browser smoke test would catch this cross-app/built-only class (same gap
   as QD-BUILD-1 / QD-SYM-LOAD); local split-port dev still needs VITE_CD_BASE.
+- **2026-08-07 · stage schwarz-s0a-relabel (PR → refactor/main):** **QD-HANDOFF-2 (σ-export gap) → OPENED; labeling half FIXED.**
+  User-reported: the QD→CD "Export map → copy link" exports φ (the Riemann map), not σ (the Schwarz reflection). Confirmed
+  by-design, not a QD-HANDOFF-1 regression — σ(w)=conj(F(φ⁻¹(w))) has a NUMERICAL inverse, so it is not a closed-form MapSpec
+  (schwarz-export.mjs:4-8, the deliberate plumbing-first Phase-4 hand-off). A three-agent audit (QD σ machinery / interchange /
+  CD+expr feasibility) → design doc `docs/design/SIGMA-HANDOFF.md`, **APPROVED 2026-08-07**: reconstruct σ from φ via a new shared
+  **@cas/schwarz** (σ math already ~1630 LOC on @cas/core; the ADR-0007 second-consumer rule is already met by
+  `correspondences/deltoid.ts` + Direct) → interchange `form:"schwarz"` in the existing `schwarz-reflection` kind → CD reconstructs
+  the deltoid σ (CPU, `≈`, principal exterior branch). Plan **S0→S4a** (σ export alongside φ). **S0a (this stage):** the honest
+  relabel only — button/card now say φ (Riemann map) and disclaim σ; net-first + mutation-verified. The faithful σ export is S1–S4a.
+  Two latent bugs the audit surfaced (queued for **S0b**): the interchange schema spells `conj` but @cas/expr only knows
+  `conjugate`; CD's `mapSpecToExpr` silently ignores the `antiholomorphic` MapSpec flag.
+- **2026-08-07 · stage schwarz-s0b-antiholo (PR → refactor/main):** **QD-HANDOFF-2 → the two audit-found latent bugs FIXED (S0b).**
+  (1) CD `mapSpecToExpr` now honors the `antiholomorphic` MapSpec flag (builds rational/laurent on `conjugate(z)`; was silently
+  rendering the holomorphic twin) — net-first + mutation-verified in `apps/complex-dynamics/test/importMap.test.ts`. (2) The
+  `conj`/`conjugate` mismatch resolved by correcting the interchange schema's ExprMap example (`conj`→`conjugate`) + the test sample,
+  NOT by adding a `conj` alias to @cas/expr — the expr language is the authority on its own vocabulary. Both preventive (no producer
+  sets `antiholomorphic` or emits `conj` today); they de-risk the S3/S4 σ path (σ is anti-holomorphic). Next: **S1** — extract
+  `@cas/core/poly` + `@cas/core polynomialRoots` (ADR-0007 second-consumer), the two pure helpers the σ engine needs.
+- **2026-08-07 · stage schwarz-s2a-pkg (PR → refactor/main):** **QD-HANDOFF-2 → S2a: @cas/schwarz created (first family).** NEW shared
+  package `packages/schwarz` (on @cas/core) holds the unbounded-Laurent σ engine (`makeUnboundedLaurentSchwarz` + `escapeTime` +
+  `pointInPolygon`), lifted verbatim from `correspondences/deltoid.ts` (a clean-room TS port of QD schwarz-common). correspondences
+  now consumes it (deltoid.ts re-exports the surface) — **ADR-0007 second-consumer met** (CD becomes the third at S4a). Golden net +
+  mutation-verified; green 2255/268. **REORDER (flagged):** went deltoid-direct — **S1** (@cas/core poly/polynomialRoots) + the full
+  QD σ lift/cutover (**S2b–d**) are DEFERRED to a post-deltoid "generalize + dedupe QD" phase (not on the deltoid-σ critical path; S1
+  also touches load-order-sensitive QD glue). Next: **S3** (interchange `form:"schwarz"` carrying the deltoid laurent φ) → **S4a** (CD
+  reconstructs the deltoid σ via @cas/schwarz — CPU, `≈`).
+- **2026-08-07 · stage schwarz-s3a-interchange (PR → refactor/main):** **QD-HANDOFF-2 → S3a: the wire format now speaks σ.**
+  `@cas/interchange` v1.1.0 adds the `schwarz` MapSpec form — a σ RECIPE (closed-form `phi` + `disk` + `inverse` + the definitional
+  `antiholomorphic:true`), validated by an `isMapSpec` case and pinned by a new deltoid-σ golden (link + frozen `σ(1+0.75i)=0.5−0.5i`).
+  This is the middle third of closing the φ-vs-σ export gap: the format can now REPRESENT σ, so QD can EXPORT it (S3b) and CD can
+  RECONSTRUCT it (S4a). VERSION bumped 1.0.0 → 1.1.0 (adding vocabulary must move the version); the φ golden was regenerated for the
+  new version field only (QD's producer test stays green untouched; major-gated decode ⇒ old links still open). **Latent CD crash
+  closed as a side effect:** enlarging the shared `MapSpec` union meant CD's `mapSpecToExpr` would silently return `undefined` for a
+  schwarz map (→ `main.ts` `inpf=undefined` → downstream crash); S3a makes it throw loudly and has `importInterchange` decline
+  gracefully — CD stays working+honest until S4a adds real σ reconstruction. Green 2259/268. Remaining for QD-HANDOFF-2: **S3b**
+  (QD emits the σ envelope) + **S4a** (CD renders the deltoid σ, CPU, `≈`).
+- **2026-08-07 · stage schwarz-s3b-qd-export (PR → refactor/main):** **QD-HANDOFF-2 → S3b: QD now EXPORTS σ (alongside φ).** The
+  producer half of the σ hand-off: a second "Export Schwarz reflection σ → copy link" button emits the `schwarz-reflection` envelope
+  the S3a format validates, and `buildSigmaEnvelope` reproduces the S3a deltoid-σ golden **byte-for-byte** — so the cross-app golden
+  is now a real producer↔consumer contract (QD emits ⇄ CD consumes), not a hand-built literal. Scoped to the unbounded-Laurent family
+  (the only σ @cas/schwarz reconstructs); other φ → σ button reports "not available for this map" (honest). Two of three thirds of
+  QD-HANDOFF-2 now closed (format speaks σ ✓, QD emits σ ✓). Remaining: **S4a** — CD reconstructs + renders the deltoid σ (CPU, `≈`),
+  after which the σ button opens a live σ dynamical plane. Until S4a merges, a σ link opened in CD is recognized + declined gracefully
+  (the S3a guard) — no crash, honest "not supported yet". Green 2263/268.
+- **2026-08-07 · stage schwarz-s4a-cd-sigma (PR → refactor/main):** **QD-HANDOFF-2 → S4a-1: CD reproduces
+  the deltoid σ numerically (ground truth).** The φ-vs-σ export gap is now closed end-to-end at the numerical
+  level: QD emits the σ recipe (S3b), and CD rebuilds the σ evaluator from it (`schwarzEngineFromMapSpec`)
+  and reproduces the frozen `σ(w₀)` through its real import path — the approved end-state's verifiable core.
+  Remaining: **S4a-2** paints the reconstructed σ escape-time field on a CPU canvas (≈-labeled), replacing
+  the S3a "σ rendering isn't supported yet" decline with the actual view. Split off to bank the proven
+  ground truth before the CD render integration (new 2D canvas + σ-mode, per the render recon).
+- **2026-08-07 · stage schwarz-s4a2-cd-render (PR → refactor/main):** **QD-HANDOFF-2 → CLOSED (through the
+  approved end-state S4a).** The φ-vs-σ export gap the user reported is fully resolved: QD's "Export σ" emits
+  the Schwarz-reflection recipe (S3b), CD reconstructs the evaluator (S4a-1) and now RENDERS the deltoid σ
+  escape-time field on a CPU canvas, `≈`-labeled (S4a-2) — the reconstructed 3-fold deltoid tiling, visually
+  verified. The S3a "σ rendering isn't supported yet" decline is gone. Deferred to separate approvals: S4b
+  (GPU σ — port QD's FRAG_SRC), S5 (non-Laurent families on the wire, branch-aware continuation, df64 σ).

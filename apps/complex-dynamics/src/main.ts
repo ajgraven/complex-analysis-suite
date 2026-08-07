@@ -101,7 +101,8 @@ import {
   type AppState,
 } from "./state/appState";
 import { decodeLink, validateEnvelope, type Envelope } from "@cas/interchange";
-import { envelopeToMapSpec, mapSpecToExpr } from "./interchange/importMap";
+import { envelopeToMapSpec, mapSpecToExpr, schwarzEngineFromMapSpec } from "./interchange/importMap";
+import { renderSchwarzField, schwarzBoundaryPoly } from "./render/schwarzView";
 import { PLACES } from "./state/places";
 import { decodeNotes, encodeNotes, type Note } from "./state/notes";
 import GIF from "gif.js";
@@ -2779,6 +2780,7 @@ function init(): void {
 
   /** Re-apply every control to the plots (used after loading a shared permalink). */
   function applyAllControls(): void {
+    exitSchwarzView(); // a normal control apply / map load leaves the σ reconstruction view (S4a)
     applyChanges();
     applyColoring();
     applyLighting();
@@ -2917,6 +2919,37 @@ function init(): void {
     }
   }
 
+  // --- σ (Schwarz reflection) reconstruction view (S4a) -----------------------------------------
+  // σ(w)=conj(F(φ⁻¹(w))) has a NUMERICAL inverse, so an imported schwarz recipe is not expr/GPU-
+  // compilable: it is rebuilt with @cas/schwarz and its escape-time field is painted on the CPU to a
+  // dedicated 2D canvas layered over the dynamical plot, at a fixed [-2.5,2.5]² window for this
+  // milestone. The image is `≈` — the principal exterior branch of a numerically-inverted reflection,
+  // not a certified render. Click it (or change any control) to dismiss and return to the normal plot.
+  const SCHWARZ_VIEW = { center: [0, 0] as [number, number], zoom: 0.4 }; // half-width 1/zoom = 2.5
+  const SCHWARZ_RENDER_SIZE = 256; // CPU escape-time is heavy (Newton/DK per Ω pixel) — a coarse ≈ preview
+  function renderSchwarzView(engine: ReturnType<typeof schwarzEngineFromMapSpec>): void {
+    const canvas = byId<HTMLCanvasElement>("JCSSchwarz");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const size = SCHWARZ_RENDER_SIZE;
+    canvas.width = size;
+    canvas.height = size;
+    const poly = schwarzBoundaryPoly(engine);
+    const rgba = renderSchwarzField(engine, poly, SCHWARZ_VIEW, size, { maxIter: 48, escapeR: 1e4 });
+    const img = new ImageData(size, size); // construct-then-set (mirrors renderJuliaPreview) — avoids the
+    img.data.set(rgba); // Uint8ClampedArray<ArrayBuffer> constructor-overload variance in the DOM lib types
+    ctx.putImageData(img, 0, 0);
+    canvas.hidden = false;
+    byId<HTMLElement>("dyn-schwarz-label").hidden = false;
+  }
+  /** Leave the σ reconstruction view (restore the normal dynamical plot underneath). Idempotent. */
+  function exitSchwarzView(): void {
+    byId<HTMLCanvasElement>("JCSSchwarz").hidden = true;
+    byId<HTMLElement>("dyn-schwarz-label").hidden = true;
+  }
+  // Click the σ raster to dismiss it — the plain, discoverable exit (a control change also exits).
+  byId<HTMLCanvasElement>("JCSSchwarz").addEventListener("click", exitSchwarzView);
+
   /**
    * Import a map handed off via @cas/interchange (a deep link OR pasted JSON, from e.g. the
    * Quadrature Domains app's "Export map"). Returns whether the input WAS an interchange payload —
@@ -2934,6 +2967,19 @@ function init(): void {
     const spec = envelopeToMapSpec(env);
     if (!spec) {
       showToast("Imported interchange payload has no map to render.", "info");
+      return true;
+    }
+    if (spec.form === "schwarz") {
+      // σ is reconstructed NUMERICALLY (φ⁻¹ is iterative), not expr/GPU-compiled: rebuild the evaluator
+      // from sigma.phi via @cas/schwarz and paint its escape-time field on the CPU (S4a). The reconstruct
+      // can throw for a family the engine doesn't support (non-Laurent φ) — decline honestly, don't crash.
+      try {
+        renderSchwarzView(schwarzEngineFromMapSpec(spec));
+      } catch (err) {
+        showToast(`Imported a ${env.kind}, but σ reconstruction isn't supported for this map: ${(err as Error).message}`, "info");
+        return true;
+      }
+      showToast(`Reconstructed the Schwarz reflection σ from ${env.provenance.app} (≈, CPU — click the plot to dismiss).`, "info");
       return true;
     }
     const st = readFullState();

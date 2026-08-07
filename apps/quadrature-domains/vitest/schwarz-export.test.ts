@@ -5,8 +5,15 @@ import {
   validateEnvelope,
   GOLDEN_CREATED_AT,
   QD_TO_CD_DELTOID_LINK,
+  QD_TO_CD_DELTOID_SIGMA_LINK,
 } from "@cas/interchange";
-import { buildExportEnvelope, exportPhiLink, phiToMapSpec } from "../app/schwarz/schwarz-export.mjs";
+import {
+  buildExportEnvelope,
+  buildSigmaEnvelope,
+  exportPhiLink,
+  exportSigmaLink,
+  phiToMapSpec,
+} from "../app/schwarz/schwarz-export.mjs";
 
 // Phase 4 (C2, QD emit): the φ -> interchange serialization + a full round-trip through the
 // @cas/interchange codec/validator. Confirms the QD side produces a valid, decodable envelope.
@@ -63,5 +70,46 @@ describe("QD φ -> interchange (Phase 4 C2)", () => {
   it("emits the exact link CD is tested against (cross-app golden)", () => {
     const link = exportPhiLink(deltoidPhi, { createdAt: GOLDEN_CREATED_AT, appVersion: "0.1.0" });
     expect(link).toBe(QD_TO_CD_DELTOID_LINK);
+  });
+});
+
+// S3b (SIGMA-HANDOFF): the σ (Schwarz reflection) hand-off, ALONGSIDE φ. σ ships as a `form:"schwarz"`
+// recipe (interchange v1.1.0); CD reconstructs it via @cas/schwarz. Scoped to the unbounded-Laurent
+// family (the deltoid), the only σ the shared engine can rebuild today.
+describe("QD σ (Schwarz reflection) export (S3b)", () => {
+  it("builds a schwarz-reflection envelope carrying the form:\"schwarz\" σ recipe over the deltoid φ", () => {
+    const env = buildSigmaEnvelope(deltoidPhi, { createdAt: GOLDEN_CREATED_AT, appVersion: "0.1.0" });
+    expect(env).not.toBeNull();
+    const validated = validateEnvelope(env); // throws if malformed
+    expect(isEnvelopeOfKind(validated, "schwarz-reflection")).toBe(true);
+    expect((env!.payload as { sigma: unknown }).sigma).toEqual({
+      form: "schwarz",
+      phi: { form: "laurent", c: C(1), F: [C(0), C(0), C(0.5)] },
+      disk: "D*",
+      inverse: "newton-dk",
+      antiholomorphic: true,
+    });
+    expect((env!.payload as { conventions: unknown }).conventions).toEqual({ area: "standard", contour: "standard" });
+  });
+
+  it("returns null for a φ the σ engine can't reconstruct (rational / non-exportable)", () => {
+    expect(buildSigmaEnvelope(rationalPhi)).toBeNull(); // rational Direct-tab φ — no unbounded-Laurent σ engine
+    expect(buildSigmaEnvelope({ w0: C(0) })).toBeNull(); // not exportable at all
+  });
+
+  it("round-trips through the deep-link codec (QD encode σ -> interchange decode)", () => {
+    const link = exportSigmaLink(deltoidPhi, { createdAt: GOLDEN_CREATED_AT });
+    expect(link!.startsWith("#s=")).toBe(true);
+    const back = decodeLink(link!);
+    expect(back.kind).toBe("schwarz-reflection");
+    expect((back.payload as { sigma: { form: string } }).sigma.form).toBe("schwarz");
+  });
+
+  // The PRODUCER half of the σ contract: QD emits the EXACT bytes stored as the cross-app golden and
+  // consumed by CD (apps/complex-dynamics/test/importMap.test.ts). Closes the producer↔consumer loop
+  // that S3a opened with a hand-built golden — now a real exporter reproduces it byte-for-byte.
+  it("emits the exact deltoid-σ link stored as the cross-app golden", () => {
+    const link = exportSigmaLink(deltoidPhi, { createdAt: GOLDEN_CREATED_AT, appVersion: "0.1.0" });
+    expect(link).toBe(QD_TO_CD_DELTOID_SIGMA_LINK);
   });
 });

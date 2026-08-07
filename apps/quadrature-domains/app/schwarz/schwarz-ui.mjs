@@ -40,7 +40,7 @@
 import { state } from '../ui/ui-state.mjs';
 import { QD_UI } from '../ui/ui-registry.mjs';
 import _QD from '../solvers/solver.mjs';
-import { exportPhiDeepLink } from './schwarz-export.mjs';
+import { exportPhiDeepLink, exportSigmaDeepLink } from './schwarz-export.mjs';
 const QD = _QD;
 
 (function () {
@@ -474,15 +474,20 @@ const QD = _QD;
       <button type="button" id="schwarz-clear-overlays" class="small"
               style="margin-left:6px;">Clear all overlays</button>
       <div style="margin-top:10px; border-top:1px solid #eee; padding-top:8px; font-size:12px; color:#555;">
-        Hand this φ off to the Complex Dynamics app as an <b>interchange</b> deep link.
+        Export to the Complex Dynamics app as an <b>interchange</b> deep link — either the
+        <b>Riemann map φ</b> (D→Ω, holomorphic), or, alongside it, the <b>Schwarz reflection σ</b>(w)=conj(F(φ⁻¹(w)))
+        (anti-holomorphic), handed off as a recipe CD reconstructs. σ export covers the unbounded-Laurent
+        families (e.g. the deltoid); other φ export as φ only.
       </div>
-      <button type="button" id="schwarz-export-map" class="small">Export map → copy link</button>
+      <button type="button" id="schwarz-export-map" class="small">Export Riemann map φ → copy link</button>
+      <button type="button" id="schwarz-export-sigma" class="small" style="margin-left:6px;">Export Schwarz reflection σ → copy link</button>
       <span id="schwarz-export-status" style="margin-left:8px; font-size:12px;"></span>
     `;
     setTimeout(() => {
       card.querySelector('#schwarz-clear-orbit').addEventListener('click', clearOrbit);
       card.querySelector('#schwarz-clear-overlays').addEventListener('click', clearAllOverlays);
       card.querySelector('#schwarz-export-map').addEventListener('click', _exportMap);
+      card.querySelector('#schwarz-export-sigma').addEventListener('click', _exportSigma);
     }, 0);
     return card;
   }
@@ -518,6 +523,40 @@ const QD = _QD;
       );
     } else {
       console.log('[interchange] deep link:', url);
+      setStatus('Clipboard unavailable — link logged to console.', false);
+    }
+  }
+
+  // Export the current φ's Schwarz reflection σ as an @cas/interchange deep link (S3b), ALONGSIDE the
+  // φ export above. σ ships as a `form:"schwarz"` recipe (its φ⁻¹ is NUMERICAL, so σ is not a closed-
+  // form map); the Complex Dynamics app reconstructs the σ evaluator from sigma.phi via @cas/schwarz.
+  // Available for the unbounded-Laurent families only — exportSigmaDeepLink returns null otherwise
+  // (a rational/bounded φ has no shared σ engine yet). Mirrors _exportMap.
+  function _exportSigma() {
+    const status = document.getElementById('schwarz-export-status');
+    const setStatus = (msg, ok) => {
+      if (status) { status.textContent = msg; status.style.color = ok ? '#2a7' : '#c33'; }
+    };
+    const cdBase = (import.meta.env && import.meta.env.VITE_CD_BASE) || undefined;
+    const result = exportSigmaDeepLink(sState.phiSnapshot, location, {
+      note: 'sigma (Schwarz reflection) exported from the Quadrature Domains app',
+      cdBase,
+    });
+    if (!result) {
+      setStatus('σ export needs an unbounded-Laurent φ (e.g. the deltoid) — not available for this map.', false);
+      return;
+    }
+    const { url, resolvable } = result;
+    const okMsg = resolvable
+      ? 'Copied Complex Dynamics σ hand-off link to clipboard.'
+      : 'Copied σ link — set VITE_CD_BASE to reach Complex Dynamics in local dev.';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(
+        () => setStatus(okMsg, resolvable),
+        () => { console.log('[interchange] σ deep link:', url); setStatus('Copy blocked — link logged to console.', false); },
+      );
+    } else {
+      console.log('[interchange] σ deep link:', url);
       setStatus('Clipboard unavailable — link logged to console.', false);
     }
   }
@@ -1476,7 +1515,7 @@ const QD = _QD;
   if (typeof window !== 'undefined' && window.__SCHWARZ_UI_TEST_HOOK__) {
     window.__schwarzUiTest = {
       sState, setMode, setViewMode, onCanvasClick, onCanvasDblClick, onMouseMove,
-      runHoverOrbit, pinOrbitAt,
+      runHoverOrbit, pinOrbitAt, makeOverlaysCard,
       get CLICK_DELAY() { return _schwarzInter.getClickDelay(); },
       set CLICK_DELAY(v) { _schwarzInter.setClickDelay(v); },
     };

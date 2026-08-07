@@ -6,8 +6,8 @@
  *
  * Handles the rational and Laurent forms QD's plumbing-first hand-off emits, plus a raw `expr`
  * passthrough. The imaginary unit is `i`, powers use `^`, so coefficients render as `(re+im*i)`.
- * (Anti-holomorphic maps — the future faithful σ — are not emitted here; the φ hand-off is
- * holomorphic. A σ import would additionally thread `conjugate` through the expression.)
+ * The φ hand-off is holomorphic, but the `antiholomorphic` MapSpec flag is honored: a rational or
+ * laurent map so tagged is built on `conjugate(z)`; an `expr` map threads its own `conjugate`.
  */
 
 import type {
@@ -15,9 +15,15 @@ import type {
   Envelope,
   MapSpec,
   QuadratureDomain,
+  SchwarzMap,
   SchwarzReflection,
   View,
 } from "@cas/interchange";
+import {
+  makeUnboundedLaurentSchwarz,
+  type Complex as SchwarzTuple,
+  type UnboundedLaurentSchwarz,
+} from "@cas/schwarz";
 
 const isZero = (z: Complex): boolean => z.re === 0 && z.im === 0;
 
@@ -40,33 +46,68 @@ function polyExpr(coeffs: readonly Complex[], v: string): string {
   return terms.length ? terms.join(" + ") : "(0)";
 }
 
-function rationalExpr(num: readonly Complex[], den: readonly Complex[]): string {
-  const p = polyExpr(num, "z");
+function rationalExpr(num: readonly Complex[], den: readonly Complex[], v: string): string {
+  const p = polyExpr(num, v);
   // A unit denominator [1] is a pure polynomial — skip the division.
   if (den.length === 1 && den[0].re === 1 && den[0].im === 0) return p;
-  return `(${p}) / (${polyExpr(den, "z")})`;
+  return `(${p}) / (${polyExpr(den, v)})`;
 }
 
-function laurentExpr(c: Complex, F: readonly Complex[]): string {
+function laurentExpr(c: Complex, F: readonly Complex[], v: string): string {
   const terms: string[] = [];
-  if (!isZero(c)) terms.push(`${coeffExpr(c)}*z`);
+  if (!isZero(c)) terms.push(`${coeffExpr(c)}*${v}`);
   F.forEach((fl, l) => {
     if (isZero(fl)) return;
-    terms.push(l === 0 ? coeffExpr(fl) : `${coeffExpr(fl)}/z^${l}`);
+    terms.push(l === 0 ? coeffExpr(fl) : `${coeffExpr(fl)}/${v}^${l}`);
   });
   return terms.length ? terms.join(" + ") : "(0)";
 }
 
 /** Convert an interchange MapSpec into a CD expression-language source string. */
 export function mapSpecToExpr(m: MapSpec): string {
+  // An antiholomorphic closed form acts on conj(z), so build it on `conjugate(z)` instead of `z`.
+  // (An `expr` map threads its own `conjugate` and passes through verbatim.)
+  const v = m.antiholomorphic ? "conjugate(z)" : "z";
   switch (m.form) {
     case "rational":
-      return rationalExpr(m.num, m.den);
+      return rationalExpr(m.num, m.den, v);
     case "laurent":
-      return laurentExpr(m.c, m.F);
+      return laurentExpr(m.c, m.F, v);
     case "expr":
       return m.expr;
+    case "schwarz":
+      // σ is defined by a NUMERICAL inverse (φ⁻¹ via Newton / Durand–Kerner), so it is not an algebraic
+      // expression the `expr` pipeline can compile. A consumer rebuilds the σ evaluator from `m.phi`
+      // via @cas/schwarz instead (CD does this in S4a). Reaching here means a schwarz map was handed to
+      // the expr path by mistake — fail loudly rather than fall through to an implicit `undefined`
+      // return that would surface as a cryptic crash downstream (main.ts would set inpf = undefined).
+      throw new Error(
+        "mapSpecToExpr: a schwarz-form map is not expr-compilable — reconstruct σ from its φ via @cas/schwarz",
+      );
   }
+}
+
+/**
+ * Reconstruct the σ evaluator for a `form:"schwarz"` map. σ(w)=conj(F(φ⁻¹(w))) has a NUMERICAL inverse
+ * (Newton + Durand–Kerner), so — unlike the rational/laurent/expr forms — it is NOT compiled through the
+ * expr pipeline (`mapSpecToExpr` throws on it); it is rebuilt from φ's coefficients by @cas/schwarz's
+ * exterior-branch engine. This is the CD half of the σ hand-off (S4a): the S3a golden's `sigma.phi`
+ * feeds `makeUnboundedLaurentSchwarz`, and the resulting `.sigma(w)` reproduces the frozen σ(w₀).
+ *
+ * Supports the unbounded-Laurent family QD emits today (`disk:"D*"`, real leading c). Interchange
+ * complex numbers are `{re,im}`; the engine works in `[re,im]` tuples, so φ's coefficients are converted.
+ * Throws for a shape the engine can't reconstruct rather than returning a subtly-wrong σ.
+ */
+export function schwarzEngineFromMapSpec(sigma: SchwarzMap): UnboundedLaurentSchwarz {
+  const phi = sigma.phi;
+  if (phi.form !== "laurent") {
+    throw new Error("schwarz reconstruction supports a Laurent φ only (the unbounded-classical family)");
+  }
+  if (phi.c.im !== 0) {
+    throw new Error("schwarz reconstruction supports a real leading coefficient c only");
+  }
+  const F: SchwarzTuple[] = phi.F.map((z) => [z.re, z.im]);
+  return makeUnboundedLaurentSchwarz(phi.c.re, F);
 }
 
 /**
