@@ -543,3 +543,11 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   schwarz map (→ `main.ts` `inpf=undefined` → downstream crash); S3a makes it throw loudly and has `importInterchange` decline
   gracefully — CD stays working+honest until S4a adds real σ reconstruction. Green 2259/268. Remaining for QD-HANDOFF-2: **S3b**
   (QD emits the σ envelope) + **S4a** (CD renders the deltoid σ, CPU, `≈`).
+- **2026-08-07 · stage schwarz-s3b-qd-export (PR → refactor/main):** **QD-HANDOFF-2 → S3b: QD now EXPORTS σ (alongside φ).** The
+  producer half of the σ hand-off: a second "Export Schwarz reflection σ → copy link" button emits the `schwarz-reflection` envelope
+  the S3a format validates, and `buildSigmaEnvelope` reproduces the S3a deltoid-σ golden **byte-for-byte** — so the cross-app golden
+  is now a real producer↔consumer contract (QD emits ⇄ CD consumes), not a hand-built literal. Scoped to the unbounded-Laurent family
+  (the only σ @cas/schwarz reconstructs); other φ → σ button reports "not available for this map" (honest). Two of three thirds of
+  QD-HANDOFF-2 now closed (format speaks σ ✓, QD emits σ ✓). Remaining: **S4a** — CD reconstructs + renders the deltoid σ (CPU, `≈`),
+  after which the σ button opens a live σ dynamical plane. Until S4a merges, a σ link opened in CD is recognized + declined gracefully
+  (the S3a guard) — no crash, honest "not supported yet". Green 2263/268.

@@ -1449,3 +1449,19 @@
   GREEN after, mutation-verified (throw → silent return → red → reverted). Additive; behavior-preserving for every existing map.
   Green: build(+gate)/typecheck/lint/test **2259 / 268** (+4 tests, census 9 projects). Next: **S3b** (QD "Export σ" button alongside
   φ) → **S4a** (CD reconstructs the deltoid σ, CPU, `≈`).
+- **2026-08-07 · stage schwarz-s3b-qd-export (PR → refactor/main):** **σ-handoff S3b — QD "Export σ" button, ALONGSIDE φ
+  (behavior change — token granted, decision 2).** QD can now hand off the Schwarz reflection, not just the Riemann map.
+  `schwarz-export.mjs`: `buildSigmaEnvelope(phi, opts)` → an `Envelope<"schwarz-reflection">` whose `sigma` is the
+  `form:"schwarz"` recipe (`phi:<phiToMapSpec>`, `disk:"D*"`, `inverse:"newton-dk"`, `antiholomorphic:true`) + `conventions:
+  CANONICAL`; `exportSigmaLink` / `exportSigmaDeepLink` mirror the φ pair (reuse `resolveHandoffBase` — VITE_CD_BASE / sibling
+  path). **Scoped to the unbounded-Laurent family** (φ → a `laurent` MapSpec): that is the only σ @cas/schwarz's exterior-branch
+  engine reconstructs today, so a rational/bounded/non-exportable φ returns **null** — we never emit a σ recipe no consumer can
+  rebuild (honest labeling). Payload CANONICAL (φ is geometric; QD's dA/2πi normalizations touch h/areas, not φ). `schwarz-ui.mjs`
+  `makeOverlaysCard`: second button **"Export Schwarz reflection σ → copy link"** beside the φ button + an `_exportSigma` handler
+  mirroring `_exportMap` (null-case toast names the family limit); card copy rewritten to describe BOTH hand-offs (supersedes S0a's
+  "σ planned" disclaimer). `_exportMap` left byte-unchanged. NET-FIRST: `schwarz-export.test.ts` σ block (recipe shape + null cases +
+  codec round-trip + **the exact byte-match to the S3a golden** — closing the producer↔consumer loop S3a opened hand-built) — GREEN
+  after impl, mutation-verified (`disk:"D*"`→`"D"` → recipe + golden tests red → reverted); `schwarz-ui.test.ts` S0a card test
+  rewritten to assert BOTH buttons present + honestly labeled — RED on the missing σ button, GREEN after. Green:
+  build(+gate)/typecheck/lint/test **2263 / 268** (+4 tests). Next: **S4a** (CD reconstructs the deltoid σ — CPU, `≈`), the approved
+  end-state; then the σ button reaches a consumer that renders it.
