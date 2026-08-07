@@ -33,6 +33,7 @@
     "@cas/expr": "workspace:*",
     "@cas/gpu": "workspace:*",
     "@cas/interchange": "workspace:*",
+    "@cas/schwarz": "workspace:*",
     "driver.js": "^1.5.0",
     "gif.js": "^0.2.0",
     "katex": "^0.17.0"

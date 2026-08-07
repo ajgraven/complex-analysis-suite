@@ -59,6 +59,9 @@ importers:
       '@cas/interchange':
         specifier: workspace:*
         version: link:../../packages/interchange
+      '@cas/schwarz':
+        specifier: workspace:*
+        version: link:../../packages/schwarz
       driver.js:
         specifier: ^1.5.0
         version: 1.6.0

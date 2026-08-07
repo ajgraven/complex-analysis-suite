@@ -8,13 +8,15 @@ import {
   QD_TO_CD_DELTOID_LINK,
   QD_TO_CD_DELTOID_PHI_AT_2,
   QD_TO_CD_DELTOID_SIGMA_LINK,
+  QD_TO_CD_DELTOID_SIGMA_W0,
+  QD_TO_CD_DELTOID_SIGMA_AT_W0,
   type Envelope,
   type QuadratureDomain,
 } from "@cas/interchange";
 import type { Complex } from "../src/complex";
 import { makeComplexFn } from "@cas/expr/evaluate";
 import { parse } from "@cas/expr/parser";
-import { envelopeToMapSpec, mapSpecToExpr } from "../src/interchange/importMap";
+import { envelopeToMapSpec, mapSpecToExpr, schwarzEngineFromMapSpec } from "../src/interchange/importMap";
 
 // Phase 4 (C3, CD consume): the QD -> CD path, end to end and headless. An interchange link (as
 // QD's "Export map" button produces) is decoded, its MapSpec turned into a CD expr string, compiled
@@ -119,6 +121,21 @@ describe("CD consume interchange map (Phase 4 C3)", () => {
     expect(() => mapSpecToExpr(sigma)).toThrow(/not expr-compilable/);
     const spec = envelopeToMapSpec(decodeLink(QD_TO_CD_DELTOID_SIGMA_LINK));
     expect(spec?.form).toBe("schwarz"); // the recipe is surfaced (not null, not silently dropped)
+  });
+
+  // S4a (SIGMA-HANDOFF, the approved end-state): CD RECONSTRUCTS σ from the golden's recipe, rather than
+  // declining it. σ is not expr-compilable (numerical inverse), so it is rebuilt from sigma.phi via
+  // @cas/schwarz — and the reconstructed σ(w₀) reproduces the frozen golden value END TO END through CD's
+  // real import path (decode → envelopeToMapSpec → schwarzEngineFromMapSpec → .sigma). This is the
+  // ground-truth net the whole hand-off was built to reach.
+  it("reconstructs the deltoid σ from the golden and reproduces the frozen σ(w₀) — S4a ground truth", () => {
+    const sigma = envelopeToMapSpec(decodeLink(QD_TO_CD_DELTOID_SIGMA_LINK));
+    if (!sigma || sigma.form !== "schwarz") throw new Error("expected a schwarz map from the σ golden link");
+    const engine = schwarzEngineFromMapSpec(sigma);
+    const got = engine.sigma([QD_TO_CD_DELTOID_SIGMA_W0.re, QD_TO_CD_DELTOID_SIGMA_W0.im]);
+    if (!got) throw new Error("σ(w₀) should reconstruct to a finite value for w₀ ∈ Ω, not null");
+    expect(got[0]).toBeCloseTo(QD_TO_CD_DELTOID_SIGMA_AT_W0.re, 9); //  0.5
+    expect(got[1]).toBeCloseTo(QD_TO_CD_DELTOID_SIGMA_AT_W0.im, 9); // −0.5 (the anti-holomorphic conj)
   });
 
   it("emits complex coefficients with the imaginary unit", () => {

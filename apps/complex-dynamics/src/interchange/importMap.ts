@@ -15,9 +15,15 @@ import type {
   Envelope,
   MapSpec,
   QuadratureDomain,
+  SchwarzMap,
   SchwarzReflection,
   View,
 } from "@cas/interchange";
+import {
+  makeUnboundedLaurentSchwarz,
+  type Complex as SchwarzTuple,
+  type UnboundedLaurentSchwarz,
+} from "@cas/schwarz";
 
 const isZero = (z: Complex): boolean => z.re === 0 && z.im === 0;
 
@@ -79,6 +85,29 @@ export function mapSpecToExpr(m: MapSpec): string {
         "mapSpecToExpr: a schwarz-form map is not expr-compilable — reconstruct σ from its φ via @cas/schwarz",
       );
   }
+}
+
+/**
+ * Reconstruct the σ evaluator for a `form:"schwarz"` map. σ(w)=conj(F(φ⁻¹(w))) has a NUMERICAL inverse
+ * (Newton + Durand–Kerner), so — unlike the rational/laurent/expr forms — it is NOT compiled through the
+ * expr pipeline (`mapSpecToExpr` throws on it); it is rebuilt from φ's coefficients by @cas/schwarz's
+ * exterior-branch engine. This is the CD half of the σ hand-off (S4a): the S3a golden's `sigma.phi`
+ * feeds `makeUnboundedLaurentSchwarz`, and the resulting `.sigma(w)` reproduces the frozen σ(w₀).
+ *
+ * Supports the unbounded-Laurent family QD emits today (`disk:"D*"`, real leading c). Interchange
+ * complex numbers are `{re,im}`; the engine works in `[re,im]` tuples, so φ's coefficients are converted.
+ * Throws for a shape the engine can't reconstruct rather than returning a subtly-wrong σ.
+ */
+export function schwarzEngineFromMapSpec(sigma: SchwarzMap): UnboundedLaurentSchwarz {
+  const phi = sigma.phi;
+  if (phi.form !== "laurent") {
+    throw new Error("schwarz reconstruction supports a Laurent φ only (the unbounded-classical family)");
+  }
+  if (phi.c.im !== 0) {
+    throw new Error("schwarz reconstruction supports a real leading coefficient c only");
+  }
+  const F: SchwarzTuple[] = phi.F.map((z) => [z.re, z.im]);
+  return makeUnboundedLaurentSchwarz(phi.c.re, F);
 }
 
 /**
