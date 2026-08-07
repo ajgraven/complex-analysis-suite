@@ -1,6 +1,7 @@
 # Design — Faithful σ (Schwarz-reflection) hand-off, QD → CD
 
-> **Status: DRAFT / proposal (2026-08-07).** Not an ADR yet; a design to review before we commit.
+> **Status: APPROVED (2026-08-07) — executing.** Maintainer-approved; the approved decisions and the
+> refined PR sequence are in the "Approved implementation plan" section at the end. Not an ADR yet.
 > Supersedes the "plumbing-first" φ-only hand-off documented at
 > `apps/quadrature-domains/app/schwarz/schwarz-export.mjs:4-8`. Grounded in a three-part code audit
 > (QD σ machinery, `@cas/interchange`, CD + `@cas/expr`); file:line anchors throughout are the
@@ -243,3 +244,49 @@ Do **M0 now** (it closes the honest-labeling bug you hit and is a few lines), an
 `@cas/schwarz`) as the real start** — it's demanded by the ADR-0007 second-consumer rule regardless of σ,
 and it turns M2's deltoid σ into a wiring job on top of code that already exists in three places. Ship σ
 `≈`-labeled, deltoid-first, φ-fallback intact.
+
+## Approved implementation plan (2026-08-07)
+
+**Maintainer-approved.** Decisions: **(1)** first shippable = **through S4a** — the deltoid's σ
+reconstructed and CPU-rendered in CD, `≈`-labeled (S4b GPU + S5 other families follow as separate
+approvals); **(2)** export σ **alongside** the existing φ export (keeps the φ pipeline-proof + old-client
+fallback); **(3)** σ ships **`≈`, principal exterior branch only**, with the univalence caveat that
+`correspondences/deltoid.ts` already documents.
+
+### What the dependency trace changed (the extraction is cleaner than §3–5 assumed)
+- QD's σ path **already runs on `@cas/core`** (its `Complex` is a re-export shim, `app/core/complex.mjs`),
+  so **~1,630 LOC of σ math lifts almost verbatim**; the only blockers are namespace plumbing (the
+  `QD.Schwarz` IIFE + the `schwarz-inverse.mjs` monkey-patch) and **four pure helpers**. `hData` is a dead
+  parameter — σ is a pure function of `(phi, boundaryPts)`.
+- The real shared input is a plain-data **`PhiData`** interface (`family, unbounded, w0, c,
+  branches[{z,A[]}], polyA/F, alpha, z0, gamma, lqdBeta, lqdGamma, P, Q`) — *the same fields the GPU
+  shader already reads*, which is one more reason to formalize it as the package's public input type.
+- Two **`@cas/core` extractions ADR-0007 already justifies** (independently valuable, and they shrink the
+  σ surface): `@cas/core/poly` (from `app/core/poly-helpers.mjs`) and `@cas/core polynomialRoots(coeffs)`
+  (from `direct-common.mjs`, wrapping the existing `makeDurandKerner`).
+
+### PR sequence (net-first, one concern per PR, mutation-verified, merge-on-green; BP = behavior-preserving)
+
+| PR | Scope | BP? |
+|----|-------|-----|
+| S0a | QD relabel: button/card say "Export **Riemann map φ**", σ not yet exported | behavior (labels), bug-report authorized |
+| S0b | CD import fixes: `conj`→`conjugate` alias + honor the ignored `antiholomorphic` flag | bug-fix |
+| S1a | Extract `@cas/core/poly`; repoint QD consumers | ✅ |
+| S1b | Extract `@cas/core polynomialRoots`; repoint Direct + inverse | ✅ |
+| S2a | Scaffold `@cas/schwarz` + `PhiData`; port unbounded-Laurent family from `deltoid.ts` (round-trip golden) | ✅ (new pkg) |
+| S2b | Lift full `schwarz-common` σ kernel (11 adapters, Newton, `buildSchwarzFromPhi`, `escapeTime`), de-namespaced | ✅ |
+| S2c | Lift `schwarz-inverse` (σ⁻¹, preimage tree, limit set); fold monkey-patch into the builder | ✅ |
+| S2d | **QD → `@cas/schwarz`** via a thin `QD.Schwarz` re-publish adapter (handle-shape compatible) | ✅ |
+| S2e | **correspondences → `@cas/schwarz`**; delete `deltoid.ts` engine | ✅ |
+| S3a | `@cas/interchange`: add `form:"schwarz"`, `isMapSpec` case + caps, deltoid σ golden, minor VERSION bump | ✅ additive |
+| S3b | QD export: `schwarz-reflection` envelope + "Export **σ**" button **alongside** φ | new feature (token granted) |
+| S4a | **CD reconstructs deltoid σ (CPU)** via `@cas/schwarz`; end-to-end ground truth; `≈` labeling | additive |
+
+**Deferred to separate approvals:** S4b (CD GPU σ — port QD's `FRAG_SRC` GLSL), S5 (non-Laurent families
+on the wire, branch-aware continuation through cusps [uncertified — RISKS §3], df64 σ, PQD GPU αth-root).
+
+### Highest-risk step
+**S2d** — QD's entire Schwarz UI (`schwarz-ui/paint/render/interaction/forward`) reads `QD.Schwarz`'s exact
+handle shape (`{ family, sigma, psi, evalPhi, evalF, isInOmega, escapeR, unbounded, w0, adapter, _phi,
+_boundaryPts }`); the re-publish adapter must be byte-compatible, gated by the full existing QD suite +
+the browser render net.

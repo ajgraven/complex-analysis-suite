@@ -86,11 +86,11 @@ Behavior-preserving by default; no behavioral change without an explicit approva
   /#225** then lifted the 3 mounts behind it, each pinned by a boot-output assertion + mutation-verified. ui.mjs = thin root.
 
 ## Next concrete steps
-- **✅ LIVE on master:** whole refactor + post-review arc + QD-SYM-LOAD + QD-HANDOFF-1 (latest deploy #91, 94d59cb).
-- **✅ SHIPPED — QD-HANDOFF-1 LIVE (deploy #91):** QD→CD "Export map → copy link" now opens the Complex Dynamics app (was
-  linking back to QD); local split-port dev needs VITE_CD_BASE. Publish was delayed ~7.5h by a GitHub Actions outage (2026-08-06).
+- **✅ LIVE on master (deploy #91, 94d59cb):** whole refactor + post-review arc + QD-SYM-LOAD + QD-HANDOFF-1 (QD→CD export link opens CD now; split-port dev needs VITE_CD_BASE).
 - **Root-cause follow-ups:** built-app worker smoke test (caught neither QD-BUILD-1 nor QD-SYM-LOAD); PWA autoUpdate→prompt.
-- **Then the product (VISION):** next correspondence family (circle-and-cardioid → cubic Chebyshev → d:d). Optional: P2 leftovers; sym messageerror.
+- **▶ NEXT — σ hand-off (APPROVED 2026-08-07):** `docs/design/SIGMA-HANDOFF.md`. QD→CD exports φ (Riemann map), NOT σ; plan
+  extracts **@cas/schwarz** (σ already ~1630 LOC on @cas/core; ADR-0007) → interchange `form:"schwarz"` → CD reconstructs deltoid σ
+  (CPU, `≈`). Executing **S0→S4a** (σ alongside φ; principal-branch ≈). Then VISION: circle-and-cardioid → cubic Chebyshev → d:d.
 
 ## Resume commands
 ```
