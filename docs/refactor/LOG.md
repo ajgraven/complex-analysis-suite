@@ -1410,3 +1410,12 @@
   (button names the Riemann map φ; card disclaims σ) — RED on the old label, GREEN after, mutation-verified (disclaimer "not"→"indeed"
   → red → reverted). Green: build(+gate)/typecheck/lint/test **2249 / 267** (+1 test). First step of the APPROVED σ hand-off plan
   (`docs/design/SIGMA-HANDOFF.md`, S0→S4a).
+- **2026-08-07 · stage schwarz-s0b-antiholo (PR → refactor/main):** **σ-handoff S0b — anti-holomorphic import correctness (CD +
+  interchange).** Two audit-found latent bugs. (1) CD's `mapSpecToExpr` (importMap.ts) IGNORED the MapSpec `antiholomorphic` flag —
+  a rational/laurent map so tagged would render as its HOLOMORPHIC twin. Parametrized the build variable: `antiholomorphic` ⇒ build
+  on `conjugate(z)` (rational/laurent); the `expr` form threads its own conjugate and passes through verbatim. NET-FIRST: new case in
+  `importMap.test.ts` (a c=1 antiholomorphic laurent maps z=2−3i → 2+3i, not 2−3i) — RED on the old code, GREEN after, mutation-
+  verified (`? "z":"z"` → red → reverted). (2) The interchange schema's ExprMap example spelled `conj(z)^2+c`, but the expr language
+  only knows `conjugate` — a producer copying it would fail CD's parser. Aligned the schema comment + interchange test sample to
+  `conjugate` (the language owns its vocabulary; no expr alias added). Both latent today (QD emits holomorphic φ) — preventive for the
+  anti-holomorphic σ ahead. Green: build(+gate)/typecheck/lint/test **2250 / 267** (+1 test).
