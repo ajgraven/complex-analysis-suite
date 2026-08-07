@@ -1515,3 +1515,28 @@
   reverted). Green: typecheck/lint/test **2282 / 270** (+15 tests, +1 file). σ COVERAGE UNCHANGED —
   pole-bearing/other-family σ stays the deferred generalize phase (S2b/S5); this only makes the refusal honest
   and nets the deltoid path that shipped in S3b/S4a.
+- **2026-08-07 · branch claude/repository-refactor-project-pg5ktu (Phase 2 — pole-bearing σ, 5 increments):**
+  **the σ hand-off now covers unbounded QDs with finite-pole branch terms (a single exterior pole, a
+  cardioid, …), not just the pole-free deltoid.** The "domains such as the deltoid" broadening, end to end.
+  Five net-first, mutation-verified increments:
+  **(1) `@cas/schwarz`** (`faaa6af`) — `makeUnboundedLaurentSchwarz(c, F, branches?)`: ported QD's canonical
+  branch term (schwarz-common `adaptUnbounded`) into φ = c·z + Σ F_l/zˡ + Σⱼ Σₖ conj(A_{j,k})·u_j(z)ᵏ
+  (u_j = z/(1−conj(z_j)z)), its derivative, and the reflected Schwarz extension Σⱼ Σₖ A_{j,k}/(z−z_j)ᵏ. The
+  branch term has poles in 𝔻*, so no cleared DK polynomial — the inverse factors into `newtonFrom(seed)` and
+  retries cold exterior seeds for branches; **the pole-free path (Newton + DK) is byte-identical**, deltoid σ
+  unchanged. Net: hand-computed φ/F values pin order-1/order-2(k=2)/Σⱼ; the boundary identity F(z)=conj(φ(z))
+  on |z|=1 pins the reflection; the round-trip σ(φ(z₀))=conj(F(z₀)) pins the inverse.
+  **(2) `@cas/interchange`** (`4f2effb`) — optional `branches` on `LaurentMap` + `isBranchArray` seatbelt;
+  **VERSION 1.1.0 → 1.2.0** (MINOR; consumers gate on MAJOR=1). Deltoid goldens regenerated — only the
+  embedded `version` changed (deltoid is pole-free).
+  **(3) QD emit** (`3477392`) — `phiToMapSpec` maps `phi.branches` into the wire (omitted when empty ⇒
+  deltoid byte-identical); the "pole-bearing σ is planned" refusal is gone. Phase-1 "does not export"
+  boundary tests flipped; the LIVE single-pole solve now emits a valid branch-bearing envelope.
+  **(4) CD reconstruct** (`819229d`) — `schwarzEngineFromMapSpec` threads `branches` into the engine; a new
+  cross-app single-pole σ golden (fixture c=1, z_j=0.2, A=0.3) pins the loop from all three sides — interchange
+  decodes it, QD reproduces the exact bytes, CD reconstructs the frozen **σ(w₀)=2/3** (a dropped branch would
+  give the pole-free 1/3). This is the end-to-end ground truth: QD emits a pole-bearing σ → CD rebuilds it.
+  **(5) CD render + docs** (this commit) — the CPU render path is generic over the engine, so a pole-bearing
+  engine paints via the same `schwarzBoundaryPoly`/`renderSchwarzField` (smoke-tested); SIGMA-HANDOFF/ISSUES
+  updated. Green bar: typecheck/lint/test **2299 / 270** (+17 tests). Still deferred: complex leading c, the
+  non-Laurent families (bounded/LQD/PQD — S2b–d), GPU σ (S4b), df64 deep-zoom.

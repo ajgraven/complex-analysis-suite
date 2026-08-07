@@ -285,6 +285,17 @@ material in this doc stays as the eventual plan for that phase.
 deltoid σ tiling (CPU, `≈`-labeled), Playwright-verified. Not deployed to master (awaiting ship approval).
 S4b (GPU σ) + S5 (other families, branch-aware, df64) remain separate approvals.
 
+**PHASE 2 — pole-bearing unbounded QDs (the branch-aware slice of S5).** The hand-off now covers unbounded
+QDs that carry finite-pole branch terms (a single exterior pole, a cardioid, …), not just the pole-free
+deltoid. The branch term Σⱼ Σₖ conj(A_{j,k})·u_j(z)ᵏ (u_j(z)=z/(1−conj(z_j)z)) was ported into
+`@cas/schwarz.makeUnboundedLaurentSchwarz` (optional 3rd arg; DK inverse stays pole-free, Newton for
+branches); the interchange `laurent` form gained optional `branches` at **1.2.0**; QD's `phiToMapSpec` emits
+them; CD's `schwarzEngineFromMapSpec` threads them into the engine; the CPU render is generic and paints
+them unchanged. A cross-app single-pole σ golden pins the loop from all three sides (interchange decode, QD
+byte-match, CD reconstruct → the frozen σ(w₀)=2/3, vs the pole-free 1/3). Still deferred: **complex leading c**
+(the engine + CD gate assume real c — always true for QD's unbounded family), the non-Laurent families
+(bounded / LQD / PQD — S2b–d), S4b (GPU σ), and df64 deep-zoom.
+
 - **S3b #239** — QD **"Export Schwarz reflection σ → copy link"** button, alongside φ. `schwarz-export.mjs`
   `buildSigmaEnvelope`/`exportSigmaLink`/`exportSigmaDeepLink` emit the `schwarz-reflection` envelope
   (sigma = `form:"schwarz"` recipe, `disk:"D*"`); scoped to the unbounded-Laurent family (the only σ

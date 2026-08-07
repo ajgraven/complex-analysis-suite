@@ -80,6 +80,13 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
 `cd-overlay-01` (per-frame redraw), `cd-metricsworker-01` (worker leak) touch code CD-1/CD-3 would move.
 
 ## Status updates (mutable)
+- **2026-08-07 · branch claude/repository-refactor-project-pg5ktu (Phase 2):** **pole-bearing unbounded QDs
+  now export σ end to end.** The branch term Σⱼ Σₖ conj(A_{j,k})·u_j(z)ᵏ was ported into
+  `@cas/schwarz.makeUnboundedLaurentSchwarz` (optional 3rd arg), the interchange `laurent` form gained
+  optional `branches` (wire **1.2.0**), QD emits them, and CD's `schwarzEngineFromMapSpec` threads them into
+  the engine — closing the QD→CD loop for a single exterior pole / cardioid, verified by a cross-app golden
+  (σ(w₀)=2/3 vs the pole-free 1/3). Still deferred: complex leading c, the non-Laurent families (bounded /
+  LQD / PQD — SIGMA-HANDOFF S2b–d), GPU σ (S4b), df64 deep-zoom.
 - **2026-08-07 · branch claude/repository-refactor-project-pg5ktu:** **σ/φ export blind-message defect →
   fixed; hand-built-only test gap → closed.** `_exportSigma`/`_exportMap` reported one "needs an
   unbounded-Laurent φ (e.g. the deltoid)" line for every refusal (nothing-captured / rational / bounded /
