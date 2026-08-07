@@ -1419,3 +1419,14 @@
   only knows `conjugate` — a producer copying it would fail CD's parser. Aligned the schema comment + interchange test sample to
   `conjugate` (the language owns its vocabulary; no expr alias added). Both latent today (QD emits holomorphic φ) — preventive for the
   anti-holomorphic σ ahead. Green: build(+gate)/typecheck/lint/test **2250 / 267** (+1 test).
+- **2026-08-07 · stage schwarz-s2a-pkg (PR → refactor/main):** **σ-handoff S2a — NEW shared package @cas/schwarz (on @cas/core).**
+  **Reorder** (flagged): went deltoid-direct — S2a before S1 — because deltoid.ts is already clean TS on @cas/core, whereas the S1
+  poly extraction touches load-order-sensitive QD glue; and S1 + the full QD cutover are NOT on the deltoid-σ critical path (deferred
+  to a generalize phase). Created `packages/schwarz` (source-consumed, modeled on @cas/gpu): the unbounded-Laurent σ engine
+  `makeUnboundedLaurentSchwarz(c,F) → {evalPhi,evalPhiDeriv,evalF,invertPhi,sigma}` + `escapeTime` + `pointInPolygon`, LIFTED VERBATIM
+  (`cp`) from `apps/correspondences/src/deltoid.ts` (itself a clean-room TS port of QD's schwarz-common adaptUnbounded+sigma). Golden
+  net `test/unbounded-laurent.test.ts` (5): the σ(φ(z₀))=conj(F(z₀)) round-trip identity + exterior-branch φ⁻¹ (|z|>1) + escapeTime —
+  mutation-verified (drop `conj` in σ → round-trip red → reverted). Registered in `vitest.workspace.ts` + `assert-test-census.mjs`
+  (now 9 projects, schwarz:1). **Consumer repoint (ADR-0007 dedup, first family):** `deltoid.ts` now imports the engine from
+  @cas/schwarz and re-exports its surface, keeping only DELTOID_C/F/DELTOID + deltoidBoundary; its 18 consumers + `deltoid.test.ts`
+  UNCHANGED (behavior-preserving). Green: build(+gate)/typecheck/lint/test **2255 / 268** (+1 file). Next: S3 → S4a.

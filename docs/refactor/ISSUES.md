@@ -525,3 +525,11 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   NOT by adding a `conj` alias to @cas/expr — the expr language is the authority on its own vocabulary. Both preventive (no producer
   sets `antiholomorphic` or emits `conj` today); they de-risk the S3/S4 σ path (σ is anti-holomorphic). Next: **S1** — extract
   `@cas/core/poly` + `@cas/core polynomialRoots` (ADR-0007 second-consumer), the two pure helpers the σ engine needs.
+- **2026-08-07 · stage schwarz-s2a-pkg (PR → refactor/main):** **QD-HANDOFF-2 → S2a: @cas/schwarz created (first family).** NEW shared
+  package `packages/schwarz` (on @cas/core) holds the unbounded-Laurent σ engine (`makeUnboundedLaurentSchwarz` + `escapeTime` +
+  `pointInPolygon`), lifted verbatim from `correspondences/deltoid.ts` (a clean-room TS port of QD schwarz-common). correspondences
+  now consumes it (deltoid.ts re-exports the surface) — **ADR-0007 second-consumer met** (CD becomes the third at S4a). Golden net +
+  mutation-verified; green 2255/268. **REORDER (flagged):** went deltoid-direct — **S1** (@cas/core poly/polynomialRoots) + the full
+  QD σ lift/cutover (**S2b–d**) are DEFERRED to a post-deltoid "generalize + dedupe QD" phase (not on the deltoid-σ critical path; S1
+  also touches load-order-sensitive QD glue). Next: **S3** (interchange `form:"schwarz"` carrying the deltoid laurent φ) → **S4a** (CD
+  reconstructs the deltoid σ via @cas/schwarz — CPU, `≈`).
