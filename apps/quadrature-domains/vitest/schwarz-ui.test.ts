@@ -35,20 +35,26 @@ describe("Schwarz fractal-mode interaction (jsdom)", () => {
     expect(!!T && typeof T.onCanvasClick === "function").toBe(true);
   });
 
-  // S0a (SIGMA-HANDOFF): the export hands off φ (the Riemann map), NOT the Schwarz reflection σ.
-  // The label must say so — "Export map" over a Schwarz-reflection tool reads as exporting σ.
-  it("export card honestly labels the hand-off as φ (Riemann map), not σ", () => {
+  // S3b (SIGMA-HANDOFF): the export card offers BOTH hand-offs — the Riemann map φ (holomorphic) and,
+  // ALONGSIDE it, the Schwarz reflection σ (anti-holomorphic, reconstructed by CD). Each button is
+  // labeled by which map it exports; a bare "Export map" over a Schwarz tool reads ambiguously.
+  // (Supersedes S0a's φ-only card, which disclaimed σ as "planned".)
+  it("export card offers both φ (Riemann map) and σ (Schwarz reflection), honestly labeled", () => {
     expect(!!T && typeof T.makeOverlaysCard === "function").toBe(true);
     const card = T.makeOverlaysCard();
-    const btn = card.querySelector("#schwarz-export-map") as HTMLButtonElement;
-    expect(btn).toBeTruthy();
-    // The button names the Riemann map φ — not the bare "Export map".
-    expect(btn.textContent).toMatch(/Riemann map/);
-    expect(btn.textContent).toContain("φ");
-    // The card copy makes clear it exports φ, and disclaims the Schwarz reflection σ.
+    const phiBtn = card.querySelector("#schwarz-export-map") as HTMLButtonElement;
+    const sigmaBtn = card.querySelector("#schwarz-export-sigma") as HTMLButtonElement;
+    expect(phiBtn).toBeTruthy();
+    expect(sigmaBtn).toBeTruthy();
+    // φ button names the Riemann map; σ button names the Schwarz reflection — neither a bare "Export map".
+    expect(phiBtn.textContent).toMatch(/Riemann map/);
+    expect(phiBtn.textContent).toContain("φ");
+    expect(sigmaBtn.textContent).toMatch(/Schwarz reflection/);
+    expect(sigmaBtn.textContent).toContain("σ");
+    // The card copy names both maps.
     const text = card.textContent || "";
     expect(text).toMatch(/Riemann map φ/);
-    expect(text).toMatch(/\bnot\b[\s\S]{0,40}(Schwarz reflection|σ)/i);
+    expect(text).toMatch(/Schwarz reflection σ/);
   });
 
   it("click pins (deferred), dblclick cancels + seeds tree, gate + hover behave", async () => {
