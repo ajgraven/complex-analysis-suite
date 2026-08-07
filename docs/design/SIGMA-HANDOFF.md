@@ -292,6 +292,20 @@ S4b (GPU σ) + S5 (other families, branch-aware, df64) remain separate approvals
   producer↔consumer contract. `_exportSigma` handler + card rewrite (both hand-offs); `_exportMap`
   unchanged. Net-first, mutation-verified. Green bar **2263 / 268**.
 
+- **S3b follow-up (legibility + the missing live net)** — the σ/φ **refusal is now legible**:
+  `classifyPhiForExport` + `explainSigmaUnavailable`/`explainPhiUnavailable` (`schwarz-export.mjs`, pure)
+  replace the single blind "needs an unbounded-Laurent φ (e.g. the deltoid)" line — which fired for EVERY
+  non-Laurent case — with the real cause (nothing captured → the manual **"Use this φ"** step; a Direct
+  rational φ → use φ export; bounded; or **N pole terms → pole-free Laurent only, planned**). null ⇔
+  exportable, deferred to `phiToMapSpec` so the verdict can't drift from the serializer. `schwarz-ui.mjs`
+  routes both handlers through the explainers and adds `_autoCaptureIfPending` (captures a pending Inverse
+  solve on Export when nothing is captured yet). Closes the gap that hid the problem: `schwarz-export.test.ts`
+  only serialized a **hand-built** deltoid literal — **NEW `schwarz-export-live.test.ts`** boots the real QD
+  solver and runs a genuinely-solved deltoid through the real exporter (valid `schwarz` envelope), then pins
+  the single-exterior-pole boundary (σ+φ null, reason names the pole) that **S2b/S5** will flip. Net-first,
+  mutation-verified. Green bar **2282 / 270**. **No σ-coverage change** — the pole-bearing/other-family lift
+  is still the deferred generalize phase below.
+
 ### What the dependency trace changed (the extraction is cleaner than §3–5 assumed)
 - QD's σ path **already runs on `@cas/core`** (its `Complex` is a re-export shim, `app/core/complex.mjs`),
   so **~1,630 LOC of σ math lifts almost verbatim**; the only blockers are namespace plumbing (the

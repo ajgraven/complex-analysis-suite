@@ -80,6 +80,15 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
 `cd-overlay-01` (per-frame redraw), `cd-metricsworker-01` (worker leak) touch code CD-1/CD-3 would move.
 
 ## Status updates (mutable)
+- **2026-08-07 · branch claude/repository-refactor-project-pg5ktu:** **σ/φ export blind-message defect →
+  fixed; hand-built-only test gap → closed.** `_exportSigma`/`_exportMap` reported one "needs an
+  unbounded-Laurent φ (e.g. the deltoid)" line for every refusal (nothing-captured / rational / bounded /
+  pole-bearing) — reading as "the deltoid is unsupported" when a solved deltoid actually exports. Root cause
+  it escaped CI: the σ-export test asserted a hand-built `deltoidPhi` literal, never a live solve. Fixed with
+  pure `classifyPhiForExport` + `explain{Sigma,Phi}Unavailable` (legible reasons, `null ⇔ exportable` deferred
+  to `phiToMapSpec`) + a live solver→exporter regression net (`schwarz-export-live.test.ts`). Pole-bearing /
+  other-family σ **remains deferred** (SIGMA-HANDOFF S2b/S5) — the fix makes its refusal honest, not supported.
+  Green **2282 / 270**.
 - **2026-07-30 · stage A1 (PR → refactor/main):** **QD-SOLV-3 → fixed** (solver-pqd-singular routed to
   `QD.poleCentroid`; D-1 behavior change, char-tested). **QD-SOLV-2 → fixed** (CONTRIBUTING.md corrected).
 - **QD-ALG-7 → deferred out of A1** to Group D (algebra work — its natural home). **QD-SOLV-6 → deferred**

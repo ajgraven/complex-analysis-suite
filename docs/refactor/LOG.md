@@ -1494,3 +1494,24 @@
   Playwright-loaded the σ deep-link against the built app — the 3-fold-symmetric deltoid σ tiling renders,
   `≈`-labeled, ZERO console errors. Green bar **2267 / 269** (+1 file, +3 tests). **QD-HANDOFF-2 CLOSED end
   to end: QD emits σ → CD reconstructs + renders it.** (S4b GPU σ + other families remain separate approvals.)
+- **2026-08-07 · branch claude/repository-refactor-project-pg5ktu:** **σ/φ export legibility + the missing
+  LIVE net (Phase 1 of the "σ for more domains such as the deltoid" ask).** A Phase-0 repro that runs the
+  REAL solver → REAL exporter in one process found the pure **deltoid already σ-exports end to end** — so the
+  reported "deltoid unsupported" was a mislabel: `_exportSigma`/`_exportMap` printed ONE blind line ("needs an
+  unbounded-Laurent φ (e.g. the deltoid)") for EVERY refusal — nothing captured, a Direct rational φ, a
+  bounded domain, or a pole-bearing unbounded QD — pointing each at the deltoid, the one shape that works. Why
+  it survived to prod: the σ test asserted a **hand-built** `deltoidPhi` literal; the live solve→capture→export
+  chain was never exercised. FIX (`schwarz-export.mjs`, pure + tested): `classifyPhiForExport` +
+  `explainSigmaUnavailable`/`explainPhiUnavailable` — return **null ⇔ exportable** (the ok-decision defers to
+  `phiToMapSpec`, so a reason can never drift from the serializer), else the real cause (names the manual
+  **"Use this φ"** capture step; "rational → use φ export"; "bounded"; "N pole terms → pole-free Laurent only,
+  planned"). `schwarz-ui.mjs`: both handlers route through the explainers; `_autoCaptureIfPending` grabs a
+  pending Inverse solve when nothing is captured yet (safe — never overrides an existing capture, reuses the
+  "Use this φ" path, no new failure mode). NET-FIRST: 10 classifier/reason unit tests (RED→GREEN); **NEW
+  `vitest/schwarz-export-live.test.ts`** boots the real QD solver and runs a genuinely-solved deltoid through
+  the real exporter (valid `schwarz` envelope) + pins the single-pole boundary (σ+φ null, reason names the
+  pole) — the net that was missing; a jsdom wiring test asserts the precise status line for nothing-captured /
+  pole-bearing / bounded. Mutation-verified (`explainSigmaUnavailable`→always-null → all three nets red →
+  reverted). Green: typecheck/lint/test **2282 / 270** (+15 tests, +1 file). σ COVERAGE UNCHANGED —
+  pole-bearing/other-family σ stays the deferred generalize phase (S2b/S5); this only makes the refusal honest
+  and nets the deltoid path that shipped in S3b/S4a.

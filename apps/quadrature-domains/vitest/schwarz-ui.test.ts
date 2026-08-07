@@ -57,6 +57,41 @@ describe("Schwarz fractal-mode interaction (jsdom)", () => {
     expect(text).toMatch(/Schwarz reflection σ/);
   });
 
+  // Phase 1 (σ-export legibility): the handlers used to reject every non-Laurent φ with one blind
+  // "needs an unbounded-Laurent φ (e.g. the deltoid)" line. Now each rejection names its real reason.
+  // Drives the real _exportSigma/_exportMap (exposed on the hook) against a mounted status span.
+  it("export handlers show the precise reason a map can't be handed off (Phase 1)", async () => {
+    if (!T) return;
+    const QD: any = (await import("../app/solvers/solver.mjs")).default;
+    // No pending Inverse solve → _autoCaptureIfPending() is a deterministic no-op (independent of order).
+    QD.PrimarySolution = { get: () => null };
+
+    const card = T.makeOverlaysCard();
+    document.body.appendChild(card); // handlers read document.getElementById('schwarz-export-status')
+    const status = () => document.getElementById("schwarz-export-status")!.textContent || "";
+
+    // (1) nothing captured → BOTH exports name the manual "Use this φ" capture step, not "the deltoid".
+    T.sState.phiSnapshot = null;
+    T._exportSigma();
+    expect(status()).toMatch(/Use this φ/);
+    expect(status()).not.toMatch(/e\.g\. the deltoid/);
+    T._exportMap();
+    expect(status()).toMatch(/Use this φ/);
+
+    // (2) captured a pole-bearing UNBOUNDED QD (single exterior pole) → σ names the pole, not the deltoid.
+    T.sState.phiSnapshot = { unbounded: true, c: 0.6, polyA: [], branches: [{ z: { re: 2, im: 0 }, A: [{ re: 1, im: 0 }] }] };
+    T._exportSigma();
+    expect(status()).toMatch(/pole/i);
+
+    // (3) captured a BOUNDED domain → says bounded.
+    T.sState.phiSnapshot = { unbounded: false, branches: [{ z: { re: 0.5, im: 0 }, A: [{ re: 1, im: 0 }] }] };
+    T._exportSigma();
+    expect(status()).toMatch(/bounded/i);
+
+    document.body.removeChild(card);
+    T.sState.phiSnapshot = null;
+  });
+
   it("click pins (deferred), dblclick cancels + seeds tree, gate + hover behave", async () => {
     if (!T) return;
     T.sState.mode = "fractal";
