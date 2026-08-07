@@ -253,6 +253,26 @@ approvals); **(2)** export σ **alongside** the existing φ export (keeps the φ
 fallback); **(3)** σ ships **`≈`, principal exterior branch only**, with the univalence caveat that
 `correspondences/deltoid.ts` already documents.
 
+### Progress (updated 2026-08-07 — read this first on resume)
+**Shipped to `refactor/main`:**
+- **S0a #235** — QD honest relabel (button/card say "Export **Riemann map φ**", disclaim σ).
+- **S0b #236** — CD `mapSpecToExpr` honors the `antiholomorphic` flag (builds on `conjugate(z)`); schema
+  example `conj`→`conjugate`.
+- **S2a #237** — **NEW `@cas/schwarz`** (on `@cas/core`): the unbounded-Laurent σ engine
+  `makeUnboundedLaurentSchwarz(c, F) → { evalPhi, evalPhiDeriv, evalF, invertPhi, sigma }` + `escapeTime`
+  + `pointInPolygon`, lifted verbatim from `correspondences/deltoid.ts`. **correspondences deduped onto it**
+  (its `deltoid.ts` re-exports the engine; 18 consumers unchanged) — **ADR-0007 second-consumer met, so the
+  original S2e is already done**. Golden net (round-trip identity + exterior branch), mutation-verified.
+  Green bar **2255 / 268** (census 9 projects, `schwarz:1`).
+
+**REORDER (in effect — the PR table below is annotated):** went **deltoid-direct** (S2a before S1).
+**S1** (`@cas/core` poly/polynomialRoots) and the **full QD σ lift/cutover (S2b–d)** are **DEFERRED** to a
+later "generalize + dedupe QD" phase — they are *not* on the deltoid-σ critical path, and S1 touches
+load-order-sensitive QD glue + the legacy `node-test` harness. The `PhiData` / full-family / S2d-cutover
+material in this doc stays as the eventual plan for that phase.
+
+**Remaining to the goal (deltoid σ live in CD):** **S3a → S3b → S4a** — see "S3 — execute next" below.
+
 ### What the dependency trace changed (the extraction is cleaner than §3–5 assumed)
 - QD's σ path **already runs on `@cas/core`** (its `Complex` is a re-export shim, `app/core/complex.mjs`),
   so **~1,630 LOC of σ math lifts almost verbatim**; the only blockers are namespace plumbing (the
@@ -267,20 +287,22 @@ fallback); **(3)** σ ships **`≈`, principal exterior branch only**, with the 
 
 ### PR sequence (net-first, one concern per PR, mutation-verified, merge-on-green; BP = behavior-preserving)
 
-| PR | Scope | BP? |
-|----|-------|-----|
-| S0a | QD relabel: button/card say "Export **Riemann map φ**", σ not yet exported | behavior (labels), bug-report authorized |
-| S0b | CD import fixes: `conj`→`conjugate` alias + honor the ignored `antiholomorphic` flag | bug-fix |
-| S1a | Extract `@cas/core/poly`; repoint QD consumers | ✅ |
-| S1b | Extract `@cas/core polynomialRoots`; repoint Direct + inverse | ✅ |
-| S2a | Scaffold `@cas/schwarz` + `PhiData`; port unbounded-Laurent family from `deltoid.ts` (round-trip golden) | ✅ (new pkg) |
-| S2b | Lift full `schwarz-common` σ kernel (11 adapters, Newton, `buildSchwarzFromPhi`, `escapeTime`), de-namespaced | ✅ |
-| S2c | Lift `schwarz-inverse` (σ⁻¹, preimage tree, limit set); fold monkey-patch into the builder | ✅ |
-| S2d | **QD → `@cas/schwarz`** via a thin `QD.Schwarz` re-publish adapter (handle-shape compatible) | ✅ |
-| S2e | **correspondences → `@cas/schwarz`**; delete `deltoid.ts` engine | ✅ |
-| S3a | `@cas/interchange`: add `form:"schwarz"`, `isMapSpec` case + caps, deltoid σ golden, minor VERSION bump | ✅ additive |
-| S3b | QD export: `schwarz-reflection` envelope + "Export **σ**" button **alongside** φ | new feature (token granted) |
-| S4a | **CD reconstructs deltoid σ (CPU)** via `@cas/schwarz`; end-to-end ground truth; `≈` labeling | additive |
+(BP = behavior-preserving unless noted.)
+
+| PR | Scope | Status |
+|----|-------|--------|
+| S0a | QD relabel: button/card say "Export **Riemann map φ**", disclaim σ (labels; bug-report authorized) | ✅ **#235** |
+| S0b | CD honors the `antiholomorphic` flag (build on `conjugate(z)`); schema `conj`→`conjugate` | ✅ **#236** |
+| S1a | Extract `@cas/core/poly`; repoint QD consumers | ⏸ DEFERRED (reorder) |
+| S1b | Extract `@cas/core polynomialRoots`; repoint Direct + inverse | ⏸ DEFERRED (reorder) |
+| S2a | NEW `@cas/schwarz` (unbounded-Laurent σ engine lifted from `deltoid.ts`) | ✅ **#237** |
+| S2b | Lift full `schwarz-common` σ kernel (11 adapters, Newton, `buildSchwarzFromPhi`, `escapeTime`) | ⏸ DEFERRED (generalize phase) |
+| S2c | Lift `schwarz-inverse` (σ⁻¹, preimage tree, limit set); fold monkey-patch into the builder | ⏸ DEFERRED |
+| S2d | **QD → `@cas/schwarz`** re-publish adapter (handle-shape compatible) — **highest-risk** | ⏸ DEFERRED |
+| S2e | correspondences → `@cas/schwarz` (dedup `deltoid.ts` engine) | ✅ done early in **#237** |
+| S3a | `@cas/interchange`: add `form:"schwarz"` + `isMapSpec` case + caps + deltoid σ golden + minor VERSION | ▶ **NEXT** |
+| S3b | QD export: `schwarz-reflection` envelope + "Export **σ**" button **alongside** φ (token granted) | pending |
+| S4a | **CD reconstructs deltoid σ (CPU)** via `@cas/schwarz`; end-to-end ground truth; `≈` labeling | pending |
 
 **Deferred to separate approvals:** S4b (CD GPU σ — port QD's `FRAG_SRC` GLSL), S5 (non-Laurent families
 on the wire, branch-aware continuation through cusps [uncertified — RISKS §3], df64 σ, PQD GPU αth-root).
@@ -289,4 +311,48 @@ on the wire, branch-aware continuation through cusps [uncertified — RISKS §3]
 **S2d** — QD's entire Schwarz UI (`schwarz-ui/paint/render/interaction/forward`) reads `QD.Schwarz`'s exact
 handle shape (`{ family, sigma, psi, evalPhi, evalF, isInOmega, escapeR, unbounded, w0, adapter, _phi,
 _boundaryPts }`); the re-publish adapter must be byte-compatible, gated by the full existing QD suite +
-the browser render net.
+the browser render net. **(Deferred by the reorder — not the immediate next step.)**
+
+### S3 — execute next (resume here after compaction)
+
+The remaining path to the goal (deltoid σ live in CD). `@cas/schwarz` already exists (S2a, #237) with
+`makeUnboundedLaurentSchwarz(c, F) → { evalPhi, evalPhiDeriv, evalF, invertPhi, sigma }` + `escapeTime` +
+`pointInPolygon`. For the deltoid, **φ is the existing `laurent` MapSpec** (`c = 1`, `F = [0,0,0.5]`) — no
+richer `PhiData` needed yet. Each step is its own net-first PR → `refactor/main`, merge-on-green.
+
+**S3a — `@cas/interchange`: add `form:"schwarz"`** (additive; minor `VERSION` bump, stay major 1):
+- `packages/interchange/src/schema.ts`: add `interface SchwarzMap { form:"schwarz"; phi: LaurentMap |
+  RationalMap; disk:"D"|"D*"; inverse:"newton-dk"; antiholomorphic:true }` to the `MapSpec` union. (Deltoid:
+  `phi` = the laurent map, `disk:"D*"` = the exterior.) Full-family `PhiData` is deferred with S2b+.
+- `packages/interchange/src/validate.ts`: add `case "schwarz":` to `isMapSpec` (recurse `isMapSpec(v.phi)`;
+  `disk` ∈ {"D","D*"}; `inverse` a known string). The existing `schwarz-reflection` kind + its `sigma:
+  MapSpec` field already validate — `sigma` now just holds a `form:"schwarz"` map.
+- `packages/interchange/src/goldens.ts`: add a **deltoid σ golden** — a `schwarz-reflection` envelope whose
+  `sigma` is the `form:"schwarz"` deltoid, plus a frozen `σ(w₀)` value (mirror `QD_TO_CD_DELTOID_PHI_AT_2`).
+  Compute it with `makeUnboundedLaurentSchwarz(1, [[0,0],[0,0],[0.5,0]]).sigma(w₀)` from `@cas/schwarz`
+  (dev-only import in a script, or hard-code the computed value with a comment showing the derivation).
+- Net: encode/decode round-trip + `isMapSpec` accepts the new form + the golden decodes to the frozen σ(w₀).
+
+**S3b — QD "Export σ" button, alongside φ** (behavior change — token granted, decision 2):
+- `apps/quadrature-domains/app/schwarz/schwarz-export.mjs`: add `buildSigmaEnvelope(phi, opts)` →
+  `{ kind:"schwarz-reflection", payload:{ sigma:{ form:"schwarz", phi:<phiToMapSpec(phi)>, disk, inverse:
+  "newton-dk", antiholomorphic:true }, sourceDomain:<the quadrature-domain payload>, conventions:CANONICAL }}`,
+  and `exportSigmaDeepLink(phi, loc, opts)` reusing `resolveHandoffBase` (S0/QD-HANDOFF-1 code).
+- `apps/quadrature-domains/app/schwarz/schwarz-ui.mjs` `makeOverlaysCard`: add a second button
+  **"Export σ (Schwarz reflection) → copy link"** next to the φ button; wire to an `_exportSigma` handler
+  mirroring `_exportMap`. Net: extend `schwarz-ui.test.ts` (both buttons present, honest labels) +
+  `schwarz-export.test.ts` (the σ envelope round-trips + matches the golden).
+
+**S4a — CD reconstructs the deltoid σ (CPU), the ground-truth milestone** (additive):
+- Add `@cas/schwarz` to `apps/complex-dynamics/package.json` deps (`pnpm install`).
+- `apps/complex-dynamics/src/interchange/importMap.ts`: `envelopeToMapSpec` already returns the
+  `schwarz-reflection` `sigma`. When `sigma.form === "schwarz"`, do **not** call `mapSpecToExpr` (σ is not an
+  expr — see §2/§3); instead build the engine from `sigma.phi` via `makeUnboundedLaurentSchwarz` and expose
+  a σ evaluator. Render/overlay the σ **escape-time field on the CPU** (a canvas overlay or CPU field is
+  fine for this milestone), **`≈`-labeled**, principal exterior branch. Net: the S3a σ golden reproduces
+  σ(w₀) through CD's import path. **This is the approved end state (S4a).** S4b (GPU σ) is a separate approval.
+
+**Reference points (file:line anchors gathered by the S2/S3 audits, valid as of 2026-08-07):** interchange
+`schema.ts:42-92` (MapSpec union + `schwarz-reflection` kind), `validate.ts:21` (`KNOWN_KINDS`) / `:98-111`
+(`isMapSpec`), `goldens.ts` (the sole deltoid-φ golden today); CD `importMap.ts:61-90` (the bridge),
+`main.ts:2926-2966` (`importInterchange`). `@cas/schwarz` public API: `packages/schwarz/src/index.ts`.

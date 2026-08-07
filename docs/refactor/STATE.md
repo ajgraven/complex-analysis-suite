@@ -95,5 +95,5 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 ## Resume commands
 ```
 git fetch && git checkout refactor/main && git pull
-pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2248/267 + census ✓
+pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm lint && pnpm test  # expect 2255/268 + census (9 projects) ✓
 ```
