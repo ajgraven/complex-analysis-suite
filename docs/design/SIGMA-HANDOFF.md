@@ -280,7 +280,14 @@ later "generalize + dedupe QD" phase — they are *not* on the deltoid-σ critic
 load-order-sensitive QD glue + the legacy `node-test` harness. The `PhiData` / full-family / S2d-cutover
 material in this doc stays as the eventual plan for that phase.
 
-**Remaining to the goal (deltoid σ live in CD):** ~~S3a~~ ✅ → **S3b → S4a** — see "S3 — execute next" below.
+**Remaining to the goal (deltoid σ live in CD):** ~~S3a~~ ✅ → ~~S3b~~ ✅ → **S4a** (the last step) — see "S3 — execute next" below.
+
+- **S3b #239** — QD **"Export Schwarz reflection σ → copy link"** button, alongside φ. `schwarz-export.mjs`
+  `buildSigmaEnvelope`/`exportSigmaLink`/`exportSigmaDeepLink` emit the `schwarz-reflection` envelope
+  (sigma = `form:"schwarz"` recipe, `disk:"D*"`); scoped to the unbounded-Laurent family (the only σ
+  @cas/schwarz rebuilds). It reproduces the S3a σ golden **byte-for-byte**, so the golden is now a real
+  producer↔consumer contract. `_exportSigma` handler + card rewrite (both hand-offs); `_exportMap`
+  unchanged. Net-first, mutation-verified. Green bar **2263 / 268**.
 
 ### What the dependency trace changed (the extraction is cleaner than §3–5 assumed)
 - QD's σ path **already runs on `@cas/core`** (its `Complex` is a re-export shim, `app/core/complex.mjs`),
@@ -310,8 +317,8 @@ material in this doc stays as the eventual plan for that phase.
 | S2d | **QD → `@cas/schwarz`** re-publish adapter (handle-shape compatible) — **highest-risk** | ⏸ DEFERRED |
 | S2e | correspondences → `@cas/schwarz` (dedup `deltoid.ts` engine) | ✅ done early in **#237** |
 | S3a | `@cas/interchange`: add `form:"schwarz"` + `isMapSpec` case + caps + deltoid σ golden + minor VERSION | ✅ **#238** |
-| S3b | QD export: `schwarz-reflection` envelope + "Export **σ**" button **alongside** φ (token granted) | ▶ **NEXT** |
-| S4a | **CD reconstructs deltoid σ (CPU)** via `@cas/schwarz`; end-to-end ground truth; `≈` labeling | pending |
+| S3b | QD export: `schwarz-reflection` envelope + "Export **σ**" button **alongside** φ (token granted) | ✅ **#239** |
+| S4a | **CD reconstructs deltoid σ (CPU)** via `@cas/schwarz`; end-to-end ground truth; `≈` labeling | ▶ **NEXT** |
 
 **Deferred to separate approvals:** S4b (CD GPU σ — port QD's `FRAG_SRC` GLSL), S5 (non-Laurent families
 on the wire, branch-aware continuation through cusps [uncertified — RISKS §3], df64 σ, PQD GPU αth-root).
@@ -343,7 +350,8 @@ richer `PhiData` needed yet. Each step is its own net-first PR → `refactor/mai
   (dev-only import in a script, or hard-code the computed value with a comment showing the derivation).
 - Net: encode/decode round-trip + `isMapSpec` accepts the new form + the golden decodes to the frozen σ(w₀).
 
-**S3b — QD "Export σ" button, alongside φ** (behavior change — token granted, decision 2):
+**S3b — QD "Export σ" button, alongside φ** — ✅ **DONE (#239)**; shipped as specced (scoped to the
+unbounded-Laurent family; the σ golden is now a byte-exact producer↔consumer contract). (behavior change — token granted, decision 2):
 - `apps/quadrature-domains/app/schwarz/schwarz-export.mjs`: add `buildSigmaEnvelope(phi, opts)` →
   `{ kind:"schwarz-reflection", payload:{ sigma:{ form:"schwarz", phi:<phiToMapSpec(phi)>, disk, inverse:
   "newton-dk", antiholomorphic:true }, sourceDomain:<the quadrature-domain payload>, conventions:CANONICAL }}`,
