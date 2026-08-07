@@ -111,11 +111,11 @@ describe("CD consume interchange map (Phase 4 C3)", () => {
     expect(v[1]).toBeCloseTo(0, 12);
   });
 
-  // S3a: the interchange `schwarz` form is a σ RECIPE, not an algebraic expression — σ has a numerical
+  // The interchange `schwarz` form is a σ RECIPE, not an algebraic expression — σ has a numerical
   // inverse (φ⁻¹ via Newton/Durand–Kerner), so it can't compile through the expr pipeline. mapSpecToExpr
   // must reject it LOUDLY (not silently return undefined → a cryptic downstream crash when main.ts sets
-  // inpf = undefined). envelopeToMapSpec still surfaces the recipe so main.ts can recognize + decline it.
-  // CD's actual σ reconstruction (build the engine from sigma.phi via @cas/schwarz) lands in S4a.
+  // inpf = undefined). envelopeToMapSpec still surfaces the recipe so main.ts can recognize it and route
+  // it to schwarzEngineFromMapSpec (the next test) instead of the expr path — which is what S4a shipped.
   it("rejects a schwarz-form map from the expr path; surfaces the σ recipe from its envelope", () => {
     const sigma = { form: "schwarz" as const, phi: deltoidPhi, disk: "D*" as const, inverse: "newton-dk" as const, antiholomorphic: true as const };
     expect(() => mapSpecToExpr(sigma)).toThrow(/not expr-compilable/);
