@@ -35,6 +35,22 @@ describe("Schwarz fractal-mode interaction (jsdom)", () => {
     expect(!!T && typeof T.onCanvasClick === "function").toBe(true);
   });
 
+  // S0a (SIGMA-HANDOFF): the export hands off φ (the Riemann map), NOT the Schwarz reflection σ.
+  // The label must say so — "Export map" over a Schwarz-reflection tool reads as exporting σ.
+  it("export card honestly labels the hand-off as φ (Riemann map), not σ", () => {
+    expect(!!T && typeof T.makeOverlaysCard === "function").toBe(true);
+    const card = T.makeOverlaysCard();
+    const btn = card.querySelector("#schwarz-export-map") as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    // The button names the Riemann map φ — not the bare "Export map".
+    expect(btn.textContent).toMatch(/Riemann map/);
+    expect(btn.textContent).toContain("φ");
+    // The card copy makes clear it exports φ, and disclaims the Schwarz reflection σ.
+    const text = card.textContent || "";
+    expect(text).toMatch(/Riemann map φ/);
+    expect(text).toMatch(/\bnot\b[\s\S]{0,40}(Schwarz reflection|σ)/i);
+  });
+
   it("click pins (deferred), dblclick cancels + seeds tree, gate + hover behave", async () => {
     if (!T) return;
     T.sState.mode = "fractal";

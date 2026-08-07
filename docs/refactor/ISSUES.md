@@ -507,3 +507,14 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   pre-fix wiring, GREEN after, mutation-verified. Behavior change authorized by the bug report. Green: build/typecheck/lint/test
   **2248 / 267**. **Follow-up (unchanged):** the built-app browser smoke test would catch this cross-app/built-only class (same gap
   as QD-BUILD-1 / QD-SYM-LOAD); local split-port dev still needs VITE_CD_BASE.
+- **2026-08-07 · stage schwarz-s0a-relabel (PR → refactor/main):** **QD-HANDOFF-2 (σ-export gap) → OPENED; labeling half FIXED.**
+  User-reported: the QD→CD "Export map → copy link" exports φ (the Riemann map), not σ (the Schwarz reflection). Confirmed
+  by-design, not a QD-HANDOFF-1 regression — σ(w)=conj(F(φ⁻¹(w))) has a NUMERICAL inverse, so it is not a closed-form MapSpec
+  (schwarz-export.mjs:4-8, the deliberate plumbing-first Phase-4 hand-off). A three-agent audit (QD σ machinery / interchange /
+  CD+expr feasibility) → design doc `docs/design/SIGMA-HANDOFF.md`, **APPROVED 2026-08-07**: reconstruct σ from φ via a new shared
+  **@cas/schwarz** (σ math already ~1630 LOC on @cas/core; the ADR-0007 second-consumer rule is already met by
+  `correspondences/deltoid.ts` + Direct) → interchange `form:"schwarz"` in the existing `schwarz-reflection` kind → CD reconstructs
+  the deltoid σ (CPU, `≈`, principal exterior branch). Plan **S0→S4a** (σ export alongside φ). **S0a (this stage):** the honest
+  relabel only — button/card now say φ (Riemann map) and disclaim σ; net-first + mutation-verified. The faithful σ export is S1–S4a.
+  Two latent bugs the audit surfaced (queued for **S0b**): the interchange schema spells `conj` but @cas/expr only knows
+  `conjugate`; CD's `mapSpecToExpr` silently ignores the `antiholomorphic` MapSpec flag.

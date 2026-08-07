@@ -474,9 +474,11 @@ const QD = _QD;
       <button type="button" id="schwarz-clear-overlays" class="small"
               style="margin-left:6px;">Clear all overlays</button>
       <div style="margin-top:10px; border-top:1px solid #eee; padding-top:8px; font-size:12px; color:#555;">
-        Hand this φ off to the Complex Dynamics app as an <b>interchange</b> deep link.
+        Export the <b>Riemann map φ</b> (D→Ω) to the Complex Dynamics app as an <b>interchange</b>
+        deep link. This hands off φ itself — <b>not</b> the Schwarz reflection σ(w)=conj(F(φ⁻¹(w)));
+        a faithful σ export is planned.
       </div>
-      <button type="button" id="schwarz-export-map" class="small">Export map → copy link</button>
+      <button type="button" id="schwarz-export-map" class="small">Export Riemann map φ → copy link</button>
       <span id="schwarz-export-status" style="margin-left:8px; font-size:12px;"></span>
     `;
     setTimeout(() => {
@@ -1476,7 +1478,7 @@ const QD = _QD;
   if (typeof window !== 'undefined' && window.__SCHWARZ_UI_TEST_HOOK__) {
     window.__schwarzUiTest = {
       sState, setMode, setViewMode, onCanvasClick, onCanvasDblClick, onMouseMove,
-      runHoverOrbit, pinOrbitAt,
+      runHoverOrbit, pinOrbitAt, makeOverlaysCard,
       get CLICK_DELAY() { return _schwarzInter.getClickDelay(); },
       set CLICK_DELAY(v) { _schwarzInter.setClickDelay(v); },
     };
