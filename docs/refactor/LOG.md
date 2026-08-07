@@ -1401,3 +1401,12 @@
   **2248 / 267** (+1 file / +10 tests). Cut `refactor/qd-cd-export-link` off refactor/main; PR → refactor/main. **Known limit
   (documented, not a regression):** cross-app deep-linking still can't resolve automatically in local split-port dev — set
   `VITE_CD_BASE`; true end-to-end confidence needs the still-pending built-app browser smoke test.
+- **2026-08-07 · stage schwarz-s0a-relabel (PR → refactor/main):** **σ-handoff S0a — honest relabel (behavior: labels;
+  bug-report authorized).** User reported the Schwarz "Export map → copy link" exports the Riemann map φ, not the Schwarz reflection
+  σ — the documented plumbing-first design (schwarz-export.mjs:4-8), but the label over-promised. Relabeled the export button
+  "Export map → copy link" → "Export **Riemann map φ** → copy link" and the card copy to state it hands off φ (the Riemann map), NOT
+  σ(w)=conj(F(φ⁻¹(w))), with a "faithful σ export is planned" note (schwarz-ui.mjs `makeOverlaysCard`). NET-FIRST: exposed
+  `makeOverlaysCard` on the `__schwarzUiTest` hook (test-only, sentinel-gated) + NEW behavioral assertions in `vitest/schwarz-ui.test.ts`
+  (button names the Riemann map φ; card disclaims σ) — RED on the old label, GREEN after, mutation-verified (disclaimer "not"→"indeed"
+  → red → reverted). Green: build(+gate)/typecheck/lint/test **2249 / 267** (+1 test). First step of the APPROVED σ hand-off plan
+  (`docs/design/SIGMA-HANDOFF.md`, S0→S4a).
