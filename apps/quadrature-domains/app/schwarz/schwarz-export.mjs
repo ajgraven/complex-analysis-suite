@@ -25,12 +25,19 @@ export function phiToMapSpec(phi) {
   if (Array.isArray(phi.P) && Array.isArray(phi.Q)) {
     return { form: "rational", num: phi.P.map(cc), den: phi.Q.map(cc) };
   }
-  // Unbounded classical Laurent φ = c·z + Σ_{l≥0} F_l / z^l — pure Laurent only (no pole branches).
-  if (phi.unbounded && (phi.polyA || phi.F) && !(phi.branches && phi.branches.length)) {
+  // Unbounded classical Laurent φ = c·z + Σ_{l≥0} F_l/z^l ( + Σ_j Σ_k conj(A_{j,k})·u_j(z)^k ) — the
+  // pole-free deltoid AND the pole-bearing unbounded QDs (single exterior pole, cardioid, …). The
+  // interchange `laurent` form gained optional `branches` in 1.2.0; @cas/schwarz reconstructs the σ.
+  if (phi.unbounded && (phi.polyA || phi.F || (phi.branches && phi.branches.length))) {
     const cRaw = phi.c;
     const c = typeof cRaw === "number" ? { re: cRaw, im: 0 } : cRaw ? cc(cRaw) : { re: 1, im: 0 };
-    const F = (phi.polyA || phi.F).map(cc);
-    return { form: "laurent", c, F };
+    const F = (phi.polyA || phi.F || []).map(cc);
+    const spec = { form: "laurent", c, F };
+    // Emit `branches` ONLY when present, so a pole-free φ stays byte-identical to the pre-1.2.0 wire.
+    if (phi.branches && phi.branches.length) {
+      spec.branches = phi.branches.map((br) => ({ z: cc(br.z), A: (br.A || []).map(cc) }));
+    }
+    return spec;
   }
   return null;
 }
@@ -40,11 +47,10 @@ export function phiToMapSpec(phi) {
 //
 // phiToMapSpec()/buildSigmaEnvelope() collapse every unsupported φ to a bare `null`; the UI then
 // showed ONE blind line ("needs an unbounded-Laurent φ (e.g. the deltoid)") for all of them. But the
-// real reasons are distinct — nothing captured, a Direct rational map, a bounded domain, or an
-// unbounded QD that carries finite-pole branch terms — and pointing every one at "the deltoid" is
-// actively misleading, since a solved deltoid is exactly the case that DOES export. These helpers name
-// the real reason. They live beside phiToMapSpec so the availability verdict stays in lockstep with
-// the actual serializer (the ok-decision below is phiToMapSpec itself, not a parallel reimplementation).
+// real reasons are distinct — nothing captured, a Direct rational map (φ-exportable, but no σ), or a
+// bounded domain (not exportable yet). ALL unbounded QDs export now, pole-free and pole-bearing alike
+// (Phase 2). These helpers name the real reason, and live beside phiToMapSpec so the availability
+// verdict stays in lockstep with the actual serializer (the ok-decision below IS phiToMapSpec).
 
 /**
  * Structural classification of a captured φ, independent of export target. Pure.
@@ -67,31 +73,24 @@ export function classifyPhiForExport(phi) {
 const CAPTURE_HINT =
   'No φ captured yet — solve a domain on the Inverse tab, then click "Use this φ" above to capture it.';
 
-const poleWord = (n) => `${n} pole term${n === 1 ? "" : "s"}`;
-
 /**
  * The user-facing reason σ export is unavailable for `phi`, or null when σ IS exportable (the caller
  * should then proceed). The null-decision defers to phiToMapSpec so it can never disagree with the
- * actual σ builder (buildSigmaEnvelope emits iff the MapSpec is `laurent`).
+ * actual σ builder (buildSigmaEnvelope emits iff the MapSpec is `laurent` — now including pole-bearing).
  */
 export function explainSigmaUnavailable(phi) {
   const spec = phiToMapSpec(phi);
-  if (spec && spec.form === "laurent") return null; // σ IS exportable
+  if (spec && spec.form === "laurent") return null; // σ IS exportable (pole-free AND pole-bearing)
   switch (classifyPhiForExport(phi).kind) {
     case "none":
       return CAPTURE_HINT;
     case "rational":
       return 'This is a Direct-tab rational map (P/Q). σ export covers the unbounded-Laurent family ' +
-             '(e.g. the deltoid); use "Export Riemann map φ" for this map instead.';
+             '(the deltoid and pole-bearing QDs); use "Export Riemann map φ" for this map instead.';
     case "bounded":
       return "σ export currently covers unbounded quadrature domains; this captured domain is bounded.";
-    case "unbounded-poles": {
-      const { poleCount } = classifyPhiForExport(phi);
-      return `This unbounded domain carries ${poleWord(poleCount)} (finite pole${poleCount === 1 ? "" : "s"}); ` +
-             "σ export currently supports pole-free Laurent domains such as the deltoid. Pole-bearing σ is planned.";
-    }
     default:
-      return "σ export needs an unbounded-Laurent φ (e.g. the deltoid); this captured map isn't one.";
+      return "σ export needs an unbounded-Laurent φ; this captured map isn't one.";
   }
 }
 
@@ -100,18 +99,13 @@ export function explainSigmaUnavailable(phi) {
  * broader than σ — a Direct rational map exports too — so the null-decision is `phiToMapSpec(phi) != null`.
  */
 export function explainPhiUnavailable(phi) {
-  if (phiToMapSpec(phi)) return null; // φ IS exportable (rational or unbounded-laurent)
+  if (phiToMapSpec(phi)) return null; // φ IS exportable (rational or unbounded-laurent, incl. pole-bearing)
   switch (classifyPhiForExport(phi).kind) {
     case "none":
       return CAPTURE_HINT;
     case "bounded":
       return "φ export currently covers unbounded-Laurent maps and Direct rational maps; " +
              "this captured domain is bounded (not a closed-form map yet).";
-    case "unbounded-poles": {
-      const { poleCount } = classifyPhiForExport(phi);
-      return `This unbounded domain carries ${poleWord(poleCount)}; ` +
-             "φ export currently supports pole-free Laurent maps such as the deltoid.";
-    }
     default:
       return "No exportable φ yet — this captured family isn't a closed-form map.";
   }
@@ -211,8 +205,9 @@ export function exportPhiJSON(phi, opts = {}) {
 // map; this hands off σ(w)=conj(F(φ⁻¹(w))) as a RECIPE (interchange `form:"schwarz"`, v1.1.0): the
 // closed-form φ plus which disk it uniformizes and how φ⁻¹ is taken. σ is not a closed-form map (its
 // inverse is numerical), so CD reconstructs the evaluator from `sigma.phi` via @cas/schwarz (S4a) —
-// it does NOT compile through the expr pipeline. Scoped to the UNBOUNDED-LAURENT family, the only one
-// @cas/schwarz's exterior-branch engine reconstructs today; a rational/bounded φ returns null (we do
+// it does NOT compile through the expr pipeline. Scoped to the UNBOUNDED-LAURENT family — the deltoid
+// AND the pole-bearing unbounded QDs (its `sigma.phi` may carry finite-pole `branches`, 1.2.0), the
+// family @cas/schwarz's exterior-branch engine reconstructs; a rational/bounded φ returns null (we do
 // not emit a σ recipe no consumer can rebuild). The payload is CANONICAL: φ is a geometric map, so no
 // convention conversion — the QD normalizations touch h / areas, not φ's coefficients.
 

@@ -72,16 +72,22 @@ describe("σ/φ export — LIVE solver path (real solve → clonePhi → export)
     expect(env!.payload.bounded).toBe(false);
   });
 
-  // BOUNDARY (Phase 2 target): a single exterior pole is a genuine UNBOUNDED QD, but its φ carries a
-  // finite-pole branch term the shared σ engine can't reconstruct yet — so both σ and φ export refuse,
-  // and the reason names the pole rather than blaming the deltoid. Teaching @cas/schwarz the branch
-  // term (Phase 2) will flip these expectations; until then this pins the honest boundary.
-  it("a single-exterior-pole unbounded QD does not export yet, and the reason names the pole", () => {
+  // Phase 2: a single exterior pole is a genuine UNBOUNDED QD whose φ carries a finite-pole branch term.
+  // The engine (increment 1) and the wire (increment 2) now handle it, so the REAL solved domain emits a
+  // valid branch-bearing σ envelope — the case the Phase-1 boundary test pinned as "not yet". CD
+  // reconstructs it in increment 4.
+  it("a single-exterior-pole unbounded QD now σ-exports, carrying its finite-pole branches", () => {
     const phi = solveAndCapture({ poles: [{ a: C(2), principal: [C(1)] }] }, { unbounded: true, c: 0.6 });
     expect(phi.unbounded).toBe(true);
     expect(classifyPhiForExport(phi)).toMatchObject({ kind: "unbounded-poles" });
-    expect(buildSigmaEnvelope(phi)).toBeNull();
-    expect(buildExportEnvelope(phi)).toBeNull();
-    expect(explainSigmaUnavailable(phi)).toMatch(/pole/i);
+    expect(explainSigmaUnavailable(phi)).toBeNull(); // the refusal is gone
+    const env = buildSigmaEnvelope(phi, FIXED);
+    expect(env, "the real single-pole domain must σ-export").not.toBeNull();
+    expect(isEnvelopeOfKind(validateEnvelope(env), "schwarz-reflection")).toBe(true);
+    const sigma = (env!.payload as { sigma: { form: string; phi: { form: string; branches?: unknown[] } } }).sigma;
+    expect(sigma.form).toBe("schwarz");
+    expect(sigma.phi.form).toBe("laurent");
+    expect(sigma.phi.branches?.length ?? 0).toBeGreaterThan(0); // the pole rode along
+    expect(buildExportEnvelope(phi, FIXED)).not.toBeNull(); // φ export works too
   });
 });

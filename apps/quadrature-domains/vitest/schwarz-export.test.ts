@@ -160,10 +160,8 @@ describe("export availability — σ reason strings (Phase 1)", () => {
   it("bounded domain → says bounded, does not blame the deltoid", () => {
     expect(explainSigmaUnavailable(boundedPhi)).toMatch(/bounded/i);
   });
-  it("pole-bearing unbounded QD → names the pole term(s), not 'unsupported'", () => {
-    const msg = explainSigmaUnavailable(polePhi)!;
-    expect(msg).toMatch(/pole/i);
-    expect(msg).toMatch(/1 pole term(?!s)/); // singular for a single pole
+  it("pole-bearing unbounded QD → now σ-exports (Phase 2), so no message", () => {
+    expect(explainSigmaUnavailable(polePhi)).toBeNull();
   });
 });
 
@@ -181,7 +179,34 @@ describe("export availability — φ reason strings (Phase 1)", () => {
   it("bounded domain → says bounded", () => {
     expect(explainPhiUnavailable(boundedPhi)).toMatch(/bounded/i);
   });
-  it("pole-bearing unbounded QD → names the pole term(s)", () => {
-    expect(explainPhiUnavailable(polePhi)).toMatch(/pole/i);
+  it("pole-bearing unbounded QD → now φ-exports (Phase 2), so no message", () => {
+    expect(explainPhiUnavailable(polePhi)).toBeNull();
+  });
+});
+
+// Phase 2: pole-bearing unbounded QDs now serialize — phiToMapSpec carries the finite-pole branches into
+// the interchange laurent form (1.2.0), the σ recipe reflects them, and CD reconstructs the full σ. A
+// pole-free φ is unaffected (no `branches` key emitted → the deltoid wire is byte-identical).
+describe("pole-bearing φ → branches on the interchange laurent (Phase 2)", () => {
+  const polePhi = { unbounded: true, c: 0.6, polyA: [], branches: [{ z: C(0.4, 0.1), A: [C(0.3), C(0.1, -0.05)] }] };
+  const branchesOut = [{ z: C(0.4, 0.1), A: [C(0.3), C(0.1, -0.05)] }];
+
+  it("phiToMapSpec emits form:laurent with the mapped branches", () => {
+    expect(phiToMapSpec(polePhi)).toEqual({ form: "laurent", c: C(0.6), F: [], branches: branchesOut });
+  });
+  it("a pole-free φ still omits the branches key (deltoid wire byte-identical)", () => {
+    expect(phiToMapSpec(deltoidPhi)).toEqual({ form: "laurent", c: C(1), F: [C(0), C(0), C(0.5)] });
+  });
+  it("buildSigmaEnvelope carries the branches into the schwarz recipe and validates", () => {
+    const env = buildSigmaEnvelope(polePhi, { createdAt: GOLDEN_CREATED_AT, appVersion: "0.1.0" });
+    expect(env).not.toBeNull();
+    expect(isEnvelopeOfKind(validateEnvelope(env), "schwarz-reflection")).toBe(true);
+    const sigma = (env!.payload as { sigma: { phi: { branches: unknown } } }).sigma;
+    expect(sigma.phi.branches).toEqual(branchesOut);
+  });
+  it("buildExportEnvelope (φ) also carries the branches", () => {
+    const env = buildExportEnvelope(polePhi, { createdAt: GOLDEN_CREATED_AT });
+    expect(env).not.toBeNull();
+    expect((env!.payload.phi as { branches: unknown }).branches).toEqual(branchesOut);
   });
 });

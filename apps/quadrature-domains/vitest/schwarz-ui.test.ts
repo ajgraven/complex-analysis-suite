@@ -78,10 +78,11 @@ describe("Schwarz fractal-mode interaction (jsdom)", () => {
     T._exportMap();
     expect(status()).toMatch(/Use this φ/);
 
-    // (2) captured a pole-bearing UNBOUNDED QD (single exterior pole) → σ names the pole, not the deltoid.
-    T.sState.phiSnapshot = { unbounded: true, c: 0.6, polyA: [], branches: [{ z: { re: 2, im: 0 }, A: [{ re: 1, im: 0 }] }] };
+    // (2) a pole-bearing UNBOUNDED QD now EXPORTS (Phase 2) — the handler proceeds to the hand-off
+    // instead of refusing, so the status is an export outcome, not a "pole"/"Use this φ"/"bounded" refusal.
+    T.sState.phiSnapshot = { unbounded: true, c: 0.6, polyA: [], branches: [{ z: { re: 0.2, im: 0 }, A: [{ re: 0.3, im: 0 }] }] };
     T._exportSigma();
-    expect(status()).toMatch(/pole/i);
+    expect(status()).not.toMatch(/pole|Use this φ|bounded/i);
 
     // (3) captured a BOUNDED domain → says bounded.
     T.sState.phiSnapshot = { unbounded: false, branches: [{ z: { re: 0.5, im: 0 }, A: [{ re: 1, im: 0 }] }] };
