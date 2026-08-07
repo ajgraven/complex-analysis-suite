@@ -1478,3 +1478,19 @@
   (swap the `{re,im}→[re,im]` tuple order → σ(w₀)=1.066 ≠ 0.5 → net red → reverted). Behavior-preserving:
   `schwarzEngineFromMapSpec` is a new tested capability; `importInterchange` still shows the S3a decline
   (S4a-2 wires the reconstruction into a CPU-rendered σ view). Green bar **2264 / 268** (+1 test).
+- **2026-08-07 · stage schwarz-s4a2-cd-render (PR → refactor/main):** **σ-handoff S4a-2 — CD renders the
+  deltoid σ (CPU), the approved end-state.** Built on S4a-1's reconstruction. NEW `src/render/schwarzView.ts`
+  (pure, unit-tested): `schwarzBoundaryPoly` (φ of the unit circle — Ω is its exterior), `pixelToPlot`
+  (the app's uvToPlot mapping), `schwarzEscapeAt`, and `renderSchwarzField(engine, poly, view, size)` →
+  RGBA escape-time buffer, mirroring `render/orbitPreview.ts`'s CPU pattern (σ is not GPU/expr-renderable).
+  Coloring by EscapeKind: fundamental (the tiling) ramps by n, escaped/interior/invalid flat. Net
+  `test/schwarzView.test.ts` (3): origin ∈ K → fundamental n=0, far point → escaped; pixelToPlot window;
+  buffer opaque + has structure. Mutation-verified (drop the `!` in isInOmega → origin misclassifies as
+  'invalid' → net red → reverted). **CD integration** (small, self-contained): a new full-size 2D canvas
+  `#JCSSchwarz` in the dyn `.canvas-stack` (reuses `.overlay` positioning; the stack is square so the 256²
+  buffer isn't distorted) + an `≈`-badge; `renderSchwarzView`/`exitSchwarzView` in main.ts; `importInterchange`
+  now RECONSTRUCTS + paints σ (replacing the S3a decline); `exitSchwarzView()` at the top of `applyAllControls`
+  (safe — boot shows σ AFTER the last applyAllControls) and on a click of the σ raster. **Visual verification:**
+  Playwright-loaded the σ deep-link against the built app — the 3-fold-symmetric deltoid σ tiling renders,
+  `≈`-labeled, ZERO console errors. Green bar **2267 / 269** (+1 file, +3 tests). **QD-HANDOFF-2 CLOSED end
+  to end: QD emits σ → CD reconstructs + renders it.** (S4b GPU σ + other families remain separate approvals.)
