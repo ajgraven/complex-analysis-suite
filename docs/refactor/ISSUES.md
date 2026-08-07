@@ -533,3 +533,13 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   QD σ lift/cutover (**S2b–d**) are DEFERRED to a post-deltoid "generalize + dedupe QD" phase (not on the deltoid-σ critical path; S1
   also touches load-order-sensitive QD glue). Next: **S3** (interchange `form:"schwarz"` carrying the deltoid laurent φ) → **S4a** (CD
   reconstructs the deltoid σ via @cas/schwarz — CPU, `≈`).
+- **2026-08-07 · stage schwarz-s3a-interchange (PR → refactor/main):** **QD-HANDOFF-2 → S3a: the wire format now speaks σ.**
+  `@cas/interchange` v1.1.0 adds the `schwarz` MapSpec form — a σ RECIPE (closed-form `phi` + `disk` + `inverse` + the definitional
+  `antiholomorphic:true`), validated by an `isMapSpec` case and pinned by a new deltoid-σ golden (link + frozen `σ(1+0.75i)=0.5−0.5i`).
+  This is the middle third of closing the φ-vs-σ export gap: the format can now REPRESENT σ, so QD can EXPORT it (S3b) and CD can
+  RECONSTRUCT it (S4a). VERSION bumped 1.0.0 → 1.1.0 (adding vocabulary must move the version); the φ golden was regenerated for the
+  new version field only (QD's producer test stays green untouched; major-gated decode ⇒ old links still open). **Latent CD crash
+  closed as a side effect:** enlarging the shared `MapSpec` union meant CD's `mapSpecToExpr` would silently return `undefined` for a
+  schwarz map (→ `main.ts` `inpf=undefined` → downstream crash); S3a makes it throw loudly and has `importInterchange` decline
+  gracefully — CD stays working+honest until S4a adds real σ reconstruction. Green 2259/268. Remaining for QD-HANDOFF-2: **S3b**
+  (QD emits the σ envelope) + **S4a** (CD renders the deltoid σ, CPU, `≈`).

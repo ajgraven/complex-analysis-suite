@@ -7,6 +7,7 @@ import {
   encodeLink,
   QD_TO_CD_DELTOID_LINK,
   QD_TO_CD_DELTOID_PHI_AT_2,
+  QD_TO_CD_DELTOID_SIGMA_LINK,
   type Envelope,
   type QuadratureDomain,
 } from "@cas/interchange";
@@ -106,6 +107,18 @@ describe("CD consume interchange map (Phase 4 C3)", () => {
     const v: Complex = makeComplexFn(parse(mapSpecToExpr(spec)))([2, 0], [0, 0]);
     expect(v[0]).toBeCloseTo(QD_TO_CD_DELTOID_PHI_AT_2, 12);
     expect(v[1]).toBeCloseTo(0, 12);
+  });
+
+  // S3a: the interchange `schwarz` form is a σ RECIPE, not an algebraic expression — σ has a numerical
+  // inverse (φ⁻¹ via Newton/Durand–Kerner), so it can't compile through the expr pipeline. mapSpecToExpr
+  // must reject it LOUDLY (not silently return undefined → a cryptic downstream crash when main.ts sets
+  // inpf = undefined). envelopeToMapSpec still surfaces the recipe so main.ts can recognize + decline it.
+  // CD's actual σ reconstruction (build the engine from sigma.phi via @cas/schwarz) lands in S4a.
+  it("rejects a schwarz-form map from the expr path; surfaces the σ recipe from its envelope", () => {
+    const sigma = { form: "schwarz" as const, phi: deltoidPhi, disk: "D*" as const, inverse: "newton-dk" as const, antiholomorphic: true as const };
+    expect(() => mapSpecToExpr(sigma)).toThrow(/not expr-compilable/);
+    const spec = envelopeToMapSpec(decodeLink(QD_TO_CD_DELTOID_SIGMA_LINK));
+    expect(spec?.form).toBe("schwarz"); // the recipe is surfaced (not null, not silently dropped)
   });
 
   it("emits complex coefficients with the imaginary unit", () => {

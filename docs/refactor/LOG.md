@@ -1430,3 +1430,22 @@
   (now 9 projects, schwarz:1). **Consumer repoint (ADR-0007 dedup, first family):** `deltoid.ts` now imports the engine from
   @cas/schwarz and re-exports its surface, keeping only DELTOID_C/F/DELTOID + deltoidBoundary; its 18 consumers + `deltoid.test.ts`
   UNCHANGED (behavior-preserving). Green: build(+gate)/typecheck/lint/test **2255 / 268** (+1 file). Next: S3 → S4a.
+- **2026-08-07 · stage schwarz-s3a-interchange (PR → refactor/main):** **σ-handoff S3a — @cas/interchange gains the `schwarz`
+  vocabulary (v1.1.0).** The wire can now carry the Schwarz reflection as a RECIPE, not just φ. `schema.ts`: new `SchwarzMap`
+  (`form:"schwarz"; phi:LaurentMap|RationalMap; disk:"D"|"D*"; inverse:"newton-dk"; antiholomorphic:true`) added to the `MapSpec`
+  union; `VERSION` 1.0.0 → **1.1.0** (honest-labeling: adding vocabulary must move the version — leaving 1.0.0 would silently redefine
+  it; major-gated validator ⇒ every prior φ link still decodes). `validate.ts`: `isMapSpec` `case "schwarz"` — recurse `phi` (laurent|
+  rational ONLY; the engine reads coefficients), `disk` enum, `inverse` ∈ `KNOWN_INVERSES`, `antiholomorphic===true`; the `phi`
+  recursion inherits MAX_COEFF_LEN so no uncapped field is added. NET-FIRST: `interchange.test.ts` schwarz accept + 6 reject cases —
+  RED on the missing case, GREEN after; mutation-verified twice (weaken case → disk/inverse/flag rejects go red; drop phi-form
+  restriction → expr-phi reject goes red; both reverted). **Goldens:** the φ golden was regenerated from QD's REAL `exportPhiLink`
+  (1.0.0 → 1.1.0, version field only — QD's byte-exact golden test stays green with no QD edit) and a NEW deltoid-σ golden added
+  (`QD_TO_CD_DELTOID_SIGMA_LINK` + a frozen `σ(1+0.75i)=0.5−0.5i`, derived via σ(φ(z₀))=conj(F(z₀)) at z₀=1+i to exercise the anti-
+  holomorphic conj). `@cas/schwarz` test pins those frozen σ values against the REAL numerical engine. **CD guard (minimal, forced by
+  the enlarged union — not S4a's feature):** `mapSpecToExpr` `case "schwarz"` now THROWS (σ has a numerical inverse ⇒ not expr-
+  compilable) instead of falling through to an implicit `undefined` (noImplicitReturns is off, so this was a latent crash: main.ts
+  would set `inpf=undefined`); `importInterchange` recognizes a schwarz map and declines with an honest toast rather than crash. NET-
+  FIRST in `importMap.test.ts` (mapSpecToExpr(schwarz) throws; envelopeToMapSpec surfaces the recipe) — RED (returned undefined),
+  GREEN after, mutation-verified (throw → silent return → red → reverted). Additive; behavior-preserving for every existing map.
+  Green: build(+gate)/typecheck/lint/test **2259 / 268** (+4 tests, census 9 projects). Next: **S3b** (QD "Export σ" button alongside
+  φ) → **S4a** (CD reconstructs the deltoid σ, CPU, `≈`).

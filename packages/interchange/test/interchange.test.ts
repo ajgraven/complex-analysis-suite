@@ -7,6 +7,8 @@ import {
   encodeLink,
   isMapSpec,
   validateEnvelope,
+  QD_TO_CD_DELTOID_SIGMA_LINK,
+  QD_TO_CD_DELTOID_SIGMA_AT_W0,
   type Envelope,
   type LaurentMap,
   type SchwarzReflection,
@@ -40,6 +42,21 @@ describe("@cas/interchange schema + constants", () => {
     expect(isMapSpec({ form: "laurent", c: { re: 1, im: 0 } })).toBe(false); // missing F
     expect(isMapSpec({ form: "bogus" })).toBe(false);
     expect(isMapSpec(null)).toBe(false);
+  });
+  it("isMapSpec recognizes the schwarz form (S3a) and rejects malformed ones", () => {
+    // A schwarz map is the RECIPE for a Schwarz reflection σ = conj(F(φ⁻¹)): the closed-form φ plus
+    // which disk it uniformizes and how φ⁻¹ is taken. σ itself is anti-holomorphic, so the flag is
+    // definitionally true. See schema.ts SchwarzMap.
+    const schwarz = { form: "schwarz", phi: deltoidSigma, disk: "D*", inverse: "newton-dk", antiholomorphic: true };
+    expect(isMapSpec(schwarz)).toBe(true);
+    // phi must itself be a valid CLOSED-FORM map (laurent | rational) — the σ engine reads its
+    // coefficients; an `expr` or nested `schwarz` phi has none, so reject it.
+    expect(isMapSpec({ ...schwarz, phi: { form: "expr", expr: "z", vars: ["z"] } })).toBe(false);
+    expect(isMapSpec({ ...schwarz, phi: { form: "laurent", c: { re: 1, im: 0 } } })).toBe(false); // phi missing F
+    expect(isMapSpec({ ...schwarz, disk: "X" })).toBe(false); // disk ∈ {D, D*}
+    expect(isMapSpec({ ...schwarz, inverse: "handwave" })).toBe(false); // inverse ∈ the known-methods set
+    expect(isMapSpec({ ...schwarz, antiholomorphic: false })).toBe(false); // a Schwarz reflection is anti-holomorphic
+    expect(isMapSpec({ form: "schwarz", phi: deltoidSigma, disk: "D*", inverse: "newton-dk" })).toBe(false); // flag absent → reject
   });
   it("SECURITY: bounds coefficient-array length, expr length, and vars entries", () => {
     const big = Array.from({ length: 5000 }, () => ({ re: 0, im: 0 }));
@@ -135,6 +152,28 @@ describe("deep-link codec", () => {
   it("throws on a missing / malformed payload", () => {
     expect(() => decodeLink("#nope=1")).toThrow(/no "s="/);
     expect(() => decodeLink("#s=!!!not-base64-json")).toThrow();
+  });
+});
+
+describe("deltoid σ golden (S3a)", () => {
+  // The σ counterpart of the φ golden: a schwarz-reflection deep link whose sigma is the form:"schwarz"
+  // recipe. This package has no σ engine, so it pins the DECODE + the recipe shape; the frozen σ(w₀) is
+  // verified against the real engine in @cas/schwarz and reproduced through CD's import path in S4a.
+  it("decodes to the form:\"schwarz\" σ recipe over the deltoid φ", () => {
+    const env = decodeLink(QD_TO_CD_DELTOID_SIGMA_LINK);
+    expect(env.kind).toBe("schwarz-reflection");
+    expect(env.version).toBe(VERSION); // minted at 1.1.0 — the version the schwarz form arrived in
+    const sigma = (env.payload as SchwarzReflection).sigma;
+    expect(sigma).toEqual({
+      form: "schwarz",
+      phi: { form: "laurent", c: { re: 1, im: 0 }, F: [{ re: 0, im: 0 }, { re: 0, im: 0 }, { re: 0.5, im: 0 }] },
+      disk: "D*",
+      inverse: "newton-dk",
+      antiholomorphic: true,
+    });
+    // isMapSpec accepts the decoded recipe (validateEnvelope already ran it, but pin it explicitly).
+    expect(isMapSpec(sigma)).toBe(true);
+    expect(QD_TO_CD_DELTOID_SIGMA_AT_W0).toEqual({ re: 0.5, im: -0.5 }); // the frozen value CD reproduces
   });
 });
 

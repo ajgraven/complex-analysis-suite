@@ -2936,6 +2936,17 @@ function init(): void {
       showToast("Imported interchange payload has no map to render.", "info");
       return true;
     }
+    if (spec.form === "schwarz") {
+      // A Schwarz reflection σ is reconstructed NUMERICALLY (its φ⁻¹ is iterative), so it is not
+      // expr-compilable — mapSpecToExpr would throw. CD's σ engine reconstruction (from sigma.phi via
+      // @cas/schwarz) lands in a later update; until then recognize the payload honestly and decline,
+      // rather than crash the expr path. It WAS a valid interchange payload, so return true.
+      showToast(
+        `Imported a ${env.kind}, but σ (Schwarz reflection) rendering isn't supported yet — only φ maps render.`,
+        "info",
+      );
+      return true;
+    }
     const st = readFullState();
     st.inpf = mapSpecToExpr(spec);
     applyFullState(st);
