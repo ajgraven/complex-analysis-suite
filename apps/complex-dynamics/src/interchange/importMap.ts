@@ -69,6 +69,15 @@ export function mapSpecToExpr(m: MapSpec): string {
       return laurentExpr(m.c, m.F, v);
     case "expr":
       return m.expr;
+    case "schwarz":
+      // σ is defined by a NUMERICAL inverse (φ⁻¹ via Newton / Durand–Kerner), so it is not an algebraic
+      // expression the `expr` pipeline can compile. A consumer rebuilds the σ evaluator from `m.phi`
+      // via @cas/schwarz instead (CD does this in S4a). Reaching here means a schwarz map was handed to
+      // the expr path by mistake — fail loudly rather than fall through to an implicit `undefined`
+      // return that would surface as a cryptic crash downstream (main.ts would set inpf = undefined).
+      throw new Error(
+        "mapSpecToExpr: a schwarz-form map is not expr-compilable — reconstruct σ from its φ via @cas/schwarz",
+      );
   }
 }
 

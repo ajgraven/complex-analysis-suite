@@ -60,6 +60,18 @@ describe("@cas/schwarz unbounded-Laurent σ (deltoid ground truth)", () => {
     }
   });
 
+  it("σ at the interchange golden points (S3a) — pins the exact frozen values the wire golden carries", () => {
+    // The @cas/interchange deltoid-σ golden (goldens.ts QD_TO_CD_DELTOID_SIGMA_*) freezes σ(w₀) at
+    // these points so CD's S4a reconstruction can reproduce them through its import path. Derivation
+    // via the exact identity σ(φ(z₀)) = conj(F(z₀)) (both w₀ and σ(w₀) come out closed-form):
+    //   z₀ = 2      ⇒ w₀ = φ(2)   = 2.125     , σ(w₀) = conj(F(2))   = conj(2.5)      = 2.5
+    //   z₀ = 1 + i  ⇒ w₀ = φ(1+i) = 1 + 0.75i , σ(w₀) = conj(F(1+i)) = conj(0.5+0.5i) = 0.5 − 0.5i
+    // The 1+i point exercises the anti-holomorphic conj: the imaginary part flips sign (+0.5 → −0.5).
+    // These run the REAL numerical inverse (Newton + Durand–Kerner), not the closed-form shortcut.
+    near(DELTOID.sigma([2.125, 0]) as Complex, [2.5, 0]);
+    near(DELTOID.sigma([1, 0.75]) as Complex, [0.5, -0.5]);
+  });
+
   it("invertPhi returns the exterior branch |z| > 1 for w ∈ Ω", () => {
     const poly = boundary(DELTOID);
     const probes: Complex[] = [

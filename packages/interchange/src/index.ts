@@ -15,4 +15,11 @@ export { InterchangeError, isComplex, isConventions, isMapSpec, isEnvelopeOfKind
 export { encodeLink, decodeLink } from "./codec.js";
 export { encodeViewState, decodeViewState, VIEWSTATE_VERSION } from "./viewstate.js";
 export type { ViewStateEnvelope } from "./viewstate.js";
-export { GOLDEN_CREATED_AT, QD_TO_CD_DELTOID_LINK, QD_TO_CD_DELTOID_PHI_AT_2 } from "./goldens.js";
+export {
+  GOLDEN_CREATED_AT,
+  QD_TO_CD_DELTOID_LINK,
+  QD_TO_CD_DELTOID_PHI_AT_2,
+  QD_TO_CD_DELTOID_SIGMA_LINK,
+  QD_TO_CD_DELTOID_SIGMA_W0,
+  QD_TO_CD_DELTOID_SIGMA_AT_W0,
+} from "./goldens.js";
