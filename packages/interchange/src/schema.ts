@@ -17,12 +17,13 @@ export const SCHEMA_ID = "complex-analysis-suite/interchange" as const;
 
 /**
  * Current schema version (semver). A MAJOR bump is a breaking change consumers must reject; a MINOR
- * bump adds backward-compatible vocabulary. 1.1.0 (S3a) added the `schwarz` MapSpec form — the wire
- * gained a variant, so the version reflects it, and every `version: VERSION`-stamped export moves to
- * 1.1.0 (a plain-φ export is byte-identical bar the version label; consumers gate on MAJOR = 1, so it
- * decodes unchanged). Bump this whenever the type vocabulary below grows, never silently.
+ * bump adds backward-compatible vocabulary. 1.1.0 (S3a) added the `schwarz` MapSpec form; 1.2.0 added
+ * optional finite-pole `branches` on `LaurentMap` (pole-bearing unbounded QDs). Each MINOR bump moves
+ * every `version: VERSION`-stamped export to the new label — a payload that uses none of the new
+ * vocabulary is byte-identical bar that label, and consumers gate on MAJOR = 1 so it decodes unchanged.
+ * Bump this whenever the type vocabulary below grows, never silently.
  */
-export const VERSION = "1.1.0" as const;
+export const VERSION = "1.2.0" as const;
 
 /** Cartesian complex number — the shared wire representation across the suite. */
 export interface Complex {
@@ -54,11 +55,24 @@ export interface RationalMap {
   antiholomorphic?: boolean;
 }
 
-/** phi = c*z + sum_{l>=0} F_l / z^l  (Laurent at infinity; the deltoid's phi = z + 1/(2 z^2)). */
+/**
+ * A finite-pole branch of a pole-bearing unbounded-Laurent φ (a single exterior pole, a cardioid, …).
+ * φ gains Σ_k conj(A[k-1])·u_j(z)^k with u_j(z) = z/(1 − conj(z_j)·z), z_j = `z` ∈ 𝔻; its Schwarz
+ * extension gains the reflected principal part Σ_k A[k-1]/(w − z_j)^k. A[k-1] = A_{j,k} (k = 1..m_j).
+ */
+export interface BranchSpec {
+  z: Complex; // reflected pole location z_j ∈ 𝔻
+  A: Complex[]; // principal-part coefficients, low order first: A[k-1] = A_{j,k}
+}
+
+/** phi = c*z + sum_{l>=0} F_l / z^l ( + finite-pole branches )  (Laurent at infinity; the deltoid's phi = z + 1/(2 z^2)). */
 export interface LaurentMap {
   form: "laurent";
   c: Complex;
   F: Complex[]; // F[0] = F_0, F[1] = F_1, ...
+  /** Finite-pole branch terms of a pole-bearing unbounded QD. Omitted/empty ⇒ the pole-free classical
+   *  Laurent map (the deltoid). Added in schema 1.2.0; older consumers gate on MAJOR=1 and ignore it. */
+  branches?: BranchSpec[];
   antiholomorphic?: boolean;
 }
 
@@ -75,8 +89,9 @@ export interface ExprMap {
  * closed-form uniformizing map (`phi`), F its Schwarz extension, and φ⁻¹ a NUMERICAL branch of the
  * inverse. Because that inverse is iterative, σ is NOT expr-compilable — a consumer rebuilds the σ
  * evaluator from `phi` via @cas/schwarz's `makeUnboundedLaurentSchwarz`, not through the `expr`
- * pipeline. (S3a first case: the deltoid, `phi` = its Laurent map, `disk` = "D*".) Full multi-branch
- * `PhiData` for the non-Laurent families is a later, separately-versioned addition.
+ * pipeline. (S3a first case: the deltoid, `phi` = its Laurent map, `disk` = "D*".) As of 1.2.0 a Laurent
+ * `phi` may carry finite-pole `branches` (pole-bearing unbounded QDs); the non-Laurent families (bounded,
+ * LQD, PQD) remain a later, separately-versioned addition.
  */
 export interface SchwarzMap {
   form: "schwarz";

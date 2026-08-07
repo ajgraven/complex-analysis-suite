@@ -65,6 +65,23 @@ describe("@cas/interchange schema + constants", () => {
     expect(isMapSpec({ form: "expr", expr: "z", vars: ["z", "c", "a"] })).toBe(true);
     expect(isMapSpec({ form: "expr", expr: "z".repeat(9000), vars: [] })).toBe(false); // > MAX_EXPR_LEN
   });
+  it("isMapSpec validates optional Laurent branches (pole-bearing unbounded QD, 1.2.0)", () => {
+    // A laurent φ MAY carry finite-pole branch terms { z ∈ 𝔻, A: principal-part coeffs } — the
+    // pole-bearing unbounded QDs (single exterior pole, cardioid). Omitted/empty ⇒ the pole-free deltoid.
+    const br = { z: { re: 0.2, im: 0 }, A: [{ re: 0.3, im: 0 }] };
+    expect(isMapSpec({ ...deltoidSigma, branches: [br] })).toBe(true);
+    expect(isMapSpec({ ...deltoidSigma, branches: [] })).toBe(true);
+    // Malformed branches are REJECTED, not silently ignored (the seatbelt owns the guarantee).
+    expect(isMapSpec({ ...deltoidSigma, branches: "nope" })).toBe(false);
+    expect(isMapSpec({ ...deltoidSigma, branches: [{ z: { re: 0 }, A: [] }] })).toBe(false); // z.im missing
+    expect(isMapSpec({ ...deltoidSigma, branches: [{ z: { re: 0, im: 0 } }] })).toBe(false); // A missing
+    expect(isMapSpec({ ...deltoidSigma, branches: [{ z: { re: 0, im: 0 }, A: [{ re: 1 }] }] })).toBe(false); // A[0].im missing
+    // SECURITY: an over-cap A array and an over-cap branch count are rejected (untrusted-input bounds).
+    const bigA = Array.from({ length: 5000 }, () => ({ re: 0, im: 0 }));
+    expect(isMapSpec({ ...deltoidSigma, branches: [{ z: { re: 0, im: 0 }, A: bigA }] })).toBe(false);
+    const manyBranches = Array.from({ length: 5000 }, () => br);
+    expect(isMapSpec({ ...deltoidSigma, branches: manyBranches })).toBe(false);
+  });
 });
 
 describe("validateEnvelope", () => {

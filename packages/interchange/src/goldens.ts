@@ -22,9 +22,10 @@
 // `exportPhiLink(phi, { createdAt: GOLDEN_CREATED_AT, appVersion: "0.1.0" })` and paste the
 // result. A diff here is a format change and should be reviewed as one.
 //
-// S3a NOTE: the φ link below was regenerated once already — the schema VERSION bump 1.0.0 → 1.1.0
-// (when the `schwarz` MapSpec form landed) changed its embedded `version` field, and nothing else.
-// The σ golden below it is new in S3a.
+// VERSION NOTE: the links below carry the schema `version` field, so each MINOR bump regenerates them
+// — 1.0.0 → 1.1.0 (the `schwarz` MapSpec form, S3a) and 1.1.0 → 1.2.0 (optional finite-pole `branches`
+// on LaurentMap, Phase 2). Both bumps changed ONLY the embedded `version` (the deltoid uses none of the
+// new vocabulary — it is pole-free). Regenerated via QD's exportPhiLink/exportSigmaLink (below).
 
 /** Frozen timestamp for the goldens — real exports use `new Date()`, which is not reproducible. */
 export const GOLDEN_CREATED_AT = "2026-07-06T00:00:00Z";
@@ -35,7 +36,7 @@ export const GOLDEN_CREATED_AT = "2026-07-06T00:00:00Z";
  * whose payload.phi is the LaurentMap CD compiles and renders.
  */
 export const QD_TO_CD_DELTOID_LINK =
-  "#s=eyJzY2hlbWEiOiJjb21wbGV4LWFuYWx5c2lzLXN1aXRlL2ludGVyY2hhbmdlIiwidmVyc2lvbiI6IjEuMS4wIiwia2luZCI6InF1YWRyYXR1cmUtZG9tYWluIiwicGF5bG9hZCI6eyJwaGkiOnsiZm9ybSI6ImxhdXJlbnQiLCJjIjp7InJlIjoxLCJpbSI6MH0sIkYiOlt7InJlIjowLCJpbSI6MH0seyJyZSI6MCwiaW0iOjB9LHsicmUiOjAuNSwiaW0iOjB9XX0sImJvdW5kZWQiOmZhbHNlLCJjb252ZW50aW9ucyI6eyJhcmVhIjoic3RhbmRhcmQiLCJjb250b3VyIjoic3RhbmRhcmQifX0sInByb3ZlbmFuY2UiOnsiYXBwIjoicXVhZHJhdHVyZS1kb21haW5zIiwiYXBwVmVyc2lvbiI6IjAuMS4wIiwiY3JlYXRlZEF0IjoiMjAyNi0wNy0wNlQwMDowMDowMFoifX0";
+  "#s=eyJzY2hlbWEiOiJjb21wbGV4LWFuYWx5c2lzLXN1aXRlL2ludGVyY2hhbmdlIiwidmVyc2lvbiI6IjEuMi4wIiwia2luZCI6InF1YWRyYXR1cmUtZG9tYWluIiwicGF5bG9hZCI6eyJwaGkiOnsiZm9ybSI6ImxhdXJlbnQiLCJjIjp7InJlIjoxLCJpbSI6MH0sIkYiOlt7InJlIjowLCJpbSI6MH0seyJyZSI6MCwiaW0iOjB9LHsicmUiOjAuNSwiaW0iOjB9XX0sImJvdW5kZWQiOmZhbHNlLCJjb252ZW50aW9ucyI6eyJhcmVhIjoic3RhbmRhcmQiLCJjb250b3VyIjoic3RhbmRhcmQifX0sInByb3ZlbmFuY2UiOnsiYXBwIjoicXVhZHJhdHVyZS1kb21haW5zIiwiYXBwVmVyc2lvbiI6IjAuMS4wIiwiY3JlYXRlZEF0IjoiMjAyNi0wNy0wNlQwMDowMDowMFoifX0";
 
 /** φ(2) for the deltoid golden: 2 + 0.5/4 = 2.125. The value CD's compiled expr must produce. */
 export const QD_TO_CD_DELTOID_PHI_AT_2 = 2.125;
@@ -59,7 +60,7 @@ export const QD_TO_CD_DELTOID_PHI_AT_2 = 2.125;
  * conventions. Decodes + validates through the same codec/seatbelt as φ; CD reconstructs σ from it (S4a).
  */
 export const QD_TO_CD_DELTOID_SIGMA_LINK =
-  "#s=eyJzY2hlbWEiOiJjb21wbGV4LWFuYWx5c2lzLXN1aXRlL2ludGVyY2hhbmdlIiwidmVyc2lvbiI6IjEuMS4wIiwia2luZCI6InNjaHdhcnotcmVmbGVjdGlvbiIsInBheWxvYWQiOnsic2lnbWEiOnsiZm9ybSI6InNjaHdhcnoiLCJwaGkiOnsiZm9ybSI6ImxhdXJlbnQiLCJjIjp7InJlIjoxLCJpbSI6MH0sIkYiOlt7InJlIjowLCJpbSI6MH0seyJyZSI6MCwiaW0iOjB9LHsicmUiOjAuNSwiaW0iOjB9XX0sImRpc2siOiJEKiIsImludmVyc2UiOiJuZXd0b24tZGsiLCJhbnRpaG9sb21vcnBoaWMiOnRydWV9LCJjb252ZW50aW9ucyI6eyJhcmVhIjoic3RhbmRhcmQiLCJjb250b3VyIjoic3RhbmRhcmQifX0sInByb3ZlbmFuY2UiOnsiYXBwIjoicXVhZHJhdHVyZS1kb21haW5zIiwiYXBwVmVyc2lvbiI6IjAuMS4wIiwiY3JlYXRlZEF0IjoiMjAyNi0wNy0wNlQwMDowMDowMFoifX0";
+  "#s=eyJzY2hlbWEiOiJjb21wbGV4LWFuYWx5c2lzLXN1aXRlL2ludGVyY2hhbmdlIiwidmVyc2lvbiI6IjEuMi4wIiwia2luZCI6InNjaHdhcnotcmVmbGVjdGlvbiIsInBheWxvYWQiOnsic2lnbWEiOnsiZm9ybSI6InNjaHdhcnoiLCJwaGkiOnsiZm9ybSI6ImxhdXJlbnQiLCJjIjp7InJlIjoxLCJpbSI6MH0sIkYiOlt7InJlIjowLCJpbSI6MH0seyJyZSI6MCwiaW0iOjB9LHsicmUiOjAuNSwiaW0iOjB9XX0sImRpc2siOiJEKiIsImludmVyc2UiOiJuZXd0b24tZGsiLCJhbnRpaG9sb21vcnBoaWMiOnRydWV9LCJjb252ZW50aW9ucyI6eyJhcmVhIjoic3RhbmRhcmQiLCJjb250b3VyIjoic3RhbmRhcmQifX0sInByb3ZlbmFuY2UiOnsiYXBwIjoicXVhZHJhdHVyZS1kb21haW5zIiwiYXBwVmVyc2lvbiI6IjAuMS4wIiwiY3JlYXRlZEF0IjoiMjAyNi0wNy0wNlQwMDowMDowMFoifX0";
 
 /**
  * A frozen (w₀, σ(w₀)) pair for the deltoid σ golden — the value CD's S4a reconstruction must reproduce
