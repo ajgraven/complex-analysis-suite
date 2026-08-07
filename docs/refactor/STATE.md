@@ -90,7 +90,7 @@ Behavior-preserving by default; no behavioral change without an explicit approva
 - **Root-cause follow-ups:** built-app worker smoke test (caught neither QD-BUILD-1 nor QD-SYM-LOAD); PWA autoUpdate→prompt.
 - **▶ NEXT — σ hand-off (APPROVED 2026-08-07):** `docs/design/SIGMA-HANDOFF.md`. QD→CD exports φ (Riemann map), NOT σ; plan
   extracts **@cas/schwarz** (σ already ~1630 LOC on @cas/core; ADR-0007) → interchange `form:"schwarz"` → CD reconstructs deltoid σ
-  (CPU, `≈`). **S0 ✅** (#235 relabel φ-not-σ, #236 antiholo-flag + conj→conjugate); S0→S4a executing (σ alongside φ; ≈ principal branch); next **S1** (@cas/core poly + polynomialRoots). Then VISION: circle-and-cardioid → cubic Chebyshev → d:d.
+  (CPU, `≈`). **S0 ✅** (#235,#236) · **S2a ✅ #237** (NEW @cas/schwarz: unbounded-Laurent σ engine; correspondences deduped [ADR-0007]; reorder=deltoid-direct, so S1 + full QD cutover S2b–d DEFERRED); next **S3** (interchange `form:"schwarz"`) → S4a. Then VISION: circle-and-cardioid → cubic Chebyshev → d:d.
 
 ## Resume commands
 ```
