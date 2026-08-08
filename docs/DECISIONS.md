@@ -675,6 +675,12 @@ one QD already validated for σ, so it is low-risk in design even though it is r
          stop-table-vs-fit split. Proven in real WebGL2 (colormap-aware `schwarzGL.browser.test.ts`:
          the K-interior base tracks the ramp's t=0 end; grayscale renders achromatic) and by a Playwright
          mode switch in the built app.
-   - [ ] Orbit inspection, legend + scale bar, precise nav — still to do.
+   - [x] **Orbit inspection.** Clicking the σ canvas traces that point's σ-orbit (w₀ → σ(w₀) → …) and
+         draws it over the field — a polyline + per-iterate dots + a ringed w₀ marker, coloured by fate
+         (green enters K, orange escapes, violet lingers, gray inverse-failed) in CD's own orbit-preview
+         idiom — with a σ-pane readout of the classification (honest `≈`). Click is disambiguated from the
+         pan-drag by a travel threshold; a "clear" removes the trace. The tracer (`schwarzOrbitAt`) shares
+         the field's escape budget and is pinned to `escapeTime` by a parity test.
+   - [ ] Legend + scale bar, precise nav — still to do.
 4. [ ] Update [SIGMA-HANDOFF.md](design/SIGMA-HANDOFF.md) so the peer-view is the target shape (superseding
        the S4a overlay), and keep the map-specific instruments explicitly out of scope for σ.

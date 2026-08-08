@@ -112,8 +112,13 @@ import {
   schwarzBoundaryPoly,
   panSchwarzView,
   zoomSchwarzView,
+  uvToPlotFrac,
+  schwarzOrbitAt,
+  schwarzOrbitLabel,
   type SchwarzView,
+  type SchwarzOrbit,
 } from "./render/schwarzView";
+import { drawSchwarzOrbit } from "./render/schwarzOrbitOverlay";
 import { createSchwarzGLRenderer, type SchwarzGLRenderer } from "./render/schwarzGL";
 import { makeUnboundedLaurentSchwarz } from "@cas/schwarz";
 import { buildSchwarzPhi, SCHWARZ_PRESETS, type SchwarzPhi } from "./render/schwarzPhiForm";
@@ -2949,6 +2954,9 @@ function init(): void {
   // not a certified render. Drag to pan, scroll to zoom (about the cursor); Esc — or any control change —
   // exits and restores the normal plot underneath.
   const SCHWARZ_DEFAULT_VIEW: SchwarzView = { center: [0, 0], zoom: 0.4 }; // half-width 1/zoom = 2.5
+  // ONE escape budget for both the σ field and the orbit inspector, so a clicked point's reported fate
+  // matches the pixel under it (the GPU/CPU field renders and the CPU orbit tracer must agree).
+  const SCHWARZ_ESCAPE = { maxIter: 48, escapeR: 1e4 } as const;
   // The GPU σ renderer is built once, lazily: `undefined` = not yet tried, `null` = WebGL2 unavailable
   // (permanently CPU). It owns a private offscreen canvas whose result we drawImage onto #JCSSchwarz.
   let schwarzGL: SchwarzGLRenderer | null | undefined;
@@ -2967,6 +2975,9 @@ function init(): void {
   // regenerate (not written to storage; a σ-view permalink that would carry it is deferred — item 2).
   let schwarzColormapName = DEFAULT_SCHWARZ_COLORMAP;
   let schwarzScaleMode = DEFAULT_SCHWARZ_SCALE;
+  // σ orbit inspection (ADR-0009 item 3): the currently-inspected orbit (w₀ = points[0]) or null. Its
+  // polyline is redrawn over the field on every paint, so it stays pinned to w₀ as the view pans/zooms.
+  let schwarzInspect: SchwarzOrbit | null = null;
 
   /** Paint the σ field at the current `schwarzView` (GPU → drawImage, or CPU → putImageData). */
   function paintSchwarz(): void {
@@ -2980,14 +2991,16 @@ function init(): void {
       canvas.height = size;
     }
     if (mode === "GPU" && schwarzGL) {
-      schwarzGL.render(schwarzView, size, { maxIter: 48, escapeR: 1e4, scaleMode: schwarzScaleMode });
+      schwarzGL.render(schwarzView, size, { ...SCHWARZ_ESCAPE, scaleMode: schwarzScaleMode });
       ctx.drawImage(schwarzGL.canvas, 0, 0);
     } else {
-      const rgba = renderSchwarzField(engine, poly, schwarzView, size, { maxIter: 48, escapeR: 1e4 });
+      const rgba = renderSchwarzField(engine, poly, schwarzView, size, SCHWARZ_ESCAPE);
       const img = new ImageData(size, size); // construct-then-set (mirrors renderJuliaPreview) — avoids the
       img.data.set(rgba); // Uint8ClampedArray<ArrayBuffer> constructor-overload variance in the DOM lib types
       ctx.putImageData(img, 0, 0);
     }
+    // Orbit overlay on top of the field (ADR-0009 item 3) — pinned to w₀, redrawn for the current view.
+    if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, size);
   }
   /** Coalesce rapid pan/zoom events into one paint per animation frame. */
   function scheduleSchwarzPaint(): void {
@@ -2996,6 +3009,54 @@ function init(): void {
       schwarzRaf = 0;
       paintSchwarz();
     });
+  }
+
+  // σ orbit inspection (ADR-0009 item 3): clicking the σ canvas traces that point's orbit and draws it
+  // over the field, with a readout of its fate. The readout lives in the σ pane (the sidebar #inspector is
+  // hidden in σ mode). Honest labeling: σ is `≈`, so a fate reads as "of the reconstruction", not certified.
+  function renderSchwarzInspectReadout(): void {
+    const box = document.getElementById("schwarz-inspect");
+    if (!box) return;
+    if (!schwarzInspect) {
+      box.hidden = true;
+      box.replaceChildren();
+      return;
+    }
+    const w0 = schwarzInspect.points[0];
+    const steps = schwarzInspect.points.length - 1;
+    const mk = (cls: string, text: string): HTMLElement => {
+      const el = document.createElement("span");
+      el.className = cls;
+      el.textContent = text;
+      return el;
+    };
+    const clearBtn = document.createElement("button");
+    clearBtn.type = "button";
+    clearBtn.className = "schwarz-inspect-clear";
+    clearBtn.textContent = "clear";
+    clearBtn.title = "Remove the traced orbit";
+    clearBtn.addEventListener("click", clearSchwarzInspect);
+    box.hidden = false;
+    box.replaceChildren(
+      mk("schwarz-inspect-title", `orbit of ${formatComplex(truncateComplex(w0))}`),
+      mk("schwarz-inspect-fate", schwarzOrbitLabel(schwarzInspect.kind, schwarzInspect.n)),
+      mk("schwarz-inspect-steps", `${steps} iterate${steps === 1 ? "" : "s"} drawn`),
+      clearBtn,
+    );
+  }
+  /** Inspect the σ-orbit of w₀ (a plot point): trace it, show the readout, redraw with the overlay. */
+  function setSchwarzInspect(w0: Complex): void {
+    if (!schwarzSession) return;
+    schwarzInspect = schwarzOrbitAt(schwarzSession.engine, schwarzSession.poly, w0, SCHWARZ_ESCAPE);
+    renderSchwarzInspectReadout();
+    scheduleSchwarzPaint();
+  }
+  /** Drop the inspected orbit (readout hides, overlay disappears on the next paint). */
+  function clearSchwarzInspect(): void {
+    if (!schwarzInspect) return;
+    schwarzInspect = null;
+    renderSchwarzInspectReadout();
+    scheduleSchwarzPaint();
   }
 
   /**
@@ -3020,6 +3081,8 @@ function init(): void {
     }
     schwarzSession = { engine, poly, size, mode };
     schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
+    schwarzInspect = null; // a new φ ⇒ any previous orbit is stale
+    renderSchwarzInspectReadout();
     document.querySelector(".workspace")?.classList.add("schwarz-active"); // enter σ mode → show the pane
     try {
       paintSchwarz();
@@ -3065,14 +3128,22 @@ function init(): void {
       ];
     };
     let lastUv: [number, number] | null = null;
+    let downClient: [number, number] | null = null;
+    let movedSinceDown = false;
+    const CLICK_TOL_PX = 4; // total travel under this ⇒ a click (inspect the orbit), not a drag (pan)
     canvas.addEventListener("pointerdown", (e) => {
       if (!schwarzSession) return;
       lastUv = clientToUv(e);
+      downClient = [e.clientX, e.clientY];
+      movedSinceDown = false;
       canvas.setPointerCapture(e.pointerId);
       canvas.style.cursor = "grabbing";
     });
     canvas.addEventListener("pointermove", (e) => {
       if (!schwarzSession || !lastUv) return;
+      if (downClient && Math.hypot(e.clientX - downClient[0], e.clientY - downClient[1]) > CLICK_TOL_PX) {
+        movedSinceDown = true; // it's a drag now — a trailing click won't inspect
+      }
       const cur = clientToUv(e);
       schwarzView = panSchwarzView(schwarzView, lastUv, cur); // move the grabbed point under the cursor
       lastUv = cur;
@@ -3081,6 +3152,7 @@ function init(): void {
     const endDrag = (e: PointerEvent): void => {
       if (!lastUv) return;
       lastUv = null;
+      downClient = null;
       canvas.style.cursor = "grab";
       try {
         canvas.releasePointerCapture(e.pointerId);
@@ -3088,7 +3160,15 @@ function init(): void {
         /* pointer was not captured — fine */
       }
     };
-    canvas.addEventListener("pointerup", endDrag);
+    canvas.addEventListener("pointerup", (e) => {
+      const wasClick = lastUv !== null && !movedSinceDown;
+      endDrag(e);
+      // A click (no meaningful drag) inspects the σ-orbit of the point under the cursor.
+      if (wasClick && schwarzSession) {
+        const uv = clientToUv(e);
+        setSchwarzInspect(uvToPlotFrac(schwarzView, uv[0], uv[1]));
+      }
+    });
     canvas.addEventListener("pointercancel", endDrag);
     canvas.addEventListener(
       "wheel",

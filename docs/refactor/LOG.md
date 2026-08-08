@@ -1659,3 +1659,24 @@
   lint / test **2340 / 275** (+12 node: colormaps; +1 file) + the 5-test σ browser suite in real WebGL2,
   build. **ADR-0009 action item 3: colormaps + scale modes done**; remaining in item 3: orbit inspection,
   legend + scale bar, precise nav.
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (ADR-0009 R3 — σ orbit inspection):**
+  **clicking the σ pane now traces that point's σ-orbit** (ADR-0009 item 3, orbit inspection — parity with
+  the Dynamical plane's point inspector, which is hidden in σ mode). A click (disambiguated from the pan-
+  drag by a 4px travel threshold) computes the orbit w₀ → σ(w₀) → σ²(w₀) → … and draws it over the field:
+  a polyline + per-iterate dots + a ringed w₀ marker, coloured by fate in CD's own orbit-preview idiom
+  (`render/orbitPreview.ts`): green enters K, orange escapes → ∞, violet lingers (non-escaping), gray
+  inverse-failed. A σ-pane readout names the fate honestly (σ is `≈`): "enters K after n steps" / "escapes
+  → ∞ (n)" / "non-escaping after n" / "inverse failed (n)", with a "clear". The overlay is redrawn on every
+  paint, so it stays pinned to w₀ as the view pans/zooms. NEW pure core in `render/schwarzView.ts`:
+  `schwarzOrbitAt` (the trajectory — the SAME loop as `@cas/schwarz`'s `escapeTime`, so the reported fate
+  matches the pixel under the click; both now run off ONE hoisted `SCHWARZ_ESCAPE` = {maxIter 48, escapeR
+  1e4} the field also uses) + `plotToPixel` (the exact inverse of `pixelToPlot`) + `schwarzOrbitLabel`;
+  drawing lives in `render/schwarzOrbitOverlay.ts`. Kept app-local (not in `@cas/schwarz`) per ADR-0007 —
+  no second consumer yet. NET: `test/schwarzOrbit.test.ts` (9 cases) pins the tracer to `schwarzEscapeAt`
+  over a K/Ω grid (kind + n identical), the chaining invariant (every iterate is a real σ step from the
+  last, points[0] = w₀), a fundamental orbit ending inside K, a far point escaping, and `plotToPixel`
+  round-tripping `pixelToPlot`. VERIFIED in the BUILT app (Playwright): click the tiling → green orbit
+  polyline + ringed seed + "enters K after 2 steps" readout; click the K interior → "in K (n = 0)"; clear
+  removes it; no console errors. Green: typecheck / lint / test **2349 / 276** (+9 node: orbit tracer +
+  plotToPixel; +1 file), build. **ADR-0009 item 3: + orbit inspection done**; remaining in item 3: legend +
+  scale bar, precise nav.

@@ -524,6 +524,38 @@ h2 {
   gap: 0.4rem;
   margin-top: 0.25rem;
 }
+/* σ orbit inspection (ADR-0009 item 3): the "click to trace" hint + the readout the click populates. */
+.schwarz-inspect-hint {
+  font-size: 0.7rem;
+  opacity: 0.7;
+  margin: 0 0 0.3rem;
+}
+.schwarz-inspect {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.72rem;
+}
+.schwarz-inspect-title {
+  font-weight: 500;
+  word-break: break-all;
+}
+.schwarz-inspect-fate {
+  opacity: 0.9;
+}
+.schwarz-inspect-steps {
+  opacity: 0.6;
+  font-size: 0.66rem;
+}
+.schwarz-inspect-clear {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+  font-size: 0.66rem;
+  padding: 0.1rem 0.5rem;
+}
 .legend-title {
   font-weight: 500;
   margin-bottom: 3px;

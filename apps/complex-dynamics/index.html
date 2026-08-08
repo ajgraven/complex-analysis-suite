@@ -558,6 +558,12 @@ abs(z)>2</textarea
                     title="How the escape count maps onto the colour ramp (linear, log, sqrt, discrete, cyclic)"
                   ></select>
                 </div>
+                <!-- Orbit inspection (ADR-0009 item 3): click the σ canvas to trace a point's orbit; the
+                     readout below is populated from render/schwarzView.ts in main.ts. -->
+                <div class="field schwarz-inspect-field">
+                  <p class="schwarz-inspect-hint">Click the plot to trace a point's σ-orbit.</p>
+                  <div id="schwarz-inspect" class="schwarz-inspect" aria-live="polite" hidden></div>
+                </div>
               </div>
             </section>
           </main>
