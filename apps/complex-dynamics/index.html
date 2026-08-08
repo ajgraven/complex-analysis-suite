@@ -543,6 +543,21 @@ abs(z)>2</textarea
                   </div>
                   <div id="schwarz-error" class="input-errors" role="alert" hidden></div>
                 </div>
+                <!-- Coloring parity with the standard fractals (ADR-0009 item 3): a shared @cas/gpu
+                     colormap ramp + escape-time scale mode. Options are populated from
+                     render/schwarzColormaps.ts in main.ts, so these start empty. -->
+                <div class="field schwarz-coloring">
+                  <label for="schwarz-colormap">colormap</label>
+                  <select
+                    id="schwarz-colormap"
+                    title="Colour ramp for the σ escape-time field"
+                  ></select>
+                  <label for="schwarz-scale">escape scale</label>
+                  <select
+                    id="schwarz-scale"
+                    title="How the escape count maps onto the colour ramp (linear, log, sqrt, discrete, cyclic)"
+                  ></select>
+                </div>
               </div>
             </section>
           </main>

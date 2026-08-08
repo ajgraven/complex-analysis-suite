@@ -117,6 +117,12 @@ import {
 import { createSchwarzGLRenderer, type SchwarzGLRenderer } from "./render/schwarzGL";
 import { makeUnboundedLaurentSchwarz } from "@cas/schwarz";
 import { buildSchwarzPhi, SCHWARZ_PRESETS, type SchwarzPhi } from "./render/schwarzPhiForm";
+import {
+  SCHWARZ_COLORMAP_NAMES,
+  SCHWARZ_SCALE_MODES,
+  DEFAULT_SCHWARZ_COLORMAP,
+  DEFAULT_SCHWARZ_SCALE,
+} from "./render/schwarzColormaps";
 import { PLACES } from "./state/places";
 import { decodeNotes, encodeNotes, type Note } from "./state/notes";
 import GIF from "gif.js";
@@ -2957,6 +2963,10 @@ function init(): void {
     | null = null;
   let schwarzView: SchwarzView = { ...SCHWARZ_DEFAULT_VIEW };
   let schwarzRaf = 0;
+  // σ coloring (ADR-0009 item 3) — remembered for this page session so it survives σ enter/exit and a
+  // regenerate (not written to storage; a σ-view permalink that would carry it is deferred — item 2).
+  let schwarzColormapName = DEFAULT_SCHWARZ_COLORMAP;
+  let schwarzScaleMode = DEFAULT_SCHWARZ_SCALE;
 
   /** Paint the σ field at the current `schwarzView` (GPU → drawImage, or CPU → putImageData). */
   function paintSchwarz(): void {
@@ -2970,7 +2980,7 @@ function init(): void {
       canvas.height = size;
     }
     if (mode === "GPU" && schwarzGL) {
-      schwarzGL.render(schwarzView, size, { maxIter: 48, escapeR: 1e4 });
+      schwarzGL.render(schwarzView, size, { maxIter: 48, escapeR: 1e4, scaleMode: schwarzScaleMode });
       ctx.drawImage(schwarzGL.canvas, 0, 0);
     } else {
       const rgba = renderSchwarzField(engine, poly, schwarzView, size, { maxIter: 48, escapeR: 1e4 });
@@ -3001,6 +3011,7 @@ function init(): void {
     if (schwarzGL) {
       try {
         schwarzGL.setPhi(phi, poly);
+        schwarzGL.setColormap(schwarzColormapName); // apply the current σ palette to this session
         mode = "GPU";
         size = 512;
       } catch (err) {
@@ -3163,6 +3174,41 @@ function init(): void {
           presetSel.value = "";
         });
       }
+    }
+  }
+
+  // σ coloring controls (ADR-0009 item 3 — colormap + scale-mode parity with the standard fractals). Live
+  // in the σ pane, so a change only fires in σ mode; it updates the in-session preference, applies to the
+  // renderer, and repaints (rAF-coalesced).
+  {
+    const cmSel = document.getElementById("schwarz-colormap") as HTMLSelectElement | null;
+    const scSel = document.getElementById("schwarz-scale") as HTMLSelectElement | null;
+    if (cmSel) {
+      for (const name of SCHWARZ_COLORMAP_NAMES) {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        cmSel.appendChild(opt);
+      }
+      cmSel.value = schwarzColormapName;
+      cmSel.addEventListener("change", () => {
+        schwarzColormapName = cmSel.value;
+        schwarzGL?.setColormap(schwarzColormapName);
+        scheduleSchwarzPaint();
+      });
+    }
+    if (scSel) {
+      for (const m of SCHWARZ_SCALE_MODES) {
+        const opt = document.createElement("option");
+        opt.value = m.key;
+        opt.textContent = m.label;
+        scSel.appendChild(opt);
+      }
+      scSel.value = schwarzScaleMode;
+      scSel.addEventListener("change", () => {
+        schwarzScaleMode = scSel.value;
+        scheduleSchwarzPaint();
+      });
     }
   }
 

@@ -667,5 +667,14 @@ one QD already validated for σ, so it is low-risk in design even though it is r
 2. [ ] Serialize σ-view state (φ recipe + view + coloring) into share links / saved views / PNG metadata.
 3. [ ] Bring the generic parity features into the σ controls section (colormaps + scale modes, orbit
        inspection, legend + scale bar, precise nav), reusing CD's field-agnostic machinery.
+   - [x] **Colormaps + scale modes.** The σ pane gets a colormap picker (7 perceptually-uniform ramps +
+         Turbo + grayscale) and an escape-time scale mode (linear / log / sqrt / discrete / cyclic),
+         wired through the shared `@cas/gpu` colormap texture — NOT CD's byte-frozen procedural-palette
+         GLSL (the review's "reuse the field-agnostic machinery, do not fork it"). Palette DATA is
+         app-local (`render/schwarzColormaps.ts`), matching QD's σ and the `@cas/gpu/colormap` header's
+         stop-table-vs-fit split. Proven in real WebGL2 (colormap-aware `schwarzGL.browser.test.ts`:
+         the K-interior base tracks the ramp's t=0 end; grayscale renders achromatic) and by a Playwright
+         mode switch in the built app.
+   - [ ] Orbit inspection, legend + scale bar, precise nav — still to do.
 4. [ ] Update [SIGMA-HANDOFF.md](design/SIGMA-HANDOFF.md) so the peer-view is the target shape (superseding
        the S4a overlay), and keep the map-specific instruments explicitly out of scope for σ.

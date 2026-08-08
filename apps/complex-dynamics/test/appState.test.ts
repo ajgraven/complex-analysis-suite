@@ -98,6 +98,10 @@ describe("SHARE_IDS DOM coverage", () => {
         // link would carry, and a σ-view permalink is deferred (SIGMA-HANDOFF S4b); re-running Generate on
         // load would be a side effect, not a restored view — same rule as the one-shot tools above.
         [["schwarz-preset", "schwarz-c", "schwarz-F", "schwarz-poles"], "σ builder input (one-shot tool)"],
+        // σ coloring (ADR-0009 item 3): colormap + escape-scale for the σ pane. A view-coloring choice, not
+        // a shared datum — the σ-view permalink that would carry it is deferred (item 2), and the standard-
+        // fractal `palette` is opted out the same way (SHARE_IDS omission). Held in-session, not persisted.
+        [["schwarz-colormap", "schwarz-scale"], "σ coloring choice (not in the deferred σ permalink)"],
         // Panel readout parameters — they change a text list inside a card, nothing on the plots.
         // (Contrast `laurent-n`, which IS shared: it sets a boundary curve drawn on both planes.)
         [["exterior-n"], "panel readout parameter"],

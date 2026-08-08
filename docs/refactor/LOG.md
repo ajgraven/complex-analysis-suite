@@ -1635,3 +1635,27 @@
   plots; no console errors. Green: typecheck / lint / test, build. **ADR-0009 action item 1 done**;
   remaining: σ-view state serialization (permalink / saved views) + folding the generic parity features
   (colormaps + scale modes, orbit inspection, legend) into the σ controls section.
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (ADR-0009 R2 — σ colormaps + scale modes):**
+  **the σ pane gets coloring parity with the standard fractals** (ADR-0009 action item 3, first slice): a
+  **colormap picker** (viridis / magma / inferno / plasma / cividis / Turbo / grayscale) and an
+  **escape-time scale mode** (linear / log / sqrt / discrete / cyclic), both in the σ controls section. σ
+  now colors its escape count `n` through the shared **`@cas/gpu` colormap texture** — the field-agnostic
+  ramp-building primitive the feature review told us to reuse — NOT CD's byte-frozen procedural-palette
+  GLSL. The shader (`render/schwarzGL.ts`) grows `u_colormap` (a 256×1 ramp, bound on TEXTURE1),
+  `u_scaleMode` + `u_modK`, and a `computeT(n)` that mirrors QD's σ re-keyed to CD's scale ids; a
+  `setColormap(name)` rebuilds the ramp on demand. The palette DATA is app-local
+  (`render/schwarzColormaps.ts`: the matplotlib ramps QD's σ already ships), matching the
+  `@cas/gpu/colormap` header's fits-vs-stop-tables split — the picker names overlap CD's standard palettes
+  so it reads consistently. `main.ts` persists the choice per-device and repaints (rAF-coalesced) on
+  change; the two `<select>`s are opted out of `SHARE_IDS` (a σ-view permalink is deferred — same rule as
+  the standard `palette`), pinned by appState's DOM-coverage guard. NET: a node test
+  (`test/schwarzColormaps.test.ts`, 12 cases) pins the palette tables (valid ramps, working fallback,
+  scale ids contiguous with the shader) and the browser test (`test/schwarzGL.browser.test.ts`) is now
+  **colormap-aware** — the K-interior center pixel tracks the chosen ramp's t=0 end (viridis `[68,1,84]` →
+  turbo → grayscale `[0,0,0]`), the whole frame moves on a colormap switch, and linear vs sqrt recolor the
+  n≥1 band. VERIFIED in the BUILT app (Playwright): open σ → deltoid tiling in viridis (48% chromatic) →
+  switch to grayscale → same tiling, fully achromatic (0% chroma) → switch scale to sqrt → repaints, no
+  console errors; both selects populate from the tables (7 colormaps, 5 scale modes). Green: typecheck /
+  lint / test **2340 / 275** (+12 node: colormaps; +1 file) + the 5-test σ browser suite in real WebGL2,
+  build. **ADR-0009 action item 3: colormaps + scale modes done**; remaining in item 3: orbit inspection,
+  legend + scale bar, precise nav.

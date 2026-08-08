@@ -14,6 +14,13 @@
 // and avoiding the ∂Ω speckle a per-pixel ray-cast or a bare Newton-success test would give).
 import { createProgram } from "@cas/gpu/shader";
 import { buildPolygonMaskTexture } from "@cas/gpu/mask";
+import { makeColormapTexture } from "@cas/gpu/colormap";
+import {
+  schwarzColormap,
+  schwarzScaleId,
+  DEFAULT_SCHWARZ_COLORMAP,
+  DEFAULT_SCHWARZ_SCALE,
+} from "./schwarzColormaps";
 import {
   SIGMA_CONSTS_GLSL,
   SIGMA_UNIFORMS_GLSL,
@@ -28,10 +35,13 @@ import {
 import type { Complex } from "@cas/schwarz";
 import type { SchwarzView, SchwarzRenderOptions } from "./schwarzView";
 
-// The escape-time + coloring shell around the shared σ evaluator. Every classification and color below
-// mirrors schwarzView.ts's escapeTime + colorFor so a GPU render is pixel-comparable to the CPU one:
-//   fundamental — orbit left Ω into K, ramped by n;  escaped — |σⁿ|>escapeR (black);
-//   interior — still in Ω after maxIter (deep indigo);  invalid — the numerical inverse failed (gray).
+// The escape-time + coloring shell around the shared σ evaluator. The CLASSIFICATION mirrors
+// schwarzView.ts's escapeTime — fundamental (orbit left Ω into K), escaped (|σⁿ|>escapeR), interior
+// (still in Ω after maxIter), invalid (the inverse failed) — so the GPU and CPU fields agree pixel-for-
+// pixel on WHICH set each point is in. The COLORS differ by design: the GPU colors the fundamental set
+// through a selectable colormap texture + scale mode (ADR-0009 item 3 — parity with the standard
+// fractals; render/schwarzColormaps.ts), while the CPU fallback keeps schwarzView.ts's fixed ramp.
+// escaped (black) / interior (deep indigo) / invalid (gray) stay flat on both paths.
 export const SCHWARZ_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 precision highp int;
@@ -44,6 +54,9 @@ uniform float     u_escapeR;
 uniform sampler2D u_mask;            // 1 inside K (the boundary polygon), 0 outside
 uniform vec2      u_maskCenter;
 uniform float     u_maskHalfExtent;
+uniform sampler2D u_colormap;        // 256×1 escape-time ramp (a @cas/gpu colormap texture)
+uniform int       u_scaleMode;       // 0 linear · 1 log · 2 sqrt · 3 discrete · 4 cyclic
+uniform int       u_modK;            // period for the cyclic mode
 ${SIGMA_UNIFORMS_GLSL}
 ${SIGMA_COMPLEX_GLSL}
 ${SIGMA_EVAL_GLSL}
@@ -56,13 +69,25 @@ bool inOmega(vec2 w) {
   return texture(u_mask, uv).r < 0.5;
 }
 
-// deep-blue → cyan → white ramp by iteration count n — schwarzView.ts fundamentalColor, verbatim.
+// Escape count n → colormap coordinate t∈[0,1] under the selected scale mode (ids match
+// render/schwarzColormaps.ts SCHWARZ_SCALE_MODES — QD's σ computeT, re-keyed to CD's ids).
+float computeT(int n) {
+  float fn = float(n);
+  float fmax = float(u_maxIter);
+  if (u_scaleMode == 1) return clamp(log(fn + 1.0) / log(fmax + 1.0), 0.0, 1.0);              // log
+  if (u_scaleMode == 2) return clamp(sqrt(fn / max(fmax, 1.0)), 0.0, 1.0);                    // sqrt
+  if (u_scaleMode == 4) {                                                                     // cyclic
+    int k = max(u_modK, 1);
+    int rm = (n - 1) - (n - 1) / k * k;
+    return float(rm) / float(k);
+  }
+  float t = float(n - 1) / max(fmax - 1.0, 1.0);                                              // linear base
+  if (u_scaleMode == 3) t = (floor(t * fmax) + 0.5) / fmax;                                   // discrete
+  return clamp(t, 0.0, 1.0);
+}
+// The fundamental (tiling) set is colored by the selected colormap; escaped / interior / invalid stay flat.
 vec3 fundamentalColor(int n) {
-  float t = min(1.0, float(n) / max(1.0, min(32.0, float(u_maxIter))));
-  vec3 a = vec3(30.0, 60.0, 140.0) / 255.0;
-  vec3 b = vec3(80.0, 200.0, 220.0) / 255.0;
-  vec3 c = vec3(240.0, 240.0, 255.0) / 255.0;
-  return (t < 0.5) ? mix(a, b, t / 0.5) : mix(b, c, (t - 0.5) / 0.5);
+  return texture(u_colormap, vec2(computeT(n), 0.5)).rgb;
 }
 
 void main() {
@@ -88,13 +113,23 @@ void main() {
   outColor = vec4(vec3(18.0, 20.0, 46.0) / 255.0, 1.0);                    // interior (non-escaping)
 }`;
 
+/** Render options for the GPU σ path — the CPU escape options plus GPU-only coloring controls. */
+export interface SchwarzGLRenderOptions extends SchwarzRenderOptions {
+  /** Scale-mode key (render/schwarzColormaps.ts SCHWARZ_SCALE_MODES); default "linear". */
+  scaleMode?: string;
+  /** Period for the cyclic scale mode; default 8. */
+  modK?: number;
+}
+
 export interface SchwarzGLRenderer {
   /** The offscreen GL canvas holding the last render — drawImage it onto the visible 2D canvas. */
   readonly canvas: HTMLCanvasElement;
   /** Upload φ and (re)build the Ω boundary mask. Call when the map changes, not on every view change. */
   setPhi(phi: SigmaPhi, boundaryPoly: readonly Complex[]): void;
+  /** Rebuild the escape-time colormap ramp from a named palette (render/schwarzColormaps.ts). Persists. */
+  setColormap(name: string): void;
   /** Render the σ field at `size`×`size` for `view`. Returns false if setPhi hasn't run. */
-  render(view: SchwarzView, size: number, opts?: SchwarzRenderOptions): boolean;
+  render(view: SchwarzView, size: number, opts?: SchwarzGLRenderOptions): boolean;
   destroy(): void;
 }
 
@@ -136,11 +171,20 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
   const uMask = U("u_mask");
   const uMaskCenter = U("u_maskCenter");
   const uMaskHalfExtent = U("u_maskHalfExtent");
+  const uColormap = U("u_colormap");
+  const uScaleMode = U("u_scaleMode");
+  const uModK = U("u_modK");
 
   let packed: PackedPhi | null = null;
   let maskTex: WebGLTexture | null = null;
   let maskCenter: [number, number] = [0, 0];
   let maskHalfExtent = 1;
+  let colormapTex: WebGLTexture | null = makeColormapTexture(ctx, schwarzColormap(DEFAULT_SCHWARZ_COLORMAP));
+
+  function setColormap(name: string): void {
+    if (colormapTex) ctx.deleteTexture(colormapTex);
+    colormapTex = makeColormapTexture(ctx, schwarzColormap(name));
+  }
 
   function setPhi(phi: SigmaPhi, boundaryPoly: readonly Complex[]): void {
     packed = packPhi(phi);
@@ -152,7 +196,7 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
     maskHalfExtent = m.halfExtent;
   }
 
-  function render(view: SchwarzView, size: number, opts: SchwarzRenderOptions = {}): boolean {
+  function render(view: SchwarzView, size: number, opts: SchwarzGLRenderOptions = {}): boolean {
     if (!packed || !maskTex) return false;
     if (canvas.width !== size || canvas.height !== size) {
       canvas.width = size;
@@ -172,11 +216,18 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
     ctx.uniform1f(uEscapeR, opts.escapeR ?? 1e4);
     uploadPhi(ctx, program, packed);
 
+    ctx.uniform1i(uScaleMode, schwarzScaleId(opts.scaleMode ?? DEFAULT_SCHWARZ_SCALE));
+    ctx.uniform1i(uModK, Math.max(2, opts.modK ?? 8));
+
     ctx.activeTexture(ctx.TEXTURE0);
     ctx.bindTexture(ctx.TEXTURE_2D, maskTex);
     ctx.uniform1i(uMask, 0);
     ctx.uniform2f(uMaskCenter, maskCenter[0], maskCenter[1]);
     ctx.uniform1f(uMaskHalfExtent, maskHalfExtent);
+
+    ctx.activeTexture(ctx.TEXTURE1);
+    ctx.bindTexture(ctx.TEXTURE_2D, colormapTex);
+    ctx.uniform1i(uColormap, 1);
 
     ctx.drawArrays(ctx.TRIANGLES, 0, 3);
     return true;
@@ -184,9 +235,10 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
 
   function destroy(): void {
     if (maskTex) ctx.deleteTexture(maskTex);
+    if (colormapTex) ctx.deleteTexture(colormapTex);
     ctx.deleteBuffer(vbo);
     ctx.deleteProgram(program);
   }
 
-  return { canvas, setPhi, render, destroy };
+  return { canvas, setPhi, setColormap, render, destroy };
 }
