@@ -285,6 +285,9 @@ importers:
       '@cas/core':
         specifier: workspace:*
         version: link:../core
+      '@cas/gpu':
+        specifier: workspace:*
+        version: link:../gpu
     devDependencies:
       '@eslint/js':
         specifier: ^9.17.0

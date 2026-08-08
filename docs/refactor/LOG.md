@@ -1540,3 +1540,27 @@
   engine paints via the same `schwarzBoundaryPoly`/`renderSchwarzField` (smoke-tested); SIGMA-HANDOFF/ISSUES
   updated. Green bar: typecheck/lint/test **2299 / 270** (+17 tests). Still deferred: complex leading c, the
   non-Laurent families (bounded/LQD/PQD — S2b–d), GPU σ (S4b), df64 deep-zoom.
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (S4b-i — GPU σ evaluator + CPU-parity net):**
+  **the first half of S4b: QD's hand-written σ fragment shader is now a shared `@cas/schwarz/gpu` GLSL module
+  with a proven CPU↔GPU parity net.** Foundation for native interactive σ in CD; nothing in an app imports it
+  yet (the CD render swap is S4b-ii). Two increments:
+  **(I0) `@cas/schwarz/gpu` homed** — new `src/gpu/` on `@cas/gpu` (`workspace:*`; dep-cruiser accepts the edge
+  — acyclic, downward, the second package↔package edge after gpu→expr). `./gpu` export subpath; a
+  `vitest.browser.config.ts` + `test:browser` script mirroring `@cas/gpu`, appended to the root `test:browser`
+  chain (CI's `browser` job runs it).
+  **(I1) σ GLSL lifted + parity proven** — `sigma.glsl.ts` lifts QD's `FRAG_SRC` σ evaluator
+  (branchPhi/branchSchwarz/evalPhi/evalPhiDeriv/evalF/invertPhi/newtonSeedFresh/acceptZ/sigma) as reusable
+  GLSL strings, **specialized to the ONE family CD reconstructs** — the unbounded-Laurent map with finite-pole
+  branches (`makeUnboundedLaurentSchwarz`). QD's other five families (bounded/LQD/singular/β) have no CD
+  consumer, so per **ADR-0007** they stay in QD's app-local shader; the `u_family` dispatch is specialized away
+  (no `u_w0`/`cexp`/`blaschke`, unbounded-only seeding/acceptance). The **EPS-guarded** complex ops are kept
+  local (deliberately NOT `@cas/gpu`'s `COMPLEX_SINGLE_GLSL`, which lacks `cinv` and the pole guard) — the same
+  pole-safety reason QD keeps them, documented in-file. `probe.ts`: `packPhi` (φ → fixed-size cap-checked
+  uniforms), `uploadPhi`, and `runSigmaGLSL` (RGBA32F readback) — the `@cas/gpu` `dualBackend.ts` split.
+  NET: a **node** structural guard pins the specialized cut (asserts the family-1 math is present and NONE of
+  QD's other-family vocabulary rode along) + `packPhi` byte-correctness; a **browser** numeric harness (real
+  WebGL2 / SwiftShader) proves **GPU σ(w) = CPU σ(w)** at round-trip samples w = φ(z₀) across the deltoid + a
+  single-pole, a complex order-2 pole, and a two-branch domain — **measured max \|GPU−CPU\| = 1.9e-7**
+  (float32 ε; matches `@cas/gpu`'s 1.5e-7 dual-backend figure), plus σ=null for a point in the hole K. Green
+  bar: typecheck / lint(+dep:check) / test **2305 / 271** (+6 node tests, +1 file), build, browser σ-parity
+  6/6. Next: **S4b-ii** composes this GLSL into CD's escape-time shader and swaps the CPU putImageData σ raster.
