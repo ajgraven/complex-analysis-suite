@@ -100,6 +100,7 @@ import {
   saveSavedViews,
   type AppState,
 } from "./state/appState";
+import { encodeSigmaState, parseSigmaState, type SigmaViewState } from "./state/schwarzState";
 import { decodeLink, validateEnvelope, type Envelope, type SchwarzMap } from "@cas/interchange";
 import {
   envelopeToMapSpec,
@@ -2856,6 +2857,18 @@ function init(): void {
     if (proj) state._proj = proj;
     const pv = byId<HTMLSelectElement>("profile").value; // the active use-case profile (label hint)
     if (pv && pv !== "custom") state._profile = pv;
+    // σ peer view (ADR-0009 item 2): when σ is showing, layer its view state (φ recipe + window + coloring)
+    // so a permalink / saved view / PNG reproduces it. Present-only — a state without `_sigma` is a normal
+    // fractal view, and applyFullState leaves σ for it.
+    if (schwarzSession) {
+      state._sigma = encodeSigmaState({
+        phi: schwarzSession.phi,
+        center: schwarzView.center,
+        zoom: schwarzView.zoom,
+        colormap: schwarzColormapName,
+        scale: schwarzScaleMode,
+      });
+    }
     return state;
   }
 
@@ -2938,6 +2951,16 @@ function init(): void {
       refreshNotes();
     }
     if (typeof state._profile === "string") adoptProfile(state._profile); // show the carried profile label
+    // σ peer view (ADR-0009 item 2), LAST — after the standard plots are set, so exiting σ later reveals
+    // the correct fractal underneath. A state carrying `_sigma` re-enters σ; one without it leaves σ (so a
+    // non-σ saved view / link switches back to the plots). A corrupt `_sigma` is ignored (stay on the plots).
+    if (typeof state._sigma === "string") {
+      const sig = parseSigmaState(state._sigma);
+      if (sig) restoreSchwarzFromState(sig);
+      else if (schwarzSession) exitSchwarzView();
+    } else if (schwarzSession) {
+      exitSchwarzView();
+    }
   }
 
   /** Serialize the current view into the URL hash and copy a shareable link. */
@@ -2971,6 +2994,7 @@ function init(): void {
     | {
         engine: ReturnType<typeof schwarzEngineFromMapSpec>;
         poly: ReturnType<typeof schwarzBoundaryPoly>;
+        phi: SchwarzPhi; // the φ recipe (c, F, branches) — serialized into the σ permalink (_sigma, item 2)
         size: number;
         mode: "GPU" | "CPU";
       }
@@ -3112,7 +3136,7 @@ function init(): void {
         console.warn("schwarzGL setPhi failed; falling back to the CPU field:", err);
       }
     }
-    schwarzSession = { engine, poly, size, mode };
+    schwarzSession = { engine, poly, phi, size, mode };
     schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
     schwarzInspect = null; // a new φ ⇒ any previous orbit is stale
     renderSchwarzInspectReadout();
@@ -3124,7 +3148,7 @@ function init(): void {
       // A GPU render that throws at paint time degrades the whole session to CPU, in THIS call.
       if (schwarzSession.mode === "GPU") {
         console.warn("schwarzGL render failed; falling back to the CPU field:", err);
-        schwarzSession = { engine, poly, size: 256, mode: "CPU" };
+        schwarzSession = { engine, poly, phi, size: 256, mode: "CPU" };
         paintSchwarz();
       }
     }
@@ -3139,6 +3163,23 @@ function init(): void {
   /** Native path: build the σ engine from φ coefficients (a preset or the custom form) and enter. */
   function renderSchwarzFromPhi(phi: SchwarzPhi): void {
     enterSchwarz(makeUnboundedLaurentSchwarz(phi.c, phi.F, phi.branches), phi);
+  }
+  /**
+   * Restore a σ view from a serialized `_sigma` state (permalink / saved view / PNG — ADR-0009 item 2):
+   * the φ recipe, the exact window, and the coloring. Sets the coloring BEFORE entering so `enterSchwarz`
+   * applies it, then overrides the reset-to-default view and syncs the σ controls + legend.
+   */
+  function restoreSchwarzFromState(s: SigmaViewState): void {
+    schwarzColormapName = s.colormap;
+    schwarzScaleMode = s.scale;
+    renderSchwarzFromPhi(s.phi); // build engine + enter σ (resets the view to default, applies the colormap)
+    schwarzView = { center: [s.center[0], s.center[1]], zoom: s.zoom }; // ...then restore the exact window
+    const cm = document.getElementById("schwarz-colormap") as HTMLSelectElement | null;
+    if (cm) cm.value = schwarzColormapName;
+    const sc = document.getElementById("schwarz-scale") as HTMLSelectElement | null;
+    if (sc) sc.value = schwarzScaleMode;
+    renderSchwarzLegendChip();
+    scheduleSchwarzPaint(); // paint at the restored window (also mirrors it into the nav fields)
   }
   /** Leave the σ peer view — back to the Parameter & Dynamical plots. Idempotent (safe if not in σ mode). */
   function exitSchwarzView(): void {

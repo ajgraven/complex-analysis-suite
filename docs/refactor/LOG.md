@@ -1705,3 +1705,28 @@
   lint / test **2359 / 277** (+10 node: legend + view parse; +1 file), build. **ADR-0009 item 3 DONE**
   (colormaps + scale modes, orbit inspection, legend + scale bar, precise nav — all four); remaining on
   ADR-0009: item 2 (σ-view serialization / permalink) + item 4 (SIGMA-HANDOFF.md target-shape update).
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (ADR-0009 item 2, Stage A — σ permalink + saved views):**
+  **a σ view now round-trips through a permalink AND a saved view** (ADR-0009 item 2, first two of its three
+  surfaces). The σ peer view is not control-based, so it can't ride `SHARE_IDS`; instead the σ view state —
+  the φ recipe (`c`, Laurent `F`, finite-pole `branches`) + the window (centre, zoom) + the coloring
+  (colormap, scale) — is layered onto the `AppState` as a single `_sigma` key, exactly as `_z0` / `_grad` /
+  `_proj` layer their non-control state. Because permalinks (`shareLink` / `loadFromHash`) AND saved views
+  (`save` / `loadSelectedView`) both flow through `readFullState` / `applyFullState`, ONE hook there lights
+  up both: `readFullState` emits `_sigma` when σ is showing; `applyFullState`, LAST (after the standard
+  plots so exiting σ reveals the right fractal), re-enters σ for a state carrying `_sigma` and leaves σ for
+  one without. NEW pure codec `state/schwarzState.ts` (`encodeSigmaState` / `parseSigmaState`) is
+  hostile-link hard: it rejects non-finite / malformed input, caps every coefficient list (≤ 64), enforces
+  the engine's `|z_j| < 1` pole invariant, clamps zoom, and normalises an unknown colormap/scale to the
+  defaults — a corrupt link yields `null` (ignored, stay on the plots), never a hung engine or NaN render.
+  `schwarzSession` now carries the φ recipe so it can be serialized; `restoreSchwarzFromState` rebuilds the
+  engine, restores the exact window + coloring, and syncs the σ controls. The σ builder / coloring / nav
+  input ids stay opted out of `SHARE_IDS` — the σ view travels as `_sigma`, not through those control ids
+  (appState's DOM-coverage guard comments updated to say so). NET: `test/schwarzState.test.ts` (11 cases:
+  encode→parse round-trips a pole-free + a pole-bearing state; the parser rejects zero/non-finite c, a bad
+  F tuple, `|z_j| ≥ 1`, an empty pole A, a missing centre, non-finite zoom, and oversized lists; clamps
+  zoom; falls back on an unknown colormap/scale). VERIFIED in the BUILT app (Playwright): build a
+  distinctive σ view (turbo + sqrt + centre 0.6−0.3i, zoom 1.2) → "Share link" → open the permalink in a
+  fresh page → σ restores identically and the render is **pixel-identical** to the settled original
+  (checksum 86040483 = 86040483); save a view, perturb (grayscale + reset), load it back → σ restores; no
+  console errors. Green: typecheck / lint / test **2370 / 278** (+11 node: σ-state codec; +1 file), build.
+  ADR-0009 item 2: permalink + saved views done; remaining: PNG-metadata export (Stage B).
