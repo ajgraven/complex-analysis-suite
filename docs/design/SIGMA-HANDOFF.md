@@ -353,11 +353,25 @@ byte-match, CD reconstruct → the frozen σ(w₀)=2/3, vs the pole-free 1/3). S
 | S4b-iv | **Native φ entry**: a "Schwarz reflection σ…" builder — a preset picker (Deltoid, Ellipse, Single exterior pole) + a custom-φ form (c, Laurent F, poles "z ; A₁, A₂, …"); pure, unit-tested parse/validate; Generate → the interactive GPU σ view. So a σ fractal is GENERATED in CD from a Riemann map, not only imported | ✅ **native φ → σ** |
 
 **Native σ in CD is complete end to end** — lift (S4b-i) → GPU render (ii) → interactive (iii) → native φ
-entry (iv). **Deferred enhancements / separate approvals:** σ **orbit inspection** (click/hover a w to trace
-its σ-orbit) and a σ-**view permalink** (share-link + saved-view state for the σ view; the builder fields are
-one-shot tool inputs today); **S5** (non-Laurent families on the wire, branch-aware continuation through cusps
-[uncertified — RISKS §3], df64 σ, PQD GPU αth-root). (A true cardioid needs a bounded/positive-power map, not
-this unbounded-Laurent family, so it is intentionally not offered as a preset — honest labeling.)
+entry (iv).
+
+**Target shape — [ADR-0009](../DECISIONS.md#adr-0009-schwarz-reflection-is-a-first-class-peer-view-in-complex-dynamics):**
+σ becomes a **first-class peer view** in Complex Dynamics — its own pane + controls section + persistent
+lifecycle + serializable state (share links / saved views / PNG metadata) — alongside Parameter Space and
+Dynamical Plane, **not** the current transient overlay. The parity enhancements below build on that refactor.
+A parity review (against CD's Dynamical plane + QD's mature σ tool) sorted CD's power features into **generic**
+(reusable for σ: colormaps + scale modes, legend, scale bar, hover readout, iteration controls, share/saved
+views, PNG export, keyboard/pinch nav) and **map-specific** (rays, Böttcher, matings, Julia-set properties,
+Yoccoz, laminations, the inspector's period/multiplier/nucleus math — inapplicable to σ, and out of scope by
+nature).
+
+**Deferred enhancements (build on the peer-view refactor):** the **peer-view/mode** refactor itself (ADR-0009
+action items); **coloring** (colormap picker + scale modes — QD's σ shader already has them, dropped in the
+lift); σ **orbit inspection** (click/hover a w to trace its σ-orbit); a σ-**view permalink** (share-link +
+saved-view state; the builder fields are one-shot tool inputs today); **S5** (non-Laurent families on the
+wire, branch-aware continuation through cusps [uncertified — RISKS §3], df64 σ, PQD GPU αth-root). (A true
+cardioid needs a bounded/positive-power map, not this unbounded-Laurent family, so it is intentionally not
+offered as a preset — honest labeling.)
 
 ### Highest-risk step
 **S2d** — QD's entire Schwarz UI (`schwarz-ui/paint/render/interaction/forward`) reads `QD.Schwarz`'s exact

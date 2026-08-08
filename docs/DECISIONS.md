@@ -17,13 +17,16 @@ Format follows Michael Nygard's ADR convention.
 | [0006](#adr-0006-convention-neutral-core-packages) | Convention-neutral core packages | Accepted |
 | [0007](#adr-0007-incremental-extraction-driven-by-real-need) | Incremental extraction driven by real need | Accepted |
 | [0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) | Extract `@cas/exact`; keep QD's `sym-core` separate | Accepted |
+| [0009](#adr-0009-schwarz-reflection-is-a-first-class-peer-view-in-complex-dynamics) | Schwarz reflection (σ) is a first-class peer view in Complex Dynamics | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
-> All eight are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
+> All nine are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
 > [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you));
 > **0008 is the first *follow-on*** — a decision made during the build, which
 > [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) explicitly asked to be recorded
-> this way. Expect more of that shape than of the original seven.
+> this way. Expect more of that shape than of the original seven. **0009 is another follow-on**, of a
+> different kind — a UI/product decision (σ becomes a first-class peer *view* in Complex Dynamics), not an
+> extraction.
 > Supersede rather than rewrite if any change later.
 >
 > **✅ Executed.** The seven up-front decisions were carried out — the
@@ -565,3 +568,101 @@ solo developer that is a bad trade. It stops being a bad trade under the conditi
        breaking `@cas/exact`'s complex-multiply sign produces 200. This required adding
        `@cas/exact` to the QD app's **devDependencies** — the app's runtime still does not use
        it, and the boundary this ADR draws is unchanged.
+
+---
+
+## ADR-0009: Schwarz reflection (σ) is a first-class peer view in Complex Dynamics
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*A follow-on ADR of the kind [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) anticipated —
+but a UI/product decision rather than an extraction. It records the target shape of the Schwarz-reflection
+feature in Complex Dynamics and supersedes the MVP "transient overlay" shape that shipped first.*
+
+### Context
+The QD → CD Schwarz-reflection (σ) hand-off shipped as a **transient overlay**: σ(w) = conj(F(φ⁻¹(w))) is
+reconstructed from an imported — or natively built — Riemann map φ and painted onto a dedicated canvas
+(`#JCSSchwarz`) layered *over* the Dynamical plane, shown for one map and dismissed by Esc or by any control
+change (S4a → S4b, `render/schwarzView.ts` / `render/schwarzGL.ts` / `main.ts`). That was the right minimal
+shape for the milestone: reproduce the deltoid σ as ground truth, then make it a live, interactive,
+GPU-rendered view with a native φ builder — without yet building UI chrome.
+
+σ is now a full interactive render (pan/zoom, presets + custom φ, CPU-parity-proven GPU engine). A
+feature-parity review — against CD's own Dynamical plane and against QD's *mature* σ tool
+(`app/schwarz/schwarz-ui.mjs`, which already ships colormaps + scale modes, hover/click orbit tracing, a
+preimage tree, a boundary overlay, and z-disk / Riemann-sphere views of σ) — found that CD's power features
+split cleanly into **generic** (operate on any escape-time field → reusable for σ: colormaps + scale modes,
+legend, scale bar, hover readout, iteration controls, share links / saved views, PNG export, keyboard/pinch
+nav) and **map-specific** (bound to the `f(z,c)` pipeline: rays, Böttcher, matings, Julia-set properties,
+Yoccoz, laminations, the inspector's period/multiplier/nucleus math — inapplicable to σ by nature). The
+finding that forces this ADR: the generic parity features integrate *cleanly* only if σ has **its own
+persistent controls and lifecycle**. An overlay dismissed on any control change has nowhere to host a
+controls panel, cannot be serialized into a share link / saved view, and makes legend/scale-bar placement
+awkward. CD's topology already has two coexisting **peer planes** — Parameter Space and Dynamical Plane, each
+a `<section>` with its own canvas + controls — which is exactly the shape σ needs.
+
+### Decision
+Promote σ from a transient overlay to a **first-class peer view** in Complex Dynamics: a Schwarz-reflection
+pane alongside Parameter Space and Dynamical Plane, with its **own canvas, its own controls section, and its
+own persistent lifecycle** (entered and left as a mode, not dismissed by unrelated control changes). σ-view
+state — the φ recipe + view + coloring — becomes **serializable** (share links, saved views, PNG metadata)
+like the other planes. This **supersedes the S4a "transient overlay" shape** (a milestone choice, not a prior
+ADR).
+
+This does **not** conflict with [CLAUDE.md decision #8](../CLAUDE.md) ("separate apps + a unified menu; **no**
+unified single-page shell"): that decision governs the *suite* topology (each tool is a separate app under a
+launcher). σ is **not** a separate app — it is a *view within* the Complex Dynamics app, sharing CD's engine,
+coloring, interaction, and import path. A peer view inside one app is not a cross-app single-page shell.
+
+### Options Considered
+
+#### Option A: First-class peer view within Complex Dynamics (this ADR)
+| Dimension | Assessment |
+|---|---|
+| Parity fit | High — every generic feature (controls panel, permalink, saved views, legend, PNG) has a natural home |
+| Reuse | High — shares CD's engine / coloring / nav; QD's σ tool is a proven reference for the shape |
+| Cost | Medium — a one-time refactor (lifecycle, a controls section, mode-switch + layout, state serialization) |
+
+**Pros:** the parity features land cleanly; σ becomes a real mode users navigate to, share, and save; matches
+the existing peer-plane structure; QD already validated this shape for σ. **Cons:** a bounded architectural
+refactor — σ's lifecycle out of "overlay dismissed on any change", a new controls section, layout/mode wiring,
+and state serialization; the QD → CD import path must keep working through the new mode.
+
+#### Option B: Keep σ as a transient overlay; bolt features onto it
+**Pros:** no refactor. **Cons:** every parity feature fights the overlay model — no home for σ controls, no
+way to serialize a dismiss-on-any-change overlay, awkward legend/scale-bar placement. It accrues exactly the
+"features bolted onto an overlay" debt the review flagged; the "no refactor" saving is paid back with interest
+per feature. Rejected.
+
+#### Option C: A separate σ app (like `apps/correspondences`)
+**Pros:** total isolation; its own everything. **Cons:** σ *shares* CD's engine, coloring, interaction, and
+the QD → CD import path; a separate app would re-duplicate them (against the suite's north star — "each new
+tool builds fewer primitives from scratch than the last") and split the hand-off across an extra app boundary.
+The stated goal was explicitly "the CD app natively supports σ." Rejected.
+
+### Trade-off Analysis
+Option A's cost is a bounded, one-time refactor; its payoff is that every Tier-1/2 parity feature lands
+cleanly and σ stops being a second-class citizen in its own app. Option B's "no refactor" is illusory — it is
+repaid, with interest, as each feature works around the overlay. Option C forfeits the reuse that motivated
+putting σ in CD at all, and duplicates primitives the suite exists to share. The peer-view shape is also the
+one QD already validated for σ, so it is low-risk in design even though it is real work.
+
+### Consequences
+- **Easier:** hosting σ's own controls (coloring, iteration, inspection); serializing σ into share links /
+  saved views / PNG metadata; a legible mode switch; giving future σ features (orbit inspection, z-disk /
+  sphere views) a home.
+- **Harder:** the one-time refactor — σ lifecycle, a controls section, mode-switch + layout wiring, state
+  serialization; keeping the QD → CD import path working through the new mode.
+- **Watch for:** σ's controls *duplicating* the Dynamical-plane controls. Reuse the generic coloring/nav
+  machinery the feature review identified as field-agnostic; do not fork it.
+- **Revisit if:** σ grows enough genuinely distinct surface to warrant its own app after all — unlikely, since
+  it shares CD's foundation, and Option C's reuse cost would still apply.
+
+### Action Items
+1. [ ] Refactor σ from a transient overlay into a peer view/mode — its own pane + controls section + a
+       persistent lifecycle (not dismissed by unrelated control changes).
+2. [ ] Serialize σ-view state (φ recipe + view + coloring) into share links / saved views / PNG metadata.
+3. [ ] Bring the generic parity features into the σ controls section (colormaps + scale modes, orbit
+       inspection, legend + scale bar, precise nav), reusing CD's field-agnostic machinery.
+4. [ ] Update [SIGMA-HANDOFF.md](design/SIGMA-HANDOFF.md) so the peer-view is the target shape (superseding
+       the S4a overlay), and keep the map-specific instruments explicitly out of scope for σ.
