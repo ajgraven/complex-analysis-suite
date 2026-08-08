@@ -1588,3 +1588,16 @@
   QD's own GPU σ). Green: typecheck / lint(+dep:check) / test **2309 / 272** (+4 node: mask frame math), build,
   CD browser **14/14**. Next: **S4b-iii** makes the σ view interactive (pan/zoom/pinch via PlotView) + adds the
   native φ preset/custom UI.
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (S4b-iii — the σ view is interactive):**
+  **the reconstructed σ view now pans and zooms like a standard fractal**, GPU-rendered live. Was a fixed
+  [-2.5,2.5]² static overlay dismissed on click; now: **drag to pan, scroll to zoom** (about the cursor), **Esc**
+  (or any control change) to exit. `renderSchwarzView` became a **session** — it stores the reconstructed
+  engine / φ / boundary once (`schwarzSession`) and repaints at the current `schwarzView` on each gesture,
+  rAF-coalesced. GPU mode paints a crisp 512² in one pass; the CPU fallback stays 256² so pan/zoom is
+  responsive. The pan/zoom math is pure + exported (`uvToPlotFrac` / `panSchwarzView` / `zoomSchwarzView` in
+  `render/schwarzView.ts`) and unit-tested (the grabbed point follows the cursor; a corner-anchored zoom pins
+  that point; a center zoom leaves the center fixed). VERIFIED in the BUILT app (Playwright drag + wheel + Esc):
+  GPU label + interaction hint, the view pans and zooms in (the K oval magnifies), Esc hides the canvas, no
+  console errors. Green: typecheck / lint / test **2309 / 272** (+4 node: view math), build. Next: **S4b-iv** —
+  the native φ entry (a preset picker + a custom-φ input form: c, Laurent F, poles A_j at z_j), so a σ fractal
+  can be GENERATED in CD from a Riemann map, not only imported.

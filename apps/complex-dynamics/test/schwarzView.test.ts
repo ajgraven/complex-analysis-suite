@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { makeUnboundedLaurentSchwarz } from "@cas/schwarz";
-import { pixelToPlot, renderSchwarzField, schwarzBoundaryPoly, schwarzEscapeAt } from "../src/render/schwarzView";
+import {
+  pixelToPlot,
+  renderSchwarzField,
+  schwarzBoundaryPoly,
+  schwarzEscapeAt,
+  uvToPlotFrac,
+  panSchwarzView,
+  zoomSchwarzView,
+} from "../src/render/schwarzView";
 
 // The deltoid σ engine — ground truth φ(z) = z + 1/(2z²) (c = 1, F = [0,0,½]); Ω is the exterior of K.
 const engine = makeUnboundedLaurentSchwarz(1, [
@@ -67,5 +75,48 @@ describe("Schwarz σ CPU render — pole-bearing engine (Phase 2)", () => {
     const colors = new Set<string>();
     for (let i = 0; i < buf.length; i += 4) colors.add(`${buf[i]},${buf[i + 1]},${buf[i + 2]}`);
     expect(colors.size).toBeGreaterThan(1); // structure, not a flat fill
+  });
+});
+
+// Interactive pan/zoom view math (S4b-iii): the pure core of the σ view's drag-pan and wheel-zoom.
+describe("Schwarz σ interactive view math", () => {
+  const view = { center: [0, 0] as [number, number], zoom: 0.4 }; // [-2.5, 2.5]²
+
+  it("uvToPlotFrac spans the window with +Im up (top-left = −2.5+2.5i, bottom-right = 2.5−2.5i)", () => {
+    expect(uvToPlotFrac(view, 0.5, 0.5)).toEqual([0, 0]); // center
+    const tl = uvToPlotFrac(view, 0, 0);
+    expect(tl[0]).toBeCloseTo(-2.5, 9);
+    expect(tl[1]).toBeCloseTo(2.5, 9); // top ⇒ +Im
+    const br = uvToPlotFrac(view, 1, 1);
+    expect(br[0]).toBeCloseTo(2.5, 9);
+    expect(br[1]).toBeCloseTo(-2.5, 9);
+  });
+
+  it("zoom about the center only scales zoom; the center is unmoved", () => {
+    const z = zoomSchwarzView(view, 2, [0.5, 0.5]);
+    expect(z.zoom).toBeCloseTo(0.8, 9);
+    expect(z.center[0]).toBeCloseTo(0, 9);
+    expect(z.center[1]).toBeCloseTo(0, 9);
+  });
+
+  it("zoom about a corner keeps that corner's plot point pinned under the cursor", () => {
+    const anchorUv: [number, number] = [0, 0]; // top-left
+    const before = uvToPlotFrac(view, ...anchorUv);
+    const z = zoomSchwarzView(view, 2, anchorUv);
+    const after = uvToPlotFrac(z, ...anchorUv);
+    expect(after[0]).toBeCloseTo(before[0], 9);
+    expect(after[1]).toBeCloseTo(before[1], 9);
+    expect(z.zoom).toBeCloseTo(0.8, 9); // still zoomed in
+  });
+
+  it("pan makes the plot point grabbed at fromUv follow to toUv (zoom unchanged)", () => {
+    const from: [number, number] = [0.5, 0.5];
+    const to: [number, number] = [0.6, 0.5];
+    const grabbed = uvToPlotFrac(view, ...from);
+    const p = panSchwarzView(view, from, to);
+    expect(p.zoom).toBe(view.zoom);
+    const nowUnderTo = uvToPlotFrac(p, ...to);
+    expect(nowUnderTo[0]).toBeCloseTo(grabbed[0], 9);
+    expect(nowUnderTo[1]).toBeCloseTo(grabbed[1], 9);
   });
 });

@@ -42,6 +42,40 @@ export function pixelToPlot(px: number, py: number, size: number, view: SchwarzV
   return [re, im];
 }
 
+// --- Interactive pan/zoom view math (S4b-iii) --------------------------------------------------------
+// Pure fractional-uv variants of pixelToPlot, for the σ view's drag-pan and wheel-zoom. uv ∈ [0,1]²,
+// u = left→right, v = TOP→bottom (DOM/pointer convention); the same window as pixelToPlot (half-width on
+// each axis = 1/zoom, +Im up). Kept pure + exported so the interaction is unit-tested without a DOM.
+
+/** uv (∈[0,1], u left→right, v top→bottom) → complex plot point. The fractional twin of pixelToPlot. */
+export function uvToPlotFrac(view: SchwarzView, u: number, v: number): Complex {
+  return [view.center[0] + (2 * u - 1) / view.zoom, view.center[1] + (2 * (1 - v) - 1) / view.zoom];
+}
+
+/** Pan so the plot point initially under `fromUv` ends up under `toUv` (the grabbed point follows the
+ *  cursor). Zoom is unchanged. Pure. */
+export function panSchwarzView(view: SchwarzView, fromUv: [number, number], toUv: [number, number]): SchwarzView {
+  const from = uvToPlotFrac(view, fromUv[0], fromUv[1]);
+  const to = uvToPlotFrac(view, toUv[0], toUv[1]);
+  return {
+    center: [view.center[0] + (from[0] - to[0]), view.center[1] + (from[1] - to[1])],
+    zoom: view.zoom,
+  };
+}
+
+/** Zoom by `factor` (>1 zooms in) about the plot point under `anchorUv`, which stays put under the
+ *  cursor. Pure. */
+export function zoomSchwarzView(view: SchwarzView, factor: number, anchorUv: [number, number]): SchwarzView {
+  const anchor = uvToPlotFrac(view, anchorUv[0], anchorUv[1]);
+  return {
+    center: [
+      anchor[0] - (anchor[0] - view.center[0]) / factor,
+      anchor[1] - (anchor[1] - view.center[1]) / factor,
+    ],
+    zoom: view.zoom * factor,
+  };
+}
+
 /** Classify one point w under σ (isInOmega = outside the boundary polygon). */
 export function schwarzEscapeAt(
   engine: UnboundedLaurentSchwarz,

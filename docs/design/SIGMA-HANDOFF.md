@@ -349,12 +349,13 @@ byte-match, CD reconstruct → the frozen σ(w₀)=2/3, vs the pole-free 1/3). S
 | S4a | **CD reconstructs + renders deltoid σ (CPU)** via `@cas/schwarz`; end-to-end ground truth; `≈` labeling | ✅ **#240 + #241** |
 | S4b-i | **`@cas/schwarz/gpu`**: lift QD's `FRAG_SRC` σ evaluator (the unbounded-Laurent + branches family only, per ADR-0007) into shared GLSL + a **CPU↔GPU parity net** (browser WebGL2; max \|GPU−CPU\| = 1.9e-7, float32 ε) | ✅ **engine lifted** |
 | S4b-ii | **CD GPU σ render**: compose the lifted GLSL + a `@cas/gpu/mask` Ω-mask into CD's escape shader; render on GPU (offscreen → drawImage onto #JCSSchwarz), CPU fallback intact; visual parity with the CPU render | ✅ **GPU render live** |
-| S4b-iii | **Interactive native σ mode**: pan / zoom / pinch (PlotView), a first-class Schwarz mode + a φ preset picker + a custom-φ input form (c, Laurent F, poles A_j at z_j) | ⏳ next |
+| S4b-iii | **Interactive σ view**: drag-pan / wheel-zoom the reconstructed σ, GPU-rendered live (offscreen → #JCSSchwarz); Esc / control-change exits; pure, unit-tested pan/zoom math | ✅ **interactive** |
+| S4b-iv | **Native φ entry**: a φ preset picker (deltoid, single exterior pole, cardioid) + a custom-φ input form (c, Laurent F, poles A_j at z_j), so a σ fractal is GENERATED in CD from a Riemann map, not only imported | ⏳ next |
 
-**Deferred to separate approvals:** S4b-iii (interactive σ view + native φ preset/custom UI — the σ evaluator
-is lifted + parity-proven and CD now renders it on the GPU; what remains is interaction + the native map UI),
-S5 (non-Laurent families on the wire, branch-aware continuation through cusps [uncertified — RISKS §3], df64 σ,
-PQD GPU αth-root).
+**Deferred to separate approvals:** S4b-iv (native φ preset/custom UI — the σ evaluator is lifted +
+parity-proven, CD renders it on the GPU, and the σ view is interactive; what remains is the native map-entry
+UI), S5 (non-Laurent families on the wire, branch-aware continuation through cusps [uncertified — RISKS §3],
+df64 σ, PQD GPU αth-root).
 
 ### Highest-risk step
 **S2d** — QD's entire Schwarz UI (`schwarz-ui/paint/render/interaction/forward`) reads `QD.Schwarz`'s exact

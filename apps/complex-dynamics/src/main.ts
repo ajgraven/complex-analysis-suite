@@ -107,7 +107,13 @@ import {
   schwarzEngineFromMapSpec,
   schwarzPhiFromMapSpec,
 } from "./interchange/importMap";
-import { renderSchwarzField, schwarzBoundaryPoly } from "./render/schwarzView";
+import {
+  renderSchwarzField,
+  schwarzBoundaryPoly,
+  panSchwarzView,
+  zoomSchwarzView,
+  type SchwarzView,
+} from "./render/schwarzView";
 import { createSchwarzGLRenderer, type SchwarzGLRenderer } from "./render/schwarzGL";
 import { PLACES } from "./state/places";
 import { decodeNotes, encodeNotes, type Note } from "./state/notes";
@@ -2925,63 +2931,163 @@ function init(): void {
     }
   }
 
-  // --- σ (Schwarz reflection) reconstruction view (S4a) -----------------------------------------
+  // --- σ (Schwarz reflection) reconstruction view (S4a; interactive GPU render S4b-ii/iii) -------
   // σ(w)=conj(F(φ⁻¹(w))) has a NUMERICAL inverse, so an imported schwarz recipe is not expr/GPU-
-  // compilable: it is rebuilt with @cas/schwarz and its escape-time field is painted on the CPU to a
-  // dedicated 2D canvas layered over the dynamical plot, at a fixed [-2.5,2.5]² window for this
-  // milestone. The image is `≈` — the principal exterior branch of a numerically-inverted reflection,
-  // not a certified render. Click it (or change any control) to dismiss and return to the normal plot.
-  const SCHWARZ_VIEW = { center: [0, 0] as [number, number], zoom: 0.4 }; // half-width 1/zoom = 2.5
-  const SCHWARZ_RENDER_SIZE = 256; // coarse ≈ preview; the GPU paints it in one pass, the CPU per Ω pixel
-  // The GPU σ renderer is built once, lazily, and reused: `undefined` = not yet tried, `null` = WebGL2
-  // unavailable (permanently CPU). It owns a private offscreen canvas whose result we drawImage onto the
-  // visible 2D #JCSSchwarz — so the DOM / dismiss / fallback path stays exactly as the CPU-only version.
+  // compilable through CD's usual pipeline: it is rebuilt with @cas/schwarz and its escape-time field is
+  // painted onto a dedicated 2D canvas layered over the dynamical plot — on the GPU (render/schwarzGL),
+  // CPU fallback. The image is `≈` — the principal exterior branch of a numerically-inverted reflection,
+  // not a certified render. Drag to pan, scroll to zoom (about the cursor); Esc — or any control change —
+  // exits and restores the normal plot underneath.
+  const SCHWARZ_DEFAULT_VIEW: SchwarzView = { center: [0, 0], zoom: 0.4 }; // half-width 1/zoom = 2.5
+  // The GPU σ renderer is built once, lazily: `undefined` = not yet tried, `null` = WebGL2 unavailable
+  // (permanently CPU). It owns a private offscreen canvas whose result we drawImage onto #JCSSchwarz.
   let schwarzGL: SchwarzGLRenderer | null | undefined;
-  function renderSchwarzView(spec: SchwarzMap): void {
+  // The active σ session — the reconstruction inputs a redraw needs at the current view. null ⇔ not shown.
+  let schwarzSession:
+    | {
+        engine: ReturnType<typeof schwarzEngineFromMapSpec>;
+        poly: ReturnType<typeof schwarzBoundaryPoly>;
+        size: number;
+        mode: "GPU" | "CPU";
+      }
+    | null = null;
+  let schwarzView: SchwarzView = { ...SCHWARZ_DEFAULT_VIEW };
+  let schwarzRaf = 0;
+
+  /** Paint the σ field at the current `schwarzView` (GPU → drawImage, or CPU → putImageData). */
+  function paintSchwarz(): void {
+    if (!schwarzSession) return;
+    const { engine, poly, size, mode } = schwarzSession;
     const canvas = byId<HTMLCanvasElement>("JCSSchwarz");
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const size = SCHWARZ_RENDER_SIZE;
-    canvas.width = size;
-    canvas.height = size;
-    // Reconstruct the engine (CPU fallback + boundary polygon) OUTSIDE the GPU try/catch, so an
-    // unsupported φ throws to importInterchange's "not supported" toast rather than silently painting CPU.
-    const engine = schwarzEngineFromMapSpec(spec);
-    const poly = schwarzBoundaryPoly(engine);
-
-    // GPU first: the lifted σ evaluator (@cas/schwarz/gpu, parity-proven to float32 ε) composed into the
-    // escape shader, painted in one pass. Any failure (no WebGL2, over a shader cap, a GL throw) → CPU.
-    let mode: "GPU" | "CPU" = "CPU";
-    if (schwarzGL === undefined) schwarzGL = createSchwarzGLRenderer();
-    if (schwarzGL) {
-      try {
-        schwarzGL.setPhi(schwarzPhiFromMapSpec(spec), poly);
-        if (schwarzGL.render(SCHWARZ_VIEW, size, { maxIter: 48, escapeR: 1e4 })) {
-          ctx.drawImage(schwarzGL.canvas, 0, 0);
-          mode = "GPU";
-        }
-      } catch (err) {
-        console.warn("schwarzGL render failed; falling back to the CPU field:", err);
-      }
+    if (canvas.width !== size || canvas.height !== size) {
+      canvas.width = size;
+      canvas.height = size;
     }
-    if (mode === "CPU") {
-      const rgba = renderSchwarzField(engine, poly, SCHWARZ_VIEW, size, { maxIter: 48, escapeR: 1e4 });
+    if (mode === "GPU" && schwarzGL) {
+      schwarzGL.render(schwarzView, size, { maxIter: 48, escapeR: 1e4 });
+      ctx.drawImage(schwarzGL.canvas, 0, 0);
+    } else {
+      const rgba = renderSchwarzField(engine, poly, schwarzView, size, { maxIter: 48, escapeR: 1e4 });
       const img = new ImageData(size, size); // construct-then-set (mirrors renderJuliaPreview) — avoids the
       img.data.set(rgba); // Uint8ClampedArray<ArrayBuffer> constructor-overload variance in the DOM lib types
       ctx.putImageData(img, 0, 0);
     }
-    canvas.hidden = false;
+  }
+  /** Coalesce rapid pan/zoom events into one paint per animation frame. */
+  function scheduleSchwarzPaint(): void {
+    if (schwarzRaf) return;
+    schwarzRaf = requestAnimationFrame(() => {
+      schwarzRaf = 0;
+      paintSchwarz();
+    });
+  }
+
+  function renderSchwarzView(spec: SchwarzMap): void {
+    // Reconstruct the engine (CPU fallback + boundary) OUTSIDE any try/catch so an unsupported φ throws
+    // to importInterchange's "not supported" toast rather than silently painting a wrong field.
+    const engine = schwarzEngineFromMapSpec(spec);
+    const poly = schwarzBoundaryPoly(engine);
+    if (schwarzGL === undefined) schwarzGL = createSchwarzGLRenderer();
+    // Decide mode + size once per session: the GPU paints a crisp 512² in one pass; the CPU fallback
+    // stays coarse (per-Ω-pixel Newton is heavy) so pan/zoom stays responsive.
+    let mode: "GPU" | "CPU" = "CPU";
+    let size = 256;
+    if (schwarzGL) {
+      try {
+        schwarzGL.setPhi(schwarzPhiFromMapSpec(spec), poly);
+        mode = "GPU";
+        size = 512;
+      } catch (err) {
+        console.warn("schwarzGL setPhi failed; falling back to the CPU field:", err);
+      }
+    }
+    schwarzSession = { engine, poly, size, mode };
+    schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
+    byId<HTMLCanvasElement>("JCSSchwarz").hidden = false;
+    try {
+      paintSchwarz();
+    } catch (err) {
+      // A GPU render that throws at paint time degrades the whole session to CPU, in THIS call.
+      if (schwarzSession.mode === "GPU") {
+        console.warn("schwarzGL render failed; falling back to the CPU field:", err);
+        schwarzSession = { engine, poly, size: 256, mode: "CPU" };
+        paintSchwarz();
+      }
+    }
     const label = byId<HTMLElement>("dyn-schwarz-label");
-    label.textContent = `Schwarz reflection σ (≈, ${mode}) · click to dismiss`;
+    label.textContent = `Schwarz reflection σ (≈, ${schwarzSession.mode}) · drag · scroll · Esc`;
     label.hidden = false;
   }
   /** Leave the σ reconstruction view (restore the normal dynamical plot underneath). Idempotent. */
   function exitSchwarzView(): void {
+    schwarzSession = null;
+    if (schwarzRaf) {
+      cancelAnimationFrame(schwarzRaf);
+      schwarzRaf = 0;
+    }
     byId<HTMLCanvasElement>("JCSSchwarz").hidden = true;
     byId<HTMLElement>("dyn-schwarz-label").hidden = true;
   }
-  // Click the σ raster to dismiss it — the plain, discoverable exit (a control change also exits).
-  byId<HTMLCanvasElement>("JCSSchwarz").addEventListener("click", exitSchwarzView);
+
+  // σ interaction: drag to pan, wheel to zoom (about the cursor), Esc to exit. Handlers are installed
+  // once and are no-ops unless a σ session is active — so they never interfere with the normal plot.
+  {
+    const canvas = byId<HTMLCanvasElement>("JCSSchwarz");
+    const clientToUv = (e: PointerEvent | WheelEvent): [number, number] => {
+      const r = canvas.getBoundingClientRect();
+      return [
+        Math.min(1, Math.max(0, (e.clientX - r.left) / Math.max(1, r.width))),
+        Math.min(1, Math.max(0, (e.clientY - r.top) / Math.max(1, r.height))),
+      ];
+    };
+    let lastUv: [number, number] | null = null;
+    canvas.addEventListener("pointerdown", (e) => {
+      if (!schwarzSession) return;
+      lastUv = clientToUv(e);
+      canvas.setPointerCapture(e.pointerId);
+      canvas.style.cursor = "grabbing";
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      if (!schwarzSession || !lastUv) return;
+      const cur = clientToUv(e);
+      schwarzView = panSchwarzView(schwarzView, lastUv, cur); // move the grabbed point under the cursor
+      lastUv = cur;
+      scheduleSchwarzPaint();
+    });
+    const endDrag = (e: PointerEvent): void => {
+      if (!lastUv) return;
+      lastUv = null;
+      canvas.style.cursor = "grab";
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch {
+        /* pointer was not captured — fine */
+      }
+    };
+    canvas.addEventListener("pointerup", endDrag);
+    canvas.addEventListener("pointercancel", endDrag);
+    canvas.addEventListener(
+      "wheel",
+      (e) => {
+        if (!schwarzSession) return;
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12; // scroll up ⇒ zoom in
+        const next = zoomSchwarzView(schwarzView, factor, clientToUv(e));
+        next.zoom = Math.min(1e6, Math.max(0.02, next.zoom)); // keep the window sane at the extremes
+        schwarzView = next;
+        scheduleSchwarzPaint();
+      },
+      { passive: false },
+    );
+    window.addEventListener("keydown", (e) => {
+      if (schwarzSession && e.key === "Escape") {
+        e.preventDefault();
+        exitSchwarzView();
+      }
+    });
+  }
 
   /**
    * Import a map handed off via @cas/interchange (a deep link OR pasted JSON, from e.g. the
