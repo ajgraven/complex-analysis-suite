@@ -115,6 +115,8 @@ import {
   type SchwarzView,
 } from "./render/schwarzView";
 import { createSchwarzGLRenderer, type SchwarzGLRenderer } from "./render/schwarzGL";
+import { makeUnboundedLaurentSchwarz } from "@cas/schwarz";
+import { buildSchwarzPhi, SCHWARZ_PRESETS, type SchwarzPhi } from "./render/schwarzPhiForm";
 import { PLACES } from "./state/places";
 import { decodeNotes, encodeNotes, type Note } from "./state/notes";
 import GIF from "gif.js";
@@ -2984,19 +2986,19 @@ function init(): void {
     });
   }
 
-  function renderSchwarzView(spec: SchwarzMap): void {
-    // Reconstruct the engine (CPU fallback + boundary) OUTSIDE any try/catch so an unsupported φ throws
-    // to importInterchange's "not supported" toast rather than silently painting a wrong field.
-    const engine = schwarzEngineFromMapSpec(spec);
+  /**
+   * Enter the σ session for an already-built engine + its φ coefficients — the shared core of the import
+   * and native-φ paths. Decides mode + size once (GPU paints a crisp 512² in one pass; the CPU fallback
+   * stays coarse since per-Ω-pixel Newton is heavy), resets the view, and shows the canvas + label.
+   */
+  function enterSchwarz(engine: ReturnType<typeof schwarzEngineFromMapSpec>, phi: SchwarzPhi): void {
     const poly = schwarzBoundaryPoly(engine);
     if (schwarzGL === undefined) schwarzGL = createSchwarzGLRenderer();
-    // Decide mode + size once per session: the GPU paints a crisp 512² in one pass; the CPU fallback
-    // stays coarse (per-Ω-pixel Newton is heavy) so pan/zoom stays responsive.
     let mode: "GPU" | "CPU" = "CPU";
     let size = 256;
     if (schwarzGL) {
       try {
-        schwarzGL.setPhi(schwarzPhiFromMapSpec(spec), poly);
+        schwarzGL.setPhi(phi, poly);
         mode = "GPU";
         size = 512;
       } catch (err) {
@@ -3019,6 +3021,15 @@ function init(): void {
     const label = byId<HTMLElement>("dyn-schwarz-label");
     label.textContent = `Schwarz reflection σ (≈, ${schwarzSession.mode}) · drag · scroll · Esc`;
     label.hidden = false;
+  }
+  /** Import path: reconstruct from an interchange schwarz map. Throws (to the caller's toast) for an
+   *  unsupported φ — reconstruct BEFORE entering so a bad map never half-shows a wrong field. */
+  function renderSchwarzView(spec: SchwarzMap): void {
+    enterSchwarz(schwarzEngineFromMapSpec(spec), schwarzPhiFromMapSpec(spec));
+  }
+  /** Native path: build the σ engine from φ coefficients (a preset or the custom form) and enter. */
+  function renderSchwarzFromPhi(phi: SchwarzPhi): void {
+    enterSchwarz(makeUnboundedLaurentSchwarz(phi.c, phi.F, phi.branches), phi);
   }
   /** Leave the σ reconstruction view (restore the normal dynamical plot underneath). Idempotent. */
   function exitSchwarzView(): void {
@@ -3087,6 +3098,73 @@ function init(): void {
         exitSchwarzView();
       }
     });
+  }
+
+  // Native σ builder: generate a σ fractal from a Riemann map φ — a preset or a custom map (leading c,
+  // Laurent F, finite-pole branches) — with no interchange link (S4b-iv). The φ-form parsing + validation
+  // is pure (render/schwarzPhiForm.ts); this only wires the fields to `renderSchwarzFromPhi`.
+  {
+    const openBtn = document.getElementById("schwarz-open");
+    const panel = document.getElementById("schwarz-builder");
+    const presetSel = document.getElementById("schwarz-preset") as HTMLSelectElement | null;
+    const cIn = document.getElementById("schwarz-c") as HTMLInputElement | null;
+    const fIn = document.getElementById("schwarz-F") as HTMLInputElement | null;
+    const polesIn = document.getElementById("schwarz-poles") as HTMLTextAreaElement | null;
+    const genBtn = document.getElementById("schwarz-generate");
+    const cancelBtn = document.getElementById("schwarz-cancel");
+    const errBox = document.getElementById("schwarz-error");
+    if (openBtn && panel && presetSel && cIn && fIn && polesIn && genBtn && cancelBtn && errBox) {
+      // Populate the preset dropdown (the leading "Custom…" option is already in the HTML).
+      for (const p of SCHWARZ_PRESETS) {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.label;
+        presetSel.appendChild(opt);
+      }
+      const setError = (msg: string | null): void => {
+        errBox.textContent = msg ?? "";
+        errBox.hidden = msg === null;
+      };
+      const fill = (id: string): void => {
+        const p = SCHWARZ_PRESETS.find((x) => x.id === id);
+        if (!p) return;
+        cIn.value = p.c;
+        fIn.value = p.F;
+        polesIn.value = p.poles;
+      };
+      // Start on the deltoid so the form opens showing a working example (single source: SCHWARZ_PRESETS).
+      presetSel.value = "deltoid";
+      fill("deltoid");
+      openBtn.addEventListener("click", () => {
+        panel.hidden = !panel.hidden;
+        setError(null);
+      });
+      presetSel.addEventListener("change", () => {
+        if (presetSel.value) {
+          fill(presetSel.value);
+          setError(null);
+        }
+      });
+      cancelBtn.addEventListener("click", () => {
+        panel.hidden = true;
+        setError(null);
+      });
+      genBtn.addEventListener("click", () => {
+        try {
+          renderSchwarzFromPhi(buildSchwarzPhi({ c: cIn.value, F: fIn.value, poles: polesIn.value }));
+          setError(null);
+          panel.hidden = true;
+        } catch (err) {
+          setError((err as Error).message); // buildSchwarzPhi's messages are written for this line
+        }
+      });
+      // Hand-editing any field makes it a "Custom…" map (programmatic fill() does not fire 'input').
+      for (const el of [cIn, fIn, polesIn]) {
+        el.addEventListener("input", () => {
+          presetSel.value = "";
+        });
+      }
+    }
   }
 
   /**

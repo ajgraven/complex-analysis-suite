@@ -685,6 +685,35 @@ z^2+c</textarea
                   Import map…
                 </button>
               </div>
+              <div class="field">
+                <button
+                  id="schwarz-open"
+                  type="button"
+                  title="Generate a Schwarz-reflection σ fractal from a Riemann map φ — a preset or a custom map."
+                >
+                  Schwarz reflection σ…
+                </button>
+              </div>
+              <div class="field schwarz-builder" id="schwarz-builder" hidden>
+                <label for="schwarz-preset">Riemann map φ preset</label>
+                <select
+                  id="schwarz-preset"
+                  title="Start from a known map, or choose Custom… and enter your own φ."
+                >
+                  <option value="">Custom…</option>
+                </select>
+                <label for="schwarz-c">c — leading coefficient (real)</label>
+                <input id="schwarz-c" type="text" inputmode="decimal" spellcheck="false" value="1" />
+                <label for="schwarz-F">F — Laurent coeffs (const, 1/z, 1/z², …)</label>
+                <input id="schwarz-F" type="text" spellcheck="false" placeholder="0, 0, 0.5" />
+                <label for="schwarz-poles">Poles — one per line: z ; A₁, A₂, …</label>
+                <textarea id="schwarz-poles" rows="2" spellcheck="false" placeholder="0.3 ; 0.4"></textarea>
+                <div class="schwarz-builder-actions">
+                  <button id="schwarz-generate" type="button">Generate σ</button>
+                  <button id="schwarz-cancel" type="button" class="secondary">Cancel</button>
+                </div>
+                <div id="schwarz-error" class="input-errors" role="alert" hidden></div>
+              </div>
               <div class="field" id="param-a-field" hidden>
                 <label for="param-a">a = <span id="param-a-value">1.00</span></label>
                 <input

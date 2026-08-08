@@ -350,12 +350,14 @@ byte-match, CD reconstruct → the frozen σ(w₀)=2/3, vs the pole-free 1/3). S
 | S4b-i | **`@cas/schwarz/gpu`**: lift QD's `FRAG_SRC` σ evaluator (the unbounded-Laurent + branches family only, per ADR-0007) into shared GLSL + a **CPU↔GPU parity net** (browser WebGL2; max \|GPU−CPU\| = 1.9e-7, float32 ε) | ✅ **engine lifted** |
 | S4b-ii | **CD GPU σ render**: compose the lifted GLSL + a `@cas/gpu/mask` Ω-mask into CD's escape shader; render on GPU (offscreen → drawImage onto #JCSSchwarz), CPU fallback intact; visual parity with the CPU render | ✅ **GPU render live** |
 | S4b-iii | **Interactive σ view**: drag-pan / wheel-zoom the reconstructed σ, GPU-rendered live (offscreen → #JCSSchwarz); Esc / control-change exits; pure, unit-tested pan/zoom math | ✅ **interactive** |
-| S4b-iv | **Native φ entry**: a φ preset picker (deltoid, single exterior pole, cardioid) + a custom-φ input form (c, Laurent F, poles A_j at z_j), so a σ fractal is GENERATED in CD from a Riemann map, not only imported | ⏳ next |
+| S4b-iv | **Native φ entry**: a "Schwarz reflection σ…" builder — a preset picker (Deltoid, Ellipse, Single exterior pole) + a custom-φ form (c, Laurent F, poles "z ; A₁, A₂, …"); pure, unit-tested parse/validate; Generate → the interactive GPU σ view. So a σ fractal is GENERATED in CD from a Riemann map, not only imported | ✅ **native φ → σ** |
 
-**Deferred to separate approvals:** S4b-iv (native φ preset/custom UI — the σ evaluator is lifted +
-parity-proven, CD renders it on the GPU, and the σ view is interactive; what remains is the native map-entry
-UI), S5 (non-Laurent families on the wire, branch-aware continuation through cusps [uncertified — RISKS §3],
-df64 σ, PQD GPU αth-root).
+**Native σ in CD is complete end to end** — lift (S4b-i) → GPU render (ii) → interactive (iii) → native φ
+entry (iv). **Deferred enhancements / separate approvals:** σ **orbit inspection** (click/hover a w to trace
+its σ-orbit) and a σ-**view permalink** (share-link + saved-view state for the σ view; the builder fields are
+one-shot tool inputs today); **S5** (non-Laurent families on the wire, branch-aware continuation through cusps
+[uncertified — RISKS §3], df64 σ, PQD GPU αth-root). (A true cardioid needs a bounded/positive-power map, not
+this unbounded-Laurent family, so it is intentionally not offered as a preset — honest labeling.)
 
 ### Highest-risk step
 **S2d** — QD's entire Schwarz UI (`schwarz-ui/paint/render/interaction/forward`) reads `QD.Schwarz`'s exact

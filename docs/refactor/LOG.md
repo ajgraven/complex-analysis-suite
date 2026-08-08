@@ -1601,3 +1601,20 @@
   console errors. Green: typecheck / lint / test **2309 / 272** (+4 node: view math), build. Next: **S4b-iv** —
   the native φ entry (a preset picker + a custom-φ input form: c, Laurent F, poles A_j at z_j), so a σ fractal
   can be GENERATED in CD from a Riemann map, not only imported.
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (S4b-iv — native φ → σ in CD):**
+  **CD now GENERATES a Schwarz-reflection σ fractal from a Riemann map φ**, not only from an imported link —
+  the headline of native σ support. A "Schwarz reflection σ…" button opens a compact builder: a **preset
+  picker** (Deltoid, Ellipse, Single exterior pole) + a **custom-φ form** (leading c, Laurent F, finite-pole
+  branches as "z ; A₁, A₂, …" lines). "Generate σ" builds the φ coefficients and enters the interactive GPU
+  σ view (S4b-ii/iii). The φ-form parsing + validation is a PURE module (`render/schwarzPhiForm.ts`:
+  `parseComplex` / `parseComplexList` / `parsePoles` / `buildSchwarzPhi` + `SCHWARZ_PRESETS`), unit-tested
+  (12 cases: complex-literal spellings, `z ; A` pole lines, |z_j|<1 + real-c + non-trivial-boundary
+  validation, every preset builds). `main.ts` factors the σ entry into a shared `enterSchwarz(engine, phi)`
+  used by BOTH the import path (`renderSchwarzView`) and the native path (`renderSchwarzFromPhi`). The 4 form
+  fields are opted out of `SHARE_IDS` as one-shot tool inputs (a σ-view permalink is deferred) — appState's
+  DOM-coverage guard pinned that decision. VERIFIED in the BUILT app (Playwright): open → prefilled deltoid →
+  Generate → the classic 3-cusp deltoid σ tiling (512² GPU, 32 colors); switch to single-pole → fields update
+  → Generate → the pole domain; empty c → the error line "enter a leading coefficient c" with no σ shown; no
+  console errors. Green: typecheck / lint / test **2325 / 273** (+12 node: φ-form; +1 file), build. This
+  closes the native σ feature end to end: **lift (S4b-i) → GPU render (ii) → interactive (iii) → native φ
+  entry (iv)**. Remaining are enhancements: σ orbit inspection + a σ-view permalink (deferred).
