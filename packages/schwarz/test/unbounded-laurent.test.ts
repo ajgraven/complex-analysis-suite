@@ -102,3 +102,100 @@ describe("@cas/schwarz unbounded-Laurent σ (deltoid ground truth)", () => {
     expect(far.kind).toBe("escaped");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Pole-bearing unbounded QDs (Phase 2). φ gains finite-pole branch terms:
+//   φ(z) = c·z + Σₗ F[l]/zˡ + Σⱼ Σₖ conj(A_{j,k})·u_j(z)ᵏ,   u_j(z) = z/(1 − conj(z_j)·z),  z_j ∈ 𝔻.
+// Its Schwarz extension gains the reflected principal part (conj(u_j)ᵏ = 1/(z−z_j)ᵏ on |z|=1):
+//   F(z) = c/z + Σₗ conj(F[l])·zˡ + Σⱼ Σₖ A_{j,k}/(z − z_j)ᵏ.
+// Ported verbatim from the QD app's canonical σ (schwarz-common.mjs adaptUnbounded + the branch
+// helpers). The deltoid path above (branches omitted) MUST stay byte-identical.
+const conj = (z: Complex): Complex => [z[0], -z[1]];
+
+// --- Hand-value domains (real coefficients → absolute arithmetic pins the branch FORMULAS, so a
+//     dropped/garbled u^k or 1/(z−z_j)^k term fails outright — not just self-consistently). ---
+// SINGLE order-1 pole: z_j=0.2, A₁=0.3 → φ(x)=x+0.3x/(1−0.2x), F(x)=1/x+0.3/(x−0.2).
+const SINGLE = makeUnboundedLaurentSchwarz(1, [], [{ z: [0.2, 0], A: [[0.3, 0]] }]);
+// HIGHER order-2 pole: z_j=0.5, A=[1,0.5] → pins the k=2 term (u² in φ, 1/(z−z_j)² in F).
+const HIGHER_R = makeUnboundedLaurentSchwarz(1, [], [{ z: [0.5, 0], A: [[1, 0], [0.5, 0]] }]);
+// TWO real branches → pins the Σⱼ sum.
+const TWO_R = makeUnboundedLaurentSchwarz(1, [], [
+  { z: [0.2, 0], A: [[0.3, 0]] },
+  { z: [0.4, 0], A: [[0.5, 0]] },
+]);
+
+// --- Univalent, small-coefficient domains for the inverse-dependent checks (round-trip / invertPhi).
+//     Large branch residues break exterior univalence; these stay φ ≈ c·z + perturbation so the
+//     cold-seeded Newton inverse lands on the unique exterior preimage. ---
+const CPLX = makeUnboundedLaurentSchwarz(1, [[0, 0], [0, 0.05]], [
+  { z: [0.25, 0.1], A: [[0.12, 0], [0.05, -0.03]] },
+]);
+const TWO_S = makeUnboundedLaurentSchwarz(1, [], [
+  { z: [0.2, 0], A: [[0.15, 0]] },
+  { z: [-0.1, 0.2], A: [[0.05, 0.1]] },
+]);
+// Exterior probes, |z|≤2.3 — well inside every branch's φ-pole radius 1/|z_j| (≥3.5), so φ is
+// univalent there and the inverse is unambiguous.
+const EXT_BRANCH: Complex[] = [[2, 0], [0, 2], [1.6, -1.2], [-2.2, 0.7]];
+
+describe("@cas/schwarz unbounded-Laurent σ — pole-bearing branch term (Phase 2)", () => {
+  it("evalPhi / evalF include the branch term — order-1 (hand-computed)", () => {
+    near(SINGLE.evalPhi([2, 0]), [3, 0]); //  2 + 0.3·2/(1−0.4) = 2 + 1
+    near(SINGLE.evalPhi([3, 0]), [5.25, 0]); //  3 + 0.3·3/0.4 = 3 + 2.25
+    near(SINGLE.evalF([2, 0]), [2 / 3, 0]); //  1/2 + 0.3/1.8
+    near(SINGLE.evalF([3, 0]), [1 / 3 + 0.3 / 2.8, 0]); //  1/3 + 0.3/2.8
+  });
+
+  it("evalPhi / evalF include the k=2 term — order-2 pole (hand-computed)", () => {
+    //  z=3, z_j=0.5: u = 3/(1−1.5) = −6.  φ = 3 + 1·(−6) + 0.5·(−6)² = 3 − 6 + 18 = 15.
+    near(HIGHER_R.evalPhi([3, 0]), [15, 0]);
+    //  F = 1/3 + 1/(3−0.5) + 0.5/(3−0.5)² = 1/3 + 0.4 + 0.08.
+    near(HIGHER_R.evalF([3, 0]), [1 / 3 + 0.4 + 0.08, 0]);
+  });
+
+  it("evalPhi / evalF sum over branches — Σⱼ (hand-computed)", () => {
+    //  z=2: branch1 0.3·(2/0.6)=1, branch2 0.5·(2/0.2)=5  ⇒  φ = 2 + 6 = 8.
+    near(TWO_R.evalPhi([2, 0]), [8, 0]);
+    //  F = 1/2 + 0.3/(2−0.2) + 0.5/(2−0.4).
+    near(TWO_R.evalF([2, 0]), [0.5 + 0.3 / 1.8 + 0.5 / 1.6, 0]);
+  });
+
+  it("boundary reflection identity F(z) = conj(φ(z)) on |z| = 1 (pins the Schwarz extension vs φ)", () => {
+    for (const dom of [SINGLE, HIGHER_R, TWO_R, CPLX, TWO_S]) {
+      for (let k = 0; k < 16; k++) {
+        const t = (2 * Math.PI * (k + 0.5)) / 16;
+        const z: Complex = [Math.cos(t), Math.sin(t)];
+        near(dom.evalF(z), conj(dom.evalPhi(z)), 9);
+      }
+    }
+  });
+
+  it("σ(φ(z₀)) = conj(F(z₀)) — the exact round-trip identity, with poles", () => {
+    for (const dom of [SINGLE, CPLX, TWO_S]) {
+      for (const z0 of EXT_BRANCH) {
+        const Fz0 = dom.evalF(z0);
+        const got = dom.sigma(dom.evalPhi(z0));
+        expect(got, `σ(φ(z₀)) null at z₀=${z0}`).not.toBeNull();
+        if (got) near(got, [Fz0[0], -Fz0[1]], 7);
+      }
+    }
+  });
+
+  it("invertPhi recovers the exterior branch |z| > 1 for a pole-bearing φ", () => {
+    for (const z0 of EXT_BRANCH) {
+      const w = SINGLE.evalPhi(z0);
+      const z = SINGLE.invertPhi(w);
+      expect(z).not.toBeNull();
+      if (z) {
+        expect(Math.hypot(z[0], z[1])).toBeGreaterThan(1);
+        near(SINGLE.evalPhi(z), w, 7);
+      }
+    }
+  });
+
+  it("branches omitted ≡ the pole-free engine (deltoid σ unchanged)", () => {
+    const bare = makeUnboundedLaurentSchwarz(1, [[0, 0], [0, 0], [0.5, 0]], []);
+    near(bare.sigma([2.125, 0]) as Complex, [2.5, 0]);
+    near(bare.sigma([1, 0.75]) as Complex, [0.5, -0.5]);
+  });
+});

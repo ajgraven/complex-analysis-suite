@@ -7,6 +7,7 @@
 export { makeUnboundedLaurentSchwarz, pointInPolygon, escapeTime } from "./unbounded-laurent.js";
 export type {
   Complex,
+  SchwarzBranch,
   UnboundedLaurentSchwarz,
   EscapeKind,
   EscapeResult,

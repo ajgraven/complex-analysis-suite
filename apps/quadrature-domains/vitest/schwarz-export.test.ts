@@ -6,10 +6,14 @@ import {
   GOLDEN_CREATED_AT,
   QD_TO_CD_DELTOID_LINK,
   QD_TO_CD_DELTOID_SIGMA_LINK,
+  QD_TO_CD_SINGLE_POLE_SIGMA_LINK,
 } from "@cas/interchange";
 import {
   buildExportEnvelope,
   buildSigmaEnvelope,
+  classifyPhiForExport,
+  explainPhiUnavailable,
+  explainSigmaUnavailable,
   exportPhiLink,
   exportSigmaLink,
   phiToMapSpec,
@@ -111,5 +115,108 @@ describe("QD σ (Schwarz reflection) export (S3b)", () => {
   it("emits the exact deltoid-σ link stored as the cross-app golden", () => {
     const link = exportSigmaLink(deltoidPhi, { createdAt: GOLDEN_CREATED_AT, appVersion: "0.1.0" });
     expect(link).toBe(QD_TO_CD_DELTOID_SIGMA_LINK);
+  });
+});
+
+// Phase 1 (σ-export legibility): the export card used to reject EVERY non-Laurent φ with one blind
+// "needs an unbounded-Laurent φ (e.g. the deltoid)" line — so "nothing captured", "captured a
+// pole-bearing unbounded QD", and "captured a bounded domain" all pointed the user at the deltoid,
+// which is the one case that DOES export. These pure classifiers turn each rejection into its real
+// reason; the UI (_exportSigma/_exportMap) just displays the string. Kept next to phiToMapSpec because
+// the availability verdict must stay in lockstep with it (a message that says "exportable" while the
+// builder returns null, or vice-versa, is its own bug).
+describe("export availability — structural classifier (Phase 1)", () => {
+  // A pole-bearing UNBOUNDED QD (a single exterior pole): the real single-pole solve emits this shape
+  // (φ = c·z + branch term, no Laurent poly). Passes phi.unbounded but carries a finite-pole branch.
+  const polePhi = { unbounded: true, c: 0.6, polyA: [], branches: [{ z: C(2), A: [C(1)] }] };
+  // A bounded classical QD: phi.unbounded is false.
+  const boundedPhi = { unbounded: false, branches: [{ z: C(0.5), A: [C(1)] }] };
+
+  it("classifies each captured-φ shape", () => {
+    expect(classifyPhiForExport(null)).toEqual({ kind: "none" });
+    expect(classifyPhiForExport(deltoidPhi).kind).toBe("unbounded-laurent");
+    expect(classifyPhiForExport(rationalPhi).kind).toBe("rational");
+    expect(classifyPhiForExport(boundedPhi).kind).toBe("bounded");
+    expect(classifyPhiForExport(polePhi)).toEqual({ kind: "unbounded-poles", poleCount: 1, branchTerms: 1 });
+  });
+});
+
+describe("export availability — σ reason strings (Phase 1)", () => {
+  const polePhi = { unbounded: true, c: 0.6, polyA: [], branches: [{ z: C(2), A: [C(1)] }] };
+  const boundedPhi = { unbounded: false, branches: [{ z: C(0.5), A: [C(1)] }] };
+
+  it("returns null (no message) exactly when σ IS exportable — the deltoid", () => {
+    expect(explainSigmaUnavailable(deltoidPhi)).toBeNull();
+  });
+  it("nothing captured → names the 'Use this φ' capture step", () => {
+    const msg = explainSigmaUnavailable(null);
+    expect(msg).toMatch(/Use this φ/);
+    expect(msg).toMatch(/Inverse tab/i);
+  });
+  it("rational Direct-tab φ → says it's rational and points at the φ export", () => {
+    const msg = explainSigmaUnavailable(rationalPhi)!;
+    expect(msg).toMatch(/rational/i);
+    expect(msg).toContain("φ");
+  });
+  it("bounded domain → says bounded, does not blame the deltoid", () => {
+    expect(explainSigmaUnavailable(boundedPhi)).toMatch(/bounded/i);
+  });
+  it("pole-bearing unbounded QD → now σ-exports (Phase 2), so no message", () => {
+    expect(explainSigmaUnavailable(polePhi)).toBeNull();
+  });
+});
+
+describe("export availability — φ reason strings (Phase 1)", () => {
+  const polePhi = { unbounded: true, c: 0.6, polyA: [], branches: [{ z: C(2), A: [C(1)] }] };
+  const boundedPhi = { unbounded: false, branches: [{ z: C(0.5), A: [C(1)] }] };
+
+  it("returns null when φ IS exportable — deltoid (laurent) AND rational both export", () => {
+    expect(explainPhiUnavailable(deltoidPhi)).toBeNull();
+    expect(explainPhiUnavailable(rationalPhi)).toBeNull();
+  });
+  it("nothing captured → names the 'Use this φ' capture step", () => {
+    expect(explainPhiUnavailable(null)).toMatch(/Use this φ/);
+  });
+  it("bounded domain → says bounded", () => {
+    expect(explainPhiUnavailable(boundedPhi)).toMatch(/bounded/i);
+  });
+  it("pole-bearing unbounded QD → now φ-exports (Phase 2), so no message", () => {
+    expect(explainPhiUnavailable(polePhi)).toBeNull();
+  });
+});
+
+// Phase 2: pole-bearing unbounded QDs now serialize — phiToMapSpec carries the finite-pole branches into
+// the interchange laurent form (1.2.0), the σ recipe reflects them, and CD reconstructs the full σ. A
+// pole-free φ is unaffected (no `branches` key emitted → the deltoid wire is byte-identical).
+describe("pole-bearing φ → branches on the interchange laurent (Phase 2)", () => {
+  const polePhi = { unbounded: true, c: 0.6, polyA: [], branches: [{ z: C(0.4, 0.1), A: [C(0.3), C(0.1, -0.05)] }] };
+  const branchesOut = [{ z: C(0.4, 0.1), A: [C(0.3), C(0.1, -0.05)] }];
+
+  it("phiToMapSpec emits form:laurent with the mapped branches", () => {
+    expect(phiToMapSpec(polePhi)).toEqual({ form: "laurent", c: C(0.6), F: [], branches: branchesOut });
+  });
+  it("a pole-free φ still omits the branches key (deltoid wire byte-identical)", () => {
+    expect(phiToMapSpec(deltoidPhi)).toEqual({ form: "laurent", c: C(1), F: [C(0), C(0), C(0.5)] });
+  });
+  it("buildSigmaEnvelope carries the branches into the schwarz recipe and validates", () => {
+    const env = buildSigmaEnvelope(polePhi, { createdAt: GOLDEN_CREATED_AT, appVersion: "0.1.0" });
+    expect(env).not.toBeNull();
+    expect(isEnvelopeOfKind(validateEnvelope(env), "schwarz-reflection")).toBe(true);
+    const sigma = (env!.payload as { sigma: { phi: { branches: unknown } } }).sigma;
+    expect(sigma.phi.branches).toEqual(branchesOut);
+  });
+  it("buildExportEnvelope (φ) also carries the branches", () => {
+    const env = buildExportEnvelope(polePhi, { createdAt: GOLDEN_CREATED_AT });
+    expect(env).not.toBeNull();
+    expect((env!.payload.phi as { branches: unknown }).branches).toEqual(branchesOut);
+  });
+
+  // The PRODUCER half of the single-pole σ cross-app contract: QD's exporter reproduces the exact bytes
+  // stored as the golden and consumed by CD (apps/complex-dynamics/test/importMap.test.ts). The fixture
+  // is c=1 with one order-1 pole z_j=0.2, A=0.3. If this drifts, the pole-bearing wire format changed.
+  it("emits the exact single-pole σ link stored as the cross-app golden", () => {
+    const singlePolePhi = { unbounded: true, c: 1, polyA: [], branches: [{ z: C(0.2, 0), A: [C(0.3, 0)] }] };
+    const link = exportSigmaLink(singlePolePhi, { createdAt: GOLDEN_CREATED_AT, appVersion: "0.1.0" });
+    expect(link).toBe(QD_TO_CD_SINGLE_POLE_SIGMA_LINK);
   });
 });

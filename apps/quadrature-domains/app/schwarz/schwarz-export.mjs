@@ -25,14 +25,90 @@ export function phiToMapSpec(phi) {
   if (Array.isArray(phi.P) && Array.isArray(phi.Q)) {
     return { form: "rational", num: phi.P.map(cc), den: phi.Q.map(cc) };
   }
-  // Unbounded classical Laurent φ = c·z + Σ_{l≥0} F_l / z^l — pure Laurent only (no pole branches).
-  if (phi.unbounded && (phi.polyA || phi.F) && !(phi.branches && phi.branches.length)) {
+  // Unbounded classical Laurent φ = c·z + Σ_{l≥0} F_l/z^l ( + Σ_j Σ_k conj(A_{j,k})·u_j(z)^k ) — the
+  // pole-free deltoid AND the pole-bearing unbounded QDs (single exterior pole, cardioid, …). The
+  // interchange `laurent` form gained optional `branches` in 1.2.0; @cas/schwarz reconstructs the σ.
+  if (phi.unbounded && (phi.polyA || phi.F || (phi.branches && phi.branches.length))) {
     const cRaw = phi.c;
     const c = typeof cRaw === "number" ? { re: cRaw, im: 0 } : cRaw ? cc(cRaw) : { re: 1, im: 0 };
-    const F = (phi.polyA || phi.F).map(cc);
-    return { form: "laurent", c, F };
+    const F = (phi.polyA || phi.F || []).map(cc);
+    const spec = { form: "laurent", c, F };
+    // Emit `branches` ONLY when present, so a pole-free φ stays byte-identical to the pre-1.2.0 wire.
+    if (phi.branches && phi.branches.length) {
+      spec.branches = phi.branches.map((br) => ({ z: cc(br.z), A: (br.A || []).map(cc) }));
+    }
+    return spec;
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Export availability — WHY a φ can't be handed off (Phase 1, σ-export legibility).
+//
+// phiToMapSpec()/buildSigmaEnvelope() collapse every unsupported φ to a bare `null`; the UI then
+// showed ONE blind line ("needs an unbounded-Laurent φ (e.g. the deltoid)") for all of them. But the
+// real reasons are distinct — nothing captured, a Direct rational map (φ-exportable, but no σ), or a
+// bounded domain (not exportable yet). ALL unbounded QDs export now, pole-free and pole-bearing alike
+// (Phase 2). These helpers name the real reason, and live beside phiToMapSpec so the availability
+// verdict stays in lockstep with the actual serializer (the ok-decision below IS phiToMapSpec).
+
+/**
+ * Structural classification of a captured φ, independent of export target. Pure.
+ * @returns {{kind:"none"|"rational"|"bounded"|"unbounded-laurent"|"unbounded-poles"|"unbounded-degenerate", poleCount?:number, branchTerms?:number}}
+ */
+export function classifyPhiForExport(phi) {
+  if (!phi) return { kind: "none" };
+  if (Array.isArray(phi.P) && Array.isArray(phi.Q)) return { kind: "rational" };
+  if (!phi.unbounded) return { kind: "bounded" };
+  const branches = phi.branches || [];
+  const poleCount = branches.length;
+  const branchTerms = branches.reduce((n, b) => n + (b && b.A ? b.A.length : 0), 0);
+  if (branchTerms > 0) return { kind: "unbounded-poles", poleCount, branchTerms };
+  if ((phi.polyA || phi.F || []).length > 0) return { kind: "unbounded-laurent" };
+  return { kind: "unbounded-degenerate" };
+}
+
+// The one place capture-flow prose lives, so both the message and the button it names ("Use this φ")
+// stay together. Referenced by the "nothing captured" branch of both explainers.
+const CAPTURE_HINT =
+  'No φ captured yet — solve a domain on the Inverse tab, then click "Use this φ" above to capture it.';
+
+/**
+ * The user-facing reason σ export is unavailable for `phi`, or null when σ IS exportable (the caller
+ * should then proceed). The null-decision defers to phiToMapSpec so it can never disagree with the
+ * actual σ builder (buildSigmaEnvelope emits iff the MapSpec is `laurent` — now including pole-bearing).
+ */
+export function explainSigmaUnavailable(phi) {
+  const spec = phiToMapSpec(phi);
+  if (spec && spec.form === "laurent") return null; // σ IS exportable (pole-free AND pole-bearing)
+  switch (classifyPhiForExport(phi).kind) {
+    case "none":
+      return CAPTURE_HINT;
+    case "rational":
+      return 'This is a Direct-tab rational map (P/Q). σ export covers the unbounded-Laurent family ' +
+             '(the deltoid and pole-bearing QDs); use "Export Riemann map φ" for this map instead.';
+    case "bounded":
+      return "σ export currently covers unbounded quadrature domains; this captured domain is bounded.";
+    default:
+      return "σ export needs an unbounded-Laurent φ; this captured map isn't one.";
+  }
+}
+
+/**
+ * The user-facing reason φ export is unavailable for `phi`, or null when φ IS exportable. φ export is
+ * broader than σ — a Direct rational map exports too — so the null-decision is `phiToMapSpec(phi) != null`.
+ */
+export function explainPhiUnavailable(phi) {
+  if (phiToMapSpec(phi)) return null; // φ IS exportable (rational or unbounded-laurent, incl. pole-bearing)
+  switch (classifyPhiForExport(phi).kind) {
+    case "none":
+      return CAPTURE_HINT;
+    case "bounded":
+      return "φ export currently covers unbounded-Laurent maps and Direct rational maps; " +
+             "this captured domain is bounded (not a closed-form map yet).";
+    default:
+      return "No exportable φ yet — this captured family isn't a closed-form map.";
+  }
 }
 
 /**
@@ -129,8 +205,9 @@ export function exportPhiJSON(phi, opts = {}) {
 // map; this hands off σ(w)=conj(F(φ⁻¹(w))) as a RECIPE (interchange `form:"schwarz"`, v1.1.0): the
 // closed-form φ plus which disk it uniformizes and how φ⁻¹ is taken. σ is not a closed-form map (its
 // inverse is numerical), so CD reconstructs the evaluator from `sigma.phi` via @cas/schwarz (S4a) —
-// it does NOT compile through the expr pipeline. Scoped to the UNBOUNDED-LAURENT family, the only one
-// @cas/schwarz's exterior-branch engine reconstructs today; a rational/bounded φ returns null (we do
+// it does NOT compile through the expr pipeline. Scoped to the UNBOUNDED-LAURENT family — the deltoid
+// AND the pole-bearing unbounded QDs (its `sigma.phi` may carry finite-pole `branches`, 1.2.0), the
+// family @cas/schwarz's exterior-branch engine reconstructs; a rational/bounded φ returns null (we do
 // not emit a σ recipe no consumer can rebuild). The payload is CANONICAL: φ is a geometric map, so no
 // convention conversion — the QD normalizations touch h / areas, not φ's coefficients.
 
