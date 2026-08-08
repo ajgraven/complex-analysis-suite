@@ -102,6 +102,11 @@ describe("SHARE_IDS DOM coverage", () => {
         // a shared datum — the σ-view permalink that would carry it is deferred (item 2), and the standard-
         // fractal `palette` is opted out the same way (SHARE_IDS omission). Held in-session, not persisted.
         [["schwarz-colormap", "schwarz-scale"], "σ coloring choice (not in the deferred σ permalink)"],
+        // σ precise-nav fields mirror the live σ view (centre + zoom) and apply back to it. They're a
+        // property of the σ view, which the deferred σ-view permalink (item 2) will carry — not a shared
+        // control in its own right, the same way the standard plots' centre/zoom travel via the view, not
+        // these input ids.
+        [["schwarz-center-re", "schwarz-center-im", "schwarz-zoom"], "σ view nav (mirrors the view; permalink deferred)"],
         // Panel readout parameters — they change a text list inside a card, nothing on the plots.
         // (Contrast `laurent-n`, which IS shared: it sets a boundary curve drawn on both planes.)
         [["exterior-n"], "panel readout parameter"],

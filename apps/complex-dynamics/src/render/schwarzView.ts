@@ -91,6 +91,38 @@ export function zoomSchwarzView(view: SchwarzView, factor: number, anchorUv: [nu
   };
 }
 
+// --- Precise navigation (S4b / ADR-0009 item 3) -----------------------------------------------------
+// Type an exact center + zoom instead of only dragging/wheeling — parity with the standard plots'
+// center/zoom inputs. Pure so the parse/format round-trip is unit-tested without a DOM.
+
+/** Zoom clamp shared by the wheel gesture and the precise-nav apply, so both keep the window sane. */
+export const SCHWARZ_ZOOM_MIN = 0.02;
+export const SCHWARZ_ZOOM_MAX = 1e6;
+
+/** Parse center-re / center-im / zoom field strings into a view; any unparseable field keeps `fallback`'s
+ *  value, and zoom is clamped to [SCHWARZ_ZOOM_MIN, SCHWARZ_ZOOM_MAX]. Never throws. */
+export function parseSchwarzViewInput(
+  re: string,
+  im: string,
+  zoom: string,
+  fallback: SchwarzView,
+): SchwarzView {
+  const num = (s: string, f: number): number => {
+    const v = Number.parseFloat(s);
+    return Number.isFinite(v) ? v : f;
+  };
+  return {
+    center: [num(re, fallback.center[0]), num(im, fallback.center[1])],
+    zoom: Math.min(SCHWARZ_ZOOM_MAX, Math.max(SCHWARZ_ZOOM_MIN, num(zoom, fallback.zoom))),
+  };
+}
+
+/** Format a view as the three field strings (6 significant figures — enough to round-trip a drag/zoom). */
+export function formatSchwarzViewFields(view: SchwarzView): { re: string; im: string; zoom: string } {
+  const s = (x: number): string => String(Number(x.toPrecision(6)));
+  return { re: s(view.center[0]), im: s(view.center[1]), zoom: s(view.zoom) };
+}
+
 /** Classify one point w under σ (isInOmega = outside the boundary polygon). */
 export function schwarzEscapeAt(
   engine: UnboundedLaurentSchwarz,
@@ -159,9 +191,16 @@ export function schwarzOrbitLabel(kind: EscapeKind, n: number): string {
 
 // A legible fixed palette keyed on EscapeKind. `fundamental` (the tiling) ramps by iteration count so the
 // dynamical structure is visible; the others are flat so the eye reads the classification at a glance.
-const INVALID: readonly [number, number, number] = [80, 80, 80];
-const ESCAPED: readonly [number, number, number] = [0, 0, 0];
-const INTERIOR: readonly [number, number, number] = [18, 20, 46];
+// The GPU shader (render/schwarzGL.ts) mirrors these three flat literals, and the σ legend
+// (render/schwarzLegend.ts) shows them as swatches — this is their single source.
+export const SCHWARZ_FLAT_RGB = {
+  escaped: [0, 0, 0],
+  interior: [18, 20, 46],
+  invalid: [80, 80, 80],
+} as const;
+const INVALID = SCHWARZ_FLAT_RGB.invalid;
+const ESCAPED = SCHWARZ_FLAT_RGB.escaped;
+const INTERIOR = SCHWARZ_FLAT_RGB.interior;
 
 /** deep-blue → cyan → white ramp by iteration count n (fundamental only). */
 function fundamentalColor(n: number, maxIter: number): [number, number, number] {

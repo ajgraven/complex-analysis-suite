@@ -484,6 +484,15 @@ h2 {
   cursor: grab;
   touch-action: none; /* pan/zoom gestures reach our handlers, not the page */
 }
+/* The σ legend sits TOP-RIGHT, clearing the top-left σ label and the bottom-left scale bar (drawn on the
+   canvas). Overrides .plot-legend's default bottom-left corner. */
+.canvas-stack > .schwarz-legend {
+  top: 6px;
+  right: 6px;
+  left: auto;
+  bottom: auto;
+  max-width: 170px;
+}
 .canvas-stack > .schwarz-label {
   position: absolute;
   top: 6px;
@@ -555,6 +564,22 @@ h2 {
   margin-top: 0.25rem;
   font-size: 0.66rem;
   padding: 0.1rem 0.5rem;
+}
+/* σ precise navigation (ADR-0009 item 3): a compact centre-re / centre-im / zoom row + apply/reset. */
+.schwarz-nav-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.3rem;
+}
+.schwarz-nav-row input {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+.schwarz-nav-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
 }
 .legend-title {
   font-weight: 500;

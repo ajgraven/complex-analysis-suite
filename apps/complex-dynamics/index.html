@@ -522,6 +522,10 @@ abs(z)>2</textarea
                   aria-label="Schwarz reflection σ — interactive plot. Drag to pan, the scroll wheel zooms, Esc exits."
                 ></canvas>
                 <div id="dyn-schwarz-label" class="schwarz-label">Schwarz reflection σ (≈)</div>
+                <!-- σ colour legend (ADR-0009 item 3): the escape-time ramp + flat classification colours;
+                     populated from render/schwarzLegend.ts in main.ts. Top-right so it clears the top-left
+                     label and the bottom-left scale bar. -->
+                <div id="schwarz-legend" class="plot-legend schwarz-legend" aria-hidden="true"></div>
               </div>
               <div class="controls">
                 <div class="field schwarz-builder" id="schwarz-builder">
@@ -563,6 +567,42 @@ abs(z)>2</textarea
                 <div class="field schwarz-inspect-field">
                   <p class="schwarz-inspect-hint">Click the plot to trace a point's σ-orbit.</p>
                   <div id="schwarz-inspect" class="schwarz-inspect" aria-live="polite" hidden></div>
+                </div>
+                <!-- Precise navigation (ADR-0009 item 3): type an exact centre + zoom — parity with the
+                     standard plots' center/zoom inputs. The fields mirror the live view (they update as you
+                     drag/zoom); main.ts parses them via render/schwarzView.ts. -->
+                <div class="field schwarz-nav">
+                  <label for="schwarz-center-re">view — centre &amp; zoom</label>
+                  <div class="schwarz-nav-row">
+                    <input
+                      id="schwarz-center-re"
+                      type="text"
+                      inputmode="decimal"
+                      spellcheck="false"
+                      title="Centre — real part"
+                      aria-label="View centre, real part"
+                    />
+                    <input
+                      id="schwarz-center-im"
+                      type="text"
+                      inputmode="decimal"
+                      spellcheck="false"
+                      title="Centre — imaginary part"
+                      aria-label="View centre, imaginary part"
+                    />
+                    <input
+                      id="schwarz-zoom"
+                      type="text"
+                      inputmode="decimal"
+                      spellcheck="false"
+                      title="Zoom (larger is closer in)"
+                      aria-label="View zoom"
+                    />
+                  </div>
+                  <div class="schwarz-nav-actions">
+                    <button id="schwarz-view-apply" type="button" class="primary">apply</button>
+                    <button id="schwarz-view-reset" type="button">reset view</button>
+                  </div>
                 </div>
               </div>
             </section>

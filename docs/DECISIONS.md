@@ -665,8 +665,9 @@ one QD already validated for σ, so it is low-risk in design even though it is r
        (modeled on the per-plot `expand` layout); the σ canvas + φ builder moved into it; the
        control-apply dismissal coupling removed. Verified in the built app (Playwright mode switch).
 2. [ ] Serialize σ-view state (φ recipe + view + coloring) into share links / saved views / PNG metadata.
-3. [ ] Bring the generic parity features into the σ controls section (colormaps + scale modes, orbit
-       inspection, legend + scale bar, precise nav), reusing CD's field-agnostic machinery.
+3. [x] Bring the generic parity features into the σ controls section (colormaps + scale modes, orbit
+       inspection, legend + scale bar, precise nav), reusing CD's field-agnostic machinery. **Done** —
+       all four sub-features below.
    - [x] **Colormaps + scale modes.** The σ pane gets a colormap picker (7 perceptually-uniform ramps +
          Turbo + grayscale) and an escape-time scale mode (linear / log / sqrt / discrete / cyclic),
          wired through the shared `@cas/gpu` colormap texture — NOT CD's byte-frozen procedural-palette
@@ -681,6 +682,14 @@ one QD already validated for σ, so it is low-risk in design even though it is r
          idiom — with a σ-pane readout of the classification (honest `≈`). Click is disambiguated from the
          pan-drag by a travel threshold; a "clear" removes the trace. The tracer (`schwarzOrbitAt`) shares
          the field's escape budget and is pinned to `escapeTime` by a parity test.
-   - [ ] Legend + scale bar, precise nav — still to do.
+   - [x] **Legend + scale bar.** A σ legend chip (top-right) shows the current colormap ramp + the flat
+         classification swatches (escapes → ∞ / non-escaping / off-branch), reusing the standard plots'
+         `legend-*` CSS so it reads consistently; the scale bar REUSES CD's own `drawScaleBar` overlay
+         directly (the σ view shares the center/zoom convention). The flat colours are exported from
+         `render/schwarzView.ts` as the single source the shader + CPU render + legend all share.
+   - [x] **Precise nav.** Centre-re / centre-im / zoom fields + apply/reset in the σ controls (parity
+         with the standard plots' centre/zoom inputs); the fields mirror the live view as you drag/zoom
+         and apply back to it. Parse/format is a pure, unit-tested pair (`parseSchwarzViewInput` /
+         `formatSchwarzViewFields`) sharing the wheel gesture's zoom clamp.
 4. [ ] Update [SIGMA-HANDOFF.md](design/SIGMA-HANDOFF.md) so the peer-view is the target shape (superseding
        the S4a overlay), and keep the map-specific instruments explicitly out of scope for σ.

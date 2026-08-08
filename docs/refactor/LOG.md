@@ -1680,3 +1680,28 @@
   removes it; no console errors. Green: typecheck / lint / test **2349 / 276** (+9 node: orbit tracer +
   plotToPixel; +1 file), build. **ADR-0009 item 3: + orbit inspection done**; remaining in item 3: legend +
   scale bar, precise nav.
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (ADR-0009 R4 — σ legend + scale bar + precise nav):**
+  **ADR-0009 action item 3 is now COMPLETE** — the last two parity pieces land, so the σ pane matches the
+  standard plots' generic coloring/nav surface. (1) **Legend + scale bar.** A σ legend chip (top-right,
+  `#schwarz-legend`) shows the current colormap ramp as a CSS gradient + the flat classification swatches
+  (escapes → ∞ / non-escaping / off-branch), REUSING the standard plots' `legend-*` CSS so it reads
+  identically; the scale bar REUSES CD's own `drawScaleBar` overlay verbatim (the σ view shares the
+  center/zoom convention, span = 2/zoom), drawn on the σ canvas each paint. The three flat colours are
+  now exported from `render/schwarzView.ts` (`SCHWARZ_FLAT_RGB`) as the single source the GPU shader, the
+  CPU render, and the legend all read. (2) **Precise nav.** Centre-re / centre-im / zoom fields + apply /
+  reset in the σ controls (parity with the standard plots' centre/zoom inputs); the fields mirror the live
+  view as you drag/zoom (`syncSchwarzViewFields`, skipped while a field is focused) and apply back to it,
+  Enter-to-apply. The parse/format is a pure, unit-tested pair (`parseSchwarzViewInput` /
+  `formatSchwarzViewFields`) sharing the wheel gesture's zoom clamp (`SCHWARZ_ZOOM_MIN/MAX`). NEW pure
+  module `render/schwarzLegend.ts` (`schwarzColormapGradientCss` + `renderSchwarzLegend`). NET:
+  `test/schwarzLegend.test.ts` (5 cases: the gradient anchors the palette endpoints, grayscale is
+  achromatic, unknown-name fallback, the flat-colour pins vs the shader literals) + 5 new
+  `test/schwarzView.test.ts` cases (parse clamps zoom / keeps the fallback on a bad field / round-trips
+  format→parse). The two nav-field ids are opted out of `SHARE_IDS` (they mirror the view; the σ-view
+  permalink that will carry them is item 2). VERIFIED in the BUILT app (Playwright): the legend shows the
+  viridis ramp (`rgb(68,1,84)` → `rgb(253,231,37)`) + 3 swatches and goes achromatic on grayscale; the
+  scale bar is drawn (bottom-left white pixels); the nav fields read the default (0, 0, 0.4), apply
+  (0.6, −0.3, 1.2) moves the render + mirrors back, reset restores; no console errors. Green: typecheck /
+  lint / test **2359 / 277** (+10 node: legend + view parse; +1 file), build. **ADR-0009 item 3 DONE**
+  (colormaps + scale modes, orbit inspection, legend + scale bar, precise nav — all four); remaining on
+  ADR-0009: item 2 (σ-view serialization / permalink) + item 4 (SIGMA-HANDOFF.md target-shape update).

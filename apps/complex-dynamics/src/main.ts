@@ -115,10 +115,16 @@ import {
   uvToPlotFrac,
   schwarzOrbitAt,
   schwarzOrbitLabel,
+  parseSchwarzViewInput,
+  formatSchwarzViewFields,
+  SCHWARZ_ZOOM_MIN,
+  SCHWARZ_ZOOM_MAX,
   type SchwarzView,
   type SchwarzOrbit,
 } from "./render/schwarzView";
 import { drawSchwarzOrbit } from "./render/schwarzOrbitOverlay";
+import { renderSchwarzLegend } from "./render/schwarzLegend";
+import { drawScaleBar } from "./render/overlay";
 import { createSchwarzGLRenderer, type SchwarzGLRenderer } from "./render/schwarzGL";
 import { makeUnboundedLaurentSchwarz } from "@cas/schwarz";
 import { buildSchwarzPhi, SCHWARZ_PRESETS, type SchwarzPhi } from "./render/schwarzPhiForm";
@@ -3001,6 +3007,33 @@ function init(): void {
     }
     // Orbit overlay on top of the field (ADR-0009 item 3) — pinned to w₀, redrawn for the current view.
     if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, size);
+    // Scale bar (ADR-0009 item 3) — CD's own overlay helper; the σ view shares its center/zoom convention
+    // (span = 2/zoom), so it reads correctly. Last, so an orbit line never hides it (it has its own backing).
+    drawScaleBar(ctx, size, schwarzView.zoom);
+    syncSchwarzViewFields(); // keep the precise-nav fields mirroring the live view
+  }
+
+  /** Mirror the live view into the precise-nav fields — unless the user is editing one (don't clobber a
+   *  half-typed value; a paint only fires on a view change, so this is just belt-and-suspenders). */
+  function syncSchwarzViewFields(): void {
+    const re = document.getElementById("schwarz-center-re") as HTMLInputElement | null;
+    const im = document.getElementById("schwarz-center-im") as HTMLInputElement | null;
+    const zoom = document.getElementById("schwarz-zoom") as HTMLInputElement | null;
+    if (!re || !im || !zoom) return;
+    const active = document.activeElement;
+    if (active === re || active === im || active === zoom) return;
+    const f = formatSchwarzViewFields(schwarzView);
+    re.value = f.re;
+    im.value = f.im;
+    zoom.value = f.zoom;
+  }
+
+  /** (Re)render the σ legend chip from the current colormap + scale mode. */
+  function renderSchwarzLegendChip(): void {
+    const el = document.getElementById("schwarz-legend");
+    if (!el) return;
+    const scaleLabel = SCHWARZ_SCALE_MODES.find((m) => m.key === schwarzScaleMode)?.label ?? "Linear";
+    renderSchwarzLegend(el, { colormapName: schwarzColormapName, scaleLabel });
   }
   /** Coalesce rapid pan/zoom events into one paint per animation frame. */
   function scheduleSchwarzPaint(): void {
@@ -3083,6 +3116,7 @@ function init(): void {
     schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
     schwarzInspect = null; // a new φ ⇒ any previous orbit is stale
     renderSchwarzInspectReadout();
+    renderSchwarzLegendChip(); // reflect the current colormap + scale in the legend
     document.querySelector(".workspace")?.classList.add("schwarz-active"); // enter σ mode → show the pane
     try {
       paintSchwarz();
@@ -3177,7 +3211,7 @@ function init(): void {
         e.preventDefault();
         const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12; // scroll up ⇒ zoom in
         const next = zoomSchwarzView(schwarzView, factor, clientToUv(e));
-        next.zoom = Math.min(1e6, Math.max(0.02, next.zoom)); // keep the window sane at the extremes
+        next.zoom = Math.min(SCHWARZ_ZOOM_MAX, Math.max(SCHWARZ_ZOOM_MIN, next.zoom)); // keep the window sane
         schwarzView = next;
         scheduleSchwarzPaint();
       },
@@ -3274,6 +3308,7 @@ function init(): void {
       cmSel.addEventListener("change", () => {
         schwarzColormapName = cmSel.value;
         schwarzGL?.setColormap(schwarzColormapName);
+        renderSchwarzLegendChip(); // legend ramp follows the colormap
         scheduleSchwarzPaint();
       });
     }
@@ -3287,6 +3322,38 @@ function init(): void {
       scSel.value = schwarzScaleMode;
       scSel.addEventListener("change", () => {
         schwarzScaleMode = scSel.value;
+        renderSchwarzLegendChip(); // legend title shows the scale mode
+        scheduleSchwarzPaint();
+      });
+    }
+  }
+
+  // σ precise navigation (ADR-0009 item 3 — type an exact centre + zoom; parity with the standard plots).
+  // The fields mirror the live view (paintSchwarz → syncSchwarzViewFields); apply parses them into the
+  // view, reset returns to the default window. Both repaint (which re-normalizes the fields).
+  {
+    const reIn = document.getElementById("schwarz-center-re") as HTMLInputElement | null;
+    const imIn = document.getElementById("schwarz-center-im") as HTMLInputElement | null;
+    const zoomIn = document.getElementById("schwarz-zoom") as HTMLInputElement | null;
+    const applyBtn = document.getElementById("schwarz-view-apply");
+    const resetBtn = document.getElementById("schwarz-view-reset");
+    if (reIn && imIn && zoomIn && applyBtn && resetBtn) {
+      const apply = (): void => {
+        schwarzView = parseSchwarzViewInput(reIn.value, imIn.value, zoomIn.value, schwarzView);
+        scheduleSchwarzPaint();
+      };
+      applyBtn.addEventListener("click", apply);
+      // Enter in any field applies (matches the standard plots' center/zoom fields).
+      for (const el of [reIn, imIn, zoomIn]) {
+        el.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            apply();
+          }
+        });
+      }
+      resetBtn.addEventListener("click", () => {
+        schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
         scheduleSchwarzPaint();
       });
     }

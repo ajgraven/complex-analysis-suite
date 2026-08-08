@@ -8,6 +8,11 @@ import {
   uvToPlotFrac,
   panSchwarzView,
   zoomSchwarzView,
+  parseSchwarzViewInput,
+  formatSchwarzViewFields,
+  SCHWARZ_ZOOM_MIN,
+  SCHWARZ_ZOOM_MAX,
+  type SchwarzView,
 } from "../src/render/schwarzView";
 
 // The deltoid σ engine — ground truth φ(z) = z + 1/(2z²) (c = 1, F = [0,0,½]); Ω is the exterior of K.
@@ -53,6 +58,42 @@ describe("Schwarz σ CPU render (S4a-2)", () => {
 // renderSchwarzField (escape under the branch-aware σ) with no special-casing. Smoke test that a
 // single-exterior-pole engine yields a finite boundary + a structured, opaque field, so a pole-bearing σ
 // hand-off paints in CD exactly like the deltoid.
+// Precise navigation (ADR-0009 item 3): the parse/format pair the σ pane's centre/zoom fields use.
+describe("parseSchwarzViewInput / formatSchwarzViewFields", () => {
+  const FALLBACK: SchwarzView = { center: [0, 0], zoom: 0.4 };
+
+  it("parses well-formed fields into a view", () => {
+    expect(parseSchwarzViewInput("1.5", "-2", "3", FALLBACK)).toEqual({ center: [1.5, -2], zoom: 3 });
+  });
+
+  it("keeps the fallback component for an unparseable field (never NaN)", () => {
+    const v = parseSchwarzViewInput("abc", "", "xyz", { center: [7, 8], zoom: 0.9 });
+    expect(v).toEqual({ center: [7, 8], zoom: 0.9 });
+  });
+
+  it("clamps zoom to [SCHWARZ_ZOOM_MIN, SCHWARZ_ZOOM_MAX]", () => {
+    expect(parseSchwarzViewInput("0", "0", "0", FALLBACK).zoom).toBe(SCHWARZ_ZOOM_MIN); // 0 → min
+    expect(parseSchwarzViewInput("0", "0", "1e12", FALLBACK).zoom).toBe(SCHWARZ_ZOOM_MAX); // huge → max
+    expect(parseSchwarzViewInput("0", "0", "-5", FALLBACK).zoom).toBe(SCHWARZ_ZOOM_MIN); // negative → min
+  });
+
+  it("round-trips a view through format → parse (to display precision)", () => {
+    const view: SchwarzView = { center: [-0.734921, 1.208143], zoom: 12.5 };
+    const f = formatSchwarzViewFields(view);
+    const back = parseSchwarzViewInput(f.re, f.im, f.zoom, FALLBACK);
+    expect(back.center[0]).toBeCloseTo(view.center[0], 4);
+    expect(back.center[1]).toBeCloseTo(view.center[1], 4);
+    expect(back.zoom).toBeCloseTo(view.zoom, 4);
+  });
+
+  it("formats to compact 6-significant-figure strings (no float noise)", () => {
+    const f = formatSchwarzViewFields({ center: [0.1 + 0.2, 0], zoom: 0.4 });
+    expect(f.re).toBe("0.3"); // 0.30000000000000004 → "0.3"
+    expect(f.im).toBe("0");
+    expect(f.zoom).toBe("0.4");
+  });
+});
+
 describe("Schwarz σ CPU render — pole-bearing engine (Phase 2)", () => {
   const poleEngine = makeUnboundedLaurentSchwarz(1, [], [{ z: [0.2, 0], A: [[0.3, 0]] }]);
   const polePoly = schwarzBoundaryPoly(poleEngine);
