@@ -3006,6 +3006,8 @@ function init(): void {
   // σ orbit inspection (ADR-0009 item 3): the currently-inspected orbit (w₀ = points[0]) or null. Its
   // polyline is redrawn over the field on every paint, so it stays pinned to w₀ as the view pans/zooms.
   let schwarzInspect: SchwarzOrbit | null = null;
+  // σ hover orbit-preview (S5-A2): a transient orbit under the cursor, drawn faint beneath the pinned one.
+  let schwarzHover: SchwarzOrbit | null = null;
 
   /** Paint the σ field at the current `schwarzView` (GPU → drawImage, or CPU → putImageData). */
   function paintSchwarz(): void {
@@ -3027,7 +3029,9 @@ function init(): void {
       img.data.set(rgba); // Uint8ClampedArray<ArrayBuffer> constructor-overload variance in the DOM lib types
       ctx.putImageData(img, 0, 0);
     }
-    // Orbit overlay on top of the field (ADR-0009 item 3) — pinned to w₀, redrawn for the current view.
+    // Orbit overlays on top of the field: the transient hover preview (faint, S5-A2) under the pinned
+    // click-inspect orbit (bold, ADR-0009 item 3) — both redrawn for the current view.
+    if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, size, { preview: true });
     if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, size);
     // Scale bar (ADR-0009 item 3) — CD's own overlay helper; the σ view shares its center/zoom convention
     // (span = 2/zoom), so it reads correctly. Last, so an orbit line never hides it (it has its own backing).
@@ -3137,6 +3141,7 @@ function init(): void {
     schwarzSession = { engine, poly, phi, size, mode };
     schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
     schwarzInspect = null; // a new φ ⇒ any previous orbit is stale
+    schwarzHover = null;
     renderSchwarzInspectReadout();
     renderSchwarzLegendChip(); // reflect the current colormap + scale in the legend
     document.querySelector(".workspace")?.classList.add("schwarz-active"); // enter σ mode → show the pane
@@ -3260,16 +3265,39 @@ function init(): void {
     let downClient: [number, number] | null = null;
     let movedSinceDown = false;
     const CLICK_TOL_PX = 4; // total travel under this ⇒ a click (inspect the orbit), not a drag (pan)
+    // Hover orbit-preview (S5-A2): trace the orbit under the cursor and repaint (rAF-coalesced). Clears when
+    // the pointer leaves. Off during a drag (a pan already repaints) and on touch (no hover).
+    const setSchwarzHover = (e: PointerEvent): void => {
+      if (!schwarzSession) return;
+      const uv = clientToUv(e);
+      schwarzHover = schwarzOrbitAt(
+        schwarzSession.engine,
+        schwarzSession.poly,
+        uvToPlotFrac(schwarzView, uv[0], uv[1]),
+        SCHWARZ_ESCAPE,
+      );
+      scheduleSchwarzPaint();
+    };
+    const clearSchwarzHover = (): void => {
+      if (!schwarzHover) return;
+      schwarzHover = null;
+      scheduleSchwarzPaint();
+    };
     canvas.addEventListener("pointerdown", (e) => {
       if (!schwarzSession) return;
       lastUv = clientToUv(e);
       downClient = [e.clientX, e.clientY];
       movedSinceDown = false;
+      schwarzHover = null; // a drag/click supersedes the hover preview
       canvas.setPointerCapture(e.pointerId);
       canvas.style.cursor = "grabbing";
     });
     canvas.addEventListener("pointermove", (e) => {
-      if (!schwarzSession || !lastUv) return;
+      if (!schwarzSession) return;
+      if (!lastUv) {
+        setSchwarzHover(e); // not dragging ⇒ preview the orbit under the cursor
+        return;
+      }
       if (downClient && Math.hypot(e.clientX - downClient[0], e.clientY - downClient[1]) > CLICK_TOL_PX) {
         movedSinceDown = true; // it's a drag now — a trailing click won't inspect
       }
@@ -3278,6 +3306,7 @@ function init(): void {
       lastUv = cur;
       scheduleSchwarzPaint();
     });
+    canvas.addEventListener("pointerleave", clearSchwarzHover);
     const endDrag = (e: PointerEvent): void => {
       if (!lastUv) return;
       lastUv = null;

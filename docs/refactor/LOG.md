@@ -1773,3 +1773,14 @@
   bottom-left white pixels 0 → 120; include-orbit ON vs OFF → the PNG changes (orbit baked in); no console
   errors. Green: typecheck / lint / test, build. Branch restarted from the freshly-merged master (#246);
   Phase A stacks on top. Next: A2 (σ hover orbit-preview).
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (S5 Phase A2 — σ hover orbit-preview):**
+  hovering the σ canvas now **traces a transient σ-orbit under the cursor** (parity with CD's orbit preview),
+  drawn faint beneath the bold, pinned click-inspect orbit. `drawSchwarzOrbit` gains a `preview` style
+  (lower alpha + thinner strokes + a plain seed dot, no ring); `main.ts` adds a `schwarzHover` orbit that
+  the pointermove handler sets (when NOT dragging — off on touch, off during a pan) via the same
+  `schwarzOrbitAt` the pinned inspect uses, and `pointerleave` / a fresh pointerdown clear it (rAF-coalesced
+  repaint). The hover is view-only — it is never baked into the σ PNG export (only the pinned orbit is).
+  Reuses the existing tested tracer, so no new pure logic. VERIFIED in the BUILT app (Playwright): moving
+  over a point draws a preview (checksum 22591461 → 22602474), leaving the canvas clears it (back to
+  22591461 exactly), and a click still pins the bold orbit; no console errors. Green: typecheck / lint /
+  test 75 files, build. Next: A3 (σ image-space coloring).
