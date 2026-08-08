@@ -100,9 +100,15 @@ import {
   saveSavedViews,
   type AppState,
 } from "./state/appState";
-import { decodeLink, validateEnvelope, type Envelope } from "@cas/interchange";
-import { envelopeToMapSpec, mapSpecToExpr, schwarzEngineFromMapSpec } from "./interchange/importMap";
+import { decodeLink, validateEnvelope, type Envelope, type SchwarzMap } from "@cas/interchange";
+import {
+  envelopeToMapSpec,
+  mapSpecToExpr,
+  schwarzEngineFromMapSpec,
+  schwarzPhiFromMapSpec,
+} from "./interchange/importMap";
 import { renderSchwarzField, schwarzBoundaryPoly } from "./render/schwarzView";
+import { createSchwarzGLRenderer, type SchwarzGLRenderer } from "./render/schwarzGL";
 import { PLACES } from "./state/places";
 import { decodeNotes, encodeNotes, type Note } from "./state/notes";
 import GIF from "gif.js";
@@ -2926,21 +2932,48 @@ function init(): void {
   // milestone. The image is `≈` — the principal exterior branch of a numerically-inverted reflection,
   // not a certified render. Click it (or change any control) to dismiss and return to the normal plot.
   const SCHWARZ_VIEW = { center: [0, 0] as [number, number], zoom: 0.4 }; // half-width 1/zoom = 2.5
-  const SCHWARZ_RENDER_SIZE = 256; // CPU escape-time is heavy (Newton/DK per Ω pixel) — a coarse ≈ preview
-  function renderSchwarzView(engine: ReturnType<typeof schwarzEngineFromMapSpec>): void {
+  const SCHWARZ_RENDER_SIZE = 256; // coarse ≈ preview; the GPU paints it in one pass, the CPU per Ω pixel
+  // The GPU σ renderer is built once, lazily, and reused: `undefined` = not yet tried, `null` = WebGL2
+  // unavailable (permanently CPU). It owns a private offscreen canvas whose result we drawImage onto the
+  // visible 2D #JCSSchwarz — so the DOM / dismiss / fallback path stays exactly as the CPU-only version.
+  let schwarzGL: SchwarzGLRenderer | null | undefined;
+  function renderSchwarzView(spec: SchwarzMap): void {
     const canvas = byId<HTMLCanvasElement>("JCSSchwarz");
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const size = SCHWARZ_RENDER_SIZE;
     canvas.width = size;
     canvas.height = size;
+    // Reconstruct the engine (CPU fallback + boundary polygon) OUTSIDE the GPU try/catch, so an
+    // unsupported φ throws to importInterchange's "not supported" toast rather than silently painting CPU.
+    const engine = schwarzEngineFromMapSpec(spec);
     const poly = schwarzBoundaryPoly(engine);
-    const rgba = renderSchwarzField(engine, poly, SCHWARZ_VIEW, size, { maxIter: 48, escapeR: 1e4 });
-    const img = new ImageData(size, size); // construct-then-set (mirrors renderJuliaPreview) — avoids the
-    img.data.set(rgba); // Uint8ClampedArray<ArrayBuffer> constructor-overload variance in the DOM lib types
-    ctx.putImageData(img, 0, 0);
+
+    // GPU first: the lifted σ evaluator (@cas/schwarz/gpu, parity-proven to float32 ε) composed into the
+    // escape shader, painted in one pass. Any failure (no WebGL2, over a shader cap, a GL throw) → CPU.
+    let mode: "GPU" | "CPU" = "CPU";
+    if (schwarzGL === undefined) schwarzGL = createSchwarzGLRenderer();
+    if (schwarzGL) {
+      try {
+        schwarzGL.setPhi(schwarzPhiFromMapSpec(spec), poly);
+        if (schwarzGL.render(SCHWARZ_VIEW, size, { maxIter: 48, escapeR: 1e4 })) {
+          ctx.drawImage(schwarzGL.canvas, 0, 0);
+          mode = "GPU";
+        }
+      } catch (err) {
+        console.warn("schwarzGL render failed; falling back to the CPU field:", err);
+      }
+    }
+    if (mode === "CPU") {
+      const rgba = renderSchwarzField(engine, poly, SCHWARZ_VIEW, size, { maxIter: 48, escapeR: 1e4 });
+      const img = new ImageData(size, size); // construct-then-set (mirrors renderJuliaPreview) — avoids the
+      img.data.set(rgba); // Uint8ClampedArray<ArrayBuffer> constructor-overload variance in the DOM lib types
+      ctx.putImageData(img, 0, 0);
+    }
     canvas.hidden = false;
-    byId<HTMLElement>("dyn-schwarz-label").hidden = false;
+    const label = byId<HTMLElement>("dyn-schwarz-label");
+    label.textContent = `Schwarz reflection σ (≈, ${mode}) · click to dismiss`;
+    label.hidden = false;
   }
   /** Leave the σ reconstruction view (restore the normal dynamical plot underneath). Idempotent. */
   function exitSchwarzView(): void {
@@ -2974,7 +3007,7 @@ function init(): void {
       // from sigma.phi via @cas/schwarz and paint its escape-time field on the CPU (S4a). The reconstruct
       // can throw for a family the engine doesn't support (non-Laurent φ) — decline honestly, don't crash.
       try {
-        renderSchwarzView(schwarzEngineFromMapSpec(spec));
+        renderSchwarzView(spec);
       } catch (err) {
         showToast(`Imported a ${env.kind}, but σ reconstruction isn't supported for this map: ${(err as Error).message}`, "info");
         return true;

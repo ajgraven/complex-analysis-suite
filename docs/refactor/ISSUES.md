@@ -580,3 +580,16 @@ maintainability impact, not user-facing bug severity. IDs are referenced by PLAN
   escape-time field on a CPU canvas, `≈`-labeled (S4a-2) — the reconstructed 3-fold deltoid tiling, visually
   verified. The S3a "σ rendering isn't supported yet" decline is gone. Deferred to separate approvals: S4b
   (GPU σ — port QD's FRAG_SRC), S5 (non-Laurent families on the wire, branch-aware continuation, df64 σ).
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (S4b-i/ii — GPU σ in CD):** the σ hand-off
+  now renders on the GPU in CD. **S4b-i**: QD's hand-written σ fragment shader is lifted into a shared
+  `@cas/schwarz/gpu` GLSL module (the unbounded-Laurent + branches family only, per ADR-0007 — QD's other five
+  families have no CD consumer), with a browser CPU↔GPU parity net (max |GPU−CPU| = 1.9e-7, float32 ε). **S4b-ii**:
+  CD composes it with a new `@cas/gpu/mask` polygon→mask primitive + CD's own view / escape / palette into
+  `render/schwarzGL.ts`, rendering to a private offscreen WebGL2 canvas and `drawImage`-ing onto `#JCSSchwarz`
+  (the CPU path stays as a fallback; the label reports the mode). Visual parity verified on three real solved
+  pole-bearing σ links — structurally identical to the CPU render, only 0.08% float32 boundary `invalid`
+  speckle (≈-labeled). Green 2309/272. **Extraction note (ADR-0007/0008):** `@cas/gpu/mask` is now the shared
+  home for boundary-mask rasterization, but **QD's `schwarz-webgl buildMaskTexture` is deliberately left as a
+  separate copy** — it is entangled with QD-specific phiState / family logic, so migrating it onto
+  `@cas/gpu/mask` is a clean, reviewable follow-up (the ADR-0008 "extract without forcing the incumbent to
+  migrate" pattern), not done here. Deferred: **S4b-iii** (interactive σ view + native φ preset/custom UI), S5.

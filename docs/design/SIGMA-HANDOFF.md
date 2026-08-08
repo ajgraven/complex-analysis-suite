@@ -348,11 +348,13 @@ byte-match, CD reconstruct → the frozen σ(w₀)=2/3, vs the pole-free 1/3). S
 | S3b | QD export: `schwarz-reflection` envelope + "Export **σ**" button **alongside** φ (token granted) | ✅ **#239** |
 | S4a | **CD reconstructs + renders deltoid σ (CPU)** via `@cas/schwarz`; end-to-end ground truth; `≈` labeling | ✅ **#240 + #241** |
 | S4b-i | **`@cas/schwarz/gpu`**: lift QD's `FRAG_SRC` σ evaluator (the unbounded-Laurent + branches family only, per ADR-0007) into shared GLSL + a **CPU↔GPU parity net** (browser WebGL2; max \|GPU−CPU\| = 1.9e-7, float32 ε) | ✅ **engine lifted** |
-| S4b-ii | **CD GPU σ render**: compose the lifted GLSL into CD's escape-time shader, swap the CPU putImageData raster, make the σ view interactive | ⏳ next |
+| S4b-ii | **CD GPU σ render**: compose the lifted GLSL + a `@cas/gpu/mask` Ω-mask into CD's escape shader; render on GPU (offscreen → drawImage onto #JCSSchwarz), CPU fallback intact; visual parity with the CPU render | ✅ **GPU render live** |
+| S4b-iii | **Interactive native σ mode**: pan / zoom / pinch (PlotView), a first-class Schwarz mode + a φ preset picker + a custom-φ input form (c, Laurent F, poles A_j at z_j) | ⏳ next |
 
-**Deferred to separate approvals:** S4b-ii (CD GPU σ render + native interactive σ mode — the second half; the
-GLSL evaluator now exists and is parity-proven), S5 (non-Laurent families on the wire, branch-aware
-continuation through cusps [uncertified — RISKS §3], df64 σ, PQD GPU αth-root).
+**Deferred to separate approvals:** S4b-iii (interactive σ view + native φ preset/custom UI — the σ evaluator
+is lifted + parity-proven and CD now renders it on the GPU; what remains is interaction + the native map UI),
+S5 (non-Laurent families on the wire, branch-aware continuation through cusps [uncertified — RISKS §3], df64 σ,
+PQD GPU αth-root).
 
 ### Highest-risk step
 **S2d** — QD's entire Schwarz UI (`schwarz-ui/paint/render/interaction/forward`) reads `QD.Schwarz`'s exact

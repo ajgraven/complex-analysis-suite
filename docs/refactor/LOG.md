@@ -1564,3 +1564,27 @@
   (float32 ε; matches `@cas/gpu`'s 1.5e-7 dual-backend figure), plus σ=null for a point in the hole K. Green
   bar: typecheck / lint(+dep:check) / test **2305 / 271** (+6 node tests, +1 file), build, browser σ-parity
   6/6. Next: **S4b-ii** composes this GLSL into CD's escape-time shader and swaps the CPU putImageData σ raster.
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (S4b-ii — CD's σ render is now GPU):**
+  **CD paints the reconstructed σ escape-time field on the GPU**; the CPU `putImageData` raster is now a
+  fallback. Two increments:
+  **(I2a) `@cas/gpu/mask`** — extracted a polygon→R8 mask-texture primitive (`buildPolygonMaskTexture` + the
+  pure `polygonMaskFrame` sampling geometry). CD's σ renderer is the SECOND consumer of what QD's
+  `schwarz-webgl buildMaskTexture` does, so per **ADR-0007** it becomes a `@cas/gpu` primitive; QD's entangled
+  copy (it carries QD-specific phiState) is left in place per the **ADR-0008** precedent — migrating it is a
+  separate, reviewable change (noted in ISSUES). Node-tests the frame math; the GL upload is exercised by CD's
+  browser render + shader-compile gate.
+  **(I2b) CD σ GPU renderer** (`src/render/schwarzGL.ts`) — composes the lifted σ evaluator GLSL
+  (`@cas/schwarz/gpu`) with CD's OWN view→w mapping, Ω mask (in Ω ⟺ outside K), escape loop, and palette —
+  every classification/color mirrored from `schwarzView.ts` so GPU ≈ CPU. It renders to a PRIVATE offscreen
+  WebGL2 canvas; `renderSchwarzView` `drawImage`s that onto the existing 2D `#JCSSchwarz`, so the
+  DOM / dismiss / label path AND the CPU fallback are untouched — the GPU is only a faster pixel source.
+  `renderSchwarzView(spec)` now reconstructs the engine (CPU fallback + boundary poly) + φ (GPU uniforms, via
+  a shared `schwarzPhiFromMapSpec`), tries GPU, falls back to CPU on any failure, and labels the mode
+  ("≈, GPU" / "≈, CPU"). NET: the σ shader joins CD's browser SHADER-COMPILE gate; a browser render test
+  proves the whole pipeline (deltoid opaque + structured + the exact K-base color; a pole-bearing domain
+  structured). VISUAL: three REAL solved pole-bearing σ links (single-pole ×2, two-pole) rendered in the
+  BUILT app via GPU are structurally identical to the CPU renders — K interior exact `[30,60,140]`; only
+  **55 / 65536 px (0.08%)** differ, as float32 boundary `invalid` speckle (the honest ≈ tradeoff, matching
+  QD's own GPU σ). Green: typecheck / lint(+dep:check) / test **2309 / 272** (+4 node: mask frame math), build,
+  CD browser **14/14**. Next: **S4b-iii** makes the σ view interactive (pan/zoom/pinch via PlotView) + adds the
+  native φ preset/custom UI.
