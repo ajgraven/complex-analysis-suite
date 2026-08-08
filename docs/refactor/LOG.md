@@ -1494,3 +1494,49 @@
   Playwright-loaded the σ deep-link against the built app — the 3-fold-symmetric deltoid σ tiling renders,
   `≈`-labeled, ZERO console errors. Green bar **2267 / 269** (+1 file, +3 tests). **QD-HANDOFF-2 CLOSED end
   to end: QD emits σ → CD reconstructs + renders it.** (S4b GPU σ + other families remain separate approvals.)
+- **2026-08-07 · branch claude/repository-refactor-project-pg5ktu:** **σ/φ export legibility + the missing
+  LIVE net (Phase 1 of the "σ for more domains such as the deltoid" ask).** A Phase-0 repro that runs the
+  REAL solver → REAL exporter in one process found the pure **deltoid already σ-exports end to end** — so the
+  reported "deltoid unsupported" was a mislabel: `_exportSigma`/`_exportMap` printed ONE blind line ("needs an
+  unbounded-Laurent φ (e.g. the deltoid)") for EVERY refusal — nothing captured, a Direct rational φ, a
+  bounded domain, or a pole-bearing unbounded QD — pointing each at the deltoid, the one shape that works. Why
+  it survived to prod: the σ test asserted a **hand-built** `deltoidPhi` literal; the live solve→capture→export
+  chain was never exercised. FIX (`schwarz-export.mjs`, pure + tested): `classifyPhiForExport` +
+  `explainSigmaUnavailable`/`explainPhiUnavailable` — return **null ⇔ exportable** (the ok-decision defers to
+  `phiToMapSpec`, so a reason can never drift from the serializer), else the real cause (names the manual
+  **"Use this φ"** capture step; "rational → use φ export"; "bounded"; "N pole terms → pole-free Laurent only,
+  planned"). `schwarz-ui.mjs`: both handlers route through the explainers; `_autoCaptureIfPending` grabs a
+  pending Inverse solve when nothing is captured yet (safe — never overrides an existing capture, reuses the
+  "Use this φ" path, no new failure mode). NET-FIRST: 10 classifier/reason unit tests (RED→GREEN); **NEW
+  `vitest/schwarz-export-live.test.ts`** boots the real QD solver and runs a genuinely-solved deltoid through
+  the real exporter (valid `schwarz` envelope) + pins the single-pole boundary (σ+φ null, reason names the
+  pole) — the net that was missing; a jsdom wiring test asserts the precise status line for nothing-captured /
+  pole-bearing / bounded. Mutation-verified (`explainSigmaUnavailable`→always-null → all three nets red →
+  reverted). Green: typecheck/lint/test **2282 / 270** (+15 tests, +1 file). σ COVERAGE UNCHANGED —
+  pole-bearing/other-family σ stays the deferred generalize phase (S2b/S5); this only makes the refusal honest
+  and nets the deltoid path that shipped in S3b/S4a.
+- **2026-08-07 · branch claude/repository-refactor-project-pg5ktu (Phase 2 — pole-bearing σ, 5 increments):**
+  **the σ hand-off now covers unbounded QDs with finite-pole branch terms (a single exterior pole, a
+  cardioid, …), not just the pole-free deltoid.** The "domains such as the deltoid" broadening, end to end.
+  Five net-first, mutation-verified increments:
+  **(1) `@cas/schwarz`** (`faaa6af`) — `makeUnboundedLaurentSchwarz(c, F, branches?)`: ported QD's canonical
+  branch term (schwarz-common `adaptUnbounded`) into φ = c·z + Σ F_l/zˡ + Σⱼ Σₖ conj(A_{j,k})·u_j(z)ᵏ
+  (u_j = z/(1−conj(z_j)z)), its derivative, and the reflected Schwarz extension Σⱼ Σₖ A_{j,k}/(z−z_j)ᵏ. The
+  branch term has poles in 𝔻*, so no cleared DK polynomial — the inverse factors into `newtonFrom(seed)` and
+  retries cold exterior seeds for branches; **the pole-free path (Newton + DK) is byte-identical**, deltoid σ
+  unchanged. Net: hand-computed φ/F values pin order-1/order-2(k=2)/Σⱼ; the boundary identity F(z)=conj(φ(z))
+  on |z|=1 pins the reflection; the round-trip σ(φ(z₀))=conj(F(z₀)) pins the inverse.
+  **(2) `@cas/interchange`** (`4f2effb`) — optional `branches` on `LaurentMap` + `isBranchArray` seatbelt;
+  **VERSION 1.1.0 → 1.2.0** (MINOR; consumers gate on MAJOR=1). Deltoid goldens regenerated — only the
+  embedded `version` changed (deltoid is pole-free).
+  **(3) QD emit** (`3477392`) — `phiToMapSpec` maps `phi.branches` into the wire (omitted when empty ⇒
+  deltoid byte-identical); the "pole-bearing σ is planned" refusal is gone. Phase-1 "does not export"
+  boundary tests flipped; the LIVE single-pole solve now emits a valid branch-bearing envelope.
+  **(4) CD reconstruct** (`819229d`) — `schwarzEngineFromMapSpec` threads `branches` into the engine; a new
+  cross-app single-pole σ golden (fixture c=1, z_j=0.2, A=0.3) pins the loop from all three sides — interchange
+  decodes it, QD reproduces the exact bytes, CD reconstructs the frozen **σ(w₀)=2/3** (a dropped branch would
+  give the pole-free 1/3). This is the end-to-end ground truth: QD emits a pole-bearing σ → CD rebuilds it.
+  **(5) CD render + docs** (this commit) — the CPU render path is generic over the engine, so a pole-bearing
+  engine paints via the same `schwarzBoundaryPoly`/`renderSchwarzField` (smoke-tested); SIGMA-HANDOFF/ISSUES
+  updated. Green bar: typecheck/lint/test **2299 / 270** (+17 tests). Still deferred: complex leading c, the
+  non-Laurent families (bounded/LQD/PQD — S2b–d), GPU σ (S4b), df64 deep-zoom.

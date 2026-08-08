@@ -18,8 +18,20 @@ const A = tupleAlgebra;
 const conj = (z: Complex): Complex => [z[0], -z[1]];
 const inv = (z: Complex): Complex => A.div([1, 0], z);
 
+/**
+ * A finite-pole branch of a pole-bearing unbounded QD. φ gains Σₖ conj(A[k-1])·u_j(z)^k with
+ * u_j(z) = z/(1 − conj(z)·z); its Schwarz extension gains the reflected principal part
+ * Σₖ A[k-1]/(w − z_j)^k. z_j ∈ 𝔻 (so both terms are regular where they must be). A[k-1] = A_{j,k}.
+ */
+export interface SchwarzBranch {
+  /** Reflected pole location z_j ∈ 𝔻. */
+  z: Complex;
+  /** Principal-part coefficients, low order first: A[k-1] = A_{j,k}, k = 1..m_j. */
+  A: readonly Complex[];
+}
+
 export interface UnboundedLaurentSchwarz {
-  /** φ(z) = c·z + Σₗ F[l] / zˡ  (the conformal map {|z|>1} → Ω). */
+  /** φ(z) = c·z + Σₗ F[l] / zˡ + Σⱼ Σₖ conj(A_{j,k})·u_j(z)ᵏ  (the conformal map {|z|>1} → Ω). */
   evalPhi(z: Complex): Complex;
   /** φ'(z) = c − Σ_{l≥1} l·F[l] / z^{l+1}. */
   evalPhiDeriv(z: Complex): Complex;
@@ -34,13 +46,72 @@ export interface UnboundedLaurentSchwarz {
 const NEWTON_MAX = 40;
 const NEWTON_TOL = 1e-12;
 
-/** Build the Schwarz engine for a classical unbounded-Laurent map φ(z) = c·z + Σₗ F[l]/zˡ. */
+/**
+ * Build the Schwarz engine for an unbounded-Laurent map φ(z) = c·z + Σₗ F[l]/zˡ, optionally with
+ * finite-pole `branches` (a pole-bearing unbounded QD — a single exterior pole, a cardioid, …). With
+ * `branches` empty this is byte-identical to the pole-free engine (deltoid path unchanged), including
+ * the Durand–Kerner exterior-root fallback; with branches present the inverse is cold-seeded Newton
+ * only (no closed-form cleared polynomial), matching QD's own σ machinery.
+ */
 export function makeUnboundedLaurentSchwarz(
   c: number,
   F: readonly Complex[],
+  branches: readonly SchwarzBranch[] = [],
 ): UnboundedLaurentSchwarz {
   const m = F.length;
+  const hasBranches = branches.length > 0;
   const dk = makeDurandKerner(A);
+
+  // Finite-pole branch contributions — ported verbatim from the QD app's canonical σ
+  // (schwarz-common.mjs adaptUnbounded + branchPhiContribution / branchPhiDeriv / branchSchwarzContribution):
+  //   φ:  Σⱼ Σₖ conj(A_{j,k})·u_j(z)ᵏ,        u_j(z) = z/(1 − conj(z_j)·z)
+  //   φ': Σⱼ (1/(1−conj(z_j)z)²)·Σₖ k·conj(A_{j,k})·u_j^{k-1}
+  //   F:  Σⱼ Σₖ A_{j,k}/(z − z_j)ᵏ            (on |z|=1, conj(u_j)ᵏ = 1/(z−z_j)ᵏ — the reflected principal part)
+  const branchPhi = (z: Complex): Complex => {
+    let acc: Complex = [0, 0];
+    for (const br of branches) {
+      const denom = A.sub([1, 0], A.mul(conj(br.z), z));
+      if (A.abs(denom) < 1e-300) continue;
+      const u = A.div(z, denom);
+      let uPow: Complex = [1, 0];
+      for (let k = 0; k < br.A.length; k++) {
+        uPow = A.mul(uPow, u); // u^{k+1}
+        acc = A.add(acc, A.mul(conj(br.A[k]), uPow));
+      }
+    }
+    return acc;
+  };
+  const branchPhiDeriv = (z: Complex): Complex => {
+    let acc: Complex = [0, 0];
+    for (const br of branches) {
+      const denom = A.sub([1, 0], A.mul(conj(br.z), z));
+      if (A.abs(denom) < 1e-300) continue;
+      const u = A.div(z, denom);
+      const denom2 = A.mul(denom, denom);
+      let uPowKm1: Complex = [1, 0]; // u^{k-1}, starting at k=1
+      let inner: Complex = [0, 0];
+      for (let k = 1; k <= br.A.length; k++) {
+        inner = A.add(inner, A.mul(A.scale(conj(br.A[k - 1]), k), uPowKm1));
+        uPowKm1 = A.mul(uPowKm1, u);
+      }
+      acc = A.add(acc, A.div(inner, denom2));
+    }
+    return acc;
+  };
+  const branchF = (z: Complex): Complex => {
+    let acc: Complex = [0, 0];
+    for (const br of branches) {
+      const d = A.sub(z, br.z);
+      if (A.abs(d) < 1e-300) continue;
+      const dInv = inv(d);
+      let dInvPow: Complex = [1, 0]; // 1/(z−z_j)^k, starting at k=0
+      for (let k = 0; k < br.A.length; k++) {
+        dInvPow = A.mul(dInvPow, dInv); // → 1/(z−z_j)^{k+1}
+        acc = A.add(acc, A.mul(br.A[k], dInvPow));
+      }
+    }
+    return acc;
+  };
 
   const evalPhi = (z: Complex): Complex => {
     let acc = A.scale(z, c);
@@ -50,6 +121,7 @@ export function makeUnboundedLaurentSchwarz(
       acc = A.add(acc, A.mul(F[l], zInvPow));
       zInvPow = A.mul(zInvPow, zInv);
     }
+    if (hasBranches) acc = A.add(acc, branchPhi(z));
     return acc;
   };
 
@@ -61,6 +133,7 @@ export function makeUnboundedLaurentSchwarz(
       acc = A.sub(acc, A.mul(A.scale(F[l], l), zInvPow));
       zInvPow = A.mul(zInvPow, zInv);
     }
+    if (hasBranches) acc = A.add(acc, branchPhiDeriv(z));
     return acc;
   };
 
@@ -71,6 +144,7 @@ export function makeUnboundedLaurentSchwarz(
       acc = A.add(acc, A.mul(conj(F[l]), zPow));
       zPow = A.mul(zPow, z);
     }
+    if (hasBranches) acc = A.add(acc, branchF(z));
     return acc;
   };
 
@@ -131,8 +205,12 @@ export function makeUnboundedLaurentSchwarz(
     return bestAbs >= 1 - 1e-6 ? best : null;
   };
 
-  const invertPhi = (w: Complex): Complex | null => {
-    let z = seedFor(w);
+  // One cold-seeded Newton solve of φ(z) = w. Returns the converged z (accepted within NEWTON_TOL, or a
+  // slack NEWTON_TOL·100 on the final residual), else null. Extracted so the branch-bearing inverse can
+  // retry from several seeds; for the pole-free path the single seedFor(w) call reproduces the original
+  // loop exactly.
+  const newtonFrom = (w: Complex, seed: Complex): Complex | null => {
+    let z = seed;
     let ok = false;
     for (let it = 0; it < NEWTON_MAX; it++) {
       const fz = A.sub(evalPhi(z), w);
@@ -146,10 +224,26 @@ export function makeUnboundedLaurentSchwarz(
       if (!A.isFinite(z) || A.abs(z) > 1e8) break;
     }
     if (!ok) ok = A.isFinite(z) && A.abs(A.sub(evalPhi(z), w)) < NEWTON_TOL * 100;
-    // Accept Newton only when it converged onto the exterior branch |z|>1 (unique there); otherwise it
-    // drifted onto an interior preimage — recover the correct branch exactly.
-    if (ok && A.abs(z) > 1) return z;
-    return exteriorRoot(w);
+    return ok ? z : null;
+  };
+
+  const invertPhi = (w: Complex): Complex | null => {
+    // Accept Newton only when it converged onto the exterior branch |z|>1 (unique there for a valid QD);
+    // otherwise it drifted onto an interior preimage — recover the correct branch below.
+    const zN = newtonFrom(w, seedFor(w));
+    if (zN && A.abs(zN) > 1) return zN;
+    // Pole-free φ: the exact Durand–Kerner exterior root immune to branch drift (the deltoid path).
+    if (!hasBranches) return exteriorRoot(w);
+    // Pole-bearing φ: the branch term has finite poles at 1/conj(z_j) ∈ 𝔻*, so there is no single
+    // cleared polynomial for DK — retry cold Newton from a few exterior seeds along the w/c ray (the
+    // exterior preimage is unique for a valid domain, so the first |z|>1 hit is the branch σ needs).
+    const base: Complex = [w[0] / c, w[1] / c];
+    const ang = Math.atan2(base[1], base[0]);
+    for (const rad of [Math.max(A.abs(base), 1.2), 1.3, 2, 4, 1.05]) {
+      const z = newtonFrom(w, [rad * Math.cos(ang), rad * Math.sin(ang)]);
+      if (z && A.abs(z) > 1) return z;
+    }
+    return null;
   };
 
   const sigma = (w: Complex): Complex | null => {

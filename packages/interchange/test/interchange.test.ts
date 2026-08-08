@@ -9,6 +9,7 @@ import {
   validateEnvelope,
   QD_TO_CD_DELTOID_SIGMA_LINK,
   QD_TO_CD_DELTOID_SIGMA_AT_W0,
+  QD_TO_CD_SINGLE_POLE_SIGMA_LINK,
   type Envelope,
   type LaurentMap,
   type SchwarzReflection,
@@ -64,6 +65,23 @@ describe("@cas/interchange schema + constants", () => {
     expect(isMapSpec({ form: "expr", expr: "z", vars: ["z", "drop table"] })).toBe(false); // bad var name
     expect(isMapSpec({ form: "expr", expr: "z", vars: ["z", "c", "a"] })).toBe(true);
     expect(isMapSpec({ form: "expr", expr: "z".repeat(9000), vars: [] })).toBe(false); // > MAX_EXPR_LEN
+  });
+  it("isMapSpec validates optional Laurent branches (pole-bearing unbounded QD, 1.2.0)", () => {
+    // A laurent φ MAY carry finite-pole branch terms { z ∈ 𝔻, A: principal-part coeffs } — the
+    // pole-bearing unbounded QDs (single exterior pole, cardioid). Omitted/empty ⇒ the pole-free deltoid.
+    const br = { z: { re: 0.2, im: 0 }, A: [{ re: 0.3, im: 0 }] };
+    expect(isMapSpec({ ...deltoidSigma, branches: [br] })).toBe(true);
+    expect(isMapSpec({ ...deltoidSigma, branches: [] })).toBe(true);
+    // Malformed branches are REJECTED, not silently ignored (the seatbelt owns the guarantee).
+    expect(isMapSpec({ ...deltoidSigma, branches: "nope" })).toBe(false);
+    expect(isMapSpec({ ...deltoidSigma, branches: [{ z: { re: 0 }, A: [] }] })).toBe(false); // z.im missing
+    expect(isMapSpec({ ...deltoidSigma, branches: [{ z: { re: 0, im: 0 } }] })).toBe(false); // A missing
+    expect(isMapSpec({ ...deltoidSigma, branches: [{ z: { re: 0, im: 0 }, A: [{ re: 1 }] }] })).toBe(false); // A[0].im missing
+    // SECURITY: an over-cap A array and an over-cap branch count are rejected (untrusted-input bounds).
+    const bigA = Array.from({ length: 5000 }, () => ({ re: 0, im: 0 }));
+    expect(isMapSpec({ ...deltoidSigma, branches: [{ z: { re: 0, im: 0 }, A: bigA }] })).toBe(false);
+    const manyBranches = Array.from({ length: 5000 }, () => br);
+    expect(isMapSpec({ ...deltoidSigma, branches: manyBranches })).toBe(false);
   });
 });
 
@@ -174,6 +192,24 @@ describe("deltoid σ golden (S3a)", () => {
     // isMapSpec accepts the decoded recipe (validateEnvelope already ran it, but pin it explicitly).
     expect(isMapSpec(sigma)).toBe(true);
     expect(QD_TO_CD_DELTOID_SIGMA_AT_W0).toEqual({ re: 0.5, im: -0.5 }); // the frozen value CD reproduces
+  });
+
+  // Phase 2: the pole-bearing σ golden — a `schwarz` recipe whose `sigma.phi` carries finite-pole
+  // `branches` (1.2.0). This package has no σ engine, so it pins the DECODE + that the branches survive
+  // the wire + validate; CD reconstructs the frozen σ(w₀) from them (importMap.test.ts).
+  it("decodes the single-pole σ golden, carrying the finite-pole branches through the seatbelt", () => {
+    const env = decodeLink(QD_TO_CD_SINGLE_POLE_SIGMA_LINK); // decodeLink runs validateEnvelope
+    expect(env.kind).toBe("schwarz-reflection");
+    expect(env.version).toBe(VERSION); // minted at 1.2.0 — the version branches arrived in
+    const sigma = (env.payload as SchwarzReflection).sigma as { form: string; phi: LaurentMap };
+    expect(sigma.form).toBe("schwarz");
+    expect(sigma.phi).toEqual({
+      form: "laurent",
+      c: { re: 1, im: 0 },
+      F: [],
+      branches: [{ z: { re: 0.2, im: 0 }, A: [{ re: 0.3, im: 0 }] }],
+    });
+    expect(isMapSpec(sigma)).toBe(true);
   });
 });
 

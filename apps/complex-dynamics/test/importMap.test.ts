@@ -10,6 +10,9 @@ import {
   QD_TO_CD_DELTOID_SIGMA_LINK,
   QD_TO_CD_DELTOID_SIGMA_W0,
   QD_TO_CD_DELTOID_SIGMA_AT_W0,
+  QD_TO_CD_SINGLE_POLE_SIGMA_LINK,
+  QD_TO_CD_SINGLE_POLE_SIGMA_W0,
+  QD_TO_CD_SINGLE_POLE_SIGMA_AT_W0,
   type Envelope,
   type QuadratureDomain,
 } from "@cas/interchange";
@@ -136,6 +139,24 @@ describe("CD consume interchange map (Phase 4 C3)", () => {
     if (!got) throw new Error("σ(w₀) should reconstruct to a finite value for w₀ ∈ Ω, not null");
     expect(got[0]).toBeCloseTo(QD_TO_CD_DELTOID_SIGMA_AT_W0.re, 9); //  0.5
     expect(got[1]).toBeCloseTo(QD_TO_CD_DELTOID_SIGMA_AT_W0.im, 9); // −0.5 (the anti-holomorphic conj)
+  });
+
+  // Phase 2: CD reconstructs a POLE-BEARING σ from the cross-app golden, END TO END through the same
+  // decode → envelopeToMapSpec → schwarzEngineFromMapSpec path. sigma.phi carries finite-pole `branches`
+  // (1.2.0) that must thread into makeUnboundedLaurentSchwarz's third argument. Ground truth on the
+  // single-exterior-pole fixture: w₀ = φ(2) = 3, σ(w₀) = conj(F(2)) = 2/3. A reconstruction that DROPPED
+  // the branch would evaluate the pole-free φ = z and return conj(1/3) = 1/3 — so 2/3 vs 1/3 proves the
+  // branch survived the wire and the reconstruction.
+  it("reconstructs the single-pole σ from the golden, threading the finite-pole branches — Phase 2 ground truth", () => {
+    const sigma = envelopeToMapSpec(decodeLink(QD_TO_CD_SINGLE_POLE_SIGMA_LINK));
+    if (!sigma || sigma.form !== "schwarz") throw new Error("expected a schwarz map from the single-pole σ golden");
+    expect(sigma.phi.form).toBe("laurent");
+    expect((sigma.phi as { branches?: unknown[] }).branches?.length).toBe(1); // the pole rode the wire
+    const engine = schwarzEngineFromMapSpec(sigma);
+    const got = engine.sigma([QD_TO_CD_SINGLE_POLE_SIGMA_W0.re, QD_TO_CD_SINGLE_POLE_SIGMA_W0.im]);
+    if (!got) throw new Error("σ(w₀) should reconstruct to a finite value, not null");
+    expect(got[0]).toBeCloseTo(QD_TO_CD_SINGLE_POLE_SIGMA_AT_W0.re, 9); // 2/3 WITH the pole (pole-free → 1/3)
+    expect(got[1]).toBeCloseTo(QD_TO_CD_SINGLE_POLE_SIGMA_AT_W0.im, 9);
   });
 
   it("emits complex coefficients with the imaginary unit", () => {

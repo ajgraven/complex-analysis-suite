@@ -40,7 +40,12 @@
 import { state } from '../ui/ui-state.mjs';
 import { QD_UI } from '../ui/ui-registry.mjs';
 import _QD from '../solvers/solver.mjs';
-import { exportPhiDeepLink, exportSigmaDeepLink } from './schwarz-export.mjs';
+import {
+  exportPhiDeepLink,
+  exportSigmaDeepLink,
+  explainPhiUnavailable,
+  explainSigmaUnavailable,
+} from './schwarz-export.mjs';
 const QD = _QD;
 
 (function () {
@@ -492,6 +497,17 @@ const QD = _QD;
     return card;
   }
 
+  // Capturing φ into the Schwarz tab is a MANUAL step (the "Use this φ" button); a user who solves on
+  // the Inverse tab and then clicks Export here would otherwise hit a bare "nothing to export". Grab the
+  // pending solve automatically — but ONLY when nothing is captured yet AND a successful solve is waiting,
+  // so we never silently replace an already-captured domain and never trip captureFromInverseTab's
+  // no-solution alert. It's the exact path the "Use this φ" button runs, so it adds no new failure mode.
+  function _autoCaptureIfPending() {
+    if (sState.phiSnapshot) return;
+    const env = QD.PrimarySolution && QD.PrimarySolution.get && QD.PrimarySolution.get();
+    if (env && env.success && env.primary && env.primary.phi) captureFromInverseTab();
+  }
+
   // Export the current φ as an @cas/interchange deep link (Phase 4 hand-off). φ is the closed-form
   // map QD solved for; the Complex Dynamics app compiles + renders it. (The Schwarz reflection σ is
   // conj(F∘φ⁻¹) with a NUMERICAL inverse — its faithful hand-off waits for the shared σ-builder.)
@@ -500,6 +516,11 @@ const QD = _QD;
     const setStatus = (msg, ok) => {
       if (status) { status.textContent = msg; status.style.color = ok ? '#2a7' : '#c33'; }
     };
+    _autoCaptureIfPending();
+    // Legible refusal: name the real reason (nothing captured / bounded / pole-bearing) instead of one
+    // blind line. reason === null ⇔ φ IS exportable, kept in lockstep with exportPhiDeepLink via phiToMapSpec.
+    const reason = explainPhiUnavailable(sState.phiSnapshot);
+    if (reason) { setStatus(reason, false); return; }
     // The hand-off must open in the Complex Dynamics app (.../complex-dynamics/#s=...), not reload QD.
     // exportPhiDeepLink resolves CD's base from the sibling deploy path; VITE_CD_BASE overrides it for
     // local dev (where the apps run on separate Vite ports and the sibling can't be resolved from here).
@@ -509,7 +530,7 @@ const QD = _QD;
       cdBase,
     });
     if (!result) {
-      setStatus('No exportable φ yet — solve one first (some families are not closed-form maps).', false);
+      setStatus('φ export unavailable for this map.', false); // defensive: reason was null yet the builder declined
       return;
     }
     const { url, resolvable } = result;
@@ -537,13 +558,18 @@ const QD = _QD;
     const setStatus = (msg, ok) => {
       if (status) { status.textContent = msg; status.style.color = ok ? '#2a7' : '#c33'; }
     };
+    _autoCaptureIfPending();
+    // Legible refusal: distinguish nothing-captured / rational / bounded / pole-bearing instead of
+    // pointing every rejection at "the deltoid" (which is the one shape that DOES σ-export).
+    const reason = explainSigmaUnavailable(sState.phiSnapshot);
+    if (reason) { setStatus(reason, false); return; }
     const cdBase = (import.meta.env && import.meta.env.VITE_CD_BASE) || undefined;
     const result = exportSigmaDeepLink(sState.phiSnapshot, location, {
       note: 'sigma (Schwarz reflection) exported from the Quadrature Domains app',
       cdBase,
     });
     if (!result) {
-      setStatus('σ export needs an unbounded-Laurent φ (e.g. the deltoid) — not available for this map.', false);
+      setStatus('σ export unavailable for this map.', false); // defensive: reason was null yet the builder declined
       return;
     }
     const { url, resolvable } = result;
@@ -1515,7 +1541,7 @@ const QD = _QD;
   if (typeof window !== 'undefined' && window.__SCHWARZ_UI_TEST_HOOK__) {
     window.__schwarzUiTest = {
       sState, setMode, setViewMode, onCanvasClick, onCanvasDblClick, onMouseMove,
-      runHoverOrbit, pinOrbitAt, makeOverlaysCard,
+      runHoverOrbit, pinOrbitAt, makeOverlaysCard, _exportMap, _exportSigma,
       get CLICK_DELAY() { return _schwarzInter.getClickDelay(); },
       set CLICK_DELAY(v) { _schwarzInter.setClickDelay(v); },
     };

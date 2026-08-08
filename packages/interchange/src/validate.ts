@@ -31,6 +31,8 @@ function isFiniteNum(v: unknown): v is number {
 /** Max length of a coefficient array (rational num/den, laurent F): bounds a crafted mega-array that
  *  would validate and then build a multi-MB expression string in a consumer (main-thread DoS). */
 const MAX_COEFF_LEN = 4096;
+/** Max number of finite-pole branches on a laurent φ (each also caps its own A[] at MAX_COEFF_LEN). */
+const MAX_BRANCHES = 1024;
 /** Max length of an `expr`-form source string. */
 const MAX_EXPR_LEN = 8192;
 /** Max number of declared variables in an `expr` map. */
@@ -73,6 +75,15 @@ export function isComplex(v: unknown): v is Complex {
 function isComplexArray(v: unknown): v is Complex[] {
   return Array.isArray(v) && v.length <= MAX_COEFF_LEN && v.every(isComplex);
 }
+/** A laurent φ's optional finite-pole branches: a bounded array of { z: Complex, A: bounded Complex[] }
+ *  (schema.ts BranchSpec). Untrusted-input bounded on both the branch count and each A[] length. */
+function isBranchArray(v: unknown): boolean {
+  return (
+    Array.isArray(v) &&
+    v.length <= MAX_BRANCHES &&
+    v.every((b) => isObject(b) && isComplex(b.z) && isComplexArray(b.A))
+  );
+}
 
 export function isConventions(v: unknown): v is Conventions {
   return (
@@ -104,7 +115,9 @@ export function isMapSpec(v: unknown): v is MapSpec {
     case "rational":
       return isComplexArray(v.num) && isComplexArray(v.den);
     case "laurent":
-      return isComplex(v.c) && isComplexArray(v.F);
+      // Optional finite-pole branches (1.2.0): validated when present, so a malformed branch list is
+      // rejected rather than silently ignored (the pole-free deltoid simply omits the field).
+      return isComplex(v.c) && isComplexArray(v.F) && (v.branches === undefined || isBranchArray(v.branches));
     case "expr":
       return typeof v.expr === "string" && v.expr.length <= MAX_EXPR_LEN &&
         Array.isArray(v.vars) && v.vars.length <= MAX_VARS_LEN && v.vars.every(isVarName);
