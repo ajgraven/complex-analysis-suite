@@ -2794,7 +2794,9 @@ function init(): void {
 
   /** Re-apply every control to the plots (used after loading a shared permalink). */
   function applyAllControls(): void {
-    exitSchwarzView(); // a normal control apply / map load leaves the σ reconstruction view (S4a)
+    // σ is a persistent peer VIEW now (ADR-0009), not an overlay dismissed on any control change: a control
+    // apply re-renders the standard plots underneath and leaves σ mode intact. Leaving σ is explicit (its ↩
+    // button / Esc) or happens when a NON-schwarz map is imported (importInterchange calls exitSchwarzView).
     applyChanges();
     applyColoring();
     applyLighting();
@@ -3007,7 +3009,7 @@ function init(): void {
     }
     schwarzSession = { engine, poly, size, mode };
     schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
-    byId<HTMLCanvasElement>("JCSSchwarz").hidden = false;
+    document.querySelector(".workspace")?.classList.add("schwarz-active"); // enter σ mode → show the pane
     try {
       paintSchwarz();
     } catch (err) {
@@ -3019,8 +3021,7 @@ function init(): void {
       }
     }
     const label = byId<HTMLElement>("dyn-schwarz-label");
-    label.textContent = `Schwarz reflection σ (≈, ${schwarzSession.mode}) · drag · scroll · Esc`;
-    label.hidden = false;
+    label.textContent = `Schwarz reflection σ (≈, ${schwarzSession.mode}) · drag · scroll · ↩/Esc to exit`;
   }
   /** Import path: reconstruct from an interchange schwarz map. Throws (to the caller's toast) for an
    *  unsupported φ — reconstruct BEFORE entering so a bad map never half-shows a wrong field. */
@@ -3031,15 +3032,14 @@ function init(): void {
   function renderSchwarzFromPhi(phi: SchwarzPhi): void {
     enterSchwarz(makeUnboundedLaurentSchwarz(phi.c, phi.F, phi.branches), phi);
   }
-  /** Leave the σ reconstruction view (restore the normal dynamical plot underneath). Idempotent. */
+  /** Leave the σ peer view — back to the Parameter & Dynamical plots. Idempotent (safe if not in σ mode). */
   function exitSchwarzView(): void {
     schwarzSession = null;
     if (schwarzRaf) {
       cancelAnimationFrame(schwarzRaf);
       schwarzRaf = 0;
     }
-    byId<HTMLCanvasElement>("JCSSchwarz").hidden = true;
-    byId<HTMLElement>("dyn-schwarz-label").hidden = true;
+    document.querySelector(".workspace")?.classList.remove("schwarz-active");
   }
 
   // σ interaction: drag to pan, wheel to zoom (about the cursor), Esc to exit. Handlers are installed
@@ -3104,16 +3104,15 @@ function init(): void {
   // Laurent F, finite-pole branches) — with no interchange link (S4b-iv). The φ-form parsing + validation
   // is pure (render/schwarzPhiForm.ts); this only wires the fields to `renderSchwarzFromPhi`.
   {
-    const openBtn = document.getElementById("schwarz-open");
-    const panel = document.getElementById("schwarz-builder");
+    const openBtn = document.getElementById("schwarz-open"); // sidebar → open the σ peer view
+    const exitBtn = document.getElementById("schwarz-exit"); // σ pane header → back to the plots
     const presetSel = document.getElementById("schwarz-preset") as HTMLSelectElement | null;
     const cIn = document.getElementById("schwarz-c") as HTMLInputElement | null;
     const fIn = document.getElementById("schwarz-F") as HTMLInputElement | null;
     const polesIn = document.getElementById("schwarz-poles") as HTMLTextAreaElement | null;
-    const genBtn = document.getElementById("schwarz-generate");
-    const cancelBtn = document.getElementById("schwarz-cancel");
+    const genBtn = document.getElementById("schwarz-generate"); // in-pane → re-render the edited φ
     const errBox = document.getElementById("schwarz-error");
-    if (openBtn && panel && presetSel && cIn && fIn && polesIn && genBtn && cancelBtn && errBox) {
+    if (openBtn && exitBtn && presetSel && cIn && fIn && polesIn && genBtn && errBox) {
       // Populate the preset dropdown (the leading "Custom…" option is already in the HTML).
       for (const p of SCHWARZ_PRESETS) {
         const opt = document.createElement("option");
@@ -3132,30 +3131,30 @@ function init(): void {
         fIn.value = p.F;
         polesIn.value = p.poles;
       };
-      // Start on the deltoid so the form opens showing a working example (single source: SCHWARZ_PRESETS).
+      // Start on the deltoid so the pane opens showing a working example (single source: SCHWARZ_PRESETS).
       presetSel.value = "deltoid";
       fill("deltoid");
-      openBtn.addEventListener("click", () => {
-        panel.hidden = !panel.hidden;
+      // Build φ from the fields and render — entering σ mode (renderSchwarzFromPhi → enterSchwarz shows the
+      // pane). Show the pane first regardless, so a validation error lands on the now-visible error line.
+      const generate = (): void => {
+        document.querySelector(".workspace")?.classList.add("schwarz-active");
+        try {
+          renderSchwarzFromPhi(buildSchwarzPhi({ c: cIn.value, F: fIn.value, poles: polesIn.value }));
+          setError(null);
+        } catch (err) {
+          setError((err as Error).message); // buildSchwarzPhi's messages are written for this line
+        }
+      };
+      openBtn.addEventListener("click", generate); // sidebar entry → open σ + render the current φ (deltoid)
+      genBtn.addEventListener("click", generate); // in-pane "Generate σ" → re-render the edited φ (stays in σ)
+      exitBtn.addEventListener("click", () => {
+        exitSchwarzView();
         setError(null);
       });
       presetSel.addEventListener("change", () => {
         if (presetSel.value) {
           fill(presetSel.value);
           setError(null);
-        }
-      });
-      cancelBtn.addEventListener("click", () => {
-        panel.hidden = true;
-        setError(null);
-      });
-      genBtn.addEventListener("click", () => {
-        try {
-          renderSchwarzFromPhi(buildSchwarzPhi({ c: cIn.value, F: fIn.value, poles: polesIn.value }));
-          setError(null);
-          panel.hidden = true;
-        } catch (err) {
-          setError((err as Error).message); // buildSchwarzPhi's messages are written for this line
         }
       });
       // Hand-editing any field makes it a "Custom…" map (programmatic fill() does not fire 'input').
@@ -3196,9 +3195,10 @@ function init(): void {
         showToast(`Imported a ${env.kind}, but σ reconstruction isn't supported for this map: ${(err as Error).message}`, "info");
         return true;
       }
-      showToast(`Reconstructed the Schwarz reflection σ from ${env.provenance.app} (≈, CPU — click the plot to dismiss).`, "info");
+      showToast(`Reconstructed the Schwarz reflection σ from ${env.provenance.app} — opened the σ view (≈).`, "info");
       return true;
     }
+    exitSchwarzView(); // importing a standard (non-σ) map returns from the σ peer view to the plots
     const st = readFullState();
     st.inpf = mapSpecToExpr(spec);
     applyFullState(st);

@@ -444,14 +444,45 @@ h2 {
   display: none;
 }
 
-/* σ (Schwarz reflection) reconstruction view (S4a; interactive GPU render S4b-ii/iii): a raster layered
-   over the dynamical plot (reuses .overlay positioning — a square stack, so the square σ buffer isn't
-   distorted), with a top-left ≈-badge. Shown for an imported schwarz recipe; drag to pan, scroll to
-   zoom, Esc to dismiss. */
-.canvas-stack > .schwarz-view {
-  z-index: 4; /* above the GL canvas + interaction overlay while shown */
-  cursor: grab;
+/* σ (Schwarz reflection) — a FIRST-CLASS PEER VIEW (ADR-0009): its own #schwarz-plot section alongside
+   the Parameter and Dynamical planes, shown only in σ mode (the .workspace.schwarz-active class — entered
+   from the sidebar "Schwarz reflection σ…" button or an import, left via the pane's ↩ button or Esc).
+   Modeled on the per-plot `expand` layout, but active at all widths (σ is a mode, not a desktop toggle). */
+#schwarz-plot {
+  display: none; /* shown only in σ mode */
+}
+.workspace.schwarz-active #param-plot,
+.workspace.schwarz-active #dyn-plot,
+.workspace.schwarz-active .controls-pane {
+  display: none;
+}
+.workspace.schwarz-active #schwarz-plot {
+  display: block;
+}
+.workspace.schwarz-active,
+.workspace.schwarz-active .plots {
+  grid-template-columns: 1fr; /* single column — σ fills the plots area */
+}
+.workspace.schwarz-active .canvas-stack {
+  display: block;
+  width: 100%;
+  min-width: 240px;
+  max-width: 100%;
+}
+.workspace.schwarz-active .canvas-stack > canvas {
+  width: 100% !important;
+  height: auto;
+}
+/* The σ raster is the pane's PRIMARY canvas now (it used to be an .overlay on the dynamical plot). A 2D
+   canvas onto which the GPU render is drawImage-d; interactive — drag to pan, wheel to zoom. */
+.schwarz-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
   background: #0e1117;
+  border-radius: var(--radius);
+  cursor: grab;
+  touch-action: none; /* pan/zoom gestures reach our handlers, not the page */
 }
 .canvas-stack > .schwarz-label {
   position: absolute;

@@ -659,8 +659,11 @@ one QD already validated for σ, so it is low-risk in design even though it is r
   it shares CD's foundation, and Option C's reuse cost would still apply.
 
 ### Action Items
-1. [ ] Refactor σ from a transient overlay into a peer view/mode — its own pane + controls section + a
-       persistent lifecycle (not dismissed by unrelated control changes).
+1. [x] Refactor σ from a transient overlay into a peer view/mode — its own pane + controls section + a
+       persistent lifecycle (not dismissed by unrelated control changes). Done: a third `#schwarz-plot`
+       `.plot` section inside `main.plots`, entered/left via a `.workspace.schwarz-active` mode class
+       (modeled on the per-plot `expand` layout); the σ canvas + φ builder moved into it; the
+       control-apply dismissal coupling removed. Verified in the built app (Playwright mode switch).
 2. [ ] Serialize σ-view state (φ recipe + view + coloring) into share links / saved views / PNG metadata.
 3. [ ] Bring the generic parity features into the σ controls section (colormaps + scale modes, orbit
        inspection, legend + scale bar, precise nav), reusing CD's field-agnostic machinery.

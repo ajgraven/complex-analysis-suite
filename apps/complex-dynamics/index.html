@@ -373,10 +373,6 @@ abs(z)>2</textarea
                   role="application"
                   aria-label="Dynamical plane — interactive fractal plot. Arrow keys pan; the + and − keys zoom; drag (or press Enter) to set the orbit start z₀ to the view centre and inspect it."
                 ></canvas>
-                <canvas id="JCSSchwarz" class="overlay schwarz-view" aria-hidden="true" hidden></canvas>
-                <div id="dyn-schwarz-label" class="schwarz-label" hidden>
-                  Schwarz reflection σ (≈)
-                </div>
                 <div id="dyn-legend" class="plot-legend" aria-hidden="true"></div>
                 <div
                   id="dyn-suggestion"
@@ -504,6 +500,49 @@ abs(z)>2</textarea
                     </button>
                   </div>
                 </details>
+              </div>
+            </section>
+            <!-- ================ Schwarz reflection (σ) — first-class peer view (ADR-0009) ======= -->
+            <section class="plot" id="schwarz-plot" aria-labelledby="schwarz-heading">
+              <h2 id="schwarz-heading">Schwarz Reflection σ</h2>
+              <button
+                id="schwarz-exit"
+                type="button"
+                class="expand-btn"
+                title="Return to the Parameter &amp; Dynamical plots (Esc)"
+              >
+                ↩ back to plots
+              </button>
+              <div class="canvas-stack">
+                <canvas
+                  id="JCSSchwarz"
+                  class="schwarz-canvas"
+                  tabindex="0"
+                  role="application"
+                  aria-label="Schwarz reflection σ — interactive plot. Drag to pan, the scroll wheel zooms, Esc exits."
+                ></canvas>
+                <div id="dyn-schwarz-label" class="schwarz-label">Schwarz reflection σ (≈)</div>
+              </div>
+              <div class="controls">
+                <div class="field schwarz-builder" id="schwarz-builder">
+                  <label for="schwarz-preset">Riemann map φ preset</label>
+                  <select
+                    id="schwarz-preset"
+                    title="Start from a known map, or choose Custom… and enter your own φ."
+                  >
+                    <option value="">Custom…</option>
+                  </select>
+                  <label for="schwarz-c">c — leading coefficient (real)</label>
+                  <input id="schwarz-c" type="text" inputmode="decimal" spellcheck="false" value="1" />
+                  <label for="schwarz-F">F — Laurent coeffs (const, 1/z, 1/z², …)</label>
+                  <input id="schwarz-F" type="text" spellcheck="false" placeholder="0, 0, 0.5" />
+                  <label for="schwarz-poles">Poles — one per line: z ; A₁, A₂, …</label>
+                  <textarea id="schwarz-poles" rows="2" spellcheck="false" placeholder="0.3 ; 0.4"></textarea>
+                  <div class="schwarz-builder-actions">
+                    <button id="schwarz-generate" type="button">Generate σ</button>
+                  </div>
+                  <div id="schwarz-error" class="input-errors" role="alert" hidden></div>
+                </div>
               </div>
             </section>
           </main>
@@ -689,30 +728,10 @@ z^2+c</textarea
                 <button
                   id="schwarz-open"
                   type="button"
-                  title="Generate a Schwarz-reflection σ fractal from a Riemann map φ — a preset or a custom map."
+                  title="Open the Schwarz-reflection σ view — a first-class peer plane where you generate a σ fractal from a Riemann map φ (a preset or a custom map)."
                 >
                   Schwarz reflection σ…
                 </button>
-              </div>
-              <div class="field schwarz-builder" id="schwarz-builder" hidden>
-                <label for="schwarz-preset">Riemann map φ preset</label>
-                <select
-                  id="schwarz-preset"
-                  title="Start from a known map, or choose Custom… and enter your own φ."
-                >
-                  <option value="">Custom…</option>
-                </select>
-                <label for="schwarz-c">c — leading coefficient (real)</label>
-                <input id="schwarz-c" type="text" inputmode="decimal" spellcheck="false" value="1" />
-                <label for="schwarz-F">F — Laurent coeffs (const, 1/z, 1/z², …)</label>
-                <input id="schwarz-F" type="text" spellcheck="false" placeholder="0, 0, 0.5" />
-                <label for="schwarz-poles">Poles — one per line: z ; A₁, A₂, …</label>
-                <textarea id="schwarz-poles" rows="2" spellcheck="false" placeholder="0.3 ; 0.4"></textarea>
-                <div class="schwarz-builder-actions">
-                  <button id="schwarz-generate" type="button">Generate σ</button>
-                  <button id="schwarz-cancel" type="button" class="secondary">Cancel</button>
-                </div>
-                <div id="schwarz-error" class="input-errors" role="alert" hidden></div>
               </div>
               <div class="field" id="param-a-field" hidden>
                 <label for="param-a">a = <span id="param-a-value">1.00</span></label>

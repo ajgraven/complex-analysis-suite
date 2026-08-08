@@ -1618,3 +1618,20 @@
   console errors. Green: typecheck / lint / test **2325 / 273** (+12 node: φ-form; +1 file), build. This
   closes the native σ feature end to end: **lift (S4b-i) → GPU render (ii) → interactive (iii) → native φ
   entry (iv)**. Remaining are enhancements: σ orbit inspection + a σ-view permalink (deferred).
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (ADR-0009 R1 — σ is a first-class peer view):**
+  **the Schwarz-reflection σ is no longer a transient overlay on the Dynamical plane — it is its own peer
+  view/mode** (ADR-0009 action item 1), alongside Parameter Space and Dynamical Plane. A third
+  `#schwarz-plot` `.plot` section (inside `main.plots`) now holds the σ canvas + its OWN controls (the φ
+  builder moved here, plus a "↩ back to plots" exit); σ mode is a `.workspace.schwarz-active` class modeled
+  on the per-plot `expand` layout (hides the two plots + the sidebar and single-columns the σ pane), active
+  at all widths. LIFECYCLE: the control-apply → dismiss coupling is **gone** — σ persists across control
+  applies; you enter via the sidebar "Schwarz reflection σ…" button (or a σ import) and leave via the pane's
+  ↩ / Esc (or by importing a non-σ map, which `importInterchange` now exits σ for). `#JCSSchwarz` restyled
+  from an `.overlay` to the pane's primary canvas. NET: a structural guard (`test/schwarzPeerView.test.ts`)
+  pins σ-as-peer-section (canvas + builder + exit INSIDE `#schwarz-plot`, NOT `#dyn-plot`); appState's
+  DOM-coverage guard stays green (the moved builder fields remain opted out as one-shot tool inputs).
+  VERIFIED in the BUILT app (Playwright): on load, the two standard plots; open → the σ pane replaces them
+  (deltoid, 512² GPU); an in-pane preset-switch + regenerate stays in σ mode; both ↩ and Esc return to the
+  plots; no console errors. Green: typecheck / lint / test, build. **ADR-0009 action item 1 done**;
+  remaining: σ-view state serialization (permalink / saved views) + folding the generic parity features
+  (colormaps + scale modes, orbit inspection, legend) into the σ controls section.
