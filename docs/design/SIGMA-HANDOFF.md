@@ -347,9 +347,38 @@ byte-match, CD reconstruct → the frozen σ(w₀)=2/3, vs the pole-free 1/3). S
 | S3a | `@cas/interchange`: add `form:"schwarz"` + `isMapSpec` case + caps + deltoid σ golden + minor VERSION | ✅ **#238** |
 | S3b | QD export: `schwarz-reflection` envelope + "Export **σ**" button **alongside** φ (token granted) | ✅ **#239** |
 | S4a | **CD reconstructs + renders deltoid σ (CPU)** via `@cas/schwarz`; end-to-end ground truth; `≈` labeling | ✅ **#240 + #241** |
+| S4b-i | **`@cas/schwarz/gpu`**: lift QD's `FRAG_SRC` σ evaluator (the unbounded-Laurent + branches family only, per ADR-0007) into shared GLSL + a **CPU↔GPU parity net** (browser WebGL2; max \|GPU−CPU\| = 1.9e-7, float32 ε) | ✅ **engine lifted** |
+| S4b-ii | **CD GPU σ render**: compose the lifted GLSL + a `@cas/gpu/mask` Ω-mask into CD's escape shader; render on GPU (offscreen → drawImage onto #JCSSchwarz), CPU fallback intact; visual parity with the CPU render | ✅ **GPU render live** |
+| S4b-iii | **Interactive σ view**: drag-pan / wheel-zoom the reconstructed σ, GPU-rendered live (offscreen → #JCSSchwarz); Esc / control-change exits; pure, unit-tested pan/zoom math | ✅ **interactive** |
+| S4b-iv | **Native φ entry**: a "Schwarz reflection σ…" builder — a preset picker (Deltoid, Ellipse, Single exterior pole) + a custom-φ form (c, Laurent F, poles "z ; A₁, A₂, …"); pure, unit-tested parse/validate; Generate → the interactive GPU σ view. So a σ fractal is GENERATED in CD from a Riemann map, not only imported | ✅ **native φ → σ** |
 
-**Deferred to separate approvals:** S4b (CD GPU σ — port QD's `FRAG_SRC` GLSL), S5 (non-Laurent families
-on the wire, branch-aware continuation through cusps [uncertified — RISKS §3], df64 σ, PQD GPU αth-root).
+**Native σ in CD is complete end to end** — lift (S4b-i) → GPU render (ii) → interactive (iii) → native φ
+entry (iv).
+
+**Target shape — [ADR-0009](../DECISIONS.md#adr-0009-schwarz-reflection-is-a-first-class-peer-view-in-complex-dynamics): REALIZED (items 1–3).**
+σ is now a **first-class peer view** in Complex Dynamics — its own `#schwarz-plot` pane + controls section +
+persistent lifecycle + serializable state (share links / saved views / PNG metadata) — alongside Parameter
+Space and Dynamical Plane. This **supersedes the transient S4a overlay**: S4a-2's render onto `#JCSSchwarz`
+as an `.overlay` on the Dynamical plane was the ground-truth stepping-stone; the **peer view is the shipped
+shape** (the σ canvas is now that pane's primary canvas, entered/left as a mode, not dismissed by unrelated
+control changes). A parity review (against CD's Dynamical plane + QD's mature σ tool) sorted CD's power
+features into **generic** (reusable for σ — all now built on the peer view: colormaps + scale modes, legend,
+scale bar, orbit inspection, precise nav, share/saved views, PNG export) and **map-specific** (rays, Böttcher,
+matings, Julia-set properties, Yoccoz, laminations, the inspector's period/multiplier/nucleus math —
+**inapplicable to σ, and explicitly out of scope for σ by nature**).
+
+**Built on the peer-view refactor — ADR-0009 DONE (items 1–3):** the **peer-view/mode** refactor (item 1 —
+its own pane + controls + a `.workspace.schwarz-active` mode, the control-apply dismissal coupling removed);
+σ **coloring** (item 3 — a colormap picker + escape-time scale modes, rebuilt on the shared `@cas/gpu`
+colormap texture, not CD's byte-frozen palette GLSL); σ **orbit inspection** (item 3 — click a w to trace its
+σ-orbit, drawn over the field in CD's orbit-preview idiom); the **legend + scale bar + precise nav** (item 3
+— reusing the standard plots' `legend-*` CSS and `drawScaleBar`); and σ-**view serialization** (item 2 —
+share link + saved views + a PNG-embedded `cdjs:state`, all via a hostile-link-hard `_sigma` codec that
+layers onto the `AppState` like `_z0`/`_grad`/`_proj`). Only **ADR-0009 item 4** — this doc update — remained,
+and it is now done. **Still deferred — S5:** non-Laurent families on the wire (bounded / LQD / PQD),
+branch-aware continuation through cusps (uncertified — RISKS §3), df64 σ deep-zoom, and the PQD GPU αth-root.
+(A true cardioid needs a bounded/positive-power map, not this unbounded-Laurent family, so it is intentionally
+not offered as a preset — honest labeling.)
 
 ### Highest-risk step
 **S2d** — QD's entire Schwarz UI (`schwarz-ui/paint/render/interaction/forward`) reads `QD.Schwarz`'s exact

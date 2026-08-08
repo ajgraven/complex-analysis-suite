@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { makeUnboundedLaurentSchwarz } from "@cas/schwarz";
-import { pixelToPlot, renderSchwarzField, schwarzBoundaryPoly, schwarzEscapeAt } from "../src/render/schwarzView";
+import {
+  pixelToPlot,
+  renderSchwarzField,
+  schwarzBoundaryPoly,
+  schwarzEscapeAt,
+  uvToPlotFrac,
+  panSchwarzView,
+  zoomSchwarzView,
+  parseSchwarzViewInput,
+  formatSchwarzViewFields,
+  SCHWARZ_ZOOM_MIN,
+  SCHWARZ_ZOOM_MAX,
+  type SchwarzView,
+} from "../src/render/schwarzView";
 
 // The deltoid σ engine — ground truth φ(z) = z + 1/(2z²) (c = 1, F = [0,0,½]); Ω is the exterior of K.
 const engine = makeUnboundedLaurentSchwarz(1, [
@@ -45,6 +58,42 @@ describe("Schwarz σ CPU render (S4a-2)", () => {
 // renderSchwarzField (escape under the branch-aware σ) with no special-casing. Smoke test that a
 // single-exterior-pole engine yields a finite boundary + a structured, opaque field, so a pole-bearing σ
 // hand-off paints in CD exactly like the deltoid.
+// Precise navigation (ADR-0009 item 3): the parse/format pair the σ pane's centre/zoom fields use.
+describe("parseSchwarzViewInput / formatSchwarzViewFields", () => {
+  const FALLBACK: SchwarzView = { center: [0, 0], zoom: 0.4 };
+
+  it("parses well-formed fields into a view", () => {
+    expect(parseSchwarzViewInput("1.5", "-2", "3", FALLBACK)).toEqual({ center: [1.5, -2], zoom: 3 });
+  });
+
+  it("keeps the fallback component for an unparseable field (never NaN)", () => {
+    const v = parseSchwarzViewInput("abc", "", "xyz", { center: [7, 8], zoom: 0.9 });
+    expect(v).toEqual({ center: [7, 8], zoom: 0.9 });
+  });
+
+  it("clamps zoom to [SCHWARZ_ZOOM_MIN, SCHWARZ_ZOOM_MAX]", () => {
+    expect(parseSchwarzViewInput("0", "0", "0", FALLBACK).zoom).toBe(SCHWARZ_ZOOM_MIN); // 0 → min
+    expect(parseSchwarzViewInput("0", "0", "1e12", FALLBACK).zoom).toBe(SCHWARZ_ZOOM_MAX); // huge → max
+    expect(parseSchwarzViewInput("0", "0", "-5", FALLBACK).zoom).toBe(SCHWARZ_ZOOM_MIN); // negative → min
+  });
+
+  it("round-trips a view through format → parse (to display precision)", () => {
+    const view: SchwarzView = { center: [-0.734921, 1.208143], zoom: 12.5 };
+    const f = formatSchwarzViewFields(view);
+    const back = parseSchwarzViewInput(f.re, f.im, f.zoom, FALLBACK);
+    expect(back.center[0]).toBeCloseTo(view.center[0], 4);
+    expect(back.center[1]).toBeCloseTo(view.center[1], 4);
+    expect(back.zoom).toBeCloseTo(view.zoom, 4);
+  });
+
+  it("formats to compact 6-significant-figure strings (no float noise)", () => {
+    const f = formatSchwarzViewFields({ center: [0.1 + 0.2, 0], zoom: 0.4 });
+    expect(f.re).toBe("0.3"); // 0.30000000000000004 → "0.3"
+    expect(f.im).toBe("0");
+    expect(f.zoom).toBe("0.4");
+  });
+});
+
 describe("Schwarz σ CPU render — pole-bearing engine (Phase 2)", () => {
   const poleEngine = makeUnboundedLaurentSchwarz(1, [], [{ z: [0.2, 0], A: [[0.3, 0]] }]);
   const polePoly = schwarzBoundaryPoly(poleEngine);
@@ -67,5 +116,48 @@ describe("Schwarz σ CPU render — pole-bearing engine (Phase 2)", () => {
     const colors = new Set<string>();
     for (let i = 0; i < buf.length; i += 4) colors.add(`${buf[i]},${buf[i + 1]},${buf[i + 2]}`);
     expect(colors.size).toBeGreaterThan(1); // structure, not a flat fill
+  });
+});
+
+// Interactive pan/zoom view math (S4b-iii): the pure core of the σ view's drag-pan and wheel-zoom.
+describe("Schwarz σ interactive view math", () => {
+  const view = { center: [0, 0] as [number, number], zoom: 0.4 }; // [-2.5, 2.5]²
+
+  it("uvToPlotFrac spans the window with +Im up (top-left = −2.5+2.5i, bottom-right = 2.5−2.5i)", () => {
+    expect(uvToPlotFrac(view, 0.5, 0.5)).toEqual([0, 0]); // center
+    const tl = uvToPlotFrac(view, 0, 0);
+    expect(tl[0]).toBeCloseTo(-2.5, 9);
+    expect(tl[1]).toBeCloseTo(2.5, 9); // top ⇒ +Im
+    const br = uvToPlotFrac(view, 1, 1);
+    expect(br[0]).toBeCloseTo(2.5, 9);
+    expect(br[1]).toBeCloseTo(-2.5, 9);
+  });
+
+  it("zoom about the center only scales zoom; the center is unmoved", () => {
+    const z = zoomSchwarzView(view, 2, [0.5, 0.5]);
+    expect(z.zoom).toBeCloseTo(0.8, 9);
+    expect(z.center[0]).toBeCloseTo(0, 9);
+    expect(z.center[1]).toBeCloseTo(0, 9);
+  });
+
+  it("zoom about a corner keeps that corner's plot point pinned under the cursor", () => {
+    const anchorUv: [number, number] = [0, 0]; // top-left
+    const before = uvToPlotFrac(view, ...anchorUv);
+    const z = zoomSchwarzView(view, 2, anchorUv);
+    const after = uvToPlotFrac(z, ...anchorUv);
+    expect(after[0]).toBeCloseTo(before[0], 9);
+    expect(after[1]).toBeCloseTo(before[1], 9);
+    expect(z.zoom).toBeCloseTo(0.8, 9); // still zoomed in
+  });
+
+  it("pan makes the plot point grabbed at fromUv follow to toUv (zoom unchanged)", () => {
+    const from: [number, number] = [0.5, 0.5];
+    const to: [number, number] = [0.6, 0.5];
+    const grabbed = uvToPlotFrac(view, ...from);
+    const p = panSchwarzView(view, from, to);
+    expect(p.zoom).toBe(view.zoom);
+    const nowUnderTo = uvToPlotFrac(p, ...to);
+    expect(nowUnderTo[0]).toBeCloseTo(grabbed[0], 9);
+    expect(nowUnderTo[1]).toBeCloseTo(grabbed[1], 9);
   });
 });

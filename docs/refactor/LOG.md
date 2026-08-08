@@ -1540,3 +1540,225 @@
   engine paints via the same `schwarzBoundaryPoly`/`renderSchwarzField` (smoke-tested); SIGMA-HANDOFF/ISSUES
   updated. Green bar: typecheck/lint/test **2299 / 270** (+17 tests). Still deferred: complex leading c, the
   non-Laurent families (bounded/LQD/PQD — S2b–d), GPU σ (S4b), df64 deep-zoom.
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (S4b-i — GPU σ evaluator + CPU-parity net):**
+  **the first half of S4b: QD's hand-written σ fragment shader is now a shared `@cas/schwarz/gpu` GLSL module
+  with a proven CPU↔GPU parity net.** Foundation for native interactive σ in CD; nothing in an app imports it
+  yet (the CD render swap is S4b-ii). Two increments:
+  **(I0) `@cas/schwarz/gpu` homed** — new `src/gpu/` on `@cas/gpu` (`workspace:*`; dep-cruiser accepts the edge
+  — acyclic, downward, the second package↔package edge after gpu→expr). `./gpu` export subpath; a
+  `vitest.browser.config.ts` + `test:browser` script mirroring `@cas/gpu`, appended to the root `test:browser`
+  chain (CI's `browser` job runs it).
+  **(I1) σ GLSL lifted + parity proven** — `sigma.glsl.ts` lifts QD's `FRAG_SRC` σ evaluator
+  (branchPhi/branchSchwarz/evalPhi/evalPhiDeriv/evalF/invertPhi/newtonSeedFresh/acceptZ/sigma) as reusable
+  GLSL strings, **specialized to the ONE family CD reconstructs** — the unbounded-Laurent map with finite-pole
+  branches (`makeUnboundedLaurentSchwarz`). QD's other five families (bounded/LQD/singular/β) have no CD
+  consumer, so per **ADR-0007** they stay in QD's app-local shader; the `u_family` dispatch is specialized away
+  (no `u_w0`/`cexp`/`blaschke`, unbounded-only seeding/acceptance). The **EPS-guarded** complex ops are kept
+  local (deliberately NOT `@cas/gpu`'s `COMPLEX_SINGLE_GLSL`, which lacks `cinv` and the pole guard) — the same
+  pole-safety reason QD keeps them, documented in-file. `probe.ts`: `packPhi` (φ → fixed-size cap-checked
+  uniforms), `uploadPhi`, and `runSigmaGLSL` (RGBA32F readback) — the `@cas/gpu` `dualBackend.ts` split.
+  NET: a **node** structural guard pins the specialized cut (asserts the family-1 math is present and NONE of
+  QD's other-family vocabulary rode along) + `packPhi` byte-correctness; a **browser** numeric harness (real
+  WebGL2 / SwiftShader) proves **GPU σ(w) = CPU σ(w)** at round-trip samples w = φ(z₀) across the deltoid + a
+  single-pole, a complex order-2 pole, and a two-branch domain — **measured max \|GPU−CPU\| = 1.9e-7**
+  (float32 ε; matches `@cas/gpu`'s 1.5e-7 dual-backend figure), plus σ=null for a point in the hole K. Green
+  bar: typecheck / lint(+dep:check) / test **2305 / 271** (+6 node tests, +1 file), build, browser σ-parity
+  6/6. Next: **S4b-ii** composes this GLSL into CD's escape-time shader and swaps the CPU putImageData σ raster.
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (S4b-ii — CD's σ render is now GPU):**
+  **CD paints the reconstructed σ escape-time field on the GPU**; the CPU `putImageData` raster is now a
+  fallback. Two increments:
+  **(I2a) `@cas/gpu/mask`** — extracted a polygon→R8 mask-texture primitive (`buildPolygonMaskTexture` + the
+  pure `polygonMaskFrame` sampling geometry). CD's σ renderer is the SECOND consumer of what QD's
+  `schwarz-webgl buildMaskTexture` does, so per **ADR-0007** it becomes a `@cas/gpu` primitive; QD's entangled
+  copy (it carries QD-specific phiState) is left in place per the **ADR-0008** precedent — migrating it is a
+  separate, reviewable change (noted in ISSUES). Node-tests the frame math; the GL upload is exercised by CD's
+  browser render + shader-compile gate.
+  **(I2b) CD σ GPU renderer** (`src/render/schwarzGL.ts`) — composes the lifted σ evaluator GLSL
+  (`@cas/schwarz/gpu`) with CD's OWN view→w mapping, Ω mask (in Ω ⟺ outside K), escape loop, and palette —
+  every classification/color mirrored from `schwarzView.ts` so GPU ≈ CPU. It renders to a PRIVATE offscreen
+  WebGL2 canvas; `renderSchwarzView` `drawImage`s that onto the existing 2D `#JCSSchwarz`, so the
+  DOM / dismiss / label path AND the CPU fallback are untouched — the GPU is only a faster pixel source.
+  `renderSchwarzView(spec)` now reconstructs the engine (CPU fallback + boundary poly) + φ (GPU uniforms, via
+  a shared `schwarzPhiFromMapSpec`), tries GPU, falls back to CPU on any failure, and labels the mode
+  ("≈, GPU" / "≈, CPU"). NET: the σ shader joins CD's browser SHADER-COMPILE gate; a browser render test
+  proves the whole pipeline (deltoid opaque + structured + the exact K-base color; a pole-bearing domain
+  structured). VISUAL: three REAL solved pole-bearing σ links (single-pole ×2, two-pole) rendered in the
+  BUILT app via GPU are structurally identical to the CPU renders — K interior exact `[30,60,140]`; only
+  **55 / 65536 px (0.08%)** differ, as float32 boundary `invalid` speckle (the honest ≈ tradeoff, matching
+  QD's own GPU σ). Green: typecheck / lint(+dep:check) / test **2309 / 272** (+4 node: mask frame math), build,
+  CD browser **14/14**. Next: **S4b-iii** makes the σ view interactive (pan/zoom/pinch via PlotView) + adds the
+  native φ preset/custom UI.
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (S4b-iii — the σ view is interactive):**
+  **the reconstructed σ view now pans and zooms like a standard fractal**, GPU-rendered live. Was a fixed
+  [-2.5,2.5]² static overlay dismissed on click; now: **drag to pan, scroll to zoom** (about the cursor), **Esc**
+  (or any control change) to exit. `renderSchwarzView` became a **session** — it stores the reconstructed
+  engine / φ / boundary once (`schwarzSession`) and repaints at the current `schwarzView` on each gesture,
+  rAF-coalesced. GPU mode paints a crisp 512² in one pass; the CPU fallback stays 256² so pan/zoom is
+  responsive. The pan/zoom math is pure + exported (`uvToPlotFrac` / `panSchwarzView` / `zoomSchwarzView` in
+  `render/schwarzView.ts`) and unit-tested (the grabbed point follows the cursor; a corner-anchored zoom pins
+  that point; a center zoom leaves the center fixed). VERIFIED in the BUILT app (Playwright drag + wheel + Esc):
+  GPU label + interaction hint, the view pans and zooms in (the K oval magnifies), Esc hides the canvas, no
+  console errors. Green: typecheck / lint / test **2309 / 272** (+4 node: view math), build. Next: **S4b-iv** —
+  the native φ entry (a preset picker + a custom-φ input form: c, Laurent F, poles A_j at z_j), so a σ fractal
+  can be GENERATED in CD from a Riemann map, not only imported.
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (S4b-iv — native φ → σ in CD):**
+  **CD now GENERATES a Schwarz-reflection σ fractal from a Riemann map φ**, not only from an imported link —
+  the headline of native σ support. A "Schwarz reflection σ…" button opens a compact builder: a **preset
+  picker** (Deltoid, Ellipse, Single exterior pole) + a **custom-φ form** (leading c, Laurent F, finite-pole
+  branches as "z ; A₁, A₂, …" lines). "Generate σ" builds the φ coefficients and enters the interactive GPU
+  σ view (S4b-ii/iii). The φ-form parsing + validation is a PURE module (`render/schwarzPhiForm.ts`:
+  `parseComplex` / `parseComplexList` / `parsePoles` / `buildSchwarzPhi` + `SCHWARZ_PRESETS`), unit-tested
+  (12 cases: complex-literal spellings, `z ; A` pole lines, |z_j|<1 + real-c + non-trivial-boundary
+  validation, every preset builds). `main.ts` factors the σ entry into a shared `enterSchwarz(engine, phi)`
+  used by BOTH the import path (`renderSchwarzView`) and the native path (`renderSchwarzFromPhi`). The 4 form
+  fields are opted out of `SHARE_IDS` as one-shot tool inputs (a σ-view permalink is deferred) — appState's
+  DOM-coverage guard pinned that decision. VERIFIED in the BUILT app (Playwright): open → prefilled deltoid →
+  Generate → the classic 3-cusp deltoid σ tiling (512² GPU, 32 colors); switch to single-pole → fields update
+  → Generate → the pole domain; empty c → the error line "enter a leading coefficient c" with no σ shown; no
+  console errors. Green: typecheck / lint / test **2325 / 273** (+12 node: φ-form; +1 file), build. This
+  closes the native σ feature end to end: **lift (S4b-i) → GPU render (ii) → interactive (iii) → native φ
+  entry (iv)**. Remaining are enhancements: σ orbit inspection + a σ-view permalink (deferred).
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (ADR-0009 R1 — σ is a first-class peer view):**
+  **the Schwarz-reflection σ is no longer a transient overlay on the Dynamical plane — it is its own peer
+  view/mode** (ADR-0009 action item 1), alongside Parameter Space and Dynamical Plane. A third
+  `#schwarz-plot` `.plot` section (inside `main.plots`) now holds the σ canvas + its OWN controls (the φ
+  builder moved here, plus a "↩ back to plots" exit); σ mode is a `.workspace.schwarz-active` class modeled
+  on the per-plot `expand` layout (hides the two plots + the sidebar and single-columns the σ pane), active
+  at all widths. LIFECYCLE: the control-apply → dismiss coupling is **gone** — σ persists across control
+  applies; you enter via the sidebar "Schwarz reflection σ…" button (or a σ import) and leave via the pane's
+  ↩ / Esc (or by importing a non-σ map, which `importInterchange` now exits σ for). `#JCSSchwarz` restyled
+  from an `.overlay` to the pane's primary canvas. NET: a structural guard (`test/schwarzPeerView.test.ts`)
+  pins σ-as-peer-section (canvas + builder + exit INSIDE `#schwarz-plot`, NOT `#dyn-plot`); appState's
+  DOM-coverage guard stays green (the moved builder fields remain opted out as one-shot tool inputs).
+  VERIFIED in the BUILT app (Playwright): on load, the two standard plots; open → the σ pane replaces them
+  (deltoid, 512² GPU); an in-pane preset-switch + regenerate stays in σ mode; both ↩ and Esc return to the
+  plots; no console errors. Green: typecheck / lint / test, build. **ADR-0009 action item 1 done**;
+  remaining: σ-view state serialization (permalink / saved views) + folding the generic parity features
+  (colormaps + scale modes, orbit inspection, legend) into the σ controls section.
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (ADR-0009 R2 — σ colormaps + scale modes):**
+  **the σ pane gets coloring parity with the standard fractals** (ADR-0009 action item 3, first slice): a
+  **colormap picker** (viridis / magma / inferno / plasma / cividis / Turbo / grayscale) and an
+  **escape-time scale mode** (linear / log / sqrt / discrete / cyclic), both in the σ controls section. σ
+  now colors its escape count `n` through the shared **`@cas/gpu` colormap texture** — the field-agnostic
+  ramp-building primitive the feature review told us to reuse — NOT CD's byte-frozen procedural-palette
+  GLSL. The shader (`render/schwarzGL.ts`) grows `u_colormap` (a 256×1 ramp, bound on TEXTURE1),
+  `u_scaleMode` + `u_modK`, and a `computeT(n)` that mirrors QD's σ re-keyed to CD's scale ids; a
+  `setColormap(name)` rebuilds the ramp on demand. The palette DATA is app-local
+  (`render/schwarzColormaps.ts`: the matplotlib ramps QD's σ already ships), matching the
+  `@cas/gpu/colormap` header's fits-vs-stop-tables split — the picker names overlap CD's standard palettes
+  so it reads consistently. `main.ts` persists the choice per-device and repaints (rAF-coalesced) on
+  change; the two `<select>`s are opted out of `SHARE_IDS` (a σ-view permalink is deferred — same rule as
+  the standard `palette`), pinned by appState's DOM-coverage guard. NET: a node test
+  (`test/schwarzColormaps.test.ts`, 12 cases) pins the palette tables (valid ramps, working fallback,
+  scale ids contiguous with the shader) and the browser test (`test/schwarzGL.browser.test.ts`) is now
+  **colormap-aware** — the K-interior center pixel tracks the chosen ramp's t=0 end (viridis `[68,1,84]` →
+  turbo → grayscale `[0,0,0]`), the whole frame moves on a colormap switch, and linear vs sqrt recolor the
+  n≥1 band. VERIFIED in the BUILT app (Playwright): open σ → deltoid tiling in viridis (48% chromatic) →
+  switch to grayscale → same tiling, fully achromatic (0% chroma) → switch scale to sqrt → repaints, no
+  console errors; both selects populate from the tables (7 colormaps, 5 scale modes). Green: typecheck /
+  lint / test **2340 / 275** (+12 node: colormaps; +1 file) + the 5-test σ browser suite in real WebGL2,
+  build. **ADR-0009 action item 3: colormaps + scale modes done**; remaining in item 3: orbit inspection,
+  legend + scale bar, precise nav.
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (ADR-0009 R3 — σ orbit inspection):**
+  **clicking the σ pane now traces that point's σ-orbit** (ADR-0009 item 3, orbit inspection — parity with
+  the Dynamical plane's point inspector, which is hidden in σ mode). A click (disambiguated from the pan-
+  drag by a 4px travel threshold) computes the orbit w₀ → σ(w₀) → σ²(w₀) → … and draws it over the field:
+  a polyline + per-iterate dots + a ringed w₀ marker, coloured by fate in CD's own orbit-preview idiom
+  (`render/orbitPreview.ts`): green enters K, orange escapes → ∞, violet lingers (non-escaping), gray
+  inverse-failed. A σ-pane readout names the fate honestly (σ is `≈`): "enters K after n steps" / "escapes
+  → ∞ (n)" / "non-escaping after n" / "inverse failed (n)", with a "clear". The overlay is redrawn on every
+  paint, so it stays pinned to w₀ as the view pans/zooms. NEW pure core in `render/schwarzView.ts`:
+  `schwarzOrbitAt` (the trajectory — the SAME loop as `@cas/schwarz`'s `escapeTime`, so the reported fate
+  matches the pixel under the click; both now run off ONE hoisted `SCHWARZ_ESCAPE` = {maxIter 48, escapeR
+  1e4} the field also uses) + `plotToPixel` (the exact inverse of `pixelToPlot`) + `schwarzOrbitLabel`;
+  drawing lives in `render/schwarzOrbitOverlay.ts`. Kept app-local (not in `@cas/schwarz`) per ADR-0007 —
+  no second consumer yet. NET: `test/schwarzOrbit.test.ts` (9 cases) pins the tracer to `schwarzEscapeAt`
+  over a K/Ω grid (kind + n identical), the chaining invariant (every iterate is a real σ step from the
+  last, points[0] = w₀), a fundamental orbit ending inside K, a far point escaping, and `plotToPixel`
+  round-tripping `pixelToPlot`. VERIFIED in the BUILT app (Playwright): click the tiling → green orbit
+  polyline + ringed seed + "enters K after 2 steps" readout; click the K interior → "in K (n = 0)"; clear
+  removes it; no console errors. Green: typecheck / lint / test **2349 / 276** (+9 node: orbit tracer +
+  plotToPixel; +1 file), build. **ADR-0009 item 3: + orbit inspection done**; remaining in item 3: legend +
+  scale bar, precise nav.
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (ADR-0009 R4 — σ legend + scale bar + precise nav):**
+  **ADR-0009 action item 3 is now COMPLETE** — the last two parity pieces land, so the σ pane matches the
+  standard plots' generic coloring/nav surface. (1) **Legend + scale bar.** A σ legend chip (top-right,
+  `#schwarz-legend`) shows the current colormap ramp as a CSS gradient + the flat classification swatches
+  (escapes → ∞ / non-escaping / off-branch), REUSING the standard plots' `legend-*` CSS so it reads
+  identically; the scale bar REUSES CD's own `drawScaleBar` overlay verbatim (the σ view shares the
+  center/zoom convention, span = 2/zoom), drawn on the σ canvas each paint. The three flat colours are
+  now exported from `render/schwarzView.ts` (`SCHWARZ_FLAT_RGB`) as the single source the GPU shader, the
+  CPU render, and the legend all read. (2) **Precise nav.** Centre-re / centre-im / zoom fields + apply /
+  reset in the σ controls (parity with the standard plots' centre/zoom inputs); the fields mirror the live
+  view as you drag/zoom (`syncSchwarzViewFields`, skipped while a field is focused) and apply back to it,
+  Enter-to-apply. The parse/format is a pure, unit-tested pair (`parseSchwarzViewInput` /
+  `formatSchwarzViewFields`) sharing the wheel gesture's zoom clamp (`SCHWARZ_ZOOM_MIN/MAX`). NEW pure
+  module `render/schwarzLegend.ts` (`schwarzColormapGradientCss` + `renderSchwarzLegend`). NET:
+  `test/schwarzLegend.test.ts` (5 cases: the gradient anchors the palette endpoints, grayscale is
+  achromatic, unknown-name fallback, the flat-colour pins vs the shader literals) + 5 new
+  `test/schwarzView.test.ts` cases (parse clamps zoom / keeps the fallback on a bad field / round-trips
+  format→parse). The two nav-field ids are opted out of `SHARE_IDS` (they mirror the view; the σ-view
+  permalink that will carry them is item 2). VERIFIED in the BUILT app (Playwright): the legend shows the
+  viridis ramp (`rgb(68,1,84)` → `rgb(253,231,37)`) + 3 swatches and goes achromatic on grayscale; the
+  scale bar is drawn (bottom-left white pixels); the nav fields read the default (0, 0, 0.4), apply
+  (0.6, −0.3, 1.2) moves the render + mirrors back, reset restores; no console errors. Green: typecheck /
+  lint / test **2359 / 277** (+10 node: legend + view parse; +1 file), build. **ADR-0009 item 3 DONE**
+  (colormaps + scale modes, orbit inspection, legend + scale bar, precise nav — all four); remaining on
+  ADR-0009: item 2 (σ-view serialization / permalink) + item 4 (SIGMA-HANDOFF.md target-shape update).
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (ADR-0009 item 2, Stage A — σ permalink + saved views):**
+  **a σ view now round-trips through a permalink AND a saved view** (ADR-0009 item 2, first two of its three
+  surfaces). The σ peer view is not control-based, so it can't ride `SHARE_IDS`; instead the σ view state —
+  the φ recipe (`c`, Laurent `F`, finite-pole `branches`) + the window (centre, zoom) + the coloring
+  (colormap, scale) — is layered onto the `AppState` as a single `_sigma` key, exactly as `_z0` / `_grad` /
+  `_proj` layer their non-control state. Because permalinks (`shareLink` / `loadFromHash`) AND saved views
+  (`save` / `loadSelectedView`) both flow through `readFullState` / `applyFullState`, ONE hook there lights
+  up both: `readFullState` emits `_sigma` when σ is showing; `applyFullState`, LAST (after the standard
+  plots so exiting σ reveals the right fractal), re-enters σ for a state carrying `_sigma` and leaves σ for
+  one without. NEW pure codec `state/schwarzState.ts` (`encodeSigmaState` / `parseSigmaState`) is
+  hostile-link hard: it rejects non-finite / malformed input, caps every coefficient list (≤ 64), enforces
+  the engine's `|z_j| < 1` pole invariant, clamps zoom, and normalises an unknown colormap/scale to the
+  defaults — a corrupt link yields `null` (ignored, stay on the plots), never a hung engine or NaN render.
+  `schwarzSession` now carries the φ recipe so it can be serialized; `restoreSchwarzFromState` rebuilds the
+  engine, restores the exact window + coloring, and syncs the σ controls. The σ builder / coloring / nav
+  input ids stay opted out of `SHARE_IDS` — the σ view travels as `_sigma`, not through those control ids
+  (appState's DOM-coverage guard comments updated to say so). NET: `test/schwarzState.test.ts` (11 cases:
+  encode→parse round-trips a pole-free + a pole-bearing state; the parser rejects zero/non-finite c, a bad
+  F tuple, `|z_j| ≥ 1`, an empty pole A, a missing centre, non-finite zoom, and oversized lists; clamps
+  zoom; falls back on an unknown colormap/scale). VERIFIED in the BUILT app (Playwright): build a
+  distinctive σ view (turbo + sqrt + centre 0.6−0.3i, zoom 1.2) → "Share link" → open the permalink in a
+  fresh page → σ restores identically and the render is **pixel-identical** to the settled original
+  (checksum 86040483 = 86040483); save a view, perturb (grayscale + reset), load it back → σ restores; no
+  console errors. Green: typecheck / lint / test **2370 / 278** (+11 node: σ-state codec; +1 file), build.
+  ADR-0009 item 2: permalink + saved views done; remaining: PNG-metadata export (Stage B).
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (ADR-0009 item 2, Stage B — σ PNG export):**
+  **ADR-0009 action item 2 is now COMPLETE** — a "Save PNG" button in the σ pane downloads the σ image with
+  the reproducible state embedded, the third of item 2's three surfaces. It re-renders the field CLEAN (no
+  orbit overlay) at **1024²** on the GPU when available — crisper than the on-screen 512² — with the scale
+  bar, falling back to the current canvas on the CPU path, then reuses `hiResExport.downloadCanvas`
+  (`toBlob` → `injectPngText` → download). The PNG carries two tEXt chunks: `cdjs:state` = the SAME
+  permalink `readFullState` builds (so it now carries `_sigma`), and `cdjs:sigma` = a human-readable,
+  ASCII-safe one-line summary (`schwarzStampParams`, pure + tested — PNG tEXt is Latin-1, so no σ/≈/Unicode
+  minus). `readFullState`'s `_sigma` layer + the PNG stamp both source the view through one
+  `currentSigmaState()` helper. NET: +2 `schwarzState.test.ts` cases pin `schwarzStampParams` (ASCII-only,
+  reports c / poles / centre / colormap / scale). VERIFIED in the BUILT app (Playwright): build a
+  distinctive σ view (turbo + sqrt + centre 0.6−0.3i, zoom 1.2) → "Save PNG" → the download is a valid
+  **1024² PNG** whose metadata contains `cdjs:sigma` (colormap=turbo, scale=sqrt) + `cdjs:state` (`#vs=`),
+  and **the embedded permalink, opened fresh, reopens the exact σ view** (turbo/sqrt/zoom 1.2); no console
+  errors. Green: typecheck / lint / test **2372 / 278** (+2 node: stamp-params), build. **ADR-0009 item 2
+  DONE** (permalink + saved views + PNG metadata — all three surfaces). Remaining on ADR-0009: only item 4
+  (SIGMA-HANDOFF.md target-shape update, docs-only).
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (ADR-0009 item 4 — docs; ADR-0009 COMPLETE):**
+  **docs-only.** Updated [SIGMA-HANDOFF.md](design/SIGMA-HANDOFF.md) so the peer view is the recorded target
+  shape (ADR-0009 item 4): its "Target shape — ADR-0009" section now reads **REALIZED (items 1–3)** and states
+  the peer view **supersedes the transient S4a `#JCSSchwarz` overlay** (that overlay was the ground-truth
+  stepping-stone; the `#schwarz-plot` pane is the shipped shape); the map-specific instruments (rays /
+  Böttcher / matings / Julia-set properties / Yoccoz / laminations / the inspector's
+  period-multiplier-nucleus math) are called out **explicitly out of scope for σ by nature**; and the
+  "Deferred enhancements" list moves items 1–3 (peer-view/mode, coloring, orbit inspection, legend + scale
+  bar + precise nav, serialization) to **done**, leaving only **S5** deferred (non-Laurent families on the
+  wire, branch-aware continuation through cusps [uncertified — RISKS §3], df64 σ, PQD GPU αth-root).
+  DECISIONS.md's ADR-0009 item 4 checked + an "ALL FOUR ACTION ITEMS COMPLETE" note added. **ADR-0009 is now
+  fully executed** — σ is a first-class peer view (item 1) with generic-parity coloring / orbit inspection /
+  legend / precise nav (item 3) and serializable state across share links / saved views / PNG (item 2),
+  recorded as the realized target shape (item 4). No code change; gates unaffected (test-census unchanged at
+  278 files). Next σ work, if any, is S5 — a separate, larger effort.

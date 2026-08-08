@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parse } from "@cas/expr/parser";
 import { differentiate } from "@cas/expr/derivative";
 import { createProgram } from "@cas/gpu/shader";
+import { SIGMA_PROBE_VERTEX } from "@cas/schwarz/gpu";
 import {
   VERTEX_SHADER,
   POST_FRAGMENT_SHADER,
@@ -9,6 +10,7 @@ import {
   PERTURBATION_FRAGMENT_SHADER,
   buildFragmentShader,
 } from "../src/render/shaderBuilder";
+import { SCHWARZ_FRAGMENT_SHADER } from "../src/render/schwarzGL";
 
 // COMPILES AND LINKS CD'S REAL SHADERS IN A REAL WebGL2 CONTEXT (cd-shader-uncompiled-07).
 //
@@ -63,6 +65,14 @@ describe("CD's real shaders compile and link in WebGL2 (cd-shader-uncompiled-07)
     ] as const) {
       expect(() => createProgram(gl, VERTEX_SHADER, src), name).not.toThrow();
     }
+  });
+
+  it("builds the Schwarz-reflection σ shader (lifted @cas/schwarz/gpu evaluator + CD escape/coloring)", () => {
+    // The σ shader composes the shared σ-evaluator GLSL with CD's own view/mask/escape/coloring (S4b-ii).
+    // It's built inside createSchwarzGLRenderer at runtime; compiling the exact emitted source here puts it
+    // in the same compile gate as CD's other real shaders (it uses the shared full-screen-triangle vertex).
+    const gl = context();
+    expect(() => createProgram(gl, SIGMA_PROBE_VERTEX, SCHWARZ_FRAGMENT_SHADER)).not.toThrow();
   });
 
   // The precision sweep is the point: `single` and `df64` share the emitted body verbatim, and a

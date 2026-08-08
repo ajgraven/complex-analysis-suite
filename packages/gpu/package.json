@@ -12,6 +12,7 @@
     "./glsl": "./src/glsl/index.ts",
     "./shader": "./src/shader.ts",
     "./colormap": "./src/colormap.ts",
+    "./mask": "./src/maskTexture.ts",
     "./dual-backend": "./src/dualBackend.ts"
   },
   "dependencies": {

@@ -10,7 +10,7 @@ import "./styles/main.css";
 import type { Vec2 } from "./arrays";
 import { argDegrees, formatComplex, parseComplex, truncateComplex, type Complex } from "./complex";
 import { PROJECTIONS, type ProjectionMode } from "./render/projection";
-import { getMaxTextureSize } from "./hiResExport";
+import { getMaxTextureSize, downloadCanvas } from "./hiResExport";
 import { PlotView } from "./render/plotView";
 import type { GLPlot, FractType } from "./render/glPlot";
 import { initialRes } from "./render/glPlot";
@@ -100,9 +100,46 @@ import {
   saveSavedViews,
   type AppState,
 } from "./state/appState";
-import { decodeLink, validateEnvelope, type Envelope } from "@cas/interchange";
-import { envelopeToMapSpec, mapSpecToExpr, schwarzEngineFromMapSpec } from "./interchange/importMap";
-import { renderSchwarzField, schwarzBoundaryPoly } from "./render/schwarzView";
+import {
+  encodeSigmaState,
+  parseSigmaState,
+  schwarzStampParams,
+  type SigmaViewState,
+} from "./state/schwarzState";
+import { decodeLink, validateEnvelope, type Envelope, type SchwarzMap } from "@cas/interchange";
+import {
+  envelopeToMapSpec,
+  mapSpecToExpr,
+  schwarzEngineFromMapSpec,
+  schwarzPhiFromMapSpec,
+} from "./interchange/importMap";
+import {
+  renderSchwarzField,
+  schwarzBoundaryPoly,
+  panSchwarzView,
+  zoomSchwarzView,
+  uvToPlotFrac,
+  schwarzOrbitAt,
+  schwarzOrbitLabel,
+  parseSchwarzViewInput,
+  formatSchwarzViewFields,
+  SCHWARZ_ZOOM_MIN,
+  SCHWARZ_ZOOM_MAX,
+  type SchwarzView,
+  type SchwarzOrbit,
+} from "./render/schwarzView";
+import { drawSchwarzOrbit } from "./render/schwarzOrbitOverlay";
+import { renderSchwarzLegend } from "./render/schwarzLegend";
+import { drawScaleBar } from "./render/overlay";
+import { createSchwarzGLRenderer, type SchwarzGLRenderer } from "./render/schwarzGL";
+import { makeUnboundedLaurentSchwarz } from "@cas/schwarz";
+import { buildSchwarzPhi, SCHWARZ_PRESETS, type SchwarzPhi } from "./render/schwarzPhiForm";
+import {
+  SCHWARZ_COLORMAP_NAMES,
+  SCHWARZ_SCALE_MODES,
+  DEFAULT_SCHWARZ_COLORMAP,
+  DEFAULT_SCHWARZ_SCALE,
+} from "./render/schwarzColormaps";
 import { PLACES } from "./state/places";
 import { decodeNotes, encodeNotes, type Note } from "./state/notes";
 import GIF from "gif.js";
@@ -2780,7 +2817,9 @@ function init(): void {
 
   /** Re-apply every control to the plots (used after loading a shared permalink). */
   function applyAllControls(): void {
-    exitSchwarzView(); // a normal control apply / map load leaves the σ reconstruction view (S4a)
+    // σ is a persistent peer VIEW now (ADR-0009), not an overlay dismissed on any control change: a control
+    // apply re-renders the standard plots underneath and leaves σ mode intact. Leaving σ is explicit (its ↩
+    // button / Esc) or happens when a NON-schwarz map is imported (importInterchange calls exitSchwarzView).
     applyChanges();
     applyColoring();
     applyLighting();
@@ -2823,6 +2862,11 @@ function init(): void {
     if (proj) state._proj = proj;
     const pv = byId<HTMLSelectElement>("profile").value; // the active use-case profile (label hint)
     if (pv && pv !== "custom") state._profile = pv;
+    // σ peer view (ADR-0009 item 2): when σ is showing, layer its view state (φ recipe + window + coloring)
+    // so a permalink / saved view / PNG reproduces it. Present-only — a state without `_sigma` is a normal
+    // fractal view, and applyFullState leaves σ for it.
+    const sig = currentSigmaState();
+    if (sig) state._sigma = encodeSigmaState(sig);
     return state;
   }
 
@@ -2905,6 +2949,16 @@ function init(): void {
       refreshNotes();
     }
     if (typeof state._profile === "string") adoptProfile(state._profile); // show the carried profile label
+    // σ peer view (ADR-0009 item 2), LAST — after the standard plots are set, so exiting σ later reveals
+    // the correct fractal underneath. A state carrying `_sigma` re-enters σ; one without it leaves σ (so a
+    // non-σ saved view / link switches back to the plots). A corrupt `_sigma` is ignored (stay on the plots).
+    if (typeof state._sigma === "string") {
+      const sig = parseSigmaState(state._sigma);
+      if (sig) restoreSchwarzFromState(sig);
+      else if (schwarzSession) exitSchwarzView();
+    } else if (schwarzSession) {
+      exitSchwarzView();
+    }
   }
 
   /** Serialize the current view into the URL hash and copy a shareable link. */
@@ -2919,36 +2973,482 @@ function init(): void {
     }
   }
 
-  // --- σ (Schwarz reflection) reconstruction view (S4a) -----------------------------------------
+  // --- σ (Schwarz reflection) reconstruction view (S4a; interactive GPU render S4b-ii/iii) -------
   // σ(w)=conj(F(φ⁻¹(w))) has a NUMERICAL inverse, so an imported schwarz recipe is not expr/GPU-
-  // compilable: it is rebuilt with @cas/schwarz and its escape-time field is painted on the CPU to a
-  // dedicated 2D canvas layered over the dynamical plot, at a fixed [-2.5,2.5]² window for this
-  // milestone. The image is `≈` — the principal exterior branch of a numerically-inverted reflection,
-  // not a certified render. Click it (or change any control) to dismiss and return to the normal plot.
-  const SCHWARZ_VIEW = { center: [0, 0] as [number, number], zoom: 0.4 }; // half-width 1/zoom = 2.5
-  const SCHWARZ_RENDER_SIZE = 256; // CPU escape-time is heavy (Newton/DK per Ω pixel) — a coarse ≈ preview
-  function renderSchwarzView(engine: ReturnType<typeof schwarzEngineFromMapSpec>): void {
+  // compilable through CD's usual pipeline: it is rebuilt with @cas/schwarz and its escape-time field is
+  // painted onto a dedicated 2D canvas layered over the dynamical plot — on the GPU (render/schwarzGL),
+  // CPU fallback. The image is `≈` — the principal exterior branch of a numerically-inverted reflection,
+  // not a certified render. Drag to pan, scroll to zoom (about the cursor); Esc — or any control change —
+  // exits and restores the normal plot underneath.
+  const SCHWARZ_DEFAULT_VIEW: SchwarzView = { center: [0, 0], zoom: 0.4 }; // half-width 1/zoom = 2.5
+  // ONE escape budget for both the σ field and the orbit inspector, so a clicked point's reported fate
+  // matches the pixel under it (the GPU/CPU field renders and the CPU orbit tracer must agree).
+  const SCHWARZ_ESCAPE = { maxIter: 48, escapeR: 1e4 } as const;
+  // The GPU σ renderer is built once, lazily: `undefined` = not yet tried, `null` = WebGL2 unavailable
+  // (permanently CPU). It owns a private offscreen canvas whose result we drawImage onto #JCSSchwarz.
+  let schwarzGL: SchwarzGLRenderer | null | undefined;
+  // The active σ session — the reconstruction inputs a redraw needs at the current view. null ⇔ not shown.
+  let schwarzSession:
+    | {
+        engine: ReturnType<typeof schwarzEngineFromMapSpec>;
+        poly: ReturnType<typeof schwarzBoundaryPoly>;
+        phi: SchwarzPhi; // the φ recipe (c, F, branches) — serialized into the σ permalink (_sigma, item 2)
+        size: number;
+        mode: "GPU" | "CPU";
+      }
+    | null = null;
+  let schwarzView: SchwarzView = { ...SCHWARZ_DEFAULT_VIEW };
+  let schwarzRaf = 0;
+  // σ coloring (ADR-0009 item 3) — remembered for this page session so it survives σ enter/exit and a
+  // regenerate (not written to storage; a σ-view permalink that would carry it is deferred — item 2).
+  let schwarzColormapName = DEFAULT_SCHWARZ_COLORMAP;
+  let schwarzScaleMode = DEFAULT_SCHWARZ_SCALE;
+  // σ orbit inspection (ADR-0009 item 3): the currently-inspected orbit (w₀ = points[0]) or null. Its
+  // polyline is redrawn over the field on every paint, so it stays pinned to w₀ as the view pans/zooms.
+  let schwarzInspect: SchwarzOrbit | null = null;
+
+  /** Paint the σ field at the current `schwarzView` (GPU → drawImage, or CPU → putImageData). */
+  function paintSchwarz(): void {
+    if (!schwarzSession) return;
+    const { engine, poly, size, mode } = schwarzSession;
     const canvas = byId<HTMLCanvasElement>("JCSSchwarz");
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const size = SCHWARZ_RENDER_SIZE;
-    canvas.width = size;
-    canvas.height = size;
+    if (canvas.width !== size || canvas.height !== size) {
+      canvas.width = size;
+      canvas.height = size;
+    }
+    if (mode === "GPU" && schwarzGL) {
+      schwarzGL.render(schwarzView, size, { ...SCHWARZ_ESCAPE, scaleMode: schwarzScaleMode });
+      ctx.drawImage(schwarzGL.canvas, 0, 0);
+    } else {
+      const rgba = renderSchwarzField(engine, poly, schwarzView, size, SCHWARZ_ESCAPE);
+      const img = new ImageData(size, size); // construct-then-set (mirrors renderJuliaPreview) — avoids the
+      img.data.set(rgba); // Uint8ClampedArray<ArrayBuffer> constructor-overload variance in the DOM lib types
+      ctx.putImageData(img, 0, 0);
+    }
+    // Orbit overlay on top of the field (ADR-0009 item 3) — pinned to w₀, redrawn for the current view.
+    if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, size);
+    // Scale bar (ADR-0009 item 3) — CD's own overlay helper; the σ view shares its center/zoom convention
+    // (span = 2/zoom), so it reads correctly. Last, so an orbit line never hides it (it has its own backing).
+    drawScaleBar(ctx, size, schwarzView.zoom);
+    syncSchwarzViewFields(); // keep the precise-nav fields mirroring the live view
+  }
+
+  /** Mirror the live view into the precise-nav fields — unless the user is editing one (don't clobber a
+   *  half-typed value; a paint only fires on a view change, so this is just belt-and-suspenders). */
+  function syncSchwarzViewFields(): void {
+    const re = document.getElementById("schwarz-center-re") as HTMLInputElement | null;
+    const im = document.getElementById("schwarz-center-im") as HTMLInputElement | null;
+    const zoom = document.getElementById("schwarz-zoom") as HTMLInputElement | null;
+    if (!re || !im || !zoom) return;
+    const active = document.activeElement;
+    if (active === re || active === im || active === zoom) return;
+    const f = formatSchwarzViewFields(schwarzView);
+    re.value = f.re;
+    im.value = f.im;
+    zoom.value = f.zoom;
+  }
+
+  /** (Re)render the σ legend chip from the current colormap + scale mode. */
+  function renderSchwarzLegendChip(): void {
+    const el = document.getElementById("schwarz-legend");
+    if (!el) return;
+    const scaleLabel = SCHWARZ_SCALE_MODES.find((m) => m.key === schwarzScaleMode)?.label ?? "Linear";
+    renderSchwarzLegend(el, { colormapName: schwarzColormapName, scaleLabel });
+  }
+  /** Coalesce rapid pan/zoom events into one paint per animation frame. */
+  function scheduleSchwarzPaint(): void {
+    if (schwarzRaf) return;
+    schwarzRaf = requestAnimationFrame(() => {
+      schwarzRaf = 0;
+      paintSchwarz();
+    });
+  }
+
+  // σ orbit inspection (ADR-0009 item 3): clicking the σ canvas traces that point's orbit and draws it
+  // over the field, with a readout of its fate. The readout lives in the σ pane (the sidebar #inspector is
+  // hidden in σ mode). Honest labeling: σ is `≈`, so a fate reads as "of the reconstruction", not certified.
+  function renderSchwarzInspectReadout(): void {
+    const box = document.getElementById("schwarz-inspect");
+    if (!box) return;
+    if (!schwarzInspect) {
+      box.hidden = true;
+      box.replaceChildren();
+      return;
+    }
+    const w0 = schwarzInspect.points[0];
+    const steps = schwarzInspect.points.length - 1;
+    const mk = (cls: string, text: string): HTMLElement => {
+      const el = document.createElement("span");
+      el.className = cls;
+      el.textContent = text;
+      return el;
+    };
+    const clearBtn = document.createElement("button");
+    clearBtn.type = "button";
+    clearBtn.className = "schwarz-inspect-clear";
+    clearBtn.textContent = "clear";
+    clearBtn.title = "Remove the traced orbit";
+    clearBtn.addEventListener("click", clearSchwarzInspect);
+    box.hidden = false;
+    box.replaceChildren(
+      mk("schwarz-inspect-title", `orbit of ${formatComplex(truncateComplex(w0))}`),
+      mk("schwarz-inspect-fate", schwarzOrbitLabel(schwarzInspect.kind, schwarzInspect.n)),
+      mk("schwarz-inspect-steps", `${steps} iterate${steps === 1 ? "" : "s"} drawn`),
+      clearBtn,
+    );
+  }
+  /** Inspect the σ-orbit of w₀ (a plot point): trace it, show the readout, redraw with the overlay. */
+  function setSchwarzInspect(w0: Complex): void {
+    if (!schwarzSession) return;
+    schwarzInspect = schwarzOrbitAt(schwarzSession.engine, schwarzSession.poly, w0, SCHWARZ_ESCAPE);
+    renderSchwarzInspectReadout();
+    scheduleSchwarzPaint();
+  }
+  /** Drop the inspected orbit (readout hides, overlay disappears on the next paint). */
+  function clearSchwarzInspect(): void {
+    if (!schwarzInspect) return;
+    schwarzInspect = null;
+    renderSchwarzInspectReadout();
+    scheduleSchwarzPaint();
+  }
+
+  /**
+   * Enter the σ session for an already-built engine + its φ coefficients — the shared core of the import
+   * and native-φ paths. Decides mode + size once (GPU paints a crisp 512² in one pass; the CPU fallback
+   * stays coarse since per-Ω-pixel Newton is heavy), resets the view, and shows the canvas + label.
+   */
+  function enterSchwarz(engine: ReturnType<typeof schwarzEngineFromMapSpec>, phi: SchwarzPhi): void {
     const poly = schwarzBoundaryPoly(engine);
-    const rgba = renderSchwarzField(engine, poly, SCHWARZ_VIEW, size, { maxIter: 48, escapeR: 1e4 });
-    const img = new ImageData(size, size); // construct-then-set (mirrors renderJuliaPreview) — avoids the
-    img.data.set(rgba); // Uint8ClampedArray<ArrayBuffer> constructor-overload variance in the DOM lib types
-    ctx.putImageData(img, 0, 0);
-    canvas.hidden = false;
-    byId<HTMLElement>("dyn-schwarz-label").hidden = false;
+    if (schwarzGL === undefined) schwarzGL = createSchwarzGLRenderer();
+    let mode: "GPU" | "CPU" = "CPU";
+    let size = 256;
+    if (schwarzGL) {
+      try {
+        schwarzGL.setPhi(phi, poly);
+        schwarzGL.setColormap(schwarzColormapName); // apply the current σ palette to this session
+        mode = "GPU";
+        size = 512;
+      } catch (err) {
+        console.warn("schwarzGL setPhi failed; falling back to the CPU field:", err);
+      }
+    }
+    schwarzSession = { engine, poly, phi, size, mode };
+    schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
+    schwarzInspect = null; // a new φ ⇒ any previous orbit is stale
+    renderSchwarzInspectReadout();
+    renderSchwarzLegendChip(); // reflect the current colormap + scale in the legend
+    document.querySelector(".workspace")?.classList.add("schwarz-active"); // enter σ mode → show the pane
+    try {
+      paintSchwarz();
+    } catch (err) {
+      // A GPU render that throws at paint time degrades the whole session to CPU, in THIS call.
+      if (schwarzSession.mode === "GPU") {
+        console.warn("schwarzGL render failed; falling back to the CPU field:", err);
+        schwarzSession = { engine, poly, phi, size: 256, mode: "CPU" };
+        paintSchwarz();
+      }
+    }
+    const label = byId<HTMLElement>("dyn-schwarz-label");
+    label.textContent = `Schwarz reflection σ (≈, ${schwarzSession.mode}) · drag · scroll · ↩/Esc to exit`;
   }
-  /** Leave the σ reconstruction view (restore the normal dynamical plot underneath). Idempotent. */
+  /** Import path: reconstruct from an interchange schwarz map. Throws (to the caller's toast) for an
+   *  unsupported φ — reconstruct BEFORE entering so a bad map never half-shows a wrong field. */
+  function renderSchwarzView(spec: SchwarzMap): void {
+    enterSchwarz(schwarzEngineFromMapSpec(spec), schwarzPhiFromMapSpec(spec));
+  }
+  /** Native path: build the σ engine from φ coefficients (a preset or the custom form) and enter. */
+  function renderSchwarzFromPhi(phi: SchwarzPhi): void {
+    enterSchwarz(makeUnboundedLaurentSchwarz(phi.c, phi.F, phi.branches), phi);
+  }
+  /**
+   * Restore a σ view from a serialized `_sigma` state (permalink / saved view / PNG — ADR-0009 item 2):
+   * the φ recipe, the exact window, and the coloring. Sets the coloring BEFORE entering so `enterSchwarz`
+   * applies it, then overrides the reset-to-default view and syncs the σ controls + legend.
+   */
+  function restoreSchwarzFromState(s: SigmaViewState): void {
+    schwarzColormapName = s.colormap;
+    schwarzScaleMode = s.scale;
+    renderSchwarzFromPhi(s.phi); // build engine + enter σ (resets the view to default, applies the colormap)
+    schwarzView = { center: [s.center[0], s.center[1]], zoom: s.zoom }; // ...then restore the exact window
+    const cm = document.getElementById("schwarz-colormap") as HTMLSelectElement | null;
+    if (cm) cm.value = schwarzColormapName;
+    const sc = document.getElementById("schwarz-scale") as HTMLSelectElement | null;
+    if (sc) sc.value = schwarzScaleMode;
+    renderSchwarzLegendChip();
+    scheduleSchwarzPaint(); // paint at the restored window (also mirrors it into the nav fields)
+  }
+  /** The σ view as a serializable state (for `_sigma` + the PNG stamp). Requires an active session. */
+  function currentSigmaState(): SigmaViewState | null {
+    if (!schwarzSession) return null;
+    return {
+      phi: schwarzSession.phi,
+      center: schwarzView.center,
+      zoom: schwarzView.zoom,
+      colormap: schwarzColormapName,
+      scale: schwarzScaleMode,
+    };
+  }
+
+  /**
+   * Save the σ view as a PNG with the reproducible state embedded (ADR-0009 item 2, PNG surface). Re-renders
+   * the field clean (no orbit overlay) at `size` on the GPU when available — a crisper export than the
+   * on-screen 512² — else falls back to the current canvas. The `cdjs:state` tEXt is the same permalink
+   * `readFullState` builds, so it now carries `_sigma`; `cdjs:sigma` is a human-readable summary.
+   */
+  async function saveSchwarzPng(): Promise<void> {
+    const sig = currentSigmaState();
+    if (!schwarzSession || !sig) return;
+    let canvas: HTMLCanvasElement;
+    if (schwarzSession.mode === "GPU" && schwarzGL) {
+      const size = 1024; // hi-res single-pass GPU render, well under any WebGL2 max texture size
+      schwarzGL.render(schwarzView, size, { ...SCHWARZ_ESCAPE, scaleMode: schwarzScaleMode });
+      const out = document.createElement("canvas");
+      out.width = size;
+      out.height = size;
+      const octx = out.getContext("2d");
+      if (!octx) return;
+      octx.drawImage(schwarzGL.canvas, 0, 0);
+      drawScaleBar(octx, size, schwarzView.zoom); // keep the scale reference; omit the transient orbit overlay
+      canvas = out;
+      scheduleSchwarzPaint(); // the render above resized the offscreen GL canvas — repaint the on-screen 512²
+    } else {
+      canvas = byId<HTMLCanvasElement>("JCSSchwarz"); // CPU fallback: the current field as shown
+    }
+    const metadata: Record<string, string> = {
+      Software: "ComplexDynamicsJS",
+      "cdjs:sigma": schwarzStampParams(sig),
+      "cdjs:state": `${location.origin}${location.pathname}${encodeState(readFullState())}`,
+    };
+    try {
+      await downloadCanvas(canvas, "schwarz-sigma.png", metadata);
+      showToast("Saved the σ image (state embedded in the PNG).", "info");
+    } catch {
+      showToast("Could not save the σ image.", "warn");
+    }
+  }
+
+  /** Leave the σ peer view — back to the Parameter & Dynamical plots. Idempotent (safe if not in σ mode). */
   function exitSchwarzView(): void {
-    byId<HTMLCanvasElement>("JCSSchwarz").hidden = true;
-    byId<HTMLElement>("dyn-schwarz-label").hidden = true;
+    schwarzSession = null;
+    if (schwarzRaf) {
+      cancelAnimationFrame(schwarzRaf);
+      schwarzRaf = 0;
+    }
+    document.querySelector(".workspace")?.classList.remove("schwarz-active");
   }
-  // Click the σ raster to dismiss it — the plain, discoverable exit (a control change also exits).
-  byId<HTMLCanvasElement>("JCSSchwarz").addEventListener("click", exitSchwarzView);
+
+  // σ interaction: drag to pan, wheel to zoom (about the cursor), Esc to exit. Handlers are installed
+  // once and are no-ops unless a σ session is active — so they never interfere with the normal plot.
+  {
+    const canvas = byId<HTMLCanvasElement>("JCSSchwarz");
+    const clientToUv = (e: PointerEvent | WheelEvent): [number, number] => {
+      const r = canvas.getBoundingClientRect();
+      return [
+        Math.min(1, Math.max(0, (e.clientX - r.left) / Math.max(1, r.width))),
+        Math.min(1, Math.max(0, (e.clientY - r.top) / Math.max(1, r.height))),
+      ];
+    };
+    let lastUv: [number, number] | null = null;
+    let downClient: [number, number] | null = null;
+    let movedSinceDown = false;
+    const CLICK_TOL_PX = 4; // total travel under this ⇒ a click (inspect the orbit), not a drag (pan)
+    canvas.addEventListener("pointerdown", (e) => {
+      if (!schwarzSession) return;
+      lastUv = clientToUv(e);
+      downClient = [e.clientX, e.clientY];
+      movedSinceDown = false;
+      canvas.setPointerCapture(e.pointerId);
+      canvas.style.cursor = "grabbing";
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      if (!schwarzSession || !lastUv) return;
+      if (downClient && Math.hypot(e.clientX - downClient[0], e.clientY - downClient[1]) > CLICK_TOL_PX) {
+        movedSinceDown = true; // it's a drag now — a trailing click won't inspect
+      }
+      const cur = clientToUv(e);
+      schwarzView = panSchwarzView(schwarzView, lastUv, cur); // move the grabbed point under the cursor
+      lastUv = cur;
+      scheduleSchwarzPaint();
+    });
+    const endDrag = (e: PointerEvent): void => {
+      if (!lastUv) return;
+      lastUv = null;
+      downClient = null;
+      canvas.style.cursor = "grab";
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch {
+        /* pointer was not captured — fine */
+      }
+    };
+    canvas.addEventListener("pointerup", (e) => {
+      const wasClick = lastUv !== null && !movedSinceDown;
+      endDrag(e);
+      // A click (no meaningful drag) inspects the σ-orbit of the point under the cursor.
+      if (wasClick && schwarzSession) {
+        const uv = clientToUv(e);
+        setSchwarzInspect(uvToPlotFrac(schwarzView, uv[0], uv[1]));
+      }
+    });
+    canvas.addEventListener("pointercancel", endDrag);
+    canvas.addEventListener(
+      "wheel",
+      (e) => {
+        if (!schwarzSession) return;
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12; // scroll up ⇒ zoom in
+        const next = zoomSchwarzView(schwarzView, factor, clientToUv(e));
+        next.zoom = Math.min(SCHWARZ_ZOOM_MAX, Math.max(SCHWARZ_ZOOM_MIN, next.zoom)); // keep the window sane
+        schwarzView = next;
+        scheduleSchwarzPaint();
+      },
+      { passive: false },
+    );
+    window.addEventListener("keydown", (e) => {
+      if (schwarzSession && e.key === "Escape") {
+        e.preventDefault();
+        exitSchwarzView();
+      }
+    });
+  }
+
+  // Native σ builder: generate a σ fractal from a Riemann map φ — a preset or a custom map (leading c,
+  // Laurent F, finite-pole branches) — with no interchange link (S4b-iv). The φ-form parsing + validation
+  // is pure (render/schwarzPhiForm.ts); this only wires the fields to `renderSchwarzFromPhi`.
+  {
+    const openBtn = document.getElementById("schwarz-open"); // sidebar → open the σ peer view
+    const exitBtn = document.getElementById("schwarz-exit"); // σ pane header → back to the plots
+    const presetSel = document.getElementById("schwarz-preset") as HTMLSelectElement | null;
+    const cIn = document.getElementById("schwarz-c") as HTMLInputElement | null;
+    const fIn = document.getElementById("schwarz-F") as HTMLInputElement | null;
+    const polesIn = document.getElementById("schwarz-poles") as HTMLTextAreaElement | null;
+    const genBtn = document.getElementById("schwarz-generate"); // in-pane → re-render the edited φ
+    const errBox = document.getElementById("schwarz-error");
+    if (openBtn && exitBtn && presetSel && cIn && fIn && polesIn && genBtn && errBox) {
+      // Populate the preset dropdown (the leading "Custom…" option is already in the HTML).
+      for (const p of SCHWARZ_PRESETS) {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.label;
+        presetSel.appendChild(opt);
+      }
+      const setError = (msg: string | null): void => {
+        errBox.textContent = msg ?? "";
+        errBox.hidden = msg === null;
+      };
+      const fill = (id: string): void => {
+        const p = SCHWARZ_PRESETS.find((x) => x.id === id);
+        if (!p) return;
+        cIn.value = p.c;
+        fIn.value = p.F;
+        polesIn.value = p.poles;
+      };
+      // Start on the deltoid so the pane opens showing a working example (single source: SCHWARZ_PRESETS).
+      presetSel.value = "deltoid";
+      fill("deltoid");
+      // Build φ from the fields and render — entering σ mode (renderSchwarzFromPhi → enterSchwarz shows the
+      // pane). Show the pane first regardless, so a validation error lands on the now-visible error line.
+      const generate = (): void => {
+        document.querySelector(".workspace")?.classList.add("schwarz-active");
+        try {
+          renderSchwarzFromPhi(buildSchwarzPhi({ c: cIn.value, F: fIn.value, poles: polesIn.value }));
+          setError(null);
+        } catch (err) {
+          setError((err as Error).message); // buildSchwarzPhi's messages are written for this line
+        }
+      };
+      openBtn.addEventListener("click", generate); // sidebar entry → open σ + render the current φ (deltoid)
+      genBtn.addEventListener("click", generate); // in-pane "Generate σ" → re-render the edited φ (stays in σ)
+      exitBtn.addEventListener("click", () => {
+        exitSchwarzView();
+        setError(null);
+      });
+      presetSel.addEventListener("change", () => {
+        if (presetSel.value) {
+          fill(presetSel.value);
+          setError(null);
+        }
+      });
+      // Hand-editing any field makes it a "Custom…" map (programmatic fill() does not fire 'input').
+      for (const el of [cIn, fIn, polesIn]) {
+        el.addEventListener("input", () => {
+          presetSel.value = "";
+        });
+      }
+    }
+  }
+
+  // σ coloring controls (ADR-0009 item 3 — colormap + scale-mode parity with the standard fractals). Live
+  // in the σ pane, so a change only fires in σ mode; it updates the in-session preference, applies to the
+  // renderer, and repaints (rAF-coalesced).
+  {
+    const cmSel = document.getElementById("schwarz-colormap") as HTMLSelectElement | null;
+    const scSel = document.getElementById("schwarz-scale") as HTMLSelectElement | null;
+    if (cmSel) {
+      for (const name of SCHWARZ_COLORMAP_NAMES) {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        cmSel.appendChild(opt);
+      }
+      cmSel.value = schwarzColormapName;
+      cmSel.addEventListener("change", () => {
+        schwarzColormapName = cmSel.value;
+        schwarzGL?.setColormap(schwarzColormapName);
+        renderSchwarzLegendChip(); // legend ramp follows the colormap
+        scheduleSchwarzPaint();
+      });
+    }
+    if (scSel) {
+      for (const m of SCHWARZ_SCALE_MODES) {
+        const opt = document.createElement("option");
+        opt.value = m.key;
+        opt.textContent = m.label;
+        scSel.appendChild(opt);
+      }
+      scSel.value = schwarzScaleMode;
+      scSel.addEventListener("change", () => {
+        schwarzScaleMode = scSel.value;
+        renderSchwarzLegendChip(); // legend title shows the scale mode
+        scheduleSchwarzPaint();
+      });
+    }
+  }
+
+  // σ precise navigation (ADR-0009 item 3 — type an exact centre + zoom; parity with the standard plots).
+  // The fields mirror the live view (paintSchwarz → syncSchwarzViewFields); apply parses them into the
+  // view, reset returns to the default window. Both repaint (which re-normalizes the fields).
+  {
+    const reIn = document.getElementById("schwarz-center-re") as HTMLInputElement | null;
+    const imIn = document.getElementById("schwarz-center-im") as HTMLInputElement | null;
+    const zoomIn = document.getElementById("schwarz-zoom") as HTMLInputElement | null;
+    const applyBtn = document.getElementById("schwarz-view-apply");
+    const resetBtn = document.getElementById("schwarz-view-reset");
+    if (reIn && imIn && zoomIn && applyBtn && resetBtn) {
+      const apply = (): void => {
+        schwarzView = parseSchwarzViewInput(reIn.value, imIn.value, zoomIn.value, schwarzView);
+        scheduleSchwarzPaint();
+      };
+      applyBtn.addEventListener("click", apply);
+      // Enter in any field applies (matches the standard plots' center/zoom fields).
+      for (const el of [reIn, imIn, zoomIn]) {
+        el.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            apply();
+          }
+        });
+      }
+      resetBtn.addEventListener("click", () => {
+        schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
+        scheduleSchwarzPaint();
+      });
+    }
+    const savePngBtn = document.getElementById("schwarz-save-png");
+    if (savePngBtn) savePngBtn.addEventListener("click", () => void saveSchwarzPng()); // PNG w/ embedded state
+  }
 
   /**
    * Import a map handed off via @cas/interchange (a deep link OR pasted JSON, from e.g. the
@@ -2974,14 +3474,15 @@ function init(): void {
       // from sigma.phi via @cas/schwarz and paint its escape-time field on the CPU (S4a). The reconstruct
       // can throw for a family the engine doesn't support (non-Laurent φ) — decline honestly, don't crash.
       try {
-        renderSchwarzView(schwarzEngineFromMapSpec(spec));
+        renderSchwarzView(spec);
       } catch (err) {
         showToast(`Imported a ${env.kind}, but σ reconstruction isn't supported for this map: ${(err as Error).message}`, "info");
         return true;
       }
-      showToast(`Reconstructed the Schwarz reflection σ from ${env.provenance.app} (≈, CPU — click the plot to dismiss).`, "info");
+      showToast(`Reconstructed the Schwarz reflection σ from ${env.provenance.app} — opened the σ view (≈).`, "info");
       return true;
     }
+    exitSchwarzView(); // importing a standard (non-σ) map returns from the σ peer view to the plots
     const st = readFullState();
     st.inpf = mapSpecToExpr(spec);
     applyFullState(st);

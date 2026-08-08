@@ -444,13 +444,54 @@ h2 {
   display: none;
 }
 
-/* σ (Schwarz reflection) reconstruction view (S4a): a CPU raster layered over the dynamical plot
-   (reuses .overlay positioning — a square stack, so the square σ buffer isn't distorted), with a
-   top-left ≈-badge. Shown only for an imported schwarz recipe; click the raster to dismiss it. */
-.canvas-stack > .schwarz-view {
-  z-index: 4; /* above the GL canvas + interaction overlay while shown */
-  cursor: pointer;
+/* σ (Schwarz reflection) — a FIRST-CLASS PEER VIEW (ADR-0009): its own #schwarz-plot section alongside
+   the Parameter and Dynamical planes, shown only in σ mode (the .workspace.schwarz-active class — entered
+   from the sidebar "Schwarz reflection σ…" button or an import, left via the pane's ↩ button or Esc).
+   Modeled on the per-plot `expand` layout, but active at all widths (σ is a mode, not a desktop toggle). */
+#schwarz-plot {
+  display: none; /* shown only in σ mode */
+}
+.workspace.schwarz-active #param-plot,
+.workspace.schwarz-active #dyn-plot,
+.workspace.schwarz-active .controls-pane {
+  display: none;
+}
+.workspace.schwarz-active #schwarz-plot {
+  display: block;
+}
+.workspace.schwarz-active,
+.workspace.schwarz-active .plots {
+  grid-template-columns: 1fr; /* single column — σ fills the plots area */
+}
+.workspace.schwarz-active .canvas-stack {
+  display: block;
+  width: 100%;
+  min-width: 240px;
+  max-width: 100%;
+}
+.workspace.schwarz-active .canvas-stack > canvas {
+  width: 100% !important;
+  height: auto;
+}
+/* The σ raster is the pane's PRIMARY canvas now (it used to be an .overlay on the dynamical plot). A 2D
+   canvas onto which the GPU render is drawImage-d; interactive — drag to pan, wheel to zoom. */
+.schwarz-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
   background: #0e1117;
+  border-radius: var(--radius);
+  cursor: grab;
+  touch-action: none; /* pan/zoom gestures reach our handlers, not the page */
+}
+/* The σ legend sits TOP-RIGHT, clearing the top-left σ label and the bottom-left scale bar (drawn on the
+   canvas). Overrides .plot-legend's default bottom-left corner. */
+.canvas-stack > .schwarz-legend {
+  top: 6px;
+  right: 6px;
+  left: auto;
+  bottom: auto;
+  max-width: 170px;
 }
 .canvas-stack > .schwarz-label {
   position: absolute;
@@ -467,6 +508,78 @@ h2 {
   background: rgba(14, 17, 23, 0.82);
   border: 0.5px solid rgba(255, 255, 255, 0.18);
   border-radius: 5px;
+}
+/* Native σ builder (S4b-iv): a compact form to generate a Schwarz reflection from a Riemann map φ. */
+.schwarz-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.schwarz-builder label {
+  font-size: 0.7rem;
+  opacity: 0.85;
+}
+.schwarz-builder input,
+.schwarz-builder textarea,
+.schwarz-builder select {
+  width: 100%;
+  box-sizing: border-box;
+}
+.schwarz-builder-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+/* σ orbit inspection (ADR-0009 item 3): the "click to trace" hint + the readout the click populates. */
+.schwarz-inspect-hint {
+  font-size: 0.7rem;
+  opacity: 0.7;
+  margin: 0 0 0.3rem;
+}
+.schwarz-inspect {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.72rem;
+}
+.schwarz-inspect-title {
+  font-weight: 500;
+  word-break: break-all;
+}
+.schwarz-inspect-fate {
+  opacity: 0.9;
+}
+.schwarz-inspect-steps {
+  opacity: 0.6;
+  font-size: 0.66rem;
+}
+.schwarz-inspect-clear {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+  font-size: 0.66rem;
+  padding: 0.1rem 0.5rem;
+}
+/* σ precise navigation (ADR-0009 item 3): a compact centre-re / centre-im / zoom row + apply/reset. */
+.schwarz-nav-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.3rem;
+}
+.schwarz-nav-row input {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+.schwarz-nav-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
 }
 .legend-title {
   font-weight: 500;

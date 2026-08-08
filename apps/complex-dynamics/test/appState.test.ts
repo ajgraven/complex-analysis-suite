@@ -94,6 +94,18 @@ describe("SHARE_IDS DOM coverage", () => {
           ],
           "tool input",
         ],
+        // Native σ builder: inputs to the one-shot "Generate σ" button. The RESULT (the σ view) is what a
+        // link carries — as the `_sigma` state layer (ADR-0009 item 2), NOT these ids; re-running Generate
+        // on load would be a side effect, not a restored view — same rule as the one-shot tools above.
+        [["schwarz-preset", "schwarz-c", "schwarz-F", "schwarz-poles"], "σ builder input (one-shot tool; view travels as _sigma)"],
+        // σ coloring (ADR-0009 item 3): colormap + escape-scale for the σ pane. Part of the σ view, which
+        // travels via the `_sigma` state layer (item 2) — not as its own shared control, the same way the
+        // standard-fractal `palette` is opted out (SHARE_IDS omission).
+        [["schwarz-colormap", "schwarz-scale"], "σ coloring (travels inside _sigma, not as a control id)"],
+        // σ precise-nav fields mirror the live σ view (centre + zoom) and apply back to it. The window is a
+        // property of the σ view and travels inside `_sigma` (item 2) — not as a shared control in its own
+        // right, the same way the standard plots' centre/zoom travel via the view, not these input ids.
+        [["schwarz-center-re", "schwarz-center-im", "schwarz-zoom"], "σ view nav (mirrors the view; travels inside _sigma)"],
         // Panel readout parameters — they change a text list inside a card, nothing on the plots.
         // (Contrast `laurent-n`, which IS shared: it sets a boundary curve drawn on both planes.)
         [["exterior-n"], "panel readout parameter"],

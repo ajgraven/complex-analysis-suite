@@ -101,7 +101,20 @@ export function mapSpecToExpr(m: MapSpec): string {
  * (and each branch's z and A) are converted. Throws for a shape the engine can't reconstruct rather
  * than returning a subtly-wrong σ.
  */
-export function schwarzEngineFromMapSpec(sigma: SchwarzMap): UnboundedLaurentSchwarz {
+/** φ's coefficients as the `[re,im]` tuples the @cas/schwarz engine (and its GPU twin's `packPhi`) take. */
+export interface SchwarzPhiCoeffs {
+  c: number;
+  F: SchwarzTuple[];
+  branches: SchwarzBranch[];
+}
+
+/**
+ * Extract φ's coefficients from a `form:"schwarz"` map, converting interchange `{re,im}` to the engine's
+ * `[re,im]` tuples. Shared by `schwarzEngineFromMapSpec` (CPU engine) and the GPU σ renderer (which packs
+ * these same coefficients into shader uniforms), so both reconstruct from ONE conversion. Throws for a
+ * shape the unbounded-Laurent family can't represent (non-Laurent φ / complex leading c).
+ */
+export function schwarzPhiFromMapSpec(sigma: SchwarzMap): SchwarzPhiCoeffs {
   const phi = sigma.phi;
   if (phi.form !== "laurent") {
     throw new Error("schwarz reconstruction supports a Laurent φ only (the unbounded-classical family)");
@@ -114,7 +127,12 @@ export function schwarzEngineFromMapSpec(sigma: SchwarzMap): UnboundedLaurentSch
     z: [br.z.re, br.z.im] as SchwarzTuple,
     A: br.A.map((a) => [a.re, a.im] as SchwarzTuple),
   }));
-  return makeUnboundedLaurentSchwarz(phi.c.re, F, branches);
+  return { c: phi.c.re, F, branches };
+}
+
+export function schwarzEngineFromMapSpec(sigma: SchwarzMap): UnboundedLaurentSchwarz {
+  const { c, F, branches } = schwarzPhiFromMapSpec(sigma);
+  return makeUnboundedLaurentSchwarz(c, F, branches);
 }
 
 /**

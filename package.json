@@ -14,7 +14,7 @@
     "test": "pnpm -r --filter \"./packages/*\" run build && vitest run --reporter=default --reporter=json --outputFile=./.vitest-census.json && node scripts/assert-test-census.mjs ./.vitest-census.json",
     "test:watch": "pnpm -r --filter \"./packages/*\" run build && vitest",
     "test:coverage": "pnpm -r --filter \"./packages/*\" run build && vitest run --coverage",
-    "test:browser": "pnpm -r --filter \"./packages/*\" run build && pnpm -C packages/gpu run test:browser && pnpm -C apps/complex-dynamics run test:browser && pnpm -C apps/quadrature-domains run test:browser",
+    "test:browser": "pnpm -r --filter \"./packages/*\" run build && pnpm -C packages/gpu run test:browser && pnpm -C packages/schwarz run test:browser && pnpm -C apps/complex-dynamics run test:browser && pnpm -C apps/quadrature-domains run test:browser",
     "typecheck": "pnpm -r --filter \"./packages/*\" run build && pnpm -r --filter \"./packages/*\" run typecheck && pnpm -r --filter \"./apps/*\" run typecheck",
     "lint": "eslint . && pnpm dep:check && pnpm -r --filter \"./packages/*\" run lint && pnpm -r --filter \"./apps/*\" run lint",
     "dep:check": "depcruise packages apps",
