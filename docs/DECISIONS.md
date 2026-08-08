@@ -698,5 +698,16 @@ one QD already validated for σ, so it is low-risk in design even though it is r
          with the standard plots' centre/zoom inputs); the fields mirror the live view as you drag/zoom
          and apply back to it. Parse/format is a pure, unit-tested pair (`parseSchwarzViewInput` /
          `formatSchwarzViewFields`) sharing the wheel gesture's zoom clamp.
-4. [ ] Update [SIGMA-HANDOFF.md](design/SIGMA-HANDOFF.md) so the peer-view is the target shape (superseding
-       the S4a overlay), and keep the map-specific instruments explicitly out of scope for σ.
+4. [x] Update [SIGMA-HANDOFF.md](design/SIGMA-HANDOFF.md) so the peer-view is the target shape (superseding
+       the S4a overlay), and keep the map-specific instruments explicitly out of scope for σ. **Done** — its
+       "Target shape — ADR-0009" section now reads REALIZED (the peer view supersedes the S4a `#JCSSchwarz`
+       overlay), the map-specific instruments (rays / Böttcher / matings / Yoccoz / laminations / the
+       inspector's period-multiplier-nucleus math) are called out explicitly out of scope for σ, and the
+       "Deferred enhancements" list moves items 1–3 to done, leaving only S5 (non-Laurent families,
+       branch-aware continuation, df64 σ, PQD GPU) deferred.
+
+**ALL FOUR ACTION ITEMS COMPLETE (2026-08-08).** σ is a first-class peer view with its own pane + controls
++ persistent lifecycle (item 1), full generic-parity coloring/inspection/legend/nav (item 3), and
+serializable state across share links / saved views / PNG metadata (item 2); the design doc records the
+peer view as the realized target shape (item 4). Deferred beyond this ADR: S5 (SIGMA-HANDOFF.md) — more
+families, branch-aware continuation, df64.

@@ -1747,3 +1747,18 @@
   errors. Green: typecheck / lint / test **2372 / 278** (+2 node: stamp-params), build. **ADR-0009 item 2
   DONE** (permalink + saved views + PNG metadata — all three surfaces). Remaining on ADR-0009: only item 4
   (SIGMA-HANDOFF.md target-shape update, docs-only).
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (ADR-0009 item 4 — docs; ADR-0009 COMPLETE):**
+  **docs-only.** Updated [SIGMA-HANDOFF.md](design/SIGMA-HANDOFF.md) so the peer view is the recorded target
+  shape (ADR-0009 item 4): its "Target shape — ADR-0009" section now reads **REALIZED (items 1–3)** and states
+  the peer view **supersedes the transient S4a `#JCSSchwarz` overlay** (that overlay was the ground-truth
+  stepping-stone; the `#schwarz-plot` pane is the shipped shape); the map-specific instruments (rays /
+  Böttcher / matings / Julia-set properties / Yoccoz / laminations / the inspector's
+  period-multiplier-nucleus math) are called out **explicitly out of scope for σ by nature**; and the
+  "Deferred enhancements" list moves items 1–3 (peer-view/mode, coloring, orbit inspection, legend + scale
+  bar + precise nav, serialization) to **done**, leaving only **S5** deferred (non-Laurent families on the
+  wire, branch-aware continuation through cusps [uncertified — RISKS §3], df64 σ, PQD GPU αth-root).
+  DECISIONS.md's ADR-0009 item 4 checked + an "ALL FOUR ACTION ITEMS COMPLETE" note added. **ADR-0009 is now
+  fully executed** — σ is a first-class peer view (item 1) with generic-parity coloring / orbit inspection /
+  legend / precise nav (item 3) and serializable state across share links / saved views / PNG (item 2),
+  recorded as the realized target shape (item 4). No code change; gates unaffected (test-census unchanged at
+  278 files). Next σ work, if any, is S5 — a separate, larger effort.

@@ -355,23 +355,30 @@ byte-match, CD reconstruct → the frozen σ(w₀)=2/3, vs the pole-free 1/3). S
 **Native σ in CD is complete end to end** — lift (S4b-i) → GPU render (ii) → interactive (iii) → native φ
 entry (iv).
 
-**Target shape — [ADR-0009](../DECISIONS.md#adr-0009-schwarz-reflection-is-a-first-class-peer-view-in-complex-dynamics):**
-σ becomes a **first-class peer view** in Complex Dynamics — its own pane + controls section + persistent
-lifecycle + serializable state (share links / saved views / PNG metadata) — alongside Parameter Space and
-Dynamical Plane, **not** the current transient overlay. The parity enhancements below build on that refactor.
-A parity review (against CD's Dynamical plane + QD's mature σ tool) sorted CD's power features into **generic**
-(reusable for σ: colormaps + scale modes, legend, scale bar, hover readout, iteration controls, share/saved
-views, PNG export, keyboard/pinch nav) and **map-specific** (rays, Böttcher, matings, Julia-set properties,
-Yoccoz, laminations, the inspector's period/multiplier/nucleus math — inapplicable to σ, and out of scope by
-nature).
+**Target shape — [ADR-0009](../DECISIONS.md#adr-0009-schwarz-reflection-is-a-first-class-peer-view-in-complex-dynamics): REALIZED (items 1–3).**
+σ is now a **first-class peer view** in Complex Dynamics — its own `#schwarz-plot` pane + controls section +
+persistent lifecycle + serializable state (share links / saved views / PNG metadata) — alongside Parameter
+Space and Dynamical Plane. This **supersedes the transient S4a overlay**: S4a-2's render onto `#JCSSchwarz`
+as an `.overlay` on the Dynamical plane was the ground-truth stepping-stone; the **peer view is the shipped
+shape** (the σ canvas is now that pane's primary canvas, entered/left as a mode, not dismissed by unrelated
+control changes). A parity review (against CD's Dynamical plane + QD's mature σ tool) sorted CD's power
+features into **generic** (reusable for σ — all now built on the peer view: colormaps + scale modes, legend,
+scale bar, orbit inspection, precise nav, share/saved views, PNG export) and **map-specific** (rays, Böttcher,
+matings, Julia-set properties, Yoccoz, laminations, the inspector's period/multiplier/nucleus math —
+**inapplicable to σ, and explicitly out of scope for σ by nature**).
 
-**Deferred enhancements (build on the peer-view refactor):** the **peer-view/mode** refactor itself (ADR-0009
-action items); **coloring** (colormap picker + scale modes — QD's σ shader already has them, dropped in the
-lift); σ **orbit inspection** (click/hover a w to trace its σ-orbit); a σ-**view permalink** (share-link +
-saved-view state; the builder fields are one-shot tool inputs today); **S5** (non-Laurent families on the
-wire, branch-aware continuation through cusps [uncertified — RISKS §3], df64 σ, PQD GPU αth-root). (A true
-cardioid needs a bounded/positive-power map, not this unbounded-Laurent family, so it is intentionally not
-offered as a preset — honest labeling.)
+**Built on the peer-view refactor — ADR-0009 DONE (items 1–3):** the **peer-view/mode** refactor (item 1 —
+its own pane + controls + a `.workspace.schwarz-active` mode, the control-apply dismissal coupling removed);
+σ **coloring** (item 3 — a colormap picker + escape-time scale modes, rebuilt on the shared `@cas/gpu`
+colormap texture, not CD's byte-frozen palette GLSL); σ **orbit inspection** (item 3 — click a w to trace its
+σ-orbit, drawn over the field in CD's orbit-preview idiom); the **legend + scale bar + precise nav** (item 3
+— reusing the standard plots' `legend-*` CSS and `drawScaleBar`); and σ-**view serialization** (item 2 —
+share link + saved views + a PNG-embedded `cdjs:state`, all via a hostile-link-hard `_sigma` codec that
+layers onto the `AppState` like `_z0`/`_grad`/`_proj`). Only **ADR-0009 item 4** — this doc update — remained,
+and it is now done. **Still deferred — S5:** non-Laurent families on the wire (bounded / LQD / PQD),
+branch-aware continuation through cusps (uncertified — RISKS §3), df64 σ deep-zoom, and the PQD GPU αth-root.
+(A true cardioid needs a bounded/positive-power map, not this unbounded-Laurent family, so it is intentionally
+not offered as a preset — honest labeling.)
 
 ### Highest-risk step
 **S2d** — QD's entire Schwarz UI (`schwarz-ui/paint/render/interaction/forward`) reads `QD.Schwarz`'s exact
