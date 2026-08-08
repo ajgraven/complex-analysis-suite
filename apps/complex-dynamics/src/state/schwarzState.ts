@@ -23,21 +23,32 @@ import {
   DEFAULT_SCHWARZ_SCALE,
 } from "../render/schwarzColormaps";
 
-/** Everything needed to reproduce a σ view: the φ recipe, the window, and the coloring. */
+/** Everything needed to reproduce a σ view: the φ recipe, the window, and the coloring (colormap + scale
+ *  + image-space tone). The tone fields (S5-A3) are identity at their defaults. */
 export interface SigmaViewState {
   phi: SchwarzPhi;
   center: Complex;
   zoom: number;
   colormap: string;
   scale: string;
+  /** Colormap-coordinate rotation ∈[0,1); 0 = none. */
+  rotation: number;
+  /** Output gamma; 1 = identity. */
+  gamma: number;
+  /** Radial edge darkening ∈[0,1]; 0 = off. */
+  vignette: number;
 }
+
+/** Identity/default image-space tone — a view with no tone adjustments (also the fallback for old links). */
+export const SIGMA_TONE_DEFAULTS = { rotation: 0, gamma: 1, vignette: 0 } as const;
 
 /** Hostile-link cap on each coefficient list (F, a pole's A, the pole count) — keep the engine bounded. */
 const MAX_TERMS = 64;
 
-/** Serialize to a compact JSON string (short keys keep the base64 permalink small). */
+/** Serialize to a compact JSON string (short keys keep the base64 permalink small). The tone keys are
+ *  omitted when they hold their identity default, so a plain view's link stays as small as before A3. */
 export function encodeSigmaState(s: SigmaViewState): string {
-  return JSON.stringify({
+  const out: Record<string, unknown> = {
     c: s.phi.c,
     F: s.phi.F,
     b: s.phi.branches.map((br) => ({ z: br.z, A: br.A })),
@@ -45,7 +56,11 @@ export function encodeSigmaState(s: SigmaViewState): string {
     z: s.zoom,
     cm: s.colormap,
     sc: s.scale,
-  });
+  };
+  if (s.rotation !== SIGMA_TONE_DEFAULTS.rotation) out.rot = s.rotation;
+  if (s.gamma !== SIGMA_TONE_DEFAULTS.gamma) out.gam = s.gamma;
+  if (s.vignette !== SIGMA_TONE_DEFAULTS.vignette) out.vig = s.vignette;
+  return JSON.stringify(out);
 }
 
 /**
@@ -58,7 +73,8 @@ export function schwarzStampParams(s: SigmaViewState): string {
   const F = s.phi.F.map(cplx).join(", ");
   return (
     `plane=Schwarz reflection sigma (approx); c=${r(s.phi.c)}; F=[${F}]; poles=${s.phi.branches.length}; ` +
-    `center=${cplx(s.center)}; zoom=${s.zoom.toExponential(3)}; colormap=${s.colormap}; scale=${s.scale}`
+    `center=${cplx(s.center)}; zoom=${s.zoom.toExponential(3)}; colormap=${s.colormap}; scale=${s.scale}; ` +
+    `rotation=${r(s.rotation)}; gamma=${r(s.gamma)}; vignette=${r(s.vignette)}`
   );
 }
 
@@ -117,5 +133,13 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   const scale =
     typeof o.sc === "string" && SCHWARZ_SCALE_MODES.some((m) => m.key === o.sc) ? o.sc : DEFAULT_SCHWARZ_SCALE;
 
-  return { phi: { c: o.c, F, branches }, center, zoom, colormap, scale };
+  // Image-space tone (S5-A3) — cosmetic + optional, so a bad/absent value clamps to the identity default
+  // rather than rejecting the whole (otherwise-valid) view.
+  const clampOr = (x: unknown, def: number, lo: number, hi: number): number =>
+    fin(x) ? Math.min(hi, Math.max(lo, x)) : def;
+  const rotation = clampOr(o.rot, SIGMA_TONE_DEFAULTS.rotation, 0, 1);
+  const gamma = clampOr(o.gam, SIGMA_TONE_DEFAULTS.gamma, 0.2, 5);
+  const vignette = clampOr(o.vig, SIGMA_TONE_DEFAULTS.vignette, 0, 1);
+
+  return { phi: { c: o.c, F, branches }, center, zoom, colormap, scale, rotation, gamma, vignette };
 }

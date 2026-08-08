@@ -561,6 +561,36 @@ abs(z)>2</textarea
                     id="schwarz-scale"
                     title="How the escape count maps onto the colour ramp (linear, log, sqrt, discrete, cyclic)"
                   ></select>
+                  <label for="schwarz-rotation">palette rotation</label>
+                  <input
+                    type="range"
+                    id="schwarz-rotation"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value="0"
+                    title="Cycle the colour ramp (S5-A3)"
+                  />
+                  <label for="schwarz-gamma">gamma</label>
+                  <input
+                    type="range"
+                    id="schwarz-gamma"
+                    min="0.4"
+                    max="2.5"
+                    step="0.05"
+                    value="1"
+                    title="Output gamma (1 = none)"
+                  />
+                  <label for="schwarz-vignette">vignette</label>
+                  <input
+                    type="range"
+                    id="schwarz-vignette"
+                    min="0"
+                    max="1"
+                    step="0.02"
+                    value="0"
+                    title="Darken toward the edges (0 = off)"
+                  />
                 </div>
                 <!-- Orbit inspection (ADR-0009 item 3): click the σ canvas to trace a point's orbit; the
                      readout below is populated from render/schwarzView.ts in main.ts. -->

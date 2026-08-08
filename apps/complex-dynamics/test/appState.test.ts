@@ -105,7 +105,10 @@ describe("SHARE_IDS DOM coverage", () => {
         // σ coloring (ADR-0009 item 3): colormap + escape-scale for the σ pane. Part of the σ view, which
         // travels via the `_sigma` state layer (item 2) — not as its own shared control, the same way the
         // standard-fractal `palette` is opted out (SHARE_IDS omission).
-        [["schwarz-colormap", "schwarz-scale"], "σ coloring (travels inside _sigma, not as a control id)"],
+        [
+          ["schwarz-colormap", "schwarz-scale", "schwarz-rotation", "schwarz-gamma", "schwarz-vignette"],
+          "σ coloring (travels inside _sigma, not as a control id)",
+        ],
         // σ precise-nav fields mirror the live σ view (centre + zoom) and apply back to it. The window is a
         // property of the σ view and travels inside `_sigma` (item 2) — not as a shared control in its own
         // right, the same way the standard plots' centre/zoom travel via the view, not these input ids.

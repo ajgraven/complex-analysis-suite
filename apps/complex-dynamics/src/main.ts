@@ -104,6 +104,7 @@ import {
   encodeSigmaState,
   parseSigmaState,
   schwarzStampParams,
+  SIGMA_TONE_DEFAULTS,
   type SigmaViewState,
 } from "./state/schwarzState";
 import { decodeLink, validateEnvelope, type Envelope, type SchwarzMap } from "@cas/interchange";
@@ -3003,6 +3004,10 @@ function init(): void {
   // regenerate (not written to storage; a σ-view permalink that would carry it is deferred — item 2).
   let schwarzColormapName = DEFAULT_SCHWARZ_COLORMAP;
   let schwarzScaleMode = DEFAULT_SCHWARZ_SCALE;
+  // σ image-space tone (S5-A3): palette rotation + gamma + vignette, part of the coloring the σ view serializes.
+  let schwarzRotation: number = SIGMA_TONE_DEFAULTS.rotation;
+  let schwarzGamma: number = SIGMA_TONE_DEFAULTS.gamma;
+  let schwarzVignette: number = SIGMA_TONE_DEFAULTS.vignette;
   // σ orbit inspection (ADR-0009 item 3): the currently-inspected orbit (w₀ = points[0]) or null. Its
   // polyline is redrawn over the field on every paint, so it stays pinned to w₀ as the view pans/zooms.
   let schwarzInspect: SchwarzOrbit | null = null;
@@ -3021,7 +3026,13 @@ function init(): void {
       canvas.height = size;
     }
     if (mode === "GPU" && schwarzGL) {
-      schwarzGL.render(schwarzView, size, { ...SCHWARZ_ESCAPE, scaleMode: schwarzScaleMode });
+      schwarzGL.render(schwarzView, size, {
+        ...SCHWARZ_ESCAPE,
+        scaleMode: schwarzScaleMode,
+        rotation: schwarzRotation,
+        gamma: schwarzGamma,
+        vignette: schwarzVignette,
+      });
       ctx.drawImage(schwarzGL.canvas, 0, 0);
     } else {
       const rgba = renderSchwarzField(engine, poly, schwarzView, size, SCHWARZ_ESCAPE);
@@ -3175,14 +3186,29 @@ function init(): void {
   function restoreSchwarzFromState(s: SigmaViewState): void {
     schwarzColormapName = s.colormap;
     schwarzScaleMode = s.scale;
+    schwarzRotation = s.rotation;
+    schwarzGamma = s.gamma;
+    schwarzVignette = s.vignette;
     renderSchwarzFromPhi(s.phi); // build engine + enter σ (resets the view to default, applies the colormap)
     schwarzView = { center: [s.center[0], s.center[1]], zoom: s.zoom }; // ...then restore the exact window
     const cm = document.getElementById("schwarz-colormap") as HTMLSelectElement | null;
     if (cm) cm.value = schwarzColormapName;
     const sc = document.getElementById("schwarz-scale") as HTMLSelectElement | null;
     if (sc) sc.value = schwarzScaleMode;
+    syncSchwarzToneControls();
     renderSchwarzLegendChip();
     scheduleSchwarzPaint(); // paint at the restored window (also mirrors it into the nav fields)
+  }
+
+  /** Mirror the σ tone state (rotation / gamma / vignette) into their sliders. */
+  function syncSchwarzToneControls(): void {
+    const set = (id: string, v: number): void => {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      if (el) el.value = String(v);
+    };
+    set("schwarz-rotation", schwarzRotation);
+    set("schwarz-gamma", schwarzGamma);
+    set("schwarz-vignette", schwarzVignette);
   }
   /** The σ view as a serializable state (for `_sigma` + the PNG stamp). Requires an active session. */
   function currentSigmaState(): SigmaViewState | null {
@@ -3193,6 +3219,9 @@ function init(): void {
       zoom: schwarzView.zoom,
       colormap: schwarzColormapName,
       scale: schwarzScaleMode,
+      rotation: schwarzRotation,
+      gamma: schwarzGamma,
+      vignette: schwarzVignette,
     };
   }
 
@@ -3213,7 +3242,13 @@ function init(): void {
     const size = Math.min(Number(sizeSel?.value) || 1024, getMaxTextureSize()); // single-pass ⇒ cap at the GPU max
     let canvas: HTMLCanvasElement;
     if (schwarzSession.mode === "GPU" && schwarzGL) {
-      schwarzGL.render(schwarzView, size, { ...SCHWARZ_ESCAPE, scaleMode: schwarzScaleMode });
+      schwarzGL.render(schwarzView, size, {
+        ...SCHWARZ_ESCAPE,
+        scaleMode: schwarzScaleMode,
+        rotation: schwarzRotation,
+        gamma: schwarzGamma,
+        vignette: schwarzVignette,
+      });
       const out = document.createElement("canvas");
       out.width = size;
       out.height = size;
@@ -3450,6 +3485,25 @@ function init(): void {
         scheduleSchwarzPaint();
       });
     }
+  }
+
+  // σ image-space tone (S5-A3): palette rotation + gamma + vignette sliders. Each live-updates the state
+  // and repaints (rAF-coalesced); the values travel in the σ view (`_sigma`), like the colormap + scale.
+  {
+    const wire = (id: string, apply: (v: number) => void): void => {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      if (!el) return;
+      el.addEventListener("input", () => {
+        const v = Number.parseFloat(el.value);
+        if (Number.isFinite(v)) {
+          apply(v);
+          scheduleSchwarzPaint();
+        }
+      });
+    };
+    wire("schwarz-rotation", (v) => (schwarzRotation = v));
+    wire("schwarz-gamma", (v) => (schwarzGamma = v));
+    wire("schwarz-vignette", (v) => (schwarzVignette = v));
   }
 
   // σ precise navigation (ADR-0009 item 3 — type an exact centre + zoom; parity with the standard plots).

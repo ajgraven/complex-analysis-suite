@@ -1784,3 +1784,26 @@
   over a point draws a preview (checksum 22591461 → 22602474), leaving the canvas clears it (back to
   22591461 exactly), and a click still pins the bold orbit; no console errors. Green: typecheck / lint /
   test 75 files, build. Next: A3 (σ image-space coloring).
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (S5 Phase A3 — σ image-space tone):**
+  the σ pane gains three **image-space tone** controls — **palette rotation** (cycle the colour ramp),
+  **gamma**, and **vignette** (radial edge darkening) — parity with the standard fractals' post controls.
+  `schwarzGL.ts` gains `u_paletteRotation` / `u_gamma` / `u_vignette`; `main()` is refactored into a
+  `fieldColor()` (the classification / escape-ramp lookup, unchanged) plus a small tone post-pass, and
+  `fundamentalColor` rotates the colormap coordinate — every tone step is applied **conditionally** (only
+  when non-default), so a default view is **byte-identical** to pre-A3. The tone rides the σ view: it is
+  serialized into `_sigma` (new `SIGMA_TONE_DEFAULTS`), and `encodeSigmaState` **omits** each tone key when
+  it holds its identity default (a plain view's link stays exactly as small as pre-A3); `parseSigmaState`
+  **clamps** each into its band (rotation 0–1, gamma 0.2–5, vignette 0–1) and — because tone is cosmetic —
+  **defaults** a bad/absent value rather than rejecting the whole (otherwise valid) view. `schwarzStampParams`
+  appends `rotation` / `gamma` / `vignette` to the PNG summary line. The three sliders join the σ-coloring
+  opt-out in appState's DOM-coverage guard (they travel inside `_sigma`, not as their own share ids), and
+  `restoreSchwarzFromState` syncs them from a loaded view. NET: +4 `schwarzState.test.ts` tone cases
+  (defaults when the keys are absent [old links]; round-trips a non-default tone AND the encoding omits
+  identity keys; clamps out-of-range into band; a non-finite tone value defaults rather than nulls the view)
+  + the stamp cases now assert the three tone fields. VERIFIED in the BUILT app (Playwright): each slider
+  visibly changes the σ render (gamma 1→2.4 Δ=23, rotation 0→.5 Δ=26, vignette 0→.9 Δ=2.9), and a full toned
+  view (rotation .3 / gamma 1.7 / vignette .5) → "Share link" → fresh page restores all three sliders and the
+  render is **pixel-identical** (Δ=0.00); the shader stays byte-identical at defaults (`schwarzGL.browser.test.ts`
+  5 tests, GPU). Green: typecheck / lint / test 75 files / 764, build. Phase A render-polish shipped (A1
+  export options, A2 hover-preview, A3 tone); deferred A3 sub-slices — custom gradient (reuse the gradient
+  editor), relief lighting, idle anti-aliasing accumulation — are clearly-scoped follow-ons, not started.

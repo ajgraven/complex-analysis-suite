@@ -57,6 +57,9 @@ uniform float     u_maskHalfExtent;
 uniform sampler2D u_colormap;        // 256×1 escape-time ramp (a @cas/gpu colormap texture)
 uniform int       u_scaleMode;       // 0 linear · 1 log · 2 sqrt · 3 discrete · 4 cyclic
 uniform int       u_modK;            // period for the cyclic mode
+uniform float     u_paletteRotation; // colormap-coordinate offset ∈[0,1) (0 = none); S5-A3 image-space tone
+uniform float     u_gamma;           // output gamma (1 = identity)
+uniform float     u_vignette;        // radial edge darkening (0 = off)
 ${SIGMA_UNIFORMS_GLSL}
 ${SIGMA_COMPLEX_GLSL}
 ${SIGMA_EVAL_GLSL}
@@ -86,31 +89,46 @@ float computeT(int n) {
   return clamp(t, 0.0, 1.0);
 }
 // The fundamental (tiling) set is colored by the selected colormap; escaped / interior / invalid stay flat.
+// The rotation offset is cyclic (fract), applied ONLY when non-zero so the default (0) is byte-identical to
+// the pre-A3 lookup — the CLAMP_TO_EDGE ramp keeps t=1 on the bright end.
 vec3 fundamentalColor(int n) {
-  return texture(u_colormap, vec2(computeT(n), 0.5)).rgb;
+  float t = computeT(n);
+  if (u_paletteRotation != 0.0) t = fract(t + u_paletteRotation);
+  return texture(u_colormap, vec2(t, 0.5)).rgb;
 }
 
-void main() {
+// The classification color at this fragment (fundamental via the colormap; escaped/invalid/interior flat).
+vec3 fieldColor() {
   // Fragment → complex w, matching schwarzView.ts pixelToPlot. gl_FragCoord is pixel-centered and y-up;
   // the caller drawImages this canvas 1:1, so y-up here lands as +Im at the top, as the CPU path intends.
   float re = u_center.x + (2.0 * gl_FragCoord.x / u_size - 1.0) / u_zoom;
   float im = u_center.y + (2.0 * gl_FragCoord.y / u_size - 1.0) / u_zoom;
   vec2 w = vec2(re, im);
 
-  if (!inOmega(w)) { outColor = vec4(fundamentalColor(0), 1.0); return; }  // w₀ ∈ K ⇒ fundamental n=0
+  if (!inOmega(w)) return fundamentalColor(0);                   // w₀ ∈ K ⇒ fundamental n=0
   vec2 zSeed = newtonSeedFresh(w);
   bool ok = true;
   for (int n = 1; n <= 512; ++n) {           // 512 ≫ any maxIter; the real bound is u_maxIter below
     if (n > u_maxIter) break;
     vec2 next = sigma(w, zSeed, ok);
-    if (!ok) { outColor = vec4(vec3(80.0) / 255.0, 1.0); return; }         // invalid (inverse failed)
+    if (!ok) return vec3(80.0) / 255.0;                          // invalid (inverse failed)
     w = next;
-    if (any(isnan(w)) || any(isinf(w)) || length(w) > u_escapeR) {
-      outColor = vec4(0.0, 0.0, 0.0, 1.0); return;                         // escaped → ∞
-    }
-    if (!inOmega(w)) { outColor = vec4(fundamentalColor(n), 1.0); return; } // entered K ⇒ fundamental n
+    if (any(isnan(w)) || any(isinf(w)) || length(w) > u_escapeR) return vec3(0.0);  // escaped → ∞
+    if (!inOmega(w)) return fundamentalColor(n);                 // entered K ⇒ fundamental n
   }
-  outColor = vec4(vec3(18.0, 20.0, 46.0) / 255.0, 1.0);                    // interior (non-escaping)
+  return vec3(18.0, 20.0, 46.0) / 255.0;                         // interior (non-escaping)
+}
+
+void main() {
+  vec3 col = fieldColor();
+  // Image-space tone (S5-A3), each applied only when non-default so defaults stay byte-exact.
+  if (u_gamma != 1.0) col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / u_gamma));     // gamma
+  if (u_vignette > 0.0) {                                                       // radial edge darkening
+    vec2 d = gl_FragCoord.xy / u_size - 0.5;
+    float r2 = dot(d, d) * 2.0;                                                 // 0 at centre, 1 at corners
+    col *= 1.0 - u_vignette * r2;
+  }
+  outColor = vec4(col, 1.0);
 }`;
 
 /** Render options for the GPU σ path — the CPU escape options plus GPU-only coloring controls. */
@@ -119,6 +137,12 @@ export interface SchwarzGLRenderOptions extends SchwarzRenderOptions {
   scaleMode?: string;
   /** Period for the cyclic scale mode; default 8. */
   modK?: number;
+  /** Image-space tone (S5-A3), all identity at their defaults. Colormap-coordinate rotation ∈[0,1); 0 = none. */
+  rotation?: number;
+  /** Output gamma; 1 = identity. */
+  gamma?: number;
+  /** Radial edge darkening ∈[0,1]; 0 = off. */
+  vignette?: number;
 }
 
 export interface SchwarzGLRenderer {
@@ -174,6 +198,9 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
   const uColormap = U("u_colormap");
   const uScaleMode = U("u_scaleMode");
   const uModK = U("u_modK");
+  const uPaletteRotation = U("u_paletteRotation");
+  const uGamma = U("u_gamma");
+  const uVignette = U("u_vignette");
 
   let packed: PackedPhi | null = null;
   let maskTex: WebGLTexture | null = null;
@@ -218,6 +245,9 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
 
     ctx.uniform1i(uScaleMode, schwarzScaleId(opts.scaleMode ?? DEFAULT_SCHWARZ_SCALE));
     ctx.uniform1i(uModK, Math.max(2, opts.modK ?? 8));
+    ctx.uniform1f(uPaletteRotation, opts.rotation ?? 0); // S5-A3 image-space tone; defaults are identity
+    ctx.uniform1f(uGamma, opts.gamma ?? 1);
+    ctx.uniform1f(uVignette, opts.vignette ?? 0);
 
     ctx.activeTexture(ctx.TEXTURE0);
     ctx.bindTexture(ctx.TEXTURE_2D, maskTex);
