@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { encodeSigmaState, parseSigmaState, type SigmaViewState } from "../src/state/schwarzState";
+import {
+  encodeSigmaState,
+  parseSigmaState,
+  schwarzStampParams,
+  type SigmaViewState,
+} from "../src/state/schwarzState";
 import { SCHWARZ_ZOOM_MIN, SCHWARZ_ZOOM_MAX } from "../src/render/schwarzView";
 import { DEFAULT_SCHWARZ_COLORMAP, DEFAULT_SCHWARZ_SCALE } from "../src/render/schwarzColormaps";
 
@@ -85,5 +90,26 @@ describe("parseSigmaState — hostile-link hardening", () => {
   it("treats absent branches as no poles (not an error)", () => {
     const s = parseSigmaState(enc({ c: 1, F: [[0, 0], [0, 0], [0.5, 0]], ctr: [0, 0], z: 0.4 }));
     expect(s?.phi.branches).toEqual([]);
+  });
+});
+
+describe("schwarzStampParams (PNG metadata summary)", () => {
+  it("summarises the σ view in one ASCII-safe line (no σ / ≈ / Unicode minus)", () => {
+    const s = schwarzStampParams(DELTOID);
+    expect(s).toContain("plane=Schwarz reflection sigma (approx)");
+    expect(s).toContain("c=1");
+    expect(s).toContain("poles=0");
+    expect(s).toContain("center=0+0i");
+    expect(s).toContain("colormap=viridis");
+    expect(s).toContain("scale=linear");
+    expect(s).not.toMatch(/[σ≈−]/); // PNG tEXt is Latin-1
+  });
+
+  it("reports the pole count and non-default coloring", () => {
+    const s = schwarzStampParams(POLE);
+    expect(s).toContain("poles=1");
+    expect(s).toContain("colormap=turbo");
+    expect(s).toContain("scale=sqrt");
+    expect(s).toContain("center=0.6-0.3i");
   });
 });

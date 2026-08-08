@@ -664,7 +664,14 @@ one QD already validated for σ, so it is low-risk in design even though it is r
        `.plot` section inside `main.plots`, entered/left via a `.workspace.schwarz-active` mode class
        (modeled on the per-plot `expand` layout); the σ canvas + φ builder moved into it; the
        control-apply dismissal coupling removed. Verified in the built app (Playwright mode switch).
-2. [ ] Serialize σ-view state (φ recipe + view + coloring) into share links / saved views / PNG metadata.
+2. [x] Serialize σ-view state (φ recipe + view + coloring) into share links / saved views / PNG metadata.
+       **Done** — layered onto the `AppState` as a single `_sigma` key (like `_z0` / `_grad` / `_proj`), so
+       one hook in `readFullState` / `applyFullState` lights up permalinks AND saved views (both flow
+       through it); the PNG "Save PNG" export embeds the same permalink as a `cdjs:state` tEXt (+ a
+       `cdjs:sigma` summary). The `_sigma` codec (`state/schwarzState.ts`) is hostile-link hard (rejects
+       non-finite/malformed input, caps lists, enforces `|z_j| < 1`, clamps zoom). Verified in the built
+       app (Playwright): a σ view round-trips through a permalink, a saved view, and a PNG's embedded
+       permalink — pixel-identical restore.
 3. [x] Bring the generic parity features into the σ controls section (colormaps + scale modes, orbit
        inspection, legend + scale bar, precise nav), reusing CD's field-agnostic machinery. **Done** —
        all four sub-features below.

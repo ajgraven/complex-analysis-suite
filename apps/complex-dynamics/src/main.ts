@@ -10,7 +10,7 @@ import "./styles/main.css";
 import type { Vec2 } from "./arrays";
 import { argDegrees, formatComplex, parseComplex, truncateComplex, type Complex } from "./complex";
 import { PROJECTIONS, type ProjectionMode } from "./render/projection";
-import { getMaxTextureSize } from "./hiResExport";
+import { getMaxTextureSize, downloadCanvas } from "./hiResExport";
 import { PlotView } from "./render/plotView";
 import type { GLPlot, FractType } from "./render/glPlot";
 import { initialRes } from "./render/glPlot";
@@ -100,7 +100,12 @@ import {
   saveSavedViews,
   type AppState,
 } from "./state/appState";
-import { encodeSigmaState, parseSigmaState, type SigmaViewState } from "./state/schwarzState";
+import {
+  encodeSigmaState,
+  parseSigmaState,
+  schwarzStampParams,
+  type SigmaViewState,
+} from "./state/schwarzState";
 import { decodeLink, validateEnvelope, type Envelope, type SchwarzMap } from "@cas/interchange";
 import {
   envelopeToMapSpec,
@@ -2860,15 +2865,8 @@ function init(): void {
     // σ peer view (ADR-0009 item 2): when σ is showing, layer its view state (φ recipe + window + coloring)
     // so a permalink / saved view / PNG reproduces it. Present-only — a state without `_sigma` is a normal
     // fractal view, and applyFullState leaves σ for it.
-    if (schwarzSession) {
-      state._sigma = encodeSigmaState({
-        phi: schwarzSession.phi,
-        center: schwarzView.center,
-        zoom: schwarzView.zoom,
-        colormap: schwarzColormapName,
-        scale: schwarzScaleMode,
-      });
-    }
+    const sig = currentSigmaState();
+    if (sig) state._sigma = encodeSigmaState(sig);
     return state;
   }
 
@@ -3181,6 +3179,56 @@ function init(): void {
     renderSchwarzLegendChip();
     scheduleSchwarzPaint(); // paint at the restored window (also mirrors it into the nav fields)
   }
+  /** The σ view as a serializable state (for `_sigma` + the PNG stamp). Requires an active session. */
+  function currentSigmaState(): SigmaViewState | null {
+    if (!schwarzSession) return null;
+    return {
+      phi: schwarzSession.phi,
+      center: schwarzView.center,
+      zoom: schwarzView.zoom,
+      colormap: schwarzColormapName,
+      scale: schwarzScaleMode,
+    };
+  }
+
+  /**
+   * Save the σ view as a PNG with the reproducible state embedded (ADR-0009 item 2, PNG surface). Re-renders
+   * the field clean (no orbit overlay) at `size` on the GPU when available — a crisper export than the
+   * on-screen 512² — else falls back to the current canvas. The `cdjs:state` tEXt is the same permalink
+   * `readFullState` builds, so it now carries `_sigma`; `cdjs:sigma` is a human-readable summary.
+   */
+  async function saveSchwarzPng(): Promise<void> {
+    const sig = currentSigmaState();
+    if (!schwarzSession || !sig) return;
+    let canvas: HTMLCanvasElement;
+    if (schwarzSession.mode === "GPU" && schwarzGL) {
+      const size = 1024; // hi-res single-pass GPU render, well under any WebGL2 max texture size
+      schwarzGL.render(schwarzView, size, { ...SCHWARZ_ESCAPE, scaleMode: schwarzScaleMode });
+      const out = document.createElement("canvas");
+      out.width = size;
+      out.height = size;
+      const octx = out.getContext("2d");
+      if (!octx) return;
+      octx.drawImage(schwarzGL.canvas, 0, 0);
+      drawScaleBar(octx, size, schwarzView.zoom); // keep the scale reference; omit the transient orbit overlay
+      canvas = out;
+      scheduleSchwarzPaint(); // the render above resized the offscreen GL canvas — repaint the on-screen 512²
+    } else {
+      canvas = byId<HTMLCanvasElement>("JCSSchwarz"); // CPU fallback: the current field as shown
+    }
+    const metadata: Record<string, string> = {
+      Software: "ComplexDynamicsJS",
+      "cdjs:sigma": schwarzStampParams(sig),
+      "cdjs:state": `${location.origin}${location.pathname}${encodeState(readFullState())}`,
+    };
+    try {
+      await downloadCanvas(canvas, "schwarz-sigma.png", metadata);
+      showToast("Saved the σ image (state embedded in the PNG).", "info");
+    } catch {
+      showToast("Could not save the σ image.", "warn");
+    }
+  }
+
   /** Leave the σ peer view — back to the Parameter & Dynamical plots. Idempotent (safe if not in σ mode). */
   function exitSchwarzView(): void {
     schwarzSession = null;
@@ -3398,6 +3446,8 @@ function init(): void {
         scheduleSchwarzPaint();
       });
     }
+    const savePngBtn = document.getElementById("schwarz-save-png");
+    if (savePngBtn) savePngBtn.addEventListener("click", () => void saveSchwarzPng()); // PNG w/ embedded state
   }
 
   /**

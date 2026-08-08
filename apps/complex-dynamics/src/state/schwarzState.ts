@@ -48,6 +48,20 @@ export function encodeSigmaState(s: SigmaViewState): string {
   });
 }
 
+/**
+ * A human-readable one-line summary of a σ view, for a PNG's `cdjs:sigma` tEXt chunk. ASCII-safe — PNG
+ * tEXt is Latin-1, so no σ / ≈ / Unicode minus (matching buildStampMetadata's ASCII-only rule).
+ */
+export function schwarzStampParams(s: SigmaViewState): string {
+  const r = (x: number): string => Number.parseFloat(x.toPrecision(6)).toString();
+  const cplx = (z: Complex): string => `${r(z[0])}${z[1] >= 0 ? "+" : "-"}${r(Math.abs(z[1]))}i`;
+  const F = s.phi.F.map(cplx).join(", ");
+  return (
+    `plane=Schwarz reflection sigma (approx); c=${r(s.phi.c)}; F=[${F}]; poles=${s.phi.branches.length}; ` +
+    `center=${cplx(s.center)}; zoom=${s.zoom.toExponential(3)}; colormap=${s.colormap}; scale=${s.scale}`
+  );
+}
+
 function fin(x: unknown): x is number {
   return typeof x === "number" && Number.isFinite(x);
 }

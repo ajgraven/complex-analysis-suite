@@ -1730,3 +1730,20 @@
   (checksum 86040483 = 86040483); save a view, perturb (grayscale + reset), load it back → σ restores; no
   console errors. Green: typecheck / lint / test **2370 / 278** (+11 node: σ-state codec; +1 file), build.
   ADR-0009 item 2: permalink + saved views done; remaining: PNG-metadata export (Stage B).
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (ADR-0009 item 2, Stage B — σ PNG export):**
+  **ADR-0009 action item 2 is now COMPLETE** — a "Save PNG" button in the σ pane downloads the σ image with
+  the reproducible state embedded, the third of item 2's three surfaces. It re-renders the field CLEAN (no
+  orbit overlay) at **1024²** on the GPU when available — crisper than the on-screen 512² — with the scale
+  bar, falling back to the current canvas on the CPU path, then reuses `hiResExport.downloadCanvas`
+  (`toBlob` → `injectPngText` → download). The PNG carries two tEXt chunks: `cdjs:state` = the SAME
+  permalink `readFullState` builds (so it now carries `_sigma`), and `cdjs:sigma` = a human-readable,
+  ASCII-safe one-line summary (`schwarzStampParams`, pure + tested — PNG tEXt is Latin-1, so no σ/≈/Unicode
+  minus). `readFullState`'s `_sigma` layer + the PNG stamp both source the view through one
+  `currentSigmaState()` helper. NET: +2 `schwarzState.test.ts` cases pin `schwarzStampParams` (ASCII-only,
+  reports c / poles / centre / colormap / scale). VERIFIED in the BUILT app (Playwright): build a
+  distinctive σ view (turbo + sqrt + centre 0.6−0.3i, zoom 1.2) → "Save PNG" → the download is a valid
+  **1024² PNG** whose metadata contains `cdjs:sigma` (colormap=turbo, scale=sqrt) + `cdjs:state` (`#vs=`),
+  and **the embedded permalink, opened fresh, reopens the exact σ view** (turbo/sqrt/zoom 1.2); no console
+  errors. Green: typecheck / lint / test **2372 / 278** (+2 node: stamp-params), build. **ADR-0009 item 2
+  DONE** (permalink + saved views + PNG metadata — all three surfaces). Remaining on ADR-0009: only item 4
+  (SIGMA-HANDOFF.md target-shape update, docs-only).
