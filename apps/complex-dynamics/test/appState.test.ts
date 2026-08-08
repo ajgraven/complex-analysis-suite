@@ -67,6 +67,10 @@ describe("SHARE_IDS DOM coverage", () => {
             "dynExportScaleBar",
             "mImageName",
             "jImageName",
+            // σ PNG export (S5-A1): size + which overlays to bake into the file — file properties, not the view.
+            "schwarz-export-size",
+            "schwarz-export-scalebar",
+            "schwarz-export-orbit",
           ],
           "export setting",
         ],

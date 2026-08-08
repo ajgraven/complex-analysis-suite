@@ -2490,7 +2490,7 @@ function init(): void {
   /** Disable export-size options the current GPU can't handle. */
   function disableUnsupportedSizes(): void {
     const max = getMaxTextureSize();
-    for (const id of ["paramExportSize", "dynExportSize"]) {
+    for (const id of ["paramExportSize", "dynExportSize", "schwarz-export-size"]) {
       const select = byId<HTMLSelectElement>(id);
       for (const option of Array.from(select.options)) {
         if (Number(option.value) > max) option.disabled = true;
@@ -3200,9 +3200,14 @@ function init(): void {
   async function saveSchwarzPng(): Promise<void> {
     const sig = currentSigmaState();
     if (!schwarzSession || !sig) return;
+    // Export options (S5-A1): size + which overlays to bake in. The GPU path re-renders clean at `size`;
+    // the CPU fallback can only give the on-screen field (per-pixel Newton at hi-res is too slow).
+    const sizeSel = document.getElementById("schwarz-export-size") as HTMLSelectElement | null;
+    const wantScaleBar = (document.getElementById("schwarz-export-scalebar") as HTMLInputElement | null)?.checked ?? true;
+    const wantOrbit = (document.getElementById("schwarz-export-orbit") as HTMLInputElement | null)?.checked ?? false;
+    const size = Math.min(Number(sizeSel?.value) || 1024, getMaxTextureSize()); // single-pass ⇒ cap at the GPU max
     let canvas: HTMLCanvasElement;
     if (schwarzSession.mode === "GPU" && schwarzGL) {
-      const size = 1024; // hi-res single-pass GPU render, well under any WebGL2 max texture size
       schwarzGL.render(schwarzView, size, { ...SCHWARZ_ESCAPE, scaleMode: schwarzScaleMode });
       const out = document.createElement("canvas");
       out.width = size;
@@ -3210,11 +3215,12 @@ function init(): void {
       const octx = out.getContext("2d");
       if (!octx) return;
       octx.drawImage(schwarzGL.canvas, 0, 0);
-      drawScaleBar(octx, size, schwarzView.zoom); // keep the scale reference; omit the transient orbit overlay
+      if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size);
+      if (wantScaleBar) drawScaleBar(octx, size, schwarzView.zoom);
       canvas = out;
       scheduleSchwarzPaint(); // the render above resized the offscreen GL canvas — repaint the on-screen 512²
     } else {
-      canvas = byId<HTMLCanvasElement>("JCSSchwarz"); // CPU fallback: the current field as shown
+      canvas = byId<HTMLCanvasElement>("JCSSchwarz"); // CPU fallback: the current field as shown (size ignored)
     }
     const metadata: Record<string, string> = {
       Software: "ComplexDynamicsJS",

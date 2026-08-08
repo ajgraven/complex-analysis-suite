@@ -606,6 +606,19 @@ abs(z)>2</textarea
                 </div>
                 <!-- Save the σ view as a PNG with the reproducible state embedded (ADR-0009 item 2). -->
                 <div class="field schwarz-export">
+                  <label for="schwarz-export-size">export size</label>
+                  <select id="schwarz-export-size" title="Pixel size of the saved σ PNG (single-pass GPU render; capped at this GPU's max texture size)">
+                    <option value="512">512</option>
+                    <option value="1024" selected>1024</option>
+                    <option value="2048">2048</option>
+                    <option value="4096">4096</option>
+                  </select>
+                  <label class="checkbox" title="Draw the scale bar on the saved image">
+                    <input type="checkbox" id="schwarz-export-scalebar" checked /> scale bar
+                  </label>
+                  <label class="checkbox" title="Include the traced orbit (if one is inspected) on the saved image">
+                    <input type="checkbox" id="schwarz-export-orbit" /> include orbit
+                  </label>
                   <button
                     id="schwarz-save-png"
                     type="button"

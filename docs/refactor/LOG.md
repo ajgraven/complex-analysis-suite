@@ -1762,3 +1762,14 @@
   legend / precise nav (item 3) and serializable state across share links / saved views / PNG (item 2),
   recorded as the realized target shape (item 4). No code change; gates unaffected (test-census unchanged at
   278 files). Next σ work, if any, is S5 — a separate, larger effort.
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (S5 Phase A1 — σ export options):**
+  first slice of the post-ADR-0009 S5 render-polish workstream. The σ "Save PNG" export gains an **export-size
+  picker** (512 / 1024 / 2048 / 4096, capped at this GPU's max texture size via `getMaxTextureSize` +
+  `disableUnsupportedSizes`) and **scale-bar / include-orbit toggles** — parity with the standard plots'
+  export options. The GPU path re-renders clean at the chosen size (single-pass), optionally baking in the
+  scale bar and/or the currently-inspected orbit; the CPU fallback keeps the on-screen field. The three
+  controls are file properties (not the view), so they join the export-settings opt-out in appState's
+  DOM-coverage guard. VERIFIED in the BUILT app (Playwright): export at 2048 → a 2048² PNG; scale-bar OFF/ON →
+  bottom-left white pixels 0 → 120; include-orbit ON vs OFF → the PNG changes (orbit baked in); no console
+  errors. Green: typecheck / lint / test, build. Branch restarted from the freshly-merged master (#246);
+  Phase A stacks on top. Next: A2 (σ hover orbit-preview).
