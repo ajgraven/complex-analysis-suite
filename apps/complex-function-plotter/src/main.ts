@@ -1,10 +1,13 @@
-// Complex Function Plotting Tool — Phase 1 (Milestones 1A + 1B): a live 2D domain-coloring plotter.
+// Complex Function Plotting Tool — the app entry: it wires the DOM to the render engine and the CPU
+// instruments. Through Phase 2 (the instrumented 2D research tool):
 //
 // Type f(z) (or pick a preset); it is parsed and compiled by @cas/expr (to GLSL for the render and to
-// a JS evaluator for the cursor probe), typeset live with KaTeX, and drawn by the layered coloring
-// engine. Pan / zoom / reset, a coordinate grid + scale bar, phase-wheel and modulus legends, a cursor
-// readout, share-links (#vs= via @cas/interchange), and PNG export. Enhanced portraits, instruments,
-// and the 3D views come in later phases.
+// a JS evaluator for the probe/instruments), typeset live with KaTeX, and drawn by the layered coloring
+// engine (colorShader.ts): phase colormap × modulus transfer × an fwidth-AA enhancement (rings /
+// sectors / conformal grid / …), plus level sets, a CVD preview, and an honest-labeling uncertainty
+// hatch. Around it: pan / zoom / reset, axes + grid + scale bar, phase-wheel and modulus legends, a
+// cursor readout, the zero/pole finder (analysis/singularities.ts), share-links (#vs= via
+// @cas/interchange), and PNG export. Parameters/animation (Phase 3) and the 3D views (Phase 5) follow.
 import "katex/dist/katex.min.css";
 import katex from "katex";
 import { parse } from "@cas/expr/parser";
@@ -20,7 +23,12 @@ import { drawModulusBar, drawPhaseWheel } from "./ui/legends.js";
 import { drawAxes } from "./ui/axes.js";
 import { drawMarkers } from "./ui/markers.js";
 import { findSingularities, type Singularities } from "./analysis/singularities.js";
-import { decodeState, encodeState, shareUrl, type PlotterState } from "./state/viewState.js";
+import {
+  decodeState,
+  encodeState,
+  shareUrl,
+  type PlotterState,
+} from "./state/viewState.js";
 
 const DEFAULTS: PlotterState = {
   expr: "z^2",
@@ -80,7 +88,11 @@ function main(): void {
   const pfz = byId("pfz");
   const pabs = byId("pabs");
   const parg = byId("parg");
-  if (!(canvas instanceof HTMLCanvasElement) || !(axesCanvas instanceof HTMLCanvasElement)) return;
+  if (
+    !(canvas instanceof HTMLCanvasElement) ||
+    !(axesCanvas instanceof HTMLCanvasElement)
+  )
+    return;
 
   const setError = (msg: string): void => {
     if (errorEl) {
@@ -178,7 +190,8 @@ function main(): void {
   };
   const recomputeSings = (): void => {
     if (markSings && probeFn) {
-      const aspect = canvas.clientHeight > 0 ? canvas.clientWidth / canvas.clientHeight : 1;
+      const aspect =
+        canvas.clientHeight > 0 ? canvas.clientWidth / canvas.clientHeight : 1;
       sings = findSingularities(probeFn, fpFn, plot.view, aspect);
     } else {
       sings = null;
@@ -226,7 +239,12 @@ function main(): void {
 
   const drawLegends = (): void => {
     if (wheelCanvas instanceof HTMLCanvasElement)
-      drawPhaseWheel(wheelCanvas, plot.color.colormap, plot.color.hueShift, plot.color.hueSign);
+      drawPhaseWheel(
+        wheelCanvas,
+        plot.color.colormap,
+        plot.color.hueShift,
+        plot.color.hueSign,
+      );
     if (modbarCanvas instanceof HTMLCanvasElement)
       drawModulusBar(modbarCanvas, plot.color.modulus, plot.color.modScale);
   };
@@ -257,7 +275,8 @@ function main(): void {
   }
   if (sectorsInput instanceof HTMLInputElement) {
     const showSectors = (): void => {
-      if (sectorsVal instanceof HTMLElement) sectorsVal.textContent = String(plot.color.sectors);
+      if (sectorsVal instanceof HTMLElement)
+        sectorsVal.textContent = String(plot.color.sectors);
     };
     sectorsInput.value = String(plot.color.sectors);
     showSectors();
@@ -338,7 +357,10 @@ function main(): void {
     presetSel.addEventListener("change", () => {
       const preset = PRESETS[Number(presetSel.value)];
       if (!preset) return;
-      if (exprInput instanceof HTMLTextAreaElement || exprInput instanceof HTMLInputElement)
+      if (
+        exprInput instanceof HTMLTextAreaElement ||
+        exprInput instanceof HTMLInputElement
+      )
         exprInput.value = preset.expr;
       plot.view = { cx: 0, cy: 0, span: preset.span };
       framingSpan = preset.span;
