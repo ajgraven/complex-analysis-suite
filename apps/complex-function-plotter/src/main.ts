@@ -1,26 +1,58 @@
-// Complex Function Plotting Tool — Phase 1, Milestone 1A: a live 2D domain-coloring plotter.
+// Complex Function Plotting Tool — Phase 1 (Milestones 1A + 1B): a live 2D domain-coloring plotter.
 //
-// Type a function f(z); it is parsed and compiled by @cas/expr (to GLSL for the render and, later, to
-// JS for the instruments), typeset live with KaTeX (toLatex), and drawn by the layered coloring engine
-// with pan / zoom-to-cursor / progressive rendering. Navigation polish, legends, the cursor probe,
-// presets, and share-links follow in Milestone 1B.
+// Type f(z) (or pick a preset); it is parsed and compiled by @cas/expr (to GLSL for the render and to
+// a JS evaluator for the cursor probe), typeset live with KaTeX, and drawn by the layered coloring
+// engine. Pan / zoom / reset, a coordinate grid + scale bar, phase-wheel and modulus legends, a cursor
+// readout, share-links (#vs= via @cas/interchange), and PNG export. Enhanced portraits, instruments,
+// and the 3D views come in later phases.
 import "katex/dist/katex.min.css";
 import katex from "katex";
 import { parse } from "@cas/expr/parser";
 import { toLatex } from "@cas/expr/latex";
 import { ExprError } from "@cas/expr/ast";
+import { makeComplexFn } from "@cas/expr/evaluate";
+import type { Complex } from "@cas/expr/complex";
 import { Plot } from "./render/plot.js";
 import { COLORMAPS } from "./render/colormaps.js";
+import { PRESETS } from "./presets.js";
+import { drawModulusBar, drawPhaseWheel } from "./ui/legends.js";
+import { drawAxes } from "./ui/axes.js";
+import { decodeState, encodeState, shareUrl, type PlotterState } from "./state/viewState.js";
+
+const DEFAULTS: PlotterState = { expr: "z^2", cx: 0, cy: 0, span: 2, colormap: 0, modulus: 2 };
+
+function addOption(sel: HTMLSelectElement, value: string, label: string): void {
+  const opt = document.createElement("option");
+  opt.value = value;
+  opt.textContent = label;
+  sel.appendChild(opt);
+}
+
+function clampIndex(v: number, n: number): number {
+  const i = Math.floor(v);
+  return i >= 0 && i < n ? i : 0;
+}
 
 function main(): void {
-  const canvas = document.getElementById("view");
-  const exprInput = document.getElementById("expr");
-  const previewEl = document.getElementById("preview");
-  const errorEl = document.getElementById("error");
-  const colormapSel = document.getElementById("colormap");
-  const modulusSel = document.getElementById("modulus");
-  const homeBtn = document.getElementById("home");
-  if (!(canvas instanceof HTMLCanvasElement)) return;
+  const byId = (id: string): HTMLElement | null => document.getElementById(id);
+  const canvas = byId("view");
+  const axesCanvas = byId("axes");
+  const exprInput = byId("expr");
+  const previewEl = byId("preview");
+  const errorEl = byId("error");
+  const colormapSel = byId("colormap");
+  const modulusSel = byId("modulus");
+  const presetSel = byId("preset");
+  const homeBtn = byId("home");
+  const savePngBtn = byId("savePng");
+  const copyLinkBtn = byId("copyLink");
+  const wheelCanvas = byId("wheel");
+  const modbarCanvas = byId("modbar");
+  const pz = byId("pz");
+  const pfz = byId("pfz");
+  const pabs = byId("pabs");
+  const parg = byId("parg");
+  if (!(canvas instanceof HTMLCanvasElement) || !(axesCanvas instanceof HTMLCanvasElement)) return;
 
   const setError = (msg: string): void => {
     if (errorEl) {
@@ -29,6 +61,8 @@ function main(): void {
     }
   };
 
+  const initial = decodeState(location.hash) ?? DEFAULTS;
+
   let plot: Plot;
   try {
     plot = new Plot(canvas, "z^2");
@@ -36,7 +70,47 @@ function main(): void {
     setError(err instanceof Error ? err.message : String(err));
     return;
   }
-  const home = { ...plot.view };
+  plot.view = { cx: initial.cx, cy: initial.cy, span: initial.span };
+  plot.color.colormap = clampIndex(initial.colormap, COLORMAPS.length);
+  plot.color.modulus = clampIndex(initial.modulus, 5);
+  let framingSpan = initial.span;
+
+  let probeFn: ((z: Complex, c: Complex) => Complex) | null = null;
+  const updateProbeFn = (src: string): void => {
+    try {
+      probeFn = makeComplexFn(parse(src));
+    } catch {
+      probeFn = null;
+    }
+  };
+
+  const exprValue = (): string =>
+    exprInput instanceof HTMLTextAreaElement || exprInput instanceof HTMLInputElement
+      ? exprInput.value
+      : "z^2";
+
+  const currentState = (): PlotterState => ({
+    expr: exprValue(),
+    cx: plot.view.cx,
+    cy: plot.view.cy,
+    span: plot.view.span,
+    colormap: plot.color.colormap,
+    modulus: plot.color.modulus,
+  });
+
+  let hashTimer = 0;
+  const scheduleHash = (): void => {
+    window.clearTimeout(hashTimer);
+    hashTimer = window.setTimeout(() => {
+      history.replaceState(null, "", encodeState(currentState()));
+    }, 350);
+  };
+
+  const redraw = (draft = false): void => {
+    plot.draw(draft);
+    drawAxes(axesCanvas, plot.view, canvas.clientWidth, canvas.clientHeight);
+    scheduleHash();
+  };
 
   const renderPreview = (src: string): void => {
     if (!(previewEl instanceof HTMLElement)) return;
@@ -55,7 +129,8 @@ function main(): void {
       plot.setFunction(src);
       setError("");
       renderPreview(src);
-      plot.draw(false);
+      updateProbeFn(src);
+      redraw(false);
     } catch (err) {
       if (err instanceof ExprError) {
         setError(err.pos >= 0 ? `${err.message} (position ${err.pos})` : err.message);
@@ -65,56 +140,113 @@ function main(): void {
     }
   };
 
+  const drawLegends = (): void => {
+    if (wheelCanvas instanceof HTMLCanvasElement) drawPhaseWheel(wheelCanvas, plot.color.colormap);
+    if (modbarCanvas instanceof HTMLCanvasElement)
+      drawModulusBar(modbarCanvas, plot.color.modulus, plot.color.modScale);
+  };
+
   if (colormapSel instanceof HTMLSelectElement) {
-    COLORMAPS.forEach((cm, i) => {
-      const opt = document.createElement("option");
-      opt.value = String(i);
-      opt.textContent = cm.label;
-      colormapSel.appendChild(opt);
-    });
+    COLORMAPS.forEach((cm, i) => addOption(colormapSel, String(i), cm.label));
     colormapSel.value = String(plot.color.colormap);
     colormapSel.addEventListener("change", () => {
       plot.color.colormap = Number(colormapSel.value);
-      plot.draw(false);
+      drawLegends();
+      redraw(false);
     });
   }
-
   if (modulusSel instanceof HTMLSelectElement) {
     modulusSel.value = String(plot.color.modulus);
     modulusSel.addEventListener("change", () => {
       plot.color.modulus = Number(modulusSel.value);
-      plot.draw(false);
+      drawLegends();
+      redraw(false);
+    });
+  }
+  if (presetSel instanceof HTMLSelectElement) {
+    addOption(presetSel, "", "Presets…");
+    PRESETS.forEach((p, i) => addOption(presetSel, String(i), p.label));
+    presetSel.addEventListener("change", () => {
+      const preset = PRESETS[Number(presetSel.value)];
+      if (!preset) return;
+      if (exprInput instanceof HTMLTextAreaElement || exprInput instanceof HTMLInputElement)
+        exprInput.value = preset.expr;
+      plot.view = { cx: 0, cy: 0, span: preset.span };
+      framingSpan = preset.span;
+      applyExpr(preset.expr);
+      presetSel.value = "";
     });
   }
 
   if (exprInput instanceof HTMLTextAreaElement || exprInput instanceof HTMLInputElement) {
-    exprInput.value = "z^2";
+    exprInput.value = initial.expr;
     exprInput.addEventListener("input", () => applyExpr(exprInput.value));
   }
-  renderPreview("z^2");
 
   if (homeBtn instanceof HTMLElement) {
     homeBtn.addEventListener("click", () => {
-      plot.view = { ...home };
-      plot.draw(false);
+      plot.view = { cx: 0, cy: 0, span: framingSpan };
+      redraw(false);
+    });
+  }
+  if (savePngBtn instanceof HTMLElement) {
+    savePngBtn.addEventListener("click", () => {
+      const a = document.createElement("a");
+      a.href = plot.toDataURL();
+      a.download = "complex-function-plot.png";
+      a.click();
+    });
+  }
+  if (copyLinkBtn instanceof HTMLElement) {
+    copyLinkBtn.addEventListener("click", () => {
+      const url = shareUrl(currentState());
+      history.replaceState(null, "", encodeState(currentState()));
+      if (navigator.clipboard) navigator.clipboard.writeText(url).catch(() => undefined);
     });
   }
 
-  // Pan (grab-and-drag) + zoom-to-cursor, with a fast half-res pass while dragging.
-  let grabWorld: [number, number] | null = null;
+  // Cursor probe (H1).
+  const fmtNum = (x: number): string => {
+    if (Number.isNaN(x)) return "NaN";
+    if (!Number.isFinite(x)) return x > 0 ? "∞" : "-∞";
+    return String(Math.round(x * 1e4) / 1e4);
+  };
+  const fmtComplex = (z: Complex): string =>
+    `${fmtNum(z[0])} ${z[1] < 0 ? "-" : "+"} ${fmtNum(Math.abs(z[1]))}i`;
+  const updateProbe = (clientX: number, clientY: number): void => {
+    if (!(pz instanceof HTMLElement)) return;
+    const z = plot.screenToWorld(clientX, clientY);
+    pz.textContent = fmtComplex(z);
+    if (!probeFn) return;
+    let w: Complex;
+    try {
+      w = probeFn(z, [0, 0]);
+    } catch {
+      w = [NaN, NaN];
+    }
+    if (pfz instanceof HTMLElement) pfz.textContent = fmtComplex(w);
+    if (pabs instanceof HTMLElement) pabs.textContent = fmtNum(Math.hypot(w[0], w[1]));
+    if (parg instanceof HTMLElement) parg.textContent = fmtNum(Math.atan2(w[1], w[0]));
+  };
+
+  // Pan (grab-and-drag) + zoom-to-cursor; probe when not dragging.
+  let grabWorld: Complex | null = null;
   canvas.addEventListener("pointerdown", (e) => {
     grabWorld = plot.screenToWorld(e.clientX, e.clientY);
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener("pointermove", (e) => {
-    if (!grabWorld) return;
-    plot.setCenterAtScreen(e.clientX, e.clientY, grabWorld);
-    plot.draw(true);
+    if (grabWorld) {
+      plot.setCenterAtScreen(e.clientX, e.clientY, grabWorld);
+      redraw(true);
+    } else {
+      updateProbe(e.clientX, e.clientY);
+    }
   });
   const endPan = (): void => {
     if (grabWorld) {
       grabWorld = null;
-      plot.draw(false);
+      redraw(false);
     }
   };
   canvas.addEventListener("pointerup", endPan);
@@ -124,14 +256,16 @@ function main(): void {
     (e) => {
       e.preventDefault();
       plot.zoomAt(e.clientX, e.clientY, Math.pow(1.0015, e.deltaY));
-      plot.draw(false);
+      redraw(false);
     },
     { passive: false },
   );
 
-  const observer = new ResizeObserver(() => plot.draw(false));
+  const observer = new ResizeObserver(() => redraw(false));
   observer.observe(canvas);
-  plot.draw(false);
+
+  drawLegends();
+  applyExpr(initial.expr);
 }
 
 main();

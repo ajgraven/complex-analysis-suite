@@ -34,16 +34,12 @@
       }
       h1 { font-size: 1rem; font-weight: 650; margin: 0 0 2px; letter-spacing: -0.01em; }
       .sub { color: var(--muted); font-size: 0.76rem; margin: 0 0 16px; }
-      .group { margin-bottom: 18px; }
+      .group { margin-bottom: 16px; }
       label { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 6px; }
       textarea, select {
-        width: 100%;
-        font: inherit;
-        color: var(--text);
-        background: var(--panel-2);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 8px 10px;
+        width: 100%; font: inherit; color: var(--text);
+        background: var(--panel-2); border: 1px solid var(--border);
+        border-radius: 8px; padding: 8px 10px;
       }
       textarea { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; resize: vertical; min-height: 42px; }
       textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -53,12 +49,27 @@
       button {
         font: inherit; cursor: pointer; color: var(--text);
         background: var(--panel-2); border: 1px solid var(--border);
-        border-radius: 8px; padding: 8px 12px;
+        border-radius: 8px; padding: 8px 10px;
       }
       button:hover { border-color: var(--accent); }
-      .hint { color: var(--muted); font-size: 0.76rem; margin-top: 4px; }
+      .actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+      .legend { display: flex; gap: 14px; align-items: center; }
+      .wheel-wrap { position: relative; flex: 0 0 auto; }
+      .wheel-wrap span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 0.68rem; color: var(--muted); }
+      .modbar-wrap { flex: 1 1 auto; }
+      #modbar { display: block; width: 100%; border-radius: 4px; border: 1px solid var(--border); }
+      .modbar-labels { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--muted); margin-top: 3px; }
+
+      dl.probe { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
+      dl.probe dt { color: var(--muted); font-size: 0.78rem; }
+      dl.probe dd { margin: 0; font-family: ui-monospace, Menlo, monospace; font-size: 0.8rem; overflow-x: auto; }
+
+      .hint { color: var(--muted); font-size: 0.76rem; margin-top: 8px; }
       .stage { position: relative; flex: 1 1 auto; min-width: 0; }
-      canvas#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+      canvas#view, canvas#axes { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+      canvas#view { touch-action: none; }
+      canvas#axes { pointer-events: none; }
     </style>
   </head>
   <body>
@@ -71,6 +82,11 @@
         <textarea id="expr" spellcheck="false" autocapitalize="off" autocomplete="off">z^2</textarea>
         <div id="preview"></div>
         <div id="error"></div>
+      </div>
+
+      <div class="group">
+        <label for="preset">Preset</label>
+        <select id="preset"></select>
       </div>
 
       <div class="group">
@@ -93,13 +109,38 @@
       </div>
 
       <div class="group">
-        <button id="home" type="button">Reset view</button>
-        <p class="hint">Drag to pan · scroll to zoom · hue = arg f, brightness = |f|.</p>
+        <label>Legend</label>
+        <div class="legend">
+          <div class="wheel-wrap"><canvas id="wheel"></canvas><span>arg&nbsp;f</span></div>
+          <div class="modbar-wrap">
+            <canvas id="modbar"></canvas>
+            <div class="modbar-labels"><span>|f| = 0</span><span>large</span></div>
+          </div>
+        </div>
       </div>
+
+      <div class="group">
+        <label>Cursor</label>
+        <dl class="probe">
+          <dt>z</dt><dd id="pz">&mdash;</dd>
+          <dt>f(z)</dt><dd id="pfz">&mdash;</dd>
+          <dt>|f|</dt><dd id="pabs">&mdash;</dd>
+          <dt>arg&nbsp;f</dt><dd id="parg">&mdash;</dd>
+        </dl>
+      </div>
+
+      <div class="group actions">
+        <button id="home" type="button">Reset</button>
+        <button id="savePng" type="button">Save PNG</button>
+        <button id="copyLink" type="button">Copy link</button>
+      </div>
+
+      <p class="hint">Drag to pan · scroll to zoom · move the cursor to read f(z). Hue = arg f, brightness = |f|.</p>
     </aside>
 
     <main class="stage">
       <canvas id="view"></canvas>
+      <canvas id="axes"></canvas>
     </main>
 
     <script type="module" src="/src/main.ts"></script>
